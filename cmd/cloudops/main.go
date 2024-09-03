@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/GoSimplicity/CloudOps/config"
-	"github.com/GoSimplicity/CloudOps/internal/di"
+	"github.com/GoSimplicity/CloudOps/pkg/di"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
