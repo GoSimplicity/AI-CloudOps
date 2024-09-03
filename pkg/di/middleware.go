@@ -1,7 +1,7 @@
 package di
 
 import (
-	"github.com/GoSimplicity/CloudOps/middleware"
+	middleware2 "github.com/GoSimplicity/CloudOps/pkg/middleware"
 	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -26,7 +26,7 @@ func InitMiddlewares(ih ijwt.Handler, l *zap.Logger) []gin.HandlerFunc {
 			},
 			MaxAge: 12 * time.Hour,
 		}),
-		middleware.NewJWTMiddleware(ih).CheckLogin(),
-		middleware.NewLogMiddleware(l).Log(),
+		middleware2.NewJWTMiddleware(ih).CheckLogin(),
+		middleware2.NewLogMiddleware(l).Log(),
 	}
 }

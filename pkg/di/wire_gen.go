@@ -7,6 +7,9 @@
 package di
 
 import (
+	"github.com/GoSimplicity/CloudOps/internal/user/api"
+	"github.com/GoSimplicity/CloudOps/internal/user/dao"
+	"github.com/GoSimplicity/CloudOps/internal/user/service"
 	"github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 )
@@ -22,6 +25,10 @@ func InitWebServer() *gin.Engine {
 	handler := jwt.NewJWTHandler(cmdable)
 	logger := InitLogger()
 	v := InitMiddlewares(handler, logger)
-	engine := InitGinServer(v)
+	db := InitDB()
+	userDAO := dao.NewUserDAO(db)
+	userService := service.NewUserService(userDAO)
+	userHandler := api.NewUserHandler(userService)
+	engine := InitGinServer(v, userHandler)
 	return engine
 }
