@@ -1,7 +1,6 @@
 package di
 
 import (
-	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/spf13/viper"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -20,7 +19,7 @@ func InitDB() *gorm.DB {
 	}
 	// 初始化表
 
-	if err = model.InitTables(db); err != nil {
+	if err = InitTables(db); err != nil {
 		panic(err)
 	}
 
