@@ -22,11 +22,11 @@ func NewUserService(dao dao.UserDAO) UserService {
 }
 
 func (u *userService) Create(ctx context.Context, user dto.UserDTO) error {
-	return u.dao.Create(ctx, u.toUserDAO(user))
+	return u.dao.CreateUser(ctx, u.toUserDAO(user))
 }
 
-func (u *userService) toUserDAO(user dto.UserDTO) model.User {
-	return model.User{
+func (u *userService) toUserDAO(user dto.UserDTO) *model.User {
+	return &model.User{
 		UserId:      user.UserID,
 		Username:    user.UserName,
 		Password:    user.PassWord,
