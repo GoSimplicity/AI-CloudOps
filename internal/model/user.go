@@ -6,6 +6,7 @@ import (
 
 type User struct {
 	gorm.Model
+	UserId      int     `gorm:"comment:用户ID"`                                         // 用户ID
 	Username    string  `gorm:"type:varchar(100);uniqueIndex;not null;comment:用户登录名"` // 用户登录名，唯一且非空
 	Password    string  `gorm:"type:varchar(255);not null;comment:用户登录密码"`            // 用户登录密码，非空
 	RealName    string  `gorm:"type:varchar(100);comment:用户真实姓名"`                     // 用户真实姓名
