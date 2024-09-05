@@ -38,6 +38,8 @@ type AuthDAO interface {
 	CreateMenu(ctx context.Context, menu *model.Menu) error
 	// GetAllMenus 获取所有菜单
 	GetAllMenus(ctx context.Context) ([]*model.Menu, error)
+	// GetMenuByID 根据ID获取菜单
+	GetMenuByID(ctx context.Context, id int) (*model.Menu, error)
 	// DeleteMenu 通过ID删除菜单
 	DeleteMenu(ctx context.Context, menuID int) error
 }
@@ -204,6 +206,17 @@ func (a *authDAO) CreateMenu(ctx context.Context, menu *model.Menu) error {
 	}
 
 	return nil
+}
+
+func (a *authDAO) GetMenuByID(ctx context.Context, id int) (*model.Menu, error) {
+	var menu model.Menu
+
+	if err := a.db.WithContext(ctx).Where("id = ?", id).First(&menu).Error; err != nil {
+		a.l.Error("failed to get menu by ID", zap.Int("id", id), zap.Error(err))
+		return nil, err
+	}
+
+	return &menu, nil
 }
 
 func (a *authDAO) GetAllMenus(ctx context.Context) ([]*model.Menu, error) {
