@@ -19,7 +19,7 @@ type UserDAO interface {
 	// GetAllUsers 获取所有用户
 	GetAllUsers(ctx context.Context) ([]*model.User, error)
 	// GetUserByID 通过ID获取用户
-	GetUserByID(ctx context.Context, id int) (*model.User, error)
+	GetUserByID(ctx context.Context, id uint) (*model.User, error)
 	// GetUserByRealName 通过名称获取用户
 	GetUserByRealName(ctx context.Context, name string) (*model.User, error)
 }
@@ -85,11 +85,11 @@ func (u *userDAO) GetAllUsers(ctx context.Context) ([]*model.User, error) {
 	return users, nil
 }
 
-func (u *userDAO) GetUserByID(ctx context.Context, id int) (*model.User, error) {
+func (u *userDAO) GetUserByID(ctx context.Context, id uint) (*model.User, error) {
 	var user model.User
 
 	if err := u.db.WithContext(ctx).Where("id = ?", id).First(&user).Error; err != nil {
-		u.l.Error("get user by id failed", zap.Int("id", id), zap.Error(err))
+		u.l.Error("get user by id failed", zap.Uint("id", id), zap.Error(err))
 		return nil, err
 	}
 

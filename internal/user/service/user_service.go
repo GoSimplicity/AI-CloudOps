@@ -4,11 +4,10 @@ import (
 	"context"
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/GoSimplicity/CloudOps/internal/user/dao"
-	"github.com/GoSimplicity/CloudOps/internal/user/dto"
 )
 
 type UserService interface {
-	Create(ctx context.Context, user dto.UserDTO) error
+	Create(ctx context.Context, user *model.User) error
 }
 
 type userService struct {
@@ -21,21 +20,11 @@ func NewUserService(dao dao.UserDAO) UserService {
 	}
 }
 
-func (u *userService) Create(ctx context.Context, user dto.UserDTO) error {
-	return u.dao.CreateUser(ctx, u.toUserDAO(user))
-}
-
-func (u *userService) toUserDAO(user dto.UserDTO) *model.User {
-	return &model.User{
-		UserId:      user.UserID,
-		Username:    user.UserName,
-		Password:    user.PassWord,
-		RealName:    user.RealName,
-		Desc:        user.Desc,
-		Mobile:      user.Mobile,
-		LarkUserId:  user.LarkUserID,
-		AccountType: user.AccountType,
-		HomePath:    user.HomePath,
-		Enable:      user.Enable,
+func (u *userService) Create(ctx context.Context, user *model.User) error {
+	un, err := u.dao.GetUserByUsername(ctx, user.Username)
+	if err != nil && un != nil {
+		return err
 	}
+
+	return u.dao.CreateUser(ctx, user)
 }

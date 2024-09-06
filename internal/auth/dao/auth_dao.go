@@ -16,6 +16,8 @@ type AuthDAO interface {
 	CreateRole(ctx context.Context, role *model.Role) error
 	// UpdateRole 更新角色
 	UpdateRole(ctx context.Context, role *model.Role) error
+	// GetApisByRoleID 通过角色ID获取API
+	GetApisByRoleID(ctx context.Context, roleID uint) ([]*model.Api, error)
 	// GetAllRoles 获取所有角色
 	GetAllRoles(ctx context.Context) ([]*model.Role, error)
 	// UpdateMenus 更新菜单
@@ -23,15 +25,15 @@ type AuthDAO interface {
 	// UpdateApis 更新API
 	UpdateApis(ctx context.Context, apis []*model.Api) error
 	// DeleteRole 删除角色
-	DeleteRole(ctx context.Context, role *model.Role) error
+	DeleteRole(ctx context.Context, roleId uint) error
 	// GetAllApis 获取所有API
 	GetAllApis(ctx context.Context) ([]*model.Api, error)
 	// GetApiByID 通过ID获取API
-	GetApiByID(ctx context.Context, apiID int) (*model.Api, error)
+	GetApiByID(ctx context.Context, apiID uint) (*model.Api, error)
 	// GetApiByTitle 通过标题获取API
 	GetApiByTitle(ctx context.Context, title string) (*model.Api, error)
 	// DeleteApi 通过ID删除API
-	DeleteApi(ctx context.Context, apiID int) error
+	DeleteApi(ctx context.Context, apiID uint) error
 	// CreateApi 创建API
 	CreateApi(ctx context.Context, api *model.Api) error
 	// UpdateApi 更新API
@@ -47,7 +49,7 @@ type AuthDAO interface {
 	// GetMenuByFatherID 根据父亲ID获取菜单
 	GetMenuByFatherID(ctx context.Context, id int) (*model.Menu, error)
 	// DeleteMenu 通过ID删除菜单
-	DeleteMenu(ctx context.Context, menuID int) error
+	DeleteMenu(ctx context.Context, menuID uint) error
 }
 
 type authDAO struct {
@@ -153,13 +155,31 @@ func (a *authDAO) UpdateApis(ctx context.Context, apis []*model.Api) error {
 	return nil
 }
 
-func (a *authDAO) DeleteRole(ctx context.Context, role *model.Role) error {
-	if err := a.db.WithContext(ctx).Delete(role).Error; err != nil {
+func (a *authDAO) DeleteRole(ctx context.Context, id uint) error {
+	if err := a.db.WithContext(ctx).Where("id = ?", id).Delete(&model.Role{}).Error; err != nil {
 		a.l.Error("failed to delete role", zap.Error(err))
 		return err
 	}
 
 	return nil
+}
+
+// GetApisByRoleID 根据角色ID获取API列表
+func (a *authDAO) GetApisByRoleID(ctx context.Context, roleID uint) ([]*model.Api, error) {
+	var apis []*model.Api
+
+	// 使用联表查询，假设角色和API的关联表为 `role_apis`
+	err := a.db.WithContext(ctx).
+		Table("role_apis").
+		Select("apis.*").
+		Joins("join apis on role_apis.api_id = apis.id").
+		Where("role_apis.role_id = ?", roleID).
+		Find(&apis).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return apis, nil
 }
 
 func (a *authDAO) GetAllApis(ctx context.Context) ([]*model.Api, error) {
@@ -173,11 +193,11 @@ func (a *authDAO) GetAllApis(ctx context.Context) ([]*model.Api, error) {
 	return apis, nil
 }
 
-func (a *authDAO) GetApiByID(ctx context.Context, apiID int) (*model.Api, error) {
+func (a *authDAO) GetApiByID(ctx context.Context, apiID uint) (*model.Api, error) {
 	var api model.Api
 
 	if err := a.db.WithContext(ctx).Where("id = ?", apiID).First(&api).Error; err != nil {
-		a.l.Error("failed to get API by ID", zap.Int("apiID", apiID), zap.Error(err))
+		a.l.Error("failed to get API by ID", zap.Uint("apiID", apiID), zap.Error(err))
 		return nil, err
 	}
 
@@ -195,9 +215,9 @@ func (a *authDAO) GetApiByTitle(ctx context.Context, title string) (*model.Api, 
 	return &api, nil
 }
 
-func (a *authDAO) DeleteApi(ctx context.Context, apiID int) error {
+func (a *authDAO) DeleteApi(ctx context.Context, apiID uint) error {
 	if err := a.db.WithContext(ctx).Where("id = ?", apiID).Delete(&model.Api{}).Error; err != nil {
-		a.l.Error("failed to delete API", zap.Int("apiID", apiID), zap.Error(err))
+		a.l.Error("failed to delete API", zap.Uint("apiID", apiID), zap.Error(err))
 		return err
 	}
 
@@ -273,9 +293,9 @@ func (a *authDAO) GetAllMenus(ctx context.Context) ([]*model.Menu, error) {
 	return menus, nil
 }
 
-func (a *authDAO) DeleteMenu(ctx context.Context, menuID int) error {
+func (a *authDAO) DeleteMenu(ctx context.Context, menuID uint) error {
 	if err := a.db.WithContext(ctx).Where("id = ?", menuID).Delete(&model.Menu{}).Error; err != nil {
-		a.l.Error("failed to delete menu", zap.Int("menuID", menuID), zap.Error(err))
+		a.l.Error("failed to delete menu", zap.Uint("menuID", menuID), zap.Error(err))
 		return err
 	}
 
