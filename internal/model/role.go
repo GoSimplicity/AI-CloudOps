@@ -13,4 +13,6 @@ type Role struct {
 	Users     []*User ` gorm:"many2many:user_roles;"`                        // 多对多用户关联
 	Menus     []*Menu ` gorm:"many2many:role_menus;"`                        // 多对多菜单关联
 	Apis      []*Api  ` gorm:"many2many:role_apis;"`                         // 多对多API关联
+	MenuIds   []int   `json:"menuIds" gorm:"-"`                              // 前端使用的菜单ID
+	ApiIds    []int   `json:"apiIds" gorm:"-"`
 }
