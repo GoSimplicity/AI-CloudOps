@@ -17,8 +17,8 @@ func InitDB() *gorm.DB {
 	if err != nil {
 		panic(err)
 	}
-	// 初始化表
 
+	// 初始化表
 	if err = InitTables(db); err != nil {
 		panic(err)
 	}
