@@ -27,35 +27,6 @@ func NewUserService(dao dao.UserDAO) UserService {
 }
 
 func (u *userService) SignUp(ctx context.Context, user dto.UserDTO) error {
-	// 验证用户名, 手机号唯一性
-	// exist, err := u.dao.GetUserByUsername(ctx, user.UserName)
-	// if err != gorm.ErrRecordNotFound && err != nil {
-	// 	return Result{
-	// 		Code: constants.UserSignUpFailedErrorCode,
-	// 		Msg:  constants.ErrorUserSignUpFail.Error(),
-	// 	}, err
-	// }
-	// if exist != nil {
-	// 	return Result{
-	// 		Code: constants.UserExistErrorCode,
-	// 		Msg:  constants.ErrorUserExist.Error(),
-	// 	}, err
-	// }
-	// exist, err = u.dao.GetUserByMobile(ctx, user.Mobile)
-	// if err != gorm.ErrRecordNotFound && err != nil {
-	// 	return Result{
-	// 		Code: constants.UserSignUpFailedErrorCode,
-	// 		Msg:  constants.ErrorUserSignUpFail.Error(),
-	// 	}, err
-	// }
-	// if exist != nil {
-	// 	return Result{
-	// 		Code: constants.UserExistErrorCode,
-	// 		Msg:  constants.ErrorUserExist.Error(),
-	// 	}, err
-	// }
-
-	// 加密
 	hash, err := bcrypt.GenerateFromPassword([]byte(user.PassWord), bcrypt.DefaultCost)
 	if err != nil {
 		return err
