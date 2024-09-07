@@ -2,9 +2,11 @@ package dao
 
 import (
 	"context"
+	"errors"
 
+	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"github.com/GoSimplicity/CloudOps/internal/model"
-	sf "github.com/bwmarrin/snowflake"
+	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -29,23 +31,23 @@ type UserDAO interface {
 }
 
 type userDAO struct {
-	db   *gorm.DB
-	l    *zap.Logger
-	node *sf.Node
+	db *gorm.DB
+	l  *zap.Logger
 }
 
-func NewUserDAO(db *gorm.DB, l *zap.Logger, node *sf.Node) UserDAO {
+func NewUserDAO(db *gorm.DB, l *zap.Logger) UserDAO {
 	return &userDAO{
-		db:   db,
-		l:    l,
-		node: node,
+		db: db,
+		l:  l,
 	}
 }
 
 func (u *userDAO) CreateUser(ctx context.Context, user *model.User) error {
-	// user.UserID = u.node.Generate().Int64()
-
 	if err := u.db.WithContext(ctx).Create(user).Error; err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == constants.ErrCodeDuplicateUserNameOrMobileNumber {
+			return constants.ErrCodeDuplicateUserNameOrMobile
+		}
 		u.l.Error("create user failed", zap.Error(err))
 		return err
 	}
