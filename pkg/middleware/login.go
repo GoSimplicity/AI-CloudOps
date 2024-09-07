@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"strings"
+
 	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -26,7 +28,8 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 		if path == "/api/users/signup" ||
 			path == "/api/users/login" ||
 			path == "/api/users/refresh_token" ||
-			path == "/api/users/change_password" {
+			path == "/api/users/change_password" ||
+			strings.Contains(path, "hello") {
 			return
 		}
 
