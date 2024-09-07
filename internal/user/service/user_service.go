@@ -7,13 +7,10 @@ import (
 
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/GoSimplicity/CloudOps/internal/user/dao"
-	"github.com/GoSimplicity/CloudOps/internal/user/dto"
 )
 
 type UserService interface {
-	SignUp(ctx context.Context, user dto.UserDTO) error
-	Login(ctx context.Context, user dto.UserDTO) error
-	Profile(ctx context.Context, user dto.UserDTO) (dto.UserDTO, error)
+	Create(ctx context.Context, user *model.User) error
 }
 
 type userService struct {
@@ -26,37 +23,11 @@ func NewUserService(dao dao.UserDAO) UserService {
 	}
 }
 
-func (u *userService) SignUp(ctx context.Context, user dto.UserDTO) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(user.PassWord), bcrypt.DefaultCost)
-	if err != nil {
+func (u *userService) Create(ctx context.Context, user *model.User) error {
+	un, err := u.dao.GetUserByUsername(ctx, user.Username)
+	if err != nil && un != nil {
 		return err
 	}
-	user.PassWord = string(hash)
 
-	return u.dao.CreateUser(ctx, u.toUserDAO(user))
-}
-
-func (u *userService) Login(ctx context.Context, user dto.UserDTO) error {
-	// username, password
-	return nil
-}
-
-func (u *userService) Profile(ctx context.Context, user dto.UserDTO) (dto.UserDTO, error) {
-
-	return dto.UserDTO{}, nil
-}
-
-func (u *userService) toUserDAO(user dto.UserDTO) *model.User {
-	return &model.User{
-		// UserId:      user.UserID,
-		Username:    user.UserName,
-		Password:    user.PassWord,
-		RealName:    user.RealName,
-		Desc:        user.Desc,
-		Mobile:      user.Mobile,
-		LarkUserId:  user.LarkUserID,
-		AccountType: user.AccountType,
-		HomePath:    user.HomePath,
-		Enable:      user.Enable,
-	}
+	return u.dao.CreateUser(ctx, user)
 }

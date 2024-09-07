@@ -19,14 +19,14 @@ type AuthService interface {
 	GetAllRoleList(ctx context.Context) ([]*model.Role, error)
 	CreateRole(ctx context.Context, roles model.Role) error
 	UpdateRole(ctx context.Context, roles model.Role) error
-	SetRoleStatus(ctx context.Context) error
-	DeleteRole(ctx context.Context) error
+	SetRoleStatus(ctx context.Context, id int, status string) error
+	DeleteRole(ctx context.Context, id int) error
 
-	GetApiList(ctx context.Context) ([]*model.Api, error)
+	GetApiList(ctx context.Context, uid int) ([]*model.Api, error)
 	GetApiListAll(ctx context.Context) ([]*model.Api, error)
-	DeleteApi(ctx context.Context) error
-	CreateApi(ctx context.Context) error
-	UpdateApi(ctx context.Context) error
+	DeleteApi(ctx context.Context, apiID int) error
+	CreateApi(ctx context.Context, api *model.Api) error
+	UpdateApi(ctx context.Context, api *model.Api) error
 }
 
 type authService struct {
@@ -46,7 +46,7 @@ func NewAuthService(dao dao.AuthDAO, l *zap.Logger, userDao userDao.UserDAO) Aut
 // GetMenuList 根据用户ID获取菜单列表
 func (a *authService) GetMenuList(ctx context.Context, uid int) ([]*model.Menu, error) {
 	// 获取用户信息
-	user, err := a.userDao.GetUserByID(ctx, uid)
+	user, err := a.userDao.GetUserByID(ctx, uint(uid))
 	if err != nil {
 		a.l.Error("GetUserByID failed", zap.Error(err))
 		return nil, err
@@ -181,7 +181,7 @@ func (a *authService) CreateMenu(ctx context.Context, menu model.Menu) error {
 
 // DeleteMenu 删除菜单
 func (a *authService) DeleteMenu(ctx context.Context, id int) error {
-	return a.dao.DeleteMenu(ctx, id)
+	return a.dao.DeleteMenu(ctx, uint(id))
 }
 
 // GetAllRoleList 获取所有角色列表
@@ -234,37 +234,97 @@ func (a *authService) UpdateRole(ctx context.Context, role model.Role) error {
 
 	return a.dao.UpdateRole(ctx, &role)
 }
-func (a *authService) SetRoleStatus(ctx context.Context) error {
-	//TODO implement me
-	panic("implement me")
+func (a *authService) SetRoleStatus(ctx context.Context, roleID int, status string) error {
+	role, err := a.dao.GetRoleByRoleID(ctx, uint(roleID))
+	if err != nil {
+		a.l.Error("GetRoleByRoleID failed", zap.Error(err))
+		return err
+	}
+
+	// 更新角色状态
+	role.Status = status
+
+	err = a.dao.UpdateRole(ctx, role)
+	if err != nil {
+		a.l.Error("UpdateRole failed", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
-func (a *authService) DeleteRole(ctx context.Context) error {
-	//TODO implement me
-	panic("implement me")
+func (a *authService) DeleteRole(ctx context.Context, id int) error {
+	err := a.dao.DeleteRole(ctx, uint(id))
+	if err != nil {
+		a.l.Error("DeleteRole failed", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
-func (a *authService) GetApiList(ctx context.Context) ([]*model.Api, error) {
-	//TODO implement me
-	panic("implement me")
+func (a *authService) GetApiList(ctx context.Context, uid int) ([]*model.Api, error) {
+	user, err := a.userDao.GetUserByID(ctx, uint(uid))
+	if err != nil {
+		a.l.Error("GetUserByID failed", zap.Error(err))
+		return nil, err
+	}
+
+	apis := make([]*model.Api, 0)
+	for _, role := range user.Roles {
+		roleApis, err := a.dao.GetApisByRoleID(ctx, role.ID)
+		if err != nil {
+			a.l.Error("GetApisByRoleID failed", zap.Error(err))
+			return nil, err
+		}
+		apis = append(apis, roleApis...)
+	}
+
+	return apis, nil
 }
 
 func (a *authService) GetApiListAll(ctx context.Context) ([]*model.Api, error) {
-	//TODO implement me
-	panic("implement me")
+	apis, err := a.dao.GetAllApis(ctx)
+	if err != nil {
+		a.l.Error("GetAllApis failed", zap.Error(err))
+		return nil, err
+	}
+
+	return apis, nil
 }
 
-func (a *authService) DeleteApi(ctx context.Context) error {
-	//TODO implement me
-	panic("implement me")
+func (a *authService) DeleteApi(ctx context.Context, apiID int) error {
+	err := a.dao.DeleteApi(ctx, uint(apiID))
+	if err != nil {
+		a.l.Error("DeleteApi failed", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
-func (a *authService) CreateApi(ctx context.Context) error {
-	//TODO implement me
-	panic("implement me")
+func (a *authService) CreateApi(ctx context.Context, api *model.Api) error {
+	err := a.dao.CreateApi(ctx, api)
+	if err != nil {
+		a.l.Error("CreateApi failed", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
-func (a *authService) UpdateApi(ctx context.Context) error {
-	//TODO implement me
-	panic("implement me")
+func (a *authService) UpdateApi(ctx context.Context, api *model.Api) error {
+	_, err := a.dao.GetApiByID(ctx, api.ID)
+	if err != nil {
+		a.l.Error("GetApiByID failed", zap.Error(err))
+		return err
+	}
+
+	err = a.dao.UpdateApi(ctx, api)
+	if err != nil {
+		a.l.Error("UpdateApi failed", zap.Error(err))
+		return err
+	}
+
+	return nil
 }

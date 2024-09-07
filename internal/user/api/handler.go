@@ -1,13 +1,9 @@
 package api
 
 import (
-	"errors"
-
-	. "github.com/GoSimplicity/CloudOps/pkg/ginp"
-
-	"github.com/GoSimplicity/CloudOps/internal/constants"
-	"github.com/GoSimplicity/CloudOps/internal/user/dto"
+	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/GoSimplicity/CloudOps/internal/user/service"
+	"github.com/GoSimplicity/CloudOps/pkg/utils/apiresponse"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -25,29 +21,15 @@ func NewUserHandler(service service.UserService, l *zap.Logger) *UserHandler {
 }
 
 func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
-	userGroup := server.Group("/api/users")
-	userGroup.POST("/signup", WrapBody(u.SignUp))
-	userGroup.POST("/login", u.Login)
-	userGroup.GET("/profile", u.Profile)
-
-	userGroup.GET("/hello", func(ctx *gin.Context) {
-		ctx.JSON(200, gin.H{"message": "success"})
-	})
+	userGroup := server.Group("/api/user")
+	userGroup.POST("/create_user", u.CreateUser)
 }
 
-func (u *UserHandler) SignUp(ctx *gin.Context, req dto.UserDTO) (Result, error) {
-	err := u.service.SignUp(ctx, req)
-	if err != nil {
-		if errors.Is(err, constants.ErrCodeDuplicateUserNameOrMobile) {
-			return Result{
-				Code: constants.UserExistErrorCode,
-				Msg:  constants.ErrorUserExist.Error(),
-			}, nil
-		}
-		return Result{
-			Code: constants.UserSignUpFailedErrorCode,
-			Msg:  constants.ErrorUserSignUpFail.Error(),
-		}, err
+func (u *UserHandler) CreateUser(ctx *gin.Context) {
+	var req model.User
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "绑定数据失败")
 	}
 	return Result{
 		Code: constants.SuccessCode,
@@ -55,10 +37,9 @@ func (u *UserHandler) SignUp(ctx *gin.Context, req dto.UserDTO) (Result, error) 
 	}, nil
 }
 
-func (u *UserHandler) Login(ctx *gin.Context) {
+	if err := u.service.Create(ctx, &req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "创建用户失败")
+	}
 
-}
-
-func (u *UserHandler) Profile(ctx *gin.Context) {
-
+	apiresponse.Success(ctx)
 }
