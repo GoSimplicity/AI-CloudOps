@@ -7,6 +7,7 @@ import (
 	userDAO "github.com/GoSimplicity/CloudOps/internal/user/dao"
 	userService "github.com/GoSimplicity/CloudOps/internal/user/service"
 	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
+	isf "github.com/GoSimplicity/CloudOps/pkg/utils/snowflake"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
@@ -23,6 +24,7 @@ func InitWebServer() *gin.Engine {
 		userDAO.NewUserDAO,
 		userService.NewUserService,
 		userHandler.NewUserHandler,
+		isf.InitializeSnowflakeNode,
 	)
 	return gin.Default()
 }
