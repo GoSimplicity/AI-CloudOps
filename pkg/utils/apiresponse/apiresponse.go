@@ -87,49 +87,41 @@ func ApiResult(c *gin.Context, code int, data interface{}, message string) {
 		Message: message,
 		Type:    "",
 	})
-	return
 }
 
 // Success 操作成功的返回
 func Success(c *gin.Context) {
 	ApiResult(c, StatusSuccess, map[string]interface{}{}, "操作成功")
-	return
 }
 
 // SuccessWithMessage 带消息的操作成功返回
 func SuccessWithMessage(c *gin.Context, message string) {
 	ApiResult(c, StatusSuccess, map[string]interface{}{}, message)
-	return
 }
 
 // SuccessWithData 带数据的操作成功返回
 func SuccessWithData(c *gin.Context, data interface{}) {
 	ApiResult(c, StatusSuccess, data, "请求成功")
-	return
 }
 
 // SuccessWithDetails 带详细数据和消息的操作成功返回
 func SuccessWithDetails(c *gin.Context, data interface{}, message string) {
 	ApiResult(c, StatusSuccess, data, message)
-	return
 }
 
 // Error 操作失败的返回
 func Error(c *gin.Context) {
 	ApiResult(c, StatusError, map[string]interface{}{}, "操作失败")
-	return
 }
 
 // ErrorWithMessage 带消息的操作失败返回
 func ErrorWithMessage(c *gin.Context, message string) {
 	ApiResult(c, StatusError, map[string]interface{}{}, message)
-	return
 }
 
 // ErrorWithDetails 带详细数据和消息的操作失败返回
 func ErrorWithDetails(c *gin.Context, data interface{}, message string) {
 	ApiResult(c, StatusError, data, message)
-	return
 }
 
 // BadRequest 参数错误的返回，使用HTTP 400状态码
@@ -140,7 +132,6 @@ func BadRequest(c *gin.Context, code int, data interface{}, message string) {
 		Message: message,
 		Type:    "",
 	})
-	return
 }
 
 // Forbidden 无权限的返回，使用HTTP 403状态码
@@ -151,7 +142,6 @@ func Forbidden(c *gin.Context, code int, data interface{}, message string) {
 		Message: message,
 		Type:    "",
 	})
-	return
 }
 
 // Unauthorized 未认证的返回，使用HTTP 401状态码
@@ -162,7 +152,6 @@ func Unauthorized(c *gin.Context, code int, data interface{}, message string) {
 		Message: message,
 		Type:    "",
 	})
-	return
 }
 
 // InternalServerError 服务器内部错误的返回，使用HTTP 500状态码
@@ -173,35 +162,29 @@ func InternalServerError(c *gin.Context, code int, data interface{}, message str
 		Message: message,
 		Type:    "",
 	})
-	return
 }
 
 // BadRequestError 参数错误的失败返回
 func BadRequestError(c *gin.Context, message string) {
 	BadRequest(c, StatusError, map[string]interface{}{}, message)
-	return
 }
 
 // BadRequestWithDetails 带详细数据和消息的参数错误返回
 func BadRequestWithDetails(c *gin.Context, data interface{}, message string) {
 	BadRequest(c, StatusError, data, message)
-	return
 }
 
 // UnauthorizedErrorWithDetails 带详细数据和消息的未认证返回
 func UnauthorizedErrorWithDetails(c *gin.Context, data interface{}, message string) {
 	Unauthorized(c, StatusError, data, message)
-	return
 }
 
 // ForbiddenError 无权限的失败返回
 func ForbiddenError(c *gin.Context, message string) {
 	Forbidden(c, StatusError, map[string]interface{}{}, message)
-	return
 }
 
 // InternalServerErrorWithDetails 带详细数据和消息的服务器内部错误返回
 func InternalServerErrorWithDetails(c *gin.Context, data interface{}, message string) {
 	InternalServerError(c, StatusError, data, message)
-	return
 }
