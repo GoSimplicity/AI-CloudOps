@@ -2,11 +2,10 @@ package service
 
 import (
 	"context"
-
-	"golang.org/x/crypto/bcrypt"
-
+	"errors"
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/GoSimplicity/CloudOps/internal/user/dao"
+	"gorm.io/gorm"
 )
 
 type UserService interface {
@@ -24,8 +23,8 @@ func NewUserService(dao dao.UserDAO) UserService {
 }
 
 func (u *userService) Create(ctx context.Context, user *model.User) error {
-	un, err := u.dao.GetUserByUsername(ctx, user.Username)
-	if err != nil && un != nil {
+	_, err := u.dao.GetUserByUsername(ctx, user.Username)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
 

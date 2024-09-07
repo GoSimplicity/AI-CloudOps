@@ -30,15 +30,12 @@ func (u *UserHandler) CreateUser(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "绑定数据失败")
+		return
 	}
-	return Result{
-		Code: constants.SuccessCode,
-		Msg:  constants.SuccessMsg,
-	}, nil
-}
 
 	if err := u.service.Create(ctx, &req); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "创建用户失败")
+		return
 	}
 
 	apiresponse.Success(ctx)
