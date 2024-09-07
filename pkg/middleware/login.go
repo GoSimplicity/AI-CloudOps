@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"strings"
+
 	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"

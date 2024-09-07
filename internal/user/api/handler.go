@@ -5,15 +5,18 @@ import (
 	"github.com/GoSimplicity/CloudOps/internal/user/service"
 	"github.com/GoSimplicity/CloudOps/pkg/utils/apiresponse"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type UserHandler struct {
 	service service.UserService
+	l       *zap.Logger
 }
 
-func NewUserHandler(service service.UserService) *UserHandler {
+func NewUserHandler(service service.UserService, l *zap.Logger) *UserHandler {
 	return &UserHandler{
 		service: service,
+		l:       l,
 	}
 }
 
@@ -28,6 +31,11 @@ func (u *UserHandler) CreateUser(ctx *gin.Context) {
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "绑定数据失败")
 	}
+	return Result{
+		Code: constants.SuccessCode,
+		Msg:  constants.SuccessMsg,
+	}, nil
+}
 
 	if err := u.service.Create(ctx, &req); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "创建用户失败")
