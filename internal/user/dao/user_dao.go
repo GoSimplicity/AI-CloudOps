@@ -2,7 +2,9 @@ package dao
 
 import (
 	"context"
+
 	"github.com/GoSimplicity/CloudOps/internal/model"
+	sf "github.com/bwmarrin/snowflake"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -22,21 +24,27 @@ type UserDAO interface {
 	GetUserByID(ctx context.Context, id int) (*model.User, error)
 	// GetUserByRealName 通过名称获取用户
 	GetUserByRealName(ctx context.Context, name string) (*model.User, error)
+	// GetUserByMobile 通过手机号获取用户
+	GetUserByMobile(ctx context.Context, mobile string) (*model.User, error)
 }
 
 type userDAO struct {
-	db *gorm.DB
-	l  *zap.Logger
+	db   *gorm.DB
+	l    *zap.Logger
+	node *sf.Node
 }
 
-func NewUserDAO(db *gorm.DB, l *zap.Logger) UserDAO {
+func NewUserDAO(db *gorm.DB, l *zap.Logger, node *sf.Node) UserDAO {
 	return &userDAO{
-		db: db,
-		l:  l,
+		db:   db,
+		l:    l,
+		node: node,
 	}
 }
 
 func (u *userDAO) CreateUser(ctx context.Context, user *model.User) error {
+	// user.UserID = u.node.Generate().Int64()
+
 	if err := u.db.WithContext(ctx).Create(user).Error; err != nil {
 		u.l.Error("create user failed", zap.Error(err))
 		return err
@@ -101,6 +109,17 @@ func (u *userDAO) GetUserByRealName(ctx context.Context, name string) (*model.Us
 
 	if err := u.db.WithContext(ctx).Where("real_name = ?", name).First(&user).Error; err != nil {
 		u.l.Error("get user by real name failed", zap.String("real_name", name), zap.Error(err))
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (u *userDAO) GetUserByMobile(ctx context.Context, mobile string) (*model.User, error) {
+	var user model.User
+
+	if err := u.db.WithContext(ctx).Where("mobile = ?", mobile).First(&user).Error; err != nil {
+		u.l.Error("get user by mobile failed", zap.String("mobile", mobile), zap.Error(err))
 		return nil, err
 	}
 
