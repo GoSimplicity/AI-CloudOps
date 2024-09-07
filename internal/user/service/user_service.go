@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/GoSimplicity/CloudOps/internal/user/dao"
 )
