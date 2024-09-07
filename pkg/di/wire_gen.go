@@ -11,6 +11,7 @@ import (
 	"github.com/GoSimplicity/CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/CloudOps/internal/user/service"
 	"github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
+	"github.com/GoSimplicity/CloudOps/pkg/utils/snowflake"
 	"github.com/gin-gonic/gin"
 )
 
@@ -26,7 +27,8 @@ func InitWebServer() *gin.Engine {
 	logger := InitLogger()
 	v := InitMiddlewares(handler, logger)
 	db := InitDB()
-	userDAO := dao.NewUserDAO(db)
+	node := snowflake.InitializeSnowflakeNode()
+	userDAO := dao.NewUserDAO(db, logger, node)
 	userService := service.NewUserService(userDAO)
 	userHandler := api.NewUserHandler(userService)
 	engine := InitGinServer(v, userHandler)
