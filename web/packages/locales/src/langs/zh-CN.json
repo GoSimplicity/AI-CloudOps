@@ -10,7 +10,8 @@
     "dashboard": {
       "title": "概览",
       "analytics": "分析页",
-      "workspace": "工作台"
+      "workspace": "工作台",
+      "test": "测试页"
     },
     "vben": {
       "title": "项目",
