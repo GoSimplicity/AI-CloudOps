@@ -2,7 +2,11 @@ package dao
 
 import (
 	"context"
+	"errors"
+
+	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"github.com/GoSimplicity/CloudOps/internal/model"
+	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -40,6 +44,10 @@ func NewUserDAO(db *gorm.DB, l *zap.Logger) UserDAO {
 
 func (u *userDAO) CreateUser(ctx context.Context, user *model.User) error {
 	if err := u.db.WithContext(ctx).Create(user).Error; err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == constants.ErrCodeDuplicate {
+			return constants.ErrorUserExist
+		}
 		u.l.Error("create user failed", zap.Error(err))
 		return err
 	}
