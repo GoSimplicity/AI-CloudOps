@@ -30,10 +30,9 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 		var uc ijwt.UserClaims
 		// 从请求中提取token
 		tokenStr := m.ExtractToken(ctx)
-		key1 := viper.GetString("jwt.key1")
-
+		key := []byte(viper.GetString("jwt.key1"))
 		token, err := jwt.ParseWithClaims(tokenStr, &uc, func(token *jwt.Token) (interface{}, error) {
-			return key1, nil
+			return key, nil
 		})
 
 		if err != nil {
