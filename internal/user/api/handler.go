@@ -45,7 +45,9 @@ func (u *UserHandler) SignUp(ctx *gin.Context) {
 			apiresponse.ErrorWithMessage(ctx, constants.ErrorUserExist.Error())
 			return
 		}
+
 		u.l.Error("signup failed", zap.Error(err))
+
 		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
 		return
 	}
@@ -66,11 +68,14 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 			apiresponse.ErrorWithMessage(ctx, constants.ErrorUserNotExist.Error())
 			return
 		}
+
 		if errors.Is(err, constants.ErrorPasswordIncorrect) {
 			apiresponse.ErrorWithMessage(ctx, constants.ErrorPasswordIncorrect.Error())
 			return
 		}
+
 		u.l.Error("login failed", zap.Error(err))
+
 		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
 		return
 	}

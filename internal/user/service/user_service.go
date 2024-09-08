@@ -31,7 +31,9 @@ func (us *userService) SignUp(ctx context.Context, user *model.User) error {
 	if err != nil {
 		return err
 	}
+
 	user.Password = string(hash)
+
 	return us.dao.CreateUser(ctx, user)
 }
 
@@ -47,5 +49,6 @@ func (us *userService) Login(ctx context.Context, user *model.User) (*model.User
 	if err != nil {
 		return &model.User{}, constants.ErrorPasswordIncorrect
 	}
+
 	return u, nil
 }
