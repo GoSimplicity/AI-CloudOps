@@ -2,15 +2,16 @@ package service
 
 import (
 	"context"
+	"sort"
+
 	"github.com/GoSimplicity/CloudOps/internal/auth/dao"
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/CloudOps/internal/user/dao"
 	"go.uber.org/zap"
-	"sort"
 )
 
 type AuthService interface {
-	GetMenuList(ctx context.Context, uid int) ([]*model.Menu, error)
+	GetMenuList(ctx context.Context, uid int64) ([]*model.Menu, error)
 	GetAllMenuList(ctx context.Context) ([]*model.Menu, error)
 	UpdateMenu(ctx context.Context, menu model.Menu) error
 	CreateMenu(ctx context.Context, menu model.Menu) error
@@ -22,7 +23,7 @@ type AuthService interface {
 	SetRoleStatus(ctx context.Context, id int, status string) error
 	DeleteRole(ctx context.Context, id int) error
 
-	GetApiList(ctx context.Context, uid int) ([]*model.Api, error)
+	GetApiList(ctx context.Context, uid int64) ([]*model.Api, error)
 	GetApiListAll(ctx context.Context) ([]*model.Api, error)
 	DeleteApi(ctx context.Context, apiID int) error
 	CreateApi(ctx context.Context, api *model.Api) error
@@ -44,9 +45,9 @@ func NewAuthService(dao dao.AuthDAO, l *zap.Logger, userDao userDao.UserDAO) Aut
 }
 
 // GetMenuList 根据用户ID获取菜单列表
-func (a *authService) GetMenuList(ctx context.Context, uid int) ([]*model.Menu, error) {
+func (a *authService) GetMenuList(ctx context.Context, uid int64) ([]*model.Menu, error) {
 	// 获取用户信息
-	user, err := a.userDao.GetUserByID(ctx, uint(uid))
+	user, err := a.userDao.GetUserByID(ctx, uid)
 	if err != nil {
 		a.l.Error("GetUserByID failed", zap.Error(err))
 		return nil, err
@@ -263,8 +264,8 @@ func (a *authService) DeleteRole(ctx context.Context, id int) error {
 	return nil
 }
 
-func (a *authService) GetApiList(ctx context.Context, uid int) ([]*model.Api, error) {
-	user, err := a.userDao.GetUserByID(ctx, uint(uid))
+func (a *authService) GetApiList(ctx context.Context, uid int64) ([]*model.Api, error) {
+	user, err := a.userDao.GetUserByID(ctx, uid)
 	if err != nil {
 		a.l.Error("GetUserByID failed", zap.Error(err))
 		return nil, err
