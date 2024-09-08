@@ -14,6 +14,7 @@ import (
 type UserService interface {
 	SignUp(ctx context.Context, user *model.User) error
 	Login(ctx context.Context, user *model.User) (*model.User, error)
+	GetProfile(ctx context.Context, uid int64) (*model.User, error)
 }
 
 type userService struct {
@@ -51,4 +52,8 @@ func (us *userService) Login(ctx context.Context, user *model.User) (*model.User
 	}
 
 	return u, nil
+}
+
+func (us *userService) GetProfile(ctx context.Context, uid int64) (*model.User, error) {
+	return us.dao.GetUserByID(ctx, uid)
 }
