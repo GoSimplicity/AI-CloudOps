@@ -33,7 +33,7 @@ type K8sObjectRequest struct {
 	Name      string `json:"name"`
 }
 
-type OperationResult struct {
+type OperationData struct {
 	Success bool   `json:"success"`
 	Error   string `json:"error"`
 }
@@ -63,7 +63,7 @@ type SilenceResponse struct {
 // ApiResponse 通用的API响应结构体
 type ApiResponse struct {
 	Code    int         `json:"code"`    // 状态码，表示业务逻辑的状态，而非HTTP状态码
-	Result  interface{} `json:"result"`  // 响应数据
+	Data    interface{} `json:"data"`    // 响应数据
 	Message string      `json:"message"` // 反馈信息
 	Type    string      `json:"type"`    // 消息类型
 }
@@ -74,16 +74,16 @@ const (
 	StatusSuccess = 0 // 操作成功
 )
 
-// ApiResult 通用的返回函数，用于标准化API响应格式
+// ApiData 通用的返回函数，用于标准化API响应格式
 // 参数：
 // - c: gin 上下文
 // - code: 状态码
 // - data: 返回的数据
 // - message: 返回的消息
-func ApiResult(c *gin.Context, code int, data interface{}, message string) {
+func ApiData(c *gin.Context, code int, data interface{}, message string) {
 	c.JSON(http.StatusOK, ApiResponse{
 		Code:    code,
-		Result:  data,
+		Data:    data,
 		Message: message,
 		Type:    "",
 	})
@@ -91,44 +91,44 @@ func ApiResult(c *gin.Context, code int, data interface{}, message string) {
 
 // Success 操作成功的返回
 func Success(c *gin.Context) {
-	ApiResult(c, StatusSuccess, map[string]interface{}{}, "操作成功")
+	ApiData(c, StatusSuccess, map[string]interface{}{}, "操作成功")
 }
 
 // SuccessWithMessage 带消息的操作成功返回
 func SuccessWithMessage(c *gin.Context, message string) {
-	ApiResult(c, StatusSuccess, map[string]interface{}{}, message)
+	ApiData(c, StatusSuccess, map[string]interface{}{}, message)
 }
 
 // SuccessWithData 带数据的操作成功返回
 func SuccessWithData(c *gin.Context, data interface{}) {
-	ApiResult(c, StatusSuccess, data, "请求成功")
+	ApiData(c, StatusSuccess, data, "请求成功")
 }
 
 // SuccessWithDetails 带详细数据和消息的操作成功返回
 func SuccessWithDetails(c *gin.Context, data interface{}, message string) {
-	ApiResult(c, StatusSuccess, data, message)
+	ApiData(c, StatusSuccess, data, message)
 }
 
 // Error 操作失败的返回
 func Error(c *gin.Context) {
-	ApiResult(c, StatusError, map[string]interface{}{}, "操作失败")
+	ApiData(c, StatusError, map[string]interface{}{}, "操作失败")
 }
 
 // ErrorWithMessage 带消息的操作失败返回
 func ErrorWithMessage(c *gin.Context, message string) {
-	ApiResult(c, StatusError, map[string]interface{}{}, message)
+	ApiData(c, StatusError, map[string]interface{}{}, message)
 }
 
 // ErrorWithDetails 带详细数据和消息的操作失败返回
 func ErrorWithDetails(c *gin.Context, data interface{}, message string) {
-	ApiResult(c, StatusError, data, message)
+	ApiData(c, StatusError, data, message)
 }
 
 // BadRequest 参数错误的返回，使用HTTP 400状态码
 func BadRequest(c *gin.Context, code int, data interface{}, message string) {
 	c.JSON(http.StatusBadRequest, ApiResponse{
 		Code:    code,
-		Result:  data,
+		Data:    data,
 		Message: message,
 		Type:    "",
 	})
@@ -138,7 +138,7 @@ func BadRequest(c *gin.Context, code int, data interface{}, message string) {
 func Forbidden(c *gin.Context, code int, data interface{}, message string) {
 	c.JSON(http.StatusForbidden, ApiResponse{
 		Code:    code,
-		Result:  data,
+		Data:    data,
 		Message: message,
 		Type:    "",
 	})
@@ -148,7 +148,7 @@ func Forbidden(c *gin.Context, code int, data interface{}, message string) {
 func Unauthorized(c *gin.Context, code int, data interface{}, message string) {
 	c.JSON(http.StatusUnauthorized, ApiResponse{
 		Code:    code,
-		Result:  data,
+		Data:    data,
 		Message: message,
 		Type:    "",
 	})
@@ -158,7 +158,7 @@ func Unauthorized(c *gin.Context, code int, data interface{}, message string) {
 func InternalServerError(c *gin.Context, code int, data interface{}, message string) {
 	c.JSON(http.StatusInternalServerError, ApiResponse{
 		Code:    code,
-		Result:  data,
+		Data:    data,
 		Message: message,
 		Type:    "",
 	})
