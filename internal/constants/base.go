@@ -1,8 +1,6 @@
 package constants
 
-const (
-	SuccessCode = 0
-	SuccessMsg  = "success"
-
-	FailedMsg = "failed"
+// MySQL Error Code
+var (
+	ErrCodeDuplicate uint16 = 1062
 )
