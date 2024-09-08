@@ -91,10 +91,11 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
 		return
 	}
-	ctx.Header("X-JWT-Token", jwtToken)
-	ctx.Header("X-Refresh-Token", refreshToken)
 
-	apiresponse.Success(ctx)
+	apiresponse.SuccessWithData(ctx, gin.H{
+		"jwtToken":     jwtToken,
+		"refreshToken": refreshToken,
+	})
 }
 
 func (u *UserHandler) Logout(ctx *gin.Context) {
