@@ -62,7 +62,7 @@ func (a *AuthHandler) RegisterRouters(server *gin.Engine) {
 func (a *AuthHandler) GetMenuList(ctx *gin.Context) {
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 
-	roles, err := a.service.GetMenuList(ctx, int(uc.Uid))
+	roles, err := a.service.GetMenuList(ctx, uc.Uid)
 	if err != nil {
 		ctx.JSON(500, gin.H{
 			"msg": err,

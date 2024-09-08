@@ -23,17 +23,16 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		path := ctx.Request.URL.Path
 		// 如果请求的路径是下述路径，则不进行token验证
-		if path == "/api/user/create_user" {
+		if path == "/api/user/signup" || path == "/api/user/login" || path == "/api/user/logout" {
 			return
 		}
 
 		var uc ijwt.UserClaims
 		// 从请求中提取token
 		tokenStr := m.ExtractToken(ctx)
-		key1 := viper.GetString("jwt.key1")
-
+		key := []byte(viper.GetString("jwt.key1"))
 		token, err := jwt.ParseWithClaims(tokenStr, &uc, func(token *jwt.Token) (interface{}, error) {
-			return key1, nil
+			return key, nil
 		})
 
 		if err != nil {
