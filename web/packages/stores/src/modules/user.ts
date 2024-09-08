@@ -55,7 +55,6 @@ export const useUserStore = defineStore('core-user', {
     userRoles: [],
   }),
 });
-
 // 解决热更新问题
 const hot = import.meta.hot;
 if (hot) {

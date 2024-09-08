@@ -3,9 +3,10 @@ package jwt
 import (
 	"errors"
 	"fmt"
-	"github.com/spf13/viper"
 	"strings"
 	"time"
+
+	"github.com/spf13/viper"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -152,32 +153,85 @@ func (h *handler) CheckSession(ctx *gin.Context, ssid string) error {
 	return nil
 }
 
-// ClearToken 清空token
-func (h *handler) ClearToken(ctx *gin.Context) error {
-	ctx.Header("X-Refresh-Token", "")
-	uc := ctx.MustGet("user").(UserClaims)
-	// 获取 refresh token
-	refreshTokenString := ctx.GetHeader("X-Refresh-Token")
+//// ClearToken 清空token
+//func (h *handler) ClearToken(ctx *gin.Context) error {
+//	ctx.Header("X-Refresh-Token", "")
+//	uc := ctx.MustGet("user").(UserClaims)
+//	// 获取 refresh token
+//	refreshTokenString := ctx.GetHeader("X-Refresh-Token")
+//
+//	if refreshTokenString == "" {
+//		return errors.New("missing refresh token")
+//	}
+//
+//	// 解析 refresh token
+//	refreshClaims := &RefreshClaims{}
+//	refreshToken, err := jwt.ParseWithClaims(refreshTokenString, refreshClaims, func(token *jwt.Token) (interface{}, error) {
+//		return h.key2, nil
+//	})
+//
+//	if err != nil || !refreshToken.Valid {
+//		return errors.New("invalid refresh token")
+//	}
+//	// 设置redis中的会话ID键的过期时间为refresh token的剩余过期时间
+//	remainingTime := refreshClaims.ExpiresAt.Time.Sub(time.Now())
+//
+//	if er := h.client.Set(ctx, fmt.Sprintf("linkme:user:ssid:%s", uc.Ssid), "", remainingTime).Err(); er != nil {
+//		return er
+//	}
+//
+//	return nil
+//}
 
-	if refreshTokenString == "" {
-		return errors.New("missing refresh token")
+// ClearToken 清空 token，让 Authorization 中的用于验证的 token 失效
+func (h *handler) ClearToken(ctx *gin.Context) error {
+	// 获取 Authorization 头部中的 token
+	authToken, err := h.extractBearerToken(ctx)
+	if err != nil {
+		return err
 	}
 
-	// 解析 refresh token
-	refreshClaims := &RefreshClaims{}
-	refreshToken, err := jwt.ParseWithClaims(refreshTokenString, refreshClaims, func(token *jwt.Token) (interface{}, error) {
-		return h.key2, nil
+	// 提取 token 的 claims 信息
+	claims := &UserClaims{}
+	token, err := jwt.ParseWithClaims(authToken, claims, func(token *jwt.Token) (interface{}, error) {
+		return h.key1, nil
 	})
 
-	if err != nil || !refreshToken.Valid {
-		return errors.New("invalid refresh token")
-	}
-	// 设置redis中的会话ID键的过期时间为refresh token的剩余过期时间
-	remainingTime := refreshClaims.ExpiresAt.Time.Sub(time.Now())
-
-	if er := h.client.Set(ctx, fmt.Sprintf("linkme:user:ssid:%s", uc.Ssid), "", remainingTime).Err(); er != nil {
-		return er
+	if err != nil || !token.Valid {
+		return errors.New("invalid authorization token")
 	}
 
+	// 将 token 加入 Redis 黑名单
+	if err := h.addToBlacklist(ctx, authToken, claims.ExpiresAt.Time); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// 提取 Bearer Token
+func (h *handler) extractBearerToken(ctx *gin.Context) (string, error) {
+	authHeader := ctx.GetHeader("Authorization")
+	if authHeader == "" {
+		return "", errors.New("missing authorization token")
+	}
+
+	const bearerPrefix = "Bearer "
+	if len(authHeader) <= len(bearerPrefix) || authHeader[:len(bearerPrefix)] != bearerPrefix {
+		return "", errors.New("invalid authorization token format")
+	}
+
+	return authHeader[len(bearerPrefix):], nil
+}
+
+// 将 token 加入 Redis 黑名单
+func (h *handler) addToBlacklist(ctx *gin.Context, authToken string, expiresAt time.Time) error {
+	remainingTime := time.Until(expiresAt)
+	blacklistKey := fmt.Sprintf("blacklist:token:%s", authToken)
+
+	// 将 token 存入 Redis，并设置过期时间
+	if err := h.client.Set(ctx, blacklistKey, "invalid", remainingTime).Err(); err != nil {
+		return err
+	}
 	return nil
 }

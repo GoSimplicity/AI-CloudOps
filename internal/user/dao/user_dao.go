@@ -2,7 +2,11 @@ package dao
 
 import (
 	"context"
+	"errors"
+
+	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"github.com/GoSimplicity/CloudOps/internal/model"
+	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -19,7 +23,7 @@ type UserDAO interface {
 	// GetAllUsers 获取所有用户
 	GetAllUsers(ctx context.Context) ([]*model.User, error)
 	// GetUserByID 通过ID获取用户
-	GetUserByID(ctx context.Context, id uint) (*model.User, error)
+	GetUserByID(ctx context.Context, id int64) (*model.User, error)
 	// GetUserByRealName 通过名称获取用户
 	GetUserByRealName(ctx context.Context, name string) (*model.User, error)
 	// GetUserByMobile 通过手机号获取用户
@@ -40,6 +44,10 @@ func NewUserDAO(db *gorm.DB, l *zap.Logger) UserDAO {
 
 func (u *userDAO) CreateUser(ctx context.Context, user *model.User) error {
 	if err := u.db.WithContext(ctx).Create(user).Error; err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == constants.ErrCodeDuplicate {
+			return constants.ErrorUserExist
+		}
 		u.l.Error("create user failed", zap.Error(err))
 		return err
 	}
@@ -87,11 +95,11 @@ func (u *userDAO) GetAllUsers(ctx context.Context) ([]*model.User, error) {
 	return users, nil
 }
 
-func (u *userDAO) GetUserByID(ctx context.Context, id uint) (*model.User, error) {
+func (u *userDAO) GetUserByID(ctx context.Context, id int64) (*model.User, error) {
 	var user model.User
 
 	if err := u.db.WithContext(ctx).Where("id = ?", id).First(&user).Error; err != nil {
-		u.l.Error("get user by id failed", zap.Uint("id", id), zap.Error(err))
+		u.l.Error("get user by id failed", zap.Int64("id", id), zap.Error(err))
 		return nil, err
 	}
 
