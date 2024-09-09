@@ -31,12 +31,12 @@ func NewUserHandler(service service.UserService, l *zap.Logger, ijwt ijwt.Handle
 
 func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
 	userGroup := server.Group("/api/user")
-	userGroup.POST("/signup", u.SignUp)
-	userGroup.POST("/login", u.Login)
-	userGroup.POST("/refresh_token", u.RefreshToken)
-	userGroup.POST("/logout", u.Logout)
-	userGroup.GET("/profile", u.Profile)
-	userGroup.GET("/codes", u.GetPermCode)
+	userGroup.POST("/signup", u.SignUp)              // 注册
+	userGroup.POST("/login", u.Login)                // 登陆
+	userGroup.POST("/refresh_token", u.RefreshToken) // 刷新token
+	userGroup.POST("/logout", u.Logout)              // 退出登陆
+	userGroup.GET("/profile", u.Profile)             // 用户信息
+	userGroup.GET("/codes", u.GetPermCode)           // 前端所需状态码
 }
 
 func (u *UserHandler) SignUp(ctx *gin.Context) {
