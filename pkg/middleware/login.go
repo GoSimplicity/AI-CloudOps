@@ -37,19 +37,19 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 
 		if err != nil {
 			// token 错误
-			ctx.AbortWithStatus(400)
+			ctx.AbortWithStatus(401)
 			return
 		}
 
 		if token == nil || !token.Valid {
 			// token 非法或过期
-			ctx.AbortWithStatus(400)
+			ctx.AbortWithStatus(401)
 			return
 		}
 
 		// 检查是否携带ua头
 		if uc.UserAgent == "" {
-			ctx.AbortWithStatus(400)
+			ctx.AbortWithStatus(401)
 			return
 		}
 
@@ -57,7 +57,7 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 		err = m.CheckSession(ctx, uc.Ssid)
 
 		if err != nil {
-			ctx.AbortWithStatus(400)
+			ctx.AbortWithStatus(401)
 			return
 		}
 
