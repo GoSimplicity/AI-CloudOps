@@ -183,5 +183,10 @@ func (u *UserHandler) RefreshToken(ctx *gin.Context) {
 }
 
 func (u *UserHandler) GetPermCode(ctx *gin.Context) {
-	apiresponse.SuccessWithData(ctx, []string{"2000", "4000", "6000"})
+	apiresponse.SuccessWithData(ctx, []string{
+		"AC_100100",
+		"AC_100110",
+		"AC_100120",
+		"AC_100010",
+	})
 }
