@@ -2,6 +2,8 @@ package api
 
 import (
 	"github.com/GoSimplicity/CloudOps/internal/auth/service"
+	"github.com/GoSimplicity/CloudOps/internal/model"
+	"github.com/GoSimplicity/CloudOps/pkg/utils/apiresponse"
 	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 )
@@ -64,24 +66,37 @@ func (a *AuthHandler) GetMenuList(ctx *gin.Context) {
 
 	roles, err := a.service.GetMenuList(ctx, uc.Uid)
 	if err != nil {
-		ctx.JSON(500, gin.H{
-			"msg": err,
-		})
+		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	ctx.JSON(200, gin.H{
-		"msg":  "success",
-		"data": roles,
-	})
+	apiresponse.SuccessWithData(ctx, roles)
 }
 
 func (a *AuthHandler) GetAllMenuList(ctx *gin.Context) {
-	// TODO: Implement GetAllMenuList
+	menus, err := a.service.GetAllMenuList(ctx)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, menus)
 }
 
 func (a *AuthHandler) UpdateMenu(ctx *gin.Context) {
-	// TODO: Implement UpdateMenu
+	var req model.Menu
+
+	if err := ctx.ShouldBindJSON(req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	if err := a.service.UpdateMenu(ctx, req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithMessage(ctx, "更新成功")
 }
 
 func (a *AuthHandler) CreateMenu(ctx *gin.Context) {
