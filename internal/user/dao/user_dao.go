@@ -3,6 +3,7 @@ package dao
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"github.com/GoSimplicity/CloudOps/internal/model"
@@ -28,6 +29,8 @@ type UserDAO interface {
 	GetUserByRealName(ctx context.Context, name string) (*model.User, error)
 	// GetUserByMobile 通过手机号获取用户
 	GetUserByMobile(ctx context.Context, mobile string) (*model.User, error)
+	// GetPermCode 获取用户权限码
+	GetPermCode(ctx context.Context, uid int64) ([]string, error)
 }
 
 type userDAO struct {
@@ -126,4 +129,26 @@ func (u *userDAO) GetUserByMobile(ctx context.Context, mobile string) (*model.Us
 	}
 
 	return &user, nil
+}
+
+func (u *userDAO) GetPermCode(ctx context.Context, uid int64) ([]string, error) {
+	var user model.User
+
+	// 根据 uid 查找用户，并预加载关联的 Roles
+	if err := u.db.WithContext(ctx).Preload("Roles").Where("id = ?", uid).Find(&user).Error; err != nil {
+		u.l.Error("get user by id failed", zap.Int64("id", uid), zap.Error(err))
+		return nil, err
+	}
+
+	// 用于存储所有的权限码
+	var permCodes []string
+
+	// 遍历用户的角色，提取每个角色的 Codes
+	for _, role := range user.Roles {
+		// Codes 字段存储为 "xxx,xxx,xxx" 格式的字符串，需要进行转换
+		codes := strings.Split(role.Codes, ",")
+		permCodes = append(permCodes, codes...)
+	}
+
+	return permCodes, nil
 }
