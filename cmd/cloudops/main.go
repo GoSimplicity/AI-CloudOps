@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/GoSimplicity/CloudOps/config"
@@ -19,6 +20,11 @@ func Init() {
 	config.InitViper()
 	// 初始化 Web 服务器和其他组件
 	server := di.InitWebServer()
+	// 初始化翻译器
+	if err := di.InitTrans(); err != nil {
+		log.Printf("初始化翻译器失败: %v\n", err)
+		return
+	}
 	// 设置请求头打印路由
 	server.GET("/headers", printHeaders)
 

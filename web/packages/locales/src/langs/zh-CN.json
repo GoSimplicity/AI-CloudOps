@@ -8,10 +8,17 @@
       "forgetPassword": "忘记密码"
     },
     "dashboard": {
-      "title": "概览",
-      "analytics": "分析页",
-      "workspace": "工作台",
-      "test": "测试页"
+      "title": "系统管理",
+      "welcome": "欢迎页",
+      "menus": "菜单管理",
+      "users": "用户管理",
+      "roles": "权限管理",
+      "apis": "接口管理",
+      "test": "测试"
+    },
+    "serviceTree": {
+      "title": "服务树",
+      "system": "服务树管理"
     },
     "vben": {
       "title": "项目",
