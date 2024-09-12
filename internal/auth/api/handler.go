@@ -10,11 +10,13 @@ import (
 
 type AuthHandler struct {
 	service service.AuthService
+	ijwt    ijwt.Handler
 }
 
-func NewAuthHandler(service service.AuthService) *AuthHandler {
+func NewAuthHandler(service service.AuthService, handler ijwt.Handler) *AuthHandler {
 	return &AuthHandler{
 		service: service,
+		ijwt:    handler,
 	}
 }
 
@@ -100,31 +102,81 @@ func (a *AuthHandler) UpdateMenu(ctx *gin.Context) {
 }
 
 func (a *AuthHandler) CreateMenu(ctx *gin.Context) {
-	// TODO: Implement CreateMenu
+	var req model.Menu
+
+	if err := ctx.ShouldBindJSON(req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	if err := a.service.CreateMenu(ctx, req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	apiresponse.SuccessWithMessage(ctx, "创建成功")
 }
 
 func (a *AuthHandler) DeleteMenu(ctx *gin.Context) {
-	// TODO: Implement DeleteMenu
+	var req model.Menu
+	if err := ctx.ShouldBindJSON(req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	if err := a.service.DeleteMenu(ctx, int(req.ID)); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	apiresponse.SuccessWithMessage(ctx, "删除成功")
+
 }
 
 func (a *AuthHandler) GetAllRoleList(ctx *gin.Context) {
-	// TODO: Implement GetAllRoleList
+	roles, err := a.service.GetAllRoleList(ctx)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+	}
+	apiresponse.SuccessWithData(ctx, roles)
+	return
 }
 
 func (a *AuthHandler) CreateRole(ctx *gin.Context) {
-	// TODO: Implement CreateRole
+	var req model.Role
+	err := a.service.CreateRole(ctx, req)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	apiresponse.SuccessWithMessage(ctx, "创建成功")
+	return
 }
 
 func (a *AuthHandler) UpdateRole(ctx *gin.Context) {
-	// TODO: Implement UpdateRole
+	var req model.Role
+	err := a.service.UpdateRole(ctx, req)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	apiresponse.SuccessWithMessage(ctx, "更新成功")
 }
 
 func (a *AuthHandler) SetRoleStatus(ctx *gin.Context) {
-	// TODO: Implement SetRoleStatus
+	var req model.Role
+	err := a.service.SetRoleStatus(ctx, int(req.ID), req.Status)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	apiresponse.SuccessWithMessage(ctx, "更新成功")
 }
 
 func (a *AuthHandler) DeleteRole(ctx *gin.Context) {
-	// TODO: Implement DeleteRole
+	var req model.Role
+	err := a.service.DeleteRole(ctx, int(req.ID))
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	apiresponse.SuccessWithMessage(ctx, "删除成功")
 }
 
 func (a *AuthHandler) CreateAccount(ctx *gin.Context) {
@@ -156,21 +208,50 @@ func (a *AuthHandler) DeleteAccount(ctx *gin.Context) {
 }
 
 func (a *AuthHandler) GetApiList(ctx *gin.Context) {
-	// TODO: Implement GetApiList
+	var user model.User
+	Apis, err := a.service.GetApiList(ctx, user.ID)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	apiresponse.SuccessWithData(ctx, Apis)
 }
 
 func (a *AuthHandler) GetApiListAll(ctx *gin.Context) {
-	// TODO: Implement GetApiListAll
+	Apis, err := a.service.GetApiListAll(ctx)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	apiresponse.SuccessWithData(ctx, Apis)
 }
 
 func (a *AuthHandler) DeleteApi(ctx *gin.Context) {
-	// TODO: Implement DeleteApi
+	var api model.Api
+	err := a.service.DeleteApi(ctx, int(api.ID))
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	apiresponse.SuccessWithMessage(ctx, "删除成功")
 }
 
 func (a *AuthHandler) CreateApi(ctx *gin.Context) {
-	// TODO: Implement CreateApi
+	var api *model.Api
+	err := a.service.CreateApi(ctx, api)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	apiresponse.SuccessWithMessage(ctx, "创建成功")
 }
 
 func (a *AuthHandler) UpdateApi(ctx *gin.Context) {
-	// TODO: Implement UpdateApi
+	var api *model.Api
+	err := a.service.UpdateApi(ctx, api)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	apiresponse.SuccessWithMessage(ctx, "更新成功")
 }
