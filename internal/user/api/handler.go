@@ -183,10 +183,13 @@ func (u *UserHandler) RefreshToken(ctx *gin.Context) {
 }
 
 func (u *UserHandler) GetPermCode(ctx *gin.Context) {
-	apiresponse.SuccessWithData(ctx, []string{
-		"AC_100100",
-		"AC_100110",
-		"AC_100120",
-		"AC_100010",
-	})
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+
+	codes, err := u.service.GetPermCode(ctx, uc.Uid)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, codes)
 }
