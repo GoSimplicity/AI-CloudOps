@@ -256,7 +256,6 @@ func (a *authDAO) CreateMenu(ctx context.Context, menu *model.Menu) error {
 		a.l.Error("failed to create menu", zap.Error(err))
 		return err
 	}
-
 	return nil
 }
 
