@@ -2,41 +2,41 @@ package service
 
 import (
 	"context"
+	"github.com/GoSimplicity/CloudOps/internal/auth/dao/auth"
 	"sort"
 
-	"github.com/GoSimplicity/CloudOps/internal/auth/dao"
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 )
 
 type AuthService interface {
-	GetMenuList(ctx context.Context, uid int64) ([]*model.Menu, error)
+	GetMenuList(ctx context.Context, uid uint) ([]*model.Menu, error)
 	GetAllMenuList(ctx context.Context) ([]*model.Menu, error)
 	UpdateMenu(ctx context.Context, menu model.Menu) error
 	CreateMenu(ctx context.Context, menu model.Menu) error
-	DeleteMenu(ctx context.Context, id int) error
+	DeleteMenu(ctx context.Context, id string) error
 
 	GetAllRoleList(ctx context.Context) ([]*model.Role, error)
 	CreateRole(ctx context.Context, roles model.Role) error
 	UpdateRole(ctx context.Context, roles model.Role) error
-	SetRoleStatus(ctx context.Context, id int, status string) error
-	DeleteRole(ctx context.Context, id int) error
+	SetRoleStatus(ctx context.Context, id uint, status string) error
+	DeleteRole(ctx context.Context, id string) error
 
-	GetApiList(ctx context.Context, uid int64) ([]*model.Api, error)
+	GetApiList(ctx context.Context, uid uint) ([]*model.Api, error)
 	GetApiListAll(ctx context.Context) ([]*model.Api, error)
-	DeleteApi(ctx context.Context, apiID int) error
+	DeleteApi(ctx context.Context, apiID uint) error
 	CreateApi(ctx context.Context, api *model.Api) error
 	UpdateApi(ctx context.Context, api *model.Api) error
 }
 
 type authService struct {
-	dao     dao.AuthDAO
+	dao     auth.AuthDAO
 	userDao userDao.UserDAO
 	l       *zap.Logger
 }
 
-func NewAuthService(dao dao.AuthDAO, l *zap.Logger, userDao userDao.UserDAO) AuthService {
+func NewAuthService(dao auth.AuthDAO, l *zap.Logger, userDao userDao.UserDAO) AuthService {
 	return &authService{
 		dao:     dao,
 		l:       l,
@@ -45,7 +45,7 @@ func NewAuthService(dao dao.AuthDAO, l *zap.Logger, userDao userDao.UserDAO) Aut
 }
 
 // GetMenuList 根据用户ID获取菜单列表
-func (a *authService) GetMenuList(ctx context.Context, uid int64) ([]*model.Menu, error) {
+func (a *authService) GetMenuList(ctx context.Context, uid uint) ([]*model.Menu, error) {
 	// 获取用户信息
 	user, err := a.userDao.GetUserByID(ctx, uid)
 	if err != nil {
@@ -181,8 +181,8 @@ func (a *authService) CreateMenu(ctx context.Context, menu model.Menu) error {
 }
 
 // DeleteMenu 删除菜单
-func (a *authService) DeleteMenu(ctx context.Context, id int) error {
-	return a.dao.DeleteMenu(ctx, uint(id))
+func (a *authService) DeleteMenu(ctx context.Context, id string) error {
+	return a.dao.DeleteMenu(ctx, id)
 }
 
 // GetAllRoleList 获取所有角色列表
@@ -235,8 +235,8 @@ func (a *authService) UpdateRole(ctx context.Context, role model.Role) error {
 
 	return a.dao.UpdateRole(ctx, &role)
 }
-func (a *authService) SetRoleStatus(ctx context.Context, roleID int, status string) error {
-	role, err := a.dao.GetRoleByRoleID(ctx, uint(roleID))
+func (a *authService) SetRoleStatus(ctx context.Context, roleID uint, status string) error {
+	role, err := a.dao.GetRoleByRoleID(ctx, roleID)
 	if err != nil {
 		a.l.Error("GetRoleByRoleID failed", zap.Error(err))
 		return err
@@ -254,8 +254,8 @@ func (a *authService) SetRoleStatus(ctx context.Context, roleID int, status stri
 	return nil
 }
 
-func (a *authService) DeleteRole(ctx context.Context, id int) error {
-	err := a.dao.DeleteRole(ctx, uint(id))
+func (a *authService) DeleteRole(ctx context.Context, id string) error {
+	err := a.dao.DeleteRole(ctx, id)
 	if err != nil {
 		a.l.Error("DeleteRole failed", zap.Error(err))
 		return err
@@ -264,7 +264,7 @@ func (a *authService) DeleteRole(ctx context.Context, id int) error {
 	return nil
 }
 
-func (a *authService) GetApiList(ctx context.Context, uid int64) ([]*model.Api, error) {
+func (a *authService) GetApiList(ctx context.Context, uid uint) ([]*model.Api, error) {
 	user, err := a.userDao.GetUserByID(ctx, uid)
 	if err != nil {
 		a.l.Error("GetUserByID failed", zap.Error(err))
@@ -294,8 +294,8 @@ func (a *authService) GetApiListAll(ctx context.Context) ([]*model.Api, error) {
 	return apis, nil
 }
 
-func (a *authService) DeleteApi(ctx context.Context, apiID int) error {
-	err := a.dao.DeleteApi(ctx, uint(apiID))
+func (a *authService) DeleteApi(ctx context.Context, apiID uint) error {
+	err := a.dao.DeleteApi(ctx, apiID)
 	if err != nil {
 		a.l.Error("DeleteApi failed", zap.Error(err))
 		return err
