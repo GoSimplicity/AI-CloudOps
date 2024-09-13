@@ -25,7 +25,7 @@ type AuthService interface {
 
 	GetApiList(ctx context.Context, uid uint) ([]*model.Api, error)
 	GetApiListAll(ctx context.Context) ([]*model.Api, error)
-	DeleteApi(ctx context.Context, apiID uint) error
+	DeleteApi(ctx context.Context, apiID string) error
 	CreateApi(ctx context.Context, api *model.Api) error
 	UpdateApi(ctx context.Context, api *model.Api) error
 }
@@ -236,18 +236,9 @@ func (a *authService) UpdateRole(ctx context.Context, role model.Role) error {
 	return a.dao.UpdateRole(ctx, &role)
 }
 func (a *authService) SetRoleStatus(ctx context.Context, roleID uint, status string) error {
-	role, err := a.dao.GetRoleByRoleID(ctx, roleID)
+	err := a.dao.UpdateRoleStatus(ctx, roleID, status)
 	if err != nil {
-		a.l.Error("GetRoleByRoleID failed", zap.Error(err))
-		return err
-	}
-
-	// 更新角色状态
-	role.Status = status
-
-	err = a.dao.UpdateRole(ctx, role)
-	if err != nil {
-		a.l.Error("UpdateRole failed", zap.Error(err))
+		a.l.Error("update role status failed", zap.Error(err))
 		return err
 	}
 
@@ -294,7 +285,7 @@ func (a *authService) GetApiListAll(ctx context.Context) ([]*model.Api, error) {
 	return apis, nil
 }
 
-func (a *authService) DeleteApi(ctx context.Context, apiID uint) error {
+func (a *authService) DeleteApi(ctx context.Context, apiID string) error {
 	err := a.dao.DeleteApi(ctx, apiID)
 	if err != nil {
 		a.l.Error("DeleteApi failed", zap.Error(err))
