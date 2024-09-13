@@ -195,9 +195,9 @@ func (a *AuthHandler) DeleteRole(ctx *gin.Context) {
 }
 
 func (a *AuthHandler) GetApiList(ctx *gin.Context) {
-	var user model.User
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
 
-	Apis, err := a.service.GetApiList(ctx, user.ID)
+	Apis, err := a.service.GetApiList(ctx, uc.Uid)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
@@ -217,14 +217,9 @@ func (a *AuthHandler) GetApiListAll(ctx *gin.Context) {
 }
 
 func (a *AuthHandler) DeleteApi(ctx *gin.Context) {
-	var api model.Api
+	id := ctx.Param("id")
 
-	if err := ctx.ShouldBindJSON(&api); err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	err := a.service.DeleteApi(ctx, api.ID)
+	err := a.service.DeleteApi(ctx, id)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
