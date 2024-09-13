@@ -261,7 +261,13 @@ func (a *authDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 }
 
 func (a *authDAO) UpdateMenu(ctx context.Context, menu *model.Menu) error {
-	if err := a.db.WithContext(ctx).Model(menu).Updates(menu).Error; err != nil {
+	if err := a.db.WithContext(ctx).Model(menu).Updates(map[string]interface{}{
+		"title":     menu.Title,
+		"name":      menu.Name,
+		"path":      menu.Path,
+		"component": menu.Component,
+		"show":      menu.Show,
+	}).Error; err != nil {
 		a.l.Error("failed to update menu", zap.Uint("menuID", menu.ID), zap.Error(err))
 		return err
 	}
