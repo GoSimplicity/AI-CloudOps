@@ -1,4 +1,4 @@
-package dao
+package auth
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 type AuthDAO interface {
 	// GetRoleByRoleValue 通过角色值获取角色
-	GetRoleByRoleValue(ctx context.Context, roleValue string) (*model.Role, error)
+	GetRoleByRoleValue(ctx context.Context, roleValue uint) (*model.Role, error)
 	// GetRoleByRoleID 通过角色ID获取角色
 	GetRoleByRoleID(ctx context.Context, roleID uint) (*model.Role, error)
 	// CreateRole 创建角色
@@ -25,7 +25,7 @@ type AuthDAO interface {
 	// UpdateApis 更新API
 	UpdateApis(ctx context.Context, apis []*model.Api) error
 	// DeleteRole 删除角色
-	DeleteRole(ctx context.Context, roleId uint) error
+	DeleteRole(ctx context.Context, roleId string) error
 	// GetAllApis 获取所有API
 	GetAllApis(ctx context.Context) ([]*model.Api, error)
 	// GetApiByID 通过ID获取API
@@ -47,9 +47,9 @@ type AuthDAO interface {
 	// GetMenuByID 根据ID获取菜单
 	GetMenuByID(ctx context.Context, id uint) (*model.Menu, error)
 	// GetMenuByFatherID 根据父亲ID获取菜单
-	GetMenuByFatherID(ctx context.Context, id int) (*model.Menu, error)
+	GetMenuByFatherID(ctx context.Context, id uint) (*model.Menu, error)
 	// DeleteMenu 通过ID删除菜单
-	DeleteMenu(ctx context.Context, menuID uint) error
+	DeleteMenu(ctx context.Context, menuID string) error
 }
 
 type authDAO struct {
@@ -64,10 +64,10 @@ func NewAuthDAO(db *gorm.DB, l *zap.Logger) AuthDAO {
 	}
 }
 
-func (a *authDAO) GetRoleByRoleValue(ctx context.Context, roleValue string) (*model.Role, error) {
+func (a *authDAO) GetRoleByRoleValue(ctx context.Context, roleValue uint) (*model.Role, error) {
 	var role model.Role
 	if err := a.db.WithContext(ctx).Where("role_value = ?", roleValue).First(&role).Error; err != nil {
-		a.l.Error("failed to get role by roleValue", zap.String("roleValue", roleValue), zap.Error(err))
+		a.l.Error("failed to get role by roleValue", zap.Uint("roleValue", roleValue), zap.Error(err))
 		return nil, err
 	}
 	return &role, nil
@@ -94,7 +94,12 @@ func (a *authDAO) CreateRole(ctx context.Context, role *model.Role) error {
 }
 
 func (a *authDAO) UpdateRole(ctx context.Context, role *model.Role) error {
-	if err := a.db.WithContext(ctx).Model(role).Updates(role).Error; err != nil {
+	if err := a.db.WithContext(ctx).Model(role).Updates(map[string]interface{}{
+		"role_name":  role.RoleName,
+		"role_value": role.RoleValue,
+		"remark":     role.Remark,
+		"status":     role.Status,
+	}).Error; err != nil {
 		a.l.Error("failed to update role", zap.Error(err))
 		return err
 	}
@@ -155,7 +160,7 @@ func (a *authDAO) UpdateApis(ctx context.Context, apis []*model.Api) error {
 	return nil
 }
 
-func (a *authDAO) DeleteRole(ctx context.Context, id uint) error {
+func (a *authDAO) DeleteRole(ctx context.Context, id string) error {
 	if err := a.db.WithContext(ctx).Where("id = ?", id).Delete(&model.Role{}).Error; err != nil {
 		a.l.Error("failed to delete role", zap.Error(err))
 		return err
@@ -256,14 +261,13 @@ func (a *authDAO) CreateMenu(ctx context.Context, menu *model.Menu) error {
 		a.l.Error("failed to create menu", zap.Error(err))
 		return err
 	}
-
 	return nil
 }
 
 func (a *authDAO) GetMenuByID(ctx context.Context, id uint) (*model.Menu, error) {
 	var menu model.Menu
 
-	if err := a.db.WithContext(ctx).Where("id = ?", id).First(&menu).Error; err != nil {
+	if err := a.db.WithContext(ctx).Where("pid = ?", id).First(&menu).Error; err != nil {
 		a.l.Error("failed to get menu by ID", zap.Uint("id", id), zap.Error(err))
 		return nil, err
 	}
@@ -271,11 +275,11 @@ func (a *authDAO) GetMenuByID(ctx context.Context, id uint) (*model.Menu, error)
 	return &menu, nil
 }
 
-func (a *authDAO) GetMenuByFatherID(ctx context.Context, id int) (*model.Menu, error) {
+func (a *authDAO) GetMenuByFatherID(ctx context.Context, id uint) (*model.Menu, error) {
 	var menu model.Menu
 
 	if err := a.db.WithContext(ctx).Where("pid = ?", id).First(&menu).Error; err != nil {
-		a.l.Error("failed to get menu by ID", zap.Int("id", id), zap.Error(err))
+		a.l.Error("failed to get menu by ID", zap.Uint("id", id), zap.Error(err))
 		return nil, err
 	}
 
@@ -293,9 +297,9 @@ func (a *authDAO) GetAllMenus(ctx context.Context) ([]*model.Menu, error) {
 	return menus, nil
 }
 
-func (a *authDAO) DeleteMenu(ctx context.Context, menuID uint) error {
+func (a *authDAO) DeleteMenu(ctx context.Context, menuID string) error {
 	if err := a.db.WithContext(ctx).Where("id = ?", menuID).Delete(&model.Menu{}).Error; err != nil {
-		a.l.Error("failed to delete menu", zap.Uint("menuID", menuID), zap.Error(err))
+		a.l.Error("failed to delete menu", zap.String("menuID", menuID), zap.Error(err))
 		return err
 	}
 

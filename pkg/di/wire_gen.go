@@ -7,6 +7,10 @@
 package di
 
 import (
+	api2 "github.com/GoSimplicity/CloudOps/internal/auth/api"
+	"github.com/GoSimplicity/CloudOps/internal/auth/dao/auth"
+	"github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
+	service2 "github.com/GoSimplicity/CloudOps/internal/auth/service"
 	"github.com/GoSimplicity/CloudOps/internal/user/api"
 	"github.com/GoSimplicity/CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/CloudOps/internal/user/service"
@@ -24,11 +28,16 @@ func InitWebServer() *gin.Engine {
 	cmdable := InitRedis()
 	handler := jwt.NewJWTHandler(cmdable)
 	logger := InitLogger()
-	v := InitMiddlewares(handler, logger)
 	db := InitDB()
 	userDAO := dao.NewUserDAO(db, logger)
+	enforcer := InitCasbin(db, logger)
+	casbinDAO := casbin.NewCasbinDAO(enforcer, logger)
+	v := InitMiddlewares(handler, logger, userDAO, casbinDAO)
 	userService := service.NewUserService(userDAO)
 	userHandler := api.NewUserHandler(userService, logger, handler)
-	engine := InitGinServer(v, userHandler)
+	authDAO := auth.NewAuthDAO(db, logger)
+	authService := service2.NewAuthService(authDAO, logger, userDAO)
+	authHandler := api2.NewAuthHandler(authService, handler, logger, casbinDAO, userDAO)
+	engine := InitGinServer(v, userHandler, authHandler)
 	return engine
 }
