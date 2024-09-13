@@ -44,7 +44,7 @@ func NewAuthService(dao auth.AuthDAO, l *zap.Logger, userDao userDao.UserDAO) Au
 	}
 }
 
-// GetMenuList 根据用户ID获取菜单列表
+// GetMenuList 根据用户ID获取菜单列表，支持按角色过滤菜单
 func (a *authService) GetMenuList(ctx context.Context, uid uint) ([]*model.Menu, error) {
 	// 获取用户信息
 	user, err := a.userDao.GetUserByID(ctx, uid)
@@ -53,106 +53,56 @@ func (a *authService) GetMenuList(ctx context.Context, uid uint) ([]*model.Menu,
 		return nil, err
 	}
 
-	// 用于存储父菜单和唯一子菜单
+	// 父菜单映射和子菜单唯一性检查
 	fatherMenuMap := make(map[uint]*model.Menu)
 	uniqueChildMap := make(map[uint]struct{})
 
-	// 遍历用户的角色
+	// 遍历用户角色，处理菜单
 	for _, role := range user.Roles {
-		// 跳过禁用的角色
 		if role.Status == "0" {
+			// 跳过禁用的角色
 			continue
 		}
 
-		// 遍历角色的菜单
+		// 处理角色的菜单
 		for _, menu := range role.Menus {
-			// 非超级管理员跳过禁用的菜单
 			if menu.Status == "0" && role.RoleValue != "super" {
+				// 非超级管理员跳过禁用菜单
 				continue
 			}
 
 			// 设置菜单元数据
-			menu.Meta = &model.MenuMeta{
-				Icon:            menu.Icon,
-				Title:           menu.Title,
-				ShowMenu:        menu.Show,
-				HideMenu:        !menu.Show,
-				IgnoreKeepAlive: true,
-			}
-			menu.Key = menu.ID
-			menu.Value = menu.ID
+			a.setMenuMeta(menu)
 
 			// 父菜单处理
 			if menu.Pid == 0 {
 				fatherMenuMap[menu.ID] = menu
-				continue
-			}
-
-			// 获取父菜单信息
-			fatherMenu, err := a.dao.GetMenuByID(ctx, uint(menu.Pid))
-			if err != nil {
-				a.l.Error("GetMenuByID failed", zap.Error(err))
-				continue
-			}
-
-			// 设置父菜单的元数据
-			fatherMenu.Meta = &model.MenuMeta{
-				Icon:     fatherMenu.Icon,
-				Title:    fatherMenu.Title,
-				ShowMenu: fatherMenu.Show,
-				HideMenu: !fatherMenu.Show,
-			}
-			fatherMenu.Key = fatherMenu.ID
-			fatherMenu.Value = fatherMenu.ID
-
-			// 如果子菜单已处理过，则跳过
-			if _, ok := uniqueChildMap[menu.ID]; ok {
-				continue
-			}
-			uniqueChildMap[menu.ID] = struct{}{}
-
-			// 父菜单添加子菜单
-			if existingFather, ok := fatherMenuMap[fatherMenu.ID]; !ok {
-				fatherMenu.Children = append(fatherMenu.Children, menu)
-				fatherMenuMap[fatherMenu.ID] = fatherMenu
 			} else {
-				existingFather.Children = append(existingFather.Children, menu)
+				// 处理子菜单并附加到父菜单
+				if err := a.attachToFatherMenu(ctx, menu, fatherMenuMap, uniqueChildMap); err != nil {
+					a.l.Error("attachToFatherMenu failed", zap.Error(err))
+					continue
+				}
 			}
 		}
 	}
 
-	// 构建最终的菜单列表并进行排序
-	finalMenus := make([]*model.Menu, 0, len(fatherMenuMap))
-	finalMenuIds := make([]int, 0, len(fatherMenuMap))
-
-	for id := range fatherMenuMap {
-		finalMenuIds = append(finalMenuIds, int(id))
-	}
-	sort.Ints(finalMenuIds)
-
-	for _, id := range finalMenuIds {
-		finalMenus = append(finalMenus, fatherMenuMap[uint(id)])
-	}
-
-	return finalMenus, nil
+	// 对菜单进行排序并返回
+	return a.sortedMenuList(fatherMenuMap), nil
 }
 
 // GetAllMenuList 获取所有菜单列表
 func (a *authService) GetAllMenuList(ctx context.Context) ([]*model.Menu, error) {
+	// 从数据库获取所有菜单
 	menus, err := a.dao.GetAllMenus(ctx)
 	if err != nil {
 		a.l.Error("GetAllMenus failed", zap.Error(err))
 		return nil, err
 	}
 
+	// 设置每个菜单的元数据
 	for _, menu := range menus {
-		menu.Meta = &model.MenuMeta{
-			Icon:     menu.Icon,
-			Title:    menu.Title,
-			ShowMenu: menu.Show,
-		}
-		menu.Key = menu.ID
-		menu.Value = menu.ID
+		a.setMenuMeta(menu)
 	}
 
 	return menus, nil
@@ -160,19 +110,7 @@ func (a *authService) GetAllMenuList(ctx context.Context) ([]*model.Menu, error)
 
 // UpdateMenu 更新菜单信息
 func (a *authService) UpdateMenu(ctx context.Context, menu model.Menu) error {
-	existingMenu, err := a.dao.GetMenuByID(ctx, menu.ID)
-	if err != nil {
-		a.l.Error("GetMenuByID failed", zap.Error(err))
-		return err
-	}
-
-	existingMenu.Name = menu.Name
-	existingMenu.Title = menu.Title
-	existingMenu.Show = menu.Show
-	existingMenu.Component = menu.Component
-	existingMenu.Path = menu.Path
-
-	return a.dao.UpdateMenu(ctx, existingMenu)
+	return a.dao.UpdateMenu(ctx, &menu)
 }
 
 // CreateMenu 创建新菜单
@@ -187,27 +125,18 @@ func (a *authService) DeleteMenu(ctx context.Context, id string) error {
 
 // GetAllRoleList 获取所有角色列表
 func (a *authService) GetAllRoleList(ctx context.Context) ([]*model.Role, error) {
-	roles, err := a.dao.GetAllRoles(ctx)
-	if err != nil {
-		a.l.Error("GetAllRoles failed", zap.Error(err))
-		return nil, err
-	}
-
-	return roles, nil
+	return a.dao.GetAllRoles(ctx)
 }
 
 // CreateRole 创建新角色
 func (a *authService) CreateRole(ctx context.Context, role model.Role) error {
-	menus := make([]*model.Menu, 0)
-	for _, menuId := range role.MenuIds {
-		menu, err := a.dao.GetMenuByID(ctx, uint(menuId))
-		if err != nil {
-			a.l.Error("GetMenuByID failed", zap.Error(err))
-			return err
-		}
-		menus = append(menus, menu)
+	// 通过菜单ID列表获取菜单对象
+	menus, err := a.getMenusByIDs(ctx, role.MenuIds)
+	if err != nil {
+		return err
 	}
 
+	// 将菜单分配给角色
 	role.Menus = menus
 
 	return a.dao.CreateRole(ctx, &role)
@@ -215,44 +144,24 @@ func (a *authService) CreateRole(ctx context.Context, role model.Role) error {
 
 // UpdateRole 更新角色信息
 func (a *authService) UpdateRole(ctx context.Context, role model.Role) error {
-	_, err := a.dao.GetRoleByRoleID(ctx, role.ID)
+	// 通过菜单ID列表获取菜单对象
+	menus, err := a.getMenusByIDs(ctx, role.MenuIds)
 	if err != nil {
-		a.l.Error("GetRoleByRoleID failed", zap.Error(err))
 		return err
 	}
 
-	menus := make([]*model.Menu, 0)
-	for _, menuId := range role.MenuIds {
-		menu, err := a.dao.GetMenuByID(ctx, uint(menuId))
-		if err != nil {
-			a.l.Error("GetMenuByID failed", zap.Error(err))
-			return err
-		}
-		menus = append(menus, menu)
-	}
-
+	// 更新角色菜单
 	role.Menus = menus
 
 	return a.dao.UpdateRole(ctx, &role)
 }
-func (a *authService) SetRoleStatus(ctx context.Context, roleID uint, status string) error {
-	err := a.dao.UpdateRoleStatus(ctx, roleID, status)
-	if err != nil {
-		a.l.Error("update role status failed", zap.Error(err))
-		return err
-	}
 
-	return nil
+func (a *authService) SetRoleStatus(ctx context.Context, roleID uint, status string) error {
+	return a.dao.UpdateRoleStatus(ctx, roleID, status)
 }
 
 func (a *authService) DeleteRole(ctx context.Context, id string) error {
-	err := a.dao.DeleteRole(ctx, id)
-	if err != nil {
-		a.l.Error("DeleteRole failed", zap.Error(err))
-		return err
-	}
-
-	return nil
+	return a.dao.DeleteRole(ctx, id)
 }
 
 func (a *authService) GetApiList(ctx context.Context, uid uint) ([]*model.Api, error) {
@@ -263,12 +172,14 @@ func (a *authService) GetApiList(ctx context.Context, uid uint) ([]*model.Api, e
 	}
 
 	apis := make([]*model.Api, 0)
+
 	for _, role := range user.Roles {
 		roleApis, err := a.dao.GetApisByRoleID(ctx, role.ID)
 		if err != nil {
 			a.l.Error("GetApisByRoleID failed", zap.Error(err))
 			return nil, err
 		}
+
 		apis = append(apis, roleApis...)
 	}
 
@@ -276,47 +187,94 @@ func (a *authService) GetApiList(ctx context.Context, uid uint) ([]*model.Api, e
 }
 
 func (a *authService) GetApiListAll(ctx context.Context) ([]*model.Api, error) {
-	apis, err := a.dao.GetAllApis(ctx)
-	if err != nil {
-		a.l.Error("GetAllApis failed", zap.Error(err))
-		return nil, err
-	}
-
-	return apis, nil
+	return a.dao.GetAllApis(ctx)
 }
 
 func (a *authService) DeleteApi(ctx context.Context, apiID string) error {
-	err := a.dao.DeleteApi(ctx, apiID)
-	if err != nil {
-		a.l.Error("DeleteApi failed", zap.Error(err))
-		return err
-	}
-
-	return nil
+	return a.dao.DeleteApi(ctx, apiID)
 }
 
 func (a *authService) CreateApi(ctx context.Context, api *model.Api) error {
-	err := a.dao.CreateApi(ctx, api)
+	return a.dao.CreateApi(ctx, api)
+}
+
+func (a *authService) UpdateApi(ctx context.Context, api *model.Api) error {
+	return a.dao.UpdateApi(ctx, api)
+}
+
+// attachToFatherMenu 将子菜单附加到父菜单
+func (a *authService) attachToFatherMenu(ctx context.Context, menu *model.Menu, fatherMenuMap map[uint]*model.Menu, uniqueChildMap map[uint]struct{}) error {
+	// 获取父菜单
+	fatherMenu, err := a.dao.GetMenuByID(ctx, uint(menu.Pid))
 	if err != nil {
-		a.l.Error("CreateApi failed", zap.Error(err))
 		return err
+	}
+
+	// 设置父菜单的元数据
+	a.setMenuMeta(fatherMenu)
+
+	// 确保子菜单唯一性
+	if _, exists := uniqueChildMap[menu.ID]; !exists {
+		uniqueChildMap[menu.ID] = struct{}{}
+
+		// 添加子菜单到父菜单
+		if existingFather, ok := fatherMenuMap[fatherMenu.ID]; ok {
+			existingFather.Children = append(existingFather.Children, menu)
+		} else {
+			fatherMenu.Children = append(fatherMenu.Children, menu)
+			fatherMenuMap[fatherMenu.ID] = fatherMenu
+		}
 	}
 
 	return nil
 }
 
-func (a *authService) UpdateApi(ctx context.Context, api *model.Api) error {
-	_, err := a.dao.GetApiByID(ctx, api.ID)
-	if err != nil {
-		a.l.Error("GetApiByID failed", zap.Error(err))
-		return err
+// sortedMenuList 根据ID对菜单进行排序并返回列表
+func (a *authService) sortedMenuList(fatherMenuMap map[uint]*model.Menu) []*model.Menu {
+	finalMenus := make([]*model.Menu, 0, len(fatherMenuMap))
+	finalMenuIds := make([]int, 0, len(fatherMenuMap))
+
+	for id := range fatherMenuMap {
+		finalMenuIds = append(finalMenuIds, int(id))
 	}
 
-	err = a.dao.UpdateApi(ctx, api)
-	if err != nil {
-		a.l.Error("UpdateApi failed", zap.Error(err))
-		return err
+	sort.Ints(finalMenuIds)
+
+	for _, id := range finalMenuIds {
+		finalMenus = append(finalMenus, fatherMenuMap[uint(id)])
 	}
 
-	return nil
+	return finalMenus
+}
+
+// setMenuMeta 设置菜单的元数据信息
+func (a *authService) setMenuMeta(menu *model.Menu) {
+	menu.Meta = &model.MenuMeta{
+		Icon:            menu.Icon,
+		Title:           menu.Title,
+		ShowMenu:        menu.Show,
+		HideMenu:        !menu.Show,
+		IgnoreKeepAlive: true,
+	}
+
+	menu.Key = menu.ID
+	menu.Value = menu.ID
+}
+
+// getMenusByIDs 根据菜单ID列表获取对应的菜单对象
+func (a *authService) getMenusByIDs(ctx context.Context, menuIds []int) ([]*model.Menu, error) {
+	menus := make([]*model.Menu, 0)
+
+	for _, menuId := range menuIds {
+		// 根据ID获取菜单信息
+		menu, err := a.dao.GetMenuByID(ctx, uint(menuId))
+		if err != nil {
+			a.l.Error("GetMenuByID failed", zap.Error(err))
+			return nil, err
+		}
+
+		menus = append(menus, menu)
+	}
+
+	return menus, nil
 }
