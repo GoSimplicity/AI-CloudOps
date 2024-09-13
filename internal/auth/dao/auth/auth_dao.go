@@ -16,6 +16,8 @@ type AuthDAO interface {
 	CreateRole(ctx context.Context, role *model.Role) error
 	// UpdateRole 更新角色
 	UpdateRole(ctx context.Context, role *model.Role) error
+	// UpdateRoleStatus 更新角色状态
+	UpdateRoleStatus(ctx context.Context, id uint, status string) error
 	// GetApisByRoleID 通过角色ID获取API
 	GetApisByRoleID(ctx context.Context, roleID uint) ([]*model.Api, error)
 	// GetAllRoles 获取所有角色
@@ -33,7 +35,7 @@ type AuthDAO interface {
 	// GetApiByTitle 通过标题获取API
 	GetApiByTitle(ctx context.Context, title string) (*model.Api, error)
 	// DeleteApi 通过ID删除API
-	DeleteApi(ctx context.Context, apiID uint) error
+	DeleteApi(ctx context.Context, apiID string) error
 	// CreateApi 创建API
 	CreateApi(ctx context.Context, api *model.Api) error
 	// UpdateApi 更新API
@@ -94,13 +96,24 @@ func (a *authDAO) CreateRole(ctx context.Context, role *model.Role) error {
 }
 
 func (a *authDAO) UpdateRole(ctx context.Context, role *model.Role) error {
-	if err := a.db.WithContext(ctx).Model(role).Updates(map[string]interface{}{
+	if err := a.db.WithContext(ctx).Model(role).Where("id = ?", role.ID).Updates(map[string]interface{}{
 		"role_name":  role.RoleName,
 		"role_value": role.RoleValue,
 		"remark":     role.Remark,
 		"status":     role.Status,
 	}).Error; err != nil {
 		a.l.Error("failed to update role", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (a *authDAO) UpdateRoleStatus(ctx context.Context, id uint, status string) error {
+	if err := a.db.WithContext(ctx).Model(model.Role{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"status": status,
+	}).Error; err != nil {
+		a.l.Error("update role status failed", zap.Error(err))
 		return err
 	}
 
@@ -220,9 +233,9 @@ func (a *authDAO) GetApiByTitle(ctx context.Context, title string) (*model.Api, 
 	return &api, nil
 }
 
-func (a *authDAO) DeleteApi(ctx context.Context, apiID uint) error {
+func (a *authDAO) DeleteApi(ctx context.Context, apiID string) error {
 	if err := a.db.WithContext(ctx).Where("id = ?", apiID).Delete(&model.Api{}).Error; err != nil {
-		a.l.Error("failed to delete API", zap.Uint("apiID", apiID), zap.Error(err))
+		a.l.Error("failed to delete API", zap.String("apiID", apiID), zap.Error(err))
 		return err
 	}
 
