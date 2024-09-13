@@ -1,6 +1,8 @@
 package di
 
 import (
+	casbinDao "github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
+	userDao "github.com/GoSimplicity/CloudOps/internal/user/dao"
 	middleware2 "github.com/GoSimplicity/CloudOps/pkg/middleware"
 	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
 	"github.com/gin-contrib/cors"
@@ -11,7 +13,7 @@ import (
 )
 
 // InitMiddlewares 初始化中间件
-func InitMiddlewares(ih ijwt.Handler, l *zap.Logger) []gin.HandlerFunc {
+func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, userDao userDao.UserDAO, casbinDao casbinDao.CasbinDAO) []gin.HandlerFunc {
 	return []gin.HandlerFunc{
 		cors.New(cors.Config{
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},

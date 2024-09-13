@@ -1,61 +1,58 @@
 package api
 
 import (
+	"github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
 	"github.com/GoSimplicity/CloudOps/internal/auth/service"
+	"github.com/GoSimplicity/CloudOps/internal/model"
+	"github.com/GoSimplicity/CloudOps/internal/user/dao"
+	"github.com/GoSimplicity/CloudOps/pkg/middleware"
+	"github.com/GoSimplicity/CloudOps/pkg/utils/apiresponse"
 	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type AuthHandler struct {
-	service service.AuthService
+	service   service.AuthService
+	ijwt      ijwt.Handler
+	l         *zap.Logger
+	casbinDao casbin.CasbinDAO
+	userDao   dao.UserDAO
 }
 
-func NewAuthHandler(service service.AuthService) *AuthHandler {
+func NewAuthHandler(service service.AuthService, handler ijwt.Handler, l *zap.Logger, casbinDao casbin.CasbinDAO, userDao dao.UserDAO) *AuthHandler {
 	return &AuthHandler{
-		service: service,
+		service:   service,
+		ijwt:      handler,
+		l:         l,
+		casbinDao: casbinDao,
+		userDao:   userDao,
 	}
 }
 
 func (a *AuthHandler) RegisterRouters(server *gin.Engine) {
 	authGroup := server.Group("/api/auth")
+	authGroup.Use(middleware.NewCasbinMiddleware(a.l, a.userDao, a.casbinDao).CheckPermission())
 
-	//TODO 菜单相关路由
-
-	// 获取菜单列表
+	// 菜单相关路由
 	authGroup.GET("/menu/list", a.GetMenuList)
-	// 获取所有菜单列表
 	authGroup.GET("/menu/all", a.GetAllMenuList)
-	// 更新菜单
 	authGroup.POST("/menu/update", a.UpdateMenu)
-	// 创建菜单
 	authGroup.POST("/menu/create", a.CreateMenu)
-	// 删除菜单
 	authGroup.DELETE("/menu/:id", a.DeleteMenu)
 
-	//TODO 权限管理相关路由
-
-	// 获取所有角色列表
+	// 权限管理相关路由
 	authGroup.GET("/role/list", a.GetAllRoleList)
-	// 创建角色
 	authGroup.POST("/role/create", a.CreateRole)
-	// 更新角色
 	authGroup.POST("/role/update", a.UpdateRole)
-	// 设置角色状态
 	authGroup.POST("/role/status", a.SetRoleStatus)
-	// 删除角色
 	authGroup.DELETE("/role/:id", a.DeleteRole)
 
-	//TODO API 管理相关路由
-
-	// 获取 API 列表
+	// API 管理相关路由
 	authGroup.GET("/api/list", a.GetApiList)
-	// 获取所有 API 列表
 	authGroup.GET("/api/all", a.GetApiListAll)
-	// 删除 API
 	authGroup.DELETE("/api/:id", a.DeleteApi)
-	// 创建 API
 	authGroup.POST("/api/create", a.CreateApi)
-	// 更新 API
 	authGroup.POST("/api/update", a.UpdateApi)
 }
 
@@ -64,98 +61,208 @@ func (a *AuthHandler) GetMenuList(ctx *gin.Context) {
 
 	roles, err := a.service.GetMenuList(ctx, uc.Uid)
 	if err != nil {
-		ctx.JSON(500, gin.H{
-			"msg": err,
-		})
+		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	ctx.JSON(200, gin.H{
-		"msg":  "success",
-		"data": roles,
-	})
+	apiresponse.SuccessWithData(ctx, roles)
 }
 
 func (a *AuthHandler) GetAllMenuList(ctx *gin.Context) {
-	// TODO: Implement GetAllMenuList
+	menus, err := a.service.GetAllMenuList(ctx)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, menus)
 }
 
 func (a *AuthHandler) UpdateMenu(ctx *gin.Context) {
-	// TODO: Implement UpdateMenu
+	var req model.Menu
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	if err := a.service.UpdateMenu(ctx, req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithMessage(ctx, "更新成功")
 }
 
 func (a *AuthHandler) CreateMenu(ctx *gin.Context) {
-	// TODO: Implement CreateMenu
+	var req model.Menu
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	if err := a.service.CreateMenu(ctx, req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithMessage(ctx, "创建成功")
 }
 
 func (a *AuthHandler) DeleteMenu(ctx *gin.Context) {
-	// TODO: Implement DeleteMenu
+	id := ctx.Param("id")
+
+	if err := a.service.DeleteMenu(ctx, id); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithMessage(ctx, "删除成功")
 }
 
 func (a *AuthHandler) GetAllRoleList(ctx *gin.Context) {
-	// TODO: Implement GetAllRoleList
+	roles, err := a.service.GetAllRoleList(ctx)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, roles)
 }
 
 func (a *AuthHandler) CreateRole(ctx *gin.Context) {
-	// TODO: Implement CreateRole
+	var req model.Role
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	err := a.service.CreateRole(ctx, req)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithMessage(ctx, "创建成功")
 }
 
 func (a *AuthHandler) UpdateRole(ctx *gin.Context) {
-	// TODO: Implement UpdateRole
+	var req model.Role
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	err := a.service.UpdateRole(ctx, req)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithMessage(ctx, "更新成功")
 }
 
 func (a *AuthHandler) SetRoleStatus(ctx *gin.Context) {
-	// TODO: Implement SetRoleStatus
+	var req model.Role
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	err := a.service.SetRoleStatus(ctx, req.ID, req.Status)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithMessage(ctx, "更新成功")
 }
 
 func (a *AuthHandler) DeleteRole(ctx *gin.Context) {
-	// TODO: Implement DeleteRole
-}
+	id := ctx.Param("id")
 
-func (a *AuthHandler) CreateAccount(ctx *gin.Context) {
-	// TODO: Implement CreateAccount
-}
+	err := a.service.DeleteRole(ctx, id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
 
-func (a *AuthHandler) AccountExist(ctx *gin.Context) {
-	// TODO: Implement AccountExist
-}
-
-func (a *AuthHandler) UpdateAccount(ctx *gin.Context) {
-	// TODO: Implement UpdateAccount
-}
-
-func (a *AuthHandler) ChangePassword(ctx *gin.Context) {
-	// TODO: Implement ChangePassword
-}
-
-func (a *AuthHandler) GetAccountList(ctx *gin.Context) {
-	// TODO: Implement GetAccountList
-}
-
-func (a *AuthHandler) GetAllUserAndRoles(ctx *gin.Context) {
-	// TODO: Implement GetAllUserAndRoles
-}
-
-func (a *AuthHandler) DeleteAccount(ctx *gin.Context) {
-	// TODO: Implement DeleteAccount
+	apiresponse.SuccessWithMessage(ctx, "删除成功")
 }
 
 func (a *AuthHandler) GetApiList(ctx *gin.Context) {
-	// TODO: Implement GetApiList
+	var user model.User
+
+	Apis, err := a.service.GetApiList(ctx, user.ID)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, Apis)
 }
 
 func (a *AuthHandler) GetApiListAll(ctx *gin.Context) {
-	// TODO: Implement GetApiListAll
+	Apis, err := a.service.GetApiListAll(ctx)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, Apis)
 }
 
 func (a *AuthHandler) DeleteApi(ctx *gin.Context) {
-	// TODO: Implement DeleteApi
+	var api model.Api
+
+	if err := ctx.ShouldBindJSON(&api); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	err := a.service.DeleteApi(ctx, api.ID)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithMessage(ctx, "删除成功")
 }
 
 func (a *AuthHandler) CreateApi(ctx *gin.Context) {
-	// TODO: Implement CreateApi
+	var api model.Api
+
+	if err := ctx.ShouldBindJSON(&api); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	err := a.service.CreateApi(ctx, &api)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithMessage(ctx, "创建成功")
 }
 
 func (a *AuthHandler) UpdateApi(ctx *gin.Context) {
-	// TODO: Implement UpdateApi
+	var api model.Api
+
+	if err := ctx.ShouldBindJSON(&api); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	err := a.service.UpdateApi(ctx, &api)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithMessage(ctx, "更新成功")
 }

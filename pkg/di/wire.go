@@ -3,6 +3,10 @@
 package di
 
 import (
+	authHandler "github.com/GoSimplicity/CloudOps/internal/auth/api"
+	"github.com/GoSimplicity/CloudOps/internal/auth/dao/auth"
+	authDAO "github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
+	authService "github.com/GoSimplicity/CloudOps/internal/auth/service"
 	userHandler "github.com/GoSimplicity/CloudOps/internal/user/api"
 	userDAO "github.com/GoSimplicity/CloudOps/internal/user/dao"
 	userService "github.com/GoSimplicity/CloudOps/internal/user/service"
@@ -20,9 +24,14 @@ func InitWebServer() *gin.Engine {
 		InitLogger,
 		InitRedis,
 		InitDB,
+		InitCasbin,
 		userDAO.NewUserDAO,
 		userService.NewUserService,
 		userHandler.NewUserHandler,
+		auth.NewAuthDAO,
+		authDAO.NewCasbinDAO,
+		authService.NewAuthService,
+		authHandler.NewAuthHandler,
 	)
 	return gin.Default()
 }
