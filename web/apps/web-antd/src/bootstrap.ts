@@ -9,6 +9,7 @@ import { setupI18n } from '#/locales';
 
 import App from './app.vue';
 import { router } from './router';
+import Antd from 'ant-design-vue';
 
 async function bootstrap(namespace: string) {
   const app = createApp(App);
@@ -24,7 +25,7 @@ async function bootstrap(namespace: string) {
 
   // 配置路由及路由守卫
   app.use(router);
-
+  app.use(Antd)
   app.mount('#app');
 }
 

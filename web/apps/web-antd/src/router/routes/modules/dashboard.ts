@@ -16,8 +16,8 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         name: 'Welcome',
-        path: '/welcome',
-        component: () => import('#/views/dashboard/welcome/welcome.vue'),
+        path: '/system_welcome',
+        component: () => import('#/views/dashboard/system_welcome/SystemWelcome.vue'),
         meta: {
           affixTab: true,
           icon: 'lucide:area-chart',
@@ -26,8 +26,8 @@ const routes: RouteRecordRaw[] = [
       },
       {
         name: '菜单管理',
-        path: '/menus',
-        component: () => import('#/views/dashboard/menus/menus.vue'),
+        path: '/system_menu',
+        component: () => import('#/views/dashboard/system_menu/SystemMenu.vue'),
         meta: {
           icon: 'lucide:menu',
           title: $t('page.dashboard.menus'),
@@ -35,8 +35,8 @@ const routes: RouteRecordRaw[] = [
       },
       {
         name: '用户管理',
-        path: '/users',
-        component: () => import('#/views/dashboard/users/users.vue'),
+        path: '/system_user',
+        component: () => import('#/views/dashboard/system_user/SystemUser.vue'),
         meta: {
           icon: 'lucide:user',
           title: $t('page.dashboard.users'),
@@ -44,8 +44,8 @@ const routes: RouteRecordRaw[] = [
       },
       {
         name: '权限管理',
-        path: '/roles',
-        component: () => import('#/views/dashboard/roles/roles.vue'),
+        path: '/system_role',
+        component: () => import('#/views/dashboard/system_role/SystemRole.vue'),
         meta: {
           icon: 'lucide:user',
           title: $t('page.dashboard.roles'),
@@ -53,8 +53,8 @@ const routes: RouteRecordRaw[] = [
       },
       {
         name: '接口管理',
-        path: '/apis',
-        component: () => import('#/views/dashboard/apis/apis.vue'),
+        path: '/system_api',
+        component: () => import('#/views/dashboard/system_api/SystemApi.vue'),
         meta: {
           title: $t('page.dashboard.apis'),
         },

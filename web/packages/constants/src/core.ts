@@ -6,7 +6,7 @@ export const LOGIN_PATH = '/auth/login';
 /**
  * @zh_CN 默认首页地址
  */
-export const DEFAULT_HOME_PATH = '/welcome';
+export const DEFAULT_HOME_PATH = '/system_welcome';
 
 export interface LanguageOption {
   label: string;
