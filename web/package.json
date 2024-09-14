@@ -116,5 +116,8 @@
       "node-gyp",
       "playwright"
     ]
+  },
+  "dependencies": {
+    "vue-request": "^2.0.4"
   }
 }
