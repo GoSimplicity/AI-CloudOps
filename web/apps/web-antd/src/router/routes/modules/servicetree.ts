@@ -14,12 +14,13 @@ const routes: RouteRecordRaw[] = [
     path: '/tree',
     children: [
       {
-        name: '服务树管理',
-        path: '/system',
-        component: () => import('#/views/servicetree/system/system.vue'),
+        name: '服务树概览',
+        path: '/tree_overview',
+        component: () =>
+          import('#/views/servicetree/tree_overview/TreeOverview.vue'),
         meta: {
-          title: $t('page.serviceTree.system'),
-        }
+          title: $t('page.serviceTree.overview'),
+        },
       },
     ],
   },

@@ -81,7 +81,7 @@ const data = reactive<Menu[]>([
     permission: 'menu:home',
     component: 'HomeComponent',
     status: true,
-    createTime: '2023-10-01 10:00:00',
+    createTime: '2024-9-14 10:00:00',
   },
   {
     id: 2,
@@ -91,7 +91,7 @@ const data = reactive<Menu[]>([
     permission: 'menu:user',
     component: 'UserComponent',
     status: false,
-    createTime: '2023-10-05 14:30:00',
+    createTime: '2024-9-14 14:30:00',
   },
   // 可添加更多示例数据
 ]);
