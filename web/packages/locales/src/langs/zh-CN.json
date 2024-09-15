@@ -18,7 +18,7 @@
     },
     "serviceTree": {
       "title": "服务树",
-      "system": "服务树管理"
+      "overview": "服务树概览"
     },
     "vben": {
       "title": "项目",
