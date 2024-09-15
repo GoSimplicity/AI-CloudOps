@@ -68,14 +68,14 @@ const data = reactive<Permission[]>([
     name: '用户查看',
     description: '允许查看用户列表',
     status: true,
-    createTime: '2023-10-01 10:00:00',
+    createTime: '2024-9-14 10:00:00',
   },
   {
     id: 2,
     name: '用户编辑',
     description: '允许编辑用户信息',
     status: false,
-    createTime: '2023-10-05 14:30:00',
+    createTime: '2024-9-14 14:30:00',
   },
   // 可添加更多示例数据
 ]);
