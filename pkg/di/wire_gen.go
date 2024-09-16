@@ -11,6 +11,9 @@ import (
 	"github.com/GoSimplicity/CloudOps/internal/auth/dao/auth"
 	"github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
 	service2 "github.com/GoSimplicity/CloudOps/internal/auth/service"
+	api3 "github.com/GoSimplicity/CloudOps/internal/tree/api"
+	"github.com/GoSimplicity/CloudOps/internal/tree/dao/ecs"
+	service3 "github.com/GoSimplicity/CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/CloudOps/internal/user/api"
 	"github.com/GoSimplicity/CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/CloudOps/internal/user/service"
@@ -38,6 +41,9 @@ func InitWebServer() *gin.Engine {
 	authDAO := auth.NewAuthDAO(db, logger)
 	authService := service2.NewAuthService(authDAO, logger, userDAO)
 	authHandler := api2.NewAuthHandler(authService, handler, logger, casbinDAO, userDAO)
-	engine := InitGinServer(v, userHandler, authHandler)
+	treeEcsDAO := ecs.NewTreeDAO(db, logger)
+	treeService := service3.NewTreeService(treeEcsDAO, logger)
+	treeHandler := api3.NewTreeHandler(treeService, logger)
+	engine := InitGinServer(v, userHandler, authHandler, treeHandler)
 	return engine
 }
