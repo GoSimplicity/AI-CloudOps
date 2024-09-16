@@ -15,17 +15,17 @@ import (
 )
 
 type Handler interface {
-	SetLoginToken(ctx *gin.Context, uid uint) (string, string, error)
-	SetJWTToken(ctx *gin.Context, uid uint, ssid string) (string, error)
+	SetLoginToken(ctx *gin.Context, uid int) (string, string, error)
+	SetJWTToken(ctx *gin.Context, uid int, ssid string) (string, error)
 	ExtractToken(ctx *gin.Context) string
 	CheckSession(ctx *gin.Context, ssid string) error
 	ClearToken(ctx *gin.Context) error
-	setRefreshToken(ctx *gin.Context, uid uint, ssid string) (string, error)
+	setRefreshToken(ctx *gin.Context, uid int, ssid string) (string, error)
 }
 
 type UserClaims struct {
 	jwt.RegisteredClaims
-	Uid         uint
+	Uid         int
 	Ssid        string
 	UserAgent   string
 	ContentType string
@@ -33,7 +33,7 @@ type UserClaims struct {
 
 type RefreshClaims struct {
 	jwt.RegisteredClaims
-	Uid  uint
+	Uid  int
 	Ssid string
 }
 
@@ -62,7 +62,7 @@ func NewJWTHandler(c redis.Cmdable) Handler {
 }
 
 // SetLoginToken 设置长短Token
-func (h *handler) SetLoginToken(ctx *gin.Context, uid uint) (string, string, error) {
+func (h *handler) SetLoginToken(ctx *gin.Context, uid int) (string, string, error) {
 	ssid := uuid.New().String()
 	refreshToken, err := h.setRefreshToken(ctx, uid, ssid)
 	if err != nil {
@@ -79,7 +79,7 @@ func (h *handler) SetLoginToken(ctx *gin.Context, uid uint) (string, string, err
 }
 
 // SetJWTToken 设置短Token
-func (h *handler) SetJWTToken(ctx *gin.Context, uid uint, ssid string) (string, error) {
+func (h *handler) SetJWTToken(ctx *gin.Context, uid int, ssid string) (string, error) {
 	uc := UserClaims{
 		Uid:         uid,
 		Ssid:        ssid,
@@ -102,7 +102,7 @@ func (h *handler) SetJWTToken(ctx *gin.Context, uid uint, ssid string) (string, 
 }
 
 // setRefreshToken 设置长Token
-func (h *handler) setRefreshToken(_ *gin.Context, uid uint, ssid string) (string, error) {
+func (h *handler) setRefreshToken(_ *gin.Context, uid int, ssid string) (string, error) {
 	rc := RefreshClaims{
 		Uid:  uid,
 		Ssid: ssid,

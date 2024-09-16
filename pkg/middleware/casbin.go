@@ -65,7 +65,7 @@ func (m *CasbinMiddleware) CheckPermission() gin.HandlerFunc {
 
 			// 记录 Casbin 校验结果
 			m.l.Debug("Casbin permission check result",
-				zap.Uint("userID", uc.Uid),
+				zap.Int("userID", uc.Uid),
 				zap.String("RoleValue", role.RoleValue),
 				zap.String("path", path),
 				zap.String("method", method),
