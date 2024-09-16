@@ -11,5 +11,12 @@ func InitTables(db *gorm.DB) error {
 		&model.Role{},
 		&model.Menu{},
 		&model.Api{},
+		// tree
+		&model.ResourceTree{},
+		&model.TreeNode{},
+		&model.ResourceEcs{},
+		&model.EcsBuyWorkOrder{},
+		&model.ResourceElb{},
+		&model.ResourceRds{},
 	)
 }

@@ -9,8 +9,11 @@ import (
 )
 
 type TreeService interface {
-	// GetTreeList 获取树列表
 	CreateResourceEcs(ctx context.Context, obj *model.ResourceEcs) error
+	DeleteResourceEcs(ctx context.Context, obj *model.ResourceEcs) error
+	UpdateResourceEcs(ctx context.Context, obj *model.ResourceEcs) error
+	GetAllResourceEcs(ctx context.Context, instanceID string) (*model.ResourceEcs, error)
+	GetResourceEcsByID(ctx context.Context, id int) (*model.ResourceEcs, error)
 }
 
 type treeService struct {
@@ -27,4 +30,20 @@ func NewTreeService(ecsDao ecs.TreeEcsDAO, l *zap.Logger) TreeService {
 
 func (ts *treeService) CreateResourceEcs(ctx context.Context, obj *model.ResourceEcs) error {
 	return ts.ecsDao.Create(ctx, obj)
+}
+
+func (ts *treeService) DeleteResourceEcs(ctx context.Context, obj *model.ResourceEcs) error {
+	return ts.ecsDao.Delete(ctx, obj)
+}
+
+func (ts *treeService) UpdateResourceEcs(ctx context.Context, obj *model.ResourceEcs) error {
+	return ts.ecsDao.Update(ctx, obj)
+}
+
+func (ts *treeService) GetAllResourceEcs(ctx context.Context, instanceID string) (*model.ResourceEcs, error) {
+	return nil, nil
+}
+
+func (ts *treeService) GetResourceEcsByID(ctx context.Context, id int) (*model.ResourceEcs, error) {
+	return nil, nil
 }
