@@ -11,7 +11,7 @@ import (
 )
 
 type AuthService interface {
-	GetMenuList(ctx context.Context, uid uint) ([]*model.Menu, error)
+	GetMenuList(ctx context.Context, uid int) ([]*model.Menu, error)
 	GetAllMenuList(ctx context.Context) ([]*model.Menu, error)
 	UpdateMenu(ctx context.Context, menu model.Menu) error
 	CreateMenu(ctx context.Context, menu model.Menu) error
@@ -20,10 +20,10 @@ type AuthService interface {
 	GetAllRoleList(ctx context.Context) ([]*model.Role, error)
 	CreateRole(ctx context.Context, roles model.Role) error
 	UpdateRole(ctx context.Context, roles model.Role) error
-	SetRoleStatus(ctx context.Context, id uint, status string) error
+	SetRoleStatus(ctx context.Context, id int, status string) error
 	DeleteRole(ctx context.Context, id string) error
 
-	GetApiList(ctx context.Context, uid uint) ([]*model.Api, error)
+	GetApiList(ctx context.Context, uid int) ([]*model.Api, error)
 	GetApiListAll(ctx context.Context) ([]*model.Api, error)
 	DeleteApi(ctx context.Context, apiID string) error
 	CreateApi(ctx context.Context, api *model.Api) error
@@ -45,7 +45,7 @@ func NewAuthService(dao auth.AuthDAO, l *zap.Logger, userDao userDao.UserDAO) Au
 }
 
 // GetMenuList 根据用户ID获取菜单列表，支持按角色过滤菜单
-func (a *authService) GetMenuList(ctx context.Context, uid uint) ([]*model.Menu, error) {
+func (a *authService) GetMenuList(ctx context.Context, uid int) ([]*model.Menu, error) {
 	// 获取用户信息
 	user, err := a.userDao.GetUserByID(ctx, uid)
 	if err != nil {
@@ -54,8 +54,8 @@ func (a *authService) GetMenuList(ctx context.Context, uid uint) ([]*model.Menu,
 	}
 
 	// 父菜单映射和子菜单唯一性检查
-	fatherMenuMap := make(map[uint]*model.Menu)
-	uniqueChildMap := make(map[uint]struct{})
+	fatherMenuMap := make(map[int]*model.Menu)
+	uniqueChildMap := make(map[int]struct{})
 
 	// 遍历用户角色，处理菜单
 	for _, role := range user.Roles {
@@ -156,7 +156,7 @@ func (a *authService) UpdateRole(ctx context.Context, role model.Role) error {
 	return a.dao.UpdateRole(ctx, &role)
 }
 
-func (a *authService) SetRoleStatus(ctx context.Context, roleID uint, status string) error {
+func (a *authService) SetRoleStatus(ctx context.Context, roleID int, status string) error {
 	return a.dao.UpdateRoleStatus(ctx, roleID, status)
 }
 
@@ -164,7 +164,7 @@ func (a *authService) DeleteRole(ctx context.Context, id string) error {
 	return a.dao.DeleteRole(ctx, id)
 }
 
-func (a *authService) GetApiList(ctx context.Context, uid uint) ([]*model.Api, error) {
+func (a *authService) GetApiList(ctx context.Context, uid int) ([]*model.Api, error) {
 	user, err := a.userDao.GetUserByID(ctx, uid)
 	if err != nil {
 		a.l.Error("GetUserByID failed", zap.Error(err))
@@ -203,9 +203,9 @@ func (a *authService) UpdateApi(ctx context.Context, api *model.Api) error {
 }
 
 // attachToFatherMenu 将子菜单附加到父菜单
-func (a *authService) attachToFatherMenu(ctx context.Context, menu *model.Menu, fatherMenuMap map[uint]*model.Menu, uniqueChildMap map[uint]struct{}) error {
+func (a *authService) attachToFatherMenu(ctx context.Context, menu *model.Menu, fatherMenuMap map[int]*model.Menu, uniqueChildMap map[int]struct{}) error {
 	// 获取父菜单
-	fatherMenu, err := a.dao.GetMenuByID(ctx, uint(menu.Pid))
+	fatherMenu, err := a.dao.GetMenuByID(ctx, int(menu.Pid))
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func (a *authService) attachToFatherMenu(ctx context.Context, menu *model.Menu, 
 }
 
 // sortedMenuList 根据ID对菜单进行排序并返回列表
-func (a *authService) sortedMenuList(fatherMenuMap map[uint]*model.Menu) []*model.Menu {
+func (a *authService) sortedMenuList(fatherMenuMap map[int]*model.Menu) []*model.Menu {
 	finalMenus := make([]*model.Menu, 0, len(fatherMenuMap))
 	finalMenuIds := make([]int, 0, len(fatherMenuMap))
 
@@ -241,7 +241,7 @@ func (a *authService) sortedMenuList(fatherMenuMap map[uint]*model.Menu) []*mode
 	sort.Ints(finalMenuIds)
 
 	for _, id := range finalMenuIds {
-		finalMenus = append(finalMenus, fatherMenuMap[uint(id)])
+		finalMenus = append(finalMenus, fatherMenuMap[int(id)])
 	}
 
 	return finalMenus
@@ -267,7 +267,7 @@ func (a *authService) getMenusByIDs(ctx context.Context, menuIds []int) ([]*mode
 
 	for _, menuId := range menuIds {
 		// 根据ID获取菜单信息
-		menu, err := a.dao.GetMenuByID(ctx, uint(menuId))
+		menu, err := a.dao.GetMenuByID(ctx, int(menuId))
 		if err != nil {
 			a.l.Error("GetMenuByID failed", zap.Error(err))
 			return nil, err
