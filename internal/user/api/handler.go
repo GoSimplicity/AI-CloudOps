@@ -2,11 +2,11 @@ package api
 
 import (
 	"errors"
+	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/spf13/viper"
 	"net/http"
 
-	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/GoSimplicity/CloudOps/internal/user/service"
 	"github.com/GoSimplicity/CloudOps/pkg/utils/apiresponse"
