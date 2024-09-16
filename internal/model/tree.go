@@ -3,14 +3,11 @@ package model
 import (
 	"database/sql/driver"
 	"errors"
-	"gorm.io/gorm"
 	"strings"
 )
 
 // ResourceTree 表示 CMDB 中的资源树节点，包含资源的基本信息
 type ResourceTree struct {
-	gorm.Model
-
 	InstanceName     string     `json:"instanceName" gorm:"uniqueIndex;type:varchar(100);comment:资源实例名称，支持模糊搜索"` // 资源实例名称，支持模糊搜索
 	Hash             string     `json:"hash" gorm:"uniqueIndex;type:varchar(200);comment:用于资源更新的哈希值"`            // 增量更新的哈希值
 	Vendor           string     `json:"vendor" gorm:"type:varchar(50);comment:云厂商名称，例：阿里云、华为云、AWS"`              // 云厂商名称
@@ -48,9 +45,9 @@ type TreeNode struct {
 	RdMembers []*User `json:"rd_members" gorm:"many2many:tree_node_rd_members;comment:研发工程师列表"` // 研发工程师列表
 
 	// 绑定的资源信息
-	BindEcs []*ResourceEcs `json:"bind_ecs" gorm:"many2many:bind_ecss;comment:绑定的 ECS 资源列表"` // 绑定的 ECS 资源列表
-	BindElb []*ResourceElb `json:"bind_elb" gorm:"many2many:bind_elbs;comment:绑定的 ELB 资源列表"` // 绑定的 ELB 资源列表
-	BindRds []*ResourceRds `json:"bind_rds" gorm:"many2many:bind_rdss;comment:绑定的 RDS 资源列表"` // 绑定的 RDS 资源列表
+	BindEcs []*ResourceEcs `json:"bind_ecs" gorm:"many2many:bind_ecs;comment:绑定的 ECS 资源列表"` // 绑定的 ECS 资源列表
+	BindElb []*ResourceElb `json:"bind_elb" gorm:"many2many:bind_elb;comment:绑定的 ELB 资源列表"` // 绑定的 ELB 资源列表
+	BindRds []*ResourceRds `json:"bind_rds" gorm:"many2many:bind_rds;comment:绑定的 RDS 资源列表"` // 绑定的 RDS 资源列表
 
 	// 前端展示信息
 	Key           string      `json:"key" gorm:"-"`             // 节点唯一标识，前端使用
@@ -92,6 +89,7 @@ type ChartItem struct {
 
 // ResourceEcs 表示 ECS 资源的结构体, 包含虚拟机的硬件和网络信息
 type ResourceEcs struct {
+	Model
 	ResourceTree
 
 	// 核心资源属性
@@ -118,8 +116,6 @@ type ResourceEcs struct {
 
 // EcsBuyWorkOrder 表示购买 ECS 工作订单的结构体
 type EcsBuyWorkOrder struct {
-	gorm.Model
-
 	Vendor         string `json:"vendor" gorm:"type:varchar(50);comment:云厂商名称, 例: 阿里云"`                    // 云厂商名称
 	Num            int    `json:"num" gorm:"comment:购买的 ECS 实例数量"`                                         // 购买的 ECS 实例数量
 	BindLeafNodeId int    `json:"bindLeafNodeId" gorm:"comment:绑定的叶子节点 ID"`                                // 绑定的叶子节点 ID
@@ -129,6 +125,7 @@ type EcsBuyWorkOrder struct {
 
 // ResourceElb 表示负载均衡器资源的结构体
 type ResourceElb struct {
+	Model
 	ResourceTree
 
 	// 负载均衡器的核心属性
@@ -143,6 +140,7 @@ type ResourceElb struct {
 
 // ResourceRds 表示 RDS 资源的结构体
 type ResourceRds struct {
+	Model
 	ResourceTree
 
 	// RDS 的核心属性
