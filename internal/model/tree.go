@@ -16,10 +16,10 @@ type ResourceTree struct {
 	PayType          string   `json:"payType" gorm:"type:varchar(50);comment:付费类型, 按量付费或包年包月"`                  // 付费类型
 	Status           string   `json:"status" gorm:"type:varchar(50);comment:资源状态, 如 Running, Stopped"`          // 资源状态
 	Description      string   `json:"description" gorm:"type:text;comment:资源描述, 如 CentOS 7.4 操作系统"`             // 资源描述
-	Tags             []string `json:"tags" gorm:"type:json;comment:资源标签集合, 用于分类和筛选"`                            // 资源标签
-	SecurityGroupIds []string `json:"securityGroupIds" gorm:"type:json;comment:安全组 ID 列表"`                      // 安全组 ID 列表
-	PrivateIpAddress []string `json:"privateIpAddress" gorm:"type:json;comment:私有 IP 地址列表"`                     // 私有 IP 地址列表
-	PublicIpAddress  []string `json:"publicIpAddress" gorm:"type:json;comment:公网 IP 地址列表"`                      // 公网 IP 地址列表
+	Tags             []string `json:"tags" gorm:"serializer:json;comment:资源标签集合, 用于分类和筛选"`                            // 资源标签
+	SecurityGroupIds []string `json:"securityGroupIds" gorm:"serializer:json;comment:安全组 ID 列表"`                      // 安全组 ID 列表
+	PrivateIpAddress []string `json:"privateIpAddress" gorm:"serializer:json;comment:私有 IP 地址列表"`                     // 私有 IP 地址列表
+	PublicIpAddress  []string `json:"publicIpAddress" gorm:"serializer:json;comment:公网 IP 地址列表"`                      // 公网 IP 地址列表
 	IpAddr           string   `json:"ipAddr" gorm:"type:varchar(45);comment:单个公网 IP 地址"`                        // 单个公网 IP 地址
 	CreationTime     string   `json:"creationTime" gorm:"type:varchar(30);comment:创建时间, ISO 8601 格式"`           // 创建时间, ISO 8601 格式
 
@@ -99,8 +99,8 @@ type ResourceEcs struct {
 	OSName            string   `json:"osName" gorm:"type:varchar(100);comment:操作系统名称, 例: CentOS 7.4 64 位"`                               // 操作系统名称
 	ImageId           string   `json:"imageId" gorm:"type:varchar(100);comment:镜像模板 ID"`                                                 // 镜像模板 ID
 	Hostname          string   `json:"hostname" gorm:"type:varchar(100);comment:主机名"`                                                    // 主机名
-	NetworkInterfaces []string `json:"networkInterfaces" gorm:"type:json;comment:弹性网卡 ID 集合"`                                            // 弹性网卡 ID 集合
-	DiskIds           []string `json:"diskIds" gorm:"type:json;comment:云盘 ID 集合"`                                                        // 云盘 ID 集合
+	NetworkInterfaces []string `json:"networkInterfaces" gorm:"serializer:json;comment:弹性网卡 ID 集合"`                                      // 弹性网卡 ID 集合
+	DiskIds           []string `json:"diskIds" gorm:"serializer:json;comment:云盘 ID 集合"`                                                  // 云盘 ID 集合
 
 	// 时间相关字段
 	StartTime       string `json:"startTime" gorm:"type:varchar(30);comment:最近启动时间, ISO 8601 标准, UTC+0 时间"`       // 最近启动时间
