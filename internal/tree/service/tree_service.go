@@ -2,48 +2,136 @@ package service
 
 import (
 	"context"
-
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/GoSimplicity/CloudOps/internal/tree/dao/ecs"
+	"github.com/GoSimplicity/CloudOps/internal/tree/dao/elb"
+	"github.com/GoSimplicity/CloudOps/internal/tree/dao/rds"
 	"go.uber.org/zap"
 )
 
 type TreeService interface {
-	CreateResourceEcs(ctx context.Context, obj *model.ResourceEcs) error
-	DeleteResourceEcs(ctx context.Context, obj *model.ResourceEcs) error
-	UpdateResourceEcs(ctx context.Context, obj *model.ResourceEcs) error
-	GetAllResourceEcs(ctx context.Context, instanceID string) (*model.ResourceEcs, error)
-	GetResourceEcsByID(ctx context.Context, id int) (*model.ResourceEcs, error)
+	ListTreeNodes(ctx context.Context) ([]*model.TreeNode, error)
+	SelectTreeNode(ctx context.Context, id int) (*model.TreeNode, error)
+	GetTopTreeNode(ctx context.Context) (*model.TreeNode, error)
+	GetAllTreeNodes(ctx context.Context) ([]*model.TreeNode, error)
+	CreateTreeNode(ctx context.Context, obj *model.TreeNode) error
+	DeleteTreeNode(ctx context.Context, id int) error
+	UpdateTreeNode(ctx context.Context, obj *model.TreeNode) error
+	GetChildrenTreeNodes(ctx context.Context, pid int) ([]*model.TreeNode, error)
+
+	GetEcsUnbindList(ctx context.Context) ([]*model.ResourceEcs, error)
+	GetEcsList(ctx context.Context) ([]*model.ResourceEcs, error)
+	GetElbUnbindList(ctx context.Context) ([]*model.ResourceElb, error)
+	GetElbList(ctx context.Context) ([]*model.ResourceElb, error)
+	GetRdsUnbindList(ctx context.Context) ([]*model.ResourceRds, error)
+	GetAllResources(ctx context.Context) ([]*model.ResourceTree, error)
+	GetRdsList(ctx context.Context) ([]*model.ResourceRds, error)
+
+	BindEcs(ctx context.Context, ecsID int, treeNodeID int) error
+	BindElb(ctx context.Context, elbID int, treeNodeID int) error
+	BindRds(ctx context.Context, rdsID int, treeNodeID int) error
+	UnBindEcs(ctx context.Context, ecsID int, treeNodeID int) error
+	UnBindElb(ctx context.Context, elbID int, treeNodeID int) error
+	UnBindRds(ctx context.Context, rdsID int, treeNodeID int) error
 }
 
 type treeService struct {
 	ecsDao ecs.TreeEcsDAO
+	elbDao elb.TreeElbDAO
+	rdsDao rds.TreeRdsDAO
 	l      *zap.Logger
 }
 
-func NewTreeService(ecsDao ecs.TreeEcsDAO, l *zap.Logger) TreeService {
+// NewTreeService 构造函数
+func NewTreeService(ecsDao ecs.TreeEcsDAO, elbDao elb.TreeElbDAO, rdsDao rds.TreeRdsDAO, l *zap.Logger) TreeService {
 	return &treeService{
 		ecsDao: ecsDao,
+		elbDao: elbDao,
+		rdsDao: rdsDao,
 		l:      l,
 	}
 }
 
-func (ts *treeService) CreateResourceEcs(ctx context.Context, obj *model.ResourceEcs) error {
-	return ts.ecsDao.Create(ctx, obj)
-}
-
-func (ts *treeService) DeleteResourceEcs(ctx context.Context, obj *model.ResourceEcs) error {
-	return ts.ecsDao.Delete(ctx, obj)
-}
-
-func (ts *treeService) UpdateResourceEcs(ctx context.Context, obj *model.ResourceEcs) error {
-	return ts.ecsDao.Update(ctx, obj)
-}
-
-func (ts *treeService) GetAllResourceEcs(ctx context.Context, instanceID string) (*model.ResourceEcs, error) {
+func (ts *treeService) ListTreeNodes(ctx context.Context) ([]*model.TreeNode, error) {
 	return nil, nil
 }
 
-func (ts *treeService) GetResourceEcsByID(ctx context.Context, id int) (*model.ResourceEcs, error) {
+func (ts *treeService) SelectTreeNode(ctx context.Context, id int) (*model.TreeNode, error) {
 	return nil, nil
+}
+
+func (ts *treeService) GetTopTreeNode(ctx context.Context) (*model.TreeNode, error) {
+	return nil, nil
+}
+
+func (ts *treeService) GetAllTreeNodes(ctx context.Context) ([]*model.TreeNode, error) {
+	return nil, nil
+}
+
+func (ts *treeService) CreateTreeNode(ctx context.Context, obj *model.TreeNode) error {
+	return nil
+}
+
+func (ts *treeService) DeleteTreeNode(ctx context.Context, id int) error {
+	return nil
+}
+
+func (ts *treeService) UpdateTreeNode(ctx context.Context, obj *model.TreeNode) error {
+	return nil
+}
+
+func (ts *treeService) GetChildrenTreeNodes(ctx context.Context, pid int) ([]*model.TreeNode, error) {
+	return nil, nil
+}
+
+func (ts *treeService) GetEcsUnbindList(ctx context.Context) ([]*model.ResourceEcs, error) {
+	return nil, nil
+}
+
+func (ts *treeService) GetEcsList(ctx context.Context) ([]*model.ResourceEcs, error) {
+	return nil, nil
+}
+
+func (ts *treeService) GetElbUnbindList(ctx context.Context) ([]*model.ResourceElb, error) {
+	return nil, nil
+}
+
+func (ts *treeService) GetElbList(ctx context.Context) ([]*model.ResourceElb, error) {
+	return nil, nil
+}
+
+func (ts *treeService) GetRdsUnbindList(ctx context.Context) ([]*model.ResourceRds, error) {
+	return nil, nil
+}
+
+func (ts *treeService) GetAllResources(ctx context.Context) ([]*model.ResourceTree, error) {
+	return nil, nil
+}
+
+func (ts *treeService) GetRdsList(ctx context.Context) ([]*model.ResourceRds, error) {
+	return nil, nil
+}
+
+func (ts *treeService) BindEcs(ctx context.Context, ecsID int, treeNodeID int) error {
+	return nil
+}
+
+func (ts *treeService) BindElb(ctx context.Context, elbID int, treeNodeID int) error {
+	return nil
+}
+
+func (ts *treeService) BindRds(ctx context.Context, rdsID int, treeNodeID int) error {
+	return nil
+}
+
+func (ts *treeService) UnBindEcs(ctx context.Context, ecsID int, treeNodeID int) error {
+	return nil
+}
+
+func (ts *treeService) UnBindElb(ctx context.Context, elbID int, treeNodeID int) error {
+	return nil
+}
+
+func (ts *treeService) UnBindRds(ctx context.Context, rdsID int, treeNodeID int) error {
+	return nil
 }
