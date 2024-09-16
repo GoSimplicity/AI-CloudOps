@@ -9,17 +9,17 @@ import (
 
 type AuthDAO interface {
 	// GetRoleByRoleValue 通过角色值获取角色
-	GetRoleByRoleValue(ctx context.Context, roleValue uint) (*model.Role, error)
+	GetRoleByRoleValue(ctx context.Context, roleValue int) (*model.Role, error)
 	// GetRoleByRoleID 通过角色ID获取角色
-	GetRoleByRoleID(ctx context.Context, roleID uint) (*model.Role, error)
+	GetRoleByRoleID(ctx context.Context, roleID int) (*model.Role, error)
 	// CreateRole 创建角色
 	CreateRole(ctx context.Context, role *model.Role) error
 	// UpdateRole 更新角色
 	UpdateRole(ctx context.Context, role *model.Role) error
 	// UpdateRoleStatus 更新角色状态
-	UpdateRoleStatus(ctx context.Context, id uint, status string) error
+	UpdateRoleStatus(ctx context.Context, id int, status string) error
 	// GetApisByRoleID 通过角色ID获取API
-	GetApisByRoleID(ctx context.Context, roleID uint) ([]*model.Api, error)
+	GetApisByRoleID(ctx context.Context, roleID int) ([]*model.Api, error)
 	// GetAllRoles 获取所有角色
 	GetAllRoles(ctx context.Context) ([]*model.Role, error)
 	// UpdateMenus 更新菜单
@@ -31,7 +31,7 @@ type AuthDAO interface {
 	// GetAllApis 获取所有API
 	GetAllApis(ctx context.Context) ([]*model.Api, error)
 	// GetApiByID 通过ID获取API
-	GetApiByID(ctx context.Context, apiID uint) (*model.Api, error)
+	GetApiByID(ctx context.Context, apiID int) (*model.Api, error)
 	// GetApiByTitle 通过标题获取API
 	GetApiByTitle(ctx context.Context, title string) (*model.Api, error)
 	// DeleteApi 通过ID删除API
@@ -47,9 +47,9 @@ type AuthDAO interface {
 	// GetAllMenus 获取所有菜单
 	GetAllMenus(ctx context.Context) ([]*model.Menu, error)
 	// GetMenuByID 根据ID获取菜单
-	GetMenuByID(ctx context.Context, id uint) (*model.Menu, error)
+	GetMenuByID(ctx context.Context, id int) (*model.Menu, error)
 	// GetMenuByFatherID 根据父亲ID获取菜单
-	GetMenuByFatherID(ctx context.Context, id uint) (*model.Menu, error)
+	GetMenuByFatherID(ctx context.Context, id int) (*model.Menu, error)
 	// DeleteMenu 通过ID删除菜单
 	DeleteMenu(ctx context.Context, menuID string) error
 }
@@ -66,20 +66,20 @@ func NewAuthDAO(db *gorm.DB, l *zap.Logger) AuthDAO {
 	}
 }
 
-func (a *authDAO) GetRoleByRoleValue(ctx context.Context, roleValue uint) (*model.Role, error) {
+func (a *authDAO) GetRoleByRoleValue(ctx context.Context, roleValue int) (*model.Role, error) {
 	var role model.Role
 	if err := a.db.WithContext(ctx).Where("role_value = ?", roleValue).First(&role).Error; err != nil {
-		a.l.Error("failed to get role by roleValue", zap.Uint("roleValue", roleValue), zap.Error(err))
+		a.l.Error("failed to get role by roleValue", zap.Int("roleValue", roleValue), zap.Error(err))
 		return nil, err
 	}
 	return &role, nil
 }
 
-func (a *authDAO) GetRoleByRoleID(ctx context.Context, roleID uint) (*model.Role, error) {
+func (a *authDAO) GetRoleByRoleID(ctx context.Context, roleID int) (*model.Role, error) {
 	var role model.Role
 
 	if err := a.db.WithContext(ctx).Where("id = ?", roleID).First(&role).Error; err != nil {
-		a.l.Error("failed to get role by roleID", zap.Uint("roleID", roleID), zap.Error(err))
+		a.l.Error("failed to get role by roleID", zap.Int("roleID", roleID), zap.Error(err))
 		return nil, err
 	}
 
@@ -109,7 +109,7 @@ func (a *authDAO) UpdateRole(ctx context.Context, role *model.Role) error {
 	return nil
 }
 
-func (a *authDAO) UpdateRoleStatus(ctx context.Context, id uint, status string) error {
+func (a *authDAO) UpdateRoleStatus(ctx context.Context, id int, status string) error {
 	if err := a.db.WithContext(ctx).Model(model.Role{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status": status,
 	}).Error; err != nil {
@@ -183,7 +183,7 @@ func (a *authDAO) DeleteRole(ctx context.Context, id string) error {
 }
 
 // GetApisByRoleID 根据角色ID获取API列表
-func (a *authDAO) GetApisByRoleID(ctx context.Context, roleID uint) ([]*model.Api, error) {
+func (a *authDAO) GetApisByRoleID(ctx context.Context, roleID int) ([]*model.Api, error) {
 	var apis []*model.Api
 
 	// 使用联表查询，假设角色和API的关联表为 `role_apis`
@@ -211,11 +211,11 @@ func (a *authDAO) GetAllApis(ctx context.Context) ([]*model.Api, error) {
 	return apis, nil
 }
 
-func (a *authDAO) GetApiByID(ctx context.Context, apiID uint) (*model.Api, error) {
+func (a *authDAO) GetApiByID(ctx context.Context, apiID int) (*model.Api, error) {
 	var api model.Api
 
 	if err := a.db.WithContext(ctx).Where("id = ?", apiID).First(&api).Error; err != nil {
-		a.l.Error("failed to get API by ID", zap.Uint("apiID", apiID), zap.Error(err))
+		a.l.Error("failed to get API by ID", zap.Int("apiID", apiID), zap.Error(err))
 		return nil, err
 	}
 
@@ -253,7 +253,7 @@ func (a *authDAO) CreateApi(ctx context.Context, api *model.Api) error {
 
 func (a *authDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 	if err := a.db.WithContext(ctx).Model(api).Updates(api).Error; err != nil {
-		a.l.Error("failed to update API", zap.Uint("apiID", api.ID), zap.Error(err))
+		a.l.Error("failed to update API", zap.Int("apiID", api.ID), zap.Error(err))
 		return err
 	}
 
@@ -268,7 +268,7 @@ func (a *authDAO) UpdateMenu(ctx context.Context, menu *model.Menu) error {
 		"component": menu.Component,
 		"show":      menu.Show,
 	}).Error; err != nil {
-		a.l.Error("failed to update menu", zap.Uint("menuID", menu.ID), zap.Error(err))
+		a.l.Error("failed to update menu", zap.Int("menuID", menu.ID), zap.Error(err))
 		return err
 	}
 
@@ -283,22 +283,22 @@ func (a *authDAO) CreateMenu(ctx context.Context, menu *model.Menu) error {
 	return nil
 }
 
-func (a *authDAO) GetMenuByID(ctx context.Context, id uint) (*model.Menu, error) {
+func (a *authDAO) GetMenuByID(ctx context.Context, id int) (*model.Menu, error) {
 	var menu model.Menu
 
 	if err := a.db.WithContext(ctx).Where("pid = ?", id).First(&menu).Error; err != nil {
-		a.l.Error("failed to get menu by ID", zap.Uint("id", id), zap.Error(err))
+		a.l.Error("failed to get menu by ID", zap.Int("id", id), zap.Error(err))
 		return nil, err
 	}
 
 	return &menu, nil
 }
 
-func (a *authDAO) GetMenuByFatherID(ctx context.Context, id uint) (*model.Menu, error) {
+func (a *authDAO) GetMenuByFatherID(ctx context.Context, id int) (*model.Menu, error) {
 	var menu model.Menu
 
 	if err := a.db.WithContext(ctx).Where("pid = ?", id).First(&menu).Error; err != nil {
-		a.l.Error("failed to get menu by ID", zap.Uint("id", id), zap.Error(err))
+		a.l.Error("failed to get menu by ID", zap.Int("id", id), zap.Error(err))
 		return nil, err
 	}
 

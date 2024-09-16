@@ -1,9 +1,7 @@
 package model
 
-import "gorm.io/gorm"
-
 type Menu struct {
-	gorm.Model
+	Model
 	Name       string    `json:"name" gorm:"type:varchar(100);uniqueIndex;not null;comment:菜单名称，必须唯一且非空"` // 菜单名称，唯一且非空
 	Title      string    `json:"title" gorm:"type:varchar(100);comment:菜单的显示标题"`                          // 菜单标题，用于前端显示
 	Pid        int       `json:"pid" gorm:"comment:父级菜单的ID"`                                              // 父级菜单ID，表示此菜单的上级菜单
@@ -21,8 +19,8 @@ type Menu struct {
 	Meta       *MenuMeta `json:"meta" gorm:"-"`                                                           // 元信息，存储菜单的额外属性，前端处理用，数据库不存储
 	Children   []*Menu   `json:"children" gorm:"-"`                                                       // 子菜单列表，递归表示子级菜单，前端处理用，数据库不存储
 	Roles      []*Role   `json:"roles" gorm:"many2many:role_menus;comment:多对多角色关联"`                       // 角色关联，表示菜单与角色的多对多关系
-	Key        uint      `json:"key" gorm:"-"`                                                            // 菜单的唯一标识符，前端使用
-	Value      uint      `json:"value" gorm:"-"`                                                          // 菜单的值，前端使用
+	Key        int       `json:"key" gorm:"-"`                                                            // 菜单的唯一标识符，前端使用
+	Value      int       `json:"value" gorm:"-"`                                                          // 菜单的值，前端使用
 }
 
 type MenuMeta struct {

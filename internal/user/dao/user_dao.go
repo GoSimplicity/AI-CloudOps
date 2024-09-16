@@ -3,9 +3,9 @@ package dao
 import (
 	"context"
 	"errors"
+	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"strings"
 
-	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
@@ -24,13 +24,13 @@ type UserDAO interface {
 	// GetAllUsers 获取所有用户
 	GetAllUsers(ctx context.Context) ([]*model.User, error)
 	// GetUserByID 通过ID获取用户
-	GetUserByID(ctx context.Context, id uint) (*model.User, error)
+	GetUserByID(ctx context.Context, id int) (*model.User, error)
 	// GetUserByRealName 通过名称获取用户
 	GetUserByRealName(ctx context.Context, name string) (*model.User, error)
 	// GetUserByMobile 通过手机号获取用户
 	GetUserByMobile(ctx context.Context, mobile string) (*model.User, error)
 	// GetPermCode 获取用户权限码
-	GetPermCode(ctx context.Context, uid uint) ([]string, error)
+	GetPermCode(ctx context.Context, uid int) ([]string, error)
 }
 
 type userDAO struct {
@@ -98,11 +98,11 @@ func (u *userDAO) GetAllUsers(ctx context.Context) ([]*model.User, error) {
 	return users, nil
 }
 
-func (u *userDAO) GetUserByID(ctx context.Context, id uint) (*model.User, error) {
+func (u *userDAO) GetUserByID(ctx context.Context, id int) (*model.User, error) {
 	var user model.User
 
 	if err := u.db.WithContext(ctx).Preload("Roles").Where("id = ?", id).First(&user).Error; err != nil {
-		u.l.Error("get user by id failed", zap.Uint("id", id), zap.Error(err))
+		u.l.Error("get user by id failed", zap.Int("id", id), zap.Error(err))
 		return nil, err
 	}
 
@@ -131,12 +131,12 @@ func (u *userDAO) GetUserByMobile(ctx context.Context, mobile string) (*model.Us
 	return &user, nil
 }
 
-func (u *userDAO) GetPermCode(ctx context.Context, uid uint) ([]string, error) {
+func (u *userDAO) GetPermCode(ctx context.Context, uid int) ([]string, error) {
 	var user model.User
 
 	// 根据 uid 查找用户，并预加载关联的 Roles
 	if err := u.db.WithContext(ctx).Preload("Roles").Where("id = ?", uid).Find(&user).Error; err != nil {
-		u.l.Error("get user by id failed", zap.Uint("id", uid), zap.Error(err))
+		u.l.Error("get user by id failed", zap.Int("id", uid), zap.Error(err))
 		return nil, err
 	}
 
