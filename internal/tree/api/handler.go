@@ -24,7 +24,7 @@ func (t *TreeHandler) RegisterRouters(server *gin.Engine) {
 	treeGroup := server.Group("/api/tree")
 
 	// ecs 相关理由
-	// TODO: delete hello
+	// TODO: delete hello，加 hello 跳过 jwt 验证
 	ecsGroup := treeGroup.Group("/ecs/hello")
 	ecsGroup.POST("/create", t.CreateResourceEcs)
 	ecsGroup.POST("/delete", t.DeleteResourceEcs)
