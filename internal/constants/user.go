@@ -10,8 +10,12 @@ const (
 )
 
 var (
+	// UserService
 	ErrorUserExist         = errors.New("user already exists, check your username or mobile, or try to login")
 	ErrorUserNotExist      = errors.New("user not exists")
 	ErrorUserSignUpFail    = errors.New("user sign up fail")
 	ErrorPasswordIncorrect = errors.New("user password incorrect")
+
+	// TreeService
+	ErrorResourceEcsExist = errors.New("resource ecs already exists")
 )
