@@ -2,7 +2,11 @@ package ecs
 
 import (
 	"context"
+	"errors"
+
+	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"github.com/GoSimplicity/CloudOps/internal/model"
+	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -49,8 +53,15 @@ func NewTreeDAO(db *gorm.DB, l *zap.Logger) TreeEcsDAO {
 }
 
 func (t *treeEcsDAO) Create(ctx context.Context, obj *model.ResourceEcs) error {
-	//TODO implement me
-	panic("implement me")
+	if err := t.db.WithContext(ctx).Create(obj).Error; err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == constants.ErrCodeDuplicate {
+			return constants.ErrorResourceEcsExist
+		}
+		t.l.Error("create resource ecs failed", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (t *treeEcsDAO) Delete(ctx context.Context, obj *model.ResourceEcs) error {
