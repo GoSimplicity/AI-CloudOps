@@ -8,3 +8,5 @@ redis:
   addr: "localhost:6379"
 mysql:
   addr: "root:root@tcp(localhost:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
+mock:
+  enabled: true
