@@ -3,14 +3,11 @@ package model
 import (
 	"database/sql/driver"
 	"errors"
-	"gorm.io/gorm"
 	"strings"
 )
 
 // ResourceTree 表示 CMDB 中的资源树节点，包含资源的基本信息
 type ResourceTree struct {
-	gorm.Model
-
 	InstanceName     string     `json:"instanceName" gorm:"uniqueIndex;type:varchar(100);comment:资源实例名称，支持模糊搜索"` // 资源实例名称，支持模糊搜索
 	Hash             string     `json:"hash" gorm:"uniqueIndex;type:varchar(200);comment:用于资源更新的哈希值"`            // 增量更新的哈希值
 	Vendor           string     `json:"vendor" gorm:"type:varchar(50);comment:云厂商名称，例：阿里云、华为云、AWS"`              // 云厂商名称
@@ -32,13 +29,13 @@ type ResourceTree struct {
 	Key string `json:"key" gorm:"-"` // 前端使用的资源键值
 }
 
-// TreeNode 表示服务树的节点，包含节点的层级关系和相关资源绑定
+// TreeNode 表示服务树的节点, 包含节点的层级关系和相关资源绑定
 type TreeNode struct {
 	Model
 
 	Title  string `json:"title" gorm:"uniqueIndex:idx_pid_title;type:varchar(50);comment:节点名称"` // 节点名称
 	Pid    int    `json:"pId" gorm:"index;uniqueIndex:idx_pid_title;comment:父节点 ID"`            // 父节点 ID
-	Level  int    `json:"level" gorm:"comment:节点层级"`                                            // 节点层级，用于标识树的深度
+	Level  int    `json:"level" gorm:"comment:节点层级"`                                            // 节点层级, 用于标识树的深度
 	IsLeaf bool   `json:"isLeaf" gorm:"comment:是否为叶子节点"`                                        // 是否为叶子节点
 	Desc   string `json:"desc" gorm:"type:text;comment:节点描述"`                                   // 节点描述信息
 
@@ -48,9 +45,9 @@ type TreeNode struct {
 	RdMembers []*User `json:"rd_members" gorm:"many2many:tree_node_rd_members;comment:研发工程师列表"` // 研发工程师列表
 
 	// 绑定的资源信息
-	BindEcs []*ResourceEcs `json:"bind_ecs" gorm:"many2many:bind_ecss;comment:绑定的 ECS 资源列表"` // 绑定的 ECS 资源列表
-	BindElb []*ResourceElb `json:"bind_elb" gorm:"many2many:bind_elbs;comment:绑定的 ELB 资源列表"` // 绑定的 ELB 资源列表
-	BindRds []*ResourceRds `json:"bind_rds" gorm:"many2many:bind_rdss;comment:绑定的 RDS 资源列表"` // 绑定的 RDS 资源列表
+	BindEcs []*ResourceEcs `json:"bind_ecs" gorm:"many2many:bind_ecs;comment:绑定的 ECS 资源列表"` // 绑定的 ECS 资源列表
+	BindElb []*ResourceElb `json:"bind_elb" gorm:"many2many:bind_elb;comment:绑定的 ELB 资源列表"` // 绑定的 ELB 资源列表
+	BindRds []*ResourceRds `json:"bind_rds" gorm:"many2many:bind_rds;comment:绑定的 RDS 资源列表"` // 绑定的 RDS 资源列表
 
 	// 前端展示信息
 	Key           string      `json:"key" gorm:"-"`             // 节点唯一标识，前端使用
@@ -81,7 +78,7 @@ type TreeNode struct {
 
 	// 操作权限
 	CanAdminNode bool   `json:"canAdminNode" gorm:"-"` // 是否有权限操作此节点
-	NodePath     string `json:"nodePath" gorm:"-"`     // 节点路径，格式如：a.b.c.d
+	NodePath     string `json:"nodePath" gorm:"-"`     // 节点路径, 格式如: a.b.c.d
 }
 
 // ChartItem 用于前端展示的图表数据结构
@@ -90,9 +87,9 @@ type ChartItem struct {
 	Value int    `json:"value"` // 分类对应的值
 }
 
-// ResourceEcs 表示 ECS 资源的结构体，包含虚拟机的硬件和网络信息
+// ResourceEcs 表示 ECS 资源的结构体, 包含虚拟机的硬件和网络信息
 type ResourceEcs struct {
-	gorm.Model
+	Model
 	ResourceTree
 
 	// 核心资源属性
@@ -109,9 +106,9 @@ type ResourceEcs struct {
 	DiskIds           StringList `json:"diskIds" gorm:"type:varchar(500);comment:云盘 ID 集合"`                    // 云盘 ID 集合
 
 	// 时间相关字段
-	StartTime       string `json:"startTime" gorm:"type:varchar(30);comment:最近启动时间，ISO 8601 标准，UTC+0 时间"`       // 最近启动时间
-	AutoReleaseTime string `json:"autoReleaseTime" gorm:"type:varchar(30);comment:自动释放时间，ISO 8601 标准，UTC+0 时间"` // 自动释放时间
-	LastInvokedTime string `json:"lastInvokedTime" gorm:"type:varchar(30);comment:最近调用时间，ISO 8601 标准，UTC+0 时间"` // 最近调用时间
+	StartTime       string `json:"startTime" gorm:"type:varchar(30);comment:最近启动时间, ISO 8601 标准, UTC+0 时间"`       // 最近启动时间
+	AutoReleaseTime string `json:"autoReleaseTime" gorm:"type:varchar(30);comment:自动释放时间, ISO 8601 标准, UTC+0 时间"` // 自动释放时间
+	LastInvokedTime string `json:"lastInvokedTime" gorm:"type:varchar(30);comment:最近调用时间, ISO 8601 标准, UTC+0 时间"` // 最近调用时间
 
 	// 多对多关系
 	BindNodes []*TreeNode `json:"bind_nodes" gorm:"many2many:bind_ecss;comment:绑定的树节点列表"` // 绑定的树节点
@@ -119,44 +116,42 @@ type ResourceEcs struct {
 
 // EcsBuyWorkOrder 表示购买 ECS 工作订单的结构体
 type EcsBuyWorkOrder struct {
-	gorm.Model
-
-	Vendor         string `json:"vendor" gorm:"type:varchar(50);comment:云厂商名称，例：阿里云"`                    // 云厂商名称
-	Num            int    `json:"num" gorm:"comment:购买的 ECS 实例数量"`                                       // 购买的 ECS 实例数量
-	BindLeafNodeId int    `json:"bindLeafNodeId" gorm:"comment:绑定的叶子节点 ID"`                              // 绑定的叶子节点 ID
-	InstanceType   string `json:"instance_type" gorm:"type:varchar(100);comment:实例类型，例：ecs.g8a.2xlarge"` // 实例类型
-	Hostnames      string `json:"hostnames" gorm:"type:text;comment:主机名，支持多条记录，用 \\n 分隔"`                // 主机名，支持多条记录，用 \n 分隔
+	Vendor         string `json:"vendor" gorm:"type:varchar(50);comment:云厂商名称, 例: 阿里云"`                    // 云厂商名称
+	Num            int    `json:"num" gorm:"comment:购买的 ECS 实例数量"`                                         // 购买的 ECS 实例数量
+	BindLeafNodeId int    `json:"bindLeafNodeId" gorm:"comment:绑定的叶子节点 ID"`                                // 绑定的叶子节点 ID
+	InstanceType   string `json:"instance_type" gorm:"type:varchar(100);comment:实例类型, 例: ecs.g8a.2xlarge"` // 实例类型
+	Hostnames      string `json:"hostnames" gorm:"type:text;comment:主机名, 支持多条记录, 用 \\n 分隔"`                // 主机名, 支持多条记录, 用 \n 分隔
 }
 
 // ResourceElb 表示负载均衡器资源的结构体
 type ResourceElb struct {
-	gorm.Model
+	Model
 	ResourceTree
 
 	// 负载均衡器的核心属性
-	LoadBalancerType   string      `json:"loadBalancerType" gorm:"type:varchar(50);comment:负载均衡类型，例：nlb、alb、clb"` // 负载均衡类型，如 nlb、alb、clb
-	BandwidthCapacity  int         `json:"bandwidthCapacity" gorm:"comment:带宽容量上限，单位 Mb，例：50"`                    // 带宽容量上限，单位 Mb
-	AddressType        string      `json:"addressType" gorm:"type:varchar(50);comment:地址类型，公网或内网"`                // 地址类型，支持公网或内网
-	DNSName            string      `json:"dnsName" gorm:"type:varchar(255);comment:DNS 解析地址"`                     // DNS 解析地址
-	BandwidthPackageId string      `json:"bandwidthPackageId" gorm:"type:varchar(100);comment:绑定的带宽包 ID"`         // 绑定的带宽包 ID
-	CrossZoneEnabled   bool        `json:"crossZoneEnabled" gorm:"comment:是否启用跨可用区"`                              // 是否启用跨可用区
-	BindNodes          []*TreeNode `json:"bind_nodes" gorm:"many2many:bind_elbs;comment:绑定的树节点列表"`                // 绑定的树节点
+	LoadBalancerType   string      `json:"loadBalancerType" gorm:"type:varchar(50);comment:负载均衡类型, 例: nlb, alb, clb"` // 负载均衡类型, 如 nlb, alb, clb
+	BandwidthCapacity  int         `json:"bandwidthCapacity" gorm:"comment:带宽容量上限, 单位 Mb, 例: 50"`                     // 带宽容量上限, 单位 Mb
+	AddressType        string      `json:"addressType" gorm:"type:varchar(50);comment:地址类型, 公网或内网"`                   // 地址类型, 支持公网或内网
+	DNSName            string      `json:"dnsName" gorm:"type:varchar(255);comment:DNS 解析地址"`                         // DNS 解析地址
+	BandwidthPackageId string      `json:"bandwidthPackageId" gorm:"type:varchar(100);comment:绑定的带宽包 ID"`             // 绑定的带宽包 ID
+	CrossZoneEnabled   bool        `json:"crossZoneEnabled" gorm:"comment:是否启用跨可用区"`                                  // 是否启用跨可用区
+	BindNodes          []*TreeNode `json:"bind_nodes" gorm:"many2many:bind_elbs;comment:绑定的树节点列表"`                    // 绑定的树节点
 }
 
 // ResourceRds 表示 RDS 资源的结构体
 type ResourceRds struct {
-	gorm.Model
+	Model
 	ResourceTree
 
 	// RDS 的核心属性
-	Engine            string `json:"engine" gorm:"type:varchar(50);comment:数据库引擎类型，例：mysql、mariadb、postgresql"`            // 数据库引擎类型
-	DBInstanceNetType string `json:"dbInstanceNetType" gorm:"type:varchar(50);comment:实例网络类型，例：Internet（外网）、Intranet（内网）"` // 实例网络类型
-	DBInstanceClass   string `json:"dbInstanceClass" gorm:"type:varchar(100);comment:实例规格，例：rds.mys2.small"`               // 实例规格
-	DBInstanceType    string `json:"dbInstanceType" gorm:"type:varchar(50);comment:实例类型，例：Primary（主实例）、Readonly（只读实例）"`    // 实例类型
-	EngineVersion     string `json:"engineVersion" gorm:"type:varchar(50);comment:数据库版本，例：8.0、5.7"`                        // 数据库版本
-	MasterInstanceId  string `json:"masterInstanceId" gorm:"type:varchar(100);comment:主实例 ID"`                             // 主实例 ID
-	DBInstanceStatus  string `json:"dbInstanceStatus" gorm:"type:varchar(50);comment:实例状态"`                                // 实例状态
-	ReplicateId       string `json:"replicateId" gorm:"type:varchar(100);comment:复制实例 ID"`                                 // 复制实例 ID
+	Engine            string `json:"engine" gorm:"type:varchar(50);comment:数据库引擎类型, 例: mysql, mariadb, postgresql"`           // 数据库引擎类型
+	DBInstanceNetType string `json:"dbInstanceNetType" gorm:"type:varchar(50);comment:实例网络类型, 例: Internet(外网), Intranet(内网)"` // 实例网络类型
+	DBInstanceClass   string `json:"dbInstanceClass" gorm:"type:varchar(100);comment:实例规格, 例: rds.mys2.small"`                // 实例规格
+	DBInstanceType    string `json:"dbInstanceType" gorm:"type:varchar(50);comment:实例类型, 例: Primary(主实例), Readonly(只读实例)"`    // 实例类型
+	EngineVersion     string `json:"engineVersion" gorm:"type:varchar(50);comment:数据库版本, 例: 8.0, 5.7"`                        // 数据库版本
+	MasterInstanceId  string `json:"masterInstanceId" gorm:"type:varchar(100);comment:主实例 ID"`                                // 主实例 ID
+	DBInstanceStatus  string `json:"dbInstanceStatus" gorm:"type:varchar(50);comment:实例状态"`                                   // 实例状态
+	ReplicateId       string `json:"replicateId" gorm:"type:varchar(100);comment:复制实例 ID"`                                    // 复制实例 ID
 
 	// 多对多关系
 	BindNodes []*TreeNode `json:"bind_nodes" gorm:"many2many:bind_rdss;comment:绑定的树节点列表"` // 绑定的树节点
