@@ -2,6 +2,7 @@ package elb
 
 import (
 	"context"
+
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -41,7 +42,7 @@ type treeElbDAO struct {
 	l  *zap.Logger
 }
 
-func NewTreeDAO(db *gorm.DB, l *zap.Logger) TreeElbDAO {
+func NewTreeElbDAO(db *gorm.DB, l *zap.Logger) TreeElbDAO {
 	return &treeElbDAO{
 		db: db,
 		l:  l,

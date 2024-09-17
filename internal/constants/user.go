@@ -17,5 +17,9 @@ var (
 	ErrorPasswordIncorrect = errors.New("user password incorrect")
 
 	// TreeService
+	// Node DAO
+	ErrorTreeNodeNotExist = errors.New("tree node not exists")
+
+	// ECS DAO
 	ErrorResourceEcsExist = errors.New("resource ecs already exists")
 )
