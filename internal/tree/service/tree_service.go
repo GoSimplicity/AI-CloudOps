@@ -2,17 +2,22 @@ package service
 
 import (
 	"context"
+	"errors"
+
+	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/GoSimplicity/CloudOps/internal/tree/dao/ecs"
 	"github.com/GoSimplicity/CloudOps/internal/tree/dao/elb"
+	"github.com/GoSimplicity/CloudOps/internal/tree/dao/node"
 	"github.com/GoSimplicity/CloudOps/internal/tree/dao/rds"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type TreeService interface {
 	ListTreeNodes(ctx context.Context) ([]*model.TreeNode, error)
 	SelectTreeNode(ctx context.Context, id int) (*model.TreeNode, error)
-	GetTopTreeNode(ctx context.Context) (*model.TreeNode, error)
+	GetTopTreeNode(ctx context.Context) ([]*model.TreeNode, error)
 	GetAllTreeNodes(ctx context.Context) ([]*model.TreeNode, error)
 	CreateTreeNode(ctx context.Context, obj *model.TreeNode) error
 	DeleteTreeNode(ctx context.Context, id int) error
@@ -36,52 +41,107 @@ type TreeService interface {
 }
 
 type treeService struct {
-	ecsDao ecs.TreeEcsDAO
-	elbDao elb.TreeElbDAO
-	rdsDao rds.TreeRdsDAO
-	l      *zap.Logger
+	ecsDao  ecs.TreeEcsDAO
+	elbDao  elb.TreeElbDAO
+	rdsDao  rds.TreeRdsDAO
+	nodeDao node.TreeNodeDAO
+	l       *zap.Logger
 }
 
 // NewTreeService 构造函数
-func NewTreeService(ecsDao ecs.TreeEcsDAO, elbDao elb.TreeElbDAO, rdsDao rds.TreeRdsDAO, l *zap.Logger) TreeService {
+func NewTreeService(ecsDao ecs.TreeEcsDAO, elbDao elb.TreeElbDAO, rdsDao rds.TreeRdsDAO, nodeDao node.TreeNodeDAO, l *zap.Logger) TreeService {
 	return &treeService{
-		ecsDao: ecsDao,
-		elbDao: elbDao,
-		rdsDao: rdsDao,
-		l:      l,
+		ecsDao:  ecsDao,
+		elbDao:  elbDao,
+		rdsDao:  rdsDao,
+		nodeDao: nodeDao,
+		l:       l,
 	}
 }
 
 func (ts *treeService) ListTreeNodes(ctx context.Context) ([]*model.TreeNode, error) {
-	return nil, nil
+	nodes, err := ts.nodeDao.GetAll(ctx)
+
+	if err != nil {
+		ts.l.Error("ListTreeNodes failed", zap.Error(err))
+		return nil, err
+	}
+
+	return nodes, nil
 }
 
 func (ts *treeService) SelectTreeNode(ctx context.Context, id int) (*model.TreeNode, error) {
-	return nil, nil
+	treeNode, err := ts.nodeDao.GetByID(ctx, id)
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrorTreeNodeNotExist
+		}
+		ts.l.Error("SelectTreeNode failed", zap.Error(err))
+		return nil, err
+	}
+
+	return treeNode, nil
 }
 
-func (ts *treeService) GetTopTreeNode(ctx context.Context) (*model.TreeNode, error) {
-	return nil, nil
+func (ts *treeService) GetTopTreeNode(ctx context.Context) ([]*model.TreeNode, error) {
+	// pid = 1, 顶级节点
+	nodes, err := ts.nodeDao.GetByPid(ctx, 1)
+
+	if err != nil {
+		ts.l.Error("GetTopTreeNode failed", zap.Error(err))
+		return nil, err
+	}
+
+	return nodes, nil
 }
 
 func (ts *treeService) GetAllTreeNodes(ctx context.Context) ([]*model.TreeNode, error) {
-	return nil, nil
+	nodes, err := ts.nodeDao.GetAll(ctx)
+
+	if err != nil {
+		ts.l.Error("GetAllTreeNodes failed", zap.Error(err))
+		return nil, err
+	}
+
+	return nodes, nil
 }
 
 func (ts *treeService) CreateTreeNode(ctx context.Context, obj *model.TreeNode) error {
+	if err := ts.nodeDao.Create(ctx, obj); err != nil {
+		ts.l.Error("CreateTreeNode failed", zap.Error(err))
+		return err
+	}
+
 	return nil
 }
 
 func (ts *treeService) DeleteTreeNode(ctx context.Context, id int) error {
+	if err := ts.nodeDao.Delete(ctx, id); err != nil {
+		ts.l.Error("DeleteTreeNode failed", zap.Error(err))
+		return err
+	}
+
 	return nil
 }
 
 func (ts *treeService) UpdateTreeNode(ctx context.Context, obj *model.TreeNode) error {
+	if err := ts.nodeDao.Update(ctx, obj); err != nil {
+		ts.l.Error("UpdateTreeNode failed", zap.Error(err))
+		return err
+	}
+
 	return nil
 }
 
 func (ts *treeService) GetChildrenTreeNodes(ctx context.Context, pid int) ([]*model.TreeNode, error) {
-	return nil, nil
+	list, err := ts.nodeDao.GetByPid(ctx, pid)
+	if err != nil {
+		ts.l.Error("GetChildrenTreeNodes failed", zap.Error(err))
+		return nil, err
+	}
+
+	return list, nil
 }
 
 func (ts *treeService) GetEcsUnbindList(ctx context.Context) ([]*model.ResourceEcs, error) {
