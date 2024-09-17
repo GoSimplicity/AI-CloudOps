@@ -45,7 +45,7 @@ type treeEcsDAO struct {
 	l  *zap.Logger
 }
 
-func NewTreeDAO(db *gorm.DB, l *zap.Logger) TreeEcsDAO {
+func NewTreeEcsDAO(db *gorm.DB, l *zap.Logger) TreeEcsDAO {
 	return &treeEcsDAO{
 		db: db,
 		l:  l,
