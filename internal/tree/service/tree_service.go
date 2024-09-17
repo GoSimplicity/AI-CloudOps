@@ -116,7 +116,7 @@ func (ts *treeService) CreateTreeNode(ctx context.Context, obj *model.TreeNode) 
 }
 
 func (ts *treeService) DeleteTreeNode(ctx context.Context, id int) error {
-	if err := ts.nodeDao.DeleteByID(ctx, id); err != nil {
+	if err := ts.nodeDao.Delete(ctx, id); err != nil {
 		ts.l.Error("DeleteTreeNode failed", zap.Error(err))
 		return err
 	}
