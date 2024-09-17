@@ -60,14 +60,15 @@ func NewTreeService(ecsDao ecs.TreeEcsDAO, elbDao elb.TreeElbDAO, rdsDao rds.Tre
 }
 
 func (ts *treeService) ListTreeNodes(ctx context.Context) ([]*model.TreeNode, error) {
-	nodes, err := ts.nodeDao.GetAll(ctx)
+	// TODO 获取全部TreeNode列表
 
-	if err != nil {
-		ts.l.Error("ListTreeNodes failed", zap.Error(err))
-		return nil, err
-	}
+	// TODO 初始化映射并分类节点
 
-	return nodes, nil
+	// TODO 回填Children列表
+
+	// TODO 返回结果
+
+	return nil, nil
 }
 
 func (ts *treeService) SelectTreeNode(ctx context.Context, id int) (*model.TreeNode, error) {
@@ -108,28 +109,35 @@ func (ts *treeService) GetAllTreeNodes(ctx context.Context) ([]*model.TreeNode, 
 }
 
 func (ts *treeService) CreateTreeNode(ctx context.Context, obj *model.TreeNode) error {
-	if err := ts.nodeDao.Create(ctx, obj); err != nil {
-		ts.l.Error("CreateTreeNode failed", zap.Error(err))
-		return err
-	}
+	// TODO 验证权限
+
+	// TODO 执行创建
+
+	// TODO 返回创建结果
 
 	return nil
 }
 
 func (ts *treeService) DeleteTreeNode(ctx context.Context, id int) error {
-	if err := ts.nodeDao.Delete(ctx, id); err != nil {
-		ts.l.Error("DeleteTreeNode failed", zap.Error(err))
-		return err
-	}
+	// TODO 验证权限
+
+	// TODO 判断是否有子节点
+
+	// TODO 执行删除
+
+	// TODO 返回删除结果
 
 	return nil
 }
 
 func (ts *treeService) UpdateTreeNode(ctx context.Context, obj *model.TreeNode) error {
-	if err := ts.nodeDao.Update(ctx, obj); err != nil {
-		ts.l.Error("UpdateTreeNode failed", zap.Error(err))
-		return err
-	}
+	// TODO 验证权限
+
+	// TODO 获取并验证关联用户（运维管理员、研发管理员、研发成员）
+
+	// TODO 更新节点关联用户
+
+	// TODO 返回更新结果
 
 	return nil
 }
