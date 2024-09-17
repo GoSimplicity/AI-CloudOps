@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"github.com/GoSimplicity/CloudOps/internal/model"
@@ -70,22 +71,22 @@ func (ts *treeService) ListTreeNodes(ctx context.Context) ([]*model.TreeNode, er
 }
 
 func (ts *treeService) SelectTreeNode(ctx context.Context, id int) (*model.TreeNode, error) {
-	node, err := ts.nodeDao.GetByID(ctx, id)
+	treeNode, err := ts.nodeDao.GetByID(ctx, id)
 
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, constants.ErrorTreeNodeNotExist
 		}
 		ts.l.Error("SelectTreeNode failed", zap.Error(err))
 		return nil, err
 	}
 
-	return node, nil
+	return treeNode, nil
 }
 
 func (ts *treeService) GetTopTreeNode(ctx context.Context) ([]*model.TreeNode, error) {
-	// pid = 0, 顶级节点
-	nodes, err := ts.nodeDao.GetChildren(ctx, 0)
+	// pid = 1, 顶级节点
+	nodes, err := ts.nodeDao.GetByPid(ctx, 1)
 
 	if err != nil {
 		ts.l.Error("GetTopTreeNode failed", zap.Error(err))
@@ -134,7 +135,7 @@ func (ts *treeService) UpdateTreeNode(ctx context.Context, obj *model.TreeNode) 
 }
 
 func (ts *treeService) GetChildrenTreeNodes(ctx context.Context, pid int) ([]*model.TreeNode, error) {
-	list, err := ts.nodeDao.GetChildren(ctx, pid)
+	list, err := ts.nodeDao.GetByPid(ctx, pid)
 	if err != nil {
 		ts.l.Error("GetChildrenTreeNodes failed", zap.Error(err))
 		return nil, err

@@ -37,8 +37,8 @@
       "path": "internal/lint-configs/stylelint-config",
     },
     {
-      "name": "@vben/node-utils",
-      "path": "internal/node-utils",
+      "name": "@vben/treeNode-utils",
+      "path": "internal/treeNode-utils",
     },
     {
       "name": "@vben/tailwind-config",
