@@ -1,7 +1,11 @@
 package api
 
 import (
+	"strconv"
+
+	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/GoSimplicity/CloudOps/internal/tree/service"
+	"github.com/GoSimplicity/CloudOps/pkg/utils/apiresponse"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -50,35 +54,138 @@ func (t *TreeHandler) RegisterRouters(server *gin.Engine) {
 }
 
 func (t *TreeHandler) ListTreeNode(ctx *gin.Context) {
-	// TODO: Implement ListTreeNode logic
+	list, err := t.service.ListTreeNodes(ctx)
+
+	if err != nil {
+		t.l.Error("list tree nodes failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 func (t *TreeHandler) SelectTreeNode(ctx *gin.Context) {
-	// TODO: Implement SelectTreeNode logic
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.ErrorWithMessage(ctx, "id不能为空")
+		return
+	}
+
+	nodeId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "id必须为整数")
+		return
+	}
+
+	node, err := t.service.SelectTreeNode(ctx, nodeId)
+	if err != nil {
+		t.l.Error("select tree node failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, node)
 }
 
 func (t *TreeHandler) GetTopTreeNode(ctx *gin.Context) {
-	// TODO: Implement GetTopTreeNode logic
+	nodes, err := t.service.GetTopTreeNode(ctx)
+	if err != nil {
+		t.l.Error("get top tree node failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, nodes)
 }
 
 func (t *TreeHandler) GetAllTreeNode(ctx *gin.Context) {
-	// TODO: Implement GetAllTreeNode logic
+	list, err := t.service.GetAllTreeNodes(ctx)
+	if err != nil {
+		t.l.Error("get all tree nodes failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 func (t *TreeHandler) CreateTreeNode(ctx *gin.Context) {
-	// TODO: Implement CreateTreeNode logic
+	var req model.TreeNode
+
+	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := t.service.CreateTreeNode(ctx, &req); err != nil {
+		t.l.Error("create tree node failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 func (t *TreeHandler) DeleteTreeNode(ctx *gin.Context) {
-	// TODO: Implement DeleteTreeNode logic
+	id := ctx.Param("id")
+	if id == "" {
+		apiresponse.ErrorWithMessage(ctx, "id不能为空")
+		return
+	}
+
+	nodeId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "id必须为整数")
+		return
+	}
+
+	if err := t.service.DeleteTreeNode(ctx, nodeId); err != nil {
+		t.l.Error("delete tree node failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 func (t *TreeHandler) GetChildrenTreeNode(ctx *gin.Context) {
-	// TODO: Implement GetChildrenTreeNode logic
+	pid := ctx.Param("pid")
+	if pid == "" {
+		apiresponse.ErrorWithMessage(ctx, "pid不能为空")
+		return
+	}
+
+	parentId, err := strconv.Atoi(pid)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "pid必须为整数")
+		return
+	}
+
+	list, err := t.service.GetChildrenTreeNodes(ctx, parentId)
+	if err != nil {
+		t.l.Error("get children tree nodes failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 func (t *TreeHandler) UpdateTreeNode(ctx *gin.Context) {
-	// TODO: Implement UpdateTreeNode logic
+	var req model.TreeNode
+	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := t.service.UpdateTreeNode(ctx, &req); err != nil {
+		t.l.Error("update tree node failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 func (t *TreeHandler) GetEcsUnbindList(ctx *gin.Context) {
