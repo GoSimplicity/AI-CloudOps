@@ -1,4 +1,4 @@
-FROM node:20-slim AS builder
+FROM treeNode:20-slim AS builder
 
 # --max-old-space-size
 ENV PNPM_HOME="/pnpm"
