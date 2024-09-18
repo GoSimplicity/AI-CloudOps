@@ -3,22 +3,25 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"github.com/GoSimplicity/CloudOps/internal/user/dao"
+	"golang.org/x/sync/errgroup"
+	"strconv"
 
 	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/GoSimplicity/CloudOps/internal/tree/dao/ecs"
 	"github.com/GoSimplicity/CloudOps/internal/tree/dao/elb"
-	"github.com/GoSimplicity/CloudOps/internal/tree/dao/node"
 	"github.com/GoSimplicity/CloudOps/internal/tree/dao/rds"
+	"github.com/GoSimplicity/CloudOps/internal/tree/dao/tree_node"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 type TreeService interface {
 	ListTreeNodes(ctx context.Context) ([]*model.TreeNode, error)
-	SelectTreeNode(ctx context.Context, id int) (*model.TreeNode, error)
+	SelectTreeNode(ctx context.Context, level int, levelLt int) ([]*model.TreeNode, error)
 	GetTopTreeNode(ctx context.Context) ([]*model.TreeNode, error)
-	GetAllTreeNodes(ctx context.Context) ([]*model.TreeNode, error)
+	ListLeafTreeNodes(ctx context.Context) ([]*model.TreeNode, error)
 	CreateTreeNode(ctx context.Context, obj *model.TreeNode) error
 	DeleteTreeNode(ctx context.Context, id int) error
 	UpdateTreeNode(ctx context.Context, obj *model.TreeNode) error
@@ -44,51 +47,93 @@ type treeService struct {
 	ecsDao  ecs.TreeEcsDAO
 	elbDao  elb.TreeElbDAO
 	rdsDao  rds.TreeRdsDAO
-	nodeDao node.TreeNodeDAO
+	nodeDao tree_node.TreeNodeDAO
+	userDao dao.UserDAO
 	l       *zap.Logger
 }
 
 // NewTreeService 构造函数
-func NewTreeService(ecsDao ecs.TreeEcsDAO, elbDao elb.TreeElbDAO, rdsDao rds.TreeRdsDAO, nodeDao node.TreeNodeDAO, l *zap.Logger) TreeService {
+func NewTreeService(ecsDao ecs.TreeEcsDAO, elbDao elb.TreeElbDAO, rdsDao rds.TreeRdsDAO, nodeDao tree_node.TreeNodeDAO, l *zap.Logger, userDao dao.UserDAO) TreeService {
 	return &treeService{
 		ecsDao:  ecsDao,
 		elbDao:  elbDao,
 		rdsDao:  rdsDao,
 		nodeDao: nodeDao,
+		userDao: userDao,
 		l:       l,
 	}
 }
 
+// ListTreeNodes 获取所有树节点并构建树结构
 func (ts *treeService) ListTreeNodes(ctx context.Context) ([]*model.TreeNode, error) {
-	// TODO 获取全部TreeNode列表
-
-	// TODO 初始化映射并分类节点
-
-	// TODO 回填Children列表
-
-	// TODO 返回结果
-
-	return nil, nil
-}
-
-func (ts *treeService) SelectTreeNode(ctx context.Context, id int) (*model.TreeNode, error) {
-	treeNode, err := ts.nodeDao.GetByID(ctx, id)
-
+	// 获取所有节点
+	nodes, err := ts.nodeDao.GetAll(ctx)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, constants.ErrorTreeNodeNotExist
-		}
-		ts.l.Error("SelectTreeNode failed", zap.Error(err))
+		ts.l.Error("ListTreeNodes 获取所有节点失败", zap.Error(err))
 		return nil, err
 	}
 
-	return treeNode, nil
+	// 初始化顶层节点切片和父节点到子节点的映射
+	var topNodes []*model.TreeNode
+	childrenMap := make(map[int][]*model.TreeNode)
+
+	// 遍历所有节点，设置 Key 属性并分类为顶层节点或子节点
+	for _, node := range nodes {
+		// 设置节点的 Key 属性
+		node.Key = strconv.Itoa(node.ID)
+
+		if node.Pid == 0 {
+			// 如果父节点 ID 为 0，则为顶层节点，添加到 topNodes 切片中
+			topNodes = append(topNodes, node)
+		} else {
+			// 否则，将节点添加到对应父节点的子节点列表中
+			childrenMap[node.Pid] = append(childrenMap[node.Pid], node)
+		}
+	}
+
+	// 遍历所有节点，将子节点关联到各自的父节点
+	for _, node := range nodes {
+		if children, exists := childrenMap[node.ID]; exists {
+			node.Children = children
+		}
+	}
+
+	return topNodes, nil
+}
+
+func (ts *treeService) SelectTreeNode(ctx context.Context, level int, levelLt int) ([]*model.TreeNode, error) {
+	// 从数据库中获取所有树节点
+	nodes, err := ts.nodeDao.GetAll(ctx)
+	if err != nil {
+		ts.l.Error("SelectTreeNode failed to retrieve nodes", zap.Error(err))
+		return nil, err
+	}
+
+	filteredNodes := make([]*model.TreeNode, 0, len(nodes))
+
+	for _, node := range nodes {
+		// 如果指定了具体层级，且节点的层级不匹配，则跳过该节点
+		if level > 0 && node.Level != level {
+			continue
+		}
+
+		// 如果指定了最大层级，且节点的层级超过该值，则跳过该节点
+		if levelLt > 0 && node.Level > levelLt {
+			continue
+		}
+
+		// 设置节点的 Value 属性为其 ID
+		node.Value = node.ID
+
+		filteredNodes = append(filteredNodes, node)
+	}
+
+	return filteredNodes, nil
 }
 
 func (ts *treeService) GetTopTreeNode(ctx context.Context) ([]*model.TreeNode, error) {
-	// pid = 1, 顶级节点
-	nodes, err := ts.nodeDao.GetByPid(ctx, 1)
-
+	// level = 1, 顶级节点
+	nodes, err := ts.nodeDao.GetByLevel(ctx, 1)
 	if err != nil {
 		ts.l.Error("GetTopTreeNode failed", zap.Error(err))
 		return nil, err
@@ -97,47 +142,85 @@ func (ts *treeService) GetTopTreeNode(ctx context.Context) ([]*model.TreeNode, e
 	return nodes, nil
 }
 
-func (ts *treeService) GetAllTreeNodes(ctx context.Context) ([]*model.TreeNode, error) {
+func (ts *treeService) ListLeafTreeNodes(ctx context.Context) ([]*model.TreeNode, error) {
+	// 从数据库中获取所有树节点
 	nodes, err := ts.nodeDao.GetAll(ctx)
-
 	if err != nil {
-		ts.l.Error("GetAllTreeNodes failed", zap.Error(err))
+		ts.l.Error("ListLeafTreeNodes 获取所有树节点失败", zap.Error(err))
 		return nil, err
 	}
 
-	return nodes, nil
+	leafNodes := make([]*model.TreeNode, 0, len(nodes))
+
+	// 遍历所有节点，筛选出叶子节点
+	for _, node := range nodes {
+		// 如果 BindEcs 为空或长度为 0，则不是叶子节点，跳过
+		if len(node.BindEcs) == 0 {
+			continue
+		}
+		leafNodes = append(leafNodes, node)
+	}
+
+	return leafNodes, nil
 }
 
 func (ts *treeService) CreateTreeNode(ctx context.Context, obj *model.TreeNode) error {
-	// TODO 验证权限
-
-	// TODO 执行创建
-
-	// TODO 返回创建结果
-
-	return nil
+	return ts.nodeDao.Create(ctx, obj)
 }
 
 func (ts *treeService) DeleteTreeNode(ctx context.Context, id int) error {
-	// TODO 验证权限
+	treeNode, err := ts.nodeDao.GetByID(ctx, id)
+	if err != nil {
+		ts.l.Error("DeleteTreeNode failed", zap.Error(err))
+		return err
+	}
 
-	// TODO 判断是否有子节点
+	if treeNode != nil && len(treeNode.Children) > 0 {
+		ts.l.Error("DeleteTreeNode failed", zap.Error(errors.New(constants.ErrorTreeNodeHasChildren)))
+		return errors.New(constants.ErrorTreeNodeHasChildren)
+	}
 
-	// TODO 执行删除
-
-	// TODO 返回删除结果
-
-	return nil
+	return ts.nodeDao.Delete(ctx, id)
 }
 
+// UpdateTreeNode 更新树节点的用户信息
 func (ts *treeService) UpdateTreeNode(ctx context.Context, obj *model.TreeNode) error {
-	// TODO 验证权限
+	// 使用 errgroup 实现并发处理
+	g, ctx := errgroup.WithContext(ctx)
 
-	// TODO 获取并验证关联用户（运维管理员、研发管理员、研发成员）
+	var (
+		usersOpsAdmin []*model.User
+		usersRdAdmin  []*model.User
+		usersRdMember []*model.User
+	)
 
-	// TODO 更新节点关联用户
+	g.Go(func() error {
+		var err error
+		usersOpsAdmin, err = ts.fetchUsers(ctx, obj.OpsAdminUsers.Items, "OpsAdmin")
+		return err
+	})
 
-	// TODO 返回更新结果
+	g.Go(func() error {
+		var err error
+		usersRdAdmin, err = ts.fetchUsers(ctx, obj.RdAdminUsers.Items, "RdAdmin")
+		return err
+	})
+
+	g.Go(func() error {
+		var err error
+		usersRdMember, err = ts.fetchUsers(ctx, obj.RdMemberUsers.Items, "RdMember")
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
+		ts.l.Error("UpdateTreeNode 获取用户信息失败", zap.Error(err))
+		return err
+	}
+
+	// 更新树节点的用户信息
+	obj.OpsAdmins = usersOpsAdmin
+	obj.RdAdmins = usersRdAdmin
+	obj.RdMembers = usersRdMember
 
 	return nil
 }
@@ -202,4 +285,22 @@ func (ts *treeService) UnBindElb(ctx context.Context, elbID int, treeNodeID int)
 
 func (ts *treeService) UnBindRds(ctx context.Context, rdsID int, treeNodeID int) error {
 	return nil
+}
+
+// fetchUsers 根据用户名列表获取用户，role 用于日志记录
+func (ts *treeService) fetchUsers(ctx context.Context, userNames []string, role string) ([]*model.User, error) {
+	// 预分配切片容量，减少内存重新分配次数
+	users := make([]*model.User, 0, len(userNames))
+
+	for _, userName := range userNames {
+		user, err := ts.userDao.GetUserByUsername(ctx, userName)
+		if err != nil {
+			// 记录具体的错误信息，包括角色和用户名
+			ts.l.Error(fmt.Sprintf("UpdateTreeNode 获取 %s 用户失败", role), zap.String("userName", userName), zap.Error(err))
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
 }
