@@ -29,7 +29,7 @@ func (t *TreeHandler) RegisterRouters(server *gin.Engine) {
 	treeGroup.GET("/listTreeNode", t.ListTreeNode)
 	treeGroup.GET("/selectTreeNode", t.SelectTreeNode)
 	treeGroup.GET("/getTopTreeNode", t.GetTopTreeNode)
-	treeGroup.GET("/getAllTreeNode", t.GetAllTreeNode)
+	treeGroup.GET("/listLeafTreeNode", t.ListLeafTreeNodes)
 	treeGroup.POST("/createTreeNode", t.CreateTreeNode)
 	treeGroup.DELETE("/deleteTreeNode/:id", t.DeleteTreeNode)
 	treeGroup.GET("/getChildrenTreeNode/:pid", t.GetChildrenTreeNode)
@@ -66,26 +66,35 @@ func (t *TreeHandler) ListTreeNode(ctx *gin.Context) {
 }
 
 func (t *TreeHandler) SelectTreeNode(ctx *gin.Context) {
-	id := ctx.Query("id")
-	if id == "" {
-		apiresponse.ErrorWithMessage(ctx, "id不能为空")
+	// 获取查询参数 "level" 和 "levelLt"，并设置默认值为 "0"
+	levelStr := ctx.DefaultQuery("level", "0")
+	levelLtStr := ctx.DefaultQuery("levelLt", "0")
+
+	// 将字符串参数转换为整数，并处理转换错误
+	level, err := strconv.Atoi(levelStr)
+	if err != nil {
+		t.l.Warn("无效的 level 参数", zap.String("level", levelStr), zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "无效的 level 参数")
 		return
 	}
 
-	nodeId, err := strconv.Atoi(id)
+	levelLt, err := strconv.Atoi(levelLtStr)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "id必须为整数")
+		t.l.Warn("无效的 levelLt 参数", zap.String("levelLt", levelLtStr), zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "无效的 levelLt 参数")
 		return
 	}
 
-	node, err := t.service.SelectTreeNode(ctx, nodeId)
+	// 调用服务层方法获取过滤后的树节点
+	nodes, err := t.service.SelectTreeNode(ctx, level, levelLt)
 	if err != nil {
-		t.l.Error("select tree node failed", zap.Error(err))
+		t.l.Error("SelectTreeNode 调用失败", zap.Error(err))
 		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, node)
+	// 返回成功响应，包含过滤后的树节点
+	apiresponse.SuccessWithData(ctx, nodes)
 }
 
 func (t *TreeHandler) GetTopTreeNode(ctx *gin.Context) {
@@ -99,8 +108,8 @@ func (t *TreeHandler) GetTopTreeNode(ctx *gin.Context) {
 	apiresponse.SuccessWithData(ctx, nodes)
 }
 
-func (t *TreeHandler) GetAllTreeNode(ctx *gin.Context) {
-	list, err := t.service.GetAllTreeNodes(ctx)
+func (t *TreeHandler) ListLeafTreeNodes(ctx *gin.Context) {
+	list, err := t.service.ListLeafTreeNodes(ctx)
 	if err != nil {
 		t.l.Error("get all tree nodes failed", zap.Error(err))
 		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
