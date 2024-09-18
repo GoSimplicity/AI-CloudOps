@@ -1,4 +1,4 @@
-package node
+package tree_node
 
 import (
 	"context"
