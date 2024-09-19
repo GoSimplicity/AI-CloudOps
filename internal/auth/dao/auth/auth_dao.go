@@ -24,6 +24,8 @@ type AuthDAO interface {
 	GetAllRoles(ctx context.Context) ([]*model.Role, error)
 	// UpdateMenus 更新菜单
 	UpdateMenus(ctx context.Context, menus []*model.Menu) error
+	// UpdateMenuStatus 更新菜单状态
+	UpdateMenuStatus(ctx context.Context, menuID int, status string) error
 	// UpdateApis 更新API
 	UpdateApis(ctx context.Context, apis []*model.Api) error
 	// DeleteRole 删除角色
@@ -265,12 +267,27 @@ func (a *authDAO) UpdateMenu(ctx context.Context, menu *model.Menu) error {
 		"title":     menu.Title,
 		"name":      menu.Name,
 		"path":      menu.Path,
+		"type":      menu.Type,
+		"orderNo":   menu.OrderNo,
+		"icon":      menu.Icon,
 		"component": menu.Component,
 		"show":      menu.Show,
+		"status":    menu.Status,
 	}).Error; err != nil {
 		a.l.Error("failed to update menu", zap.Int("menuID", menu.ID), zap.Error(err))
 		return err
 	}
+
+	return nil
+}
+
+func (a *authDAO) UpdateMenuStatus(ctx context.Context, menuID int, status string) error {
+	if err := a.db.WithContext(ctx).Model(&model.Menu{}).Where("id = ?", menuID).Update("status", status).Error; err != nil {
+		a.l.Error("failed to update menu status", zap.Int("menu_id", menuID), zap.String("status", status), zap.Error(err))
+		return err
+	}
+
+	a.l.Info("menu status updated successfully", zap.Int("menu_id", menuID), zap.String("status", status))
 
 	return nil
 }

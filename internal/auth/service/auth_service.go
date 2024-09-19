@@ -14,6 +14,7 @@ type AuthService interface {
 	GetMenuList(ctx context.Context, uid int) ([]*model.Menu, error)
 	GetAllMenuList(ctx context.Context) ([]*model.Menu, error)
 	UpdateMenu(ctx context.Context, menu model.Menu) error
+	UpdateMenuStatus(ctx context.Context, menuID int, status string) error
 	CreateMenu(ctx context.Context, menu model.Menu) error
 	DeleteMenu(ctx context.Context, id string) error
 
@@ -111,6 +112,10 @@ func (a *authService) GetAllMenuList(ctx context.Context) ([]*model.Menu, error)
 // UpdateMenu 更新菜单信息
 func (a *authService) UpdateMenu(ctx context.Context, menu model.Menu) error {
 	return a.dao.UpdateMenu(ctx, &menu)
+}
+
+func (a *authService) UpdateMenuStatus(ctx context.Context, menuID int, status string) error {
+	return a.dao.UpdateMenuStatus(ctx, menuID, status)
 }
 
 // CreateMenu 创建新菜单
