@@ -80,13 +80,22 @@ func (h *handler) SetLoginToken(ctx *gin.Context, uid int) (string, string, erro
 
 // SetJWTToken 设置短Token
 func (h *handler) SetJWTToken(ctx *gin.Context, uid int, ssid string) (string, error) {
+	// 从配置文件中获取JWT的过期时间
+	expirationMinutes := viper.GetInt64("jwt.expiration")
+
+	// 如果未设置或值无效，设置一个默认值，例如30分钟
+	if expirationMinutes <= 0 {
+		expirationMinutes = 30
+	}
+
+	// 构建用户声明信息
 	uc := UserClaims{
 		Uid:         uid,
 		Ssid:        ssid,
 		UserAgent:   ctx.GetHeader("User-Agent"),
 		ContentType: ctx.GetHeader("Content-Type"),
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 30)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * time.Duration(expirationMinutes))),
 			Issuer:    h.issuer,
 		},
 	}

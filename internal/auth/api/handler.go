@@ -38,6 +38,7 @@ func (a *AuthHandler) RegisterRouters(server *gin.Engine) {
 	authGroup.GET("/menu/list", a.GetMenuList)
 	authGroup.GET("/menu/all", a.GetAllMenuList)
 	authGroup.POST("/menu/update", a.UpdateMenu)
+	authGroup.POST("/menu/update_status", a.UpdateMenuStatus)
 	authGroup.POST("/menu/create", a.CreateMenu)
 	authGroup.DELETE("/menu/:id", a.DeleteMenu)
 
@@ -87,6 +88,25 @@ func (a *AuthHandler) UpdateMenu(ctx *gin.Context) {
 	}
 
 	if err := a.service.UpdateMenu(ctx, req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithMessage(ctx, "更新成功")
+}
+
+func (a *AuthHandler) UpdateMenuStatus(ctx *gin.Context) {
+	var req struct {
+		ID     int    `json:"id"`
+		Status string `json:"status"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	if err := a.service.UpdateMenuStatus(ctx, req.ID, req.Status); err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
