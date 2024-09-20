@@ -2,10 +2,12 @@ package api
 
 import (
 	"github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
-	"github.com/GoSimplicity/CloudOps/internal/auth/service"
+	"github.com/GoSimplicity/CloudOps/internal/auth/service/api"
+	"github.com/GoSimplicity/CloudOps/internal/auth/service/menu"
+	"github.com/GoSimplicity/CloudOps/internal/auth/service/role"
+	"github.com/GoSimplicity/CloudOps/internal/middleware"
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	"github.com/GoSimplicity/CloudOps/internal/user/dao"
-	"github.com/GoSimplicity/CloudOps/pkg/middleware"
 	"github.com/GoSimplicity/CloudOps/pkg/utils/apiresponse"
 	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
@@ -13,20 +15,24 @@ import (
 )
 
 type AuthHandler struct {
-	service   service.AuthService
-	ijwt      ijwt.Handler
-	l         *zap.Logger
-	casbinDao casbin.CasbinDAO
-	userDao   dao.UserDAO
+	apiService  api.ApiService
+	roleService role.RoleService
+	menuService menu.MenuService
+	ijwt        ijwt.Handler
+	l           *zap.Logger
+	casbinDao   casbin.CasbinDAO
+	userDao     dao.UserDAO
 }
 
-func NewAuthHandler(service service.AuthService, handler ijwt.Handler, l *zap.Logger, casbinDao casbin.CasbinDAO, userDao dao.UserDAO) *AuthHandler {
+func NewAuthHandler(apiService api.ApiService, roleService role.RoleService, menuService menu.MenuService, handler ijwt.Handler, l *zap.Logger, casbinDao casbin.CasbinDAO, userDao dao.UserDAO) *AuthHandler {
 	return &AuthHandler{
-		service:   service,
-		ijwt:      handler,
-		l:         l,
-		casbinDao: casbinDao,
-		userDao:   userDao,
+		apiService:  apiService,
+		roleService: roleService,
+		menuService: menuService,
+		ijwt:        handler,
+		l:           l,
+		casbinDao:   casbinDao,
+		userDao:     userDao,
 	}
 }
 
@@ -60,7 +66,7 @@ func (a *AuthHandler) RegisterRouters(server *gin.Engine) {
 func (a *AuthHandler) GetMenuList(ctx *gin.Context) {
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 
-	roles, err := a.service.GetMenuList(ctx, uc.Uid)
+	roles, err := a.menuService.GetMenuList(ctx, uc.Uid)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
@@ -70,7 +76,7 @@ func (a *AuthHandler) GetMenuList(ctx *gin.Context) {
 }
 
 func (a *AuthHandler) GetAllMenuList(ctx *gin.Context) {
-	menus, err := a.service.GetAllMenuList(ctx)
+	menus, err := a.menuService.GetAllMenuList(ctx)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
@@ -87,7 +93,7 @@ func (a *AuthHandler) UpdateMenu(ctx *gin.Context) {
 		return
 	}
 
-	if err := a.service.UpdateMenu(ctx, req); err != nil {
+	if err := a.menuService.UpdateMenu(ctx, req); err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
@@ -106,7 +112,7 @@ func (a *AuthHandler) UpdateMenuStatus(ctx *gin.Context) {
 		return
 	}
 
-	if err := a.service.UpdateMenuStatus(ctx, req.ID, req.Status); err != nil {
+	if err := a.menuService.UpdateMenuStatus(ctx, req.ID, req.Status); err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
@@ -122,7 +128,7 @@ func (a *AuthHandler) CreateMenu(ctx *gin.Context) {
 		return
 	}
 
-	if err := a.service.CreateMenu(ctx, req); err != nil {
+	if err := a.menuService.CreateMenu(ctx, req); err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
@@ -133,7 +139,7 @@ func (a *AuthHandler) CreateMenu(ctx *gin.Context) {
 func (a *AuthHandler) DeleteMenu(ctx *gin.Context) {
 	id := ctx.Param("id")
 
-	if err := a.service.DeleteMenu(ctx, id); err != nil {
+	if err := a.menuService.DeleteMenu(ctx, id); err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
@@ -142,7 +148,7 @@ func (a *AuthHandler) DeleteMenu(ctx *gin.Context) {
 }
 
 func (a *AuthHandler) GetAllRoleList(ctx *gin.Context) {
-	roles, err := a.service.GetAllRoleList(ctx)
+	roles, err := a.roleService.GetAllRoleList(ctx)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
@@ -159,7 +165,7 @@ func (a *AuthHandler) CreateRole(ctx *gin.Context) {
 		return
 	}
 
-	err := a.service.CreateRole(ctx, req)
+	err := a.roleService.CreateRole(ctx, req)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
@@ -176,7 +182,7 @@ func (a *AuthHandler) UpdateRole(ctx *gin.Context) {
 		return
 	}
 
-	err := a.service.UpdateRole(ctx, req)
+	err := a.roleService.UpdateRole(ctx, req)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
@@ -193,7 +199,7 @@ func (a *AuthHandler) SetRoleStatus(ctx *gin.Context) {
 		return
 	}
 
-	err := a.service.SetRoleStatus(ctx, req.ID, req.Status)
+	err := a.roleService.SetRoleStatus(ctx, req.ID, req.Status)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
@@ -205,7 +211,7 @@ func (a *AuthHandler) SetRoleStatus(ctx *gin.Context) {
 func (a *AuthHandler) DeleteRole(ctx *gin.Context) {
 	id := ctx.Param("id")
 
-	err := a.service.DeleteRole(ctx, id)
+	err := a.roleService.DeleteRole(ctx, id)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
@@ -217,7 +223,7 @@ func (a *AuthHandler) DeleteRole(ctx *gin.Context) {
 func (a *AuthHandler) GetApiList(ctx *gin.Context) {
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 
-	Apis, err := a.service.GetApiList(ctx, uc.Uid)
+	Apis, err := a.apiService.GetApiList(ctx, uc.Uid)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
@@ -227,7 +233,7 @@ func (a *AuthHandler) GetApiList(ctx *gin.Context) {
 }
 
 func (a *AuthHandler) GetApiListAll(ctx *gin.Context) {
-	Apis, err := a.service.GetApiListAll(ctx)
+	Apis, err := a.apiService.GetApiListAll(ctx)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
@@ -239,7 +245,7 @@ func (a *AuthHandler) GetApiListAll(ctx *gin.Context) {
 func (a *AuthHandler) DeleteApi(ctx *gin.Context) {
 	id := ctx.Param("id")
 
-	err := a.service.DeleteApi(ctx, id)
+	err := a.apiService.DeleteApi(ctx, id)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
@@ -249,14 +255,14 @@ func (a *AuthHandler) DeleteApi(ctx *gin.Context) {
 }
 
 func (a *AuthHandler) CreateApi(ctx *gin.Context) {
-	var api model.Api
+	var ma model.Api
 
-	if err := ctx.ShouldBindJSON(&api); err != nil {
+	if err := ctx.ShouldBindJSON(&ma); err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	err := a.service.CreateApi(ctx, &api)
+	err := a.apiService.CreateApi(ctx, &ma)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
@@ -266,14 +272,14 @@ func (a *AuthHandler) CreateApi(ctx *gin.Context) {
 }
 
 func (a *AuthHandler) UpdateApi(ctx *gin.Context) {
-	var api model.Api
+	var ma model.Api
 
-	if err := ctx.ShouldBindJSON(&api); err != nil {
+	if err := ctx.ShouldBindJSON(&ma); err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	err := a.service.UpdateApi(ctx, &api)
+	err := a.apiService.UpdateApi(ctx, &ma)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
