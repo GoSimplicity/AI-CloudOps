@@ -2,8 +2,8 @@ package di
 
 import (
 	casbinDao "github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
+	"github.com/GoSimplicity/CloudOps/internal/middleware"
 	userDao "github.com/GoSimplicity/CloudOps/internal/user/dao"
-	middleware2 "github.com/GoSimplicity/CloudOps/pkg/middleware"
 	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -28,7 +28,7 @@ func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, userDao userDao.UserDAO, ca
 			},
 			MaxAge: 12 * time.Hour,
 		}),
-		middleware2.NewJWTMiddleware(ih).CheckLogin(),
-		middleware2.NewLogMiddleware(l).Log(),
+		middleware.NewJWTMiddleware(ih).CheckLogin(),
+		middleware.NewLogMiddleware(l).Log(),
 	}
 }
