@@ -49,6 +49,11 @@ func NewTreeElbDAO(db *gorm.DB, l *zap.Logger) TreeElbDAO {
 	}
 }
 
+func (t *treeElbDAO) applyPreloads(query *gorm.DB) *gorm.DB {
+	return query.
+		Preload("BindNodes")
+}
+
 func (t *treeElbDAO) Create(ctx context.Context, obj *model.ResourceElb) error {
 	//TODO implement me
 	panic("implement me")
@@ -80,8 +85,16 @@ func (t *treeElbDAO) UpdateBindNodes(ctx context.Context, obj *model.ResourceElb
 }
 
 func (t *treeElbDAO) GetAll(ctx context.Context) ([]*model.ResourceElb, error) {
-	//TODO implement me
-	panic("implement me")
+	var elb []*model.ResourceElb
+
+	query := t.applyPreloads(t.db.WithContext(ctx))
+
+	if err := query.Find(&elb).Error; err != nil {
+		t.l.Error("获取所有 ELB 实例失败", zap.Error(err))
+		return nil, err
+	}
+
+	return elb, nil
 }
 
 func (t *treeElbDAO) GetAllNoPreload(ctx context.Context) ([]*model.ResourceElb, error) {
