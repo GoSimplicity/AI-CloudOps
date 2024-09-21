@@ -372,7 +372,7 @@ func (ts *treeService) getChildrenTreeNodeIds(ctx context.Context, nid int) []in
 		}
 	}
 
-	// 递归到根节点
+	// 递归到叶子节点
 	if isLeaf {
 		return ids
 	}
