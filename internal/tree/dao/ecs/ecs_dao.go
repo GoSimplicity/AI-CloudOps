@@ -2,11 +2,8 @@ package ecs
 
 import (
 	"context"
-	"errors"
 
-	"github.com/GoSimplicity/CloudOps/internal/constants"
 	"github.com/GoSimplicity/CloudOps/internal/model"
-	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -52,16 +49,14 @@ func NewTreeEcsDAO(db *gorm.DB, l *zap.Logger) TreeEcsDAO {
 	}
 }
 
+func (t *treeEcsDAO) applyPreloads(query *gorm.DB) *gorm.DB {
+	return query.
+		Preload("BindNodes")
+}
+
 func (t *treeEcsDAO) Create(ctx context.Context, obj *model.ResourceEcs) error {
-	if err := t.db.WithContext(ctx).Create(obj).Error; err != nil {
-		var mysqlErr *mysql.MySQLError
-		if errors.As(err, &mysqlErr) && mysqlErr.Number == constants.ErrCodeDuplicate {
-			return constants.ErrorResourceEcsExist
-		}
-		t.l.Error("create resource ecs failed", zap.Error(err))
-		return err
-	}
-	return nil
+	//TODO implement me
+	panic("implement me")
 }
 
 func (t *treeEcsDAO) Delete(ctx context.Context, obj *model.ResourceEcs) error {
@@ -90,8 +85,16 @@ func (t *treeEcsDAO) UpdateBindNodes(ctx context.Context, obj *model.ResourceEcs
 }
 
 func (t *treeEcsDAO) GetAll(ctx context.Context) ([]*model.ResourceEcs, error) {
-	//TODO implement me
-	panic("implement me")
+	var ecs []*model.ResourceEcs
+
+	query := t.applyPreloads(t.db.WithContext(ctx))
+
+	if err := query.Find(&ecs).Error; err != nil {
+		t.l.Error("获取所有 ECS 失败", zap.Error(err))
+		return nil, err
+	}
+
+	return ecs, nil
 }
 
 func (t *treeEcsDAO) GetAllNoPreload(ctx context.Context) ([]*model.ResourceEcs, error) {
