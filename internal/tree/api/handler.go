@@ -23,7 +23,8 @@ func NewTreeHandler(service service.TreeService, l *zap.Logger) *TreeHandler {
 }
 
 func (t *TreeHandler) RegisterRouters(server *gin.Engine) {
-	treeGroup := server.Group("/api/tree")
+	// TODO delete hello
+	treeGroup := server.Group("/api/tree/hello")
 
 	// 树节点相关路由
 	treeGroup.GET("/listTreeNode", t.ListTreeNode)
@@ -32,6 +33,7 @@ func (t *TreeHandler) RegisterRouters(server *gin.Engine) {
 	treeGroup.GET("/listLeafTreeNode", t.ListLeafTreeNodes)
 	treeGroup.POST("/createTreeNode", t.CreateTreeNode)
 	treeGroup.DELETE("/deleteTreeNode/:id", t.DeleteTreeNode)
+	// TODO ChildrenTreeNode 判定 is_leaf == true
 	treeGroup.GET("/getChildrenTreeNode/:pid", t.GetChildrenTreeNode)
 	treeGroup.POST("/updateTreeNode", t.UpdateTreeNode)
 
@@ -198,31 +200,146 @@ func (t *TreeHandler) UpdateTreeNode(ctx *gin.Context) {
 }
 
 func (t *TreeHandler) GetEcsUnbindList(ctx *gin.Context) {
-	// TODO: Implement GetEcsUnbindList logic
+	ecs, err := t.service.GetEcsUnbindList(ctx)
+	if err != nil {
+		t.l.Error("get unbind ecs failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, ecs)
 }
 
 func (t *TreeHandler) GetEcsList(ctx *gin.Context) {
-	// TODO: Implement GetEcsList logic
+	nid := ctx.Query("nid")
+	if nid == "" {
+		apiresponse.ErrorWithMessage(ctx, "nid不能为空")
+		return
+	}
+
+	nodeID, err := strconv.Atoi(nid)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "nid必须为整数")
+		return
+	}
+
+	ecs, err := t.service.GetEcsList(ctx, nodeID)
+	if err != nil {
+		t.l.Error("get ecs list failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, ecs)
 }
 
 func (t *TreeHandler) GetElbUnbindList(ctx *gin.Context) {
-	// TODO: Implement GetElbUnbindList logic
+	elb, err := t.service.GetElbUnbindList(ctx)
+	if err != nil {
+		t.l.Error("get unbind elb failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, elb)
 }
 
 func (t *TreeHandler) GetElbList(ctx *gin.Context) {
-	// TODO: Implement GetElbList logic
+	nid := ctx.Query("nid")
+	if nid == "" {
+		apiresponse.ErrorWithMessage(ctx, "nid不能为空")
+		return
+	}
+
+	nodeID, err := strconv.Atoi(nid)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "nid必须为整数")
+		return
+	}
+
+	elb, err := t.service.GetElbList(ctx, nodeID)
+	if err != nil {
+		t.l.Error("get elb list failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, elb)
 }
 
 func (t *TreeHandler) GetRdsUnbindList(ctx *gin.Context) {
-	// TODO: Implement GetRdsUnbindList logic
+	rds, err := t.service.GetRdsUnbindList(ctx)
+	if err != nil {
+		t.l.Error("get unbind rds failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, rds)
 }
 
 func (t *TreeHandler) GetRdsList(ctx *gin.Context) {
-	// TODO: Implement GetRdsList logic
+	nid := ctx.Query("nid")
+	if nid == "" {
+		apiresponse.ErrorWithMessage(ctx, "nid不能为空")
+		return
+	}
+
+	nodeID, err := strconv.Atoi(nid)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "nid必须为整数")
+		return
+	}
+
+	rds, err := t.service.GetRdsList(ctx, nodeID)
+	if err != nil {
+		t.l.Error("get rds list failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, rds)
 }
 
 func (t *TreeHandler) GetAllResource(ctx *gin.Context) {
-	// TODO: Implement GetAllResource logic
+	resourceType := ctx.Query("type")
+	if resourceType == "" || (resourceType != "ecs" && resourceType != "elb" && resourceType != "rds") {
+		apiresponse.ErrorWithMessage(ctx, "resource type不能为空或不合法")
+		return
+	}
+
+	nid := ctx.Query("nid")
+	if nid == "" {
+		apiresponse.ErrorWithMessage(ctx, "nid不能为空")
+		return
+	}
+	nodeId, err := strconv.Atoi(nid)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "nid必须为整数")
+		return
+	}
+
+	p := ctx.DefaultQuery("page", "1")
+	s := ctx.DefaultQuery("size", "10")
+	page, err := strconv.Atoi(p)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "page必须为整数")
+		return
+	}
+	size, err := strconv.Atoi(s)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "size必须为整数")
+		return
+	}
+
+	resource, err := t.service.GetAllResources(ctx, nodeId, resourceType, page, size)
+	if err != nil {
+		t.l.Error("get all resource failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, resource)
 }
 
 func (t *TreeHandler) BindEcs(ctx *gin.Context) {

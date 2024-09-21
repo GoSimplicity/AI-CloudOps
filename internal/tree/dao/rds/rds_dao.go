@@ -2,6 +2,7 @@ package rds
 
 import (
 	"context"
+
 	"github.com/GoSimplicity/CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -48,6 +49,11 @@ func NewTreeRdsDAO(db *gorm.DB, l *zap.Logger) TreeRdsDAO {
 	}
 }
 
+func (t *treeRdsDAO) applyPreloads(query *gorm.DB) *gorm.DB {
+	return query.
+		Preload("BindNodes")
+}
+
 func (t *treeRdsDAO) Create(ctx context.Context, obj *model.ResourceRds) error {
 	//TODO implement me
 	panic("implement me")
@@ -79,8 +85,16 @@ func (t *treeRdsDAO) UpdateBindNodes(ctx context.Context, obj *model.ResourceRds
 }
 
 func (t *treeRdsDAO) GetAll(ctx context.Context) ([]*model.ResourceRds, error) {
-	//TODO implement me
-	panic("implement me")
+	var rds []*model.ResourceRds
+
+	query := t.applyPreloads(t.db.WithContext(ctx))
+
+	if err := query.Find(&rds).Error; err != nil {
+		t.l.Error("获取所有 ResourceRds 实例失败", zap.Error(err))
+		return nil, err
+	}
+
+	return rds, nil
 }
 
 func (t *treeRdsDAO) GetAllNoPreload(ctx context.Context) ([]*model.ResourceRds, error) {
