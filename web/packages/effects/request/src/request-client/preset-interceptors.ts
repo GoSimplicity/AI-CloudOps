@@ -45,10 +45,8 @@ export const authenticateResponseInterceptor = ({
       client.isRefreshing = true;
       // 标记当前请求为重试请求，避免无限循环
       config.__isRetryRequest = true;
-
       try {
         const newToken = await doRefreshToken();
-
         // 处理队列中的请求
         client.refreshTokenQueue.forEach((callback) => callback(newToken));
         // 清空队列
