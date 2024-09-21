@@ -27,29 +27,51 @@ function createRequestClient(baseURL: string) {
    * 重新认证逻辑
    */
   async function doReAuthenticate() {
-    console.warn('Access token or refresh token is invalid or expired. ');
+    console.warn('Access token or refresh token is invalid or expired.');
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
+
+    // 清除 accessToken
     accessStore.setAccessToken(null);
-    if (
-      preferences.app.loginExpiredMode === 'modal' &&
-      accessStore.isAccessChecked
-    ) {
+
+    if (preferences.app.loginExpiredMode === 'modal' && accessStore.isAccessChecked) {
       accessStore.setLoginExpired(true);
     } else {
-      await authStore.logout();
+      await authStore.logout(); // 执行登出
     }
   }
 
   /**
    * 刷新token逻辑
    */
-  async function doRefreshToken() {
+  async function doRefreshToken(): Promise<string> {
     const accessStore = useAccessStore();
-    const resp = await refreshTokenApi();
-    const newToken = resp.data;
-    accessStore.setAccessToken(newToken);
-    return newToken;
+
+    // 检查 refreshToken 是否存在
+    const refreshToken = accessStore.refreshToken;
+    if (!refreshToken) {
+      console.error('Refresh token is missing or null.');
+      throw new Error('Refresh token is missing or null.'); // 抛出异常，确保不会返回 null
+    }
+
+    try {
+      // 调用 refreshTokenApi，确保传入 refreshToken
+      const resp = await refreshTokenApi({ refreshToken });
+      const newToken = resp.data.data;
+      // 检查 newToken 是否为 undefined 或 null
+      if (!newToken) {
+        console.error('New token is null or undefined.');
+        throw new Error('New token is null or undefined.');
+      }
+      // 更新 accessToken
+      accessStore.setAccessToken(newToken);
+
+      // 返回新的 token
+      return newToken;
+    } catch (error) {
+      console.error('Failed to refresh token:', error);
+      throw error;
+    }
   }
 
   function formatToken(token: null | string) {
@@ -61,7 +83,9 @@ function createRequestClient(baseURL: string) {
     fulfilled: async (config) => {
       const accessStore = useAccessStore();
 
-      config.headers.Authorization = formatToken(accessStore.accessToken);
+      // 确保每次请求使用最新的 token
+      const currentToken = accessStore.accessToken;
+      config.headers.Authorization = formatToken(currentToken);
       config.headers['Accept-Language'] = preferences.app.locale;
       return config;
     },

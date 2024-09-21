@@ -162,36 +162,6 @@ func (h *handler) CheckSession(ctx *gin.Context, ssid string) error {
 	return nil
 }
 
-//// ClearToken 清空token
-//func (h *handler) ClearToken(ctx *gin.Context) error {
-//	ctx.Header("X-Refresh-Token", "")
-//	uc := ctx.MustGet("user").(UserClaims)
-//	// 获取 refresh token
-//	refreshTokenString := ctx.GetHeader("X-Refresh-Token")
-//
-//	if refreshTokenString == "" {
-//		return errors.New("missing refresh token")
-//	}
-//
-//	// 解析 refresh token
-//	refreshClaims := &RefreshClaims{}
-//	refreshToken, err := jwt.ParseWithClaims(refreshTokenString, refreshClaims, func(token *jwt.Token) (interface{}, error) {
-//		return h.key2, nil
-//	})
-//
-//	if err != nil || !refreshToken.Valid {
-//		return errors.New("invalid refresh token")
-//	}
-//	// 设置redis中的会话ID键的过期时间为refresh token的剩余过期时间
-//	remainingTime := refreshClaims.ExpiresAt.Time.Sub(time.Now())
-//
-//	if er := h.client.Set(ctx, fmt.Sprintf("linkme:user:ssid:%s", uc.Ssid), "", remainingTime).Err(); er != nil {
-//		return er
-//	}
-//
-//	return nil
-//}
-
 // ClearToken 清空 token，让 Authorization 中的用于验证的 token 失效
 func (h *handler) ClearToken(ctx *gin.Context) error {
 	// 获取 Authorization 头部中的 token
