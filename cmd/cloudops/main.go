@@ -1,12 +1,13 @@
 package main
 
 import (
+	"log"
+	"net/http"
+
 	"github.com/GoSimplicity/CloudOps/mock"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"log"
-	"net/http"
 
 	"github.com/GoSimplicity/CloudOps/config"
 	"github.com/GoSimplicity/CloudOps/pkg/di"
@@ -79,4 +80,7 @@ func InitMock() {
 
 	um := mock.NewUserMock(db)
 	um.CreateUserAdmin()
+
+	tm := mock.NewTreeMock(db)
+	tm.CreateTreeMock()
 }
