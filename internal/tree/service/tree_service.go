@@ -353,45 +353,47 @@ func (ts *treeService) GetRdsList(ctx context.Context, nodeID int) ([]*model.Res
 	return bindRds, nil
 }
 
-func (ts *treeService) getChildrenTreeNodeIds(ctx context.Context, nid int) []int {
-	// map[int][]int
+func (ts *treeService) getChildrenTreeNodeIds(ctx context.Context, nid int) map[int]struct{} {
 	nodes, err := ts.nodeDao.GetAllNoPreload(ctx)
 	if err != nil {
 		ts.l.Error("GetChildrenTreeNodeIds failed", zap.Error(err))
 		return nil
 	}
 
-	ids := make([]int, 0)
-	isLeaf := false
+	nodeMap := make(map[int]*model.TreeNode)
+	childrenMap := make(map[int][]*model.TreeNode)
 	for _, node := range nodes {
-		if node.Pid == nid {
-			ids = append(ids, node.ID)
-			if node.IsLeaf {
-				isLeaf = true
-			}
+		nodeMap[node.ID] = node
+		childrenMap[node.Pid] = append(childrenMap[node.Pid], node)
+	}
+
+	idMp := make(map[int]struct{})
+
+	var dfs func(nodeId int)
+	dfs = func(nodeId int) {
+		node, exists := nodeMap[nodeId]
+		if !exists {
+			return
+		}
+
+		if node.IsLeaf {
+			idMp[node.ID] = struct{}{}
+			return
+		}
+
+		for _, child := range childrenMap[nodeId] {
+			dfs(child.ID)
 		}
 	}
 
-	// 递归到叶子节点
-	if isLeaf {
-		return ids
-	}
+	dfs(nid)
 
-	next := make([]int, 0)
-	for _, id := range ids {
-		next = append(next, ts.getChildrenTreeNodeIds(ctx, id)...)
-	}
-
-	return next
+	return idMp
 }
 
 func (ts *treeService) GetAllResources(ctx context.Context, nid int, resourceType string, page, size int) ([]*model.ResourceTree, error) {
-	// 获取子节点
-	nodeIds := ts.getChildrenTreeNodeIds(ctx, nid)
-	nodeIdsMap := make(map[int]struct{})
-	for _, id := range nodeIds {
-		nodeIdsMap[id] = struct{}{}
-	}
+	// 获取子节点 ID Map
+	nodeIdsMap := ts.getChildrenTreeNodeIds(ctx, nid)
 
 	// 查询对应类型的资源
 	resources := make([]*model.ResourceTree, 0)
@@ -404,8 +406,11 @@ func (ts *treeService) GetAllResources(ctx context.Context, nid int, resourceTyp
 			return nil, err
 		}
 		for _, e := range ecs {
-			if _, ok := nodeIdsMap[e.BindNodes[0].ID]; ok {
-				resources = append(resources, &e.ResourceTree)
+			for _, n := range e.BindNodes {
+				if _, ok := nodeIdsMap[n.ID]; ok {
+					resources = append(resources, &e.ResourceTree)
+					break
+				}
 			}
 		}
 
@@ -416,8 +421,11 @@ func (ts *treeService) GetAllResources(ctx context.Context, nid int, resourceTyp
 			return nil, err
 		}
 		for _, e := range elb {
-			if _, ok := nodeIdsMap[e.BindNodes[0].ID]; ok {
-				resources = append(resources, &e.ResourceTree)
+			for _, n := range e.BindNodes {
+				if _, ok := nodeIdsMap[n.ID]; ok {
+					resources = append(resources, &e.ResourceTree)
+					break
+				}
 			}
 		}
 
@@ -428,8 +436,11 @@ func (ts *treeService) GetAllResources(ctx context.Context, nid int, resourceTyp
 			return nil, err
 		}
 		for _, e := range rds {
-			if _, ok := nodeIdsMap[e.BindNodes[0].ID]; ok {
-				resources = append(resources, &e.ResourceTree)
+			for _, n := range e.BindNodes {
+				if _, ok := nodeIdsMap[n.ID]; ok {
+					resources = append(resources, &e.ResourceTree)
+					break
+				}
 			}
 		}
 	}
