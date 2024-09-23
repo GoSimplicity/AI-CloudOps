@@ -3,7 +3,7 @@ package elb
 import (
 	"context"
 
-	"github.com/GoSimplicity/CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

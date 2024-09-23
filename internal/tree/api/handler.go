@@ -3,9 +3,9 @@ package api
 import (
 	"strconv"
 
-	"github.com/GoSimplicity/CloudOps/internal/model"
-	"github.com/GoSimplicity/CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
