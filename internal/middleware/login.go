@@ -3,7 +3,7 @@ package middleware
 import (
 	"strings"
 
-	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/golang-jwt/jwt/v5"
@@ -25,7 +25,7 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		path := ctx.Request.URL.Path
 		// 如果请求的路径是下述路径，则不进行token验证
-		if path == "/api/user/signup" || path == "/api/user/login" || path == "/api/user/logout" || strings.Contains(path, "hello") {
+		if path == "/api/user/signup" || path == "/api/user/login" || path == "/api/user/logout" || strings.Contains(path, "hello") || path == "/api/user/refresh_token" {
 			return
 		}
 

@@ -1,9 +1,9 @@
 package di
 
 import (
-	authApi "github.com/GoSimplicity/CloudOps/internal/auth/api"
-	treeApi "github.com/GoSimplicity/CloudOps/internal/tree/api"
-	userApi "github.com/GoSimplicity/CloudOps/internal/user/api"
+	authApi "github.com/GoSimplicity/AI-CloudOps/internal/auth/api"
+	treeApi "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
+	userApi "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	"github.com/gin-gonic/gin"
 )
 

@@ -2,15 +2,15 @@ package api
 
 import (
 	"errors"
-	"github.com/GoSimplicity/CloudOps/internal/constants"
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/spf13/viper"
 	"net/http"
 
-	"github.com/GoSimplicity/CloudOps/internal/model"
-	"github.com/GoSimplicity/CloudOps/internal/user/service"
-	"github.com/GoSimplicity/CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/user/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -88,7 +88,7 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 		return
 	}
 
-	accessToken, _, err := u.ijwt.SetLoginToken(ctx, ur.ID)
+	accessToken, refreshToken, err := u.ijwt.SetLoginToken(ctx, ur.ID)
 	if err != nil {
 		u.l.Error("set login token failed", zap.Error(err))
 		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
@@ -96,13 +96,14 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 	}
 
 	apiresponse.SuccessWithData(ctx, gin.H{
-		"id":          ur.ID,
-		"accessToken": accessToken,
-		"roles":       ur.Roles,
-		"desc":        ur.Desc,
-		"realName":    ur.RealName,
-		"userId":      ur.ID,
-		"username":    ur.Username,
+		"id":           ur.ID,
+		"accessToken":  accessToken,
+		"refreshToken": refreshToken,
+		"roles":        ur.Roles,
+		"desc":         ur.Desc,
+		"realName":     ur.RealName,
+		"userId":       ur.ID,
+		"username":     ur.Username,
 	})
 }
 
@@ -135,20 +136,20 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 }
 
 func (u *UserHandler) RefreshToken(ctx *gin.Context) {
-	var rc ijwt.RefreshClaims
+	var req TokenRequest
 
-	// 提取 token
-	tokenString := u.ijwt.ExtractToken(ctx)
-	if tokenString == "" {
-		apiresponse.Unauthorized(ctx, http.StatusUnauthorized, "token not found", "找不到token")
+	rc := ijwt.RefreshClaims{}
+
+	if err := ctx.BindJSON(&req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
 	// 获取密钥
-	key := viper.GetString("jwt.key1")
+	key := viper.GetString("jwt.key2")
 
 	// 解析 token 并获取刷新 claims
-	token, err := jwt.ParseWithClaims(tokenString, &rc, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(req.RefreshToken, &rc, func(token *jwt.Token) (interface{}, error) {
 		return []byte(key), nil
 	})
 	if err != nil {

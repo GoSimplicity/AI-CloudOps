@@ -7,20 +7,24 @@
 package di
 
 import (
-	api2 "github.com/GoSimplicity/CloudOps/internal/auth/api"
-	"github.com/GoSimplicity/CloudOps/internal/auth/dao/auth"
-	"github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
-	service2 "github.com/GoSimplicity/CloudOps/internal/auth/service"
-	api3 "github.com/GoSimplicity/CloudOps/internal/tree/api"
-	"github.com/GoSimplicity/CloudOps/internal/tree/dao/ecs"
-	"github.com/GoSimplicity/CloudOps/internal/tree/dao/elb"
-	"github.com/GoSimplicity/CloudOps/internal/tree/dao/rds"
-	"github.com/GoSimplicity/CloudOps/internal/tree/dao/tree_node"
-	service3 "github.com/GoSimplicity/CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/CloudOps/internal/user/api"
-	"github.com/GoSimplicity/CloudOps/internal/user/dao"
-	"github.com/GoSimplicity/CloudOps/internal/user/service"
-	"github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
+	api4 "github.com/GoSimplicity/AI-CloudOps/internal/auth/api"
+	api2 "github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/casbin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/menu"
+	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/role"
+	api3 "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/api"
+	menu2 "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/menu"
+	role2 "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/role"
+	api5 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/rds"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/tree_node"
+	service2 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/user/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/user/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -41,15 +45,19 @@ func InitWebServer() *gin.Engine {
 	v := InitMiddlewares(handler, logger, userDAO, casbinDAO)
 	userService := service.NewUserService(userDAO)
 	userHandler := api.NewUserHandler(userService, logger, handler)
-	authDAO := auth.NewAuthDAO(db, logger)
-	authService := service2.NewAuthService(authDAO, logger, userDAO)
-	authHandler := api2.NewAuthHandler(authService, handler, logger, casbinDAO, userDAO)
+	apiDAO := api2.NewApiDAO(db, logger)
+	roleDAO := role.NewRoleDAO(db, logger)
+	apiService := api3.NewApiService(apiDAO, roleDAO, logger, userDAO)
+	menuDAO := menu.NewMenuDAO(db, logger)
+	roleService := role2.NewRoleService(menuDAO, roleDAO, logger)
+	menuService := menu2.NewMenuService(menuDAO, logger, userDAO)
+	authHandler := api4.NewAuthHandler(apiService, roleService, menuService, handler, logger, casbinDAO, userDAO)
 	treeEcsDAO := ecs.NewTreeEcsDAO(db, logger)
 	treeElbDAO := elb.NewTreeElbDAO(db, logger)
 	treeRdsDAO := rds.NewTreeRdsDAO(db, logger)
 	treeNodeDAO := tree_node.NewTreeNodeDAO(db, logger)
-	treeService := service3.NewTreeService(treeEcsDAO, treeElbDAO, treeRdsDAO, treeNodeDAO, logger, userDAO)
-	treeHandler := api3.NewTreeHandler(treeService, logger)
+	treeService := service2.NewTreeService(treeEcsDAO, treeElbDAO, treeRdsDAO, treeNodeDAO, logger, userDAO)
+	treeHandler := api5.NewTreeHandler(treeService, logger)
 	engine := InitGinServer(v, userHandler, authHandler, treeHandler)
 	return engine
 }

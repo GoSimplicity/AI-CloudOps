@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 	"errors"
-	"github.com/GoSimplicity/CloudOps/internal/constants"
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 
-	"github.com/GoSimplicity/CloudOps/internal/model"
-	"github.com/GoSimplicity/CloudOps/internal/user/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
