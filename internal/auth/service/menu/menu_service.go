@@ -2,11 +2,11 @@ package menu
 
 import (
 	"context"
-	"github.com/GoSimplicity/CloudOps/internal/auth/dao/menu"
+	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/menu"
 	"sort"
 
-	"github.com/GoSimplicity/CloudOps/internal/model"
-	userDao "github.com/GoSimplicity/CloudOps/internal/user/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 )
 

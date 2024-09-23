@@ -6,15 +6,15 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/GoSimplicity/CloudOps/internal/user/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/GoSimplicity/CloudOps/internal/constants"
-	"github.com/GoSimplicity/CloudOps/internal/model"
-	"github.com/GoSimplicity/CloudOps/internal/tree/dao/ecs"
-	"github.com/GoSimplicity/CloudOps/internal/tree/dao/elb"
-	"github.com/GoSimplicity/CloudOps/internal/tree/dao/rds"
-	"github.com/GoSimplicity/CloudOps/internal/tree/dao/tree_node"
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/rds"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/tree_node"
 	"go.uber.org/zap"
 )
 
