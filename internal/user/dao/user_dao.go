@@ -3,10 +3,10 @@ package dao
 import (
 	"context"
 	"errors"
-	"github.com/GoSimplicity/CloudOps/internal/constants"
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"strings"
 
-	"github.com/GoSimplicity/CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"gorm.io/gorm"

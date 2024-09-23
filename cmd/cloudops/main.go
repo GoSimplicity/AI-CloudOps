@@ -1,15 +1,16 @@
 package main
 
 import (
-	"github.com/GoSimplicity/CloudOps/mock"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 	"log"
 	"net/http"
 
-	"github.com/GoSimplicity/CloudOps/config"
-	"github.com/GoSimplicity/CloudOps/pkg/di"
+	"github.com/GoSimplicity/AI-CloudOps/mock"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
+	"github.com/GoSimplicity/AI-CloudOps/config"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/di"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -79,4 +80,7 @@ func InitMock() {
 
 	um := mock.NewUserMock(db)
 	um.CreateUserAdmin()
+
+	tm := mock.NewTreeMock(db)
+	tm.CreateTreeMock()
 }

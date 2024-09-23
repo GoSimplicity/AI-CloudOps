@@ -1,10 +1,10 @@
 package middleware
 
 import (
-	casbinDao "github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
-	userDao "github.com/GoSimplicity/CloudOps/internal/user/dao"
-	"github.com/GoSimplicity/CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
+	casbinDao "github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/casbin"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )

@@ -1,8 +1,10 @@
-# CloudOps  
-云原生运维平台
+# AI+CloudOps
+
+AI 驱动的云原生运维平台
 
 ## 目录
-- [CloudOps](#cloudops)
+
+- [AI+CloudOps](#AICloudOps)
   - [目录](#目录)
   - [项目介绍](#项目介绍)
   - [快速开始](#快速开始)
@@ -15,46 +17,60 @@
   - [致谢](#致谢)
 
 ## 项目介绍
-CloudOps 是一个面向企业的云原生运维管理平台，旨在提供高效、可扩展的企业级运维解决方案。平台主要分为以下五个核心模块：
-1. **用户与权限**：管理用户、角色及权限，确保系统的安全和可控性。
-2. **服务树与 CMDB**：提供可视化的服务树结构和配置管理数据库（CMDB）。
-3. **工单系统**：支持工单的创建、分配、处理和追踪，提高问题解决效率。
-4. **Prometheus 集成**：实时监控系统性能并预警异常情况。
-5. **Kubernetes 管理**：支持 Kubernetes 集群的管理与监控，简化云端资源操作。
+
+AI+CloudOps 是一个面向企业的 AI 驱动云原生运维管理平台，旨在通过人工智能技术提升运维效率和智能化水平。平台包含以下核心模块：
+
+1. **AIOps 模块**：通过机器学习和 AI 技术，分析系统日志、监控数据，提供智能告警、故障预测和根因分析。
+2. **用户与权限**：管理用户、角色及权限，确保系统的安全和可控性。
+3. **服务树与 CMDB**：提供可视化的服务树结构和配置管理数据库（CMDB），实现运维资源的全面管理。
+4. **工单系统**：支持工单的创建、分配、处理和追踪，提高问题解决效率。
+5. **Prometheus 集成**：实时监控系统性能，结合 AI 技术，进行异常预警和自动化响应。
+6. **Kubernetes 管理**：支持 Kubernetes 集群的管理与监控，简化云端资源操作，集成 AI 进行自动化优化和资源调度。
 
 ## 快速开始
 
 ### 克隆项目
+
 首先，将项目克隆到本地：
+
 ```bash
-git clone https://github.com/GoSimplicity/CloudOps.git
+git clone https://github.com/GoSimplicity/AI-CloudOps.git
 ```
 
 ### 运行后端项目
+
 进入项目目录并安装依赖：
+
 ```bash
-cd CloudOps
 go mod tidy
 ```
+
 启动后端服务：
+
 ```bash
 go run cmd/cloudops/main.go
 ```
 
 ### 运行前端项目
+
 进入前端目录并安装依赖：
+
 ```bash
 cd web
+# 推荐使用 node21 版本
 pnpm install
 ```
+
 启动前端项目：
+
 ```bash
 pnpm run dev
 ```
 
 ## 项目结构
+
 ```text
-CloudOps/
+AI-CloudOps/
 │
 ├── LICENSE               # 许可证文件
 ├── README.md             # 项目说明文档
@@ -74,16 +90,20 @@ CloudOps/
 ```
 
 ## 许可证
+
 本项目使用 [MIT 许可证](./LICENSE)，详情请查看 LICENSE 文件。
 
 ## 联系方式
+
 如果有任何问题或建议，欢迎通过以下方式联系我：
+
 - Email: [wzijian62@gmail.com](mailto:wzijian62@gmail.com)
 - 微信：GoSimplicity（加我后可邀请进微信群交流）
 
 ## 致谢
-感谢所有为本项目贡献代码、文档和建议的人！CloudOps 的发展离不开社区的支持和贡献。
+
+感谢所有为本项目贡献代码、文档和建议的人！AI+CloudOps 的发展离不开社区的支持和贡献。
 
 ---
 
-欢迎加入 CloudOps 云原生运维平台，期待你的参与和贡献！
+欢迎加入 AI+CloudOps 云原生运维平台，期待你的参与和贡献！

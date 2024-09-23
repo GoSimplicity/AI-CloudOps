@@ -1,7 +1,7 @@
 package mock
 
 import (
-	"github.com/GoSimplicity/CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"log"
