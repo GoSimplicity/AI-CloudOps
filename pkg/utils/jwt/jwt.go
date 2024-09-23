@@ -80,13 +80,22 @@ func (h *handler) SetLoginToken(ctx *gin.Context, uid int) (string, string, erro
 
 // SetJWTToken 设置短Token
 func (h *handler) SetJWTToken(ctx *gin.Context, uid int, ssid string) (string, error) {
+	// 从配置文件中获取JWT的过期时间
+	expirationMinutes := viper.GetInt64("jwt.expiration")
+
+	// 如果未设置或值无效，设置一个默认值，例如30分钟
+	if expirationMinutes <= 0 {
+		expirationMinutes = 30
+	}
+
+	// 构建用户声明信息
 	uc := UserClaims{
 		Uid:         uid,
 		Ssid:        ssid,
 		UserAgent:   ctx.GetHeader("User-Agent"),
 		ContentType: ctx.GetHeader("Content-Type"),
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 30)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * time.Duration(expirationMinutes))),
 			Issuer:    h.issuer,
 		},
 	}
@@ -152,36 +161,6 @@ func (h *handler) CheckSession(ctx *gin.Context, ssid string) error {
 
 	return nil
 }
-
-//// ClearToken 清空token
-//func (h *handler) ClearToken(ctx *gin.Context) error {
-//	ctx.Header("X-Refresh-Token", "")
-//	uc := ctx.MustGet("user").(UserClaims)
-//	// 获取 refresh token
-//	refreshTokenString := ctx.GetHeader("X-Refresh-Token")
-//
-//	if refreshTokenString == "" {
-//		return errors.New("missing refresh token")
-//	}
-//
-//	// 解析 refresh token
-//	refreshClaims := &RefreshClaims{}
-//	refreshToken, err := jwt.ParseWithClaims(refreshTokenString, refreshClaims, func(token *jwt.Token) (interface{}, error) {
-//		return h.key2, nil
-//	})
-//
-//	if err != nil || !refreshToken.Valid {
-//		return errors.New("invalid refresh token")
-//	}
-//	// 设置redis中的会话ID键的过期时间为refresh token的剩余过期时间
-//	remainingTime := refreshClaims.ExpiresAt.Time.Sub(time.Now())
-//
-//	if er := h.client.Set(ctx, fmt.Sprintf("linkme:user:ssid:%s", uc.Ssid), "", remainingTime).Err(); er != nil {
-//		return er
-//	}
-//
-//	return nil
-//}
 
 // ClearToken 清空 token，让 Authorization 中的用于验证的 token 失效
 func (h *handler) ClearToken(ctx *gin.Context) error {

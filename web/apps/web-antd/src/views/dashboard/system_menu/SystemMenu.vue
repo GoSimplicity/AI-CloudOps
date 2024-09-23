@@ -49,72 +49,113 @@
 
       <!-- 图标列 -->
       <template #icon="{ record }">
-        <a-icon :type="record.icon" />
+        <a-icon :type="record.icon || 'menu'" /> <!-- 设置默认图标 -->
       </template>
     </a-table>
+
+    <!-- 编辑菜单对话框 -->
+    <a-modal
+      v-model:visible="isEditModalVisible"
+      title="编辑菜单"
+      @ok="handleEditSubmit"
+      @cancel="handleEditCancel"
+      :okText="'保存'"
+      :cancelText="'取消'"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="中文名称" required>
+          <a-input v-model="editForm.chineseName" placeholder="请输入中文名称" />
+        </a-form-item>
+        <a-form-item label="英文名称" required>
+          <a-input v-model="editForm.englishName" placeholder="请输入英文名称" />
+        </a-form-item>
+        <a-form-item label="图标">
+          <a-input v-model="editForm.icon" placeholder="请输入图标名称" />
+        </a-form-item>
+        <a-form-item label="权限标识" required>
+          <a-input v-model="editForm.permission" placeholder="请输入权限标识" />
+        </a-form-item>
+        <a-form-item label="组件" required>
+          <a-input v-model="editForm.component" placeholder="请输入组件名称" />
+        </a-form-item>
+        <a-form-item label="路径" required>
+          <a-input v-model="editForm.path" placeholder="请输入菜单路径" />
+        </a-form-item>
+        <a-form-item label="类型" required>
+          <a-input v-model="editForm.type" placeholder="请输入类型" />
+        </a-form-item>
+        <a-form-item label="状态">
+          <a-select v-model="editForm.status" placeholder="请选择状态">
+            <a-select-option value="1">启用</a-select-option>
+            <a-select-option value="0">禁用</a-select-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { reactive, ref } from 'vue';
+import {ref, onMounted, reactive} from 'vue';
 import { message } from 'ant-design-vue';
+import {requestClient} from "#/api/request";
 
 // 定义数据类型
+interface BackendMenu {
+  ID: number;
+  CreatedAt: string;
+  UpdatedAt: string;
+  DeletedAt: string | null;
+  name: string;
+  title: string;
+  pid: number;
+  parentMenu: string;
+  icon: string;
+  type: string;
+  show: boolean;
+  orderNo: number;
+  component: string;
+  redirect: string;
+  path: string;
+  remark: string;
+  homePath: string;
+  status: string; // "1" 表示启用，"0" 表示禁用
+  meta: {
+    title: string;
+    icon: string;
+    showMenu: boolean;
+    hideMenu: boolean;
+    ignoreKeepAlive: boolean;
+  };
+  children: any;
+  roles: any;
+  key: number;
+  value: number;
+}
+
 interface Menu {
   id: number;
   chineseName: string;
   englishName: string;
-  icon: string;
   permission: string;
+  icon: string;
   component: string;
   status: boolean;
+  path: string;
+  type: string;
   createTime: string;
 }
-
-// 示例数据
-const data = reactive<Menu[]>([
-  {
-    id: 1,
-    chineseName: '首页',
-    englishName: 'Home',
-    icon: 'home',
-    permission: 'menu:home',
-    component: 'HomeComponent',
-    status: true,
-    createTime: '2024-9-14 10:00:00',
-  },
-  {
-    id: 2,
-    chineseName: '用户管理',
-    englishName: 'User Management',
-    icon: 'user',
-    permission: 'menu:user',
-    component: 'UserComponent',
-    status: false,
-    createTime: '2024-9-14 14:30:00',
-  },
-  // 可添加更多示例数据
-]);
 
 // 搜索文本
 const searchText = ref('');
 // 状态过滤
 const selectedStatus = ref<string | null>(null);
 
-// 过滤后的数据
-const filteredData = ref<Menu[]>(data);
+// 原始数据
+const data = ref<Menu[]>([]);
 
-// 处理搜索
-const handleSearch = () => {
-  const searchValue = searchText.value.trim().toLowerCase();
-  filteredData.value = data.filter(item => {
-    const nameMatch = item.chineseName.toLowerCase().includes(searchValue);
-    const statusMatch =
-      selectedStatus.value === null ||
-      item.status.toString() === selectedStatus.value;
-    return nameMatch && statusMatch;
-  });
-};
+// 过滤后的数据
+const filteredData = ref<Menu[]>([]);
 
 // 表格列配置
 const columns = [
@@ -150,6 +191,16 @@ const columns = [
     key: 'component',
   },
   {
+    title: '路径',
+    dataIndex: 'path',
+    key: 'path',
+  },
+  {
+    title: '类型',
+    dataIndex: 'type',
+    key: 'type',
+  },
+  {
     title: '创建时间',
     dataIndex: 'createTime',
     key: 'createTime',
@@ -167,10 +218,43 @@ const columns = [
   },
 ];
 
+// 处理搜索
+const handleSearch = () => {
+  const searchValue = searchText.value.trim().toLowerCase();
+  filteredData.value = data.value.filter(item => {
+    const nameMatch = item.chineseName.toLowerCase().includes(searchValue);
+    const statusMatch =
+      selectedStatus.value === null ||
+      item.status.toString() === selectedStatus.value;
+    return nameMatch && statusMatch;
+  });
+};
+
 // 处理修改状态
-const handleStatusChange = (record: Menu) => {
+const handleStatusChange = async (record: Menu) => {
+  const originalStatus = record.status; // 保存原始状态
+
+  // 临时修改前端状态，防止重复点击
   record.status = !record.status;
-  message.success(`菜单 "${record.chineseName}" 的状态已修改`);
+
+  try {
+    // 发送状态更新请求，将布尔值转换为字符串 "1" 或 "0"
+    await requestClient.post(`/auth/menu/update_status`, {
+      id: record.id,  // 传递菜单的 ID
+      status: record.status ? '1' : '0',  // 将布尔值转换为 "1" 或 "0"
+    });
+
+    // 显示成功消息
+    message.success(`菜单 "${record.chineseName}" 的状态已修改`);
+  } catch (error) {
+    console.error('状态修改失败:', error);
+
+    // 恢复原始状态
+    record.status = originalStatus;
+
+    // 显示错误提示
+    message.error('状态修改失败，请稍后再试');
+  }
 };
 
 // 处理创建菜单
@@ -179,22 +263,126 @@ const handleAdd = () => {
   message.info('点击了创建菜单按钮');
 };
 
-// 处理编辑菜单
+// 编辑菜单对话框的可见状态
+const isEditModalVisible = ref(false);
+
+// 当前编辑的菜单记录
+const currentEditRecord = ref<Menu | null>(null);
+
+// 编辑菜单表单数据
+const editForm = reactive({
+  id: 0,
+  chineseName: '',
+  englishName: '',
+  icon: '',
+  permission: '',
+  component: '',
+  status: '1', // "1" 表示启用，"0" 表示禁用
+  path: '',
+  type: '',
+});
+
 const handleEdit = (record: Menu) => {
-  // 这里可以打开一个对话框，编辑菜单的信息
-  message.info(`编辑菜单 "${record.chineseName}"`);
+  currentEditRecord.value = record;
+
+  // 填充编辑表单数据
+  editForm.id = record.id;
+  editForm.chineseName = record.chineseName;
+  editForm.englishName = record.englishName;
+  editForm.icon = record.icon;
+  editForm.permission = record.permission;
+  editForm.component = record.component;
+  editForm.status = record.status ? '1' : '0';
+  editForm.path = record.path;
+  editForm.type = record.type;
+
+  // 打开编辑对话框
+  isEditModalVisible.value = true;
 };
 
-// 处理删除菜单
-const handleDelete = (record: Menu) => {
-  const index = data.findIndex(item => item.id === record.id);
-  if (index !== -1) {
-    data.splice(index, 1);
-    // 更新过滤后的数据
-    handleSearch();
-    message.success(`菜单 "${record.chineseName}" 已删除`);
+const handleEditSubmit = async () => {
+  try {
+    // 发送状态更新请求，将布尔值转换为字符串 "1" 或 "0"
+    await requestClient.post(`/auth/menu/update`, {
+      id: editForm.id,  // 传递菜单的 ID
+      chineseName: editForm.chineseName,
+      englishName: editForm.englishName,
+      icon: editForm.icon,
+      permission: editForm.permission,
+      component: editForm.component,
+      status: editForm.status,  // "1" 或 "0"
+      path: editForm.path,
+      type: editForm.type,
+    });
+
+    // 显示成功消息
+    message.success(`菜单 "${editForm.chineseName}" 已成功更新`);
+
+    // 关闭编辑对话框
+    isEditModalVisible.value = false;
+
+    // 刷新菜单数据
+    fetchData();
+  } catch (error) {
+    console.error('编辑菜单失败:', error);
+    message.error('编辑菜单失败，请稍后再试');
   }
 };
+
+const handleEditCancel = () => {
+  isEditModalVisible.value = false;
+};
+
+const handleDelete = async (record: Menu) => {
+  try {
+    // 调用后端接口删除菜单
+    await requestClient.delete(`/auth/menu/${record.id}`);
+
+    message.success(`菜单 "${record.chineseName}" 已删除`);
+
+    // 只刷新菜单数据，而不是刷新整个页面
+    fetchData();
+  } catch (error) {
+    console.error('删除菜单失败:', error);
+    message.error('删除失败，请稍后再试');
+  }
+};
+
+// 获取后端数据并映射到前端接口
+const fetchData = async () => {
+  try {
+    const response = await requestClient.get("/auth/menu/all");
+    console.log(response); // 打印整个响应对象，应该是数组
+
+    // 直接使用 response 作为数据数组
+    const backendData: BackendMenu[] = response;
+
+    // 映射后端数据到前端 Menu 接口
+    data.value = backendData.map(item => ({
+      id: item.ID,
+      chineseName: item.title,
+      englishName: item.name,
+      icon: item.icon || 'menu', // 设置默认图标
+      permission: item.roles || '',
+      component: item.component,
+      status: item.status === '1',
+      path: item.path,
+      type: item.type || '',
+      createTime: new Date(item.CreatedAt).toLocaleString(),
+    }));
+
+    // 初始化过滤后的数据
+    handleSearch();
+  } catch (error) {
+    console.error(error);
+    message.error('请求失败，请稍后再试');
+  }
+};
+
+// 在组件挂载时获取数据
+onMounted(() => {
+  fetchData();
+});
 </script>
 
 <style scoped>
