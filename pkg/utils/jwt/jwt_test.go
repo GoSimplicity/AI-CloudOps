@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/golang-jwt/jwt/v5"
 )
 

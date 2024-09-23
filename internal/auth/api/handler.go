@@ -1,15 +1,15 @@
 package api
 
 import (
-	"github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
-	"github.com/GoSimplicity/CloudOps/internal/auth/service/api"
-	"github.com/GoSimplicity/CloudOps/internal/auth/service/menu"
-	"github.com/GoSimplicity/CloudOps/internal/auth/service/role"
-	"github.com/GoSimplicity/CloudOps/internal/middleware"
-	"github.com/GoSimplicity/CloudOps/internal/model"
-	"github.com/GoSimplicity/CloudOps/internal/user/dao"
-	"github.com/GoSimplicity/CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
+	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/casbin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/auth/service/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/auth/service/menu"
+	"github.com/GoSimplicity/AI-CloudOps/internal/auth/service/role"
+	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )

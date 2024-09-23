@@ -1,10 +1,10 @@
 package di
 
 import (
-	casbinDao "github.com/GoSimplicity/CloudOps/internal/auth/dao/casbin"
-	"github.com/GoSimplicity/CloudOps/internal/middleware"
-	userDao "github.com/GoSimplicity/CloudOps/internal/user/dao"
-	ijwt "github.com/GoSimplicity/CloudOps/pkg/utils/jwt"
+	casbinDao "github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/casbin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

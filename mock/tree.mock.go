@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/GoSimplicity/CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"gorm.io/gorm"
 )
 
