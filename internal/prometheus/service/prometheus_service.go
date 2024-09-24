@@ -1,8 +1,16 @@
 package service
 
-/**
- * @Author: Bamboo
- * @Author: 13664854532@163.com
- * @Date: 2024/9/23 11:03
- * @Desc:
- */
+import "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao"
+
+type PrometheusService interface {
+}
+
+type prometheusService struct {
+	dao dao.PrometheusDao
+}
+
+func NewPrometheusService(dao dao.PrometheusDao) PrometheusService {
+	return &prometheusService{
+		dao: dao,
+	}
+}

@@ -1,8 +1,16 @@
 package service
 
-/**
- * @Author: Bamboo
- * @Author: 13664854532@163.com
- * @Date: 2024/9/23 11:02
- * @Desc:
- */
+import "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+
+type K8sService interface {
+}
+
+type k8sService struct {
+	dao dao.K8sDao
+}
+
+func NewK8sService(dao dao.K8sDao) K8sService {
+	return &k8sService{
+		dao: dao,
+	}
+}
