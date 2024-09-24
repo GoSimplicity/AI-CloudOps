@@ -1,8 +1,21 @@
 package dao
 
-/**
- * @Author: Bamboo
- * @Author: 13664854532@163.com
- * @Date: 2024/9/23 11:02
- * @Desc:
- */
+import (
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
+
+type K8sDao interface {
+}
+
+type k8sDao struct {
+	db *gorm.DB
+	l  *zap.Logger
+}
+
+func NewK8sDao(db *gorm.DB, l *zap.Logger) K8sDao {
+	return &k8sDao{
+		db: db,
+		l:  l,
+	}
+}
