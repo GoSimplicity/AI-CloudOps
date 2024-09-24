@@ -225,7 +225,9 @@ type MonitorScrapePool struct {
 	RecordFilePath       string     `json:"recordFilePath,omitempty" gorm:"size:255;comment:记录文件路径"`                                              // 记录文件路径
 	RemoteWriteUrl       string     `json:"remoteWriteUrl,omitempty" gorm:"size:255;comment:远程写入的地址"`                                             // 远程写入的地址
 	RemoteTimeoutSeconds int        `json:"remoteTimeoutSeconds,omitempty" gorm:"default:5;type:int;comment:远程写入的超时时间（秒）"`                        // 远程写入的超时时间（秒）
-	ExternalLabelsFront  string     `json:"externalLabelsFront,omitempty" gorm:"-"`                                                               // 前端显示的ExternalLabels字符串
-	Key                  string     `json:"key" gorm:"-"`                                                                                         // 前端表格使用的Key
-	CreateUserName       string     `json:"createUserName,omitempty" gorm:"-"`                                                                    // 创建者用户名，用于前端展示
+
+	// 前端使用字段
+	ExternalLabelsFront string `json:"externalLabelsFront,omitempty" gorm:"-"` // 前端显示的ExternalLabels字符串
+	Key                 string `json:"key" gorm:"-"`                           // 前端表格使用的Key
+	CreateUserName      string `json:"createUserName,omitempty" gorm:"-"`      // 创建者用户名，用于前端展示
 }
