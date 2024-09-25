@@ -24,8 +24,7 @@ func Init() {
 	// 初始化配置
 	config.InitViper()
 	// 初始化 Web 服务器和其他组件
-	server := di.InitWebServer()
-
+	cmd := di.InitWebServer()
 	// 初始化翻译器
 	if err := di.InitTrans(); err != nil {
 		log.Printf("初始化翻译器失败: %v\n", err)
@@ -33,7 +32,7 @@ func Init() {
 	}
 
 	// 设置请求头打印路由
-	server.GET("/headers", printHeaders)
+	cmd.Server.GET("/headers", printHeaders)
 
 	// 判断是否需要mock
 	e := viper.GetString("mock.enabled")
@@ -43,8 +42,10 @@ func Init() {
 
 	sp := viper.GetString("server.port")
 
+	cmd.Cron.Start() // 启动定时任务
+
 	// 启动 Web 服务器
-	if err := server.Run(":" + sp); err != nil {
+	if err := cmd.Server.Run(":" + sp); err != nil {
 		zap.L().Fatal("Failed to start web server", zap.Error(err))
 	}
 
@@ -83,4 +84,11 @@ func InitMock() {
 
 	tm := mock.NewTreeMock(db)
 	tm.CreateTreeMock()
+
+	km := mock.NewK8sClientMock(db)
+	//for i := 1; i < 5; i++ {
+	//	km.InitClient(nil, i, nil)
+	//}
+
+	km.InitClient(nil, 1, nil)
 }
