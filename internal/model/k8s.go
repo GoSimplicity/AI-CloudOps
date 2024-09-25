@@ -2,6 +2,7 @@ package model
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"gorm.io/gorm"
 	core "k8s.io/api/core/v1"
 )
 
@@ -185,4 +186,18 @@ type K8sYamlTemplate struct {
 	// 前端使用字段
 	Key            string `json:"key" gorm:"-"`                      // 前端表格使用的Key，不存储在数据库中
 	CreateUserName string `json:"createUserName,omitempty" gorm:"-"` // 创建者用户名，不存储在数据库中
+}
+
+// K8sNamespace Kubernetes 命名空间
+type K8sNamespace struct {
+	gorm.Model
+	Name      string `json:"name" gorm:"uniqueIndex:name_cluster;size:100;comment:命名空间名称"`
+	ClusterID int    `json:"clusterId" gorm:"comment:关联的集群ID"`
+}
+
+// K8sProbeError 探针错误信息
+type K8sProbeError struct {
+	gorm.Model
+	ClusterID int    `json:"clusterId" gorm:"uniqueIndex:idx_cluster_id"`
+	ErrorMsg  string `json:"errorMsg" gorm:"type:text;comment:错误信息"`
 }
