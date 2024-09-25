@@ -11,6 +11,10 @@ import (
 	apiService "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/api"
 	menuService "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/menu"
 	roleService "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/role"
+	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	k8sService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	treeHandler "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	ecsDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
 	elbDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
@@ -21,12 +25,11 @@ import (
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	userService "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
-	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
 )
 
-func InitWebServer() *gin.Engine {
+func InitWebServer() *Cmd {
 	wire.Build(
 		InitMiddlewares,
 		ijwt.NewJWTHandler,
@@ -35,14 +38,18 @@ func InitWebServer() *gin.Engine {
 		InitRedis,
 		InitDB,
 		InitCasbin,
+		InitAndRefreshK8sClient,
 		userHandler.NewUserHandler,
 		authHandler.NewAuthHandler,
 		treeHandler.NewTreeHandler,
+		k8sHandler.NewK8sHandler,
+		client.NewK8sClient,
 		userService.NewUserService,
 		treeService.NewTreeService,
 		apiService.NewApiService,
 		roleService.NewRoleService,
 		menuService.NewMenuService,
+		k8sService.NewK8sService,
 		userDao.NewUserDAO,
 		apiDao.NewApiDAO,
 		roleDao.NewRoleDAO,
@@ -51,7 +58,9 @@ func InitWebServer() *gin.Engine {
 		ecsDao.NewTreeEcsDAO,
 		rdsDao.NewTreeRdsDAO,
 		elbDao.NewTreeElbDAO,
+		k8sDao.NewK8sDAO,
 		nodeDao.NewTreeNodeDAO,
+		wire.Struct(new(Cmd), "*"),
 	)
-	return gin.Default()
+	return new(Cmd)
 }
