@@ -15,6 +15,10 @@ import (
 	api3 "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/api"
 	menu2 "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/menu"
 	role2 "github.com/GoSimplicity/AI-CloudOps/internal/auth/service/role"
+	api6 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	service3 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	api5 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
@@ -25,7 +29,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
-	"github.com/gin-gonic/gin"
 )
 
 import (
@@ -34,7 +37,7 @@ import (
 
 // Injectors from wire.go:
 
-func InitWebServer() *gin.Engine {
+func InitWebServer() *Cmd {
 	cmdable := InitRedis()
 	handler := jwt.NewJWTHandler(cmdable)
 	logger := InitLogger()
@@ -58,6 +61,15 @@ func InitWebServer() *gin.Engine {
 	treeNodeDAO := tree_node.NewTreeNodeDAO(db, logger)
 	treeService := service2.NewTreeService(treeEcsDAO, treeElbDAO, treeRdsDAO, treeNodeDAO, logger, userDAO)
 	treeHandler := api5.NewTreeHandler(treeService, logger)
-	engine := InitGinServer(v, userHandler, authHandler, treeHandler)
-	return engine
+	k8sDAO := dao2.NewK8sDAO(db, logger)
+	k8sService := service3.NewK8sService(k8sDAO)
+	k8sHandler := api6.NewK8sHandler(k8sService, logger)
+	engine := InitGinServer(v, userHandler, authHandler, treeHandler, k8sHandler)
+	k8sClient := client.NewK8sClient(logger, k8sService)
+	cron := InitAndRefreshK8sClient(k8sClient, logger)
+	cmd := &Cmd{
+		Server: engine,
+		Cron:   cron,
+	}
+	return cmd
 }
