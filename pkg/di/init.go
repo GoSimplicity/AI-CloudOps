@@ -27,7 +27,6 @@ func InitTables(db *gorm.DB) error {
 		&model.K8sYamlTemplate{},
 		&model.K8sInstance{},
 		&model.K8sCronjob{},
-		&model.K8sNamespace{},
-		&model.K8sProbeError{},
+		&model.K8sNode{},
 	)
 }

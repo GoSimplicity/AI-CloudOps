@@ -86,9 +86,7 @@ func InitMock() {
 	tm.CreateTreeMock()
 
 	km := mock.NewK8sClientMock(db)
-	//for i := 1; i < 5; i++ {
-	//	km.InitClient(nil, i, nil)
-	//}
-
-	km.InitClient(nil, 1, nil)
+	for i := 1; i < 5; i++ {
+		km.InitClient(nil, i, nil)
+	}
 }
