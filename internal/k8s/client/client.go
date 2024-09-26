@@ -3,8 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"sync"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/openkruise/kruise-api/client/clientset/versioned"
 	"go.uber.org/zap"
@@ -14,23 +12,24 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
+	"sync"
 )
 
 type K8sClient interface {
 	// InitClient 初始化指定集群 ID 的 Kubernetes 客户端
 	InitClient(ctx context.Context, clusterID int, kubeConfig *rest.Config) error
 	// GetKubeClient 获取指定集群 ID 的 Kubernetes 客户端
-	GetKubeClient(ctx context.Context, clusterID int) (*kubernetes.Clientset, error)
+	GetKubeClient(clusterID int) (*kubernetes.Clientset, error)
 	// GetKruiseClient 获取指定集群 ID 的 Kruise 客户端
-	GetKruiseClient(ctx context.Context, clusterID int) (*versioned.Clientset, error)
+	GetKruiseClient(clusterID int) (*versioned.Clientset, error)
 	// GetMetricsClient 获取指定集群 ID 的 Metrics 客户端
-	GetMetricsClient(ctx context.Context, clusterID int) (*metricsClient.Clientset, error)
+	GetMetricsClient(clusterID int) (*metricsClient.Clientset, error)
 	// GetDynamicClient 获取指定集群 ID 的动态客户端
-	GetDynamicClient(ctx context.Context, clusterID int) (*dynamic.DynamicClient, error)
+	GetDynamicClient(clusterID int) (*dynamic.DynamicClient, error)
 	// GetNamespaces 获取指定集群的命名空间
 	GetNamespaces(ctx context.Context, clusterID int) ([]string, error)
 	// RecordProbeError 记录指定集群探活时遇到的错误
-	RecordProbeError(ctx context.Context, clusterID int, errMsg string)
+	RecordProbeError(clusterID int, errMsg string)
 	// RefreshClients 刷新客户端
 	RefreshClients(ctx context.Context) error
 }
@@ -71,7 +70,7 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 
 	// 检查客户端是否已经初始化
 	if _, exists := k.KubeClients[clusterID]; exists {
-		k.l.Warn("InitClient: Client already initialized for clusterID", zap.Int("ClusterID", clusterID))
+		k.l.Debug("InitClient: Client already initialized for clusterID", zap.Int("ClusterID", clusterID))
 		return nil
 	}
 
@@ -113,7 +112,7 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 	// 获取并保存命名空间，直接使用 kubeClient 而不通过 GetKubeClient
 	namespaces, err := k.getNamespacesDirectly(ctx, clusterID, kubeClient)
 	if err != nil {
-		k.l.Error("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+		k.l.Warn("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
 		k.LastProbeErrors[clusterID] = err.Error()
 	} else {
 		host := kubeConfig.Host
@@ -141,11 +140,12 @@ func (k *k8sClient) getNamespacesDirectly(ctx context.Context, clusterID int, ku
 	for i, ns := range namespaces.Items {
 		nsList[i] = ns.Name
 	}
+	k.l.Debug("获取到到命名空间为：", zap.Strings("Namespaces", nsList))
 	return nsList, nil
 }
 
 // GetKubeClient 获取指定集群 ID 的 Kubernetes 客户端
-func (k *k8sClient) GetKubeClient(ctx context.Context, clusterID int) (*kubernetes.Clientset, error) {
+func (k *k8sClient) GetKubeClient(clusterID int) (*kubernetes.Clientset, error) {
 	k.RLock()
 	client, exists := k.KubeClients[clusterID]
 	k.RUnlock()
@@ -158,7 +158,7 @@ func (k *k8sClient) GetKubeClient(ctx context.Context, clusterID int) (*kubernet
 }
 
 // GetKruiseClient 获取指定集群 ID 的 Kruise 客户端
-func (k *k8sClient) GetKruiseClient(ctx context.Context, clusterID int) (*versioned.Clientset, error) {
+func (k *k8sClient) GetKruiseClient(clusterID int) (*versioned.Clientset, error) {
 	k.RLock()
 	client, exists := k.KruiseClients[clusterID]
 	k.RUnlock()
@@ -171,7 +171,7 @@ func (k *k8sClient) GetKruiseClient(ctx context.Context, clusterID int) (*versio
 }
 
 // GetMetricsClient 获取指定集群 ID 的 Metrics 客户端
-func (k *k8sClient) GetMetricsClient(ctx context.Context, clusterID int) (*metricsClient.Clientset, error) {
+func (k *k8sClient) GetMetricsClient(clusterID int) (*metricsClient.Clientset, error) {
 	k.RLock()
 	client, exists := k.MetricsClients[clusterID]
 	k.RUnlock()
@@ -184,7 +184,7 @@ func (k *k8sClient) GetMetricsClient(ctx context.Context, clusterID int) (*metri
 }
 
 // GetDynamicClient 获取指定集群 ID 的动态客户端
-func (k *k8sClient) GetDynamicClient(ctx context.Context, clusterID int) (*dynamic.DynamicClient, error) {
+func (k *k8sClient) GetDynamicClient(clusterID int) (*dynamic.DynamicClient, error) {
 	k.RLock()
 	client, exists := k.DynamicClients[clusterID]
 	k.RUnlock()
@@ -192,12 +192,13 @@ func (k *k8sClient) GetDynamicClient(ctx context.Context, clusterID int) (*dynam
 	if !exists {
 		return nil, fmt.Errorf("集群 %d 的 DynamicClient 未初始化", clusterID)
 	}
+
 	return client, nil
 }
 
 // GetNamespaces 获取指定集群的命名空间
 func (k *k8sClient) GetNamespaces(ctx context.Context, clusterID int) ([]string, error) {
-	client, err := k.GetKubeClient(ctx, clusterID)
+	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -212,11 +213,12 @@ func (k *k8sClient) GetNamespaces(ctx context.Context, clusterID int) ([]string,
 	for i, ns := range namespaces.Items {
 		nsList[i] = ns.Name
 	}
+
 	return nsList, nil
 }
 
 // RecordProbeError 记录指定集群探活时遇到的错误
-func (k *k8sClient) RecordProbeError(ctx context.Context, clusterID int, errMsg string) {
+func (k *k8sClient) RecordProbeError(clusterID int, errMsg string) {
 	k.Lock()
 	k.LastProbeErrors[clusterID] = errMsg
 	k.Unlock()
