@@ -76,14 +76,14 @@ func (t *TreeHandler) SelectTreeNode(ctx *gin.Context) {
 	level, err := strconv.Atoi(levelStr)
 	if err != nil {
 		t.l.Warn("无效的 level 参数", zap.String("level", levelStr), zap.Error(err))
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "无效的 level 参数")
+		apiresponse.BadRequestError(ctx, "无效的 level 参数")
 		return
 	}
 
 	levelLt, err := strconv.Atoi(levelLtStr)
 	if err != nil {
 		t.l.Warn("无效的 levelLt 参数", zap.String("levelLt", levelLtStr), zap.Error(err))
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "无效的 levelLt 参数")
+		apiresponse.BadRequestError(ctx, "无效的 levelLt 参数")
 		return
 	}
 
@@ -125,7 +125,7 @@ func (t *TreeHandler) CreateTreeNode(ctx *gin.Context) {
 	var req model.TreeNode
 
 	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
@@ -141,13 +141,13 @@ func (t *TreeHandler) CreateTreeNode(ctx *gin.Context) {
 func (t *TreeHandler) DeleteTreeNode(ctx *gin.Context) {
 	id := ctx.Param("id")
 	if id == "" {
-		apiresponse.ErrorWithMessage(ctx, "id不能为空")
+		apiresponse.BadRequestError(ctx, "id不能为空")
 		return
 	}
 
 	nodeId, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "id必须为整数")
+		apiresponse.BadRequestError(ctx, "id必须为整数")
 		return
 	}
 
@@ -163,13 +163,13 @@ func (t *TreeHandler) DeleteTreeNode(ctx *gin.Context) {
 func (t *TreeHandler) GetChildrenTreeNode(ctx *gin.Context) {
 	pid := ctx.Param("pid")
 	if pid == "" {
-		apiresponse.ErrorWithMessage(ctx, "pid不能为空")
+		apiresponse.BadRequestError(ctx, "pid不能为空")
 		return
 	}
 
 	parentId, err := strconv.Atoi(pid)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "pid必须为整数")
+		apiresponse.BadRequestError(ctx, "pid必须为整数")
 		return
 	}
 
@@ -186,7 +186,7 @@ func (t *TreeHandler) GetChildrenTreeNode(ctx *gin.Context) {
 func (t *TreeHandler) UpdateTreeNode(ctx *gin.Context) {
 	var req model.TreeNode
 	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
@@ -213,13 +213,13 @@ func (t *TreeHandler) GetEcsUnbindList(ctx *gin.Context) {
 func (t *TreeHandler) GetEcsList(ctx *gin.Context) {
 	nid := ctx.Query("nid")
 	if nid == "" {
-		apiresponse.ErrorWithMessage(ctx, "nid不能为空")
+		apiresponse.BadRequestError(ctx, "nid不能为空")
 		return
 	}
 
 	nodeID, err := strconv.Atoi(nid)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "nid必须为整数")
+		apiresponse.BadRequestError(ctx, "nid必须为整数")
 		return
 	}
 
@@ -247,13 +247,13 @@ func (t *TreeHandler) GetElbUnbindList(ctx *gin.Context) {
 func (t *TreeHandler) GetElbList(ctx *gin.Context) {
 	nid := ctx.Query("nid")
 	if nid == "" {
-		apiresponse.ErrorWithMessage(ctx, "nid不能为空")
+		apiresponse.BadRequestError(ctx, "nid不能为空")
 		return
 	}
 
 	nodeID, err := strconv.Atoi(nid)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "nid必须为整数")
+		apiresponse.BadRequestError(ctx, "nid必须为整数")
 		return
 	}
 
@@ -281,13 +281,13 @@ func (t *TreeHandler) GetRdsUnbindList(ctx *gin.Context) {
 func (t *TreeHandler) GetRdsList(ctx *gin.Context) {
 	nid := ctx.Query("nid")
 	if nid == "" {
-		apiresponse.ErrorWithMessage(ctx, "nid不能为空")
+		apiresponse.BadRequestError(ctx, "nid不能为空")
 		return
 	}
 
 	nodeID, err := strconv.Atoi(nid)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "nid必须为整数")
+		apiresponse.BadRequestError(ctx, "nid必须为整数")
 		return
 	}
 
@@ -304,18 +304,18 @@ func (t *TreeHandler) GetRdsList(ctx *gin.Context) {
 func (t *TreeHandler) GetAllResource(ctx *gin.Context) {
 	resourceType := ctx.Query("type")
 	if resourceType == "" || (resourceType != "ecs" && resourceType != "elb" && resourceType != "rds") {
-		apiresponse.ErrorWithMessage(ctx, "resource type不能为空或不合法")
+		apiresponse.BadRequestError(ctx, "resource type不能为空或不合法")
 		return
 	}
 
 	nid := ctx.Query("nid")
 	if nid == "" {
-		apiresponse.ErrorWithMessage(ctx, "nid不能为空")
+		apiresponse.BadRequestError(ctx, "nid不能为空")
 		return
 	}
 	nodeId, err := strconv.Atoi(nid)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "nid必须为整数")
+		apiresponse.BadRequestError(ctx, "nid必须为整数")
 		return
 	}
 
@@ -323,12 +323,12 @@ func (t *TreeHandler) GetAllResource(ctx *gin.Context) {
 	s := ctx.DefaultQuery("size", "10")
 	page, err := strconv.Atoi(p)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "page必须为整数")
+		apiresponse.BadRequestError(ctx, "page必须为整数")
 		return
 	}
 	size, err := strconv.Atoi(s)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "size必须为整数")
+		apiresponse.BadRequestError(ctx, "size必须为整数")
 		return
 	}
 
