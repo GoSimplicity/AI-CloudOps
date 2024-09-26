@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -42,7 +43,7 @@ func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
 		nodes.GET("/:name/pods", k.GetPodsListByNodeId) // 获取指定节点上的 Pods 列表
 
 		nodes.POST("/taint_check", k.TaintYamlCheck)              // 检查节点 Taint 的 YAML 配置
-		nodes.POST("/enable-switch", k.ScheduleEnableSwitchNodes) // 启用或切换节点调度
+		nodes.POST("/enable_switch", k.ScheduleEnableSwitchNodes) // 启用或切换节点调度
 		nodes.POST("/labels/add", k.AddLabelNodes)                // 为节点添加标签
 		nodes.DELETE("/labels/delete", k.DeleteLabelNodes)
 		nodes.POST("/taints/add", k.AddTaintsNodes) // 为节点添加 Taint
@@ -252,7 +253,18 @@ func (k *K8sHandler) DeleteLabelNodes(ctx *gin.Context) {
 
 // AddTaintsNodes 为节点添加 Taint
 func (k *K8sHandler) AddTaintsNodes(ctx *gin.Context) {
-	// TODO: 实现为节点添加 Taint 的逻辑
+	var taint *model.TaintK8sNodesRequest
+
+	err := ctx.ShouldBind(&taint)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := k.service.AddNodeTaint(ctx, taint); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
 }
 
 func (k *K8sHandler) DeleteTaintsNodes(ctx *gin.Context) {
