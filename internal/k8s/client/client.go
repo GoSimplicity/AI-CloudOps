@@ -28,8 +28,6 @@ type K8sClient interface {
 	GetDynamicClient(clusterID int) (*dynamic.DynamicClient, error)
 	// GetNamespaces 获取指定集群的命名空间
 	GetNamespaces(ctx context.Context, clusterID int) ([]string, error)
-	// RecordProbeError 记录指定集群探活时遇到的错误
-	RecordProbeError(clusterID int, errMsg string)
 	// RefreshClients 刷新客户端
 	RefreshClients(ctx context.Context) error
 }
@@ -215,13 +213,6 @@ func (k *k8sClient) GetNamespaces(ctx context.Context, clusterID int) ([]string,
 	}
 
 	return nsList, nil
-}
-
-// RecordProbeError 记录指定集群探活时遇到的错误
-func (k *k8sClient) RecordProbeError(clusterID int, errMsg string) {
-	k.Lock()
-	k.LastProbeErrors[clusterID] = errMsg
-	k.Unlock()
 }
 
 // RefreshClients 刷新所有集群的客户端
