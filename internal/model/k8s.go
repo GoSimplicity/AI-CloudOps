@@ -9,18 +9,20 @@ import (
 // K8sCluster Kubernetes 集群的配置
 type K8sCluster struct {
 	Model
-	Name                 string `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex;size:100;comment:集群名称"`     // 集群名称
-	NameZh               string `json:"nameZh" binding:"required,min=1,max=500" gorm:"uniqueIndex;size:100;comment:集群中文名称"` // 集群中文名称
-	UserID               int    `json:"userId" gorm:"comment:创建者用户ID"`                                                      // 创建者用户ID
-	CpuRequest           string `json:"cpuRequest,omitempty" gorm:"comment:CPU 请求量"`                                        // CPU 请求量
-	CpuLimit             string `json:"cpuLimit,omitempty" gorm:"comment:CPU 限制量"`                                          // CPU 限制量
-	MemoryRequest        string `json:"memoryRequest,omitempty" gorm:"comment:内存请求量"`                                       // 内存请求量
-	MemoryLimit          string `json:"memoryLimit,omitempty" gorm:"comment:内存限制量"`                                         // 内存限制量
-	Env                  string `json:"env,omitempty" gorm:"comment:集群环境，例如 prod, stage, dev, rc, press"`                   // 集群环境
-	Version              string `json:"version,omitempty" gorm:"comment:集群版本"`                                              // 集群版本
-	ApiServerAddr        string `json:"apiServerAddr,omitempty" gorm:"comment:API Server 地址"`                               // API Server 地址
-	KubeConfigContent    string `json:"kubeConfigContent,omitempty" gorm:"type:text;comment:kubeConfig 内容"`                 // kubeConfig 内容
-	ActionTimeoutSeconds int    `json:"actionTimeoutSeconds,omitempty" gorm:"comment:操作超时时间（秒）"`                            // 操作超时时间（秒）
+	Name                string     `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex;size:100;comment:集群名称"`     // 集群名称
+	NameZh              string     `json:"nameZh" binding:"required,min=1,max=500" gorm:"uniqueIndex;size:100;comment:集群中文名称"` // 集群中文名称
+	UserID              int        `json:"userId" gorm:"comment:创建者用户ID"`                                                      // 创建者用户ID
+	CpuRequest          string     `json:"cpuRequest,omitempty" gorm:"comment:CPU 请求量"`                                        // CPU 请求量
+	CpuLimit            string     `json:"cpuLimit,omitempty" gorm:"comment:CPU 限制量"`                                          // CPU 限制量
+	MemoryRequest       string     `json:"memoryRequest,omitempty" gorm:"comment:内存请求量"`                                       // 内存请求量
+	MemoryLimit         string     `json:"memoryLimit,omitempty" gorm:"comment:内存限制量"`                                         // 内存限制量
+	RestrictedNameSpace StringList `json:"restrictedNameSpace" gorm:"comment:资源限制命名空间"`                                        // 资源限制命名空间
+
+	Env                  string `json:"env,omitempty" gorm:"comment:集群环境，例如 prod, stage, dev, rc, press"`   // 集群环境
+	Version              string `json:"version,omitempty" gorm:"comment:集群版本"`                              // 集群版本
+	ApiServerAddr        string `json:"apiServerAddr,omitempty" gorm:"comment:API Server 地址"`               // API Server 地址
+	KubeConfigContent    string `json:"kubeConfigContent,omitempty" gorm:"type:text;comment:kubeConfig 内容"` // kubeConfig 内容
+	ActionTimeoutSeconds int    `json:"actionTimeoutSeconds,omitempty" gorm:"comment:操作超时时间（秒）"`            // 操作超时时间（秒）
 
 	// 前端使用字段
 	Key               string            `json:"key" gorm:"-"`                         // 前端表格使用的Key，不存储在数据库中

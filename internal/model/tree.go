@@ -2,7 +2,6 @@ package model
 
 import (
 	"database/sql/driver"
-	"errors"
 	"strings"
 )
 
@@ -158,52 +157,16 @@ type ResourceRds struct {
 }
 
 // StringList 封装了 []string 类型，用于与数据库中的逗号分隔字符串进行转换
-type StringList struct {
-	Items []string
-}
+type StringList []string
 
-// Value 实现 driver.Valuer 接口，将 StringList 转换为数据库可存储的格式
-func (s StringList) Value() (driver.Value, error) {
-	// 将 []string 转换为 "a,b,c,d" 格式的字符串
-	return strings.Join(s.Items, ","), nil
-}
-
-// Scan 实现了 sql.Scanner 接口，将数据库中的字符串转换为 StringList
-func (s *StringList) Scan(value interface{}) error {
-	if value == nil {
-		s.Items = []string{}
-		return nil
-	}
-
-	var data string
-	switch v := value.(type) {
-	case string:
-		data = v
-	case []byte:
-		data = string(v)
-	default:
-		return errors.New("invalid type for StringList")
-	}
-
-	// 将 "a,b,c,d" 格式的字符串拆分为 []string
-	if data == "" {
-		s.Items = []string{}
-		return nil
-	}
-	s.Items = strings.Split(data, ",")
+func (m *StringList) Scan(val interface{}) error {
+	s := val.([]uint8)
+	ss := strings.Split(string(s), "|")
+	*m = ss
 	return nil
 }
 
-// ToString 将 StringList 转换为逗号分隔的字符串
-func (s StringList) ToString() string {
-	return strings.Join(s.Items, ",")
-}
-
-// FromString 将逗号分隔的字符串转换为 StringList
-func (s *StringList) FromString(str string) {
-	if str == "" {
-		s.Items = []string{}
-		return
-	}
-	s.Items = strings.Split(str, ",")
+func (m StringList) Value() (driver.Value, error) {
+	str := strings.Join(m, "|")
+	return str, nil
 }
