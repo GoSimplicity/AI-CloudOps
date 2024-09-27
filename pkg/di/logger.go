@@ -11,5 +11,6 @@ func InitLogger() *zap.Logger {
 	cfg := zap.NewDevelopmentConfig()
 	cfg.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder // 使用彩色输出
 	l, _ := cfg.Build()
+
 	return l
 }

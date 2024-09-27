@@ -12,6 +12,7 @@ type K8sDAO interface {
 	ListClustersForSelect(ctx context.Context) ([]*model.K8sCluster, error)
 	CreateCluster(ctx context.Context, cluster *model.K8sCluster) error
 	UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) error
+	DeleteCluster(ctx context.Context, id int) error
 	GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error)
 	GetClusterByName(ctx context.Context, name string) (*model.K8sCluster, error)
 	BatchEnableSwitchClusters(ctx context.Context, ids []int) error
@@ -58,8 +59,21 @@ func (k *k8sDAO) ListClustersForSelect(ctx context.Context) ([]*model.K8sCluster
 }
 
 func (k *k8sDAO) CreateCluster(ctx context.Context, cluster *model.K8sCluster) error {
-	//TODO implement me
-	panic("implement me")
+	if err := k.db.WithContext(ctx).Create(&cluster).Error; err != nil {
+		k.l.Error("CreateCluster 创建集群失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (k *k8sDAO) DeleteCluster(ctx context.Context, id int) error {
+	if err := k.db.WithContext(ctx).Where("id = ?", id).Delete(&model.K8sCluster{}).Error; err != nil {
+		k.l.Error("DeleteCluster 删除集群失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 func (k *k8sDAO) UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) error {
