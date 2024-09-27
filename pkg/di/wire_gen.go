@@ -62,10 +62,10 @@ func InitWebServer() *Cmd {
 	treeService := service2.NewTreeService(treeEcsDAO, treeElbDAO, treeRdsDAO, treeNodeDAO, logger, userDAO)
 	treeHandler := api5.NewTreeHandler(treeService, logger)
 	k8sDAO := dao2.NewK8sDAO(db, logger)
-	k8sService := service3.NewK8sService(k8sDAO)
+	k8sClient := client.NewK8sClient(logger, k8sDAO)
+	k8sService := service3.NewK8sService(k8sDAO, k8sClient, logger)
 	k8sHandler := api6.NewK8sHandler(k8sService, logger)
 	engine := InitGinServer(v, userHandler, authHandler, treeHandler, k8sHandler)
-	k8sClient := client.NewK8sClient(logger, k8sService)
 	cron := InitAndRefreshK8sClient(k8sClient, logger)
 	cmd := &Cmd{
 		Server: engine,
