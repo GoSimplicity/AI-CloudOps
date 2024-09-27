@@ -6,13 +6,11 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"sync"
 )
@@ -138,21 +136,21 @@ func (k *k8sService) CreateCluster(ctx context.Context, cluster *model.K8sCluste
 			defer func() { <-semaphore }()
 
 			// 确保命名空间存在
-			if err := k.ensureNamespace(ctx1, kubeClient, ns); err != nil {
+			if err := pkg.EnsureNamespace(ctx1, kubeClient, ns); err != nil {
 				errChan <- fmt.Errorf("确保命名空间 %s 存在失败: %w", ns, err)
 				cancel()
 				return
 			}
 
 			// 应用 LimitRange
-			if err := k.applyLimitRange(ctx1, kubeClient, ns, cluster); err != nil {
+			if err := pkg.ApplyLimitRange(ctx1, kubeClient, ns, cluster); err != nil {
 				errChan <- fmt.Errorf("应用 LimitRange 到命名空间 %s 失败: %w", ns, err)
 				cancel()
 				return
 			}
 
 			// 应用 ResourceQuota
-			if err := k.applyResourceQuota(ctx1, kubeClient, ns, cluster); err != nil {
+			if err := pkg.ApplyResourceQuota(ctx1, kubeClient, ns, cluster); err != nil {
 				errChan <- fmt.Errorf("应用 ResourceQuota 到命名空间 %s 失败: %w", ns, err)
 				cancel()
 				return
@@ -173,102 +171,6 @@ func (k *k8sService) CreateCluster(ctx context.Context, cluster *model.K8sCluste
 	}
 
 	k.l.Info("CreateCluster: 成功创建 Kubernetes 集群", zap.Int("clusterID", cluster.ID))
-	return nil
-}
-
-// ensureNamespace 确保指定的命名空间存在，如果不存在则创建
-func (k *k8sService) ensureNamespace(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) error {
-	_, err := kubeClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// 创建命名空间
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: namespace,
-				},
-			}
-			_, createErr := kubeClient.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
-			if createErr != nil {
-				k.l.Error("ensureNamespace: 创建命名空间失败", zap.String("namespace", namespace), zap.Error(createErr))
-				return fmt.Errorf("创建命名空间 %s 失败: %w", namespace, createErr)
-			}
-			k.l.Info("ensureNamespace: 命名空间创建成功", zap.String("namespace", namespace))
-			return nil
-		}
-		k.l.Error("ensureNamespace: 获取命名空间失败", zap.String("namespace", namespace), zap.Error(err))
-		return fmt.Errorf("获取命名空间 %s 失败: %w", namespace, err)
-	}
-	// 命名空间已存在
-	k.l.Info("ensureNamespace: 命名空间已存在", zap.String("namespace", namespace))
-	return nil
-}
-
-// applyLimitRange 应用 LimitRange 到指定命名空间
-func (k *k8sService) applyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, cluster *model.K8sCluster) error {
-	limitRange := &corev1.LimitRange{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "resource-limits",
-			Namespace: namespace,
-		},
-		Spec: corev1.LimitRangeSpec{
-			Limits: []corev1.LimitRangeItem{
-				{
-					Type: corev1.LimitTypeContainer,
-					Default: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse(cluster.CpuLimit),
-						corev1.ResourceMemory: resource.MustParse(cluster.MemoryLimit),
-					},
-					DefaultRequest: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse(cluster.CpuRequest),
-						corev1.ResourceMemory: resource.MustParse(cluster.MemoryRequest),
-					},
-				},
-			},
-		},
-	}
-
-	_, err := kubeClient.CoreV1().LimitRanges(namespace).Create(ctx, limitRange, metav1.CreateOptions{})
-	if err != nil {
-		if errors.IsAlreadyExists(err) {
-			k.l.Warn("applyLimitRange: LimitRange 已存在", zap.String("namespace", namespace))
-			return nil
-		}
-		k.l.Error("applyLimitRange: 创建 LimitRange 失败", zap.Error(err), zap.String("namespace", namespace))
-		return fmt.Errorf("创建 LimitRange 失败 (namespace: %s): %w", namespace, err)
-	}
-
-	k.l.Info("applyLimitRange: LimitRange 创建成功", zap.String("namespace", namespace))
-	return nil
-}
-
-// applyResourceQuota 应用 ResourceQuota 到指定命名空间
-func (k *k8sService) applyResourceQuota(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, cluster *model.K8sCluster) error {
-	resourceQuota := &corev1.ResourceQuota{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "compute-quota",
-			Namespace: namespace,
-		},
-		Spec: corev1.ResourceQuotaSpec{
-			Hard: corev1.ResourceList{
-				corev1.ResourceRequestsCPU:    resource.MustParse(cluster.CpuRequest),
-				corev1.ResourceRequestsMemory: resource.MustParse(cluster.MemoryRequest),
-				corev1.ResourceLimitsCPU:      resource.MustParse(cluster.CpuLimit),
-				corev1.ResourceLimitsMemory:   resource.MustParse(cluster.MemoryLimit),
-			},
-		},
-	}
-
-	_, err := kubeClient.CoreV1().ResourceQuotas(namespace).Create(ctx, resourceQuota, metav1.CreateOptions{})
-	if err != nil {
-		if errors.IsAlreadyExists(err) {
-			k.l.Warn("applyResourceQuota: ResourceQuota 已存在", zap.String("namespace", namespace))
-			return nil
-		}
-		k.l.Error("applyResourceQuota: 创建 ResourceQuota 失败", zap.Error(err), zap.String("namespace", namespace))
-		return fmt.Errorf("创建 ResourceQuota 失败 (namespace: %s): %w", namespace, err)
-	}
-
-	k.l.Info("applyResourceQuota: ResourceQuota 创建成功", zap.String("namespace", namespace))
 	return nil
 }
 
@@ -340,7 +242,7 @@ func (k *k8sService) AddNodeTaint(ctx context.Context, req *model.TaintK8sNodesR
 	// 解析 YAML 配置中的 Taints
 	var taintsToProcess []corev1.Taint
 	if err := yaml.UnmarshalStrict([]byte(req.TaintYaml), &taintsToProcess); err != nil {
-		k.l.Error("解析 YAML 失败", zap.Error(err))
+		k.l.Error("解析 Taint YAML 配置失败", zap.Error(err))
 		return err
 	}
 
@@ -351,55 +253,24 @@ func (k *k8sService) AddNodeTaint(ctx context.Context, req *model.TaintK8sNodesR
 		// 获取节点信息
 		node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if err != nil {
-			k.l.Error("获取节点信息失败", zap.String("node", nodeName), zap.Error(err))
 			errs = append(errs, fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err))
+			k.l.Error("获取节点信息失败", zap.Error(err))
 			continue
 		}
 
 		switch req.ModType {
 		case "add":
-			// 添加新的 Taints，避免重复
-			existingTaints := node.Spec.Taints
-			taintsMap := make(map[string]corev1.Taint)
-
-			// 记录现有 taints，键为 "Key:Value:Effect" 形式
-			for _, taint := range existingTaints {
-				key := fmt.Sprintf("%s:%s:%s", taint.Key, taint.Value, taint.Effect)
-				taintsMap[key] = taint
-			}
-
-			// 添加新的 Taints，避免重复
-			for _, newTaint := range taintsToProcess {
-				key := fmt.Sprintf("%s:%s:%s", newTaint.Key, newTaint.Value, newTaint.Effect)
-				if _, exists := taintsMap[key]; !exists {
-					existingTaints = append(existingTaints, newTaint)
-				}
-			}
-
-			node.Spec.Taints = existingTaints
+			// 添加新的 Taints
+			node.Spec.Taints = pkg.MergeTaints(node.Spec.Taints, taintsToProcess)
 
 		case "delete":
 			// 删除指定的 Taints
-			taintsToDelete := make(map[string]struct{})
-			for _, delTaint := range taintsToProcess {
-				key := fmt.Sprintf("%s:%s:%s", delTaint.Key, delTaint.Value, delTaint.Effect)
-				taintsToDelete[key] = struct{}{}
-			}
-
-			var updatedTaints []corev1.Taint
-
-			for _, existingTaint := range node.Spec.Taints {
-				key := fmt.Sprintf("%s:%s:%s", existingTaint.Key, existingTaint.Value, existingTaint.Effect)
-				if _, shouldDelete := taintsToDelete[key]; !shouldDelete {
-					updatedTaints = append(updatedTaints, existingTaint)
-				}
-			}
-			node.Spec.Taints = updatedTaints
+			node.Spec.Taints = pkg.RemoveTaints(node.Spec.Taints, taintsToProcess)
 
 		default:
 			// 处理未知的修改类型
 			errMsg := fmt.Sprintf("未知的修改类型: %s", req.ModType)
-			k.l.Error(errMsg, zap.String("ModType", req.ModType))
+			k.l.Error(errMsg)
 			errs = append(errs, fmt.Errorf(errMsg))
 			continue
 		}
@@ -407,12 +278,12 @@ func (k *k8sService) AddNodeTaint(ctx context.Context, req *model.TaintK8sNodesR
 		// 更新节点信息
 		_, err = kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 		if err != nil {
-			k.l.Error("更新节点信息失败", zap.String("node", nodeName), zap.Error(err))
+			k.l.Error("更新节点信息失败", zap.Error(err))
 			errs = append(errs, fmt.Errorf("更新节点 %s 信息失败: %w", nodeName, err))
 			continue
 		}
 
-		k.l.Info("成功更新节点 Taints", zap.String("node", nodeName), zap.String("ModType", req.ModType))
+		k.l.Info("更新节点信息成功", zap.String("nodeName", nodeName))
 	}
 
 	if len(errs) > 0 {
