@@ -21,10 +21,6 @@ type K8sService interface {
 	CreateCluster(ctx context.Context, cluster *model.K8sCluster) error
 	// UpdateCluster 更新指定 ID 的 Kubernetes 集群
 	UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) error
-	// DeleteCluster 删除指定 ID 的 Kubernetes 集群
-	DeleteCluster(ctx context.Context, id int) error
-	// EnableSwitchCluster 启用或切换指定 ID 的 Kubernetes 集群调度
-	EnableSwitchCluster(ctx context.Context, id int) error
 	// BatchEnableSwitchClusters 批量启用或切换 Kubernetes 集群调度
 	BatchEnableSwitchClusters(ctx context.Context, ids []int) error
 	// BatchDeleteClusters 批量删除 Kubernetes 集群
@@ -81,16 +77,6 @@ func (k *k8sService) CreateCluster(ctx context.Context, cluster *model.K8sCluste
 }
 
 func (k *k8sService) UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (k *k8sService) DeleteCluster(ctx context.Context, id int) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (k *k8sService) EnableSwitchCluster(ctx context.Context, id int) error {
 	//TODO implement me
 	panic("implement me")
 }

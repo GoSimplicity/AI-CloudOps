@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/openkruise/kruise-api/client/clientset/versioned"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,10 +42,10 @@ type k8sClient struct {
 	ClusterNamespaces map[string][]string              // 集群命名空间集合
 	LastProbeErrors   map[int]string                   // 集群探针错误信息
 	l                 *zap.Logger                      // 日志记录器
-	svc               service.K8sService
+	dao               dao.K8sDAO
 }
 
-func NewK8sClient(l *zap.Logger, svc service.K8sService) K8sClient {
+func NewK8sClient(l *zap.Logger, dao dao.K8sDAO) K8sClient {
 	return &k8sClient{
 		KubeClients:       make(map[int]*kubernetes.Clientset),
 		KruiseClients:     make(map[int]*versioned.Clientset),
@@ -55,7 +55,7 @@ func NewK8sClient(l *zap.Logger, svc service.K8sService) K8sClient {
 		ClusterNamespaces: make(map[string][]string),
 		LastProbeErrors:   make(map[int]string),
 		l:                 l,
-		svc:               svc,
+		dao:               dao,
 	}
 }
 
@@ -107,7 +107,7 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 	// 保存 REST 配置
 	k.RestConfigs[clusterID] = kubeConfig
 
-	// 获取并保存命名空间，直接使用 kubeClient 而不通过 GetKubeClient
+	// 获取并保存命名空间，直接使用 kubeClient
 	namespaces, err := k.getNamespacesDirectly(ctx, clusterID, kubeClient)
 	if err != nil {
 		k.l.Warn("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
@@ -217,7 +217,7 @@ func (k *k8sClient) GetNamespaces(ctx context.Context, clusterID int) ([]string,
 
 // RefreshClients 刷新所有集群的客户端
 func (k *k8sClient) RefreshClients(ctx context.Context) error {
-	clusters, err := k.svc.ListAllClusters(ctx)
+	clusters, err := k.dao.ListAllClusters(ctx)
 	if err != nil {
 		k.l.Error("RefreshClients: 获取所有集群失败", zap.Error(err))
 		return err

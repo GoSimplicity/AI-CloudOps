@@ -23,17 +23,20 @@ func InitAndRefreshK8sClient(K8sClient client.K8sClient, logger *zap.Logger) *cr
 		),
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel() // 确保超时或操作完成后释放资源
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 
-	// 初始刷新
-	if err := K8sClient.RefreshClients(ctx); err != nil {
-		logger.Error("InitAndRefreshK8sClient: 初始刷新 Kubernetes 客户端失败", zap.Error(err))
-		return nil
-	}
+		logger.Info("开始初始刷新 Kubernetes 客户端")
+		if err := K8sClient.RefreshClients(ctx); err != nil {
+			logger.Error("InitAndRefreshK8sClient: 初始刷新 Kubernetes 客户端失败", zap.Error(err))
+		} else {
+			logger.Info("InitAndRefreshK8sClient: 成功完成初始刷新 Kubernetes 客户端")
+		}
+	}()
 
 	// 添加 cron job，每5秒执行一次
-	_, err := c.AddFunc("@every 5s", func() {
+	_, err := c.AddFunc("@every 15s", func() {
 		taskCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
