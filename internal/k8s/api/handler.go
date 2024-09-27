@@ -4,6 +4,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -198,7 +199,25 @@ func (k *K8sHandler) GetClusterListForSelect(ctx *gin.Context) {
 
 // CreateCluster 创建新的集群
 func (k *K8sHandler) CreateCluster(ctx *gin.Context) {
-	// TODO: 实现创建集群的逻辑
+	var cluster *model.K8sCluster
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+
+	err := ctx.ShouldBind(&cluster)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	cluster.UserID = uc.Uid
+
+	err = k.service.CreateCluster(ctx, cluster)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // UpdateCluster 更新指定 ID 的集群
