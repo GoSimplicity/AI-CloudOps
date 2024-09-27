@@ -10,4 +10,4 @@ redis:
 mysql:
   addr: "root:root@tcp(localhost:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
 mock:
-  enabled: false
+  enabled: false # 是否开启mock
