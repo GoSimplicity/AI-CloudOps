@@ -199,19 +199,19 @@ func (ts *treeService) UpdateTreeNode(ctx context.Context, obj *model.TreeNode) 
 
 	g.Go(func() error {
 		var err error
-		usersOpsAdmin, err = ts.fetchUsers(ctx, obj.OpsAdminUsers.Items, "OpsAdmin")
+		usersOpsAdmin, err = ts.fetchUsers(ctx, obj.OpsAdminUsers, "OpsAdmin")
 		return err
 	})
 
 	g.Go(func() error {
 		var err error
-		usersRdAdmin, err = ts.fetchUsers(ctx, obj.RdAdminUsers.Items, "RdAdmin")
+		usersRdAdmin, err = ts.fetchUsers(ctx, obj.RdAdminUsers, "RdAdmin")
 		return err
 	})
 
 	g.Go(func() error {
 		var err error
-		usersRdMember, err = ts.fetchUsers(ctx, obj.RdMemberUsers.Items, "RdMember")
+		usersRdMember, err = ts.fetchUsers(ctx, obj.RdMemberUsers, "RdMember")
 		return err
 	})
 
