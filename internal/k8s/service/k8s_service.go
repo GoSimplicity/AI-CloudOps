@@ -8,8 +8,13 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+	"sync"
 )
 
 type K8sService interface {
@@ -71,9 +76,200 @@ func (k *k8sService) ListClustersForSelect(ctx context.Context) ([]*model.K8sClu
 	panic("implement me")
 }
 
-func (k *k8sService) CreateCluster(ctx context.Context, cluster *model.K8sCluster) error {
-	//TODO implement me
-	panic("implement me")
+// CreateCluster 创建一个新的 Kubernetes 集群，并应用资源限制
+func (k *k8sService) CreateCluster(ctx context.Context, cluster *model.K8sCluster) (err error) {
+	// 创建集群记录
+	if err = k.dao.CreateCluster(ctx, cluster); err != nil {
+		k.l.Error("CreateCluster: 创建集群记录失败", zap.Error(err))
+		return fmt.Errorf("创建集群记录失败: %w", err)
+	}
+
+	// 确保后续操作如果出现错误时回滚集群记录以防后续步骤失败
+	defer func() {
+		if err != nil {
+			k.l.Info("CreateCluster: 回滚集群记录", zap.Int("clusterID", cluster.ID))
+			if rollbackErr := k.dao.DeleteCluster(ctx, cluster.ID); rollbackErr != nil {
+				k.l.Error("CreateCluster: 回滚集群记录失败", zap.Error(rollbackErr))
+			}
+		}
+	}()
+
+	// 解析 kubeconfig 并手动初始化 Kubernetes 客户端
+	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
+	if err != nil {
+		k.l.Error("CreateCluster: 解析 kubeconfig 失败", zap.Error(err))
+		return fmt.Errorf("解析 kubeconfig 失败: %w", err)
+	}
+
+	if err = k.client.InitClient(ctx, cluster.ID, restConfig); err != nil { // 假设 useMock=false
+		k.l.Error("CreateCluster: 初始化 Kubernetes 客户端失败", zap.Error(err))
+		return fmt.Errorf("初始化 Kubernetes 客户端失败: %w", err)
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("CreateCluster: 获取 Kubernetes 客户端失败", zap.Error(err))
+		return fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
+	}
+
+	const maxConcurrent = 5 // 最大并发数
+	semaphore := make(chan struct{}, maxConcurrent)
+
+	var wg sync.WaitGroup
+
+	// 使用一个 channel 来收集错误
+	errChan := make(chan error, len(cluster.RestrictedNameSpace))
+
+	ctx1, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	for _, namespace := range cluster.RestrictedNameSpace {
+		wg.Add(1)
+
+		// 传递变量到 goroutine
+		ns := namespace
+
+		go func() {
+			defer wg.Done()
+
+			// 获取 semaphore
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			// 确保命名空间存在
+			if err := k.ensureNamespace(ctx1, kubeClient, ns); err != nil {
+				errChan <- fmt.Errorf("确保命名空间 %s 存在失败: %w", ns, err)
+				cancel()
+				return
+			}
+
+			// 应用 LimitRange
+			if err := k.applyLimitRange(ctx1, kubeClient, ns, cluster); err != nil {
+				errChan <- fmt.Errorf("应用 LimitRange 到命名空间 %s 失败: %w", ns, err)
+				cancel()
+				return
+			}
+
+			// 应用 ResourceQuota
+			if err := k.applyResourceQuota(ctx1, kubeClient, ns, cluster); err != nil {
+				errChan <- fmt.Errorf("应用 ResourceQuota 到命名空间 %s 失败: %w", ns, err)
+				cancel()
+				return
+			}
+		}()
+	}
+
+	// 等待所有 goroutines 完成
+	wg.Wait()
+	close(errChan)
+
+	// 检查是否有错误
+	for e := range errChan {
+		if e != nil {
+			k.l.Error("CreateCluster: 处理命名空间时发生错误", zap.Error(e))
+			return e
+		}
+	}
+
+	k.l.Info("CreateCluster: 成功创建 Kubernetes 集群", zap.Int("clusterID", cluster.ID))
+	return nil
+}
+
+// ensureNamespace 确保指定的命名空间存在，如果不存在则创建
+func (k *k8sService) ensureNamespace(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) error {
+	_, err := kubeClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// 创建命名空间
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			_, createErr := kubeClient.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			if createErr != nil {
+				k.l.Error("ensureNamespace: 创建命名空间失败", zap.String("namespace", namespace), zap.Error(createErr))
+				return fmt.Errorf("创建命名空间 %s 失败: %w", namespace, createErr)
+			}
+			k.l.Info("ensureNamespace: 命名空间创建成功", zap.String("namespace", namespace))
+			return nil
+		}
+		k.l.Error("ensureNamespace: 获取命名空间失败", zap.String("namespace", namespace), zap.Error(err))
+		return fmt.Errorf("获取命名空间 %s 失败: %w", namespace, err)
+	}
+	// 命名空间已存在
+	k.l.Info("ensureNamespace: 命名空间已存在", zap.String("namespace", namespace))
+	return nil
+}
+
+// applyLimitRange 应用 LimitRange 到指定命名空间
+func (k *k8sService) applyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, cluster *model.K8sCluster) error {
+	limitRange := &corev1.LimitRange{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "resource-limits",
+			Namespace: namespace,
+		},
+		Spec: corev1.LimitRangeSpec{
+			Limits: []corev1.LimitRangeItem{
+				{
+					Type: corev1.LimitTypeContainer,
+					Default: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse(cluster.CpuLimit),
+						corev1.ResourceMemory: resource.MustParse(cluster.MemoryLimit),
+					},
+					DefaultRequest: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse(cluster.CpuRequest),
+						corev1.ResourceMemory: resource.MustParse(cluster.MemoryRequest),
+					},
+				},
+			},
+		},
+	}
+
+	_, err := kubeClient.CoreV1().LimitRanges(namespace).Create(ctx, limitRange, metav1.CreateOptions{})
+	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			k.l.Warn("applyLimitRange: LimitRange 已存在", zap.String("namespace", namespace))
+			return nil
+		}
+		k.l.Error("applyLimitRange: 创建 LimitRange 失败", zap.Error(err), zap.String("namespace", namespace))
+		return fmt.Errorf("创建 LimitRange 失败 (namespace: %s): %w", namespace, err)
+	}
+
+	k.l.Info("applyLimitRange: LimitRange 创建成功", zap.String("namespace", namespace))
+	return nil
+}
+
+// applyResourceQuota 应用 ResourceQuota 到指定命名空间
+func (k *k8sService) applyResourceQuota(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, cluster *model.K8sCluster) error {
+	resourceQuota := &corev1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "compute-quota",
+			Namespace: namespace,
+		},
+		Spec: corev1.ResourceQuotaSpec{
+			Hard: corev1.ResourceList{
+				corev1.ResourceRequestsCPU:    resource.MustParse(cluster.CpuRequest),
+				corev1.ResourceRequestsMemory: resource.MustParse(cluster.MemoryRequest),
+				corev1.ResourceLimitsCPU:      resource.MustParse(cluster.CpuLimit),
+				corev1.ResourceLimitsMemory:   resource.MustParse(cluster.MemoryLimit),
+			},
+		},
+	}
+
+	_, err := kubeClient.CoreV1().ResourceQuotas(namespace).Create(ctx, resourceQuota, metav1.CreateOptions{})
+	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			k.l.Warn("applyResourceQuota: ResourceQuota 已存在", zap.String("namespace", namespace))
+			return nil
+		}
+		k.l.Error("applyResourceQuota: 创建 ResourceQuota 失败", zap.Error(err), zap.String("namespace", namespace))
+		return fmt.Errorf("创建 ResourceQuota 失败 (namespace: %s): %w", namespace, err)
+	}
+
+	k.l.Info("applyResourceQuota: ResourceQuota 创建成功", zap.String("namespace", namespace))
+	return nil
 }
 
 func (k *k8sService) UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) error {
