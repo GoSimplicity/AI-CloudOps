@@ -12,10 +12,8 @@ type K8sDAO interface {
 	ListClustersForSelect(ctx context.Context) ([]*model.K8sCluster, error)
 	CreateCluster(ctx context.Context, cluster *model.K8sCluster) error
 	UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) error
-	DeleteCluster(ctx context.Context, id int) error
 	GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error)
 	GetClusterByName(ctx context.Context, name string) (*model.K8sCluster, error)
-	EnableSwitchCluster(ctx context.Context, id int) error
 	BatchEnableSwitchClusters(ctx context.Context, ids []int) error
 	BatchDeleteClusters(ctx context.Context, ids []int) error
 
@@ -69,22 +67,12 @@ func (k *k8sDAO) UpdateCluster(ctx context.Context, id int, cluster *model.K8sCl
 	panic("implement me")
 }
 
-func (k *k8sDAO) DeleteCluster(ctx context.Context, id int) error {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (k *k8sDAO) GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
 func (k *k8sDAO) GetClusterByName(ctx context.Context, name string) (*model.K8sCluster, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (k *k8sDAO) EnableSwitchCluster(ctx context.Context, id int) error {
 	//TODO implement me
 	panic("implement me")
 }
@@ -100,6 +88,7 @@ func (k *k8sDAO) BatchDeleteClusters(ctx context.Context, ids []int) error {
 }
 
 func (k *k8sDAO) ListAllNodes(ctx context.Context) ([]*model.K8sNode, error) {
+	//
 	var nodes []*model.K8sNode
 
 	if err := k.db.WithContext(ctx).Find(&nodes).Error; err != nil {
