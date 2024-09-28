@@ -157,7 +157,7 @@ type ResourceRds struct {
 }
 
 type BindResourceReq struct {
-	NodeId      int   `json:"nodId" `
+	NodeId      int   `json:"nodeId" `
 	ResourceIds []int `json:"resource_ids" binding:"required,min=1"`
 }
 
