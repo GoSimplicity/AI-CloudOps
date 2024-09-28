@@ -33,7 +33,6 @@ func (t *TreeHandler) RegisterRouters(server *gin.Engine) {
 	treeGroup.GET("/listLeafTreeNode", t.ListLeafTreeNodes)
 	treeGroup.POST("/createTreeNode", t.CreateTreeNode)
 	treeGroup.DELETE("/deleteTreeNode/:id", t.DeleteTreeNode)
-	// TODO ChildrenTreeNode 判定 is_leaf == true
 	treeGroup.GET("/getChildrenTreeNode/:pid", t.GetChildrenTreeNode)
 	treeGroup.POST("/updateTreeNode", t.UpdateTreeNode)
 
@@ -343,25 +342,104 @@ func (t *TreeHandler) GetAllResource(ctx *gin.Context) {
 }
 
 func (t *TreeHandler) BindEcs(ctx *gin.Context) {
-	// TODO: Implement BindEcs logic
+	var req model.BindResourceReq
+
+	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	// TODO: 假定仅支持绑定一个 ECS 实例
+	if err := t.service.BindEcs(ctx, req.ResourceIds[0], req.NodeId); err != nil {
+		t.l.Error("bind ecs failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 func (t *TreeHandler) BindElb(ctx *gin.Context) {
-	// TODO: Implement BindElb logic
+	var req model.BindResourceReq
+
+	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := t.service.BindElb(ctx, req.ResourceIds[0], req.NodeId); err != nil {
+		t.l.Error("bind elb failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 func (t *TreeHandler) BindRds(ctx *gin.Context) {
-	// TODO: Implement BindRds logic
+	var req model.BindResourceReq
+
+	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := t.service.BindRds(ctx, req.ResourceIds[0], req.NodeId); err != nil {
+		t.l.Error("bind rds failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 func (t *TreeHandler) UnBindEcs(ctx *gin.Context) {
-	// TODO: Implement UnBindEcs logic
+	var req model.BindResourceReq
+
+	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := t.service.UnBindEcs(ctx, req.ResourceIds[0], req.NodeId); err != nil {
+		t.l.Error("unbind ecs failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 func (t *TreeHandler) UnBindElb(ctx *gin.Context) {
-	// TODO: Implement UnBindElb logic
+	var req model.BindResourceReq
+
+	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := t.service.UnBindElb(ctx, req.ResourceIds[0], req.NodeId); err != nil {
+		t.l.Error("unbind elb failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 func (t *TreeHandler) UnBindRds(ctx *gin.Context) {
-	// TODO: Implement UnBindRds logic
+	var req model.BindResourceReq
+
+	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := t.service.UnBindRds(ctx, req.ResourceIds[0], req.NodeId); err != nil {
+		t.l.Error("unbind rds failed", zap.Error(err))
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
