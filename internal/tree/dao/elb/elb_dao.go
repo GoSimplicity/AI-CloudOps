@@ -33,8 +33,14 @@ type TreeElbDAO interface {
 	GetByInstanceID(ctx context.Context, instanceID string) (*model.ResourceElb, error)
 	// GetByID 根据 ID 获取单个 ResourceElb 实例，预加载绑定的 TreeNodes
 	GetByID(ctx context.Context, id int) (*model.ResourceElb, error)
+	// GetByIDNoPreload 根据 ID 获取单个 ResourceElb 实例，不预加载任何关联
+	GetByIDNoPreload(ctx context.Context, id int) (*model.ResourceElb, error)
 	// GetUidAndHashMap 获取所有 ResourceElb 的 InstanceID 和 Hash 映射
 	GetUidAndHashMap(ctx context.Context) (map[string]string, error)
+	// AddBindNodes 添加 ResourceElb 绑定的 TreeNode 节点
+	AddBindNodes(ctx context.Context, elb *model.ResourceElb, node *model.TreeNode) error
+	// RemoveBindNodes 移除 ResourceElb 绑定的 TreeNode 节点
+	RemoveBindNodes(ctx context.Context, elb *model.ResourceElb, node *model.TreeNode) error
 }
 
 type treeElbDAO struct {
@@ -122,7 +128,50 @@ func (t *treeElbDAO) GetByID(ctx context.Context, id int) (*model.ResourceElb, e
 	panic("implement me")
 }
 
+func (t *treeElbDAO) GetByIDNoPreload(ctx context.Context, id int) (*model.ResourceElb, error) {
+	elb := &model.ResourceElb{}
+
+	if err := t.db.WithContext(ctx).First(&elb, id).Error; err != nil {
+		t.l.Error("获取 ELB 实例失败", zap.Error(err))
+		return nil, err
+	}
+
+	return elb, nil
+}
+
 func (t *treeElbDAO) GetUidAndHashMap(ctx context.Context) (map[string]string, error) {
 	//TODO implement me
 	panic("implement me")
+}
+
+func (t *treeElbDAO) AddBindNodes(ctx context.Context, elb *model.ResourceElb, node *model.TreeNode) error {
+	// 使用事务更新 ELB 和树节点的关联关系
+	return t.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(elb).Association("BindNodes").Append(node); err != nil {
+			t.l.Error("BindElb 更新 ELB 失败", zap.Error(err))
+			return err
+		}
+
+		if err := tx.Model(node).Association("BindElb").Append(elb); err != nil {
+			t.l.Error("BindElb 更新树节点失败", zap.Error(err))
+			return err
+		}
+		return nil
+	})
+}
+
+func (t *treeElbDAO) RemoveBindNodes(ctx context.Context, elb *model.ResourceElb, node *model.TreeNode) error {
+	// 使用事务更新 ELB 和树节点的关联关系
+	return t.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(elb).Association("BindNodes").Delete(node); err != nil {
+			t.l.Error("BindElb 删除 ELB 失败", zap.Error(err))
+			return err
+		}
+
+		if err := tx.Model(node).Association("BindElb").Delete(elb); err != nil {
+			t.l.Error("BindElb 删除树节点失败", zap.Error(err))
+			return err
+		}
+		return nil
+	})
 }
