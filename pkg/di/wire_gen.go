@@ -19,6 +19,9 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	service3 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	api7 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
+	dao3 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao"
+	service4 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service"
 	api5 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
@@ -65,7 +68,10 @@ func InitWebServer() *Cmd {
 	k8sClient := client.NewK8sClient(logger, k8sDAO)
 	k8sService := service3.NewK8sService(k8sDAO, k8sClient, logger)
 	k8sHandler := api6.NewK8sHandler(k8sService, logger)
-	engine := InitGinServer(v, userHandler, authHandler, treeHandler, k8sHandler)
+	prometheusDao := dao3.NewPrometheusDAO(db, logger)
+	prometheusService := service4.NewPrometheusService(prometheusDao)
+	prometheusHandler := api7.NewPrometheusHandler(prometheusService, logger)
+	engine := InitGinServer(v, userHandler, authHandler, treeHandler, k8sHandler, prometheusHandler)
 	cron := InitAndRefreshK8sClient(k8sClient, logger)
 	cmd := &Cmd{
 		Server: engine,
