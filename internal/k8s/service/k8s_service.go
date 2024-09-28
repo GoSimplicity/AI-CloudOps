@@ -70,7 +70,6 @@ func (k *k8sService) ListAllClusters(ctx context.Context) ([]*model.K8sCluster, 
 }
 
 func (k *k8sService) ListClustersForSelect(ctx context.Context) ([]*model.K8sCluster, error) {
-	//TODO implement me
 	panic("implement me")
 }
 
@@ -175,12 +174,84 @@ func (k *k8sService) CreateCluster(ctx context.Context, cluster *model.K8sCluste
 }
 
 func (k *k8sService) UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) error {
-	//TODO implement me
-	panic("implement me")
+	//已经在dao层实现回滚机制
+	if err := k.dao.UpdateCluster(ctx, id, cluster); err != nil {
+		k.l.Error("UpdateCluster 更新集群失败", zap.Error(err))
+		return fmt.Errorf("更新集群失败: %w", err)
+	}
+	//初始化或更新 kubernetes 客户端
+	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
+	if err != nil {
+		k.l.Error("UpdateCluster: 解析 kubeconfig 失败", zap.Error(err))
+		return fmt.Errorf("解析 kubeconfig 失败: %w", err)
+	}
+
+	if err = k.client.InitClient(ctx, cluster.ID, restConfig); err != nil {
+		k.l.Error("UpdateCluster: 初始化 Kubernetes 客户端失败", zap.Error(err))
+		return fmt.Errorf("初始化 Kubernetes 客户端失败: %w", err)
+	}
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("UpdateCluster: 获取 Kubernetes 客户端失败", zap.Error(err))
+		return fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
+	}
+
+	const maxConcurrent = 5
+	semaphore := make(chan struct{}, maxConcurrent)
+
+	var wg sync.WaitGroup
+
+	errChan := make(chan error, len(cluster.RestrictedNameSpace))
+
+	ctx1, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	for _, namespace := range cluster.RestrictedNameSpace {
+		wg.Add(1)
+		//传递变量到goroutine
+		ns := namespace
+
+		go func() {
+			defer wg.Done()
+
+			//获取semaphore
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			//确保命名空间存在
+			if err := pkg.EnsureNamespace(ctx1, kubeClient, ns); err != nil {
+				errChan <- fmt.Errorf("确保命名空间 %s 存在失败: %w", ns, err)
+				cancel()
+				return
+			}
+			//应用LimitRange
+			if err := pkg.ApplyLimitRange(ctx1, kubeClient, ns, cluster); err != nil {
+				errChan <- fmt.Errorf("应用 LimitRange 到命名空间 %s 失败: %w", ns, err)
+				cancel()
+				return
+			}
+			if err := pkg.ApplyResourceQuota(ctx1, kubeClient, ns, cluster); err != nil {
+				errChan <- fmt.Errorf("应用 ResourceQuota 到命名空间 %s 失败: %w", ns, err)
+				cancel()
+				return
+			}
+		}()
+	}
+	wg.Wait()
+	close(errChan)
+
+	//检查是否有错误
+	for e := range errChan {
+		if e != nil {
+			k.l.Error("UpdateCluster: 处理命名空间时发生错误", zap.Error(e))
+			return e
+		}
+	}
+	k.l.Info("UpdateCluster: 成功更新 Kubernetes 集群", zap.Int("clusterID", cluster.ID))
+	return nil
 }
 
 func (k *k8sService) BatchEnableSwitchClusters(ctx context.Context, ids []int) error {
-	//TODO implement me
 	panic("implement me")
 }
 
@@ -190,7 +261,6 @@ func (k *k8sService) BatchDeleteClusters(ctx context.Context, ids []int) error {
 }
 
 func (k *k8sService) GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error) {
-	//TODO implement me
 	panic("implement me")
 }
 
