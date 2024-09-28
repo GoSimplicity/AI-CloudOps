@@ -33,8 +33,14 @@ type TreeRdsDAO interface {
 	GetByInstanceID(ctx context.Context, instanceID string) (*model.ResourceRds, error)
 	// GetByID 根据 ID 获取单个 ResourceRds 实例，预加载绑定的 TreeNodes
 	GetByID(ctx context.Context, id int) (*model.ResourceRds, error)
+	// GetByIDNoPreload 根据 ID 获取单个 ResourceRds 实例, 不预加载任何关联
+	GetByIDNoPreload(ctx context.Context, id int) (*model.ResourceRds, error)
 	// GetInstanceIDHashMap 获取所有 ResourceRds 的 InstanceID 和 Hash 映射
 	GetInstanceIDHashMap(ctx context.Context) (map[string]string, error)
+	// AddBindNodes 添加 ResourceRds 绑定的 TreeNode 节点
+	AddBindNodes(ctx context.Context, rds *model.ResourceRds, node *model.TreeNode) error
+	// RemoveBindNodes 移除 ResourceRds 绑定的 TreeNode 节点
+	RemoveBindNodes(ctx context.Context, rds *model.ResourceRds, node *model.TreeNode) error
 }
 
 type treeRdsDAO struct {
@@ -122,7 +128,50 @@ func (t *treeRdsDAO) GetByID(ctx context.Context, id int) (*model.ResourceRds, e
 	panic("implement me")
 }
 
+func (t *treeRdsDAO) GetByIDNoPreload(ctx context.Context, id int) (*model.ResourceRds, error) {
+	rds := &model.ResourceRds{}
+
+	if err := t.db.WithContext(ctx).First(&rds, id).Error; err != nil {
+		t.l.Error("根据 ID 获取 ResourceRds 实例失败", zap.Error(err))
+		return nil, err
+	}
+
+	return rds, nil
+}
+
 func (t *treeRdsDAO) GetInstanceIDHashMap(ctx context.Context) (map[string]string, error) {
 	//TODO implement me
 	panic("implement me")
+}
+
+func (t *treeRdsDAO) AddBindNodes(ctx context.Context, rds *model.ResourceRds, node *model.TreeNode) error {
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(rds).Association("BindNodes").Append(node); err != nil {
+			t.l.Error("添加 ResourceRds 绑定的 TreeNode 节点失败", zap.Error(err))
+			return err
+		}
+
+		if err := tx.Model(node).Association("BindRds").Append(rds); err != nil {
+			t.l.Error("添加 TreeNode 绑定的 ResourceRds 实例失败", zap.Error(err))
+			return err
+		}
+
+		return nil
+	})
+}
+
+func (t *treeRdsDAO) RemoveBindNodes(ctx context.Context, rds *model.ResourceRds, node *model.TreeNode) error {
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(rds).Association("BindNodes").Delete(node); err != nil {
+			t.l.Error("移除 ResourceRds 绑定的 TreeNode 节点失败", zap.Error(err))
+			return err
+		}
+
+		if err := tx.Model(node).Association("BindRds").Delete(rds); err != nil {
+			t.l.Error("移除 TreeNode 绑定的 ResourceRds 实例失败", zap.Error(err))
+			return err
+		}
+
+		return nil
+	})
 }
