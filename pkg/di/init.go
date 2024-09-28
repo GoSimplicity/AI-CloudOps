@@ -29,5 +29,17 @@ func InitTables(db *gorm.DB) error {
 		&model.K8sCronjob{},
 		&model.K8sNode{},
 		&model.K8sPod{},
+
+		// prometheus
+		&model.MonitorScrapePool{},
+		&model.MonitorScrapeJob{},
+		&model.MonitorAlertManagerPool{},
+		&model.MonitorAlertRule{},
+		&model.MonitorRecordRule{},
+		&model.MonitorOnDutyHistory{},
+		&model.MonitorOnDutyGroup{},
+		&model.MonitorSendGroup{},
+		&model.MonitorOnDutyChange{},
+		&model.MonitorAlertEvent{},
 	)
 }
