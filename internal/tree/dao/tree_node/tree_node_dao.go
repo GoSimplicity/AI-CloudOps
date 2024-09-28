@@ -31,6 +31,8 @@ type TreeNodeDAO interface {
 	GetByIDs(ctx context.Context, ids []int) ([]*model.TreeNode, error)
 	// GetByID 根据 ID 获取单个 TreeNode 实例，预加载相关数据
 	GetByID(ctx context.Context, id int) (*model.TreeNode, error)
+	// GetByIDNoPreload 根据 ID 获取单个 TreeNode 实例
+	GetByIDNoPreload(ctx context.Context, id int) (*model.TreeNode, error)
 	// GetByPid 获取指定 TreeNode 的子节点
 	GetByPid(ctx context.Context, pid int) ([]*model.TreeNode, error)
 }
@@ -186,6 +188,21 @@ func (t *treeNodeDAO) GetByID(ctx context.Context, id int) (*model.TreeNode, err
 	query := t.applyPreloads(t.db.WithContext(ctx)).Where("id = ?", id)
 
 	if err := query.First(node).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			t.l.Warn("未找到对应的树节点", zap.Int("id", id))
+			return nil, nil
+		}
+		t.l.Error("根据 ID 获取树节点失败", zap.Int("id", id), zap.Error(err))
+		return nil, err
+	}
+
+	return node, nil
+}
+
+func (t *treeNodeDAO) GetByIDNoPreload(ctx context.Context, id int) (*model.TreeNode, error) {
+	node := &model.TreeNode{}
+
+	if err := t.db.WithContext(ctx).First(node, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			t.l.Warn("未找到对应的树节点", zap.Int("id", id))
 			return nil, nil

@@ -460,27 +460,99 @@ func (ts *treeService) GetAllResources(ctx context.Context, nid int, resourceTyp
 }
 
 func (ts *treeService) BindEcs(ctx context.Context, ecsID int, treeNodeID int) error {
-	return nil
+	ecs, err := ts.ecsDao.GetByIDNoPreload(ctx, ecsID)
+	if err != nil {
+		ts.l.Error("BindEcs 获取 ECS 失败", zap.Error(err))
+		return err
+	}
+
+	node, err := ts.nodeDao.GetByIDNoPreload(ctx, treeNodeID)
+	if err != nil {
+		ts.l.Error("BindEcs 获取树节点失败", zap.Error(err))
+		return err
+	}
+
+	return ts.ecsDao.AddBindNodes(ctx, ecs, node)
 }
 
 func (ts *treeService) BindElb(ctx context.Context, elbID int, treeNodeID int) error {
-	return nil
+	elb, err := ts.elbDao.GetByIDNoPreload(ctx, elbID)
+	if err != nil {
+		ts.l.Error("BindElb 获取 ELB 失败", zap.Error(err))
+		return err
+	}
+
+	node, err := ts.nodeDao.GetByIDNoPreload(ctx, treeNodeID)
+	if err != nil {
+		ts.l.Error("BindElb 获取树节点失败", zap.Error(err))
+		return err
+	}
+
+	return ts.elbDao.AddBindNodes(ctx, elb, node)
 }
 
 func (ts *treeService) BindRds(ctx context.Context, rdsID int, treeNodeID int) error {
-	return nil
+	elb, err := ts.rdsDao.GetByIDNoPreload(ctx, rdsID)
+	if err != nil {
+		ts.l.Error("BindRds 获取 RDS 失败", zap.Error(err))
+		return err
+	}
+
+	node, err := ts.nodeDao.GetByIDNoPreload(ctx, treeNodeID)
+	if err != nil {
+		ts.l.Error("BindRds 获取树节点失败", zap.Error(err))
+		return err
+	}
+
+	return ts.rdsDao.AddBindNodes(ctx, elb, node)
 }
 
 func (ts *treeService) UnBindEcs(ctx context.Context, ecsID int, treeNodeID int) error {
-	return nil
+	ecs, err := ts.ecsDao.GetByIDNoPreload(ctx, ecsID)
+	if err != nil {
+		ts.l.Error("UnBindEcs 获取 ECS 失败", zap.Error(err))
+		return err
+	}
+
+	node, err := ts.nodeDao.GetByIDNoPreload(ctx, treeNodeID)
+	if err != nil {
+		ts.l.Error("UnBindEcs 获取树节点失败", zap.Error(err))
+		return err
+	}
+
+	return ts.ecsDao.RemoveBindNodes(ctx, ecs, node)
 }
 
 func (ts *treeService) UnBindElb(ctx context.Context, elbID int, treeNodeID int) error {
-	return nil
+	elb, err := ts.elbDao.GetByIDNoPreload(ctx, elbID)
+	if err != nil {
+		ts.l.Error("UnBindElb 获取 ELB 失败", zap.Error(err))
+		return err
+	}
+
+	node, err := ts.nodeDao.GetByIDNoPreload(ctx, treeNodeID)
+	if err != nil {
+		ts.l.Error("UnBindElb 获取树节点失败", zap.Error(err))
+		return err
+	}
+
+	return ts.elbDao.RemoveBindNodes(ctx, elb, node)
 }
 
 func (ts *treeService) UnBindRds(ctx context.Context, rdsID int, treeNodeID int) error {
-	return nil
+	rds, err := ts.rdsDao.GetByIDNoPreload(ctx, rdsID)
+	if err != nil {
+		ts.l.Error("UnBindRds 获取 RDS 失败", zap.Error(err))
+		return err
+	}
+
+	node, err := ts.nodeDao.GetByIDNoPreload(ctx, treeNodeID)
+	if err != nil {
+		ts.l.Error("UnBindRds 获取树节点失败", zap.Error(err))
+		return err
+	}
+
+	return ts.rdsDao.RemoveBindNodes(ctx, rds, node)
 }
 
 // fetchUsers 根据用户名列表获取用户，role 用于日志记录
