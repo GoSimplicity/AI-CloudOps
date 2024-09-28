@@ -28,5 +28,6 @@ func InitTables(db *gorm.DB) error {
 		&model.K8sInstance{},
 		&model.K8sCronjob{},
 		&model.K8sNode{},
+		&model.K8sPod{},
 	)
 }

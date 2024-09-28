@@ -4,10 +4,10 @@ jwt:
   key1: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"
   key2: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0z"
   issuer: "K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx"
-  expiration: 1
+  expiration: 3600
 redis:
   addr: "localhost:6379"
 mysql:
   addr: "root:root@tcp(localhost:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
 mock:
-  enabled: true
+  enabled: false # 是否开启mock
