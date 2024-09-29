@@ -13,6 +13,6 @@ prometheus:
   interval_seconds: 15
   enable_alert: 0 # 1 开启告警 0 关闭告警
   enable_record: 0 # 1 开启记录 0 关闭记录
-
+  alert_webhook_addr: "http://localhost:8081/receive"
 mock:
   enabled: false # 是否开启mock
