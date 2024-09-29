@@ -23,6 +23,7 @@ type PrometheusDao interface {
 
 	GetHttpSdApi(ctx context.Context, jobId int) (string, error)
 	GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, error)
+	GetMonitorSendGroupByPoolId(ctx context.Context, poolId int) ([]*model.MonitorSendGroup, error)
 }
 
 type prometheusDao struct {
@@ -268,4 +269,15 @@ func (p *prometheusDao) GetAllAlertManagerPools(ctx context.Context) ([]*model.M
 	}
 
 	return pools, nil
+}
+
+func (p *prometheusDao) GetMonitorSendGroupByPoolId(ctx context.Context, poolId int) ([]*model.MonitorSendGroup, error) {
+	var sendGroups []*model.MonitorSendGroup
+
+	if err := p.db.WithContext(ctx).Where("poolId = ?", poolId).Find(&sendGroups).Error; err != nil {
+		p.l.Error("GetMonitorSendGroupByPoolId failed to get send groups", zap.Error(err))
+		return nil, err
+	}
+
+	return sendGroups, nil
 }
