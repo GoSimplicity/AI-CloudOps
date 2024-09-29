@@ -9,5 +9,10 @@ redis:
   addr: "localhost:6379"
 mysql:
   addr: "root:root@tcp(localhost:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
+prometheus:
+  interval_seconds: 15
+  enable_alert: 0 # 1 开启告警 0 关闭告警
+  enable_record: 0 # 1 开启记录 0 关闭记录
+
 mock:
   enabled: false # 是否开启mock
