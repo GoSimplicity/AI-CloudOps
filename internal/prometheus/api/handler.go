@@ -189,21 +189,69 @@ func (p *PrometheusHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
 
 // GetMonitorScrapeJobList 获取监控采集 Job 列表
 func (p *PrometheusHandler) GetMonitorScrapeJobList(ctx *gin.Context) {
-	// TODO: 实现获取监控采集 Job 列表的逻辑
+	search := ctx.Query("search")
+	list, err := p.service.GetMonitorScrapeJobList(ctx, &search)
+	if err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "获取监控采集 Job 列表失败")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 // CreateMonitorScrapeJob 创建监控采集 Job
 func (p *PrometheusHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
-	// TODO: 实现创建监控采集 Job 的逻辑
+	var monitorScrapeJob *model.MonitorScrapeJob
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	err := ctx.ShouldBind(&monitorScrapeJob)
+	if err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	monitorScrapeJob.UserID = uc.Uid
+
+	if err := p.service.CreateMonitorScrapeJob(ctx, monitorScrapeJob); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // UpdateMonitorScrapeJob 更新监控采集 Job
 func (p *PrometheusHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
-	// TODO: 实现更新监控采集 Job 的逻辑
+	var monitorScrapeJob *model.MonitorScrapeJob
+
+	err := ctx.ShouldBind(&monitorScrapeJob)
+	if err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	if err := p.service.UpdateMonitorScrapeJob(ctx, monitorScrapeJob); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 func (p *PrometheusHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
-	// TODO: 实现删除监控采集 Job 的逻辑
+	id := ctx.Query("id")
+	atom, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := p.service.DeleteMonitorScrapeJob(ctx, atom); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetMonitorPrometheusYaml 获取单个 Prometheus 配置文件

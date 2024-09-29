@@ -15,7 +15,14 @@ type PrometheusDao interface {
 	UpdateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error
 	DeleteMonitorScrapePool(ctx context.Context, poolId int) error
 
+	GetAllMonitorScrapeJobs(ctx context.Context) ([]*model.MonitorScrapeJob, error)
+	CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
 	GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId int) ([]*model.MonitorScrapeJob, error)
+	UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
+	DeleteMonitorScrapeJob(ctx context.Context, jobId int) error
+
+	GetHttpSdApi(ctx context.Context, jobId int) (string, error)
+	GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, error)
 }
 
 type prometheusDao struct {
@@ -141,6 +148,35 @@ func (p *prometheusDao) DeleteMonitorScrapePool(ctx context.Context, poolId int)
 	return nil
 }
 
+func (p *prometheusDao) GetAllMonitorScrapeJobs(ctx context.Context) ([]*model.MonitorScrapeJob, error) {
+	var scrapeJobs []*model.MonitorScrapeJob
+
+	if err := p.db.WithContext(ctx).Find(&scrapeJobs).Error; err != nil {
+		p.l.Error("GetAllMonitorScrapeJobs failed to get all scrape jobs", zap.Error(err))
+		return nil, err
+	}
+
+	if len(scrapeJobs) == 0 {
+		p.l.Info("no monitor scrape jobs found")
+	}
+
+	return scrapeJobs, nil
+}
+
+func (p *prometheusDao) CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
+	if monitorScrapeJob == nil {
+		p.l.Error("CreateMonitorScrapeJob failed: monitorScrapeJob is nil")
+		return fmt.Errorf("monitorScrapeJob cannot be nil")
+	}
+
+	if err := p.db.WithContext(ctx).Create(monitorScrapeJob).Error; err != nil {
+		p.l.Error("CreateMonitorScrapeJob failed to create scrape job", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
 func (p *prometheusDao) GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId int) ([]*model.MonitorScrapeJob, error) {
 	if poolId <= 0 {
 		p.l.Error("GetMonitorScrapeJobsByPoolId failed: invalid poolId", zap.Int("poolId", poolId))
@@ -155,4 +191,81 @@ func (p *prometheusDao) GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId
 	}
 
 	return scrapeJobs, nil
+}
+
+func (p *prometheusDao) UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
+	if monitorScrapeJob == nil {
+		p.l.Error("UpdateMonitorScrapeJob failed: monitorScrapeJob is nil")
+		return fmt.Errorf("monitorScrapeJob cannot be nil")
+	}
+
+	// 确保 monitorScrapeJob.ID 已设置
+	if monitorScrapeJob.ID == 0 {
+		p.l.Error("UpdateMonitorScrapeJob failed: ID is zero", zap.Any("monitorScrapeJob", monitorScrapeJob))
+		return fmt.Errorf("monitorScrapeJob ID must be set and non-zero")
+	}
+
+	result := p.db.WithContext(ctx).
+		Model(&model.MonitorScrapeJob{}).     // 明确指定模型
+		Where("id = ?", monitorScrapeJob.ID). // 根据 ID 过滤记录
+		Updates(monitorScrapeJob)             // 执行更新
+
+	// 检查更新过程中是否有错误
+	if result.Error != nil {
+		p.l.Error("UpdateMonitorScrapeJob failed to update record",
+			zap.Error(result.Error),
+			zap.Int("id", monitorScrapeJob.ID))
+		return result.Error
+	}
+
+	// 检查是否有记录被更新
+	if result.RowsAffected == 0 {
+		p.l.Warn("UpdateMonitorScrapeJob found no records to update", zap.Int("id", monitorScrapeJob.ID))
+	}
+
+	return nil
+}
+
+func (p *prometheusDao) DeleteMonitorScrapeJob(ctx context.Context, jobId int) error {
+	if jobId <= 0 {
+		p.l.Error("DeleteMonitorScrapeJob failed: invalid jobId", zap.Int("jobId", jobId))
+		return fmt.Errorf("invalid jobId: %d", jobId)
+	}
+
+	result := p.db.WithContext(ctx).
+		Model(&model.MonitorScrapeJob{}).
+		Where("id = ?", jobId).
+		Delete(&model.MonitorScrapeJob{})
+
+	// 检查删除过程中是否有错误
+	if result.Error != nil {
+		p.l.Error("DeleteMonitorScrapeJob failed to delete record",
+			zap.Error(result.Error),
+			zap.Int("jobId", jobId))
+		return fmt.Errorf("failed to delete monitor scrape job with ID %d: %w", jobId, result.Error)
+	}
+
+	return nil
+}
+
+func (p *prometheusDao) GetHttpSdApi(ctx context.Context, jobId int) (string, error) {
+	var scrapeJob *model.MonitorScrapeJob
+
+	if err := p.db.WithContext(ctx).Where("id = ?", jobId).First(scrapeJob).Error; err != nil {
+		p.l.Error("GetHttpSdApi failed to get http sd api", zap.Error(err))
+		return "", err
+	}
+
+	return scrapeJob.ServiceDiscoveryType, nil
+}
+
+func (p *prometheusDao) GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, error) {
+	var pools []*model.MonitorAlertManagerPool
+
+	if err := p.db.WithContext(ctx).Find(&pools).Error; err != nil {
+		p.l.Error("GetAllAlertManagerPools failed to get all alert manager pools", zap.Error(err))
+		return nil, err
+	}
+
+	return pools, nil
 }
