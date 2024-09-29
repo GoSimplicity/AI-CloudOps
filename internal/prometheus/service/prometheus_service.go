@@ -15,10 +15,10 @@ type PrometheusService interface {
 	UpdateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error
 	DeleteMonitorScrapePool(ctx context.Context, id int) error
 
-	GetMonitorScrapeJobList(ctx context.Context) ([]*model.MonitorScrapeJob, error)
+	GetMonitorScrapeJobList(ctx context.Context, search *string) ([]*model.MonitorScrapeJob, error)
 	CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
 	UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
-	DeleteMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
+	DeleteMonitorScrapeJob(ctx context.Context, id int) error
 
 	GetMonitorPrometheusYaml(ctx context.Context) (string, error)
 	GetMonitorPrometheusAlertYaml(ctx context.Context) (string, error)
@@ -108,24 +108,38 @@ func (p *prometheusService) DeleteMonitorScrapePool(ctx context.Context, id int)
 	return p.dao.DeleteMonitorScrapePool(ctx, id)
 }
 
-func (p *prometheusService) GetMonitorScrapeJobList(ctx context.Context) ([]*model.MonitorScrapeJob, error) {
-	//TODO implement me
-	panic("implement me")
+func (p *prometheusService) GetMonitorScrapeJobList(ctx context.Context, search *string) ([]*model.MonitorScrapeJob, error) {
+	jobList, err := p.dao.GetAllMonitorScrapeJobs(ctx)
+	if err != nil {
+		p.l.Error("failed to get all monitor scrape pool", zap.Error(err))
+		return nil, err
+	}
+
+	if search == nil {
+		return jobList, nil
+	}
+
+	var filteredJobs []*model.MonitorScrapeJob
+
+	for _, job := range jobList {
+		if job.Name == *search {
+			filteredJobs = append(filteredJobs, job)
+		}
+	}
+
+	return filteredJobs, nil
 }
 
 func (p *prometheusService) CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
-	//TODO implement me
-	panic("implement me")
+	return p.dao.CreateMonitorScrapeJob(ctx, monitorScrapeJob)
 }
 
 func (p *prometheusService) UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
-	//TODO implement me
-	panic("implement me")
+	return p.dao.UpdateMonitorScrapeJob(ctx, monitorScrapeJob)
 }
 
-func (p *prometheusService) DeleteMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
-	//TODO implement me
-	panic("implement me")
+func (p *prometheusService) DeleteMonitorScrapeJob(ctx context.Context, id int) error {
+	return p.dao.DeleteMonitorScrapeJob(ctx, id)
 }
 
 func (p *prometheusService) GetMonitorPrometheusYaml(ctx context.Context) (string, error) {
