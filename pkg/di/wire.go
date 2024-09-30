@@ -16,6 +16,7 @@ import (
 	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	k8sService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	promHandler "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	promDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao"
 	promService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service"
 	treeHandler "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
@@ -43,6 +44,7 @@ func InitWebServer() *Cmd {
 		InitCasbin,
 		InitAndRefreshK8sClient,
 		client.NewK8sClient,
+		cache.NewMonitorCache,
 		userHandler.NewUserHandler,
 		authHandler.NewAuthHandler,
 		treeHandler.NewTreeHandler,

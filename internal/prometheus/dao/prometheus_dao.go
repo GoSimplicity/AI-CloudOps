@@ -24,6 +24,10 @@ type PrometheusDao interface {
 	GetHttpSdApi(ctx context.Context, jobId int) (string, error)
 	GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, error)
 	GetMonitorSendGroupByPoolId(ctx context.Context, poolId int) ([]*model.MonitorSendGroup, error)
+	GetMonitorScrapePoolSupportedAlert(ctx context.Context) ([]*model.MonitorScrapePool, error)
+	GetMonitorScrapePoolSupportedRecord(ctx context.Context) ([]*model.MonitorScrapePool, error)
+	GetMonitorAlertRuleByPoolId(ctx context.Context, poolId int) ([]*model.MonitorAlertRule, error)
+	GetMonitorRecordRuleByPoolId(ctx context.Context, poolId int) ([]*model.MonitorRecordRule, error)
 }
 
 type prometheusDao struct {
@@ -274,10 +278,54 @@ func (p *prometheusDao) GetAllAlertManagerPools(ctx context.Context) ([]*model.M
 func (p *prometheusDao) GetMonitorSendGroupByPoolId(ctx context.Context, poolId int) ([]*model.MonitorSendGroup, error) {
 	var sendGroups []*model.MonitorSendGroup
 
-	if err := p.db.WithContext(ctx).Where("poolId = ?", poolId).Find(&sendGroups).Error; err != nil {
+	if err := p.db.WithContext(ctx).Where("pool_id = ?", poolId).Find(&sendGroups).Error; err != nil {
 		p.l.Error("GetMonitorSendGroupByPoolId failed to get send groups", zap.Error(err))
 		return nil, err
 	}
 
 	return sendGroups, nil
+}
+
+func (p *prometheusDao) GetMonitorScrapePoolSupportedAlert(ctx context.Context) ([]*model.MonitorScrapePool, error) {
+	var pools []*model.MonitorScrapePool
+
+	if err := p.db.WithContext(ctx).Where("support_alert = 1").Find(&pools).Error; err != nil {
+		p.l.Error("GetMonitorScrapePoolSupportedAlert failed to get supported alert pools", zap.Error(err))
+		return nil, err
+	}
+
+	return pools, nil
+}
+
+func (p *prometheusDao) GetMonitorScrapePoolSupportedRecord(ctx context.Context) ([]*model.MonitorScrapePool, error) {
+	var pools []*model.MonitorScrapePool
+
+	if err := p.db.WithContext(ctx).Where("support_record = 1").Find(&pools).Error; err != nil {
+		p.l.Error("GetMonitorScrapePoolSupportedRecord failed to get supported record pools", zap.Error(err))
+		return nil, err
+	}
+
+	return pools, nil
+}
+
+func (p *prometheusDao) GetMonitorAlertRuleByPoolId(ctx context.Context, poolId int) ([]*model.MonitorAlertRule, error) {
+	var alertRules []*model.MonitorAlertRule
+
+	if err := p.db.WithContext(ctx).Where("enable = 1 and pool_id = ?", poolId).Find(&alertRules).Error; err != nil {
+		p.l.Error("failed to get alert rules by pool id", zap.Error(err))
+		return nil, err
+	}
+
+	return alertRules, nil
+}
+
+func (p *prometheusDao) GetMonitorRecordRuleByPoolId(ctx context.Context, poolId int) ([]*model.MonitorRecordRule, error) {
+	var recordRules []*model.MonitorRecordRule
+
+	if err := p.db.WithContext(ctx).Where("enable = 1 and pool_id = ?", poolId).Find(&recordRules).Error; err != nil {
+		p.l.Error("failed to get record rules by pool id", zap.Error(err))
+		return nil, err
+	}
+
+	return recordRules, nil
 }
