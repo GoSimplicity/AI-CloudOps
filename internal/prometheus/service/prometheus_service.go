@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
 	"go.uber.org/zap"
@@ -20,20 +21,23 @@ type PrometheusService interface {
 	UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
 	DeleteMonitorScrapeJob(ctx context.Context, id int) error
 
-	GetMonitorPrometheusYaml(ctx context.Context) (string, error)
-	GetMonitorPrometheusAlertYaml(ctx context.Context) (string, error)
-	GetMonitorPrometheusRecordYaml(ctx context.Context) (string, error)
-	GetMonitorAlertManagerYaml(ctx context.Context) (string, error)
+	GetMonitorPrometheusYaml(ctx context.Context, ip string) string
+	GetMonitorPrometheusAlertYaml(ctx context.Context) string
+	GetMonitorPrometheusRecordYaml(ctx context.Context) string
+	GetMonitorAlertManagerYaml(ctx context.Context) string
 }
 
 type prometheusService struct {
-	l   *zap.Logger
-	dao dao.PrometheusDao
+	dao   dao.PrometheusDao
+	cache cache.MonitorCache
+	l     *zap.Logger
 }
 
-func NewPrometheusService(dao dao.PrometheusDao) PrometheusService {
+func NewPrometheusService(dao dao.PrometheusDao, cache cache.MonitorCache, l *zap.Logger) PrometheusService {
 	return &prometheusService{
-		dao: dao,
+		dao:   dao,
+		l:     l,
+		cache: cache,
 	}
 }
 
@@ -142,22 +146,21 @@ func (p *prometheusService) DeleteMonitorScrapeJob(ctx context.Context, id int) 
 	return p.dao.DeleteMonitorScrapeJob(ctx, id)
 }
 
-func (p *prometheusService) GetMonitorPrometheusYaml(ctx context.Context) (string, error) {
+func (p *prometheusService) GetMonitorPrometheusYaml(_ context.Context, ip string) string {
+	return p.cache.GetAlertManagerMainConfigYamlByIP(ip)
+}
+
+func (p *prometheusService) GetMonitorPrometheusAlertYaml(_ context.Context) string {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (p *prometheusService) GetMonitorPrometheusAlertYaml(ctx context.Context) (string, error) {
+func (p *prometheusService) GetMonitorPrometheusRecordYaml(_ context.Context) string {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (p *prometheusService) GetMonitorPrometheusRecordYaml(ctx context.Context) (string, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (p *prometheusService) GetMonitorAlertManagerYaml(ctx context.Context) (string, error) {
+func (p *prometheusService) GetMonitorAlertManagerYaml(_ context.Context) string {
 	//TODO implement me
 	panic("implement me")
 }
