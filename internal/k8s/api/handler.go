@@ -1,6 +1,8 @@
 package api
 
 import (
+	"strconv"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
@@ -24,6 +26,7 @@ func NewK8sHandler(service service.K8sService, l *zap.Logger) *K8sHandler {
 
 // RegisterRouters 注册所有 Kubernetes 相关的路由
 func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
+	// TODO delete hello, avoid validate for test
 	k8sGroup := server.Group("/api/k8s")
 
 	// 集群相关路由
@@ -39,9 +42,9 @@ func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
 	// 节点相关路由
 	nodes := k8sGroup.Group("/nodes")
 	{
-		nodes.GET("/", k.GetNodeList)                   // 获取节点列表
-		nodes.GET("/:name", k.GetNodeDetail)            // 获取指定名称的节点详情
-		nodes.GET("/:name/pods", k.GetPodsListByNodeId) // 获取指定节点上的 Pods 列表
+		nodes.GET("/", k.GetNodeList)                     // 获取节点列表
+		nodes.GET("/:name", k.GetNodeDetail)              // 获取指定名称的节点详情
+		nodes.GET("/:name/pods", k.GetPodsListByNodeName) // 获取指定节点上的 Pods 列表
 
 		nodes.POST("/taint_check", k.TaintYamlCheck)              // 检查节点 Taint 的 YAML 配置
 		nodes.POST("/enable_switch", k.ScheduleEnableSwitchNodes) // 启用或切换节点调度
@@ -232,9 +235,21 @@ func (k *K8sHandler) DeleteCluster(ctx *gin.Context) {
 
 // GetNodeList 获取节点列表
 func (k *K8sHandler) GetNodeList(ctx *gin.Context) {
-	nodes, err := k.service.ListAllNodes(ctx)
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	nodes, err := k.service.ListAllNodes(ctx, clusterID)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
@@ -243,12 +258,60 @@ func (k *K8sHandler) GetNodeList(ctx *gin.Context) {
 
 // GetNodeDetail 获取指定名称的节点详情
 func (k *K8sHandler) GetNodeDetail(ctx *gin.Context) {
-	// TODO: 实现获取节点详情的逻辑
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	name := ctx.Param("name")
+	if name == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	node, err := k.service.GetNodeByName(ctx, clusterID, name)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, node)
 }
 
 // GetPodsListByNodeId 获取指定节点上的 Pods 列表
-func (k *K8sHandler) GetPodsListByNodeId(ctx *gin.Context) {
-	// TODO: 实现获取指定节点上的 Pods 列表的逻辑
+func (k *K8sHandler) GetPodsListByNodeName(ctx *gin.Context) {
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	name := ctx.Param("name")
+	if name == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	node, err := k.service.GetPodsByNodeName(ctx, clusterID, name)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, node)
 }
 
 // TaintYamlCheck 检查节点 Taint 的 YAML 配置

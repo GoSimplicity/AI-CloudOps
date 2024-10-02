@@ -2,18 +2,22 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
+	"time"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/clientcmd"
-	"sync"
-	"time"
 )
 
 type K8sService interface {
@@ -33,11 +37,11 @@ type K8sService interface {
 	GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error)
 
 	// ListAllNodes 获取所有 Kubernetes 节点
-	ListAllNodes(ctx context.Context) ([]*model.K8sNode, error)
+	ListAllNodes(ctx context.Context, id int) ([]*model.K8sNode, error)
 	// GetNodeByID 根据 ID 获取单个 Kubernetes 节点
-	GetNodeByID(ctx context.Context, id int) (*model.K8sNode, error)
+	GetNodeByName(ctx context.Context, id int, name string) (*model.K8sNode, error)
 	// GetPodsByNodeID 根据 Node ID 获取 Pod 列表
-	GetPodsByNodeID(ctx context.Context, nodeID int) ([]*model.K8sPod, error)
+	GetPodsByNodeName(ctx context.Context, id int, name string) ([]*model.K8sPod, error)
 	// CheckTaintYaml 检查 Taint Yaml 是否合法
 	CheckTaintYaml(ctx context.Context, taint *model.TaintK8sNodesRequest) error
 	// BatchEnableSwitchNodes 批量启用或切换 Kubernetes 节点调度
@@ -265,18 +269,194 @@ func (k *k8sService) GetClusterByID(ctx context.Context, id int) (*model.K8sClus
 	panic("implement me")
 }
 
-func (k *k8sService) ListAllNodes(ctx context.Context) ([]*model.K8sNode, error) {
-	return k.dao.ListAllNodes(ctx)
+func (k *k8sService) ListAllNodes(ctx context.Context, id int) ([]*model.K8sNode, error) {
+	// 获取 Kubernetes 客户端和 Metrics 客户端
+	kubeClient, err := k.client.GetKubeClient(id)
+	if err != nil {
+		k.l.Error("CreateCluster: 获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, constants.ErrorK8sClientNotReady
+	}
+
+	metricsClient, err := k.client.GetMetricsClient(id)
+	if err != nil {
+		k.l.Error("CreateCluster: 获取 Metrics 客户端失败", zap.Error(err))
+		return nil, constants.ErrorMetricsClientNotReady
+	}
+
+	// 获取节点列表
+	nodes, err := k8s.GetNodesByClusterID(ctx, kubeClient, "")
+	if err != nil {
+		return nil, err
+	}
+
+	// 并发处理节点信息
+	var wg sync.WaitGroup
+	nodeChan := make(chan *model.K8sNode, len(nodes.Items))
+	for _, node := range nodes.Items {
+		wg.Add(1)
+		go func(node corev1.Node) {
+			defer wg.Done()
+			k8sNode, err := k8s.BuildK8sNode(ctx, id, node, kubeClient, metricsClient)
+			if err != nil {
+				k.l.Error("构建 K8sNode 失败", zap.Error(err))
+				return
+			}
+			nodeChan <- k8sNode
+		}(node)
+	}
+
+	// 收集节点数据
+	go func() {
+		wg.Wait()
+		close(nodeChan)
+	}()
+
+	var k8sNodes []*model.K8sNode
+	for k8sNode := range nodeChan {
+		k8sNodes = append(k8sNodes, k8sNode)
+	}
+
+	return k8sNodes, nil
 }
 
-func (k *k8sService) GetNodeByID(ctx context.Context, id int) (*model.K8sNode, error) {
-	//TODO implement me
-	panic("implement me")
+func (k *k8sService) GetNodeByName(ctx context.Context, id int, name string) (*model.K8sNode, error) {
+	// 获取 Kubernetes 客户端和 Metrics 客户端
+	kubeClient, err := k.client.GetKubeClient(id)
+	if err != nil {
+		k.l.Error("CreateCluster: 获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, constants.ErrorK8sClientNotReady
+	}
+
+	metricsClient, err := k.client.GetMetricsClient(id)
+	if err != nil {
+		k.l.Error("CreateCluster: 获取 Metrics 客户端失败", zap.Error(err))
+		return nil, constants.ErrorMetricsClientNotReady
+	}
+
+	// 获取节点
+	nodes, err := k8s.GetNodesByClusterID(ctx, kubeClient, name)
+	if err != nil || len(nodes.Items) == 0 {
+		return nil, constants.ErrorNodeNotFound
+	}
+	node := nodes.Items[0]
+
+	// 构建 k8sNode
+	return k8s.BuildK8sNode(ctx, id, node, kubeClient, metricsClient)
 }
 
-func (k *k8sService) GetPodsByNodeID(ctx context.Context, nodeID int) ([]*model.K8sPod, error) {
-	//TODO implement me
-	panic("implement me")
+func (k *k8sService) GetPodsByNodeName(ctx context.Context, id int, name string) ([]*model.K8sPod, error) {
+	kubeClient, err := k.client.GetKubeClient(id)
+	if err != nil {
+		k.l.Error("CreateCluster: 获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, constants.ErrorK8sClientNotReady
+	}
+
+	// 获取节点
+	nodes, err := k8s.GetNodesByClusterID(ctx, kubeClient, name)
+	if err != nil || len(nodes.Items) == 0 {
+		return nil, constants.ErrorNodeNotFound
+	}
+
+	pods, err := k8s.GetPodsByNodeName(ctx, kubeClient, name)
+	if err != nil {
+		return nil, err
+	}
+
+	var k8sPods []*model.K8sPod
+	for _, pod := range pods.Items {
+		k8sPod := &model.K8sPod{
+			Name:        pod.Name,
+			Namespace:   pod.Namespace,
+			NodeName:    pod.Spec.NodeName,
+			Status:      string(pod.Status.Phase),
+			Labels:      pod.Labels,
+			Annotations: pod.Annotations,
+			Containers:  make([]model.K8sPodContainer, 0),
+		}
+
+		for _, container := range pod.Spec.Containers {
+			newContainer := model.K8sPodContainer{
+				Name:    container.Name,
+				Image:   container.Image,
+				Command: model.StringList(container.Command),
+				Args:    model.StringList(container.Args),
+				Envs:    make([]model.K8sEnvVar, 0),
+				Ports:   make([]model.K8sContainerPort, 0),
+				Resources: model.ResourceRequirements{
+					Requests: model.K8sResourceList{
+						CPU:    container.Resources.Requests.Cpu().String(),
+						Memory: container.Resources.Requests.Memory().String(),
+					},
+					Limits: model.K8sResourceList{
+						CPU:    container.Resources.Limits.Cpu().String(),
+						Memory: container.Resources.Limits.Memory().String(),
+					},
+				},
+				VolumeMounts:    make([]model.K8sVolumeMount, 0),
+				ImagePullPolicy: string(container.ImagePullPolicy),
+			}
+
+			if container.LivenessProbe != nil {
+				newContainer.LivenessProbe = &model.K8sProbe{
+					HTTPGet: &model.K8sHTTPGetAction{
+						Path:   container.LivenessProbe.HTTPGet.Path,
+						Port:   container.LivenessProbe.HTTPGet.Port.IntValue(),
+						Scheme: string(container.LivenessProbe.HTTPGet.Scheme),
+					},
+					InitialDelaySeconds: int(container.LivenessProbe.InitialDelaySeconds),
+					PeriodSeconds:       int(container.LivenessProbe.PeriodSeconds),
+					TimeoutSeconds:      int(container.LivenessProbe.TimeoutSeconds),
+					SuccessThreshold:    int(container.LivenessProbe.SuccessThreshold),
+					FailureThreshold:    int(container.LivenessProbe.FailureThreshold),
+				}
+			}
+
+			if container.ReadinessProbe != nil {
+				newContainer.ReadinessProbe = &model.K8sProbe{
+					HTTPGet: &model.K8sHTTPGetAction{
+						Path:   container.ReadinessProbe.HTTPGet.Path,
+						Port:   container.ReadinessProbe.HTTPGet.Port.IntValue(),
+						Scheme: string(container.ReadinessProbe.HTTPGet.Scheme),
+					},
+					InitialDelaySeconds: int(container.ReadinessProbe.InitialDelaySeconds),
+					PeriodSeconds:       int(container.ReadinessProbe.PeriodSeconds),
+					TimeoutSeconds:      int(container.ReadinessProbe.TimeoutSeconds),
+					SuccessThreshold:    int(container.ReadinessProbe.SuccessThreshold),
+					FailureThreshold:    int(container.ReadinessProbe.FailureThreshold),
+				}
+			}
+
+			for _, env := range container.Env {
+				newContainer.Envs = append(newContainer.Envs, model.K8sEnvVar{
+					Name:  env.Name,
+					Value: env.Value,
+				})
+			}
+
+			for _, port := range container.Ports {
+				newContainer.Ports = append(newContainer.Ports, model.K8sContainerPort{
+					Name:          port.Name,
+					ContainerPort: int(port.ContainerPort),
+					Protocol:      string(port.Protocol),
+				})
+			}
+
+			for _, volumeMount := range container.VolumeMounts {
+				newContainer.VolumeMounts = append(newContainer.VolumeMounts, model.K8sVolumeMount{
+					Name:      volumeMount.Name,
+					MountPath: volumeMount.MountPath,
+					ReadOnly:  volumeMount.ReadOnly,
+					SubPath:   volumeMount.SubPath,
+				})
+			}
+
+			k8sPod.Containers = append(k8sPod.Containers, newContainer)
+		}
+
+		k8sPods = append(k8sPods, k8sPod)
+	}
+
+	return k8sPods, nil
 }
 
 func (k *k8sService) CheckTaintYaml(ctx context.Context, taint *model.TaintK8sNodesRequest) error {
@@ -342,7 +522,7 @@ func (k *k8sService) AddNodeTaint(ctx context.Context, req *model.TaintK8sNodesR
 			// 处理未知的修改类型
 			errMsg := fmt.Sprintf("未知的修改类型: %s", req.ModType)
 			k.l.Error(errMsg)
-			errs = append(errs, fmt.Errorf(errMsg))
+			errs = append(errs, errors.New(errMsg))
 			continue
 		}
 
