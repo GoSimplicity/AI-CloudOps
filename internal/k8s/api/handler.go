@@ -42,9 +42,9 @@ func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
 	// 节点相关路由
 	nodes := k8sGroup.Group("/nodes")
 	{
-		nodes.GET("/", k.GetNodeList)                   // 获取节点列表
-		nodes.GET("/:name", k.GetNodeDetail)            // 获取指定名称的节点详情
-		nodes.GET("/:name/pods", k.GetPodsListByNodeId) // 获取指定节点上的 Pods 列表
+		nodes.GET("/", k.GetNodeList)                     // 获取节点列表
+		nodes.GET("/:name", k.GetNodeDetail)              // 获取指定名称的节点详情
+		nodes.GET("/:name/pods", k.GetPodsListByNodeName) // 获取指定节点上的 Pods 列表
 
 		nodes.POST("/taint_check", k.TaintYamlCheck)              // 检查节点 Taint 的 YAML 配置
 		nodes.POST("/enable_switch", k.ScheduleEnableSwitchNodes) // 启用或切换节点调度
@@ -286,7 +286,7 @@ func (k *K8sHandler) GetNodeDetail(ctx *gin.Context) {
 }
 
 // GetPodsListByNodeId 获取指定节点上的 Pods 列表
-func (k *K8sHandler) GetPodsListByNodeId(ctx *gin.Context) {
+func (k *K8sHandler) GetPodsListByNodeName(ctx *gin.Context) {
 	id := ctx.Query("id")
 	if id == "" {
 		apiresponse.BadRequestError(ctx, "参数错误")
