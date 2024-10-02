@@ -249,7 +249,7 @@ func (k *K8sHandler) GetNodeList(ctx *gin.Context) {
 
 	nodes, err := k.service.ListAllNodes(ctx, clusterID)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
@@ -258,7 +258,31 @@ func (k *K8sHandler) GetNodeList(ctx *gin.Context) {
 
 // GetNodeDetail 获取指定名称的节点详情
 func (k *K8sHandler) GetNodeDetail(ctx *gin.Context) {
-	// TODO: 实现获取节点详情的逻辑
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	name := ctx.Param("name")
+	if name == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	node, err := k.service.GetNodeByName(ctx, clusterID, name)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, node)
 }
 
 // GetPodsListByNodeId 获取指定节点上的 Pods 列表
