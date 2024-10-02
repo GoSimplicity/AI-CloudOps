@@ -46,10 +46,10 @@ func (p *PrometheusHandler) RegisterRouters(server *gin.Engine) {
 		// Prometheus 配置相关路由
 		prometheusConfigs := monitorGroup.Group("/prometheus_configs")
 		{
-			prometheusConfigs.GET("/prometheus", p.GetMonitorPrometheusYaml)              // 获取单个 Prometheus 配置文件
-			prometheusConfigs.GET("/prometheus_alert", p.GetMonitorPrometheusAlertYaml)   // 获取单个 Prometheus 告警配置文件
-			prometheusConfigs.GET("/prometheus_record", p.GetMonitorPrometheusRecordYaml) // 获取单个 Prometheus 记录配置文件
-			prometheusConfigs.GET("/alertManager", p.GetMonitorAlertManagerYaml)          // 获取单个 AlertManager 配置文件
+			prometheusConfigs.GET("/prometheus", p.GetMonitorPrometheusYaml)                // 获取单个 Prometheus 配置文件
+			prometheusConfigs.GET("/prometheus_alert", p.GetMonitorPrometheusAlertRuleYaml) // 获取单个 Prometheus 告警配置文件
+			prometheusConfigs.GET("/prometheus_record", p.GetMonitorPrometheusRecordYaml)   // 获取单个 Prometheus 记录配置文件
+			prometheusConfigs.GET("/alertManager", p.GetMonitorAlertManagerYaml)            // 获取单个 AlertManager 配置文件
 		}
 
 		// 值班组相关路由
@@ -256,22 +256,54 @@ func (p *PrometheusHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
 
 // GetMonitorPrometheusYaml 获取单个 Prometheus 配置文件
 func (p *PrometheusHandler) GetMonitorPrometheusYaml(ctx *gin.Context) {
-	// TODO: 实现获取单个 Prometheus 配置文件的逻辑
+	ip := ctx.Query("ip")
+
+	yaml := p.service.GetMonitorPrometheusYaml(ctx, ip)
+	if yaml == "" {
+		apiresponse.ErrorWithMessage(ctx, "获取 Prometheus 配置文件失败")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, yaml)
 }
 
-// GetMonitorPrometheusAlertYaml 获取单个 Prometheus 告警配置文件
-func (p *PrometheusHandler) GetMonitorPrometheusAlertYaml(ctx *gin.Context) {
-	// TODO: 实现获取单个 Prometheus 告警配置文件的逻辑
+// GetMonitorPrometheusAlertRuleYaml 获取单个 Prometheus 告警配置规则文件
+func (p *PrometheusHandler) GetMonitorPrometheusAlertRuleYaml(ctx *gin.Context) {
+	ip := ctx.Query("ip")
+
+	yaml := p.service.GetMonitorPrometheusAlertRuleYaml(ctx, ip)
+	if yaml == "" {
+		apiresponse.ErrorWithMessage(ctx, "获取 Prometheus 告警配置文件失败")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, yaml)
 }
 
 // GetMonitorPrometheusRecordYaml 获取单个 Prometheus 记录配置文件
 func (p *PrometheusHandler) GetMonitorPrometheusRecordYaml(ctx *gin.Context) {
+	ip := ctx.Query("ip")
+
+	yaml := p.service.GetMonitorPrometheusRecordYaml(ctx, ip)
+	if yaml == "" {
+		apiresponse.ErrorWithMessage(ctx, "获取 Prometheus 记录配置文件失败")
+		return
+	}
+	apiresponse.SuccessWithData(ctx, yaml)
 	// TODO: 实现获取单个 Prometheus 记录配置文件的逻辑
 }
 
 // GetMonitorAlertManagerYaml 获取单个 AlertManager 配置文件
 func (p *PrometheusHandler) GetMonitorAlertManagerYaml(ctx *gin.Context) {
-	// TODO: 实现获取单个 AlertManager 配置文件的逻辑
+	ip := ctx.Query("ip")
+
+	yaml := p.service.GetMonitorAlertManagerYaml(ctx, ip)
+	if yaml == "" {
+		apiresponse.ErrorWithMessage(ctx, "获取 AlertManager 配置文件失败")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, yaml)
 }
 
 // GetMonitorOnDutyGroupList 获取值班组列表
