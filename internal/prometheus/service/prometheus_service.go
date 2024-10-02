@@ -22,9 +22,9 @@ type PrometheusService interface {
 	DeleteMonitorScrapeJob(ctx context.Context, id int) error
 
 	GetMonitorPrometheusYaml(ctx context.Context, ip string) string
-	GetMonitorPrometheusAlertYaml(ctx context.Context) string
-	GetMonitorPrometheusRecordYaml(ctx context.Context) string
-	GetMonitorAlertManagerYaml(ctx context.Context) string
+	GetMonitorPrometheusAlertRuleYaml(ctx context.Context, ip string) string
+	GetMonitorPrometheusRecordYaml(ctx context.Context, ip string) string
+	GetMonitorAlertManagerYaml(ctx context.Context, ip string) string
 }
 
 type prometheusService struct {
@@ -150,17 +150,14 @@ func (p *prometheusService) GetMonitorPrometheusYaml(_ context.Context, ip strin
 	return p.cache.GetAlertManagerMainConfigYamlByIP(ip)
 }
 
-func (p *prometheusService) GetMonitorPrometheusAlertYaml(_ context.Context) string {
-	//TODO implement me
-	panic("implement me")
+func (p *prometheusService) GetMonitorPrometheusAlertRuleYaml(_ context.Context, ip string) string {
+	return p.cache.GetPrometheusAlertRuleConfigYamlByIp(ip)
 }
 
-func (p *prometheusService) GetMonitorPrometheusRecordYaml(_ context.Context) string {
-	//TODO implement me
-	panic("implement me")
+func (p *prometheusService) GetMonitorPrometheusRecordYaml(_ context.Context, ip string) string {
+	return p.cache.GetPrometheusRecordRuleConfigYamlByIp(ip)
 }
 
-func (p *prometheusService) GetMonitorAlertManagerYaml(_ context.Context) string {
-	//TODO implement me
-	panic("implement me")
+func (p *prometheusService) GetMonitorAlertManagerYaml(_ context.Context, ip string) string {
+	return p.cache.GetAlertManagerMainConfigYamlByIP(ip)
 }
