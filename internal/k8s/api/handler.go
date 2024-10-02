@@ -287,7 +287,31 @@ func (k *K8sHandler) GetNodeDetail(ctx *gin.Context) {
 
 // GetPodsListByNodeId 获取指定节点上的 Pods 列表
 func (k *K8sHandler) GetPodsListByNodeId(ctx *gin.Context) {
-	// TODO: 实现获取指定节点上的 Pods 列表的逻辑
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	name := ctx.Param("name")
+	if name == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	node, err := k.service.GetPodsByNodeName(ctx, clusterID, name)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, node)
 }
 
 // TaintYamlCheck 检查节点 Taint 的 YAML 配置
