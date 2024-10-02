@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -14,7 +15,6 @@ import (
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes"
@@ -41,7 +41,7 @@ type K8sService interface {
 	// ListAllNodes 获取所有 Kubernetes 节点
 	ListAllNodes(ctx context.Context, id int) ([]*model.K8sNode, error)
 	// GetNodeByID 根据 ID 获取单个 Kubernetes 节点
-	GetNodeByID(ctx context.Context, id int) (*model.K8sNode, error)
+	GetNodeByName(ctx context.Context, id int, name string) (*model.K8sNode, error)
 	// GetPodsByNodeID 根据 Node ID 获取 Pod 列表
 	GetPodsByNodeID(ctx context.Context, nodeID int) ([]*model.K8sPod, error)
 	// CheckTaintYaml 检查 Taint Yaml 是否合法
@@ -272,6 +272,7 @@ func (k *k8sService) GetClusterByID(ctx context.Context, id int) (*model.K8sClus
 }
 
 func (k *k8sService) ListAllNodes(ctx context.Context, id int) ([]*model.K8sNode, error) {
+	// 获取 Kubernetes 客户端和 Metrics 客户端
 	kubeClient, err := k.client.GetKubeClient(id)
 	if err != nil {
 		k.l.Error("CreateCluster: 获取 Kubernetes 客户端失败", zap.Error(err))
@@ -285,97 +286,64 @@ func (k *k8sService) ListAllNodes(ctx context.Context, id int) ([]*model.K8sNode
 	}
 
 	// 获取节点列表
-	nodes, err := k.getNodesByClusterID(ctx, kubeClient)
+	nodes, err := k.getNodesByClusterID(ctx, kubeClient, "")
 	if err != nil {
 		return nil, err
 	}
 
+	// 并发处理节点信息
 	var wg sync.WaitGroup
-	var k8sNodes []*model.K8sNode
 	nodeChan := make(chan *model.K8sNode, len(nodes.Items))
-	doneChan := make(chan struct{}) // 用于标识数据收集完成
-
 	for _, node := range nodes.Items {
 		wg.Add(1)
-		go func(node v1.Node) {
+		go func(node corev1.Node) {
 			defer wg.Done()
-
-			// 获取节点相关的 Pod 列表
-			pods, err := k.getPodsByNodeName(ctx, kubeClient, node.Name)
+			k8sNode, err := k.buildK8sNode(ctx, id, node, kubeClient, metricsClient)
 			if err != nil {
-				k.l.Error("获取 Pod 列表失败", zap.Error(err))
+				k.l.Error("构建 K8sNode 失败", zap.Error(err))
 				return
 			}
-
-			// 获取节点相关事件
-			events, err := k.getNodeEvents(ctx, kubeClient, node.Name)
-			if err != nil {
-				k.l.Error("获取节点事件失败", zap.Error(err))
-				return
-			}
-
-			// 获取节点的资源使用情况
-			resourceInfo, err := getResource(ctx, metricsClient, node.Name, pods, &node)
-			if err != nil {
-				k.l.Error("获取节点资源信息失败", zap.Error(err))
-				return
-			}
-
-			// 构建 k8sNode 结构体
-			k8sNode := &model.K8sNode{
-				Name:              node.Name,
-				ClusterID:         id,
-				Status:            getNodeStatus(node),
-				ScheduleEnable:    isNodeSchedulable(node),
-				Roles:             getNodeRoles(node),
-				Age:               getNodeAge(node),
-				IP:                getInternalIP(node),
-				PodNum:            len(pods.Items),
-				CpuRequestInfo:    resourceInfo[0],
-				CpuUsageInfo:      resourceInfo[4],
-				CpuLimitInfo:      resourceInfo[1],
-				MemoryRequestInfo: resourceInfo[2],
-				MemoryUsageInfo:   resourceInfo[5],
-				MemoryLimitInfo:   resourceInfo[3],
-				PodNumInfo:        resourceInfo[6],
-				CpuCores:          getResourceString(node, "cpu"),
-				MemGibs:           getResourceString(node, "memory"),
-				EphemeralStorage:  getResourceString(node, "ephemeral-storage"),
-				KubeletVersion:    node.Status.NodeInfo.KubeletVersion,
-				CriVersion:        node.Status.NodeInfo.ContainerRuntimeVersion,
-				OsVersion:         node.Status.NodeInfo.OSImage,
-				KernelVersion:     node.Status.NodeInfo.KernelVersion,
-				Labels:            getNodeLabels(node),
-				Taints:            node.Spec.Taints,
-				Events:            events,
-				Conditions:        node.Status.Conditions,
-				CreatedAt:         node.CreationTimestamp.Time,
-				UpdatedAt:         time.Now(),
-			}
-
-			// 将节点数据发送到 channel
 			nodeChan <- k8sNode
 		}(node)
 	}
 
+	// 收集节点数据
 	go func() {
-		defer close(doneChan)
-		for k8sNode := range nodeChan {
-			k8sNodes = append(k8sNodes, k8sNode)
-			fmt.Println(k8sNode)
-		}
+		wg.Wait()
+		close(nodeChan)
 	}()
 
-	wg.Wait()
-	close(nodeChan)
-	<-doneChan
+	var k8sNodes []*model.K8sNode
+	for k8sNode := range nodeChan {
+		k8sNodes = append(k8sNodes, k8sNode)
+	}
 
 	return k8sNodes, nil
 }
 
-func (k *k8sService) GetNodeByID(ctx context.Context, id int) (*model.K8sNode, error) {
-	//TODO implement me
-	panic("implement me")
+func (k *k8sService) GetNodeByName(ctx context.Context, id int, name string) (*model.K8sNode, error) {
+	// 获取 Kubernetes 客户端和 Metrics 客户端
+	kubeClient, err := k.client.GetKubeClient(id)
+	if err != nil {
+		k.l.Error("CreateCluster: 获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, constants.ErrorK8sClientNotReady
+	}
+
+	metricsClient, err := k.client.GetMetricsClient(id)
+	if err != nil {
+		k.l.Error("CreateCluster: 获取 Metrics 客户端失败", zap.Error(err))
+		return nil, constants.ErrorMetricsClientNotReady
+	}
+
+	// 获取节点
+	nodes, err := k.getNodesByClusterID(ctx, kubeClient, name)
+	if err != nil || len(nodes.Items) == 0 {
+		return nil, fmt.Errorf("节点 %s 不存在", name)
+	}
+	node := nodes.Items[0]
+
+	// 构建 k8sNode
+	return k.buildK8sNode(ctx, id, node, kubeClient, metricsClient)
 }
 
 func (k *k8sService) GetPodsByNodeID(ctx context.Context, nodeID int) ([]*model.K8sPod, error) {
@@ -446,7 +414,7 @@ func (k *k8sService) AddNodeTaint(ctx context.Context, req *model.TaintK8sNodesR
 			// 处理未知的修改类型
 			errMsg := fmt.Sprintf("未知的修改类型: %s", req.ModType)
 			k.l.Error(errMsg)
-			errs = append(errs, fmt.Errorf(errMsg))
+			errs = append(errs, errors.New(errMsg))
 			continue
 		}
 
@@ -478,8 +446,23 @@ func (k *k8sService) DrainPods(ctx context.Context, nodeID int) error {
 	panic("implement me")
 }
 
+// ------------------------------ 辅助函数 ----------------------------
 // 获取指定集群上的 Node 列表
-func (k *k8sService) getNodesByClusterID(ctx context.Context, client *kubernetes.Clientset) (*v1.NodeList, error) {
+func (k *k8sService) getNodesByClusterID(ctx context.Context, client *kubernetes.Clientset, name string) (*corev1.NodeList, error) {
+	if name != "" {
+		node, err := client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			k.l.Error("获取 Node 失败", zap.String("nodeName", name), zap.Error(err))
+			return nil, err
+		}
+		// 将单个节点转换为 NodeList
+		nodeList := &corev1.NodeList{
+			Items: []corev1.Node{*node},
+		}
+
+		return nodeList, nil
+	}
+
 	nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		k.l.Error("获取 Node 列表失败", zap.Error(err))
@@ -490,7 +473,7 @@ func (k *k8sService) getNodesByClusterID(ctx context.Context, client *kubernetes
 }
 
 // 获取指定节点上的 Pod 列表
-func (k *k8sService) getPodsByNodeName(ctx context.Context, client *kubernetes.Clientset, nodeName string) (*v1.PodList, error) {
+func (k *k8sService) getPodsByNodeName(ctx context.Context, client *kubernetes.Clientset, nodeName string) (*corev1.PodList, error) {
 	pods, err := client.CoreV1().Pods("").List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
 	})
@@ -535,7 +518,7 @@ func (k *k8sService) getNodeEvents(ctx context.Context, client *kubernetes.Clien
 }
 
 // 获取节点资源信息
-func getResource(ctx context.Context, metricsCli *metricsClient.Clientset, nodeName string, pods *v1.PodList, node *v1.Node) ([]string, error) {
+func getResource(ctx context.Context, metricsCli *metricsClient.Clientset, nodeName string, pods *corev1.PodList, node *corev1.Node) ([]string, error) {
 	// 计算 CPU 和内存的请求和限制
 	var totalCPURequest, totalCPULimit, totalMemoryRequest, totalMemoryLimit int64
 	for _, pod := range pods.Items {
@@ -658,4 +641,61 @@ func getNodeAge(node corev1.Node) string {
 
 	// 返回节点存在时间的字符串表示
 	return fmt.Sprintf("%dd%dh", days, hours)
+}
+
+func (k *k8sService) buildK8sNode(ctx context.Context, id int, node corev1.Node, kubeClient *kubernetes.Clientset, metricsClient *metricsClient.Clientset) (*model.K8sNode, error) {
+	// 获取节点相关的 Pod 列表
+	pods, err := k.getPodsByNodeName(ctx, kubeClient, node.Name)
+	if err != nil {
+		k.l.Error("获取 Pod 列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取节点相关事件
+	events, err := k.getNodeEvents(ctx, kubeClient, node.Name)
+	if err != nil {
+		k.l.Error("获取节点事件失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取节点的资源使用情况
+	resourceInfo, err := getResource(ctx, metricsClient, node.Name, pods, &node)
+	if err != nil {
+		k.l.Error("获取节点资源信息失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 构建 k8sNode 结构体
+	k8sNode := &model.K8sNode{
+		Name:              node.Name,
+		ClusterID:         id,
+		Status:            getNodeStatus(node),
+		ScheduleEnable:    isNodeSchedulable(node),
+		Roles:             getNodeRoles(node),
+		Age:               getNodeAge(node),
+		IP:                getInternalIP(node),
+		PodNum:            len(pods.Items),
+		CpuRequestInfo:    resourceInfo[0],
+		CpuUsageInfo:      resourceInfo[4],
+		CpuLimitInfo:      resourceInfo[1],
+		MemoryRequestInfo: resourceInfo[2],
+		MemoryUsageInfo:   resourceInfo[5],
+		MemoryLimitInfo:   resourceInfo[3],
+		PodNumInfo:        resourceInfo[6],
+		CpuCores:          getResourceString(node, "cpu"),
+		MemGibs:           getResourceString(node, "memory"),
+		EphemeralStorage:  getResourceString(node, "ephemeral-storage"),
+		KubeletVersion:    node.Status.NodeInfo.KubeletVersion,
+		CriVersion:        node.Status.NodeInfo.ContainerRuntimeVersion,
+		OsVersion:         node.Status.NodeInfo.OSImage,
+		KernelVersion:     node.Status.NodeInfo.KernelVersion,
+		Labels:            getNodeLabels(node),
+		Taints:            node.Spec.Taints,
+		Events:            events,
+		Conditions:        node.Status.Conditions,
+		CreatedAt:         node.CreationTimestamp.Time,
+		UpdatedAt:         time.Now(),
+	}
+
+	return k8sNode, nil
 }
