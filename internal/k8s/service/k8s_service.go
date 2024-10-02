@@ -3,17 +3,23 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	"sync"
-	"time"
+	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 type K8sService interface {
@@ -33,7 +39,7 @@ type K8sService interface {
 	GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error)
 
 	// ListAllNodes 获取所有 Kubernetes 节点
-	ListAllNodes(ctx context.Context) ([]*model.K8sNode, error)
+	ListAllNodes(ctx context.Context, id int) ([]*model.K8sNode, error)
 	// GetNodeByID 根据 ID 获取单个 Kubernetes 节点
 	GetNodeByID(ctx context.Context, id int) (*model.K8sNode, error)
 	// GetPodsByNodeID 根据 Node ID 获取 Pod 列表
@@ -265,8 +271,106 @@ func (k *k8sService) GetClusterByID(ctx context.Context, id int) (*model.K8sClus
 	panic("implement me")
 }
 
-func (k *k8sService) ListAllNodes(ctx context.Context) ([]*model.K8sNode, error) {
-	return k.dao.ListAllNodes(ctx)
+func (k *k8sService) ListAllNodes(ctx context.Context, id int) ([]*model.K8sNode, error) {
+	kubeClient, err := k.client.GetKubeClient(id)
+	if err != nil {
+		k.l.Error("CreateCluster: 获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, constants.ErrorK8sClientNotReady
+	}
+
+	metricsClient, err := k.client.GetMetricsClient(id)
+	if err != nil {
+		k.l.Error("CreateCluster: 获取 Metrics 客户端失败", zap.Error(err))
+		return nil, constants.ErrorMetricsClientNotReady
+	}
+
+	// 获取节点列表
+	nodes, err := k.getNodesByClusterID(ctx, kubeClient)
+	if err != nil {
+		return nil, err
+	}
+
+	var wg sync.WaitGroup
+	var k8sNodes []*model.K8sNode
+	nodeChan := make(chan *model.K8sNode, len(nodes.Items))
+	doneChan := make(chan struct{}) // 用于标识数据收集完成
+
+	for _, node := range nodes.Items {
+		wg.Add(1)
+		go func(node v1.Node) {
+			defer wg.Done()
+
+			// 获取节点相关的 Pod 列表
+			pods, err := k.getPodsByNodeName(ctx, kubeClient, node.Name)
+			if err != nil {
+				k.l.Error("获取 Pod 列表失败", zap.Error(err))
+				return
+			}
+
+			// 获取节点相关事件
+			events, err := k.getNodeEvents(ctx, kubeClient, node.Name)
+			if err != nil {
+				k.l.Error("获取节点事件失败", zap.Error(err))
+				return
+			}
+
+			// 获取节点的资源使用情况
+			resourceInfo, err := getResource(ctx, metricsClient, node.Name, pods, &node)
+			if err != nil {
+				k.l.Error("获取节点资源信息失败", zap.Error(err))
+				return
+			}
+
+			// 构建 k8sNode 结构体
+			k8sNode := &model.K8sNode{
+				Name:              node.Name,
+				ClusterID:         id,
+				Status:            getNodeStatus(node),
+				ScheduleEnable:    isNodeSchedulable(node),
+				Roles:             getNodeRoles(node),
+				Age:               getNodeAge(node),
+				IP:                getInternalIP(node),
+				PodNum:            len(pods.Items),
+				CpuRequestInfo:    resourceInfo[0],
+				CpuUsageInfo:      resourceInfo[4],
+				CpuLimitInfo:      resourceInfo[1],
+				MemoryRequestInfo: resourceInfo[2],
+				MemoryUsageInfo:   resourceInfo[5],
+				MemoryLimitInfo:   resourceInfo[3],
+				PodNumInfo:        resourceInfo[6],
+				CpuCores:          getResourceString(node, "cpu"),
+				MemGibs:           getResourceString(node, "memory"),
+				EphemeralStorage:  getResourceString(node, "ephemeral-storage"),
+				KubeletVersion:    node.Status.NodeInfo.KubeletVersion,
+				CriVersion:        node.Status.NodeInfo.ContainerRuntimeVersion,
+				OsVersion:         node.Status.NodeInfo.OSImage,
+				KernelVersion:     node.Status.NodeInfo.KernelVersion,
+				Labels:            getNodeLabels(node),
+				Taints:            node.Spec.Taints,
+				Events:            events,
+				Conditions:        node.Status.Conditions,
+				CreatedAt:         node.CreationTimestamp.Time,
+				UpdatedAt:         time.Now(),
+			}
+
+			// 将节点数据发送到 channel
+			nodeChan <- k8sNode
+		}(node)
+	}
+
+	go func() {
+		defer close(doneChan)
+		for k8sNode := range nodeChan {
+			k8sNodes = append(k8sNodes, k8sNode)
+			fmt.Println(k8sNode)
+		}
+	}()
+
+	wg.Wait()
+	close(nodeChan)
+	<-doneChan
+
+	return k8sNodes, nil
 }
 
 func (k *k8sService) GetNodeByID(ctx context.Context, id int) (*model.K8sNode, error) {
@@ -372,4 +476,186 @@ func (k *k8sService) DeleteNodeLabel(ctx context.Context, nodeID int, labelKey s
 func (k *k8sService) DrainPods(ctx context.Context, nodeID int) error {
 	//TODO implement me
 	panic("implement me")
+}
+
+// 获取指定集群上的 Node 列表
+func (k *k8sService) getNodesByClusterID(ctx context.Context, client *kubernetes.Clientset) (*v1.NodeList, error) {
+	nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		k.l.Error("获取 Node 列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	return nodes, nil
+}
+
+// 获取指定节点上的 Pod 列表
+func (k *k8sService) getPodsByNodeName(ctx context.Context, client *kubernetes.Clientset, nodeName string) (*v1.PodList, error) {
+	pods, err := client.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
+	})
+
+	if err != nil {
+		k.l.Error("获取 Pod 列表失败", zap.String("nodeName", nodeName), zap.Error(err))
+		return nil, err
+	}
+
+	return pods, nil
+}
+
+// 获取节点事件
+func (k *k8sService) getNodeEvents(ctx context.Context, client *kubernetes.Clientset, nodeName string) ([]model.OneEvent, error) {
+	eventlist, err := client.CoreV1().Events("").List(ctx, metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("involvedObject.name=%s", nodeName),
+	})
+
+	if err != nil {
+		// 输出错误 nodename
+		k.l.Error("获取节点事件失败", zap.String("nodeName", nodeName), zap.Error(err))
+		return nil, err
+	}
+
+	// 转换为 OneEvent 模型
+	var oneEvents []model.OneEvent
+	for _, event := range eventlist.Items {
+		oneEvent := model.OneEvent{
+			Type:      event.Type,
+			Component: event.Source.Component,
+			Reason:    event.Reason,
+			Message:   event.Message,
+			FirstTime: event.FirstTimestamp.Format(time.RFC3339),
+			LastTime:  event.LastTimestamp.Format(time.RFC3339),
+			Object:    fmt.Sprintf("kind:%s name:%s", event.InvolvedObject.Kind, event.InvolvedObject.Name),
+			Count:     int(event.Count),
+		}
+		oneEvents = append(oneEvents, oneEvent)
+	}
+
+	return oneEvents, nil
+}
+
+// 获取节点资源信息
+func getResource(ctx context.Context, metricsCli *metricsClient.Clientset, nodeName string, pods *v1.PodList, node *v1.Node) ([]string, error) {
+	// 计算 CPU 和内存的请求和限制
+	var totalCPURequest, totalCPULimit, totalMemoryRequest, totalMemoryLimit int64
+	for _, pod := range pods.Items {
+		for _, container := range pod.Spec.Containers {
+			if cpuRequest, ok := container.Resources.Requests[corev1.ResourceCPU]; ok {
+				totalCPURequest += cpuRequest.MilliValue()
+			}
+			if cpuLimit, ok := container.Resources.Limits[corev1.ResourceCPU]; ok {
+				totalCPULimit += cpuLimit.MilliValue()
+			}
+			if memoryRequest, ok := container.Resources.Requests[corev1.ResourceMemory]; ok {
+				totalMemoryRequest += memoryRequest.Value()
+			}
+			if memoryLimit, ok := container.Resources.Limits[corev1.ResourceMemory]; ok {
+				totalMemoryLimit += memoryLimit.Value()
+			}
+		}
+	}
+
+	var result []string
+
+	// 获取节点的总 CPU 和内存容量
+	cpuCapacity := node.Status.Capacity[corev1.ResourceCPU]
+	memoryCapacity := node.Status.Capacity[corev1.ResourceMemory]
+
+	// CpuRequestInfo
+	result = append(result, fmt.Sprintf("%dm/%dm", totalCPURequest, cpuCapacity.MilliValue()))
+	// CpuLimitInfo
+	result = append(result, fmt.Sprintf("%dm/%dm", totalCPULimit, cpuCapacity.MilliValue()))
+	// MemoryRequestInfo
+	result = append(result, fmt.Sprintf("%dMi/%dMi", totalMemoryRequest/1024/1024, memoryCapacity.Value()/1024/1024))
+	// MemoryLimitInfo
+	result = append(result, fmt.Sprintf("%dMi/%dMi", totalMemoryLimit/1024/1024, memoryCapacity.Value()/1024/1024))
+
+	// 获取节点资源使用情况
+	nodeMetrics, err := metricsCli.MetricsV1beta1().NodeMetricses().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node metrics: %v", err)
+	}
+
+	// CPU 和内存的使用量
+	cpuUsage := nodeMetrics.Usage[corev1.ResourceCPU]
+	memoryUsage := nodeMetrics.Usage[corev1.ResourceMemory]
+
+	result = append(result, fmt.Sprintf("%dm/%dm", cpuUsage.MilliValue(), cpuCapacity.MilliValue()))
+	result = append(result, fmt.Sprintf("%dMi/%dMi", memoryUsage.Value()/1024/1024, memoryCapacity.Value()/1024/1024))
+
+	// PodNumInfo
+	maxPods := node.Status.Allocatable[corev1.ResourcePods]
+	result = append(result, fmt.Sprintf("%d/%d", len(pods.Items), maxPods.Value()))
+	return result, nil
+}
+
+// 获取节点状态
+func getNodeStatus(node corev1.Node) string {
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == corev1.NodeReady {
+			if condition.Status == corev1.ConditionTrue {
+				return "Ready"
+			}
+			return "NotReady"
+		}
+	}
+	return "Unknown"
+}
+
+// 判断节点是否可调度
+func isNodeSchedulable(node corev1.Node) bool {
+	return !node.Spec.Unschedulable
+}
+
+// 获取节点角色
+func getNodeRoles(node corev1.Node) []string {
+	var roles []string
+	for key := range node.Labels {
+		if strings.HasPrefix(key, "node-role.kubernetes.io/") {
+			role := strings.TrimPrefix(key, "node-role.kubernetes.io/")
+			roles = append(roles, role)
+		}
+	}
+	return roles
+}
+
+// 获取节点内部IP
+func getInternalIP(node corev1.Node) string {
+	for _, address := range node.Status.Addresses {
+		if address.Type == corev1.NodeInternalIP {
+			return address.Address
+		}
+	}
+	return ""
+}
+
+// 获取节点标签
+func getNodeLabels(node corev1.Node) []string {
+	var labels []string
+	for key, value := range node.Labels {
+		labels = append(labels, fmt.Sprintf("%s=%s", key, value))
+	}
+	return labels
+}
+
+// 获取节点资源信息
+func getResourceString(node corev1.Node, resourceName string) string {
+	allocatable := node.Status.Allocatable[corev1.ResourceName(resourceName)]
+	return allocatable.String()
+}
+
+// 计算节点存在时间
+func getNodeAge(node corev1.Node) string {
+	// 获取节点的创建时间
+	creationTime := node.CreationTimestamp.Time
+
+	// 计算当前时间与创建时间的差值
+	duration := time.Since(creationTime)
+
+	// 将差值转换为天数、小时数等格式
+	days := int(duration.Hours()) / 24
+	hours := int(duration.Hours()) % 24
+
+	// 返回节点存在时间的字符串表示
+	return fmt.Sprintf("%dd%dh", days, hours)
 }

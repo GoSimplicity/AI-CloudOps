@@ -1,6 +1,8 @@
 package api
 
 import (
+	"strconv"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
@@ -24,6 +26,7 @@ func NewK8sHandler(service service.K8sService, l *zap.Logger) *K8sHandler {
 
 // RegisterRouters 注册所有 Kubernetes 相关的路由
 func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
+	// TODO delete hello, avoid validate for test
 	k8sGroup := server.Group("/api/k8s")
 
 	// 集群相关路由
@@ -232,7 +235,19 @@ func (k *K8sHandler) DeleteCluster(ctx *gin.Context) {
 
 // GetNodeList 获取节点列表
 func (k *K8sHandler) GetNodeList(ctx *gin.Context) {
-	nodes, err := k.service.ListAllNodes(ctx)
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	nodes, err := k.service.ListAllNodes(ctx, clusterID)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
