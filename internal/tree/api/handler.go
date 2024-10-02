@@ -23,8 +23,7 @@ func NewTreeHandler(service service.TreeService, l *zap.Logger) *TreeHandler {
 }
 
 func (t *TreeHandler) RegisterRouters(server *gin.Engine) {
-	// TODO delete hello
-	treeGroup := server.Group("/api/tree/hello")
+	treeGroup := server.Group("/api/tree")
 
 	// 树节点相关路由
 	treeGroup.GET("/listTreeNode", t.ListTreeNode)
