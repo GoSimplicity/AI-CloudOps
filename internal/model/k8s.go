@@ -37,7 +37,6 @@ type K8sCluster struct {
 
 // K8sNode Kubernetes 节点
 type K8sNode struct {
-	Model
 	Name              string               `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex;size:100;comment:节点名称"` // 节点名称
 	ClusterID         int                  `json:"clusterId" gorm:"index;not null;comment:所属集群ID"`                                 // 所属集群ID
 	Status            string               `json:"status" gorm:"comment:节点状态，例如 Ready, NotReady, SchedulingDisabled"`              // 节点状态

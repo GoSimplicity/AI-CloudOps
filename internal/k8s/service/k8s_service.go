@@ -11,6 +11,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -267,51 +268,66 @@ func (k *k8sService) GetClusterByID(ctx context.Context, id int) (*model.K8sClus
 	panic("implement me")
 }
 
+// ListAllNodes 获取指定集群的所有节点信息
 func (k *k8sService) ListAllNodes(ctx context.Context, id int) ([]*model.K8sNode, error) {
-	// 获取 Kubernetes 客户端和 Metrics 客户端
+	// 获取 Kubernetes 客户端
 	kubeClient, err := k.client.GetKubeClient(id)
 	if err != nil {
-		k.l.Error("CreateCluster: 获取 Kubernetes 客户端失败", zap.Error(err))
+		k.l.Error("ListAllNodes: 获取 Kubernetes 客户端失败", zap.Error(err))
 		return nil, constants.ErrorK8sClientNotReady
 	}
 
+	// 获取 Metrics 客户端
 	metricsClient, err := k.client.GetMetricsClient(id)
 	if err != nil {
-		k.l.Error("CreateCluster: 获取 Metrics 客户端失败", zap.Error(err))
+		k.l.Error("ListAllNodes: 获取 Metrics 客户端失败", zap.Error(err))
 		return nil, constants.ErrorMetricsClientNotReady
 	}
 
 	// 获取节点列表
 	nodes, err := k8s.GetNodesByClusterID(ctx, kubeClient, "")
 	if err != nil {
+		k.l.Error("ListAllNodes: 获取节点列表失败", zap.Error(err))
 		return nil, err
 	}
 
-	// 并发处理节点信息
-	var wg sync.WaitGroup
-	nodeChan := make(chan *model.K8sNode, len(nodes.Items))
+	// 设置最大并发数
+	const maxConcurrency = 10
+	semaphore := make(chan struct{}, maxConcurrency)
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	// 使用互斥锁保护对共享切片的访问
+	var mu sync.Mutex
+	var k8sNodes []*model.K8sNode
+
+	// 遍历每个节点，并发处理
 	for _, node := range nodes.Items {
-		wg.Add(1)
-		go func(node corev1.Node) {
-			defer wg.Done()
+		node := node // 捕获循环变量
+
+		g.Go(func() error {
+			// 获取 semaphore
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			// 构建 K8sNode 对象
 			k8sNode, err := k8s.BuildK8sNode(ctx, id, node, kubeClient, metricsClient)
 			if err != nil {
-				k.l.Error("构建 K8sNode 失败", zap.Error(err))
-				return
+				k.l.Error("ListAllNodes: 构建 K8sNode 失败", zap.Error(err), zap.String("node", node.Name))
+				return nil
 			}
-			nodeChan <- k8sNode
-		}(node)
+
+			mu.Lock()
+			k8sNodes = append(k8sNodes, k8sNode)
+			mu.Unlock()
+
+			return nil
+		})
 	}
 
-	// 收集节点数据
-	go func() {
-		wg.Wait()
-		close(nodeChan)
-	}()
-
-	var k8sNodes []*model.K8sNode
-	for k8sNode := range nodeChan {
-		k8sNodes = append(k8sNodes, k8sNode)
+	if err := g.Wait(); err != nil {
+		k.l.Error("ListAllNodes: 并发处理节点信息失败", zap.Error(err))
+		return nil, err
 	}
 
 	return k8sNodes, nil
