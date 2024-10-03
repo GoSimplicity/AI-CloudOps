@@ -327,13 +327,13 @@ func (k *k8sService) GetNodeByName(ctx context.Context, id int, name string) (*m
 	kubeClient, err := k.client.GetKubeClient(id)
 	if err != nil {
 		k.l.Error("CreateCluster: 获取 Kubernetes 客户端失败", zap.Error(err))
-		return nil, constants.ErrorK8sClientNotReady
+		return nil, err
 	}
 
 	metricsClient, err := k.client.GetMetricsClient(id)
 	if err != nil {
 		k.l.Error("CreateCluster: 获取 Metrics 客户端失败", zap.Error(err))
-		return nil, constants.ErrorMetricsClientNotReady
+		return nil, err
 	}
 
 	// 获取节点
@@ -477,19 +477,27 @@ func (k *k8sService) CheckTaintYaml(ctx context.Context, req *model.TaintK8sNode
 	// 3. Cluster, Node 是否存在
 	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)
 	if err != nil {
-		return constants.ErrorK8sClientNotReady
+		return err
 	}
 
 	// Client 是否准备好
-	_, err = k.client.GetKubeClient(cluster.ID)
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
 	if err != nil {
-		return constants.ErrorK8sClientNotReady
+		return err
 	}
 
-	// TODO 仅检查单个节点
-	_, err = k.dao.GetNodeByName(ctx, req.NodeNames[0])
-	if err != nil {
-		return constants.ErrorNodeNotFound
+	// 遍历每个节点名称
+	var errs []error
+	for _, nodeName := range req.NodeNames {
+		_, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			k.l.Error("获取节点信息失败", zap.Error(err))
+			errs = append(errs, fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("在处理节点 Taints 时遇到以下错误: %v", errs)
 	}
 
 	return nil
@@ -565,7 +573,7 @@ func (k *k8sService) AddNodeTaint(ctx context.Context, req *model.TaintK8sNodesR
 			continue
 		}
 
-		k.l.Info("更新节点信息成功", zap.String("nodeName", nodeName))
+		k.l.Info("更新节点Taint成功", zap.String("nodeName", nodeName))
 	}
 
 	if len(errs) > 0 {
