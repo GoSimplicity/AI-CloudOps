@@ -344,3 +344,8 @@ type Taint struct {
 	Value  string `json:"value,omitempty"`                                                       // Taint 的值
 	Effect string `json:"effect" binding:"required,oneof=NoSchedule PreferNoSchedule NoExecute"` // Taint 的效果，例如 "NoSchedule", "PreferNoSchedule", "NoExecute"
 }
+
+type ScheduleK8sNodesRequest struct {
+	*K8sClusterNodesRequest
+	ScheduleEnable bool `json:"schedule_enable"`
+}
