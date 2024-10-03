@@ -305,16 +305,19 @@ func (k *k8sService) ListAllNodes(ctx context.Context, id int) ([]*model.K8sNode
 		}(node)
 	}
 
-	// 收集节点数据
+	var k8sNodes []*model.K8sNode
+	doneChan := make(chan struct{}) // 用于标识数据收集完成
 	go func() {
-		wg.Wait()
-		close(nodeChan)
+		defer close(doneChan)
+		for k8sNode := range nodeChan {
+			k8sNodes = append(k8sNodes, k8sNode)
+			fmt.Println(k8sNode)
+		}
 	}()
 
-	var k8sNodes []*model.K8sNode
-	for k8sNode := range nodeChan {
-		k8sNodes = append(k8sNodes, k8sNode)
-	}
+	wg.Wait()
+	close(nodeChan)
+	<-doneChan
 
 	return k8sNodes, nil
 }
