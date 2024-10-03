@@ -328,12 +328,24 @@ func (k *K8sHandler) TaintYamlCheck(ctx *gin.Context) {
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, "Taint YAML 配置合法")
+	apiresponse.Success(ctx)
 }
 
 // ScheduleEnableSwitchNodes 启用或切换节点调度
 func (k *K8sHandler) ScheduleEnableSwitchNodes(ctx *gin.Context) {
-	
+	var req model.ScheduleK8sNodesRequest
+
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := k.service.BatchEnableSwitchNodes(ctx, &req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err.Error(), "启用或切换节点调度失败")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // AddLabelNodes 为节点添加标签
@@ -355,14 +367,29 @@ func (k *K8sHandler) AddTaintsNodes(ctx *gin.Context) {
 		return
 	}
 
-	if err := k.service.AddNodeTaint(ctx, taint); err != nil {
+	if err := k.service.UpdateNodeTaint(ctx, taint); err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
+
+	apiresponse.Success(ctx)
 }
 
 func (k *K8sHandler) DeleteTaintsNodes(ctx *gin.Context) {
-	// TODO: 实现删除节点 Taint 的逻辑
+	var taint *model.TaintK8sNodesRequest
+
+	err := ctx.ShouldBind(&taint)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := k.service.UpdateNodeTaint(ctx, taint); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // DrainPods 清空节点上的 Pods
