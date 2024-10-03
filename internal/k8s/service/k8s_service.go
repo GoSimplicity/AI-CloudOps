@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
-	"time"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
@@ -18,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/clientcmd"
+	"sync"
 )
 
 type K8sService interface {
@@ -102,7 +100,7 @@ func (k *k8sService) CreateCluster(ctx context.Context, cluster *model.K8sCluste
 		k.l.Error("CreateCluster: 解析 kubeconfig 失败", zap.Error(err))
 		return fmt.Errorf("解析 kubeconfig 失败: %w", err)
 	}
-	time.Sleep(20 * time.Second)
+
 	if err = k.client.InitClient(ctx, cluster.ID, restConfig); err != nil { // 假设 useMock=false
 		k.l.Error("CreateCluster: 初始化 Kubernetes 客户端失败", zap.Error(err))
 		return fmt.Errorf("初始化 Kubernetes 客户端失败: %w", err)
