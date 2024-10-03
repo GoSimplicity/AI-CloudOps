@@ -316,7 +316,19 @@ func (k *K8sHandler) GetPodsListByNodeName(ctx *gin.Context) {
 
 // TaintYamlCheck 检查节点 Taint 的 YAML 配置
 func (k *K8sHandler) TaintYamlCheck(ctx *gin.Context) {
-	// TODO: 实现检查节点 Taint 的 YAML 配置的逻辑
+	var req model.TaintK8sNodesRequest
+
+	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := k.service.CheckTaintYaml(ctx, &req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err.Error(), "Taint YAML 配置检查失败")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, "Taint YAML 配置合法")
 }
 
 // ScheduleEnableSwitchNodes 启用或切换节点调度
