@@ -333,7 +333,7 @@ func (k *K8sHandler) TaintYamlCheck(ctx *gin.Context) {
 
 // ScheduleEnableSwitchNodes 启用或切换节点调度
 func (k *K8sHandler) ScheduleEnableSwitchNodes(ctx *gin.Context) {
-	// TODO: 实现启用或切换节点调度的逻辑
+	
 }
 
 // AddLabelNodes 为节点添加标签
