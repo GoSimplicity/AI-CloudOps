@@ -69,7 +69,7 @@ func (k *k8sDAO) CreateCluster(ctx context.Context, cluster *model.K8sCluster) e
 }
 
 func (k *k8sDAO) DeleteCluster(ctx context.Context, id int) error {
-	if err := k.db.WithContext(ctx).Where("id = ?", id).Delete(&model.K8sCluster{}).Error; err != nil {
+	if err := k.db.WithContext(ctx).Where("id = ?", id).Unscoped().Delete(&model.K8sCluster{}).Error; err != nil {
 		k.l.Error("DeleteCluster 删除集群失败", zap.Error(err))
 		return err
 	}
