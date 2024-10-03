@@ -1,9 +1,10 @@
 package model
 
 import (
+	"time"
+
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
 	core "k8s.io/api/core/v1"
-	"time"
 )
 
 // K8sCluster Kubernetes 集群的配置
@@ -339,7 +340,7 @@ type OneEvent struct {
 
 // Taint 定义 Taint 的模型
 type Taint struct {
-	Key    string `json:"key" binding:"required"`    // Taint 的键
-	Value  string `json:"value" binding:"required"`  // Taint 的值
-	Effect string `json:"effect" binding:"required"` // Taint 的效果，例如 "NoSchedule", "PreferNoSchedule", "NoExecute"
+	Key    string `json:"key" binding:"required"`                                                // Taint 的键
+	Value  string `json:"value,omitempty"`                                                       // Taint 的值
+	Effect string `json:"effect" binding:"required,oneof=NoSchedule PreferNoSchedule NoExecute"` // Taint 的效果，例如 "NoSchedule", "PreferNoSchedule", "NoExecute"
 }

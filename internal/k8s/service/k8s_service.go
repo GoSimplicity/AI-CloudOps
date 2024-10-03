@@ -462,9 +462,37 @@ func (k *k8sService) GetPodsByNodeName(ctx context.Context, id int, name string)
 	return k8sPods, nil
 }
 
-func (k *k8sService) CheckTaintYaml(ctx context.Context, taint *model.TaintK8sNodesRequest) error {
-	panic("implement me")
+func (k *k8sService) CheckTaintYaml(ctx context.Context, req *model.TaintK8sNodesRequest) error {
+	// 1. binding 校验key不为空，effect 为 NoSchedule、PreferNoSchedule、NoExecute之一
 
+	// 2. key 不重复
+	taintsKey := make(map[string]struct{})
+	for _, taint := range req.Taints {
+		if _, ok := taintsKey[taint.Key]; ok {
+			return constants.ErrorTaintsKeyDuplicate
+		}
+		taintsKey[taint.Key] = struct{}{}
+	}
+
+	// 3. Cluster, Node 是否存在
+	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)
+	if err != nil {
+		return constants.ErrorK8sClientNotReady
+	}
+
+	// Client 是否准备好
+	_, err = k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		return constants.ErrorK8sClientNotReady
+	}
+
+	// TODO 仅检查单个节点
+	_, err = k.dao.GetNodeByName(ctx, req.NodeNames[0])
+	if err != nil {
+		return constants.ErrorNodeNotFound
+	}
+
+	return nil
 }
 
 func (k *k8sService) BatchEnableSwitchNodes(ctx context.Context, ids []int) error {
