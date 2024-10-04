@@ -14,6 +14,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -287,35 +288,49 @@ func (k *k8sService) ListAllNodes(ctx context.Context, id int) ([]*model.K8sNode
 		return nil, err
 	}
 
-	// 并发处理节点信息
-	var wg sync.WaitGroup
+	// // 并发处理节点信息
+	// var wg sync.WaitGroup
+	// nodeChan := make(chan *model.K8sNode, len(nodes.Items))
+	// for _, node := range nodes.Items {
+	// 	wg.Add(1)
+	// 	go func(node corev1.Node) {
+	// 		defer wg.Done()
+	// 		k8sNode, err := k8s.BuildK8sNode(ctx, id, node, kubeClient, metricsClient)
+	// 		if err != nil {
+	// 			k.l.Error("构建 K8sNode 失败", zap.Error(err))
+	// 			return
+	// 		}
+	// 		nodeChan <- k8sNode
+	// 	}(node)
+	// }
+
+	g := new(errgroup.Group)
 	nodeChan := make(chan *model.K8sNode, len(nodes.Items))
+
 	for _, node := range nodes.Items {
-		wg.Add(1)
-		go func(node corev1.Node) {
-			defer wg.Done()
+		node := node
+		g.Go(func() error {
 			k8sNode, err := k8s.BuildK8sNode(ctx, id, node, kubeClient, metricsClient)
 			if err != nil {
 				k.l.Error("构建 K8sNode 失败", zap.Error(err))
-				return
+				return err
 			}
 			nodeChan <- k8sNode
-		}(node)
+			return nil
+		})
 	}
 
-	var k8sNodes []*model.K8sNode
-	doneChan := make(chan struct{}) // 用于标识数据收集完成
-	go func() {
-		defer close(doneChan)
-		for k8sNode := range nodeChan {
-			k8sNodes = append(k8sNodes, k8sNode)
-			fmt.Println(k8sNode)
-		}
-	}()
+	if err := g.Wait(); err != nil {
+		k.l.Error("获取节点信息失败", zap.Error(err))
+		close(nodeChan)
+		return nil, err
+	}
 
-	wg.Wait()
 	close(nodeChan)
-	<-doneChan
+	var k8sNodes []*model.K8sNode
+	for k8sNode := range nodeChan {
+		k8sNodes = append(k8sNodes, k8sNode)
+	}
 
 	return k8sNodes, nil
 }
@@ -464,8 +479,22 @@ func (k *k8sService) CheckTaintYaml(ctx context.Context, req *model.TaintK8sNode
 	// 1. binding 校验key不为空，effect 为 NoSchedule、PreferNoSchedule、NoExecute之一
 
 	// 2. key 不重复
+	var taintsToProcess []corev1.Taint
+	if err := yaml.UnmarshalStrict([]byte(req.TaintYaml), &taintsToProcess); err != nil {
+		k.l.Error("解析 Taint YAML 配置失败", zap.Error(err))
+		return err
+	}
+
 	taintsKey := make(map[string]struct{})
-	for _, taint := range req.Taints {
+
+	// for _, taint := range req.Taints {
+	// 	if _, ok := taintsKey[taint.Key]; ok {
+	// 		return constants.ErrorTaintsKeyDuplicate
+	// 	}
+	// 	taintsKey[taint.Key] = struct{}{}
+	// }
+
+	for _, taint := range taintsToProcess {
 		if _, ok := taintsKey[taint.Key]; ok {
 			return constants.ErrorTaintsKeyDuplicate
 		}
