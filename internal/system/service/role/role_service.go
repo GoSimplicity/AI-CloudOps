@@ -2,9 +2,9 @@ package role
 
 import (
 	"context"
-	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/menu"
-	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/role"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao/menu"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao/role"
 	"go.uber.org/zap"
 )
 

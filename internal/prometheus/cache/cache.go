@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -187,7 +188,15 @@ func (mc *monitorCache) GeneratePrometheusMainConfig(ctx context.Context) error 
 
 			// 写入配置文件
 			filePath := fmt.Sprintf("%s/prometheus_pool_%s.yaml", mc.localYamlDir, ip)
-			if err := os.WriteFile(filePath, yamlData, 0644); err != nil { // 使用更安全的文件权限
+
+			// 创建目录
+			dir := filepath.Dir(filePath)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				mc.l.Error("创建目录失败", zap.Error(err), zap.String("目录路径", dir))
+				continue
+			}
+
+			if err := os.WriteFile(filePath, yamlData, 0644); err != nil {
 				mc.l.Error("写入 Prometheus 配置文件失败", zap.Error(err), zap.String("文件路径", filePath))
 				continue
 			}

@@ -1,12 +1,12 @@
 package api
 
 import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/casbin"
-	"github.com/GoSimplicity/AI-CloudOps/internal/auth/service/api"
-	"github.com/GoSimplicity/AI-CloudOps/internal/auth/service/menu"
-	"github.com/GoSimplicity/AI-CloudOps/internal/auth/service/role"
 	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao/casbin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/service/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/service/menu"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/service/role"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"

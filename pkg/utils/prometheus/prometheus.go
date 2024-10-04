@@ -16,6 +16,10 @@ func CheckPoolIpExists(req *model.MonitorScrapePool, pools []*model.MonitorScrap
 
 	// 遍历请求中的IP地址，检查是否存在于现有抓取池中
 	for _, ip := range req.PrometheusInstances {
+		if req.ID != 0 && ips[ip] == req.Name {
+			continue
+		}
+
 		if _, ok := ips[ip]; ok {
 			return true
 		}
