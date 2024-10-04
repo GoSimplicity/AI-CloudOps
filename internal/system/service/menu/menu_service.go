@@ -2,7 +2,7 @@ package menu
 
 import (
 	"context"
-	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/menu"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao/menu"
 	"sort"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"

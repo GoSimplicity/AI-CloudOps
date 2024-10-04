@@ -172,7 +172,7 @@ func (p *PrometheusHandler) UpdateMonitorScrapePool(ctx *gin.Context) {
 
 // DeleteMonitorScrapePool 删除监控采集池
 func (p *PrometheusHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
-	id := ctx.Query("id")
+	id := ctx.Param("id")
 	atom, err := strconv.Atoi(id)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, "参数错误")
