@@ -1,0 +1,24 @@
+global:
+    scrape_interval: 10s
+    scrape_timeout: 10s
+scrape_configs:
+    - job_name: test-exporter-1
+      honor_timestamps: false
+      track_timestamps_staleness: false
+      scrape_interval: 15s
+      scrape_timeout: 5s
+      metrics_path: /metrics
+      scheme: http
+      enable_compression: false
+      follow_redirects: false
+      enable_http2: false
+      http_sd_configs:
+        - follow_redirects: false
+          enable_http2: false
+          refresh_interval: 30s
+          url: http?port=8428&leafNodeIds=7
+remote_write:
+    - url: http://192.168.0.104:8428/api/v1/write
+      remote_timeout: 10s
+      follow_redirects: false
+      enable_http2: false

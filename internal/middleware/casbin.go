@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	casbinDao "github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/casbin"
+	casbinDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/casbin"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"

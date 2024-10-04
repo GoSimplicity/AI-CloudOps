@@ -256,7 +256,7 @@ func (p *prometheusDao) DeleteMonitorScrapeJob(ctx context.Context, jobId int) e
 func (p *prometheusDao) GetHttpSdApi(ctx context.Context, jobId int) (string, error) {
 	var scrapeJob *model.MonitorScrapeJob
 
-	if err := p.db.WithContext(ctx).Where("id = ?", jobId).First(scrapeJob).Error; err != nil {
+	if err := p.db.WithContext(ctx).Where("id = ?", jobId).First(&scrapeJob).Error; err != nil {
 		p.l.Error("GetHttpSdApi failed to get http sd api", zap.Error(err))
 		return "", err
 	}

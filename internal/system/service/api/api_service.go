@@ -2,9 +2,9 @@ package api
 
 import (
 	"context"
-	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/api"
-	"github.com/GoSimplicity/AI-CloudOps/internal/auth/dao/role"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao/role"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 )
