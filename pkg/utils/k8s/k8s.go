@@ -149,7 +149,7 @@ func RemoveTaints(existingTaints []corev1.Taint, taintsToDelete []corev1.Taint) 
 	return updatedTaints
 }
 
-// 获取指定集群上的 Node 列表
+// GetNodesByClusterID 获取指定集群上的 Node 列表
 func GetNodesByClusterID(ctx context.Context, client *kubernetes.Clientset, name string) (*corev1.NodeList, error) {
 	if name != "" {
 		node, err := client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
@@ -174,7 +174,7 @@ func GetNodesByClusterID(ctx context.Context, client *kubernetes.Clientset, name
 	return nodes, nil
 }
 
-// 获取指定节点上的 Pod 列表
+// GetPodsByNodeName 获取指定节点上的 Pod 列表
 func GetPodsByNodeName(ctx context.Context, client *kubernetes.Clientset, nodeName string) (*corev1.PodList, error) {
 	pods, err := client.CoreV1().Pods("").List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
@@ -188,7 +188,7 @@ func GetPodsByNodeName(ctx context.Context, client *kubernetes.Clientset, nodeNa
 	return pods, nil
 }
 
-// 获取节点事件
+// GetNodeEvents 获取节点事件
 func GetNodeEvents(ctx context.Context, client *kubernetes.Clientset, nodeName string) ([]model.OneEvent, error) {
 	eventlist, err := client.CoreV1().Events("").List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("involvedObject.name=%s", nodeName),
@@ -218,7 +218,7 @@ func GetNodeEvents(ctx context.Context, client *kubernetes.Clientset, nodeName s
 	return oneEvents, nil
 }
 
-// 获取节点资源信息
+// GetNodeResource 获取节点资源信息
 func GetNodeResource(ctx context.Context, metricsCli *metricsClient.Clientset, nodeName string, pods *corev1.PodList, node *corev1.Node) ([]string, error) {
 	// 计算 CPU 和内存的请求和限制
 	var totalCPURequest, totalCPULimit, totalMemoryRequest, totalMemoryLimit int64
@@ -278,7 +278,7 @@ func GetNodeResource(ctx context.Context, metricsCli *metricsClient.Clientset, n
 	return result, nil
 }
 
-// 获取节点状态
+// GetNodeStatus 获取节点状态
 func GetNodeStatus(node corev1.Node) string {
 	for _, condition := range node.Status.Conditions {
 		if condition.Type == corev1.NodeReady {
@@ -291,12 +291,12 @@ func GetNodeStatus(node corev1.Node) string {
 	return "Unknown"
 }
 
-// 判断节点是否可调度
+// IsNodeSchedulable 判断节点是否可调度
 func IsNodeSchedulable(node corev1.Node) bool {
 	return !node.Spec.Unschedulable
 }
 
-// 获取节点角色
+// GetNodeRoles 获取节点角色
 func GetNodeRoles(node corev1.Node) []string {
 	var roles []string
 	for key := range node.Labels {
@@ -308,7 +308,7 @@ func GetNodeRoles(node corev1.Node) []string {
 	return roles
 }
 
-// 获取节点内部IP
+// GetInternalIP 获取节点内部IP
 func GetInternalIP(node corev1.Node) string {
 	for _, address := range node.Status.Addresses {
 		if address.Type == corev1.NodeInternalIP {
@@ -318,7 +318,7 @@ func GetInternalIP(node corev1.Node) string {
 	return ""
 }
 
-// 获取节点标签
+// GetNodeLabels 获取节点标签
 func GetNodeLabels(node corev1.Node) []string {
 	var labels []string
 	for key, value := range node.Labels {
@@ -327,13 +327,13 @@ func GetNodeLabels(node corev1.Node) []string {
 	return labels
 }
 
-// 获取节点资源信息
+// GetResourceString 获取节点资源信息
 func GetResourceString(node corev1.Node, resourceName string) string {
 	allocatable := node.Status.Allocatable[corev1.ResourceName(resourceName)]
 	return allocatable.String()
 }
 
-// 计算节点存在时间
+// GetNodeAge 计算节点存在时间
 func GetNodeAge(node corev1.Node) string {
 	// 获取节点的创建时间
 	creationTime := node.CreationTimestamp.Time
