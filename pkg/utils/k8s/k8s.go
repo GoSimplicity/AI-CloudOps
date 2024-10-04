@@ -255,14 +255,19 @@ func GetNodeResource(ctx context.Context, metricsCli *metricsClient.Clientset, n
 	result = append(result, fmt.Sprintf("%dMi/%dMi", totalMemoryLimit/1024/1024, memoryCapacity.Value()/1024/1024))
 
 	// 获取节点资源使用情况
-	nodeMetrics, err := metricsCli.MetricsV1beta1().NodeMetricses().Get(ctx, nodeName, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get node metrics: %v", err)
-	}
+	// TODO need Metrics-Server
+	// nodeMetrics, err := metricsCli.MetricsV1alpha1().NodeMetricses().Get(ctx, nodeName, metav1.GetOptions{})
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to get node metrics: %v", err)
+	// }
 
-	// CPU 和内存的使用量
-	cpuUsage := nodeMetrics.Usage[corev1.ResourceCPU]
-	memoryUsage := nodeMetrics.Usage[corev1.ResourceMemory]
+	// // CPU 和内存的使用量
+	// cpuUsage := nodeMetrics.Usage[corev1.ResourceCPU]
+	// memoryUsage := nodeMetrics.Usage[corev1.ResourceMemory]
+
+	// mock data
+	cpuUsage := resource.NewMilliQuantity(100, resource.DecimalSI)
+	memoryUsage := resource.NewQuantity(1024*1024*100, resource.BinarySI)
 
 	result = append(result, fmt.Sprintf("%dm/%dm", cpuUsage.MilliValue(), cpuCapacity.MilliValue()))
 	result = append(result, fmt.Sprintf("%dMi/%dMi", memoryUsage.Value()/1024/1024, memoryCapacity.Value()/1024/1024))

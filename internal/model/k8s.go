@@ -321,9 +321,9 @@ type LabelK8sNodesRequest struct {
 // TaintK8sNodesRequest 定义为节点添加或删除 Taint 的请求结构
 type TaintK8sNodesRequest struct {
 	*K8sClusterNodesRequest
-	Taints    []Taint `json:"taints" binding:"required,dive,required"`   // Taint 列表，必填
-	ModType   string  `json:"mod_type" binding:"required,oneof=add del"` // 操作类型，必填，值为 "add" 或 "del"
-	TaintYaml string  `json:"taint_yaml_string,omitempty"`               // 可选的 Taint YAML 字符串，用于验证或其他用途
+	// Taints    []Taint `json:"taints" binding:"required,dive,required"`   // Taint 列表，必填
+	ModType   string `json:"mod_type" binding:"required,oneof=add del"` // 操作类型，必填，值为 "add" 或 "del"
+	TaintYaml string `json:"taint_yaml_string,omitempty"`               // 可选的 Taint YAML 字符串，用于验证或其他用途
 }
 
 // OneEvent 单个事件的模型
