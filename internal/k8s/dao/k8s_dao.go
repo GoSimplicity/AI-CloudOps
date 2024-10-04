@@ -21,6 +21,7 @@ type K8sDAO interface {
 
 	ListAllNodes(ctx context.Context) ([]*model.K8sNode, error)
 	GetNodeByID(ctx context.Context, id int) (*model.K8sNode, error)
+	GetNodeByName(ctx context.Context, name string) (*model.K8sNode, error)
 	GetPodsByNodeID(ctx context.Context, nodeID int) ([]*model.K8sPod, error)
 	CheckTaintYaml(ctx context.Context, taintYaml string) error
 	BatchEnableSwitchNodes(ctx context.Context, ids []int) error
@@ -104,8 +105,14 @@ func (k *k8sDAO) GetClusterByID(ctx context.Context, id int) (*model.K8sCluster,
 }
 
 func (k *k8sDAO) GetClusterByName(ctx context.Context, name string) (*model.K8sCluster, error) {
-	//TODO implement me
-	panic("implement me")
+	var cluster *model.K8sCluster
+
+	if err := k.db.WithContext(ctx).Where("name = ?", name).First(&cluster).Error; err != nil {
+		k.l.Error("GetClusterByName 查询集群失败", zap.Error(err))
+		return nil, err
+	}
+
+	return cluster, nil
 }
 
 func (k *k8sDAO) BatchEnableSwitchClusters(ctx context.Context, ids []int) error {
@@ -133,6 +140,17 @@ func (k *k8sDAO) ListAllNodes(ctx context.Context) ([]*model.K8sNode, error) {
 func (k *k8sDAO) GetNodeByID(ctx context.Context, id int) (*model.K8sNode, error) {
 	//TODO implement me
 	panic("implement me")
+}
+
+func (k *k8sDAO) GetNodeByName(ctx context.Context, name string) (*model.K8sNode, error) {
+	var node *model.K8sNode
+
+	if err := k.db.WithContext(ctx).Where("name = ?", name).First(&node).Error; err != nil {
+		k.l.Error("GetNodeByName 查询节点失败", zap.Error(err))
+		return nil, err
+	}
+
+	return node, nil
 }
 
 func (k *k8sDAO) GetPodsByNodeID(ctx context.Context, nodeID int) ([]*model.K8sPod, error) {
