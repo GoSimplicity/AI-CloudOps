@@ -13,7 +13,6 @@ k8s:
   refresh_cron: "@every 15s"
 prometheus:
   refresh_cron: "@every 15s"
-  interval_seconds: 15
   local_yaml_dir: ./local_yaml
   enable_alert: 0 # 1 开启告警 0 关闭告警
   enable_record: 0 # 1 开启记录 0 关闭记录

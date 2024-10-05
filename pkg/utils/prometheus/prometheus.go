@@ -3,8 +3,15 @@ package prometheus
 import (
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	pcc "github.com/prometheus/common/config"
+	pm "github.com/prometheus/common/model"
 	promModel "github.com/prometheus/common/model"
+	pc "github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/discovery"
+	"github.com/prometheus/prometheus/model/relabel"
+	"net/url"
 	"strings"
+	"time"
 )
 
 func CheckPoolIpExists(req *model.MonitorScrapePool, pools []*model.MonitorScrapePool) bool {
@@ -52,4 +59,58 @@ func ParseTags(tags []string) (map[promModel.LabelName]promModel.LabelValue, err
 	}
 
 	return labels, nil
+}
+
+// ParseExternalLabels 解析外部标签
+func ParseExternalLabels(labelsList []string) []string {
+	var parsed []string
+
+	// 示例：["key1=value1", "key2=value2"]
+	for _, label := range labelsList {
+		// 根据 "=" 分割字符串
+		parts := strings.SplitN(label, "=", 2)
+		if len(parts) == 2 {
+			parsed = append(parsed, parts[0], parts[1])
+		}
+	}
+
+	// 返回的格式为 ["key1", "value1", "key2", "value2"]
+	return parsed
+}
+
+// ParseURL 解析字符串为URL，返回错误而非 panic
+func ParseURL(u string) (*pcc.URL, error) {
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return nil, fmt.Errorf("无效的URL: %s", u)
+	}
+
+	return &pcc.URL{URL: parsed}, nil
+}
+
+// GenPromDuration 转换秒为Prometheus Duration
+func GenPromDuration(seconds int) pm.Duration {
+	return pm.Duration(time.Duration(seconds) * time.Second)
+}
+
+// DeepCopyScrapeConfig 深度拷贝 ScrapeConfig
+func DeepCopyScrapeConfig(sc *pc.ScrapeConfig) *pc.ScrapeConfig {
+	copySc := *sc
+
+	// 深度拷贝 RelabelConfigs
+	if sc.RelabelConfigs != nil {
+		copySc.RelabelConfigs = make([]*relabel.Config, len(sc.RelabelConfigs))
+		for i, rc := range sc.RelabelConfigs {
+			copyRC := *rc
+			copySc.RelabelConfigs[i] = &copyRC
+		}
+	}
+
+	// 深度拷贝 ServiceDiscoveryConfigs
+	if sc.ServiceDiscoveryConfigs != nil {
+		copySc.ServiceDiscoveryConfigs = make(discovery.Configs, len(sc.ServiceDiscoveryConfigs))
+		copy(copySc.ServiceDiscoveryConfigs, sc.ServiceDiscoveryConfigs)
+	}
+
+	return &copySc
 }
