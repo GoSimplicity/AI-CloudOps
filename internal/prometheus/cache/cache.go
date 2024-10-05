@@ -13,6 +13,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
 	altconfig "github.com/prometheus/alertmanager/config"
 	al "github.com/prometheus/alertmanager/pkg/labels"
 	pcc "github.com/prometheus/common/config"
@@ -66,8 +67,7 @@ type monitorCache struct {
 	dao                       dao.PrometheusDao // Prometheus数据访问对象
 	localYamlDir              string            // 本地YAML目录
 	alertWebhookAddr          string            // Alertmanager Webhook地址
-	alertEnable               bool              // 是否启用告警
-	recordEnable              bool              // 是否启用预聚合
+	httpSdAPI                 string            // HTTP服务发现API地址
 }
 
 func NewMonitorCache(l *zap.Logger, dao dao.PrometheusDao) MonitorCache {
@@ -81,8 +81,7 @@ func NewMonitorCache(l *zap.Logger, dao dao.PrometheusDao) MonitorCache {
 		dao:                       dao,
 		localYamlDir:              viper.GetString("prometheus.local_yaml_dir"),
 		alertWebhookAddr:          viper.GetString("prometheus.alert_webhook_addr"),
-		alertEnable:               viper.GetInt("prometheus.enable_alert") == 1,
-		recordEnable:              viper.GetInt("prometheus.enable_record") == 1,
+		httpSdAPI:                 viper.GetString("prometheus.httpSdAPI"),
 	}
 }
 
@@ -144,16 +143,19 @@ func (mc *monitorCache) GetPrometheusMainConfigByIP(ip string) string {
 
 // GeneratePrometheusMainConfig 生成所有Prometheus主配置文件
 func (mc *monitorCache) GeneratePrometheusMainConfig(ctx context.Context) error {
+	// 获取所有采集池
 	pools, err := mc.dao.GetAllMonitorScrapePool(ctx)
 	if err != nil {
 		mc.l.Error("获取采集池失败", zap.Error(err))
 		return err
 	}
+
 	if len(pools) == 0 {
 		mc.l.Info("没有找到任何采集池")
 		return nil
 	}
 
+	// 创建新的配置映射key为ip，val为配置
 	newConfigMap := make(map[string]string)
 
 	for _, pool := range pools {
@@ -216,61 +218,70 @@ func (mc *monitorCache) GeneratePrometheusMainConfig(ctx context.Context) error 
 
 // CreateBasePrometheusConfig 创建基础Prometheus配置，返回错误
 func (mc *monitorCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePool) (pc.Config, error) {
+	// 创建prometheus global全局配置
 	globalConfig := pc.GlobalConfig{
-		ScrapeInterval: GenPromDuration(pool.ScrapeInterval),
-		ScrapeTimeout:  GenPromDuration(pool.ScrapeTimeout),
+		ScrapeInterval: pkg.GenPromDuration(pool.ScrapeInterval), // 采集间隔
+		ScrapeTimeout:  pkg.GenPromDuration(pool.ScrapeTimeout),  // 采集超时时间
 	}
 
 	// 解析外部标签
-	externalLabels := ParseExternalLabels(pool.ExternalLabels)
+	externalLabels := pkg.ParseExternalLabels(pool.ExternalLabels)
 	if len(externalLabels) > 0 {
 		globalConfig.ExternalLabels = labels.FromStrings(externalLabels...)
 	}
 
 	// 解析 RemoteWrite URL
-	remoteWriteURL, err := ParseURL(pool.RemoteWriteUrl)
+	remoteWriteURL, err := pkg.ParseURL(pool.RemoteWriteUrl)
 	if err != nil {
+		mc.l.Error("解析 RemoteWriteUrl 失败", zap.Error(err))
 		return pc.Config{}, fmt.Errorf("解析 RemoteWriteUrl 失败: %w", err)
 	}
 
+	// 配置远程写入
 	remoteWrite := &pc.RemoteWriteConfig{
 		URL:           remoteWriteURL,
-		RemoteTimeout: GenPromDuration(pool.RemoteTimeoutSeconds),
+		RemoteTimeout: pkg.GenPromDuration(pool.RemoteTimeoutSeconds),
 	}
 
+	// 组装prometheus基础配置
 	config := pc.Config{
 		GlobalConfig:       globalConfig,
 		RemoteWriteConfigs: []*pc.RemoteWriteConfig{remoteWrite},
 	}
 
-	if mc.alertEnable && pool.SupportAlert == 1 {
-		// 配置 RemoteRead
-		remoteReadURL, err := ParseURL(pool.RemoteReadUrl)
+	if pool.SupportAlert == 1 { // 启用告警
+		// 解析 RemoteRead URL
+		remoteReadURL, err := pkg.ParseURL(pool.RemoteReadUrl)
 		if err != nil {
+			mc.l.Error("解析 RemoteReadUrl 失败", zap.Error(err))
 			return pc.Config{}, fmt.Errorf("解析 RemoteReadUrl 失败: %w", err)
 		}
 
+		// 配置远程读取
 		config.RemoteReadConfigs = []*pc.RemoteReadConfig{
 			{
 				URL:           remoteReadURL,
-				RemoteTimeout: GenPromDuration(pool.RemoteTimeoutSeconds),
+				RemoteTimeout: pkg.GenPromDuration(pool.RemoteTimeoutSeconds),
 			},
 		}
 
 		// 配置 Alertmanager
 		alertConfig := &pc.AlertmanagerConfig{
 			APIVersion: "v2",
-			ServiceDiscoveryConfigs: discovery.Configs{
+			ServiceDiscoveryConfigs: discovery.Configs{ // 服务发现配置
 				&discovery.StaticConfig{
 					{
 						Targets: []pm.LabelSet{
-							{pm.AddressLabel: pm.LabelValue(pool.AlertManagerUrl)},
+							{
+								pm.AddressLabel: pm.LabelValue(pool.AlertManagerUrl), // 配置抓取目标地址
+							},
 						},
 					},
 				},
 			},
 		}
 
+		// 组装Alertmanager基础配置
 		config.AlertingConfig = pc.AlertingConfig{
 			AlertmanagerConfigs: []*pc.AlertmanagerConfig{alertConfig},
 		}
@@ -279,41 +290,12 @@ func (mc *monitorCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePool
 		config.RuleFiles = append(config.RuleFiles, pool.RuleFilePath)
 	}
 
-	if mc.recordEnable && pool.SupportRecord == 1 {
+	if pool.SupportRecord == 1 { // 启用预聚合
 		// 添加预聚合规则文件
 		config.RuleFiles = append(config.RuleFiles, pool.RecordFilePath)
 	}
 
 	return config, nil
-}
-
-// ParseExternalLabels 解析外部标签
-func ParseExternalLabels(labelsList []string) []string {
-	var parsed []string
-
-	for _, label := range labelsList {
-		parts := strings.SplitN(label, "=", 2)
-		if len(parts) == 2 {
-			parsed = append(parsed, parts[0], parts[1])
-		}
-	}
-
-	return parsed
-}
-
-// ParseURL 解析字符串为URL，返回错误而非 panic
-func ParseURL(u string) (*pcc.URL, error) {
-	parsed, err := url.Parse(u)
-	if err != nil {
-		return nil, fmt.Errorf("无效的URL: %s", u)
-	}
-
-	return &pcc.URL{URL: parsed}, nil
-}
-
-// GenPromDuration 转换秒为Prometheus Duration
-func GenPromDuration(seconds int) pm.Duration {
-	return pm.Duration(time.Duration(seconds) * time.Second)
 }
 
 // ApplyHashMod 应用HashMod和Keep Relabel配置进行分片
@@ -322,23 +304,24 @@ func (mc *monitorCache) ApplyHashMod(scrapeConfigs []*pc.ScrapeConfig, modNum, i
 
 	for _, sc := range scrapeConfigs {
 		// 深度拷贝 ScrapeConfig
-		copySc := DeepCopyScrapeConfig(sc)
+		copySc := pkg.DeepCopyScrapeConfig(sc)
 		// 添加新的 Relabel 配置
 		newRelabelConfigs := []*relabel.Config{
 			{
-				Action:       relabel.HashMod,
-				SourceLabels: pm.LabelNames{pm.AddressLabel},
-				Regex:        relabel.MustNewRegexp("(.*)"),
-				Replacement:  "$1",
-				Modulus:      uint64(modNum),
-				TargetLabel:  hashTmpKey,
+				Action:       relabel.HashMod,                // 使用哈希取模操作
+				SourceLabels: pm.LabelNames{pm.AddressLabel}, // 使用抓取目标地址作为源标签
+				Regex:        relabel.MustNewRegexp("(.*)"),  // 匹配所有字符
+				Replacement:  "$1",                           // 将匹配的整个值作为替换结果
+				Modulus:      uint64(modNum),                 // 设置模数
+				TargetLabel:  hashTmpKey,                     // 目标标签 用于存储哈希取模后的结果
 			},
 			{
-				Action:       relabel.Keep,
-				SourceLabels: pm.LabelNames{hashTmpKey},
-				Regex:        relabel.MustNewRegexp(fmt.Sprintf("^%d$", index)),
+				Action:       relabel.Keep,                                      // 保留符合条件的目标 丢弃不符合条件的目标
+				SourceLabels: pm.LabelNames{hashTmpKey},                         // 使用上一步计算出的哈希结果作为源标签
+				Regex:        relabel.MustNewRegexp(fmt.Sprintf("^%d$", index)), // 只保留哈希结果等于当前实例索引 (index) 的目标
 			},
 		}
+
 		copySc.RelabelConfigs = append(copySc.RelabelConfigs, newRelabelConfigs...)
 		modified = append(modified, copySc)
 	}
@@ -346,30 +329,9 @@ func (mc *monitorCache) ApplyHashMod(scrapeConfigs []*pc.ScrapeConfig, modNum, i
 	return modified
 }
 
-// DeepCopyScrapeConfig 深度拷贝 ScrapeConfig
-func DeepCopyScrapeConfig(sc *pc.ScrapeConfig) *pc.ScrapeConfig {
-	copySc := *sc
-
-	// 深度拷贝 RelabelConfigs
-	if sc.RelabelConfigs != nil {
-		copySc.RelabelConfigs = make([]*relabel.Config, len(sc.RelabelConfigs))
-		for i, rc := range sc.RelabelConfigs {
-			copyRC := *rc
-			copySc.RelabelConfigs[i] = &copyRC
-		}
-	}
-
-	// 深度拷贝 ServiceDiscoveryConfigs
-	if sc.ServiceDiscoveryConfigs != nil {
-		copySc.ServiceDiscoveryConfigs = make(discovery.Configs, len(sc.ServiceDiscoveryConfigs))
-		copy(copySc.ServiceDiscoveryConfigs, sc.ServiceDiscoveryConfigs)
-	}
-
-	return &copySc
-}
-
 // GenerateScrapeConfigs 生成采集配置
 func (mc *monitorCache) GenerateScrapeConfigs(ctx context.Context, pool *model.MonitorScrapePool) []*pc.ScrapeConfig {
+	// 获取与指定池相关的采集任务
 	scrapeJobs, err := mc.dao.GetMonitorScrapeJobsByPoolId(ctx, pool.ID)
 	if err != nil {
 		mc.l.Error("获取采集任务失败", zap.Error(err), zap.String("池名", pool.Name))
@@ -387,8 +349,8 @@ func (mc *monitorCache) GenerateScrapeConfigs(ctx context.Context, pool *model.M
 			JobName:        job.Name,
 			Scheme:         job.Scheme,
 			MetricsPath:    job.MetricsPath,
-			ScrapeInterval: GenPromDuration(job.ScrapeInterval),
-			ScrapeTimeout:  GenPromDuration(job.ScrapeTimeout),
+			ScrapeInterval: pkg.GenPromDuration(job.ScrapeInterval),
+			ScrapeTimeout:  pkg.GenPromDuration(job.ScrapeTimeout),
 		}
 
 		// 解析 Relabel 配置
@@ -402,31 +364,34 @@ func (mc *monitorCache) GenerateScrapeConfigs(ctx context.Context, pool *model.M
 		// 根据服务发现类型配置 ServiceDiscoveryConfigs
 		switch job.ServiceDiscoveryType {
 		case "http":
-			httpSdAPI := viper.GetString("prometheus.httpSdAPI")
 			if err != nil {
 				mc.l.Error("获取 HTTP SD API 失败", zap.Error(err), zap.String("任务名", job.Name))
 				continue
 			}
-			sdURL := fmt.Sprintf("%s?port=%d&leafNodeIds=%s", httpSdAPI, job.Port, strings.Join(job.TreeNodeIDs, ","))
+
+			// 拼接 SD API URL
+			sdURL := fmt.Sprintf("%s?port=%d&leafNodeIds=%s", mc.httpSdAPI, job.Port, strings.Join(job.TreeNodeIDs, ","))
+
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				&http.SDConfig{
 					URL:             sdURL,
-					RefreshInterval: GenPromDuration(job.RefreshInterval),
+					RefreshInterval: pkg.GenPromDuration(job.RefreshInterval),
 				},
 			}
 		case "k8s":
-			sc.HTTPClientConfig = pcc.HTTPClientConfig{
-				BearerTokenFile: job.BearerTokenFile,
-				TLSConfig: pcc.TLSConfig{
-					CAFile:             job.TlsCaFilePath,
-					InsecureSkipVerify: true,
+			sc.HTTPClientConfig = pcc.HTTPClientConfig{ // 配置 HTTP 客户端配置
+				BearerTokenFile: job.BearerTokenFile, // 设置鉴权文件路径
+				TLSConfig: pcc.TLSConfig{ // 配置 TLS 配置
+					CAFile:             job.TlsCaFilePath, // 设置 CA 证书文件路径
+					InsecureSkipVerify: true,              // 跳过证书验证
 				},
 			}
+
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				&kubernetes.SDConfig{
-					Role:             kubernetes.Role(job.KubernetesSdRole),
-					KubeConfig:       job.KubeConfigFilePath,
-					HTTPClientConfig: pcc.DefaultHTTPClientConfig,
+					Role:             kubernetes.Role(job.KubernetesSdRole), // 设置k8s服务发现角色
+					KubeConfig:       job.KubeConfigFilePath,                // kubeconfig文件路径
+					HTTPClientConfig: pcc.DefaultHTTPClientConfig,           // 使用默认的HTTP客户端配置
 				},
 			}
 		default:
@@ -481,7 +446,7 @@ func (mc *monitorCache) GenerateAlertManagerMainConfig(ctx context.Context) erro
 		}
 
 		// 序列化配置为YAML格式
-		out, err := yaml.Marshal(allConfig)
+		config, err := yaml.Marshal(allConfig)
 		if err != nil {
 			mc.l.Error("[监控模块]根据alert配置生成AlertManager主配置文件错误",
 				zap.Error(err),
@@ -492,7 +457,7 @@ func (mc *monitorCache) GenerateAlertManagerMainConfig(ctx context.Context) erro
 
 		mc.l.Debug("[监控模块]根据alert配置生成AlertManager主配置文件成功",
 			zap.String("池子", pool.Name),
-			zap.ByteString("配置", out),
+			zap.ByteString("配置", config),
 		)
 
 		// 写入配置文件并更新缓存
@@ -503,14 +468,17 @@ func (mc *monitorCache) GenerateAlertManagerMainConfig(ctx context.Context) erro
 				ip,
 				index,
 			)
-			if err := os.WriteFile(fileName, out, 0644); err != nil { // 使用更安全的文件权限
+
+			if err := os.WriteFile(fileName, config, 0644); err != nil {
 				mc.l.Error("[监控模块]写入AlertManager配置文件失败",
 					zap.Error(err),
 					zap.String("文件路径", fileName),
 				)
 				continue
 			}
-			mainConfigMap[ip] = string(out)
+
+			// 配置存入map中
+			mainConfigMap[ip] = string(config)
 		}
 	}
 
@@ -523,50 +491,51 @@ func (mc *monitorCache) GenerateAlertManagerMainConfig(ctx context.Context) erro
 
 // GenerateAlertManagerMainConfigOnePool 生成单个AlertManager池的主配置
 func (mc *monitorCache) GenerateAlertManagerMainConfigOnePool(pool *model.MonitorAlertManagerPool) *altconfig.Config {
-	// 解析持续时间配置
+	// 解析默认恢复时间
 	resolveTimeout, err := pm.ParseDuration(pool.ResolveTimeout)
 	if err != nil {
 		mc.l.Warn("[监控模块]解析ResolveTimeout失败，使用默认值",
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		resolveTimeout = 0
+		resolveTimeout = 5
 	}
 
+	// 解析分组第一次等待时间
 	groupWait, err := pm.ParseDuration(pool.GroupWait)
 	if err != nil {
 		mc.l.Warn("[监控模块]解析GroupWait失败，使用默认值",
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		groupWait = 0
+		groupWait = 5
 	}
 
+	// 解析分组等待间隔时间
 	groupInterval, err := pm.ParseDuration(pool.GroupInterval)
 	if err != nil {
 		mc.l.Warn("[监控模块]解析GroupInterval失败，使用默认值",
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		groupInterval = 0
+		groupInterval = 5
 	}
 
+	// 解析重复发送时间
 	repeatInterval, err := pm.ParseDuration(pool.RepeatInterval)
 	if err != nil {
 		mc.l.Warn("[监控模块]解析RepeatInterval失败，使用默认值",
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		repeatInterval = 0
+		repeatInterval = 5
 	}
 
-	config := &altconfig.Config{
-		// 设置全局配置
-		Global: &altconfig.GlobalConfig{
+	config := &altconfig.Config{ // 生成alertmanager配置
+		Global: &altconfig.GlobalConfig{ // 设置全局配置
 			ResolveTimeout: resolveTimeout,
 		},
-		// 设置默认路由
-		Route: &altconfig.Route{
+		Route: &altconfig.Route{ // 设置默认路由
 			Receiver:       pool.Receiver,
 			GroupWait:      &groupWait,
 			GroupInterval:  &groupInterval,
