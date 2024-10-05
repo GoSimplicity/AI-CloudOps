@@ -21,7 +21,6 @@ type PrometheusDao interface {
 	UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
 	DeleteMonitorScrapeJob(ctx context.Context, jobId int) error
 
-	GetHttpSdApi(ctx context.Context, jobId int) (string, error)
 	GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, error)
 	GetMonitorSendGroupByPoolId(ctx context.Context, poolId int) ([]*model.MonitorSendGroup, error)
 	GetMonitorScrapePoolSupportedAlert(ctx context.Context) ([]*model.MonitorScrapePool, error)
@@ -251,17 +250,6 @@ func (p *prometheusDao) DeleteMonitorScrapeJob(ctx context.Context, jobId int) e
 	}
 
 	return nil
-}
-
-func (p *prometheusDao) GetHttpSdApi(ctx context.Context, jobId int) (string, error) {
-	var scrapeJob *model.MonitorScrapeJob
-
-	if err := p.db.WithContext(ctx).Where("id = ?", jobId).First(&scrapeJob).Error; err != nil {
-		p.l.Error("GetHttpSdApi failed to get http sd api", zap.Error(err))
-		return "", err
-	}
-
-	return scrapeJob.ServiceDiscoveryType, nil
 }
 
 func (p *prometheusDao) GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, error) {

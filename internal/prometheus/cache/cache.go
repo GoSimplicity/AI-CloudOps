@@ -402,7 +402,7 @@ func (mc *monitorCache) GenerateScrapeConfigs(ctx context.Context, pool *model.M
 		// 根据服务发现类型配置 ServiceDiscoveryConfigs
 		switch job.ServiceDiscoveryType {
 		case "http":
-			httpSdAPI, err := mc.dao.GetHttpSdApi(ctx, job.ID)
+			httpSdAPI := viper.GetString("prometheus.httpSdAPI")
 			if err != nil {
 				mc.l.Error("获取 HTTP SD API 失败", zap.Error(err), zap.String("任务名", job.Name))
 				continue
