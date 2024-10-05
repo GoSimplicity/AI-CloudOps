@@ -7,6 +7,7 @@ import (
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"net/http"
 	"strconv"
 )
 
@@ -264,7 +265,7 @@ func (p *PrometheusHandler) GetMonitorPrometheusYaml(ctx *gin.Context) {
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, yaml)
+	ctx.String(http.StatusOK, yaml)
 }
 
 // GetMonitorPrometheusAlertRuleYaml 获取单个 Prometheus 告警配置规则文件
@@ -277,7 +278,7 @@ func (p *PrometheusHandler) GetMonitorPrometheusAlertRuleYaml(ctx *gin.Context) 
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, yaml)
+	ctx.String(http.StatusOK, yaml)
 }
 
 // GetMonitorPrometheusRecordYaml 获取单个 Prometheus 记录配置文件
@@ -289,8 +290,7 @@ func (p *PrometheusHandler) GetMonitorPrometheusRecordYaml(ctx *gin.Context) {
 		apiresponse.ErrorWithMessage(ctx, "获取 Prometheus 记录配置文件失败")
 		return
 	}
-	apiresponse.SuccessWithData(ctx, yaml)
-	// TODO: 实现获取单个 Prometheus 记录配置文件的逻辑
+	ctx.String(http.StatusOK, yaml)
 }
 
 // GetMonitorAlertManagerYaml 获取单个 AlertManager 配置文件
@@ -303,7 +303,7 @@ func (p *PrometheusHandler) GetMonitorAlertManagerYaml(ctx *gin.Context) {
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, yaml)
+	ctx.String(http.StatusOK, yaml)
 }
 
 // GetMonitorOnDutyGroupList 获取值班组列表

@@ -25,7 +25,16 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		path := ctx.Request.URL.Path
 		// 如果请求的路径是下述路径，则不进行token验证
-		if path == "/api/user/signup" || path == "/api/user/login" || path == "/api/user/logout" || strings.Contains(path, "hello") || path == "/api/user/refresh_token" {
+		if path == "/api/user/signup" ||
+			path == "/api/user/login" ||
+			path == "/api/user/logout" ||
+			strings.Contains(path, "hello") ||
+			path == "/api/user/refresh_token" ||
+			path == "/api/not_auth/getTreeNodeBindIps" ||
+			path == "/api/monitor/prometheus_configs/prometheus" ||
+			path == "/api/monitor/prometheus_configs/prometheus_alert" ||
+			path == "/api/monitor/prometheus_configs/prometheus_record" ||
+			path == "/api/monitor/prometheus_configs/alertManager" {
 			return
 		}
 

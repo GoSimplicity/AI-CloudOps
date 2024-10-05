@@ -147,7 +147,7 @@ func (p *prometheusService) DeleteMonitorScrapeJob(ctx context.Context, id int) 
 }
 
 func (p *prometheusService) GetMonitorPrometheusYaml(_ context.Context, ip string) string {
-	return p.cache.GetAlertManagerMainConfigYamlByIP(ip)
+	return p.cache.GetPrometheusMainConfigByIP(ip)
 }
 
 func (p *prometheusService) GetMonitorPrometheusAlertRuleYaml(_ context.Context, ip string) string {
