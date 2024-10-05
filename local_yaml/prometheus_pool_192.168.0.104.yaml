@@ -16,7 +16,7 @@ scrape_configs:
         - follow_redirects: false
           enable_http2: false
           refresh_interval: 30s
-          url: http?port=8428&leafNodeIds=7
+          url: http://192.168.0.105:8888/api/not_auth/getTreeNodeBindIps?port=8428&leafNodeIds=8
 remote_write:
     - url: http://192.168.0.104:8428/api/v1/write
       remote_timeout: 10s

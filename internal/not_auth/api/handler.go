@@ -51,13 +51,12 @@ func (n *NotAuthHandler) GetTreeNodeBindIps(ctx *gin.Context) {
 		return
 	}
 
-	// 调用服务逻辑构建 Prometheus 服务发现结果
+	// 构建 Prometheus 服务发现结果
 	res, err := n.svc.BuildPrometheusServiceDiscovery(ctx, leafNodeIdList, p)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	// 返回成功结果
 	ctx.JSON(http.StatusOK, res)
 }

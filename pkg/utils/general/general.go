@@ -2,11 +2,26 @@ package general
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
+
+func ConvertToIntList(stringList []string) ([]int, error) {
+	intList := make([]int, 0, len(stringList))
+	for _, idStr := range stringList {
+		id, err := strconv.Atoi(strings.TrimSpace(idStr)) // 去除空白并转换为整数
+		if err != nil {
+			return nil, fmt.Errorf("无法解析 leafNodeId: '%s' 为整数", idStr)
+		}
+		intList = append(intList, id)
+	}
+
+	return intList, nil
+}
 
 // IsType 判断两个值是否是相同类型
 func IsType(value1, value2 interface{}) bool {

@@ -7,6 +7,8 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	k8sService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
+	notAuthService "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	promHandler "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	promDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao"
@@ -47,6 +49,7 @@ func InitWebServer() *Cmd {
 		cache.NewMonitorCache,
 		userHandler.NewUserHandler,
 		authHandler.NewAuthHandler,
+		notAuthHandler.NewNotAuthHandler,
 		treeHandler.NewTreeHandler,
 		k8sHandler.NewK8sHandler,
 		promHandler.NewPrometheusHandler,
@@ -57,6 +60,7 @@ func InitWebServer() *Cmd {
 		menuService.NewMenuService,
 		k8sService.NewK8sService,
 		promService.NewPrometheusService,
+		notAuthService.NewNotAuthService,
 		userDao.NewUserDAO,
 		apiDao.NewApiDAO,
 		roleDao.NewRoleDAO,
