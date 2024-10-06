@@ -4,19 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/clientcmd"
-	"sync"
 )
 
 type K8sService interface {
@@ -45,12 +46,12 @@ type K8sService interface {
 	CheckTaintYaml(ctx context.Context, taint *model.TaintK8sNodesRequest) error
 	// BatchEnableSwitchNodes 批量启用或切换 Kubernetes 节点调度
 	BatchEnableSwitchNodes(ctx context.Context, req *model.ScheduleK8sNodesRequest) error
-	// AddNodeLabel 添加标签到指定 Node
-	AddNodeLabel(ctx context.Context, nodeID int, labelKey, labelValue string) error
+	// UpdateNodeLabel 添加或者删除指定节点 Label
+	UpdateNodeLabel(ctx context.Context, req *model.LabelK8sNodesRequest) error
 	// UpdateNodeTaint 添加或者删除指定节点 Taint
 	UpdateNodeTaint(ctx context.Context, taint *model.TaintK8sNodesRequest) error
 	// DrainPods 删除指定 Node 上的 Pod
-	DrainPods(ctx context.Context, nodeID int) error
+	DrainPods(ctx context.Context, req *model.K8sClusterNodesRequest) error
 }
 
 type k8sService struct {
@@ -283,7 +284,7 @@ func (k *k8sService) ListAllNodes(ctx context.Context, id int) ([]*model.K8sNode
 	}
 
 	// 获取节点列表
-	nodes, err := k8s.GetNodesByClusterID(ctx, kubeClient, "")
+	nodes, err := pkg.GetNodesByClusterID(ctx, kubeClient, "")
 	if err != nil {
 		k.l.Error("ListAllNodes: 获取节点列表失败", zap.Error(err))
 		return nil, err
@@ -309,7 +310,7 @@ func (k *k8sService) ListAllNodes(ctx context.Context, id int) ([]*model.K8sNode
 			defer func() { <-semaphore }()
 
 			// 构建 K8sNode 对象
-			k8sNode, err := k8s.BuildK8sNode(ctx, id, node, kubeClient, metricsClient)
+			k8sNode, err := pkg.BuildK8sNode(ctx, id, node, kubeClient, metricsClient)
 			if err != nil {
 				k.l.Error("ListAllNodes: 构建 K8sNode 失败", zap.Error(err), zap.String("node", node.Name))
 				return nil
@@ -346,14 +347,14 @@ func (k *k8sService) GetNodeByName(ctx context.Context, id int, name string) (*m
 	}
 
 	// 获取节点
-	nodes, err := k8s.GetNodesByClusterID(ctx, kubeClient, name)
+	nodes, err := pkg.GetNodesByClusterID(ctx, kubeClient, name)
 	if err != nil || len(nodes.Items) == 0 {
 		return nil, constants.ErrorNodeNotFound
 	}
 	node := nodes.Items[0]
 
 	// 构建 k8sNode
-	return k8s.BuildK8sNode(ctx, id, node, kubeClient, metricsClient)
+	return pkg.BuildK8sNode(ctx, id, node, kubeClient, metricsClient)
 }
 
 func (k *k8sService) GetPodsByNodeName(ctx context.Context, id int, name string) ([]*model.K8sPod, error) {
@@ -364,12 +365,12 @@ func (k *k8sService) GetPodsByNodeName(ctx context.Context, id int, name string)
 	}
 
 	// 获取节点
-	nodes, err := k8s.GetNodesByClusterID(ctx, kubeClient, name)
+	nodes, err := pkg.GetNodesByClusterID(ctx, kubeClient, name)
 	if err != nil || len(nodes.Items) == 0 {
 		return nil, constants.ErrorNodeNotFound
 	}
 
-	pods, err := k8s.GetPodsByNodeName(ctx, kubeClient, name)
+	pods, err := pkg.GetPodsByNodeName(ctx, kubeClient, name)
 	if err != nil {
 		return nil, err
 	}
@@ -573,9 +574,68 @@ func (k *k8sService) BatchEnableSwitchNodes(ctx context.Context, req *model.Sche
 	return nil
 }
 
-func (k *k8sService) AddNodeLabel(ctx context.Context, nodeID int, labelKey, labelValue string) error {
-	//TODO implement me
-	panic("implement me")
+func (k *k8sService) UpdateNodeLabel(ctx context.Context, req *model.LabelK8sNodesRequest) error {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	var errs []error
+
+	// 遍历每个节点名称
+	for _, nodeName := range req.NodeNames {
+		// 获取节点信息
+		node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			errs = append(errs, fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err))
+			k.l.Error("获取节点信息失败", zap.Error(err))
+			continue
+		}
+
+		switch req.ModType {
+		case "add":
+			for key, value := range req.Labels {
+				node.Labels[key] = value
+			}
+
+		case "del":
+			for key := range req.Labels {
+				delete(node.Labels, key)
+			}
+
+		default:
+			// 处理未知的修改类型
+			errMsg := fmt.Sprintf("未知的修改类型: %s", req.ModType)
+			k.l.Error(errMsg)
+			errs = append(errs, errors.New(errMsg))
+			continue
+		}
+
+		// 更新节点信息
+		_, err = kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+		if err != nil {
+			k.l.Error("更新节点信息失败", zap.Error(err))
+			errs = append(errs, fmt.Errorf("更新节点 %s 信息失败: %w", nodeName, err))
+			continue
+		}
+
+		k.l.Info("更新节点Label成功", zap.String("nodeName", nodeName))
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("在处理节点 Labels 时遇到以下错误: %v", errs)
+	}
+
+	return nil
 }
 
 // AddNodeTaint 添加或删除 Kubernetes 节点的 Taint
@@ -618,7 +678,7 @@ func (k *k8sService) UpdateNodeTaint(ctx context.Context, req *model.TaintK8sNod
 			// 添加新的 Taints
 			node.Spec.Taints = pkg.MergeTaints(node.Spec.Taints, taintsToProcess)
 
-		case "delete":
+		case "del":
 			// 删除指定的 Taints
 			node.Spec.Taints = pkg.RemoveTaints(node.Spec.Taints, taintsToProcess)
 
@@ -648,12 +708,59 @@ func (k *k8sService) UpdateNodeTaint(ctx context.Context, req *model.TaintK8sNod
 	return nil
 }
 
-func (k *k8sService) DeleteNodeLabel(ctx context.Context, nodeID int, labelKey string) error {
-	//TODO implement me
-	panic("implement me")
-}
+func (k *k8sService) DrainPods(ctx context.Context, req *model.K8sClusterNodesRequest) error {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return err
+	}
 
-func (k *k8sService) DrainPods(ctx context.Context, nodeID int) error {
-	//TODO implement me
-	panic("implement me")
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	// 获取 pods
+	pods, err := pkg.GetPodsByNodeName(ctx, kubeClient, req.NodeNames[0])
+	if err != nil {
+		k.l.Error("获取 Pod 列表失败", zap.Error(err))
+		return err
+	}
+
+	// 创建 Eviction 对象
+	eviction := &policyv1.Eviction{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "policy/v1",
+			Kind:       "Eviction",
+		},
+		DeleteOptions: &metav1.DeleteOptions{
+			GracePeriodSeconds: new(int64),
+		},
+	}
+
+	var errs []error
+	// 遍历每个 Pod
+	for _, pod := range pods.Items {
+		// 设置 Eviction 对象的 Name 和 Namespace
+		eviction.Name = pod.Name
+		eviction.Namespace = pod.Namespace
+
+		// 驱逐 Pod
+		if err := kubeClient.PolicyV1().Evictions(eviction.Namespace).Evict(ctx, eviction); err != nil {
+			k.l.Error("驱逐 Pod 失败", zap.Error(err), zap.String("podName", pod.Name))
+			errs = append(errs, fmt.Errorf("驱逐 Pod %s 失败: %w", pod.Name, err))
+			continue
+		}
+
+		k.l.Info("驱逐 Pod 成功", zap.String("podName", pod.Name))
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("在驱逐 Pod 时遇到以下错误: %v", errs)
+	}
+
+	return nil
 }
