@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
@@ -16,7 +18,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/clientcmd"
-	"sync"
 )
 
 type K8sService interface {
@@ -618,7 +619,7 @@ func (k *k8sService) UpdateNodeTaint(ctx context.Context, req *model.TaintK8sNod
 			// 添加新的 Taints
 			node.Spec.Taints = pkg.MergeTaints(node.Spec.Taints, taintsToProcess)
 
-		case "delete":
+		case "del":
 			// 删除指定的 Taints
 			node.Spec.Taints = pkg.RemoveTaints(node.Spec.Taints, taintsToProcess)
 
