@@ -51,6 +51,11 @@ func (t *TreeHandler) RegisterRouters(server *gin.Engine) {
 	treeGroup.POST("/unBindEcs", t.UnBindEcs)
 	treeGroup.POST("/unBindElb", t.UnBindElb)
 	treeGroup.POST("/unBindRds", t.UnBindRds)
+
+	// 资源CURD相关路由
+	treeGroup.POST("/createEcsResource", t.CreateEcsResource)
+	treeGroup.POST("/updateEcsResource", t.UpdateEcsResource)
+	treeGroup.DELETE("/deleteEcsResource/{id}", t.DeleteEcsResource)
 }
 
 func (t *TreeHandler) ListTreeNode(ctx *gin.Context) {
@@ -437,6 +442,55 @@ func (t *TreeHandler) UnBindRds(ctx *gin.Context) {
 	if err := t.service.UnBindRds(ctx, req.ResourceIds[0], req.NodeId); err != nil {
 		t.l.Error("unbind rds failed", zap.Error(err))
 		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
+}
+
+func (t *TreeHandler) CreateEcsResource(ctx *gin.Context) {
+	var req model.ResourceEcs
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := t.service.CreateEcsResource(ctx, &req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.Success(ctx)
+}
+
+func (t *TreeHandler) UpdateEcsResource(ctx *gin.Context) {
+	var req model.ResourceEcs
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := t.service.UpdateEcsResource(ctx, &req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.Success(ctx)
+}
+
+func (t *TreeHandler) DeleteEcsResource(ctx *gin.Context) {
+	id := ctx.Param("id")
+
+	idInt, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	if err := t.service.DeleteEcsResource(ctx, idInt); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 

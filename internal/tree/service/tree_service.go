@@ -28,8 +28,6 @@ type TreeService interface {
 	UpdateTreeNode(ctx context.Context, obj *model.TreeNode) error
 	GetChildrenTreeNodes(ctx context.Context, pid int) ([]*model.TreeNode, error)
 
-	// TODO 创建资源
-
 	GetEcsUnbindList(ctx context.Context) ([]*model.ResourceEcs, error)
 	GetEcsList(ctx context.Context, nodeID int) ([]*model.ResourceEcs, error)
 	GetElbUnbindList(ctx context.Context) ([]*model.ResourceElb, error)
@@ -44,6 +42,10 @@ type TreeService interface {
 	UnBindEcs(ctx context.Context, ecsID int, treeNodeID int) error
 	UnBindElb(ctx context.Context, elbID int, treeNodeID int) error
 	UnBindRds(ctx context.Context, rdsID int, treeNodeID int) error
+
+	CreateEcsResource(ctx context.Context, obj *model.ResourceEcs) error
+	UpdateEcsResource(ctx context.Context, obj *model.ResourceEcs) error
+	DeleteEcsResource(ctx context.Context, id int) error
 }
 
 type treeService struct {
@@ -571,4 +573,19 @@ func (ts *treeService) fetchUsers(ctx context.Context, userNames []string, role 
 	}
 
 	return users, nil
+}
+
+func (ts *treeService) CreateEcsResource(ctx context.Context, obj *model.ResourceEcs) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (ts *treeService) UpdateEcsResource(ctx context.Context, obj *model.ResourceEcs) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (ts *treeService) DeleteEcsResource(ctx context.Context, id int) error {
+	//TODO implement me
+	panic("implement me")
 }
