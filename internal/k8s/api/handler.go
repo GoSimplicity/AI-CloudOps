@@ -363,7 +363,7 @@ func (k *K8sHandler) AddTaintsNodes(ctx *gin.Context) {
 
 	err := ctx.ShouldBind(&taint)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
@@ -380,7 +380,7 @@ func (k *K8sHandler) DeleteTaintsNodes(ctx *gin.Context) {
 
 	err := ctx.ShouldBind(&taint)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
