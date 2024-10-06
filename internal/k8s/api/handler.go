@@ -366,6 +366,7 @@ func (k *K8sHandler) AddLabelNodes(ctx *gin.Context) {
 	apiresponse.Success(ctx)
 }
 
+// DeleteLabelNodes 删除节点标签
 func (k *K8sHandler) DeleteLabelNodes(ctx *gin.Context) {
 	var label *model.LabelK8sNodesRequest
 
@@ -401,6 +402,7 @@ func (k *K8sHandler) AddTaintsNodes(ctx *gin.Context) {
 	apiresponse.Success(ctx)
 }
 
+// DeleteTaintsNodes 删除节点 Taint
 func (k *K8sHandler) DeleteTaintsNodes(ctx *gin.Context) {
 	var taint *model.TaintK8sNodesRequest
 
@@ -420,7 +422,20 @@ func (k *K8sHandler) DeleteTaintsNodes(ctx *gin.Context) {
 
 // DrainPods 清空节点上的 Pods
 func (k *K8sHandler) DrainPods(ctx *gin.Context) {
-	// TODO: 实现清空节点上的 Pods 的逻辑
+	var req model.K8sClusterNodesRequest
+
+	err := ctx.ShouldBind(&req)
+	if err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	if err := k.service.DrainPods(ctx, &req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetYamlTemplateList 获取 YAML 模板列表
