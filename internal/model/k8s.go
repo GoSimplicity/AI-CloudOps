@@ -314,7 +314,8 @@ type K8sResourceList struct {
 // LabelK8sNodesRequest 定义为节点添加标签的请求结构
 type LabelK8sNodesRequest struct {
 	*K8sClusterNodesRequest
-	Labels map[string]string `json:"labels" binding:"required,dive,required"` // 标签键值对，必填，格式为 key=value
+	ModType string            `json:"mod_type" binding:"required,oneof=add del"` // 操作类型，必填，值为 "add" 或 "del"
+	Labels  map[string]string `json:"labels" binding:"required,dive,required"`   // 标签键值对，必填，格式为 key=value
 }
 
 // TaintK8sNodesRequest 定义为节点添加或删除 Taint 的请求结构
