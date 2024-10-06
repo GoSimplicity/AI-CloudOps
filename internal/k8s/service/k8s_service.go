@@ -46,8 +46,8 @@ type K8sService interface {
 	CheckTaintYaml(ctx context.Context, taint *model.TaintK8sNodesRequest) error
 	// BatchEnableSwitchNodes 批量启用或切换 Kubernetes 节点调度
 	BatchEnableSwitchNodes(ctx context.Context, req *model.ScheduleK8sNodesRequest) error
-	// AddNodeLabel 添加标签到指定 Node
-	AddNodeLabel(ctx context.Context, nodeID int, labelKey, labelValue string) error
+	// UpdateNodeLabel 添加或者删除指定节点 Label
+	UpdateNodeLabel(ctx context.Context, req *model.LabelK8sNodesRequest) error
 	// UpdateNodeTaint 添加或者删除指定节点 Taint
 	UpdateNodeTaint(ctx context.Context, taint *model.TaintK8sNodesRequest) error
 	// DrainPods 删除指定 Node 上的 Pod
@@ -574,9 +574,68 @@ func (k *k8sService) BatchEnableSwitchNodes(ctx context.Context, req *model.Sche
 	return nil
 }
 
-func (k *k8sService) AddNodeLabel(ctx context.Context, nodeID int, labelKey, labelValue string) error {
-	//TODO implement me
-	panic("implement me")
+func (k *k8sService) UpdateNodeLabel(ctx context.Context, req *model.LabelK8sNodesRequest) error {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	var errs []error
+
+	// 遍历每个节点名称
+	for _, nodeName := range req.NodeNames {
+		// 获取节点信息
+		node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			errs = append(errs, fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err))
+			k.l.Error("获取节点信息失败", zap.Error(err))
+			continue
+		}
+
+		switch req.ModType {
+		case "add":
+			for key, value := range req.Labels {
+				node.Labels[key] = value
+			}
+
+		case "del":
+			for key := range req.Labels {
+				delete(node.Labels, key)
+			}
+
+		default:
+			// 处理未知的修改类型
+			errMsg := fmt.Sprintf("未知的修改类型: %s", req.ModType)
+			k.l.Error(errMsg)
+			errs = append(errs, errors.New(errMsg))
+			continue
+		}
+
+		// 更新节点信息
+		_, err = kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+		if err != nil {
+			k.l.Error("更新节点信息失败", zap.Error(err))
+			errs = append(errs, fmt.Errorf("更新节点 %s 信息失败: %w", nodeName, err))
+			continue
+		}
+
+		k.l.Info("更新节点Label成功", zap.String("nodeName", nodeName))
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("在处理节点 Labels 时遇到以下错误: %v", errs)
+	}
+
+	return nil
 }
 
 // AddNodeTaint 添加或删除 Kubernetes 节点的 Taint
@@ -647,11 +706,6 @@ func (k *k8sService) UpdateNodeTaint(ctx context.Context, req *model.TaintK8sNod
 	}
 
 	return nil
-}
-
-func (k *k8sService) DeleteNodeLabel(ctx context.Context, nodeID int, labelKey string) error {
-	//TODO implement me
-	panic("implement me")
 }
 
 func (k *k8sService) DrainPods(ctx context.Context, nodeID int) error {
