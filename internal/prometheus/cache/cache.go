@@ -31,7 +31,8 @@ import (
 
 const (
 	// 临时哈希键，用于分片配置的哈希操作
-	hashTmpKey = "__tmp_hash"
+	hashTmpKey        = "__tmp_hash"
+	alertSendGroupKey = "alert_send_group"
 )
 
 // MonitorCache 管理监控相关的缓存数据和配置
@@ -420,6 +421,7 @@ func (mc *monitorCache) GenerateAlertManagerMainConfig(ctx context.Context) erro
 		mc.l.Error("[监控模块]扫描数据库中的AlertManager集群失败", zap.Error(err))
 		return err
 	}
+
 	if len(pools) == 0 {
 		mc.l.Info("[监控模块]没有找到任何AlertManager采集池")
 		return err
@@ -429,24 +431,24 @@ func (mc *monitorCache) GenerateAlertManagerMainConfig(ctx context.Context) erro
 
 	for _, pool := range pools {
 		// 生成单个AlertManager池的主配置
-		allConfig := mc.GenerateAlertManagerMainConfigOnePool(pool)
+		oneConfig := mc.GenerateAlertManagerMainConfigOnePool(pool)
 
 		// 生成对应的routes和receivers配置
 		routes, receivers := mc.GenerateAlertManagerRouteConfigOnePool(ctx, pool)
 		if len(routes) > 0 {
-			allConfig.Route.Routes = routes
+			oneConfig.Route.Routes = routes
 		}
 
 		if len(receivers) > 0 {
-			if allConfig.Receivers == nil {
-				allConfig.Receivers = receivers
+			if oneConfig.Receivers == nil {
+				oneConfig.Receivers = receivers
 			} else {
-				allConfig.Receivers = append(receivers, allConfig.Receivers...)
+				oneConfig.Receivers = append(receivers, oneConfig.Receivers...)
 			}
 		}
 
 		// 序列化配置为YAML格式
-		config, err := yaml.Marshal(allConfig)
+		config, err := yaml.Marshal(oneConfig)
 		if err != nil {
 			mc.l.Error("[监控模块]根据alert配置生成AlertManager主配置文件错误",
 				zap.Error(err),
@@ -531,24 +533,25 @@ func (mc *monitorCache) GenerateAlertManagerMainConfigOnePool(pool *model.Monito
 		repeatInterval = 5
 	}
 
-	config := &altconfig.Config{ // 生成alertmanager配置
-		Global: &altconfig.GlobalConfig{ // 设置全局配置
-			ResolveTimeout: resolveTimeout,
+	// 生成 Alertmanager 默认配置
+	config := &altconfig.Config{
+		Global: &altconfig.GlobalConfig{
+			ResolveTimeout: resolveTimeout, // 设置恢复超时时间
 		},
 		Route: &altconfig.Route{ // 设置默认路由
-			Receiver:       pool.Receiver,
-			GroupWait:      &groupWait,
-			GroupInterval:  &groupInterval,
-			RepeatInterval: &repeatInterval,
-			GroupByStr:     pool.GroupBy,
+			Receiver:       pool.Receiver,   // 设置默认接收者
+			GroupWait:      &groupWait,      // 设置分组等待时间
+			GroupInterval:  &groupInterval,  // 设置分组等待间隔
+			RepeatInterval: &repeatInterval, // 设置重复发送时间
+			GroupByStr:     pool.GroupBy,    // 设置分组分组标签
 		},
 	}
 
-	// 如果有默认Receiver，则添加到Receivers列表中
+	// 如果有默认rs列表中Receiver，则添加到Receive
 	if config.Route.Receiver != "" {
 		config.Receivers = []altconfig.Receiver{
 			{
-				Name: config.Route.Receiver,
+				Name: config.Route.Receiver, // 接收者名称
 			},
 		}
 	}
@@ -583,11 +586,12 @@ func (mc *monitorCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Conte
 				zap.Error(err),
 				zap.String("发送组", sendGroup.Name),
 			)
-			repeatInterval = 0
+			repeatInterval = 5
 		}
 
-		// 创建Matcher
-		matcher, err := al.NewMatcher(al.MatchEqual, "alert_send_group", fmt.Sprintf("%d", sendGroup.ID))
+		// 创建 Matcher 并设置匹配条件
+		// 默认匹配条件为: alert_send_group=sendGroup.ID
+		matcher, err := al.NewMatcher(al.MatchEqual, alertSendGroupKey, fmt.Sprintf("%d", sendGroup.ID))
 		if err != nil {
 			mc.l.Error("[监控模块]创建Matcher失败",
 				zap.Error(err),
@@ -598,18 +602,19 @@ func (mc *monitorCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Conte
 
 		// 创建Route
 		route := &altconfig.Route{
-			Receiver:       sendGroup.Name,
-			Continue:       true,
-			Matchers:       []*al.Matcher{matcher},
-			RepeatInterval: &repeatInterval,
+			Receiver:       sendGroup.Name,         // 设置接收者
+			Continue:       true,                   // 继续匹配下一个路由
+			Matchers:       []*al.Matcher{matcher}, // 设置匹配条件
+			RepeatInterval: &repeatInterval,        // 设置重复发送时间
 		}
 
 		// 拼接Webhook URL
 		webHookURL := fmt.Sprintf("%s?%s=%d",
 			mc.alertWebhookAddr,
-			"alert_send_group",
+			alertSendGroupKey,
 			sendGroup.ID,
 		)
+
 		parsedURL, err := url.Parse(webHookURL)
 		if err != nil {
 			mc.l.Error("[监控模块]解析Webhook URL失败",
@@ -620,18 +625,15 @@ func (mc *monitorCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Conte
 			continue
 		}
 
-		// 设置是否发送解决通知
-		sendResolved := sendGroup.SendResolved == 1
-
 		// 创建Receiver
 		receiver := altconfig.Receiver{
-			Name: sendGroup.Name,
-			WebhookConfigs: []*altconfig.WebhookConfig{
+			Name: sendGroup.Name, // 接收者名称
+			WebhookConfigs: []*altconfig.WebhookConfig{ // Webhook配置
 				{
-					NotifierConfig: altconfig.NotifierConfig{
-						VSendResolved: sendResolved,
+					NotifierConfig: altconfig.NotifierConfig{ // Notifier配置 用于告警通知
+						VSendResolved: sendGroup.SendResolved == 1, // 在告警解决时是否发送通知
 					},
-					URL: &altconfig.SecretURL{URL: parsedURL},
+					URL: &altconfig.SecretURL{URL: parsedURL}, // 告警发送的URL地址
 				},
 			},
 		}
@@ -644,20 +646,23 @@ func (mc *monitorCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Conte
 	return routes, receivers
 }
 
+// RuleGroup 构造Prometheus Rule 规则的结构体
+type RuleGroup struct {
+	Name  string         `yaml:"name"`
+	Rules []rulefmt.Rule `yaml:"rules"`
+}
+
+// RuleGroups 生成Prometheus rule yaml
+type RuleGroups struct {
+	Groups []RuleGroup `yaml:"groups"`
+}
+
 // GetPrometheusAlertRuleConfigYamlByIp 根据IP获取Prometheus的告警规则配置YAML
 func (mc *monitorCache) GetPrometheusAlertRuleConfigYamlByIp(ip string) string {
 	mc.mu.RLock()
 	defer mc.mu.RUnlock()
 
 	return mc.AlertRuleMap[ip]
-}
-
-// GetPrometheusRecordRuleConfigYamlByIp 根据IP获取Prometheus的预聚合规则配置YAML
-func (mc *monitorCache) GetPrometheusRecordRuleConfigYamlByIp(ip string) string {
-	mc.mu.RLock()
-	defer mc.mu.RUnlock()
-
-	return mc.RecordRuleMap[ip]
 }
 
 // GenerateAlertRuleConfigYaml 生成并更新所有Prometheus的告警规则配置YAML
@@ -668,6 +673,7 @@ func (mc *monitorCache) GenerateAlertRuleConfigYaml(ctx context.Context) error {
 		mc.l.Error("[监控模块] 获取支持告警的采集池失败", zap.Error(err))
 		return err
 	}
+
 	if len(pools) == 0 {
 		mc.l.Info("没有找到支持告警的采集池")
 		return nil
@@ -692,6 +698,103 @@ func (mc *monitorCache) GenerateAlertRuleConfigYaml(ctx context.Context) error {
 	return nil
 }
 
+// GeneratePrometheusAlertRuleConfigYamlOnePool 根据单个采集池生成Prometheus的告警规则配置YAML
+func (mc *monitorCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
+	rules, err := mc.dao.GetMonitorAlertRuleByPoolId(ctx, pool.ID)
+	if err != nil {
+		mc.l.Error("[监控模块] 根据采集池ID获取告警规则失败",
+			zap.Error(err),
+			zap.String("池子", pool.Name),
+		)
+		return nil
+	}
+	if len(rules) == 0 {
+		return nil
+	}
+
+	var ruleGroups RuleGroups
+
+	// 构建规则组
+	for _, rule := range rules {
+		ft, err := pm.ParseDuration(rule.ForTime)
+		if err != nil {
+			mc.l.Warn("[监控模块] 解析告警规则持续时间失败，使用默认值",
+				zap.Error(err),
+				zap.String("规则", rule.Name),
+			)
+			ft = 15
+		}
+		oneRule := rulefmt.Rule{
+			Alert:       rule.Name,         // 告警名称
+			Expr:        rule.Expr,         // 告警表达式
+			For:         ft,                // 持续时间
+			Labels:      rule.LabelsM,      // 标签组
+			Annotations: rule.AnnotationsM, // 注解组
+		}
+
+		ruleGroup := RuleGroup{
+			Name:  rule.Name,
+			Rules: []rulefmt.Rule{oneRule}, // 一个规则组可以包含多个规则
+		}
+		ruleGroups.Groups = append(ruleGroups.Groups, ruleGroup)
+	}
+
+	numInstances := len(pool.PrometheusInstances)
+	if numInstances == 0 {
+		mc.l.Warn("[监控模块] 采集池中没有Prometheus实例", zap.String("池子", pool.Name))
+		return nil
+	}
+
+	ruleMap := make(map[string]string)
+
+	// 分片逻辑，将规则分配给不同的Prometheus实例，以减少服务器的负载
+	for i, ip := range pool.PrometheusInstances {
+		var myRuleGroups RuleGroups
+
+		for j, group := range ruleGroups.Groups {
+			if j%numInstances == i { // 按顺序平均分片
+				myRuleGroups.Groups = append(myRuleGroups.Groups, group)
+			}
+		}
+
+		// 序列化规则组为YAML
+		yamlData, err := yaml.Marshal(&myRuleGroups)
+		if err != nil {
+			mc.l.Error("[监控模块] 序列化告警规则YAML失败",
+				zap.Error(err),
+				zap.String("池子", pool.Name),
+				zap.String("IP", ip),
+			)
+			continue
+		}
+
+		fileName := fmt.Sprintf("%s/prometheus_rule_%s_%s.yml",
+			mc.localYamlDir,
+			pool.Name,
+			ip,
+		)
+		if err := os.WriteFile(fileName, yamlData, 0644); err != nil {
+			mc.l.Error("[监控模块] 写入告警规则文件失败",
+				zap.Error(err),
+				zap.String("文件路径", fileName),
+			)
+			continue
+		}
+
+		ruleMap[ip] = string(yamlData)
+	}
+
+	return ruleMap
+}
+
+// GetPrometheusRecordRuleConfigYamlByIp 根据IP获取Prometheus的预聚合规则配置YAML
+func (mc *monitorCache) GetPrometheusRecordRuleConfigYamlByIp(ip string) string {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+
+	return mc.RecordRuleMap[ip]
+}
+
 // GenerateRecordRuleConfigYaml 生成并更新所有Prometheus的预聚合规则配置YAML
 func (mc *monitorCache) GenerateRecordRuleConfigYaml(ctx context.Context) error {
 	// 获取支持预聚合配置的所有采集池
@@ -700,6 +803,7 @@ func (mc *monitorCache) GenerateRecordRuleConfigYaml(ctx context.Context) error 
 		mc.l.Error("[监控模块] 获取支持预聚合的采集池失败", zap.Error(err))
 		return err
 	}
+
 	if len(pools) == 0 {
 		mc.l.Info("没有找到支持预聚合的采集池")
 		return nil
@@ -724,105 +828,6 @@ func (mc *monitorCache) GenerateRecordRuleConfigYaml(ctx context.Context) error 
 	return nil
 }
 
-// RuleGroup 构造Prometheus Rule 规则的结构体
-type RuleGroup struct {
-	Name  string         `yaml:"name"`
-	Rules []rulefmt.Rule `yaml:"rules"`
-}
-
-// RuleGroups 生成Prometheus rule yaml
-type RuleGroups struct {
-	Groups []RuleGroup `yaml:"groups"`
-}
-
-// GeneratePrometheusAlertRuleConfigYamlOnePool 根据单个采集池生成Prometheus的告警规则配置YAML
-func (mc *monitorCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
-	rules, err := mc.dao.GetMonitorAlertRuleByPoolId(ctx, pool.ID)
-	if err != nil {
-		mc.l.Error("[监控模块] 根据采集池ID获取告警规则失败",
-			zap.Error(err),
-			zap.String("池子", pool.Name),
-		)
-		return nil
-	}
-	if len(rules) == 0 {
-		return nil
-	}
-
-	var ruleGroups RuleGroups
-
-	// 构建规则组
-	for _, rule := range rules {
-		forD, err := pm.ParseDuration(rule.ForTime)
-		if err != nil {
-			mc.l.Warn("[监控模块] 解析告警规则持续时间失败，使用默认值",
-				zap.Error(err),
-				zap.String("规则", rule.Name),
-			)
-			forD = 0
-		}
-		oneRule := rulefmt.Rule{
-			Alert:       rule.Name,
-			Expr:        rule.Expr,
-			For:         forD,
-			Labels:      rule.LabelsM,
-			Annotations: rule.AnnotationsM,
-		}
-
-		ruleGroup := RuleGroup{
-			Name:  rule.Name,
-			Rules: []rulefmt.Rule{oneRule},
-		}
-		ruleGroups.Groups = append(ruleGroups.Groups, ruleGroup)
-	}
-
-	numInstances := len(pool.PrometheusInstances)
-	if numInstances == 0 {
-		mc.l.Warn("[监控模块] 采集池中没有Prometheus实例", zap.String("池子", pool.Name))
-		return nil
-	}
-
-	ruleMap := make(map[string]string)
-
-	// 分片逻辑，将规则分配给不同的Prometheus实例
-	for i, ip := range pool.PrometheusInstances {
-		var myRuleGroups RuleGroups
-		for j, group := range ruleGroups.Groups {
-			if j%numInstances == i {
-				myRuleGroups.Groups = append(myRuleGroups.Groups, group)
-			}
-		}
-
-		// 序列化规则组为YAML
-		yamlData, err := yaml.Marshal(&myRuleGroups)
-		if err != nil {
-			mc.l.Error("[监控模块] 序列化告警规则YAML失败",
-				zap.Error(err),
-				zap.String("池子", pool.Name),
-				zap.String("IP", ip),
-			)
-			continue
-		}
-		fileName := fmt.Sprintf("%s/prometheus_rule_%s_%s.yml",
-			mc.localYamlDir,
-			pool.Name,
-			ip,
-		)
-		// 写入规则文件并检查错误
-		if err := os.WriteFile(fileName, yamlData, 0644); err != nil {
-			mc.l.Error("[监控模块] 写入告警规则文件失败",
-				zap.Error(err),
-				zap.String("文件路径", fileName),
-			)
-			continue
-		}
-
-		ruleMap[ip] = string(yamlData)
-	}
-
-	return ruleMap
-}
-
 // GeneratePrometheusRecordRuleConfigYamlOnePool 根据单个采集池生成Prometheus的预聚合规则配置YAML
 func (mc *monitorCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
 	rules, err := mc.dao.GetMonitorRecordRuleByPoolId(ctx, pool.ID)
@@ -831,8 +836,10 @@ func (mc *monitorCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx contex
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
+
 		return nil
 	}
+
 	if len(rules) == 0 {
 		return nil
 	}
@@ -847,12 +854,12 @@ func (mc *monitorCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx contex
 				zap.Error(err),
 				zap.String("规则", rule.Name),
 			)
-			forD = 0
+			forD = 15
 		}
 		oneRule := rulefmt.Rule{
-			Alert: rule.Name,
-			Expr:  rule.Expr,
-			For:   forD,
+			Alert: rule.Name, // 告警名称
+			Expr:  rule.Expr, // 预聚合表达式
+			For:   forD,      // 持续时间
 		}
 
 		ruleGroup := RuleGroup{
@@ -874,12 +881,11 @@ func (mc *monitorCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx contex
 	for i, ip := range pool.PrometheusInstances {
 		var myRuleGroups RuleGroups
 		for j, group := range ruleGroups.Groups {
-			if j%numInstances == i {
+			if j%numInstances == i { // 按顺序平均分片
 				myRuleGroups.Groups = append(myRuleGroups.Groups, group)
 			}
 		}
 
-		// 序列化规则组为YAML
 		yamlData, err := yaml.Marshal(&myRuleGroups)
 		if err != nil {
 			mc.l.Error("[监控模块] 序列化预聚合规则YAML失败",
@@ -895,7 +901,6 @@ func (mc *monitorCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx contex
 			ip,
 		)
 
-		// 写入规则文件并检查错误
 		if err := os.WriteFile(fileName, yamlData, 0644); err != nil {
 			mc.l.Error("[监控模块] 写入预聚合规则文件失败",
 				zap.Error(err),
