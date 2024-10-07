@@ -349,3 +349,5 @@ type ScheduleK8sNodesRequest struct {
 	*K8sClusterNodesRequest
 	ScheduleEnable bool `json:"schedule_enable"`
 }
+
+
