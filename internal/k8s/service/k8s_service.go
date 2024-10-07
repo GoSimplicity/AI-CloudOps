@@ -52,6 +52,11 @@ type K8sService interface {
 	UpdateNodeTaint(ctx context.Context, taint *model.TaintK8sNodesRequest) error
 	// DrainPods 删除指定 Node 上的 Pod
 	DrainPods(ctx context.Context, req *model.K8sClusterNodesRequest) error
+
+	// GetClusterNamespacesList 获取命名空间列表
+	GetClusterNamespacesList(ctx context.Context) (map[string][]string, error)
+	// GetClusterNamespacesByName 获取指定集群的所有命名空间
+	GetClusterNamespacesByName(ctx context.Context, clusterName string) ([]string, error)
 }
 
 type k8sService struct {
@@ -708,6 +713,7 @@ func (k *k8sService) UpdateNodeTaint(ctx context.Context, req *model.TaintK8sNod
 	return nil
 }
 
+// DrainPods 驱逐指定 Node 上的 Pod
 func (k *k8sService) DrainPods(ctx context.Context, req *model.K8sClusterNodesRequest) error {
 	// 获取集群信息
 	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)
@@ -763,4 +769,84 @@ func (k *k8sService) DrainPods(ctx context.Context, req *model.K8sClusterNodesRe
 	}
 
 	return nil
+}
+
+// GetClusterNamespacesList 获取命名空间列表
+func (k *k8sService) GetClusterNamespacesList(ctx context.Context) (map[string][]string, error) {
+	clusters, err := k.dao.ListAllClusters(ctx)
+	if err != nil {
+		k.l.Error("获取集群列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	mp := make(map[string][]string)
+	var mu sync.Mutex
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(10)
+	errChan := make(chan error, len(clusters))
+
+	for _, cluster := range clusters {
+		g.Go(func() error {
+			namespace, err := k.GetClusterNamespacesByName(ctx, cluster.Name)
+			if err != nil {
+				errChan <- err
+				return nil
+			}
+
+			mu.Lock()
+			mp[cluster.Name] = namespace
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		k.l.Error("获取命名空间列表失败", zap.Error(err))
+		close(errChan)
+		return nil, err
+	}
+
+	close(errChan)
+
+	var errs []error
+	for e := range errChan {
+		if e != nil {
+			k.l.Error("获取命名空间列表失败", zap.Error(e))
+			errs = append(errs, e)
+		}
+	}
+	if len(errs) > 0 && len(errs) == len(clusters) {
+		return nil, fmt.Errorf("获取命名空间列表失败: %v", err)
+	}
+
+	return mp, nil
+}
+
+// GetClusterNamespacesByName 获取指定集群的所有命名空间
+func (k *k8sService) GetClusterNamespacesByName(ctx context.Context, clusterName string) ([]string, error) {
+	cluster, err := k.dao.GetClusterByName(ctx, clusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return nil, err
+	}
+
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	namespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		k.l.Error("获取命名空间列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	var nsList []string
+	for _, ns := range namespaces.Items {
+		nsList = append(nsList, ns.Name)
+	}
+
+	return nsList, nil
 }

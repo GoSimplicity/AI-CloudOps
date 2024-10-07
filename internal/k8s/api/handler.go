@@ -485,12 +485,31 @@ func (k *K8sHandler) DeleteYamlTask(ctx *gin.Context) {
 
 // GetClusterNamespacesForCascade 获取级联选择的命名空间列表
 func (k *K8sHandler) GetClusterNamespacesForCascade(ctx *gin.Context) {
-	// TODO: 实现获取级联选择的命名空间列表的逻辑
+	namespaces, err := k.service.GetClusterNamespacesList(ctx)
+	if err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, namespaces)
 }
 
 // GetClusterNamespacesForSelect 获取用于选择的命名空间列表
 func (k *K8sHandler) GetClusterNamespacesForSelect(ctx *gin.Context) {
-	// TODO: 实现获取用于选择的命名空间列表的逻辑
+	name := ctx.Query("name")
+
+	if name == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	namespaces, err := k.service.GetClusterNamespacesByName(ctx, name)
+	if err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, namespaces)
 }
 
 // GetPodListByNamespace 根据命名空间获取 Pods 列表
