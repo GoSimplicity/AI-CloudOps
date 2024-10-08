@@ -2,6 +2,7 @@ package model
 
 import (
 	"github.com/prometheus/alertmanager/template"
+	"time"
 )
 
 // MonitorAlertEvent 告警事件与相关实体的关系
@@ -108,11 +109,11 @@ type MonitorAlertManagerPool struct {
 // MonitorOnDutyChange 值班换班记录
 type MonitorOnDutyChange struct {
 	Model
-	OnDutyGroupID int    `json:"onDutyGroupId" gorm:"uniqueIndex:group_id_date;comment:值班组ID，用于唯一标识值班历史记录"`   // 值班组ID，用于标识换班记录所属的值班组
-	UserID        int    `json:"userId" gorm:"comment:创建该换班记录的用户ID"`                                          // 创建该换班记录的用户ID
-	DateString    string `json:"dateString" gorm:"uniqueIndex:group_id_date;size:50;comment:计划哪一天进行换班的日期字符串"` // 计划哪一天进行换班的日期字符串
-	OnDutyUserID  int    `json:"onDutyUserId" gorm:"comment:换班后值班人员的用户ID"`                                    // 换班后值班人员的用户ID
-	OriginUserID  int    `json:"originUserId" gorm:"comment:换班前原定的值班人员用户ID"`                                  // 换班前原定的值班人员用户ID
+	OnDutyGroupID int       `json:"onDutyGroupId" gorm:"uniqueIndex:group_id_date;comment:值班组ID，用于唯一标识值班历史记录"` // 值班组ID，用于标识换班记录所属的值班组
+	UserID        int       `json:"userId" gorm:"comment:创建该换班记录的用户ID"`                                        // 创建该换班记录的用户ID
+	Date          time.Time `json:"date" gorm:"uniqueIndex:group_id_date;comment:计划哪一天进行换班的日期"`                // 计划哪一天进行换班的日期字符串
+	OnDutyUserID  int       `json:"onDutyUserId" gorm:"comment:换班后值班人员的用户ID"`                                  // 换班后值班人员的用户ID
+	OriginUserID  int       `json:"originUserId" gorm:"comment:换班前原定的值班人员用户ID"`                                // 换班前原定的值班人员用户ID
 
 	// 前端使用字段
 	TargetUserName string `json:"targetUserName,omitempty" gorm:"-"` // 前端传递的目标用户名称

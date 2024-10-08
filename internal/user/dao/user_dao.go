@@ -17,6 +17,7 @@ type UserDAO interface {
 	CreateUser(ctx context.Context, user *model.User) error
 	// GetUserByUsername 通过用户名获取用户
 	GetUserByUsername(ctx context.Context, username string) (*model.User, error)
+	GetUserByUsernames(ctx context.Context, usernames []string) ([]*model.User, error)
 	// GetOrCreateUser 获取用户或创建新用户
 	GetOrCreateUser(ctx context.Context, user *model.User) (*model.User, error)
 	// UpdateUser 更新用户
@@ -151,4 +152,15 @@ func (u *userDAO) GetPermCode(ctx context.Context, uid int) ([]string, error) {
 	}
 
 	return permCodes, nil
+}
+
+func (u *userDAO) GetUserByUsernames(ctx context.Context, usernames []string) ([]*model.User, error) {
+	var users []*model.User
+
+	if err := u.db.WithContext(ctx).Where("username in (?)", usernames).Find(&users).Error; err != nil {
+		u.l.Error("get user by username failed", zap.Strings("usernames", usernames), zap.Error(err))
+		return nil, err
+	}
+
+	return users, nil
 }
