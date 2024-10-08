@@ -68,6 +68,13 @@ type K8sService interface {
 	GetContainerLogs(ctx context.Context, clusterID int, namespace, podName, containerName string) (string, error)
 	// GetPodYaml 获取指定 Pod 的 YAML 配置
 	GetPodYaml(ctx context.Context, clusterID int, namespace, podName string) (string, error)
+	// CreatePod 创建 Pod
+	// CreatePod(ctx context.Context, clusterID int, namespace string, pod *model.K8sPod) error
+	CreatePod(ctx context.Context, pod *corev1.Pod) error
+	// UpdatePod 更新 Pod
+	UpdatePod(ctx context.Context, clusterID int, namespace string, pod *model.K8sPod) error
+	// DeletePod 删除 Pod
+	DeletePod(ctx context.Context, clusterID int, namespace, podName string) error
 }
 
 type k8sService struct {
@@ -857,4 +864,59 @@ func (k *k8sService) GetPodYaml(ctx context.Context, clusterID int, namespace, p
 	}
 
 	return string(yamlBytes), nil
+}
+
+// CreatePod 创建 Pod
+//
+//	func (k *k8sService) CreatePod(ctx context.Context, clusterID int, namespace string, pod *model.K8sPod) error {
+//		panic("implement me")
+//	}
+func (k *k8sService) CreatePod(ctx context.Context, pod *corev1.Pod) error {
+	// TODO 获取集群信息, 根据什么
+	cluster, err := k.dao.GetClusterByName(ctx, pod.Namespace)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	// 创建 Pod
+	_, err = kubeClient.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+	if err != nil {
+		k.l.Error("创建 Pod 失败", zap.Error(err))
+		return err
+	}
+
+	k.l.Info("创建 Pod 成功", zap.String("podName", pod.Name))
+	return nil
+}
+
+// UpdatePod 更新 Pod
+func (k *k8sService) UpdatePod(ctx context.Context, clusterID int, namespace string, pod *model.K8sPod) error {
+	panic("implement")
+}
+
+// DeletePod 删除 Pod
+func (k *k8sService) DeletePod(ctx context.Context, clusterID int, namespace, podName string) error {
+	kubeClient, err := k.client.GetKubeClient(clusterID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	// 删除 Pod
+	err = kubeClient.CoreV1().Pods(namespace).Delete(ctx, podName, metav1.DeleteOptions{})
+	if err != nil {
+		k.l.Error("删除 Pod 失败", zap.Error(err))
+		return err
+	}
+
+	k.l.Info("删除 Pod 成功", zap.String("podName", podName))
+	return nil
 }
