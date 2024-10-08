@@ -18,8 +18,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/yaml"
 )
 
 type K8sService interface {
@@ -66,6 +66,8 @@ type K8sService interface {
 	GetContainersByPod(ctx context.Context, clusterID int, podName string) ([]*model.K8sPodContainer, error)
 	// GetContainerLogs 获取指定 Pod 的容器日志
 	GetContainerLogs(ctx context.Context, clusterID int, namespace, podName, containerName string) (string, error)
+	// GetPodYaml 获取指定 Pod 的 YAML 配置
+	GetPodYaml(ctx context.Context, clusterID int, namespace, podName string) (string, error)
 }
 
 type k8sService struct {
@@ -832,4 +834,27 @@ func (k *k8sService) GetContainerLogs(ctx context.Context, clusterID int, namesp
 	}
 
 	return buf.String(), nil
+}
+
+// GetPodYaml 获取指定 Pod 的 YAML 配置
+func (k *k8sService) GetPodYaml(ctx context.Context, clusterID int, namespace, podName string) (string, error) {
+	kubeClient, err := k.client.GetKubeClient(clusterID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return "", err
+	}
+
+	pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		k.l.Error("获取 Pod 信息失败", zap.Error(err))
+		return "", err
+	}
+
+	yamlBytes, err := yaml.Marshal(pod)
+	if err != nil {
+		k.l.Error("序列化 Pod 信息失败", zap.Error(err))
+		return "", err
+	}
+
+	return string(yamlBytes), nil
 }
