@@ -406,3 +406,196 @@ func BuildK8sNode(ctx context.Context, id int, node corev1.Node, kubeClient *kub
 
 	return k8sNode, nil
 }
+
+// BuildK8sNodes 构建 K8sNode 列表
+func BuildK8sPods(pods *corev1.PodList) []*model.K8sPod {
+	var k8sPods []*model.K8sPod
+	for _, pod := range pods.Items {
+		k8sPod := &model.K8sPod{
+			Name:        pod.Name,
+			Namespace:   pod.Namespace,
+			NodeName:    pod.Spec.NodeName,
+			Status:      string(pod.Status.Phase),
+			Labels:      pod.Labels,
+			Annotations: pod.Annotations,
+			Containers:  BuildK8sContainers(pod.Spec.Containers),
+		}
+
+		// for _, container := range pod.Spec.Containers {
+		// 	newContainer := model.K8sPodContainer{
+		// 		Name:    container.Name,
+		// 		Image:   container.Image,
+		// 		Command: model.StringList(container.Command),
+		// 		Args:    model.StringList(container.Args),
+		// 		Envs:    make([]model.K8sEnvVar, 0),
+		// 		Ports:   make([]model.K8sContainerPort, 0),
+		// 		Resources: model.ResourceRequirements{
+		// 			Requests: model.K8sResourceList{
+		// 				CPU:    container.Resources.Requests.Cpu().String(),
+		// 				Memory: container.Resources.Requests.Memory().String(),
+		// 			},
+		// 			Limits: model.K8sResourceList{
+		// 				CPU:    container.Resources.Limits.Cpu().String(),
+		// 				Memory: container.Resources.Limits.Memory().String(),
+		// 			},
+		// 		},
+		// 		VolumeMounts:    make([]model.K8sVolumeMount, 0),
+		// 		ImagePullPolicy: string(container.ImagePullPolicy),
+		// 	}
+
+		// 	if container.LivenessProbe != nil {
+		// 		newContainer.LivenessProbe = &model.K8sProbe{
+		// 			HTTPGet: &model.K8sHTTPGetAction{
+		// 				Path:   container.LivenessProbe.HTTPGet.Path,
+		// 				Port:   container.LivenessProbe.HTTPGet.Port.IntValue(),
+		// 				Scheme: string(container.LivenessProbe.HTTPGet.Scheme),
+		// 			},
+		// 			InitialDelaySeconds: int(container.LivenessProbe.InitialDelaySeconds),
+		// 			PeriodSeconds:       int(container.LivenessProbe.PeriodSeconds),
+		// 			TimeoutSeconds:      int(container.LivenessProbe.TimeoutSeconds),
+		// 			SuccessThreshold:    int(container.LivenessProbe.SuccessThreshold),
+		// 			FailureThreshold:    int(container.LivenessProbe.FailureThreshold),
+		// 		}
+		// 	}
+
+		// 	if container.ReadinessProbe != nil {
+		// 		newContainer.ReadinessProbe = &model.K8sProbe{
+		// 			HTTPGet: &model.K8sHTTPGetAction{
+		// 				Path:   container.ReadinessProbe.HTTPGet.Path,
+		// 				Port:   container.ReadinessProbe.HTTPGet.Port.IntValue(),
+		// 				Scheme: string(container.ReadinessProbe.HTTPGet.Scheme),
+		// 			},
+		// 			InitialDelaySeconds: int(container.ReadinessProbe.InitialDelaySeconds),
+		// 			PeriodSeconds:       int(container.ReadinessProbe.PeriodSeconds),
+		// 			TimeoutSeconds:      int(container.ReadinessProbe.TimeoutSeconds),
+		// 			SuccessThreshold:    int(container.ReadinessProbe.SuccessThreshold),
+		// 			FailureThreshold:    int(container.ReadinessProbe.FailureThreshold),
+		// 		}
+		// 	}
+
+		// 	for _, env := range container.Env {
+		// 		newContainer.Envs = append(newContainer.Envs, model.K8sEnvVar{
+		// 			Name:  env.Name,
+		// 			Value: env.Value,
+		// 		})
+		// 	}
+
+		// 	for _, port := range container.Ports {
+		// 		newContainer.Ports = append(newContainer.Ports, model.K8sContainerPort{
+		// 			Name:          port.Name,
+		// 			ContainerPort: int(port.ContainerPort),
+		// 			Protocol:      string(port.Protocol),
+		// 		})
+		// 	}
+
+		// 	for _, volumeMount := range container.VolumeMounts {
+		// 		newContainer.VolumeMounts = append(newContainer.VolumeMounts, model.K8sVolumeMount{
+		// 			Name:      volumeMount.Name,
+		// 			MountPath: volumeMount.MountPath,
+		// 			ReadOnly:  volumeMount.ReadOnly,
+		// 			SubPath:   volumeMount.SubPath,
+		// 		})
+		// 	}
+
+		// 	k8sPod.Containers = append(k8sPod.Containers, newContainer)
+		// }
+
+		k8sPods = append(k8sPods, k8sPod)
+	}
+
+	return k8sPods
+}
+
+// BuildK8sContainers 构建 K8sContainer 列表
+func BuildK8sContainers(containers []corev1.Container) []model.K8sPodContainer {
+	var k8sContainers []model.K8sPodContainer
+	for _, container := range containers {
+		newContainer := model.K8sPodContainer{
+			Name:    container.Name,
+			Image:   container.Image,
+			Command: model.StringList(container.Command),
+			Args:    model.StringList(container.Args),
+			Envs:    make([]model.K8sEnvVar, 0),
+			Ports:   make([]model.K8sContainerPort, 0),
+			Resources: model.ResourceRequirements{
+				Requests: model.K8sResourceList{
+					CPU:    container.Resources.Requests.Cpu().String(),
+					Memory: container.Resources.Requests.Memory().String(),
+				},
+				Limits: model.K8sResourceList{
+					CPU:    container.Resources.Limits.Cpu().String(),
+					Memory: container.Resources.Limits.Memory().String(),
+				},
+			},
+			VolumeMounts:    make([]model.K8sVolumeMount, 0),
+			ImagePullPolicy: string(container.ImagePullPolicy),
+		}
+
+		if container.LivenessProbe != nil {
+			newContainer.LivenessProbe = &model.K8sProbe{
+				HTTPGet: &model.K8sHTTPGetAction{
+					Path:   container.LivenessProbe.HTTPGet.Path,
+					Port:   container.LivenessProbe.HTTPGet.Port.IntValue(),
+					Scheme: string(container.LivenessProbe.HTTPGet.Scheme),
+				},
+				InitialDelaySeconds: int(container.LivenessProbe.InitialDelaySeconds),
+				PeriodSeconds:       int(container.LivenessProbe.PeriodSeconds),
+				TimeoutSeconds:      int(container.LivenessProbe.TimeoutSeconds),
+				SuccessThreshold:    int(container.LivenessProbe.SuccessThreshold),
+				FailureThreshold:    int(container.LivenessProbe.FailureThreshold),
+			}
+		}
+
+		if container.ReadinessProbe != nil {
+			newContainer.ReadinessProbe = &model.K8sProbe{
+				HTTPGet: &model.K8sHTTPGetAction{
+					Path:   container.ReadinessProbe.HTTPGet.Path,
+					Port:   container.ReadinessProbe.HTTPGet.Port.IntValue(),
+					Scheme: string(container.ReadinessProbe.HTTPGet.Scheme),
+				},
+				InitialDelaySeconds: int(container.ReadinessProbe.InitialDelaySeconds),
+				PeriodSeconds:       int(container.ReadinessProbe.PeriodSeconds),
+				TimeoutSeconds:      int(container.ReadinessProbe.TimeoutSeconds),
+				SuccessThreshold:    int(container.ReadinessProbe.SuccessThreshold),
+				FailureThreshold:    int(container.ReadinessProbe.FailureThreshold),
+			}
+		}
+
+		for _, env := range container.Env {
+			newContainer.Envs = append(newContainer.Envs, model.K8sEnvVar{
+				Name:  env.Name,
+				Value: env.Value,
+			})
+		}
+
+		for _, port := range container.Ports {
+			newContainer.Ports = append(newContainer.Ports, model.K8sContainerPort{
+				Name:          port.Name,
+				ContainerPort: int(port.ContainerPort),
+				Protocol:      string(port.Protocol),
+			})
+		}
+
+		for _, volumeMount := range container.VolumeMounts {
+			newContainer.VolumeMounts = append(newContainer.VolumeMounts, model.K8sVolumeMount{
+				Name:      volumeMount.Name,
+				MountPath: volumeMount.MountPath,
+				ReadOnly:  volumeMount.ReadOnly,
+				SubPath:   volumeMount.SubPath,
+			})
+		}
+
+		k8sContainers = append(k8sContainers, newContainer)
+	}
+
+	return k8sContainers
+}
+
+// BuildK8sContainersWithPointer 转换普通切片为指针切片
+func BuildK8sContainersWithPointer(k8sContainers []model.K8sPodContainer) []*model.K8sPodContainer {
+	pointerSlice := make([]*model.K8sPodContainer, len(k8sContainers))
+	for i := range k8sContainers {
+		pointerSlice[i] = &k8sContainers[i]
+	}
+	return pointerSlice
+}

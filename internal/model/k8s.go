@@ -345,9 +345,14 @@ type Taint struct {
 	Effect string `json:"effect" binding:"required,oneof=NoSchedule PreferNoSchedule NoExecute"` // Taint 的效果，例如 "NoSchedule", "PreferNoSchedule", "NoExecute"
 }
 
+// ScheduleK8sNodesRequest 定义调度节点的请求结构
 type ScheduleK8sNodesRequest struct {
 	*K8sClusterNodesRequest
 	ScheduleEnable bool `json:"schedule_enable"`
 }
 
-
+// CreatePodRequest 创建 Pod 的请求结构
+type K8sPodRequest struct {
+	ClusterName string    `json:"cluster_name" binding:"required"` // 集群名称，必填
+	Pod         *core.Pod `json:"pod" binding:"required"`          // Pod 对象，必填
+}
