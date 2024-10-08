@@ -543,7 +543,31 @@ func (k *K8sHandler) GetPodListByNamespace(ctx *gin.Context) {
 
 // GetPodContainers 获取 Pod 的容器列表
 func (k *K8sHandler) GetPodContainers(ctx *gin.Context) {
-	// TODO: 实现获取 Pod 的容器列表的逻辑
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	podName := ctx.Param("podName")
+	if podName == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	containers, err := k.service.GetContainersByPod(ctx, clusterID, podName)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, containers)
 }
 
 // GetContainerLogs 获取容器日志
