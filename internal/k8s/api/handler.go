@@ -9,6 +9,7 @@ import (
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	corev1 "k8s.io/api/core/v1"
 )
 
 type K8sHandler struct {
@@ -648,7 +649,21 @@ func (k *K8sHandler) GetPodYaml(ctx *gin.Context) {
 
 // CreatePod 创建新的 Pod
 func (k *K8sHandler) CreatePod(ctx *gin.Context) {
-	// TODO: 实现创建 Pod 的逻辑
+	var podSpec corev1.Pod
+
+	err := ctx.ShouldBind(&podSpec)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	err = k.service.CreatePod(ctx, &podSpec)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // UpdatePod 更新指定名称的 Pod
@@ -658,7 +673,37 @@ func (k *K8sHandler) UpdatePod(ctx *gin.Context) {
 
 // DeletePod 删除指定名称的 Pod
 func (k *K8sHandler) DeletePod(ctx *gin.Context) {
-	// TODO: 实现删除 Pod 的逻辑
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	namespace := ctx.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	podName := ctx.Param("podName")
+	if podName == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	err = k.service.DeletePod(ctx, clusterID, namespace, podName)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetDeployListByNamespace 根据命名空间获取部署列表
