@@ -390,17 +390,73 @@ func (p *prometheusDao) GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.C
 	return changes, nil
 }
 
+// UpdateMonitorOnDutyGroup 更新 MonitorOnDutyGroup
 func (p *prometheusDao) UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error {
-	//TODO implement me
-	panic("implement me")
+	if monitorOnDutyGroup == nil {
+		p.l.Error("UpdateMonitorOnDutyGroup failed: monitorOnDutyGroup is nil")
+		return fmt.Errorf("monitorOnDutyGroup cannot be nil")
+	}
+
+	// 确保只更新指定的记录
+	result := p.db.WithContext(ctx).
+		Model(&model.MonitorOnDutyGroup{}).
+		Where("id = ?", monitorOnDutyGroup.ID).
+		Updates(monitorOnDutyGroup)
+
+	if result.Error != nil {
+		p.l.Error("UpdateMonitorOnDutyGroup failed to update on-duty group", zap.Error(result.Error))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("UpdateMonitorOnDutyGroup: no rows affected", zap.Int("ID", monitorOnDutyGroup.ID))
+		return fmt.Errorf("no on-duty group found with ID %d", monitorOnDutyGroup.ID)
+	}
+
+	return nil
 }
 
+// GetMonitorSendGroupByOnDutyGroupId 根据 onDutyGroupID 获取 MonitorSendGroup 列表
 func (p *prometheusDao) GetMonitorSendGroupByOnDutyGroupId(ctx context.Context, onDutyGroupID int) ([]*model.MonitorSendGroup, error) {
-	//TODO implement me
-	panic("implement me")
+	var sendGroups []*model.MonitorSendGroup
+
+	result := p.db.WithContext(ctx).
+		Where("on_duty_group_id = ?", onDutyGroupID).
+		Find(&sendGroups)
+
+	if result.Error != nil {
+		p.l.Error("GetMonitorSendGroupByOnDutyGroupId failed to retrieve send groups",
+			zap.Int("onDutyGroupID", onDutyGroupID),
+			zap.Error(result.Error))
+		return nil, result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Info("GetMonitorSendGroupByOnDutyGroupId: no send groups found",
+			zap.Int("onDutyGroupID", onDutyGroupID))
+		return nil, nil
+	}
+
+	return sendGroups, nil
 }
 
+// DeleteMonitorOnDutyGroup 删除指定 ID 的 MonitorOnDutyGroup
 func (p *prometheusDao) DeleteMonitorOnDutyGroup(ctx context.Context, id int) error {
-	//TODO implement me
-	panic("implement me")
+	result := p.db.WithContext(ctx).
+		Delete(&model.MonitorOnDutyGroup{}, id)
+
+	if result.Error != nil {
+		p.l.Error("DeleteMonitorOnDutyGroup failed to delete on-duty group",
+			zap.Int("ID", id),
+			zap.Error(result.Error))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("DeleteMonitorOnDutyGroup: no rows deleted",
+			zap.Int("ID", id))
+		return fmt.Errorf("no on-duty group found with ID %d", id)
+	}
+
+	return nil
 }
