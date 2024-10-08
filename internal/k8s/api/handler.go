@@ -9,7 +9,6 @@ import (
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	corev1 "k8s.io/api/core/v1"
 )
 
 type K8sHandler struct {
@@ -90,9 +89,9 @@ func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
 		pods.GET("/:podName/containers/:container/logs", k.GetContainerLogs) // 获取指定容器的日志
 		pods.GET("/:podName/yaml", k.GetPodYaml)                             // 获取指定 Pod 的 YAML 配置
 
-		pods.POST("/", k.CreatePod)           // 创建新的 Pod
-		pods.PUT("/:podName", k.UpdatePod)    // 更新指定名称的 Pod
-		pods.DELETE("/:podName", k.DeletePod) // 删除指定名称的 Pod
+		pods.POST("/", k.CreatePod)   // 创建新的 Pod
+		pods.PUT("/", k.UpdatePod)    // 更新指定名称的 Pod
+		pods.DELETE("/", k.DeletePod) // 删除指定名称的 Pod
 	}
 
 	// Deployment 相关路由
@@ -649,15 +648,15 @@ func (k *K8sHandler) GetPodYaml(ctx *gin.Context) {
 
 // CreatePod 创建新的 Pod
 func (k *K8sHandler) CreatePod(ctx *gin.Context) {
-	var podSpec corev1.Pod
+	var req *model.K8sPodRequest
 
-	err := ctx.ShouldBind(&podSpec)
+	err := ctx.ShouldBind(&req)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, "参数错误")
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
-	err = k.service.CreatePod(ctx, &podSpec)
+	err = k.service.CreatePod(ctx, req)
 	if err != nil {
 		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
 		return
@@ -668,36 +667,34 @@ func (k *K8sHandler) CreatePod(ctx *gin.Context) {
 
 // UpdatePod 更新指定名称的 Pod
 func (k *K8sHandler) UpdatePod(ctx *gin.Context) {
-	// TODO: 实现更新 Pod 的逻辑
+	var req *model.K8sPodRequest
+
+	err := ctx.ShouldBind(&req)
+	if err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	err = k.service.UpdatePod(ctx, req)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // DeletePod 删除指定名称的 Pod
 func (k *K8sHandler) DeletePod(ctx *gin.Context) {
-	id := ctx.Query("id")
-	if id == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
-		return
-	}
+	var req *model.K8sPodRequest
 
-	clusterID, err := strconv.Atoi(id)
+	err := ctx.ShouldBind(&req)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, "id 非整数")
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
-	namespace := ctx.Query("namespace")
-	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
-		return
-	}
-
-	podName := ctx.Param("podName")
-	if podName == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
-		return
-	}
-
-	err = k.service.DeletePod(ctx, clusterID, namespace, podName)
+	err = k.service.DeletePod(ctx, req.ClusterName, req.Pod.Namespace, req.Pod.Name)
 	if err != nil {
 		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
 		return
