@@ -70,11 +70,11 @@ type K8sService interface {
 	GetPodYaml(ctx context.Context, clusterID int, namespace, podName string) (string, error)
 	// CreatePod 创建 Pod
 	// CreatePod(ctx context.Context, clusterID int, namespace string, pod *model.K8sPod) error
-	CreatePod(ctx context.Context, pod *corev1.Pod) error
+	CreatePod(ctx context.Context, pod *model.K8sPodRequest) error
 	// UpdatePod 更新 Pod
-	UpdatePod(ctx context.Context, clusterID int, namespace string, pod *model.K8sPod) error
+	UpdatePod(ctx context.Context, pod *model.K8sPodRequest) error
 	// DeletePod 删除 Pod
-	DeletePod(ctx context.Context, clusterID int, namespace, podName string) error
+	DeletePod(ctx context.Context, clusterName, namespace, podName string) error
 }
 
 type k8sService struct {
@@ -867,13 +867,9 @@ func (k *k8sService) GetPodYaml(ctx context.Context, clusterID int, namespace, p
 }
 
 // CreatePod 创建 Pod
-//
-//	func (k *k8sService) CreatePod(ctx context.Context, clusterID int, namespace string, pod *model.K8sPod) error {
-//		panic("implement me")
-//	}
-func (k *k8sService) CreatePod(ctx context.Context, pod *corev1.Pod) error {
-	// TODO 获取集群信息, 根据什么
-	cluster, err := k.dao.GetClusterByName(ctx, pod.Namespace)
+func (k *k8sService) CreatePod(ctx context.Context, req *model.K8sPodRequest) error {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)
 	if err != nil {
 		k.l.Error("获取集群信息失败", zap.Error(err))
 		return err
@@ -887,24 +883,62 @@ func (k *k8sService) CreatePod(ctx context.Context, pod *corev1.Pod) error {
 	}
 
 	// 创建 Pod
-	_, err = kubeClient.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+	_, err = kubeClient.CoreV1().Pods(req.Pod.Namespace).Create(ctx, req.Pod, metav1.CreateOptions{})
 	if err != nil {
 		k.l.Error("创建 Pod 失败", zap.Error(err))
 		return err
 	}
 
-	k.l.Info("创建 Pod 成功", zap.String("podName", pod.Name))
+	k.l.Info("创建 Pod 成功", zap.String("podName", req.Pod.Name))
 	return nil
 }
 
 // UpdatePod 更新 Pod
-func (k *k8sService) UpdatePod(ctx context.Context, clusterID int, namespace string, pod *model.K8sPod) error {
-	panic("implement")
+func (k *k8sService) UpdatePod(ctx context.Context, req *model.K8sPodRequest) error {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	pod, err := kubeClient.CoreV1().Pods(req.Pod.Namespace).Get(ctx, req.Pod.Name, metav1.GetOptions{})
+	if err != nil {
+		k.l.Error("获取 Pod 信息失败", zap.Error(err))
+		return err
+	}
+
+	updatePod := pod.DeepCopy()
+	// TODO 讨论更新哪些内容
+
+	// 更新 Pod
+	_, err = kubeClient.CoreV1().Pods(req.Pod.Namespace).Update(ctx, updatePod, metav1.UpdateOptions{})
+	if err != nil {
+		k.l.Error("更新 Pod 失败", zap.Error(err))
+		return err
+	}
+
+	k.l.Info("更新 Pod 成功", zap.String("podName", req.Pod.Name))
+	return nil
 }
 
 // DeletePod 删除 Pod
-func (k *k8sService) DeletePod(ctx context.Context, clusterID int, namespace, podName string) error {
-	kubeClient, err := k.client.GetKubeClient(clusterID)
+func (k *k8sService) DeletePod(ctx context.Context, clusterName, namespace, podName string) error {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, clusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return err
+	}
+
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
 	if err != nil {
 		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
