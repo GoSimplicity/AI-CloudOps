@@ -73,7 +73,7 @@ func InitWebServer() *Cmd {
 	k8sHandler := api6.NewK8sHandler(k8sService, logger)
 	prometheusDao := dao3.NewPrometheusDAO(db, logger)
 	monitorCache := cache.NewMonitorCache(logger, prometheusDao)
-	prometheusService := service4.NewPrometheusService(prometheusDao, monitorCache, logger)
+	prometheusService := service4.NewPrometheusService(prometheusDao, monitorCache, logger, userDAO)
 	prometheusHandler := api7.NewPrometheusHandler(prometheusService, logger)
 	notAuthService := service5.NewNotAuthService(logger, treeNodeDAO)
 	notAuthHandler := api8.NewNotAuthHandler(notAuthService)
