@@ -637,13 +637,13 @@ func (k *K8sHandler) GetPodYaml(ctx *gin.Context) {
 		return
 	}
 
-	yaml, err := k.service.GetPodYaml(ctx, clusterID, namespace, podName)
+	pod, err := k.service.GetPodYaml(ctx, clusterID, namespace, podName)
 	if err != nil {
 		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, yaml)
+	apiresponse.SuccessWithData(ctx, pod)
 }
 
 // CreatePod 创建新的 Pod
