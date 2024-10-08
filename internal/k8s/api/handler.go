@@ -613,7 +613,37 @@ func (k *K8sHandler) GetContainerLogs(ctx *gin.Context) {
 
 // GetPodYaml 获取 Pod 的 YAML 配置
 func (k *K8sHandler) GetPodYaml(ctx *gin.Context) {
-	// TODO: 实现获取 Pod 的 YAML 配置的逻辑
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	namespace := ctx.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	podName := ctx.Param("podName")
+	if podName == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	yaml, err := k.service.GetPodYaml(ctx, clusterID, namespace, podName)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, yaml)
 }
 
 // CreatePod 创建新的 Pod
