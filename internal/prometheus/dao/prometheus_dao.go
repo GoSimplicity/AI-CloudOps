@@ -6,6 +6,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"time"
 )
 
 type PrometheusDao interface {
@@ -27,6 +28,15 @@ type PrometheusDao interface {
 	GetMonitorScrapePoolSupportedRecord(ctx context.Context) ([]*model.MonitorScrapePool, error)
 	GetMonitorAlertRuleByPoolId(ctx context.Context, poolId int) ([]*model.MonitorAlertRule, error)
 	GetMonitorRecordRuleByPoolId(ctx context.Context, poolId int) ([]*model.MonitorRecordRule, error)
+
+	GetAllMonitorOndutyGroup(ctx context.Context) ([]*model.MonitorOnDutyGroup, error)
+	CreateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error
+	GetMonitorOnDutyGroupById(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error)
+	CreateMonitorOnDutyGroupChange(ctx context.Context, monitorOnDutyGroupChange *model.MonitorOnDutyChange) error
+	GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime time.Time) ([]*model.MonitorOnDutyChange, error)
+	UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error
+	GetMonitorSendGroupByOnDutyGroupId(ctx context.Context, onDutyGroupID int) ([]*model.MonitorSendGroup, error)
+	DeleteMonitorOnDutyGroup(ctx context.Context, id int) error
 }
 
 type prometheusDao struct {
@@ -316,4 +326,81 @@ func (p *prometheusDao) GetMonitorRecordRuleByPoolId(ctx context.Context, poolId
 	}
 
 	return recordRules, nil
+}
+
+func (p *prometheusDao) GetAllMonitorOndutyGroup(ctx context.Context) ([]*model.MonitorOnDutyGroup, error) {
+	var ondutyGroups []*model.MonitorOnDutyGroup
+
+	if err := p.db.WithContext(ctx).Find(&ondutyGroups).Error; err != nil {
+		p.l.Error("GetAllMonitorOndutyGroup failed to get all onduty groups", zap.Error(err))
+		return nil, err
+	}
+
+	return ondutyGroups, nil
+}
+
+func (p *prometheusDao) CreateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error {
+	if monitorOnDutyGroup == nil {
+		p.l.Error("CreateMonitorOnDutyGroup failed: monitorOnDutyGroup is nil")
+		return fmt.Errorf("monitorOnDutyGroup cannot be nil")
+	}
+
+	if err := p.db.WithContext(ctx).Create(monitorOnDutyGroup).Error; err != nil {
+		p.l.Error("CreateMonitorOnDutyGroup failed to create onduty group", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (p *prometheusDao) GetMonitorOnDutyGroupById(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error) {
+	var ondutyGroup *model.MonitorOnDutyGroup
+
+	if err := p.db.WithContext(ctx).Where("id = ?", id).First(&ondutyGroup).Error; err != nil {
+		p.l.Error("GetMonitorOnDutyGroupById failed to get onduty group by id", zap.Error(err))
+		return nil, err
+	}
+
+	return ondutyGroup, nil
+}
+
+func (p *prometheusDao) CreateMonitorOnDutyGroupChange(ctx context.Context, monitorOnDutyGroupChange *model.MonitorOnDutyChange) error {
+	if monitorOnDutyGroupChange == nil {
+		p.l.Error("CreateMonitorOnDutyGroupChange failed: monitorOnDutyGroupChange is nil")
+		return fmt.Errorf("monitorOnDutyGroupChange cannot be nil")
+	}
+
+	if err := p.db.WithContext(ctx).Create(monitorOnDutyGroupChange).Error; err != nil {
+		p.l.Error("CreateMonitorOnDutyGroupChange failed to create onduty group change", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// GetMonitorOnDutyChangesByGroupAndTimeRange 获取指定值班组在指定时间范围内的值班计划变更
+func (p *prometheusDao) GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime time.Time) ([]*model.MonitorOnDutyChange, error) {
+	var changes []*model.MonitorOnDutyChange
+
+	if err := p.db.WithContext(ctx).Where("on_duty_group_id = ? AND date >= ? AND date <= ?", groupID, startTime, endTime).Find(&changes).Error; err != nil {
+		p.l.Error("GetMonitorOnDutyChangesByGroupAndTimeRange failed to get onduty group changes", zap.Error(err))
+		return nil, err
+	}
+
+	return changes, nil
+}
+
+func (p *prometheusDao) UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) GetMonitorSendGroupByOnDutyGroupId(ctx context.Context, onDutyGroupID int) ([]*model.MonitorSendGroup, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) DeleteMonitorOnDutyGroup(ctx context.Context, id int) error {
+	//TODO implement me
+	panic("implement me")
 }

@@ -513,194 +513,197 @@ func (k *K8sHandler) GetClusterNamespacesForSelect(ctx *gin.Context) {
 }
 
 // GetPodListByNamespace 根据命名空间获取 Pods 列表
-func (k *K8sHandler) GetPodListByNamespace(ctx *gin.Context) {
-	id := ctx.Query("id")
-	if id == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+func (k *K8sHandler) GetPodListByNamespace(c *gin.Context) {
+	idStr := c.Query("id")
+	if idStr == "" {
+		apiresponse.BadRequestError(c, "缺少 'id' 参数")
 		return
 	}
 
-	clusterID, err := strconv.Atoi(id)
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(c, "缺少 'namespace' 参数")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(idStr)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, "id 非整数")
+		apiresponse.BadRequestError(c, "'id' 参数必须为整数")
 		return
 	}
 
-	name := ctx.Query("namespace")
-	if name == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
-		return
-	}
+	// 可选参数：按 Pod 名称过滤
+	podName := c.Query("podName") // 例如，?podName=my-pod
 
-	pods, err := k.service.GetPodsByNamespace(ctx, clusterID, name)
+	pods, err := k.service.GetPodsByNamespace(c.Request.Context(), clusterID, namespace, podName)
 	if err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, pods)
+	apiresponse.SuccessWithData(c, pods)
 }
 
 // GetPodContainers 获取 Pod 的容器列表
-func (k *K8sHandler) GetPodContainers(ctx *gin.Context) {
-	id := ctx.Query("id")
-	if id == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+func (k *K8sHandler) GetPodContainers(c *gin.Context) {
+	idStr := c.Query("id")
+	if idStr == "" {
+		apiresponse.BadRequestError(c, "缺少 'id' 参数")
 		return
 	}
 
-	clusterID, err := strconv.Atoi(id)
+	clusterID, err := strconv.Atoi(idStr)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, "id 非整数")
+		apiresponse.BadRequestError(c, "'id' 参数必须为整数")
 		return
 	}
 
-	podName := ctx.Param("podName")
+	namespace := c.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(c, "缺少 'namespace' 参数")
+		return
+	}
+
+	podName := c.Param("podName")
 	if podName == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+		apiresponse.BadRequestError(c, "缺少 'podName' 参数")
 		return
 	}
 
-	containers, err := k.service.GetContainersByPod(ctx, clusterID, podName)
+	containers, err := k.service.GetContainersByPod(c.Request.Context(), clusterID, namespace, podName)
 	if err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, containers)
+	apiresponse.SuccessWithData(c, containers)
 }
 
 // GetContainerLogs 获取容器日志
-func (k *K8sHandler) GetContainerLogs(ctx *gin.Context) {
-	id := ctx.Query("id")
-	if id == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+func (k *K8sHandler) GetContainerLogs(c *gin.Context) {
+	idStr := c.Query("id")
+	if idStr == "" {
+		apiresponse.BadRequestError(c, "缺少 'id' 参数")
 		return
 	}
 
-	namespace := ctx.Query("namespace")
+	namespace := c.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+		apiresponse.BadRequestError(c, "缺少 'namespace' 参数")
 		return
 	}
 
-	clusterID, err := strconv.Atoi(id)
+	clusterID, err := strconv.Atoi(idStr)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, "id 非整数")
+		apiresponse.BadRequestError(c, "'id' 参数必须为整数")
 		return
 	}
 
-	podName := ctx.Param("podName")
+	podName := c.Param("podName")
 	if podName == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+		apiresponse.BadRequestError(c, "缺少 'podName' 参数")
 		return
 	}
 
-	containerName := ctx.Param("container")
+	containerName := c.Param("container")
 	if containerName == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+		apiresponse.BadRequestError(c, "缺少 'container' 参数")
 		return
 	}
 
-	logs, err := k.service.GetContainerLogs(ctx, clusterID, namespace, podName, containerName)
+	logs, err := k.service.GetContainerLogs(c.Request.Context(), clusterID, namespace, podName, containerName)
 	if err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, logs)
+	apiresponse.SuccessWithData(c, logs)
 }
 
 // GetPodYaml 获取 Pod 的 YAML 配置
-func (k *K8sHandler) GetPodYaml(ctx *gin.Context) {
-	id := ctx.Query("id")
-	if id == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+func (k *K8sHandler) GetPodYaml(c *gin.Context) {
+	idStr := c.Query("id")
+	if idStr == "" {
+		apiresponse.BadRequestError(c, "缺少 'id' 参数")
 		return
 	}
 
-	clusterID, err := strconv.Atoi(id)
+	clusterID, err := strconv.Atoi(idStr)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, "id 非整数")
+		apiresponse.BadRequestError(c, "'id' 参数必须为整数")
 		return
 	}
 
-	namespace := ctx.Query("namespace")
+	namespace := c.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+		apiresponse.BadRequestError(c, "缺少 'namespace' 参数")
 		return
 	}
 
-	podName := ctx.Param("podName")
+	podName := c.Param("podName")
 	if podName == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+		apiresponse.BadRequestError(c, "缺少 'podName' 参数")
 		return
 	}
 
-	pod, err := k.service.GetPodYaml(ctx, clusterID, namespace, podName)
+	pod, err := k.service.GetPodYaml(c.Request.Context(), clusterID, namespace, podName)
 	if err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, pod)
+	apiresponse.SuccessWithData(c, pod)
 }
 
 // CreatePod 创建新的 Pod
-func (k *K8sHandler) CreatePod(ctx *gin.Context) {
-	var req *model.K8sPodRequest
+func (k *K8sHandler) CreatePod(c *gin.Context) {
+	var req model.K8sPodRequest
 
-	err := ctx.ShouldBind(&req)
-	if err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(c, "绑定数据失败", err.Error())
 		return
 	}
 
-	err = k.service.CreatePod(ctx, req)
-	if err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+	if err := k.service.CreatePod(c.Request.Context(), &req); err != nil {
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	apiresponse.Success(c)
 }
 
 // UpdatePod 更新指定名称的 Pod
-func (k *K8sHandler) UpdatePod(ctx *gin.Context) {
-	var req *model.K8sPodRequest
+func (k *K8sHandler) UpdatePod(c *gin.Context) {
+	var req model.K8sPodRequest
 
-	err := ctx.ShouldBind(&req)
-	if err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(c, "绑定数据失败", err.Error())
 		return
 	}
 
-	err = k.service.UpdatePod(ctx, req)
-	if err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+	if err := k.service.UpdatePod(c.Request.Context(), &req); err != nil {
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	apiresponse.Success(c)
 }
 
 // DeletePod 删除指定名称的 Pod
-func (k *K8sHandler) DeletePod(ctx *gin.Context) {
-	var req *model.K8sPodRequest
+func (k *K8sHandler) DeletePod(c *gin.Context) {
+	var req model.K8sPodRequest
 
-	err := ctx.ShouldBind(&req)
-	if err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(c, "绑定数据失败", err.Error())
 		return
 	}
 
-	err = k.service.DeletePod(ctx, req.ClusterName, req.Pod.Namespace, req.Pod.Name)
-	if err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+	if err := k.service.DeletePod(c.Request.Context(), req.ClusterName, req.Pod.Namespace, req.Pod.Name); err != nil {
+		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	apiresponse.Success(c)
 }
 
 // GetDeployListByNamespace 根据命名空间获取部署列表

@@ -61,9 +61,9 @@ type K8sService interface {
 	GetClusterNamespacesByName(ctx context.Context, clusterName string) ([]string, error)
 
 	// GetPodsByNamespace 获取指定命名空间的 Pod 列表
-	GetPodsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPod, error)
+	GetPodsByNamespace(ctx context.Context, clusterID int, namespace string, podName string) ([]*model.K8sPod, error)
 	// GetContainersByPod 获取指定 Pod 的容器列表
-	GetContainersByPod(ctx context.Context, clusterID int, podName string) ([]*model.K8sPodContainer, error)
+	GetContainersByPod(ctx context.Context, clusterID int, namespace string, podName string) ([]*model.K8sPodContainer, error)
 	// GetContainerLogs 获取指定 Pod 的容器日志
 	GetContainerLogs(ctx context.Context, clusterID int, namespace, podName, containerName string) (string, error)
 	// GetPodYaml 获取指定 Pod 的 YAML 配置
@@ -693,7 +693,7 @@ func (k *k8sService) DrainPods(ctx context.Context, req *model.K8sClusterNodesRe
 	return nil
 }
 
-// GetClusterNamespacesList 获取命名空间列表
+// GetClusterNamespacesList 获取所有集群的命名空间列表
 func (k *k8sService) GetClusterNamespacesList(ctx context.Context) (map[string][]string, error) {
 	clusters, err := k.dao.ListAllClusters(ctx)
 	if err != nil {
@@ -706,18 +706,18 @@ func (k *k8sService) GetClusterNamespacesList(ctx context.Context) (map[string][
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(10)
-	errChan := make(chan error, len(clusters))
 
 	for _, cluster := range clusters {
+		cluster := cluster // Capture loop variable
 		g.Go(func() error {
-			namespace, err := k.GetClusterNamespacesByName(ctx, cluster.Name)
+			namespaces, err := k.GetClusterNamespacesByName(ctx, cluster.Name)
 			if err != nil {
-				errChan <- err
-				return nil
+				k.l.Error("获取命名空间列表失败", zap.Error(err), zap.String("clusterName", cluster.Name))
+				return err
 			}
 
 			mu.Lock()
-			mp[cluster.Name] = namespace
+			mp[cluster.Name] = namespaces
 			mu.Unlock()
 			return nil
 		})
@@ -725,21 +725,7 @@ func (k *k8sService) GetClusterNamespacesList(ctx context.Context) (map[string][
 
 	if err := g.Wait(); err != nil {
 		k.l.Error("获取命名空间列表失败", zap.Error(err))
-		close(errChan)
 		return nil, err
-	}
-
-	close(errChan)
-
-	var errs []error
-	for e := range errChan {
-		if e != nil {
-			k.l.Error("获取命名空间列表失败", zap.Error(e))
-			errs = append(errs, e)
-		}
-	}
-	if len(errs) > 0 && len(errs) == len(clusters) {
-		return nil, fmt.Errorf("获取命名空间列表失败: %v", err)
 	}
 
 	return mp, nil
@@ -773,15 +759,20 @@ func (k *k8sService) GetClusterNamespacesByName(ctx context.Context, clusterName
 	return nsList, nil
 }
 
-// GetPodsByNamespace 获取指定命名空间的 Pod 列表
-func (k *k8sService) GetPodsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPod, error) {
+// GetPodsByNamespace 获取指定命名空间的 Pod 列表，可按名称过滤
+func (k *k8sService) GetPodsByNamespace(ctx context.Context, clusterID int, namespace, podName string) ([]*model.K8sPod, error) {
 	kubeClient, err := k.client.GetKubeClient(clusterID)
 	if err != nil {
 		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return nil, err
 	}
 
-	pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	listOptions := metav1.ListOptions{}
+	if podName != "" {
+		listOptions.FieldSelector = fmt.Sprintf("metadata.name=%s", podName)
+	}
+
+	pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, listOptions)
 	if err != nil {
 		k.l.Error("获取 Pod 列表失败", zap.Error(err))
 		return nil, err
@@ -791,27 +782,21 @@ func (k *k8sService) GetPodsByNamespace(ctx context.Context, clusterID int, name
 }
 
 // GetContainersByPod 获取指定 Pod 的容器列表
-func (k *k8sService) GetContainersByPod(ctx context.Context, clusterID int, podName string) ([]*model.K8sPodContainer, error) {
+func (k *k8sService) GetContainersByPod(ctx context.Context, clusterID int, namespace, podName string) ([]*model.K8sPodContainer, error) {
 	kubeClient, err := k.client.GetKubeClient(clusterID)
 	if err != nil {
 		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return nil, err
 	}
 
-	pods, err := kubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
-		k.l.Error("获取 Pod 列表失败", zap.Error(err))
+		k.l.Error("获取 Pod 失败", zap.Error(err))
 		return nil, err
 	}
 
-	for _, pod := range pods.Items {
-		if pod.Name == podName {
-			containers := pkg.BuildK8sContainers(pod.Spec.Containers)
-			return pkg.BuildK8sContainersWithPointer(containers), nil
-		}
-	}
-
-	return nil, fmt.Errorf("未找到 Pod: %s", podName)
+	containers := pkg.BuildK8sContainers(pod.Spec.Containers)
+	return pkg.BuildK8sContainersWithPointer(containers), nil
 }
 
 // GetContainerLogs 获取指定 Pod 的容器日志
@@ -824,7 +809,10 @@ func (k *k8sService) GetContainerLogs(ctx context.Context, clusterID int, namesp
 
 	req := kubeClient.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{
 		Container: containerName,
+		Follow:    false, // 不跟随日志
+		Previous:  false, // 不使用 previous
 	})
+
 	podLogs, err := req.Stream(ctx)
 	if err != nil {
 		k.l.Error("获取 Pod 日志失败", zap.Error(err))
@@ -902,17 +890,8 @@ func (k *k8sService) UpdatePod(ctx context.Context, req *model.K8sPodRequest) er
 		return err
 	}
 
-	pod, err := kubeClient.CoreV1().Pods(req.Pod.Namespace).Get(ctx, req.Pod.Name, metav1.GetOptions{})
-	if err != nil {
-		k.l.Error("获取 Pod 信息失败", zap.Error(err))
-		return err
-	}
-
-	updatePod := pod.DeepCopy()
-	// TODO 讨论哪些可更新，需要更新的字段
-
 	// 更新 Pod
-	_, err = kubeClient.CoreV1().Pods(req.Pod.Namespace).Update(ctx, updatePod, metav1.UpdateOptions{})
+	_, err = kubeClient.CoreV1().Pods(req.Pod.Namespace).Update(ctx, req.Pod, metav1.UpdateOptions{})
 	if err != nil {
 		k.l.Error("更新 Pod 失败", zap.Error(err))
 		return err
