@@ -59,6 +59,8 @@ type K8sService interface {
 	GetClusterNamespacesByName(ctx context.Context, clusterName string) ([]string, error)
 	// GetPodsByNamespace 获取指定命名空间的 Pod 列表
 	GetPodsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPod, error)
+	// GetContainersByPod 获取指定 Pod 的容器列表
+	GetContainersByPod(ctx context.Context, clusterID int, podName string) ([]*model.K8sPodContainer, error)
 }
 
 type k8sService struct {
@@ -773,4 +775,28 @@ func (k *k8sService) GetPodsByNamespace(ctx context.Context, clusterID int, name
 	}
 
 	return pkg.BuildK8sPods(pods), nil
+}
+
+// GetContainersByPod 获取指定 Pod 的容器列表
+func (k *k8sService) GetContainersByPod(ctx context.Context, clusterID int, podName string) ([]*model.K8sPodContainer, error) {
+	kubeClient, err := k.client.GetKubeClient(clusterID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	pods, err := kubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		k.l.Error("获取 Pod 列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	for _, pod := range pods.Items {
+		if pod.Name == podName {
+			containers := pkg.BuildK8sContainers(pod.Spec.Containers)
+			return pkg.BuildK8sContainersWithPointer(containers), nil
+		}
+	}
+
+	return nil, fmt.Errorf("未找到 Pod: %s", podName)
 }
