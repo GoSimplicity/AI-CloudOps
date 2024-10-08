@@ -514,7 +514,31 @@ func (k *K8sHandler) GetClusterNamespacesForSelect(ctx *gin.Context) {
 
 // GetPodListByNamespace 根据命名空间获取 Pods 列表
 func (k *K8sHandler) GetPodListByNamespace(ctx *gin.Context) {
-	// TODO: 实现根据命名空间获取 Pods 列表的逻辑
+	id := ctx.Query("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	clusterID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "id 非整数")
+		return
+	}
+
+	name := ctx.Query("namespace")
+	if name == "" {
+		apiresponse.BadRequestError(ctx, "参数错误")
+		return
+	}
+
+	pods, err := k.service.GetPodsByNamespace(ctx, clusterID, name)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, pods)
 }
 
 // GetPodContainers 获取 Pod 的容器列表
