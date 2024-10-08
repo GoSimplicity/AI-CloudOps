@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
 	"sync"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
@@ -57,10 +59,13 @@ type K8sService interface {
 	GetClusterNamespacesList(ctx context.Context) (map[string][]string, error)
 	// GetClusterNamespacesByName 获取指定集群的所有命名空间
 	GetClusterNamespacesByName(ctx context.Context, clusterName string) ([]string, error)
+
 	// GetPodsByNamespace 获取指定命名空间的 Pod 列表
 	GetPodsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPod, error)
 	// GetContainersByPod 获取指定 Pod 的容器列表
 	GetContainersByPod(ctx context.Context, clusterID int, podName string) ([]*model.K8sPodContainer, error)
+	// GetContainerLogs 获取指定 Pod 的容器日志
+	GetContainerLogs(ctx context.Context, clusterID int, namespace, podName, containerName string) (string, error)
 }
 
 type k8sService struct {
@@ -799,4 +804,32 @@ func (k *k8sService) GetContainersByPod(ctx context.Context, clusterID int, podN
 	}
 
 	return nil, fmt.Errorf("未找到 Pod: %s", podName)
+}
+
+// GetContainerLogs 获取指定 Pod 的容器日志
+func (k *k8sService) GetContainerLogs(ctx context.Context, clusterID int, namespace, podName, containerName string) (string, error) {
+	kubeClient, err := k.client.GetKubeClient(clusterID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return "", err
+	}
+
+	req := kubeClient.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{
+		Container: containerName,
+	})
+	podLogs, err := req.Stream(ctx)
+	if err != nil {
+		k.l.Error("获取 Pod 日志失败", zap.Error(err))
+		return "", err
+	}
+	defer podLogs.Close()
+
+	buf := new(strings.Builder)
+	_, err = io.Copy(buf, podLogs)
+	if err != nil {
+		k.l.Error("读取 Pod 日志失败", zap.Error(err))
+		return "", err
+	}
+
+	return buf.String(), nil
 }
