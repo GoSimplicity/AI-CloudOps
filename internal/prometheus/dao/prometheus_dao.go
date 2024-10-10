@@ -45,6 +45,21 @@ type PrometheusDao interface {
 	CreateMonitorOnDutyGroupChange(ctx context.Context, monitorOnDutyGroupChange *model.MonitorOnDutyChange) error
 	GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime time.Time) ([]*model.MonitorOnDutyChange, error)
 	GetMonitorSendGroupByOnDutyGroupId(ctx context.Context, onDutyGroupID int) ([]*model.MonitorSendGroup, error)
+
+	SearchMonitorSendGroupByName(ctx context.Context, name string) ([]*model.MonitorSendGroup, error)
+	GetMonitorSendGroupList(ctx context.Context) ([]*model.MonitorSendGroup, error)
+	GetMonitorSendGroupById(ctx context.Context, id int) (*model.MonitorSendGroup, error)
+	CreateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error
+	UpdateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error
+	DeleteMonitorSendGroup(ctx context.Context, id int) error
+	SearchMonitorAlertRuleByName(ctx context.Context, name string) ([]*model.MonitorAlertRule, error)
+	GetMonitorAlertRuleList(ctx context.Context) ([]*model.MonitorAlertRule, error)
+	CreateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error
+	GetMonitorAlertRuleById(ctx context.Context, id int) (*model.MonitorAlertRule, error)
+	UpdateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error
+	EnableSwitchMonitorAlertRule(ctx context.Context, ruleID int) error
+	BatchEnableSwitchMonitorAlertRule(ctx context.Context, ruleIDs []int) error
+	DeleteMonitorAlertRule(ctx context.Context, ruleID int) error
 }
 
 type prometheusDao struct {
@@ -247,6 +262,7 @@ func (p *prometheusDao) UpdateMonitorScrapeJob(ctx context.Context, job *model.M
 
 	if result.RowsAffected == 0 {
 		p.l.Warn("UpdateMonitorScrapeJob 未找到要更新的记录", zap.Int("id", job.ID))
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorScrapeJob", job.ID)
 	}
 
 	return nil
@@ -577,7 +593,6 @@ func (p *prometheusDao) UpdateMonitorAlertManagerPool(ctx context.Context, pool 
 	return nil
 }
 
-// DeleteMonitorAlertManagerPool 根据 ID 删除 MonitorAlertManagerPool 记录
 func (p *prometheusDao) DeleteMonitorAlertManagerPool(ctx context.Context, id int) error {
 	if id <= 0 {
 		p.l.Error("DeleteMonitorAlertManagerPool 失败: 无效的 ID", zap.Int("id", id))
@@ -626,4 +641,282 @@ func (p *prometheusDao) SearchMonitorOnDutyGroupByName(ctx context.Context, name
 	}
 
 	return groups, nil
+}
+
+// SearchMonitorSendGroupByName 通过名称搜索 MonitorSendGroup
+func (p *prometheusDao) SearchMonitorSendGroupByName(ctx context.Context, name string) ([]*model.MonitorSendGroup, error) {
+	var sendGroups []*model.MonitorSendGroup
+
+	if err := p.db.WithContext(ctx).
+		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
+		Find(&sendGroups).Error; err != nil {
+		p.l.Error("通过名称搜索 MonitorSendGroup 失败", zap.Error(err))
+		return nil, err
+	}
+
+	return sendGroups, nil
+}
+
+// GetMonitorSendGroupList 获取所有 MonitorSendGroup 记录
+func (p *prometheusDao) GetMonitorSendGroupList(ctx context.Context) ([]*model.MonitorSendGroup, error) {
+	var sendGroups []*model.MonitorSendGroup
+
+	if err := p.db.WithContext(ctx).Find(&sendGroups).Error; err != nil {
+		p.l.Error("获取所有 MonitorSendGroup 失败", zap.Error(err))
+		return nil, err
+	}
+
+	if len(sendGroups) == 0 {
+		p.l.Info("未找到任何 MonitorSendGroup 记录")
+	}
+
+	return sendGroups, nil
+}
+
+// GetMonitorSendGroupById 根据 ID 获取 MonitorSendGroup 记录
+func (p *prometheusDao) GetMonitorSendGroupById(ctx context.Context, id int) (*model.MonitorSendGroup, error) {
+	if id <= 0 {
+		p.l.Error("GetMonitorSendGroupById 失败: 无效的 ID", zap.Int("id", id))
+		return nil, fmt.Errorf("无效的 ID: %d", id)
+	}
+
+	var sendGroup model.MonitorSendGroup
+	if err := p.db.WithContext(ctx).First(&sendGroup, id).Error; err != nil {
+		p.l.Error("GetMonitorSendGroupById 获取记录失败", zap.Error(err), zap.Int("id", id))
+		return nil, err
+	}
+
+	return &sendGroup, nil
+}
+
+// CreateMonitorSendGroup 在数据库中创建一个新的 MonitorSendGroup 记录
+func (p *prometheusDao) CreateMonitorSendGroup(ctx context.Context, sendGroup *model.MonitorSendGroup) error {
+	if sendGroup == nil {
+		p.l.Error("CreateMonitorSendGroup 失败: sendGroup 为 nil")
+		return fmt.Errorf("monitorSendGroup 不能为空")
+	}
+
+	if err := p.db.WithContext(ctx).Create(sendGroup).Error; err != nil {
+		p.l.Error("创建 MonitorSendGroup 失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// UpdateMonitorSendGroup 更新现有的 MonitorSendGroup 记录
+func (p *prometheusDao) UpdateMonitorSendGroup(ctx context.Context, sendGroup *model.MonitorSendGroup) error {
+	if sendGroup == nil {
+		p.l.Error("UpdateMonitorSendGroup 失败: sendGroup 为 nil")
+		return fmt.Errorf("monitorSendGroup 不能为空")
+	}
+
+	if sendGroup.ID == 0 {
+		p.l.Error("UpdateMonitorSendGroup 失败: ID 为 0", zap.Any("sendGroup", sendGroup))
+		return fmt.Errorf("monitorSendGroup 的 ID 必须设置且非零")
+	}
+
+	result := p.db.WithContext(ctx).
+		Model(&model.MonitorSendGroup{}).
+		Where("id = ?", sendGroup.ID).
+		Updates(sendGroup)
+
+	if result.Error != nil {
+		p.l.Error("UpdateMonitorSendGroup 更新记录失败", zap.Error(result.Error), zap.Int("id", sendGroup.ID))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("UpdateMonitorSendGroup 未找到要更新的记录", zap.Int("id", sendGroup.ID))
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorSendGroup", sendGroup.ID)
+	}
+
+	return nil
+}
+
+func (p *prometheusDao) DeleteMonitorSendGroup(ctx context.Context, id int) error {
+	if id <= 0 {
+		p.l.Error("DeleteMonitorSendGroup 失败: 无效的 ID", zap.Int("id", id))
+		return fmt.Errorf("无效的 ID: %d", id)
+	}
+
+	result := p.db.WithContext(ctx).
+		Delete(&model.MonitorSendGroup{}, id)
+
+	if result.Error != nil {
+		p.l.Error("DeleteMonitorSendGroup 删除记录失败", zap.Error(result.Error), zap.Int("id", id))
+		return fmt.Errorf("删除 ID 为 %d 的 MonitorSendGroup 失败: %w", id, result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("DeleteMonitorSendGroup 未找到要删除的记录", zap.Int("id", id))
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorSendGroup", id)
+	}
+
+	return nil
+}
+
+// SearchMonitorAlertRuleByName 通过名称搜索 MonitorAlertRule
+func (p *prometheusDao) SearchMonitorAlertRuleByName(ctx context.Context, name string) ([]*model.MonitorAlertRule, error) {
+	var alertRules []*model.MonitorAlertRule
+
+	if err := p.db.WithContext(ctx).
+		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
+		Find(&alertRules).Error; err != nil {
+		p.l.Error("通过名称搜索 MonitorAlertRule 失败", zap.Error(err))
+		return nil, err
+	}
+
+	return alertRules, nil
+}
+
+// GetMonitorAlertRuleList 获取所有 MonitorAlertRule 记录
+func (p *prometheusDao) GetMonitorAlertRuleList(ctx context.Context) ([]*model.MonitorAlertRule, error) {
+	var alertRules []*model.MonitorAlertRule
+
+	if err := p.db.WithContext(ctx).Find(&alertRules).Error; err != nil {
+		p.l.Error("获取所有 MonitorAlertRule 失败", zap.Error(err))
+		return nil, err
+	}
+
+	if len(alertRules) == 0 {
+		p.l.Info("未找到任何 MonitorAlertRule 记录")
+	}
+
+	return alertRules, nil
+}
+
+// CreateMonitorAlertRule 在数据库中创建一个新的 MonitorAlertRule 记录
+func (p *prometheusDao) CreateMonitorAlertRule(ctx context.Context, alertRule *model.MonitorAlertRule) error {
+	if alertRule == nil {
+		p.l.Error("CreateMonitorAlertRule 失败: alertRule 为 nil")
+		return fmt.Errorf("monitorAlertRule 不能为空")
+	}
+
+	if err := p.db.WithContext(ctx).Create(alertRule).Error; err != nil {
+		p.l.Error("创建 MonitorAlertRule 失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// GetMonitorAlertRuleById 根据 ID 获取 MonitorAlertRule 记录
+func (p *prometheusDao) GetMonitorAlertRuleById(ctx context.Context, id int) (*model.MonitorAlertRule, error) {
+	if id <= 0 {
+		p.l.Error("GetMonitorAlertRuleById 失败: 无效的 ID", zap.Int("id", id))
+		return nil, fmt.Errorf("无效的 ID: %d", id)
+	}
+
+	var alertRule model.MonitorAlertRule
+	if err := p.db.WithContext(ctx).First(&alertRule, id).Error; err != nil {
+		p.l.Error("GetMonitorAlertRuleById 获取记录失败", zap.Error(err), zap.Int("id", id))
+		return nil, err
+	}
+
+	return &alertRule, nil
+}
+
+// UpdateMonitorAlertRule 更新现有的 MonitorAlertRule 记录
+func (p *prometheusDao) UpdateMonitorAlertRule(ctx context.Context, alertRule *model.MonitorAlertRule) error {
+	if alertRule == nil {
+		p.l.Error("UpdateMonitorAlertRule 失败: alertRule 为 nil")
+		return fmt.Errorf("monitorAlertRule 不能为空")
+	}
+
+	if alertRule.ID == 0 {
+		p.l.Error("UpdateMonitorAlertRule 失败: ID 为 0", zap.Any("alertRule", alertRule))
+		return fmt.Errorf("monitorAlertRule 的 ID 必须设置且非零")
+	}
+
+	result := p.db.WithContext(ctx).
+		Model(&model.MonitorAlertRule{}).
+		Where("id = ?", alertRule.ID).
+		Updates(alertRule)
+
+	if result.Error != nil {
+		p.l.Error("UpdateMonitorAlertRule 更新记录失败", zap.Error(result.Error), zap.Int("id", alertRule.ID))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("UpdateMonitorAlertRule 未找到要更新的记录", zap.Int("id", alertRule.ID))
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorAlertRule", alertRule.ID)
+	}
+
+	return nil
+}
+
+// EnableSwitchMonitorAlertRule 启用或禁用 MonitorAlertRule
+func (p *prometheusDao) EnableSwitchMonitorAlertRule(ctx context.Context, ruleID int) error {
+	if ruleID <= 0 {
+		p.l.Error("EnableSwitchMonitorAlertRule 失败: 无效的 ruleID", zap.Int("ruleID", ruleID))
+		return fmt.Errorf("无效的 ruleID: %d", ruleID)
+	}
+
+	// 假设 MonitorAlertRule 有一个 "enable" 字段
+	result := p.db.WithContext(ctx).
+		Model(&model.MonitorAlertRule{}).
+		Where("id = ?", ruleID).
+		Update("enable", gorm.Expr("NOT enable"))
+
+	if result.Error != nil {
+		p.l.Error("EnableSwitchMonitorAlertRule 更新记录失败", zap.Error(result.Error), zap.Int("ruleID", ruleID))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("EnableSwitchMonitorAlertRule 未找到要更新的记录", zap.Int("ruleID", ruleID))
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorAlertRule", ruleID)
+	}
+
+	return nil
+}
+
+// BatchEnableSwitchMonitorAlertRule 批量启用或禁用 MonitorAlertRule
+func (p *prometheusDao) BatchEnableSwitchMonitorAlertRule(ctx context.Context, ruleIDs []int) error {
+	if len(ruleIDs) == 0 {
+		p.l.Error("BatchEnableSwitchMonitorAlertRule 失败: ruleIDs 为空")
+		return fmt.Errorf("ruleIDs 不能为空")
+	}
+
+	result := p.db.WithContext(ctx).
+		Model(&model.MonitorAlertRule{}).
+		Where("id IN ?", ruleIDs).
+		Update("enable", gorm.Expr("NOT enable"))
+
+	if result.Error != nil {
+		p.l.Error("BatchEnableSwitchMonitorAlertRule 更新记录失败", zap.Error(result.Error), zap.Ints("ruleIDs", ruleIDs))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("BatchEnableSwitchMonitorAlertRule 未找到要更新的记录", zap.Ints("ruleIDs", ruleIDs))
+		return fmt.Errorf("未找到任何指定 ID 的 MonitorAlertRule")
+	}
+
+	return nil
+}
+
+// DeleteMonitorAlertRule 根据 ruleID 删除 MonitorAlertRule 记录
+func (p *prometheusDao) DeleteMonitorAlertRule(ctx context.Context, ruleID int) error {
+	if ruleID <= 0 {
+		p.l.Error("DeleteMonitorAlertRule 失败: 无效的 ruleID", zap.Int("ruleID", ruleID))
+		return fmt.Errorf("无效的 ruleID: %d", ruleID)
+	}
+
+	result := p.db.WithContext(ctx).
+		Delete(&model.MonitorAlertRule{}, ruleID)
+
+	if result.Error != nil {
+		p.l.Error("DeleteMonitorAlertRule 删除记录失败", zap.Error(result.Error), zap.Int("ruleID", ruleID))
+		return fmt.Errorf("删除 ID 为 %d 的 MonitorAlertRule 失败: %w", ruleID, result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("DeleteMonitorAlertRule 未找到要删除的记录", zap.Int("ruleID", ruleID))
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorAlertRule", ruleID)
+	}
+
+	return nil
 }
