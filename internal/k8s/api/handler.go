@@ -285,7 +285,7 @@ func (k *K8sHandler) GetNodeDetail(ctx *gin.Context) {
 	apiresponse.SuccessWithData(ctx, node)
 }
 
-// GetPodsListByNodeId 获取指定节点上的 Pods 列表
+// GetPodsListByNodeName 获取指定节点上的 Pods 列表
 func (k *K8sHandler) GetPodsListByNodeName(ctx *gin.Context) {
 	id := ctx.Query("id")
 	if id == "" {
