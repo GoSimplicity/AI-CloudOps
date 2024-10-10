@@ -6,6 +6,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"strings"
 	"time"
 )
 
@@ -15,14 +16,20 @@ type PrometheusDao interface {
 	GetMonitorScrapePoolById(ctx context.Context, id int) (*model.MonitorScrapePool, error)
 	UpdateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error
 	DeleteMonitorScrapePool(ctx context.Context, poolId int) error
+	SearchMonitorScrapePoolsByName(ctx context.Context, name string) ([]*model.MonitorScrapePool, error)
 
 	GetAllMonitorScrapeJobs(ctx context.Context) ([]*model.MonitorScrapeJob, error)
 	CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
 	GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId int) ([]*model.MonitorScrapeJob, error)
 	UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
 	DeleteMonitorScrapeJob(ctx context.Context, jobId int) error
+	SearchMonitorScrapeJobsByName(ctx context.Context, name string) ([]*model.MonitorScrapeJob, error)
 
 	GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, error)
+	CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
+	UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
+	DeleteMonitorAlertManagerPool(ctx context.Context, id int) error
+	SearchMonitorAlertManagerPoolByName(ctx context.Context, name string) ([]*model.MonitorAlertManagerPool, error)
 	GetMonitorSendGroupByPoolId(ctx context.Context, poolId int) ([]*model.MonitorSendGroup, error)
 	GetMonitorScrapePoolSupportedAlert(ctx context.Context) ([]*model.MonitorScrapePool, error)
 	GetMonitorScrapePoolSupportedRecord(ctx context.Context) ([]*model.MonitorScrapePool, error)
@@ -32,11 +39,12 @@ type PrometheusDao interface {
 	GetAllMonitorOndutyGroup(ctx context.Context) ([]*model.MonitorOnDutyGroup, error)
 	CreateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error
 	GetMonitorOnDutyGroupById(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error)
+	UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error
+	DeleteMonitorOnDutyGroup(ctx context.Context, id int) error
+	SearchMonitorOnDutyGroupByName(ctx context.Context, name string) ([]*model.MonitorOnDutyGroup, error)
 	CreateMonitorOnDutyGroupChange(ctx context.Context, monitorOnDutyGroupChange *model.MonitorOnDutyChange) error
 	GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime time.Time) ([]*model.MonitorOnDutyChange, error)
-	UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error
 	GetMonitorSendGroupByOnDutyGroupId(ctx context.Context, onDutyGroupID int) ([]*model.MonitorSendGroup, error)
-	DeleteMonitorOnDutyGroup(ctx context.Context, id int) error
 }
 
 type prometheusDao struct {
@@ -51,327 +59,384 @@ func NewPrometheusDAO(db *gorm.DB, l *zap.Logger) PrometheusDao {
 	}
 }
 
+// GetAllMonitorScrapePool 获取所有 MonitorScrapePool 记录
 func (p *prometheusDao) GetAllMonitorScrapePool(ctx context.Context) ([]*model.MonitorScrapePool, error) {
-	var list []*model.MonitorScrapePool
+	var pools []*model.MonitorScrapePool
 
-	if err := p.db.WithContext(ctx).Find(&list).Error; err != nil {
-		p.l.Error("failed to get all monitor scrape pool", zap.Error(err))
+	if err := p.db.WithContext(ctx).Find(&pools).Error; err != nil {
+		p.l.Error("获取所有 MonitorScrapePool 失败", zap.Error(err))
 		return nil, err
 	}
 
-	if len(list) == 0 {
-		p.l.Info("no monitor scrape pools found")
+	if len(pools) == 0 {
+		p.l.Info("未找到任何 MonitorScrapePool 记录")
 	}
 
-	return list, nil
+	return pools, nil
 }
 
-func (p *prometheusDao) CreateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error {
-	// 确保 monitorScrapePool 不为 nil
-	if monitorScrapePool == nil {
-		p.l.Error("CreateMonitorScrapePool failed: monitorScrapePool is nil")
-		return fmt.Errorf("monitorScrapePool cannot be nil")
+// CreateMonitorScrapePool 在数据库中创建一个新的 MonitorScrapePool 记录
+func (p *prometheusDao) CreateMonitorScrapePool(ctx context.Context, pool *model.MonitorScrapePool) error {
+	if pool == nil {
+		p.l.Error("CreateMonitorScrapePool 失败: pool 为 nil")
+		return fmt.Errorf("monitorScrapePool 不能为空")
 	}
 
-	if err := p.db.WithContext(ctx).Create(monitorScrapePool).Error; err != nil {
-		p.l.Error("failed to create monitor scrape pool", zap.Error(err))
+	if err := p.db.WithContext(ctx).Create(pool).Error; err != nil {
+		p.l.Error("创建 MonitorScrapePool 失败", zap.Error(err))
 		return err
 	}
 
 	return nil
 }
 
+// GetMonitorScrapePoolById 根据 ID 获取 MonitorScrapePool 记录
 func (p *prometheusDao) GetMonitorScrapePoolById(ctx context.Context, id int) (*model.MonitorScrapePool, error) {
-	var monitorScrapePool *model.MonitorScrapePool
-
-	// 确保 ID 是有效的（非零）
 	if id <= 0 {
-		p.l.Error("GetMonitorScrapePoolById failed: invalid ID", zap.Int("id", id))
-		return nil, fmt.Errorf("invalid ID: %d", id)
+		p.l.Error("GetMonitorScrapePoolById 失败: 无效的 ID", zap.Int("id", id))
+		return nil, fmt.Errorf("无效的 ID: %d", id)
 	}
 
-	if err := p.db.WithContext(ctx).Where("id = ?", id).First(&monitorScrapePool).Error; err != nil {
-		p.l.Error("failed to get monitor scrape pool by id", zap.Error(err))
+	var pool model.MonitorScrapePool
+	if err := p.db.WithContext(ctx).First(&pool, id).Error; err != nil {
+		p.l.Error("GetMonitorScrapePoolById 获取记录失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
 
-	return monitorScrapePool, nil
+	return &pool, nil
 }
 
-func (p *prometheusDao) UpdateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error {
-	if monitorScrapePool == nil {
-		p.l.Error("UpdateMonitorScrapePool failed: monitorScrapePool is nil")
-		return fmt.Errorf("monitorScrapePool cannot be nil")
+// UpdateMonitorScrapePool 更新现有的 MonitorScrapePool 记录
+func (p *prometheusDao) UpdateMonitorScrapePool(ctx context.Context, pool *model.MonitorScrapePool) error {
+	if pool == nil {
+		p.l.Error("UpdateMonitorScrapePool 失败: pool 为 nil")
+		return fmt.Errorf("monitorScrapePool 不能为空")
 	}
 
-	// 确保 monitorScrapePool.ID 已设置
-	if monitorScrapePool.ID == 0 {
-		p.l.Error("UpdateMonitorScrapePool failed: ID is zero", zap.Any("monitorScrapePool", monitorScrapePool))
-		return fmt.Errorf("monitorScrapePool ID must be set and non-zero")
-	}
-
-	result := p.db.WithContext(ctx).
-		Model(&model.MonitorScrapePool{}).     // 明确指定模型
-		Where("id = ?", monitorScrapePool.ID). // 根据 ID 过滤记录
-		Updates(monitorScrapePool)             // 执行更新
-
-	// 检查更新过程中是否有错误
-	if result.Error != nil {
-		p.l.Error("UpdateMonitorScrapePool failed to update record",
-			zap.Error(result.Error),
-			zap.Int("id", monitorScrapePool.ID))
-		return result.Error
-	}
-
-	// 检查是否有记录被更新
-	if result.RowsAffected == 0 {
-		p.l.Warn("UpdateMonitorScrapePool found no records to update", zap.Int("id", monitorScrapePool.ID))
-		return fmt.Errorf("no MonitorScrapePool found with ID %d", monitorScrapePool.ID)
-	}
-
-	return nil
-}
-
-func (p *prometheusDao) DeleteMonitorScrapePool(ctx context.Context, poolId int) error {
-	// 确保 poolId 是有效的（非零）
-	if poolId <= 0 {
-		p.l.Error("DeleteMonitorScrapePool failed: invalid poolId", zap.Int("poolId", poolId))
-		return fmt.Errorf("invalid poolId: %d", poolId)
+	if pool.ID == 0 {
+		p.l.Error("UpdateMonitorScrapePool 失败: ID 为 0", zap.Any("pool", pool))
+		return fmt.Errorf("monitorScrapePool 的 ID 必须设置且非零")
 	}
 
 	result := p.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
-		Where("id = ?", poolId).
-		Delete(&model.MonitorScrapePool{})
+		Where("id = ?", pool.ID).
+		Updates(pool)
 
-	// 检查删除过程中是否有错误
 	if result.Error != nil {
-		p.l.Error("DeleteMonitorScrapePool failed to delete record",
-			zap.Error(result.Error),
-			zap.Int("poolId", poolId))
-		return fmt.Errorf("failed to delete monitor scrape pool with ID %d: %w", poolId, result.Error)
-	}
-
-	// 检查是否有记录被删除
-	if result.RowsAffected == 0 {
-		p.l.Warn("DeleteMonitorScrapePool found no records to delete",
-			zap.Int("poolId", poolId))
-		return fmt.Errorf("no monitor scrape pool found with ID %d", poolId)
-	}
-
-	return nil
-}
-
-func (p *prometheusDao) GetAllMonitorScrapeJobs(ctx context.Context) ([]*model.MonitorScrapeJob, error) {
-	var scrapeJobs []*model.MonitorScrapeJob
-
-	if err := p.db.WithContext(ctx).Find(&scrapeJobs).Error; err != nil {
-		p.l.Error("GetAllMonitorScrapeJobs failed to get all scrape jobs", zap.Error(err))
-		return nil, err
-	}
-
-	if len(scrapeJobs) == 0 {
-		p.l.Info("no monitor scrape jobs found")
-	}
-
-	return scrapeJobs, nil
-}
-
-func (p *prometheusDao) CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
-	if monitorScrapeJob == nil {
-		p.l.Error("CreateMonitorScrapeJob failed: monitorScrapeJob is nil")
-		return fmt.Errorf("monitorScrapeJob cannot be nil")
-	}
-
-	if err := p.db.WithContext(ctx).Create(monitorScrapeJob).Error; err != nil {
-		p.l.Error("CreateMonitorScrapeJob failed to create scrape job", zap.Error(err))
-		return err
-	}
-
-	return nil
-}
-
-func (p *prometheusDao) GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId int) ([]*model.MonitorScrapeJob, error) {
-	if poolId <= 0 {
-		p.l.Error("GetMonitorScrapeJobsByPoolId failed: invalid poolId", zap.Int("poolId", poolId))
-		return nil, fmt.Errorf("invalid poolId: %d", poolId)
-	}
-
-	var scrapeJobs []*model.MonitorScrapeJob
-
-	if err := p.db.WithContext(ctx).Where("enable = 1 and pool_id = ?", poolId).Find(&scrapeJobs).Error; err != nil {
-		p.l.Error("GetMonitorScrapeJobsByPoolId failed to get scrape jobs", zap.Error(err))
-		return nil, err
-	}
-
-	return scrapeJobs, nil
-}
-
-func (p *prometheusDao) UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
-	if monitorScrapeJob == nil {
-		p.l.Error("UpdateMonitorScrapeJob failed: monitorScrapeJob is nil")
-		return fmt.Errorf("monitorScrapeJob cannot be nil")
-	}
-
-	// 确保 monitorScrapeJob.ID 已设置
-	if monitorScrapeJob.ID == 0 {
-		p.l.Error("UpdateMonitorScrapeJob failed: ID is zero", zap.Any("monitorScrapeJob", monitorScrapeJob))
-		return fmt.Errorf("monitorScrapeJob ID must be set and non-zero")
-	}
-
-	result := p.db.WithContext(ctx).
-		Model(&model.MonitorScrapeJob{}).     // 明确指定模型
-		Where("id = ?", monitorScrapeJob.ID). // 根据 ID 过滤记录
-		Updates(monitorScrapeJob)             // 执行更新
-
-	// 检查更新过程中是否有错误
-	if result.Error != nil {
-		p.l.Error("UpdateMonitorScrapeJob failed to update record",
-			zap.Error(result.Error),
-			zap.Int("id", monitorScrapeJob.ID))
+		p.l.Error("UpdateMonitorScrapePool 更新记录失败", zap.Error(result.Error), zap.Int("id", pool.ID))
 		return result.Error
 	}
 
-	// 检查是否有记录被更新
 	if result.RowsAffected == 0 {
-		p.l.Warn("UpdateMonitorScrapeJob found no records to update", zap.Int("id", monitorScrapeJob.ID))
+		p.l.Warn("UpdateMonitorScrapePool 未找到要更新的记录", zap.Int("id", pool.ID))
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorScrapePool", pool.ID)
 	}
 
 	return nil
 }
 
-func (p *prometheusDao) DeleteMonitorScrapeJob(ctx context.Context, jobId int) error {
-	if jobId <= 0 {
-		p.l.Error("DeleteMonitorScrapeJob failed: invalid jobId", zap.Int("jobId", jobId))
-		return fmt.Errorf("invalid jobId: %d", jobId)
+// DeleteMonitorScrapePool 根据 ID 删除 MonitorScrapePool 记录
+func (p *prometheusDao) DeleteMonitorScrapePool(ctx context.Context, poolId int) error {
+	if poolId <= 0 {
+		p.l.Error("DeleteMonitorScrapePool 失败: 无效的 poolId", zap.Int("poolId", poolId))
+		return fmt.Errorf("无效的 poolId: %d", poolId)
 	}
 
 	result := p.db.WithContext(ctx).
-		Model(&model.MonitorScrapeJob{}).
-		Where("id = ?", jobId).
-		Delete(&model.MonitorScrapeJob{})
+		Delete(&model.MonitorScrapePool{}, poolId)
 
-	// 检查删除过程中是否有错误
 	if result.Error != nil {
-		p.l.Error("DeleteMonitorScrapeJob failed to delete record",
-			zap.Error(result.Error),
-			zap.Int("jobId", jobId))
-		return fmt.Errorf("failed to delete monitor scrape job with ID %d: %w", jobId, result.Error)
+		p.l.Error("DeleteMonitorScrapePool 删除记录失败", zap.Error(result.Error), zap.Int("poolId", poolId))
+		return fmt.Errorf("删除 ID 为 %d 的 MonitorScrapePool 失败: %w", poolId, result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("DeleteMonitorScrapePool 未找到要删除的记录", zap.Int("poolId", poolId))
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorScrapePool", poolId)
 	}
 
 	return nil
 }
 
-func (p *prometheusDao) GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, error) {
-	var pools []*model.MonitorAlertManagerPool
+// SearchMonitorScrapePoolsByName 通过名称搜索 MonitorScrapePool
+func (p *prometheusDao) SearchMonitorScrapePoolsByName(ctx context.Context, name string) ([]*model.MonitorScrapePool, error) {
+	var pools []*model.MonitorScrapePool
 
-	if err := p.db.WithContext(ctx).Find(&pools).Error; err != nil {
-		p.l.Error("GetAllAlertManagerPools failed to get all alert manager pools", zap.Error(err))
+	if err := p.db.WithContext(ctx).
+		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
+		Find(&pools).Error; err != nil {
+		p.l.Error("通过名称搜索 MonitorScrapePool 失败", zap.Error(err))
 		return nil, err
 	}
 
 	return pools, nil
 }
 
-func (p *prometheusDao) GetMonitorSendGroupByPoolId(ctx context.Context, poolId int) ([]*model.MonitorSendGroup, error) {
-	var sendGroups []*model.MonitorSendGroup
+// GetAllMonitorScrapeJobs 获取所有 MonitorScrapeJob 记录
+func (p *prometheusDao) GetAllMonitorScrapeJobs(ctx context.Context) ([]*model.MonitorScrapeJob, error) {
+	var jobs []*model.MonitorScrapeJob
 
-	if err := p.db.WithContext(ctx).Where("pool_id = ?", poolId).Find(&sendGroups).Error; err != nil {
-		p.l.Error("GetMonitorSendGroupByPoolId failed to get send groups", zap.Error(err))
+	if err := p.db.WithContext(ctx).Find(&jobs).Error; err != nil {
+		p.l.Error("获取所有 MonitorScrapeJob 失败", zap.Error(err))
+		return nil, err
+	}
+
+	if len(jobs) == 0 {
+		p.l.Info("未找到任何 MonitorScrapeJob 记录")
+	}
+
+	return jobs, nil
+}
+
+// CreateMonitorScrapeJob 在数据库中创建一个新的 MonitorScrapeJob 记录
+func (p *prometheusDao) CreateMonitorScrapeJob(ctx context.Context, job *model.MonitorScrapeJob) error {
+	if job == nil {
+		p.l.Error("CreateMonitorScrapeJob 失败: job 为 nil")
+		return fmt.Errorf("monitorScrapeJob 不能为空")
+	}
+
+	if err := p.db.WithContext(ctx).Create(job).Error; err != nil {
+		p.l.Error("创建 MonitorScrapeJob 失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// GetMonitorScrapeJobsByPoolId 根据 poolId 获取启用的 MonitorScrapeJob 记录
+func (p *prometheusDao) GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId int) ([]*model.MonitorScrapeJob, error) {
+	if poolId <= 0 {
+		p.l.Error("GetMonitorScrapeJobsByPoolId 失败: 无效的 poolId", zap.Int("poolId", poolId))
+		return nil, fmt.Errorf("无效的 poolId: %d", poolId)
+	}
+
+	var jobs []*model.MonitorScrapeJob
+	if err := p.db.WithContext(ctx).
+		Where("enable = ?", true).
+		Where("pool_id = ?", poolId).
+		Find(&jobs).Error; err != nil {
+		p.l.Error("GetMonitorScrapeJobsByPoolId 获取记录失败", zap.Error(err), zap.Int("poolId", poolId))
+		return nil, err
+	}
+
+	return jobs, nil
+}
+
+// UpdateMonitorScrapeJob 更新现有的 MonitorScrapeJob 记录
+func (p *prometheusDao) UpdateMonitorScrapeJob(ctx context.Context, job *model.MonitorScrapeJob) error {
+	if job == nil {
+		p.l.Error("UpdateMonitorScrapeJob 失败: job 为 nil")
+		return fmt.Errorf("monitorScrapeJob 不能为空")
+	}
+
+	if job.ID == 0 {
+		p.l.Error("UpdateMonitorScrapeJob 失败: ID 为 0", zap.Any("job", job))
+		return fmt.Errorf("monitorScrapeJob 的 ID 必须设置且非零")
+	}
+
+	result := p.db.WithContext(ctx).
+		Model(&model.MonitorScrapeJob{}).
+		Where("id = ?", job.ID).
+		Updates(job)
+
+	if result.Error != nil {
+		p.l.Error("UpdateMonitorScrapeJob 更新记录失败", zap.Error(result.Error), zap.Int("id", job.ID))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("UpdateMonitorScrapeJob 未找到要更新的记录", zap.Int("id", job.ID))
+	}
+
+	return nil
+}
+
+// DeleteMonitorScrapeJob 根据 ID 删除 MonitorScrapeJob 记录
+func (p *prometheusDao) DeleteMonitorScrapeJob(ctx context.Context, jobId int) error {
+	if jobId <= 0 {
+		p.l.Error("DeleteMonitorScrapeJob 失败: 无效的 jobId", zap.Int("jobId", jobId))
+		return fmt.Errorf("无效的 jobId: %d", jobId)
+	}
+
+	result := p.db.WithContext(ctx).
+		Delete(&model.MonitorScrapeJob{}, jobId)
+
+	if result.Error != nil {
+		p.l.Error("DeleteMonitorScrapeJob 删除记录失败", zap.Error(result.Error), zap.Int("jobId", jobId))
+		return fmt.Errorf("删除 ID 为 %d 的 MonitorScrapeJob 失败: %w", jobId, result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("DeleteMonitorScrapeJob 未找到要删除的记录", zap.Int("jobId", jobId))
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorScrapeJob", jobId)
+	}
+
+	return nil
+}
+
+// SearchMonitorScrapeJobsByName 通过名称搜索 MonitorScrapeJob
+func (p *prometheusDao) SearchMonitorScrapeJobsByName(ctx context.Context, name string) ([]*model.MonitorScrapeJob, error) {
+	var jobs []*model.MonitorScrapeJob
+
+	if err := p.db.WithContext(ctx).
+		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
+		Find(&jobs).Error; err != nil {
+		p.l.Error("通过名称搜索 MonitorScrapeJob 失败", zap.Error(err))
+		return nil, err
+	}
+
+	return jobs, nil
+}
+
+// GetAllAlertManagerPools 获取所有 MonitorAlertManagerPool 记录
+func (p *prometheusDao) GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, error) {
+	var pools []*model.MonitorAlertManagerPool
+
+	if err := p.db.WithContext(ctx).Find(&pools).Error; err != nil {
+		p.l.Error("获取所有 MonitorAlertManagerPool 失败", zap.Error(err))
+		return nil, err
+	}
+
+	return pools, nil
+}
+
+// GetMonitorSendGroupByPoolId 根据 poolId 获取 MonitorSendGroup 记录
+func (p *prometheusDao) GetMonitorSendGroupByPoolId(ctx context.Context, poolId int) ([]*model.MonitorSendGroup, error) {
+	if poolId <= 0 {
+		p.l.Error("GetMonitorSendGroupByPoolId 失败: 无效的 poolId", zap.Int("poolId", poolId))
+		return nil, fmt.Errorf("无效的 poolId: %d", poolId)
+	}
+
+	var sendGroups []*model.MonitorSendGroup
+	if err := p.db.WithContext(ctx).
+		Where("pool_id = ?", poolId).
+		Find(&sendGroups).Error; err != nil {
+		p.l.Error("GetMonitorSendGroupByPoolId 获取记录失败", zap.Error(err), zap.Int("poolId", poolId))
 		return nil, err
 	}
 
 	return sendGroups, nil
 }
 
+// GetMonitorScrapePoolSupportedAlert 获取支持警报的 MonitorScrapePool 记录
 func (p *prometheusDao) GetMonitorScrapePoolSupportedAlert(ctx context.Context) ([]*model.MonitorScrapePool, error) {
 	var pools []*model.MonitorScrapePool
 
-	if err := p.db.WithContext(ctx).Where("support_alert = 1").Find(&pools).Error; err != nil {
-		p.l.Error("GetMonitorScrapePoolSupportedAlert failed to get supported alert pools", zap.Error(err))
+	if err := p.db.WithContext(ctx).
+		Where("support_alert = ?", true).
+		Find(&pools).Error; err != nil {
+		p.l.Error("获取支持警报的 MonitorScrapePool 失败", zap.Error(err))
 		return nil, err
 	}
 
 	return pools, nil
 }
 
+// GetMonitorScrapePoolSupportedRecord 获取支持记录规则的 MonitorScrapePool 记录
 func (p *prometheusDao) GetMonitorScrapePoolSupportedRecord(ctx context.Context) ([]*model.MonitorScrapePool, error) {
 	var pools []*model.MonitorScrapePool
 
-	if err := p.db.WithContext(ctx).Where("support_record = 1").Find(&pools).Error; err != nil {
-		p.l.Error("GetMonitorScrapePoolSupportedRecord failed to get supported record pools", zap.Error(err))
+	if err := p.db.WithContext(ctx).
+		Where("support_record = ?", true).
+		Find(&pools).Error; err != nil {
+		p.l.Error("获取支持记录规则的 MonitorScrapePool 失败", zap.Error(err))
 		return nil, err
 	}
 
 	return pools, nil
 }
 
+// GetMonitorAlertRuleByPoolId 根据 poolId 获取启用的 MonitorAlertRule 记录
 func (p *prometheusDao) GetMonitorAlertRuleByPoolId(ctx context.Context, poolId int) ([]*model.MonitorAlertRule, error) {
-	var alertRules []*model.MonitorAlertRule
+	if poolId <= 0 {
+		p.l.Error("GetMonitorAlertRuleByPoolId 失败: 无效的 poolId", zap.Int("poolId", poolId))
+		return nil, fmt.Errorf("无效的 poolId: %d", poolId)
+	}
 
-	if err := p.db.WithContext(ctx).Where("enable = 1 and pool_id = ?", poolId).Find(&alertRules).Error; err != nil {
-		p.l.Error("failed to get alert rules by pool id", zap.Error(err))
+	var alertRules []*model.MonitorAlertRule
+	if err := p.db.WithContext(ctx).
+		Where("enable = ?", true).
+		Where("pool_id = ?", poolId).
+		Find(&alertRules).Error; err != nil {
+		p.l.Error("GetMonitorAlertRuleByPoolId 获取记录失败", zap.Error(err), zap.Int("poolId", poolId))
 		return nil, err
 	}
 
 	return alertRules, nil
 }
 
+// GetMonitorRecordRuleByPoolId 根据 poolId 获取启用的 MonitorRecordRule 记录
 func (p *prometheusDao) GetMonitorRecordRuleByPoolId(ctx context.Context, poolId int) ([]*model.MonitorRecordRule, error) {
-	var recordRules []*model.MonitorRecordRule
+	if poolId <= 0 {
+		p.l.Error("GetMonitorRecordRuleByPoolId 失败: 无效的 poolId", zap.Int("poolId", poolId))
+		return nil, fmt.Errorf("无效的 poolId: %d", poolId)
+	}
 
-	if err := p.db.WithContext(ctx).Where("enable = 1 and pool_id = ?", poolId).Find(&recordRules).Error; err != nil {
-		p.l.Error("failed to get record rules by pool id", zap.Error(err))
+	var recordRules []*model.MonitorRecordRule
+	if err := p.db.WithContext(ctx).
+		Where("enable = ?", true).
+		Where("pool_id = ?", poolId).
+		Find(&recordRules).Error; err != nil {
+		p.l.Error("GetMonitorRecordRuleByPoolId 获取记录失败", zap.Error(err), zap.Int("poolId", poolId))
 		return nil, err
 	}
 
 	return recordRules, nil
 }
 
+// GetAllMonitorOndutyGroup 获取所有 MonitorOnDutyGroup 记录
 func (p *prometheusDao) GetAllMonitorOndutyGroup(ctx context.Context) ([]*model.MonitorOnDutyGroup, error) {
-	var ondutyGroups []*model.MonitorOnDutyGroup
+	var groups []*model.MonitorOnDutyGroup
 
-	if err := p.db.WithContext(ctx).Find(&ondutyGroups).Error; err != nil {
-		p.l.Error("GetAllMonitorOndutyGroup failed to get all onduty groups", zap.Error(err))
+	if err := p.db.WithContext(ctx).Find(&groups).Error; err != nil {
+		p.l.Error("获取所有 MonitorOnDutyGroup 失败", zap.Error(err))
 		return nil, err
 	}
 
-	return ondutyGroups, nil
+	return groups, nil
 }
 
-func (p *prometheusDao) CreateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error {
-	if monitorOnDutyGroup == nil {
-		p.l.Error("CreateMonitorOnDutyGroup failed: monitorOnDutyGroup is nil")
-		return fmt.Errorf("monitorOnDutyGroup cannot be nil")
+// CreateMonitorOnDutyGroup 在数据库中创建一个新的 MonitorOnDutyGroup 记录
+func (p *prometheusDao) CreateMonitorOnDutyGroup(ctx context.Context, group *model.MonitorOnDutyGroup) error {
+	if group == nil {
+		p.l.Error("CreateMonitorOnDutyGroup 失败: group 为 nil")
+		return fmt.Errorf("monitorOnDutyGroup 不能为空")
 	}
 
-	if err := p.db.WithContext(ctx).Create(monitorOnDutyGroup).Error; err != nil {
-		p.l.Error("CreateMonitorOnDutyGroup failed to create onduty group", zap.Error(err))
+	if err := p.db.WithContext(ctx).Create(group).Error; err != nil {
+		p.l.Error("创建 MonitorOnDutyGroup 失败", zap.Error(err))
 		return err
 	}
 
 	return nil
 }
 
+// GetMonitorOnDutyGroupById 根据 ID 获取 MonitorOnDutyGroup 记录
 func (p *prometheusDao) GetMonitorOnDutyGroupById(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error) {
-	var ondutyGroup *model.MonitorOnDutyGroup
+	if id <= 0 {
+		p.l.Error("GetMonitorOnDutyGroupById 失败: 无效的 ID", zap.Int("id", id))
+		return nil, fmt.Errorf("无效的 ID: %d", id)
+	}
 
-	if err := p.db.WithContext(ctx).Where("id = ?", id).First(&ondutyGroup).Error; err != nil {
-		p.l.Error("GetMonitorOnDutyGroupById failed to get onduty group by id", zap.Error(err))
+	var group model.MonitorOnDutyGroup
+	if err := p.db.WithContext(ctx).First(&group, id).Error; err != nil {
+		p.l.Error("GetMonitorOnDutyGroupById 获取记录失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
 
-	return ondutyGroup, nil
+	return &group, nil
 }
 
-func (p *prometheusDao) CreateMonitorOnDutyGroupChange(ctx context.Context, monitorOnDutyGroupChange *model.MonitorOnDutyChange) error {
-	if monitorOnDutyGroupChange == nil {
-		p.l.Error("CreateMonitorOnDutyGroupChange failed: monitorOnDutyGroupChange is nil")
-		return fmt.Errorf("monitorOnDutyGroupChange cannot be nil")
+// CreateMonitorOnDutyGroupChange 在数据库中创建一个新的 MonitorOnDutyChange 记录
+func (p *prometheusDao) CreateMonitorOnDutyGroupChange(ctx context.Context, change *model.MonitorOnDutyChange) error {
+	if change == nil {
+		p.l.Error("CreateMonitorOnDutyGroupChange 失败: change 为 nil")
+		return fmt.Errorf("monitorOnDutyGroupChange 不能为空")
 	}
 
-	if err := p.db.WithContext(ctx).Create(monitorOnDutyGroupChange).Error; err != nil {
-		p.l.Error("CreateMonitorOnDutyGroupChange failed to create onduty group change", zap.Error(err))
+	if err := p.db.WithContext(ctx).Create(change).Error; err != nil {
+		p.l.Error("创建 MonitorOnDutyGroupChange 失败", zap.Error(err))
 		return err
 	}
 
@@ -380,37 +445,49 @@ func (p *prometheusDao) CreateMonitorOnDutyGroupChange(ctx context.Context, moni
 
 // GetMonitorOnDutyChangesByGroupAndTimeRange 获取指定值班组在指定时间范围内的值班计划变更
 func (p *prometheusDao) GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime time.Time) ([]*model.MonitorOnDutyChange, error) {
-	var changes []*model.MonitorOnDutyChange
+	if groupID <= 0 {
+		p.l.Error("GetMonitorOnDutyChangesByGroupAndTimeRange 失败: 无效的 groupID", zap.Int("groupID", groupID))
+		return nil, fmt.Errorf("无效的 groupID: %d", groupID)
+	}
 
-	if err := p.db.WithContext(ctx).Where("on_duty_group_id = ? AND date >= ? AND date <= ?", groupID, startTime, endTime).Find(&changes).Error; err != nil {
-		p.l.Error("GetMonitorOnDutyChangesByGroupAndTimeRange failed to get onduty group changes", zap.Error(err))
+	var changes []*model.MonitorOnDutyChange
+	if err := p.db.WithContext(ctx).
+		Where("on_duty_group_id = ?", groupID).
+		Where("date >= ?", startTime).
+		Where("date <= ?", endTime).
+		Find(&changes).Error; err != nil {
+		p.l.Error("GetMonitorOnDutyChangesByGroupAndTimeRange 获取变更记录失败", zap.Error(err), zap.Int("groupID", groupID))
 		return nil, err
 	}
 
 	return changes, nil
 }
 
-// UpdateMonitorOnDutyGroup 更新 MonitorOnDutyGroup
-func (p *prometheusDao) UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error {
-	if monitorOnDutyGroup == nil {
-		p.l.Error("UpdateMonitorOnDutyGroup failed: monitorOnDutyGroup is nil")
-		return fmt.Errorf("monitorOnDutyGroup cannot be nil")
+// UpdateMonitorOnDutyGroup 更新现有的 MonitorOnDutyGroup 记录
+func (p *prometheusDao) UpdateMonitorOnDutyGroup(ctx context.Context, group *model.MonitorOnDutyGroup) error {
+	if group == nil {
+		p.l.Error("UpdateMonitorOnDutyGroup 失败: group 为 nil")
+		return fmt.Errorf("monitorOnDutyGroup 不能为空")
 	}
 
-	// 确保只更新指定的记录
+	if group.ID == 0 {
+		p.l.Error("UpdateMonitorOnDutyGroup 失败: ID 为 0", zap.Any("group", group))
+		return fmt.Errorf("monitorOnDutyGroup 的 ID 必须设置且非零")
+	}
+
 	result := p.db.WithContext(ctx).
 		Model(&model.MonitorOnDutyGroup{}).
-		Where("id = ?", monitorOnDutyGroup.ID).
-		Updates(monitorOnDutyGroup)
+		Where("id = ?", group.ID).
+		Updates(group)
 
 	if result.Error != nil {
-		p.l.Error("UpdateMonitorOnDutyGroup failed to update on-duty group", zap.Error(result.Error))
+		p.l.Error("UpdateMonitorOnDutyGroup 更新记录失败", zap.Error(result.Error), zap.Int("id", group.ID))
 		return result.Error
 	}
 
 	if result.RowsAffected == 0 {
-		p.l.Warn("UpdateMonitorOnDutyGroup: no rows affected", zap.Int("ID", monitorOnDutyGroup.ID))
-		return fmt.Errorf("no on-duty group found with ID %d", monitorOnDutyGroup.ID)
+		p.l.Warn("UpdateMonitorOnDutyGroup 未找到要更新的记录", zap.Int("id", group.ID))
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorOnDutyGroup", group.ID)
 	}
 
 	return nil
@@ -418,23 +495,17 @@ func (p *prometheusDao) UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnD
 
 // GetMonitorSendGroupByOnDutyGroupId 根据 onDutyGroupID 获取 MonitorSendGroup 列表
 func (p *prometheusDao) GetMonitorSendGroupByOnDutyGroupId(ctx context.Context, onDutyGroupID int) ([]*model.MonitorSendGroup, error) {
-	var sendGroups []*model.MonitorSendGroup
-
-	result := p.db.WithContext(ctx).
-		Where("on_duty_group_id = ?", onDutyGroupID).
-		Find(&sendGroups)
-
-	if result.Error != nil {
-		p.l.Error("GetMonitorSendGroupByOnDutyGroupId failed to retrieve send groups",
-			zap.Int("onDutyGroupID", onDutyGroupID),
-			zap.Error(result.Error))
-		return nil, result.Error
+	if onDutyGroupID <= 0 {
+		p.l.Error("GetMonitorSendGroupByOnDutyGroupId 失败: 无效的 onDutyGroupID", zap.Int("onDutyGroupID", onDutyGroupID))
+		return nil, fmt.Errorf("无效的 onDutyGroupID: %d", onDutyGroupID)
 	}
 
-	if result.RowsAffected == 0 {
-		p.l.Info("GetMonitorSendGroupByOnDutyGroupId: no send groups found",
-			zap.Int("onDutyGroupID", onDutyGroupID))
-		return nil, nil
+	var sendGroups []*model.MonitorSendGroup
+	if err := p.db.WithContext(ctx).
+		Where("on_duty_group_id = ?", onDutyGroupID).
+		Find(&sendGroups).Error; err != nil {
+		p.l.Error("GetMonitorSendGroupByOnDutyGroupId 获取发送组失败", zap.Error(err), zap.Int("onDutyGroupID", onDutyGroupID))
+		return nil, err
 	}
 
 	return sendGroups, nil
@@ -459,4 +530,100 @@ func (p *prometheusDao) DeleteMonitorOnDutyGroup(ctx context.Context, id int) er
 	}
 
 	return nil
+}
+
+// CreateMonitorAlertManagerPool 在数据库中创建一个新的 MonitorAlertManagerPool 记录
+func (p *prometheusDao) CreateMonitorAlertManagerPool(ctx context.Context, pool *model.MonitorAlertManagerPool) error {
+	if pool == nil {
+		p.l.Error("CreateMonitorAlertManagerPool 失败: pool 为 nil")
+		return fmt.Errorf("monitorAlertManagerPool 不能为空")
+	}
+
+	if err := p.db.WithContext(ctx).Create(pool).Error; err != nil {
+		p.l.Error("创建 MonitorAlertManagerPool 失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// UpdateMonitorAlertManagerPool 更新现有的 MonitorAlertManagerPool 记录
+func (p *prometheusDao) UpdateMonitorAlertManagerPool(ctx context.Context, pool *model.MonitorAlertManagerPool) error {
+	if pool == nil {
+		p.l.Error("UpdateMonitorAlertManagerPool 失败: pool 为 nil")
+		return fmt.Errorf("monitorAlertManagerPool 不能为空")
+	}
+
+	if pool.ID == 0 {
+		p.l.Error("UpdateMonitorAlertManagerPool 失败: ID 为 0", zap.Any("pool", pool))
+		return fmt.Errorf("monitorAlertManagerPool 的 ID 必须设置且非零")
+	}
+
+	result := p.db.WithContext(ctx).
+		Model(&model.MonitorAlertManagerPool{}).
+		Where("id = ?", pool.ID).
+		Updates(pool)
+
+	if result.Error != nil {
+		p.l.Error("UpdateMonitorAlertManagerPool 更新记录失败", zap.Error(result.Error), zap.Int("id", pool.ID))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("UpdateMonitorAlertManagerPool 未找到要更新的记录", zap.Int("id", pool.ID))
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorAlertManagerPool", pool.ID)
+	}
+
+	return nil
+}
+
+// DeleteMonitorAlertManagerPool 根据 ID 删除 MonitorAlertManagerPool 记录
+func (p *prometheusDao) DeleteMonitorAlertManagerPool(ctx context.Context, id int) error {
+	if id <= 0 {
+		p.l.Error("DeleteMonitorAlertManagerPool 失败: 无效的 ID", zap.Int("id", id))
+		return fmt.Errorf("无效的 ID: %d", id)
+	}
+
+	result := p.db.WithContext(ctx).
+		Delete(&model.MonitorAlertManagerPool{}, id)
+
+	if result.Error != nil {
+		p.l.Error("DeleteMonitorAlertManagerPool 删除记录失败", zap.Error(result.Error), zap.Int("id", id))
+		return fmt.Errorf("删除 ID 为 %d 的 MonitorAlertManagerPool 失败: %w", id, result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		p.l.Warn("DeleteMonitorAlertManagerPool 未找到要删除的记录", zap.Int("id", id))
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorAlertManagerPool", id)
+	}
+
+	return nil
+}
+
+// SearchMonitorAlertManagerPoolByName 通过名称搜索 MonitorAlertManagerPool
+func (p *prometheusDao) SearchMonitorAlertManagerPoolByName(ctx context.Context, name string) ([]*model.MonitorAlertManagerPool, error) {
+	var pools []*model.MonitorAlertManagerPool
+
+	if err := p.db.WithContext(ctx).
+		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
+		Find(&pools).Error; err != nil {
+		p.l.Error("通过名称搜索 MonitorAlertManagerPool 失败", zap.Error(err))
+		return nil, err
+	}
+
+	return pools, nil
+}
+
+// SearchMonitorOnDutyGroupByName 通过名称搜索 MonitorOnDutyGroup
+func (p *prometheusDao) SearchMonitorOnDutyGroupByName(ctx context.Context, name string) ([]*model.MonitorOnDutyGroup, error) {
+	var groups []*model.MonitorOnDutyGroup
+
+	if err := p.db.WithContext(ctx).
+		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
+		Find(&groups).Error; err != nil {
+		p.l.Error("通过名称搜索 MonitorOnDutyGroup 失败", zap.Error(err))
+		return nil, err
+	}
+
+	return groups, nil
 }
