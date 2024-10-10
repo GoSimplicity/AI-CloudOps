@@ -135,17 +135,16 @@ func (p *PrometheusHandler) GetMonitorScrapePoolList(ctx *gin.Context) {
 
 // CreateMonitorScrapePool 创建监控采集池
 func (p *PrometheusHandler) CreateMonitorScrapePool(ctx *gin.Context) {
-	var monitorScrapePool *model.MonitorScrapePool
+	var monitorScrapePool model.MonitorScrapePool
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
-	err := ctx.ShouldBind(&monitorScrapePool)
-	if err != nil {
+	if err := ctx.ShouldBind(&monitorScrapePool); err != nil {
 		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	monitorScrapePool.UserID = uc.Uid
-	if err := p.service.CreateMonitorScrapePool(ctx, monitorScrapePool); err != nil {
+	if err := p.service.CreateMonitorScrapePool(ctx, &monitorScrapePool); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
@@ -155,15 +154,14 @@ func (p *PrometheusHandler) CreateMonitorScrapePool(ctx *gin.Context) {
 
 // UpdateMonitorScrapePool 更新监控采集池
 func (p *PrometheusHandler) UpdateMonitorScrapePool(ctx *gin.Context) {
-	var monitorScrapePool *model.MonitorScrapePool
+	var monitorScrapePool model.MonitorScrapePool
 
-	err := ctx.ShouldBind(&monitorScrapePool)
-	if err != nil {
+	if err := ctx.ShouldBind(&monitorScrapePool); err != nil {
 		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
-	if err := p.service.UpdateMonitorScrapePool(ctx, monitorScrapePool); err != nil {
+	if err := p.service.UpdateMonitorScrapePool(ctx, &monitorScrapePool); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
@@ -202,18 +200,17 @@ func (p *PrometheusHandler) GetMonitorScrapeJobList(ctx *gin.Context) {
 
 // CreateMonitorScrapeJob 创建监控采集 Job
 func (p *PrometheusHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
-	var monitorScrapeJob *model.MonitorScrapeJob
+	var monitorScrapeJob model.MonitorScrapeJob
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
-	err := ctx.ShouldBind(&monitorScrapeJob)
-	if err != nil {
+	if err := ctx.ShouldBind(&monitorScrapeJob); err != nil {
 		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	monitorScrapeJob.UserID = uc.Uid
 
-	if err := p.service.CreateMonitorScrapeJob(ctx, monitorScrapeJob); err != nil {
+	if err := p.service.CreateMonitorScrapeJob(ctx, &monitorScrapeJob); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
@@ -223,15 +220,14 @@ func (p *PrometheusHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
 
 // UpdateMonitorScrapeJob 更新监控采集 Job
 func (p *PrometheusHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
-	var monitorScrapeJob *model.MonitorScrapeJob
+	var monitorScrapeJob model.MonitorScrapeJob
 
-	err := ctx.ShouldBind(&monitorScrapeJob)
-	if err != nil {
+	if err := ctx.ShouldBind(&monitorScrapeJob); err != nil {
 		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
-	if err := p.service.UpdateMonitorScrapeJob(ctx, monitorScrapeJob); err != nil {
+	if err := p.service.UpdateMonitorScrapeJob(ctx, &monitorScrapeJob); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
@@ -239,15 +235,17 @@ func (p *PrometheusHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
 	apiresponse.Success(ctx)
 }
 
+// DeleteMonitorScrapeJob 删除监控采集 Job
 func (p *PrometheusHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
-	id := ctx.Query("id")
-	atom, err := strconv.Atoi(id)
+	id := ctx.Param("id")
+
+	intId, err := strconv.Atoi(id)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
-	if err := p.service.DeleteMonitorScrapeJob(ctx, atom); err != nil {
+	if err := p.service.DeleteMonitorScrapeJob(ctx, intId); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
@@ -321,7 +319,7 @@ func (p *PrometheusHandler) GetMonitorOnDutyGroupList(ctx *gin.Context) {
 
 // CreateMonitorOnDutyGroup 创建新的值班组
 func (p *PrometheusHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
-	var onDutyGroup *model.MonitorOnDutyGroup
+	var onDutyGroup model.MonitorOnDutyGroup
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	if err := ctx.ShouldBind(&onDutyGroup); err != nil {
@@ -331,7 +329,7 @@ func (p *PrometheusHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
 
 	onDutyGroup.UserID = uc.Uid
 
-	if err := p.service.CreateMonitorOnDutyGroup(ctx, onDutyGroup); err != nil {
+	if err := p.service.CreateMonitorOnDutyGroup(ctx, &onDutyGroup); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
@@ -341,7 +339,7 @@ func (p *PrometheusHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
 
 // CreateMonitorOnDutyGroupChange 创建值班组的换班记录
 func (p *PrometheusHandler) CreateMonitorOnDutyGroupChange(ctx *gin.Context) {
-	var onDutyGroupChange *model.MonitorOnDutyChange
+	var onDutyGroupChange model.MonitorOnDutyChange
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 
@@ -352,7 +350,7 @@ func (p *PrometheusHandler) CreateMonitorOnDutyGroupChange(ctx *gin.Context) {
 
 	onDutyGroupChange.UserID = uc.Uid
 
-	if err := p.service.CreateMonitorOnDutyGroupChange(ctx, onDutyGroupChange); err != nil {
+	if err := p.service.CreateMonitorOnDutyGroupChange(ctx, &onDutyGroupChange); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
@@ -362,14 +360,14 @@ func (p *PrometheusHandler) CreateMonitorOnDutyGroupChange(ctx *gin.Context) {
 
 // UpdateMonitorOnDutyGroup 更新值班组信息
 func (p *PrometheusHandler) UpdateMonitorOnDutyGroup(ctx *gin.Context) {
-	var onDutyGroup *model.MonitorOnDutyGroup
+	var onDutyGroup model.MonitorOnDutyGroup
 
 	if err := ctx.ShouldBind(&onDutyGroup); err != nil {
 		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
-	if err := p.service.UpdateMonitorOnDutyGroup(ctx, onDutyGroup); err != nil {
+	if err := p.service.UpdateMonitorOnDutyGroup(ctx, &onDutyGroup); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
@@ -447,7 +445,7 @@ func (p *PrometheusHandler) GetMonitorAlertManagerPoolList(ctx *gin.Context) {
 
 // CreateMonitorAlertManagerPool 创建新的 AlertManager 集群池
 func (p *PrometheusHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
-	var alertManagerPool *model.MonitorAlertManagerPool
+	var alertManagerPool model.MonitorAlertManagerPool
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 
@@ -458,7 +456,7 @@ func (p *PrometheusHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
 
 	alertManagerPool.UserID = uc.Uid
 
-	if err := p.service.CreateMonitorAlertManagerPool(ctx, alertManagerPool); err != nil {
+	if err := p.service.CreateMonitorAlertManagerPool(ctx, &alertManagerPool); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
@@ -468,14 +466,14 @@ func (p *PrometheusHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
 
 // UpdateMonitorAlertManagerPool 更新现有的 AlertManager 集群池
 func (p *PrometheusHandler) UpdateMonitorAlertManagerPool(ctx *gin.Context) {
-	var alertManagerPool *model.MonitorAlertManagerPool
+	var alertManagerPool model.MonitorAlertManagerPool
 
 	if err := ctx.ShouldBind(&alertManagerPool); err != nil {
 		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
-	if err := p.service.UpdateMonitorAlertManagerPool(ctx, alertManagerPool); err != nil {
+	if err := p.service.UpdateMonitorAlertManagerPool(ctx, &alertManagerPool); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
@@ -503,62 +501,210 @@ func (p *PrometheusHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
 
 // GetMonitorSendGroupList 获取发送组列表
 func (p *PrometheusHandler) GetMonitorSendGroupList(ctx *gin.Context) {
-	// TODO: 实现获取发送组列表的逻辑
+	searchName := ctx.Query("name")
+
+	list, err := p.service.GetMonitorSendGroupList(ctx, &searchName)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 // CreateMonitorSendGroup 创建新的发送组
 func (p *PrometheusHandler) CreateMonitorSendGroup(ctx *gin.Context) {
-	// TODO: 实现创建新的发送组的逻辑
+	var sendGroup model.MonitorSendGroup
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+
+	if err := ctx.ShouldBind(&sendGroup); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	sendGroup.UserID = uc.Uid
+
+	if err := p.service.CreateMonitorSendGroup(ctx, &sendGroup); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // UpdateMonitorSendGroup 更新现有的发送组
 func (p *PrometheusHandler) UpdateMonitorSendGroup(ctx *gin.Context) {
-	// TODO: 实现更新现有的发送组的逻辑
+	var sendGroup model.MonitorSendGroup
+
+	if err := ctx.ShouldBind(&sendGroup); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	if err := p.service.UpdateMonitorSendGroup(ctx, &sendGroup); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // DeleteMonitorSendGroup 删除指定的发送组
 func (p *PrometheusHandler) DeleteMonitorSendGroup(ctx *gin.Context) {
-	// TODO: 实现删除指定的发送组的逻辑
+	id := ctx.Param("id")
+
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := p.service.DeleteMonitorSendGroup(ctx, intId); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetMonitorAlertRuleList 获取告警规则列表
 func (p *PrometheusHandler) GetMonitorAlertRuleList(ctx *gin.Context) {
-	// TODO: 实现获取告警规则列表的逻辑
+	searchName := ctx.Query("name")
+
+	list, err := p.service.GetMonitorAlertRuleList(ctx, &searchName)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 // PromqlExprCheck 检查 PromQL 表达式的合法性
 func (p *PrometheusHandler) PromqlExprCheck(ctx *gin.Context) {
-	// TODO: 实现检查 PromQL 表达式的合法性的逻辑
+	promql := ctx.Query("promql")
+
+	exist, err := p.service.PromqlExprCheck(ctx, promql)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	if !exist {
+		apiresponse.ErrorWithMessage(ctx, "PromQL 表达式不合法")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // CreateMonitorAlertRule 创建新的告警规则
 func (p *PrometheusHandler) CreateMonitorAlertRule(ctx *gin.Context) {
-	// TODO: 实现创建新的告警规则的逻辑
+	var alertRule model.MonitorAlertRule
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+
+	if err := ctx.ShouldBind(&alertRule); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	alertRule.UserID = uc.Uid
+
+	if err := p.service.CreateMonitorAlertRule(ctx, &alertRule); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // UpdateMonitorAlertRule 更新现有的告警规则
 func (p *PrometheusHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
-	// TODO: 实现更新现有的告警规则的逻辑
+	var alertRule model.MonitorAlertRule
+
+	if err := ctx.ShouldBind(&alertRule); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	if err := p.service.UpdateMonitorAlertRule(ctx, &alertRule); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // EnableSwitchMonitorAlertRule 切换告警规则的启用状态
 func (p *PrometheusHandler) EnableSwitchMonitorAlertRule(ctx *gin.Context) {
-	// TODO: 实现切换告警规则的启用状态的逻辑
+	id := ctx.Param("id")
+
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := p.service.EnableSwitchMonitorAlertRule(ctx, intId); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // BatchEnableSwitchMonitorAlertRule 批量切换告警规则的启用状态
 func (p *PrometheusHandler) BatchEnableSwitchMonitorAlertRule(ctx *gin.Context) {
-	// TODO: 实现批量切换告警规则的启用状态的逻辑
+	var req []int
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	if err := p.service.BatchEnableSwitchMonitorAlertRule(ctx, req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // DeleteMonitorAlertRule 删除指定的告警规则
 func (p *PrometheusHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
-	// TODO: 实现删除指定的告警规则的逻辑
+	id := ctx.Param("id")
+
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := p.service.DeleteMonitorAlertRule(ctx, intId); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // BatchDeleteMonitorAlertRule 批量删除告警规则
 func (p *PrometheusHandler) BatchDeleteMonitorAlertRule(ctx *gin.Context) {
-	// TODO: 实现批量删除告警规则的逻辑
+	var req []int
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	if err := p.service.BatchDeleteMonitorAlertRule(ctx, req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetMonitorAlertEventList 获取告警事件列表

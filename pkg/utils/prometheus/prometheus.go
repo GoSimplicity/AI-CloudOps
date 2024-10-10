@@ -9,6 +9,7 @@ import (
 	pc "github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/model/relabel"
+	"github.com/prometheus/prometheus/promql/parser"
 	"net/url"
 	"strings"
 	"time"
@@ -135,4 +136,18 @@ func DeepCopyScrapeConfig(sc *pc.ScrapeConfig) *pc.ScrapeConfig {
 	}
 
 	return &copySc
+}
+
+func PromqlExprCheck(expr string) (bool, error) {
+	if expr == "" {
+		return false, fmt.Errorf("expression cannot be empty")
+	}
+
+	// 解析 PromQL 表达式
+	_, err := parser.ParseExpr(expr)
+	if err != nil {
+		return false, fmt.Errorf("invalid PromQL expression: %v", err)
+	}
+
+	return true, nil
 }
