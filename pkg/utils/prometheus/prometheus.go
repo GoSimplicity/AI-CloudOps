@@ -38,6 +38,28 @@ func CheckPoolIpExists(req *model.MonitorScrapePool, pools []*model.MonitorScrap
 	return false
 }
 
+func CheckAlertIpExists(req *model.MonitorAlertManagerPool, rules []*model.MonitorAlertManagerPool) bool {
+	ips := make(map[string]string)
+
+	for _, rule := range rules {
+		for _, ip := range rule.AlertManagerInstances {
+			ips[ip] = rule.Name
+		}
+	}
+
+	for _, ip := range req.AlertManagerInstances {
+		if req.ID != 0 && ips[ip] == req.Name {
+			continue
+		}
+
+		if _, ok := ips[ip]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
 // ParseTags 将 ECS 的 Tags 切片解析为 Prometheus 的标签映射
 func ParseTags(tags []string) (map[promModel.LabelName]promModel.LabelValue, error) {
 	labels := make(map[promModel.LabelName]promModel.LabelValue)

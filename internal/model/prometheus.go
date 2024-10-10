@@ -66,7 +66,7 @@ type MonitorSendGroup struct {
 	NameZh              string     `json:"nameZh" binding:"required,min=1,max=50" gorm:"uniqueIndex;size:100;comment:发送组中文名称，供告警规则选择发送组时使用，支持通配符*进行模糊搜索"`     // 发送组中文名称，供告警规则选择发送组时使用，支持通配符*进行模糊搜索
 	Enable              int        `json:"enable" gorm:"type:int;comment:是否启用发送组：1启用，2禁用"`                                                                    // 是否启用发送组：1启用，2禁用
 	UserID              int        `json:"userId" gorm:"comment:创建该发送组的用户ID"`                                                                                 // 创建该发送组的用户ID
-	PoolID              int        `json:"poolId" gorm:"comment:关联的Prometheus实例池ID"`                                                                          // 关联的Prometheus实例池ID
+	PoolID              int        `json:"poolId" gorm:"comment:关联的AlertManager实例ID"`                                                                         // 关联的Prometheus实例池ID
 	OnDutyGroupID       int        `json:"onDutyGroupId" gorm:"comment:值班组ID"`                                                                                // 值班组ID
 	StaticReceiveUsers  []*User    `json:"staticReceiveUsers" gorm:"many2many:static_receive_users;comment:静态配置的接收人列表，多对多关系"`                                 // 静态配置的接收人列表，多对多关系
 	FeiShuQunRobotToken string     `json:"feiShuQunRobotToken,omitempty" gorm:"size:255;comment:飞书机器人Token，对应IM群"`                                            // 飞书机器人Token，对应IM群

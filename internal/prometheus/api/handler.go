@@ -434,22 +434,71 @@ func (p *PrometheusHandler) GetMonitorOnDutyGroupFuturePlan(ctx *gin.Context) {
 
 // GetMonitorAlertManagerPoolList 获取 AlertManager 集群池列表
 func (p *PrometheusHandler) GetMonitorAlertManagerPoolList(ctx *gin.Context) {
-	// TODO: 实现获取 AlertManager 集群池列表的逻辑
+	searchName := ctx.Query("name")
+
+	alerts, err := p.service.GetMonitorAlertManagerPoolList(ctx, &searchName)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, alerts)
 }
 
 // CreateMonitorAlertManagerPool 创建新的 AlertManager 集群池
 func (p *PrometheusHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
-	// TODO: 实现创建新的 AlertManager 集群池的逻辑
+	var alertManagerPool *model.MonitorAlertManagerPool
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+
+	if err := ctx.ShouldBind(&alertManagerPool); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	alertManagerPool.UserID = uc.Uid
+
+	if err := p.service.CreateMonitorAlertManagerPool(ctx, alertManagerPool); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // UpdateMonitorAlertManagerPool 更新现有的 AlertManager 集群池
 func (p *PrometheusHandler) UpdateMonitorAlertManagerPool(ctx *gin.Context) {
-	// TODO: 实现更新现有的 AlertManager 集群池的逻辑
+	var alertManagerPool *model.MonitorAlertManagerPool
+
+	if err := ctx.ShouldBind(&alertManagerPool); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	if err := p.service.UpdateMonitorAlertManagerPool(ctx, alertManagerPool); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // DeleteMonitorAlertManagerPool 删除指定的 AlertManager 集群池
 func (p *PrometheusHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
-	// TODO: 实现删除指定的 AlertManager 集群池的逻辑
+	id := ctx.Param("id")
+
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := p.service.DeleteMonitorAlertManagerPool(ctx, intId); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetMonitorSendGroupList 获取发送组列表

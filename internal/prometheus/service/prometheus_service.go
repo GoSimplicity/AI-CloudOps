@@ -36,6 +36,11 @@ type PrometheusService interface {
 	DeleteMonitorOnDutyGroup(ctx context.Context, id int) error
 	GetMonitorOnDutyGroup(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error)
 	GetMonitorOnDutyGroupFuturePlan(ctx context.Context, id int, startTime string, endTime string) ([]*model.MonitorOnDutyChange, error)
+
+	GetMonitorAlertManagerPoolList(ctx context.Context, searchName *string) ([]*model.MonitorAlertManagerPool, error)
+	CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
+	UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
+	DeleteMonitorAlertManagerPool(ctx context.Context, id int) error
 }
 
 type prometheusService struct {
@@ -54,29 +59,14 @@ func NewPrometheusService(dao dao.PrometheusDao, cache cache.MonitorCache, l *za
 	}
 }
 
-// GetMonitorScrapePoolList 获取监控抓取池列表，并根据可选的搜索参数进行过滤
+// GetMonitorScrapePoolList 获取监控抓取池列表，可选根据名称过滤
 func (p *prometheusService) GetMonitorScrapePoolList(ctx context.Context, search *string) ([]*model.MonitorScrapePool, error) {
-	poolList, err := p.dao.GetAllMonitorScrapePool(ctx)
-	if err != nil {
-		p.l.Error("failed to get all monitor scrape pool", zap.Error(err))
-		return nil, err
+	if search != nil && *search != "" {
+		// 在dao层进行名称搜索
+		return p.dao.SearchMonitorScrapePoolsByName(ctx, *search)
 	}
 
-	if search == nil {
-		return poolList, nil
-	}
-
-	// 初始化过滤后的抓取池列表
-	var filteredPools []*model.MonitorScrapePool
-
-	// 遍历所有抓取池，并根据名称进行过滤
-	for _, pool := range poolList {
-		if pool.Name == *search {
-			filteredPools = append(filteredPools, pool)
-		}
-	}
-
-	return filteredPools, nil
+	return p.dao.GetAllMonitorScrapePool(ctx)
 }
 
 func (p *prometheusService) CreateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error {
@@ -100,6 +90,10 @@ func (p *prometheusService) UpdateMonitorScrapePool(ctx context.Context, monitor
 	if err != nil {
 		p.l.Error("failed to get monitor scrape pool by id", zap.Error(err))
 		return err
+	}
+
+	if pool == nil {
+		return errors.New("scrape pool not found")
 	}
 
 	// 检查抓取池是否已经存在
@@ -126,25 +120,12 @@ func (p *prometheusService) DeleteMonitorScrapePool(ctx context.Context, id int)
 }
 
 func (p *prometheusService) GetMonitorScrapeJobList(ctx context.Context, search *string) ([]*model.MonitorScrapeJob, error) {
-	jobList, err := p.dao.GetAllMonitorScrapeJobs(ctx)
-	if err != nil {
-		p.l.Error("failed to get all monitor scrape pool", zap.Error(err))
-		return nil, err
+	if search != nil && *search != "" {
+		// 在dao层进行名称搜索
+		return p.dao.SearchMonitorScrapeJobsByName(ctx, *search)
 	}
 
-	if search == nil || *search == "" {
-		return jobList, nil
-	}
-
-	var filteredJobs []*model.MonitorScrapeJob
-
-	for _, job := range jobList {
-		if job.Name == *search {
-			filteredJobs = append(filteredJobs, job)
-		}
-	}
-
-	return filteredJobs, nil
+	return p.dao.GetAllMonitorScrapeJobs(ctx)
 }
 
 func (p *prometheusService) CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
@@ -176,25 +157,12 @@ func (p *prometheusService) GetMonitorAlertManagerYaml(_ context.Context, ip str
 }
 
 func (p *prometheusService) GetMonitorOnDutyGroupList(ctx context.Context, searchName *string) ([]*model.MonitorOnDutyGroup, error) {
-	groupList, err := p.dao.GetAllMonitorOndutyGroup(ctx)
-	if err != nil {
-		p.l.Error("failed to get all monitor onduty group", zap.Error(err))
-		return nil, err
+	if searchName != nil && *searchName != "" {
+		// 在dao层进行名称搜索
+		return p.dao.SearchMonitorOnDutyGroupByName(ctx, *searchName)
 	}
 
-	if searchName == nil || *searchName == "" {
-		return groupList, nil
-	}
-
-	var filteredGroups []*model.MonitorOnDutyGroup
-
-	for _, group := range groupList {
-		if group.Name == *searchName {
-			filteredGroups = append(filteredGroups, group)
-		}
-	}
-
-	return filteredGroups, nil
+	return p.dao.GetAllMonitorOndutyGroup(ctx)
 }
 
 func (p *prometheusService) CreateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error {
@@ -268,15 +236,15 @@ func (p *prometheusService) GetMonitorOnDutyGroupFuturePlan(ctx context.Context,
 	// 解析开始时间
 	startTime, err := time.Parse("2006-01-02", startTimeStr)
 	if err != nil {
-		p.l.Error("解析开始时间错误", zap.String("startTime", startTimeStr), zap.Error(err))
-		return nil, err
+		p.l.Error("开始时间格式错误", zap.String("startTime", startTimeStr), zap.Error(err))
+		return nil, errors.New("开始时间格式错误")
 	}
 
 	// 解析结束时间
 	endTime, err := time.Parse("2006-01-02", endTimeStr)
 	if err != nil {
-		p.l.Error("解析结束时间错误", zap.String("endTime", endTimeStr), zap.Error(err))
-		return nil, err
+		p.l.Error("结束时间格式错误", zap.String("endTime", endTimeStr), zap.Error(err))
+		return nil, errors.New("结束时间格式错误")
 	}
 
 	// 验证时间范围
@@ -286,17 +254,10 @@ func (p *prometheusService) GetMonitorOnDutyGroupFuturePlan(ctx context.Context,
 		return nil, errors.New(errMsg)
 	}
 
-	// 获取值班组信息
-	onDutyGroup, err := p.dao.GetMonitorOnDutyGroupById(ctx, id)
-	if err != nil {
-		p.l.Error("获取值班组信息失败", zap.Int("id", id), zap.Error(err))
+	// 确保值班组存在
+	if _, err := p.dao.GetMonitorOnDutyGroupById(ctx, id); err != nil {
+		p.l.Error("根据 ID 获取值班组失败", zap.Int("id", id), zap.Error(err))
 		return nil, err
-	}
-
-	if onDutyGroup == nil {
-		errMsg := "值班组不存在"
-		p.l.Error(errMsg, zap.Int("id", id))
-		return nil, errors.New(errMsg)
 	}
 
 	// 获取指定时间范围内的值班计划变更
@@ -307,4 +268,57 @@ func (p *prometheusService) GetMonitorOnDutyGroupFuturePlan(ctx context.Context,
 	}
 
 	return changes, nil
+}
+
+func (p *prometheusService) GetMonitorAlertManagerPoolList(ctx context.Context, searchName *string) ([]*model.MonitorAlertManagerPool, error) {
+	if searchName != nil && *searchName != "" {
+		// 在dao层进行名称搜索
+		return p.dao.SearchMonitorAlertManagerPoolByName(ctx, *searchName)
+	}
+
+	return p.dao.GetAllAlertManagerPools(ctx)
+}
+
+func (p *prometheusService) CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
+	alertList, err := p.dao.GetAllAlertManagerPools(ctx)
+	if err != nil {
+		p.l.Error("failed to get all alert manager pools", zap.Error(err))
+		return err
+	}
+
+	if pkg.CheckAlertIpExists(monitorAlertManagerPool, alertList) {
+		return errors.New("ip already exists")
+	}
+
+	if err := p.dao.CreateMonitorAlertManagerPool(ctx, monitorAlertManagerPool); err != nil {
+		p.l.Error("failed to create monitor alert manager pool", zap.Error(err))
+		return err
+	}
+
+	return p.dao.CreateMonitorAlertManagerPool(ctx, monitorAlertManagerPool)
+
+}
+
+func (p *prometheusService) UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
+	alertList, err := p.dao.GetAllAlertManagerPools(ctx)
+	if err != nil {
+		p.l.Error("failed to get all alert manager pools", zap.Error(err))
+		return err
+	}
+
+	if pkg.CheckAlertIpExists(monitorAlertManagerPool, alertList) {
+		return errors.New("ip already exists")
+	}
+
+	return p.dao.UpdateMonitorAlertManagerPool(ctx, monitorAlertManagerPool)
+}
+
+func (p *prometheusService) DeleteMonitorAlertManagerPool(ctx context.Context, id int) error {
+	sendGroup, _ := p.dao.GetMonitorSendGroupByPoolId(ctx, id)
+
+	if sendGroup != nil || len(sendGroup) > 0 {
+		return errors.New("该实例下存在发送组，无法删除")
+	}
+
+	return p.dao.DeleteMonitorAlertManagerPool(ctx, id)
 }
