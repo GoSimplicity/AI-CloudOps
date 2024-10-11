@@ -709,60 +709,216 @@ func (p *PrometheusHandler) BatchDeleteMonitorAlertRule(ctx *gin.Context) {
 
 // GetMonitorAlertEventList 获取告警事件列表
 func (p *PrometheusHandler) GetMonitorAlertEventList(ctx *gin.Context) {
-	// TODO: 实现获取告警事件列表的逻辑
+	searchName := ctx.Query("name")
+
+	list, err := p.service.GetMonitorAlertEventList(ctx, &searchName)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 // EventAlertSilence 将指定告警事件设置为静默状态
 func (p *PrometheusHandler) EventAlertSilence(ctx *gin.Context) {
-	// TODO: 实现将指定告警事件设置为静默状态的逻辑
+	var silence model.AlertEventSilenceRequest
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+
+	id := ctx.Param("id")
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := ctx.ShouldBind(&silence); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	if err := p.service.EventAlertSilence(ctx, intId, &silence, uc.Uid); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // EventAlertClaim 认领指定的告警事件
 func (p *PrometheusHandler) EventAlertClaim(ctx *gin.Context) {
-	// TODO: 实现认领指定的告警事件的逻辑
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+
+	id := ctx.Param("id")
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := p.service.EventAlertClaim(ctx, intId, uc.Uid); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // EventAlertUnSilence 取消指定告警事件的静默状态
 func (p *PrometheusHandler) EventAlertUnSilence(ctx *gin.Context) {
-	// TODO: 实现取消指定告警事件的静默状态的逻辑
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+
+	id := ctx.Param("id")
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := p.service.EventAlertClaim(ctx, intId, uc.Uid); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // BatchEventAlertSilence 批量设置告警事件为静默状态
 func (p *PrometheusHandler) BatchEventAlertSilence(ctx *gin.Context) {
-	// TODO: 实现批量设置告警事件为静默状态的逻辑
+	var req model.BatchEventAlertSilenceRequest
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	if err := p.service.BatchEventAlertSilence(ctx, &req, uc.Uid); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetMonitorRecordRuleList 获取预聚合规则列表
 func (p *PrometheusHandler) GetMonitorRecordRuleList(ctx *gin.Context) {
-	// TODO: 实现获取预聚合规则列表的逻辑
+	searchName := ctx.Query("name")
+
+	list, err := p.service.GetMonitorRecordRuleList(ctx, &searchName)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 // CreateMonitorRecordRule 创建新的预聚合规则
 func (p *PrometheusHandler) CreateMonitorRecordRule(ctx *gin.Context) {
-	// TODO: 实现创建新的预聚合规则的逻辑
+	var recordRule model.MonitorRecordRule
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	if err := ctx.ShouldBind(&recordRule); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	recordRule.UserID = uc.Uid
+
+	if err := p.service.CreateMonitorRecordRule(ctx, &recordRule); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // UpdateMonitorRecordRule 更新现有的预聚合规则
 func (p *PrometheusHandler) UpdateMonitorRecordRule(ctx *gin.Context) {
-	// TODO: 实现更新现有的预聚合规则的逻辑
+	var recordRule model.MonitorRecordRule
+
+	if err := ctx.ShouldBind(&recordRule); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	if err := p.service.UpdateMonitorRecordRule(ctx, &recordRule); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // DeleteMonitorRecordRule 删除指定的预聚合规则
 func (p *PrometheusHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
-	// TODO: 实现删除指定的预聚合规则的逻辑
+	id := ctx.Param("id")
+
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := p.service.DeleteMonitorRecordRule(ctx, intId); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // BatchDeleteMonitorRecordRule 批量删除预聚合规则
 func (p *PrometheusHandler) BatchDeleteMonitorRecordRule(ctx *gin.Context) {
-	// TODO: 实现批量删除预聚合规则的逻辑
+	var req model.BatchRequest
+
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	if err := p.service.BatchDeleteMonitorRecordRule(ctx, req.IDs); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // EnableSwitchMonitorRecordRule 切换预聚合规则的启用状态
 func (p *PrometheusHandler) EnableSwitchMonitorRecordRule(ctx *gin.Context) {
-	// TODO: 实现切换预聚合规则的启用状态的逻辑
+	id := ctx.Param("id")
+
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := p.service.EnableSwitchMonitorRecordRule(ctx, intId); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // BatchEnableSwitchMonitorRecordRule 批量切换预聚合规则的启用状态
 func (p *PrometheusHandler) BatchEnableSwitchMonitorRecordRule(ctx *gin.Context) {
-	// TODO: 实现批量切换预聚合规则的启用状态的逻辑
+	var req model.BatchRequest
+
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	if err := p.service.BatchEnableSwitchMonitorRecordRule(ctx, req.IDs); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }

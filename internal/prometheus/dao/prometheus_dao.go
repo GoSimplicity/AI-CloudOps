@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"strings"
@@ -60,17 +61,49 @@ type PrometheusDao interface {
 	EnableSwitchMonitorAlertRule(ctx context.Context, ruleID int) error
 	BatchEnableSwitchMonitorAlertRule(ctx context.Context, ruleIDs []int) error
 	DeleteMonitorAlertRule(ctx context.Context, ruleID int) error
+
+	GetMonitorAlertEventById(ctx context.Context, id int) (*model.MonitorAlertEvent, error)
+	SearchMonitorAlertEventByName(ctx context.Context, name string) ([]*model.MonitorAlertEvent, error)
+	GetMonitorAlertEventList(ctx context.Context) ([]*model.MonitorAlertEvent, error)
+	EventAlertClaim(ctx context.Context, event *model.MonitorAlertEvent) error
+	GetAlertEventByID(ctx context.Context, id int) (*model.MonitorAlertEvent, error)
+	GetAlertPoolByID(ctx context.Context, poolID int) (*model.MonitorAlertManagerPool, error)
+	UpdateAlertEvent(ctx context.Context, alertEvent *model.MonitorAlertEvent) error
+
+	SearchMonitorRecordRuleByName(ctx context.Context, name string) ([]*model.MonitorRecordRule, error)
+	GetMonitorRecordRuleList(ctx context.Context) ([]*model.MonitorRecordRule, error)
+	CreateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error
+	GetMonitorRecordRuleById(ctx context.Context, id int) (*model.MonitorRecordRule, error)
+	UpdateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error
+	DeleteMonitorRecordRule(ctx context.Context, ruleID int) error
+	EnableSwitchMonitorRecordRule(ctx context.Context, ruleID int) error
+	GetAssociatedResourcesBySendGroupId(ctx context.Context, sendGroupId int) ([]*model.MonitorScrapePool, error)
+
+	CheckMonitorSendGroupExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error)
+	CheckMonitorSendGroupNameExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error)
+	CheckMonitorAlertRuleExists(ctx context.Context, alertRule *model.MonitorAlertRule) (bool, error)
+	CheckMonitorAlertRuleNameExists(ctx context.Context, alertRule *model.MonitorAlertRule) (bool, error)
+	CheckMonitorRecordRuleExists(ctx context.Context, recordRule *model.MonitorRecordRule) (bool, error)
+	CheckMonitorRecordRuleNameExists(ctx context.Context, recordRule *model.MonitorRecordRule) (bool, error)
+	CheckMonitorScrapePoolExists(ctx context.Context, scrapePool *model.MonitorScrapePool) (bool, error)
+	CheckMonitorScrapeJobExists(ctx context.Context, scrapeJob *model.MonitorScrapeJob) (bool, error)
+	GetMonitorScrapeJobById(ctx context.Context, id int) (*model.MonitorScrapeJob, error)
+	CheckMonitorOnDutyGroupExists(ctx context.Context, onDutyGroup *model.MonitorOnDutyGroup) (bool, error)
+	CheckMonitorAlertManagerPoolExists(ctx context.Context, alertManagerPool *model.MonitorAlertManagerPool) (bool, error)
+	GetMonitorAlertManagerPoolById(ctx context.Context, id int) (*model.MonitorAlertManagerPool, error)
 }
 
 type prometheusDao struct {
-	db *gorm.DB
-	l  *zap.Logger
+	db      *gorm.DB
+	l       *zap.Logger
+	userDao userDao.UserDAO
 }
 
-func NewPrometheusDAO(db *gorm.DB, l *zap.Logger) PrometheusDao {
+func NewPrometheusDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO) PrometheusDao {
 	return &prometheusDao{
-		db: db,
-		l:  l,
+		db:      db,
+		l:       l,
+		userDao: userDao,
 	}
 }
 
@@ -919,4 +952,173 @@ func (p *prometheusDao) DeleteMonitorAlertRule(ctx context.Context, ruleID int) 
 	}
 
 	return nil
+}
+
+func (p *prometheusDao) GetMonitorAlertEventById(ctx context.Context, id int) (*model.MonitorAlertEvent, error) {
+	var alertEvent *model.MonitorAlertEvent
+
+	if id <= 0 {
+		p.l.Error("GetMonitorAlertEventById 失败: 无效的 ID", zap.Int("id", id))
+		return nil, fmt.Errorf("无效的 ID: %d", id)
+	}
+
+	if err := p.db.WithContext(ctx).First(&alertEvent, id).Error; err != nil {
+		p.l.Error("GetMonitorAlertEventById 获取记录失败", zap.Error(err), zap.Int("id", id))
+		return nil, err
+	}
+
+	return alertEvent, nil
+}
+
+func (p *prometheusDao) SearchMonitorAlertEventByName(ctx context.Context, name string) ([]*model.MonitorAlertEvent, error) {
+	var alertEvents []*model.MonitorAlertEvent
+
+	if err := p.db.WithContext(ctx).Where("alert_name LIKE ?", "%"+name+"%").Find(&alertEvents).Error; err != nil {
+		p.l.Error("SearchMonitorAlertEventByName 获取记录失败", zap.Error(err), zap.String("name", name))
+		return nil, err
+	}
+
+	return alertEvents, nil
+}
+
+func (p *prometheusDao) GetMonitorAlertEventList(ctx context.Context) ([]*model.MonitorAlertEvent, error) {
+	var alertEvents []*model.MonitorAlertEvent
+
+	if err := p.db.WithContext(ctx).Find(&alertEvents).Error; err != nil {
+		p.l.Error("GetMonitorAlertEventList 获取记录失败", zap.Error(err))
+		return nil, err
+	}
+
+	return alertEvents, nil
+}
+
+func (p *prometheusDao) GetAlertEventByID(ctx context.Context, id int) (*model.MonitorAlertEvent, error) {
+	var alertEvent model.MonitorAlertEvent
+	if err := p.db.WithContext(ctx).First(&alertEvent, id).Error; err != nil {
+		p.l.Error("GetAlertEventByID failed", zap.Error(err), zap.Int("id", id))
+		return nil, err
+	}
+	return &alertEvent, nil
+}
+
+func (p *prometheusDao) GetAlertPoolByID(ctx context.Context, poolID int) (*model.MonitorAlertManagerPool, error) {
+	var alertPool model.MonitorAlertManagerPool
+	if err := p.db.WithContext(ctx).Table("alert_pool").Where("id = ?", poolID).First(&alertPool).Error; err != nil {
+		p.l.Error("GetAlertPoolByID failed", zap.Error(err), zap.Int("poolID", poolID))
+		return nil, err
+	}
+	return &alertPool, nil
+}
+
+func (p *prometheusDao) UpdateAlertEvent(ctx context.Context, alertEvent *model.MonitorAlertEvent) error {
+	if err := p.db.WithContext(ctx).Save(alertEvent).Error; err != nil {
+		p.l.Error("UpdateAlertEvent failed", zap.Error(err), zap.Int("id", alertEvent.ID))
+		return err
+	}
+	return nil
+}
+
+func (p *prometheusDao) EventAlertClaim(ctx context.Context, event *model.MonitorAlertEvent) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) SearchMonitorRecordRuleByName(ctx context.Context, name string) ([]*model.MonitorRecordRule, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) GetMonitorRecordRuleList(ctx context.Context) ([]*model.MonitorRecordRule, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) CreateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) GetMonitorRecordRuleById(ctx context.Context, id int) (*model.MonitorRecordRule, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) UpdateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) DeleteMonitorRecordRule(ctx context.Context, ruleID int) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) EnableSwitchMonitorRecordRule(ctx context.Context, ruleID int) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) GetAssociatedResourcesBySendGroupId(ctx context.Context, sendGroupId int) ([]*model.MonitorScrapePool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) CheckMonitorSendGroupExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) CheckMonitorSendGroupNameExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) CheckMonitorAlertRuleExists(ctx context.Context, alertRule *model.MonitorAlertRule) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) CheckMonitorAlertRuleNameExists(ctx context.Context, alertRule *model.MonitorAlertRule) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) CheckMonitorRecordRuleExists(ctx context.Context, recordRule *model.MonitorRecordRule) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) CheckMonitorRecordRuleNameExists(ctx context.Context, recordRule *model.MonitorRecordRule) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) CheckMonitorScrapePoolExists(ctx context.Context, scrapePool *model.MonitorScrapePool) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) CheckMonitorScrapeJobExists(ctx context.Context, scrapeJob *model.MonitorScrapeJob) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) GetMonitorScrapeJobById(ctx context.Context, id int) (*model.MonitorScrapeJob, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) CheckMonitorOnDutyGroupExists(ctx context.Context, onDutyGroup *model.MonitorOnDutyGroup) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) CheckMonitorAlertManagerPoolExists(ctx context.Context, alertManagerPool *model.MonitorAlertManagerPool) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *prometheusDao) GetMonitorAlertManagerPoolById(ctx context.Context, id int) (*model.MonitorAlertManagerPool, error) {
+	//TODO implement me
+	panic("implement me")
 }
