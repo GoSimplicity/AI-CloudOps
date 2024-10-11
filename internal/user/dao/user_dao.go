@@ -17,6 +17,7 @@ type UserDAO interface {
 	CreateUser(ctx context.Context, user *model.User) error
 	// GetUserByUsername 通过用户名获取用户
 	GetUserByUsername(ctx context.Context, username string) (*model.User, error)
+	// GetUserByUsernames 通过用户名批量获取用户
 	GetUserByUsernames(ctx context.Context, usernames []string) ([]*model.User, error)
 	// GetOrCreateUser 获取用户或创建新用户
 	GetOrCreateUser(ctx context.Context, user *model.User) (*model.User, error)
