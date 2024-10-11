@@ -19,15 +19,15 @@ type MonitorAlertEvent struct {
 	Labels        StringList `json:"labels,omitempty" gorm:"type:text;comment:标签组，格式为 key=v"`                                // 标签组，格式为 key=v
 
 	// 前端使用字段
-	Key           string            `json:"key" gorm:"-"`                     // 前端表格使用的Key
-	AlertRuleName string            `json:"alertRuleName,omitempty" gorm:"-"` // 前端表格显示的告警规则名称
-	SendGroupName string            `json:"sendGroupName,omitempty" gorm:"-"` // 前端表格显示的发送组名称
-	Alert         template.Alert    `json:"alert,omitempty" gorm:"-"`         // 告警详情
-	SendGroup     *MonitorSendGroup `json:"sendGroup,omitempty" gorm:"-"`     // 发送组对象
-	RenLingUser   *User             `json:"renLingUser,omitempty" gorm:"-"`   // 认领告警的用户对象
-	Rule          *MonitorAlertRule `json:"rule,omitempty" gorm:"-"`          // 告警规则对象
-	LabelsM       map[string]string `json:"labelsM,omitempty" gorm:"-"`       // 标签键值对映射
-	AnnotationsM  map[string]string `json:"annotationsM,omitempty" gorm:"-"`  // 注释键值对映射
+	Key                string            `json:"key" gorm:"-"`                          // 前端表格使用的Key
+	AlertRuleName      string            `json:"alertRuleName,omitempty" gorm:"-"`      // 前端表格显示的告警规则名称
+	SendGroupName      string            `json:"sendGroupName,omitempty" gorm:"-"`      // 前端表格显示的发送组名称
+	Alert              template.Alert    `json:"alert,omitempty" gorm:"-"`              // 告警详情
+	SendGroup          *MonitorSendGroup `json:"sendGroup,omitempty" gorm:"-"`          // 发送组对象
+	RenLingUser        *User             `json:"renLingUser,omitempty" gorm:"-"`        // 认领告警的用户对象
+	Rule               *MonitorAlertRule `json:"rule,omitempty" gorm:"-"`               // 告警规则对象
+	LabelsMatcher      map[string]string `json:"labelsMatcher,omitempty" gorm:"-"`      // 标签键值对映射
+	AnnotationsMatcher map[string]string `json:"annotationsMatcher,omitempty" gorm:"-"` // 注释键值对映射
 }
 
 // MonitorAlertRule 告警规则的配置
@@ -66,7 +66,7 @@ type MonitorSendGroup struct {
 	NameZh              string     `json:"nameZh" binding:"required,min=1,max=50" gorm:"uniqueIndex;size:100;comment:发送组中文名称，供告警规则选择发送组时使用，支持通配符*进行模糊搜索"`     // 发送组中文名称，供告警规则选择发送组时使用，支持通配符*进行模糊搜索
 	Enable              int        `json:"enable" gorm:"type:int;comment:是否启用发送组：1启用，2禁用"`                                                                    // 是否启用发送组：1启用，2禁用
 	UserID              int        `json:"userId" gorm:"comment:创建该发送组的用户ID"`                                                                                 // 创建该发送组的用户ID
-	PoolID              int        `json:"poolId" gorm:"comment:关联的Prometheus实例池ID"`                                                                          // 关联的Prometheus实例池ID
+	PoolID              int        `json:"poolId" gorm:"comment:关联的AlertManager实例ID"`                                                                         // 关联的Prometheus实例池ID
 	OnDutyGroupID       int        `json:"onDutyGroupId" gorm:"comment:值班组ID"`                                                                                // 值班组ID
 	StaticReceiveUsers  []*User    `json:"staticReceiveUsers" gorm:"many2many:static_receive_users;comment:静态配置的接收人列表，多对多关系"`                                 // 静态配置的接收人列表，多对多关系
 	FeiShuQunRobotToken string     `json:"feiShuQunRobotToken,omitempty" gorm:"size:255;comment:飞书机器人Token，对应IM群"`                                            // 飞书机器人Token，对应IM群
@@ -232,4 +232,18 @@ type MonitorScrapePool struct {
 	ExternalLabelsFront string `json:"externalLabelsFront,omitempty" gorm:"-"` // 前端显示的ExternalLabels字符串
 	Key                 string `json:"key" gorm:"-"`                           // 前端表格使用的Key
 	CreateUserName      string `json:"createUserName,omitempty" gorm:"-"`      // 创建者用户名，用于前端展示
+}
+
+type AlertEventSilenceRequest struct {
+	UseName bool   `json:"useName"`
+	Time    string `json:"time"`
+}
+
+type BatchEventAlertSilenceRequest struct {
+	IDs []int `json:"ids" binding:"required"`
+	AlertEventSilenceRequest
+}
+
+type BatchRequest struct {
+	IDs []int `json:"ids" binding:"required"`
 }
