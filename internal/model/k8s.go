@@ -170,7 +170,7 @@ type K8sYamlTask struct {
 	TemplateID  int        `json:"templateId" gorm:"comment:关联的模板ID"`                                                  // 关联的模板ID
 	ClusterName string     `json:"clusterName,omitempty" gorm:"comment:集群名称"`                                          // 集群名称
 	Variables   StringList `json:"variables,omitempty" gorm:"type:text;comment:yaml 变量，格式 k=v,k=v"`                    // YAML 变量
-	Status      string     `json:"status,omitempty" gorm:"comment:当前状态"`                                               // 当前状态
+	Status      string     `json:"status,omitempty" gorm:"comment:当前状态" binding:"oneof=Pending Failed Succeeded"`      // 当前状态
 	ApplyResult string     `json:"applyResult,omitempty" gorm:"comment:apply 后的返回数据"`                                  // apply 结果
 
 	// 前端使用字段
