@@ -74,6 +74,15 @@ type K8sService interface {
 	UpdatePod(ctx context.Context, pod *model.K8sPodRequest) error
 	// DeletePod 删除 Pod
 	DeletePod(ctx context.Context, clusterName, namespace, podName string) error
+
+	// GetYamlTemplateList 获取 YAML 模板列表
+	GetYamlTemplateList(ctx context.Context) ([]*model.K8sYamlTemplate, error)
+	// CreateYamlTemplate 创建 YAML 模板
+	CreateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
+	// UpdateYamlTemplate 更新 YAML 模板
+	UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
+	// DeleteYamlTemplate 删除 YAML 模板
+	DeleteYamlTemplate(ctx context.Context, id int) error
 }
 
 type k8sService struct {
@@ -925,4 +934,24 @@ func (k *k8sService) DeletePod(ctx context.Context, clusterName, namespace, podN
 
 	k.l.Info("删除 Pod 成功", zap.String("podName", podName))
 	return nil
+}
+
+// GetYamlTemplateList 获取 YAML 模板列表
+func (k *k8sService) GetYamlTemplateList(ctx context.Context) ([]*model.K8sYamlTemplate, error) {
+	return k.dao.ListAllYamlTemplates(ctx)
+}
+
+// CreateYamlTemplate 创建 YAML 模板
+func (k *k8sService) CreateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
+	return k.dao.CreateYamlTemplate(ctx, template)
+}
+
+// UpdateYamlTemplate 更新 YAML 模板
+func (k *k8sService) UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
+	return k.dao.UpdateYamlTemplate(ctx, template)
+}
+
+// DeleteYamlTemplate 删除 YAML 模板
+func (k *k8sService) DeleteYamlTemplate(ctx context.Context, id int) error {
+	return k.dao.DeleteYamlTemplate(ctx, id)
 }

@@ -440,22 +440,88 @@ func (k *K8sHandler) DrainPods(ctx *gin.Context) {
 
 // GetYamlTemplateList 获取 YAML 模板列表
 func (k *K8sHandler) GetYamlTemplateList(ctx *gin.Context) {
-	// TODO: 实现获取 YAML 模板列表的逻辑
+	list, err := k.service.GetYamlTemplateList(ctx)
+	if err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 // CreateYamlTemplate 创建新的 YAML 模板
 func (k *K8sHandler) CreateYamlTemplate(ctx *gin.Context) {
-	// TODO: 实现创建 YAML 模板的逻辑
+	var req model.K8sYamlTemplate
+
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	req.UserID = uc.Uid
+
+	if err := k.service.CreateYamlTemplate(ctx, &req); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // UpdateYamlTemplate 更新指定 ID 的 YAML 模板
 func (k *K8sHandler) UpdateYamlTemplate(ctx *gin.Context) {
-	// TODO: 实现更新 YAML 模板的逻辑
+	var req model.K8sYamlTemplate
+
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	id := ctx.Param("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
+		return
+	}
+
+	yamlId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
+		return
+	}
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	req.ID = yamlId
+	req.UserID = uc.Uid
+
+	if err := k.service.UpdateYamlTemplate(ctx, &req); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // DeleteYamlTemplate 删除指定 ID 的 YAML 模板
 func (k *K8sHandler) DeleteYamlTemplate(ctx *gin.Context) {
-	// TODO: 实现删除 YAML 模板的逻辑
+	id := ctx.Param("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
+		return
+	}
+
+	yamlId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
+		return
+	}
+
+	if err := k.service.DeleteYamlTemplate(ctx, yamlId); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetYamlTaskList 获取 YAML 任务列表
