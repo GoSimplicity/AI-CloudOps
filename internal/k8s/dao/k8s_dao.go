@@ -9,6 +9,7 @@ import (
 )
 
 type K8sDAO interface {
+	// Cluster
 	ListAllClusters(ctx context.Context) ([]*model.K8sCluster, error)
 	ListClustersForSelect(ctx context.Context) ([]*model.K8sCluster, error)
 	CreateCluster(ctx context.Context, cluster *model.K8sCluster) error
@@ -19,6 +20,7 @@ type K8sDAO interface {
 	BatchEnableSwitchClusters(ctx context.Context, ids []int) error
 	BatchDeleteClusters(ctx context.Context, ids []int) error
 
+	// Node
 	ListAllNodes(ctx context.Context) ([]*model.K8sNode, error)
 	GetNodeByID(ctx context.Context, id int) (*model.K8sNode, error)
 	GetNodeByName(ctx context.Context, name string) (*model.K8sNode, error)
@@ -30,6 +32,12 @@ type K8sDAO interface {
 	DeleteNodeLabel(ctx context.Context, nodeID int, labelKey string) error
 	DeleteNodeTaint(ctx context.Context, nodeID int, taintKey string) error
 	DrainPods(ctx context.Context, nodeID int) error
+
+	// Yaml
+	ListAllYamlTemplates(ctx context.Context) ([]*model.K8sYamlTemplate, error)
+	CreateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error
+	UpdateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error
+	DeleteYamlTemplate(ctx context.Context, id int) error
 }
 
 type k8sDAO struct {
@@ -191,4 +199,42 @@ func (k *k8sDAO) DeleteNodeTaint(ctx context.Context, nodeID int, taintKey strin
 func (k *k8sDAO) DrainPods(ctx context.Context, nodeID int) error {
 	//TODO implement me
 	panic("implement me")
+}
+
+func (k *k8sDAO) ListAllYamlTemplates(ctx context.Context) ([]*model.K8sYamlTemplate, error) {
+	var yamls []*model.K8sYamlTemplate
+
+	if err := k.db.WithContext(ctx).Find(&yamls).Error; err != nil {
+		k.l.Error("ListAllYamlTemplates 查询所有Yaml模板失败", zap.Error(err))
+		return nil, err
+	}
+
+	return yamls, nil
+}
+
+func (k *k8sDAO) CreateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error {
+	if err := k.db.WithContext(ctx).Create(&yaml).Error; err != nil {
+		k.l.Error("CreateYamlTemplate 创建Yaml模板失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (k *k8sDAO) UpdateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error {
+	if err := k.db.WithContext(ctx).Where("id = ?", yaml.ID).Updates(&yaml).Error; err != nil {
+		k.l.Error("UpdateYamlTemplate 更新Yaml模板失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (k *k8sDAO) DeleteYamlTemplate(ctx context.Context, id int) error {
+	if err := k.db.WithContext(ctx).Where("id = ?", id).Delete(&model.K8sYamlTemplate{}).Error; err != nil {
+		k.l.Error("DeleteYamlTemplate 删除Yaml模板失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
