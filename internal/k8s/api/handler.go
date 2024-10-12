@@ -99,8 +99,8 @@ func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
 	{
 		deployments.GET("/", k.GetDeployListByNamespace) // 根据命名空间获取部署列表
 		deployments.POST("/", k.CreateDeployment)        // 创建新的部署
-		deployments.PUT("/:id", k.UpdateDeployment)      // 更新指定 ID 的部署
-		deployments.DELETE("/:id", k.DeleteDeployment)   // 删除指定 ID 的部署
+		deployments.PUT("/", k.UpdateDeployment)         // 更新指定 ID 的部署
+		deployments.DELETE("/", k.DeleteDeployment)      // 删除指定 ID 的部署
 
 		deployments.PUT("/:id/image", k.SetDeploymentContainerImage) // 设置部署中容器的镜像
 		deployments.POST("/:id/scale", k.ScaleDeployment)            // 扩缩指定 ID 的部署
@@ -857,22 +857,76 @@ func (k *K8sHandler) DeletePod(c *gin.Context) {
 
 // GetDeployListByNamespace 根据命名空间获取部署列表
 func (k *K8sHandler) GetDeployListByNamespace(ctx *gin.Context) {
-	// TODO: 实现根据命名空间获取部署列表的逻辑
+	namesapce := ctx.Query("namespace")
+	if namesapce == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		return
+	}
+
+	clusterName := ctx.Query("cluster_name")
+	if clusterName == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'cluster_name' 参数")
+		return
+	}
+
+	deploys, err := k.service.GetDeploymentsByNamespace(ctx, clusterName, namesapce)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, deploys)
 }
 
 // CreateDeployment 创建新的部署
 func (k *K8sHandler) CreateDeployment(ctx *gin.Context) {
-	// TODO: 实现创建部署的逻辑
+	var req model.K8sDeploymentRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.CreateDeployment(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
-// UpdateDeployment 更新指定 ID 的部署
+// UpdateDeployment 更新指定 Name 的部署
 func (k *K8sHandler) UpdateDeployment(ctx *gin.Context) {
-	// TODO: 实现更新部署的逻辑
+	var req model.K8sDeploymentRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.UpdateDeployment(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
-// DeleteDeployment 删除指定 ID 的部署
+// DeleteDeployment 删除指定 Name 的部署
 func (k *K8sHandler) DeleteDeployment(ctx *gin.Context) {
-	// TODO: 实现删除部署的逻辑
+	var req model.K8sDeploymentRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.DeleteDeployment(ctx, req.ClusterName, req.Namespace, req.DeploymentName); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // SetDeploymentContainerImage 设置部署中容器的镜像
