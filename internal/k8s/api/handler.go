@@ -26,7 +26,6 @@ func NewK8sHandler(service service.K8sService, l *zap.Logger) *K8sHandler {
 
 // RegisterRouters 注册所有 Kubernetes 相关的路由
 func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
-	// TODO delete hello, avoid validate for test
 	k8sGroup := server.Group("/api/k8s")
 
 	// 集群相关路由
@@ -99,13 +98,13 @@ func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
 	{
 		deployments.GET("/", k.GetDeployListByNamespace) // 根据命名空间获取部署列表
 		deployments.POST("/", k.CreateDeployment)        // 创建新的部署
-		deployments.PUT("/", k.UpdateDeployment)         // 更新指定 ID 的部署
-		deployments.DELETE("/", k.DeleteDeployment)      // 删除指定 ID 的部署
+		deployments.PUT("/", k.UpdateDeployment)         // 更新指定 deploymentName 的部署
+		deployments.DELETE("/", k.DeleteDeployment)      // 删除指定 deploymentName 的部署
 
-		deployments.PUT("/:id/image", k.SetDeploymentContainerImage) // 设置部署中容器的镜像
-		deployments.POST("/:id/scale", k.ScaleDeployment)            // 扩缩指定 ID 的部署
-		deployments.POST("/restart", k.BatchRestartDeployments)      // 批量重启部署
-		deployments.GET("/:id/yaml", k.GetDeployYaml)                // 获取指定部署的 YAML 配置
+		deployments.PUT("/:name/image", k.SetDeploymentContainerImage) // 设置部署中容器的镜像
+		deployments.POST("/:name/scale", k.ScaleDeployment)            // 扩缩指定 ID 的部署
+		deployments.POST("/restart", k.BatchRestartDeployments)        // 批量重启部署
+		deployments.GET("/:name/yaml", k.GetDeployYaml)                // 获取指定部署的 YAML 配置
 	}
 
 	// ConfigMap 相关路由
@@ -921,7 +920,7 @@ func (k *K8sHandler) DeleteDeployment(ctx *gin.Context) {
 		return
 	}
 
-	if err := k.service.DeleteDeployment(ctx, req.ClusterName, req.Namespace, req.DeploymentName); err != nil {
+	if err := k.service.DeleteDeployment(ctx, req.ClusterName, req.Namespace, req.DeploymentNames[0]); err != nil {
 		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
 		return
 	}
@@ -931,17 +930,53 @@ func (k *K8sHandler) DeleteDeployment(ctx *gin.Context) {
 
 // SetDeploymentContainerImage 设置部署中容器的镜像
 func (k *K8sHandler) SetDeploymentContainerImage(ctx *gin.Context) {
-	// TODO: 实现设置部署中容器镜像的逻辑
+	var req model.K8sDeploymentRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.UpdateDeployment(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // ScaleDeployment 扩缩部署
 func (k *K8sHandler) ScaleDeployment(ctx *gin.Context) {
-	// TODO: 实现扩缩部署的逻辑
+	var req model.K8sDeploymentRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.UpdateDeployment(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // BatchRestartDeployments 批量重启部署
 func (k *K8sHandler) BatchRestartDeployments(ctx *gin.Context) {
-	// TODO: 实现批量重启部署的逻辑
+	var req model.K8sDeploymentRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.BatchRestartDeployments(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetDeployYaml 获取部署的 YAML 配置
