@@ -53,18 +53,6 @@ func (p *PrometheusHandler) RegisterRouters(server *gin.Engine) {
 			prometheusConfigs.GET("/alertManager", p.GetMonitorAlertManagerYaml)            // 获取单个 AlertManager 配置文件
 		}
 
-		// 值班组相关路由
-		onDutyGroups := monitorGroup.Group("/onDuty_groups")
-		{
-			onDutyGroups.GET("/", p.GetMonitorOnDutyGroupList)                      // 获取值班组列表
-			onDutyGroups.POST("/create", p.CreateMonitorOnDutyGroup)                // 创建新的值班组
-			onDutyGroups.POST("/changes", p.CreateMonitorOnDutyGroupChange)         // 创建值班组的换班记录
-			onDutyGroups.POST("/update", p.UpdateMonitorOnDutyGroup)                // 更新值班组信息
-			onDutyGroups.DELETE("/:id", p.DeleteMonitorOnDutyGroup)                 // 删除指定的值班组
-			onDutyGroups.GET("/:id", p.GetMonitorOnDutyGroup)                       // 获取指定的值班组信息
-			onDutyGroups.GET("/:id/future_plan", p.GetMonitorOnDutyGroupFuturePlan) // 获取指定值班组的未来值班计划
-		}
-
 		// AlertManager 集群相关路由
 		alertManagerPools := monitorGroup.Group("/alertManager_pools")
 		{
@@ -74,26 +62,17 @@ func (p *PrometheusHandler) RegisterRouters(server *gin.Engine) {
 			alertManagerPools.DELETE("/:id", p.DeleteMonitorAlertManagerPool)  // 删除指定的 AlertManager 集群池
 		}
 
-		// 发送组相关路由
-		sendGroups := monitorGroup.Group("/send_groups")
-		{
-			sendGroups.GET("/", p.GetMonitorSendGroupList)       // 获取发送组列表
-			sendGroups.POST("/create", p.CreateMonitorSendGroup) // 创建新的发送组
-			sendGroups.POST("/update", p.UpdateMonitorSendGroup) // 更新现有的发送组
-			sendGroups.DELETE("/:id", p.DeleteMonitorSendGroup)  // 删除指定的发送组
-		}
-
 		// 告警规则相关路由
 		alertRules := monitorGroup.Group("/alert_rules")
 		{
-			alertRules.GET("/", p.GetMonitorAlertRuleList)                  // 获取告警规则列表
-			alertRules.POST("/promql_check", p.PromqlExprCheck)             // 检查 PromQL 表达式的合法性
-			alertRules.POST("/create", p.CreateMonitorAlertRule)            // 创建新的告警规则
-			alertRules.POST("/update", p.UpdateMonitorAlertRule)            // 更新现有的告警规则
-			alertRules.POST("/:id/enable", p.EnableSwitchMonitorAlertRule)  // 切换告警规则的启用状态
-			alertRules.POST("/enable", p.BatchEnableSwitchMonitorAlertRule) // 批量切换告警规则的启用状态
-			alertRules.DELETE("/:id", p.DeleteMonitorAlertRule)             // 删除指定的告警规则
-			alertRules.DELETE("/", p.BatchDeleteMonitorAlertRule)           // 批量删除告警规则
+			alertRules.GET("/", p.GetMonitorAlertRuleList)                        // 获取告警规则列表
+			alertRules.POST("/promql_check", p.PromqlExprCheck)                   // 检查 PromQL 表达式的合法性
+			alertRules.POST("/create", p.CreateMonitorAlertRule)                  // 创建新的告警规则
+			alertRules.POST("/update", p.UpdateMonitorAlertRule)                  // 更新现有的告警规则
+			alertRules.POST("/enable", p.EnableSwitchMonitorAlertRule)            // 切换告警规则的启用状态
+			alertRules.POST("/batch_enable", p.BatchEnableSwitchMonitorAlertRule) // 批量切换告警规则的启用状态
+			alertRules.DELETE("/:id", p.DeleteMonitorAlertRule)                   // 删除指定的告警规则
+			alertRules.DELETE("/", p.BatchDeleteMonitorAlertRule)                 // 批量删除告警规则
 		}
 
 		// 告警事件相关路由
@@ -117,6 +96,28 @@ func (p *PrometheusHandler) RegisterRouters(server *gin.Engine) {
 			recordRules.POST("/:id/enable", p.EnableSwitchMonitorRecordRule)  // 切换预聚合规则的启用状态
 			recordRules.POST("/enable", p.BatchEnableSwitchMonitorRecordRule) // 批量切换预聚合规则的启用状态
 		}
+
+		// 值班组相关路由
+		onDutyGroups := monitorGroup.Group("/onDuty_groups")
+		{
+			onDutyGroups.GET("/", p.GetMonitorOnDutyGroupList)                      // 获取值班组列表
+			onDutyGroups.POST("/create", p.CreateMonitorOnDutyGroup)                // 创建新的值班组
+			onDutyGroups.POST("/changes", p.CreateMonitorOnDutyGroupChange)         // 创建值班组的换班记录
+			onDutyGroups.POST("/update", p.UpdateMonitorOnDutyGroup)                // 更新值班组信息
+			onDutyGroups.DELETE("/:id", p.DeleteMonitorOnDutyGroup)                 // 删除指定的值班组
+			onDutyGroups.GET("/:id", p.GetMonitorOnDutyGroup)                       // 获取指定的值班组信息
+			onDutyGroups.GET("/:id/future_plan", p.GetMonitorOnDutyGroupFuturePlan) // 获取指定值班组的未来值班计划
+		}
+
+		// 发送组相关路由
+		sendGroups := monitorGroup.Group("/send_groups")
+		{
+			sendGroups.GET("/", p.GetMonitorSendGroupList)       // 获取发送组列表
+			sendGroups.POST("/create", p.CreateMonitorSendGroup) // 创建新的发送组
+			sendGroups.POST("/update", p.UpdateMonitorSendGroup) // 更新现有的发送组
+			sendGroups.DELETE("/:id", p.DeleteMonitorSendGroup)  // 删除指定的发送组
+		}
+
 	}
 }
 
@@ -583,9 +584,14 @@ func (p *PrometheusHandler) GetMonitorAlertRuleList(ctx *gin.Context) {
 
 // PromqlExprCheck 检查 PromQL 表达式的合法性
 func (p *PrometheusHandler) PromqlExprCheck(ctx *gin.Context) {
-	promql := ctx.Query("promql")
+	var promql model.PromqlExprCheckReq
 
-	exist, err := p.service.PromqlExprCheck(ctx, promql)
+	if err := ctx.ShouldBind(&promql); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	exist, err := p.service.PromqlExprCheck(ctx, promql.PromqlExpr)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
@@ -639,15 +645,14 @@ func (p *PrometheusHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
 
 // EnableSwitchMonitorAlertRule 切换告警规则的启用状态
 func (p *PrometheusHandler) EnableSwitchMonitorAlertRule(ctx *gin.Context) {
-	id := ctx.Param("id")
+	var req model.IdRequest
 
-	intId, err := strconv.Atoi(id)
-	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
-	if err := p.service.EnableSwitchMonitorAlertRule(ctx, intId); err != nil {
+	if err := p.service.EnableSwitchMonitorAlertRule(ctx, req.ID); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
@@ -657,14 +662,14 @@ func (p *PrometheusHandler) EnableSwitchMonitorAlertRule(ctx *gin.Context) {
 
 // BatchEnableSwitchMonitorAlertRule 批量切换告警规则的启用状态
 func (p *PrometheusHandler) BatchEnableSwitchMonitorAlertRule(ctx *gin.Context) {
-	var req []int
+	var req model.BatchRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
-	if err := p.service.BatchEnableSwitchMonitorAlertRule(ctx, req); err != nil {
+	if err := p.service.BatchEnableSwitchMonitorAlertRule(ctx, req.IDs); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
@@ -692,14 +697,14 @@ func (p *PrometheusHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
 
 // BatchDeleteMonitorAlertRule 批量删除告警规则
 func (p *PrometheusHandler) BatchDeleteMonitorAlertRule(ctx *gin.Context) {
-	var req []int
+	var req model.BatchRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
-	if err := p.service.BatchDeleteMonitorAlertRule(ctx, req); err != nil {
+	if err := p.service.BatchDeleteMonitorAlertRule(ctx, req.IDs); err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}

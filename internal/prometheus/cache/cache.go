@@ -269,8 +269,8 @@ func (mc *monitorCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePool
 		// 配置 Alertmanager
 		alertConfig := &pc.AlertmanagerConfig{
 			APIVersion: "v2",
-			ServiceDiscoveryConfigs: discovery.Configs{ // 服务发现配置
-				&discovery.StaticConfig{
+			ServiceDiscoveryConfigs: []discovery.Config{ // 服务发现配置
+				discovery.StaticConfig{
 					{
 						Targets: []pm.LabelSet{
 							{
@@ -500,7 +500,7 @@ func (mc *monitorCache) GenerateAlertManagerMainConfigOnePool(pool *model.Monito
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		resolveTimeout = 5
+		resolveTimeout, _ = pm.ParseDuration("5s")
 	}
 
 	// 解析分组第一次等待时间
@@ -510,7 +510,7 @@ func (mc *monitorCache) GenerateAlertManagerMainConfigOnePool(pool *model.Monito
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		groupWait = 5
+		groupWait, _ = pm.ParseDuration("5s")
 	}
 
 	// 解析分组等待间隔时间
@@ -520,7 +520,7 @@ func (mc *monitorCache) GenerateAlertManagerMainConfigOnePool(pool *model.Monito
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		groupInterval = 5
+		groupInterval, _ = pm.ParseDuration("5s")
 	}
 
 	// 解析重复发送时间
@@ -530,7 +530,7 @@ func (mc *monitorCache) GenerateAlertManagerMainConfigOnePool(pool *model.Monito
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		repeatInterval = 5
+		repeatInterval, _ = pm.ParseDuration("5s")
 	}
 
 	// 生成 Alertmanager 默认配置
@@ -586,7 +586,7 @@ func (mc *monitorCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Conte
 				zap.Error(err),
 				zap.String("发送组", sendGroup.Name),
 			)
-			repeatInterval = 5
+			repeatInterval, _ = pm.ParseDuration("5s")
 		}
 
 		// 创建 Matcher 并设置匹配条件
@@ -722,7 +722,7 @@ func (mc *monitorCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx context
 				zap.Error(err),
 				zap.String("规则", rule.Name),
 			)
-			ft = 15
+			ft, _ = pm.ParseDuration("5s")
 		}
 		oneRule := rulefmt.Rule{
 			Alert:       rule.Name,         // 告警名称
@@ -854,7 +854,7 @@ func (mc *monitorCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx contex
 				zap.Error(err),
 				zap.String("规则", rule.Name),
 			)
-			forD = 15
+			forD, _ = pm.ParseDuration("5s")
 		}
 		oneRule := rulefmt.Rule{
 			Alert: rule.Name, // 告警名称
