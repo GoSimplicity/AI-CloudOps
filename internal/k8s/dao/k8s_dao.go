@@ -46,6 +46,7 @@ type K8sDAO interface {
 	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
 	DeleteYamlTask(ctx context.Context, id int) error
 	GetYamlTaskByID(ctx context.Context, id int) (*model.K8sYamlTask, error)
+	GetYamlTaskByTemplateID(ctx context.Context, templateID int) ([]*model.K8sYamlTask, error)
 }
 
 type k8sDAO struct {
@@ -305,4 +306,15 @@ func (k *k8sDAO) GetYamlTaskByID(ctx context.Context, id int) (*model.K8sYamlTas
 	}
 
 	return task, nil
+}
+
+func (k *k8sDAO) GetYamlTaskByTemplateID(ctx context.Context, templateID int) ([]*model.K8sYamlTask, error) {
+	var tasks []*model.K8sYamlTask
+
+	if err := k.db.WithContext(ctx).Where("template_id = ?", templateID).Find(&tasks).Error; err != nil {
+		k.l.Error("GetYamlTaskByTemplateID 查询Yaml任务失败", zap.Error(err))
+		return nil, err
+	}
+
+	return tasks, nil
 }
