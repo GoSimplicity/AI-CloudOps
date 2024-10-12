@@ -964,16 +964,41 @@ func (k *k8sService) GetYamlTemplateList(ctx context.Context) ([]*model.K8sYamlT
 
 // CreateYamlTemplate 创建 YAML 模板
 func (k *k8sService) CreateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
+	// yaml 校验
+	if _, err := yamlTask.ToJSON([]byte(template.Content)); err != nil {
+		return fmt.Errorf("YAML 格式错误: %w", err)
+	}
+
 	return k.dao.CreateYamlTemplate(ctx, template)
 }
 
 // UpdateYamlTemplate 更新 YAML 模板
 func (k *k8sService) UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
+	// yaml 校验
+	if _, err := yamlTask.ToJSON([]byte(template.Content)); err != nil {
+		return fmt.Errorf("YAML 格式错误: %w", err)
+	}
+
 	return k.dao.UpdateYamlTemplate(ctx, template)
 }
 
 // DeleteYamlTemplate 删除 YAML 模板
 func (k *k8sService) DeleteYamlTemplate(ctx context.Context, id int) error {
+	// 检查是否有任务使用该模板
+	tasks, err := k.dao.GetYamlTaskByTemplateID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	taskName := make([]string, 0)
+	for _, task := range tasks {
+		taskName = append(taskName, task.Name)
+	}
+
+	if len(tasks) > 0 {
+		return fmt.Errorf("该模板正在被以下任务使用: %v, 删除失败", taskName)
+	}
+
 	return k.dao.DeleteYamlTemplate(ctx, id)
 }
 
