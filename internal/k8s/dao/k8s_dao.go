@@ -38,6 +38,14 @@ type K8sDAO interface {
 	CreateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error
 	UpdateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error
 	DeleteYamlTemplate(ctx context.Context, id int) error
+	GetYamlTemplateByID(ctx context.Context, id int) (*model.K8sYamlTemplate, error)
+
+	// YamlTask
+	ListAllYamlTasks(ctx context.Context) ([]*model.K8sYamlTask, error)
+	CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
+	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
+	DeleteYamlTask(ctx context.Context, id int) error
+	GetYamlTaskByID(ctx context.Context, id int) (*model.K8sYamlTask, error)
 }
 
 type k8sDAO struct {
@@ -237,4 +245,64 @@ func (k *k8sDAO) DeleteYamlTemplate(ctx context.Context, id int) error {
 	}
 
 	return nil
+}
+
+func (k *k8sDAO) ListAllYamlTasks(ctx context.Context) ([]*model.K8sYamlTask, error) {
+	var tasks []*model.K8sYamlTask
+
+	if err := k.db.WithContext(ctx).Find(&tasks).Error; err != nil {
+		k.l.Error("ListAllYamlTasks 查询所有Yaml任务失败", zap.Error(err))
+		return nil, err
+	}
+
+	return tasks, nil
+}
+
+func (k *k8sDAO) CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
+	if err := k.db.WithContext(ctx).Create(&task).Error; err != nil {
+		k.l.Error("CreateYamlTask 创建Yaml任务失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (k *k8sDAO) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
+	if err := k.db.WithContext(ctx).Where("id = ?", task.ID).Updates(&task).Error; err != nil {
+		k.l.Error("UpdateYamlTask 更新Yaml任务失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (k *k8sDAO) DeleteYamlTask(ctx context.Context, id int) error {
+	if err := k.db.WithContext(ctx).Where("id = ?", id).Delete(&model.K8sYamlTask{}).Error; err != nil {
+		k.l.Error("DeleteYamlTask 删除Yaml任务失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (k *k8sDAO) GetYamlTemplateByID(ctx context.Context, id int) (*model.K8sYamlTemplate, error) {
+	var yaml *model.K8sYamlTemplate
+
+	if err := k.db.WithContext(ctx).Where("id = ?", id).First(&yaml).Error; err != nil {
+		k.l.Error("GetYamlTemplateByID 查询Yaml模板失败", zap.Error(err))
+		return nil, err
+	}
+
+	return yaml, nil
+}
+
+func (k *k8sDAO) GetYamlTaskByID(ctx context.Context, id int) (*model.K8sYamlTask, error) {
+	var task *model.K8sYamlTask
+
+	if err := k.db.WithContext(ctx).Where("id = ?", id).First(&task).Error; err != nil {
+		k.l.Error("GetYamlTaskByID 查询Yaml任务失败", zap.Error(err))
+		return nil, err
+	}
+
+	return task, nil
 }

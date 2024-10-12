@@ -17,9 +17,19 @@ import (
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	k8sErr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	yamlTask "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/yaml"
+)
+
+const (
+	TaskPending   = "Pending"
+	TaskFailed    = "Failed"
+	TaskSucceeded = "Succeeded"
 )
 
 type K8sService interface {
@@ -83,6 +93,17 @@ type K8sService interface {
 	UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
 	// DeleteYamlTemplate 删除 YAML 模板
 	DeleteYamlTemplate(ctx context.Context, id int) error
+
+	// GetYamlTaskList 获取 YAML 任务列表
+	GetYamlTaskList(ctx context.Context) ([]*model.K8sYamlTask, error)
+	// CreateYamlTask 创建 YAML 任务
+	CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
+	// UpdateYamlTask 更新 YAML 任务
+	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
+	// DeleteYamlTask 删除 YAML 任务
+	DeleteYamlTask(ctx context.Context, id int) error
+	// ApplyYamlTask 应用 YAML 任务
+	ApplyYamlTask(ctx context.Context, id int) error
 }
 
 type k8sService struct {
@@ -954,4 +975,128 @@ func (k *k8sService) UpdateYamlTemplate(ctx context.Context, template *model.K8s
 // DeleteYamlTemplate 删除 YAML 模板
 func (k *k8sService) DeleteYamlTemplate(ctx context.Context, id int) error {
 	return k.dao.DeleteYamlTemplate(ctx, id)
+}
+
+// GetYamlTaskList 获取 YAML 任务列表
+func (k *k8sService) GetYamlTaskList(ctx context.Context) ([]*model.K8sYamlTask, error) {
+	return k.dao.ListAllYamlTasks(ctx)
+}
+
+// CreateYamlTask 创建 YAML 任务
+func (k *k8sService) CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
+	// yaml not found
+	_, err := k.dao.GetYamlTemplateByID(ctx, task.TemplateID)
+	if err != nil {
+		return fmt.Errorf("yaml 模板不存在: %w", err)
+	}
+
+	// cluster not found
+	_, err = k.dao.GetClusterByName(ctx, task.ClusterName)
+	if err != nil {
+		return fmt.Errorf("集群不存在: %w", err)
+	}
+
+	return k.dao.CreateYamlTask(ctx, task)
+}
+
+// UpdateYamlTask 更新 YAML 任务
+func (k *k8sService) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
+	return k.dao.UpdateYamlTask(ctx, task)
+}
+
+// DeleteYamlTask 删除 YAML 任务
+func (k *k8sService) DeleteYamlTask(ctx context.Context, id int) error {
+	return k.dao.DeleteYamlTask(ctx, id)
+}
+
+// ApplyYamlTask 应用 YAML 任务
+func (k *k8sService) ApplyYamlTask(ctx context.Context, id int) error {
+	// 获取任务信息
+	task, err := k.dao.GetYamlTaskByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("yamlTask not found: %w", err)
+	}
+
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, task.ClusterName)
+	if err != nil {
+		return err
+	}
+
+	// 获取 Kubernetes 客户端
+	dynClient, err := k.client.GetDynamicClient(cluster.ID)
+	if err != nil {
+		return err
+	}
+
+	// 获取模板信息
+	taskTemplate, err := k.dao.GetYamlTemplateByID(ctx, task.TemplateID)
+	if err != nil {
+		return err
+	}
+
+	// 处理变量替换
+	yamlContent := taskTemplate.Content
+	for _, variable := range task.Variables {
+		parts := strings.SplitN(variable, "=", 2)
+		if len(parts) == 2 {
+			key := parts[0]
+			value := parts[1]
+			yamlContent = strings.ReplaceAll(yamlContent, fmt.Sprintf("${%s}", key), value)
+		}
+	}
+
+	// 解析 YAML 文件
+	jsonData, err := yamlTask.ToJSON([]byte(yamlContent))
+	if err != nil {
+		return fmt.Errorf("error converting YAML to JSON: %w", err)
+	}
+
+	// 创建 unstructured 对象
+	obj := &unstructured.Unstructured{}
+	if _, _, err = unstructured.UnstructuredJSONScheme.Decode(jsonData, nil, obj); err != nil {
+		return fmt.Errorf("error decoding JSON: %w", err)
+	}
+
+	// 获取 GVR (GroupVersionResource)
+	gvr := schema.GroupVersionResource{
+		Group:    obj.GetObjectKind().GroupVersionKind().Group,
+		Version:  obj.GetObjectKind().GroupVersionKind().Version,
+		Resource: getResourceName(obj.GetObjectKind().GroupVersionKind().Kind),
+	}
+
+	task.Status = TaskSucceeded
+	// 应用资源
+	if _, err = dynClient.Resource(gvr).Namespace(obj.GetNamespace()).Create(ctx, obj, metav1.CreateOptions{}); err != nil {
+		if k8sErr.IsAlreadyExists(err) {
+			// 处理资源已存在的情况
+			k.l.Warn("Resource already exists, consider updating it", zap.Error(err))
+		} else {
+			k.l.Error("ApplyYamlTask failed: ", zap.Error(err))
+		}
+		task.Status = TaskFailed
+		task.ApplyResult = err.Error()
+	}
+
+	// 更新任务状态
+	if err := k.dao.UpdateYamlTask(ctx, task); err != nil {
+		k.l.Error("UpdateYamlTask failed: ", zap.Error(err))
+	}
+
+	return err
+}
+
+// getResourceName 根据 Kind 获取资源名称
+func getResourceName(kind string) string {
+	switch kind {
+	case "Pod":
+		return "pods"
+	case "Service":
+		return "services"
+	case "Deployment":
+		return "deployments"
+	// 添加其他资源类型
+	default:
+		return strings.ToLower(kind) + "s"
+	}
 }

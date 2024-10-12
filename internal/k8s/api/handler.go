@@ -526,27 +526,110 @@ func (k *K8sHandler) DeleteYamlTemplate(ctx *gin.Context) {
 
 // GetYamlTaskList 获取 YAML 任务列表
 func (k *K8sHandler) GetYamlTaskList(ctx *gin.Context) {
-	// TODO: 实现获取 YAML 任务列表的逻辑
+	list, err := k.service.GetYamlTaskList(ctx)
+	if err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 // CreateYamlTask 创建新的 YAML 任务
 func (k *K8sHandler) CreateYamlTask(ctx *gin.Context) {
-	// TODO: 实现创建 YAML 任务的逻辑
+	var req model.K8sYamlTask
+
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	req.UserID = uc.Uid
+
+	if err := k.service.CreateYamlTask(ctx, &req); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // UpdateYamlTask 更新指定 ID 的 YAML 任务
 func (k *K8sHandler) UpdateYamlTask(ctx *gin.Context) {
-	// TODO: 实现更新 YAML 任务的逻辑
+	var req model.K8sYamlTask
+
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	id := ctx.Param("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
+		return
+	}
+
+	taskID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
+		return
+	}
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	req.ID = taskID
+	req.UserID = uc.Uid
+
+	if err := k.service.UpdateYamlTask(ctx, &req); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // ApplyYamlTask 应用指定 ID 的 YAML 任务
 func (k *K8sHandler) ApplyYamlTask(ctx *gin.Context) {
-	// TODO: 实现应用 YAML 任务的逻辑
+	id := ctx.Param("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
+		return
+	}
+
+	taskID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
+		return
+	}
+
+	if err := k.service.ApplyYamlTask(ctx, taskID); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // DeleteYamlTask 删除指定 ID 的 YAML 任务
 func (k *K8sHandler) DeleteYamlTask(ctx *gin.Context) {
-	// TODO: 实现删除 YAML 任务的逻辑
+	id := ctx.Param("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
+		return
+	}
+
+	taskID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
+		return
+	}
+
+	if err := k.service.DeleteYamlTask(ctx, taskID); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetClusterNamespacesForCascade 获取级联选择的命名空间列表
