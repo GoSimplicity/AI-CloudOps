@@ -359,8 +359,10 @@ type K8sPodRequest struct {
 }
 
 type K8sDeploymentRequest struct {
-	ClusterName    string             `json:"cluster_name" binding:"required"` // 集群名称，必填
-	Namespace      string             `json:"namespace" binding:"required"`    // 命名空间，必填
-	DeploymentName string             `json:"deployment_name"`                 // Deployment 名称，必填
-	Deployment     *appsv1.Deployment `json:"deployment"`                      // Deployment 对象，必填
+	ClusterName     string             `json:"cluster_name" binding:"required"` // 集群名称，必填
+	Namespace       string             `json:"namespace" binding:"required"`    // 命名空间，必填
+	DeploymentNames []string           `json:"deployment_names"`                // Deployment 名称，可选
+	ChangeKey       string             `json:"change_key"`                      // 修改的 Key，可选
+	ChangeValue     string             `json:"change_value"`                    // 修改的 Value，可选
+	Deployment      *appsv1.Deployment `json:"deployment"`                      // Deployment 对象, 可选
 }

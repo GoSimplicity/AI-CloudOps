@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
@@ -114,6 +116,8 @@ type K8sService interface {
 	UpdateDeployment(ctx context.Context, deployment *model.K8sDeploymentRequest) error
 	// DeleteDeployment 删除 Deployment
 	DeleteDeployment(ctx context.Context, clusterName, namespace, deploymentName string) error
+	// BatchRestartDeployments 批量重启 Deployment
+	BatchRestartDeployments(ctx context.Context, req *model.K8sDeploymentRequest) error
 }
 
 type k8sService struct {
@@ -1207,10 +1211,6 @@ func (k *k8sService) CreateDeployment(ctx context.Context, req *model.K8sDeploym
 	}
 
 	// 创建 Deployment
-	if req.Deployment.Namespace == "" {
-		req.Deployment.Namespace = req.Namespace
-	}
-
 	deploymentResult, err := kubeClient.AppsV1().Deployments(req.Deployment.Namespace).Create(ctx, req.Deployment, metav1.CreateOptions{})
 	if err != nil {
 		k.l.Error("创建 Deployment 失败", zap.Error(err))
@@ -1238,11 +1238,33 @@ func (k *k8sService) UpdateDeployment(ctx context.Context, req *model.K8sDeploym
 	}
 
 	// 更新 Deployment
-	if req.Deployment.Namespace == "" {
-		req.Deployment.Namespace = req.Namespace
+	deployment, err := kubeClient.AppsV1().Deployments(req.Namespace).Get(ctx, req.DeploymentNames[0], metav1.GetOptions{})
+	if err != nil {
+		k.l.Error("获取 Deployment 失败", zap.Error(err))
+		return err
 	}
 
-	deploymentResult, err := kubeClient.AppsV1().Deployments(req.Deployment.Namespace).Update(ctx, req.Deployment, metav1.UpdateOptions{})
+	if req.Deployment != nil {
+		deployment.Spec = req.Deployment.Spec
+	}
+
+	// 部分更新
+	if req.ChangeKey != "" && req.ChangeValue != "" {
+		switch req.ChangeKey {
+		case "image": // 更新镜像
+			deployment.Spec.Template.Spec.Containers[0].Image = req.ChangeValue
+		case "replicas": // 更新副本数
+			replicas, err := strconv.Atoi(req.ChangeValue)
+			if err != nil {
+				k.l.Error("副本数转换失败", zap.Error(err))
+				return err
+			}
+			replicas32 := int32(replicas)
+			deployment.Spec.Replicas = &replicas32
+		}
+	}
+
+	deploymentResult, err := kubeClient.AppsV1().Deployments(deployment.Namespace).Update(ctx, deployment, metav1.UpdateOptions{})
 	if err != nil {
 		k.l.Error("更新 Deployment 失败", zap.Error(err))
 		return err
@@ -1276,5 +1298,48 @@ func (k *k8sService) DeleteDeployment(ctx context.Context, clusterName, namespac
 	}
 
 	k.l.Info("删除 Deployment 成功", zap.String("deploymentName", deploymentName))
+	return nil
+}
+
+// BatchRestartDeployments 批量重启 Deployment
+func (k *k8sService) BatchRestartDeployments(ctx context.Context, req *model.K8sDeploymentRequest) error {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	for _, deploy := range req.DeploymentNames {
+		// 获取 Deployment
+		deployment, err := kubeClient.AppsV1().Deployments(req.Namespace).Get(ctx, deploy, metav1.GetOptions{})
+		if err != nil {
+			k.l.Error("获取 Deployment 失败", zap.Error(err))
+			return err
+		}
+
+		// 更新重启策略
+		if deployment.Spec.Template.Annotations == nil {
+			deployment.Spec.Template.Annotations = make(map[string]string)
+		}
+		deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+		// 更新 Deployment
+		_, err = kubeClient.AppsV1().Deployments(req.Namespace).Update(ctx, deployment, metav1.UpdateOptions{})
+		if err != nil {
+			k.l.Error("更新 Deployment 失败", zap.Error(err))
+			return err
+		}
+
+		k.l.Info("重启 Deployment 成功", zap.String("deploymentName", deploy))
+	}
+
 	return nil
 }
