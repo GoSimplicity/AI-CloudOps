@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	appsv1 "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 )
 
@@ -355,4 +356,11 @@ type ScheduleK8sNodesRequest struct {
 type K8sPodRequest struct {
 	ClusterName string    `json:"cluster_name" binding:"required"` // 集群名称，必填
 	Pod         *core.Pod `json:"pod" binding:"required"`          // Pod 对象，必填
+}
+
+type K8sDeploymentRequest struct {
+	ClusterName    string             `json:"cluster_name" binding:"required"` // 集群名称，必填
+	Namespace      string             `json:"namespace" binding:"required"`    // 命名空间，必填
+	DeploymentName string             `json:"deployment_name"`                 // Deployment 名称，必填
+	Deployment     *appsv1.Deployment `json:"deployment"`                      // Deployment 对象，必填
 }
