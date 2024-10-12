@@ -1088,6 +1088,7 @@ func (k *k8sService) ApplyYamlTask(ctx context.Context, id int) error {
 	}
 
 	task.Status = TaskSucceeded
+	task.ApplyResult = "success"
 	// 应用资源
 	if _, err = dynClient.Resource(gvr).Namespace(obj.GetNamespace()).Create(ctx, obj, metav1.CreateOptions{}); err != nil {
 		if k8sErr.IsAlreadyExists(err) {
