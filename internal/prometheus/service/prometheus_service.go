@@ -93,7 +93,7 @@ func NewPrometheusService(dao dao.PrometheusDao, cache cache.MonitorCache, l *za
 func (p *prometheusService) GetMonitorScrapePoolList(ctx context.Context, search *string) ([]*model.MonitorScrapePool, error) {
 	return pkg.HandleList(ctx, search,
 		p.dao.SearchMonitorScrapePoolsByName, // 搜索函数
-		p.dao.GetAllMonitorScrapePool)        // 获取所有函数
+		p.dao.GetAllMonitorScrapePool) // 获取所有函数
 }
 
 // CreateMonitorScrapePool 创建新的监控抓取池
@@ -127,21 +127,23 @@ func (p *prometheusService) CreateMonitorScrapePool(ctx context.Context, monitor
 // UpdateMonitorScrapePool 更新现有的监控抓取池
 func (p *prometheusService) UpdateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error {
 	// 确保要更新的抓取池存在
-	existingPool, err := p.dao.GetMonitorScrapePoolById(ctx, monitorScrapePool.ID)
+	pools, err := p.dao.GetAllMonitorScrapePool(ctx)
 	if err != nil {
 		p.l.Error("更新抓取池失败：获取抓取池时出错", zap.Error(err))
 		return err
 	}
-	if existingPool == nil {
-		return errors.New("抓取池不存在")
+	for _, pool := range pools {
+		if pool.ID == monitorScrapePool.ID {
+			continue
+		}
+
+		if pool.Name == monitorScrapePool.Name {
+			return errors.New("抓取池名称已存在")
+		}
 	}
 
 	// 检查新的抓取池 IP 是否已存在
-	exists, err := p.dao.CheckMonitorScrapePoolExists(ctx, monitorScrapePool)
-	if err != nil {
-		p.l.Error("更新抓取池失败：检查抓取池是否存在时出错", zap.Error(err))
-		return err
-	}
+	exists := pkg.CheckPoolIpExists(monitorScrapePool, pools)
 	if exists {
 		return errors.New("抓取池 IP 已存在")
 	}
@@ -194,17 +196,18 @@ func (p *prometheusService) DeleteMonitorScrapePool(ctx context.Context, id int)
 func (p *prometheusService) GetMonitorScrapeJobList(ctx context.Context, search *string) ([]*model.MonitorScrapeJob, error) {
 	return pkg.HandleList(ctx, search,
 		p.dao.SearchMonitorScrapeJobsByName, // 搜索函数
-		p.dao.GetAllMonitorScrapeJobs)       // 获取所有函数
+		p.dao.GetAllMonitorScrapeJobs) // 获取所有函数
 }
 
 // CreateMonitorScrapeJob 创建新的监控抓取作业
 func (p *prometheusService) CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
 	// 检查抓取作业是否已存在
-	exists, err := p.dao.CheckMonitorScrapeJobExists(ctx, monitorScrapeJob)
+	exists, err := p.dao.CheckMonitorScrapeJobExists(ctx, monitorScrapeJob.Name)
 	if err != nil {
 		p.l.Error("创建抓取作业失败：检查抓取作业是否存在时出错", zap.Error(err))
 		return err
 	}
+
 	if exists {
 		return errors.New("抓取作业已存在")
 	}
@@ -227,22 +230,13 @@ func (p *prometheusService) CreateMonitorScrapeJob(ctx context.Context, monitorS
 
 // UpdateMonitorScrapeJob 更新现有的监控抓取作业
 func (p *prometheusService) UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
-	// 确保要更新的抓取作业存在
-	existingJob, err := p.dao.GetMonitorScrapeJobById(ctx, monitorScrapeJob.ID)
-	if err != nil {
-		p.l.Error("更新抓取作业失败：获取抓取作业时出错", zap.Error(err))
-		return err
-	}
-	if existingJob == nil {
-		return errors.New("抓取作业不存在")
-	}
-
 	// 检查新的抓取作业名称是否已存在
-	exists, err := p.dao.CheckMonitorScrapeJobExists(ctx, monitorScrapeJob)
+	exists, err := p.dao.CheckMonitorScrapeJobExists(ctx, monitorScrapeJob.Name)
 	if err != nil {
 		p.l.Error("更新抓取作业失败：检查抓取作业是否存在时出错", zap.Error(err))
 		return err
 	}
+
 	if exists {
 		return errors.New("抓取作业名称已存在")
 	}
@@ -305,7 +299,7 @@ func (p *prometheusService) GetMonitorAlertManagerYaml(ctx context.Context, ip s
 func (p *prometheusService) GetMonitorOnDutyGroupList(ctx context.Context, searchName *string) ([]*model.MonitorOnDutyGroup, error) {
 	return pkg.HandleList(ctx, searchName,
 		p.dao.SearchMonitorOnDutyGroupByName, // 搜索函数
-		p.dao.GetAllMonitorOndutyGroup)       // 获取所有函数
+		p.dao.GetAllMonitorOndutyGroup) // 获取所有函数
 }
 
 // CreateMonitorOnDutyGroup 创建新的值班组
@@ -381,16 +375,6 @@ func (p *prometheusService) CreateMonitorOnDutyGroupChange(ctx context.Context, 
 
 // UpdateMonitorOnDutyGroup 更新现有的值班组
 func (p *prometheusService) UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error {
-	// 确保值班组存在
-	existingGroup, err := p.dao.GetMonitorOnDutyGroupById(ctx, monitorOnDutyGroup.ID)
-	if err != nil {
-		p.l.Error("更新值班组失败：获取值班组时出错", zap.Error(err))
-		return err
-	}
-	if existingGroup == nil {
-		return errors.New("值班组不存在")
-	}
-
 	// 获取成员用户信息
 	users, err := p.userDao.GetUserByUsernames(ctx, monitorOnDutyGroup.UserNames)
 	if err != nil {
@@ -495,7 +479,7 @@ func (p *prometheusService) GetMonitorOnDutyGroupFuturePlan(ctx context.Context,
 func (p *prometheusService) GetMonitorAlertManagerPoolList(ctx context.Context, searchName *string) ([]*model.MonitorAlertManagerPool, error) {
 	return pkg.HandleList(ctx, searchName,
 		p.dao.SearchMonitorAlertManagerPoolByName, // 搜索函数
-		p.dao.GetAllAlertManagerPools)             // 获取所有函数
+		p.dao.GetAllAlertManagerPools) // 获取所有函数
 }
 
 // CreateMonitorAlertManagerPool 创建新的 AlertManager 集群池
@@ -528,22 +512,14 @@ func (p *prometheusService) CreateMonitorAlertManagerPool(ctx context.Context, m
 
 // UpdateMonitorAlertManagerPool 更新现有的 AlertManager 集群池
 func (p *prometheusService) UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
-	// 确保 AlertManager 集群池存在
-	existingPool, err := p.dao.GetMonitorAlertManagerPoolById(ctx, monitorAlertManagerPool.ID)
+	alerts, err := p.dao.GetAllAlertManagerPools(ctx)
 	if err != nil {
 		p.l.Error("更新 AlertManager 集群池失败：获取集群池时出错", zap.Error(err))
 		return err
 	}
-	if existingPool == nil {
-		return errors.New("AlertManager 集群池不存在")
-	}
 
 	// 检查新的 AlertManager IP 是否已存在
-	exists, err := p.dao.CheckMonitorAlertManagerPoolExists(ctx, monitorAlertManagerPool)
-	if err != nil {
-		p.l.Error("更新 AlertManager 集群池失败：检查是否存在时出错", zap.Error(err))
-		return err
-	}
+	exists := pkg.CheckAlertIpExists(monitorAlertManagerPool, alerts)
 	if exists {
 		return errors.New("AlertManager 集群池 IP 已存在")
 	}
@@ -572,6 +548,7 @@ func (p *prometheusService) DeleteMonitorAlertManagerPool(ctx context.Context, i
 		p.l.Error("删除 AlertManager 集群池失败：获取关联发送组时出错", zap.Error(err))
 		return err
 	}
+
 	if len(sendGroups) > 0 {
 		return errors.New("AlertManager 集群池存在关联发送组，无法删除")
 	}
@@ -607,6 +584,7 @@ func (p *prometheusService) CreateMonitorSendGroup(ctx context.Context, monitorS
 		p.l.Error("创建发送组失败：检查发送组是否存在时出错", zap.Error(err))
 		return err
 	}
+
 	if exists {
 		return errors.New("发送组已存在")
 	}
@@ -628,22 +606,13 @@ func (p *prometheusService) CreateMonitorSendGroup(ctx context.Context, monitorS
 
 // UpdateMonitorSendGroup 更新发送组
 func (p *prometheusService) UpdateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error {
-	// 确保发送组存在
-	existingGroup, err := p.dao.GetMonitorSendGroupById(ctx, monitorSendGroup.ID)
-	if err != nil {
-		p.l.Error("更新发送组失败：获取发送组时出错", zap.Error(err))
-		return err
-	}
-	if existingGroup == nil {
-		return errors.New("发送组不存在")
-	}
-
 	// 检查发送组名称是否重复
 	exists, err := p.dao.CheckMonitorSendGroupNameExists(ctx, monitorSendGroup)
 	if err != nil {
 		p.l.Error("更新发送组失败：检查发送组名称时出错", zap.Error(err))
 		return err
 	}
+
 	if exists {
 		return errors.New("发送组名称已存在")
 	}
@@ -671,6 +640,7 @@ func (p *prometheusService) DeleteMonitorSendGroup(ctx context.Context, id int) 
 		p.l.Error("删除发送组失败：获取关联资源时出错", zap.Error(err))
 		return err
 	}
+
 	if len(associatedResources) > 0 {
 		return errors.New("发送组存在关联资源，无法删除")
 	}
@@ -710,6 +680,7 @@ func (p *prometheusService) CreateMonitorAlertRule(ctx context.Context, monitorA
 		p.l.Error("创建告警规则失败：检查告警规则是否存在时出错", zap.Error(err))
 		return err
 	}
+
 	if exists {
 		return errors.New("告警规则已存在")
 	}
@@ -731,22 +702,13 @@ func (p *prometheusService) CreateMonitorAlertRule(ctx context.Context, monitorA
 
 // UpdateMonitorAlertRule 更新告警规则
 func (p *prometheusService) UpdateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error {
-	// 确保告警规则存在
-	existingRule, err := p.dao.GetMonitorAlertRuleById(ctx, monitorAlertRule.ID)
-	if err != nil {
-		p.l.Error("更新告警规则失败：获取告警规则时出错", zap.Error(err))
-		return err
-	}
-	if existingRule == nil {
-		return errors.New("告警规则不存在")
-	}
-
 	// 检查告警规则名称是否重复
 	exists, err := p.dao.CheckMonitorAlertRuleNameExists(ctx, monitorAlertRule)
 	if err != nil {
 		p.l.Error("更新告警规则失败：检查告警规则名称时出错", zap.Error(err))
 		return err
 	}
+
 	if exists {
 		return errors.New("告警规则名称已存在")
 	}
@@ -825,6 +787,7 @@ func (p *prometheusService) BatchDeleteMonitorAlertRule(ctx context.Context, ids
 			return fmt.Errorf("删除告警规则 ID %d 失败: %v", id, err)
 		}
 	}
+
 	return nil
 }
 
@@ -1108,6 +1071,7 @@ func (p *prometheusService) CreateMonitorRecordRule(ctx context.Context, monitor
 		p.l.Error("创建记录规则失败：检查记录规则是否存在时出错", zap.Error(err))
 		return err
 	}
+
 	if exists {
 		return errors.New("记录规则已存在")
 	}
@@ -1129,26 +1093,6 @@ func (p *prometheusService) CreateMonitorRecordRule(ctx context.Context, monitor
 
 // UpdateMonitorRecordRule 更新记录规则
 func (p *prometheusService) UpdateMonitorRecordRule(ctx context.Context, monitorRecordRule *model.MonitorRecordRule) error {
-	// 确保记录规则存在
-	existingRule, err := p.dao.GetMonitorRecordRuleById(ctx, monitorRecordRule.ID)
-	if err != nil {
-		p.l.Error("更新记录规则失败：获取记录规则时出错", zap.Error(err))
-		return err
-	}
-	if existingRule == nil {
-		return errors.New("记录规则不存在")
-	}
-
-	// 检查记录规则名称是否重复
-	exists, err := p.dao.CheckMonitorRecordRuleNameExists(ctx, monitorRecordRule)
-	if err != nil {
-		p.l.Error("更新记录规则失败：检查记录规则名称时出错", zap.Error(err))
-		return err
-	}
-	if exists {
-		return errors.New("记录规则名称已存在")
-	}
-
 	// 更新记录规则
 	if err := p.dao.UpdateMonitorRecordRule(ctx, monitorRecordRule); err != nil {
 		p.l.Error("更新记录规则失败", zap.Error(err))
@@ -1190,6 +1134,7 @@ func (p *prometheusService) BatchDeleteMonitorRecordRule(ctx context.Context, id
 			return fmt.Errorf("删除记录规则 ID %d 失败: %v", id, err)
 		}
 	}
+
 	return nil
 }
 
