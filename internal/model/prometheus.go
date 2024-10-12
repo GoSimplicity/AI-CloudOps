@@ -19,15 +19,15 @@ type MonitorAlertEvent struct {
 	Labels        StringList `json:"labels,omitempty" gorm:"type:text;comment:标签组，格式为 key=v"`                                // 标签组，格式为 key=v
 
 	// 前端使用字段
-	Key           string            `json:"key" gorm:"-"`                     // 前端表格使用的Key
-	AlertRuleName string            `json:"alertRuleName,omitempty" gorm:"-"` // 前端表格显示的告警规则名称
-	SendGroupName string            `json:"sendGroupName,omitempty" gorm:"-"` // 前端表格显示的发送组名称
-	Alert         template.Alert    `json:"alert,omitempty" gorm:"-"`         // 告警详情
-	SendGroup     *MonitorSendGroup `json:"sendGroup,omitempty" gorm:"-"`     // 发送组对象
-	RenLingUser   *User             `json:"renLingUser,omitempty" gorm:"-"`   // 认领告警的用户对象
-	Rule          *MonitorAlertRule `json:"rule,omitempty" gorm:"-"`          // 告警规则对象
-	LabelsM       map[string]string `json:"labelsM,omitempty" gorm:"-"`       // 标签键值对映射
-	AnnotationsM  map[string]string `json:"annotationsM,omitempty" gorm:"-"`  // 注释键值对映射
+	Key                string            `json:"key" gorm:"-"`                          // 前端表格使用的Key
+	AlertRuleName      string            `json:"alertRuleName,omitempty" gorm:"-"`      // 前端表格显示的告警规则名称
+	SendGroupName      string            `json:"sendGroupName,omitempty" gorm:"-"`      // 前端表格显示的发送组名称
+	Alert              template.Alert    `json:"alert,omitempty" gorm:"-"`              // 告警详情
+	SendGroup          *MonitorSendGroup `json:"sendGroup,omitempty" gorm:"-"`          // 发送组对象
+	RenLingUser        *User             `json:"renLingUser,omitempty" gorm:"-"`        // 认领告警的用户对象
+	Rule               *MonitorAlertRule `json:"rule,omitempty" gorm:"-"`               // 告警规则对象
+	LabelsMatcher      map[string]string `json:"labelsMatcher,omitempty" gorm:"-"`      // 标签键值对映射
+	AnnotationsMatcher map[string]string `json:"annotationsMatcher,omitempty" gorm:"-"` // 注释键值对映射
 }
 
 // MonitorAlertRule 告警规则的配置
@@ -232,4 +232,18 @@ type MonitorScrapePool struct {
 	ExternalLabelsFront string `json:"externalLabelsFront,omitempty" gorm:"-"` // 前端显示的ExternalLabels字符串
 	Key                 string `json:"key" gorm:"-"`                           // 前端表格使用的Key
 	CreateUserName      string `json:"createUserName,omitempty" gorm:"-"`      // 创建者用户名，用于前端展示
+}
+
+type AlertEventSilenceRequest struct {
+	UseName bool   `json:"useName"`
+	Time    string `json:"time"`
+}
+
+type BatchEventAlertSilenceRequest struct {
+	IDs []int `json:"ids" binding:"required"`
+	AlertEventSilenceRequest
+}
+
+type BatchRequest struct {
+	IDs []int `json:"ids" binding:"required"`
 }

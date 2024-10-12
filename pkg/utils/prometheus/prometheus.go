@@ -1,8 +1,12 @@
 package prometheus
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/prometheus/alertmanager/pkg/labels"
 	pcc "github.com/prometheus/common/config"
 	pm "github.com/prometheus/common/model"
 	promModel "github.com/prometheus/common/model"
@@ -10,6 +14,9 @@ import (
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/promql/parser"
+	"go.uber.org/zap"
+	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -150,4 +157,84 @@ func PromqlExprCheck(expr string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func BuildMatchers(alertEvent *model.MonitorAlertEvent, l *zap.Logger, useName bool) ([]*labels.Matcher, error) {
+	var matchers []*labels.Matcher
+	if useName {
+		// 如果 useName 为 true，仅使用 alertname 匹配器
+		alertName, exists := alertEvent.LabelsMatcher["alertname"]
+		if !exists {
+			l.Error("EventAlertSilence failed: alertname missing in LabelsMatcher", zap.Int("id", alertEvent.ID))
+			return nil, fmt.Errorf("alertname missing in LabelsMatcher")
+		}
+		matchers = []*labels.Matcher{
+			{
+				Type:  labels.MatchEqual,
+				Name:  "alertname",
+				Value: alertName,
+			},
+		}
+	} else {
+		// 否则，使用所有标签匹配器
+		for key, val := range alertEvent.LabelsMatcher {
+			matcher := &labels.Matcher{
+				Type:  labels.MatchEqual,
+				Name:  key,
+				Value: val,
+			}
+			matchers = append(matchers, matcher)
+		}
+	}
+	return matchers, nil
+}
+
+func SendSilenceRequest(ctx context.Context, l *zap.Logger, url string, data []byte) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(data))
+	if err != nil {
+		l.Error("sendSilenceRequest failed: create HTTP request error", zap.Error(err))
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		l.Error("sendSilenceRequest failed: send HTTP request error", zap.Error(err))
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		l.Error("sendSilenceRequest failed: AlertManager response error", zap.Int("status", resp.StatusCode), zap.String("body", string(body)))
+		return "", fmt.Errorf("AlertManager request failed, status: %d, response: %s", resp.StatusCode, string(body))
+	}
+
+	// 解析响应
+	var result struct {
+		Status string `json:"status"`
+		Data   struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		l.Error("sendSilenceRequest failed: decode response error", zap.Error(err))
+		return "", err
+	}
+
+	if result.Status != "success" {
+		l.Error("sendSilenceRequest failed: AlertManager status not success", zap.String("status", result.Status))
+		return "", fmt.Errorf("AlertManager status not success, status: %s", result.Status)
+	}
+
+	return result.Data.ID, nil
+}
+
+// HandleList 处理搜索或获取所有记录
+func HandleList[T any](ctx context.Context, search *string, searchFunc func(ctx context.Context, name string) ([]*T, error), listFunc func(ctx context.Context) ([]*T, error)) ([]*T, error) {
+	if search != nil && *search != "" {
+		return searchFunc(ctx, *search)
+	}
+	return listFunc(ctx)
 }

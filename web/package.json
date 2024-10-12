@@ -118,6 +118,7 @@
     ]
   },
   "dependencies": {
+    "jiti": "^2.3.3",
     "vue-request": "^2.0.4"
   }
 }
