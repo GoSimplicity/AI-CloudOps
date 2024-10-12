@@ -15,6 +15,7 @@ import (
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	k8sErr "k8s.io/apimachinery/pkg/api/errors"
@@ -104,6 +105,15 @@ type K8sService interface {
 	DeleteYamlTask(ctx context.Context, id int) error
 	// ApplyYamlTask 应用 YAML 任务
 	ApplyYamlTask(ctx context.Context, id int) error
+
+	// GetDeploymentsByNamespace 获取指定命名空间的 Deployment 列表
+	GetDeploymentsByNamespace(ctx context.Context, cluserName, namespace string) ([]*appsv1.Deployment, error)
+	// CreateDeployment 创建 Deployment
+	CreateDeployment(ctx context.Context, deployment *model.K8sDeploymentRequest) error
+	// UpdateDeployment 更新 Deployment
+	UpdateDeployment(ctx context.Context, deployment *model.K8sDeploymentRequest) error
+	// DeleteDeployment 删除 Deployment
+	DeleteDeployment(ctx context.Context, clusterName, namespace, deploymentName string) error
 }
 
 type k8sService struct {
@@ -1147,4 +1157,124 @@ func getResourceName(kind string) string {
 	default:
 		return strings.ToLower(kind) + "s"
 	}
+}
+
+// GetDeploymentsByNamespace 获取指定命名空间的 Deployment 列表
+func (k *k8sService) GetDeploymentsByNamespace(ctx context.Context, clusterName, namespace string) ([]*appsv1.Deployment, error) {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, clusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取 Deployment 列表
+	deployments, err := kubeClient.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		k.l.Error("获取 Deployment 列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	result := make([]*appsv1.Deployment, 0, len(deployments.Items))
+	for _, deployment := range deployments.Items {
+		result = append(result, &deployment)
+	}
+
+	return result, nil
+}
+
+// CreateDeployment 创建 Deployment
+func (k *k8sService) CreateDeployment(ctx context.Context, req *model.K8sDeploymentRequest) error {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	// 创建 Deployment
+	if req.Deployment.Namespace == "" {
+		req.Deployment.Namespace = req.Namespace
+	}
+
+	deploymentResult, err := kubeClient.AppsV1().Deployments(req.Deployment.Namespace).Create(ctx, req.Deployment, metav1.CreateOptions{})
+	if err != nil {
+		k.l.Error("创建 Deployment 失败", zap.Error(err))
+		return err
+	}
+
+	k.l.Info("创建 Deployment 成功", zap.String("deploymentName", deploymentResult.Name))
+	return nil
+}
+
+// UpdateDeployment 更新 Deployment
+func (k *k8sService) UpdateDeployment(ctx context.Context, req *model.K8sDeploymentRequest) error {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	// 更新 Deployment
+	if req.Deployment.Namespace == "" {
+		req.Deployment.Namespace = req.Namespace
+	}
+
+	deploymentResult, err := kubeClient.AppsV1().Deployments(req.Deployment.Namespace).Update(ctx, req.Deployment, metav1.UpdateOptions{})
+	if err != nil {
+		k.l.Error("更新 Deployment 失败", zap.Error(err))
+		return err
+	}
+
+	k.l.Info("更新 Deployment 成功", zap.String("deploymentName", deploymentResult.Name))
+	return nil
+}
+
+// DeleteDeployment 删除 Deployment
+func (k *k8sService) DeleteDeployment(ctx context.Context, clusterName, namespace, deploymentName string) error {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, clusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	// 删除 Deployment
+	err = kubeClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metav1.DeleteOptions{})
+	if err != nil {
+		k.l.Error("删除 Deployment 失败", zap.Error(err))
+		return err
+	}
+
+	k.l.Info("删除 Deployment 成功", zap.String("deploymentName", deploymentName))
+	return nil
 }
