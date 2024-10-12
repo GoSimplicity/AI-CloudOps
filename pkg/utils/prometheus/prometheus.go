@@ -50,6 +50,10 @@ func CheckAlertIpExists(req *model.MonitorAlertManagerPool, rules []*model.Monit
 	ips := make(map[string]string)
 
 	for _, rule := range rules {
+		if req.ID == rule.ID {
+			continue
+		}
+
 		for _, ip := range rule.AlertManagerInstances {
 			ips[ip] = rule.Name
 		}
