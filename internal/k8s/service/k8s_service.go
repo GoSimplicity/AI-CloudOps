@@ -1001,6 +1001,28 @@ func (k *k8sService) CreateYamlTask(ctx context.Context, task *model.K8sYamlTask
 
 // UpdateYamlTask 更新 YAML 任务
 func (k *k8sService) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
+	_, err := k.dao.GetYamlTaskByID(ctx, task.ID)
+	if err != nil {
+		return fmt.Errorf("yaml 任务不存在: %w", err)
+	}
+
+	if task.TemplateID != 0 {
+		_, err := k.dao.GetYamlTemplateByID(ctx, task.TemplateID)
+		if err != nil {
+			return fmt.Errorf("yaml 模板不存在: %w", err)
+		}
+	}
+
+	if task.ClusterName != "" {
+		_, err := k.dao.GetClusterByName(ctx, task.ClusterName)
+		if err != nil {
+			return fmt.Errorf("集群不存在: %w", err)
+		}
+	}
+
+	task.Status = TaskPending
+	task.ApplyResult = ""
+
 	return k.dao.UpdateYamlTask(ctx, task)
 }
 
