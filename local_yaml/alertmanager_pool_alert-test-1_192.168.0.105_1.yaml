@@ -9,9 +9,21 @@ route:
         - key2
         - val2
     continue: false
+    routes:
+        - receiver: aiops-test
+          matchers:
+            - alert_send_group="1"
+          continue: true
+          repeat_interval: 30s
     group_wait: 5s
     group_interval: 5s
     repeat_interval: 5s
 receivers:
     - name: admin
+    - name: aiops-test
+      webhook_configs:
+        - send_resolved: true
+          url: null
+          url_file: ./local_yaml/webhook_url_1.txt
+          max_alerts: 0
 templates: []
