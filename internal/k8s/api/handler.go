@@ -98,8 +98,8 @@ func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
 	{
 		deployments.GET("/", k.GetDeployListByNamespace) // 根据命名空间获取部署列表
 		deployments.POST("/", k.CreateDeployment)        // 创建新的部署
-		deployments.PUT("/", k.UpdateDeployment)         // 更新指定 deploymentName 的部署
-		deployments.DELETE("/", k.DeleteDeployment)      // 删除指定 deploymentName 的部署
+		deployments.PUT("/:name", k.UpdateDeployment)    // 更新指定 deploymentName 的部署
+		deployments.DELETE("/:name", k.DeleteDeployment) // 删除指定 deploymentName 的部署
 
 		deployments.PUT("/:name/image", k.SetDeploymentContainerImage) // 设置部署中容器的镜像
 		deployments.POST("/:name/scale", k.ScaleDeployment)            // 扩缩指定 ID 的部署
