@@ -1,5 +1,7 @@
 server:
   port: "8888"
+webhook:
+  port: "8889"
 jwt:
   key1: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"
   key2: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0z"
@@ -16,7 +18,7 @@ prometheus:
   local_yaml_dir: ./local_yaml
   enable_alert: 0  # 1 开启告警 0 关闭告警
   enable_record: 0 # 1 开启记录 0 关闭记录
-  alert_webhook_addr: "http://192.168.0.105:8081/receive"
+  alert_webhook_addr: "http://192.168.0.105:8889/receive"
   httpSdAPI: "http://192.168.0.105:8888/api/not_auth/getTreeNodeBindIps"
 mock:
   enabled: false # 是否开启mock

@@ -1,8 +1,13 @@
 package apiresponse
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+	"io/ioutil"
 	"net/http"
+	"time"
 )
 
 // LabelOption 通用返回结构体，用于前后端交互的数据格式
@@ -187,4 +192,49 @@ func ForbiddenError(c *gin.Context, message string) {
 // InternalServerErrorWithDetails 带详细数据和消息的服务器内部错误返回
 func InternalServerErrorWithDetails(c *gin.Context, data interface{}, message string) {
 	InternalServerError(c, StatusError, data, message)
+}
+
+// PostWithJsonString 发送带 JSON 数据的 POST 请求
+func PostWithJsonString(l *zap.Logger, funcName string, timeout int, url string, jsonStr string, paramsMap map[string]string, headerMap map[string]string) ([]byte, error) {
+	client := &http.Client{Timeout: time.Duration(timeout) * time.Second}
+	reader := bytes.NewReader([]byte(jsonStr))
+
+	req, err := http.NewRequest("POST", url, reader)
+	if err != nil {
+		l.Error(fmt.Sprintf("[PostWithJsonString.NewRequest.error][funcName:%s][url:%s][err:%v]", funcName, url, err))
+		return nil, err
+	}
+
+	// 添加URL参数
+	q := req.URL.Query()
+	for k, v := range paramsMap {
+		q.Add(k, v)
+	}
+	req.URL.RawQuery = q.Encode()
+
+	// 添加Header
+	for k, v := range headerMap {
+		req.Header.Add(k, v)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		l.Error(fmt.Sprintf("[PostWithJsonString.Do.error][funcName:%s][url:%s][err:%v]", funcName, url, err))
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := ioutil.ReadAll(resp.Body) // 忽略错误，记录原始响应体
+		l.Error(fmt.Sprintf("[PostWithJsonString.StatusCode.notOK][funcName:%s][url:%s][code:%d][resp_body:%s]", funcName, url, resp.StatusCode, string(bodyBytes)))
+		return nil, fmt.Errorf("server returned HTTP status %s", resp.Status)
+	}
+
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		l.Error(fmt.Sprintf("[PostWithJsonString.ReadBody.error][funcName:%s][url:%s][err:%v]", funcName, url, err))
+		return nil, err
+	}
+
+	return bodyBytes, nil
 }
