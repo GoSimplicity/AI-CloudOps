@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/prometheus/prometheus/model/rulefmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -269,8 +268,8 @@ func (mc *monitorCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePool
 		// 配置 Alertmanager
 		alertConfig := &pc.AlertmanagerConfig{
 			APIVersion: "v2",
-			ServiceDiscoveryConfigs: discovery.Configs{ // 服务发现配置
-				&discovery.StaticConfig{
+			ServiceDiscoveryConfigs: []discovery.Config{ // 服务发现配置
+				discovery.StaticConfig{
 					{
 						Targets: []pm.LabelSet{
 							{
@@ -443,10 +442,9 @@ func (mc *monitorCache) GenerateAlertManagerMainConfig(ctx context.Context) erro
 			if oneConfig.Receivers == nil {
 				oneConfig.Receivers = receivers
 			} else {
-				oneConfig.Receivers = append(receivers, oneConfig.Receivers...)
+				oneConfig.Receivers = append(oneConfig.Receivers, receivers...)
 			}
 		}
-
 		// 序列化配置为YAML格式
 		config, err := yaml.Marshal(oneConfig)
 		if err != nil {
@@ -456,7 +454,6 @@ func (mc *monitorCache) GenerateAlertManagerMainConfig(ctx context.Context) erro
 			)
 			continue
 		}
-
 		mc.l.Debug("[监控模块]根据alert配置生成AlertManager主配置文件成功",
 			zap.String("池子", pool.Name),
 			zap.ByteString("配置", config),
@@ -500,7 +497,7 @@ func (mc *monitorCache) GenerateAlertManagerMainConfigOnePool(pool *model.Monito
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		resolveTimeout = 5
+		resolveTimeout, _ = pm.ParseDuration("5s")
 	}
 
 	// 解析分组第一次等待时间
@@ -510,7 +507,7 @@ func (mc *monitorCache) GenerateAlertManagerMainConfigOnePool(pool *model.Monito
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		groupWait = 5
+		groupWait, _ = pm.ParseDuration("5s")
 	}
 
 	// 解析分组等待间隔时间
@@ -520,7 +517,7 @@ func (mc *monitorCache) GenerateAlertManagerMainConfigOnePool(pool *model.Monito
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		groupInterval = 5
+		groupInterval, _ = pm.ParseDuration("5s")
 	}
 
 	// 解析重复发送时间
@@ -530,7 +527,7 @@ func (mc *monitorCache) GenerateAlertManagerMainConfigOnePool(pool *model.Monito
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		repeatInterval = 5
+		repeatInterval, _ = pm.ParseDuration("5s")
 	}
 
 	// 生成 Alertmanager 默认配置
@@ -586,7 +583,7 @@ func (mc *monitorCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Conte
 				zap.Error(err),
 				zap.String("发送组", sendGroup.Name),
 			)
-			repeatInterval = 5
+			repeatInterval, _ = pm.ParseDuration("5s")
 		}
 
 		// 创建 Matcher 并设置匹配条件
@@ -615,9 +612,11 @@ func (mc *monitorCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Conte
 			sendGroup.ID,
 		)
 
-		parsedURL, err := url.Parse(webHookURL)
+		// 将 URL 写入到 .txt 文件
+		urlFilePath := fmt.Sprintf("%s/webhook_url_%d.txt", mc.localYamlDir, sendGroup.ID)
+		err = os.WriteFile(urlFilePath, []byte(webHookURL), 0644)
 		if err != nil {
-			mc.l.Error("[监控模块]解析Webhook URL失败",
+			mc.l.Error("[监控模块]写入Webhook URL文件失败",
 				zap.Error(err),
 				zap.String("Webhook URL", webHookURL),
 				zap.String("发送组", sendGroup.Name),
@@ -633,11 +632,10 @@ func (mc *monitorCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Conte
 					NotifierConfig: altconfig.NotifierConfig{ // Notifier配置 用于告警通知
 						VSendResolved: sendGroup.SendResolved == 1, // 在告警解决时是否发送通知
 					},
-					URL: &altconfig.SecretURL{URL: parsedURL}, // 告警发送的URL地址
+					URLFile: urlFilePath,
 				},
 			},
 		}
-
 		// 添加到routes和receivers中
 		routes = append(routes, route)
 		receivers = append(receivers, receiver)
@@ -722,7 +720,7 @@ func (mc *monitorCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx context
 				zap.Error(err),
 				zap.String("规则", rule.Name),
 			)
-			ft = 15
+			ft, _ = pm.ParseDuration("5s")
 		}
 		oneRule := rulefmt.Rule{
 			Alert:       rule.Name,         // 告警名称
@@ -854,7 +852,7 @@ func (mc *monitorCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx contex
 				zap.Error(err),
 				zap.String("规则", rule.Name),
 			)
-			forD = 15
+			forD, _ = pm.ParseDuration("5s")
 		}
 		oneRule := rulefmt.Rule{
 			Alert: rule.Name, // 告警名称

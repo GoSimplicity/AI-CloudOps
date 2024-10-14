@@ -26,7 +26,6 @@ func NewK8sHandler(service service.K8sService, l *zap.Logger) *K8sHandler {
 
 // RegisterRouters 注册所有 Kubernetes 相关的路由
 func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
-	// TODO delete hello, avoid validate for test
 	k8sGroup := server.Group("/api/k8s")
 
 	// 集群相关路由
@@ -99,13 +98,13 @@ func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
 	{
 		deployments.GET("/", k.GetDeployListByNamespace) // 根据命名空间获取部署列表
 		deployments.POST("/", k.CreateDeployment)        // 创建新的部署
-		deployments.PUT("/:id", k.UpdateDeployment)      // 更新指定 ID 的部署
-		deployments.DELETE("/:id", k.DeleteDeployment)   // 删除指定 ID 的部署
+		deployments.PUT("/:name", k.UpdateDeployment)    // 更新指定 deploymentName 的部署
+		deployments.DELETE("/:name", k.DeleteDeployment) // 删除指定 deploymentName 的部署
 
-		deployments.PUT("/:id/image", k.SetDeploymentContainerImage) // 设置部署中容器的镜像
-		deployments.POST("/:id/scale", k.ScaleDeployment)            // 扩缩指定 ID 的部署
-		deployments.POST("/restart", k.BatchRestartDeployments)      // 批量重启部署
-		deployments.GET("/:id/yaml", k.GetDeployYaml)                // 获取指定部署的 YAML 配置
+		deployments.PUT("/:name/image", k.SetDeploymentContainerImage) // 设置部署中容器的镜像
+		deployments.POST("/:name/scale", k.ScaleDeployment)            // 扩缩指定 ID 的部署
+		deployments.POST("/restart", k.BatchRestartDeployments)        // 批量重启部署
+		deployments.GET("/:name/yaml", k.GetDeployYaml)                // 获取指定部署的 YAML 配置
 	}
 
 	// ConfigMap 相关路由
@@ -237,13 +236,13 @@ func (k *K8sHandler) DeleteCluster(ctx *gin.Context) {
 func (k *K8sHandler) GetNodeList(ctx *gin.Context) {
 	id := ctx.Query("id")
 	if id == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
 
 	clusterID, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, "id 非整数")
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
 		return
 	}
 
@@ -260,19 +259,19 @@ func (k *K8sHandler) GetNodeList(ctx *gin.Context) {
 func (k *K8sHandler) GetNodeDetail(ctx *gin.Context) {
 	id := ctx.Query("id")
 	if id == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
 
 	clusterID, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, "id 非整数")
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
 		return
 	}
 
 	name := ctx.Param("name")
 	if name == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+		apiresponse.BadRequestError(ctx, "缺少 'name' 参数")
 		return
 	}
 
@@ -289,19 +288,19 @@ func (k *K8sHandler) GetNodeDetail(ctx *gin.Context) {
 func (k *K8sHandler) GetPodsListByNodeName(ctx *gin.Context) {
 	id := ctx.Query("id")
 	if id == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+		apiresponse.BadRequestError(ctx, "'id' 参数缺失")
 		return
 	}
 
 	clusterID, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, "id 非整数")
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
 		return
 	}
 
 	name := ctx.Param("name")
 	if name == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+		apiresponse.BadRequestError(ctx, "'name' 参数缺失")
 		return
 	}
 
@@ -440,47 +439,196 @@ func (k *K8sHandler) DrainPods(ctx *gin.Context) {
 
 // GetYamlTemplateList 获取 YAML 模板列表
 func (k *K8sHandler) GetYamlTemplateList(ctx *gin.Context) {
-	// TODO: 实现获取 YAML 模板列表的逻辑
+	list, err := k.service.GetYamlTemplateList(ctx)
+	if err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 // CreateYamlTemplate 创建新的 YAML 模板
 func (k *K8sHandler) CreateYamlTemplate(ctx *gin.Context) {
-	// TODO: 实现创建 YAML 模板的逻辑
+	var req model.K8sYamlTemplate
+
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	req.UserID = uc.Uid
+
+	if err := k.service.CreateYamlTemplate(ctx, &req); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // UpdateYamlTemplate 更新指定 ID 的 YAML 模板
 func (k *K8sHandler) UpdateYamlTemplate(ctx *gin.Context) {
-	// TODO: 实现更新 YAML 模板的逻辑
+	var req model.K8sYamlTemplate
+
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	id := ctx.Param("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
+		return
+	}
+
+	yamlId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
+		return
+	}
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	req.ID = yamlId
+	req.UserID = uc.Uid
+
+	if err := k.service.UpdateYamlTemplate(ctx, &req); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // DeleteYamlTemplate 删除指定 ID 的 YAML 模板
 func (k *K8sHandler) DeleteYamlTemplate(ctx *gin.Context) {
-	// TODO: 实现删除 YAML 模板的逻辑
+	id := ctx.Param("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
+		return
+	}
+
+	yamlId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
+		return
+	}
+
+	if err := k.service.DeleteYamlTemplate(ctx, yamlId); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetYamlTaskList 获取 YAML 任务列表
 func (k *K8sHandler) GetYamlTaskList(ctx *gin.Context) {
-	// TODO: 实现获取 YAML 任务列表的逻辑
+	list, err := k.service.GetYamlTaskList(ctx)
+	if err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }
 
 // CreateYamlTask 创建新的 YAML 任务
 func (k *K8sHandler) CreateYamlTask(ctx *gin.Context) {
-	// TODO: 实现创建 YAML 任务的逻辑
+	var req model.K8sYamlTask
+
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	req.UserID = uc.Uid
+
+	if err := k.service.CreateYamlTask(ctx, &req); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // UpdateYamlTask 更新指定 ID 的 YAML 任务
 func (k *K8sHandler) UpdateYamlTask(ctx *gin.Context) {
-	// TODO: 实现更新 YAML 任务的逻辑
+	var req model.K8sYamlTask
+
+	if err := ctx.ShouldBind(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	id := ctx.Param("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
+		return
+	}
+
+	taskID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
+		return
+	}
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	req.ID = taskID
+	req.UserID = uc.Uid
+
+	if err := k.service.UpdateYamlTask(ctx, &req); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // ApplyYamlTask 应用指定 ID 的 YAML 任务
 func (k *K8sHandler) ApplyYamlTask(ctx *gin.Context) {
-	// TODO: 实现应用 YAML 任务的逻辑
+	id := ctx.Param("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
+		return
+	}
+
+	taskID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
+		return
+	}
+
+	if err := k.service.ApplyYamlTask(ctx, taskID); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // DeleteYamlTask 删除指定 ID 的 YAML 任务
 func (k *K8sHandler) DeleteYamlTask(ctx *gin.Context) {
-	// TODO: 实现删除 YAML 任务的逻辑
+	id := ctx.Param("id")
+	if id == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
+		return
+	}
+
+	taskID, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, "'id' 非整数")
+		return
+	}
+
+	if err := k.service.DeleteYamlTask(ctx, taskID); err != nil {
+		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetClusterNamespacesForCascade 获取级联选择的命名空间列表
@@ -496,14 +644,14 @@ func (k *K8sHandler) GetClusterNamespacesForCascade(ctx *gin.Context) {
 
 // GetClusterNamespacesForSelect 获取用于选择的命名空间列表
 func (k *K8sHandler) GetClusterNamespacesForSelect(ctx *gin.Context) {
-	name := ctx.Query("name")
+	namespace := ctx.Query("namespace")
 
-	if name == "" {
-		apiresponse.BadRequestError(ctx, "参数错误")
+	if namespace == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
-	namespaces, err := k.service.GetClusterNamespacesByName(ctx, name)
+	namespaces, err := k.service.GetClusterNamespacesByName(ctx, namespace)
 	if err != nil {
 		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
 		return
@@ -513,111 +661,111 @@ func (k *K8sHandler) GetClusterNamespacesForSelect(ctx *gin.Context) {
 }
 
 // GetPodListByNamespace 根据命名空间获取 Pods 列表
-func (k *K8sHandler) GetPodListByNamespace(c *gin.Context) {
-	idStr := c.Query("id")
+func (k *K8sHandler) GetPodListByNamespace(ctx *gin.Context) {
+	idStr := ctx.Query("id")
 	if idStr == "" {
-		apiresponse.BadRequestError(c, "缺少 'id' 参数")
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
 
-	namespace := c.Query("namespace")
+	namespace := ctx.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(c, "缺少 'namespace' 参数")
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
 	clusterID, err := strconv.Atoi(idStr)
 	if err != nil {
-		apiresponse.BadRequestError(c, "'id' 参数必须为整数")
+		apiresponse.BadRequestError(ctx, "'id' 参数必须为整数")
 		return
 	}
 
 	// 可选参数：按 Pod 名称过滤
-	podName := c.Query("podName") // 例如，?podName=my-pod
+	podName := ctx.Query("podName") // 例如，?podName=my-pod
 
-	pods, err := k.service.GetPodsByNamespace(c.Request.Context(), clusterID, namespace, podName)
+	pods, err := k.service.GetPodsByNamespace(ctx.Request.Context(), clusterID, namespace, podName)
 	if err != nil {
-		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(c, pods)
+	apiresponse.SuccessWithData(ctx, pods)
 }
 
 // GetPodContainers 获取 Pod 的容器列表
-func (k *K8sHandler) GetPodContainers(c *gin.Context) {
-	idStr := c.Query("id")
+func (k *K8sHandler) GetPodContainers(ctx *gin.Context) {
+	idStr := ctx.Query("id")
 	if idStr == "" {
-		apiresponse.BadRequestError(c, "缺少 'id' 参数")
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
 
 	clusterID, err := strconv.Atoi(idStr)
 	if err != nil {
-		apiresponse.BadRequestError(c, "'id' 参数必须为整数")
+		apiresponse.BadRequestError(ctx, "'id' 参数必须为整数")
 		return
 	}
 
-	namespace := c.Query("namespace")
+	namespace := ctx.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(c, "缺少 'namespace' 参数")
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
-	podName := c.Param("podName")
+	podName := ctx.Param("podName")
 	if podName == "" {
-		apiresponse.BadRequestError(c, "缺少 'podName' 参数")
+		apiresponse.BadRequestError(ctx, "缺少 'podName' 参数")
 		return
 	}
 
-	containers, err := k.service.GetContainersByPod(c.Request.Context(), clusterID, namespace, podName)
+	containers, err := k.service.GetContainersByPod(ctx.Request.Context(), clusterID, namespace, podName)
 	if err != nil {
-		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(c, containers)
+	apiresponse.SuccessWithData(ctx, containers)
 }
 
 // GetContainerLogs 获取容器日志
-func (k *K8sHandler) GetContainerLogs(c *gin.Context) {
-	idStr := c.Query("id")
+func (k *K8sHandler) GetContainerLogs(ctx *gin.Context) {
+	idStr := ctx.Query("id")
 	if idStr == "" {
-		apiresponse.BadRequestError(c, "缺少 'id' 参数")
+		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
 
-	namespace := c.Query("namespace")
+	namespace := ctx.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(c, "缺少 'namespace' 参数")
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
 	clusterID, err := strconv.Atoi(idStr)
 	if err != nil {
-		apiresponse.BadRequestError(c, "'id' 参数必须为整数")
+		apiresponse.BadRequestError(ctx, "'id' 参数必须为整数")
 		return
 	}
 
-	podName := c.Param("podName")
+	podName := ctx.Param("podName")
 	if podName == "" {
-		apiresponse.BadRequestError(c, "缺少 'podName' 参数")
+		apiresponse.BadRequestError(ctx, "缺少 'podName' 参数")
 		return
 	}
 
-	containerName := c.Param("container")
+	containerName := ctx.Param("container")
 	if containerName == "" {
-		apiresponse.BadRequestError(c, "缺少 'container' 参数")
+		apiresponse.BadRequestError(ctx, "缺少 'container' 参数")
 		return
 	}
 
-	logs, err := k.service.GetContainerLogs(c.Request.Context(), clusterID, namespace, podName, containerName)
+	logs, err := k.service.GetContainerLogs(ctx.Request.Context(), clusterID, namespace, podName, containerName)
 	if err != nil {
-		apiresponse.InternalServerError(c, 500, err.Error(), "服务器内部错误")
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(c, logs)
+	apiresponse.SuccessWithData(ctx, logs)
 }
 
 // GetPodYaml 获取 Pod 的 YAML 配置
@@ -708,37 +856,127 @@ func (k *K8sHandler) DeletePod(c *gin.Context) {
 
 // GetDeployListByNamespace 根据命名空间获取部署列表
 func (k *K8sHandler) GetDeployListByNamespace(ctx *gin.Context) {
-	// TODO: 实现根据命名空间获取部署列表的逻辑
+	namesapce := ctx.Query("namespace")
+	if namesapce == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		return
+	}
+
+	clusterName := ctx.Query("cluster_name")
+	if clusterName == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'cluster_name' 参数")
+		return
+	}
+
+	deploys, err := k.service.GetDeploymentsByNamespace(ctx, clusterName, namesapce)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, deploys)
 }
 
 // CreateDeployment 创建新的部署
 func (k *K8sHandler) CreateDeployment(ctx *gin.Context) {
-	// TODO: 实现创建部署的逻辑
+	var req model.K8sDeploymentRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.CreateDeployment(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
-// UpdateDeployment 更新指定 ID 的部署
+// UpdateDeployment 更新指定 Name 的部署
 func (k *K8sHandler) UpdateDeployment(ctx *gin.Context) {
-	// TODO: 实现更新部署的逻辑
+	var req model.K8sDeploymentRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.UpdateDeployment(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
-// DeleteDeployment 删除指定 ID 的部署
+// DeleteDeployment 删除指定 Name 的部署
 func (k *K8sHandler) DeleteDeployment(ctx *gin.Context) {
-	// TODO: 实现删除部署的逻辑
+	var req model.K8sDeploymentRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.DeleteDeployment(ctx, req.ClusterName, req.Namespace, req.DeploymentNames[0]); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // SetDeploymentContainerImage 设置部署中容器的镜像
 func (k *K8sHandler) SetDeploymentContainerImage(ctx *gin.Context) {
-	// TODO: 实现设置部署中容器镜像的逻辑
+	var req model.K8sDeploymentRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.UpdateDeployment(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // ScaleDeployment 扩缩部署
 func (k *K8sHandler) ScaleDeployment(ctx *gin.Context) {
-	// TODO: 实现扩缩部署的逻辑
+	var req model.K8sDeploymentRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.UpdateDeployment(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // BatchRestartDeployments 批量重启部署
 func (k *K8sHandler) BatchRestartDeployments(ctx *gin.Context) {
-	// TODO: 实现批量重启部署的逻辑
+	var req model.K8sDeploymentRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.BatchRestartDeployments(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetDeployYaml 获取部署的 YAML 配置

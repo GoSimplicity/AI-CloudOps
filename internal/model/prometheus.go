@@ -5,6 +5,50 @@ import (
 	"time"
 )
 
+// MonitorScrapePool 采集池的配置
+type MonitorScrapePool struct {
+	Model
+	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex;size:100;comment:采集池名称，支持使用通配符*进行模糊搜索"`        // 采集池名称，支持使用通配符*进行模糊搜索
+	PrometheusInstances   StringList `json:"prometheusInstances,omitempty" gorm:"type:text;comment:选择多个Prometheus实例"`                              // 选择多个Prometheus实例
+	AlertManagerInstances StringList `json:"alertManagerInstances,omitempty" gorm:"type:text;comment:选择多个AlertManager实例"`                          // 选择多个AlertManager实例
+	UserID                int        `json:"userId" gorm:"comment:创建该采集池的用户ID"`                                                                    // 创建该采集池的用户ID
+	ScrapeInterval        int        `json:"scrapeInterval,omitempty" gorm:"default:30;type:int;comment:采集间隔（秒）"`                                  // 采集间隔（秒）
+	ScrapeTimeout         int        `json:"scrapeTimeout,omitempty" gorm:"default:10;type:int;comment:采集超时时间（秒）"`                                 // 采集超时时间（秒）
+	ExternalLabels        StringList `json:"externalLabels,omitempty" gorm:"type:text;comment:remote_write时添加的标签组，格式为 key=v，例如 scrape_ip=1.1.1.1"` // remote_write时添加的标签组，格式为 key=v，例如 scrape_ip=1.1.1.1
+	SupportAlert          int        `json:"supportAlert" gorm:"type:int;comment:是否支持告警：1支持，2不支持"`                                                 // 是否支持告警：1支持，2不支持
+	SupportRecord         int        `json:"supportRecord" gorm:"type:int;comment:是否支持预聚合：1支持，2不支持"`                                               // 是否支持预聚合：1支持，2不支持
+	RemoteReadUrl         string     `json:"remoteReadUrl,omitempty" gorm:"size:255;comment:远程读取的地址"`                                              // 远程读取的地址
+	AlertManagerUrl       string     `json:"alertManagerUrl,omitempty" gorm:"size:255;comment:AlertManager的地址"`                                    // AlertManager的地址
+	RuleFilePath          string     `json:"ruleFilePath,omitempty" gorm:"size:255;comment:规则文件路径"`                                                // 规则文件路径
+	RecordFilePath        string     `json:"recordFilePath,omitempty" gorm:"size:255;comment:记录文件路径"`                                              // 记录文件路径
+	RemoteWriteUrl        string     `json:"remoteWriteUrl,omitempty" gorm:"size:255;comment:远程写入的地址"`                                             // 远程写入的地址
+	RemoteTimeoutSeconds  int        `json:"remoteTimeoutSeconds,omitempty" gorm:"default:5;type:int;comment:远程写入的超时时间（秒）"`                        // 远程写入的超时时间（秒）
+
+	// 前端使用字段
+	ExternalLabelsFront string `json:"externalLabelsFront,omitempty" gorm:"-"` // 前端显示的ExternalLabels字符串
+	Key                 string `json:"key" gorm:"-"`                           // 前端表格使用的Key
+	CreateUserName      string `json:"createUserName,omitempty" gorm:"-"`      // 创建者用户名，用于前端展示
+}
+
+// MonitorAlertManagerPool AlertManager 实例池的配置
+type MonitorAlertManagerPool struct {
+	Model
+	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex;size:100;comment:AlertManager实例名称，支持使用通配符*进行模糊搜索"` // AlertManager实例名称，支持使用通配符*进行模糊搜索
+	AlertManagerInstances StringList `json:"alertManagerInstances" gorm:"type:text;comment:选择多个AlertManager实例"`                                        // 选择多个AlertManager实例
+	UserID                int        `json:"userId" gorm:"comment:创建该实例池的用户ID"`                                                                        // 创建该实例池的用户ID
+	ResolveTimeout        string     `json:"resolveTimeout,omitempty" gorm:"size:50;comment:默认恢复时间"`                                                   // 默认恢复时间
+	GroupWait             string     `json:"groupWait,omitempty" gorm:"size:50;comment:默认分组第一次等待时间"`                                                   // 默认分组第一次等待时间
+	GroupInterval         string     `json:"groupInterval,omitempty" gorm:"size:50;comment:默认分组等待间隔"`                                                  // 默认分组等待间隔
+	RepeatInterval        string     `json:"repeatInterval,omitempty" gorm:"size:50;comment:默认重复发送时间"`                                                 // 默认重复发送时间
+	GroupBy               StringList `json:"groupBy,omitempty" gorm:"type:text;comment:分组的标签"`                                                         // 分组的标签
+	Receiver              string     `json:"receiver,omitempty" gorm:"size:100;comment:兜底接收者"`                                                         // 兜底接收者
+
+	// 前端使用字段
+	GroupByFront   string `json:"groupByFront,omitempty" gorm:"-"`   // 前端显示的GroupBy字符串
+	Key            string `json:"key" gorm:"-"`                      // 前端表格使用的Key
+	CreateUserName string `json:"createUserName,omitempty" gorm:"-"` // 创建者用户名，用于前端展示
+}
+
 // MonitorAlertEvent 告警事件与相关实体的关系
 type MonitorAlertEvent struct {
 	Model
@@ -85,25 +129,6 @@ type MonitorSendGroup struct {
 	PoolName        string   `json:"poolName,omitempty" gorm:"-"`        // 前端表格显示的AlertManager实例名称
 	OnDutyGroupName string   `json:"onDutyGroupName,omitempty" gorm:"-"` // 前端表格显示的值班组名称
 	CreateUserName  string   `json:"createUserName,omitempty" gorm:"-"`  // 前端表格显示的创建者用户名
-}
-
-// MonitorAlertManagerPool AlertManager 实例池的配置
-type MonitorAlertManagerPool struct {
-	Model
-	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex;size:100;comment:AlertManager实例名称，支持使用通配符*进行模糊搜索"` // AlertManager实例名称，支持使用通配符*进行模糊搜索
-	AlertManagerInstances StringList `json:"alertManagerInstances" gorm:"type:text;comment:选择多个AlertManager实例"`                                        // 选择多个AlertManager实例
-	UserID                int        `json:"userId" gorm:"comment:创建该实例池的用户ID"`                                                                        // 创建该实例池的用户ID
-	ResolveTimeout        string     `json:"resolveTimeout,omitempty" gorm:"size:50;comment:默认恢复时间"`                                                   // 默认恢复时间
-	GroupWait             string     `json:"groupWait,omitempty" gorm:"size:50;comment:默认分组第一次等待时间"`                                                   // 默认分组第一次等待时间
-	GroupInterval         string     `json:"groupInterval,omitempty" gorm:"size:50;comment:默认分组等待间隔"`                                                  // 默认分组等待间隔
-	RepeatInterval        string     `json:"repeatInterval,omitempty" gorm:"size:50;comment:默认重复发送时间"`                                                 // 默认重复发送时间
-	GroupBy               StringList `json:"groupBy,omitempty" gorm:"type:text;comment:分组的标签"`                                                         // 分组的标签
-	Receiver              string     `json:"receiver,omitempty" gorm:"size:100;comment:兜底接收者"`                                                         // 兜底接收者
-
-	// 前端使用字段
-	GroupByFront   string `json:"groupByFront,omitempty" gorm:"-"`   // 前端显示的GroupBy字符串
-	Key            string `json:"key" gorm:"-"`                      // 前端表格使用的Key
-	CreateUserName string `json:"createUserName,omitempty" gorm:"-"` // 创建者用户名，用于前端展示
 }
 
 // MonitorOnDutyChange 值班换班记录
@@ -209,33 +234,8 @@ type MonitorScrapeJob struct {
 	CreateUserName string `json:"createUserName,omitempty" gorm:"-"` // 创建用户的名称，用于前端展示
 }
 
-// MonitorScrapePool 采集池的配置
-type MonitorScrapePool struct {
-	Model
-	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex;size:100;comment:采集池名称，支持使用通配符*进行模糊搜索"`        // 采集池名称，支持使用通配符*进行模糊搜索
-	PrometheusInstances   StringList `json:"prometheusInstances,omitempty" gorm:"type:text;comment:选择多个Prometheus实例"`                              // 选择多个Prometheus实例
-	AlertManagerInstances StringList `json:"alertManagerInstances,omitempty" gorm:"type:text;comment:选择多个AlertManager实例"`                          // 选择多个AlertManager实例
-	UserID                int        `json:"userId" gorm:"comment:创建该采集池的用户ID"`                                                                    // 创建该采集池的用户ID
-	ScrapeInterval        int        `json:"scrapeInterval,omitempty" gorm:"default:30;type:int;comment:采集间隔（秒）"`                                  // 采集间隔（秒）
-	ScrapeTimeout         int        `json:"scrapeTimeout,omitempty" gorm:"default:10;type:int;comment:采集超时时间（秒）"`                                 // 采集超时时间（秒）
-	ExternalLabels        StringList `json:"externalLabels,omitempty" gorm:"type:text;comment:remote_write时添加的标签组，格式为 key=v，例如 scrape_ip=1.1.1.1"` // remote_write时添加的标签组，格式为 key=v，例如 scrape_ip=1.1.1.1
-	SupportAlert          int        `json:"supportAlert" gorm:"type:int;comment:是否支持告警：1支持，2不支持"`                                                 // 是否支持告警：1支持，2不支持
-	SupportRecord         int        `json:"supportRecord" gorm:"type:int;comment:是否支持预聚合：1支持，2不支持"`                                               // 是否支持预聚合：1支持，2不支持
-	RemoteReadUrl         string     `json:"remoteReadUrl,omitempty" gorm:"size:255;comment:远程读取的地址"`                                              // 远程读取的地址
-	AlertManagerUrl       string     `json:"alertManagerUrl,omitempty" gorm:"size:255;comment:AlertManager的地址"`                                    // AlertManager的地址
-	RuleFilePath          string     `json:"ruleFilePath,omitempty" gorm:"size:255;comment:规则文件路径"`                                                // 规则文件路径
-	RecordFilePath        string     `json:"recordFilePath,omitempty" gorm:"size:255;comment:记录文件路径"`                                              // 记录文件路径
-	RemoteWriteUrl        string     `json:"remoteWriteUrl,omitempty" gorm:"size:255;comment:远程写入的地址"`                                             // 远程写入的地址
-	RemoteTimeoutSeconds  int        `json:"remoteTimeoutSeconds,omitempty" gorm:"default:5;type:int;comment:远程写入的超时时间（秒）"`                        // 远程写入的超时时间（秒）
-
-	// 前端使用字段
-	ExternalLabelsFront string `json:"externalLabelsFront,omitempty" gorm:"-"` // 前端显示的ExternalLabels字符串
-	Key                 string `json:"key" gorm:"-"`                           // 前端表格使用的Key
-	CreateUserName      string `json:"createUserName,omitempty" gorm:"-"`      // 创建者用户名，用于前端展示
-}
-
 type AlertEventSilenceRequest struct {
-	UseName bool   `json:"useName"`
+	UseName bool   `json:"useName"` // 是否启用名称静默
 	Time    string `json:"time"`
 }
 
@@ -246,4 +246,12 @@ type BatchEventAlertSilenceRequest struct {
 
 type BatchRequest struct {
 	IDs []int `json:"ids" binding:"required"`
+}
+
+type PromqlExprCheckReq struct {
+	PromqlExpr string `json:"promqlExpr" binding:"required"`
+}
+
+type IdRequest struct {
+	ID int `json:"id" binding:"required"`
 }

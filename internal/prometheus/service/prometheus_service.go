@@ -93,7 +93,7 @@ func NewPrometheusService(dao dao.PrometheusDao, cache cache.MonitorCache, l *za
 func (p *prometheusService) GetMonitorScrapePoolList(ctx context.Context, search *string) ([]*model.MonitorScrapePool, error) {
 	return pkg.HandleList(ctx, search,
 		p.dao.SearchMonitorScrapePoolsByName, // 搜索函数
-		p.dao.GetAllMonitorScrapePool) // 获取所有函数
+		p.dao.GetAllMonitorScrapePool)        // 获取所有函数
 }
 
 // CreateMonitorScrapePool 创建新的监控抓取池
@@ -132,6 +132,9 @@ func (p *prometheusService) UpdateMonitorScrapePool(ctx context.Context, monitor
 		p.l.Error("更新抓取池失败：获取抓取池时出错", zap.Error(err))
 		return err
 	}
+
+	newPools := make([]*model.MonitorScrapePool, 0)
+
 	for _, pool := range pools {
 		if pool.ID == monitorScrapePool.ID {
 			continue
@@ -140,10 +143,12 @@ func (p *prometheusService) UpdateMonitorScrapePool(ctx context.Context, monitor
 		if pool.Name == monitorScrapePool.Name {
 			return errors.New("抓取池名称已存在")
 		}
+
+		newPools = append(newPools, pool)
 	}
 
 	// 检查新的抓取池 IP 是否已存在
-	exists := pkg.CheckPoolIpExists(monitorScrapePool, pools)
+	exists := pkg.CheckPoolIpExists(monitorScrapePool, newPools)
 	if exists {
 		return errors.New("抓取池 IP 已存在")
 	}
@@ -196,7 +201,7 @@ func (p *prometheusService) DeleteMonitorScrapePool(ctx context.Context, id int)
 func (p *prometheusService) GetMonitorScrapeJobList(ctx context.Context, search *string) ([]*model.MonitorScrapeJob, error) {
 	return pkg.HandleList(ctx, search,
 		p.dao.SearchMonitorScrapeJobsByName, // 搜索函数
-		p.dao.GetAllMonitorScrapeJobs) // 获取所有函数
+		p.dao.GetAllMonitorScrapeJobs)       // 获取所有函数
 }
 
 // CreateMonitorScrapeJob 创建新的监控抓取作业
@@ -299,7 +304,7 @@ func (p *prometheusService) GetMonitorAlertManagerYaml(ctx context.Context, ip s
 func (p *prometheusService) GetMonitorOnDutyGroupList(ctx context.Context, searchName *string) ([]*model.MonitorOnDutyGroup, error) {
 	return pkg.HandleList(ctx, searchName,
 		p.dao.SearchMonitorOnDutyGroupByName, // 搜索函数
-		p.dao.GetAllMonitorOndutyGroup) // 获取所有函数
+		p.dao.GetAllMonitorOndutyGroup)       // 获取所有函数
 }
 
 // CreateMonitorOnDutyGroup 创建新的值班组
@@ -479,7 +484,7 @@ func (p *prometheusService) GetMonitorOnDutyGroupFuturePlan(ctx context.Context,
 func (p *prometheusService) GetMonitorAlertManagerPoolList(ctx context.Context, searchName *string) ([]*model.MonitorAlertManagerPool, error) {
 	return pkg.HandleList(ctx, searchName,
 		p.dao.SearchMonitorAlertManagerPoolByName, // 搜索函数
-		p.dao.GetAllAlertManagerPools) // 获取所有函数
+		p.dao.GetAllAlertManagerPools)             // 获取所有函数
 }
 
 // CreateMonitorAlertManagerPool 创建新的 AlertManager 集群池

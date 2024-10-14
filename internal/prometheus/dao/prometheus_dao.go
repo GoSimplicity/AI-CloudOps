@@ -78,7 +78,7 @@ type PrometheusDao interface {
 	UpdateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error
 	DeleteMonitorRecordRule(ctx context.Context, ruleID int) error
 	EnableSwitchMonitorRecordRule(ctx context.Context, ruleID int) error
-	GetAssociatedResourcesBySendGroupId(ctx context.Context, sendGroupId int) ([]*model.MonitorScrapePool, error)
+	GetAssociatedResourcesBySendGroupId(ctx context.Context, sendGroupId int) ([]*model.MonitorAlertRule, error)
 
 	CheckMonitorSendGroupExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error)
 	CheckMonitorSendGroupNameExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error)
@@ -1060,10 +1060,29 @@ func (p *prometheusDao) EnableSwitchMonitorRecordRule(ctx context.Context, ruleI
 		return fmt.Errorf("无效的 ruleID: %d", ruleID)
 	}
 
+	// 获取当前规则的状态
+	var rule model.MonitorRecordRule
 	if err := p.db.WithContext(ctx).
 		Model(&model.MonitorRecordRule{}).
 		Where("id = ?", ruleID).
-		Update("enable", gorm.Expr("NOT enable")).Error; err != nil {
+		First(&rule).Error; err != nil {
+		p.l.Error("查询 MonitorRecordRule 失败", zap.Error(err), zap.Int("ruleID", ruleID))
+		return err
+	}
+
+	// 切换状态，1->2 或 2->1·
+	newEnable := 1
+	if rule.Enable == 1 {
+		newEnable = 2
+	} else if rule.Enable == 2 {
+		newEnable = 1
+	}
+
+	// 更新状态
+	if err := p.db.WithContext(ctx).
+		Model(&model.MonitorRecordRule{}).
+		Where("id = ?", ruleID).
+		Update("enable", newEnable).Error; err != nil {
 		p.l.Error("更新 MonitorRecordRule 状态失败", zap.Error(err), zap.Int("ruleID", ruleID))
 		return err
 	}
@@ -1072,13 +1091,13 @@ func (p *prometheusDao) EnableSwitchMonitorRecordRule(ctx context.Context, ruleI
 }
 
 // GetAssociatedResourcesBySendGroupId 根据 sendGroupId 获取关联的 MonitorScrapePool 资源
-func (p *prometheusDao) GetAssociatedResourcesBySendGroupId(ctx context.Context, sendGroupId int) ([]*model.MonitorScrapePool, error) {
+func (p *prometheusDao) GetAssociatedResourcesBySendGroupId(ctx context.Context, sendGroupId int) ([]*model.MonitorAlertRule, error) {
 	if sendGroupId <= 0 {
 		p.l.Error("GetAssociatedResourcesBySendGroupId 失败: 无效的 sendGroupId", zap.Int("sendGroupId", sendGroupId))
 		return nil, fmt.Errorf("无效的 sendGroupId: %d", sendGroupId)
 	}
 
-	var scrapePools []*model.MonitorScrapePool
+	var scrapePools []*model.MonitorAlertRule
 
 	if err := p.db.WithContext(ctx).
 		Where("send_group_id = ?", sendGroupId).
