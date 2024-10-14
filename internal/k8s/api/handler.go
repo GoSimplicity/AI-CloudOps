@@ -986,15 +986,46 @@ func (k *K8sHandler) GetDeployYaml(ctx *gin.Context) {
 
 // GetConfigMapListByNamespace 根据命名空间获取 ConfigMap 列表
 func (k *K8sHandler) GetConfigMapListByNamespace(ctx *gin.Context) {
-	// TODO: 实现根据命名空间获取 ConfigMap 列表的逻辑
+	namespace := ctx.Query("namespace")
+
+	if namespace == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		return
+	}
+
+	clusterName := ctx.Query("cluster_name")
+	if clusterName == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'cluster_name' 参数")
+		return
+	}
+
+	configMaps, err := k.service.GetConfigMapsByNamespace(ctx, clusterName, namespace)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, configMaps)
 }
 
 // CreateConfigMap 创建新的 ConfigMap
 func (k *K8sHandler) CreateConfigMap(ctx *gin.Context) {
-	// TODO: 实现创建 ConfigMap 的逻辑
+	var req model.K8sConfigMapRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.CreateConfigMap(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
-// UpdateConfigMap 更新指定 ID 的 ConfigMap
+// UpdateConfigMap 更新指定 Name 的 ConfigMap
 func (k *K8sHandler) UpdateConfigMap(ctx *gin.Context) {
 	// TODO: 实现更新 ConfigMap 的逻辑
 }
