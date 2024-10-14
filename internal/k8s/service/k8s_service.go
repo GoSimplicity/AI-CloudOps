@@ -118,6 +118,11 @@ type K8sService interface {
 	DeleteDeployment(ctx context.Context, clusterName, namespace, deploymentName string) error
 	// BatchRestartDeployments 批量重启 Deployment
 	BatchRestartDeployments(ctx context.Context, req *model.K8sDeploymentRequest) error
+
+	// GetConfigMapsByNamespace 获取指定命名空间的 ConfigMap 列表
+	GetConfigMapsByNamespace(ctx context.Context, clusterName, namespace string) ([]*corev1.ConfigMap, error)
+	// CreateConfigMap 创建 ConfigMap
+	CreateConfigMap(ctx context.Context, configMap *model.K8sConfigMapRequest) error
 }
 
 type k8sService struct {
@@ -1341,5 +1346,64 @@ func (k *k8sService) BatchRestartDeployments(ctx context.Context, req *model.K8s
 		k.l.Info("重启 Deployment 成功", zap.String("deploymentName", deploy))
 	}
 
+	return nil
+}
+
+// GetConfigMapsByNamespace 获取指定命名空间的 ConfigMap 列表
+func (k *k8sService) GetConfigMapsByNamespace(ctx context.Context, clusterName, namespace string) ([]*corev1.ConfigMap, error) {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, clusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取 ConfigMap 列表
+	configMapList, err := kubeClient.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		k.l.Error("获取 ConfigMap 列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 转换为 []*corev1.ConfigMap
+	var configMaps []*corev1.ConfigMap
+	for i := range configMapList.Items {
+		configMaps = append(configMaps, &configMapList.Items[i])
+	}
+
+	return configMaps, nil
+}
+
+// CreateConfigMap 创建 ConfigMap
+func (k *k8sService) CreateConfigMap(ctx context.Context, req *model.K8sConfigMapRequest) error {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	// 创建 ConfigMap
+	_, err = kubeClient.CoreV1().ConfigMaps(req.ConfigMap.Namespace).Create(ctx, req.ConfigMap, metav1.CreateOptions{})
+	if err != nil {
+		k.l.Error("创建 ConfigMap 失败", zap.Error(err))
+		return err
+	}
+
+	k.l.Info("创建 ConfigMap 成功", zap.String("configMapName", req.ConfigMap.Name))
 	return nil
 }
