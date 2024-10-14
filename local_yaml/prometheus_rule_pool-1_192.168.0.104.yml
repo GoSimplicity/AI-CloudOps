@@ -4,3 +4,5 @@ groups:
         - alert: alert-rule-1
           expr: rate(http_requests_total{job='api-server', status='500'}[5m]) > 0.5
           for: 15s
+) ) * 10
+          for: 15s
