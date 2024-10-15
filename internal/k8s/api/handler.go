@@ -110,13 +110,13 @@ func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
 	// ConfigMap 相关路由
 	configMaps := k8sGroup.Group("/configmaps")
 	{
-		configMaps.GET("/", k.GetConfigMapListByNamespace) // 根据命名空间获取 ConfigMap 列表
-		configMaps.POST("/", k.CreateConfigMap)            // 创建新的 ConfigMap
-		configMaps.PUT("/:id", k.UpdateConfigMap)          // 更新指定 ID 的 ConfigMap
-		configMaps.PUT("/:id/data", k.UpdateConfigMapData) // 更新指定 ID 的 ConfigMap 数据
-		configMaps.GET("/:id/yaml", k.GetConfigMapYaml)    // 获取指定 ConfigMap 的 YAML 配置
-		configMaps.DELETE("/:id", k.DeleteConfigMap)       // 删除指定 ID 的 ConfigMap
-		configMaps.DELETE("/", k.BatchDeleteConfigMaps)    // 批量删除 ConfigMap
+		configMaps.GET("/", k.GetConfigMapListByNamespace)   // 根据命名空间获取 ConfigMap 列表
+		configMaps.POST("/", k.CreateConfigMap)              // 创建新的 ConfigMap
+		configMaps.PUT("/:name", k.UpdateConfigMap)          // 更新指定 Name 的 ConfigMap
+		configMaps.PUT("/:name/data", k.UpdateConfigMapData) // 更新指定 Name 的 ConfigMap 数据
+		configMaps.GET("/:name/yaml", k.GetConfigMapYaml)    // 获取指定 ConfigMap 的 YAML 配置
+		configMaps.DELETE("/:name", k.DeleteConfigMap)       // 删除指定 Name 的 ConfigMap
+		configMaps.DELETE("/", k.BatchDeleteConfigMaps)      // 批量删除 ConfigMap
 	}
 
 	// Service 相关路由
@@ -986,37 +986,140 @@ func (k *K8sHandler) GetDeployYaml(ctx *gin.Context) {
 
 // GetConfigMapListByNamespace 根据命名空间获取 ConfigMap 列表
 func (k *K8sHandler) GetConfigMapListByNamespace(ctx *gin.Context) {
-	// TODO: 实现根据命名空间获取 ConfigMap 列表的逻辑
+	namespace := ctx.Query("namespace")
+
+	if namespace == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		return
+	}
+
+	clusterName := ctx.Query("cluster_name")
+	if clusterName == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'cluster_name' 参数")
+		return
+	}
+
+	configMaps, err := k.service.GetConfigMapsByNamespace(ctx, clusterName, namespace)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, configMaps)
 }
 
 // CreateConfigMap 创建新的 ConfigMap
 func (k *K8sHandler) CreateConfigMap(ctx *gin.Context) {
-	// TODO: 实现创建 ConfigMap 的逻辑
+	var req model.K8sConfigMapRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.CreateConfigMap(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
-// UpdateConfigMap 更新指定 ID 的 ConfigMap
+// UpdateConfigMap 更新指定 Name 的 ConfigMap
 func (k *K8sHandler) UpdateConfigMap(ctx *gin.Context) {
-	// TODO: 实现更新 ConfigMap 的逻辑
+	var req model.K8sConfigMapRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.UpdateConfigMap(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
-// UpdateConfigMapData 更新 ConfigMap 数据
+// UpdateConfigMapData 更新指定 Name 的 ConfigMap 数据
 func (k *K8sHandler) UpdateConfigMapData(ctx *gin.Context) {
-	// TODO: 实现更新 ConfigMap 数据的逻辑
+	var req model.K8sConfigMapRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.UpdateConfigMapData(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetConfigMapYaml 获取 ConfigMap 的 YAML 配置
 func (k *K8sHandler) GetConfigMapYaml(ctx *gin.Context) {
-	// TODO: 实现获取 ConfigMap 的 YAML 配置的逻辑
+	clusterName := ctx.Query("cluster_name")
+	if clusterName == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'cluster_name' 参数")
+		return
+	}
+
+	namespace := ctx.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		return
+	}
+
+	configMapName := ctx.Param("name")
+	if configMapName == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'configMapName' 参数")
+		return
+	}
+
+	configMap, err := k.service.GetConfigMapYaml(ctx, clusterName, namespace, configMapName)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, configMap)
 }
 
-// DeleteConfigMap 删除指定 ID 的 ConfigMap
+// DeleteConfigMap 删除指定 Name 的 ConfigMap
 func (k *K8sHandler) DeleteConfigMap(ctx *gin.Context) {
-	// TODO: 实现删除 ConfigMap 的逻辑
+	var req model.K8sConfigMapRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.DeleteConfigMap(ctx, req.ClusterName, req.Namespace, req.ConfigMapNames); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // BatchDeleteConfigMaps 批量删除 ConfigMap
 func (k *K8sHandler) BatchDeleteConfigMaps(ctx *gin.Context) {
-	// TODO: 实现批量删除 ConfigMap 的逻辑
+	var req model.K8sConfigMapRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.DeleteConfigMap(ctx, req.ClusterName, req.Namespace, req.ConfigMapNames); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetServiceListByNamespace 根据命名空间获取 Service 列表
