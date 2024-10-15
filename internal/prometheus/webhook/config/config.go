@@ -2,9 +2,7 @@ package config
 
 import (
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 	"gorm.io/driver/mysql"
-	"os"
 )
 
 // AlertWebhookConfig Private告警Webhook的配置
@@ -14,7 +12,7 @@ type AlertWebhookConfig struct {
 	LogFilePath                   string        `yaml:"log_file_path"`                       // 日志文件路径
 	AlertReceiveQueueSize         int           `yaml:"alert_receive_queue_size"`            // 告警接收队列大小
 	CommonMapRenewIntervalSeconds int           `yaml:"common_map_renew_interval_seconds"`   // 通用映射刷新间隔（秒）
-	MySQLConfig                   *mysql.Config `yaml:"mysql"`                               // MySQL 配置（使用 GORM 默认配置）
+	MySQLConfig                   *mysql.Config `yaml:"mysql"`                               // MySQL 配置（使用 GORM 的 MySQL 配置）
 	HTTPRequestTimeoutSeconds     int           `yaml:"http_request_global_timeout_seconds"` // HTTP 请求超时（秒）
 	AlertManagerAPI               string        `yaml:"alert_manager_api"`                   // 告警管理 API
 	FrontDomain                   string        `yaml:"front_domain"`                        // 前端域名
@@ -33,20 +31,4 @@ type IMFeishu struct {
 	PrivateChatRobotAppID     string `yaml:"private_robot_app_id"`     // 私聊机器人 App ID
 	PrivateChatRobotAppSecret string `yaml:"private_robot_app_secret"` // 私聊机器人 App Secret
 	RequestTimeoutSeconds     int    `yaml:"request_timeout_seconds"`  // 请求超时时间（秒）
-}
-
-// LoadAlertWebhook 加载并解析配置文件
-func LoadAlertWebhook(filename string) (*AlertWebhookConfig, error) {
-	cfg := &AlertWebhookConfig{}
-
-	content, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	err = yaml.Unmarshal(content, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
 }
