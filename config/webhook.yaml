@@ -1,0 +1,6 @@
+webhook:
+  port: "8889"
+  min_workers: 1 # 最小工作线程数
+  max_workers: 10 # 最大工作线程数
+  scale_threshold: 0.5 # 扩缩容的阈值
+  scale_interval: 5 # 扩缩容的时间间隔
