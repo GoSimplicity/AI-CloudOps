@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/prometheus/prometheus/model/rulefmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -443,10 +442,9 @@ func (mc *monitorCache) GenerateAlertManagerMainConfig(ctx context.Context) erro
 			if oneConfig.Receivers == nil {
 				oneConfig.Receivers = receivers
 			} else {
-				oneConfig.Receivers = append(receivers, oneConfig.Receivers...)
+				oneConfig.Receivers = append(oneConfig.Receivers, receivers...)
 			}
 		}
-
 		// 序列化配置为YAML格式
 		config, err := yaml.Marshal(oneConfig)
 		if err != nil {
@@ -456,7 +454,6 @@ func (mc *monitorCache) GenerateAlertManagerMainConfig(ctx context.Context) erro
 			)
 			continue
 		}
-
 		mc.l.Debug("[监控模块]根据alert配置生成AlertManager主配置文件成功",
 			zap.String("池子", pool.Name),
 			zap.ByteString("配置", config),
@@ -615,9 +612,11 @@ func (mc *monitorCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Conte
 			sendGroup.ID,
 		)
 
-		parsedURL, err := url.Parse(webHookURL)
+		// 将 URL 写入到 .txt 文件
+		urlFilePath := fmt.Sprintf("%s/webhook_url_%d.txt", mc.localYamlDir, sendGroup.ID)
+		err = os.WriteFile(urlFilePath, []byte(webHookURL), 0644)
 		if err != nil {
-			mc.l.Error("[监控模块]解析Webhook URL失败",
+			mc.l.Error("[监控模块]写入Webhook URL文件失败",
 				zap.Error(err),
 				zap.String("Webhook URL", webHookURL),
 				zap.String("发送组", sendGroup.Name),
@@ -633,11 +632,10 @@ func (mc *monitorCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Conte
 					NotifierConfig: altconfig.NotifierConfig{ // Notifier配置 用于告警通知
 						VSendResolved: sendGroup.SendResolved == 1, // 在告警解决时是否发送通知
 					},
-					URL: &altconfig.SecretURL{URL: parsedURL}, // 告警发送的URL地址
+					URLFile: urlFilePath,
 				},
 			},
 		}
-
 		// 添加到routes和receivers中
 		routes = append(routes, route)
 		receivers = append(receivers, receiver)
