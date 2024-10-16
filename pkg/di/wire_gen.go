@@ -7,6 +7,7 @@
 package di
 
 import (
+	"github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	api6 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
@@ -47,11 +48,9 @@ func InitWebServer() *Cmd {
 	cmdable := InitRedis()
 	handler := jwt.NewJWTHandler(cmdable)
 	logger := InitLogger()
+	v := InitMiddlewares(handler, logger)
 	db := InitDB()
 	userDAO := dao.NewUserDAO(db, logger)
-	enforcer := InitCasbin(db, logger)
-	casbinDAO := casbin.NewCasbinDAO(enforcer, logger)
-	v := InitMiddlewares(handler, logger, userDAO, casbinDAO)
 	userService := service.NewUserService(userDAO)
 	userHandler := api.NewUserHandler(userService, logger, handler)
 	apiDAO := api2.NewApiDAO(db, logger)
@@ -60,6 +59,8 @@ func InitWebServer() *Cmd {
 	menuDAO := menu.NewMenuDAO(db, logger)
 	roleService := role2.NewRoleService(menuDAO, roleDAO, logger)
 	menuService := menu2.NewMenuService(menuDAO, logger, userDAO)
+	enforcer := InitCasbin(db, logger)
+	casbinDAO := casbin.NewCasbinDAO(enforcer, logger)
 	authHandler := api4.NewAuthHandler(apiService, roleService, menuService, handler, logger, casbinDAO, userDAO)
 	treeEcsDAO := ecs.NewTreeEcsDAO(db, logger)
 	treeElbDAO := elb.NewTreeElbDAO(db, logger)
@@ -78,10 +79,11 @@ func InitWebServer() *Cmd {
 	notAuthService := service5.NewNotAuthService(logger, treeNodeDAO)
 	notAuthHandler := api8.NewNotAuthHandler(notAuthService)
 	engine := InitGinServer(v, userHandler, authHandler, treeHandler, k8sHandler, prometheusHandler, notAuthHandler)
-	cron := InitAndRefreshK8sClient(k8sClient, logger, monitorCache)
+	cronManager := cron.NewCronManager(logger, prometheusDao)
+	cronCron := InitAndRefreshK8sClient(k8sClient, logger, monitorCache, cronManager)
 	cmd := &Cmd{
 		Server: engine,
-		Cron:   cron,
+		Cron:   cronCron,
 	}
 	return cmd
 }

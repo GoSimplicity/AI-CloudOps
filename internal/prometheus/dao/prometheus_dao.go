@@ -92,6 +92,10 @@ type PrometheusDao interface {
 	CheckMonitorOnDutyGroupExists(ctx context.Context, onDutyGroup *model.MonitorOnDutyGroup) (bool, error)
 	CheckMonitorAlertManagerPoolExists(ctx context.Context, alertManagerPool *model.MonitorAlertManagerPool) (bool, error)
 	GetMonitorAlertManagerPoolById(ctx context.Context, id int) (*model.MonitorAlertManagerPool, error)
+	GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyHistory, error)
+	CreateMonitorOnDutyHistory(ctx context.Context, monitorOnDutyHistory *model.MonitorOnDutyHistory) error
+	GetMonitorOnDutyHistoryByGroupIdAndDay(ctx context.Context, groupID int, day string) (*model.MonitorOnDutyHistory, error)
+	ExistsMonitorOnDutyHistory(ctx context.Context, groupID int, day string) (bool, error)
 }
 
 type prometheusDao struct {
@@ -1271,4 +1275,44 @@ func (p *prometheusDao) GetMonitorAlertManagerPoolById(ctx context.Context, id i
 	}
 
 	return &alertManagerPool, nil
+}
+
+func (p *prometheusDao) GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyHistory, error) {
+	var historyList []*model.MonitorOnDutyHistory
+
+	if err := p.db.WithContext(ctx).Where("on_duty_group_id = ? AND data_string >= ? AND data_string <= ?", groupID, startTime, endTime).Find(&historyList).Error; err != nil {
+		p.l.Error("获取值班历史记录失败", zap.Error(err))
+		return nil, err
+	}
+
+	return historyList, nil
+}
+
+func (p *prometheusDao) GetMonitorOnDutyHistoryByGroupIdAndDay(ctx context.Context, groupID int, day string) (*model.MonitorOnDutyHistory, error) {
+	var history *model.MonitorOnDutyHistory
+
+	if err := p.db.WithContext(ctx).Where("on_duty_group_id = ? AND data_string = ?", groupID, day).First(&history).Error; err != nil {
+		p.l.Error("获取值班历史记录失败", zap.Error(err))
+		return nil, err
+	}
+
+	return history, nil
+}
+
+func (p *prometheusDao) CreateMonitorOnDutyHistory(ctx context.Context, monitorOnDutyHistory *model.MonitorOnDutyHistory) error {
+	if err := p.db.WithContext(ctx).Create(monitorOnDutyHistory).Error; err != nil {
+		p.l.Error("创建值班历史记录失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+func (p *prometheusDao) ExistsMonitorOnDutyHistory(ctx context.Context, groupID int, day string) (bool, error) {
+	var count int64
+
+	if err := p.db.WithContext(ctx).Model(&model.MonitorOnDutyHistory{}).Where("on_duty_group_id = ? AND data_string = ?", groupID, day).Count(&count).Error; err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
 }
