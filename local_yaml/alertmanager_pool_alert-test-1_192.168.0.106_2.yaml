@@ -10,7 +10,7 @@ route:
         - val2
     continue: false
     routes:
-        - receiver: aiops-test
+        - receiver: admin
           matchers:
             - alert_send_group="1"
           continue: true
@@ -20,7 +20,7 @@ route:
     repeat_interval: 5s
 receivers:
     - name: admin
-    - name: aiops-test
+    - name: admin
       webhook_configs:
         - send_resolved: true
           url: null

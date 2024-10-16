@@ -1,148 +1,72 @@
-package webhook
+package consumer
 
 import (
 	"context"
 	"fmt"
-	"github.com/spf13/viper"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/content"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/dao"
 	"github.com/prometheus/alertmanager/template"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
+// WebhookConsumer 定义了Webhook消费者的接口
 type WebhookConsumer interface {
 	// AlertReceiveConsumerManager 管理告警接收的消费者
 	AlertReceiveConsumerManager(ctx context.Context) error
-	// DealWithOneAlertReceive 处理单个告警接收
-	DealWithOneAlertReceive(ctx context.Context, alert template.Alert)
+	// HandleAlert 处理单个告警接收
+	HandleAlert(ctx context.Context, alert template.Alert)
 }
 
+// webhookConsumer 是 WebhookConsumer 接口的实现
 type webhookConsumer struct {
-	alertReceiveQueue chan template.Alert
+	alertReceiveQueue chan template.Alert // 告警接收队列
 	cache             cache.WebhookCache
 	dao               dao.WebhookDao
 	content           content.WebhookContent
 	logger            *zap.Logger
+	workerCount       int           // 固定的工作者数量
+	exitWorkerChan    chan struct{} // 退出信号通道
 
-	workerCount    int           // 当前工作协程数量
-	minWorkers     int           // 最小工作协程数量
-	maxWorkers     int           // 最大工作协程数量
-	scaleInterval  time.Duration // 监控和调整工作协程的间隔时间
-	scaleThreshold int           // 阈值，决定是否需要扩缩协程
-	exitWorkerChan chan struct{} // 退出信号通道
-
-	mu sync.Mutex // 保护 workerCount
+	wg     sync.WaitGroup // 用于等待所有工作者完成
+	mu     sync.Mutex     // 保护资源
+	closed bool           // 标记消费者是否已关闭
 }
 
-func NewWebhookConsumer(logger *zap.Logger, cache cache.WebhookCache, alertReceiveQueue chan template.Alert, dao dao.WebhookDao, content content.WebhookContent, minWorkers, maxWorkers, scaleThreshold int, scaleInterval time.Duration) WebhookConsumer {
+// NewWebhookConsumer 创建一个新的WebhookConsumer实例
+func NewWebhookConsumer(logger *zap.Logger, cache cache.WebhookCache, dao dao.WebhookDao, content content.WebhookContent, alertReceiveQueue chan template.Alert) WebhookConsumer {
 	return &webhookConsumer{
 		logger:            logger,
-		alertReceiveQueue: alertReceiveQueue,
 		cache:             cache,
 		dao:               dao,
 		content:           content,
-		minWorkers:        viper.GetInt("webhook.min_workers"),
-		maxWorkers:        viper.GetInt("webhook.max_workers"),
-		scaleThreshold:    viper.GetInt("webhook.scale_threshold"),
-		scaleInterval:     viper.GetDuration("webhook.scale_interval"),
-		exitWorkerChan:    make(chan struct{}, maxWorkers), // 设置缓冲区大小以避免阻塞
+		alertReceiveQueue: alertReceiveQueue,
+		exitWorkerChan:    make(chan struct{}),
+		workerCount:       viper.GetInt("webhook.fixed_workers"), // 从配置中获取固定工作者数量
 	}
 }
 
-// AlertReceiveConsumerManager 启动消费者管理器，监听告警接收队列并动态调整工作协程数量
+// AlertReceiveConsumerManager 启动消费者管理器，启动固定数量的工作者并监听告警接收队列
 func (wc *webhookConsumer) AlertReceiveConsumerManager(ctx context.Context) error {
-	// 初始化工作协程数量为最小值
-	wc.mu.Lock()
-	wc.workerCount = wc.minWorkers
-	wc.mu.Unlock()
-
-	for i := 0; i < wc.minWorkers; i++ {
-		go wc.worker(ctx, i)
-	}
-
-	// 启动一个独立的协程用于监控和调整工作协程数量
-	go wc.scaleWorkers(ctx)
-
-	// 等待上下文取消
-	<-ctx.Done()
-	wc.logger.Info("AlertReceiveConsumerManager 收到退出信号，等待工作协程退出")
-	return nil
-}
-
-// worker 是一个工作协程，持续从告警接收队列中获取告警并处理
-func (wc *webhookConsumer) worker(ctx context.Context, workerID int) {
-	wc.logger.Info("启动一个工作协程", zap.Int("workerID", workerID))
 	for {
 		select {
 		case <-ctx.Done():
-			wc.logger.Info("工作协程收到上下文取消信号，退出", zap.Int("workerID", workerID))
-			return
-		case <-wc.exitWorkerChan:
-			wc.logger.Info("工作协程收到缩减退出信号，退出", zap.Int("workerID", workerID))
-			return
-		case alert, ok := <-wc.alertReceiveQueue:
-			if !ok {
-				wc.logger.Info("告警接收队列已关闭，工作协程退出", zap.Int("workerID", workerID))
-				return
-			}
-			wc.DealWithOneAlertReceive(ctx, alert)
+			wc.logger.Info("AlertReceiveConsumerManager 收到其他任务退出信号 退出")
+			return nil
+		case alert := <-wc.alertReceiveQueue:
+			go wc.HandleAlert(ctx, alert)
 		}
+
 	}
 }
 
-// scaleWorkers 监控队列长度并动态调整工作协程数量
-func (wc *webhookConsumer) scaleWorkers(ctx context.Context) {
-	ticker := time.NewTicker(wc.scaleInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			wc.logger.Info("scaleWorkers 收到退出信号，停止动态扩缩")
-			return
-		case <-ticker.C:
-			queueLength := len(wc.alertReceiveQueue)
-			wc.logger.Debug("监控队列长度", zap.Int("queueLength", queueLength), zap.Int("currentWorkers", wc.getWorkerCount()))
-
-			if queueLength > wc.scaleThreshold && wc.getWorkerCount() < wc.maxWorkers {
-				// 扩展工作协程
-				wc.mu.Lock()
-				newWorkerID := wc.workerCount
-				wc.workerCount++
-				wc.mu.Unlock()
-				go wc.worker(ctx, newWorkerID)
-				wc.logger.Info("扩展工作协程", zap.Int("newWorkerID", newWorkerID))
-			} else if queueLength < wc.scaleThreshold/2 && wc.getWorkerCount() > wc.minWorkers {
-				// 缩减工作协程：发送退出信号
-				select {
-				case wc.exitWorkerChan <- struct{}{}:
-					wc.mu.Lock()
-					wc.workerCount--
-					wc.mu.Unlock()
-					wc.logger.Info("缩减工作协程", zap.Int("remainingWorkerCount", wc.getWorkerCount()))
-				default:
-					wc.logger.Warn("尝试发送退出信号失败，可能退出信号通道已满")
-				}
-			}
-		}
-	}
-}
-
-// getWorkerCount 安全地获取当前工作协程数量
-func (wc *webhookConsumer) getWorkerCount() int {
-	wc.mu.Lock()
-	defer wc.mu.Unlock()
-	return wc.workerCount
-}
-
-// DealWithOneAlertReceive 处理单个告警接收
-func (wc *webhookConsumer) DealWithOneAlertReceive(ctx context.Context, alert template.Alert) {
+// HandleAlert 处理单个告警接收
+func (wc *webhookConsumer) HandleAlert(ctx context.Context, alert template.Alert) {
 	// 提取 send_group_id
 	sendGroupIDStr, exists := alert.Labels["alert_send_group"]
 	if !exists {
@@ -193,6 +117,7 @@ func (wc *webhookConsumer) DealWithOneAlertReceive(ctx context.Context, alert te
 			zap.Int("userID", sendGroup.UserID),
 			zap.Any("alert", alert),
 		)
+		return
 	}
 
 	// 从缓存中获取规则
@@ -202,6 +127,7 @@ func (wc *webhookConsumer) DealWithOneAlertReceive(ctx context.Context, alert te
 			zap.Int("ruleID", ruleID),
 			zap.Any("alert", alert),
 		)
+		return
 	}
 
 	wc.logger.Debug("收到告警信息，准备处理",
@@ -260,7 +186,7 @@ func (wc *webhookConsumer) DealWithOneAlertReceive(ctx context.Context, alert te
 	}
 
 	// 生成飞书卡片内容
-	if err := wc.content.GenerateFeishuCardContentOneAlert(alert, updatedEvent, rule, sendGroup); err != nil {
+	if err := wc.content.GenerateFeishuCardContentOneAlert(ctx, alert, updatedEvent, rule, sendGroup); err != nil {
 		wc.logger.Error("生成飞书卡片内容失败",
 			zap.Error(err),
 			zap.Any("alert", alert),

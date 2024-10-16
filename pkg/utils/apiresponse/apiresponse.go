@@ -2,6 +2,7 @@ package apiresponse
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -233,6 +234,51 @@ func PostWithJsonString(l *zap.Logger, funcName string, timeout int, url string,
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		l.Error(fmt.Sprintf("[PostWithJsonString.ReadBody.error][funcName:%s][url:%s][err:%v]", funcName, url, err))
+		return nil, err
+	}
+
+	return bodyBytes, nil
+}
+
+func DeleteWithId(l *zap.Logger, funcName string, timeout int, url string, paramsMap map[string]string, headerMap map[string]string) ([]byte, error) {
+	client := &http.Client{}
+
+	reader := bytes.NewReader([]byte(""))
+	client.Timeout = time.Duration(timeout) * time.Second
+	req, err := http.NewRequest("DELETE", url, reader)
+	if err != nil {
+		l.Error(fmt.Sprintf("[DeleteWithId.http.NewRequest.error][funcName:%+v][url:%v][err:%v]", funcName, url, err))
+		return nil, err
+	}
+
+	// 添加URL参数
+	q := req.URL.Query()
+	for k, v := range paramsMap {
+		q.Add(k, v)
+	}
+	req.URL.RawQuery = q.Encode()
+
+	// 添加Header
+	for k, v := range headerMap {
+		req.Header.Add(k, v)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		l.Error(fmt.Sprintf("[DeleteWithId.request.error][funcName:%+v][url:%v][err:%v]", funcName, url, err))
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		l.Error(fmt.Sprintf("[DeleteWithId.StatusCode.not2xx.error][funcName:%+v][url:%v][code:%v][resp_body_text:%v]", funcName, url, resp.StatusCode, string(bodyBytes)))
+		return nil, errors.New(fmt.Sprintf("server returned HTTP status %s", resp.Status))
+	}
+
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		l.Error(fmt.Sprintf("[DeleteWithId.readbody.error][funcName:%+v][url:%v][err:%v]", funcName, url, err))
 		return nil, err
 	}
 
