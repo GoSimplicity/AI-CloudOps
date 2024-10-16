@@ -5,16 +5,13 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/consumer"
 	"go.uber.org/zap"
-	"time"
 )
 
-// InitWebHookCache 初始化 WebhookCache 和 WebhookConsumer 并执行初始刷新
 func InitWebHookCache(logger *zap.Logger, webHookCache cache.WebhookCache, webHookConsumer consumer.WebhookConsumer) func() {
 	return func() {
 		// 执行初始刷新 WebHookCache
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
+			ctx := context.Background() // 使用持久上下文
 
 			logger.Info("开始初始刷新 WebHook Cache")
 			if err := webHookCache.RenewAllCaches(ctx); err != nil {
@@ -26,8 +23,7 @@ func InitWebHookCache(logger *zap.Logger, webHookCache cache.WebhookCache, webHo
 
 		// 执行初始刷新 WebHookConsumer
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
+			ctx := context.Background() // 使用持久上下文
 
 			logger.Info("开始初始刷新 WebHook Consumer")
 			if err := webHookConsumer.AlertReceiveConsumerManager(ctx); err != nil {

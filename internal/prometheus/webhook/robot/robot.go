@@ -1,111 +1,215 @@
-package webhook
+package robot
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/config"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/request"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	"go.uber.org/zap"
+	"io"
+	"net/http"
 	"sync"
+	"time"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/request"
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
-// WebhookRobot 定义了用于管理Webhook机器人的接口
+// WebhookRobot 定义了Webhook机器人相关的接口
 type WebhookRobot interface {
 	// RefreshPrivateRobotToken 刷新私有机器人令牌
-	RefreshPrivateRobotToken(ctx context.Context) error
+	RefreshPrivateRobotToken(ctx context.Context)
 	// GetPrivateRobotToken 获取当前的私有机器人令牌
 	GetPrivateRobotToken() string
+	// GetTenantAccessToken 获取租户访问令牌
+	GetTenantAccessToken(ctx context.Context) (string, error)
 }
 
+// webhookRobot 是 WebhookRobot 接口的实现
 type webhookRobot struct {
-	logger            *zap.Logger
-	config            *config.AlertWebhookConfig
 	privateRobotToken string
-	mux               sync.RWMutex
+	tenantToken       string
+
+	logger          *zap.Logger
+	privateTokenMux sync.RWMutex
+	tenantExpireAt  time.Time
+	tenantTokenMux  sync.RWMutex
+	httpClient      *http.Client
 }
 
-func NewWebhookRobot(logger *zap.Logger, config *config.AlertWebhookConfig) WebhookRobot {
+// NewWebhookRobot 创建一个新的 webhookRobot 实例
+func NewWebhookRobot(logger *zap.Logger) WebhookRobot {
 	return &webhookRobot{
 		logger: logger,
-		config: config,
+		httpClient: &http.Client{
+			Timeout: time.Duration(viper.GetInt("webhook.im_feishu.request_timeout_seconds")) * time.Second,
+		},
 	}
 }
 
 // RefreshPrivateRobotToken 刷新私有机器人令牌
-func (w *webhookRobot) RefreshPrivateRobotToken(ctx context.Context) error {
-	// 构造请求数据
-	requestData := request.RobotTenantAccessTokenReq{
-		AppID:     w.config.IMFeishuConfig.PrivateChatRobotAppID,
-		AppSecret: w.config.IMFeishuConfig.PrivateChatRobotAppSecret,
+func (w *webhookRobot) RefreshPrivateRobotToken(ctx context.Context) {
+	token, _, err := w.getTokenFromAPI(ctx)
+	if err != nil {
+		w.logger.Error("刷新私有机器人令牌失败", zap.Error(err))
+		return
 	}
 
-	// 将请求数据序列化为JSON
+	// 更新私有机器人令牌
+	w.privateTokenMux.Lock()
+	w.privateRobotToken = token
+	w.privateTokenMux.Unlock()
+
+	w.logger.Info("成功刷新私有机器人令牌")
+}
+
+// GetTenantAccessToken 获取租户访问令牌
+func (w *webhookRobot) GetTenantAccessToken(ctx context.Context) (string, error) {
+	// 读锁检查是否有有效的令牌
+	w.tenantTokenMux.RLock()
+	if w.tenantToken != "" && time.Now().Before(w.tenantExpireAt.Add(-60*time.Second)) {
+		token := w.tenantToken
+		w.tenantTokenMux.RUnlock()
+		return token, nil
+	}
+	w.tenantTokenMux.RUnlock()
+
+	// 写锁获取新的令牌
+	w.tenantTokenMux.Lock()
+	defer w.tenantTokenMux.Unlock()
+
+	// 再次检查，防止其他 Goroutine 已经更新
+	if w.tenantToken != "" && time.Now().Before(w.tenantExpireAt.Add(-60*time.Second)) {
+		return w.tenantToken, nil
+	}
+
+	// 获取新的令牌
+	token, expire, err := w.getTokenFromAPI(ctx)
+	if err != nil {
+		w.logger.Error("获取租户访问令牌失败", zap.Error(err))
+		return "", err
+	}
+
+	// 更新租户访问令牌和过期时间
+	w.tenantToken = token
+	w.tenantExpireAt = time.Now().Add(time.Duration(expire) * time.Second)
+
+	w.logger.Info("成功获取租户访问令牌")
+	return w.tenantToken, nil
+}
+
+// GetPrivateRobotToken 获取当前的私有机器人令牌
+func (w *webhookRobot) GetPrivateRobotToken() string {
+	w.privateTokenMux.RLock()
+	defer w.privateTokenMux.RUnlock()
+	return w.privateRobotToken
+}
+
+// postWithJson 发送带有JSON字节的POST请求
+func (w *webhookRobot) postWithJson(ctx context.Context, url string, jsonBytes []byte, headers map[string]string) ([]byte, error) {
+	// 创建HTTP请求
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		w.logger.Error("创建HTTP请求失败",
+			zap.Error(err),
+			zap.String("url", url),
+		)
+		return nil, err
+	}
+
+	// 设置请求头
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	// 设置默认Content-Type
+	if _, exists := headers["Content-Type"]; !exists {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	// 发送请求
+	resp, err := w.httpClient.Do(req)
+	if err != nil {
+		w.logger.Error("发送HTTP请求失败",
+			zap.Error(err),
+			zap.String("url", url),
+		)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// 读取响应体
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		w.logger.Error("读取响应体失败",
+			zap.Error(err),
+			zap.String("url", url),
+		)
+		return nil, err
+	}
+
+	// 检查HTTP状态码
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		w.logger.Error("服务器返回非2xx状态码",
+			zap.String("url", url),
+			zap.Int("statusCode", resp.StatusCode),
+			zap.String("responseBody", string(bodyBytes)),
+		)
+		return bodyBytes, fmt.Errorf("server returned HTTP status %s", resp.Status)
+	}
+
+	return bodyBytes, nil
+}
+
+// getTokenFromAPI 是一个通用函数，用于获取 token
+func (w *webhookRobot) getTokenFromAPI(ctx context.Context) (string, int, error) {
+	requestData := request.RobotTenantAccessTokenReq{
+		AppID:     viper.GetString("webhook.im_feishu.private_robot_app_id"),
+		AppSecret: viper.GetString("webhook.im_feishu.private_robot_app_secret"),
+	}
+
+	// 序列化请求数据
 	jsonBytes, err := json.Marshal(requestData)
 	if err != nil {
-		w.logger.Error("刷新私有机器人令牌时序列化请求数据失败",
+		w.logger.Error("获取令牌时序列化请求数据失败",
 			zap.Error(err),
-			zap.String("AppID", w.config.IMFeishuConfig.PrivateChatRobotAppID),
+			zap.String("AppID", requestData.AppID),
 		)
-		return fmt.Errorf("failed to marshal RobotTenantAccessTokenReq: %w", err)
+		return "", 0, fmt.Errorf("failed to serialize request: %w", err)
 	}
 
-	// 发送HTTP POST请求
-	bodyBytes, err := apiresponse.PostWithJsonString(
-		w.logger,
-		"RefreshPrivateRobotToken",
-		w.config.IMFeishuConfig.RequestTimeoutSeconds,
-		w.config.IMFeishuConfig.TenantAccessTokenAPI,
-		string(jsonBytes),
-		nil, // paramsMap
-		nil, // headerMap
-	)
+	// 发送 HTTP POST 请求
+	url := viper.GetString("webhook.im_feishu.tenant_access_token_api")
+	bodyBytes, err := w.postWithJson(ctx, url, jsonBytes, nil)
 	if err != nil {
-		w.logger.Error("刷新私有机器人令牌时发送HTTP请求失败",
+		w.logger.Error("获取令牌时发送HTTP请求失败",
 			zap.Error(err),
-			zap.String("funcName", "RefreshPrivateRobotToken"),
-			zap.String("url", w.config.IMFeishuConfig.TenantAccessTokenAPI),
+			zap.String("url", url),
 		)
-		return fmt.Errorf("failed to send HTTP request: %w", err)
+		return "", 0, fmt.Errorf("failed to send HTTP request: %w", err)
 	}
 
 	// 解析响应数据
 	var responseData request.RobotTenantAccessTokenRes
 	err = json.Unmarshal(bodyBytes, &responseData)
 	if err != nil {
-		w.logger.Error("刷新私有机器人令牌时解析响应JSON失败",
+		w.logger.Error("解析响应JSON失败",
 			zap.Error(err),
-			zap.String("AppID", w.config.IMFeishuConfig.PrivateChatRobotAppID),
+			zap.String("AppID", requestData.AppID),
 			zap.String("responseBody", string(bodyBytes)),
 		)
-		return fmt.Errorf("failed to unmarshal RobotTenantAccessTokenRes: %w", err)
+		return "", 0, fmt.Errorf("failed to parse response: %w", err)
 	}
 
+	// 如果 API 返回错误码，记录错误并返回
 	if responseData.Code != 0 {
-		w.logger.Error("刷新私有机器人令牌时API返回错误",
+		w.logger.Error("API返回错误",
 			zap.Int("Code", responseData.Code),
 			zap.String("Message", responseData.Message),
 			zap.String("responseBody", string(bodyBytes)),
 		)
-		return fmt.Errorf("API returned error code %d: %s", responseData.Code, responseData.Message)
+		return "", 0, fmt.Errorf("API error: code=%d, message=%s", responseData.Code, responseData.Message)
 	}
 
-	// 更新私有机器人令牌
-	w.mux.Lock()
-	w.privateRobotToken = responseData.TenantAccessToken
-	w.mux.Unlock()
-
-	w.logger.Info("成功刷新私有机器人令牌",
-		zap.String("AppID", w.config.IMFeishuConfig.PrivateChatRobotAppID),
-	)
-
-	return nil
-}
-
-// GetPrivateRobotToken 获取当前的私有机器人令牌
-func (w *webhookRobot) GetPrivateRobotToken() string {
-	w.mux.RLock()
-	defer w.mux.RUnlock()
-	return w.privateRobotToken
+	return responseData.TenantAccessToken, responseData.Expire, nil
 }
