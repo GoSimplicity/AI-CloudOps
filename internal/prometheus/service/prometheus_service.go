@@ -40,7 +40,7 @@ type PrometheusService interface {
 	UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error
 	DeleteMonitorOnDutyGroup(ctx context.Context, id int) error
 	GetMonitorOnDutyGroup(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error)
-	GetMonitorOnDutyGroupFuturePlan(ctx context.Context, id int, startTime string, endTime string) ([]*model.MonitorOnDutyChange, error)
+	GetMonitorOnDutyGroupFuturePlan(ctx context.Context, id int, startTime string, endTime string) (model.OnDutyPlanResp, error)
 
 	GetMonitorAlertManagerPoolList(ctx context.Context, searchName *string) ([]*model.MonitorAlertManagerPool, error)
 	CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
@@ -442,42 +442,171 @@ func (p *prometheusService) GetMonitorOnDutyGroup(ctx context.Context, id int) (
 }
 
 // GetMonitorOnDutyGroupFuturePlan 获取指定值班组在指定时间范围内的值班计划变更
-func (p *prometheusService) GetMonitorOnDutyGroupFuturePlan(ctx context.Context, id int, startTimeStr string, endTimeStr string) ([]*model.MonitorOnDutyChange, error) {
-	// 解析开始时间
+func (p *prometheusService) GetMonitorOnDutyGroupFuturePlan(ctx context.Context, id int, startTimeStr string, endTimeStr string) (model.OnDutyPlanResp, error) {
+	// 解析开始和结束时间
 	startTime, err := time.Parse("2006-01-02", startTimeStr)
 	if err != nil {
-		p.l.Error("获取未来值班计划失败：开始时间格式错误", zap.String("startTime", startTimeStr), zap.Error(err))
-		return nil, errors.New("开始时间格式错误")
+		p.l.Error("开始时间格式错误", zap.String("startTime", startTimeStr), zap.Error(err))
+		return model.OnDutyPlanResp{}, errors.New("开始时间格式错误")
 	}
 
-	// 解析结束时间
 	endTime, err := time.Parse("2006-01-02", endTimeStr)
 	if err != nil {
-		p.l.Error("获取未来值班计划失败：结束时间格式错误", zap.String("endTime", endTimeStr), zap.Error(err))
-		return nil, errors.New("结束时间格式错误")
+		p.l.Error("结束时间格式错误", zap.String("endTime", endTimeStr), zap.Error(err))
+		return model.OnDutyPlanResp{}, errors.New("结束时间格式错误")
 	}
 
 	// 验证时间范围
 	if endTime.Before(startTime) {
 		errMsg := "结束时间不能早于开始时间"
 		p.l.Error(errMsg, zap.String("startTime", startTimeStr), zap.String("endTime", endTimeStr))
-		return nil, errors.New(errMsg)
+		return model.OnDutyPlanResp{}, errors.New(errMsg)
 	}
 
-	// 确保值班组存在
-	if _, err := p.dao.GetMonitorOnDutyGroupById(ctx, id); err != nil {
-		p.l.Error("获取未来值班计划失败：根据 ID 获取值班组时出错", zap.Int("id", id), zap.Error(err))
-		return nil, err
+	// 获取值班组信息
+	group, err := p.dao.GetMonitorOnDutyGroupById(ctx, id)
+	if err != nil {
+		p.l.Error("获取值班组失败", zap.Int("id", id), zap.Error(err))
+		return model.OnDutyPlanResp{}, err
+	}
+
+	// 初始化返回结果
+	planResp := model.OnDutyPlanResp{
+		Details:       []model.OnDutyOne{},
+		Map:           make(map[string]string),
+		UserNameMap:   make(map[string]string),
+		OriginUserMap: make(map[string]string),
 	}
 
 	// 获取指定时间范围内的值班计划变更
-	changes, err := p.dao.GetMonitorOnDutyChangesByGroupAndTimeRange(ctx, id, startTime, endTime)
-	if err != nil {
-		p.l.Error("获取未来值班计划失败：获取值班计划变更时出错", zap.Int("id", id), zap.Error(err))
-		return nil, err
+	histories, err := p.dao.GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx, id, startTimeStr, endTimeStr)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		p.l.Error("获取值班计划变更失败", zap.Int("id", id), zap.Error(err))
+		return model.OnDutyPlanResp{}, err
 	}
 
-	return changes, nil
+	// 构建变更记录的映射，方便后续查询
+	historyMap := make(map[string]*model.MonitorOnDutyHistory)
+	for _, history := range histories {
+		historyMap[history.DateString] = history
+	}
+
+	// 获取今天的日期
+	today := time.Now().Format("2006-01-02")
+
+	// 生成从开始日期到结束日期的所有日期列表
+	totalDays := int(endTime.Sub(startTime).Hours()/24) + 1
+	for i := 0; i < totalDays; i++ {
+		currentDate := startTime.AddDate(0, 0, i).Format("2006-01-02")
+
+		var user *model.User
+		var originUserName string
+
+		// 如果有历史变更记录，使用变更后的用户
+		if history, exists := historyMap[currentDate]; exists {
+			user, err = p.userDao.GetUserByID(ctx, history.OnDutyUserID)
+			if err != nil {
+				p.l.Warn("获取用户信息失败", zap.Int("userID", history.OnDutyUserID), zap.Error(err))
+				continue
+			}
+			if history.OriginUserID > 0 {
+				originUser, err := p.userDao.GetUserByID(ctx, history.OriginUserID)
+				if err == nil {
+					originUserName = originUser.RealName
+				}
+			}
+		} else {
+			// 没有变更记录，按照排班规则计算值班人
+			user = p.calculateOnDutyUser(ctx, group, currentDate, today)
+			if user == nil {
+				p.l.Warn("无法计算值班人", zap.String("date", currentDate))
+				continue
+			}
+		}
+
+		// 构建值班信息
+		onDutyOne := model.OnDutyOne{
+			Date:       currentDate,
+			User:       user,
+			OriginUser: originUserName,
+		}
+
+		// 添加到返回结果
+		planResp.Details = append(planResp.Details, onDutyOne)
+		planResp.Map[currentDate] = user.RealName
+		planResp.UserNameMap[currentDate] = user.Username
+		planResp.OriginUserMap[currentDate] = originUserName
+	}
+
+	p.l.Info("获取值班计划成功", zap.Int("groupID", id), zap.String("startTime", startTimeStr), zap.String("endTime", endTimeStr))
+	return planResp, nil
+}
+
+// calculateOnDutyUser 根据排班规则计算指定日期的值班人
+func (p *prometheusService) calculateOnDutyUser(ctx context.Context, group *model.MonitorOnDutyGroup, dateStr string, todayStr string) *model.User {
+	// 解析目标日期
+	targetDate, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		p.l.Error("日期解析失败", zap.String("date", dateStr), zap.Error(err))
+		return nil
+	}
+
+	// 解析今天的日期
+	today, err := time.Parse("2006-01-02", todayStr)
+	if err != nil {
+		p.l.Error("解析今天日期失败", zap.String("today", todayStr), zap.Error(err))
+		return nil
+	}
+
+	// 计算从今天开始的天数差
+	daysDiff := int(targetDate.Sub(today).Hours() / 24)
+
+	// 获取当前值班人的索引
+	currentUserIndex := p.getCurrentUserIndex(ctx, group, todayStr)
+	if currentUserIndex == -1 {
+		p.l.Warn("未找到当前值班人", zap.String("today", todayStr))
+		return nil
+	}
+
+	// 根据轮班规则计算值班人索引
+	totalMembers := len(group.Members)
+	shiftDays := group.ShiftDays
+	totalShiftLength := totalMembers * shiftDays
+
+	// 自定义取模函数，确保结果为非负数
+	mod := func(a, b int) int {
+		return (a%b + b) % b
+	}
+
+	// 计算目标日期的值班人索引
+	indexInShift := mod(currentUserIndex*shiftDays+daysDiff, totalShiftLength)
+	userIndex := indexInShift / shiftDays
+
+	// 返回对应的用户
+	if userIndex >= 0 && userIndex < totalMembers {
+		return group.Members[userIndex]
+	}
+
+	return nil
+}
+
+// getCurrentUserIndex 获取当前值班人在成员列表中的索引
+func (p *prometheusService) getCurrentUserIndex(ctx context.Context, group *model.MonitorOnDutyGroup, todayStr string) int {
+	// 尝试从历史记录中获取今天的值班人
+	todayHistory, err := p.dao.GetMonitorOnDutyHistoryByGroupIdAndDay(ctx, group.ID, todayStr)
+	if err == nil && todayHistory.OnDutyUserID > 0 {
+		for index, member := range group.Members {
+			if member.ID == todayHistory.OnDutyUserID {
+				return index
+			}
+		}
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		// 如果查询发生了其他错误，记录日志
+		p.l.Error("获取今天的值班历史记录失败", zap.Error(err))
+	}
+
+	// 如果没有历史记录，默认第一个成员为当前值班人
+	return 0
 }
 
 // GetMonitorAlertManagerPoolList 获取 AlertManager 集群池列表，可选根据名称过滤

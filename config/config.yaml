@@ -1,5 +1,8 @@
 server:
   port: "8888"
+log:
+  dir: "./logs"
+  level: "debug"
 jwt:
   key1: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"
   key2: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0z"
