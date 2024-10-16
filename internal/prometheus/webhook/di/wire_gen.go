@@ -22,16 +22,17 @@ func InitWebServer() *Cmd {
 	v := InitMiddlewares(logger)
 	db := InitDB()
 	webhookDao := dao.NewWebhookDao(logger, db)
-	webHookHandler := api.NewWebHookHandler(logger, webhookDao)
+	v2 := CreateAlertChan()
+	webHookHandler := api.NewWebHookHandler(logger, webhookDao, v2)
 	engine := InitGinServer(v, webHookHandler)
 	webhookRobot := robot.NewWebhookRobot(logger)
 	webhookCache := cache.NewWebhookCache(logger, webhookDao, webhookRobot)
 	webhookContent := content.NewWebhookContent(logger, webhookDao, webhookRobot)
-	webhookConsumer := consumer.NewWebhookConsumer(logger, webhookCache, webhookDao, webhookContent)
-	v2 := InitWebHookCache(logger, webhookCache, webhookConsumer)
+	webhookConsumer := consumer.NewWebhookConsumer(logger, webhookCache, webhookDao, webhookContent, v2)
+	v3 := InitWebHookCache(logger, webhookCache, webhookConsumer)
 	cmd := &Cmd{
 		Server: engine,
-		Start:  v2,
+		Start:  v3,
 	}
 	return cmd
 }
