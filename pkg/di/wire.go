@@ -3,6 +3,7 @@
 package di
 
 import (
+	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
@@ -47,6 +48,7 @@ func InitWebServer() *Cmd {
 		InitAndRefreshK8sClient,
 		client.NewK8sClient,
 		cache.NewMonitorCache,
+		cron.NewCronManager,
 		userHandler.NewUserHandler,
 		authHandler.NewAuthHandler,
 		notAuthHandler.NewNotAuthHandler,

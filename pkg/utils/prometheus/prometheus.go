@@ -242,3 +242,15 @@ func HandleList[T any](ctx context.Context, search *string, searchFunc func(ctx 
 	}
 	return listFunc(ctx)
 }
+
+func FromSliceTuMap(kvs []string) map[string]string {
+	labelsMap := make(map[string]string)
+	for _, i := range kvs {
+		parts := strings.Split(i, "=")
+		if len(parts) != 2 {
+			continue
+		}
+		labelsMap[parts[0]] = parts[1]
+	}
+	return labelsMap
+}

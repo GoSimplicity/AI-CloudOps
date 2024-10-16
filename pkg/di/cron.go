@@ -2,18 +2,18 @@ package di
 
 import (
 	"context"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
-	"github.com/spf13/viper"
-	"time"
-
+	cn "github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/robfig/cron/v3"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"time"
 )
 
 // InitAndRefreshK8sClient 初始化并启动定时刷新 Kubernetes 客户端
 // 返回 cron 调度器实例以便调用者可以在需要时停止它
-func InitAndRefreshK8sClient(K8sClient client.K8sClient, logger *zap.Logger, PromCache cache.MonitorCache) *cron.Cron {
+func InitAndRefreshK8sClient(K8sClient client.K8sClient, logger *zap.Logger, PromCache cache.MonitorCache, manager cn.CronManager) *cron.Cron {
 	stdLogger := zap.NewStdLog(logger)
 
 	// 启用秒级调度，并集成日志记录和恢复中间件
@@ -48,6 +48,16 @@ func InitAndRefreshK8sClient(K8sClient client.K8sClient, logger *zap.Logger, Pro
 			logger.Error("InitAndRefreshPrometheusCache: 初始刷新 Prometheus 缓存失败", zap.Error(err))
 		} else {
 			logger.Info("InitAndRefreshPrometheusCache: 成功完成初始刷新 Prometheus 缓存")
+		}
+	}()
+
+	// 启动值班历史记录填充任务
+	go func() {
+		ctx := context.Background()
+		if err := manager.StartOnDutyHistoryManager(ctx); err != nil {
+			logger.Error("启动值班历史记录填充任务失败", zap.Error(err))
+		} else {
+			logger.Info("成功启动值班历史记录填充任务")
 		}
 	}()
 

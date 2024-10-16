@@ -1,6 +1,1 @@
-groups:
-    - name: node-exporter-1
-      rules:
-        - alert: node-exporter-1
-          expr: rate(http_requests_total{job='api-server', status='500'}[5m]) > 0.5
-          for: 15s
+groups: []
