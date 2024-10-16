@@ -15,3 +15,13 @@ func InitViper() {
 		panic(err)
 	}
 }
+
+func InitWebHookViper() {
+	configFile := pflag.String("config", "config/webhook.yaml", "配置文件路径")
+	pflag.Parse()
+	viper.SetConfigFile(*configFile)
+	err := viper.ReadInConfig()
+	if err != nil {
+		panic(err)
+	}
+}

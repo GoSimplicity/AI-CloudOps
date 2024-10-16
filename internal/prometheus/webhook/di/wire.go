@@ -17,6 +17,7 @@ func InitWebServer() *Cmd {
 		InitLogger,
 		InitGinServer,
 		InitMiddlewares,
+		CreateAlertChan,
 		InitDB,
 		InitWebHookCache,
 		api.NewWebHookHandler,

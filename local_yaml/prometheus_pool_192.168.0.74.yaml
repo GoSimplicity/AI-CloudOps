@@ -8,11 +8,11 @@ alerting:
           api_version: v2
           static_configs:
             - targets:
-                - 192.168.0.104:9093
+                - 192.168.0.74:9093
 rule_files:
-    - /usr/local/prometheus/rule.yaml
+    - ""
 scrape_configs:
-    - job_name: test-exporter-1
+    - job_name: node-exporter-1
       honor_timestamps: false
       track_timestamps_staleness: false
       scrape_interval: 15s
@@ -22,28 +22,18 @@ scrape_configs:
       enable_compression: false
       follow_redirects: false
       enable_http2: false
-      relabel_configs:
-        - source_labels: [__address__]
-          regex: (.*)
-          modulus: 2
-          target_label: __tmp_hash
-          replacement: $1
-          action: hashmod
-        - source_labels: [__tmp_hash]
-          regex: ^1$
-          action: keep
       http_sd_configs:
         - follow_redirects: false
           enable_http2: false
           refresh_interval: 30s
-          url: http://192.168.0.105:8888/api/not_auth/getTreeNodeBindIps?port=8428&leafNodeIds=7
+          url: http://192.168.0.105:8888/api/not_auth/getTreeNodeBindIps?port=9100&leafNodeIds=8
 remote_write:
-    - url: http://192.168.0.104:8428/api/v1/write
+    - url: ""
       remote_timeout: 10s
       follow_redirects: false
       enable_http2: false
 remote_read:
-    - url: http://192.168.0.104:8428/api/v1/read
+    - url: ""
       remote_timeout: 10s
       follow_redirects: false
       enable_http2: false
