@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/spf13/viper"
 	"io"
@@ -18,6 +17,311 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/robot"
 	"github.com/prometheus/alertmanager/template"
 	"go.uber.org/zap"
+)
+
+var (
+	feiShuCardContent = `
+{
+  "header": {
+    "template": "%s",
+    "title": {
+      "content": "%s",
+      "tag": "plain_text"
+    }
+  },
+  "elements": [
+    {
+      "tag": "div",
+      "fields": [
+        {
+          "is_short": true,
+          "text": {
+            "tag": "lark_md",
+            "content": "%s"
+          }
+        },
+        {
+          "is_short": true,
+          "text": {
+            "tag": "lark_md",
+            "content": "%s"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "div",
+      "fields": [
+        {
+          "is_short": true,
+          "text": {
+            "tag": "lark_md",
+            "content": "%s"
+          }
+        },
+        {
+          "is_short": true,
+          "text": {
+            "tag": "lark_md",
+            "content": "%s"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "column_set",
+      "flex_mode": "none",
+      "background_style": "default",
+      "columns": [
+        {
+          "tag": "column",
+          "width": "weighted",
+          "weight": 1,
+          "vertical_align": "top",
+          "elements": [
+            {
+              "tag": "div",
+              "text": {
+                "content": "%s",
+                "tag": "lark_md"
+              }
+            }
+          ]
+        },
+        {
+          "tag": "column",
+          "width": "weighted",
+          "weight": 1,
+          "vertical_align": "top",
+          "elements": [
+            {
+              "tag": "div",
+              "text": {
+                "content": "%s",
+                "tag": "lark_md"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "column_set",
+      "flex_mode": "none",
+      "background_style": "default",
+      "columns": [
+        {
+          "tag": "column",
+          "width": "weighted",
+          "weight": 1,
+          "vertical_align": "top",
+          "elements": [
+            {
+              "tag": "div",
+              "text": {
+                "content": "%s",
+                "tag": "lark_md"
+              }
+            }
+          ]
+        },
+        {
+          "tag": "column",
+          "width": "weighted",
+          "weight": 1,
+          "vertical_align": "top",
+          "elements": [
+            {
+              "tag": "markdown",
+              "content": "%s"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "div",
+      "fields": [
+        {
+          "is_short": true,
+          "text": {
+            "tag": "lark_md",
+            "content": "%s\n"
+          }
+        },
+        {
+          "is_short": true,
+          "text": {
+            "tag": "lark_md",
+            "content": "%s"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "hr"
+    },
+    {
+      "tag": "markdown",
+      "content": "%s"
+    },
+    {
+      "tag": "hr"
+    },
+    {
+      "tag": "div",
+      "text": {
+        "tag": "lark_md",
+        "content": "🔴 告警屏蔽按钮 [下面是单一告警屏蔽👇][右侧是按告警名称屏蔽👉]"
+      }
+    },
+    {
+      "tag": "action",
+      "actions": [
+        {
+          "tag": "button",
+          "text": {
+            "tag": "plain_text",
+            "content": "认领告警"
+          },
+          "type": "primary",
+          "url": "%s",
+          "confirm": {
+            "title": {
+              "tag": "plain_text",
+              "content": "确定认领吗"
+            },
+            "text": {
+              "tag": "plain_text",
+              "content": ""
+            }
+          }
+        },
+        {
+          "tag": "button",
+          "text": {
+            "tag": "plain_text",
+            "content": "屏蔽1小时"
+          },
+          "type": "default",
+          "url": "%s",
+          "confirm": {
+            "title": {
+              "tag": "plain_text",
+              "content": "确定屏蔽吗"
+            },
+            "text": {
+              "tag": "plain_text",
+              "content": ""
+            }
+          }
+        },
+        {
+          "tag": "button",
+          "text": {
+            "tag": "plain_text",
+            "content": "屏蔽24小时"
+          },
+          "type": "danger",
+          "url": "%s",
+          "confirm": {
+            "title": {
+              "tag": "plain_text",
+              "content": "确定屏蔽吗"
+            },
+            "text": {
+              "tag": "plain_text",
+              "content": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "tag": "hr"
+    },
+    {
+      "tag": "action",
+      "actions": [
+        {
+          "tag": "button",
+          "text": {
+            "tag": "plain_text",
+            "content": "取消屏蔽"
+          },
+          "type": "primary",
+          "url": "%s",
+          "confirm": {
+            "title": {
+              "tag": "plain_text",
+              "content": "确定取消吗"
+            },
+            "text": {
+              "tag": "plain_text",
+              "content": ""
+            }
+          }
+        },
+        {
+          "tag": "button",
+          "text": {
+            "tag": "plain_text",
+            "content": "屏蔽6小时"
+          },
+          "type": "default",
+          "url": "%s",
+          "confirm": {
+            "title": {
+              "tag": "plain_text",
+              "content": "确定屏蔽吗"
+            },
+            "text": {
+              "tag": "plain_text",
+              "content": ""
+            }
+          }
+        },
+        {
+          "tag": "button",
+          "text": {
+            "tag": "plain_text",
+            "content": "屏蔽7天"
+          },
+          "type": "danger",
+          "url": "%s",
+          "confirm": {
+            "title": {
+              "tag": "plain_text",
+              "content": "确定屏蔽吗"
+            },
+            "text": {
+              "tag": "plain_text",
+              "content": ""
+            }
+          }
+        }
+      ]
+    },
+    {
+      "tag": "hr"
+    },
+    {
+      "tag": "div",
+      "text": {
+        "tag": "lark_md",
+        "content": "🙋‍♂️ [我要反馈错误](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message-development-tutorial/introduction?from=mcb) | 📝 [录入报警处理过程](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message-development-tutorial/introduction?from=mcb)"
+      }
+    }
+  ]
+}
+`
+
+	feiShuCartDataGroup = `
+{
+    "msg_type": "interactive",
+    "card": %s
+}
+`
 )
 
 type WebhookContent interface {
@@ -46,14 +350,6 @@ func NewWebhookContent(l *zap.Logger, dao dao.WebhookDao, robot robot.WebhookRob
 		},
 	}
 }
-
-// FeiShuCardDataGroup 用于群聊发送的 JSON 模板
-const FeiShuCardDataGroup = `
-{
-  "msg_type": "interactive",
-  "card": %s
-}
-`
 
 // GenerateFeishuCardContentOneAlert 生成单个告警的 Feishu 卡片内容并发送到群聊和私聊
 func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context, alert template.Alert, event *model.MonitorAlertEvent, rule *model.MonitorAlertRule, sendGroup *model.MonitorSendGroup) error {
@@ -86,7 +382,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	var msgGrafana, msgExpr string
 	if rule != nil {
 		msgGrafana = fmt.Sprintf(`**🗳查看grafana大盘图**\n[链接地址](%s)`, rule.GrafanaLink)
-		msgExpr = fmt.Sprintf(`**🏹修改告警规则**  [规则地址](%s)\n<font color='red'>%s</font>`,
+		msgExpr = fmt.Sprintf(`**🏹修改告警规则**\n[规则地址](%s)\n<font color='red'>%s</font>`,
 			fmt.Sprintf("%s/%s?ruleid=%v",
 				viper.GetString("webhook.front_domain"),
 				"monitor/rule/detail",
@@ -205,38 +501,39 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	BackendDomain := viper.GetString("webhook.backend_domain")
 	// 构建各类操作的 URL
 	buttonURLs := []string{
-		fmt.Sprintf(constant.SilenceByNameURLTemplate, BackendDomain, "silence", alert.Fingerprint, 1),
-		fmt.Sprintf(constant.SilenceByNameURLTemplate, BackendDomain, "silence", alert.Fingerprint, 6),
-		fmt.Sprintf(constant.SilenceByNameURLTemplate, BackendDomain, "silence", alert.Fingerprint, 24),
-		fmt.Sprintf(constant.RenderingURLTemplate, BackendDomain, "renling", alert.Fingerprint),
-		fmt.Sprintf(constant.SilenceURLTemplate, BackendDomain, "silence", alert.Fingerprint, 1),
-		fmt.Sprintf(constant.SilenceURLTemplate, BackendDomain, "silence", alert.Fingerprint, 24),
-		fmt.Sprintf(constant.UnsilenceURLTemplate, BackendDomain, "unsilence", alert.Fingerprint),
-		fmt.Sprintf(constant.SilenceURLTemplate, BackendDomain, "silence", alert.Fingerprint, 6),
-		fmt.Sprintf(constant.SilenceURLTemplate, BackendDomain, "silence", alert.Fingerprint, 168), // 7天
+		fmt.Sprintf(constant.RenderingURLTemplate, BackendDomain, "renling", alert.Fingerprint),    // 认领告警
+		fmt.Sprintf(constant.SilenceURLTemplate, BackendDomain, "silence", alert.Fingerprint, 1),   // 屏蔽1小时
+		fmt.Sprintf(constant.SilenceURLTemplate, BackendDomain, "silence", alert.Fingerprint, 24),  // 屏蔽24小时
+		fmt.Sprintf(constant.UnsilenceURLTemplate, BackendDomain, "unsilence", alert.Fingerprint),  // 取消屏蔽
+		fmt.Sprintf(constant.SilenceURLTemplate, BackendDomain, "silence", alert.Fingerprint, 6),   // 屏蔽6小时
+		fmt.Sprintf(constant.SilenceURLTemplate, BackendDomain, "silence", alert.Fingerprint, 168), // 屏蔽7天
 	}
 
-	// 构建 Feishu 卡片内容
+	// 使用 feiShuCardContent 模板构建 Feishu 卡片内容
 	cardContent, err := wc.buildFeishuCardContent(
-		alertHeaderColor,
-		alertHeader,
-		msgLabel,
-		msgAnno,
-		msgSeverity,
-		msgStatus,
-		msgStreeNode,
-		msgTime,
-		msgUpgrade,
-		msgOnduty,
-		msgGrafana,
-		msgSendGroup,
-		msgExpr,
-		buttonURLs...,
+		alertHeaderColor, // header.template
+		alertHeader,      // header.title.content
+		msgLabel,         // 第一行标签信息
+		msgAnno,          // 第一行 anno 信息
+		msgSeverity,      // 第二行告警级别
+		msgStatus,        // 第二行当前状态
+		msgStreeNode,     // 绑定的服务树
+		msgTime,          // 触发时间
+		msgUpgrade,       // 升级状态
+		msgOnduty,        // 值班组信息
+		msgGrafana,       // 查看 Grafana 大盘图
+		msgSendGroup,     // 修改发送组
+		msgExpr,          // 修改告警规则
+		buttonURLs[0],    // 认领告警 URL
+		buttonURLs[1],    // 屏蔽1小时 URL
+		buttonURLs[2],    // 屏蔽24小时 URL
+		buttonURLs[3],    // 取消屏蔽 URL
+		buttonURLs[4],    // 屏蔽6小时 URL
+		buttonURLs[5],    // 屏蔽7天 URL
 	)
 	if err != nil {
 		return fmt.Errorf("构建 Feishu 卡片内容失败: %w", err)
 	}
-
 	// 私聊发送
 	if err := wc.SentFeishuPrivate(ctx, cardContent, privateUserIds); err != nil {
 		wc.l.Error("发送 Feishu 私聊消息失败",
@@ -247,7 +544,8 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	}
 
 	// 群聊发送
-	msgQun := fmt.Sprintf(FeiShuCardDataGroup, cardContent)
+	msgQun := fmt.Sprintf(feiShuCartDataGroup, cardContent)
+
 	if err := wc.SentFeishuGroup(ctx, msgQun, sendGroup.FeiShuQunRobotToken); err != nil {
 		wc.l.Error("发送 Feishu 群聊消息失败",
 			zap.Error(err),
@@ -260,354 +558,43 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 }
 
 // buildFeishuCardContent 构建 Feishu 卡片内容的 JSON 字符串
-func (wc *webhookContent) buildFeishuCardContent(alertHeaderColor, alertHeader, msgLabel, msgAnno, msgSeverity, msgStatus, msgStreeNode, msgTime, msgUpgrade, msgOnduty, msgGrafana, msgSendGroup, msgExpr string, buttonURLs ...string) (string, error) {
-	if len(buttonURLs) < 9 {
-		return "", errors.New("buttonURLs 数量不足")
+func (wc *webhookContent) buildFeishuCardContent(
+	alertHeaderColor, alertHeader, msgLabel, msgAnno, msgSeverity, msgStatus,
+	msgStreeNode, msgTime, msgUpgrade, msgOnduty, msgGrafana, msgSendGroup, msgExpr string,
+	buttonURL1, buttonURL2, buttonURL3,
+	buttonURL4, buttonURL5, buttonURL6 string,
+) (string, error) {
+
+	// 格式化 feiShuCardContent 模板
+	cardContent := fmt.Sprintf(feiShuCardContent,
+		alertHeaderColor, // header.template
+		alertHeader,      // header.title.content
+		msgLabel,         // 第一行标签信息
+		msgAnno,          // 第一行 anno 信息
+		msgSeverity,      // 第二行告警级别
+		msgStatus,        // 第二行当前状态
+		msgStreeNode,     // 绑定的服务树
+		msgTime,          // 触发时间
+		msgUpgrade,       // 升级状态
+		msgOnduty,        // 值班组信息
+		msgGrafana,       // 查看 Grafana 大盘图
+		msgSendGroup,     // 修改发送组
+		msgExpr,          // 修改告警规则
+		buttonURL1,       // 认领告警 URL
+		buttonURL2,       // 屏蔽1小时 URL
+		buttonURL3,       // 屏蔽24小时 URL
+		buttonURL4,       // 取消屏蔽 URL
+		buttonURL5,       // 屏蔽6小时 URL
+		buttonURL6,       // 屏蔽7天 URL
+	)
+
+	// 验证生成的 JSON 是否有效
+	var temp interface{}
+	if err := json.Unmarshal([]byte(cardContent), &temp); err != nil {
+		return "", fmt.Errorf("生成的 Feishu 卡片内容 JSON 无效: %w", err)
 	}
 
-	// 构建 Feishu 卡片结构体
-	card := map[string]interface{}{
-		"header": map[string]interface{}{
-			"template": alertHeaderColor,
-			"title": map[string]interface{}{
-				"content": alertHeader,
-				"tag":     "plain_text",
-			},
-		},
-		"elements": []map[string]interface{}{
-			{
-				"tag": "div",
-				"fields": []map[string]interface{}{
-					{
-						"is_short": true,
-						"text": map[string]interface{}{
-							"tag":     "lark_md",
-							"content": msgLabel,
-						},
-					},
-					{
-						"is_short": true,
-						"text": map[string]interface{}{
-							"tag":     "lark_md",
-							"content": msgAnno,
-						},
-					},
-				},
-			},
-			{
-				"tag": "div",
-				"fields": []map[string]interface{}{
-					{
-						"is_short": true,
-						"text": map[string]interface{}{
-							"tag":     "lark_md",
-							"content": msgSeverity,
-						},
-					},
-					{
-						"is_short": true,
-						"text": map[string]interface{}{
-							"tag":     "lark_md",
-							"content": msgStatus,
-						},
-					},
-				},
-			},
-			{
-				"tag":              "column_set",
-				"flex_mode":        "none",
-				"background_style": "default",
-				"columns": []map[string]interface{}{
-					{
-						"tag":            "column",
-						"width":          "weighted",
-						"weight":         1,
-						"vertical_align": "top",
-						"elements": []map[string]interface{}{
-							{
-								"tag": "div",
-								"text": map[string]interface{}{
-									"content": msgStreeNode,
-									"tag":     "lark_md",
-								},
-							},
-						},
-					},
-					{
-						"tag":            "column",
-						"width":          "weighted",
-						"weight":         1,
-						"vertical_align": "top",
-						"elements": []map[string]interface{}{
-							{
-								"tag": "div",
-								"text": map[string]interface{}{
-									"content": msgTime,
-									"tag":     "lark_md",
-								},
-							},
-						},
-					},
-				},
-			},
-			{
-				"tag":              "column_set",
-				"flex_mode":        "none",
-				"background_style": "default",
-				"columns": []map[string]interface{}{
-					{
-						"tag":            "column",
-						"width":          "weighted",
-						"weight":         1,
-						"vertical_align": "top",
-						"elements": []map[string]interface{}{
-							{
-								"tag": "div",
-								"text": map[string]interface{}{
-									"content": msgUpgrade,
-									"tag":     "lark_md",
-								},
-							},
-						},
-					},
-					{
-						"tag":            "column",
-						"width":          "weighted",
-						"weight":         1,
-						"vertical_align": "top",
-						"elements": []map[string]interface{}{
-							{
-								"tag":     "markdown",
-								"content": msgOnduty,
-							},
-						},
-					},
-				},
-			},
-			{
-				"tag": "div",
-				"fields": []map[string]interface{}{
-					{
-						"is_short": true,
-						"text": map[string]interface{}{
-							"tag":     "lark_md",
-							"content": msgGrafana,
-						},
-					},
-					{
-						"is_short": true,
-						"text": map[string]interface{}{
-							"tag":     "lark_md",
-							"content": msgSendGroup,
-						},
-					},
-				},
-			},
-			{
-				"tag": "hr",
-			},
-			{
-				"tag":     "markdown",
-				"content": msgExpr,
-			},
-			{
-				"tag": "hr",
-			},
-			{
-				"tag": "div",
-				"text": map[string]interface{}{
-					"tag":     "lark_md",
-					"content": "🔴 告警屏蔽按钮 [下面是单一告警屏蔽👇][右侧是按告警名称屏蔽👉]",
-				},
-				"extra": map[string]interface{}{
-					"tag": "overflow",
-					"options": []map[string]interface{}{
-						{
-							"text": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "屏蔽1小时",
-							},
-							"value": "appStore",
-							"url":   buttonURLs[0],
-						},
-						{
-							"text": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "屏蔽6小时",
-							},
-							"value": "document",
-							"url":   buttonURLs[1],
-						},
-						{
-							"text": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "屏蔽24小时",
-							},
-							"value": "document",
-							"url":   buttonURLs[2],
-						},
-					},
-				},
-			},
-			{
-				"tag": "action",
-				"actions": []map[string]interface{}{
-					{
-						"tag": "button",
-						"text": map[string]interface{}{
-							"tag":     "plain_text",
-							"content": "认领告警",
-						},
-						"type": "primary",
-						"multi_url": map[string]interface{}{
-							"url": buttonURLs[3],
-						},
-						"confirm": map[string]interface{}{
-							"title": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "确定认领吗",
-							},
-							"text": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "",
-							},
-						},
-					},
-					{
-						"tag": "button",
-						"text": map[string]interface{}{
-							"tag":     "plain_text",
-							"content": "屏蔽1小时",
-						},
-						"type": "default",
-						"multi_url": map[string]interface{}{
-							"url": buttonURLs[4],
-						},
-						"confirm": map[string]interface{}{
-							"title": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "确定屏蔽吗",
-							},
-							"text": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "",
-							},
-						},
-					},
-					{
-						"tag": "button",
-						"text": map[string]interface{}{
-							"tag":     "plain_text",
-							"content": "屏蔽24小时",
-						},
-						"type": "danger",
-						"multi_url": map[string]interface{}{
-							"url": buttonURLs[5],
-						},
-						"confirm": map[string]interface{}{
-							"title": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "确定屏蔽吗",
-							},
-							"text": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "",
-							},
-						},
-					},
-				},
-			},
-			{
-				"tag": "hr",
-			},
-			{
-				"tag": "action",
-				"actions": []map[string]interface{}{
-					{
-						"tag": "button",
-						"text": map[string]interface{}{
-							"tag":     "plain_text",
-							"content": "取消屏蔽",
-						},
-						"type": "primary",
-						"multi_url": map[string]interface{}{
-							"url": buttonURLs[6],
-						},
-						"confirm": map[string]interface{}{
-							"title": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "确定取消吗",
-							},
-							"text": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "",
-							},
-						},
-					},
-					{
-						"tag": "button",
-						"text": map[string]interface{}{
-							"tag":     "plain_text",
-							"content": "屏蔽6小时",
-						},
-						"type": "default",
-						"multi_url": map[string]interface{}{
-							"url": buttonURLs[7],
-						},
-						"confirm": map[string]interface{}{
-							"title": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "确定屏蔽吗",
-							},
-							"text": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "",
-							},
-						},
-					},
-					{
-						"tag": "button",
-						"text": map[string]interface{}{
-							"tag":     "plain_text",
-							"content": "屏蔽7天",
-						},
-						"type": "danger",
-						"multi_url": map[string]interface{}{
-							"url": buttonURLs[8],
-						},
-						"confirm": map[string]interface{}{
-							"title": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "确定屏蔽吗",
-							},
-							"text": map[string]interface{}{
-								"tag":     "plain_text",
-								"content": "",
-							},
-						},
-					},
-				},
-			},
-			{
-				"tag": "hr",
-			},
-			{
-				"tag": "div",
-				"text": map[string]interface{}{
-					"content": "🙋‍♂️ [我要反馈错误](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message-development-tutorial/introduction?from=mcb) | 📝 [录入报警处理过程](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message-development-tutorial/introduction?from=mcb)",
-					"tag":     "lark_md",
-				},
-			},
-		},
-	}
-
-	// 序列化 Feishu 卡片结构体为 JSON 字符串
-	cardJSON, err := json.Marshal(card)
-	if err != nil {
-		return "", fmt.Errorf("序列化 Feishu 卡片内容失败: %w", err)
-	}
-
-	return string(cardJSON), nil
+	return cardContent, nil
 }
 
 // SentFeishuGroup 发送消息到 Feishu 群聊
@@ -616,7 +603,7 @@ func (wc *webhookContent) SentFeishuGroup(ctx context.Context, msg string, robot
 	url := fmt.Sprintf("%s/%s", viper.GetString("webhook.im_feishu.group_message_api"), robotToken)
 
 	// 发送 HTTP POST 请求
-	response, err := wc.postWithJson(ctx, url, msg, nil)
+	response, err := wc.postWithJson(ctx, url, msg, nil, nil)
 	if err != nil {
 		wc.l.Error("发送飞书群聊卡片消息失败",
 			zap.Error(err),
@@ -628,11 +615,12 @@ func (wc *webhookContent) SentFeishuGroup(ctx context.Context, msg string, robot
 	return nil
 }
 
-// FeishuPrivateCardMsg 定义私聊消息的结构体
+// FeishuPrivateCardMsg 私聊消息的结构体
 type FeishuPrivateCardMsg struct {
-	MsgType   string `json:"msg_type"`
-	ReceiveId string `json:"receive_id"`
-	Content   string `json:"content"`
+	ReceiveId     string `json:"receive_id"`
+	ReceiveIdType string `json:"receive_id_type"`
+	MsgType       string `json:"msg_type"`
+	Content       string `json:"content"`
 }
 
 // SentFeishuPrivate 发送消息到 Feishu 私聊
@@ -640,9 +628,10 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 	for userId := range privateUserIds {
 		// 构建私聊消息结构体
 		feishuPrivateCardMsg := FeishuPrivateCardMsg{
-			MsgType:   "interactive",
-			ReceiveId: userId,
-			Content:   cardContent,
+			ReceiveId:     userId,
+			ReceiveIdType: "user_id",
+			MsgType:       "interactive",
+			Content:       cardContent,
 		}
 
 		// 序列化消息结构体为 JSON
@@ -661,11 +650,12 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 		// 构建请求头
 		headers := map[string]string{
 			"Authorization": fmt.Sprintf("Bearer %s", wc.robot.GetPrivateRobotToken()),
-			"Content-Type":  "application/json",
+			"Content-Type":  "application/json; charset=utf-8",
 		}
+		params := map[string]string{"receive_id_type": "user_id"}
 
 		// 发送 HTTP POST 请求
-		response, err := wc.postWithJson(ctx, url, string(data), headers)
+		response, err := wc.postWithJson(ctx, url, string(data), params, headers)
 		if err != nil {
 			wc.l.Error("发送飞书私聊卡片消息失败",
 				zap.Error(err),
@@ -680,7 +670,7 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 }
 
 // postWithJson 发送带有JSON字符串的POST请求
-func (wc *webhookContent) postWithJson(ctx context.Context, url string, jsonStr string, headers map[string]string) ([]byte, error) {
+func (wc *webhookContent) postWithJson(ctx context.Context, url string, jsonStr string, params map[string]string, headers map[string]string) ([]byte, error) {
 	// 创建 HTTP 请求
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer([]byte(jsonStr)))
 	if err != nil {
@@ -690,6 +680,14 @@ func (wc *webhookContent) postWithJson(ctx context.Context, url string, jsonStr 
 		)
 		return nil, err
 	}
+
+	// 设置查询参数
+	q := req.URL.Query()
+	for k, v := range params {
+		q.Add(k, v)
+	}
+
+	req.URL.RawQuery = q.Encode()
 
 	// 设置请求头
 	for key, value := range headers {
