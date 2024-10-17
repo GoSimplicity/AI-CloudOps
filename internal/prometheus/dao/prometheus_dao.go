@@ -441,7 +441,7 @@ func (p *prometheusDao) GetMonitorOnDutyGroupById(ctx context.Context, id int) (
 	}
 
 	var group model.MonitorOnDutyGroup
-	if err := p.db.WithContext(ctx).First(&group, id).Error; err != nil {
+	if err := p.db.WithContext(ctx).Preload("Members").First(&group, id).Error; err != nil {
 		p.l.Error("获取 MonitorOnDutyGroup 失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
@@ -1280,7 +1280,7 @@ func (p *prometheusDao) GetMonitorAlertManagerPoolById(ctx context.Context, id i
 func (p *prometheusDao) GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyHistory, error) {
 	var historyList []*model.MonitorOnDutyHistory
 
-	if err := p.db.WithContext(ctx).Where("on_duty_group_id = ? AND data_string >= ? AND data_string <= ?", groupID, startTime, endTime).Find(&historyList).Error; err != nil {
+	if err := p.db.WithContext(ctx).Where("on_duty_group_id = ? AND date_string >= ? AND date_string <= ?", groupID, startTime, endTime).Find(&historyList).Error; err != nil {
 		p.l.Error("获取值班历史记录失败", zap.Error(err))
 		return nil, err
 	}
@@ -1291,7 +1291,7 @@ func (p *prometheusDao) GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx context
 func (p *prometheusDao) GetMonitorOnDutyHistoryByGroupIdAndDay(ctx context.Context, groupID int, day string) (*model.MonitorOnDutyHistory, error) {
 	var history *model.MonitorOnDutyHistory
 
-	if err := p.db.WithContext(ctx).Where("on_duty_group_id = ? AND data_string = ?", groupID, day).First(&history).Error; err != nil {
+	if err := p.db.WithContext(ctx).Where("on_duty_group_id = ? AND date_string = ?", groupID, day).First(&history).Error; err != nil {
 		p.l.Error("获取值班历史记录失败", zap.Error(err))
 		return nil, err
 	}
@@ -1310,7 +1310,7 @@ func (p *prometheusDao) CreateMonitorOnDutyHistory(ctx context.Context, monitorO
 func (p *prometheusDao) ExistsMonitorOnDutyHistory(ctx context.Context, groupID int, day string) (bool, error) {
 	var count int64
 
-	if err := p.db.WithContext(ctx).Model(&model.MonitorOnDutyHistory{}).Where("on_duty_group_id = ? AND data_string = ?", groupID, day).Count(&count).Error; err != nil {
+	if err := p.db.WithContext(ctx).Model(&model.MonitorOnDutyHistory{}).Where("on_duty_group_id = ? AND date_string = ?", groupID, day).Count(&count).Error; err != nil {
 		return false, err
 	}
 
