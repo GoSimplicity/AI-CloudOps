@@ -319,6 +319,13 @@ func (p *prometheusService) CreateMonitorOnDutyGroup(ctx context.Context, monito
 		return errors.New("值班组已存在")
 	}
 
+	users, err := p.userDao.GetUserByUsernames(ctx, monitorOnDutyGroup.UserNames)
+	if err != nil {
+		p.l.Error("创建值班组失败：获取值班组成员信息时出错", zap.Error(err))
+		return err
+	}
+
+	monitorOnDutyGroup.Members = users
 	// 创建值班组
 	if err := p.dao.CreateMonitorOnDutyGroup(ctx, monitorOnDutyGroup); err != nil {
 		p.l.Error("创建值班组失败", zap.Error(err))
@@ -497,7 +504,7 @@ func (p *prometheusService) GetMonitorOnDutyGroupFuturePlan(ctx context.Context,
 	// 生成从开始日期到结束日期的所有日期列表
 	totalDays := int(endTime.Sub(startTime).Hours()/24) + 1
 	for i := 0; i < totalDays; i++ {
-		currentDate := startTime.AddDate(0, 0, i).Format("2006-01-02")
+		currentDate := startTime.AddDate(0, 0, i).Format("2006-01-02") // 计算开始日期和结束日期之间的每一天
 
 		var user *model.User
 		var originUserName string
@@ -513,6 +520,8 @@ func (p *prometheusService) GetMonitorOnDutyGroupFuturePlan(ctx context.Context,
 				originUser, err := p.userDao.GetUserByID(ctx, history.OriginUserID)
 				if err == nil {
 					originUserName = originUser.RealName
+				} else {
+					p.l.Warn("获取原始用户信息失败", zap.Int("originUserID", history.OriginUserID), zap.Error(err))
 				}
 			}
 		} else {
@@ -559,7 +568,7 @@ func (p *prometheusService) calculateOnDutyUser(ctx context.Context, group *mode
 	}
 
 	// 计算从今天开始的天数差
-	daysDiff := int(targetDate.Sub(today).Hours() / 24)
+	daysDiff := int(targetDate.Sub(today).Hours()) / 24
 
 	// 获取当前值班人的索引
 	currentUserIndex := p.getCurrentUserIndex(ctx, group, todayStr)
@@ -568,24 +577,45 @@ func (p *prometheusService) calculateOnDutyUser(ctx context.Context, group *mode
 		return nil
 	}
 
-	// 根据轮班规则计算值班人索引
+	// 获取总成员数和每班轮值天数
 	totalMembers := len(group.Members)
 	shiftDays := group.ShiftDays
+
+	// 检查轮班天数是否为零，避免除零错误
+	if shiftDays == 0 || totalMembers == 0 {
+		p.l.Error("轮班天数或成员数量无效", zap.Int("shiftDays", shiftDays), zap.Int("totalMembers", totalMembers))
+		return nil
+	}
+
+	// 总的轮班周期长度
 	totalShiftLength := totalMembers * shiftDays
 
 	// 自定义取模函数，确保结果为非负数
 	mod := func(a, b int) int {
+		if b == 0 {
+			p.l.Error("除零错误", zap.Int("b", b))
+			return -1
+		}
 		return (a%b + b) % b
 	}
 
 	// 计算目标日期的值班人索引
 	indexInShift := mod(currentUserIndex*shiftDays+daysDiff, totalShiftLength)
+	if indexInShift == -1 {
+		p.l.Error("取模运算出错，可能是因为轮班天数或成员数量无效", zap.Int("currentUserIndex", currentUserIndex), zap.Int("shiftDays", shiftDays), zap.Int("totalMembers", totalMembers))
+		return nil
+	}
+
+	// 确定值班人的索引
 	userIndex := indexInShift / shiftDays
 
-	// 返回对应的用户
+	// 确认索引范围有效，返回对应的成员
 	if userIndex >= 0 && userIndex < totalMembers {
 		return group.Members[userIndex]
 	}
+
+	// 如果索引超出范围
+	p.l.Error("计算出的值班人索引无效", zap.Int("userIndex", userIndex), zap.Int("totalMembers", totalMembers))
 
 	return nil
 }
