@@ -722,12 +722,15 @@ func (mc *monitorCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx context
 			)
 			ft, _ = pm.ParseDuration("5s")
 		}
+		lables := pkg.FromSliceTuMap(rule.Labels)
+		annotations := pkg.FromSliceTuMap(rule.Annotations)
+
 		oneRule := rulefmt.Rule{
-			Alert:       rule.Name,         // 告警名称
-			Expr:        rule.Expr,         // 告警表达式
-			For:         ft,                // 持续时间
-			Labels:      rule.LabelsM,      // 标签组
-			Annotations: rule.AnnotationsM, // 注解组
+			Alert:       rule.Name,   // 告警名称
+			Expr:        rule.Expr,   // 告警表达式
+			For:         ft,          // 持续时间
+			Labels:      lables,      // 标签组
+			Annotations: annotations, // 注解组
 		}
 
 		ruleGroup := RuleGroup{

@@ -2,7 +2,6 @@ package model
 
 import (
 	"github.com/prometheus/alertmanager/template"
-	"time"
 )
 
 // MonitorScrapePool 采集池的配置
@@ -134,11 +133,11 @@ type MonitorSendGroup struct {
 // MonitorOnDutyChange 值班换班记录
 type MonitorOnDutyChange struct {
 	Model
-	OnDutyGroupID int       `json:"onDutyGroupId" gorm:"uniqueIndex:group_id_date;comment:值班组ID，用于唯一标识值班历史记录"` // 值班组ID，用于标识换班记录所属的值班组
-	UserID        int       `json:"userId" gorm:"comment:创建该换班记录的用户ID"`                                        // 创建该换班记录的用户ID
-	Date          time.Time `json:"date" gorm:"uniqueIndex:group_id_date;comment:计划哪一天进行换班的日期"`                // 计划哪一天进行换班的日期字符串
-	OnDutyUserID  int       `json:"onDutyUserId" gorm:"comment:换班后值班人员的用户ID"`                                  // 换班后值班人员的用户ID
-	OriginUserID  int       `json:"originUserId" gorm:"comment:换班前原定的值班人员用户ID"`                                // 换班前原定的值班人员用户ID
+	OnDutyGroupID int    `json:"onDutyGroupId" gorm:"uniqueIndex:group_id_date;comment:值班组ID，用于唯一标识值班历史记录"` // 值班组ID，用于标识换班记录所属的值班组
+	UserID        int    `json:"userId" gorm:"comment:创建该换班记录的用户ID"`                                        // 创建该换班记录的用户ID
+	Date          string `json:"date" gorm:"comment:计划哪一天进行换班的日期"`                                          // 计划哪一天进行换班的日期字符串
+	OriginUserID  int    `json:"originUserId" gorm:"comment:换班前原定的值班人员用户ID"`                                // 换班前原定的值班人员用户ID
+	OnDutyUserID  int    `json:"onDutyUserId" gorm:"comment:换班后值班人员的用户ID"`                                  // 换班后值班人员的用户ID
 
 	// 前端使用字段
 	TargetUserName string `json:"targetUserName,omitempty" gorm:"-"` // 前端传递的目标用户名称
@@ -155,7 +154,6 @@ type MonitorOnDutyGroup struct {
 	UserID                    int     `json:"userId" gorm:"comment:创建该值班组的用户ID"`                                                                               // 创建该值班组的用户ID
 	Members                   []*User `json:"members" gorm:"many2many:monitor_onDuty_users;comment:值班组成员列表，多对多关系"`                                             // 值班组成员列表，多对多关系
 	ShiftDays                 int     `json:"shiftDays,omitempty" gorm:"type:int;comment:轮班周期，以天为单位"`                                                          // 轮班周期，以天为单位
-	ImRobotToken              string  `json:"imRobotToken,omitempty" gorm:"size:255;comment:IM机器人Token，用于指定对应的IM群"`                                            // IM机器人Token，用于指定对应的IM群
 	YesterdayNormalDutyUserID int     `json:"yesterdayNormalDutyUserId" gorm:"comment:昨天的正常排班值班人ID，由cron任务设置"`                                                 // 昨天的正常排班值班人ID，由cron任务设置
 
 	// 前端使用字段
@@ -169,7 +167,7 @@ type MonitorOnDutyGroup struct {
 type MonitorOnDutyHistory struct {
 	Model
 	OnDutyGroupID int    `json:"onDutyGroupId" gorm:"uniqueIndex:group_id_date;comment:值班组ID，用于唯一标识值班历史记录"` // 值班组ID，用于唯一标识值班历史记录
-	DateString    string `json:"dateString" gorm:"uniqueIndex:group_id_date;size:50;comment:具体哪一天的日期字符串"`   // 具体哪一天的日期字符串
+	DateString    string `json:"dateString" gorm:"uniqueIndex:group_id_date;type:varchar(50);comment:日期"`   // 具体哪一天的日期字符串
 	OnDutyUserID  int    `json:"onDutyUserId" gorm:"comment:当天值班人员的用户ID"`                                   // 当天值班人员的用户ID
 	OriginUserID  int    `json:"originUserId" gorm:"comment:原计划的值班人员用户ID"`                                  // 原计划的值班人员用户ID
 
@@ -254,4 +252,17 @@ type PromqlExprCheckReq struct {
 
 type IdRequest struct {
 	ID int `json:"id" binding:"required"`
+}
+
+type OnDutyPlanResp struct {
+	Details       []OnDutyOne       `json:"details"`
+	Map           map[string]string `json:"map"`
+	UserNameMap   map[string]string `json:"userNameMap"`
+	OriginUserMap map[string]string `json:"originUserMap"`
+}
+
+type OnDutyOne struct {
+	Date       string `json:"date"`
+	User       *User  `json:"user"`
+	OriginUser string `json:"originUser"` // 原始用户名
 }

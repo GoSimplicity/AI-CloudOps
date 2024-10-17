@@ -252,7 +252,7 @@ func (wd *webhookDao) getUserByID(ctx context.Context, userID int) (*model.User,
 }
 
 // assignDefaultDutyUser 为值班组分配默认的值班用户（成员列表中的第一个成员）
-func (wd *webhookDao) assignDefaultDutyUser(ctx context.Context, onDutyGroup *model.MonitorOnDutyGroup, dateStr string) (*model.MonitorOnDutyGroup, error) {
+func (wd *webhookDao) assignDefaultDutyUser(_ context.Context, onDutyGroup *model.MonitorOnDutyGroup, dateStr string) (*model.MonitorOnDutyGroup, error) {
 	if len(onDutyGroup.Members) == 0 {
 		wd.l.Warn("onDutyGroup.Members 为空，无法分配 TodayDutyUser",
 			zap.Int("onDutyGroupId", onDutyGroup.ID),
