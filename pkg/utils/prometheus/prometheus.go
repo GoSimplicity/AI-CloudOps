@@ -254,3 +254,88 @@ func FromSliceTuMap(kvs []string) map[string]string {
 	}
 	return labelsMap
 }
+
+// PostWithJson 发送带有JSON字符串的POST请求
+func PostWithJson(ctx context.Context, client *http.Client, l *zap.Logger, url string, jsonStr string, params map[string]string, headers map[string]string) ([]byte, error) {
+	// 创建 HTTP 请求
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer([]byte(jsonStr)))
+	if err != nil {
+		l.Error("创建 HTTP 请求失败",
+			zap.Error(err),
+			zap.String("url", url),
+		)
+		return nil, err
+	}
+
+	// 设置查询参数
+	q := req.URL.Query()
+	for k, v := range params {
+		q.Add(k, v)
+	}
+
+	req.URL.RawQuery = q.Encode()
+
+	// 设置请求头
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	// 设置默认 Content-Type
+	if _, exists := headers["Content-Type"]; !exists {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	// 发送请求
+	resp, err := client.Do(req)
+	if err != nil {
+		l.Error("发送 HTTP 请求失败",
+			zap.Error(err),
+			zap.String("url", url),
+		)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// 读取响应体
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		l.Error("读取响应体失败",
+			zap.Error(err),
+			zap.String("url", url),
+		)
+		return nil, err
+	}
+
+	// 检查 HTTP 状态码
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		l.Error("服务器返回非2xx状态码",
+			zap.String("url", url),
+			zap.Int("statusCode", resp.StatusCode),
+			zap.String("responseBody", string(bodyBytes)),
+		)
+		return bodyBytes, fmt.Errorf("server returned HTTP status %s", resp.Status)
+	}
+
+	return bodyBytes, nil
+}
+
+// CloneMap 克隆一个字符串到字符串的映射
+func CloneMap(original map[string]string) map[string]string {
+	if original == nil {
+		return nil
+	}
+	cloned := make(map[string]string, len(original))
+	for k, v := range original {
+		cloned[k] = v
+	}
+	return cloned
+}
+
+// FormatMap 将 map[string]string 格式化为字符串，每个键值对占一行
+func FormatMap(m map[string]string) string {
+	var builder strings.Builder
+	for k, v := range m {
+		builder.WriteString(fmt.Sprintf("%s=%s ", k, v))
+	}
+	return strings.TrimSpace(builder.String())
+}
