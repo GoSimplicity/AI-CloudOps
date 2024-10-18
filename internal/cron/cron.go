@@ -3,12 +3,12 @@ package cron
 import (
 	"context"
 	"errors"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/onduty"
 	"gorm.io/gorm"
 	"sync"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -22,16 +22,16 @@ type CronManager interface {
 
 // cronManager 实现 CronManager 接口
 type cronManager struct {
-	logger *zap.Logger
-	dao    dao.PrometheusDao
+	logger    *zap.Logger
+	onDutyDao onduty.AlertManagerOnDutyDAO
 	sync.RWMutex
 }
 
 // NewCronManager 创建一个新的 CronManager 实例
-func NewCronManager(logger *zap.Logger, dao dao.PrometheusDao) CronManager {
+func NewCronManager(logger *zap.Logger, onDutyDao onduty.AlertManagerOnDutyDAO) CronManager {
 	return &cronManager{
-		logger: logger,
-		dao:    dao,
+		logger:    logger,
+		onDutyDao: onDutyDao,
 	}
 }
 
@@ -47,7 +47,7 @@ func (cm *cronManager) StartOnDutyHistoryManager(ctx context.Context) error {
 // fillOnDutyHistory 填充所有值班组的历史记录
 func (cm *cronManager) fillOnDutyHistory(ctx context.Context) {
 	// 获取所有的值班组
-	groups, err := cm.dao.GetAllMonitorOndutyGroup(ctx)
+	groups, err := cm.onDutyDao.GetAllMonitorOnDutyGroup(ctx)
 	if err != nil {
 		cm.logger.Error("获取值班组失败", zap.Error(err))
 		return
@@ -72,7 +72,7 @@ func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *
 	todayStr := time.Now().Format("2006-01-02")
 
 	// 检查今天是否已经有值班历史记录
-	exists, err := cm.dao.ExistsMonitorOnDutyHistory(ctx, group.ID, todayStr)
+	exists, err := cm.onDutyDao.ExistsMonitorOnDutyHistory(ctx, group.ID, todayStr)
 	if err != nil {
 		cm.logger.Error("检查值班历史记录失败", zap.Error(err), zap.String("group", group.Name))
 		return
@@ -85,7 +85,7 @@ func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *
 	yesterdayStr := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 
 	// 获取昨天的值班历史记录
-	yesterdayHistory, err := cm.dao.GetMonitorOnDutyHistoryByGroupIdAndDay(ctx, group.ID, yesterdayStr)
+	yesterdayHistory, err := cm.onDutyDao.GetMonitorOnDutyHistoryByGroupIdAndDay(ctx, group.ID, yesterdayStr)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		cm.logger.Error("获取昨天的值班历史记录失败", zap.Error(err), zap.String("group", group.Name))
 		return
@@ -118,7 +118,7 @@ func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *
 		DateString:    todayStr,
 		OnDutyUserID:  onDutyUserID,
 	}
-	if err := cm.dao.CreateMonitorOnDutyHistory(ctx, history); err != nil {
+	if err := cm.onDutyDao.CreateMonitorOnDutyHistory(ctx, history); err != nil {
 		cm.logger.Error("创建值班历史记录失败", zap.Error(err), zap.String("group", group.Name))
 		return
 	}
@@ -131,7 +131,7 @@ func (cm *cronManager) isShiftNeeded(ctx context.Context, group *model.MonitorOn
 	yesterdayStr := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 
 	// 获取最近 shiftDays 天的值班历史记录
-	histories, err := cm.dao.GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx, group.ID, startDate, yesterdayStr)
+	histories, err := cm.onDutyDao.GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx, group.ID, startDate, yesterdayStr)
 	if err != nil {
 		return false, err
 	}
