@@ -76,7 +76,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	var msgGrafana, msgExpr string
 	if rule != nil {
 		msgGrafana = fmt.Sprintf(`**🗳查看grafana大盘图**\n[链接地址](%s)`, rule.GrafanaLink)
-		msgExpr = fmt.Sprintf(`**🏹修改告警规则**\n[规则地址](%s)\n<font color='red'>%s</font>`,
+		msgExpr = fmt.Sprintf(`**🏹修改告警规则** \n[规则地址](%s) \n<font color='red'>%s</font>`,
 			fmt.Sprintf("%s/%s?ruleid=%v",
 				viper.GetString("webhook.front_domain"),
 				"monitor/rule/detail",
@@ -129,7 +129,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	if event.Status != "renlinged" && alert.Status == string(constant.AlertStatusFiring) && sendGroup.FirstUpgradeUsers != nil && len(sendGroup.FirstUpgradeUsers) > 0 {
 		upgradeMinutes := sendGroup.UpgradeMinutes
 		if upgradeMinutes == 0 {
-			upgradeMinutes = constant.DefaultUpgradeMinutes
+			upgradeMinutes = viper.GetInt("webhook.default_upgrade_minutes")
 		}
 		if time.Since(alert.StartsAt) > time.Minute*time.Duration(upgradeMinutes) {
 			var upgradeUserNames, upgradeUserAtIds strings.Builder
