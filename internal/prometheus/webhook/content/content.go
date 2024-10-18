@@ -1,12 +1,11 @@
 package content
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
 	"github.com/spf13/viper"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -17,311 +16,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/robot"
 	"github.com/prometheus/alertmanager/template"
 	"go.uber.org/zap"
-)
-
-var (
-	feiShuCardContent = `
-{
-  "header": {
-    "template": "%s",
-    "title": {
-      "content": "%s",
-      "tag": "plain_text"
-    }
-  },
-  "elements": [
-    {
-      "tag": "div",
-      "fields": [
-        {
-          "is_short": true,
-          "text": {
-            "tag": "lark_md",
-            "content": "%s"
-          }
-        },
-        {
-          "is_short": true,
-          "text": {
-            "tag": "lark_md",
-            "content": "%s"
-          }
-        }
-      ]
-    },
-    {
-      "tag": "div",
-      "fields": [
-        {
-          "is_short": true,
-          "text": {
-            "tag": "lark_md",
-            "content": "%s"
-          }
-        },
-        {
-          "is_short": true,
-          "text": {
-            "tag": "lark_md",
-            "content": "%s"
-          }
-        }
-      ]
-    },
-    {
-      "tag": "column_set",
-      "flex_mode": "none",
-      "background_style": "default",
-      "columns": [
-        {
-          "tag": "column",
-          "width": "weighted",
-          "weight": 1,
-          "vertical_align": "top",
-          "elements": [
-            {
-              "tag": "div",
-              "text": {
-                "content": "%s",
-                "tag": "lark_md"
-              }
-            }
-          ]
-        },
-        {
-          "tag": "column",
-          "width": "weighted",
-          "weight": 1,
-          "vertical_align": "top",
-          "elements": [
-            {
-              "tag": "div",
-              "text": {
-                "content": "%s",
-                "tag": "lark_md"
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "tag": "column_set",
-      "flex_mode": "none",
-      "background_style": "default",
-      "columns": [
-        {
-          "tag": "column",
-          "width": "weighted",
-          "weight": 1,
-          "vertical_align": "top",
-          "elements": [
-            {
-              "tag": "div",
-              "text": {
-                "content": "%s",
-                "tag": "lark_md"
-              }
-            }
-          ]
-        },
-        {
-          "tag": "column",
-          "width": "weighted",
-          "weight": 1,
-          "vertical_align": "top",
-          "elements": [
-            {
-              "tag": "markdown",
-              "content": "%s"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "tag": "div",
-      "fields": [
-        {
-          "is_short": true,
-          "text": {
-            "tag": "lark_md",
-            "content": "%s\n"
-          }
-        },
-        {
-          "is_short": true,
-          "text": {
-            "tag": "lark_md",
-            "content": "%s"
-          }
-        }
-      ]
-    },
-    {
-      "tag": "hr"
-    },
-    {
-      "tag": "markdown",
-      "content": "%s"
-    },
-    {
-      "tag": "hr"
-    },
-    {
-      "tag": "div",
-      "text": {
-        "tag": "lark_md",
-        "content": "🔴 告警屏蔽按钮 [下面是单一告警屏蔽👇][右侧是按告警名称屏蔽👉]"
-      }
-    },
-    {
-      "tag": "action",
-      "actions": [
-        {
-          "tag": "button",
-          "text": {
-            "tag": "plain_text",
-            "content": "认领告警"
-          },
-          "type": "primary",
-          "url": "%s",
-          "confirm": {
-            "title": {
-              "tag": "plain_text",
-              "content": "确定认领吗"
-            },
-            "text": {
-              "tag": "plain_text",
-              "content": ""
-            }
-          }
-        },
-        {
-          "tag": "button",
-          "text": {
-            "tag": "plain_text",
-            "content": "屏蔽1小时"
-          },
-          "type": "default",
-          "url": "%s",
-          "confirm": {
-            "title": {
-              "tag": "plain_text",
-              "content": "确定屏蔽吗"
-            },
-            "text": {
-              "tag": "plain_text",
-              "content": ""
-            }
-          }
-        },
-        {
-          "tag": "button",
-          "text": {
-            "tag": "plain_text",
-            "content": "屏蔽24小时"
-          },
-          "type": "danger",
-          "url": "%s",
-          "confirm": {
-            "title": {
-              "tag": "plain_text",
-              "content": "确定屏蔽吗"
-            },
-            "text": {
-              "tag": "plain_text",
-              "content": ""
-            }
-          }
-        }
-      ]
-    },
-    {
-      "tag": "hr"
-    },
-    {
-      "tag": "action",
-      "actions": [
-        {
-          "tag": "button",
-          "text": {
-            "tag": "plain_text",
-            "content": "取消屏蔽"
-          },
-          "type": "primary",
-          "url": "%s",
-          "confirm": {
-            "title": {
-              "tag": "plain_text",
-              "content": "确定取消吗"
-            },
-            "text": {
-              "tag": "plain_text",
-              "content": ""
-            }
-          }
-        },
-        {
-          "tag": "button",
-          "text": {
-            "tag": "plain_text",
-            "content": "屏蔽6小时"
-          },
-          "type": "default",
-          "url": "%s",
-          "confirm": {
-            "title": {
-              "tag": "plain_text",
-              "content": "确定屏蔽吗"
-            },
-            "text": {
-              "tag": "plain_text",
-              "content": ""
-            }
-          }
-        },
-        {
-          "tag": "button",
-          "text": {
-            "tag": "plain_text",
-            "content": "屏蔽7天"
-          },
-          "type": "danger",
-          "url": "%s",
-          "confirm": {
-            "title": {
-              "tag": "plain_text",
-              "content": "确定屏蔽吗"
-            },
-            "text": {
-              "tag": "plain_text",
-              "content": ""
-            }
-          }
-        }
-      ]
-    },
-    {
-      "tag": "hr"
-    },
-    {
-      "tag": "div",
-      "text": {
-        "tag": "lark_md",
-        "content": "🙋‍♂️ [我要反馈错误](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message-development-tutorial/introduction?from=mcb) | 📝 [录入报警处理过程](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message-development-tutorial/introduction?from=mcb)"
-      }
-    }
-  ]
-}
-`
-
-	feiShuCartDataGroup = `
-{
-    "msg_type": "interactive",
-    "card": %s
-}
-`
 )
 
 type WebhookContent interface {
@@ -382,7 +76,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	var msgGrafana, msgExpr string
 	if rule != nil {
 		msgGrafana = fmt.Sprintf(`**🗳查看grafana大盘图**\n[链接地址](%s)`, rule.GrafanaLink)
-		msgExpr = fmt.Sprintf(`**🏹修改告警规则**\n[规则地址](%s)\n<font color='red'>%s</font>`,
+		msgExpr = fmt.Sprintf(`**🏹修改告警规则** \n[规则地址](%s) \n<font color='red'>%s</font>`,
 			fmt.Sprintf("%s/%s?ruleid=%v",
 				viper.GetString("webhook.front_domain"),
 				"monitor/rule/detail",
@@ -435,7 +129,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	if event.Status != "renlinged" && alert.Status == string(constant.AlertStatusFiring) && sendGroup.FirstUpgradeUsers != nil && len(sendGroup.FirstUpgradeUsers) > 0 {
 		upgradeMinutes := sendGroup.UpgradeMinutes
 		if upgradeMinutes == 0 {
-			upgradeMinutes = constant.DefaultUpgradeMinutes
+			upgradeMinutes = viper.GetInt("webhook.default_upgrade_minutes")
 		}
 		if time.Since(alert.StartsAt) > time.Minute*time.Duration(upgradeMinutes) {
 			var upgradeUserNames, upgradeUserAtIds strings.Builder
@@ -475,18 +169,18 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	}
 
 	// 处理告警标签和注释
-	labelMap := cloneMap(alert.Labels)
+	labelMap := pkg.CloneMap(alert.Labels)
 	delete(labelMap, "alertname")
 	delete(labelMap, "severity")
 	delete(labelMap, "bind_tree_node")
 	delete(labelMap, "alert_rule_id")
 	delete(labelMap, "alert_send_group")
 
-	anno := cloneMap(alert.Annotations)
+	anno := pkg.CloneMap(alert.Annotations)
 	delete(anno, "description_value")
 
-	msgLabel := fmt.Sprintf(`**🛶标签信息：**\n%s`, formatMap(labelMap))
-	msgAnno := fmt.Sprintf(`**🚂anno信息：**\n%s`, formatMap(anno))
+	msgLabel := fmt.Sprintf(`**🛶标签信息：**\n%s`, pkg.FormatMap(labelMap))
+	msgAnno := fmt.Sprintf(`**🚂anno信息：**\n%s`, pkg.FormatMap(anno))
 
 	// 构建发送组信息
 	sendGroupUrl := fmt.Sprintf(constant.SendGroupURLTemplate,
@@ -544,7 +238,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	}
 
 	// 群聊发送
-	msgQun := fmt.Sprintf(feiShuCartDataGroup, cardContent)
+	msgQun := fmt.Sprintf(constant.CartDataGroup, cardContent)
 
 	if err := wc.SentFeishuGroup(ctx, msgQun, sendGroup.FeiShuQunRobotToken); err != nil {
 		wc.l.Error("发送 Feishu 群聊消息失败",
@@ -566,7 +260,7 @@ func (wc *webhookContent) buildFeishuCardContent(
 ) (string, error) {
 
 	// 格式化 feiShuCardContent 模板
-	cardContent := fmt.Sprintf(feiShuCardContent,
+	cardContent := fmt.Sprintf(constant.CardContent,
 		alertHeaderColor, // header.template
 		alertHeader,      // header.title.content
 		msgLabel,         // 第一行标签信息
@@ -603,7 +297,7 @@ func (wc *webhookContent) SentFeishuGroup(ctx context.Context, msg string, robot
 	url := fmt.Sprintf("%s/%s", viper.GetString("webhook.im_feishu.group_message_api"), robotToken)
 
 	// 发送 HTTP POST 请求
-	response, err := wc.postWithJson(ctx, url, msg, nil, nil)
+	response, err := pkg.PostWithJson(ctx, wc.client, wc.l, url, msg, nil, nil)
 	if err != nil {
 		wc.l.Error("发送飞书群聊卡片消息失败",
 			zap.Error(err),
@@ -655,7 +349,7 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 		params := map[string]string{"receive_id_type": "user_id"}
 
 		// 发送 HTTP POST 请求
-		response, err := wc.postWithJson(ctx, url, string(data), params, headers)
+		response, err := pkg.PostWithJson(ctx, wc.client, wc.l, url, string(data), params, headers)
 		if err != nil {
 			wc.l.Error("发送飞书私聊卡片消息失败",
 				zap.Error(err),
@@ -667,89 +361,4 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 	}
 
 	return nil
-}
-
-// postWithJson 发送带有JSON字符串的POST请求
-func (wc *webhookContent) postWithJson(ctx context.Context, url string, jsonStr string, params map[string]string, headers map[string]string) ([]byte, error) {
-	// 创建 HTTP 请求
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer([]byte(jsonStr)))
-	if err != nil {
-		wc.l.Error("创建 HTTP 请求失败",
-			zap.Error(err),
-			zap.String("url", url),
-		)
-		return nil, err
-	}
-
-	// 设置查询参数
-	q := req.URL.Query()
-	for k, v := range params {
-		q.Add(k, v)
-	}
-
-	req.URL.RawQuery = q.Encode()
-
-	// 设置请求头
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-
-	// 设置默认 Content-Type
-	if _, exists := headers["Content-Type"]; !exists {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	// 发送请求
-	resp, err := wc.client.Do(req)
-	if err != nil {
-		wc.l.Error("发送 HTTP 请求失败",
-			zap.Error(err),
-			zap.String("url", url),
-		)
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// 读取响应体
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		wc.l.Error("读取响应体失败",
-			zap.Error(err),
-			zap.String("url", url),
-		)
-		return nil, err
-	}
-
-	// 检查 HTTP 状态码
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		wc.l.Error("服务器返回非2xx状态码",
-			zap.String("url", url),
-			zap.Int("statusCode", resp.StatusCode),
-			zap.String("responseBody", string(bodyBytes)),
-		)
-		return bodyBytes, fmt.Errorf("server returned HTTP status %s", resp.Status)
-	}
-
-	return bodyBytes, nil
-}
-
-// cloneMap 克隆一个字符串到字符串的映射
-func cloneMap(original map[string]string) map[string]string {
-	if original == nil {
-		return nil
-	}
-	cloned := make(map[string]string, len(original))
-	for k, v := range original {
-		cloned[k] = v
-	}
-	return cloned
-}
-
-// formatMap 将 map[string]string 格式化为字符串，每个键值对占一行
-func formatMap(m map[string]string) string {
-	var builder strings.Builder
-	for k, v := range m {
-		builder.WriteString(fmt.Sprintf("%s=%s ", k, v))
-	}
-	return strings.TrimSpace(builder.String())
 }
