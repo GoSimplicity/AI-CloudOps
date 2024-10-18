@@ -375,3 +375,11 @@ type K8sConfigMapRequest struct {
 	ConfigMapNames []string        `json:"config_map_names"`                // ConfigMap 名称，可选， 删除用
 	ConfigMap      *core.ConfigMap `json:"config_map"`                      // ConfigMap 对象, 可选
 }
+
+// K8sServiceRequest Service 相关请求结构
+type K8sServiceRequest struct {
+	ClusterName  string        `json:"cluster_name" binding:"required"` // 集群名称，必填
+	Namespace    string        `json:"namespace"`                       // 命名空间，必填
+	ServiceNames []string      `json:"service_names"`                   // Service 名称，可选
+	Service      *core.Service `json:"service"`                         // Service 对象, 可选
+}
