@@ -159,7 +159,7 @@ var (
       "tag": "div",
       "text": {
         "tag": "lark_md",
-        "content": "🔴 告警屏蔽按钮 [下面是单一告警屏蔽👇][右侧是按告警名称屏蔽👉]"
+        "content": "🔴 告警屏蔽按钮 [单一告警屏蔽👇]"
       }
     },
     {
@@ -312,12 +312,10 @@ var (
 )
 
 const (
-	// 定义告警严重性等级常量
 	AlertSeverityCritical AlertSeverity = "critical" // 严重
 	AlertSeverityWarning  AlertSeverity = "warning"  // 警告
 	AlertSeverityInfo     AlertSeverity = "info"     // 信息
 
-	// 定义告警状态常量
 	AlertStatusFiring   AlertStatus = "firing"   // 触发中
 	AlertStatusResolved AlertStatus = "resolved" // 已恢复
 )
@@ -343,11 +341,10 @@ var StatusChineseMap = map[AlertStatus]string{
 
 // URL 模板常量
 const (
-	SendGroupURLTemplate     = "%s/%s?id=%v"                            // 发送组 URL 模板
-	RenderingURLTemplate     = "%s/%s?fingerprint=%v"                   // 渲染 URL 模板
-	SilenceURLTemplate       = "%s/%s?fingerprint=%v&hour=%v"           // 静音 URL 模板
-	SilenceByNameURLTemplate = "%s/%s?fingerprint=%v&hour=%v&by_name=1" // 按名称静音 URL 模板
-	UnsilenceURLTemplate     = "%s/%s?fingerprint=%v"                   // 取消静音 URL 模板
+	SendGroupURLTemplate = "%s/%s?id=%v"                  // 发送组 URL 模板
+	RenderingURLTemplate = "%s/%s?fingerprint=%v"         // 渲染 URL 模板
+	SilenceURLTemplate   = "%s/%s?fingerprint=%v&hour=%v" // 静音 URL 模板
+	UnsilenceURLTemplate = "%s/%s?fingerprint=%v"         // 取消静音 URL 模板
 
 	// DefaultUpgradeMinutes 默认告警升级时间（分钟）
 	DefaultUpgradeMinutes = 30 // 默认告警升级时间为30分钟
