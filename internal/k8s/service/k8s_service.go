@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	yamlTask "k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/yaml"
 )
@@ -131,6 +132,17 @@ type K8sService interface {
 	GetConfigMapYaml(ctx context.Context, clusterName, namespace, configMapName string) (*corev1.ConfigMap, error)
 	// DeleteConfigMap 删除 ConfigMap
 	DeleteConfigMap(ctx context.Context, clusterName, namespace string, configMapName []string) error
+
+	// GetServicesByNamespace 获取指定命名空间的 Service 列表
+	GetServicesByNamespace(ctx context.Context, clusterName, namespace string) ([]*corev1.Service, error)
+	// GetServiceYaml 获取指定 Service 的 YAML 配置
+	GetServiceYaml(ctx context.Context, clusterName, namespace, serviceName string) (*corev1.Service, error)
+	// CreateOrUpdateService 创建或更新 Service
+	CreateOrUpdateService(ctx context.Context, service *model.K8sServiceRequest) error
+	// UpdateService 更新指定 Name Service
+	UpdateService(ctx context.Context, service *model.K8sServiceRequest) error
+	// DeleteService 删除 Service
+	DeleteService(ctx context.Context, clusterName, namespace string, serviceName []string) error
 }
 
 type k8sService struct {
@@ -145,6 +157,24 @@ func NewK8sService(dao dao.K8sDAO, client client.K8sClient, l *zap.Logger) K8sSe
 		client: client,
 		l:      l,
 	}
+}
+
+func (k *k8sService) getKubeClient(ctx context.Context, clusterName string) (*kubernetes.Clientset, error) {
+	// 获取集群信息
+	cluster, err := k.dao.GetClusterByName(ctx, clusterName)
+	if err != nil {
+		k.l.Error("获取集群信息失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	return kubeClient, nil
 }
 
 func (k *k8sService) ListAllClusters(ctx context.Context) ([]*model.K8sCluster, error) {
@@ -1541,6 +1571,125 @@ func (k *k8sService) DeleteConfigMap(ctx context.Context, clusterName, namespace
 
 	if len(errs) > 0 {
 		return fmt.Errorf("在删除 ConfigMap 时遇到以下错误: %v", errs)
+	}
+
+	return nil
+}
+
+// GetServicesByNamespace 获取指定命名空间的 Service 列表
+func (k *k8sService) GetServicesByNamespace(ctx context.Context, clusterName, namespace string) ([]*corev1.Service, error) {
+	kubeClient, err := k.getKubeClient(ctx, clusterName)
+	if err != nil {
+		return nil, err
+	}
+
+	serviceList, err := kubeClient.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		k.l.Error("获取 Service 列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	var services []*corev1.Service
+	for i := range serviceList.Items {
+		services = append(services, &serviceList.Items[i])
+	}
+
+	return services, nil
+}
+
+// GetServiceYaml 获取指定 Service 的 YAML 配置
+func (k *k8sService) GetServiceYaml(ctx context.Context, clusterName, namespace, serviceName string) (*corev1.Service, error) {
+	kubeClient, err := k.getKubeClient(ctx, clusterName)
+	if err != nil {
+		return nil, err
+	}
+
+	service, err := kubeClient.CoreV1().Services(namespace).Get(ctx, serviceName, metav1.GetOptions{})
+	if err != nil {
+		k.l.Error("获取 Service 失败", zap.Error(err))
+		return nil, err
+	}
+
+	return service, nil
+}
+
+// CreateOrUpdateService 创建或更新 Service
+func (k *k8sService) CreateOrUpdateService(ctx context.Context, req *model.K8sServiceRequest) error {
+	kubeClient, err := k.getKubeClient(ctx, req.ClusterName)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	_, err = kubeClient.CoreV1().Services(req.Service.Namespace).Get(ctx, req.Service.Name, metav1.GetOptions{})
+	if err != nil {
+		if k8sErr.IsNotFound(err) {
+			// 创建 Service
+			_, err = kubeClient.CoreV1().Services(req.Service.Namespace).Create(ctx, req.Service, metav1.CreateOptions{})
+			if err != nil {
+				k.l.Error("创建 Service 失败", zap.Error(err))
+				return err
+			}
+			k.l.Info("创建 Service 成功", zap.String("serviceName", req.Service.Name))
+			return nil
+		}
+
+		k.l.Error("获取 Service 失败", zap.Error(err))
+		return err
+	}
+
+	// 更新 Service
+	k.UpdateService(ctx, req)
+	return nil
+}
+
+// UpdateService 更新 Service
+func (k *k8sService) UpdateService(ctx context.Context, req *model.K8sServiceRequest) error {
+	kubeClient, err := k.getKubeClient(ctx, req.ClusterName)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	service, err := kubeClient.CoreV1().Services(req.Service.Namespace).Get(ctx, req.Service.Name, metav1.GetOptions{})
+	if err != nil {
+		k.l.Error("获取 Service 失败", zap.Error(err))
+		return err
+	}
+
+	service.Spec = req.Service.Spec
+	_, err = kubeClient.CoreV1().Services(req.Service.Namespace).Update(ctx, service, metav1.UpdateOptions{})
+	if err != nil {
+		k.l.Error("更新 Service 失败", zap.Error(err))
+		return err
+	}
+
+	k.l.Info("更新 Service 成功", zap.String("serviceName", req.Service.Name))
+	return nil
+}
+
+// DeleteService 删除 Service
+func (k *k8sService) DeleteService(ctx context.Context, clusterName, namespace string, serviceName []string) error {
+	kubeClient, err := k.getKubeClient(ctx, clusterName)
+	if err != nil {
+		k.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	var errs []error
+	for _, name := range serviceName {
+		err = kubeClient.CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+		if err != nil {
+			k.l.Error("删除 Service 失败", zap.Error(err))
+			errs = append(errs, err)
+			continue
+		}
+
+		k.l.Info("删除 Service 成功", zap.String("serviceName", name))
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("在删除 Service 时遇到以下错误: %v", errs)
 	}
 
 	return nil

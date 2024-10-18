@@ -123,10 +123,10 @@ func (k *K8sHandler) RegisterRouters(server *gin.Engine) {
 	services := k8sGroup.Group("/services")
 	{
 		services.GET("/", k.GetServiceListByNamespace) // 根据命名空间获取 Service 列表
-		services.GET("/:id/yaml", k.GetServiceYaml)    // 获取指定 Service 的 YAML 配置
+		services.GET("/:name/yaml", k.GetServiceYaml)  // 获取指定 Service 的 YAML 配置
 		services.POST("/", k.CreateOrUpdateService)    // 创建或更新 Service
-		services.PUT("/:id", k.UpdateService)          // 更新指定 ID 的 Service
-		services.DELETE("/:id", k.DeleteService)       // 删除指定 ID 的 Service
+		services.PUT("/:name", k.UpdateService)        // 更新指定 Name 的 Service
+		services.DELETE("/:name", k.DeleteService)     // 删除指定 Name 的 Service
 		services.DELETE("/", k.BatchDeleteServices)    // 批量删除 Service
 	}
 
@@ -1124,32 +1124,122 @@ func (k *K8sHandler) BatchDeleteConfigMaps(ctx *gin.Context) {
 
 // GetServiceListByNamespace 根据命名空间获取 Service 列表
 func (k *K8sHandler) GetServiceListByNamespace(ctx *gin.Context) {
-	// TODO: 实现根据命名空间获取 Service 列表的逻辑
+	clusterName := ctx.Query("cluster_name")
+	if clusterName == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'cluster_name' 参数")
+		return
+	}
+
+	namespace := ctx.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		return
+	}
+
+	services, err := k.service.GetServicesByNamespace(ctx, clusterName, namespace)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, services)
 }
 
 // GetServiceYaml 获取 Service 的 YAML 配置
 func (k *K8sHandler) GetServiceYaml(ctx *gin.Context) {
-	// TODO: 实现获取 Service 的 YAML 配置的逻辑
+	clusterName := ctx.Query("cluster_name")
+	if clusterName == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'cluster_name' 参数")
+		return
+	}
+
+	namespace := ctx.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		return
+	}
+
+	serviceName := ctx.Param("name")
+	if serviceName == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'serviceName' 参数")
+		return
+	}
+
+	service, err := k.service.GetServiceYaml(ctx, clusterName, namespace, serviceName)
+	if err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, service)
 }
 
 // CreateOrUpdateService 创建或更新 Service
 func (k *K8sHandler) CreateOrUpdateService(ctx *gin.Context) {
-	// TODO: 实现创建或更新 Service 的逻辑
+	var req model.K8sServiceRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.CreateOrUpdateService(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
-// UpdateService 更新指定 ID 的 Service
+// UpdateService 更新指定 Name 的 Service
 func (k *K8sHandler) UpdateService(ctx *gin.Context) {
-	// TODO: 实现更新 Service 的逻辑
+	var req model.K8sServiceRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.UpdateService(ctx, &req); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
-// DeleteService 删除指定 ID 的 Service
+// DeleteService 删除指定 Name 的 Service
 func (k *K8sHandler) DeleteService(ctx *gin.Context) {
-	// TODO: 实现删除 Service 的逻辑
+	var req model.K8sServiceRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.DeleteService(ctx, req.ClusterName, req.Namespace, req.ServiceNames); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // BatchDeleteServices 批量删除 Service
 func (k *K8sHandler) BatchDeleteServices(ctx *gin.Context) {
-	// TODO: 实现批量删除 Service 的逻辑
+	var req model.K8sServiceRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
+		return
+	}
+
+	if err := k.service.DeleteService(ctx, req.ClusterName, req.Namespace, req.ServiceNames); err != nil {
+		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }
 
 // GetClusterNamespacesUnique 获取唯一的命名空间列表
