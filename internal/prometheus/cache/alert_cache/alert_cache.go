@@ -187,14 +187,14 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfigOnePool(pool *model.Mon
 		},
 	}
 
-	// 如果有默认rs列表中Receiver，则添加到Receive
-	if config.Route.Receiver != "" {
-		config.Receivers = []altconfig.Receiver{
-			{
-				Name: config.Route.Receiver, // 接收者名称
-			},
-		}
-	}
+	//// 如果有默认rs列表中Receiver，则添加到Receive
+	//if config.Route.Receiver != "" {
+	//	config.Receivers = []altconfig.Receiver{
+	//		{
+	//			Name: config.Route.Receiver, // 接收者名称
+	//		},
+	//	}
+	//}
 
 	return config
 }
