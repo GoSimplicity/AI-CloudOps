@@ -180,7 +180,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	delete(anno, "description_value")
 
 	msgLabel := fmt.Sprintf(`**🛶标签信息：**\n%s`, pkg.FormatMap(labelMap))
-	msgAnno := fmt.Sprintf(`**🚂anno信息：**\n%s`, pkg.FormatMap(anno))
+	msgAnno := fmt.Sprintf(`**🚂注释信息：**\n%s`, pkg.FormatMap(anno))
 
 	// 构建发送组信息
 	sendGroupUrl := fmt.Sprintf(constant.SendGroupURLTemplate,

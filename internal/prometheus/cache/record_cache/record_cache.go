@@ -94,6 +94,7 @@ func (r *recordConfigCache) GenerateRecordRuleConfigYaml(ctx context.Context) er
 	return nil
 }
 
+// GeneratePrometheusRecordRuleConfigYamlOnePool 根据单个采集池生成Prometheus的预聚合规则配置YAML
 func (r *recordConfigCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
 	rules, err := r.alertRecordDao.GetMonitorRecordRuleByPoolId(ctx, pool.ID)
 	if err != nil {
@@ -160,7 +161,7 @@ func (r *recordConfigCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx co
 			)
 			continue
 		}
-		fileName := fmt.Sprintf("%s/prometheus_rule_%s_%s.yml",
+		fileName := fmt.Sprintf("%s/prometheus_record_%s_%s.yml",
 			r.localYamlDir,
 			pool.Name,
 			ip,
