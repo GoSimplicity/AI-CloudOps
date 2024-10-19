@@ -1,9 +1,9 @@
 groups:
-    - name: alert-rule-1
+    - name: rule-1
       rules:
-        - alert: alert-rule-1
+        - alert: rule-1
           expr: (1 - avg by(instance) (rate(node_cpu_seconds_total{mode='idle'}[5m]))) * 100 > 10
-          for: 15s
+          for: 10s
           labels:
             alert_rule_id: "1"
             alert_send_group: "1"
