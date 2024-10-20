@@ -2,6 +2,7 @@ package ecs
 
 import (
 	"context"
+	"gorm.io/gorm/clause"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -10,17 +11,17 @@ import (
 
 type TreeEcsDAO interface {
 	// Create 创建一个新的 ResourceEcs 实例
-	Create(ctx context.Context, obj *model.ResourceEcs) error
+	Create(ctx context.Context, resource *model.ResourceEcs) error
 	// Delete 删除指定的 ResourceEcs 实例（软删除）
-	Delete(ctx context.Context, obj *model.ResourceEcs) error
-	// DeleteByInstanceID 根据 InstanceID 删除 ResourceEcs 实例（软删除）
-	DeleteByInstanceID(ctx context.Context, instanceID string) error
+	Delete(ctx context.Context, id int) error
+	// DeleteByInstanceName 根据 InstanceName 删除 ResourceEcs 实例（软删除）
+	DeleteByInstanceName(ctx context.Context, name string) error
 	// Upsert 创建或更新 ResourceEcs 实例
-	Upsert(ctx context.Context, obj *model.ResourceEcs) error
+	Upsert(ctx context.Context, resource *model.ResourceEcs) error
 	// Update 更新指定的 ResourceEcs 实例
-	Update(ctx context.Context, obj *model.ResourceEcs) error
+	Update(ctx context.Context, resource *model.ResourceEcs) error
 	// UpdateBindNodes 更新 ResourceEcs 绑定的 TreeNode 节点
-	UpdateBindNodes(ctx context.Context, obj *model.ResourceEcs, nodes []*model.TreeNode) error
+	UpdateBindNodes(ctx context.Context, resource *model.ResourceEcs, nodes []*model.TreeNode) error
 	// GetAll 获取所有 ResourceEcs 实例，预加载绑定的 TreeNodes
 	GetAll(ctx context.Context) ([]*model.ResourceEcs, error)
 	// GetAllNoPreload 获取所有 ResourceEcs 实例，不预加载任何关联
@@ -56,38 +57,136 @@ func NewTreeEcsDAO(db *gorm.DB, l *zap.Logger) TreeEcsDAO {
 }
 
 func (t *treeEcsDAO) applyPreloads(query *gorm.DB) *gorm.DB {
-	return query.
-		Preload("BindNodes")
+	return query.Preload("BindNodes")
 }
 
-func (t *treeEcsDAO) Create(ctx context.Context, obj *model.ResourceEcs) error {
-	//TODO implement me
-	panic("implement me")
+func (t *treeEcsDAO) Create(ctx context.Context, resource *model.ResourceEcs) error {
+	// 创建资源
+	if err := t.db.WithContext(ctx).Create(resource).Error; err != nil {
+		t.l.Error("创建 ECS 失败", zap.Error(err))
+		return err
+	}
+
+	// 如果存在 BindNodes，则添加关联
+	if len(resource.BindNodes) > 0 {
+		if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			for _, node := range resource.BindNodes {
+				if err := t.AddBindNodes(ctx, resource, node); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			t.l.Error("添加 ECS 绑定的 TreeNode 失败", zap.Error(err))
+			return err
+		}
+	}
+
+	return nil
 }
 
-func (t *treeEcsDAO) Delete(ctx context.Context, obj *model.ResourceEcs) error {
-	//TODO implement me
-	panic("implement me")
+func (t *treeEcsDAO) Delete(ctx context.Context, id int) error {
+	// 删除关联关系
+	if err := t.db.WithContext(ctx).Where("id = ?", id).Select(clause.Associations).Delete(&model.ResourceEcs{}).Error; err != nil {
+		t.l.Error("删除 ECS 失败", zap.Int("id", id), zap.Error(err))
+		return err
+	}
+
+	// 物理删除资源
+	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ?", id).Unscoped().Delete(&model.ResourceEcs{}).Error; err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.l.Error("物理删除 ECS 失败", zap.Int("id", id), zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
-func (t *treeEcsDAO) DeleteByInstanceID(ctx context.Context, instanceID string) error {
-	//TODO implement me
-	panic("implement me")
+func (t *treeEcsDAO) DeleteByInstanceName(ctx context.Context, name string) error {
+	// 删除关联关系
+	if err := t.db.WithContext(ctx).Where("instance_name = ?", name).Select(clause.Associations).Delete(&model.ResourceEcs{}).Error; err != nil {
+		t.l.Error("删除 ECS 失败", zap.String("instance_name", name), zap.Error(err))
+		return err
+	}
+
+	// 物理删除资源
+	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("instance_name = ?", name).Unscoped().Delete(&model.ResourceEcs{}).Error; err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.l.Error("物理删除 ECS 失败", zap.String("instance_name", name), zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
-func (t *treeEcsDAO) Upsert(ctx context.Context, obj *model.ResourceEcs) error {
-	//TODO implement me
-	panic("implement me")
+func (t *treeEcsDAO) Upsert(ctx context.Context, resource *model.ResourceEcs) error {
+	// 插入或更新资源
+	if err := t.db.WithContext(ctx).Clauses(clause.OnConflict{
+		UpdateAll: true,
+	}).Create(resource).Error; err != nil {
+		t.l.Error("Upsert ECS 失败", zap.Error(err))
+		return err
+	}
+
+	// 更新关联关系
+	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := t.UpdateBindNodes(ctx, resource, resource.BindNodes); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.l.Error("更新关联关系失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
-func (t *treeEcsDAO) Update(ctx context.Context, obj *model.ResourceEcs) error {
-	//TODO implement me
-	panic("implement me")
+func (t *treeEcsDAO) Update(ctx context.Context, resource *model.ResourceEcs) error {
+	// 更新资源信息
+	if err := t.db.WithContext(ctx).Updates(resource).Error; err != nil {
+		t.l.Error("更新 ECS 失败", zap.Error(err))
+		return err
+	}
+
+	// 更新关联关系
+	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := t.UpdateBindNodes(ctx, resource, resource.BindNodes); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.l.Error("更新关联关系失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
-func (t *treeEcsDAO) UpdateBindNodes(ctx context.Context, obj *model.ResourceEcs, nodes []*model.TreeNode) error {
-	//TODO implement me
-	panic("implement me")
+func (t *treeEcsDAO) UpdateBindNodes(ctx context.Context, resource *model.ResourceEcs, nodes []*model.TreeNode) error {
+	// 更新关联对象的字段
+	for _, node := range nodes {
+		if err := t.db.WithContext(ctx).Model(node).Updates(node).Error; err != nil {
+			t.l.Error("更新 TreeNode 字段失败", zap.Error(err))
+			return err
+		}
+	}
+
+	// 同步关联集合
+	if err := t.db.WithContext(ctx).Model(resource).Association("BindNodes").Replace(nodes); err != nil {
+		t.l.Error("同步 ECS 绑定的 TreeNode 失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 func (t *treeEcsDAO) GetAll(ctx context.Context) ([]*model.ResourceEcs, error) {
@@ -104,28 +203,66 @@ func (t *treeEcsDAO) GetAll(ctx context.Context) ([]*model.ResourceEcs, error) {
 }
 
 func (t *treeEcsDAO) GetAllNoPreload(ctx context.Context) ([]*model.ResourceEcs, error) {
-	//TODO implement me
-	panic("implement me")
+	var ecs []*model.ResourceEcs
+
+	if err := t.db.WithContext(ctx).Find(&ecs).Error; err != nil {
+		t.l.Error("获取所有 ECS 失败", zap.Error(err))
+		return nil, err
+	}
+
+	return ecs, nil
 }
 
 func (t *treeEcsDAO) GetByLevel(ctx context.Context, level int) ([]*model.ResourceEcs, error) {
-	//TODO implement me
-	panic("implement me")
+	var ecs []*model.ResourceEcs
+
+	query := t.applyPreloads(t.db.WithContext(ctx)).Where("level = ?", level)
+
+	if err := query.Find(&ecs).Error; err != nil {
+		t.l.Error("根据层级获取 ECS 失败", zap.Int("level", level), zap.Error(err))
+		return nil, err
+	}
+
+	return ecs, nil
 }
 
 func (t *treeEcsDAO) GetByIDsWithPagination(ctx context.Context, ids []int, limit, offset int) ([]*model.ResourceEcs, error) {
-	//TODO implement me
-	panic("implement me")
+	var ecs []*model.ResourceEcs
+
+	query := t.applyPreloads(t.db.WithContext(ctx)).Where("id IN ?", ids).Limit(limit).Offset(offset)
+
+	if err := query.Find(&ecs).Error; err != nil {
+		t.l.Error("根据 IDs 获取 ECS 失败", zap.Ints("ids", ids), zap.Error(err))
+		return nil, err
+	}
+
+	return ecs, nil
 }
 
 func (t *treeEcsDAO) GetByInstanceID(ctx context.Context, instanceID string) (*model.ResourceEcs, error) {
-	//TODO implement me
-	panic("implement me")
+	var ecs model.ResourceEcs
+
+	query := t.applyPreloads(t.db.WithContext(ctx)).Where("instance_id = ?", instanceID)
+
+	if err := query.First(&ecs).Error; err != nil {
+		t.l.Error("根据 InstanceID 获取 ECS 失败", zap.String("instanceID", instanceID), zap.Error(err))
+		return nil, err
+	}
+
+	return &ecs, nil
 }
 
 func (t *treeEcsDAO) GetByID(ctx context.Context, id int) (*model.ResourceEcs, error) {
-	//TODO implement me
-	panic("implement me")
+	var ecs model.ResourceEcs
+
+	query := t.applyPreloads(t.db.WithContext(ctx)).Where("id = ?", id)
+
+	if err := query.First(&ecs).Error; err != nil {
+		t.l.Error("根据 ID 获取 ECS 失败", zap.Int("id", id), zap.Error(err))
+		return nil, err
+	}
+
+	return &ecs, nil
 }
 
 func (t *treeEcsDAO) GetByIDNoPreload(ctx context.Context, id int) (*model.ResourceEcs, error) {
@@ -140,8 +277,7 @@ func (t *treeEcsDAO) GetByIDNoPreload(ctx context.Context, id int) (*model.Resou
 }
 
 func (t *treeEcsDAO) GetUidAndHashMap(ctx context.Context) (map[string]string, error) {
-	//TODO implement me
-	panic("implement me")
+	return nil, nil
 }
 
 func (t *treeEcsDAO) AddBindNodes(ctx context.Context, ecs *model.ResourceEcs, node *model.TreeNode) error {

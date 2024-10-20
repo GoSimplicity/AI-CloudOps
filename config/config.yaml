@@ -23,3 +23,5 @@ prometheus:
   httpSdAPI: "http://192.168.0.105:8888/api/not_auth/getTreeNodeBindIps"
 mock:
   enabled: true # 是否开启mock
+terraform:
+  bin_path: "/opt/homebrew/bin/terraform"

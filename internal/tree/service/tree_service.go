@@ -575,17 +575,29 @@ func (ts *treeService) fetchUsers(ctx context.Context, userNames []string, role 
 	return users, nil
 }
 
-func (ts *treeService) CreateEcsResource(ctx context.Context, obj *model.ResourceEcs) error {
-	//TODO implement me
-	panic("implement me")
+func (ts *treeService) CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
+	if err := ts.ecsDao.Create(ctx, resource); err != nil {
+		ts.l.Error("CreateEcsResource 创建 ECS 资源失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
-func (ts *treeService) UpdateEcsResource(ctx context.Context, obj *model.ResourceEcs) error {
-	//TODO implement me
-	panic("implement me")
+func (ts *treeService) UpdateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
+	if err := ts.ecsDao.Update(ctx, resource); err != nil {
+		ts.l.Error("UpdateEcsResource 更新 ECS 资源失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 func (ts *treeService) DeleteEcsResource(ctx context.Context, id int) error {
-	//TODO implement me
-	panic("implement me")
+	if err := ts.ecsDao.Delete(ctx, id); err != nil {
+		ts.l.Error("DeleteEcsResource 删除 ECS 资源失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
