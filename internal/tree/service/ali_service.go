@@ -187,8 +187,6 @@ func (a *aliResourceService) destroyTerraform(ctx context.Context, workDir strin
 
 // CreateResource 创建云资源
 func (a *aliResourceService) CreateResource(ctx context.Context, config model.TerraformConfig) error {
-	a.logger.Info("开始创建阿里云资源", zap.String("name", config.Name))
-
 	// 获取项目根目录（当前工作目录）
 	projectRootDir, err := os.Getwd() // 获取当前工作目录
 	if err != nil {
@@ -242,8 +240,6 @@ func (a *aliResourceService) CreateResource(ctx context.Context, config model.Te
 
 // GetResource 获取云资源
 func (a *aliResourceService) GetResource(ctx context.Context, id int) (model.TerraformConfig, error) {
-	a.logger.Info("获取阿里云资源", zap.Int("resource_id", id))
-
 	// 从数据库获取资源配置信息
 	config, err := a.dao.Get(ctx, id)
 	if err != nil {
@@ -257,8 +253,6 @@ func (a *aliResourceService) GetResource(ctx context.Context, id int) (model.Ter
 
 // UpdateResource 更新云资源
 func (a *aliResourceService) UpdateResource(ctx context.Context, id int, updatedConfig model.TerraformConfig) error {
-	a.logger.Info("更新阿里云资源", zap.Int("resource_id", id))
-
 	// 获取项目根目录（当前工作目录）
 	projectRootDir, err := os.Getwd() // 获取当前工作目录
 	if err != nil {
@@ -311,8 +305,6 @@ func (a *aliResourceService) UpdateResource(ctx context.Context, id int, updated
 
 // DeleteResource 删除云资源
 func (a *aliResourceService) DeleteResource(ctx context.Context, id int) error {
-	a.logger.Info("删除阿里云资源", zap.Int("resource_id", id))
-
 	// 获取资源配置信息
 	config, err := a.dao.Get(ctx, id)
 	if err != nil {
