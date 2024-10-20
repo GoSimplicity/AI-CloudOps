@@ -46,6 +46,7 @@ import (
 	menu2 "github.com/GoSimplicity/AI-CloudOps/internal/system/service/menu"
 	role2 "github.com/GoSimplicity/AI-CloudOps/internal/system/service/role"
 	api5 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ali_resource"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/rds"
@@ -86,7 +87,9 @@ func InitWebServer() *Cmd {
 	treeRdsDAO := rds.NewTreeRdsDAO(db, logger)
 	treeNodeDAO := tree_node.NewTreeNodeDAO(db, logger)
 	treeService := service2.NewTreeService(treeEcsDAO, treeElbDAO, treeRdsDAO, treeNodeDAO, logger, userDAO)
-	treeHandler := api5.NewTreeHandler(treeService, logger)
+	aliResourceDAO := ali_resource.NewAliResourceDAO(db, logger)
+	aliResourceService := service2.NewAliResourceService(logger, aliResourceDAO)
+	treeHandler := api5.NewTreeHandler(treeService, logger, aliResourceService)
 	k8sDAO := dao2.NewK8sDAO(db, logger)
 	k8sClient := client.NewK8sClient(logger, k8sDAO)
 	k8sService := service3.NewK8sService(k8sDAO, k8sClient, logger)

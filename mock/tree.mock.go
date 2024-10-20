@@ -135,7 +135,6 @@ func MockResouceTree(name string) model.ResourceTree {
 		PublicIpAddress:  model.StringList{"1.2.3.4", "5.6.7.8"},
 		IpAddr:           "1.2.3.4",
 		CreationTime:     time.Now().Format(time.RFC3339),
-		Key:              "example-key",
 	}
 }
 

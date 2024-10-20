@@ -18,6 +18,7 @@ func InitTables(db *gorm.DB) error {
 		&model.ResourceEcs{},
 		&model.ResourceElb{},
 		&model.ResourceRds{},
+		&model.TerraformConfig{},
 
 		// k8s
 		&model.K8sCluster{},

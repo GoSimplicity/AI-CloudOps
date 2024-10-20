@@ -11,6 +11,7 @@ type ResourceTree struct {
 	Hash             string     `json:"hash" gorm:"uniqueIndex;type:varchar(200);comment:用于资源更新的哈希值"`            // 增量更新的哈希值
 	Vendor           string     `json:"vendor" gorm:"type:varchar(50);comment:云厂商名称，例：阿里云、华为云、AWS"`              // 云厂商名称
 	CreateByOrder    bool       `json:"createByOrder" gorm:"comment:是否由工单创建，工单创建的资源不会被自动更新删除"`                   // 是否由工单创建的标识
+	Image            string     `json:"image" gorm:"type:varchar(100);comment:镜像名称"`                             // 镜像名称
 	VpcId            string     `json:"vpcId" gorm:"type:varchar(100);comment:专有网络 VPC ID"`                      // 专有网络 VPC ID
 	ZoneId           string     `json:"zoneId" gorm:"type:varchar(100);comment:实例所属可用区 ID，如 cn-hangzhou-g"`      // 可用区 ID
 	Env              string     `json:"env" gorm:"type:varchar(50);comment:环境标识，如 dev、stage、prod"`               // 环境标识
@@ -21,11 +22,8 @@ type ResourceTree struct {
 	SecurityGroupIds StringList `json:"securityGroupIds" gorm:"type:varchar(500);comment:安全组 ID 列表"`             // 安全组 ID 列表
 	PrivateIpAddress StringList `json:"privateIpAddress" gorm:"type:varchar(500);comment:私有 IP 地址列表"`            // 私有 IP 地址列表
 	PublicIpAddress  StringList `json:"publicIpAddress" gorm:"type:varchar(500);comment:公网 IP 地址列表"`             // 公网 IP 地址列表
-	IpAddr           string     `json:"ipAddr" gorm:"type:varchar(45);comment:单个公网 IP 地址"`                       // 单个公网 IP 地址
+	IpAddr           string     `json:"ipAddr" gorm:"type:varchar(45);uniqueIndex;comment:单个公网 IP 地址"`           // 单个公网 IP 地址
 	CreationTime     string     `json:"creationTime" gorm:"type:varchar(30);comment:创建时间，ISO 8601 格式"`           // 创建时间，ISO 8601 格式
-
-	// 前端展示信息
-	Key string `json:"key" gorm:"-"` // 前端使用的资源键值
 }
 
 // TreeNode 表示服务树的节点, 包含节点的层级关系和相关资源绑定
@@ -110,7 +108,7 @@ type ResourceEcs struct {
 	LastInvokedTime string `json:"lastInvokedTime" gorm:"type:varchar(30);comment:最近调用时间, ISO 8601 标准, UTC+0 时间"` // 最近调用时间
 
 	// 多对多关系
-	BindNodes []*TreeNode `json:"bind_nodes" gorm:"many2many:bind_ecss;comment:绑定的树节点列表"` // 绑定的树节点
+	BindNodes []*TreeNode `json:"bind_nodes" gorm:"many2many:bind_ecs;comment:绑定的树节点列表"` // 绑定的树节点
 }
 
 // EcsBuyWorkOrder 表示购买 ECS 工作订单的结构体
@@ -153,7 +151,7 @@ type ResourceRds struct {
 	ReplicateId       string `json:"replicateId" gorm:"type:varchar(100);comment:复制实例 ID"`                                    // 复制实例 ID
 
 	// 多对多关系
-	BindNodes []*TreeNode `json:"bind_nodes" gorm:"many2many:bind_rdss;comment:绑定的树节点列表"` // 绑定的树节点
+	BindNodes []*TreeNode `json:"bind_nodes" gorm:"many2many:bind_rds;comment:绑定的树节点列表"` // 绑定的树节点
 }
 
 type BindResourceReq struct {
