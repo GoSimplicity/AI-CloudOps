@@ -17,6 +17,8 @@ import (
 
 const terraformTemplate = `
 provider "alicloud" {
+  access_key = "{{.Key}}"
+  secret_key = "{{.Secret}}"
   region = "{{.Region}}"
 }
 
@@ -66,6 +68,8 @@ type aliResourceService struct {
 	logger       *zap.Logger
 	dao          ali_resource.AliResourceDAO
 	terraformBin string
+	key          string
+	secret       string
 }
 
 func NewAliResourceService(logger *zap.Logger, dao ali_resource.AliResourceDAO) AliResourceService {
@@ -73,6 +77,8 @@ func NewAliResourceService(logger *zap.Logger, dao ali_resource.AliResourceDAO) 
 		logger:       logger,
 		dao:          dao,
 		terraformBin: viper.GetString("terraform.bin_path"),
+		key:          viper.GetString("terraform.key"),
+		secret:       viper.GetString("terraform.secret"),
 	}
 }
 
@@ -103,12 +109,16 @@ func (a *aliResourceService) renderTerraformTemplate(config model.TerraformConfi
 		VPC      model.VPCConfig
 		Instance model.InstanceConfig
 		Security model.SecurityConfig
+		Key      string
+		Secret   string
 	}{
 		Region:   config.Region,
 		Name:     config.Name,
 		VPC:      vpc,
 		Instance: instance,
 		Security: security,
+		Key:      a.key,
+		Secret:   a.secret,
 	}
 
 	// 解析并执行模板
