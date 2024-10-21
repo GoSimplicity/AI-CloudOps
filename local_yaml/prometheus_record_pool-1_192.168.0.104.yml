@@ -1,0 +1,6 @@
+groups:
+    - name: record-1
+      rules:
+        - alert: record-1
+          expr: avg by (instance) (1 - avg by(instance)(rate(node_cpu_seconds_total{mode='idle'}[2m])) ) * 10
+          for: 15s
