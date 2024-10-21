@@ -25,3 +25,5 @@ mock:
   enabled: true # 是否开启mock
 terraform:
   bin_path: "/opt/homebrew/bin/terraform"
+  key: ""
+  secret: ""

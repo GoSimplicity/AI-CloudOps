@@ -1,0 +1,40 @@
+global:
+    scrape_interval: 10s
+    scrape_timeout: 10s
+alerting:
+    alertmanagers:
+        - follow_redirects: false
+          enable_http2: false
+          api_version: v2
+          static_configs:
+            - targets:
+                - 192.168.0.104:9093
+rule_files:
+    - /usr/local/prometheus/prometheus_rule_pool-1_192.168.0.104.yml
+    - ""
+scrape_configs:
+    - job_name: scrape-1
+      honor_timestamps: false
+      track_timestamps_staleness: false
+      scrape_interval: 15s
+      scrape_timeout: 5s
+      metrics_path: /metrics
+      scheme: http
+      enable_compression: false
+      follow_redirects: false
+      enable_http2: false
+      http_sd_configs:
+        - follow_redirects: false
+          enable_http2: false
+          refresh_interval: 30s
+          url: http://192.168.0.105:8888/api/not_auth/getTreeNodeBindIps?port=9100&leafNodeIds=8
+remote_write:
+    - url: http://192.168.0.104:8428/api/v1/write
+      remote_timeout: 10s
+      follow_redirects: false
+      enable_http2: false
+remote_read:
+    - url: http://192.168.0.104:8428/api/v1/read
+      remote_timeout: 10s
+      follow_redirects: false
+      enable_http2: false
