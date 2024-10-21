@@ -38,20 +38,11 @@ const routes: RouteRecordRaw[] = [
         component: () =>
           import('#/views/promethues/MonitorAlert.vue'),
         meta: {
-          title: "alert告警",
+          title: "alert告警池",
           icon: 'lucide:alert-triangle',
         },
       },
-      {
-        name: 'MonitorConfig',
-        path: '/monitor_config',
-        component: () =>
-          import('#/views/promethues/MonitorConfig.vue'),
-        meta: {
-          title: "配置文件",
-          icon: 'lucide:file-text',
-        },
-      },
+      
       {
         name: 'MonitorAlertRule',
         path: '/monitor_alert_rule',
@@ -83,12 +74,32 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        name: 'MonitorConfig',
+        path: '/monitor_config',
+        component: () =>
+          import('#/views/promethues/MonitorConfig.vue'),
+        meta: {
+          title: "配置文件",
+          icon: 'lucide:file-text',
+        },
+      },
+      {
         name: 'MonitorOnDutyGroup',
         path: '/monitor_onduty_group',
         component: () =>
           import('#/views/promethues/MonitorOnDutyGroup.vue'),
         meta: {
           title: "值班组",
+          icon: 'lucide:user-round-minus'
+        },
+      },
+      {
+        name: 'MonitorOnDutyGroup',
+        path: '/monitor_onduty_group',
+        component: () =>
+          import('#/views/promethues/MonitorOnDutyGroup.vue'),
+        meta: {
+          title: "排班表",
           icon: 'lucide:user-round-minus'
         },
       },
