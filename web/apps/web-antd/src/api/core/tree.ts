@@ -8,6 +8,10 @@ export interface ChartItem {
 export interface User {
   id: number;
   name: string;
+  realName: string;
+  roles: string[];
+  userId: number;
+  username: string
 }
 
 export interface TreeNode {
@@ -16,20 +20,20 @@ export interface TreeNode {
   pId: number;
   level: number;
   isLeaf: number;
-  description: string;
-  opsAdmins: User[];
-  rdAdmins: User[];
-  rdMembers: User[];
-  bindEcs: ResourceEcs[];
-  bindElb: ResourceElb[];
-  bindRds: ResourceRds[];
+  desc: string;
+  ops_admins: User[];
+  rd_admins: User[];
+  rd_members: User[];
+  bind_ecs: ResourceEcs[];
+  bind_elb: ResourceElb[];
+  bind_rds: ResourceRds[];
   children?: TreeNode[];
   key: string;
   label: string;
   value: number;
-  opsAdminUsers: string[];
-  rdAdminUsers: string[];
-  rdMemberUsers: string[];
+  ops_admin_users: User[];
+  rd_admin_users: User[];
+  rd_member_users: User[];
   ecsNum: number;
   elbNum: number;
   rdsNum: number;
@@ -42,7 +46,7 @@ export interface TreeNode {
 }
 
 export interface ResourceEcs {
-  id: number;
+  ID: number;
   osType: string;
   vmType: number;
   instanceType: string;
@@ -60,7 +64,7 @@ export interface ResourceEcs {
 }
 
 export interface ResourceElb {
-  id: number;
+  ID: number;
   loadBalancerType: string;
   bandwidthCapacity: number;
   addressType: string;
@@ -70,7 +74,7 @@ export interface ResourceElb {
 }
 
 export interface ResourceRds {
-  id: number;
+  ID: number;
   engine: string;
   dbInstanceNetType: string;
   dbInstanceClass: string;
@@ -96,10 +100,19 @@ export interface GeneralRes {
 
 export interface CreateTreeNodeReq {
   title: string,
-  description: string,
+  desc: string,
   pId: number,
   isLeaf: number,
   level: number
+}
+
+export interface updateTreeNodeReq {
+  ID: number,
+  title: string,
+  desc: string,
+  ops_admins: User[],
+  rd_admins: User[],
+  rd_members: User[],
 }
 
 export async function getAllTreeNodes() {
@@ -108,4 +121,8 @@ export async function getAllTreeNodes() {
 
 export async function createTreeNode(data: CreateTreeNodeReq) {
   return requestClient.post<GeneralRes>('/tree/createTreeNode', data);
+}
+
+export async function updateTreeNode(data: updateTreeNodeReq) {
+  return requestClient.post<GeneralRes>('/tree/updateTreeNode', data);
 }
