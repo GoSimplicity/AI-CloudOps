@@ -170,6 +170,40 @@ func (ts *treeService) ListLeafTreeNodes(ctx context.Context) ([]*model.TreeNode
 }
 
 func (ts *treeService) CreateTreeNode(ctx context.Context, obj *model.TreeNode) error {
+	// 如果是顶级节点，并且层级为 1
+	if obj.Pid == 0 && obj.Level == 1 {
+		return ts.nodeDao.Create(ctx, obj)
+	}
+
+	// 获取父节点
+	node, err := ts.nodeDao.GetByID(ctx, obj.Pid)
+	if err != nil {
+		ts.l.Error("获取父节点失败", zap.Error(err))
+		return errors.New("获取父节点失败")
+	}
+
+	// 父节点不存在
+	if node == nil {
+		errMsg := "父节点不存在"
+		ts.l.Error(errMsg)
+		return errors.New(errMsg)
+	}
+
+	// 检查层级是否超过父节点的允许范围
+	if obj.Level >= node.Level+2 {
+		errMsg := "创建节点失败，节点层级超出限制"
+		ts.l.Error(errMsg)
+		return errors.New(errMsg)
+	}
+
+	// 检查父节点是否为叶子节点
+	if node.IsLeaf == 1 {
+		errMsg := "创建节点失败，父节点为叶子节点，无法添加子节点"
+		ts.l.Error(errMsg)
+		return errors.New(errMsg)
+	}
+
+	// 创建新节点
 	return ts.nodeDao.Create(ctx, obj)
 }
 
@@ -378,7 +412,7 @@ func (ts *treeService) getChildrenTreeNodeIds(ctx context.Context, nid int) map[
 			return
 		}
 
-		if node.IsLeaf {
+		if node.IsLeaf == 1 {
 			idMp[node.ID] = struct{}{}
 			return
 		}
