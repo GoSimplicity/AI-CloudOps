@@ -34,7 +34,7 @@ func (t *TreeMock) createTreeNodeMock() {
 	log.Print("[Mock some TreeNodes]")
 
 	// 生成节点的辅助函数
-	createNode := func(title string, pid int, level int, isLeaf bool, desc string, user *model.User) (*model.TreeNode, error) {
+	createNode := func(title string, pid int, level int, isLeaf int, desc string, user *model.User) (*model.TreeNode, error) {
 		node := model.TreeNode{
 			Title:  title,
 			Pid:    pid,
@@ -63,7 +63,7 @@ func (t *TreeMock) createTreeNodeMock() {
 	}
 
 	// 生成 level = 1 的根节点
-	rootNode, err := createNode("Tencent", 0, 1, false, "Tencent yyds", admin)
+	rootNode, err := createNode("Tencent", 0, 1, 0, "Tencent yyds", admin)
 	if err != nil {
 		log.Printf("创建根节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")
@@ -71,14 +71,14 @@ func (t *TreeMock) createTreeNodeMock() {
 	}
 
 	// 生成 level = 2 的子节点
-	secondNode, err := createNode("WXG", rootNode.ID, 2, false, "", admin)
+	secondNode, err := createNode("WXG", rootNode.ID, 2, 0, "", admin)
 	if err != nil {
 		log.Printf("创建二级节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")
 		return
 	}
 
-	_, err = createNode("CDG", rootNode.ID, 2, false, "", admin)
+	_, err = createNode("CDG", rootNode.ID, 2, 0, "", admin)
 	if err != nil {
 		log.Printf("创建二级节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")
@@ -86,14 +86,14 @@ func (t *TreeMock) createTreeNodeMock() {
 	}
 
 	// 生成 level = 3 的子节点
-	thirdNode, err := createNode("前端组", secondNode.ID, 3, false, "", admin)
+	thirdNode, err := createNode("前端组", secondNode.ID, 3, 0, "", admin)
 	if err != nil {
 		log.Printf("创建三级节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")
 		return
 	}
 
-	_, err = createNode("后端组", secondNode.ID, 3, false, "", admin)
+	_, err = createNode("后端组", secondNode.ID, 3, 0, "", admin)
 	if err != nil {
 		log.Printf("创建三级节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")
@@ -101,14 +101,14 @@ func (t *TreeMock) createTreeNodeMock() {
 	}
 
 	// 生成 level = 4 的子节点
-	_, err = createNode("好看的前端项目-1", thirdNode.ID, 4, true, "", admin)
+	_, err = createNode("好看的前端项目-1", thirdNode.ID, 4, 0, "", admin)
 	if err != nil {
 		log.Printf("创建四级节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")
 		return
 	}
 
-	_, err = createNode("好看的前端项目-2", thirdNode.ID, 4, true, "", admin)
+	_, err = createNode("好看的前端项目-2", thirdNode.ID, 4, 0, "", admin)
 	if err != nil {
 		log.Printf("创建四级节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")
