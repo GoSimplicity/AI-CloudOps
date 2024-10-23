@@ -126,3 +126,7 @@ export async function createTreeNode(data: CreateTreeNodeReq) {
 export async function updateTreeNode(data: updateTreeNodeReq) {
   return requestClient.post<GeneralRes>('/tree/updateTreeNode', data);
 }
+
+export async function deleteTreeNode(id: number) {
+  return requestClient.delete<GeneralRes>(`/tree/deleteTreeNode/${id}`);
+}
