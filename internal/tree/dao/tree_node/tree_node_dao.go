@@ -35,6 +35,8 @@ type TreeNodeDAO interface {
 	GetByIDNoPreload(ctx context.Context, id int) (*model.TreeNode, error)
 	// GetByPid 获取指定 TreeNode 的子节点
 	GetByPid(ctx context.Context, pid int) ([]*model.TreeNode, error)
+	// HasChildren 判断指定的 TreeNode 是否有子节点
+	HasChildren(ctx context.Context, id int) (bool, error)
 }
 
 type treeNodeDAO struct {
@@ -98,22 +100,45 @@ func (t *treeNodeDAO) Upsert(ctx context.Context, obj *model.TreeNode) error {
 }
 
 func (t *treeNodeDAO) Update(ctx context.Context, obj *model.TreeNode) error {
-	result := t.db.WithContext(ctx).
-		Model(&model.TreeNode{}).
-		Where("id = ?", obj.ID).
-		Updates(obj)
+	tx := t.db.WithContext(ctx).Begin()
 
+	// 更新基本字段
+	result := tx.Model(&model.TreeNode{}).Where("id = ?", obj.ID).Updates(obj)
 	if result.Error != nil {
+		tx.Rollback()
 		t.l.Error("更新树节点失败", zap.Int("id", obj.ID), zap.Error(result.Error))
 		return result.Error
 	}
 
 	if result.RowsAffected == 0 {
+		tx.Rollback()
 		err := errors.New("没有找到对应的树节点进行更新")
 		t.l.Warn("更新树节点未找到目标", zap.Int("id", obj.ID))
 		return err
 	}
 
+	// 更新运维负责人列表 (OpsAdmins)
+	if err := tx.Model(&obj).Association("OpsAdmins").Replace(obj.OpsAdmins); err != nil {
+		tx.Rollback()
+		t.l.Error("更新运维负责人失败", zap.Int("id", obj.ID), zap.Error(err))
+		return err
+	}
+
+	// 更新研发负责人列表 (RdAdmins)
+	if err := tx.Model(&obj).Association("RdAdmins").Replace(obj.RdAdmins); err != nil {
+		tx.Rollback()
+		t.l.Error("更新研发负责人失败", zap.Int("id", obj.ID), zap.Error(err))
+		return err
+	}
+
+	// 更新研发工程师列表 (RdMembers)
+	if err := tx.Model(&obj).Association("RdMembers").Replace(obj.RdMembers); err != nil {
+		tx.Rollback()
+		t.l.Error("更新研发工程师列表失败", zap.Int("id", obj.ID), zap.Error(err))
+		return err
+	}
+
+	tx.Commit()
 	return nil
 }
 
@@ -225,4 +250,20 @@ func (t *treeNodeDAO) GetByPid(ctx context.Context, pid int) ([]*model.TreeNode,
 	}
 
 	return nodes, nil
+}
+
+func (t *treeNodeDAO) HasChildren(ctx context.Context, id int) (bool, error) {
+	var count int64
+	err := t.db.WithContext(ctx).
+		Model(&model.TreeNode{}).
+		Where("pid = ?", id). // 查找 pid 等于该节点 id 的子节点
+		Count(&count).Error
+
+	if err != nil {
+		t.l.Error("检查子节点失败", zap.Int("id", id), zap.Error(err))
+		return false, err
+	}
+
+	// 如果 count > 0，表示有子节点
+	return count > 0, nil
 }

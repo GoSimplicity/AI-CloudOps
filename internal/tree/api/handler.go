@@ -164,7 +164,7 @@ func (t *TreeHandler) DeleteTreeNode(ctx *gin.Context) {
 
 	if err := t.service.DeleteTreeNode(ctx, nodeId); err != nil {
 		t.l.Error("delete tree node failed", zap.Error(err))
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
+		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 

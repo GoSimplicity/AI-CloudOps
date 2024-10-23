@@ -6,15 +6,13 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/rds"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/tree_node"
+	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 )
 
@@ -208,51 +206,65 @@ func (ts *treeService) CreateTreeNode(ctx context.Context, obj *model.TreeNode) 
 }
 
 func (ts *treeService) DeleteTreeNode(ctx context.Context, id int) error {
+	// 获取节点信息
 	treeNode, err := ts.nodeDao.GetByID(ctx, id)
 	if err != nil {
-		ts.l.Error("DeleteTreeNode failed", zap.Error(err))
+		ts.l.Error("DeleteTreeNode failed: 获取节点失败", zap.Error(err))
 		return err
 	}
 
-	if treeNode != nil && len(treeNode.Children) > 0 {
-		ts.l.Error("DeleteTreeNode failed", zap.Error(errors.New(constants.ErrorTreeNodeHasChildren)))
+	// 检查节点是否存在
+	if treeNode == nil {
+		ts.l.Error("DeleteTreeNode failed: 节点不存在", zap.Error(errors.New("节点不存在")))
+		return errors.New("节点不存在")
+	}
+
+	// 检查是否有子节点
+	hasChildren, err := ts.nodeDao.HasChildren(ctx, id)
+	if err != nil {
+		ts.l.Error("DeleteTreeNode failed: 检查子节点失败", zap.Error(err))
+		return err
+	}
+	if hasChildren {
+		ts.l.Error("DeleteTreeNode failed: 节点有子节点", zap.Error(errors.New(constants.ErrorTreeNodeHasChildren)))
 		return errors.New(constants.ErrorTreeNodeHasChildren)
 	}
 
-	return ts.nodeDao.Delete(ctx, id)
+	// 删除节点
+	if err := ts.nodeDao.Delete(ctx, id); err != nil {
+		ts.l.Error("DeleteTreeNode failed: 删除节点失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
-// UpdateTreeNode 更新树节点的用户信息
 func (ts *treeService) UpdateTreeNode(ctx context.Context, obj *model.TreeNode) error {
-	// 使用 errgroup 实现并发处理
-	g, ctx := errgroup.WithContext(ctx)
-
 	var (
 		usersOpsAdmin []*model.User
 		usersRdAdmin  []*model.User
 		usersRdMember []*model.User
+		err           error
 	)
 
-	g.Go(func() error {
-		var err error
-		usersOpsAdmin, err = ts.fetchUsers(ctx, obj.OpsAdminUsers, "OpsAdmin")
+	// 获取运维负责人
+	usersOpsAdmin, err = ts.fetchUsers(ctx, obj.OpsAdminUsers, "OpsAdmin")
+	if err != nil {
+		ts.l.Error("UpdateTreeNode 获取 OpsAdmin 用户信息失败", zap.Error(err))
 		return err
-	})
+	}
 
-	g.Go(func() error {
-		var err error
-		usersRdAdmin, err = ts.fetchUsers(ctx, obj.RdAdminUsers, "RdAdmin")
+	// 获取研发负责人
+	usersRdAdmin, err = ts.fetchUsers(ctx, obj.RdAdminUsers, "RdAdmin")
+	if err != nil {
+		ts.l.Error("UpdateTreeNode 获取 RdAdmin 用户信息失败", zap.Error(err))
 		return err
-	})
+	}
 
-	g.Go(func() error {
-		var err error
-		usersRdMember, err = ts.fetchUsers(ctx, obj.RdMemberUsers, "RdMember")
-		return err
-	})
-
-	if err := g.Wait(); err != nil {
-		ts.l.Error("UpdateTreeNode 获取用户信息失败", zap.Error(err))
+	// 获取研发工程师
+	usersRdMember, err = ts.fetchUsers(ctx, obj.RdMemberUsers, "RdMember")
+	if err != nil {
+		ts.l.Error("UpdateTreeNode 获取 RdMember 用户信息失败", zap.Error(err))
 		return err
 	}
 
@@ -260,6 +272,12 @@ func (ts *treeService) UpdateTreeNode(ctx context.Context, obj *model.TreeNode) 
 	obj.OpsAdmins = usersOpsAdmin
 	obj.RdAdmins = usersRdAdmin
 	obj.RdMembers = usersRdMember
+
+	// 持久化树节点更新
+	if err := ts.nodeDao.Update(ctx, obj); err != nil {
+		ts.l.Error("UpdateTreeNode 持久化树节点信息失败", zap.Error(err))
+		return errors.New("持久化树节点信息失败")
+	}
 
 	return nil
 }
