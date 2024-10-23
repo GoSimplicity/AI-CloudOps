@@ -2,18 +2,41 @@
   <a-layout style="height: 100vh;">
     <a-layout-sider width="320" theme="light">
       <div style="padding: 24px;">
-        <a-tree
-          :field-names="{ title: 'title', key: 'key', children: 'children' }"
-          :tree-data="treeData"
-          default-expand-all
-          show-line
-          draggable
-          @select="onSelect"
-          @drop="onDrop"
-          @dragend="onDragEnd"
-        />
+        <a-tree :field-names="{ title: 'title', key: 'key', children: 'children' }" :tree-data="treeData"
+          default-expand-all show-line draggable @select="onSelect" @drop="onDrop" @dragend="onDragEnd" />
         <a-button type="primary" block style="margin-top: 16px" @click="showAddModal">
           <a-icon type="plus" /> 新增节点
+          <a-modal v-model:visible="isAddModalVisible" style="z-index: 1000" title="新增节点" @ok="handleAdd" okText="新增"
+            cancelText="取消">
+            <a-form :model="addForm" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }" :rules="formRules"
+              ref="addFormRef">
+              <a-form-item label="节点名称" name="title" :rules="[{ required: true, message: '请输入节点名称' }]">
+                <a-input v-model:value="addForm.title" placeholder="请输入节点名称" />
+              </a-form-item>
+              <a-form-item label="level层级" name="level">
+                <a-input-number v-model:value=addForm.level />
+              </a-form-item>
+              <a-form-item label="创建类型" name="isLeaf" :rules="[{ required: true, message: '请选择是否为叶节点' }]">
+                <a-select v-model:value="addForm.isLeaf" placeholder="请选择">
+                  <a-select-option :value=0>目录</a-select-option>
+                  <a-select-option :value=1>叶节点</a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="描述" name="description">
+                <a-input v-model:value="addForm.description" placeholder="请输入描述" />
+              </a-form-item>
+              <a-form-item label="父节点" name="pId">
+                <a-select v-if="isSelectVisible" v-model:value="addForm.pId" placeholder="请选择父节点">
+                  <!-- 默认顶级节点选项，值为 0 -->
+                  <a-select-option :key="0" :value="0">顶级节点</a-select-option>
+                  <!-- 动态生成的节点选项 -->
+                  <a-select-option v-for="node in flatTreeData" :key="node.ID" :value="node.ID">
+                    {{ node.title }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-form>
+          </a-modal>
         </a-button>
       </div>
     </a-layout-sider>
@@ -56,34 +79,16 @@
             </a-descriptions>
 
             <a-divider orientation="left">ECS 资源详情</a-divider>
-            <a-table
-              :columns="ecsColumns"
-              :data-source="selectedNode.bindEcs"
-              rowKey="id"
-              :pagination="false"
-              size="small"
-              bordered
-            />
+            <a-table :columns="ecsColumns" :data-source="selectedNode.bindEcs" rowKey="id" :pagination="false"
+              size="small" bordered />
 
             <a-divider orientation="left">ELB 资源详情</a-divider>
-            <a-table
-              :columns="elbColumns"
-              :data-source="selectedNode.bindElb"
-              rowKey="id"
-              :pagination="false"
-              size="small"
-              bordered
-            />
+            <a-table :columns="elbColumns" :data-source="selectedNode.bindElb" rowKey="id" :pagination="false"
+              size="small" bordered />
 
             <a-divider orientation="left">RDS 资源详情</a-divider>
-            <a-table
-              :columns="rdsColumns"
-              :data-source="selectedNode.bindRds"
-              rowKey="id"
-              :pagination="false"
-              size="small"
-              bordered
-            />
+            <a-table :columns="rdsColumns" :data-source="selectedNode.bindRds" rowKey="id" :pagination="false"
+              size="small" bordered />
           </a-card>
         </div>
 
@@ -93,39 +98,7 @@
       </a-layout-content>
     </a-layout>
 
-    <a-modal
-      v-model:visible="isAddModalVisible"
-      title="新增节点"
-      @ok="handleAdd"
-      @cancel="handleCancel"
-      okText="新增"
-      cancelText="取消"
-    >
-      <a-form :model="addForm" label-col="{ span: 6 }" wrapper-col="{ span: 16 }">
-        <a-form-item label="节点名称" :rules="[{ required: true, message: '请输入节点名称' }]">
-          <a-input v-model:value="addForm.title" placeholder="请输入节点名称" />
-        </a-form-item>
-        <a-form-item label="描述">
-          <a-input v-model:value="addForm.description" placeholder="请输入描述" />
-        </a-form-item>
-        <a-form-item label="父节点">
-          <a-select v-model:value="addForm.pId" placeholder="请选择父节点">
-            <a-select-option v-for="node in flatTreeData" :key="node.id" :value="node.id">
-              {{ node.title }}
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-      </a-form>
-    </a-modal>
-
-    <a-modal
-      v-model:visible="isEditModalVisible"
-      title="编辑节点"
-      @ok="handleEdit"
-      @cancel="handleCancel"
-      okText="保存"
-      cancelText="取消"
-    >
+    <a-modal v-model:visible="isEditModalVisible" title="编辑节点" @ok="handleEdit" okText="保存" cancelText="取消">
       <a-form :model="editForm" label-col="{ span: 6 }" wrapper-col="{ span: 16 }">
         <a-form-item label="节点名称" :rules="[{ required: true, message: '请输入节点名称' }]">
           <a-input v-model:value="editForm.title" placeholder="请输入节点名称" />
@@ -140,13 +113,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import type { TreeNode } from './types'; // 确保类型定义文件路径正确
+import type { TreeNode } from '#/api/core/tree';
 import { message } from 'ant-design-vue';
-
+import { getAllTreeNodes, createTreeNode } from '#/api';
 // 树数据
 const treeData = ref<TreeNode[]>([]);
 const flatTreeData = ref<TreeNode[]>([]);
 const selectedNode = ref<TreeNode | null>(null);
+const isSelectVisible = ref(true);
 const isAddModalVisible = ref(false);
 const isEditModalVisible = ref(false);
 
@@ -154,6 +128,8 @@ const addForm = reactive({
   title: '',
   description: '',
   pId: 0,
+  isLeaf: 0,
+  level: 1,
 });
 
 const editForm = reactive({
@@ -174,7 +150,7 @@ const ecsColumns = [
 
 const elbColumns = [
   { title: 'ID', dataIndex: 'id', key: 'id' },
-  { title: '负载均衡类型', dataIndex: 'loadBalancerType', key: 'loadBalancerType' },
+  { title: '载均衡类型', dataIndex: 'loadBalancerType', key: 'loadBalancerType' },
   { title: '带宽容量 (Mb)', dataIndex: 'bandwidthCapacity', key: 'bandwidthCapacity' },
   { title: '地址类型', dataIndex: 'addressType', key: 'addressType' },
   { title: 'DNS 名称', dataIndex: 'dnsName', key: 'dnsName' },
@@ -190,70 +166,18 @@ const rdsColumns = [
   { title: '状态', dataIndex: 'dbInstanceStatus', key: 'dbInstanceStatus' },
 ];
 
+
 // 初始化树数据
 const fetchTreeData = () => {
-  treeData.value = mockData;
-  flatTreeData.value = [];
-  flattenTree(treeData.value, flatTreeData.value);
+  getAllTreeNodes().then(response => {
+    treeData.value = response;
+    flatTreeData.value = [];
+    flattenTree(treeData.value, flatTreeData.value);
+  }).catch(error => {
+    message.error('获取树数据失败');
+    console.error(error);
+  });
 };
-
-// Mock 数据
-const mockData: TreeNode[] = [
-  {
-    id: 1,
-    title: '系统 A',
-    pId: 0,
-    key: '1',
-    description: '这是系统 A 的描述',
-    level: 1,
-    opsAdmins: [{ id: 1, name: '张三' }],
-    rdAdmins: [{ id: 2, name: '李四' }],
-    rdMembers: [{ id: 3, name: '王五' }],
-    ecsNum: 2,
-    elbNum: 3, // 更新为3个 ELB
-    rdsNum: 3, // 更新为3个 RDS
-    bindEcs: [
-      { id: 101, osType: 'Linux', instanceType: 't2.medium', cpu: 2, memory: 4, disk: 50, hostname: 'ecs-101' },
-      { id: 102, osType: 'Windows', instanceType: 't2.large', cpu: 4, memory: 8, disk: 100, hostname: 'ecs-102' },
-    ],
-    bindElb: [
-      { id: 201, loadBalancerType: '公网型', bandwidthCapacity: 100, addressType: '公网', dnsName: 'elb-201.example.com' },
-      { id: 202, loadBalancerType: '内部型', bandwidthCapacity: 50, addressType: '内部', dnsName: 'elb-202.internal.example.com' },
-      { id: 203, loadBalancerType: '混合型', bandwidthCapacity: 150, addressType: '公网/内部', dnsName: 'elb-203.example.com' },
-    ],
-    bindRds: [
-      { id: 301, engine: 'MySQL', dbInstanceNetType: 'Internet', dbInstanceClass: 'db.m1.small', dbInstanceType: '主实例', engineVersion: '5.7', dbInstanceStatus: 'Running' },
-      { id: 302, engine: 'PostgreSQL', dbInstanceNetType: 'VPC', dbInstanceClass: 'db.m1.medium', dbInstanceType: '从实例', engineVersion: '12', dbInstanceStatus: 'Stopped' },
-      { id: 303, engine: 'MongoDB', dbInstanceNetType: 'Internet', dbInstanceClass: 'db.m2.large', dbInstanceType: '主实例', engineVersion: '4.4', dbInstanceStatus: 'Running' },
-    ],
-    children: [
-      {
-        id: 2,
-        title: '子系统 A1',
-        pId: 1,
-        key: '2',
-        description: '这是子系统 A1 的描述',
-        level: 2,
-        opsAdmins: [{ id: 1, name: '张三' }],
-        rdAdmins: [{ id: 2, name: '李四' }],
-        rdMembers: [{ id: 4, name: '赵六' }],
-        ecsNum: 1,
-        elbNum: 1, // 更新为1个 ELB
-        rdsNum: 1, // 更新为1个 RDS
-        bindEcs: [
-          { id: 103, osType: 'Linux', instanceType: 't2.small', cpu: 1, memory: 2, disk: 20, hostname: 'ecs-103' },
-        ],
-        bindElb: [
-          { id: 204, loadBalancerType: '公网型', bandwidthCapacity: 80, addressType: '公网', dnsName: 'elb-204.example.com' },
-        ],
-        bindRds: [
-          { id: 304, engine: 'SQL Server', dbInstanceNetType: 'VPC', dbInstanceClass: 'db.m3.medium', dbInstanceType: '主实例', engineVersion: '2019', dbInstanceStatus: 'Running' },
-        ],
-        children: [],
-      },
-    ],
-  },
-];
 
 const flattenTree = (nodes: TreeNode[], flatList: TreeNode[]) => {
   nodes.forEach(node => {
@@ -283,40 +207,53 @@ const findNodeByKey = (data: TreeNode[], key: string): TreeNode | null => {
 
 const showAddModal = () => {
   isAddModalVisible.value = true;
+  console.log('isAddModalVisible:', isAddModalVisible.value);
 };
 
-const handleAdd = () => {
+
+const handleAdd = async () => {
+  // 检查节点名称是否为空
   if (!addForm.title) {
     message.error('节点名称不能为空');
     return;
   }
 
-  const newId = flatTreeData.value.length > 0 ? Math.max(...flatTreeData.value.map(node => node.id)) + 1 : 1;
-  const newNode: TreeNode = {
-    ...addForm,
-    id: newId,
-    key: `${newId}`,
-    nodePath: '',
-    children: [],
-  };
+  try {
+    // 调用 API 创建新节点
+    const response = await createTreeNode({
+      title: addForm.title,
+      pId: addForm.pId,
+      description: addForm.description,
+      isLeaf: addForm.isLeaf,
+      level: addForm.level,
+    });
 
-  if (addForm.pId === 0) {
-    newNode.nodePath = newNode.title;
+    console.log('createTreeNode response:', response);
+
+    // 从响应中获取新节点
+    const newNode = response.data;
+
+    // 将新节点添加到树数据中
     treeData.value.push(newNode);
-  } else {
-    const parentNode = flatTreeData.value.find(node => node.id === addForm.pId);
-    if (parentNode) {
-      newNode.nodePath = `${parentNode.nodePath} > ${newNode.title}`;
-      parentNode.children = parentNode.children || [];
-      parentNode.children.push(newNode);
-      parentNode.isLeaf = false;
-    }
-  }
 
-  updateTreeData();
-  message.success('新增节点成功');
-  isAddModalVisible.value = false;
-  resetForm(addForm);
+    // 提示用户新增成功
+    message.success('新增节点成功');
+
+    // 关闭 select 框
+    isSelectVisible.value = false;
+
+    // 重置表单数据
+    resetForm(addForm);
+
+    // 延迟 1-2 秒后刷新页面
+    setTimeout(() => {
+      location.reload();  // 刷新页面
+    }, 1500);  // 1.5 秒延迟
+  } catch (error) {
+    // 处理错误
+    message.error('新增节点失败');
+    console.error(error);
+  }
 };
 
 const resetForm = (form: any) => {
@@ -387,7 +324,6 @@ const removeNodeByKey = (nodes: TreeNode[], key: string): TreeNode[] => {
 
 onMounted(fetchTreeData);
 </script>
-
 
 <style scoped>
 h2 {
