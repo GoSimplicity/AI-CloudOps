@@ -11,7 +11,7 @@ export interface User {
   realName: string;
   roles: string[];
   userId: number;
-  username: string
+  username: string;
 }
 
 export interface TreeNode {
@@ -48,7 +48,11 @@ export interface TreeNode {
 export interface ResourceEcs {
   ID: number;
   osType: string;
+  instanceName: string;
   vmType: number;
+  vendor: string;
+  CreatedAt: string;
+  ipAddr: string;
   instanceType: string;
   cpu: number;
   memory: number;
@@ -85,7 +89,6 @@ export interface ResourceRds {
   replicateId: string;
 }
 
-
 export interface BindResourceReq {
   nodeId: number;
   resource_ids: number[];
@@ -99,20 +102,30 @@ export interface GeneralRes {
 }
 
 export interface CreateTreeNodeReq {
-  title: string,
-  desc: string,
-  pId: number,
-  isLeaf: number,
-  level: number
+  title: string;
+  desc: string;
+  pId: number;
+  isLeaf: number;
+  level: number;
 }
 
 export interface updateTreeNodeReq {
-  ID: number,
-  title: string,
-  desc: string,
-  ops_admins: User[],
-  rd_admins: User[],
-  rd_members: User[],
+  ID: number;
+  title: string;
+  desc: string;
+  ops_admins: User[];
+  rd_admins: User[];
+  rd_members: User[];
+}
+
+export interface CreateECSResourceReq {
+  instanceName: string;
+  vendor: string;
+  description: string;
+  tags: string[];
+  ipAddr: string;
+  osName: string;
+  hostname: string;
 }
 
 export async function getAllTreeNodes() {
@@ -129,4 +142,22 @@ export async function updateTreeNode(data: updateTreeNodeReq) {
 
 export async function deleteTreeNode(id: number) {
   return requestClient.delete<GeneralRes>(`/tree/deleteTreeNode/${id}`);
+}
+
+export async function getAllECSResources() {
+  return requestClient.get<ResourceEcs[]>('/tree/getEcsList');
+}
+export async function getAllELBResources() {
+  return requestClient.get<ResourceElb[]>('/tree/getElbList');
+}
+export async function getAllRDSResources() {
+  return requestClient.get<ResourceRds[]>('/tree/getRdsList');
+}
+
+export async function createECSResources(data: CreateECSResourceReq) {
+  return requestClient.post<GeneralRes>('/tree/createEcsResource', data);
+}
+
+export async function deleteECSResources(id: number) {
+  return requestClient.delete<GeneralRes>(`/tree/deleteEcsResource/${id}`);
 }
