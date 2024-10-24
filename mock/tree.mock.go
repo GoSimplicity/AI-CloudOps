@@ -121,7 +121,7 @@ func MockResouceTree(name string) model.ResourceTree {
 	return model.ResourceTree{
 		InstanceName:     name,
 		Hash:             name,
-		Vendor:           "阿里云",
+		Vendor:           "2",
 		CreateByOrder:    true,
 		VpcId:            "vpc-123456",
 		ZoneId:           "cn-hangzhou-g",

@@ -2,12 +2,11 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -15,6 +14,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/rds"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/tree_node"
+	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 )
 
@@ -29,12 +29,13 @@ type TreeService interface {
 	GetChildrenTreeNodes(ctx context.Context, pid int) ([]*model.TreeNode, error)
 
 	GetEcsUnbindList(ctx context.Context) ([]*model.ResourceEcs, error)
-	GetEcsList(ctx context.Context, nodeID int) ([]*model.ResourceEcs, error)
+	GetEcsList(ctx context.Context) ([]*model.ResourceEcs, error)
 	GetElbUnbindList(ctx context.Context) ([]*model.ResourceElb, error)
-	GetElbList(ctx context.Context, nodeID int) ([]*model.ResourceElb, error)
+	GetElbList(ctx context.Context) ([]*model.ResourceElb, error)
 	GetRdsUnbindList(ctx context.Context) ([]*model.ResourceRds, error)
-	GetRdsList(ctx context.Context, nodeID int) ([]*model.ResourceRds, error)
-	GetAllResources(ctx context.Context, nid int, resourceType string, page int, size int) ([]*model.ResourceTree, error)
+	GetRdsList(ctx context.Context) ([]*model.ResourceRds, error)
+	GetAllResourcesByType(ctx context.Context, nid int, resourceType string, page int, size int) ([]*model.ResourceTree, error)
+	//GetAllResources(ctx context.Context) ([]*model.ResourceTree, error)
 
 	BindEcs(ctx context.Context, ecsID int, treeNodeID int) error
 	BindElb(ctx context.Context, elbID int, treeNodeID int) error
@@ -208,51 +209,65 @@ func (ts *treeService) CreateTreeNode(ctx context.Context, obj *model.TreeNode) 
 }
 
 func (ts *treeService) DeleteTreeNode(ctx context.Context, id int) error {
+	// 获取节点信息
 	treeNode, err := ts.nodeDao.GetByID(ctx, id)
 	if err != nil {
-		ts.l.Error("DeleteTreeNode failed", zap.Error(err))
+		ts.l.Error("DeleteTreeNode failed: 获取节点失败", zap.Error(err))
 		return err
 	}
 
-	if treeNode != nil && len(treeNode.Children) > 0 {
-		ts.l.Error("DeleteTreeNode failed", zap.Error(errors.New(constants.ErrorTreeNodeHasChildren)))
+	// 检查节点是否存在
+	if treeNode == nil {
+		ts.l.Error("DeleteTreeNode failed: 节点不存在", zap.Error(errors.New("节点不存在")))
+		return errors.New("节点不存在")
+	}
+
+	// 检查是否有子节点
+	hasChildren, err := ts.nodeDao.HasChildren(ctx, id)
+	if err != nil {
+		ts.l.Error("DeleteTreeNode failed: 检查子节点失败", zap.Error(err))
+		return err
+	}
+	if hasChildren {
+		ts.l.Error("DeleteTreeNode failed: 节点有子节点", zap.Error(errors.New(constants.ErrorTreeNodeHasChildren)))
 		return errors.New(constants.ErrorTreeNodeHasChildren)
 	}
 
-	return ts.nodeDao.Delete(ctx, id)
+	// 删除节点
+	if err := ts.nodeDao.Delete(ctx, id); err != nil {
+		ts.l.Error("DeleteTreeNode failed: 删除节点失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
-// UpdateTreeNode 更新树节点的用户信息
 func (ts *treeService) UpdateTreeNode(ctx context.Context, obj *model.TreeNode) error {
-	// 使用 errgroup 实现并发处理
-	g, ctx := errgroup.WithContext(ctx)
-
 	var (
 		usersOpsAdmin []*model.User
 		usersRdAdmin  []*model.User
 		usersRdMember []*model.User
+		err           error
 	)
 
-	g.Go(func() error {
-		var err error
-		usersOpsAdmin, err = ts.fetchUsers(ctx, obj.OpsAdminUsers, "OpsAdmin")
+	// 获取运维负责人
+	usersOpsAdmin, err = ts.fetchUsers(ctx, obj.OpsAdminUsers, "OpsAdmin")
+	if err != nil {
+		ts.l.Error("UpdateTreeNode 获取 OpsAdmin 用户信息失败", zap.Error(err))
 		return err
-	})
+	}
 
-	g.Go(func() error {
-		var err error
-		usersRdAdmin, err = ts.fetchUsers(ctx, obj.RdAdminUsers, "RdAdmin")
+	// 获取研发负责人
+	usersRdAdmin, err = ts.fetchUsers(ctx, obj.RdAdminUsers, "RdAdmin")
+	if err != nil {
+		ts.l.Error("UpdateTreeNode 获取 RdAdmin 用户信息失败", zap.Error(err))
 		return err
-	})
+	}
 
-	g.Go(func() error {
-		var err error
-		usersRdMember, err = ts.fetchUsers(ctx, obj.RdMemberUsers, "RdMember")
-		return err
-	})
-
-	if err := g.Wait(); err != nil {
-		ts.l.Error("UpdateTreeNode 获取用户信息失败", zap.Error(err))
+	// 获取研发工程师
+	usersRdMember, err = ts.fetchUsers(ctx, obj.RdMemberUsers, "RdMember")
+	if err != nil {
+		ts.l.Error("UpdateTreeNode 获取 RdMember 用户信息失败", zap.Error(err))
 		return err
 	}
 
@@ -260,6 +275,12 @@ func (ts *treeService) UpdateTreeNode(ctx context.Context, obj *model.TreeNode) 
 	obj.OpsAdmins = usersOpsAdmin
 	obj.RdAdmins = usersRdAdmin
 	obj.RdMembers = usersRdMember
+
+	// 持久化树节点更新
+	if err := ts.nodeDao.Update(ctx, obj); err != nil {
+		ts.l.Error("UpdateTreeNode 持久化树节点信息失败", zap.Error(err))
+		return errors.New("持久化树节点信息失败")
+	}
 
 	return nil
 }
@@ -292,25 +313,14 @@ func (ts *treeService) GetEcsUnbindList(ctx context.Context) ([]*model.ResourceE
 	return unbindEcs, nil
 }
 
-func (ts *treeService) GetEcsList(ctx context.Context, nodeID int) ([]*model.ResourceEcs, error) {
-	ecs, err := ts.ecsDao.GetAll(ctx)
+func (ts *treeService) GetEcsList(ctx context.Context) ([]*model.ResourceEcs, error) {
+	list, err := ts.ecsDao.GetAll(ctx)
 	if err != nil {
 		ts.l.Error("GetEcsList failed", zap.Error(err))
 		return nil, err
 	}
 
-	// 筛选出绑定到指定节点的 ECS 资源
-	bindEcs := make([]*model.ResourceEcs, 0, len(ecs))
-	for _, e := range ecs {
-		for _, n := range e.BindNodes {
-			if n.ID == nodeID {
-				bindEcs = append(bindEcs, e)
-				break
-			}
-		}
-	}
-
-	return bindEcs, nil
+	return list, nil
 }
 
 func (ts *treeService) GetElbUnbindList(ctx context.Context) ([]*model.ResourceElb, error) {
@@ -331,24 +341,14 @@ func (ts *treeService) GetElbUnbindList(ctx context.Context) ([]*model.ResourceE
 	return unbindElb, nil
 }
 
-func (ts *treeService) GetElbList(ctx context.Context, nodeID int) ([]*model.ResourceElb, error) {
-	elb, err := ts.elbDao.GetAll(ctx)
+func (ts *treeService) GetElbList(ctx context.Context) ([]*model.ResourceElb, error) {
+	list, err := ts.elbDao.GetAll(ctx)
 	if err != nil {
 		ts.l.Error("GetElbList failed", zap.Error(err))
 		return nil, err
 	}
 
-	bindElb := make([]*model.ResourceElb, 0, len(elb))
-	for _, e := range elb {
-		for _, n := range e.BindNodes {
-			if n.ID == nodeID {
-				bindElb = append(bindElb, e)
-				break
-			}
-		}
-	}
-
-	return bindElb, nil
+	return list, nil
 }
 
 func (ts *treeService) GetRdsUnbindList(ctx context.Context) ([]*model.ResourceRds, error) {
@@ -369,24 +369,14 @@ func (ts *treeService) GetRdsUnbindList(ctx context.Context) ([]*model.ResourceR
 	return unbindRds, nil
 }
 
-func (ts *treeService) GetRdsList(ctx context.Context, nodeID int) ([]*model.ResourceRds, error) {
-	rds, err := ts.rdsDao.GetAll(ctx)
+func (ts *treeService) GetRdsList(ctx context.Context) ([]*model.ResourceRds, error) {
+	list, err := ts.rdsDao.GetAll(ctx)
 	if err != nil {
 		ts.l.Error("GetRdsList failed", zap.Error(err))
 		return nil, err
 	}
 
-	bindRds := make([]*model.ResourceRds, 0, len(rds))
-	for _, e := range rds {
-		for _, n := range e.BindNodes {
-			if n.ID == nodeID {
-				bindRds = append(bindRds, e)
-				break
-			}
-		}
-	}
-
-	return bindRds, nil
+	return list, nil
 }
 
 func (ts *treeService) getChildrenTreeNodeIds(ctx context.Context, nid int) map[int]struct{} {
@@ -427,7 +417,7 @@ func (ts *treeService) getChildrenTreeNodeIds(ctx context.Context, nid int) map[
 	return idMp
 }
 
-func (ts *treeService) GetAllResources(ctx context.Context, nid int, resourceType string, page, size int) ([]*model.ResourceTree, error) {
+func (ts *treeService) GetAllResourcesByType(ctx context.Context, nid int, resourceType string, page, size int) ([]*model.ResourceTree, error) {
 	// 获取子节点 ID Map
 	nodeIdsMap := ts.getChildrenTreeNodeIds(ctx, nid)
 
@@ -610,12 +600,22 @@ func (ts *treeService) fetchUsers(ctx context.Context, userNames []string, role 
 }
 
 func (ts *treeService) CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
+	// 生成资源的唯一哈希值
+	resource.Hash = generateResourceHash(resource)
 	if err := ts.ecsDao.Create(ctx, resource); err != nil {
 		ts.l.Error("CreateEcsResource 创建 ECS 资源失败", zap.Error(err))
 		return err
 	}
 
 	return nil
+}
+
+// 生成资源哈希
+func generateResourceHash(resource *model.ResourceEcs) string {
+	// 假设根据资源的名称和IP地址生成唯一的哈希值，可以根据实际需求调整
+	data := fmt.Sprintf("%s-%s", resource.InstanceName, resource.IpAddr)
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
 }
 
 func (ts *treeService) UpdateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
@@ -634,4 +634,8 @@ func (ts *treeService) DeleteEcsResource(ctx context.Context, id int) error {
 	}
 
 	return nil
+}
+
+func (ts *treeService) GetAllResources(ctx context.Context, t string) ([]*model.ResourceTree, error) {
+	return nil, nil
 }

@@ -32,12 +32,30 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
-        name: '资产管理',
-        path: '/resource_operation',
+        name: 'ECS管理',
+        path: '/ecs_resource_operation',
         component: () =>
-          import('#/views/servicetree/ResourceOperation.vue'),
+          import('#/views/servicetree/ECSResourceOperation.vue'),
         meta: {
-          title: "资产管理",
+          title: "ECS管理",
+        },
+      },
+      {
+        name: 'RDS管理',
+        path: '/rds_resource_operation',
+        component: () =>
+          import('#/views/servicetree/RDSResourceOperation.vue'),
+        meta: {
+          title: "RDS管理",
+        },
+      },
+      {
+        name: 'ELB管理',
+        path: '/elb_resource_operation',
+        component: () =>
+          import('#/views/servicetree/ELBResourceOperation.vue'),
+        meta: {
+          title: "ELB管理",
         },
       },
     ],
