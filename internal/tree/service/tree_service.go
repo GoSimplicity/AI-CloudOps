@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -27,12 +29,13 @@ type TreeService interface {
 	GetChildrenTreeNodes(ctx context.Context, pid int) ([]*model.TreeNode, error)
 
 	GetEcsUnbindList(ctx context.Context) ([]*model.ResourceEcs, error)
-	GetEcsList(ctx context.Context, nodeID int) ([]*model.ResourceEcs, error)
+	GetEcsList(ctx context.Context) ([]*model.ResourceEcs, error)
 	GetElbUnbindList(ctx context.Context) ([]*model.ResourceElb, error)
-	GetElbList(ctx context.Context, nodeID int) ([]*model.ResourceElb, error)
+	GetElbList(ctx context.Context) ([]*model.ResourceElb, error)
 	GetRdsUnbindList(ctx context.Context) ([]*model.ResourceRds, error)
-	GetRdsList(ctx context.Context, nodeID int) ([]*model.ResourceRds, error)
-	GetAllResources(ctx context.Context, nid int, resourceType string, page int, size int) ([]*model.ResourceTree, error)
+	GetRdsList(ctx context.Context) ([]*model.ResourceRds, error)
+	GetAllResourcesByType(ctx context.Context, nid int, resourceType string, page int, size int) ([]*model.ResourceTree, error)
+	//GetAllResources(ctx context.Context) ([]*model.ResourceTree, error)
 
 	BindEcs(ctx context.Context, ecsID int, treeNodeID int) error
 	BindElb(ctx context.Context, elbID int, treeNodeID int) error
@@ -310,25 +313,14 @@ func (ts *treeService) GetEcsUnbindList(ctx context.Context) ([]*model.ResourceE
 	return unbindEcs, nil
 }
 
-func (ts *treeService) GetEcsList(ctx context.Context, nodeID int) ([]*model.ResourceEcs, error) {
-	ecs, err := ts.ecsDao.GetAll(ctx)
+func (ts *treeService) GetEcsList(ctx context.Context) ([]*model.ResourceEcs, error) {
+	list, err := ts.ecsDao.GetAll(ctx)
 	if err != nil {
 		ts.l.Error("GetEcsList failed", zap.Error(err))
 		return nil, err
 	}
 
-	// 筛选出绑定到指定节点的 ECS 资源
-	bindEcs := make([]*model.ResourceEcs, 0, len(ecs))
-	for _, e := range ecs {
-		for _, n := range e.BindNodes {
-			if n.ID == nodeID {
-				bindEcs = append(bindEcs, e)
-				break
-			}
-		}
-	}
-
-	return bindEcs, nil
+	return list, nil
 }
 
 func (ts *treeService) GetElbUnbindList(ctx context.Context) ([]*model.ResourceElb, error) {
@@ -349,24 +341,14 @@ func (ts *treeService) GetElbUnbindList(ctx context.Context) ([]*model.ResourceE
 	return unbindElb, nil
 }
 
-func (ts *treeService) GetElbList(ctx context.Context, nodeID int) ([]*model.ResourceElb, error) {
-	elb, err := ts.elbDao.GetAll(ctx)
+func (ts *treeService) GetElbList(ctx context.Context) ([]*model.ResourceElb, error) {
+	list, err := ts.elbDao.GetAll(ctx)
 	if err != nil {
 		ts.l.Error("GetElbList failed", zap.Error(err))
 		return nil, err
 	}
 
-	bindElb := make([]*model.ResourceElb, 0, len(elb))
-	for _, e := range elb {
-		for _, n := range e.BindNodes {
-			if n.ID == nodeID {
-				bindElb = append(bindElb, e)
-				break
-			}
-		}
-	}
-
-	return bindElb, nil
+	return list, nil
 }
 
 func (ts *treeService) GetRdsUnbindList(ctx context.Context) ([]*model.ResourceRds, error) {
@@ -387,24 +369,14 @@ func (ts *treeService) GetRdsUnbindList(ctx context.Context) ([]*model.ResourceR
 	return unbindRds, nil
 }
 
-func (ts *treeService) GetRdsList(ctx context.Context, nodeID int) ([]*model.ResourceRds, error) {
-	rds, err := ts.rdsDao.GetAll(ctx)
+func (ts *treeService) GetRdsList(ctx context.Context) ([]*model.ResourceRds, error) {
+	list, err := ts.rdsDao.GetAll(ctx)
 	if err != nil {
 		ts.l.Error("GetRdsList failed", zap.Error(err))
 		return nil, err
 	}
 
-	bindRds := make([]*model.ResourceRds, 0, len(rds))
-	for _, e := range rds {
-		for _, n := range e.BindNodes {
-			if n.ID == nodeID {
-				bindRds = append(bindRds, e)
-				break
-			}
-		}
-	}
-
-	return bindRds, nil
+	return list, nil
 }
 
 func (ts *treeService) getChildrenTreeNodeIds(ctx context.Context, nid int) map[int]struct{} {
@@ -445,7 +417,7 @@ func (ts *treeService) getChildrenTreeNodeIds(ctx context.Context, nid int) map[
 	return idMp
 }
 
-func (ts *treeService) GetAllResources(ctx context.Context, nid int, resourceType string, page, size int) ([]*model.ResourceTree, error) {
+func (ts *treeService) GetAllResourcesByType(ctx context.Context, nid int, resourceType string, page, size int) ([]*model.ResourceTree, error) {
 	// 获取子节点 ID Map
 	nodeIdsMap := ts.getChildrenTreeNodeIds(ctx, nid)
 
@@ -628,12 +600,22 @@ func (ts *treeService) fetchUsers(ctx context.Context, userNames []string, role 
 }
 
 func (ts *treeService) CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
+	// 生成资源的唯一哈希值
+	resource.Hash = generateResourceHash(resource)
 	if err := ts.ecsDao.Create(ctx, resource); err != nil {
 		ts.l.Error("CreateEcsResource 创建 ECS 资源失败", zap.Error(err))
 		return err
 	}
 
 	return nil
+}
+
+// 生成资源哈希
+func generateResourceHash(resource *model.ResourceEcs) string {
+	// 假设根据资源的名称和IP地址生成唯一的哈希值，可以根据实际需求调整
+	data := fmt.Sprintf("%s-%s", resource.InstanceName, resource.IpAddr)
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
 }
 
 func (ts *treeService) UpdateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
@@ -652,4 +634,8 @@ func (ts *treeService) DeleteEcsResource(ctx context.Context, id int) error {
 	}
 
 	return nil
+}
+
+func (ts *treeService) GetAllResources(ctx context.Context, t string) ([]*model.ResourceTree, error) {
+	return nil, nil
 }
