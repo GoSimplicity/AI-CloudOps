@@ -65,6 +65,10 @@ export interface ResourceEcs {
   startTime: string;
   autoReleaseTime: string;
   lastInvokedTime: string;
+  isBound?: boolean;     
+  boundNodeId?: number;  
+  description?: string;
+  tags: string[];
 }
 
 export interface ResourceElb {
@@ -128,6 +132,17 @@ export interface CreateECSResourceReq {
   hostname: string;
 }
 
+export interface EditECSResourceReq {
+  ID: number;
+  instanceName: string;
+  vendor: string;
+  description: string;
+  tags: string[];
+  ipAddr: string;
+  osName: string;
+  hostname: string;
+}
+
 export async function getAllTreeNodes() {
   return requestClient.get<TreeNode[]>('/tree/listTreeNode');
 }
@@ -160,4 +175,16 @@ export async function createECSResources(data: CreateECSResourceReq) {
 
 export async function deleteECSResources(id: number) {
   return requestClient.delete<GeneralRes>(`/tree/deleteEcsResource/${id}`);
+}
+
+export async function editECSResources(data: EditECSResourceReq) {
+  return requestClient.post<GeneralRes>('/tree/updateEcsResource', data);
+}
+
+export async function bindECSResources(data: BindResourceReq) {
+  return requestClient.post<GeneralRes>('/tree/bindEcs', data);
+}
+
+export async function unbindECSResources(data: BindResourceReq) {
+  return requestClient.post<GeneralRes>('/tree/unBindEcs', data);
 }
