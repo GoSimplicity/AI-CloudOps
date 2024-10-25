@@ -18,8 +18,9 @@
         <a-space>
           <a-button type="link" @click="handleEditResource(record)">编辑</a-button>
           <a-button type="link" danger @click="handleDeleteResource(record)">删除</a-button>
-          <a-button type="link" @click="handleBindToNode(record)">绑定到服务树</a-button>
-          <a-button type="link" @click="handleUnbindFromNode(record)">解绑服务树</a-button>
+          <a-button type="link" @click="record.isBound ? handleUnbindFromNode(record) : handleBindToNode(record)">
+            {{ record.isBound ? '解绑服务树' : '绑定到服务树' }}
+          </a-button>
         </a-space>
       </template>
     </a-table>
@@ -69,14 +70,74 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 编辑资源模态框 -->
+    <a-modal v-model:visible="isEditModalVisible" title="编辑资源" @ok="handleEditECS" @cancel="handleEditCancel">
+      <a-form :model="editForm" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }" ref="editFormRef">
+        <a-form-item label="资源名称" name="instanceName" :rules="[{ required: true, message: '请输入资源名称' }]">
+          <a-input v-model:value="editForm.instanceName" placeholder="请输入资源名称" />
+        </a-form-item>
+
+        <a-form-item label="IP地址" name="ipAddr" :rules="[{ required: true, message: '请输入IP地址' }]">
+          <a-input v-model:value="editForm.ipAddr" placeholder="请输入IP地址" />
+        </a-form-item>
+
+        <a-form-item label="主机名" name="hostname">
+          <a-input v-model:value="editForm.hostname" placeholder="请输入主机名" />
+        </a-form-item>
+
+        <a-form-item label="操作系统" name="osName">
+          <a-input v-model:value="editForm.osName" placeholder="请输入系统名称" />
+        </a-form-item>
+
+        <a-form-item label="描述" name="description">
+          <a-input v-model:value="editForm.description" placeholder="请输入资源描述" />
+        </a-form-item>
+
+        <!-- 支持多标签输入 -->
+        <a-form-item label="标签" name="tags">
+          <a-select mode="tags" v-model:value="editForm.tags" placeholder="请输入标签" style="width: 100%">
+            <a-select-option v-for="tag in editForm.tags" :key="tag" :value="tag">
+              {{ tag }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+
+        <a-form-item label="供应商" name="vendor" :rules="[
+          { required: true, type: 'string', message: '请选择供应商' }
+        ]">
+          <a-select v-model:value="editForm.vendor" placeholder="请选择供应商" style="width: 100%">
+            <a-select-option :value="'1'">个人</a-select-option>
+            <a-select-option :value="'2'">阿里云</a-select-option>
+            <a-select-option :value="'3'">华为云</a-select-option>
+            <a-select-option :value="'4'">腾讯云</a-select-option>
+            <a-select-option :value="'5'">AWS</a-select-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 绑定资源模态框 -->
+    <a-modal v-model:visible="isBindModalVisible" title="绑定到服务树" @ok="confirmBind" @cancel="handleBindCancel">
+      <a-tree :tree-data="treeNodes" :checkable="false" @select="onNodeSelect"
+        :default-expanded-keys="defaultExpandedKeys" />
+    </a-modal>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { reactive, ref, onMounted } from 'vue';
 import { message, Modal } from 'ant-design-vue';
-import { getAllECSResources, createECSResources, deleteECSResources } from '#/api';
-import type { ResourceEcs } from '#/api';
+import {
+  getAllECSResources,
+  createECSResources,
+  deleteECSResources,
+  editECSResources,
+  bindECSResources,
+  unbindECSResources,
+  getAllTreeNodes
+} from '#/api';
+import type { ResourceEcs, TreeNode } from '#/api';
 
 const vendorMap: { [key: string]: string } = {
   '1': '个人',
@@ -86,19 +147,20 @@ const vendorMap: { [key: string]: string } = {
   '5': 'AWS',
 };
 
-// 资源数据类型
-interface Resource {
-  ID: number;
-  instanceName: string;
-  createResourceType: number;
-  status: string;
-  description: string;
-  CreatedAt: string;
-  vendor: string;
-  ipAddr: string;
-}
-
+// 创建表单
 const createForm = reactive({
+  instanceName: '',
+  description: '',
+  tags: [] as string[],
+  vendor: null as string | null, // 初始化为 null 或字符串
+  hostname: '',
+  ipAddr: '',
+  osName: '',
+});
+
+// 编辑表单
+const editForm = reactive({
+  ID: 0,
   instanceName: '',
   description: '',
   tags: [] as string[],
@@ -110,26 +172,22 @@ const createForm = reactive({
 
 // 资源数据
 const data = reactive<ResourceEcs[]>([]);
-
-// 获取资源数据
-const fetchResources = async () => {
-  try {
-    const response = await getAllECSResources();
-    data.splice(0, data.length, ...response);
-    handleSearch(); // 初始化过滤后的数据
-  } catch (error) {
-    console.log(error);
-    message.error('获取ECS资源数据失败');
-  }
-};
-
 // 搜索文本
 const searchText = ref('');
 // 过滤后的数据
-const filteredData = ref<ResourceEcs[]>(data);
-
+const filteredData = ref<ResourceEcs[]>([]);
+// 模态框状态
+const isBindModalVisible = ref(false);
 const isCreateModalVisible = ref(false);
-
+const isEditModalVisible = ref(false);
+// 树节点数据
+const treeNodes = ref<TreeNode[]>([]);
+// 默认展开的节点
+const defaultExpandedKeys = ref<number[]>([]);
+// 选择的节点ID
+const selectedNodeId = ref<number | null>(null);
+// 资源待绑定
+const resourceToBind = ref<ResourceEcs | null>(null);
 // 表格列配置
 const columns = [
   {
@@ -190,6 +248,45 @@ const handleSearch = () => {
   }
 };
 
+// 获取资源数据
+const fetchResources = async () => {
+  try {
+    const [ecsResponse, treeResponse] = await Promise.all([
+      getAllECSResources(),
+      getAllTreeNodes(),
+    ]);
+    // 假设每个 TreeNode 的 bind_ecs 包含已绑定的 ECS 资源
+    ecsResponse.forEach(ecs => {
+      ecs.isBound = false;
+      treeResponse.forEach(node => {
+        if (node.bind_ecs.some(boundEcs => boundEcs.ID === ecs.ID)) {
+          ecs.isBound = true;
+          ecs.boundNodeId = node.ID; // 确保 ResourceEcs 接口中有 boundNodeId
+        }
+      });
+    });
+    data.splice(0, data.length, ...ecsResponse);
+    handleSearch(); // 初始化过滤后的数据
+  } catch (error) {
+    console.log(error);
+    message.error('获取ECS资源数据失败');
+  }
+};
+
+// 获取树节点数据
+const fetchTreeNodes = async () => {
+  try {
+    const response = await getAllTreeNodes();
+    treeNodes.value = response;
+    // 根据需要设置默认展开的节点
+    defaultExpandedKeys.value = response.map(node => node.ID);
+  } catch (error) {
+    console.error('获取树节点失败', error);
+    message.error('获取树节点失败');
+  }
+};
+
+// 处理创建资源
 const handleCreateECS = async () => {
   // 校验供应商是否选择
   if (createForm.vendor === null) {
@@ -221,9 +318,8 @@ const handleCreateECS = async () => {
     // 显示成功提示
     message.success('新增ECS资源成功');
 
-    setTimeout(() => {
-      location.reload();
-    }, 500);
+    // 更新本地数据
+    fetchResources();
 
     // 隐藏模态框
     isCreateModalVisible.value = false;
@@ -235,9 +331,14 @@ const handleCreateECS = async () => {
   }
 };
 
-
+// 取消按钮点击事件
 const handleCancel = () => {
   isCreateModalVisible.value = false;
+};
+
+// 取消编辑按钮点击事件
+const handleEditCancel = () => {
+  isEditModalVisible.value = false;
 };
 
 // 处理新增资源
@@ -255,12 +356,68 @@ const handleAddResource = () => {
 };
 
 // 处理编辑资源
-const handleEditResource = (record: Resource) => {
-  // TODO: 打开编辑资源对话框并调用接口保存更新的资源信息
-  message.info(`编辑ECS资源 "${record.instanceName}"`);
+const handleEditResource = (record: ResourceEcs) => {
+  Object.assign(editForm, {
+    ID: record.ID,
+    instanceName: record.instanceName,
+    description: record.description,
+    tags: record.tags,
+    vendor: record.vendor,
+    hostname: record.hostname,
+    ipAddr: record.ipAddr,
+    osName: record.osName,
+  });
+  isEditModalVisible.value = true;
 };
 
-const handleDeleteResource = (record: Resource) => {
+// 处理编辑资源
+const handleEditECS = async () => {
+  // 校验供应商是否选择
+  if (editForm.vendor === null) {
+    message.error('请选择供应商');
+    return;
+  }
+
+  // 校验资源名称是否填写
+  if (!editForm.instanceName) {
+    message.error('请输入资源名称');
+    return;
+  }
+
+  // 清理标签数据，移除空白标签
+  editForm.tags = editForm.tags.filter(tag => tag.trim() !== '');
+
+  try {
+    // 调用接口编辑资源，假设有一个 updateECSResources 接口
+    await editECSResources({
+      ID: editForm.ID, // 确保传递资源的ID
+      instanceName: editForm.instanceName,
+      description: editForm.description,
+      tags: editForm.tags,
+      vendor: editForm.vendor,
+      hostname: editForm.hostname,
+      ipAddr: editForm.ipAddr,
+      osName: editForm.osName,
+    });
+
+    // 显示成功提示
+    message.success('编辑ECS资源成功');
+
+    // 更新本地数据
+    fetchResources();
+
+    // 隐藏模态框
+    isEditModalVisible.value = false;
+
+  } catch (error) {
+    // 捕获异常并显示错误提示
+    console.error('编辑ECS资源失败', error);
+    message.error('编辑ECS资源失败，请稍后再试');
+  }
+};
+
+// 处理删除资源
+const handleDeleteResource = (record: ResourceEcs) => {
   // 弹出确认对话框，防止误删除
   Modal.confirm({
     title: '确认删除',
@@ -273,7 +430,7 @@ const handleDeleteResource = (record: Resource) => {
         if (index !== -1) {
           data.splice(index, 1);  // 删除资源
           handleSearch();  // 重新过滤数据
-        message.success(`资源 "${record.instanceName}" 已成功删除`);
+          message.success(`资源 "${record.instanceName}" 已成功删除`);
         }
       } catch (error) {
         console.error('删除资源失败', error);
@@ -283,20 +440,103 @@ const handleDeleteResource = (record: Resource) => {
   });
 };
 
-// 处理绑定到服务树
-const handleBindToNode = (record: Resource) => {
-  // TODO: 打开绑定对话框并调用接口绑定资源到服务树节点
-  message.info(`绑定ECS资源 "${record.instanceName}" 到服务树节点`);
+// 选择节点事件
+const onNodeSelect = (selectedKeys: any) => {
+  if (selectedKeys.length > 0) {
+    selectedNodeId.value = Number(selectedKeys[0]); // 转换为整数
+  } else {
+    selectedNodeId.value = null;
+  }
 };
 
-// 处理解绑服务树
-const handleUnbindFromNode = (record: Resource) => {
-  // TODO: 调用接口解绑资源从服务树节点
-  message.info(`解绑ECS资源 "${record.instanceName}" 从服务树节点`);
+// 处理绑定资源
+const handleBindToNode = (record: ResourceEcs) => {
+  // 设置要绑定的资源
+  resourceToBind.value = record;
+  // 显示绑定模态框
+  isBindModalVisible.value = true;
+};
+
+// 处理解绑资源
+const handleUnbindFromNode = (record: ResourceEcs) => {
+  // 查找绑定的节点
+  const boundNode = treeNodes.value.find(node => node.ID === record.boundNodeId);
+  const boundNodeName = boundNode ? boundNode.title : '未知节点';
+
+  // 弹出确认对话框
+  Modal.confirm({
+    title: '确认解绑',
+    content: `确定要将资源 "${record.instanceName}" 从节点 "${boundNodeName}" 解绑吗？`,
+    okText: '确认',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        // 调用解绑接口
+        await unbindECSResources({
+          nodeId: record.boundNodeId!,
+          resource_ids: [record.ID]
+        });
+
+        message.success(`解绑资源 "${record.instanceName}" 成功`);
+
+        // 更新本地数据
+        const index = data.findIndex(item => item.ID === record.ID);
+        if (index !== -1) {
+          data[index].isBound = false;
+          data[index].boundNodeId = undefined;
+          handleSearch();
+        }
+      } catch (error) {
+        console.error('解绑资源失败', error);
+        message.error(`解绑资源 "${record.instanceName}" 失败，请稍后再试`);
+      }
+    },
+  });
+};
+
+// 确认绑定
+const confirmBind = async () => {
+  if (!resourceToBind.value || selectedNodeId.value === null) {
+    message.error('请选择要绑定的服务树节点');
+    return;
+  }
+
+  try {
+    await bindECSResources({
+      nodeId: selectedNodeId.value,
+      resource_ids: [resourceToBind.value.ID],
+    });
+
+    message.success(`绑定资源 "${resourceToBind.value.instanceName}" 成功`);
+
+    // 更新本地数据
+    const index = data.findIndex(item => item.ID === resourceToBind.value?.ID);
+    if (index !== -1) {
+      data[index].isBound = true;
+      data[index].boundNodeId = selectedNodeId.value;
+      handleSearch();
+    }
+
+    // 重置绑定状态
+    resourceToBind.value = null;
+    selectedNodeId.value = null;
+    isBindModalVisible.value = false;
+  } catch (error) {
+    console.error('绑定资源失败', error);
+    message.error(`绑定资源 "${resourceToBind.value.instanceName}" 失败，请稍后再试`);
+  }
+};
+
+// 取消绑定
+const handleBindCancel = () => {
+  resourceToBind.value = null;
+  selectedNodeId.value = null;
+  isBindModalVisible.value = false;
 };
 
 onMounted(() => {
   fetchResources();
+  fetchTreeNodes();
 });
 </script>
 
