@@ -86,24 +86,21 @@ func (t *treeEcsDAO) Create(ctx context.Context, resource *model.ResourceEcs) er
 }
 
 func (t *treeEcsDAO) Delete(ctx context.Context, id int) error {
-	// 删除关联关系
-	if err := t.db.WithContext(ctx).Where("id = ?", id).Select(clause.Associations).Delete(&model.ResourceEcs{}).Error; err != nil {
-		t.l.Error("删除 ECS 失败", zap.Int("id", id), zap.Error(err))
-		return err
-	}
-
-	// 物理删除资源
-	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("id = ?", id).Unscoped().Delete(&model.ResourceEcs{}).Error; err != nil {
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 删除关联关系
+		if err := tx.Where("id = ?", id).Select(clause.Associations).Delete(&model.ResourceEcs{}).Error; err != nil {
+			t.l.Error("删除 ECS 关联关系失败", zap.Int("id", id), zap.Error(err))
 			return err
 		}
-		return nil
-	}); err != nil {
-		t.l.Error("物理删除 ECS 失败", zap.Int("id", id), zap.Error(err))
-		return err
-	}
 
-	return nil
+		// 物理删除资源
+		if err := tx.Unscoped().Where("id = ?", id).Delete(&model.ResourceEcs{}).Error; err != nil {
+			t.l.Error("物理删除 ECS 失败", zap.Int("id", id), zap.Error(err))
+			return err
+		}
+
+		return nil
+	})
 }
 
 func (t *treeEcsDAO) DeleteByInstanceName(ctx context.Context, name string) error {

@@ -18,6 +18,11 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	ErrResourceBound    = errors.New("ECS 资源被绑定，无法删除")
+	ErrResourceNotFound = errors.New("ECS 资源未找到")
+)
+
 type TreeService interface {
 	ListTreeNodes(ctx context.Context) ([]*model.TreeNode, error)
 	SelectTreeNode(ctx context.Context, level int, levelLt int) ([]*model.TreeNode, error)
@@ -628,11 +633,30 @@ func (ts *treeService) UpdateEcsResource(ctx context.Context, resource *model.Re
 }
 
 func (ts *treeService) DeleteEcsResource(ctx context.Context, id int) error {
-	if err := ts.ecsDao.Delete(ctx, id); err != nil {
-		ts.l.Error("DeleteEcsResource 删除 ECS 资源失败", zap.Error(err))
-		return err
+	// 获取资源
+	resource, err := ts.ecsDao.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrResourceNotFound) {
+			ts.l.Warn("DeleteEcsResource: 资源未找到", zap.Int("id", id))
+			return fmt.Errorf("资源未找到: %w", err)
+		}
+		ts.l.Error("DeleteEcsResource 获取 ECS 资源失败", zap.Int("id", id), zap.Error(err))
+		return fmt.Errorf("获取 ECS 资源失败: %w", err)
 	}
 
+	// 检查资源是否被绑定
+	if len(resource.BindNodes) > 0 {
+		ts.l.Warn("DeleteEcsResource: 资源被绑定，无法删除", zap.Int("id", id), zap.Any("bindNodes", resource.BindNodes))
+		return ErrResourceBound
+	}
+
+	// 删除资源
+	if err := ts.ecsDao.Delete(ctx, id); err != nil {
+		ts.l.Error("DeleteEcsResource 删除 ECS 资源失败", zap.Int("id", id), zap.Error(err))
+		return fmt.Errorf("删除 ECS 资源失败: %w", err)
+	}
+
+	ts.l.Info("DeleteEcsResource 删除 ECS 资源成功", zap.Int("id", id))
 	return nil
 }
 
