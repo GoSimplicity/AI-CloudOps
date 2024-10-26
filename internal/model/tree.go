@@ -16,12 +16,12 @@ type ResourceTree struct {
 	ZoneId           string     `json:"zoneId" gorm:"type:varchar(100);comment:实例所属可用区 ID，如 cn-hangzhou-g"`      // 可用区 ID
 	Env              string     `json:"env" gorm:"type:varchar(50);comment:环境标识，如 dev、stage、prod"`               // 环境标识
 	PayType          string     `json:"payType" gorm:"type:varchar(50);comment:付费类型，按量付费或包年包月"`                  // 付费类型
-	Status           string     `json:"status" gorm:"type:varchar(50);comment:资源状态，如 Running、Stopped"`           // 资源状态
+	Status           string     `json:"status" gorm:"type:varchar(50);comment:资源状态，如 Running、Stopped、Created"`   // 资源状态
 	Description      string     `json:"description" gorm:"type:text;comment:资源描述，如 CentOS 7.4 操作系统"`             // 资源描述
 	Tags             StringList `json:"tags" gorm:"type:varchar(500);comment:资源标签集合，用于分类和筛选"`                    // 资源标签
 	SecurityGroupIds StringList `json:"securityGroupIds" gorm:"type:varchar(500);comment:安全组 ID 列表"`             // 安全组 ID 列表
-	PrivateIpAddress StringList `json:"privateIpAddress" gorm:"type:varchar(500);comment:私有 IP 地址列表"`            // 私有 IP 地址列表
-	PublicIpAddress  StringList `json:"publicIpAddress" gorm:"type:varchar(500);comment:公网 IP 地址列表"`             // 公网 IP 地址列表
+	PrivateIpAddress string     `json:"privateIpAddress" gorm:"type:varchar(500);comment:私有 IP 地址列表"`            // 私有 IP 地址列表
+	PublicIpAddress  string     `json:"publicIpAddress" gorm:"type:varchar(500);comment:公网 IP 地址列表"`             // 公网 IP 地址列表
 	IpAddr           string     `json:"ipAddr" gorm:"type:varchar(45);uniqueIndex;comment:单个公网 IP 地址"`           // 单个公网 IP 地址
 	CreationTime     string     `json:"creationTime" gorm:"type:varchar(30);comment:创建时间，ISO 8601 格式"`           // 创建时间，ISO 8601 格式
 }
