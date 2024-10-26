@@ -131,8 +131,8 @@ func MockResouceTree(name string) model.ResourceTree {
 		Description:      "CentOS 7.4 操作系统",
 		Tags:             model.StringList{"tag1", "tag2"},
 		SecurityGroupIds: model.StringList{"sg-123456", "sg-654321"},
-		PrivateIpAddress: model.StringList{"192.168.0.1", "192.168.0.2"},
-		PublicIpAddress:  model.StringList{"1.2.3.4", "5.6.7.8"},
+		PrivateIpAddress: "192.168.0.1",
+		PublicIpAddress:  "1.2.3.4",
 		IpAddr:           "1.2.3.4",
 		CreationTime:     time.Now().Format(time.RFC3339),
 	}

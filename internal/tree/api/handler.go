@@ -60,7 +60,6 @@ func (t *TreeHandler) RegisterRouters(server *gin.Engine) {
 	treeGroup.DELETE("/deleteEcsResource/:id", t.DeleteEcsResource)
 
 	// 公有云ECS资源相关路由
-	treeGroup.GET("/getAliResource/:id", t.GetAliEcsResource)
 	treeGroup.POST("/createAliResource", t.CreateAliEcsResource)
 	treeGroup.POST("/updateAliResource", t.UpdateAliEcsResource)
 	treeGroup.DELETE("/deleteAliResource/:id", t.DeleteAliEcsResource)
@@ -469,23 +468,6 @@ func (t *TreeHandler) DeleteEcsResource(ctx *gin.Context) {
 	apiresponse.Success(ctx)
 }
 
-func (t *TreeHandler) GetAliEcsResource(ctx *gin.Context) {
-	id := ctx.Param("id")
-	idInt, err := strconv.Atoi(id)
-	if err != nil {
-		apiresponse.BadRequestError(ctx, "id 非整数")
-		return
-	}
-
-	resourceList, err := t.aliService.GetResource(ctx, idInt)
-	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	apiresponse.SuccessWithData(ctx, resourceList)
-}
-
 func (t *TreeHandler) CreateAliEcsResource(ctx *gin.Context) {
 	var req model.TerraformConfig
 
@@ -494,12 +476,13 @@ func (t *TreeHandler) CreateAliEcsResource(ctx *gin.Context) {
 		return
 	}
 
-	if err := t.aliService.CreateResource(ctx, req); err != nil {
+	id, err := t.aliService.CreateResource(ctx, req)
+	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	apiresponse.SuccessWithData(ctx, id)
 }
 
 func (t *TreeHandler) UpdateAliEcsResource(ctx *gin.Context) {
@@ -533,13 +516,3 @@ func (t *TreeHandler) DeleteAliEcsResource(ctx *gin.Context) {
 
 	apiresponse.Success(ctx)
 }
-
-//func (t *TreeHandler) GetAllResource(ctx *gin.Context) {
-//	list, err := t.service.GetAllResources(ctx)
-//	if err != nil {
-//		apiresponse.ErrorWithMessage(ctx, err.Error())
-//		return
-//	}
-//
-//	apiresponse.SuccessWithData(ctx, list)
-//}

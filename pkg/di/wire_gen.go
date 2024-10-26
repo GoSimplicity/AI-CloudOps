@@ -87,8 +87,8 @@ func InitWebServer() *Cmd {
 	treeRdsDAO := rds.NewTreeRdsDAO(db, logger)
 	treeNodeDAO := tree_node.NewTreeNodeDAO(db, logger)
 	treeService := service2.NewTreeService(treeEcsDAO, treeElbDAO, treeRdsDAO, treeNodeDAO, logger, userDAO)
-	aliResourceDAO := ali_resource.NewAliResourceDAO(db, logger)
-	aliResourceService := service2.NewAliResourceService(logger, aliResourceDAO)
+	aliResourceDAO := ali_resource.NewAliResourceDAO(cmdable)
+	aliResourceService := service2.NewAliResourceService(logger, aliResourceDAO, cmdable, treeEcsDAO)
 	treeHandler := api5.NewTreeHandler(treeService, logger, aliResourceService)
 	k8sDAO := dao2.NewK8sDAO(db, logger)
 	k8sClient := client.NewK8sClient(logger, k8sDAO)
@@ -125,6 +125,7 @@ func InitWebServer() *Cmd {
 	cmd := &Cmd{
 		Server: engine,
 		Cron:   cronCron,
+		Start:  aliResourceService,
 	}
 	return cmd
 }

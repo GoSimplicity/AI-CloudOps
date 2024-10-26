@@ -42,6 +42,8 @@ type TreeEcsDAO interface {
 	AddBindNodes(ctx context.Context, ecs *model.ResourceEcs, node *model.TreeNode) error
 	// RemoveBindNodes 移除 ResourceEcs 绑定的 TreeNode 节点
 	RemoveBindNodes(ctx context.Context, ecs *model.ResourceEcs, node *model.TreeNode) error
+	// GetByHash 根据 Hash 获取单个 ResourceEcs 实例
+	GetByHash(ctx context.Context, hash string) (*model.ResourceEcs, error)
 }
 
 type treeEcsDAO struct {
@@ -149,20 +151,22 @@ func (t *treeEcsDAO) Upsert(ctx context.Context, resource *model.ResourceEcs) er
 
 func (t *treeEcsDAO) Update(ctx context.Context, resource *model.ResourceEcs) error {
 	// 更新资源信息
-	if err := t.db.WithContext(ctx).Updates(resource).Error; err != nil {
+	if err := t.db.WithContext(ctx).Where("id = ?", resource.ID).Updates(resource).Error; err != nil {
 		t.l.Error("更新 ECS 失败", zap.Error(err))
 		return err
 	}
 
-	// 更新关联关系
-	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := t.UpdateBindNodes(ctx, resource, resource.BindNodes); err != nil {
+	if len(resource.BindNodes) > 0 {
+		// 更新关联关系
+		if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := t.UpdateBindNodes(ctx, resource, resource.BindNodes); err != nil {
+				return err
+			}
+			return nil
+		}); err != nil {
+			t.l.Error("更新关联关系失败", zap.Error(err))
 			return err
 		}
-		return nil
-	}); err != nil {
-		t.l.Error("更新关联关系失败", zap.Error(err))
-		return err
 	}
 
 	return nil
@@ -309,4 +313,15 @@ func (t *treeEcsDAO) RemoveBindNodes(ctx context.Context, ecs *model.ResourceEcs
 
 		return nil
 	})
+}
+
+func (t *treeEcsDAO) GetByHash(ctx context.Context, hash string) (*model.ResourceEcs, error) {
+	var modelEcs *model.ResourceEcs
+
+	if err := t.db.WithContext(ctx).Where("hash = ?", hash).First(&modelEcs).Error; err != nil {
+		t.l.Error("根据 Hash 获取 ECS 失败", zap.String("hash", hash), zap.Error(err))
+		return nil, err
+	}
+
+	return modelEcs, nil
 }
