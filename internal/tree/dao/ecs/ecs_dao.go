@@ -20,6 +20,10 @@ type TreeEcsDAO interface {
 	Upsert(ctx context.Context, resource *model.ResourceEcs) error
 	// Update 更新指定的 ResourceEcs 实例
 	Update(ctx context.Context, resource *model.ResourceEcs) error
+	// UpdateEcsResourceStatusByHash 更新 ECS 资源的状态
+	UpdateEcsResourceStatusByHash(ctx context.Context, resource *model.ResourceEcs) error
+	// UpdateByHash 通过 Hash 更新 ResourceEcs 实例
+	UpdateByHash(ctx context.Context, resource *model.ResourceEcs) error
 	// UpdateBindNodes 更新 ResourceEcs 绑定的 TreeNode 节点
 	UpdateBindNodes(ctx context.Context, resource *model.ResourceEcs, nodes []*model.TreeNode) error
 	// GetAll 获取所有 ResourceEcs 实例，预加载绑定的 TreeNodes
@@ -49,6 +53,15 @@ type TreeEcsDAO interface {
 type treeEcsDAO struct {
 	db *gorm.DB
 	l  *zap.Logger
+}
+
+func (t *treeEcsDAO) UpdateEcsResourceStatusByHash(ctx context.Context, resource *model.ResourceEcs) error {
+	if err := t.db.WithContext(ctx).Model(model.ResourceEcs{}).Where("hash = ?", resource.Hash).Update("status", resource.Status).Error; err != nil {
+		t.l.Error("更新 ECS 资源状态失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 func NewTreeEcsDAO(db *gorm.DB, l *zap.Logger) TreeEcsDAO {
@@ -324,4 +337,14 @@ func (t *treeEcsDAO) GetByHash(ctx context.Context, hash string) (*model.Resourc
 	}
 
 	return modelEcs, nil
+}
+
+func (t *treeEcsDAO) UpdateByHash(ctx context.Context, resource *model.ResourceEcs) error {
+	// 更新资源信息
+	if err := t.db.WithContext(ctx).Where("hash = ?", resource.Hash).Updates(resource).Error; err != nil {
+		t.l.Error("更新 ECS 失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }

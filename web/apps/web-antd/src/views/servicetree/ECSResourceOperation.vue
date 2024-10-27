@@ -85,6 +85,10 @@
             <a-input v-model:value="createForm.region" placeholder="请输入区域" />
           </a-form-item>
 
+          <a-form-item label="描述" name="description">
+            <a-input v-model:value="createForm.description" placeholder="请输入描述" />
+          </a-form-item>
+          
           <!-- 实例信息 -->
           <a-divider>实例信息</a-divider>
           <a-form-item label="可用区" name="instance_availability_zone" :rules="[{ required: true, message: '请输入可用区' }]">
@@ -153,43 +157,11 @@
       </a-form>
     </a-modal>
 
-
-
     <!-- 编辑资源模态框 -->
     <a-modal v-model:visible="isEditModalVisible" title="编辑资源" @ok="handleEditECS" @cancel="handleEditCancel">
       <a-form :model="editForm" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }" ref="editFormRef">
-        <a-form-item label="资源名称" name="instanceName" :rules="[{ required: true, message: '请输入资源名称' }]">
-          <a-input v-model:value="editForm.instanceName" placeholder="请输入资源名称" />
-        </a-form-item>
-
-        <a-form-item label="IP地址" name="ipAddr" :rules="[{ required: true, message: '请输入IP地址' }]">
-          <a-input v-model:value="editForm.ipAddr" placeholder="请输入IP地址" />
-        </a-form-item>
-
-        <a-form-item label="主机名" name="hostname">
-          <a-input v-model:value="editForm.hostname" placeholder="请输入主机名" />
-        </a-form-item>
-
-        <a-form-item label="操作系统" name="osName">
-          <a-input v-model:value="editForm.osName" placeholder="请输入系统名称" />
-        </a-form-item>
-
-        <a-form-item label="描述" name="description">
-          <a-input v-model:value="editForm.description" placeholder="请输入资源描述" />
-        </a-form-item>
-
-        <!-- 支持多标签输入 -->
-        <a-form-item label="标签" name="tags">
-          <a-select mode="tags" v-model:value="editForm.tags" placeholder="请输入标签" style="width: 100%">
-            <a-select-option v-for="tag in editForm.tags" :key="tag" :value="tag">
-              {{ tag }}
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-
-        <a-form-item label="供应商" name="vendor" :rules="[
-          { required: true, type: 'string', message: '请选择供应商' }
-        ]">
+        <!-- 公共字段 -->
+        <a-form-item label="供应商" name="vendor" :rules="[{ required: true, type: 'string', message: '请选择供应商' }]">
           <a-select v-model:value="editForm.vendor" placeholder="请选择供应商" style="width: 100%">
             <a-select-option :value="'1'">个人</a-select-option>
             <a-select-option :value="'2'">阿里云</a-select-option>
@@ -198,6 +170,121 @@
             <a-select-option :value="'5'">AWS</a-select-option>
           </a-select>
         </a-form-item>
+
+        <!-- 个人供应商通用字段 -->
+        <template v-if="editForm.vendor === '1'">
+          <a-form-item label="资源名称" name="instanceName" :rules="[{ required: true, message: '请输入资源名称' }]">
+            <a-input v-model:value="editForm.instanceName" placeholder="请输入资源名称" />
+          </a-form-item>
+
+          <a-form-item label="IP地址" name="ipAddr" :rules="[{ required: true, message: '请输入IP地址' }]">
+            <a-input v-model:value="editForm.ipAddr" placeholder="请输入IP地址" />
+          </a-form-item>
+
+          <a-form-item label="主机名" name="hostname">
+            <a-input v-model:value="editForm.hostname" placeholder="请输入主机名" />
+          </a-form-item>
+
+          <a-form-item label="操作系统" name="osName">
+            <a-input v-model:value="editForm.osName" placeholder="请输入系统名称" />
+          </a-form-item>
+
+          <a-form-item label="描述" name="description">
+            <a-input v-model:value="editForm.description" placeholder="请输入资源描述" />
+          </a-form-item>
+
+          <!-- 支持多标签输入 -->
+          <a-form-item label="标签" name="tags">
+            <a-select mode="tags" v-model:value="editForm.tags" placeholder="请输入标签" style="width: 100%">
+              <a-select-option v-for="tag in editForm.tags" :key="tag" :value="tag">
+                {{ tag }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+        </template>
+
+        <!-- 非个人供应商特有字段 -->
+        <template v-else>
+          <a-divider>非个人供应商详情</a-divider>
+
+          <a-form-item label="名称" name="name" :rules="[{ required: true, message: '请输入名称' }]">
+            <a-input v-model:value="editForm.name" placeholder="请输入名称" />
+          </a-form-item>
+
+          <a-form-item label="区域" name="region" :rules="[{ required: true, message: '请输入区域' }]">
+            <a-input v-model:value="editForm.region" placeholder="请输入区域" />
+          </a-form-item>
+
+          <a-form-item label="描述" name="description">
+            <a-input v-model:value="editForm.description" placeholder="请输入描述" />
+          </a-form-item>
+
+          <!-- 实例信息 -->
+          <a-divider>实例信息</a-divider>
+          
+          <a-form-item label="实例名称" name="instance_name" :rules="[{ required: true, message: '请输入实例名称' }]">
+            <a-input v-model:value="editForm.instance_name" placeholder="请输入实例名称" />
+          </a-form-item>
+
+          <a-form-item label="可用区" name="instance_availability_zone" :rules="[{ required: true, message: '请输入可用区' }]">
+            <a-input v-model:value="editForm.instance_availability_zone" placeholder="请输入可用区" />
+          </a-form-item>
+
+          <a-form-item label="实例类型" name="instance_type" :rules="[{ required: true, message: '请输入实例类型' }]">
+            <a-input v-model:value="editForm.instance_type" placeholder="请输入实例类型" />
+          </a-form-item>
+
+          <a-form-item label="系统盘类别" name="system_disk_category" :rules="[{ required: true, message: '请输入系统盘类别' }]">
+            <a-input v-model:value="editForm.system_disk_category" placeholder="请输入系统盘类别" />
+          </a-form-item>
+
+          <a-form-item label="系统盘名称" name="system_disk_name" :rules="[{ required: true, message: '请输入系统盘名称' }]">
+            <a-input v-model:value="editForm.system_disk_name" placeholder="请输入系统盘名称" />
+          </a-form-item>
+
+          <a-form-item label="系统盘描述" name="system_disk_description">
+            <a-input v-model:value="editForm.system_disk_description" placeholder="请输入系统盘描述" />
+          </a-form-item>
+
+          <a-form-item label="镜像ID" name="image_id" :rules="[{ required: true, message: '请输入镜像ID' }]">
+            <a-input v-model:value="editForm.image_id" placeholder="请输入镜像ID" />
+          </a-form-item>
+
+          <a-form-item label="公网出带宽" name="internet_max_bandwidth_out"
+            :rules="[{ required: true, message: '请输入公网出带宽' }]">
+            <a-input-number v-model:value="editForm.internet_max_bandwidth_out" placeholder="请输入公网出带宽"
+              style="width: 100%" />
+          </a-form-item>
+
+          <!-- VPC 信息 -->
+          <a-divider>VPC 信息</a-divider>
+          <a-form-item label="VPC名称" name="vpc_name" :rules="[{ required: true, message: '请输入VPC名称' }]">
+            <a-input v-model:value="editForm.vpc_name" placeholder="请输入VPC名称" />
+          </a-form-item>
+
+          <a-form-item label="CIDR块" name="cidr_block" :rules="[{ required: true, message: '请输入CIDR块' }]">
+            <a-input v-model:value="editForm.cidr_block" placeholder="请输入CIDR块" />
+          </a-form-item>
+
+          <a-form-item label="VSwitch CIDR" name="vswitch_cidr"
+            :rules="[{ required: true, message: '请输入VSwitch CIDR' }]">
+            <a-input v-model:value="editForm.vswitch_cidr" placeholder="请输入VSwitch CIDR" />
+          </a-form-item>
+
+          <a-form-item label="区域ID" name="zone_id" :rules="[{ required: true, message: '请输入区域ID' }]">
+            <a-input v-model:value="editForm.zone_id" placeholder="请输入区域ID" />
+          </a-form-item>
+
+          <!-- 安全组信息 -->
+          <a-divider>安全组信息</a-divider>
+          <a-form-item label="安全组名称" name="security_group_name" :rules="[{ required: true, message: '请输入安全组名称' }]">
+            <a-input v-model:value="editForm.security_group_name" placeholder="请输入安全组名称" />
+          </a-form-item>
+
+          <a-form-item label="安全组描述" name="security_group_description">
+            <a-input v-model:value="editForm.security_group_description" placeholder="请输入安全组描述" />
+          </a-form-item>
+        </template>
       </a-form>
     </a-modal>
 
@@ -220,7 +307,9 @@ import {
   bindECSResources,
   unbindECSResources,
   getAllTreeNodes,
-  createAliECSResources
+  createAliECSResources,
+  editOtherECSResources,
+  deleteOtherECSResources,
 } from '#/api';
 import type { ResourceEcs, TreeNode } from '#/api';
 
@@ -245,13 +334,13 @@ const createForm = reactive({
   // 非个人供应商字段
   name: '',
   region: '',
+  instance_name: '',
   instance_availability_zone: '',
   instance_type: '',
   system_disk_category: '',
   system_disk_name: '',
   system_disk_description: '',
   image_id: '',
-  instance_name: '',
   internet_max_bandwidth_out: null as number | null,
   vpc_name: '',
   cidr_block: '',
@@ -271,7 +360,27 @@ const editForm = reactive({
   hostname: '',
   ipAddr: '',
   osName: '',
+
+  // 非个人供应商字段
+  name: '',
+  region: '',
+  instance_name: '',
+  instance_availability_zone: '',
+  instance_type: '',
+  system_disk_category: '',
+  system_disk_name: '',
+  system_disk_description: '',
+  image_id: '',
+  internet_max_bandwidth_out: null as number | null,
+  vpc_name: '',
+  cidr_block: '',
+  vswitch_cidr: '',
+  zone_id: '',
+  security_group_name: '',
+  security_group_description: '',
+
 });
+
 
 // 资源数据
 const data = reactive<ResourceEcs[]>([]);
@@ -494,11 +603,11 @@ const handleCreateECS = async () => {
   }
 };
 
-
 // 取消按钮点击事件
 const handleCancel = () => {
   isCreateModalVisible.value = false;
 };
+
 
 // 取消编辑按钮点击事件
 const handleEditCancel = () => {
@@ -572,17 +681,40 @@ const handleEditECS = async () => {
   editForm.tags = editForm.tags.filter(tag => tag.trim() !== '');
 
   try {
-    // 调用接口编辑资源，假设有一个 updateECSResources 接口
-    await editECSResources({
-      ID: editForm.ID, // 确保传递资源的ID
-      instanceName: editForm.instanceName,
-      description: editForm.description,
-      tags: editForm.tags,
-      vendor: editForm.vendor,
-      hostname: editForm.hostname,
-      ipAddr: editForm.ipAddr,
-      osName: editForm.osName,
-    });
+    if (editForm.vendor == '1') {
+      await editECSResources({
+        ID: editForm.ID, // 确保传递资源的ID
+        instanceName: editForm.instanceName,
+        description: editForm.description,
+        tags: editForm.tags,
+        vendor: editForm.vendor,
+        hostname: editForm.hostname,
+        ipAddr: editForm.ipAddr,
+        osName: editForm.osName,
+      });
+    } else {
+      await editOtherECSResources({
+        ID: editForm.ID,
+        name: editForm.name,
+        description: editForm.description,
+        region: editForm.region,
+        instance_name: editForm.instance_name,
+        instance_availability_zone: editForm.instance_availability_zone,
+        instance_type: editForm.instance_type,
+        system_disk_category: editForm.system_disk_category,
+        system_disk_name: editForm.system_disk_name,
+        system_disk_description: editForm.system_disk_description,
+        image_id: editForm.image_id,
+        internet_max_bandwidth_out: editForm.internet_max_bandwidth_out ?? 0,
+        vpc_name: editForm.vpc_name,
+        cidr_block: editForm.cidr_block,
+        vswitch_cidr: editForm.vswitch_cidr,
+        zone_id: editForm.zone_id,
+        security_group_name: editForm.security_group_name,
+        security_group_description: editForm.security_group_description,
+      })
+    }
+
 
     // 显示成功提示
     message.success('编辑ECS资源成功');
@@ -608,14 +740,22 @@ const handleDeleteResource = (record: ResourceEcs) => {
     content: `确定要删除资源 "${record.instanceName}" 吗？`,
     onOk: async () => {
       try {
-        await deleteECSResources(record.ID);
-        // 从本地数据中删除该资源
-        const index = data.findIndex(item => item.ID === record.ID);
-        if (index !== -1) {
-          data.splice(index, 1);  // 删除资源
-          handleSearch();  // 重新过滤数据
-          message.success(`资源 "${record.instanceName}" 已成功删除`);
+        if (record.vendor === '1') {
+          // 使用个人供应商的删除接口
+          await deleteECSResources(record.ID);
+        } else {
+          // 使用非个人供应商的删除接口
+          await deleteOtherECSResources(record.ID);
         }
+        message.success(`资源 "${record.instanceName}" 已成功删除`);
+        await fetchResources();
+        // // 从本地数据中删除该资源
+        // const index = data.findIndex(item => item.ID === record.ID);
+        // if (index !== -1) {
+        //   data.splice(index, 1);  // 删除资源
+        //   handleSearch();  // 重新过滤数据
+        //   message.success(`资源 "${record.instanceName}" 已成功删除`);
+        // }
       } catch (error) {
         console.error('删除资源失败', error);
         message.error(`删除资源 "${record.instanceName}" 失败，请稍后再试`);
