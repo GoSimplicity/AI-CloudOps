@@ -2,6 +2,7 @@ package elb
 
 import (
 	"context"
+	"gorm.io/gorm/clause"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -12,7 +13,7 @@ type TreeElbDAO interface {
 	// Create 创建一个新的 ResourceElb 实例
 	Create(ctx context.Context, obj *model.ResourceElb) error
 	// Delete 删除指定的 ResourceElb 实例（软删除）
-	Delete(ctx context.Context, obj *model.ResourceElb) error
+	Delete(ctx context.Context, id int) error
 	// DeleteByInstanceID 根据 InstanceID 删除 ResourceElb 实例（软删除）
 	DeleteByInstanceID(ctx context.Context, instanceID string) error
 	// Upsert 创建或更新 ResourceElb 实例
@@ -61,33 +62,116 @@ func (t *treeElbDAO) applyPreloads(query *gorm.DB) *gorm.DB {
 }
 
 func (t *treeElbDAO) Create(ctx context.Context, obj *model.ResourceElb) error {
-	//TODO implement me
-	panic("implement me")
+	//创建资源
+	if err := t.db.WithContext(ctx).Create(obj).Error; err != nil {
+		t.l.Error("创建 ELB 失败", zap.Error(err))
+		return err
+	}
+
+	//如果存在BindNodes,则添加关联
+	if len(obj.BindNodes) > 0 {
+		if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			for _, node := range obj.BindNodes {
+				if err := t.AddBindNodes(ctx, obj, node); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			t.l.Error("添加 ELB 绑定的 TreeNode 失败", zap.Error(err))
+			return err
+		}
+	}
+	return nil
 }
 
-func (t *treeElbDAO) Delete(ctx context.Context, obj *model.ResourceElb) error {
-	//TODO implement me
-	panic("implement me")
+func (t *treeElbDAO) Delete(ctx context.Context, id int) error {
+	//删除关联关系
+	if err := t.db.WithContext(ctx).Where("id = ?", id).Select(clause.Associations).Delete(&model.ResourceElb{}).Error; err != nil {
+		t.l.Error("删除 ELB 失败", zap.Int("id", id), zap.Error(err))
+		return err
+	}
+
+	//物理删除资源
+	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ?", id).Unscoped().Delete(&model.ResourceElb{}).Error; err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.l.Error("物理删除 ELB 失败", zap.Int("id", id), zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (t *treeElbDAO) DeleteByInstanceID(ctx context.Context, instanceID string) error {
-	//TODO implement me
-	panic("implement me")
+	if err := t.db.WithContext(ctx).Where("instance_id = ?", instanceID).Delete(&model.ResourceElb{}).Error; err != nil {
+		t.l.Error("根据 InstanceID 删除 ELB 失败", zap.String("instanceID", instanceID), zap.Error(err))
+		return err
+	}
+
+	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("instance_id = ?", instanceID).Unscoped().Delete(&model.ResourceElb{}).Error; err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.l.Error("物理删除 ELB 失败", zap.String("instanceID", instanceID), zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (t *treeElbDAO) Upsert(ctx context.Context, obj *model.ResourceElb) error {
-	//TODO implement me
-	panic("implement me")
+	//插入或者更新资源
+	if err := t.db.WithContext(ctx).Clauses(clause.OnConflict{
+		UpdateAll: true,
+	}).Create(obj).Error; err != nil {
+		t.l.Error("Upsert ELB 失败", zap.Error(err))
+		return err
+	}
+	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := t.UpdateBindNodes(ctx, obj, obj.BindNodes); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.l.Error("更新关联关系失败", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (t *treeElbDAO) Update(ctx context.Context, obj *model.ResourceElb) error {
-	//TODO implement me
-	panic("implement me")
+	if err := t.db.WithContext(ctx).Updates(obj).Error; err != nil {
+		t.l.Error("更新 ELB 失败", zap.Error(err))
+		return err
+	}
+	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := t.UpdateBindNodes(ctx, obj, obj.BindNodes); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.l.Error("更新关联关系失败", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (t *treeElbDAO) UpdateBindNodes(ctx context.Context, obj *model.ResourceElb, nodes []*model.TreeNode) error {
-	//TODO implement me
-	panic("implement me")
+	for _, node := range nodes {
+		if err := t.db.WithContext(ctx).Model(node).Updates(node).Error; err != nil {
+			t.l.Error("更新 TreeNode 字段失败", zap.Error(err))
+			return err
+		}
+	}
+	if err := t.db.WithContext(ctx).Model(obj).Association("BindNodes").Replace(nodes); err != nil {
+		t.l.Error("同步 ELB 绑定的 TreeNode 失败", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (t *treeElbDAO) GetAll(ctx context.Context) ([]*model.ResourceElb, error) {
@@ -96,7 +180,7 @@ func (t *treeElbDAO) GetAll(ctx context.Context) ([]*model.ResourceElb, error) {
 	query := t.applyPreloads(t.db.WithContext(ctx))
 
 	if err := query.Find(&elb).Error; err != nil {
-		t.l.Error("获取所有 ELB 实例失败", zap.Error(err))
+		t.l.Error("获取所有 ELB 失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -104,35 +188,68 @@ func (t *treeElbDAO) GetAll(ctx context.Context) ([]*model.ResourceElb, error) {
 }
 
 func (t *treeElbDAO) GetAllNoPreload(ctx context.Context) ([]*model.ResourceElb, error) {
-	//TODO implement me
-	panic("implement me")
+	var elb []*model.ResourceElb
+
+	if err := t.db.WithContext(ctx).Find(&elb).Error; err != nil {
+		t.l.Error("获取所有 ELB 失败", zap.Error(err))
+		return nil, err
+	}
+	return elb, nil
 }
 
 func (t *treeElbDAO) GetByLevel(ctx context.Context, level int) ([]*model.ResourceElb, error) {
-	//TODO implement me
-	panic("implement me")
+	var elb []*model.ResourceElb
+
+	query := t.applyPreloads(t.db.WithContext(ctx)).Where("level = ?", level)
+
+	if err := query.Find(&elb).Error; err != nil {
+		t.l.Error("根据层级获取 ELB 失败", zap.Int("level", level), zap.Error(err))
+		return nil, err
+	}
+	return elb, nil
 }
 
 func (t *treeElbDAO) GetByIDsWithPagination(ctx context.Context, ids []int, limit, offset int) ([]*model.ResourceElb, error) {
-	//TODO implement me
-	panic("implement me")
+	var elb []*model.ResourceElb
+
+	query := t.applyPreloads(t.db.WithContext(ctx)).Where("id IN ?", ids).Limit(limit).Offset(offset)
+
+	if err := query.Find(&elb).Error; err != nil {
+		t.l.Error("根据 IDs 获取 ELB 失败", zap.Ints("ids", ids), zap.Error(err))
+		return nil, err
+	}
+	return elb, nil
 }
 
 func (t *treeElbDAO) GetByInstanceID(ctx context.Context, instanceID string) (*model.ResourceElb, error) {
-	//TODO implement me
-	panic("implement me")
+	var elb model.ResourceElb
+
+	query := t.applyPreloads(t.db.WithContext(ctx)).Where("instance_id = ?", instanceID)
+
+	if err := query.First(&elb).Error; err != nil {
+		t.l.Error("根据 InstanceID 获取 ELB 失败", zap.String("instanceID", instanceID), zap.Error(err))
+		return nil, err
+	}
+	return &elb, nil
 }
 
 func (t *treeElbDAO) GetByID(ctx context.Context, id int) (*model.ResourceElb, error) {
-	//TODO implement me
-	panic("implement me")
+	var elb model.ResourceElb
+
+	query := t.applyPreloads(t.db.WithContext(ctx)).Where("id = ?", id)
+
+	if err := query.First(&elb).Error; err != nil {
+		t.l.Error("根据 ID 获取 ELB 失败", zap.Int("id", id), zap.Error(err))
+		return nil, err
+	}
+	return &elb, nil
 }
 
 func (t *treeElbDAO) GetByIDNoPreload(ctx context.Context, id int) (*model.ResourceElb, error) {
 	elb := &model.ResourceElb{}
 
 	if err := t.db.WithContext(ctx).First(&elb, id).Error; err != nil {
-		t.l.Error("获取 ELB 实例失败", zap.Error(err))
+		t.l.Error("根据ID获取 ELB 失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -140,13 +257,12 @@ func (t *treeElbDAO) GetByIDNoPreload(ctx context.Context, id int) (*model.Resou
 }
 
 func (t *treeElbDAO) GetUidAndHashMap(ctx context.Context) (map[string]string, error) {
-	//TODO implement me
-	panic("implement me")
+	return nil, nil
 }
 
 func (t *treeElbDAO) AddBindNodes(ctx context.Context, elb *model.ResourceElb, node *model.TreeNode) error {
 	// 使用事务更新 ELB 和树节点的关联关系
-	return t.db.Transaction(func(tx *gorm.DB) error {
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(elb).Association("BindNodes").Append(node); err != nil {
 			t.l.Error("BindElb 更新 ELB 失败", zap.Error(err))
 			return err
