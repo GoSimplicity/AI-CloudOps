@@ -42,7 +42,8 @@ func Init() {
 
 	sp := viper.GetString("server.port")
 
-	cmd.Cron.Start() // 启动定时任务
+	go cmd.Cron.Start() // 启动定时任务
+	go cmd.Start.StartWorker()
 
 	// 启动 Web 服务器
 	if err := cmd.Server.Run(":" + sp); err != nil {

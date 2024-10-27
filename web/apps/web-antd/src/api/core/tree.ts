@@ -143,6 +143,39 @@ export interface EditECSResourceReq {
   hostname: string;
 }
 
+export interface createAliECSResourcesReq {
+  name: string;
+  region: string;
+  instance: {
+    instance_availability_zone: string;
+    instance_type: string;
+    system_disk_category: string;
+    system_disk_name: string;
+    system_disk_description: string;
+    image_id: string;
+    instance_name: string;
+    internet_max_bandwidth_out: number;
+  };
+  vpc: {
+    vpc_name: string;
+    cidr_block: string;
+    vswitch_cidr: string;
+    zone_id: string;
+  };
+  security: {
+    security_group_name: string;
+    security_group_description: string;
+  };
+  // 其他通用字段
+  instanceName: string;
+  description: string;
+  tags: string[];
+  vendor: string;
+  hostname: string;
+  ipAddr: string;
+  osName: string;
+}
+
 export async function getAllTreeNodes() {
   return requestClient.get<TreeNode[]>('/tree/listTreeNode');
 }
@@ -187,4 +220,8 @@ export async function bindECSResources(data: BindResourceReq) {
 
 export async function unbindECSResources(data: BindResourceReq) {
   return requestClient.post<GeneralRes>('/tree/unBindEcs', data);
+}
+
+export async function createAliECSResources(data: createAliECSResourcesReq) {
+  return requestClient.post<GeneralRes>('/tree/createAliResource', data);
 }

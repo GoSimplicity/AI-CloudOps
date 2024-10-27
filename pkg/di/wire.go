@@ -42,7 +42,7 @@ import (
 	menuService "github.com/GoSimplicity/AI-CloudOps/internal/system/service/menu"
 	roleService "github.com/GoSimplicity/AI-CloudOps/internal/system/service/role"
 	treeHandler "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ali_resource"
+	aliDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ali_resource"
 	ecsDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
 	elbDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
 	rdsDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/rds"
@@ -101,7 +101,7 @@ func InitWebServer() *Cmd {
 		alertSendDao.NewAlertManagerSendDAO,
 		scrapeJobDao.NewScrapeJobDAO,
 		scrapePoolDao.NewScrapePoolDAO,
-		ali_resource.NewAliResourceDAO,
+		aliDao.NewAliResourceDAO,
 		yamlService.NewPrometheusConfigService,
 		k8sService.NewK8sService,
 		notAuthService.NewNotAuthService,
