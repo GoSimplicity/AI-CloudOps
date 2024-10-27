@@ -266,7 +266,7 @@ func (a *aliResourceService) executeCreateResource(ctx context.Context, config m
 		ResourceTree: model.ResourceTree{
 			InstanceName:     config.Name,
 			Hash:             hash,
-			Vendor:           "阿里云",
+			Vendor:           "2",
 			CreateByOrder:    true,
 			Image:            instanceConfig.ImageID,
 			VpcId:            vpcConfig.VpcName,
@@ -356,7 +356,7 @@ func (a *aliResourceService) executeCreateResource(ctx context.Context, config m
 		},
 	}
 
-	if err := a.ecsDao.Update(ctx, updatedResource); err != nil {
+	if err := a.ecsDao.UpdateByHash(ctx, updatedResource); err != nil {
 		a.logger.Error("更新资源记录失败", zap.Error(err))
 		return fmt.Errorf("更新资源记录失败: %w", err)
 	}
@@ -545,37 +545,57 @@ func (a *aliResourceService) DeleteResource(ctx context.Context, id int) error {
 
 // executeDeleteResource 执行实际的资源删除逻辑
 func (a *aliResourceService) executeDeleteResource(ctx context.Context, config model.TerraformConfig) error {
-	// 1. 获取现有资源
+	// 获取现有资源
 	existingResource, err := a.ecsDao.GetByID(ctx, config.ID)
 	if err != nil {
 		a.logger.Error("获取现有资源失败", zap.Error(err))
 		return fmt.Errorf("获取现有资源失败: %w", err)
 	}
 
-	// 2. 获取项目根目录（当前工作目录）
+	if len(existingResource.BindNodes) > 0 {
+		existingResource.Status = "错误"
+
+		err = a.ecsDao.UpdateEcsResourceStatusByHash(ctx, existingResource)
+		if err != nil {
+			a.logger.Error("更新资源状态失败", zap.Error(err))
+			return err
+		}
+
+		return ErrResourceBound
+	}
+
+	existingResource.Status = "删除中"
+
+	err = a.ecsDao.UpdateEcsResourceStatusByHash(ctx, existingResource)
+	if err != nil {
+		a.logger.Error("更新资源状态失败", zap.Error(err))
+		return err
+	}
+
+	// 获取项目根目录（当前工作目录）
 	projectRootDir, err := os.Getwd()
 	if err != nil {
 		a.logger.Error("获取项目根目录失败", zap.Error(err))
 		return fmt.Errorf("获取项目根目录失败: %w", err)
 	}
 
-	// 3. 构建 Terraform 工作目录路径，基于资源 ID
+	// 构建 Terraform 工作目录路径，基于资源 ID
 	terraformDir := filepath.Join(projectRootDir, "terraform", fmt.Sprintf("resource_%d", existingResource.ID))
 
-	// 4. 初始化 Terraform
+	// 初始化 Terraform
 	_, err = tree.SetupTerraform(ctx, terraformDir, a.terraformBin)
 	if err != nil {
 		a.logger.Error("Terraform 初始化失败", zap.Error(err))
 		return fmt.Errorf("terraform 初始化失败: %w", err)
 	}
 
-	// 5. 执行 Terraform Destroy
+	// 执行 Terraform Destroy
 	if err := tree.DestroyTerraform(ctx, terraformDir, a.terraformBin); err != nil {
 		a.logger.Error("Terraform Destroy 执行失败", zap.Error(err))
 		return fmt.Errorf("terraform Destroy 失败: %w", err)
 	}
 
-	// 6. 从数据库中删除资源记录
+	// 从数据库中删除资源记录
 	if err := a.ecsDao.Delete(ctx, existingResource.ID); err != nil {
 		a.logger.Error("删除资源信息到数据库失败", zap.Error(err))
 		return fmt.Errorf("删除资源信息到数据库失败: %w", err)

@@ -65,10 +65,28 @@ export interface ResourceEcs {
   startTime: string;
   autoReleaseTime: string;
   lastInvokedTime: string;
-  isBound?: boolean;     
-  boundNodeId?: number;  
+  isBound?: boolean;
+  boundNodeId?: number;
   description?: string;
   tags: string[];
+
+  // aliyun
+  name: string;
+  region: string;
+  instance_name: string;
+  instance_availability_zone: string;
+  instance_type: string;
+  system_disk_category: string;
+  system_disk_name: string;
+  system_disk_description: string;
+  image_id: string;
+  internet_max_bandwidth_out: number;
+  vpc_name: string;
+  cidr_block: string;
+  vswitch_cidr: string;
+  zone_id: string;
+  security_group_name: string;
+  security_group_description: string;
 }
 
 export interface ResourceElb {
@@ -176,6 +194,27 @@ export interface createAliECSResourcesReq {
   osName: string;
 }
 
+export interface OtherEcsResourceReq {
+  ID: number;
+  name: string;
+  description: string;
+  region: string;
+  instance_name: string;
+  instance_availability_zone: string;
+  instance_type: string;
+  system_disk_category: string;
+  system_disk_name: string;
+  system_disk_description: string;
+  image_id: string;
+  internet_max_bandwidth_out: number;
+  vpc_name: string;
+  cidr_block: string;
+  vswitch_cidr: string;
+  zone_id: string;
+  security_group_name: string;
+  security_group_description: string;
+}
+
 export async function getAllTreeNodes() {
   return requestClient.get<TreeNode[]>('/tree/listTreeNode');
 }
@@ -224,4 +263,12 @@ export async function unbindECSResources(data: BindResourceReq) {
 
 export async function createAliECSResources(data: createAliECSResourcesReq) {
   return requestClient.post<GeneralRes>('/tree/createAliResource', data);
+}
+
+export async function editOtherECSResources(data: OtherEcsResourceReq) {
+  return requestClient.post<GeneralRes>('/tree/updateAliResource', data);
+}
+
+export async function deleteOtherECSResources(id: number) {
+  return requestClient.delete<GeneralRes>(`/tree/deleteAliResource/${id}`);
 }

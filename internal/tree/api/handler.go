@@ -63,6 +63,7 @@ func (t *TreeHandler) RegisterRouters(server *gin.Engine) {
 	treeGroup.POST("/createAliResource", t.CreateAliEcsResource)
 	treeGroup.POST("/updateAliResource", t.UpdateAliEcsResource)
 	treeGroup.DELETE("/deleteAliResource/:id", t.DeleteAliEcsResource)
+	treeGroup.GET("/getResourceStatus/:id", t.GetResourceStatus)
 }
 
 func (t *TreeHandler) ListTreeNode(ctx *gin.Context) {
@@ -324,7 +325,6 @@ func (t *TreeHandler) BindEcs(ctx *gin.Context) {
 		return
 	}
 
-	// TODO: 假定仅支持绑定一个 ECS 实例
 	if err := t.service.BindEcs(ctx, req.ResourceIds[0], req.NodeId); err != nil {
 		t.l.Error("bind ecs failed", zap.Error(err))
 		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
@@ -453,7 +453,6 @@ func (t *TreeHandler) UpdateEcsResource(ctx *gin.Context) {
 
 func (t *TreeHandler) DeleteEcsResource(ctx *gin.Context) {
 	id := ctx.Param("id")
-
 	idInt, err := strconv.Atoi(id)
 	if err != nil {
 		apiresponse.BadRequestError(ctx, "id 非整数")
@@ -515,4 +514,17 @@ func (t *TreeHandler) DeleteAliEcsResource(ctx *gin.Context) {
 	}
 
 	apiresponse.Success(ctx)
+}
+
+func (t *TreeHandler) GetResourceStatus(ctx *gin.Context) {
+	id := ctx.Param("id")
+
+	task, err := t.aliService.GetTaskStatus(ctx, id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, task)
+
 }
