@@ -105,14 +105,24 @@ type aliResourceService struct {
 }
 
 func NewAliResourceService(logger *zap.Logger, dao ali_resource.AliResourceDAO, redisClient redis.Cmdable, ecsDao ecs.TreeEcsDAO) AliResourceService {
+	key := os.Getenv("ALIYUN_ACCESS_KEY_ID")
+	if key == "" {
+		logger.Error("ALIYUN_ACCESS_KEY_ID 环境变量未设置")
+	}
+
+	secret := os.Getenv("ALIYUN_ACCESS_KEY_SECRET")
+	if secret == "" {
+		logger.Error("ALIYUN_ACCESS_KEY_SECRET 环境变量未设置")
+	}
+
 	return &aliResourceService{
 		logger:       logger,
 		dao:          dao,
 		ecsDao:       ecsDao,
 		redisClient:  redisClient,
 		terraformBin: viper.GetString("terraform.bin_path"),
-		key:          viper.GetString("terraform.key"),
-		secret:       viper.GetString("terraform.secret"),
+		key:          key,
+		secret:       secret,
 		semaphore:    make(chan struct{}, 10),
 	}
 }
