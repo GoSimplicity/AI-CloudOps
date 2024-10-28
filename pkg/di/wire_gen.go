@@ -114,7 +114,7 @@ func InitWebServer() *Cmd {
 	alertManagerRuleService := rule2.NewAlertManagerRuleService(alertManagerRuleDAO, monitorCache, logger, userDAO)
 	alertManagerSendService := send2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, monitorCache, logger, userDAO)
 	scrapeJobService := job2.NewPrometheusScrapeService(scrapeJobDAO, monitorCache, logger, userDAO)
-	scrapePoolService := pool4.NewPrometheusPoolService(scrapePoolDAO, monitorCache, logger, userDAO)
+	scrapePoolService := pool4.NewPrometheusPoolService(scrapePoolDAO, monitorCache, logger, userDAO, scrapeJobDAO)
 	configYamlService := yaml.NewPrometheusConfigService(promConfigCache, alertConfigCache, ruleConfigCache, recordConfigCache)
 	prometheusHandler := api7.NewPrometheusHandler(logger, alertManagerEventService, alertManagerOnDutyService, alertManagerPoolService, alertManagerRecordService, alertManagerRuleService, alertManagerSendService, scrapeJobService, scrapePoolService, configYamlService)
 	notAuthService := service4.NewNotAuthService(logger, treeNodeDAO)

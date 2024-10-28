@@ -69,7 +69,7 @@ func (s *scrapeJobDAO) GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId 
 	var jobs []*model.MonitorScrapeJob
 
 	if err := s.db.WithContext(ctx).
-		Where("enable = ?", true).
+		Where("enable = ?", 1).
 		Where("pool_id = ?", poolId).
 		Find(&jobs).Error; err != nil {
 		s.l.Error("获取 MonitorScrapeJob 失败", zap.Error(err), zap.Int("poolId", poolId))

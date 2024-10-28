@@ -27,9 +27,10 @@ type scrapePoolService struct {
 	l       *zap.Logger
 }
 
-func NewPrometheusPoolService(dao scrapePoolDao.ScrapePoolDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO) ScrapePoolService {
+func NewPrometheusPoolService(dao scrapePoolDao.ScrapePoolDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO, jobDao scrapeJobDao.ScrapeJobDAO) ScrapePoolService {
 	return &scrapePoolService{
 		dao:     dao,
+		jobDao:  jobDao,
 		userDao: userDao,
 		l:       l,
 		cache:   cache,
