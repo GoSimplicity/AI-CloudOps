@@ -20,6 +20,7 @@ const routes: RouteRecordRaw[] = [
           import('#/views/servicetree/TreeOverview.vue'),
         meta: {
           title: "服务树概览",
+          icon: 'material-symbols:overview'
         },
       },
       {
@@ -29,6 +30,7 @@ const routes: RouteRecordRaw[] = [
           import('#/views/servicetree/TreeNodeManager.vue'),
         meta: {
           title: "服务树节点管理",
+          icon: 'fluent-mdl2:task-manager'
         },
       },
       {
@@ -38,26 +40,27 @@ const routes: RouteRecordRaw[] = [
           import('#/views/servicetree/ECSResourceOperation.vue'),
         meta: {
           title: "ECS管理",
+          icon: 'mdi:cloud-cog-outline'
         },
       },
-      {
-        name: 'RDS管理',
-        path: '/rds_resource_operation',
-        component: () =>
-          import('#/views/servicetree/RDSResourceOperation.vue'),
-        meta: {
-          title: "RDS管理",
-        },
-      },
-      {
-        name: 'ELB管理',
-        path: '/elb_resource_operation',
-        component: () =>
-          import('#/views/servicetree/ELBResourceOperation.vue'),
-        meta: {
-          title: "ELB管理",
-        },
-      },
+      // {
+      //   name: 'RDS管理',
+      //   path: '/rds_resource_operation',
+      //   component: () =>
+      //     import('#/views/servicetree/RDSResourceOperation.vue'),
+      //   meta: {
+      //     title: "RDS管理",
+      //   },
+      // },
+      // {
+      //   name: 'ELB管理',
+      //   path: '/elb_resource_operation',
+      //   component: () =>
+      //     import('#/views/servicetree/ELBResourceOperation.vue'),
+      //   meta: {
+      //     title: "ELB管理",
+      //   },
+      // },
     ],
   },
 ];

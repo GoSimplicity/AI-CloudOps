@@ -57,6 +57,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/dashboard/system_api/SystemApi.vue'),
         meta: {
           title: $t('page.dashboard.apis'),
+          icon: 'lucide:zap',
         },
       },
     ],
