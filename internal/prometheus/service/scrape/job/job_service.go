@@ -69,17 +69,6 @@ func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, monitorSc
 }
 
 func (s *scrapeJobService) UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
-	// 检查新的抓取作业名称是否已存在
-	exists, err := s.dao.CheckMonitorScrapeJobExists(ctx, monitorScrapeJob.Name)
-	if err != nil {
-		s.l.Error("更新抓取作业失败：检查抓取作业是否存在时出错", zap.Error(err))
-		return err
-	}
-
-	if exists {
-		return errors.New("抓取作业名称已存在")
-	}
-
 	// 更新抓取作业
 	if err := s.dao.UpdateMonitorScrapeJob(ctx, monitorScrapeJob); err != nil {
 		s.l.Error("更新抓取作业失败", zap.Error(err))
