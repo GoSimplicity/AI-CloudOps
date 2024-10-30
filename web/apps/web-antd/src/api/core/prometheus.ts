@@ -1,4 +1,5 @@
 import { requestClient } from '#/api/request';
+import { interaction } from '@antv/g2plot/lib/adaptor/common';
 
 export interface MonitorScrapePoolItem {
   ID: number;
@@ -112,6 +113,73 @@ export interface editScrapeJobReq {
   treeNodeIds: string[];
 }
 
+export interface MonitorAlertPoolItem {
+  name: string;
+  userId: number;
+  alertManagerInstances: string[];
+  resolveTimeout: string;
+  groupWait: string;
+  groupInterval: string;
+  repeatInterval: string;
+  groupBy: string[];
+  receiver: string;
+  CreatedAt: string;
+}
+
+export interface createAlertManagerPoolReq {
+  name: string;
+  alertManagerInstances: string[];
+  resolveTimeout: string;
+  groupWait: string;
+  groupInterval: string;
+  repeatInterval: string;
+  groupBy: string[];
+  receiver: string;
+}
+
+export interface editAlertManagerPoolReq {
+  ID: number;
+  name: string;
+  alertManagerInstances: string[];
+  resolveTimeout: string;
+  groupWait: string;
+  groupInterval: string;
+  repeatInterval: string;
+  groupBy: string[];
+  receiver: string;
+}
+
+export interface createAlertRuleReq {
+  name: string;
+  poolId: number;
+  sendGroupId: number;
+  treeNodeId: number;
+  expr: string;
+  severity: string;
+  forTime: string;
+  enable: number;
+  labels: string[];
+  annotations: string[];
+}
+
+export interface updateAlertRuleReq {
+  ID: number;
+  name: string;
+  poolId: number;
+  sendGroupId: number;
+  treeNodeId: number;
+  expr: string;
+  severity: string;
+  forTime: string;
+  enable: number;
+  labels: string[];
+  annotations: string[];
+}
+
+export interface validateExprApiReq {
+  promqlExpr: string;
+}
+
 export const getMonitorScrapePoolApi = () => {
   return requestClient.get<MonitorScrapePoolItem[]>('/monitor/scrape_pools');
 };
@@ -138,12 +206,48 @@ export const getMonitorScrapeJobApi = () => {
 
 export const createScrapeJobApi = (data: createScrapeJobReq) => {
   return requestClient.post('/monitor/scrape_jobs/create', data);
-}
+};
 
 export const deleteScrapeJobApi = (id: number) => {
   return requestClient.delete(`/monitor/scrape_jobs/${id}`);
-}
+};
 
 export const updateScrapeJobApi = (data: editScrapeJobReq) => {
   return requestClient.post('/monitor/scrape_jobs/update', data);
-}
+};
+
+export const getAlertManagerPoolsApi = () => {
+  return requestClient.get('/monitor/alertManager_pools/');
+};
+
+export const createAlertManagerPoolApi = (data: createAlertManagerPoolReq) => {
+  return requestClient.post('/monitor/alertManager_pools/create', data);
+};
+
+export const updateAlertManagerPoolApi = (data: editAlertManagerPoolReq) => {
+  return requestClient.post('/monitor/alertManager_pools/update', data);
+};
+
+export const deleteAlertManagerPoolApi = (id: number) => {
+  return requestClient.delete(`/monitor/alertManager_pools/${id}`);
+};
+
+export const getAlertRulesApi = () => {
+  return requestClient.get('/monitor/alert_rules');
+};
+
+export const createAlertRuleApi = (data: createAlertRuleReq) => {
+  return requestClient.post('/monitor/alert_rules/create', data);
+};
+
+export const updateAlertRuleApi = (data: updateAlertRuleReq) => {
+  return requestClient.post('/monitor/alert_rules/update', data);
+};
+
+export const deleteAlertRuleApi = (id: number) => {
+  return requestClient.delete(`/monitor/alert_rules/${id}`);
+};
+
+export const validateExprApi = (data: validateExprApiReq) => {
+  return requestClient.post('/monitor/alert_rules/promql_check', data);
+};

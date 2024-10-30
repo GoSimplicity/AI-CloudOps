@@ -90,16 +90,13 @@ type MonitorAlertRule struct {
 	Annotations StringList `json:"annotations,omitempty" gorm:"type:text;comment:注解，格式为 key=v"`                                  // 注解，格式为 key=v
 
 	// 前端使用字段
-	NodePath         string            `json:"nodePath,omitempty" gorm:"-"`         // 节点路径，形式为 a.b.c.d
-	TreeNodeIDs      []int             `json:"treeNodeIds,omitempty" gorm:"-"`      // 节点ID整数数组
-	Key              string            `json:"key" gorm:"-"`                        // 前端表格的Key
-	PoolName         string            `json:"poolName,omitempty" gorm:"-"`         // 前端表格显示的Prometheus实例池名称
-	SendGroupName    string            `json:"sendGroupName,omitempty" gorm:"-"`    // 前端表格显示的发送组名称
-	CreateUserName   string            `json:"createUserName,omitempty" gorm:"-"`   // 前端表格显示的创建者用户名
-	LabelsFront      string            `json:"labelsFront,omitempty" gorm:"-"`      // 前端显示的标签组字符串
-	AnnotationsFront string            `json:"annotationsFront,omitempty" gorm:"-"` // 前端显示的注解字符串
-	LabelsM          map[string]string `json:"labelsM,omitempty" gorm:"-"`          // 标签键值对映射
-	AnnotationsM     map[string]string `json:"annotationsM,omitempty" gorm:"-"`     // 注释键值对映射
+	NodePath       string `json:"nodePath,omitempty" gorm:"-"`       // 节点路径，形式为 a.b.c.d
+	TreeNodeIDs    []int  `json:"treeNodeIds,omitempty" gorm:"-"`    // 节点ID整数数组
+	Key            string `json:"key" gorm:"-"`                      // 前端表格的Key
+	PoolName       string `json:"poolName,omitempty" gorm:"-"`       // 前端表格显示的Prometheus实例池名称
+	SendGroupName  string `json:"sendGroupName,omitempty" gorm:"-"`  // 前端表格显示的发送组名称
+	CreateUserName string `json:"createUserName,omitempty" gorm:"-"` // 前端表格显示的创建者用户名
+	LabelsFront    string `json:"labelsFront,omitempty" gorm:"-"`    // 前端显示的标签组字符串
 }
 
 // MonitorSendGroup 发送组的配置
