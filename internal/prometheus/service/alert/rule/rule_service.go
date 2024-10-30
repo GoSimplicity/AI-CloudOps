@@ -77,17 +77,6 @@ func (a *alertManagerRuleService) CreateMonitorAlertRule(ctx context.Context, mo
 }
 
 func (a *alertManagerRuleService) UpdateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error {
-	// 检查告警规则名称是否重复
-	exists, err := a.dao.CheckMonitorAlertRuleNameExists(ctx, monitorAlertRule)
-	if err != nil {
-		a.l.Error("更新告警规则失败：检查告警规则名称时出错", zap.Error(err))
-		return err
-	}
-
-	if exists {
-		return errors.New("告警规则名称已存在")
-	}
-
 	// 更新告警规则
 	if err := a.dao.UpdateMonitorAlertRule(ctx, monitorAlertRule); err != nil {
 		a.l.Error("更新告警规则失败", zap.Error(err))

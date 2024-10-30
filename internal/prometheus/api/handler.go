@@ -627,12 +627,7 @@ func (p *PrometheusHandler) PromqlExprCheck(ctx *gin.Context) {
 	}
 
 	exist, err := p.alertRuleService.PromqlExprCheck(ctx, promql.PromqlExpr)
-	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
-		return
-	}
-
-	if !exist {
+	if !exist || err != nil {
 		apiresponse.ErrorWithMessage(ctx, "PromQL 表达式不合法")
 		return
 	}
