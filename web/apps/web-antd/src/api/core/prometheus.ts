@@ -180,6 +180,19 @@ export interface validateExprApiReq {
   promqlExpr: string;
 }
 
+export interface MonitorAlertEventItem {
+  ID: number;
+  alertName: string;
+  fingerprint: string;
+  status: string;
+  sendGroupId: string;
+  eventTimes: number;
+  renLingUserId: string;
+  labels: string[];
+  createTime: string;
+  silenceId: string;
+}
+
 export const getMonitorScrapePoolApi = () => {
   return requestClient.get<MonitorScrapePoolItem[]>('/monitor/scrape_pools');
 };
@@ -250,4 +263,20 @@ export const deleteAlertRuleApi = (id: number) => {
 
 export const validateExprApi = (data: validateExprApiReq) => {
   return requestClient.post('/monitor/alert_rules/promql_check', data);
+};
+
+export const getAlertEventsApi = () => {
+  return requestClient.get('/monitor/alert_events');
+};
+export const silenceAlertApi = () => {
+  return requestClient.get('/monitor/alert_events');
+};
+export const claimAlertApi = () => {
+  return requestClient.get('/monitor/alert_events');
+};
+export const cancelSilenceAlertApi = () => {
+  return requestClient.get('/monitor/alert_events');
+};
+export const silenceBatchApi = () => {
+  return requestClient.get('/monitor/alert_events');
 };
