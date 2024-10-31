@@ -53,10 +53,18 @@ go run cmd/cloudops/main.go
 
 ### 运行前端项目
 
+前端项目地址：<https://github.com/GoSimplicity/AI-CloudOps-web>
+
+```bash
+# clone前端项目
+git clone https://github.com/GoSimplicity/AI-CloudOps-web.git
+```
+
 进入前端目录并安装依赖：
 
 ```bash
-cd web
+# 进入项目根目录
+cd AI-CloudOps-web
 # 推荐使用 node21 版本
 pnpm install
 ```
