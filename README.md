@@ -85,12 +85,9 @@ AI-CloudOps/
 ├── Makefile              # 项目构建和管理文件
 ├── go.mod                # Go 模块依赖文件
 ├── go.sum                # Go 依赖校验文件
-│
 ├── config/               # 配置文件目录
 ├── doc/                  # 项目文档目录
 ├── pkg/                  # 公共库和工具包
-├── web/                  # 前端项目目录
-│
 ├── cmd/                  # 可执行程序的主入口
 ├── deploy/               # 部署相关文件
 ├── internal/             # 内部模块与业务逻辑
