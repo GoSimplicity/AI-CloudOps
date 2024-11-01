@@ -43,9 +43,29 @@ func NewAlertManagerOnDutyService(dao onduty.AlertManagerOnDutyDAO, sendDao send
 }
 
 func (a *alertManagerOnDutyService) GetMonitorOnDutyGroupList(ctx context.Context, searchName *string) ([]*model.MonitorOnDutyGroup, error) {
-	return pkg.HandleList(ctx, searchName,
+	// 调用 HandleList 获取值班组列表
+	list, err := pkg.HandleList(ctx, searchName,
 		a.dao.SearchMonitorOnDutyGroupByName, // 搜索函数
-		a.dao.GetAllMonitorOnDutyGroup)       // 获取所有函数
+		a.dao.GetAllMonitorOnDutyGroup)
+	if err != nil {
+		a.l.Error("获取值班组列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 遍历每个值班组，构建 UserNames 列表
+	for _, group := range list {
+		// 预分配切片容量
+		userNames := make([]string, 0, len(group.Members))
+
+		// 直接赋值
+		for _, member := range group.Members {
+			userNames = append(userNames, member.Username)
+		}
+
+		group.UserNames = userNames
+	}
+
+	return list, nil
 }
 
 func (a *alertManagerOnDutyService) CreateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error {

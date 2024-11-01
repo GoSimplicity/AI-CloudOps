@@ -37,6 +37,7 @@ func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
 	userGroup.POST("/logout", u.Logout)              // 退出登陆
 	userGroup.GET("/profile", u.Profile)             // 用户信息
 	userGroup.GET("/codes", u.GetPermCode)           // 前端所需状态码
+	userGroup.GET("/list", u.GetUserList)
 }
 
 func (u *UserHandler) SignUp(ctx *gin.Context) {
@@ -193,4 +194,14 @@ func (u *UserHandler) GetPermCode(ctx *gin.Context) {
 	}
 
 	apiresponse.SuccessWithData(ctx, codes)
+}
+
+func (u *UserHandler) GetUserList(ctx *gin.Context) {
+	list, err := u.service.GetUserList(ctx)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, list)
 }

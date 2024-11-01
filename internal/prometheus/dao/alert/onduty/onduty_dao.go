@@ -44,7 +44,7 @@ func NewAlertManagerOnDutyDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDA
 func (a *alertManagerOnDutyDAO) GetAllMonitorOnDutyGroup(ctx context.Context) ([]*model.MonitorOnDutyGroup, error) {
 	var groups []*model.MonitorOnDutyGroup
 
-	if err := a.db.WithContext(ctx).Find(&groups).Error; err != nil {
+	if err := a.db.WithContext(ctx).Preload("Members").Find(&groups).Error; err != nil {
 		a.l.Error("获取所有 MonitorOnDutyGroup 失败", zap.Error(err))
 		return nil, err
 	}

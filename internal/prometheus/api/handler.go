@@ -125,7 +125,7 @@ func (p *PrometheusHandler) RegisterRouters(server *gin.Engine) {
 		{
 			recordRules.GET("/", p.GetMonitorRecordRuleList)                  // 获取预聚合规则列表
 			recordRules.POST("/create", p.CreateMonitorRecordRule)            // 创建新的预聚合规则
-			recordRules.PUT("/update", p.UpdateMonitorRecordRule)             // 更新现有的预聚合规则
+			recordRules.POST("/update", p.UpdateMonitorRecordRule)            // 更新现有的预聚合规则
 			recordRules.DELETE("/:id", p.DeleteMonitorRecordRule)             // 删除指定的预聚合规则
 			recordRules.DELETE("/", p.BatchDeleteMonitorRecordRule)           // 批量删除预聚合规则
 			recordRules.POST("/:id/enable", p.EnableSwitchMonitorRecordRule)  // 切换预聚合规则的启用状态
@@ -135,7 +135,7 @@ func (p *PrometheusHandler) RegisterRouters(server *gin.Engine) {
 		// 值班组相关路由
 		onDutyGroups := monitorGroup.Group("/onDuty_groups")
 		{
-			onDutyGroups.GET("/", p.GetMonitorOnDutyGroupList)                      // 获取值班组列表
+			onDutyGroups.GET("/list", p.GetMonitorOnDutyGroupList)                  // 获取值班组列表
 			onDutyGroups.POST("/create", p.CreateMonitorOnDutyGroup)                // 创建新的值班组
 			onDutyGroups.POST("/changes", p.CreateMonitorOnDutyGroupChange)         // 创建值班组的换班记录
 			onDutyGroups.POST("/update", p.UpdateMonitorOnDutyGroup)                // 更新值班组信息
