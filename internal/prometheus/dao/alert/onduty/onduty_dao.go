@@ -8,7 +8,6 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"strings"
-	"time"
 )
 
 type AlertManagerOnDutyDAO interface {
@@ -19,7 +18,7 @@ type AlertManagerOnDutyDAO interface {
 	DeleteMonitorOnDutyGroup(ctx context.Context, id int) error
 	SearchMonitorOnDutyGroupByName(ctx context.Context, name string) ([]*model.MonitorOnDutyGroup, error)
 	CreateMonitorOnDutyGroupChange(ctx context.Context, monitorOnDutyGroupChange *model.MonitorOnDutyChange) error
-	GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime time.Time) ([]*model.MonitorOnDutyChange, error)
+	GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyChange, error)
 	CheckMonitorOnDutyGroupExists(ctx context.Context, onDutyGroup *model.MonitorOnDutyGroup) (bool, error)
 	GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyHistory, error)
 	CreateMonitorOnDutyHistory(ctx context.Context, monitorOnDutyHistory *model.MonitorOnDutyHistory) error
@@ -145,7 +144,7 @@ func (a *alertManagerOnDutyDAO) CreateMonitorOnDutyGroupChange(ctx context.Conte
 	return nil
 }
 
-func (a *alertManagerOnDutyDAO) GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime time.Time) ([]*model.MonitorOnDutyChange, error) {
+func (a *alertManagerOnDutyDAO) GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyChange, error) {
 	if groupID <= 0 {
 		a.l.Error("GetMonitorOnDutyChangesByGroupAndTimeRange 失败: 无效的 groupID", zap.Int("groupID", groupID))
 		return nil, fmt.Errorf("无效的 groupID: %d", groupID)

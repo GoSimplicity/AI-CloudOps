@@ -141,6 +141,11 @@ func (a *alertManagerOnDutyService) CreateMonitorOnDutyGroupChange(ctx context.C
 		return err
 	}
 
+	if err := a.cache.MonitorCacheManager(ctx); err != nil {
+		a.l.Error("更新缓存失败", zap.Error(err))
+		return err
+	}
+
 	a.l.Info("创建值班组变更记录成功", zap.Int("onDutyGroupID", monitorOnDutyChange.OnDutyGroupID))
 	return nil
 }
@@ -242,16 +247,16 @@ func (a *alertManagerOnDutyService) GetMonitorOnDutyGroupFuturePlan(ctx context.
 	}
 
 	// 获取指定时间范围内的值班计划变更
-	histories, err := a.dao.GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx, id, startTimeStr, endTimeStr)
+	changes, err := a.dao.GetMonitorOnDutyChangesByGroupAndTimeRange(ctx, id, startTimeStr, endTimeStr)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		a.l.Error("获取值班计划变更失败", zap.Int("id", id), zap.Error(err))
 		return model.OnDutyPlanResp{}, err
 	}
 
 	// 构建变更记录的映射，方便后续查询
-	historyMap := make(map[string]*model.MonitorOnDutyHistory)
-	for _, history := range histories {
-		historyMap[history.DateString] = history
+	changeMap := make(map[string]*model.MonitorOnDutyChange)
+	for _, change := range changes {
+		changeMap[change.Date] = change
 	}
 
 	// 获取今天的日期
@@ -266,7 +271,7 @@ func (a *alertManagerOnDutyService) GetMonitorOnDutyGroupFuturePlan(ctx context.
 		var originUserName string
 
 		// 如果有历史变更记录，使用变更后的用户
-		if history, exists := historyMap[currentDate]; exists {
+		if history, exists := changeMap[currentDate]; exists {
 			user, err = a.userDao.GetUserByID(ctx, history.OnDutyUserID)
 			if err != nil {
 				a.l.Warn("获取用户信息失败", zap.Int("userID", history.OnDutyUserID), zap.Error(err))
