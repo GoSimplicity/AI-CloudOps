@@ -43,9 +43,29 @@ func NewAlertManagerOnDutyService(dao onduty.AlertManagerOnDutyDAO, sendDao send
 }
 
 func (a *alertManagerOnDutyService) GetMonitorOnDutyGroupList(ctx context.Context, searchName *string) ([]*model.MonitorOnDutyGroup, error) {
-	return pkg.HandleList(ctx, searchName,
+	// 调用 HandleList 获取值班组列表
+	list, err := pkg.HandleList(ctx, searchName,
 		a.dao.SearchMonitorOnDutyGroupByName, // 搜索函数
-		a.dao.GetAllMonitorOnDutyGroup)       // 获取所有函数
+		a.dao.GetAllMonitorOnDutyGroup)
+	if err != nil {
+		a.l.Error("获取值班组列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 遍历每个值班组，构建 UserNames 列表
+	for _, group := range list {
+		// 预分配切片容量
+		userNames := make([]string, 0, len(group.Members))
+
+		// 直接赋值
+		for _, member := range group.Members {
+			userNames = append(userNames, member.Username)
+		}
+
+		group.UserNames = userNames
+	}
+
+	return list, nil
 }
 
 func (a *alertManagerOnDutyService) CreateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error {
@@ -118,6 +138,11 @@ func (a *alertManagerOnDutyService) CreateMonitorOnDutyGroupChange(ctx context.C
 	// 创建值班组变更记录
 	if err := a.dao.CreateMonitorOnDutyGroupChange(ctx, monitorOnDutyChange); err != nil {
 		a.l.Error("创建值班组变更失败", zap.Error(err))
+		return err
+	}
+
+	if err := a.cache.MonitorCacheManager(ctx); err != nil {
+		a.l.Error("更新缓存失败", zap.Error(err))
 		return err
 	}
 
@@ -222,16 +247,16 @@ func (a *alertManagerOnDutyService) GetMonitorOnDutyGroupFuturePlan(ctx context.
 	}
 
 	// 获取指定时间范围内的值班计划变更
-	histories, err := a.dao.GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx, id, startTimeStr, endTimeStr)
+	changes, err := a.dao.GetMonitorOnDutyChangesByGroupAndTimeRange(ctx, id, startTimeStr, endTimeStr)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		a.l.Error("获取值班计划变更失败", zap.Int("id", id), zap.Error(err))
 		return model.OnDutyPlanResp{}, err
 	}
 
 	// 构建变更记录的映射，方便后续查询
-	historyMap := make(map[string]*model.MonitorOnDutyHistory)
-	for _, history := range histories {
-		historyMap[history.DateString] = history
+	changeMap := make(map[string]*model.MonitorOnDutyChange)
+	for _, change := range changes {
+		changeMap[change.Date] = change
 	}
 
 	// 获取今天的日期
@@ -246,7 +271,7 @@ func (a *alertManagerOnDutyService) GetMonitorOnDutyGroupFuturePlan(ctx context.
 		var originUserName string
 
 		// 如果有历史变更记录，使用变更后的用户
-		if history, exists := historyMap[currentDate]; exists {
+		if history, exists := changeMap[currentDate]; exists {
 			user, err = a.userDao.GetUserByID(ctx, history.OnDutyUserID)
 			if err != nil {
 				a.l.Warn("获取用户信息失败", zap.Int("userID", history.OnDutyUserID), zap.Error(err))
