@@ -72,17 +72,6 @@ func (a *alertManagerSendService) CreateMonitorSendGroup(ctx context.Context, mo
 }
 
 func (a *alertManagerSendService) UpdateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error {
-	// 检查发送组名称是否重复
-	exists, err := a.dao.CheckMonitorSendGroupNameExists(ctx, monitorSendGroup)
-	if err != nil {
-		a.l.Error("更新发送组失败：检查发送组名称时出错", zap.Error(err))
-		return err
-	}
-
-	if exists {
-		return errors.New("发送组名称已存在")
-	}
-
 	// 更新发送组
 	if err := a.dao.UpdateMonitorSendGroup(ctx, monitorSendGroup); err != nil {
 		a.l.Error("更新发送组失败", zap.Error(err))
