@@ -73,7 +73,6 @@ func (k *k8sDAO) ListAllClusters(ctx context.Context) ([]*model.K8sCluster, erro
 }
 
 func (k *k8sDAO) ListClustersForSelect(ctx context.Context) ([]*model.K8sCluster, error) {
-	//TODO implement me
 	panic("implement me")
 }
 
@@ -133,13 +132,26 @@ func (k *k8sDAO) GetClusterByName(ctx context.Context, name string) (*model.K8sC
 }
 
 func (k *k8sDAO) BatchEnableSwitchClusters(ctx context.Context, ids []int) error {
-	//TODO implement me
-	panic("implement me")
+	if len(ids) == 0 {
+		k.l.Error("BatchEnableSwitchClusters 批处理切换集群状态失败,参数为空")
+	}
+	if err := k.db.WithContext(ctx).Model(&model.K8sCluster{}).Where("id in ?", ids).Update("is_enable", true).Error; err != nil {
+		k.l.Error("BatchEnableSwitchClusters 批处理切换集群状态失败 ", zap.Error(err))
+		return err
+	}
+	return nil
+
 }
 
 func (k *k8sDAO) BatchDeleteClusters(ctx context.Context, ids []int) error {
-	//TODO implement me
-	panic("implement me")
+	if len(ids) == 0 {
+		k.l.Error("BatchDeleteClusters 批处理删除集群失败,参数为空")
+	}
+	if err := k.db.WithContext(ctx).Delete(&model.K8sCluster{}, "id in ?", ids).Error; err != nil {
+		k.l.Error("BatchDeleteClusters 批处理删除集群失败 ", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (k *k8sDAO) ListAllNodes(ctx context.Context) ([]*model.K8sNode, error) {
@@ -155,8 +167,12 @@ func (k *k8sDAO) ListAllNodes(ctx context.Context) ([]*model.K8sNode, error) {
 }
 
 func (k *k8sDAO) GetNodeByID(ctx context.Context, id int) (*model.K8sNode, error) {
-	//TODO implement me
-	panic("implement me")
+	var node *model.K8sNode
+	if err := k.db.WithContext(ctx).Where("id = ?", id).First(&node).Error; err != nil {
+		k.l.Error("GetNodeByID 通过ID获取节点失败", zap.Error(err))
+		return nil, err
+	}
+	return node, nil
 }
 
 func (k *k8sDAO) GetNodeByName(ctx context.Context, name string) (*model.K8sNode, error) {
@@ -171,43 +187,72 @@ func (k *k8sDAO) GetNodeByName(ctx context.Context, name string) (*model.K8sNode
 }
 
 func (k *k8sDAO) GetPodsByNodeID(ctx context.Context, nodeID int) ([]*model.K8sPod, error) {
-	//TODO implement me
-	panic("implement me")
+	var pods []*model.K8sPod
+	if err := k.db.WithContext(ctx).Where("node_id = ?", nodeID).Find(&pods).Error; err != nil {
+		k.l.Error("GetPodsByNodeID 通过节点ID获取pods失败", zap.Error(err))
+		return nil, err
+	}
+	return pods, nil
 }
 
 func (k *k8sDAO) CheckTaintYaml(ctx context.Context, taintYaml string) error {
-	//TODO implement me
-	panic("implement me")
+	var yamls []*model.K8sYamlTemplate
+	if err := k.db.WithContext(ctx).Where("taintYaml = ?", taintYaml).First(&yamls).Error; err != nil {
+		k.l.Error("CheckTaintYaml 查询模板失败", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (k *k8sDAO) BatchEnableSwitchNodes(ctx context.Context, ids []int) error {
-	//TODO implement me
-	panic("implement me")
+	if len(ids) == 0 {
+		k.l.Error("BatchEnableSwitchNodes 批处理切换节点状态失败,参数为空")
+	}
+	if err := k.db.WithContext(ctx).Model(&model.K8sNode{}).Where("id in ?", ids).Update("is_enable", true).Error; err != nil {
+		k.l.Error("BatchEnableSwitchNodes 批处理切换节点状态失败 ", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (k *k8sDAO) AddNodeLabel(ctx context.Context, nodeID int, labelKey, labelValue string) error {
-	//TODO implement me
-	panic("implement me")
+	if err := k.db.WithContext(ctx).Model(&model.K8sNode{}).Where("id = ?", nodeID).Update("labels", gorm.Expr("jsonb_set(labels, '{"+labelKey+"}', '"+labelValue+"')")).Error; err != nil {
+		k.l.Error("AddNodeLabel 添加节点标签失败", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (k *k8sDAO) AddNodeTaint(ctx context.Context, nodeID int, taintKey, taintValue string) error {
-	//TODO implement me
-	panic("implement me")
+	if err := k.db.WithContext(ctx).Model(&model.K8sNode{}).Where("id = ?", nodeID).Update("taints", gorm.Expr("jsonb_set(taints, '{"+taintKey+"}', '"+taintValue+"')")).Error; err != nil {
+		k.l.Error("AddNodeTaint 添加节点taint失败", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (k *k8sDAO) DeleteNodeLabel(ctx context.Context, nodeID int, labelKey string) error {
-	//TODO implement me
-	panic("implement me")
+	if err := k.db.WithContext(ctx).Model(&model.K8sNode{}).Where("id = ?", nodeID).Delete("labels", gorm.Expr("jsonb_set(labels, '{"+labelKey+"}', 'null')")).Error; err != nil {
+		k.l.Error("DeleteNodeLabel 删除节点标签失败", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (k *k8sDAO) DeleteNodeTaint(ctx context.Context, nodeID int, taintKey string) error {
-	//TODO implement me
-	panic("implement me")
+	if err := k.db.WithContext(ctx).Model(&model.K8sNode{}).Where("id = ?", nodeID).Delete("taints", gorm.Expr("jsonb_set(taints, '{"+taintKey+"}', 'null')")).Error; err != nil {
+		k.l.Error("DeleteNodeTaint 删除节点taint失败", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (k *k8sDAO) DrainPods(ctx context.Context, nodeID int) error {
-	//TODO implement me
-	panic("implement me")
+	if err := k.db.WithContext(ctx).Model(&model.K8sNode{}).Where("id = ?", nodeID).Update("is_drain", true).Error; err != nil {
+		k.l.Error("DrainPods 节点排空失败", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (k *k8sDAO) ListAllYamlTemplates(ctx context.Context) ([]*model.K8sYamlTemplate, error) {
