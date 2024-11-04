@@ -147,7 +147,7 @@ func (p *PrometheusHandler) RegisterRouters(server *gin.Engine) {
 		// 发送组相关路由
 		sendGroups := monitorGroup.Group("/send_groups")
 		{
-			sendGroups.GET("/", p.GetMonitorSendGroupList)       // 获取发送组列表
+			sendGroups.GET("/list", p.GetMonitorSendGroupList)   // 获取发送组列表
 			sendGroups.POST("/create", p.CreateMonitorSendGroup) // 创建新的发送组
 			sendGroups.POST("/update", p.UpdateMonitorSendGroup) // 更新现有的发送组
 			sendGroups.DELETE("/:id", p.DeleteMonitorSendGroup)  // 删除指定的发送组
