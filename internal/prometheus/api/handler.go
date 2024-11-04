@@ -125,7 +125,7 @@ func (p *PrometheusHandler) RegisterRouters(server *gin.Engine) {
 		{
 			recordRules.GET("/", p.GetMonitorRecordRuleList)                  // 获取预聚合规则列表
 			recordRules.POST("/create", p.CreateMonitorRecordRule)            // 创建新的预聚合规则
-			recordRules.PUT("/update", p.UpdateMonitorRecordRule)             // 更新现有的预聚合规则
+			recordRules.POST("/update", p.UpdateMonitorRecordRule)            // 更新现有的预聚合规则
 			recordRules.DELETE("/:id", p.DeleteMonitorRecordRule)             // 删除指定的预聚合规则
 			recordRules.DELETE("/", p.BatchDeleteMonitorRecordRule)           // 批量删除预聚合规则
 			recordRules.POST("/:id/enable", p.EnableSwitchMonitorRecordRule)  // 切换预聚合规则的启用状态
@@ -135,19 +135,19 @@ func (p *PrometheusHandler) RegisterRouters(server *gin.Engine) {
 		// 值班组相关路由
 		onDutyGroups := monitorGroup.Group("/onDuty_groups")
 		{
-			onDutyGroups.GET("/", p.GetMonitorOnDutyGroupList)                      // 获取值班组列表
-			onDutyGroups.POST("/create", p.CreateMonitorOnDutyGroup)                // 创建新的值班组
-			onDutyGroups.POST("/changes", p.CreateMonitorOnDutyGroupChange)         // 创建值班组的换班记录
-			onDutyGroups.POST("/update", p.UpdateMonitorOnDutyGroup)                // 更新值班组信息
-			onDutyGroups.DELETE("/:id", p.DeleteMonitorOnDutyGroup)                 // 删除指定的值班组
-			onDutyGroups.GET("/:id", p.GetMonitorOnDutyGroup)                       // 获取指定的值班组信息
-			onDutyGroups.GET("/:id/future_plan", p.GetMonitorOnDutyGroupFuturePlan) // 获取指定值班组的未来值班计划
+			onDutyGroups.GET("/list", p.GetMonitorOnDutyGroupList)               // 获取值班组列表
+			onDutyGroups.POST("/create", p.CreateMonitorOnDutyGroup)             // 创建新的值班组
+			onDutyGroups.POST("/changes", p.CreateMonitorOnDutyGroupChange)      // 创建值班组的换班记录
+			onDutyGroups.POST("/update", p.UpdateMonitorOnDutyGroup)             // 更新值班组信息
+			onDutyGroups.DELETE("/:id", p.DeleteMonitorOnDutyGroup)              // 删除指定的值班组
+			onDutyGroups.GET("/:id", p.GetMonitorOnDutyGroup)                    // 获取指定的值班组信息
+			onDutyGroups.POST("/future_plan", p.GetMonitorOnDutyGroupFuturePlan) // 获取指定值班组的未来值班计划
 		}
 
 		// 发送组相关路由
 		sendGroups := monitorGroup.Group("/send_groups")
 		{
-			sendGroups.GET("/", p.GetMonitorSendGroupList)       // 获取发送组列表
+			sendGroups.GET("/list", p.GetMonitorSendGroupList)   // 获取发送组列表
 			sendGroups.POST("/create", p.CreateMonitorSendGroup) // 创建新的发送组
 			sendGroups.POST("/update", p.UpdateMonitorSendGroup) // 更新现有的发送组
 			sendGroups.DELETE("/:id", p.DeleteMonitorSendGroup)  // 删除指定的发送组
@@ -448,16 +448,18 @@ func (p *PrometheusHandler) GetMonitorOnDutyGroup(ctx *gin.Context) {
 
 // GetMonitorOnDutyGroupFuturePlan 获取指定值班组的未来值班计划
 func (p *PrometheusHandler) GetMonitorOnDutyGroupFuturePlan(ctx *gin.Context) {
-	startTime := ctx.DefaultQuery("startTime", "")
-	endTime := ctx.DefaultQuery("endTime", "")
-	id := ctx.Param("id")
-	intId, err := strconv.Atoi(id)
-	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+	var req struct {
+		Id        int    `json:"id"`
+		StartTime string `json:"startTime"`
+		EndTime   string `json:"endTime"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	plans, err := p.alertOnDutyService.GetMonitorOnDutyGroupFuturePlan(ctx, intId, startTime, endTime)
+	plans, err := p.alertOnDutyService.GetMonitorOnDutyGroupFuturePlan(ctx, req.Id, req.StartTime, req.EndTime)
 	if err != nil {
 		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
 		return

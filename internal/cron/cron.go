@@ -13,21 +13,18 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-// CronManager 定义计划任务管理接口
 type CronManager interface {
 	StartOnDutyHistoryManager(ctx context.Context) error
 	fillOnDutyHistory(ctx context.Context)
 	processOnDutyHistoryForGroup(ctx context.Context, group *model.MonitorOnDutyGroup)
 }
 
-// cronManager 实现 CronManager 接口
 type cronManager struct {
 	logger    *zap.Logger
 	onDutyDao onduty.AlertManagerOnDutyDAO
 	sync.RWMutex
 }
 
-// NewCronManager 创建一个新的 CronManager 实例
 func NewCronManager(logger *zap.Logger, onDutyDao onduty.AlertManagerOnDutyDAO) CronManager {
 	return &cronManager{
 		logger:    logger,
@@ -155,5 +152,5 @@ func (cm *cronManager) getMemberIndex(group *model.MonitorOnDutyGroup, userID in
 			return index
 		}
 	}
-	return 0 // 默认返回第一个成员
+	return 0
 }

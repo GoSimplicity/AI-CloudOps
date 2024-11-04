@@ -16,6 +16,7 @@ type UserService interface {
 	Login(ctx context.Context, user *model.User) (*model.User, error)
 	GetProfile(ctx context.Context, uid int) (*model.User, error)
 	GetPermCode(ctx context.Context, uid int) ([]string, error)
+	GetUserList(ctx context.Context) ([]*model.User, error)
 }
 
 type userService struct {
@@ -66,4 +67,8 @@ func (us *userService) GetPermCode(ctx context.Context, uid int) ([]string, erro
 	}
 
 	return codes, nil
+}
+
+func (us *userService) GetUserList(ctx context.Context) ([]*model.User, error) {
+	return us.dao.GetAllUsers(ctx)
 }
