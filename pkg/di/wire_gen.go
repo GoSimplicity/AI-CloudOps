@@ -11,9 +11,9 @@ import (
 	api6 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
-	service3 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	api8 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
-	service4 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
+	service3 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	api7 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/alert_cache"
@@ -92,8 +92,27 @@ func InitWebServer() *Cmd {
 	treeHandler := api5.NewTreeHandler(treeService, logger, aliResourceService)
 	k8sDAO := dao2.NewK8sDAO(db, logger)
 	k8sClient := client.NewK8sClient(logger, k8sDAO)
-	k8sService := service3.NewK8sService(k8sDAO, k8sClient, logger)
-	k8sHandler := api6.NewK8sHandler(k8sService, logger)
+	clusterService := admin.NewClusterService(k8sDAO, k8sClient, logger)
+	k8sClusterHandler := api6.NewK8sClusterHandler(logger, clusterService)
+	configMapService := admin.NewConfigMapService(k8sDAO, k8sClient, logger)
+	k8sConfigMapHandler := api6.NewK8sConfigMapHandler(logger, configMapService)
+	deploymentService := admin.NewDeploymentService(k8sDAO, k8sClient, logger)
+	k8sDeploymentHandler := api6.NewK8sDeploymentHandler(logger, deploymentService)
+	namespaceService := admin.NewNamespaceService(k8sDAO, k8sClient, logger)
+	k8sNamespaceHandler := api6.NewK8sNamespaceHandler(logger, namespaceService)
+	nodeService := admin.NewNodeService(k8sDAO, k8sClient, logger)
+	k8sNodeHandler := api6.NewK8sNodeHandler(logger, nodeService)
+	podService := admin.NewPodService(k8sDAO, k8sClient, logger)
+	k8sPodHandler := api6.NewK8sPodHandler(logger, podService)
+	svcService := admin.NewSvcService(k8sDAO, k8sClient, logger)
+	k8sSvcHandler := api6.NewK8sSvcHandler(logger, svcService)
+	taintService := admin.NewTaintService(k8sDAO, k8sClient, logger)
+	k8sTaintHandler := api6.NewK8sTaintHandler(logger, taintService)
+	yamlTaskService := admin.NewYamlTaskService(k8sDAO, k8sClient, logger)
+	k8sYamlTaskHandler := api6.NewK8sYamlTaskHandler(logger, yamlTaskService)
+	yamlTemplateService := admin.NewYamlTemplateService(k8sDAO, k8sClient, logger)
+	k8sYamlTemplateHandler := api6.NewK8sYamlTemplateHandler(logger, yamlTemplateService)
+	k8sAppHandler := api6.NewK8sAppHandler(logger)
 	alertManagerEventDAO := event.NewAlertManagerEventDAO(db, logger, userDAO)
 	scrapePoolDAO := pool.NewScrapePoolDAO(db, logger, userDAO)
 	scrapeJobDAO := job.NewScrapeJobDAO(db, logger, userDAO)
@@ -117,9 +136,9 @@ func InitWebServer() *Cmd {
 	scrapePoolService := pool4.NewPrometheusPoolService(scrapePoolDAO, monitorCache, logger, userDAO, scrapeJobDAO)
 	configYamlService := yaml.NewPrometheusConfigService(promConfigCache, alertConfigCache, ruleConfigCache, recordConfigCache)
 	prometheusHandler := api7.NewPrometheusHandler(logger, alertManagerEventService, alertManagerOnDutyService, alertManagerPoolService, alertManagerRecordService, alertManagerRuleService, alertManagerSendService, scrapeJobService, scrapePoolService, configYamlService)
-	notAuthService := service4.NewNotAuthService(logger, treeNodeDAO)
+	notAuthService := service3.NewNotAuthService(logger, treeNodeDAO)
 	notAuthHandler := api8.NewNotAuthHandler(notAuthService)
-	engine := InitGinServer(v, userHandler, authHandler, treeHandler, k8sHandler, prometheusHandler, notAuthHandler)
+	engine := InitGinServer(v, userHandler, authHandler, treeHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, prometheusHandler, notAuthHandler)
 	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO)
 	cronCron := InitAndRefreshK8sClient(k8sClient, logger, monitorCache, cronManager)
 	cmd := &Cmd{
