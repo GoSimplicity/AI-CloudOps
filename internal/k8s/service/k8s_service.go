@@ -364,16 +364,15 @@ func (k *k8sService) UpdateCluster(ctx context.Context, id int, cluster *model.K
 }
 
 func (k *k8sService) BatchEnableSwitchClusters(ctx context.Context, ids []int) error {
-	panic("implement me")
+	return k.dao.BatchEnableSwitchClusters(ctx, ids)
 }
 
 func (k *k8sService) BatchDeleteClusters(ctx context.Context, ids []int) error {
-	//TODO implement me
-	panic("implement me")
+	return k.dao.BatchDeleteClusters(ctx, ids)
 }
 
 func (k *k8sService) GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error) {
-	panic("implement me")
+	return k.dao.GetClusterByID(ctx, id)
 }
 
 // ListAllNodes 获取指定集群的所有节点信息
@@ -652,7 +651,7 @@ func (k *k8sService) UpdateNodeLabel(ctx context.Context, req *model.LabelK8sNod
 	return nil
 }
 
-// AddNodeTaint 添加或删除 Kubernetes 节点的 Taint
+// UpdateNodeTaint AddNodeTaint 添加或删除 Kubernetes 节点的 Taint
 func (k *k8sService) UpdateNodeTaint(ctx context.Context, req *model.TaintK8sNodesRequest) error {
 	// 获取集群信息
 	cluster, err := k.dao.GetClusterByName(ctx, req.ClusterName)

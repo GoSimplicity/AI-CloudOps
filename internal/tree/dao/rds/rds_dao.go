@@ -2,6 +2,7 @@ package rds
 
 import (
 	"context"
+	"gorm.io/gorm/clause"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -12,7 +13,7 @@ type TreeRdsDAO interface {
 	// Create 创建一个新的 ResourceRds 实例
 	Create(ctx context.Context, obj *model.ResourceRds) error
 	// Delete 删除指定的 ResourceRds 实例（软删除）
-	Delete(ctx context.Context, obj *model.ResourceRds) error
+	Delete(ctx context.Context, id int) error
 	// DeleteByInstanceID 根据 InstanceID 删除 ResourceRds 实例（软删除）
 	DeleteByInstanceID(ctx context.Context, instanceID string) error
 	// Upsert 创建或更新 ResourceRds 实例
@@ -61,28 +62,105 @@ func (t *treeRdsDAO) applyPreloads(query *gorm.DB) *gorm.DB {
 }
 
 func (t *treeRdsDAO) Create(ctx context.Context, obj *model.ResourceRds) error {
-	//TODO implement me
-	panic("implement me")
+	if err := t.db.WithContext(ctx).Create(obj).Error; err != nil {
+		t.l.Error("创建 Rds 实例失败", zap.Error(err))
+		return err
+	}
+	//如果存在BindNodes，则添加关联
+	if len(obj.BindNodes) > 0 {
+		if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			for _, node := range obj.BindNodes {
+				if err := t.AddBindNodes(ctx, obj, node); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			t.l.Error("添加 Rds 绑定的 TreeNode 失败", zap.Error(err))
+			return err
+		}
+	}
+	return nil
 }
 
-func (t *treeRdsDAO) Delete(ctx context.Context, obj *model.ResourceRds) error {
-	//TODO implement me
-	panic("implement me")
+func (t *treeRdsDAO) Delete(ctx context.Context, id int) error {
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		//删除关联关系
+		if err := tx.Where("id = ?", id).Select(clause.Associations).Delete(&model.ResourceRds{}).Error; err != nil {
+			t.l.Error("删除 Rds 关联关系失败", zap.Int("id", id), zap.Error(err))
+			return err
+		}
+		//删除物理资源
+		if err := tx.Unscoped().Where("id = ?", id).Delete(&model.ResourceRds{}).Error; err != nil {
+			t.l.Error("删除 Rds 物理资源失败", zap.Int("id", id), zap.Error(err))
+			return err
+		}
+		return nil
+	})
 }
 
 func (t *treeRdsDAO) DeleteByInstanceID(ctx context.Context, instanceID string) error {
-	//TODO implement me
-	panic("implement me")
+	// 删除关联关系
+	if err := t.db.WithContext(ctx).Where("instanceID = ?", instanceID).Select(clause.Associations).Delete(&model.ResourceEcs{}).Error; err != nil {
+		t.l.Error("删除 ECS 失败", zap.String("instanceID", instanceID), zap.Error(err))
+		return err
+	}
+
+	// 物理删除资源
+	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("instanceID = ?", instanceID).Unscoped().Delete(&model.ResourceEcs{}).Error; err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.l.Error("物理删除 ECS 失败", zap.String("instanceID", instanceID), zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 func (t *treeRdsDAO) Upsert(ctx context.Context, obj *model.ResourceRds) error {
-	//TODO implement me
-	panic("implement me")
+	//插入或更新资源
+	if err := t.db.WithContext(ctx).Clauses(clause.OnConflict{
+		UpdateAll: true,
+	}).Create(obj).Error; err != nil {
+		t.l.Error("Upsert Rds 失败", zap.Error(err))
+		return err
+	}
+	//更新关联关系
+	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := t.UpdateBindNodes(ctx, obj, obj.BindNodes); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.l.Error("更新关联关系失败", zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (t *treeRdsDAO) Update(ctx context.Context, obj *model.ResourceRds) error {
-	//TODO implement me
-	panic("implement me")
+	//更新资源信息
+	if err := t.db.WithContext(ctx).Where("id = ?", obj.ID).Updates(obj).Error; err != nil {
+		t.l.Error("更新 Rds 失败", zap.Error(err))
+		return err
+	}
+	if len(obj.BindNodes) > 0 {
+		if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			for _, node := range obj.BindNodes {
+				if err := t.AddBindNodes(ctx, obj, node); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			t.l.Error("添加 Rds 绑定的 TreeNode 失败", zap.Error(err))
+			return err
+		}
+	}
+	return nil
 }
 
 func (t *treeRdsDAO) UpdateBindNodes(ctx context.Context, obj *model.ResourceRds, nodes []*model.TreeNode) error {
