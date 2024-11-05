@@ -1,0 +1,202 @@
+package api
+
+import (
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+)
+
+type K8sAppHandler struct {
+	l *zap.Logger
+}
+
+func NewK8sAppHandler(l *zap.Logger) *K8sAppHandler {
+	return &K8sAppHandler{
+		l: l,
+	}
+}
+
+func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
+	k8sGroup := server.Group("/api/k8s")
+
+	// 普通运维相关路由（K8sApp）
+	k8sAppApiGroup := k8sGroup.Group("/k8sApp")
+	{
+		// 命名空间
+		k8sAppApiGroup.GET("/namespaces/unique", k.GetClusterNamespacesUnique) // 获取唯一的命名空间列表
+
+		// 实例
+		instances := k8sAppApiGroup.Group("/instances")
+		{
+			instances.POST("/", k.CreateK8sInstanceOne)           // 创建单个 Kubernetes 实例
+			instances.PUT("/", k.UpdateK8sInstanceOne)            // 更新单个 Kubernetes 实例
+			instances.DELETE("/", k.BatchDeleteK8sInstance)       // 批量删除 Kubernetes 实例
+			instances.POST("/restart", k.BatchRestartK8sInstance) // 批量重启 Kubernetes 实例
+			instances.GET("/by-app", k.GetK8sInstanceByApp)       // 根据应用获取 Kubernetes 实例
+			instances.GET("/", k.GetK8sInstanceList)              // 获取 Kubernetes 实例列表
+			instances.GET("/:id", k.GetK8sInstanceOne)            // 获取单个 Kubernetes 实例
+		}
+
+		// 应用 Deployment 和 Service 的抽象
+		apps := k8sAppApiGroup.Group("/apps")
+		{
+			apps.GET("/", k.GetK8sAppList)                 // 获取 Kubernetes 应用列表
+			apps.POST("/", k.CreateK8sAppOne)              // 创建单个 Kubernetes 应用
+			apps.PUT("/:id", k.UpdateK8sAppOne)            // 更新单个 Kubernetes 应用
+			apps.DELETE("/:id", k.DeleteK8sAppOne)         // 删除单个 Kubernetes 应用
+			apps.GET("/:id", k.GetK8sAppOne)               // 获取单个 Kubernetes 应用
+			apps.GET("/:id/pods", k.GetK8sPodListByDeploy) // 根据部署获取 Kubernetes Pod 列表
+			apps.GET("/select", k.GetK8sAppListForSelect)  // 获取用于选择的 Kubernetes 应用列表
+		}
+
+		// 项目
+		projects := k8sAppApiGroup.Group("/projects")
+		{
+			projects.GET("/", k.GetK8sProjectList)                // 获取 Kubernetes 项目列表
+			projects.GET("/select", k.GetK8sProjectListForSelect) // 获取用于选择的 Kubernetes 项目列表
+			projects.POST("/", k.CreateK8sProject)                // 创建 Kubernetes 项目
+			projects.PUT("/", k.UpdateK8sProject)                 // 更新 Kubernetes 项目
+			projects.DELETE("/:id", k.DeleteK8sProjectOne)        // 删除单个 Kubernetes 项目
+		}
+
+		// CronJob
+		cronJobs := k8sAppApiGroup.Group("/cronJobs")
+		{
+			cronJobs.GET("/", k.GetK8sCronjobList)                // 获取 CronJob 列表
+			cronJobs.POST("/", k.CreateK8sCronjobOne)             // 创建单个 CronJob
+			cronJobs.PUT("/:id", k.UpdateK8sCronjobOne)           // 更新单个 CronJob
+			cronJobs.GET("/:id", k.GetK8sCronjobOne)              // 获取单个 CronJob
+			cronJobs.GET("/:id/last-pod", k.GetK8sCronjobLastPod) // 获取 CronJob 最近的 Pod
+			cronJobs.DELETE("/", k.BatchDeleteK8sCronjob)         // 批量删除 CronJob
+		}
+	}
+}
+
+// GetClusterNamespacesUnique 获取唯一的命名空间列表
+func (k *K8sAppHandler) GetClusterNamespacesUnique(ctx *gin.Context) {
+	// TODO: 实现获取唯一命名空间列表的逻辑
+}
+
+// CreateK8sInstanceOne 创建单个 Kubernetes 实例
+func (k *K8sAppHandler) CreateK8sInstanceOne(ctx *gin.Context) {
+	// TODO: 实现创建单个 Kubernetes 实例的逻辑
+}
+
+// UpdateK8sInstanceOne 更新单个 Kubernetes 实例
+func (k *K8sAppHandler) UpdateK8sInstanceOne(ctx *gin.Context) {
+	// TODO: 实现更新单个 Kubernetes 实例的逻辑
+}
+
+// BatchDeleteK8sInstance 批量删除 Kubernetes 实例
+func (k *K8sAppHandler) BatchDeleteK8sInstance(ctx *gin.Context) {
+	// TODO: 实现批量删除 Kubernetes 实例的逻辑
+}
+
+// BatchRestartK8sInstance 批量重启 Kubernetes 实例
+func (k *K8sAppHandler) BatchRestartK8sInstance(ctx *gin.Context) {
+	// TODO: 实现批量重启 Kubernetes 实例的逻辑
+}
+
+// GetK8sInstanceByApp 根据应用获取 Kubernetes 实例
+func (k *K8sAppHandler) GetK8sInstanceByApp(ctx *gin.Context) {
+	// TODO: 实现根据应用获取 Kubernetes 实例的逻辑
+}
+
+// GetK8sInstanceList 获取 Kubernetes 实例列表
+func (k *K8sAppHandler) GetK8sInstanceList(ctx *gin.Context) {
+	// TODO: 实现获取 Kubernetes 实例列表的逻辑
+}
+
+// GetK8sInstanceOne 获取单个 Kubernetes 实例
+func (k *K8sAppHandler) GetK8sInstanceOne(ctx *gin.Context) {
+	// TODO: 实现获取单个 Kubernetes 实例的逻辑
+}
+
+// GetK8sAppList 获取 Kubernetes 应用列表
+func (k *K8sAppHandler) GetK8sAppList(ctx *gin.Context) {
+	// TODO: 实现获取 Kubernetes 应用列表的逻辑
+}
+
+// CreateK8sAppOne 创建单个 Kubernetes 应用
+func (k *K8sAppHandler) CreateK8sAppOne(ctx *gin.Context) {
+	// TODO: 实现创建单个 Kubernetes 应用的逻辑
+}
+
+// UpdateK8sAppOne 更新单个 Kubernetes 应用
+func (k *K8sAppHandler) UpdateK8sAppOne(ctx *gin.Context) {
+	// TODO: 实现更新单个 Kubernetes 应用的逻辑
+}
+
+// DeleteK8sAppOne 删除单个 Kubernetes 应用
+func (k *K8sAppHandler) DeleteK8sAppOne(ctx *gin.Context) {
+	// TODO: 实现删除单个 Kubernetes 应用的逻辑
+}
+
+// GetK8sAppOne 获取单个 Kubernetes 应用
+func (k *K8sAppHandler) GetK8sAppOne(ctx *gin.Context) {
+	// TODO: 实现获取单个 Kubernetes 应用的逻辑
+}
+
+// GetK8sPodListByDeploy 根据部署获取 Kubernetes Pod 列表
+func (k *K8sAppHandler) GetK8sPodListByDeploy(ctx *gin.Context) {
+	// TODO: 实现根据部署获取 Kubernetes Pod 列表的逻辑
+}
+
+// GetK8sAppListForSelect 获取用于选择的 Kubernetes 应用列表
+func (k *K8sAppHandler) GetK8sAppListForSelect(ctx *gin.Context) {
+	// TODO: 实现获取用于选择的 Kubernetes 应用列表的逻辑
+}
+
+// GetK8sProjectList 获取 Kubernetes 项目列表
+func (k *K8sAppHandler) GetK8sProjectList(ctx *gin.Context) {
+	// TODO: 实现获取 Kubernetes 项目列表的逻辑
+}
+
+// GetK8sProjectListForSelect 获取用于选择的 Kubernetes 项目列表
+func (k *K8sAppHandler) GetK8sProjectListForSelect(ctx *gin.Context) {
+	// TODO: 实现获取用于选择的 Kubernetes 项目列表的逻辑
+}
+
+// CreateK8sProject 创建 Kubernetes 项目
+func (k *K8sAppHandler) CreateK8sProject(ctx *gin.Context) {
+	// TODO: 实现创建 Kubernetes 项目的逻辑
+}
+
+// UpdateK8sProject 更新 Kubernetes 项目
+func (k *K8sAppHandler) UpdateK8sProject(ctx *gin.Context) {
+	// TODO: 实现更新 Kubernetes 项目的逻辑
+}
+
+// DeleteK8sProjectOne 删除单个 Kubernetes 项目
+func (k *K8sAppHandler) DeleteK8sProjectOne(ctx *gin.Context) {
+	// TODO: 实现删除单个 Kubernetes 项目的逻辑
+}
+
+// GetK8sCronjobList 获取 CronJob 列表
+func (k *K8sAppHandler) GetK8sCronjobList(ctx *gin.Context) {
+	// TODO: 实现获取 CronJob 列表的逻辑
+}
+
+// CreateK8sCronjobOne 创建单个 CronJob
+func (k *K8sAppHandler) CreateK8sCronjobOne(ctx *gin.Context) {
+	// TODO: 实现创建单个 CronJob 的逻辑
+}
+
+// UpdateK8sCronjobOne 更新单个 CronJob
+func (k *K8sAppHandler) UpdateK8sCronjobOne(ctx *gin.Context) {
+	// TODO: 实现更新单个 CronJob 的逻辑
+}
+
+// GetK8sCronjobOne 获取单个 CronJob
+func (k *K8sAppHandler) GetK8sCronjobOne(ctx *gin.Context) {
+	// TODO: 实现获取单个 CronJob 的逻辑
+}
+
+// GetK8sCronjobLastPod 获取 CronJob 最近的 Pod
+func (k *K8sAppHandler) GetK8sCronjobLastPod(ctx *gin.Context) {
+	// TODO: 实现获取 CronJob 最近的 Pod 的逻辑
+}
+
+// BatchDeleteK8sCronjob 批量删除 CronJob
+func (k *K8sAppHandler) BatchDeleteK8sCronjob(ctx *gin.Context) {
+	// TODO: 实现批量删除 CronJob 的逻辑
+}

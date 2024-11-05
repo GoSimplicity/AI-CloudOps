@@ -44,14 +44,14 @@ func (s *scrapePoolService) GetMonitorScrapePoolList(ctx context.Context, search
 }
 
 func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error {
-	// 检查抓取池 IP 是否已存在
+	// 检查抓取池是否已存在
 	exists, err := s.dao.CheckMonitorScrapePoolExists(ctx, monitorScrapePool)
 	if err != nil {
 		s.l.Error("创建抓取池失败：检查抓取池是否存在时出错", zap.Error(err))
 		return err
 	}
 	if exists {
-		return errors.New("抓取池 IP 已存在")
+		return errors.New("抓取池已存在")
 	}
 
 	// 创建抓取池

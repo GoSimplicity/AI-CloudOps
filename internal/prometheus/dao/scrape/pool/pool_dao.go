@@ -158,7 +158,7 @@ func (s *scrapePoolDAO) CheckMonitorScrapePoolExists(ctx context.Context, scrape
 
 	if err := s.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
-		Where("id = ?", scrapePool.ID).
+		Where("name = ?", scrapePool.Name).
 		Count(&count).Error; err != nil {
 		return false, err
 	}

@@ -7,7 +7,7 @@ import (
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
-	k8sService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	k8sAdminService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	notAuthService "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	promHandler "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
@@ -77,13 +77,33 @@ func InitWebServer() *Cmd {
 		authHandler.NewAuthHandler,
 		notAuthHandler.NewNotAuthHandler,
 		treeHandler.NewTreeHandler,
-		k8sHandler.NewK8sHandler,
-		promHandler.NewPrometheusHandler,
+		k8sHandler.NewK8sPodHandler,
+		k8sHandler.NewK8sAppHandler,
+		k8sHandler.NewK8sNodeHandler,
+		k8sHandler.NewK8sConfigMapHandler,
+		k8sHandler.NewK8sClusterHandler,
+		k8sHandler.NewK8sDeploymentHandler,
+		k8sHandler.NewK8sNamespaceHandler,
+		k8sHandler.NewK8sSvcHandler,
+		k8sHandler.NewK8sTaintHandler,
+		k8sHandler.NewK8sYamlTaskHandler,
+		k8sHandler.NewK8sYamlTemplateHandler,
+		k8sAdminService.NewClusterService,
+		k8sAdminService.NewConfigMapService,
+		k8sAdminService.NewDeploymentService,
+		k8sAdminService.NewNamespaceService,
+		k8sAdminService.NewPodService,
+		k8sAdminService.NewSvcService,
+		k8sAdminService.NewNodeService,
+		k8sAdminService.NewTaintService,
+		k8sAdminService.NewYamlTaskService,
+		k8sAdminService.NewYamlTemplateService,
 		userService.NewUserService,
 		treeService.NewTreeService,
 		apiService.NewApiService,
 		roleService.NewRoleService,
 		menuService.NewMenuService,
+		promHandler.NewPrometheusHandler,
 		alertEventService.NewAlertManagerEventService,
 		alertOnDutyService.NewAlertManagerOnDutyService,
 		alertPoolService.NewAlertManagerPoolService,
@@ -103,7 +123,6 @@ func InitWebServer() *Cmd {
 		scrapePoolDao.NewScrapePoolDAO,
 		aliDao.NewAliResourceDAO,
 		yamlService.NewPrometheusConfigService,
-		k8sService.NewK8sService,
 		notAuthService.NewNotAuthService,
 		userDao.NewUserDAO,
 		apiDao.NewApiDAO,

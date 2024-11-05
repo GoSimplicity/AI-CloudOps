@@ -3,6 +3,9 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"go.uber.org/zap"
 	"log"
 	"strings"
 	"time"
@@ -598,4 +601,37 @@ func BuildK8sContainersWithPointer(k8sContainers []model.K8sPodContainer) []*mod
 		pointerSlice[i] = &k8sContainers[i]
 	}
 	return pointerSlice
+}
+
+func GetKubeClient(ctx context.Context, clusterName string, dao dao.K8sDAO, client client.K8sClient, l *zap.Logger) (*kubernetes.Clientset, error) {
+	// 获取集群信息
+	cluster, err := dao.GetClusterByName(ctx, clusterName)
+	if err != nil {
+		l.Error("获取集群信息失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := client.GetKubeClient(cluster.ID)
+	if err != nil {
+		l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	return kubeClient, nil
+}
+
+// GetResourceName 根据 Kind 获取资源名称
+func GetResourceName(kind string) string {
+	switch kind {
+	case "Pod":
+		return "pods"
+	case "Service":
+		return "services"
+	case "Deployment":
+		return "deployments"
+	// 添加其他资源类型
+	default:
+		return strings.ToLower(kind) + "s"
+	}
 }
