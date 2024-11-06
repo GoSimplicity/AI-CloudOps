@@ -3,7 +3,7 @@ package admin
 import (
 	"context"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -19,12 +19,12 @@ type NamespaceService interface {
 }
 
 type namespaceService struct {
-	dao    dao.K8sDAO
+	dao    admin.ClusterDAO
 	client client.K8sClient
 	l      *zap.Logger
 }
 
-func NewNamespaceService(dao dao.K8sDAO, client client.K8sClient, l *zap.Logger) NamespaceService {
+func NewNamespaceService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) NamespaceService {
 	return &namespaceService{
 		dao:    dao,
 		client: client,

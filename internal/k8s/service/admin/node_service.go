@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
@@ -25,16 +25,16 @@ type NodeService interface {
 }
 
 type nodeService struct {
-	dao    dao.K8sDAO
-	client client.K8sClient
-	l      *zap.Logger
+	clusterDao admin.ClusterDAO
+	client     client.K8sClient
+	l          *zap.Logger
 }
 
-func NewNodeService(dao dao.K8sDAO, client client.K8sClient, l *zap.Logger) NodeService {
+func NewNodeService(clusterDao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) NodeService {
 	return &nodeService{
-		dao:    dao,
-		client: client,
-		l:      l,
+		clusterDao: clusterDao,
+		client:     client,
+		l:          l,
 	}
 }
 
@@ -123,7 +123,7 @@ func (n *nodeService) GetNodeByName(ctx context.Context, id int, name string) (*
 
 // UpdateNodeLabel 更新节点标签（添加或删除）
 func (n *nodeService) UpdateNodeLabel(ctx context.Context, nodeResource *model.LabelK8sNodesRequest) error {
-	kubeClient, err := pkg.GetKubeClient(ctx, nodeResource.ClusterName, n.dao, n.client, n.l)
+	kubeClient, err := pkg.GetKubeClient(ctx, nodeResource.ClusterName, n.clusterDao, n.client, n.l)
 	if err != nil {
 		n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err

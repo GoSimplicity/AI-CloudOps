@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	yamlTask "k8s.io/apimachinery/pkg/util/yaml"
@@ -22,22 +22,24 @@ type YamlTemplateService interface {
 }
 
 type yamlTemplateService struct {
-	dao    dao.K8sDAO
-	client client.K8sClient
-	l      *zap.Logger
+	yamlTemplateDao admin.YamlTemplateDAO
+	yamlTaskDao     admin.YamlTaskDAO
+	client          client.K8sClient
+	l               *zap.Logger
 }
 
-func NewYamlTemplateService(dao dao.K8sDAO, client client.K8sClient, l *zap.Logger) YamlTemplateService {
+func NewYamlTemplateService(yamlTemplateDao admin.YamlTemplateDAO, yamlTaskDao admin.YamlTaskDAO, client client.K8sClient, l *zap.Logger) YamlTemplateService {
 	return &yamlTemplateService{
-		dao:    dao,
-		client: client,
-		l:      l,
+		yamlTemplateDao: yamlTemplateDao,
+		yamlTaskDao:     yamlTaskDao,
+		client:          client,
+		l:               l,
 	}
 }
 
 // GetYamlTemplateList 获取 YAML 模板列表
 func (y *yamlTemplateService) GetYamlTemplateList(ctx context.Context) ([]*model.K8sYamlTemplate, error) {
-	return y.dao.ListAllYamlTemplates(ctx)
+	return y.yamlTemplateDao.ListAllYamlTemplates(ctx)
 }
 
 // CreateYamlTemplate 创建 YAML 模板
@@ -48,7 +50,7 @@ func (y *yamlTemplateService) CreateYamlTemplate(ctx context.Context, template *
 	}
 
 	// 创建模板
-	return y.dao.CreateYamlTemplate(ctx, template)
+	return y.yamlTemplateDao.CreateYamlTemplate(ctx, template)
 }
 
 // UpdateYamlTemplate 更新 YAML 模板
@@ -59,13 +61,13 @@ func (y *yamlTemplateService) UpdateYamlTemplate(ctx context.Context, template *
 	}
 
 	// 更新模板
-	return y.dao.UpdateYamlTemplate(ctx, template)
+	return y.yamlTemplateDao.UpdateYamlTemplate(ctx, template)
 }
 
 // DeleteYamlTemplate 删除 YAML 模板
 func (y *yamlTemplateService) DeleteYamlTemplate(ctx context.Context, id int) error {
 	// 检查是否有任务正在使用该模板
-	tasks, err := y.dao.GetYamlTaskByTemplateID(ctx, id)
+	tasks, err := y.yamlTaskDao.GetYamlTaskByTemplateID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -80,5 +82,5 @@ func (y *yamlTemplateService) DeleteYamlTemplate(ctx context.Context, id int) er
 	}
 
 	// 删除模板
-	return y.dao.DeleteYamlTemplate(ctx, id)
+	return y.yamlTemplateDao.DeleteYamlTemplate(ctx, id)
 }

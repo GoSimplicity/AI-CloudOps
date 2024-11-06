@@ -10,8 +10,8 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	api6 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	admin2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	api8 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	service3 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	api7 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
@@ -90,27 +90,29 @@ func InitWebServer() *Cmd {
 	aliResourceDAO := ali_resource.NewAliResourceDAO(cmdable)
 	aliResourceService := service2.NewAliResourceService(logger, aliResourceDAO, cmdable, treeEcsDAO)
 	treeHandler := api5.NewTreeHandler(treeService, logger, aliResourceService)
-	k8sDAO := dao2.NewK8sDAO(db, logger)
-	k8sClient := client.NewK8sClient(logger, k8sDAO)
-	clusterService := admin.NewClusterService(k8sDAO, k8sClient, logger)
+	clusterDAO := admin.NewClusterDAO(db, logger)
+	k8sClient := client.NewK8sClient(logger, clusterDAO)
+	clusterService := admin2.NewClusterService(clusterDAO, k8sClient, logger)
 	k8sClusterHandler := api6.NewK8sClusterHandler(logger, clusterService)
-	configMapService := admin.NewConfigMapService(k8sDAO, k8sClient, logger)
+	configMapService := admin2.NewConfigMapService(clusterDAO, k8sClient, logger)
 	k8sConfigMapHandler := api6.NewK8sConfigMapHandler(logger, configMapService)
-	deploymentService := admin.NewDeploymentService(k8sDAO, k8sClient, logger)
+	deploymentService := admin2.NewDeploymentService(clusterDAO, k8sClient, logger)
 	k8sDeploymentHandler := api6.NewK8sDeploymentHandler(logger, deploymentService)
-	namespaceService := admin.NewNamespaceService(k8sDAO, k8sClient, logger)
+	namespaceService := admin2.NewNamespaceService(clusterDAO, k8sClient, logger)
 	k8sNamespaceHandler := api6.NewK8sNamespaceHandler(logger, namespaceService)
-	nodeService := admin.NewNodeService(k8sDAO, k8sClient, logger)
+	nodeService := admin2.NewNodeService(clusterDAO, k8sClient, logger)
 	k8sNodeHandler := api6.NewK8sNodeHandler(logger, nodeService)
-	podService := admin.NewPodService(k8sDAO, k8sClient, logger)
+	podService := admin2.NewPodService(clusterDAO, k8sClient, logger)
 	k8sPodHandler := api6.NewK8sPodHandler(logger, podService)
-	svcService := admin.NewSvcService(k8sDAO, k8sClient, logger)
+	svcService := admin2.NewSvcService(clusterDAO, k8sClient, logger)
 	k8sSvcHandler := api6.NewK8sSvcHandler(logger, svcService)
-	taintService := admin.NewTaintService(k8sDAO, k8sClient, logger)
+	taintService := admin2.NewTaintService(clusterDAO, k8sClient, logger)
 	k8sTaintHandler := api6.NewK8sTaintHandler(logger, taintService)
-	yamlTaskService := admin.NewYamlTaskService(k8sDAO, k8sClient, logger)
+	yamlTaskDAO := admin.NewYamlTaskDAO(db, logger)
+	yamlTemplateDAO := admin.NewYamlTemplateDAO(db, logger)
+	yamlTaskService := admin2.NewYamlTaskService(yamlTaskDAO, clusterDAO, yamlTemplateDAO, k8sClient, logger)
 	k8sYamlTaskHandler := api6.NewK8sYamlTaskHandler(logger, yamlTaskService)
-	yamlTemplateService := admin.NewYamlTemplateService(k8sDAO, k8sClient, logger)
+	yamlTemplateService := admin2.NewYamlTemplateService(yamlTemplateDAO, yamlTaskDAO, k8sClient, logger)
 	k8sYamlTemplateHandler := api6.NewK8sYamlTemplateHandler(logger, yamlTemplateService)
 	k8sAppHandler := api6.NewK8sAppHandler(logger)
 	alertManagerEventDAO := event.NewAlertManagerEventDAO(db, logger, userDAO)

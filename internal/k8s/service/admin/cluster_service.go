@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
@@ -30,12 +30,12 @@ type ClusterService interface {
 }
 
 type clusterService struct {
-	dao    dao.K8sDAO
+	dao    admin.ClusterDAO
 	client client.K8sClient
 	l      *zap.Logger
 }
 
-func NewClusterService(dao dao.K8sDAO, client client.K8sClient, l *zap.Logger) ClusterService {
+func NewClusterService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) ClusterService {
 	return &clusterService{
 		dao:    dao,
 		client: client,

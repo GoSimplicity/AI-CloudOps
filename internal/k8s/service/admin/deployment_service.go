@@ -3,7 +3,7 @@ package admin
 import (
 	"context"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
@@ -27,12 +27,12 @@ type DeploymentService interface {
 }
 
 type deploymentService struct {
-	dao    dao.K8sDAO
+	dao    admin.ClusterDAO
 	client client.K8sClient
 	l      *zap.Logger
 }
 
-func NewDeploymentService(dao dao.K8sDAO, client client.K8sClient, l *zap.Logger) DeploymentService {
+func NewDeploymentService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) DeploymentService {
 	return &deploymentService{
 		dao:    dao,
 		client: client,

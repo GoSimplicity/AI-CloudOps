@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/openkruise/kruise-api/client/clientset/versioned"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,10 +42,10 @@ type k8sClient struct {
 	ClusterNamespaces map[string][]string              // 集群命名空间集合
 	LastProbeErrors   map[int]string                   // 集群探针错误信息
 	l                 *zap.Logger                      // 日志记录器
-	dao               dao.K8sDAO
+	dao               admin.ClusterDAO
 }
 
-func NewK8sClient(l *zap.Logger, dao dao.K8sDAO) K8sClient {
+func NewK8sClient(l *zap.Logger, dao admin.ClusterDAO) K8sClient {
 	return &k8sClient{
 		KubeClients:       make(map[int]*kubernetes.Clientset),
 		KruiseClients:     make(map[int]*versioned.Clientset),
