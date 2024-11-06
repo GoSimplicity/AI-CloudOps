@@ -6,7 +6,7 @@ import (
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	k8sAdminService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	notAuthService "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
@@ -132,7 +132,9 @@ func InitWebServer() *Cmd {
 		ecsDao.NewTreeEcsDAO,
 		rdsDao.NewTreeRdsDAO,
 		elbDao.NewTreeElbDAO,
-		k8sDao.NewK8sDAO,
+		k8sDao.NewClusterDAO,
+		k8sDao.NewYamlTemplateDAO,
+		k8sDao.NewYamlTaskDAO,
 		nodeDao.NewTreeNodeDAO,
 		wire.Struct(new(Cmd), "*"),
 	)

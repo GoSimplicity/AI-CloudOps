@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
@@ -35,13 +35,13 @@ type PodService interface {
 }
 
 type podService struct {
-	dao    dao.K8sDAO
+	dao    admin.ClusterDAO
 	client client.K8sClient
 	l      *zap.Logger
 }
 
 // NewPodService 用于创建 PodService 实例
-func NewPodService(dao dao.K8sDAO, client client.K8sClient, l *zap.Logger) PodService {
+func NewPodService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) PodService {
 	return &podService{
 		dao:    dao,
 		client: client,

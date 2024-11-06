@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"go.uber.org/zap"
 	"log"
 	"strings"
@@ -19,12 +19,15 @@ import (
 	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
+const QuotaName = "compute-quota"
+
 // EnsureNamespace 确保指定的命名空间存在，如果不存在则创建
 func EnsureNamespace(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) error {
+	// 获取命名空间
 	_, err := kubeClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// 创建命名空间
+			// 如果命名空间不存在，则创建
 			ns := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: namespace,
@@ -32,16 +35,19 @@ func EnsureNamespace(ctx context.Context, kubeClient *kubernetes.Clientset, name
 			}
 			_, createErr := kubeClient.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 			if createErr != nil {
+				// 创建失败日志
 				log.Printf("EnsureNamespace: 创建命名空间失败 %s: %v", namespace, createErr)
 				return fmt.Errorf("创建命名空间 %s 失败: %w", namespace, createErr)
 			}
+			// 创建成功日志
 			log.Printf("EnsureNamespace: 命名空间创建成功 %s", namespace)
 			return nil
 		}
+		// 获取命名空间失败日志
 		log.Printf("EnsureNamespace: 获取命名空间失败 %s: %v", namespace, err)
 		return fmt.Errorf("获取命名空间 %s 失败: %w", namespace, err)
 	}
-	// 命名空间已存在
+	// 命名空间已存在日志
 	log.Printf("EnsureNamespace: 命名空间已存在 %s", namespace)
 	return nil
 }
@@ -70,17 +76,21 @@ func ApplyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, name
 		},
 	}
 
+	// 创建 LimitRange
 	_, err := kubeClient.CoreV1().LimitRanges(namespace).Create(ctx, limitRange, metav1.CreateOptions{})
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			log.Printf("ApplyLimitRange: LimitRange 已存在 %s", namespace)
+			// 如果 LimitRange 已存在，跳过创建
+			log.Printf("ApplyLimitRange: LimitRange 已存在 %s/%s，跳过创建", namespace, limitRange.Name)
 			return nil
 		}
-		log.Printf("ApplyLimitRange: 创建 LimitRange 失败 %s: %v", namespace, err)
-		return fmt.Errorf("创建 LimitRange 失败 (namespace: %s): %w", namespace, err)
+		// 处理其他错误
+		log.Printf("ApplyLimitRange: 创建 LimitRange 失败 %s/%s: %v", namespace, limitRange.Name, err)
+		return fmt.Errorf("创建 LimitRange 失败 (namespace: %s, cpuLimit: %s, memoryLimit: %s): %w",
+			namespace, cluster.CpuLimit, cluster.MemoryLimit, err)
 	}
 
-	log.Printf("ApplyLimitRange: LimitRange 创建成功 %s", namespace)
+	log.Printf("ApplyLimitRange: LimitRange 创建成功 %s/%s", namespace, limitRange.Name)
 	return nil
 }
 
@@ -88,7 +98,7 @@ func ApplyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, name
 func ApplyResourceQuota(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, cluster *model.K8sCluster) error {
 	resourceQuota := &corev1.ResourceQuota{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "compute-quota",
+			Name:      QuotaName,
 			Namespace: namespace,
 		},
 		Spec: corev1.ResourceQuotaSpec{
@@ -101,17 +111,21 @@ func ApplyResourceQuota(ctx context.Context, kubeClient *kubernetes.Clientset, n
 		},
 	}
 
+	// 创建 ResourceQuota
 	_, err := kubeClient.CoreV1().ResourceQuotas(namespace).Create(ctx, resourceQuota, metav1.CreateOptions{})
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
-			log.Printf("ApplyResourceQuota: ResourceQuota 已存在 %s", namespace)
+			// 如果 ResourceQuota 已存在，跳过创建
+			log.Printf("ApplyResourceQuota: ResourceQuota 已存在 %s/%s，跳过创建", namespace, resourceQuota.Name)
 			return nil
 		}
-		log.Printf("ApplyResourceQuota: 创建 ResourceQuota 失败 %s: %v", namespace, err)
-		return fmt.Errorf("创建 ResourceQuota 失败 (namespace: %s): %w", namespace, err)
+		// 处理其他错误
+		log.Printf("ApplyResourceQuota: 创建 ResourceQuota 失败 %s/%s: %v", namespace, resourceQuota.Name, err)
+		return fmt.Errorf("创建 ResourceQuota 失败 (namespace: %s, cpuRequest: %s, memoryRequest: %s, cpuLimit: %s, memoryLimit: %s): %w",
+			namespace, cluster.CpuRequest, cluster.MemoryRequest, cluster.CpuLimit, cluster.MemoryLimit, err)
 	}
 
-	log.Printf("ApplyResourceQuota: ResourceQuota 创建成功 %s", namespace)
+	log.Printf("ApplyResourceQuota: ResourceQuota 创建成功 %s/%s", namespace, resourceQuota.Name)
 	return nil
 }
 
@@ -125,12 +139,17 @@ func GetTaintsMapFromTaints(taints []corev1.Taint) map[string]corev1.Taint {
 	return taintsMap
 }
 
+// buildTaintKey 构建 taint 的唯一 key
+func buildTaintKey(taint corev1.Taint) string {
+	return strings.Join([]string{taint.Key, taint.Value, string(taint.Effect)}, ":")
+}
+
 // MergeTaints 合并新的 taints，避免重复
 func MergeTaints(existingTaints []corev1.Taint, newTaints []corev1.Taint) []corev1.Taint {
 	taintsMap := GetTaintsMapFromTaints(existingTaints)
 
 	for _, newTaint := range newTaints {
-		key := fmt.Sprintf("%s:%s:%s", newTaint.Key, newTaint.Value, newTaint.Effect)
+		key := buildTaintKey(newTaint)
 		if _, exists := taintsMap[key]; !exists {
 			existingTaints = append(existingTaints, newTaint)
 		}
@@ -140,12 +159,12 @@ func MergeTaints(existingTaints []corev1.Taint, newTaints []corev1.Taint) []core
 
 // RemoveTaints 从现有的 taints 中删除指定的 taints
 func RemoveTaints(existingTaints []corev1.Taint, taintsToDelete []corev1.Taint) []corev1.Taint {
-	taintsMap := GetTaintsMapFromTaints(taintsToDelete)
+	taintsToDeleteMap := GetTaintsMapFromTaints(taintsToDelete)
 
 	var updatedTaints []corev1.Taint
 	for _, existingTaint := range existingTaints {
-		key := fmt.Sprintf("%s:%s:%s", existingTaint.Key, existingTaint.Value, existingTaint.Effect)
-		if _, shouldDelete := taintsMap[key]; !shouldDelete {
+		key := buildTaintKey(existingTaint)
+		if _, shouldDelete := taintsToDeleteMap[key]; !shouldDelete {
 			updatedTaints = append(updatedTaints, existingTaint)
 		}
 	}
@@ -153,27 +172,30 @@ func RemoveTaints(existingTaints []corev1.Taint, taintsToDelete []corev1.Taint) 
 }
 
 // GetNodesByClusterID 获取指定集群上的 Node 列表
-func GetNodesByClusterID(ctx context.Context, client *kubernetes.Clientset, name string) (*corev1.NodeList, error) {
-	if name != "" {
-		node, err := client.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+func GetNodesByClusterID(ctx context.Context, client *kubernetes.Clientset, nodeName string) (*corev1.NodeList, error) {
+	if nodeName != "" {
+		// 获取单个节点
+		node, err := client.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if err != nil {
-			log.Printf("获取 Node 失败 %s: %v", name, err)
-			return nil, err
+			log.Printf("获取 Node 失败 (nodeName: %s): %v", nodeName, err)
+			return nil, fmt.Errorf("获取 Node %s 失败: %w", nodeName, err)
 		}
 		// 将单个节点转换为 NodeList
 		nodeList := &corev1.NodeList{
 			Items: []corev1.Node{*node},
 		}
-
+		log.Printf("获取单个 Node 成功 (nodeName: %s)", nodeName)
 		return nodeList, nil
 	}
 
+	// 获取所有节点
 	nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		log.Printf("获取 Node 列表失败: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("获取 Node 列表失败: %w", err)
 	}
 
+	log.Printf("获取所有 Nodes 成功, 总数: %d", len(nodes.Items))
 	return nodes, nil
 }
 
@@ -184,10 +206,11 @@ func GetPodsByNodeName(ctx context.Context, client *kubernetes.Clientset, nodeNa
 	})
 
 	if err != nil {
-		log.Printf("获取 Pod 列表失败 %s: %v", nodeName, err)
-		return nil, err
+		log.Printf("获取 Pod 列表失败 (nodeName: %s): %v", nodeName, err)
+		return nil, fmt.Errorf("获取 Pod 列表失败 (nodeName: %s): %w", nodeName, err)
 	}
 
+	log.Printf("成功获取节点 %s 上的 Pod 列表, 总数: %d", nodeName, len(pods.Items))
 	return pods, nil
 }
 
@@ -198,8 +221,8 @@ func GetNodeEvents(ctx context.Context, client *kubernetes.Clientset, nodeName s
 	})
 
 	if err != nil {
-		log.Printf("获取节点事件失败 %s: %v", nodeName, err)
-		return nil, err
+		log.Printf("获取节点事件失败 (nodeName: %s): %v", nodeName, err)
+		return nil, fmt.Errorf("获取节点事件失败 (nodeName: %s): %w", nodeName, err)
 	}
 
 	// 转换为 OneEvent 模型
@@ -215,9 +238,19 @@ func GetNodeEvents(ctx context.Context, client *kubernetes.Clientset, nodeName s
 			Object:    fmt.Sprintf("kind:%s name:%s", event.InvolvedObject.Kind, event.InvolvedObject.Name),
 			Count:     int(event.Count),
 		}
+
+		// 处理空时间戳，避免 nil 引用错误
+		if event.FirstTimestamp.IsZero() {
+			oneEvent.FirstTime = "N/A"
+		}
+		if event.LastTimestamp.IsZero() {
+			oneEvent.LastTime = "N/A"
+		}
+
 		oneEvents = append(oneEvents, oneEvent)
 	}
 
+	log.Printf("成功获取节点 %s 的事件, 总数: %d", nodeName, len(oneEvents))
 	return oneEvents, nil
 }
 
@@ -229,15 +262,23 @@ func GetNodeResource(ctx context.Context, metricsCli *metricsClient.Clientset, n
 		for _, container := range pod.Spec.Containers {
 			if cpuRequest, ok := container.Resources.Requests[corev1.ResourceCPU]; ok {
 				totalCPURequest += cpuRequest.MilliValue()
+			} else {
+				log.Printf("Pod %s: Missing CPU request", pod.Name)
 			}
 			if cpuLimit, ok := container.Resources.Limits[corev1.ResourceCPU]; ok {
 				totalCPULimit += cpuLimit.MilliValue()
+			} else {
+				log.Printf("Pod %s: Missing CPU limit", pod.Name)
 			}
 			if memoryRequest, ok := container.Resources.Requests[corev1.ResourceMemory]; ok {
 				totalMemoryRequest += memoryRequest.Value()
+			} else {
+				log.Printf("Pod %s: Missing memory request", pod.Name)
 			}
 			if memoryLimit, ok := container.Resources.Limits[corev1.ResourceMemory]; ok {
 				totalMemoryLimit += memoryLimit.Value()
+			} else {
+				log.Printf("Pod %s: Missing memory limit", pod.Name)
 			}
 		}
 	}
@@ -248,36 +289,34 @@ func GetNodeResource(ctx context.Context, metricsCli *metricsClient.Clientset, n
 	cpuCapacity := node.Status.Capacity[corev1.ResourceCPU]
 	memoryCapacity := node.Status.Capacity[corev1.ResourceMemory]
 
-	// CpuRequestInfo
-	result = append(result, fmt.Sprintf("%dm/%dm", totalCPURequest, cpuCapacity.MilliValue()))
-	// CpuLimitInfo
-	result = append(result, fmt.Sprintf("%dm/%dm", totalCPULimit, cpuCapacity.MilliValue()))
-	// MemoryRequestInfo
-	result = append(result, fmt.Sprintf("%dMi/%dMi", totalMemoryRequest/1024/1024, memoryCapacity.Value()/1024/1024))
-	// MemoryLimitInfo
-	result = append(result, fmt.Sprintf("%dMi/%dMi", totalMemoryLimit/1024/1024, memoryCapacity.Value()/1024/1024))
+	// CPU Request 和 Limit 信息
+	result = append(result, fmt.Sprintf("CPU Request: %dm / %dm", totalCPURequest, cpuCapacity.MilliValue()))
+	result = append(result, fmt.Sprintf("CPU Limit: %dm / %dm", totalCPULimit, cpuCapacity.MilliValue()))
+
+	// Memory Request 和 Limit 信息（单位：MiB）
+	result = append(result, fmt.Sprintf("Memory Request: %dMi / %dMi", totalMemoryRequest/1024/1024, memoryCapacity.Value()/1024/1024))
+	result = append(result, fmt.Sprintf("Memory Limit: %dMi / %dMi", totalMemoryLimit/1024/1024, memoryCapacity.Value()/1024/1024))
 
 	// 获取节点资源使用情况
-	// TODO need Metrics-Server
+	// TODO: need Metrics-Server
 	// nodeMetrics, err := metricsCli.MetricsV1alpha1().NodeMetricses().Get(ctx, nodeName, metav1.GetOptions{})
 	// if err != nil {
 	// 	return nil, fmt.Errorf("failed to get node metrics: %v", err)
 	// }
 
-	// // CPU 和内存的使用量
-	// cpuUsage := nodeMetrics.Usage[corev1.ResourceCPU]
-	// memoryUsage := nodeMetrics.Usage[corev1.ResourceMemory]
-
-	// mock data
+	// Mock data for testing
 	cpuUsage := resource.NewMilliQuantity(100, resource.DecimalSI)
 	memoryUsage := resource.NewQuantity(1024*1024*100, resource.BinarySI)
 
-	result = append(result, fmt.Sprintf("%dm/%dm", cpuUsage.MilliValue(), cpuCapacity.MilliValue()))
-	result = append(result, fmt.Sprintf("%dMi/%dMi", memoryUsage.Value()/1024/1024, memoryCapacity.Value()/1024/1024))
+	// CPU 和内存的使用量（单位：m，MiB）
+	result = append(result, fmt.Sprintf("CPU Usage: %dm / %dm", cpuUsage.MilliValue(), cpuCapacity.MilliValue()))
+	result = append(result, fmt.Sprintf("Memory Usage: %dMi / %dMi", memoryUsage.Value()/1024/1024, memoryCapacity.Value()/1024/1024))
 
-	// PodNumInfo
+	// Pod 数量信息
 	maxPods := node.Status.Allocatable[corev1.ResourcePods]
-	result = append(result, fmt.Sprintf("%d/%d", len(pods.Items), maxPods.Value()))
+	result = append(result, fmt.Sprintf("Pods: %d / %d", len(pods.Items), maxPods.Value()))
+
+	// 返回结果
 	return result, nil
 }
 
@@ -410,9 +449,10 @@ func BuildK8sNode(ctx context.Context, id int, node corev1.Node, kubeClient *kub
 	return k8sNode, nil
 }
 
-// BuildK8sNodes 构建 K8sNode 列表
+// BuildK8sPods BuildK8sNodes 构建 K8sNode 列表
 func BuildK8sPods(pods *corev1.PodList) []*model.K8sPod {
 	var k8sPods []*model.K8sPod
+
 	for _, pod := range pods.Items {
 		k8sPod := &model.K8sPod{
 			Name:        pod.Name,
@@ -423,86 +463,6 @@ func BuildK8sPods(pods *corev1.PodList) []*model.K8sPod {
 			Annotations: pod.Annotations,
 			Containers:  BuildK8sContainers(pod.Spec.Containers),
 		}
-
-		// for _, container := range pod.Spec.Containers {
-		// 	newContainer := model.K8sPodContainer{
-		// 		Name:    container.Name,
-		// 		Image:   container.Image,
-		// 		Command: model.StringList(container.Command),
-		// 		Args:    model.StringList(container.Args),
-		// 		Envs:    make([]model.K8sEnvVar, 0),
-		// 		Ports:   make([]model.K8sContainerPort, 0),
-		// 		Resources: model.ResourceRequirements{
-		// 			Requests: model.K8sResourceList{
-		// 				CPU:    container.Resources.Requests.Cpu().String(),
-		// 				Memory: container.Resources.Requests.Memory().String(),
-		// 			},
-		// 			Limits: model.K8sResourceList{
-		// 				CPU:    container.Resources.Limits.Cpu().String(),
-		// 				Memory: container.Resources.Limits.Memory().String(),
-		// 			},
-		// 		},
-		// 		VolumeMounts:    make([]model.K8sVolumeMount, 0),
-		// 		ImagePullPolicy: string(container.ImagePullPolicy),
-		// 	}
-
-		// 	if container.LivenessProbe != nil {
-		// 		newContainer.LivenessProbe = &model.K8sProbe{
-		// 			HTTPGet: &model.K8sHTTPGetAction{
-		// 				Path:   container.LivenessProbe.HTTPGet.Path,
-		// 				Port:   container.LivenessProbe.HTTPGet.Port.IntValue(),
-		// 				Scheme: string(container.LivenessProbe.HTTPGet.Scheme),
-		// 			},
-		// 			InitialDelaySeconds: int(container.LivenessProbe.InitialDelaySeconds),
-		// 			PeriodSeconds:       int(container.LivenessProbe.PeriodSeconds),
-		// 			TimeoutSeconds:      int(container.LivenessProbe.TimeoutSeconds),
-		// 			SuccessThreshold:    int(container.LivenessProbe.SuccessThreshold),
-		// 			FailureThreshold:    int(container.LivenessProbe.FailureThreshold),
-		// 		}
-		// 	}
-
-		// 	if container.ReadinessProbe != nil {
-		// 		newContainer.ReadinessProbe = &model.K8sProbe{
-		// 			HTTPGet: &model.K8sHTTPGetAction{
-		// 				Path:   container.ReadinessProbe.HTTPGet.Path,
-		// 				Port:   container.ReadinessProbe.HTTPGet.Port.IntValue(),
-		// 				Scheme: string(container.ReadinessProbe.HTTPGet.Scheme),
-		// 			},
-		// 			InitialDelaySeconds: int(container.ReadinessProbe.InitialDelaySeconds),
-		// 			PeriodSeconds:       int(container.ReadinessProbe.PeriodSeconds),
-		// 			TimeoutSeconds:      int(container.ReadinessProbe.TimeoutSeconds),
-		// 			SuccessThreshold:    int(container.ReadinessProbe.SuccessThreshold),
-		// 			FailureThreshold:    int(container.ReadinessProbe.FailureThreshold),
-		// 		}
-		// 	}
-
-		// 	for _, env := range container.Env {
-		// 		newContainer.Envs = append(newContainer.Envs, model.K8sEnvVar{
-		// 			Name:  env.Name,
-		// 			Value: env.Value,
-		// 		})
-		// 	}
-
-		// 	for _, port := range container.Ports {
-		// 		newContainer.Ports = append(newContainer.Ports, model.K8sContainerPort{
-		// 			Name:          port.Name,
-		// 			ContainerPort: int(port.ContainerPort),
-		// 			Protocol:      string(port.Protocol),
-		// 		})
-		// 	}
-
-		// 	for _, volumeMount := range container.VolumeMounts {
-		// 		newContainer.VolumeMounts = append(newContainer.VolumeMounts, model.K8sVolumeMount{
-		// 			Name:      volumeMount.Name,
-		// 			MountPath: volumeMount.MountPath,
-		// 			ReadOnly:  volumeMount.ReadOnly,
-		// 			SubPath:   volumeMount.SubPath,
-		// 		})
-		// 	}
-
-		// 	k8sPod.Containers = append(k8sPod.Containers, newContainer)
-		// }
-
 		k8sPods = append(k8sPods, k8sPod)
 	}
 
@@ -511,15 +471,17 @@ func BuildK8sPods(pods *corev1.PodList) []*model.K8sPod {
 
 // BuildK8sContainers 构建 K8sContainer 列表
 func BuildK8sContainers(containers []corev1.Container) []model.K8sPodContainer {
-	var k8sContainers []model.K8sPodContainer
+	k8sContainers := make([]model.K8sPodContainer, 0, len(containers)) // 预分配切片容量，避免重复内存分配
+
+	// 遍历所有容器并构建 K8sPodContainer
 	for _, container := range containers {
 		newContainer := model.K8sPodContainer{
 			Name:    container.Name,
 			Image:   container.Image,
 			Command: model.StringList(container.Command),
 			Args:    model.StringList(container.Args),
-			Envs:    make([]model.K8sEnvVar, 0),
-			Ports:   make([]model.K8sContainerPort, 0),
+			Envs:    make([]model.K8sEnvVar, len(container.Env)), // 直接预分配大小
+			Ports:   make([]model.K8sContainerPort, len(container.Ports)),
 			Resources: model.ResourceRequirements{
 				Requests: model.K8sResourceList{
 					CPU:    container.Resources.Requests.Cpu().String(),
@@ -530,92 +492,89 @@ func BuildK8sContainers(containers []corev1.Container) []model.K8sPodContainer {
 					Memory: container.Resources.Limits.Memory().String(),
 				},
 			},
-			VolumeMounts:    make([]model.K8sVolumeMount, 0),
+			VolumeMounts:    make([]model.K8sVolumeMount, len(container.VolumeMounts)),
 			ImagePullPolicy: string(container.ImagePullPolicy),
 		}
 
-		if container.LivenessProbe != nil {
-			newContainer.LivenessProbe = &model.K8sProbe{
-				HTTPGet: &model.K8sHTTPGetAction{
-					Path:   container.LivenessProbe.HTTPGet.Path,
-					Port:   container.LivenessProbe.HTTPGet.Port.IntValue(),
-					Scheme: string(container.LivenessProbe.HTTPGet.Scheme),
-				},
-				InitialDelaySeconds: int(container.LivenessProbe.InitialDelaySeconds),
-				PeriodSeconds:       int(container.LivenessProbe.PeriodSeconds),
-				TimeoutSeconds:      int(container.LivenessProbe.TimeoutSeconds),
-				SuccessThreshold:    int(container.LivenessProbe.SuccessThreshold),
-				FailureThreshold:    int(container.LivenessProbe.FailureThreshold),
-			}
-		}
+		// 构建 LivenessProbe 和 ReadinessProbe
+		buildProbeIfNeeded(container.LivenessProbe, &newContainer.LivenessProbe)
+		buildProbeIfNeeded(container.ReadinessProbe, &newContainer.ReadinessProbe)
 
-		if container.ReadinessProbe != nil {
-			newContainer.ReadinessProbe = &model.K8sProbe{
-				HTTPGet: &model.K8sHTTPGetAction{
-					Path:   container.ReadinessProbe.HTTPGet.Path,
-					Port:   container.ReadinessProbe.HTTPGet.Port.IntValue(),
-					Scheme: string(container.ReadinessProbe.HTTPGet.Scheme),
-				},
-				InitialDelaySeconds: int(container.ReadinessProbe.InitialDelaySeconds),
-				PeriodSeconds:       int(container.ReadinessProbe.PeriodSeconds),
-				TimeoutSeconds:      int(container.ReadinessProbe.TimeoutSeconds),
-				SuccessThreshold:    int(container.ReadinessProbe.SuccessThreshold),
-				FailureThreshold:    int(container.ReadinessProbe.FailureThreshold),
-			}
-		}
-
-		for _, env := range container.Env {
-			newContainer.Envs = append(newContainer.Envs, model.K8sEnvVar{
+		// 构建环境变量列表
+		for i, env := range container.Env {
+			newContainer.Envs[i] = model.K8sEnvVar{
 				Name:  env.Name,
 				Value: env.Value,
-			})
+			}
 		}
 
-		for _, port := range container.Ports {
-			newContainer.Ports = append(newContainer.Ports, model.K8sContainerPort{
+		// 构建容器端口列表
+		for i, port := range container.Ports {
+			newContainer.Ports[i] = model.K8sContainerPort{
 				Name:          port.Name,
 				ContainerPort: int(port.ContainerPort),
 				Protocol:      string(port.Protocol),
-			})
+			}
 		}
 
-		for _, volumeMount := range container.VolumeMounts {
-			newContainer.VolumeMounts = append(newContainer.VolumeMounts, model.K8sVolumeMount{
+		// 构建挂载卷列表
+		for i, volumeMount := range container.VolumeMounts {
+			newContainer.VolumeMounts[i] = model.K8sVolumeMount{
 				Name:      volumeMount.Name,
 				MountPath: volumeMount.MountPath,
 				ReadOnly:  volumeMount.ReadOnly,
 				SubPath:   volumeMount.SubPath,
-			})
+			}
 		}
 
+		// 将新容器添加到列表中
 		k8sContainers = append(k8sContainers, newContainer)
 	}
 
 	return k8sContainers
 }
 
+// buildProbeIfNeeded 构建探针（LivenessProbe 或 ReadinessProbe）
+func buildProbeIfNeeded(probe *corev1.Probe, result **model.K8sProbe) {
+	if probe != nil {
+		*result = &model.K8sProbe{
+			HTTPGet: &model.K8sHTTPGetAction{
+				Path:   probe.HTTPGet.Path,
+				Port:   probe.HTTPGet.Port.IntValue(),
+				Scheme: string(probe.HTTPGet.Scheme),
+			},
+			InitialDelaySeconds: int(probe.InitialDelaySeconds),
+			PeriodSeconds:       int(probe.PeriodSeconds),
+			TimeoutSeconds:      int(probe.TimeoutSeconds),
+			SuccessThreshold:    int(probe.SuccessThreshold),
+			FailureThreshold:    int(probe.FailureThreshold),
+		}
+	}
+}
+
 // BuildK8sContainersWithPointer 转换普通切片为指针切片
 func BuildK8sContainersWithPointer(k8sContainers []model.K8sPodContainer) []*model.K8sPodContainer {
 	pointerSlice := make([]*model.K8sPodContainer, len(k8sContainers))
-	for i := range k8sContainers {
+	for i := 0; i < len(k8sContainers); i++ {
 		pointerSlice[i] = &k8sContainers[i]
 	}
 	return pointerSlice
 }
 
-func GetKubeClient(ctx context.Context, clusterName string, dao dao.K8sDAO, client client.K8sClient, l *zap.Logger) (*kubernetes.Clientset, error) {
+// GetKubeClient 获取 Kubernetes 客户端
+func GetKubeClient(ctx context.Context, clusterName string, dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) (*kubernetes.Clientset, error) {
 	// 获取集群信息
 	cluster, err := dao.GetClusterByName(ctx, clusterName)
 	if err != nil {
-		l.Error("获取集群信息失败", zap.Error(err))
-		return nil, err
+		l.Error("获取集群信息失败", zap.String("clusterName", clusterName), zap.Error(err))
+		return nil, fmt.Errorf("获取集群信息失败: %w", err)
 	}
 
 	// 获取 Kubernetes 客户端
 	kubeClient, err := client.GetKubeClient(cluster.ID)
 	if err != nil {
-		l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return nil, err
+		l.Error("获取 Kubernetes 客户端失败", zap.String("clusterID", fmt.Sprintf("%d", cluster.ID)), zap.Error(err))
+		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
 	}
 
 	return kubeClient, nil

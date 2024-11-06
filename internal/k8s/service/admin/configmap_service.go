@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
@@ -30,12 +30,12 @@ type ConfigMapService interface {
 }
 
 type configMapService struct {
-	dao    dao.K8sDAO
+	dao    admin.ClusterDAO
 	client client.K8sClient
 	l      *zap.Logger
 }
 
-func NewConfigMapService(dao dao.K8sDAO, client client.K8sClient, l *zap.Logger) ConfigMapService {
+func NewConfigMapService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) ConfigMapService {
 	return &configMapService{
 		dao:    dao,
 		client: client,

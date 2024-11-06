@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
@@ -28,12 +28,12 @@ type TaintService interface {
 }
 
 type taintService struct {
-	dao    dao.K8sDAO
+	dao    admin.ClusterDAO
 	client client.K8sClient
 	l      *zap.Logger
 }
 
-func NewTaintService(dao dao.K8sDAO, client client.K8sClient, l *zap.Logger) TaintService {
+func NewTaintService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) TaintService {
 	return &taintService{
 		dao:    dao,
 		client: client,

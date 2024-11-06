@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
@@ -27,13 +27,13 @@ type SvcService interface {
 }
 
 type svcService struct {
-	dao    dao.K8sDAO
+	dao    admin.ClusterDAO
 	client client.K8sClient
 	l      *zap.Logger
 }
 
 // NewSvcService 创建新的 SvcService 实例
-func NewSvcService(dao dao.K8sDAO, client client.K8sClient, l *zap.Logger) SvcService {
+func NewSvcService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) SvcService {
 	return &svcService{
 		dao:    dao,
 		client: client,
