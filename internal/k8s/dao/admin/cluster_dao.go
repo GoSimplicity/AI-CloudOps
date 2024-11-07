@@ -2,7 +2,6 @@ package admin
 
 import (
 	"context"
-	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -11,7 +10,7 @@ import (
 type ClusterDAO interface {
 	ListAllClusters(ctx context.Context) ([]*model.K8sCluster, error)
 	CreateCluster(ctx context.Context, cluster *model.K8sCluster) error
-	UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) error
+	UpdateCluster(ctx context.Context, cluster *model.K8sCluster) error
 	DeleteCluster(ctx context.Context, id int) error
 	GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error)
 	GetClusterByName(ctx context.Context, name string) (*model.K8sCluster, error)
@@ -53,17 +52,15 @@ func (c *clusterDAO) CreateCluster(ctx context.Context, cluster *model.K8sCluste
 }
 
 // UpdateCluster 更新集群信息
-func (c *clusterDAO) UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) error {
+func (c *clusterDAO) UpdateCluster(ctx context.Context, cluster *model.K8sCluster) error {
 	tx := c.db.WithContext(ctx).Begin()
 
-	// 如果发生错误，回滚事务
-	if err := tx.Model(cluster).Where("id = ?", id).Updates(cluster).Error; err != nil {
+	if err := tx.Model(cluster).Where("id = ?", cluster.ID).Updates(cluster).Error; err != nil {
 		tx.Rollback()
-		c.l.Error("UpdateCluster 更新集群失败", zap.Int("id", id), zap.Error(err))
+		c.l.Error("UpdateCluster 更新集群失败", zap.Int("id", cluster.ID), zap.Error(err))
 		return err
 	}
 
-	// 提交事务
 	tx.Commit()
 	return nil
 }
@@ -104,11 +101,6 @@ func (c *clusterDAO) GetClusterByName(ctx context.Context, name string) (*model.
 
 // BatchDeleteClusters 批量删除集群
 func (c *clusterDAO) BatchDeleteClusters(ctx context.Context, ids []int) error {
-	if len(ids) == 0 {
-		c.l.Error("BatchDeleteClusters 批处理删除集群失败, 参数为空")
-		return fmt.Errorf("empty ids list")
-	}
-
 	if err := c.db.WithContext(ctx).Where("id IN ?", ids).Delete(&model.K8sCluster{}).Error; err != nil {
 		c.l.Error("BatchDeleteClusters 批处理删除集群失败", zap.Error(err))
 		return err
