@@ -30,11 +30,11 @@ type ResourceTree struct {
 type TreeNode struct {
 	Model
 
-	Title  string `json:"title" gorm:"uniqueIndex:idx_pid_title;type:varchar(50);comment:节点名称"` // 节点名称
-	Pid    int    `json:"pId" gorm:"index;uniqueIndex:idx_pid_title;comment:父节点 ID"`            // 父节点 ID
-	Level  int    `json:"level" gorm:"comment:节点层级"`                                            // 节点层级, 用于标识树的深度
-	IsLeaf int    `json:"isLeaf" gorm:"comment:是否为叶子节点 0为非叶子节点 1为叶子节点"`                         // 是否为叶子节点
-	Desc   string `json:"desc" gorm:"type:text;comment:节点描述"`                                   // 节点描述信息
+	Title  string `json:"title" gorm:"uniqueIndex:udx_name;type:varchar(50);comment:节点名称"` // 节点名称
+	Pid    int    `json:"pId" gorm:"index;uniqueIndex:udx_name;comment:父节点 ID"`            // 父节点 ID
+	Level  int    `json:"level" gorm:"comment:节点层级"`                                       // 节点层级, 用于标识树的深度
+	IsLeaf int    `json:"isLeaf" gorm:"comment:是否为叶子节点 0为非叶子节点 1为叶子节点"`                    // 是否为叶子节点
+	Desc   string `json:"desc" gorm:"type:text;comment:节点描述"`                              // 节点描述信息
 
 	// 关联的负责人信息
 	OpsAdmins []*User `json:"ops_admins" gorm:"many2many:tree_node_ops_admins;comment:运维负责人列表"` // 运维负责人列表
