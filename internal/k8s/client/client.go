@@ -26,8 +26,6 @@ type K8sClient interface {
 	GetMetricsClient(clusterID int) (*metricsClient.Clientset, error)
 	// GetDynamicClient 获取指定集群 ID 的动态客户端
 	GetDynamicClient(clusterID int) (*dynamic.DynamicClient, error)
-	// GetNamespaces 获取指定集群的命名空间
-	GetNamespaces(ctx context.Context, clusterID int) ([]string, error)
 	// RefreshClients 刷新客户端
 	RefreshClients(ctx context.Context) error
 }
@@ -192,27 +190,6 @@ func (k *k8sClient) GetDynamicClient(clusterID int) (*dynamic.DynamicClient, err
 	}
 
 	return client, nil
-}
-
-// GetNamespaces 获取指定集群的命名空间
-func (k *k8sClient) GetNamespaces(ctx context.Context, clusterID int) ([]string, error) {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return nil, err
-	}
-
-	namespaces, err := client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		k.l.Error("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
-		return nil, fmt.Errorf("获取命名空间失败: %w", err)
-	}
-
-	nsList := make([]string, len(namespaces.Items))
-	for i, ns := range namespaces.Items {
-		nsList[i] = ns.Name
-	}
-
-	return nsList, nil
 }
 
 // RefreshClients 刷新所有集群的客户端
