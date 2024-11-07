@@ -10,13 +10,11 @@ import (
 
 type ClusterDAO interface {
 	ListAllClusters(ctx context.Context) ([]*model.K8sCluster, error)
-	ListClustersForSelect(ctx context.Context) ([]*model.K8sCluster, error)
 	CreateCluster(ctx context.Context, cluster *model.K8sCluster) error
 	UpdateCluster(ctx context.Context, id int, cluster *model.K8sCluster) error
 	DeleteCluster(ctx context.Context, id int) error
 	GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error)
 	GetClusterByName(ctx context.Context, name string) (*model.K8sCluster, error)
-	BatchEnableSwitchClusters(ctx context.Context, ids []int) error
 	BatchDeleteClusters(ctx context.Context, ids []int) error
 }
 
@@ -42,12 +40,6 @@ func (c *clusterDAO) ListAllClusters(ctx context.Context) ([]*model.K8sCluster, 
 	}
 
 	return clusters, nil
-}
-
-// ListClustersForSelect 查询集群用于选择
-func (c *clusterDAO) ListClustersForSelect(ctx context.Context) ([]*model.K8sCluster, error) {
-	// TODO: 实现集群选择功能
-	return nil, nil
 }
 
 // CreateCluster 创建新集群
@@ -108,21 +100,6 @@ func (c *clusterDAO) GetClusterByName(ctx context.Context, name string) (*model.
 	}
 
 	return &cluster, nil
-}
-
-// BatchEnableSwitchClusters 批量启用集群
-func (c *clusterDAO) BatchEnableSwitchClusters(ctx context.Context, ids []int) error {
-	if len(ids) == 0 {
-		c.l.Error("BatchEnableSwitchClusters 批处理切换集群状态失败, 参数为空")
-		return fmt.Errorf("empty ids list")
-	}
-
-	if err := c.db.WithContext(ctx).Model(&model.K8sCluster{}).Where("id IN ?", ids).Update("is_enable", true).Error; err != nil {
-		c.l.Error("BatchEnableSwitchClusters 批处理切换集群状态失败", zap.Error(err))
-		return err
-	}
-
-	return nil
 }
 
 // BatchDeleteClusters 批量删除集群

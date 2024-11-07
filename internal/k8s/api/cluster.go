@@ -7,6 +7,7 @@ import (
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"strconv"
 )
 
 type K8sClusterHandler struct {
@@ -81,5 +82,17 @@ func (k *K8sClusterHandler) UpdateCluster(ctx *gin.Context) {
 
 // DeleteCluster 删除指定 ID 的集群
 func (k *K8sClusterHandler) DeleteCluster(ctx *gin.Context) {
-	// TODO: 实现删除集群的逻辑
+	id := ctx.Param("id")
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := k.clusterService.DeleteCluster(ctx, intId); err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }

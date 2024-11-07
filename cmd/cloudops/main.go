@@ -83,11 +83,5 @@ func InitMock() {
 	um := mock.NewUserMock(db)
 	um.CreateUserAdmin()
 
-	//tm := mock.NewTreeMock(db)
-	//tm.CreateTreeMock()
-
-	//km := mock.NewK8sClientMock(db)
-	//for i := 1; i < 5; i++ {
-	//	km.InitClient(nil, i, nil)
-	//}
+	_ = mock.NewK8sClientMock(db)
 }
