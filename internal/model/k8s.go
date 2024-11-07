@@ -11,37 +11,35 @@ import (
 // K8sCluster Kubernetes 集群的配置
 type K8sCluster struct {
 	Model
-	ID                  int        `gorm:"primaryKey;autoIncrement"`                                                                    // 主键，自增
-	Name                string     `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex:udx_name;size:100;comment:集群名称"`     // 集群名称
-	NameZh              string     `json:"nameZh" binding:"required,min=1,max=500" gorm:"uniqueIndex:udx_name;size:100;comment:集群中文名称"` // 集群中文名称
-	UserID              int        `json:"userId" gorm:"comment:创建者用户ID"`                                                               // 创建者用户ID
-	CpuRequest          string     `json:"cpuRequest,omitempty" gorm:"comment:CPU 请求量"`                                                 // CPU 请求量
-	CpuLimit            string     `json:"cpuLimit,omitempty" gorm:"comment:CPU 限制量"`                                                   // CPU 限制量
-	MemoryRequest       string     `json:"memoryRequest,omitempty" gorm:"comment:内存请求量"`                                                // 内存请求量
-	MemoryLimit         string     `json:"memoryLimit,omitempty" gorm:"comment:内存限制量"`                                                  // 内存限制量
-	RestrictedNameSpace StringList `json:"restrictedNameSpace" gorm:"comment:资源限制命名空间"`                                                 // 资源限制命名空间
+	Name                string     `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex:udx_name;size:100;comment:集群名称"`      // 集群名称
+	NameZh              string     `json:"name_zh" binding:"required,min=1,max=500" gorm:"uniqueIndex:udx_name;size:100;comment:集群中文名称"` // 集群中文名称
+	UserID              int        `json:"user_id" gorm:"comment:创建者用户ID"`                                                               // 创建者用户ID
+	CpuRequest          string     `json:"cpu_request,omitempty" gorm:"comment:CPU 请求量"`                                                 // CPU 请求量
+	CpuLimit            string     `json:"cpu_limit,omitempty" gorm:"comment:CPU 限制量"`                                                   // CPU 限制量
+	MemoryRequest       string     `json:"memory_request,omitempty" gorm:"comment:内存请求量"`                                                // 内存请求量
+	MemoryLimit         string     `json:"memory_limit,omitempty" gorm:"comment:内存限制量"`                                                  // 内存限制量
+	RestrictedNameSpace StringList `json:"restricted_name_space" gorm:"comment:资源限制命名空间"`                                                // 资源限制命名空间
 
-	Env                  string `json:"env,omitempty" gorm:"comment:集群环境，例如 prod, stage, dev, rc, press"`   // 集群环境
-	Version              string `json:"version,omitempty" gorm:"comment:集群版本"`                              // 集群版本
-	ApiServerAddr        string `json:"apiServerAddr,omitempty" gorm:"comment:API Server 地址"`               // API Server 地址
-	KubeConfigContent    string `json:"kubeConfigContent,omitempty" gorm:"type:text;comment:kubeConfig 内容"` // kubeConfig 内容
-	ActionTimeoutSeconds int    `json:"actionTimeoutSeconds,omitempty" gorm:"comment:操作超时时间（秒）"`            // 操作超时时间（秒）
+	Env                  string `json:"env,omitempty" gorm:"comment:集群环境，例如 prod, stage, dev, rc, press"`     // 集群环境
+	Version              string `json:"version,omitempty" gorm:"comment:集群版本"`                                // 集群版本
+	ApiServerAddr        string `json:"api_server_addr,omitempty" gorm:"comment:API Server 地址"`               // API Server 地址
+	KubeConfigContent    string `json:"kube_config_content,omitempty" gorm:"type:text;comment:kubeConfig 内容"` // kubeConfig 内容
+	ActionTimeoutSeconds int    `json:"action_timeout_seconds,omitempty" gorm:"comment:操作超时时间（秒）"`            // 操作超时时间（秒）
 
 	// 前端使用字段
-	Key               string            `json:"key" gorm:"-"`                         // 前端表格使用的Key，不存储在数据库中
-	CreateUserName    string            `json:"createUserName,omitempty" gorm:"-"`    // 创建者用户名，不存储在数据库中
-	LastProbeSuccess  bool              `json:"lastProbeSuccess,omitempty" gorm:"-"`  // 最近一次探测是否成功，不存储在数据库中
-	LastProbeErrorMsg string            `json:"lastProbeErrorMsg,omitempty" gorm:"-"` // 最近一次探测错误信息，不存储在数据库中
-	LabelsFront       string            `json:"labelsFront,omitempty" gorm:"-"`       // 前端显示的标签字符串，不存储在数据库中
-	AnnotationsFront  string            `json:"annotationsFront,omitempty" gorm:"-"`  // 前端显示的注解字符串，不存储在数据库中
-	LabelsM           map[string]string `json:"labelsM,omitempty" gorm:"-"`           // 标签键值对映射，不存储在数据库中
-	AnnotationsM      map[string]string `json:"annotationsM,omitempty" gorm:"-"`      // 注解键值对映射，不存储在数据库中
+	CreateUserName    string            `json:"create_username,omitempty" gorm:"-"`      // 创建者用户名
+	LastProbeSuccess  bool              `json:"last_probe_success,omitempty" gorm:"-"`   // 最近一次探测是否成功
+	LastProbeErrorMsg string            `json:"last_probe_error_msg,omitempty" gorm:"-"` // 最近一次探测错误信息
+	LabelsFront       string            `json:"labels_front,omitempty" gorm:"-"`         // 前端显示的标签字符串
+	AnnotationsFront  string            `json:"annotations_front,omitempty" gorm:"-"`    // 前端显示的注解字符串
+	LabelsMap         map[string]string `json:"labels_map,omitempty" gorm:"-"`           // 标签键值对映射
+	AnnotationsMap    map[string]string `json:"annotations_map,omitempty" gorm:"-"`      // 注解键值对映射
 }
 
 // K8sNode Kubernetes 节点
 type K8sNode struct {
 	Name              string               `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex;size:100;comment:节点名称"` // 节点名称
-	ClusterID         int                  `json:"clusterId" gorm:"index;not null;comment:所属集群ID"`                                 // 所属集群ID
+	ClusterID         int                  `json:"cluster_id" gorm:"index;not null;comment:所属集群ID"`                                // 所属集群ID
 	Status            string               `json:"status" gorm:"comment:节点状态，例如 Ready, NotReady, SchedulingDisabled"`              // 节点状态
 	ScheduleEnable    bool                 `json:"schedule_enable" gorm:"comment:节点是否可调度"`                                         // 节点是否可调度
 	Roles             []string             `json:"roles" gorm:"type:text;serializer:json;comment:节点角色，例如 master, worker"`          // 节点角色
@@ -77,24 +75,24 @@ type K8sNode struct {
 // K8sApp 面向运维的 Kubernetes 应用
 type K8sApp struct {
 	Model
-	Name          string                 `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex:udx_name;size:100;comment:应用名称"` // 应用名称
-	K8sProjectID  int                    `json:"k8sProjectId" gorm:"comment:关联的 Kubernetes 项目ID"`                                         // 关联的 Kubernetes 项目ID
-	TreeNodeID    int                    `json:"treeNodeId" gorm:"comment:关联的树节点ID"`                                                      // 关联的树节点ID
-	UserID        int                    `json:"userId" gorm:"comment:创建者用户ID"`                                                           // 创建者用户ID
-	Cluster       string                 `json:"cluster" gorm:"uniqueIndex:udx_name;size:100;comment:所属集群名称"`                             // 所属集群名称
-	K8sInstances  []K8sInstance          `json:"k8sInstances" gorm:"foreignKey:K8sAppID;comment:关联的 Kubernetes 实例"`                       // 关联的 Kubernetes 实例
-	ServiceType   string                 `json:"serviceType,omitempty" gorm:"comment:服务类型"`                                               // 服务类型
-	Namespace     string                 `json:"namespace,omitempty" gorm:"comment:Kubernetes 命名空间"`                                      // Kubernetes 命名空间
+	Name         string        `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex:udx_name;size:100;comment:应用名称"` // 应用名称
+	K8sProjectID int           `json:"k8s_project_id" gorm:"comment:关联的 Kubernetes 项目ID"`                                       // 关联的 Kubernetes 项目ID
+	TreeNodeID   int           `json:"tree_node_id" gorm:"comment:关联的树节点ID"`                                                    // 关联的树节点ID
+	UserID       int           `json:"user_id" gorm:"comment:创建者用户ID"`                                                          // 创建者用户ID
+	Cluster      string        `json:"cluster" gorm:"uniqueIndex:udx_name;size:100;comment:所属集群名称"`                             // 所属集群名称
+	K8sInstances []K8sInstance `json:"k8s_instances" gorm:"foreignKey:K8sAppID;comment:关联的 Kubernetes 实例"`                      // 关联的 Kubernetes 实例
+	ServiceType  string        `json:"service_type,omitempty" gorm:"comment:服务类型"`                                              // 服务类型
+	Namespace    string        `json:"namespace,omitempty" gorm:"comment:Kubernetes 命名空间"`                                      // Kubernetes 命名空间
+
 	ContainerCore `json:"containerCore"` // 容器核心配置
 
 	// 前端使用字段
-	TreeNodeObj    *TreeNode   `json:"treeNodeObj,omitempty" gorm:"-"`    // 树节点对象，不存储在数据库中
-	ClusterObj     *K8sCluster `json:"clusterObj,omitempty" gorm:"-"`     // 集群对象，不存储在数据库中
-	ProjectObj     *K8sProject `json:"projectObj,omitempty" gorm:"-"`     // 项目对象，不存储在数据库中
-	CreateUserName string      `json:"createUserName,omitempty" gorm:"-"` // 创建者用户名，不存储在数据库中
-	NodePath       string      `json:"nodePath,omitempty" gorm:"-"`       // 节点路径，不存储在数据库中
-	K8sProjectName string      `json:"k8sProjectName,omitempty" gorm:"-"` // 项目名称，不存储在数据库中
-	Key            string      `json:"key" gorm:"-"`                      // 前端表格使用的Key，不存储在数据库中
+	TreeNodeObj    *TreeNode   `json:"tree_node_obj,omitempty" gorm:"-"`    // 树节点对象
+	ClusterObj     *K8sCluster `json:"cluster_obj,omitempty" gorm:"-"`      // 集群对象
+	ProjectObj     *K8sProject `json:"project_obj,omitempty" gorm:"-"`      // 项目对象
+	CreateUserName string      `json:"create_username,omitempty" gorm:"-"`  // 创建者用户名
+	NodePath       string      `json:"node_path,omitempty" gorm:"-"`        // 节点路径
+	K8sProjectName string      `json:"k8s_project_name,omitempty" gorm:"-"` // 项目名称
 }
 
 // K8sCronjob Kubernetes 定时任务的配置
@@ -102,9 +100,9 @@ type K8sCronjob struct {
 	Model
 	Name         string     `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex:udx_name;size:100;comment:定时任务名称"` // 定时任务名称
 	Cluster      string     `json:"cluster,omitempty" gorm:"size:100;comment:所属集群"`                                            // 所属集群
-	TreeNodeID   int        `json:"treeNodeId" gorm:"comment:关联的树节点ID"`                                                        // 关联的树节点ID
-	UserID       int        `json:"userId" gorm:"comment:创建者用户ID"`                                                             // 创建者用户ID
-	K8sProjectID int        `json:"k8sProjectId" gorm:"uniqueIndex:udx_name;comment:关联的 Kubernetes 项目ID"`                      // 关联的 Kubernetes 项目ID
+	TreeNodeID   int        `json:"tree_node_id" gorm:"comment:关联的树节点ID"`                                                      // 关联的树节点ID
+	UserID       int        `json:"user_id" gorm:"comment:创建者用户ID"`                                                            // 创建者用户ID
+	K8sProjectID int        `json:"k8s_project_id" gorm:"uniqueIndex:udx_name;comment:关联的 Kubernetes 项目ID"`                    // 关联的 Kubernetes 项目ID
 	Namespace    string     `json:"namespace,omitempty" gorm:"comment:命名空间"`                                                   // 命名空间
 	Schedule     string     `json:"schedule,omitempty" gorm:"comment:调度表达式"`                                                   // 调度表达式
 	Image        string     `json:"image,omitempty" gorm:"comment:镜像"`                                                         // 镜像
@@ -112,87 +110,87 @@ type K8sCronjob struct {
 	Args         StringList `json:"args,omitempty" gorm:"comment:启动参数，空格分隔"`                                                   // 启动参数
 
 	// 前端使用字段
-	CommandsFront       []apiresponse.KeyValueItem `json:"commandsFront,omitempty" gorm:"-"`       // 前端显示的命令，不存储在数据库中
-	ArgsFront           []apiresponse.KeyValueItem `json:"argsFront,omitempty" gorm:"-"`           // 前端显示的参数，不存储在数据库中
-	LastScheduleTime    string                     `json:"lastScheduleTime,omitempty" gorm:"-"`    // 最近一次调度时间，不存储在数据库中
-	LastSchedulePodName string                     `json:"lastSchedulePodName,omitempty" gorm:"-"` // 最近一次调度的 Pod 名称，不存储在数据库中
-	CreateUserName      string                     `json:"createUserName,omitempty" gorm:"-"`      // 创建者用户名，不存储在数据库中
-	NodePath            string                     `json:"nodePath,omitempty" gorm:"-"`            // 节点路径，不存储在数据库中
-	Key                 string                     `json:"key" gorm:"-"`                           // 前端表格使用的Key，不存储在数据库中
-	TreeNodeObj         *TreeNode                  `json:"treeNodeObj,omitempty" gorm:"-"`         // 树节点对象，不存储在数据库中
-	ClusterObj          *K8sCluster                `json:"clusterObj,omitempty" gorm:"-"`          // 集群对象，不存储在数据库中
-	ProjectObj          *K8sProject                `json:"projectObj,omitempty" gorm:"-"`          // 项目对象，不存储在数据库中
-	K8sProjectName      string                     `json:"k8sProjectName,omitempty" gorm:"-"`      // 项目名称，不存储在数据库中
+	CommandsFront       []apiresponse.KeyValueItem `json:"commands_front,omitempty" gorm:"-"`         // 前端显示的命令
+	ArgsFront           []apiresponse.KeyValueItem `json:"args_front,omitempty" gorm:"-"`             // 前端显示的参数
+	LastScheduleTime    string                     `json:"last_schedule_time,omitempty" gorm:"-"`     // 最近一次调度时间
+	LastSchedulePodName string                     `json:"last_schedule_pod_name,omitempty" gorm:"-"` // 最近一次调度的 Pod 名称
+	CreateUserName      string                     `json:"create_username,omitempty" gorm:"-"`        // 创建者用户名
+	NodePath            string                     `json:"node_path,omitempty" gorm:"-"`              // 节点路径
+	Key                 string                     `json:"key" gorm:"-"`                              // 前端表格使用的Key
+	TreeNodeObj         *TreeNode                  `json:"tree_node_obj,omitempty" gorm:"-"`          // 树节点对象
+	ClusterObj          *K8sCluster                `json:"cluster_obj,omitempty" gorm:"-"`            // 集群对象
+	ProjectObj          *K8sProject                `json:"project_obj,omitempty" gorm:"-"`            // 项目对象
+	K8sProjectName      string                     `json:"k8s_project_name,omitempty" gorm:"-"`       // 项目名称
 }
 
 // K8sInstance Kubernetes 实例的配置
 type K8sInstance struct {
 	Model
 	Name          string                 `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex:udx_name;size:100;comment:实例名称"` // 实例名称
-	UserID        int                    `json:"userId" gorm:"comment:创建者用户ID"`                                                           // 创建者用户ID
+	UserID        int                    `json:"user_id" gorm:"comment:创建者用户ID"`                                                          // 创建者用户ID
 	Cluster       string                 `json:"cluster,omitempty" gorm:"size:100;comment:所属集群"`                                          // 所属集群
 	ContainerCore `json:"containerCore"` // 容器核心配置
-	Image         string                 `json:"image,omitempty" gorm:"comment:镜像"`                                // 镜像
-	Replicas      int                    `json:"replicas,omitempty" gorm:"comment:副本数量"`                           // 副本数量
-	K8sAppID      int                    `json:"k8sAppId" gorm:"uniqueIndex:udx_name;comment:关联的 Kubernetes 应用ID"` // 关联的 Kubernetes 应用ID
+	Image         string                 `json:"image,omitempty" gorm:"comment:镜像"`                                 // 镜像
+	Replicas      int                    `json:"replicas,omitempty" gorm:"comment:副本数量"`                            // 副本数量
+	K8sAppID      int                    `json:"k8s_appId" gorm:"uniqueIndex:udx_name;comment:关联的 Kubernetes 应用ID"` // 关联的 Kubernetes 应用ID
 
 	// 前端使用字段
-	K8sAppName     string      `json:"k8sAppName,omitempty" gorm:"-"`     // 应用名称，不存储在数据库中
-	CreateUserName string      `json:"createUserName,omitempty" gorm:"-"` // 创建者用户名，不存储在数据库中
-	NodePath       string      `json:"nodePath,omitempty" gorm:"-"`       // 节点路径，不存储在数据库中
-	Key            string      `json:"key" gorm:"-"`                      // 前端表格使用的Key，不存储在数据库中
-	Namespace      string      `json:"namespace,omitempty" gorm:"-"`      // 命名空间，不存储在数据库中
-	K8sAppObj      *K8sApp     `json:"k8sAppObj,omitempty" gorm:"-"`      // 应用对象，不存储在数据库中
-	ClusterObj     *K8sCluster `json:"clusterObj,omitempty" gorm:"-"`     // 集群对象，不存储在数据库中
-	ReadyStatus    string      `json:"readyStatus,omitempty" gorm:"-"`    // 就绪状态，不存储在数据库中
+	K8sAppName     string      `json:"k8s_app_name,omitempty" gorm:"-"`    // 应用名称
+	CreateUserName string      `json:"create_username,omitempty" gorm:"-"` // 创建者用户名
+	NodePath       string      `json:"node_path,omitempty" gorm:"-"`       // 节点路径
+	Key            string      `json:"key" gorm:"-"`                       // 前端表格使用的Key
+	Namespace      string      `json:"namespace,omitempty" gorm:"-"`       // 命名空间
+	K8sAppObj      *K8sApp     `json:"k8s_app_obj,omitempty" gorm:"-"`     // 应用对象
+	ClusterObj     *K8sCluster `json:"cluster_obj,omitempty" gorm:"-"`     // 集群对象
+	ReadyStatus    string      `json:"ready_status,omitempty" gorm:"-"`    // 就绪状态
 }
 
 // K8sProject Kubernetes 项目的配置
 type K8sProject struct {
 	Model
 	Name       string   `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex:udx_name;size:100;comment:项目名称"` // 项目名称
-	NameZh     string   `json:"nameZh" binding:"required,min=1,max=500" gorm:"uniqueIndex;size:100;comment:项目中文名称"`      // 项目中文名称
+	NameZh     string   `json:"name_zh" binding:"required,min=1,max=500" gorm:"uniqueIndex;size:100;comment:项目中文名称"`     // 项目中文名称
 	Cluster    string   `json:"cluster" gorm:"uniqueIndex:udx_name;size:100;comment:所属集群名称"`                             // 所属集群名称
-	TreeNodeID int      `json:"treeNodeId" gorm:"comment:关联的树节点ID"`                                                      // 关联的树节点ID
-	UserID     int      `json:"userId" gorm:"comment:创建者用户ID"`                                                           // 创建者用户ID
-	K8sApps    []K8sApp `json:"k8sApps,omitempty" gorm:"foreignKey:K8sProjectID;comment:关联的 Kubernetes 应用"`              // 关联的 Kubernetes 应用
+	TreeNodeID int      `json:"tree_node_id" gorm:"comment:关联的树节点ID"`                                                    // 关联的树节点ID
+	UserID     int      `json:"user_id" gorm:"comment:创建者用户ID"`                                                          // 创建者用户ID
+	K8sApps    []K8sApp `json:"k8s_apps,omitempty" gorm:"foreignKey:K8sProjectID;comment:关联的 Kubernetes 应用"`             // 关联的 Kubernetes 应用
 
 	// 前端使用字段
-	CreateUserName string    `json:"createUserName,omitempty" gorm:"-"` // 创建者用户名，不存储在数据库中
-	NodePath       string    `json:"nodePath,omitempty" gorm:"-"`       // 节点路径，不存储在数据库中
-	Key            string    `json:"key" gorm:"-"`                      // 前端表格使用的Key，不存储在数据库中
-	TreeNodeObj    *TreeNode `json:"treeNodeObj,omitempty" gorm:"-"`    // 树节点对象，不存储在数据库中
+	CreateUserName string    `json:"create_username,omitempty" gorm:"-"` // 创建者用户名
+	NodePath       string    `json:"node_path,omitempty" gorm:"-"`       // 节点路径
+	Key            string    `json:"key" gorm:"-"`                       // 前端表格使用的Key
+	TreeNodeObj    *TreeNode `json:"tree_node_obj,omitempty" gorm:"-"`   // 树节点对象
 }
 
 // K8sYamlTask Kubernetes YAML 任务的配置
 type K8sYamlTask struct {
 	Model
 	Name        string     `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex:udx_name;size:100;comment:YAML 任务名称"` // YAML 任务名称
-	UserID      int        `json:"userId" gorm:"comment:创建者用户ID"`                                                               // 创建者用户ID
-	TemplateID  int        `json:"templateId" gorm:"comment:关联的模板ID"`                                                           // 关联的模板ID
-	ClusterName string     `json:"clusterName,omitempty" gorm:"comment:集群名称"`                                                   // 集群名称
+	UserID      int        `json:"user_id" gorm:"comment:创建者用户ID"`                                                              // 创建者用户ID
+	TemplateID  int        `json:"template_id" gorm:"comment:关联的模板ID"`                                                          // 关联的模板ID
+	ClusterName string     `json:"cluster_name,omitempty" gorm:"comment:集群名称"`                                                  // 集群名称
 	Variables   StringList `json:"variables,omitempty" gorm:"type:text;comment:yaml 变量，格式 k=v,k=v"`                             // YAML 变量
 	Status      string     `json:"status,omitempty" gorm:"comment:当前状态" binding:"oneof=Pending Failed Succeeded"`               // 当前状态
-	ApplyResult string     `json:"applyResult,omitempty" gorm:"comment:apply 后的返回数据"`                                           // apply 结果
+	ApplyResult string     `json:"apply_result,omitempty" gorm:"comment:apply 后的返回数据"`                                          // apply 结果
 
 	// 前端使用字段
-	Key            string `json:"key" gorm:"-"`                      // 前端表格使用的Key，不存储在数据库中
-	VariablesFront string `json:"variablesFront,omitempty" gorm:"-"` // 前端显示的变量，不存储在数据库中
-	YamlString     string `json:"yamlString,omitempty" gorm:"-"`     // YAML 字符串，不存储在数据库中
-	TemplateName   string `json:"templateName,omitempty" gorm:"-"`   // 模板名称，不存储在数据库中
-	CreateUserName string `json:"createUserName,omitempty" gorm:"-"` // 创建者用户名，不存储在数据库中
+	Key            string `json:"key" gorm:"-"`                       // 前端表格使用的Key
+	VariablesFront string `json:"variables_front,omitempty" gorm:"-"` // 前端显示的变量
+	YamlString     string `json:"yaml_string,omitempty" gorm:"-"`     // YAML 字符串
+	TemplateName   string `json:"template_name,omitempty" gorm:"-"`   // 模板名称
+	CreateUserName string `json:"create_username,omitempty" gorm:"-"` // 创建者用户名
 }
 
 // K8sYamlTemplate Kubernetes YAML 模板的配置
 type K8sYamlTemplate struct {
 	Model
 	Name    string `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex:udx_name;size:100;comment:模板名称"` // 模板名称
-	UserID  int    `json:"userId" gorm:"comment:创建者用户ID"`                                                          // 创建者用户ID
+	UserID  int    `json:"user_id" gorm:"comment:创建者用户ID"`                                                         // 创建者用户ID
 	Content string `json:"content,omitempty" gorm:"type:text;comment:yaml 模板内容"`                                   // YAML 模板内容
 
 	// 前端使用字段
-	Key            string `json:"key" gorm:"-"`                      // 前端表格使用的Key，不存储在数据库中
-	CreateUserName string `json:"createUserName,omitempty" gorm:"-"` // 创建者用户名，不存储在数据库中
+	Key            string `json:"key" gorm:"-"`                       // 前端表格使用的Key
+	CreateUserName string `json:"create_username,omitempty" gorm:"-"` // 创建者用户名
 }
 
 // K8sPod 单个 Pod 的模型
@@ -209,51 +207,51 @@ type K8sPod struct {
 
 // ContainerCore 包含容器的核心配置
 type ContainerCore struct {
-	Envs          StringList `json:"envs,omitempty" gorm:"comment:环境变量组，格式 key=value"`         // 环境变量组
-	Labels        StringList `json:"labels,omitempty" gorm:"comment:标签组，格式 key=value"`         // 标签组
-	Commands      StringList `json:"commands,omitempty" gorm:"comment:启动命令组"`                  // 启动命令组
-	Args          StringList `json:"args,omitempty" gorm:"comment:启动参数，空格分隔"`                  // 启动参数
-	CpuRequest    string     `json:"cpuRequest,omitempty" gorm:"comment:CPU 请求量"`              // CPU 请求量
-	CpuLimit      string     `json:"cpuLimit,omitempty" gorm:"comment:CPU 限制量"`                // CPU 限制量
-	MemoryRequest string     `json:"memoryRequest,omitempty" gorm:"comment:内存请求量"`             // 内存请求量
-	MemoryLimit   string     `json:"memoryLimit,omitempty" gorm:"comment:内存限制量"`               // 内存限制量
-	VolumeJson    string     `json:"volumeJson,omitempty" gorm:"type:text;comment:卷和挂载配置JSON"` // 卷和挂载配置JSON
-	PortJson      string     `json:"portJson,omitempty" gorm:"type:text;comment:容器和服务端口配置"`    // 容器和服务端口配置
+	Envs          StringList `json:"envs,omitempty" gorm:"comment:环境变量组，格式 key=value"`          // 环境变量组
+	Labels        StringList `json:"labels,omitempty" gorm:"comment:标签组，格式 key=value"`          // 标签组
+	Commands      StringList `json:"commands,omitempty" gorm:"comment:启动命令组"`                   // 启动命令组
+	Args          StringList `json:"args,omitempty" gorm:"comment:启动参数，空格分隔"`                   // 启动参数
+	CpuRequest    string     `json:"cpu_request,omitempty" gorm:"comment:CPU 请求量"`              // CPU 请求量
+	CpuLimit      string     `json:"cpu_limit,omitempty" gorm:"comment:CPU 限制量"`                // CPU 限制量
+	MemoryRequest string     `json:"memory_request,omitempty" gorm:"comment:内存请求量"`             // 内存请求量
+	MemoryLimit   string     `json:"memory_limit,omitempty" gorm:"comment:内存限制量"`               // 内存限制量
+	VolumeJson    string     `json:"volume_json,omitempty" gorm:"type:text;comment:卷和挂载配置JSON"` // 卷和挂载配置JSON
+	PortJson      string     `json:"port_json,omitempty" gorm:"type:text;comment:容器和服务端口配置"`    // 容器和服务端口配置
 
 	// 前端使用字段
-	EnvsFront       []apiresponse.KeyValueItem `json:"envsFront,omitempty" gorm:"-"`       // 前端显示的环境变量，不存储在数据库中
-	LabelsFront     []apiresponse.KeyValueItem `json:"labelsFront,omitempty" gorm:"-"`     // 前端显示的标签，不存储在数据库中
-	CommandsFront   []apiresponse.KeyValueItem `json:"commandsFront,omitempty" gorm:"-"`   // 前端显示的命令，不存储在数据库中
-	ArgsFront       []apiresponse.KeyValueItem `json:"argsFront,omitempty" gorm:"-"`       // 前端显示的参数，不存储在数据库中
-	VolumeJsonFront []K8sOneVolume             `json:"volumeJsonFront,omitempty" gorm:"-"` // 前端显示的卷配置，不存储在数据库中
-	PortJsonFront   []core.ServicePort         `json:"portJsonFront,omitempty" gorm:"-"`   // 前端显示的端口配置，不存储在数据库中
+	EnvsFront       []apiresponse.KeyValueItem `json:"envs_front,omitempty" gorm:"-"`        // 前端显示的环境变量
+	LabelsFront     []apiresponse.KeyValueItem `json:"labels_front,omitempty" gorm:"-"`      // 前端显示的标签
+	CommandsFront   []apiresponse.KeyValueItem `json:"commands_front,omitempty" gorm:"-"`    // 前端显示的命令
+	ArgsFront       []apiresponse.KeyValueItem `json:"args_front,omitempty" gorm:"-"`        // 前端显示的参数
+	VolumeJsonFront []K8sOneVolume             `json:"volume_json_front,omitempty" gorm:"-"` // 前端显示的卷配置
+	PortJsonFront   []core.ServicePort         `json:"port_json_front,omitempty" gorm:"-"`   // 前端显示的端口配置
 }
 
 // K8sOneVolume 单个卷的配置
 type K8sOneVolume struct {
-	Type         string `json:"type" gorm:"comment:卷类型，如 hostPath, configMap, emptyDir, pvc"`             // 卷类型
-	Name         string `json:"name" gorm:"size:100;comment:卷名称"`                                         // 卷名称
-	MountPath    string `json:"mountPath" gorm:"size:255;comment:挂载路径"`                                   // 挂载路径
-	SubPath      string `json:"subPath,omitempty" gorm:"size:255;comment:子路径"`                            // 子路径（可选）
-	PvcName      string `json:"pvcName,omitempty" gorm:"size:100;comment:PVC名称，当类型为 pvc 时使用"`             // PVC名称（可选）
-	CmName       string `json:"cmName,omitempty" gorm:"size:100;comment:ConfigMap名称，当类型为 configMap 时使用"`  // ConfigMap名称（可选）
-	HostPathPath string `json:"hostPathPath,omitempty" gorm:"size:255;comment:Host路径，当类型为 hostPath 时使用"`  // Host路径（可选）
-	HostPathType string `json:"hostPathType,omitempty" gorm:"size:50;comment:Host路径类型，当类型为 hostPath 时使用"` // Host路径类型（可选）
+	Type         string `json:"type" gorm:"comment:卷类型，如 hostPath, configMap, emptyDir, pvc"`               // 卷类型
+	Name         string `json:"name" gorm:"size:100;comment:卷名称"`                                           // 卷名称
+	MountPath    string `json:"mount_path" gorm:"size:255;comment:挂载路径"`                                    // 挂载路径
+	SubPath      string `json:"sub_path,omitempty" gorm:"size:255;comment:子路径"`                             // 子路径（可选）
+	PvcName      string `json:"pvc_name,omitempty" gorm:"size:100;comment:PVC名称，当类型为 pvc 时使用"`              // PVC名称（可选）
+	CmName       string `json:"cm_name,omitempty" gorm:"size:100;comment:ConfigMap名称，当类型为 configMap 时使用"`   // ConfigMap名称（可选）
+	HostPath     string `json:"host_path,omitempty" gorm:"size:255;comment:Host路径，当类型为 hostPath 时使用"`       // Host路径（可选）
+	HostPathType string `json:"host_path_type,omitempty" gorm:"size:50;comment:Host路径类型，当类型为 hostPath 时使用"` // Host路径类型（可选）
 }
 
 // K8sPodContainer Pod 中单个容器的模型
 type K8sPodContainer struct {
-	Name            string               `json:"name" binding:"required,min=1,max=200" gorm:"size:200;comment:容器名称"`       // 容器名称
-	Image           string               `json:"image" binding:"required" gorm:"size:500;comment:容器镜像"`                    // 容器镜像
-	Command         StringList           `json:"command,omitempty" gorm:"type:text;serializer:json;comment:启动命令组"`         // 启动命令组
-	Args            StringList           `json:"args,omitempty" gorm:"type:text;serializer:json;comment:启动参数，空格分隔"`        // 启动参数
-	Envs            []K8sEnvVar          `json:"envs,omitempty" gorm:"type:text;serializer:json;comment:环境变量组"`            // 环境变量组
-	Ports           []K8sContainerPort   `json:"ports,omitempty" gorm:"type:text;serializer:json;comment:容器端口配置"`          // 容器端口配置
-	Resources       ResourceRequirements `json:"resources,omitempty" gorm:"type:text;serializer:json;comment:资源请求与限制"`     // 资源请求与限制
-	VolumeMounts    []K8sVolumeMount     `json:"volumeMounts,omitempty" gorm:"type:text;serializer:json;comment:卷挂载配置"`    // 卷挂载配置
-	LivenessProbe   *K8sProbe            `json:"livenessProbe,omitempty" gorm:"type:text;serializer:json;comment:存活探测配置"`  // 存活探测配置
-	ReadinessProbe  *K8sProbe            `json:"readinessProbe,omitempty" gorm:"type:text;serializer:json;comment:就绪探测配置"` // 就绪探测配置
-	ImagePullPolicy string               `json:"imagePullPolicy,omitempty" gorm:"size:50;comment:镜像拉取策略"`                  // 镜像拉取策略，例如 "Always", "IfNotPresent", "Never"
+	Name            string               `json:"name" binding:"required,min=1,max=200" gorm:"size:200;comment:容器名称"`        // 容器名称
+	Image           string               `json:"image" binding:"required" gorm:"size:500;comment:容器镜像"`                     // 容器镜像
+	Command         StringList           `json:"command,omitempty" gorm:"type:text;serializer:json;comment:启动命令组"`          // 启动命令组
+	Args            StringList           `json:"args,omitempty" gorm:"type:text;serializer:json;comment:启动参数，空格分隔"`         // 启动参数
+	Envs            []K8sEnvVar          `json:"envs,omitempty" gorm:"type:text;serializer:json;comment:环境变量组"`             // 环境变量组
+	Ports           []K8sContainerPort   `json:"ports,omitempty" gorm:"type:text;serializer:json;comment:容器端口配置"`           // 容器端口配置
+	Resources       ResourceRequirements `json:"resources,omitempty" gorm:"type:text;serializer:json;comment:资源请求与限制"`      // 资源请求与限制
+	VolumeMounts    []K8sVolumeMount     `json:"volume_mounts,omitempty" gorm:"type:text;serializer:json;comment:卷挂载配置"`    // 卷挂载配置
+	LivenessProbe   *K8sProbe            `json:"liveness_probe,omitempty" gorm:"type:text;serializer:json;comment:存活探测配置"`  // 存活探测配置
+	ReadinessProbe  *K8sProbe            `json:"readiness_probe,omitempty" gorm:"type:text;serializer:json;comment:就绪探测配置"` // 就绪探测配置
+	ImagePullPolicy string               `json:"image_pull_policy,omitempty" gorm:"size:50;comment:镜像拉取策略"`                 // 镜像拉取策略，例如 "Always", "IfNotPresent", "Never"
 }
 
 // K8sEnvVar 环境变量的键值对
@@ -264,9 +262,9 @@ type K8sEnvVar struct {
 
 // K8sContainerPort 容器的端口配置
 type K8sContainerPort struct {
-	Name          string `json:"name,omitempty" gorm:"size:100;comment:端口名称"`           // 端口名称（可选）
-	ContainerPort int    `json:"containerPort" binding:"required" gorm:"comment:容器端口号"` // 容器端口号
-	Protocol      string `json:"protocol,omitempty" gorm:"size:10;comment:协议类型"`        // 协议类型，例如 "TCP", "UDP"
+	Name          string `json:"name,omitempty" gorm:"size:100;comment:端口名称"`            // 端口名称（可选）
+	ContainerPort int    `json:"container_port" binding:"required" gorm:"comment:容器端口号"` // 容器端口号
+	Protocol      string `json:"protocol,omitempty" gorm:"size:10;comment:协议类型"`         // 协议类型，例如 "TCP", "UDP"
 }
 
 // K8sClusterNodesRequest 定义集群节点请求的基础结构
@@ -283,21 +281,21 @@ type ResourceRequirements struct {
 
 // K8sVolumeMount 卷的挂载配置
 type K8sVolumeMount struct {
-	Name      string `json:"name" binding:"required" gorm:"size:100;comment:卷名称"`       // 卷名称，必填，长度限制为100字符
-	MountPath string `json:"mountPath" binding:"required" gorm:"size:255;comment:挂载路径"` // 挂载路径，必填，长度限制为255字符
-	ReadOnly  bool   `json:"readOnly,omitempty" gorm:"comment:是否只读"`                    // 是否只读
-	SubPath   string `json:"subPath,omitempty" gorm:"size:255;comment:子路径"`             // 子路径（可选），长度限制为255字符
+	Name      string `json:"name" binding:"required" gorm:"size:100;comment:卷名称"`        // 卷名称，必填，长度限制为100字符
+	MountPath string `json:"mount_path" binding:"required" gorm:"size:255;comment:挂载路径"` // 挂载路径，必填，长度限制为255字符
+	ReadOnly  bool   `json:"read_only,omitempty" gorm:"comment:是否只读"`                    // 是否只读
+	SubPath   string `json:"sub_path,omitempty" gorm:"size:255;comment:子路径"`             // 子路径（可选），长度限制为255字符
 }
 
 // K8sProbe 探测配置
 type K8sProbe struct {
-	HTTPGet *K8sHTTPGetAction `json:"httpGet,omitempty" gorm:"type:text;serializer:json;comment:HTTP GET 探测配置"` // HTTP GET 探测
+	HTTPGet *K8sHTTPGetAction `json:"http_get,omitempty" gorm:"type:text;serializer:json;comment:HTTP GET 探测配置"` // HTTP GET 探测
 	// TCPSocket 和 Exec 探测也可以根据需要添加
-	InitialDelaySeconds int `json:"initialDelaySeconds" gorm:"comment:探测初始延迟时间（秒）"` // 探测初始延迟时间
-	PeriodSeconds       int `json:"periodSeconds" gorm:"comment:探测间隔时间（秒）"`         // 探测间隔时间
-	TimeoutSeconds      int `json:"timeoutSeconds" gorm:"comment:探测超时时间（秒）"`        // 探测超时时间
-	SuccessThreshold    int `json:"successThreshold" gorm:"comment:探测成功阈值"`         // 探测成功阈值
-	FailureThreshold    int `json:"failureThreshold" gorm:"comment:探测失败阈值"`         // 探测失败阈值
+	InitialDelaySeconds int `json:"initial_delay_seconds" gorm:"comment:探测初始延迟时间（秒）"` // 探测初始延迟时间
+	PeriodSeconds       int `json:"period_seconds" gorm:"comment:探测间隔时间（秒）"`          // 探测间隔时间
+	TimeoutSeconds      int `json:"timeout_seconds" gorm:"comment:探测超时时间（秒）"`         // 探测超时时间
+	SuccessThreshold    int `json:"success_threshold" gorm:"comment:探测成功阈值"`          // 探测成功阈值
+	FailureThreshold    int `json:"failure_threshold" gorm:"comment:探测失败阈值"`          // 探测失败阈值
 }
 
 // K8sHTTPGetAction HTTP GET 探测动作
@@ -383,4 +381,8 @@ type K8sServiceRequest struct {
 	Namespace    string        `json:"namespace"`                       // 命名空间，必填
 	ServiceNames []string      `json:"service_names"`                   // Service 名称，可选
 	Service      *core.Service `json:"service"`                         // Service 对象, 可选
+}
+
+type BatchDeleteReq struct {
+	IDs []int `json:"ids" binding:"required"`
 }

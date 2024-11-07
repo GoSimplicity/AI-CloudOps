@@ -29,7 +29,6 @@ func (m *K8sClientMock) populateMockData() {
 	m.Lock()
 	defer m.Unlock()
 
-	// 示例：插入多个 K8sCluster
 	clusters := []model.K8sCluster{
 		{
 			Name:          "Cluster-1",

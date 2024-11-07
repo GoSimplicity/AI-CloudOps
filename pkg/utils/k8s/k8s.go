@@ -6,6 +6,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"go.uber.org/zap"
+	"k8s.io/client-go/tools/clientcmd"
 	"log"
 	"strings"
 	"time"
@@ -589,8 +590,32 @@ func GetResourceName(kind string) string {
 		return "services"
 	case "Deployment":
 		return "deployments"
-	// 添加其他资源类型
+	//TODO: 添加其他资源类型
 	default:
 		return strings.ToLower(kind) + "s"
 	}
+}
+
+func InitAadGetKubeClient(ctx context.Context, cluster *model.K8sCluster, logger *zap.Logger, client client.K8sClient) (*kubernetes.Clientset, error) {
+	// 解析 kubeconfig 并手动初始化 Kubernetes 客户端
+	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
+	if err != nil {
+		logger.Error("CreateCluster: 解析 kubeconfig 失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 初始化 Kubernetes 客户端
+	if err = client.InitClient(ctx, cluster.ID, restConfig); err != nil {
+		logger.Error("CreateCluster: 初始化 Kubernetes 客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := client.GetKubeClient(cluster.ID)
+	if err != nil {
+		logger.Error("CreateCluster: 获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	return kubeClient, err
 }
