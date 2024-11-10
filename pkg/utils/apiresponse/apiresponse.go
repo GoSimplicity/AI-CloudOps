@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -283,4 +284,52 @@ func DeleteWithId(l *zap.Logger, funcName string, timeout int, url string, param
 	}
 
 	return bodyBytes, nil
+}
+
+// HandleRequest 用于统一处理请求绑定和响应
+func HandleRequest(ctx *gin.Context, req interface{}, action func() (interface{}, error)) {
+	if req != nil {
+		// 如果提供了绑定对象，执行数据绑定
+		if err := ctx.ShouldBind(req); err != nil {
+			BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+			return
+		}
+	}
+
+	// 执行主要业务逻辑
+	data, err := action()
+	if err != nil {
+		ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	// 返回成功响应，若有数据则包含数据，否则仅返回成功状态
+	if data != nil {
+		SuccessWithData(ctx, data)
+	} else {
+		Success(ctx)
+	}
+}
+
+// GetParamID 从查询参数中解析 ID，并进行类型转换
+func GetParamID(ctx *gin.Context) (int, error) {
+	id := ctx.Param("id")
+	if id == "" {
+		return 0, fmt.Errorf("缺少 'id' 参数")
+	}
+	paramID, err := strconv.Atoi(id)
+	if err != nil {
+		return 0, fmt.Errorf("'id' 非整数")
+	}
+	return paramID, nil
+}
+
+// GetQueryName 从查询参数中解析 Name，并进行类型转换
+func GetQueryName(ctx *gin.Context) (string, error) {
+	name := ctx.Query("name")
+	if name == "" {
+		return "", fmt.Errorf("缺少 'name' 参数")
+	}
+
+	return name, nil
 }

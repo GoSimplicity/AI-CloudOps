@@ -70,6 +70,9 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 		return nil
 	}
 
+	// 保存 REST 配置
+	k.RestConfigs[clusterID] = kubeConfig
+
 	// 创建 Kubernetes 原生客户端
 	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
@@ -101,9 +104,6 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 		return fmt.Errorf("创建动态客户端失败: %w", err)
 	}
 	k.DynamicClients[clusterID] = dynamicClient
-
-	// 保存 REST 配置
-	k.RestConfigs[clusterID] = kubeConfig
 
 	// 获取并保存命名空间，直接使用 kubeClient
 	namespaces, err := k.getNamespacesDirectly(ctx, clusterID, kubeClient)

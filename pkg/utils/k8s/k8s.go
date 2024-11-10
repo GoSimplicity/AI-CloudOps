@@ -619,3 +619,18 @@ func InitAadGetKubeClient(ctx context.Context, cluster *model.K8sCluster, logger
 
 	return kubeClient, err
 }
+
+func GetKubeAndMetricsClient(id int, logger *zap.Logger, client client.K8sClient) (*kubernetes.Clientset, *metricsClient.Clientset, error) {
+	kc, err := client.GetKubeClient(id)
+	if err != nil {
+		logger.Error("CreateCluster: 获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, nil, err
+	}
+
+	mc, err := client.GetMetricsClient(id)
+	if err != nil {
+		logger.Error("CreateCluster: 获取 Metrics 客户端失败", zap.Error(err))
+		return nil, nil, err
+	}
+	return kc, mc, nil
+}
