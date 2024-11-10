@@ -7,7 +7,6 @@ import (
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"strconv"
 )
 
 type K8sClusterHandler struct {
@@ -40,126 +39,73 @@ func (k *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
 
 // GetAllClusters 获取集群列表
 func (k *K8sClusterHandler) GetAllClusters(ctx *gin.Context) {
-	clusters, err := k.clusterService.ListAllClusters(ctx)
-	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
-		return
-	}
-
-	apiresponse.SuccessWithData(ctx, clusters)
+	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return k.clusterService.ListAllClusters(ctx)
+	})
 }
 
 // GetCluster 获取指定 ID 的集群详情
 func (k *K8sClusterHandler) GetCluster(ctx *gin.Context) {
-	id := ctx.Param("id")
-
-	if id == "" {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
-		return
-	}
-
-	intId, err := strconv.Atoi(id)
+	id, err := apiresponse.GetParamID(ctx)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		apiresponse.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	cluster, err := k.clusterService.GetClusterByID(ctx, intId)
-	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
-		return
-	}
-
-	apiresponse.SuccessWithData(ctx, cluster)
+	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return k.clusterService.GetClusterByID(ctx, id)
+	})
 }
 
 // CreateCluster 创建新的集群
 func (k *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
-	var cluster *model.K8sCluster
-
-	if err := ctx.ShouldBind(&cluster); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
-		return
-	}
+	var req model.K8sCluster
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims) // 获取用户信息
 
-	cluster.UserID = uc.Uid
+	req.UserID = uc.Uid
 
-	// 调用服务层方法创建集群
-	if err := k.clusterService.CreateCluster(ctx, cluster); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
+	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.clusterService.CreateCluster(ctx, &req)
+	})
 }
 
 // UpdateCluster 更新指定 ID 的集群
 func (k *K8sClusterHandler) UpdateCluster(ctx *gin.Context) {
-	var cluster *model.K8sCluster
+	var req model.K8sCluster
 
-	if err := ctx.ShouldBind(&cluster); err != nil {
+	if req.ID == 0 {
 		apiresponse.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
-	if cluster.ID == 0 {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
-		return
-	}
-
-	// 调用服务层方法更新集群
-	if err := k.clusterService.UpdateCluster(ctx, cluster); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
+	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.clusterService.UpdateCluster(ctx, &req)
+	})
 }
 
 // DeleteCluster 删除指定 ID 的集群
 func (k *K8sClusterHandler) DeleteCluster(ctx *gin.Context) {
-	id := ctx.Param("id")
-
-	if id == "" {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
-		return
-	}
-
-	intId, err := strconv.Atoi(id)
+	id, err := apiresponse.GetParamID(ctx)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		apiresponse.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	// 调用服务层方法删除集群
-	if err := k.clusterService.DeleteCluster(ctx, intId); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
+	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, k.clusterService.DeleteCluster(ctx, id)
+	})
 }
 
 func (k *K8sClusterHandler) BatchDeleteClusters(ctx *gin.Context) {
 	var req model.BatchDeleteReq
-
-	if err := ctx.ShouldBind(&req); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
-		return
-	}
 
 	if len(req.IDs) == 0 {
 		apiresponse.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
-	// 调用服务层方法批量删除集群
-	if err := k.clusterService.BatchDeleteClusters(ctx, req.IDs); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
+	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.clusterService.BatchDeleteClusters(ctx, req.IDs)
+	})
 }
