@@ -10,27 +10,26 @@ import (
 
 type K8sTaintHandler struct {
 	taintService admin.TaintService
-	l            *zap.Logger
+	logger       *zap.Logger
 }
 
-func NewK8sTaintHandler(l *zap.Logger, taintService admin.TaintService) *K8sTaintHandler {
+func NewK8sTaintHandler(logger *zap.Logger, taintService admin.TaintService) *K8sTaintHandler {
 	return &K8sTaintHandler{
-		l:            l,
+		logger:       logger,
 		taintService: taintService,
 	}
 }
 
-// RegisterRouters 注册所有 Kubernetes 相关的路由
 func (k *K8sTaintHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 
-	// 节点相关路由
-	nodes := k8sGroup.Group("/nodes")
+	// 节点相关路由组
+	nodes := k8sGroup.Group("/taints")
 	{
-		nodes.POST("/taint_check", k.TaintYamlCheck)              // 检查节点 Taint 的 YAML 配置
+		nodes.POST("/add", k.AddTaintsNodes)                      // 为节点添加 Taint
 		nodes.POST("/enable_switch", k.ScheduleEnableSwitchNodes) // 启用或切换节点调度
-		nodes.POST("/taints/add", k.AddTaintsNodes)               // 为节点添加 Taint
-		nodes.DELETE("/taints/delete", k.DeleteTaintsNodes)       // 删除节点 Taint
+		nodes.POST("/taint_check", k.TaintYamlCheck)              // 检查节点 Taint 的 YAML 配置
+		nodes.DELETE("/delete", k.DeleteTaintsNodes)              // 删除节点 Taint
 		nodes.POST("/drain", k.DrainPods)                         // 清空节点上的 Pods
 	}
 }
@@ -40,7 +39,7 @@ func (k *K8sTaintHandler) AddTaintsNodes(ctx *gin.Context) {
 	var req model.TaintK8sNodesRequest
 
 	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.taintService.UpdateNodeTaint(ctx, &req)
+		return nil, k.taintService.AddOrUpdateNodeTaint(ctx, &req)
 	})
 }
 
@@ -64,10 +63,10 @@ func (k *K8sTaintHandler) TaintYamlCheck(ctx *gin.Context) {
 
 // DeleteTaintsNodes 删除节点 Taint
 func (k *K8sTaintHandler) DeleteTaintsNodes(ctx *gin.Context) {
-	var taint model.TaintK8sNodesRequest
+	var req model.TaintK8sNodesRequest
 
-	apiresponse.HandleRequest(ctx, &taint, func() (interface{}, error) {
-		return nil, k.taintService.UpdateNodeTaint(ctx, &taint)
+	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.taintService.AddOrUpdateNodeTaint(ctx, &req)
 	})
 }
 

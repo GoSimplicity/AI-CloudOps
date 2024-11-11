@@ -8,25 +8,25 @@ import (
 )
 
 type K8sNamespaceHandler struct {
-	l                *zap.Logger
+	logger           *zap.Logger
 	namespaceService admin.NamespaceService
 }
 
-func NewK8sNamespaceHandler(l *zap.Logger, namespaceService admin.NamespaceService) *K8sNamespaceHandler {
+func NewK8sNamespaceHandler(logger *zap.Logger, namespaceService admin.NamespaceService) *K8sNamespaceHandler {
 	return &K8sNamespaceHandler{
-		l:                l,
+		logger:           logger,
 		namespaceService: namespaceService,
 	}
 }
 
-func (k *K8sNamespaceHandler) RegisterRouters(server *gin.Engine) {
-	k8sGroup := server.Group("/api/k8s")
+func (k *K8sNamespaceHandler) RegisterRouters(router *gin.Engine) {
+	k8sGroup := router.Group("/api/k8s")
 
-	// 命名空间相关路由
+	// 命名空间相关路由组
 	namespaces := k8sGroup.Group("/namespaces")
 	{
-		namespaces.GET("/cascade", k.GetClusterNamespacesForCascade) // 获取级联选择的命名空间列表
-		namespaces.GET("/select", k.GetClusterNamespacesForSelect)   // 获取用于选择的命名空间列表
+		namespaces.GET("/cascade", k.GetClusterNamespacesForCascade)   // 获取级联选择的命名空间列表
+		namespaces.GET("/select/:id", k.GetClusterNamespacesForSelect) // 获取用于选择的命名空间列表
 	}
 }
 
@@ -34,6 +34,7 @@ func (k *K8sNamespaceHandler) RegisterRouters(server *gin.Engine) {
 func (k *K8sNamespaceHandler) GetClusterNamespacesForCascade(ctx *gin.Context) {
 	namespaces, err := k.namespaceService.GetClusterNamespacesList(ctx)
 	if err != nil {
+		k.logger.Error("Failed to get cascade namespaces", zap.Error(err))
 		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
 		return
 	}
@@ -43,15 +44,15 @@ func (k *K8sNamespaceHandler) GetClusterNamespacesForCascade(ctx *gin.Context) {
 
 // GetClusterNamespacesForSelect 获取用于选择的命名空间列表
 func (k *K8sNamespaceHandler) GetClusterNamespacesForSelect(ctx *gin.Context) {
-	namespace := ctx.Query("namespace")
-
-	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+	id, err := apiresponse.GetParamID(ctx)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespaces, err := k.namespaceService.GetClusterNamespacesByName(ctx, namespace)
+	namespaces, err := k.namespaceService.GetClusterNamespacesById(ctx, id)
 	if err != nil {
+		k.logger.Error("Failed to get namespaces for select", zap.Strings("namespace", namespaces), zap.Error(err))
 		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
 		return
 	}
