@@ -269,8 +269,8 @@ type K8sContainerPort struct {
 
 // K8sClusterNodesRequest 定义集群节点请求的基础结构
 type K8sClusterNodesRequest struct {
-	ClusterName string   `json:"cluster_name" binding:"required"` // 集群名称，必填
-	NodeNames   []string `json:"node_names" binding:"required"`   // 节点名称列表，必填
+	ClusterId int      `json:"cluster_id" binding:"required"` // 集群id，必填
+	NodeNames []string `json:"node_names" binding:"required"` // 节点名称列表，必填
 }
 
 // ResourceRequirements 资源的请求与限制

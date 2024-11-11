@@ -146,7 +146,7 @@ func (p *podService) GetPodsByNodeName(ctx context.Context, id int, name string)
 		return nil, constants.ErrorK8sClientNotReady
 	}
 
-	nodes, err := pkg.GetNodesByClusterID(ctx, kubeClient, name)
+	nodes, err := pkg.GetNodesByName(ctx, kubeClient, name)
 	if err != nil || len(nodes.Items) == 0 {
 		return nil, constants.ErrorNodeNotFound
 	}
@@ -161,57 +161,60 @@ func (p *podService) GetPodsByNodeName(ctx context.Context, id int, name string)
 
 // CreatePod 创建 Pod
 func (p *podService) CreatePod(ctx context.Context, podResource *model.K8sPodRequest) error {
-	kubeClient, err := pkg.GetKubeClient(ctx, podResource.ClusterName, p.dao, p.client, p.l)
-	if err != nil {
-		p.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return err
-	}
-
-	// 创建 Pod
-	_, err = kubeClient.CoreV1().Pods(podResource.Pod.Namespace).Create(ctx, podResource.Pod, metav1.CreateOptions{})
-	if err != nil {
-		p.l.Error("创建 Pod 失败", zap.Error(err))
-		return err
-	}
-
-	p.l.Info("创建 Pod 成功", zap.String("podName", podResource.Pod.Name))
+	//kubeClient, err := pkg.GetKubeClient(ctx, podResource.ClusterName, p.dao, p.client, p.l)
+	//if err != nil {
+	//	p.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+	//	return err
+	//}
+	//
+	//// 创建 Pod
+	//_, err = kubeClient.CoreV1().Pods(podResource.Pod.Namespace).Create(ctx, podResource.Pod, metav1.CreateOptions{})
+	//if err != nil {
+	//	p.l.Error("创建 Pod 失败", zap.Error(err))
+	//	return err
+	//}
+	//
+	//p.l.Info("创建 Pod 成功", zap.String("podName", podResource.Pod.Name))
+	//return nil
 	return nil
 }
 
 // UpdatePod 更新 Pod
 func (p *podService) UpdatePod(ctx context.Context, podResource *model.K8sPodRequest) error {
-	kubeClient, err := pkg.GetKubeClient(ctx, podResource.ClusterName, p.dao, p.client, p.l)
-	if err != nil {
-		p.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return err
-	}
-
-	// 更新 Pod
-	_, err = kubeClient.CoreV1().Pods(podResource.Pod.Namespace).Update(ctx, podResource.Pod, metav1.UpdateOptions{})
-	if err != nil {
-		p.l.Error("更新 Pod 失败", zap.Error(err))
-		return err
-	}
-
-	p.l.Info("更新 Pod 成功", zap.String("podName", podResource.Pod.Name))
+	//kubeClient, err := pkg.GetKubeClient(ctx, podResource.ClusterName, p.dao, p.client, p.l)
+	//if err != nil {
+	//	p.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+	//	return err
+	//}
+	//
+	//// 更新 Pod
+	//_, err = kubeClient.CoreV1().Pods(podResource.Pod.Namespace).Update(ctx, podResource.Pod, metav1.UpdateOptions{})
+	//if err != nil {
+	//	p.l.Error("更新 Pod 失败", zap.Error(err))
+	//	return err
+	//}
+	//
+	//p.l.Info("更新 Pod 成功", zap.String("podName", podResource.Pod.Name))
+	//return nil
 	return nil
 }
 
 // DeletePod 删除 Pod
 func (p *podService) DeletePod(ctx context.Context, clusterName, namespace, podName string) error {
-	kubeClient, err := pkg.GetKubeClient(ctx, clusterName, p.dao, p.client, p.l)
-	if err != nil {
-		p.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return err
-	}
-
-	// 删除 Pod
-	err = kubeClient.CoreV1().Pods(namespace).Delete(ctx, podName, metav1.DeleteOptions{})
-	if err != nil {
-		p.l.Error("删除 Pod 失败", zap.Error(err))
-		return err
-	}
-
-	p.l.Info("删除 Pod 成功", zap.String("podName", podName))
+	//kubeClient, err := pkg.GetKubeClient(ctx, clusterName, p.dao, p.client, p.l)
+	//if err != nil {
+	//	p.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+	//	return err
+	//}
+	//
+	//// 删除 Pod
+	//err = kubeClient.CoreV1().Pods(namespace).Delete(ctx, podName, metav1.DeleteOptions{})
+	//if err != nil {
+	//	p.l.Error("删除 Pod 失败", zap.Error(err))
+	//	return err
+	//}
+	//
+	//p.l.Info("删除 Pod 成功", zap.String("podName", podName))
+	//return nil
 	return nil
 }

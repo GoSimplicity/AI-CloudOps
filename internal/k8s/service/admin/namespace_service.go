@@ -4,10 +4,8 @@ import (
 	"context"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sync"
 )
 
@@ -78,25 +76,26 @@ func (n *namespaceService) GetClusterNamespacesList(ctx context.Context) (map[st
 
 // GetClusterNamespacesByName 获取指定集群的命名空间列表
 func (n *namespaceService) GetClusterNamespacesByName(ctx context.Context, clusterName string) ([]string, error) {
-	// 获取 Kubernetes 客户端
-	kubeClient, err := pkg.GetKubeClient(ctx, clusterName, n.dao, n.client, n.l)
-	if err != nil {
-		n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return nil, err
-	}
-
-	// 获取命名空间列表
-	namespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		n.l.Error("获取命名空间列表失败", zap.Error(err))
-		return nil, err
-	}
-
-	// 提取命名空间名称
-	var nsList []string
-	for _, ns := range namespaces.Items {
-		nsList = append(nsList, ns.Name)
-	}
-
-	return nsList, nil
+	//// 获取 Kubernetes 客户端
+	//kubeClient, err := pkg.GetKubeClient(ctx, clusterName, n.dao, n.client, n.l)
+	//if err != nil {
+	//	n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+	//	return nil, err
+	//}
+	//
+	//// 获取命名空间列表
+	//namespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	//if err != nil {
+	//	n.l.Error("获取命名空间列表失败", zap.Error(err))
+	//	return nil, err
+	//}
+	//
+	//// 提取命名空间名称
+	//var nsList []string
+	//for _, ns := range namespaces.Items {
+	//	nsList = append(nsList, ns.Name)
+	//}
+	//
+	//return nsList, nil
+	return nil, nil
 }

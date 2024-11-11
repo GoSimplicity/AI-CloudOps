@@ -1,7 +1,6 @@
 package mock
 
 import (
-	"fmt"
 	"log"
 	"sync"
 
@@ -86,23 +85,5 @@ users:
 		}
 
 		log.Printf("populateMockData: 初始化 Kubernetes 集群成功，ClusterID: %d\n", cluster.ID)
-
-		// 为每个集群插入模拟节点
-		var nodes []*model.K8sNode
-
-		for i := 0; i < 3; i++ {
-			node := &model.K8sNode{
-				Name:      fmt.Sprintf("%s-mock-node-%d", cluster.Name, i),
-				ClusterID: cluster.ID,
-			}
-			nodes = append(nodes, node)
-		}
-
-		if err := m.db.Create(&nodes).Error; err != nil {
-			log.Printf("populateMockData: 插入 Node 失败: %v\n", err)
-			continue
-		}
-
-		log.Printf("populateMockData: 为集群 %d 插入节点成功\n", cluster.ID)
 	}
 }

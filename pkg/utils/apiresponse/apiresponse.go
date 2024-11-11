@@ -324,9 +324,22 @@ func GetParamID(ctx *gin.Context) (int, error) {
 	return paramID, nil
 }
 
-// GetQueryName 从查询参数中解析 Name，并进行类型转换
-func GetQueryName(ctx *gin.Context) (string, error) {
-	name := ctx.Query("name")
+// GetQueryID 从query参数中解析 ID，并进行类型转换
+func GetQueryID(ctx *gin.Context) (int, error) {
+	id := ctx.Query("id")
+	if id == "" {
+		return 0, fmt.Errorf("缺少 'id' 参数")
+	}
+	paramID, err := strconv.Atoi(id)
+	if err != nil {
+		return 0, fmt.Errorf("'id' 非整数")
+	}
+	return paramID, nil
+}
+
+// GetParamName 从查询参数中解析 Name，并进行类型转换
+func GetParamName(ctx *gin.Context) (string, error) {
+	name := ctx.Param("name")
 	if name == "" {
 		return "", fmt.Errorf("缺少 'name' 参数")
 	}

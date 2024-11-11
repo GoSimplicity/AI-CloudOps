@@ -6,7 +6,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -45,12 +44,14 @@ func NewConfigMapService(dao admin.ClusterDAO, client client.K8sClient, l *zap.L
 
 // getKubeClient 封装获取 Kubernetes 客户端的逻辑
 func (c *configMapService) getKubeClient(ctx context.Context, clusterName string) (*kubernetes.Clientset, error) {
-	kubeClient, err := pkg.GetKubeClient(ctx, clusterName, c.dao, c.client, c.l)
-	if err != nil {
-		c.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return nil, err
-	}
-	return kubeClient, nil
+	//kubeClient, err := pkg.GetKubeClient(ctx, clusterName, c.dao, c.client, c.l)
+	//if err != nil {
+	//	c.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+	//	return nil, err
+	//}
+	//return kubeClient, nil
+
+	return nil, nil
 }
 
 // GetConfigMapsByNamespace 获取指定命名空间的所有 ConfigMap

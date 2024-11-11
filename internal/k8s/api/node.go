@@ -24,7 +24,7 @@ func (k *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	nodes := k8sGroup.Group("/nodes")
 	{
-		nodes.GET("/list", k.GetNodeList)                  // 获取节点列表
+		nodes.GET("/list/:id", k.GetNodeList)              // 获取节点列表
 		nodes.GET("/:name", k.GetNodeDetail)               // 获取指定节点详情
 		nodes.POST("/labels/add", k.AddLabelNodes)         // 添加节点标签
 		nodes.DELETE("/labels/delete", k.DeleteLabelNodes) // 删除节点标签
@@ -40,26 +40,26 @@ func (k *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
 	}
 
 	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.nodeService.ListNodeByClusterId(ctx, clusterID)
+		return k.nodeService.ListNodeByClusterName(ctx, clusterID)
 	})
 }
 
 // GetNodeDetail 获取指定名称的节点详情
 func (k *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
-	clusterID, err := apiresponse.GetParamID(ctx)
+	name, err := apiresponse.GetParamName(ctx)
 	if err != nil {
 		apiresponse.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := apiresponse.GetQueryName(ctx)
+	id, err := apiresponse.GetQueryID(ctx)
 	if err != nil {
 		apiresponse.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.nodeService.GetNodeByName(ctx, clusterID, name)
+		return k.nodeService.GetNodeDetail(ctx, id, name)
 	})
 }
 
@@ -79,5 +79,4 @@ func (k *K8sNodeHandler) DeleteLabelNodes(ctx *gin.Context) {
 	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.nodeService.AddOrUpdateNodeLabel(ctx, &req)
 	})
-
 }
