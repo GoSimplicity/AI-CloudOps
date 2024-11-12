@@ -1,7 +1,31 @@
 package mock
 
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 import (
-	"fmt"
 	"log"
 	"sync"
 
@@ -86,23 +110,5 @@ users:
 		}
 
 		log.Printf("populateMockData: 初始化 Kubernetes 集群成功，ClusterID: %d\n", cluster.ID)
-
-		// 为每个集群插入模拟节点
-		var nodes []*model.K8sNode
-
-		for i := 0; i < 3; i++ {
-			node := &model.K8sNode{
-				Name:      fmt.Sprintf("%s-mock-node-%d", cluster.Name, i),
-				ClusterID: cluster.ID,
-			}
-			nodes = append(nodes, node)
-		}
-
-		if err := m.db.Create(&nodes).Error; err != nil {
-			log.Printf("populateMockData: 插入 Node 失败: %v\n", err)
-			continue
-		}
-
-		log.Printf("populateMockData: 为集群 %d 插入节点成功\n", cluster.ID)
 	}
 }

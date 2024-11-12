@@ -1,5 +1,30 @@
 package admin
 
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 import (
 	"context"
 	"errors"
@@ -12,14 +37,13 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sync"
 )
 
 type NodeService interface {
-	// ListNodeByClusterId 获取指定集群的节点列表
-	ListNodeByClusterId(ctx context.Context, id int) ([]*model.K8sNode, error)
-	// GetNodeByName 根据 ID 获取指定节点
-	GetNodeByName(ctx context.Context, id int, name string) (*model.K8sNode, error)
+	// ListNodeByClusterName 获取指定集群的节点列表
+	ListNodeByClusterName(ctx context.Context, id int) ([]*model.K8sNode, error)
+	// GetNodeDetail 获取指定节点详情
+	GetNodeDetail(ctx context.Context, id int, name string) (*model.K8sNode, error)
 	// AddOrUpdateNodeLabel 添加或删除指定节点的 Label
 	AddOrUpdateNodeLabel(ctx context.Context, req *model.LabelK8sNodesRequest) error
 }
@@ -38,15 +62,15 @@ func NewNodeService(clusterDao admin.ClusterDAO, client client.K8sClient, l *zap
 	}
 }
 
-// ListNodeByClusterId 获取集群的节点列表
-func (n *nodeService) ListNodeByClusterId(ctx context.Context, id int) ([]*model.K8sNode, error) {
+// ListNodeByClusterName 获取集群的节点列表
+func (n *nodeService) ListNodeByClusterName(ctx context.Context, id int) ([]*model.K8sNode, error) {
 	kubeClient, metricsClient, err := pkg.GetKubeAndMetricsClient(id, n.l, n.client)
 	if err != nil {
 		n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return nil, err
 	}
 
-	nodes, err := pkg.GetNodesByClusterID(ctx, kubeClient, "")
+	nodes, err := pkg.GetNodesByName(ctx, kubeClient, "")
 	if err != nil {
 		n.l.Error("获取节点列表失败", zap.Error(err))
 		return nil, err
@@ -56,25 +80,23 @@ func (n *nodeService) ListNodeByClusterId(ctx context.Context, id int) ([]*model
 	semaphore := make(chan struct{}, maxConcurrency)
 
 	g, ctx := errgroup.WithContext(ctx)
-	var mu sync.Mutex
-	k8sNodes := make([]*model.K8sNode, 0, len(nodes.Items))
+	k8sNodes := make([]*model.K8sNode, len(nodes.Items))
 
-	for _, node := range nodes.Items {
-		node := node // 避免闭包变量问题
+	// 使用 Worker Pool 模式优化并发性能
+	for i := range nodes.Items {
+		node := nodes.Items[i] // 避免闭包变量问题
 		g.Go(func() error {
 			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
+			defer func() {
+				<-semaphore
+			}()
 
 			k8sNode, err := pkg.BuildK8sNode(ctx, id, node, kubeClient, metricsClient)
 			if err != nil {
 				n.l.Error("构建 K8sNode 失败", zap.Error(err), zap.String("node", node.Name))
 				return nil
 			}
-
-			mu.Lock()
-			k8sNodes = append(k8sNodes, k8sNode)
-			mu.Unlock()
-
+			k8sNodes[i] = k8sNode
 			return nil
 		})
 	}
@@ -87,15 +109,15 @@ func (n *nodeService) ListNodeByClusterId(ctx context.Context, id int) ([]*model
 	return k8sNodes, nil
 }
 
-// GetNodeByName 根据 ID 获取指定节点
-func (n *nodeService) GetNodeByName(ctx context.Context, id int, name string) (*model.K8sNode, error) {
+// GetNodeDetail 获取指定节点详情
+func (n *nodeService) GetNodeDetail(ctx context.Context, id int, name string) (*model.K8sNode, error) {
 	kubeClient, metricsClient, err := pkg.GetKubeAndMetricsClient(id, n.l, n.client)
 	if err != nil {
 		n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return nil, err
 	}
 
-	nodes, err := pkg.GetNodesByClusterID(ctx, kubeClient, name)
+	nodes, err := pkg.GetNodesByName(ctx, kubeClient, name)
 	if err != nil || len(nodes.Items) == 0 {
 		return nil, constants.ErrorNodeNotFound
 	}
@@ -105,7 +127,7 @@ func (n *nodeService) GetNodeByName(ctx context.Context, id int, name string) (*
 
 // AddOrUpdateNodeLabel 更新节点标签（添加或删除）
 func (n *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.LabelK8sNodesRequest) error {
-	kubeClient, err := pkg.GetKubeClient(ctx, req.ClusterName, n.clusterDao, n.client, n.l)
+	kubeClient, err := pkg.GetKubeClient(req.ClusterId, n.client, n.l)
 	if err != nil {
 		n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
@@ -130,6 +152,16 @@ func (n *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.Label
 			for key := range req.Labels {
 				delete(node.Labels, key)
 			}
+		case "update":
+			for key, value := range req.Labels {
+				// 如果标签键存在，更新其值
+				if _, exists := node.Labels[key]; exists {
+					node.Labels[key] = value
+				} else {
+					n.l.Warn("标签键不存在，无法更新", zap.String("key", key))
+					errs = append(errs, fmt.Errorf("节点 %s 不存在标签键 %s，无法更新", nodeName, key))
+				}
+			}
 		default:
 			errMsg := fmt.Sprintf("未知的修改类型: %s", req.ModType)
 			n.l.Error(errMsg)
@@ -147,6 +179,10 @@ func (n *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.Label
 
 	if len(errs) > 0 {
 		return fmt.Errorf("在处理节点 Labels 时遇到以下错误: %v", errs)
+	}
+
+	if err := n.client.RefreshClients(ctx); err != nil {
+		return fmt.Errorf("刷新客户端失败: %w", err)
 	}
 
 	return nil

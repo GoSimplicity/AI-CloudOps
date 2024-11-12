@@ -1,5 +1,30 @@
 package model
 
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 import (
 	"github.com/prometheus/alertmanager/template"
 )
@@ -163,10 +188,10 @@ type MonitorOnDutyGroup struct {
 // MonitorOnDutyHistory 值班历史记录
 type MonitorOnDutyHistory struct {
 	Model
-	OnDutyGroupID int    `json:"onDutyGroupId" gorm:"uniqueIndex:group_id_date;comment:值班组ID，用于唯一标识值班历史记录"` // 值班组ID，用于唯一标识值班历史记录
-	DateString    string `json:"dateString" gorm:"uniqueIndex:group_id_date;type:varchar(50);comment:日期"`   // 具体哪一天的日期字符串
-	OnDutyUserID  int    `json:"onDutyUserId" gorm:"comment:当天值班人员的用户ID"`                                   // 当天值班人员的用户ID
-	OriginUserID  int    `json:"originUserId" gorm:"comment:原计划的值班人员用户ID"`                                  // 原计划的值班人员用户ID
+	OnDutyGroupID int    `json:"onDutyGroupId" gorm:"uniqueIndex:udx_name;comment:值班组ID，用于唯一标识值班历史记录"` // 值班组ID，用于唯一标识值班历史记录
+	DateString    string `json:"dateString" gorm:"uniqueIndex:udx_name;type:varchar(50);comment:日期"`   // 具体哪一天的日期字符串
+	OnDutyUserID  int    `json:"onDutyUserId" gorm:"comment:当天值班人员的用户ID"`                              // 当天值班人员的用户ID
+	OriginUserID  int    `json:"originUserId" gorm:"comment:原计划的值班人员用户ID"`                             // 原计划的值班人员用户ID
 
 	// 前端使用字段
 	Key            string `json:"key" gorm:"-"`                      // 前端表格使用的Key

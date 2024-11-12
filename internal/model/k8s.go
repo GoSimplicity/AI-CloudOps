@@ -1,5 +1,30 @@
 package model
 
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 import (
 	"time"
 
@@ -269,8 +294,8 @@ type K8sContainerPort struct {
 
 // K8sClusterNodesRequest 定义集群节点请求的基础结构
 type K8sClusterNodesRequest struct {
-	ClusterName string   `json:"cluster_name" binding:"required"` // 集群名称，必填
-	NodeNames   []string `json:"node_names" binding:"required"`   // 节点名称列表，必填
+	ClusterId int      `json:"cluster_id" binding:"required"` // 集群id，必填
+	NodeNames []string `json:"node_names" binding:"required"` // 节点名称列表，必填
 }
 
 // ResourceRequirements 资源的请求与限制
@@ -321,9 +346,8 @@ type LabelK8sNodesRequest struct {
 // TaintK8sNodesRequest 定义为节点添加或删除 Taint 的请求结构
 type TaintK8sNodesRequest struct {
 	*K8sClusterNodesRequest
-	// Taints    []Taint `json:"taints" binding:"required,dive,required"`   // Taint 列表，必填
-	ModType   string `json:"mod_type" binding:"required,oneof=add del"` // 操作类型，必填，值为 "add" 或 "del"
-	TaintYaml string `json:"taint_yaml_string,omitempty"`               // 可选的 Taint YAML 字符串，用于验证或其他用途
+	ModType   string `json:"mod_type"`             // 操作类型，值为 "add" 或 "del"
+	TaintYaml string `json:"taint_yaml,omitempty"` // 可选的 Taint YAML 字符串，用于验证或其他用途
 }
 
 // OneEvent 单个事件的模型
@@ -353,34 +377,32 @@ type ScheduleK8sNodesRequest struct {
 
 // K8sPodRequest 创建 Pod 的请求结构
 type K8sPodRequest struct {
-	ClusterName string    `json:"cluster_name" binding:"required"` // 集群名称，必填
-	Pod         *core.Pod `json:"pod" binding:"required"`          // Pod 对象，必填
+	ClusterId int       `json:"cluster_id" binding:"required"` // 集群名称，必填
+	Pod       *core.Pod `json:"pod"`                           // Pod 对象
 }
 
 // K8sDeploymentRequest Deployment 相关请求结构
 type K8sDeploymentRequest struct {
-	ClusterName     string             `json:"cluster_name" binding:"required"` // 集群名称，必填
-	Namespace       string             `json:"namespace" binding:"required"`    // 命名空间，必填
-	DeploymentNames []string           `json:"deployment_names"`                // Deployment 名称，可选
-	ChangeKey       string             `json:"change_key"`                      // 修改的 Key，可选
-	ChangeValue     string             `json:"change_value"`                    // 修改的 Value，可选
-	Deployment      *appsv1.Deployment `json:"deployment"`                      // Deployment 对象, 可选
+	ClusterId       int                `json:"cluster_id" binding:"required"` // 集群名称，必填
+	Namespace       string             `json:"namespace" binding:"required"`  // 命名空间，必填
+	DeploymentNames []string           `json:"deployment_names"`              // Deployment 名称，可选
+	DeploymentYaml  *appsv1.Deployment `json:"deployment_yaml"`               // Deployment 对象, 可选
 }
 
 // K8sConfigMapRequest ConfigMap 相关请求结构
 type K8sConfigMapRequest struct {
-	ClusterName    string          `json:"cluster_name" binding:"required"` // 集群名称，必填
-	Namespace      string          `json:"namespace"`                       // 命名空间，可选, 删除用
-	ConfigMapNames []string        `json:"config_map_names"`                // ConfigMap 名称，可选， 删除用
-	ConfigMap      *core.ConfigMap `json:"config_map"`                      // ConfigMap 对象, 可选
+	ClusterId      int             `json:"cluster_id" binding:"required"` // 集群id，必填
+	Namespace      string          `json:"namespace"`                     // 命名空间，可选, 删除用
+	ConfigMapNames []string        `json:"config_map_names"`              // ConfigMap 名称，可选， 删除用
+	ConfigMap      *core.ConfigMap `json:"config_map"`                    // ConfigMap 对象, 可选
 }
 
 // K8sServiceRequest Service 相关请求结构
 type K8sServiceRequest struct {
-	ClusterName  string        `json:"cluster_name" binding:"required"` // 集群名称，必填
-	Namespace    string        `json:"namespace"`                       // 命名空间，必填
-	ServiceNames []string      `json:"service_names"`                   // Service 名称，可选
-	Service      *core.Service `json:"service"`                         // Service 对象, 可选
+	ClusterId    int           `json:"cluster_id" binding:"required"` // 集群id，必填
+	Namespace    string        `json:"namespace"`                     // 命名空间，必填
+	ServiceNames []string      `json:"service_names"`                 // Service 名称，可选
+	ServiceYaml  *core.Service `json:"service_yaml"`                  // Service 对象, 可选
 }
 
 type BatchDeleteReq struct {

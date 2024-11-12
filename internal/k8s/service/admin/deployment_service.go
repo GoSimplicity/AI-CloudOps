@@ -1,5 +1,30 @@
 package admin
 
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 import (
 	"context"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
@@ -7,23 +32,20 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strconv"
+	"sync"
 	"time"
 )
 
 type DeploymentService interface {
-	// GetDeploymentsByNamespace 获取指定命名空间的 Deployment 列表
-	GetDeploymentsByNamespace(ctx context.Context, clusterName, namespace string) ([]*appsv1.Deployment, error)
-	// CreateDeployment 创建 Deployment
+	GetDeploymentsByNamespace(ctx context.Context, id int, namespace string) ([]*appsv1.Deployment, error)
 	CreateDeployment(ctx context.Context, deployment *model.K8sDeploymentRequest) error
-	// UpdateDeployment 更新 Deployment
 	UpdateDeployment(ctx context.Context, deployment *model.K8sDeploymentRequest) error
-	// DeleteDeployment 删除 Deployment
-	DeleteDeployment(ctx context.Context, clusterName, namespace, deploymentName string) error
-	// BatchRestartDeployments 批量重启 Deployment
+	BatchDeleteDeployment(ctx context.Context, id int, namespace string, deploymentNames []string) error
 	BatchRestartDeployments(ctx context.Context, req *model.K8sDeploymentRequest) error
+	GetDeploymentYaml(ctx context.Context, id int, namespace string, deploymentName string) (string, error)
 }
 
 type deploymentService struct {
@@ -32,30 +54,25 @@ type deploymentService struct {
 	l      *zap.Logger
 }
 
+// NewDeploymentService 创建新的 DeploymentService 实例
 func NewDeploymentService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) DeploymentService {
-	return &deploymentService{
-		dao:    dao,
-		client: client,
-		l:      l,
-	}
+	return &deploymentService{dao: dao, client: client, l: l}
 }
 
 // GetDeploymentsByNamespace 获取指定命名空间下的所有 Deployment
-func (d *deploymentService) GetDeploymentsByNamespace(ctx context.Context, clusterName, namespace string) ([]*appsv1.Deployment, error) {
-	kubeClient, err := pkg.GetKubeClient(ctx, clusterName, d.dao, d.client, d.l)
+func (d *deploymentService) GetDeploymentsByNamespace(ctx context.Context, id int, namespace string) ([]*appsv1.Deployment, error) {
+	kubeClient, err := pkg.GetKubeClient(id, d.client, d.l)
 	if err != nil {
 		d.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return nil, err
 	}
 
-	// 获取指定命名空间下的 Deployment 列表
 	deployments, err := kubeClient.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		d.l.Error("获取 Deployment 列表失败", zap.Error(err))
 		return nil, err
 	}
 
-	// 将获取到的 Deployment 列表转化为返回结果
 	result := make([]*appsv1.Deployment, len(deployments.Items))
 	for i, deployment := range deployments.Items {
 		result[i] = &deployment
@@ -64,122 +81,143 @@ func (d *deploymentService) GetDeploymentsByNamespace(ctx context.Context, clust
 	return result, nil
 }
 
+// GetDeploymentYaml 获取指定 Deployment 的 YAML 定义
+func (d *deploymentService) GetDeploymentYaml(ctx context.Context, id int, namespace string, deploymentName string) (string, error) {
+	kubeClient, err := pkg.GetKubeClient(id, d.client, d.l)
+	if err != nil {
+		d.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return "", err
+	}
+
+	deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+	if err != nil {
+		d.l.Error("获取 Deployment 失败", zap.Error(err))
+		return "", err
+	}
+
+	yamlData, err := yaml.Marshal(deployment)
+	if err != nil {
+		d.l.Error("序列化 Deployment YAML 失败", zap.Error(err))
+		return "", err
+	}
+
+	return string(yamlData), nil
+}
+
 // CreateDeployment 创建新的 Deployment
 func (d *deploymentService) CreateDeployment(ctx context.Context, deploymentResource *model.K8sDeploymentRequest) error {
-	kubeClient, err := pkg.GetKubeClient(ctx, deploymentResource.ClusterName, d.dao, d.client, d.l)
+	kubeClient, err := pkg.GetKubeClient(deploymentResource.ClusterId, d.client, d.l)
 	if err != nil {
 		d.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
 	}
 
-	// 创建 Deployment
-	deploymentResult, err := kubeClient.AppsV1().Deployments(deploymentResource.Deployment.Namespace).Create(ctx, deploymentResource.Deployment, metav1.CreateOptions{})
+	_, err = kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Create(ctx, deploymentResource.DeploymentYaml, metav1.CreateOptions{})
 	if err != nil {
 		d.l.Error("创建 Deployment 失败", zap.Error(err))
 		return err
 	}
 
-	d.l.Info("创建 Deployment 成功", zap.String("deploymentName", deploymentResult.Name))
+	d.l.Info("创建 Deployment 成功", zap.String("deploymentName", deploymentResource.DeploymentYaml.Name))
 	return nil
 }
 
-// UpdateDeployment 更新现有的 Deployment
+// UpdateDeployment 更新 Deployment
 func (d *deploymentService) UpdateDeployment(ctx context.Context, deploymentResource *model.K8sDeploymentRequest) error {
-	kubeClient, err := pkg.GetKubeClient(ctx, deploymentResource.ClusterName, d.dao, d.client, d.l)
+	// 获取 Kubernetes 客户端
+	kubeClient, err := pkg.GetKubeClient(deploymentResource.ClusterId, d.client, d.l)
 	if err != nil {
 		d.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
 	}
 
 	// 获取现有的 Deployment
-	deployment, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Get(ctx, deploymentResource.DeploymentNames[0], metav1.GetOptions{})
+	existingDeployment, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Get(ctx, deploymentResource.DeploymentYaml.Name, metav1.GetOptions{})
 	if err != nil {
-		d.l.Error("获取 Deployment 失败", zap.Error(err))
+		d.l.Error("获取现有 Deployment 失败", zap.Error(err))
 		return err
 	}
 
-	// 如果提供了新的 Deployment spec，进行更新
-	if deploymentResource.Deployment != nil {
-		deployment.Spec = deploymentResource.Deployment.Spec
-	}
-
-	// 部分更新处理
-	if deploymentResource.ChangeKey != "" && deploymentResource.ChangeValue != "" {
-		switch deploymentResource.ChangeKey {
-		case "image": // 更新镜像
-			deployment.Spec.Template.Spec.Containers[0].Image = deploymentResource.ChangeValue
-		case "replicas": // 更新副本数
-			replicas, err := strconv.Atoi(deploymentResource.ChangeValue)
-			if err != nil {
-				d.l.Error("副本数转换失败", zap.Error(err))
-				return err
-			}
-			replicas32 := int32(replicas)
-			deployment.Spec.Replicas = &replicas32
-		}
-	}
+	existingDeployment.Spec = deploymentResource.DeploymentYaml.Spec
 
 	// 更新 Deployment
-	deploymentResult, err := kubeClient.AppsV1().Deployments(deployment.Namespace).Update(ctx, deployment, metav1.UpdateOptions{})
+	_, err = kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Update(ctx, existingDeployment, metav1.UpdateOptions{})
 	if err != nil {
 		d.l.Error("更新 Deployment 失败", zap.Error(err))
 		return err
 	}
 
-	d.l.Info("更新 Deployment 成功", zap.String("deploymentName", deploymentResult.Name))
 	return nil
 }
 
-// DeleteDeployment 删除指定的 Deployment
-func (d *deploymentService) DeleteDeployment(ctx context.Context, clusterName, namespace, deploymentName string) error {
-	kubeClient, err := pkg.GetKubeClient(ctx, clusterName, d.dao, d.client, d.l)
+// BatchDeleteDeployment 批量删除 Deployment
+func (d *deploymentService) BatchDeleteDeployment(ctx context.Context, id int, namespace string, deploymentNames []string) error {
+	kubeClient, err := pkg.GetKubeClient(id, d.client, d.l)
 	if err != nil {
 		d.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
 	}
 
-	// 删除指定的 Deployment
-	err = kubeClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metav1.DeleteOptions{})
-	if err != nil {
-		d.l.Error("删除 Deployment 失败", zap.Error(err))
-		return err
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(deploymentNames))
+	for _, name := range deploymentNames {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			if err := kubeClient.AppsV1().Deployments(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+				errChan <- err
+				d.l.Error("删除 Deployment 失败", zap.String("DeploymentName", name), zap.Error(err))
+			}
+		}(name)
 	}
 
-	d.l.Info("删除 Deployment 成功", zap.String("deploymentName", deploymentName))
+	wg.Wait()
+	close(errChan)
+	if len(errChan) > 0 {
+		return <-errChan
+	}
+
 	return nil
 }
 
 // BatchRestartDeployments 批量重启 Deployment
 func (d *deploymentService) BatchRestartDeployments(ctx context.Context, deploymentResource *model.K8sDeploymentRequest) error {
-	kubeClient, err := pkg.GetKubeClient(ctx, deploymentResource.ClusterName, d.dao, d.client, d.l)
+	kubeClient, err := pkg.GetKubeClient(deploymentResource.ClusterId, d.client, d.l)
 	if err != nil {
 		d.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
 	}
 
-	// 批量处理每个 Deployment
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(deploymentResource.DeploymentNames))
 	for _, deploy := range deploymentResource.DeploymentNames {
-		// 获取 Deployment
-		deployment, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Get(ctx, deploy, metav1.GetOptions{})
-		if err != nil {
-			d.l.Error("获取 Deployment 失败", zap.Error(err))
-			return err
-		}
+		wg.Add(1)
+		go func(deploy string) {
+			defer wg.Done()
+			deployment, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Get(ctx, deploy, metav1.GetOptions{})
+			if err != nil {
+				errChan <- err
+				d.l.Error("获取 Deployment 失败", zap.Error(err))
+				return
+			}
 
-		// 更新重启标记
-		if deployment.Spec.Template.Annotations == nil {
-			deployment.Spec.Template.Annotations = make(map[string]string)
-		}
-		deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+			if deployment.Spec.Template.Annotations == nil {
+				deployment.Spec.Template.Annotations = make(map[string]string)
+			}
+			deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
 
-		// 更新 Deployment
-		_, err = kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Update(ctx, deployment, metav1.UpdateOptions{})
-		if err != nil {
-			d.l.Error("更新 Deployment 失败", zap.Error(err))
-			return err
-		}
+			if _, err := kubeClient.AppsV1().Deployments(deployment.Namespace).Update(ctx, deployment, metav1.UpdateOptions{}); err != nil {
+				errChan <- err
+				d.l.Error("更新 Deployment 失败", zap.Error(err))
+				return
+			}
+		}(deploy)
+	}
 
-		d.l.Info("重启 Deployment 成功", zap.String("deploymentName", deploy))
+	wg.Wait()
+	close(errChan)
+	if len(errChan) > 0 {
+		return <-errChan
 	}
 
 	return nil

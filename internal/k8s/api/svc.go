@@ -1,5 +1,30 @@
 package api
 
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -27,20 +52,19 @@ func (k *K8sSvcHandler) RegisterRouters(server *gin.Engine) {
 	// Service 相关路由
 	services := k8sGroup.Group("/services")
 	{
-		services.GET("/", k.GetServiceListByNamespace) // 根据命名空间获取 Service 列表
-		services.GET("/:name/yaml", k.GetServiceYaml)  // 获取指定 Service 的 YAML 配置
-		services.POST("/", k.CreateOrUpdateService)    // 创建或更新 Service
-		services.PUT("/:name", k.UpdateService)        // 更新指定 Name 的 Service
-		services.DELETE("/:name", k.DeleteService)     // 删除指定 Name 的 Service
-		services.DELETE("/", k.BatchDeleteServices)    // 批量删除 Service
+		services.GET("/:id", k.GetServiceListByNamespace)       // 根据命名空间获取 Service 列表
+		services.GET("/:id/:svcName/yaml", k.GetServiceYaml)    // 获取指定 Service 的 YAML 配置
+		services.POST("/create", k.CreateService)               // 创建或更新 Service
+		services.POST("/update", k.UpdateService)               // 更新指定 Name 的 Service
+		services.DELETE("/batch_delete", k.BatchDeleteServices) // 批量删除 Service
 	}
 }
 
 // GetServiceListByNamespace 根据命名空间获取 Service 列表
 func (k *K8sSvcHandler) GetServiceListByNamespace(ctx *gin.Context) {
-	clusterName := ctx.Query("cluster_name")
-	if clusterName == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'cluster_name' 参数")
+	id, err := apiresponse.GetParamID(ctx)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -50,20 +74,22 @@ func (k *K8sSvcHandler) GetServiceListByNamespace(ctx *gin.Context) {
 		return
 	}
 
-	services, err := k.svcService.GetServicesByNamespace(ctx, clusterName, namespace)
-	if err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.SuccessWithData(ctx, services)
+	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return k.svcService.GetServicesByNamespace(ctx, id, namespace)
+	})
 }
 
 // GetServiceYaml 获取 Service 的 YAML 配置
 func (k *K8sSvcHandler) GetServiceYaml(ctx *gin.Context) {
-	clusterName := ctx.Query("cluster_name")
-	if clusterName == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'cluster_name' 参数")
+	id, err := apiresponse.GetParamID(ctx)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	svcName := ctx.Param("svcName")
+	if svcName == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'serviceName' 参数")
 		return
 	}
 
@@ -73,85 +99,34 @@ func (k *K8sSvcHandler) GetServiceYaml(ctx *gin.Context) {
 		return
 	}
 
-	serviceName := ctx.Param("name")
-	if serviceName == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'serviceName' 参数")
-		return
-	}
-
-	service, err := k.svcService.GetServiceYaml(ctx, clusterName, namespace, serviceName)
-	if err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.SuccessWithData(ctx, service)
+	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return k.svcService.GetServiceYaml(ctx, id, namespace, svcName)
+	})
 }
 
-// CreateOrUpdateService 创建或更新 Service
-func (k *K8sSvcHandler) CreateOrUpdateService(ctx *gin.Context) {
+// CreateService 创建或更新 Service
+func (k *K8sSvcHandler) CreateService(ctx *gin.Context) {
 	var req model.K8sServiceRequest
 
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
-		return
-	}
-
-	if err := k.svcService.CreateOrUpdateService(ctx, &req); err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
+	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.svcService.CreateOrUpdateService(ctx, &req)
+	})
 }
 
 // UpdateService 更新指定 Name 的 Service
 func (k *K8sSvcHandler) UpdateService(ctx *gin.Context) {
 	var req model.K8sServiceRequest
 
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
-		return
-	}
-
-	if err := k.svcService.UpdateService(ctx, &req); err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
-}
-
-// DeleteService 删除指定 Name 的 Service
-func (k *K8sSvcHandler) DeleteService(ctx *gin.Context) {
-	var req model.K8sServiceRequest
-
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
-		return
-	}
-
-	if err := k.svcService.DeleteService(ctx, req.ClusterName, req.Namespace, req.ServiceNames); err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
+	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.svcService.CreateOrUpdateService(ctx, &req)
+	})
 }
 
 // BatchDeleteServices 批量删除 Service
 func (k *K8sSvcHandler) BatchDeleteServices(ctx *gin.Context) {
 	var req model.K8sServiceRequest
 
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
-		return
-	}
-
-	if err := k.svcService.DeleteService(ctx, req.ClusterName, req.Namespace, req.ServiceNames); err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
+	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.svcService.DeleteService(ctx, req.ClusterId, req.Namespace, req.ServiceNames)
+	})
 }

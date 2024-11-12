@@ -1,5 +1,30 @@
 package api
 
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -26,144 +51,87 @@ func (k *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 	// Deployment 相关路由
 	deployments := k8sGroup.Group("/deployments")
 	{
-		deployments.GET("/", k.GetDeployListByNamespace) // 根据命名空间获取部署列表
-		deployments.POST("/", k.CreateDeployment)        // 创建新的部署
-		deployments.PUT("/:name", k.UpdateDeployment)    // 更新指定 deploymentName 的部署
-		deployments.DELETE("/:name", k.DeleteDeployment) // 删除指定 deploymentName 的部署
-
-		deployments.PUT("/:name/image", k.SetDeploymentContainerImage) // 设置部署中容器的镜像
-		deployments.POST("/:name/scale", k.ScaleDeployment)            // 扩缩指定 ID 的部署
-		deployments.POST("/restart", k.BatchRestartDeployments)        // 批量重启部署
-		deployments.GET("/:name/yaml", k.GetDeployYaml)                // 获取指定部署的 YAML 配置
+		deployments.GET("/:id", k.GetDeployListByNamespace)           // 根据命名空间获取部署列表
+		deployments.GET("/:id/yaml", k.GetDeployYaml)                 // 获取指定部署的 YAML 配置
+		deployments.POST("/create", k.CreateDeployment)               // 创建新的部署
+		deployments.POST("/update", k.UpdateDeployment)               // 更新指定 deployment
+		deployments.DELETE("/batch_delete", k.BatchDeleteDeployment)  // 批量删除 deployment
+		deployments.POST("/batch_restart", k.BatchRestartDeployments) // 批量重启部署
 	}
 }
 
 // GetDeployListByNamespace 根据命名空间获取部署列表
 func (k *K8sDeploymentHandler) GetDeployListByNamespace(ctx *gin.Context) {
-	namesapce := ctx.Query("namespace")
-	if namesapce == "" {
+	id, err := apiresponse.GetParamID(ctx)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace := ctx.Query("namespace")
+	if namespace == "" {
 		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
-	clusterName := ctx.Query("cluster_name")
-	if clusterName == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'cluster_name' 参数")
-		return
-	}
-
-	deploys, err := k.deploymentService.GetDeploymentsByNamespace(ctx, clusterName, namesapce)
-	if err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.SuccessWithData(ctx, deploys)
+	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return k.deploymentService.GetDeploymentsByNamespace(ctx, id, namespace)
+	})
 }
 
 // CreateDeployment 创建新的部署
 func (k *K8sDeploymentHandler) CreateDeployment(ctx *gin.Context) {
 	var req model.K8sDeploymentRequest
 
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
-		return
-	}
-
-	if err := k.deploymentService.CreateDeployment(ctx, &req); err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
+	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.deploymentService.CreateDeployment(ctx, &req)
+	})
 }
 
 // UpdateDeployment 更新指定 Name 的部署
 func (k *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 	var req model.K8sDeploymentRequest
 
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
-		return
-	}
-
-	if err := k.deploymentService.UpdateDeployment(ctx, &req); err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
+	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.deploymentService.UpdateDeployment(ctx, &req)
+	})
 }
 
-// DeleteDeployment 删除指定 Name 的部署
-func (k *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
+// BatchDeleteDeployment 删除指定 Name 的部署
+func (k *K8sDeploymentHandler) BatchDeleteDeployment(ctx *gin.Context) {
 	var req model.K8sDeploymentRequest
 
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
-		return
-	}
-
-	if err := k.deploymentService.DeleteDeployment(ctx, req.ClusterName, req.Namespace, req.DeploymentNames[0]); err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
-}
-
-// SetDeploymentContainerImage 设置部署中容器的镜像
-func (k *K8sDeploymentHandler) SetDeploymentContainerImage(ctx *gin.Context) {
-	var req model.K8sDeploymentRequest
-
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
-		return
-	}
-
-	if err := k.deploymentService.UpdateDeployment(ctx, &req); err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
-}
-
-// ScaleDeployment 扩缩部署
-func (k *K8sDeploymentHandler) ScaleDeployment(ctx *gin.Context) {
-	var req model.K8sDeploymentRequest
-
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
-		return
-	}
-
-	if err := k.deploymentService.UpdateDeployment(ctx, &req); err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
+	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.deploymentService.BatchDeleteDeployment(ctx, req.ClusterId, req.Namespace, req.DeploymentNames)
+	})
 }
 
 // BatchRestartDeployments 批量重启部署
 func (k *K8sDeploymentHandler) BatchRestartDeployments(ctx *gin.Context) {
 	var req model.K8sDeploymentRequest
 
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "绑定数据失败", err.Error())
-		return
-	}
-
-	if err := k.deploymentService.BatchRestartDeployments(ctx, &req); err != nil {
-		apiresponse.InternalServerError(ctx, 500, err.Error(), "服务器内部错误")
-		return
-	}
-
-	apiresponse.Success(ctx)
+	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.deploymentService.BatchRestartDeployments(ctx, &req)
+	})
 }
 
 // GetDeployYaml 获取部署的 YAML 配置
 func (k *K8sDeploymentHandler) GetDeployYaml(ctx *gin.Context) {
-	// TODO: 实现获取部署的 YAML 配置的逻辑
+	id, err := apiresponse.GetParamID(ctx)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	deploymentName := ctx.Param("deployment_name")
+
+	namespace := ctx.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		return
+	}
+
+	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return k.deploymentService.GetDeploymentYaml(ctx, id, namespace, deploymentName)
+	})
 }

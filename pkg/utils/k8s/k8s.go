@@ -1,10 +1,34 @@
 package k8s
 
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 import (
 	"context"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"go.uber.org/zap"
 	"k8s.io/client-go/tools/clientcmd"
 	"log"
@@ -172,8 +196,8 @@ func RemoveTaints(existingTaints []corev1.Taint, taintsToDelete []corev1.Taint) 
 	return updatedTaints
 }
 
-// GetNodesByClusterID 获取指定集群上的 Node 列表
-func GetNodesByClusterID(ctx context.Context, client *kubernetes.Clientset, nodeName string) (*corev1.NodeList, error) {
+// GetNodesByName 获取指定集群上的 Node 列表
+func GetNodesByName(ctx context.Context, client *kubernetes.Clientset, nodeName string) (*corev1.NodeList, error) {
 	if nodeName != "" {
 		// 获取单个节点
 		node, err := client.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
@@ -562,25 +586,6 @@ func BuildK8sContainersWithPointer(k8sContainers []model.K8sPodContainer) []*mod
 	return pointerSlice
 }
 
-// GetKubeClient 获取 Kubernetes 客户端
-func GetKubeClient(ctx context.Context, clusterName string, dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) (*kubernetes.Clientset, error) {
-	// 获取集群信息
-	cluster, err := dao.GetClusterByName(ctx, clusterName)
-	if err != nil {
-		l.Error("获取集群信息失败", zap.String("clusterName", clusterName), zap.Error(err))
-		return nil, fmt.Errorf("获取集群信息失败: %w", err)
-	}
-
-	// 获取 Kubernetes 客户端
-	kubeClient, err := client.GetKubeClient(cluster.ID)
-	if err != nil {
-		l.Error("获取 Kubernetes 客户端失败", zap.String("clusterID", fmt.Sprintf("%d", cluster.ID)), zap.Error(err))
-		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
-	}
-
-	return kubeClient, nil
-}
-
 // GetResourceName 根据 Kind 获取资源名称
 func GetResourceName(kind string) string {
 	switch kind {
@@ -594,6 +599,18 @@ func GetResourceName(kind string) string {
 	default:
 		return strings.ToLower(kind) + "s"
 	}
+}
+
+// GetKubeClient 获取 Kubernetes 客户端
+func GetKubeClient(clusterId int, client client.K8sClient, l *zap.Logger) (*kubernetes.Clientset, error) {
+	// 获取 Kubernetes 客户端
+	kubeClient, err := client.GetKubeClient(clusterId)
+	if err != nil {
+		l.Error("获取 Kubernetes 客户端失败", zap.String("clusterID", fmt.Sprintf("%d", clusterId)), zap.Error(err))
+		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
+	}
+
+	return kubeClient, nil
 }
 
 func InitAadGetKubeClient(ctx context.Context, cluster *model.K8sCluster, logger *zap.Logger, client client.K8sClient) (*kubernetes.Clientset, error) {
