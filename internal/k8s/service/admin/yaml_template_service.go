@@ -74,7 +74,6 @@ func (y *yamlTemplateService) CreateYamlTemplate(ctx context.Context, template *
 		return fmt.Errorf("YAML 格式错误: %w", err)
 	}
 
-	// 创建模板
 	return y.yamlTemplateDao.CreateYamlTemplate(ctx, template)
 }
 

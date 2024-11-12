@@ -46,11 +46,9 @@ func NewK8sClusterHandler(l *zap.Logger, clusterService admin.ClusterService) *K
 	}
 }
 
-// RegisterRouters 注册集群相关的路由
 func (k *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 
-	// 集群相关路由
 	clusters := k8sGroup.Group("/clusters")
 	{
 		clusters.GET("/list", k.GetAllClusters)                 // 获取集群列表

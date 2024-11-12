@@ -47,6 +47,7 @@ func NewK8sNodeHandler(logger *zap.Logger, nodeService admin.NodeService) *K8sNo
 
 func (k *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
+
 	nodes := k8sGroup.Group("/nodes")
 	{
 		nodes.GET("/list/:id", k.GetNodeList)              // 获取节点列表

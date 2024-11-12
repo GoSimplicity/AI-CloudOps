@@ -190,13 +190,13 @@ type K8sProject struct {
 // K8sYamlTask Kubernetes YAML 任务的配置
 type K8sYamlTask struct {
 	Model
-	Name        string     `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex:udx_name;size:100;comment:YAML 任务名称"` // YAML 任务名称
-	UserID      int        `json:"user_id" gorm:"comment:创建者用户ID"`                                                              // 创建者用户ID
-	TemplateID  int        `json:"template_id" gorm:"comment:关联的模板ID"`                                                          // 关联的模板ID
-	ClusterName string     `json:"cluster_name,omitempty" gorm:"comment:集群名称"`                                                  // 集群名称
-	Variables   StringList `json:"variables,omitempty" gorm:"type:text;comment:yaml 变量，格式 k=v,k=v"`                             // YAML 变量
-	Status      string     `json:"status,omitempty" gorm:"comment:当前状态" binding:"oneof=Pending Failed Succeeded"`               // 当前状态
-	ApplyResult string     `json:"apply_result,omitempty" gorm:"comment:apply 后的返回数据"`                                          // apply 结果
+	Name        string     `json:"name" gorm:"type:varchar(255);uniqueIndex:udx_name;comment:YAML 任务名称"` // YAML 任务名称
+	UserID      int        `json:"user_id" gorm:"comment:创建者用户ID"`                                       // 创建者用户ID
+	TemplateID  int        `json:"template_id" gorm:"comment:关联的模板ID"`                                   // 关联的模板ID
+	ClusterId   int        `json:"cluster_id,omitempty" gorm:"comment:集群名称"`                             // 集群名称
+	Variables   StringList `json:"variables,omitempty" gorm:"type:text;comment:yaml 变量，格式 k=v,k=v"`      // YAML 变量
+	Status      string     `json:"status,omitempty" gorm:"comment:当前状态"`                                 // 当前状态
+	ApplyResult string     `json:"apply_result,omitempty" gorm:"comment:apply 后的返回数据"`                   // apply 结果
 
 	// 前端使用字段
 	Key            string `json:"key" gorm:"-"`                       // 前端表格使用的Key

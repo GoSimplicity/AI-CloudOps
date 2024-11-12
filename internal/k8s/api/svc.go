@@ -45,11 +45,9 @@ func NewK8sSvcHandler(l *zap.Logger, svcService admin.SvcService) *K8sSvcHandler
 	}
 }
 
-// RegisterRouters 注册所有 Kubernetes 相关的路由
 func (k *K8sSvcHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 
-	// Service 相关路由
 	services := k8sGroup.Group("/services")
 	{
 		services.GET("/:id", k.GetServiceListByNamespace)       // 根据命名空间获取 Service 列表
