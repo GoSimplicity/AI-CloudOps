@@ -47,7 +47,6 @@ func NewK8sNamespaceHandler(logger *zap.Logger, namespaceService admin.Namespace
 func (k *K8sNamespaceHandler) RegisterRouters(router *gin.Engine) {
 	k8sGroup := router.Group("/api/k8s")
 
-	// 命名空间相关路由组
 	namespaces := k8sGroup.Group("/namespaces")
 	{
 		namespaces.GET("/cascade", k.GetClusterNamespacesForCascade)   // 获取级联选择的命名空间列表

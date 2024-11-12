@@ -86,15 +86,11 @@ func (y *yamlTaskService) GetYamlTaskList(ctx context.Context) ([]*model.K8sYaml
 
 // CreateYamlTask 创建 YAML 任务
 func (y *yamlTaskService) CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
-	// 检查模板是否存在
-	_, err := y.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID)
-	if err != nil {
+	if _, err := y.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID); err != nil {
 		return fmt.Errorf("YAML 模板不存在: %w", err)
 	}
 
-	// 检查集群是否存在
-	_, err = y.clusterDao.GetClusterByName(ctx, task.ClusterName)
-	if err != nil {
+	if _, err := y.clusterDao.GetClusterByID(ctx, task.ClusterId); err != nil {
 		return fmt.Errorf("集群不存在: %w", err)
 	}
 
@@ -103,29 +99,23 @@ func (y *yamlTaskService) CreateYamlTask(ctx context.Context, task *model.K8sYam
 
 // UpdateYamlTask 更新 YAML 任务
 func (y *yamlTaskService) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
-	// 检查任务是否存在
-	_, err := y.yamlTaskDao.GetYamlTaskByID(ctx, task.ID)
-	if err != nil {
+	if _, err := y.yamlTaskDao.GetYamlTaskByID(ctx, task.ID); err != nil {
 		return fmt.Errorf("YAML 任务不存在: %w", err)
 	}
 
-	// 检查模板是否存在
-	if task.TemplateID != 0 {
-		_, err := y.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID)
-		if err != nil {
+	if task.TemplateID > 0 {
+		if _, err := y.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID); err != nil {
 			return fmt.Errorf("YAML 模板不存在: %w", err)
 		}
 	}
 
-	// 检查集群是否存在
-	if task.ClusterName != "" {
-		_, err := y.clusterDao.GetClusterByName(ctx, task.ClusterName)
-		if err != nil {
+	if task.ClusterId > 0 {
+		if _, err := y.clusterDao.GetClusterByID(ctx, task.ClusterId); err != nil {
 			return fmt.Errorf("集群不存在: %w", err)
 		}
 	}
 
-	// 设置任务状态为 Pending，清空结果
+	// 重置任务状态为待处理，并清空应用结果
 	task.Status = TaskPending
 	task.ApplyResult = ""
 
@@ -139,31 +129,24 @@ func (y *yamlTaskService) DeleteYamlTask(ctx context.Context, id int) error {
 
 // ApplyYamlTask 应用 YAML 任务
 func (y *yamlTaskService) ApplyYamlTask(ctx context.Context, id int) error {
-	// 获取任务信息
 	task, err := y.yamlTaskDao.GetYamlTaskByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("YAML 模板不存在: %w", err)
+		return fmt.Errorf("YAML 任务不存在: %w", err)
 	}
 
-	// 获取集群信息
-	cluster, err := y.clusterDao.GetClusterByName(ctx, task.ClusterName)
+	dynClient, err := pkg.GetDynamicClient(ctx, task.ClusterId, y.clusterDao, y.client)
 	if err != nil {
-		return fmt.Errorf("集群不存在: %w", err)
+		y.l.Error("获取动态客户端失败", zap.Error(err))
+		return fmt.Errorf("获取动态客户端失败: %w", err)
 	}
 
-	// 获取 Kubernetes 客户端
-	dynClient, err := y.client.GetDynamicClient(cluster.ID)
-	if err != nil {
-		return fmt.Errorf("无法获取动态客户端: %w", err)
-	}
-
-	// 获取模板信息
 	taskTemplate, err := y.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID)
 	if err != nil {
+		y.l.Error("获取 YAML 模板失败", zap.Error(err))
 		return fmt.Errorf("获取 YAML 模板失败: %w", err)
 	}
 
-	// 处理变量替换
+	// 变量替换处理
 	yamlContent := taskTemplate.Content
 	for _, variable := range task.Variables {
 		parts := strings.SplitN(variable, "=", 2)
@@ -174,16 +157,20 @@ func (y *yamlTaskService) ApplyYamlTask(ctx context.Context, id int) error {
 		}
 	}
 
-	// 解析 YAML 文件为 JSON
 	jsonData, err := yamlTask.ToJSON([]byte(yamlContent))
 	if err != nil {
-		return fmt.Errorf("YAML转换JSON失败: %w", err)
+		y.l.Error("YAML 转换 JSON 失败", zap.Error(err))
+		return fmt.Errorf("YAML 转换 JSON 失败: %w", err)
 	}
 
-	// 创建 unstructured 对象
 	obj := &unstructured.Unstructured{}
 	if _, _, err = unstructured.UnstructuredJSONScheme.Decode(jsonData, nil, obj); err != nil {
-		return fmt.Errorf("解析JSON失败: %w", err)
+		y.l.Error("解析 JSON 失败", zap.Error(err))
+		return fmt.Errorf("解析 JSON 失败: %w", err)
+	}
+
+	if obj.GetNamespace() == "" {
+		obj.SetNamespace("default")
 	}
 
 	// 获取 GVR (GroupVersionResource)
@@ -193,27 +180,23 @@ func (y *yamlTaskService) ApplyYamlTask(ctx context.Context, id int) error {
 		Resource: pkg.GetResourceName(obj.GetObjectKind().GroupVersionKind().Kind),
 	}
 
-	// 更新任务状态为成功
-	task.Status = TaskSucceeded
-	task.ApplyResult = "success"
-
-	// 应用资源
+	// 应用资源到集群
 	_, err = dynClient.Resource(gvr).Namespace(obj.GetNamespace()).Create(ctx, obj, metav1.CreateOptions{})
 	if err != nil {
-		// 资源已存在的情况处理
 		if k8sErr.IsAlreadyExists(err) {
-			y.l.Warn("资源已存在，请考虑更新", zap.Error(err))
+			y.l.Warn("资源已存在，跳过创建", zap.Error(err))
 		} else {
-			y.l.Error("应用YAML任务失败: ", zap.Error(err))
+			y.l.Error("应用 YAML 任务失败", zap.Error(err))
+			task.Status = TaskFailed
+			task.ApplyResult = err.Error()
 		}
-		// 更新任务状态为失败
-		task.Status = TaskFailed
-		task.ApplyResult = err.Error()
+	} else {
+		task.Status = TaskSucceeded
+		task.ApplyResult = "应用成功"
 	}
 
-	// 更新任务状态
-	if err := y.yamlTaskDao.UpdateYamlTask(ctx, task); err != nil {
-		y.l.Error("更新YAML任务失败: ", zap.Error(err))
+	if updateErr := y.yamlTaskDao.UpdateYamlTask(ctx, task); updateErr != nil {
+		y.l.Error("更新 YAML 任务状态失败", zap.Error(updateErr))
 	}
 
 	return err

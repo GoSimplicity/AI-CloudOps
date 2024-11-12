@@ -29,7 +29,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"go.uber.org/zap"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 	"log"
 	"strings"
@@ -650,4 +652,18 @@ func GetKubeAndMetricsClient(id int, logger *zap.Logger, client client.K8sClient
 		return nil, nil, err
 	}
 	return kc, mc, nil
+}
+
+func GetDynamicClient(ctx context.Context, id int, clusterDao admin.ClusterDAO, client client.K8sClient) (*dynamic.DynamicClient, error) {
+	cluster, err := clusterDao.GetClusterByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("集群不存在: %w", err)
+	}
+
+	dynClient, err := client.GetDynamicClient(cluster.ID)
+	if err != nil {
+		return nil, fmt.Errorf("无法获取动态客户端: %w", err)
+	}
+
+	return dynClient, nil
 }

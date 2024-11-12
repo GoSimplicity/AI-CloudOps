@@ -43,7 +43,6 @@ func NewK8sAppHandler(l *zap.Logger) *K8sAppHandler {
 func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 
-	// 普通运维相关路由（K8sApp）
 	k8sAppApiGroup := k8sGroup.Group("/k8sApp")
 	{
 		// 命名空间

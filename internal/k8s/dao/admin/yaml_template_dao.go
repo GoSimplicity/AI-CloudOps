@@ -113,6 +113,7 @@ func (y *yamlTemplateDAO) GetYamlTemplateByID(ctx context.Context, id int) (*mod
 	}
 
 	var yaml *model.K8sYamlTemplate
+
 	if err := y.db.WithContext(ctx).Where("id = ?", id).First(&yaml).Error; err != nil {
 		y.l.Error("GetYamlTemplateByID 查询Yaml模板失败", zap.Int("yamlID", id), zap.Error(err))
 		return nil, err

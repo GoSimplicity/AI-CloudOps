@@ -48,7 +48,6 @@ func NewK8sTaintHandler(logger *zap.Logger, taintService admin.TaintService) *K8
 func (k *K8sTaintHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 
-	// 节点相关路由组
 	nodes := k8sGroup.Group("/taints")
 	{
 		nodes.POST("/add", k.AddTaintsNodes)                      // 为节点添加 Taint

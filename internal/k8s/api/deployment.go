@@ -48,7 +48,6 @@ func NewK8sDeploymentHandler(l *zap.Logger, deploymentService admin.DeploymentSe
 func (k *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 
-	// Deployment 相关路由
 	deployments := k8sGroup.Group("/deployments")
 	{
 		deployments.GET("/:id", k.GetDeployListByNamespace)           // 根据命名空间获取部署列表

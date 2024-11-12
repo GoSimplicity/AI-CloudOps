@@ -48,7 +48,6 @@ func NewK8sPodHandler(logger *zap.Logger, podService admin.PodService) *K8sPodHa
 func (k *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 
-	// Pod 相关路由
 	pods := k8sGroup.Group("/pods")
 	{
 		pods.GET("/:id", k.GetPodListByNamespace)                     // 根据命名空间获取 Pods 列表
