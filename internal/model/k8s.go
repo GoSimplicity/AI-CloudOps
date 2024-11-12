@@ -366,10 +366,10 @@ type K8sDeploymentRequest struct {
 
 // K8sConfigMapRequest ConfigMap 相关请求结构
 type K8sConfigMapRequest struct {
-	ClusterName    string          `json:"cluster_name" binding:"required"` // 集群名称，必填
-	Namespace      string          `json:"namespace"`                       // 命名空间，可选, 删除用
-	ConfigMapNames []string        `json:"config_map_names"`                // ConfigMap 名称，可选， 删除用
-	ConfigMap      *core.ConfigMap `json:"config_map"`                      // ConfigMap 对象, 可选
+	ClusterId      int             `json:"cluster_id" binding:"required"` // 集群id，必填
+	Namespace      string          `json:"namespace"`                     // 命名空间，可选, 删除用
+	ConfigMapNames []string        `json:"config_map_names"`              // ConfigMap 名称，可选， 删除用
+	ConfigMap      *core.ConfigMap `json:"config_map"`                    // ConfigMap 对象, 可选
 }
 
 // K8sServiceRequest Service 相关请求结构
