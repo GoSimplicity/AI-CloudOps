@@ -97,11 +97,6 @@ func (k *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
 func (k *K8sClusterHandler) UpdateCluster(ctx *gin.Context) {
 	var req model.K8sCluster
 
-	if req.ID == 0 {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
-		return
-	}
-
 	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.clusterService.UpdateCluster(ctx, &req)
 	})
