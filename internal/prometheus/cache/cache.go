@@ -28,10 +28,6 @@ package cache
 import (
 	"context"
 	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/alert_cache"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/prom_cache"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/record_cache"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/rule_cache"
 	"sync"
 	"time"
 
@@ -44,14 +40,14 @@ type MonitorCache interface {
 }
 
 type monitorCache struct {
-	PrometheusMainConfig  prom_cache.PromConfigCache
-	AlertMangerMainConfig alert_cache.AlertConfigCache
-	AlertRuleConfig       rule_cache.RuleConfigCache
-	AlertRecordConfig     record_cache.RecordConfigCache
+	PrometheusMainConfig  PromConfigCache
+	AlertMangerMainConfig AlertConfigCache
+	AlertRuleConfig       RuleConfigCache
+	AlertRecordConfig     RecordConfigCache
 	l                     *zap.Logger
 }
 
-func NewMonitorCache(PrometheusMainConfig prom_cache.PromConfigCache, AlertMangerMainConfig alert_cache.AlertConfigCache, AlertRuleConfig rule_cache.RuleConfigCache, AlertRecordConfig record_cache.RecordConfigCache, l *zap.Logger) MonitorCache {
+func NewMonitorCache(PrometheusMainConfig PromConfigCache, AlertMangerMainConfig AlertConfigCache, AlertRuleConfig RuleConfigCache, AlertRecordConfig RecordConfigCache, l *zap.Logger) MonitorCache {
 	return &monitorCache{
 		PrometheusMainConfig:  PrometheusMainConfig,
 		AlertMangerMainConfig: AlertMangerMainConfig,

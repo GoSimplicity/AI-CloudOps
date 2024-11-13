@@ -32,7 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/onduty"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/prometheus/alertmanager/pkg/labels"
 	pcc "github.com/prometheus/common/config"
 	pm "github.com/prometheus/common/model"
@@ -369,7 +369,7 @@ func FormatMap(m map[string]string) string {
 }
 
 // CalculateOnDutyUser 根据排班规则计算指定日期的值班人
-func CalculateOnDutyUser(ctx context.Context, l *zap.Logger, dao onduty.AlertManagerOnDutyDAO, group *model.MonitorOnDutyGroup, dateStr string, todayStr string) *model.User {
+func CalculateOnDutyUser(ctx context.Context, l *zap.Logger, dao alert.AlertManagerOnDutyDAO, group *model.MonitorOnDutyGroup, dateStr string, todayStr string) *model.User {
 	// 解析目标日期
 	targetDate, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
@@ -438,7 +438,7 @@ func CalculateOnDutyUser(ctx context.Context, l *zap.Logger, dao onduty.AlertMan
 }
 
 // GetCurrentUserIndex 获取当前值班人在成员列表中的索引
-func GetCurrentUserIndex(ctx context.Context, l *zap.Logger, dao onduty.AlertManagerOnDutyDAO, group *model.MonitorOnDutyGroup, todayStr string) int {
+func GetCurrentUserIndex(ctx context.Context, l *zap.Logger, dao alert.AlertManagerOnDutyDAO, group *model.MonitorOnDutyGroup, todayStr string) int {
 	// 尝试从历史记录中获取今天的值班人
 	todayHistory, err := dao.GetMonitorOnDutyHistoryByGroupIdAndDay(ctx, group.ID, todayStr)
 	if err == nil && todayHistory.OnDutyUserID > 0 {

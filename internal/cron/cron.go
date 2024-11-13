@@ -28,7 +28,7 @@ package cron
 import (
 	"context"
 	"errors"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/onduty"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"gorm.io/gorm"
 	"sync"
 	"time"
@@ -46,11 +46,11 @@ type CronManager interface {
 
 type cronManager struct {
 	logger    *zap.Logger
-	onDutyDao onduty.AlertManagerOnDutyDAO
+	onDutyDao alert.AlertManagerOnDutyDAO
 	sync.RWMutex
 }
 
-func NewCronManager(logger *zap.Logger, onDutyDao onduty.AlertManagerOnDutyDAO) CronManager {
+func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO) CronManager {
 	return &cronManager{
 		logger:    logger,
 		onDutyDao: onDutyDao,

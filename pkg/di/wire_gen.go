@@ -8,34 +8,18 @@ package di
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron"
-	api6 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
+	api7 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	admin2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
-	api8 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
+	api6 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	service3 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
-	api7 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
+	api8 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/alert_cache"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/prom_cache"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/record_cache"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/rule_cache"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/event"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/onduty"
-	pool2 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/pool"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/record"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/rule"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/send"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape/job"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape/pool"
-	event2 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert/event"
-	onduty2 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert/onduty"
-	pool3 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert/pool"
-	record2 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert/record"
-	rule2 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert/rule"
-	send2 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert/send"
-	job2 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape/job"
-	pool4 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape/pool"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
+	alert2 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
+	scrape2 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/yaml"
 	api4 "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
 	api2 "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/api"
@@ -90,57 +74,65 @@ func InitWebServer() *Cmd {
 	aliResourceDAO := ali_resource.NewAliResourceDAO(cmdable)
 	aliResourceService := service2.NewAliResourceService(logger, aliResourceDAO, cmdable, treeEcsDAO)
 	treeHandler := api5.NewTreeHandler(treeService, logger, aliResourceService)
+	notAuthService := service3.NewNotAuthService(logger, treeNodeDAO)
+	notAuthHandler := api6.NewNotAuthHandler(notAuthService)
 	clusterDAO := admin.NewClusterDAO(db, logger)
 	k8sClient := client.NewK8sClient(logger, clusterDAO)
 	clusterService := admin2.NewClusterService(clusterDAO, k8sClient, logger)
-	k8sClusterHandler := api6.NewK8sClusterHandler(logger, clusterService)
+	k8sClusterHandler := api7.NewK8sClusterHandler(logger, clusterService)
 	configMapService := admin2.NewConfigMapService(clusterDAO, k8sClient, logger)
-	k8sConfigMapHandler := api6.NewK8sConfigMapHandler(logger, configMapService)
+	k8sConfigMapHandler := api7.NewK8sConfigMapHandler(logger, configMapService)
 	deploymentService := admin2.NewDeploymentService(clusterDAO, k8sClient, logger)
-	k8sDeploymentHandler := api6.NewK8sDeploymentHandler(logger, deploymentService)
+	k8sDeploymentHandler := api7.NewK8sDeploymentHandler(logger, deploymentService)
 	namespaceService := admin2.NewNamespaceService(clusterDAO, k8sClient, logger)
-	k8sNamespaceHandler := api6.NewK8sNamespaceHandler(logger, namespaceService)
+	k8sNamespaceHandler := api7.NewK8sNamespaceHandler(logger, namespaceService)
 	nodeService := admin2.NewNodeService(clusterDAO, k8sClient, logger)
-	k8sNodeHandler := api6.NewK8sNodeHandler(logger, nodeService)
+	k8sNodeHandler := api7.NewK8sNodeHandler(logger, nodeService)
 	podService := admin2.NewPodService(clusterDAO, k8sClient, logger)
-	k8sPodHandler := api6.NewK8sPodHandler(logger, podService)
+	k8sPodHandler := api7.NewK8sPodHandler(logger, podService)
 	svcService := admin2.NewSvcService(clusterDAO, k8sClient, logger)
-	k8sSvcHandler := api6.NewK8sSvcHandler(logger, svcService)
+	k8sSvcHandler := api7.NewK8sSvcHandler(logger, svcService)
 	taintService := admin2.NewTaintService(clusterDAO, k8sClient, logger)
-	k8sTaintHandler := api6.NewK8sTaintHandler(logger, taintService)
+	k8sTaintHandler := api7.NewK8sTaintHandler(logger, taintService)
 	yamlTaskDAO := admin.NewYamlTaskDAO(db, logger)
 	yamlTemplateDAO := admin.NewYamlTemplateDAO(db, logger)
 	yamlTaskService := admin2.NewYamlTaskService(yamlTaskDAO, clusterDAO, yamlTemplateDAO, k8sClient, logger)
-	k8sYamlTaskHandler := api6.NewK8sYamlTaskHandler(logger, yamlTaskService)
+	k8sYamlTaskHandler := api7.NewK8sYamlTaskHandler(logger, yamlTaskService)
 	yamlTemplateService := admin2.NewYamlTemplateService(yamlTemplateDAO, yamlTaskDAO, k8sClient, logger)
-	k8sYamlTemplateHandler := api6.NewK8sYamlTemplateHandler(logger, yamlTemplateService)
-	k8sAppHandler := api6.NewK8sAppHandler(logger)
-	alertManagerEventDAO := event.NewAlertManagerEventDAO(db, logger, userDAO)
-	scrapePoolDAO := pool.NewScrapePoolDAO(db, logger, userDAO)
-	scrapeJobDAO := job.NewScrapeJobDAO(db, logger, userDAO)
-	promConfigCache := prom_cache.NewPromConfigCache(logger, scrapePoolDAO, scrapeJobDAO)
-	alertManagerPoolDAO := pool2.NewAlertManagerPoolDAO(db, logger, userDAO)
-	alertManagerSendDAO := send.NewAlertManagerSendDAO(db, logger, userDAO)
-	alertConfigCache := alert_cache.NewAlertConfigCache(logger, alertManagerPoolDAO, alertManagerSendDAO)
-	alertManagerRuleDAO := rule.NewAlertManagerRuleDAO(db, logger, userDAO)
-	ruleConfigCache := rule_cache.NewRuleConfigCache(logger, scrapePoolDAO, alertManagerRuleDAO)
-	alertManagerRecordDAO := record.NewAlertManagerRecordDAO(db, logger, userDAO)
-	recordConfigCache := record_cache.NewRecordConfig(logger, scrapePoolDAO, alertManagerRecordDAO)
+	k8sYamlTemplateHandler := api7.NewK8sYamlTemplateHandler(logger, yamlTemplateService)
+	k8sAppHandler := api7.NewK8sAppHandler(logger)
+	alertManagerEventDAO := alert.NewAlertManagerEventDAO(db, logger, userDAO)
+	scrapePoolDAO := scrape.NewScrapePoolDAO(db, logger, userDAO)
+	scrapeJobDAO := scrape.NewScrapeJobDAO(db, logger, userDAO)
+	promConfigCache := cache.NewPromConfigCache(logger, scrapePoolDAO, scrapeJobDAO)
+	alertManagerPoolDAO := alert.NewAlertManagerPoolDAO(db, logger, userDAO)
+	alertManagerSendDAO := alert.NewAlertManagerSendDAO(db, logger, userDAO)
+	alertConfigCache := cache.NewAlertConfigCache(logger, alertManagerPoolDAO, alertManagerSendDAO)
+	alertManagerRuleDAO := alert.NewAlertManagerRuleDAO(db, logger, userDAO)
+	ruleConfigCache := cache.NewRuleConfigCache(logger, scrapePoolDAO, alertManagerRuleDAO)
+	alertManagerRecordDAO := alert.NewAlertManagerRecordDAO(db, logger, userDAO)
+	recordConfigCache := cache.NewRecordConfig(logger, scrapePoolDAO, alertManagerRecordDAO)
 	monitorCache := cache.NewMonitorCache(promConfigCache, alertConfigCache, ruleConfigCache, recordConfigCache, logger)
-	alertManagerEventService := event2.NewAlertManagerEventService(alertManagerEventDAO, monitorCache, logger, userDAO)
-	alertManagerOnDutyDAO := onduty.NewAlertManagerOnDutyDAO(db, logger, userDAO)
-	alertManagerOnDutyService := onduty2.NewAlertManagerOnDutyService(alertManagerOnDutyDAO, alertManagerSendDAO, monitorCache, logger, userDAO)
-	alertManagerPoolService := pool3.NewAlertManagerPoolService(alertManagerPoolDAO, alertManagerSendDAO, monitorCache, logger, userDAO)
-	alertManagerRecordService := record2.NewAlertManagerRecordService(alertManagerRecordDAO, monitorCache, logger, userDAO)
-	alertManagerRuleService := rule2.NewAlertManagerRuleService(alertManagerRuleDAO, monitorCache, logger, userDAO)
-	alertManagerSendService := send2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, monitorCache, logger, userDAO)
-	scrapeJobService := job2.NewPrometheusScrapeService(scrapeJobDAO, monitorCache, logger, userDAO)
-	scrapePoolService := pool4.NewPrometheusPoolService(scrapePoolDAO, monitorCache, logger, userDAO, scrapeJobDAO)
+	alertManagerEventService := alert2.NewAlertManagerEventService(alertManagerEventDAO, monitorCache, logger, userDAO)
+	alertEventHandler := api8.NewAlertEventHandler(logger, alertManagerEventService)
+	alertManagerPoolService := alert2.NewAlertManagerPoolService(alertManagerPoolDAO, alertManagerSendDAO, monitorCache, logger, userDAO)
+	alertPoolHandler := api8.NewAlertPoolHandler(logger, alertManagerPoolService)
+	alertManagerRuleService := alert2.NewAlertManagerRuleService(alertManagerRuleDAO, monitorCache, logger, userDAO)
+	alertRuleHandler := api8.NewAlertRuleHandler(logger, alertManagerRuleService)
 	configYamlService := yaml.NewPrometheusConfigService(promConfigCache, alertConfigCache, ruleConfigCache, recordConfigCache)
-	prometheusHandler := api7.NewPrometheusHandler(logger, alertManagerEventService, alertManagerOnDutyService, alertManagerPoolService, alertManagerRecordService, alertManagerRuleService, alertManagerSendService, scrapeJobService, scrapePoolService, configYamlService)
-	notAuthService := service3.NewNotAuthService(logger, treeNodeDAO)
-	notAuthHandler := api8.NewNotAuthHandler(notAuthService)
-	engine := InitGinServer(v, userHandler, authHandler, treeHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, prometheusHandler, notAuthHandler)
+	configYamlHandler := api8.NewConfigYamlHandler(logger, configYamlService)
+	alertManagerOnDutyDAO := alert.NewAlertManagerOnDutyDAO(db, logger, userDAO)
+	alertManagerOnDutyService := alert2.NewAlertManagerOnDutyService(alertManagerOnDutyDAO, alertManagerSendDAO, monitorCache, logger, userDAO)
+	onDutyGroupHandler := api8.NewOnDutyGroupHandler(logger, alertManagerOnDutyService)
+	alertManagerRecordService := alert2.NewAlertManagerRecordService(alertManagerRecordDAO, monitorCache, logger, userDAO)
+	recordRuleHandler := api8.NewRecordRuleHandler(logger, alertManagerRecordService)
+	scrapePoolService := scrape2.NewPrometheusPoolService(scrapePoolDAO, monitorCache, logger, userDAO, scrapeJobDAO)
+	scrapePoolHandler := api8.NewScrapePoolHandler(logger, scrapePoolService)
+	scrapeJobService := scrape2.NewPrometheusScrapeService(scrapeJobDAO, monitorCache, logger, userDAO)
+	scrapeJobHandler := api8.NewScrapeJobHandler(logger, scrapeJobService)
+	alertManagerSendService := alert2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, monitorCache, logger, userDAO)
+	sendGroupHandler := api8.NewSendGroupHandler(logger, alertManagerSendService)
+	engine := InitGinServer(v, userHandler, authHandler, treeHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler)
 	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO)
 	cronCron := InitAndRefreshK8sClient(k8sClient, logger, monitorCache, cronManager)
 	cmd := &Cmd{

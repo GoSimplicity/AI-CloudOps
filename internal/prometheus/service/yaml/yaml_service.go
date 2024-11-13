@@ -27,10 +27,7 @@ package yaml
 
 import (
 	"context"
-	alertCache "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/alert_cache"
-	promCache "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/prom_cache"
-	recordCache "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/record_cache"
-	ruleCache "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/rule_cache"
+	alertCache "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 )
 
 type ConfigYamlService interface {
@@ -41,13 +38,13 @@ type ConfigYamlService interface {
 }
 
 type configYamlService struct {
-	promCache   promCache.PromConfigCache
+	promCache   alertCache.PromConfigCache
 	alertCache  alertCache.AlertConfigCache
-	ruleCache   ruleCache.RuleConfigCache
-	recordCache recordCache.RecordConfigCache
+	ruleCache   alertCache.RuleConfigCache
+	recordCache alertCache.RecordConfigCache
 }
 
-func NewPrometheusConfigService(promCache promCache.PromConfigCache, alertCache alertCache.AlertConfigCache, ruleCache ruleCache.RuleConfigCache, recordCache recordCache.RecordConfigCache) ConfigYamlService {
+func NewPrometheusConfigService(promCache alertCache.PromConfigCache, alertCache alertCache.AlertConfigCache, ruleCache alertCache.RuleConfigCache, recordCache alertCache.RecordConfigCache) ConfigYamlService {
 	return &configYamlService{
 		promCache:   promCache,
 		alertCache:  alertCache,
