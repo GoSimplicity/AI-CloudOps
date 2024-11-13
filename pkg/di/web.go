@@ -41,6 +41,7 @@ func InitGinServer(
 	userHdl *userApi.UserHandler,
 	authHdl *authApi.AuthHandler,
 	treeHdl *treeApi.TreeHandler,
+	notAuthHdl *notAuthHandler.NotAuthHandler,
 	k8sClusterHdl *k8sApi.K8sClusterHandler,
 	k8sConfigMapHdl *k8sApi.K8sConfigMapHandler,
 	k8sDeploymentHdl *k8sApi.K8sDeploymentHandler,
@@ -52,8 +53,15 @@ func InitGinServer(
 	k8sYamlTaskHdl *k8sApi.K8sYamlTaskHandler,
 	k8sYamlTemplateHdl *k8sApi.K8sYamlTemplateHandler,
 	k8sAppHdl *k8sApi.K8sAppHandler,
-	promHdl *prometheusApi.PrometheusHandler,
-	notAuthHdl *notAuthHandler.NotAuthHandler,
+	alertEventHdl *prometheusApi.AlertEventHandler,
+	alertPoolHdl *prometheusApi.AlertPoolHandler,
+	alertRuleHdl *prometheusApi.AlertRuleHandler,
+	configYamlHdl *prometheusApi.ConfigYamlHandler,
+	onDutyGroupHdl *prometheusApi.OnDutyGroupHandler,
+	recordRuleHdl *prometheusApi.RecordRuleHandler,
+	scrapePoolHdl *prometheusApi.ScrapePoolHandler,
+	scrapeJobHdl *prometheusApi.ScrapeJobHandler,
+	sendGroupHdl *prometheusApi.SendGroupHandler,
 ) *gin.Engine {
 	server := gin.Default()
 	server.Use(m...)
@@ -61,7 +69,15 @@ func InitGinServer(
 	authHdl.RegisterRouters(server)
 	treeHdl.RegisterRouters(server)
 	notAuthHdl.RegisterRouters(server)
-	promHdl.RegisterRouters(server)
+	alertEventHdl.RegisterRouters(server)
+	alertPoolHdl.RegisterRouters(server)
+	alertRuleHdl.RegisterRouters(server)
+	configYamlHdl.RegisterRouters(server)
+	onDutyGroupHdl.RegisterRouters(server)
+	recordRuleHdl.RegisterRouters(server)
+	scrapePoolHdl.RegisterRouters(server)
+	scrapeJobHdl.RegisterRouters(server)
+	sendGroupHdl.RegisterRouters(server)
 	k8sClusterHdl.RegisterRouters(server)
 	k8sAppHdl.RegisterRouters(server)
 	k8sConfigMapHdl.RegisterRouters(server)

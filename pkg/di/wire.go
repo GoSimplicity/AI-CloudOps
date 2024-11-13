@@ -37,26 +37,10 @@ import (
 	notAuthService "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	promHandler "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
-	alertCache "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/alert_cache"
-	promCache "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/prom_cache"
-	recordCache "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/record_cache"
-	ruleCache "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/rule_cache"
-	alertEventDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/event"
-	alertOnDutyDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/onduty"
-	alertPoolDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/pool"
-	alertRecordDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/record"
-	alertRuleDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/rule"
-	alertSendDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/send"
-	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape/job"
-	scrapePoolDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape/pool"
-	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert/event"
-	alertOnDutyService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert/onduty"
-	alertPoolService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert/pool"
-	alertRecordService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert/record"
-	alertRuleService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert/rule"
-	alertSendService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert/send"
-	scrapeJobService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape/job"
-	scrapePoolService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape/pool"
+	alertDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
+	alertService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
+	scrapeJobService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape"
 	yamlService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/yaml"
 	authHandler "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
 	apiDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/api"
@@ -93,10 +77,10 @@ func InitWebServer() *Cmd {
 		InitAndRefreshK8sClient,
 		client.NewK8sClient,
 		cache.NewMonitorCache,
-		alertCache.NewAlertConfigCache,
-		ruleCache.NewRuleConfigCache,
-		recordCache.NewRecordConfig,
-		promCache.NewPromConfigCache,
+		cache.NewAlertConfigCache,
+		cache.NewRuleConfigCache,
+		cache.NewRecordConfig,
+		cache.NewPromConfigCache,
 		cron.NewCronManager,
 		userHandler.NewUserHandler,
 		authHandler.NewAuthHandler,
@@ -128,24 +112,32 @@ func InitWebServer() *Cmd {
 		apiService.NewApiService,
 		roleService.NewRoleService,
 		menuService.NewMenuService,
-		promHandler.NewPrometheusHandler,
-		alertEventService.NewAlertManagerEventService,
-		alertOnDutyService.NewAlertManagerOnDutyService,
-		alertPoolService.NewAlertManagerPoolService,
-		alertRecordService.NewAlertManagerRecordService,
-		alertRuleService.NewAlertManagerRuleService,
-		alertSendService.NewAlertManagerSendService,
+		promHandler.NewAlertPoolHandler,
+		promHandler.NewConfigYamlHandler,
+		promHandler.NewOnDutyGroupHandler,
+		promHandler.NewRecordRuleHandler,
+		promHandler.NewAlertRuleHandler,
+		promHandler.NewSendGroupHandler,
+		promHandler.NewScrapeJobHandler,
+		promHandler.NewScrapePoolHandler,
+		promHandler.NewAlertEventHandler,
+		alertService.NewAlertManagerEventService,
+		alertService.NewAlertManagerOnDutyService,
+		alertService.NewAlertManagerPoolService,
+		alertService.NewAlertManagerRecordService,
+		alertService.NewAlertManagerRuleService,
+		alertService.NewAlertManagerSendService,
 		scrapeJobService.NewPrometheusScrapeService,
-		scrapePoolService.NewPrometheusPoolService,
+		scrapeJobService.NewPrometheusPoolService,
 		treeService.NewAliResourceService,
-		alertEventDao.NewAlertManagerEventDAO,
-		alertOnDutyDao.NewAlertManagerOnDutyDAO,
-		alertPoolDao.NewAlertManagerPoolDAO,
-		alertRecordDao.NewAlertManagerRecordDAO,
-		alertRuleDao.NewAlertManagerRuleDAO,
-		alertSendDao.NewAlertManagerSendDAO,
+		alertDao.NewAlertManagerEventDAO,
+		alertDao.NewAlertManagerOnDutyDAO,
+		alertDao.NewAlertManagerPoolDAO,
+		alertDao.NewAlertManagerRecordDAO,
+		alertDao.NewAlertManagerRuleDAO,
+		alertDao.NewAlertManagerSendDAO,
 		scrapeJobDao.NewScrapeJobDAO,
-		scrapePoolDao.NewScrapePoolDAO,
+		scrapeJobDao.NewScrapePoolDAO,
 		aliDao.NewAliResourceDAO,
 		yamlService.NewPrometheusConfigService,
 		notAuthService.NewNotAuthService,
