@@ -31,6 +31,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"go.uber.org/zap"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 	"log"
@@ -666,4 +667,158 @@ func GetDynamicClient(ctx context.Context, id int, clusterDao admin.ClusterDAO, 
 	}
 
 	return dynClient, nil
+}
+
+// GetPodResources 获取 Pod 资源
+func GetPodResources(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) ([]model.Resource, error) {
+	pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var resources []model.Resource
+
+	for _, pod := range pods.Items {
+		resources = append(resources, model.Resource{
+			Type:         "Pod",
+			Name:         pod.Name,
+			Namespace:    pod.Namespace,
+			Status:       string(pod.Status.Phase),
+			CreationTime: pod.CreationTimestamp.Time,
+		})
+	}
+
+	return resources, nil
+}
+
+// GetServiceResources 获取 Service 资源
+func GetServiceResources(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) ([]model.Resource, error) {
+	services, err := kubeClient.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var resources []model.Resource
+
+	for _, service := range services.Items {
+		resources = append(resources, model.Resource{
+			Type:         "Service",
+			Name:         service.Name,
+			Namespace:    service.Namespace,
+			Status:       "Active", // TODO: 自定义处理
+			CreationTime: service.CreationTimestamp.Time,
+		})
+	}
+
+	return resources, nil
+}
+
+// GetDeploymentResources 获取 Deployment 资源
+func GetDeploymentResources(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) ([]model.Resource, error) {
+	deployments, err := kubeClient.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var resources []model.Resource
+
+	for _, deployment := range deployments.Items {
+		status := "Unknown"
+		for _, condition := range deployment.Status.Conditions {
+			if condition.Type == appsv1.DeploymentAvailable && condition.Status == corev1.ConditionTrue {
+				status = "Available"
+				break
+			}
+		}
+
+		resources = append(resources, model.Resource{
+			Type:         "Deployment",
+			Name:         deployment.Name,
+			Namespace:    deployment.Namespace,
+			Status:       status,
+			CreationTime: deployment.CreationTimestamp.Time,
+		})
+	}
+
+	return resources, nil
+}
+
+// GetReplicaSetResources 获取 ReplicaSet 资源
+func GetReplicaSetResources(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) ([]model.Resource, error) {
+	rs, err := kubeClient.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var resources []model.Resource
+
+	for _, rsItem := range rs.Items {
+		status := "NotReady"
+		if rsItem.Status.ReadyReplicas == rsItem.Status.Replicas {
+			status = "Ready"
+		}
+		resources = append(resources, model.Resource{
+			Type:         "ReplicaSet",
+			Name:         rsItem.Name,
+			Namespace:    rsItem.Namespace,
+			Status:       status,
+			CreationTime: rsItem.CreationTimestamp.Time,
+		})
+	}
+
+	return resources, nil
+}
+
+// GetStatefulSetResources 获取 StatefulSet 资源
+func GetStatefulSetResources(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) ([]model.Resource, error) {
+	ss, err := kubeClient.AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var resources []model.Resource
+
+	for _, ssItem := range ss.Items {
+		status := "NotReady"
+		if ssItem.Status.ReadyReplicas == ssItem.Status.Replicas {
+			status = "Ready"
+		}
+
+		resources = append(resources, model.Resource{
+			Type:         "StatefulSet",
+			Name:         ssItem.Name,
+			Namespace:    ssItem.Namespace,
+			Status:       status,
+			CreationTime: ssItem.CreationTimestamp.Time,
+		})
+	}
+
+	return resources, nil
+}
+
+// GetDaemonSetResources 获取 DaemonSet 资源
+func GetDaemonSetResources(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) ([]model.Resource, error) {
+	ds, err := kubeClient.AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var resources []model.Resource
+
+	for _, dsItem := range ds.Items {
+		status := "NotReady"
+		if dsItem.Status.NumberReady == dsItem.Status.DesiredNumberScheduled {
+			status = "Ready"
+		}
+
+		resources = append(resources, model.Resource{
+			Type:         "DaemonSet",
+			Name:         dsItem.Name,
+			Namespace:    dsItem.Namespace,
+			Status:       status,
+			CreationTime: dsItem.CreationTimestamp.Time,
+		})
+	}
+
+	return resources, nil
 }

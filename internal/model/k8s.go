@@ -408,3 +408,53 @@ type K8sServiceRequest struct {
 type BatchDeleteReq struct {
 	IDs []int `json:"ids" binding:"required"`
 }
+
+// CreateNamespaceRequest 创建新的命名空间请求结构体
+type CreateNamespaceRequest struct {
+	ClusterId int             `json:"cluster_id" binding:"required"`
+	Ns        *core.Namespace `json:"namespace" binding:"required"`
+}
+
+// UpdateNamespaceRequest 更新命名空间请求结构体
+type UpdateNamespaceRequest struct {
+	ClusterId   int               `json:"cluster_id" binding:"required"`
+	Name        string            `json:"name" binding:"required"`
+	Labels      map[string]string `json:"labels,omitempty"`      // 命名空间标签
+	Annotations map[string]string `json:"annotations,omitempty"` // 命名空间注解
+}
+
+// Namespace 命名空间响应结构体
+type Namespace struct {
+	Name         string            `json:"name"`                  // 命名空间名称
+	UID          string            `json:"uid"`                   // 命名空间唯一标识符
+	Status       string            `json:"status"`                // 命名空间状态，例如 Active
+	CreationTime time.Time         `json:"creation_time"`         // 创建时间
+	Labels       map[string]string `json:"labels,omitempty"`      // 命名空间标签
+	Annotations  map[string]string `json:"annotations,omitempty"` // 命名空间注解
+}
+
+// Resource 命名空间中的资源响应结构体
+type Resource struct {
+	Type         string    `json:"type"`          // 资源类型，例如 Pod, Service, Deployment
+	Name         string    `json:"name"`          // 资源名称
+	Namespace    string    `json:"namespace"`     // 所属命名空间
+	Status       string    `json:"status"`        // 资源状态，例如 Running, Pending
+	CreationTime time.Time `json:"creation_time"` // 创建时间
+}
+
+// Event 命名空间事件响应结构体
+type Event struct {
+	Reason         string           `json:"reason"`          // 事件原因
+	Message        string           `json:"message"`         // 事件消息
+	Type           string           `json:"type"`            // 事件类型，例如 Normal, Warning
+	FirstTimestamp time.Time        `json:"first_timestamp"` // 第一次发生时间
+	LastTimestamp  time.Time        `json:"last_timestamp"`  // 最后一次发生时间
+	Count          int32            `json:"count"`           // 事件发生次数
+	Source         core.EventSource `json:"source"`          // 事件来源
+}
+
+// Metrics 命名空间指标响应结构体
+type Metrics struct {
+	CPUUsage    string `json:"cpu_usage"`    // CPU 使用情况
+	MemoryUsage string `json:"memory_usage"` // 内存使用情况
+}
