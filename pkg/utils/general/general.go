@@ -142,3 +142,38 @@ func DaysBetween(t1, t2 time.Time) int {
 func IsValidEmail(email string) bool {
 	return strings.Contains(email, "@") && strings.Contains(email, ".")
 }
+
+// MapToStringSlice 将 map 转换为 []string，要求偶数个元素，key和值依次排列
+func MapToStringSlice(inputMap map[string]string) ([]string, error) {
+	if inputMap == nil {
+		return []string{}, nil
+	}
+
+	var result []string
+	for key, value := range inputMap {
+		result = append(result, key, value)
+	}
+
+	// 确保结果长度为偶数
+	if len(result)%2 != 0 {
+		return nil, fmt.Errorf("转换后的字符串切片长度为奇数，不符合键值对要求")
+	}
+
+	return result, nil
+}
+
+// StringSliceToMap 将 []string 转换为 map[string]string，要求输入长度为偶数，奇数索引为 key，偶数索引为 value
+func StringSliceToMap(inputSlice []string) (map[string]string, error) {
+	if len(inputSlice)%2 != 0 {
+		return nil, fmt.Errorf("输入的字符串切片长度必须为偶数，实际长度为 %d", len(inputSlice))
+	}
+
+	result := make(map[string]string)
+	for i := 0; i < len(inputSlice); i += 2 {
+		key := inputSlice[i]
+		value := inputSlice[i+1]
+		result[key] = value
+	}
+
+	return result, nil
+}

@@ -49,7 +49,7 @@ func (k *K8sNamespaceHandler) RegisterRouters(router *gin.Engine) {
 	k8sGroup := router.Group("/api/k8s")
 	namespaces := k8sGroup.Group("/namespaces")
 	{
-		namespaces.GET("/cascade", k.GetClusterNamespacesForCascade)   // 获取级联选择的命名空间列表
+		namespaces.GET("/list", k.GetClusterNamespacesForCascade)      // 获取级联选择的命名空间列表
 		namespaces.GET("/select/:id", k.GetClusterNamespacesForSelect) // 获取用于选择的命名空间列表
 		namespaces.POST("/create", k.CreateNamespace)                  // 创建新的命名空间
 		namespaces.DELETE("/delete/:id", k.DeleteNamespace)            // 删除指定的命名空间

@@ -52,7 +52,6 @@ func (k *K8sSvcHandler) RegisterRouters(server *gin.Engine) {
 	{
 		services.GET("/:id", k.GetServiceListByNamespace)       // 根据命名空间获取 Service 列表
 		services.GET("/:id/:svcName/yaml", k.GetServiceYaml)    // 获取指定 Service 的 YAML 配置
-		services.POST("/create", k.CreateService)               // 创建或更新 Service
 		services.POST("/update", k.UpdateService)               // 更新指定 Name 的 Service
 		services.DELETE("/batch_delete", k.BatchDeleteServices) // 批量删除 Service
 	}
@@ -102,21 +101,12 @@ func (k *K8sSvcHandler) GetServiceYaml(ctx *gin.Context) {
 	})
 }
 
-// CreateService 创建或更新 Service
-func (k *K8sSvcHandler) CreateService(ctx *gin.Context) {
-	var req model.K8sServiceRequest
-
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.svcService.CreateOrUpdateService(ctx, &req)
-	})
-}
-
 // UpdateService 更新指定 Name 的 Service
 func (k *K8sSvcHandler) UpdateService(ctx *gin.Context) {
 	var req model.K8sServiceRequest
 
 	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.svcService.CreateOrUpdateService(ctx, &req)
+		return nil, k.svcService.UpdateService(ctx, &req)
 	})
 }
 

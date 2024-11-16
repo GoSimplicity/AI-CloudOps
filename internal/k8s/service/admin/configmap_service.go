@@ -41,7 +41,6 @@ import (
 
 type ConfigMapService interface {
 	GetConfigMapsByNamespace(ctx context.Context, id int, namespace string) ([]*corev1.ConfigMap, error)
-	CreateConfigMap(ctx context.Context, configMap *model.K8sConfigMapRequest) error
 	UpdateConfigMap(ctx context.Context, configMap *model.K8sConfigMapRequest) error
 	GetConfigMapYaml(ctx context.Context, id int, namespace, configMapName string) (*corev1.ConfigMap, error)
 	BatchDeleteConfigMap(ctx context.Context, id int, namespace string, configMapNames []string) error
@@ -50,32 +49,30 @@ type ConfigMapService interface {
 type configMapService struct {
 	dao    admin.ClusterDAO
 	client client.K8sClient
-	l      *zap.Logger
+	logger *zap.Logger
 }
 
-func NewConfigMapService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) ConfigMapService {
+func NewConfigMapService(dao admin.ClusterDAO, client client.K8sClient, logger *zap.Logger) ConfigMapService {
 	return &configMapService{
 		dao:    dao,
 		client: client,
-		l:      l,
+		logger: logger,
 	}
 }
 
 // GetConfigMapsByNamespace 获取命名空间的所有 ConfigMap
 func (c *configMapService) GetConfigMapsByNamespace(ctx context.Context, id int, namespace string) ([]*corev1.ConfigMap, error) {
-	kubeClient, err := pkg.GetKubeClient(id, c.client, c.l)
+	kubeClient, err := pkg.GetKubeClient(id, c.client, c.logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get kubeClient: %w", err)
 	}
 
-	// 获取configMap列表
 	configMapList, err := kubeClient.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		c.l.Error("获取 ConfigMap 列表失败", zap.Error(err))
-		return nil, err
+		c.logger.Error("Failed to get ConfigMap list", zap.Error(err))
+		return nil, fmt.Errorf("failed to list ConfigMaps: %w", err)
 	}
 
-	// 将configMap列表转换为数组
 	configMaps := make([]*corev1.ConfigMap, len(configMapList.Items))
 	for i := range configMapList.Items {
 		configMaps[i] = &configMapList.Items[i]
@@ -84,35 +81,17 @@ func (c *configMapService) GetConfigMapsByNamespace(ctx context.Context, id int,
 	return configMaps, nil
 }
 
-// CreateConfigMap 创建新的 ConfigMap
-func (c *configMapService) CreateConfigMap(ctx context.Context, configMapRequest *model.K8sConfigMapRequest) error {
-	kubeClient, err := pkg.GetKubeClient(configMapRequest.ClusterId, c.client, c.l)
-	if err != nil {
-		return err
-	}
-
-	// 创建 ConfigMap
-	_, err = kubeClient.CoreV1().ConfigMaps(configMapRequest.ConfigMap.Namespace).Create(ctx, configMapRequest.ConfigMap, metav1.CreateOptions{})
-	if err != nil {
-		c.l.Error("创建 ConfigMap 失败", zap.Error(err))
-		return err
-	}
-
-	return nil
-}
-
 // UpdateConfigMap 更新 ConfigMap
 func (c *configMapService) UpdateConfigMap(ctx context.Context, configMapRequest *model.K8sConfigMapRequest) error {
-	kubeClient, err := pkg.GetKubeClient(configMapRequest.ClusterId, c.client, c.l)
+	kubeClient, err := pkg.GetKubeClient(configMapRequest.ClusterId, c.client, c.logger)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get kubeClient: %w", err)
 	}
 
-	// 获取单个 ConfigMap
 	configMap, err := kubeClient.CoreV1().ConfigMaps(configMapRequest.ConfigMap.Namespace).Get(ctx, configMapRequest.ConfigMap.Name, metav1.GetOptions{})
 	if err != nil {
-		c.l.Error("获取 ConfigMap 失败", zap.Error(err))
-		return err
+		c.logger.Error("Failed to get ConfigMap", zap.Error(err))
+		return fmt.Errorf("failed to get ConfigMap: %w", err)
 	}
 
 	if configMap.Data == nil {
@@ -125,8 +104,8 @@ func (c *configMapService) UpdateConfigMap(ctx context.Context, configMapRequest
 
 	_, err = kubeClient.CoreV1().ConfigMaps(configMapRequest.ConfigMap.Namespace).Update(ctx, configMap, metav1.UpdateOptions{})
 	if err != nil {
-		c.l.Error("更新 ConfigMap 数据失败", zap.Error(err))
-		return err
+		c.logger.Error("Failed to update ConfigMap", zap.Error(err))
+		return fmt.Errorf("failed to update ConfigMap: %w", err)
 	}
 
 	return nil
@@ -134,15 +113,15 @@ func (c *configMapService) UpdateConfigMap(ctx context.Context, configMapRequest
 
 // GetConfigMapYaml 获取 ConfigMap 详情
 func (c *configMapService) GetConfigMapYaml(ctx context.Context, id int, namespace, configMapName string) (*corev1.ConfigMap, error) {
-	kubeClient, err := pkg.GetKubeClient(id, c.client, c.l)
+	kubeClient, err := pkg.GetKubeClient(id, c.client, c.logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get kubeClient: %w", err)
 	}
 
 	configMap, err := kubeClient.CoreV1().ConfigMaps(namespace).Get(ctx, configMapName, metav1.GetOptions{})
 	if err != nil {
-		c.l.Error("获取 ConfigMap 失败", zap.Error(err))
-		return nil, err
+		c.logger.Error("Failed to get ConfigMap", zap.Error(err))
+		return nil, fmt.Errorf("failed to get ConfigMap: %w", err)
 	}
 
 	return configMap, nil
@@ -150,25 +129,23 @@ func (c *configMapService) GetConfigMapYaml(ctx context.Context, id int, namespa
 
 // BatchDeleteConfigMap 批量删除指定的 ConfigMap
 func (c *configMapService) BatchDeleteConfigMap(ctx context.Context, id int, namespace string, configMapNames []string) error {
-	kubeClient, err := pkg.GetKubeClient(id, c.client, c.l)
+	kubeClient, err := pkg.GetKubeClient(id, c.client, c.logger)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get kubeClient: %w", err)
 	}
 
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(configMapNames))
 
-	// 并发删除 ConfigMap
 	for _, name := range configMapNames {
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
-			err := kubeClient.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
-			if err != nil {
-				c.l.Error("删除 ConfigMap 失败", zap.String("configMapName", name), zap.Error(err))
-				errCh <- err
+			if err := kubeClient.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+				c.logger.Error("Failed to delete ConfigMap", zap.String("configMapName", name), zap.Error(err))
+				errCh <- fmt.Errorf("failed to delete ConfigMap '%s': %w", name, err)
 			} else {
-				c.l.Info("删除 ConfigMap 成功", zap.String("configMapName", name))
+				c.logger.Info("Successfully deleted ConfigMap", zap.String("configMapName", name))
 			}
 		}(name)
 	}
@@ -176,14 +153,13 @@ func (c *configMapService) BatchDeleteConfigMap(ctx context.Context, id int, nam
 	wg.Wait()
 	close(errCh)
 
-	// 检查是否有错误
 	var errs []error
 	for err := range errCh {
 		errs = append(errs, err)
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("在删除 ConfigMap 时遇到错误: %v", errs)
+		return fmt.Errorf("errors occurred while deleting ConfigMaps: %v", errs)
 	}
 
 	return nil

@@ -94,16 +94,11 @@ func (t *taintService) CheckTaintYaml(ctx context.Context, req *model.TaintK8sNo
 		return err
 	}
 
-	var errs []error
-	for _, nodeName := range req.NodeNames {
-		if _, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{}); err != nil {
-			t.l.Error("获取节点信息失败", zap.Error(err))
-			errs = append(errs, fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err))
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("在处理节点 Taints 时遇到以下错误: %v", errs)
+	// 尝试获取节点信息
+	_, err = kubeClient.CoreV1().Nodes().Get(ctx, req.NodeName, metav1.GetOptions{})
+	if err != nil {
+		t.l.Error("获取节点信息失败", zap.Error(err))
+		return fmt.Errorf("获取节点 %s 信息失败: %w", req.NodeName, err)
 	}
 
 	return nil
@@ -117,29 +112,21 @@ func (t *taintService) BatchEnableSwitchNodes(ctx context.Context, req *model.Sc
 		return err
 	}
 
-	var errs []error
-	for _, nodeName := range req.NodeNames {
-		node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if err != nil {
-			errs = append(errs, fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err))
-			t.l.Error("获取节点信息失败", zap.Error(err))
-			continue
-		}
-
-		node.Spec.Unschedulable = !req.ScheduleEnable
-		if _, err := kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
-			t.l.Error("更新节点信息失败", zap.Error(err))
-			errs = append(errs, fmt.Errorf("更新节点 %s 信息失败: %w", nodeName, err))
-			continue
-		}
-
-		t.l.Info("更新节点调度状态成功", zap.String("nodeName", nodeName))
+	// 获取节点信息
+	node, err := kubeClient.CoreV1().Nodes().Get(ctx, req.NodeName, metav1.GetOptions{})
+	if err != nil {
+		t.l.Error("获取节点信息失败", zap.Error(err))
+		return fmt.Errorf("获取节点 %s 信息失败: %w", req.NodeName, err)
 	}
 
-	if len(errs) > 0 {
-		return fmt.Errorf("在处理节点调度状态时遇到以下错误: %v", errs)
+	// 更新节点调度状态
+	node.Spec.Unschedulable = !req.ScheduleEnable
+	if _, err := kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
+		t.l.Error("更新节点信息失败", zap.Error(err))
+		return fmt.Errorf("更新节点 %s 信息失败: %w", req.NodeName, err)
 	}
 
+	t.l.Info("更新节点调度状态成功", zap.String("nodeName", req.NodeName))
 	return nil
 }
 
@@ -151,46 +138,39 @@ func (t *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.Tain
 		return err
 	}
 
+	// 解析 Taint YAML 配置
 	var taintsToProcess []corev1.Taint
 	if err := yaml.UnmarshalStrict([]byte(req.TaintYaml), &taintsToProcess); err != nil {
 		t.l.Error("解析 Taint YAML 配置失败", zap.Error(err))
 		return err
 	}
 
-	var errs []error
-	for _, nodeName := range req.NodeNames {
-		node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if err != nil {
-			errs = append(errs, fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err))
-			t.l.Error("获取节点信息失败", zap.Error(err))
-			continue
-		}
-
-		switch req.ModType {
-		case "add":
-			node.Spec.Taints = pkg.MergeTaints(node.Spec.Taints, taintsToProcess)
-		case "del":
-			node.Spec.Taints = pkg.RemoveTaints(node.Spec.Taints, taintsToProcess)
-		default:
-			errMsg := fmt.Sprintf("未知的修改类型: %s", req.ModType)
-			t.l.Error(errMsg)
-			errs = append(errs, errors.New(errMsg))
-			continue
-		}
-
-		if _, err := kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
-			t.l.Error("更新节点信息失败", zap.Error(err))
-			errs = append(errs, fmt.Errorf("更新节点 %s 信息失败: %w", nodeName, err))
-			continue
-		}
-
-		t.l.Info("更新节点Taint成功", zap.String("nodeName", nodeName))
+	// 获取节点信息
+	node, err := kubeClient.CoreV1().Nodes().Get(ctx, req.NodeName, metav1.GetOptions{})
+	if err != nil {
+		t.l.Error("获取节点信息失败", zap.Error(err))
+		return fmt.Errorf("获取节点 %s 信息失败: %w", req.NodeName, err)
 	}
 
-	if len(errs) > 0 {
-		return fmt.Errorf("在处理节点 Taints 时遇到以下错误: %v", errs)
+	// 根据操作类型添加、删除或更新 taint
+	switch req.ModType {
+	case "add":
+		node.Spec.Taints = pkg.MergeTaints(node.Spec.Taints, taintsToProcess)
+	case "del":
+		node.Spec.Taints = pkg.RemoveTaints(node.Spec.Taints, taintsToProcess)
+	default:
+		errMsg := fmt.Sprintf("未知的修改类型: %s", req.ModType)
+		t.l.Error(errMsg)
+		return errors.New(errMsg)
 	}
 
+	// 更新节点信息
+	if _, err := kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
+		t.l.Error("更新节点信息失败", zap.Error(err))
+		return fmt.Errorf("更新节点 %s 信息失败: %w", req.NodeName, err)
+	}
+
+	t.l.Info("更新节点 Taint 成功", zap.String("nodeName", req.NodeName))
 	return nil
 }
 
@@ -202,14 +182,14 @@ func (t *taintService) DrainPods(ctx context.Context, req *model.K8sClusterNodes
 		return err
 	}
 
-	// 获取指定节点的 Pod 列表
-	pods, err := pkg.GetPodsByNodeName(ctx, kubeClient, req.NodeNames[0])
+	// 获取节点上的 Pod 列表
+	pods, err := pkg.GetPodsByNodeName(ctx, kubeClient, req.NodeName)
 	if err != nil {
 		t.l.Error("获取 Pod 列表失败", zap.Error(err))
 		return err
 	}
 
-	// 设置驱逐参数
+	// 配置驱逐模板
 	evictionTemplate := &policyv1.Eviction{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "policy/v1",
@@ -220,9 +200,8 @@ func (t *taintService) DrainPods(ctx context.Context, req *model.K8sClusterNodes
 		},
 	}
 
-	// 使用 errgroup 控制并发驱逐 Pods
+	// 并发驱逐 Pods
 	var errs []error
-
 	g, ctx := errgroup.WithContext(ctx)
 	for _, pod := range pods.Items {
 		pod := pod // 避免闭包引用问题
@@ -231,6 +210,7 @@ func (t *taintService) DrainPods(ctx context.Context, req *model.K8sClusterNodes
 			eviction.Name = pod.Name
 			eviction.Namespace = pod.Namespace
 
+			// 驱逐 Pod
 			if err := kubeClient.PolicyV1().Evictions(eviction.Namespace).Evict(ctx, eviction); err != nil {
 				t.l.Error("驱逐 Pod 失败", zap.Error(err), zap.String("podName", pod.Name))
 				return fmt.Errorf("驱逐 Pod %s 失败: %w", pod.Name, err)
@@ -241,10 +221,12 @@ func (t *taintService) DrainPods(ctx context.Context, req *model.K8sClusterNodes
 		})
 	}
 
+	// 等待所有驱逐操作完成
 	if err := g.Wait(); err != nil {
 		errs = append(errs, err)
 	}
 
+	// 如果有错误，返回汇总
 	if len(errs) > 0 {
 		return fmt.Errorf("在驱逐 Pod 时遇到以下错误: %v", errs)
 	}

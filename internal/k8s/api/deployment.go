@@ -52,7 +52,6 @@ func (k *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 	{
 		deployments.GET("/:id", k.GetDeployListByNamespace)           // 根据命名空间获取部署列表
 		deployments.GET("/:id/yaml", k.GetDeployYaml)                 // 获取指定部署的 YAML 配置
-		deployments.POST("/create", k.CreateDeployment)               // 创建新的部署
 		deployments.POST("/update", k.UpdateDeployment)               // 更新指定 deployment
 		deployments.DELETE("/batch_delete", k.BatchDeleteDeployment)  // 批量删除 deployment
 		deployments.POST("/batch_restart", k.BatchRestartDeployments) // 批量重启部署
@@ -75,15 +74,6 @@ func (k *K8sDeploymentHandler) GetDeployListByNamespace(ctx *gin.Context) {
 
 	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.deploymentService.GetDeploymentsByNamespace(ctx, id, namespace)
-	})
-}
-
-// CreateDeployment 创建新的部署
-func (k *K8sDeploymentHandler) CreateDeployment(ctx *gin.Context) {
-	var req model.K8sDeploymentRequest
-
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.deploymentService.CreateDeployment(ctx, &req)
 	})
 }
 

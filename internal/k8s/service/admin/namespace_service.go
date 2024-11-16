@@ -30,9 +30,11 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/general"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sync"
@@ -40,9 +42,9 @@ import (
 
 type NamespaceService interface {
 	// GetClusterNamespacesList 获取命名空间列表
-	GetClusterNamespacesList(ctx context.Context) (map[string][]string, error)
+	GetClusterNamespacesList(ctx context.Context) ([]model.ClusterNamespaces, error)
 	// GetClusterNamespacesById 获取指定集群的所有命名空间
-	GetClusterNamespacesById(ctx context.Context, id int) ([]string, error)
+	GetClusterNamespacesById(ctx context.Context, id int) ([]model.Namespace, error)
 	// CreateNamespace 创建新的命名空间
 	CreateNamespace(ctx context.Context, req model.CreateNamespaceRequest) error
 	// DeleteNamespace 删除指定的命名空间
@@ -71,47 +73,8 @@ func NewNamespaceService(dao admin.ClusterDAO, client client.K8sClient, logger *
 	}
 }
 
-// GetClusterNamespacesList 获取所有集群的命名空间列表
-func (n *namespaceService) GetClusterNamespacesList(ctx context.Context) (map[string][]string, error) {
-	// 获取集群列表
-	clusters, err := n.dao.ListAllClusters(ctx)
-	if err != nil {
-		n.logger.Error("获取集群列表失败", zap.Error(err))
-		return nil, err
-	}
-
-	namespaceMap := make(map[string][]string)
-	var mu sync.Mutex
-	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(10) // 限制并发数为 10
-
-	for _, cluster := range clusters {
-		cluster := cluster // 避免闭包变量捕获问题
-		g.Go(func() error {
-			namespaces, err := n.GetClusterNamespacesById(ctx, cluster.ID)
-			if err != nil {
-				n.logger.Error("获取命名空间列表失败", zap.Error(err), zap.String("clusterName", cluster.Name))
-				return err
-			}
-
-			mu.Lock()
-			defer mu.Unlock()
-			namespaceMap[cluster.Name] = namespaces
-			return nil
-		})
-	}
-
-	// 等待所有 goroutines 执行完毕
-	if err := g.Wait(); err != nil {
-		n.logger.Error("并发获取命名空间列表失败", zap.Error(err))
-		return nil, err
-	}
-
-	return namespaceMap, nil
-}
-
-// GetClusterNamespacesById 获取指定集群的命名空间列表
-func (n *namespaceService) GetClusterNamespacesById(ctx context.Context, id int) ([]string, error) {
+// GetClusterNamespacesById 获取指定集群的命名空间列表，返回详细的 Namespace 结构体
+func (n *namespaceService) GetClusterNamespacesById(ctx context.Context, id int) ([]model.Namespace, error) {
 	// 获取 Kubernetes 客户端
 	kubeClient, err := pkg.GetKubeClient(id, n.client, n.logger)
 	if err != nil {
@@ -126,16 +89,88 @@ func (n *namespaceService) GetClusterNamespacesById(ctx context.Context, id int)
 		return nil, err
 	}
 
-	// 提取命名空间名称并返回
-	nsList := make([]string, len(namespaces.Items))
+	// 转换为 []model.Namespace
+	nsList := make([]model.Namespace, len(namespaces.Items))
 	for i, ns := range namespaces.Items {
-		nsList[i] = ns.Name
+		// 转换 Labels 和 Annotations 为 []string
+		labels, err := general.MapToStringSlice(ns.Labels)
+		if err != nil {
+			n.logger.Error("转换 Labels 失败", zap.Error(err))
+			return nil, err
+		}
+
+		annotations, err := general.MapToStringSlice(ns.Annotations)
+		if err != nil {
+			n.logger.Error("转换 Annotations 失败", zap.Error(err))
+			return nil, err
+		}
+
+		nsList[i] = model.Namespace{
+			Name:         ns.Name,
+			UID:          string(ns.UID),
+			Status:       string(ns.Status.Phase),
+			CreationTime: ns.CreationTimestamp.Time,
+			Labels:       labels,
+			Annotations:  annotations,
+		}
 	}
 
 	return nsList, nil
 }
 
-// CreateNamespace 创建新的命名空间
+// GetClusterNamespacesList 获取所有集群的命名空间列表，返回包含 cluster_name 和 namespaces 的列表
+func (n *namespaceService) GetClusterNamespacesList(ctx context.Context) ([]model.ClusterNamespaces, error) {
+	// 获取集群列表
+	clusters, err := n.dao.ListAllClusters(ctx)
+	if err != nil {
+		n.logger.Error("获取集群列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 初始化结果切片
+	var clusterNamespacesList []model.ClusterNamespaces
+	var mu sync.Mutex
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(10) // 限制并发数为 10
+
+	// 遍历集群列表并发获取命名空间
+	for _, cluster := range clusters {
+		cluster := cluster // 避免闭包变量捕获问题
+		g.Go(func() error {
+			// 获取指定集群的命名空间
+			namespaces, err := n.GetClusterNamespacesById(ctx, cluster.ID)
+			if err != nil {
+				n.logger.Error("获取命名空间列表失败",
+					zap.Error(err),
+					zap.String("clusterName", cluster.Name))
+				return err
+			}
+
+			// 创建 ClusterNamespaces 实例
+			cn := model.ClusterNamespaces{
+				ClusterName: cluster.Name,
+				ClusterId:   cluster.ID,
+				Namespaces:  namespaces,
+			}
+
+			// 加锁写入结果切片
+			mu.Lock()
+			clusterNamespacesList = append(clusterNamespacesList, cn)
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	// 等待所有 goroutines 执行完成
+	if err := g.Wait(); err != nil {
+		n.logger.Error("并发获取命名空间列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	return clusterNamespacesList, nil
+}
+
 func (n *namespaceService) CreateNamespace(ctx context.Context, req model.CreateNamespaceRequest) error {
 	// 获取 Kubernetes 客户端
 	kubeClient, err := pkg.GetKubeClient(req.ClusterId, n.client, n.logger)
@@ -144,7 +179,30 @@ func (n *namespaceService) CreateNamespace(ctx context.Context, req model.Create
 		return err
 	}
 
-	_, err = kubeClient.CoreV1().Namespaces().Create(ctx, req.Ns, metav1.CreateOptions{})
+	// 将 []string 转换为 map[string]string
+	labelsMap, err := general.StringSliceToMap(req.Labels)
+	if err != nil {
+		n.logger.Error("转换 Labels 失败", zap.Error(err))
+		return err
+	}
+
+	annotationsMap, err := general.StringSliceToMap(req.Annotations)
+	if err != nil {
+		n.logger.Error("转换 Annotations 失败", zap.Error(err))
+		return err
+	}
+
+	// 创建命名空间对象
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Labels:      labelsMap,
+			Annotations: annotationsMap,
+		},
+	}
+
+	// 提交创建请求
+	_, err = kubeClient.CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{})
 	if err != nil {
 		n.logger.Error("创建命名空间失败", zap.Error(err))
 		return err
@@ -172,7 +230,7 @@ func (n *namespaceService) DeleteNamespace(ctx context.Context, name string, id 
 	return nil
 }
 
-// GetNamespaceDetails 获取指定命名空间的详情
+// GetNamespaceDetails 获取指定命名空间的详细信息
 func (n *namespaceService) GetNamespaceDetails(ctx context.Context, name string, id int) (model.Namespace, error) {
 	// 获取 Kubernetes 客户端
 	kubeClient, err := pkg.GetKubeClient(id, n.client, n.logger)
@@ -188,13 +246,25 @@ func (n *namespaceService) GetNamespaceDetails(ctx context.Context, name string,
 		return model.Namespace{}, err
 	}
 
+	labels, err := general.MapToStringSlice(namespace.Labels)
+	if err != nil {
+		n.logger.Error("转换 Labels 失败", zap.Error(err))
+		return model.Namespace{}, err
+	}
+
+	annotations, err := general.MapToStringSlice(namespace.Annotations)
+	if err != nil {
+		n.logger.Error("转换 Annotations 失败", zap.Error(err))
+		return model.Namespace{}, err
+	}
+
 	return model.Namespace{
 		Name:         namespace.Name,
 		UID:          string(namespace.UID),
 		Status:       string(namespace.Status.Phase),
 		CreationTime: namespace.CreationTimestamp.Time,
-		Labels:       namespace.Labels,
-		Annotations:  namespace.Annotations,
+		Labels:       labels,
+		Annotations:  annotations,
 	}, nil
 }
 
@@ -214,9 +284,21 @@ func (n *namespaceService) UpdateNamespace(ctx context.Context, req model.Update
 		return err
 	}
 
+	labelsMap, err := general.StringSliceToMap(req.Labels)
+	if err != nil {
+		n.logger.Error("转换 Labels 失败", zap.Error(err))
+		return err
+	}
+
+	annotationsMap, err := general.StringSliceToMap(req.Annotations)
+	if err != nil {
+		n.logger.Error("转换 Annotations 失败", zap.Error(err))
+		return err
+	}
+
 	// 更新命名空间标签或注释
-	namespace.Labels = req.Labels
-	namespace.Annotations = req.Annotations
+	namespace.Labels = labelsMap
+	namespace.Annotations = annotationsMap
 
 	// 提交更新请求
 	_, err = kubeClient.CoreV1().Namespaces().Update(ctx, namespace, metav1.UpdateOptions{})
