@@ -44,7 +44,9 @@ type SvcService interface {
 	// GetServiceYaml 获取指定 Service 的 YAML 配置
 	GetServiceYaml(ctx context.Context, id int, namespace, serviceName string) (*corev1.Service, error)
 	// DeleteService 删除 Service
-	DeleteService(ctx context.Context, id int, namespace string, serviceNames []string) error
+	DeleteService(ctx context.Context, id int, namespace string, serviceNames string) error
+	// BatchDeleteService 批量删除 Service
+	BatchDeleteService(ctx context.Context, id int, namespace string, serviceNames []string) error
 	// UpdateService 更新 Service
 	UpdateService(ctx context.Context, serviceResource *model.K8sServiceRequest) error
 }
@@ -128,8 +130,18 @@ func (s *svcService) UpdateService(ctx context.Context, serviceResource *model.K
 	return nil
 }
 
-// DeleteService 删除指定的 Service
-func (s *svcService) DeleteService(ctx context.Context, id int, namespace string, serviceNames []string) error {
+func (s *svcService) DeleteService(ctx context.Context, id int, namespace string, serviceNames string) error {
+	kubeClient, err := pkg.GetKubeClient(id, s.client, s.l)
+	if err != nil {
+		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return err
+	}
+
+	return kubeClient.CoreV1().Services(namespace).Delete(ctx, serviceNames, metav1.DeleteOptions{})
+}
+
+// BatchDeleteService 批量删除指定的 Service
+func (s *svcService) BatchDeleteService(ctx context.Context, id int, namespace string, serviceNames []string) error {
 	kubeClient, err := pkg.GetKubeClient(id, s.client, s.l)
 	if err != nil {
 		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
