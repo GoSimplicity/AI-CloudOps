@@ -50,9 +50,10 @@ func (k *K8sSvcHandler) RegisterRouters(server *gin.Engine) {
 
 	services := k8sGroup.Group("/services")
 	{
-		services.GET("/:id", k.GetServiceListByNamespace)       // 根据命名空间获取 Service 列表
-		services.GET("/:id/:svcName/yaml", k.GetServiceYaml)    // 获取指定 Service 的 YAML 配置
-		services.POST("/update", k.UpdateService)               // 更新指定 Name 的 Service
+		services.GET("/:id", k.GetServiceListByNamespace)    // 根据命名空间获取 Service 列表
+		services.GET("/:id/:svcName/yaml", k.GetServiceYaml) // 获取指定 Service 的 YAML 配置
+		services.POST("/update", k.UpdateService)            // 更新指定 Name 的 Service
+		services.DELETE("/delete/:id", k.DeleteService)
 		services.DELETE("/batch_delete", k.BatchDeleteServices) // 批量删除 Service
 	}
 }
@@ -110,11 +111,32 @@ func (k *K8sSvcHandler) UpdateService(ctx *gin.Context) {
 	})
 }
 
+// DeleteService 删除指定 Service
+func (k *K8sSvcHandler) DeleteService(ctx *gin.Context) {
+	id, err := apiresponse.GetParamID(ctx)
+	if err != nil {
+		apiresponse.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace := ctx.Query("namespace")
+	svcName := ctx.Query("svcName")
+	if namespace == "" || svcName == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 或 'svcName' 参数")
+		return
+	}
+
+	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, k.svcService.DeleteService(ctx, id, namespace, svcName)
+	})
+
+}
+
 // BatchDeleteServices 批量删除 Service
 func (k *K8sSvcHandler) BatchDeleteServices(ctx *gin.Context) {
 	var req model.K8sServiceRequest
 
 	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.svcService.DeleteService(ctx, req.ClusterId, req.Namespace, req.ServiceNames)
+		return nil, k.svcService.BatchDeleteService(ctx, req.ClusterId, req.Namespace, req.ServiceNames)
 	})
 }
