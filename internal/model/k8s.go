@@ -294,8 +294,8 @@ type K8sContainerPort struct {
 
 // K8sClusterNodesRequest 定义集群节点请求的基础结构
 type K8sClusterNodesRequest struct {
-	ClusterId int      `json:"cluster_id" binding:"required"` // 集群id，必填
-	NodeNames []string `json:"node_names" binding:"required"` // 节点名称列表，必填
+	ClusterId int    `json:"cluster_id" binding:"required"` // 集群id，必填
+	NodeName  string `json:"node_name" binding:"required"`  // 节点名称列表，必填
 }
 
 // ResourceRequirements 资源的请求与限制
@@ -339,8 +339,8 @@ type K8sResourceList struct {
 // LabelK8sNodesRequest 定义为节点添加标签的请求结构
 type LabelK8sNodesRequest struct {
 	*K8sClusterNodesRequest
-	ModType string            `json:"mod_type" binding:"required,oneof=add del"` // 操作类型，必填，值为 "add" 或 "del"
-	Labels  map[string]string `json:"labels" binding:"required,dive,required"`   // 标签键值对，必填，格式为 key=value
+	ModType string   `json:"mod_type" binding:"required,oneof=add del"` // 操作类型，必填，值为 "add" 或 "del"
+	Labels  []string `json:"labels" binding:"required"`                 // 标签键值对，必填
 }
 
 // TaintK8sNodesRequest 定义为节点添加或删除 Taint 的请求结构
@@ -407,4 +407,57 @@ type K8sServiceRequest struct {
 
 type BatchDeleteReq struct {
 	IDs []int `json:"ids" binding:"required"`
+}
+
+// CreateNamespaceRequest 创建新的命名空间请求结构体
+type CreateNamespaceRequest struct {
+	ClusterId   int      `json:"cluster_id" binding:"required"`
+	Name        string   `json:"namespace" binding:"required"`
+	Labels      []string `json:"labels,omitempty"`      // 命名空间标签
+	Annotations []string `json:"annotations,omitempty"` // 命名空间注解
+}
+
+// UpdateNamespaceRequest 更新命名空间请求结构体
+type UpdateNamespaceRequest struct {
+	ClusterId   int      `json:"cluster_id" binding:"required"`
+	Name        string   `json:"namespace" binding:"required"`
+	Labels      []string `json:"labels,omitempty"`      // 命名空间标签
+	Annotations []string `json:"annotations,omitempty"` // 命名空间注解
+}
+
+// Resource 命名空间中的资源响应结构体
+type Resource struct {
+	Type         string    `json:"type"`          // 资源类型，例如 Pod, Service, Deployment
+	Name         string    `json:"name"`          // 资源名称
+	Namespace    string    `json:"namespace"`     // 所属命名空间
+	Status       string    `json:"status"`        // 资源状态，例如 Running, Pending
+	CreationTime time.Time `json:"creation_time"` // 创建时间
+}
+
+// Event 命名空间事件响应结构体
+type Event struct {
+	Reason         string           `json:"reason"`          // 事件原因
+	Message        string           `json:"message"`         // 事件消息
+	Type           string           `json:"type"`            // 事件类型，例如 Normal, Warning
+	FirstTimestamp time.Time        `json:"first_timestamp"` // 第一次发生时间
+	LastTimestamp  time.Time        `json:"last_timestamp"`  // 最后一次发生时间
+	Count          int32            `json:"count"`           // 事件发生次数
+	Source         core.EventSource `json:"source"`          // 事件来源
+}
+
+// Namespace 命名空间响应结构体
+type Namespace struct {
+	Name         string    `json:"name"`                  // 命名空间名称
+	UID          string    `json:"uid"`                   // 命名空间唯一标识符
+	Status       string    `json:"status"`                // 命名空间状态，例如 Active
+	CreationTime time.Time `json:"creation_time"`         // 创建时间
+	Labels       []string  `json:"labels,omitempty"`      // 命名空间标签
+	Annotations  []string  `json:"annotations,omitempty"` // 命名空间注解
+}
+
+// ClusterNamespaces 表示一个集群及其命名空间列表
+type ClusterNamespaces struct {
+	ClusterName string      `json:"cluster_name"` // 集群名称
+	ClusterId   int         `json:"cluster_id"`   // 集群ID
+	Namespaces  []Namespace `json:"namespaces"`   // 命名空间列表
 }

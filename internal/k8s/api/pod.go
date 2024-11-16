@@ -27,7 +27,6 @@ package api
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -54,7 +53,6 @@ func (k *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 		pods.GET("/:id/:podName/containers", k.GetPodContainers)      // 获取指定 Pod 的容器列表
 		pods.GET("/:id/:podName/:container/logs", k.GetContainerLogs) // 获取指定容器的日志
 		pods.GET("/:id/:podName/yaml", k.GetPodYaml)                  // 获取指定 Pod 的 YAML 配置
-		pods.POST("/create", k.CreatePod)                             // 创建新的 Pod
 		pods.DELETE("/delete/:id", k.DeletePod)                       // 删除指定名称的 Pod
 	}
 }
@@ -175,15 +173,6 @@ func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 
 	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.podService.GetPodYaml(ctx, id, namespace, podName)
-	})
-}
-
-// CreatePod 创建新的 Pod
-func (k *K8sPodHandler) CreatePod(ctx *gin.Context) {
-	var req model.K8sPodRequest
-
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.podService.CreatePod(ctx, &req)
 	})
 }
 

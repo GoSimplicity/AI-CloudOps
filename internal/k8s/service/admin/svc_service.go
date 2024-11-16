@@ -35,7 +35,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
-	k8sErr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -44,10 +43,10 @@ type SvcService interface {
 	GetServicesByNamespace(ctx context.Context, id int, namespace string) ([]*corev1.Service, error)
 	// GetServiceYaml 获取指定 Service 的 YAML 配置
 	GetServiceYaml(ctx context.Context, id int, namespace, serviceName string) (*corev1.Service, error)
-	// CreateOrUpdateService 创建或更新 Service
-	CreateOrUpdateService(ctx context.Context, service *model.K8sServiceRequest) error
 	// DeleteService 删除 Service
 	DeleteService(ctx context.Context, id int, namespace string, serviceNames []string) error
+	// UpdateService 更新 Service
+	UpdateService(ctx context.Context, serviceResource *model.K8sServiceRequest) error
 }
 
 type svcService struct {
@@ -103,36 +102,8 @@ func (s *svcService) GetServiceYaml(ctx context.Context, id int, namespace, serv
 	return service, nil
 }
 
-// CreateOrUpdateService 创建或更新指定 Service
-func (s *svcService) CreateOrUpdateService(ctx context.Context, serviceResource *model.K8sServiceRequest) error {
-	kubeClient, err := pkg.GetKubeClient(serviceResource.ClusterId, s.client, s.l)
-	if err != nil {
-		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return err
-	}
-
-	// 检查 Service 是否已存在
-	_, err = kubeClient.CoreV1().Services(serviceResource.ServiceYaml.Namespace).Get(ctx, serviceResource.ServiceYaml.Name, metav1.GetOptions{})
-	if err != nil {
-		if k8sErr.IsNotFound(err) {
-			// Service 不存在，创建新 Service
-			_, err = kubeClient.CoreV1().Services(serviceResource.ServiceYaml.Namespace).Create(ctx, serviceResource.ServiceYaml, metav1.CreateOptions{})
-			if err != nil {
-				s.l.Error("创建 Service 失败", zap.Error(err))
-				return err
-			}
-			s.l.Info("创建 Service 成功", zap.String("serviceName", serviceResource.ServiceYaml.Name))
-			return nil
-		}
-		s.l.Error("获取 Service 失败", zap.Error(err))
-		return err
-	}
-
-	return s.updateService(ctx, serviceResource)
-}
-
-// updateService 更新指定的 Service
-func (s *svcService) updateService(ctx context.Context, serviceResource *model.K8sServiceRequest) error {
+// UpdateService 更新指定的 Service
+func (s *svcService) UpdateService(ctx context.Context, serviceResource *model.K8sServiceRequest) error {
 	kubeClient, err := pkg.GetKubeClient(serviceResource.ClusterId, s.client, s.l)
 	if err != nil {
 		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))

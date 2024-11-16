@@ -52,7 +52,6 @@ func (k *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 	{
 		configMaps.GET("/:id", k.GetConfigMapListByNamespace)           // 根据命名空间获取 ConfigMap 列表
 		configMaps.GET("/:id/:configmap_name/yaml", k.GetConfigMapYaml) // 获取指定 ConfigMap 的 YAML 配置
-		configMaps.POST("/create", k.CreateConfigMap)                   // 创建新的 ConfigMap
 		configMaps.POST("/update", k.UpdateConfigMap)                   // 更新指定 Name 的 ConfigMap
 		configMaps.DELETE("/batch_delete", k.BatchDeleteConfigMaps)     // 批量删除 ConfigMap
 	}
@@ -74,15 +73,6 @@ func (k *K8sConfigMapHandler) GetConfigMapListByNamespace(ctx *gin.Context) {
 
 	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.configmapService.GetConfigMapsByNamespace(ctx, id, namespace)
-	})
-}
-
-// CreateConfigMap 创建新的 ConfigMap
-func (k *K8sConfigMapHandler) CreateConfigMap(ctx *gin.Context) {
-	var req model.K8sConfigMapRequest
-
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.configmapService.CreateConfigMap(ctx, &req)
 	})
 }
 

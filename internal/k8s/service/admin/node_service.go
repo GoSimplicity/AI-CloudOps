@@ -101,6 +101,7 @@ func (n *nodeService) ListNodeByClusterName(ctx context.Context, id int) ([]*mod
 		})
 	}
 
+	// 等待所有协程完成
 	if err := g.Wait(); err != nil {
 		n.l.Error("并发处理节点信息失败", zap.Error(err))
 		return nil, err
@@ -125,7 +126,7 @@ func (n *nodeService) GetNodeDetail(ctx context.Context, id int, name string) (*
 	return pkg.BuildK8sNode(ctx, id, nodes.Items[0], kubeClient, metricsClient)
 }
 
-// AddOrUpdateNodeLabel 更新节点标签（添加或删除）
+// AddOrUpdateNodeLabel 更新节点标签（添加、删除或更新）
 func (n *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.LabelK8sNodesRequest) error {
 	kubeClient, err := pkg.GetKubeClient(req.ClusterId, n.client, n.l)
 	if err != nil {
@@ -133,54 +134,59 @@ func (n *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.Label
 		return err
 	}
 
-	var errs []error
+	// 校验传入的 Labels 数组长度是否为偶数
+	if len(req.Labels)%2 != 0 {
+		n.l.Error("传入的 Labels 数组不合法", zap.Int("labelsLength", len(req.Labels)))
+		return fmt.Errorf("传入的 Labels 数组必须是偶数个元素")
+	}
 
-	for _, nodeName := range req.NodeNames {
-		node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-		if err != nil {
-			errs = append(errs, fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err))
-			n.l.Error("获取节点信息失败", zap.Error(err))
-			continue
+	// 将传入的 labels 转换为 map[string]string
+	labelsMap := make(map[string]string)
+	for i := 0; i < len(req.Labels); i += 2 {
+		labelsMap[req.Labels[i]] = req.Labels[i+1]
+	}
+
+	// 获取指定节点
+	node, err := kubeClient.CoreV1().Nodes().Get(ctx, req.NodeName, metav1.GetOptions{})
+	if err != nil {
+		n.l.Error("获取节点信息失败", zap.Error(err))
+		return fmt.Errorf("获取节点 %s 信息失败: %w", req.NodeName, err)
+	}
+
+	// 根据操作类型进行标签处理
+	switch req.ModType {
+	case "add":
+		node.Labels = labelsMap
+	case "del":
+		// 删除标签
+		for key := range labelsMap {
+			delete(node.Labels, key)
 		}
-
-		switch req.ModType {
-		case "add":
-			for key, value := range req.Labels {
+	case "update":
+		// 更新标签
+		for key, value := range labelsMap {
+			if _, exists := node.Labels[key]; exists {
 				node.Labels[key] = value
+			} else {
+				n.l.Warn("标签键不存在，无法更新", zap.String("key", key))
+				return fmt.Errorf("节点 %s 不存在标签键 %s，无法更新", req.NodeName, key)
 			}
-		case "del":
-			for key := range req.Labels {
-				delete(node.Labels, key)
-			}
-		case "update":
-			for key, value := range req.Labels {
-				// 如果标签键存在，更新其值
-				if _, exists := node.Labels[key]; exists {
-					node.Labels[key] = value
-				} else {
-					n.l.Warn("标签键不存在，无法更新", zap.String("key", key))
-					errs = append(errs, fmt.Errorf("节点 %s 不存在标签键 %s，无法更新", nodeName, key))
-				}
-			}
-		default:
-			errMsg := fmt.Sprintf("未知的修改类型: %s", req.ModType)
-			n.l.Error(errMsg)
-			errs = append(errs, errors.New(errMsg))
-			continue
 		}
-
-		if _, err = kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
-			n.l.Error("更新节点信息失败", zap.Error(err))
-			errs = append(errs, fmt.Errorf("更新节点 %s 信息失败: %w", nodeName, err))
-		} else {
-			n.l.Info("更新节点Label成功", zap.String("nodeName", nodeName))
-		}
+	default:
+		errMsg := fmt.Sprintf("未知的修改类型: %s", req.ModType)
+		n.l.Error(errMsg)
+		return errors.New(errMsg)
 	}
 
-	if len(errs) > 0 {
-		return fmt.Errorf("在处理节点 Labels 时遇到以下错误: %v", errs)
+	// 更新节点信息
+	if _, err = kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
+		n.l.Error("更新节点信息失败", zap.Error(err))
+		return fmt.Errorf("更新节点 %s 信息失败: %w", req.NodeName, err)
 	}
 
+	n.l.Info("更新节点Label成功", zap.String("nodeName", req.NodeName))
+
+	// 刷新客户端
 	if err := n.client.RefreshClients(ctx); err != nil {
 		return fmt.Errorf("刷新客户端失败: %w", err)
 	}
