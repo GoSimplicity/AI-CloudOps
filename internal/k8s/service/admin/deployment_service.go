@@ -45,7 +45,9 @@ type DeploymentService interface {
 	GetDeploymentsByNamespace(ctx context.Context, id int, namespace string) ([]*appsv1.Deployment, error)
 	UpdateDeployment(ctx context.Context, deployment *model.K8sDeploymentRequest) error
 	BatchDeleteDeployment(ctx context.Context, id int, namespace string, deploymentNames []string) error
+	DeleteDeployment(ctx context.Context, id int, namespace, deploymentName string) error
 	BatchRestartDeployments(ctx context.Context, req *model.K8sDeploymentRequest) error
+	RestartDeployment(ctx context.Context, id int, namespace, deploymentName string) error
 	GetDeploymentYaml(ctx context.Context, id int, namespace, deploymentName string) (string, error)
 }
 
@@ -57,20 +59,22 @@ type deploymentService struct {
 
 // NewDeploymentService 创建新的 DeploymentService 实例
 func NewDeploymentService(dao admin.ClusterDAO, client client.K8sClient, logger *zap.Logger) DeploymentService {
-	return &deploymentService{dao: dao, client: client, logger: logger}
+	return &deploymentService{
+		dao:    dao,
+		client: client,
+		logger: logger,
+	}
 }
 
 // GetDeploymentsByNamespace 获取指定命名空间下的所有 Deployment
 func (d *deploymentService) GetDeploymentsByNamespace(ctx context.Context, id int, namespace string) ([]*appsv1.Deployment, error) {
 	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
 	if err != nil {
-		d.logger.Error("Failed to get Kubernetes client", zap.Error(err))
 		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
 
 	deployments, err := kubeClient.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		d.logger.Error("Failed to get Deployment list", zap.Error(err))
 		return nil, fmt.Errorf("failed to get Deployment list: %w", err)
 	}
 
@@ -83,22 +87,19 @@ func (d *deploymentService) GetDeploymentsByNamespace(ctx context.Context, id in
 }
 
 // GetDeploymentYaml 获取指定 Deployment 的 YAML 定义
-func (d *deploymentService) GetDeploymentYaml(ctx context.Context, id int, namespace string, deploymentName string) (string, error) {
+func (d *deploymentService) GetDeploymentYaml(ctx context.Context, id int, namespace, deploymentName string) (string, error) {
 	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
 	if err != nil {
-		d.logger.Error("Failed to get Kubernetes client", zap.Error(err))
 		return "", fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
 
 	deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
 	if err != nil {
-		d.logger.Error("Failed to get Deployment", zap.Error(err))
 		return "", fmt.Errorf("failed to get Deployment: %w", err)
 	}
 
 	yamlData, err := yaml.Marshal(deployment)
 	if err != nil {
-		d.logger.Error("Failed to serialize Deployment YAML", zap.Error(err))
 		return "", fmt.Errorf("failed to serialize Deployment YAML: %w", err)
 	}
 
@@ -109,21 +110,17 @@ func (d *deploymentService) GetDeploymentYaml(ctx context.Context, id int, names
 func (d *deploymentService) UpdateDeployment(ctx context.Context, deploymentResource *model.K8sDeploymentRequest) error {
 	kubeClient, err := pkg.GetKubeClient(deploymentResource.ClusterId, d.client, d.logger)
 	if err != nil {
-		d.logger.Error("Failed to get Kubernetes client", zap.Error(err))
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
 
 	existingDeployment, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Get(ctx, deploymentResource.DeploymentYaml.Name, metav1.GetOptions{})
 	if err != nil {
-		d.logger.Error("Failed to get existing Deployment", zap.Error(err))
 		return fmt.Errorf("failed to get existing Deployment: %w", err)
 	}
 
 	existingDeployment.Spec = deploymentResource.DeploymentYaml.Spec
 
-	_, err = kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Update(ctx, existingDeployment, metav1.UpdateOptions{})
-	if err != nil {
-		d.logger.Error("Failed to update Deployment", zap.Error(err))
+	if _, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Update(ctx, existingDeployment, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update Deployment: %w", err)
 	}
 
@@ -134,7 +131,6 @@ func (d *deploymentService) UpdateDeployment(ctx context.Context, deploymentReso
 func (d *deploymentService) BatchDeleteDeployment(ctx context.Context, id int, namespace string, deploymentNames []string) error {
 	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
 	if err != nil {
-		d.logger.Error("Failed to get Kubernetes client", zap.Error(err))
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
 
@@ -146,7 +142,6 @@ func (d *deploymentService) BatchDeleteDeployment(ctx context.Context, id int, n
 		go func(name string) {
 			defer wg.Done()
 			if err := kubeClient.AppsV1().Deployments(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
-				d.logger.Error("Failed to delete Deployment", zap.String("DeploymentName", name), zap.Error(err))
 				errChan <- fmt.Errorf("failed to delete Deployment '%s': %w", name, err)
 			}
 		}(name)
@@ -171,7 +166,6 @@ func (d *deploymentService) BatchDeleteDeployment(ctx context.Context, id int, n
 func (d *deploymentService) BatchRestartDeployments(ctx context.Context, deploymentResource *model.K8sDeploymentRequest) error {
 	kubeClient, err := pkg.GetKubeClient(deploymentResource.ClusterId, d.client, d.logger)
 	if err != nil {
-		d.logger.Error("Failed to get Kubernetes client", zap.Error(err))
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
 
@@ -184,7 +178,6 @@ func (d *deploymentService) BatchRestartDeployments(ctx context.Context, deploym
 			defer wg.Done()
 			deployment, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Get(ctx, deploy, metav1.GetOptions{})
 			if err != nil {
-				d.logger.Error("Failed to get Deployment", zap.String("DeploymentName", deploy), zap.Error(err))
 				errChan <- fmt.Errorf("failed to get Deployment '%s': %w", deploy, err)
 				return
 			}
@@ -195,7 +188,6 @@ func (d *deploymentService) BatchRestartDeployments(ctx context.Context, deploym
 			deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
 
 			if _, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Update(ctx, deployment, metav1.UpdateOptions{}); err != nil {
-				d.logger.Error("Failed to update Deployment", zap.String("DeploymentName", deploy), zap.Error(err))
 				errChan <- fmt.Errorf("failed to update Deployment '%s': %w", deploy, err)
 			}
 		}(deploy)
@@ -211,6 +203,45 @@ func (d *deploymentService) BatchRestartDeployments(ctx context.Context, deploym
 
 	if len(errs) > 0 {
 		return fmt.Errorf("errors occurred while restarting Deployments: %v", errs)
+	}
+
+	return nil
+}
+
+// DeleteDeployment 删除指定的 Deployment
+func (d *deploymentService) DeleteDeployment(ctx context.Context, id int, namespace, deploymentName string) error {
+	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
+	if err != nil {
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	if err := kubeClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("failed to delete Deployment '%s': %w", deploymentName, err)
+	}
+
+	return nil
+}
+
+// RestartDeployment 重启指定的 Deployment
+func (d *deploymentService) RestartDeployment(ctx context.Context, id int, namespace, deploymentName string) error {
+	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
+	if err != nil {
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get Deployment '%s': %w", deploymentName, err)
+	}
+
+	if deployment.Spec.Template.Annotations == nil {
+		deployment.Spec.Template.Annotations = make(map[string]string)
+	}
+
+	deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+	if _, err := kubeClient.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to update Deployment '%s': %w", deploymentName, err)
 	}
 
 	return nil
