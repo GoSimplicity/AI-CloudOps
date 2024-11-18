@@ -43,6 +43,7 @@ type ConfigMapService interface {
 	GetConfigMapsByNamespace(ctx context.Context, id int, namespace string) ([]*corev1.ConfigMap, error)
 	UpdateConfigMap(ctx context.Context, configMap *model.K8sConfigMapRequest) error
 	GetConfigMapYaml(ctx context.Context, id int, namespace, configMapName string) (*corev1.ConfigMap, error)
+	DeleteConfigMap(ctx context.Context, id int, namespace, configMapName string) error
 	BatchDeleteConfigMap(ctx context.Context, id int, namespace string, configMapNames []string) error
 }
 
@@ -125,6 +126,22 @@ func (c *configMapService) GetConfigMapYaml(ctx context.Context, id int, namespa
 	}
 
 	return configMap, nil
+}
+
+func (c *configMapService) DeleteConfigMap(ctx context.Context, id int, namespace, configMapName string) error {
+	// 获取 Kubernetes 客户端
+	kubeClient, err := pkg.GetKubeClient(id, c.client, c.logger)
+	if err != nil {
+		return fmt.Errorf("failed to get kubeClient: %w", err)
+	}
+
+	// 删除指定的 ConfigMap
+	if err := kubeClient.CoreV1().ConfigMaps(namespace).Delete(ctx, configMapName, metav1.DeleteOptions{}); err != nil {
+		c.logger.Error("Failed to delete ConfigMap", zap.String("configMapName", configMapName), zap.Error(err))
+		return fmt.Errorf("failed to delete ConfigMap '%s': %w", configMapName, err)
+	}
+
+	return nil
 }
 
 // BatchDeleteConfigMap 批量删除指定的 ConfigMap

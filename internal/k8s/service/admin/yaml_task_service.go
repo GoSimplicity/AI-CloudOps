@@ -86,7 +86,7 @@ func (y *yamlTaskService) GetYamlTaskList(ctx context.Context) ([]*model.K8sYaml
 
 // CreateYamlTask 创建 YAML 任务
 func (y *yamlTaskService) CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
-	if _, err := y.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID); err != nil {
+	if _, err := y.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterId); err != nil {
 		return fmt.Errorf("YAML 模板不存在: %w", err)
 	}
 
@@ -104,7 +104,7 @@ func (y *yamlTaskService) UpdateYamlTask(ctx context.Context, task *model.K8sYam
 	}
 
 	if task.TemplateID > 0 {
-		if _, err := y.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID); err != nil {
+		if _, err := y.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterId); err != nil {
 			return fmt.Errorf("YAML 模板不存在: %w", err)
 		}
 	}
@@ -140,7 +140,7 @@ func (y *yamlTaskService) ApplyYamlTask(ctx context.Context, id int) error {
 		return fmt.Errorf("获取动态客户端失败: %w", err)
 	}
 
-	taskTemplate, err := y.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID)
+	taskTemplate, err := y.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterId)
 	if err != nil {
 		y.l.Error("获取 YAML 模板失败", zap.Error(err))
 		return fmt.Errorf("获取 YAML 模板失败: %w", err)

@@ -50,10 +50,11 @@ func (k *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 
 	configMaps := k8sGroup.Group("/configmaps")
 	{
-		configMaps.GET("/:id", k.GetConfigMapListByNamespace)           // 根据命名空间获取 ConfigMap 列表
-		configMaps.GET("/:id/:configmap_name/yaml", k.GetConfigMapYaml) // 获取指定 ConfigMap 的 YAML 配置
-		configMaps.POST("/update", k.UpdateConfigMap)                   // 更新指定 Name 的 ConfigMap
-		configMaps.DELETE("/batch_delete", k.BatchDeleteConfigMaps)     // 批量删除 ConfigMap
+		configMaps.GET("/:id", k.GetConfigMapListByNamespace)       // 根据命名空间获取 ConfigMap 列表
+		configMaps.GET("/:id/yaml", k.GetConfigMapYaml)             // 获取指定 ConfigMap 的 YAML 配置
+		configMaps.POST("/update", k.UpdateConfigMap)               // 更新指定 Name 的 ConfigMap
+		configMaps.DELETE("/delete/:id", k.DeleteConfigMaps)        // 删除 ConfigMap
+		configMaps.DELETE("/batch_delete", k.BatchDeleteConfigMaps) // 批量删除 ConfigMap
 	}
 }
 
@@ -93,7 +94,7 @@ func (k *K8sConfigMapHandler) GetConfigMapYaml(ctx *gin.Context) {
 		return
 	}
 
-	configMapName := ctx.Param("configmap_name")
+	configMapName := ctx.Query("configmap_name")
 	if configMapName == "" {
 		apiresponse.BadRequestError(ctx, "缺少 'configmap_name' 参数")
 		return
@@ -116,5 +117,29 @@ func (k *K8sConfigMapHandler) BatchDeleteConfigMaps(ctx *gin.Context) {
 
 	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.configmapService.BatchDeleteConfigMap(ctx, req.ClusterId, req.Namespace, req.ConfigMapNames)
+	})
+}
+
+func (k *K8sConfigMapHandler) DeleteConfigMaps(ctx *gin.Context) {
+	id, err := apiresponse.GetParamID(ctx)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		return
+	}
+
+	configMapName := ctx.Query("configmap_name")
+	if configMapName == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'configmap_name' 参数")
+		return
+	}
+
+	namespace := ctx.Query("namespace")
+	if namespace == "" {
+		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		return
+	}
+
+	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, k.configmapService.DeleteConfigMap(ctx, id, namespace, configMapName)
 	})
 }
