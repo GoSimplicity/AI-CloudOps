@@ -32,6 +32,7 @@ import (
 	"github.com/openkruise/kruise-api/client/clientset/versioned"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	discovery2 "k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -51,6 +52,8 @@ type K8sClient interface {
 	GetMetricsClient(clusterID int) (*metricsClient.Clientset, error)
 	// GetDynamicClient 获取指定集群 ID 的动态客户端
 	GetDynamicClient(clusterID int) (*dynamic.DynamicClient, error)
+	// GetDiscoveryClient 获取指定集群 ID 的 Discovery 客户端
+	GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error)
 	// RefreshClients 刷新客户端
 	RefreshClients(ctx context.Context) error
 }
@@ -62,9 +65,10 @@ type k8sClient struct {
 	MetricsClients    map[int]*metricsClient.Clientset // Metrics客户端集合
 	DynamicClients    map[int]*dynamic.DynamicClient   // 动态客户端集合
 	RestConfigs       map[int]*rest.Config             // REST配置集合
-	ClusterNamespaces map[string][]string              // 集群命名空间集合
-	LastProbeErrors   map[int]string                   // 集群探针错误信息
-	l                 *zap.Logger                      // 日志记录器
+	DiscoveryClients  map[int]*discovery2.DiscoveryClient
+	ClusterNamespaces map[string][]string // 集群命名空间集合
+	LastProbeErrors   map[int]string      // 集群探针错误信息
+	l                 *zap.Logger         // 日志记录器
 	dao               admin.ClusterDAO
 }
 
@@ -75,6 +79,7 @@ func NewK8sClient(l *zap.Logger, dao admin.ClusterDAO) K8sClient {
 		MetricsClients:    make(map[int]*metricsClient.Clientset),
 		DynamicClients:    make(map[int]*dynamic.DynamicClient),
 		RestConfigs:       make(map[int]*rest.Config),
+		DiscoveryClients:  make(map[int]*discovery2.DiscoveryClient),
 		ClusterNamespaces: make(map[string][]string),
 		LastProbeErrors:   make(map[int]string),
 		l:                 l,
@@ -129,6 +134,13 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 		return fmt.Errorf("创建动态客户端失败: %w", err)
 	}
 	k.DynamicClients[clusterID] = dynamicClient
+
+	discoveryClient, err := discovery2.NewDiscoveryClientForConfig(kubeConfig)
+	if err != nil {
+		k.l.Error("创建 Discovery 客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+		return fmt.Errorf("创建 Discovery 客户端失败: %w", err)
+	}
+	k.DiscoveryClients[clusterID] = discoveryClient
 
 	// 获取并保存命名空间，直接使用 kubeClient
 	namespaces, err := k.getNamespacesDirectly(ctx, clusterID, kubeClient)
@@ -215,6 +227,19 @@ func (k *k8sClient) GetDynamicClient(clusterID int) (*dynamic.DynamicClient, err
 	}
 
 	return client, nil
+}
+
+// GetDiscoveryClient 获取指定集群 ID 的 Discovery 客户端
+func (k *k8sClient) GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error) {
+	k.RLock()
+	defer k.RUnlock()
+
+	discoveryClient, exists := k.DiscoveryClients[clusterID]
+	if !exists {
+		return nil, fmt.Errorf("discovery client not found for cluster ID: %d", clusterID)
+	}
+
+	return discoveryClient, nil
 }
 
 // RefreshClients 刷新所有集群的客户端

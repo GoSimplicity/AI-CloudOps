@@ -209,10 +209,10 @@ type K8sYamlTask struct {
 // K8sYamlTemplate Kubernetes YAML 模板的配置
 type K8sYamlTemplate struct {
 	Model
-	Name    string `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex:udx_name;size:100;comment:模板名称"` // 模板名称
-	UserID  int    `json:"user_id" gorm:"comment:创建者用户ID"`                                                         // 创建者用户ID
-	Content string `json:"content,omitempty" gorm:"type:text;comment:yaml 模板内容"`                                   // YAML 模板内容
-
+	Name      string `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex:udx_name;size:100;comment:模板名称"` // 模板名称
+	UserID    int    `json:"user_id" gorm:"comment:创建者用户ID"`                                                         // 创建者用户ID
+	Content   string `json:"content,omitempty" gorm:"type:text;comment:yaml 模板内容"`                                   // YAML 模板内容
+	ClusterId int    `json:"cluster_id,omitempty" gorm:"comment:对应集群id"`
 	// 前端使用字段
 	Key            string `json:"key" gorm:"-"`                       // 前端表格使用的Key
 	CreateUserName string `json:"create_username,omitempty" gorm:"-"` // 创建者用户名

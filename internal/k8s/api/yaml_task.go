@@ -51,9 +51,9 @@ func (k *K8sYamlTaskHandler) RegisterRouters(server *gin.Engine) {
 
 	yamlTasks := k8sGroup.Group("/yaml_tasks")
 	{
-		yamlTasks.GET("/", k.GetYamlTaskList)             // 获取 YAML 任务列表
+		yamlTasks.GET("/list", k.GetYamlTaskList)         // 获取 YAML 任务列表
 		yamlTasks.POST("/create", k.CreateYamlTask)       // 创建新的 YAML 任务
-		yamlTasks.POST("/update/:id", k.UpdateYamlTask)   // 更新指定 ID 的 YAML 任务
+		yamlTasks.POST("/update", k.UpdateYamlTask)       // 更新指定 ID 的 YAML 任务
 		yamlTasks.POST("/apply/:id", k.ApplyYamlTask)     // 应用指定 ID 的 YAML 任务
 		yamlTasks.DELETE("/delete/:id", k.DeleteYamlTask) // 删除指定 ID 的 YAML 任务
 	}
@@ -82,14 +82,7 @@ func (k *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
 func (k *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
 	var req model.K8sYamlTask
 
-	id, err := apiresponse.GetParamID(ctx)
-	if err != nil {
-		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
-		return
-	}
-
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
-	req.ID = id
 	req.UserID = uc.Uid
 
 	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
