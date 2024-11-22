@@ -1,5 +1,17 @@
 package dao
 
+import (
+	"context"
+	"errors"
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
+	"strings"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/go-sql-driver/mysql"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
+
 /*
  * MIT License
  *
@@ -24,18 +36,6 @@ package dao
  * THE SOFTWARE.
  *
  */
-
-import (
-	"context"
-	"errors"
-	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
-	"strings"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/go-sql-driver/mysql"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
-)
 
 type UserDAO interface {
 	// CreateUser 新建用户

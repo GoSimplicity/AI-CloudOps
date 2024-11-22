@@ -43,19 +43,10 @@ import (
 	scrapeJobService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape"
 	yamlService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/yaml"
 	authHandler "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
-	apiDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/api"
-	authDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/casbin"
-	menuDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/menu"
-	roleDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/role"
-	apiService "github.com/GoSimplicity/AI-CloudOps/internal/system/service/api"
-	menuService "github.com/GoSimplicity/AI-CloudOps/internal/system/service/menu"
-	roleService "github.com/GoSimplicity/AI-CloudOps/internal/system/service/role"
+	authDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
+	authService "github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	treeHandler "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
-	aliDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ali_resource"
-	ecsDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
-	elbDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/elb"
-	rdsDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/rds"
-	nodeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/tree_node"
+	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeService "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	userHandler "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -73,7 +64,7 @@ func InitWebServer() *Cmd {
 		InitLogger,
 		InitRedis,
 		InitDB,
-		InitCasbin,
+		//InitCasbin,
 		InitAndRefreshK8sClient,
 		client.NewK8sClient,
 		cache.NewMonitorCache,
@@ -82,10 +73,17 @@ func InitWebServer() *Cmd {
 		cache.NewRecordConfig,
 		cache.NewPromConfigCache,
 		cron.NewCronManager,
+		authHandler.NewAuthMenuHandler,
+		authHandler.NewAuthRoleHandler,
+		authHandler.NewAuthApiHandler,
 		userHandler.NewUserHandler,
-		authHandler.NewAuthHandler,
 		notAuthHandler.NewNotAuthHandler,
-		treeHandler.NewTreeHandler,
+		treeHandler.NewEcsHandler,
+		treeHandler.NewRdsHandler,
+		treeHandler.NewElbHandler,
+		treeHandler.NewEcsResourceHandler,
+		treeHandler.NewTreeNodeHandler,
+		treeHandler.NewAliResourceHandler,
 		k8sHandler.NewK8sPodHandler,
 		k8sHandler.NewK8sAppHandler,
 		k8sHandler.NewK8sNodeHandler,
@@ -108,10 +106,15 @@ func InitWebServer() *Cmd {
 		k8sAdminService.NewYamlTaskService,
 		k8sAdminService.NewYamlTemplateService,
 		userService.NewUserService,
-		treeService.NewTreeService,
-		apiService.NewApiService,
-		roleService.NewRoleService,
-		menuService.NewMenuService,
+		treeService.NewTreeNodeService,
+		treeService.NewEcsService,
+		treeService.NewElbService,
+		treeService.NewRdsService,
+		treeService.NewEcsResourceService,
+		treeService.NewAliResourceService,
+		authService.NewAuthApiService,
+		authService.NewAuthRoleService,
+		authService.NewAuthMenuService,
 		promHandler.NewAlertPoolHandler,
 		promHandler.NewConfigYamlHandler,
 		promHandler.NewOnDutyGroupHandler,
@@ -129,7 +132,6 @@ func InitWebServer() *Cmd {
 		alertService.NewAlertManagerSendService,
 		scrapeJobService.NewPrometheusScrapeService,
 		scrapeJobService.NewPrometheusPoolService,
-		treeService.NewAliResourceService,
 		alertDao.NewAlertManagerEventDAO,
 		alertDao.NewAlertManagerOnDutyDAO,
 		alertDao.NewAlertManagerPoolDAO,
@@ -138,21 +140,22 @@ func InitWebServer() *Cmd {
 		alertDao.NewAlertManagerSendDAO,
 		scrapeJobDao.NewScrapeJobDAO,
 		scrapeJobDao.NewScrapePoolDAO,
-		aliDao.NewAliResourceDAO,
 		yamlService.NewPrometheusConfigService,
 		notAuthService.NewNotAuthService,
 		userDao.NewUserDAO,
-		apiDao.NewApiDAO,
-		roleDao.NewRoleDAO,
-		menuDao.NewMenuDAO,
-		authDao.NewCasbinDAO,
-		ecsDao.NewTreeEcsDAO,
-		rdsDao.NewTreeRdsDAO,
-		elbDao.NewTreeElbDAO,
+		authDao.NewAuthMenuDAO,
+		authDao.NewAuthRoleDAO,
+		authDao.NewAuthApiDAO,
+		//authDao.NewAuthCasbinDAO,
+		treeDao.NewAliResourceDAO,
+		treeDao.NewEcsResourceDAO,
+		treeDao.NewTreeEcsDAO,
+		treeDao.NewTreeRdsDAO,
+		treeDao.NewTreeElbDAO,
+		treeDao.NewTreeNodeDAO,
 		k8sDao.NewClusterDAO,
 		k8sDao.NewYamlTemplateDAO,
 		k8sDao.NewYamlTaskDAO,
-		nodeDao.NewTreeNodeDAO,
 		wire.Struct(new(Cmd), "*"),
 	)
 	return new(Cmd)

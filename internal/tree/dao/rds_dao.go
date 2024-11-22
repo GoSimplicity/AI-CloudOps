@@ -1,4 +1,14 @@
-package rds
+package dao
+
+import (
+	"context"
+
+	"gorm.io/gorm/clause"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
 
 /*
  * MIT License
@@ -24,15 +34,6 @@ package rds
  * THE SOFTWARE.
  *
  */
-
-import (
-	"context"
-	"gorm.io/gorm/clause"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
-)
 
 type TreeRdsDAO interface {
 	// Create 创建一个新的 ResourceRds 实例
@@ -126,19 +127,19 @@ func (t *treeRdsDAO) Delete(ctx context.Context, id int) error {
 
 func (t *treeRdsDAO) DeleteByInstanceID(ctx context.Context, instanceID string) error {
 	// 删除关联关系
-	if err := t.db.WithContext(ctx).Where("instanceID = ?", instanceID).Select(clause.Associations).Delete(&model.ResourceEcs{}).Error; err != nil {
-		t.l.Error("删除 ECS 失败", zap.String("instanceID", instanceID), zap.Error(err))
+	if err := t.db.WithContext(ctx).Where("instance_id = ?", instanceID).Select(clause.Associations).Delete(&model.ResourceRds{}).Error; err != nil {
+		t.l.Error("删除 RDS 失败", zap.String("instanceID", instanceID), zap.Error(err))
 		return err
 	}
 
 	// 物理删除资源
 	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("instanceID = ?", instanceID).Unscoped().Delete(&model.ResourceEcs{}).Error; err != nil {
+		if err := tx.Where("instance_id = ?", instanceID).Unscoped().Delete(&model.ResourceRds{}).Error; err != nil {
 			return err
 		}
 		return nil
 	}); err != nil {
-		t.l.Error("物理删除 ECS 失败", zap.String("instanceID", instanceID), zap.Error(err))
+		t.l.Error("物理删除 RDS 失败", zap.String("instanceID", instanceID), zap.Error(err))
 		return err
 	}
 
@@ -189,8 +190,23 @@ func (t *treeRdsDAO) Update(ctx context.Context, obj *model.ResourceRds) error {
 }
 
 func (t *treeRdsDAO) UpdateBindNodes(ctx context.Context, obj *model.ResourceRds, nodes []*model.TreeNode) error {
-	//TODO implement me
-	panic("implement me")
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 更新关联对象的字段
+		for _, node := range nodes {
+			if err := tx.Model(node).Updates(node).Error; err != nil {
+				t.l.Error("更新 TreeNode 字段失败", zap.Error(err))
+				return err
+			}
+		}
+
+		// 同步关联集合
+		if err := tx.Model(obj).Association("BindNodes").Replace(nodes); err != nil {
+			t.l.Error("同步 RDS 绑定的 TreeNode 失败", zap.Error(err))
+			return err
+		}
+
+		return nil
+	})
 }
 
 func (t *treeRdsDAO) GetAll(ctx context.Context) ([]*model.ResourceRds, error) {
@@ -207,44 +223,65 @@ func (t *treeRdsDAO) GetAll(ctx context.Context) ([]*model.ResourceRds, error) {
 }
 
 func (t *treeRdsDAO) GetAllNoPreload(ctx context.Context) ([]*model.ResourceRds, error) {
-	//TODO implement me
-	panic("implement me")
+	var rds []*model.ResourceRds
+	if err := t.db.WithContext(ctx).Find(&rds).Error; err != nil {
+		t.l.Error("获取所有 ResourceRds 实例失败", zap.Error(err))
+		return nil, err
+	}
+	return rds, nil
 }
 
 func (t *treeRdsDAO) GetByLevel(ctx context.Context, level int) ([]*model.ResourceRds, error) {
-	//TODO implement me
-	panic("implement me")
+	var rds []*model.ResourceRds
+	query := t.applyPreloads(t.db.WithContext(ctx)).Where("level = ?", level)
+	if err := query.Find(&rds).Error; err != nil {
+		t.l.Error("根据层级获取 ResourceRds 实例失败", zap.Int("level", level), zap.Error(err))
+		return nil, err
+	}
+	return rds, nil
 }
 
 func (t *treeRdsDAO) GetByIDsWithPagination(ctx context.Context, ids []int, limit, offset int) ([]*model.ResourceRds, error) {
-	//TODO implement me
-	panic("implement me")
+	var rds []*model.ResourceRds
+	query := t.applyPreloads(t.db.WithContext(ctx)).Where("id IN ?", ids).Limit(limit).Offset(offset)
+	if err := query.Find(&rds).Error; err != nil {
+		t.l.Error("根据 IDs 获取 ResourceRds 实例失败", zap.Ints("ids", ids), zap.Error(err))
+		return nil, err
+	}
+	return rds, nil
 }
 
 func (t *treeRdsDAO) GetByInstanceID(ctx context.Context, instanceID string) (*model.ResourceRds, error) {
-	//TODO implement me
-	panic("implement me")
+	var rds model.ResourceRds
+	query := t.applyPreloads(t.db.WithContext(ctx)).Where("instance_id = ?", instanceID)
+	if err := query.First(&rds).Error; err != nil {
+		t.l.Error("根据 InstanceID 获取 ResourceRds 实例失败", zap.String("instanceID", instanceID), zap.Error(err))
+		return nil, err
+	}
+	return &rds, nil
 }
 
 func (t *treeRdsDAO) GetByID(ctx context.Context, id int) (*model.ResourceRds, error) {
-	//TODO implement me
-	panic("implement me")
+	var rds model.ResourceRds
+	query := t.applyPreloads(t.db.WithContext(ctx)).Where("id = ?", id)
+	if err := query.First(&rds).Error; err != nil {
+		t.l.Error("根据 ID 获取 ResourceRds 实例失败", zap.Int("id", id), zap.Error(err))
+		return nil, err
+	}
+	return &rds, nil
 }
 
 func (t *treeRdsDAO) GetByIDNoPreload(ctx context.Context, id int) (*model.ResourceRds, error) {
 	rds := &model.ResourceRds{}
-
-	if err := t.db.WithContext(ctx).First(&rds, id).Error; err != nil {
+	if err := t.db.WithContext(ctx).First(rds, id).Error; err != nil {
 		t.l.Error("根据 ID 获取 ResourceRds 实例失败", zap.Error(err))
 		return nil, err
 	}
-
 	return rds, nil
 }
 
 func (t *treeRdsDAO) GetInstanceIDHashMap(ctx context.Context) (map[string]string, error) {
-	//TODO implement me
-	panic("implement me")
+	return nil, nil
 }
 
 func (t *treeRdsDAO) AddBindNodes(ctx context.Context, rds *model.ResourceRds, node *model.TreeNode) error {

@@ -1,5 +1,16 @@
 package service
 
+import (
+	"context"
+	"fmt"
+	treeNode "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/general"
+	promPkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
+	promModel "github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/discovery/targetgroup"
+	"go.uber.org/zap"
+)
+
 /*
  * MIT License
  *
@@ -24,17 +35,6 @@ package service
  * THE SOFTWARE.
  *
  */
-
-import (
-	"context"
-	"fmt"
-	treeNode "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/tree_node"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/general"
-	promPkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
-	promModel "github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/discovery/targetgroup"
-	"go.uber.org/zap"
-)
 
 type NotAuthService interface {
 	BuildPrometheusServiceDiscovery(ctx context.Context, leafNodeIdList []string, port int) ([]*targetgroup.Group, error)

@@ -1,4 +1,14 @@
-package tree_node
+package dao
+
+import (
+	"context"
+	"errors"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
 
 /*
  * MIT License
@@ -24,16 +34,6 @@ package tree_node
  * THE SOFTWARE.
  *
  */
-
-import (
-	"context"
-	"errors"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
-)
 
 type TreeNodeDAO interface {
 	// Create 创建一个新的 TreeNode 实例
@@ -97,11 +97,17 @@ func (t *treeNodeDAO) Create(ctx context.Context, obj *model.TreeNode) error {
 }
 
 func (t *treeNodeDAO) Delete(ctx context.Context, id int) error {
-	if err := t.db.WithContext(ctx).
-		Where("id = ?", id).
-		Select(clause.Associations).
-		Delete(&model.TreeNode{}).
-		Error; err != nil {
+	if err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 先删除关联关系
+		if err := tx.Where("id = ?", id).Select(clause.Associations).Delete(&model.TreeNode{}).Error; err != nil {
+			return err
+		}
+		// 再删除节点本身
+		if err := tx.Where("id = ?", id).Delete(&model.TreeNode{}).Error; err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
 		t.l.Error("删除树节点失败", zap.Int("id", id), zap.Error(err))
 		return err
 	}
@@ -110,79 +116,75 @@ func (t *treeNodeDAO) Delete(ctx context.Context, id int) error {
 }
 
 func (t *treeNodeDAO) Upsert(ctx context.Context, obj *model.TreeNode) error {
-	// 使用 Clauses 来实现原子性的 Upsert 操作
-	err := t.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "title"}, {Name: "pid"}},
-		UpdateAll: true,
-	}).Create(obj).Error
+	// 使用事务确保原子性
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 使用 Clauses 来实现原子性的 Upsert 操作
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "title"}, {Name: "pid"}},
+			UpdateAll: true,
+		}).Create(obj).Error; err != nil {
+			t.l.Error("Upsert 树节点失败", zap.Error(err), zap.Any("TreeNode", obj))
+			return err
+		}
 
-	if err != nil {
-		t.l.Error("Upsert 树节点失败", zap.Error(err), zap.Any("TreeNode", obj))
-		return err
-	}
+		// 更新关联关系
+		if err := t.UpdateBindNode(ctx, obj, obj.BindEcs); err != nil {
+			return err
+		}
 
-	return nil
+		return nil
+	})
 }
 
 func (t *treeNodeDAO) Update(ctx context.Context, obj *model.TreeNode) error {
-	tx := t.db.WithContext(ctx).Begin()
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 更新基本字段
+		result := tx.Model(&model.TreeNode{}).Where("id = ?", obj.ID).Updates(obj)
+		if result.Error != nil {
+			t.l.Error("更新树节点失败", zap.Int("id", obj.ID), zap.Error(result.Error))
+			return result.Error
+		}
 
-	// 更新基本字段
-	result := tx.Model(&model.TreeNode{}).Where("id = ?", obj.ID).Updates(obj)
-	if result.Error != nil {
-		tx.Rollback()
-		t.l.Error("更新树节点失败", zap.Int("id", obj.ID), zap.Error(result.Error))
-		return result.Error
-	}
+		if result.RowsAffected == 0 {
+			err := errors.New("没有找到对应的树节点进行更新")
+			t.l.Warn("更新树节点未找到目标", zap.Int("id", obj.ID))
+			return err
+		}
 
-	if result.RowsAffected == 0 {
-		tx.Rollback()
-		err := errors.New("没有找到对应的树节点进行更新")
-		t.l.Warn("更新树节点未找到目标", zap.Int("id", obj.ID))
-		return err
-	}
+		// 更新关联关系
+		if err := tx.Model(&obj).Association("OpsAdmins").Replace(obj.OpsAdmins); err != nil {
+			t.l.Error("更新运维负责人失败", zap.Int("id", obj.ID), zap.Error(err))
+			return err
+		}
 
-	// 更新运维负责人列表 (OpsAdmins)
-	if err := tx.Model(&obj).Association("OpsAdmins").Replace(obj.OpsAdmins); err != nil {
-		tx.Rollback()
-		t.l.Error("更新运维负责人失败", zap.Int("id", obj.ID), zap.Error(err))
-		return err
-	}
+		if err := tx.Model(&obj).Association("RdAdmins").Replace(obj.RdAdmins); err != nil {
+			t.l.Error("更新研发负责人失败", zap.Int("id", obj.ID), zap.Error(err))
+			return err
+		}
 
-	// 更新研发负责人列表 (RdAdmins)
-	if err := tx.Model(&obj).Association("RdAdmins").Replace(obj.RdAdmins); err != nil {
-		tx.Rollback()
-		t.l.Error("更新研发负责人失败", zap.Int("id", obj.ID), zap.Error(err))
-		return err
-	}
+		if err := tx.Model(&obj).Association("RdMembers").Replace(obj.RdMembers); err != nil {
+			t.l.Error("更新研发工程师列表失败", zap.Int("id", obj.ID), zap.Error(err))
+			return err
+		}
 
-	// 更新研发工程师列表 (RdMembers)
-	if err := tx.Model(&obj).Association("RdMembers").Replace(obj.RdMembers); err != nil {
-		tx.Rollback()
-		t.l.Error("更新研发工程师列表失败", zap.Int("id", obj.ID), zap.Error(err))
-		return err
-	}
-
-	tx.Commit()
-	return nil
+		return nil
+	})
 }
 
 func (t *treeNodeDAO) UpdateBindNode(ctx context.Context, obj *model.TreeNode, ecs []*model.ResourceEcs) error {
-	association := t.db.WithContext(ctx).Model(obj).Association("BindEcs")
-	if err := association.Replace(ecs); err != nil {
-		t.l.Error("更新树节点绑定的 Ecs 失败", zap.Int("id", obj.ID), zap.Error(err))
-		return err
-	}
-
-	return nil
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(obj).Association("BindEcs").Replace(ecs); err != nil {
+			t.l.Error("更新树节点绑定的 Ecs 失败", zap.Int("id", obj.ID), zap.Error(err))
+			return err
+		}
+		return nil
+	})
 }
 
 func (t *treeNodeDAO) GetAll(ctx context.Context) ([]*model.TreeNode, error) {
 	var nodes []*model.TreeNode
 
-	query := t.applyPreloads(t.db.WithContext(ctx))
-
-	if err := query.Find(&nodes).Error; err != nil {
+	if err := t.applyPreloads(t.db.WithContext(ctx)).Find(&nodes).Error; err != nil {
 		t.l.Error("获取所有树节点失败", zap.Error(err))
 		return nil, err
 	}
@@ -204,9 +206,7 @@ func (t *treeNodeDAO) GetAllNoPreload(ctx context.Context) ([]*model.TreeNode, e
 func (t *treeNodeDAO) GetByLevel(ctx context.Context, level int) ([]*model.TreeNode, error) {
 	var nodes []*model.TreeNode
 
-	query := t.applyPreloads(t.db.WithContext(ctx)).Where("level = ?", level)
-
-	if err := query.Find(&nodes).Error; err != nil {
+	if err := t.applyPreloads(t.db.WithContext(ctx)).Where("level = ?", level).Find(&nodes).Error; err != nil {
 		t.l.Error("根据层级获取树节点失败", zap.Int("level", level), zap.Error(err))
 		return nil, err
 	}
@@ -215,16 +215,13 @@ func (t *treeNodeDAO) GetByLevel(ctx context.Context, level int) ([]*model.TreeN
 }
 
 func (t *treeNodeDAO) GetByIDs(ctx context.Context, ids []int) ([]*model.TreeNode, error) {
-	var nodes []*model.TreeNode
-
 	if len(ids) == 0 {
 		t.l.Info("未提供 IDs，返回空结果")
 		return []*model.TreeNode{}, nil
 	}
 
-	query := t.applyPreloads(t.db.WithContext(ctx)).Where("id IN ?", ids)
-
-	if err := query.Find(&nodes).Error; err != nil {
+	var nodes []*model.TreeNode
+	if err := t.applyPreloads(t.db.WithContext(ctx)).Where("id IN ?", ids).Find(&nodes).Error; err != nil {
 		t.l.Error("根据 IDs 获取树节点失败", zap.Ints("ids", ids), zap.Error(err))
 		return nil, err
 	}
@@ -233,11 +230,9 @@ func (t *treeNodeDAO) GetByIDs(ctx context.Context, ids []int) ([]*model.TreeNod
 }
 
 func (t *treeNodeDAO) GetByID(ctx context.Context, id int) (*model.TreeNode, error) {
-	node := &model.TreeNode{}
+	var node model.TreeNode
 
-	query := t.applyPreloads(t.db.WithContext(ctx)).Where("id = ?", id)
-
-	if err := query.First(node).Error; err != nil {
+	if err := t.applyPreloads(t.db.WithContext(ctx)).Where("id = ?", id).First(&node).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			t.l.Warn("未找到对应的树节点", zap.Int("id", id))
 			return nil, nil
@@ -246,13 +241,13 @@ func (t *treeNodeDAO) GetByID(ctx context.Context, id int) (*model.TreeNode, err
 		return nil, err
 	}
 
-	return node, nil
+	return &node, nil
 }
 
 func (t *treeNodeDAO) GetByIDNoPreload(ctx context.Context, id int) (*model.TreeNode, error) {
-	node := &model.TreeNode{}
+	var node model.TreeNode
 
-	if err := t.db.WithContext(ctx).First(node, id).Error; err != nil {
+	if err := t.db.WithContext(ctx).Where("id = ?", id).First(&node).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			t.l.Warn("未找到对应的树节点", zap.Int("id", id))
 			return nil, nil
@@ -261,15 +256,13 @@ func (t *treeNodeDAO) GetByIDNoPreload(ctx context.Context, id int) (*model.Tree
 		return nil, err
 	}
 
-	return node, nil
+	return &node, nil
 }
 
 func (t *treeNodeDAO) GetByPid(ctx context.Context, pid int) ([]*model.TreeNode, error) {
 	var nodes []*model.TreeNode
 
-	query := t.applyPreloads(t.db.WithContext(ctx)).Where("pid = ?", pid)
-
-	if err := query.Find(&nodes).Error; err != nil {
+	if err := t.applyPreloads(t.db.WithContext(ctx)).Where("pid = ?", pid).Find(&nodes).Error; err != nil {
 		t.l.Error("根据 pid 获取树节点失败", zap.Int("pid", pid), zap.Error(err))
 		return nil, err
 	}
@@ -279,16 +272,10 @@ func (t *treeNodeDAO) GetByPid(ctx context.Context, pid int) ([]*model.TreeNode,
 
 func (t *treeNodeDAO) HasChildren(ctx context.Context, id int) (bool, error) {
 	var count int64
-	err := t.db.WithContext(ctx).
-		Model(&model.TreeNode{}).
-		Where("pid = ?", id). // 查找 pid 等于该节点 id 的子节点
-		Count(&count).Error
-
-	if err != nil {
+	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("pid = ?", id).Count(&count).Error; err != nil {
 		t.l.Error("检查子节点失败", zap.Int("id", id), zap.Error(err))
 		return false, err
 	}
 
-	// 如果 count > 0，表示有子节点
 	return count > 0, nil
 }

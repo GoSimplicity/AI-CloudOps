@@ -1,4 +1,11 @@
-package menu
+package dao
+
+import (
+	"context"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
 
 /*
  * MIT License
@@ -25,19 +32,11 @@ package menu
  *
  */
 
-import (
-	"context"
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
-)
-
-type MenuDAO interface {
+type AuthMenuDAO interface {
 	// UpdateMenus 更新菜单
 	UpdateMenus(ctx context.Context, menus []*model.Menu) error
 	// UpdateMenuStatus 更新菜单状态
 	UpdateMenuStatus(ctx context.Context, menuID int, status string) error
-
 	// UpdateMenu 更新菜单
 	UpdateMenu(ctx context.Context, menu *model.Menu) error
 	// CreateMenu 创建菜单
@@ -52,19 +51,19 @@ type MenuDAO interface {
 	DeleteMenu(ctx context.Context, menuID string) error
 }
 
-type menuDAO struct {
+type authMenuDAO struct {
 	db *gorm.DB
 	l  *zap.Logger
 }
 
-func NewMenuDAO(db *gorm.DB, l *zap.Logger) MenuDAO {
-	return &menuDAO{
+func NewAuthMenuDAO(db *gorm.DB, l *zap.Logger) AuthMenuDAO {
+	return &authMenuDAO{
 		db: db,
 		l:  l,
 	}
 }
 
-func (m *menuDAO) UpdateMenus(ctx context.Context, menus []*model.Menu) error {
+func (m *authMenuDAO) UpdateMenus(ctx context.Context, menus []*model.Menu) error {
 	tx := m.db.WithContext(ctx).Begin() // 开始事务
 
 	// 遍历每个菜单项，逐个更新
@@ -85,7 +84,7 @@ func (m *menuDAO) UpdateMenus(ctx context.Context, menus []*model.Menu) error {
 	return nil
 }
 
-func (m *menuDAO) UpdateMenu(ctx context.Context, menu *model.Menu) error {
+func (m *authMenuDAO) UpdateMenu(ctx context.Context, menu *model.Menu) error {
 	if err := m.db.WithContext(ctx).Model(menu).Updates(map[string]interface{}{
 		"title":     menu.Title,
 		"name":      menu.Name,
@@ -104,7 +103,7 @@ func (m *menuDAO) UpdateMenu(ctx context.Context, menu *model.Menu) error {
 	return nil
 }
 
-func (m *menuDAO) UpdateMenuStatus(ctx context.Context, menuID int, status string) error {
+func (m *authMenuDAO) UpdateMenuStatus(ctx context.Context, menuID int, status string) error {
 	if err := m.db.WithContext(ctx).Model(&model.Menu{}).Where("id = ?", menuID).Update("status", status).Error; err != nil {
 		m.l.Error("failed to update menu status", zap.Int("menu_id", menuID), zap.String("status", status), zap.Error(err))
 		return err
@@ -115,7 +114,7 @@ func (m *menuDAO) UpdateMenuStatus(ctx context.Context, menuID int, status strin
 	return nil
 }
 
-func (m *menuDAO) CreateMenu(ctx context.Context, menu *model.Menu) error {
+func (m *authMenuDAO) CreateMenu(ctx context.Context, menu *model.Menu) error {
 	if err := m.db.WithContext(ctx).Create(menu).Error; err != nil {
 		m.l.Error("failed to create menu", zap.Error(err))
 		return err
@@ -124,7 +123,7 @@ func (m *menuDAO) CreateMenu(ctx context.Context, menu *model.Menu) error {
 	return nil
 }
 
-func (m *menuDAO) GetMenuByID(ctx context.Context, id int) (*model.Menu, error) {
+func (m *authMenuDAO) GetMenuByID(ctx context.Context, id int) (*model.Menu, error) {
 	var menu model.Menu
 
 	if err := m.db.WithContext(ctx).Where("pid = ?", id).First(&menu).Error; err != nil {
@@ -135,7 +134,7 @@ func (m *menuDAO) GetMenuByID(ctx context.Context, id int) (*model.Menu, error) 
 	return &menu, nil
 }
 
-func (m *menuDAO) GetMenuByFatherID(ctx context.Context, id int) (*model.Menu, error) {
+func (m *authMenuDAO) GetMenuByFatherID(ctx context.Context, id int) (*model.Menu, error) {
 	var menu model.Menu
 
 	if err := m.db.WithContext(ctx).Where("pid = ?", id).First(&menu).Error; err != nil {
@@ -146,7 +145,7 @@ func (m *menuDAO) GetMenuByFatherID(ctx context.Context, id int) (*model.Menu, e
 	return &menu, nil
 }
 
-func (m *menuDAO) GetAllMenus(ctx context.Context) ([]*model.Menu, error) {
+func (m *authMenuDAO) GetAllMenus(ctx context.Context) ([]*model.Menu, error) {
 	var menus []*model.Menu
 
 	if err := m.db.WithContext(ctx).Find(&menus).Error; err != nil {
@@ -157,7 +156,7 @@ func (m *menuDAO) GetAllMenus(ctx context.Context) ([]*model.Menu, error) {
 	return menus, nil
 }
 
-func (m *menuDAO) DeleteMenu(ctx context.Context, menuID string) error {
+func (m *authMenuDAO) DeleteMenu(ctx context.Context, menuID string) error {
 	if err := m.db.WithContext(ctx).Where("id = ?", menuID).Delete(&model.Menu{}).Error; err != nil {
 		m.l.Error("failed to delete menu", zap.String("menuID", menuID), zap.Error(err))
 		return err

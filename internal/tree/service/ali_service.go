@@ -1,5 +1,23 @@
 package service
 
+import (
+	"context"
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/tree"
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
+)
+
 /*
  * MIT License
  *
@@ -25,22 +43,7 @@ package service
  *
  */
 
-import (
-	"context"
-	"crypto/sha256"
-	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ali_resource"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/tree"
-	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
-	"github.com/spf13/viper"
-	"go.uber.org/zap"
-	"os"
-	"path/filepath"
-	"time"
-)
+var ErrResourceBound = errors.New("资源已被绑定，无法删除")
 
 const terraformTemplate = `
 provider "alicloud" {
@@ -119,17 +122,18 @@ type AliResourceService interface {
 }
 
 type aliResourceService struct {
-	logger       *zap.Logger
-	dao          ali_resource.AliResourceDAO
-	terraformBin string
-	key          string
-	secret       string
-	redisClient  redis.Cmdable
-	ecsDao       ecs.TreeEcsDAO
-	semaphore    chan struct{}
+	logger         *zap.Logger
+	dao            dao.TreeAliResourceDAO
+	terraformBin   string
+	key            string
+	secret         string
+	redisClient    redis.Cmdable
+	ecsDao         dao.TreeEcsDAO
+	ecsResourceDao dao.TreeEcsResourceDAO
+	semaphore      chan struct{}
 }
 
-func NewAliResourceService(logger *zap.Logger, dao ali_resource.AliResourceDAO, redisClient redis.Cmdable, ecsDao ecs.TreeEcsDAO) AliResourceService {
+func NewAliResourceService(logger *zap.Logger, dao dao.TreeAliResourceDAO, redisClient redis.Cmdable, ecsDao dao.TreeEcsDAO, ecsResourceDao dao.TreeEcsResourceDAO) AliResourceService {
 	key := os.Getenv("ALIYUN_ACCESS_KEY_ID")
 	if key == "" {
 		logger.Error("ALIYUN_ACCESS_KEY_ID 环境变量未设置")
@@ -141,14 +145,15 @@ func NewAliResourceService(logger *zap.Logger, dao ali_resource.AliResourceDAO, 
 	}
 
 	return &aliResourceService{
-		logger:       logger,
-		dao:          dao,
-		ecsDao:       ecsDao,
-		redisClient:  redisClient,
-		terraformBin: viper.GetString("terraform.bin_path"),
-		key:          key,
-		secret:       secret,
-		semaphore:    make(chan struct{}, 10),
+		logger:         logger,
+		dao:            dao,
+		ecsDao:         ecsDao,
+		ecsResourceDao: ecsResourceDao,
+		redisClient:    redisClient,
+		terraformBin:   viper.GetString("terraform.bin_path"),
+		key:            key,
+		secret:         secret,
+		semaphore:      make(chan struct{}, 10),
 	}
 }
 
@@ -321,12 +326,12 @@ func (a *aliResourceService) executeCreateResource(ctx context.Context, config m
 	}
 
 	// 保存资源记录到数据库
-	if err := a.ecsDao.Create(ctx, resource); err != nil {
+	if err := a.ecsResourceDao.Create(ctx, resource); err != nil {
 		a.logger.Error("创建 ECS 资源失败", zap.Error(err))
 		return fmt.Errorf("创建 ECS 资源失败: %w", err)
 	}
 
-	ecsResource, err := a.ecsDao.GetByHash(ctx, hash)
+	ecsResource, err := a.ecsResourceDao.GetByHash(ctx, hash)
 	if err != nil {
 		a.logger.Error("获取 ECS 资源失败", zap.Error(err))
 		return fmt.Errorf("获取 ECS 资源失败: %w", err)
@@ -391,7 +396,7 @@ func (a *aliResourceService) executeCreateResource(ctx context.Context, config m
 		},
 	}
 
-	if err := a.ecsDao.UpdateByHash(ctx, updatedResource); err != nil {
+	if err := a.ecsResourceDao.UpdateByHash(ctx, updatedResource); err != nil {
 		a.logger.Error("更新资源记录失败", zap.Error(err))
 		return fmt.Errorf("更新资源记录失败: %w", err)
 	}
@@ -447,7 +452,7 @@ func (a *aliResourceService) executeUpdateResource(ctx context.Context, config m
 	existingResource.ResourceTree.Hash = generateHash(config)
 
 	// 保存更新后的资源
-	if err := a.ecsDao.Update(ctx, existingResource); err != nil {
+	if err := a.ecsResourceDao.Update(ctx, existingResource); err != nil {
 		a.logger.Error("更新 ECS 资源失败", zap.Error(err))
 		return fmt.Errorf("更新 ECS 资源失败: %w", err)
 	}
@@ -489,7 +494,7 @@ func (a *aliResourceService) executeUpdateResource(ctx context.Context, config m
 		},
 	}
 
-	if err := a.ecsDao.Update(ctx, updatedResource); err != nil {
+	if err := a.ecsResourceDao.Update(ctx, updatedResource); err != nil {
 		a.logger.Error("更新资源记录失败", zap.Error(err))
 		return fmt.Errorf("更新资源记录失败: %w", err)
 	}
@@ -590,7 +595,7 @@ func (a *aliResourceService) executeDeleteResource(ctx context.Context, config m
 	if len(existingResource.BindNodes) > 0 {
 		existingResource.Status = "错误"
 
-		err = a.ecsDao.UpdateEcsResourceStatusByHash(ctx, existingResource)
+		err = a.ecsResourceDao.UpdateEcsResourceStatusByHash(ctx, existingResource)
 		if err != nil {
 			a.logger.Error("更新资源状态失败", zap.Error(err))
 			return err
@@ -601,7 +606,7 @@ func (a *aliResourceService) executeDeleteResource(ctx context.Context, config m
 
 	existingResource.Status = "删除中"
 
-	err = a.ecsDao.UpdateEcsResourceStatusByHash(ctx, existingResource)
+	err = a.ecsResourceDao.UpdateEcsResourceStatusByHash(ctx, existingResource)
 	if err != nil {
 		a.logger.Error("更新资源状态失败", zap.Error(err))
 		return err
@@ -631,7 +636,7 @@ func (a *aliResourceService) executeDeleteResource(ctx context.Context, config m
 	}
 
 	// 从数据库中删除资源记录
-	if err := a.ecsDao.Delete(ctx, existingResource.ID); err != nil {
+	if err := a.ecsResourceDao.Delete(ctx, existingResource.ID); err != nil {
 		a.logger.Error("删除资源信息到数据库失败", zap.Error(err))
 		return fmt.Errorf("删除资源信息到数据库失败: %w", err)
 	}
