@@ -39,8 +39,15 @@ import (
 func InitGinServer(
 	m []gin.HandlerFunc,
 	userHdl *userApi.UserHandler,
-	authHdl *authApi.AuthHandler,
-	treeHdl *treeApi.TreeHandler,
+	authApiHdl *authApi.AuthApiHandler,
+	authMenuHdl *authApi.AuthMenuHandler,
+	authRoleHdl *authApi.AuthRoleHandler,
+	treeNodeHdl *treeApi.TreeNodeHandler,
+	treeAliResourceHdl *treeApi.AliResourceHandler,
+	treeEcsResourceHdl *treeApi.EcsResourceHandler,
+	treeEcsHdl *treeApi.EcsHandler,
+	treeElbHdl *treeApi.ElbHandler,
+	treeRdsHdl *treeApi.RdsHandler,
 	notAuthHdl *notAuthHandler.NotAuthHandler,
 	k8sClusterHdl *k8sApi.K8sClusterHandler,
 	k8sConfigMapHdl *k8sApi.K8sConfigMapHandler,
@@ -66,8 +73,15 @@ func InitGinServer(
 	server := gin.Default()
 	server.Use(m...)
 	userHdl.RegisterRoutes(server)
-	authHdl.RegisterRouters(server)
-	treeHdl.RegisterRouters(server)
+	authMenuHdl.RegisterRouters(server)
+	authApiHdl.RegisterRouters(server)
+	authRoleHdl.RegisterRouters(server)
+	treeEcsHdl.RegisterRouters(server)
+	treeEcsResourceHdl.RegisterRouters(server)
+	treeAliResourceHdl.RegisterRouters(server)
+	treeElbHdl.RegisterRouters(server)
+	treeRdsHdl.RegisterRouters(server)
+	treeNodeHdl.RegisterRouters(server)
 	notAuthHdl.RegisterRouters(server)
 	alertEventHdl.RegisterRouters(server)
 	alertPoolHdl.RegisterRouters(server)

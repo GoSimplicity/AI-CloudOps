@@ -1,4 +1,14 @@
-package menu
+package service
+
+import (
+	"context"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
+	"sort"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	"go.uber.org/zap"
+)
 
 /*
  * MIT License
@@ -25,17 +35,7 @@ package menu
  *
  */
 
-import (
-	"context"
-	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao/menu"
-	"sort"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	"go.uber.org/zap"
-)
-
-type MenuService interface {
+type AuthMenuService interface {
 	GetMenuList(ctx context.Context, uid int) ([]*model.Menu, error)
 	GetAllMenuList(ctx context.Context) ([]*model.Menu, error)
 	UpdateMenu(ctx context.Context, menu model.Menu) error
@@ -44,14 +44,14 @@ type MenuService interface {
 	DeleteMenu(ctx context.Context, id string) error
 }
 
-type menuService struct {
-	menuDao menu.MenuDAO
+type authMenuService struct {
+	menuDao dao.AuthMenuDAO
 	userDao userDao.UserDAO
 	l       *zap.Logger
 }
 
-func NewMenuService(menuDao menu.MenuDAO, l *zap.Logger, userDao userDao.UserDAO) MenuService {
-	return &menuService{
+func NewAuthMenuService(menuDao dao.AuthMenuDAO, l *zap.Logger, userDao userDao.UserDAO) AuthMenuService {
+	return &authMenuService{
 		menuDao: menuDao,
 		l:       l,
 		userDao: userDao,
@@ -59,7 +59,7 @@ func NewMenuService(menuDao menu.MenuDAO, l *zap.Logger, userDao userDao.UserDAO
 }
 
 // GetMenuList 根据用户ID获取菜单列表，支持按角色过滤菜单
-func (m *menuService) GetMenuList(ctx context.Context, uid int) ([]*model.Menu, error) {
+func (m *authMenuService) GetMenuList(ctx context.Context, uid int) ([]*model.Menu, error) {
 	// 获取用户信息
 	user, err := m.userDao.GetUserByID(ctx, uid)
 	if err != nil {
@@ -106,7 +106,7 @@ func (m *menuService) GetMenuList(ctx context.Context, uid int) ([]*model.Menu, 
 }
 
 // GetAllMenuList 获取所有菜单列表
-func (m *menuService) GetAllMenuList(ctx context.Context) ([]*model.Menu, error) {
+func (m *authMenuService) GetAllMenuList(ctx context.Context) ([]*model.Menu, error) {
 	// 从数据库获取所有菜单
 	menus, err := m.menuDao.GetAllMenus(ctx)
 	if err != nil {
@@ -123,25 +123,25 @@ func (m *menuService) GetAllMenuList(ctx context.Context) ([]*model.Menu, error)
 }
 
 // UpdateMenu 更新菜单信息
-func (m *menuService) UpdateMenu(ctx context.Context, menu model.Menu) error {
+func (m *authMenuService) UpdateMenu(ctx context.Context, menu model.Menu) error {
 	return m.menuDao.UpdateMenu(ctx, &menu)
 }
 
-func (m *menuService) UpdateMenuStatus(ctx context.Context, menuID int, status string) error {
+func (m *authMenuService) UpdateMenuStatus(ctx context.Context, menuID int, status string) error {
 	return m.menuDao.UpdateMenuStatus(ctx, menuID, status)
 }
 
 // CreateMenu 创建新菜单
-func (m *menuService) CreateMenu(ctx context.Context, menu model.Menu) error {
+func (m *authMenuService) CreateMenu(ctx context.Context, menu model.Menu) error {
 	return m.menuDao.CreateMenu(ctx, &menu)
 }
 
 // DeleteMenu 删除菜单
-func (m *menuService) DeleteMenu(ctx context.Context, id string) error {
+func (m *authMenuService) DeleteMenu(ctx context.Context, id string) error {
 	return m.menuDao.DeleteMenu(ctx, id)
 }
 
-func (m *menuService) attachToFatherMenu(ctx context.Context, menu *model.Menu, fatherMenuMap map[int]*model.Menu, uniqueChildMap map[int]struct{}) error {
+func (m *authMenuService) attachToFatherMenu(ctx context.Context, menu *model.Menu, fatherMenuMap map[int]*model.Menu, uniqueChildMap map[int]struct{}) error {
 	// 获取父菜单
 	fatherMenu, err := m.menuDao.GetMenuByID(ctx, int(menu.Pid))
 	if err != nil {
@@ -168,7 +168,7 @@ func (m *menuService) attachToFatherMenu(ctx context.Context, menu *model.Menu, 
 }
 
 // sortedMenuList 根据ID对菜单进行排序并返回列表
-func (m *menuService) sortedMenuList(fatherMenuMap map[int]*model.Menu) []*model.Menu {
+func (m *authMenuService) sortedMenuList(fatherMenuMap map[int]*model.Menu) []*model.Menu {
 	finalMenus := make([]*model.Menu, 0, len(fatherMenuMap))
 	finalMenuIds := make([]int, 0, len(fatherMenuMap))
 
@@ -186,7 +186,7 @@ func (m *menuService) sortedMenuList(fatherMenuMap map[int]*model.Menu) []*model
 }
 
 // setMenuMeta 设置菜单的元数据信息
-func (m *menuService) setMenuMeta(menu *model.Menu) {
+func (m *authMenuService) setMenuMeta(menu *model.Menu) {
 	menu.Meta = &model.MenuMeta{
 		Icon:            menu.Icon,
 		Title:           menu.Title,
@@ -200,7 +200,7 @@ func (m *menuService) setMenuMeta(menu *model.Menu) {
 }
 
 // getMenusByIDs 根据菜单ID列表获取对应的菜单对象
-func (m *menuService) getMenusByIDs(ctx context.Context, menuIds []int) ([]*model.Menu, error) {
+func (m *authMenuService) getMenusByIDs(ctx context.Context, menuIds []int) ([]*model.Menu, error) {
 	menus := make([]*model.Menu, 0)
 
 	for _, menuId := range menuIds {

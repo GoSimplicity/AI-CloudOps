@@ -1,4 +1,11 @@
-package api
+package dao
+
+import (
+	"context"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
 
 /*
  * MIT License
@@ -25,14 +32,7 @@ package api
  *
  */
 
-import (
-	"context"
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
-)
-
-type ApiDAO interface {
+type AuthApiDAO interface {
 	// GetApisByRoleID 通过角色ID获取API
 	GetApisByRoleID(ctx context.Context, roleID int) ([]*model.Api, error)
 	// UpdateApis 更新API
@@ -51,19 +51,19 @@ type ApiDAO interface {
 	UpdateApi(ctx context.Context, api *model.Api) error
 }
 
-type apiDAO struct {
+type authApiDAO struct {
 	db *gorm.DB
 	l  *zap.Logger
 }
 
-func NewApiDAO(db *gorm.DB, l *zap.Logger) ApiDAO {
-	return &apiDAO{
+func NewAuthApiDAO(db *gorm.DB, l *zap.Logger) AuthApiDAO {
+	return &authApiDAO{
 		db: db,
 		l:  l,
 	}
 }
 
-func (a *apiDAO) UpdateApis(ctx context.Context, apis []*model.Api) error {
+func (a *authApiDAO) UpdateApis(ctx context.Context, apis []*model.Api) error {
 	tx := a.db.WithContext(ctx).Begin() // 开始事务
 
 	// 遍历每个API项，逐个更新
@@ -85,7 +85,7 @@ func (a *apiDAO) UpdateApis(ctx context.Context, apis []*model.Api) error {
 }
 
 // GetApisByRoleID 根据角色ID获取API列表
-func (a *apiDAO) GetApisByRoleID(ctx context.Context, roleID int) ([]*model.Api, error) {
+func (a *authApiDAO) GetApisByRoleID(ctx context.Context, roleID int) ([]*model.Api, error) {
 	var apis []*model.Api
 
 	// 使用联表查询，假设角色和API的关联表为 `role_apis`
@@ -102,7 +102,7 @@ func (a *apiDAO) GetApisByRoleID(ctx context.Context, roleID int) ([]*model.Api,
 	return apis, nil
 }
 
-func (a *apiDAO) GetAllApis(ctx context.Context) ([]*model.Api, error) {
+func (a *authApiDAO) GetAllApis(ctx context.Context) ([]*model.Api, error) {
 	var apis []*model.Api
 
 	if err := a.db.WithContext(ctx).Find(&apis).Error; err != nil {
@@ -113,7 +113,7 @@ func (a *apiDAO) GetAllApis(ctx context.Context) ([]*model.Api, error) {
 	return apis, nil
 }
 
-func (a *apiDAO) GetApiByID(ctx context.Context, apiID int) (*model.Api, error) {
+func (a *authApiDAO) GetApiByID(ctx context.Context, apiID int) (*model.Api, error) {
 	var api model.Api
 
 	if err := a.db.WithContext(ctx).Where("id = ?", apiID).First(&api).Error; err != nil {
@@ -124,7 +124,7 @@ func (a *apiDAO) GetApiByID(ctx context.Context, apiID int) (*model.Api, error) 
 	return &api, nil
 }
 
-func (a *apiDAO) GetApiByTitle(ctx context.Context, title string) (*model.Api, error) {
+func (a *authApiDAO) GetApiByTitle(ctx context.Context, title string) (*model.Api, error) {
 	var api model.Api
 
 	if err := a.db.WithContext(ctx).Where("title = ?", title).First(&api).Error; err != nil {
@@ -135,7 +135,7 @@ func (a *apiDAO) GetApiByTitle(ctx context.Context, title string) (*model.Api, e
 	return &api, nil
 }
 
-func (a *apiDAO) DeleteApi(ctx context.Context, apiID string) error {
+func (a *authApiDAO) DeleteApi(ctx context.Context, apiID string) error {
 	if err := a.db.WithContext(ctx).Where("id = ?", apiID).Delete(&model.Api{}).Error; err != nil {
 		a.l.Error("failed to delete API", zap.String("apiID", apiID), zap.Error(err))
 		return err
@@ -144,7 +144,7 @@ func (a *apiDAO) DeleteApi(ctx context.Context, apiID string) error {
 	return nil
 }
 
-func (a *apiDAO) CreateApi(ctx context.Context, api *model.Api) error {
+func (a *authApiDAO) CreateApi(ctx context.Context, api *model.Api) error {
 	if err := a.db.WithContext(ctx).Create(api).Error; err != nil {
 		a.l.Error("failed to create API", zap.Error(err))
 		return err
@@ -153,7 +153,7 @@ func (a *apiDAO) CreateApi(ctx context.Context, api *model.Api) error {
 	return nil
 }
 
-func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
+func (a *authApiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 	if err := a.db.WithContext(ctx).Model(api).Updates(api).Error; err != nil {
 		a.l.Error("failed to update API", zap.Int("apiID", api.ID), zap.Error(err))
 		return err

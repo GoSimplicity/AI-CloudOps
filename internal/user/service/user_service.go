@@ -1,5 +1,16 @@
 package service
 
+import (
+	"context"
+	"errors"
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+)
+
 /*
  * MIT License
  *
@@ -24,17 +35,6 @@ package service
  * THE SOFTWARE.
  *
  */
-
-import (
-	"context"
-	"errors"
-	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
-)
 
 type UserService interface {
 	SignUp(ctx context.Context, user *model.User) error
