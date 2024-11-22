@@ -34,15 +34,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// CasbinMiddleware 结构体，负责通过 Casbin 检查用户权限
 type CasbinMiddleware struct {
-	l         *zap.Logger         // Logger 用于日志记录
-	userDAO   userDao.UserDAO     // 用户 DAO，用于获取用户信息
-	casbinDAO casbinDao.CasbinDAO // Casbin DAO，用于权限检查
+	l         *zap.Logger             // Logger 用于日志记录
+	userDAO   userDao.UserDAO         // 用户 DAO，用于获取用户信息
+	casbinDAO casbinDao.AuthCasbinDAO // Casbin DAO，用于权限检查
 }
 
-// NewCasbinMiddleware 创建一个新的 CasbinMiddleware 实例
-func NewCasbinMiddleware(l *zap.Logger, userDAO userDao.UserDAO, casbinDAO casbinDao.CasbinDAO) *CasbinMiddleware {
+func NewCasbinMiddleware(l *zap.Logger, userDAO userDao.UserDAO, casbinDAO casbinDao.AuthCasbinDAO) *CasbinMiddleware {
 	return &CasbinMiddleware{
 		l:         l,
 		userDAO:   userDAO,
