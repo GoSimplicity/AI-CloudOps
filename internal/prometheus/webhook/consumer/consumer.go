@@ -1,5 +1,3 @@
-package consumer
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package consumer
  * THE SOFTWARE.
  *
  */
+
+package consumer
 
 import (
 	"context"

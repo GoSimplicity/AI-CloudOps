@@ -28,8 +28,11 @@ package alert
 import (
 	"context"
 	"fmt"
+	"net/http"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -41,19 +44,22 @@ type AlertManagerEventDAO interface {
 	EventAlertClaim(ctx context.Context, event *model.MonitorAlertEvent) error
 	GetAlertEventByID(ctx context.Context, id int) (*model.MonitorAlertEvent, error)
 	UpdateAlertEvent(ctx context.Context, alertEvent *model.MonitorAlertEvent) error
+	SendMessageToGroup(ctx context.Context, url string, message string) error
 }
 
 type alertManagerEventDAO struct {
-	db      *gorm.DB
-	l       *zap.Logger
-	userDao userDao.UserDAO
+	db         *gorm.DB
+	l          *zap.Logger
+	userDao    userDao.UserDAO
+	httpClient *http.Client
 }
 
 func NewAlertManagerEventDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO) AlertManagerEventDAO {
 	return &alertManagerEventDAO{
-		db:      db,
-		l:       l,
-		userDao: userDao,
+		db:         db,
+		l:          l,
+		userDao:    userDao,
+		httpClient: &http.Client{},
 	}
 }
 
@@ -138,6 +144,28 @@ func (a *alertManagerEventDAO) UpdateAlertEvent(ctx context.Context, alertEvent 
 		a.l.Error("更新 AlertEvent 失败", zap.Error(err), zap.Int("id", alertEvent.ID))
 		return err
 	}
+
+	return nil
+}
+
+// SendMessageToGroup 发送飞书群聊消息
+func (a *alertManagerEventDAO) SendMessageToGroup(ctx context.Context, url string, message string) error {
+	// 拼接发送内容
+	content := fmt.Sprintf(`{"msg_type":"text","content":{"text":"%s"}}`, message)
+
+	// 发送消息到群组
+	body, err := pkg.PostWithJson(ctx, a.httpClient, a.l, url, content, nil, nil)
+	if err != nil {
+		a.l.Error("发送飞书群聊消息失败",
+			zap.Error(err),
+			zap.Any("结果", string(body)),
+		)
+		return fmt.Errorf("发送飞书群聊消息失败: %w", err)
+	}
+
+	a.l.Info("发送飞书群聊消息成功",
+		zap.Any("结果", string(body)),
+	)
 
 	return nil
 }

@@ -1,5 +1,3 @@
-package request
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package request
  * THE SOFTWARE.
  *
  */
+
+package request
 
 // AlertmanagerSilenceResponse 表示告警管理器静默响应结构体
 type AlertmanagerSilenceResponse struct {

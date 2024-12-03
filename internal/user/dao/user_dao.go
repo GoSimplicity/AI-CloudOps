@@ -58,6 +58,8 @@ type UserDAO interface {
 	GetUserByMobile(ctx context.Context, mobile string) (*model.User, error)
 	// GetPermCode 获取用户权限码
 	GetPermCode(ctx context.Context, uid int) ([]string, error)
+	// GetUserByFeiShuUserId 通过飞书用户ID获取用户
+	GetUserByFeiShuUserId(ctx context.Context, feiShuUserId string) (*model.User, error)
 }
 
 type userDAO struct {
@@ -189,4 +191,15 @@ func (u *userDAO) GetUserByUsernames(ctx context.Context, usernames []string) ([
 	}
 
 	return users, nil
+}
+
+func (u *userDAO) GetUserByFeiShuUserId(ctx context.Context, feiShuUserId string) (*model.User, error) {
+	var user model.User
+
+	if err := u.db.WithContext(ctx).Where("feiShuUserId = ?", feiShuUserId).First(&user).Error; err != nil {
+		u.l.Error("get user by feiShuUserId failed", zap.String("feiShuUserId", feiShuUserId), zap.Error(err))
+		return nil, err
+	}
+
+	return &user, nil
 }

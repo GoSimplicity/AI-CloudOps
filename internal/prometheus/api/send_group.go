@@ -53,6 +53,7 @@ func (s *SendGroupHandler) RegisterRouters(server *gin.Engine) {
 	sendGroups := monitorGroup.Group("/send_groups")
 	{
 		sendGroups.GET("/list", s.GetMonitorSendGroupList)   // 获取发送组列表
+		sendGroups.GET("/:id", s.GetMonitorSendGroup)        // 获取指定发送组
 		sendGroups.POST("/create", s.CreateMonitorSendGroup) // 创建新的发送组
 		sendGroups.POST("/update", s.UpdateMonitorSendGroup) // 更新现有的发送组
 		sendGroups.DELETE("/:id", s.DeleteMonitorSendGroup)  // 删除指定的发送组
@@ -126,4 +127,22 @@ func (s *SendGroupHandler) DeleteMonitorSendGroup(ctx *gin.Context) {
 	}
 
 	apiresponse.Success(ctx)
+}
+
+func (s *SendGroupHandler) GetMonitorSendGroup(ctx *gin.Context) {
+	id := ctx.Param("id")
+
+	intId, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	group, err := s.alertSendService.GetMonitorSendGroup(ctx, intId)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "获取发送组失败")
+		return
+	}
+
+	apiresponse.SuccessWithData(ctx, group)
 }

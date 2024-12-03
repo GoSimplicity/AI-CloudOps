@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -126,8 +125,14 @@ func (ts *treeNodeService) DeleteTreeNode(ctx context.Context, id int) error {
 		return err
 	}
 	if hasChildren {
-		ts.l.Error("DeleteTreeNode failed: 节点有子节点", zap.Error(errors.New(constants.ErrorTreeNodeHasChildren)))
-		return errors.New(constants.ErrorTreeNodeHasChildren)
+		ts.l.Error("DeleteTreeNode failed: 节点有子节点", zap.Error(errors.New("节点有子节点")))
+		return errors.New("节点有子节点")
+	}
+
+	// 检查节点是否有绑定的资源
+	if len(treeNode.BindEcs) > 0 {
+		ts.l.Error("DeleteTreeNode failed: 节点已绑定资源", zap.Error(errors.New("节点已绑定资源")))
+		return errors.New("节点已绑定资源")
 	}
 
 	// 删除节点

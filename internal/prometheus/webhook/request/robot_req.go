@@ -1,5 +1,3 @@
-package request
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package request
  * THE SOFTWARE.
  *
  */
+
+package request
 
 // RobotTenantAccessTokenReq 表示获取租户访问令牌的请求结构体
 type RobotTenantAccessTokenReq struct {

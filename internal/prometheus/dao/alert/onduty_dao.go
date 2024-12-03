@@ -28,11 +28,12 @@ package alert
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"strings"
 )
 
 type AlertManagerOnDutyDAO interface {
@@ -65,177 +66,232 @@ func NewAlertManagerOnDutyDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDA
 	}
 }
 
+// GetAllMonitorOnDutyGroup 获取所有值班组信息
 func (a *alertManagerOnDutyDAO) GetAllMonitorOnDutyGroup(ctx context.Context) ([]*model.MonitorOnDutyGroup, error) {
 	var groups []*model.MonitorOnDutyGroup
 
 	if err := a.db.WithContext(ctx).Preload("Members").Find(&groups).Error; err != nil {
-		a.l.Error("获取所有 MonitorOnDutyGroup 失败", zap.Error(err))
-		return nil, err
+		a.l.Error("获取所有值班组失败", zap.Error(err))
+		return nil, fmt.Errorf("获取值班组失败: %w", err)
 	}
 
 	return groups, nil
 }
 
+// CreateMonitorOnDutyGroup 创建新的值班组
 func (a *alertManagerOnDutyDAO) CreateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error {
 	if monitorOnDutyGroup == nil {
-		a.l.Error("CreateMonitorOnDutyGroup 失败: group 为 nil")
-		return fmt.Errorf("monitorOnDutyGroup 不能为空")
+		return fmt.Errorf("值班组不能为空")
 	}
 
 	if err := a.db.WithContext(ctx).Create(monitorOnDutyGroup).Error; err != nil {
-		a.l.Error("创建 MonitorOnDutyGroup 失败", zap.Error(err))
-		return err
+		a.l.Error("创建值班组失败", zap.Error(err))
+		return fmt.Errorf("创建值班组失败: %w", err)
 	}
 
 	return nil
 }
 
+// GetMonitorOnDutyGroupById 根据ID获取值班组信息
 func (a *alertManagerOnDutyDAO) GetMonitorOnDutyGroupById(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error) {
 	if id <= 0 {
-		a.l.Error("GetMonitorOnDutyGroupById 失败: 无效的 ID", zap.Int("id", id))
-		return nil, fmt.Errorf("无效的 ID: %d", id)
+		return nil, fmt.Errorf("无效的值班组ID: %d", id)
 	}
 
 	var group model.MonitorOnDutyGroup
 	if err := a.db.WithContext(ctx).Preload("Members").First(&group, id).Error; err != nil {
-		a.l.Error("获取 MonitorOnDutyGroup 失败", zap.Error(err), zap.Int("id", id))
-		return nil, err
+		a.l.Error("获取值班组失败", zap.Error(err), zap.Int("id", id))
+		return nil, fmt.Errorf("获取值班组失败: %w", err)
 	}
 
 	return &group, nil
 }
 
+// UpdateMonitorOnDutyGroup 更新值班组信息
 func (a *alertManagerOnDutyDAO) UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error {
 	if monitorOnDutyGroup == nil {
-		a.l.Error("UpdateMonitorOnDutyGroup 失败: group 为 nil")
-		return fmt.Errorf("monitorOnDutyGroup 不能为空")
+		return fmt.Errorf("值班组不能为空")
 	}
 
-	if monitorOnDutyGroup.ID == 0 {
-		a.l.Error("UpdateMonitorOnDutyGroup 失败: ID 为 0", zap.Any("group", monitorOnDutyGroup))
-		return fmt.Errorf("monitorOnDutyGroup 的 ID 必须设置且非零")
+	if monitorOnDutyGroup.ID <= 0 {
+		return fmt.Errorf("无效的值班组ID: %d", monitorOnDutyGroup.ID)
 	}
 
-	if err := a.db.WithContext(ctx).
-		Model(&model.MonitorOnDutyGroup{}).
-		Where("id = ?", monitorOnDutyGroup.ID).
-		Updates(monitorOnDutyGroup).Error; err != nil {
-		a.l.Error("更新 MonitorOnDutyGroup 失败", zap.Error(err), zap.Int("id", monitorOnDutyGroup.ID))
-		return err
-	}
+	// 使用单个事务处理所有更新操作
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 先获取原有的值班组信息
+		var existingGroup model.MonitorOnDutyGroup
+		if err := tx.Preload("Members").First(&existingGroup, monitorOnDutyGroup.ID).Error; err != nil {
+			a.l.Error("获取原有值班组信息失败", zap.Error(err), zap.Int("id", monitorOnDutyGroup.ID))
+			return fmt.Errorf("获取原有值班组信息失败: %w", err)
+		}
 
-	return nil
+		existingGroup.Name = monitorOnDutyGroup.Name
+		existingGroup.ShiftDays = monitorOnDutyGroup.ShiftDays
+		existingGroup.YesterdayNormalDutyUserID = monitorOnDutyGroup.YesterdayNormalDutyUserID
+
+		// 更新基本信息
+		if err := tx.Save(&existingGroup).Error; err != nil {
+			a.l.Error("更新值班组基本信息失败", zap.Error(err), zap.Int("id", monitorOnDutyGroup.ID))
+			return fmt.Errorf("更新值班组基本信息失败: %w", err)
+		}
+
+		if err := tx.Model(&existingGroup).Association("Members").Replace(monitorOnDutyGroup.Members); err != nil {
+			a.l.Error("更新成员关联失败", zap.Error(err), zap.Int("id", monitorOnDutyGroup.ID))
+			return fmt.Errorf("更新成员关联失败: %w", err)
+		}
+
+		return nil
+	})
 }
 
+// DeleteMonitorOnDutyGroup 删除值班组
 func (a *alertManagerOnDutyDAO) DeleteMonitorOnDutyGroup(ctx context.Context, id int) error {
 	if id <= 0 {
-		a.l.Error("DeleteMonitorOnDutyGroup 失败: 无效的 ID", zap.Int("id", id))
-		return fmt.Errorf("无效的 ID: %d", id)
+		return fmt.Errorf("无效的值班组ID: %d", id)
 	}
 
 	result := a.db.WithContext(ctx).Delete(&model.MonitorOnDutyGroup{}, id)
 	if err := result.Error; err != nil {
-		a.l.Error("删除 MonitorOnDutyGroup 失败", zap.Error(err), zap.Int("ID", id))
-		return err
+		a.l.Error("删除值班组失败", zap.Error(err), zap.Int("id", id))
+		return fmt.Errorf("删除值班组失败: %w", err)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("未找到ID为%d的值班组", id)
 	}
 
 	return nil
 }
 
+// SearchMonitorOnDutyGroupByName 根据名称搜索值班组
 func (a *alertManagerOnDutyDAO) SearchMonitorOnDutyGroupByName(ctx context.Context, name string) ([]*model.MonitorOnDutyGroup, error) {
 	var groups []*model.MonitorOnDutyGroup
 
 	if err := a.db.WithContext(ctx).
 		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
 		Find(&groups).Error; err != nil {
-		a.l.Error("通过名称搜索 MonitorOnDutyGroup 失败", zap.Error(err))
-		return nil, err
+		a.l.Error("搜索值班组失败", zap.Error(err), zap.String("name", name))
+		return nil, fmt.Errorf("搜索值班组失败: %w", err)
 	}
 
 	return groups, nil
 }
 
+// CreateMonitorOnDutyGroupChange 创建值班组变更记录
 func (a *alertManagerOnDutyDAO) CreateMonitorOnDutyGroupChange(ctx context.Context, monitorOnDutyGroupChange *model.MonitorOnDutyChange) error {
 	if monitorOnDutyGroupChange == nil {
-		a.l.Error("CreateMonitorOnDutyGroupChange 失败: change 为 nil")
-		return fmt.Errorf("monitorOnDutyGroupChange 不能为空")
+		return fmt.Errorf("值班组变更记录不能为空")
 	}
 
 	if err := a.db.WithContext(ctx).Create(monitorOnDutyGroupChange).Error; err != nil {
-		a.l.Error("创建 MonitorOnDutyGroupChange 失败", zap.Error(err))
-		return err
+		a.l.Error("创建值班组变更记录失败", zap.Error(err))
+		return fmt.Errorf("创建值班组变更记录失败: %w", err)
 	}
 
 	return nil
 }
 
+// GetMonitorOnDutyChangesByGroupAndTimeRange 获取指定时间范围内的值班组变更记录
 func (a *alertManagerOnDutyDAO) GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyChange, error) {
 	if groupID <= 0 {
-		a.l.Error("GetMonitorOnDutyChangesByGroupAndTimeRange 失败: 无效的 groupID", zap.Int("groupID", groupID))
-		return nil, fmt.Errorf("无效的 groupID: %d", groupID)
+		return nil, fmt.Errorf("无效的值班组ID: %d", groupID)
 	}
 
 	var changes []*model.MonitorOnDutyChange
+
 	if err := a.db.WithContext(ctx).
-		Where("on_duty_group_id = ?", groupID).
-		Where("date BETWEEN ? AND ?", startTime, endTime).
+		Where("on_duty_group_id = ? AND date BETWEEN ? AND ?", groupID, startTime, endTime).
 		Find(&changes).Error; err != nil {
-		a.l.Error("获取值班计划变更失败", zap.Error(err), zap.Int("groupID", groupID))
-		return nil, err
+		a.l.Error("获取值班组变更记录失败", zap.Error(err), zap.Int("groupID", groupID))
+		return nil, fmt.Errorf("获取值班组变更记录失败: %w", err)
 	}
 
 	return changes, nil
 }
 
+// CheckMonitorOnDutyGroupExists 检查值班组是否存在
 func (a *alertManagerOnDutyDAO) CheckMonitorOnDutyGroupExists(ctx context.Context, onDutyGroup *model.MonitorOnDutyGroup) (bool, error) {
-	var count int64
+	if onDutyGroup == nil {
+		return false, fmt.Errorf("无效的值班组")
+	}
 
+	var count int64
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorOnDutyGroup{}).
 		Where("id = ?", onDutyGroup.ID).
 		Count(&count).Error; err != nil {
-		return false, err
+		a.l.Error("检查值班组存在性失败", zap.Error(err), zap.Int("id", onDutyGroup.ID))
+		return false, fmt.Errorf("检查值班组存在性失败: %w", err)
 	}
 
 	return count > 0, nil
 }
 
+// GetMonitorOnDutyHistoryByGroupIdAndTimeRange 获取指定时间范围内的值班历史记录
 func (a *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyHistory, error) {
-	var historyList []*model.MonitorOnDutyHistory
+	if groupID <= 0 {
+		return nil, fmt.Errorf("无效的值班组ID: %d", groupID)
+	}
 
-	if err := a.db.WithContext(ctx).Where("on_duty_group_id = ? AND date_string >= ? AND date_string <= ?", groupID, startTime, endTime).Find(&historyList).Error; err != nil {
-		a.l.Error("获取值班历史记录失败", zap.Error(err))
-		return nil, err
+	var historyList []*model.MonitorOnDutyHistory
+	if err := a.db.WithContext(ctx).
+		Where("on_duty_group_id = ? AND date_string BETWEEN ? AND ?", groupID, startTime, endTime).
+		Find(&historyList).Error; err != nil {
+		a.l.Error("获取值班历史记录失败", zap.Error(err), zap.Int("groupID", groupID))
+		return nil, fmt.Errorf("获取值班历史记录失败: %w", err)
 	}
 
 	return historyList, nil
 }
 
+// CreateMonitorOnDutyHistory 创建值班历史记录
 func (a *alertManagerOnDutyDAO) CreateMonitorOnDutyHistory(ctx context.Context, monitorOnDutyHistory *model.MonitorOnDutyHistory) error {
+	if monitorOnDutyHistory == nil {
+		return fmt.Errorf("值班历史记录不能为空")
+	}
+
 	if err := a.db.WithContext(ctx).Create(monitorOnDutyHistory).Error; err != nil {
 		a.l.Error("创建值班历史记录失败", zap.Error(err))
-		return err
+		return fmt.Errorf("创建值班历史记录失败: %w", err)
 	}
 
 	return nil
 }
 
+// GetMonitorOnDutyHistoryByGroupIdAndDay 获取指定日期的值班历史记录
 func (a *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryByGroupIdAndDay(ctx context.Context, groupID int, day string) (*model.MonitorOnDutyHistory, error) {
-	var history *model.MonitorOnDutyHistory
-
-	if err := a.db.WithContext(ctx).Where("on_duty_group_id = ? AND date_string = ?", groupID, day).First(&history).Error; err != nil {
-		a.l.Error("获取值班历史记录失败", zap.Error(err))
-		return nil, err
+	if groupID <= 0 {
+		return nil, fmt.Errorf("无效的值班组ID: %d", groupID)
 	}
 
-	return history, nil
+	var history model.MonitorOnDutyHistory
+	if err := a.db.WithContext(ctx).
+		Where("on_duty_group_id = ? AND date_string = ?", groupID, day).
+		First(&history).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		a.l.Error("获取值班历史记录失败", zap.Error(err), zap.Int("groupID", groupID), zap.String("day", day))
+		return nil, fmt.Errorf("获取值班历史记录失败: %w", err)
+	}
+
+	return &history, nil
 }
 
+// ExistsMonitorOnDutyHistory 检查指定日期的值班历史记录是否存在
 func (a *alertManagerOnDutyDAO) ExistsMonitorOnDutyHistory(ctx context.Context, groupID int, day string) (bool, error) {
-	var count int64
+	if groupID <= 0 {
+		return false, fmt.Errorf("无效的值班组ID: %d", groupID)
+	}
 
-	if err := a.db.WithContext(ctx).Model(&model.MonitorOnDutyHistory{}).Where("on_duty_group_id = ? AND date_string = ?", groupID, day).Count(&count).Error; err != nil {
-		return false, err
+	var count int64
+	if err := a.db.WithContext(ctx).
+		Model(&model.MonitorOnDutyHistory{}).
+		Where("on_duty_group_id = ? AND date_string = ?", groupID, day).
+		Count(&count).Error; err != nil {
+		a.l.Error("检查值班历史记录存在性失败", zap.Error(err), zap.Int("groupID", groupID), zap.String("day", day))
+		return false, fmt.Errorf("检查值班历史记录存在性失败: %w", err)
 	}
 
 	return count > 0, nil

@@ -1,5 +1,3 @@
-package content
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package content
  * THE SOFTWARE.
  *
  */
+
+package content
 
 import (
 	"context"

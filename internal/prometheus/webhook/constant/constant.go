@@ -1,5 +1,3 @@
-package constant
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package constant
  * THE SOFTWARE.
  *
  */
+
+package constant
 
 // AlertSeverity 表示告警的严重性等级
 type AlertSeverity string
