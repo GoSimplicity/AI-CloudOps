@@ -29,10 +29,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/prometheus/alertmanager/pkg/labels"
 	pcc "github.com/prometheus/common/config"
 	pm "github.com/prometheus/common/model"
@@ -42,12 +46,6 @@ import (
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/promql/parser"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
-	"io"
-	"net/http"
-	"net/url"
-	"strings"
-	"time"
 )
 
 func CheckPoolIpExists(req *model.MonitorScrapePool, pools []*model.MonitorScrapePool) bool {
@@ -366,92 +364,4 @@ func FormatMap(m map[string]string) string {
 		builder.WriteString(fmt.Sprintf("%s=%s ", k, v))
 	}
 	return strings.TrimSpace(builder.String())
-}
-
-// CalculateOnDutyUser 根据排班规则计算指定日期的值班人
-func CalculateOnDutyUser(ctx context.Context, l *zap.Logger, dao alert.AlertManagerOnDutyDAO, group *model.MonitorOnDutyGroup, dateStr string, todayStr string) *model.User {
-	// 解析目标日期
-	targetDate, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		l.Error("日期解析失败", zap.String("date", dateStr), zap.Error(err))
-		return nil
-	}
-
-	// 解析今天的日期
-	today, err := time.Parse("2006-01-02", todayStr)
-	if err != nil {
-		l.Error("解析今天日期失败", zap.String("today", todayStr), zap.Error(err))
-		return nil
-	}
-
-	// 计算从今天开始的天数差
-	daysDiff := int(targetDate.Sub(today).Hours()) / 24
-
-	// 获取当前值班人的索引
-	currentUserIndex := GetCurrentUserIndex(ctx, l, dao, group, todayStr)
-	if currentUserIndex == -1 {
-		l.Warn("未找到当前值班人", zap.String("today", todayStr))
-		return nil
-	}
-
-	// 获取总成员数和每班轮值天数
-	totalMembers := len(group.Members)
-	shiftDays := group.ShiftDays
-
-	// 检查轮班天数是否为零，避免除零错误
-	if shiftDays == 0 || totalMembers == 0 {
-		l.Error("轮班天数或成员数量无效", zap.Int("shiftDays", shiftDays), zap.Int("totalMembers", totalMembers))
-		return nil
-	}
-
-	// 总的轮班周期长度
-	totalShiftLength := totalMembers * shiftDays
-
-	// 自定义取模函数，确保结果为非负数
-	mod := func(a, b int) int {
-		if b == 0 {
-			l.Error("除零错误", zap.Int("b", b))
-			return -1
-		}
-		return (a%b + b) % b
-	}
-
-	// 计算目标日期的值班人索引
-	indexInShift := mod(currentUserIndex*shiftDays+daysDiff, totalShiftLength)
-	if indexInShift == -1 {
-		l.Error("取模运算出错，可能是因为轮班天数或成员数量无效", zap.Int("currentUserIndex", currentUserIndex), zap.Int("shiftDays", shiftDays), zap.Int("totalMembers", totalMembers))
-		return nil
-	}
-
-	// 确定值班人的索引
-	userIndex := indexInShift / shiftDays
-
-	// 确认索引范围有效，返回对应的成员
-	if userIndex >= 0 && userIndex < totalMembers {
-		return group.Members[userIndex]
-	}
-
-	// 如果索引超出范围
-	l.Error("计算出的值班人索引无效", zap.Int("userIndex", userIndex), zap.Int("totalMembers", totalMembers))
-
-	return nil
-}
-
-// GetCurrentUserIndex 获取当前值班人在成员列表中的索引
-func GetCurrentUserIndex(ctx context.Context, l *zap.Logger, dao alert.AlertManagerOnDutyDAO, group *model.MonitorOnDutyGroup, todayStr string) int {
-	// 尝试从历史记录中获取今天的值班人
-	todayHistory, err := dao.GetMonitorOnDutyHistoryByGroupIdAndDay(ctx, group.ID, todayStr)
-	if err == nil && todayHistory.OnDutyUserID > 0 {
-		for index, member := range group.Members {
-			if member.ID == todayHistory.OnDutyUserID {
-				return index
-			}
-		}
-	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		// 如果查询发生了其他错误，记录日志
-		l.Error("获取今天的值班历史记录失败", zap.Error(err))
-	}
-
-	// 如果没有历史记录，默认第一个成员为当前值班人
-	return 0
 }

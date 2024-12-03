@@ -1,7 +1,5 @@
 //go:build wireinject
 
-package di
-
 /*
  * MIT License
  *
@@ -26,6 +24,8 @@ package di
  * THE SOFTWARE.
  *
  */
+
+package di
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/api"

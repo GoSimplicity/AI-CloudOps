@@ -27,7 +27,7 @@ package model
 
 type Menu struct {
 	Model
-	Name       string    `json:"name" gorm:"type:varchar(100);uniqueIndex:udx_name;not null;comment:菜单名称，必须唯一且非空"` // 菜单名称，唯一且非空
+	Name       string    `json:"name" gorm:"type:varchar(100);uniqueIndex;not null;comment:菜单名称，必须唯一且非空"` // 菜单名称，唯一且非空
 	Title      string    `json:"title" gorm:"type:varchar(100);comment:菜单的显示标题"`                                   // 菜单标题，用于前端显示
 	Pid        int       `json:"pid" gorm:"comment:父级菜单的ID"`                                                       // 父级菜单ID，表示此菜单的上级菜单
 	ParentMenu string    `json:"parentMenu" gorm:"type:varchar(50);comment:父级菜单标识符"`                               // 父级菜单标识，用于前端逻辑标识

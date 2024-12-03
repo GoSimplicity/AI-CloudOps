@@ -1,5 +1,3 @@
-package robot
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package robot
  * THE SOFTWARE.
  *
  */
+
+package robot
 
 import (
 	"bytes"

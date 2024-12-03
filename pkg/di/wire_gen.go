@@ -114,7 +114,7 @@ func InitWebServer() *Cmd {
 	alertManagerRecordDAO := alert.NewAlertManagerRecordDAO(db, logger, userDAO)
 	recordConfigCache := cache.NewRecordConfig(logger, scrapePoolDAO, alertManagerRecordDAO)
 	monitorCache := cache.NewMonitorCache(promConfigCache, alertConfigCache, ruleConfigCache, recordConfigCache, logger)
-	alertManagerEventService := alert2.NewAlertManagerEventService(alertManagerEventDAO, monitorCache, logger, userDAO)
+	alertManagerEventService := alert2.NewAlertManagerEventService(alertManagerEventDAO, monitorCache, logger, userDAO, alertManagerSendDAO)
 	alertEventHandler := api6.NewAlertEventHandler(logger, alertManagerEventService)
 	alertManagerPoolService := alert2.NewAlertManagerPoolService(alertManagerPoolDAO, alertManagerSendDAO, monitorCache, logger, userDAO)
 	alertPoolHandler := api6.NewAlertPoolHandler(logger, alertManagerPoolService)

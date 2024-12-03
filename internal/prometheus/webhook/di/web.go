@@ -1,5 +1,3 @@
-package di
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package di
  * THE SOFTWARE.
  *
  */
+
+package di
 
 import (
 	webhookApi "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/api"
