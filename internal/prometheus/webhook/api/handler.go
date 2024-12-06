@@ -69,9 +69,9 @@ func NewWebHookHandler(l *zap.Logger, dao dao.WebhookDao, alertQueue chan templa
 func (w *WebHookHandler) RegisterRouters(server *gin.Engine) {
 	alertGroup := server.Group("/api/v1/alerts")
 	{
-		alertGroup.POST("/receive", w.MonitorAlertReceive)     // 处理告警接收请求
-		alertGroup.POST("/silence", w.MonitorAlertSilence)     // 处理静默告警请求
-		alertGroup.POST("/unsilence", w.MonitorAlertUnSilence) // 处理取消静默告警请求
+		alertGroup.POST("/receive", w.MonitorAlertReceive)    // 处理告警接收请求
+		alertGroup.GET("/silence", w.MonitorAlertSilence)     // 处理静默告警请求
+		alertGroup.GET("/unsilence", w.MonitorAlertUnSilence) // 处理取消静默告警请求
 	}
 }
 
@@ -112,6 +112,12 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 	fingerprint := ctx.DefaultQuery("fingerprint", "")
 	hour := ctx.DefaultQuery("hour", "")
 
+	// 参数校验
+	if fingerprint == "" {
+		apiresponse.ErrorWithMessage(ctx, "缺少必要的fingerprint参数")
+		return
+	}
+
 	hourInt, err := strconv.Atoi(hour)
 	if err != nil || hourInt <= 0 {
 		apiresponse.ErrorWithMessage(ctx, "无效的静默时长")
@@ -120,7 +126,12 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 
 	// 获取告警事件
 	event, err := w.dao.GetMonitorAlertEventByFingerprintId(ctx, fingerprint)
-	if err != nil || event == nil {
+	if err != nil {
+		w.l.Error("获取告警事件失败", zap.Error(err))
+		apiresponse.ErrorWithMessage(ctx, "获取告警事件失败")
+		return
+	}
+	if event == nil {
 		apiresponse.ErrorWithMessage(ctx, "未找到对应的告警事件")
 		return
 	}
@@ -128,9 +139,12 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 	// 解析标签
 	labelsM := make(map[string]string)
 	for _, label := range event.Labels {
-		if parts := strings.Split(label, "="); len(parts) == 2 {
-			labelsM[parts[0]] = parts[1]
+		parts := strings.Split(label, "=")
+		if len(parts) != 2 {
+			w.l.Warn("无效的标签格式", zap.String("label", label))
+			continue
 		}
+		labelsM[parts[0]] = parts[1]
 	}
 	event.LabelsMatcher = labelsM
 
@@ -150,7 +164,7 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 		StartsAt:  time.Now(),
 		EndsAt:    time.Now().Add(time.Duration(hourInt) * time.Hour),
 		CreatedBy: "系统管理员",
-		Comment:   "手动静默处理",
+		Comment:   fmt.Sprintf("手动静默处理,持续%d小时", hourInt),
 	}
 
 	jsonData, err := json.Marshal(silence)
@@ -161,15 +175,40 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 	}
 
 	url := fmt.Sprintf("%s/api/v2/silences", viper.GetString("webhook.alert_manager_api"))
-	_, err = pkg.PostWithJsonString(w.l, "AlertSilence",
+	resp, err := pkg.PostWithJsonString(w.l, "AlertSilence",
 		viper.GetInt("webhook.im_feishu.request_timeout_seconds"),
 		url, string(jsonData), nil, nil)
 
 	if err != nil {
-		w.l.Error("调用静默接口失败", zap.Error(err))
+		w.l.Error("调用静默接口失败",
+			zap.Error(err),
+			zap.String("url", url),
+			zap.String("request", string(jsonData)))
 		apiresponse.ErrorWithMessage(ctx, "设置静默失败")
 		return
 	}
+
+	// 解析响应获取silenceID
+	var silenceResp struct {
+		SilenceID string `json:"silenceID"`
+	}
+	if err := json.Unmarshal([]byte(resp), &silenceResp); err != nil {
+		w.l.Error("解析静默响应失败", zap.Error(err))
+		apiresponse.ErrorWithMessage(ctx, "设置静默失败")
+		return
+	}
+
+	// 更新告警事件的静默状态和silenceID
+	event.Status = "silenced"
+	event.SilenceID = silenceResp.SilenceID
+	if err := w.dao.UpdateMonitorAlertEvent(ctx, event); err != nil {
+		w.l.Error("更新告警事件状态失败", zap.Error(err))
+	}
+
+	w.l.Info("静默设置成功",
+		zap.String("fingerprint", fingerprint),
+		zap.Int("hour", hourInt),
+		zap.String("silenceID", silenceResp.SilenceID))
 
 	apiresponse.SuccessWithMessage(ctx, "静默设置成功")
 }
@@ -182,25 +221,51 @@ func (w *WebHookHandler) MonitorAlertUnSilence(ctx *gin.Context) {
 		return
 	}
 
+	// 获取告警事件
 	event, err := w.dao.GetMonitorAlertEventByFingerprintId(ctx, fingerprint)
-	if err != nil || event == nil || event.SilenceID == "" {
-		apiresponse.ErrorWithMessage(ctx, "未找到对应的静默记录")
+	if err != nil {
+		w.l.Error("获取告警事件失败", zap.Error(err))
+		apiresponse.ErrorWithMessage(ctx, "获取告警事件失败")
 		return
 	}
 
-	silenceURL := fmt.Sprintf("%s/api/v1/silence/%s",
+	if event == nil {
+		apiresponse.ErrorWithMessage(ctx, "未找到对应的告警事件")
+		return
+	}
+
+	if event.Status != "silenced" {
+		apiresponse.ErrorWithMessage(ctx, "该告警未处于静默状态")
+		return
+	}
+
+	// 构建取消静默的URL
+	silenceURL := fmt.Sprintf("%s/api/v2/silence/%v",
 		viper.GetString("webhook.alert_manager_api"),
 		event.SilenceID)
 
-	_, err = apiresponse.DeleteWithId(w.l, "MonitorAlertUnSilence",
+	// 调用AlertManager API取消静默
+	_, err = pkg.DeleteWithId(w.l, "MonitorAlertUnSilence",
 		viper.GetInt("webhook.im_feishu.request_timeout_seconds"),
 		silenceURL, nil, nil)
 
 	if err != nil {
-		w.l.Error("取消静默失败", zap.Error(err))
+		w.l.Error("取消静默失败",
+			zap.Error(err),
+			zap.String("url", silenceURL))
 		apiresponse.ErrorWithMessage(ctx, "取消静默失败")
 		return
 	}
+
+	// 更新告警事件状态
+	event.Status = "firing"
+	event.SilenceID = ""
+	if err := w.dao.UpdateMonitorAlertEvent(ctx, event); err != nil {
+		w.l.Error("更新告警事件状态失败", zap.Error(err))
+	}
+
+	w.l.Info("取消静默成功",
+		zap.String("fingerprint", fingerprint))
 
 	apiresponse.SuccessWithMessage(ctx, "取消静默成功")
 }
