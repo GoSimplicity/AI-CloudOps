@@ -188,8 +188,19 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 		return
 	}
 
-	// 更新告警事件的静默状态
+	// 解析响应获取silenceID
+	var silenceResp struct {
+		SilenceID string `json:"silenceID"`
+	}
+	if err := json.Unmarshal([]byte(resp), &silenceResp); err != nil {
+		w.l.Error("解析静默响应失败", zap.Error(err))
+		apiresponse.ErrorWithMessage(ctx, "设置静默失败")
+		return
+	}
+
+	// 更新告警事件的静默状态和silenceID
 	event.Status = "silenced"
+	event.SilenceID = silenceResp.SilenceID
 	if err := w.dao.UpdateMonitorAlertEvent(ctx, event); err != nil {
 		w.l.Error("更新告警事件状态失败", zap.Error(err))
 	}
@@ -197,7 +208,7 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 	w.l.Info("静默设置成功",
 		zap.String("fingerprint", fingerprint),
 		zap.Int("hour", hourInt),
-		zap.String("response", string(resp)))
+		zap.String("silenceID", silenceResp.SilenceID))
 
 	apiresponse.SuccessWithMessage(ctx, "静默设置成功")
 }
@@ -210,25 +221,51 @@ func (w *WebHookHandler) MonitorAlertUnSilence(ctx *gin.Context) {
 		return
 	}
 
+	// 获取告警事件
 	event, err := w.dao.GetMonitorAlertEventByFingerprintId(ctx, fingerprint)
-	if err != nil || event == nil || event.SilenceID == "" {
-		apiresponse.ErrorWithMessage(ctx, "未找到对应的静默记录")
+	if err != nil {
+		w.l.Error("获取告警事件失败", zap.Error(err))
+		apiresponse.ErrorWithMessage(ctx, "获取告警事件失败")
 		return
 	}
 
-	silenceURL := fmt.Sprintf("%s/api/v1/silence/%s",
+	if event == nil {
+		apiresponse.ErrorWithMessage(ctx, "未找到对应的告警事件")
+		return
+	}
+
+	if event.Status != "silenced" {
+		apiresponse.ErrorWithMessage(ctx, "该告警未处于静默状态")
+		return
+	}
+
+	// 构建取消静默的URL
+	silenceURL := fmt.Sprintf("%s/api/v2/silence/%v",
 		viper.GetString("webhook.alert_manager_api"),
 		event.SilenceID)
 
-	_, err = apiresponse.DeleteWithId(w.l, "MonitorAlertUnSilence",
+	// 调用AlertManager API取消静默
+	_, err = pkg.DeleteWithId(w.l, "MonitorAlertUnSilence",
 		viper.GetInt("webhook.im_feishu.request_timeout_seconds"),
 		silenceURL, nil, nil)
 
 	if err != nil {
-		w.l.Error("取消静默失败", zap.Error(err))
+		w.l.Error("取消静默失败",
+			zap.Error(err),
+			zap.String("url", silenceURL))
 		apiresponse.ErrorWithMessage(ctx, "取消静默失败")
 		return
 	}
+
+	// 更新告警事件状态
+	event.Status = "firing"
+	event.SilenceID = ""
+	if err := w.dao.UpdateMonitorAlertEvent(ctx, event); err != nil {
+		w.l.Error("更新告警事件状态失败", zap.Error(err))
+	}
+
+	w.l.Info("取消静默成功",
+		zap.String("fingerprint", fingerprint))
 
 	apiresponse.SuccessWithMessage(ctx, "取消静默成功")
 }
