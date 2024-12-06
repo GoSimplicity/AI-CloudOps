@@ -77,8 +77,12 @@ func (n *notAuthService) BuildPrometheusServiceDiscovery(ctx context.Context, le
 		}
 
 		for _, ecs := range node.BindEcs {
-			// 确保 ecs.Tags 有偶数个元素，以便成对解析
-			if len(ecs.Tags) == 0 || len(ecs.Tags)%2 != 0 {
+			// 检查 ecs.Tags 是否为空或有偶数个元素
+			if len(ecs.Tags) == 0 {
+				// 如果标签为空,直接跳过
+				continue
+			}
+			if len(ecs.Tags)%2 != 0 {
 				n.l.Warn("ECS 实例的 Tags 格式不正确，必须为偶数个元素", zap.Int("node_id", node.ID), zap.Any("ecs", ecs))
 				continue
 			}

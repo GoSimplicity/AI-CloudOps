@@ -366,10 +366,10 @@ var StatusChineseMap = map[AlertStatus]string{
 
 // URL 模板常量
 const (
-	SendGroupURLTemplate = "%s/%s?id=%v"                  // 发送组 URL 模板
-	RenderingURLTemplate = "%s/%s?fingerprint=%v"         // 渲染 URL 模板
-	SilenceURLTemplate   = "%s/%s?fingerprint=%v&hour=%v" // 静音 URL 模板
-	UnsilenceURLTemplate = "%s/%s?fingerprint=%v"         // 取消静音 URL 模板
+	SendGroupURLTemplate = "http://%s/%s?id=%v"                  // 发送组 URL 模板
+	RenderingURLTemplate = "http://%s/%s?fingerprint=%v"         // 渲染 URL 模板
+	SilenceURLTemplate   = "http://%s/%s?fingerprint=%v&hour=%v" // 静音 URL 模板
+	UnsilenceURLTemplate = "http://%s/%s?fingerprint=%v"         // 取消静音 URL 模板
 
 	// DefaultUpgradeMinutes 默认告警升级时间（分钟）
 	DefaultUpgradeMinutes = 30 // 默认告警升级时间为30分钟

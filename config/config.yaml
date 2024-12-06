@@ -19,8 +19,8 @@ prometheus:
   local_yaml_dir: ./local_yaml
   enable_alert: 0  # 1 开启告警 0 关闭告警
   enable_record: 0 # 1 开启记录 0 关闭记录
-  alert_webhook_addr: "http://192.168.0.105:8889/api/v1/alerts/receive"
-  httpSdAPI: "http://192.168.0.105:8888/api/not_auth/getTreeNodeBindIps"
+  alert_webhook_addr: "http://192.168.5.2:8889/api/v1/alerts/receive"
+  httpSdAPI: "http://192.168.5.2:8888/api/not_auth/getTreeNodeBindIps"
 mock:
   enabled: true # 是否开启mock
 terraform:

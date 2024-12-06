@@ -232,6 +232,8 @@ func PostWithJsonString(l *zap.Logger, funcName string, timeout int, url string,
 		return nil, err
 	}
 
+	req.Header.Set("Content-Type", "application/json")
+
 	// 添加URL参数
 	q := req.URL.Query()
 	for k, v := range paramsMap {

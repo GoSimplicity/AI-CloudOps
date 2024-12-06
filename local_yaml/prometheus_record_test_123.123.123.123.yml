@@ -1,6 +1,0 @@
-groups:
-    - name: "123123123"
-      rules:
-        - alert: "123123123"
-          expr: "123123"
-          for: 15s
