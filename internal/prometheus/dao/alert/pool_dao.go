@@ -28,11 +28,12 @@ package alert
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"strings"
 )
 
 type AlertManagerPoolDAO interface {
@@ -155,7 +156,7 @@ func (a *alertManagerPoolDAO) CheckMonitorAlertManagerPoolExists(ctx context.Con
 
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertManagerPool{}).
-		Where("id = ?", alertManagerPool.ID).
+		Where("name = ?", alertManagerPool.Name).
 		Count(&count).Error; err != nil {
 		return false, err
 	}

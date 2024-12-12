@@ -118,7 +118,7 @@ func (t *TreeMock) createTreeNodeMock() {
 		return
 	}
 
-	_, err = createNode("后端组", secondNode.ID, 3, 0, "", admin)
+	thirdNode2, err := createNode("后端组", secondNode.ID, 3, 0, "", admin)
 	if err != nil {
 		log.Printf("创建三级节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")
@@ -126,14 +126,14 @@ func (t *TreeMock) createTreeNodeMock() {
 	}
 
 	// 生成 level = 4 的子节点
-	_, err = createNode("好看的前端项目-1", thirdNode.ID, 4, 0, "", admin)
+	_, err = createNode("好看的前端项目", thirdNode.ID, 4, 1, "", admin)
 	if err != nil {
 		log.Printf("创建四级节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")
 		return
 	}
 
-	_, err = createNode("好看的前端项目-2", thirdNode.ID, 4, 0, "", admin)
+	_, err = createNode("高并发的后端项目", thirdNode2.ID, 4, 1, "", admin)
 	if err != nil {
 		log.Printf("创建四级节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")

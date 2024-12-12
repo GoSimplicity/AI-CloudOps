@@ -109,4 +109,7 @@ func InitMock() {
 	um.CreateUserAdmin()
 
 	_ = mock.NewK8sClientMock(db)
+
+	tm := mock.NewTreeMock(db)
+	tm.CreateTreeMock()
 }
