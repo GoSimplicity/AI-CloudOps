@@ -147,6 +147,12 @@ func (r *roleDAO) UpdateRole(ctx context.Context, role *model.Role) error {
 		return errors.New("角色名称不能为空")
 	}
 
+	// 获取原角色信息
+	var oldRole model.Role
+	if err := r.db.WithContext(ctx).Where("id = ? AND is_deleted = ?", role.ID, 0).First(&oldRole).Error; err != nil {
+		return fmt.Errorf("获取原角色信息失败: %v", err)
+	}
+
 	// 检查角色名是否已被其他角色使用
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&model.Role{}).
@@ -166,18 +172,48 @@ func (r *roleDAO) UpdateRole(ctx context.Context, role *model.Role) error {
 		"update_time": time.Now().Unix(),
 	}
 
-	result := r.db.WithContext(ctx).
-		Model(&model.Role{}).
-		Where("id = ? AND is_deleted = ?", role.ID, 0).
-		Updates(updates)
-	if result.Error != nil {
-		return fmt.Errorf("更新角色失败: %v", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return errors.New("角色不存在或已被删除")
-	}
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.Role{}).
+			Where("id = ? AND is_deleted = ?", role.ID, 0).
+			Updates(updates)
+		if result.Error != nil {
+			return fmt.Errorf("更新角色失败: %v", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return errors.New("角色不存在或已被删除")
+		}
 
-	return nil
+		// 如果角色名发生变化，需要更新casbin中的权限
+		if oldRole.Name != role.Name {
+			// 获取原角色的所有权限
+			policies, err := r.enforcer.GetFilteredPolicy(0, oldRole.Name)
+			if err != nil {
+				return fmt.Errorf("获取原角色权限失败: %v", err)
+			}
+
+			// 删除原角色的所有权限
+			if _, err := r.enforcer.DeleteRole(oldRole.Name); err != nil {
+				return fmt.Errorf("删除原角色权限失败: %v", err)
+			}
+
+			// 为新角色名添加相同的权限
+			for _, policy := range policies {
+				policy[0] = role.Name // 更新角色名
+				if _, err := r.enforcer.AddPolicy(policy); err != nil {
+					return fmt.Errorf("添加新角色权限失败: %v", err)
+				}
+			}
+
+			// 确保所有策略都已添加后再保存
+			if err := r.enforcer.SavePolicy(); err != nil {
+				return fmt.Errorf("保存权限策略失败: %v", err)
+			}
+		}
+
+		return nil
+	})
+
+	return err
 }
 
 // DeleteRole 删除角色
@@ -309,7 +345,7 @@ func (r *roleDAO) GetUserRole(ctx context.Context, userId int) (*model.Role, err
 
 	// 先从数据库中获取用户的角色
 	var user model.User
-	if err := r.db.WithContext(ctx).Preload("Roles", "is_deleted = ?", 0).Where("id = ? AND is_deleted = ?", userId, 0).First(&user).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Roles", "is_deleted = ?", 0).Where("id = ? AND deleted_at = ?", userId, 0).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -328,14 +364,15 @@ func (r *roleDAO) GetUserRole(ctx context.Context, userId int) (*model.Role, err
 	allPolicies := make([][]string, 0)
 
 	// 获取用户直接权限
-	userPolicies, err := r.enforcer.GetFilteredPolicy(0, fmt.Sprintf("user:%d", userId))
+	userStr := fmt.Sprintf("%d", userId)
+	userPolicies, err := r.enforcer.GetFilteredPolicy(0, userStr)
 	if err == nil && len(userPolicies) > 0 {
 		allPolicies = append(allPolicies, userPolicies...)
 	}
 
 	// 获取角色权限
 	if role.ID > 0 {
-		rolePolicies, err := r.enforcer.GetFilteredPolicy(0, fmt.Sprintf("role:%s", role.Name))
+		rolePolicies, err := r.enforcer.GetFilteredPolicy(0, role.Name)
 		if err == nil && len(rolePolicies) > 0 {
 			allPolicies = append(allPolicies, rolePolicies...)
 		}
@@ -375,16 +412,21 @@ func (r *roleDAO) GetUserRole(ctx context.Context, userId int) (*model.Role, err
 	}
 
 	// 查询菜单和API详细信息
+	var menus []*model.Menu
+	var apis []*model.Api
+	
 	if len(menuIds) > 0 {
-		if err := r.db.WithContext(ctx).Where("id IN ? AND is_deleted = ?", menuIds, 0).Find(&role.Menus).Error; err != nil {
+		if err := r.db.WithContext(ctx).Where("id IN ? AND is_deleted = ?", menuIds, 0).Find(&menus).Error; err != nil {
 			return nil, fmt.Errorf("查询菜单失败: %v", err)
 		}
+		role.Menus = menus
 	}
 
 	if len(apiIds) > 0 {
-		if err := r.db.WithContext(ctx).Where("id IN ? AND is_deleted = ?", apiIds, 0).Find(&role.Apis).Error; err != nil {
+		if err := r.db.WithContext(ctx).Where("id IN ? AND is_deleted = ?", apiIds, 0).Find(&apis).Error; err != nil {
 			return nil, fmt.Errorf("查询API失败: %v", err)
 		}
+		role.Apis = apis
 	}
 
 	return role, nil

@@ -60,6 +60,14 @@ type UserDAO interface {
 	GetPermCode(ctx context.Context, uid int) ([]string, error)
 	// GetUserByFeiShuUserId 通过飞书用户ID获取用户
 	GetUserByFeiShuUserId(ctx context.Context, feiShuUserId string) (*model.User, error)
+	// ChangePassword 修改密码
+	ChangePassword(ctx context.Context, uid int, password string) error
+	// WriteOff 注销账号
+	WriteOff(ctx context.Context, username, password string) error
+	// UpdateProfile 更新用户信息
+	UpdateProfile(ctx context.Context, user *model.User) error
+	// DeleteUser 删除用户
+	DeleteUser(ctx context.Context, uid int) error
 }
 
 type userDAO struct {
@@ -119,7 +127,7 @@ func (u *userDAO) UpdateUser(ctx context.Context, user *model.User) error {
 func (u *userDAO) GetAllUsers(ctx context.Context) ([]*model.User, error) {
 	var users []*model.User
 
-	if err := u.db.WithContext(ctx).Find(&users).Error; err != nil {
+	if err := u.db.WithContext(ctx).Preload("Roles").Preload("Menus").Preload("Apis").Find(&users).Error; err != nil {
 		u.l.Error("get all users failed", zap.Error(err))
 		return nil, err
 	}
@@ -204,4 +212,47 @@ func (u *userDAO) GetUserByFeiShuUserId(ctx context.Context, feiShuUserId string
 	}
 
 	return &user, nil
+}
+func (u *userDAO) ChangePassword(ctx context.Context, uid int, password string) error {
+	if err := u.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", uid).Update("password", password).Error; err != nil {
+		u.l.Error("update password failed", zap.Int("uid", uid), zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (u *userDAO) UpdateProfile(ctx context.Context, user *model.User) error {
+	if err := u.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]interface{}{
+		"real_name":       user.RealName,
+		"desc":            user.Desc,
+		"mobile":          user.Mobile,
+		"fei_shu_user_id": user.FeiShuUserId,
+		"account_type":    user.AccountType,
+		"home_path":       user.HomePath,
+		"enable":          user.Enable,
+	}).Error; err != nil {
+		u.l.Error("update user profile failed", zap.Int("uid", user.ID), zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (u *userDAO) WriteOff(ctx context.Context, username string, password string) error {
+	if err := u.db.WithContext(ctx).Where("username = ?", username).Delete(&model.User{}).Error; err != nil {
+		u.l.Error("write off user failed", zap.String("username", username), zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (u *userDAO) DeleteUser(ctx context.Context, uid int) error {
+	if err := u.db.WithContext(ctx).Where("id = ?", uid).Delete(&model.User{}).Error; err != nil {
+		u.l.Error("delete user failed", zap.Int("uid", uid), zap.Error(err))
+		return err
+	}
+
+	return nil
 }

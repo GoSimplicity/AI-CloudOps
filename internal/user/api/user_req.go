@@ -28,3 +28,30 @@ package api
 type TokenRequest struct {
 	RefreshToken string `json:"refreshToken"`
 }
+
+type ChangePasswordRequest struct {
+	Username        string `json:"username"`
+	Password        string `json:"password"`
+	NewPassword     string `json:"newPassword"`
+	ConfirmPassword string `json:"confirmPassword"`
+}
+
+type WriteOffRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type UpdateProfileRequest struct {
+	UserId       int    `json:"user_id"`
+	RealName     string `json:"real_name"`
+	Desc         string `json:"desc"`
+	Mobile       string `json:"mobile"`
+	FeiShuUserId string `json:"fei_shu_user_id"`
+	AccountType  int    `json:"account_type"`
+	HomePath     string `json:"home_path"`
+	Enable       int    `json:"enable"`
+}
+
+type DeleteUserRequest struct {
+	UserId int `json:"user_id"`
+}

@@ -77,7 +77,7 @@ func (h *PermissionHandler) AssignUsersRole(c *gin.Context) {
 	}
 
 	// 调用服务层批量分配角色和权限
-	if err := h.svc.AssignRoleToUsers(c.Request.Context(), r.UserIds, r.RoleIds, r.MenuIds, r.ApiIds); err != nil {
+	if err := h.svc.AssignRoleToUsers(c.Request.Context(), r.UserIds, r.RoleIds); err != nil {
 		apiresponse.Error(c)
 		return
 	}

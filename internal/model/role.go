@@ -89,6 +89,4 @@ type AssignUserRoleRequest struct {
 type AssignUsersRoleRequest struct {
 	UserIds []int `json:"user_ids" binding:"required,gt=0"` // 用户ID
 	RoleIds []int `json:"role_ids"`                         // 角色ID列表
-	MenuIds []int `json:"menu_ids"`                         // 菜单ID列表
-	ApiIds  []int `json:"api_ids"`                          // API ID列表
 }

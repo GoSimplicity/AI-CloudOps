@@ -35,7 +35,7 @@ import (
 type PermissionService interface {
 	AssignRole(ctx context.Context, roleId int, menuIds []int, apiIds []int) error
 	AssignRoleToUser(ctx context.Context, userId int, roleIds []int, menuIds []int, apiIds []int) error
-	AssignRoleToUsers(ctx context.Context, userIds []int, roleIds []int, menuIds []int, apiIds []int) error
+	AssignRoleToUsers(ctx context.Context, userIds []int, roleIds []int) error
 }
 
 type permissionService struct {
@@ -93,7 +93,7 @@ func (p *permissionService) AssignRoleToUser(ctx context.Context, userId int, ro
 }
 
 // AssignRoleToUsers 为多个用户批量分配角色和权限
-func (p *permissionService) AssignRoleToUsers(ctx context.Context, userIds []int, roleIds []int, menuIds []int, apiIds []int) error {
+func (p *permissionService) AssignRoleToUsers(ctx context.Context, userIds []int, roleIds []int) error {
 	// 参数校验
 	if len(userIds) == 0 {
 		p.l.Warn("用户ID列表不能为空")
@@ -107,5 +107,5 @@ func (p *permissionService) AssignRoleToUsers(ctx context.Context, userIds []int
 	}
 
 	// 批量分配新角色和权限
-	return p.dao.AssignRoleToUsers(ctx, userIds, roleIds, menuIds, apiIds)
+	return p.dao.AssignRoleToUsers(ctx, userIds, roleIds)
 }

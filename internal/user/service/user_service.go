@@ -43,6 +43,10 @@ type UserService interface {
 	GetProfile(ctx context.Context, uid int) (*model.User, error)
 	GetPermCode(ctx context.Context, uid int) ([]string, error)
 	GetUserList(ctx context.Context) ([]*model.User, error)
+	ChangePassword(ctx context.Context, uid int, oldPassword, newPassword string) error
+	WriteOff(ctx context.Context, username, password string) error
+	UpdateProfile(ctx context.Context, uid int, user *model.User) error
+	DeleteUser(ctx context.Context, uid int) error
 }
 
 type userService struct {
@@ -97,4 +101,63 @@ func (us *userService) GetPermCode(ctx context.Context, uid int) ([]string, erro
 
 func (us *userService) GetUserList(ctx context.Context) ([]*model.User, error) {
 	return us.dao.GetAllUsers(ctx)
+}
+
+func (us *userService) ChangePassword(ctx context.Context, uid int, oldPassword string, newPassword string) error {
+	// 验证旧密码是否正确
+	user, err := us.dao.GetUserByID(ctx, uid)
+	if err != nil {
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
+		return constants.ErrorPasswordIncorrect
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	// 修改密码
+	return us.dao.ChangePassword(ctx, uid, string(hash))
+}
+
+func (us *userService) UpdateProfile(ctx context.Context, uid int, req *model.User) error {
+	// 验证用户是否存在
+	user, err := us.dao.GetUserByID(ctx, uid)
+	if err != nil {
+		return err
+	}
+
+	// 更新用户信息
+	user.RealName = req.RealName
+	user.Desc = req.Desc
+	user.Mobile = req.Mobile
+	user.FeiShuUserId = req.FeiShuUserId
+	user.AccountType = req.AccountType
+	user.HomePath = req.HomePath
+	user.Enable = req.Enable
+
+	return us.dao.UpdateProfile(ctx, user)
+}
+
+func (us *userService) WriteOff(ctx context.Context, username string, password string) error {
+	// 验证用户是否存在
+	user, err := us.dao.GetUserByUsername(ctx, username)
+	if err != nil {
+		return err
+	}
+
+	// 验证密码是否正确
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return constants.ErrorPasswordIncorrect
+	}
+
+	// 注销账号
+	return us.dao.WriteOff(ctx, username, password)
+}
+
+func (us *userService) DeleteUser(ctx context.Context, uid int) error {
+	return us.dao.DeleteUser(ctx, uid)
 }
