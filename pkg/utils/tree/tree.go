@@ -1,5 +1,3 @@
-package tree
-
 /*
  * MIT License
  *
@@ -25,17 +23,20 @@ package tree
  *
  */
 
+package tree
+
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/hashicorp/terraform-exec/tfexec"
-	"go.uber.org/zap"
 	"os"
 	"path/filepath"
 	"text/template"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/hashicorp/terraform-exec/tfexec"
+	"go.uber.org/zap"
 )
 
 // RenderTerraformTemplate 渲染 Terraform 模板并写入指定目录的 main.tf 文件

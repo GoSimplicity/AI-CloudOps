@@ -1,5 +1,3 @@
-package model
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package model
  * THE SOFTWARE.
  *
  */
+
+package model
 
 import (
 	"encoding/json"

@@ -1,5 +1,3 @@
-package model
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package model
  * THE SOFTWARE.
  *
  */
+
+package model
 
 type User struct {
 	Model                // 软删除字段，自动管理

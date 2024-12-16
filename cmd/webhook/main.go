@@ -1,5 +1,3 @@
-package main
-
 /*
  * MIT License
  *
@@ -25,13 +23,16 @@ package main
  *
  */
 
+package main
+
 import (
-	"github.com/GoSimplicity/AI-CloudOps/config"
+	"net/http"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/di"
+	viper_di "github.com/GoSimplicity/AI-CloudOps/pkg/di"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 func main() {
@@ -40,7 +41,7 @@ func main() {
 
 func Init() {
 	// 初始化配置
-	config.InitWebHookViper()
+	viper_di.InitWebHookViper()
 	sp := viper.GetString("webhook.port")
 	cmd := di.InitWebServer()
 	cmd.Server.GET("/headers", printHeaders)

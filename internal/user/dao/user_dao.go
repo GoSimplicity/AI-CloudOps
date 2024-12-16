@@ -1,17 +1,3 @@
-package dao
-
-import (
-	"context"
-	"errors"
-	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
-	"strings"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/go-sql-driver/mysql"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
-)
-
 /*
  * MIT License
  *
@@ -36,6 +22,20 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package dao
+
+import (
+	"context"
+	"errors"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/go-sql-driver/mysql"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
 
 type UserDAO interface {
 	// CreateUser 新建用户
@@ -161,25 +161,27 @@ func (u *userDAO) GetUserByMobile(ctx context.Context, mobile string) (*model.Us
 }
 
 func (u *userDAO) GetPermCode(ctx context.Context, uid int) ([]string, error) {
-	var user model.User
+	// var user model.User
 
-	// 根据 uid 查找用户，并预加载关联的 Roles
-	if err := u.db.WithContext(ctx).Preload("Roles").Where("id = ?", uid).Find(&user).Error; err != nil {
-		u.l.Error("get user by id failed", zap.Int("id", uid), zap.Error(err))
-		return nil, err
-	}
+	// // 根据 uid 查找用户，并预加载关联的 Roles
+	// if err := u.db.WithContext(ctx).Preload("Roles").Where("id = ?", uid).Find(&user).Error; err != nil {
+	// 	u.l.Error("get user by id failed", zap.Int("id", uid), zap.Error(err))
+	// 	return nil, err
+	// }
 
-	// 用于存储所有的权限码
-	var permCodes []string
+	// // 用于存储所有的权限码
+	// var permCodes []string
 
-	// 遍历用户的角色，提取每个角色的 Codes
-	for _, role := range user.Roles {
-		// Codes 字段存储为 "xxx,xxx,xxx" 格式的字符串，需要进行转换
-		codes := strings.Split(role.Codes, ",")
-		permCodes = append(permCodes, codes...)
-	}
+	// // 遍历用户的角色，提取每个角色的 Codes
+	// for _, role := range user.Roles {
+	// 	// Codes 字段存储为 "xxx,xxx,xxx" 格式的字符串，需要进行转换
+	// 	codes := strings.Split(role.Codes, ",")
+	// 	permCodes = append(permCodes, codes...)
+	// }
 
-	return permCodes, nil
+	// return permCodes, nil
+
+	return nil, nil
 }
 
 func (u *userDAO) GetUserByUsernames(ctx context.Context, usernames []string) ([]*model.User, error) {

@@ -1,5 +1,3 @@
-package prometheus
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package prometheus
  * THE SOFTWARE.
  *
  */
+
+package prometheus
 
 import (
 	"bytes"

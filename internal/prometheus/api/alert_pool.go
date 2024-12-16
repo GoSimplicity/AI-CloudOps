@@ -1,5 +1,3 @@
-package api
-
 /*
  * MIT License
  *
@@ -25,14 +23,17 @@ package api
  *
  */
 
+package api
+
 import (
+	"strconv"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"strconv"
 )
 
 type AlertPoolHandler struct {

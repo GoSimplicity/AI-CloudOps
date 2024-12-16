@@ -1,5 +1,3 @@
-package model
-
 /*
  * MIT License
  *
@@ -25,15 +23,48 @@ package model
  *
  */
 
+package model
+
 type Api struct {
-	Model
-	Path     string  `gorm:"type:varchar(100);not null;comment:路由路径"`              // 路由路径，非空，表示API的具体访问路径
-	Method   string  `gorm:"type:varchar(20);not null;comment:HTTP请求方法"`           // HTTP请求方法，非空，如 GET、POST、PUT 等
-	Pid      int     `gorm:"comment:父级API的ID"`                                     // 父级API的ID，用于构建API的树状结构
-	Title    string  `gorm:"type:varchar(100);uniqueIndex;not null;comment:API名称"` // API名称，唯一且非空，用于描述此API的功能
-	Roles    []*Role `gorm:"many2many:role_apis;comment:关联的角色"`                    // 关联的角色，多对多关系，表示哪些角色可以访问该API
-	Type     string  `gorm:"type:varchar(100);default:1;comment:类型 0=父级 1=子级"`     // API类型，0表示父级API，1表示子级API，默认值为1（子级）
-	Key      uint    `json:"key" gorm:"-"`                                         // 用于前端显示的唯一键，不存储在数据库
-	Value    uint    `json:"value" gorm:"-"`                                       // 用于前端显示的值，不存储在数据库
-	Children []*Api  `json:"children" gorm:"-"`                                    // 子API列表，递归定义，用于前端构建API树结构，不存储在数据库
+	ID          int    `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
+	Name        string `json:"name" gorm:"column:name;type:varchar(50);not null;comment:API名称"`
+	Path        string `json:"path" gorm:"column:path;type:varchar(255);not null;comment:API路径"`
+	Method      int    `json:"method" gorm:"column:method;type:tinyint(1);not null;comment:HTTP请求方法(1:GET,2:POST,3:PUT,4:DELETE)"`
+	Description string `json:"description" gorm:"column:description;type:varchar(500);comment:API描述"`
+	Version     string `json:"version" gorm:"column:version;type:varchar(20);default:v1;comment:API版本"`
+	Category    int    `json:"category" gorm:"column:category;type:tinyint(1);not null;comment:API分类(1:系统,2:业务)"`
+	IsPublic    int    `json:"is_public" gorm:"column:is_public;type:tinyint(1);default:0;comment:是否公开(0:否,1:是)"`
+	CreateTime  int64  `json:"create_time" gorm:"column:create_time;autoCreateTime;comment:创建时间"`
+	UpdateTime  int64  `json:"update_time" gorm:"column:update_time;autoUpdateTime;comment:更新时间"`
+	IsDeleted   int    `json:"is_deleted" gorm:"column:is_deleted;type:tinyint(1);default:0;comment:是否删除(0:否,1:是)"`
+}
+
+type CreateApiRequest struct {
+	Name        string `json:"name" binding:"required"`       // API名称
+	Path        string `json:"path" binding:"required"`       // API路径
+	Method      int    `json:"method" binding:"required"`     // 请求方法
+	Description string `json:"description"`                   // API描述
+	Version     string `json:"version"`                       // API版本
+	Category    int    `json:"category"`                      // API分类
+	IsPublic    int    `json:"is_public" binding:"oneof=0 1"` // 是否公开
+}
+
+type GetApiRequest struct {
+	ID int `json:"id" binding:"required,gt=0"` // API ID
+}
+
+type UpdateApiRequest struct {
+	ID          int    `json:"id" binding:"required,gt=0"`    // API ID
+	Name        string `json:"name" binding:"required"`       // API名称
+	Path        string `json:"path" binding:"required"`       // API路径
+	Method      int    `json:"method" binding:"required"`     // 请求方法
+	Description string `json:"description"`                   // API描述
+	Version     string `json:"version"`                       // API版本
+	Category    int    `json:"category"`                      // API分类
+	IsPublic    int    `json:"is_public" binding:"oneof=0 1"` // 是否公开
+}
+
+type ListApisRequest struct {
+	PageNumber int `json:"page_number" binding:"required,gt=0"` // 页码
+	PageSize   int `json:"page_size" binding:"required,gt=0"`   // 每页数量
 }

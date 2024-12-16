@@ -1,5 +1,3 @@
-package admin
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package admin
  * THE SOFTWARE.
  *
  */
+
+package admin
 
 import (
 	"context"

@@ -1,11 +1,3 @@
-package dao
-
-import (
-	"context"
-	"github.com/casbin/casbin/v2"
-	"go.uber.org/zap"
-)
-
 /*
  * MIT License
  *
@@ -30,6 +22,15 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package dao
+
+import (
+	"context"
+
+	"github.com/casbin/casbin/v2"
+	"go.uber.org/zap"
+)
 
 type AuthCasbinDAO interface {
 	// CheckPermission 检查角色是否具有某资源的访问权限

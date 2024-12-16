@@ -1,5 +1,3 @@
-package admin
-
 /*
  * MIT License
  *
@@ -25,8 +23,11 @@ package admin
  *
  */
 
+package admin
+
 import (
 	"context"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"

@@ -1,5 +1,3 @@
-package model
-
 /*
  * MIT License
  *
@@ -25,18 +23,72 @@ package model
  *
  */
 
+package model
+
 type Role struct {
-	Model
-	OrderNo   int     `json:"orderNo" gorm:"comment:排序"`                                        // 排序号，决定角色在显示或列表中的顺序
-	RoleName  string  `json:"roleName" gorm:"type:varchar(100);uniqueIndex;comment:角色中文名称"`     // 角色的中文名称，必须唯一，便于识别和显示
-	RoleValue string  `json:"roleValue" gorm:"type:varchar(100);uniqueIndex;comment:角色值"`       // 角色的标识符，用于在权限控制等场景中标识角色，必须唯一
-	Remark    string  `json:"remark" gorm:"comment:角色描述"`                                       // 对角色的简要描述，通常用于说明角色的功能或用途
-	HomePath  string  `json:"homePath" gorm:"comment:登录后的默认首页"`                                 // 用户登录后默认的首页路径，根据角色定义不同的首页
-	Codes     string  `json:"codes" gorm:"type:varchar(100);comment:权限码"`                       // 前端校验权限码
-	Status    string  `json:"status" gorm:"type:varchar(100);default:1;comment:角色状态 1=正常 2=冻结"` // 角色状态，1 表示正���，2 表示被冻结
-	Users     []*User `json:"users" gorm:"many2many:user_roles;comment:关联的用户"`                  // 多对多关联用户，表示哪些用户属于该角色
-	Menus     []*Menu `json:"menus" gorm:"many2many:role_menus;comment:关联的菜单"`                  // 多对多关联菜单，表示该角色可以访问的菜单
-	Apis      []*Api  `json:"apis" gorm:"many2many:role_apis;comment:关联的API"`                   // 多对多关联API，表示该角色可以调用的API接口
-	MenuIds   []int   `json:"menuIds" gorm:"-"`                                                 // 前端使用的菜单ID，用于构建角色与菜单的关系，不存储在数据库中
-	ApiIds    []int   `json:"apiIds" gorm:"-"`                                                  // 前端使用的API ID，用于构建角色与API的关系，不存储在数据库中
+	ID          int     `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
+	Name        string  `json:"name" gorm:"column:name;type:varchar(50);not null;unique;comment:角色名称"`
+	Description string  `json:"description" gorm:"column:description;type:varchar(255);comment:角色描述"`
+	RoleType    int     `json:"role_type" gorm:"column:role_type;type:tinyint(1);not null;comment:角色类型(1:系统角色,2:自定义角色)"`
+	IsDefault   int     `json:"is_default" gorm:"column:is_default;type:tinyint(1);default:0;comment:是否为默认角色(0:否,1:是)"`
+	CreateTime  int64   `json:"create_time" gorm:"column:create_time;autoCreateTime;comment:创建时间"`
+	UpdateTime  int64   `json:"update_time" gorm:"column:update_time;autoUpdateTime;comment:更新时间"`
+	IsDeleted   int     `json:"is_deleted" gorm:"column:is_deleted;type:tinyint(1);default:0;comment:是否删除(0:否,1:是)"`
+	Menus       []*Menu `json:"menus" gorm:"-"`
+	Apis        []*Api  `json:"apis" gorm:"-"`
+}
+
+type CreateRoleRequest struct {
+	Name        string `json:"name" binding:"required"`        // 角色名称
+	Description string `json:"description"`                    // 角色描述
+	RoleType    int    `json:"role_type" binding:"required"`   // 角色类型
+	IsDefault   int    `json:"is_default" binding:"oneof=0 1"` // 是否默认角色
+	MenuIds     []int  `json:"menu_ids"`                       // 菜单ID列表
+	ApiIds      []int  `json:"api_ids"`                        // API ID列表
+}
+
+type GetRoleRequest struct {
+	Id int `json:"id" binding:"required,gt=0"` // 角色ID
+}
+
+type UpdateRoleRequest struct {
+	Id          int    `json:"id" binding:"required,gt=0"`     // 角色ID
+	Name        string `json:"name" binding:"required"`        // 角色名称
+	Description string `json:"description"`                    // 角色描述
+	RoleType    int    `json:"role_type" binding:"required"`   // 角色类型
+	IsDefault   int    `json:"is_default" binding:"oneof=0 1"` // 是否默认角色
+	MenuIds     []int  `json:"menu_ids"`                       // 菜单ID列表
+	ApiIds      []int  `json:"api_ids"`                        // API ID列表
+}
+
+type ListRolesRequest struct {
+	PageNumber int `json:"page_number" binding:"required,gt=0"` // 页码
+	PageSize   int `json:"page_size" binding:"required,gt=0"`   // 每页数量
+}
+
+// 用户角色相关
+type ListUserRolesRequest struct {
+	PageNumber int `json:"page_number" binding:"required,gt=0"` // 页码
+	PageSize   int `json:"page_size" binding:"required,gt=0"`   // 每页数量
+}
+
+type UpdateUserRoleRequest struct {
+	UserId  int   `json:"user_id" binding:"required,gt=0"` // 用户ID
+	MenuIds []int `json:"menu_ids"`                        // 菜单ID列表
+	ApiIds  []int `json:"api_ids"`                         // API ID列表
+	RoleIds []int `json:"role_ids"`                        // 角色ID列表
+}
+
+type AssignUserRoleRequest struct {
+	UserId  int   `json:"user_id" binding:"required,gt=0"` // 用户ID
+	RoleIds []int `json:"role_ids"`                        // 角色ID列表
+	MenuIds []int `json:"menu_ids"`                        // 菜单ID列表
+	ApiIds  []int `json:"api_ids"`                         // API ID列表
+}
+
+type AssignUsersRoleRequest struct {
+	UserIds []int `json:"user_ids" binding:"required,gt=0"` // 用户ID
+	RoleIds []int `json:"role_ids"`                         // 角色ID列表
+	MenuIds []int `json:"menu_ids"`                         // 菜单ID列表
+	ApiIds  []int `json:"api_ids"`                          // API ID列表
 }

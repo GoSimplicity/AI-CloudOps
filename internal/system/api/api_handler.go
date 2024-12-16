@@ -1,13 +1,3 @@
-package api
-
-import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
-	"github.com/gin-gonic/gin"
-)
-
 /*
  * MIT License
  *
@@ -33,91 +23,125 @@ import (
  *
  */
 
-type AuthApiHandler struct {
-	apiService service.AuthApiService
+package api
+
+import (
+	"strconv"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/gin-gonic/gin"
+)
+
+type ApiHandler struct {
+	svc service.ApiService
 }
 
-func NewAuthApiHandler(apiService service.AuthApiService) *AuthApiHandler {
-	return &AuthApiHandler{
-		apiService: apiService,
+func NewApiHandler(svc service.ApiService) *ApiHandler {
+	return &ApiHandler{
+		svc: svc,
 	}
 }
 
-func (a *AuthApiHandler) RegisterRouters(server *gin.Engine) {
-	authGroup := server.Group("/api/auth")
+func (h *ApiHandler) RegisterRouters(server *gin.Engine) {
+	apiGroup := server.Group("/api/apis")
 
-	// API 管理相关路由
-	authGroup.GET("/api/list", a.GetApiList)
-	authGroup.GET("/api/all", a.GetApiListAll)
-	authGroup.DELETE("/api/:id", a.DeleteApi)
-	authGroup.POST("/api/create", a.CreateApi)
-	authGroup.POST("/api/update", a.UpdateApi)
+	apiGroup.POST("/list", h.ListApis)
+	apiGroup.POST("/create", h.CreateAPI)
+	apiGroup.POST("/update", h.UpdateAPI)
+	apiGroup.DELETE("/:id", h.DeleteAPI)
 }
 
-func (a *AuthApiHandler) GetApiList(ctx *gin.Context) {
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+// ListApis 获取API列表
+func (a *ApiHandler) ListApis(c *gin.Context) {
+	var req model.ListApisRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.Error(c)
+		return
+	}
 
-	Apis, err := a.apiService.GetApiList(ctx, uc.Uid)
+	// 调用service层获取API列表
+	apis, total, err := a.svc.ListApis(c.Request.Context(), req.PageNumber, req.PageSize)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
+		apiresponse.Error(c)
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, Apis)
+	apiresponse.SuccessWithData(c, gin.H{
+		"list":  apis,
+		"total": total,
+	})
 }
 
-func (a *AuthApiHandler) GetApiListAll(ctx *gin.Context) {
-	Apis, err := a.apiService.GetApiListAll(ctx)
-	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
+// CreateAPI 创建新的API
+func (a *ApiHandler) CreateAPI(c *gin.Context) {
+	var req model.CreateApiRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.Error(c)
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, Apis)
+	// 构建API对象
+	api := &model.Api{
+		Name:        req.Name,
+		Path:        req.Path,
+		Method:      req.Method,
+		Description: req.Description,
+		Version:     req.Version,
+		Category:    req.Category,
+		IsPublic:    req.IsPublic,
+	}
+
+	if err := a.svc.CreateApi(c.Request.Context(), api); err != nil {
+		apiresponse.Error(c)
+		return
+	}
+
+	apiresponse.Success(c)
 }
 
-func (a *AuthApiHandler) DeleteApi(ctx *gin.Context) {
-	id := ctx.Param("id")
-
-	err := a.apiService.DeleteApi(ctx, id)
-	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
+// UpdateAPI 更新API信息
+func (a *ApiHandler) UpdateAPI(c *gin.Context) {
+	var req model.UpdateApiRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.Error(c)
 		return
 	}
 
-	apiresponse.SuccessWithMessage(ctx, "删除成功")
+	// 构建更新的API对象
+	api := &model.Api{
+		ID:          req.ID,
+		Name:        req.Name,
+		Path:        req.Path,
+		Method:      req.Method,
+		Description: req.Description,
+		Version:     req.Version,
+		Category:    req.Category,
+		IsPublic:    req.IsPublic,
+	}
+
+	if err := a.svc.UpdateApi(c.Request.Context(), api); err != nil {
+		apiresponse.Error(c)
+		return
+	}
+
+	apiresponse.Success(c)
 }
 
-func (a *AuthApiHandler) CreateApi(ctx *gin.Context) {
-	var ma model.Api
-
-	if err := ctx.ShouldBindJSON(&ma); err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	err := a.apiService.CreateApi(ctx, &ma)
+// DeleteAPI 删除API
+func (a *ApiHandler) DeleteAPI(c *gin.Context) {
+	// 从URL参数中获取API ID
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
+		apiresponse.Error(c)
 		return
 	}
 
-	apiresponse.SuccessWithMessage(ctx, "创建成功")
-}
-
-func (a *AuthApiHandler) UpdateApi(ctx *gin.Context) {
-	var ma model.Api
-
-	if err := ctx.ShouldBindJSON(&ma); err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
+	if err := a.svc.DeleteApi(c.Request.Context(), id); err != nil {
+		apiresponse.Error(c)
 		return
 	}
 
-	err := a.apiService.UpdateApi(ctx, &ma)
-	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	apiresponse.SuccessWithMessage(ctx, "更新成功")
+	apiresponse.Success(c)
 }

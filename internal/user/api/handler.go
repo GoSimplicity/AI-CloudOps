@@ -1,20 +1,3 @@
-package api
-
-import (
-	"errors"
-	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/spf13/viper"
-	"net/http"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/user/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-)
-
 /*
  * MIT License
  *
@@ -39,6 +22,24 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package api
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/spf13/viper"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/user/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+)
 
 type UserHandler struct {
 	service service.UserService

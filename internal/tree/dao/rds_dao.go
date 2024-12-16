@@ -1,15 +1,3 @@
-package dao
-
-import (
-	"context"
-
-	"gorm.io/gorm/clause"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
-)
-
 /*
  * MIT License
  *
@@ -34,6 +22,18 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package dao
+
+import (
+	"context"
+
+	"gorm.io/gorm/clause"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
 
 type TreeRdsDAO interface {
 	// Create 创建一个新的 ResourceRds 实例

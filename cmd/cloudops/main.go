@@ -1,5 +1,3 @@
-package main
-
 /*
  * MIT License
  *
@@ -25,6 +23,8 @@ package main
  *
  */
 
+package main
+
 import (
 	"log"
 	"net/http"
@@ -34,7 +34,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/GoSimplicity/AI-CloudOps/config"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/di"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -47,7 +46,7 @@ func main() {
 
 func Init() {
 	// 初始化配置
-	config.InitViper()
+	di.InitViper()
 	// 初始化 Web 服务器和其他组件
 	cmd := di.InitWebServer()
 	// 初始化翻译器

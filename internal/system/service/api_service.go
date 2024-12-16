@@ -1,13 +1,3 @@
-package service
-
-import (
-	"context"
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	"go.uber.org/zap"
-)
-
 /*
  * MIT License
  *
@@ -33,64 +23,83 @@ import (
  *
  */
 
-type AuthApiService interface {
-	GetApiList(ctx context.Context, uid int) ([]*model.Api, error)
-	GetApiListAll(ctx context.Context) ([]*model.Api, error)
-	DeleteApi(ctx context.Context, apiID string) error
+package service
+
+import (
+	"context"
+	"errors"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
+	"go.uber.org/zap"
+)
+
+type ApiService interface {
 	CreateApi(ctx context.Context, api *model.Api) error
+	GetApiById(ctx context.Context, id int) (*model.Api, error)
 	UpdateApi(ctx context.Context, api *model.Api) error
+	DeleteApi(ctx context.Context, id int) error
+	ListApis(ctx context.Context, page, pageSize int) ([]*model.Api, int, error)
 }
 
-type authApiService struct {
-	apiDao  dao.AuthApiDAO
-	roleDao dao.AuthRoleDAO
-	userDao userDao.UserDAO
-	l       *zap.Logger
+type apiService struct {
+	l   *zap.Logger
+	dao dao.ApiDAO
 }
 
-func NewAuthApiService(apiDao dao.AuthApiDAO, roleDao dao.AuthRoleDAO, l *zap.Logger, userDao userDao.UserDAO) AuthApiService {
-	return &authApiService{
-		apiDao:  apiDao,
-		roleDao: roleDao,
-		l:       l,
-		userDao: userDao,
+func NewApiService(l *zap.Logger, dao dao.ApiDAO) ApiService {
+	return &apiService{
+		l:   l,
+		dao: dao,
 	}
 }
 
-func (a *authApiService) GetApiList(ctx context.Context, uid int) ([]*model.Api, error) {
-	user, err := a.userDao.GetUserByID(ctx, uid)
-	if err != nil {
-		a.l.Error("GetUserByID failed", zap.Error(err))
-		return nil, err
+// CreateApi 创建新的API
+func (a *apiService) CreateApi(ctx context.Context, api *model.Api) error {
+	if api == nil {
+		a.l.Warn("API不能为空")
+		return errors.New("api不能为空")
 	}
 
-	apis := make([]*model.Api, 0)
+	return a.dao.CreateApi(ctx, api)
+}
 
-	for _, role := range user.Roles {
-		roleApis, err := a.roleDao.GetApisByRoleID(ctx, role.ID)
-		if err != nil {
-			a.l.Error("GetApisByRoleID failed", zap.Error(err))
-			return nil, err
-		}
-
-		apis = append(apis, roleApis...)
+// GetApiById 根据ID获取API
+func (a *apiService) GetApiById(ctx context.Context, id int) (*model.Api, error) {
+	if id <= 0 {
+		a.l.Warn("API ID无效", zap.Int("ID", id))
+		return nil, errors.New("api id无效")
 	}
 
-	return apis, nil
+	return a.dao.GetApiById(ctx, id)
 }
 
-func (a *authApiService) GetApiListAll(ctx context.Context) ([]*model.Api, error) {
-	return a.apiDao.GetAllApis(ctx)
+// UpdateApi 更新API信息
+func (a *apiService) UpdateApi(ctx context.Context, api *model.Api) error {
+	if api == nil {
+		a.l.Warn("API不能为空")
+		return errors.New("api不能为空")
+	}
+
+	return a.dao.UpdateApi(ctx, api)
 }
 
-func (a *authApiService) DeleteApi(ctx context.Context, apiID string) error {
-	return a.apiDao.DeleteApi(ctx, apiID)
+// DeleteApi 删除指定ID的API
+func (a *apiService) DeleteApi(ctx context.Context, id int) error {
+	if id <= 0 {
+		a.l.Warn("API ID无效", zap.Int("ID", id))
+		return errors.New("api id无效")
+	}
+
+	return a.dao.DeleteApi(ctx, id)
 }
 
-func (a *authApiService) CreateApi(ctx context.Context, api *model.Api) error {
-	return a.apiDao.CreateApi(ctx, api)
-}
+// ListApis 分页获取API列表
+func (a *apiService) ListApis(ctx context.Context, page, pageSize int) ([]*model.Api, int, error) {
+	if page < 1 || pageSize < 1 {
+		a.l.Warn("分页参数无效", zap.Int("页码", page), zap.Int("每页数量", pageSize))
+		return nil, 0, errors.New("分页参数无效")
+	}
 
-func (a *authApiService) UpdateApi(ctx context.Context, api *model.Api) error {
-	return a.apiDao.UpdateApi(ctx, api)
+	return a.dao.ListApis(ctx, page, pageSize)
 }

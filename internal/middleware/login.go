@@ -1,5 +1,3 @@
-package middleware
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package middleware
  * THE SOFTWARE.
  *
  */
+
+package middleware
 
 import (
 	"strings"

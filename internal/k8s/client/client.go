@@ -1,5 +1,3 @@
-package client
-
 /*
  * MIT License
  *
@@ -25,9 +23,13 @@ package client
  *
  */
 
+package client
+
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/openkruise/kruise-api/client/clientset/versioned"
 	"go.uber.org/zap"
@@ -38,7 +40,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
-	"sync"
 )
 
 type K8sClient interface {

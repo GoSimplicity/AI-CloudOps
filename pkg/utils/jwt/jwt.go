@@ -1,5 +1,3 @@
-package jwt
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package jwt
  * THE SOFTWARE.
  *
  */
+
+package jwt
 
 import (
 	"errors"

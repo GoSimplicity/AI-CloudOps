@@ -1,5 +1,3 @@
-package jwt_test
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package jwt_test
  * THE SOFTWARE.
  *
  */
+
+package jwt_test
 
 import (
 	"fmt"

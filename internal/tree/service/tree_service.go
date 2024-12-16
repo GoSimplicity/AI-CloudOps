@@ -1,20 +1,3 @@
-package service
-
-import (
-	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"errors"
-	"fmt"
-	"strconv"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-
-	"go.uber.org/zap"
-)
-
 /*
  * MIT License
  *
@@ -39,6 +22,23 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package service
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"strconv"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+
+	"go.uber.org/zap"
+)
 
 type TreeNodeService interface {
 	CreateTreeNode(ctx context.Context, obj *model.TreeNode) error
