@@ -1,5 +1,3 @@
-package admin
-
 /*
  * MIT License
  *
@@ -25,9 +23,13 @@ package admin
  *
  */
 
+package admin
+
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -39,7 +41,6 @@ import (
 	yamlTask "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/restmapper"
-	"strings"
 )
 
 type YamlTemplateService interface {

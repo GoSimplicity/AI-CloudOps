@@ -1,5 +1,3 @@
-package middleware
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package middleware
  * THE SOFTWARE.
  *
  */
+
+package middleware
 
 import (
 	"strings"
@@ -55,6 +55,7 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 			path == "/api/user/logout" ||
 			strings.Contains(path, "hello") ||
 			path == "/api/user/refresh_token" ||
+			path == "/api/user/signup" ||
 			path == "/api/not_auth/getTreeNodeBindIps" ||
 			path == "/api/monitor/prometheus_configs/prometheus" ||
 			path == "/api/monitor/prometheus_configs/prometheus_alert" ||

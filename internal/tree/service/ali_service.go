@@ -1,23 +1,3 @@
-package service
-
-import (
-	"context"
-	"crypto/sha256"
-	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
-	"time"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/tree"
-	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
-	"github.com/spf13/viper"
-	"go.uber.org/zap"
-)
-
 /*
  * MIT License
  *
@@ -42,6 +22,26 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package service
+
+import (
+	"context"
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/tree"
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
+)
 
 var ErrResourceBound = errors.New("资源已被绑定，无法删除")
 

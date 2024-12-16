@@ -1,5 +1,3 @@
-package admin
-
 /*
  * MIT License
  *
@@ -25,11 +23,14 @@ package admin
  *
  */
 
+package admin
+
 import (
 	"context"
 	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"strings"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"

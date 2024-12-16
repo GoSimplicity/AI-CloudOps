@@ -1,5 +1,3 @@
-package cache
-
 /*
  * MIT License
  *
@@ -25,9 +23,16 @@ package cache
  *
  */
 
+package cache
+
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
@@ -42,10 +47,6 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
 )
 
 const hashTmpKey = "__tmp_hash"

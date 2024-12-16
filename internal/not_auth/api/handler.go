@@ -1,5 +1,3 @@
-package api
-
 /*
  * MIT License
  *
@@ -25,13 +23,16 @@ package api
  *
  */
 
+package api
+
 import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/gin-gonic/gin"
 )
 
 type NotAuthHandler struct {

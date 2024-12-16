@@ -1,5 +1,3 @@
-package di
-
 /*
  * MIT License
  *
@@ -25,14 +23,17 @@ package di
  *
  */
 
+package di
+
 import (
+	"strings"
+	"time"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"strings"
-	"time"
 )
 
 // InitMiddlewares 初始化中间件

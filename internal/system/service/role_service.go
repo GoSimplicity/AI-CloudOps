@@ -1,12 +1,3 @@
-package service
-
-import (
-	"context"
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
-	"go.uber.org/zap"
-)
-
 /*
  * MIT License
  *
@@ -32,83 +23,65 @@ import (
  *
  */
 
-type AuthRoleService interface {
-	GetAllRoleList(ctx context.Context) ([]*model.Role, error)
-	CreateRole(ctx context.Context, roles model.Role) error
-	UpdateRole(ctx context.Context, roles model.Role) error
-	SetRoleStatus(ctx context.Context, id int, status string) error
-	DeleteRole(ctx context.Context, id string) error
+package service
+
+import (
+	"context"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
+	"go.uber.org/zap"
+)
+
+type RoleService interface {
+	ListRoles(ctx context.Context, page, pageSize int) ([]*model.Role, int, error)
+	CreateRole(ctx context.Context, role *model.Role, menuIds []int, apiIds []int) error
+	UpdateRole(ctx context.Context, role *model.Role) error
+	DeleteRole(ctx context.Context, id int) error
+	GetRole(ctx context.Context, id int) (*model.Role, error)
+	GetUserRole(ctx context.Context, userId int) (*model.Role, error)
 }
 
-type authRoleService struct {
-	menuDao dao.AuthMenuDAO
-	roleDao dao.AuthRoleDAO
+type roleService struct {
+	menuDao dao.MenuDAO
+	roleDao dao.RoleDAO
 	l       *zap.Logger
 }
 
-func NewAuthRoleService(menuDao dao.AuthMenuDAO, roleDao dao.AuthRoleDAO, l *zap.Logger) AuthRoleService {
-	return &authRoleService{
+func NewRoleService(menuDao dao.MenuDAO, roleDao dao.RoleDAO, l *zap.Logger) RoleService {
+	return &roleService{
 		menuDao: menuDao,
 		roleDao: roleDao,
 		l:       l,
 	}
 }
 
-// GetAllRoleList 获取所有角色列表
-func (r *authRoleService) GetAllRoleList(ctx context.Context) ([]*model.Role, error) {
-	return r.roleDao.GetAllRoles(ctx)
+// ListRoles 获取角色列表
+func (r *roleService) ListRoles(ctx context.Context, page, pageSize int) ([]*model.Role, int, error) {
+	return r.roleDao.ListRoles(ctx, page, pageSize)
 }
 
 // CreateRole 创建新角色
-func (r *authRoleService) CreateRole(ctx context.Context, role model.Role) error {
-	// 通过菜单ID列表获取菜单对象
-	menus, err := r.getMenusByIDs(ctx, role.MenuIds)
-	if err != nil {
-		return err
-	}
-
-	// 将菜单分配给角色
-	role.Menus = menus
-
-	return r.roleDao.CreateRole(ctx, &role)
+func (r *roleService) CreateRole(ctx context.Context, role *model.Role, menuIds []int, apiIds []int) error {
+	return r.roleDao.CreateRole(ctx, role, menuIds, apiIds)
 }
 
 // UpdateRole 更新角色信息
-func (r *authRoleService) UpdateRole(ctx context.Context, role model.Role) error {
-	// 通过菜单ID列表获取菜单对象
-	menus, err := r.getMenusByIDs(ctx, role.MenuIds)
-	if err != nil {
-		return err
-	}
-
-	// 更新角色菜单
-	role.Menus = menus
-
-	return r.roleDao.UpdateRole(ctx, &role)
+func (r *roleService) UpdateRole(ctx context.Context, role *model.Role) error {
+	return r.roleDao.UpdateRole(ctx, role)
 }
 
-func (r *authRoleService) SetRoleStatus(ctx context.Context, roleID int, status string) error {
-	return r.roleDao.UpdateRoleStatus(ctx, roleID, status)
-}
-
-func (r *authRoleService) DeleteRole(ctx context.Context, id string) error {
+// DeleteRole 删除角色
+func (r *roleService) DeleteRole(ctx context.Context, id int) error {
 	return r.roleDao.DeleteRole(ctx, id)
 }
 
-// getMenusByIDs 根据菜单ID列表获取对应的菜单对象
-func (r *authRoleService) getMenusByIDs(ctx context.Context, menuIds []int) ([]*model.Menu, error) {
-	menus := make([]*model.Menu, 0)
+// GetRole 获取角色详情
+func (r *roleService) GetRole(ctx context.Context, id int) (*model.Role, error) {
+	return r.roleDao.GetRole(ctx, id)
+}
 
-	for _, menuId := range menuIds {
-		// 根据ID获取菜单信息
-		menu, err := r.menuDao.GetMenuByID(ctx, int(menuId))
-		if err != nil {
-			r.l.Error("GetMenuByID failed", zap.Error(err))
-			return nil, err
-		}
-
-		menus = append(menus, menu)
-	}
-
-	return menus, nil
+// GetUserRole 获取用户角色
+func (r *roleService) GetUserRole(ctx context.Context, userId int) (*model.Role, error) {
+	return r.roleDao.GetUserRole(ctx, userId)
 }

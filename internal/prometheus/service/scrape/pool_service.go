@@ -1,5 +1,3 @@
-package scrape
-
 /*
  * MIT License
  *
@@ -25,9 +23,12 @@ package scrape
  *
  */
 
+package scrape
+
 import (
 	"context"
 	"errors"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"

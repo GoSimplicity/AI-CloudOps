@@ -1,5 +1,3 @@
-package alert
-
 /*
  * MIT License
  *
@@ -25,9 +23,12 @@ package alert
  *
  */
 
+package alert
+
 import (
 	"context"
 	"errors"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"

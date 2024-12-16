@@ -1,20 +1,3 @@
-package api
-
-import (
-	"errors"
-	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/spf13/viper"
-	"net/http"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/user/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-)
-
 /*
  * MIT License
  *
@@ -40,6 +23,25 @@ import (
  *
  */
 
+package api
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/spf13/viper"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/user/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+)
+
 type UserHandler struct {
 	service service.UserService
 	l       *zap.Logger
@@ -56,13 +58,17 @@ func NewUserHandler(service service.UserService, l *zap.Logger, ijwt ijwt.Handle
 
 func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
 	userGroup := server.Group("/api/user")
-	userGroup.POST("/signup", u.SignUp)              // 注册
-	userGroup.POST("/login", u.Login)                // 登陆
-	userGroup.POST("/refresh_token", u.RefreshToken) // 刷新token
-	userGroup.POST("/logout", u.Logout)              // 退出登陆
-	userGroup.GET("/profile", u.Profile)             // 用户信息
-	userGroup.GET("/codes", u.GetPermCode)           // 前端所需状态码
-	userGroup.GET("/list", u.GetUserList)
+	userGroup.POST("/signup", u.SignUp)                  // 注册
+	userGroup.POST("/login", u.Login)                    // 登陆
+	userGroup.POST("/refresh_token", u.RefreshToken)     // 刷新token
+	userGroup.POST("/logout", u.Logout)                  // 退出登陆
+	userGroup.GET("/profile", u.Profile)                 // 用户信息
+	userGroup.GET("/codes", u.GetPermCode)               // 前端所需状态码
+	userGroup.GET("/list", u.GetUserList)                // 用户列表
+	userGroup.POST("/change_password", u.ChangePassword) // 修改密码
+	userGroup.POST("/write_off", u.WriteOff)             // 注销账号
+	userGroup.POST("/profile/update", u.UpdateProfile)   // 更新用户信息
+	userGroup.DELETE("/:id", u.DeleteUser)               // 删除用户
 }
 
 func (u *UserHandler) SignUp(ctx *gin.Context) {
@@ -153,11 +159,15 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 	}
 
 	apiresponse.SuccessWithData(ctx, gin.H{
-		"id":       user.ID,
-		"roles":    user.Roles,
-		"realName": user.RealName,
-		"userId":   user.ID,
-		"username": user.Username,
+		"id":           user.ID,
+		"roles":        user.Roles,
+		"realName":     user.RealName,
+		"userId":       user.ID,
+		"username":     user.Username,
+		"desc":         user.Desc,
+		"homePath":     user.HomePath,
+		"mobile":       user.Mobile,
+		"feiShuUserId": user.FeiShuUserId,
 	})
 }
 
@@ -229,4 +239,104 @@ func (u *UserHandler) GetUserList(ctx *gin.Context) {
 	}
 
 	apiresponse.SuccessWithData(ctx, list)
+}
+
+func (u *UserHandler) ChangePassword(ctx *gin.Context) {
+	var req ChangePasswordRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	// 验证新密码和确认密码是否一致
+	if req.NewPassword != req.ConfirmPassword {
+		apiresponse.ErrorWithMessage(ctx, "新密码和确认密码不一致")
+		return
+	}
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+
+	if err := u.service.ChangePassword(ctx, uc.Uid, req.Password, req.NewPassword); err != nil {
+		if errors.Is(err, constants.ErrorPasswordIncorrect) {
+			apiresponse.ErrorWithMessage(ctx, "原密码不正确")
+			return
+		}
+		u.l.Error("修改密码失败", zap.Error(err))
+		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "修改密码失败")
+		return
+	}
+
+	apiresponse.Success(ctx)
+}
+
+func (u *UserHandler) WriteOff(ctx *gin.Context) {
+	var req WriteOffRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	// 验证用户名不能为空
+	if req.Username == "" {
+		apiresponse.ErrorWithMessage(ctx, "用户名不能为空")
+		return
+	}
+
+	if err := u.service.WriteOff(ctx, req.Username, req.Password); err != nil {
+		u.l.Error("注销账号失败", zap.Error(err))
+		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "注销账号失败")
+		return
+	}
+
+	apiresponse.Success(ctx)
+}
+
+func (u *UserHandler) UpdateProfile(ctx *gin.Context) {
+	var req UpdateProfileRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	req.UserId = uc.Uid
+
+	user := &model.User{
+		RealName:     req.RealName,
+		Desc:         req.Desc,
+		Mobile:       req.Mobile,
+		FeiShuUserId: req.FeiShuUserId,
+		AccountType:  req.AccountType,
+		HomePath:     req.HomePath,
+		Enable:       req.Enable,
+	}
+
+	if err := u.service.UpdateProfile(ctx, req.UserId, user); err != nil {
+		u.l.Error("更新用户信息失败", zap.Error(err))
+		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "更新用户信息失败")
+		return
+	}
+
+	apiresponse.Success(ctx)
+}
+
+func (u *UserHandler) DeleteUser(ctx *gin.Context) {
+	id := ctx.Param("id")
+
+	idInt, err := strconv.Atoi(id)
+	if err != nil {
+		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	if err := u.service.DeleteUser(ctx, idInt); err != nil {
+		u.l.Error("删除用户失败", zap.Error(err))
+		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "删除用户失败")
+		return
+	}
+
+	apiresponse.Success(ctx)
 }

@@ -1,5 +1,3 @@
-package alert
-
 /*
  * MIT License
  *
@@ -25,23 +23,24 @@ package alert
  *
  */
 
+package alert
+
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/domain"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
-	"github.com/prometheus/alertmanager/types"
-	promModel "github.com/prometheus/common/model"
 	"go.uber.org/zap"
 )
 
+// AlertManagerEventService 定义告警事件管理服务接口
 type AlertManagerEventService interface {
 	GetMonitorAlertEventList(ctx context.Context, searchName *string) ([]*model.MonitorAlertEvent, error)
 	EventAlertSilence(ctx context.Context, id int, event *model.AlertEventSilenceRequest, userId int) error
@@ -49,6 +48,7 @@ type AlertManagerEventService interface {
 	BatchEventAlertSilence(ctx context.Context, request *model.BatchEventAlertSilenceRequest, userId int) error
 }
 
+// alertManagerEventService 实现告警事件管理服务
 type alertManagerEventService struct {
 	dao     alert.AlertManagerEventDAO
 	sendDao alert.AlertManagerSendDAO
@@ -58,6 +58,7 @@ type alertManagerEventService struct {
 	l       *zap.Logger
 }
 
+// NewAlertManagerEventService 创建告警事件管理服务实例
 func NewAlertManagerEventService(dao alert.AlertManagerEventDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO, sendDao alert.AlertManagerSendDAO) AlertManagerEventService {
 	return &alertManagerEventService{
 		dao:     dao,
@@ -68,285 +69,191 @@ func NewAlertManagerEventService(dao alert.AlertManagerEventDAO, cache cache.Mon
 	}
 }
 
+// GetMonitorAlertEventList 获取告警事件列表
 func (a *alertManagerEventService) GetMonitorAlertEventList(ctx context.Context, searchName *string) ([]*model.MonitorAlertEvent, error) {
 	return pkg.HandleList(ctx, searchName,
 		a.dao.SearchMonitorAlertEventByName,
 		a.dao.GetMonitorAlertEventList)
 }
 
+// EventAlertSilence 设置告警事件静默
 func (a *alertManagerEventService) EventAlertSilence(ctx context.Context, id int, event *model.AlertEventSilenceRequest, userId int) error {
-	// 验证 ID 是否有效
+	// 参数校验
 	if id <= 0 {
 		a.l.Error("设置静默失败: 无效的 ID", zap.Int("id", id))
 		return fmt.Errorf("无效的 ID: %d", id)
 	}
 
-	// 获取 AlertEvent
+	// 获取告警事件信息
 	alertEvent, err := a.dao.GetAlertEventByID(ctx, id)
 	if err != nil {
-		a.l.Error("设置静默失败: 无法获取 AlertEvent", zap.Error(err), zap.Int("id", id))
-		return err
+		a.l.Error("设置静默失败: 无法获取告警事件", zap.Error(err), zap.Int("id", id))
+		return fmt.Errorf("获取告警事件失败: %v", err)
 	}
 
 	// 获取用户信息
 	user, err := a.userDao.GetUserByID(ctx, userId)
 	if err != nil {
-		a.l.Error("设置静默失败: 无效的 userId", zap.Int("userId", userId))
-		return fmt.Errorf("无效的 userId: %d", userId)
+		a.l.Error("设置静默失败: 无效的用户ID", zap.Int("userId", userId), zap.Error(err))
+		return fmt.Errorf("无效的用户ID: %d, %v", userId, err)
 	}
 
-	// 解析持续时间
-	duration, err := promModel.ParseDuration(event.Time)
-	if err != nil {
-		a.l.Error("设置静默失败: 解析持续时间错误", zap.Error(err))
-		return fmt.Errorf("无效的持续时间: %v", err)
-	}
+	// 创建领域对象
+	eventDomain := domain.NewAlertEventDomain(alertEvent, user, a.l)
 
-	// 构建匹配器
-	matchers, err := pkg.BuildMatchers(alertEvent, a.l, event.UseName)
+	// 构建静默对象
+	silence, err := eventDomain.BuildSilence(ctx, event)
 	if err != nil {
-		a.l.Error("设置静默失败: 构建匹配器错误", zap.Error(err))
 		return err
 	}
 
-	// 创建 Silence 对象
-	silence := types.Silence{
-		Matchers:  matchers,
-		StartsAt:  time.Now(),
-		EndsAt:    time.Now().Add(time.Duration(duration)),
-		CreatedBy: user.RealName,
-		Comment:   fmt.Sprintf("eventId: %v 操作人: %v 静默时间: %v", alertEvent.ID, user.RealName, duration),
-	}
-
-	// 序列化 Silence 对象为 JSON
+	// 序列化静默规则
 	silenceData, err := json.Marshal(silence)
 	if err != nil {
-		a.l.Error("设置静默失败: 序列化 Silence 对象失败", zap.Error(err))
-		return fmt.Errorf("序列化失败: %v", err)
+		a.l.Error("设置静默失败: 序列化静默规则失败", zap.Error(err))
+		return fmt.Errorf("序列化静默规则失败: %v", err)
 	}
 
-	// 获取 AlertManager 地址
+	// 获取告警管理器实例
 	alertPool, err := a.poolDao.GetAlertPoolByID(ctx, alertEvent.SendGroup.PoolID)
 	if err != nil {
-		a.l.Error("设置静默失败: 无法获取 AlertPool", zap.Error(err))
-		return err
+		a.l.Error("设置静默失败: 无法获取告警管理器实例", zap.Error(err))
+		return fmt.Errorf("获取告警管理器实例失败: %v", err)
 	}
 
 	if len(alertPool.AlertManagerInstances) == 0 {
-		a.l.Error("设置静默失败: AlertManager 实例为空", zap.Int("poolID", alertPool.ID))
-		return fmt.Errorf("AlertManager 实例为空")
+		a.l.Error("设置静默失败: 告警管理器实例为空", zap.Int("poolID", alertPool.ID))
+		return fmt.Errorf("告警管理器实例未配置")
 	}
 
+	// 构建请求URL
 	alertAddr := fmt.Sprintf("http://%v:9093", alertPool.AlertManagerInstances[0])
 	alertUrl := fmt.Sprintf("%s/api/v1/silences", alertAddr)
 
-	// 发送 Silence 请求到 AlertManager
+	// 发送静默请求
 	silenceID, err := pkg.SendSilenceRequest(ctx, a.l, alertUrl, silenceData)
 	if err != nil {
-		a.l.Error("设置静默失败: 发送 Silence 请求失败", zap.Error(err))
-		return fmt.Errorf("发送 Silence 请求失败: %v", err)
+		a.l.Error("设置静默失败: 发送静默请求失败", zap.Error(err))
+		return fmt.Errorf("发送静默请求失败: %v", err)
 	}
 
-	// 更新 AlertEvent 状态为已静默
-	alertEvent.Status = "已屏蔽"
-	alertEvent.SilenceID = silenceID
+	// 标记为已静默
+	eventDomain.MarkAsSilenced(silenceID)
+
+	// 更新告警事件状态
 	if err := a.dao.UpdateAlertEvent(ctx, alertEvent); err != nil {
-		a.l.Error("设置静默失败: 更新 AlertEvent 失败", zap.Error(err), zap.Int("id", id))
-		return fmt.Errorf("更新 AlertEvent 失败: %v", err)
+		a.l.Error("设置静默失败: 更新告警事件状态失败", zap.Error(err), zap.Int("id", id))
+		return fmt.Errorf("更新告警事件状态失败: %v", err)
 	}
 
 	a.l.Info("设置静默成功", zap.Int("id", id), zap.String("silenceID", silenceID))
 	return nil
 }
 
+// EventAlertClaim 认领告警事件
 func (a *alertManagerEventService) EventAlertClaim(ctx context.Context, id int, userId int) error {
 	// 获取告警事件
 	event, err := a.dao.GetMonitorAlertEventById(ctx, id)
 	if err != nil {
-		a.l.Error("认领告警事件失败: 获取告警事件时出错", zap.Error(err))
-		return err
+		a.l.Error("认领告警事件失败: 获取告警事件失败", zap.Error(err))
+		return fmt.Errorf("获取告警事件失败: %v", err)
 	}
 
-	// 获取发送组
+	// 获取发送组信息
 	sendGroup, err := a.sendDao.GetMonitorSendGroupById(ctx, event.SendGroupID)
 	if err != nil {
-		a.l.Error("认领告警事件失败: 获取发送组时出错", zap.Error(err))
-		return err
-	}
-
-	user, err := a.userDao.GetUserByID(ctx, userId)
-	if err != nil {
-		a.l.Error("认领告警事件失败: 获取用户时出错", zap.Error(err))
-		return err
-	}
-
-	// 更新认领用户
-	event.RenLingUserID = userId
-	event.Status = "已认领"
-
-	// 更新数据库
-	if err := a.dao.EventAlertClaim(ctx, event); err != nil {
-		a.l.Error("认领告警事件失败: 更新告警事件时出错", zap.Error(err))
-		return err
-	}
-
-	// 构建 content
-	content := fmt.Sprintf(
-		"**%s** 认领了告警事件: %s, 当前时间: %s",
-		user.RealName,
-		event.AlertName,
-		time.Now().Format("2006-01-02 15:04:05"),
-	)
-
-	// 拼接 url
-	url := fmt.Sprintf("https://open.feishu.cn/open-apis/bot/v2/hook/%s", sendGroup.FeiShuQunRobotToken)
-
-	// 发送消息到群组
-	err = a.dao.SendMessageToGroup(ctx, url, content)
-
-	a.l.Info("认领告警事件成功", zap.Int("id", id), zap.Int("userId", userId))
-
-	return nil
-}
-
-func (a *alertManagerEventService) BatchEventAlertSilence(ctx context.Context, request *model.BatchEventAlertSilenceRequest, userId int) error {
-	// 输入验证
-	if request == nil || len(request.IDs) == 0 {
-		a.l.Error("批量设置静默失败: 未提供事件ID")
-		return fmt.Errorf("未提供事件ID")
+		a.l.Error("认领告警事件失败: 获取发送组失败", zap.Error(err))
+		return fmt.Errorf("获取发送组失败: %v", err)
 	}
 
 	// 获取用户信息
 	user, err := a.userDao.GetUserByID(ctx, userId)
 	if err != nil {
-		a.l.Error("批量设置静默失败: 无效的 userId", zap.Int("userId", userId), zap.Error(err))
-		return fmt.Errorf("无效的 userId: %d", userId)
+		a.l.Error("认领告警事件失败: 获取用户信息失败", zap.Error(err))
+		return fmt.Errorf("获取用户信息失败: %v", err)
 	}
 
-	// 解析持续时间
-	duration, err := promModel.ParseDuration(request.Time)
+	// 创建领域对象
+	eventDomain := domain.NewAlertEventDomain(event, user, a.l)
+
+	// 标记为已认领
+	eventDomain.MarkAsClaimed()
+
+	// 更新数据库
+	if err := a.dao.EventAlertClaim(ctx, event); err != nil {
+		a.l.Error("认领告警事件失败: 更新告警事件失败", zap.Error(err))
+		return fmt.Errorf("更新告警事件失败: %v", err)
+	}
+
+	// 构建通知内容
+	content := eventDomain.BuildClaimMessage()
+
+	// 发送飞书通知
+	url := fmt.Sprintf("https://open.feishu.cn/open-apis/bot/v2/hook/%s", sendGroup.FeiShuQunRobotToken)
+	if err = a.dao.SendMessageToGroup(ctx, url, content); err != nil {
+		a.l.Error("发送飞书通知失败", zap.Error(err))
+		// 不影响主流程,仅记录日志
+	}
+
+	a.l.Info("认领告警事件成功", zap.Int("id", id), zap.Int("userId", userId))
+	return nil
+}
+
+// BatchEventAlertSilence 批量设置告警事件静默
+func (a *alertManagerEventService) BatchEventAlertSilence(ctx context.Context, request *model.BatchEventAlertSilenceRequest, userId int) error {
+	// 参数校验
+	if request == nil || len(request.IDs) == 0 {
+		a.l.Error("批量设置静默失败: 未提供事件ID")
+		return fmt.Errorf("未提供有效的事件ID列表")
+	}
+
+	// 获取用户信息
+	user, err := a.userDao.GetUserByID(ctx, userId)
 	if err != nil {
-		a.l.Error("批量设置静默失败: 解析持续时间错误", zap.Error(err))
-		return fmt.Errorf("无效的持续时间: %v", err)
+		a.l.Error("批量设置静默失败: 无效的用户ID", zap.Int("userId", userId), zap.Error(err))
+		return fmt.Errorf("无效的用户ID: %d, %v", userId, err)
 	}
 
-	// 初始化等待组和错误收集
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	var errs []error
+	// 并发控制
+	var (
+		wg   sync.WaitGroup
+		mu   sync.Mutex
+		errs []error
+		sem  = make(chan struct{}, 10) // 限制最大并发数为10
+	)
 
-	// 定义信号量以限制并发数量（例如，最多 10 个并发 goroutine）
-	sem := make(chan struct{}, 10)
-
+	// 并发处理每个告警事件
 	for _, id := range request.IDs {
 		if id <= 0 {
-			a.l.Error("批量设置静默跳过: 无效的 ID", zap.Int("id", id))
+			a.l.Error("批量设置静默跳过: 无效的ID", zap.Int("id", id))
 			mu.Lock()
-			errs = append(errs, fmt.Errorf("无效的 ID: %d", id))
+			errs = append(errs, fmt.Errorf("无效的ID: %d", id))
 			mu.Unlock()
 			continue
 		}
 
 		wg.Add(1)
 		sem <- struct{}{} // 获取信号量
+
 		go func(eventID int) {
 			defer wg.Done()
 			defer func() { <-sem }() // 释放信号量
 
-			// 获取 AlertEvent
-			alertEvent, err := a.dao.GetAlertEventByID(ctx, eventID)
-			if err != nil {
-				a.l.Error("批量设置静默失败: 无法获取 AlertEvent", zap.Error(err), zap.Int("id", eventID))
+			if err := a.processSingleSilence(ctx, eventID, request, user); err != nil {
 				mu.Lock()
-				errs = append(errs, fmt.Errorf("事件 ID %d: %v", eventID, err))
+				errs = append(errs, fmt.Errorf("事件ID %d: %v", eventID, err))
 				mu.Unlock()
-				return
 			}
-
-			// 构建匹配器
-			matchers, err := pkg.BuildMatchers(alertEvent, a.l, request.UseName)
-			if err != nil {
-				a.l.Error("批量设置静默失败: 构建匹配器错误", zap.Error(err), zap.Int("id", eventID))
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("事件 ID %d: %v", eventID, err))
-				mu.Unlock()
-				return
-			}
-
-			// 创建 Silence 对象
-			silence := types.Silence{
-				Matchers:  matchers,
-				StartsAt:  time.Now(),
-				EndsAt:    time.Now().Add(time.Duration(duration)),
-				CreatedBy: user.RealName,
-				Comment:   fmt.Sprintf("eventId: %v 操作人: %v 静默时间: %v", alertEvent.ID, user.RealName, duration),
-			}
-
-			// 序列化 Silence 对象为 JSON
-			silenceData, err := json.Marshal(silence)
-			if err != nil {
-				a.l.Error("批量设置静默失败: 序列化 Silence 对象失败", zap.Error(err), zap.Int("id", eventID))
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("事件 ID %d: %v", eventID, err))
-				mu.Unlock()
-				return
-			}
-
-			// 获取 AlertManager 地址
-			alertPool, err := a.poolDao.GetAlertPoolByID(ctx, alertEvent.SendGroup.PoolID)
-			if err != nil {
-				a.l.Error("批量设置静默失败: 无法获取 AlertPool", zap.Error(err), zap.Int("id", eventID))
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("事件 ID %d: %v", eventID, err))
-				mu.Unlock()
-				return
-			}
-
-			if len(alertPool.AlertManagerInstances) == 0 {
-				a.l.Error("批量设置静默失败: AlertManager 实例为空", zap.Int("poolID", alertPool.ID), zap.Int("id", eventID))
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("事件 ID %d: AlertManager 实例为空", eventID))
-				mu.Unlock()
-				return
-			}
-
-			alertAddr := fmt.Sprintf("http://%v:9093", alertPool.AlertManagerInstances[0])
-			alertUrl := fmt.Sprintf("%s/api/v1/silences", alertAddr)
-
-			// 发送 Silence 请求到 AlertManager
-			silenceID, err := pkg.SendSilenceRequest(ctx, a.l, alertUrl, silenceData)
-			if err != nil {
-				a.l.Error("批量设置静默失败: 发送 Silence 请求失败", zap.Error(err), zap.Int("id", eventID))
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("事件 ID %d: %v", eventID, err))
-				mu.Unlock()
-				return
-			}
-
-			// 更新 AlertEvent 状态为已静默
-			alertEvent.Status = "已屏蔽"
-			alertEvent.SilenceID = silenceID
-			if err := a.dao.UpdateAlertEvent(ctx, alertEvent); err != nil {
-				a.l.Error("批量设置静默失败: 更新 AlertEvent 失败", zap.Error(err), zap.Int("id", eventID))
-				mu.Lock()
-				errs = append(errs, fmt.Errorf("事件 ID %d: %v", eventID, err))
-				mu.Unlock()
-				return
-			}
-
-			a.l.Info("批量设置静默成功", zap.Int("id", eventID), zap.String("silenceID", silenceID))
 		}(id)
 	}
 
-	// 等待所有 goroutine 完成
+	// 等待所有goroutine完成
 	wg.Wait()
-
-	// 关闭信号量通道
 	close(sem)
 
+	// 处理错误
 	if len(errs) > 0 {
-		// 聚合错误
-		errMsg := "批量设置静默过程中遇到以下错误: "
+		errMsg := "批量设置静默过程中遇到以下错误:"
 		for _, e := range errs {
 			errMsg += "\n" + e.Error()
 		}
@@ -354,6 +261,74 @@ func (a *alertManagerEventService) BatchEventAlertSilence(ctx context.Context, r
 		return fmt.Errorf(errMsg)
 	}
 
-	a.l.Info("批量设置静默成功处理所有事件")
+	a.l.Info("批量设置静默成功完成")
 	return nil
+}
+
+// processSingleSilence 处理单个告警事件的静默
+func (a *alertManagerEventService) processSingleSilence(ctx context.Context, eventID int, request *model.BatchEventAlertSilenceRequest, user *model.User) error {
+	// 获取告警事件
+	alertEvent, err := a.dao.GetAlertEventByID(ctx, eventID)
+	if err != nil {
+		a.l.Error("处理单个静默失败: 获取告警事件失败", zap.Error(err), zap.Int("id", eventID))
+		return fmt.Errorf("获取告警事件失败: %v", err)
+	}
+
+	// 创建领域对象
+	eventDomain := domain.NewAlertEventDomain(alertEvent, user, a.l)
+
+	// 构建静默对象
+	silence, err := eventDomain.BuildSilence(ctx, &model.AlertEventSilenceRequest{
+		Time:    request.Time,
+		UseName: request.UseName,
+	})
+	if err != nil {
+		return err
+	}
+
+	// 序列化静默规则
+	silenceData, err := json.Marshal(silence)
+	if err != nil {
+		return fmt.Errorf("序列化静默规则失败: %v", err)
+	}
+
+	// 获取告警管理器实例
+	alertPool, err := a.poolDao.GetAlertPoolByID(ctx, alertEvent.SendGroup.PoolID)
+	if err != nil {
+		return fmt.Errorf("获取告警管理器实例失败: %v", err)
+	}
+
+	// 发送静默请求
+	silenceID, err := a.sendSilenceRequest(ctx, alertPool, silenceData)
+	if err != nil {
+		return err
+	}
+
+	// 标记为已静默
+	eventDomain.MarkAsSilenced(silenceID)
+
+	// 更新告警事件状态
+	if err := a.dao.UpdateAlertEvent(ctx, alertEvent); err != nil {
+		return fmt.Errorf("更新告警事件状态失败: %v", err)
+	}
+
+	a.l.Info("处理单个静默成功", zap.Int("id", eventID), zap.String("silenceID", silenceID))
+	return nil
+}
+
+// sendSilenceRequest 发送静默请求到AlertManager
+func (a *alertManagerEventService) sendSilenceRequest(ctx context.Context, alertPool *model.MonitorAlertManagerPool, silenceData []byte) (string, error) {
+	if len(alertPool.AlertManagerInstances) == 0 {
+		return "", fmt.Errorf("告警管理器实例未配置")
+	}
+
+	alertAddr := fmt.Sprintf("http://%v:9093", alertPool.AlertManagerInstances[0])
+	alertUrl := fmt.Sprintf("%s/api/v1/silences", alertAddr)
+
+	silenceID, err := pkg.SendSilenceRequest(ctx, a.l, alertUrl, silenceData)
+	if err != nil {
+		return "", fmt.Errorf("发送静默请求失败: %v", err)
+	}
+
+	return silenceID, nil
 }

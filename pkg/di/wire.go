@@ -1,7 +1,5 @@
 //go:build wireinject
 
-package di
-
 /*
  * MIT License
  *
@@ -26,6 +24,8 @@ package di
  * THE SOFTWARE.
  *
  */
+
+package di
 
 import (
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
@@ -64,7 +64,7 @@ func InitWebServer() *Cmd {
 		InitLogger,
 		InitRedis,
 		InitDB,
-		//InitCasbin,
+		InitCasbin,
 		InitAndRefreshK8sClient,
 		client.NewK8sClient,
 		cache.NewMonitorCache,
@@ -73,9 +73,10 @@ func InitWebServer() *Cmd {
 		cache.NewRecordConfig,
 		cache.NewPromConfigCache,
 		cron.NewCronManager,
-		authHandler.NewAuthMenuHandler,
-		authHandler.NewAuthRoleHandler,
-		authHandler.NewAuthApiHandler,
+		authHandler.NewMenuHandler,
+		authHandler.NewRoleHandler,
+		authHandler.NewApiHandler,
+		authHandler.NewPermissionHandler,
 		userHandler.NewUserHandler,
 		notAuthHandler.NewNotAuthHandler,
 		treeHandler.NewEcsHandler,
@@ -112,9 +113,10 @@ func InitWebServer() *Cmd {
 		treeService.NewRdsService,
 		treeService.NewEcsResourceService,
 		treeService.NewAliResourceService,
-		authService.NewAuthApiService,
-		authService.NewAuthRoleService,
-		authService.NewAuthMenuService,
+		authService.NewApiService,
+		authService.NewRoleService,
+		authService.NewMenuService,
+		authService.NewPermissionService,
 		promHandler.NewAlertPoolHandler,
 		promHandler.NewConfigYamlHandler,
 		promHandler.NewOnDutyGroupHandler,
@@ -143,10 +145,10 @@ func InitWebServer() *Cmd {
 		yamlService.NewPrometheusConfigService,
 		notAuthService.NewNotAuthService,
 		userDao.NewUserDAO,
-		authDao.NewAuthMenuDAO,
-		authDao.NewAuthRoleDAO,
-		authDao.NewAuthApiDAO,
-		//authDao.NewAuthCasbinDAO,
+		authDao.NewMenuDAO,
+		authDao.NewRoleDAO,
+		authDao.NewApiDAO,
+		authDao.NewPermissionDAO,
 		treeDao.NewAliResourceDAO,
 		treeDao.NewEcsResourceDAO,
 		treeDao.NewTreeEcsDAO,

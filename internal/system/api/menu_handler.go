@@ -1,13 +1,3 @@
-package api
-
-import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
-	"github.com/gin-gonic/gin"
-)
-
 /*
  * MIT License
  *
@@ -33,108 +23,123 @@ import (
  *
  */
 
-type AuthMenuHandler struct {
-	menuService service.AuthMenuService
+package api
+
+import (
+	"strconv"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/gin-gonic/gin"
+)
+
+type MenuHandler struct {
+	svc service.MenuService
 }
 
-func NewAuthMenuHandler(menuService service.AuthMenuService) *AuthMenuHandler {
-	return &AuthMenuHandler{
-		menuService: menuService,
+func NewMenuHandler(svc service.MenuService) *MenuHandler {
+	return &MenuHandler{
+		svc: svc,
 	}
 }
 
-func (m *AuthMenuHandler) RegisterRouters(server *gin.Engine) {
-	authGroup := server.Group("/api/auth")
+func (h *MenuHandler) RegisterRouters(server *gin.Engine) {
+	menuGroup := server.Group("/api/menus")
 
-	// 菜单相关路由
-	authGroup.GET("/menu/list", m.GetMenuList)
-	authGroup.GET("/menu/all", m.GetAllMenuList)
-	authGroup.POST("/menu/update", m.UpdateMenu)
-	authGroup.POST("/menu/update_status", m.UpdateMenuStatus)
-	authGroup.POST("/menu/create", m.CreateMenu)
-	authGroup.DELETE("/menu/:id", m.DeleteMenu)
+	menuGroup.POST("/list", h.ListMenus)
+	menuGroup.POST("/create", h.CreateMenu)
+	menuGroup.POST("/update", h.UpdateMenu)
+	menuGroup.DELETE("/:id", h.DeleteMenu)
 }
 
-func (m *AuthMenuHandler) GetMenuList(ctx *gin.Context) {
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+// ListMenus 获取菜单列表
+func (m *MenuHandler) ListMenus(c *gin.Context) {
+	var req model.ListMenusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithMessage(c, "参数错误")
+		return
+	}
 
-	roles, err := m.menuService.GetMenuList(ctx, uc.Uid)
+	// 调用service层获取菜单列表
+	menus, total, err := m.svc.GetMenus(c.Request.Context(), req.PageNumber, req.PageSize, req.IsTree)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
+		apiresponse.ErrorWithMessage(c, "获取菜单列表失败")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, roles)
+	apiresponse.SuccessWithData(c, gin.H{
+		"list":  menus,
+		"total": total,
+	})
 }
 
-func (m *AuthMenuHandler) GetAllMenuList(ctx *gin.Context) {
-	menus, err := m.menuService.GetAllMenuList(ctx)
+// CreateMenu 创建菜单
+func (m *MenuHandler) CreateMenu(c *gin.Context) {
+	var req model.CreateMenuRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithMessage(c, "参数错误")
+		return
+	}
+	menu := &model.Menu{
+		Name:      req.Name,
+		Path:      req.Path,
+		Component: req.Component,
+		SortOrder: req.SortOrder,
+		ParentID:  req.ParentId,
+		Icon:      req.Icon,
+		Hidden:    req.Hidden,
+		RouteName: req.RouteName,
+	}
+
+	if err := m.svc.CreateMenu(c.Request.Context(), menu); err != nil {
+		apiresponse.ErrorWithMessage(c, "创建菜单失败")
+		return
+	}
+
+	apiresponse.SuccessWithMessage(c, "创建成功")
+}
+
+// UpdateMenu 更新菜单
+func (m *MenuHandler) UpdateMenu(c *gin.Context) {
+	var req model.UpdateMenuRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithMessage(c, "参数错误")
+		return
+	}
+
+	menu := &model.Menu{
+		ID:        req.Id,
+		Name:      req.Name,
+		Path:      req.Path,
+		Component: req.Component,
+		SortOrder: req.SortOrder,
+		ParentID:  req.ParentId,
+		Icon:      req.Icon,
+		Hidden:    req.Hidden,
+		RouteName: req.RouteName,
+	}
+
+	if err := m.svc.UpdateMenu(c.Request.Context(), menu); err != nil {
+		apiresponse.ErrorWithMessage(c, "更新菜单失败")
+		return
+	}
+
+	apiresponse.SuccessWithMessage(c, "更新成功")
+}
+
+// DeleteMenu 删除菜单
+func (m *MenuHandler) DeleteMenu(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
+		apiresponse.ErrorWithMessage(c, "参数错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, menus)
-}
-
-func (m *AuthMenuHandler) UpdateMenu(ctx *gin.Context) {
-	var req model.Menu
-
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
+	if err := m.svc.DeleteMenu(c.Request.Context(), id); err != nil {
+		apiresponse.ErrorWithMessage(c, "删除菜单失败")
 		return
 	}
 
-	if err := m.menuService.UpdateMenu(ctx, req); err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	apiresponse.SuccessWithMessage(ctx, "更新成功")
-}
-
-func (m *AuthMenuHandler) UpdateMenuStatus(ctx *gin.Context) {
-	var req struct {
-		ID     int    `json:"id"`
-		Status string `json:"status"`
-	}
-
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	if err := m.menuService.UpdateMenuStatus(ctx, req.ID, req.Status); err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	apiresponse.SuccessWithMessage(ctx, "更新成功")
-}
-
-func (m *AuthMenuHandler) CreateMenu(ctx *gin.Context) {
-	var req model.Menu
-
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	if err := m.menuService.CreateMenu(ctx, req); err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	apiresponse.SuccessWithMessage(ctx, "创建成功")
-}
-
-func (m *AuthMenuHandler) DeleteMenu(ctx *gin.Context) {
-	id := ctx.Param("id")
-
-	if err := m.menuService.DeleteMenu(ctx, id); err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	apiresponse.SuccessWithMessage(ctx, "删除成功")
+	apiresponse.SuccessWithMessage(c, "删除成功")
 }

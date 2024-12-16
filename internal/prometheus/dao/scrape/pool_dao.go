@@ -1,5 +1,3 @@
-package scrape
-
 /*
  * MIT License
  *
@@ -25,14 +23,17 @@ package scrape
  *
  */
 
+package scrape
+
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"strings"
 )
 
 type ScrapePoolDAO interface {

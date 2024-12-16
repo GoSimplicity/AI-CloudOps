@@ -1,5 +1,3 @@
-package di
-
 /*
  * MIT License
  *
@@ -25,11 +23,13 @@ package di
  *
  */
 
+package di
+
 import (
 	k8sApi "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	prometheusApi "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
-	authApi "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
+	systemApi "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
 	treeApi "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	userApi "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	"github.com/gin-gonic/gin"
@@ -39,9 +39,10 @@ import (
 func InitGinServer(
 	m []gin.HandlerFunc,
 	userHdl *userApi.UserHandler,
-	authApiHdl *authApi.AuthApiHandler,
-	authMenuHdl *authApi.AuthMenuHandler,
-	authRoleHdl *authApi.AuthRoleHandler,
+	authApiHdl *systemApi.ApiHandler,
+	authMenuHdl *systemApi.MenuHandler,
+	authRoleHdl *systemApi.RoleHandler,
+	authPermissionHdl *systemApi.PermissionHandler,
 	treeNodeHdl *treeApi.TreeNodeHandler,
 	treeAliResourceHdl *treeApi.AliResourceHandler,
 	treeEcsResourceHdl *treeApi.EcsResourceHandler,
@@ -76,6 +77,7 @@ func InitGinServer(
 	authMenuHdl.RegisterRouters(server)
 	authApiHdl.RegisterRouters(server)
 	authRoleHdl.RegisterRouters(server)
+	authPermissionHdl.RegisterRouters(server)
 	treeEcsHdl.RegisterRouters(server)
 	treeEcsResourceHdl.RegisterRouters(server)
 	treeAliResourceHdl.RegisterRouters(server)

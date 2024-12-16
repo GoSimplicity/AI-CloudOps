@@ -1,5 +1,3 @@
-package dao
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package dao
  * THE SOFTWARE.
  *
  */
+
+package dao
 
 import (
 	"context"

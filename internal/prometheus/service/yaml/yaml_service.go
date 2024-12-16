@@ -1,5 +1,3 @@
-package yaml
-
 /*
  * MIT License
  *
@@ -25,8 +23,11 @@ package yaml
  *
  */
 
+package yaml
+
 import (
 	"context"
+
 	alertCache "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 )
 

@@ -1,5 +1,3 @@
-package middleware
-
 /*
  * MIT License
  *
@@ -25,13 +23,16 @@ package middleware
  *
  */
 
+package middleware
+
 import (
 	"bytes"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"io/ioutil"
 	"net/http"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type AccessLog struct {

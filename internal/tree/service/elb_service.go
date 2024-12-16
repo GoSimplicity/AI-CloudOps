@@ -1,13 +1,3 @@
-package service
-
-import (
-	"context"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	"go.uber.org/zap"
-)
-
 /*
  * MIT License
  *
@@ -32,6 +22,16 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package service
+
+import (
+	"context"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	"go.uber.org/zap"
+)
 
 type ElbService interface {
 	GetElbUnbindList(ctx context.Context) ([]*model.ResourceElb, error)
