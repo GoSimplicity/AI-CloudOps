@@ -1,5 +1,3 @@
-package uesr
-
 /*
  * MIT License
  *
@@ -24,3 +22,5 @@ package uesr
  * THE SOFTWARE.
  *
  */
+
+package uesr

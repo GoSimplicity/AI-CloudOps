@@ -1,5 +1,3 @@
-package alert
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package alert
  * THE SOFTWARE.
  *
  */
+
+package alert
 
 import (
 	"context"

@@ -1,5 +1,3 @@
-package apiresponse
-
 /*
  * MIT License
  *
@@ -25,16 +23,19 @@ package apiresponse
  *
  */
 
+package apiresponse
+
 import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // LabelOption 通用返回结构体，用于前后端交互的数据格式

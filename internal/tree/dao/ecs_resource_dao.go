@@ -1,14 +1,3 @@
-package dao
-
-import (
-	"context"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
-)
-
 /*
  * MIT License
  *
@@ -33,6 +22,17 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package dao
+
+import (
+	"context"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
 
 type TreeEcsResourceDAO interface {
 	Create(ctx context.Context, resource *model.ResourceEcs) error

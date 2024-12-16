@@ -1,5 +1,3 @@
-package config
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package config
  * THE SOFTWARE.
  *
  */
+
+package di
 
 import (
 	"github.com/spf13/pflag"

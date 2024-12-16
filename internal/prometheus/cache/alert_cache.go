@@ -1,5 +1,3 @@
-package cache
-
 /*
  * MIT License
  *
@@ -25,9 +23,14 @@ package cache
  *
  */
 
+package cache
+
 import (
 	"context"
 	"fmt"
+	"os"
+	"sync"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertPoolDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	altconfig "github.com/prometheus/alertmanager/config"
@@ -36,8 +39,6 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
-	"os"
-	"sync"
 )
 
 const alertSendGroupKey = "alert_send_group"

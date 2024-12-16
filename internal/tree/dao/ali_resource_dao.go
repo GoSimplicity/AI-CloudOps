@@ -1,13 +1,3 @@
-package dao
-
-import (
-	"context"
-	"encoding/json"
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/redis/go-redis/v9"
-	"time"
-)
-
 /*
  * MIT License
  *
@@ -32,6 +22,17 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package dao
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/redis/go-redis/v9"
+)
 
 type TreeAliResourceDAO interface {
 	CreateTask(ctx context.Context, task *model.Task) error

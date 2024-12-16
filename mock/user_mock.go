@@ -1,5 +1,3 @@
-package mock
-
 /*
  * MIT License
  *
@@ -25,11 +23,14 @@ package mock
  *
  */
 
+package mock
+
 import (
+	"log"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
-	"log"
 )
 
 const (

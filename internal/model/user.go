@@ -1,5 +1,3 @@
-package model
-
 /*
  * MIT License
  *
@@ -25,6 +23,8 @@ package model
  *
  */
 
+package model
+
 type User struct {
 	Model                // 软删除字段，自动管理
 	Username     string  `json:"username" gorm:"type:varchar(100);uniqueIndex;not null;comment:用户登录名"`                // 用户登录名，唯一且非空
@@ -37,4 +37,6 @@ type User struct {
 	HomePath     string  `json:"homePath" gorm:"type:varchar(255);comment:登录后的默认首页"`                                  // 登录后的默认首页
 	Enable       int     `json:"enable" gorm:"default:1;comment:用户状态 1正常 2冻结" binding:"omitempty,oneof=1 2"`          // 用户状态，默认为正常
 	Roles        []*Role `json:"roles" gorm:"many2many:user_roles;comment:关联角色"`                                      // 多对多关联角色
+	Menus        []*Menu `json:"menus" gorm:"many2many:user_menus;comment:关联菜单"`                                      // 多对多关联菜单
+	Apis         []*Api  `json:"apis" gorm:"many2many:user_apis;comment:关联接口"`                                        // 多对多关联接口
 }

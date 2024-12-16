@@ -1,5 +1,3 @@
-package constants
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package constants
  * THE SOFTWARE.
  *
  */
+
+package constants
 
 const (
 	ErrorTreeNodeHasChildren = "tree node has children"

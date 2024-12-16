@@ -1,5 +1,3 @@
-package alert
-
 /*
  * MIT License
  *
@@ -25,14 +23,17 @@ package alert
  *
  */
 
+package alert
+
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"strings"
 )
 
 type AlertManagerRuleDAO interface {

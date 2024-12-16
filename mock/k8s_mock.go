@@ -1,5 +1,3 @@
-package mock
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package mock
  * THE SOFTWARE.
  *
  */
+
+package mock
 
 import (
 	"log"

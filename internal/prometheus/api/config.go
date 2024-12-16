@@ -1,5 +1,3 @@
-package api
-
 /*
  * MIT License
  *
@@ -25,12 +23,15 @@ package api
  *
  */
 
+package api
+
 import (
+	"net/http"
+
 	yamlService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/yaml"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 type ConfigYamlHandler struct {

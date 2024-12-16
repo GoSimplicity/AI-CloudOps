@@ -1,5 +1,3 @@
-package api
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package api
  * THE SOFTWARE.
  *
  */
+
+package api
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"

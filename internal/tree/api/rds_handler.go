@@ -1,12 +1,3 @@
-package api
-
-import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	"github.com/gin-gonic/gin"
-)
-
 /*
  * MIT License
  *
@@ -31,6 +22,15 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package api
+
+import (
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/gin-gonic/gin"
+)
 
 type RdsHandler struct {
 	service service.RdsService

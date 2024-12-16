@@ -1,14 +1,3 @@
-package api
-
-import (
-	"strconv"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	"github.com/gin-gonic/gin"
-)
-
 /*
  * MIT License
  *
@@ -33,6 +22,17 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package api
+
+import (
+	"strconv"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/gin-gonic/gin"
+)
 
 type EcsResourceHandler struct {
 	service service.EcsResourceService

@@ -1,5 +1,3 @@
-package cache
-
 /*
  * MIT License
  *
@@ -25,9 +23,14 @@ package cache
  *
  */
 
+package cache
+
 import (
 	"context"
 	"fmt"
+	"os"
+	"sync"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertRecordDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	scrapePoolDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
@@ -36,8 +39,6 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
-	"os"
-	"sync"
 )
 
 type RecordConfigCache interface {

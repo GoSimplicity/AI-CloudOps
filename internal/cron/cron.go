@@ -1,5 +1,3 @@
-package cron
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package cron
  * THE SOFTWARE.
  *
  */
+
+package cron
 
 import (
 	"context"

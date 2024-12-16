@@ -1,15 +1,3 @@
-package dao
-
-import (
-	"context"
-	"errors"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
-)
-
 /*
  * MIT License
  *
@@ -34,6 +22,18 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package dao
+
+import (
+	"context"
+	"errors"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
 
 type TreeNodeDAO interface {
 	// Create 创建一个新的 TreeNode 实例

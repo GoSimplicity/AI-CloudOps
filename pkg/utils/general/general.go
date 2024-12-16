@@ -1,5 +1,3 @@
-package general
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package general
  * THE SOFTWARE.
  *
  */
+
+package general
 
 import (
 	"errors"

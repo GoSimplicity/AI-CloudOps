@@ -1,5 +1,3 @@
-package cache
-
 /*
  * MIT License
  *
@@ -24,6 +22,8 @@ package cache
  * THE SOFTWARE.
  *
  */
+
+package cache
 
 import (
 	"context"

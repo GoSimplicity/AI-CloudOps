@@ -1,13 +1,3 @@
-package dao
-
-import (
-	"context"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"go.uber.org/zap"
-	"gorm.io/gorm"
-)
-
 /*
  * MIT License
  *
@@ -32,6 +22,16 @@ import (
  * THE SOFTWARE.
  *
  */
+
+package dao
+
+import (
+	"context"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
 
 type TreeEcsDAO interface {
 	// 绑定节点相关操作
