@@ -30,6 +30,8 @@ import (
 	"net/http"
 
 	"github.com/GoSimplicity/AI-CloudOps/mock"
+	"github.com/casbin/casbin/v2"
+	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -92,6 +94,15 @@ func InitMock() {
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 
+	adapter, err := gormadapter.NewAdapterByDB(db)
+	if err != nil {
+		log.Fatalf("Failed to create adapter: %v", err)
+	}
+	enforcer, err := casbin.NewEnforcer("config/model.conf", adapter)
+	if err != nil {
+		log.Fatalf("Failed to create enforcer: %v", err)
+	}
+
 	if err != nil {
 		log.Println("mock db error")
 	}
@@ -104,7 +115,7 @@ func InitMock() {
 
 	defer sqlDB.Close()
 
-	um := mock.NewUserMock(db)
+	um := mock.NewUserMock(db, enforcer)
 	um.CreateUserAdmin()
 
 	_ = mock.NewK8sClientMock(db)
