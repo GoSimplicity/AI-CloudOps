@@ -27,8 +27,10 @@ package mock
 
 import (
 	"log"
+	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/casbin/casbin/v2"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -41,11 +43,13 @@ const (
 
 type UserMock struct {
 	db *gorm.DB
+	ce *casbin.Enforcer
 }
 
-func NewUserMock(db *gorm.DB) *UserMock {
+func NewUserMock(db *gorm.DB, ce *casbin.Enforcer) *UserMock {
 	return &UserMock{
 		db: db,
+		ce: ce,
 	}
 }
 
@@ -65,7 +69,7 @@ func (u *UserMock) CreateUserAdmin() {
 		Username:    AdminUsername,
 		Password:    string(hashedPassword),
 		RealName:    "管理员账号",
-		AccountType: AdminAccountType, // 确保 AdminAccountType 已定义
+		AccountType: AdminAccountType,
 	}
 
 	// 使用 FirstOrCreate 方法查找或创建管理员用户
@@ -83,6 +87,30 @@ func (u *UserMock) CreateUserAdmin() {
 		log.Println("管理员用户创建成功")
 	} else {
 		log.Println("管理员用户已存在，跳过创建")
+	}
+
+	// 为管理员用户添加所有权限
+	userIDStr := strconv.FormatInt(int64(adminUser.ID), 10)
+	paths := []string{"/*"}
+	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
+
+	for _, path := range paths {
+		for _, method := range methods {
+			ok, err := u.ce.AddPolicy(userIDStr, path, method)
+			if err != nil {
+				continue
+			}
+
+			if !ok {
+				continue
+			}
+		}
+	}
+
+	err = u.ce.SavePolicy()
+	if err != nil {
+		log.Printf("保存策略失败: %v\n", err)
+		return
 	}
 
 	log.Println("[用户模块Mock结束]")
