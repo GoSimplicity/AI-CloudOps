@@ -247,11 +247,8 @@ type MonitorScrapeJob struct {
 	BearerTokenFile          string     `json:"bearerTokenFile,omitempty" gorm:"size:255;comment:鉴权Token文件路径"`
 	KubernetesSdRole         string     `json:"kubernetesSdRole,omitempty" gorm:"size:50;comment:Kubernetes服务发现角色"`
 
-	// 前端使用字段
-	TreeNodeIDIns  []int  `json:"treeNodeIdIns,omitempty" gorm:"-"`
-	Key            string `json:"key" gorm:"-"`
-	PoolName       string `json:"poolName,omitempty" gorm:"-"`
-	CreateUserName string `json:"createUserName,omitempty" gorm:"-"`
+	TreeNodeNames  []string `json:"treeNodeNames,omitempty" gorm:"-"`
+	CreateUserName string   `json:"createUserName,omitempty" gorm:"-"`
 }
 
 type AlertEventSilenceRequest struct {

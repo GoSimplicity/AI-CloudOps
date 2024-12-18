@@ -66,18 +66,29 @@ func (cm *CasbinMiddleware) CheckCasbin() gin.HandlerFunc {
 		// 获取用户身份
 		userClaims, exists := c.Get("user")
 		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "User not authenticated"})
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    1,
+				"message": "User not authenticated",
+			})
 			c.Abort()
 			return
 		}
+
 		sub, ok := userClaims.(ijwt.UserClaims)
 		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid user claims"})
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    1,
+				"message": "Invalid user claims",
+			})
 			c.Abort()
 			return
 		}
+
 		if sub.Uid == 0 {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid user ID"})
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    1,
+				"message": "Invalid user ID",
+			})
 			c.Abort()
 			return
 		}
@@ -86,15 +97,23 @@ func (cm *CasbinMiddleware) CheckCasbin() gin.HandlerFunc {
 		// 获取请求的 URL 和请求方法
 		obj := c.Request.URL.Path
 		act := c.Request.Method
+
 		// 使用 Casbin 检查权限
 		ok, err := cm.enforcer.Enforce(userIDStr, obj, act)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Error occurred when enforcing policy"})
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    1,
+				"message": "Error occurred when enforcing policy",
+			})
 			c.Abort()
 			return
 		}
+
 		if !ok {
-			c.JSON(http.StatusForbidden, gin.H{"message": "You don't have permission to access this resource"})
+			c.JSON(http.StatusForbidden, gin.H{
+				"code":    1,
+				"message": "You don't have permission to access this resource",
+			})
 			c.Abort()
 			return
 		}

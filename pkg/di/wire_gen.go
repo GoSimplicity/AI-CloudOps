@@ -133,7 +133,7 @@ func InitWebServer() *Cmd {
 	recordRuleHandler := api6.NewRecordRuleHandler(logger, alertManagerRecordService)
 	scrapePoolService := scrape2.NewPrometheusPoolService(scrapePoolDAO, monitorCache, logger, userDAO, scrapeJobDAO)
 	scrapePoolHandler := api6.NewScrapePoolHandler(logger, scrapePoolService)
-	scrapeJobService := scrape2.NewPrometheusScrapeService(scrapeJobDAO, monitorCache, logger, userDAO)
+	scrapeJobService := scrape2.NewPrometheusScrapeService(scrapeJobDAO, monitorCache, logger, userDAO, treeNodeDAO)
 	scrapeJobHandler := api6.NewScrapeJobHandler(logger, scrapeJobService)
 	alertManagerSendService := alert2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, monitorCache, logger, userDAO)
 	sendGroupHandler := api6.NewSendGroupHandler(logger, alertManagerSendService)

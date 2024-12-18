@@ -13,3 +13,13 @@ groups:
             alert_send_group: "1"
             bind_tree_node: "8"
             severity: warning
+    - name: "123"
+      rules:
+        - alert: "123"
+          expr: ""
+          for: 5s
+    - name: "12312311"
+      rules:
+        - alert: "12312311"
+          expr: ""
+          for: 5s

@@ -52,6 +52,8 @@ type UserDAO interface {
 	GetAllUsers(ctx context.Context) ([]*model.User, error)
 	// GetUserByID 通过ID获取用户
 	GetUserByID(ctx context.Context, id int) (*model.User, error)
+	// GetUserByIDs 通过ID批量获取用户
+	GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, error)
 	// GetUserByRealName 通过名称获取用户
 	GetUserByRealName(ctx context.Context, name string) (*model.User, error)
 	// GetUserByMobile 通过手机号获取用户
@@ -255,4 +257,15 @@ func (u *userDAO) DeleteUser(ctx context.Context, uid int) error {
 	}
 
 	return nil
+}
+
+func (u *userDAO) GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, error) {
+	var users []*model.User
+
+	if err := u.db.WithContext(ctx).Where("id in (?)", ids).Find(&users).Error; err != nil {
+		u.l.Error("get user by ids failed", zap.Ints("ids", ids), zap.Error(err))
+		return nil, err
+	}
+
+	return users, nil
 }
