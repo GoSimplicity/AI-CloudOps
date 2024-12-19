@@ -53,6 +53,7 @@ func (cm *CasbinMiddleware) CheckCasbin() gin.HandlerFunc {
 			path == "/api/user/logout" ||
 			strings.Contains(path, "hello") ||
 			path == "/api/user/refresh_token" ||
+			path == "/api/user/codes" ||
 			path == "/api/user/signup" ||
 			path == "/api/not_auth/getTreeNodeBindIps" ||
 			path == "/api/monitor/prometheus_configs/prometheus" ||
@@ -97,6 +98,8 @@ func (cm *CasbinMiddleware) CheckCasbin() gin.HandlerFunc {
 		// 获取请求的 URL 和请求方法
 		obj := c.Request.URL.Path
 		act := c.Request.Method
+
+		cm.enforcer.LoadPolicy()
 
 		// 使用 Casbin 检查权限
 		ok, err := cm.enforcer.Enforce(userIDStr, obj, act)

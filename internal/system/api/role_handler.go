@@ -37,16 +37,14 @@ import (
 
 type RoleHandler struct {
 	svc           service.RoleService
-	menuSvc       service.MenuService
 	apiSvc        service.ApiService
 	permissionSvc service.PermissionService
 	l             *zap.Logger
 }
 
-func NewRoleHandler(svc service.RoleService, menuSvc service.MenuService, apiSvc service.ApiService, permissionSvc service.PermissionService, l *zap.Logger) *RoleHandler {
+func NewRoleHandler(svc service.RoleService, apiSvc service.ApiService, permissionSvc service.PermissionService, l *zap.Logger) *RoleHandler {
 	return &RoleHandler{
 		svc:           svc,
-		menuSvc:       menuSvc,
 		apiSvc:        apiSvc,
 		permissionSvc: permissionSvc,
 		l:             l,
@@ -105,7 +103,7 @@ func (r *RoleHandler) CreateRole(c *gin.Context) {
 	}
 
 	// 创建角色并分配权限
-	if err := r.svc.CreateRole(c.Request.Context(), role, req.MenuIds, req.ApiIds); err != nil {
+	if err := r.svc.CreateRole(c.Request.Context(), role, req.ApiIds); err != nil {
 		r.l.Error("创建角色失败", zap.Error(err))
 		apiresponse.Error(c)
 		return
@@ -140,7 +138,7 @@ func (r *RoleHandler) UpdateRole(c *gin.Context) {
 	}
 
 	// 更新角色权限
-	if err := r.permissionSvc.AssignRole(c.Request.Context(), role.ID, req.MenuIds, req.ApiIds); err != nil {
+	if err := r.permissionSvc.AssignRole(c.Request.Context(), role.ID, req.ApiIds); err != nil {
 		r.l.Error("更新权限失败", zap.Error(err))
 		apiresponse.Error(c)
 		return
@@ -178,7 +176,7 @@ func (r *RoleHandler) UpdateUserRole(c *gin.Context) {
 	}
 
 	// 分配用户角色和权限
-	if err := r.permissionSvc.AssignRoleToUser(c.Request.Context(), req.UserId, req.RoleIds, req.MenuIds, req.ApiIds); err != nil {
+	if err := r.permissionSvc.AssignRoleToUser(c.Request.Context(), req.UserId, req.RoleIds, req.ApiIds); err != nil {
 		r.l.Error("分配API权限失败", zap.Error(err))
 		apiresponse.Error(c)
 		return

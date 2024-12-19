@@ -1,0 +1,45 @@
+version: '3'
+
+######################## 先启动 docker-compose-env.yaml 再启动此文件 ########################
+
+services:
+  nginx-gateway:
+    image: nginx:1.21.5
+    container_name: nginx-gateway
+    restart: always
+    privileged: true
+    environment:
+      - TZ=Asia/Shanghai
+    ports:
+      - 8888:8081
+    volumes:
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d
+      - ./data/nginx/log:/var/log/nginx
+    networks:
+      - cloudOps_net
+    depends_on:
+      - cloudOps
+
+  cloudOps:
+    # 使用项目根目录下的 Dockerfile 自行构建镜像
+    image: Bamboo/gomodd:v1.22.1
+    container_name: cloudOps
+    environment:
+      # 时区上海
+      TZ: Asia/Shanghai
+      GOPROXY: https://goproxy.cn,direct
+    working_dir: /go/cloudOps
+    volumes:
+      - .:/go/cloudOps
+    privileged: true
+    restart: always
+    networks:
+      - cloudOps_net
+
+networks:
+  cloudOps_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+

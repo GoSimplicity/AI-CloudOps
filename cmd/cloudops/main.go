@@ -118,5 +118,6 @@ func InitMock() {
 	um := mock.NewUserMock(db, enforcer)
 	um.CreateUserAdmin()
 
-	_ = mock.NewK8sClientMock(db)
+	mm := mock.NewMenuMock(db)
+	mm.InitMenu()
 }

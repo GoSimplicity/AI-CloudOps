@@ -136,12 +136,12 @@ type aliResourceService struct {
 func NewAliResourceService(logger *zap.Logger, dao dao.TreeAliResourceDAO, redisClient redis.Cmdable, ecsDao dao.TreeEcsDAO, ecsResourceDao dao.TreeEcsResourceDAO) AliResourceService {
 	key := os.Getenv("ALIYUN_ACCESS_KEY_ID")
 	if key == "" {
-		logger.Error("ALIYUN_ACCESS_KEY_ID 环境变量未设置")
+		logger.Debug("ALIYUN_ACCESS_KEY_ID 环境变量未设置")
 	}
 
 	secret := os.Getenv("ALIYUN_ACCESS_KEY_SECRET")
 	if secret == "" {
-		logger.Error("ALIYUN_ACCESS_KEY_SECRET 环境变量未设置")
+		logger.Debug("ALIYUN_ACCESS_KEY_SECRET 环境变量未设置")
 	}
 
 	return &aliResourceService{

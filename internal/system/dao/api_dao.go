@@ -27,7 +27,6 @@ package dao
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -82,11 +81,6 @@ func (a *apiDAO) GetApiById(ctx context.Context, id int) (*model.Api, error) {
 func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 	if api == nil {
 		return gorm.ErrRecordNotFound
-	}
-
-	// 确保API路径以api:开头
-	if !strings.HasPrefix(api.Path, "api:") {
-		api.Path = "api:" + api.Path
 	}
 
 	updates := map[string]interface{}{

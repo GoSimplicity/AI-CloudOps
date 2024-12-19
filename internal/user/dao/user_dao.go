@@ -38,37 +38,17 @@ import (
 )
 
 type UserDAO interface {
-	// CreateUser 新建用户
 	CreateUser(ctx context.Context, user *model.User) error
-	// GetUserByUsername 通过用户名获取用户
 	GetUserByUsername(ctx context.Context, username string) (*model.User, error)
-	// GetUserByUsernames 通过用户名批量获取用户
 	GetUserByUsernames(ctx context.Context, usernames []string) ([]*model.User, error)
-	// GetOrCreateUser 获取用户或创建新用户
-	GetOrCreateUser(ctx context.Context, user *model.User) (*model.User, error)
-	// UpdateUser 更新用户
 	UpdateUser(ctx context.Context, user *model.User) error
-	// GetAllUsers 获取所有用户
 	GetAllUsers(ctx context.Context) ([]*model.User, error)
-	// GetUserByID 通过ID获取用户
 	GetUserByID(ctx context.Context, id int) (*model.User, error)
-	// GetUserByIDs 通过ID批量获取用户
 	GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, error)
-	// GetUserByRealName 通过名称获取用户
-	GetUserByRealName(ctx context.Context, name string) (*model.User, error)
-	// GetUserByMobile 通过手机号获取用户
-	GetUserByMobile(ctx context.Context, mobile string) (*model.User, error)
-	// GetPermCode 获取用户权限码
 	GetPermCode(ctx context.Context, uid int) ([]string, error)
-	// GetUserByFeiShuUserId 通过飞书用户ID获取用户
-	GetUserByFeiShuUserId(ctx context.Context, feiShuUserId string) (*model.User, error)
-	// ChangePassword 修改密码
 	ChangePassword(ctx context.Context, uid int, password string) error
-	// WriteOff 注销账号
 	WriteOff(ctx context.Context, username, password string) error
-	// UpdateProfile 更新用户信息
 	UpdateProfile(ctx context.Context, user *model.User) error
-	// DeleteUser 删除用户
 	DeleteUser(ctx context.Context, uid int) error
 }
 
@@ -84,6 +64,7 @@ func NewUserDAO(db *gorm.DB, l *zap.Logger) UserDAO {
 	}
 }
 
+// CreateUser 创建用户
 func (u *userDAO) CreateUser(ctx context.Context, user *model.User) error {
 	if err := u.db.WithContext(ctx).Create(user).Error; err != nil {
 		var mysqlErr *mysql.MySQLError
@@ -97,6 +78,7 @@ func (u *userDAO) CreateUser(ctx context.Context, user *model.User) error {
 	return nil
 }
 
+// GetUserByUsername 根据用户名获取用户信息
 func (u *userDAO) GetUserByUsername(ctx context.Context, username string) (*model.User, error) {
 	var user model.User
 
@@ -108,15 +90,7 @@ func (u *userDAO) GetUserByUsername(ctx context.Context, username string) (*mode
 	return &user, nil
 }
 
-func (u *userDAO) GetOrCreateUser(ctx context.Context, user *model.User) (*model.User, error) {
-	if err := u.db.WithContext(ctx).Where("username = ?", user.Username).FirstOrCreate(user).Error; err != nil {
-		u.l.Error("get or create user failed", zap.String("username", user.Username), zap.Error(err))
-		return nil, err
-	}
-
-	return user, nil
-}
-
+// UpdateUser 更新用户信息
 func (u *userDAO) UpdateUser(ctx context.Context, user *model.User) error {
 	if err := u.db.WithContext(ctx).Model(user).Updates(user).Error; err != nil {
 		u.l.Error("update user failed", zap.Error(err))
@@ -126,6 +100,7 @@ func (u *userDAO) UpdateUser(ctx context.Context, user *model.User) error {
 	return nil
 }
 
+// GetAllUsers 获取所有用户
 func (u *userDAO) GetAllUsers(ctx context.Context) ([]*model.User, error) {
 	var users []*model.User
 
@@ -137,39 +112,53 @@ func (u *userDAO) GetAllUsers(ctx context.Context) ([]*model.User, error) {
 	return users, nil
 }
 
+// GetUserByID 根据用户ID获取用户信息
 func (u *userDAO) GetUserByID(ctx context.Context, id int) (*model.User, error) {
 	var user model.User
 
-	if err := u.db.WithContext(ctx).Preload("Roles").Where("id = ?", id).First(&user).Error; err != nil {
+	if err := u.db.WithContext(ctx).Preload("Roles").Preload("Apis").Where("id = ?", id).First(&user).Error; err != nil {
 		u.l.Error("get user by id failed", zap.Int("id", id), zap.Error(err))
 		return nil, err
 	}
 
-	return &user, nil
-}
-
-func (u *userDAO) GetUserByRealName(ctx context.Context, name string) (*model.User, error) {
-	var user model.User
-
-	if err := u.db.WithContext(ctx).Where("real_name = ?", name).First(&user).Error; err != nil {
-		u.l.Error("get user by real name failed", zap.String("real_name", name), zap.Error(err))
+	// 获取用户的菜单并构建树状结构
+	var menus []*model.Menu
+	if err := u.db.WithContext(ctx).
+		Table("menus").
+		Joins("LEFT JOIN user_menus ON menus.id = user_menus.menu_id").
+		Where("user_menus.user_id = ? AND menus.is_deleted = ?", id, 0).
+		Order("menus.parent_id, menus.id").
+		Find(&menus).Error; err != nil {
+		u.l.Error("get user menus failed", zap.Int("id", id), zap.Error(err))
 		return nil, err
 	}
 
-	return &user, nil
-}
+	// 构建菜单树
+	menuMap := make(map[int]*model.Menu)
+	var rootMenus []*model.Menu
 
-func (u *userDAO) GetUserByMobile(ctx context.Context, mobile string) (*model.User, error) {
-	var user model.User
-
-	if err := u.db.WithContext(ctx).Where("mobile = ?", mobile).First(&user).Error; err != nil {
-		u.l.Error("get user by mobile failed", zap.String("mobile", mobile), zap.Error(err))
-		return nil, err
+	// 第一次遍历,建立id->menu的映射
+	for _, menu := range menus {
+		menuMap[menu.ID] = menu
 	}
 
+	// 第二次遍历,构建父子关系
+	for _, menu := range menus {
+		if menu.ParentID == 0 {
+			rootMenus = append(rootMenus, menu)
+		} else {
+			if parent, ok := menuMap[menu.ParentID]; ok {
+				parent.Children = append(parent.Children, menu)
+			}
+		}
+	}
+
+	user.Menus = rootMenus
+
 	return &user, nil
 }
 
+// GetPermCode 根据用户ID获取用户的所有权限码
 func (u *userDAO) GetPermCode(ctx context.Context, uid int) ([]string, error) {
 	// var user model.User
 
@@ -194,6 +183,7 @@ func (u *userDAO) GetPermCode(ctx context.Context, uid int) ([]string, error) {
 	return nil, nil
 }
 
+// GetUserByUsernames 根据用户名批量获取用户信息
 func (u *userDAO) GetUserByUsernames(ctx context.Context, usernames []string) ([]*model.User, error) {
 	var users []*model.User
 
@@ -205,16 +195,7 @@ func (u *userDAO) GetUserByUsernames(ctx context.Context, usernames []string) ([
 	return users, nil
 }
 
-func (u *userDAO) GetUserByFeiShuUserId(ctx context.Context, feiShuUserId string) (*model.User, error) {
-	var user model.User
-
-	if err := u.db.WithContext(ctx).Where("feiShuUserId = ?", feiShuUserId).First(&user).Error; err != nil {
-		u.l.Error("get user by feiShuUserId failed", zap.String("feiShuUserId", feiShuUserId), zap.Error(err))
-		return nil, err
-	}
-
-	return &user, nil
-}
+// ChangePassword 修改密码
 func (u *userDAO) ChangePassword(ctx context.Context, uid int, password string) error {
 	if err := u.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", uid).Update("password", password).Error; err != nil {
 		u.l.Error("update password failed", zap.Int("uid", uid), zap.Error(err))
@@ -224,6 +205,7 @@ func (u *userDAO) ChangePassword(ctx context.Context, uid int, password string) 
 	return nil
 }
 
+// UpdateProfile 更新用户信息
 func (u *userDAO) UpdateProfile(ctx context.Context, user *model.User) error {
 	if err := u.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]interface{}{
 		"real_name":       user.RealName,
@@ -241,6 +223,7 @@ func (u *userDAO) UpdateProfile(ctx context.Context, user *model.User) error {
 	return nil
 }
 
+// WriteOff 注销用户
 func (u *userDAO) WriteOff(ctx context.Context, username string, password string) error {
 	if err := u.db.WithContext(ctx).Where("username = ?", username).Delete(&model.User{}).Error; err != nil {
 		u.l.Error("write off user failed", zap.String("username", username), zap.Error(err))
@@ -250,6 +233,7 @@ func (u *userDAO) WriteOff(ctx context.Context, username string, password string
 	return nil
 }
 
+// DeleteUser 删除用户
 func (u *userDAO) DeleteUser(ctx context.Context, uid int) error {
 	if err := u.db.WithContext(ctx).Where("id = ?", uid).Delete(&model.User{}).Error; err != nil {
 		u.l.Error("delete user failed", zap.Int("uid", uid), zap.Error(err))
@@ -259,6 +243,7 @@ func (u *userDAO) DeleteUser(ctx context.Context, uid int) error {
 	return nil
 }
 
+// GetUserByIDs 根据用户ID批量获取用户信息
 func (u *userDAO) GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, error) {
 	var users []*model.User
 
