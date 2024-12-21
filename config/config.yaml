@@ -9,9 +9,11 @@ jwt:
   issuer: "K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx"
   expiration: 3600
 redis:
-  addr: "redis:6379"
+  # addr: "redis:6379"
+  addr: "localhost:6379"
 mysql:
-  addr: "root:root@tcp(mysql:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
+  # addr: "root:root@tcp(mysql:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
+  addr: "root:root@tcp(localhost:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
 k8s:
   refresh_cron: "@every 15s"
 prometheus:

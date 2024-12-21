@@ -28,11 +28,12 @@ package dao
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
+	"github.com/casbin/casbin/v2"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -54,23 +55,34 @@ type UserDAO interface {
 
 type userDAO struct {
 	db *gorm.DB
+	ce *casbin.Enforcer
 	l  *zap.Logger
 }
 
-func NewUserDAO(db *gorm.DB, l *zap.Logger) UserDAO {
+func NewUserDAO(db *gorm.DB, ce *casbin.Enforcer, l *zap.Logger) UserDAO {
 	return &userDAO{
 		db: db,
+		ce: ce,
 		l:  l,
 	}
 }
 
 // CreateUser 创建用户
 func (u *userDAO) CreateUser(ctx context.Context, user *model.User) error {
+	// 先检查用户是否存在
+	var existingUser model.User
+	err := u.db.WithContext(ctx).Where("username = ?", user.Username).First(&existingUser).Error
+	if err == nil {
+		// 用户已存在
+		return constants.ErrorUserExist
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		// 查询出错
+		u.l.Error("check user exist failed", zap.Error(err))
+		return err
+	}
+
+	// 用户不存在,创建新用户
 	if err := u.db.WithContext(ctx).Create(user).Error; err != nil {
-		var mysqlErr *mysql.MySQLError
-		if errors.As(err, &mysqlErr) && mysqlErr.Number == constants.ErrCodeDuplicate {
-			return constants.ErrorUserExist
-		}
 		u.l.Error("create user failed", zap.Error(err))
 		return err
 	}
@@ -235,12 +247,40 @@ func (u *userDAO) WriteOff(ctx context.Context, username string, password string
 
 // DeleteUser 删除用户
 func (u *userDAO) DeleteUser(ctx context.Context, uid int) error {
-	if err := u.db.WithContext(ctx).Where("id = ?", uid).Delete(&model.User{}).Error; err != nil {
-		u.l.Error("delete user failed", zap.Int("uid", uid), zap.Error(err))
-		return err
-	}
+	return u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 删除用户角色关联
+		if err := tx.Table("user_roles").Where("user_id = ?", uid).Delete(nil).Error; err != nil {
+			u.l.Error("删除用户角色关联失败", zap.Int("uid", uid), zap.Error(err))
+		}
 
-	return nil
+		// 删除用户菜单关联
+		if err := tx.Table("user_menus").Where("user_id = ?", uid).Delete(nil).Error; err != nil {
+			u.l.Warn("删除用户菜单关联失败", zap.Int("uid", uid), zap.Error(err))
+		}
+
+		// 删除用户API关联
+		if err := tx.Table("user_apis").Where("user_id = ?", uid).Delete(nil).Error; err != nil {
+			u.l.Warn("删除用户API关联失败", zap.Int("uid", uid), zap.Error(err))
+		}
+		// 删除用户权限策略
+		ok, err := u.ce.RemoveFilteredPolicy(0, strconv.Itoa(uid))
+		if err != nil {
+			u.l.Warn("删除用户权限策略失败", zap.Int("uid", uid), zap.Error(err))
+			return err
+		}
+
+		if !ok {
+			u.l.Warn("删除用户权限策略失败", zap.Int("uid", uid))
+		}
+
+		// 删除用户
+		if err := tx.Where("id = ?", uid).Delete(&model.User{}).Error; err != nil {
+			u.l.Error("删除用户失败", zap.Int("uid", uid), zap.Error(err))
+			return err
+		}
+
+		return nil
+	})
 }
 
 // GetUserByIDs 根据用户ID批量获取用户信息

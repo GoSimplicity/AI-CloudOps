@@ -115,9 +115,12 @@ func InitMock() {
 
 	defer sqlDB.Close()
 
-	um := mock.NewUserMock(db, enforcer)
-	um.CreateUserAdmin()
-
 	mm := mock.NewMenuMock(db)
 	mm.InitMenu()
+
+	am := mock.NewApiMock(db)
+	am.InitApi()
+
+	um := mock.NewUserMock(db, enforcer)
+	um.CreateUserAdmin()
 }

@@ -53,7 +53,7 @@ func (a *AlertPoolHandler) RegisterRouters(server *gin.Engine) {
 
 	alertManagerPools := monitorGroup.Group("/alertManager_pools")
 	{
-		alertManagerPools.GET("/", a.GetMonitorAlertManagerPoolList)       // 获取 AlertManager 集群池列表
+		alertManagerPools.GET("/list", a.GetMonitorAlertManagerPoolList)   // 获取 AlertManager 集群池列表
 		alertManagerPools.POST("/create", a.CreateMonitorAlertManagerPool) // 创建新的 AlertManager 集群池
 		alertManagerPools.POST("/update", a.UpdateMonitorAlertManagerPool) // 更新现有的 AlertManager 集群池
 		alertManagerPools.DELETE("/:id", a.DeleteMonitorAlertManagerPool)  // 删除指定的 AlertManager 集群池

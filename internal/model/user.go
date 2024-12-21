@@ -27,7 +27,7 @@ package model
 
 type User struct {
 	Model                // 软删除字段，自动管理
-	Username     string  `json:"username" gorm:"type:varchar(100);uniqueIndex;not null;comment:用户登录名"`                // 用户登录名，唯一且非空
+	Username     string  `json:"username" gorm:"type:varchar(100);not null;comment:用户登录名"`                            // 用户登录名，唯一且非空
 	Password     string  `json:"password" gorm:"type:varchar(255);not null;comment:用户登录密码"`                           // 用户登录密码，非空
 	RealName     string  `json:"realName" gorm:"type:varchar(100);comment:用户真实姓名"`                                    // 用户真实姓名
 	Desc         string  `json:"desc" gorm:"type:text;comment:用户描述"`                                                  // 用户描述，支持较长文本

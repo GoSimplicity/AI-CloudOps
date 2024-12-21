@@ -93,16 +93,23 @@ func (cm *CasbinMiddleware) CheckCasbin() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
+		//// 打印已有的策略
+		//res, err := cm.enforcer.GetPolicy()
+		//if err != nil {
+		//	log.Println("获取策略失败", err)
+		//}
+		//
+		//log.Println("已有的策略", res)
+
 		// 将用户ID转换为字符串
 		userIDStr := strconv.Itoa(sub.Uid)
-		// 获取请求的 URL 和请求方法
-		obj := c.Request.URL.Path
 		act := c.Request.Method
 
 		cm.enforcer.LoadPolicy()
 
 		// 使用 Casbin 检查权限
-		ok, err := cm.enforcer.Enforce(userIDStr, obj, act)
+		ok, err := cm.enforcer.Enforce(userIDStr, path, act)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    1,

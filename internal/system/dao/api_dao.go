@@ -27,9 +27,11 @@ package dao
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/casbin/casbin/v2"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -43,14 +45,16 @@ type ApiDAO interface {
 }
 
 type apiDAO struct {
-	db *gorm.DB
-	l  *zap.Logger
+	db       *gorm.DB
+	enforcer *casbin.Enforcer
+	l        *zap.Logger
 }
 
-func NewApiDAO(db *gorm.DB, l *zap.Logger) ApiDAO {
+func NewApiDAO(db *gorm.DB, enforcer *casbin.Enforcer, l *zap.Logger) ApiDAO {
 	return &apiDAO{
-		db: db,
-		l:  l,
+		db:       db,
+		enforcer: enforcer,
+		l:        l,
 	}
 }
 
@@ -83,6 +87,12 @@ func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 		return gorm.ErrRecordNotFound
 	}
 
+	// 获取旧的API记录
+	oldApi, err := a.GetApiById(ctx, api.ID)
+	if err != nil {
+		return err
+	}
+
 	updates := map[string]interface{}{
 		"name":        api.Name,
 		"path":        api.Path,
@@ -94,10 +104,88 @@ func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 		"update_time": time.Now().Unix(),
 	}
 
-	return a.db.WithContext(ctx).
-		Model(&model.Api{}).
+	// 开启事务
+	tx := a.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	// 更新API记录
+	if err := tx.Model(&model.Api{}).
 		Where("id = ? AND is_deleted = 0", api.ID).
-		Updates(updates).Error
+		Updates(updates).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 如果API路径或方法发生变化，则需要更新casbin策略
+	if oldApi.Path != api.Path || oldApi.Method != api.Method {
+		// HTTP方法映射表
+		methodMap := map[int]string{
+			1: "GET",
+			2: "POST",
+			3: "PUT",
+			4: "DELETE",
+			5: "PATCH",
+			6: "OPTIONS",
+			7: "HEAD",
+		}
+
+		// 获取所有包含旧路径的策略
+		policies, err := a.enforcer.GetFilteredPolicy(1, oldApi.Path, methodMap[api.Method])
+		if err != nil {
+			tx.Rollback()
+			a.l.Error("获取旧的API策略失败", zap.Error(err))
+			return err
+		}
+
+		if len(policies) > 0 {
+			// 遍历每个策略进行更新
+			for _, policy := range policies {
+				// 检查旧的策略是否存在
+				hasPolicy, err := a.enforcer.HasPolicy(policy[0], oldApi.Path, methodMap[oldApi.Method])
+				if err != nil {
+					tx.Rollback()
+					a.l.Error("检查旧的策略是否存在失败", zap.Error(err))
+					return err
+				}
+
+				// 如果旧策略存在，需要更新策略
+				if hasPolicy {
+					// 删除旧的策略
+					removed, err := a.enforcer.RemoveFilteredPolicy(1, oldApi.Path, methodMap[oldApi.Method])
+					if err != nil {
+						tx.Rollback()
+						a.l.Error("删除旧的API策略失败", zap.Error(err))
+						return err
+					}
+
+					if !removed {
+						tx.Rollback()
+						a.l.Warn("没有找到要删除的API策略", zap.String("path", oldApi.Path))
+						return fmt.Errorf("没有找到要删除的API策略: %s", oldApi.Path)
+					}
+
+					// 添加新的策略
+					_, err = a.enforcer.AddPolicy(policy[0], api.Path, methodMap[api.Method])
+					if err != nil {
+						tx.Rollback()
+						a.l.Error("添加新的API策略失败", zap.Error(err))
+						return err
+					}
+
+					// 保存策略变更
+					if err = a.enforcer.SavePolicy(); err != nil {
+						tx.Rollback()
+						a.l.Error("保存API策略失败", zap.Error(err))
+						return err
+					}
+				}
+			}
+		}
+	}
+
+	return tx.Commit().Error
 }
 
 // DeleteApi 软删除API记录
