@@ -28,10 +28,12 @@ package scrape
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
+	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
 	"go.uber.org/zap"
@@ -46,24 +48,123 @@ type ScrapeJobService interface {
 
 type scrapeJobService struct {
 	dao     scrapeJobDao.ScrapeJobDAO
+	treeDao treeDao.TreeNodeDAO
 	cache   cache.MonitorCache
 	userDao userDao.UserDAO
 	l       *zap.Logger
 }
 
-func NewPrometheusScrapeService(dao scrapeJobDao.ScrapeJobDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO) ScrapeJobService {
+func NewPrometheusScrapeService(dao scrapeJobDao.ScrapeJobDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO, treeDao treeDao.TreeNodeDAO) ScrapeJobService {
 	return &scrapeJobService{
 		dao:     dao,
 		userDao: userDao,
+		treeDao: treeDao,
 		l:       l,
 		cache:   cache,
 	}
 }
-
 func (s *scrapeJobService) GetMonitorScrapeJobList(ctx context.Context, search *string) ([]*model.MonitorScrapeJob, error) {
-	return pkg.HandleList(ctx, search,
-		s.dao.SearchMonitorScrapeJobsByName, // 搜索函数
-		s.dao.GetAllMonitorScrapeJobs)       // 获取所有函数
+	// 获取作业列表
+	jobs, err := pkg.HandleList(ctx, search,
+		s.dao.SearchMonitorScrapeJobsByName,
+		s.dao.GetAllMonitorScrapeJobs)
+	if err != nil {
+		s.l.Error("获取抓取作业列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 提前分配好容量,避免频繁扩容
+	treeNodeIDMap := make(map[int]struct{}, len(jobs))
+
+	// 收集所有需要查询的树节点ID和用户ID
+	userIDMap := make(map[int]struct{}, len(jobs))
+	for _, job := range jobs {
+		userIDMap[job.UserID] = struct{}{}
+		for _, idStr := range job.TreeNodeIDs {
+			id, err := strconv.Atoi(idStr)
+			if err != nil {
+				s.l.Error("转换树节点ID失败",
+					zap.String("id", idStr),
+					zap.Error(err))
+				continue
+			}
+			treeNodeIDMap[id] = struct{}{}
+		}
+	}
+
+	// 批量获取用户信息
+	userIDs := make([]int, 0, len(userIDMap))
+	for id := range userIDMap {
+		userIDs = append(userIDs, id)
+	}
+	users, err := s.userDao.GetUserByIDs(ctx, userIDs)
+	if err != nil {
+		s.l.Error("批量获取用户信息失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 构建用户ID到用户信息的映射
+	userMap := make(map[int]*model.User, len(users))
+	for _, user := range users {
+		userMap[user.ID] = user
+	}
+
+	// 填充用户信息
+	for _, job := range jobs {
+		if user, ok := userMap[job.UserID]; ok {
+			if user.RealName == "" {
+				job.CreateUserName = user.Username
+			} else {
+				job.CreateUserName = user.RealName
+			}
+		} else {
+			// 如果找不到对应的用户信息,设置一个默认值
+			job.CreateUserName = "未知用户"
+		}
+	}
+
+	// 将map转为slice
+	treeNodeIDs := make([]int, 0, len(treeNodeIDMap))
+	for id := range treeNodeIDMap {
+		treeNodeIDs = append(treeNodeIDs, id)
+	}
+
+	// 如果没有需要查询的树节点ID,直接返回
+	if len(treeNodeIDs) == 0 {
+		return jobs, nil
+	}
+
+	// 检查treeDao是否为nil
+	if s.treeDao == nil {
+		s.l.Error("treeDao未初始化")
+		return jobs, errors.New("treeDao未初始化")
+	}
+
+	// 批量获取树节点信息
+	treeNodes, err := s.treeDao.GetByIDs(ctx, treeNodeIDs)
+	if err != nil {
+		s.l.Error("批量获取树节点信息失败", zap.Error(err))
+		return jobs, err // 返回jobs而不是nil,避免完全失败
+	}
+
+	// 构建ID到名称的映射
+	treeNodeNameMap := make(map[int]string, len(treeNodes))
+	for _, node := range treeNodes {
+		treeNodeNameMap[node.ID] = node.Title
+	}
+
+	// 填充作业的树节点名称
+	for _, job := range jobs {
+		job.TreeNodeNames = make([]string, 0, len(job.TreeNodeIDs))
+		for _, idStr := range job.TreeNodeIDs {
+			id, _ := strconv.Atoi(idStr)
+			if name, ok := treeNodeNameMap[id]; ok {
+				job.TreeNodeNames = append(job.TreeNodeNames, name)
+			}
+		}
+	}
+
+	return jobs, nil
 }
 
 func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {

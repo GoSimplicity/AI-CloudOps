@@ -115,8 +115,12 @@ func InitMock() {
 
 	defer sqlDB.Close()
 
+	mm := mock.NewMenuMock(db)
+	mm.InitMenu()
+
+	am := mock.NewApiMock(db)
+	am.InitApi()
+
 	um := mock.NewUserMock(db, enforcer)
 	um.CreateUserAdmin()
-
-	_ = mock.NewK8sClientMock(db)
 }

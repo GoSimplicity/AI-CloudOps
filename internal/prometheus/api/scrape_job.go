@@ -53,7 +53,7 @@ func (s *ScrapeJobHandler) RegisterRouters(server *gin.Engine) {
 
 	scrapeJobs := monitorGroup.Group("/scrape_jobs")
 	{
-		scrapeJobs.GET("/", s.GetMonitorScrapeJobList)       // 获取监控采集 Job 列表
+		scrapeJobs.GET("/list", s.GetMonitorScrapeJobList)   // 获取监控采集 Job 列表
 		scrapeJobs.POST("/create", s.CreateMonitorScrapeJob) // 创建监控采集 Job
 		scrapeJobs.POST("/update", s.UpdateMonitorScrapeJob) // 更新监控采集 Job
 		scrapeJobs.DELETE("/:id", s.DeleteMonitorScrapeJob)  // 删除监控采集 Job

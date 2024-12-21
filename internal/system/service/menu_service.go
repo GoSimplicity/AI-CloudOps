@@ -36,12 +36,12 @@ import (
 )
 
 type MenuService interface {
-	GetMenus(ctx context.Context, pageNum, pageSize int, isTree bool) ([]*model.Menu, int, error)
+	GetMenus(ctx context.Context, pageNum, pageSize int) ([]*model.Menu, int, error)
 	CreateMenu(ctx context.Context, menu *model.Menu) error
 	GetMenuById(ctx context.Context, id int) (*model.Menu, error)
 	UpdateMenu(ctx context.Context, menu *model.Menu) error
 	DeleteMenu(ctx context.Context, id int) error
-	GetMenuTree(ctx context.Context) ([]*model.Menu, error)
+	UpdateUserMenu(ctx context.Context, userId int, menuId []int) error
 }
 
 type menuService struct {
@@ -57,23 +57,19 @@ func NewMenuService(menuDao dao.MenuDAO, l *zap.Logger) MenuService {
 }
 
 // GetMenus 获取菜单列表,支持分页和树形结构
-func (m *menuService) GetMenus(ctx context.Context, pageNum, pageSize int, isTree bool) ([]*model.Menu, int, error) {
+func (m *menuService) GetMenus(ctx context.Context, pageNum, pageSize int) ([]*model.Menu, int, error) {
 	if pageNum < 1 || pageSize < 1 {
 		m.l.Warn("分页参数无效", zap.Int("页码", pageNum), zap.Int("每页数量", pageSize))
 		return nil, 0, errors.New("分页参数无效")
 	}
 
-	// 如果需要树形结构,则调用GetMenuTree
-	if isTree {
-		menus, err := m.menuDao.GetMenuTree(ctx)
-		if err != nil {
-			m.l.Error("获取菜单树失败", zap.Error(err))
-			return nil, 0, err
-		}
-		return menus, len(menus), nil
+	menus, err := m.menuDao.ListMenuTree(ctx)
+	if err != nil {
+		m.l.Error("获取菜单树失败", zap.Error(err))
+		return nil, 0, err
 	}
 
-	return m.menuDao.ListMenus(ctx, pageNum, pageSize)
+	return menus, len(menus), nil
 }
 
 // CreateMenu 创建新菜单
@@ -116,7 +112,12 @@ func (m *menuService) DeleteMenu(ctx context.Context, id int) error {
 	return m.menuDao.DeleteMenu(ctx, id)
 }
 
-// GetMenuTree 获取菜单树形结构
-func (m *menuService) GetMenuTree(ctx context.Context) ([]*model.Menu, error) {
-	return m.menuDao.GetMenuTree(ctx)
+// UpdateUserMenu 更新用户菜单关联
+func (m *menuService) UpdateUserMenu(ctx context.Context, userId int, menuId []int) error {
+	if userId <= 0 || len(menuId) == 0 {
+		m.l.Warn("用户或菜单ID无效", zap.Int("用户ID", userId), zap.Ints("菜单ID", menuId))
+		return errors.New("用户或菜单ID无效")
+	}
+
+	return m.menuDao.UpdateUserMenu(ctx, userId, menuId)
 }

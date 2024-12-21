@@ -59,8 +59,8 @@ func (h *PermissionHandler) AssignUserRole(c *gin.Context) {
 	}
 
 	// 调用服务层分配角色和权限
-	if err := h.svc.AssignRoleToUser(c.Request.Context(), r.UserId, r.RoleIds, r.MenuIds, r.ApiIds); err != nil {
-		apiresponse.Error(c)
+	if err := h.svc.AssignRoleToUser(c.Request.Context(), r.UserId, r.RoleIds, r.ApiIds); err != nil {
+		apiresponse.ErrorWithMessage(c, err.Error())
 		return
 	}
 

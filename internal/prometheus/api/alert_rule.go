@@ -53,7 +53,7 @@ func (a *AlertRuleHandler) RegisterRouters(server *gin.Engine) {
 
 	alertRules := monitorGroup.Group("/alert_rules")
 	{
-		alertRules.GET("/", a.GetMonitorAlertRuleList)                        // 获取告警规则列表
+		alertRules.GET("/list", a.GetMonitorAlertRuleList)                    // 获取告警规则列表
 		alertRules.POST("/promql_check", a.PromqlExprCheck)                   // 检查 PromQL 表达式的合法性
 		alertRules.POST("/create", a.CreateMonitorAlertRule)                  // 创建新的告警规则
 		alertRules.POST("/update", a.UpdateMonitorAlertRule)                  // 更新现有的告警规则

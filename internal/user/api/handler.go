@@ -168,6 +168,9 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 		"homePath":     user.HomePath,
 		"mobile":       user.Mobile,
 		"feiShuUserId": user.FeiShuUserId,
+		"menus":        user.Menus,
+		"apis":         user.Apis,
+		"Roles":        user.Roles,
 	})
 }
 
@@ -300,9 +303,6 @@ func (u *UserHandler) UpdateProfile(ctx *gin.Context) {
 		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
-
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
-	req.UserId = uc.Uid
 
 	user := &model.User{
 		RealName:     req.RealName,

@@ -146,7 +146,7 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 	// 获取并保存命名空间，直接使用 kubeClient
 	namespaces, err := k.getNamespacesDirectly(ctx, clusterID, kubeClient)
 	if err != nil {
-		k.l.Warn("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+		k.l.Debug("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
 		k.LastProbeErrors[clusterID] = err.Error()
 	} else {
 		host := kubeConfig.Host
@@ -166,7 +166,7 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 func (k *k8sClient) getNamespacesDirectly(ctx context.Context, clusterID int, kubeClient *kubernetes.Clientset) ([]string, error) {
 	namespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		k.l.Error("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+		k.l.Debug("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
 		return nil, fmt.Errorf("获取命名空间失败: %w", err)
 	}
 

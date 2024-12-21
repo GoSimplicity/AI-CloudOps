@@ -33,8 +33,8 @@ import (
 )
 
 type PermissionService interface {
-	AssignRole(ctx context.Context, roleId int, menuIds []int, apiIds []int) error
-	AssignRoleToUser(ctx context.Context, userId int, roleIds []int, menuIds []int, apiIds []int) error
+	AssignRole(ctx context.Context, roleId int, apiIds []int) error
+	AssignRoleToUser(ctx context.Context, userId int, roleIds []int, apiIds []int) error
 	AssignRoleToUsers(ctx context.Context, userIds []int, roleIds []int) error
 }
 
@@ -57,7 +57,7 @@ func NewPermissionService(l *zap.Logger, dao dao.PermissionDAO) PermissionServic
 // 3.由于casbin_rule表id主键为自增的，所以每次写入都会导致id自增，导致性能问题，需要优化
 
 // AssignRole 为角色分配权限
-func (p *permissionService) AssignRole(ctx context.Context, roleId int, menuIds []int, apiIds []int) error {
+func (p *permissionService) AssignRole(ctx context.Context, roleId int, apiIds []int) error {
 	// 参数校验
 	if roleId <= 0 {
 		p.l.Warn("角色ID无效", zap.Int("roleId", roleId))
@@ -71,11 +71,11 @@ func (p *permissionService) AssignRole(ctx context.Context, roleId int, menuIds 
 	}
 
 	// 分配新权限
-	return p.dao.AssignRole(ctx, roleId, menuIds, apiIds)
+	return p.dao.AssignRole(ctx, roleId, apiIds)
 }
 
 // AssignRoleToUser 为用户分配角色和权限
-func (p *permissionService) AssignRoleToUser(ctx context.Context, userId int, roleIds []int, menuIds []int, apiIds []int) error {
+func (p *permissionService) AssignRoleToUser(ctx context.Context, userId int, roleIds []int, apiIds []int) error {
 	// 参数校验
 	if userId <= 0 {
 		p.l.Warn("用户ID无效", zap.Int("userId", userId))
@@ -89,7 +89,7 @@ func (p *permissionService) AssignRoleToUser(ctx context.Context, userId int, ro
 	}
 
 	// 分配新角色和权限
-	return p.dao.AssignRoleToUser(ctx, userId, roleIds, menuIds, apiIds)
+	return p.dao.AssignRoleToUser(ctx, userId, roleIds, apiIds)
 }
 
 // AssignRoleToUsers 为多个用户批量分配角色和权限

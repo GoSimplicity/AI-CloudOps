@@ -35,7 +35,7 @@ import (
 
 type RoleService interface {
 	ListRoles(ctx context.Context, page, pageSize int) ([]*model.Role, int, error)
-	CreateRole(ctx context.Context, role *model.Role, menuIds []int, apiIds []int) error
+	CreateRole(ctx context.Context, role *model.Role, apiIds []int) error
 	UpdateRole(ctx context.Context, role *model.Role) error
 	DeleteRole(ctx context.Context, id int) error
 	GetRole(ctx context.Context, id int) (*model.Role, error)
@@ -43,14 +43,12 @@ type RoleService interface {
 }
 
 type roleService struct {
-	menuDao dao.MenuDAO
 	roleDao dao.RoleDAO
 	l       *zap.Logger
 }
 
-func NewRoleService(menuDao dao.MenuDAO, roleDao dao.RoleDAO, l *zap.Logger) RoleService {
+func NewRoleService(roleDao dao.RoleDAO, l *zap.Logger) RoleService {
 	return &roleService{
-		menuDao: menuDao,
 		roleDao: roleDao,
 		l:       l,
 	}
@@ -62,8 +60,8 @@ func (r *roleService) ListRoles(ctx context.Context, page, pageSize int) ([]*mod
 }
 
 // CreateRole 创建新角色
-func (r *roleService) CreateRole(ctx context.Context, role *model.Role, menuIds []int, apiIds []int) error {
-	return r.roleDao.CreateRole(ctx, role, menuIds, apiIds)
+func (r *roleService) CreateRole(ctx context.Context, role *model.Role, apiIds []int) error {
+	return r.roleDao.CreateRole(ctx, role, apiIds)
 }
 
 // UpdateRole 更新角色信息

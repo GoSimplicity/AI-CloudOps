@@ -53,7 +53,7 @@ func (s *ScrapePoolHandler) RegisterRouters(server *gin.Engine) {
 
 	scrapePools := monitorGroup.Group("/scrape_pools")
 	{
-		scrapePools.GET("/", s.GetMonitorScrapePoolList)       // 获取监控采集池列表
+		scrapePools.GET("/list", s.GetMonitorScrapePoolList)       // 获取监控采集池列表
 		scrapePools.POST("/create", s.CreateMonitorScrapePool) // 创建监控采集池
 		scrapePools.POST("/update", s.UpdateMonitorScrapePool) // 更新监控采集池
 		scrapePools.DELETE("/:id", s.DeleteMonitorScrapePool)  // 删除监控采集池

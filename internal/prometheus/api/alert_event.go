@@ -53,7 +53,7 @@ func (a *AlertEventHandler) RegisterRouters(server *gin.Engine) {
 
 	alertEvents := monitorGroup.Group("/alert_events")
 	{
-		alertEvents.GET("/", a.GetMonitorAlertEventList)          // 获取告警事件列表
+		alertEvents.GET("/list", a.GetMonitorAlertEventList)      // 获取告警事件列表
 		alertEvents.POST("/:id/silence", a.EventAlertSilence)     // 将指定告警事件设置为静默状态
 		alertEvents.POST("/:id/claim", a.EventAlertClaim)         // 认领指定的告警事件
 		alertEvents.POST("/:id/unSilence", a.EventAlertUnSilence) // 取消指定告警事件的静默状态

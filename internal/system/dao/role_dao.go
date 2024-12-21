@@ -30,7 +30,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -40,7 +39,7 @@ import (
 )
 
 type RoleDAO interface {
-	CreateRole(ctx context.Context, role *model.Role, menuIds []int, apiIds []int) error
+	CreateRole(ctx context.Context, role *model.Role, apiIds []int) error
 	GetRoleById(ctx context.Context, id int) (*model.Role, error)
 	UpdateRole(ctx context.Context, role *model.Role) error
 	DeleteRole(ctx context.Context, id int) error
@@ -66,7 +65,7 @@ func NewRoleDAO(db *gorm.DB, l *zap.Logger, enforcer *casbin.Enforcer, permissio
 }
 
 // CreateRole 创建角色
-func (r *roleDAO) CreateRole(ctx context.Context, role *model.Role, menuIds []int, apiIds []int) error {
+func (r *roleDAO) CreateRole(ctx context.Context, role *model.Role, apiIds []int) error {
 	if role == nil {
 		return errors.New("角色对象不能为空")
 	}
@@ -109,8 +108,8 @@ func (r *roleDAO) CreateRole(ctx context.Context, role *model.Role, menuIds []in
 	}
 
 	// 分配权限
-	if len(menuIds) > 0 || len(apiIds) > 0 {
-		if err := r.permissionDao.AssignRole(ctx, roleId, menuIds, apiIds); err != nil {
+	if len(apiIds) > 0 {
+		if err := r.permissionDao.AssignRole(ctx, roleId, apiIds); err != nil {
 			return fmt.Errorf("分配权限失败: %v", err)
 		}
 	}
@@ -301,33 +300,18 @@ func (r *roleDAO) GetRole(ctx context.Context, roleId int) (*model.Role, error) 
 		return nil, fmt.Errorf("获取角色权限策略失败: %v", err)
 	}
 
-	// 解析权限策略获取菜单和API的ID
-	menuIds := make([]int, 0)
+	// 解析权限策略获取API的ID
 	apiIds := make([]int, 0)
 	for _, policy := range policies {
 		if len(policy) < 2 {
 			continue
 		}
-		if strings.HasPrefix(policy[1], "menu:") {
-			if id, err := strconv.Atoi(strings.TrimPrefix(policy[1], "menu:")); err == nil {
-				menuIds = append(menuIds, id)
-			}
-		} else if strings.HasPrefix(policy[1], "api:") {
-			parts := strings.Split(policy[1], ":")
-			if len(parts) >= 2 {
-				if id, err := strconv.Atoi(parts[1]); err == nil {
-					apiIds = append(apiIds, id)
-				}
-			}
+		if id, err := strconv.Atoi(policy[1]); err == nil {
+			apiIds = append(apiIds, id)
 		}
 	}
 
-	// 查询菜单和API详细信息
-	if len(menuIds) > 0 {
-		if err := r.db.WithContext(ctx).Where("id IN ? AND is_deleted = ?", menuIds, 0).Find(&role.Menus).Error; err != nil {
-			return nil, fmt.Errorf("查询菜单失败: %v", err)
-		}
-	}
+	// 查询API详细信息
 	if len(apiIds) > 0 {
 		if err := r.db.WithContext(ctx).Where("id IN ? AND is_deleted = ?", apiIds, 0).Find(&role.Apis).Error; err != nil {
 			return nil, fmt.Errorf("查询API失败: %v", err)
@@ -378,49 +362,26 @@ func (r *roleDAO) GetUserRole(ctx context.Context, userId int) (*model.Role, err
 		}
 	}
 
-	// 解析权限策略获取菜单和API的ID
-	menuIdsMap := make(map[int]struct{})
+	// 解析权限策略获取API的ID
 	apiIdsMap := make(map[int]struct{})
 
 	for _, policy := range allPolicies {
 		if len(policy) < 2 {
 			continue
 		}
-		if strings.HasPrefix(policy[1], "menu:") {
-			if id, err := strconv.Atoi(strings.TrimPrefix(policy[1], "menu:")); err == nil {
-				menuIdsMap[id] = struct{}{}
-			}
-		} else if strings.HasPrefix(policy[1], "api:") {
-			parts := strings.Split(policy[1], ":")
-			if len(parts) >= 2 {
-				if id, err := strconv.Atoi(parts[1]); err == nil {
-					apiIdsMap[id] = struct{}{}
-				}
-			}
+		if id, err := strconv.Atoi(policy[1]); err == nil {
+			apiIdsMap[id] = struct{}{}
 		}
 	}
 
 	// 转换为切片
-	menuIds := make([]int, 0, len(menuIdsMap))
-	for id := range menuIdsMap {
-		menuIds = append(menuIds, id)
-	}
-
 	apiIds := make([]int, 0, len(apiIdsMap))
 	for id := range apiIdsMap {
 		apiIds = append(apiIds, id)
 	}
 
-	// 查询菜单和API详细信息
-	var menus []*model.Menu
+	// 查询API详细信息
 	var apis []*model.Api
-	
-	if len(menuIds) > 0 {
-		if err := r.db.WithContext(ctx).Where("id IN ? AND is_deleted = ?", menuIds, 0).Find(&menus).Error; err != nil {
-			return nil, fmt.Errorf("查询菜单失败: %v", err)
-		}
-		role.Menus = menus
-	}
 
 	if len(apiIds) > 0 {
 		if err := r.db.WithContext(ctx).Where("id IN ? AND is_deleted = ?", apiIds, 0).Find(&apis).Error; err != nil {

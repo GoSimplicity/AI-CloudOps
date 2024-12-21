@@ -59,6 +59,7 @@ func NewUserService(dao dao.UserDAO) UserService {
 	}
 }
 
+// SignUp 用户注册
 func (us *userService) SignUp(ctx context.Context, user *model.User) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -70,6 +71,7 @@ func (us *userService) SignUp(ctx context.Context, user *model.User) error {
 	return us.dao.CreateUser(ctx, user)
 }
 
+// Login 用户登录
 func (us *userService) Login(ctx context.Context, user *model.User) (*model.User, error) {
 	u, err := us.dao.GetUserByUsername(ctx, user.Username)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -86,10 +88,12 @@ func (us *userService) Login(ctx context.Context, user *model.User) (*model.User
 	return u, nil
 }
 
+// GetProfile 获取用户信息
 func (us *userService) GetProfile(ctx context.Context, uid int) (*model.User, error) {
 	return us.dao.GetUserByID(ctx, uid)
 }
 
+// GetPermCode 获取用户权限
 func (us *userService) GetPermCode(ctx context.Context, uid int) ([]string, error) {
 	codes, err := us.dao.GetPermCode(ctx, uid)
 	if err != nil {
@@ -99,10 +103,12 @@ func (us *userService) GetPermCode(ctx context.Context, uid int) ([]string, erro
 	return codes, nil
 }
 
+// GetUserList 获取用户列表
 func (us *userService) GetUserList(ctx context.Context) ([]*model.User, error) {
 	return us.dao.GetAllUsers(ctx)
 }
 
+// ChangePassword 修改密码
 func (us *userService) ChangePassword(ctx context.Context, uid int, oldPassword string, newPassword string) error {
 	// 验证旧密码是否正确
 	user, err := us.dao.GetUserByID(ctx, uid)
@@ -123,6 +129,7 @@ func (us *userService) ChangePassword(ctx context.Context, uid int, oldPassword 
 	return us.dao.ChangePassword(ctx, uid, string(hash))
 }
 
+// UpdateProfile 修改用户信息
 func (us *userService) UpdateProfile(ctx context.Context, uid int, req *model.User) error {
 	// 验证用户是否存在
 	user, err := us.dao.GetUserByID(ctx, uid)
@@ -142,6 +149,7 @@ func (us *userService) UpdateProfile(ctx context.Context, uid int, req *model.Us
 	return us.dao.UpdateProfile(ctx, user)
 }
 
+// WriteOff 注销账号
 func (us *userService) WriteOff(ctx context.Context, username string, password string) error {
 	// 验证用户是否存在
 	user, err := us.dao.GetUserByUsername(ctx, username)

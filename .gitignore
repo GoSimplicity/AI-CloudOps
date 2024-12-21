@@ -21,6 +21,11 @@ terraform
 go.work
 go.work.sum
 
+bin
+
+data/mysql
+data/redis
+data/nginx/log
 # env file
 .env
 
