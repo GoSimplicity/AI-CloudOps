@@ -27,8 +27,10 @@ package mock
 
 import (
 	"log"
+	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/casbin/casbin/v2"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -41,11 +43,13 @@ const (
 
 type UserMock struct {
 	db *gorm.DB
+	ce *casbin.Enforcer
 }
 
-func NewUserMock(db *gorm.DB) *UserMock {
+func NewUserMock(db *gorm.DB, ce *casbin.Enforcer) *UserMock {
 	return &UserMock{
 		db: db,
+		ce: ce,
 	}
 }
 
@@ -65,7 +69,7 @@ func (u *UserMock) CreateUserAdmin() {
 		Username:    AdminUsername,
 		Password:    string(hashedPassword),
 		RealName:    "管理员账号",
-		AccountType: AdminAccountType, // 确保 AdminAccountType 已定义
+		AccountType: AdminAccountType,
 	}
 
 	// 使用 FirstOrCreate 方法查找或创建管理员用户
@@ -83,6 +87,57 @@ func (u *UserMock) CreateUserAdmin() {
 		log.Println("管理员用户创建成功")
 	} else {
 		log.Println("管理员用户已存在，跳过创建")
+	}
+
+	// 为管理员用户添加所有权限
+	userIDStr := strconv.FormatInt(int64(adminUser.ID), 10)
+	paths := []string{"/*"}
+	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
+
+	for _, path := range paths {
+		for _, method := range methods {
+			if ok, err := u.ce.AddPolicy(userIDStr, path, method); err == nil && ok {
+				log.Printf("成功添加权限策略: 用户=%s, 路径=%s, 方法=%s", userIDStr, path, method)
+			} else if err != nil {
+				log.Printf("添加权限策略失败: %v", err)
+			} else {
+				log.Printf("权限策略已存在: 用户=%s, 路径=%s, 方法=%s", userIDStr, path, method)
+			}
+		}
+	}
+
+	err = u.ce.SavePolicy()
+	if err != nil {
+		log.Printf("保存策略失败: %v\n", err)
+		return
+	}
+
+	menuIds := []int{
+		1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+		11, 12, 13, 14, 15, 16, 17, 18,
+		19, 20, 21, 22, 23, 24, 25, 26,
+		27, 28, 29, 30,
+	}
+
+	// 构建批量插入的数据
+	userMenus := make([]map[string]interface{}, 0, len(menuIds))
+	for _, menuId := range menuIds {
+		userMenus = append(userMenus, map[string]interface{}{
+			"user_id": adminUser.ID,
+			"menu_id": menuId,
+		})
+	}
+
+	// 先删除已有的关联
+	if err := u.db.Table("user_menus").Where("user_id = ?", adminUser.ID).Delete(nil).Error; err != nil {
+		log.Printf("删除已有用户菜单关联失败: %v", err)
+		return
+	}
+
+	// 批量创建新的关联
+	if err := u.db.Table("user_menus").Create(userMenus).Error; err != nil {
+		log.Printf("添加用户菜单关联失败: %v", err)
+		return
 	}
 
 	log.Println("[用户模块Mock结束]")

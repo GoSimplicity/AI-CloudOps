@@ -44,13 +44,14 @@ func NewMenuHandler(svc service.MenuService) *MenuHandler {
 	}
 }
 
-func (h *MenuHandler) RegisterRouters(server *gin.Engine) {
+func (m *MenuHandler) RegisterRouters(server *gin.Engine) {
 	menuGroup := server.Group("/api/menus")
 
-	menuGroup.POST("/list", h.ListMenus)
-	menuGroup.POST("/create", h.CreateMenu)
-	menuGroup.POST("/update", h.UpdateMenu)
-	menuGroup.DELETE("/:id", h.DeleteMenu)
+	menuGroup.POST("/list", m.ListMenus)
+	menuGroup.POST("/create", m.CreateMenu)
+	menuGroup.POST("/update", m.UpdateMenu)
+	menuGroup.DELETE("/:id", m.DeleteMenu)
+	menuGroup.POST("/update_related", m.UpdateUserMenu)
 }
 
 // ListMenus 获取菜单列表
@@ -62,16 +63,13 @@ func (m *MenuHandler) ListMenus(c *gin.Context) {
 	}
 
 	// 调用service层获取菜单列表
-	menus, total, err := m.svc.GetMenus(c.Request.Context(), req.PageNumber, req.PageSize, req.IsTree)
+	menus, _, err := m.svc.GetMenus(c.Request.Context(), req.PageNumber, req.PageSize)
 	if err != nil {
 		apiresponse.ErrorWithMessage(c, "获取菜单列表失败")
 		return
 	}
 
-	apiresponse.SuccessWithData(c, gin.H{
-		"list":  menus,
-		"total": total,
-	})
+	apiresponse.SuccessWithData(c, menus)
 }
 
 // CreateMenu 创建菜单
@@ -85,11 +83,12 @@ func (m *MenuHandler) CreateMenu(c *gin.Context) {
 		Name:      req.Name,
 		Path:      req.Path,
 		Component: req.Component,
-		SortOrder: req.SortOrder,
 		ParentID:  req.ParentId,
-		Icon:      req.Icon,
 		Hidden:    req.Hidden,
 		RouteName: req.RouteName,
+		Redirect:  req.Redirect,
+		Meta:      req.Meta,
+		Children:  req.Children,
 	}
 
 	if err := m.svc.CreateMenu(c.Request.Context(), menu); err != nil {
@@ -113,9 +112,7 @@ func (m *MenuHandler) UpdateMenu(c *gin.Context) {
 		Name:      req.Name,
 		Path:      req.Path,
 		Component: req.Component,
-		SortOrder: req.SortOrder,
 		ParentID:  req.ParentId,
-		Icon:      req.Icon,
 		Hidden:    req.Hidden,
 		RouteName: req.RouteName,
 	}
@@ -142,4 +139,20 @@ func (m *MenuHandler) DeleteMenu(c *gin.Context) {
 	}
 
 	apiresponse.SuccessWithMessage(c, "删除成功")
+}
+
+// AddUserMenu 添加用户菜单关联
+func (m *MenuHandler) UpdateUserMenu(c *gin.Context) {
+	var req model.UpdateUserMenuRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiresponse.ErrorWithMessage(c, "参数错误")
+		return
+	}
+
+	if err := m.svc.UpdateUserMenu(c.Request.Context(), req.UserId, req.MenuIds); err != nil {
+		apiresponse.ErrorWithMessage(c, "更新用户菜单关联失败")
+		return
+	}
+
+	apiresponse.SuccessWithMessage(c, "更新成功")
 }

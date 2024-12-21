@@ -53,7 +53,7 @@ func (r *RecordRuleHandler) RegisterRouters(server *gin.Engine) {
 
 	recordRules := monitorGroup.Group("/record_rules")
 	{
-		recordRules.GET("/", r.GetMonitorRecordRuleList)                  // 获取预聚合规则列表
+		recordRules.GET("/list", r.GetMonitorRecordRuleList)              // 获取预聚合规则列表
 		recordRules.POST("/create", r.CreateMonitorRecordRule)            // 创建新的预聚合规则
 		recordRules.POST("/update", r.UpdateMonitorRecordRule)            // 更新现有的预聚合规则
 		recordRules.DELETE("/:id", r.DeleteMonitorRecordRule)             // 删除指定的预聚合规则

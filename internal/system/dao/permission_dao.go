@@ -37,8 +37,8 @@ import (
 )
 
 type PermissionDAO interface {
-	AssignRole(ctx context.Context, roleId int, menuIds []int, apiIds []int) error
-	AssignRoleToUser(ctx context.Context, userId int, roleIds []int, menuIds []int, apiIds []int) error
+	AssignRole(ctx context.Context, roleId int, apiIds []int) error
+	AssignRoleToUser(ctx context.Context, userId int, roleIds []int, apiIds []int) error
 	AssignRoleToUsers(ctx context.Context, userIds []int, roleIds []int) error
 
 	RemoveUserPermissions(ctx context.Context, userId int) error
@@ -63,7 +63,7 @@ func NewPermissionDAO(db *gorm.DB, l *zap.Logger, enforcer *casbin.Enforcer, api
 }
 
 // AssignRole 为角色分配权限
-func (p *permissionDAO) AssignRole(ctx context.Context, roleId int, menuIds []int, apiIds []int) error {
+func (p *permissionDAO) AssignRole(ctx context.Context, roleId int, apiIds []int) error {
 	const batchSize = 1000
 
 	if roleId <= 0 {
@@ -85,17 +85,11 @@ func (p *permissionDAO) AssignRole(ctx context.Context, roleId int, menuIds []in
 			return fmt.Errorf("移除角色现有权限失败: %v", err)
 		}
 
-		// 添加菜单权限
-		if err := p.assignMenuPermissions(role.Name, menuIds, batchSize); err != nil {
-			return err
-		}
-
 		// 添加API权限
 		if err := p.assignAPIPermissions(ctx, role.Name, apiIds, batchSize); err != nil {
 			return err
 		}
 
-		// 加载最新的策略
 		if err := p.enforcer.LoadPolicy(); err != nil {
 			return fmt.Errorf("加载策略失败: %v", err)
 		}
@@ -105,7 +99,7 @@ func (p *permissionDAO) AssignRole(ctx context.Context, roleId int, menuIds []in
 }
 
 // AssignRoleToUser 为用户分配角色和权限
-func (p *permissionDAO) AssignRoleToUser(ctx context.Context, userId int, roleIds []int, menuIds []int, apiIds []int) error {
+func (p *permissionDAO) AssignRoleToUser(ctx context.Context, userId int, roleIds []int, apiIds []int) error {
 	const batchSize = 1000
 
 	if userId <= 0 {
@@ -141,17 +135,6 @@ func (p *permissionDAO) AssignRoleToUser(ctx context.Context, userId int, roleId
 			return fmt.Errorf("更新用户角色关联失败: %v", err)
 		}
 
-		// 更新用户的菜单关联
-		if len(menuIds) > 0 {
-			var menus []*model.Menu
-			if err := tx.Where("id IN ? AND is_deleted = ?", menuIds, 0).Find(&menus).Error; err != nil {
-				return fmt.Errorf("获取菜单信息失败: %v", err)
-			}
-			if err := tx.Model(&user).Association("Menus").Replace(menus); err != nil {
-				return fmt.Errorf("更新用户菜单关联失败: %v", err)
-			}
-		}
-
 		// 更新用户的API关联
 		if len(apiIds) > 0 {
 			var apis []*model.Api
@@ -171,13 +154,6 @@ func (p *permissionDAO) AssignRoleToUser(ctx context.Context, userId int, roleId
 			}
 			if _, err := p.enforcer.AddGroupingPolicies(rolePolicies); err != nil {
 				return fmt.Errorf("添加用户角色关联失败: %v", err)
-			}
-		}
-
-		// 添加菜单权限
-		if len(menuIds) > 0 {
-			if err := p.assignMenuPermissions(userStr, menuIds, batchSize); err != nil {
-				return err
 			}
 		}
 
@@ -203,31 +179,53 @@ func (p *permissionDAO) RemoveUserPermissions(ctx context.Context, userId int) e
 		return errors.New("无效的用户ID")
 	}
 
+	// 不允许删除userId为1的权限
+	if userId == 1 {
+		return errors.New("不允许删除超级管理员权限")
+	}
+
 	userStr := fmt.Sprintf("%d", userId)
 
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 移除该用户的所有权限策略
-		if _, err := p.enforcer.RemoveFilteredPolicy(0, userStr); err != nil {
-			return fmt.Errorf("移除用户权限策略失败: %v", err)
-		}
-
-		// 移除该用户的所有角色关联
-		if _, err := p.enforcer.RemoveFilteredGroupingPolicy(0, userStr); err != nil {
-			return fmt.Errorf("移除用户角色关联失败: %v", err)
-		}
-
-		// 清空用户的所有关联
+		// 获取用户信息
 		var user model.User
 		if err := tx.First(&user, userId).Error; err != nil {
 			return fmt.Errorf("获取用户信息失败: %v", err)
 		}
 
-		if err := tx.Model(&user).Association("Roles").Clear(); err != nil {
-			return fmt.Errorf("清空用户角色关联失败: %v", err)
+		// 获取用户当前的API列表
+		var apis []*model.Api
+		if err := tx.Model(&user).Association("Apis").Find(&apis); err != nil {
+			return fmt.Errorf("获取用户API关联失败: %v", err)
 		}
 
-		if err := tx.Model(&user).Association("Menus").Clear(); err != nil {
-			return fmt.Errorf("清空用户菜单关联失败: %v", err)
+		// 移除每个API的权限策略
+		for _, api := range apis {
+			// HTTP方法映射表
+			methodMap := map[int]string{
+				1: "GET",
+				2: "POST",
+				3: "PUT",
+				4: "DELETE",
+				5: "PATCH",
+				6: "OPTIONS",
+				7: "HEAD",
+			}
+			method := methodMap[api.Method]
+
+			if _, err := p.enforcer.RemovePolicy(userStr, api.Path, method); err != nil {
+				return fmt.Errorf("移除用户API权限失败: %v", err)
+			}
+		}
+
+		// 移除用户的角色关联
+		if _, err := p.enforcer.RemoveFilteredGroupingPolicy(0, userStr); err != nil {
+			return fmt.Errorf("移除用户角色关联失败: %v", err)
+		}
+
+		// 清空用户的关联
+		if err := tx.Model(&user).Association("Roles").Clear(); err != nil {
+			return fmt.Errorf("清空用户角色关联失败: %v", err)
 		}
 
 		if err := tx.Model(&user).Association("Apis").Clear(); err != nil {
@@ -255,9 +253,9 @@ func (p *permissionDAO) RemoveRolePermissions(ctx context.Context, roleId int) e
 		return fmt.Errorf("查询角色失败: %v", err)
 	}
 
-	// 移除该角色的所有API权限策略
+	// 直接移除角色的所有权限策略
 	if _, err := p.enforcer.RemoveFilteredPolicy(0, role.Name); err != nil {
-		return fmt.Errorf("移除角色API权限策略失败: %v", err)
+		return fmt.Errorf("移除角色权限失败: %v", err)
 	}
 
 	// 重新加载策略
@@ -266,30 +264,6 @@ func (p *permissionDAO) RemoveRolePermissions(ctx context.Context, roleId int) e
 	}
 
 	return nil
-}
-
-// assignMenuPermissions 分配菜单权限
-func (p *permissionDAO) assignMenuPermissions(roleName string, menuIds []int, batchSize int) error {
-	if roleName == "" {
-		return errors.New("角色名称不能为空")
-	}
-
-	// 如果菜单ID列表为空,直接返回
-	if len(menuIds) == 0 {
-		return nil
-	}
-
-	// 构建casbin策略规则
-	policies := make([][]string, 0, len(menuIds))
-	for _, menuId := range menuIds {
-		if menuId <= 0 {
-			return fmt.Errorf("无效的菜单ID: %d", menuId)
-		}
-		policies = append(policies, []string{roleName, fmt.Sprintf("menu:%d", menuId), "read"})
-	}
-
-	// 批量添加策略
-	return p.batchAddPolicies(policies, batchSize)
 }
 
 // assignAPIPermissions 分配API权限
@@ -337,7 +311,7 @@ func (p *permissionDAO) assignAPIPermissions(ctx context.Context, roleName strin
 			return fmt.Errorf("无效的HTTP方法: %d", api.Method)
 		}
 
-		policies = append(policies, []string{roleName, fmt.Sprintf("api:%d", api.ID), method})
+		policies = append(policies, []string{roleName, api.Path, method})
 	}
 
 	// 批量添加策略
@@ -434,23 +408,57 @@ func (p *permissionDAO) RemoveUsersPermissions(ctx context.Context, userIds []in
 	}
 
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 移除所有用户的角色
 		for _, userId := range userIds {
-			userStr := fmt.Sprintf("%d", userId)
-
-			// 移除用户的所有角色关联
-			if _, err := p.enforcer.RemoveFilteredGroupingPolicy(0, userStr); err != nil {
-				return fmt.Errorf("移除用户角色关联失败: %v", err)
+			// 不允许删除userId为1的权限
+			if userId == 1 {
+				continue
 			}
 
-			// 清空用户的角色关联
+			userStr := fmt.Sprintf("%d", userId)
+
+			// 获取用户信息
 			var user model.User
 			if err := tx.First(&user, userId).Error; err != nil {
 				return fmt.Errorf("获取用户信息失败: %v", err)
 			}
 
+			// 获取用户当前的API列表
+			var apis []*model.Api
+			if err := tx.Model(&user).Association("Apis").Find(&apis); err != nil {
+				return fmt.Errorf("获取用户API关联失败: %v", err)
+			}
+
+			// 移除每个API的权限策略
+			for _, api := range apis {
+				// HTTP方法映射表
+				methodMap := map[int]string{
+					1: "GET",
+					2: "POST",
+					3: "PUT",
+					4: "DELETE",
+					5: "PATCH",
+					6: "OPTIONS",
+					7: "HEAD",
+				}
+				method := methodMap[api.Method]
+
+				if _, err := p.enforcer.RemovePolicy(userStr, api.Path, method); err != nil {
+					return fmt.Errorf("移除用户API权限失败: %v", err)
+				}
+			}
+
+			// 移除用户的角色关联
+			if _, err := p.enforcer.RemoveFilteredGroupingPolicy(0, userStr); err != nil {
+				return fmt.Errorf("移除用户角色关联失败: %v", err)
+			}
+
+			// 清空用户的关联
 			if err := tx.Model(&user).Association("Roles").Clear(); err != nil {
 				return fmt.Errorf("清空用户角色关联失败: %v", err)
+			}
+
+			if err := tx.Model(&user).Association("Apis").Clear(); err != nil {
+				return fmt.Errorf("清空用户API关联失败: %v", err)
 			}
 		}
 
