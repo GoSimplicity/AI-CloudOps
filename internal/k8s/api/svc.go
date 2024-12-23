@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -60,44 +60,44 @@ func (k *K8sSvcHandler) RegisterRouters(server *gin.Engine) {
 
 // GetServiceListByNamespace 根据命名空间获取 Service 列表
 func (k *K8sSvcHandler) GetServiceListByNamespace(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	namespace := ctx.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.svcService.GetServicesByNamespace(ctx, id, namespace)
 	})
 }
 
 // GetServiceYaml 获取 Service 的 YAML 配置
 func (k *K8sSvcHandler) GetServiceYaml(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	svcName := ctx.Param("svcName")
 	if svcName == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'serviceName' 参数")
+		utils.BadRequestError(ctx, "缺少 'serviceName' 参数")
 		return
 	}
 
 	namespace := ctx.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.svcService.GetServiceYaml(ctx, id, namespace, svcName)
 	})
 }
@@ -106,27 +106,27 @@ func (k *K8sSvcHandler) GetServiceYaml(ctx *gin.Context) {
 func (k *K8sSvcHandler) UpdateService(ctx *gin.Context) {
 	var req model.K8sServiceRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.svcService.UpdateService(ctx, &req)
 	})
 }
 
 // DeleteService 删除指定 Service
 func (k *K8sSvcHandler) DeleteService(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	namespace := ctx.Query("namespace")
 	svcName := ctx.Query("svcName")
 	if namespace == "" || svcName == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'namespace' 或 'svcName' 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 或 'svcName' 参数")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, k.svcService.DeleteService(ctx, id, namespace, svcName)
 	})
 
@@ -136,7 +136,7 @@ func (k *K8sSvcHandler) DeleteService(ctx *gin.Context) {
 func (k *K8sSvcHandler) BatchDeleteServices(ctx *gin.Context) {
 	var req model.K8sServiceRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.svcService.BatchDeleteService(ctx, req.ClusterId, req.Namespace, req.ServiceNames)
 	})
 }

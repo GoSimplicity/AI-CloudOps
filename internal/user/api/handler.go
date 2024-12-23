@@ -27,6 +27,7 @@ package api
 
 import (
 	"errors"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"net/http"
 	"strconv"
 
@@ -36,8 +37,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -75,59 +75,59 @@ func (u *UserHandler) SignUp(ctx *gin.Context) {
 	var req model.User
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		utils.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
 	if err := u.service.SignUp(ctx, &req); err != nil {
 		if errors.Is(err, constants.ErrorUserExist) {
-			apiresponse.ErrorWithMessage(ctx, constants.ErrorUserExist.Error())
+			utils.ErrorWithMessage(ctx, constants.ErrorUserExist.Error())
 			return
 		}
 
 		u.l.Error("signup failed", zap.Error(err))
 
-		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
+		utils.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (u *UserHandler) Login(ctx *gin.Context) {
 	var req model.User
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		utils.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
 	ur, err := u.service.Login(ctx, &req)
 	if err != nil {
 		if errors.Is(err, constants.ErrorUserNotExist) {
-			apiresponse.ErrorWithMessage(ctx, constants.ErrorUserNotExist.Error())
+			utils.ErrorWithMessage(ctx, constants.ErrorUserNotExist.Error())
 			return
 		}
 
 		if errors.Is(err, constants.ErrorPasswordIncorrect) {
-			apiresponse.ErrorWithMessage(ctx, constants.ErrorPasswordIncorrect.Error())
+			utils.ErrorWithMessage(ctx, constants.ErrorPasswordIncorrect.Error())
 			return
 		}
 
 		u.l.Error("login failed", zap.Error(err))
 
-		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
+		utils.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
 		return
 	}
 
 	accessToken, refreshToken, err := u.ijwt.SetLoginToken(ctx, ur.ID)
 	if err != nil {
 		u.l.Error("set login token failed", zap.Error(err))
-		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
+		utils.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, gin.H{
+	utils.SuccessWithData(ctx, gin.H{
 		"id":           ur.ID,
 		"accessToken":  accessToken,
 		"refreshToken": refreshToken,
@@ -142,11 +142,11 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 func (u *UserHandler) Logout(ctx *gin.Context) {
 	if err := u.ijwt.ClearToken(ctx); err != nil {
 		u.l.Error("clear token failed", zap.Error(err))
-		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
+		utils.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (u *UserHandler) Profile(ctx *gin.Context) {
@@ -154,11 +154,11 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 	user, err := u.service.GetProfile(ctx, uc.Uid)
 	if err != nil {
 		u.l.Error("get user info failed", zap.Error(err))
-		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
+		utils.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, gin.H{
+	utils.SuccessWithData(ctx, gin.H{
 		"id":           user.ID,
 		"roles":        user.Roles,
 		"realName":     user.RealName,
@@ -180,7 +180,7 @@ func (u *UserHandler) RefreshToken(ctx *gin.Context) {
 	rc := ijwt.RefreshClaims{}
 
 	if err := ctx.BindJSON(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		utils.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
@@ -193,21 +193,21 @@ func (u *UserHandler) RefreshToken(ctx *gin.Context) {
 	})
 	if err != nil {
 		u.l.Error("failed to parse token", zap.Error(err))
-		apiresponse.Unauthorized(ctx, http.StatusUnauthorized, "token parsing failed", "token解析失败")
+		utils.Unauthorized(ctx, http.StatusUnauthorized, "token parsing failed", "token解析失败")
 		return
 	}
 
 	// 检查 token 是否有效
 	if token == nil || !token.Valid {
 		u.l.Warn("invalid token")
-		apiresponse.Unauthorized(ctx, http.StatusUnauthorized, "token is invalid", "token无效")
+		utils.Unauthorized(ctx, http.StatusUnauthorized, "token is invalid", "token无效")
 		return
 	}
 
 	// 检查会话状态是否异常
 	if err = u.ijwt.CheckSession(ctx, rc.Ssid); err != nil {
 		u.l.Error("session check failed", zap.Error(err))
-		apiresponse.Unauthorized(ctx, http.StatusUnauthorized, "session check failed", "会话检查失败")
+		utils.Unauthorized(ctx, http.StatusUnauthorized, "session check failed", "会话检查失败")
 		return
 	}
 
@@ -215,11 +215,11 @@ func (u *UserHandler) RefreshToken(ctx *gin.Context) {
 	newToken, err := u.ijwt.SetJWTToken(ctx, rc.Uid, rc.Ssid)
 	if err != nil {
 		u.l.Error("failed to generate new token", zap.Error(err))
-		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "生成新token失败")
+		utils.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "生成新token失败")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, newToken)
+	utils.SuccessWithData(ctx, newToken)
 }
 
 func (u *UserHandler) GetPermCode(ctx *gin.Context) {
@@ -227,34 +227,34 @@ func (u *UserHandler) GetPermCode(ctx *gin.Context) {
 
 	codes, err := u.service.GetPermCode(ctx, uc.Uid)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, codes)
+	utils.SuccessWithData(ctx, codes)
 }
 
 func (u *UserHandler) GetUserList(ctx *gin.Context) {
 	list, err := u.service.GetUserList(ctx)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, list)
+	utils.SuccessWithData(ctx, list)
 }
 
 func (u *UserHandler) ChangePassword(ctx *gin.Context) {
 	var req ChangePasswordRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		utils.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
 	// 验证新密码和确认密码是否一致
 	if req.NewPassword != req.ConfirmPassword {
-		apiresponse.ErrorWithMessage(ctx, "新密码和确认密码不一致")
+		utils.ErrorWithMessage(ctx, "新密码和确认密码不一致")
 		return
 	}
 
@@ -262,45 +262,45 @@ func (u *UserHandler) ChangePassword(ctx *gin.Context) {
 
 	if err := u.service.ChangePassword(ctx, uc.Uid, req.Password, req.NewPassword); err != nil {
 		if errors.Is(err, constants.ErrorPasswordIncorrect) {
-			apiresponse.ErrorWithMessage(ctx, "原密码不正确")
+			utils.ErrorWithMessage(ctx, "原密码不正确")
 			return
 		}
 		u.l.Error("修改密码失败", zap.Error(err))
-		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "修改密码失败")
+		utils.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "修改密码失败")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (u *UserHandler) WriteOff(ctx *gin.Context) {
 	var req WriteOffRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		utils.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
 	// 验证用户名不能为空
 	if req.Username == "" {
-		apiresponse.ErrorWithMessage(ctx, "用户名不能为空")
+		utils.ErrorWithMessage(ctx, "用户名不能为空")
 		return
 	}
 
 	if err := u.service.WriteOff(ctx, req.Username, req.Password); err != nil {
 		u.l.Error("注销账号失败", zap.Error(err))
-		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "注销账号失败")
+		utils.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "注销账号失败")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (u *UserHandler) UpdateProfile(ctx *gin.Context) {
 	var req UpdateProfileRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
+		utils.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
 		return
 	}
 
@@ -316,11 +316,11 @@ func (u *UserHandler) UpdateProfile(ctx *gin.Context) {
 
 	if err := u.service.UpdateProfile(ctx, req.UserId, user); err != nil {
 		u.l.Error("更新用户信息失败", zap.Error(err))
-		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "更新用户信息失败")
+		utils.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "更新用户信息失败")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (u *UserHandler) DeleteUser(ctx *gin.Context) {
@@ -328,15 +328,15 @@ func (u *UserHandler) DeleteUser(ctx *gin.Context) {
 
 	idInt, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	if err := u.service.DeleteUser(ctx, idInt); err != nil {
 		u.l.Error("删除用户失败", zap.Error(err))
-		apiresponse.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "删除用户失败")
+		utils.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "删除用户失败")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }

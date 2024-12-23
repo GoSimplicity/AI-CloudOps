@@ -23,7 +23,7 @@
  *
  */
 
-package general
+package utils
 
 import (
 	"errors"
@@ -33,6 +33,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-ping/ping"
 )
 
 func ConvertToIntList(stringList []string) ([]int, error) {
@@ -176,4 +178,31 @@ func StringSliceToMap(inputSlice []string) (map[string]string, error) {
 	}
 
 	return result, nil
+}
+
+// Ping 检查指定的 IP 地址是否可达
+func Ping(ipAddr string) bool {
+	pinger, err := ping.NewPinger(ipAddr)
+	if err != nil {
+		fmt.Printf("创建 pinger 失败: %v\n", err)
+		return false
+	}
+
+	// 设置使用 IPv4，如果需要 IPv6，可以设置为 false
+	pinger.SetPrivileged(true) // 需要 root/管理员权限
+
+	// 设置超时时间
+	pinger.Timeout = time.Second * 3
+
+	// 发送 1 个包
+	pinger.Count = 1
+
+	err = pinger.Run() // 开始 ping
+	if err != nil {
+		fmt.Printf("运行 pinger 失败: %v\n", err)
+		return false
+	}
+
+	stats := pinger.Statistics()
+	return stats.PacketsRecv > 0
 }

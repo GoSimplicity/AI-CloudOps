@@ -28,10 +28,10 @@ package domain
 import (
 	"context"
 	"fmt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
 	"github.com/prometheus/alertmanager/types"
 	promModel "github.com/prometheus/common/model"
 	"go.uber.org/zap"
@@ -62,7 +62,7 @@ func (d *AlertEventDomain) BuildSilence(ctx context.Context, silenceReq *model.A
 	}
 
 	// 构建匹配器
-	matchers, err := prometheus.BuildMatchers(d.Event, d.Logger, silenceReq.UseName)
+	matchers, err := utils.BuildMatchers(d.Event, d.Logger, silenceReq.UseName)
 	if err != nil {
 		d.Logger.Error("构建静默对象失败: 构建匹配器错误", zap.Error(err))
 		return nil, err

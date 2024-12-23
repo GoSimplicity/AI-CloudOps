@@ -28,10 +28,9 @@ package service
 import (
 	"context"
 	"fmt"
+	promPkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	treeNode "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/general"
-	promPkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
 	promModel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"go.uber.org/zap"
@@ -55,7 +54,7 @@ func NewNotAuthService(l *zap.Logger, treeNodeDao treeNode.TreeNodeDAO) NotAuthS
 
 // BuildPrometheusServiceDiscovery 构建 Prometheus 服务发现的目标组，支持多个标签
 func (n *notAuthService) BuildPrometheusServiceDiscovery(ctx context.Context, leafNodeIdList []string, port int) ([]*targetgroup.Group, error) {
-	leafNodeIntList, err := pkg.ConvertToIntList(leafNodeIdList)
+	leafNodeIntList, err := promPkg.ConvertToIntList(leafNodeIdList)
 	if err != nil {
 		n.l.Warn("无效的 leafNodeIdList", zap.Strings("leafNodeIdList", leafNodeIdList), zap.Error(err))
 		return nil, err

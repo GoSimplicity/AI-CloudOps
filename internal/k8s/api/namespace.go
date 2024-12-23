@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -65,73 +65,73 @@ func (k *K8sNamespaceHandler) GetClusterNamespacesForCascade(ctx *gin.Context) {
 	namespaces, err := k.namespaceService.GetClusterNamespacesList(ctx)
 	if err != nil {
 		k.logger.Error("Failed to get cascade namespaces", zap.Error(err))
-		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		utils.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, namespaces)
+	utils.SuccessWithData(ctx, namespaces)
 }
 
 // GetClusterNamespacesForSelect 获取用于选择的命名空间列表
 func (k *K8sNamespaceHandler) GetClusterNamespacesForSelect(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	namespaces, err := k.namespaceService.GetClusterNamespacesById(ctx, id)
 	if err != nil {
-		apiresponse.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
+		utils.InternalServerErrorWithDetails(ctx, err.Error(), "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, namespaces)
+	utils.SuccessWithData(ctx, namespaces)
 }
 
 // CreateNamespace 创建新的命名空间
 func (k *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
 	var req model.CreateNamespaceRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.namespaceService.CreateNamespace(ctx, req)
 	})
 }
 
 // DeleteNamespace 删除指定的命名空间
 func (k *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	namespaceName := ctx.Query("name")
 	if namespaceName == "" {
-		apiresponse.BadRequestError(ctx, "命名空间名称不能为空")
+		utils.BadRequestError(ctx, "命名空间名称不能为空")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, k.namespaceService.DeleteNamespace(ctx, namespaceName, id)
 	})
 }
 
 // GetNamespaceDetails 获取指定命名空间的详情
 func (k *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	namespaceName := ctx.Query("name")
 	if namespaceName == "" {
-		apiresponse.BadRequestError(ctx, "命名空间名称不能为空")
+		utils.BadRequestError(ctx, "命名空间名称不能为空")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.namespaceService.GetNamespaceDetails(ctx, namespaceName, id)
 	})
 }
@@ -140,45 +140,45 @@ func (k *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 func (k *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
 	var req model.UpdateNamespaceRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.namespaceService.UpdateNamespace(ctx, req)
 	})
 }
 
 // GetNamespaceResources 获取指定命名空间中的资源
 func (k *K8sNamespaceHandler) GetNamespaceResources(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	namespaceName := ctx.Query("name")
 	if namespaceName == "" {
-		apiresponse.BadRequestError(ctx, "命名空间名称不能为空")
+		utils.BadRequestError(ctx, "命名空间名称不能为空")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.namespaceService.GetNamespaceResources(ctx, namespaceName, id)
 	})
 }
 
 // GetNamespaceEvents 获取指定命名空间中的事件
 func (k *K8sNamespaceHandler) GetNamespaceEvents(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	namespaceName := ctx.Query("name")
 	if namespaceName == "" {
-		apiresponse.BadRequestError(ctx, "命名空间名称不能为空")
+		utils.BadRequestError(ctx, "命名空间名称不能为空")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.namespaceService.GetNamespaceEvents(ctx, namespaceName, id)
 	})
 }

@@ -106,6 +106,12 @@ func InitAndRefreshK8sClient(K8sClient client.K8sClient, logger *zap.Logger, Pro
 			configKey: "prometheus.refresh_cron",
 			fn:        PromCache.MonitorCacheManager,
 		},
+		{
+			name:      "主机状态检查",
+			cronExpr:  viper.GetString("tree.check_status_cron"),
+			configKey: "tree.check_status_cron",
+			fn:        manager.StartCheckHostStatusManager,
+		},
 	}
 
 	for _, config := range cronConfigs {

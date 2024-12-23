@@ -26,12 +26,12 @@
 package api
 
 import (
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -66,11 +66,11 @@ func (a *AlertPoolHandler) GetMonitorAlertManagerPoolList(ctx *gin.Context) {
 
 	alerts, err := a.alertPoolService.GetMonitorAlertManagerPoolList(ctx, &searchName)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, alerts)
+	utils.SuccessWithData(ctx, alerts)
 }
 
 // CreateMonitorAlertManagerPool 创建新的 AlertManager 集群池
@@ -80,18 +80,18 @@ func (a *AlertPoolHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 
 	if err := ctx.ShouldBind(&alertManagerPool); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	alertManagerPool.UserID = uc.Uid
 
 	if err := a.alertPoolService.CreateMonitorAlertManagerPool(ctx, &alertManagerPool); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // UpdateMonitorAlertManagerPool 更新现有的 AlertManager 集群池
@@ -99,16 +99,16 @@ func (a *AlertPoolHandler) UpdateMonitorAlertManagerPool(ctx *gin.Context) {
 	var alertManagerPool model.MonitorAlertManagerPool
 
 	if err := ctx.ShouldBind(&alertManagerPool); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	if err := a.alertPoolService.UpdateMonitorAlertManagerPool(ctx, &alertManagerPool); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // DeleteMonitorAlertManagerPool 删除指定的 AlertManager 集群池
@@ -117,14 +117,14 @@ func (a *AlertPoolHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
 
 	intId, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	if err := a.alertPoolService.DeleteMonitorAlertManagerPool(ctx, intId); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }

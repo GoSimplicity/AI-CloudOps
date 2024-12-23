@@ -26,11 +26,11 @@
 package middleware
 
 import (
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"net/http"
 	"strconv"
 	"strings"
 
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
 )

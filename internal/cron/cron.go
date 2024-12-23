@@ -28,14 +28,15 @@ package cron
 import (
 	"context"
 	"errors"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"sync"
 	"time"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
-	"gorm.io/gorm"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -45,26 +46,20 @@ var (
 
 type CronManager interface {
 	StartOnDutyHistoryManager(ctx context.Context) error
-	fillOnDutyHistory(ctx context.Context)
-	processOnDutyHistoryForGroup(ctx context.Context, group *model.MonitorOnDutyGroup) error
+	StartCheckHostStatusManager(ctx context.Context) error
 }
 
 type cronManager struct {
 	logger    *zap.Logger
 	onDutyDao alert.AlertManagerOnDutyDAO
-	sync.RWMutex
+	ecsDao    treeDao.TreeEcsDAO
 }
 
-func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO) CronManager {
-	if logger == nil {
-		panic("logger cannot be nil")
-	}
-	if onDutyDao == nil {
-		panic("onDutyDao cannot be nil")
-	}
+func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, ecsDao treeDao.TreeEcsDAO) CronManager {
 	return &cronManager{
 		logger:    logger,
 		onDutyDao: onDutyDao,
+		ecsDao:    ecsDao,
 	}
 }
 
@@ -115,6 +110,71 @@ func (cm *cronManager) fillOnDutyHistory(ctx context.Context) {
 	for err := range errChan {
 		cm.logger.Error("处理值班历史记录时发生错误", zap.Error(err))
 	}
+}
+
+// StartCheckHostStatusManager 定期检查ecs主机状态
+func (cm *cronManager) StartCheckHostStatusManager(ctx context.Context) error {
+	cm.logger.Info("开始检查ecs主机状态")
+
+	// 获取所有ECS主机
+	ecss, err := cm.ecsDao.GetAll(ctx)
+	if err != nil {
+		cm.logger.Error("获取ecs主机失败", zap.Error(err))
+		return err
+	}
+	if len(ecss) == 0 {
+		cm.logger.Info("没有ecs主机")
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(ecss))
+
+	for _, ecs := range ecss {
+		wg.Add(1)
+		go func(ecs *model.ResourceEcs) {
+			defer wg.Done()
+
+			// 检查IP地址
+			if ecs.IpAddr == "" {
+				cm.logger.Warn("目标ecs没有绑定公网ip",
+					zap.String("hostname", ecs.Hostname),
+					zap.Int("id", ecs.ID))
+				return
+			}
+
+			// 发送ping请求检查状态
+			if ok := pkg.Ping(ecs.IpAddr); !ok {
+				cm.logger.Debug("ping请求失败",
+					zap.String("ip", ecs.IpAddr),
+					zap.String("hostname", ecs.Hostname))
+				ecs.Status = "ERROR"
+			} else {
+				ecs.Status = "RUNNING"
+			}
+
+			// 更新主机状态
+			if err := cm.ecsDao.UpdateStatus(ctx, ecs.ID, ecs.Status); err != nil {
+				cm.logger.Error("更新主机状态失败",
+					zap.Error(err),
+					zap.String("hostname", ecs.Hostname),
+					zap.String("status", ecs.Status))
+				errChan <- err
+			}
+		}(ecs)
+	}
+
+	// 等待所有检查完成
+	wg.Wait()
+	close(errChan)
+
+	// 检查是否有错误发生
+	if len(errChan) > 0 {
+		return <-errChan
+	}
+
+	cm.logger.Info("完成ecs主机状态检查")
+	return nil
 }
 
 // processOnDutyHistoryForGroup 填充单个值班组的历史记录

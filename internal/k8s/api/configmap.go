@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -60,19 +60,19 @@ func (k *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 
 // GetConfigMapListByNamespace 根据命名空间获取 ConfigMap 列表
 func (k *K8sConfigMapHandler) GetConfigMapListByNamespace(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
 	namespace := ctx.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.configmapService.GetConfigMapsByNamespace(ctx, id, namespace)
 	})
 }
@@ -81,32 +81,32 @@ func (k *K8sConfigMapHandler) GetConfigMapListByNamespace(ctx *gin.Context) {
 func (k *K8sConfigMapHandler) UpdateConfigMap(ctx *gin.Context) {
 	var req model.K8sConfigMapRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.configmapService.UpdateConfigMap(ctx, &req)
 	})
 }
 
 // GetConfigMapYaml 获取 ConfigMap 的 YAML 配置
 func (k *K8sConfigMapHandler) GetConfigMapYaml(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
 	configMapName := ctx.Query("configmap_name")
 	if configMapName == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'configmap_name' 参数")
+		utils.BadRequestError(ctx, "缺少 'configmap_name' 参数")
 		return
 	}
 
 	namespace := ctx.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.configmapService.GetConfigMapYaml(ctx, id, namespace, configMapName)
 	})
 }
@@ -115,31 +115,31 @@ func (k *K8sConfigMapHandler) GetConfigMapYaml(ctx *gin.Context) {
 func (k *K8sConfigMapHandler) BatchDeleteConfigMaps(ctx *gin.Context) {
 	var req model.K8sConfigMapRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.configmapService.BatchDeleteConfigMap(ctx, req.ClusterId, req.Namespace, req.ConfigMapNames)
 	})
 }
 
 func (k *K8sConfigMapHandler) DeleteConfigMaps(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
 	configMapName := ctx.Query("configmap_name")
 	if configMapName == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'configmap_name' 参数")
+		utils.BadRequestError(ctx, "缺少 'configmap_name' 参数")
 		return
 	}
 
 	namespace := ctx.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, k.configmapService.DeleteConfigMap(ctx, id, namespace, configMapName)
 	})
 }

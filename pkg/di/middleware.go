@@ -26,11 +26,11 @@
 package di
 
 import (
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/casbin/casbin/v2"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"

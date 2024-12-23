@@ -30,7 +30,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -56,68 +56,68 @@ func (a *AliResourceHandler) CreateAliEcsResource(ctx *gin.Context) {
 	var req model.TerraformConfig
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
+		utils.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
 		return
 	}
 
 	id, err := a.service.CreateResource(ctx, req)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "创建阿里云ECS资源失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "创建阿里云ECS资源失败: "+err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, id)
+	utils.SuccessWithData(ctx, id)
 }
 
 func (a *AliResourceHandler) UpdateAliEcsResource(ctx *gin.Context) {
 	var req model.TerraformConfig
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
+		utils.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
 		return
 	}
 
 	if req.ID == 0 {
-		apiresponse.BadRequestWithDetails(ctx, "资源ID不能为空", "请提供有效的资源ID")
+		utils.BadRequestWithDetails(ctx, "资源ID不能为空", "请提供有效的资源ID")
 		return
 	}
 
 	if err := a.service.UpdateResource(ctx, req.ID, req); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "更新阿里云ECS资源失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "更新阿里云ECS资源失败: "+err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (a *AliResourceHandler) DeleteAliEcsResource(ctx *gin.Context) {
 	id := ctx.Param("id")
 	idInt, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "资源ID必须为有效的整数")
+		utils.BadRequestWithDetails(ctx, err.Error(), "资源ID必须为有效的整数")
 		return
 	}
 
 	if err := a.service.DeleteResource(ctx, idInt); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "删除阿里云ECS资源失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "删除阿里云ECS资源失败: "+err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (a *AliResourceHandler) GetResourceStatus(ctx *gin.Context) {
 	id := ctx.Param("id")
 	if id == "" {
-		apiresponse.BadRequestWithDetails(ctx, "资源ID不能为空", "请提供有效的资源ID")
+		utils.BadRequestWithDetails(ctx, "资源ID不能为空", "请提供有效的资源ID")
 		return
 	}
 
 	task, err := a.service.GetTaskStatus(ctx, id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "获取资源状态失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "获取资源状态失败: "+err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, task)
+	utils.SuccessWithData(ctx, task)
 }

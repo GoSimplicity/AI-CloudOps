@@ -26,12 +26,12 @@
 package api
 
 import (
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -70,11 +70,11 @@ func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupList(ctx *gin.Context) {
 
 	list, err := o.alertOnDutyService.GetMonitorOnDutyGroupList(ctx, &searchName)
 	if err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "获取值班组列表失败")
+		utils.ErrorWithDetails(ctx, err, "获取值班组列表失败")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, list)
+	utils.SuccessWithData(ctx, list)
 }
 
 // CreateMonitorOnDutyGroup 创建新的值班组
@@ -83,18 +83,18 @@ func (o *OnDutyGroupHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	if err := ctx.ShouldBind(&onDutyGroup); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	onDutyGroup.UserID = uc.Uid
 
 	if err := o.alertOnDutyService.CreateMonitorOnDutyGroup(ctx, &onDutyGroup); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // CreateMonitorOnDutyGroupChange 创建值班组的换班记录
@@ -104,18 +104,18 @@ func (o *OnDutyGroupHandler) CreateMonitorOnDutyGroupChange(ctx *gin.Context) {
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 
 	if err := ctx.ShouldBind(&onDutyGroupChange); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	onDutyGroupChange.UserID = uc.Uid
 
 	if err := o.alertOnDutyService.CreateMonitorOnDutyGroupChange(ctx, &onDutyGroupChange); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // UpdateMonitorOnDutyGroup 更新值班组信息
@@ -123,16 +123,16 @@ func (o *OnDutyGroupHandler) UpdateMonitorOnDutyGroup(ctx *gin.Context) {
 	var onDutyGroup model.MonitorOnDutyGroup
 
 	if err := ctx.ShouldBind(&onDutyGroup); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	if err := o.alertOnDutyService.UpdateMonitorOnDutyGroup(ctx, &onDutyGroup); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // DeleteMonitorOnDutyGroup 删除指定的值班组
@@ -140,16 +140,16 @@ func (o *OnDutyGroupHandler) DeleteMonitorOnDutyGroup(ctx *gin.Context) {
 	id := ctx.Param("id")
 	intId, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	if err := o.alertOnDutyService.DeleteMonitorOnDutyGroup(ctx, intId); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // GetMonitorOnDutyGroup 获取指定的值班组信息
@@ -157,17 +157,17 @@ func (o *OnDutyGroupHandler) GetMonitorOnDutyGroup(ctx *gin.Context) {
 	id := ctx.Param("id")
 	intId, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	group, err := o.alertOnDutyService.GetMonitorOnDutyGroup(ctx, intId)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, group)
+	utils.SuccessWithData(ctx, group)
 }
 
 // GetMonitorOnDutyGroupFuturePlan 获取指定值班组的未来值班计划
@@ -179,15 +179,15 @@ func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupFuturePlan(ctx *gin.Context) {
 	}
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithMessage(ctx, err.Error())
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	plans, err := o.alertOnDutyService.GetMonitorOnDutyGroupFuturePlan(ctx, req.Id, req.StartTime, req.EndTime)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, plans)
+	utils.SuccessWithData(ctx, plans)
 }

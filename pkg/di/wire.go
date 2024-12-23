@@ -48,10 +48,11 @@ import (
 	treeHandler "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeService "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
 	userHandler "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	userService "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
 )
@@ -158,6 +159,7 @@ func InitWebServer() *Cmd {
 		k8sDao.NewClusterDAO,
 		k8sDao.NewYamlTemplateDAO,
 		k8sDao.NewYamlTaskDAO,
+		ssh.NewSSH,
 		wire.Struct(new(Cmd), "*"),
 	)
 	return new(Cmd)
