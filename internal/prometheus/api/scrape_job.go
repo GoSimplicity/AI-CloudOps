@@ -26,12 +26,12 @@
 package api
 
 import (
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	scrapeJobService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -65,11 +65,11 @@ func (s *ScrapeJobHandler) GetMonitorScrapeJobList(ctx *gin.Context) {
 	search := ctx.Query("search")
 	list, err := s.scrapeJobService.GetMonitorScrapeJobList(ctx, &search)
 	if err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "获取监控采集 Job 列表失败")
+		utils.ErrorWithDetails(ctx, err, "获取监控采集 Job 列表失败")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, list)
+	utils.SuccessWithData(ctx, list)
 }
 
 // CreateMonitorScrapeJob 创建监控采集 Job
@@ -78,18 +78,18 @@ func (s *ScrapeJobHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	if err := ctx.ShouldBind(&monitorScrapeJob); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	monitorScrapeJob.UserID = uc.Uid
 
 	if err := s.scrapeJobService.CreateMonitorScrapeJob(ctx, &monitorScrapeJob); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // UpdateMonitorScrapeJob 更新监控采集 Job
@@ -97,16 +97,16 @@ func (s *ScrapeJobHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
 	var monitorScrapeJob model.MonitorScrapeJob
 
 	if err := ctx.ShouldBind(&monitorScrapeJob); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	if err := s.scrapeJobService.UpdateMonitorScrapeJob(ctx, &monitorScrapeJob); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // DeleteMonitorScrapeJob 删除监控采集 Job
@@ -115,14 +115,14 @@ func (s *ScrapeJobHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
 
 	intId, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	if err := s.scrapeJobService.DeleteMonitorScrapeJob(ctx, intId); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }

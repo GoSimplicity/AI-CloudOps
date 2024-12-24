@@ -23,7 +23,7 @@
  *
  */
 
-package k8s
+package utils
 
 import (
 	"context"
@@ -34,12 +34,13 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"

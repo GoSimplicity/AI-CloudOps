@@ -30,7 +30,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -67,7 +67,7 @@ func (r *RoleHandler) ListRoles(c *gin.Context) {
 	var req model.ListRolesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		r.l.Error("绑定请求参数失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
@@ -75,11 +75,11 @@ func (r *RoleHandler) ListRoles(c *gin.Context) {
 	roles, total, err := r.svc.ListRoles(c.Request.Context(), req.PageNumber, req.PageSize)
 	if err != nil {
 		r.l.Error("获取角色列表失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
-	apiresponse.SuccessWithData(c, gin.H{
+	utils.SuccessWithData(c, gin.H{
 		"list":  roles,
 		"total": total,
 	})
@@ -90,7 +90,7 @@ func (r *RoleHandler) CreateRole(c *gin.Context) {
 	var req model.CreateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		r.l.Error("绑定请求参数失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
@@ -105,11 +105,11 @@ func (r *RoleHandler) CreateRole(c *gin.Context) {
 	// 创建角色并分配权限
 	if err := r.svc.CreateRole(c.Request.Context(), role, req.ApiIds); err != nil {
 		r.l.Error("创建角色失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
-	apiresponse.Success(c)
+	utils.Success(c)
 }
 
 // UpdateRole 更新角色
@@ -117,7 +117,7 @@ func (r *RoleHandler) UpdateRole(c *gin.Context) {
 	var req model.UpdateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		r.l.Error("绑定请求参数失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
@@ -133,18 +133,18 @@ func (r *RoleHandler) UpdateRole(c *gin.Context) {
 	// 更新角色基本信息
 	if err := r.svc.UpdateRole(c.Request.Context(), role); err != nil {
 		r.l.Error("更新角色失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
 	// 更新角色权限
 	if err := r.permissionSvc.AssignRole(c.Request.Context(), role.ID, req.ApiIds); err != nil {
 		r.l.Error("更新权限失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
-	apiresponse.Success(c)
+	utils.Success(c)
 }
 
 // DeleteRole 删除角色
@@ -153,17 +153,17 @@ func (r *RoleHandler) DeleteRole(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		r.l.Error("解析ID失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
 	if err := r.svc.DeleteRole(c.Request.Context(), id); err != nil {
 		r.l.Error("删除角色失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
-	apiresponse.Success(c)
+	utils.Success(c)
 }
 
 // UpdateUserRole 更新用户角色
@@ -171,18 +171,18 @@ func (r *RoleHandler) UpdateUserRole(c *gin.Context) {
 	var req model.UpdateUserRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		r.l.Error("绑定请求参数失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
 	// 分配用户角色和权限
 	if err := r.permissionSvc.AssignRoleToUser(c.Request.Context(), req.UserId, req.RoleIds, req.ApiIds); err != nil {
 		r.l.Error("分配API权限失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
-	apiresponse.Success(c)
+	utils.Success(c)
 }
 
 // GetUserRoles 获取用户角色
@@ -191,18 +191,18 @@ func (r *RoleHandler) GetUserRoles(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		r.l.Error("解析ID失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
 	role, err := r.svc.GetUserRole(c.Request.Context(), id)
 	if err != nil {
 		r.l.Error("获取用户角色失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
-	apiresponse.SuccessWithData(c, role)
+	utils.SuccessWithData(c, role)
 }
 
 // GetRoles 获取角色详情
@@ -211,16 +211,16 @@ func (r *RoleHandler) GetRoles(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		r.l.Error("解析ID失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
 	role, err := r.svc.GetRole(c.Request.Context(), id)
 	if err != nil {
 		r.l.Error("获取角色失败", zap.Error(err))
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
-	apiresponse.SuccessWithData(c, role)
+	utils.SuccessWithData(c, role)
 }

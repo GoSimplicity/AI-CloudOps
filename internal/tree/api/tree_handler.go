@@ -30,7 +30,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -61,11 +61,11 @@ func (t *TreeNodeHandler) RegisterRouters(server *gin.Engine) {
 func (t *TreeNodeHandler) ListTreeNode(ctx *gin.Context) {
 	list, err := t.service.ListTreeNodes(ctx)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "获取树节点列表失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "获取树节点列表失败: "+err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, list)
+	utils.SuccessWithData(ctx, list)
 }
 
 func (t *TreeNodeHandler) SelectTreeNode(ctx *gin.Context) {
@@ -74,130 +74,130 @@ func (t *TreeNodeHandler) SelectTreeNode(ctx *gin.Context) {
 
 	level, err := strconv.Atoi(levelStr)
 	if err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "level参数必须为有效的整数")
+		utils.BadRequestWithDetails(ctx, err.Error(), "level参数必须为有效的整数")
 		return
 	}
 
 	levelLt, err := strconv.Atoi(levelLtStr)
 	if err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "levelLt参数必须为有效的整数")
+		utils.BadRequestWithDetails(ctx, err.Error(), "levelLt参数必须为有效的整数")
 		return
 	}
 
 	nodes, err := t.service.SelectTreeNode(ctx, level, levelLt)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "查询指定层级的树节点失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "查询指定层级的树节点失败: "+err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, nodes)
+	utils.SuccessWithData(ctx, nodes)
 }
 
 func (t *TreeNodeHandler) GetTopTreeNode(ctx *gin.Context) {
 	nodes, err := t.service.GetTopTreeNode(ctx)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "获取顶层树节点失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "获取顶层树节点失败: "+err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, nodes)
+	utils.SuccessWithData(ctx, nodes)
 }
 
 func (t *TreeNodeHandler) ListLeafTreeNodes(ctx *gin.Context) {
 	list, err := t.service.ListLeafTreeNodes(ctx)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "获取叶子节点列表失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "获取叶子节点列表失败: "+err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, list)
+	utils.SuccessWithData(ctx, list)
 }
 
 func (t *TreeNodeHandler) CreateTreeNode(ctx *gin.Context) {
 	var req model.TreeNode
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入的树节点数据是否完整")
+		utils.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入的树节点数据是否完整")
 		return
 	}
 
 	if req.Title == "" {
-		apiresponse.BadRequestWithDetails(ctx, "节点名称不能为空", "请提供有效的节点名称")
+		utils.BadRequestWithDetails(ctx, "节点名称不能为空", "请提供有效的节点名称")
 		return
 	}
 
 	if err := t.service.CreateTreeNode(ctx, &req); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "创建树节点失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "创建树节点失败: "+err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (t *TreeNodeHandler) DeleteTreeNode(ctx *gin.Context) {
 	id := ctx.Param("id")
 	if id == "" {
-		apiresponse.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要删除的树节点ID")
+		utils.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要删除的树节点ID")
 		return
 	}
 
 	nodeId, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "节点ID必须为有效的整数")
+		utils.BadRequestWithDetails(ctx, err.Error(), "节点ID必须为有效的整数")
 		return
 	}
 
 	if err := t.service.DeleteTreeNode(ctx, nodeId); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "删除树节点失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "删除树节点失败: "+err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (t *TreeNodeHandler) GetChildrenTreeNode(ctx *gin.Context) {
 	pid := ctx.Param("pid")
 	if pid == "" {
-		apiresponse.BadRequestWithDetails(ctx, "父节点ID不能为空", "请提供有效的父节点ID")
+		utils.BadRequestWithDetails(ctx, "父节点ID不能为空", "请提供有效的父节点ID")
 		return
 	}
 
 	parentId, err := strconv.Atoi(pid)
 	if err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "父节点ID必须为有效的整数")
+		utils.BadRequestWithDetails(ctx, err.Error(), "父节点ID必须为有效的整数")
 		return
 	}
 
 	list, err := t.service.GetChildrenTreeNodes(ctx, parentId)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "获取子节点列表失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "获取子节点列表失败: "+err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, list)
+	utils.SuccessWithData(ctx, list)
 }
 
 func (t *TreeNodeHandler) UpdateTreeNode(ctx *gin.Context) {
 	var req model.TreeNode
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查更新的树节点数据是否完整")
+		utils.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查更新的树节点数据是否完整")
 		return
 	}
 
 	if req.ID == 0 {
-		apiresponse.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要更新的节点ID")
+		utils.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要更新的节点ID")
 		return
 	}
 
 	if req.Title == "" {
-		apiresponse.BadRequestWithDetails(ctx, "节点名称不能为空", "请提供有效的节点名称")
+		utils.BadRequestWithDetails(ctx, "节点名称不能为空", "请提供有效的节点名称")
 		return
 	}
 
 	if err := t.service.UpdateTreeNode(ctx, &req); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "更新树节点失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "更新树节点失败: "+err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }

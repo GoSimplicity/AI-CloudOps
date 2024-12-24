@@ -38,6 +38,7 @@ type EcsService interface {
 	GetEcsList(ctx context.Context) ([]*model.ResourceEcs, error)
 	BindEcs(ctx context.Context, ecsID int, treeNodeID int) error
 	UnBindEcs(ctx context.Context, ecsID int, treeNodeID int) error
+	GetEcsById(ctx context.Context, id int) (*model.ResourceEcs, error)
 }
 
 type ecsService struct {
@@ -112,4 +113,15 @@ func (s *ecsService) UnBindEcs(ctx context.Context, ecsID int, treeNodeID int) e
 	}
 
 	return s.ecsDao.RemoveBindNodes(ctx, ecs, node)
+}
+
+// GetEcsById 根据ID获取ECS资源
+func (s *ecsService) GetEcsById(ctx context.Context, id int) (*model.ResourceEcs, error) {
+	ecs, err := s.ecsDao.GetByID(ctx, id)
+	if err != nil {
+		s.logger.Error("获取ECS资源失败", zap.Error(err))
+		return nil, err
+	}
+
+	return ecs, nil
 }

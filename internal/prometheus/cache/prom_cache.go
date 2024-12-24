@@ -28,6 +28,8 @@ package cache
 import (
 	"context"
 	"fmt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,7 +37,6 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
 	pcc "github.com/prometheus/common/config"
 	pm "github.com/prometheus/common/model"
 	pc "github.com/prometheus/prometheus/config"
@@ -46,7 +47,6 @@ import (
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 )
 
 const hashTmpKey = "__tmp_hash"
@@ -119,7 +119,7 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 		// 生成采集配置
 		scrapeConfigs := p.GenerateScrapeConfigs(ctx, pool)
 		if len(scrapeConfigs) == 0 {
-			p.l.Warn("没有找到任何采集任务", zap.String("池名", pool.Name))
+			p.l.Debug("没有找到任何采集任务", zap.String("池名", pool.Name))
 			continue
 		}
 		baseConfig.ScrapeConfigs = scrapeConfigs
@@ -169,18 +169,17 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePool) (pc.Config, error) {
 	// 创建prometheus global全局配置
 	globalConfig := pc.GlobalConfig{
-		ScrapeInterval: pkg.GenPromDuration(pool.ScrapeInterval), // 采集间隔
-		ScrapeTimeout:  pkg.GenPromDuration(pool.ScrapeTimeout),  // 采集超时时间
+		ScrapeInterval: utils.GenPromDuration(pool.ScrapeInterval), // 采集间隔
+		ScrapeTimeout:  utils.GenPromDuration(pool.ScrapeTimeout),  // 采集超时时间
 	}
-
 	// 解析外部标签
-	externalLabels := pkg.ParseExternalLabels(pool.ExternalLabels)
+	externalLabels := utils.ParseExternalLabels(pool.ExternalLabels)
 	if len(externalLabels) > 0 {
 		globalConfig.ExternalLabels = labels.FromStrings(externalLabels...)
 	}
 
 	// 解析 RemoteWrite URL
-	remoteWriteURL, err := pkg.ParseURL(pool.RemoteWriteUrl)
+	remoteWriteURL, err := utils.ParseURL(pool.RemoteWriteUrl)
 	if err != nil {
 		p.l.Error("解析 RemoteWriteUrl 失败", zap.Error(err))
 		return pc.Config{}, fmt.Errorf("解析 RemoteWriteUrl 失败: %w", err)
@@ -189,7 +188,7 @@ func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePo
 	// 配置远程写入
 	remoteWrite := &pc.RemoteWriteConfig{
 		URL:           remoteWriteURL,
-		RemoteTimeout: pkg.GenPromDuration(pool.RemoteTimeoutSeconds),
+		RemoteTimeout: utils.GenPromDuration(pool.RemoteTimeoutSeconds),
 	}
 
 	// 组装prometheus基础配置
@@ -200,7 +199,7 @@ func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePo
 
 	if pool.SupportAlert == 1 { // 启用告警
 		// 解析 RemoteRead URL
-		remoteReadURL, err := pkg.ParseURL(pool.RemoteReadUrl)
+		remoteReadURL, err := utils.ParseURL(pool.RemoteReadUrl)
 		if err != nil {
 			p.l.Error("解析 RemoteReadUrl 失败", zap.Error(err))
 			return pc.Config{}, fmt.Errorf("解析 RemoteReadUrl 失败: %w", err)
@@ -210,7 +209,7 @@ func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePo
 		config.RemoteReadConfigs = []*pc.RemoteReadConfig{
 			{
 				URL:           remoteReadURL,
-				RemoteTimeout: pkg.GenPromDuration(pool.RemoteTimeoutSeconds),
+				RemoteTimeout: utils.GenPromDuration(pool.RemoteTimeoutSeconds),
 			},
 		}
 
@@ -266,8 +265,8 @@ func (p *promConfigCache) GenerateScrapeConfigs(ctx context.Context, pool *model
 			JobName:        job.Name,
 			Scheme:         job.Scheme,
 			MetricsPath:    job.MetricsPath,
-			ScrapeInterval: pkg.GenPromDuration(job.ScrapeInterval),
-			ScrapeTimeout:  pkg.GenPromDuration(job.ScrapeTimeout),
+			ScrapeInterval: utils.GenPromDuration(job.ScrapeInterval),
+			ScrapeTimeout:  utils.GenPromDuration(job.ScrapeTimeout),
 		}
 
 		// 解析 Relabel 配置
@@ -292,7 +291,7 @@ func (p *promConfigCache) GenerateScrapeConfigs(ctx context.Context, pool *model
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				&http.SDConfig{
 					URL:             sdURL,
-					RefreshInterval: pkg.GenPromDuration(job.RefreshInterval),
+					RefreshInterval: utils.GenPromDuration(job.RefreshInterval),
 				},
 			}
 		case "k8s":
@@ -327,7 +326,7 @@ func (p *promConfigCache) ApplyHashMod(scrapeConfigs []*pc.ScrapeConfig, modNum,
 
 	for _, sc := range scrapeConfigs {
 		// 深度拷贝 ScrapeConfig
-		copySc := pkg.DeepCopyScrapeConfig(sc)
+		copySc := utils.DeepCopyScrapeConfig(sc)
 		// 添加新的 Relabel 配置
 		newRelabelConfigs := []*relabel.Config{
 			{

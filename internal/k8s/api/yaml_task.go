@@ -28,8 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -61,7 +61,7 @@ func (k *K8sYamlTaskHandler) RegisterRouters(server *gin.Engine) {
 
 // GetYamlTaskList 获取 YAML 任务列表
 func (k *K8sYamlTaskHandler) GetYamlTaskList(ctx *gin.Context) {
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.yamlTaskService.GetYamlTaskList(ctx)
 	})
 }
@@ -73,7 +73,7 @@ func (k *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	req.UserID = uc.Uid
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.yamlTaskService.CreateYamlTask(ctx, &req)
 	})
 }
@@ -85,33 +85,33 @@ func (k *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	req.UserID = uc.Uid
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.yamlTaskService.UpdateYamlTask(ctx, &req)
 	})
 }
 
 // ApplyYamlTask 应用指定 ID 的 YAML 任务
 func (k *K8sYamlTaskHandler) ApplyYamlTask(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
+		utils.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, k.yamlTaskService.ApplyYamlTask(ctx, id)
 	})
 }
 
 // DeleteYamlTask 删除指定 ID 的 YAML 任务
 func (k *K8sYamlTaskHandler) DeleteYamlTask(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, "缺少 'id' 参数")
+		utils.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, k.yamlTaskService.DeleteYamlTask(ctx, id)
 	})
 }

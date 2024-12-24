@@ -26,12 +26,11 @@
 package api
 
 import (
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -67,92 +66,92 @@ func (a *AlertEventHandler) GetMonitorAlertEventList(ctx *gin.Context) {
 
 	list, err := a.alertEventService.GetMonitorAlertEventList(ctx, &searchName)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, list)
+	utils.SuccessWithData(ctx, list)
 }
 
 // EventAlertSilence 将指定告警事件设置为静默状态
 func (a *AlertEventHandler) EventAlertSilence(ctx *gin.Context) {
 	var silence model.AlertEventSilenceRequest
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(utils.UserClaims)
 
 	id := ctx.Param("id")
 	intId, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	if err := ctx.ShouldBind(&silence); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	if err := a.alertEventService.EventAlertSilence(ctx, intId, &silence, uc.Uid); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // EventAlertClaim 认领指定的告警事件
 func (a *AlertEventHandler) EventAlertClaim(ctx *gin.Context) {
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(utils.UserClaims)
 
 	id := ctx.Param("id")
 	intId, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	if err := a.alertEventService.EventAlertClaim(ctx, intId, uc.Uid); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // EventAlertUnSilence 取消指定告警事件的静默状态
 func (a *AlertEventHandler) EventAlertUnSilence(ctx *gin.Context) {
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(utils.UserClaims)
 
 	id := ctx.Param("id")
 	intId, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	if err := a.alertEventService.EventAlertClaim(ctx, intId, uc.Uid); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // BatchEventAlertSilence 批量设置告警事件为静默状态
 func (a *AlertEventHandler) BatchEventAlertSilence(ctx *gin.Context) {
 	var req model.BatchEventAlertSilenceRequest
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(utils.UserClaims)
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	if err := a.alertEventService.BatchEventAlertSilence(ctx, &req, uc.Uid); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }

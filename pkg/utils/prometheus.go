@@ -23,7 +23,7 @@
  *
  */
 
-package prometheus
+package utils
 
 import (
 	"bytes"

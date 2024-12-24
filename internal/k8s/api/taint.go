@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -62,7 +62,7 @@ func (k *K8sTaintHandler) RegisterRouters(server *gin.Engine) {
 func (k *K8sTaintHandler) AddTaintsNodes(ctx *gin.Context) {
 	var req model.TaintK8sNodesRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.AddOrUpdateNodeTaint(ctx, &req)
 	})
 }
@@ -71,7 +71,7 @@ func (k *K8sTaintHandler) AddTaintsNodes(ctx *gin.Context) {
 func (k *K8sTaintHandler) ScheduleEnableSwitchNodes(ctx *gin.Context) {
 	var req model.ScheduleK8sNodesRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.BatchEnableSwitchNodes(ctx, &req)
 	})
 }
@@ -80,7 +80,7 @@ func (k *K8sTaintHandler) ScheduleEnableSwitchNodes(ctx *gin.Context) {
 func (k *K8sTaintHandler) TaintYamlCheck(ctx *gin.Context) {
 	var req model.TaintK8sNodesRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.CheckTaintYaml(ctx, &req)
 	})
 }
@@ -89,7 +89,7 @@ func (k *K8sTaintHandler) TaintYamlCheck(ctx *gin.Context) {
 func (k *K8sTaintHandler) DeleteTaintsNodes(ctx *gin.Context) {
 	var req model.TaintK8sNodesRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.AddOrUpdateNodeTaint(ctx, &req)
 	})
 }
@@ -98,7 +98,7 @@ func (k *K8sTaintHandler) DeleteTaintsNodes(ctx *gin.Context) {
 func (k *K8sTaintHandler) DrainPods(ctx *gin.Context) {
 	var req model.K8sClusterNodesRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.DrainPods(ctx, &req)
 	})
 }

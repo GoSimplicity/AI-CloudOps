@@ -28,11 +28,11 @@ package alert
 import (
 	"context"
 	"fmt"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"net/http"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

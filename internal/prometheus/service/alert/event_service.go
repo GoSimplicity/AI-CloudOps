@@ -29,6 +29,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"sync"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -36,7 +37,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/domain"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
 	"go.uber.org/zap"
 )
 

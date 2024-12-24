@@ -14,6 +14,8 @@ redis:
 mysql:
   # addr: "root:root@tcp(mysql:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
   addr: "root:root@tcp(localhost:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
+tree:
+  check_status_cron: "@every 5s"
 k8s:
   refresh_cron: "@every 15s"
 prometheus:

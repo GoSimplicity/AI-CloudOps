@@ -28,7 +28,6 @@ package model
 import (
 	"time"
 
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
 	appsv1 "k8s.io/api/apps/v1"
 	core "k8s.io/api/core/v1"
 )
@@ -135,17 +134,17 @@ type K8sCronjob struct {
 	Args         StringList `json:"args,omitempty" gorm:"comment:启动参数，空格分隔"`                                          // 启动参数
 
 	// 前端使用字段
-	CommandsFront       []apiresponse.KeyValueItem `json:"commands_front,omitempty" gorm:"-"`         // 前端显示的命令
-	ArgsFront           []apiresponse.KeyValueItem `json:"args_front,omitempty" gorm:"-"`             // 前端显示的参数
-	LastScheduleTime    string                     `json:"last_schedule_time,omitempty" gorm:"-"`     // 最近一次调度时间
-	LastSchedulePodName string                     `json:"last_schedule_pod_name,omitempty" gorm:"-"` // 最近一次调度的 Pod 名称
-	CreateUserName      string                     `json:"create_username,omitempty" gorm:"-"`        // 创建者用户名
-	NodePath            string                     `json:"node_path,omitempty" gorm:"-"`              // 节点路径
-	Key                 string                     `json:"key" gorm:"-"`                              // 前端表格使用的Key
-	TreeNodeObj         *TreeNode                  `json:"tree_node_obj,omitempty" gorm:"-"`          // 树节点对象
-	ClusterObj          *K8sCluster                `json:"cluster_obj,omitempty" gorm:"-"`            // 集群对象
-	ProjectObj          *K8sProject                `json:"project_obj,omitempty" gorm:"-"`            // 项目对象
-	K8sProjectName      string                     `json:"k8s_project_name,omitempty" gorm:"-"`       // 项目名称
+	CommandsFront       []KeyValueItem `json:"commands_front,omitempty" gorm:"-"`         // 前端显示的命令
+	ArgsFront           []KeyValueItem `json:"args_front,omitempty" gorm:"-"`             // 前端显示的参数
+	LastScheduleTime    string         `json:"last_schedule_time,omitempty" gorm:"-"`     // 最近一次调度时间
+	LastSchedulePodName string         `json:"last_schedule_pod_name,omitempty" gorm:"-"` // 最近一次调度的 Pod 名称
+	CreateUserName      string         `json:"create_username,omitempty" gorm:"-"`        // 创建者用户名
+	NodePath            string         `json:"node_path,omitempty" gorm:"-"`              // 节点路径
+	Key                 string         `json:"key" gorm:"-"`                              // 前端表格使用的Key
+	TreeNodeObj         *TreeNode      `json:"tree_node_obj,omitempty" gorm:"-"`          // 树节点对象
+	ClusterObj          *K8sCluster    `json:"cluster_obj,omitempty" gorm:"-"`            // 集群对象
+	ProjectObj          *K8sProject    `json:"project_obj,omitempty" gorm:"-"`            // 项目对象
+	K8sProjectName      string         `json:"k8s_project_name,omitempty" gorm:"-"`       // 项目名称
 }
 
 // K8sInstance Kubernetes 实例的配置
@@ -244,12 +243,12 @@ type ContainerCore struct {
 	PortJson      string     `json:"port_json,omitempty" gorm:"type:text;comment:容器和服务端口配置"`    // 容器和服务端口配置
 
 	// 前端使用字段
-	EnvsFront       []apiresponse.KeyValueItem `json:"envs_front,omitempty" gorm:"-"`        // 前端显示的环境变量
-	LabelsFront     []apiresponse.KeyValueItem `json:"labels_front,omitempty" gorm:"-"`      // 前端显示的标签
-	CommandsFront   []apiresponse.KeyValueItem `json:"commands_front,omitempty" gorm:"-"`    // 前端显示的命令
-	ArgsFront       []apiresponse.KeyValueItem `json:"args_front,omitempty" gorm:"-"`        // 前端显示的参数
-	VolumeJsonFront []K8sOneVolume             `json:"volume_json_front,omitempty" gorm:"-"` // 前端显示的卷配置
-	PortJsonFront   []core.ServicePort         `json:"port_json_front,omitempty" gorm:"-"`   // 前端显示的端口配置
+	EnvsFront       []KeyValueItem     `json:"envs_front,omitempty" gorm:"-"`        // 前端显示的环境变量
+	LabelsFront     []KeyValueItem     `json:"labels_front,omitempty" gorm:"-"`      // 前端显示的标签
+	CommandsFront   []KeyValueItem     `json:"commands_front,omitempty" gorm:"-"`    // 前端显示的命令
+	ArgsFront       []KeyValueItem     `json:"args_front,omitempty" gorm:"-"`        // 前端显示的参数
+	VolumeJsonFront []K8sOneVolume     `json:"volume_json_front,omitempty" gorm:"-"` // 前端显示的卷配置
+	PortJsonFront   []core.ServicePort `json:"port_json_front,omitempty" gorm:"-"`   // 前端显示的端口配置
 }
 
 // K8sOneVolume 单个卷的配置
@@ -460,4 +459,9 @@ type ClusterNamespaces struct {
 	ClusterName string      `json:"cluster_name"` // 集群名称
 	ClusterId   int         `json:"cluster_id"`   // 集群ID
 	Namespaces  []Namespace `json:"namespaces"`   // 命名空间列表
+}
+
+type KeyValueItem struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }

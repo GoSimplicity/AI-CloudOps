@@ -26,9 +26,9 @@
 package middleware
 
 import (
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strings"
 
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/golang-jwt/jwt/v5"
@@ -65,8 +65,16 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 		}
 
 		var uc ijwt.UserClaims
-		// 从请求中提取token
-		tokenStr := m.ExtractToken(ctx)
+		var tokenStr string
+		
+		// 如果是/api/tree/ecs/console开头的路径，从查询参数获取token
+		if strings.HasPrefix(path, "/api/tree/ecs/console") {
+			tokenStr = ctx.Query("token")
+		} else {
+			// 从请求中提取token
+			tokenStr = m.ExtractToken(ctx)
+		}
+
 		key := []byte(viper.GetString("jwt.key1"))
 		token, err := jwt.ParseWithClaims(tokenStr, &uc, func(token *jwt.Token) (interface{}, error) {
 			return key, nil

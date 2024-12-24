@@ -29,7 +29,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/spf13/viper"
 	"net/http"
 	"strings"

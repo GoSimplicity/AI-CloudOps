@@ -28,8 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -62,20 +62,20 @@ func (k *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
 
 // GetAllClusters 获取集群列表
 func (k *K8sClusterHandler) GetAllClusters(ctx *gin.Context) {
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.clusterService.ListAllClusters(ctx)
 	})
 }
 
 // GetCluster 获取指定 ID 的集群详情
 func (k *K8sClusterHandler) GetCluster(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.clusterService.GetClusterByID(ctx, id)
 	})
 }
@@ -88,7 +88,7 @@ func (k *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
 
 	req.UserID = uc.Uid
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.clusterService.CreateCluster(ctx, &req)
 	})
 }
@@ -97,20 +97,20 @@ func (k *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
 func (k *K8sClusterHandler) UpdateCluster(ctx *gin.Context) {
 	var req model.K8sCluster
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.clusterService.UpdateCluster(ctx, &req)
 	})
 }
 
 // DeleteCluster 删除指定 ID 的集群
 func (k *K8sClusterHandler) DeleteCluster(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, k.clusterService.DeleteCluster(ctx, id)
 	})
 }
@@ -119,11 +119,11 @@ func (k *K8sClusterHandler) BatchDeleteClusters(ctx *gin.Context) {
 	var req model.BatchDeleteReq
 
 	if len(req.IDs) == 0 {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.clusterService.BatchDeleteClusters(ctx, req.IDs)
 	})
 }

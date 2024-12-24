@@ -30,13 +30,13 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/tree"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
@@ -293,7 +293,7 @@ func (a *aliResourceService) executeCreateResource(ctx context.Context, config m
 	currentTime := time.Now().UTC().Format(time.RFC3339)
 
 	// 解析配置
-	instanceConfig, vpcConfig, securityConfig, err := tree.ParseConfigs(config, a.logger)
+	instanceConfig, vpcConfig, securityConfig, err := utils.ParseConfigs(config, a.logger)
 	if err != nil {
 		return err
 	}
@@ -348,39 +348,39 @@ func (a *aliResourceService) executeCreateResource(ctx context.Context, config m
 	terraformDir := filepath.Join(projectRootDir, "terraform", fmt.Sprintf("resource_%d", ecsResource.ID))
 
 	// 确保 Terraform 目录存在
-	if err := tree.EnsureDir(terraformDir, a.logger); err != nil {
+	if err := utils.EnsureDir(terraformDir, a.logger); err != nil {
 		return err
 	}
 
 	a.logger.Info("设置工作目录", zap.String("path", terraformDir))
 
 	// 渲染 Terraform 配置文件
-	if err := tree.RenderTerraformTemplate(config, terraformDir, terraformTemplate, a.key, a.secret, vpcConfig, instanceConfig, securityConfig); err != nil {
+	if err := utils.RenderTerraformTemplate(config, terraformDir, terraformTemplate, a.key, a.secret, vpcConfig, instanceConfig, securityConfig); err != nil {
 		a.logger.Error("渲染 Terraform 模板失败", zap.Error(err))
 		return fmt.Errorf("渲染 Terraform 模板失败: %w", err)
 	}
 
 	// 初始化并计划 Terraform
-	tf, err := tree.SetupTerraform(ctx, terraformDir, a.terraformBin)
+	tf, err := utils.SetupTerraform(ctx, terraformDir, a.terraformBin)
 	if err != nil {
 		a.logger.Error("Terraform 初始化或 Plan 执行失败", zap.Error(err))
 		return fmt.Errorf("terraform 初始化或 Plan 失败: %w", err)
 	}
 
 	// 执行 Terraform Apply
-	if err := tree.ApplyTerraform(ctx, tf); err != nil {
+	if err := utils.ApplyTerraform(ctx, tf); err != nil {
 		a.logger.Error("Terraform Apply 执行失败", zap.Error(err))
 		return fmt.Errorf("terraform Apply 失败: %w", err)
 	}
 
 	// 获取并解析 Terraform 状态
-	state, err := tree.GetTerraformState(ctx, tf, a.logger)
+	state, err := utils.GetTerraformState(ctx, tf, a.logger)
 	if err != nil {
 		return err
 	}
 
 	// 提取 Terraform 输出的 IP 地址
-	publicIP, privateIP, err := tree.ExtractIPs(state, a.logger)
+	publicIP, privateIP, err := utils.ExtractIPs(state, a.logger)
 	if err != nil {
 		return err
 	}
@@ -416,20 +416,20 @@ func (a *aliResourceService) executeUpdateResource(ctx context.Context, config m
 	terraformDir := filepath.Join(projectRootDir, "terraform", fmt.Sprintf("resource_%d", config.ID))
 
 	// 确保 Terraform 目录存在
-	if err := tree.EnsureDir(terraformDir, a.logger); err != nil {
+	if err := utils.EnsureDir(terraformDir, a.logger); err != nil {
 		return err
 	}
 
 	a.logger.Info("设置工作目录", zap.String("path", terraformDir))
 
 	// 解析配置
-	instanceConfig, vpcConfig, securityConfig, err := tree.ParseConfigs(config, a.logger)
+	instanceConfig, vpcConfig, securityConfig, err := utils.ParseConfigs(config, a.logger)
 	if err != nil {
 		return err
 	}
 
 	// 渲染 Terraform 配置文件
-	if err := tree.RenderTerraformTemplate(config, terraformDir, terraformTemplate, a.key, a.secret, vpcConfig, instanceConfig, securityConfig); err != nil {
+	if err := utils.RenderTerraformTemplate(config, terraformDir, terraformTemplate, a.key, a.secret, vpcConfig, instanceConfig, securityConfig); err != nil {
 		a.logger.Error("渲染 Terraform 模板失败", zap.Error(err))
 		return fmt.Errorf("渲染 Terraform 模板失败: %w", err)
 	}
@@ -458,26 +458,26 @@ func (a *aliResourceService) executeUpdateResource(ctx context.Context, config m
 	}
 
 	// 初始化并计划 Terraform
-	tf, err := tree.SetupTerraform(ctx, terraformDir, a.terraformBin)
+	tf, err := utils.SetupTerraform(ctx, terraformDir, a.terraformBin)
 	if err != nil {
 		a.logger.Error("Terraform 初始化或 Plan 执行失败", zap.Error(err))
 		return fmt.Errorf("terraform 初始化或 Plan 失败: %w", err)
 	}
 
 	// 执行 Terraform Apply
-	if err := tree.ApplyTerraform(ctx, tf); err != nil {
+	if err := utils.ApplyTerraform(ctx, tf); err != nil {
 		a.logger.Error("Terraform Apply 执行失败", zap.Error(err))
 		return fmt.Errorf("terraform Apply 失败: %w", err)
 	}
 
 	// 获取并解析 Terraform 状态
-	state, err := tree.GetTerraformState(ctx, tf, a.logger)
+	state, err := utils.GetTerraformState(ctx, tf, a.logger)
 	if err != nil {
 		return err
 	}
 
 	// 提取 Terraform 输出的 IP 地址
-	publicIP, privateIP, err := tree.ExtractIPs(state, a.logger)
+	publicIP, privateIP, err := utils.ExtractIPs(state, a.logger)
 	if err != nil {
 		return err
 	}
@@ -623,14 +623,14 @@ func (a *aliResourceService) executeDeleteResource(ctx context.Context, config m
 	terraformDir := filepath.Join(projectRootDir, "terraform", fmt.Sprintf("resource_%d", existingResource.ID))
 
 	// 初始化 Terraform
-	_, err = tree.SetupTerraform(ctx, terraformDir, a.terraformBin)
+	_, err = utils.SetupTerraform(ctx, terraformDir, a.terraformBin)
 	if err != nil {
 		a.logger.Error("Terraform 初始化失败", zap.Error(err))
 		return fmt.Errorf("terraform 初始化失败: %w", err)
 	}
 
 	// 执行 Terraform Destroy
-	if err := tree.DestroyTerraform(ctx, terraformDir, a.terraformBin); err != nil {
+	if err := utils.DestroyTerraform(ctx, terraformDir, a.terraformBin); err != nil {
 		a.logger.Error("Terraform Destroy 执行失败", zap.Error(err))
 		return fmt.Errorf("terraform Destroy 失败: %w", err)
 	}

@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -62,19 +62,19 @@ func (k *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 
 // GetDeployListByNamespace 根据命名空间获取部署列表
 func (k *K8sDeploymentHandler) GetDeployListByNamespace(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	namespace := ctx.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.deploymentService.GetDeploymentsByNamespace(ctx, id, namespace)
 	})
 }
@@ -83,7 +83,7 @@ func (k *K8sDeploymentHandler) GetDeployListByNamespace(ctx *gin.Context) {
 func (k *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 	var req model.K8sDeploymentRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.deploymentService.UpdateDeployment(ctx, &req)
 	})
 }
@@ -92,7 +92,7 @@ func (k *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 func (k *K8sDeploymentHandler) BatchDeleteDeployment(ctx *gin.Context) {
 	var req model.K8sDeploymentRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.deploymentService.BatchDeleteDeployment(ctx, req.ClusterId, req.Namespace, req.DeploymentNames)
 	})
 }
@@ -101,80 +101,80 @@ func (k *K8sDeploymentHandler) BatchDeleteDeployment(ctx *gin.Context) {
 func (k *K8sDeploymentHandler) BatchRestartDeployments(ctx *gin.Context) {
 	var req model.K8sDeploymentRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.deploymentService.BatchRestartDeployments(ctx, &req)
 	})
 }
 
 // GetDeployYaml 获取部署的 YAML 配置
 func (k *K8sDeploymentHandler) GetDeployYaml(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	deploymentName := ctx.Query("deployment_name")
 	if deploymentName == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'deployment_name' 参数")
+		utils.BadRequestError(ctx, "缺少 'deployment_name' 参数")
 		return
 	}
 
 	namespace := ctx.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.deploymentService.GetDeploymentYaml(ctx, id, namespace, deploymentName)
 	})
 }
 
 func (k *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	deploymentName := ctx.Query("deployment_name")
 	if deploymentName == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'deployment_name' 参数")
+		utils.BadRequestError(ctx, "缺少 'deployment_name' 参数")
 		return
 	}
 
 	namespace := ctx.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, k.deploymentService.DeleteDeployment(ctx, id, namespace, deploymentName)
 	})
 }
 
 func (k *K8sDeploymentHandler) RestartDeployment(ctx *gin.Context) {
-	id, err := apiresponse.GetParamID(ctx)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	deploymentName := ctx.Query("deployment_name")
 	if deploymentName == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'deployment_name' 参数")
+		utils.BadRequestError(ctx, "缺少 'deployment_name' 参数")
 		return
 	}
 
 	namespace := ctx.Query("namespace")
 	if namespace == "" {
-		apiresponse.BadRequestError(ctx, "缺少 'namespace' 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, k.deploymentService.RestartDeployment(ctx, id, namespace, deploymentName)
 	})
 }

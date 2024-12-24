@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -53,71 +53,71 @@ func (e *ElbHandler) RegisterRouters(server *gin.Engine) {
 func (e *ElbHandler) GetElbUnbindList(ctx *gin.Context) {
 	elb, err := e.service.GetElbUnbindList(ctx)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "获取未绑定的ELB实例列表失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "获取未绑定的ELB实例列表失败: "+err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, elb)
+	utils.SuccessWithData(ctx, elb)
 }
 
 func (e *ElbHandler) GetElbList(ctx *gin.Context) {
 	elb, err := e.service.GetElbList(ctx)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "获取ELB实例列表失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "获取ELB实例列表失败: "+err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, elb)
+	utils.SuccessWithData(ctx, elb)
 }
 
 func (e *ElbHandler) BindElb(ctx *gin.Context) {
 	var req model.BindResourceReq
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
+		utils.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
 		return
 	}
 
 	if len(req.ResourceIds) == 0 {
-		apiresponse.BadRequestWithDetails(ctx, "资源ID不能为空", "请提供要绑定的ELB实例ID")
+		utils.BadRequestWithDetails(ctx, "资源ID不能为空", "请提供要绑定的ELB实例ID")
 		return
 	}
 
 	if req.NodeId == 0 {
-		apiresponse.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要绑定到的节点ID")
+		utils.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要绑定到的节点ID")
 		return
 	}
 
 	if err := e.service.BindElb(ctx, req.ResourceIds[0], req.NodeId); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "绑定ELB实例失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "绑定ELB实例失败: "+err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (e *ElbHandler) UnBindElb(ctx *gin.Context) {
 	var req model.BindResourceReq
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
+		utils.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
 		return
 	}
 
 	if len(req.ResourceIds) == 0 {
-		apiresponse.BadRequestWithDetails(ctx, "资源ID不能为空", "请提供要解绑的ELB实例ID")
+		utils.BadRequestWithDetails(ctx, "资源ID不能为空", "请提供要解绑的ELB实例ID")
 		return
 	}
 
 	if req.NodeId == 0 {
-		apiresponse.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要解绑的节点ID")
+		utils.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要解绑的节点ID")
 		return
 	}
 
 	if err := e.service.UnBindElb(ctx, req.ResourceIds[0], req.NodeId); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "解绑ELB实例失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "解绑ELB实例失败: "+err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }

@@ -28,13 +28,13 @@ package admin
 import (
 	"context"
 	"fmt"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	k8sErr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -30,7 +30,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -58,25 +58,25 @@ func (m *MenuHandler) RegisterRouters(server *gin.Engine) {
 func (m *MenuHandler) ListMenus(c *gin.Context) {
 	var req model.ListMenusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithMessage(c, "参数错误")
+		utils.ErrorWithMessage(c, "参数错误")
 		return
 	}
 
 	// 调用service层获取菜单列表
 	menus, _, err := m.svc.GetMenus(c.Request.Context(), req.PageNumber, req.PageSize)
 	if err != nil {
-		apiresponse.ErrorWithMessage(c, "获取菜单列表失败")
+		utils.ErrorWithMessage(c, "获取菜单列表失败")
 		return
 	}
 
-	apiresponse.SuccessWithData(c, menus)
+	utils.SuccessWithData(c, menus)
 }
 
 // CreateMenu 创建菜单
 func (m *MenuHandler) CreateMenu(c *gin.Context) {
 	var req model.CreateMenuRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithMessage(c, "参数错误")
+		utils.ErrorWithMessage(c, "参数错误")
 		return
 	}
 	menu := &model.Menu{
@@ -92,18 +92,18 @@ func (m *MenuHandler) CreateMenu(c *gin.Context) {
 	}
 
 	if err := m.svc.CreateMenu(c.Request.Context(), menu); err != nil {
-		apiresponse.ErrorWithMessage(c, "创建菜单失败")
+		utils.ErrorWithMessage(c, "创建菜单失败")
 		return
 	}
 
-	apiresponse.SuccessWithMessage(c, "创建成功")
+	utils.SuccessWithMessage(c, "创建成功")
 }
 
 // UpdateMenu 更新菜单
 func (m *MenuHandler) UpdateMenu(c *gin.Context) {
 	var req model.UpdateMenuRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithMessage(c, "参数错误")
+		utils.ErrorWithMessage(c, "参数错误")
 		return
 	}
 
@@ -118,41 +118,41 @@ func (m *MenuHandler) UpdateMenu(c *gin.Context) {
 	}
 
 	if err := m.svc.UpdateMenu(c.Request.Context(), menu); err != nil {
-		apiresponse.ErrorWithMessage(c, "更新菜单失败")
+		utils.ErrorWithMessage(c, "更新菜单失败")
 		return
 	}
 
-	apiresponse.SuccessWithMessage(c, "更新成功")
+	utils.SuccessWithMessage(c, "更新成功")
 }
 
 // DeleteMenu 删除菜单
 func (m *MenuHandler) DeleteMenu(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		apiresponse.ErrorWithMessage(c, "参数错误")
+		utils.ErrorWithMessage(c, "参数错误")
 		return
 	}
 
 	if err := m.svc.DeleteMenu(c.Request.Context(), id); err != nil {
-		apiresponse.ErrorWithMessage(c, "删除菜单失败")
+		utils.ErrorWithMessage(c, "删除菜单失败")
 		return
 	}
 
-	apiresponse.SuccessWithMessage(c, "删除成功")
+	utils.SuccessWithMessage(c, "删除成功")
 }
 
 // AddUserMenu 添加用户菜单关联
 func (m *MenuHandler) UpdateUserMenu(c *gin.Context) {
 	var req model.UpdateUserMenuRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithMessage(c, "参数错误")
+		utils.ErrorWithMessage(c, "参数错误")
 		return
 	}
 
 	if err := m.svc.UpdateUserMenu(c.Request.Context(), req.UserId, req.MenuIds); err != nil {
-		apiresponse.ErrorWithMessage(c, "更新用户菜单关联失败")
+		utils.ErrorWithMessage(c, "更新用户菜单关联失败")
 		return
 	}
 
-	apiresponse.SuccessWithMessage(c, "更新成功")
+	utils.SuccessWithMessage(c, "更新成功")
 }

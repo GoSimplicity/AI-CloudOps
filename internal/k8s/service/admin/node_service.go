@@ -29,12 +29,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
