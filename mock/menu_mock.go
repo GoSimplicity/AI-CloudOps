@@ -130,6 +130,11 @@ func (m *MenuMock) InitMenu() {
 			},
 		},
 		{
+			ID: 31,
+			Name: "终端管理",
+			
+		},
+		{
 			ID:        11,
 			Name:      "Prometheus",
 			Path:      "/prometheus",

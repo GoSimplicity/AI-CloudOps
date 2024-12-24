@@ -1,13 +1,8 @@
 package ssh
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
-	"io"
-	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -123,6 +118,7 @@ func (s *EcsSSH) Run(command string) (string, error) {
  */
 
 type MyReader struct {
+	// 监听websocket
 	ws *websocket.Conn
 }
 
@@ -132,162 +128,83 @@ type MyWriter struct {
 
 // MyReader 从WebSocket读取数据
 func (r MyReader) Read(p []byte) (n int, err error) {
-	messageType, data, err := r.ws.ReadMessage()
+	// 从客户端接收命令
+	_, message, err := r.ws.ReadMessage()
 	if err != nil {
+		r.ws.WriteMessage(websocket.CloseMessage, []byte{})
 		return 0, err
 	}
 
-	if messageType != websocket.TextMessage {
-		return 0, nil
+	// 将命令转换为字节并添加换行符
+	cmdStr := string(message)
+	if !strings.HasSuffix(cmdStr, "\n") {
+		cmdStr = cmdStr + "\n"
 	}
 
-	copy(p, data)
-	return len(data), nil
+	// 复制命令到缓冲区
+	cmdBytes := []byte(cmdStr)
+	n = copy(p, cmdBytes)
+
+	return n, nil
 }
 
 // MyWriter 向WebSocket写入数据
 func (w MyWriter) Write(p []byte) (n int, err error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	// 发送数据
 	err = w.ws.WriteMessage(websocket.TextMessage, p)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("write websocket message failed: %w", err)
 	}
+
 	return len(p), nil
-}
-
-var (
-	ansiRegex   = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
-	promptRegex = regexp.MustCompile(`\[?[0-9;:]*[0-9]+[@][a-zA-Z0-9]+:.*?#\s*`)
-	specialSeqs = []string{
-		"[?2004l",
-		"[?2004h",
-		"]0;",
-		"[0m",
-		"[01;34m",
-	}
-)
-
-// cleanOutput 清理终端输出中的特殊字符
-func cleanOutput(input string) string {
-	result := ansiRegex.ReplaceAllString(input, "")
-	result = promptRegex.ReplaceAllString(result, "")
-
-	for _, seq := range specialSeqs {
-		result = strings.ReplaceAll(result, seq, "")
-	}
-
-	lines := strings.Split(result, "\n")
-	var cleanLines []string
-	for _, line := range lines {
-		if trimmed := strings.TrimSpace(line); trimmed != "" {
-			cleanLines = append(cleanLines, trimmed)
-		}
-	}
-
-	return strings.Join(cleanLines, "\n")
-}
-
-// handleIO 处理输入输出流
-func handleIO(reader *bufio.Reader, ws *websocket.Conn, l *zap.Logger) {
-	var buffer strings.Builder
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			if err != io.EOF {
-				l.Error("Failed to read", zap.Error(err))
-			}
-			return
-		}
-		buffer.WriteString(line)
-
-		if strings.Contains(line, "\n") {
-			if cleanedOutput := cleanOutput(buffer.String()); cleanedOutput != "" {
-				if err := ws.WriteMessage(websocket.TextMessage, []byte(cleanedOutput+"\n")); err != nil {
-					l.Error("Failed to write message", zap.Error(err))
-					return
-				}
-			}
-			buffer.Reset()
-		}
-	}
 }
 
 // Web2SSH 实现Web SSH功能
 func (s *EcsSSH) Web2SSH(ws *websocket.Conn) {
+	defer func() {
+		ws.Close()
+		if s.Session != nil {
+			s.Session.Close()
+		}
+		if s.Client != nil {
+			s.Client.Close()
+		}
+	}()
+
+	// 配置和创建一个伪终端
 	modes := ssh.TerminalModes{
-		ssh.ECHO:          1,
-		ssh.TTY_OP_ISPEED: 14400,
-		ssh.TTY_OP_OSPEED: 14400,
-		ssh.ICANON:        1,
-		ssh.ICRNL:         1,
-		ssh.ISIG:          1,
+		ssh.ECHO:          0,     // 关闭回显
+		ssh.TTY_OP_ISPEED: 14400, // 设置传输速率
+		ssh.TTY_OP_OSPEED: 14400, // 设置传输速率
 	}
 
-	if err := s.Session.RequestPty("xterm-256color", 50, 200, modes); err != nil {
+	// 激活终端
+	if err := s.Session.RequestPty("xterm", 25, 80, modes); err != nil {
 		s.l.Error("Request pty failed", zap.Error(err))
 		return
 	}
 
-	stdin, err := s.Session.StdinPipe()
-	if err != nil {
-		s.l.Error("Failed to create stdin pipe", zap.Error(err))
-		return
-	}
-	stdout, err := s.Session.StdoutPipe()
-	if err != nil {
-		s.l.Error("Failed to create stdout pipe", zap.Error(err))
-		return
-	}
-	stderr, err := s.Session.StderrPipe()
-	if err != nil {
-		s.l.Error("Failed to create stderr pipe", zap.Error(err))
-		return
-	}
+	// 设置输入输出
+	s.Session.Stdin = &MyReader{ws}
+	s.Session.Stdout = &MyWriter{ws}
+	s.Session.Stderr = &MyWriter{ws}
 
+	// 激活shell
 	if err := s.Session.Shell(); err != nil {
-		s.l.Error("Failed to start shell", zap.Error(err))
+		s.l.Error("Start shell failed", zap.Error(err))
 		return
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(3)
+	s.l.Info("WebSocket connected to SSH session")
 
-	// 处理输入
-	go func() {
-		defer wg.Done()
-		defer stdin.Close()
-		for {
-			messageType, p, err := ws.ReadMessage()
-			if err != nil {
-				s.l.Error("Failed to read message", zap.Error(err))
-				return
-			}
-			if messageType == websocket.TextMessage {
-				if !bytes.HasSuffix(p, []byte("\n")) {
-					p = append(p, '\n')
-				}
-				if _, err = stdin.Write(p); err != nil {
-					s.l.Error("Failed to write to stdin", zap.Error(err))
-					return
-				}
-			}
-		}
-	}()
-
-	// 处理标准输出
-	go func() {
-		defer wg.Done()
-		handleIO(bufio.NewReader(stdout), ws, s.l)
-	}()
-
-	// 处理错误输出
-	go func() {
-		defer wg.Done()
-		handleIO(bufio.NewReader(stderr), ws, s.l)
-	}()
-
-	wg.Wait()
-
-	if err := s.Session.Wait(); err != nil && err != io.EOF {
+	// 等待SSH会话结束
+	if err := s.Session.Wait(); err != nil {
 		s.l.Error("SSH session ended with error", zap.Error(err))
 	}
+
+	s.l.Info("WebSocket disconnected from SSH session")
 }

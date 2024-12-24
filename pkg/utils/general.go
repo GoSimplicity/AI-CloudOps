@@ -199,7 +199,6 @@ func Ping(ipAddr string) bool {
 
 	err = pinger.Run() // 开始 ping
 	if err != nil {
-		fmt.Printf("运行 pinger 失败: %v\n", err)
 		return false
 	}
 
