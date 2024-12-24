@@ -29,7 +29,7 @@ import (
 	"net/http"
 
 	yamlService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/yaml"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -64,7 +64,7 @@ func (c *ConfigYamlHandler) GetMonitorPrometheusYaml(ctx *gin.Context) {
 
 	yaml := c.yamlService.GetMonitorPrometheusYaml(ctx, ip)
 	if yaml == "" {
-		apiresponse.ErrorWithMessage(ctx, "获取 Prometheus 配置文件失败")
+		utils.ErrorWithMessage(ctx, "获取 Prometheus 配置文件失败")
 		return
 	}
 
@@ -77,7 +77,7 @@ func (c *ConfigYamlHandler) GetMonitorPrometheusAlertRuleYaml(ctx *gin.Context) 
 
 	yaml := c.yamlService.GetMonitorPrometheusAlertRuleYaml(ctx, ip)
 	if yaml == "" {
-		apiresponse.ErrorWithMessage(ctx, "获取 Prometheus 告警配置文件失败")
+		utils.ErrorWithMessage(ctx, "获取 Prometheus 告警配置文件失败")
 		return
 	}
 
@@ -90,7 +90,7 @@ func (c *ConfigYamlHandler) GetMonitorPrometheusRecordYaml(ctx *gin.Context) {
 
 	yaml := c.yamlService.GetMonitorPrometheusRecordYaml(ctx, ip)
 	if yaml == "" {
-		apiresponse.ErrorWithMessage(ctx, "获取 Prometheus 记录配置文件失败")
+		utils.ErrorWithMessage(ctx, "获取 Prometheus 记录配置文件失败")
 		return
 	}
 	ctx.String(http.StatusOK, yaml)
@@ -102,7 +102,7 @@ func (c *ConfigYamlHandler) GetMonitorAlertManagerYaml(ctx *gin.Context) {
 
 	yaml := c.yamlService.GetMonitorAlertManagerYaml(ctx, ip)
 	if yaml == "" {
-		apiresponse.ErrorWithMessage(ctx, "获取 AlertManager 配置文件失败")
+		utils.ErrorWithMessage(ctx, "获取 AlertManager 配置文件失败")
 		return
 	}
 

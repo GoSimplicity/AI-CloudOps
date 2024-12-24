@@ -23,7 +23,7 @@
  *
  */
 
-package apiresponse
+package utils
 
 import (
 	"bytes"
@@ -43,11 +43,6 @@ type LabelOption struct {
 	Label    string         `json:"label"`
 	Value    string         `json:"value"`
 	Children []*LabelOption `json:"children"`
-}
-
-type KeyValueItem struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
 }
 
 type K8sBatchRequest struct {

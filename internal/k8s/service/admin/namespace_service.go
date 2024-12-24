@@ -27,13 +27,12 @@ package admin
 
 import (
 	"context"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"sync"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/general"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/k8s"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
@@ -94,13 +93,13 @@ func (n *namespaceService) GetClusterNamespacesById(ctx context.Context, id int)
 	nsList := make([]model.Namespace, len(namespaces.Items))
 	for i, ns := range namespaces.Items {
 		// 转换 Labels 和 Annotations 为 []string
-		labels, err := general.MapToStringSlice(ns.Labels)
+		labels, err := pkg.MapToStringSlice(ns.Labels)
 		if err != nil {
 			n.logger.Error("转换 Labels 失败", zap.Error(err))
 			return nil, err
 		}
 
-		annotations, err := general.MapToStringSlice(ns.Annotations)
+		annotations, err := pkg.MapToStringSlice(ns.Annotations)
 		if err != nil {
 			n.logger.Error("转换 Annotations 失败", zap.Error(err))
 			return nil, err
@@ -181,13 +180,13 @@ func (n *namespaceService) CreateNamespace(ctx context.Context, req model.Create
 	}
 
 	// 将 []string 转换为 map[string]string
-	labelsMap, err := general.StringSliceToMap(req.Labels)
+	labelsMap, err := pkg.StringSliceToMap(req.Labels)
 	if err != nil {
 		n.logger.Error("转换 Labels 失败", zap.Error(err))
 		return err
 	}
 
-	annotationsMap, err := general.StringSliceToMap(req.Annotations)
+	annotationsMap, err := pkg.StringSliceToMap(req.Annotations)
 	if err != nil {
 		n.logger.Error("转换 Annotations 失败", zap.Error(err))
 		return err
@@ -247,13 +246,13 @@ func (n *namespaceService) GetNamespaceDetails(ctx context.Context, name string,
 		return model.Namespace{}, err
 	}
 
-	labels, err := general.MapToStringSlice(namespace.Labels)
+	labels, err := pkg.MapToStringSlice(namespace.Labels)
 	if err != nil {
 		n.logger.Error("转换 Labels 失败", zap.Error(err))
 		return model.Namespace{}, err
 	}
 
-	annotations, err := general.MapToStringSlice(namespace.Annotations)
+	annotations, err := pkg.MapToStringSlice(namespace.Annotations)
 	if err != nil {
 		n.logger.Error("转换 Annotations 失败", zap.Error(err))
 		return model.Namespace{}, err
@@ -285,13 +284,13 @@ func (n *namespaceService) UpdateNamespace(ctx context.Context, req model.Update
 		return err
 	}
 
-	labelsMap, err := general.StringSliceToMap(req.Labels)
+	labelsMap, err := pkg.StringSliceToMap(req.Labels)
 	if err != nil {
 		n.logger.Error("转换 Labels 失败", zap.Error(err))
 		return err
 	}
 
-	annotationsMap, err := general.StringSliceToMap(req.Annotations)
+	annotationsMap, err := pkg.StringSliceToMap(req.Annotations)
 	if err != nil {
 		n.logger.Error("转换 Annotations 失败", zap.Error(err))
 		return err

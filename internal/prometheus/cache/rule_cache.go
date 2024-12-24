@@ -28,13 +28,13 @@ package cache
 import (
 	"context"
 	"fmt"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"os"
 	"sync"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertRuleDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	scrapePoolDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
 	pm "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/spf13/viper"

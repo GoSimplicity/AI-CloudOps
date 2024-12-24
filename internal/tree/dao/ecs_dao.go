@@ -45,6 +45,7 @@ type TreeEcsDAO interface {
 	GetByIDsWithPagination(ctx context.Context, ids []int, limit, offset int) ([]*model.ResourceEcs, error)
 	GetByInstanceID(ctx context.Context, instanceID string) (*model.ResourceEcs, error)
 	GetByID(ctx context.Context, id int) (*model.ResourceEcs, error)
+	UpdateStatus(ctx context.Context, id int, status string) error
 }
 
 type treeEcsDAO struct {
@@ -168,4 +169,14 @@ func (t *treeEcsDAO) GetByID(ctx context.Context, id int) (*model.ResourceEcs, e
 	}
 
 	return &ecs, nil
+}
+
+// UpdateStatus 更新 ECS 状态
+func (t *treeEcsDAO) UpdateStatus(ctx context.Context, id int, status string) error {
+	if err := t.db.WithContext(ctx).Model(&model.ResourceEcs{}).Where("id = ?", id).Update("status", status).Error; err != nil {
+		t.l.Error("更新 ECS 状态失败", zap.Int("id", id), zap.String("status", status), zap.Error(err))
+		return err
+	}
+
+	return nil
 }

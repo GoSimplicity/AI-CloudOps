@@ -28,6 +28,7 @@ package scrape
 import (
 	"context"
 	"errors"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -35,7 +36,6 @@ import (
 	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
 	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
 	"go.uber.org/zap"
 )
 

@@ -26,12 +26,12 @@
 package api
 
 import (
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -71,18 +71,18 @@ func (a *AlertRuleHandler) CreateMonitorAlertRule(ctx *gin.Context) {
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 
 	if err := ctx.ShouldBind(&alertRule); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	alertRule.UserID = uc.Uid
 
 	if err := a.alertRuleService.CreateMonitorAlertRule(ctx, &alertRule); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // UpdateMonitorAlertRule 更新现有的告警规则
@@ -90,16 +90,16 @@ func (a *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
 	var alertRule model.MonitorAlertRule
 
 	if err := ctx.ShouldBind(&alertRule); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	if err := a.alertRuleService.UpdateMonitorAlertRule(ctx, &alertRule); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // EnableSwitchMonitorAlertRule 切换告警规则的启用状态
@@ -107,16 +107,16 @@ func (a *AlertRuleHandler) EnableSwitchMonitorAlertRule(ctx *gin.Context) {
 	var req model.IdRequest
 
 	if err := ctx.ShouldBind(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	if err := a.alertRuleService.EnableSwitchMonitorAlertRule(ctx, req.ID); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // BatchEnableSwitchMonitorAlertRule 批量切换告警规则的启用状态
@@ -124,16 +124,16 @@ func (a *AlertRuleHandler) BatchEnableSwitchMonitorAlertRule(ctx *gin.Context) {
 	var req model.BatchRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	if err := a.alertRuleService.BatchEnableSwitchMonitorAlertRule(ctx, req.IDs); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // DeleteMonitorAlertRule 删除指定的告警规则
@@ -142,16 +142,16 @@ func (a *AlertRuleHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
 
 	intId, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	if err := a.alertRuleService.DeleteMonitorAlertRule(ctx, intId); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // BatchDeleteMonitorAlertRule 批量删除告警规则
@@ -159,16 +159,16 @@ func (a *AlertRuleHandler) BatchDeleteMonitorAlertRule(ctx *gin.Context) {
 	var req model.BatchRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	if err := a.alertRuleService.BatchDeleteMonitorAlertRule(ctx, req.IDs); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // GetMonitorAlertRuleList 获取告警规则列表
@@ -177,11 +177,11 @@ func (a *AlertRuleHandler) GetMonitorAlertRuleList(ctx *gin.Context) {
 
 	list, err := a.alertRuleService.GetMonitorAlertRuleList(ctx, &searchName)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, list)
+	utils.SuccessWithData(ctx, list)
 }
 
 // PromqlExprCheck 检查 PromQL 表达式的合法性
@@ -189,15 +189,15 @@ func (a *AlertRuleHandler) PromqlExprCheck(ctx *gin.Context) {
 	var promql model.PromqlExprCheckReq
 
 	if err := ctx.ShouldBind(&promql); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	exist, err := a.alertRuleService.PromqlExprCheck(ctx, promql.PromqlExpr)
 	if !exist || err != nil {
-		apiresponse.ErrorWithMessage(ctx, "PromQL 表达式不合法")
+		utils.ErrorWithMessage(ctx, "PromQL 表达式不合法")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }

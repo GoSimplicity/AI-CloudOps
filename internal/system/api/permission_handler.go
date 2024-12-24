@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -54,17 +54,17 @@ func (h *PermissionHandler) AssignUserRole(c *gin.Context) {
 	var r model.AssignUserRoleRequest
 	// 绑定请求参数
 	if err := c.ShouldBindJSON(&r); err != nil {
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
 	// 调用服务层分配角色和权限
 	if err := h.svc.AssignRoleToUser(c.Request.Context(), r.UserId, r.RoleIds, r.ApiIds); err != nil {
-		apiresponse.ErrorWithMessage(c, err.Error())
+		utils.ErrorWithMessage(c, err.Error())
 		return
 	}
 
-	apiresponse.Success(c)
+	utils.Success(c)
 }
 
 // AssignUsersRole 批量为用户分配角色和权限
@@ -72,15 +72,15 @@ func (h *PermissionHandler) AssignUsersRole(c *gin.Context) {
 	var r model.AssignUsersRoleRequest
 	// 绑定请求参数
 	if err := c.ShouldBindJSON(&r); err != nil {
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
 	// 调用服务层批量分配角色和权限
 	if err := h.svc.AssignRoleToUsers(c.Request.Context(), r.UserIds, r.RoleIds); err != nil {
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
-	apiresponse.Success(c)
+	utils.Success(c)
 }

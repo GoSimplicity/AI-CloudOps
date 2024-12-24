@@ -26,21 +26,26 @@
 package api
 
 import (
+	"strconv"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 type EcsHandler struct {
 	service service.EcsService
+	ssh     *ssh.EcsSSH
 	l       *zap.Logger
 }
 
-func NewEcsHandler(service service.EcsService, logger *zap.Logger) *EcsHandler {
+func NewEcsHandler(service service.EcsService, logger *zap.Logger, ssh *ssh.EcsSSH) *EcsHandler {
 	return &EcsHandler{
 		service: service,
+		ssh:     ssh,
 		l:       logger,
 	}
 }
@@ -51,80 +56,136 @@ func (e *EcsHandler) RegisterRouters(server *gin.Engine) {
 	ecsGroup.GET("/getEcsList", e.GetEcsList)
 	ecsGroup.POST("/bindEcs", e.BindEcs)
 	ecsGroup.POST("/unBindEcs", e.UnBindEcs)
+	ecsGroup.GET("/console/:id", e.HostConsole)
 }
 
 func (e *EcsHandler) GetEcsUnbindList(ctx *gin.Context) {
 	ecs, err := e.service.GetEcsUnbindList(ctx)
 	if err != nil {
 		e.l.Error("get unbind ecs failed", zap.Error(err))
-		apiresponse.ErrorWithMessage(ctx, "获取未绑定的ECS实例列表失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "获取未绑定的ECS实例列表失败: "+err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, ecs)
+	utils.SuccessWithData(ctx, ecs)
 }
 
 func (e *EcsHandler) GetEcsList(ctx *gin.Context) {
 	ecs, err := e.service.GetEcsList(ctx)
 	if err != nil {
 		e.l.Error("get ecs list failed", zap.Error(err))
-		apiresponse.ErrorWithMessage(ctx, "获取ECS实例列表失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "获取ECS实例列表失败: "+err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, ecs)
+	utils.SuccessWithData(ctx, ecs)
 }
 
 func (e *EcsHandler) BindEcs(ctx *gin.Context) {
 	var req model.BindResourceReq
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
+		utils.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
 		return
 	}
 
 	if len(req.ResourceIds) == 0 {
-		apiresponse.BadRequestWithDetails(ctx, "资源ID不能为空", "请提供要绑定的ECS实例ID")
+		utils.BadRequestWithDetails(ctx, "资源ID不能为空", "请提供要绑定的ECS实例ID")
 		return
 	}
 
 	if req.NodeId == 0 {
-		apiresponse.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要绑定到的节点ID")
+		utils.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要绑定到的节点ID")
 		return
 	}
 
 	if err := e.service.BindEcs(ctx, req.ResourceIds[0], req.NodeId); err != nil {
 		e.l.Error("bind ecs failed", zap.Error(err))
-		apiresponse.ErrorWithMessage(ctx, "绑定ECS实例失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "绑定ECS实例失败: "+err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (e *EcsHandler) UnBindEcs(ctx *gin.Context) {
 	var req model.BindResourceReq
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
+		utils.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
 		return
 	}
 
 	if len(req.ResourceIds) == 0 {
-		apiresponse.BadRequestWithDetails(ctx, "资源ID不能为空", "请提供要解绑的ECS实例ID")
+		utils.BadRequestWithDetails(ctx, "资源ID不能为空", "请提供要解绑的ECS实例ID")
 		return
 	}
 
 	if req.NodeId == 0 {
-		apiresponse.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要解绑的节点ID")
+		utils.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要解绑的节点ID")
 		return
 	}
 
 	if err := e.service.UnBindEcs(ctx, req.ResourceIds[0], req.NodeId); err != nil {
 		e.l.Error("unbind ecs failed", zap.Error(err))
-		apiresponse.ErrorWithMessage(ctx, "解绑ECS实例失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "解绑ECS实例失败: "+err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
+}
+
+func (e *EcsHandler) HostConsole(ctx *gin.Context) {
+	// 设置响应头,允许WebSocket连接
+	ctx.Header("Access-Control-Allow-Origin", "*")
+	ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	ctx.Header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization")
+	ctx.Header("Access-Control-Allow-Credentials", "true")
+	ctx.Header("Connection", "Upgrade")
+	ctx.Header("Upgrade", "websocket")
+	ctx.Header("Sec-WebSocket-Version", "13")
+	ctx.Header("Sec-WebSocket-Key", "1234567890")
+
+	// 升级websocket连接
+	ws, err := utils.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	if err != nil {
+		e.l.Error("upgrade websocket failed", zap.Error(err))
+		utils.ErrorWithMessage(ctx, "升级websocket连接失败: "+err.Error())
+		return
+	}
+	defer func() {
+		ws.Close()
+		if e.ssh.Session != nil {
+			e.ssh.Session.Close()
+		}
+		if e.ssh.Client != nil {
+			e.ssh.Client.Close()
+		}
+	}()
+
+	// 根据ID获取主机连接信息
+	id, err := strconv.Atoi(ctx.Param("id"))
+	if err != nil {
+		e.l.Error("invalid id", zap.Error(err))
+		utils.ErrorWithMessage(ctx, "无效的ID: "+err.Error())
+		return
+	}
+
+	ecs, err := e.service.GetEcsById(ctx, id)
+	if err != nil {
+		e.l.Error("get ecs by id failed", zap.Error(err))
+		utils.ErrorWithMessage(ctx, "获取ECS实例失败: "+err.Error())
+		return
+	}
+
+	// 创建 SSH 远程连接，并尝试连接到主机
+	err = e.ssh.Connect(ecs.IpAddr, ecs.Port, ecs.Username, ecs.Password, ecs.Key, ecs.Mode)
+	if err != nil {
+		e.l.Error("connect ecs failed", zap.Error(err))
+		utils.ErrorWithMessage(ctx, "连接ECS实例失败: "+err.Error())
+		return
+	}
+
+	// 进行 web-ssh 命令通信
+	e.ssh.Web2SSH(ws)
 }

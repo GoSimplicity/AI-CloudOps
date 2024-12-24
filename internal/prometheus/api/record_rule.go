@@ -26,12 +26,12 @@
 package api
 
 import (
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -69,11 +69,11 @@ func (r *RecordRuleHandler) GetMonitorRecordRuleList(ctx *gin.Context) {
 
 	list, err := r.alertRecordService.GetMonitorRecordRuleList(ctx, &searchName)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, list)
+	utils.SuccessWithData(ctx, list)
 }
 
 // CreateMonitorRecordRule 创建新的预聚合规则
@@ -82,18 +82,18 @@ func (r *RecordRuleHandler) CreateMonitorRecordRule(ctx *gin.Context) {
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	if err := ctx.ShouldBind(&recordRule); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	recordRule.UserID = uc.Uid
 
 	if err := r.alertRecordService.CreateMonitorRecordRule(ctx, &recordRule); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // UpdateMonitorRecordRule 更新现有的预聚合规则
@@ -101,16 +101,16 @@ func (r *RecordRuleHandler) UpdateMonitorRecordRule(ctx *gin.Context) {
 	var recordRule model.MonitorRecordRule
 
 	if err := ctx.ShouldBind(&recordRule); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	if err := r.alertRecordService.UpdateMonitorRecordRule(ctx, &recordRule); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // DeleteMonitorRecordRule 删除指定的预聚合规则
@@ -119,16 +119,16 @@ func (r *RecordRuleHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
 
 	intId, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	if err := r.alertRecordService.DeleteMonitorRecordRule(ctx, intId); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // BatchDeleteMonitorRecordRule 批量删除预聚合规则
@@ -136,16 +136,16 @@ func (r *RecordRuleHandler) BatchDeleteMonitorRecordRule(ctx *gin.Context) {
 	var req model.BatchRequest
 
 	if err := ctx.ShouldBind(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	if err := r.alertRecordService.BatchDeleteMonitorRecordRule(ctx, req.IDs); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // EnableSwitchMonitorRecordRule 切换预聚合规则的启用状态
@@ -154,16 +154,16 @@ func (r *RecordRuleHandler) EnableSwitchMonitorRecordRule(ctx *gin.Context) {
 
 	intId, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "参数错误")
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	if err := r.alertRecordService.EnableSwitchMonitorRecordRule(ctx, intId); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 // BatchEnableSwitchMonitorRecordRule 批量切换预聚合规则的启用状态
@@ -171,14 +171,14 @@ func (r *RecordRuleHandler) BatchEnableSwitchMonitorRecordRule(ctx *gin.Context)
 	var req model.BatchRequest
 
 	if err := ctx.ShouldBind(&req); err != nil {
-		apiresponse.ErrorWithDetails(ctx, err, "参数错误")
+		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
 
 	if err := r.alertRecordService.BatchEnableSwitchMonitorRecordRule(ctx, req.IDs); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }

@@ -23,21 +23,30 @@
  *
  */
 
-package tree
+package utils
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"text/template"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/gorilla/websocket"
 	"github.com/hashicorp/terraform-exec/tfexec"
 	"go.uber.org/zap"
 )
+
+// 升级器
+var UpGrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
 // RenderTerraformTemplate 渲染 Terraform 模板并写入指定目录的 main.tf 文件
 func RenderTerraformTemplate(config model.TerraformConfig, workDir string, terraformTemplate string, key string, secret string,

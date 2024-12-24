@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -59,32 +59,32 @@ func (k *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
 
 // GetNodeList 获取节点列表
 func (k *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
-	clusterID, err := apiresponse.GetParamID(ctx)
+	clusterID, err := utils.GetParamID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.nodeService.ListNodeByClusterName(ctx, clusterID)
 	})
 }
 
 // GetNodeDetail 获取指定名称的节点详情
 func (k *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
-	name, err := apiresponse.GetParamName(ctx)
+	name, err := utils.GetParamName(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	id, err := apiresponse.GetQueryID(ctx)
+	id, err := utils.GetQueryID(ctx)
 	if err != nil {
-		apiresponse.BadRequestError(ctx, err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	apiresponse.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.nodeService.GetNodeDetail(ctx, id, name)
 	})
 }
@@ -93,7 +93,7 @@ func (k *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
 func (k *K8sNodeHandler) AddLabelNodes(ctx *gin.Context) {
 	var req model.LabelK8sNodesRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.nodeService.AddOrUpdateNodeLabel(ctx, &req)
 	})
 }
@@ -102,7 +102,7 @@ func (k *K8sNodeHandler) AddLabelNodes(ctx *gin.Context) {
 func (k *K8sNodeHandler) DeleteLabelNodes(ctx *gin.Context) {
 	var req model.LabelK8sNodesRequest
 
-	apiresponse.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.nodeService.AddOrUpdateNodeLabel(ctx, &req)
 	})
 }

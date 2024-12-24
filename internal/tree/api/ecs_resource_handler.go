@@ -30,7 +30,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -55,18 +55,18 @@ func (r *EcsResourceHandler) RegisterRouters(server *gin.Engine) {
 func (r *EcsResourceHandler) GetAllResourceByType(ctx *gin.Context) {
 	resourceType := ctx.Query("type")
 	if resourceType == "" || (resourceType != "ecs" && resourceType != "elb" && resourceType != "rds") {
-		apiresponse.BadRequestWithDetails(ctx, "资源类型错误", "资源类型必须为ecs、elb或rds之一")
+		utils.BadRequestWithDetails(ctx, "资源类型错误", "资源类型必须为ecs、elb或rds之一")
 		return
 	}
 
 	nid := ctx.Query("nid")
 	if nid == "" {
-		apiresponse.BadRequestWithDetails(ctx, "节点ID为空", "请提供有效的节点ID")
+		utils.BadRequestWithDetails(ctx, "节点ID为空", "请提供有效的节点ID")
 		return
 	}
 	nodeId, err := strconv.Atoi(nid)
 	if err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "节点ID格式错误", "节点ID必须为有效的整数")
+		utils.BadRequestWithDetails(ctx, "节点ID格式错误", "节点ID必须为有效的整数")
 		return
 	}
 
@@ -74,68 +74,68 @@ func (r *EcsResourceHandler) GetAllResourceByType(ctx *gin.Context) {
 	s := ctx.DefaultQuery("size", "10")
 	page, err := strconv.Atoi(p)
 	if err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "页码格式错误", "页码必须为有效的整数")
+		utils.BadRequestWithDetails(ctx, "页码格式错误", "页码必须为有效的整数")
 		return
 	}
 	size, err := strconv.Atoi(s)
 	if err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "分页大小格式错误", "分页大小必须为有效的整数")
+		utils.BadRequestWithDetails(ctx, "分页大小格式错误", "分页大小必须为有效的整数")
 		return
 	}
 
 	resource, err := r.service.GetAllResourcesByType(ctx, nodeId, resourceType, page, size)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "获取资源列表失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "获取资源列表失败: "+err.Error())
 		return
 	}
 
-	apiresponse.SuccessWithData(ctx, resource)
+	utils.SuccessWithData(ctx, resource)
 }
 
 func (r *EcsResourceHandler) CreateEcsResource(ctx *gin.Context) {
 	var req model.ResourceEcs
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
+		utils.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
 		return
 	}
 
 	if err := r.service.CreateEcsResource(ctx, &req); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "创建ECS资源失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "创建ECS资源失败: "+err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (r *EcsResourceHandler) UpdateEcsResource(ctx *gin.Context) {
 	var req model.ResourceEcs
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		apiresponse.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
+		utils.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入")
 		return
 	}
 
 	if err := r.service.UpdateEcsResource(ctx, &req); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "更新ECS资源失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "更新ECS资源失败: "+err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }
 
 func (r *EcsResourceHandler) DeleteEcsResource(ctx *gin.Context) {
 	id := ctx.Param("id")
 	idInt, err := strconv.Atoi(id)
 	if err != nil {
-		apiresponse.BadRequestWithDetails(ctx, "资源ID格式错误", "资源ID必须为有效的整数")
+		utils.BadRequestWithDetails(ctx, "资源ID格式错误", "资源ID必须为有效的整数")
 		return
 	}
 
 	if err := r.service.DeleteEcsResource(ctx, idInt); err != nil {
-		apiresponse.ErrorWithMessage(ctx, "删除ECS资源失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, "删除ECS资源失败: "+err.Error())
 		return
 	}
 
-	apiresponse.Success(ctx)
+	utils.Success(ctx)
 }

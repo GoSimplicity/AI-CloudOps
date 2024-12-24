@@ -31,7 +31,7 @@ import (
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -54,33 +54,33 @@ func (n *NotAuthHandler) GetTreeNodeBindIps(ctx *gin.Context) {
 	// 获取和验证 leafNodeIds
 	leafNodeIds := ctx.DefaultQuery("leafNodeIds", "")
 	if leafNodeIds == "" {
-		apiresponse.BadRequestError(ctx, "leafNodeIds 参数不能为空")
+		utils.BadRequestError(ctx, "leafNodeIds 参数不能为空")
 		return
 	}
 
 	leafNodeIdList := strings.Split(leafNodeIds, ",")
 	if len(leafNodeIdList) == 0 {
-		apiresponse.BadRequestError(ctx, "leafNodeIds 参数格式无效")
+		utils.BadRequestError(ctx, "leafNodeIds 参数格式无效")
 		return
 	}
 
 	// 获取和验证 port
 	port := ctx.DefaultQuery("port", "")
 	if port == "" {
-		apiresponse.BadRequestError(ctx, "port 参数不能为空")
+		utils.BadRequestError(ctx, "port 参数不能为空")
 		return
 	}
 
 	p, err := strconv.Atoi(port)
 	if err != nil || p <= 0 {
-		apiresponse.BadRequestError(ctx, "port 必须为正整数")
+		utils.BadRequestError(ctx, "port 必须为正整数")
 		return
 	}
 
 	// 构建 Prometheus 服务发现结果
 	res, err := n.svc.BuildPrometheusServiceDiscovery(ctx, leafNodeIdList, p)
 	if err != nil {
-		apiresponse.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 

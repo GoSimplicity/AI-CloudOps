@@ -27,10 +27,11 @@ import (
 	api3 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	dao3 "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	service3 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 )
 
 import (
@@ -41,7 +42,7 @@ import (
 
 func InitWebServer() *Cmd {
 	cmdable := InitRedis()
-	handler := jwt.NewJWTHandler(cmdable)
+	handler := utils.NewJWTHandler(cmdable)
 	logger := InitLogger()
 	db := InitDB()
 	enforcer := InitCasbin(db)
@@ -72,7 +73,8 @@ func InitWebServer() *Cmd {
 	ecsResourceService := service3.NewEcsResourceService(logger, treeEcsResourceDAO, treeEcsDAO)
 	ecsResourceHandler := api3.NewEcsResourceHandler(ecsResourceService)
 	ecsService := service3.NewEcsService(logger, treeEcsDAO, treeNodeDAO)
-	ecsHandler := api3.NewEcsHandler(ecsService, logger)
+	ecsSSH := ssh.NewSSH(logger)
+	ecsHandler := api3.NewEcsHandler(ecsService, logger, ecsSSH)
 	treeElbDAO := dao3.NewTreeElbDAO(db, logger)
 	elbService := service3.NewElbService(logger, treeElbDAO, treeNodeDAO)
 	elbHandler := api3.NewElbHandler(elbService)
@@ -138,7 +140,7 @@ func InitWebServer() *Cmd {
 	alertManagerSendService := alert2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, monitorCache, logger, userDAO)
 	sendGroupHandler := api6.NewSendGroupHandler(logger, alertManagerSendService)
 	engine := InitGinServer(v, userHandler, apiHandler, menuHandler, roleHandler, permissionHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler)
-	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO)
+	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, treeEcsDAO)
 	cronCron := InitAndRefreshK8sClient(k8sClient, logger, monitorCache, cronManager)
 	cmd := &Cmd{
 		Server: engine,

@@ -30,7 +30,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -57,18 +57,18 @@ func (h *ApiHandler) RegisterRouters(server *gin.Engine) {
 func (a *ApiHandler) ListApis(c *gin.Context) {
 	var req model.ListApisRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
 	// 调用service层获取API列表
 	apis, total, err := a.svc.ListApis(c.Request.Context(), req.PageNumber, req.PageSize)
 	if err != nil {
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
-	apiresponse.SuccessWithData(c, gin.H{
+	utils.SuccessWithData(c, gin.H{
 		"list":  apis,
 		"total": total,
 	})
@@ -78,7 +78,7 @@ func (a *ApiHandler) ListApis(c *gin.Context) {
 func (a *ApiHandler) CreateAPI(c *gin.Context) {
 	var req model.CreateApiRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
@@ -94,18 +94,18 @@ func (a *ApiHandler) CreateAPI(c *gin.Context) {
 	}
 
 	if err := a.svc.CreateApi(c.Request.Context(), api); err != nil {
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
-	apiresponse.Success(c)
+	utils.Success(c)
 }
 
 // UpdateAPI 更新API信息
 func (a *ApiHandler) UpdateAPI(c *gin.Context) {
 	var req model.UpdateApiRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
@@ -122,11 +122,11 @@ func (a *ApiHandler) UpdateAPI(c *gin.Context) {
 	}
 
 	if err := a.svc.UpdateApi(c.Request.Context(), api); err != nil {
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
-	apiresponse.Success(c)
+	utils.Success(c)
 }
 
 // DeleteAPI 删除API
@@ -134,14 +134,14 @@ func (a *ApiHandler) DeleteAPI(c *gin.Context) {
 	// 从URL参数中获取API ID
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
 	if err := a.svc.DeleteApi(c.Request.Context(), id); err != nil {
-		apiresponse.Error(c)
+		utils.Error(c)
 		return
 	}
 
-	apiresponse.Success(c)
+	utils.Success(c)
 }
