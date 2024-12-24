@@ -130,9 +130,15 @@ func (m *MenuMock) InitMenu() {
 			},
 		},
 		{
-			ID: 31,
-			Name: "终端管理",
-			
+			ID:        31,
+			Name:      "终端管理",
+			Path:      "/terminal_connect",
+			Component: "/servicetree/TerminalConnect",
+			ParentID:  7,
+			Meta: model.MetaField{
+				HideInMenu: true,
+				Title:      "终端管理",
+			},
 		},
 		{
 			ID:        11,
