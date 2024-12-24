@@ -138,16 +138,6 @@ func (e *EcsHandler) UnBindEcs(ctx *gin.Context) {
 }
 
 func (e *EcsHandler) HostConsole(ctx *gin.Context) {
-	// 设置响应头,允许WebSocket连接
-	ctx.Header("Access-Control-Allow-Origin", "*")
-	ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	ctx.Header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization")
-	ctx.Header("Access-Control-Allow-Credentials", "true")
-	ctx.Header("Connection", "Upgrade")
-	ctx.Header("Upgrade", "websocket")
-	ctx.Header("Sec-WebSocket-Version", "13")
-	ctx.Header("Sec-WebSocket-Key", "1234567890")
-
 	// 升级websocket连接
 	ws, err := utils.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
@@ -157,8 +147,10 @@ func (e *EcsHandler) HostConsole(ctx *gin.Context) {
 	}
 	defer func() {
 		ws.Close()
-		if e.ssh.Session != nil {
-			e.ssh.Session.Close()
+		if e.ssh.Sessions != nil {
+			for _, session := range e.ssh.Sessions {
+				session.Close()
+			}
 		}
 		if e.ssh.Client != nil {
 			e.ssh.Client.Close()
@@ -180,8 +172,10 @@ func (e *EcsHandler) HostConsole(ctx *gin.Context) {
 		return
 	}
 
+	uc := ctx.MustGet("user").(utils.UserClaims)
+
 	// 创建 SSH 远程连接，并尝试连接到主机
-	err = e.ssh.Connect(ecs.IpAddr, ecs.Port, ecs.Username, ecs.Password, ecs.Key, ecs.Mode)
+	err = e.ssh.Connect(ecs.IpAddr, ecs.Port, ecs.Username, ecs.Password, ecs.Key, ecs.Mode, uc.Uid)
 	if err != nil {
 		e.l.Error("connect ecs failed", zap.Error(err))
 		utils.ErrorWithMessage(ctx, "连接ECS实例失败: "+err.Error())
