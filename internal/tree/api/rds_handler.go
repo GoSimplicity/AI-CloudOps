@@ -44,10 +44,12 @@ func NewRdsHandler(service service.RdsService) *RdsHandler {
 
 func (r *RdsHandler) RegisterRouters(server *gin.Engine) {
 	rdsGroup := server.Group("/api/tree/rds")
-	rdsGroup.GET("/getRdsUnbindList", r.GetRdsUnbindList)
-	rdsGroup.GET("/getRdsList", r.GetRdsList)
-	rdsGroup.POST("/bindRds", r.BindRds)
-	rdsGroup.POST("/unBindRds", r.UnBindRds)
+
+	// RDS相关路由
+	rdsGroup.GET("/getRdsUnbindList", r.GetRdsUnbindList) // 获取未绑定的RDS实例列表
+	rdsGroup.GET("/getRdsList", r.GetRdsList)             // 获取RDS实例列表
+	rdsGroup.POST("/bindRds", r.BindRds)                  // 绑定RDS实例
+	rdsGroup.POST("/unBindRds", r.UnBindRds)              // 解绑RDS实例
 }
 
 func (r *RdsHandler) GetRdsUnbindList(ctx *gin.Context) {

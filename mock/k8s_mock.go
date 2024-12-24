@@ -53,6 +53,16 @@ func (m *K8sClientMock) populateMockData() {
 	m.Lock()
 	defer m.Unlock()
 
+	// 检查是否已经初始化过集群
+	var count int64
+	m.db.Model(&model.K8sCluster{}).Count(&count)
+	if count > 0 {
+		log.Println("[K8s集群已经初始化过,跳过Mock]")
+		return
+	}
+
+	log.Println("[K8s集群Mock开始]")
+
 	clusters := []model.K8sCluster{
 		{
 			Name:          "Cluster-1",
@@ -102,13 +112,12 @@ users:
 		},
 	}
 
+	// 插入mock数据
 	for _, cluster := range clusters {
-		// 插入或更新 K8sCluster
-		if err := m.db.Where("name = ?", cluster.Name).FirstOrCreate(&cluster).Error; err != nil {
+		if err := m.db.Create(&cluster).Error; err != nil {
 			log.Printf("populateMockData: 插入 K8sCluster 失败: %v\n", err)
 			continue
 		}
-
 		log.Printf("populateMockData: 初始化 Kubernetes 集群成功，ClusterID: %d\n", cluster.ID)
 	}
 }

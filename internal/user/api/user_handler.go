@@ -27,9 +27,10 @@ package api
 
 import (
 	"errors"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"net/http"
 	"strconv"
+
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/golang-jwt/jwt/v5"
@@ -175,7 +176,7 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 }
 
 func (u *UserHandler) RefreshToken(ctx *gin.Context) {
-	var req TokenRequest
+	var req model.TokenRequest
 
 	rc := ijwt.RefreshClaims{}
 
@@ -245,7 +246,7 @@ func (u *UserHandler) GetUserList(ctx *gin.Context) {
 }
 
 func (u *UserHandler) ChangePassword(ctx *gin.Context) {
-	var req ChangePasswordRequest
+	var req model.ChangePasswordRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		utils.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
@@ -274,7 +275,7 @@ func (u *UserHandler) ChangePassword(ctx *gin.Context) {
 }
 
 func (u *UserHandler) WriteOff(ctx *gin.Context) {
-	var req WriteOffRequest
+	var req model.WriteOffRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		utils.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")
@@ -297,7 +298,7 @@ func (u *UserHandler) WriteOff(ctx *gin.Context) {
 }
 
 func (u *UserHandler) UpdateProfile(ctx *gin.Context) {
-	var req UpdateProfileRequest
+	var req model.UpdateProfileRequest
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		utils.ErrorWithDetails(ctx, err.Error(), "绑定数据失败")

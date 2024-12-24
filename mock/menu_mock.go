@@ -17,7 +17,15 @@ func NewMenuMock(db *gorm.DB) *MenuMock {
 	}
 }
 
-func (m *MenuMock) InitMenu() {
+func (m *MenuMock) InitMenu() error {
+	// 检查是否已经初始化过菜单
+	var count int64
+	m.db.Model(&model.Menu{}).Count(&count)
+	if count > 0 {
+		log.Println("[菜单已经初始化过,跳过Mock]")
+		return nil
+	}
+
 	log.Println("[菜单Mock开始]")
 	menus := []model.Menu{
 		{
@@ -363,19 +371,14 @@ func (m *MenuMock) InitMenu() {
 	}
 
 	for _, menu := range menus {
-		// 使用FirstOrCreate方法,如果记录存在则跳过,不存在则创建
-		result := m.db.Where("id = ?", menu.ID).FirstOrCreate(&menu)
-		if result.Error != nil {
-			log.Printf("创建菜单失败: %v", result.Error)
-			continue
+		if err := m.db.Create(&menu).Error; err != nil {
+			log.Printf("创建菜单失败: %v", err)
+			return err
 		}
-
-		if result.RowsAffected == 1 {
-			log.Printf("创建菜单 [%s] 成功", menu.Name)
-		} else {
-			log.Printf("菜单 [%s] 已存在,跳过创建", menu.Name)
-		}
+		log.Printf("创建菜单 [%s] 成功", menu.Name)
 	}
 
 	log.Println("[菜单Mock结束]")
+
+	return nil
 }

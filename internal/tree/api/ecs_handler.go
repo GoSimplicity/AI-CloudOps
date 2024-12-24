@@ -52,11 +52,13 @@ func NewEcsHandler(service service.EcsService, logger *zap.Logger, ssh *ssh.EcsS
 
 func (e *EcsHandler) RegisterRouters(server *gin.Engine) {
 	ecsGroup := server.Group("/api/tree/ecs")
-	ecsGroup.GET("/getEcsUnbindList", e.GetEcsUnbindList)
-	ecsGroup.GET("/getEcsList", e.GetEcsList)
-	ecsGroup.POST("/bindEcs", e.BindEcs)
-	ecsGroup.POST("/unBindEcs", e.UnBindEcs)
-	ecsGroup.GET("/console/:id", e.HostConsole)
+
+	// ECS相关路由
+	ecsGroup.GET("/getEcsUnbindList", e.GetEcsUnbindList) // 获取未绑定的ECS实例列表
+	ecsGroup.GET("/getEcsList", e.GetEcsList)             // 获取ECS实例列表
+	ecsGroup.POST("/bindEcs", e.BindEcs)                  // 绑定ECS实例
+	ecsGroup.POST("/unBindEcs", e.UnBindEcs)              // 解绑ECS实例
+	ecsGroup.GET("/console/:id", e.HostConsole)           // 主机控制台
 }
 
 func (e *EcsHandler) GetEcsUnbindList(ctx *gin.Context) {

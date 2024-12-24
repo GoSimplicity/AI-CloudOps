@@ -16,7 +16,16 @@ func NewApiMock(db *gorm.DB) *ApiMock {
 		db: db,
 	}
 }
-func (m *ApiMock) InitApi() {
+
+func (m *ApiMock) InitApi() error {
+	// 检查是否已经初始化过API
+	var count int64
+	m.db.Model(&model.Api{}).Count(&count)
+	if count > 0 {
+		log.Println("[API已经初始化过,跳过Mock]")
+		return nil
+	}
+
 	log.Println("[API Mock开始]")
 
 	apis := []model.Api{
@@ -141,19 +150,22 @@ func (m *ApiMock) InitApi() {
 	}
 
 	for _, api := range apis {
-		// 使用FirstOrCreate方法,如果记录存在则跳过,不存在则创建
-		result := m.db.Where("id = ?", api.ID).FirstOrCreate(&api)
-		if result.Error != nil {
-			log.Printf("创建API记录失败: %v", result.Error)
-			continue
-		}
+		if err := m.db.Create(&api).Error; err != nil {
+			// 使用FirstOrCreate方法,如果记录存在则跳过,不存在则创建
+			result := m.db.Where("id = ?", api.ID).FirstOrCreate(&api)
+			if result.Error != nil {
+				return result.Error
+			}
 
-		if result.RowsAffected == 1 {
-			log.Printf("创建API [%s] 成功", api.Name)
-		} else {
-			log.Printf("API [%s] 已存在,跳过创建", api.Name)
+			if result.RowsAffected == 1 {
+				log.Printf("创建API [%s] 成功", api.Name)
+			} else {
+				log.Printf("API [%s] 已存在,跳过创建", api.Name)
+			}
 		}
 	}
 
 	log.Println("[API Mock结束]")
+
+	return nil
 }

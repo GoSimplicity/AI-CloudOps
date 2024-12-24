@@ -53,7 +53,15 @@ func NewUserMock(db *gorm.DB, ce *casbin.Enforcer) *UserMock {
 	}
 }
 
-func (u *UserMock) CreateUserAdmin() {
+func (u *UserMock) CreateUserAdmin() error {
+	// 检查是否已经初始化过用户
+	var count int64
+	u.db.Model(&model.User{}).Count(&count)
+	if count > 0 {
+		log.Println("[用户已经初始化过,跳过Mock]")
+		return nil
+	}
+
 	log.Println("[用户模块Mock开始]")
 
 	// 生成加密密码
@@ -61,7 +69,7 @@ func (u *UserMock) CreateUserAdmin() {
 	if err != nil {
 		log.Printf("生成密码失败: %v\n", err)
 		log.Println("[用户模块Mock结束]")
-		return
+		return err
 	}
 
 	// 创建管理员用户实例
@@ -79,7 +87,7 @@ func (u *UserMock) CreateUserAdmin() {
 	if result.Error != nil {
 		log.Printf("创建或获取管理员用户失败: %v\n", result.Error)
 		log.Println("[用户模块Mock结束]")
-		return
+		return result.Error
 	}
 
 	// 根据 RowsAffected 判断用户是否已存在或新创建
@@ -109,7 +117,7 @@ func (u *UserMock) CreateUserAdmin() {
 	err = u.ce.SavePolicy()
 	if err != nil {
 		log.Printf("保存策略失败: %v\n", err)
-		return
+		return err
 	}
 
 	menuIds := []int{
@@ -131,14 +139,15 @@ func (u *UserMock) CreateUserAdmin() {
 	// 先删除已有的关联
 	if err := u.db.Table("user_menus").Where("user_id = ?", adminUser.ID).Delete(nil).Error; err != nil {
 		log.Printf("删除已有用户菜单关联失败: %v", err)
-		return
+		return err
 	}
 
 	// 批量创建新的关联
 	if err := u.db.Table("user_menus").Create(userMenus).Error; err != nil {
 		log.Printf("添加用户菜单关联失败: %v", err)
-		return
+		return err
 	}
 
 	log.Println("[用户模块Mock结束]")
+	return nil
 }

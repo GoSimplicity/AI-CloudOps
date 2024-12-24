@@ -28,10 +28,9 @@ package dao
 import (
 	"context"
 	"errors"
-	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
-	"github.com/casbin/casbin/v2"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -42,7 +41,6 @@ type UserDAO interface {
 	CreateUser(ctx context.Context, user *model.User) error
 	GetUserByUsername(ctx context.Context, username string) (*model.User, error)
 	GetUserByUsernames(ctx context.Context, usernames []string) ([]*model.User, error)
-	UpdateUser(ctx context.Context, user *model.User) error
 	GetAllUsers(ctx context.Context) ([]*model.User, error)
 	GetUserByID(ctx context.Context, id int) (*model.User, error)
 	GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, error)
@@ -54,16 +52,16 @@ type UserDAO interface {
 }
 
 type userDAO struct {
-	db *gorm.DB
-	ce *casbin.Enforcer
-	l  *zap.Logger
+	db            *gorm.DB
+	l             *zap.Logger
+	permissionDao dao.PermissionDAO
 }
 
-func NewUserDAO(db *gorm.DB, ce *casbin.Enforcer, l *zap.Logger) UserDAO {
+func NewUserDAO(db *gorm.DB, l *zap.Logger, permissionDao dao.PermissionDAO) UserDAO {
 	return &userDAO{
-		db: db,
-		ce: ce,
-		l:  l,
+		db:            db,
+		l:             l,
+		permissionDao: permissionDao,
 	}
 }
 
@@ -100,16 +98,6 @@ func (u *userDAO) GetUserByUsername(ctx context.Context, username string) (*mode
 	}
 
 	return &user, nil
-}
-
-// UpdateUser 更新用户信息
-func (u *userDAO) UpdateUser(ctx context.Context, user *model.User) error {
-	if err := u.db.WithContext(ctx).Model(user).Updates(user).Error; err != nil {
-		u.l.Error("update user failed", zap.Error(err))
-		return err
-	}
-
-	return nil
 }
 
 // GetAllUsers 获取所有用户
@@ -262,15 +250,11 @@ func (u *userDAO) DeleteUser(ctx context.Context, uid int) error {
 		if err := tx.Table("user_apis").Where("user_id = ?", uid).Delete(nil).Error; err != nil {
 			u.l.Warn("删除用户API关联失败", zap.Int("uid", uid), zap.Error(err))
 		}
+
 		// 删除用户权限策略
-		ok, err := u.ce.RemoveFilteredPolicy(0, strconv.Itoa(uid))
-		if err != nil {
+		if err := u.permissionDao.RemoveUserPermissions(ctx, uid); err != nil {
 			u.l.Warn("删除用户权限策略失败", zap.Int("uid", uid), zap.Error(err))
 			return err
-		}
-
-		if !ok {
-			u.l.Warn("删除用户权限策略失败", zap.Int("uid", uid))
 		}
 
 		// 删除用户

@@ -44,10 +44,12 @@ func NewElbHandler(service service.ElbService) *ElbHandler {
 
 func (e *ElbHandler) RegisterRouters(server *gin.Engine) {
 	elbGroup := server.Group("/api/tree/elb")
-	elbGroup.GET("/getElbUnbindList", e.GetElbUnbindList)
-	elbGroup.GET("/getElbList", e.GetElbList)
-	elbGroup.POST("/bindElb", e.BindElb)
-	elbGroup.POST("/unBindElb", e.UnBindElb)
+
+	// ELB相关路由
+	elbGroup.GET("/getElbUnbindList", e.GetElbUnbindList) // 获取未绑定的ELB实例列表
+	elbGroup.GET("/getElbList", e.GetElbList)             // 获取ELB实例列表
+	elbGroup.POST("/bindElb", e.BindElb)                  // 绑定ELB实例
+	elbGroup.POST("/unBindElb", e.UnBindElb)              // 解绑ELB实例
 }
 
 func (e *ElbHandler) GetElbUnbindList(ctx *gin.Context) {
