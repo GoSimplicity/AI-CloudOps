@@ -28,12 +28,13 @@ package cache
 import (
 	"context"
 	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"gopkg.in/yaml.v3"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
@@ -280,8 +281,8 @@ func (p *promConfigCache) GenerateScrapeConfigs(ctx context.Context, pool *model
 		// 根据服务发现类型配置 ServiceDiscoveryConfigs
 		switch job.ServiceDiscoveryType {
 		case "http":
-			if err != nil {
-				p.l.Error("获取 HTTP SD API 失败", zap.Error(err), zap.String("任务名", job.Name))
+			if p.httpSdAPI == "" { // 检查 httpSdAPI 是否为空
+				p.l.Error("HTTP SD API 地址为空", zap.String("任务名", job.Name))
 				continue
 			}
 
