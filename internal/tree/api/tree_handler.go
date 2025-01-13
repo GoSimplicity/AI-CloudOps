@@ -48,14 +48,14 @@ func (t *TreeNodeHandler) RegisterRouters(server *gin.Engine) {
 	treeNodeGroup := server.Group("/api/tree/node")
 
 	// 树节点相关路由
-	treeNodeGroup.GET("/listTreeNode", t.ListTreeNode)
-	treeNodeGroup.GET("/selectTreeNode", t.SelectTreeNode)
-	treeNodeGroup.GET("/getTopTreeNode", t.GetTopTreeNode)
-	treeNodeGroup.GET("/listLeafTreeNode", t.ListLeafTreeNodes)
-	treeNodeGroup.POST("/createTreeNode", t.CreateTreeNode)
-	treeNodeGroup.DELETE("/deleteTreeNode/:id", t.DeleteTreeNode)
-	treeNodeGroup.GET("/getChildrenTreeNode/:pid", t.GetChildrenTreeNode)
-	treeNodeGroup.POST("/updateTreeNode", t.UpdateTreeNode)
+	treeNodeGroup.GET("/listTreeNode", t.ListTreeNode)                    // 获取树节点列表
+	treeNodeGroup.GET("/selectTreeNode", t.SelectTreeNode)                // 获取指定层级的树节点
+	treeNodeGroup.GET("/getTopTreeNode", t.GetTopTreeNode)                // 获取顶层树节点
+	treeNodeGroup.GET("/listLeafTreeNode", t.ListLeafTreeNodes)           // 获取叶子节点列表
+	treeNodeGroup.POST("/createTreeNode", t.CreateTreeNode)               // 创建树节点
+	treeNodeGroup.DELETE("/deleteTreeNode/:id", t.DeleteTreeNode)         // 删除树节点
+	treeNodeGroup.GET("/getChildrenTreeNode/:pid", t.GetChildrenTreeNode) // 获取子节点列表
+	treeNodeGroup.POST("/updateTreeNode", t.UpdateTreeNode)               // 更新树节点
 }
 
 func (t *TreeNodeHandler) ListTreeNode(ctx *gin.Context) {

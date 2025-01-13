@@ -28,6 +28,7 @@ package alert
 import (
 	"context"
 	"errors"
+
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -70,13 +71,25 @@ func (a *alertManagerPoolService) GetMonitorAlertManagerPoolList(ctx context.Con
 }
 
 func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
-	// 检查 AlertManager IP 是否已存在
+	alertPool, err := a.dao.GetAlertPoolByID(ctx, monitorAlertManagerPool.ID)
+	if err != nil {
+		a.l.Error("创建 AlertManager 集群池失败：获取集群池时出错", zap.Error(err))
+		return err
+	}
+
+	// 检查 AlertManager Pool 是否已存在
 	exists, err := a.dao.CheckMonitorAlertManagerPoolExists(ctx, monitorAlertManagerPool)
 	if err != nil {
 		a.l.Error("创建 AlertManager 集群池失败：检查是否存在时出错", zap.Error(err))
 		return err
 	}
 	if exists {
+		return errors.New("AlertManager 集群池 IP 已存在")
+	}
+
+	// 检查 AlertManager IP 是否已存在
+	exist := pkg.CheckAlertIpExists(monitorAlertManagerPool, alertPool)
+	if exist {
 		return errors.New("AlertManager 集群池 IP 已存在")
 	}
 
@@ -104,7 +117,7 @@ func (a *alertManagerPoolService) UpdateMonitorAlertManagerPool(ctx context.Cont
 	}
 
 	// 检查新的 AlertManager IP 是否已存在
-	exists := pkg.CheckAlertIpExists(monitorAlertManagerPool, alerts)
+	exists := pkg.CheckAlertsIpExists(monitorAlertManagerPool, alerts)
 	if exists {
 		return errors.New("AlertManager 集群池 IP 已存在")
 	}

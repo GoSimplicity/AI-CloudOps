@@ -18,27 +18,34 @@ type EcsSSH struct {
 	Password string      // 密码
 	Key      string      // 认证私钥
 	Client   *ssh.Client // ssh客户端
+	UserID   int         // 用户ID
 	// console
-	Session    *ssh.Session // ssh会话对象
-	Channel    ssh.Channel  // ssh通信管道
-	LastResult string       // 最近一次执行命令的结果
+	Sessions   map[int]*ssh.Session // ssh会话对象
+	Channel    ssh.Channel          // ssh通信管道
+	LastResult string               // 最近一次执行命令的结果
 	l          *zap.Logger
 }
 
 func NewSSH(l *zap.Logger) *EcsSSH {
 	return &EcsSSH{
-		l: l,
+		l:        l,
+		Sessions: make(map[int]*ssh.Session), // 初始化Sessions map
 	}
 }
 
 // Connect SSH连接
-func (s *EcsSSH) Connect(ip string, port int, username string, password string, key string, mode string) error {
+func (s *EcsSSH) Connect(ip string, port int, username string, password string, key string, mode string, userID int) error {
 	s.IP = ip
 	s.Port = port
 	s.Username = username
 	s.Password = password
 	s.Key = key
 	s.Mode = mode
+	s.UserID = userID
+
+	if s.Sessions == nil {
+		s.Sessions = make(map[int]*ssh.Session)
+	}
 
 	config := &ssh.ClientConfig{
 		User:            s.Username,
@@ -76,7 +83,7 @@ func (s *EcsSSH) Connect(ip string, port int, username string, password string, 
 		s.l.Error("Create SSH session failed", zap.Error(err))
 		return fmt.Errorf("create session failed: %w", err)
 	}
-	s.Session = session
+	s.Sessions[userID] = session // 将会话存储在映射中
 
 	return nil
 }
@@ -94,7 +101,7 @@ func (s *EcsSSH) AddPublicKeyToRemoteHost(publicKey string) error {
 // Run 执行Shell命令
 func (s *EcsSSH) Run(command string) (string, error) {
 	if s.Client == nil {
-		if err := s.Connect(s.IP, s.Port, s.Username, s.Password, s.Key, s.Mode); err != nil {
+		if err := s.Connect(s.IP, s.Port, s.Username, s.Password, s.Key, s.Mode, s.UserID); err != nil {
 			return "", err
 		}
 	}
@@ -167,13 +174,20 @@ func (w MyWriter) Write(p []byte) (n int, err error) {
 func (s *EcsSSH) Web2SSH(ws *websocket.Conn) {
 	defer func() {
 		ws.Close()
-		if s.Session != nil {
-			s.Session.Close()
+		if s.Sessions != nil {
+			for _, session := range s.Sessions {
+				session.Close()
+			}
 		}
 		if s.Client != nil {
 			s.Client.Close()
 		}
 	}()
+
+	if s.Sessions == nil || s.Sessions[s.UserID] == nil {
+		s.l.Error("SSH session not found")
+		return
+	}
 
 	// 配置和创建一个伪终端
 	modes := ssh.TerminalModes{
@@ -183,18 +197,18 @@ func (s *EcsSSH) Web2SSH(ws *websocket.Conn) {
 	}
 
 	// 激活终端
-	if err := s.Session.RequestPty("xterm", 25, 80, modes); err != nil {
+	if err := s.Sessions[s.UserID].RequestPty("xterm", 25, 80, modes); err != nil {
 		s.l.Error("Request pty failed", zap.Error(err))
 		return
 	}
 
 	// 设置输入输出
-	s.Session.Stdin = &MyReader{ws}
-	s.Session.Stdout = &MyWriter{ws}
-	s.Session.Stderr = &MyWriter{ws}
+	s.Sessions[s.UserID].Stdin = &MyReader{ws}
+	s.Sessions[s.UserID].Stdout = &MyWriter{ws}
+	s.Sessions[s.UserID].Stderr = &MyWriter{ws}
 
 	// 激活shell
-	if err := s.Session.Shell(); err != nil {
+	if err := s.Sessions[s.UserID].Shell(); err != nil {
 		s.l.Error("Start shell failed", zap.Error(err))
 		return
 	}
@@ -202,7 +216,7 @@ func (s *EcsSSH) Web2SSH(ws *websocket.Conn) {
 	s.l.Info("WebSocket connected to SSH session")
 
 	// 等待SSH会话结束
-	if err := s.Session.Wait(); err != nil {
+	if err := s.Sessions[s.UserID].Wait(); err != nil {
 		s.l.Error("SSH session ended with error", zap.Error(err))
 	}
 

@@ -22,14 +22,14 @@ import (
 	scrape2 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/yaml"
 	api2 "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
-	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	service2 "github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	api3 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	dao3 "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	service3 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/api"
-	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 )
@@ -47,17 +47,17 @@ func InitWebServer() *Cmd {
 	db := InitDB()
 	enforcer := InitCasbin(db)
 	v := InitMiddlewares(handler, logger, enforcer)
-	userDAO := dao.NewUserDAO(db, enforcer, logger)
+	apiDAO := dao.NewApiDAO(db, enforcer, logger)
+	permissionDAO := dao.NewPermissionDAO(db, logger, enforcer, apiDAO)
+	userDAO := dao2.NewUserDAO(db, logger, permissionDAO)
 	userService := service.NewUserService(userDAO)
 	userHandler := api.NewUserHandler(userService, logger, handler)
-	apiDAO := dao2.NewApiDAO(db, enforcer, logger)
 	apiService := service2.NewApiService(logger, apiDAO)
 	apiHandler := api2.NewApiHandler(apiService)
-	menuDAO := dao2.NewMenuDAO(db, logger)
+	menuDAO := dao.NewMenuDAO(db, logger)
 	menuService := service2.NewMenuService(menuDAO, logger)
 	menuHandler := api2.NewMenuHandler(menuService)
-	permissionDAO := dao2.NewPermissionDAO(db, logger, enforcer, apiDAO)
-	roleDAO := dao2.NewRoleDAO(db, logger, enforcer, permissionDAO)
+	roleDAO := dao.NewRoleDAO(db, logger, enforcer, permissionDAO)
 	roleService := service2.NewRoleService(roleDAO, logger)
 	permissionService := service2.NewPermissionService(logger, permissionDAO)
 	roleHandler := api2.NewRoleHandler(roleService, apiService, permissionService, logger)

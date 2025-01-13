@@ -31,14 +31,16 @@ import (
 )
 
 // InitViper 初始化viper配置
-func InitViper() {
+func InitViper() error {
 	configFile := pflag.String("config", "config/config.yaml", "配置文件路径")
 	pflag.Parse()
 	viper.SetConfigFile(*configFile)
 	err := viper.ReadInConfig()
 	if err != nil {
-		panic(err)
+		return err
 	}
+
+	return nil
 }
 
 func InitWebHookViper() {

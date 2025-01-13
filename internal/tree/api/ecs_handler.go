@@ -52,11 +52,13 @@ func NewEcsHandler(service service.EcsService, logger *zap.Logger, ssh *ssh.EcsS
 
 func (e *EcsHandler) RegisterRouters(server *gin.Engine) {
 	ecsGroup := server.Group("/api/tree/ecs")
-	ecsGroup.GET("/getEcsUnbindList", e.GetEcsUnbindList)
-	ecsGroup.GET("/getEcsList", e.GetEcsList)
-	ecsGroup.POST("/bindEcs", e.BindEcs)
-	ecsGroup.POST("/unBindEcs", e.UnBindEcs)
-	ecsGroup.GET("/console/:id", e.HostConsole)
+
+	// ECS相关路由
+	ecsGroup.GET("/getEcsUnbindList", e.GetEcsUnbindList) // 获取未绑定的ECS实例列表
+	ecsGroup.GET("/getEcsList", e.GetEcsList)             // 获取ECS实例列表
+	ecsGroup.POST("/bindEcs", e.BindEcs)                  // 绑定ECS实例
+	ecsGroup.POST("/unBindEcs", e.UnBindEcs)              // 解绑ECS实例
+	ecsGroup.GET("/console/:id", e.HostConsole)           // 主机控制台
 }
 
 func (e *EcsHandler) GetEcsUnbindList(ctx *gin.Context) {
@@ -136,16 +138,6 @@ func (e *EcsHandler) UnBindEcs(ctx *gin.Context) {
 }
 
 func (e *EcsHandler) HostConsole(ctx *gin.Context) {
-	// 设置响应头,允许WebSocket连接
-	ctx.Header("Access-Control-Allow-Origin", "*")
-	ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	ctx.Header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization")
-	ctx.Header("Access-Control-Allow-Credentials", "true")
-	ctx.Header("Connection", "Upgrade")
-	ctx.Header("Upgrade", "websocket")
-	ctx.Header("Sec-WebSocket-Version", "13")
-	ctx.Header("Sec-WebSocket-Key", "1234567890")
-
 	// 升级websocket连接
 	ws, err := utils.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
@@ -155,8 +147,10 @@ func (e *EcsHandler) HostConsole(ctx *gin.Context) {
 	}
 	defer func() {
 		ws.Close()
-		if e.ssh.Session != nil {
-			e.ssh.Session.Close()
+		if e.ssh.Sessions != nil {
+			for _, session := range e.ssh.Sessions {
+				session.Close()
+			}
 		}
 		if e.ssh.Client != nil {
 			e.ssh.Client.Close()
@@ -178,8 +172,10 @@ func (e *EcsHandler) HostConsole(ctx *gin.Context) {
 		return
 	}
 
+	uc := ctx.MustGet("user").(utils.UserClaims)
+
 	// 创建 SSH 远程连接，并尝试连接到主机
-	err = e.ssh.Connect(ecs.IpAddr, ecs.Port, ecs.Username, ecs.Password, ecs.Key, ecs.Mode)
+	err = e.ssh.Connect(ecs.IpAddr, ecs.Port, ecs.Username, ecs.Password, ecs.Key, ecs.Mode, uc.Uid)
 	if err != nil {
 		e.l.Error("connect ecs failed", zap.Error(err))
 		utils.ErrorWithMessage(ctx, "连接ECS实例失败: "+err.Error())

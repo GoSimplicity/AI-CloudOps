@@ -179,6 +179,17 @@ func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, monitorSc
 		return errors.New("抓取作业已存在")
 	}
 
+	// 检查采集池是否存在
+	poolExists, err := s.dao.CheckMonitorInstanceExists(ctx, monitorScrapeJob.PoolID)
+	if err != nil {
+		s.l.Error("创建抓取作业失败：检查采集池是否存在时出错", zap.Error(err))
+		return err
+	}
+
+	if !poolExists {
+		return errors.New("采集池不存在")
+	}
+
 	// 创建抓取作业
 	if err := s.dao.CreateMonitorScrapeJob(ctx, monitorScrapeJob); err != nil {
 		s.l.Error("创建抓取作业失败", zap.Error(err))
