@@ -189,6 +189,9 @@ func ParseURL(u string) (*pcc.URL, error) {
 
 // GenPromDuration 转换秒为Prometheus Duration
 func GenPromDuration(seconds int) pm.Duration {
+	if seconds <= 0 {
+		return pm.Duration(5 * time.Second)
+	}
 	return pm.Duration(time.Duration(seconds) * time.Second)
 }
 
