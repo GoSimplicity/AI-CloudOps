@@ -46,10 +46,12 @@ func NewEcsResourceHandler(service service.EcsResourceService) *EcsResourceHandl
 
 func (r *EcsResourceHandler) RegisterRouters(server *gin.Engine) {
 	ecsResourceGroup := server.Group("/api/tree/ecs/resource")
-	ecsResourceGroup.POST("/createEcsResource", r.CreateEcsResource)
-	ecsResourceGroup.POST("/updateEcsResource", r.UpdateEcsResource)
-	ecsResourceGroup.DELETE("/deleteEcsResource/:id", r.DeleteEcsResource)
-	ecsResourceGroup.GET("/getAllResourceByType", r.GetAllResourceByType)
+
+	// ECS资源相关路由
+	ecsResourceGroup.POST("/createEcsResource", r.CreateEcsResource)       // 创建ECS资源
+	ecsResourceGroup.POST("/updateEcsResource", r.UpdateEcsResource)       // 更新ECS资源
+	ecsResourceGroup.DELETE("/deleteEcsResource/:id", r.DeleteEcsResource) // 删除ECS资源
+	ecsResourceGroup.GET("/getAllResourceByType", r.GetAllResourceByType)  // 获取所有资源
 }
 
 func (r *EcsResourceHandler) GetAllResourceByType(ctx *gin.Context) {

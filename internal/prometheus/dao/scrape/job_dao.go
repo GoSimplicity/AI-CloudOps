@@ -43,8 +43,9 @@ type ScrapeJobDAO interface {
 	UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
 	DeleteMonitorScrapeJob(ctx context.Context, jobId int) error
 	SearchMonitorScrapeJobsByName(ctx context.Context, name string) ([]*model.MonitorScrapeJob, error)
-	CheckMonitorScrapeJobExists(ctx context.Context, name string) (bool, error)
 	GetMonitorScrapeJobById(ctx context.Context, id int) (*model.MonitorScrapeJob, error)
+	CheckMonitorScrapeJobExists(ctx context.Context, name string) (bool, error)
+	CheckMonitorInstanceExists(ctx context.Context, poolID int) (bool, error)
 }
 
 type scrapeJobDAO struct {
@@ -182,4 +183,18 @@ func (s *scrapeJobDAO) GetMonitorScrapeJobById(ctx context.Context, id int) (*mo
 	}
 
 	return &scrapeJob, nil
+}
+
+// CheckMonitorInstanceExists 检查监控实例是否存在
+func (s *scrapeJobDAO) CheckMonitorInstanceExists(ctx context.Context, poolID int) (bool, error) {
+	var count int64
+
+	if err := s.db.WithContext(ctx).
+		Model(&model.MonitorScrapePool{}).
+		Where("id = ?", poolID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
 }

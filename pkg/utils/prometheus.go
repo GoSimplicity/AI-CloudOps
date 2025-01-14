@@ -72,7 +72,7 @@ func CheckPoolIpExists(req *model.MonitorScrapePool, pools []*model.MonitorScrap
 	return false
 }
 
-func CheckAlertIpExists(req *model.MonitorAlertManagerPool, rules []*model.MonitorAlertManagerPool) bool {
+func CheckAlertsIpExists(req *model.MonitorAlertManagerPool, rules []*model.MonitorAlertManagerPool) bool {
 	ips := make(map[string]string)
 
 	for _, rule := range rules {
@@ -90,6 +90,45 @@ func CheckAlertIpExists(req *model.MonitorAlertManagerPool, rules []*model.Monit
 			continue
 		}
 
+		if _, ok := ips[ip]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+func CheckAlertIpExists(req *model.MonitorAlertManagerPool, rule *model.MonitorAlertManagerPool) bool {
+	if req == nil || rule == nil {
+		return false
+	}
+
+	ips := make(map[string]string)
+
+	// 如果是同一个实例,直接返回false
+	if req.ID == rule.ID {
+		return false
+	}
+
+	// 将现有规则的IP添加到map中
+	for _, ip := range rule.AlertManagerInstances {
+		if ip != "" {
+			ips[ip] = rule.Name
+		}
+	}
+
+	// 检查请求中的IP是否已存在
+	for _, ip := range req.AlertManagerInstances {
+		if ip == "" {
+			continue
+		}
+
+		// 如果是更新操作且IP属于自己,则跳过
+		if req.ID != 0 && ips[ip] == req.Name {
+			continue
+		}
+
+		// 检查IP是否已存在于其他规则中
 		if _, ok := ips[ip]; ok {
 			return true
 		}

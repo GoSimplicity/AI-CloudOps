@@ -46,10 +46,12 @@ func NewAliResourceHandler(service service.AliResourceService) *AliResourceHandl
 
 func (a *AliResourceHandler) RegisterRouters(server *gin.Engine) {
 	aliResourceGroup := server.Group("/api/tree/ecs/ali/resource")
-	aliResourceGroup.POST("/createAliResource", a.CreateAliEcsResource)
-	aliResourceGroup.POST("/updateAliResource", a.UpdateAliEcsResource)
-	aliResourceGroup.DELETE("/deleteAliResource/:id", a.DeleteAliEcsResource)
-	aliResourceGroup.GET("/getResourceStatus/:id", a.GetResourceStatus)
+
+	// 阿里云资源相关路由
+	aliResourceGroup.POST("/createAliResource", a.CreateAliEcsResource)       // 创建阿里云ECS资源
+	aliResourceGroup.POST("/updateAliResource", a.UpdateAliEcsResource)       // 更新阿里云ECS资源
+	aliResourceGroup.DELETE("/deleteAliResource/:id", a.DeleteAliEcsResource) // 删除阿里云ECS资源
+	aliResourceGroup.GET("/getResourceStatus/:id", a.GetResourceStatus)       // 获取资源状态
 }
 
 func (a *AliResourceHandler) CreateAliEcsResource(ctx *gin.Context) {
