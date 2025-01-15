@@ -156,7 +156,7 @@ func (a *alertManagerPoolDAO) CheckMonitorAlertManagerPoolExists(ctx context.Con
 
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertManagerPool{}).
-		Where("id = ?", alertManagerPool.ID).
+		Where("name = ?", alertManagerPool.Name).
 		Count(&count).Error; err != nil {
 		return false, err
 	}

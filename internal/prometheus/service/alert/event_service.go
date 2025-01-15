@@ -29,8 +29,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"sync"
+
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
@@ -253,12 +254,15 @@ func (a *alertManagerEventService) BatchEventAlertSilence(ctx context.Context, r
 
 	// 处理错误
 	if len(errs) > 0 {
-		errMsg := "批量设置静默过程中遇到以下错误:"
+		var errMsg string
 		for _, e := range errs {
-			errMsg += "\n" + e.Error()
+			if errMsg != "" {
+				errMsg += "\n"
+			}
+			errMsg += e.Error()
 		}
 		a.l.Error(errMsg)
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("批量设置静默失败: %s", errMsg)
 	}
 
 	a.l.Info("批量设置静默成功完成")

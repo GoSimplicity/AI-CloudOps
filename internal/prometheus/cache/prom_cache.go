@@ -168,53 +168,57 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 }
 
 func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePool) (pc.Config, error) {
+	var config pc.Config
+
 	// 创建prometheus global全局配置
-	globalConfig := pc.GlobalConfig{
-		ScrapeInterval: utils.GenPromDuration(pool.ScrapeInterval), // 采集间隔
-		ScrapeTimeout:  utils.GenPromDuration(pool.ScrapeTimeout),  // 采集超时时间
+	if pool.ScrapeInterval <= 0 || pool.ScrapeTimeout <= 0 || pool.ScrapeTimeout > pool.ScrapeInterval {
+		return pc.Config{}, fmt.Errorf("采集间隔和采集超时时间不能小于等于0，且采集超时时间不能大于采集间隔")
 	}
+	config.GlobalConfig = pc.GlobalConfig{
+		ScrapeInterval: utils.GenPromDuration(int(pool.ScrapeInterval)), // 采集间隔
+		ScrapeTimeout:  utils.GenPromDuration(int(pool.ScrapeTimeout)),  // 采集超时时间
+	}
+
 	// 解析外部标签
 	externalLabels := utils.ParseExternalLabels(pool.ExternalLabels)
 	if len(externalLabels) > 0 {
-		globalConfig.ExternalLabels = labels.FromStrings(externalLabels...)
+		config.GlobalConfig.ExternalLabels = labels.FromStrings(externalLabels...)
 	}
 
 	// 解析 RemoteWrite URL
-	remoteWriteURL, err := utils.ParseURL(pool.RemoteWriteUrl)
-	if err != nil {
-		p.l.Error("解析 RemoteWriteUrl 失败", zap.Error(err))
-		return pc.Config{}, fmt.Errorf("解析 RemoteWriteUrl 失败: %w", err)
+	if pool.RemoteWriteUrl != "" {
+		remoteWriteURL, err := utils.ParseURL(pool.RemoteWriteUrl)
+		if err != nil {
+			p.l.Error("解析 RemoteWriteUrl 失败", zap.Error(err), zap.String("池名", pool.Name))
+			return pc.Config{}, fmt.Errorf("解析 RemoteWriteUrl 失败: %w", err)
+		}
+
+		config.RemoteWriteConfigs = []*pc.RemoteWriteConfig{
+			{
+				URL:           remoteWriteURL,
+				RemoteTimeout: utils.GenPromDuration(int(pool.RemoteTimeoutSeconds)),
+			},
+		}
 	}
 
-	// 配置远程写入
-	remoteWrite := &pc.RemoteWriteConfig{
-		URL:           remoteWriteURL,
-		RemoteTimeout: utils.GenPromDuration(pool.RemoteTimeoutSeconds),
-	}
-
-	// 组装prometheus基础配置
-	config := pc.Config{
-		GlobalConfig:       globalConfig,
-		RemoteWriteConfigs: []*pc.RemoteWriteConfig{remoteWrite},
-	}
-
-	if pool.SupportAlert == 1 { // 启用告警
-		// 解析 RemoteRead URL
+	// 解析 RemoteRead URL
+	if pool.RemoteReadUrl != "" {
 		remoteReadURL, err := utils.ParseURL(pool.RemoteReadUrl)
 		if err != nil {
 			p.l.Error("解析 RemoteReadUrl 失败", zap.Error(err))
 			return pc.Config{}, fmt.Errorf("解析 RemoteReadUrl 失败: %w", err)
 		}
 
-		// 配置远程读取
 		config.RemoteReadConfigs = []*pc.RemoteReadConfig{
 			{
 				URL:           remoteReadURL,
-				RemoteTimeout: utils.GenPromDuration(pool.RemoteTimeoutSeconds),
+				RemoteTimeout: utils.GenPromDuration(int(pool.RemoteTimeoutSeconds)),
 			},
 		}
+	}
 
-		// 配置 Alertmanager
+	// 启用告警，配置 Alertmanager
+	if pool.SupportAlert == 1 {
 		alertConfig := &pc.AlertmanagerConfig{
 			APIVersion: "v2",
 			ServiceDiscoveryConfigs: []discovery.Config{ // 服务发现配置
@@ -239,8 +243,8 @@ func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePo
 		config.RuleFiles = append(config.RuleFiles, pool.RuleFilePath)
 	}
 
-	if pool.SupportRecord == 1 { // 启用预聚合
-		// 添加预聚合规则文件
+	// 启用预聚合，添加规则文件
+	if pool.SupportRecord == 1 {
 		config.RuleFiles = append(config.RuleFiles, pool.RecordFilePath)
 	}
 

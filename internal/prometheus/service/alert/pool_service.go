@@ -71,12 +71,6 @@ func (a *alertManagerPoolService) GetMonitorAlertManagerPoolList(ctx context.Con
 }
 
 func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
-	alertPool, err := a.dao.GetAlertPoolByID(ctx, monitorAlertManagerPool.ID)
-	if err != nil {
-		a.l.Error("创建 AlertManager 集群池失败：获取集群池时出错", zap.Error(err))
-		return err
-	}
-
 	// 检查 AlertManager Pool 是否已存在
 	exists, err := a.dao.CheckMonitorAlertManagerPoolExists(ctx, monitorAlertManagerPool)
 	if err != nil {
@@ -84,13 +78,13 @@ func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Cont
 		return err
 	}
 	if exists {
-		return errors.New("AlertManager 集群池 IP 已存在")
+		return errors.New("AlertManager Pool 已存在")
 	}
 
 	// 检查 AlertManager IP 是否已存在
-	exist := pkg.CheckAlertIpExists(monitorAlertManagerPool, alertPool)
-	if exist {
-		return errors.New("AlertManager 集群池 IP 已存在")
+	if err := a.checkAlertIpExists(ctx, monitorAlertManagerPool); err != nil {
+		a.l.Error("创建 AlertManager 集群池失败：检查 AlertManager IP 是否存在时出错", zap.Error(err))
+		return err
 	}
 
 	// 创建 AlertManager 集群池
@@ -110,16 +104,20 @@ func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Cont
 }
 
 func (a *alertManagerPoolService) UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
-	alerts, err := a.dao.GetAllAlertManagerPools(ctx)
+	// 检查 AlertManager Pool 是否已存在
+	exists, err := a.dao.CheckMonitorAlertManagerPoolExists(ctx, monitorAlertManagerPool)
 	if err != nil {
-		a.l.Error("更新 AlertManager 集群池失败：获取集群池时出错", zap.Error(err))
+		a.l.Error("更新 AlertManager 集群池失败：检查 AlertManager Pool 是否存在时出错", zap.Error(err))
 		return err
 	}
+	if !exists {
+		return errors.New("AlertManager Pool 不存在")
+	}
 
-	// 检查新的 AlertManager IP 是否已存在
-	exists := pkg.CheckAlertsIpExists(monitorAlertManagerPool, alerts)
-	if exists {
-		return errors.New("AlertManager 集群池 IP 已存在")
+	// 检查 AlertManager IP 是否已存在
+	if err := a.checkAlertIpExists(ctx, monitorAlertManagerPool); err != nil {
+		a.l.Error("更新 AlertManager 集群池失败：检查 AlertManager IP 是否存在时出错", zap.Error(err))
+		return err
 	}
 
 	// 更新 AlertManager 集群池
@@ -164,4 +162,14 @@ func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Cont
 
 	a.l.Info("删除 AlertManager 集群池成功", zap.Int("id", id))
 	return nil
+}
+
+func (a *alertManagerPoolService) checkAlertIpExists(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
+	pools, err := a.dao.GetAllAlertManagerPools(ctx)
+	if err != nil {
+		a.l.Error("检查 AlertManager Pool 是否存在失败", zap.Error(err))
+		return err
+	}
+
+	return pkg.CheckAlertIpExists(monitorAlertManagerPool, pools)
 }
