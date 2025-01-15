@@ -33,6 +33,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -48,28 +49,32 @@ import (
 	"go.uber.org/zap"
 )
 
-func CheckPoolIpExists(req *model.MonitorScrapePool, pools []*model.MonitorScrapePool) bool {
-	ips := make(map[string]string)
+func CheckPoolIpExists(pools []*model.MonitorScrapePool, req *model.MonitorScrapePool) error {
+	var ipPrometheus []string
+	var ipAlertManager []string
 
-	// 遍历现有抓取池，将IP地址添加到映射中
 	for _, pool := range pools {
-		for _, ip := range pool.PrometheusInstances {
-			ips[ip] = pool.Name
-		}
-	}
-
-	// 遍历请求中的IP地址，检查是否存在于现有抓取池中
-	for _, ip := range req.PrometheusInstances {
-		if req.ID != 0 && ips[ip] == req.Name {
+		if pool.ID == req.ID {
 			continue
 		}
 
-		if _, ok := ips[ip]; ok {
-			return true
+		ipPrometheus = append(ipPrometheus, pool.PrometheusInstances...)
+		ipAlertManager = append(ipAlertManager, pool.AlertManagerInstances...)
+	}
+
+	for _, ip := range req.PrometheusInstances {
+		if slices.Contains(ipPrometheus, ip) {
+			return fmt.Errorf("PrometheusInstances %v 已存在", ip)
 		}
 	}
 
-	return false
+	for _, ip := range req.AlertManagerInstances {
+		if slices.Contains(ipAlertManager, ip) {
+			return fmt.Errorf("AlertManagerInstances %v 已存在", ip)
+		}
+	}
+
+	return 0
 }
 
 func CheckAlertsIpExists(req *model.MonitorAlertManagerPool, rules []*model.MonitorAlertManagerPool) bool {
@@ -98,43 +103,24 @@ func CheckAlertsIpExists(req *model.MonitorAlertManagerPool, rules []*model.Moni
 	return false
 }
 
-func CheckAlertIpExists(req *model.MonitorAlertManagerPool, rule *model.MonitorAlertManagerPool) bool {
-	if req == nil || rule == nil {
-		return false
-	}
+func CheckAlertIpExists(req *model.MonitorAlertManagerPool, pools []*model.MonitorAlertManagerPool) error {
+	ips := make([]string, 0)
 
-	ips := make(map[string]string)
-
-	// 如果是同一个实例,直接返回false
-	if req.ID == rule.ID {
-		return false
-	}
-
-	// 将现有规则的IP添加到map中
-	for _, ip := range rule.AlertManagerInstances {
-		if ip != "" {
-			ips[ip] = rule.Name
+	for _, pool := range pools {
+		if pool.ID == req.ID {
+			continue
 		}
+
+		ips = append(ips, pool.AlertManagerInstances...)
 	}
 
-	// 检查请求中的IP是否已存在
 	for _, ip := range req.AlertManagerInstances {
-		if ip == "" {
-			continue
-		}
-
-		// 如果是更新操作且IP属于自己,则跳过
-		if req.ID != 0 && ips[ip] == req.Name {
-			continue
-		}
-
-		// 检查IP是否已存在于其他规则中
-		if _, ok := ips[ip]; ok {
-			return true
+		if slices.Contains(ips, ip) {
+			return fmt.Errorf("AlertManagerInstances %v 已存在", ip)
 		}
 	}
 
-	return false
+	return nil
 }
 
 // ParseTags 将 ECS 的 Tags 切片解析为 Prometheus 的标签映射

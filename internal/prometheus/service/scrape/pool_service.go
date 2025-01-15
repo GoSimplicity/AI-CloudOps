@@ -28,6 +28,7 @@ package scrape
 import (
 	"context"
 	"errors"
+
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -79,6 +80,12 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, monitor
 		return errors.New("抓取池已存在")
 	}
 
+	// 检查新的抓取池 IP 是否已存在
+	if err := s.CheckInstancesExists(ctx, monitorScrapePool); err != nil {
+		s.l.Error("创建抓取池失败：检查抓取池 IP 是否存在时出错", zap.Error(err))
+		return err
+	}
+
 	// 创建抓取池
 	if err := s.dao.CreateMonitorScrapePool(ctx, monitorScrapePool); err != nil {
 		s.l.Error("创建抓取池失败", zap.Error(err))
@@ -96,31 +103,20 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, monitor
 }
 
 func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error {
-	// 确保要更新的抓取池存在
-	pools, err := s.dao.GetAllMonitorScrapePool(ctx)
+	// 检查抓取池是否已存在
+	exists, err := s.dao.CheckMonitorScrapePoolExists(ctx, monitorScrapePool)
 	if err != nil {
-		s.l.Error("更新抓取池失败：获取抓取池时出错", zap.Error(err))
+		s.l.Error("更新抓取池失败：检查抓取池是否存在时出错", zap.Error(err))
 		return err
 	}
-
-	newPools := make([]*model.MonitorScrapePool, 0)
-
-	for _, pool := range pools {
-		if pool.ID == monitorScrapePool.ID {
-			continue
-		}
-
-		if pool.Name == monitorScrapePool.Name {
-			return errors.New("抓取池名称已存在")
-		}
-
-		newPools = append(newPools, pool)
+	if !exists {
+		return errors.New("抓取池不存在")
 	}
 
 	// 检查新的抓取池 IP 是否已存在
-	exists := pkg.CheckPoolIpExists(monitorScrapePool, newPools)
-	if exists {
-		return errors.New("抓取池 IP 已存在")
+	if err := s.CheckInstancesExists(ctx, monitorScrapePool); err != nil {
+		s.l.Error("更新抓取池失败：检查抓取池 IP 是否存在时出错", zap.Error(err))
+		return err
 	}
 
 	// 更新抓取池
@@ -165,4 +161,14 @@ func (s *scrapePoolService) DeleteMonitorScrapePool(ctx context.Context, id int)
 
 	s.l.Info("删除抓取池成功", zap.Int("id", id))
 	return nil
+}
+
+func (s *scrapePoolService) CheckInstancesExists(ctx context.Context, req *model.MonitorScrapePool) error {
+	pools, err := s.dao.GetAllMonitorScrapePool(ctx)
+	if err != nil {
+		s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
+		return err
+	}
+
+	return pkg.CheckPoolIpExists(pools, req)
 }
