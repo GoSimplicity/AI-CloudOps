@@ -27,7 +27,6 @@ package utils
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -297,7 +296,7 @@ func DeleteWithId(l *zap.Logger, funcName string, timeout int, url string, param
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := ioutil.ReadAll(resp.Body)
 		l.Error(fmt.Sprintf("[DeleteWithId.StatusCode.not2xx.error][funcName:%+v][url:%v][code:%v][resp_body_text:%v]", funcName, url, resp.StatusCode, string(bodyBytes)))
-		return nil, errors.New(fmt.Sprintf("server returned HTTP status %s", resp.Status))
+		return nil, fmt.Errorf("server returned HTTP status %s", resp.Status)
 	}
 
 	bodyBytes, err := ioutil.ReadAll(resp.Body)

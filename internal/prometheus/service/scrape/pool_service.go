@@ -81,7 +81,7 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, monitor
 	}
 
 	// 检查新的抓取池 IP 是否已存在
-	if err := s.CheckInstancesExists(ctx, monitorScrapePool); err != nil {
+	if err := s.checkInstancesExists(ctx, monitorScrapePool); err != nil {
 		s.l.Error("创建抓取池失败：检查抓取池 IP 是否存在时出错", zap.Error(err))
 		return err
 	}
@@ -114,7 +114,7 @@ func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, monitor
 	}
 
 	// 检查新的抓取池 IP 是否已存在
-	if err := s.CheckInstancesExists(ctx, monitorScrapePool); err != nil {
+	if err := s.checkInstancesExists(ctx, monitorScrapePool); err != nil {
 		s.l.Error("更新抓取池失败：检查抓取池 IP 是否存在时出错", zap.Error(err))
 		return err
 	}
@@ -163,7 +163,7 @@ func (s *scrapePoolService) DeleteMonitorScrapePool(ctx context.Context, id int)
 	return nil
 }
 
-func (s *scrapePoolService) CheckInstancesExists(ctx context.Context, req *model.MonitorScrapePool) error {
+func (s *scrapePoolService) checkInstancesExists(ctx context.Context, req *model.MonitorScrapePool) error {
 	pools, err := s.dao.GetAllMonitorScrapePool(ctx)
 	if err != nil {
 		s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))

@@ -40,7 +40,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/prometheus/alertmanager/pkg/labels"
 	pcc "github.com/prometheus/common/config"
-	pm "github.com/prometheus/common/model"
 	promModel "github.com/prometheus/common/model"
 	pc "github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
@@ -74,7 +73,7 @@ func CheckPoolIpExists(pools []*model.MonitorScrapePool, req *model.MonitorScrap
 		}
 	}
 
-	return 0
+	return nil
 }
 
 func CheckAlertsIpExists(req *model.MonitorAlertManagerPool, rules []*model.MonitorAlertManagerPool) bool {
@@ -174,11 +173,11 @@ func ParseURL(u string) (*pcc.URL, error) {
 }
 
 // GenPromDuration 转换秒为Prometheus Duration
-func GenPromDuration(seconds int) pm.Duration {
+func GenPromDuration(seconds int) promModel.Duration {
 	if seconds <= 0 {
-		return pm.Duration(5 * time.Second)
+		return promModel.Duration(5 * time.Second)
 	}
-	return pm.Duration(time.Duration(seconds) * time.Second)
+	return promModel.Duration(time.Duration(seconds) * time.Second)
 }
 
 // DeepCopyScrapeConfig 深度拷贝 ScrapeConfig
