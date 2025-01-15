@@ -104,7 +104,7 @@ func CheckAlertsIpExists(req *model.MonitorAlertManagerPool, rules []*model.Moni
 }
 
 func CheckAlertIpExists(req *model.MonitorAlertManagerPool, pools []*model.MonitorAlertManagerPool) error {
-	ips := make([]string, 0)
+	var ips []string
 
 	for _, pool := range pools {
 		if pool.ID == req.ID {
