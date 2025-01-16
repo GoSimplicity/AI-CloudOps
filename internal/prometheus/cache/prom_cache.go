@@ -140,7 +140,7 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 			}
 
 			// 写入配置文件
-			filePath := fmt.Sprintf("%s/prometheus_pool_%s.yaml", p.localYamlDir, ip)
+			filePath := fmt.Sprintf("%s/prometheus_pool_%s_%d.yaml", p.localYamlDir, pool.Name, idx)
 
 			// 创建目录
 			dir := filepath.Dir(filePath)
@@ -238,9 +238,6 @@ func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePo
 		config.AlertingConfig = pc.AlertingConfig{
 			AlertmanagerConfigs: []*pc.AlertmanagerConfig{alertConfig},
 		}
-
-		// 添加告警规则文件
-		config.RuleFiles = append(config.RuleFiles, pool.RuleFilePath)
 	}
 
 	// 启用预聚合，添加规则文件

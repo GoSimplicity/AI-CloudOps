@@ -130,10 +130,9 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) e
 
 		// 写入配置文件并更新缓存
 		for index, ip := range pool.AlertManagerInstances {
-			fileName := fmt.Sprintf("%s/alertmanager_pool_%s_%s_%d.yaml",
+			fileName := fmt.Sprintf("%s/alertmanager_pool_%s_%d.yaml",
 				a.localYamlDir,
 				pool.Name,
-				ip,
 				index,
 			)
 
