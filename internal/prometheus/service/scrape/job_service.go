@@ -28,8 +28,9 @@ package scrape
 import (
 	"context"
 	"errors"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
+
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
