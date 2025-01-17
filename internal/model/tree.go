@@ -129,9 +129,10 @@ type ResourceEcs struct {
 	OSName            string     `json:"osName" gorm:"type:varchar(100);comment:操作系统名称，例：CentOS 7.4 64 位"`     // 操作系统名称
 	ImageId           string     `json:"imageId" gorm:"type:varchar(100);comment:镜像模板 ID"`                     // 镜像模板 ID
 	Hostname          string     `json:"hostname" gorm:"type:varchar(100);comment:主机名"`                        // 主机名
-	NetworkInterfaces StringList `json:"networkInterfaces" gorm:"type:varchar(500);comment:弹性网卡 ID 集合"`        // 弹性网卡 ID 集合
-	DiskIds           StringList `json:"diskIds" gorm:"type:varchar(500);comment:云盘 ID 集合"`                    // 云盘 ID 集合
-	Status            string     `json:"status" gorm:"type:varchar(50);comment:资源状态，如 运行中、已停止、创建中"`            // 资源状态
+	Password          string     `json:"password" gorm:"comment:密码"`
+	NetworkInterfaces StringList `json:"networkInterfaces" gorm:"type:varchar(500);comment:弹性网卡 ID 集合"` // 弹性网卡 ID 集合
+	DiskIds           StringList `json:"diskIds" gorm:"type:varchar(500);comment:云盘 ID 集合"`             // 云盘 ID 集合
+	Status            string     `json:"status" gorm:"type:varchar(50);comment:资源状态，如 运行中、已停止、创建中"`     // 资源状态
 	// 时间相关字段
 	StartTime       string `json:"startTime" gorm:"type:varchar(30);comment:最近启动时间, ISO 8601 标准, UTC+0 时间"`       // 最近启动时间
 	AutoReleaseTime string `json:"autoReleaseTime" gorm:"type:varchar(30);comment:自动释放时间, ISO 8601 标准, UTC+0 时间"` // 自动释放时间

@@ -26,6 +26,10 @@
 package utils
 
 import (
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
@@ -204,4 +208,57 @@ func Ping(ipAddr string) bool {
 
 	stats := pinger.Statistics()
 	return stats.PacketsRecv > 0
+}
+
+// AesEncrypt AES加密
+func AesEncrypt(data []byte, key []byte) ([]byte, error) {
+	// 创建加密实例
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	// 填充数据
+	blockSize := block.BlockSize()
+	padding := blockSize - len(data)%blockSize
+	padText := bytes.Repeat([]byte{byte(padding)}, padding)
+	data = append(data, padText...)
+
+	// 加密
+	encrypted := make([]byte, len(data))
+	mode := cipher.NewCBCEncrypter(block, key[:blockSize])
+	mode.CryptBlocks(encrypted, data)
+
+	return encrypted, nil
+}
+
+// AesDecrypt AES解密
+func AesDecrypt(encrypted []byte, key []byte) ([]byte, error) {
+	// 创建解密实例
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	// 解密
+	blockSize := block.BlockSize()
+	mode := cipher.NewCBCDecrypter(block, key[:blockSize])
+	decrypted := make([]byte, len(encrypted))
+	mode.CryptBlocks(decrypted, encrypted)
+
+	// 去除填充
+	padding := int(decrypted[len(decrypted)-1])
+	decrypted = decrypted[:len(decrypted)-padding]
+
+	return decrypted, nil
+}
+
+// Base64Encode 将字节数组转换为 base64 编码的字符串
+func Base64Encode(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+// Base64Decode 将 base64 编码的字符串转换为字节数组
+func Base64Decode(encoded string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(encoded)
 }
