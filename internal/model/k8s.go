@@ -35,14 +35,14 @@ import (
 // K8sCluster Kubernetes 集群的配置
 type K8sCluster struct {
 	Model
-	Name                string     `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex;size:100;comment:集群名称"`      // 集群名称
-	NameZh              string     `json:"name_zh" binding:"required,min=1,max=500" gorm:"uniqueIndex;size:100;comment:集群中文名称"` // 集群中文名称
-	UserID              int        `json:"user_id" gorm:"comment:创建者用户ID"`                                                      // 创建者用户ID
-	CpuRequest          string     `json:"cpu_request,omitempty" gorm:"comment:CPU 请求量"`                                        // CPU 请求量
-	CpuLimit            string     `json:"cpu_limit,omitempty" gorm:"comment:CPU 限制量"`                                          // CPU 限制量
-	MemoryRequest       string     `json:"memory_request,omitempty" gorm:"comment:内存请求量"`                                       // 内存请求量
-	MemoryLimit         string     `json:"memory_limit,omitempty" gorm:"comment:内存限制量"`                                         // 内存限制量
-	RestrictedNameSpace StringList `json:"restricted_name_space" gorm:"comment:资源限制命名空间"`                                       // 资源限制命名空间
+	Name                string     `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:集群名称"`      // 集群名称
+	NameZh              string     `json:"name_zh" binding:"required,min=1,max=500" gorm:"size:100;comment:集群中文名称"` // 集群中文名称
+	UserID              int        `json:"user_id" gorm:"comment:创建者用户ID"`                                          // 创建者用户ID
+	CpuRequest          string     `json:"cpu_request,omitempty" gorm:"comment:CPU 请求量"`                            // CPU 请求量
+	CpuLimit            string     `json:"cpu_limit,omitempty" gorm:"comment:CPU 限制量"`                              // CPU 限制量
+	MemoryRequest       string     `json:"memory_request,omitempty" gorm:"comment:内存请求量"`                           // 内存请求量
+	MemoryLimit         string     `json:"memory_limit,omitempty" gorm:"comment:内存限制量"`                             // 内存限制量
+	RestrictedNameSpace StringList `json:"restricted_name_space" gorm:"comment:资源限制命名空间"`                           // 资源限制命名空间
 
 	Env                  string `json:"env,omitempty" gorm:"comment:集群环境，例如 prod, stage, dev, rc, press"`     // 集群环境
 	Version              string `json:"version,omitempty" gorm:"comment:集群版本"`                                // 集群版本
@@ -62,48 +62,48 @@ type K8sCluster struct {
 
 // K8sNode Kubernetes 节点
 type K8sNode struct {
-	Name              string               `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex;size:100;comment:节点名称"` // 节点名称
-	ClusterID         int                  `json:"cluster_id" gorm:"index;not null;comment:所属集群ID"`                                // 所属集群ID
-	Status            string               `json:"status" gorm:"comment:节点状态，例如 Ready, NotReady, SchedulingDisabled"`              // 节点状态
-	ScheduleEnable    bool                 `json:"schedule_enable" gorm:"comment:节点是否可调度"`                                         // 节点是否可调度
-	Roles             []string             `json:"roles" gorm:"type:text;serializer:json;comment:节点角色，例如 master, worker"`          // 节点角色
-	Age               string               `json:"age" gorm:"comment:节点存在时间，例如 5d"`                                                // 节点存在时间
-	IP                string               `json:"ip" gorm:"comment:节点内部IP"`                                                       // 节点内部IP
-	PodNum            int                  `json:"pod_num" gorm:"comment:节点上的 Pod 数量"`                                             // 节点上的 Pod 数量
-	CpuRequestInfo    string               `json:"cpu_request_info" gorm:"comment:CPU 请求信息，例如 500m/2"`                             // CPU 请求信息
-	CpuLimitInfo      string               `json:"cpu_limit_info" gorm:"comment:CPU 限制信息，例如 1/2"`                                  // CPU 限制信息
-	CpuUsageInfo      string               `json:"cpu_usage_info" gorm:"comment:CPU 使用信息，例如 300m/2 (15%)"`                         // CPU 使用信息
-	MemoryRequestInfo string               `json:"memory_request_info" gorm:"comment:内存请求信息，例如 1Gi/8Gi"`                           // 内存请求信息
-	MemoryLimitInfo   string               `json:"memory_limit_info" gorm:"comment:内存限制信息，例如 2Gi/8Gi"`                             // 内存限制信息
-	MemoryUsageInfo   string               `json:"memory_usage_info" gorm:"comment:内存使用信息，例如 1.5Gi/8Gi (18.75%)"`                  // 内存使用信息
-	PodNumInfo        string               `json:"pod_num_info" gorm:"comment:Pod 数量信息，例如 10/50 (20%)"`                            // Pod 数量信息
-	CpuCores          string               `json:"cpu_cores" gorm:"comment:CPU 核心信息，例如 2/4"`                                       // CPU 核心信息
-	MemGibs           string               `json:"mem_gibs" gorm:"comment:内存信息，例如 8Gi/16Gi"`                                       // 内存信息
-	EphemeralStorage  string               `json:"ephemeral_storage" gorm:"comment:临时存储信息，例如 100Gi/200Gi"`                         // 临时存储信息
-	KubeletVersion    string               `json:"kubelet_version" gorm:"comment:Kubelet 版本"`                                      // Kubelet 版本
-	CriVersion        string               `json:"cri_version" gorm:"comment:容器运行时接口版本"`                                           // 容器运行时接口版本
-	OsVersion         string               `json:"os_version" gorm:"comment:操作系统版本"`                                               // 操作系统版本
-	KernelVersion     string               `json:"kernel_version" gorm:"comment:内核版本"`                                             // 内核版本
-	Labels            []string             `json:"labels" gorm:"type:text;serializer:json;comment:节点标签列表"`                         // 节点标签列表
-	LabelsFront       string               `json:"labels_front" gorm:"-"`                                                          // 前端显示的标签字符串，格式为多行 key=value
-	TaintsFront       string               `json:"taints_front" gorm:"-"`                                                          // 前端显示的 Taints 字符串，格式为多行 key=value:Effect
-	LabelPairs        map[string]string    `json:"label_pairs" gorm:"-"`                                                           // 标签键值对映射
-	Annotation        map[string]string    `json:"annotation" gorm:"type:text;serializer:json;comment:注解键值对映射"`                    // 注解键值对映射
-	Conditions        []core.NodeCondition `json:"conditions" gorm:"-"`                                                            // 节点条件列表
-	Taints            []core.Taint         `json:"taints" gorm:"-"`                                                                // 节点 Taints 列表
-	Events            []OneEvent           `json:"events" gorm:"-"`                                                                // 节点相关事件列表，包含最近的事件信息
-	CreatedAt         time.Time            `json:"created_at" gorm:"comment:创建时间"`                                                 // 创建时间
-	UpdatedAt         time.Time            `json:"updated_at" gorm:"comment:更新时间"`                                                 // 更新时间
+	Name              string               `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:节点名称"`    // 节点名称
+	ClusterID         int                  `json:"cluster_id" gorm:"index;not null;comment:所属集群ID"`                       // 所属集群ID
+	Status            string               `json:"status" gorm:"comment:节点状态，例如 Ready, NotReady, SchedulingDisabled"`     // 节点状态
+	ScheduleEnable    bool                 `json:"schedule_enable" gorm:"comment:节点是否可调度"`                                // 节点是否可调度
+	Roles             []string             `json:"roles" gorm:"type:text;serializer:json;comment:节点角色，例如 master, worker"` // 节点角色
+	Age               string               `json:"age" gorm:"comment:节点存在时间，例如 5d"`                                       // 节点存在时间
+	IP                string               `json:"ip" gorm:"comment:节点内部IP"`                                              // 节点内部IP
+	PodNum            int                  `json:"pod_num" gorm:"comment:节点上的 Pod 数量"`                                    // 节点上的 Pod 数量
+	CpuRequestInfo    string               `json:"cpu_request_info" gorm:"comment:CPU 请求信息，例如 500m/2"`                    // CPU 请求信息
+	CpuLimitInfo      string               `json:"cpu_limit_info" gorm:"comment:CPU 限制信息，例如 1/2"`                         // CPU 限制信息
+	CpuUsageInfo      string               `json:"cpu_usage_info" gorm:"comment:CPU 使用信息，例如 300m/2 (15%)"`                // CPU 使用信息
+	MemoryRequestInfo string               `json:"memory_request_info" gorm:"comment:内存请求信息，例如 1Gi/8Gi"`                  // 内存请求信息
+	MemoryLimitInfo   string               `json:"memory_limit_info" gorm:"comment:内存限制信息，例如 2Gi/8Gi"`                    // 内存限制信息
+	MemoryUsageInfo   string               `json:"memory_usage_info" gorm:"comment:内存使用信息，例如 1.5Gi/8Gi (18.75%)"`         // 内存使用信息
+	PodNumInfo        string               `json:"pod_num_info" gorm:"comment:Pod 数量信息，例如 10/50 (20%)"`                   // Pod 数量信息
+	CpuCores          string               `json:"cpu_cores" gorm:"comment:CPU 核心信息，例如 2/4"`                              // CPU 核心信息
+	MemGibs           string               `json:"mem_gibs" gorm:"comment:内存信息，例如 8Gi/16Gi"`                              // 内存信息
+	EphemeralStorage  string               `json:"ephemeral_storage" gorm:"comment:临时存储信息，例如 100Gi/200Gi"`                // 临时存储信息
+	KubeletVersion    string               `json:"kubelet_version" gorm:"comment:Kubelet 版本"`                             // Kubelet 版本
+	CriVersion        string               `json:"cri_version" gorm:"comment:容器运行时接口版本"`                                  // 容器运行时接口版本
+	OsVersion         string               `json:"os_version" gorm:"comment:操作系统版本"`                                      // 操作系统版本
+	KernelVersion     string               `json:"kernel_version" gorm:"comment:内核版本"`                                    // 内核版本
+	Labels            []string             `json:"labels" gorm:"type:text;serializer:json;comment:节点标签列表"`                // 节点标签列表
+	LabelsFront       string               `json:"labels_front" gorm:"-"`                                                 // 前端显示的标签字符串，格式为多行 key=value
+	TaintsFront       string               `json:"taints_front" gorm:"-"`                                                 // 前端显示的 Taints 字符串，格式为多行 key=value:Effect
+	LabelPairs        map[string]string    `json:"label_pairs" gorm:"-"`                                                  // 标签键值对映射
+	Annotation        map[string]string    `json:"annotation" gorm:"type:text;serializer:json;comment:注解键值对映射"`           // 注解键值对映射
+	Conditions        []core.NodeCondition `json:"conditions" gorm:"-"`                                                   // 节点条件列表
+	Taints            []core.Taint         `json:"taints" gorm:"-"`                                                       // 节点 Taints 列表
+	Events            []OneEvent           `json:"events" gorm:"-"`                                                       // 节点相关事件列表，包含最近的事件信息
+	CreatedAt         time.Time            `json:"created_at" gorm:"comment:创建时间"`                                        // 创建时间
+	UpdatedAt         time.Time            `json:"updated_at" gorm:"comment:更新时间"`                                        // 更新时间
 }
 
 // K8sApp 面向运维的 Kubernetes 应用
 type K8sApp struct {
 	Model
-	Name         string        `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex;size:100;comment:应用名称"` // 应用名称
+	Name         string        `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:应用名称"` // 应用名称
 	K8sProjectID int           `json:"k8s_project_id" gorm:"comment:关联的 Kubernetes 项目ID"`                              // 关联的 Kubernetes 项目ID
 	TreeNodeID   int           `json:"tree_node_id" gorm:"comment:关联的树节点ID"`                                           // 关联的树节点ID
 	UserID       int           `json:"user_id" gorm:"comment:创建者用户ID"`                                                 // 创建者用户ID
-	Cluster      string        `json:"cluster" gorm:"uniqueIndex;size:100;comment:所属集群名称"`                             // 所属集群名称
+	Cluster      string        `json:"cluster" gorm:"size:100;comment:所属集群名称"`                             // 所属集群名称
 	K8sInstances []K8sInstance `json:"k8s_instances" gorm:"foreignKey:K8sAppID;comment:关联的 Kubernetes 实例"`             // 关联的 Kubernetes 实例
 	ServiceType  string        `json:"service_type,omitempty" gorm:"comment:服务类型"`                                     // 服务类型
 	Namespace    string        `json:"namespace,omitempty" gorm:"comment:Kubernetes 命名空间"`                             // Kubernetes 命名空间
@@ -122,11 +122,11 @@ type K8sApp struct {
 // K8sCronjob Kubernetes 定时任务的配置
 type K8sCronjob struct {
 	Model
-	Name         string     `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex;size:100;comment:定时任务名称"` // 定时任务名称
+	Name         string     `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:定时任务名称"` // 定时任务名称
 	Cluster      string     `json:"cluster,omitempty" gorm:"size:100;comment:所属集群"`                                   // 所属集群
 	TreeNodeID   int        `json:"tree_node_id" gorm:"comment:关联的树节点ID"`                                             // 关联的树节点ID
 	UserID       int        `json:"user_id" gorm:"comment:创建者用户ID"`                                                   // 创建者用户ID
-	K8sProjectID int        `json:"k8s_project_id" gorm:"uniqueIndex;comment:关联的 Kubernetes 项目ID"`                    // 关联的 Kubernetes 项目ID
+	K8sProjectID int        `json:"k8s_project_id" gorm:"comment:关联的 Kubernetes 项目ID"`                    // 关联的 Kubernetes 项目ID
 	Namespace    string     `json:"namespace,omitempty" gorm:"comment:命名空间"`                                          // 命名空间
 	Schedule     string     `json:"schedule,omitempty" gorm:"comment:调度表达式"`                                          // 调度表达式
 	Image        string     `json:"image,omitempty" gorm:"comment:镜像"`                                                // 镜像
@@ -150,13 +150,13 @@ type K8sCronjob struct {
 // K8sInstance Kubernetes 实例的配置
 type K8sInstance struct {
 	Model
-	Name          string                 `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex;size:100;comment:实例名称"` // 实例名称
+	Name          string                 `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:实例名称"` // 实例名称
 	UserID        int                    `json:"user_id" gorm:"comment:创建者用户ID"`                                                 // 创建者用户ID
 	Cluster       string                 `json:"cluster,omitempty" gorm:"size:100;comment:所属集群"`                                 // 所属集群
 	ContainerCore `json:"containerCore"` // 容器核心配置
 	Image         string                 `json:"image,omitempty" gorm:"comment:镜像"`                        // 镜像
 	Replicas      int                    `json:"replicas,omitempty" gorm:"comment:副本数量"`                   // 副本数量
-	K8sAppID      int                    `json:"k8s_appId" gorm:"uniqueIndex;comment:关联的 Kubernetes 应用ID"` // 关联的 Kubernetes 应用ID
+	K8sAppID      int                    `json:"k8s_appId" gorm:"comment:关联的 Kubernetes 应用ID"` // 关联的 Kubernetes 应用ID
 
 	// 前端使用字段
 	K8sAppName     string      `json:"k8s_app_name,omitempty" gorm:"-"`    // 应用名称
@@ -172,9 +172,9 @@ type K8sInstance struct {
 // K8sProject Kubernetes 项目的配置
 type K8sProject struct {
 	Model
-	Name       string   `json:"name" binding:"required,min=1,max=200" gorm:"uniqueIndex;size:100;comment:项目名称"`      // 项目名称
-	NameZh     string   `json:"name_zh" binding:"required,min=1,max=500" gorm:"uniqueIndex;size:100;comment:项目中文名称"` // 项目中文名称
-	Cluster    string   `json:"cluster" gorm:"uniqueIndex;size:100;comment:所属集群名称"`                                  // 所属集群名称
+	Name       string   `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:项目名称"`      // 项目名称
+	NameZh     string   `json:"name_zh" binding:"required,min=1,max=500" gorm:"size:100;comment:项目中文名称"` // 项目中文名称
+	Cluster    string   `json:"cluster" gorm:"size:100;comment:所属集群名称"`                                  // 所属集群名称
 	TreeNodeID int      `json:"tree_node_id" gorm:"comment:关联的树节点ID"`                                                // 关联的树节点ID
 	UserID     int      `json:"user_id" gorm:"comment:创建者用户ID"`                                                      // 创建者用户ID
 	K8sApps    []K8sApp `json:"k8s_apps,omitempty" gorm:"foreignKey:K8sProjectID;comment:关联的 Kubernetes 应用"`         // 关联的 Kubernetes 应用
@@ -189,7 +189,7 @@ type K8sProject struct {
 // K8sYamlTask Kubernetes YAML 任务的配置
 type K8sYamlTask struct {
 	Model
-	Name        string     `json:"name" gorm:"type:varchar(255);uniqueIndex;comment:YAML 任务名称"`     // YAML 任务名称
+	Name        string     `json:"name" gorm:"type:varchar(255);comment:YAML 任务名称"`     // YAML 任务名称
 	UserID      int        `json:"user_id" gorm:"comment:创建者用户ID"`                                  // 创建者用户ID
 	TemplateID  int        `json:"template_id" gorm:"comment:关联的模板ID"`                              // 关联的模板ID
 	ClusterId   int        `json:"cluster_id,omitempty" gorm:"comment:集群名称"`                        // 集群名称
@@ -208,7 +208,7 @@ type K8sYamlTask struct {
 // K8sYamlTemplate Kubernetes YAML 模板的配置
 type K8sYamlTemplate struct {
 	Model
-	Name      string `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex;size:100;comment:模板名称"` // 模板名称
+	Name      string `json:"name" binding:"required,min=1,max=50" gorm:"size:100;comment:模板名称"` // 模板名称
 	UserID    int    `json:"user_id" gorm:"comment:创建者用户ID"`                                                // 创建者用户ID
 	Content   string `json:"content,omitempty" gorm:"type:text;comment:yaml 模板内容"`                          // YAML 模板内容
 	ClusterId int    `json:"cluster_id,omitempty" gorm:"comment:对应集群id"`

@@ -63,6 +63,7 @@ func NewEcsResourceService(logger *zap.Logger, ecsResourceDao dao.TreeEcsResourc
 func (s *ecsResourceService) CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
 	// 生成资源的唯一哈希值
 	resource.Hash = generateResourceHash(resource)
+
 	if err := s.ecsResourceDao.Create(ctx, resource); err != nil {
 		s.logger.Error("CreateEcsResource 创建 ECS 资源失败", zap.Error(err))
 		return err
