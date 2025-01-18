@@ -142,18 +142,20 @@ func InitWebServer() *Cmd {
 	alertManagerSendService := alert2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, monitorCache, logger, userDAO)
 	sendGroupHandler := api6.NewSendGroupHandler(logger, alertManagerSendService)
 	engine := InitGinServer(v, userHandler, apiHandler, menuHandler, roleHandler, permissionHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler)
-	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, treeEcsDAO)
-	cronCron := InitAndRefreshK8sClient(k8sClient, logger, monitorCache, cronManager)
 	createK8sClusterTask := job.NewCreateK8sClusterTask(logger, k8sClient, clusterDAO)
 	updateK8sClusterTask := job.NewUpdateK8sClusterTask(logger, k8sClient, clusterDAO)
-	routes := job.NewRoutes(createK8sClusterTask, updateK8sClusterTask)
+	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, treeEcsDAO)
+	timedTask := job.NewTimedTask(logger, k8sClient, monitorCache, cronManager)
+	routes := job.NewRoutes(createK8sClusterTask, updateK8sClusterTask, timedTask)
 	server := InitAsynqServer()
+	scheduler := InitScheduler()
+	timedScheduler := job.NewTimedScheduler(scheduler)
 	cmd := &Cmd{
-		Server: engine,
-		Cron:   cronCron,
-		Start:  aliResourceService,
-		Routes: routes,
-		Asynq:  server,
+		Server:    engine,
+		Start:     aliResourceService,
+		Routes:    routes,
+		Asynq:     server,
+		Scheduler: timedScheduler,
 	}
 	return cmd
 }
