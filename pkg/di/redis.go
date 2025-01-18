@@ -33,7 +33,8 @@ import (
 func InitRedis() redis.Cmdable {
 	// 初始化 Redis 客户端
 	client := redis.NewClient(&redis.Options{
-		Addr: viper.GetString("redis.addr"),
+		Addr:     viper.GetString("redis.addr"),
+		Password: viper.GetString("redis.password"),
 	})
 
 	return client

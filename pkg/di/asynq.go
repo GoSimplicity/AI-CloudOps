@@ -26,17 +26,25 @@
 package di
 
 import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/job"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
-	"github.com/robfig/cron/v3"
+	"github.com/spf13/viper"
 )
 
-type Cmd struct {
-	Server *gin.Engine
-	Cron   *cron.Cron
-	Start  service.AliResourceService
-	Routes *job.Routes
-	Asynq  *asynq.Server
+func InitAsynqClient() *asynq.Client {
+	return asynq.NewClient(asynq.RedisClientOpt{
+		Addr:     viper.GetString("redis.addr"),
+		Password: viper.GetString("redis.password"),
+	})
+}
+
+func InitAsynqServer() *asynq.Server {
+	return asynq.NewServer(
+		asynq.RedisClientOpt{
+			Addr:     viper.GetString("redis.addr"),
+			Password: viper.GetString("redis.password"),
+		},
+		asynq.Config{
+			Concurrency: 10, // 设置并发数
+		},
+	)
 }
