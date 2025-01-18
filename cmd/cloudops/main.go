@@ -78,7 +78,13 @@ func Init() error {
 	}
 
 	// 启动定时任务和worker
-	go cmd.Cron.Start()
+	go func() {
+		cmd.Scheduler.RegisterTimedTasks()
+		if err := cmd.Scheduler.Run(); err != nil {
+			log.Fatalf("启动定时任务失败: %v", err)
+		}
+	}()
+
 	go cmd.Start.StartWorker()
 
 	// 启动异步任务服务器
@@ -113,8 +119,8 @@ func Init() error {
 	log.Println("正在关闭服务器...")
 
 	// 先停止定时任务
-	cmd.Cron.Stop()
-
+	cmd.Scheduler.Stop()
+	
 	// 关闭异步任务服务器
 	cmd.Asynq.Shutdown()
 

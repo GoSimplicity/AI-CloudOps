@@ -30,13 +30,12 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
-	"github.com/robfig/cron/v3"
 )
 
 type Cmd struct {
-	Server *gin.Engine
-	Cron   *cron.Cron
-	Start  service.AliResourceService
-	Routes *job.Routes
-	Asynq  *asynq.Server
+	Server    *gin.Engine
+	Start     service.AliResourceService
+	Routes    *job.Routes
+	Asynq     *asynq.Server
+	Scheduler *job.TimedScheduler
 }
