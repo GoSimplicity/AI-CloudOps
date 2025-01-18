@@ -29,6 +29,7 @@ package di
 
 import (
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
+	"github.com/GoSimplicity/AI-CloudOps/internal/job"
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
@@ -67,6 +68,8 @@ func InitWebServer() *Cmd {
 		InitDB,
 		InitCasbin,
 		InitAndRefreshK8sClient,
+		InitAsynqClient,
+		InitAsynqServer,
 		client.NewK8sClient,
 		cache.NewMonitorCache,
 		cache.NewAlertConfigCache,
@@ -159,6 +162,9 @@ func InitWebServer() *Cmd {
 		k8sDao.NewClusterDAO,
 		k8sDao.NewYamlTemplateDAO,
 		k8sDao.NewYamlTaskDAO,
+		job.NewCreateK8sClusterTask,
+		job.NewUpdateK8sClusterTask,
+		job.NewRoutes,
 		ssh.NewSSH,
 		wire.Struct(new(Cmd), "*"),
 	)

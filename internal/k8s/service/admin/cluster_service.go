@@ -27,14 +27,16 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
+	"github.com/hibiken/asynq"
+	"gorm.io/gorm"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/job"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"sync"
-	"time"
 
 	"go.uber.org/zap"
 )
@@ -55,17 +57,18 @@ type ClusterService interface {
 }
 
 type clusterService struct {
-	dao    admin.ClusterDAO
-	client client.K8sClient
-	l      *zap.Logger
+	dao         admin.ClusterDAO
+	client      client.K8sClient
+	asynqClient *asynq.Client
+	l           *zap.Logger
 }
 
-// NewClusterService 创建并返回一个 ClusterService 实例
-func NewClusterService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) ClusterService {
+func NewClusterService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger, asynqClient *asynq.Client) ClusterService {
 	return &clusterService{
-		dao:    dao,
-		client: client,
-		l:      l,
+		dao:         dao,
+		client:      client,
+		asynqClient: asynqClient,
+		l:           l,
 	}
 }
 
@@ -87,89 +90,40 @@ func (c *clusterService) GetClusterByID(ctx context.Context, id int) (*model.K8s
 
 // CreateCluster 创建一个新的 Kubernetes 集群
 func (c *clusterService) CreateCluster(ctx context.Context, cluster *model.K8sCluster) (err error) {
+	// 检查集群是否存在
+	existingCluster, err := c.dao.GetClusterByName(ctx, cluster.Name)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		c.l.Error("CreateCluster: 查询集群失败", zap.Error(err))
+		return fmt.Errorf("查询集群失败: %w", err)
+	}
+
+	if existingCluster != nil {
+		c.l.Error("CreateCluster: 集群已存在", zap.Int("clusterID", cluster.ID))
+		return fmt.Errorf("集群已存在: %w", err)
+	}
+
+	cluster.Status = "PENDING"
+
 	// 创建集群记录
 	if err := c.dao.CreateCluster(ctx, cluster); err != nil {
 		c.l.Error("CreateCluster: 创建集群记录失败", zap.Error(err))
 		return fmt.Errorf("创建集群记录失败: %w", err)
 	}
 
-	// 后续操作如果出现错误时回滚集群记录
-	defer func() {
-		if err != nil {
-			c.l.Info("CreateCluster: 回滚集群记录", zap.Int("clusterID", cluster.ID))
-			if rollbackErr := c.dao.DeleteCluster(ctx, cluster.ID); rollbackErr != nil {
-				c.l.Error("CreateCluster: 回滚集群记录失败", zap.Error(rollbackErr))
-			}
-		}
-	}()
-
-	// 初始化 Kubernetes 客户端
-	kubeClient, err := pkg.InitAadGetKubeClient(ctx, cluster, c.l, c.client)
+	// 放入异步任务队列
+	payload := job.CreateK8sClusterPayload{
+		Cluster: cluster,
+	}
+	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		c.l.Error("CreateCluster: 初始化 Kubernetes 客户端失败", zap.Error(err))
-		return err
+		c.l.Error("CreateCluster: 序列化任务载荷失败", zap.Error(err))
+		return fmt.Errorf("序列化任务载荷失败: %w", err)
 	}
 
-	// 限制并发数，避免过多并发请求
-	const maxConcurrent = 5
-	semaphore := make(chan struct{}, maxConcurrent)
-
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(cluster.RestrictedNameSpace))
-
-	ctx1, cancel := context.WithTimeout(ctx, time.Duration(cluster.ActionTimeoutSeconds)*time.Second)
-	defer cancel()
-
-	// 如果 RestrictedNameSpace 为空，默认为 "default" 命名空间
-	if cluster.RestrictedNameSpace == nil || len(cluster.RestrictedNameSpace) == 0 {
-		cluster.RestrictedNameSpace = []string{"default"}
-	}
-
-	// 为每个命名空间启动并发处理
-	for _, namespace := range cluster.RestrictedNameSpace {
-		wg.Add(1)
-		ns := namespace
-
-		go func() {
-			defer wg.Done()
-
-			semaphore <- struct{}{}
-			defer func() {
-				<-semaphore // 确保在退出时释放信号量
-			}()
-
-			// 确保命名空间存在
-			if err := pkg.EnsureNamespace(ctx1, kubeClient, ns); err != nil {
-				errChan <- fmt.Errorf("确保命名空间 %s 存在失败: %w", ns, err)
-				cancel()
-				return
-			}
-
-			// 应用 LimitRange 配置
-			if err := pkg.ApplyLimitRange(ctx1, kubeClient, ns, cluster); err != nil {
-				errChan <- fmt.Errorf("应用 LimitRange 到命名空间 %s 失败: %w", ns, err)
-				cancel()
-				return
-			}
-
-			// 应用 ResourceQuota 配置
-			if err := pkg.ApplyResourceQuota(ctx1, kubeClient, ns, cluster); err != nil {
-				errChan <- fmt.Errorf("应用 ResourceQuota 到命名空间 %s 失败: %w", ns, err)
-				cancel()
-				return
-			}
-		}()
-	}
-
-	wg.Wait()
-	close(errChan)
-
-	// 检查是否有错误
-	for e := range errChan {
-		if e != nil {
-			c.l.Error("CreateCluster: 处理命名空间时发生错误", zap.Error(e))
-			return e
-		}
+	task := asynq.NewTask(job.DeferCreateK8sCluster, jsonPayload)
+	if _, err := c.asynqClient.Enqueue(task); err != nil {
+		c.l.Error("CreateCluster: 放入异步任务队列失败", zap.Error(err))
+		return fmt.Errorf("放入异步任务队列失败: %w", err)
 	}
 
 	c.l.Info("CreateCluster: 成功创建 Kubernetes 集群", zap.Int("clusterID", cluster.ID))
@@ -178,77 +132,26 @@ func (c *clusterService) CreateCluster(ctx context.Context, cluster *model.K8sCl
 
 // UpdateCluster 更新指定 ID 的 Kubernetes 集群
 func (c *clusterService) UpdateCluster(ctx context.Context, cluster *model.K8sCluster) error {
-	// 如果 RestrictedNameSpace 为空，则跳过命名空间操作
-	if cluster.RestrictedNameSpace != nil && len(cluster.RestrictedNameSpace) > 0 {
-		kubeClient, err := pkg.InitAadGetKubeClient(ctx, cluster, c.l, c.client)
-		if err != nil {
-			c.l.Error("UpdateCluster: 初始化 Kubernetes 客户端失败", zap.Error(err))
-			return err
-		}
-
-		// 限制并发数，避免过多并发
-		const maxConcurrent = 5
-		semaphore := make(chan struct{}, maxConcurrent)
-
-		var wg sync.WaitGroup
-		errChan := make(chan error, len(cluster.RestrictedNameSpace))
-
-		// 设置超时控制
-		ctx1, cancel := context.WithTimeout(ctx, time.Duration(cluster.ActionTimeoutSeconds)*time.Second)
-		defer cancel()
-
-		// 并发处理命名空间
-		for _, ns := range cluster.RestrictedNameSpace {
-			if ns == "" {
-				continue
-			}
-
-			wg.Add(1)
-
-			go func(ns string) {
-				defer wg.Done()
-
-				semaphore <- struct{}{} // 信号量控制并发数
-				defer func() {
-					<-semaphore
-				}()
-
-				// 确保命名空间存在
-				if err := pkg.EnsureNamespace(ctx1, kubeClient, ns); err != nil {
-					errChan <- fmt.Errorf("确保命名空间 %s 存在失败: %w", ns, err)
-					return
-				}
-
-				// 应用 LimitRange
-				if err := pkg.ApplyLimitRange(ctx1, kubeClient, ns, cluster); err != nil {
-					errChan <- fmt.Errorf("应用 LimitRange 到命名空间 %s 失败: %w", ns, err)
-					return
-				}
-
-				// 应用 ResourceQuota
-				if err := pkg.ApplyResourceQuota(ctx1, kubeClient, ns, cluster); err != nil {
-					errChan <- fmt.Errorf("应用 ResourceQuota 到命名空间 %s 失败: %w", ns, err)
-					return
-				}
-			}(ns)
-		}
-
-		wg.Wait()
-		close(errChan)
-
-		// 检查并处理并发任务中的错误
-		for e := range errChan {
-			if e != nil {
-				c.l.Error("UpdateCluster: 处理命名空间时发生错误", zap.Error(e))
-				return e
-			}
-		}
-	}
-
 	// 更新集群记录
 	if err := c.dao.UpdateCluster(ctx, cluster); err != nil {
 		c.l.Error("UpdateCluster: 更新集群失败", zap.Error(err))
 		return fmt.Errorf("更新集群失败: %w", err)
+	}
+
+	// 放入异步任务队列
+	payload := job.UpdateK8sClusterPayload{
+		Cluster: cluster,
+	}
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		c.l.Error("UpdateCluster: 序列化任务载荷失败", zap.Error(err))
+		return fmt.Errorf("序列化任务载荷失败: %w", err)
+	}
+
+	task := asynq.NewTask(job.DeferUpdateK8sCluster, jsonPayload)
+	if _, err := c.asynqClient.Enqueue(task); err != nil {
+		c.l.Error("UpdateCluster: 放入异步任务队列失败", zap.Error(err))
+		return fmt.Errorf("放入异步任务队列失败: %w", err)
 	}
 
 	c.l.Info("UpdateCluster: 成功更新 Kubernetes 集群", zap.Int("clusterID", cluster.ID))

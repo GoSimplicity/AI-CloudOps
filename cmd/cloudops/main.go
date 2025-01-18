@@ -81,6 +81,14 @@ func Init() error {
 	go cmd.Cron.Start()
 	go cmd.Start.StartWorker()
 
+	// 启动异步任务服务器
+	go func() {
+		mux := cmd.Routes.RegisterHandlers()
+		if err := cmd.Asynq.Run(mux); err != nil {
+			log.Fatalf("启动异步任务服务器失败: %v", err)
+		}
+	}()
+
 	// 创建HTTP服务器
 	srv := &http.Server{
 		Addr:    ":" + viper.GetString("server.port"),
@@ -106,6 +114,9 @@ func Init() error {
 
 	// 先停止定时任务
 	cmd.Cron.Stop()
+
+	// 关闭异步任务服务器
+	cmd.Asynq.Shutdown()
 
 	// 设置关闭超时时间为30秒
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

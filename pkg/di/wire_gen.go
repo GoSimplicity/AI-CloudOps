@@ -8,6 +8,7 @@ package di
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron"
+	"github.com/GoSimplicity/AI-CloudOps/internal/job"
 	api5 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
@@ -85,7 +86,8 @@ func InitWebServer() *Cmd {
 	notAuthHandler := api4.NewNotAuthHandler(notAuthService)
 	clusterDAO := admin.NewClusterDAO(db, logger)
 	k8sClient := client.NewK8sClient(logger, clusterDAO)
-	clusterService := admin2.NewClusterService(clusterDAO, k8sClient, logger)
+	asynqClient := InitAsynqClient()
+	clusterService := admin2.NewClusterService(clusterDAO, k8sClient, logger, asynqClient)
 	k8sClusterHandler := api5.NewK8sClusterHandler(logger, clusterService)
 	configMapService := admin2.NewConfigMapService(clusterDAO, k8sClient, logger)
 	k8sConfigMapHandler := api5.NewK8sConfigMapHandler(logger, configMapService)
@@ -142,10 +144,16 @@ func InitWebServer() *Cmd {
 	engine := InitGinServer(v, userHandler, apiHandler, menuHandler, roleHandler, permissionHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler)
 	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, treeEcsDAO)
 	cronCron := InitAndRefreshK8sClient(k8sClient, logger, monitorCache, cronManager)
+	createK8sClusterTask := job.NewCreateK8sClusterTask(logger, k8sClient, clusterDAO)
+	updateK8sClusterTask := job.NewUpdateK8sClusterTask(logger, k8sClient, clusterDAO)
+	routes := job.NewRoutes(createK8sClusterTask, updateK8sClusterTask)
+	server := InitAsynqServer()
 	cmd := &Cmd{
 		Server: engine,
 		Cron:   cronCron,
 		Start:  aliResourceService,
+		Routes: routes,
+		Asynq:  server,
 	}
 	return cmd
 }

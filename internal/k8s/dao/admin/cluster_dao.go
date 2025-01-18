@@ -37,6 +37,7 @@ type ClusterDAO interface {
 	ListAllClusters(ctx context.Context) ([]*model.K8sCluster, error)
 	CreateCluster(ctx context.Context, cluster *model.K8sCluster) error
 	UpdateCluster(ctx context.Context, cluster *model.K8sCluster) error
+	UpdateClusterStatus(ctx context.Context, id int, status string) error
 	DeleteCluster(ctx context.Context, id int) error
 	GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error)
 	GetClusterByName(ctx context.Context, name string) (*model.K8sCluster, error)
@@ -88,6 +89,18 @@ func (c *clusterDAO) UpdateCluster(ctx context.Context, cluster *model.K8sCluste
 	}
 
 	tx.Commit()
+	return nil
+}
+
+// UpdateClusterStatus 更新集群状态
+func (c *clusterDAO) UpdateClusterStatus(ctx context.Context, id int, status string) error {
+	if err := c.db.WithContext(ctx).Model(&model.K8sCluster{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"status": status,
+	}).Error; err != nil {
+		c.l.Error("UpdateClusterStatus 更新集群状态失败", zap.Int("id", id), zap.String("status", status), zap.Error(err))
+		return err
+	}
+
 	return nil
 }
 
