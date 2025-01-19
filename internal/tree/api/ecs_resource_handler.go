@@ -102,6 +102,11 @@ func (r *EcsResourceHandler) CreateEcsResource(ctx *gin.Context) {
 		return
 	}
 
+	// 加密密码
+	if req.Password != "" {
+		req.EncryptedPassword = utils.Base64Encrypt(req.Password)
+	}
+
 	if err := r.service.CreateEcsResource(ctx, &req); err != nil {
 		utils.ErrorWithMessage(ctx, "创建ECS资源失败: "+err.Error())
 		return

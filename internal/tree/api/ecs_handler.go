@@ -172,10 +172,18 @@ func (e *EcsHandler) HostConsole(ctx *gin.Context) {
 		return
 	}
 
+	// 解密密码
+	password, err := utils.Base64Decrypt(ecs.EncryptedPassword)
+	if err != nil {
+		e.l.Error("解密密码失败", zap.Error(err))
+		utils.ErrorWithMessage(ctx, "解密密码失败: "+err.Error())
+		return
+	}
+
 	uc := ctx.MustGet("user").(utils.UserClaims)
 
 	// 创建 SSH 远程连接，并尝试连接到主机
-	err = e.ssh.Connect(ecs.IpAddr, ecs.Port, ecs.Username, ecs.Password, ecs.Key, ecs.Mode, uc.Uid)
+	err = e.ssh.Connect(ecs.IpAddr, ecs.Port, ecs.Username, password, ecs.Key, ecs.Mode, uc.Uid)
 	if err != nil {
 		e.l.Error("connect ecs failed", zap.Error(err))
 		utils.ErrorWithMessage(ctx, "连接ECS实例失败: "+err.Error())
