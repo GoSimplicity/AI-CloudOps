@@ -40,6 +40,7 @@ type RoleService interface {
 	DeleteRole(ctx context.Context, id int) error
 	GetRole(ctx context.Context, id int) (*model.Role, error)
 	GetUserRole(ctx context.Context, userId int) (*model.Role, error)
+	GetRoleByName(ctx context.Context, name string) (*model.Role, error)
 }
 
 type roleService struct {
@@ -82,4 +83,9 @@ func (r *roleService) GetRole(ctx context.Context, id int) (*model.Role, error) 
 // GetUserRole 获取用户角色
 func (r *roleService) GetUserRole(ctx context.Context, userId int) (*model.Role, error) {
 	return r.roleDao.GetUserRole(ctx, userId)
+}
+
+// GetRoleByName 根据角色名称获取角色信息
+func (r *roleService) GetRoleByName(ctx context.Context, name string) (*model.Role, error) {
+	return r.roleDao.GetRoleByName(ctx, name)
 }

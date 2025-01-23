@@ -41,19 +41,21 @@ type Meta struct {
 }
 
 type Menu struct {
-	ID         int       `json:"id" gorm:"primaryKey;column:id;comment:菜单ID"`
-	Name       string    `json:"name" gorm:"column:name;type:varchar(50);not null;comment:菜单显示名称"`
-	ParentID   int       `json:"parent_id" gorm:"column:parent_id;default:0;comment:上级菜单ID,0表示顶级菜单"`
-	Path       string    `json:"path" gorm:"column:path;type:varchar(255);not null;comment:前端路由访问路径"`
-	Component  string    `json:"component" gorm:"column:component;type:varchar(255);not null;comment:前端组件文件路径"`
-	RouteName  string    `json:"route_name" gorm:"column:route_name;type:varchar(50);not null;comment:前端路由名称,需唯一"`
-	Hidden     int       `json:"hidden" gorm:"column:hidden;type:tinyint(1);default:0;comment:菜单是否隐藏(0:显示 1:隐藏)"`
-	Redirect   string    `json:"redirect" gorm:"column:redirect;type:varchar(255);default:'';comment:重定向路径"`
-	Meta       MetaField `json:"meta" gorm:"column:meta;type:json;serializer:json;comment:菜单元数据"`
-	CreateTime int64     `json:"create_time" gorm:"column:create_time;autoCreateTime;comment:记录创建时间戳"`
-	UpdateTime int64     `json:"update_time" gorm:"column:update_time;autoUpdateTime;comment:记录最后更新时间戳"`
-	IsDeleted  int       `json:"is_deleted" gorm:"column:is_deleted;type:tinyint(1);default:0;comment:逻辑删除标记(0:未删除 1:已删除)"`
-	Children   []*Menu   `json:"children" gorm:"-"` // 子菜单列表,不映射到数据库
+	ID           int       `json:"id" gorm:"primaryKey;autoIncrement;comment:主键ID"`                                     // 主键ID，自增
+	CreatedAt    int64     `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`                                       // 创建时间，自动记录
+	UpdatedAt    int64     `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`                                       // 更新时间，自动记录
+	DeletedAt    int64     `json:"deleted_at" gorm:"index;default:0;comment:删除时间"`                                      // 软删除时间，使用普通索引
+	Name         string    `json:"name" gorm:"type:varchar(50);not null;comment:菜单显示名称"`                                // 菜单显示名称，非空
+	ParentID     int       `json:"parent_id" gorm:"default:0;comment:上级菜单ID,0表示顶级菜单"`                                 // 上级菜单ID,0表示顶级菜单
+	Path         string    `json:"path" gorm:"type:varchar(255);not null;comment:前端路由访问路径"`                            // 前端路由访问路径，非空
+	Component    string    `json:"component" gorm:"type:varchar(255);not null;comment:前端组件文件路径"`                       // 前端组件文件路径，非空
+	RouteName    string    `json:"route_name" gorm:"type:varchar(50);uniqueIndex:idx_route_del;not null;comment:前端路由名称"` // 前端路由名称，唯一且非空
+	Hidden       int8      `json:"hidden" gorm:"type:tinyint(1);default:0;comment:菜单是否隐藏 0显示 1隐藏"`                    // 菜单是否隐藏，使用int8节省空间
+	Redirect     string    `json:"redirect" gorm:"type:varchar(255);default:'';comment:重定向路径"`                         // 重定向路径
+	Meta         MetaField `json:"meta" gorm:"type:json;serializer:json;comment:菜单元数据"`                                // 菜单元数据，使用JSON存储
+	Children     []*Menu   `json:"children" gorm:"-"`                                                                  // 子菜单列表,不映射到数据库
+	Users        []*User   `json:"users" gorm:"many2many:user_menus;comment:关联用户"`                                    // 多对多关联用户
+	Roles        []*Role   `json:"roles" gorm:"many2many:role_menus;comment:关联角色"`                                    // 多对多关联角色
 }
 
 type CreateMenuRequest struct {

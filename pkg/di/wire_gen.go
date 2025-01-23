@@ -24,14 +24,14 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/yaml"
 	api2 "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
-	service2 "github.com/GoSimplicity/AI-CloudOps/internal/system/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	api3 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	dao3 "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	service3 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	"github.com/GoSimplicity/AI-CloudOps/internal/user/service"
+	service2 "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 )
 
@@ -51,16 +51,16 @@ func InitWebServer() *Cmd {
 	apiDAO := dao.NewApiDAO(db, enforcer, logger)
 	permissionDAO := dao.NewPermissionDAO(db, logger, enforcer, apiDAO)
 	userDAO := dao2.NewUserDAO(db, logger, permissionDAO)
-	userService := service.NewUserService(userDAO)
+	roleDAO := dao.NewRoleDAO(db, logger, enforcer, permissionDAO)
+	roleService := service.NewRoleService(roleDAO, logger)
+	permissionService := service.NewPermissionService(logger, permissionDAO)
+	userService := service2.NewUserService(userDAO, roleService, permissionService)
 	userHandler := api.NewUserHandler(userService, logger, handler)
-	apiService := service2.NewApiService(logger, apiDAO)
+	apiService := service.NewApiService(logger, apiDAO)
 	apiHandler := api2.NewApiHandler(apiService)
 	menuDAO := dao.NewMenuDAO(db, logger)
-	menuService := service2.NewMenuService(menuDAO, logger)
+	menuService := service.NewMenuService(menuDAO, logger)
 	menuHandler := api2.NewMenuHandler(menuService)
-	roleDAO := dao.NewRoleDAO(db, logger, enforcer, permissionDAO)
-	roleService := service2.NewRoleService(roleDAO, logger)
-	permissionService := service2.NewPermissionService(logger, permissionDAO)
 	roleHandler := api2.NewRoleHandler(roleService, apiService, permissionService, logger)
 	permissionHandler := api2.NewPermissionHandler(permissionService)
 	treeNodeDAO := dao3.NewTreeNodeDAO(db, logger)
@@ -144,7 +144,7 @@ func InitWebServer() *Cmd {
 	engine := InitGinServer(v, userHandler, apiHandler, menuHandler, roleHandler, permissionHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler)
 	createK8sClusterTask := job.NewCreateK8sClusterTask(logger, k8sClient, clusterDAO)
 	updateK8sClusterTask := job.NewUpdateK8sClusterTask(logger, k8sClient, clusterDAO)
-	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, treeEcsDAO)
+	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, treeEcsDAO, clusterDAO, k8sClient)
 	timedTask := job.NewTimedTask(logger, k8sClient, monitorCache, cronManager)
 	routes := job.NewRoutes(createK8sClusterTask, updateK8sClusterTask, timedTask)
 	server := InitAsynqServer()

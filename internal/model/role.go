@@ -26,15 +26,17 @@
 package model
 
 type Role struct {
-	ID          int    `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
-	Name        string `json:"name" gorm:"column:name;type:varchar(50);not null;unique;comment:角色名称"`
-	Description string `json:"description" gorm:"column:description;type:varchar(255);comment:角色描述"`
-	RoleType    int    `json:"role_type" gorm:"column:role_type;type:tinyint(1);not null;comment:角色类型(1:系统角色,2:自定义角色)"`
-	IsDefault   int    `json:"is_default" gorm:"column:is_default;type:tinyint(1);default:0;comment:是否为默认角色(0:否,1:是)"`
-	CreateTime  int64  `json:"create_time" gorm:"column:create_time;autoCreateTime;comment:创建时间"`
-	UpdateTime  int64  `json:"update_time" gorm:"column:update_time;autoUpdateTime;comment:更新时间"`
-	IsDeleted   int    `json:"is_deleted" gorm:"column:is_deleted;type:tinyint(1);default:0;comment:是否删除(0:否,1:是)"`
-	Apis        []*Api `json:"apis" gorm:"-"`
+	ID        int     `json:"id" gorm:"primaryKey;autoIncrement;comment:主键ID"`                                    // 主键ID，自增
+	CreatedAt int64   `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`                                      // 创建时间，自动记录
+	UpdatedAt int64   `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`                                      // 更新时间，自动记录
+	DeletedAt int64   `json:"deleted_at" gorm:"index;default:0;comment:删除时间"`                                     // 软删除时间，使用普通索引
+	Name      string  `json:"name" gorm:"type:varchar(50);uniqueIndex:idx_name_del;not null;comment:角色名称"`         // 角色名称，唯一且非空
+	Desc      string  `json:"desc" gorm:"type:varchar(255);comment:角色描述"`                                         // 角色描述
+	RoleType  int8    `json:"role_type" gorm:"type:tinyint(1);not null;comment:角色类型 1系统角色 2自定义角色" binding:"oneof=1 2"` // 角色类型，使用int8节省空间
+	IsDefault int8    `json:"is_default" gorm:"type:tinyint(1);default:0;comment:是否为默认角色 0否 1是" binding:"oneof=0 1"`  // 是否默认角色，使用int8节省空间
+	Users     []*User `json:"users" gorm:"many2many:user_roles;comment:关联用户"`                                     // 多对多关联用户
+	Menus     []*Menu `json:"menus" gorm:"many2many:role_menus;comment:关联菜单"`                                    // 多对多关联菜单
+	Apis      []*Api  `json:"apis" gorm:"many2many:role_apis;comment:关联接口"`                                      // 多对多关联接口
 }
 
 type CreateRoleRequest struct {

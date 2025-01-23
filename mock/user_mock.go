@@ -28,6 +28,7 @@ package mock
 import (
 	"log"
 	"strconv"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/casbin/casbin/v2"
@@ -74,10 +75,16 @@ func (u *UserMock) CreateUserAdmin() error {
 
 	// 创建管理员用户实例
 	adminUser := model.User{
-		Username:    AdminUsername,
-		Password:    string(hashedPassword),
-		RealName:    "管理员账号",
-		AccountType: AdminAccountType,
+		Username:     AdminUsername,
+		Password:     string(hashedPassword),
+		RealName:     "管理员账号",
+		AccountType:  AdminAccountType,
+		Enable:       1,
+		HomePath:     "/",
+		Mobile:       "123123123",
+		FeiShuUserId: "123123123",
+		CreatedAt:    time.Now().Unix(),
+		UpdatedAt:    time.Now().Unix(),
 	}
 
 	// 使用 FirstOrCreate 方法查找或创建管理员用户
@@ -120,16 +127,23 @@ func (u *UserMock) CreateUserAdmin() error {
 		return err
 	}
 
+	// 先检查菜单是否存在
 	menuIds := []int{
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 		11, 12, 13, 14, 15, 16, 17, 18,
 		19, 20, 21, 22, 23, 24, 25, 26,
-		27, 28, 29, 30, 31,
+		27, 28, 29, 30,
 	}
 
-	// 构建批量插入的数据
-	userMenus := make([]map[string]interface{}, 0, len(menuIds))
-	for _, menuId := range menuIds {
+	var existingMenus []int
+	if err := u.db.Model(&model.Menu{}).Where("id IN ?", menuIds).Pluck("id", &existingMenus).Error; err != nil {
+		log.Printf("查询菜单失败: %v", err)
+		return err
+	}
+
+	// 构建批量插入的数据,只包含存在的菜单ID
+	userMenus := make([]map[string]interface{}, 0, len(existingMenus))
+	for _, menuId := range existingMenus {
 		userMenus = append(userMenus, map[string]interface{}{
 			"user_id": adminUser.ID,
 			"menu_id": menuId,
@@ -143,9 +157,11 @@ func (u *UserMock) CreateUserAdmin() error {
 	}
 
 	// 批量创建新的关联
-	if err := u.db.Table("user_menus").Create(userMenus).Error; err != nil {
-		log.Printf("添加用户菜单关联失败: %v", err)
-		return err
+	if len(userMenus) > 0 {
+		if err := u.db.Table("user_menus").Create(userMenus).Error; err != nil {
+			log.Printf("添加用户菜单关联失败: %v", err)
+			return err
+		}
 	}
 
 	log.Println("[用户模块Mock结束]")

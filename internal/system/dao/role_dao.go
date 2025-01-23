@@ -46,6 +46,7 @@ type RoleDAO interface {
 	ListRoles(ctx context.Context, page, pageSize int) ([]*model.Role, int, error)
 	GetRole(ctx context.Context, roleId int) (*model.Role, error)
 	GetUserRole(ctx context.Context, userId int) (*model.Role, error)
+	GetRoleByName(ctx context.Context, name string) (*model.Role, error)
 }
 
 type roleDAO struct {
@@ -79,7 +80,7 @@ func (r *roleDAO) CreateRole(ctx context.Context, role *model.Role, apiIds []int
 		var count int64
 
 		// 检查角色名是否已存在
-		if err := tx.Model(&model.Role{}).Where("name = ? AND is_deleted = ?", role.Name, 0).Count(&count).Error; err != nil {
+		if err := tx.Model(&model.Role{}).Where("name = ? AND deleted_at = ?", role.Name, 0).Count(&count).Error; err != nil {
 			return fmt.Errorf("检查角色名称失败: %v", err)
 		}
 		if count > 0 {
@@ -88,9 +89,9 @@ func (r *roleDAO) CreateRole(ctx context.Context, role *model.Role, apiIds []int
 
 		// 设置创建时间和更新时间
 		now := time.Now().Unix()
-		role.CreateTime = now
-		role.UpdateTime = now
-		role.IsDeleted = 0
+		role.CreatedAt = now
+		role.UpdatedAt = now
+		role.DeletedAt = 0
 
 		// 创建角色并返回ID
 		result := tx.Create(role)
@@ -98,7 +99,7 @@ func (r *roleDAO) CreateRole(ctx context.Context, role *model.Role, apiIds []int
 			return fmt.Errorf("创建角色失败: %v", result.Error)
 		}
 
-		roleId = result.Statement.Model.(*model.Role).ID
+		roleId = role.ID
 
 		return nil
 	})
@@ -124,7 +125,7 @@ func (r *roleDAO) GetRoleById(ctx context.Context, id int) (*model.Role, error) 
 	}
 
 	var role model.Role
-	if err := r.db.WithContext(ctx).Where("id = ? AND is_deleted = ?", id, 0).First(&role).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("id = ? AND deleted_at = ?", id, 0).First(&role).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -148,14 +149,14 @@ func (r *roleDAO) UpdateRole(ctx context.Context, role *model.Role) error {
 
 	// 获取原角色信息
 	var oldRole model.Role
-	if err := r.db.WithContext(ctx).Where("id = ? AND is_deleted = ?", role.ID, 0).First(&oldRole).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("id = ? AND deleted_at = ?", role.ID, 0).First(&oldRole).Error; err != nil {
 		return fmt.Errorf("获取原角色信息失败: %v", err)
 	}
 
 	// 检查角色名是否已被其他角色使用
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&model.Role{}).
-		Where("name = ? AND id != ? AND is_deleted = ?", role.Name, role.ID, 0).
+		Where("name = ? AND id != ? AND deleted_at = ?", role.Name, role.ID, 0).
 		Count(&count).Error; err != nil {
 		return fmt.Errorf("检查角色名称失败: %v", err)
 	}
@@ -165,7 +166,7 @@ func (r *roleDAO) UpdateRole(ctx context.Context, role *model.Role) error {
 
 	updates := map[string]interface{}{
 		"name":        role.Name,
-		"description": role.Description,
+		"desc":        role.Desc,
 		"role_type":   role.RoleType,
 		"is_default":  role.IsDefault,
 		"update_time": time.Now().Unix(),
@@ -173,7 +174,7 @@ func (r *roleDAO) UpdateRole(ctx context.Context, role *model.Role) error {
 
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		result := tx.Model(&model.Role{}).
-			Where("id = ? AND is_deleted = ?", role.ID, 0).
+			Where("id = ? AND deleted_at = ?", role.ID, 0).
 			Updates(updates)
 		if result.Error != nil {
 			return fmt.Errorf("更新角色失败: %v", result.Error)
@@ -223,7 +224,7 @@ func (r *roleDAO) DeleteRole(ctx context.Context, id int) error {
 
 	// 检查是否为默认角色
 	var role model.Role
-	if err := r.db.WithContext(ctx).Where("id = ? AND is_deleted = ?", id, 0).First(&role).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("id = ? AND deleted_at = ?", id, 0).First(&role).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("角色不存在")
 		}
@@ -235,11 +236,11 @@ func (r *roleDAO) DeleteRole(ctx context.Context, id int) error {
 	}
 
 	updates := map[string]interface{}{
-		"is_deleted":  1,
+		"deleted_at":  1,
 		"update_time": time.Now().Unix(),
 	}
 
-	result := r.db.WithContext(ctx).Model(&model.Role{}).Where("id = ? AND is_deleted = ?", id, 0).Updates(updates)
+	result := r.db.WithContext(ctx).Model(&model.Role{}).Where("id = ? AND deleted_at = ?", id, 0).Updates(updates)
 	if result.Error != nil {
 		return fmt.Errorf("删除角色失败: %v", result.Error)
 	}
@@ -264,7 +265,7 @@ func (r *roleDAO) ListRoles(ctx context.Context, page, pageSize int) ([]*model.R
 	var roles []*model.Role
 	var total int64
 
-	db := r.db.WithContext(ctx).Model(&model.Role{}).Where("is_deleted = ?", 0)
+	db := r.db.WithContext(ctx).Model(&model.Role{}).Where("deleted_at = ?", 0)
 
 	// 获取总数
 	if err := db.Count(&total).Error; err != nil {
@@ -287,7 +288,7 @@ func (r *roleDAO) GetRole(ctx context.Context, roleId int) (*model.Role, error) 
 	}
 
 	var role model.Role
-	if err := r.db.WithContext(ctx).Where("id = ? AND is_deleted = ?", roleId, 0).First(&role).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("id = ? AND deleted_at = ?", roleId, 0).First(&role).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -313,7 +314,7 @@ func (r *roleDAO) GetRole(ctx context.Context, roleId int) (*model.Role, error) 
 
 	// 查询API详细信息
 	if len(apiIds) > 0 {
-		if err := r.db.WithContext(ctx).Where("id IN ? AND is_deleted = ?", apiIds, 0).Find(&role.Apis).Error; err != nil {
+		if err := r.db.WithContext(ctx).Where("id IN ? AND deleted_at = ?", apiIds, 0).Find(&role.Apis).Error; err != nil {
 			return nil, fmt.Errorf("查询API失败: %v", err)
 		}
 	}
@@ -329,7 +330,7 @@ func (r *roleDAO) GetUserRole(ctx context.Context, userId int) (*model.Role, err
 
 	// 先从数据库中获取用户的角色
 	var user model.User
-	if err := r.db.WithContext(ctx).Preload("Roles", "is_deleted = ?", 0).Where("id = ? AND deleted_at = ?", userId, 0).First(&user).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Roles", "deleted_at = ?", 0).Where("id = ? AND deleted_at = ?", userId, 0).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -384,11 +385,28 @@ func (r *roleDAO) GetUserRole(ctx context.Context, userId int) (*model.Role, err
 	var apis []*model.Api
 
 	if len(apiIds) > 0 {
-		if err := r.db.WithContext(ctx).Where("id IN ? AND is_deleted = ?", apiIds, 0).Find(&apis).Error; err != nil {
+		if err := r.db.WithContext(ctx).Where("id IN ? AND deleted_at = ?", apiIds, 0).Find(&apis).Error; err != nil {
 			return nil, fmt.Errorf("查询API失败: %v", err)
 		}
 		role.Apis = apis
 	}
 
 	return role, nil
+}
+
+// GetRoleByName 根据角色名称获取角色信息
+func (r *roleDAO) GetRoleByName(ctx context.Context, name string) (*model.Role, error) {
+	if name == "" {
+		return nil, errors.New("角色名称不能为空")
+	}
+
+	var role model.Role
+	if err := r.db.WithContext(ctx).Where("name = ? AND deleted_at = ?", name, 0).First(&role).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("查询角色失败: %v", err)
+	}
+
+	return &role, nil
 }

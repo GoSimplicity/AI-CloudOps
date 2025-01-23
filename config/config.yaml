@@ -10,7 +10,7 @@ jwt:
   expiration: 3600
 redis:
   # addr: "redis:6379"
-  addr: "localhost:6379"
+  addr: "192.168.5.11:36379"
   password: "v6SxhWHyZC7S"
 mysql:
   # addr: "root:root@tcp(mysql:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"

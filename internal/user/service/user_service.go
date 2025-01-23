@@ -30,6 +30,7 @@ import (
 	"errors"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -50,12 +51,16 @@ type UserService interface {
 }
 
 type userService struct {
-	dao dao.UserDAO
+	dao           dao.UserDAO
+	roleSvc       service.RoleService
+	permissionSvc service.PermissionService
 }
 
-func NewUserService(dao dao.UserDAO) UserService {
+func NewUserService(dao dao.UserDAO, roleSvc service.RoleService, permissionSvc service.PermissionService) UserService {
 	return &userService{
-		dao: dao,
+		dao:           dao,
+		roleSvc:       roleSvc,
+		permissionSvc: permissionSvc,
 	}
 }
 
@@ -68,7 +73,21 @@ func (us *userService) SignUp(ctx context.Context, user *model.User) error {
 
 	user.Password = string(hash)
 
-	return us.dao.CreateUser(ctx, user)
+	if err := us.dao.CreateUser(ctx, user); err != nil {
+		return err
+	}
+
+	// 为新用户分配默认角色
+	role, err := us.roleSvc.GetRoleByName(ctx, "user")
+	if err != nil {
+		return err
+	}
+
+	if err := us.permissionSvc.AssignRoleToUser(ctx, user.ID, []int{role.ID}, nil); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Login 用户登录

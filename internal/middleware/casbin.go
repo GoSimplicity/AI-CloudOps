@@ -26,10 +26,11 @@
 package middleware
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"net/http"
 	"strconv"
 	"strings"
+
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
@@ -94,15 +95,6 @@ func (cm *CasbinMiddleware) CheckCasbin() gin.HandlerFunc {
 			return
 		}
 
-		//// 打印已有的策略
-		//res, err := cm.enforcer.GetPolicy()
-		//if err != nil {
-		//	log.Println("获取策略失败", err)
-		//}
-		//
-		//log.Println("已有的策略", res)
-
-		// 将用户ID转换为字符串
 		userIDStr := strconv.Itoa(sub.Uid)
 		act := c.Request.Method
 

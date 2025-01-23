@@ -81,7 +81,7 @@ func (m *menuDAO) CreateMenu(ctx context.Context, menu *model.Menu) error {
 		// 检查父菜单是否存在
 		if menu.ParentID != 0 {
 			var count int64
-			if err := tx.Model(&model.Menu{}).Where("id = ? AND is_deleted = ?", menu.ParentID, 0).Count(&count).Error; err != nil {
+			if err := tx.Model(&model.Menu{}).Where("id = ? AND deleted_at = ?", menu.ParentID, 0).Count(&count).Error; err != nil {
 				return fmt.Errorf("检查父菜单失败: %v", err)
 			}
 			if count == 0 {
@@ -91,7 +91,7 @@ func (m *menuDAO) CreateMenu(ctx context.Context, menu *model.Menu) error {
 
 		// 检查同级菜单名称是否重复
 		var count int64
-		if err := tx.Model(&model.Menu{}).Where("name = ? AND parent_id = ? AND is_deleted = ?", menu.Name, menu.ParentID, 0).Count(&count).Error; err != nil {
+		if err := tx.Model(&model.Menu{}).Where("name = ? AND parent_id = ? AND deleted_at = ?", menu.Name, menu.ParentID, 0).Count(&count).Error; err != nil {
 			return fmt.Errorf("检查菜单名称失败: %v", err)
 		}
 		if count > 0 {
@@ -99,8 +99,8 @@ func (m *menuDAO) CreateMenu(ctx context.Context, menu *model.Menu) error {
 		}
 
 		now := time.Now().Unix()
-		menu.CreateTime = now
-		menu.UpdateTime = now
+		menu.CreatedAt = now
+		menu.UpdatedAt = now
 
 		// 先创建父菜单
 		if err := tx.Model(&model.Menu{}).Create(menu).Error; err != nil {
@@ -111,8 +111,8 @@ func (m *menuDAO) CreateMenu(ctx context.Context, menu *model.Menu) error {
 		if len(menu.Children) > 0 {
 			for _, child := range menu.Children {
 				child.ParentID = menu.ID // 设置父菜单ID
-				child.CreateTime = now
-				child.UpdateTime = now
+				child.CreatedAt = now
+				child.UpdatedAt = now
 				if err := tx.Model(&model.Menu{}).Create(child).Error; err != nil {
 					return err
 				}
@@ -130,7 +130,7 @@ func (m *menuDAO) GetMenuById(ctx context.Context, id int) (*model.Menu, error) 
 	}
 
 	var menu model.Menu
-	if err := m.db.WithContext(ctx).Where("id = ? AND is_deleted = ?", id, 0).First(&menu).Error; err != nil {
+	if err := m.db.WithContext(ctx).Where("id = ? AND deleted_at = ?", id, 0).First(&menu).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrMenuNotFound
 		}
@@ -158,7 +158,7 @@ func (m *menuDAO) UpdateMenu(ctx context.Context, menu *model.Menu) error {
 	return m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 检查菜单是否存在
 		var exists bool
-		if err := tx.Model(&model.Menu{}).Select("1").Where("id = ? AND is_deleted = ?", menu.ID, 0).Find(&exists).Error; err != nil {
+		if err := tx.Model(&model.Menu{}).Select("1").Where("id = ? AND deleted_at = ?", menu.ID, 0).Find(&exists).Error; err != nil {
 			return fmt.Errorf("检查菜单是否存在失败: %v", err)
 		}
 		if !exists {
@@ -167,13 +167,13 @@ func (m *menuDAO) UpdateMenu(ctx context.Context, menu *model.Menu) error {
 
 		// 检查是否有子菜单
 		var childCount int64
-		if err := tx.Model(&model.Menu{}).Where("parent_id = ? AND is_deleted = ?", menu.ID, 0).Count(&childCount).Error; err != nil {
+		if err := tx.Model(&model.Menu{}).Where("parent_id = ? AND deleted_at = ?", menu.ID, 0).Count(&childCount).Error; err != nil {
 			return fmt.Errorf("检查子菜单失败: %v", err)
 		}
 
 		// 获取原菜单信息
 		var oldMenu model.Menu
-		if err := tx.Where("id = ? AND is_deleted = ?", menu.ID, 0).First(&oldMenu).Error; err != nil {
+		if err := tx.Where("id = ? AND deleted_at = ?", menu.ID, 0).First(&oldMenu).Error; err != nil {
 			return fmt.Errorf("获取原菜单信息失败: %v", err)
 		}
 
@@ -188,7 +188,7 @@ func (m *menuDAO) UpdateMenu(ctx context.Context, menu *model.Menu) error {
 				return errors.New("不能将菜单设置为自己的子菜单")
 			}
 			var count int64
-			if err := tx.Model(&model.Menu{}).Where("id = ? AND is_deleted = ?", menu.ParentID, 0).Count(&count).Error; err != nil {
+			if err := tx.Model(&model.Menu{}).Where("id = ? AND deleted_at = ?", menu.ParentID, 0).Count(&count).Error; err != nil {
 				return fmt.Errorf("检查父菜单失败: %v", err)
 			}
 			if count == 0 {
@@ -198,7 +198,7 @@ func (m *menuDAO) UpdateMenu(ctx context.Context, menu *model.Menu) error {
 
 		// 检查同级菜单名称是否重复
 		var count int64
-		if err := tx.Model(&model.Menu{}).Where("name = ? AND parent_id = ? AND id != ? AND is_deleted = ?",
+		if err := tx.Model(&model.Menu{}).Where("name = ? AND parent_id = ? AND id != ? AND deleted_at = ?",
 			menu.Name, menu.ParentID, menu.ID, 0).Count(&count).Error; err != nil {
 			return fmt.Errorf("检查菜单名称失败: %v", err)
 		}
@@ -207,8 +207,8 @@ func (m *menuDAO) UpdateMenu(ctx context.Context, menu *model.Menu) error {
 		}
 
 		// 更新菜单信息
-		menu.UpdateTime = time.Now().Unix()
-		result := tx.Model(&model.Menu{}).Where("id = ? AND is_deleted = ?", menu.ID, 0).Updates(menu)
+		menu.UpdatedAt = time.Now().Unix()
+		result := tx.Model(&model.Menu{}).Where("id = ? AND deleted_at = ?", menu.ID, 0).Updates(menu)
 		if result.Error != nil {
 			return fmt.Errorf("更新菜单失败: %v", result.Error)
 		}
@@ -229,7 +229,7 @@ func (m *menuDAO) DeleteMenu(ctx context.Context, id int) error {
 	return m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 检查菜单是否存在
 		var exists bool
-		if err := tx.Model(&model.Menu{}).Select("1").Where("id = ? AND is_deleted = ?", id, 0).Find(&exists).Error; err != nil {
+		if err := tx.Model(&model.Menu{}).Select("1").Where("id = ? AND deleted_at = ?", id, 0).Find(&exists).Error; err != nil {
 			return fmt.Errorf("检查菜单是否存在失败: %v", err)
 		}
 		if !exists {
@@ -238,7 +238,7 @@ func (m *menuDAO) DeleteMenu(ctx context.Context, id int) error {
 
 		// 检查是否有子菜单
 		var count int64
-		if err := tx.Model(&model.Menu{}).Where("parent_id = ? AND is_deleted = ?", id, 0).Count(&count).Error; err != nil {
+		if err := tx.Model(&model.Menu{}).Where("parent_id = ? AND deleted_at = ?", id, 0).Count(&count).Error; err != nil {
 			return fmt.Errorf("检查子菜单失败: %v", err)
 		}
 		if count > 0 {
@@ -247,10 +247,10 @@ func (m *menuDAO) DeleteMenu(ctx context.Context, id int) error {
 
 		// 软删除菜单
 		updates := map[string]interface{}{
-			"is_deleted":  1,
+			"deleted_at":  1,
 			"update_time": time.Now().Unix(),
 		}
-		result := tx.Model(&model.Menu{}).Where("id = ? AND is_deleted = ?", id, 0).Updates(updates)
+		result := tx.Model(&model.Menu{}).Where("id = ? AND deleted_at = ?", id, 0).Updates(updates)
 		if result.Error != nil {
 			return fmt.Errorf("删除菜单失败: %v", result.Error)
 		}
@@ -269,7 +269,7 @@ func (m *menuDAO) ListMenuTree(ctx context.Context) ([]*model.Menu, error) {
 	// 使用索引字段优化查询,查询所有必要字段
 	if err := m.db.WithContext(ctx).
 		Select("id, name, parent_id, path, component, route_name, hidden, redirect, meta, create_time, update_time").
-		Where("is_deleted = ?", 0).
+		Where("deleted_at = ?", 0).
 		Find(&menus).Error; err != nil {
 		return nil, fmt.Errorf("查询菜单列表失败: %v", err)
 	}
@@ -332,7 +332,7 @@ func (m *menuDAO) UpdateUserMenu(ctx context.Context, userId int, menuIds []int)
 
 	// 检查所有菜单是否存在且未删除
 	var count int64
-	if err := m.db.WithContext(ctx).Model(&model.Menu{}).Where("id IN ? AND is_deleted = 0", menuIds).Count(&count).Error; err != nil {
+	if err := m.db.WithContext(ctx).Model(&model.Menu{}).Where("id IN ? AND deleted_at = 0", menuIds).Count(&count).Error; err != nil {
 		m.l.Error("查询菜单失败", zap.Error(err))
 		return fmt.Errorf("查询菜单失败: %v", err)
 	}
