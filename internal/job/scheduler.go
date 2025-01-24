@@ -11,6 +11,7 @@ const (
 	RefreshK8sClientsTask      = "refresh_k8s_clients"
 	RefreshPrometheusCacheTask = "refresh_prometheus_cache"
 	CheckHostStatusTask        = "check_host_status"
+	CheckK8sStatusTask         = "check_k8s_status"
 )
 
 type TimedScheduler struct {
@@ -27,12 +28,12 @@ func (s *TimedScheduler) RegisterTimedTasks() error {
 	// K8s 客户端刷新任务 - 每5分钟
 	if err := s.registerTask(
 		RefreshK8sClientsTask,
-		"@every 30s",
+		"@every 5m",
 	); err != nil {
 		return err
 	}
 
-	// Prometheus 缓存刷新任务 - 每分钟
+	// Prometheus 缓存刷新任务 - 每30秒
 	if err := s.registerTask(
 		RefreshPrometheusCacheTask,
 		"@every 30s",
@@ -40,10 +41,18 @@ func (s *TimedScheduler) RegisterTimedTasks() error {
 		return err
 	}
 
-	// 主机状态检查任务 - 每5秒
+	// 主机状态检查任务 - 每30秒
 	if err := s.registerTask(
 		CheckHostStatusTask,
-		"@every 5s",
+		"@every 30s",
+	); err != nil {
+		return err
+	}
+
+	// K8s 状态检查任务 - 每30秒
+	if err := s.registerTask(
+		CheckK8sStatusTask,
+		"@every 30s",
 	); err != nil {
 		return err
 	}

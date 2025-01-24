@@ -84,7 +84,7 @@ func (m *MenuHandler) CreateMenu(c *gin.Context) {
 		Path:      req.Path,
 		Component: req.Component,
 		ParentID:  req.ParentId,
-		Hidden:    req.Hidden,
+		Hidden:    int8(req.Hidden),
 		RouteName: req.RouteName,
 		Redirect:  req.Redirect,
 		Meta:      req.Meta,
@@ -113,7 +113,7 @@ func (m *MenuHandler) UpdateMenu(c *gin.Context) {
 		Path:      req.Path,
 		Component: req.Component,
 		ParentID:  req.ParentId,
-		Hidden:    req.Hidden,
+		Hidden:    int8(req.Hidden),
 		RouteName: req.RouteName,
 	}
 

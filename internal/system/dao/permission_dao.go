@@ -71,12 +71,11 @@ func (p *permissionDAO) AssignRole(ctx context.Context, roleId int, apiIds []int
 	}
 
 	var role model.Role
-	if err := p.db.WithContext(ctx).Where("id = ? AND is_deleted = ?", roleId, 0).First(&role).Error; err != nil {
+	if err := p.db.WithContext(ctx).Where("id = ? AND deleted_at = ?", roleId, 0).First(&role).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("角色不存在")
+		}
 		return fmt.Errorf("获取角色失败: %v", err)
-	}
-
-	if role.ID <= 0 {
-		return errors.New("角色不存在")
 	}
 
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -107,11 +106,23 @@ func (p *permissionDAO) AssignRoleToUser(ctx context.Context, userId int, roleId
 	}
 
 	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 获取用户信息
+		var user model.User
+		if err := tx.First(&user, userId).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("用户不存在")
+			}
+			return fmt.Errorf("获取用户信息失败: %v", err)
+		}
+
 		// 获取角色信息
 		var roles []*model.Role
 		if len(roleIds) > 0 {
-			if err := tx.Where("id IN ? AND is_deleted = ?", roleIds, 0).Find(&roles).Error; err != nil {
+			if err := tx.Where("id IN ? AND deleted_at = ?", roleIds, 0).Find(&roles).Error; err != nil {
 				return fmt.Errorf("获取角色信息失败: %v", err)
+			}
+			if len(roles) != len(roleIds) {
+				return errors.New("部分角色不存在或已被删除")
 			}
 		}
 
@@ -124,12 +135,6 @@ func (p *permissionDAO) AssignRoleToUser(ctx context.Context, userId int, roleId
 			return fmt.Errorf("移除用户现有权限失败: %v", err)
 		}
 
-		// 获取用户信息
-		var user model.User
-		if err := tx.First(&user, userId).Error; err != nil {
-			return fmt.Errorf("获取用户信息失败: %v", err)
-		}
-
 		// 更新用户的角色关联
 		if err := tx.Model(&user).Association("Roles").Replace(roles); err != nil {
 			return fmt.Errorf("更新用户角色关联失败: %v", err)
@@ -138,8 +143,11 @@ func (p *permissionDAO) AssignRoleToUser(ctx context.Context, userId int, roleId
 		// 更新用户的API关联
 		if len(apiIds) > 0 {
 			var apis []*model.Api
-			if err := tx.Where("id IN ? AND is_deleted = ?", apiIds, 0).Find(&apis).Error; err != nil {
+			if err := tx.Where("id IN ? AND deleted_at = ?", apiIds, 0).Find(&apis).Error; err != nil {
 				return fmt.Errorf("获取API信息失败: %v", err)
+			}
+			if len(apis) != len(apiIds) {
+				return errors.New("部分API不存在或已被删除")
 			}
 			if err := tx.Model(&user).Association("Apis").Replace(apis); err != nil {
 				return fmt.Errorf("更新用户API关联失败: %v", err)
@@ -186,70 +194,36 @@ func (p *permissionDAO) RemoveUserPermissions(ctx context.Context, userId int) e
 
 	userStr := fmt.Sprintf("%d", userId)
 
-	return p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 获取用户信息
-		var user model.User
-		if err := tx.First(&user, userId).Error; err != nil {
-			return fmt.Errorf("获取用户信息失败: %v", err)
-		}
+	// 移除用户的角色关联
+	if _, err := p.enforcer.RemoveFilteredGroupingPolicy(0, userStr); err != nil {
+		return fmt.Errorf("移除用户角色关联失败: %v", err)
+	}
 
-		// 获取用户当前的API列表
-		var apis []*model.Api
-		if err := tx.Model(&user).Association("Apis").Find(&apis); err != nil {
-			return fmt.Errorf("获取用户API关联失败: %v", err)
-		}
+	// 移除用户的所有权限策略
+	if _, err := p.enforcer.RemoveFilteredPolicy(0, userStr); err != nil {
+		return fmt.Errorf("移除用户权限策略失败: %v", err)
+	}
 
-		// 移除每个API的权限策略
-		for _, api := range apis {
-			// HTTP方法映射表
-			methodMap := map[int]string{
-				1: "GET",
-				2: "POST",
-				3: "PUT",
-				4: "DELETE",
-				5: "PATCH",
-				6: "OPTIONS",
-				7: "HEAD",
-			}
-			method := methodMap[api.Method]
+	// 重新加载策略
+	if err := p.enforcer.LoadPolicy(); err != nil {
+		return fmt.Errorf("加载策略失败: %v", err)
+	}
 
-			if _, err := p.enforcer.RemovePolicy(userStr, api.Path, method); err != nil {
-				return fmt.Errorf("移除用户API权限失败: %v", err)
-			}
-		}
-
-		// 移除用户的角色关联
-		if _, err := p.enforcer.RemoveFilteredGroupingPolicy(0, userStr); err != nil {
-			return fmt.Errorf("移除用户角色关联失败: %v", err)
-		}
-
-		// 清空用户的关联
-		if err := tx.Model(&user).Association("Roles").Clear(); err != nil {
-			return fmt.Errorf("清空用户角色关联失败: %v", err)
-		}
-
-		if err := tx.Model(&user).Association("Apis").Clear(); err != nil {
-			return fmt.Errorf("清空用户API关联失败: %v", err)
-		}
-
-		// 重新加载策略
-		if err := p.enforcer.LoadPolicy(); err != nil {
-			return fmt.Errorf("加载策略失败: %v", err)
-		}
-
-		return nil
-	})
+	return nil
 }
 
 // RemoveRolePermissions 批量移除角色对应api权限
 func (p *permissionDAO) RemoveRolePermissions(ctx context.Context, roleId int) error {
 	if roleId <= 0 {
-		return nil
+		return errors.New("无效的角色ID")
 	}
 
 	// 查询角色名称
 	var role model.Role
-	if err := p.db.WithContext(ctx).Where("id = ? AND is_deleted = ?", roleId, 0).First(&role).Error; err != nil {
+	if err := p.db.WithContext(ctx).Where("id = ? AND deleted_at = ?", roleId, 0).First(&role).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("角色不存在")
+		}
 		return fmt.Errorf("查询角色失败: %v", err)
 	}
 
@@ -306,7 +280,7 @@ func (p *permissionDAO) assignAPIPermissions(ctx context.Context, roleName strin
 		}
 
 		// 获取HTTP方法
-		method, ok := methodMap[api.Method]
+		method, ok := methodMap[int(api.Method)]
 		if !ok {
 			return fmt.Errorf("无效的HTTP方法: %d", api.Method)
 		}
@@ -356,8 +330,11 @@ func (p *permissionDAO) AssignRoleToUsers(ctx context.Context, userIds []int, ro
 		// 获取角色信息
 		var roles []*model.Role
 		if len(roleIds) > 0 {
-			if err := tx.Where("id IN ? AND is_deleted = ?", roleIds, 0).Find(&roles).Error; err != nil {
+			if err := tx.Where("id IN ? AND deleted_at = ?", roleIds, 0).Find(&roles).Error; err != nil {
 				return fmt.Errorf("获取角色信息失败: %v", err)
+			}
+			if len(roles) != len(roleIds) {
+				return errors.New("部分角色不存在或已被删除")
 			}
 		}
 
@@ -365,17 +342,21 @@ func (p *permissionDAO) AssignRoleToUsers(ctx context.Context, userIds []int, ro
 		for _, userId := range userIds {
 			userStr := fmt.Sprintf("%d", userId)
 
+			// 获取用户信息
+			var user model.User
+			if err := tx.First(&user, userId).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("用户不存在: %d", userId)
+				}
+				return fmt.Errorf("获取用户信息失败: %v", err)
+			}
+
 			// 先移除用户现有的角色关联
 			if _, err := p.enforcer.RemoveFilteredGroupingPolicy(0, userStr); err != nil {
 				return fmt.Errorf("移除用户现有角色关联失败: %v", err)
 			}
 
 			// 更新用户的角色关联
-			var user model.User
-			if err := tx.First(&user, userId).Error; err != nil {
-				return fmt.Errorf("获取用户信息失败: %v", err)
-			}
-
 			if err := tx.Model(&user).Association("Roles").Replace(roles); err != nil {
 				return fmt.Errorf("更新用户角色关联失败: %v", err)
 			}
@@ -419,6 +400,9 @@ func (p *permissionDAO) RemoveUsersPermissions(ctx context.Context, userIds []in
 			// 获取用户信息
 			var user model.User
 			if err := tx.First(&user, userId).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("用户不存在: %d", userId)
+				}
 				return fmt.Errorf("获取用户信息失败: %v", err)
 			}
 
@@ -440,7 +424,7 @@ func (p *permissionDAO) RemoveUsersPermissions(ctx context.Context, userIds []in
 					6: "OPTIONS",
 					7: "HEAD",
 				}
-				method := methodMap[api.Method]
+				method := methodMap[int(api.Method)]
 
 				if _, err := p.enforcer.RemovePolicy(userStr, api.Path, method); err != nil {
 					return fmt.Errorf("移除用户API权限失败: %v", err)

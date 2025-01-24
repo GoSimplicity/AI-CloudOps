@@ -96,10 +96,10 @@ func (r *RoleHandler) CreateRole(c *gin.Context) {
 
 	// 构建角色对象
 	role := &model.Role{
-		Name:        req.Name,
-		Description: req.Description,
-		RoleType:    req.RoleType,
-		IsDefault:   req.IsDefault,
+		Name:      req.Name,
+		Desc:      req.Description,
+		RoleType:  int8(req.RoleType),
+		IsDefault: int8(req.IsDefault),
 	}
 
 	// 创建角色并分配权限
@@ -123,11 +123,11 @@ func (r *RoleHandler) UpdateRole(c *gin.Context) {
 
 	// 构建角色对象
 	role := &model.Role{
-		ID:          req.Id,
-		Name:        req.Name,
-		Description: req.Description,
-		RoleType:    req.RoleType,
-		IsDefault:   req.IsDefault,
+		ID:        req.Id,
+		Name:      req.Name,
+		Desc:      req.Description,
+		RoleType:  int8(req.RoleType),
+		IsDefault: int8(req.IsDefault),
 	}
 
 	// 更新角色基本信息

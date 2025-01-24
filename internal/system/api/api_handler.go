@@ -86,11 +86,11 @@ func (a *ApiHandler) CreateAPI(c *gin.Context) {
 	api := &model.Api{
 		Name:        req.Name,
 		Path:        req.Path,
-		Method:      req.Method,
+		Method:      int8(req.Method),
 		Description: req.Description,
 		Version:     req.Version,
-		Category:    req.Category,
-		IsPublic:    req.IsPublic,
+		Category:    int8(req.Category),
+		IsPublic:    int8(req.IsPublic),
 	}
 
 	if err := a.svc.CreateApi(c.Request.Context(), api); err != nil {
@@ -114,11 +114,11 @@ func (a *ApiHandler) UpdateAPI(c *gin.Context) {
 		ID:          req.ID,
 		Name:        req.Name,
 		Path:        req.Path,
-		Method:      req.Method,
+		Method:      int8(req.Method),
 		Description: req.Description,
 		Version:     req.Version,
-		Category:    req.Category,
-		IsPublic:    req.IsPublic,
+		Category:    int8(req.Category),
+		IsPublic:    int8(req.IsPublic),
 	}
 
 	if err := a.svc.UpdateApi(c.Request.Context(), api); err != nil {

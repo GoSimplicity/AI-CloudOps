@@ -28,15 +28,19 @@ package cron
 import (
 	"context"
 	"errors"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -47,19 +51,24 @@ var (
 type CronManager interface {
 	StartOnDutyHistoryManager(ctx context.Context) error
 	StartCheckHostStatusManager(ctx context.Context) error
+	StartCheckK8sStatusManager(ctx context.Context) error
 }
 
 type cronManager struct {
 	logger    *zap.Logger
 	onDutyDao alert.AlertManagerOnDutyDAO
 	ecsDao    treeDao.TreeEcsDAO
+	k8sDao    admin.ClusterDAO
+	k8sClient client.K8sClient
 }
 
-func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, ecsDao treeDao.TreeEcsDAO) CronManager {
+func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, ecsDao treeDao.TreeEcsDAO, k8sDao admin.ClusterDAO, k8sClient client.K8sClient) CronManager {
 	return &cronManager{
 		logger:    logger,
 		onDutyDao: onDutyDao,
 		ecsDao:    ecsDao,
+		k8sDao:    k8sDao,
+		k8sClient: k8sClient,
 	}
 }
 
@@ -123,7 +132,6 @@ func (cm *cronManager) StartCheckHostStatusManager(ctx context.Context) error {
 		return err
 	}
 	if len(ecss) == 0 {
-		cm.logger.Info("没有ecs主机")
 		return nil
 	}
 
@@ -174,6 +182,97 @@ func (cm *cronManager) StartCheckHostStatusManager(ctx context.Context) error {
 	}
 
 	cm.logger.Info("完成ecs主机状态检查")
+	return nil
+}
+
+// StartCheckK8sStatusManager 启动k8s状态检查任务
+func (cm *cronManager) StartCheckK8sStatusManager(ctx context.Context) error {
+	cm.logger.Info("开始检查k8s状态")
+
+	// 获取所有k8s集群
+	clusters, err := cm.k8sDao.ListAllClusters(ctx)
+	if err != nil {
+		cm.logger.Error("获取k8s集群列表失败", zap.Error(err))
+		return fmt.Errorf("获取k8s集群列表失败: %w", err)
+	}
+
+	if len(clusters) == 0 {
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(clusters))
+
+	// 限制并发数
+	semaphore := make(chan struct{}, 5)
+
+	for _, cluster := range clusters {
+		wg.Add(1)
+		go func(cluster *model.K8sCluster) {
+			defer wg.Done()
+
+			// 获取信号量
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			if err := cm.checkClusterStatus(ctx, cluster); err != nil {
+				errChan <- err
+			}
+		}(cluster)
+	}
+
+	// 等待所有检查完成
+	wg.Wait()
+	close(errChan)
+
+	// 检查是否有错误发生
+	if len(errChan) > 0 {
+		var errs []error
+		for err := range errChan {
+			errs = append(errs, err)
+		}
+		return fmt.Errorf("k8s集群状态检查失败: %v", errs)
+	}
+
+	cm.logger.Info("完成k8s集群状态检查")
+	return nil
+}
+
+// checkClusterStatus 检查单个集群状态
+func (cm *cronManager) checkClusterStatus(ctx context.Context, cluster *model.K8sCluster) error {
+	// 获取k8s客户端
+	clientset, err := cm.k8sClient.GetKubeClient(cluster.ID)
+	if err != nil {
+		cm.logger.Warn("获取k8s客户端失败",
+			zap.Error(err),
+			zap.String("cluster", cluster.Name))
+		cluster.Status = "ERROR"
+	} else {
+		// 设置超时上下文
+		ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+
+		// 尝试访问API Server
+		_, err = clientset.CoreV1().Nodes().List(ctxWithTimeout, metav1.ListOptions{})
+		if err != nil {
+			cm.logger.Error("访问k8s集群失败",
+				zap.Error(err),
+				zap.String("cluster", cluster.Name))
+			cluster.Status = "ERROR"
+		} else {
+			cluster.Status = "RUNNING"
+		}
+	}
+
+	// 更新集群状态
+	if err := cm.k8sDao.UpdateClusterStatus(ctx, cluster.ID, cluster.Status); err != nil {
+		cm.logger.Error("更新集群状态失败",
+			zap.Error(err),
+			zap.String("cluster", cluster.Name),
+			zap.String("status", cluster.Status))
+		return fmt.Errorf("更新集群[%s]状态失败: %w", cluster.Name, err)
+	}
+
 	return nil
 }
 

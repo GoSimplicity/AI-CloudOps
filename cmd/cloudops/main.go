@@ -79,7 +79,10 @@ func Init() error {
 
 	// 启动定时任务和worker
 	go func() {
-		cmd.Scheduler.RegisterTimedTasks()
+		if err := cmd.Scheduler.RegisterTimedTasks(); err != nil {
+			log.Fatalf("注册定时任务失败: %v", err)
+		}
+
 		if err := cmd.Scheduler.Run(); err != nil {
 			log.Fatalf("启动定时任务失败: %v", err)
 		}
@@ -120,7 +123,7 @@ func Init() error {
 
 	// 先停止定时任务
 	cmd.Scheduler.Stop()
-	
+
 	// 关闭异步任务服务器
 	cmd.Asynq.Shutdown()
 
@@ -191,6 +194,11 @@ func InitMock() error {
 	um := mock.NewUserMock(db, enforcer)
 	if err := um.CreateUserAdmin(); err != nil {
 		return fmt.Errorf("创建管理员用户失败: %v", err)
+	}
+
+	rm := mock.NewRoleMock(db, enforcer)
+	if err := rm.InitRole(); err != nil {
+		return fmt.Errorf("创建角色失败: %v", err)
 	}
 
 	return nil
