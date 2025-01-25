@@ -199,7 +199,7 @@ func parseTargetID(c *gin.Context, reqBody []byte) string {
 		}
 	}
 
-	return ""
+	return "0"
 }
 
 // 解析操作类型
