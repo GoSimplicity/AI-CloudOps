@@ -37,6 +37,7 @@ func InitTables(db *gorm.DB) error {
 		&model.Role{},
 		&model.Menu{},
 		&model.Api{},
+		&model.AuditLog{},
 
 		// tree
 		&model.TreeNode{},

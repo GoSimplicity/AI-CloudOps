@@ -42,6 +42,7 @@ type AuditService interface {
 	DeleteAuditLog(ctx context.Context, id uint) error
 	BatchDeleteLogs(ctx context.Context, ids []uint) error
 	ArchiveAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) error
+	RecordOperationLog(ctx context.Context, req *model.AuditLog) error
 }
 
 type auditService struct {
@@ -96,5 +97,23 @@ func (s *auditService) BatchDeleteLogs(ctx context.Context, ids []uint) error {
 
 // ArchiveAuditLogs 归档审计日志
 func (s *auditService) ArchiveAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) error {
+	// 查询待归档日志
+
+	// 压缩日志数据
+
+	// 上传到对象存储 MinIO
+
+	// 标记原始日志为已归档（软删除）
+
+	return nil
+}
+
+// RecordOperationLog 记录操作日志
+func (s *auditService) RecordOperationLog(ctx context.Context, req *model.AuditLog) error {
+	// 将日志数据插入到数据库
+	if err := s.dao.CreateAuditLog(ctx, req); err != nil {
+		return err
+	}
+
 	return nil
 }

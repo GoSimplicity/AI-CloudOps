@@ -23,7 +23,6 @@ require (
 	github.com/prometheus/common v0.55.0
 	github.com/prometheus/prometheus v0.54.1
 	github.com/redis/go-redis/v9 v9.7.0
-	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
 	go.uber.org/zap v1.27.0
@@ -31,6 +30,7 @@ require (
 	golang.org/x/sync v0.10.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
+	gorm.io/datatypes v1.2.5
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.11
 	gorm.io/plugin/soft_delete v1.2.1
@@ -43,7 +43,8 @@ require (
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/go-redis/redis/v8 v8.11.2 // indirect
-	gorm.io/datatypes v1.2.5 // indirect
+	github.com/jackc/puddle/v2 v2.2.1 // indirect
+	github.com/robfig/cron/v3 v3.0.1 // indirect
 )
 
 require (

@@ -34,6 +34,7 @@ import (
 )
 
 type AuditDAO interface {
+	CreateAuditLog(ctx context.Context, req *model.AuditLog) error
 	ListAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) ([]*model.AuditLog, int64, error)
 	GetAuditLogDetail(ctx context.Context, id uint) (*model.AuditLogDetail, error)
 	GetAuditTypes(ctx context.Context) ([]string, error)
@@ -246,5 +247,15 @@ func (d *auditDAO) ArchiveAuditLogs(ctx context.Context, req *model.ListAuditLog
 		return result.Error
 	}
 	d.l.Info("归档审计日志成功", zap.Int64("archived_count", result.RowsAffected))
+	return nil
+}
+
+// CreateAuditLog 创建审计日志
+func (d *auditDAO) CreateAuditLog(ctx context.Context, req *model.AuditLog) error {
+	if err := d.db.WithContext(ctx).Create(req).Error; err != nil {
+		d.l.Error("创建审计日志失败", zap.Error(err))
+		return err
+	}
+
 	return nil
 }

@@ -26,8 +26,9 @@
 package middleware
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strings"
+
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -53,7 +54,6 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 		if path == "/api/user/login" ||
 			//path == "/api/user/signup" ||   // 不允许用户自己注册账号
 			path == "/api/user/logout" ||
-			strings.Contains(path, "hello") ||
 			path == "/api/user/refresh_token" ||
 			path == "/api/user/signup" ||
 			path == "/api/not_auth/getTreeNodeBindIps" ||
@@ -66,7 +66,7 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 
 		var uc ijwt.UserClaims
 		var tokenStr string
-		
+
 		// 如果是/api/tree/ecs/console开头的路径，从查询参数获取token
 		if strings.HasPrefix(path, "/api/tree/ecs/console") {
 			tokenStr = ctx.Query("token")

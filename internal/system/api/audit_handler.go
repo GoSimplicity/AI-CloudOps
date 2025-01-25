@@ -59,20 +59,21 @@ func (h *AuditHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // ListAuditLogs 获取审计日志列表
-func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
+func (h *AuditHandler) ListAuditLogs(ctx *gin.Context) {
 	var req model.ListAuditLogsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Error(c)
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		utils.Error(ctx)
 		return
 	}
 
-	logs, total, err := h.svc.ListAuditLogs(c.Request.Context(), &req)
+	logs, total, err := h.svc.ListAuditLogs(ctx.Request.Context(), &req)
 	if err != nil {
-		utils.Error(c)
+		utils.Error(ctx)
 		return
 	}
 
-	utils.SuccessWithData(c, gin.H{
+	utils.SuccessWithData(ctx, gin.H{
 		"list":  logs,
 		"total": total,
 	})

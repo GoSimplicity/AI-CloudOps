@@ -70,6 +70,7 @@ func InitGinServer(
 	scrapePoolHdl *prometheusApi.ScrapePoolHandler,
 	scrapeJobHdl *prometheusApi.ScrapeJobHandler,
 	sendGroupHdl *prometheusApi.SendGroupHandler,
+	auditHdl *systemApi.AuditHandler,
 ) *gin.Engine {
 	server := gin.Default()
 	server.Use(m...)
@@ -78,6 +79,7 @@ func InitGinServer(
 	authApiHdl.RegisterRouters(server)
 	authRoleHdl.RegisterRouters(server)
 	authPermissionHdl.RegisterRouters(server)
+	auditHdl.RegisterRouters(server)
 	treeEcsHdl.RegisterRouters(server)
 	treeEcsResourceHdl.RegisterRouters(server)
 	treeAliResourceHdl.RegisterRouters(server)
