@@ -26,8 +26,9 @@
 package api
 
 import (
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
+
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
@@ -52,21 +53,26 @@ func (a *AlertEventHandler) RegisterRouters(server *gin.Engine) {
 
 	alertEvents := monitorGroup.Group("/alert_events")
 	{
-		alertEvents.GET("/list", a.GetMonitorAlertEventList)      // 获取告警事件列表
-		alertEvents.POST("/:id/silence", a.EventAlertSilence)     // 将指定告警事件设置为静默状态
-		alertEvents.POST("/:id/claim", a.EventAlertClaim)         // 认领指定的告警事件
-		alertEvents.POST("/:id/unSilence", a.EventAlertUnSilence) // 取消指定告警事件的静默状态
-		alertEvents.POST("/silence", a.BatchEventAlertSilence)    // 批量设置告警事件为静默状态
+		alertEvents.GET("/list", a.GetMonitorAlertEventList)
+		alertEvents.POST("/:id/silence", a.EventAlertSilence)
+		alertEvents.POST("/:id/claim", a.EventAlertClaim)
+		alertEvents.POST("/:id/unSilence", a.EventAlertUnSilence)
+		alertEvents.POST("/silence", a.BatchEventAlertSilence)
 	}
 }
 
 // GetMonitorAlertEventList 获取告警事件列表
 func (a *AlertEventHandler) GetMonitorAlertEventList(ctx *gin.Context) {
-	searchName := ctx.Query("name")
+	var listReq model.ListReq
 
-	list, err := a.alertEventService.GetMonitorAlertEventList(ctx, &searchName)
+	if err := ctx.ShouldBindQuery(&listReq); err != nil {
+		utils.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	list, err := a.alertEventService.GetMonitorAlertEventList(ctx, &listReq)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -92,7 +98,7 @@ func (a *AlertEventHandler) EventAlertSilence(ctx *gin.Context) {
 	}
 
 	if err := a.alertEventService.EventAlertSilence(ctx, intId, &silence, uc.Uid); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -111,7 +117,7 @@ func (a *AlertEventHandler) EventAlertClaim(ctx *gin.Context) {
 	}
 
 	if err := a.alertEventService.EventAlertClaim(ctx, intId, uc.Uid); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -130,7 +136,7 @@ func (a *AlertEventHandler) EventAlertUnSilence(ctx *gin.Context) {
 	}
 
 	if err := a.alertEventService.EventAlertClaim(ctx, intId, uc.Uid); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -149,7 +155,7 @@ func (a *AlertEventHandler) BatchEventAlertSilence(ctx *gin.Context) {
 	}
 
 	if err := a.alertEventService.BatchEventAlertSilence(ctx, &req, uc.Uid); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 

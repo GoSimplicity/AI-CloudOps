@@ -145,7 +145,7 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 		}
 		labelsM[parts[0]] = parts[1]
 	}
-	event.LabelsMatcher = labelsM
+	event.LabelsMap = labelsM
 
 	// 构建匹配器
 	matchers := make(labels.Matchers, 0, len(labelsM))

@@ -29,7 +29,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
@@ -39,7 +38,7 @@ import (
 )
 
 type AlertManagerRecordService interface {
-	GetMonitorRecordRuleList(ctx context.Context, searchName *string) ([]*model.MonitorRecordRule, error)
+	GetMonitorRecordRuleList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorRecordRule, error)
 	CreateMonitorRecordRule(ctx context.Context, monitorRecordRule *model.MonitorRecordRule) error
 	UpdateMonitorRecordRule(ctx context.Context, monitorRecordRule *model.MonitorRecordRule) error
 	DeleteMonitorRecordRule(ctx context.Context, id int) error
@@ -64,15 +63,31 @@ func NewAlertManagerRecordService(dao alert.AlertManagerRecordDAO, cache cache.M
 	}
 }
 
-func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context, searchName *string) ([]*model.MonitorRecordRule, error) {
-	return pkg.HandleList(ctx, searchName,
-		a.dao.SearchMonitorRecordRuleByName,
-		a.dao.GetMonitorRecordRuleList)
+func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorRecordRule, error) {
+	if listReq.Search != "" {
+		rules, err := a.dao.SearchMonitorRecordRuleByName(ctx, listReq.Search)
+		if err != nil {
+			a.l.Error("搜索记录规则失败", zap.String("search", listReq.Search), zap.Error(err))
+			return nil, err
+		}
+		return rules, nil
+	}
+
+	offset := (listReq.Page - 1) * listReq.Size
+	limit := listReq.Size
+
+	rules, err := a.dao.GetMonitorRecordRuleList(ctx, offset, limit)
+	if err != nil {
+		a.l.Error("获取记录规则列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	return rules, nil
 }
 
 func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context, monitorRecordRule *model.MonitorRecordRule) error {
 	// 检查记录规则是否已存在
-	exists, err := a.dao.CheckMonitorRecordRuleExists(ctx, monitorRecordRule)
+	exists, err := a.dao.CheckMonitorRecordRuleNameExists(ctx, monitorRecordRule)
 	if err != nil {
 		a.l.Error("创建记录规则失败：检查记录规则是否存在时出错", zap.Error(err))
 		return err
@@ -88,25 +103,32 @@ func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context,
 		return err
 	}
 
-	// 更新缓存
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
-		return err
-	}
-
 	return nil
 }
 
 func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context, monitorRecordRule *model.MonitorRecordRule) error {
-	// 更新记录规则
-	if err := a.dao.UpdateMonitorRecordRule(ctx, monitorRecordRule); err != nil {
-		a.l.Error("更新记录规则失败", zap.Error(err))
+	// 检查记录规则是否已存在
+	rule, err := a.dao.GetMonitorRecordRuleById(ctx, monitorRecordRule.ID)
+	if err != nil {
+		a.l.Error("更新记录规则失败：获取记录规则时出错", zap.Error(err))
 		return err
 	}
 
-	// 更新缓存
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
+	if rule.Name != monitorRecordRule.Name {
+		exists, err := a.dao.CheckMonitorRecordRuleNameExists(ctx, monitorRecordRule)
+		if err != nil {
+			a.l.Error("更新记录规则失败：检查记录规则名称是否存在时出错", zap.Error(err))
+			return err
+		}
+
+		if exists {
+			return errors.New("记录规则名称已存在")
+		}
+	}
+
+	// 更新记录规则
+	if err := a.dao.UpdateMonitorRecordRule(ctx, monitorRecordRule); err != nil {
+		a.l.Error("更新记录规则失败", zap.Error(err))
 		return err
 	}
 
@@ -114,15 +136,20 @@ func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context,
 }
 
 func (a *alertManagerRecordService) DeleteMonitorRecordRule(ctx context.Context, id int) error {
-	// 删除记录规则
-	if err := a.dao.DeleteMonitorRecordRule(ctx, id); err != nil {
-		a.l.Error("删除记录规则失败", zap.Error(err))
+	// 检查记录规则是否存在
+	rule, err := a.dao.GetMonitorRecordRuleById(ctx, id)
+	if err != nil {
+		a.l.Error("删除记录规则失败：获取记录规则时出错", zap.Error(err))
 		return err
 	}
 
-	// 更新缓存
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
+	if rule == nil {
+		return errors.New("记录规则不存在")
+	}
+
+	// 删除记录规则
+	if err := a.dao.DeleteMonitorRecordRule(ctx, id); err != nil {
+		a.l.Error("删除记录规则失败", zap.Error(err))
 		return err
 	}
 

@@ -40,7 +40,7 @@ import (
 )
 
 type AlertManagerPoolService interface {
-	GetMonitorAlertManagerPoolList(ctx context.Context, searchName *string) ([]*model.MonitorAlertManagerPool, error)
+	GetMonitorAlertManagerPoolList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorAlertManagerPool, error)
 	CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	DeleteMonitorAlertManagerPool(ctx context.Context, id int) error
@@ -64,10 +64,28 @@ func NewAlertManagerPoolService(dao alert.AlertManagerPoolDAO, sendDao alert.Ale
 	}
 }
 
-func (a *alertManagerPoolService) GetMonitorAlertManagerPoolList(ctx context.Context, searchName *string) ([]*model.MonitorAlertManagerPool, error) {
-	return pkg.HandleList(ctx, searchName,
-		a.dao.SearchMonitorAlertManagerPoolByName, // 搜索函数
-		a.dao.GetAllAlertManagerPools)             // 获取所有函数
+func (a *alertManagerPoolService) GetMonitorAlertManagerPoolList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorAlertManagerPool, error) {
+	var pools []*model.MonitorAlertManagerPool
+
+	if listReq.Search != "" {
+		pools, err := a.dao.SearchMonitorAlertManagerPoolByName(ctx, listReq.Search)
+		if err != nil {
+			a.l.Error("搜索告警事件失败", zap.String("search", listReq.Search), zap.Error(err))
+			return nil, err
+		}
+		return pools, nil
+	}
+
+	offset := (listReq.Page - 1) * listReq.Size
+	limit := listReq.Size
+
+	pools, err := a.dao.GetMonitorAlertManagerPoolList(ctx, offset, limit)
+	if err != nil {
+		a.l.Error("获取告警事件列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	return pools, nil
 }
 
 func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
@@ -104,17 +122,32 @@ func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Cont
 }
 
 func (a *alertManagerPoolService) UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
-	// 检查 AlertManager Pool 是否已存在
-	exists, err := a.dao.CheckMonitorAlertManagerPoolExists(ctx, monitorAlertManagerPool)
-	if err != nil {
-		a.l.Error("更新 AlertManager 集群池失败：检查 AlertManager Pool 是否存在时出错", zap.Error(err))
-		return err
-	}
-	if !exists {
-		return errors.New("AlertManager Pool 不存在")
+	// 检查 ID 是否有效
+	if monitorAlertManagerPool.ID <= 0 {
+		return errors.New("无效的告警池ID")
 	}
 
-	// 检查 AlertManager IP 是否已存在
+	// 先获取原有的告警池信息
+	oldPool, err := a.dao.GetAlertPoolByID(ctx, monitorAlertManagerPool.ID)
+	if err != nil {
+		a.l.Error("更新 AlertManager 集群池失败：获取原有告警池信息出错", zap.Error(err))
+		return err
+	}
+
+	// 如果名称发生变化,需要检查新名称是否已存在
+	if oldPool.Name != monitorAlertManagerPool.Name {
+		exists, err := a.dao.CheckMonitorAlertManagerPoolExists(ctx, monitorAlertManagerPool)
+		if err != nil {
+			a.l.Error("更新 AlertManager 集群池失败：检查 AlertManager Pool 是否存在时出错", zap.Error(err))
+			return err
+		}
+
+		if exists {
+			return errors.New("告警池名称已存在")
+		}
+	}
+
+	// 检查 AlertManager IP 是否已被其他池使用
 	if err := a.checkAlertIpExists(ctx, monitorAlertManagerPool); err != nil {
 		a.l.Error("更新 AlertManager 集群池失败：检查 AlertManager IP 是否存在时出错", zap.Error(err))
 		return err
@@ -126,17 +159,15 @@ func (a *alertManagerPoolService) UpdateMonitorAlertManagerPool(ctx context.Cont
 		return err
 	}
 
-	// 更新缓存
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
-		return err
-	}
-
-	a.l.Info("更新 AlertManager 集群池成功", zap.Int("id", monitorAlertManagerPool.ID))
 	return nil
 }
 
 func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Context, id int) error {
+	// 检查 ID 是否有效
+	if id <= 0 {
+		return errors.New("无效的告警池ID")
+	}
+
 	// 检查 AlertManager 集群池是否有关联的发送组
 	sendGroups, err := a.sendDao.GetMonitorSendGroupByPoolId(ctx, id)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -154,13 +185,6 @@ func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Cont
 		return err
 	}
 
-	// 更新缓存
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
-		return err
-	}
-
-	a.l.Info("删除 AlertManager 集群池成功", zap.Int("id", id))
 	return nil
 }
 

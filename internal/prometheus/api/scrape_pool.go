@@ -26,8 +26,9 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
+
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	scrapeJobService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape"
@@ -53,20 +54,25 @@ func (s *ScrapePoolHandler) RegisterRouters(server *gin.Engine) {
 
 	scrapePools := monitorGroup.Group("/scrape_pools")
 	{
-		scrapePools.GET("/list", s.GetMonitorScrapePoolList)   // 获取监控采集池列表
-		scrapePools.POST("/create", s.CreateMonitorScrapePool) // 创建监控采集池
-		scrapePools.POST("/update", s.UpdateMonitorScrapePool) // 更新监控采集池
-		scrapePools.DELETE("/:id", s.DeleteMonitorScrapePool)  // 删除监控采集池
+		scrapePools.GET("/list", s.GetMonitorScrapePoolList)
+		scrapePools.POST("/create", s.CreateMonitorScrapePool)
+		scrapePools.POST("/update", s.UpdateMonitorScrapePool)
+		scrapePools.DELETE("/:id", s.DeleteMonitorScrapePool)
 	}
 }
 
 // GetMonitorScrapePoolList 获取监控采集池列表
 func (s *ScrapePoolHandler) GetMonitorScrapePoolList(ctx *gin.Context) {
-	search := ctx.Query("search")
+	var listReq model.ListReq
 
-	list, err := s.scrapePoolService.GetMonitorScrapePoolList(ctx, &search)
+	if err := ctx.ShouldBindQuery(&listReq); err != nil {
+		utils.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	list, err := s.scrapePoolService.GetMonitorScrapePoolList(ctx, &listReq)
 	if err != nil {
-		utils.ErrorWithDetails(ctx, err, "获取监控采集池列表失败")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -85,7 +91,7 @@ func (s *ScrapePoolHandler) CreateMonitorScrapePool(ctx *gin.Context) {
 
 	monitorScrapePool.UserID = uc.Uid
 	if err := s.scrapePoolService.CreateMonitorScrapePool(ctx, &monitorScrapePool); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -102,7 +108,7 @@ func (s *ScrapePoolHandler) UpdateMonitorScrapePool(ctx *gin.Context) {
 	}
 
 	if err := s.scrapePoolService.UpdateMonitorScrapePool(ctx, &monitorScrapePool); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -119,7 +125,7 @@ func (s *ScrapePoolHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
 	}
 
 	if err := s.scrapePoolService.DeleteMonitorScrapePool(ctx, atom); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 

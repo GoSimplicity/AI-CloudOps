@@ -38,7 +38,7 @@ import (
 type AlertManagerRecordDAO interface {
 	GetMonitorRecordRuleByPoolId(ctx context.Context, poolId int) ([]*model.MonitorRecordRule, error)
 	SearchMonitorRecordRuleByName(ctx context.Context, name string) ([]*model.MonitorRecordRule, error)
-	GetMonitorRecordRuleList(ctx context.Context) ([]*model.MonitorRecordRule, error)
+	GetMonitorRecordRuleList(ctx context.Context, offset, limit int) ([]*model.MonitorRecordRule, error)
 	CreateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error
 	GetMonitorRecordRuleById(ctx context.Context, id int) (*model.MonitorRecordRule, error)
 	UpdateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error
@@ -62,6 +62,7 @@ func NewAlertManagerRecordDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDA
 	}
 }
 
+// GetMonitorRecordRuleByPoolId 通过 poolId 获取 MonitorRecordRule
 func (a *alertManagerRecordDAO) GetMonitorRecordRuleByPoolId(ctx context.Context, poolId int) ([]*model.MonitorRecordRule, error) {
 	if poolId <= 0 {
 		a.l.Error("GetMonitorRecordRuleByPoolId 失败: 无效的 poolId", zap.Int("poolId", poolId))
@@ -69,8 +70,9 @@ func (a *alertManagerRecordDAO) GetMonitorRecordRuleByPoolId(ctx context.Context
 	}
 
 	var recordRules []*model.MonitorRecordRule
+
 	if err := a.db.WithContext(ctx).
-		Where("enable = ?", true).
+		Where("enable = ? AND deleted_at = ?", true, 0).
 		Where("pool_id = ?", poolId).
 		Find(&recordRules).Error; err != nil {
 		a.l.Error("获取 MonitorRecordRule 失败", zap.Error(err), zap.Int("poolId", poolId))
@@ -80,6 +82,7 @@ func (a *alertManagerRecordDAO) GetMonitorRecordRuleByPoolId(ctx context.Context
 	return recordRules, nil
 }
 
+// SearchMonitorRecordRuleByName 通过名称搜索 MonitorRecordRule
 func (a *alertManagerRecordDAO) SearchMonitorRecordRuleByName(ctx context.Context, name string) ([]*model.MonitorRecordRule, error) {
 	if name == "" {
 		return nil, fmt.Errorf("name 不能为空")
@@ -88,7 +91,7 @@ func (a *alertManagerRecordDAO) SearchMonitorRecordRuleByName(ctx context.Contex
 	var recordRules []*model.MonitorRecordRule
 
 	if err := a.db.WithContext(ctx).
-		Where("name LIKE ?", "%"+name+"%").
+		Where("name LIKE ? AND deleted_at = ?", "%"+name+"%", 0).
 		Find(&recordRules).Error; err != nil {
 		a.l.Error("通过名称搜索 MonitorRecordRule 失败", zap.Error(err), zap.String("name", name))
 		return nil, err
@@ -97,10 +100,15 @@ func (a *alertManagerRecordDAO) SearchMonitorRecordRuleByName(ctx context.Contex
 	return recordRules, nil
 }
 
-func (a *alertManagerRecordDAO) GetMonitorRecordRuleList(ctx context.Context) ([]*model.MonitorRecordRule, error) {
+// GetMonitorRecordRuleList 获取 MonitorRecordRule 列表
+func (a *alertManagerRecordDAO) GetMonitorRecordRuleList(ctx context.Context, offset, limit int) ([]*model.MonitorRecordRule, error) {
 	var recordRules []*model.MonitorRecordRule
 
-	if err := a.db.WithContext(ctx).Find(&recordRules).Error; err != nil {
+	if offset < 0 || limit <= 0 {
+		return nil, fmt.Errorf("无效的分页参数: offset=%d, limit=%d", offset, limit)
+	}
+
+	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).Offset(offset).Limit(limit).Find(&recordRules).Error; err != nil {
 		a.l.Error("获取所有 MonitorRecordRule 失败", zap.Error(err))
 		return nil, err
 	}
@@ -108,11 +116,10 @@ func (a *alertManagerRecordDAO) GetMonitorRecordRuleList(ctx context.Context) ([
 	return recordRules, nil
 }
 
+// CreateMonitorRecordRule 创建 MonitorRecordRule
 func (a *alertManagerRecordDAO) CreateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error {
-	if recordRule == nil {
-		a.l.Error("CreateMonitorRecordRule 失败: recordRule 为 nil")
-		return fmt.Errorf("monitorRecordRule 不能为空")
-	}
+	recordRule.CreatedAt = getTime()
+	recordRule.UpdatedAt = getTime()
 
 	if err := a.db.WithContext(ctx).Create(recordRule).Error; err != nil {
 		a.l.Error("创建 MonitorRecordRule 失败", zap.Error(err))
@@ -122,6 +129,7 @@ func (a *alertManagerRecordDAO) CreateMonitorRecordRule(ctx context.Context, rec
 	return nil
 }
 
+// GetMonitorRecordRuleById 通过 ID 获取 MonitorRecordRule
 func (a *alertManagerRecordDAO) GetMonitorRecordRuleById(ctx context.Context, id int) (*model.MonitorRecordRule, error) {
 	if id <= 0 {
 		a.l.Error("GetMonitorRecordRuleById 失败: 无效的 ID", zap.Int("id", id))
@@ -129,7 +137,11 @@ func (a *alertManagerRecordDAO) GetMonitorRecordRuleById(ctx context.Context, id
 	}
 
 	var recordRule model.MonitorRecordRule
-	if err := a.db.WithContext(ctx).First(&recordRule, id).Error; err != nil {
+
+	if err := a.db.WithContext(ctx).Where("id = ? AND deleted_at = ?", id, 0).First(&recordRule).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("未找到 ID 为 %d 的 MonitorRecordRule", id)
+		}
 		a.l.Error("获取 MonitorRecordRule 失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
@@ -137,21 +149,30 @@ func (a *alertManagerRecordDAO) GetMonitorRecordRuleById(ctx context.Context, id
 	return &recordRule, nil
 }
 
+// UpdateMonitorRecordRule 更新 MonitorRecordRule
 func (a *alertManagerRecordDAO) UpdateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error {
-	if recordRule == nil {
-		a.l.Error("UpdateMonitorRecordRule 失败: recordRule 为 nil")
-		return fmt.Errorf("monitorRecordRule 不能为空")
-	}
-
 	if recordRule.ID == 0 {
 		a.l.Error("UpdateMonitorRecordRule 失败: ID 为 0", zap.Any("recordRule", recordRule))
 		return fmt.Errorf("monitorRecordRule 的 ID 必须设置且非零")
 	}
 
+	recordRule.UpdatedAt = getTime()
+
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorRecordRule{}).
-		Where("id = ?", recordRule.ID).
-		Updates(recordRule).Error; err != nil {
+		Where("id = ? AND deleted_at = ?", recordRule.ID, 0).
+		Updates(map[string]interface{}{
+			"name":         recordRule.Name,
+			"user_id":      recordRule.UserID,
+			"pool_id":      recordRule.PoolID,
+			"tree_node_id": recordRule.TreeNodeID,
+			"enable":       recordRule.Enable,
+			"for_time":     recordRule.ForTime,
+			"expr":         recordRule.Expr,
+			"labels":       recordRule.Labels,
+			"annotations":  recordRule.Annotations,
+			"updated_at":   getTime(),
+		}).Error; err != nil {
 		a.l.Error("更新 MonitorRecordRule 失败", zap.Error(err), zap.Int("id", recordRule.ID))
 		return err
 	}
@@ -159,21 +180,33 @@ func (a *alertManagerRecordDAO) UpdateMonitorRecordRule(ctx context.Context, rec
 	return nil
 }
 
+// DeleteMonitorRecordRule 删除 MonitorRecordRule
 func (a *alertManagerRecordDAO) DeleteMonitorRecordRule(ctx context.Context, ruleID int) error {
 	if ruleID <= 0 {
 		a.l.Error("DeleteMonitorRecordRule 失败: 无效的 ruleID", zap.Int("ruleID", ruleID))
 		return fmt.Errorf("无效的 ruleID: %d", ruleID)
 	}
 
-	result := a.db.WithContext(ctx).Delete(&model.MonitorRecordRule{}, ruleID)
+	result := a.db.WithContext(ctx).
+		Model(&model.MonitorRecordRule{}).
+		Where("id = ? AND deleted_at = ?", ruleID, 0).
+		Updates(map[string]interface{}{
+			"deleted_at": getTime(),
+		})
+
 	if err := result.Error; err != nil {
 		a.l.Error("删除 MonitorRecordRule 失败", zap.Error(err), zap.Int("ruleID", ruleID))
 		return fmt.Errorf("删除 ID 为 %d 的 MonitorRecordRule 失败: %w", ruleID, err)
 	}
 
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("未找到 ID 为 %d 的 MonitorRecordRule", ruleID)
+	}
+
 	return nil
 }
 
+// EnableSwitchMonitorRecordRule 切换 MonitorRecordRule 状态
 func (a *alertManagerRecordDAO) EnableSwitchMonitorRecordRule(ctx context.Context, ruleID int) error {
 	if ruleID <= 0 {
 		a.l.Error("EnableSwitchMonitorRecordRule 失败: 无效的 ruleID", zap.Int("ruleID", ruleID))
@@ -182,27 +215,26 @@ func (a *alertManagerRecordDAO) EnableSwitchMonitorRecordRule(ctx context.Contex
 
 	// 获取当前规则的状态
 	var rule model.MonitorRecordRule
+
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorRecordRule{}).
-		Where("id = ?", ruleID).
+		Where("id = ? AND deleted_at = ?", ruleID, 0).
 		First(&rule).Error; err != nil {
 		a.l.Error("查询 MonitorRecordRule 失败", zap.Error(err), zap.Int("ruleID", ruleID))
 		return err
 	}
 
-	// 切换状态，1->2 或 2->1·
-	newEnable := 1
-	if rule.Enable == 1 {
-		newEnable = 2
-	} else if rule.Enable == 2 {
-		newEnable = 1
-	}
+	// 切换状态
+	newEnable := !rule.Enable
 
 	// 更新状态
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorRecordRule{}).
-		Where("id = ?", ruleID).
-		Update("enable", newEnable).Error; err != nil {
+		Where("id = ? AND deleted_at = ?", ruleID, 0).
+		Updates(map[string]interface{}{
+			"enable":     newEnable,
+			"updated_at": getTime(),
+		}).Error; err != nil {
 		a.l.Error("更新 MonitorRecordRule 状态失败", zap.Error(err), zap.Int("ruleID", ruleID))
 		return err
 	}
@@ -210,26 +242,30 @@ func (a *alertManagerRecordDAO) EnableSwitchMonitorRecordRule(ctx context.Contex
 	return nil
 }
 
+// CheckMonitorRecordRuleExists 检查 MonitorRecordRule 是否存在
 func (a *alertManagerRecordDAO) CheckMonitorRecordRuleExists(ctx context.Context, recordRule *model.MonitorRecordRule) (bool, error) {
 	var count int64
 
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorRecordRule{}).
-		Where("id = ?", recordRule.ID).
+		Where("id = ? AND deleted_at = ?", recordRule.ID, 0).
 		Count(&count).Error; err != nil {
+		a.l.Error("检查 MonitorRecordRule 是否存在失败", zap.Error(err))
 		return false, err
 	}
 
 	return count > 0, nil
 }
 
+// CheckMonitorRecordRuleNameExists 检查 MonitorRecordRule 名称是否存在
 func (a *alertManagerRecordDAO) CheckMonitorRecordRuleNameExists(ctx context.Context, recordRule *model.MonitorRecordRule) (bool, error) {
 	var count int64
 
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorRecordRule{}).
-		Where("name = ?", recordRule.Name).
+		Where("name = ? AND deleted_at = ?", recordRule.Name, 0).
 		Count(&count).Error; err != nil {
+		a.l.Error("检查 MonitorRecordRule 名称是否存在失败", zap.Error(err))
 		return false, err
 	}
 

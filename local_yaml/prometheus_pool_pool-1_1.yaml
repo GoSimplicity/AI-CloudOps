@@ -40,7 +40,7 @@ scrape_configs:
           replacement: $1
           action: hashmod
         - source_labels: [__tmp_hash]
-          regex: ^0$
+          regex: ^1$
           action: keep
       http_sd_configs:
         - follow_redirects: false

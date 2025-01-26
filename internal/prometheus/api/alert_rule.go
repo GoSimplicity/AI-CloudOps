@@ -26,8 +26,9 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
+
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
@@ -53,14 +54,14 @@ func (a *AlertRuleHandler) RegisterRouters(server *gin.Engine) {
 
 	alertRules := monitorGroup.Group("/alert_rules")
 	{
-		alertRules.GET("/list", a.GetMonitorAlertRuleList)                    // 获取告警规则列表
-		alertRules.POST("/promql_check", a.PromqlExprCheck)                   // 检查 PromQL 表达式的合法性
-		alertRules.POST("/create", a.CreateMonitorAlertRule)                  // 创建新的告警规则
-		alertRules.POST("/update", a.UpdateMonitorAlertRule)                  // 更新现有的告警规则
-		alertRules.POST("/enable", a.EnableSwitchMonitorAlertRule)            // 切换告警规则的启用状态
-		alertRules.POST("/batch_enable", a.BatchEnableSwitchMonitorAlertRule) // 批量切换告警规则的启用状态
-		alertRules.DELETE("/:id", a.DeleteMonitorAlertRule)                   // 删除指定的告警规则
-		alertRules.DELETE("/", a.BatchDeleteMonitorAlertRule)                 // 批量删除告警规则
+		alertRules.GET("/list", a.GetMonitorAlertRuleList)
+		alertRules.POST("/promql_check", a.PromqlExprCheck)
+		alertRules.POST("/create", a.CreateMonitorAlertRule)
+		alertRules.POST("/update", a.UpdateMonitorAlertRule)
+		alertRules.POST("/enable", a.EnableSwitchMonitorAlertRule)
+		alertRules.POST("/batch_enable", a.BatchEnableSwitchMonitorAlertRule)
+		alertRules.DELETE("/:id", a.DeleteMonitorAlertRule)
+		alertRules.DELETE("/", a.BatchDeleteMonitorAlertRule)
 	}
 }
 
@@ -78,7 +79,7 @@ func (a *AlertRuleHandler) CreateMonitorAlertRule(ctx *gin.Context) {
 	alertRule.UserID = uc.Uid
 
 	if err := a.alertRuleService.CreateMonitorAlertRule(ctx, &alertRule); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -95,7 +96,7 @@ func (a *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
 	}
 
 	if err := a.alertRuleService.UpdateMonitorAlertRule(ctx, &alertRule); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -112,7 +113,7 @@ func (a *AlertRuleHandler) EnableSwitchMonitorAlertRule(ctx *gin.Context) {
 	}
 
 	if err := a.alertRuleService.EnableSwitchMonitorAlertRule(ctx, req.ID); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -129,7 +130,7 @@ func (a *AlertRuleHandler) BatchEnableSwitchMonitorAlertRule(ctx *gin.Context) {
 	}
 
 	if err := a.alertRuleService.BatchEnableSwitchMonitorAlertRule(ctx, req.IDs); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -147,7 +148,7 @@ func (a *AlertRuleHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
 	}
 
 	if err := a.alertRuleService.DeleteMonitorAlertRule(ctx, intId); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -164,7 +165,7 @@ func (a *AlertRuleHandler) BatchDeleteMonitorAlertRule(ctx *gin.Context) {
 	}
 
 	if err := a.alertRuleService.BatchDeleteMonitorAlertRule(ctx, req.IDs); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -173,11 +174,16 @@ func (a *AlertRuleHandler) BatchDeleteMonitorAlertRule(ctx *gin.Context) {
 
 // GetMonitorAlertRuleList 获取告警规则列表
 func (a *AlertRuleHandler) GetMonitorAlertRuleList(ctx *gin.Context) {
-	searchName := ctx.Query("name")
+	var listReq model.ListReq
 
-	list, err := a.alertRuleService.GetMonitorAlertRuleList(ctx, &searchName)
+	if err := ctx.ShouldBindQuery(&listReq); err != nil {
+		utils.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	list, err := a.alertRuleService.GetMonitorAlertRuleList(ctx, &listReq)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -188,7 +194,7 @@ func (a *AlertRuleHandler) GetMonitorAlertRuleList(ctx *gin.Context) {
 func (a *AlertRuleHandler) PromqlExprCheck(ctx *gin.Context) {
 	var promql model.PromqlExprCheckReq
 
-	if err := ctx.ShouldBind(&promql); err != nil {
+	if err := ctx.ShouldBindJSON(&promql); err != nil {
 		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}

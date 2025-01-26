@@ -1,0 +1,15 @@
+groups:
+    - name: rule-1
+      rules:
+        - alert: rule-1
+          expr: (1 - avg by(instance) (rate(node_cpu_seconds_total{mode='idle'}[5m]))) * 100 > 10
+          for: 10s
+          labels:
+            alert_rule_id: "1"
+            alert_send_group: "1"
+            bind_tree_node: "4"
+            severity: warning
+          annotations:
+            alert_send_group: "1"
+            bind_tree_node: "8"
+            severity: warning

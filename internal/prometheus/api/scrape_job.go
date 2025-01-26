@@ -26,8 +26,9 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
+
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	scrapeJobService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape"
@@ -53,19 +54,25 @@ func (s *ScrapeJobHandler) RegisterRouters(server *gin.Engine) {
 
 	scrapeJobs := monitorGroup.Group("/scrape_jobs")
 	{
-		scrapeJobs.GET("/list", s.GetMonitorScrapeJobList)   // 获取监控采集 Job 列表
-		scrapeJobs.POST("/create", s.CreateMonitorScrapeJob) // 创建监控采集 Job
-		scrapeJobs.POST("/update", s.UpdateMonitorScrapeJob) // 更新监控采集 Job
-		scrapeJobs.DELETE("/:id", s.DeleteMonitorScrapeJob)  // 删除监控采集 Job
+		scrapeJobs.GET("/list", s.GetMonitorScrapeJobList)
+		scrapeJobs.POST("/create", s.CreateMonitorScrapeJob)
+		scrapeJobs.POST("/update", s.UpdateMonitorScrapeJob)
+		scrapeJobs.DELETE("/:id", s.DeleteMonitorScrapeJob)
 	}
 }
 
 // GetMonitorScrapeJobList 获取监控采集 Job 列表
 func (s *ScrapeJobHandler) GetMonitorScrapeJobList(ctx *gin.Context) {
-	search := ctx.Query("search")
-	list, err := s.scrapeJobService.GetMonitorScrapeJobList(ctx, &search)
+	var listReq model.ListReq
+
+	if err := ctx.ShouldBindQuery(&listReq); err != nil {
+		utils.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	list, err := s.scrapeJobService.GetMonitorScrapeJobList(ctx, &listReq)
 	if err != nil {
-		utils.ErrorWithDetails(ctx, err, "获取监控采集 Job 列表失败")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -85,7 +92,7 @@ func (s *ScrapeJobHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
 	monitorScrapeJob.UserID = uc.Uid
 
 	if err := s.scrapeJobService.CreateMonitorScrapeJob(ctx, &monitorScrapeJob); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -102,7 +109,7 @@ func (s *ScrapeJobHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
 	}
 
 	if err := s.scrapeJobService.UpdateMonitorScrapeJob(ctx, &monitorScrapeJob); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -120,7 +127,7 @@ func (s *ScrapeJobHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
 	}
 
 	if err := s.scrapeJobService.DeleteMonitorScrapeJob(ctx, intId); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 

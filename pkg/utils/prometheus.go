@@ -220,7 +220,7 @@ func BuildMatchers(alertEvent *model.MonitorAlertEvent, l *zap.Logger, useName b
 	var matchers []*labels.Matcher
 	if useName {
 		// 如果 useName 为 true，仅使用 alertname 匹配器
-		alertName, exists := alertEvent.LabelsMatcher["alertname"]
+		alertName, exists := alertEvent.LabelsMap["alertname"]
 		if !exists {
 			l.Error("EventAlertSilence failed: alertname missing in LabelsMatcher", zap.Int("id", alertEvent.ID))
 			return nil, fmt.Errorf("alertname missing in LabelsMatcher")
@@ -234,7 +234,7 @@ func BuildMatchers(alertEvent *model.MonitorAlertEvent, l *zap.Logger, useName b
 		}
 	} else {
 		// 否则，使用所有标签匹配器
-		for key, val := range alertEvent.LabelsMatcher {
+		for key, val := range alertEvent.LabelsMap {
 			matcher := &labels.Matcher{
 				Type:  labels.MatchEqual,
 				Name:  key,
@@ -286,14 +286,6 @@ func SendSilenceRequest(ctx context.Context, l *zap.Logger, url string, data []b
 	}
 
 	return result.Data.ID, nil
-}
-
-// HandleList 处理搜索或获取所有记录
-func HandleList[T any](ctx context.Context, search *string, searchFunc func(ctx context.Context, name string) ([]*T, error), listFunc func(ctx context.Context) ([]*T, error)) ([]*T, error) {
-	if search != nil && *search != "" {
-		return searchFunc(ctx, *search)
-	}
-	return listFunc(ctx)
 }
 
 func FromSliceTuMap(kvs []string) map[string]string {

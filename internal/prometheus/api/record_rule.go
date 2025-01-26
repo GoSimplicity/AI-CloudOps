@@ -26,8 +26,9 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
+
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
@@ -53,23 +54,28 @@ func (r *RecordRuleHandler) RegisterRouters(server *gin.Engine) {
 
 	recordRules := monitorGroup.Group("/record_rules")
 	{
-		recordRules.GET("/list", r.GetMonitorRecordRuleList)              // 获取预聚合规则列表
-		recordRules.POST("/create", r.CreateMonitorRecordRule)            // 创建新的预聚合规则
-		recordRules.POST("/update", r.UpdateMonitorRecordRule)            // 更新现有的预聚合规则
-		recordRules.DELETE("/:id", r.DeleteMonitorRecordRule)             // 删除指定的预聚合规则
-		recordRules.DELETE("/", r.BatchDeleteMonitorRecordRule)           // 批量删除预聚合规则
-		recordRules.POST("/:id/enable", r.EnableSwitchMonitorRecordRule)  // 切换预聚合规则的启用状态
-		recordRules.POST("/enable", r.BatchEnableSwitchMonitorRecordRule) // 批量切换预聚合规则的启用状态
+		recordRules.GET("/list", r.GetMonitorRecordRuleList)
+		recordRules.POST("/create", r.CreateMonitorRecordRule)
+		recordRules.POST("/update", r.UpdateMonitorRecordRule)
+		recordRules.DELETE("/:id", r.DeleteMonitorRecordRule)
+		recordRules.DELETE("/", r.BatchDeleteMonitorRecordRule)
+		recordRules.POST("/:id/enable", r.EnableSwitchMonitorRecordRule)
+		recordRules.POST("/enable", r.BatchEnableSwitchMonitorRecordRule)
 	}
 }
 
 // GetMonitorRecordRuleList 获取预聚合规则列表
 func (r *RecordRuleHandler) GetMonitorRecordRuleList(ctx *gin.Context) {
-	searchName := ctx.Query("name")
+	var listReq model.ListReq
 
-	list, err := r.alertRecordService.GetMonitorRecordRuleList(ctx, &searchName)
+	if err := ctx.ShouldBindQuery(&listReq); err != nil {
+		utils.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	list, err := r.alertRecordService.GetMonitorRecordRuleList(ctx, &listReq)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -89,7 +95,7 @@ func (r *RecordRuleHandler) CreateMonitorRecordRule(ctx *gin.Context) {
 	recordRule.UserID = uc.Uid
 
 	if err := r.alertRecordService.CreateMonitorRecordRule(ctx, &recordRule); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -106,7 +112,7 @@ func (r *RecordRuleHandler) UpdateMonitorRecordRule(ctx *gin.Context) {
 	}
 
 	if err := r.alertRecordService.UpdateMonitorRecordRule(ctx, &recordRule); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -124,7 +130,7 @@ func (r *RecordRuleHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
 	}
 
 	if err := r.alertRecordService.DeleteMonitorRecordRule(ctx, intId); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -141,7 +147,7 @@ func (r *RecordRuleHandler) BatchDeleteMonitorRecordRule(ctx *gin.Context) {
 	}
 
 	if err := r.alertRecordService.BatchDeleteMonitorRecordRule(ctx, req.IDs); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -159,7 +165,7 @@ func (r *RecordRuleHandler) EnableSwitchMonitorRecordRule(ctx *gin.Context) {
 	}
 
 	if err := r.alertRecordService.EnableSwitchMonitorRecordRule(ctx, intId); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -176,7 +182,7 @@ func (r *RecordRuleHandler) BatchEnableSwitchMonitorRecordRule(ctx *gin.Context)
 	}
 
 	if err := r.alertRecordService.BatchEnableSwitchMonitorRecordRule(ctx, req.IDs); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 

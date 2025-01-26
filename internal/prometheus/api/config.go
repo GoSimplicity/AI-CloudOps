@@ -51,10 +51,10 @@ func (c *ConfigYamlHandler) RegisterRouters(server *gin.Engine) {
 
 	prometheusConfigs := monitorGroup.Group("/prometheus_configs")
 	{
-		prometheusConfigs.GET("/prometheus", c.GetMonitorPrometheusYaml)                // 获取单个 Prometheus 配置文件
-		prometheusConfigs.GET("/prometheus_alert", c.GetMonitorPrometheusAlertRuleYaml) // 获取单个 Prometheus 告警配置文件
-		prometheusConfigs.GET("/prometheus_record", c.GetMonitorPrometheusRecordYaml)   // 获取单个 Prometheus 记录配置文件
-		prometheusConfigs.GET("/alertManager", c.GetMonitorAlertManagerYaml)            // 获取单个 AlertManager 配置文件
+		prometheusConfigs.GET("/prometheus", c.GetMonitorPrometheusYaml)
+		prometheusConfigs.GET("/prometheus_alert", c.GetMonitorPrometheusAlertRuleYaml)
+		prometheusConfigs.GET("/prometheus_record", c.GetMonitorPrometheusRecordYaml)
+		prometheusConfigs.GET("/alertManager", c.GetMonitorAlertManagerYaml)
 	}
 }
 

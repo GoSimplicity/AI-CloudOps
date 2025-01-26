@@ -28,7 +28,6 @@ package alert
 import (
 	"context"
 	"errors"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -47,7 +46,7 @@ var (
 )
 
 type AlertManagerOnDutyService interface {
-	GetMonitorOnDutyGroupList(ctx context.Context, searchName *string) ([]*model.MonitorOnDutyGroup, error)
+	GetMonitorOnDutyGroupList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorOnDutyGroup, error)
 	CreateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error
 	CreateMonitorOnDutyGroupChange(ctx context.Context, monitorOnDutyChange *model.MonitorOnDutyChange) error
 	UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error
@@ -75,16 +74,29 @@ func NewAlertManagerOnDutyService(dao alert.AlertManagerOnDutyDAO, sendDao alert
 }
 
 // GetMonitorOnDutyGroupList 获取值班组列表
-func (a *alertManagerOnDutyService) GetMonitorOnDutyGroupList(ctx context.Context, searchName *string) ([]*model.MonitorOnDutyGroup, error) {
-	list, err := pkg.HandleList(ctx, searchName,
-		a.dao.SearchMonitorOnDutyGroupByName,
-		a.dao.GetAllMonitorOnDutyGroup)
+func (a *alertManagerOnDutyService) GetMonitorOnDutyGroupList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorOnDutyGroup, error) {
+	var groups []*model.MonitorOnDutyGroup
+
+	if listReq.Search != "" {
+		groups, err := a.dao.SearchMonitorOnDutyGroupByName(ctx, listReq.Search)
+		if err != nil {
+			a.l.Error("搜索值班组失败", zap.String("search", listReq.Search), zap.Error(err))
+			return nil, err
+		}
+
+		groups = groups
+	}
+
+	offset := (listReq.Page - 1) * listReq.Size
+	limit := listReq.Size
+
+	groups, err := a.dao.GetMonitorOnDutyList(ctx, offset, limit)
 	if err != nil {
 		a.l.Error("获取值班组列表失败", zap.Error(err))
 		return nil, err
 	}
 
-	for _, group := range list {
+	for _, group := range groups {
 		userNames := make([]string, len(group.Members))
 		for i, member := range group.Members {
 			userNames[i] = member.Username
@@ -92,7 +104,7 @@ func (a *alertManagerOnDutyService) GetMonitorOnDutyGroupList(ctx context.Contex
 		group.UserNames = userNames
 	}
 
-	return list, nil
+	return groups, nil
 }
 
 // CreateMonitorOnDutyGroup 创建值班组
@@ -102,6 +114,7 @@ func (a *alertManagerOnDutyService) CreateMonitorOnDutyGroup(ctx context.Context
 		a.l.Error("检查值班组是否存在失败", zap.Error(err))
 		return err
 	}
+
 	if exists {
 		return ErrGroupExists
 	}
@@ -142,16 +155,22 @@ func (a *alertManagerOnDutyService) CreateMonitorOnDutyGroupChange(ctx context.C
 		return err
 	}
 
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
-		return err
-	}
-
 	return nil
 }
 
 // UpdateMonitorOnDutyGroup 更新值班组
 func (a *alertManagerOnDutyService) UpdateMonitorOnDutyGroup(ctx context.Context, group *model.MonitorOnDutyGroup) error {
+	// 检查值班组是否存在
+	exists, err := a.dao.CheckMonitorOnDutyGroupExists(ctx, group)
+	if err != nil {
+		a.l.Error("检查值班组是否存在失败", zap.Error(err))
+		return err
+	}
+
+	if !exists {
+		return errors.New("值班组不存在")
+	}
+
 	users, err := a.userDao.GetUserByUsernames(ctx, group.UserNames)
 	if err != nil {
 		a.l.Error("获取用户信息失败", zap.Error(err))
@@ -161,11 +180,6 @@ func (a *alertManagerOnDutyService) UpdateMonitorOnDutyGroup(ctx context.Context
 	group.Members = users
 	if err := a.dao.UpdateMonitorOnDutyGroup(ctx, group); err != nil {
 		a.l.Error("更新值班组失败", zap.Error(err))
-		return err
-	}
-
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
 		return err
 	}
 
@@ -186,11 +200,6 @@ func (a *alertManagerOnDutyService) DeleteMonitorOnDutyGroup(ctx context.Context
 
 	if err := a.dao.DeleteMonitorOnDutyGroup(ctx, id); err != nil {
 		a.l.Error("删除值班组失败", zap.Error(err))
-		return err
-	}
-
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
 		return err
 	}
 

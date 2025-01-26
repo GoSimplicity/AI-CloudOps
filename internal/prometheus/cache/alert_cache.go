@@ -296,7 +296,7 @@ func (a *alertConfigCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Co
 			WebhookConfigs: []*altconfig.WebhookConfig{ // Webhook配置
 				{
 					NotifierConfig: altconfig.NotifierConfig{ // Notifier配置 用于告警通知
-						VSendResolved: sendGroup.SendResolved == 1, // 在告警解决时是否发送通知
+						VSendResolved: sendGroup.SendResolved, // 在告警解决时是否发送通知
 					},
 					URLFile: urlFilePath,
 				},

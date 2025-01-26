@@ -28,8 +28,10 @@ package alert
 import (
 	"context"
 	"fmt"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"net/http"
+	"time"
+
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -40,7 +42,7 @@ import (
 type AlertManagerEventDAO interface {
 	GetMonitorAlertEventById(ctx context.Context, id int) (*model.MonitorAlertEvent, error)
 	SearchMonitorAlertEventByName(ctx context.Context, name string) ([]*model.MonitorAlertEvent, error)
-	GetMonitorAlertEventList(ctx context.Context) ([]*model.MonitorAlertEvent, error)
+	GetMonitorAlertEventList(ctx context.Context, offset, limit int) ([]*model.MonitorAlertEvent, error)
 	EventAlertClaim(ctx context.Context, event *model.MonitorAlertEvent) error
 	GetAlertEventByID(ctx context.Context, id int) (*model.MonitorAlertEvent, error)
 	UpdateAlertEvent(ctx context.Context, alertEvent *model.MonitorAlertEvent) error
@@ -56,13 +58,21 @@ type alertManagerEventDAO struct {
 
 func NewAlertManagerEventDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO) AlertManagerEventDAO {
 	return &alertManagerEventDAO{
-		db:         db,
-		l:          l,
-		userDao:    userDao,
-		httpClient: &http.Client{},
+		db:      db,
+		l:       l,
+		userDao: userDao,
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
 	}
 }
 
+// 获取当前时间戳
+func getTime() int64 {
+	return time.Now().Unix()
+}
+
+// GetMonitorAlertEventById 获取告警事件
 func (a *alertManagerEventDAO) GetMonitorAlertEventById(ctx context.Context, id int) (*model.MonitorAlertEvent, error) {
 	if id <= 0 {
 		a.l.Error("GetMonitorAlertEventById 失败: 无效的 ID", zap.Int("id", id))
@@ -70,7 +80,11 @@ func (a *alertManagerEventDAO) GetMonitorAlertEventById(ctx context.Context, id 
 	}
 
 	var alertEvent model.MonitorAlertEvent
-	if err := a.db.WithContext(ctx).First(&alertEvent, id).Error; err != nil {
+
+	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).First(&alertEvent, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("未找到ID为 %d 的告警事件", id)
+		}
 		a.l.Error("获取 MonitorAlertEvent 失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
@@ -78,10 +92,16 @@ func (a *alertManagerEventDAO) GetMonitorAlertEventById(ctx context.Context, id 
 	return &alertEvent, nil
 }
 
+// SearchMonitorAlertEventByName 通过名称搜索告警事件
 func (a *alertManagerEventDAO) SearchMonitorAlertEventByName(ctx context.Context, name string) ([]*model.MonitorAlertEvent, error) {
+	if name == "" {
+		return nil, fmt.Errorf("搜索名称不能为空")
+	}
+
 	var alertEvents []*model.MonitorAlertEvent
 
 	if err := a.db.WithContext(ctx).
+		Where("deleted_at = ?", 0).
 		Where("alert_name LIKE ?", "%"+name+"%").
 		Find(&alertEvents).Error; err != nil {
 		a.l.Error("通过名称搜索 MonitorAlertEvent 失败", zap.Error(err), zap.String("name", name))
@@ -91,10 +111,23 @@ func (a *alertManagerEventDAO) SearchMonitorAlertEventByName(ctx context.Context
 	return alertEvents, nil
 }
 
-func (a *alertManagerEventDAO) GetMonitorAlertEventList(ctx context.Context) ([]*model.MonitorAlertEvent, error) {
+// GetMonitorAlertEventList 获取告警事件列表
+func (a *alertManagerEventDAO) GetMonitorAlertEventList(ctx context.Context, offset, limit int) ([]*model.MonitorAlertEvent, error) {
+	if offset < 0 {
+		return nil, fmt.Errorf("offset不能为负数")
+	}
+	if limit <= 0 {
+		return nil, fmt.Errorf("limit必须大于0")
+	}
+
 	var alertEvents []*model.MonitorAlertEvent
 
-	if err := a.db.WithContext(ctx).Find(&alertEvents).Error; err != nil {
+	if err := a.db.WithContext(ctx).
+		Where("deleted_at = ?", 0).
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&alertEvents).Error; err != nil {
 		a.l.Error("获取 MonitorAlertEvent 列表失败", zap.Error(err))
 		return nil, err
 	}
@@ -102,23 +135,30 @@ func (a *alertManagerEventDAO) GetMonitorAlertEventList(ctx context.Context) ([]
 	return alertEvents, nil
 }
 
+// EventAlertClaim 认领告警事件
 func (a *alertManagerEventDAO) EventAlertClaim(ctx context.Context, event *model.MonitorAlertEvent) error {
-	if event == nil {
-		a.l.Error("EventAlertClaim 失败: event 为 nil")
-		return fmt.Errorf("event 不能为空")
+	if event.ID <= 0 {
+		return fmt.Errorf("无效的事件ID")
 	}
 
-	if err := a.db.WithContext(ctx).
+	result := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertEvent{}).
-		Where("id = ?", event.ID).
-		Updates(event).Error; err != nil {
-		a.l.Error("EventAlertClaim 更新失败", zap.Error(err), zap.Int("id", event.ID))
-		return err
+		Where("id = ? AND deleted_at = ?", event.ID, 0).
+		Updates(event)
+
+	if result.Error != nil {
+		a.l.Error("EventAlertClaim 更新失败", zap.Error(result.Error), zap.Int("id", event.ID))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("未找到ID为 %d 的告警事件或已被删除", event.ID)
 	}
 
 	return nil
 }
 
+// GetAlertEventByID 通过ID获取告警事件
 func (a *alertManagerEventDAO) GetAlertEventByID(ctx context.Context, id int) (*model.MonitorAlertEvent, error) {
 	if id <= 0 {
 		a.l.Error("GetAlertEventByID 失败: 无效的 ID", zap.Int("id", id))
@@ -126,7 +166,11 @@ func (a *alertManagerEventDAO) GetAlertEventByID(ctx context.Context, id int) (*
 	}
 
 	var alertEvent model.MonitorAlertEvent
-	if err := a.db.WithContext(ctx).First(&alertEvent, id).Error; err != nil {
+
+	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).First(&alertEvent, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("未找到ID为 %d 的告警事件", id)
+		}
 		a.l.Error("获取 AlertEvent 失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
@@ -134,15 +178,34 @@ func (a *alertManagerEventDAO) GetAlertEventByID(ctx context.Context, id int) (*
 	return &alertEvent, nil
 }
 
+// UpdateAlertEvent 更新告警事件
 func (a *alertManagerEventDAO) UpdateAlertEvent(ctx context.Context, alertEvent *model.MonitorAlertEvent) error {
-	if alertEvent == nil {
-		a.l.Error("UpdateAlertEvent 失败: alertEvent 为 nil")
-		return fmt.Errorf("alertEvent 不能为空")
+	if alertEvent.ID <= 0 {
+		return fmt.Errorf("无效的事件ID")
 	}
 
-	if err := a.db.WithContext(ctx).Save(alertEvent).Error; err != nil {
-		a.l.Error("更新 AlertEvent 失败", zap.Error(err), zap.Int("id", alertEvent.ID))
-		return err
+	result := a.db.WithContext(ctx).
+		Where("id = ? AND deleted_at = ?", alertEvent.ID, 0).
+		Updates(map[string]interface{}{
+			"alert_name":       alertEvent.AlertName,
+			"fingerprint":      alertEvent.Fingerprint,
+			"status":           alertEvent.Status,
+			"rule_id":          alertEvent.RuleID,
+			"send_group_id":    alertEvent.SendGroupID,
+			"event_times":      alertEvent.EventTimes,
+			"silence_id":       alertEvent.SilenceID,
+			"ren_ling_user_id": alertEvent.RenLingUserID,
+			"labels":           alertEvent.Labels,
+			"updated_at":       getTime(),
+		})
+
+	if result.Error != nil {
+		a.l.Error("更新 AlertEvent 失败", zap.Error(result.Error), zap.Int("id", alertEvent.ID))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("未找到ID为 %d 的告警事件或已被删除", alertEvent.ID)
 	}
 
 	return nil
@@ -150,6 +213,13 @@ func (a *alertManagerEventDAO) UpdateAlertEvent(ctx context.Context, alertEvent 
 
 // SendMessageToGroup 发送飞书群聊消息
 func (a *alertManagerEventDAO) SendMessageToGroup(ctx context.Context, url string, message string) error {
+	if url == "" {
+		return fmt.Errorf("url不能为空")
+	}
+	if message == "" {
+		return fmt.Errorf("message不能为空")
+	}
+
 	// 拼接发送内容
 	content := fmt.Sprintf(`{"msg_type":"text","content":{"text":"%s"}}`, message)
 
@@ -158,12 +228,16 @@ func (a *alertManagerEventDAO) SendMessageToGroup(ctx context.Context, url strin
 	if err != nil {
 		a.l.Error("发送飞书群聊消息失败",
 			zap.Error(err),
+			zap.String("url", url),
+			zap.String("message", message),
 			zap.Any("结果", string(body)),
 		)
 		return fmt.Errorf("发送飞书群聊消息失败: %w", err)
 	}
 
 	a.l.Info("发送飞书群聊消息成功",
+		zap.String("url", url),
+		zap.String("message", message),
 		zap.Any("结果", string(body)),
 	)
 

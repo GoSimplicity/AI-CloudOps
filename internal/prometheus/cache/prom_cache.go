@@ -218,7 +218,7 @@ func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePo
 	}
 
 	// 启用告警，配置 Alertmanager
-	if pool.SupportAlert == 1 {
+	if pool.SupportAlert {
 		alertConfig := &pc.AlertmanagerConfig{
 			APIVersion: "v2",
 			ServiceDiscoveryConfigs: []discovery.Config{ // 服务发现配置
@@ -241,7 +241,7 @@ func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePo
 	}
 
 	// 启用预聚合，添加规则文件
-	if pool.SupportRecord == 1 {
+	if pool.SupportRecord {
 		config.RuleFiles = append(config.RuleFiles, pool.RecordFilePath)
 	}
 

@@ -26,8 +26,9 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
+
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
@@ -53,21 +54,26 @@ func (s *SendGroupHandler) RegisterRouters(server *gin.Engine) {
 
 	sendGroups := monitorGroup.Group("/send_groups")
 	{
-		sendGroups.GET("/list", s.GetMonitorSendGroupList)   // 获取发送组列表
-		sendGroups.GET("/:id", s.GetMonitorSendGroup)        // 获取指定发送组
-		sendGroups.POST("/create", s.CreateMonitorSendGroup) // 创建新的发送组
-		sendGroups.POST("/update", s.UpdateMonitorSendGroup) // 更新现有的发送组
-		sendGroups.DELETE("/:id", s.DeleteMonitorSendGroup)  // 删除指定的发送组
+		sendGroups.GET("/list", s.GetMonitorSendGroupList)
+		sendGroups.GET("/:id", s.GetMonitorSendGroup)
+		sendGroups.POST("/create", s.CreateMonitorSendGroup)
+		sendGroups.POST("/update", s.UpdateMonitorSendGroup)
+		sendGroups.DELETE("/:id", s.DeleteMonitorSendGroup)
 	}
 }
 
 // GetMonitorSendGroupList 获取发送组列表
 func (s *SendGroupHandler) GetMonitorSendGroupList(ctx *gin.Context) {
-	searchName := ctx.Query("name")
+	var listReq model.ListReq
 
-	list, err := s.alertSendService.GetMonitorSendGroupList(ctx, &searchName)
+	if err := ctx.ShouldBindQuery(&listReq); err != nil {
+		utils.ErrorWithDetails(ctx, err, "参数错误")
+		return
+	}
+
+	list, err := s.alertSendService.GetMonitorSendGroupList(ctx, &listReq)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -80,7 +86,7 @@ func (s *SendGroupHandler) CreateMonitorSendGroup(ctx *gin.Context) {
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 
-	if err := ctx.ShouldBind(&sendGroup); err != nil {
+	if err := ctx.ShouldBindJSON(&sendGroup); err != nil {
 		utils.ErrorWithDetails(ctx, err, "参数错误")
 		return
 	}
@@ -88,7 +94,7 @@ func (s *SendGroupHandler) CreateMonitorSendGroup(ctx *gin.Context) {
 	sendGroup.UserID = uc.Uid
 
 	if err := s.alertSendService.CreateMonitorSendGroup(ctx, &sendGroup); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -104,8 +110,12 @@ func (s *SendGroupHandler) UpdateMonitorSendGroup(ctx *gin.Context) {
 		return
 	}
 
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+
+	sendGroup.UserID = uc.Uid
+
 	if err := s.alertSendService.UpdateMonitorSendGroup(ctx, &sendGroup); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -123,7 +133,7 @@ func (s *SendGroupHandler) DeleteMonitorSendGroup(ctx *gin.Context) {
 	}
 
 	if err := s.alertSendService.DeleteMonitorSendGroup(ctx, intId); err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
@@ -141,7 +151,7 @@ func (s *SendGroupHandler) GetMonitorSendGroup(ctx *gin.Context) {
 
 	group, err := s.alertSendService.GetMonitorSendGroup(ctx, intId)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "获取发送组失败")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 

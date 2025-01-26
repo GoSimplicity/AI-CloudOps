@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -39,7 +40,7 @@ import (
 )
 
 type AlertManagerRuleService interface {
-	GetMonitorAlertRuleList(ctx context.Context, searchName *string) ([]*model.MonitorAlertRule, error)
+	GetMonitorAlertRuleList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorAlertRule, error)
 	PromqlExprCheck(ctx context.Context, expr string) (bool, error)
 	CreateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error
 	UpdateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error
@@ -65,19 +66,38 @@ func NewAlertManagerRuleService(dao alert.AlertManagerRuleDAO, cache cache.Monit
 	}
 }
 
-func (a *alertManagerRuleService) GetMonitorAlertRuleList(ctx context.Context, searchName *string) ([]*model.MonitorAlertRule, error) {
-	return pkg.HandleList(ctx, searchName,
-		a.dao.SearchMonitorAlertRuleByName,
-		a.dao.GetMonitorAlertRuleList)
+// GetMonitorAlertRuleList 获取告警规则列表
+func (a *alertManagerRuleService) GetMonitorAlertRuleList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorAlertRule, error) {
+	if listReq.Search != "" {
+		rules, err := a.dao.SearchMonitorAlertRuleByName(ctx, listReq.Search)
+		if err != nil {
+			a.l.Error("搜索告警规则失败", zap.String("search", listReq.Search), zap.Error(err))
+			return nil, err
+		}
+		return rules, nil
+	}
+
+	offset := (listReq.Page - 1) * listReq.Size
+	limit := listReq.Size
+
+	rules, err := a.dao.GetMonitorAlertRuleList(ctx, offset, limit)
+	if err != nil {
+		a.l.Error("获取告警规则列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	return rules, nil
 }
 
+// PromqlExprCheck 检查 PromQL 表达式是否有效
 func (a *alertManagerRuleService) PromqlExprCheck(_ context.Context, expr string) (bool, error) {
 	return pkg.PromqlExprCheck(expr)
 }
 
+// CreateMonitorAlertRule 创建告警规则
 func (a *alertManagerRuleService) CreateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error {
 	// 检查告警规则是否已存在
-	exists, err := a.dao.CheckMonitorAlertRuleExists(ctx, monitorAlertRule)
+	exists, err := a.dao.CheckMonitorAlertRuleNameExists(ctx, monitorAlertRule)
 	if err != nil {
 		a.l.Error("创建告警规则失败：检查告警规则是否存在时出错", zap.Error(err))
 		return err
@@ -93,31 +113,36 @@ func (a *alertManagerRuleService) CreateMonitorAlertRule(ctx context.Context, mo
 		return err
 	}
 
-	// 更新缓存
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
-		return err
-	}
-
 	return nil
 }
 
+// UpdateMonitorAlertRule 更新告警规则
 func (a *alertManagerRuleService) UpdateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error {
+	// 检查告警规则是否已存在
+	exists, err := a.dao.CheckMonitorAlertRuleExists(ctx, monitorAlertRule)
+	if err != nil {
+		a.l.Error("更新告警规则失败：检查告警规则是否存在时出错", zap.Error(err))
+		return err
+	}
+
+	if !exists {
+		return errors.New("告警规则不存在")
+	}
+
 	// 更新告警规则
 	if err := a.dao.UpdateMonitorAlertRule(ctx, monitorAlertRule); err != nil {
 		a.l.Error("更新告警规则失败", zap.Error(err))
 		return err
 	}
 
-	// 更新缓存
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
-		return err
+	if ok, err := pkg.PromqlExprCheck(monitorAlertRule.Expr); err != nil || !ok {
+		return errors.New("PromQL 表达式无效")
 	}
 
 	return nil
 }
 
+// EnableSwitchMonitorAlertRule 切换告警规则状态
 func (a *alertManagerRuleService) EnableSwitchMonitorAlertRule(ctx context.Context, id int) error {
 	if err := a.dao.EnableSwitchMonitorAlertRule(ctx, id); err != nil {
 		a.l.Error("切换告警规则状态失败", zap.Error(err))
@@ -133,6 +158,7 @@ func (a *alertManagerRuleService) EnableSwitchMonitorAlertRule(ctx context.Conte
 	return nil
 }
 
+// BatchEnableSwitchMonitorAlertRule 批量切换告警规则状态
 func (a *alertManagerRuleService) BatchEnableSwitchMonitorAlertRule(ctx context.Context, ids []int) error {
 	// 批量切换告警规则状态
 	if err := a.dao.BatchEnableSwitchMonitorAlertRule(ctx, ids); err != nil {
@@ -149,6 +175,7 @@ func (a *alertManagerRuleService) BatchEnableSwitchMonitorAlertRule(ctx context.
 	return nil
 }
 
+// DeleteMonitorAlertRule 删除告警规则
 func (a *alertManagerRuleService) DeleteMonitorAlertRule(ctx context.Context, id int) error {
 	// 删除告警规则
 	if err := a.dao.DeleteMonitorAlertRule(ctx, id); err != nil {
@@ -165,6 +192,7 @@ func (a *alertManagerRuleService) DeleteMonitorAlertRule(ctx context.Context, id
 	return nil
 }
 
+// BatchDeleteMonitorAlertRule 批量删除告警规则
 func (a *alertManagerRuleService) BatchDeleteMonitorAlertRule(ctx context.Context, ids []int) error {
 	for _, id := range ids {
 		if err := a.DeleteMonitorAlertRule(ctx, id); err != nil {

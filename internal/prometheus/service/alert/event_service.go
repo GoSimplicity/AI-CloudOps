@@ -43,7 +43,7 @@ import (
 
 // AlertManagerEventService 定义告警事件管理服务接口
 type AlertManagerEventService interface {
-	GetMonitorAlertEventList(ctx context.Context, searchName *string) ([]*model.MonitorAlertEvent, error)
+	GetMonitorAlertEventList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorAlertEvent, error)
 	EventAlertSilence(ctx context.Context, id int, event *model.AlertEventSilenceRequest, userId int) error
 	EventAlertClaim(ctx context.Context, id int, userId int) error
 	BatchEventAlertSilence(ctx context.Context, request *model.BatchEventAlertSilenceRequest, userId int) error
@@ -71,10 +71,26 @@ func NewAlertManagerEventService(dao alert.AlertManagerEventDAO, cache cache.Mon
 }
 
 // GetMonitorAlertEventList 获取告警事件列表
-func (a *alertManagerEventService) GetMonitorAlertEventList(ctx context.Context, searchName *string) ([]*model.MonitorAlertEvent, error) {
-	return pkg.HandleList(ctx, searchName,
-		a.dao.SearchMonitorAlertEventByName,
-		a.dao.GetMonitorAlertEventList)
+func (a *alertManagerEventService) GetMonitorAlertEventList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorAlertEvent, error) {
+	if listReq.Search != "" {
+		events, err := a.dao.SearchMonitorAlertEventByName(ctx, listReq.Search)
+		if err != nil {
+			a.l.Error("搜索告警事件失败", zap.String("search", listReq.Search), zap.Error(err))
+			return nil, err
+		}
+		return events, nil
+	}
+
+	offset := (listReq.Page - 1) * listReq.Size
+	limit := listReq.Size
+
+	events, err := a.dao.GetMonitorAlertEventList(ctx, offset, limit)
+	if err != nil {
+		a.l.Error("获取告警事件列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	return events, nil
 }
 
 // EventAlertSilence 设置告警事件静默
