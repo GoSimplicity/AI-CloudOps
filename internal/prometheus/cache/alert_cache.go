@@ -44,13 +44,9 @@ import (
 const alertSendGroupKey = "alert_send_group"
 
 type AlertConfigCache interface {
-	// GetAlertManagerMainConfigYamlByIP 根据IP地址获取AlertManager的主配置内容
 	GetAlertManagerMainConfigYamlByIP(ip string) string
-	// GenerateAlertManagerMainConfig 生成所有AlertManager主配置文件
 	GenerateAlertManagerMainConfig(ctx context.Context) error
-	// GenerateAlertManagerMainConfigOnePool 生成单个AlertManager池的主配置
 	GenerateAlertManagerMainConfigOnePool(pool *model.MonitorAlertManagerPool) *altconfig.Config
-	// GenerateAlertManagerRouteConfigOnePool 生成单个AlertManager池的routes和receivers配置
 	GenerateAlertManagerRouteConfigOnePool(ctx context.Context, pool *model.MonitorAlertManagerPool) ([]*altconfig.Route, []altconfig.Receiver)
 }
 
@@ -76,12 +72,14 @@ func NewAlertConfigCache(l *zap.Logger, alertPoolDao alertPoolDao.AlertManagerPo
 	}
 }
 
+// GetAlertManagerMainConfigYamlByIP 根据IP地址获取AlertManager的主配置内容
 func (a *alertConfigCache) GetAlertManagerMainConfigYamlByIP(ip string) string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.AlertManagerMainConfigMap[ip]
 }
 
+// GenerateAlertManagerMainConfig 生成所有AlertManager主配置文件
 func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) error {
 	// 从数据库中获取所有AlertManager采集池
 	pools, err := a.alertPoolDao.GetAllAlertManagerPools(ctx)
@@ -114,6 +112,7 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) e
 				oneConfig.Receivers = append(oneConfig.Receivers, receivers...)
 			}
 		}
+
 		// 序列化配置为YAML格式
 		config, err := yaml.Marshal(oneConfig)
 		if err != nil {
@@ -156,6 +155,7 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) e
 	return nil
 }
 
+// GenerateAlertManagerMainConfigOnePool 生成单个AlertManager池的主配置
 func (a *alertConfigCache) GenerateAlertManagerMainConfigOnePool(pool *model.MonitorAlertManagerPool) *altconfig.Config {
 	// 解析默认恢复时间
 	resolveTimeout, err := pm.ParseDuration(pool.ResolveTimeout)
@@ -174,7 +174,7 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfigOnePool(pool *model.Mon
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		groupWait, _ = pm.ParseDuration("5s")
+		groupWait, _ = pm.ParseDuration("5m")
 	}
 
 	// 解析分组等待间隔时间
@@ -184,7 +184,7 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfigOnePool(pool *model.Mon
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		groupInterval, _ = pm.ParseDuration("5s")
+		groupInterval, _ = pm.ParseDuration("5m")
 	}
 
 	// 解析重复发送时间
@@ -194,7 +194,7 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfigOnePool(pool *model.Mon
 			zap.Error(err),
 			zap.String("池子", pool.Name),
 		)
-		repeatInterval, _ = pm.ParseDuration("5s")
+		repeatInterval, _ = pm.ParseDuration("1h")
 	}
 
 	// 生成 Alertmanager 默认配置
@@ -211,20 +211,11 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfigOnePool(pool *model.Mon
 		},
 	}
 
-	//// 如果有默认rs列表中Receiver，则添加到Receive
-	//if config.Route.Receiver != "" {
-	//	config.Receivers = []altconfig.Receiver{
-	//		{
-	//			Name: config.Route.Receiver, // 接收者名称
-	//		},
-	//	}
-	//}
-
 	return config
 }
 
+// GenerateAlertManagerRouteConfigOnePool 生成单个AlertManager池的routes和receivers配置
 func (a *alertConfigCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Context, pool *model.MonitorAlertManagerPool) ([]*altconfig.Route, []altconfig.Receiver) {
-	// 从数据库中查找该AlertManager池的所有发送组
 	sendGroups, err := a.alertSendDao.GetMonitorSendGroupByPoolId(ctx, pool.ID)
 	if err != nil {
 		a.l.Error("[监控模块]根据AlertManager池ID查找所有发送组错误",
@@ -233,6 +224,7 @@ func (a *alertConfigCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Co
 		)
 		return nil, nil
 	}
+
 	if len(sendGroups) == 0 {
 		a.l.Info("[监控模块]没有找到发送组", zap.String("池子", pool.Name))
 		return nil, nil
@@ -242,18 +234,17 @@ func (a *alertConfigCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Co
 	var receivers []altconfig.Receiver
 
 	for _, sendGroup := range sendGroups {
-		// 解析RepeatInterval
+		// 处理 RepeatInterval
 		repeatInterval, err := pm.ParseDuration(sendGroup.RepeatInterval)
 		if err != nil {
-			a.l.Warn("[监控模块]解析RepeatInterval失败，使用默认值",
+			a.l.Warn("[监控模块]解析RepeatInterval失败，使用默认值1h",
 				zap.Error(err),
 				zap.String("发送组", sendGroup.Name),
 			)
-			repeatInterval, _ = pm.ParseDuration("5s")
+			repeatInterval, _ = pm.ParseDuration("1h")
 		}
 
-		// 创建 Matcher 并设置匹配条件
-		// 默认匹配条件为: alert_send_group=sendGroup.ID
+		// 创建 Matcher
 		matcher, err := al.NewMatcher(al.MatchEqual, alertSendGroupKey, fmt.Sprintf("%d", sendGroup.ID))
 		if err != nil {
 			a.l.Error("[监控模块]创建Matcher失败",
@@ -263,46 +254,57 @@ func (a *alertConfigCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Co
 			continue
 		}
 
-		// 创建Route
+		// 创建 Route
 		route := &altconfig.Route{
-			Receiver:       sendGroup.Name,         // 设置接收者
-			Continue:       true,                   // 继续匹配下一个路由
-			Matchers:       []*al.Matcher{matcher}, // 设置匹配条件
-			RepeatInterval: &repeatInterval,        // 设置重复发送时间
+			Receiver:       sendGroup.Name,
+			Continue:       false, // 默认不继续匹配
+			Matchers:       []*al.Matcher{matcher},
+			RepeatInterval: &repeatInterval,
 		}
 
-		// 拼接Webhook URL
+		// 处理 Webhook URL 文件
+		if err := os.MkdirAll(a.localYamlDir, 0755); err != nil {
+			a.l.Error("[监控模块]创建目录失败",
+				zap.Error(err),
+				zap.String("目录", a.localYamlDir),
+			)
+			continue
+		}
+
 		webHookURL := fmt.Sprintf("%s?%s=%d",
 			a.alertWebhookAddr,
 			alertSendGroupKey,
 			sendGroup.ID,
 		)
 
-		// 将 URL 写入到 .txt 文件
-		urlFilePath := fmt.Sprintf("%s/webhook_url_%d.txt", a.localYamlDir, sendGroup.ID)
-		err = os.WriteFile(urlFilePath, []byte(webHookURL), 0644)
-		if err != nil {
-			a.l.Error("[监控模块]写入Webhook URL文件失败",
+		urlFilePath := fmt.Sprintf("%s/webhook_%d_%d.txt",
+			a.localYamlDir,
+			pool.ID,
+			sendGroup.ID,
+		)
+
+		if err := os.WriteFile(urlFilePath, []byte(webHookURL), 0644); err != nil {
+			a.l.Error("[监控模块]写入Webhook URL失败",
 				zap.Error(err),
-				zap.String("Webhook URL", webHookURL),
+				zap.String("文件路径", urlFilePath),
 				zap.String("发送组", sendGroup.Name),
 			)
 			continue
 		}
 
-		// 创建Receiver
+		// 创建 Receiver
 		receiver := altconfig.Receiver{
-			Name: sendGroup.Name, // 接收者名称
-			WebhookConfigs: []*altconfig.WebhookConfig{ // Webhook配置
+			Name: sendGroup.Name,
+			WebhookConfigs: []*altconfig.WebhookConfig{
 				{
-					NotifierConfig: altconfig.NotifierConfig{ // Notifier配置 用于告警通知
-						VSendResolved: sendGroup.SendResolved, // 在告警解决时是否发送通知
+					NotifierConfig: altconfig.NotifierConfig{
+						VSendResolved: sendGroup.SendResolved,
 					},
 					URLFile: urlFilePath,
 				},
 			},
 		}
-		// 添加到routes和receivers中
+
 		routes = append(routes, route)
 		receivers = append(receivers, receiver)
 	}

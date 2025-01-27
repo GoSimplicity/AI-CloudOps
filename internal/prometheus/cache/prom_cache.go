@@ -53,15 +53,10 @@ import (
 const hashTmpKey = "__tmp_hash"
 
 type PromConfigCache interface {
-	// GetPrometheusMainConfigByIP 根据IP地址获取Prometheus的主配置内容
 	GetPrometheusMainConfigByIP(ip string) string
-	// GeneratePrometheusMainConfig 生成所有Prometheus主配置文件
 	GeneratePrometheusMainConfig(ctx context.Context) error
-	// CreateBasePrometheusConfig 创建基础Prometheus配置
 	CreateBasePrometheusConfig(pool *model.MonitorScrapePool) (pc.Config, error)
-	// GenerateScrapeConfigs 生成采集配置
 	GenerateScrapeConfigs(ctx context.Context, pool *model.MonitorScrapePool) []*pc.ScrapeConfig
-	// ApplyHashMod 应用HashMod和Keep Relabel配置进行分片
 	ApplyHashMod(scrapeConfigs []*pc.ScrapeConfig, modNum, index int) []*pc.ScrapeConfig
 }
 
@@ -87,12 +82,14 @@ func NewPromConfigCache(l *zap.Logger, scrapePoolDao scrapeJobDao.ScrapePoolDAO,
 	}
 }
 
+// GetPrometheusMainConfigByIP 根据IP地址获取Prometheus主配置
 func (p *promConfigCache) GetPrometheusMainConfigByIP(ip string) string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.PrometheusMainConfigMap[ip]
 }
 
+// GeneratePrometheusMainConfig 生成Prometheus主配置
 func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) error {
 	// 获取所有采集池
 	pools, err := p.scrapePoolDao.GetAllMonitorScrapePool(ctx)
@@ -167,6 +164,7 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 	return nil
 }
 
+// CreateBasePrometheusConfig 创建基础Prometheus配置
 func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePool) (pc.Config, error) {
 	var config pc.Config
 
@@ -248,6 +246,7 @@ func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePo
 	return config, nil
 }
 
+// GenerateScrapeConfigs 生成 Prometheus 采集配置
 func (p *promConfigCache) GenerateScrapeConfigs(ctx context.Context, pool *model.MonitorScrapePool) []*pc.ScrapeConfig {
 	// 获取与指定池相关的采集任务
 	scrapeJobs, err := p.scrapeJobDao.GetMonitorScrapeJobsByPoolId(ctx, pool.ID)
@@ -323,6 +322,7 @@ func (p *promConfigCache) GenerateScrapeConfigs(ctx context.Context, pool *model
 	return scrapeConfigs
 }
 
+// ApplyHashMod 根据哈希取模操作对 Prometheus 采集配置进行分组
 func (p *promConfigCache) ApplyHashMod(scrapeConfigs []*pc.ScrapeConfig, modNum, index int) []*pc.ScrapeConfig {
 	var modified []*pc.ScrapeConfig
 
