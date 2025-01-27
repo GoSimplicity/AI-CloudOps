@@ -34,136 +34,66 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type AuditHandler struct {
-	svc service.AuditService
+type ApiHandler struct {
+	svc service.ApiService
 }
 
-func NewAuditHandler(svc service.AuditService) *AuditHandler {
-	return &AuditHandler{
+func NewApiHandler(svc service.ApiService) *ApiHandler {
+	return &ApiHandler{
 		svc: svc,
 	}
 }
 
-func (h *AuditHandler) RegisterRouters(server *gin.Engine) {
-	auditGroup := server.Group("/api/audit_logs")
+func (h *ApiHandler) RegisterRouters(server *gin.Engine) {
+	apiGroup := server.Group("/api/apis")
 
-	auditGroup.POST("/list", h.ListAuditLogs)           // 审计日志列表
-	auditGroup.GET("/:id", h.GetAuditLogDetail)         // 日志详情
-	auditGroup.GET("/types", h.GetAuditTypes)           // 获取审计日志类型列表
-	auditGroup.GET("/statistics", h.GetAuditStatistics) // 获取审计统计信息
-	auditGroup.POST("/search", h.SearchAuditLogs)       // 高级搜索，支持多条件组合查询
-	auditGroup.POST("/export", h.ExportAuditLogs)       // 导出日志
-	auditGroup.DELETE("/:id", h.DeleteAuditLog)         // 删除单条日志
-	auditGroup.POST("/batch-delete", h.BatchDeleteLogs) // 批量删除日志
-	auditGroup.POST("/archive", h.ArchiveAuditLogs)     // 归档历史日志
+	apiGroup.POST("/list", h.ListApis)
+	apiGroup.POST("/create", h.CreateAPI)
+	apiGroup.POST("/update", h.UpdateAPI)
+	apiGroup.DELETE("/:id", h.DeleteAPI)
 }
 
-// ListAuditLogs 获取审计日志列表
-func (h *AuditHandler) ListAuditLogs(ctx *gin.Context) {
-	var req model.ListAuditLogsRequest
-
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		utils.Error(ctx)
-		return
-	}
-
-	logs, total, err := h.svc.ListAuditLogs(ctx.Request.Context(), &req)
-	if err != nil {
-		utils.Error(ctx)
-		return
-	}
-
-	utils.SuccessWithData(ctx, gin.H{
-		"list":  logs,
-		"total": total,
-	})
-}
-
-// GetAuditLogDetail 获取审计日志详情
-func (h *AuditHandler) GetAuditLogDetail(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		utils.Error(c)
-		return
-	}
-
-	detail, err := h.svc.GetAuditLogDetail(c.Request.Context(), uint(id))
-	if err != nil {
-		utils.Error(c)
-		return
-	}
-
-	utils.SuccessWithData(c, detail)
-}
-
-// GetAuditTypes 获取审计日志类型列表
-func (h *AuditHandler) GetAuditTypes(c *gin.Context) {
-	types, err := h.svc.GetAuditTypes(c.Request.Context())
-	if err != nil {
-		utils.Error(c)
-		return
-	}
-
-	utils.SuccessWithData(c, types)
-}
-
-// GetAuditStatistics 获取审计统计信息
-func (h *AuditHandler) GetAuditStatistics(c *gin.Context) {
-	stats, err := h.svc.GetAuditStatistics(c.Request.Context())
-	if err != nil {
-		utils.Error(c)
-		return
-	}
-
-	utils.SuccessWithData(c, stats)
-}
-
-// SearchAuditLogs 高级搜索审计日志
-func (h *AuditHandler) SearchAuditLogs(c *gin.Context) {
-	var req model.ListAuditLogsRequest
+// ListApis 获取API列表
+func (a *ApiHandler) ListApis(c *gin.Context) {
+	var req model.ListApisRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c)
 		return
 	}
 
-	logs, total, err := h.svc.SearchAuditLogs(c.Request.Context(), &req)
+	// 调用service层获取API列表
+	apis, total, err := a.svc.ListApis(c.Request.Context(), req.PageNumber, req.PageSize)
 	if err != nil {
 		utils.Error(c)
 		return
 	}
 
 	utils.SuccessWithData(c, gin.H{
-		"list":  logs,
+		"list":  apis,
 		"total": total,
 	})
 }
 
-// ExportAuditLogs 导出审计日志
-func (h *AuditHandler) ExportAuditLogs(c *gin.Context) {
-	var req model.ListAuditLogsRequest
+// CreateAPI 创建新的API
+func (a *ApiHandler) CreateAPI(c *gin.Context) {
+	var req model.CreateApiRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c)
 		return
 	}
 
-	data, err := h.svc.ExportAuditLogs(c.Request.Context(), &req)
-	if err != nil {
-		utils.Error(c)
-		return
+	// 构建API对象
+	api := &model.Api{
+		Name:        req.Name,
+		Path:        req.Path,
+		Method:      int8(req.Method),
+		Description: req.Description,
+		Version:     req.Version,
+		Category:    int8(req.Category),
+		IsPublic:    int8(req.IsPublic),
 	}
 
-	utils.SuccessWithData(c, data)
-}
-
-// DeleteAuditLog 删除单条审计日志
-func (h *AuditHandler) DeleteAuditLog(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		utils.Error(c)
-		return
-	}
-
-	if err := h.svc.DeleteAuditLog(c.Request.Context(), uint(id)); err != nil {
+	if err := a.svc.CreateApi(c.Request.Context(), api); err != nil {
 		utils.Error(c)
 		return
 	}
@@ -171,15 +101,27 @@ func (h *AuditHandler) DeleteAuditLog(c *gin.Context) {
 	utils.Success(c)
 }
 
-// BatchDeleteLogs 批量删除审计日志
-func (h *AuditHandler) BatchDeleteLogs(c *gin.Context) {
-	var ids []uint
-	if err := c.ShouldBindJSON(&ids); err != nil {
+// UpdateAPI 更新API信息
+func (a *ApiHandler) UpdateAPI(c *gin.Context) {
+	var req model.UpdateApiRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.Error(c)
 		return
 	}
 
-	if err := h.svc.BatchDeleteLogs(c.Request.Context(), ids); err != nil {
+	// 构建更新的API对象
+	api := &model.Api{
+		ID:          req.ID,
+		Name:        req.Name,
+		Path:        req.Path,
+		Method:      int8(req.Method),
+		Description: req.Description,
+		Version:     req.Version,
+		Category:    int8(req.Category),
+		IsPublic:    int8(req.IsPublic),
+	}
+
+	if err := a.svc.UpdateApi(c.Request.Context(), api); err != nil {
 		utils.Error(c)
 		return
 	}
@@ -187,15 +129,16 @@ func (h *AuditHandler) BatchDeleteLogs(c *gin.Context) {
 	utils.Success(c)
 }
 
-// ArchiveAuditLogs 归档历史审计日志
-func (h *AuditHandler) ArchiveAuditLogs(c *gin.Context) {
-	var req model.ListAuditLogsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+// DeleteAPI 删除API
+func (a *ApiHandler) DeleteAPI(c *gin.Context) {
+	// 从URL参数中获取API ID
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
 		utils.Error(c)
 		return
 	}
 
-	if err := h.svc.ArchiveAuditLogs(c.Request.Context(), &req); err != nil {
+	if err := a.svc.DeleteApi(c.Request.Context(), id); err != nil {
 		utils.Error(c)
 		return
 	}
