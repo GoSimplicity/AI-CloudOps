@@ -47,6 +47,7 @@ type AlertManagerEventDAO interface {
 	GetAlertEventByID(ctx context.Context, id int) (*model.MonitorAlertEvent, error)
 	UpdateAlertEvent(ctx context.Context, alertEvent *model.MonitorAlertEvent) error
 	SendMessageToGroup(ctx context.Context, url string, message string) error
+	GetMonitorAlertEventTotal(ctx context.Context) (int, error)
 }
 
 type alertManagerEventDAO struct {
@@ -242,4 +243,16 @@ func (a *alertManagerEventDAO) SendMessageToGroup(ctx context.Context, url strin
 	)
 
 	return nil
+}
+
+// GetMonitorAlertEventTotal 获取监控告警事件总数
+func (a *alertManagerEventDAO) GetMonitorAlertEventTotal(ctx context.Context) (int, error) {
+	var count int64
+
+	if err := a.db.WithContext(ctx).Model(&model.MonitorAlertEvent{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+		a.l.Error("获取监控告警事件总数失败", zap.Error(err))
+		return 0, err
+	}
+
+	return int(count), nil
 }

@@ -42,6 +42,7 @@ type AlertManagerPoolDAO interface {
 	CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	DeleteMonitorAlertManagerPool(ctx context.Context, id int) error
+	GetMonitorAlertManagerPoolTotal(ctx context.Context) (int, error)
 	SearchMonitorAlertManagerPoolByName(ctx context.Context, name string) ([]*model.MonitorAlertManagerPool, error)
 	GetAlertPoolByID(ctx context.Context, poolID int) (*model.MonitorAlertManagerPool, error)
 	CheckMonitorAlertManagerPoolExists(ctx context.Context, alertManagerPool *model.MonitorAlertManagerPool) (bool, error)
@@ -196,4 +197,16 @@ func (a *alertManagerPoolDAO) GetMonitorAlertManagerPoolList(ctx context.Context
 	}
 
 	return pools, nil
+}
+
+// GetMonitorAlertManagerPoolTotal 获取 AlertManager 集群池总数
+func (a *alertManagerPoolDAO) GetMonitorAlertManagerPoolTotal(ctx context.Context) (int, error) {
+	var count int64
+
+	if err := a.db.WithContext(ctx).Model(&model.MonitorAlertManagerPool{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+		a.l.Error("获取 MonitorAlertManagerPool 总数失败", zap.Error(err))
+		return 0, err
+	}
+
+	return int(count), nil
 }

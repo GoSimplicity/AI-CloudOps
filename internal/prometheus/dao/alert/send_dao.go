@@ -48,6 +48,8 @@ type AlertManagerSendDAO interface {
 	CheckMonitorSendGroupExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error)
 	CheckMonitorSendGroupNameExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error)
 	Transaction(ctx context.Context, fn func(tx *gorm.DB) error) error
+	GetMonitorSendGroupTotal(ctx context.Context) (int, error)
+	GetMonitorSendGroups(ctx context.Context) ([]*model.MonitorSendGroup, error)
 }
 
 type alertManagerSendDAO struct {
@@ -251,4 +253,28 @@ func (a *alertManagerSendDAO) UpdateMonitorSendGroup(ctx context.Context, tx *go
 		"upgrade_minutes":         monitorSendGroup.UpgradeMinutes,
 		"updated_at":              getTime(),
 	}).Error
+}
+
+// GetMonitorSendGroupTotal 获取监控告警事件总数
+func (a *alertManagerSendDAO) GetMonitorSendGroupTotal(ctx context.Context) (int, error) {
+	var count int64
+
+	if err := a.db.WithContext(ctx).Model(&model.MonitorSendGroup{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+		a.l.Error("获取监控告警事件总数失败", zap.Error(err))
+		return 0, err
+	}
+
+	return int(count), nil
+}
+
+// GetMonitorSendGroups 获取所有发送组
+func (a *alertManagerSendDAO) GetMonitorSendGroups(ctx context.Context) ([]*model.MonitorSendGroup, error) {
+	var sendGroups []*model.MonitorSendGroup
+
+	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).Find(&sendGroups).Error; err != nil {
+		a.l.Error("获取所有发送组失败", zap.Error(err))
+		return nil, err
+	}
+
+	return sendGroups, nil
 }

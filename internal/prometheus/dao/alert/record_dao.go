@@ -46,6 +46,7 @@ type AlertManagerRecordDAO interface {
 	EnableSwitchMonitorRecordRule(ctx context.Context, ruleID int) error
 	CheckMonitorRecordRuleExists(ctx context.Context, recordRule *model.MonitorRecordRule) (bool, error)
 	CheckMonitorRecordRuleNameExists(ctx context.Context, recordRule *model.MonitorRecordRule) (bool, error)
+	GetMonitorRecordRuleTotal(ctx context.Context) (int, error)
 }
 
 type alertManagerRecordDAO struct {
@@ -270,4 +271,16 @@ func (a *alertManagerRecordDAO) CheckMonitorRecordRuleNameExists(ctx context.Con
 	}
 
 	return count > 0, nil
+}
+
+// GetMonitorRecordRuleTotal 获取监控告警事件总数
+func (a *alertManagerRecordDAO) GetMonitorRecordRuleTotal(ctx context.Context) (int, error) {
+	var count int64
+
+	if err := a.db.WithContext(ctx).Model(&model.MonitorRecordRule{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+		a.l.Error("获取监控告警事件总数失败", zap.Error(err))
+		return 0, err
+	}
+
+	return int(count), nil
 }

@@ -45,6 +45,8 @@ type AlertManagerSendService interface {
 	UpdateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error
 	DeleteMonitorSendGroup(ctx context.Context, id int) error
 	GetMonitorSendGroup(ctx context.Context, id int) (*model.MonitorSendGroup, error)
+	GetMonitorSendGroupTotal(ctx context.Context) (int, error)
+	GetMonitorSendGroupAll(ctx context.Context) ([]*model.MonitorSendGroup, error)
 }
 
 type alertManagerSendService struct {
@@ -243,4 +245,14 @@ func (a *alertManagerSendService) DeleteMonitorSendGroup(ctx context.Context, id
 // GetMonitorSendGroup 获取发送组
 func (a *alertManagerSendService) GetMonitorSendGroup(ctx context.Context, id int) (*model.MonitorSendGroup, error) {
 	return a.dao.GetMonitorSendGroupById(ctx, id)
+}
+
+// GetMonitorSendGroupTotal 获取发送组总数
+func (a *alertManagerSendService) GetMonitorSendGroupTotal(ctx context.Context) (int, error) {
+	return a.dao.GetMonitorSendGroupTotal(ctx)
+}
+
+// GetMonitorSendGroupAll 获取所有发送组
+func (a *alertManagerSendService) GetMonitorSendGroupAll(ctx context.Context) ([]*model.MonitorSendGroup, error) {
+	return a.dao.GetMonitorSendGroups(ctx)
 }

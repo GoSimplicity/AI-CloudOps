@@ -48,6 +48,7 @@ type AlertManagerRuleService interface {
 	BatchEnableSwitchMonitorAlertRule(ctx context.Context, ids []int) error
 	DeleteMonitorAlertRule(ctx context.Context, id int) error
 	BatchDeleteMonitorAlertRule(ctx context.Context, ids []int) error
+	GetMonitorAlertRuleTotal(ctx context.Context) (int, error)
 }
 
 type alertManagerRuleService struct {
@@ -84,6 +85,19 @@ func (a *alertManagerRuleService) GetMonitorAlertRuleList(ctx context.Context, l
 	if err != nil {
 		a.l.Error("获取告警规则列表失败", zap.Error(err))
 		return nil, err
+	}
+
+	for _, rule := range rules {
+		user, err := a.userDao.GetUserByID(ctx, rule.UserID)
+		if err != nil {
+			a.l.Error("获取创建用户名失败", zap.Error(err))
+			return nil, err
+		}
+		if user.RealName == "" {
+			rule.CreateUserName = user.Username
+		} else {
+			rule.CreateUserName = user.RealName
+		}
 	}
 
 	return rules, nil
@@ -203,4 +217,9 @@ func (a *alertManagerRuleService) BatchDeleteMonitorAlertRule(ctx context.Contex
 	}
 
 	return nil
+}
+
+// GetMonitorAlertRuleTotal 获取监控告警规则总数
+func (a *alertManagerRuleService) GetMonitorAlertRuleTotal(ctx context.Context) (int, error) {
+	return a.dao.GetMonitorAlertRuleTotal(ctx)
 }

@@ -58,6 +58,7 @@ func (a *AlertEventHandler) RegisterRouters(server *gin.Engine) {
 		alertEvents.POST("/:id/claim", a.EventAlertClaim)
 		alertEvents.POST("/:id/unSilence", a.EventAlertUnSilence)
 		alertEvents.POST("/silence", a.BatchEventAlertSilence)
+		alertEvents.GET("/total", a.GetMonitorAlertEventTotal)
 	}
 }
 
@@ -160,4 +161,14 @@ func (a *AlertEventHandler) BatchEventAlertSilence(ctx *gin.Context) {
 	}
 
 	utils.Success(ctx)
+}
+
+// GetMonitorAlertEventTotal 获取监控告警事件总数
+func (a *AlertEventHandler) GetMonitorAlertEventTotal(ctx *gin.Context) {
+	total, err := a.alertEventService.GetMonitorAlertEventTotal(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	utils.SuccessWithData(ctx, total)
 }

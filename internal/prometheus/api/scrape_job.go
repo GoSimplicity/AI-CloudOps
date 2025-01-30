@@ -58,6 +58,7 @@ func (s *ScrapeJobHandler) RegisterRouters(server *gin.Engine) {
 		scrapeJobs.POST("/create", s.CreateMonitorScrapeJob)
 		scrapeJobs.POST("/update", s.UpdateMonitorScrapeJob)
 		scrapeJobs.DELETE("/:id", s.DeleteMonitorScrapeJob)
+		scrapeJobs.GET("/total", s.GetMonitorScrapeJobTotal)
 	}
 }
 
@@ -132,4 +133,14 @@ func (s *ScrapeJobHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
 	}
 
 	utils.Success(ctx)
+}
+
+// GetMonitorScrapeJobTotal 获取监控采集作业总数
+func (s *ScrapeJobHandler) GetMonitorScrapeJobTotal(ctx *gin.Context) {
+	total, err := s.scrapeJobService.GetMonitorScrapeJobTotal(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	utils.SuccessWithData(ctx, total)
 }

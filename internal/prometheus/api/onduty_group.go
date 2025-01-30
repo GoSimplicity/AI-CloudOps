@@ -62,6 +62,7 @@ func (o *OnDutyGroupHandler) RegisterRouters(server *gin.Engine) {
 		onDutyGroups.DELETE("/:id", o.DeleteMonitorOnDutyGroup)
 		onDutyGroups.GET("/:id", o.GetMonitorOnDutyGroup)
 		onDutyGroups.GET("/future_plan", o.GetMonitorOnDutyGroupFuturePlan)
+		onDutyGroups.GET("/total", o.GetMonitorOnDutyGroupTotal)
 	}
 }
 
@@ -196,4 +197,14 @@ func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupFuturePlan(ctx *gin.Context) {
 	}
 
 	utils.SuccessWithData(ctx, plans)
+}
+
+// GetMonitorOnDutyGroupTotal 获取监控告警事件总数
+func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupTotal(ctx *gin.Context) {
+	total, err := o.alertOnDutyService.GetMonitorOnDutyTotal(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	utils.SuccessWithData(ctx, total)
 }

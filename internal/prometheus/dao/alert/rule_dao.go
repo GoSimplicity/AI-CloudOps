@@ -49,6 +49,7 @@ type AlertManagerRuleDAO interface {
 	GetAssociatedResourcesBySendGroupId(ctx context.Context, sendGroupId int) ([]*model.MonitorAlertRule, error)
 	CheckMonitorAlertRuleExists(ctx context.Context, alertRule *model.MonitorAlertRule) (bool, error)
 	CheckMonitorAlertRuleNameExists(ctx context.Context, alertRule *model.MonitorAlertRule) (bool, error)
+	GetMonitorAlertRuleTotal(ctx context.Context) (int, error)
 }
 
 type alertManagerRuleDAO struct {
@@ -153,7 +154,6 @@ func (a *alertManagerRuleDAO) UpdateMonitorAlertRule(ctx context.Context, monito
 		Where("id = ? AND deleted_at = ?", monitorAlertRule.ID, 0).
 		Updates(map[string]interface{}{
 			"name":          monitorAlertRule.Name,
-			"user_id":       monitorAlertRule.UserID,
 			"pool_id":       monitorAlertRule.PoolID,
 			"send_group_id": monitorAlertRule.SendGroupID,
 			"tree_node_id":  monitorAlertRule.TreeNodeID,
@@ -283,4 +283,16 @@ func (a *alertManagerRuleDAO) CheckMonitorAlertRuleNameExists(ctx context.Contex
 	}
 
 	return count > 0, nil
+}
+
+// GetMonitorAlertRuleTotal 获取监控告警事件总数
+func (a *alertManagerRuleDAO) GetMonitorAlertRuleTotal(ctx context.Context) (int, error) {
+	var count int64
+
+	if err := a.db.WithContext(ctx).Model(&model.MonitorAlertRule{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+		a.l.Error("获取监控告警事件总数失败", zap.Error(err))
+		return 0, err
+	}
+
+	return int(count), nil
 }

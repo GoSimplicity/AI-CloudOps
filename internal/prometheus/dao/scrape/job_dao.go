@@ -46,6 +46,7 @@ type ScrapeJobDAO interface {
 	GetMonitorScrapeJobById(ctx context.Context, id int) (*model.MonitorScrapeJob, error)
 	CheckMonitorScrapeJobExists(ctx context.Context, name string) (bool, error)
 	CheckMonitorInstanceExists(ctx context.Context, poolID int) (bool, error)
+	GetMonitorScrapeJobTotal(ctx context.Context) (int, error)
 }
 
 type scrapeJobDAO struct {
@@ -126,7 +127,27 @@ func (s *scrapeJobDAO) UpdateMonitorScrapeJob(ctx context.Context, monitorScrape
 	if err := s.db.WithContext(ctx).
 		Model(&model.MonitorScrapeJob{}).
 		Where("id = ? AND deleted_at = ?", monitorScrapeJob.ID, 0).
-		Updates(monitorScrapeJob).Error; err != nil {
+		Updates(map[string]interface{}{
+			"name":                        monitorScrapeJob.Name,
+			"enable":                      monitorScrapeJob.Enable,
+			"service_discovery_type":      monitorScrapeJob.ServiceDiscoveryType,
+			"metrics_path":                monitorScrapeJob.MetricsPath,
+			"scheme":                      monitorScrapeJob.Scheme,
+			"scrape_interval":             monitorScrapeJob.ScrapeInterval,
+			"scrape_timeout":              monitorScrapeJob.ScrapeTimeout,
+			"pool_id":                     monitorScrapeJob.PoolID,
+			"relabel_configs_yaml_string": monitorScrapeJob.RelabelConfigsYamlString,
+			"refresh_interval":            monitorScrapeJob.RefreshInterval,
+			"port":                        monitorScrapeJob.Port,
+			"tree_node_ids":               monitorScrapeJob.TreeNodeIDs,
+			"kube_config_file_path":       monitorScrapeJob.KubeConfigFilePath,
+			"tls_ca_file_path":            monitorScrapeJob.TlsCaFilePath,
+			"tls_ca_content":              monitorScrapeJob.TlsCaContent,
+			"bearer_token":                monitorScrapeJob.BearerToken,
+			"bearer_token_file":           monitorScrapeJob.BearerTokenFile,
+			"kubernetes_sd_role":          monitorScrapeJob.KubernetesSdRole,
+			"updated_at":                  monitorScrapeJob.UpdatedAt,
+		}).Error; err != nil {
 		s.l.Error("更新 MonitorScrapeJob 失败", zap.Error(err), zap.Int("id", monitorScrapeJob.ID))
 		return err
 	}
@@ -235,4 +256,16 @@ func (s *scrapeJobDAO) CheckMonitorInstanceExists(ctx context.Context, poolID in
 	}
 
 	return count > 0, nil
+}
+
+// GetMonitorScrapeJobTotal 获取监控采集作业总数
+func (s *scrapeJobDAO) GetMonitorScrapeJobTotal(ctx context.Context) (int, error) {
+	var count int64
+
+	if err := s.db.WithContext(ctx).Model(&model.MonitorScrapeJob{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+		s.l.Error("获取监控采集作业总数失败", zap.Error(err))
+		return 0, err
+	}
+
+	return int(count), nil
 }

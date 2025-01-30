@@ -37,7 +37,7 @@ type AuditLog struct {
 	UserAgent     string         `json:"user_agent" gorm:"size:255;not null;comment:用户代理"`
 	HttpMethod    string         `json:"http_method" gorm:"size:10;not null;comment:HTTP请求方法"`
 	Endpoint      string         `json:"endpoint" gorm:"size:255;not null;comment:请求端点"`
-	OperationType string         `json:"operation_type" gorm:"type:ENUM('CREATE','UPDATE','DELETE','OTHER');index;not null;comment:操作类型"`
+	OperationType string         `json:"operation_type" gorm:"type:VARCHAR(20);index;not null;comment:操作类型"`
 	TargetType    string         `json:"target_type" gorm:"size:64;not null;comment:目标资源类型"`
 	TargetID      string         `json:"target_id" gorm:"size:255;index;comment:目标资源ID"`
 	StatusCode    int            `json:"status_code" gorm:"not null;comment:HTTP状态码"`

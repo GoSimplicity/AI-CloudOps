@@ -43,6 +43,7 @@ type ScrapeJobService interface {
 	CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
 	UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
 	DeleteMonitorScrapeJob(ctx context.Context, id int) error
+	GetMonitorScrapeJobTotal(ctx context.Context) (int, error)
 }
 
 type scrapeJobService struct {
@@ -245,6 +246,10 @@ func (s *scrapeJobService) buildTreeNodeInfo(ctx context.Context, jobs []*model.
 	seen := make(map[int]bool)
 	for _, job := range jobs {
 		for _, idStr := range job.TreeNodeIDs {
+			if idStr == "" {
+				continue
+			}
+
 			id, err := strconv.Atoi(idStr)
 			if err != nil {
 				s.l.Error("转换树节点ID失败", zap.String("id", idStr), zap.Error(err))
@@ -288,4 +293,9 @@ func (s *scrapeJobService) buildTreeNodeInfo(ctx context.Context, jobs []*model.
 	}
 
 	return nil
+}
+
+// GetMonitorScrapeJobTotal 获取监控采集作业总数
+func (s *scrapeJobService) GetMonitorScrapeJobTotal(ctx context.Context) (int, error) {
+	return s.dao.GetMonitorScrapeJobTotal(ctx)
 }

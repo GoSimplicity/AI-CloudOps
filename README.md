@@ -37,7 +37,6 @@ AI+CloudOps 是一个面向企业的 AI 驱动云原生运维管理平台，旨�
 ![image 6](image/6.png)
 ![image 7](image/7.png)
 ![image 8](image/8.png)
-![image 9](image/9.png)
 
 ## 快速开始
 

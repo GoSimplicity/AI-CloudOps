@@ -47,6 +47,7 @@ type AlertManagerEventService interface {
 	EventAlertSilence(ctx context.Context, id int, event *model.AlertEventSilenceRequest, userId int) error
 	EventAlertClaim(ctx context.Context, id int, userId int) error
 	BatchEventAlertSilence(ctx context.Context, request *model.BatchEventAlertSilenceRequest, userId int) error
+	GetMonitorAlertEventTotal(ctx context.Context) (int, error)
 }
 
 // alertManagerEventService 实现告警事件管理服务
@@ -351,4 +352,9 @@ func (a *alertManagerEventService) sendSilenceRequest(ctx context.Context, alert
 	}
 
 	return silenceID, nil
+}
+
+// GetMonitorAlertEventTotal 获取监控告警事件总数
+func (a *alertManagerEventService) GetMonitorAlertEventTotal(ctx context.Context) (int, error) {
+	return a.dao.GetMonitorAlertEventTotal(ctx)
 }

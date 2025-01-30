@@ -58,6 +58,7 @@ func (a *AlertPoolHandler) RegisterRouters(server *gin.Engine) {
 		alertManagerPools.POST("/create", a.CreateMonitorAlertManagerPool)
 		alertManagerPools.POST("/update", a.UpdateMonitorAlertManagerPool)
 		alertManagerPools.DELETE("/:id", a.DeleteMonitorAlertManagerPool)
+		alertManagerPools.GET("/total", a.GetMonitorAlertManagerPoolTotal)
 	}
 }
 
@@ -133,4 +134,15 @@ func (a *AlertPoolHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
 	}
 
 	utils.Success(ctx)
+}
+
+// GetMonitorAlertManagerPoolTotal 获取 AlertManager 集群池总数
+func (a *AlertPoolHandler) GetMonitorAlertManagerPoolTotal(ctx *gin.Context) {
+	total, err := a.alertPoolService.GetMonitorAlertManagerPoolTotal(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	utils.SuccessWithData(ctx, total)
 }

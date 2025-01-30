@@ -48,6 +48,7 @@ type ScrapePoolDAO interface {
 	GetMonitorScrapePoolSupportedAlert(ctx context.Context) ([]*model.MonitorScrapePool, error)
 	GetMonitorScrapePoolSupportedRecord(ctx context.Context) ([]*model.MonitorScrapePool, error)
 	CheckMonitorScrapePoolExists(ctx context.Context, scrapePool *model.MonitorScrapePool) (bool, error)
+	GetMonitorScrapePoolTotal(ctx context.Context) (int, error)
 }
 
 type scrapePoolDAO struct {
@@ -149,20 +150,21 @@ func (s *scrapePoolDAO) UpdateMonitorScrapePool(ctx context.Context, monitorScra
 		Model(&model.MonitorScrapePool{}).
 		Where("id = ? AND deleted_at = ?", monitorScrapePool.ID, 0).
 		Updates(map[string]interface{}{
-			"name":                   monitorScrapePool.Name,
-			"prometheus_instances":   monitorScrapePool.PrometheusInstances,
-			"scrape_interval":        monitorScrapePool.ScrapeInterval,
-			"scrape_timeout":         monitorScrapePool.ScrapeTimeout,
-			"remote_timeout_seconds": monitorScrapePool.RemoteTimeoutSeconds,
-			"support_alert":          monitorScrapePool.SupportAlert,
-			"support_record":         monitorScrapePool.SupportRecord,
-			"external_labels":        monitorScrapePool.ExternalLabels,
-			"remote_write_url":       monitorScrapePool.RemoteWriteUrl,
-			"remote_read_url":        monitorScrapePool.RemoteReadUrl,
-			"alert_manager_url":      monitorScrapePool.AlertManagerUrl,
-			"rule_file_path":         monitorScrapePool.RuleFilePath,
-			"record_file_path":       monitorScrapePool.RecordFilePath,
-			"updated_at":             monitorScrapePool.UpdatedAt,
+			"name":                    monitorScrapePool.Name,
+			"prometheus_instances":    monitorScrapePool.PrometheusInstances,
+			"alert_manager_instances": monitorScrapePool.AlertManagerInstances,
+			"scrape_interval":         monitorScrapePool.ScrapeInterval,
+			"scrape_timeout":          monitorScrapePool.ScrapeTimeout,
+			"remote_timeout_seconds":  monitorScrapePool.RemoteTimeoutSeconds,
+			"support_alert":           monitorScrapePool.SupportAlert,
+			"support_record":          monitorScrapePool.SupportRecord,
+			"external_labels":         monitorScrapePool.ExternalLabels,
+			"remote_write_url":        monitorScrapePool.RemoteWriteUrl,
+			"remote_read_url":         monitorScrapePool.RemoteReadUrl,
+			"alert_manager_url":       monitorScrapePool.AlertManagerUrl,
+			"rule_file_path":          monitorScrapePool.RuleFilePath,
+			"record_file_path":        monitorScrapePool.RecordFilePath,
+			"updated_at":              monitorScrapePool.UpdatedAt,
 		}).Error; err != nil {
 		s.l.Error("更新 MonitorScrapePool 失败", zap.Error(err), zap.Int("id", monitorScrapePool.ID))
 		return err
@@ -258,4 +260,16 @@ func (s *scrapePoolDAO) CheckMonitorScrapePoolExists(ctx context.Context, scrape
 	}
 
 	return count > 0, nil
+}
+
+// GetMonitorScrapePoolTotal 获取监控采集池总数
+func (s *scrapePoolDAO) GetMonitorScrapePoolTotal(ctx context.Context) (int, error) {
+	var count int64
+
+	if err := s.db.WithContext(ctx).Model(&model.MonitorScrapePool{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+		s.l.Error("获取监控采集池总数失败", zap.Error(err))
+		return 0, err
+	}
+
+	return int(count), nil
 }

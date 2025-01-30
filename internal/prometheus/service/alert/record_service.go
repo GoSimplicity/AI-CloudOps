@@ -45,6 +45,7 @@ type AlertManagerRecordService interface {
 	BatchDeleteMonitorRecordRule(ctx context.Context, ids []int) error
 	EnableSwitchMonitorRecordRule(ctx context.Context, id int) error
 	BatchEnableSwitchMonitorRecordRule(ctx context.Context, ids []int) error
+	GetMonitorRecordRuleTotal(ctx context.Context) (int, error)
 }
 
 type alertManagerRecordService struct {
@@ -191,4 +192,9 @@ func (a *alertManagerRecordService) BatchEnableSwitchMonitorRecordRule(ctx conte
 		}
 	}
 	return nil
+}
+
+// GetMonitorRecordRuleTotal 获取监控告警事件总数
+func (a *alertManagerRecordService) GetMonitorRecordRuleTotal(ctx context.Context) (int, error) {
+	return a.dao.GetMonitorRecordRuleTotal(ctx)
 }

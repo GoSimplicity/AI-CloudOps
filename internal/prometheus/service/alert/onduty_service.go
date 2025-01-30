@@ -53,6 +53,7 @@ type AlertManagerOnDutyService interface {
 	DeleteMonitorOnDutyGroup(ctx context.Context, id int) error
 	GetMonitorOnDutyGroup(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error)
 	GetMonitorOnDutyGroupFuturePlan(ctx context.Context, id int, startTimeStr string, endTimeStr string) (model.OnDutyPlanResp, error)
+	GetMonitorOnDutyTotal(ctx context.Context) (int, error)
 }
 
 type alertManagerOnDutyService struct {
@@ -422,4 +423,9 @@ func GetCurrentUserIndex(ctx context.Context, l *zap.Logger, dao alert.AlertMana
 
 	// 如果没有历史记录，默认第一个成员为当前值班人
 	return 0
+}
+
+// GetMonitorOnDutyTotal 获取监控告警事件总数
+func (a *alertManagerOnDutyService) GetMonitorOnDutyTotal(ctx context.Context) (int, error) {
+	return a.dao.GetMonitorOnDutyTotal(ctx)
 }

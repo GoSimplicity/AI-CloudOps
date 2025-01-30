@@ -59,6 +59,8 @@ func (s *SendGroupHandler) RegisterRouters(server *gin.Engine) {
 		sendGroups.POST("/create", s.CreateMonitorSendGroup)
 		sendGroups.POST("/update", s.UpdateMonitorSendGroup)
 		sendGroups.DELETE("/:id", s.DeleteMonitorSendGroup)
+		sendGroups.GET("/total", s.GetMonitorSendGroupTotal)
+		sendGroups.GET("/all", s.GetMonitorSendGroupAll)
 	}
 }
 
@@ -156,4 +158,24 @@ func (s *SendGroupHandler) GetMonitorSendGroup(ctx *gin.Context) {
 	}
 
 	utils.SuccessWithData(ctx, group)
+}
+
+// GetMonitorSendGroupTotal 获取发送组总数
+func (s *SendGroupHandler) GetMonitorSendGroupTotal(ctx *gin.Context) {
+	total, err := s.alertSendService.GetMonitorSendGroupTotal(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	utils.SuccessWithData(ctx, total)
+}
+
+// GetMonitorSendGroupAll 获取所有发送组
+func (s *SendGroupHandler) GetMonitorSendGroupAll(ctx *gin.Context) {
+	groups, err := s.alertSendService.GetMonitorSendGroupAll(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	utils.SuccessWithData(ctx, groups)
 }

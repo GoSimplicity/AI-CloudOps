@@ -43,6 +43,8 @@ type ScrapePoolService interface {
 	CreateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error
 	UpdateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error
 	DeleteMonitorScrapePool(ctx context.Context, id int) error
+	GetMonitorScrapePoolTotal(ctx context.Context) (int, error)
+	GetMonitorScrapePoolAll(ctx context.Context) ([]*model.MonitorScrapePool, error)
 }
 
 type scrapePoolService struct {
@@ -82,6 +84,19 @@ func (s *scrapePoolService) GetMonitorScrapePoolList(ctx context.Context, listRe
 	if err != nil {
 		s.l.Error("获取抓取池列表失败", zap.Error(err))
 		return nil, err
+	}
+
+	for _, pool := range pools {
+		user, err := s.userDao.GetUserByID(ctx, pool.UserID)
+		if err != nil {
+			s.l.Error("获取创建用户名失败", zap.Error(err))
+			return nil, err
+		}
+		if user.RealName == "" {
+			pool.CreateUserName = user.Username
+		} else {
+			pool.CreateUserName = user.RealName
+		}
 	}
 
 	return pools, nil
@@ -199,4 +214,14 @@ func (s *scrapePoolService) DeleteMonitorScrapePool(ctx context.Context, id int)
 	}
 
 	return nil
+}
+
+// GetMonitorScrapePoolTotal 获取监控采集池总数
+func (s *scrapePoolService) GetMonitorScrapePoolTotal(ctx context.Context) (int, error) {
+	return s.dao.GetMonitorScrapePoolTotal(ctx)
+}
+
+// GetMonitorScrapePoolAll 获取所有监控采集池
+func (s *scrapePoolService) GetMonitorScrapePoolAll(ctx context.Context) ([]*model.MonitorScrapePool, error) {
+	return s.dao.GetAllMonitorScrapePool(ctx)
 }

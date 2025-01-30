@@ -61,6 +61,7 @@ func (r *RecordRuleHandler) RegisterRouters(server *gin.Engine) {
 		recordRules.DELETE("/", r.BatchDeleteMonitorRecordRule)
 		recordRules.POST("/:id/enable", r.EnableSwitchMonitorRecordRule)
 		recordRules.POST("/enable", r.BatchEnableSwitchMonitorRecordRule)
+		recordRules.GET("/total", r.GetMonitorRecordRuleTotal)
 	}
 }
 
@@ -187,4 +188,14 @@ func (r *RecordRuleHandler) BatchEnableSwitchMonitorRecordRule(ctx *gin.Context)
 	}
 
 	utils.Success(ctx)
+}
+
+// GetMonitorRecordRuleTotal 获取监控告警事件总数
+func (r *RecordRuleHandler) GetMonitorRecordRuleTotal(ctx *gin.Context) {
+	total, err := r.alertRecordService.GetMonitorRecordRuleTotal(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	utils.SuccessWithData(ctx, total)
 }

@@ -62,6 +62,7 @@ func (a *AlertRuleHandler) RegisterRouters(server *gin.Engine) {
 		alertRules.POST("/batch_enable", a.BatchEnableSwitchMonitorAlertRule)
 		alertRules.DELETE("/:id", a.DeleteMonitorAlertRule)
 		alertRules.DELETE("/", a.BatchDeleteMonitorAlertRule)
+		alertRules.GET("/total", a.GetMonitorAlertRuleTotal)
 	}
 }
 
@@ -206,4 +207,14 @@ func (a *AlertRuleHandler) PromqlExprCheck(ctx *gin.Context) {
 	}
 
 	utils.Success(ctx)
+}
+
+// GetMonitorAlertRuleTotal 获取监控告警规则总数
+func (a *AlertRuleHandler) GetMonitorAlertRuleTotal(ctx *gin.Context) {
+	total, err := a.alertRuleService.GetMonitorAlertRuleTotal(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	utils.SuccessWithData(ctx, total)
 }

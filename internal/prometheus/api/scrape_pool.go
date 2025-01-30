@@ -55,9 +55,11 @@ func (s *ScrapePoolHandler) RegisterRouters(server *gin.Engine) {
 	scrapePools := monitorGroup.Group("/scrape_pools")
 	{
 		scrapePools.GET("/list", s.GetMonitorScrapePoolList)
+		scrapePools.GET("/all", s.GetMonitorScrapePoolAll)
 		scrapePools.POST("/create", s.CreateMonitorScrapePool)
 		scrapePools.POST("/update", s.UpdateMonitorScrapePool)
 		scrapePools.DELETE("/:id", s.DeleteMonitorScrapePool)
+		scrapePools.GET("/total", s.GetMonitorScrapePoolTotal)
 	}
 }
 
@@ -130,4 +132,24 @@ func (s *ScrapePoolHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
 	}
 
 	utils.Success(ctx)
+}
+
+// GetMonitorScrapePoolTotal 获取监控采集池总数
+func (s *ScrapePoolHandler) GetMonitorScrapePoolTotal(ctx *gin.Context) {
+	total, err := s.scrapePoolService.GetMonitorScrapePoolTotal(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	utils.SuccessWithData(ctx, total)
+}
+
+// GetMonitorScrapePoolAll 获取所有监控采集池
+func (s *ScrapePoolHandler) GetMonitorScrapePoolAll(ctx *gin.Context) {
+	all, err := s.scrapePoolService.GetMonitorScrapePoolAll(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	utils.SuccessWithData(ctx, all)
 }

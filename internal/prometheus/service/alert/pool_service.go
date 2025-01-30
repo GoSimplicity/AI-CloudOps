@@ -44,6 +44,7 @@ type AlertManagerPoolService interface {
 	CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	DeleteMonitorAlertManagerPool(ctx context.Context, id int) error
+	GetMonitorAlertManagerPoolTotal(ctx context.Context) (int, error)
 }
 
 type alertManagerPoolService struct {
@@ -83,6 +84,19 @@ func (a *alertManagerPoolService) GetMonitorAlertManagerPoolList(ctx context.Con
 	if err != nil {
 		a.l.Error("获取告警事件列表失败", zap.Error(err))
 		return nil, err
+	}
+
+	for _, pool := range pools {
+		user, err := a.userDao.GetUserByID(ctx, pool.UserID)
+		if err != nil {
+			a.l.Error("获取创建用户名失败", zap.Error(err))
+			return nil, err
+		}
+		if user.RealName == "" {
+			pool.CreateUserName = user.Username
+		} else {
+			pool.CreateUserName = user.RealName
+		}
 	}
 
 	return pools, nil
@@ -186,6 +200,16 @@ func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Cont
 	}
 
 	return nil
+}
+
+func (a *alertManagerPoolService) GetMonitorAlertManagerPoolTotal(ctx context.Context) (int, error) {
+	total, err := a.dao.GetMonitorAlertManagerPoolTotal(ctx)
+	if err != nil {
+		a.l.Error("获取 AlertManager 集群池总数失败", zap.Error(err))
+		return 0, err
+	}
+
+	return total, nil
 }
 
 func (a *alertManagerPoolService) checkAlertIpExists(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {

@@ -51,6 +51,7 @@ type AlertManagerOnDutyDAO interface {
 	CreateMonitorOnDutyHistory(ctx context.Context, monitorOnDutyHistory *model.MonitorOnDutyHistory) error
 	GetMonitorOnDutyHistoryByGroupIdAndDay(ctx context.Context, groupID int, day string) (*model.MonitorOnDutyHistory, error)
 	ExistsMonitorOnDutyHistory(ctx context.Context, groupID int, day string) (bool, error)
+	GetMonitorOnDutyTotal(ctx context.Context) (int, error)
 }
 
 type alertManagerOnDutyDAO struct {
@@ -357,4 +358,16 @@ func (a *alertManagerOnDutyDAO) GetMonitorOnDutyList(ctx context.Context, offset
 	}
 
 	return groups, nil
+}
+
+// GetMonitorOnDutyTotal 获取监控告警事件总数
+func (a *alertManagerOnDutyDAO) GetMonitorOnDutyTotal(ctx context.Context) (int, error) {
+	var count int64
+
+	if err := a.db.WithContext(ctx).Model(&model.MonitorOnDutyGroup{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+		a.l.Error("获取监控告警事件总数失败", zap.Error(err))
+		return 0, err
+	}
+
+	return int(count), nil
 }
