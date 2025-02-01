@@ -1,0 +1,52 @@
+version: "3"
+
+######################## 项目依赖的环境，启动项目之前要先启动此环境 ########################
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: cloudOps
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_general_ci
+    ports:
+      - "33069:3306"
+    volumes:
+      - ./data/mysql/data:/var/lib/mysql:rw
+      - ./deploy/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command:
+      [
+        "--default-authentication-plugin=mysql_native_password",
+        "--character-set-server=utf8mb4",
+        "--collation-server=utf8mb4_general_ci",
+        "--explicit_defaults_for_timestamp=true",
+        "--lower_case_table_names=1",
+        "--max_connections=1000",
+      ]
+    privileged: true
+    restart: always
+    networks:
+      - cloudOps_net
+
+  redis:
+    image: redis:6.2.5
+    container_name: redis
+    ports:
+      - "36379:6379"
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./data/redis/data:/data:rw
+    restart: always
+    networks:
+      - cloudOps_net
+
+networks:
+  cloudOps_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.0.0/16

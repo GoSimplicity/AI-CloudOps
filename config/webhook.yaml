@@ -2,10 +2,10 @@ webhook:
   alert_receive_queue_size: 100  # 告警接收队列大小
   common_map_renew_interval_seconds: 10  # 通用映射刷新间隔（秒）
   http_request_global_timeout_seconds: 30  # HTTP 请求超时（秒）
-  alert_manager_api: "http://192.168.0.104:9093"  # 告警管理 API
+  alert_manager_api: "http://localhost:9093"  # 告警管理 API
   default_upgrade_minutes: 30
-  front_domain: "https://localhost:3000"  # 前端域名
-  backend_domain: "https://localhost:8889/api/v1/alerts"  # 后端域名
+  front_domain: "localhost:3000"  # 前端域名
+  backend_domain: "localhost:8889/api/v1/alerts"  # 后端域名
   im_feishu:
     group_message_api: "https://open.feishu.cn/open-apis/bot/v2/hook/"  # 群聊消息 API
     private_message_api: "https://open.feishu.cn/open-apis/im/v1/messages"  # 私聊消息 API
@@ -19,4 +19,4 @@ webhook:
   scale_threshold: 0.5  # 扩缩容的阈值
   scale_interval: 5  # 扩缩容的时间间隔
 mysql:
-  addr: "root:root@tcp(localhost:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"  # MySQL 连接地址
+  addr: "root:root@tcp(mysql:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"  # MySQL 连接地址

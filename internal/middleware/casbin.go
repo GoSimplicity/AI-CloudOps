@@ -1,89 +1,158 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package middleware
 
 import (
-	casbinDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao/casbin"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/apiresponse"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	"net/http"
+	"strconv"
+	"strings"
+
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+
+	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
-// CasbinMiddleware 结构体，负责通过 Casbin 检查用户权限
 type CasbinMiddleware struct {
-	l         *zap.Logger         // Logger 用于日志记录
-	userDAO   userDao.UserDAO     // 用户 DAO，用于获取用户信息
-	casbinDAO casbinDao.CasbinDAO // Casbin DAO，用于权限检查
+	enforcer *casbin.Enforcer
 }
 
-// NewCasbinMiddleware 创建一个新的 CasbinMiddleware 实例
-func NewCasbinMiddleware(l *zap.Logger, userDAO userDao.UserDAO, casbinDAO casbinDao.CasbinDAO) *CasbinMiddleware {
+func NewCasbinMiddleware(enforcer *casbin.Enforcer) *CasbinMiddleware {
 	return &CasbinMiddleware{
-		l:         l,
-		userDAO:   userDAO,
-		casbinDAO: casbinDAO,
+		enforcer: enforcer,
 	}
 }
 
-// CheckPermission 通过 Casbin 检查权限的中间件
-func (m *CasbinMiddleware) CheckPermission() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		// 获取经过身份验证的用户信息
-		uc := ctx.MustGet("user").(ijwt.UserClaims)
+func (cm *CasbinMiddleware) CheckCasbin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+		// 如果请求的路径是下述路径，则不进行权限验证
+		if path == "/api/user/login" ||
+			path == "/api/user/logout" ||
+			strings.Contains(path, "hello") ||
+			path == "/api/user/refresh_token" ||
+			path == "/api/user/codes" ||
+			path == "/api/user/signup" ||
+			path == "/api/not_auth/getTreeNodeBindIps" ||
+			path == "/api/monitor/prometheus_configs/prometheus" ||
+			path == "/api/monitor/prometheus_configs/prometheus_alert" ||
+			path == "/api/monitor/prometheus_configs/prometheus_record" ||
+			path == "/api/monitor/prometheus_configs/alertManager" {
+			c.Next()
+			return
+		}
 
-		// 根据用户 ID 获取用户详细信息
-		user, err := m.userDAO.GetUserByID(ctx, uc.Uid)
+		// 获取用户身份
+		userClaims, exists := c.Get("user")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    1,
+				"message": "用户未认证",
+			})
+			c.Abort()
+			return
+		}
+
+		sub, ok := userClaims.(ijwt.UserClaims)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    1,
+				"message": "无效的用户声明",
+			})
+			c.Abort()
+			return
+		}
+
+		if sub.Uid == 0 {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    1,
+				"message": "无效的用户ID",
+			})
+			c.Abort()
+			return
+		}
+
+		userIDStr := strconv.Itoa(sub.Uid)
+		act := c.Request.Method
+
+		// 每次请求前重新加载策略,确保获取最新权限
+		if err := cm.enforcer.LoadPolicy(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    1,
+				"message": "加载权限策略失败",
+			})
+			c.Abort()
+			return
+		}
+
+		// 使用 Casbin 检查权限
+		ok, err := cm.enforcer.Enforce(userIDStr, path, act)
 		if err != nil {
-			m.l.Error("get user by id failed", zap.Error(err))
-			apiresponse.InternalServerError(ctx, 0, nil, "failed to retrieve user info") // 优化: 返回适当的错误响应
-			ctx.Abort()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    1,
+				"message": "检查权限时发生错误",
+			})
+			c.Abort()
 			return
 		}
 
-		// 如果用户是服务账户（AccountType == 2），跳过权限检查，直接允许访问
-		if user.AccountType == 2 {
-			ctx.Next()
-			return
-		}
-
-		// 获取当前请求的路径和方法
-		path := ctx.Request.URL.Path
-		method := ctx.Request.Method
-
-		// 检查用户的每个角色是否有权限
-		pass := false
-		for _, role := range user.Roles {
-			// 使用 Casbin 检查角色是否有权限访问该路径
-			permission, err := m.casbinDAO.CheckPermission(ctx, role.RoleValue, path, method)
+		if !ok {
+			// 检查用户角色权限
+			roles, err := cm.enforcer.GetRolesForUser(userIDStr)
 			if err != nil {
-				m.l.Error("casbin permission check failed", zap.Error(err))
-				apiresponse.InternalServerError(ctx, 0, nil, "failed to check permission") // 优化: 返回适当的错误响应
-				ctx.Abort()
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"code":    1,
+					"message": "获取用户角色失败",
+				})
+				c.Abort()
 				return
 			}
 
-			// 记录 Casbin 校验结果
-			m.l.Debug("Casbin permission check result",
-				zap.Int("userID", uc.Uid),
-				zap.String("RoleValue", role.RoleValue),
-				zap.String("path", path),
-				zap.String("method", method),
-				zap.Bool("permission", permission))
+			// 遍历用户的所有角色,检查是否有权限
+			for _, role := range roles {
+				hasPermission, err := cm.enforcer.Enforce(role, path, act)
+				if err != nil {
+					continue
+				}
+				if hasPermission {
+					ok = true
+					break
+				}
+			}
 
-			// 如果其中一个角色有权限，则停止进一步检查
-			if permission {
-				pass = true
-				break
+			if !ok {
+				c.JSON(http.StatusForbidden, gin.H{
+					"code":    1,
+					"message": "您没有权限访问此资源",
+				})
+				c.Abort()
+				return
 			}
 		}
 
-		// 如果没有角色通过权限检查，则返回 403 Forbidden
-		if !pass {
-			apiresponse.Forbidden(ctx, 1, nil, "no permission")
-			ctx.Abort()
-		} else {
-			// 权限校验通过，继续处理请求
-			ctx.Next()
-		}
+		c.Next()
 	}
 }

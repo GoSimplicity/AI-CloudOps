@@ -1,21 +1,49 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package service
 
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"os"
+	"path/filepath"
+	"time"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ali_resource"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/ecs"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/tree"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"os"
-	"path/filepath"
-	"time"
 )
+
+var ErrResourceBound = errors.New("资源已被绑定，无法删除")
 
 const terraformTemplate = `
 provider "alicloud" {
@@ -94,26 +122,38 @@ type AliResourceService interface {
 }
 
 type aliResourceService struct {
-	logger       *zap.Logger
-	dao          ali_resource.AliResourceDAO
-	terraformBin string
-	key          string
-	secret       string
-	redisClient  redis.Cmdable
-	ecsDao       ecs.TreeEcsDAO
-	semaphore    chan struct{}
+	logger         *zap.Logger
+	dao            dao.TreeAliResourceDAO
+	terraformBin   string
+	key            string
+	secret         string
+	redisClient    redis.Cmdable
+	ecsDao         dao.TreeEcsDAO
+	ecsResourceDao dao.TreeEcsResourceDAO
+	semaphore      chan struct{}
 }
 
-func NewAliResourceService(logger *zap.Logger, dao ali_resource.AliResourceDAO, redisClient redis.Cmdable, ecsDao ecs.TreeEcsDAO) AliResourceService {
+func NewAliResourceService(logger *zap.Logger, dao dao.TreeAliResourceDAO, redisClient redis.Cmdable, ecsDao dao.TreeEcsDAO, ecsResourceDao dao.TreeEcsResourceDAO) AliResourceService {
+	key := os.Getenv("ALIYUN_ACCESS_KEY_ID")
+	if key == "" {
+		logger.Debug("ALIYUN_ACCESS_KEY_ID 环境变量未设置")
+	}
+
+	secret := os.Getenv("ALIYUN_ACCESS_KEY_SECRET")
+	if secret == "" {
+		logger.Debug("ALIYUN_ACCESS_KEY_SECRET 环境变量未设置")
+	}
+
 	return &aliResourceService{
-		logger:       logger,
-		dao:          dao,
-		ecsDao:       ecsDao,
-		redisClient:  redisClient,
-		terraformBin: viper.GetString("terraform.bin_path"),
-		key:          viper.GetString("terraform.key"),
-		secret:       viper.GetString("terraform.secret"),
-		semaphore:    make(chan struct{}, 10),
+		logger:         logger,
+		dao:            dao,
+		ecsDao:         ecsDao,
+		ecsResourceDao: ecsResourceDao,
+		redisClient:    redisClient,
+		terraformBin:   viper.GetString("terraform.bin_path"),
+		key:            key,
+		secret:         secret,
+		semaphore:      make(chan struct{}, 10),
 	}
 }
 
@@ -253,7 +293,7 @@ func (a *aliResourceService) executeCreateResource(ctx context.Context, config m
 	currentTime := time.Now().UTC().Format(time.RFC3339)
 
 	// 解析配置
-	instanceConfig, vpcConfig, securityConfig, err := tree.ParseConfigs(config, a.logger)
+	instanceConfig, vpcConfig, securityConfig, err := utils.ParseConfigs(config, a.logger)
 	if err != nil {
 		return err
 	}
@@ -266,7 +306,7 @@ func (a *aliResourceService) executeCreateResource(ctx context.Context, config m
 		ResourceTree: model.ResourceTree{
 			InstanceName:     config.Name,
 			Hash:             hash,
-			Vendor:           "阿里云",
+			Vendor:           "2",
 			CreateByOrder:    true,
 			Image:            instanceConfig.ImageID,
 			VpcId:            vpcConfig.VpcName,
@@ -286,12 +326,12 @@ func (a *aliResourceService) executeCreateResource(ctx context.Context, config m
 	}
 
 	// 保存资源记录到数据库
-	if err := a.ecsDao.Create(ctx, resource); err != nil {
+	if err := a.ecsResourceDao.Create(ctx, resource); err != nil {
 		a.logger.Error("创建 ECS 资源失败", zap.Error(err))
 		return fmt.Errorf("创建 ECS 资源失败: %w", err)
 	}
 
-	ecsResource, err := a.ecsDao.GetByHash(ctx, hash)
+	ecsResource, err := a.ecsResourceDao.GetByHash(ctx, hash)
 	if err != nil {
 		a.logger.Error("获取 ECS 资源失败", zap.Error(err))
 		return fmt.Errorf("获取 ECS 资源失败: %w", err)
@@ -308,39 +348,39 @@ func (a *aliResourceService) executeCreateResource(ctx context.Context, config m
 	terraformDir := filepath.Join(projectRootDir, "terraform", fmt.Sprintf("resource_%d", ecsResource.ID))
 
 	// 确保 Terraform 目录存在
-	if err := tree.EnsureDir(terraformDir, a.logger); err != nil {
+	if err := utils.EnsureDir(terraformDir, a.logger); err != nil {
 		return err
 	}
 
 	a.logger.Info("设置工作目录", zap.String("path", terraformDir))
 
 	// 渲染 Terraform 配置文件
-	if err := tree.RenderTerraformTemplate(config, terraformDir, terraformTemplate, a.key, a.secret, vpcConfig, instanceConfig, securityConfig); err != nil {
+	if err := utils.RenderTerraformTemplate(config, terraformDir, terraformTemplate, a.key, a.secret, vpcConfig, instanceConfig, securityConfig); err != nil {
 		a.logger.Error("渲染 Terraform 模板失败", zap.Error(err))
 		return fmt.Errorf("渲染 Terraform 模板失败: %w", err)
 	}
 
 	// 初始化并计划 Terraform
-	tf, err := tree.SetupTerraform(ctx, terraformDir, a.terraformBin)
+	tf, err := utils.SetupTerraform(ctx, terraformDir, a.terraformBin)
 	if err != nil {
 		a.logger.Error("Terraform 初始化或 Plan 执行失败", zap.Error(err))
 		return fmt.Errorf("terraform 初始化或 Plan 失败: %w", err)
 	}
 
 	// 执行 Terraform Apply
-	if err := tree.ApplyTerraform(ctx, tf); err != nil {
+	if err := utils.ApplyTerraform(ctx, tf); err != nil {
 		a.logger.Error("Terraform Apply 执行失败", zap.Error(err))
 		return fmt.Errorf("terraform Apply 失败: %w", err)
 	}
 
 	// 获取并解析 Terraform 状态
-	state, err := tree.GetTerraformState(ctx, tf, a.logger)
+	state, err := utils.GetTerraformState(ctx, tf, a.logger)
 	if err != nil {
 		return err
 	}
 
 	// 提取 Terraform 输出的 IP 地址
-	publicIP, privateIP, err := tree.ExtractIPs(state, a.logger)
+	publicIP, privateIP, err := utils.ExtractIPs(state, a.logger)
 	if err != nil {
 		return err
 	}
@@ -356,7 +396,7 @@ func (a *aliResourceService) executeCreateResource(ctx context.Context, config m
 		},
 	}
 
-	if err := a.ecsDao.Update(ctx, updatedResource); err != nil {
+	if err := a.ecsResourceDao.UpdateByHash(ctx, updatedResource); err != nil {
 		a.logger.Error("更新资源记录失败", zap.Error(err))
 		return fmt.Errorf("更新资源记录失败: %w", err)
 	}
@@ -376,20 +416,20 @@ func (a *aliResourceService) executeUpdateResource(ctx context.Context, config m
 	terraformDir := filepath.Join(projectRootDir, "terraform", fmt.Sprintf("resource_%d", config.ID))
 
 	// 确保 Terraform 目录存在
-	if err := tree.EnsureDir(terraformDir, a.logger); err != nil {
+	if err := utils.EnsureDir(terraformDir, a.logger); err != nil {
 		return err
 	}
 
 	a.logger.Info("设置工作目录", zap.String("path", terraformDir))
 
 	// 解析配置
-	instanceConfig, vpcConfig, securityConfig, err := tree.ParseConfigs(config, a.logger)
+	instanceConfig, vpcConfig, securityConfig, err := utils.ParseConfigs(config, a.logger)
 	if err != nil {
 		return err
 	}
 
 	// 渲染 Terraform 配置文件
-	if err := tree.RenderTerraformTemplate(config, terraformDir, terraformTemplate, a.key, a.secret, vpcConfig, instanceConfig, securityConfig); err != nil {
+	if err := utils.RenderTerraformTemplate(config, terraformDir, terraformTemplate, a.key, a.secret, vpcConfig, instanceConfig, securityConfig); err != nil {
 		a.logger.Error("渲染 Terraform 模板失败", zap.Error(err))
 		return fmt.Errorf("渲染 Terraform 模板失败: %w", err)
 	}
@@ -412,32 +452,32 @@ func (a *aliResourceService) executeUpdateResource(ctx context.Context, config m
 	existingResource.ResourceTree.Hash = generateHash(config)
 
 	// 保存更新后的资源
-	if err := a.ecsDao.Update(ctx, existingResource); err != nil {
+	if err := a.ecsResourceDao.Update(ctx, existingResource); err != nil {
 		a.logger.Error("更新 ECS 资源失败", zap.Error(err))
 		return fmt.Errorf("更新 ECS 资源失败: %w", err)
 	}
 
 	// 初始化并计划 Terraform
-	tf, err := tree.SetupTerraform(ctx, terraformDir, a.terraformBin)
+	tf, err := utils.SetupTerraform(ctx, terraformDir, a.terraformBin)
 	if err != nil {
 		a.logger.Error("Terraform 初始化或 Plan 执行失败", zap.Error(err))
 		return fmt.Errorf("terraform 初始化或 Plan 失败: %w", err)
 	}
 
 	// 执行 Terraform Apply
-	if err := tree.ApplyTerraform(ctx, tf); err != nil {
+	if err := utils.ApplyTerraform(ctx, tf); err != nil {
 		a.logger.Error("Terraform Apply 执行失败", zap.Error(err))
 		return fmt.Errorf("terraform Apply 失败: %w", err)
 	}
 
 	// 获取并解析 Terraform 状态
-	state, err := tree.GetTerraformState(ctx, tf, a.logger)
+	state, err := utils.GetTerraformState(ctx, tf, a.logger)
 	if err != nil {
 		return err
 	}
 
 	// 提取 Terraform 输出的 IP 地址
-	publicIP, privateIP, err := tree.ExtractIPs(state, a.logger)
+	publicIP, privateIP, err := utils.ExtractIPs(state, a.logger)
 	if err != nil {
 		return err
 	}
@@ -454,7 +494,7 @@ func (a *aliResourceService) executeUpdateResource(ctx context.Context, config m
 		},
 	}
 
-	if err := a.ecsDao.Update(ctx, updatedResource); err != nil {
+	if err := a.ecsResourceDao.Update(ctx, updatedResource); err != nil {
 		a.logger.Error("更新资源记录失败", zap.Error(err))
 		return fmt.Errorf("更新资源记录失败: %w", err)
 	}
@@ -545,38 +585,58 @@ func (a *aliResourceService) DeleteResource(ctx context.Context, id int) error {
 
 // executeDeleteResource 执行实际的资源删除逻辑
 func (a *aliResourceService) executeDeleteResource(ctx context.Context, config model.TerraformConfig) error {
-	// 1. 获取现有资源
+	// 获取现有资源
 	existingResource, err := a.ecsDao.GetByID(ctx, config.ID)
 	if err != nil {
 		a.logger.Error("获取现有资源失败", zap.Error(err))
 		return fmt.Errorf("获取现有资源失败: %w", err)
 	}
 
-	// 2. 获取项目根目录（当前工作目录）
+	if len(existingResource.BindNodes) > 0 {
+		existingResource.Status = "错误"
+
+		err = a.ecsResourceDao.UpdateEcsResourceStatusByHash(ctx, existingResource)
+		if err != nil {
+			a.logger.Error("更新资源状态失败", zap.Error(err))
+			return err
+		}
+
+		return ErrResourceBound
+	}
+
+	existingResource.Status = "删除中"
+
+	err = a.ecsResourceDao.UpdateEcsResourceStatusByHash(ctx, existingResource)
+	if err != nil {
+		a.logger.Error("更新资源状态失败", zap.Error(err))
+		return err
+	}
+
+	// 获取项目根目录（当前工作目录）
 	projectRootDir, err := os.Getwd()
 	if err != nil {
 		a.logger.Error("获取项目根目录失败", zap.Error(err))
 		return fmt.Errorf("获取项目根目录失败: %w", err)
 	}
 
-	// 3. 构建 Terraform 工作目录路径，基于资源 ID
+	// 构建 Terraform 工作目录路径，基于资源 ID
 	terraformDir := filepath.Join(projectRootDir, "terraform", fmt.Sprintf("resource_%d", existingResource.ID))
 
-	// 4. 初始化 Terraform
-	_, err = tree.SetupTerraform(ctx, terraformDir, a.terraformBin)
+	// 初始化 Terraform
+	_, err = utils.SetupTerraform(ctx, terraformDir, a.terraformBin)
 	if err != nil {
 		a.logger.Error("Terraform 初始化失败", zap.Error(err))
 		return fmt.Errorf("terraform 初始化失败: %w", err)
 	}
 
-	// 5. 执行 Terraform Destroy
-	if err := tree.DestroyTerraform(ctx, terraformDir, a.terraformBin); err != nil {
+	// 执行 Terraform Destroy
+	if err := utils.DestroyTerraform(ctx, terraformDir, a.terraformBin); err != nil {
 		a.logger.Error("Terraform Destroy 执行失败", zap.Error(err))
 		return fmt.Errorf("terraform Destroy 失败: %w", err)
 	}
 
-	// 6. 从数据库中删除资源记录
-	if err := a.ecsDao.Delete(ctx, existingResource.ID); err != nil {
+	// 从数据库中删除资源记录
+	if err := a.ecsResourceDao.Delete(ctx, existingResource.ID); err != nil {
 		a.logger.Error("删除资源信息到数据库失败", zap.Error(err))
 		return fmt.Errorf("删除资源信息到数据库失败: %w", err)
 	}

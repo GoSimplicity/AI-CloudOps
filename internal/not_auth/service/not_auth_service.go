@@ -1,11 +1,36 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package service
 
 import (
 	"context"
 	"fmt"
-	treeNode "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao/tree_node"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/general"
-	promPkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils/prometheus"
+	promPkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+
+	treeNode "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	promModel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"go.uber.org/zap"
@@ -29,7 +54,7 @@ func NewNotAuthService(l *zap.Logger, treeNodeDao treeNode.TreeNodeDAO) NotAuthS
 
 // BuildPrometheusServiceDiscovery 构建 Prometheus 服务发现的目标组，支持多个标签
 func (n *notAuthService) BuildPrometheusServiceDiscovery(ctx context.Context, leafNodeIdList []string, port int) ([]*targetgroup.Group, error) {
-	leafNodeIntList, err := pkg.ConvertToIntList(leafNodeIdList)
+	leafNodeIntList, err := promPkg.ConvertToIntList(leafNodeIdList)
 	if err != nil {
 		n.l.Warn("无效的 leafNodeIdList", zap.Strings("leafNodeIdList", leafNodeIdList), zap.Error(err))
 		return nil, err
@@ -52,8 +77,12 @@ func (n *notAuthService) BuildPrometheusServiceDiscovery(ctx context.Context, le
 		}
 
 		for _, ecs := range node.BindEcs {
-			// 确保 ecs.Tags 有偶数个元素，以便成对解析
-			if len(ecs.Tags) == 0 || len(ecs.Tags)%2 != 0 {
+			// 检查 ecs.Tags 是否为空或有偶数个元素
+			if len(ecs.Tags) == 0 {
+				// 如果标签为空,直接跳过
+				continue
+			}
+			if len(ecs.Tags)%2 != 0 {
 				n.l.Warn("ECS 实例的 Tags 格式不正确，必须为偶数个元素", zap.Int("node_id", node.ID), zap.Any("ecs", ecs))
 				continue
 			}

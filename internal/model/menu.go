@@ -1,32 +1,131 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package model
 
-type Menu struct {
-	Model
-	Name       string    `json:"name" gorm:"type:varchar(100);uniqueIndex;not null;comment:菜单名称，必须唯一且非空"` // 菜单名称，唯一且非空
-	Title      string    `json:"title" gorm:"type:varchar(100);comment:菜单的显示标题"`                          // 菜单标题，用于前端显示
-	Pid        int       `json:"pid" gorm:"comment:父级菜单的ID"`                                              // 父级菜单ID，表示此菜单的上级菜单
-	ParentMenu string    `json:"parentMenu" gorm:"type:varchar(50);comment:父级菜单标识符"`                      // 父级菜单标识，用于前端逻辑标识
-	Icon       string    `json:"icon" gorm:"type:varchar(100);comment:菜单图标的路径或类名"`                        // 菜单图标，通常为图标的路径或类名
-	Type       string    `json:"type" gorm:"type:varchar(10);comment:菜单类型，0=目录，1=子菜单"`                    // 菜单类型，0表示目录，1表示子菜单
-	Show       bool      `json:"show" gorm:"type:bool;default:true;comment:显示状态，false=禁用，true=启用"`        // 菜单显示状态，true为启用，false为禁用
-	OrderNo    int       `json:"orderNo" gorm:"comment:菜单排序号"`                                            // 排序号，决定菜单在前端展示时的顺序
-	Component  string    `json:"component" gorm:"type:varchar(50);comment:前端组件名称，菜单对应LAYOUT"`             // 前端组件，菜单对应的前端组件名称
-	Redirect   string    `json:"redirect" gorm:"type:varchar(100);comment:页面重定向路径"`                       // 重定向路径，当菜单被点击时跳转的默认页面
-	Path       string    `json:"path" gorm:"type:varchar(100);comment:菜单的路由路径"`                           // 路由路径，用于匹配前端路由
-	Remark     string    `json:"remark" gorm:"type:text;comment:菜单的备注信息"`                                 // 备注信息，提供关于此菜单的额外说明
-	HomePath   string    `json:"homePath" gorm:"type:varchar(100);comment:登录后的默认首页路径"`                    // 用户登录后的默认首页路径
-	Status     string    `json:"status" gorm:"type:varchar(10);default:1;comment:启用状态，0=禁用，1=启用"`         // 启用状态，0表示禁用，1表示启用
-	Meta       *MenuMeta `json:"meta" gorm:"-"`                                                           // 元信息，存储菜单的额外属性，前端处理用，数据库不存储
-	Children   []*Menu   `json:"children" gorm:"-"`                                                       // 子菜单列表，递归表示子级菜单，前端处理用，数据库不存储
-	Roles      []*Role   `json:"roles" gorm:"many2many:role_menus;comment:多对多角色关联"`                       // 角色关联，表示菜单与角色的多对多关系
-	Key        int       `json:"key" gorm:"-"`                                                            // 菜单的唯一标识符，前端使用
-	Value      int       `json:"value" gorm:"-"`                                                          // 菜单的值，前端使用
+import (
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
+)
+
+// Meta 菜单元数据
+type Meta struct {
+	Order      int    `json:"order,omitempty"`      // 排序
+	Title      string `json:"title"`                // 标题
+	AffixTab   bool   `json:"affixTab,omitempty"`   // 是否固定标签页
+	HideInMenu bool   `json:"hideInMenu,omitempty"` // 是否在菜单中隐藏
+	Icon       string `json:"icon"`                 // 图标
 }
 
-type MenuMeta struct {
-	Title           string `json:"title" gorm:"-"`           // 菜单标题，用于前端显示的标题
-	Icon            string `json:"icon" gorm:"-"`            // 菜单图标，用于显示菜单的图标（类名或路径）
-	ShowMenu        bool   `json:"showMenu" gorm:"-"`        // 是否显示菜单，true表示显示，false表示隐藏
-	HideMenu        bool   `json:"hideMenu" gorm:"-"`        // 是否隐藏菜单，true表示隐藏，false表示不隐藏
-	IgnoreKeepAlive bool   `json:"ignoreKeepAlive" gorm:"-"` // 是否禁用路由缓存，true表示禁用，false表示启用缓存
+type Menu struct {
+	ID           int       `json:"id" gorm:"primaryKey;autoIncrement;comment:主键ID"`                                     // 主键ID，自增
+	CreatedAt    int64     `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`                                       // 创建时间，自动记录
+	UpdatedAt    int64     `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`                                       // 更新时间，自动记录
+	DeletedAt    int64     `json:"deleted_at" gorm:"index;default:0;comment:删除时间"`                                      // 软删除时间，使用普通索引
+	Name         string    `json:"name" gorm:"type:varchar(50);not null;comment:菜单显示名称"`                                // 菜单显示名称，非空
+	ParentID     int       `json:"parent_id" gorm:"default:0;comment:上级菜单ID,0表示顶级菜单"`                                 // 上级菜单ID,0表示顶级菜单
+	Path         string    `json:"path" gorm:"type:varchar(255);not null;comment:前端路由访问路径"`                            // 前端路由访问路径，非空
+	Component    string    `json:"component" gorm:"type:varchar(255);not null;comment:前端组件文件路径"`                       // 前端组件文件路径，非空
+	RouteName    string    `json:"route_name" gorm:"type:varchar(50);uniqueIndex:idx_route_del;not null;comment:前端路由名称"` // 前端路由名称，唯一且非空
+	Hidden       int8      `json:"hidden" gorm:"type:tinyint(1);default:0;comment:菜单是否隐藏 0显示 1隐藏"`                    // 菜单是否隐藏，使用int8节省空间
+	Redirect     string    `json:"redirect" gorm:"type:varchar(255);default:'';comment:重定向路径"`                         // 重定向路径
+	Meta         MetaField `json:"meta" gorm:"type:json;serializer:json;comment:菜单元数据"`                                // 菜单元数据，使用JSON存储
+	Children     []*Menu   `json:"children" gorm:"-"`                                                                  // 子菜单列表,不映射到数据库
+	Users        []*User   `json:"users" gorm:"many2many:user_menus;comment:关联用户"`                                    // 多对多关联用户
+	Roles        []*Role   `json:"roles" gorm:"many2many:role_menus;comment:关联角色"`                                    // 多对多关联角色
+}
+
+type CreateMenuRequest struct {
+	Name      string    `json:"name" binding:"required"`    // 菜单名称
+	Path      string    `json:"path" binding:"required"`    // 菜单路径
+	ParentId  int       `json:"parent_id" binding:"gte=0"`  // 父菜单ID
+	Component string    `json:"component"`                  // 组件
+	RouteName string    `json:"route_name"`                 // 路由名称
+	Hidden    int       `json:"hidden" binding:"oneof=0 1"` // 是否隐藏
+	Redirect  string    `json:"redirect"`                   // 重定向路径
+	Meta      MetaField `json:"meta"`                       // 元数据
+	Children  []*Menu   `json:"children" gorm:"-"`
+}
+
+type GetMenuRequest struct {
+	Id int `json:"id" binding:"required,gt=0"` // 菜单ID
+}
+
+type UpdateMenuRequest struct {
+	Id        int       `json:"id" binding:"required,gt=0"` // 菜单ID
+	Name      string    `json:"name" binding:"required"`    // 菜单名称
+	Path      string    `json:"path" binding:"required"`    // 菜单路径
+	ParentId  int       `json:"parent_id" binding:"gte=0"`  // 父菜单ID
+	Component string    `json:"component"`                  // 组件
+	Icon      string    `json:"icon"`                       // 图标
+	SortOrder int       `json:"sort_order" binding:"gte=0"` // 排序
+	RouteName string    `json:"route_name"`                 // 路由名称
+	Hidden    int       `json:"hidden" binding:"oneof=0 1"` // 是否隐藏
+	Redirect  string    `json:"redirect"`                   // 重定向路径
+	Meta      MetaField `json:"meta"`                       // 元数据
+}
+
+type DeleteMenuRequest struct {
+	Id int `json:"id" binding:"required,gt=0"` // 菜单ID
+}
+
+type ListMenusRequest struct {
+	PageNumber int `json:"page_number" binding:"required,gt=0"` // 页码
+	PageSize   int `json:"page_size" binding:"required,gt=0"`   // 每页数量
+}
+
+type UpdateUserMenuRequest struct {
+	UserId  int   `json:"user_id" binding:"required,gt=0"`  // 用户ID
+	MenuIds []int `json:"menu_ids" binding:"required,gt=0"` // 菜单ID
+}
+
+type MetaField Meta
+
+func (m *MetaField) Scan(value interface{}) error {
+	if value == nil {
+		*m = MetaField{}
+		return nil
+	}
+
+	byteValue, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("invalid type for MetaField: %T", value)
+	}
+
+	// 将 JSON 字符串解析为 Meta 结构体
+	if err := json.Unmarshal(byteValue, m); err != nil {
+		return fmt.Errorf("error unmarshaling MetaField: %v", err)
+	}
+
+	return nil
+}
+
+func (m *MetaField) Value() (driver.Value, error) {
+	if m == nil {
+		return nil, nil
+	}
+	return json.Marshal(m)
 }

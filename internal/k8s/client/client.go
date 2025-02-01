@@ -1,18 +1,45 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package client
 
 import (
 	"context"
 	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"sync"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/openkruise/kruise-api/client/clientset/versioned"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	discovery2 "k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
-	"sync"
 )
 
 type K8sClient interface {
@@ -26,8 +53,8 @@ type K8sClient interface {
 	GetMetricsClient(clusterID int) (*metricsClient.Clientset, error)
 	// GetDynamicClient 获取指定集群 ID 的动态客户端
 	GetDynamicClient(clusterID int) (*dynamic.DynamicClient, error)
-	// GetNamespaces 获取指定集群的命名空间
-	GetNamespaces(ctx context.Context, clusterID int) ([]string, error)
+	// GetDiscoveryClient 获取指定集群 ID 的 Discovery 客户端
+	GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error)
 	// RefreshClients 刷新客户端
 	RefreshClients(ctx context.Context) error
 }
@@ -39,19 +66,21 @@ type k8sClient struct {
 	MetricsClients    map[int]*metricsClient.Clientset // Metrics客户端集合
 	DynamicClients    map[int]*dynamic.DynamicClient   // 动态客户端集合
 	RestConfigs       map[int]*rest.Config             // REST配置集合
-	ClusterNamespaces map[string][]string              // 集群命名空间集合
-	LastProbeErrors   map[int]string                   // 集群探针错误信息
-	l                 *zap.Logger                      // 日志记录器
-	dao               dao.K8sDAO
+	DiscoveryClients  map[int]*discovery2.DiscoveryClient
+	ClusterNamespaces map[string][]string // 集群命名空间集合
+	LastProbeErrors   map[int]string      // 集群探针错误信息
+	l                 *zap.Logger         // 日志记录器
+	dao               admin.ClusterDAO
 }
 
-func NewK8sClient(l *zap.Logger, dao dao.K8sDAO) K8sClient {
+func NewK8sClient(l *zap.Logger, dao admin.ClusterDAO) K8sClient {
 	return &k8sClient{
 		KubeClients:       make(map[int]*kubernetes.Clientset),
 		KruiseClients:     make(map[int]*versioned.Clientset),
 		MetricsClients:    make(map[int]*metricsClient.Clientset),
 		DynamicClients:    make(map[int]*dynamic.DynamicClient),
 		RestConfigs:       make(map[int]*rest.Config),
+		DiscoveryClients:  make(map[int]*discovery2.DiscoveryClient),
 		ClusterNamespaces: make(map[string][]string),
 		LastProbeErrors:   make(map[int]string),
 		l:                 l,
@@ -71,6 +100,9 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 		k.l.Debug("InitClient: Client already initialized for clusterID", zap.Int("ClusterID", clusterID))
 		return nil
 	}
+
+	// 保存 REST 配置
+	k.RestConfigs[clusterID] = kubeConfig
 
 	// 创建 Kubernetes 原生客户端
 	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
@@ -104,13 +136,17 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 	}
 	k.DynamicClients[clusterID] = dynamicClient
 
-	// 保存 REST 配置
-	k.RestConfigs[clusterID] = kubeConfig
+	discoveryClient, err := discovery2.NewDiscoveryClientForConfig(kubeConfig)
+	if err != nil {
+		k.l.Error("创建 Discovery 客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+		return fmt.Errorf("创建 Discovery 客户端失败: %w", err)
+	}
+	k.DiscoveryClients[clusterID] = discoveryClient
 
 	// 获取并保存命名空间，直接使用 kubeClient
 	namespaces, err := k.getNamespacesDirectly(ctx, clusterID, kubeClient)
 	if err != nil {
-		k.l.Warn("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+		k.l.Debug("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
 		k.LastProbeErrors[clusterID] = err.Error()
 	} else {
 		host := kubeConfig.Host
@@ -130,7 +166,7 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 func (k *k8sClient) getNamespacesDirectly(ctx context.Context, clusterID int, kubeClient *kubernetes.Clientset) ([]string, error) {
 	namespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		k.l.Error("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+		k.l.Debug("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
 		return nil, fmt.Errorf("获取命名空间失败: %w", err)
 	}
 
@@ -194,25 +230,17 @@ func (k *k8sClient) GetDynamicClient(clusterID int) (*dynamic.DynamicClient, err
 	return client, nil
 }
 
-// GetNamespaces 获取指定集群的命名空间
-func (k *k8sClient) GetNamespaces(ctx context.Context, clusterID int) ([]string, error) {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return nil, err
+// GetDiscoveryClient 获取指定集群 ID 的 Discovery 客户端
+func (k *k8sClient) GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error) {
+	k.RLock()
+	defer k.RUnlock()
+
+	discoveryClient, exists := k.DiscoveryClients[clusterID]
+	if !exists {
+		return nil, fmt.Errorf("discovery client not found for cluster ID: %d", clusterID)
 	}
 
-	namespaces, err := client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		k.l.Error("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
-		return nil, fmt.Errorf("获取命名空间失败: %w", err)
-	}
-
-	nsList := make([]string, len(namespaces.Items))
-	for i, ns := range namespaces.Items {
-		nsList[i] = ns.Name
-	}
-
-	return nsList, nil
+	return discoveryClient, nil
 }
 
 // RefreshClients 刷新所有集群的客户端

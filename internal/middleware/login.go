@@ -1,9 +1,35 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package middleware
 
 import (
 	"strings"
 
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils/jwt"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/golang-jwt/jwt/v5"
@@ -28,8 +54,8 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 		if path == "/api/user/login" ||
 			//path == "/api/user/signup" ||   // 不允许用户自己注册账号
 			path == "/api/user/logout" ||
-			strings.Contains(path, "hello") ||
 			path == "/api/user/refresh_token" ||
+			path == "/api/user/signup" ||
 			path == "/api/not_auth/getTreeNodeBindIps" ||
 			path == "/api/monitor/prometheus_configs/prometheus" ||
 			path == "/api/monitor/prometheus_configs/prometheus_alert" ||
@@ -39,8 +65,16 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 		}
 
 		var uc ijwt.UserClaims
-		// 从请求中提取token
-		tokenStr := m.ExtractToken(ctx)
+		var tokenStr string
+
+		// 如果是/api/tree/ecs/console开头的路径，从查询参数获取token
+		if strings.HasPrefix(path, "/api/tree/ecs/console") {
+			tokenStr = ctx.Query("token")
+		} else {
+			// 从请求中提取token
+			tokenStr = m.ExtractToken(ctx)
+		}
+
 		key := []byte(viper.GetString("jwt.key1"))
 		token, err := jwt.ParseWithClaims(tokenStr, &uc, func(token *jwt.Token) (interface{}, error) {
 			return key, nil

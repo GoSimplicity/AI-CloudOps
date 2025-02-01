@@ -1,42 +1,83 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package cron
 
 import (
 	"context"
 	"errors"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert/onduty"
-	"gorm.io/gorm"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-// CronManager 定义计划任务管理接口
+var (
+	ErrNoMembers = errors.New("值班组没有成员")
+)
+
 type CronManager interface {
 	StartOnDutyHistoryManager(ctx context.Context) error
-	fillOnDutyHistory(ctx context.Context)
-	processOnDutyHistoryForGroup(ctx context.Context, group *model.MonitorOnDutyGroup)
+	StartCheckHostStatusManager(ctx context.Context) error
+	StartCheckK8sStatusManager(ctx context.Context) error
 }
 
-// cronManager 实现 CronManager 接口
 type cronManager struct {
 	logger    *zap.Logger
-	onDutyDao onduty.AlertManagerOnDutyDAO
-	sync.RWMutex
+	onDutyDao alert.AlertManagerOnDutyDAO
+	ecsDao    treeDao.TreeEcsDAO
+	k8sDao    admin.ClusterDAO
+	k8sClient client.K8sClient
 }
 
-// NewCronManager 创建一个新的 CronManager 实例
-func NewCronManager(logger *zap.Logger, onDutyDao onduty.AlertManagerOnDutyDAO) CronManager {
+func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, ecsDao treeDao.TreeEcsDAO, k8sDao admin.ClusterDAO, k8sClient client.K8sClient) CronManager {
 	return &cronManager{
 		logger:    logger,
 		onDutyDao: onDutyDao,
+		ecsDao:    ecsDao,
+		k8sDao:    k8sDao,
+		k8sClient: k8sClient,
 	}
 }
 
 // StartOnDutyHistoryManager 启动值班历史记录填充任务
 func (cm *cronManager) StartOnDutyHistoryManager(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("context cannot be nil")
+	}
+
 	// 每隔 5 分钟执行一次 fillOnDutyHistory，直到 ctx.Done
 	go wait.UntilWithContext(ctx, cm.fillOnDutyHistory, 5*time.Minute)
 	<-ctx.Done()
@@ -53,32 +94,207 @@ func (cm *cronManager) fillOnDutyHistory(ctx context.Context) {
 		return
 	}
 
+	errChan := make(chan error, len(groups))
 	var wg sync.WaitGroup
+
 	for _, group := range groups {
 		if len(group.Members) == 0 {
+			cm.logger.Warn("跳过无成员的值班组", zap.String("group", group.Name))
 			continue
 		}
 		wg.Add(1)
 		go func(g *model.MonitorOnDutyGroup) {
 			defer wg.Done()
-			cm.processOnDutyHistoryForGroup(ctx, g)
+			if err := cm.processOnDutyHistoryForGroup(ctx, g); err != nil {
+				errChan <- err
+			}
 		}(group)
 	}
+
+	// 等待所有goroutine完成
 	wg.Wait()
+	close(errChan)
+
+	// 收集错误
+	for err := range errChan {
+		cm.logger.Error("处理值班历史记录时发生错误", zap.Error(err))
+	}
+}
+
+// StartCheckHostStatusManager 定期检查ecs主机状态
+func (cm *cronManager) StartCheckHostStatusManager(ctx context.Context) error {
+	cm.logger.Info("开始检查ecs主机状态")
+
+	// 获取所有ECS主机
+	ecss, err := cm.ecsDao.GetAll(ctx)
+	if err != nil {
+		cm.logger.Error("获取ecs主机失败", zap.Error(err))
+		return err
+	}
+	if len(ecss) == 0 {
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(ecss))
+
+	for _, ecs := range ecss {
+		wg.Add(1)
+		go func(ecs *model.ResourceEcs) {
+			defer wg.Done()
+
+			// 检查IP地址
+			if ecs.IpAddr == "" {
+				cm.logger.Warn("目标ecs没有绑定公网ip",
+					zap.String("hostname", ecs.Hostname),
+					zap.Int("id", ecs.ID))
+				return
+			}
+
+			// 发送ping请求检查状态
+			if ok := pkg.Ping(ecs.IpAddr); !ok {
+				cm.logger.Debug("ping请求失败",
+					zap.String("ip", ecs.IpAddr),
+					zap.String("hostname", ecs.Hostname))
+				ecs.Status = "ERROR"
+			} else {
+				ecs.Status = "RUNNING"
+			}
+
+			// 更新主机状态
+			if err := cm.ecsDao.UpdateStatus(ctx, ecs.ID, ecs.Status); err != nil {
+				cm.logger.Error("更新主机状态失败",
+					zap.Error(err),
+					zap.String("hostname", ecs.Hostname),
+					zap.String("status", ecs.Status))
+				errChan <- err
+			}
+		}(ecs)
+	}
+
+	// 等待所有检查完成
+	wg.Wait()
+	close(errChan)
+
+	// 检查是否有错误发生
+	if len(errChan) > 0 {
+		return <-errChan
+	}
+
+	cm.logger.Info("完成ecs主机状态检查")
+	return nil
+}
+
+// StartCheckK8sStatusManager 启动k8s状态检查任务
+func (cm *cronManager) StartCheckK8sStatusManager(ctx context.Context) error {
+	cm.logger.Info("开始检查k8s状态")
+
+	// 获取所有k8s集群
+	clusters, err := cm.k8sDao.ListAllClusters(ctx)
+	if err != nil {
+		cm.logger.Error("获取k8s集群列表失败", zap.Error(err))
+		return fmt.Errorf("获取k8s集群列表失败: %w", err)
+	}
+
+	if len(clusters) == 0 {
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(clusters))
+
+	// 限制并发数
+	semaphore := make(chan struct{}, 5)
+
+	for _, cluster := range clusters {
+		wg.Add(1)
+		go func(cluster *model.K8sCluster) {
+			defer wg.Done()
+
+			// 获取信号量
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			if err := cm.checkClusterStatus(ctx, cluster); err != nil {
+				errChan <- err
+			}
+		}(cluster)
+	}
+
+	// 等待所有检查完成
+	wg.Wait()
+	close(errChan)
+
+	// 检查是否有错误发生
+	if len(errChan) > 0 {
+		var errs []error
+		for err := range errChan {
+			errs = append(errs, err)
+		}
+		return fmt.Errorf("k8s集群状态检查失败: %v", errs)
+	}
+
+	cm.logger.Info("完成k8s集群状态检查")
+	return nil
+}
+
+// checkClusterStatus 检查单个集群状态
+func (cm *cronManager) checkClusterStatus(ctx context.Context, cluster *model.K8sCluster) error {
+	// 获取k8s客户端
+	clientset, err := cm.k8sClient.GetKubeClient(cluster.ID)
+	if err != nil {
+		cm.logger.Warn("获取k8s客户端失败",
+			zap.Error(err),
+			zap.String("cluster", cluster.Name))
+		cluster.Status = "ERROR"
+	} else {
+		// 设置超时上下文
+		ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+
+		// 尝试访问API Server
+		_, err = clientset.CoreV1().Nodes().List(ctxWithTimeout, metav1.ListOptions{})
+		if err != nil {
+			cm.logger.Error("访问k8s集群失败",
+				zap.Error(err),
+				zap.String("cluster", cluster.Name))
+			cluster.Status = "ERROR"
+		} else {
+			cluster.Status = "RUNNING"
+		}
+	}
+
+	// 更新集群状态
+	if err := cm.k8sDao.UpdateClusterStatus(ctx, cluster.ID, cluster.Status); err != nil {
+		cm.logger.Error("更新集群状态失败",
+			zap.Error(err),
+			zap.String("cluster", cluster.Name),
+			zap.String("status", cluster.Status))
+		return fmt.Errorf("更新集群[%s]状态失败: %w", cluster.Name, err)
+	}
+
+	return nil
 }
 
 // processOnDutyHistoryForGroup 填充单个值班组的历史记录
-func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *model.MonitorOnDutyGroup) {
+func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *model.MonitorOnDutyGroup) error {
+	if group == nil {
+		return errors.New("group cannot be nil")
+	}
+	if len(group.Members) == 0 {
+		return ErrNoMembers
+	}
+
 	todayStr := time.Now().Format("2006-01-02")
 
 	// 检查今天是否已经有值班历史记录
 	exists, err := cm.onDutyDao.ExistsMonitorOnDutyHistory(ctx, group.ID, todayStr)
 	if err != nil {
 		cm.logger.Error("检查值班历史记录失败", zap.Error(err), zap.String("group", group.Name))
-		return
+		return err
 	}
 	if exists {
-		return
+		return nil
 	}
 
 	// 获取昨天的日期字符串
@@ -88,7 +304,7 @@ func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *
 	yesterdayHistory, err := cm.onDutyDao.GetMonitorOnDutyHistoryByGroupIdAndDay(ctx, group.ID, yesterdayStr)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		cm.logger.Error("获取昨天的值班历史记录失败", zap.Error(err), zap.String("group", group.Name))
-		return
+		return err
 	}
 
 	var onDutyUserID int
@@ -100,7 +316,7 @@ func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *
 		shiftNeeded, err := cm.isShiftNeeded(ctx, group, yesterdayHistory)
 		if err != nil {
 			cm.logger.Error("判断是否需要轮换值班人失败", zap.Error(err), zap.String("group", group.Name))
-			return
+			return err
 		}
 		if shiftNeeded {
 			// 获取下一个值班人的索引
@@ -120,12 +336,21 @@ func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *
 	}
 	if err := cm.onDutyDao.CreateMonitorOnDutyHistory(ctx, history); err != nil {
 		cm.logger.Error("创建值班历史记录失败", zap.Error(err), zap.String("group", group.Name))
-		return
+		return err
 	}
+
+	return nil
 }
 
 // isShiftNeeded 判断是否需要轮换值班人
 func (cm *cronManager) isShiftNeeded(ctx context.Context, group *model.MonitorOnDutyGroup, lastHistory *model.MonitorOnDutyHistory) (bool, error) {
+	if group == nil || lastHistory == nil {
+		return false, errors.New("group or lastHistory cannot be nil")
+	}
+	if group.ShiftDays <= 0 {
+		return false, errors.New("invalid ShiftDays value")
+	}
+
 	// 计算开始日期，向前推移 shiftDays 天
 	startDate := time.Now().AddDate(0, 0, -group.ShiftDays).Format("2006-01-02")
 	yesterdayStr := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
@@ -150,10 +375,15 @@ func (cm *cronManager) isShiftNeeded(ctx context.Context, group *model.MonitorOn
 
 // getMemberIndex 获取成员在成员列表中的索引
 func (cm *cronManager) getMemberIndex(group *model.MonitorOnDutyGroup, userID int) int {
+	if group == nil || len(group.Members) == 0 {
+		return 0
+	}
+
 	for index, member := range group.Members {
 		if member.ID == userID {
 			return index
 		}
 	}
-	return 0 // 默认返回第一个成员
+
+	return 0
 }

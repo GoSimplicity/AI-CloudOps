@@ -1,3 +1,28 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package constant
 
 // AlertSeverity 表示告警的严重性等级
@@ -341,10 +366,10 @@ var StatusChineseMap = map[AlertStatus]string{
 
 // URL 模板常量
 const (
-	SendGroupURLTemplate = "%s/%s?id=%v"                  // 发送组 URL 模板
-	RenderingURLTemplate = "%s/%s?fingerprint=%v"         // 渲染 URL 模板
-	SilenceURLTemplate   = "%s/%s?fingerprint=%v&hour=%v" // 静音 URL 模板
-	UnsilenceURLTemplate = "%s/%s?fingerprint=%v"         // 取消静音 URL 模板
+	SendGroupURLTemplate = "http://%s/%s?id=%v"                  // 发送组 URL 模板
+	RenderingURLTemplate = "http://%s/%s?fingerprint=%v"         // 渲染 URL 模板
+	SilenceURLTemplate   = "http://%s/%s?fingerprint=%v&hour=%v" // 静音 URL 模板
+	UnsilenceURLTemplate = "http://%s/%s?fingerprint=%v"         // 取消静音 URL 模板
 
 	// DefaultUpgradeMinutes 默认告警升级时间（分钟）
 	DefaultUpgradeMinutes = 30 // 默认告警升级时间为30分钟

@@ -1,3 +1,28 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package mock
 
 import (
@@ -93,7 +118,7 @@ func (t *TreeMock) createTreeNodeMock() {
 		return
 	}
 
-	_, err = createNode("后端组", secondNode.ID, 3, 0, "", admin)
+	thirdNode2, err := createNode("后端组", secondNode.ID, 3, 0, "", admin)
 	if err != nil {
 		log.Printf("创建三级节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")
@@ -101,14 +126,14 @@ func (t *TreeMock) createTreeNodeMock() {
 	}
 
 	// 生成 level = 4 的子节点
-	_, err = createNode("好看的前端项目-1", thirdNode.ID, 4, 0, "", admin)
+	_, err = createNode("好看的前端项目", thirdNode.ID, 4, 1, "", admin)
 	if err != nil {
 		log.Printf("创建四级节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")
 		return
 	}
 
-	_, err = createNode("好看的前端项目-2", thirdNode.ID, 4, 0, "", admin)
+	_, err = createNode("高并发的后端项目", thirdNode2.ID, 4, 1, "", admin)
 	if err != nil {
 		log.Printf("创建四级节点失败: %v\n", err)
 		log.Print("[Tree模块Mock结束]")

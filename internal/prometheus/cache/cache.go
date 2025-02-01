@@ -1,12 +1,33 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package cache
 
 import (
 	"context"
 	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/alert_cache"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/prom_cache"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/record_cache"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache/rule_cache"
 	"sync"
 	"time"
 
@@ -19,14 +40,14 @@ type MonitorCache interface {
 }
 
 type monitorCache struct {
-	PrometheusMainConfig  prom_cache.PromConfigCache
-	AlertMangerMainConfig alert_cache.AlertConfigCache
-	AlertRuleConfig       rule_cache.RuleConfigCache
-	AlertRecordConfig     record_cache.RecordConfigCache
+	PrometheusMainConfig  PromConfigCache
+	AlertMangerMainConfig AlertConfigCache
+	AlertRuleConfig       RuleConfigCache
+	AlertRecordConfig     RecordConfigCache
 	l                     *zap.Logger
 }
 
-func NewMonitorCache(PrometheusMainConfig prom_cache.PromConfigCache, AlertMangerMainConfig alert_cache.AlertConfigCache, AlertRuleConfig rule_cache.RuleConfigCache, AlertRecordConfig record_cache.RecordConfigCache, l *zap.Logger) MonitorCache {
+func NewMonitorCache(PrometheusMainConfig PromConfigCache, AlertMangerMainConfig AlertConfigCache, AlertRuleConfig RuleConfigCache, AlertRecordConfig RecordConfigCache, l *zap.Logger) MonitorCache {
 	return &monitorCache{
 		PrometheusMainConfig:  PrometheusMainConfig,
 		AlertMangerMainConfig: AlertMangerMainConfig,
