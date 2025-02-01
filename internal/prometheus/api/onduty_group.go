@@ -63,6 +63,7 @@ func (o *OnDutyGroupHandler) RegisterRouters(server *gin.Engine) {
 		onDutyGroups.GET("/:id", o.GetMonitorOnDutyGroup)
 		onDutyGroups.GET("/future_plan", o.GetMonitorOnDutyGroupFuturePlan)
 		onDutyGroups.GET("/total", o.GetMonitorOnDutyGroupTotal)
+		onDutyGroups.GET("/all", o.GetAllMonitorOnDutyGroup)
 	}
 }
 
@@ -207,4 +208,14 @@ func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupTotal(ctx *gin.Context) {
 		return
 	}
 	utils.SuccessWithData(ctx, total)
+}
+
+// GetAllMonitorOnDutyGroup 获取所有值班组
+func (o *OnDutyGroupHandler) GetAllMonitorOnDutyGroup(ctx *gin.Context) {
+	groups, err := o.alertOnDutyService.GetAllMonitorOnDutyGroup(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	utils.SuccessWithData(ctx, groups)
 }

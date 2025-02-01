@@ -242,7 +242,6 @@ func (a *alertManagerSendDAO) UpdateMonitorSendGroup(ctx context.Context, tx *go
 		"name":                    monitorSendGroup.Name,
 		"name_zh":                 monitorSendGroup.NameZh,
 		"enable":                  monitorSendGroup.Enable,
-		"user_id":                 monitorSendGroup.UserID,
 		"pool_id":                 monitorSendGroup.PoolID,
 		"on_duty_group_id":        monitorSendGroup.OnDutyGroupID,
 		"fei_shu_qun_robot_token": monitorSendGroup.FeiShuQunRobotToken,

@@ -33,6 +33,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 )
@@ -50,14 +51,16 @@ type AlertManagerRecordService interface {
 
 type alertManagerRecordService struct {
 	dao     alert.AlertManagerRecordDAO
+	poolDao scrape.ScrapePoolDAO
 	cache   cache.MonitorCache
 	userDao userDao.UserDAO
 	l       *zap.Logger
 }
 
-func NewAlertManagerRecordService(dao alert.AlertManagerRecordDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO) AlertManagerRecordService {
+func NewAlertManagerRecordService(dao alert.AlertManagerRecordDAO, poolDao scrape.ScrapePoolDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO) AlertManagerRecordService {
 	return &alertManagerRecordService{
 		dao:     dao,
+		poolDao: poolDao,
 		userDao: userDao,
 		l:       l,
 		cache:   cache,
@@ -81,6 +84,25 @@ func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context
 	if err != nil {
 		a.l.Error("获取记录规则列表失败", zap.Error(err))
 		return nil, err
+	}
+
+	for _, rule := range rules {
+		user, err := a.userDao.GetUserByID(ctx, rule.UserID)
+		if err != nil {
+			a.l.Error("获取创建用户名失败", zap.Error(err))
+		}
+
+		if user.RealName == "" {
+			rule.CreateUserName = user.Username
+		} else {
+			rule.CreateUserName = user.RealName
+		}
+
+		pool, err := a.poolDao.GetMonitorScrapePoolById(ctx, rule.PoolID)
+		if err != nil {
+			a.l.Error("获取Prometheus实例池失败", zap.Error(err))
+		}
+		rule.PoolName = pool.Name
 	}
 
 	return rules, nil

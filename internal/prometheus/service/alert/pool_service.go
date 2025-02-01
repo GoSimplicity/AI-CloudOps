@@ -90,7 +90,6 @@ func (a *alertManagerPoolService) GetMonitorAlertManagerPoolList(ctx context.Con
 		user, err := a.userDao.GetUserByID(ctx, pool.UserID)
 		if err != nil {
 			a.l.Error("获取创建用户名失败", zap.Error(err))
-			return nil, err
 		}
 		if user.RealName == "" {
 			pool.CreateUserName = user.Username

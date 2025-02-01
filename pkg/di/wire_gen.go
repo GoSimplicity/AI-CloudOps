@@ -135,7 +135,7 @@ func InitWebServer() *Cmd {
 	alertManagerOnDutyDAO := alert.NewAlertManagerOnDutyDAO(db, logger, userDAO)
 	alertManagerOnDutyService := alert2.NewAlertManagerOnDutyService(alertManagerOnDutyDAO, alertManagerSendDAO, monitorCache, logger, userDAO)
 	onDutyGroupHandler := api6.NewOnDutyGroupHandler(logger, alertManagerOnDutyService)
-	alertManagerRecordService := alert2.NewAlertManagerRecordService(alertManagerRecordDAO, monitorCache, logger, userDAO)
+	alertManagerRecordService := alert2.NewAlertManagerRecordService(alertManagerRecordDAO, scrapePoolDAO, monitorCache, logger, userDAO)
 	recordRuleHandler := api6.NewRecordRuleHandler(logger, alertManagerRecordService)
 	scrapePoolService := scrape2.NewPrometheusPoolService(scrapePoolDAO, monitorCache, logger, userDAO, scrapeJobDAO)
 	scrapePoolHandler := api6.NewScrapePoolHandler(logger, scrapePoolService)

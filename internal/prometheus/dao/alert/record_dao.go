@@ -164,7 +164,6 @@ func (a *alertManagerRecordDAO) UpdateMonitorRecordRule(ctx context.Context, rec
 		Where("id = ? AND deleted_at = ?", recordRule.ID, 0).
 		Updates(map[string]interface{}{
 			"name":         recordRule.Name,
-			"user_id":      recordRule.UserID,
 			"pool_id":      recordRule.PoolID,
 			"tree_node_id": recordRule.TreeNodeID,
 			"enable":       recordRule.Enable,

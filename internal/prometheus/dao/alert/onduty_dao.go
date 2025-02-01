@@ -138,15 +138,12 @@ func (a *alertManagerOnDutyDAO) UpdateMonitorOnDutyGroup(ctx context.Context, mo
 			return fmt.Errorf("获取原有值班组信息失败: %w", err)
 		}
 
-		// 更新基本信息
-		updates := map[string]interface{}{
+		if err := tx.Model(&existingGroup).Updates(map[string]interface{}{
 			"name":                          monitorOnDutyGroup.Name,
 			"shift_days":                    monitorOnDutyGroup.ShiftDays,
 			"yesterday_normal_duty_user_id": monitorOnDutyGroup.YesterdayNormalDutyUserID,
 			"updated_at":                    monitorOnDutyGroup.UpdatedAt,
-		}
-
-		if err := tx.Model(&existingGroup).Updates(updates).Error; err != nil {
+		}).Error; err != nil {
 			a.l.Error("更新值班组基本信息失败", zap.Error(err), zap.Int("id", monitorOnDutyGroup.ID))
 			return fmt.Errorf("更新值班组基本信息失败: %w", err)
 		}

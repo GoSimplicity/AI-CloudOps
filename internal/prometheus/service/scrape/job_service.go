@@ -211,7 +211,6 @@ func (s *scrapeJobService) buildUserInfo(ctx context.Context, jobs []*model.Moni
 	users, err := s.userDao.GetUserByIDs(ctx, userIDs)
 	if err != nil {
 		s.l.Error("批量获取用户信息失败", zap.Error(err))
-		return err
 	}
 
 	// 构建用户映射

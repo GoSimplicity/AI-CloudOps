@@ -91,7 +91,6 @@ func (a *alertManagerRuleService) GetMonitorAlertRuleList(ctx context.Context, l
 		user, err := a.userDao.GetUserByID(ctx, rule.UserID)
 		if err != nil {
 			a.l.Error("获取创建用户名失败", zap.Error(err))
-			return nil, err
 		}
 		if user.RealName == "" {
 			rule.CreateUserName = user.Username

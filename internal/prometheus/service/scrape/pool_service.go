@@ -90,7 +90,6 @@ func (s *scrapePoolService) GetMonitorScrapePoolList(ctx context.Context, listRe
 		user, err := s.userDao.GetUserByID(ctx, pool.UserID)
 		if err != nil {
 			s.l.Error("获取创建用户名失败", zap.Error(err))
-			return nil, err
 		}
 		if user.RealName == "" {
 			pool.CreateUserName = user.Username

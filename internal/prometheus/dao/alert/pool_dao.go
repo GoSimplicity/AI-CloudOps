@@ -99,7 +99,17 @@ func (a *alertManagerPoolDAO) UpdateMonitorAlertManagerPool(ctx context.Context,
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertManagerPool{}).
 		Where("id = ? AND deleted_at = ?", monitorAlertManagerPool.ID, 0).
-		Updates(monitorAlertManagerPool).Error; err != nil {
+		Updates(map[string]interface{}{
+			"name":                    monitorAlertManagerPool.Name,
+			"alert_manager_instances": monitorAlertManagerPool.AlertManagerInstances,
+			"resolve_timeout":         monitorAlertManagerPool.ResolveTimeout,
+			"group_wait":              monitorAlertManagerPool.GroupWait,
+			"group_interval":          monitorAlertManagerPool.GroupInterval,
+			"repeat_interval":         monitorAlertManagerPool.RepeatInterval,
+			"group_by":                monitorAlertManagerPool.GroupBy,
+			"receiver":                monitorAlertManagerPool.Receiver,
+			"updated_at":              monitorAlertManagerPool.UpdatedAt,
+		}).Error; err != nil {
 		a.l.Error("更新 MonitorAlertManagerPool 失败", zap.Error(err), zap.Int("id", monitorAlertManagerPool.ID))
 		return err
 	}
