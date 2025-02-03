@@ -35,7 +35,6 @@ import (
 )
 
 type MonitorCache interface {
-	// MonitorCacheManager 更新缓存
 	MonitorCacheManager(ctx context.Context) error
 }
 

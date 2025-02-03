@@ -33,6 +33,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertPoolDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	altconfig "github.com/prometheus/alertmanager/config"
 	al "github.com/prometheus/alertmanager/pkg/labels"
 	pm "github.com/prometheus/common/model"
@@ -51,24 +52,26 @@ type AlertConfigCache interface {
 }
 
 type alertConfigCache struct {
-	AlertManagerMainConfigMap map[string]string // 存储AlertManager主配置
-	l                         *zap.Logger
-	mu                        sync.RWMutex // 读写锁，保护缓存数据
-	localYamlDir              string       // 本地YAML目录
-	alertWebhookAddr          string       // Alertmanager Webhook地址
-	alertPoolDao              alertPoolDao.AlertManagerPoolDAO
-	alertSendDao              alertPoolDao.AlertManagerSendDAO
+	AlertManagerMainConfigMap map[string]string
+	l                        *zap.Logger
+	mu                       sync.RWMutex
+	localYamlDir             string
+	alertWebhookAddr         string
+	alertPoolDao             alertPoolDao.AlertManagerPoolDAO
+	alertSendDao             alertPoolDao.AlertManagerSendDAO
+	poolHashes               map[string]string
 }
 
 func NewAlertConfigCache(l *zap.Logger, alertPoolDao alertPoolDao.AlertManagerPoolDAO, alertSendDao alertPoolDao.AlertManagerSendDAO) AlertConfigCache {
 	return &alertConfigCache{
 		AlertManagerMainConfigMap: make(map[string]string),
-		l:                         l,
-		localYamlDir:              viper.GetString("prometheus.local_yaml_dir"),
-		alertWebhookAddr:          viper.GetString("prometheus.alert_webhook_addr"),
-		mu:                        sync.RWMutex{},
-		alertPoolDao:              alertPoolDao,
-		alertSendDao:              alertSendDao,
+		l:                        l,
+		localYamlDir:             viper.GetString("prometheus.local_yaml_dir"),
+		alertWebhookAddr:         viper.GetString("prometheus.alert_webhook_addr"),
+		mu:                       sync.RWMutex{},
+		alertPoolDao:             alertPoolDao,
+		alertSendDao:             alertSendDao,
+		poolHashes:               make(map[string]string),
 	}
 }
 
@@ -90,66 +93,84 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) e
 
 	if len(pools) == 0 {
 		a.l.Info("[监控模块]没有找到任何AlertManager采集池")
-		return err
+		return nil
 	}
 
-	mainConfigMap := make(map[string]string)
+	// 创建新的配置映射
+	newConfigMap := make(map[string]string)
+	newHashes := make(map[string]string)
 
 	for _, pool := range pools {
+		currentHash := utils.CalculateAlertHash(pool)
+		// 如果缓存中存在该池子的哈希值，并且与当前哈希值相同，则跳过
+		if cachedHash, ok := a.poolHashes[pool.Name]; ok && cachedHash == currentHash {
+			a.l.Debug("[监控模块]配置未发生变化，跳过", zap.String("池子", pool.Name))
+			continue
+		}
+
 		// 生成单个AlertManager池的主配置
 		oneConfig := a.GenerateAlertManagerMainConfigOnePool(pool)
 
 		// 生成对应的routes和receivers配置
 		routes, receivers := a.GenerateAlertManagerRouteConfigOnePool(ctx, pool)
-		if len(routes) > 0 {
-			oneConfig.Route.Routes = routes
+		if len(routes) == 0 {
+			a.l.Debug("[监控模块]没有找到任何告警路由", zap.String("池子", pool.Name))
+			continue
 		}
 
-		if len(receivers) > 0 {
-			if oneConfig.Receivers == nil {
-				oneConfig.Receivers = receivers
-			} else {
-				oneConfig.Receivers = append(oneConfig.Receivers, receivers...)
-			}
+		// 更新配置
+		oneConfig.Route.Routes = routes
+		if oneConfig.Receivers == nil {
+			oneConfig.Receivers = receivers
+		} else {
+			oneConfig.Receivers = append(oneConfig.Receivers, receivers...)
 		}
 
 		// 序列化配置为YAML格式
-		config, err := yaml.Marshal(oneConfig)
+		yamlData, err := yaml.Marshal(oneConfig)
 		if err != nil {
-			a.l.Error("[监控模块]根据alert配置生成AlertManager主配置文件错误",
+			a.l.Error("[监控模块]生成AlertManager配置失败",
 				zap.Error(err),
 				zap.String("池子", pool.Name),
 			)
 			continue
 		}
-		a.l.Debug("[监控模块]根据alert配置生成AlertManager主配置文件成功",
-			zap.String("池子", pool.Name),
-			zap.ByteString("配置", config),
-		)
 
-		// 写入配置文件并更新缓存
-		for index, ip := range pool.AlertManagerInstances {
-			fileName := fmt.Sprintf("%s/alertmanager_pool_%s_%d.yaml",
-				a.localYamlDir,
-				pool.Name,
-				index,
-			)
-
-			if err := os.WriteFile(fileName, config, 0644); err != nil {
-				a.l.Error("[监控模块]写入AlertManager配置文件失败",
+		// 为每个实例生成配置
+		for idx, ip := range pool.AlertManagerInstances {
+			// 写入文件到Pool专属目录
+			dir := fmt.Sprintf("%s/%s", a.localYamlDir, pool.Name)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				a.l.Error("[监控模块]创建目录失败",
 					zap.Error(err),
-					zap.String("文件路径", fileName),
+					zap.String("目录路径", dir),
 				)
 				continue
 			}
 
-			// 配置存入map中
-			mainConfigMap[ip] = string(config)
+			// 生成文件路径并写入
+			filePath := fmt.Sprintf("%s/alertmanager_pool_%s_%d.yaml", dir, pool.Name, idx)
+			if err := os.WriteFile(filePath, yamlData, 0644); err != nil {
+				a.l.Error("[监控模块]写入AlertManager配置文件失败",
+					zap.Error(err),
+					zap.String("文件路径", filePath),
+				)
+				continue
+			}
+
+			newConfigMap[ip] = string(yamlData)
+			newHashes[pool.Name] = currentHash
+			a.l.Debug("[监控模块]成功生成AlertManager配置",
+				zap.String("池子", pool.Name),
+				zap.String("IP", ip),
+			)
 		}
 	}
 
+	// 更新缓存
 	a.mu.Lock()
-	a.AlertManagerMainConfigMap = mainConfigMap
+	a.AlertManagerMainConfigMap = newConfigMap
+	a.poolHashes = newHashes
 	a.mu.Unlock()
 
 	return nil

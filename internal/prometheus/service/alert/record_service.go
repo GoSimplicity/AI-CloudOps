@@ -196,13 +196,6 @@ func (a *alertManagerRecordService) EnableSwitchMonitorRecordRule(ctx context.Co
 		a.l.Error("切换记录规则状态失败", zap.Error(err))
 		return err
 	}
-
-	// 更新缓存
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
-		return err
-	}
-
 	return nil
 }
 
