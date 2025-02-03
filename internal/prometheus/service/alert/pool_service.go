@@ -41,6 +41,7 @@ import (
 
 type AlertManagerPoolService interface {
 	GetMonitorAlertManagerPoolList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorAlertManagerPool, error)
+	GetMonitorAlertManagerPoolAll(ctx context.Context) ([]*model.MonitorAlertManagerPool, error)
 	CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	DeleteMonitorAlertManagerPool(ctx context.Context, id int) error
@@ -124,13 +125,6 @@ func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Cont
 		return err
 	}
 
-	// 更新缓存
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
-		return err
-	}
-
-	a.l.Info("创建 AlertManager 集群池成功", zap.Int("id", monitorAlertManagerPool.ID))
 	return nil
 }
 
@@ -219,4 +213,13 @@ func (a *alertManagerPoolService) checkAlertIpExists(ctx context.Context, monito
 	}
 
 	return pkg.CheckAlertIpExists(monitorAlertManagerPool, pools)
+}
+
+func (a *alertManagerPoolService) GetMonitorAlertManagerPoolAll(ctx context.Context) ([]*model.MonitorAlertManagerPool, error) {
+	pools, err := a.dao.GetAllAlertManagerPools(ctx)
+	if err != nil {
+		a.l.Error("获取所有告警池失败", zap.Error(err))
+		return nil, err
+	}
+	return pools, nil
 }

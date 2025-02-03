@@ -1,0 +1,6 @@
+groups:
+    - name: "123"
+      rules:
+        - alert: "123"
+          expr: "123"
+          for: 5m

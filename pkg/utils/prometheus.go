@@ -28,12 +28,15 @@ package utils
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -383,4 +386,88 @@ func FormatMap(m map[string]string) string {
 		builder.WriteString(fmt.Sprintf("%s=%s ", k, v))
 	}
 	return strings.TrimSpace(builder.String())
+}
+
+type promHashPayload struct {
+	Name                  string   `json:"name"`
+	PrometheusInstances   []string `json:"prometheus_instances"`
+	AlertManagerInstances []string `json:"alert_manager_instances"`
+	ScrapeInterval        int      `json:"scrape_interval"`
+	ScrapeTimeout         int      `json:"scrape_timeout"`
+	RemoteTimeoutSeconds  int      `json:"remote_timeout_seconds"`
+	SupportAlert          bool     `json:"support_alert"`
+	SupportRecord         bool     `json:"support_record"`
+	ExternalLabels        []string `json:"external_labels"`
+	RemoteWriteUrl        string   `json:"remote_write_url"`
+	RemoteReadUrl         string   `json:"remote_read_url"`
+	AlertManagerUrl       string   `json:"alert_manager_url"`
+	RecordFilePath        string   `json:"record_file_path"`
+}
+
+// CalculateHash 计算哈希值
+func CalculatePromHash(pool *model.MonitorScrapePool) string {
+	// 排序列表字段确保顺序不影响哈希
+	sort.Strings(pool.PrometheusInstances)
+	sort.Strings(pool.AlertManagerInstances)
+	sort.Strings(pool.ExternalLabels)
+
+	payload := promHashPayload{
+		Name:                  pool.Name,
+		PrometheusInstances:   pool.PrometheusInstances,
+		AlertManagerInstances: pool.AlertManagerInstances,
+		ScrapeInterval:        pool.ScrapeInterval,
+		ScrapeTimeout:         pool.ScrapeTimeout,
+		RemoteTimeoutSeconds:  pool.RemoteTimeoutSeconds,
+		SupportAlert:          pool.SupportAlert,
+		SupportRecord:         pool.SupportRecord,
+		ExternalLabels:        pool.ExternalLabels,
+		RemoteWriteUrl:        pool.RemoteWriteUrl,
+		RemoteReadUrl:         pool.RemoteReadUrl,
+		AlertManagerUrl:       pool.AlertManagerUrl,
+		RecordFilePath:        pool.RecordFilePath,
+	}
+
+	// 稳定序列化
+	data, _ := json.Marshal(payload)
+
+	// 计算哈希
+	hash := sha256.New()
+	hash.Write(data)
+	return hex.EncodeToString(hash.Sum(nil))
+}
+
+type alertHashPayload struct {
+	Name                  string   `json:"name"`
+	AlertManagerInstances []string `json:"alert_manager_instances"`
+	ResolveTimeout        string   `json:"resolve_timeout"`
+	GroupWait             string   `json:"group_wait"`
+	GroupInterval         string   `json:"group_interval"`
+	RepeatInterval        string   `json:"repeat_interval"`
+	GroupBy               []string `json:"group_by"`
+	Receiver              string   `json:"receiver"`
+}
+
+func CalculateAlertHash(pool *model.MonitorAlertManagerPool) string {
+	// 排序列表字段确保顺序不影响哈希
+	sort.Strings(pool.AlertManagerInstances)
+	sort.Strings(pool.GroupBy)
+
+	payload := alertHashPayload{
+		Name:                  pool.Name,
+		AlertManagerInstances: pool.AlertManagerInstances,
+		ResolveTimeout:        pool.ResolveTimeout,
+		GroupWait:             pool.GroupWait,
+		GroupInterval:         pool.GroupInterval,
+		RepeatInterval:        pool.RepeatInterval,
+		GroupBy:               pool.GroupBy,
+		Receiver:              pool.Receiver,
+	}
+
+	// 稳定序列化
+	data, _ := json.Marshal(payload)
+
+	// 计算哈希
+	hash := sha256.New()
+	hash.Write(data)
+	return hex.EncodeToString(hash.Sum(nil))
 }

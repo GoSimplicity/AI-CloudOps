@@ -29,7 +29,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -61,13 +60,14 @@ type PromConfigCache interface {
 }
 
 type promConfigCache struct {
-	PrometheusMainConfigMap map[string]string // 存储Prometheus主配置，键为IP地址
-	mu                      sync.RWMutex      // 读写锁，保护缓存数据
-	l                       *zap.Logger       // 日志记录器
-	localYamlDir            string            // 本地YAML目录
+	PrometheusMainConfigMap map[string]string
+	mu                      sync.RWMutex
+	l                       *zap.Logger
+	localYamlDir            string
 	scrapePoolDao           scrapeJobDao.ScrapePoolDAO
 	scrapeJobDao            scrapeJobDao.ScrapeJobDAO
-	httpSdAPI               string // HTTP服务发现API地址
+	httpSdAPI               string
+	poolHashes              map[string]string
 }
 
 func NewPromConfigCache(l *zap.Logger, scrapePoolDao scrapeJobDao.ScrapePoolDAO, scrapeJobDao scrapeJobDao.ScrapeJobDAO) PromConfigCache {
@@ -79,6 +79,7 @@ func NewPromConfigCache(l *zap.Logger, scrapePoolDao scrapeJobDao.ScrapePoolDAO,
 		scrapeJobDao:            scrapeJobDao,
 		l:                       l,
 		mu:                      sync.RWMutex{},
+		poolHashes:              make(map[string]string),
 	}
 }
 
@@ -94,36 +95,48 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 	// 获取所有采集池
 	pools, err := p.scrapePoolDao.GetAllMonitorScrapePool(ctx)
 	if err != nil {
-		p.l.Error("获取采集池失败", zap.Error(err))
+		p.l.Error("[监控模块] 获取采集池失败", zap.Error(err))
 		return err
 	}
 
 	if len(pools) == 0 {
-		p.l.Info("没有找到任何采集池")
+		p.l.Info("[监控模块] 没有找到任何采集池")
 		return nil
 	}
 
-	// 创建新的配置映射key为ip，val为配置
+	// 创建新的配置映射
 	newConfigMap := make(map[string]string)
+	newHashes := make(map[string]string)
 
 	for _, pool := range pools {
+		currentHash := utils.CalculatePromHash(pool)
+		// 如果缓存中存在该池子的哈希值，并且与当前哈希值相同，则跳过
+		if cachedHash, ok := p.poolHashes[pool.Name]; ok && cachedHash == currentHash {
+			p.l.Debug("[监控模块] 配置未发生变化，跳过", zap.String("池子", pool.Name))
+			continue
+		}
+
 		// 创建基础配置
 		baseConfig, err := p.CreateBasePrometheusConfig(pool)
 		if err != nil {
-			p.l.Error("创建基础 Prometheus 配置失败", zap.Error(err), zap.String("池名", pool.Name))
+			p.l.Error("[监控模块] 创建基础 Prometheus 配置失败",
+				zap.Error(err),
+				zap.String("池子", pool.Name),
+			)
 			continue
 		}
 
 		// 生成采集配置
 		scrapeConfigs := p.GenerateScrapeConfigs(ctx, pool)
 		if len(scrapeConfigs) == 0 {
-			p.l.Debug("没有找到任何采集任务", zap.String("池名", pool.Name))
+			p.l.Debug("[监控模块] 没有找到任何采集任务", zap.String("池子", pool.Name))
 			continue
 		}
 		baseConfig.ScrapeConfigs = scrapeConfigs
 
+		// 为每个实例生成配置
 		for idx, ip := range pool.PrometheusInstances {
-			configCopy := baseConfig // 浅拷贝
+			configCopy := baseConfig
 			// 如果有多个实例，应用哈希分片
 			if len(pool.PrometheusInstances) > 1 {
 				configCopy.ScrapeConfigs = p.ApplyHashMod(scrapeConfigs, len(pool.PrometheusInstances), idx)
@@ -132,33 +145,46 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 			// 序列化配置为 YAML
 			yamlData, err := yaml.Marshal(configCopy)
 			if err != nil {
-				p.l.Error("生成 Prometheus 配置失败", zap.Error(err), zap.String("池名", pool.Name))
+				p.l.Error("[监控模块] 生成 Prometheus 配置失败",
+					zap.Error(err),
+					zap.String("池子", pool.Name),
+				)
 				continue
 			}
 
-			// 写入配置文件
-			filePath := fmt.Sprintf("%s/prometheus_pool_%s_%d.yaml", p.localYamlDir, pool.Name, idx)
-
-			// 创建目录
-			dir := filepath.Dir(filePath)
+			// 写入文件到Pool专属目录
+			dir := fmt.Sprintf("%s/%s", p.localYamlDir, pool.Name)
 			if err := os.MkdirAll(dir, 0755); err != nil {
-				p.l.Error("创建目录失败", zap.Error(err), zap.String("目录路径", dir))
+				p.l.Error("[监控模块] 创建目录失败",
+					zap.Error(err),
+					zap.String("目录路径", dir),
+				)
 				continue
 			}
 
+			// 生成文件路径并写入
+			filePath := fmt.Sprintf("%s/prometheus_pool_%s_%d.yaml", dir, pool.Name, idx)
 			if err := os.WriteFile(filePath, yamlData, 0644); err != nil {
-				p.l.Error("写入 Prometheus 配置文件失败", zap.Error(err), zap.String("文件路径", filePath))
+				p.l.Error("[监控模块] 写入 Prometheus 配置文件失败",
+					zap.Error(err),
+					zap.String("文件路径", filePath),
+				)
 				continue
 			}
 
 			newConfigMap[ip] = string(yamlData)
-			p.l.Debug("成功生成 Prometheus 配置", zap.String("池名", pool.Name), zap.String("IP", ip))
+			newHashes[pool.Name] = currentHash
+			p.l.Debug("[监控模块] 成功生成 Prometheus 配置",
+				zap.String("池子", pool.Name),
+				zap.String("IP", ip),
+			)
 		}
 	}
 
 	// 更新缓存
 	p.mu.Lock()
 	p.PrometheusMainConfigMap = newConfigMap
+	p.poolHashes = newHashes
 	p.mu.Unlock()
 
 	return nil

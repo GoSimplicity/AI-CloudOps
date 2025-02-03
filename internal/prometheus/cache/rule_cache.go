@@ -28,9 +28,12 @@ package cache
 import (
 	"context"
 	"fmt"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+
 	"os"
 	"sync"
+
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"gopkg.in/yaml.v3"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertRuleDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
@@ -39,25 +42,23 @@ import (
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 )
 
 type RuleConfigCache interface {
-	// GetPrometheusAlertRuleConfigYamlByIp 根据IP地址获取Prometheus的告警规则配置YAML
 	GetPrometheusAlertRuleConfigYamlByIp(ip string) string
-	// GenerateAlertRuleConfigYaml 生成并更新所有Prometheus的告警规则配置YAML
 	GenerateAlertRuleConfigYaml(ctx context.Context) error
-	// GeneratePrometheusAlertRuleConfigYamlOnePool 根据单个采集池生成Prometheus的告警规则配置YAML
 	GeneratePrometheusAlertRuleConfigYamlOnePool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string
 }
 
 type ruleConfigCache struct {
-	AlertRuleMap  map[string]string // 存储告警规则
-	mu            sync.RWMutex      // 读写锁，保护缓存数据
-	l             *zap.Logger       // 日志记录器
-	localYamlDir  string            // 本地YAML目录
+
+	AlertRuleMap  map[string]string
+	mu            sync.RWMutex
+	l             *zap.Logger
+	localYamlDir  string
 	scrapePoolDao scrapePoolDao.ScrapePoolDAO
 	alertRuleDao  alertRuleDao.AlertManagerRuleDAO
+	ruleHashes    map[string]string
 }
 
 // RuleGroup 构造Prometheus Rule 规则的结构体
@@ -79,16 +80,18 @@ func NewRuleConfigCache(l *zap.Logger, scrapePoolDao scrapePoolDao.ScrapePoolDAO
 		mu:            sync.RWMutex{},
 		scrapePoolDao: scrapePoolDao,
 		alertRuleDao:  alertRuleDao,
+		ruleHashes:    make(map[string]string),
 	}
 }
 
+// GetPrometheusAlertRuleConfigYamlByIp 根据IP地址获取告警规则配置
 func (r *ruleConfigCache) GetPrometheusAlertRuleConfigYamlByIp(ip string) string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-
 	return r.AlertRuleMap[ip]
 }
 
+// GenerateAlertRuleConfigYaml 生成告警规则配置
 func (r *ruleConfigCache) GenerateAlertRuleConfigYaml(ctx context.Context) error {
 	// 获取支持告警配置的所有采集池
 	pools, err := r.scrapePoolDao.GetMonitorScrapePoolSupportedAlert(ctx)
@@ -98,29 +101,46 @@ func (r *ruleConfigCache) GenerateAlertRuleConfigYaml(ctx context.Context) error
 	}
 
 	if len(pools) == 0 {
-		r.l.Info("没有找到支持告警的采集池")
+
+		r.l.Info("[监控模块] 没有找到支持告警的采集池")
 		return nil
 	}
 
-	ruleConfigMap := make(map[string]string)
+	// 创建新的配置映射
+	newConfigMap := make(map[string]string)
+	newHashes := make(map[string]string)
 
-	// 遍历每个采集池生成对应的规则配置
 	for _, pool := range pools {
+		currentHash := utils.CalculatePromHash(pool)
+		// 如果缓存中存在该池子的哈希值，并且与当前哈希值相同，则跳过
+		if cachedHash, ok := r.ruleHashes[pool.Name]; ok && cachedHash == currentHash {
+			r.l.Debug("[监控模块] 告警规则配置未发生变化，跳过", zap.String("池子", pool.Name))
+			continue
+		}
+
 		oneMap := r.GeneratePrometheusAlertRuleConfigYamlOnePool(ctx, pool)
 		if oneMap != nil {
 			for ip, out := range oneMap {
-				ruleConfigMap[ip] = out
+				newConfigMap[ip] = out
+				newHashes[pool.Name] = currentHash
+				r.l.Debug("[监控模块] 成功生成告警规则配置",
+					zap.String("池子", pool.Name),
+					zap.String("IP", ip),
+				)
 			}
 		}
 	}
 
+	// 更新缓存
 	r.mu.Lock()
-	r.AlertRuleMap = ruleConfigMap
+	r.AlertRuleMap = newConfigMap
+	r.ruleHashes = newHashes
 	r.mu.Unlock()
 
 	return nil
 }
 
+// GeneratePrometheusAlertRuleConfigYamlOnePool 为单个采集池生成告警规则配置
 func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
 	rules, err := r.alertRuleDao.GetMonitorAlertRuleByPoolId(ctx, pool.ID)
 	if err != nil {
@@ -146,20 +166,19 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 			)
 			ft, _ = pm.ParseDuration("5s")
 		}
-		lables := pkg.FromSliceTuMap(rule.Labels)
-		annotations := pkg.FromSliceTuMap(rule.Annotations)
 
 		oneRule := rulefmt.Rule{
-			Alert:       rule.Name,   // 告警名称
-			Expr:        rule.Expr,   // 告警表达式
-			For:         ft,          // 持续时间
-			Labels:      lables,      // 标签组
-			Annotations: annotations, // 注解组
+			Alert:       rule.Name,
+			Expr:        rule.Expr,
+			For:         ft,
+			Labels:      utils.FromSliceTuMap(rule.Labels),
+			Annotations: utils.FromSliceTuMap(rule.Annotations),
 		}
 
 		ruleGroup := RuleGroup{
 			Name:  rule.Name,
-			Rules: []rulefmt.Rule{oneRule}, // 一个规则组可以包含多个规则
+
+			Rules: []rulefmt.Rule{oneRule},
 		}
 		ruleGroups.Groups = append(ruleGroups.Groups, ruleGroup)
 	}
@@ -172,7 +191,8 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 
 	ruleMap := make(map[string]string)
 
-	// 分片逻辑，将规则分配给不同的Prometheus实例，以减少服务器的负载
+
+	// 分片逻辑，将规则分配给不同的Prometheus实例
 	for i, ip := range pool.PrometheusInstances {
 		var myRuleGroups RuleGroups
 
@@ -193,11 +213,18 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 			continue
 		}
 
-		fileName := fmt.Sprintf("%s/prometheus_rule_%s_%s.yml",
-			r.localYamlDir,
-			pool.Name,
-			ip,
-		)
+
+		// 生成文件路径并写入
+		dir := fmt.Sprintf("%s/%s", r.localYamlDir, pool.Name)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			r.l.Error("[监控模块] 创建目录失败",
+				zap.Error(err),
+				zap.String("目录路径", dir),
+			)
+			continue
+		}
+
+		fileName := fmt.Sprintf("%s/prometheus_rule_%s_%s.yml", dir, pool.Name, ip)
 		if err := os.WriteFile(fileName, yamlData, 0644); err != nil {
 			r.l.Error("[监控模块] 写入告警规则文件失败",
 				zap.Error(err),

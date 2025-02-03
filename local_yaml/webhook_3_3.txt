@@ -1,0 +1,1 @@
+http://localhost:8889/api/v1/alerts/receive?alert_send_group=3

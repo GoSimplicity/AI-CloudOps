@@ -162,12 +162,6 @@ func (a *alertManagerRuleService) EnableSwitchMonitorAlertRule(ctx context.Conte
 		return err
 	}
 
-	// 更新缓存
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
-		return err
-	}
-
 	return nil
 }
 
@@ -179,12 +173,6 @@ func (a *alertManagerRuleService) BatchEnableSwitchMonitorAlertRule(ctx context.
 		return err
 	}
 
-	// 更新缓存
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
-		return err
-	}
-
 	return nil
 }
 
@@ -193,12 +181,6 @@ func (a *alertManagerRuleService) DeleteMonitorAlertRule(ctx context.Context, id
 	// 删除告警规则
 	if err := a.dao.DeleteMonitorAlertRule(ctx, id); err != nil {
 		a.l.Error("删除告警规则失败", zap.Error(err))
-		return err
-	}
-
-	// 更新缓存
-	if err := a.cache.MonitorCacheManager(ctx); err != nil {
-		a.l.Error("更新缓存失败", zap.Error(err))
 		return err
 	}
 

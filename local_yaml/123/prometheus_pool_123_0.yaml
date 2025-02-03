@@ -1,0 +1,114 @@
+global:
+    scrape_interval: 10s
+    scrape_timeout: 10s
+alerting:
+    alertmanagers:
+        - follow_redirects: false
+          enable_http2: false
+          api_version: v2
+          static_configs:
+            - targets:
+                - ""
+rule_files:
+    - ""
+scrape_configs:
+    - job_name: "123"
+      honor_timestamps: false
+      track_timestamps_staleness: false
+      scrape_interval: 15s
+      scrape_timeout: 5s
+      metrics_path: /metrics
+      scheme: http
+      enable_compression: false
+      follow_redirects: false
+      enable_http2: false
+      relabel_configs:
+        - source_labels: [__address__]
+          regex: (.*)
+          modulus: 3
+          target_label: __tmp_hash
+          replacement: $1
+          action: hashmod
+        - source_labels: [__tmp_hash]
+          regex: ^0$
+          action: keep
+      http_sd_configs:
+        - follow_redirects: false
+          enable_http2: false
+          refresh_interval: 30s
+          url: http://localhost:8888/api/not_auth/getTreeNodeBindIps?port=9100&leafNodeIds=
+    - job_name: asdf
+      honor_timestamps: false
+      track_timestamps_staleness: false
+      scrape_interval: 15s
+      scrape_timeout: 5s
+      metrics_path: /metrics
+      scheme: http
+      enable_compression: false
+      follow_redirects: false
+      enable_http2: false
+      relabel_configs:
+        - source_labels: [__address__]
+          regex: (.*)
+          modulus: 3
+          target_label: __tmp_hash
+          replacement: $1
+          action: hashmod
+        - source_labels: [__tmp_hash]
+          regex: ^0$
+          action: keep
+      http_sd_configs:
+        - follow_redirects: false
+          enable_http2: false
+          refresh_interval: 30s
+          url: http://localhost:8888/api/not_auth/getTreeNodeBindIps?port=9100&leafNodeIds=
+    - job_name: "12311"
+      honor_timestamps: false
+      track_timestamps_staleness: false
+      scrape_interval: 15s
+      scrape_timeout: 5s
+      metrics_path: /metrics
+      scheme: http
+      enable_compression: false
+      follow_redirects: false
+      enable_http2: false
+      relabel_configs:
+        - source_labels: [__address__]
+          regex: (.*)
+          modulus: 3
+          target_label: __tmp_hash
+          replacement: $1
+          action: hashmod
+        - source_labels: [__tmp_hash]
+          regex: ^0$
+          action: keep
+      http_sd_configs:
+        - follow_redirects: false
+          enable_http2: false
+          refresh_interval: 30s
+          url: http://localhost:8888/api/not_auth/getTreeNodeBindIps?port=9100&leafNodeIds=
+    - job_name: f f f
+      honor_timestamps: false
+      track_timestamps_staleness: false
+      scrape_interval: 15s
+      scrape_timeout: 5s
+      metrics_path: /metrics
+      scheme: http
+      enable_compression: false
+      follow_redirects: false
+      enable_http2: false
+      relabel_configs:
+        - source_labels: [__address__]
+          regex: (.*)
+          modulus: 3
+          target_label: __tmp_hash
+          replacement: $1
+          action: hashmod
+        - source_labels: [__tmp_hash]
+          regex: ^0$
+          action: keep
+      http_sd_configs:
+        - follow_redirects: false
+          enable_http2: false
+          refresh_interval: 30s
+          url: http://localhost:8888/api/not_auth/getTreeNodeBindIps?port=9100&leafNodeIds=
