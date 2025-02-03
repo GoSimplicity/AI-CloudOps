@@ -98,6 +98,7 @@ func (r *recordConfigCache) GenerateRecordRuleConfigYaml(ctx context.Context) er
 	}
 
 	if len(pools) == 0 {
+
 		r.l.Info("[监控模块] 没有找到支持预聚合的采集池")
 		return nil
 	}
@@ -179,6 +180,7 @@ func (r *recordConfigCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx co
 
 	numInstances := len(pool.PrometheusInstances)
 	if numInstances == 0 {
+
 		r.l.Warn("[监控模块] 采集池中没有Prometheus实例",
 			zap.String("池子", pool.Name))
 		return nil
@@ -200,6 +202,7 @@ func (r *recordConfigCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx co
 			r.l.Error("[监控模块] 序列化预聚合规则YAML失败",
 				zap.Error(err),
 				zap.String("池子", pool.Name),
+
 				zap.String("IP", ip))
 			continue
 		}

@@ -28,6 +28,7 @@ package cache
 import (
 	"context"
 	"fmt"
+
 	"os"
 	"sync"
 
@@ -50,6 +51,7 @@ type RuleConfigCache interface {
 }
 
 type ruleConfigCache struct {
+
 	AlertRuleMap  map[string]string
 	mu            sync.RWMutex
 	l             *zap.Logger
@@ -99,6 +101,7 @@ func (r *ruleConfigCache) GenerateAlertRuleConfigYaml(ctx context.Context) error
 	}
 
 	if len(pools) == 0 {
+
 		r.l.Info("[监控模块] 没有找到支持告警的采集池")
 		return nil
 	}
@@ -174,6 +177,7 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 
 		ruleGroup := RuleGroup{
 			Name:  rule.Name,
+
 			Rules: []rulefmt.Rule{oneRule},
 		}
 		ruleGroups.Groups = append(ruleGroups.Groups, ruleGroup)
@@ -186,6 +190,7 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 	}
 
 	ruleMap := make(map[string]string)
+
 
 	// 分片逻辑，将规则分配给不同的Prometheus实例
 	for i, ip := range pool.PrometheusInstances {
@@ -207,6 +212,7 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 			)
 			continue
 		}
+
 
 		// 生成文件路径并写入
 		dir := fmt.Sprintf("%s/%s", r.localYamlDir, pool.Name)

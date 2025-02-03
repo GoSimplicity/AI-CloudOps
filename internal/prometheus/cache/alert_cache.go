@@ -107,7 +107,6 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) e
 			a.l.Debug("[监控模块]配置未发生变化，跳过", zap.String("池子", pool.Name))
 			continue
 		}
-
 		// 生成单个AlertManager池的主配置
 		oneConfig := a.GenerateAlertManagerMainConfigOnePool(pool)
 

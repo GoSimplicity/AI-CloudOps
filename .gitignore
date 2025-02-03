@@ -23,6 +23,7 @@ go.work.sum
 local_yaml
 bin
 
+bin
 data/mysql
 data/redis
 data/nginx/log
