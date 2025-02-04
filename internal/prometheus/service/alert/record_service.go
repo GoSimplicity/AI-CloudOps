@@ -35,6 +35,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	"github.com/prometheus/prometheus/promql/parser"
 	"go.uber.org/zap"
 )
 
@@ -120,6 +121,14 @@ func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context,
 		return errors.New("记录规则已存在")
 	}
 
+	// 如果存在表达式，则检查 PromQL 语法是否合法
+	if monitorRecordRule.Expr != "" {
+		if _, err := parser.ParseExpr(monitorRecordRule.Expr); err != nil {
+			a.l.Error("创建记录规则失败：PromQL 语法错误", zap.Error(err))
+			return fmt.Errorf("PromQL 语法错误: %v", err)
+		}
+	}
+
 	// 创建记录规则
 	if err := a.dao.CreateMonitorRecordRule(ctx, monitorRecordRule); err != nil {
 		a.l.Error("创建记录规则失败", zap.Error(err))
@@ -146,6 +155,14 @@ func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context,
 
 		if exists {
 			return errors.New("记录规则名称已存在")
+		}
+	}
+
+	// 如果存在表达式，则检查 PromQL 语法是否合法
+	if monitorRecordRule.Expr != "" {
+		if _, err := parser.ParseExpr(monitorRecordRule.Expr); err != nil {
+			a.l.Error("更新记录规则失败：PromQL 语法错误", zap.Error(err))
+			return fmt.Errorf("PromQL 语法错误: %v", err)
 		}
 	}
 
