@@ -53,25 +53,25 @@ type AlertConfigCache interface {
 
 type alertConfigCache struct {
 	AlertManagerMainConfigMap map[string]string
-	l                        *zap.Logger
-	mu                       sync.RWMutex
-	localYamlDir             string
-	alertWebhookAddr         string
-	alertPoolDao             alertPoolDao.AlertManagerPoolDAO
-	alertSendDao             alertPoolDao.AlertManagerSendDAO
-	poolHashes               map[string]string
+	l                         *zap.Logger
+	mu                        sync.RWMutex
+	localYamlDir              string
+	alertWebhookAddr          string
+	alertPoolDao              alertPoolDao.AlertManagerPoolDAO
+	alertSendDao              alertPoolDao.AlertManagerSendDAO
+	poolHashes                map[string]string
 }
 
 func NewAlertConfigCache(l *zap.Logger, alertPoolDao alertPoolDao.AlertManagerPoolDAO, alertSendDao alertPoolDao.AlertManagerSendDAO) AlertConfigCache {
 	return &alertConfigCache{
 		AlertManagerMainConfigMap: make(map[string]string),
-		l:                        l,
-		localYamlDir:             viper.GetString("prometheus.local_yaml_dir"),
-		alertWebhookAddr:         viper.GetString("prometheus.alert_webhook_addr"),
-		mu:                       sync.RWMutex{},
-		alertPoolDao:             alertPoolDao,
-		alertSendDao:             alertSendDao,
-		poolHashes:               make(map[string]string),
+		l:                         l,
+		localYamlDir:              viper.GetString("prometheus.local_yaml_dir"),
+		alertWebhookAddr:          viper.GetString("prometheus.alert_webhook_addr"),
+		mu:                        sync.RWMutex{},
+		alertPoolDao:              alertPoolDao,
+		alertSendDao:              alertSendDao,
+		poolHashes:                make(map[string]string),
 	}
 }
 
@@ -84,7 +84,6 @@ func (a *alertConfigCache) GetAlertManagerMainConfigYamlByIP(ip string) string {
 
 // GenerateAlertManagerMainConfig 生成所有AlertManager主配置文件
 func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) error {
-	// 从数据库中获取所有AlertManager采集池
 	pools, err := a.alertPoolDao.GetAllAlertManagerPools(ctx)
 	if err != nil {
 		a.l.Error("[监控模块]扫描数据库中的AlertManager集群失败", zap.Error(err))
@@ -96,15 +95,19 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) e
 		return nil
 	}
 
-	// 创建新的配置映射
-	newConfigMap := make(map[string]string)
-	newHashes := make(map[string]string)
+	a.mu.RLock()
+	tempConfigMap := utils.CopyMap(a.AlertManagerMainConfigMap)
+	tempPoolHashes := utils.CopyMap(a.poolHashes)
+	a.mu.RUnlock()
+
+	validIPs := make(map[string]struct{})
 
 	for _, pool := range pools {
 		currentHash := utils.CalculateAlertHash(pool)
-		// 如果缓存中存在该池子的哈希值，并且与当前哈希值相同，则跳过
-		if cachedHash, ok := a.poolHashes[pool.Name]; ok && cachedHash == currentHash {
-			a.l.Debug("[监控模块]配置未发生变化，跳过", zap.String("池子", pool.Name))
+		if cachedHash, ok := tempPoolHashes[pool.Name]; ok && cachedHash == currentHash {
+			for _, ip := range pool.AlertManagerInstances {
+				validIPs[ip] = struct{}{}
+			}
 			continue
 		}
 		// 生成单个AlertManager池的主配置
@@ -135,6 +138,7 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) e
 			continue
 		}
 
+		success := true
 		// 为每个实例生成配置
 		for idx, ip := range pool.AlertManagerInstances {
 			// 写入文件到Pool专属目录
@@ -144,32 +148,44 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) e
 					zap.Error(err),
 					zap.String("目录路径", dir),
 				)
-				continue
+				success = false
+				break
 			}
 
 			// 生成文件路径并写入
 			filePath := fmt.Sprintf("%s/alertmanager_pool_%s_%d.yaml", dir, pool.Name, idx)
-			if err := os.WriteFile(filePath, yamlData, 0644); err != nil {
+			if err := utils.AtomicWriteFile(filePath, yamlData); err != nil {
 				a.l.Error("[监控模块]写入AlertManager配置文件失败",
 					zap.Error(err),
 					zap.String("文件路径", filePath),
 				)
-				continue
+				success = false
+				break
 			}
 
-			newConfigMap[ip] = string(yamlData)
-			newHashes[pool.Name] = currentHash
-			a.l.Debug("[监控模块]成功生成AlertManager配置",
-				zap.String("池子", pool.Name),
-				zap.String("IP", ip),
-			)
+			tempConfigMap[ip] = string(yamlData)
+			validIPs[ip] = struct{}{}
+		}
+
+		if success {
+			tempPoolHashes[pool.Name] = currentHash
+		} else {
+			// 回滚该池子的哈希，下次重试
+			delete(tempPoolHashes, pool.Name)
 		}
 	}
 
-	// 更新缓存
+	// 清理无效的IP配置
+	for ip := range tempConfigMap {
+		if _, ok := validIPs[ip]; !ok {
+			delete(tempConfigMap, ip)
+		}
+	}
+
+	// 原子性更新配置和哈希
 	a.mu.Lock()
-	a.AlertManagerMainConfigMap = newConfigMap
-	a.poolHashes = newHashes
+	a.AlertManagerMainConfigMap = tempConfigMap
+	a.poolHashes = tempPoolHashes
 	a.mu.Unlock()
 
 	return nil

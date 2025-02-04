@@ -60,7 +60,7 @@ func (s *TimedScheduler) RegisterTimedTasks() error {
 	// Prometheus 缓存刷新任务 - 每10秒
 	if err := s.registerTask(
 		RefreshPrometheusCacheTask,
-		"@every 10s",
+		"@every 30s",
 	); err != nil {
 		return err
 	}
