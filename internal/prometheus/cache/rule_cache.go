@@ -106,35 +106,45 @@ func (r *ruleConfigCache) GenerateAlertRuleConfigYaml(ctx context.Context) error
 		return nil
 	}
 
-	// 创建新的配置映射
-	newConfigMap := make(map[string]string)
-	newHashes := make(map[string]string)
+	r.mu.RLock()
+	// 创建当前配置的副本作为临时配置
+	tempConfigMap := utils.CopyMap(r.AlertRuleMap)
+	tempPoolHashes := utils.CopyMap(r.ruleHashes)
+	r.mu.RUnlock()
+
+	validIPs := make(map[string]struct{})     // 记录当前所有有效的实例IP
+	updatedPools := make(map[string]struct{}) // 记录需要清理旧IP的池子
 
 	for _, pool := range pools {
 		currentHash := utils.CalculatePromHash(pool)
-		// 如果缓存中存在该池子的哈希值，并且与当前哈希值相同，则跳过
-		if cachedHash, ok := r.ruleHashes[pool.Name]; ok && cachedHash == currentHash {
-			r.l.Debug("[监控模块] 告警规则配置未发生变化，跳过", zap.String("池子", pool.Name))
+		if cachedHash, ok := tempPoolHashes[pool.Name]; ok && cachedHash == currentHash {
+			// 哈希未变化，记录有效IP并跳过
+			for _, ip := range pool.PrometheusInstances {
+				validIPs[ip] = struct{}{}
+			}
 			continue
 		}
+
+		// 标记该池子需要清理旧IP
+		updatedPools[pool.Name] = struct{}{}
 
 		oneMap := r.GeneratePrometheusAlertRuleConfigYamlOnePool(ctx, pool)
 		if oneMap != nil {
 			for ip, out := range oneMap {
-				newConfigMap[ip] = out
-				newHashes[pool.Name] = currentHash
-				r.l.Debug("[监控模块] 成功生成告警规则配置",
-					zap.String("池子", pool.Name),
-					zap.String("IP", ip),
-				)
+				tempConfigMap[ip] = out
+				validIPs[ip] = struct{}{}
 			}
+			tempPoolHashes[pool.Name] = currentHash
 		}
 	}
 
-	// 更新缓存
+	// 清理被修改池子的旧IP
+	utils.CleanupOldIPs(tempConfigMap, updatedPools, validIPs)
+
+	// 原子性更新配置和哈希
 	r.mu.Lock()
-	r.AlertRuleMap = newConfigMap
-	r.ruleHashes = newHashes
+	r.AlertRuleMap = tempConfigMap
+	r.ruleHashes = tempPoolHashes
 	r.mu.Unlock()
 
 	return nil
@@ -190,6 +200,7 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 	}
 
 	ruleMap := make(map[string]string)
+	success := true
 
 
 	// 分片逻辑，将规则分配给不同的Prometheus实例
@@ -210,7 +221,8 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 				zap.String("池子", pool.Name),
 				zap.String("IP", ip),
 			)
-			continue
+			success = false
+			break
 		}
 
 
@@ -221,19 +233,27 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 				zap.Error(err),
 				zap.String("目录路径", dir),
 			)
-			continue
+			success = false
+			break
 		}
 
 		fileName := fmt.Sprintf("%s/prometheus_rule_%s_%s.yml", dir, pool.Name, ip)
-		if err := os.WriteFile(fileName, yamlData, 0644); err != nil {
+		if err := utils.AtomicWriteFile(fileName, yamlData); err != nil {
 			r.l.Error("[监控模块] 写入告警规则文件失败",
 				zap.Error(err),
 				zap.String("文件路径", fileName),
 			)
-			continue
+			success = false
+			break
 		}
 
 		ruleMap[ip] = string(yamlData)
+	}
+
+	if !success {
+		// 失败时删除可能已写入的临时文件
+		utils.CleanupFailedPool(r.localYamlDir, pool, len(pool.PrometheusInstances))
+		return nil
 	}
 
 	return ruleMap

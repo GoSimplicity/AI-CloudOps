@@ -33,8 +33,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"slices"
 	"sort"
 	"strings"
@@ -470,4 +472,53 @@ func CalculateAlertHash(pool *model.MonitorAlertManagerPool) string {
 	hash := sha256.New()
 	hash.Write(data)
 	return hex.EncodeToString(hash.Sum(nil))
+}
+
+// 深拷贝map
+func CopyMap[K comparable, V any](src map[K]V) map[K]V {
+	dst := make(map[K]V, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+// 清理失败池子的临时文件
+func CleanupFailedPool(localYamlDir string, pool *model.MonitorScrapePool, instances int) {
+	for i := 0; i < instances; i++ {
+		filePath := fmt.Sprintf("%s/%s/prometheus_pool_%s_%d.yaml",
+			localYamlDir, pool.Name, pool.Name, i)
+		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+			log.Println("清理临时文件失败", filePath, err)
+		}
+	}
+}
+
+// 清理已更新池子的旧IP
+func CleanupOldIPs(tempConfigMap map[string]string,
+	updatedPools map[string]struct{}, validIPs map[string]struct{}) {
+
+	for ip := range tempConfigMap {
+		if _, ok := validIPs[ip]; !ok {
+			// 检查该IP是否属于被修改的池子
+			for poolName := range updatedPools {
+				if strings.HasPrefix(ip, poolName+"_") {
+					delete(tempConfigMap, ip)
+					break
+				}
+			}
+		}
+	}
+}
+
+// 原子性写入文件
+func AtomicWriteFile(filePath string, data []byte) error {
+	tmpFilePath := filePath + ".tmp"
+	if err := os.WriteFile(tmpFilePath, data, 0644); err != nil {
+		return fmt.Errorf("写入临时文件失败: %w", err)
+	}
+	if err := os.Rename(tmpFilePath, filePath); err != nil {
+		return fmt.Errorf("重命名临时文件失败: %w", err)
+	}
+	return nil
 }

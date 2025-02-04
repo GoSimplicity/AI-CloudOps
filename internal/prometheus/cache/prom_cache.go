@@ -92,99 +92,98 @@ func (p *promConfigCache) GetPrometheusMainConfigByIP(ip string) string {
 
 // GeneratePrometheusMainConfig 生成Prometheus主配置
 func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) error {
-	// 获取所有采集池
 	pools, err := p.scrapePoolDao.GetAllMonitorScrapePool(ctx)
 	if err != nil {
-		p.l.Error("[监控模块] 获取采集池失败", zap.Error(err))
+		p.l.Error("获取采集池失败", zap.Error(err))
 		return err
 	}
 
-	if len(pools) == 0 {
-		p.l.Info("[监控模块] 没有找到任何采集池")
-		return nil
-	}
+	p.mu.RLock()
+	tempConfigMap := utils.CopyMap(p.PrometheusMainConfigMap)
+	tempPoolHashes := utils.CopyMap(p.poolHashes)
+	p.mu.RUnlock()
 
-	// 创建新的配置映射
-	newConfigMap := make(map[string]string)
-	newHashes := make(map[string]string)
+	validIPs := make(map[string]struct{})
+	updatedPools := make(map[string]struct{}) // 记录需要清理旧IP的池子
 
 	for _, pool := range pools {
 		currentHash := utils.CalculatePromHash(pool)
-		// 如果缓存中存在该池子的哈希值，并且与当前哈希值相同，则跳过
-		if cachedHash, ok := p.poolHashes[pool.Name]; ok && cachedHash == currentHash {
-			p.l.Debug("[监控模块] 配置未发生变化，跳过", zap.String("池子", pool.Name))
+		if cachedHash, ok := tempPoolHashes[pool.Name]; ok && cachedHash == currentHash {
+			for _, ip := range pool.PrometheusInstances {
+				validIPs[ip] = struct{}{}
+			}
 			continue
 		}
 
-		// 创建基础配置
+		// 标记该池子需要清理旧IP
+		updatedPools[pool.Name] = struct{}{}
+
 		baseConfig, err := p.CreateBasePrometheusConfig(pool)
 		if err != nil {
-			p.l.Error("[监控模块] 创建基础 Prometheus 配置失败",
-				zap.Error(err),
-				zap.String("池子", pool.Name),
-			)
+			p.l.Error("创建基础配置失败", zap.String("池子", pool.Name), zap.Error(err))
 			continue
 		}
 
-		// 生成采集配置
 		scrapeConfigs := p.GenerateScrapeConfigs(ctx, pool)
 		if len(scrapeConfigs) == 0 {
-			p.l.Debug("[监控模块] 没有找到任何采集任务", zap.String("池子", pool.Name))
+			p.l.Info("未生成采集配置", zap.String("池子", pool.Name))
 			continue
 		}
 		baseConfig.ScrapeConfigs = scrapeConfigs
 
-		// 为每个实例生成配置
+		instanceConfigs := make(map[string]string) // 暂存实例配置
+		success := true
+
 		for idx, ip := range pool.PrometheusInstances {
 			configCopy := baseConfig
-			// 如果有多个实例，应用哈希分片
 			if len(pool.PrometheusInstances) > 1 {
 				configCopy.ScrapeConfigs = p.ApplyHashMod(scrapeConfigs, len(pool.PrometheusInstances), idx)
 			}
 
-			// 序列化配置为 YAML
 			yamlData, err := yaml.Marshal(configCopy)
 			if err != nil {
-				p.l.Error("[监控模块] 生成 Prometheus 配置失败",
-					zap.Error(err),
-					zap.String("池子", pool.Name),
-				)
-				continue
+				p.l.Error("配置序列化失败", zap.String("池子", pool.Name), zap.Error(err))
+				success = false
+				break
 			}
 
-			// 写入文件到Pool专属目录
 			dir := fmt.Sprintf("%s/%s", p.localYamlDir, pool.Name)
 			if err := os.MkdirAll(dir, 0755); err != nil {
-				p.l.Error("[监控模块] 创建目录失败",
-					zap.Error(err),
-					zap.String("目录路径", dir),
-				)
-				continue
+				p.l.Error("创建目录失败", zap.String("路径", dir), zap.Error(err))
+				success = false
+				break
 			}
 
-			// 生成文件路径并写入
 			filePath := fmt.Sprintf("%s/prometheus_pool_%s_%d.yaml", dir, pool.Name, idx)
-			if err := os.WriteFile(filePath, yamlData, 0644); err != nil {
-				p.l.Error("[监控模块] 写入 Prometheus 配置文件失败",
-					zap.Error(err),
-					zap.String("文件路径", filePath),
-				)
-				continue
+			if err := utils.AtomicWriteFile(filePath, yamlData); err != nil { // 使用原子写入
+				p.l.Error("写入配置文件失败", zap.String("路径", filePath), zap.Error(err))
+				success = false
+				break
 			}
 
-			newConfigMap[ip] = string(yamlData)
-			newHashes[pool.Name] = currentHash
-			p.l.Debug("[监控模块] 成功生成 Prometheus 配置",
-				zap.String("池子", pool.Name),
-				zap.String("IP", ip),
-			)
+			instanceConfigs[ip] = string(yamlData) // 暂存到内存
+		}
+
+		if success {
+			// 原子性更新该池子的所有实例
+			for ip, cfg := range instanceConfigs {
+				tempConfigMap[ip] = cfg
+				validIPs[ip] = struct{}{}
+			}
+			tempPoolHashes[pool.Name] = currentHash
+		} else {
+			// 失败时删除可能已写入的临时文件
+			utils.CleanupFailedPool(p.localYamlDir, pool, len(pool.PrometheusInstances))
 		}
 	}
 
-	// 更新缓存
+	// 清理被修改池子的旧IP
+	utils.CleanupOldIPs(tempConfigMap, updatedPools, validIPs)
+
+	// 原子性更新全局配置
 	p.mu.Lock()
-	p.PrometheusMainConfigMap = newConfigMap
-	p.poolHashes = newHashes
+	p.PrometheusMainConfigMap = tempConfigMap
+	p.poolHashes = tempPoolHashes
 	p.mu.Unlock()
 
 	return nil
