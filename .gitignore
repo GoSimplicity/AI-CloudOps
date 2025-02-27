@@ -20,7 +20,6 @@ terraform
 # Go workspace file
 go.work
 go.work.sum
-local_yaml
 bin
 
 bin
@@ -62,7 +61,7 @@ package-lock.json
 .env.local
 .env.*.local
 .eslintcache
-
+local_yaml
 logs
 *.log
 npm-debug.log*
