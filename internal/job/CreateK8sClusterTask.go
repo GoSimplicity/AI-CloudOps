@@ -120,7 +120,7 @@ func (k *CreateK8sClusterTask) ProcessTask(ctx context.Context, t *asynq.Task) e
 }
 
 // processClusterConfig 处理集群配置
-func (k *CreateK8sClusterTask) processClusterConfig(ctx context.Context, cluster *model.K8sCluster, retryCount int, initTimeout time.Duration, maxConcurrent int) error {
+func (k *CreateK8sClusterTask) processClusterConfig(ctx context.Context, cluster *model.K8sCluster, _ int, initTimeout time.Duration, maxConcurrent int) error {
 	ctx, cancel := context.WithTimeout(ctx, initTimeout)
 	defer cancel()
 
