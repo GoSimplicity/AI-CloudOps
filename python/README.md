@@ -168,7 +168,7 @@ python/
 ---
 
 ## 如何运行
-
+推荐python版本：Python 3.11.11
 1. 安装依赖：
    ```bash
    pip install -r requirements.txt
