@@ -73,7 +73,9 @@ vite.config.mts.*
 vite.config.mjs.*
 vite.config.js.*
 vite.config.ts.*
-
+__pycache__
+venv
+.venv
 # Editor directories and files
 .idea
 # .vscode
