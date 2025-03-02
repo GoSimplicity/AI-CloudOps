@@ -1082,3 +1082,80 @@ func BatchRestartK8sInstance(ctx context.Context, deploymentRequests []*model.K8
 	logger.Info("批量重启 Kubernetes 实例完成")
 	return nil
 }
+
+// ContainerInfo 结构体，存储容器的信息
+type ContainerInfo struct {
+	Name  string `json:"name"`
+	Image string `json:"image"`
+	Ports []int  `json:"ports"`
+}
+
+// K8sInstance 结构体，存储实例的信息，包括 Deployment 和相关容器
+type K8sInstanceReply struct {
+	Name       string          `json:"name"`
+	Status     string          `json:"status"`
+	Replicas   int32           `json:"replicas"`
+	Containers []ContainerInfo `json:"containers"`
+}
+
+// getDeploymentsByAppName 获取 Deployment 及其容器信息，支持 ClusterId
+func GetDeploymentsByAppName(ctx context.Context, clusterId int, appName string, client client.K8sClient, logger *zap.Logger) ([]K8sInstanceReply, error) {
+	// 获取指定 ClusterId 的 Kubernetes 客户端
+	kubeClient, err := GetKubeClient(clusterId, client, logger)
+	if err != nil {
+		logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	deploymentsClient := kubeClient.AppsV1().Deployments("default") // 假设默认 namespace 是 "default"
+
+	// 按应用名称查找 Deployment
+	deploymentsList, err := deploymentsClient.List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("app=%s", appName),
+	})
+	if err != nil {
+		logger.Error("获取 Deployments 失败", zap.Error(err))
+		return nil, fmt.Errorf("could not list deployments: %w", err)
+	}
+
+	var instances []K8sInstanceReply
+	for _, deployment := range deploymentsList.Items {
+		// 获取 Deployment 的状态信息
+		instance := K8sInstanceReply{
+			Name:     deployment.Name,
+			Status:   string(deployment.Status.Conditions[0].Type),
+			Replicas: *deployment.Spec.Replicas,
+		}
+
+		// 获取 Deployment 关联的 Pod 以获取容器信息
+		podsClient := kubeClient.CoreV1().Pods("default")
+		podList, err := podsClient.List(ctx, metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("app=%s", appName),
+		})
+		if err != nil {
+			logger.Error("获取 Pods 失败", zap.Error(err))
+			return nil, fmt.Errorf("could not list pods: %w", err)
+		}
+
+		// 提取容器信息
+		for _, pod := range podList.Items {
+			for _, container := range pod.Spec.Containers {
+				var ports []int
+				for _, port := range container.Ports {
+					ports = append(ports, int(port.ContainerPort))
+				}
+
+				instance.Containers = append(instance.Containers, ContainerInfo{
+					Name:  container.Name,
+					Image: container.Image,
+					Ports: ports,
+				})
+			}
+			break // 只取第一个 Pod 的容器信息（假设所有 Pods 配置一致）
+		}
+
+		instances = append(instances, instance)
+	}
+
+	return instances, nil
+}
