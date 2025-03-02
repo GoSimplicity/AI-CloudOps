@@ -12,6 +12,7 @@ import (
 
 type AppService interface {
 	CreateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
+	UpdateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
 }
 type appService struct {
 	dao    admin.ClusterDAO
@@ -51,6 +52,32 @@ func (a *appService) CreateInstanceOne(ctx context.Context, instance *model.K8sI
 	err = pkg.CreateService(ctx, svcRequest, a.client, a.l)
 	if err != nil {
 		return fmt.Errorf("failed to create Service: %w", err)
+	}
+	return nil
+}
+
+func (a *appService) UpdateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error {
+	// 1.更新deployment请求参数
+	deploymentRequest := &model.K8sDeploymentRequest{
+		ClusterId:       instance.ClusterId,
+		Namespace:       instance.Namespace,
+		DeploymentNames: instance.DeploymentNames,
+		DeploymentYaml:  instance.DeploymentYaml,
+	}
+	err := pkg.UpdateDeployment(ctx, deploymentRequest, a.client, a.l)
+	if err != nil {
+		return fmt.Errorf("failed to update Deployment: %w", err)
+	}
+	// 2.更新service请求参数
+	svcRequest := &model.K8sServiceRequest{
+		ClusterId:    instance.ClusterId,
+		Namespace:    instance.Namespace,
+		ServiceNames: instance.ServiceNames,
+		ServiceYaml:  instance.ServiceYaml,
+	}
+	err = pkg.UpdateService(ctx, svcRequest, a.client, a.l)
+	if err != nil {
+		return fmt.Errorf("failed to update Service: %w", err)
 	}
 	return nil
 }

@@ -881,3 +881,80 @@ func CreateService(ctx context.Context, serviceRequest *model.K8sServiceRequest,
 	logger.Info("Service 创建成功", zap.String("serviceName", serviceRequest.ServiceYaml.Name))
 	return nil
 }
+
+// UpdateDeployment 更新或创建 Deployment
+func UpdateDeployment(ctx context.Context, deploymentRequest *model.K8sDeploymentRequest, client client.K8sClient, logger *zap.Logger) error {
+	// 获取 Kubernetes 客户端
+	kubeClient, err := GetKubeClient(deploymentRequest.ClusterId, client, logger)
+	if err != nil {
+		logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	if deploymentRequest.DeploymentYaml == nil {
+		return fmt.Errorf("deployment_yaml is required")
+	}
+
+	deploymentsClient := kubeClient.AppsV1().Deployments(deploymentRequest.Namespace)
+	existingDeployment, err := deploymentsClient.Get(ctx, deploymentRequest.DeploymentYaml.Name, metav1.GetOptions{})
+
+	if err == nil {
+		// Deployment 存在，执行更新
+		deploymentRequest.DeploymentYaml.ResourceVersion = existingDeployment.ResourceVersion // 重要：保持资源版本
+		_, err = deploymentsClient.Update(ctx, deploymentRequest.DeploymentYaml, metav1.UpdateOptions{})
+		if err != nil {
+			logger.Error("更新 Deployment 失败", zap.Error(err))
+			return fmt.Errorf("failed to update Deployment: %w", err)
+		}
+		logger.Info("Deployment 更新成功", zap.String("name", deploymentRequest.DeploymentYaml.Name))
+	} else {
+		// Deployment 不存在，执行创建
+		_, err = deploymentsClient.Create(ctx, deploymentRequest.DeploymentYaml, metav1.CreateOptions{})
+		if err != nil {
+			logger.Error("创建 Deployment 失败", zap.Error(err))
+			return fmt.Errorf("failed to create Deployment: %w", err)
+		}
+		logger.Info("Deployment 创建成功", zap.String("name", deploymentRequest.DeploymentYaml.Name))
+	}
+
+	return nil
+}
+
+// UpdateService 更新或创建 Service
+func UpdateService(ctx context.Context, serviceRequest *model.K8sServiceRequest, client client.K8sClient, logger *zap.Logger) error {
+
+	// 获取 Kubernetes 客户端
+	kubeClient, err := GetKubeClient(serviceRequest.ClusterId, client, logger)
+	if err != nil {
+		logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	if serviceRequest.ServiceYaml == nil {
+		return fmt.Errorf("service_yaml is required")
+	}
+
+	servicesClient := kubeClient.CoreV1().Services(serviceRequest.Namespace)
+	existingService, err := servicesClient.Get(ctx, serviceRequest.ServiceYaml.Name, metav1.GetOptions{})
+
+	if err == nil {
+		// Service 存在，执行更新
+		serviceRequest.ServiceYaml.ResourceVersion = existingService.ResourceVersion // 重要：保持资源版本
+		_, err = servicesClient.Update(ctx, serviceRequest.ServiceYaml, metav1.UpdateOptions{})
+		if err != nil {
+			logger.Error("更新 Service 失败", zap.Error(err))
+			return fmt.Errorf("failed to update Service: %w", err)
+		}
+		logger.Info("Service 更新成功", zap.String("name", serviceRequest.ServiceYaml.Name))
+	} else {
+		// Service 不存在，执行创建
+		_, err = servicesClient.Create(ctx, serviceRequest.ServiceYaml, metav1.CreateOptions{})
+		if err != nil {
+			logger.Error("创建 Service 失败", zap.Error(err))
+			return fmt.Errorf("failed to create Service: %w", err)
+		}
+		logger.Info("Service 创建成功", zap.String("name", serviceRequest.ServiceYaml.Name))
+	}
+
+	return nil
+}
