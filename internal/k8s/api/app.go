@@ -26,7 +26,7 @@
 package api
 
 import (
-	admin2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
+	user2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/uesr"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
@@ -35,10 +35,10 @@ import (
 
 type K8sAppHandler struct {
 	l          *zap.Logger
-	appService admin2.AppService
+	appService user2.AppService
 }
 
-func NewK8sAppHandler(l *zap.Logger, appService admin2.AppService) *K8sAppHandler {
+func NewK8sAppHandler(l *zap.Logger, appService user2.AppService) *K8sAppHandler {
 	return &K8sAppHandler{
 		l:          l,
 		appService: appService,
