@@ -38,6 +38,7 @@ services:
 
 networks:
   cloudOps_net:
+    external: true
     driver: bridge
     ipam:
       config:

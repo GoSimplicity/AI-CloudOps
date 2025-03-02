@@ -40,12 +40,13 @@ services:
       TZ: Asia/Shanghai
     volumes:
       - ./data/redis/data:/data:rw
+    command: ["redis-server", "--requirepass", "v6SxhWHyZC7S"]
     restart: always
     networks:
       - cloudOps_net
-
 networks:
   cloudOps_net:
+    external: true
     driver: bridge
     ipam:
       config:

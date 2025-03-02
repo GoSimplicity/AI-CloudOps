@@ -349,6 +349,16 @@ type TaintK8sNodesRequest struct {
 	TaintYaml string `json:"taint_yaml,omitempty"` // 可选的 Taint YAML 字符串，用于验证或其他用途
 }
 
+// 创建K8sInstance请求
+type K8sInstanceRequest struct {
+	ClusterId       int                `json:"cluster_id" binding:"required"` // 集群id，必填
+	Namespace       string             `json:"namespace"`                     // 命名空间，必填
+	ServiceNames    []string           `json:"service_names"`                 // Service 名称，可选
+	ServiceYaml     *core.Service      `json:"service_yaml"`                  // Service 对象, 可选
+	DeploymentNames []string           `json:"deployment_names"`              // Deployment 名称，可选
+	DeploymentYaml  *appsv1.Deployment `json:"deployment_yaml"`               // Deployment 对象, 可选
+}
+
 // OneEvent 单个事件的模型
 type OneEvent struct {
 	Type      string `json:"type"`       // 事件类型，例如 "Normal", "Warning"
