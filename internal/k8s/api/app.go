@@ -132,7 +132,10 @@ func (k *K8sAppHandler) BatchDeleteK8sInstance(ctx *gin.Context) {
 
 // BatchRestartK8sInstance 批量重启 Kubernetes 实例
 func (k *K8sAppHandler) BatchRestartK8sInstance(ctx *gin.Context) {
-	// TODO: 实现批量重启 Kubernetes 实例的逻辑
+	var req []*model.K8sInstanceRequest
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.appService.BatchRestartInstance(ctx, req)
+	})
 }
 
 // GetK8sInstanceByApp 根据应用获取 Kubernetes 实例

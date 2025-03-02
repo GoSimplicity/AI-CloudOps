@@ -14,6 +14,7 @@ type AppService interface {
 	CreateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
 	UpdateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
 	BatchDeleteInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
+	BatchRestartInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
 }
 type appService struct {
 	dao    admin.ClusterDAO
@@ -103,6 +104,24 @@ func (a *appService) BatchDeleteInstance(ctx context.Context, instance []*model.
 	}
 	// 2.调用deploymentService的BatchDeleteDeployment方法删除deployment
 	err := pkg.BatchDeleteK8sInstance(ctx, deploymentRequests, svcRequests, a.client, a.l)
+	if err != nil {
+		return fmt.Errorf("failed to delete Deployment: %w", err)
+	}
+	return nil
+}
+func (a *appService) BatchRestartInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error {
+	// 1.遍历instance取出deploymentRequest和svcRequest
+	var deploymentRequests []*model.K8sDeploymentRequest
+	for _, i := range instance {
+		deploymentRequests = append(deploymentRequests, &model.K8sDeploymentRequest{
+			ClusterId:       i.ClusterId,
+			Namespace:       i.Namespace,
+			DeploymentNames: i.DeploymentNames,
+			DeploymentYaml:  i.DeploymentYaml,
+		})
+	}
+	// 2.调用deploymentService的BatchDeleteDeployment方法删除deployment
+	err := pkg.BatchRestartK8sInstance(ctx, deploymentRequests, a.client, a.l)
 	if err != nil {
 		return fmt.Errorf("failed to delete Deployment: %w", err)
 	}

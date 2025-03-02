@@ -1036,3 +1036,49 @@ func BatchDeleteK8sInstance(ctx context.Context, deploymentRequests []*model.K8s
 	logger.Info("批量删除 Kubernetes 实例完成")
 	return nil
 }
+
+// RestartDeployment 触发 Deployment 重启
+func RestartDeployment(ctx context.Context, deploymentRequest *model.K8sDeploymentRequest, client client.K8sClient, logger *zap.Logger) error {
+	// 获取 Kubernetes 客户端
+	kubeClient, err := GetKubeClient(deploymentRequest.ClusterId, client, logger)
+	if err != nil {
+		logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	deploymentsClient := kubeClient.AppsV1().Deployments(deploymentRequest.Namespace)
+
+	// 获取 Deployment
+	deployment, err := deploymentsClient.Get(ctx, deploymentRequest.DeploymentYaml.Name, metav1.GetOptions{})
+	if err != nil {
+		logger.Error("获取 Deployment 失败", zap.String("name", deploymentRequest.DeploymentYaml.Name), zap.Error(err))
+		return fmt.Errorf("failed to get Deployment: %w", err)
+	}
+
+	// 触发重启：更新 `annotations`
+	if deployment.Annotations == nil {
+		deployment.Annotations = map[string]string{}
+	}
+	deployment.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+	// 更新 Deployment
+	_, err = deploymentsClient.Update(ctx, deployment, metav1.UpdateOptions{})
+	if err != nil {
+		logger.Error("更新 Deployment 失败", zap.String("name", deploymentRequest.DeploymentYaml.Name), zap.Error(err))
+		return fmt.Errorf("failed to update Deployment: %w", err)
+	}
+
+	logger.Info("Deployment 已重启", zap.String("name", deploymentRequest.DeploymentYaml.Name))
+	return nil
+}
+
+// BatchRestartK8sInstance 批量重启 Kubernetes 实例
+func BatchRestartK8sInstance(ctx context.Context, deploymentRequests []*model.K8sDeploymentRequest, client client.K8sClient, logger *zap.Logger) error {
+	for _, deploymentReq := range deploymentRequests {
+		if err := RestartDeployment(ctx, deploymentReq, client, logger); err != nil {
+			logger.Error("批量重启 Deployment 失败", zap.String("name", deploymentReq.DeploymentYaml.Name), zap.Error(err))
+		}
+	}
+	logger.Info("批量重启 Kubernetes 实例完成")
+	return nil
+}
