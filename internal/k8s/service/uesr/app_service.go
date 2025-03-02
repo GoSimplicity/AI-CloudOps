@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
-	admin2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
@@ -15,20 +14,16 @@ type AppService interface {
 	CreateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
 }
 type appService struct {
-	dao               admin.ClusterDAO
-	client            client.K8sClient
-	l                 *zap.Logger
-	deploymentService admin2.DeploymentService
-	svcService        admin2.SvcService
+	dao    admin.ClusterDAO
+	client client.K8sClient
+	l      *zap.Logger
 }
 
-func NewAppService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger, deploymentService admin2.DeploymentService, svcService admin2.SvcService) AppService {
+func NewAppService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) AppService {
 	return &appService{
-		dao:               dao,
-		client:            client,
-		l:                 l,
-		deploymentService: deploymentService,
-		svcService:        svcService,
+		dao:    dao,
+		client: client,
+		l:      l,
 	}
 }
 

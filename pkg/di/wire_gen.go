@@ -112,7 +112,7 @@ func InitWebServer() *Cmd {
 	k8sYamlTaskHandler := api5.NewK8sYamlTaskHandler(logger, yamlTaskService)
 	yamlTemplateService := admin2.NewYamlTemplateService(yamlTemplateDAO, yamlTaskDAO, k8sClient, logger)
 	k8sYamlTemplateHandler := api5.NewK8sYamlTemplateHandler(logger, yamlTemplateService)
-	k8sAppService := user2.NewAppService(clusterDAO, k8sClient, logger,deploymentService,svcService)
+	k8sAppService := user2.NewAppService(clusterDAO, k8sClient, logger)
 	k8sAppHandler := api5.NewK8sAppHandler(logger, k8sAppService)
 	alertManagerEventDAO := alert.NewAlertManagerEventDAO(db, logger, userDAO)
 	scrapePoolDAO := scrape.NewScrapePoolDAO(db, logger, userDAO)
