@@ -958,3 +958,81 @@ func UpdateService(ctx context.Context, serviceRequest *model.K8sServiceRequest,
 
 	return nil
 }
+
+// DeleteDeployment 删除 Deployment
+func DeleteDeployment(ctx context.Context, deploymentRequest *model.K8sDeploymentRequest, client client.K8sClient, logger *zap.Logger) error {
+	// 获取 Kubernetes 客户端
+	kubeClient, err := GetKubeClient(deploymentRequest.ClusterId, client, logger)
+	if err != nil {
+		logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	deploymentsClient := kubeClient.AppsV1().Deployments(deploymentRequest.Namespace)
+
+	// 检查 Deployment 是否存在
+	_, err = deploymentsClient.Get(ctx, deploymentRequest.DeploymentYaml.Name, metav1.GetOptions{})
+	if err != nil {
+		logger.Warn("Deployment 不存在，跳过删除", zap.String("name", deploymentRequest.DeploymentYaml.Name))
+		return nil // Deployment 不存在，不需要删除
+	}
+
+	// 删除 Deployment
+	err = deploymentsClient.Delete(ctx, deploymentRequest.DeploymentYaml.Name, metav1.DeleteOptions{})
+	if err != nil {
+		logger.Error("删除 Deployment 失败", zap.Error(err))
+		return fmt.Errorf("failed to delete Deployment: %w", err)
+	}
+
+	logger.Info("Deployment 删除成功", zap.String("name", deploymentRequest.DeploymentYaml.Name))
+	return nil
+}
+
+// DeleteService 删除 Service
+func DeleteService(ctx context.Context, serviceRequest *model.K8sServiceRequest, client client.K8sClient, logger *zap.Logger) error {
+	// 获取 Kubernetes 客户端
+	kubeClient, err := GetKubeClient(serviceRequest.ClusterId, client, logger)
+	if err != nil {
+		logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	servicesClient := kubeClient.CoreV1().Services(serviceRequest.Namespace)
+
+	// 检查 Service 是否存在
+	_, err = servicesClient.Get(ctx, serviceRequest.ServiceYaml.Name, metav1.GetOptions{})
+	if err != nil {
+		logger.Warn("Service 不存在，跳过删除", zap.String("name", serviceRequest.ServiceYaml.Name))
+		return nil // Service 不存在，不需要删除
+	}
+
+	// 删除 Service
+	err = servicesClient.Delete(ctx, serviceRequest.ServiceYaml.Name, metav1.DeleteOptions{})
+	if err != nil {
+		logger.Error("删除 Service 失败", zap.Error(err))
+		return fmt.Errorf("failed to delete Service: %w", err)
+	}
+
+	logger.Info("Service 删除成功", zap.String("name", serviceRequest.ServiceYaml.Name))
+	return nil
+}
+
+// BatchDeleteK8sInstance 批量删除 Kubernetes 实例
+func BatchDeleteK8sInstance(ctx context.Context, deploymentRequests []*model.K8sDeploymentRequest, serviceRequests []*model.K8sServiceRequest, client client.K8sClient, logger *zap.Logger) error {
+	// 1.先删除 Service
+	for _, serviceReq := range serviceRequests {
+		if err := DeleteService(ctx, serviceReq, client, logger); err != nil {
+			logger.Error("批量删除 Service 失败", zap.Error(err))
+		}
+	}
+
+	// 2.再删除 Deployment
+	for _, deploymentReq := range deploymentRequests {
+		if err := DeleteDeployment(ctx, deploymentReq, client, logger); err != nil {
+			logger.Error("批量删除 Deployment 失败", zap.Error(err))
+		}
+	}
+
+	logger.Info("批量删除 Kubernetes 实例完成")
+	return nil
+}

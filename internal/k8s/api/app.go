@@ -58,7 +58,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		{
 			instances.POST("/create", k.CreateK8sInstanceOne)     // 创建单个 Kubernetes 实例
 			instances.PUT("/update", k.UpdateK8sInstanceOne)      // 更新单个 Kubernetes 实例
-			instances.DELETE("/", k.BatchDeleteK8sInstance)       // 批量删除 Kubernetes 实例
+			instances.DELETE("/delete", k.BatchDeleteK8sInstance) // 批量删除 Kubernetes 实例
 			instances.POST("/restart", k.BatchRestartK8sInstance) // 批量重启 Kubernetes 实例
 			instances.GET("/by-app", k.GetK8sInstanceByApp)       // 根据应用获取 Kubernetes 实例
 			instances.GET("/", k.GetK8sInstanceList)              // 获取 Kubernetes 实例列表
@@ -124,7 +124,10 @@ func (k *K8sAppHandler) UpdateK8sInstanceOne(ctx *gin.Context) {
 
 // BatchDeleteK8sInstance 批量删除 Kubernetes 实例
 func (k *K8sAppHandler) BatchDeleteK8sInstance(ctx *gin.Context) {
-	// TODO: 实现批量删除 Kubernetes 实例的逻辑
+	var req []*model.K8sInstanceRequest
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.appService.BatchDeleteInstance(ctx, req)
+	})
 }
 
 // BatchRestartK8sInstance 批量重启 Kubernetes 实例
