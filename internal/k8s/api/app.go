@@ -57,7 +57,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		instances := k8sAppApiGroup.Group("/instances")
 		{
 			instances.POST("/create", k.CreateK8sInstanceOne)     // 创建单个 Kubernetes 实例
-			instances.PUT("/", k.UpdateK8sInstanceOne)            // 更新单个 Kubernetes 实例
+			instances.PUT("/update", k.UpdateK8sInstanceOne)      // 更新单个 Kubernetes 实例
 			instances.DELETE("/", k.BatchDeleteK8sInstance)       // 批量删除 Kubernetes 实例
 			instances.POST("/restart", k.BatchRestartK8sInstance) // 批量重启 Kubernetes 实例
 			instances.GET("/by-app", k.GetK8sInstanceByApp)       // 根据应用获取 Kubernetes 实例
@@ -108,7 +108,6 @@ func (k *K8sAppHandler) GetClusterNamespacesUnique(ctx *gin.Context) {
 
 // CreateK8sInstanceOne 创建单个 Kubernetes 实例
 func (k *K8sAppHandler) CreateK8sInstanceOne(ctx *gin.Context) {
-	// TODO: 实现创建单个 Kubernetes 实例的逻辑
 	var req model.K8sInstanceRequest
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.appService.CreateInstanceOne(ctx, &req)
@@ -117,7 +116,10 @@ func (k *K8sAppHandler) CreateK8sInstanceOne(ctx *gin.Context) {
 
 // UpdateK8sInstanceOne 更新单个 Kubernetes 实例
 func (k *K8sAppHandler) UpdateK8sInstanceOne(ctx *gin.Context) {
-	// TODO: 实现更新单个 Kubernetes 实例的逻辑
+	var req model.K8sInstanceRequest
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.appService.UpdateInstanceOne(ctx, &req)
+	})
 }
 
 // BatchDeleteK8sInstance 批量删除 Kubernetes 实例
