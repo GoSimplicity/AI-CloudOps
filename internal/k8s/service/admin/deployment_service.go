@@ -49,7 +49,6 @@ type DeploymentService interface {
 	BatchRestartDeployments(ctx context.Context, req *model.K8sDeploymentRequest) error
 	RestartDeployment(ctx context.Context, id int, namespace, deploymentName string) error
 	GetDeploymentYaml(ctx context.Context, id int, namespace, deploymentName string) (string, error)
-	CreateDeployment(ctx context.Context, deploymentRequest *model.K8sDeploymentRequest) error
 }
 
 type deploymentService struct {
@@ -243,33 +242,6 @@ func (d *deploymentService) RestartDeployment(ctx context.Context, id int, names
 
 	if _, err := kubeClient.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update Deployment '%s': %w", deploymentName, err)
-	}
-
-	return nil
-}
-
-// CreateDeployment 创建 Deployment
-func (d *deploymentService) CreateDeployment(ctx context.Context, deploymentRequest *model.K8sDeploymentRequest) error {
-	kubeClient, err := pkg.GetKubeClient(deploymentRequest.ClusterId, d.client, d.logger)
-	if err != nil {
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
-	}
-
-	// 检查是否提供了 DeploymentYaml
-	if deploymentRequest.DeploymentYaml == nil {
-		return fmt.Errorf("deployment_yaml is required for creating a deployment")
-	}
-
-	// 检查 Deployment 是否已存在
-	_, err = kubeClient.AppsV1().Deployments(deploymentRequest.Namespace).Get(ctx, deploymentRequest.DeploymentYaml.Name, metav1.GetOptions{})
-	if err == nil {
-		return fmt.Errorf("deployment '%s' already exists in namespace '%s'", deploymentRequest.DeploymentYaml.Name, deploymentRequest.Namespace)
-	}
-
-	// 创建 Deployment
-	_, err = kubeClient.AppsV1().Deployments(deploymentRequest.Namespace).Create(ctx, deploymentRequest.DeploymentYaml, metav1.CreateOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to create Deployment: %w", err)
 	}
 
 	return nil

@@ -7,6 +7,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	admin2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -40,7 +41,7 @@ func (a *appService) CreateInstanceOne(ctx context.Context, instance *model.K8sI
 		DeploymentYaml:  instance.DeploymentYaml,
 	}
 	// 调用deploymentService的CreateDeployment方法创建deployment
-	err := a.deploymentService.CreateDeployment(ctx, deploymentRequest)
+	err := pkg.CreateDeployment(ctx, deploymentRequest, a.client, a.l)
 	if err != nil {
 		return fmt.Errorf("failed to create Deployment: %w", err)
 	}
@@ -52,7 +53,7 @@ func (a *appService) CreateInstanceOne(ctx context.Context, instance *model.K8sI
 		ServiceYaml:  instance.ServiceYaml,
 	}
 	// 调用svcService的CreateService方法创建service
-	err = a.svcService.CreateService(ctx, svcRequest)
+	err = pkg.CreateService(ctx, svcRequest, a.client, a.l)
 	if err != nil {
 		return fmt.Errorf("failed to create Service: %w", err)
 	}

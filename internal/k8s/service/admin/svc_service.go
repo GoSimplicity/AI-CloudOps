@@ -51,7 +51,7 @@ type SvcService interface {
 	// UpdateService 更新 Service
 	UpdateService(ctx context.Context, serviceResource *model.K8sServiceRequest) error
 	// CreateService 创建 Service
-	CreateService(ctx context.Context, serviceRequest *model.K8sServiceRequest) error
+	//CreateService(ctx context.Context, serviceRequest *model.K8sServiceRequest) error
 }
 
 type svcService struct {
@@ -169,36 +169,5 @@ func (s *svcService) BatchDeleteService(ctx context.Context, id int, namespace s
 		return fmt.Errorf("在删除 Service 时遇到错误: %v", err)
 	}
 
-	return nil
-}
-
-// CreateService 创建 Kubernetes Service
-func (s *svcService) CreateService(ctx context.Context, serviceRequest *model.K8sServiceRequest) error {
-	// 获取 Kubernetes 客户端
-	kubeClient, err := pkg.GetKubeClient(serviceRequest.ClusterId, s.client, s.l)
-	if err != nil {
-		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
-	}
-
-	// 检查是否提供了 ServiceYaml
-	if serviceRequest.ServiceYaml == nil {
-		return fmt.Errorf("service_yaml is required for creating a service")
-	}
-
-	// 检查 Service 是否已存在
-	_, err = kubeClient.CoreV1().Services(serviceRequest.Namespace).Get(ctx, serviceRequest.ServiceYaml.Name, metav1.GetOptions{})
-	if err == nil {
-		return fmt.Errorf("service '%s' already exists in namespace '%s'", serviceRequest.ServiceYaml.Name, serviceRequest.Namespace)
-	}
-
-	// 创建 Service
-	_, err = kubeClient.CoreV1().Services(serviceRequest.Namespace).Create(ctx, serviceRequest.ServiceYaml, metav1.CreateOptions{})
-	if err != nil {
-		s.l.Error("创建 Service 失败", zap.Error(err))
-		return fmt.Errorf("failed to create Service: %w", err)
-	}
-
-	s.l.Info("Service 创建成功", zap.String("serviceName", serviceRequest.ServiceYaml.Name))
 	return nil
 }
