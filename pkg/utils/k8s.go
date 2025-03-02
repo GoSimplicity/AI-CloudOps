@@ -824,3 +824,60 @@ func GetDaemonSetResources(ctx context.Context, kubeClient *kubernetes.Clientset
 
 	return resources, nil
 }
+
+// CreateDeployment 创建 Deployment
+func CreateDeployment(ctx context.Context, deploymentRequest *model.K8sDeploymentRequest, client client.K8sClient, logger *zap.Logger) error {
+	kubeClient, err := GetKubeClient(deploymentRequest.ClusterId, client, logger)
+	if err != nil {
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	// 检查是否提供了 DeploymentYaml
+	if deploymentRequest.DeploymentYaml == nil {
+		return fmt.Errorf("deployment_yaml is required for creating a deployment")
+	}
+
+	// 检查 Deployment 是否已存在
+	_, err = kubeClient.AppsV1().Deployments(deploymentRequest.Namespace).Get(ctx, deploymentRequest.DeploymentYaml.Name, metav1.GetOptions{})
+	if err == nil {
+		return fmt.Errorf("deployment '%s' already exists in namespace '%s'", deploymentRequest.DeploymentYaml.Name, deploymentRequest.Namespace)
+	}
+
+	// 创建 Deployment
+	_, err = kubeClient.AppsV1().Deployments(deploymentRequest.Namespace).Create(ctx, deploymentRequest.DeploymentYaml, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create Deployment: %w", err)
+	}
+	return nil
+}
+
+// CreateService 创建 Kubernetes Service
+func CreateService(ctx context.Context, serviceRequest *model.K8sServiceRequest, client client.K8sClient, logger *zap.Logger) error {
+	// 获取 Kubernetes 客户端
+	kubeClient, err := GetKubeClient(serviceRequest.ClusterId, client, logger)
+	if err != nil {
+		logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	// 检查是否提供了 ServiceYaml
+	if serviceRequest.ServiceYaml == nil {
+		return fmt.Errorf("service_yaml is required for creating a service")
+	}
+
+	// 检查 Service 是否已存在
+	_, err = kubeClient.CoreV1().Services(serviceRequest.Namespace).Get(ctx, serviceRequest.ServiceYaml.Name, metav1.GetOptions{})
+	if err == nil {
+		return fmt.Errorf("service '%s' already exists in namespace '%s'", serviceRequest.ServiceYaml.Name, serviceRequest.Namespace)
+	}
+
+	// 创建 Service
+	_, err = kubeClient.CoreV1().Services(serviceRequest.Namespace).Create(ctx, serviceRequest.ServiceYaml, metav1.CreateOptions{})
+	if err != nil {
+		logger.Error("创建 Service 失败", zap.Error(err))
+		return fmt.Errorf("failed to create Service: %w", err)
+	}
+
+	logger.Info("Service 创建成功", zap.String("serviceName", serviceRequest.ServiceYaml.Name))
+	return nil
+}

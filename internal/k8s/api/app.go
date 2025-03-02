@@ -26,17 +26,22 @@
 package api
 
 import (
+	user2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/uesr"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 type K8sAppHandler struct {
-	l *zap.Logger
+	l          *zap.Logger
+	appService user2.AppService
 }
 
-func NewK8sAppHandler(l *zap.Logger) *K8sAppHandler {
+func NewK8sAppHandler(l *zap.Logger, appService user2.AppService) *K8sAppHandler {
 	return &K8sAppHandler{
-		l: l,
+		l:          l,
+		appService: appService,
 	}
 }
 
@@ -51,7 +56,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		// 实例
 		instances := k8sAppApiGroup.Group("/instances")
 		{
-			instances.POST("/", k.CreateK8sInstanceOne)           // 创建单个 Kubernetes 实例
+			instances.POST("/create", k.CreateK8sInstanceOne)     // 创建单个 Kubernetes 实例
 			instances.PUT("/", k.UpdateK8sInstanceOne)            // 更新单个 Kubernetes 实例
 			instances.DELETE("/", k.BatchDeleteK8sInstance)       // 批量删除 Kubernetes 实例
 			instances.POST("/restart", k.BatchRestartK8sInstance) // 批量重启 Kubernetes 实例
@@ -98,11 +103,16 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 // GetClusterNamespacesUnique 获取唯一的命名空间列表
 func (k *K8sAppHandler) GetClusterNamespacesUnique(ctx *gin.Context) {
 	// TODO: 实现获取唯一命名空间列表的逻辑
+
 }
 
 // CreateK8sInstanceOne 创建单个 Kubernetes 实例
 func (k *K8sAppHandler) CreateK8sInstanceOne(ctx *gin.Context) {
 	// TODO: 实现创建单个 Kubernetes 实例的逻辑
+	var req model.K8sInstanceRequest
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.appService.CreateInstanceOne(ctx, &req)
+	})
 }
 
 // UpdateK8sInstanceOne 更新单个 Kubernetes 实例

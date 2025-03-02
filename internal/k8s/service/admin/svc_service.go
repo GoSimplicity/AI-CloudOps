@@ -50,6 +50,8 @@ type SvcService interface {
 	BatchDeleteService(ctx context.Context, id int, namespace string, serviceNames []string) error
 	// UpdateService 更新 Service
 	UpdateService(ctx context.Context, serviceResource *model.K8sServiceRequest) error
+	// CreateService 创建 Service
+	//CreateService(ctx context.Context, serviceRequest *model.K8sServiceRequest) error
 }
 
 type svcService struct {
