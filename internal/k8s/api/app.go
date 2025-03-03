@@ -63,7 +63,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 			instances.DELETE("/delete", k.BatchDeleteK8sInstance) // 批量删除 Kubernetes 实例
 			instances.POST("/restart", k.BatchRestartK8sInstance) // 批量重启 Kubernetes 实例
 			instances.GET("/by-app", k.GetK8sInstanceByApp)       // 根据应用获取 Kubernetes 实例
-			instances.GET("/", k.GetK8sInstanceList)              // 获取 Kubernetes 实例列表
+			instances.GET("/instances", k.GetK8sInstanceList)     // 获取 Kubernetes 实例列表
 			instances.GET("/:id", k.GetK8sInstanceOne)            // 获取单个 Kubernetes 实例
 		}
 
@@ -173,7 +173,23 @@ func (k *K8sAppHandler) GetK8sInstanceByApp(ctx *gin.Context) {
 
 // GetK8sInstanceList 获取 Kubernetes 实例列表
 func (k *K8sAppHandler) GetK8sInstanceList(ctx *gin.Context) {
-	// TODO: 实现获取 Kubernetes 实例列表的逻辑
+	clusterStr := ctx.DefaultQuery("clusterId", "")
+
+	var clusterID int
+	if clusterStr != "" {
+		var err error
+		clusterID, err = strconv.Atoi(clusterStr)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deployment_id"})
+			return
+		}
+	}
+	res, err := k.appService.GetInstanceAll(ctx, clusterID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, res)
 }
 
 // GetK8sInstanceOne 获取单个 Kubernetes 实例
