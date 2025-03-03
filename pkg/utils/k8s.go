@@ -1159,3 +1159,36 @@ func GetDeploymentsByAppName(ctx context.Context, clusterId int, appName string,
 
 	return instances, nil
 }
+func GetK8sInstanceOne(ctx context.Context, clusterId int, client client.K8sClient, logger *zap.Logger) ([]model.K8sInstance, error) {
+	// 获取 Kubernetes 客户端
+	kubeClient, err := GetKubeClient(clusterId, client, logger)
+	if err != nil {
+		logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	// 假设默认 namespace 是 "default"
+	deploymentsClient := kubeClient.AppsV1().Deployments("default")
+
+	// 获取所有 Deployment 信息
+	deployments, err := deploymentsClient.List(ctx, metav1.ListOptions{})
+	if err != nil {
+		logger.Error("获取 Deployments 列表失败", zap.Error(err))
+		return nil, fmt.Errorf("failed to list Deployments: %w", err)
+	}
+
+	// 将 Deployment 列表转换为 K8sInstance 列表
+	var k8sInstances []model.K8sInstance
+	for _, deployment := range deployments.Items {
+		k8sInstance := model.K8sInstance{
+			Name:      deployment.Name,
+			Namespace: deployment.Namespace,
+			Image:     deployment.Spec.Template.Spec.Containers[0].Image, // 假设只使用第一个容器的镜像
+			Replicas:  int(*deployment.Spec.Replicas),
+		}
+		k8sInstances = append(k8sInstances, k8sInstance)
+	}
+
+	// 返回填充好的 K8sInstance 列表
+	return k8sInstances, nil
+}

@@ -16,6 +16,7 @@ type AppService interface {
 	BatchDeleteInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
 	BatchRestartInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
 	GetInstanceByApp(ctx context.Context, clusterId int, appName string) ([]model.K8sInstanceByApp, error)
+	GetInstanceOne(ctx context.Context, clusterId int) ([]model.K8sInstance, error)
 }
 type appService struct {
 	dao    admin.ClusterDAO
@@ -155,5 +156,15 @@ func (a *appService) GetInstanceByApp(ctx context.Context, clusterId int, appNam
 		}
 	}
 	return instances, nil
+	//return nil, nil
+}
+
+func (a *appService) GetInstanceOne(ctx context.Context, clusterId int) ([]model.K8sInstance, error) {
+	res, err := pkg.GetK8sInstanceOne(ctx, clusterId, a.client, a.l)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Deployment: %w", err)
+	}
+	// 3.返回实例列表
+	return res, nil
 	//return nil, nil
 }
