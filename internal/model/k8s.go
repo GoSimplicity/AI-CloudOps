@@ -475,3 +475,18 @@ type KeyValueItem struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
+
+// ContainerInfo 结构体，存储容器的信息
+type ContainerInfo struct {
+	Name  string `json:"name"`
+	Image string `json:"image"`
+	Ports []int  `json:"ports"`
+}
+
+// K8sInstance 结构体，存储实例的信息，包括 Deployment 和相关容器
+type K8sInstanceByApp struct {
+	Name       string          `json:"name"`
+	Status     string          `json:"status"`
+	Replicas   int32           `json:"replicas"`
+	Containers []ContainerInfo `json:"containers"`
+}

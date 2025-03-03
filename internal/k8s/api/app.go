@@ -31,6 +31,8 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"net/http"
+	"strconv"
 )
 
 type K8sAppHandler struct {
@@ -58,10 +60,10 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		{
 			instances.POST("/create", k.CreateK8sInstanceOne)     // 创建单个 Kubernetes 实例
 			instances.PUT("/update", k.UpdateK8sInstanceOne)      // 更新单个 Kubernetes 实例
-			instances.DELETE("/", k.BatchDeleteK8sInstance)       // 批量删除 Kubernetes 实例
+			instances.DELETE("/delete", k.BatchDeleteK8sInstance) // 批量删除 Kubernetes 实例
 			instances.POST("/restart", k.BatchRestartK8sInstance) // 批量重启 Kubernetes 实例
 			instances.GET("/by-app", k.GetK8sInstanceByApp)       // 根据应用获取 Kubernetes 实例
-			instances.GET("/", k.GetK8sInstanceList)              // 获取 Kubernetes 实例列表
+			instances.GET("/instances", k.GetK8sInstanceList)     // 获取 Kubernetes 实例列表
 			instances.GET("/:id", k.GetK8sInstanceOne)            // 获取单个 Kubernetes 实例
 		}
 
@@ -124,27 +126,91 @@ func (k *K8sAppHandler) UpdateK8sInstanceOne(ctx *gin.Context) {
 
 // BatchDeleteK8sInstance 批量删除 Kubernetes 实例
 func (k *K8sAppHandler) BatchDeleteK8sInstance(ctx *gin.Context) {
-	// TODO: 实现批量删除 Kubernetes 实例的逻辑
+	var req []*model.K8sInstanceRequest
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.appService.BatchDeleteInstance(ctx, req)
+	})
 }
 
 // BatchRestartK8sInstance 批量重启 Kubernetes 实例
 func (k *K8sAppHandler) BatchRestartK8sInstance(ctx *gin.Context) {
-	// TODO: 实现批量重启 Kubernetes 实例的逻辑
+	var req []*model.K8sInstanceRequest
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.appService.BatchRestartInstance(ctx, req)
+	})
 }
 
 // GetK8sInstanceByApp 根据应用获取 Kubernetes 实例
 func (k *K8sAppHandler) GetK8sInstanceByApp(ctx *gin.Context) {
-	// TODO: 实现根据应用获取 Kubernetes 实例的逻辑
+	// 1.获取请求参数
+	appName := ctx.DefaultQuery("app", "")
+	clusterIDStr := ctx.DefaultQuery("cluster_id", "")
+
+	if appName == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "app parameter is required"})
+		return
+	}
+
+	// 2. 转换 cluster_id 为整数
+	var clusterID int
+	if clusterIDStr != "" {
+		var err error
+		clusterID, err = strconv.Atoi(clusterIDStr)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid cluster_id"})
+			return
+		}
+	}
+	// 3.调用appService的GetInstanceByApp方法获取实例
+	instances, err := k.appService.GetInstanceByApp(ctx, clusterID, appName)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	// 4.返回实例列表
+	ctx.JSON(http.StatusOK, instances)
 }
 
 // GetK8sInstanceList 获取 Kubernetes 实例列表
 func (k *K8sAppHandler) GetK8sInstanceList(ctx *gin.Context) {
-	// TODO: 实现获取 Kubernetes 实例列表的逻辑
+	clusterStr := ctx.DefaultQuery("clusterId", "")
+
+	var clusterID int
+	if clusterStr != "" {
+		var err error
+		clusterID, err = strconv.Atoi(clusterStr)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deployment_id"})
+			return
+		}
+	}
+	res, err := k.appService.GetInstanceAll(ctx, clusterID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, res)
 }
 
 // GetK8sInstanceOne 获取单个 Kubernetes 实例
 func (k *K8sAppHandler) GetK8sInstanceOne(ctx *gin.Context) {
-	// TODO: 实现获取单个 Kubernetes 实例的逻辑
+	clusterStr := ctx.Param("id")
+
+	var clusterID int
+	if clusterStr != "" {
+		var err error
+		clusterID, err = strconv.Atoi(clusterStr)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deployment_id"})
+			return
+		}
+	}
+	res, err := k.appService.GetInstanceOne(ctx, clusterID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, res[0])
 }
 
 // GetK8sAppList 获取 Kubernetes 应用列表
