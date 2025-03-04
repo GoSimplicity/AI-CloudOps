@@ -2,15 +2,20 @@ package uesr
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
+	appsv1 "k8s.io/api/apps/v1"
+	core "k8s.io/api/core/v1"
+	"log"
 )
 
 type AppService interface {
+	// 实例
 	CreateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
 	UpdateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
 	BatchDeleteInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
@@ -18,6 +23,8 @@ type AppService interface {
 	GetInstanceByApp(ctx context.Context, clusterId int, appName string) ([]model.K8sInstanceByApp, error)
 	GetInstanceOne(ctx context.Context, clusterId int) ([]model.K8sInstance, error)
 	GetInstanceAll(ctx context.Context, clusterId int) ([]model.K8sInstance, error)
+	// 应用
+	CreateAppOne(ctx context.Context, app *model.K8sApp) error
 }
 type appService struct {
 	dao    admin.ClusterDAO
@@ -177,4 +184,117 @@ func (a *appService) GetInstanceAll(ctx context.Context, clusterId int) ([]model
 	// 3.返回实例列表
 	return res, nil
 	//return nil, nil
+}
+func (a *appService) CreateAppOne(ctx context.Context, app *model.K8sApp) error {
+	// 1.构建deployment和service
+	if len(app.K8sInstances) == 0 {
+		return fmt.Errorf("no instances provided")
+	}
+	var deployments []appsv1.Deployment
+	var services []core.Service
+	for _, instance := range app.K8sInstances {
+		portJson, err2 := pkg.ParsePorts(instance.ContainerCore.PortJson)
+		if portJson == nil {
+			return fmt.Errorf("instance containerCore portJson is nil")
+		}
+		if err2 != nil {
+			return fmt.Errorf("instance ContainerCore PortJson parse fail")
+		}
+		// step1:构建deployment
+		deploy := map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      app.Name,
+				"namespace": app.Namespace,
+			},
+			"spec": map[string]interface{}{
+				"replicas": instance.Replicas,
+				"selector": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						"app": app.Name,
+					},
+				},
+				"template": map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]interface{}{
+							"app": app.Name,
+						},
+					},
+					"spec": map[string]interface{}{
+						"containers": []map[string]interface{}{
+							{
+								"name":  instance.Name,
+								"image": instance.Image,
+								"ports": []map[string]interface{}{
+									{
+										"containerPort": portJson[0].Port,
+										"protocol":      portJson[0].Protocol,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		deployBytes, err := json.Marshal(deploy) // 将 map 转换为 *appsv1.Deployment
+		if err != nil {
+			log.Fatalf("Error marshaling deploy: %v", err)
+		}
+
+		var deployment appsv1.Deployment
+		err = json.Unmarshal(deployBytes, &deployment)
+		if err != nil {
+			log.Fatalf("Error unmarshaling deploy: %v", err)
+		}
+
+		deployments = append(deployments, deployment) // 将转换后的 deployment 添加到 deployments 切片中
+		// step2:构建service
+		service := map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Service",
+			"metadata": map[string]interface{}{
+				"name":      app.Name,
+				"namespace": app.Namespace,
+			},
+			"spec": map[string]interface{}{
+				"selector": map[string]interface{}{
+					"app": app.Name,
+				},
+				"ports": []map[string]interface{}{
+					{
+						"port":       portJson[0].Port,
+						"protocol":   portJson[0].Protocol,
+						"targetPort": portJson[0].Port,
+					},
+				},
+				"type": app.ServiceType,
+			},
+		}
+
+		serviceBytes, err := json.Marshal(service) // 将 map 转换为 *core.Service
+		if err != nil {
+			log.Fatalf("Error marshaling service: %v", err)
+		}
+		var svc core.Service
+		err = json.Unmarshal(serviceBytes, &svc)
+		if err != nil {
+			log.Fatalf("Error unmarshaling service: %v", err)
+		}
+
+		services = append(services, svc) // 将转换后的 service 添加到 services 切片中
+	}
+
+	// 2.调用deploymentService的CreateDeployment方法创建deployment
+	k8scluster, err2 := a.dao.GetClusterByName(ctx, app.Cluster)
+	if err2 != nil {
+		return fmt.Errorf("failed to get Deployment: %w", err2)
+	}
+	err := pkg.CreateK8sApp(ctx, k8scluster, deployments, services, a.client, a.l)
+	if err != nil {
+		return fmt.Errorf("failed to create Deployment: %w", err)
+	}
+	return nil
 }
