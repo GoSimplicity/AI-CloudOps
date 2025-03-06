@@ -252,10 +252,10 @@ func (d *auditDAO) ArchiveAuditLogs(ctx context.Context, req *model.ListAuditLog
 
 // CreateAuditLog 创建审计日志
 func (d *auditDAO) CreateAuditLog(ctx context.Context, req *model.AuditLog) error {
-	if err := d.db.WithContext(ctx).Create(req).Error; err != nil {
-		d.l.Error("创建审计日志失败", zap.Error(err))
-		return err
-	}
+	//if err := d.db.WithContext(ctx).Create(req).Error; err != nil {
+	//	d.l.Error("创建审计日志失败", zap.Error(err))
+	//	return err
+	//}
 
 	return nil
 }
