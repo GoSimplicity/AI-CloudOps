@@ -21,3 +21,17 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
+
+
+class OpenAIAdapter:
+  def __init__(
+    self,
+  ):
+    """
+    初始化OpenAI适配器
+
+    Args:
+        api_key: OpenAI API密钥
+        model: 使用的模型
+        temperature: 生成温度
+    """

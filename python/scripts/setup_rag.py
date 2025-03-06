@@ -28,6 +28,7 @@ import sys
 import subprocess
 import argparse
 import logging
+import platform
 
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -44,20 +45,19 @@ def check_and_install_dependencies():
     """检查并安装必要的依赖"""
     required_packages = [
         "langchain",
-        "openai",
         "chromadb",
         "tiktoken",
         "unstructured",
         "pypdf",
         "pandas",
-        "requests"
+        "python-dotenv",
+        "ollama"
     ]
 
     optional_packages = {
-        "ollama": "使用本地Ollama模型",
         "sentence-transformers": "使用本地嵌入模型",
-        "torch": "深度学习支持",
-        "transformers": "Hugging Face模型支持"
+        "faiss-cpu": "使用FAISS向量存储",
+        "langchain-community": "使用LangChain社区组件"
     }
 
     logger.info("检查必要依赖...")
@@ -79,24 +79,14 @@ def check_and_install_dependencies():
             logger.warning(f"! {package} 未安装 ({description})")
             install = input(f"是否安装 {package}? (y/n): ").lower() == 'y'
             if install:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-                logger.info(f"✓ {package} 安装完成")
+                try:
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+                    logger.info(f"✓ {package} 安装完成")
+                except subprocess.CalledProcessError:
+                    logger.error(f"× 安装 {package} 失败")
+                    logger.warning(f"请稍后手动安装 {package}")
             else:
                 logger.info(f"× 跳过安装 {package}")
-
-def create_directories():
-    """创建必要的目录"""
-    dirs = [
-        "./knowledge_docs",
-        "./data/storage/vector_store",
-        "./models/data/qa_dataset",
-        "./models/finetuned-deepseek-qa"
-    ]
-
-    logger.info("\n创建必要目录...")
-    for d in dirs:
-        os.makedirs(d, exist_ok=True)
-        logger.info(f"✓ 目录已创建: {d}")
 
 def setup_environment():
     """设置环境变量"""
@@ -106,8 +96,8 @@ def setup_environment():
         "LLM_MODEL": "使用的模型名称",
         "OLLAMA_HOST": "Ollama服务地址 (如果使用Ollama，默认: http://127.0.0.1:11434)",
         "EMBEDDING_MODEL": "嵌入模型名称",
-        "VECTOR_STORE_DIR": "向量存储目录路径",
-        "DOCS_DIR": "知识文档目录路径"
+        "VECTOR_STORE_TYPE": "向量存储类型 (chroma 或 faiss)",
+        "VECTOR_STORE_PATH": "向量存储路径"
     }
 
     logger.info("\n设置环境变量...")
@@ -118,20 +108,23 @@ def setup_environment():
 
     if os.path.exists(env_file):
         logger.info(f"发现现有环境变量配置文件: {env_file}")
-        with open(env_file, 'r') as f:
-            for line in f:
-                if '=' in line and not line.startswith('#'):
-                    key, value = line.strip().split('=', 1)
-                    existing_vars[key] = value
+        try:
+            with open(env_file, 'r') as f:
+                for line in f:
+                    if '=' in line and not line.startswith('#'):
+                        key, value = line.strip().split('=', 1)
+                        existing_vars[key] = value
+        except Exception as e:
+            logger.warning(f"读取环境变量文件时出错: {e}")
 
     # 设置默认值
     default_values = {
-        "LLM_PROVIDER": "ollama",
-        "LLM_MODEL": "deepseek-r1:8b",
-        "OLLAMA_HOST": "http://127.0.0.1:11434",
-        "EMBEDDING_MODEL": "nomic-embed-text:latest",
-        "VECTOR_STORE_DIR": "./data/storage/vector_store",
-        "DOCS_DIR": "./knowledge_docs"
+        "LLM_PROVIDER": existing_vars.get("LLM_PROVIDER", "openai"),
+        "LLM_MODEL": existing_vars.get("LLM_MODEL", "gpt-3.5-turbo"),
+        "OLLAMA_HOST": existing_vars.get("OLLAMA_HOST", "http://127.0.0.1:11434"),
+        "EMBEDDING_MODEL": existing_vars.get("EMBEDDING_MODEL", "text-embedding-ada-002"),
+        "VECTOR_STORE_TYPE": existing_vars.get("VECTOR_STORE_TYPE", "chroma"),
+        "VECTOR_STORE_PATH": existing_vars.get("VECTOR_STORE_PATH", "./data/storage/vector_store")
     }
 
     # 询问用户设置环境变量
@@ -148,24 +141,92 @@ def setup_environment():
             new_vars[var] = current_value
 
     # 保存环境变量
-    with open(env_file, 'w') as f:
-        for var, value in new_vars.items():
-            f.write(f"{var}={value}\n")
+    try:
+        with open(env_file, 'w') as f:
+            for var, value in new_vars.items():
+                f.write(f"{var}={value}\n")
+        logger.info(f"环境变量已保存到: {env_file}")
+    except Exception as e:
+        logger.error(f"保存环境变量文件时出错: {e}")
+        sys.exit(1)
 
-    logger.info(f"环境变量已保存到: {env_file}")
-    logger.info("请确保在运行前加载这些环境变量，例如:")
-    logger.info(f"source {env_file}")
+    # 显示如何加载环境变量的提示
+    if platform.system() == "Windows":
+        logger.info("请确保在运行前加载这些环境变量，例如:")
+        logger.info(f"$env:OPENAI_API_KEY=\"your-key-here\"")
+    else:
+        logger.info("请确保在运行前加载这些环境变量，例如:")
+        logger.info(f"source {env_file} 或 export $(cat {env_file} | xargs)")
+
+def create_directories():
+    """创建必要的目录"""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    dirs = [
+        os.path.join(project_root, "knowledge_docs"),
+        os.path.join(project_root, "data/storage/vector_store"),
+        os.path.join(project_root, "data/processed"),
+        os.path.join(project_root, "logs")
+    ]
+
+    logger.info("\n创建必要目录...")
+    for d in dirs:
+        try:
+            os.makedirs(d, exist_ok=True)
+            logger.info(f"✓ 目录已创建: {d}")
+        except Exception as e:
+            logger.error(f"× 创建目录失败 {d}: {e}")
+            sys.exit(1)
+    
+    # 创建示例文档
+    example_doc_path = os.path.join(project_root, "knowledge_docs/example.txt")
+    if not os.path.exists(example_doc_path):
+        try:
+            with open(example_doc_path, 'w') as f:
+                f.write("这是一个示例文档，用于测试RAG系统。\n")
+                f.write("您可以将您的知识文档放在knowledge_docs目录下。\n")
+                f.write("支持的文件格式包括：txt, pdf, docx等。\n")
+            logger.info(f"✓ 示例文档已创建: {example_doc_path}")
+        except Exception as e:
+            logger.warning(f"× 创建示例文档失败: {e}")
+
+def check_system_requirements():
+    """检查系统要求"""
+    logger.info("\n检查系统要求...")
+    
+    # 检查Python版本
+    python_version = sys.version_info
+    if python_version.major < 3 or (python_version.major == 3 and python_version.minor < 8):
+        logger.warning(f"× Python版本过低: {python_version.major}.{python_version.minor}")
+        logger.warning("推荐使用Python 3.8或更高版本")
+    else:
+        logger.info(f"✓ Python版本: {python_version.major}.{python_version.minor}")
+    
+    # 检查内存
+    try:
+        import psutil
+        memory_gb = psutil.virtual_memory().total / (1024**3)
+        if memory_gb < 4:
+            logger.warning(f"× 系统内存可能不足: {memory_gb:.1f} GB")
+            logger.warning("推荐至少4GB内存用于RAG系统")
+        else:
+            logger.info(f"✓ 系统内存: {memory_gb:.1f} GB")
+    except ImportError:
+        logger.info("无法检查系统内存 (psutil未安装)")
 
 def main():
     parser = argparse.ArgumentParser(description='设置RAG系统环境')
     parser.add_argument('--skip-deps', action='store_true', help='跳过依赖检查')
     parser.add_argument('--skip-env', action='store_true', help='跳过环境变量设置')
     parser.add_argument('--skip-dirs', action='store_true', help='跳过目录创建')
+    parser.add_argument('--skip-checks', action='store_true', help='跳过系统检查')
     args = parser.parse_args()
 
     print("="*50)
     print("RAG系统环境设置")
     print("="*50)
+
+    if not args.skip_checks:
+        check_system_requirements()
 
     if not args.skip_deps:
         check_and_install_dependencies()
@@ -179,8 +240,6 @@ def main():
     print("\n"+"="*50)
     print("设置完成！现在您可以运行以下命令来测试RAG系统:")
     print("python scripts/rag_demo.py")
-    print("或者运行诊断工具检查系统状态:")
-    print("python scripts/diagnose_rag.py")
     print("="*50)
 
 if __name__ == "__main__":

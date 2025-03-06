@@ -22,7 +22,7 @@ go.work
 go.work.sum
 bin
 
-bin
+storage
 data/mysql
 data/redis
 data/nginx/log
