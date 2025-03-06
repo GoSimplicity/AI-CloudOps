@@ -1221,40 +1221,6 @@ func ParsePorts(portJson string) ([]corev1.ServicePort, error) {
 	return servicePorts, nil
 }
 
-// ctx, app.Cluster, deployments, services, a.client, a.l
-func CreateK8sApp(ctx context.Context, K8sCluser *model.K8sCluster, deployments []appsv1.Deployment, services []corev1.Service, client client.K8sClient, logger *zap.Logger) error {
-	// 1.创建deployment
-	if deployments == nil {
-		return fmt.Errorf("deployment_yaml is required for creating a deployment")
-	}
-
-	kubeClient, err := GetKubeClient(K8sCluser.ID, client, logger)
-	if err != nil {
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
-	}
-	// 创建 Deployment
-	for _, deployment := range deployments {
-		_, err := kubeClient.AppsV1().Deployments(deployment.Namespace).Create(ctx, &deployment, metav1.CreateOptions{})
-		if err != nil {
-			logger.Error("Failed to create Deployment", zap.String("name", deployment.Name), zap.Error(err))
-			return fmt.Errorf("failed to create Deployment %s: %w", deployment.Name, err)
-		}
-		logger.Info("Deployment created successfully", zap.String("name", deployment.Name))
-	}
-
-	// 创建 Service
-	for _, service := range services {
-		_, err := kubeClient.CoreV1().Services(service.Namespace).Create(ctx, &service, metav1.CreateOptions{})
-		if err != nil {
-			logger.Error("Failed to create Service", zap.String("name", service.Name), zap.Error(err))
-			return fmt.Errorf("failed to create Service %s: %w", service.Name, err)
-		}
-		logger.Info("Service created successfully", zap.String("name", service.Name))
-	}
-
-	return nil
-}
-
 // 解析K8SApp请求的代码
 func ParseK8sApp(ctx context.Context, app *model.K8sApp) ([]appsv1.Deployment, []corev1.Service, error) {
 	if len(app.K8sInstances) == 0 {
