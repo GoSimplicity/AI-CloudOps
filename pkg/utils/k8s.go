@@ -1290,48 +1290,82 @@ func ParseK8sApp(ctx context.Context, app *model.K8sApp) ([]appsv1.Deployment, [
 		//deployments = append(deployments, deployment) // 将转换后的 deployment 添加到 deployments 切片中
 
 		//方式2构建deployment
+		//replicas := int32(instance.Replicas) // 将 int 转换为 int32
+		//deployment := appsv1.Deployment{
+		//	TypeMeta: metav1.TypeMeta{
+		//		APIVersion: "apps/v1",
+		//		Kind:       "Deployment",
+		//	},
+		//	ObjectMeta: metav1.ObjectMeta{
+		//		Name:      app.Name,
+		//		Namespace: app.Namespace,
+		//	},
+		//	Spec: appsv1.DeploymentSpec{
+		//		Replicas: &replicas, // 注意：Replicas 是指针类型
+		//		Selector: &metav1.LabelSelector{
+		//			MatchLabels: map[string]string{
+		//				"app": app.Name,
+		//			},
+		//		},
+		//		Template: corev1.PodTemplateSpec{
+		//			ObjectMeta: metav1.ObjectMeta{
+		//				Labels: map[string]string{
+		//					"app": app.Name,
+		//				},
+		//			},
+		//			Spec: corev1.PodSpec{
+		//				Containers: []corev1.Container{
+		//					{
+		//						Name:  instance.Name,
+		//						Image: instance.Image,
+		//						Ports: []corev1.ContainerPort{
+		//							{
+		//								ContainerPort: portJson[0].Port,
+		//								Protocol:      corev1.Protocol(portJson[0].Protocol),
+		//							},
+		//						},
+		//					},
+		//				},
+		//			},
+		//		},
+		//	},
+		//}
+		//deployments = append(deployments, deployment)
+
+		// 方式3构建deployment
+		// 构建 Deployment
+		deployment := appsv1.Deployment{}
+		deployment.APIVersion = "apps/v1"
+		deployment.Kind = "Deployment"
+		deployment.ObjectMeta.Name = app.Name
+		deployment.ObjectMeta.Namespace = app.Namespace
+
 		replicas := int32(instance.Replicas) // 将 int 转换为 int32
-		deployment := appsv1.Deployment{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
+		deployment.Spec.Replicas = &replicas // 使用 int32 指针
+
+		deployment.Spec.Selector = &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"app": app.Name,
 			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      app.Name,
-				Namespace: app.Namespace,
-			},
-			Spec: appsv1.DeploymentSpec{
-				Replicas: &replicas, // 注意：Replicas 是指针类型
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"app": app.Name,
-					},
-				},
-				Template: corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"app": app.Name,
-						},
-					},
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							{
-								Name:  instance.Name,
-								Image: instance.Image,
-								Ports: []corev1.ContainerPort{
-									{
-										ContainerPort: portJson[0].Port,
-										Protocol:      corev1.Protocol(portJson[0].Protocol),
-									},
-								},
-							},
-						},
+		}
+
+		deployment.Spec.Template.ObjectMeta.Labels = map[string]string{
+			"app": app.Name,
+		}
+
+		deployment.Spec.Template.Spec.Containers = []corev1.Container{
+			{
+				Name:  instance.Name,
+				Image: instance.Image,
+				Ports: []corev1.ContainerPort{
+					{
+						ContainerPort: portJson[0].Port,
+						Protocol:      corev1.Protocol(portJson[0].Protocol),
 					},
 				},
 			},
 		}
 		deployments = append(deployments, deployment)
-
 		// step2:构建service
 		// 方式1构建service
 		//service := map[string]interface{}{
