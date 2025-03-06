@@ -27,6 +27,7 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"log"
@@ -1252,4 +1253,108 @@ func CreateK8sApp(ctx context.Context, K8sCluser *model.K8sCluster, deployments 
 	}
 
 	return nil
+}
+
+// 解析K8SApp请求的代码
+func ParseK8sApp(ctx context.Context, app *model.K8sApp) ([]appsv1.Deployment, []corev1.Service, error) {
+	if len(app.K8sInstances) == 0 {
+		return nil, nil, fmt.Errorf("no instances provided")
+	}
+	var deployments []appsv1.Deployment
+	var services []corev1.Service
+	for _, instance := range app.K8sInstances {
+		portJson, err2 := ParsePorts(instance.ContainerCore.PortJson)
+		if portJson == nil {
+			return nil, nil, fmt.Errorf("instance containerCore portJson is nil")
+		}
+		if err2 != nil {
+			return nil, nil, fmt.Errorf("instance ContainerCore PortJson parse fail")
+		}
+		// step1:构建deployment
+		deploy := map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      app.Name,
+				"namespace": app.Namespace,
+			},
+			"spec": map[string]interface{}{
+				"replicas": instance.Replicas,
+				"selector": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						"app": app.Name,
+					},
+				},
+				"template": map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": map[string]interface{}{
+							"app": app.Name,
+						},
+					},
+					"spec": map[string]interface{}{
+						"containers": []map[string]interface{}{
+							{
+								"name":  instance.Name,
+								"image": instance.Image,
+								"ports": []map[string]interface{}{
+									{
+										"containerPort": portJson[0].Port,
+										"protocol":      portJson[0].Protocol,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		deployBytes, err := json.Marshal(deploy) // 将 map 转换为 *appsv1.Deployment
+		if err != nil {
+			log.Fatalf("Error marshaling deploy: %v", err)
+		}
+
+		var deployment appsv1.Deployment
+		err = json.Unmarshal(deployBytes, &deployment)
+		if err != nil {
+			log.Fatalf("Error unmarshaling deploy: %v", err)
+		}
+
+		deployments = append(deployments, deployment) // 将转换后的 deployment 添加到 deployments 切片中
+		// step2:构建service
+		service := map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Service",
+			"metadata": map[string]interface{}{
+				"name":      app.Name,
+				"namespace": app.Namespace,
+			},
+			"spec": map[string]interface{}{
+				"selector": map[string]interface{}{
+					"app": app.Name,
+				},
+				"ports": []map[string]interface{}{
+					{
+						"port":       portJson[0].Port,
+						"protocol":   portJson[0].Protocol,
+						"targetPort": portJson[0].Port,
+					},
+				},
+				"type": app.ServiceType,
+			},
+		}
+
+		serviceBytes, err := json.Marshal(service) // 将 map 转换为 *core.Service
+		if err != nil {
+			log.Fatalf("Error marshaling service: %v", err)
+		}
+		var svc corev1.Service
+		err = json.Unmarshal(serviceBytes, &svc)
+		if err != nil {
+			log.Fatalf("Error unmarshaling service: %v", err)
+		}
+
+		services = append(services, svc) // 将转换后的 service 添加到 services 切片中
+	}
+	return deployments, services, nil
 }
