@@ -114,6 +114,7 @@ func (d *deploymentService) UpdateDeployment(ctx context.Context, deploymentReso
 	}
 
 	existingDeployment, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Get(ctx, deploymentResource.DeploymentYaml.Name, metav1.GetOptions{})
+
 	if err != nil {
 		return fmt.Errorf("failed to get existing Deployment: %w", err)
 	}

@@ -70,8 +70,8 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		// 应用 Deployment 和 Service 的抽象
 		apps := k8sAppApiGroup.Group("/apps")
 		{
-			apps.GET("/", k.GetK8sAppList)                 // 获取 Kubernetes 应用列表
-			apps.POST("/", k.CreateK8sAppOne)              // 创建单个 Kubernetes 应用
+			apps.POST("/create", k.CreateK8sAppOne)        // 创建单个 Kubernetes 应用
+			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表
 			apps.PUT("/:id", k.UpdateK8sAppOne)            // 更新单个 Kubernetes 应用
 			apps.DELETE("/:id", k.DeleteK8sAppOne)         // 删除单个 Kubernetes 应用
 			apps.GET("/:id", k.GetK8sAppOne)               // 获取单个 Kubernetes 应用
@@ -220,7 +220,10 @@ func (k *K8sAppHandler) GetK8sAppList(ctx *gin.Context) {
 
 // CreateK8sAppOne 创建单个 Kubernetes 应用
 func (k *K8sAppHandler) CreateK8sAppOne(ctx *gin.Context) {
-	// TODO: 实现创建单个 Kubernetes 应用的逻辑
+	var req model.K8sApp
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.appService.CreateAppOne(ctx, &req)
+	})
 }
 
 // UpdateK8sAppOne 更新单个 Kubernetes 应用

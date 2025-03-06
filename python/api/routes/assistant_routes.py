@@ -24,70 +24,87 @@ THE SOFTWARE.
 description: 助手路由
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from typing import Dict, List, Any, Optional
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Body, Query
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 
-from utils.logger import get_logger
-from utils.metrics import timing_decorator
+from rag.qa_assistant import QaAssistant
+from rag.knowledge_base import KnowledgeBase
 
 router = APIRouter()
-logger = get_logger("assistant_routes")
+
+qa_assistant = None
+
+# 初始化模型
+def get_qa_assistant():
+    global qa_assistant
+    if qa_assistant is None:
+        # 创建知识库
+        kb = KnowledgeBase(
+            docs_dir="./knowledge_docs",
+            persist_directory="./data/storage/vector_store" 
+        )
+        
+        # 创建QA助手
+        qa_assistant = QaAssistant(knowledge_base=kb)
+        
+    return qa_assistant
 
 # 请求模型
-class AssistantQueryRequest(BaseModel):
-    query: str
-    context: Optional[Dict[str, Any]] = None
-    history: Optional[List[Dict[str, str]]] = None
-
-class KnowledgeBaseRequest(BaseModel):
-    documents: List[Dict[str, Any]]
-    metadata: Optional[Dict[str, Any]] = None
-
+class QuestionRequest(BaseModel):
+    question: str
+    chat_history: Optional[List[Dict[str, str]]] = None
+    
 # 响应模型
-class AssistantResponse(BaseModel):
+class AnswerResponse(BaseModel):
     answer: str
-    sources: List[Dict[str, Any]]
-    confidence: float
-
-class KnowledgeBaseResponse(BaseModel):
-    status: str
-    document_ids: List[str]
-    message: str
-
-# 路由
-@router.post("/query", response_model=AssistantResponse)
-@timing_decorator
-async def query_assistant(request: AssistantQueryRequest):
-    """查询AI助手"""
-    logger.info(f"Received assistant query: {request.query}")
+    sources: List[str]
     
-    return {
-        "answer": "这是一个示例回答。具体实现将在RAG模块中完成。",
-        "sources": [],
-        "confidence": 0.95
-    }
+# API端点：回答问题
+@router.post("/question", response_model=AnswerResponse)
+async def answer_question(
+    request: QuestionRequest,
+    qa: QaAssistant = Depends(get_qa_assistant)
+):
+    try:
+        result = qa.answer_question(
+            question=request.question,
+            chat_history=request.chat_history
+        )
+        
+        return {
+            "answer": result["answer"],
+            "sources": result.get("sources", [])
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error answering question: {str(e)}")
 
-@router.post("/knowledge", response_model=KnowledgeBaseResponse)
-@timing_decorator
-async def update_knowledge_base(request: KnowledgeBaseRequest, background_tasks: BackgroundTasks):
-    """更新知识库"""
-    logger.info(f"Updating knowledge base with {len(request.documents)} documents")
-    
-    return {
-        "status": "success",
-        "document_ids": ["doc-1", "doc-2"],
-        "message": "Knowledge base update scheduled"
-    }
+# API端点：加载知识库
+@router.post("/load-knowledge")
+async def load_knowledge(
+    background_tasks: BackgroundTasks,
+    qa: QaAssistant = Depends(get_qa_assistant)
+):
+    try:
+        # 在后台加载知识库
+        background_tasks.add_task(qa.knowledge_base.load_documents)
+        return {"message": "Knowledge base loading started in background"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading knowledge base: {str(e)}")
 
-@router.get("/knowledge/{document_id}")
-@timing_decorator
-async def get_document(document_id: str):
-    """获取知识库文档"""
-    logger.info(f"Retrieving document: {document_id}")
-    
-    return {
-        "id": document_id,
-        "content": "示例文档内容",
-        "metadata": {"source": "example", "timestamp": "2023-01-01T00:00:00Z"}
-    }
+# API端点：添加文档
+class DocumentItem(BaseModel):
+    content: str
+    metadata: Dict[str, Any] = {}
+
+@router.post("/add-documents")
+async def add_documents(
+    documents: List[DocumentItem],
+    qa: QaAssistant = Depends(get_qa_assistant)
+):
+    try:
+        docs_list = [{"content": doc.content, "metadata": doc.metadata} for doc in documents]
+        qa.knowledge_base.add_documents(docs_list)
+        return {"message": f"Added {len(documents)} documents to knowledge base"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error adding documents: {str(e)}")

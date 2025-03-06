@@ -63,7 +63,7 @@ async def detect_metric_anomalies(request: MetricAnomalyRequest, background_task
     """检测指标异常"""
     logger.info(f"Detecting metric anomalies for service: {request.service_name}")
     
-    # 这里只是准备工作，实际实现将在core模块中完成
+    # 准备工作，实际实现将在core模块中完成
     return {
         "anomalies": [],
         "detection_time": 0.0,
