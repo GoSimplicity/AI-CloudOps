@@ -24,3 +24,34 @@
  */
 
 package uesr
+
+import (
+	"context"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
+
+type InstanceDAO interface {
+	CreateInstanceOne(ctx context.Context, instance *model.K8sInstance) error
+}
+type instanceDAO struct {
+	db *gorm.DB
+	l  *zap.Logger
+}
+
+func NewInstanceDAO(db *gorm.DB, l *zap.Logger) InstanceDAO {
+	return &instanceDAO{
+		db: db,
+		l:  l,
+	}
+}
+
+func (i *instanceDAO) CreateInstanceOne(ctx context.Context, instance *model.K8sInstance) error {
+	if err := i.db.WithContext(ctx).Create(instance).Error; err != nil {
+		i.l.Error("CreateInstanceOne 创建Instance任务失败", zap.Error(err), zap.Any("instance", instance))
+		return err
+	}
+
+	return nil
+}

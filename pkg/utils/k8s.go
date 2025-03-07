@@ -1220,6 +1220,67 @@ func ParsePorts(portJson string) ([]corev1.ServicePort, error) {
 
 	return servicePorts, nil
 }
+func ParseK8sInstance(ctx context.Context, instance *model.K8sInstance) (appsv1.Deployment, corev1.Service, error) {
+
+	// 解析端口
+	portJson, err2 := ParsePorts(instance.PortJson)
+	if len(portJson) == 0 {
+		return appsv1.Deployment{}, corev1.Service{}, fmt.Errorf("instance containerCore portJson is nil")
+	}
+	if err2 != nil {
+		return appsv1.Deployment{}, corev1.Service{}, fmt.Errorf("instance ContainerCore PortJson parse fail")
+	}
+	// 构建deployment
+	deployment := appsv1.Deployment{}
+	deployment.APIVersion = "apps/v1"
+	deployment.Kind = "Deployment"
+	deployment.ObjectMeta.Name = instance.Name
+	deployment.ObjectMeta.Namespace = instance.Namespace
+
+	replicas := int32(instance.Replicas) // 将 int 转换为 int32
+	deployment.Spec.Replicas = &replicas // 使用 int32 指针
+
+	deployment.Spec.Selector = &metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"app": instance.Name,
+		},
+	}
+
+	deployment.Spec.Template.ObjectMeta.Labels = map[string]string{
+		"app": instance.Name,
+	}
+
+	deployment.Spec.Template.Spec.Containers = []corev1.Container{
+		{
+			Name:  instance.Name,
+			Image: instance.Image,
+			Ports: []corev1.ContainerPort{
+				{
+					ContainerPort: portJson[0].Port,
+					Protocol:      corev1.Protocol(portJson[0].Protocol),
+				},
+			},
+		},
+	}
+
+	// 构建service
+	service := corev1.Service{}
+	service.APIVersion = "v1"
+	service.Kind = "Service"
+	service.ObjectMeta.Name = instance.Name
+	service.ObjectMeta.Namespace = instance.Namespace
+	service.Spec.Selector = map[string]string{"app": instance.Name}
+	service.Spec.Ports = []corev1.ServicePort{
+		{
+			Port:       portJson[0].Port,
+			Protocol:   corev1.Protocol(portJson[0].Protocol),
+			TargetPort: intstr.FromInt(int(portJson[0].Port)),
+		},
+	}
+	service.Spec.Type = corev1.ServiceTypeNodePort // Note:这里硬编码了下，由于传入参数的问题
+
+	return deployment, service, nil
+}
 
 // 解析K8SApp请求的代码
 func ParseK8sApp(ctx context.Context, app *model.K8sApp) ([]appsv1.Deployment, []corev1.Service, error) {

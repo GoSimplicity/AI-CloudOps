@@ -71,10 +71,10 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		apps := k8sAppApiGroup.Group("/apps")
 		{
 			apps.POST("/create", k.CreateK8sAppOne)        // 创建单个 Kubernetes 应用
-			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表
 			apps.PUT("/:id", k.UpdateK8sAppOne)            // 更新单个 Kubernetes 应用
 			apps.DELETE("/:id", k.DeleteK8sAppOne)         // 删除单个 Kubernetes 应用
 			apps.GET("/:id", k.GetK8sAppOne)               // 获取单个 Kubernetes 应用
+			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表
 			apps.GET("/:id/pods", k.GetK8sPodListByDeploy) // 根据部署获取 Kubernetes Pod 列表
 			apps.GET("/select", k.GetK8sAppListForSelect)  // 获取用于选择的 Kubernetes 应用列表
 		}
@@ -110,7 +110,7 @@ func (k *K8sAppHandler) GetClusterNamespacesUnique(ctx *gin.Context) {
 
 // CreateK8sInstanceOne 创建单个 Kubernetes 实例
 func (k *K8sAppHandler) CreateK8sInstanceOne(ctx *gin.Context) {
-	var req model.K8sInstanceRequest
+	var req model.K8sInstance
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.appService.CreateInstanceOne(ctx, &req)
 	})
@@ -228,7 +228,10 @@ func (k *K8sAppHandler) CreateK8sAppOne(ctx *gin.Context) {
 
 // UpdateK8sAppOne 更新单个 Kubernetes 应用
 func (k *K8sAppHandler) UpdateK8sAppOne(ctx *gin.Context) {
-	// TODO: 实现更新单个 Kubernetes 应用的逻辑
+	var req model.K8sApp
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.appService.CreateAppOne(ctx, &req)
+	})
 }
 
 // DeleteK8sAppOne 删除单个 Kubernetes 应用

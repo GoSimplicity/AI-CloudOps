@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/uesr"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
@@ -12,7 +13,7 @@ import (
 
 type AppService interface {
 	// 实例
-	CreateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
+	CreateInstanceOne(ctx context.Context, instance *model.K8sInstance) error
 	UpdateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
 	BatchDeleteInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
 	BatchRestartInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
@@ -23,44 +24,54 @@ type AppService interface {
 	CreateAppOne(ctx context.Context, app *model.K8sApp) error
 }
 type appService struct {
-	dao    admin.ClusterDAO
-	client client.K8sClient
-	l      *zap.Logger
+	dao         admin.ClusterDAO
+	appdao      uesr.AppDAO
+	instancedao uesr.InstanceDAO
+	client      client.K8sClient
+	l           *zap.Logger
 }
 
-func NewAppService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) AppService {
+func NewAppService(dao admin.ClusterDAO, appdao uesr.AppDAO, instancedao uesr.InstanceDAO, client client.K8sClient, l *zap.Logger) AppService {
 	return &appService{
-		dao:    dao,
-		client: client,
-		l:      l,
+		dao:         dao,
+		appdao:      appdao,
+		instancedao: instancedao,
+		client:      client,
+		l:           l,
 	}
 }
 
-func (a *appService) CreateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error {
-	// 1.创建deployment请求参数
-	deploymentRequest := &model.K8sDeploymentRequest{
-		ClusterId:       instance.ClusterId,
+func (a *appService) CreateInstanceOne(ctx context.Context, instance *model.K8sInstance) error {
+	//0 先入数据库
+	err := a.instancedao.CreateInstanceOne(ctx, instance) // 单侧先删除外键：ALTER TABLE k8s_instances DROP FOREIGN KEY fk_k8s_apps_k8s_instances;
+	if err != nil {
+		return fmt.Errorf("failed to create instance: %w", err)
+	}
+	// 将instance转换成deployment和service内容
+	deployment, service, err := pkg.ParseK8sInstance(ctx, instance)
+	// 2.通过clustername获取集群
+	k8scluster, err2 := a.dao.GetClusterByName(ctx, instance.Cluster)
+	if err2 != nil {
+		return fmt.Errorf("failed to get Cluster: %w", err2)
+	}
+	// 调用创建函数
+	deploymentRequest := model.K8sDeploymentRequest{
+		ClusterId:       k8scluster.ID,
 		Namespace:       instance.Namespace,
-		DeploymentNames: instance.DeploymentNames,
-		DeploymentYaml:  instance.DeploymentYaml,
+		DeploymentNames: []string{deployment.Name},
+		DeploymentYaml:  &deployment,
 	}
 	// 调用deploymentService的CreateDeployment方法创建deployment
-	err := pkg.CreateDeployment(ctx, deploymentRequest, a.client, a.l)
-	if err != nil {
-		return fmt.Errorf("failed to create Deployment: %w", err)
-	}
-	// 2.创建service请求参数
-	svcRequest := &model.K8sServiceRequest{
-		ClusterId:    instance.ClusterId,
+	pkg.CreateDeployment(ctx, &deploymentRequest, a.client, a.l)
+	//
+	serviceRequest := model.K8sServiceRequest{
+		ClusterId:    k8scluster.ID,
 		Namespace:    instance.Namespace,
-		ServiceNames: instance.ServiceNames,
-		ServiceYaml:  instance.ServiceYaml,
+		ServiceNames: []string{service.Name},
+		ServiceYaml:  &service,
 	}
 	// 调用svcService的CreateService方法创建service
-	err = pkg.CreateService(ctx, svcRequest, a.client, a.l)
-	if err != nil {
-		return fmt.Errorf("failed to create Service: %w", err)
-	}
+	pkg.CreateService(ctx, &serviceRequest, a.client, a.l)
 	return nil
 }
 
@@ -182,6 +193,11 @@ func (a *appService) GetInstanceAll(ctx context.Context, clusterId int) ([]model
 	//return nil, nil
 }
 func (a *appService) CreateAppOne(ctx context.Context, app *model.K8sApp) error {
+	// 0.先入数据库
+	err0 := a.appdao.CreateAppOne(ctx, app)
+	if err0 != nil {
+		return fmt.Errorf("failed to create app in db: %w", err0)
+	}
 	// 1.解析获得deployment和service
 	deployments, services, err := pkg.ParseK8sApp(ctx, app)
 	if err != nil {
@@ -190,7 +206,7 @@ func (a *appService) CreateAppOne(ctx context.Context, app *model.K8sApp) error 
 	// 2.通过clustername获取集群
 	k8scluster, err2 := a.dao.GetClusterByName(ctx, app.Cluster)
 	if err2 != nil {
-		return fmt.Errorf("failed to get Deployment: %w", err2)
+		return fmt.Errorf("failed to get Cluster: %w", err2)
 	}
 	// 3.封装deploymentRequest请求参数
 	for i := 0; i < len(deployments); i++ {

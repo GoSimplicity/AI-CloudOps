@@ -12,6 +12,7 @@ import (
 	api5 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	uesr "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/uesr"
 	admin2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	user2  "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/uesr"
 	api4 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
@@ -112,7 +113,9 @@ func InitWebServer() *Cmd {
 	k8sYamlTaskHandler := api5.NewK8sYamlTaskHandler(logger, yamlTaskService)
 	yamlTemplateService := admin2.NewYamlTemplateService(yamlTemplateDAO, yamlTaskDAO, k8sClient, logger)
 	k8sYamlTemplateHandler := api5.NewK8sYamlTemplateHandler(logger, yamlTemplateService)
-	k8sAppService := user2.NewAppService(clusterDAO, k8sClient, logger)
+	k8sAppDao:=uesr.NewAppDAO(db, logger)
+	k8sInstanceDao:=uesr.NewInstanceDAO(db,logger)
+	k8sAppService := user2.NewAppService(clusterDAO,k8sAppDao,k8sInstanceDao, k8sClient, logger)
 	k8sAppHandler := api5.NewK8sAppHandler(logger, k8sAppService)
 	alertManagerEventDAO := alert.NewAlertManagerEventDAO(db, logger, userDAO)
 	scrapePoolDAO := scrape.NewScrapePoolDAO(db, logger, userDAO)
