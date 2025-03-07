@@ -198,43 +198,37 @@ func (a *appService) CreateAppOne(ctx context.Context, app *model.K8sApp) error 
 	if err0 != nil {
 		return fmt.Errorf("failed to create app in db: %w", err0)
 	}
-	// 1.解析获得deployment和service
-	deployments, services, err := pkg.ParseK8sApp(ctx, app)
-	if err != nil {
-		return fmt.Errorf("failed to get Deployment: %w", err)
-	}
-	// 2.通过clustername获取集群
-	k8scluster, err2 := a.dao.GetClusterByName(ctx, app.Cluster)
-	if err2 != nil {
-		return fmt.Errorf("failed to get Cluster: %w", err2)
-	}
-	// 3.封装deploymentRequest请求参数
-	for i := 0; i < len(deployments); i++ {
-		var deploymentRequest model.K8sDeploymentRequest
-		deploymentRequest = model.K8sDeploymentRequest{
+	// 1.创建实例
+	for i := 0; i < len(app.K8sInstances); i++ {
+		instance := app.K8sInstances[i]
+		// 将instance转换成deployment和service内容
+		deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
+		if err != nil {
+			return fmt.Errorf("failed to 转换 deployment, service: %w", err0)
+		}
+		// 2.通过clustername获取集群
+		k8scluster, err2 := a.dao.GetClusterByName(ctx, instance.Cluster)
+		if err2 != nil {
+			return fmt.Errorf("failed to get Cluster: %w", err2)
+		}
+		// 调用创建函数
+		deploymentRequest := model.K8sDeploymentRequest{
 			ClusterId:       k8scluster.ID,
-			Namespace:       app.Namespace,
-			DeploymentNames: []string{deployments[i].Name},
-			DeploymentYaml:  &deployments[i],
+			Namespace:       instance.Namespace,
+			DeploymentNames: []string{deployment.Name},
+			DeploymentYaml:  &deployment,
 		}
 		// 调用deploymentService的CreateDeployment方法创建deployment
 		pkg.CreateDeployment(ctx, &deploymentRequest, a.client, a.l)
-	}
-	// 4.封装serviceRequest请求参数
-	for i := 0; i < len(services); i++ {
-		var serviceRequest model.K8sServiceRequest
-		serviceRequest = model.K8sServiceRequest{
+		//
+		serviceRequest := model.K8sServiceRequest{
 			ClusterId:    k8scluster.ID,
-			Namespace:    app.Namespace,
-			ServiceNames: []string{services[i].Name},
-			ServiceYaml:  &services[i],
+			Namespace:    instance.Namespace,
+			ServiceNames: []string{service.Name},
+			ServiceYaml:  &service,
 		}
 		// 调用svcService的CreateService方法创建service
 		pkg.CreateService(ctx, &serviceRequest, a.client, a.l)
 	}
-	//err = pkg.CreateK8sApp(ctx, k8scluster, deployments, services, a.client, a.l)
-	//if err != nil {
-	//	return fmt.Errorf("failed to create Deployment: %w", err)
-	//}
 	return nil
 }
