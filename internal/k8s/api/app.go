@@ -71,10 +71,10 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		apps := k8sAppApiGroup.Group("/apps")
 		{
 			apps.POST("/create", k.CreateK8sAppOne)        // 创建单个 Kubernetes 应用
-			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表
 			apps.PUT("/:id", k.UpdateK8sAppOne)            // 更新单个 Kubernetes 应用
 			apps.DELETE("/:id", k.DeleteK8sAppOne)         // 删除单个 Kubernetes 应用
 			apps.GET("/:id", k.GetK8sAppOne)               // 获取单个 Kubernetes 应用
+			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表
 			apps.GET("/:id/pods", k.GetK8sPodListByDeploy) // 根据部署获取 Kubernetes Pod 列表
 			apps.GET("/select", k.GetK8sAppListForSelect)  // 获取用于选择的 Kubernetes 应用列表
 		}
@@ -84,7 +84,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		{
 			projects.GET("/", k.GetK8sProjectList)                // 获取 Kubernetes 项目列表
 			projects.GET("/select", k.GetK8sProjectListForSelect) // 获取用于选择的 Kubernetes 项目列表
-			projects.POST("/", k.CreateK8sProject)                // 创建 Kubernetes 项目
+			projects.POST("/create", k.CreateK8sProject)          // 创建 Kubernetes 项目
 			projects.PUT("/", k.UpdateK8sProject)                 // 更新 Kubernetes 项目
 			projects.DELETE("/:id", k.DeleteK8sProjectOne)        // 删除单个 Kubernetes 项目
 		}
@@ -110,7 +110,7 @@ func (k *K8sAppHandler) GetClusterNamespacesUnique(ctx *gin.Context) {
 
 // CreateK8sInstanceOne 创建单个 Kubernetes 实例
 func (k *K8sAppHandler) CreateK8sInstanceOne(ctx *gin.Context) {
-	var req model.K8sInstanceRequest
+	var req model.K8sInstance
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.appService.CreateInstanceOne(ctx, &req)
 	})
@@ -142,27 +142,19 @@ func (k *K8sAppHandler) BatchRestartK8sInstance(ctx *gin.Context) {
 
 // GetK8sInstanceByApp 根据应用获取 Kubernetes 实例
 func (k *K8sAppHandler) GetK8sInstanceByApp(ctx *gin.Context) {
-	// 1.获取请求参数
-	appName := ctx.DefaultQuery("app", "")
-	clusterIDStr := ctx.DefaultQuery("cluster_id", "")
-
-	if appName == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "app parameter is required"})
+	appID := ctx.Query("app_id") // 获取 app_id 的值
+	if appID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "app_id is required"})
+		return
+	}
+	appID64, err := strconv.ParseInt(appID, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid app_id"})
 		return
 	}
 
-	// 2. 转换 cluster_id 为整数
-	var clusterID int
-	if clusterIDStr != "" {
-		var err error
-		clusterID, err = strconv.Atoi(clusterIDStr)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid cluster_id"})
-			return
-		}
-	}
-	// 3.调用appService的GetInstanceByApp方法获取实例
-	instances, err := k.appService.GetInstanceByApp(ctx, clusterID, appName)
+	// 2.调用服务方法获取实例列表
+	instances, err := k.appService.GetInstanceByApp(ctx, appID64)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -173,18 +165,7 @@ func (k *K8sAppHandler) GetK8sInstanceByApp(ctx *gin.Context) {
 
 // GetK8sInstanceList 获取 Kubernetes 实例列表
 func (k *K8sAppHandler) GetK8sInstanceList(ctx *gin.Context) {
-	clusterStr := ctx.DefaultQuery("clusterId", "")
-
-	var clusterID int
-	if clusterStr != "" {
-		var err error
-		clusterID, err = strconv.Atoi(clusterStr)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deployment_id"})
-			return
-		}
-	}
-	res, err := k.appService.GetInstanceAll(ctx, clusterID)
+	res, err := k.appService.GetInstanceAll(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -194,23 +175,16 @@ func (k *K8sAppHandler) GetK8sInstanceList(ctx *gin.Context) {
 
 // GetK8sInstanceOne 获取单个 Kubernetes 实例
 func (k *K8sAppHandler) GetK8sInstanceOne(ctx *gin.Context) {
-	clusterStr := ctx.Param("id")
-
-	var clusterID int
-	if clusterStr != "" {
-		var err error
-		clusterID, err = strconv.Atoi(clusterStr)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deployment_id"})
-			return
-		}
+	instanceId := ctx.Param("id")
+	instanceId_int, err2 := strconv.ParseInt(instanceId, 10, 64)
+	if err2 != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
 	}
-	res, err := k.appService.GetInstanceOne(ctx, clusterID)
+	instance, err := k.appService.GetInstanceOne(ctx, instanceId_int)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
 	}
-	ctx.JSON(http.StatusOK, res[0])
+	ctx.JSON(http.StatusOK, instance)
 }
 
 // GetK8sAppList 获取 Kubernetes 应用列表
@@ -228,7 +202,10 @@ func (k *K8sAppHandler) CreateK8sAppOne(ctx *gin.Context) {
 
 // UpdateK8sAppOne 更新单个 Kubernetes 应用
 func (k *K8sAppHandler) UpdateK8sAppOne(ctx *gin.Context) {
-	// TODO: 实现更新单个 Kubernetes 应用的逻辑
+	var req model.K8sApp
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.appService.CreateAppOne(ctx, &req)
+	})
 }
 
 // DeleteK8sAppOne 删除单个 Kubernetes 应用
@@ -263,7 +240,10 @@ func (k *K8sAppHandler) GetK8sProjectListForSelect(ctx *gin.Context) {
 
 // CreateK8sProject 创建 Kubernetes 项目
 func (k *K8sAppHandler) CreateK8sProject(ctx *gin.Context) {
-	// TODO: 实现创建 Kubernetes 项目的逻辑
+	var req model.K8sProject
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.appService.CreateProjectOne(ctx, &req)
+	})
 }
 
 // UpdateK8sProject 更新 Kubernetes 项目

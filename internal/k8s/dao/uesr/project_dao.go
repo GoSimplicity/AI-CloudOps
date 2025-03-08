@@ -24,3 +24,33 @@
  */
 
 package uesr
+
+import (
+	"context"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
+
+type ProjectDAO interface {
+	CreateProjectOne(ctx context.Context, project *model.K8sProject) error
+}
+
+type projectDAO struct {
+	db *gorm.DB
+	l  *zap.Logger
+}
+
+func NewProjectDAO(db *gorm.DB, l *zap.Logger) ProjectDAO {
+	return &projectDAO{
+		db: db,
+		l:  l,
+	}
+}
+func (p *projectDAO) CreateProjectOne(ctx context.Context, project *model.K8sProject) error {
+	if err := p.db.WithContext(ctx).Create(project).Error; err != nil {
+		p.l.Error("CreateProjectOne 创建k8sProject失败", zap.Error(err))
+		return err
+	}
+	return nil
+}
