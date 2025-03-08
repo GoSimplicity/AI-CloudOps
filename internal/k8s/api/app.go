@@ -315,7 +315,28 @@ func (k *K8sAppHandler) GetK8sPodListByDeploy(ctx *gin.Context) {
 
 // GetK8sAppListForSelect 获取用于选择的 Kubernetes 应用列表
 func (k *K8sAppHandler) GetK8sAppListForSelect(ctx *gin.Context) {
-	// TODO: 实现获取用于选择的 Kubernetes 应用列表的逻辑
+
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "instance_ids cannot be empty"})
+		return
+	}
+
+	// 调用服务方法进行批量重启
+	apps, err1 := k.appService.GetAppByIds(ctx, req.IDs)
+	if err1 != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, apps)
 }
 
 // GetK8sProjectList 获取 Kubernetes 项目列表

@@ -9,6 +9,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type AppService interface {
@@ -25,6 +26,7 @@ type AppService interface {
 	GetAppOne(ctx context.Context, id int64) (model.K8sApp, error)
 	DeleteAppOne(ctx context.Context, id int64) error
 	UpdateAppOne(ctx context.Context, id int64, app model.K8sApp) error
+	GetAppByIds(ctx context.Context, ids []int64) ([]model.K8sApp, error)
 	// 项目
 	CreateProjectOne(ctx context.Context, project *model.K8sProject) error
 }
@@ -369,6 +371,28 @@ func (a *appService) UpdateAppOne(ctx context.Context, id int64, app model.K8sAp
 	}
 	return nil
 }
+
+func (a *appService) GetAppByIds(ctx context.Context, ids []int64) ([]model.K8sApp, error) {
+	var apps []model.K8sApp
+	for _, id := range ids {
+		app, err := a.appdao.GetAppById(ctx, id)
+		if err != nil {
+			if err == gorm.ErrRecordNotFound {
+				a.l.Warn("部分应用不存在", zap.Int64("appId", id))
+				continue
+			}
+			a.l.Error("批量查询应用失败", zap.Int64("appId", id), zap.Error(err))
+			return nil, fmt.Errorf("failed to get app %d: %w", id, err)
+		}
+		apps = append(apps, app)
+	}
+
+	if len(apps) == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return apps, nil
+}
+
 func (a *appService) CreateProjectOne(ctx context.Context, project *model.K8sProject) error {
 	// 0.先入数据库
 	err := a.projectdao.CreateProjectOne(ctx, project)
