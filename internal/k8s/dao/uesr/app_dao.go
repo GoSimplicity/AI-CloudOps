@@ -36,6 +36,7 @@ type AppDAO interface {
 	CreateAppOne(ctx context.Context, app *model.K8sApp) error
 	GetAppById(ctx context.Context, id int64) (model.K8sApp, error)
 	DeleteAppById(ctx context.Context, id int64) (model.K8sApp, error)
+	UpdateAppById(ctx context.Context, id int64, app model.K8sApp) error
 }
 type appDAO struct {
 	db *gorm.DB
@@ -92,4 +93,24 @@ func (a *appDAO) DeleteAppById(ctx context.Context, id int64) (model.K8sApp, err
 	}
 
 	return app, nil
+}
+func (a *appDAO) UpdateAppById(ctx context.Context, id int64, app model.K8sApp) error {
+	result := a.db.WithContext(ctx).
+		Model(&model.K8sApp{}).
+		Where("id = ?", id).
+		Updates(app)
+
+	if result.Error != nil {
+		a.l.Error("UpdateAppById 更新应用失败",
+			zap.Int64("appId", id),
+			zap.Error(result.Error))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		a.l.Warn("UpdateAppById 应用不存在", zap.Int64("appId", id))
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
 }

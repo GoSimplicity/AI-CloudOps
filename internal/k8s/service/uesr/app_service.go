@@ -24,7 +24,7 @@ type AppService interface {
 	CreateAppOne(ctx context.Context, app *model.K8sApp) error
 	GetAppOne(ctx context.Context, id int64) (model.K8sApp, error)
 	DeleteAppOne(ctx context.Context, id int64) error
-
+	UpdateAppOne(ctx context.Context, id int64, app model.K8sApp) error
 	// 项目
 	CreateProjectOne(ctx context.Context, project *model.K8sProject) error
 }
@@ -323,6 +323,52 @@ func (a *appService) GetAppOne(ctx context.Context, id int64) (model.K8sApp, err
 		return model.K8sApp{}, fmt.Errorf("failed to get app in db: %w", err)
 	}
 	return app, nil
+}
+func (a *appService) UpdateAppOne(ctx context.Context, id int64, app model.K8sApp) error {
+	// 更新数据库
+	err := a.appdao.UpdateAppById(ctx, id, app)
+	if err != nil {
+		return fmt.Errorf("failed to update app in db: %w", err)
+	}
+	// 开始实例更新
+	// 1. 查找关联的instances
+
+	for _, instance := range app.K8sInstances {
+		// 转换实例为K8s资源
+		deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
+		if err != nil {
+			return fmt.Errorf("failed to parse instance %d: %w", instance.ID, err)
+		}
+
+		// 获取集群信息
+		cluster, err := a.dao.GetClusterByName(ctx, instance.Cluster)
+		if err != nil {
+			return fmt.Errorf("failed to get cluster for instance %d: %w", instance.ID, err)
+		}
+
+		// 删除Deployment
+		depReq := model.K8sDeploymentRequest{
+			ClusterId:       cluster.ID,
+			Namespace:       instance.Namespace,
+			DeploymentNames: []string{deployment.Name},
+			DeploymentYaml:  &deployment,
+		}
+		if err := pkg.UpdateDeployment(ctx, &depReq, a.client, a.l); err != nil {
+			return fmt.Errorf("failed to update deployment %s: %w", deployment.Name, err)
+		}
+
+		// 删除Service
+		svcReq := model.K8sServiceRequest{
+			ClusterId:    cluster.ID,
+			Namespace:    instance.Namespace,
+			ServiceNames: []string{service.Name},
+			ServiceYaml:  &service,
+		}
+		if err := pkg.UpdateService(ctx, &svcReq, a.client, a.l); err != nil {
+			return fmt.Errorf("failed to update service %s: %w", service.Name, err)
+		}
+	}
+	return nil
 }
 func (a *appService) CreateProjectOne(ctx context.Context, project *model.K8sProject) error {
 	// 0.先入数据库

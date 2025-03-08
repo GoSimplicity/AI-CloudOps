@@ -71,7 +71,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		apps := k8sAppApiGroup.Group("/apps")
 		{
 			apps.POST("/create", k.CreateK8sAppOne)        // 创建单个 Kubernetes 应用
-			apps.PUT("/:id", k.UpdateK8sAppOne)            // 更新单个 Kubernetes 应用
+			apps.PUT("/update/:id", k.UpdateK8sAppOne)     // 更新单个 Kubernetes 应用
 			apps.DELETE("/:id", k.DeleteK8sAppOne)         // 删除单个 Kubernetes 应用
 			apps.GET("/:id", k.GetK8sAppOne)               // 获取单个 Kubernetes 应用
 			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表
@@ -235,7 +235,18 @@ func (k *K8sAppHandler) GetK8sInstanceOne(ctx *gin.Context) {
 
 // GetK8sAppList 获取 Kubernetes 应用列表
 func (k *K8sAppHandler) GetK8sAppList(ctx *gin.Context) {
-	// TODO: 实现获取 Kubernetes 应用列表的逻辑
+	//Todo:
+	//ID := ctx.Query("id") // 获取 app_id 的值
+	//if ID == "" {
+	//	ctx.JSON(http.StatusBadRequest, gin.H{"error": "app_id is required"})
+	//	return
+	//}
+	//ID64, err := strconv.ParseInt(ID, 10, 64)
+	//if err != nil {
+	//	ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid app_id"})
+	//	return
+	//}
+	//k.appService.GetK8sAppList(ctx, ID)
 }
 
 // CreateK8sAppOne 创建单个 Kubernetes 应用
@@ -248,7 +259,24 @@ func (k *K8sAppHandler) CreateK8sAppOne(ctx *gin.Context) {
 
 // UpdateK8sAppOne 更新单个 Kubernetes 应用
 func (k *K8sAppHandler) UpdateK8sAppOne(ctx *gin.Context) {
-	// TODO:
+	// 拿到id参数
+	Id := ctx.Param("id")
+	Id_int, err := strconv.ParseInt(Id, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+	// 拿到req
+	var req model.K8sApp
+	if err = ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		return
+	}
+
+	err = k.appService.UpdateAppOne(ctx, Id_int, req)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "app updated successfully"})
 }
 
 // DeleteK8sAppOne 删除单个 Kubernetes 应用
