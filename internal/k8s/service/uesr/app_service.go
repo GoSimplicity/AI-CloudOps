@@ -14,7 +14,7 @@ import (
 type AppService interface {
 	// 实例
 	CreateInstanceOne(ctx context.Context, instance *model.K8sInstance) error
-	UpdateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
+	UpdateInstanceOne(ctx context.Context, id int64, instance model.K8sInstance) error
 	BatchDeleteInstance(ctx context.Context, ids []int64) error
 	BatchRestartInstance(ctx context.Context, ids []int64) error
 	GetInstanceByApp(ctx context.Context, appId int64) ([]model.K8sInstance, error)
@@ -80,28 +80,49 @@ func (a *appService) CreateInstanceOne(ctx context.Context, instance *model.K8sI
 	return nil
 }
 
-func (a *appService) UpdateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error {
-	// 1.更新deployment请求参数
-	deploymentRequest := &model.K8sDeploymentRequest{
-		ClusterId:       instance.ClusterId,
+func (a *appService) UpdateInstanceOne(ctx context.Context, id int64, instance model.K8sInstance) error {
+	// 1.从DB中取出具体的内容，然后更新=>[DB层面]
+	_, err := a.instancedao.GetInstanceById(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get instance: %w", err)
+	}
+	// 2.将instance转换成deployment和service内容
+	err = a.instancedao.UpdateInstanceById(ctx, id, instance)
+	if err != nil {
+		return fmt.Errorf("failed to update instance: %w", err)
+	}
+	// 3. 将instance转换成deployment和service内容
+	deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
+	if err != nil {
+		return fmt.Errorf("failed to parse k8s instance: %w", err)
+	}
+
+	// 4. 获取集群信息
+	k8scluster, err := a.dao.GetClusterByName(ctx, instance.Cluster)
+	if err != nil {
+		return fmt.Errorf("failed to get Cluster: %w", err)
+	}
+
+	// 5. 更新Deployment
+	deploymentRequest := model.K8sDeploymentRequest{
+		ClusterId:       k8scluster.ID,
 		Namespace:       instance.Namespace,
-		DeploymentNames: instance.DeploymentNames,
-		DeploymentYaml:  instance.DeploymentYaml,
+		DeploymentNames: []string{deployment.Name},
+		DeploymentYaml:  &deployment,
 	}
-	err := pkg.UpdateDeployment(ctx, deploymentRequest, a.client, a.l)
-	if err != nil {
-		return fmt.Errorf("failed to update Deployment: %w", err)
+	if err := pkg.UpdateDeployment(ctx, &deploymentRequest, a.client, a.l); err != nil {
+		return fmt.Errorf("failed to update deployment: %w", err)
 	}
-	// 2.更新service请求参数
-	svcRequest := &model.K8sServiceRequest{
-		ClusterId:    instance.ClusterId,
+
+	// 6. 更新Service
+	serviceRequest := model.K8sServiceRequest{
+		ClusterId:    k8scluster.ID,
 		Namespace:    instance.Namespace,
-		ServiceNames: instance.ServiceNames,
-		ServiceYaml:  instance.ServiceYaml,
+		ServiceNames: []string{service.Name},
+		ServiceYaml:  &service,
 	}
-	err = pkg.UpdateService(ctx, svcRequest, a.client, a.l)
-	if err != nil {
-		return fmt.Errorf("failed to update Service: %w", err)
+	if err := pkg.UpdateService(ctx, &serviceRequest, a.client, a.l); err != nil {
+		return fmt.Errorf("failed to update service: %w", err)
 	}
 	return nil
 }

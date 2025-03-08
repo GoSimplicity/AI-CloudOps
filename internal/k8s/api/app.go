@@ -59,7 +59,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		instances := k8sAppApiGroup.Group("/instances")
 		{
 			instances.POST("/create", k.CreateK8sInstanceOne)     // 创建单个 Kubernetes 实例
-			instances.PUT("/update", k.UpdateK8sInstanceOne)      // 更新单个 Kubernetes 实例
+			instances.PUT("/update/:id", k.UpdateK8sInstanceOne)  // 更新单个 Kubernetes 实例
 			instances.DELETE("/delete", k.BatchDeleteK8sInstance) // 批量删除 Kubernetes 实例
 			instances.POST("/restart", k.BatchRestartK8sInstance) // 批量重启 Kubernetes 实例
 			instances.GET("/by-app", k.GetK8sInstanceByApp)       // 根据应用获取 Kubernetes 实例
@@ -118,10 +118,24 @@ func (k *K8sAppHandler) CreateK8sInstanceOne(ctx *gin.Context) {
 
 // UpdateK8sInstanceOne 更新单个 Kubernetes 实例
 func (k *K8sAppHandler) UpdateK8sInstanceOne(ctx *gin.Context) {
-	var req model.K8sInstanceRequest
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.appService.UpdateInstanceOne(ctx, &req)
-	})
+	// 拿到id参数
+	instanceId := ctx.Param("id")
+	instanceId_int, err2 := strconv.ParseInt(instanceId, 10, 64)
+	if err2 != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+	// 拿到req
+	var req model.K8sInstance
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		return
+	}
+
+	err := k.appService.UpdateInstanceOne(ctx, instanceId_int, req)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "instance updated successfully"})
 }
 
 // BatchDeleteK8sInstance 批量删除 Kubernetes 实例
