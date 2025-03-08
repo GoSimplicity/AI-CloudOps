@@ -23,6 +23,8 @@ type AppService interface {
 	// 应用
 	CreateAppOne(ctx context.Context, app *model.K8sApp) error
 	GetAppOne(ctx context.Context, id int64) (model.K8sApp, error)
+	DeleteAppOne(ctx context.Context, id int64) error
+
 	// 项目
 	CreateProjectOne(ctx context.Context, project *model.K8sProject) error
 }
@@ -269,7 +271,52 @@ func (a *appService) CreateAppOne(ctx context.Context, app *model.K8sApp) error 
 	}
 	return nil
 }
+func (a *appService) DeleteAppOne(ctx context.Context, id int64) error {
+	// 0.操作数据库
+	app, err := a.appdao.DeleteAppById(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete app in db: %w", err)
+	}
 
+	// 1. 查找关联的instances
+	instances, err := a.instancedao.GetInstanceByApp(ctx, int64(app.ID))
+	for _, instance := range instances {
+		// 转换实例为K8s资源
+		deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
+		if err != nil {
+			return fmt.Errorf("failed to parse instance %d: %w", instance.ID, err)
+		}
+
+		// 获取集群信息
+		cluster, err := a.dao.GetClusterByName(ctx, instance.Cluster)
+		if err != nil {
+			return fmt.Errorf("failed to get cluster for instance %d: %w", instance.ID, err)
+		}
+
+		// 删除Deployment
+		depReq := model.K8sDeploymentRequest{
+			ClusterId:       cluster.ID,
+			Namespace:       instance.Namespace,
+			DeploymentNames: []string{deployment.Name},
+			DeploymentYaml:  &deployment,
+		}
+		if err := pkg.DeleteDeployment(ctx, &depReq, a.client, a.l); err != nil {
+			return fmt.Errorf("failed to delete deployment %s: %w", deployment.Name, err)
+		}
+
+		// 删除Service
+		svcReq := model.K8sServiceRequest{
+			ClusterId:    cluster.ID,
+			Namespace:    instance.Namespace,
+			ServiceNames: []string{service.Name},
+			ServiceYaml:  &service,
+		}
+		if err := pkg.DeleteService(ctx, &svcReq, a.client, a.l); err != nil {
+			return fmt.Errorf("failed to delete service %s: %w", service.Name, err)
+		}
+	}
+	return nil
+}
 func (a *appService) GetAppOne(ctx context.Context, id int64) (model.K8sApp, error) {
 	app, err := a.appdao.GetAppById(ctx, id)
 	if err != nil {

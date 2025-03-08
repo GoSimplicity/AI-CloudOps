@@ -35,6 +35,7 @@ import (
 type AppDAO interface {
 	CreateAppOne(ctx context.Context, app *model.K8sApp) error
 	GetAppById(ctx context.Context, id int64) (model.K8sApp, error)
+	DeleteAppById(ctx context.Context, id int64) (model.K8sApp, error)
 }
 type appDAO struct {
 	db *gorm.DB
@@ -69,5 +70,26 @@ func (a *appDAO) GetAppById(ctx context.Context, id int64) (model.K8sApp, error)
 		a.l.Error("GetAppById 获取应用失败", zap.Int64("appId", id), zap.Error(err))
 		return model.K8sApp{}, err
 	}
+	return app, nil
+}
+
+func (a *appDAO) DeleteAppById(ctx context.Context, id int64) (model.K8sApp, error) {
+	var app model.K8sApp
+	// 先查询记录
+	if err := a.db.WithContext(ctx).Where("id = ?", id).First(&app).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			a.l.Warn("DeleteAppById 应用不存在", zap.Int64("appId", id))
+			return model.K8sApp{}, gorm.ErrRecordNotFound
+		}
+		a.l.Error("DeleteAppById 查询应用失败", zap.Int64("appId", id), zap.Error(err))
+		return model.K8sApp{}, err
+	}
+
+	// 执行软删除（更新deleted_at）
+	if err := a.db.WithContext(ctx).Model(&app).Update("deleted_at", 1).Error; err != nil {
+		a.l.Error("DeleteAppById 更新删除状态失败", zap.Int64("appId", id), zap.Error(err))
+		return model.K8sApp{}, err
+	}
+
 	return app, nil
 }
