@@ -22,20 +22,25 @@ type AppService interface {
 	GetInstanceAll(ctx context.Context, clusterId int) ([]model.K8sInstance, error)
 	// 应用
 	CreateAppOne(ctx context.Context, app *model.K8sApp) error
+
+	// 项目
+	CreateProjectOne(ctx context.Context, project *model.K8sProject) error
 }
 type appService struct {
 	dao         admin.ClusterDAO
 	appdao      uesr.AppDAO
 	instancedao uesr.InstanceDAO
+	projectdao  uesr.ProjectDAO
 	client      client.K8sClient
 	l           *zap.Logger
 }
 
-func NewAppService(dao admin.ClusterDAO, appdao uesr.AppDAO, instancedao uesr.InstanceDAO, client client.K8sClient, l *zap.Logger) AppService {
+func NewAppService(dao admin.ClusterDAO, appdao uesr.AppDAO, instancedao uesr.InstanceDAO, projectdao uesr.ProjectDAO, client client.K8sClient, l *zap.Logger) AppService {
 	return &appService{
 		dao:         dao,
 		appdao:      appdao,
 		instancedao: instancedao,
+		projectdao:  projectdao,
 		client:      client,
 		l:           l,
 	}
@@ -229,6 +234,50 @@ func (a *appService) CreateAppOne(ctx context.Context, app *model.K8sApp) error 
 		}
 		// 调用svcService的CreateService方法创建service
 		pkg.CreateService(ctx, &serviceRequest, a.client, a.l)
+	}
+	return nil
+}
+
+func (a *appService) CreateProjectOne(ctx context.Context, project *model.K8sProject) error {
+	// 0.先入数据库
+	err := a.projectdao.CreateProjectOne(ctx, project)
+	if err != nil {
+		return fmt.Errorf("failed to create project in db: %w", err)
+	}
+	//1.开始创建K8SAPP
+	for i := 0; i < len(project.K8sApps); i++ {
+		for j := 0; j < len(project.K8sApps[i].K8sInstances); j++ {
+			instance := project.K8sApps[i].K8sInstances[j]
+
+			// 将instance转换成deployment和service内容
+			deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
+			if err != nil {
+				return fmt.Errorf("failed to 转换 deployment, service: %w", err)
+			}
+			// 2.通过clustername获取集群
+			k8scluster, err2 := a.dao.GetClusterByName(ctx, instance.Cluster)
+			if err2 != nil {
+				return fmt.Errorf("failed to get Cluster: %w", err2)
+			}
+			// 调用创建函数
+			deploymentRequest := model.K8sDeploymentRequest{
+				ClusterId:       k8scluster.ID,
+				Namespace:       instance.Namespace,
+				DeploymentNames: []string{deployment.Name},
+				DeploymentYaml:  &deployment,
+			}
+			// 调用deploymentService的CreateDeployment方法创建deployment
+			pkg.CreateDeployment(ctx, &deploymentRequest, a.client, a.l)
+			//
+			serviceRequest := model.K8sServiceRequest{
+				ClusterId:    k8scluster.ID,
+				Namespace:    instance.Namespace,
+				ServiceNames: []string{service.Name},
+				ServiceYaml:  &service,
+			}
+			// 调用svcService的CreateService方法创建service
+			pkg.CreateService(ctx, &serviceRequest, a.client, a.l)
+		}
 	}
 	return nil
 }
