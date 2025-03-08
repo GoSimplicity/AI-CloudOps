@@ -37,6 +37,7 @@ type AppDAO interface {
 	GetAppById(ctx context.Context, id int64) (model.K8sApp, error)
 	DeleteAppById(ctx context.Context, id int64) (model.K8sApp, error)
 	UpdateAppById(ctx context.Context, id int64, app model.K8sApp) error
+	GetAppsByProjectId(ctx context.Context, ids int64) ([]model.K8sApp, error)
 }
 type appDAO struct {
 	db *gorm.DB
@@ -113,4 +114,16 @@ func (a *appDAO) UpdateAppById(ctx context.Context, id int64, app model.K8sApp) 
 	}
 
 	return nil
+}
+
+// GetAppsByProjectId 根据多个 Project ID 查询关联的 K8sApp
+func (a *appDAO) GetAppsByProjectId(ctx context.Context, ids int64) ([]model.K8sApp, error) {
+	// 如果传入的 ID 列表为空，直接返回空结果
+
+	var apps []model.K8sApp
+	err := a.db.WithContext(ctx).Where("k8s_project_id = ?", ids).Find(&apps).Error
+	if err != nil {
+		return nil, err
+	}
+	return apps, nil
 }

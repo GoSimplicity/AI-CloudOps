@@ -88,11 +88,17 @@ func (i *instanceDAO) GetInstanceById(ctx context.Context, instanceId int64) (mo
 }
 
 func (i *instanceDAO) DeleteInstanceByIds(ctx context.Context, instanceIds []int64) error {
-	if err := i.db.WithContext(ctx).Where("id IN ?", instanceIds).Delete(&model.K8sInstance{}).Error; err != nil {
-		i.l.Error("DeleteInstanceByIds 删除Instance任务失败", zap.Error(err))
+	// 使用 Update 更新 deleted_at 字段
+	if err := i.db.WithContext(ctx).
+		Model(&model.K8sInstance{}).
+		Where("id IN ?", instanceIds).
+		Update("deleted_at", 1).Error; err != nil {
+		i.l.Error("DeleteInstanceByIds 逻辑删除失败", zap.Error(err))
+		return err
 	}
 	return nil
 }
+
 func (i *instanceDAO) GetInstanceByIds(ctx context.Context, instanceIds []int64) ([]model.K8sInstance, error) {
 
 	var instances []model.K8sInstance

@@ -74,7 +74,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 			apps.PUT("/update/:id", k.UpdateK8sAppOne)     // 更新单个 Kubernetes 应用
 			apps.DELETE("/:id", k.DeleteK8sAppOne)         // 删除单个 Kubernetes 应用
 			apps.GET("/:id", k.GetK8sAppOne)               // 获取单个 Kubernetes 应用
-			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表
+			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表 // TODO:需求未懂
 			apps.GET("/:id/pods", k.GetK8sPodListByDeploy) // 根据部署获取 Kubernetes Pod 列表
 			apps.GET("/select", k.GetK8sAppListForSelect)  // 获取用于选择的 Kubernetes 应用列表
 		}
@@ -82,7 +82,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		// 项目
 		projects := k8sAppApiGroup.Group("/projects")
 		{
-			projects.GET("/", k.GetK8sProjectList)                // 获取 Kubernetes 项目列表
+			projects.GET("/all", k.GetK8sProjectList)             // 获取 Kubernetes 项目列表
 			projects.GET("/select", k.GetK8sProjectListForSelect) // 获取用于选择的 Kubernetes 项目列表
 			projects.POST("/create", k.CreateK8sProject)          // 创建 Kubernetes 项目
 			projects.PUT("/", k.UpdateK8sProject)                 // 更新 Kubernetes 项目
@@ -310,22 +310,76 @@ func (k *K8sAppHandler) GetK8sAppOne(ctx *gin.Context) {
 
 // GetK8sPodListByDeploy 根据部署获取 Kubernetes Pod 列表
 func (k *K8sAppHandler) GetK8sPodListByDeploy(ctx *gin.Context) {
-	// TODO: 实现根据部署获取 Kubernetes Pod 列表的逻辑
+	ID := ctx.Param("id")
+	IDInt, err := strconv.ParseInt(ID, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid app ID"})
+		return
+	}
+	resources, err := k.appService.GetPodListByDeploy(ctx, IDInt)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, resources)
 }
 
 // GetK8sAppListForSelect 获取用于选择的 Kubernetes 应用列表
 func (k *K8sAppHandler) GetK8sAppListForSelect(ctx *gin.Context) {
-	// TODO: 实现获取用于选择的 Kubernetes 应用列表的逻辑
+
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "instance_ids cannot be empty"})
+		return
+	}
+
+	// 调用服务方法进行批量重启
+	apps, err1 := k.appService.GetAppByIds(ctx, req.IDs)
+	if err1 != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, apps)
 }
 
 // GetK8sProjectList 获取 Kubernetes 项目列表
 func (k *K8sAppHandler) GetK8sProjectList(ctx *gin.Context) {
-	// TODO: 实现获取 Kubernetes 项目列表的逻辑
+	projectList, err1 := k.appService.GetprojectList(ctx)
+	if err1 != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, projectList)
 }
 
 // GetK8sProjectListForSelect 获取用于选择的 Kubernetes 项目列表
 func (k *K8sAppHandler) GetK8sProjectListForSelect(ctx *gin.Context) {
-	// TODO: 实现获取用于选择的 Kubernetes 项目列表的逻辑
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+	// 解析 JSON 体
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ids cannot be empty"})
+		return
+	}
+	projectList, err1 := k.appService.GetprojectListByIds(ctx, req.IDs)
+	if err1 != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, projectList)
 }
 
 // CreateK8sProject 创建 Kubernetes 项目
@@ -343,7 +397,17 @@ func (k *K8sAppHandler) UpdateK8sProject(ctx *gin.Context) {
 
 // DeleteK8sProjectOne 删除单个 Kubernetes 项目
 func (k *K8sAppHandler) DeleteK8sProjectOne(ctx *gin.Context) {
-	// TODO: 实现删除单个 Kubernetes 项目的逻辑
+	ID := ctx.Param("id")
+	IDInt, err := strconv.ParseInt(ID, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid app ID"})
+		return
+	}
+	err1 := k.appService.DeleteProjectOne(ctx, IDInt)
+	if err1 != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "project deleted successfully"})
 }
 
 // GetK8sCronjobList 获取 CronJob 列表
