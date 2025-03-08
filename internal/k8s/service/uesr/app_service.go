@@ -17,7 +17,7 @@ type AppService interface {
 	UpdateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
 	BatchDeleteInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
 	BatchRestartInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
-	GetInstanceByApp(ctx context.Context, clusterId int, appName string) ([]model.K8sInstanceByApp, error)
+	GetInstanceByApp(ctx context.Context, appId int64) ([]model.K8sInstance, error)
 	GetInstanceOne(ctx context.Context, clusterId int) ([]model.K8sInstance, error)
 	GetInstanceAll(ctx context.Context) ([]model.K8sInstance, error)
 	// 应用
@@ -150,33 +150,13 @@ func (a *appService) BatchRestartInstance(ctx context.Context, instance []*model
 	return nil
 }
 
-func (a *appService) GetInstanceByApp(ctx context.Context, clusterId int, appName string) ([]model.K8sInstanceByApp, error) {
-	replies, err := pkg.GetDeploymentsByAppName(ctx, clusterId, appName, a.client, a.l)
+func (a *appService) GetInstanceByApp(ctx context.Context, appId int64) ([]model.K8sInstance, error) {
+	// 1.根据appId获取实例列表
+	instances, err := a.instancedao.GetInstanceByApp(ctx, appId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Deployment: %w", err)
 	}
-	// 3.返回实例列表
-	instances := make([]model.K8sInstanceByApp, len(replies))
-
-	for i, reply := range replies {
-		containers := make([]model.ContainerInfo, len(reply.Containers))
-		for j, c := range reply.Containers {
-			containers[j] = model.ContainerInfo{
-				Name:  c.Name,
-				Image: c.Image,
-				Ports: c.Ports,
-			}
-		}
-
-		instances[i] = model.K8sInstanceByApp{
-			Name:       reply.Name,
-			Status:     reply.Status,
-			Replicas:   reply.Replicas,
-			Containers: containers,
-		}
-	}
 	return instances, nil
-	//return nil, nil
 }
 
 func (a *appService) GetInstanceOne(ctx context.Context, clusterId int) ([]model.K8sInstance, error) {

@@ -142,27 +142,19 @@ func (k *K8sAppHandler) BatchRestartK8sInstance(ctx *gin.Context) {
 
 // GetK8sInstanceByApp 根据应用获取 Kubernetes 实例
 func (k *K8sAppHandler) GetK8sInstanceByApp(ctx *gin.Context) {
-	// 1.获取请求参数
-	appName := ctx.DefaultQuery("app", "")
-	clusterIDStr := ctx.DefaultQuery("cluster_id", "")
-
-	if appName == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "app parameter is required"})
+	appID := ctx.Query("app_id") // 获取 app_id 的值
+	if appID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "app_id is required"})
+		return
+	}
+	appID64, err := strconv.ParseInt(appID, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid app_id"})
 		return
 	}
 
-	// 2. 转换 cluster_id 为整数
-	var clusterID int
-	if clusterIDStr != "" {
-		var err error
-		clusterID, err = strconv.Atoi(clusterIDStr)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid cluster_id"})
-			return
-		}
-	}
-	// 3.调用appService的GetInstanceByApp方法获取实例
-	instances, err := k.appService.GetInstanceByApp(ctx, clusterID, appName)
+	// 2.调用服务方法获取实例列表
+	instances, err := k.appService.GetInstanceByApp(ctx, appID64)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

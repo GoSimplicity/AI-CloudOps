@@ -35,6 +35,7 @@ import (
 type InstanceDAO interface {
 	CreateInstanceOne(ctx context.Context, instance *model.K8sInstance) error
 	GetInstanceAll(ctx context.Context) ([]model.K8sInstance, error)
+	GetInstanceByApp(ctx context.Context, AppId int64) ([]model.K8sInstance, error)
 }
 type instanceDAO struct {
 	db *gorm.DB
@@ -61,6 +62,13 @@ func (i *instanceDAO) GetInstanceAll(ctx context.Context) ([]model.K8sInstance, 
 	if err := i.db.WithContext(ctx).Find(&instances).Error; err != nil {
 		i.l.Error("GetInstanceAll 获取Instance任务失败", zap.Error(err))
 		return nil, err
+	}
+	return instances, nil
+}
+func (i *instanceDAO) GetInstanceByApp(ctx context.Context, AppId int64) ([]model.K8sInstance, error) {
+	var instances []model.K8sInstance
+	if err := i.db.WithContext(ctx).Where("k8s_app_id = ?", AppId).Find(&instances).Error; err != nil {
+		i.l.Error("GetInstanceByApp 获取Instance任务失败", zap.Error(err))
 	}
 	return instances, nil
 }
