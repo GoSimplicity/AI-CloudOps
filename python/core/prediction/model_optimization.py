@@ -36,32 +36,235 @@ import optuna
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from prophet import Prophet
+from typing import List, Dict, Any, Optional
+import numpy as np
+import optuna
+from sklearn.metrics import r2_score, mean_squared_error
+from core.prediction.resource_prediction import create_predictor
+from utils.logger import get_logger
 
+logger = get_logger("aiops.model_optimization")
 from utils.logger import get_logger
 
 logger = get_logger("model_optimization")
 
 
-def create_optimizer(optimizer_type: str, model_dir: str = "./models/prediction") -> 'ModelOptimizer':
+def create_optimizer(optimizer_type: str = "supervised", **kwargs) -> ModelOptimizer:
     """
     创建模型优化器工厂函数
-    
+
     Args:
-        optimizer_type: 优化器类型，可选值为 "time_series", "ml", "failure"
-        model_dir: 模型保存目录
-        
+        optimizer_type: 优化器类型 (supervised, unsupervised, timeseries, ml, failure)
+        **kwargs: 其他参数
+
     Returns:
-        对应类型的模型优化器实例
+        优化器实例
     """
-    if optimizer_type == "time_series":
-        return TimeSeriesModelOptimizer(model_dir)
+    if optimizer_type == "supervised":
+        return SupervisedModelOptimizer(
+            model_dir=kwargs.get("model_dir", "./models/optimized"),
+            n_trials=kwargs.get("n_trials", 20),
+            cv=kwargs.get("cv", 5),
+        )
+    elif optimizer_type == "unsupervised":
+        return UnsupervisedModelOptimizer(
+            model_dir=kwargs.get("model_dir", "./models/optimized"),
+            n_trials=kwargs.get("n_trials", 20),
+        )
+    elif optimizer_type == "timeseries":
+        # 添加对时间序列优化器的支持
+        return TimeSeriesModelOptimizer(
+            model_dir=kwargs.get("model_dir", "./models/optimized"),
+            n_trials=kwargs.get("n_trials", 20),
+        )
     elif optimizer_type == "ml":
-        return MLModelOptimizer(model_dir)
+        return MLModelOptimizer(
+            model_dir=kwargs.get("model_dir", "./models/optimized"),
+            n_trials=kwargs.get("n_trials", 20),
+        )
     elif optimizer_type == "failure":
-        return FailurePredictionModelOptimizer(model_dir)
+        return FailurePredictionModelOptimizer(
+            model_dir=kwargs.get("model_dir", "./models/optimized"),
+            n_trials=kwargs.get("n_trials", 20),
+        )
     else:
         raise ValueError(f"不支持的优化器类型: {optimizer_type}")
 
+
+class TimeSeriesModelOptimizer(ModelOptimizer):
+    """时间序列模型优化器"""
+
+    def __init__(self, model_dir: str = "./models/optimized", n_trials: int = 20):
+        """
+        初始化时间序列模型优化器
+
+        Args:
+            model_dir: 优化后模型保存目录
+            n_trials: 优化尝试次数
+        """
+        super().__init__(model_dir)
+        self.n_trials = n_trials
+
+    def optimize(self, data: List[Dict[str, Any]], model_types: List[str] = None, metric_name: str = "cpu_usage") -> Dict[str, Any]:
+        """
+        优化时间序列预测模型
+
+        Args:
+            data: 训练数据
+            model_types: 要优化的模型类型列表，默认为 ["arima", "ets"]
+            metric_name: 目标指标名称
+
+        Returns:
+            优化结果
+        """
+        if model_types is None:
+            model_types = ["arima", "ets"]
+        
+        logger.info(f"优化时间序列模型，目标指标: {metric_name}...")
+
+        # 提取时间序列数据
+        ts_data = []
+        for item in data:
+            ts_data.append({
+                "timestamp": item["timestamp"],
+                "value": item["value"],
+                "metric_name": item.get("metric_name", metric_name)
+            })
+
+        # 创建优化研究
+        study = optuna.create_study(direction="maximize")
+
+        # 定义优化目标函数
+        def objective(trial):
+            # 定义超参数搜索空间
+            model_type = trial.suggest_categorical("model_type", model_types)
+            
+            if model_type == "arima":
+                # ARIMA参数
+                p = trial.suggest_int("p", 0, 5)
+                d = trial.suggest_int("d", 0, 2)
+                q = trial.suggest_int("q", 0, 5)
+                seasonal_p = trial.suggest_int("seasonal_p", 0, 2)
+                seasonal_d = trial.suggest_int("seasonal_d", 0, 1)
+                seasonal_q = trial.suggest_int("seasonal_q", 0, 2)
+                seasonal_m = trial.suggest_int("seasonal_m", 12, 24)
+                
+                # 创建预测器
+                predictor = create_predictor(
+                    predictor_type="timeseries",
+                    model_dir=self.model_dir,
+                    model_type="arima"
+                )
+                
+                # 设置模型参数
+                predictor.model_params = {
+                    "order": (p, d, q),
+                    "seasonal_order": (seasonal_p, seasonal_d, seasonal_q, seasonal_m)
+                }
+                
+            else:  # ets
+                # 指数平滑参数
+                seasonal = trial.suggest_categorical("seasonal", ["add", "mul", None])
+                seasonal_periods = trial.suggest_int("seasonal_periods", 12, 24)
+                
+                # 创建预测器
+                predictor = create_predictor(
+                    predictor_type="timeseries",
+                    model_dir=self.model_dir,
+                    model_type="ets"
+                )
+                
+                # 设置模型参数
+                predictor.model_params = {
+                    "seasonal": seasonal,
+                    "seasonal_periods": seasonal_periods
+                }
+            
+            # 分割数据
+            train_size = int(len(ts_data) * 0.8)
+            train_data = ts_data[:train_size]
+            test_data = ts_data[train_size:]
+            
+            if len(train_data) < 10 or len(test_data) < 5:
+                return 0.0  # 数据不足
+            
+            try:
+                # 训练模型
+                predictor.train(train_data)
+                
+                # 预测
+                predictions = predictor.predict(train_data[-10:], future_steps=len(test_data))
+                
+                # 计算评分 (使用R²或负RMSE)
+                actual = [item["value"] for item in test_data]
+                predicted = [pred["value"] for pred in predictions]
+                
+                if len(actual) != len(predicted):
+                    return 0.0
+                
+                # 计算R²分数
+                r2 = r2_score(actual, predicted)
+                
+                # 计算RMSE
+                rmse = np.sqrt(mean_squared_error(actual, predicted))
+                
+                # 返回评分 (R² 或 -RMSE)
+                return r2 if not np.isnan(r2) else -rmse
+                
+            except Exception as e:
+                logger.warning(f"优化过程中出错: {str(e)}")
+                return 0.0
+        
+        # 运行优化
+        study.optimize(objective, n_trials=self.n_trials)
+        
+        # 获取最佳参数
+        best_params = study.best_params
+        best_value = study.best_value
+        
+        # 使用最佳参数创建和训练模型
+        model_type = best_params.get("model_type", "arima")
+        
+        predictor = create_predictor(
+            predictor_type="timeseries",
+            model_dir=self.model_dir,
+            model_type=model_type
+        )
+        
+        if model_type == "arima":
+            predictor.model_params = {
+                "order": (
+                    best_params.get("p", 1),
+                    best_params.get("d", 1),
+                    best_params.get("q", 0)
+                ),
+                "seasonal_order": (
+                    best_params.get("seasonal_p", 0),
+                    best_params.get("seasonal_d", 0),
+                    best_params.get("seasonal_q", 0),
+                    best_params.get("seasonal_m", 12)
+                )
+            }
+        else:  # ets
+            predictor.model_params = {
+                "seasonal": best_params.get("seasonal", "add"),
+                "seasonal_periods": best_params.get("seasonal_periods", 12)
+            }
+        
+        # 训练最终模型
+        predictor.train(ts_data)
+        
+        # 保存模型
+        model_path = predictor.save_model(f"optimized_{model_type}_{metric_name}")
+        
+        logger.info(f"最佳模型已保存到 {model_path}")
+        
+        return {
+            "model_type": model_type,
+            "best_params": best_params,
+            "best_score": best_value,
+            "model_path": model_path
+        }
 
 class ModelOptimizer:
     """模型优化器基类"""

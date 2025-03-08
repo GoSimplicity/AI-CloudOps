@@ -27,23 +27,145 @@ import pandas as pd
 import numpy as np
 import logging
 import time
-from typing import Dict, List, Union, Optional, Tuple
+from typing import Dict, List, Union, Optional, Tuple, Any
 from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
 
-class PrometheusCollector:
-    """Prometheus 指标收集器，用于从 Prometheus 查询和收集时序数据"""
+class PrometheusClient:
+    """Prometheus API 客户端"""
     
     def __init__(self, base_url: str, timeout: int = 30):
         """
+        初始化 Prometheus 客户端
+        
         Args:
             base_url: Prometheus 服务器的基础 URL
             timeout: 请求超时时间（秒）
         """
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
+    
+    def query(self, query: str, time: Optional[datetime] = None) -> Dict:
+        """执行 PromQL 即时查询
+        
+        Args:
+            query: PromQL 查询语句
+            time: 查询的时间点，默认为当前时间
+            
+        Returns:
+            Prometheus API 响应
+        """
+        endpoint = f"{self.base_url}/api/v1/query"
+        
+        params = {"query": query}
+        if time is not None:
+            params["time"] = time.timestamp()
+        
+        response = requests.get(endpoint, params=params, timeout=self.timeout)
+        response.raise_for_status()
+        return response.json()
+    
+    def query_range(self, query: str, start: datetime, end: datetime, step: str) -> Dict:
+        """执行 PromQL 范围查询
+        
+        Args:
+            query: PromQL 查询语句
+            start: 开始时间
+            end: 结束时间
+            step: 步长，如 "1m"
+            
+        Returns:
+            Prometheus API 响应
+        """
+        endpoint = f"{self.base_url}/api/v1/query_range"
+        
+        params = {
+            "query": query,
+            "start": start.timestamp(),
+            "end": end.timestamp(),
+            "step": step
+        }
+        
+        response = requests.get(endpoint, params=params, timeout=self.timeout)
+        response.raise_for_status()
+        return response.json()
+    
+    def get_metric_names(self) -> Dict:
+        """获取所有可用的指标名称
+        
+        Returns:
+            Prometheus API 响应
+        """
+        endpoint = f"{self.base_url}/api/v1/label/__name__/values"
+        response = requests.get(endpoint, timeout=self.timeout)
+        response.raise_for_status()
+        return response.json()
+    
+    def get_label_values(self, label: str) -> Dict:
+        """获取指定标签的所有可能值
+        
+        Args:
+            label: 标签名称
+            
+        Returns:
+            Prometheus API 响应
+        """
+        endpoint = f"{self.base_url}/api/v1/label/{label}/values"
+        response = requests.get(endpoint, timeout=self.timeout)
+        response.raise_for_status()
+        return response.json()
+    
+    def get_metric_metadata(self, metric: Optional[str] = None) -> Dict:
+        """获取指标的元数据
+        
+        Args:
+            metric: 指标名称，如果为 None 则获取所有指标的元数据
+            
+        Returns:
+            Prometheus API 响应
+        """
+        endpoint = f"{self.base_url}/api/v1/metadata"
+        
+        params = {}
+        if metric is not None:
+            params["metric"] = metric
+        
+        response = requests.get(endpoint, params=params, timeout=self.timeout)
+        response.raise_for_status()
+        return response.json()
+    
+    def check_connection(self) -> bool:
+        """检查与 Prometheus 服务器的连接
+        
+        Returns:
+            连接是否成功
+        """
+        try:
+            response = requests.get(f"{self.base_url}/-/healthy", timeout=self.timeout)
+            return response.status_code == 200
+        except requests.exceptions.RequestException:
+            return False
+
+class PrometheusCollector:
+    """Prometheus 指标收集器，用于从 Prometheus 查询和收集时序数据"""
+    
+    def __init__(self, base_url: str, timeout: int = 30, client=None):
+        """
+        Args:
+            base_url: Prometheus 服务器的基础 URL
+            timeout: 请求超时时间（秒）
+            client: 可选的自定义 Prometheus 客户端，用于测试
+        """
+        self.base_url = base_url.rstrip('/')
+        self.timeout = timeout
+        
+        if client is None:
+            self.client = PrometheusClient(base_url, timeout)
+        else:
+            self.client = client
+            
         logger.info(f"初始化 Prometheus 收集器，连接到 {base_url}")
     
     def query(self, query: str, time: Optional[datetime] = None) -> pd.DataFrame:
@@ -56,16 +178,8 @@ class PrometheusCollector:
         Returns:
             包含查询结果的 DataFrame
         """
-        endpoint = f"{self.base_url}/api/v1/query"
-        
-        params = {"query": query}
-        if time is not None:
-            params["time"] = time.timestamp()
-        
         try:
-            response = requests.get(endpoint, params=params, timeout=self.timeout)
-            response.raise_for_status()
-            result = response.json()
+            result = self.client.query(query, time)
             
             if result["status"] != "success":
                 logger.error(f"Prometheus 查询失败: {result.get('error', '未知错误')}")
@@ -90,8 +204,6 @@ class PrometheusCollector:
         Returns:
             包含查询结果的 DataFrame
         """
-        endpoint = f"{self.base_url}/api/v1/query_range"
-        
         # 转换 step 为字符串格式
         if isinstance(step, timedelta):
             step_seconds = step.total_seconds()
@@ -100,17 +212,8 @@ class PrometheusCollector:
             else:
                 step = f"{int(step_seconds // 60)}m"
         
-        params = {
-            "query": query,
-            "start": start_time.timestamp(),
-            "end": end_time.timestamp(),
-            "step": step
-        }
-        
         try:
-            response = requests.get(endpoint, params=params, timeout=self.timeout)
-            response.raise_for_status()
-            result = response.json()
+            result = self.client.query_range(query, start_time, end_time, step)
             
             if result["status"] != "success":
                 logger.error(f"Prometheus 范围查询失败: {result.get('error', '未知错误')}")
@@ -121,6 +224,50 @@ class PrometheusCollector:
         except requests.exceptions.RequestException as e:
             logger.error(f"Prometheus 范围查询请求异常: {str(e)}")
             return pd.DataFrame()
+    
+    def collect_metrics(self, metric_name: str, start_time: datetime, end_time: datetime, 
+                        step: str = "1m", labels: Dict[str, str] = None) -> List[Dict[str, Any]]:
+        """收集指定指标的时间序列数据
+        
+        Args:
+            metric_name: 指标名称
+            start_time: 开始时间
+            end_time: 结束时间
+            step: 步长，如 "1m"
+            labels: 可选的标签过滤条件
+            
+        Returns:
+            指标数据列表
+        """
+        # 构建查询语句
+        query = metric_name
+        if labels:
+            label_str = ",".join([f'{k}="{v}"' for k, v in labels.items()])
+            query = f'{metric_name}{{{label_str}}}'
+        
+        try:
+            result = self.client.query_range(query, start_time, end_time, step)
+            
+            if result["status"] != "success":
+                logger.error(f"收集指标失败: {result.get('error', '未知错误')}")
+                return []
+            
+            # 解析结果
+            metrics = []
+            for series in result.get("data", {}).get("result", []):
+                for timestamp, value in series.get("values", []):
+                    metrics.append({
+                        "timestamp": float(timestamp),
+                        "value": value,
+                        "metric_name": metric_name,
+                        "labels": series.get("metric", {})
+                    })
+            
+            return metrics
+        
+        except requests.exceptions.RequestException as e:
+            logger.error(f"收集指标请求异常: {str(e)}")
+            return []
     
     def _parse_query_result(self, result: Dict) -> pd.DataFrame:
         """解析即时查询结果
@@ -235,12 +382,8 @@ class PrometheusCollector:
         Returns:
             指标名称列表
         """
-        endpoint = f"{self.base_url}/api/v1/label/__name__/values"
-        
         try:
-            response = requests.get(endpoint, timeout=self.timeout)
-            response.raise_for_status()
-            result = response.json()
+            result = self.client.get_metric_names()
             
             if result["status"] != "success":
                 logger.error(f"获取指标名称失败: {result.get('error', '未知错误')}")
@@ -261,12 +404,8 @@ class PrometheusCollector:
         Returns:
             标签值列表
         """
-        endpoint = f"{self.base_url}/api/v1/label/{label}/values"
-        
         try:
-            response = requests.get(endpoint, timeout=self.timeout)
-            response.raise_for_status()
-            result = response.json()
+            result = self.client.get_label_values(label)
             
             if result["status"] != "success":
                 logger.error(f"获取标签值失败: {result.get('error', '未知错误')}")
@@ -287,16 +426,8 @@ class PrometheusCollector:
         Returns:
             指标元数据字典
         """
-        endpoint = f"{self.base_url}/api/v1/metadata"
-        
-        params = {}
-        if metric is not None:
-            params["metric"] = metric
-        
         try:
-            response = requests.get(endpoint, params=params, timeout=self.timeout)
-            response.raise_for_status()
-            result = response.json()
+            result = self.client.get_metric_metadata(metric)
             
             if result["status"] != "success":
                 logger.error(f"获取指标元数据失败: {result.get('error', '未知错误')}")
@@ -314,8 +445,4 @@ class PrometheusCollector:
         Returns:
             连接是否成功
         """
-        try:
-            response = requests.get(f"{self.base_url}/-/healthy", timeout=self.timeout)
-            return response.status_code == 200
-        except requests.exceptions.RequestException:
-            return False
+        return self.client.check_connection()
