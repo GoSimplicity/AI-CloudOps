@@ -331,8 +331,7 @@ func (a *appService) UpdateAppOne(ctx context.Context, id int64, app model.K8sAp
 		return fmt.Errorf("failed to update app in db: %w", err)
 	}
 	// 开始实例更新
-	// 1. 查找关联的instances
-
+	// TODO:存在DB-instances不统一问题
 	for _, instance := range app.K8sInstances {
 		// 转换实例为K8s资源
 		deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
