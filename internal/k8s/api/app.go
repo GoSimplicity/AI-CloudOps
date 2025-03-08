@@ -261,7 +261,16 @@ func (k *K8sAppHandler) DeleteK8sAppOne(ctx *gin.Context) {
 
 // GetK8sAppOne 获取单个 Kubernetes 应用
 func (k *K8sAppHandler) GetK8sAppOne(ctx *gin.Context) {
-	// TODO: 实现获取单个 Kubernetes 应用的逻辑
+	Id := ctx.Param("id")
+	Id_int, err2 := strconv.ParseInt(Id, 10, 64)
+	if err2 != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+	app, err := k.appService.GetAppOne(ctx, Id_int)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, app)
 }
 
 // GetK8sPodListByDeploy 根据部署获取 Kubernetes Pod 列表

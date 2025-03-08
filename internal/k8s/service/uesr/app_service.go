@@ -22,7 +22,7 @@ type AppService interface {
 	GetInstanceAll(ctx context.Context) ([]model.K8sInstance, error)
 	// 应用
 	CreateAppOne(ctx context.Context, app *model.K8sApp) error
-
+	GetAppOne(ctx context.Context, id int64) (model.K8sApp, error)
 	// 项目
 	CreateProjectOne(ctx context.Context, project *model.K8sProject) error
 }
@@ -270,6 +270,13 @@ func (a *appService) CreateAppOne(ctx context.Context, app *model.K8sApp) error 
 	return nil
 }
 
+func (a *appService) GetAppOne(ctx context.Context, id int64) (model.K8sApp, error) {
+	app, err := a.appdao.GetAppById(ctx, id)
+	if err != nil {
+		return model.K8sApp{}, fmt.Errorf("failed to get app in db: %w", err)
+	}
+	return app, nil
+}
 func (a *appService) CreateProjectOne(ctx context.Context, project *model.K8sProject) error {
 	// 0.先入数据库
 	err := a.projectdao.CreateProjectOne(ctx, project)
