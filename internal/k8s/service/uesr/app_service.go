@@ -107,9 +107,45 @@ func (a *appService) UpdateInstanceOne(ctx context.Context, instance *model.K8sI
 }
 
 func (a *appService) BatchDeleteInstance(ctx context.Context, ids []int64) error {
-	err := a.instancedao.DeleteInstanceByIds(ctx, ids)
+	// 1.从DB中取出内容
+	instances, err := a.instancedao.GetInstanceByIds(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("failed to get Deployment: %w", err)
+	}
+	// 2.然后删除对应的instances信息
+	err = a.instancedao.DeleteInstanceByIds(ctx, ids)
 	if err != nil {
 		return fmt.Errorf("failed to delete Deployment: %w", err)
+	}
+	// 3.接着需要删除对应的实例
+	for i := 0; i < len(instances); i++ {
+		instance := instances[i]
+		// 将instance转换成deployment和service内容
+		deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
+		if err != nil {
+			return fmt.Errorf("failed to 转换 deployment, service: %w", err)
+		}
+		// 2.通过clustername获取集群
+		k8scluster, err2 := a.dao.GetClusterByName(ctx, instance.Cluster)
+		if err2 != nil {
+			return fmt.Errorf("failed to get Cluster: %w", err2)
+		}
+		// 调用deploymentService的DeleteDeployment方法删除deployment
+		deploymentRequest := model.K8sDeploymentRequest{
+			ClusterId:       k8scluster.ID,
+			Namespace:       instance.Namespace,
+			DeploymentNames: []string{deployment.Name},
+			DeploymentYaml:  &deployment,
+		}
+		pkg.DeleteDeployment(ctx, &deploymentRequest, a.client, a.l)
+		//	调用svcService的DeleteService方法删除service
+		serviceRequest := model.K8sServiceRequest{
+			ClusterId:    k8scluster.ID,
+			Namespace:    instance.Namespace,
+			ServiceNames: []string{service.Name},
+			ServiceYaml:  &service,
+		}
+		pkg.DeleteService(ctx, &serviceRequest, a.client, a.l)
 	}
 	return nil
 }
