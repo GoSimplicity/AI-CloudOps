@@ -173,18 +173,7 @@ func (k *K8sAppHandler) GetK8sInstanceByApp(ctx *gin.Context) {
 
 // GetK8sInstanceList 获取 Kubernetes 实例列表
 func (k *K8sAppHandler) GetK8sInstanceList(ctx *gin.Context) {
-	clusterStr := ctx.DefaultQuery("clusterId", "")
-
-	var clusterID int
-	if clusterStr != "" {
-		var err error
-		clusterID, err = strconv.Atoi(clusterStr)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid deployment_id"})
-			return
-		}
-	}
-	res, err := k.appService.GetInstanceAll(ctx, clusterID)
+	res, err := k.appService.GetInstanceAll(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

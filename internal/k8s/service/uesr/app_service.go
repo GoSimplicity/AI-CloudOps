@@ -19,7 +19,7 @@ type AppService interface {
 	BatchRestartInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
 	GetInstanceByApp(ctx context.Context, clusterId int, appName string) ([]model.K8sInstanceByApp, error)
 	GetInstanceOne(ctx context.Context, clusterId int) ([]model.K8sInstance, error)
-	GetInstanceAll(ctx context.Context, clusterId int) ([]model.K8sInstance, error)
+	GetInstanceAll(ctx context.Context) ([]model.K8sInstance, error)
 	// 应用
 	CreateAppOne(ctx context.Context, app *model.K8sApp) error
 
@@ -188,14 +188,13 @@ func (a *appService) GetInstanceOne(ctx context.Context, clusterId int) ([]model
 	return res, nil
 	//return nil, nil
 }
-func (a *appService) GetInstanceAll(ctx context.Context, clusterId int) ([]model.K8sInstance, error) {
-	res, err := pkg.GetK8sInstanceOne(ctx, clusterId, a.client, a.l)
+func (a *appService) GetInstanceAll(ctx context.Context) ([]model.K8sInstance, error) {
+	allinstances, err := a.instancedao.GetInstanceAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Deployment: %w", err)
 	}
 	// 3.返回实例列表
-	return res, nil
-	//return nil, nil
+	return allinstances, nil
 }
 func (a *appService) CreateAppOne(ctx context.Context, app *model.K8sApp) error {
 	// 0.先入数据库
