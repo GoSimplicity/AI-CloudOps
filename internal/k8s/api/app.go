@@ -310,7 +310,17 @@ func (k *K8sAppHandler) GetK8sAppOne(ctx *gin.Context) {
 
 // GetK8sPodListByDeploy 根据部署获取 Kubernetes Pod 列表
 func (k *K8sAppHandler) GetK8sPodListByDeploy(ctx *gin.Context) {
-	// TODO: 实现根据部署获取 Kubernetes Pod 列表的逻辑
+	ID := ctx.Param("id")
+	IDInt, err := strconv.ParseInt(ID, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid app ID"})
+		return
+	}
+	resources, err := k.appService.GetPodListByDeploy(ctx, IDInt)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, resources)
 }
 
 // GetK8sAppListForSelect 获取用于选择的 Kubernetes 应用列表
