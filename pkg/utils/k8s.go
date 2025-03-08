@@ -1075,9 +1075,9 @@ func RestartDeployment(ctx context.Context, deploymentRequest *model.K8sDeployme
 }
 
 // BatchRestartK8sInstance 批量重启 Kubernetes 实例
-func BatchRestartK8sInstance(ctx context.Context, deploymentRequests []*model.K8sDeploymentRequest, client client.K8sClient, logger *zap.Logger) error {
+func BatchRestartK8sInstance(ctx context.Context, deploymentRequests []model.K8sDeploymentRequest, client client.K8sClient, logger *zap.Logger) error {
 	for _, deploymentReq := range deploymentRequests {
-		if err := RestartDeployment(ctx, deploymentReq, client, logger); err != nil {
+		if err := RestartDeployment(ctx, &deploymentReq, client, logger); err != nil {
 			logger.Error("批量重启 Deployment 失败", zap.String("name", deploymentReq.DeploymentYaml.Name), zap.Error(err))
 		}
 	}

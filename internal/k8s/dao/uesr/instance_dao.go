@@ -27,6 +27,7 @@ package uesr
 
 import (
 	"context"
+	"errors"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -37,7 +38,11 @@ type InstanceDAO interface {
 	GetInstanceAll(ctx context.Context) ([]model.K8sInstance, error)
 	GetInstanceByApp(ctx context.Context, AppId int64) ([]model.K8sInstance, error)
 	GetInstanceById(ctx context.Context, instanceId int64) (model.K8sInstance, error)
+	DeleteInstanceByIds(ctx context.Context, instanceIds []int64) error
+	GetInstanceByIds(ctx context.Context, instanceIds []int64) ([]model.K8sInstance, error)
+	UpdateInstanceById(ctx context.Context, id int64, instance model.K8sInstance) error
 }
+
 type instanceDAO struct {
 	db *gorm.DB
 	l  *zap.Logger
@@ -80,4 +85,47 @@ func (i *instanceDAO) GetInstanceById(ctx context.Context, instanceId int64) (mo
 		i.l.Error("GetInstanceById 获取Instance任务失败", zap.Error(err))
 	}
 	return instance, nil
+}
+
+func (i *instanceDAO) DeleteInstanceByIds(ctx context.Context, instanceIds []int64) error {
+	if err := i.db.WithContext(ctx).Where("id IN ?", instanceIds).Delete(&model.K8sInstance{}).Error; err != nil {
+		i.l.Error("DeleteInstanceByIds 删除Instance任务失败", zap.Error(err))
+	}
+	return nil
+}
+func (i *instanceDAO) GetInstanceByIds(ctx context.Context, instanceIds []int64) ([]model.K8sInstance, error) {
+
+	var instances []model.K8sInstance
+	if err := i.db.WithContext(ctx).Where("id IN ?", instanceIds).Find(&instances).Error; err != nil {
+		i.l.Error("GetInstancesByIds 查询 Instance 任务失败", zap.Error(err))
+		return nil, err
+	}
+	return instances, nil
+}
+func (i *instanceDAO) UpdateInstanceById(ctx context.Context, id int64, instance model.K8sInstance) error {
+	// 开始事务，确保操作的原子性
+	tx := i.db.WithContext(ctx).Begin()
+
+	// 检查该实例是否存在
+	var existingInstance model.K8sInstance
+	if err := tx.First(&existingInstance, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			tx.Rollback()                           // 事务回滚
+			return errors.New("instance not found") // 返回实例未找到的错误
+		}
+		tx.Rollback() // 事务回滚
+		return err    // 返回其他错误
+	}
+
+	// 更新实例信息
+	if err := tx.Model(&existingInstance).Updates(instance).Error; err != nil {
+		tx.Rollback() // 事务回滚
+		return err    // 返回更新失败的错误
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		return err // 返回提交事务失败的错误
+	}
+	return nil
 }

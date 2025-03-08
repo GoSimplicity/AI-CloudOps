@@ -59,7 +59,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		instances := k8sAppApiGroup.Group("/instances")
 		{
 			instances.POST("/create", k.CreateK8sInstanceOne)     // 创建单个 Kubernetes 实例
-			instances.PUT("/update", k.UpdateK8sInstanceOne)      // 更新单个 Kubernetes 实例
+			instances.PUT("/update/:id", k.UpdateK8sInstanceOne)  // 更新单个 Kubernetes 实例
 			instances.DELETE("/delete", k.BatchDeleteK8sInstance) // 批量删除 Kubernetes 实例
 			instances.POST("/restart", k.BatchRestartK8sInstance) // 批量重启 Kubernetes 实例
 			instances.GET("/by-app", k.GetK8sInstanceByApp)       // 根据应用获取 Kubernetes 实例
@@ -71,7 +71,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		apps := k8sAppApiGroup.Group("/apps")
 		{
 			apps.POST("/create", k.CreateK8sAppOne)        // 创建单个 Kubernetes 应用
-			apps.PUT("/:id", k.UpdateK8sAppOne)            // 更新单个 Kubernetes 应用
+			apps.PUT("/update/:id", k.UpdateK8sAppOne)     // 更新单个 Kubernetes 应用
 			apps.DELETE("/:id", k.DeleteK8sAppOne)         // 删除单个 Kubernetes 应用
 			apps.GET("/:id", k.GetK8sAppOne)               // 获取单个 Kubernetes 应用
 			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表
@@ -118,26 +118,72 @@ func (k *K8sAppHandler) CreateK8sInstanceOne(ctx *gin.Context) {
 
 // UpdateK8sInstanceOne 更新单个 Kubernetes 实例
 func (k *K8sAppHandler) UpdateK8sInstanceOne(ctx *gin.Context) {
-	var req model.K8sInstanceRequest
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.appService.UpdateInstanceOne(ctx, &req)
-	})
+	// 拿到id参数
+	instanceId := ctx.Param("id")
+	instanceId_int, err2 := strconv.ParseInt(instanceId, 10, 64)
+	if err2 != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+	// 拿到req
+	var req model.K8sInstance
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		return
+	}
+
+	err := k.appService.UpdateInstanceOne(ctx, instanceId_int, req)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "instance updated successfully"})
 }
 
 // BatchDeleteK8sInstance 批量删除 Kubernetes 实例
 func (k *K8sAppHandler) BatchDeleteK8sInstance(ctx *gin.Context) {
-	var req []*model.K8sInstanceRequest
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.appService.BatchDeleteInstance(ctx, req)
-	})
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+	// 解析 JSON 体
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ids cannot be empty"})
+		return
+	}
+	// 调用服务方法进行批量删除
+	if err := k.appService.BatchDeleteInstance(ctx, req.IDs); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "instances deleted successfully"})
+
 }
 
 // BatchRestartK8sInstance 批量重启 Kubernetes 实例
 func (k *K8sAppHandler) BatchRestartK8sInstance(ctx *gin.Context) {
-	var req []*model.K8sInstanceRequest
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.appService.BatchRestartInstance(ctx, req)
-	})
+	var req struct {
+		InstanceIDs []int64 `json:"instance_ids" binding:"required"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		return
+	}
+
+	if len(req.InstanceIDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "instance_ids cannot be empty"})
+		return
+	}
+
+	// 调用服务方法进行批量重启
+	if err := k.appService.BatchRestartInstance(ctx, req.InstanceIDs); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "instances restarted successfully"})
 }
 
 // GetK8sInstanceByApp 根据应用获取 Kubernetes 实例
@@ -189,7 +235,18 @@ func (k *K8sAppHandler) GetK8sInstanceOne(ctx *gin.Context) {
 
 // GetK8sAppList 获取 Kubernetes 应用列表
 func (k *K8sAppHandler) GetK8sAppList(ctx *gin.Context) {
-	// TODO: 实现获取 Kubernetes 应用列表的逻辑
+	//Todo:
+	//ID := ctx.Query("id") // 获取 app_id 的值
+	//if ID == "" {
+	//	ctx.JSON(http.StatusBadRequest, gin.H{"error": "app_id is required"})
+	//	return
+	//}
+	//ID64, err := strconv.ParseInt(ID, 10, 64)
+	//if err != nil {
+	//	ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid app_id"})
+	//	return
+	//}
+	//k.appService.GetK8sAppList(ctx, ID)
 }
 
 // CreateK8sAppOne 创建单个 Kubernetes 应用
@@ -202,20 +259,53 @@ func (k *K8sAppHandler) CreateK8sAppOne(ctx *gin.Context) {
 
 // UpdateK8sAppOne 更新单个 Kubernetes 应用
 func (k *K8sAppHandler) UpdateK8sAppOne(ctx *gin.Context) {
+	// 拿到id参数
+	Id := ctx.Param("id")
+	Id_int, err := strconv.ParseInt(Id, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+	// 拿到req
 	var req model.K8sApp
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.appService.CreateAppOne(ctx, &req)
-	})
+	if err = ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		return
+	}
+
+	err = k.appService.UpdateAppOne(ctx, Id_int, req)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "app updated successfully"})
 }
 
 // DeleteK8sAppOne 删除单个 Kubernetes 应用
 func (k *K8sAppHandler) DeleteK8sAppOne(ctx *gin.Context) {
-	// TODO: 实现删除单个 Kubernetes 应用的逻辑
+	Id := ctx.Param("id")
+	Id_int, err := strconv.ParseInt(Id, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid app_id"})
+	}
+	err = k.appService.DeleteAppOne(ctx, Id_int)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "app deleted successfully"})
+
 }
 
 // GetK8sAppOne 获取单个 Kubernetes 应用
 func (k *K8sAppHandler) GetK8sAppOne(ctx *gin.Context) {
-	// TODO: 实现获取单个 Kubernetes 应用的逻辑
+	Id := ctx.Param("id")
+	Id_int, err2 := strconv.ParseInt(Id, 10, 64)
+	if err2 != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+	app, err := k.appService.GetAppOne(ctx, Id_int)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, app)
 }
 
 // GetK8sPodListByDeploy 根据部署获取 Kubernetes Pod 列表
