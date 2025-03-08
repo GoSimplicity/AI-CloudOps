@@ -30,6 +30,7 @@ type AppService interface {
 	GetPodListByDeploy(ctx context.Context, id int64) ([]model.Resource, error)
 	// 项目
 	CreateProjectOne(ctx context.Context, project *model.K8sProject) error
+	GetprojectList(ctx context.Context) ([]model.K8sProject, error)
 }
 type appService struct {
 	dao         admin.ClusterDAO
@@ -457,4 +458,11 @@ func (a *appService) CreateProjectOne(ctx context.Context, project *model.K8sPro
 		}
 	}
 	return nil
+}
+func (a *appService) GetprojectList(ctx context.Context) ([]model.K8sProject, error) {
+	projectList, err := a.projectdao.GetAll(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project list: %w", err)
+	}
+	return projectList, nil
 }

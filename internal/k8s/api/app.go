@@ -74,7 +74,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 			apps.PUT("/update/:id", k.UpdateK8sAppOne)     // 更新单个 Kubernetes 应用
 			apps.DELETE("/:id", k.DeleteK8sAppOne)         // 删除单个 Kubernetes 应用
 			apps.GET("/:id", k.GetK8sAppOne)               // 获取单个 Kubernetes 应用
-			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表
+			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表 // TODO:需求未懂
 			apps.GET("/:id/pods", k.GetK8sPodListByDeploy) // 根据部署获取 Kubernetes Pod 列表
 			apps.GET("/select", k.GetK8sAppListForSelect)  // 获取用于选择的 Kubernetes 应用列表
 		}
@@ -82,7 +82,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		// 项目
 		projects := k8sAppApiGroup.Group("/projects")
 		{
-			projects.GET("/", k.GetK8sProjectList)                // 获取 Kubernetes 项目列表
+			projects.GET("/all", k.GetK8sProjectList)             // 获取 Kubernetes 项目列表
 			projects.GET("/select", k.GetK8sProjectListForSelect) // 获取用于选择的 Kubernetes 项目列表
 			projects.POST("/create", k.CreateK8sProject)          // 创建 Kubernetes 项目
 			projects.PUT("/", k.UpdateK8sProject)                 // 更新 Kubernetes 项目
@@ -351,7 +351,12 @@ func (k *K8sAppHandler) GetK8sAppListForSelect(ctx *gin.Context) {
 
 // GetK8sProjectList 获取 Kubernetes 项目列表
 func (k *K8sAppHandler) GetK8sProjectList(ctx *gin.Context) {
-	// TODO: 实现获取 Kubernetes 项目列表的逻辑
+	projectList, err1 := k.appService.GetprojectList(ctx)
+	if err1 != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, projectList)
 }
 
 // GetK8sProjectListForSelect 获取用于选择的 Kubernetes 项目列表

@@ -34,6 +34,7 @@ import (
 
 type ProjectDAO interface {
 	CreateProjectOne(ctx context.Context, project *model.K8sProject) error
+	GetAll(ctx context.Context) ([]model.K8sProject, error)
 }
 
 type projectDAO struct {
@@ -53,4 +54,15 @@ func (p *projectDAO) CreateProjectOne(ctx context.Context, project *model.K8sPro
 		return err
 	}
 	return nil
+}
+func (p *projectDAO) GetAll(ctx context.Context) ([]model.K8sProject, error) {
+	var projects []model.K8sProject
+	// 执行查询操作，从数据库中获取所有 K8sProject 记录
+	err := p.db.WithContext(ctx).Find(&projects).Error
+	if err != nil {
+		// 若查询出错，记录错误日志并返回错误信息
+		p.l.Error("GetAll 获取所有 k8sProject 失败", zap.Error(err))
+		return nil, err
+	}
+	return projects, nil
 }
