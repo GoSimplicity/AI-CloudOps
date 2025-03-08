@@ -361,7 +361,25 @@ func (k *K8sAppHandler) GetK8sProjectList(ctx *gin.Context) {
 
 // GetK8sProjectListForSelect 获取用于选择的 Kubernetes 项目列表
 func (k *K8sAppHandler) GetK8sProjectListForSelect(ctx *gin.Context) {
-	// TODO: 实现获取用于选择的 Kubernetes 项目列表的逻辑
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+	// 解析 JSON 体
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ids cannot be empty"})
+		return
+	}
+	projectList, err1 := k.appService.GetprojectListByIds(ctx, req.IDs)
+	if err1 != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, projectList)
 }
 
 // CreateK8sProject 创建 Kubernetes 项目

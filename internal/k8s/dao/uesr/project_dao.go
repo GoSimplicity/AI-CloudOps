@@ -35,6 +35,7 @@ import (
 type ProjectDAO interface {
 	CreateProjectOne(ctx context.Context, project *model.K8sProject) error
 	GetAll(ctx context.Context) ([]model.K8sProject, error)
+	GetByIds(ctx context.Context, ids []int64) ([]model.K8sProject, error)
 }
 
 type projectDAO struct {
@@ -62,6 +63,17 @@ func (p *projectDAO) GetAll(ctx context.Context) ([]model.K8sProject, error) {
 	if err != nil {
 		// 若查询出错，记录错误日志并返回错误信息
 		p.l.Error("GetAll 获取所有 k8sProject 失败", zap.Error(err))
+		return nil, err
+	}
+	return projects, nil
+}
+func (p *projectDAO) GetByIds(ctx context.Context, ids []int64) ([]model.K8sProject, error) {
+	var projects []model.K8sProject
+	// 使用 IN 条件查询指定 ID 的项目
+	err := p.db.WithContext(ctx).Where("id IN ?", ids).Find(&projects).Error
+	if err != nil {
+		// 若查询出错，记录错误日志并返回错误信息
+		p.l.Error("GetByIds 根据 ID 获取 k8sProject 失败", zap.Int64s("ids", ids), zap.Error(err))
 		return nil, err
 	}
 	return projects, nil
