@@ -397,7 +397,17 @@ func (k *K8sAppHandler) UpdateK8sProject(ctx *gin.Context) {
 
 // DeleteK8sProjectOne 删除单个 Kubernetes 项目
 func (k *K8sAppHandler) DeleteK8sProjectOne(ctx *gin.Context) {
-	// TODO: 实现删除单个 Kubernetes 项目的逻辑
+	ID := ctx.Param("id")
+	IDInt, err := strconv.ParseInt(ID, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid app ID"})
+		return
+	}
+	err1 := k.appService.DeleteProjectOne(ctx, IDInt)
+	if err1 != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "project deleted successfully"})
 }
 
 // GetK8sCronjobList 获取 CronJob 列表

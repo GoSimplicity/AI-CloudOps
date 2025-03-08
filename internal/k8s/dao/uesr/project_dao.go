@@ -36,6 +36,7 @@ type ProjectDAO interface {
 	CreateProjectOne(ctx context.Context, project *model.K8sProject) error
 	GetAll(ctx context.Context) ([]model.K8sProject, error)
 	GetByIds(ctx context.Context, ids []int64) ([]model.K8sProject, error)
+	DeleteProjectById(ctx context.Context, id int64) (model.K8sProject, error)
 }
 
 type projectDAO struct {
@@ -77,4 +78,18 @@ func (p *projectDAO) GetByIds(ctx context.Context, ids []int64) ([]model.K8sProj
 		return nil, err
 	}
 	return projects, nil
+}
+
+// 项目删除方法
+func (p *projectDAO) DeleteProjectById(ctx context.Context, id int64) (model.K8sProject, error) {
+	var project model.K8sProject
+	result := p.db.WithContext(ctx).
+		Model(&model.K8sProject{}).
+		Where("id = ?", id).
+		Update("deleted_at", 1)
+
+	if result.Error == nil && result.RowsAffected > 0 {
+		p.db.WithContext(ctx).First(&project, id)
+	}
+	return project, result.Error
 }

@@ -32,6 +32,7 @@ type AppService interface {
 	CreateProjectOne(ctx context.Context, project *model.K8sProject) error
 	GetprojectList(ctx context.Context) ([]model.K8sProject, error)
 	GetprojectListByIds(ctx context.Context, ids []int64) ([]model.K8sProject, error)
+	DeleteProjectOne(ctx context.Context, id int64) error
 }
 type appService struct {
 	dao         admin.ClusterDAO
@@ -474,4 +475,69 @@ func (a *appService) GetprojectListByIds(ctx context.Context, ids []int64) ([]mo
 		return nil, fmt.Errorf("failed to get project list by Ids: %w", err)
 	}
 	return projectList, nil
+}
+func (a *appService) DeleteProjectOne(ctx context.Context, id int64) error {
+	// 1.先通过id将k8sproject中的字段逻辑删除
+	_, err := a.projectdao.DeleteProjectById(ctx, id)
+	if err != nil {
+		return fmt.Errorf("项目软删除失败: %w", err)
+	}
+
+	// 2.通过id到k8sApps中查找，并且也是将其软删除
+	apps, err := a.appdao.GetAppsByProjectId(ctx, id)
+	if err != nil {
+		return fmt.Errorf("获取项目应用失败: %w", err)
+	}
+	// 3.通过k8sapps到k8sinstance中查找，并且将其软删除，同时需要记录其信息
+	var allInstances []model.K8sInstance
+	for _, app := range apps {
+		// 软删除应用
+		if _, err := a.appdao.DeleteAppById(ctx, int64(app.ID)); err != nil {
+			a.l.Warn("应用软删除失败", zap.Int64("appId", int64(app.ID)))
+		}
+		// 3. 获取并软删除实例
+		instances, err := a.instancedao.GetInstanceByApp(ctx, int64(app.ID))
+		if err != nil {
+			continue
+		}
+		instanceIDs := make([]int64, len(instances))
+		for i, inst := range instances {
+			instanceIDs[i] = int64(inst.ID)
+		}
+		if err := a.instancedao.DeleteInstanceByIds(ctx, instanceIDs); err != nil {
+			a.l.Warn("实例软删除失败", zap.Int64s("instanceIds", instanceIDs))
+		}
+		allInstances = append(allInstances, instances...)
+	}
+	// 调用pkg中的删除Deployment和Service的删除instances
+	for i := 0; i < len(allInstances); i++ {
+		instance := allInstances[i]
+		// 将instance转换成deployment和service内容
+		deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
+		if err != nil {
+			return fmt.Errorf("failed to 转换 deployment, service: %w", err)
+		}
+		// 2.通过clustername获取集群
+		k8scluster, err2 := a.dao.GetClusterByName(ctx, instance.Cluster)
+		if err2 != nil {
+			return fmt.Errorf("failed to get Cluster: %w", err2)
+		}
+		// 调用deploymentService的DeleteDeployment方法删除deployment
+		deploymentRequest := model.K8sDeploymentRequest{
+			ClusterId:       k8scluster.ID,
+			Namespace:       instance.Namespace,
+			DeploymentNames: []string{deployment.Name},
+			DeploymentYaml:  &deployment,
+		}
+		pkg.DeleteDeployment(ctx, &deploymentRequest, a.client, a.l)
+		//	调用svcService的DeleteService方法删除service
+		serviceRequest := model.K8sServiceRequest{
+			ClusterId:    k8scluster.ID,
+			Namespace:    instance.Namespace,
+			ServiceNames: []string{service.Name},
+			ServiceYaml:  &service,
+		}
+		pkg.DeleteService(ctx, &serviceRequest, a.client, a.l)
+	}
+	return nil
 }
