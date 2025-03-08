@@ -37,6 +37,7 @@ type InstanceDAO interface {
 	GetInstanceAll(ctx context.Context) ([]model.K8sInstance, error)
 	GetInstanceByApp(ctx context.Context, AppId int64) ([]model.K8sInstance, error)
 	GetInstanceById(ctx context.Context, instanceId int64) (model.K8sInstance, error)
+	DeleteInstanceByIds(ctx context.Context, instanceId []int64) error
 }
 type instanceDAO struct {
 	db *gorm.DB
@@ -80,4 +81,11 @@ func (i *instanceDAO) GetInstanceById(ctx context.Context, instanceId int64) (mo
 		i.l.Error("GetInstanceById 获取Instance任务失败", zap.Error(err))
 	}
 	return instance, nil
+}
+
+func (i *instanceDAO) DeleteInstanceByIds(ctx context.Context, instanceId []int64) error {
+	if err := i.db.WithContext(ctx).Where("id IN ?", instanceId).Delete(&model.K8sInstance{}).Error; err != nil {
+		i.l.Error("DeleteInstanceByIds 删除Instance任务失败", zap.Error(err))
+	}
+	return nil
 }

@@ -126,10 +126,26 @@ func (k *K8sAppHandler) UpdateK8sInstanceOne(ctx *gin.Context) {
 
 // BatchDeleteK8sInstance 批量删除 Kubernetes 实例
 func (k *K8sAppHandler) BatchDeleteK8sInstance(ctx *gin.Context) {
-	var req []*model.K8sInstanceRequest
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.appService.BatchDeleteInstance(ctx, req)
-	})
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+	// 解析 JSON 体
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ids cannot be empty"})
+		return
+	}
+	// 调用服务方法进行批量删除
+	if err := k.appService.BatchDeleteInstance(ctx, req.IDs); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "instances deleted successfully"})
+
 }
 
 // BatchRestartK8sInstance 批量重启 Kubernetes 实例

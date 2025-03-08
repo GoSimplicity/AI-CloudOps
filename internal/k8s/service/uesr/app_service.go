@@ -15,7 +15,7 @@ type AppService interface {
 	// 实例
 	CreateInstanceOne(ctx context.Context, instance *model.K8sInstance) error
 	UpdateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
-	BatchDeleteInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
+	BatchDeleteInstance(ctx context.Context, ids []int64) error
 	BatchRestartInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
 	GetInstanceByApp(ctx context.Context, appId int64) ([]model.K8sInstance, error)
 	GetInstanceOne(ctx context.Context, instanceId int64) (model.K8sInstance, error)
@@ -106,26 +106,8 @@ func (a *appService) UpdateInstanceOne(ctx context.Context, instance *model.K8sI
 	return nil
 }
 
-func (a *appService) BatchDeleteInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error {
-	// 1.遍历instance取出deploymentRequest和svcRequest
-	var deploymentRequests []*model.K8sDeploymentRequest
-	var svcRequests []*model.K8sServiceRequest
-	for _, i := range instance {
-		deploymentRequests = append(deploymentRequests, &model.K8sDeploymentRequest{
-			ClusterId:       i.ClusterId,
-			Namespace:       i.Namespace,
-			DeploymentNames: i.DeploymentNames,
-			DeploymentYaml:  i.DeploymentYaml,
-		})
-		svcRequests = append(svcRequests, &model.K8sServiceRequest{
-			ClusterId:    i.ClusterId,
-			Namespace:    i.Namespace,
-			ServiceNames: i.ServiceNames,
-			ServiceYaml:  i.ServiceYaml,
-		})
-	}
-	// 2.调用deploymentService的BatchDeleteDeployment方法删除deployment
-	err := pkg.BatchDeleteK8sInstance(ctx, deploymentRequests, svcRequests, a.client, a.l)
+func (a *appService) BatchDeleteInstance(ctx context.Context, ids []int64) error {
+	err := a.instancedao.DeleteInstanceByIds(ctx, ids)
 	if err != nil {
 		return fmt.Errorf("failed to delete Deployment: %w", err)
 	}
