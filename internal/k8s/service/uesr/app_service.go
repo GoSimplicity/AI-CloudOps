@@ -16,7 +16,7 @@ type AppService interface {
 	CreateInstanceOne(ctx context.Context, instance *model.K8sInstance) error
 	UpdateInstanceOne(ctx context.Context, instance *model.K8sInstanceRequest) error
 	BatchDeleteInstance(ctx context.Context, ids []int64) error
-	BatchRestartInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
+	BatchRestartInstance(ctx context.Context, ids []int64) error
 	GetInstanceByApp(ctx context.Context, appId int64) ([]model.K8sInstance, error)
 	GetInstanceOne(ctx context.Context, instanceId int64) (model.K8sInstance, error)
 	GetInstanceAll(ctx context.Context) ([]model.K8sInstance, error)
@@ -149,22 +149,37 @@ func (a *appService) BatchDeleteInstance(ctx context.Context, ids []int64) error
 	}
 	return nil
 }
-func (a *appService) BatchRestartInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error {
-	// 1.遍历instance取出deploymentRequest和svcRequest
-	var deploymentRequests []*model.K8sDeploymentRequest
-	for _, i := range instance {
-		deploymentRequests = append(deploymentRequests, &model.K8sDeploymentRequest{
-			ClusterId:       i.ClusterId,
-			Namespace:       i.Namespace,
-			DeploymentNames: i.DeploymentNames,
-			DeploymentYaml:  i.DeploymentYaml,
-		})
-	}
-	// 2.调用deploymentService的BatchDeleteDeployment方法删除deployment
-	err := pkg.BatchRestartK8sInstance(ctx, deploymentRequests, a.client, a.l)
+func (a *appService) BatchRestartInstance(ctx context.Context, ids []int64) error {
+	// 1.从DB中取出内容
+	instances, err := a.instancedao.GetInstanceByIds(ctx, ids)
 	if err != nil {
-		return fmt.Errorf("failed to delete Deployment: %w", err)
+		return fmt.Errorf("failed to get Deployment: %w", err)
 	}
+	var deploymentRequests []model.K8sDeploymentRequest
+	for i := 0; i < len(instances); i++ {
+		instance := instances[i]
+
+		// 将instance转换成deployment和service内容
+		deployment, _, err := pkg.ParseK8sInstance(ctx, &instance)
+		if err != nil {
+			return fmt.Errorf("failed to 转换 deployment, service: %w", err)
+		}
+
+		// 2.通过clustername获取集群
+		k8scluster, err2 := a.dao.GetClusterByName(ctx, instance.Cluster)
+		if err2 != nil {
+			return fmt.Errorf("failed to get Cluster: %w", err2)
+		}
+		deploymentRequest := model.K8sDeploymentRequest{
+			ClusterId:       k8scluster.ID,
+			Namespace:       instance.Namespace,
+			DeploymentNames: []string{deployment.Name},
+			DeploymentYaml:  &deployment,
+		}
+		deploymentRequests = append(deploymentRequests, deploymentRequest)
+
+	}
+	pkg.BatchRestartK8sInstance(ctx, deploymentRequests, a.client, a.l)
 	return nil
 }
 

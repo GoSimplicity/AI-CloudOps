@@ -150,10 +150,26 @@ func (k *K8sAppHandler) BatchDeleteK8sInstance(ctx *gin.Context) {
 
 // BatchRestartK8sInstance 批量重启 Kubernetes 实例
 func (k *K8sAppHandler) BatchRestartK8sInstance(ctx *gin.Context) {
-	var req []*model.K8sInstanceRequest
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.appService.BatchRestartInstance(ctx, req)
-	})
+	var req struct {
+		InstanceIDs []int64 `json:"instance_ids" binding:"required"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		return
+	}
+
+	if len(req.InstanceIDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "instance_ids cannot be empty"})
+		return
+	}
+
+	// 调用服务方法进行批量重启
+	if err := k.appService.BatchRestartInstance(ctx, req.InstanceIDs); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "instances restarted successfully"})
 }
 
 // GetK8sInstanceByApp 根据应用获取 Kubernetes 实例
