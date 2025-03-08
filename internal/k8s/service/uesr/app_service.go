@@ -18,7 +18,7 @@ type AppService interface {
 	BatchDeleteInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
 	BatchRestartInstance(ctx context.Context, instance []*model.K8sInstanceRequest) error
 	GetInstanceByApp(ctx context.Context, appId int64) ([]model.K8sInstance, error)
-	GetInstanceOne(ctx context.Context, clusterId int) ([]model.K8sInstance, error)
+	GetInstanceOne(ctx context.Context, instanceId int64) (model.K8sInstance, error)
 	GetInstanceAll(ctx context.Context) ([]model.K8sInstance, error)
 	// 应用
 	CreateAppOne(ctx context.Context, app *model.K8sApp) error
@@ -159,14 +159,13 @@ func (a *appService) GetInstanceByApp(ctx context.Context, appId int64) ([]model
 	return instances, nil
 }
 
-func (a *appService) GetInstanceOne(ctx context.Context, clusterId int) ([]model.K8sInstance, error) {
-	res, err := pkg.GetK8sInstanceOne(ctx, clusterId, a.client, a.l)
+func (a *appService) GetInstanceOne(ctx context.Context, instanceId int64) (model.K8sInstance, error) {
+	// 1.根据instanceId获取实例
+	instance, err := a.instancedao.GetInstanceById(ctx, instanceId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Deployment: %w", err)
+		return model.K8sInstance{}, fmt.Errorf("failed to get Deployment: %w", err)
 	}
-	// 3.返回实例列表
-	return res, nil
-	//return nil, nil
+	return instance, nil
 }
 func (a *appService) GetInstanceAll(ctx context.Context) ([]model.K8sInstance, error) {
 	allinstances, err := a.instancedao.GetInstanceAll(ctx)
