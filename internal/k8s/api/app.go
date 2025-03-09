@@ -85,7 +85,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 			projects.GET("/all", k.GetK8sProjectList)             // 获取 Kubernetes 项目列表
 			projects.GET("/select", k.GetK8sProjectListForSelect) // 获取用于选择的 Kubernetes 项目列表
 			projects.POST("/create", k.CreateK8sProject)          // 创建 Kubernetes 项目
-			projects.PUT("/", k.UpdateK8sProject)                 // 更新 Kubernetes 项目
+			projects.PUT("/:id", k.UpdateK8sProject)              // 更新 Kubernetes 项目
 			projects.DELETE("/:id", k.DeleteK8sProjectOne)        // 删除单个 Kubernetes 项目
 		}
 

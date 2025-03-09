@@ -95,25 +95,51 @@ func (a *appDAO) DeleteAppById(ctx context.Context, id int64) (model.K8sApp, err
 
 	return app, nil
 }
+
+//	func (a *appDAO) UpdateAppById(ctx context.Context, id int64, app model.K8sApp) error {
+//		result := a.db.WithContext(ctx).
+//			Model(&model.K8sApp{}).
+//			Where("id = ?", id).
+//			Updates(app)
+//
+//		if result.Error != nil {
+//			a.l.Error("UpdateAppById 更新应用失败",
+//				zap.Int64("appId", id),
+//				zap.Error(result.Error))
+//			return result.Error
+//		}
+//
+//		if result.RowsAffected == 0 {
+//			a.l.Warn("UpdateAppById 应用不存在", zap.Int64("appId", id))
+//			return gorm.ErrRecordNotFound
+//		}
+//
+//		return nil
+//	}
 func (a *appDAO) UpdateAppById(ctx context.Context, id int64, app model.K8sApp) error {
-	result := a.db.WithContext(ctx).
-		Model(&model.K8sApp{}).
-		Where("id = ?", id).
-		Updates(app)
+	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. 先更新 K8sApp
+		result := tx.Model(&model.K8sApp{}).Where("id = ?", id).Updates(app)
+		if result.Error != nil {
+			a.l.Error("UpdateAppById 更新应用失败", zap.Int64("appId", id), zap.Error(result.Error))
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			a.l.Warn("UpdateAppById 应用不存在", zap.Int64("appId", id))
+			return gorm.ErrRecordNotFound
+		}
 
-	if result.Error != nil {
-		a.l.Error("UpdateAppById 更新应用失败",
-			zap.Int64("appId", id),
-			zap.Error(result.Error))
-		return result.Error
-	}
-
-	if result.RowsAffected == 0 {
-		a.l.Warn("UpdateAppById 应用不存在", zap.Int64("appId", id))
-		return gorm.ErrRecordNotFound
-	}
-
-	return nil
+		// 2. 级联更新 K8sInstances
+		for _, instance := range app.K8sInstances {
+			instance.K8sAppID = int(id) // 确保实例正确关联到 K8sApp
+			if err := tx.Model(&model.K8sInstance{}).
+				Where("id = ? AND k8s_app_id = ?", instance.ID, id). // 确保只更新该实例
+				Updates(instance).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // GetAppsByProjectId 根据多个 Project ID 查询关联的 K8sApp
