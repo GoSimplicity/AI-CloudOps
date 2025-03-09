@@ -40,6 +40,7 @@ type CronjobService interface {
 	CreateCronjobOne(ctx context.Context, cornjob model.K8sCronjob) error
 	GetCronjobList(ctx context.Context) ([]*model.K8sCronjob, error)
 	GetCronjobOne(ctx context.Context, id int64) (*model.K8sCronjob, error)
+	UpdateCronjobOne(ctx context.Context, id int64, cornjob model.K8sCronjob) error
 }
 type cronjobService struct {
 	dao           admin.ClusterDAO
@@ -78,4 +79,18 @@ func (c *cronjobService) GetCronjobList(ctx context.Context) ([]*model.K8sCronjo
 }
 func (c *cronjobService) GetCronjobOne(ctx context.Context, id int64) (*model.K8sCronjob, error) {
 	return c.k8scornjobDAO.GetCronjobOne(ctx, id)
+}
+func (c *cronjobService) UpdateCronjobOne(ctx context.Context, id int64, cornjob model.K8sCronjob) error {
+	// 更新数据库
+	c.k8scornjobDAO.UpdateCronjobOne(ctx, id, cornjob)
+	// 实例更新
+	K8sCluster, err := c.dao.GetClusterByName(ctx, cornjob.Cluster)
+	if err != nil {
+		return errors.New("Create Cronjob One Get Cluster By Name fail")
+	}
+	err = pkg.UpdateCronJob(ctx, K8sCluster.ID, cornjob, c.client, c.l)
+	if err != nil {
+		return errors.New("pkg Update Cron job  fail")
+	}
+	return nil
 }

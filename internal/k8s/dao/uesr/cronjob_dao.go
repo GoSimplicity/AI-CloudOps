@@ -27,6 +27,7 @@ package uesr
 
 import (
 	"context"
+	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -36,6 +37,7 @@ type CornJobDAO interface {
 	CreateCornJobOne(ctx context.Context, job *model.K8sCronjob) error
 	GetCronjobList(ctx context.Context) ([]*model.K8sCronjob, error)
 	GetCronjobOne(ctx context.Context, id int64) (*model.K8sCronjob, error)
+	UpdateCronjobOne(ctx context.Context, id int64, job model.K8sCronjob) error
 }
 type cornJobDAO struct {
 	db *gorm.DB
@@ -77,4 +79,22 @@ func (c *cornJobDAO) GetCronjobOne(ctx context.Context, id int64) (*model.K8sCro
 		return nil, result.Error
 	}
 	return &job, nil
+}
+func (c *cornJobDAO) UpdateCronjobOne(ctx context.Context, id int64, job model.K8sCronjob) error {
+	var existingJob model.K8sCronjob
+	if err := c.db.First(&existingJob, id).Error; err != nil {
+		// 如果没有找到记录，返回错误
+		return fmt.Errorf("failed to find CronJob with id %d: %w", id, err)
+	}
+
+	// 将 job 直接赋值给 existingJob
+	existingJob = job
+
+	// 保存更新后的数据回数据库，传递 context
+	if err := c.db.WithContext(ctx).Save(&existingJob).Error; err != nil {
+		return fmt.Errorf("failed to update CronJob: %w", err)
+	}
+
+	// 返回成功
+	return nil
 }

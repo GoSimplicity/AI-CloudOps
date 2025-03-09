@@ -483,7 +483,34 @@ func (k *K8sAppHandler) CreateK8sCronjobOne(ctx *gin.Context) {
 
 // UpdateK8sCronjobOne 更新单个 CronJob
 func (k *K8sAppHandler) UpdateK8sCronjobOne(ctx *gin.Context) {
-	// TODO: 实现更新单个 CronJob 的逻辑
+	Id := ctx.Param("id")
+	Id_int, err2 := strconv.ParseInt(Id, 10, 64)
+	if err2 != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+
+	var req model.K8sCronjob
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		// 若解析失败，记录错误日志并返回 400 错误响应
+		k.l.Error("解析请求 JSON 失败", zap.Error(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":   "无效的请求体",
+			"details": err.Error(),
+		})
+		return
+	}
+	err := k.cronjobService.UpdateCronjobOne(ctx, Id_int, req)
+	if err != nil {
+		// 若创建失败，记录错误日志并返回 500 错误响应
+		k.l.Error("创建 CronJob 失败", zap.Error(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": "创建 CronJob 时出错",
+		})
+	}
+	// 若创建成功，返回 201 状态码和成功消息
+	ctx.JSON(http.StatusCreated, gin.H{
+		"message": "CronJob 创建成功",
+	})
 }
 
 // GetK8sCronjobOne 获取单个 CronJob

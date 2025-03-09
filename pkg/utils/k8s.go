@@ -1526,3 +1526,31 @@ func CreateCornJob(ctx context.Context, clusterId int, job model.K8sCronjob, cli
 	return nil
 
 }
+func UpdateCronJob(ctx context.Context, clusterId int, job model.K8sCronjob, client client.K8sClient, logger *zap.Logger) error {
+	// Convert the job model to CronJob resource
+	cronJob, err := ConvertCornJob(job)
+	if err != nil {
+		return err
+	}
+
+	// Get the Kubernetes client for the specified cluster
+	kubeClient, err := GetKubeClient(clusterId, client, logger)
+	if err != nil {
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	// Get the CronJobs client for the specified namespace
+	cronJobsClient := kubeClient.BatchV1().CronJobs(job.Namespace)
+
+	// Try to update the CronJob resource in Kubernetes
+	updatedCronJob, err := cronJobsClient.Update(ctx, &cronJob, metav1.UpdateOptions{})
+	if err != nil {
+		logger.Error("Failed to update CronJob in Kubernetes", zap.Error(err))
+		return err
+	}
+
+	// Log successful update
+	logger.Info("Successfully updated CronJob", zap.String("name", job.Name), zap.String("namespace", job.Namespace), zap.String("name", updatedCronJob.Name))
+
+	return nil
+}
