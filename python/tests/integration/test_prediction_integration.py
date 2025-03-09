@@ -29,7 +29,6 @@ import tempfile
 import shutil
 from datetime import datetime, timedelta
 import json
-import pandas as pd
 import numpy as np
 from unittest.mock import patch, MagicMock
 
@@ -39,7 +38,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from core.prediction.resource_prediction import create_predictor
 from core.prediction.failure_prediction import create_failure_predictor
 from data.collectors.prometheus_collector import PrometheusCollector
-from data.preprocessors.normalization import Normalizer
 from utils.logger import get_logger
 
 logger = get_logger("test_prediction_integration")

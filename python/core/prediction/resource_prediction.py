@@ -30,6 +30,7 @@ from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import joblib
 import os
 
@@ -180,9 +181,7 @@ class ResourcePredictor:
 class TimeSeriesPredictor(ResourcePredictor):
     """时间序列预测器"""
 
-    def __init__(
-        self, model_dir: str = "./models/prediction", model_type: str = "arima"
-    ):
+    def __init__(self, model_dir: str, model_type: str = "arima", **kwargs):
         """
         初始化时间序列预测器
 
@@ -191,7 +190,10 @@ class TimeSeriesPredictor(ResourcePredictor):
             model_type: 模型类型 (arima, ets)
         """
         super().__init__(model_dir)
+        self.model_dir = model_dir
         self.model_type = model_type
+        self.model = None
+        self.metric_name = "cpu_usage"  # 默认指标名称
         self.model_params = {}
 
     def train(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -252,7 +254,35 @@ class TimeSeriesPredictor(ResourcePredictor):
             f"{self.model_type.upper()} 模型训练完成，参数: {self.model_params}"
         )
 
-        return {"status": "success", "model_type": self.model_type, "params": self.model_params}
+        # 计算简单的评估指标
+        if len(ts) > 10:
+            train_size = int(len(ts) * 0.8)
+            train_data = ts[:train_size]
+            test_data = ts[train_size:]
+            
+            if self.model_type == "arima":
+                predictions = self.model.forecast(steps=len(test_data))
+            else:  # ets
+                predictions = self.model.predict(start=train_size, end=len(ts)-1)
+                
+            metrics = {
+                "rmse": np.sqrt(np.mean((test_data.values - predictions)**2)),
+                "mae": np.mean(np.abs(test_data.values - predictions)),
+                "r2": 1 - np.sum((test_data.values - predictions)**2) / np.sum((test_data.values - np.mean(test_data.values))**2)
+            }
+        else:
+            metrics = {"rmse": 0.0, "mae": 0.0, "r2": 0.0}
+            
+        # 如果数据中有metric_name字段，则使用它
+        if "metric_name" in df.columns and not df["metric_name"].empty:
+            self.metric_name = df["metric_name"].iloc[0]
+
+        return {
+            "status": "success", 
+            "model_type": self.model_type, 
+            "params": self.model_params,
+            "metrics": metrics  # 添加评估指标
+        }
 
     def predict(self, data: List[Dict[str, Any]], future_steps: int = 1) -> List[Dict[str, Any]]:
         """
@@ -293,6 +323,7 @@ class TimeSeriesPredictor(ResourcePredictor):
                 {
                     "timestamp": ts.strftime("%Y-%m-%d %H:%M:%S"),
                     "value": float(value),
+                    "metric_name": self.metric_name,
                     "confidence_lower": float(value * 0.9),  # 简化的置信区间
                     "confidence_upper": float(value * 1.1),
                 }
@@ -315,6 +346,7 @@ class MLPredictor(ResourcePredictor):
         super().__init__(model_dir)
         self.model_type = model_type
         self.feature_names = []
+        self.metric_name = "cpu_usage"  # 默认指标名称
 
     def train(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -336,6 +368,10 @@ class MLPredictor(ResourcePredictor):
 
             features.append(item["features"])
             targets.append(item["target"])
+            
+            # 如果有metric_name字段，则使用它
+            if "metric_name" in item:
+                self.metric_name = item["metric_name"]
 
         # 转换为DataFrame
         X_df = pd.DataFrame(features)
@@ -353,8 +389,21 @@ class MLPredictor(ResourcePredictor):
             raise ValueError(f"不支持的模型类型: {self.model_type}")
 
         logger.info(f"{self.model_type.upper()} 模型训练完成")
+        
+        # 计算训练集上的评估指标
+        y_pred = self.model.predict(X)
+        metrics = {
+            "rmse": np.sqrt(mean_squared_error(y, y_pred)),
+            "mae": mean_absolute_error(y, y_pred),
+            "r2": r2_score(y, y_pred)
+        }
 
-        return {"status": "success", "model_type": self.model_type, "feature_count": len(self.feature_names)}
+        return {
+            "status": "success", 
+            "model_type": self.model_type, 
+            "feature_count": len(self.feature_names),
+            "metrics": metrics  # 添加评估指标
+        }
 
     def predict(self, data: List[Dict[str, Any]], future_steps: int = 1) -> List[Dict[str, Any]]:
         """
@@ -402,6 +451,7 @@ class MLPredictor(ResourcePredictor):
             predictions.append({
                 "timestamp": timestamp,
                 "value": pred_value,
+                "metric_name": self.metric_name,  # 添加指标名称
                 "confidence_lower": pred_value * 0.9,  # 简化的置信区间
                 "confidence_upper": pred_value * 1.1,
             })
