@@ -24,3 +24,39 @@
  */
 
 package uesr
+
+import (
+	"context"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
+
+type CornJobDAO interface {
+	CreateCornJobOne(ctx context.Context, job *model.K8sCronjob) error
+}
+type cornJobDAO struct {
+	db *gorm.DB
+	l  *zap.Logger
+}
+
+func NewCornJobDAO(db *gorm.DB, l *zap.Logger) CornJobDAO {
+	return &cornJobDAO{
+		db: db,
+		l:  l,
+	}
+}
+func (c *cornJobDAO) CreateCornJobOne(ctx context.Context, job *model.K8sCronjob) error {
+	// 使用 gorm 插入新的 CronJob 记录到数据库
+	result := c.db.WithContext(ctx).Create(job)
+	if result.Error != nil {
+		// 记录错误日志
+		c.l.Error("Failed to create CronJob in database",
+			zap.String("name", job.Name),
+			zap.Error(result.Error))
+		return result.Error
+	}
+	c.l.Info("CronJob created successfully in database",
+		zap.String("name", job.Name))
+	return nil
+}

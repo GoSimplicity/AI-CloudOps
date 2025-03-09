@@ -43,6 +43,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 	//core "k8s.io/api/core/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -1482,4 +1483,46 @@ func ParseK8sApp(ctx context.Context, app *model.K8sApp) ([]appsv1.Deployment, [
 
 	}
 	return deployments, services, nil
+}
+func ConvertCornJob(job model.K8sCronjob) (batchv1.CronJob, error) {
+	var cronJob batchv1.CronJob
+	cronJob.APIVersion = "batch/v1"
+	cronJob.Kind = "CronJob"
+	cronJob.ObjectMeta = metav1.ObjectMeta{
+		Name:      job.Name,
+		Namespace: job.Namespace,
+	}
+	cronJob.Spec.Schedule = job.Schedule
+	cronJob.Spec.JobTemplate = batchv1.JobTemplateSpec{}
+	cronJob.Spec.JobTemplate.Spec.Template = corev1.PodTemplateSpec{}
+	cronJob.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyOnFailure
+	cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers = []corev1.Container{
+		{
+			Name:    job.Name,
+			Image:   job.Image,
+			Command: job.Commands,
+			Args:    job.Args,
+		},
+	}
+	return cronJob, nil
+}
+func CreateCornJob(ctx context.Context, clusterId int, job model.K8sCronjob, client client.K8sClient, logger *zap.Logger) error {
+	cornJob, err := ConvertCornJob(job)
+	if err != nil {
+		return err
+	}
+	kubeClient, err := GetKubeClient(clusterId, client, logger)
+	if err != nil {
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+	cronJobsClient := kubeClient.BatchV1().CronJobs(job.Namespace)
+	_, err = cronJobsClient.Create(ctx, &cornJob, metav1.CreateOptions{})
+	if err != nil {
+		logger.Error("Failed to create CronJob in Kubernetes", zap.Error(err))
+		return err
+	}
+
+	logger.Info("Successfully created CronJob", zap.String("name", job.Name), zap.String("namespace", job.Namespace))
+	return nil
+
 }

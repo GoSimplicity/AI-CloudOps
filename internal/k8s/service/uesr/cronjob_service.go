@@ -26,20 +26,48 @@
 package uesr
 
 import (
+	"context"
+	"errors"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/uesr"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
 )
 
 type CronjobService interface {
+	CreateCronjobOne(ctx context.Context, cornjob model.K8sCronjob) error
 }
 type cronjobService struct {
-	client client.K8sClient
-	l      *zap.Logger
+	dao           admin.ClusterDAO
+	k8scornjobDAO uesr.CornJobDAO
+	client        client.K8sClient
+	l             *zap.Logger
 }
 
-func NewCronjobService(client client.K8sClient, l *zap.Logger) CronjobService {
+func NewCronjobService(dao admin.ClusterDAO, k8scornjobDAO uesr.CornJobDAO, client client.K8sClient, l *zap.Logger) CronjobService {
 	return &cronjobService{
-		client: client,
-		l:      l,
+		dao:           dao,
+		k8scornjobDAO: k8scornjobDAO,
+		client:        client,
+		l:             l,
 	}
+}
+func (c *cronjobService) CreateCronjobOne(ctx context.Context, job model.K8sCronjob) error {
+
+	err := c.k8scornjobDAO.CreateCornJobOne(ctx, &job)
+	if err != nil {
+		return errors.New("Create Cronjob One fail")
+	}
+	// 构建cornjob
+	K8sCluster, err := c.dao.GetClusterByName(ctx, job.Cluster)
+	if err != nil {
+		return errors.New("Create Cronjob One Get Cluster By Name fail")
+	}
+	err = pkg.CreateCornJob(ctx, K8sCluster.ID, job, c.client, c.l)
+	if err != nil {
+		return errors.New("pkg Create Cron job  fail")
+	}
+	return nil
 }

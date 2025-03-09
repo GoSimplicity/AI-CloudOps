@@ -99,7 +99,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		cronJobs := k8sAppApiGroup.Group("/cronJobs")
 		{
 			cronJobs.GET("/", k.GetK8sCronjobList)                // 获取 CronJob 列表
-			cronJobs.POST("/", k.CreateK8sCronjobOne)             // 创建单个 CronJob
+			cronJobs.POST("/create", k.CreateK8sCronjobOne)       // 创建单个 CronJob
 			cronJobs.PUT("/:id", k.UpdateK8sCronjobOne)           // 更新单个 CronJob
 			cronJobs.GET("/:id", k.GetK8sCronjobOne)              // 获取单个 CronJob
 			cronJobs.GET("/:id/last-pod", k.GetK8sCronjobLastPod) // 获取 CronJob 最近的 Pod
@@ -447,7 +447,33 @@ func (k *K8sAppHandler) GetK8sCronjobList(ctx *gin.Context) {
 
 // CreateK8sCronjobOne 创建单个 CronJob
 func (k *K8sAppHandler) CreateK8sCronjobOne(ctx *gin.Context) {
-	// TODO: 实现创建单个 CronJob 的逻辑
+	// 从请求中解析出 CronJob 信息到 req 结构体
+	var req model.K8sCronjob
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		// 若解析失败，记录错误日志并返回 400 错误响应
+		k.l.Error("解析请求 JSON 失败", zap.Error(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":   "无效的请求体",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// 调用服务层方法创建 CronJob
+	err := k.cronjobService.CreateCronjobOne(ctx, req)
+	if err != nil {
+		// 若创建失败，记录错误日志并返回 500 错误响应
+		k.l.Error("创建 CronJob 失败", zap.Error(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": "创建 CronJob 时出错",
+		})
+		return
+	}
+
+	// 若创建成功，返回 201 状态码和成功消息
+	ctx.JSON(http.StatusCreated, gin.H{
+		"message": "CronJob 创建成功",
+	})
 }
 
 // UpdateK8sCronjobOne 更新单个 CronJob
