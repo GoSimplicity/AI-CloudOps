@@ -36,14 +36,20 @@ import (
 )
 
 type K8sAppHandler struct {
-	l          *zap.Logger
-	appService user2.AppService
+	l               *zap.Logger
+	appService      user2.AppService
+	instanceService user2.InstanceService
+	projectService  user2.ProjectService
+	cronjobService  user2.CronjobService
 }
 
-func NewK8sAppHandler(l *zap.Logger, appService user2.AppService) *K8sAppHandler {
+func NewK8sAppHandler(l *zap.Logger, instanceService user2.InstanceService, appService user2.AppService, projectService user2.ProjectService, cronjobService user2.CronjobService) *K8sAppHandler {
 	return &K8sAppHandler{
-		l:          l,
-		appService: appService,
+		l:               l,
+		projectService:  projectService,
+		instanceService: instanceService,
+		cronjobService:  cronjobService,
+		appService:      appService,
 	}
 }
 
@@ -112,7 +118,7 @@ func (k *K8sAppHandler) GetClusterNamespacesUnique(ctx *gin.Context) {
 func (k *K8sAppHandler) CreateK8sInstanceOne(ctx *gin.Context) {
 	var req model.K8sInstance
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.appService.CreateInstanceOne(ctx, &req)
+		return nil, k.instanceService.CreateInstanceOne(ctx, &req)
 	})
 }
 
@@ -131,7 +137,7 @@ func (k *K8sAppHandler) UpdateK8sInstanceOne(ctx *gin.Context) {
 		return
 	}
 
-	err := k.appService.UpdateInstanceOne(ctx, instanceId_int, req)
+	err := k.instanceService.UpdateInstanceOne(ctx, instanceId_int, req)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
@@ -154,7 +160,7 @@ func (k *K8sAppHandler) BatchDeleteK8sInstance(ctx *gin.Context) {
 		return
 	}
 	// 调用服务方法进行批量删除
-	if err := k.appService.BatchDeleteInstance(ctx, req.IDs); err != nil {
+	if err := k.instanceService.BatchDeleteInstance(ctx, req.IDs); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -179,7 +185,7 @@ func (k *K8sAppHandler) BatchRestartK8sInstance(ctx *gin.Context) {
 	}
 
 	// 调用服务方法进行批量重启
-	if err := k.appService.BatchRestartInstance(ctx, req.InstanceIDs); err != nil {
+	if err := k.instanceService.BatchRestartInstance(ctx, req.InstanceIDs); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -200,7 +206,7 @@ func (k *K8sAppHandler) GetK8sInstanceByApp(ctx *gin.Context) {
 	}
 
 	// 2.调用服务方法获取实例列表
-	instances, err := k.appService.GetInstanceByApp(ctx, appID64)
+	instances, err := k.instanceService.GetInstanceByApp(ctx, appID64)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -211,7 +217,7 @@ func (k *K8sAppHandler) GetK8sInstanceByApp(ctx *gin.Context) {
 
 // GetK8sInstanceList 获取 Kubernetes 实例列表
 func (k *K8sAppHandler) GetK8sInstanceList(ctx *gin.Context) {
-	res, err := k.appService.GetInstanceAll(ctx)
+	res, err := k.instanceService.GetInstanceAll(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -226,7 +232,7 @@ func (k *K8sAppHandler) GetK8sInstanceOne(ctx *gin.Context) {
 	if err2 != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
 	}
-	instance, err := k.appService.GetInstanceOne(ctx, instanceId_int)
+	instance, err := k.instanceService.GetInstanceOne(ctx, instanceId_int)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
@@ -351,7 +357,7 @@ func (k *K8sAppHandler) GetK8sAppListForSelect(ctx *gin.Context) {
 
 // GetK8sProjectList 获取 Kubernetes 项目列表
 func (k *K8sAppHandler) GetK8sProjectList(ctx *gin.Context) {
-	projectList, err1 := k.appService.GetprojectList(ctx)
+	projectList, err1 := k.projectService.GetprojectList(ctx)
 	if err1 != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
 		return
@@ -374,7 +380,7 @@ func (k *K8sAppHandler) GetK8sProjectListForSelect(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ids cannot be empty"})
 		return
 	}
-	projectList, err1 := k.appService.GetprojectListByIds(ctx, req.IDs)
+	projectList, err1 := k.projectService.GetprojectListByIds(ctx, req.IDs)
 	if err1 != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
 		return
@@ -386,7 +392,7 @@ func (k *K8sAppHandler) GetK8sProjectListForSelect(ctx *gin.Context) {
 func (k *K8sAppHandler) CreateK8sProject(ctx *gin.Context) {
 	var req model.K8sProject
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.appService.CreateProjectOne(ctx, &req)
+		return nil, k.projectService.CreateProjectOne(ctx, &req)
 	})
 }
 
@@ -405,7 +411,7 @@ func (k *K8sAppHandler) UpdateK8sProject(ctx *gin.Context) {
 		return
 	}
 	// 调用服务层更新项目
-	if err := k.appService.UpdateProjectOne(ctx, Id_int, &req); err != nil {
+	if err := k.projectService.UpdateProjectOne(ctx, Id_int, &req); err != nil {
 		k.l.Error("项目更新失败",
 			zap.Int64("projectId", Id_int),
 			zap.Error(err))
@@ -427,7 +433,7 @@ func (k *K8sAppHandler) DeleteK8sProjectOne(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid app ID"})
 		return
 	}
-	err1 := k.appService.DeleteProjectOne(ctx, IDInt)
+	err1 := k.projectService.DeleteProjectOne(ctx, IDInt)
 	if err1 != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
 	}

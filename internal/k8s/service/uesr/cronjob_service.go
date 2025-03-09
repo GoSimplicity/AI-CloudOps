@@ -24,3 +24,22 @@
  */
 
 package uesr
+
+import (
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"go.uber.org/zap"
+)
+
+type CronjobService interface {
+}
+type cronjobService struct {
+	client client.K8sClient
+	l      *zap.Logger
+}
+
+func NewCronjobService(client client.K8sClient, l *zap.Logger) CronjobService {
+	return &cronjobService{
+		client: client,
+		l:      l,
+	}
+}
