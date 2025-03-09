@@ -35,6 +35,7 @@ import (
 type CornJobDAO interface {
 	CreateCornJobOne(ctx context.Context, job *model.K8sCronjob) error
 	GetCronjobList(ctx context.Context) ([]*model.K8sCronjob, error)
+	GetCronjobOne(ctx context.Context, id int64) (*model.K8sCronjob, error)
 }
 type cornJobDAO struct {
 	db *gorm.DB
@@ -68,4 +69,12 @@ func (c *cornJobDAO) GetCronjobList(ctx context.Context) ([]*model.K8sCronjob, e
 		return nil, result.Error
 	}
 	return jobs, nil
+}
+func (c *cornJobDAO) GetCronjobOne(ctx context.Context, id int64) (*model.K8sCronjob, error) {
+	var job model.K8sCronjob
+	result := c.db.WithContext(ctx).Where("id = ?", id).First(&job)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &job, nil
 }

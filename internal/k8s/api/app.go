@@ -488,7 +488,17 @@ func (k *K8sAppHandler) UpdateK8sCronjobOne(ctx *gin.Context) {
 
 // GetK8sCronjobOne 获取单个 CronJob
 func (k *K8sAppHandler) GetK8sCronjobOne(ctx *gin.Context) {
-	// TODO: 实现获取单个 CronJob 的逻辑
+
+	Id := ctx.Param("id")
+	Id_int, err2 := strconv.ParseInt(Id, 10, 64)
+	if err2 != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+	cronjob, err := k.cronjobService.GetCronjobOne(ctx, Id_int)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, cronjob)
 }
 
 // GetK8sCronjobLastPod 获取 CronJob 最近的 Pod
