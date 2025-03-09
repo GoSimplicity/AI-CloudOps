@@ -34,6 +34,7 @@ import (
 
 type CornJobDAO interface {
 	CreateCornJobOne(ctx context.Context, job *model.K8sCronjob) error
+	GetCronjobList(ctx context.Context) ([]*model.K8sCronjob, error)
 }
 type cornJobDAO struct {
 	db *gorm.DB
@@ -59,4 +60,12 @@ func (c *cornJobDAO) CreateCornJobOne(ctx context.Context, job *model.K8sCronjob
 	c.l.Info("CronJob created successfully in database",
 		zap.String("name", job.Name))
 	return nil
+}
+func (c *cornJobDAO) GetCronjobList(ctx context.Context) ([]*model.K8sCronjob, error) {
+	var jobs []*model.K8sCronjob
+	result := c.db.WithContext(ctx).Find(&jobs)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return jobs, nil
 }

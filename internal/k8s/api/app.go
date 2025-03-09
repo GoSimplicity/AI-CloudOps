@@ -98,7 +98,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		// CronJob
 		cronJobs := k8sAppApiGroup.Group("/cronJobs")
 		{
-			cronJobs.GET("/", k.GetK8sCronjobList)                // 获取 CronJob 列表
+			cronJobs.GET("/cronJoblist", k.GetK8sCronjobList)     // 获取 CronJob 列表
 			cronJobs.POST("/create", k.CreateK8sCronjobOne)       // 创建单个 CronJob
 			cronJobs.PUT("/:id", k.UpdateK8sCronjobOne)           // 更新单个 CronJob
 			cronJobs.GET("/:id", k.GetK8sCronjobOne)              // 获取单个 CronJob
@@ -442,7 +442,12 @@ func (k *K8sAppHandler) DeleteK8sProjectOne(ctx *gin.Context) {
 
 // GetK8sCronjobList 获取 CronJob 列表
 func (k *K8sAppHandler) GetK8sCronjobList(ctx *gin.Context) {
-	// TODO: 实现获取 CronJob 列表的逻辑
+	res, err := k.cronjobService.GetCronjobList(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, res)
 }
 
 // CreateK8sCronjobOne 创建单个 CronJob
