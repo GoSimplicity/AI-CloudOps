@@ -36,14 +36,20 @@ import (
 )
 
 type K8sAppHandler struct {
-	l          *zap.Logger
-	appService user2.AppService
+	l               *zap.Logger
+	appService      user2.AppService
+	instanceService user2.InstanceService
+	projectService  user2.ProjectService
+	cronjobService  user2.CronjobService
 }
 
-func NewK8sAppHandler(l *zap.Logger, appService user2.AppService) *K8sAppHandler {
+func NewK8sAppHandler(l *zap.Logger, instanceService user2.InstanceService, appService user2.AppService, projectService user2.ProjectService, cronjobService user2.CronjobService) *K8sAppHandler {
 	return &K8sAppHandler{
-		l:          l,
-		appService: appService,
+		l:               l,
+		projectService:  projectService,
+		instanceService: instanceService,
+		cronjobService:  cronjobService,
+		appService:      appService,
 	}
 }
 
@@ -74,7 +80,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 			apps.PUT("/update/:id", k.UpdateK8sAppOne)     // 更新单个 Kubernetes 应用
 			apps.DELETE("/:id", k.DeleteK8sAppOne)         // 删除单个 Kubernetes 应用
 			apps.GET("/:id", k.GetK8sAppOne)               // 获取单个 Kubernetes 应用
-			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表
+			apps.GET("/by-app", k.GetK8sAppList)           // 获取 Kubernetes 应用列表 // TODO:需求未懂
 			apps.GET("/:id/pods", k.GetK8sPodListByDeploy) // 根据部署获取 Kubernetes Pod 列表
 			apps.GET("/select", k.GetK8sAppListForSelect)  // 获取用于选择的 Kubernetes 应用列表
 		}
@@ -82,22 +88,22 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 		// 项目
 		projects := k8sAppApiGroup.Group("/projects")
 		{
-			projects.GET("/", k.GetK8sProjectList)                // 获取 Kubernetes 项目列表
+			projects.GET("/all", k.GetK8sProjectList)             // 获取 Kubernetes 项目列表
 			projects.GET("/select", k.GetK8sProjectListForSelect) // 获取用于选择的 Kubernetes 项目列表
 			projects.POST("/create", k.CreateK8sProject)          // 创建 Kubernetes 项目
-			projects.PUT("/", k.UpdateK8sProject)                 // 更新 Kubernetes 项目
+			projects.PUT("/update/:id", k.UpdateK8sProject)       // 更新 Kubernetes 项目
 			projects.DELETE("/:id", k.DeleteK8sProjectOne)        // 删除单个 Kubernetes 项目
 		}
 
 		// CronJob
 		cronJobs := k8sAppApiGroup.Group("/cronJobs")
 		{
-			cronJobs.GET("/", k.GetK8sCronjobList)                // 获取 CronJob 列表
-			cronJobs.POST("/", k.CreateK8sCronjobOne)             // 创建单个 CronJob
+			cronJobs.GET("/cronJoblist", k.GetK8sCronjobList)     // 获取 CronJob 列表
+			cronJobs.POST("/create", k.CreateK8sCronjobOne)       // 创建单个 CronJob
 			cronJobs.PUT("/:id", k.UpdateK8sCronjobOne)           // 更新单个 CronJob
 			cronJobs.GET("/:id", k.GetK8sCronjobOne)              // 获取单个 CronJob
 			cronJobs.GET("/:id/last-pod", k.GetK8sCronjobLastPod) // 获取 CronJob 最近的 Pod
-			cronJobs.DELETE("/", k.BatchDeleteK8sCronjob)         // 批量删除 CronJob
+			cronJobs.DELETE("/delete", k.BatchDeleteK8sCronjob)   // 批量删除 CronJob
 		}
 	}
 }
@@ -112,7 +118,7 @@ func (k *K8sAppHandler) GetClusterNamespacesUnique(ctx *gin.Context) {
 func (k *K8sAppHandler) CreateK8sInstanceOne(ctx *gin.Context) {
 	var req model.K8sInstance
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.appService.CreateInstanceOne(ctx, &req)
+		return nil, k.instanceService.CreateInstanceOne(ctx, &req)
 	})
 }
 
@@ -131,7 +137,7 @@ func (k *K8sAppHandler) UpdateK8sInstanceOne(ctx *gin.Context) {
 		return
 	}
 
-	err := k.appService.UpdateInstanceOne(ctx, instanceId_int, req)
+	err := k.instanceService.UpdateInstanceOne(ctx, instanceId_int, req)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
@@ -154,7 +160,7 @@ func (k *K8sAppHandler) BatchDeleteK8sInstance(ctx *gin.Context) {
 		return
 	}
 	// 调用服务方法进行批量删除
-	if err := k.appService.BatchDeleteInstance(ctx, req.IDs); err != nil {
+	if err := k.instanceService.BatchDeleteInstance(ctx, req.IDs); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -179,7 +185,7 @@ func (k *K8sAppHandler) BatchRestartK8sInstance(ctx *gin.Context) {
 	}
 
 	// 调用服务方法进行批量重启
-	if err := k.appService.BatchRestartInstance(ctx, req.InstanceIDs); err != nil {
+	if err := k.instanceService.BatchRestartInstance(ctx, req.InstanceIDs); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -200,7 +206,7 @@ func (k *K8sAppHandler) GetK8sInstanceByApp(ctx *gin.Context) {
 	}
 
 	// 2.调用服务方法获取实例列表
-	instances, err := k.appService.GetInstanceByApp(ctx, appID64)
+	instances, err := k.instanceService.GetInstanceByApp(ctx, appID64)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -211,7 +217,7 @@ func (k *K8sAppHandler) GetK8sInstanceByApp(ctx *gin.Context) {
 
 // GetK8sInstanceList 获取 Kubernetes 实例列表
 func (k *K8sAppHandler) GetK8sInstanceList(ctx *gin.Context) {
-	res, err := k.appService.GetInstanceAll(ctx)
+	res, err := k.instanceService.GetInstanceAll(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -226,7 +232,7 @@ func (k *K8sAppHandler) GetK8sInstanceOne(ctx *gin.Context) {
 	if err2 != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
 	}
-	instance, err := k.appService.GetInstanceOne(ctx, instanceId_int)
+	instance, err := k.instanceService.GetInstanceOne(ctx, instanceId_int)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
@@ -310,68 +316,258 @@ func (k *K8sAppHandler) GetK8sAppOne(ctx *gin.Context) {
 
 // GetK8sPodListByDeploy 根据部署获取 Kubernetes Pod 列表
 func (k *K8sAppHandler) GetK8sPodListByDeploy(ctx *gin.Context) {
-	// TODO: 实现根据部署获取 Kubernetes Pod 列表的逻辑
+	ID := ctx.Param("id")
+	IDInt, err := strconv.ParseInt(ID, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid app ID"})
+		return
+	}
+	resources, err := k.appService.GetPodListByDeploy(ctx, IDInt)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, resources)
 }
 
 // GetK8sAppListForSelect 获取用于选择的 Kubernetes 应用列表
 func (k *K8sAppHandler) GetK8sAppListForSelect(ctx *gin.Context) {
-	// TODO: 实现获取用于选择的 Kubernetes 应用列表的逻辑
+
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "instance_ids cannot be empty"})
+		return
+	}
+
+	// 调用服务方法进行批量重启
+	apps, err1 := k.appService.GetAppByIds(ctx, req.IDs)
+	if err1 != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, apps)
 }
 
 // GetK8sProjectList 获取 Kubernetes 项目列表
 func (k *K8sAppHandler) GetK8sProjectList(ctx *gin.Context) {
-	// TODO: 实现获取 Kubernetes 项目列表的逻辑
+	projectList, err1 := k.projectService.GetprojectList(ctx)
+	if err1 != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, projectList)
 }
 
 // GetK8sProjectListForSelect 获取用于选择的 Kubernetes 项目列表
 func (k *K8sAppHandler) GetK8sProjectListForSelect(ctx *gin.Context) {
-	// TODO: 实现获取用于选择的 Kubernetes 项目列表的逻辑
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+	// 解析 JSON 体
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "ids cannot be empty"})
+		return
+	}
+	projectList, err1 := k.projectService.GetprojectListByIds(ctx, req.IDs)
+	if err1 != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, projectList)
 }
 
 // CreateK8sProject 创建 Kubernetes 项目
 func (k *K8sAppHandler) CreateK8sProject(ctx *gin.Context) {
 	var req model.K8sProject
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.appService.CreateProjectOne(ctx, &req)
+		return nil, k.projectService.CreateProjectOne(ctx, &req)
 	})
 }
 
 // UpdateK8sProject 更新 Kubernetes 项目
 func (k *K8sAppHandler) UpdateK8sProject(ctx *gin.Context) {
-	// TODO: 实现更新 Kubernetes 项目的逻辑
+	Id := ctx.Param("id")
+	Id_int, err := strconv.ParseInt(Id, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+	// 拿到req
+	var req model.K8sProject
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求参数"})
+		return
+	}
+	// 调用服务层更新项目
+	if err := k.projectService.UpdateProjectOne(ctx, Id_int, &req); err != nil {
+		k.l.Error("项目更新失败",
+			zap.Int64("projectId", Id_int),
+			zap.Error(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "项目更新失败"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "项目更新成功",
+		"id":      req.ID,
+	})
 }
 
 // DeleteK8sProjectOne 删除单个 Kubernetes 项目
 func (k *K8sAppHandler) DeleteK8sProjectOne(ctx *gin.Context) {
-	// TODO: 实现删除单个 Kubernetes 项目的逻辑
+	ID := ctx.Param("id")
+	IDInt, err := strconv.ParseInt(ID, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid app ID"})
+		return
+	}
+	err1 := k.projectService.DeleteProjectOne(ctx, IDInt)
+	if err1 != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err1.Error()})
+	}
+	ctx.JSON(http.StatusOK, gin.H{"message": "project deleted successfully"})
 }
 
 // GetK8sCronjobList 获取 CronJob 列表
 func (k *K8sAppHandler) GetK8sCronjobList(ctx *gin.Context) {
-	// TODO: 实现获取 CronJob 列表的逻辑
+	res, err := k.cronjobService.GetCronjobList(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, res)
 }
 
 // CreateK8sCronjobOne 创建单个 CronJob
 func (k *K8sAppHandler) CreateK8sCronjobOne(ctx *gin.Context) {
-	// TODO: 实现创建单个 CronJob 的逻辑
+	// 从请求中解析出 CronJob 信息到 req 结构体
+	var req model.K8sCronjob
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		// 若解析失败，记录错误日志并返回 400 错误响应
+		k.l.Error("解析请求 JSON 失败", zap.Error(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":   "无效的请求体",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// 调用服务层方法创建 CronJob
+	err := k.cronjobService.CreateCronjobOne(ctx, req)
+	if err != nil {
+		// 若创建失败，记录错误日志并返回 500 错误响应
+		k.l.Error("创建 CronJob 失败", zap.Error(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": "创建 CronJob 时出错",
+		})
+		return
+	}
+
+	// 若创建成功，返回 201 状态码和成功消息
+	ctx.JSON(http.StatusCreated, gin.H{
+		"message": "CronJob 创建成功",
+	})
 }
 
 // UpdateK8sCronjobOne 更新单个 CronJob
 func (k *K8sAppHandler) UpdateK8sCronjobOne(ctx *gin.Context) {
-	// TODO: 实现更新单个 CronJob 的逻辑
+	Id := ctx.Param("id")
+	Id_int, err2 := strconv.ParseInt(Id, 10, 64)
+	if err2 != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+
+	var req model.K8sCronjob
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		// 若解析失败，记录错误日志并返回 400 错误响应
+		k.l.Error("解析请求 JSON 失败", zap.Error(err))
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":   "无效的请求体",
+			"details": err.Error(),
+		})
+		return
+	}
+	err := k.cronjobService.UpdateCronjobOne(ctx, Id_int, req)
+	if err != nil {
+		// 若创建失败，记录错误日志并返回 500 错误响应
+		k.l.Error("创建 CronJob 失败", zap.Error(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": "创建 CronJob 时出错",
+		})
+	}
+	// 若创建成功，返回 201 状态码和成功消息
+	ctx.JSON(http.StatusCreated, gin.H{
+		"message": "CronJob 创建成功",
+	})
 }
 
 // GetK8sCronjobOne 获取单个 CronJob
 func (k *K8sAppHandler) GetK8sCronjobOne(ctx *gin.Context) {
-	// TODO: 实现获取单个 CronJob 的逻辑
+
+	Id := ctx.Param("id")
+	Id_int, err2 := strconv.ParseInt(Id, 10, 64)
+	if err2 != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+	cronjob, err := k.cronjobService.GetCronjobOne(ctx, Id_int)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, cronjob)
 }
 
 // GetK8sCronjobLastPod 获取 CronJob 最近的 Pod
 func (k *K8sAppHandler) GetK8sCronjobLastPod(ctx *gin.Context) {
-	// TODO: 实现获取 CronJob 最近的 Pod 的逻辑
+	cronjobID := ctx.Param("id") // 获取 URL 参数中的 CronJob ID
+	Id_int, err2 := strconv.ParseInt(cronjobID, 10, 64)
+	if err2 != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+	// 调用服务层方法获取最近的 Pod
+	pod, err := k.cronjobService.GetCronjobLastPod(ctx, Id_int)
+	// 处理错误
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 返回最近的 Pod
+	ctx.JSON(http.StatusOK, pod)
 }
 
 // BatchDeleteK8sCronjob 批量删除 CronJob
 func (k *K8sAppHandler) BatchDeleteK8sCronjob(ctx *gin.Context) {
-	// TODO: 实现批量删除 CronJob 的逻辑
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "instance_ids cannot be empty"})
+		return
+	}
+	// 调用服务方法进行批量删除
+	if err := k.cronjobService.BatchDeleteCronjob(ctx, req.IDs); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	//	返回成功响应
+	ctx.JSON(http.StatusOK, gin.H{"message": "cronjobs deleted successfully"})
+
 }
