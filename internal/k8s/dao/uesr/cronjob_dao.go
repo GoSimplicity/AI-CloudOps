@@ -38,6 +38,7 @@ type CornJobDAO interface {
 	GetCronjobList(ctx context.Context) ([]*model.K8sCronjob, error)
 	GetCronjobOne(ctx context.Context, id int64) (*model.K8sCronjob, error)
 	UpdateCronjobOne(ctx context.Context, id int64, job model.K8sCronjob) error
+	BatchDeleteCronjob(ctx context.Context, ids []int64) error
 }
 type cornJobDAO struct {
 	db *gorm.DB
@@ -96,5 +97,12 @@ func (c *cornJobDAO) UpdateCronjobOne(ctx context.Context, id int64, job model.K
 	}
 
 	// 返回成功
+	return nil
+}
+func (c *cornJobDAO) BatchDeleteCronjob(ctx context.Context, ids []int64) error {
+	result := c.db.WithContext(ctx).Delete(&model.K8sCronjob{}, ids)
+	if result.Error != nil {
+		return result.Error
+	}
 	return nil
 }

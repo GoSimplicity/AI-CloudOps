@@ -41,6 +41,7 @@ type CronjobService interface {
 	GetCronjobList(ctx context.Context) ([]*model.K8sCronjob, error)
 	GetCronjobOne(ctx context.Context, id int64) (*model.K8sCronjob, error)
 	UpdateCronjobOne(ctx context.Context, id int64, cornjob model.K8sCronjob) error
+	BatchDeleteCronjob(ctx context.Context, ids []int64) error
 }
 type cronjobService struct {
 	dao           admin.ClusterDAO
@@ -91,6 +92,31 @@ func (c *cronjobService) UpdateCronjobOne(ctx context.Context, id int64, cornjob
 	err = pkg.UpdateCronJob(ctx, K8sCluster.ID, cornjob, c.client, c.l)
 	if err != nil {
 		return errors.New("pkg Update Cron job  fail")
+	}
+	return nil
+}
+func (c *cronjobService) BatchDeleteCronjob(ctx context.Context, ids []int64) error {
+
+	// 批量删除k8s实例
+	for _, id := range ids {
+		job, err := c.k8scornjobDAO.GetCronjobOne(ctx, id)
+		if err != nil {
+			return errors.New("Batch Delete Cronjob Get Cronjob One fail")
+		}
+		K8sCluster, err := c.dao.GetClusterByName(ctx, job.Cluster)
+		if err != nil {
+			return errors.New("Batch Delete Cronjob Get Cluster By Name fail")
+		}
+		err = pkg.DeleteCronJob(ctx, K8sCluster.ID, job, c.client, c.l)
+		if err != nil {
+			return errors.New("Batch Delete Cronjob Delete Cronjob fail")
+
+		}
+	}
+	// 批量删除数据库记录
+	err := c.k8scornjobDAO.BatchDeleteCronjob(ctx, ids)
+	if err != nil {
+		return errors.New("Batch Delete Cronjob fail")
 	}
 	return nil
 }

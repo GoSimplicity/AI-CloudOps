@@ -535,5 +535,25 @@ func (k *K8sAppHandler) GetK8sCronjobLastPod(ctx *gin.Context) {
 
 // BatchDeleteK8sCronjob 批量删除 CronJob
 func (k *K8sAppHandler) BatchDeleteK8sCronjob(ctx *gin.Context) {
-	// TODO: 实现批量删除 CronJob 的逻辑
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "details": err.Error()})
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "instance_ids cannot be empty"})
+		return
+	}
+	// 调用服务方法进行批量删除
+	if err := k.cronjobService.BatchDeleteCronjob(ctx, req.IDs); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	//	返回成功响应
+	ctx.JSON(http.StatusOK, gin.H{"message": "cronjobs deleted successfully"})
+
 }

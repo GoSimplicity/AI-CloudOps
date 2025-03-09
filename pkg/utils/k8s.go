@@ -1554,3 +1554,18 @@ func UpdateCronJob(ctx context.Context, clusterId int, job model.K8sCronjob, cli
 
 	return nil
 }
+func DeleteCronJob(ctx context.Context, clusterId int, job *model.K8sCronjob, client client.K8sClient, logger *zap.Logger) error {
+	// Get the Kubernetes client for the specified cluster
+	kubeClient, err := GetKubeClient(clusterId, client, logger)
+	if err != nil {
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+	// Get the CronJobs client for the specified namespace
+	cronJobsClient := kubeClient.BatchV1().CronJobs(job.Namespace)
+	// Try to delete the CronJob resource in Kubernetes
+	err = cronJobsClient.Delete(ctx, job.Name, metav1.DeleteOptions{})
+	if err != nil {
+		logger.Error("Failed to delete CronJob in Kubernetes", zap.Error(err))
+	}
+	return nil
+}
