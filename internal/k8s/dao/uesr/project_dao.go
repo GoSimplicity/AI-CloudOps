@@ -37,6 +37,7 @@ type ProjectDAO interface {
 	GetAll(ctx context.Context) ([]model.K8sProject, error)
 	GetByIds(ctx context.Context, ids []int64) ([]model.K8sProject, error)
 	DeleteProjectById(ctx context.Context, id int64) (model.K8sProject, error)
+	UpdateProjectById(ctx context.Context, id int64, project model.K8sProject) error
 }
 
 type projectDAO struct {
@@ -92,4 +93,38 @@ func (p *projectDAO) DeleteProjectById(ctx context.Context, id int64) (model.K8s
 		p.db.WithContext(ctx).First(&project, id)
 	}
 	return project, result.Error
+}
+func (p *projectDAO) UpdateProjectById(ctx context.Context, id int64, project model.K8sProject) error {
+	result := p.db.WithContext(ctx).
+		Model(&model.K8sProject{}).
+		Where("id =?", id).
+		Updates(project)
+	if result.Error != nil {
+		p.l.Error("UpdateProjectById 更新项目失败", zap.Int64("projectId", id), zap.Error(result.Error))
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		p.l.Warn("UpdateProjectById 项目不存在", zap.Int64("projectId", id))
+	}
+	// 级联更新 K8sApp
+	for _, app := range project.K8sApps {
+		app.K8sProjectID = int(id) // 确保应用正确关联到 K8sProject
+		if err := p.db.WithContext(ctx).
+			Model(&model.K8sApp{}).
+			Where("id =? AND k8s_project_id =?", app.ID, id). // 确保只更新
+			Updates(app).Error; err != nil {
+			return err
+		}
+		// 级联更新 K8sInstance
+		for _, instance := range app.K8sInstances {
+			instance.K8sAppID = int(app.ID) // 确保实例正确关联到 K8sApp
+			if err := p.db.WithContext(ctx).
+				Model(&model.K8sInstance{}).
+				Where("id =? AND k8s_app_id =?", instance.ID, app.ID). // 确保只更新该实例
+				Updates(instance).Error; err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

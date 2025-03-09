@@ -33,6 +33,7 @@ type AppService interface {
 	GetprojectList(ctx context.Context) ([]model.K8sProject, error)
 	GetprojectListByIds(ctx context.Context, ids []int64) ([]model.K8sProject, error)
 	DeleteProjectOne(ctx context.Context, id int64) error
+	UpdateProjectOne(ctx context.Context, id int64, project *model.K8sProject) error
 }
 type appService struct {
 	dao         admin.ClusterDAO
@@ -337,7 +338,6 @@ func (a *appService) UpdateAppOne(ctx context.Context, id int64, app model.K8sAp
 		return fmt.Errorf("failed to update app in db: %w", err)
 	}
 	// 开始实例更新
-	// TODO:存在DB-instances不统一问题
 	for _, instance := range app.K8sInstances {
 		// 转换实例为K8s资源
 		deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
@@ -538,6 +538,51 @@ func (a *appService) DeleteProjectOne(ctx context.Context, id int64) error {
 			ServiceYaml:  &service,
 		}
 		pkg.DeleteService(ctx, &serviceRequest, a.client, a.l)
+	}
+	return nil
+}
+
+func (a *appService) UpdateProjectOne(ctx context.Context, id int64, project *model.K8sProject) error {
+	// 1.更新Project
+	if err := a.projectdao.UpdateProjectById(ctx, id, *project); err != nil {
+		return fmt.Errorf("更新项目失败: %w", err)
+	}
+	for _, app := range project.K8sApps {
+		for _, instance := range app.K8sInstances {
+			// 转换实例为K8s资源
+			deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
+			if err != nil {
+				return fmt.Errorf("failed to parse instance %d: %w", instance.ID, err)
+			}
+
+			// 获取集群信息
+			cluster, err := a.dao.GetClusterByName(ctx, instance.Cluster)
+			if err != nil {
+				return fmt.Errorf("failed to get cluster for instance %d: %w", instance.ID, err)
+			}
+
+			// 删除Deployment
+			depReq := model.K8sDeploymentRequest{
+				ClusterId:       cluster.ID,
+				Namespace:       instance.Namespace,
+				DeploymentNames: []string{deployment.Name},
+				DeploymentYaml:  &deployment,
+			}
+			if err := pkg.UpdateDeployment(ctx, &depReq, a.client, a.l); err != nil {
+				return fmt.Errorf("failed to update deployment %s: %w", deployment.Name, err)
+			}
+
+			// 删除Service
+			svcReq := model.K8sServiceRequest{
+				ClusterId:    cluster.ID,
+				Namespace:    instance.Namespace,
+				ServiceNames: []string{service.Name},
+				ServiceYaml:  &service,
+			}
+			if err := pkg.UpdateService(ctx, &svcReq, a.client, a.l); err != nil {
+				return fmt.Errorf("failed to update service %s: %w", service.Name, err)
+			}
+		}
 	}
 	return nil
 }

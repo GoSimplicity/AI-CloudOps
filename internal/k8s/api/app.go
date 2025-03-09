@@ -85,7 +85,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 			projects.GET("/all", k.GetK8sProjectList)             // 获取 Kubernetes 项目列表
 			projects.GET("/select", k.GetK8sProjectListForSelect) // 获取用于选择的 Kubernetes 项目列表
 			projects.POST("/create", k.CreateK8sProject)          // 创建 Kubernetes 项目
-			projects.PUT("/:id", k.UpdateK8sProject)              // 更新 Kubernetes 项目
+			projects.PUT("/update/:id", k.UpdateK8sProject)       // 更新 Kubernetes 项目
 			projects.DELETE("/:id", k.DeleteK8sProjectOne)        // 删除单个 Kubernetes 项目
 		}
 
@@ -392,7 +392,31 @@ func (k *K8sAppHandler) CreateK8sProject(ctx *gin.Context) {
 
 // UpdateK8sProject 更新 Kubernetes 项目
 func (k *K8sAppHandler) UpdateK8sProject(ctx *gin.Context) {
-	// TODO: 实现更新 Kubernetes 项目的逻辑
+	Id := ctx.Param("id")
+	Id_int, err := strconv.ParseInt(Id, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+	// 拿到req
+	var req model.K8sProject
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求参数"})
+		return
+	}
+	// 调用服务层更新项目
+	if err := k.appService.UpdateProjectOne(ctx, Id_int, &req); err != nil {
+		k.l.Error("项目更新失败",
+			zap.Int64("projectId", Id_int),
+			zap.Error(err))
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "项目更新失败"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "项目更新成功",
+		"id":      req.ID,
+	})
 }
 
 // DeleteK8sProjectOne 删除单个 Kubernetes 项目
