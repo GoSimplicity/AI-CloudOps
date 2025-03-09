@@ -154,19 +154,20 @@ type K8sInstance struct {
 	UserID        int                    `json:"user_id" gorm:"comment:创建者用户ID"`                                     // 创建者用户ID
 	Cluster       string                 `json:"cluster,omitempty" gorm:"size:100;comment:所属集群"`                     // 所属集群
 	ContainerCore `json:"containerCore"` // 容器核心配置
-	Image         string                 `json:"image,omitempty" gorm:"comment:镜像"`            // 镜像
-	Replicas      int                    `json:"replicas,omitempty" gorm:"comment:副本数量"`       // 副本数量
-	K8sAppID      int                    `json:"k8s_appId" gorm:"comment:关联的 Kubernetes 应用ID"` // 关联的 Kubernetes 应用ID
+	Image         string                 `json:"image,omitempty" gorm:"comment:镜像"`                           // 镜像
+	Replicas      int                    `json:"replicas,omitempty" gorm:"comment:副本数量"`                      // 副本数量
+	K8sAppID      int                    `json:"k8s_appId" gorm:"comment:关联的 Kubernetes 应用ID"`                // 关联的 Kubernetes 应用ID
+	Namespace     string                 `json:"namespace,omitempty" gorm:"comment:Kubernetes-Instance 命名空间"` // 命名空间
 
 	// 前端使用字段
-	K8sAppName     string      `json:"k8s_app_name,omitempty" gorm:"-"`    // 应用名称
-	CreateUserName string      `json:"create_username,omitempty" gorm:"-"` // 创建者用户名
-	NodePath       string      `json:"node_path,omitempty" gorm:"-"`       // 节点路径
-	Key            string      `json:"key" gorm:"-"`                       // 前端表格使用的Key
-	Namespace      string      `json:"namespace,omitempty" gorm:"-"`       // 命名空间
-	K8sAppObj      *K8sApp     `json:"k8s_app_obj,omitempty" gorm:"-"`     // 应用对象
-	ClusterObj     *K8sCluster `json:"cluster_obj,omitempty" gorm:"-"`     // 集群对象
-	ReadyStatus    string      `json:"ready_status,omitempty" gorm:"-"`    // 就绪状态
+	K8sAppName     string `json:"k8s_app_name,omitempty" gorm:"-"`    // 应用名称
+	CreateUserName string `json:"create_username,omitempty" gorm:"-"` // 创建者用户名
+	NodePath       string `json:"node_path,omitempty" gorm:"-"`       // 节点路径
+	Key            string `json:"key" gorm:"-"`                       // 前端表格使用的Key
+
+	K8sAppObj   *K8sApp     `json:"k8s_app_obj,omitempty" gorm:"-"`  // 应用对象
+	ClusterObj  *K8sCluster `json:"cluster_obj,omitempty" gorm:"-"`  // 集群对象
+	ReadyStatus string      `json:"ready_status,omitempty" gorm:"-"` // 就绪状态
 }
 
 // K8sProject Kubernetes 项目的配置

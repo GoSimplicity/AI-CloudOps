@@ -43,6 +43,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 	//core "k8s.io/api/core/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -1075,9 +1076,9 @@ func RestartDeployment(ctx context.Context, deploymentRequest *model.K8sDeployme
 }
 
 // BatchRestartK8sInstance 批量重启 Kubernetes 实例
-func BatchRestartK8sInstance(ctx context.Context, deploymentRequests []*model.K8sDeploymentRequest, client client.K8sClient, logger *zap.Logger) error {
+func BatchRestartK8sInstance(ctx context.Context, deploymentRequests []model.K8sDeploymentRequest, client client.K8sClient, logger *zap.Logger) error {
 	for _, deploymentReq := range deploymentRequests {
-		if err := RestartDeployment(ctx, deploymentReq, client, logger); err != nil {
+		if err := RestartDeployment(ctx, &deploymentReq, client, logger); err != nil {
 			logger.Error("批量重启 Deployment 失败", zap.String("name", deploymentReq.DeploymentYaml.Name), zap.Error(err))
 		}
 	}
@@ -1219,6 +1220,67 @@ func ParsePorts(portJson string) ([]corev1.ServicePort, error) {
 	}
 
 	return servicePorts, nil
+}
+func ParseK8sInstance(ctx context.Context, instance *model.K8sInstance) (appsv1.Deployment, corev1.Service, error) {
+
+	// 解析端口
+	portJson, err2 := ParsePorts(instance.PortJson)
+	if len(portJson) == 0 {
+		return appsv1.Deployment{}, corev1.Service{}, fmt.Errorf("instance containerCore portJson is nil")
+	}
+	if err2 != nil {
+		return appsv1.Deployment{}, corev1.Service{}, fmt.Errorf("instance ContainerCore PortJson parse fail")
+	}
+	// 构建deployment
+	deployment := appsv1.Deployment{}
+	deployment.APIVersion = "apps/v1"
+	deployment.Kind = "Deployment"
+	deployment.ObjectMeta.Name = instance.Name
+	deployment.ObjectMeta.Namespace = instance.Namespace
+
+	replicas := int32(instance.Replicas) // 将 int 转换为 int32
+	deployment.Spec.Replicas = &replicas // 使用 int32 指针
+
+	deployment.Spec.Selector = &metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"app": instance.Name,
+		},
+	}
+
+	deployment.Spec.Template.ObjectMeta.Labels = map[string]string{
+		"app": instance.Name,
+	}
+
+	deployment.Spec.Template.Spec.Containers = []corev1.Container{
+		{
+			Name:  instance.Name,
+			Image: instance.Image,
+			Ports: []corev1.ContainerPort{
+				{
+					ContainerPort: portJson[0].Port,
+					Protocol:      corev1.Protocol(portJson[0].Protocol),
+				},
+			},
+		},
+	}
+
+	// 构建service
+	service := corev1.Service{}
+	service.APIVersion = "v1"
+	service.Kind = "Service"
+	service.ObjectMeta.Name = instance.Name
+	service.ObjectMeta.Namespace = instance.Namespace
+	service.Spec.Selector = map[string]string{"app": instance.Name}
+	service.Spec.Ports = []corev1.ServicePort{
+		{
+			Port:       portJson[0].Port,
+			Protocol:   corev1.Protocol(portJson[0].Protocol),
+			TargetPort: intstr.FromInt(int(portJson[0].Port)),
+		},
+	}
+	service.Spec.Type = corev1.ServiceTypeNodePort // Note:这里硬编码了下，由于传入参数的问题
+
+	return deployment, service, nil
 }
 
 // 解析K8SApp请求的代码
@@ -1421,4 +1483,176 @@ func ParseK8sApp(ctx context.Context, app *model.K8sApp) ([]appsv1.Deployment, [
 
 	}
 	return deployments, services, nil
+}
+func ConvertCornJob(job model.K8sCronjob) (batchv1.CronJob, error) {
+	var cronJob batchv1.CronJob
+	cronJob.APIVersion = "batch/v1"
+	cronJob.Kind = "CronJob"
+	cronJob.ObjectMeta = metav1.ObjectMeta{
+		Name:      job.Name,
+		Namespace: job.Namespace,
+	}
+	cronJob.Spec.Schedule = job.Schedule
+	cronJob.Spec.JobTemplate = batchv1.JobTemplateSpec{}
+	cronJob.Spec.JobTemplate.Spec.Template = corev1.PodTemplateSpec{}
+	cronJob.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyOnFailure
+	cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers = []corev1.Container{
+		{
+			Name:    job.Name,
+			Image:   job.Image,
+			Command: job.Commands,
+			Args:    job.Args,
+		},
+	}
+	return cronJob, nil
+}
+func CreateCornJob(ctx context.Context, clusterId int, job model.K8sCronjob, client client.K8sClient, logger *zap.Logger) error {
+	cornJob, err := ConvertCornJob(job)
+	if err != nil {
+		return err
+	}
+	kubeClient, err := GetKubeClient(clusterId, client, logger)
+	if err != nil {
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+	cronJobsClient := kubeClient.BatchV1().CronJobs(job.Namespace)
+	_, err = cronJobsClient.Create(ctx, &cornJob, metav1.CreateOptions{})
+	if err != nil {
+		logger.Error("Failed to create CronJob in Kubernetes", zap.Error(err))
+		return err
+	}
+
+	logger.Info("Successfully created CronJob", zap.String("name", job.Name), zap.String("namespace", job.Namespace))
+	return nil
+
+}
+func UpdateCronJob(ctx context.Context, clusterId int, job model.K8sCronjob, client client.K8sClient, logger *zap.Logger) error {
+	// Convert the job model to CronJob resource
+	cronJob, err := ConvertCornJob(job)
+	if err != nil {
+		return err
+	}
+
+	// Get the Kubernetes client for the specified cluster
+	kubeClient, err := GetKubeClient(clusterId, client, logger)
+	if err != nil {
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	// Get the CronJobs client for the specified namespace
+	cronJobsClient := kubeClient.BatchV1().CronJobs(job.Namespace)
+
+	// Try to update the CronJob resource in Kubernetes
+	updatedCronJob, err := cronJobsClient.Update(ctx, &cronJob, metav1.UpdateOptions{})
+	if err != nil {
+		logger.Error("Failed to update CronJob in Kubernetes", zap.Error(err))
+		return err
+	}
+
+	// Log successful update
+	logger.Info("Successfully updated CronJob", zap.String("name", job.Name), zap.String("namespace", job.Namespace), zap.String("name", updatedCronJob.Name))
+
+	return nil
+}
+func DeleteCronJob(ctx context.Context, clusterId int, job *model.K8sCronjob, client client.K8sClient, logger *zap.Logger) error {
+	// Get the Kubernetes client for the specified cluster
+	kubeClient, err := GetKubeClient(clusterId, client, logger)
+	if err != nil {
+		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+	// Get the CronJobs client for the specified namespace
+	cronJobsClient := kubeClient.BatchV1().CronJobs(job.Namespace)
+	// Try to delete the CronJob resource in Kubernetes
+	err = cronJobsClient.Delete(ctx, job.Name, metav1.DeleteOptions{})
+	if err != nil {
+		logger.Error("Failed to delete CronJob in Kubernetes", zap.Error(err))
+	}
+	return nil
+}
+
+func GetLastSuccessfulPod(ctx context.Context, clusterId int, job *model.K8sCronjob, client client.K8sClient, logger *zap.Logger) (*corev1.Pod, error) {
+	// 获取 K8s 客户端
+	kubeClient, err := GetKubeClient(clusterId, client, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	// 获取 Job 资源
+	jobsClient := kubeClient.BatchV1().Jobs(job.Namespace)
+	labelSelector := fmt.Sprintf("job-name=%s", job.Name)
+
+	// 查询匹配的 Job 列表
+	jobList, err := jobsClient.List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		logger.Error("Failed to list jobs", zap.Error(err))
+		return nil, err
+	}
+
+	// 如果没有找到 Job，返回错误
+	if len(jobList.Items) == 0 {
+		return nil, fmt.Errorf("no jobs found for CronJob %s", job.Name)
+	}
+
+	// 获取 Pod 资源
+	podsClient := kubeClient.CoreV1().Pods(job.Namespace)
+
+	// 遍历 Job，查找最近的成功 Pod
+	var lastSuccessfulPod *corev1.Pod
+	for _, jobItem := range jobList.Items {
+		// 获取 Job 的 Pod
+		podList, err := podsClient.List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("job-name=%s", jobItem.Name)})
+		if err != nil {
+			logger.Error("Failed to list pods for job", zap.String("job", jobItem.Name), zap.Error(err))
+			continue
+		}
+
+		// 选出最近的成功 Pod
+		for i, pod := range podList.Items {
+			if pod.Status.Phase == corev1.PodSucceeded {
+				// 比较创建时间，选出最新的 Pod
+				if lastSuccessfulPod == nil || pod.CreationTimestamp.After(lastSuccessfulPod.CreationTimestamp.Time) {
+					lastSuccessfulPod = &podList.Items[i]
+				}
+			}
+		}
+	}
+
+	if lastSuccessfulPod == nil {
+		return nil, fmt.Errorf("no successful pod found for CronJob %s", job.Name)
+	}
+
+	return lastSuccessfulPod, nil
+}
+func GetCronJobLastPod(ctx context.Context, clusterId int, job *model.K8sCronjob, client client.K8sClient, logger *zap.Logger) (model.K8sPod, error) {
+	// 获取 K8s 客户端
+	kubeClient, err := GetKubeClient(clusterId, client, logger)
+	if err != nil {
+		return model.K8sPod{}, fmt.Errorf("failed to get Kubernetes client for cluster %d: %w", clusterId, err)
+	}
+
+	// 获取 CronJob 资源
+	cronJobsClient := kubeClient.BatchV1().CronJobs(job.Namespace)
+	cronJob, err := cronJobsClient.Get(ctx, job.Name, metav1.GetOptions{})
+	if err != nil {
+		return model.K8sPod{}, fmt.Errorf("failed to get CronJob %s in namespace %s for cluster %d: %w", job.Name, job.Namespace, clusterId, err)
+	}
+
+	// 检查 CronJob 是否已经被调度
+	if cronJob.Status.LastScheduleTime == nil {
+		return model.K8sPod{}, fmt.Errorf("CronJob %s has not been scheduled yet", job.Name)
+	}
+
+	// 调用 GetLastSuccessfulPod 获取最近的成功 Pod
+	lastSuccessfulPod, err := GetLastSuccessfulPod(ctx, clusterId, job, client, logger)
+	if err != nil {
+		logger.Warn("Failed to get last successful pod", zap.Error(err))
+		return model.K8sPod{}, fmt.Errorf("no successful pod found for CronJob %s", job.Name)
+	}
+
+	return model.K8sPod{
+		Name:      lastSuccessfulPod.Name,
+		Namespace: lastSuccessfulPod.Namespace,
+		Status:    string(lastSuccessfulPod.Status.Phase),
+		NodeName:  lastSuccessfulPod.Spec.NodeName,
+	}, nil
 }
