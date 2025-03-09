@@ -1569,3 +1569,90 @@ func DeleteCronJob(ctx context.Context, clusterId int, job *model.K8sCronjob, cl
 	}
 	return nil
 }
+
+func GetLastSuccessfulPod(ctx context.Context, clusterId int, job *model.K8sCronjob, client client.K8sClient, logger *zap.Logger) (*corev1.Pod, error) {
+	// 获取 K8s 客户端
+	kubeClient, err := GetKubeClient(clusterId, client, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
+	}
+
+	// 获取 Job 资源
+	jobsClient := kubeClient.BatchV1().Jobs(job.Namespace)
+	labelSelector := fmt.Sprintf("job-name=%s", job.Name)
+
+	// 查询匹配的 Job 列表
+	jobList, err := jobsClient.List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		logger.Error("Failed to list jobs", zap.Error(err))
+		return nil, err
+	}
+
+	// 如果没有找到 Job，返回错误
+	if len(jobList.Items) == 0 {
+		return nil, fmt.Errorf("no jobs found for CronJob %s", job.Name)
+	}
+
+	// 获取 Pod 资源
+	podsClient := kubeClient.CoreV1().Pods(job.Namespace)
+
+	// 遍历 Job，查找最近的成功 Pod
+	var lastSuccessfulPod *corev1.Pod
+	for _, jobItem := range jobList.Items {
+		// 获取 Job 的 Pod
+		podList, err := podsClient.List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("job-name=%s", jobItem.Name)})
+		if err != nil {
+			logger.Error("Failed to list pods for job", zap.String("job", jobItem.Name), zap.Error(err))
+			continue
+		}
+
+		// 选出最近的成功 Pod
+		for i, pod := range podList.Items {
+			if pod.Status.Phase == corev1.PodSucceeded {
+				// 比较创建时间，选出最新的 Pod
+				if lastSuccessfulPod == nil || pod.CreationTimestamp.After(lastSuccessfulPod.CreationTimestamp.Time) {
+					lastSuccessfulPod = &podList.Items[i]
+				}
+			}
+		}
+	}
+
+	if lastSuccessfulPod == nil {
+		return nil, fmt.Errorf("no successful pod found for CronJob %s", job.Name)
+	}
+
+	return lastSuccessfulPod, nil
+}
+func GetCronJobLastPod(ctx context.Context, clusterId int, job *model.K8sCronjob, client client.K8sClient, logger *zap.Logger) (model.K8sPod, error) {
+	// 获取 K8s 客户端
+	kubeClient, err := GetKubeClient(clusterId, client, logger)
+	if err != nil {
+		return model.K8sPod{}, fmt.Errorf("failed to get Kubernetes client for cluster %d: %w", clusterId, err)
+	}
+
+	// 获取 CronJob 资源
+	cronJobsClient := kubeClient.BatchV1().CronJobs(job.Namespace)
+	cronJob, err := cronJobsClient.Get(ctx, job.Name, metav1.GetOptions{})
+	if err != nil {
+		return model.K8sPod{}, fmt.Errorf("failed to get CronJob %s in namespace %s for cluster %d: %w", job.Name, job.Namespace, clusterId, err)
+	}
+
+	// 检查 CronJob 是否已经被调度
+	if cronJob.Status.LastScheduleTime == nil {
+		return model.K8sPod{}, fmt.Errorf("CronJob %s has not been scheduled yet", job.Name)
+	}
+
+	// 调用 GetLastSuccessfulPod 获取最近的成功 Pod
+	lastSuccessfulPod, err := GetLastSuccessfulPod(ctx, clusterId, job, client, logger)
+	if err != nil {
+		logger.Warn("Failed to get last successful pod", zap.Error(err))
+		return model.K8sPod{}, fmt.Errorf("no successful pod found for CronJob %s", job.Name)
+	}
+
+	return model.K8sPod{
+		Name:      lastSuccessfulPod.Name,
+		Namespace: lastSuccessfulPod.Namespace,
+		Status:    string(lastSuccessfulPod.Status.Phase),
+		NodeName:  lastSuccessfulPod.Spec.NodeName,
+	}, nil
+}

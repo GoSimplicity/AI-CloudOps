@@ -103,7 +103,7 @@ func (k *K8sAppHandler) RegisterRouters(server *gin.Engine) {
 			cronJobs.PUT("/:id", k.UpdateK8sCronjobOne)           // 更新单个 CronJob
 			cronJobs.GET("/:id", k.GetK8sCronjobOne)              // 获取单个 CronJob
 			cronJobs.GET("/:id/last-pod", k.GetK8sCronjobLastPod) // 获取 CronJob 最近的 Pod
-			cronJobs.DELETE("/", k.BatchDeleteK8sCronjob)         // 批量删除 CronJob
+			cronJobs.DELETE("/delete", k.BatchDeleteK8sCronjob)   // 批量删除 CronJob
 		}
 	}
 }
@@ -530,7 +530,21 @@ func (k *K8sAppHandler) GetK8sCronjobOne(ctx *gin.Context) {
 
 // GetK8sCronjobLastPod 获取 CronJob 最近的 Pod
 func (k *K8sAppHandler) GetK8sCronjobLastPod(ctx *gin.Context) {
-	// TODO: 实现获取 CronJob 最近的 Pod 的逻辑
+	cronjobID := ctx.Param("id") // 获取 URL 参数中的 CronJob ID
+	Id_int, err2 := strconv.ParseInt(cronjobID, 10, 64)
+	if err2 != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid instance_id"})
+	}
+	// 调用服务层方法获取最近的 Pod
+	pod, err := k.cronjobService.GetCronjobLastPod(ctx, Id_int)
+	// 处理错误
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 返回最近的 Pod
+	ctx.JSON(http.StatusOK, pod)
 }
 
 // BatchDeleteK8sCronjob 批量删除 CronJob

@@ -42,6 +42,7 @@ type CronjobService interface {
 	GetCronjobOne(ctx context.Context, id int64) (*model.K8sCronjob, error)
 	UpdateCronjobOne(ctx context.Context, id int64, cornjob model.K8sCronjob) error
 	BatchDeleteCronjob(ctx context.Context, ids []int64) error
+	GetCronjobLastPod(ctx context.Context, id int64) (model.K8sPod, error)
 }
 type cronjobService struct {
 	dao           admin.ClusterDAO
@@ -119,4 +120,15 @@ func (c *cronjobService) BatchDeleteCronjob(ctx context.Context, ids []int64) er
 		return errors.New("Batch Delete Cronjob fail")
 	}
 	return nil
+}
+func (c *cronjobService) GetCronjobLastPod(ctx context.Context, id int64) (model.K8sPod, error) {
+	job, err := c.k8scornjobDAO.GetCronjobOne(ctx, id)
+	if err != nil {
+		return model.K8sPod{}, errors.New("Get Cronjob Last Pod Get Cronjob One fail")
+	}
+	K8sCluster, err := c.dao.GetClusterByName(ctx, job.Cluster)
+	if err != nil {
+		return model.K8sPod{}, errors.New("Get Cronjob Last Pod Get Cluster By Name fail")
+	}
+	return pkg.GetCronJobLastPod(ctx, K8sCluster.ID, job, c.client, c.l)
 }
