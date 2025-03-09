@@ -20,91 +20,66 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
-description: FastAPI应用
 """
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import time
 import uvicorn
 import os
-import sys
 
-# 添加项目根目录到路径
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from api.routes import anomaly_routes, prediction_routes, assistant_routes
 from utils.logger import get_logger
-from utils.config import get_config
-from utils.metrics import APIMetrics
+from utils.config import load_config
 
-# 导入路由
-from api.routes.anomaly_routes import router as anomaly_router
-from api.routes.prediction_routes import router as prediction_router
-from api.routes.assistant_routes import router as assistant_router
+logger = get_logger("fastapi_app")
 
-logger = get_logger("api")
+# 加载配置
+config = load_config()
 
 # 创建FastAPI应用
 app = FastAPI(
-    title=get_config("service.name", "AIOps"),
-    description="AIOps平台API",
-    version=get_config("service.version", "0.1.0"),
-    docs_url="/docs",
-    redoc_url="/redoc"
+    title="CloudOps AI API", description="CloudOps AI系统API接口", version="1.0.0"
 )
 
-# CORS配置
+# 添加CORS中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=get_config("api.cors_origins", ["*"]),
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 请求计时中间件
-@app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
-    start_time = time.time()
-    response = await call_next(request)
-    process_time = time.time() - start_time
-    response.headers["X-Process-Time"] = str(process_time)
-    
-    # 记录API指标
-    APIMetrics.record_api_call(
-        endpoint=request.url.path,
-        status_code=response.status_code,
-        duration=process_time
-    )
-    
-    return response
+# 添加路由
+app.include_router(anomaly_routes.router)
+app.include_router(prediction_routes.router)
+app.include_router(assistant_routes.router)
 
-# 健康检查路由
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
 
-# 指标路由
-@app.get("/metrics")
-async def metrics():
+@app.get("/")
+async def root():
+    """API根路径"""
     return {
-        "api_metrics": APIMetrics.get_api_metrics()
+        "message": "欢迎使用CloudOps AI系统API",
+        "docs_url": "/docs",
+        "redoc_url": "/redoc",
     }
 
-# 挂载路由
-app.include_router(anomaly_router, prefix="/api/anomaly", tags=["anomaly"])
-app.include_router(prediction_router, prefix="/api/prediction", tags=["prediction"])
-app.include_router(assistant_router, prefix="/api/assistant", tags=["assistant"])
+
+@app.get("/health")
+async def health_check():
+    """健康检查"""
+    return {"status": "healthy"}
+
 
 def start_server():
-    """启动API服务器"""
-    host = get_config("service.host", "0.0.0.0")
-    port = get_config("service.port", 8000)
-    debug = get_config("service.debug", False)
-    
-    logger.info(f"Starting AIOps API server at http://{host}:{port}")
-    uvicorn.run("api.fastapi_app:app", host=host, port=port, reload=debug)
+    """启动FastAPI服务器"""
+    host = config.get("api", {}).get("host", "0.0.0.0")
+    port = config.get("api", {}).get("port", 8000)
+
+    logger.info(f"启动FastAPI服务器，监听地址: {host}:{port}")
+    uvicorn.run(app, host=host, port=port)
+
 
 if __name__ == "__main__":
     start_server()
