@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -51,16 +50,14 @@ type UserDAO interface {
 }
 
 type userDAO struct {
-	db            *gorm.DB
-	l             *zap.Logger
-	permissionDao dao.PermissionDAO
+	db *gorm.DB
+	l  *zap.Logger
 }
 
-func NewUserDAO(db *gorm.DB, l *zap.Logger, permissionDao dao.PermissionDAO) UserDAO {
+func NewUserDAO(db *gorm.DB, l *zap.Logger) UserDAO {
 	return &userDAO{
-		db:            db,
-		l:             l,
-		permissionDao: permissionDao,
+		db: db,
+		l:  l,
 	}
 }
 
@@ -135,8 +132,6 @@ func (u *userDAO) GetAllUsers(ctx context.Context) ([]*model.User, error) {
 	var users []*model.User
 	if err := u.db.WithContext(ctx).
 		Where("deleted_at = ?", 0).
-		Preload("Roles").
-		Preload("Menus").
 		Preload("Apis").
 		Find(&users).Error; err != nil {
 		u.l.Error("获取所有用户失败", zap.Error(err))
@@ -155,7 +150,6 @@ func (u *userDAO) GetUserByID(ctx context.Context, id int) (*model.User, error) 
 	var user model.User
 	if err := u.db.WithContext(ctx).
 		Where("id = ? AND deleted_at = ?", id, 0).
-		Preload("Roles").
 		Preload("Apis").
 		First(&user).Error; err != nil {
 		u.l.Error("根据ID获取用户失败", zap.Int("id", id), zap.Error(err))
@@ -290,25 +284,9 @@ func (u *userDAO) WriteOff(ctx context.Context, username string, password string
 // DeleteUser 删除用户
 func (u *userDAO) DeleteUser(ctx context.Context, uid int) error {
 	return u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 删除用户角色关联
-		if err := tx.Table("user_roles").Where("user_id = ?", uid).Delete(nil).Error; err != nil {
-			u.l.Error("删除用户角色关联失败", zap.Int("uid", uid), zap.Error(err))
-		}
-
-		// 删除用户菜单关联
-		if err := tx.Table("user_menus").Where("user_id = ?", uid).Delete(nil).Error; err != nil {
-			u.l.Warn("删除用户菜单关联失败", zap.Int("uid", uid), zap.Error(err))
-		}
-
 		// 删除用户API关联
 		if err := tx.Table("user_apis").Where("user_id = ?", uid).Delete(nil).Error; err != nil {
 			u.l.Warn("删除用户API关联失败", zap.Int("uid", uid), zap.Error(err))
-		}
-
-		// 删除用户权限策略
-		if err := u.permissionDao.RemoveUserPermissions(ctx, uid); err != nil {
-			u.l.Warn("删除用户权限策略失败", zap.Int("uid", uid), zap.Error(err))
-			return err
 		}
 
 		// 删除用户

@@ -34,9 +34,9 @@ func InitTables(db *gorm.DB) error {
 	return db.AutoMigrate(
 		// auth
 		&model.User{},
-		&model.Role{},
 		&model.Api{},
 		&model.AuditLog{},
+		&model.CasbinRule{},
 
 		// tree
 		&model.TreeNode{},

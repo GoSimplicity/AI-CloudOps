@@ -190,10 +190,5 @@ func InitMock() error {
 		return fmt.Errorf("创建管理员用户失败: %v", err)
 	}
 
-	rm := mock.NewRoleMock(db, enforcer)
-	if err := rm.InitRole(); err != nil {
-		return fmt.Errorf("创建角色失败: %v", err)
-	}
-
 	return nil
 }

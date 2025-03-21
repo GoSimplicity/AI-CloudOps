@@ -126,7 +126,6 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 		"id":           user.ID,
 		"accessToken":  accessToken,
 		"refreshToken": refreshToken,
-		"roles":        user.Roles,
 		"desc":         user.Desc,
 		"realName":     user.RealName,
 		"userId":       user.ID,
