@@ -44,9 +44,23 @@ services:
     restart: always
     networks:
       - cloudOps_net
+
+  asynqmon:
+    image: hibiken/asynqmon:latest
+    container_name: asynqmon
+    ports:
+      - "8980:8080"
+    command:
+      - '--redis-addr=redis:6379'
+      - '--redis-password=v6SxhWHyZC7S'
+    restart: always
+    networks:
+      - cloudOps_net
+    depends_on:
+      - redis
+
 networks:
   cloudOps_net:
-    external: true
     driver: bridge
     ipam:
       config:

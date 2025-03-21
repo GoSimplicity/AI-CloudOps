@@ -12,9 +12,9 @@ import (
 	api5 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
-	uesr "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/uesr"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
 	admin2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
-	user2  "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/uesr"
+	user2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/user"
 	api4 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	service4 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	api6 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
@@ -62,9 +62,6 @@ func InitWebServer() *Cmd {
 	userHandler := api.NewUserHandler(userService, logger, handler)
 	apiService := service.NewApiService(logger, apiDAO)
 	apiHandler := api2.NewApiHandler(apiService)
-	menuDAO := dao.NewMenuDAO(db, logger)
-	menuService := service.NewMenuService(menuDAO, logger)
-	menuHandler := api2.NewMenuHandler(menuService)
 	roleHandler := api2.NewRoleHandler(roleService, apiService, permissionService, logger)
 	permissionHandler := api2.NewPermissionHandler(permissionService)
 	treeNodeDAO := dao3.NewTreeNodeDAO(db, logger)
@@ -113,15 +110,15 @@ func InitWebServer() *Cmd {
 	k8sYamlTaskHandler := api5.NewK8sYamlTaskHandler(logger, yamlTaskService)
 	yamlTemplateService := admin2.NewYamlTemplateService(yamlTemplateDAO, yamlTaskDAO, k8sClient, logger)
 	k8sYamlTemplateHandler := api5.NewK8sYamlTemplateHandler(logger, yamlTemplateService)
-	k8sAppDao:=uesr.NewAppDAO(db, logger)
-	k8sInstanceDao:=uesr.NewInstanceDAO(db,logger)
-	k8sProjectDao:=uesr.NewProjectDAO(db, logger)
-	k8scornjobDAO := uesr.NewCornJobDAO(db, logger)
-	K8sInstanceService:=user2.NewInstanceService(clusterDAO,k8sInstanceDao, k8sClient, logger)
-	k8sAppService := user2.NewAppService(clusterDAO,k8sAppDao,k8sInstanceDao, k8sClient, logger)
-	k8sProjectService := user2.NewProjectService(clusterDAO,k8sProjectDao,k8sAppDao,k8sInstanceDao, k8sClient, logger)
-	K8sCoreService := user2.NewCronjobService(clusterDAO,k8scornjobDAO, k8sClient, logger)
-	k8sAppHandler := api5.NewK8sAppHandler(logger,K8sInstanceService, k8sAppService,k8sProjectService,K8sCoreService)
+	instanceDAO := user.NewInstanceDAO(db, logger)
+	instanceService := user2.NewInstanceService(clusterDAO, instanceDAO, k8sClient, logger)
+	appDAO := user.NewAppDAO(db, logger)
+	appService := user2.NewAppService(clusterDAO, appDAO, instanceDAO, k8sClient, logger)
+	projectDAO := user.NewProjectDAO(db, logger)
+	projectService := user2.NewProjectService(clusterDAO, projectDAO, appDAO, instanceDAO, k8sClient, logger)
+	cornJobDAO := user.NewCornJobDAO(db, logger)
+	cronjobService := user2.NewCronjobService(clusterDAO, cornJobDAO, k8sClient, logger)
+	k8sAppHandler := api5.NewK8sAppHandler(logger, instanceService, appService, projectService, cronjobService)
 	alertManagerEventDAO := alert.NewAlertManagerEventDAO(db, logger, userDAO)
 	scrapePoolDAO := scrape.NewScrapePoolDAO(db, logger, userDAO)
 	scrapeJobDAO := scrape.NewScrapeJobDAO(db, logger, userDAO)
@@ -154,7 +151,7 @@ func InitWebServer() *Cmd {
 	alertManagerSendService := alert2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, monitorCache, logger, userDAO)
 	sendGroupHandler := api6.NewSendGroupHandler(logger, alertManagerSendService)
 	auditHandler := api2.NewAuditHandler(auditService)
-	engine := InitGinServer(v, userHandler, apiHandler, menuHandler, roleHandler, permissionHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler)
+	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, permissionHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler)
 	createK8sClusterTask := job.NewCreateK8sClusterTask(logger, k8sClient, clusterDAO)
 	updateK8sClusterTask := job.NewUpdateK8sClusterTask(logger, k8sClient, clusterDAO)
 	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, treeEcsDAO, clusterDAO, k8sClient)

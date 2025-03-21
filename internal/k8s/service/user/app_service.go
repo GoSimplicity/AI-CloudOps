@@ -1,11 +1,11 @@
-package uesr
+package user
 
 import (
 	"context"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/uesr"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
@@ -26,21 +26,20 @@ type AppService interface {
 }
 type appService struct {
 	dao         admin.ClusterDAO
-	appdao      uesr.AppDAO
-	instancedao uesr.InstanceDAO
+	appdao      user.AppDAO
+	instancedao user.InstanceDAO
 
 	client client.K8sClient
 	l      *zap.Logger
 }
 
-func NewAppService(dao admin.ClusterDAO, appdao uesr.AppDAO, instancedao uesr.InstanceDAO, client client.K8sClient, l *zap.Logger) AppService {
+func NewAppService(dao admin.ClusterDAO, appdao user.AppDAO, instancedao user.InstanceDAO, client client.K8sClient, l *zap.Logger) AppService {
 	return &appService{
 		dao:         dao,
 		appdao:      appdao,
 		instancedao: instancedao,
-
-		client: client,
-		l:      l,
+		client:      client,
+		l:           l,
 	}
 }
 

@@ -35,7 +35,6 @@ func InitTables(db *gorm.DB) error {
 		// auth
 		&model.User{},
 		&model.Role{},
-		&model.Menu{},
 		&model.Api{},
 		&model.AuditLog{},
 

@@ -40,7 +40,6 @@ func InitGinServer(
 	m []gin.HandlerFunc,
 	userHdl *userApi.UserHandler,
 	authApiHdl *systemApi.ApiHandler,
-	authMenuHdl *systemApi.MenuHandler,
 	authRoleHdl *systemApi.RoleHandler,
 	authPermissionHdl *systemApi.PermissionHandler,
 	treeNodeHdl *treeApi.TreeNodeHandler,
@@ -75,7 +74,6 @@ func InitGinServer(
 	server := gin.Default()
 	server.Use(m...)
 	userHdl.RegisterRoutes(server)
-	authMenuHdl.RegisterRouters(server)
 	authApiHdl.RegisterRouters(server)
 	authRoleHdl.RegisterRouters(server)
 	authPermissionHdl.RegisterRouters(server)

@@ -33,7 +33,9 @@ import (
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	k8sAppDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
 	k8sAdminService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
+	k8sAppService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/user"
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	notAuthService "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	promHandler "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
@@ -79,7 +81,6 @@ func InitWebServer() *Cmd {
 		cache.NewRecordConfig,
 		cache.NewPromConfigCache,
 		cron.NewCronManager,
-		authHandler.NewMenuHandler,
 		authHandler.NewRoleHandler,
 		authHandler.NewApiHandler,
 		authHandler.NewPermissionHandler,
@@ -113,6 +114,10 @@ func InitWebServer() *Cmd {
 		k8sAdminService.NewTaintService,
 		k8sAdminService.NewYamlTaskService,
 		k8sAdminService.NewYamlTemplateService,
+		k8sAppService.NewAppService,
+		k8sAppService.NewInstanceService,
+		k8sAppService.NewCronjobService,
+		k8sAppService.NewProjectService,
 		userService.NewUserService,
 		treeService.NewTreeNodeService,
 		treeService.NewEcsService,
@@ -122,7 +127,6 @@ func InitWebServer() *Cmd {
 		treeService.NewAliResourceService,
 		authService.NewApiService,
 		authService.NewRoleService,
-		authService.NewMenuService,
 		authService.NewPermissionService,
 		authService.NewAuditService,
 		promHandler.NewAlertPoolHandler,
@@ -153,7 +157,6 @@ func InitWebServer() *Cmd {
 		yamlService.NewPrometheusConfigService,
 		notAuthService.NewNotAuthService,
 		userDao.NewUserDAO,
-		authDao.NewMenuDAO,
 		authDao.NewRoleDAO,
 		authDao.NewApiDAO,
 		authDao.NewAuditDAO,
@@ -167,6 +170,10 @@ func InitWebServer() *Cmd {
 		k8sDao.NewClusterDAO,
 		k8sDao.NewYamlTemplateDAO,
 		k8sDao.NewYamlTaskDAO,
+		k8sAppDao.NewAppDAO,
+		k8sAppDao.NewInstanceDAO,
+		k8sAppDao.NewProjectDAO,
+		k8sAppDao.NewCornJobDAO,
 		job.NewCreateK8sClusterTask,
 		job.NewUpdateK8sClusterTask,
 		job.NewRoutes,

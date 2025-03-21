@@ -162,52 +162,7 @@ func (u *userDAO) GetUserByID(ctx context.Context, id int) (*model.User, error) 
 		return nil, err
 	}
 
-	// 获取用户的菜单并构建树状结构
-	menus, err := u.getUserMenus(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	user.Menus = menus
-
 	return &user, nil
-}
-
-// getUserMenus 获取用户菜单并构建树状结构
-func (u *userDAO) getUserMenus(ctx context.Context, userID int) ([]*model.Menu, error) {
-	var menus []*model.Menu
-	if err := u.db.WithContext(ctx).
-		Table("menus").
-		Joins("LEFT JOIN user_menus ON menus.id = user_menus.menu_id").
-		Where("user_menus.user_id = ? AND menus.deleted_at = ?", userID, 0).
-		Order("menus.parent_id, menus.id").
-		Find(&menus).Error; err != nil {
-		u.l.Error("获取用户菜单失败", zap.Int("id", userID), zap.Error(err))
-		return nil, err
-	}
-
-	return buildMenuTree(menus), nil
-}
-
-// buildMenuTree 构建菜单树
-func buildMenuTree(menus []*model.Menu) []*model.Menu {
-	menuMap := make(map[int]*model.Menu)
-	var rootMenus []*model.Menu
-
-	// 建立id->menu的映射
-	for _, menu := range menus {
-		menuMap[menu.ID] = menu
-	}
-
-	// 构建父子关系
-	for _, menu := range menus {
-		if menu.ParentID == 0 {
-			rootMenus = append(rootMenus, menu)
-		} else if parent, ok := menuMap[menu.ParentID]; ok {
-			parent.Children = append(parent.Children, menu)
-		}
-	}
-
-	return rootMenus
 }
 
 // GetPermCode 获取用户权限码

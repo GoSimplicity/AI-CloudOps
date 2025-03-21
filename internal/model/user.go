@@ -41,7 +41,6 @@ type User struct {
 	HomePath     string  `json:"home_path" gorm:"type:varchar(255);default:'/';comment:登录后的默认首页"`                       // 登录后的默认首页，添加默认值
 	Enable       int8    `json:"enable" gorm:"default:1;comment:用户状态 1正常 2冻结" binding:"omitempty,oneof=1 2"`            // 用户状态，使用int8节省空间
 	Roles        []*Role `json:"roles" gorm:"many2many:user_roles;comment:关联角色"`                                        // 多对多关联角色
-	Menus        []*Menu `json:"menus" gorm:"many2many:user_menus;comment:关联菜单"`                                        // 多对多关联菜单
 	Apis         []*Api  `json:"apis" gorm:"many2many:user_apis;comment:关联接口"`                                          // 多对多关联接口
 }
 
