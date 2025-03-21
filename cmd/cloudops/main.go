@@ -28,18 +28,19 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/mock"
-	"github.com/casbin/casbin/v2"
-	gormadapter "github.com/casbin/gorm-adapter/v3"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/GoSimplicity/AI-CloudOps/mock"
+	"github.com/casbin/casbin/v2"
+	gormadapter "github.com/casbin/gorm-adapter/v3"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
 	"github.com/GoSimplicity/AI-CloudOps/pkg/di"
 	"github.com/gin-gonic/gin"
@@ -62,9 +63,9 @@ func Init() error {
 	cmd := di.InitWebServer()
 
 	// 初始化翻译器
-	if err := di.InitTrans(); err != nil {
-		return fmt.Errorf("初始化翻译器失败: %v", err)
-	}
+	//if err := di.InitTrans(); err != nil {
+	//	return fmt.Errorf("初始化翻译器失败: %v", err)
+	//}
 
 	// 设置请求头打印路由
 	cmd.Server.GET("/headers", printHeaders)
@@ -178,12 +179,6 @@ func InitMock() error {
 		return fmt.Errorf("获取sql.DB失败: %v", err)
 	}
 	defer sqlDB.Close()
-
-	// 初始化Mock数据
-	mm := mock.NewMenuMock(db)
-	if err := mm.InitMenu(); err != nil {
-		return fmt.Errorf("初始化菜单失败: %v", err)
-	}
 
 	am := mock.NewApiMock(db)
 	if err := am.InitApi(); err != nil {

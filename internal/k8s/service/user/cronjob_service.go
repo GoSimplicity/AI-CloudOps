@@ -23,14 +23,14 @@
  *
  */
 
-package uesr
+package user
 
 import (
 	"context"
 	"errors"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/uesr"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
@@ -46,12 +46,12 @@ type CronjobService interface {
 }
 type cronjobService struct {
 	dao           admin.ClusterDAO
-	k8scornjobDAO uesr.CornJobDAO
+	k8scornjobDAO user.CornJobDAO
 	client        client.K8sClient
 	l             *zap.Logger
 }
 
-func NewCronjobService(dao admin.ClusterDAO, k8scornjobDAO uesr.CornJobDAO, client client.K8sClient, l *zap.Logger) CronjobService {
+func NewCronjobService(dao admin.ClusterDAO, k8scornjobDAO user.CornJobDAO, client client.K8sClient, l *zap.Logger) CronjobService {
 	return &cronjobService{
 		dao:           dao,
 		k8scornjobDAO: k8scornjobDAO,

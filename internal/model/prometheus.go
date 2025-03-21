@@ -35,7 +35,7 @@ type MonitorScrapePool struct {
 	CreatedAt             int64      `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`
 	UpdatedAt             int64      `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`
 	DeletedAt             int64      `json:"deleted_at" gorm:"index:idx_deleted_at;default:0;comment:删除时间"`
-	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex:idx_name_deleted_at;size:100;not null;comment:pool池名称"`
+	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:pool池名称"`
 	PrometheusInstances   StringList `json:"prometheus_instances" gorm:"type:text;comment:Prometheus实例ID列表"`
 	AlertManagerInstances StringList `json:"alert_manager_instances" gorm:"type:text;comment:AlertManager实例ID列表"`
 	UserID                int        `json:"user_id" gorm:"index;not null;comment:所属用户ID"`
@@ -59,7 +59,7 @@ type MonitorScrapeJob struct {
 	CreatedAt                int64      `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`
 	UpdatedAt                int64      `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`
 	DeletedAt                int64      `json:"deleted_at" gorm:"index:idx_deleted_at;default:0;comment:删除时间"`
-	Name                     string     `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex:idx_name_deleted_at;size:100;comment:采集任务名称"`
+	Name                     string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;comment:采集任务名称"`
 	UserID                   int        `json:"user_id" gorm:"index;not null;comment:任务关联的用户ID"`
 	Enable                   bool       `json:"enable" gorm:"type:tinyint(1);default:1;not null;comment:是否启用采集任务"`
 	ServiceDiscoveryType     string     `json:"service_discovery_type" gorm:"size:50;not null;default:'http';comment:服务发现类型(k8s/http)"`
@@ -88,7 +88,7 @@ type MonitorAlertManagerPool struct {
 	CreatedAt             int64      `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`
 	UpdatedAt             int64      `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`
 	DeletedAt             int64      `json:"deleted_at" gorm:"index:idx_deleted_at;default:0;comment:删除时间"`
-	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex:idx_name_deleted_at;size:100;not null;comment:AlertManager实例名称"`
+	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:AlertManager实例名称"`
 	AlertManagerInstances StringList `json:"alert_manager_instances" gorm:"type:text;not null;comment:AlertManager实例列表"`
 	UserID                int        `json:"user_id" gorm:"index;not null;comment:所属用户ID"`
 	ResolveTimeout        string     `json:"resolve_timeout" gorm:"size:50;default:'5m';not null;comment:告警恢复超时时间"`
@@ -106,7 +106,7 @@ type MonitorAlertRule struct {
 	CreatedAt      int64             `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`
 	UpdatedAt      int64             `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`
 	DeletedAt      int64             `json:"deleted_at" gorm:"index:idx_deleted_at;default:0;comment:删除时间"`
-	Name           string            `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex:idx_name_deleted_at;size:100;comment:告警规则名称"`
+	Name           string            `json:"name" binding:"required,min=1,max=50" gorm:"size:100;comment:告警规则名称"`
 	UserID         int               `json:"user_id" gorm:"index;not null;comment:创建该告警规则的用户ID"`
 	PoolID         int               `json:"pool_id" gorm:"index;not null;comment:关联的Prometheus实例池ID"`
 	SendGroupID    int               `json:"send_group_id" gorm:"index;not null;comment:关联的发送组ID"`
@@ -134,7 +134,7 @@ type MonitorAlertEvent struct {
 	UpdatedAt      int64             `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`
 	DeletedAt      int64             `json:"deleted_at" gorm:"index:idx_deleted_at;default:0;comment:删除时间"`
 	AlertName      string            `json:"alert_name" binding:"required,min=1,max=200" gorm:"size:200;not null;comment:告警名称"`
-	Fingerprint    string            `json:"fingerprint" binding:"required,min=1,max=50" gorm:"uniqueIndex:idx_fingerprint_deleted_at;size:100;not null;comment:告警唯一ID"`
+	Fingerprint    string            `json:"fingerprint" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:告警唯一ID"`
 	Status         string            `json:"status" gorm:"size:50;not null;default:'firing';comment:告警状态(firing/silenced/claimed/resolved)"`
 	RuleID         int               `json:"rule_id" gorm:"index;not null;comment:关联的告警规则ID"`
 	SendGroupID    int               `json:"send_group_id" gorm:"index;not null;comment:关联的发送组ID"`
@@ -158,7 +158,7 @@ type MonitorRecordRule struct {
 	CreatedAt      int64             `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`
 	UpdatedAt      int64             `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`
 	DeletedAt      int64             `json:"deleted_at" gorm:"index:idx_deleted_at;default:0;comment:删除时间"`
-	Name           string            `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex:idx_name_deleted_at;size:100;comment:记录规则名称"`
+	Name           string            `json:"name" binding:"required,min=1,max=50" gorm:"size:100;comment:记录规则名称"`
 	UserID         int               `json:"user_id" gorm:"index;not null;comment:创建该记录规则的用户ID"`
 	PoolID         int               `json:"pool_id" gorm:"index;not null;comment:关联的Prometheus实例池ID"`
 	TreeNodeID     int               `json:"tree_node_id" gorm:"index;not null;comment:绑定的树节点ID"`
@@ -182,8 +182,8 @@ type MonitorSendGroup struct {
 	CreatedAt              int64      `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`
 	UpdatedAt              int64      `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`
 	DeletedAt              int64      `json:"deleted_at" gorm:"index:idx_deleted_at;default:0;comment:删除时间"`
-	Name                   string     `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex:idx_name_deleted_at;size:100;comment:发送组英文名称"`
-	NameZh                 string     `json:"name_zh" binding:"required,min=1,max=50" gorm:"uniqueIndex:idx_name_zh_deleted_at;size:100;comment:发送组中文名称"`
+	Name                   string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;comment:发送组英文名称"`
+	NameZh                 string     `json:"name_zh" binding:"required,min=1,max=50" gorm:"size:100;comment:发送组中文名称"`
 	Enable                 bool       `json:"enable" gorm:"type:tinyint(1);default:1;not null;comment:是否启用发送组"`
 	UserID                 int        `json:"user_id" gorm:"index;not null;comment:创建该发送组的用户ID"`
 	PoolID                 int        `json:"pool_id" gorm:"index;not null;comment:关联的AlertManager实例ID"`
@@ -214,7 +214,7 @@ type MonitorOnDutyChange struct {
 	DeletedAt      int64  `json:"deleted_at" gorm:"index:idx_deleted_at;default:0;comment:删除时间"`
 	OnDutyGroupID  int    `json:"on_duty_group_id" gorm:"index:idx_group_date_deleted_at;comment:值班组ID"`
 	UserID         int    `json:"user_id" gorm:"index;comment:创建者ID"`
-	Date           string `json:"date" gorm:"type:varchar(10);uniqueIndex:idx_group_date_deleted_at;not null;comment:换班日期"`
+	Date           string `json:"date" gorm:"type:varchar(10);not null;comment:换班日期"`
 	OriginUserID   int    `json:"origin_user_id" gorm:"index;comment:原值班人ID"`
 	OnDutyUserID   int    `json:"on_duty_user_id" gorm:"index;comment:新值班人ID"`
 	TargetUserName string `json:"target_user_name" gorm:"-"`
@@ -229,7 +229,7 @@ type MonitorOnDutyGroup struct {
 	CreatedAt                 int64    `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`
 	UpdatedAt                 int64    `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`
 	DeletedAt                 int64    `json:"deleted_at" gorm:"index:idx_deleted_at;default:0;comment:删除时间"`
-	Name                      string   `json:"name" binding:"required,min=1,max=50" gorm:"uniqueIndex:idx_name_deleted_at;size:100;comment:值班组名称"`
+	Name                      string   `json:"name" binding:"required,min=1,max=50" gorm:"size:100;comment:值班组名称"`
 	UserID                    int      `json:"user_id" gorm:"comment:创建该值班组的用户ID"`
 	Members                   []*User  `json:"members" gorm:"many2many:monitor_on_duty_users;comment:值班组成员列表，多对多关系"`
 	ShiftDays                 int      `json:"shift_days" gorm:"type:int;comment:轮班周期，以天为单位"`
@@ -246,7 +246,7 @@ type MonitorOnDutyHistory struct {
 	UpdatedAt      int64  `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`
 	DeletedAt      int64  `json:"deleted_at" gorm:"index:idx_deleted_at;default:0;comment:删除时间"`
 	OnDutyGroupID  int    `json:"on_duty_group_id" gorm:"index:idx_group_date_deleted_at;comment:值班组ID"`
-	DateString     string `json:"date_string" gorm:"type:varchar(10);uniqueIndex:idx_group_date_deleted_at;not null;comment:值班日期"`
+	DateString     string `json:"date_string" gorm:"type:varchar(10);not null;comment:值班日期"`
 	OnDutyUserID   int    `json:"on_duty_user_id" gorm:"index;comment:当天值班人员ID"`
 	OriginUserID   int    `json:"origin_user_id" gorm:"index;comment:原计划值班人员ID"`
 	OnDutyUserName string `json:"on_duty_user_name" gorm:"-"`

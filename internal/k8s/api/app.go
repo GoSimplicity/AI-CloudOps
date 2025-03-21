@@ -26,7 +26,7 @@
 package api
 
 import (
-	user2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/uesr"
+	user2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/user"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"

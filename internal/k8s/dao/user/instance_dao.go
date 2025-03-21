@@ -23,7 +23,7 @@
  *
  */
 
-package uesr
+package user
 
 import (
 	"context"

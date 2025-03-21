@@ -23,14 +23,14 @@
  *
  */
 
-package uesr
+package user
 
 import (
 	"context"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/uesr"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
@@ -47,12 +47,12 @@ type projectService struct {
 	client      client.K8sClient
 	l           *zap.Logger
 	dao         admin.ClusterDAO
-	projectdao  uesr.ProjectDAO
-	appdao      uesr.AppDAO
-	instancedao uesr.InstanceDAO
+	projectdao  user.ProjectDAO
+	appdao      user.AppDAO
+	instancedao user.InstanceDAO
 }
 
-func NewProjectService(dao admin.ClusterDAO, projectdao uesr.ProjectDAO, appdao uesr.AppDAO, instancedao uesr.InstanceDAO, client client.K8sClient, l *zap.Logger) ProjectService {
+func NewProjectService(dao admin.ClusterDAO, projectdao user.ProjectDAO, appdao user.AppDAO, instancedao user.InstanceDAO, client client.K8sClient, l *zap.Logger) ProjectService {
 	return &projectService{
 		dao:         dao,
 		instancedao: instancedao,
