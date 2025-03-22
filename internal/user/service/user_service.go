@@ -31,6 +31,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
+	"go.uber.org/zap"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -51,16 +52,16 @@ type UserService interface {
 }
 
 type userService struct {
-	dao           dao.UserDAO
-	roleSvc       service.RoleService
-	permissionSvc service.PermissionService
+	dao     dao.UserDAO
+	roleSvc service.RoleService
+	l       *zap.Logger
 }
 
-func NewUserService(dao dao.UserDAO, roleSvc service.RoleService, permissionSvc service.PermissionService) UserService {
+func NewUserService(dao dao.UserDAO, roleSvc service.RoleService, l *zap.Logger) UserService {
 	return &userService{
-		dao:           dao,
-		roleSvc:       roleSvc,
-		permissionSvc: permissionSvc,
+		dao:     dao,
+		roleSvc: roleSvc,
+		l:       l,
 	}
 }
 
@@ -74,16 +75,6 @@ func (us *userService) SignUp(ctx context.Context, user *model.User) error {
 	user.Password = string(hash)
 
 	if err := us.dao.CreateUser(ctx, user); err != nil {
-		return err
-	}
-
-	// 为新用户分配默认角色
-	role, err := us.roleSvc.GetRoleByName(ctx, "user")
-	if err != nil {
-		return err
-	}
-
-	if err := us.permissionSvc.AssignRoleToUser(ctx, user.ID, []int{role.ID}, nil); err != nil {
 		return err
 	}
 
@@ -186,5 +177,11 @@ func (us *userService) WriteOff(ctx context.Context, username string, password s
 }
 
 func (us *userService) DeleteUser(ctx context.Context, uid int) error {
+	// 删除用户角色关联
+	if err := us.roleSvc.DeleteUserAllRoles(ctx, uid); err != nil {
+		us.l.Error("删除用户角色关联失败", zap.Int("uid", uid), zap.Error(err))
+		return err
+	}
+
 	return us.dao.DeleteUser(ctx, uid)
 }

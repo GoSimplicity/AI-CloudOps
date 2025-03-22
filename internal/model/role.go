@@ -26,37 +26,19 @@
 package model
 
 type Role struct {
-	ID        int     `json:"id" gorm:"primaryKey;autoIncrement;comment:主键ID"`                                         // 主键ID，自增
-	CreatedAt int64   `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`                                           // 创建时间，自动记录
-	UpdatedAt int64   `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`                                           // 更新时间，自动记录
-	DeletedAt int64   `json:"deleted_at" gorm:"index;default:0;comment:删除时间"`                                          // 软删除时间，使用普通索引
-	Name      string  `json:"name" gorm:"type:varchar(50);uniqueIndex:idx_name_del;not null;comment:角色名称"`             // 角色名称，唯一且非空
-	Desc      string  `json:"desc" gorm:"type:varchar(255);comment:角色描述"`                                              // 角色描述
-	RoleType  int8    `json:"role_type" gorm:"type:tinyint(1);not null;comment:角色类型 1系统角色 2自定义角色" binding:"oneof=1 2"` // 角色类型，使用int8节省空间
-	IsDefault int8    `json:"is_default" gorm:"type:tinyint(1);default:0;comment:是否为默认角色 0否 1是" binding:"oneof=0 1"`   // 是否默认角色，使用int8节省空间
-	Users     []*User `json:"users" gorm:"many2many:user_roles;comment:关联用户"`                                          // 多对多关联用户
-	Apis      []*Api  `json:"apis" gorm:"many2many:role_apis;comment:关联接口"`                                            // 多对多关联接口
+	Name   string `json:"name" binding:"required"`   // 角色名称
+	Domain string `json:"domain" binding:"required"` // 域ID
+	Path   string `json:"path" binding:"required"`   // 路径
+	Method string `json:"method" binding:"required"` // 方法
 }
 
 type CreateRoleRequest struct {
-	Name        string `json:"name" binding:"required"`        // 角色名称
-	Description string `json:"description"`                    // 角色描述
-	RoleType    int    `json:"role_type" binding:"required"`   // 角色类型
-	IsDefault   int    `json:"is_default" binding:"oneof=0 1"` // 是否默认角色
-	ApiIds      []int  `json:"api_ids"`                        // API ID列表
-}
-
-type GetRoleRequest struct {
-	Id int `json:"id" binding:"required,gt=0"` // 角色ID
+	Role
 }
 
 type UpdateRoleRequest struct {
-	Id          int    `json:"id" binding:"required,gt=0"`     // 角色ID
-	Name        string `json:"name" binding:"required"`        // 角色名称
-	Description string `json:"description"`                    // 角色描述
-	RoleType    int    `json:"role_type" binding:"required"`   // 角色类型
-	IsDefault   int    `json:"is_default" binding:"oneof=0 1"` // 是否默认角色
-	ApiIds      []int  `json:"api_ids"`                        // API ID列表
+	NewRole Role `json:"new_role" binding:"required"`
+	OldRole Role `json:"old_role" binding:"required"`
 }
 
 type ListRolesRequest struct {
@@ -75,13 +57,28 @@ type UpdateUserRoleRequest struct {
 	RoleIds []int `json:"role_ids"`                        // 角色ID列表
 }
 
-type AssignUserRoleRequest struct {
-	UserId  int   `json:"user_id" binding:"required,gt=0"` // 用户ID
-	RoleIds []int `json:"role_ids"`                        // 角色ID列表
-	ApiIds  []int `json:"api_ids"`                         // API ID列表
+type DeleteRoleRequest struct {
+	Role
 }
 
-type AssignUsersRoleRequest struct {
-	UserIds []int `json:"user_ids" binding:"required,gt=0"` // 用户ID
-	RoleIds []int `json:"role_ids"`                         // 角色ID列表
+type GenerateRoleResp struct {
+	Total int     `json:"total"`
+	Items []*Role `json:"items"`
+}
+
+// CasbinRule 对应 casbin_rule 表结构
+type CasbinRule struct {
+	ID    int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Ptype string `json:"ptype" gorm:"type:varchar(100)"`
+	V0    string `json:"v0" gorm:"type:varchar(100)"`
+	V1    string `json:"v1" gorm:"type:varchar(100)"`
+	V2    string `json:"v2" gorm:"type:varchar(100)"`
+	V3    string `json:"v3" gorm:"type:varchar(100)"`
+	V4    string `json:"v4" gorm:"type:varchar(100)"`
+	V5    string `json:"v5" gorm:"type:varchar(100)"`
+}
+
+// TableName 指定表名
+func (c *CasbinRule) TableName() string {
+	return "casbin_rule"
 }

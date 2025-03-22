@@ -41,7 +41,6 @@ func InitGinServer(
 	userHdl *userApi.UserHandler,
 	authApiHdl *systemApi.ApiHandler,
 	authRoleHdl *systemApi.RoleHandler,
-	authPermissionHdl *systemApi.PermissionHandler,
 	treeNodeHdl *treeApi.TreeNodeHandler,
 	treeAliResourceHdl *treeApi.AliResourceHandler,
 	treeEcsResourceHdl *treeApi.EcsResourceHandler,
@@ -76,7 +75,6 @@ func InitGinServer(
 	userHdl.RegisterRoutes(server)
 	authApiHdl.RegisterRouters(server)
 	authRoleHdl.RegisterRouters(server)
-	authPermissionHdl.RegisterRouters(server)
 	auditHdl.RegisterRouters(server)
 	treeEcsHdl.RegisterRouters(server)
 	treeEcsResourceHdl.RegisterRouters(server)

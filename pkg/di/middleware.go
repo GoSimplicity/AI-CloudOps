@@ -56,7 +56,7 @@ func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, enforcer *casbin.Enforcer, 
 			MaxAge: 12 * time.Hour,
 		}),
 		middleware.NewJWTMiddleware(ih).CheckLogin(),
-		middleware.NewCasbinMiddleware(enforcer).CheckCasbin(),
+		// middleware.NewCasbinMiddleware(enforcer).CheckCasbin(),
 		middleware.NewLogMiddleware(l).Log(),
 		middleware.NewAuditLogMiddleware(auditSvc, l).AuditLog(),
 	}
