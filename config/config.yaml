@@ -16,9 +16,9 @@ mysql:
   # addr: "root:root@tcp(mysql:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
   addr: "root:root@tcp(localhost:33069)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
 tree:
-  check_status_cron: "@every 5s"
+  check_status_cron: "@every 300s"
 k8s:
-  refresh_cron: "@every 15s"
+  refresh_cron: "@every 300s"
 prometheus:
   refresh_cron: "@every 15s"
   local_yaml_dir: ./local_yaml

@@ -32,6 +32,7 @@ import (
 	systemApi "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
 	treeApi "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	userApi "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
+	workorderApi "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	"github.com/gin-gonic/gin"
 )
 
@@ -69,6 +70,7 @@ func InitGinServer(
 	scrapeJobHdl *prometheusApi.ScrapeJobHandler,
 	sendGroupHdl *prometheusApi.SendGroupHandler,
 	auditHdl *systemApi.AuditHandler,
+	fromdesignHandler *workorderApi.FormDesignHandler,
 ) *gin.Engine {
 	server := gin.Default()
 	server.Use(m...)
@@ -103,6 +105,6 @@ func InitGinServer(
 	k8sTaintHdl.RegisterRouters(server)
 	k8sYamlTaskHdl.RegisterRouters(server)
 	k8sYamlTemplateHdl.RegisterRouters(server)
-
+	fromdesignHandler.RegisterRouters(server)
 	return server
 }

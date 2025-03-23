@@ -55,7 +55,9 @@ import (
 	userHandler "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	userService "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	workorderHandler "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
+	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
+	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
 )
@@ -117,6 +119,7 @@ func InitWebServer() *Cmd {
 		k8sAppService.NewInstanceService,
 		k8sAppService.NewCronjobService,
 		k8sAppService.NewProjectService,
+
 		userService.NewUserService,
 		treeService.NewTreeNodeService,
 		treeService.NewEcsService,
@@ -171,10 +174,14 @@ func InitWebServer() *Cmd {
 		k8sAppDao.NewInstanceDAO,
 		k8sAppDao.NewProjectDAO,
 		k8sAppDao.NewCornJobDAO,
+
 		job.NewCreateK8sClusterTask,
 		job.NewUpdateK8sClusterTask,
 		job.NewRoutes,
 		ssh.NewSSH,
+		workorderHandler.NewFormDesignHandler,
+		workorderService.NewFormDesignService,
+		workorderDao.NewFormDesignDAO,
 		wire.Struct(new(Cmd), "*"),
 	)
 	return new(Cmd)
