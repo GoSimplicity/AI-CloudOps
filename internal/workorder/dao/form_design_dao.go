@@ -87,27 +87,20 @@ func (f *formDesignDAO) DeleteFormDesign(ctx context.Context, id int64) error {
 // PublishFormDesign implements FormDesignDAO.
 // PublishFormDesign implements FormDesignDAO.
 func (f *formDesignDAO) PublishFormDesign(ctx context.Context, id int64) error {
-	// 检查记录是否存在
-	var existingFormDesign model.FormDesign
-	if err := f.db.WithContext(ctx).Where("id = ?", id).First(&existingFormDesign).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			f.l.Error("FormDesign记录不存在", zap.Int64("id", id))
-			return fmt.Errorf("record not found with id %d", id)
-		}
-		f.l.Error("查询FormDesign失败", zap.Int64("id", id), zap.Error(err))
-		return err
+	// 直接更新表单设计数据，将状态从草稿（status = 0）更新为已发布（status = 1）
+	result := f.db.WithContext(ctx).Model(&model.FormDesign{}).
+		Where("id = ? AND status = 0", id).
+		Update("status", 1)
+
+	if result.Error != nil {
+		f.l.Error("PublishFormDesign 更新表单失败", zap.Int64("id", id), zap.Error(result.Error))
+		return result.Error
 	}
 
-	// 确保表单状态为草稿状态（status = 0），才允许发布
-	if existingFormDesign.Status != 0 {
-		f.l.Error("FormDesign状态不为草稿，无法发布", zap.Int64("id", id), zap.Int8("status", existingFormDesign.Status))
-		return fmt.Errorf("FormDesign状态不为草稿，无法发布")
-	}
-
-	// 更新表单设计数据，将状态更新为已发布（status = 1）
-	if err := f.db.WithContext(ctx).Model(&model.FormDesign{}).Where("id = ?", id).Update("status", 1).Error; err != nil {
-		f.l.Error("PublishFormDesign 更新表单失败", zap.Int64("id", id), zap.Error(err))
-		return err
+	if result.RowsAffected == 0 {
+		// 没有记录被更新，可能是记录不存在或者状态不是草稿
+		f.l.Error("FormDesign记录不存在或状态不为草稿，无法发布", zap.Int64("id", id))
+		return fmt.Errorf("record not found or status is not draft with id %d", id)
 	}
 
 	// 返回成功

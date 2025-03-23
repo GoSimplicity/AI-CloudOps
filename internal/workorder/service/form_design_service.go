@@ -10,12 +10,12 @@ import (
 )
 
 type FormDesignService interface {
-	CreateFormDesign(ctx context.Context, formDesign *model.FormDesignReq) (model.FormDesign, error)
+	CreateFormDesign(ctx context.Context, formDesign *model.FormDesignReq) (model.FormDesignReq, error)
 	UpdateFormDesign(ctx context.Context, formDesign *model.FormDesignReq) error
 	DeleteFormDesign(ctx context.Context, id int64) error
 	//ListFormDesign(ctx context.Context)
 	PublishFormDesign(ctx context.Context, id int64) error
-	CloneFormDesign(ctx context.Context, id int64, name string) (*model.FormDesign, error)
+	CloneFormDesign(ctx context.Context, id int64, name string) (*model.FormDesignReq, error)
 	DetailFormDesign(ctx context.Context, id int64) (*model.FormDesignReq, error)
 	ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) ([]model.FormDesignReq, error)
 }
@@ -31,17 +31,21 @@ func NewFormDesignService(dao dao.FormDesignDAO) FormDesignService {
 }
 
 // CreateFormDesign implements FormDesignService.
-func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq *model.FormDesignReq) (model.FormDesign, error) {
+func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq *model.FormDesignReq) (model.FormDesignReq, error) {
 
 	req, err := convertReq(formDesignReq)
 	if err != nil {
-		return model.FormDesign{}, err
+		return model.FormDesignReq{}, err
 	}
 	err = f.dao.CreateFormDesign(ctx, req)
 	if err != nil {
-		return model.FormDesign{}, err
+		return model.FormDesignReq{}, err
 	}
-	return *req, nil
+	origin, err := convertOrigin(req)
+	if err != nil {
+		return model.FormDesignReq{}, err
+	}
+	return *origin, nil
 }
 
 // UpdateFormDesign implements FormDesignService.
@@ -64,8 +68,16 @@ func (f *formDesignService) PublishFormDesign(ctx context.Context, id int64) err
 }
 
 // CloneFormDesign implements FormDesignService.
-func (f *formDesignService) CloneFormDesign(ctx context.Context, id int64, name string) (*model.FormDesign, error) {
-	return f.dao.CloneFormDesign(ctx, id, name)
+func (f *formDesignService) CloneFormDesign(ctx context.Context, id int64, name string) (*model.FormDesignReq, error) {
+	design, err := f.dao.CloneFormDesign(ctx, id, name)
+	if err != nil {
+		return nil, err
+	}
+	origin, err := convertOrigin(design)
+	if err != nil {
+		return nil, err
+	}
+	return origin, nil
 }
 
 // ListFormDesign implements FormDesignService.
