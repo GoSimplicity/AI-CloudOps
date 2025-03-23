@@ -3,42 +3,65 @@ package service
 import (
 	"context"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 )
 
 type FormDesignService interface {
-	CreateFormDesign(ctx context.Context)
-	UpdateFormDesign(ctx context.Context)
-	DeleteFormDesign(ctx context.Context)
-	ListFormDesign(ctx context.Context)
+	CreateFormDesign(ctx context.Context, formDesign *model.FormDesign) error
+	UpdateFormDesign(ctx context.Context, formDesign *model.FormDesign) error
+	DeleteFormDesign(ctx context.Context, id int64) error
+	PublishFormDesign(ctx context.Context, id int64) error
+	CloneFormDesign(ctx context.Context, name string) error
+	DetailFormDesign(ctx context.Context, id int64) (*model.FormDesign, error)
+	ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) ([]model.FormDesign, error)
 }
 
 type formDesignService struct {
 	dao dao.FormDesignDAO
+	l   *zap.Logger
 }
 
-func NewFormDesignService(dao dao.FormDesignDAO) FormDesignService {
+func NewFormDesignService(dao dao.FormDesignDAO, l *zap.Logger) FormDesignService {
 	return &formDesignService{
 		dao: dao,
+		l:   l,
 	}
 }
 
-// CreateFormDesign implements FormDesignService.
-func (f *formDesignService) CreateFormDesign(ctx context.Context) {
-	panic("unimplemented")
+// CreateFormDesign 创建表单设计
+func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesign *model.FormDesign) error {
+	return f.dao.CreateFormDesign(ctx, formDesign)
 }
 
-// DeleteFormDesign implements FormDesignService.
-func (f *formDesignService) DeleteFormDesign(ctx context.Context) {
-	panic("unimplemented")
+// UpdateFormDesign 更新表单设计
+func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesign *model.FormDesign) error {
+	return f.dao.UpdateFormDesign(ctx, formDesign)
 }
 
-// ListFormDesign implements FormDesignService.
-func (f *formDesignService) ListFormDesign(ctx context.Context) {
-	panic("unimplemented")
+// DeleteFormDesign 删除表单设计
+func (f *formDesignService) DeleteFormDesign(ctx context.Context, id int64) error {
+	return f.dao.DeleteFormDesign(ctx, id)
 }
 
-// UpdateFormDesign implements FormDesignService.
-func (f *formDesignService) UpdateFormDesign(ctx context.Context) {
-	panic("unimplemented")
+// PublishFormDesign 发布表单设计
+func (f *formDesignService) PublishFormDesign(ctx context.Context, id int64) error {
+	return f.dao.PublishFormDesign(ctx, id)
+}
+
+// CloneFormDesign 克隆表单设计
+func (f *formDesignService) CloneFormDesign(ctx context.Context, name string) error {
+	return f.dao.CloneFormDesign(ctx, name)
+}
+
+// DetailFormDesign 获取表单设计详情
+func (f *formDesignService) DetailFormDesign(ctx context.Context, id int64) (*model.FormDesign, error) {
+	return f.dao.GetFormDesign(ctx, id)
+}
+
+// ListFormDesign 获取表单设计列表
+func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) ([]model.FormDesign, error) {
+	return f.dao.ListFormDesign(ctx, req)
 }

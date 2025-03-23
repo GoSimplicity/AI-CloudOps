@@ -32,6 +32,7 @@ import (
 
 // InitViper 初始化viper配置
 func InitViper() error {
+
 	configFile := pflag.String("config", "config/config.yaml", "配置文件路径")
 	pflag.Parse()
 	viper.SetConfigFile(*configFile)
@@ -39,7 +40,6 @@ func InitViper() error {
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 

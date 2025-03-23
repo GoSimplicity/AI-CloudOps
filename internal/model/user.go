@@ -34,6 +34,7 @@ type User struct {
 	Username     string `json:"username" gorm:"type:varchar(100);uniqueIndex:idx_username_del;not null;comment:用户登录名"` // 用户登录名，唯一且非空
 	Password     string `json:"password" gorm:"type:varchar(255);not null;comment:用户登录密码"`                             // 用户登录密码，非空，JSON序列化时忽略
 	RealName     string `json:"real_name" gorm:"type:varchar(100);comment:用户真实姓名"`                                     // 用户真实姓名
+	Domain       string `json:"domain" gorm:"type:varchar(100);default:'default';comment:用户域"`                         // 用户域，默认default
 	Desc         string `json:"desc" gorm:"type:text;comment:用户描述"`                                                    // 用户描述，支持较长文本
 	Mobile       string `json:"mobile" gorm:"type:varchar(20);uniqueIndex:idx_mobile_del;comment:手机号"`                 // 手机号，添加唯一索引
 	FeiShuUserId string `json:"fei_shu_user_id" gorm:"type:varchar(50);uniqueIndex:idx_feishu_del;comment:飞书用户ID"`     // 飞书用户ID，添加唯一索引
