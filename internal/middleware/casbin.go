@@ -28,7 +28,6 @@ package middleware
 import (
 	"net/http"
 	"strconv"
-	"strings"
 
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
@@ -49,21 +48,10 @@ func NewCasbinMiddleware(enforcer *casbin.Enforcer) *CasbinMiddleware {
 func (cm *CasbinMiddleware) CheckCasbin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
-		// 如果请求的路径是下述路径，则不进行权限验证
-		if path == "/api/user/login" ||
-			path == "/api/user/logout" ||
-			strings.Contains(path, "hello") ||
-			path == "/api/user/refresh_token" ||
-			path == "/api/user/codes" ||
-			path == "/api/user/signup" ||
-			path == "/api/not_auth/getTreeNodeBindIps" ||
-			path == "/api/monitor/prometheus_configs/prometheus" ||
-			path == "/api/monitor/prometheus_configs/prometheus_alert" ||
-			path == "/api/monitor/prometheus_configs/prometheus_record" ||
-			path == "/api/monitor/prometheus_configs/alertManager" {
-			c.Next()
-			return
-		}
+		act := c.Request.Method
+
+		// 默认域，可以根据实际需求从请求中获取或设置
+		dom := "default"
 
 		// 获取用户身份
 		userClaims, exists := c.Get("user")
@@ -96,7 +84,6 @@ func (cm *CasbinMiddleware) CheckCasbin() gin.HandlerFunc {
 		}
 
 		userIDStr := strconv.Itoa(sub.Uid)
-		act := c.Request.Method
 
 		// 每次请求前重新加载策略,确保获取最新权限
 		if err := cm.enforcer.LoadPolicy(); err != nil {
@@ -108,8 +95,8 @@ func (cm *CasbinMiddleware) CheckCasbin() gin.HandlerFunc {
 			return
 		}
 
-		// 使用 Casbin 检查权限
-		ok, err := cm.enforcer.Enforce(userIDStr, path, act)
+		// 使用 Casbin 检查权限，加入域(dom)参数
+		ok, err := cm.enforcer.Enforce(userIDStr, dom, path, act)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    1,
@@ -133,7 +120,7 @@ func (cm *CasbinMiddleware) CheckCasbin() gin.HandlerFunc {
 
 			// 遍历用户的所有角色,检查是否有权限
 			for _, role := range roles {
-				hasPermission, err := cm.enforcer.Enforce(role, path, act)
+				hasPermission, err := cm.enforcer.Enforce(role, dom, path, act)
 				if err != nil {
 					continue
 				}
