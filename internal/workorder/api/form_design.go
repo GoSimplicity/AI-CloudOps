@@ -31,67 +31,57 @@ func (h *FormDesignHandler) RegisterRouters(server *gin.Engine) {
 }
 
 func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
+	var req model.FormDesign
 
-	var formDesignReq model.FormDesignReq
-	utils.HandleRequest(ctx, &formDesignReq, func() (interface{}, error) {
-		return h.service.CreateFormDesign(ctx, &formDesignReq)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.CreateFormDesign(ctx, &req)
 	})
 }
 
 func (h *FormDesignHandler) UpdateFormDesign(ctx *gin.Context) {
+	var req model.FormDesign
 
-	var formDesignreq model.FormDesignReq
-	utils.HandleRequest(ctx, &formDesignreq, func() (interface{}, error) {
-		return nil, h.service.UpdateFormDesign(ctx, &formDesignreq)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.UpdateFormDesign(ctx, &req)
 	})
 }
 
 func (h *FormDesignHandler) DeleteFormDesign(ctx *gin.Context) {
+	var req model.DetailFormDesignReq
 
-	var request struct {
-		ID int64 `json:"id"`
-	}
-	utils.HandleRequest(ctx, &request, func() (interface{}, error) {
-		return h.service.DeleteFormDesign(ctx, request.ID), nil
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.DeleteFormDesign(ctx, req.ID)
 	})
 
 }
 
 func (h *FormDesignHandler) ListFormDesign(ctx *gin.Context) {
-
-	var request model.ListFormDesignReq
-	utils.HandleRequest(ctx, &request, func() (interface{}, error) {
-		return h.service.ListFormDesign(ctx, &request)
+	var req model.ListFormDesignReq
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.service.ListFormDesign(ctx, &req)
 	})
 }
 
 func (h *FormDesignHandler) DetailFormDesign(ctx *gin.Context) {
+	var req model.DetailFormDesignReq
 
-	var request struct {
-		ID int64 `json:"id"`
-	}
-	utils.HandleRequest(ctx, &request, func() (interface{}, error) {
-		return h.service.DetailFormDesign(ctx, request.ID)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.service.DetailFormDesign(ctx, req.ID)
 	})
 }
 
 func (h *FormDesignHandler) PublishFormDesign(ctx *gin.Context) {
+	var req model.PublishFormDesignReq
 
-	var request struct {
-		ID int64 `json:"id"`
-	}
-	utils.HandleRequest(ctx, &request, func() (interface{}, error) {
-		return nil, h.service.PublishFormDesign(ctx, request.ID)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.PublishFormDesign(ctx, req.ID)
 	})
 }
 
 func (h *FormDesignHandler) CloneFormDesign(ctx *gin.Context) {
+	var req model.CloneFormDesignReq
 
-	var request struct {
-		ID   int64  `json:"id"`
-		Name string `json:"name"`
-	}
-	utils.HandleRequest(ctx, &request, func() (interface{}, error) {
-		return h.service.CloneFormDesign(ctx, request.ID, request.Name)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.CloneFormDesign(ctx, req.Name)
 	})
 }

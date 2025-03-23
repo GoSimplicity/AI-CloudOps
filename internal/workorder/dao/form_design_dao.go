@@ -3,8 +3,8 @@ package dao
 import (
 	"context"
 	"fmt"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -15,150 +15,147 @@ type FormDesignDAO interface {
 	PublishFormDesign(ctx context.Context, id int64) error
 	ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) ([]model.FormDesign, error)
 	GetFormDesign(ctx context.Context, id int64) (*model.FormDesign, error)
-	CloneFormDesign(ctx context.Context, id int64, name string) (*model.FormDesign, error)
+	CloneFormDesign(ctx context.Context, name string) error
 }
 
 type formDesignDAO struct {
 	db *gorm.DB
-	l  *zap.Logger
 }
 
-func NewFormDesignDAO(db *gorm.DB, l *zap.Logger) FormDesignDAO {
+func NewFormDesignDAO(db *gorm.DB) FormDesignDAO {
 	return &formDesignDAO{
 		db: db,
-		l:  l,
 	}
 }
 
-// CreateFormDesign implements FormDesignDAO.
+// CreateFormDesign 创建表单设计
 func (f *formDesignDAO) CreateFormDesign(ctx context.Context, formDesign *model.FormDesign) error {
-
 	if err := f.db.WithContext(ctx).Create(formDesign).Error; err != nil {
-		f.l.Error("CreateFormDesign 创建表单失败", zap.Error(err))
+		if err == gorm.ErrDuplicatedKey {
+			return fmt.Errorf("表单设计名称已存在")
+		}
 		return err
 	}
 	return nil
-
 }
 
-// UpdateFormDesign implements FormDesignDAO.
+// UpdateFormDesign 更新表单设计
 func (f *formDesignDAO) UpdateFormDesign(ctx context.Context, formDesign *model.FormDesign) error {
-	// 检查记录是否存在
-	var existingFormDesign model.FormDesign
-	if err := f.db.WithContext(ctx).Where("id = ? ", formDesign.ID).First(&existingFormDesign).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			f.l.Error("FormDesign记录不存在", zap.Int64("id", formDesign.ID))
-			return fmt.Errorf("record not found with id %d", formDesign.ID)
-		}
-		f.l.Error("查询FormDesign失败", zap.Int64("id", formDesign.ID), zap.Error(err))
-		return err
-	}
-
-	// 更新表单设计数据
-	if err := f.db.WithContext(ctx).Model(&model.FormDesign{}).Where("id = ?", formDesign.ID).Updates(formDesign).Error; err != nil {
-		f.l.Error("UpdateFormDesign 更新表单失败", zap.Int64("id", formDesign.ID), zap.Error(err))
-		return err
-	}
-
-	// 返回成功
-	return nil
-}
-
-// DeleteFormDesign implements FormDesignDAO.
-func (f *formDesignDAO) DeleteFormDesign(ctx context.Context, id int64) error {
-	// 检查记录是否存在
-	var existingFormDesign model.FormDesign
-	if err := f.db.WithContext(ctx).Where("id =? ", id).First(&existingFormDesign).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			f.l.Error("FormDesign记录不存在", zap.Int64("id", id))
-		}
-		f.l.Error("查询FormDesign失败", zap.Int64("id", id), zap.Error(err))
-		return err
-	}
-	// 删除表单设计数据
-	if err := f.db.WithContext(ctx).Delete(&model.FormDesign{}, id).Error; err != nil {
-		f.l.Error("DeleteFormDesign 删除表单失败", zap.Int64("id", id), zap.Error(err))
-		return err
-	}
-	// 返回成功
-	return nil
-}
-
-// PublishFormDesign implements FormDesignDAO.
-// PublishFormDesign implements FormDesignDAO.
-func (f *formDesignDAO) PublishFormDesign(ctx context.Context, id int64) error {
-	// 直接更新表单设计数据，将状态从草稿（status = 0）更新为已发布（status = 1）
-	result := f.db.WithContext(ctx).Model(&model.FormDesign{}).
-		Where("id = ? AND status = 0", id).
-		Update("status", 1)
+	result := f.db.WithContext(ctx).Model(&model.FormDesign{}).Where("id = ?", formDesign.ID).Updates(map[string]interface{}{
+		"name":        formDesign.Name,
+		"description": formDesign.Description,
+		"schema":      formDesign.Schema,
+		"version":     formDesign.Version,
+		"status":      formDesign.Status,
+		"category_id": formDesign.CategoryID,
+	})
 
 	if result.Error != nil {
-		f.l.Error("PublishFormDesign 更新表单失败", zap.Int64("id", id), zap.Error(result.Error))
+		if result.Error == gorm.ErrRecordNotFound {
+			return fmt.Errorf("表单设计不存在")
+		}
+		if result.Error == gorm.ErrDuplicatedKey {
+			return fmt.Errorf("目标表单设计名称已存在")
+		}
 		return result.Error
 	}
 
 	if result.RowsAffected == 0 {
-		// 没有记录被更新，可能是记录不存在或者状态不是草稿
-		f.l.Error("FormDesign记录不存在或状态不为草稿，无法发布", zap.Int64("id", id))
-		return fmt.Errorf("record not found or status is not draft with id %d", id)
+		return fmt.Errorf("表单设计不存在")
 	}
 
-	// 返回成功
 	return nil
 }
 
-// GetFormDesign implements FormDesignDAO.
+// DeleteFormDesign 删除表单设计
+func (f *formDesignDAO) DeleteFormDesign(ctx context.Context, id int64) error {
+	result := f.db.WithContext(ctx).Delete(&model.FormDesign{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("表单设计不存在")
+	}
+
+	return nil
+}
+
+// PublishFormDesign 发布表单设计
+func (f *formDesignDAO) PublishFormDesign(ctx context.Context, id int64) error {
+	result := f.db.WithContext(ctx).Model(&model.FormDesign{}).
+		Where("id = ? AND status = 0", id).
+		Updates(map[string]interface{}{
+			"status": 1,
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("表单设计不存在或状态不是草稿，无法发布")
+	}
+
+	return nil
+}
+
+// GetFormDesign 获取表单设计
 func (f *formDesignDAO) GetFormDesign(ctx context.Context, id int64) (*model.FormDesign, error) {
 	var formDesign model.FormDesign
-	// 查询表单设计
+
 	if err := f.db.WithContext(ctx).First(&formDesign, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			f.l.Error("DetailFormDesign 未找到指定 ID 的表单设计", zap.Int64("id", id), zap.Error(err))
-			return nil, err
+			return nil, fmt.Errorf("表单设计不存在")
 		}
-		f.l.Error("DetailFormDesign 查询表单设计失败", zap.Int64("id", id), zap.Error(err))
 		return nil, err
 	}
+
 	return &formDesign, nil
 }
 
-// CloneFormDesign implements FormDesignDAO.
-func (f *formDesignDAO) CloneFormDesign(ctx context.Context, id int64, name string) (*model.FormDesign, error) {
-	// 1. 根据 id 查询原始表单设计记录
+// CloneFormDesign 克隆表单设计
+func (f *formDesignDAO) CloneFormDesign(ctx context.Context, name string) error {
 	var originalFormDesign model.FormDesign
-	if err := f.db.WithContext(ctx).First(&originalFormDesign, id).Error; err != nil {
+
+	if err := f.db.WithContext(ctx).First(&originalFormDesign).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			f.l.Error("CloneFormDesign 未找到指定 ID 的表单设计", zap.Int64("id", id), zap.Error(err))
-			return nil, err
+			return fmt.Errorf("表单设计不存在")
 		}
-		f.l.Error("CloneFormDesign 查询表单设计失败", zap.Int64("id", id), zap.Error(err))
-		return nil, err
+		return err
 	}
 
-	// 2. 创建新的表单设计对象并复制字段
 	clonedFormDesign := originalFormDesign
+	clonedFormDesign.ID = 0
 	clonedFormDesign.Name = name
 
-	// 3. 重置新对象的 ID 字段
-	clonedFormDesign.ID = 0
-
-	// 4. 将新对象插入数据库
 	if err := f.db.WithContext(ctx).Create(&clonedFormDesign).Error; err != nil {
-		f.l.Error("CloneFormDesign 插入新表单设计失败", zap.Int64("original_id", id), zap.String("new_name", name), zap.Error(err))
-		return nil, err
+		if err == gorm.ErrDuplicatedKey {
+			return fmt.Errorf("表单设计名称已存在")
+		}
+		return err
 	}
 
-	return &clonedFormDesign, nil
+	return nil
 }
+
+// ListFormDesign 获取表单设计列表
 func (f *formDesignDAO) ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) ([]model.FormDesign, error) {
 	var formDesigns []model.FormDesign
-	query := f.db.WithContext(ctx).Model(&model.FormDesign{})
+	db := f.db.WithContext(ctx).Model(&model.FormDesign{})
+
 	if req.Search != "" {
-		query = query.Where("name LIKE ?", "%"+req.Search+"%")
+		db = db.Where("name LIKE ?", "%"+req.Search+"%")
 	}
-	if err := query.Offset((req.Page - 1) * req.PageSize).Limit(req.PageSize).Find(&formDesigns).Error; err != nil {
-		f.l.Error("ListFormDesign 查询表单设计失败", zap.Error(err))
+
+	if req.Status != 0 {
+		db = db.Where("status = ?", req.Status)
+	}
+
+	offset := (req.Page - 1) * req.PageSize
+	if err := db.Offset(offset).Limit(req.PageSize).Find(&formDesigns).Error; err != nil {
 		return nil, err
 	}
+
 	return formDesigns, nil
 }
