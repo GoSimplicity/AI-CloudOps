@@ -26,6 +26,7 @@
 package di
 
 import (
+	"fmt"
 	"github.com/spf13/viper"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -33,16 +34,26 @@ import (
 
 // InitDB 初始化数据库
 func InitDB() *gorm.DB {
+	// 获取数据库连接字符串
 	addr := viper.GetString("mysql.addr")
-	db, err := gorm.Open(mysql.Open(addr), &gorm.Config{
-		//Logger: logger.Default.LogMode(logger.Info),
-	})
+	fmt.Println("Database connection string:", addr)
 
-	if err != nil {
-		panic(err)
+	// 初始化 MySQL 驱动
+	dsn := mysql.Open(addr)
+	if dsn == nil {
+		fmt.Println("Failed to initialize MySQL driver")
+		panic("MySQL driver initialization failed")
 	}
 
-	// 初始化表
+	// 连接数据库
+	db, err := gorm.Open(dsn, &gorm.Config{})
+	if err != nil {
+		fmt.Println("Failed to connect to database:", err)
+		panic(err)
+	}
+	fmt.Println("Successfully connected to database!")
+
+	//初始化表
 	if err = InitTables(db); err != nil {
 		panic(err)
 	}

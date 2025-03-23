@@ -46,15 +46,15 @@ func InitTables(db *gorm.DB) error {
 		&model.TerraformConfig{},
 
 		// k8s
+
 		&model.K8sCluster{},
 		&model.K8sProject{},
-		&model.K8sApp{},
 		&model.K8sYamlTask{},
 		&model.K8sYamlTemplate{},
-		&model.K8sInstance{},
+		&model.K8sApp{},      // 注意，放在这里，确保它先于 K8sInstance 创建
+		&model.K8sInstance{}, // 外键依赖 K8sApp，确保 K8sApp 先创建
 		&model.K8sCronjob{},
 		&model.K8sPod{},
-
 		// prometheus
 		&model.MonitorScrapePool{},
 		&model.MonitorScrapeJob{},
@@ -66,5 +66,8 @@ func InitTables(db *gorm.DB) error {
 		&model.MonitorSendGroup{},
 		&model.MonitorOnDutyChange{},
 		&model.MonitorAlertEvent{},
+
+		&model.FormDesign{},
+
 	)
 }

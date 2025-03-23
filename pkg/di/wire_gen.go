@@ -34,6 +34,9 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	service2 "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
+	workorderHandler "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
+	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
+	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 )
 
@@ -148,12 +151,18 @@ func InitWebServer() *Cmd {
 	alertManagerSendService := alert2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, monitorCache, logger, userDAO)
 	sendGroupHandler := api6.NewSendGroupHandler(logger, alertManagerSendService)
 	auditHandler := api2.NewAuditHandler(auditService)
-	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler)
+
+	fromdesignDAO := workorderDao.NewFormDesignDAO(db, logger)
+	fromdesignService := workorderService.NewFormDesignService(fromdesignDAO)
+	fromdesignHandler := workorderHandler.NewFormDesignHandler(fromdesignService)
+
+	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler,fromdesignHandler)
 	createK8sClusterTask := job.NewCreateK8sClusterTask(logger, k8sClient, clusterDAO)
 	updateK8sClusterTask := job.NewUpdateK8sClusterTask(logger, k8sClient, clusterDAO)
 	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, treeEcsDAO, clusterDAO, k8sClient)
 	timedTask := job.NewTimedTask(logger, k8sClient, monitorCache, cronManager)
 	routes := job.NewRoutes(createK8sClusterTask, updateK8sClusterTask, timedTask)
+
 	server := InitAsynqServer()
 	scheduler := InitScheduler()
 	timedScheduler := job.NewTimedScheduler(scheduler)
