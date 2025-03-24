@@ -42,3 +42,22 @@ func ConvertFormDesign(formDesign *model.FormDesign) (*model.FormDesignReq, erro
 		CreatorName: formDesign.CreatorName,
 	}, nil
 }
+
+func ConvertProcessReq(process *model.ProcessReq) (*model.Process, error) {
+	processMarshal, err := json.Marshal(process.Definition)
+	if err != nil {
+		return nil, fmt.Errorf("序列化流程 Schema 失败: %v", err)
+	}
+	return &model.Process{
+		ID:           process.ID,
+		Name:         process.Name,
+		Description:  process.Description,
+		FormDesignID: process.FormDesignID,
+		Definition:   string(processMarshal),
+		Version:      process.Version,
+		Status:       process.Status,
+		CategoryID:   process.CategoryID,
+		CreatorID:    process.CreatorID,
+		CreatorName:  process.CreatorName,
+	}, nil
+}

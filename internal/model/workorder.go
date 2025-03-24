@@ -68,21 +68,66 @@ func (FormDesign) TableName() string {
 	return "form_design"
 }
 
+// Step 流程步骤
+type Step struct {
+	Step   string `json:"step"`
+	Role   string `json:"role"`
+	Action string `json:"action"`
+}
+
+// Definition 流程定义
+type Definition struct {
+	Steps []Step `json:"steps"`
+}
+
+// Process 流程定义表
+type ProcessReq struct {
+	Model
+	ID           int64      `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
+	Name         string     `json:"name" gorm:"column:name;not null;comment:流程名称"`
+	Description  string     `json:"description" gorm:"column:description;comment:流程描述"`
+	FormDesignID int64      `json:"form_design_id" gorm:"column:form_design_id;not null;comment:关联的表单设计ID"`
+	Definition   Definition `json:"definition" gorm:"column:definition;type:json;not null;comment:流程定义JSON"`
+	Version      int        `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
+	Status       int8       `json:"status" gorm:"column:status;not null;default:0;comment:状态：0-草稿，1-已发布，2-已禁用"`
+	CategoryID   int64      `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID    int64      `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	CreatorName  string     `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
+}
+type DeleteProcessReqReq struct {
+	ID int64 `json:"id" form:"id" binding:"required"`
+}
+
+type DetailProcessReqReq struct {
+	ID int64 `json:"id" form:"id" binding:"required"`
+}
+type ListProcessReq struct {
+	Page     int    `json:"page" form:"page" binding:"required,min=1"`
+	PageSize int    `json:"size" form:"size" binding:"required,min=10,max=100"`
+	Status   int    `json:"status" form:"status" binding:"omitempty"`
+	Search   string `json:"search" form:"search" binding:"omitempty"`
+}
+type PublishProcessReq struct {
+	ID int64 `json:"id" form:"id" binding:"required"`
+}
+type CloneProcessReq struct {
+	ID   int64  `json:"id" form:"id" binding:"required"`
+	Name string `json:"name" form:"name" binding:"required"`
+}
+
 // Process 流程定义表
 type Process struct {
-	ID           int64     `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
-	Name         string    `json:"name" gorm:"column:name;not null;comment:流程名称"`
-	Description  string    `json:"description" gorm:"column:description;comment:流程描述"`
-	FormDesignID int64     `json:"form_design_id" gorm:"column:form_design_id;not null;comment:关联的表单设计ID"`
-	Definition   string    `json:"definition" gorm:"column:definition;type:json;not null;comment:流程定义JSON"`
-	Version      int       `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
-	Status       int8      `json:"status" gorm:"column:status;not null;default:0;comment:状态：0-草稿，1-已发布，2-已禁用"`
-	CategoryID   int64     `json:"category_id" gorm:"column:category_id;comment:分类ID"`
-	CreatorID    int64     `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	CreatorName  string    `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
-	CreatedAt    time.Time `json:"created_at" gorm:"column:created_at;not null;comment:创建时间"`
-	UpdatedAt    time.Time `json:"updated_at" gorm:"column:updated_at;not null;comment:更新时间"`
-	DeletedAt    time.Time `json:"deleted_at" gorm:"column:deleted_at;index;comment:删除时间"`
+	Model
+	ID           int64  `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
+	Name         string `json:"name" gorm:"column:name;not null;comment:流程名称"`
+	Description  string `json:"description" gorm:"column:description;comment:流程描述"`
+	FormDesignID int64  `json:"form_design_id" gorm:"column:form_design_id;not null;comment:关联的表单设计ID"`
+	Definition   string `json:"definition" gorm:"column:definition;type:json;not null;comment:流程定义JSON"`
+	Version      int    `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
+	Status       int8   `json:"status" gorm:"column:status;not null;default:0;comment:状态：0-草稿，1-已发布，2-已禁用"`
+	CategoryID   int64  `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID    int64  `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	CreatorName  string `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
 }
 
 func (Process) TableName() string {
