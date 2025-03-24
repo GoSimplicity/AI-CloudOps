@@ -71,6 +71,7 @@ func InitGinServer(
 	sendGroupHdl *prometheusApi.SendGroupHandler,
 	auditHdl *systemApi.AuditHandler,
 	fromdesignHandler *workorderApi.FormDesignHandler,
+	processHandler *workorderApi.ProcessHandler,
 ) *gin.Engine {
 	server := gin.Default()
 	server.Use(m...)
@@ -106,5 +107,6 @@ func InitGinServer(
 	k8sYamlTaskHdl.RegisterRouters(server)
 	k8sYamlTemplateHdl.RegisterRouters(server)
 	fromdesignHandler.RegisterRouters(server)
+	processHandler.RegisterRouters(server)
 	return server
 }
