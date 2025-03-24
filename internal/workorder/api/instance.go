@@ -28,6 +28,7 @@ func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 }
 
 func (h *InstanceHandler) CreateInstance(ctx *gin.Context) {
+
 }
 
 func (h *InstanceHandler) ApproveInstance(ctx *gin.Context) {
@@ -40,7 +41,9 @@ func (h *InstanceHandler) CommentInstance(ctx *gin.Context) {
 }
 
 func (h *InstanceHandler) ListInstance(ctx *gin.Context) {
+
 }
 
 func (h *InstanceHandler) DetailInstance(ctx *gin.Context) {
+
 }

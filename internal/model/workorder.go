@@ -36,12 +36,27 @@ type Schema struct {
 }
 
 // FormDesign 表单设计表
-type FormDesign struct {
+type FormDesignReq struct {
 	Model
 	ID          int64  `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
 	Name        string `json:"name" gorm:"column:name;not null;comment:表单名称"`
 	Description string `json:"description" gorm:"column:description;comment:表单描述"`
 	Schema      Schema `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
+	Version     int    `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
+	Status      int8   `json:"status" gorm:"column:status;not null;default:0;comment:状态：0-草稿，1-已发布，2-已禁用"`
+	CategoryID  int64  `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID   int64  `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	CreatorName string `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
+}
+
+// FormDesign 表单设计表
+type FormDesign struct {
+	Model
+	ID          int64  `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
+	Name        string `json:"name" gorm:"column:name;not null;comment:表单名称"`
+	Description string `json:"description" gorm:"column:description;comment:表单描述"`
+	Schema      string `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
+	//Schema      string `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
 	Version     int    `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
 	Status      int8   `json:"status" gorm:"column:status;not null;default:0;comment:状态：0-草稿，1-已发布，2-已禁用"`
 	CategoryID  int64  `json:"category_id" gorm:"column:category_id;comment:分类ID"`
