@@ -3,7 +3,6 @@ package dao
 import (
 	"context"
 	"fmt"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"gorm.io/gorm"
 )
