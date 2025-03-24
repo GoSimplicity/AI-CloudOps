@@ -31,7 +31,7 @@ func (h *FormDesignHandler) RegisterRouters(server *gin.Engine) {
 }
 
 func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
-	var req model.FormDesign
+	var req model.FormDesignReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateFormDesign(ctx, &req)
@@ -39,7 +39,7 @@ func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
 }
 
 func (h *FormDesignHandler) UpdateFormDesign(ctx *gin.Context) {
-	var req model.FormDesign
+	var req model.FormDesignReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateFormDesign(ctx, &req)

@@ -2,16 +2,16 @@ package service
 
 import (
 	"context"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 )
 
 type FormDesignService interface {
-	CreateFormDesign(ctx context.Context, formDesign *model.FormDesign) error
-	UpdateFormDesign(ctx context.Context, formDesign *model.FormDesign) error
+	CreateFormDesign(ctx context.Context, formDesignReq *model.FormDesignReq) error
+	UpdateFormDesign(ctx context.Context, formDesign *model.FormDesignReq) error
 	DeleteFormDesign(ctx context.Context, id int64) error
 	PublishFormDesign(ctx context.Context, id int64) error
 	CloneFormDesign(ctx context.Context, name string) error
@@ -32,12 +32,22 @@ func NewFormDesignService(dao dao.FormDesignDAO, l *zap.Logger) FormDesignServic
 }
 
 // CreateFormDesign 创建表单设计
-func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesign *model.FormDesign) error {
+func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq *model.FormDesignReq) error {
+	formDesign, err := utils.ConvertFormDesignReq(formDesignReq)
+	if err != nil {
+		f.l.Error("转换表单设计请求失败", zap.Error(err))
+		return err
+	}
 	return f.dao.CreateFormDesign(ctx, formDesign)
 }
 
 // UpdateFormDesign 更新表单设计
-func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesign *model.FormDesign) error {
+func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq *model.FormDesignReq) error {
+	formDesign, err := utils.ConvertFormDesignReq(formDesignReq)
+	if err != nil {
+		f.l.Error("转换表单设计请求失败", zap.Error(err))
+		return err
+	}
 	return f.dao.UpdateFormDesign(ctx, formDesign)
 }
 

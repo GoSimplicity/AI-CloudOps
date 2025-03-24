@@ -152,8 +152,8 @@ func InitWebServer() *Cmd {
 	sendGroupHandler := api6.NewSendGroupHandler(logger, alertManagerSendService)
 	auditHandler := api2.NewAuditHandler(auditService)
 
-	fromdesignDAO := workorderDao.NewFormDesignDAO(db, logger)
-	fromdesignService := workorderService.NewFormDesignService(fromdesignDAO)
+	fromdesignDAO := workorderDao.NewFormDesignDAO(db)
+	fromdesignService := workorderService.NewFormDesignService(fromdesignDAO,logger)
 	fromdesignHandler := workorderHandler.NewFormDesignHandler(fromdesignService)
 
 	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler,fromdesignHandler)

@@ -39,4 +39,5 @@ func (h *StatisticsHandler) GetPerformanceStats(ctx *gin.Context) {
 }
 
 func (h *StatisticsHandler) GetUserStats(ctx *gin.Context) {
+
 }
