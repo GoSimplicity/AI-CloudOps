@@ -72,6 +72,8 @@ func InitGinServer(
 	auditHdl *systemApi.AuditHandler,
 	fromdesignHandler *workorderApi.FormDesignHandler,
 	processHandler *workorderApi.ProcessHandler,
+	templateHandler *workorderApi.TemplateHandler,
+
 ) *gin.Engine {
 	server := gin.Default()
 	server.Use(m...)
@@ -108,5 +110,6 @@ func InitGinServer(
 	k8sYamlTemplateHdl.RegisterRouters(server)
 	fromdesignHandler.RegisterRouters(server)
 	processHandler.RegisterRouters(server)
+	templateHandler.RegisterRouters(server)
 	return server
 }

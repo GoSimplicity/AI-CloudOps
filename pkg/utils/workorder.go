@@ -61,3 +61,20 @@ func ConvertProcessReq(process *model.ProcessReq) (*model.Process, error) {
 		CreatorName:  process.CreatorName,
 	}, nil
 }
+func ConvertTemplateReq(template *model.TemplateReq) (*model.Template, error) {
+	templateMarshal, err := json.Marshal(template.DefaultValues)
+	if err != nil {
+		return nil, fmt.Errorf("序列化模板 Schema 失败: %v", err)
+	}
+	return &model.Template{
+		ID:            template.ID,
+		Name:          template.Name,
+		Description:   template.Description,
+		ProcessID:     template.ProcessID,
+		DefaultValues: string(templateMarshal),
+		Status:        template.Status,
+		CategoryID:    template.CategoryID,
+		CreatorID:     template.CreatorID,
+		CreatorName:   template.CreatorName,
+	}, nil
+}

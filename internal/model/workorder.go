@@ -134,22 +134,53 @@ func (Process) TableName() string {
 	return "process"
 }
 
+type DefaultValues struct {
+	Approver string `json:"approver"`
+	Deadline string `json:"deadline"`
+}
+type DeleteTemplateReq struct {
+	ID int64 `json:"id" form:"id" binding:"required"`
+}
+type DetailTemplateReq struct {
+	ID int64 `json:"id" form:"id" binding:"required"`
+}
+type ListTemplateReq struct {
+	Page     int    `json:"page" form:"page" binding:"required,min=1"`
+	PageSize int    `json:"size" form:"size" binding:"required,min=10,max=100"`
+	Status   int    `json:"status" form:"status" binding:"omitempty"`
+	Search   string `json:"search" form:"search" binding:"omitempty"`
+}
+
+// Template 工单模板表
+type TemplateReq struct {
+	Model
+	ID            int64         `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
+	Name          string        `json:"name" gorm:"column:name;not null;comment:模板名称"`
+	Description   string        `json:"description" gorm:"column:description;comment:模板描述"`
+	ProcessID     int64         `json:"process_id" gorm:"column:process_id;not null;comment:关联的流程ID"`
+	DefaultValues DefaultValues `json:"default_values" gorm:"column:default_values;type:json;comment:默认值JSON"`
+	Icon          string        `json:"icon" gorm:"column:icon;comment:图标URL"`
+	Status        int8          `json:"status" gorm:"column:status;not null;default:1;comment:状态：0-禁用，1-启用"`
+	SortOrder     int           `json:"sort_order" gorm:"column:sort_order;default:0;comment:排序顺序"`
+	CategoryID    int64         `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID     int64         `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	CreatorName   string        `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
+}
+
 // Template 工单模板表
 type Template struct {
-	ID            int64     `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
-	Name          string    `json:"name" gorm:"column:name;not null;comment:模板名称"`
-	Description   string    `json:"description" gorm:"column:description;comment:模板描述"`
-	ProcessID     int64     `json:"process_id" gorm:"column:process_id;not null;comment:关联的流程ID"`
-	DefaultValues string    `json:"default_values" gorm:"column:default_values;type:json;comment:默认值JSON"`
-	Icon          string    `json:"icon" gorm:"column:icon;comment:图标URL"`
-	Status        int8      `json:"status" gorm:"column:status;not null;default:1;comment:状态：0-禁用，1-启用"`
-	SortOrder     int       `json:"sort_order" gorm:"column:sort_order;default:0;comment:排序顺序"`
-	CategoryID    int64     `json:"category_id" gorm:"column:category_id;comment:分类ID"`
-	CreatorID     int64     `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	CreatorName   string    `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
-	CreatedAt     time.Time `json:"created_at" gorm:"column:created_at;not null;comment:创建时间"`
-	UpdatedAt     time.Time `json:"updated_at" gorm:"column:updated_at;not null;comment:更新时间"`
-	DeletedAt     time.Time `json:"deleted_at" gorm:"column:deleted_at;index;comment:删除时间"`
+	Model
+	ID            int64  `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
+	Name          string `json:"name" gorm:"column:name;not null;comment:模板名称"`
+	Description   string `json:"description" gorm:"column:description;comment:模板描述"`
+	ProcessID     int64  `json:"process_id" gorm:"column:process_id;not null;comment:关联的流程ID"`
+	DefaultValues string `json:"default_values" gorm:"column:default_values;type:json;comment:默认值JSON"`
+	Icon          string `json:"icon" gorm:"column:icon;comment:图标URL"`
+	Status        int8   `json:"status" gorm:"column:status;not null;default:1;comment:状态：0-禁用，1-启用"`
+	SortOrder     int    `json:"sort_order" gorm:"column:sort_order;default:0;comment:排序顺序"`
+	CategoryID    int64  `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID     int64  `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	CreatorName   string `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
 }
 
 func (Template) TableName() string {
