@@ -187,6 +187,49 @@ func (Template) TableName() string {
 	return "template"
 }
 
+type DeleteInstanceReq struct {
+	ID int64 `json:"id" form:"id" binding:"required"`
+}
+type DetailInstanceReq struct {
+	ID int64 `json:"id" form:"id" binding:"required"`
+}
+type ListInstanceReq struct {
+	Page       int      `json:"page"`        // 页码
+	PageSize   int      `json:"page_size"`   // 每页大小
+	Status     int      `json:"status"`      // 状态
+	Keyword    string   `json:"keyword"`     // 关键字搜索
+	DateRange  []string `json:"date_range"`  // 日期范围 ["开始日期", "结束日期"]
+	CreatorID  int64    `json:"creator_id"`  // 创建人ID
+	AssigneeID int64    `json:"assignee_id"` // 处理人ID
+}
+
+type FormData struct {
+	Reason      string   `json:"reason"`        // 请假原因
+	DateRange   []string `json:"date_range"`    // 请假日期范围
+	Type        string   `json:"type"`          // 请假类型（个人、病假等）
+	ApproveDays int64    `json:"approved_days"` // 可请假天数
+}
+
+type InstanceReq struct {
+	ID             int64     `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
+	Title          string    `json:"title" gorm:"column:title;not null;comment:工单标题"`
+	ProcessID      int64     `json:"process_id" gorm:"column:process_id;not null;comment:流程ID"`
+	ProcessVersion int       `json:"process_version" gorm:"column:process_version;not null;comment:流程版本"`
+	FormData       FormData  `json:"form_data" gorm:"column:form_data;type:json;not null;comment:表单数据"`
+	CurrentNode    string    `json:"current_node" gorm:"column:current_node;not null;comment:当前节点ID"`
+	Status         int8      `json:"status" gorm:"column:status;not null;comment:状态：0-草稿，1-处理中，2-已完成，3-已取消，4-已拒绝"`
+	Priority       int8      `json:"priority" gorm:"column:priority;default:0;comment:优先级：0-普通，1-紧急，2-非常紧急"`
+	CategoryID     int64     `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID      int64     `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	CreatorName    string    `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
+	AssigneeID     int64     `json:"assignee_id" gorm:"column:assignee_id;comment:当前处理人ID"`
+	AssigneeName   string    `json:"assignee_name" gorm:"column:assignee_name;comment:当前处理人姓名"`
+	CreatedAt      time.Time `json:"created_at" gorm:"column:created_at;not null;comment:创建时间"`
+	UpdatedAt      time.Time `json:"updated_at" gorm:"column:updated_at;not null;comment:更新时间"`
+	CompletedAt    time.Time `json:"completed_at" gorm:"column:completed_at;comment:完成时间"`
+	DueDate        time.Time `json:"due_date" gorm:"column:due_date;comment:截止时间"`
+}
+
 // Instance 工单实例表
 type Instance struct {
 	ID             int64     `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
@@ -213,12 +256,27 @@ func (Instance) TableName() string {
 }
 
 // InstanceFlow 工单流转记录表
+type InstanceFlowReq struct {
+	ID           int64     `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
+	InstanceID   int64     `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
+	NodeID       string    `json:"node_id" gorm:"column:node_id;not null;comment:节点ID"`
+	NodeName     string    `json:"node_name" gorm:"column:node_name;not null;comment:节点名称"`
+	Action       string    `json:"action" gorm:"column:action;not null;comment:操作：approve-同意，reject-拒绝，transfer-转交，comment-评论"`
+	TargetUserID int64     `json:"target_user_id,omitempty" gorm:"column:target_user_id;comment:转交用户ID"` // 允许为空
+	OperatorID   int64     `json:"operator_id" gorm:"column:operator_id;not null;comment:操作人ID"`
+	OperatorName string    `json:"operator_name" gorm:"column:operator_name;not null;comment:操作人姓名"`
+	Comment      string    `json:"comment" gorm:"column:comment;type:text;comment:处理意见"`
+	FormData     FormData  `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据（如有修改）"`
+	Attachments  string    `json:"attachments" gorm:"column:attachments;type:json;comment:附件列表"`
+	CreatedAt    time.Time `json:"created_at" gorm:"column:created_at;not null;comment:创建时间"`
+}
 type InstanceFlow struct {
 	ID           int64     `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
 	InstanceID   int64     `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
 	NodeID       string    `json:"node_id" gorm:"column:node_id;not null;comment:节点ID"`
 	NodeName     string    `json:"node_name" gorm:"column:node_name;not null;comment:节点名称"`
 	Action       string    `json:"action" gorm:"column:action;not null;comment:操作：approve-同意，reject-拒绝，transfer-转交，comment-评论"`
+	TargetUserID int64     `json:"target_user_id,omitempty" gorm:"column:target_user_id;comment:转交用户ID"` // 允许为空
 	OperatorID   int64     `json:"operator_id" gorm:"column:operator_id;not null;comment:操作人ID"`
 	OperatorName string    `json:"operator_name" gorm:"column:operator_name;not null;comment:操作人姓名"`
 	Comment      string    `json:"comment" gorm:"column:comment;type:text;comment:处理意见"`
@@ -232,6 +290,17 @@ func (InstanceFlow) TableName() string {
 }
 
 // InstanceComment 工单评论表
+type InstanceCommentReq struct {
+	ID          int64     `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
+	InstanceID  int64     `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
+	Content     string    `json:"content" gorm:"column:content;type:text;not null;comment:评论内容"`
+	Attachments string    `json:"attachments" gorm:"column:attachments;type:json;comment:附件列表"`
+	CreatorID   int64     `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	CreatorName string    `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
+	CreatedAt   time.Time `json:"created_at" gorm:"column:created_at;not null;comment:创建时间"`
+	ParentID    int64     `json:"parent_id" gorm:"column:parent_id;default:0;comment:父评论ID，用于回复功能"`
+}
+
 type InstanceComment struct {
 	ID          int64     `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
 	InstanceID  int64     `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`

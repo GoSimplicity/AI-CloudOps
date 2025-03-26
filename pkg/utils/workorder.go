@@ -78,3 +78,68 @@ func ConvertTemplateReq(template *model.TemplateReq) (*model.Template, error) {
 		CreatorName:   template.CreatorName,
 	}, nil
 }
+
+func ConvertInstanceReq(instance *model.InstanceReq) (*model.Instance, error) {
+	instanceMarshal, err := json.Marshal(instance.FormData)
+	if err != nil {
+		return nil, fmt.Errorf("序列化实例 Schema 失败: %v", err)
+	}
+	return &model.Instance{
+		ID:             instance.ID,
+		Title:          instance.Title,
+		ProcessID:      instance.ProcessID,
+		ProcessVersion: instance.ProcessVersion,
+		FormData:       string(instanceMarshal),
+		Status:         instance.Status,
+		CategoryID:     instance.CategoryID,
+		DueDate:        instance.DueDate,
+	}, nil
+}
+func ConvertInstance(instance *model.Instance) (*model.InstanceReq, error) {
+	var p model.FormData
+	err := json.Unmarshal([]byte(instance.FormData), &p)
+	if err != nil {
+		return nil, fmt.Errorf("序列化实例 Schema 失败: %v", err)
+	}
+	return &model.InstanceReq{
+		ID:             instance.ID,
+		Title:          instance.Title,
+		ProcessID:      instance.ProcessID,
+		ProcessVersion: instance.ProcessVersion,
+		FormData:       p,
+		Status:         instance.Status,
+		CategoryID:     instance.CategoryID,
+	}, nil
+}
+func ConvertInstanceFlowReq(instance *model.InstanceFlowReq) (*model.InstanceFlow, error) {
+	instanceMarshal, err := json.Marshal(instance.FormData)
+	if err != nil {
+		return nil, fmt.Errorf("序列化实例 Schema 失败: %v", err)
+
+	}
+	return &model.InstanceFlow{
+		ID:           instance.ID,
+		InstanceID:   instance.InstanceID,
+		NodeID:       instance.NodeID,
+		NodeName:     instance.NodeName,
+		Action:       instance.Action,
+		TargetUserID: instance.TargetUserID,
+		OperatorID:   instance.OperatorID,
+		OperatorName: instance.OperatorName,
+		Comment:      instance.Comment,
+		FormData:     string(instanceMarshal),
+		Attachments:  instance.Attachments,
+		CreatedAt:    instance.CreatedAt,
+	}, nil
+}
+
+func ConvertInstanceCommentReq(instanceComment *model.InstanceCommentReq) (*model.InstanceComment, error) {
+	return &model.InstanceComment{
+		ID:          instanceComment.ID,
+		InstanceID:  instanceComment.InstanceID,
+		Attachments: instanceComment.Attachments,
+		CreatorID:   instanceComment.CreatorID,
+		CreatorName: instanceComment.CreatorName,
+		CreatedAt:   instanceComment.CreatedAt,
+	}, nil
+}
