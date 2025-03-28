@@ -180,9 +180,19 @@ func InitWebServer() *Cmd {
 		job.NewUpdateK8sClusterTask,
 		job.NewRoutes,
 		ssh.NewSSH,
+
 		workorderHandler.NewFormDesignHandler,
 		workorderService.NewFormDesignService,
 		workorderDao.NewFormDesignDAO,
+		workorderHandler.NewInstanceHandler,
+		workorderService.NewInstanceService,
+		workorderDao.NewInstanceDAO,
+		workorderHandler.NewTemplateHandler,
+		workorderService.NewTemplateService,
+		workorderDao.NewTemplateDAO,
+		workorderHandler.NewProcessHandler,
+		workorderService.NewProcessService,
+		workorderDao.NewProcessDAO,
 		wire.Struct(new(Cmd), "*"),
 	)
 	return new(Cmd)

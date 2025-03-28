@@ -68,6 +68,10 @@ func InitTables(db *gorm.DB) error {
 		&model.MonitorAlertEvent{},
 
 		&model.FormDesign{},
-
+		&model.Process{},
+		&model.Template{},
+		&model.Instance{},
+		&model.InstanceFlow{},
+		&model.InstanceComment{},
 	)
 }
