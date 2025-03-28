@@ -151,25 +151,19 @@ func InitWebServer() *Cmd {
 	alertManagerSendService := alert2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, monitorCache, logger, userDAO)
 	sendGroupHandler := api6.NewSendGroupHandler(logger, alertManagerSendService)
 	auditHandler := api2.NewAuditHandler(auditService)
-
-
-	fromdesignDAO := workorderDao.NewFormDesignDAO(db)
-	fromdesignService := workorderService.NewFormDesignService(fromdesignDAO,logger)
-	fromdesignHandler := workorderHandler.NewFormDesignHandler(fromdesignService)
-
-	processDAO := workorderDao.NewProcessDAO(db)
-	processService := workorderService.NewProcessService(processDAO,logger)
-	processHandler := workorderHandler.NewProcessHandler(processService)
-
-	templateDAO := workorderDao.NewTemplateDAO(db)
-	templateService := workorderService.NewTemplateService(templateDAO,logger)
-	templateHandler := workorderHandler.NewTemplateHandler(templateService)
-
-	InstanceDAO := workorderDao.NewInstanceDAO(db)
-	InstanceService := workorderService.NewInstanceService(InstanceDAO,logger)
-	instanceHandler := workorderHandler.NewInstanceHandler(InstanceService)
-	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler,fromdesignHandler,processHandler,templateHandler,instanceHandler)
-
+	formDesignDAO := dao4.NewFormDesignDAO(db)
+	formDesignService := service5.NewFormDesignService(formDesignDAO, logger)
+	formDesignHandler := api7.NewFormDesignHandler(formDesignService)
+	processDAO := dao4.NewProcessDAO(db)
+	processService := service5.NewProcessService(processDAO, logger)
+	processHandler := api7.NewProcessHandler(processService)
+	templateDAO := dao4.NewTemplateDAO(db)
+	templateService := service5.NewTemplateService(templateDAO, logger)
+	templateHandler := api7.NewTemplateHandler(templateService)
+	daoInstanceDAO := dao4.NewInstanceDAO(db)
+	serviceInstanceService := service5.NewInstanceService(daoInstanceDAO, logger)
+	instanceHandler := api7.NewInstanceHandler(serviceInstanceService)
+	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, processHandler, templateHandler, instanceHandler)
 	createK8sClusterTask := job.NewCreateK8sClusterTask(logger, k8sClient, clusterDAO)
 	updateK8sClusterTask := job.NewUpdateK8sClusterTask(logger, k8sClient, clusterDAO)
 	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, treeEcsDAO, clusterDAO, k8sClient)
