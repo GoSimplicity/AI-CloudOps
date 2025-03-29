@@ -28,6 +28,9 @@
 package di
 
 import (
+	aiHandler "github.com/GoSimplicity/AI-CloudOps/internal/ai/api"
+	aiClient "github.com/GoSimplicity/AI-CloudOps/internal/ai/client"
+	aiService "github.com/GoSimplicity/AI-CloudOps/internal/ai/service"
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	"github.com/GoSimplicity/AI-CloudOps/internal/job"
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
@@ -78,6 +81,7 @@ func InitWebServer() *Cmd {
 		job.NewTimedScheduler,
 		job.NewTimedTask,
 		client.NewK8sClient,
+		aiClient.NewAIClient,
 		cache.NewMonitorCache,
 		cache.NewAlertConfigCache,
 		cache.NewRuleConfigCache,
@@ -106,6 +110,7 @@ func InitWebServer() *Cmd {
 		k8sHandler.NewK8sTaintHandler,
 		k8sHandler.NewK8sYamlTaskHandler,
 		k8sHandler.NewK8sYamlTemplateHandler,
+		aiHandler.NewAIHandler,
 		k8sAdminService.NewClusterService,
 		k8sAdminService.NewConfigMapService,
 		k8sAdminService.NewDeploymentService,
@@ -120,7 +125,6 @@ func InitWebServer() *Cmd {
 		k8sAppService.NewInstanceService,
 		k8sAppService.NewCronjobService,
 		k8sAppService.NewProjectService,
-
 		userService.NewUserService,
 		treeService.NewTreeNodeService,
 		treeService.NewEcsService,
@@ -131,6 +135,7 @@ func InitWebServer() *Cmd {
 		authService.NewApiService,
 		authService.NewRoleService,
 		authService.NewAuditService,
+		aiService.NewAIService,
 		promHandler.NewAlertPoolHandler,
 		promHandler.NewConfigYamlHandler,
 		promHandler.NewOnDutyGroupHandler,
@@ -175,12 +180,10 @@ func InitWebServer() *Cmd {
 		k8sAppDao.NewInstanceDAO,
 		k8sAppDao.NewProjectDAO,
 		k8sAppDao.NewCornJobDAO,
-
 		job.NewCreateK8sClusterTask,
 		job.NewUpdateK8sClusterTask,
 		job.NewRoutes,
 		ssh.NewSSH,
-
 		workorderHandler.NewFormDesignHandler,
 		workorderService.NewFormDesignService,
 		workorderDao.NewFormDesignDAO,

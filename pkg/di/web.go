@@ -26,6 +26,7 @@
 package di
 
 import (
+	aiHandler "github.com/GoSimplicity/AI-CloudOps/internal/ai/api"
 	k8sApi "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	prometheusApi "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
@@ -74,6 +75,7 @@ func InitGinServer(
 	processHandler *workorderApi.ProcessHandler,
 	templateHandler *workorderApi.TemplateHandler,
 	instanceHandler *workorderApi.InstanceHandler,
+	aiHandler *aiHandler.AIHandler,
 
 ) *gin.Engine {
 	server := gin.Default()
@@ -113,5 +115,6 @@ func InitGinServer(
 	processHandler.RegisterRouters(server)
 	templateHandler.RegisterRouters(server)
 	instanceHandler.RegisterRouters(server)
+	aiHandler.RegisterRouters(server)
 	return server
 }

@@ -21,6 +21,7 @@ terraform
 go.work
 go.work.sum
 bin
+volumes
 
 storage
 data/mysql

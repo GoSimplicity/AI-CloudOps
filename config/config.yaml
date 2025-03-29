@@ -15,6 +15,7 @@ redis:
 mysql:
   # addr: "root:root@tcp(mysql:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
   addr: "root:root@tcp(localhost:33069)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
+
 tree:
   check_status_cron: "@every 300s"
 k8s:
@@ -30,3 +31,6 @@ mock:
   enabled: true # 是否开启mock
 terraform:
   bin_path: "/opt/homebrew/bin/terraform"
+ai:
+  base_url: "http://localhost/v1" # dify API地址
+  api_key: "xxx" # dify API密钥
