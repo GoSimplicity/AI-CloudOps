@@ -28,6 +28,7 @@ package user
 import (
 	"context"
 	"fmt"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
@@ -36,212 +37,281 @@ import (
 	"go.uber.org/zap"
 )
 
+// InstanceService 定义 Kubernetes 实例服务接口
 type InstanceService interface {
-	// 实例
-	CreateInstanceOne(ctx context.Context, instance *model.K8sInstance) error
-	UpdateInstanceOne(ctx context.Context, id int64, instance model.K8sInstance) error
-	BatchDeleteInstance(ctx context.Context, ids []int64) error
-	BatchRestartInstance(ctx context.Context, ids []int64) error
-	GetInstanceByApp(ctx context.Context, appId int64) ([]model.K8sInstance, error)
-	GetInstanceOne(ctx context.Context, instanceId int64) (model.K8sInstance, error)
-	GetInstanceAll(ctx context.Context) ([]model.K8sInstance, error)
-}
-type instanceService struct {
-	client      client.K8sClient
-	l           *zap.Logger
-	dao         admin.ClusterDAO
-	instancedao user.InstanceDAO
+	// 实例管理相关方法
+	CreateInstance(ctx context.Context, req *model.CreateK8sInstanceRequest) error
+	UpdateInstance(ctx context.Context, req *model.UpdateK8sInstanceRequest) error
+	BatchDeleteInstance(ctx context.Context, instanceIDs []int64) error
+	BatchRestartInstance(ctx context.Context, instanceIDs []int64) error
+	GetInstanceByApp(ctx context.Context, appID int64) ([]model.K8sInstance, error)
+	GetInstance(ctx context.Context, instanceID int64) (model.K8sInstance, error)
+	GetInstanceList(ctx context.Context, req *model.GetK8sInstanceListRequest) ([]model.K8sInstance, error)
 }
 
-func NewInstanceService(dao admin.ClusterDAO, instancedao user.InstanceDAO, client client.K8sClient, l *zap.Logger) InstanceService {
+// instanceService 实现 InstanceService 接口
+type instanceService struct {
+	client      client.K8sClient
+	logger      *zap.Logger
+	clusterDAO  admin.ClusterDAO
+	instanceDAO user.InstanceDAO
+}
+
+// NewInstanceService 创建新的实例服务
+func NewInstanceService(clusterDAO admin.ClusterDAO, instanceDAO user.InstanceDAO, client client.K8sClient, logger *zap.Logger) InstanceService {
 	return &instanceService{
-		dao:         dao,
+		clusterDAO:  clusterDAO,
 		client:      client,
-		l:           l,
-		instancedao: instancedao,
+		logger:      logger,
+		instanceDAO: instanceDAO,
 	}
 }
 
-func (a *instanceService) CreateInstanceOne(ctx context.Context, instance *model.K8sInstance) error {
-	//0 先入数据库
-	err := a.instancedao.CreateInstanceOne(ctx, instance) // 单侧先删除外键：ALTER TABLE k8s_instances DROP FOREIGN KEY fk_k8s_apps_k8s_instances;
+// CreateInstance 创建 Kubernetes 实例
+func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateK8sInstanceRequest) error {
+	// 1. 先入数据库
+	instance := &model.K8sInstance{}
+
+	err := s.instanceDAO.CreateInstanceOne(ctx, instance)
 	if err != nil {
 		return fmt.Errorf("failed to create instance: %w", err)
 	}
-	// 将instance转换成deployment和service内容
+
+	// 2. 将instance转换成deployment和service内容
 	deployment, service, err := pkg.ParseK8sInstance(ctx, instance)
-	// 2.通过clustername获取集群
-	k8scluster, err2 := a.dao.GetClusterByName(ctx, instance.Cluster)
-	if err2 != nil {
-		return fmt.Errorf("failed to get Cluster: %w", err2)
+	if err != nil {
+		return fmt.Errorf("failed to parse instance: %w", err)
 	}
-	// 调用创建函数
+
+	// 3. 通过clustername获取集群
+	k8sCluster, err := s.clusterDAO.GetClusterByName(ctx, instance.Cluster)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster: %w", err)
+	}
+
+	// 4. 调用创建函数
 	deploymentRequest := model.K8sDeploymentRequest{
-		ClusterId:       k8scluster.ID,
+		ClusterId:       k8sCluster.ID,
 		Namespace:       instance.Namespace,
 		DeploymentNames: []string{deployment.Name},
 		DeploymentYaml:  &deployment,
 	}
-	// 调用deploymentService的CreateDeployment方法创建deployment
-	pkg.CreateDeployment(ctx, &deploymentRequest, a.client, a.l)
-	//
+
+	// 5. 创建 Deployment
+	err = pkg.CreateDeployment(ctx, &deploymentRequest, s.client, s.logger)
+	if err != nil {
+		return fmt.Errorf("failed to create deployment: %w", err)
+	}
+
+	// 6. 创建 Service
 	serviceRequest := model.K8sServiceRequest{
-		ClusterId:    k8scluster.ID,
+		ClusterId:    k8sCluster.ID,
 		Namespace:    instance.Namespace,
 		ServiceNames: []string{service.Name},
 		ServiceYaml:  &service,
 	}
-	// 调用svcService的CreateService方法创建service
-	pkg.CreateService(ctx, &serviceRequest, a.client, a.l)
+
+	err = pkg.CreateService(ctx, &serviceRequest, s.client, s.logger)
+	if err != nil {
+		return fmt.Errorf("failed to create service: %w", err)
+	}
+
 	return nil
 }
 
-func (a *instanceService) UpdateInstanceOne(ctx context.Context, id int64, instance model.K8sInstance) error {
-	// 1.从DB中取出具体的内容，然后更新=>[DB层面]
-	_, err := a.instancedao.GetInstanceById(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to get instance: %w", err)
+// UpdateInstance 更新 Kubernetes 实例
+func (s *instanceService) UpdateInstance(ctx context.Context, req *model.UpdateK8sInstanceRequest) error {
+	// 更新实例信息
+	instance := model.K8sInstance{
+		Cluster:   req.Cluster,
+		Image:     req.Image,
+		Replicas:  req.Replicas,
+		Namespace: req.Namespace,
+		K8sAppID:  req.K8sAppID,
+		ContainerCore: model.ContainerCore{
+			CpuLimit:      req.ContainerCore.CpuLimit,
+			MemoryLimit:   req.ContainerCore.MemoryLimit,
+			VolumeJson:    req.ContainerCore.VolumeJson,
+			PortJson:      req.ContainerCore.PortJson,
+			Envs:          req.ContainerCore.Envs,
+			Labels:        req.ContainerCore.Labels,
+			Commands:      req.ContainerCore.Commands,
+			Args:          req.ContainerCore.Args,
+			CpuRequest:    req.ContainerCore.CpuRequest,
+			MemoryRequest: req.ContainerCore.MemoryRequest,
+		},
 	}
-	// 2.将instance转换成deployment和service内容
-	err = a.instancedao.UpdateInstanceById(ctx, id, instance)
+
+	err := s.instanceDAO.UpdateInstanceById(ctx, int64(req.ID), instance)
 	if err != nil {
 		return fmt.Errorf("failed to update instance: %w", err)
 	}
-	// 3. 将instance转换成deployment和service内容
+
+	// 将实例转换成 Deployment 和 Service
 	deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
 	if err != nil {
 		return fmt.Errorf("failed to parse k8s instance: %w", err)
 	}
 
 	// 4. 获取集群信息
-	k8scluster, err := a.dao.GetClusterByName(ctx, instance.Cluster)
+	k8sCluster, err := s.clusterDAO.GetClusterByName(ctx, instance.Cluster)
 	if err != nil {
-		return fmt.Errorf("failed to get Cluster: %w", err)
+		return fmt.Errorf("failed to get cluster: %w", err)
 	}
 
-	// 5. 更新Deployment
+	// 5. 更新 Deployment
 	deploymentRequest := model.K8sDeploymentRequest{
-		ClusterId:       k8scluster.ID,
+		ClusterId:       k8sCluster.ID,
 		Namespace:       instance.Namespace,
 		DeploymentNames: []string{deployment.Name},
 		DeploymentYaml:  &deployment,
 	}
-	if err := pkg.UpdateDeployment(ctx, &deploymentRequest, a.client, a.l); err != nil {
+
+	if err := pkg.UpdateDeployment(ctx, &deploymentRequest, s.client, s.logger); err != nil {
 		return fmt.Errorf("failed to update deployment: %w", err)
 	}
 
-	// 6. 更新Service
+	// 6. 更新 Service
 	serviceRequest := model.K8sServiceRequest{
-		ClusterId:    k8scluster.ID,
+		ClusterId:    k8sCluster.ID,
 		Namespace:    instance.Namespace,
 		ServiceNames: []string{service.Name},
 		ServiceYaml:  &service,
 	}
-	if err := pkg.UpdateService(ctx, &serviceRequest, a.client, a.l); err != nil {
+
+	if err := pkg.UpdateService(ctx, &serviceRequest, s.client, s.logger); err != nil {
 		return fmt.Errorf("failed to update service: %w", err)
 	}
+
 	return nil
 }
 
-func (a *instanceService) BatchDeleteInstance(ctx context.Context, ids []int64) error {
-	// 1.从DB中取出内容
-	instances, err := a.instancedao.GetInstanceByIds(ctx, ids)
+// BatchDeleteInstance 批量删除 Kubernetes 实例
+func (s *instanceService) BatchDeleteInstance(ctx context.Context, instanceIDs []int64) error {
+	// 1. 从 DB 中取出内容
+	instances, err := s.instanceDAO.GetInstanceByIds(ctx, instanceIDs)
 	if err != nil {
-		return fmt.Errorf("failed to get Deployment: %w", err)
+		return fmt.Errorf("failed to get instances: %w", err)
 	}
-	// 2.然后删除对应的instances信息
-	err = a.instancedao.DeleteInstanceByIds(ctx, ids)
+
+	// 2. 从数据库中删除实例记录
+	err = s.instanceDAO.DeleteInstanceByIds(ctx, instanceIDs)
 	if err != nil {
-		return fmt.Errorf("failed to delete Deployment: %w", err)
+		return fmt.Errorf("failed to delete instances from database: %w", err)
 	}
-	// 3.接着需要删除对应的实例
-	for i := 0; i < len(instances); i++ {
-		instance := instances[i]
-		// 将instance转换成deployment和service内容
+
+	// 3. 从 Kubernetes 集群中删除实例
+	for _, instance := range instances {
+		// 将 instance 转换成 deployment 和 service
 		deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
 		if err != nil {
-			return fmt.Errorf("failed to 转换 deployment, service: %w", err)
+			return fmt.Errorf("failed to convert to deployment and service: %w", err)
 		}
-		// 2.通过clustername获取集群
-		k8scluster, err2 := a.dao.GetClusterByName(ctx, instance.Cluster)
-		if err2 != nil {
-			return fmt.Errorf("failed to get Cluster: %w", err2)
+
+		// 获取集群信息
+		k8sCluster, err := s.clusterDAO.GetClusterByName(ctx, instance.Cluster)
+		if err != nil {
+			return fmt.Errorf("failed to get cluster: %w", err)
 		}
-		// 调用deploymentService的DeleteDeployment方法删除deployment
+
+		// 删除 Deployment
 		deploymentRequest := model.K8sDeploymentRequest{
-			ClusterId:       k8scluster.ID,
+			ClusterId:       k8sCluster.ID,
 			Namespace:       instance.Namespace,
 			DeploymentNames: []string{deployment.Name},
 			DeploymentYaml:  &deployment,
 		}
-		pkg.DeleteDeployment(ctx, &deploymentRequest, a.client, a.l)
-		//	调用svcService的DeleteService方法删除service
+
+		err = pkg.DeleteDeployment(ctx, &deploymentRequest, s.client, s.logger)
+		if err != nil {
+			s.logger.Error("Failed to delete deployment", zap.Error(err))
+		}
+
+		// 删除 Service
 		serviceRequest := model.K8sServiceRequest{
-			ClusterId:    k8scluster.ID,
+			ClusterId:    k8sCluster.ID,
 			Namespace:    instance.Namespace,
 			ServiceNames: []string{service.Name},
 			ServiceYaml:  &service,
 		}
-		pkg.DeleteService(ctx, &serviceRequest, a.client, a.l)
+
+		err = pkg.DeleteService(ctx, &serviceRequest, s.client, s.logger)
+		if err != nil {
+			s.logger.Error("Failed to delete service", zap.Error(err))
+		}
 	}
+
 	return nil
 }
-func (a *instanceService) BatchRestartInstance(ctx context.Context, ids []int64) error {
-	// 1.从DB中取出内容
-	instances, err := a.instancedao.GetInstanceByIds(ctx, ids)
-	if err != nil {
-		return fmt.Errorf("failed to get Deployment: %w", err)
-	}
-	var deploymentRequests []model.K8sDeploymentRequest
-	for i := 0; i < len(instances); i++ {
-		instance := instances[i]
 
-		// 将instance转换成deployment和service内容
+// BatchRestartInstance 批量重启 Kubernetes 实例
+func (s *instanceService) BatchRestartInstance(ctx context.Context, instanceIDs []int64) error {
+	// 1. 从 DB 中取出内容
+	instances, err := s.instanceDAO.GetInstanceByIds(ctx, instanceIDs)
+	if err != nil {
+		return fmt.Errorf("failed to get instances: %w", err)
+	}
+
+	var deploymentRequests []model.K8sDeploymentRequest
+
+	for _, instance := range instances {
+		// 将 instance 转换成 deployment
 		deployment, _, err := pkg.ParseK8sInstance(ctx, &instance)
 		if err != nil {
-			return fmt.Errorf("failed to 转换 deployment, service: %w", err)
+			return fmt.Errorf("failed to convert to deployment: %w", err)
 		}
 
-		// 2.通过clustername获取集群
-		k8scluster, err2 := a.dao.GetClusterByName(ctx, instance.Cluster)
-		if err2 != nil {
-			return fmt.Errorf("failed to get Cluster: %w", err2)
+		// 获取集群信息
+		k8sCluster, err := s.clusterDAO.GetClusterByName(ctx, instance.Cluster)
+		if err != nil {
+			return fmt.Errorf("failed to get cluster: %w", err)
 		}
+
 		deploymentRequest := model.K8sDeploymentRequest{
-			ClusterId:       k8scluster.ID,
+			ClusterId:       k8sCluster.ID,
 			Namespace:       instance.Namespace,
 			DeploymentNames: []string{deployment.Name},
 			DeploymentYaml:  &deployment,
 		}
-		deploymentRequests = append(deploymentRequests, deploymentRequest)
 
+		deploymentRequests = append(deploymentRequests, deploymentRequest)
 	}
-	pkg.BatchRestartK8sInstance(ctx, deploymentRequests, a.client, a.l)
+
+	err = pkg.BatchRestartK8sInstance(ctx, deploymentRequests, s.client, s.logger)
+	if err != nil {
+		return fmt.Errorf("failed to restart instances: %w", err)
+	}
+
 	return nil
 }
 
-func (a *instanceService) GetInstanceByApp(ctx context.Context, appId int64) ([]model.K8sInstance, error) {
-	// 1.根据appId获取实例列表
-	instances, err := a.instancedao.GetInstanceByApp(ctx, appId)
+// GetInstanceByApp 根据应用获取 Kubernetes 实例列表
+func (s *instanceService) GetInstanceByApp(ctx context.Context, appID int64) ([]model.K8sInstance, error) {
+	instances, err := s.instanceDAO.GetInstanceByApp(ctx, appID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Deployment: %w", err)
+		return nil, fmt.Errorf("failed to get instances by app: %w", err)
 	}
+
 	return instances, nil
 }
 
-func (a *instanceService) GetInstanceOne(ctx context.Context, instanceId int64) (model.K8sInstance, error) {
-	// 1.根据instanceId获取实例
-	instance, err := a.instancedao.GetInstanceById(ctx, instanceId)
+// GetInstance 获取单个 Kubernetes 实例
+func (s *instanceService) GetInstance(ctx context.Context, instanceID int64) (model.K8sInstance, error) {
+	instance, err := s.instanceDAO.GetInstanceById(ctx, instanceID)
 	if err != nil {
-		return model.K8sInstance{}, fmt.Errorf("failed to get Deployment: %w", err)
+		return model.K8sInstance{}, fmt.Errorf("failed to get instance: %w", err)
 	}
+
 	return instance, nil
 }
-func (a *instanceService) GetInstanceAll(ctx context.Context) ([]model.K8sInstance, error) {
-	allinstances, err := a.instancedao.GetInstanceAll(ctx)
+
+// GetInstanceList 获取 Kubernetes 实例列表
+func (s *instanceService) GetInstanceList(ctx context.Context, req *model.GetK8sInstanceListRequest) ([]model.K8sInstance, error) {
+	// TODO: 实现基于请求参数的筛选逻辑
+	allInstances, err := s.instanceDAO.GetInstanceAll(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Deployment: %w", err)
+		return nil, fmt.Errorf("failed to get instances: %w", err)
 	}
-	// 3.返回实例列表
-	return allinstances, nil
+
+	return allInstances, nil
 }

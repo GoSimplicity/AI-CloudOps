@@ -3,7 +3,7 @@ package model
 // ChatMessage 聊天消息请求
 type ChatMessage struct {
 	Query            string                 `json:"query"`
-	Inputs           map[string]interface{} `json:"inputs,omitempty"`
+	Inputs           map[string]interface{} `json:"inputs"`
 	ResponseMode     string                 `json:"response_mode"`
 	User             string                 `json:"user"`
 	ConversationID   string                 `json:"conversation_id,omitempty"`
@@ -21,12 +21,14 @@ type FileInfo struct {
 
 // ChatCompletionResponse 阻塞模式的响应
 type ChatCompletionResponse struct {
-	MessageID      string                 `json:"message_id"`
-	ConversationID string                 `json:"conversation_id"`
-	Mode           string                 `json:"mode"`
-	Answer         string                 `json:"answer"`
-	Metadata       map[string]interface{} `json:"metadata"`
-	CreatedAt      int64                  `json:"created_at"`
+	MessageID          string                   `json:"message_id"`
+	ConversationID     string                   `json:"conversation_id"`
+	Mode               string                   `json:"mode"`
+	Answer             string                   `json:"answer"`
+	Metadata           map[string]interface{}   `json:"metadata"`
+	Usage              map[string]interface{}   `json:"usage"`
+	RetrieverResources []map[string]interface{} `json:"retriever_resources"`
+	CreatedAt          int64                    `json:"created_at"`
 }
 
 // ChunkChatCompletionResponse 流式模式的响应块

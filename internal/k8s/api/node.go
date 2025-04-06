@@ -78,7 +78,7 @@ func (k *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
 		return
 	}
 
-	id, err := utils.GetQueryID(ctx)
+	id, err := utils.GetQueryParam[int](ctx, "id")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return

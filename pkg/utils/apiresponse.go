@@ -346,17 +346,32 @@ func GetParamID(ctx *gin.Context) (int, error) {
 	return paramID, nil
 }
 
-// GetQueryID 从query参数中解析 ID，并进行类型转换
-func GetQueryID(ctx *gin.Context) (int, error) {
-	id := ctx.Query("id")
-	if id == "" {
-		return 0, fmt.Errorf("缺少 'id' 参数")
+// GetQueryParam 从查询参数中解析指定类型的值
+func GetQueryParam[T any](ctx *gin.Context, key string) (T, error) {
+	var result T
+	value := ctx.Query(key)
+	if value == "" {
+		return result, fmt.Errorf("缺少 '%s' 参数", key)
 	}
-	paramID, err := strconv.Atoi(id)
-	if err != nil {
-		return 0, fmt.Errorf("'id' 非整数")
+
+	switch any(result).(type) {
+	case int:
+		intVal, err := strconv.Atoi(value)
+		if err != nil {
+			return result, fmt.Errorf("'%s' 非整数", key)
+		}
+		return any(intVal).(T), nil
+	case string:
+		return any(value).(T), nil
+	case float64:
+		floatVal, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return result, fmt.Errorf("'%s' 非浮点数", key)
+		}
+		return any(floatVal).(T), nil
+	default:
+		return result, fmt.Errorf("不支持的类型")
 	}
-	return paramID, nil
 }
 
 // GetParamName 从查询参数中解析 Name，并进行类型转换

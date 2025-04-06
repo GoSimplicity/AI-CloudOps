@@ -69,6 +69,9 @@ func (a *aiClient) SendChatMessage(ctx context.Context, message model.ChatMessag
 	url := fmt.Sprintf("%s/chat-messages", a.BaseURL)
 	a.l.Info("发送聊天消息到", zap.String("url", url))
 
+	// 确保使用非流式模式
+	message.ResponseMode = "blocking"
+
 	jsonData, err := json.Marshal(message)
 	if err != nil {
 		a.l.Error("序列化消息失败", zap.Error(err))
@@ -100,13 +103,42 @@ func (a *aiClient) SendChatMessage(ctx context.Context, message model.ChatMessag
 		return nil, errors.New(errMsg)
 	}
 
-	var result model.ChatCompletionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		a.l.Error("解析响应失败", zap.Error(err))
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		a.l.Error("读取响应失败", zap.Error(err))
 		return nil, err
 	}
 
-	return &result, nil
+	var apiResponse struct {
+		MessageID          string                   `json:"message_id"`
+		ConversationID     string                   `json:"conversation_id"`
+		Mode               string                   `json:"mode"`
+		Answer             string                   `json:"answer"`
+		Metadata           map[string]interface{}   `json:"metadata"`
+		Usage              map[string]interface{}   `json:"usage"`
+		RetrieverResources []map[string]interface{} `json:"retriever_resources"`
+		CreatedAt          int64                    `json:"created_at"`
+	}
+
+	err = json.Unmarshal(bodyBytes, &apiResponse)
+	if err != nil {
+		a.l.Error("解析响应失败", zap.Error(err), zap.String("body", string(bodyBytes)))
+		return nil, err
+	}
+
+	// 构建完整响应
+	result := &model.ChatCompletionResponse{
+		MessageID:          apiResponse.MessageID,
+		ConversationID:     apiResponse.ConversationID,
+		Mode:               apiResponse.Mode,
+		Answer:             apiResponse.Answer,
+		Metadata:           apiResponse.Metadata,
+		Usage:              apiResponse.Usage,
+		RetrieverResources: apiResponse.RetrieverResources,
+		CreatedAt:          apiResponse.CreatedAt,
+	}
+
+	return result, nil
 }
 
 // SendStreamingChatMessage 发送流式聊天消息

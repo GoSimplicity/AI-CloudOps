@@ -29,6 +29,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1" // 添加导入以支持 CronJob 相关功能
 	core "k8s.io/api/core/v1"
 )
 
@@ -49,15 +50,6 @@ type K8sCluster struct {
 	ApiServerAddr        string     `json:"api_server_addr,omitempty" gorm:"comment:API Server 地址"`                  // API Server 地址
 	KubeConfigContent    string     `json:"kube_config_content,omitempty" gorm:"type:text;comment:kubeConfig 内容"`    // kubeConfig 内容
 	ActionTimeoutSeconds int        `json:"action_timeout_seconds,omitempty" gorm:"comment:操作超时时间（秒）"`               // 操作超时时间（秒）
-
-	// 前端使用字段
-	CreateUserName    string            `json:"create_username,omitempty" gorm:"-"`      // 创建者用户名
-	LastProbeSuccess  bool              `json:"last_probe_success,omitempty" gorm:"-"`   // 最近一次探测是否成功
-	LastProbeErrorMsg string            `json:"last_probe_error_msg,omitempty" gorm:"-"` // 最近一次探测错误信息
-	LabelsFront       string            `json:"labels_front,omitempty" gorm:"-"`         // 前端显示的标签字符串
-	AnnotationsFront  string            `json:"annotations_front,omitempty" gorm:"-"`    // 前端显示的注解字符串
-	LabelsMap         map[string]string `json:"labels_map,omitempty" gorm:"-"`           // 标签键值对映射
-	AnnotationsMap    map[string]string `json:"annotations_map,omitempty" gorm:"-"`      // 注解键值对映射
 }
 
 // K8sNode Kubernetes 节点
@@ -96,27 +88,42 @@ type K8sNode struct {
 	UpdatedAt         time.Time            `json:"updated_at" gorm:"comment:更新时间"`                                        // 更新时间
 }
 
+// K8sInstance Kubernetes 实例的配置
+type K8sInstance struct {
+	Model
+	Name          string `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:实例名称"` // 实例名称
+	UserID        int    `json:"user_id" gorm:"comment:创建者用户ID"`                                     // 创建者用户ID
+	Cluster       string `json:"cluster,omitempty" gorm:"size:100;comment:所属集群"`                     // 所属集群
+	ContainerCore `json:"containerCore"`
+	Image         string `json:"image,omitempty" gorm:"comment:镜像"`                           // 镜像
+	Replicas      int    `json:"replicas,omitempty" gorm:"comment:副本数量"`                      // 副本数量
+	K8sAppID      int    `json:"k8s_appId" gorm:"comment:关联的 Kubernetes 应用ID"`                // 关联的 Kubernetes 应用ID
+	Namespace     string `json:"namespace,omitempty" gorm:"comment:Kubernetes-Instance 命名空间"` // 命名空间
+}
+
+// K8sProject Kubernetes 项目的配置
+type K8sProject struct {
+	Model
+	Name       string   `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:项目名称"`          // 项目名称
+	NameZh     string   `json:"name_zh" binding:"required,min=1,max=500" gorm:"size:100;comment:项目中文名称"`     // 项目中文名称
+	Cluster    string   `json:"cluster" gorm:"size:100;comment:所属集群名称"`                                      // 所属集群名称
+	TreeNodeID int      `json:"tree_node_id" gorm:"comment:关联的树节点ID"`                                        // 关联的树节点ID
+	UserID     int      `json:"user_id" gorm:"comment:创建者用户ID"`                                              // 创建者用户ID
+	K8sApps    []K8sApp `json:"k8s_apps,omitempty" gorm:"foreignKey:K8sProjectID;comment:关联的 Kubernetes 应用"` // 关联的 Kubernetes 应用
+}
+
 // K8sApp 面向运维的 Kubernetes 应用
 type K8sApp struct {
 	Model
-	Name         string        `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:应用名称"` // 应用名称
-	K8sProjectID int           `json:"k8s_project_id" gorm:"comment:关联的 Kubernetes 项目ID"`                  // 关联的 Kubernetes 项目ID
-	TreeNodeID   int           `json:"tree_node_id" gorm:"comment:关联的树节点ID"`                               // 关联的树节点ID
-	UserID       int           `json:"user_id" gorm:"comment:创建者用户ID"`                                     // 创建者用户ID
-	Cluster      string        `json:"cluster" gorm:"size:100;comment:所属集群名称"`                             // 所属集群名称
-	K8sInstances []K8sInstance `json:"k8s_instances" gorm:"foreignKey:K8sAppID;comment:关联的 Kubernetes 实例"` // 关联的 Kubernetes 实例
-	ServiceType  string        `json:"service_type,omitempty" gorm:"comment:服务类型"`                         // 服务类型
-	Namespace    string        `json:"namespace,omitempty" gorm:"comment:Kubernetes 命名空间"`                 // Kubernetes 命名空间
-
+	Name          string                 `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:应用名称"` // 应用名称
+	K8sProjectID  int                    `json:"k8s_project_id" gorm:"comment:关联的 Kubernetes 项目ID"`                  // 关联的 Kubernetes 项目ID
+	TreeNodeID    int                    `json:"tree_node_id" gorm:"comment:关联的树节点ID"`                               // 关联的树节点ID
+	UserID        int                    `json:"user_id" gorm:"comment:创建者用户ID"`                                     // 创建者用户ID
+	Cluster       string                 `json:"cluster" gorm:"size:100;comment:所属集群名称"`                             // 所属集群名称
+	K8sInstances  []K8sInstance          `json:"k8s_instances" gorm:"foreignKey:K8sAppID;comment:关联的 Kubernetes 实例"` // 关联的 Kubernetes 实例
+	ServiceType   string                 `json:"service_type,omitempty" gorm:"comment:服务类型"`                         // 服务类型
+	Namespace     string                 `json:"namespace,omitempty" gorm:"comment:Kubernetes 命名空间"`                 // Kubernetes 命名空间
 	ContainerCore `json:"containerCore"` // 容器核心配置
-
-	// 前端使用字段
-	TreeNodeObj    *TreeNode   `json:"tree_node_obj,omitempty" gorm:"-"`    // 树节点对象
-	ClusterObj     *K8sCluster `json:"cluster_obj,omitempty" gorm:"-"`      // 集群对象
-	ProjectObj     *K8sProject `json:"project_obj,omitempty" gorm:"-"`      // 项目对象
-	CreateUserName string      `json:"create_username,omitempty" gorm:"-"`  // 创建者用户名
-	NodePath       string      `json:"node_path,omitempty" gorm:"-"`        // 节点路径
-	K8sProjectName string      `json:"k8s_project_name,omitempty" gorm:"-"` // 项目名称
 }
 
 // K8sCronjob Kubernetes 定时任务的配置
@@ -132,59 +139,6 @@ type K8sCronjob struct {
 	Image        string     `json:"image,omitempty" gorm:"comment:镜像"`                                    // 镜像
 	Commands     StringList `json:"commands,omitempty" gorm:"comment:启动命令组"`                              // 启动命令组
 	Args         StringList `json:"args,omitempty" gorm:"comment:启动参数，空格分隔"`                              // 启动参数
-
-	// 前端使用字段
-	CommandsFront       []KeyValueItem `json:"commands_front,omitempty" gorm:"-"`         // 前端显示的命令
-	ArgsFront           []KeyValueItem `json:"args_front,omitempty" gorm:"-"`             // 前端显示的参数
-	LastScheduleTime    string         `json:"last_schedule_time,omitempty" gorm:"-"`     // 最近一次调度时间
-	LastSchedulePodName string         `json:"last_schedule_pod_name,omitempty" gorm:"-"` // 最近一次调度的 Pod 名称
-	CreateUserName      string         `json:"create_username,omitempty" gorm:"-"`        // 创建者用户名
-	NodePath            string         `json:"node_path,omitempty" gorm:"-"`              // 节点路径
-	Key                 string         `json:"key" gorm:"-"`                              // 前端表格使用的Key
-	TreeNodeObj         *TreeNode      `json:"tree_node_obj,omitempty" gorm:"-"`          // 树节点对象
-	ClusterObj          *K8sCluster    `json:"cluster_obj,omitempty" gorm:"-"`            // 集群对象
-	ProjectObj          *K8sProject    `json:"project_obj,omitempty" gorm:"-"`            // 项目对象
-	K8sProjectName      string         `json:"k8s_project_name,omitempty" gorm:"-"`       // 项目名称
-}
-
-// K8sInstance Kubernetes 实例的配置
-type K8sInstance struct {
-	Model
-	Name          string                 `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:实例名称"` // 实例名称
-	UserID        int                    `json:"user_id" gorm:"comment:创建者用户ID"`                                     // 创建者用户ID
-	Cluster       string                 `json:"cluster,omitempty" gorm:"size:100;comment:所属集群"`                     // 所属集群
-	ContainerCore `json:"containerCore"` // 容器核心配置
-	Image         string                 `json:"image,omitempty" gorm:"comment:镜像"`                           // 镜像
-	Replicas      int                    `json:"replicas,omitempty" gorm:"comment:副本数量"`                      // 副本数量
-	K8sAppID      int                    `json:"k8s_appId" gorm:"comment:关联的 Kubernetes 应用ID"`                // 关联的 Kubernetes 应用ID
-	Namespace     string                 `json:"namespace,omitempty" gorm:"comment:Kubernetes-Instance 命名空间"` // 命名空间
-
-	// 前端使用字段
-	K8sAppName     string `json:"k8s_app_name,omitempty" gorm:"-"`    // 应用名称
-	CreateUserName string `json:"create_username,omitempty" gorm:"-"` // 创建者用户名
-	NodePath       string `json:"node_path,omitempty" gorm:"-"`       // 节点路径
-	Key            string `json:"key" gorm:"-"`                       // 前端表格使用的Key
-
-	K8sAppObj   *K8sApp     `json:"k8s_app_obj,omitempty" gorm:"-"`  // 应用对象
-	ClusterObj  *K8sCluster `json:"cluster_obj,omitempty" gorm:"-"`  // 集群对象
-	ReadyStatus string      `json:"ready_status,omitempty" gorm:"-"` // 就绪状态
-}
-
-// K8sProject Kubernetes 项目的配置
-type K8sProject struct {
-	Model
-	Name       string   `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:项目名称"`          // 项目名称
-	NameZh     string   `json:"name_zh" binding:"required,min=1,max=500" gorm:"size:100;comment:项目中文名称"`     // 项目中文名称
-	Cluster    string   `json:"cluster" gorm:"size:100;comment:所属集群名称"`                                      // 所属集群名称
-	TreeNodeID int      `json:"tree_node_id" gorm:"comment:关联的树节点ID"`                                        // 关联的树节点ID
-	UserID     int      `json:"user_id" gorm:"comment:创建者用户ID"`                                              // 创建者用户ID
-	K8sApps    []K8sApp `json:"k8s_apps,omitempty" gorm:"foreignKey:K8sProjectID;comment:关联的 Kubernetes 应用"` // 关联的 Kubernetes 应用
-
-	// 前端使用字段
-	CreateUserName string    `json:"create_username,omitempty" gorm:"-"` // 创建者用户名
-	NodePath       string    `json:"node_path,omitempty" gorm:"-"`       // 节点路径
-	Key            string    `json:"key" gorm:"-"`                       // 前端表格使用的Key
-	TreeNodeObj    *TreeNode `json:"tree_node_obj,omitempty" gorm:"-"`   // 树节点对象
 }
 
 // K8sYamlTask Kubernetes YAML 任务的配置
@@ -197,13 +151,6 @@ type K8sYamlTask struct {
 	Variables   StringList `json:"variables,omitempty" gorm:"type:text;comment:yaml 变量，格式 k=v,k=v"` // YAML 变量
 	Status      string     `json:"status,omitempty" gorm:"comment:当前状态"`                            // 当前状态
 	ApplyResult string     `json:"apply_result,omitempty" gorm:"comment:apply 后的返回数据"`              // apply 结果
-
-	// 前端使用字段
-	Key            string `json:"key" gorm:"-"`                       // 前端表格使用的Key
-	VariablesFront string `json:"variables_front,omitempty" gorm:"-"` // 前端显示的变量
-	YamlString     string `json:"yaml_string,omitempty" gorm:"-"`     // YAML 字符串
-	TemplateName   string `json:"template_name,omitempty" gorm:"-"`   // 模板名称
-	CreateUserName string `json:"create_username,omitempty" gorm:"-"` // 创建者用户名
 }
 
 // K8sYamlTemplate Kubernetes YAML 模板的配置
@@ -213,9 +160,6 @@ type K8sYamlTemplate struct {
 	UserID    int    `json:"user_id" gorm:"comment:创建者用户ID"`                                    // 创建者用户ID
 	Content   string `json:"content,omitempty" gorm:"type:text;comment:yaml 模板内容"`              // YAML 模板内容
 	ClusterId int    `json:"cluster_id,omitempty" gorm:"comment:对应集群id"`
-	// 前端使用字段
-	Key            string `json:"key" gorm:"-"`                       // 前端表格使用的Key
-	CreateUserName string `json:"create_username,omitempty" gorm:"-"` // 创建者用户名
 }
 
 // K8sPod 单个 Pod 的模型
@@ -242,14 +186,6 @@ type ContainerCore struct {
 	MemoryLimit   string     `json:"memory_limit,omitempty" gorm:"comment:内存限制量"`               // 内存限制量
 	VolumeJson    string     `json:"volume_json,omitempty" gorm:"type:text;comment:卷和挂载配置JSON"` // 卷和挂载配置JSON
 	PortJson      string     `json:"port_json,omitempty" gorm:"type:text;comment:容器和服务端口配置"`    // 容器和服务端口配置
-
-	// 前端使用字段
-	EnvsFront       []KeyValueItem     `json:"envs_front,omitempty" gorm:"-"`        // 前端显示的环境变量
-	LabelsFront     []KeyValueItem     `json:"labels_front,omitempty" gorm:"-"`      // 前端显示的标签
-	CommandsFront   []KeyValueItem     `json:"commands_front,omitempty" gorm:"-"`    // 前端显示的命令
-	ArgsFront       []KeyValueItem     `json:"args_front,omitempty" gorm:"-"`        // 前端显示的参数
-	VolumeJsonFront []K8sOneVolume     `json:"volume_json_front,omitempty" gorm:"-"` // 前端显示的卷配置
-	PortJsonFront   []core.ServicePort `json:"port_json_front,omitempty" gorm:"-"`   // 前端显示的端口配置
 }
 
 // K8sOneVolume 单个卷的配置
@@ -348,16 +284,6 @@ type TaintK8sNodesRequest struct {
 	*K8sClusterNodesRequest
 	ModType   string `json:"mod_type"`             // 操作类型，值为 "add" 或 "del"
 	TaintYaml string `json:"taint_yaml,omitempty"` // 可选的 Taint YAML 字符串，用于验证或其他用途
-}
-
-// 创建K8sInstance请求
-type K8sInstanceRequest struct {
-	ClusterId       int                `json:"cluster_id" binding:"required"` // 集群id，必填
-	Namespace       string             `json:"namespace"`                     // 命名空间，必填
-	ServiceNames    []string           `json:"service_names"`                 // Service 名称，可选
-	ServiceYaml     *core.Service      `json:"service_yaml"`                  // Service 对象, 可选
-	DeploymentNames []string           `json:"deployment_names"`              // Deployment 名称，可选
-	DeploymentYaml  *appsv1.Deployment `json:"deployment_yaml"`               // Deployment 对象, 可选
 }
 
 // OneEvent 单个事件的模型
@@ -484,10 +410,175 @@ type ContainerInfo struct {
 	Ports []int  `json:"ports"`
 }
 
-// K8sInstance 结构体，存储实例的信息，包括 Deployment 和相关容器
+// K8sInstanceByApp 结构体，存储实例的信息，包括 Deployment 和相关容器
 type K8sInstanceByApp struct {
 	Name       string          `json:"name"`
 	Status     string          `json:"status"`
 	Replicas   int32           `json:"replicas"`
 	Containers []ContainerInfo `json:"containers"`
+}
+
+// CreateK8sInstanceRequest 创建 Kubernetes 实例的请求
+type CreateK8sInstanceRequest struct {
+	Name          string                 `json:"name" binding:"required,min=1,max=200"` // 实例名称
+	UserID        int                    `json:"user_id" binding:"required"`            // 创建者用户ID
+	Cluster       string                 `json:"cluster,omitempty"`                     // 所属集群
+	ContainerCore `json:"containerCore"` // 容器配置
+	Image         string                 `json:"image,omitempty"`     // 镜像
+	Replicas      int                    `json:"replicas,omitempty"`  // 副本数量
+	K8sAppID      int                    `json:"k8s_appId"`           // 关联的 Kubernetes 应用ID
+	Namespace     string                 `json:"namespace,omitempty"` // 命名空间
+}
+
+// UpdateK8sInstanceRequest 更新 Kubernetes 实例的请求
+type UpdateK8sInstanceRequest struct {
+	ID            int64  `json:"id" binding:"required"`
+	Cluster       string `json:"cluster" binding:"required"`
+	ContainerCore `json:"containerCore"`
+	Image         string `json:"image,omitempty"`
+	Replicas      int    `json:"replicas,omitempty"`
+	K8sAppID      int    `json:"k8s_appId"`
+	Namespace     string `json:"namespace,omitempty"`
+}
+
+// BatchDeleteK8sInstanceRequest 批量删除 Kubernetes 实例的请求
+type BatchDeleteK8sInstanceRequest struct {
+	InstanceIDs []int64 `json:"instance_ids" binding:"required"`
+}
+
+// BatchRestartK8sInstanceRequest 批量重启 Kubernetes 实例的请求
+type BatchRestartK8sInstanceRequest struct {
+	InstanceIDs []int64 `json:"instance_ids" binding:"required"`
+}
+
+// GetK8sInstanceListRequest 获取 Kubernetes 实例列表的请求
+type GetK8sInstanceListRequest struct {
+	ClusterName string `json:"cluster_name,omitempty"` // 集群名称过滤
+	Namespace   string `json:"namespace,omitempty"`    // 命名空间过滤
+	AppID       int64  `json:"app_id,omitempty"`       // 应用ID过滤
+	Name        string `json:"name,omitempty"`         // 名称过滤（模糊查询）
+	Page        int    `json:"page,omitempty"`         // 分页页码
+	PageSize    int    `json:"page_size,omitempty"`    // 分页大小
+}
+
+// CreateK8sAppRequest 创建 Kubernetes 应用的请求
+type CreateK8sAppRequest struct {
+	Name          string                 `json:"name" binding:"required,min=1,max=200"` // 应用名称
+	K8sProjectID  int64                  `json:"k8s_project_id" binding:"required"`     // 关联的 Kubernetes 项目ID
+	UserID        int                    `json:"user_id" binding:"required"`            // 创建者用户ID
+	Cluster       string                 `json:"cluster" binding:"required"`            // 所属集群名称
+	ServiceType   string                 `json:"service_type,omitempty"`                // 服务类型
+	Namespace     string                 `json:"namespace" binding:"required"`          // Kubernetes 命名空间
+	ContainerCore `json:"containerCore"` // 容器核心配置
+}
+
+// UpdateK8sAppRequest 更新 Kubernetes 应用的请求
+type UpdateK8sAppRequest struct {
+	ID            int64                  `json:"id" binding:"required"`
+	Name          string                 `json:"name" binding:"required,min=1,max=200"` // 应用名称
+	K8sProjectID  int64                  `json:"k8s_project_id" binding:"required"`     // 关联的 Kubernetes 项目ID
+	Cluster       string                 `json:"cluster" binding:"required"`            // 所属集群名称
+	ServiceType   string                 `json:"service_type,omitempty"`                // 服务类型
+	Namespace     string                 `json:"namespace" binding:"required"`          // Kubernetes 命名空间
+	ContainerCore `json:"containerCore"` // 容器核心配置
+}
+
+// GetK8sAppListRequest 获取 Kubernetes 应用列表的请求
+type GetK8sAppListRequest struct {
+	ProjectID   int64  `json:"project_id,omitempty"`   // 项目ID过滤
+	ClusterName string `json:"cluster_name,omitempty"` // 集群名称过滤
+	Namespace   string `json:"namespace,omitempty"`    // 命名空间过滤
+	Name        string `json:"name,omitempty"`         // 名称过滤（模糊查询）
+	Page        int    `json:"page,omitempty"`         // 分页页码
+	PageSize    int    `json:"page_size,omitempty"`    // 分页大小
+}
+
+// CreateK8sProjectRequest 创建 Kubernetes 项目的请求
+type CreateK8sProjectRequest struct {
+	Name       string `json:"name" binding:"required,min=1,max=200"`    // 项目名称
+	NameZh     string `json:"name_zh" binding:"required,min=1,max=500"` // 项目中文名称
+	Cluster    string `json:"cluster" binding:"required"`               // 所属集群名称
+	TreeNodeID int    `json:"tree_node_id,omitempty"`                   // 关联的树节点ID（可选）
+	UserID     int    `json:"user_id" binding:"required"`               // 创建者用户ID
+}
+
+// UpdateK8sProjectRequest 更新 Kubernetes 项目的请求
+type UpdateK8sProjectRequest struct {
+	ID         int64  `json:"id" binding:"required"`
+	Name       string `json:"name" binding:"required,min=1,max=200"`    // 项目名称
+	NameZh     string `json:"name_zh" binding:"required,min=1,max=500"` // 项目中文名称
+	Cluster    string `json:"cluster" binding:"required"`               // 所属集群名称
+	TreeNodeID int    `json:"tree_node_id,omitempty"`                   // 关联的树节点ID（可选）
+}
+
+// GetK8sProjectListRequest 获取 Kubernetes 项目列表的请求
+type GetK8sProjectListRequest struct {
+	ClusterName string `json:"cluster_name,omitempty"` // 集群名称过滤
+	Name        string `json:"name,omitempty"`         // 名称过滤（模糊查询）
+	TreeNodeID  int    `json:"tree_node_id,omitempty"` // 树节点ID过滤
+	Page        int    `json:"page,omitempty"`         // 分页页码
+	PageSize    int    `json:"page_size,omitempty"`    // 分页大小
+}
+
+// CreateK8sCronjobRequest 创建 CronJob 的请求
+type CreateK8sCronjobRequest struct {
+	Name         string     `json:"name" binding:"required,min=1,max=200"` // 定时任务名称
+	Cluster      string     `json:"cluster" binding:"required"`            // 所属集群
+	TreeNodeID   int        `json:"tree_node_id,omitempty"`                // 关联的树节点ID（可选）
+	UserID       int        `json:"user_id" binding:"required"`            // 创建者用户ID
+	K8sProjectID int        `json:"k8s_project_id" binding:"required"`     // 关联的 Kubernetes 项目ID
+	Namespace    string     `json:"namespace" binding:"required"`          // 命名空间
+	Schedule     string     `json:"schedule" binding:"required"`           // 调度表达式
+	Image        string     `json:"image" binding:"required"`              // 镜像
+	Commands     StringList `json:"commands,omitempty"`                    // 启动命令组
+	Args         StringList `json:"args,omitempty"`                        // 启动参数
+}
+
+// UpdateK8sCronjobRequest 更新 CronJob 的请求
+type UpdateK8sCronjobRequest struct {
+	ID           int64      `json:"id" binding:"required"`
+	Name         string     `json:"name" binding:"required,min=1,max=200"` // 定时任务名称
+	Cluster      string     `json:"cluster" binding:"required"`            // 所属集群
+	TreeNodeID   int        `json:"tree_node_id,omitempty"`                // 关联的树节点ID（可选）
+	K8sProjectID int        `json:"k8s_project_id" binding:"required"`     // 关联的 Kubernetes 项目ID
+	Namespace    string     `json:"namespace" binding:"required"`          // 命名空间
+	Schedule     string     `json:"schedule" binding:"required"`           // 调度表达式
+	Image        string     `json:"image" binding:"required"`              // 镜像
+	Commands     StringList `json:"commands,omitempty"`                    // 启动命令组
+	Args         StringList `json:"args,omitempty"`                        // 启动参数
+}
+
+// GetK8sCronjobListRequest 获取 CronJob 列表的请求
+type GetK8sCronjobListRequest struct {
+	ProjectID   int64  `json:"project_id,omitempty"`   // 项目ID过滤
+	ClusterName string `json:"cluster_name,omitempty"` // 集群名称过滤
+	Namespace   string `json:"namespace,omitempty"`    // 命名空间过滤
+	Name        string `json:"name,omitempty"`         // 名称过滤（模糊查询）
+	Page        int    `json:"page,omitempty"`         // 分页页码
+	PageSize    int    `json:"page_size,omitempty"`    // 分页大小
+}
+
+// BatchDeleteK8sCronjobRequest 批量删除 CronJob 的请求
+type BatchDeleteK8sCronjobRequest struct {
+	CronjobIDs []int64 `json:"cronjob_ids" binding:"required"`
+}
+
+// K8sCronjobRequest CronJob 相关请求结构
+type K8sCronjobRequest struct {
+	ClusterId    int              `json:"cluster_id" binding:"required"` // 集群id，必填
+	Namespace    string           `json:"namespace" binding:"required"`  // 命名空间，必填
+	CronjobNames []string         `json:"cronjob_names,omitempty"`       // CronJob 名称，可选
+	CronjobYaml  *batchv1.CronJob `json:"cronjob_yaml,omitempty"`        // CronJob 对象, 可选
+}
+
+// K8sPodListResponse Pod 列表响应
+type K8sPodListResponse struct {
+	Pods       []K8sPod `json:"pods"`        // Pod 列表
+	TotalCount int      `json:"total_count"` // 总数
+}
+
+// K8sCronjobPodResponse CronJob Pod 响应
+type K8sCronjobPodResponse struct {
+	Pod     *K8sPod `json:"pod"`      // Pod 信息
+	LogData string  `json:"log_data"` // 日志数据
 }
