@@ -21,17 +21,14 @@ type AppService interface {
 type appService struct {
 	dao         admin.ClusterDAO
 	appdao      user.AppDAO
-	instancedao user.InstanceDAO
-
 	client client.K8sClient
 	l      *zap.Logger
 }
 
-func NewAppService(dao admin.ClusterDAO, appdao user.AppDAO, instancedao user.InstanceDAO, client client.K8sClient, l *zap.Logger) AppService {
+func NewAppService(dao admin.ClusterDAO, appdao user.AppDAO, client client.K8sClient, l *zap.Logger) AppService {
 	return &appService{
 		dao:         dao,
 		appdao:      appdao,
-		instancedao: instancedao,
 		client:      client,
 		l:           l,
 	}

@@ -48,13 +48,11 @@ type projectService struct {
 	dao         admin.ClusterDAO
 	projectdao  user.ProjectDAO
 	appdao      user.AppDAO
-	instancedao user.InstanceDAO
 }
 
-func NewProjectService(dao admin.ClusterDAO, projectdao user.ProjectDAO, appdao user.AppDAO, instancedao user.InstanceDAO, client client.K8sClient, l *zap.Logger) ProjectService {
+func NewProjectService(dao admin.ClusterDAO, projectdao user.ProjectDAO, appdao user.AppDAO, client client.K8sClient, l *zap.Logger) ProjectService {
 	return &projectService{
 		dao:         dao,
-		instancedao: instancedao,
 		appdao:      appdao,
 		projectdao:  projectdao,
 		client:      client,

@@ -28,290 +28,336 @@ package user
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
+	batchv1 "k8s.io/api/batch/v1"
 )
 
-// InstanceService 定义 Kubernetes 实例服务接口
 type InstanceService interface {
-	// 实例管理相关方法
-	CreateInstance(ctx context.Context, req *model.CreateK8sInstanceRequest) error
-	UpdateInstance(ctx context.Context, req *model.UpdateK8sInstanceRequest) error
-	BatchDeleteInstance(ctx context.Context, instanceIDs []int64) error
-	BatchRestartInstance(ctx context.Context, instanceIDs []int64) error
-	GetInstanceByApp(ctx context.Context, appID int64) ([]model.K8sInstance, error)
-	GetInstance(ctx context.Context, instanceID int64) (model.K8sInstance, error)
-	GetInstanceList(ctx context.Context, req *model.GetK8sInstanceListRequest) ([]model.K8sInstance, error)
+	CreateInstance(ctx context.Context, req *model.K8sInstance) (*model.CreateK8sInstanceResp, error)
+	UpdateInstance(ctx context.Context, req *model.K8sInstance) (*model.UpdateK8sInstanceResp, error)
+	BatchDeleteInstance(ctx context.Context, req *model.BatchDeleteK8sInstanceReq) (*model.BatchDeleteK8sInstanceResp, error)
+	BatchRestartInstance(ctx context.Context, req *model.BatchRestartK8sInstanceReq) (*model.BatchRestartK8sInstanceResp, error)
+	GetInstanceByApp(ctx context.Context, req *model.GetK8sInstanceByAppReq) (*model.GetK8sInstanceByAppResp, error)
+	GetInstance(ctx context.Context, req *model.GetK8sInstanceReq) (*model.GetK8sInstanceResp, error)
+	GetInstanceList(ctx context.Context, req *model.GetK8sInstanceListReq) (*model.GetK8sInstanceListResp, error)
 }
 
-// instanceService 实现 InstanceService 接口
 type instanceService struct {
 	client      client.K8sClient
 	logger      *zap.Logger
 	clusterDAO  admin.ClusterDAO
-	instanceDAO user.InstanceDAO
 }
 
-// NewInstanceService 创建新的实例服务
-func NewInstanceService(clusterDAO admin.ClusterDAO, instanceDAO user.InstanceDAO, client client.K8sClient, logger *zap.Logger) InstanceService {
+
+
+func NewInstanceService(clusterDAO admin.ClusterDAO, client client.K8sClient, logger *zap.Logger) InstanceService {
 	return &instanceService{
 		clusterDAO:  clusterDAO,
 		client:      client,
 		logger:      logger,
-		instanceDAO: instanceDAO,
 	}
 }
 
-// CreateInstance 创建 Kubernetes 实例
-func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateK8sInstanceRequest) error {
-	// 1. 先入数据库
-	instance := &model.K8sInstance{}
-
-	err := s.instanceDAO.CreateInstanceOne(ctx, instance)
-	if err != nil {
-		return fmt.Errorf("failed to create instance: %w", err)
+// BatchDeleteInstance 批量删除实例
+func (i *instanceService) BatchDeleteInstance(ctx context.Context, req *model.BatchDeleteK8sInstanceReq) (*model.BatchDeleteK8sInstanceResp, error) {
+	deletedCount := 0
+	
+	for _, instance := range req.Instances {
+		var err error
+		
+		// 根据每个实例的type删除对应的资源
+		switch instance.Type {
+		case "Deployment":
+			err = i.client.DeleteDeployment(ctx, instance.Namespace, instance.Name, instance.ClusterID)
+		case "StatefulSet":
+			err = i.client.DeleteStatefulSet(ctx, instance.Namespace, instance.Name, instance.ClusterID)
+		case "DaemonSet":
+			err = i.client.DeleteDaemonSet(ctx, instance.Namespace, instance.Name, instance.ClusterID)
+		case "Job":
+			err = i.client.DeleteJob(ctx, instance.Namespace, instance.Name, instance.ClusterID)
+		case "CronJob":
+			err = i.client.DeleteCronJob(ctx, instance.Namespace, instance.Name, instance.ClusterID)
+		default:
+			i.logger.Error("不支持的资源类型", zap.String("type", instance.Type), zap.String("name", instance.Name))
+			continue
+		}
+		
+		if err != nil {
+			i.logger.Error("删除K8s资源失败", 
+				zap.Error(err), 
+				zap.String("type", instance.Type),
+				zap.String("namespace", instance.Namespace),
+				zap.String("name", instance.Name),
+				zap.Int("clusterId", instance.ClusterID))
+			continue
+		}
+		deletedCount++
 	}
-
-	// 2. 将instance转换成deployment和service内容
-	deployment, service, err := pkg.ParseK8sInstance(ctx, instance)
-	if err != nil {
-		return fmt.Errorf("failed to parse instance: %w", err)
-	}
-
-	// 3. 通过clustername获取集群
-	k8sCluster, err := s.clusterDAO.GetClusterByName(ctx, instance.Cluster)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster: %w", err)
-	}
-
-	// 4. 调用创建函数
-	deploymentRequest := model.K8sDeploymentRequest{
-		ClusterId:       k8sCluster.ID,
-		Namespace:       instance.Namespace,
-		DeploymentNames: []string{deployment.Name},
-		DeploymentYaml:  &deployment,
-	}
-
-	// 5. 创建 Deployment
-	err = pkg.CreateDeployment(ctx, &deploymentRequest, s.client, s.logger)
-	if err != nil {
-		return fmt.Errorf("failed to create deployment: %w", err)
-	}
-
-	// 6. 创建 Service
-	serviceRequest := model.K8sServiceRequest{
-		ClusterId:    k8sCluster.ID,
-		Namespace:    instance.Namespace,
-		ServiceNames: []string{service.Name},
-		ServiceYaml:  &service,
-	}
-
-	err = pkg.CreateService(ctx, &serviceRequest, s.client, s.logger)
-	if err != nil {
-		return fmt.Errorf("failed to create service: %w", err)
-	}
-
-	return nil
+	
+	return &model.BatchDeleteK8sInstanceResp{
+		DeletedCount: deletedCount,
+	}, nil
 }
 
-// UpdateInstance 更新 Kubernetes 实例
-func (s *instanceService) UpdateInstance(ctx context.Context, req *model.UpdateK8sInstanceRequest) error {
-	// 更新实例信息
-	instance := model.K8sInstance{
-		Cluster:   req.Cluster,
-		Image:     req.Image,
-		Replicas:  req.Replicas,
-		Namespace: req.Namespace,
-		K8sAppID:  req.K8sAppID,
-		ContainerCore: model.ContainerCore{
-			CpuLimit:      req.ContainerCore.CpuLimit,
-			MemoryLimit:   req.ContainerCore.MemoryLimit,
-			VolumeJson:    req.ContainerCore.VolumeJson,
-			PortJson:      req.ContainerCore.PortJson,
-			Envs:          req.ContainerCore.Envs,
-			Labels:        req.ContainerCore.Labels,
-			Commands:      req.ContainerCore.Commands,
-			Args:          req.ContainerCore.Args,
-			CpuRequest:    req.ContainerCore.CpuRequest,
-			MemoryRequest: req.ContainerCore.MemoryRequest,
-		},
+// BatchRestartInstance 批量重启实例
+func (i *instanceService) BatchRestartInstance(ctx context.Context, req *model.BatchRestartK8sInstanceReq) (*model.BatchRestartK8sInstanceResp, error) {
+	restartedCount := 0
+
+	for _, instance := range req.Instances {
+		var err error
+		
+		// 根据每个实例的type重启对应的资源
+		switch instance.Type {
+		case "Deployment":
+			err = i.client.RestartDeployment(ctx, instance.Namespace, instance.Name, instance.ClusterID)
+		case "StatefulSet":
+			err = i.client.RestartStatefulSet(ctx, instance.Namespace, instance.Name, instance.ClusterID)
+		case "DaemonSet":
+			err = i.client.RestartDaemonSet(ctx, instance.Namespace, instance.Name, instance.ClusterID)
+		case "Job":
+			err = i.client.RestartJob(ctx, instance.Namespace, instance.Name, instance.ClusterID)
+		case "CronJob":
+			err = i.client.RestartCronJob(ctx, instance.Namespace, instance.Name, instance.ClusterID)
+		default:
+			i.logger.Error("不支持的资源类型", zap.String("type", instance.Type), zap.String("name", instance.Name))
+			continue
+		}
+		
+		if err != nil {
+			i.logger.Error("重启K8s资源失败", 
+				zap.Error(err),
+				zap.String("type", instance.Type),
+				zap.String("namespace", instance.Namespace),
+				zap.String("name", instance.Name),
+				zap.Int("clusterId", instance.ClusterID))
+			continue
+		}
+		restartedCount++
 	}
 
-	err := s.instanceDAO.UpdateInstanceById(ctx, int64(req.ID), instance)
-	if err != nil {
-		return fmt.Errorf("failed to update instance: %w", err)
-	}
-
-	// 将实例转换成 Deployment 和 Service
-	deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
-	if err != nil {
-		return fmt.Errorf("failed to parse k8s instance: %w", err)
-	}
-
-	// 4. 获取集群信息
-	k8sCluster, err := s.clusterDAO.GetClusterByName(ctx, instance.Cluster)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster: %w", err)
-	}
-
-	// 5. 更新 Deployment
-	deploymentRequest := model.K8sDeploymentRequest{
-		ClusterId:       k8sCluster.ID,
-		Namespace:       instance.Namespace,
-		DeploymentNames: []string{deployment.Name},
-		DeploymentYaml:  &deployment,
-	}
-
-	if err := pkg.UpdateDeployment(ctx, &deploymentRequest, s.client, s.logger); err != nil {
-		return fmt.Errorf("failed to update deployment: %w", err)
-	}
-
-	// 6. 更新 Service
-	serviceRequest := model.K8sServiceRequest{
-		ClusterId:    k8sCluster.ID,
-		Namespace:    instance.Namespace,
-		ServiceNames: []string{service.Name},
-		ServiceYaml:  &service,
-	}
-
-	if err := pkg.UpdateService(ctx, &serviceRequest, s.client, s.logger); err != nil {
-		return fmt.Errorf("failed to update service: %w", err)
-	}
-
-	return nil
+	return &model.BatchRestartK8sInstanceResp{
+		RestartedCount: restartedCount,
+	}, nil
 }
 
-// BatchDeleteInstance 批量删除 Kubernetes 实例
-func (s *instanceService) BatchDeleteInstance(ctx context.Context, instanceIDs []int64) error {
-	// 1. 从 DB 中取出内容
-	instances, err := s.instanceDAO.GetInstanceByIds(ctx, instanceIDs)
+// CreateInstance 创建实例
+func (i *instanceService) CreateInstance(ctx context.Context, req *model.K8sInstance) (*model.CreateK8sInstanceResp, error) {
+	var err error
+
+	switch req.Type {
+	case "Deployment":
+		// 构建Deployment创建配置
+		deployment := utils.BuildDeploymentConfig(req)
+		err = i.client.CreateDeployment(ctx, req.Namespace, req.ClusterID, deployment)
+	case "StatefulSet":
+		// 构建StatefulSet创建配置
+		statefulset := utils.BuildStatefulSetConfig(req)
+		err = i.client.CreateStatefulSet(ctx, req.Namespace, req.ClusterID, statefulset)
+	case "DaemonSet":
+		// 构建DaemonSet创建配置
+		daemonset := utils.BuildDaemonSetConfig(req)
+		err = i.client.CreateDaemonSet(ctx, req.Namespace, req.ClusterID, daemonset)
+	case "Job":
+		// 构建Job创建配置
+		job := utils.BuildJobConfig(req)
+		err = i.client.CreateJob(ctx, req.Namespace, req.ClusterID, job)
+	case "CronJob":
+		// 构建CronJob创建配置
+		cronjob := utils.BuildCronJobConfig(req)
+		err = i.client.CreateCronJob(ctx, req.Namespace, req.ClusterID, cronjob)
+	default:
+		return nil, fmt.Errorf("不支持的资源类型: %s", req.Type)
+	}
 	if err != nil {
-		return fmt.Errorf("failed to get instances: %w", err)
+		return nil, err
 	}
 
-	// 2. 从数据库中删除实例记录
-	err = s.instanceDAO.DeleteInstanceByIds(ctx, instanceIDs)
+	return &model.CreateK8sInstanceResp{}, nil
+}
+
+// GetInstance 获取实例
+func (i *instanceService) GetInstance(ctx context.Context, req *model.GetK8sInstanceReq) (*model.GetK8sInstanceResp, error) {
+	var err error
+	var instance interface{}
+	switch req.Type {
+	case "Deployment":
+		instance, err = i.client.GetDeployment(ctx, req.Namespace, req.Name, req.ClusterID)
+	case "StatefulSet":
+		instance, err = i.client.GetStatefulSet(ctx, req.Namespace, req.Name, req.ClusterID)
+	case "DaemonSet":
+		instance, err = i.client.GetDaemonSet(ctx, req.Namespace, req.Name, req.ClusterID)
+	case "Job":
+		instance, err = i.client.GetJob(ctx, req.Namespace, req.Name, req.ClusterID)
+	case "CronJob":
+		instance, err = i.client.GetCronJob(ctx, req.Namespace, req.Name, req.ClusterID)
+	}
 	if err != nil {
-		return fmt.Errorf("failed to delete instances from database: %w", err)
+		return nil, err
 	}
 
-	// 3. 从 Kubernetes 集群中删除实例
+	return &model.GetK8sInstanceResp{
+		Item: instance,
+	}, nil
+}
+
+// GetInstanceByApp 根据应用获取实例
+func (i *instanceService) GetInstanceByApp(ctx context.Context, req *model.GetK8sInstanceByAppReq) (*model.GetK8sInstanceByAppResp, error) {
+	// 根据注解中的app_id获取实例
+	instances, err := i.client.GetDeploymentList(ctx, req.Namespace, req.ClusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	var instanceList []interface{}
 	for _, instance := range instances {
-		// 将 instance 转换成 deployment 和 service
-		deployment, service, err := pkg.ParseK8sInstance(ctx, &instance)
-		if err != nil {
-			return fmt.Errorf("failed to convert to deployment and service: %w", err)
-		}
-
-		// 获取集群信息
-		k8sCluster, err := s.clusterDAO.GetClusterByName(ctx, instance.Cluster)
-		if err != nil {
-			return fmt.Errorf("failed to get cluster: %w", err)
-		}
-
-		// 删除 Deployment
-		deploymentRequest := model.K8sDeploymentRequest{
-			ClusterId:       k8sCluster.ID,
-			Namespace:       instance.Namespace,
-			DeploymentNames: []string{deployment.Name},
-			DeploymentYaml:  &deployment,
-		}
-
-		err = pkg.DeleteDeployment(ctx, &deploymentRequest, s.client, s.logger)
-		if err != nil {
-			s.logger.Error("Failed to delete deployment", zap.Error(err))
-		}
-
-		// 删除 Service
-		serviceRequest := model.K8sServiceRequest{
-			ClusterId:    k8sCluster.ID,
-			Namespace:    instance.Namespace,
-			ServiceNames: []string{service.Name},
-			ServiceYaml:  &service,
-		}
-
-		err = pkg.DeleteService(ctx, &serviceRequest, s.client, s.logger)
-		if err != nil {
-			s.logger.Error("Failed to delete service", zap.Error(err))
+		if instance.Annotations["app_id"] == strconv.Itoa(req.AppID) {
+			instanceList = append(instanceList, instance)
 		}
 	}
 
-	return nil
+	return &model.GetK8sInstanceByAppResp{
+		Items: instanceList,
+	}, nil
 }
 
-// BatchRestartInstance 批量重启 Kubernetes 实例
-func (s *instanceService) BatchRestartInstance(ctx context.Context, instanceIDs []int64) error {
-	// 1. 从 DB 中取出内容
-	instances, err := s.instanceDAO.GetInstanceByIds(ctx, instanceIDs)
-	if err != nil {
-		return fmt.Errorf("failed to get instances: %w", err)
-	}
+// GetInstanceList 获取实例列表
+func (i *instanceService) GetInstanceList(ctx context.Context, req *model.GetK8sInstanceListReq) (*model.GetK8sInstanceListResp, error) {
+	var result []model.K8sInstance
 
-	var deploymentRequests []model.K8sDeploymentRequest
-
-	for _, instance := range instances {
-		// 将 instance 转换成 deployment
-		deployment, _, err := pkg.ParseK8sInstance(ctx, &instance)
+	switch req.Type {
+	case "Deployment":
+		deployments, err := i.client.GetDeploymentList(ctx, req.Namespace, req.ClusterID)
 		if err != nil {
-			return fmt.Errorf("failed to convert to deployment: %w", err)
+			return nil, err
 		}
-
-		// 获取集群信息
-		k8sCluster, err := s.clusterDAO.GetClusterByName(ctx, instance.Cluster)
+		for _, deployment := range deployments {
+			result = append(result, model.K8sInstance{
+				Name:      deployment.Name,
+				Namespace: deployment.Namespace,
+				Type:      "Deployment",
+				Status:    string(deployment.Status.Conditions[0].Type),
+			})
+		}
+	case "StatefulSet":
+		statefulSets, err := i.client.GetStatefulSetList(ctx, req.Namespace, req.ClusterID)
 		if err != nil {
-			return fmt.Errorf("failed to get cluster: %w", err)
+			return nil, err
 		}
-
-		deploymentRequest := model.K8sDeploymentRequest{
-			ClusterId:       k8sCluster.ID,
-			Namespace:       instance.Namespace,
-			DeploymentNames: []string{deployment.Name},
-			DeploymentYaml:  &deployment,
+		for _, statefulSet := range statefulSets {
+			result = append(result, model.K8sInstance{
+				Name:      statefulSet.Name,
+				Namespace: statefulSet.Namespace,
+				Type:      "StatefulSet",
+				Status:    string(statefulSet.Status.Conditions[0].Type),
+			})
 		}
-
-		deploymentRequests = append(deploymentRequests, deploymentRequest)
+	case "DaemonSet":
+		daemonSets, err := i.client.GetDaemonSetList(ctx, req.Namespace, req.ClusterID)
+		if err != nil {
+			return nil, err
+		}
+		for _, daemonSet := range daemonSets {
+			result = append(result, model.K8sInstance{
+				Name:      daemonSet.Name,
+				Namespace: daemonSet.Namespace,
+				Type:      "DaemonSet",
+				Status:    string(daemonSet.Status.Conditions[0].Type),
+			})
+		}
+	case "Job":
+		jobs, err := i.client.GetJobList(ctx, req.Namespace, req.ClusterID)
+		if err != nil {
+			return nil, err
+		}
+		for _, job := range jobs {
+			result = append(result, model.K8sInstance{
+				Name:      job.Name,
+				Namespace: job.Namespace,
+				Type:      "Job",
+				Status:    getJobStatus(job),
+			})
+		}
+	case "CronJob":
+		cronJobs, err := i.client.GetCronJobList(ctx, req.Namespace, req.ClusterID)
+		if err != nil {
+			return nil, err
+		}
+		for _, cronJob := range cronJobs {
+			result = append(result, model.K8sInstance{
+				Name:      cronJob.Name,
+				Namespace: cronJob.Namespace,
+				Type:      "CronJob",
+				Status:    getCronJobStatus(cronJob),
+			})
+		}
+	default:
+		return nil, fmt.Errorf("不支持的资源类型: %s", req.Type)
 	}
 
-	err = pkg.BatchRestartK8sInstance(ctx, deploymentRequests, s.client, s.logger)
-	if err != nil {
-		return fmt.Errorf("failed to restart instances: %w", err)
-	}
-
-	return nil
+	return &model.GetK8sInstanceListResp{
+		Items: result,
+	}, nil
 }
 
-// GetInstanceByApp 根据应用获取 Kubernetes 实例列表
-func (s *instanceService) GetInstanceByApp(ctx context.Context, appID int64) ([]model.K8sInstance, error) {
-	instances, err := s.instanceDAO.GetInstanceByApp(ctx, appID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get instances by app: %w", err)
-	}
+// UpdateInstance 更新实例
+func (i *instanceService) UpdateInstance(ctx context.Context, req *model.K8sInstance) (*model.UpdateK8sInstanceResp, error) {
+	var err error
 
-	return instances, nil
+	switch req.Type {
+	case "Deployment":
+		// 构建Deployment更新配置
+		deployment := utils.BuildDeploymentConfig(req)
+		err = i.client.UpdateDeployment(ctx, req.Namespace, req.ClusterID, deployment)
+	case "StatefulSet":
+		statefulset := utils.BuildStatefulSetConfig(req)
+		err = i.client.UpdateStatefulSet(ctx, req.Namespace, req.ClusterID, statefulset)
+	case "DaemonSet":
+		daemonset := utils.BuildDaemonSetConfig(req)
+		err = i.client.UpdateDaemonSet(ctx, req.Namespace, req.ClusterID, daemonset)
+	case "Job":
+		job := utils.BuildJobConfig(req)
+		err = i.client.UpdateJob(ctx, req.Namespace, req.ClusterID, job)
+	case "CronJob":
+		cronjob := utils.BuildCronJobConfig(req)
+		err = i.client.UpdateCronJob(ctx, req.Namespace, req.ClusterID, cronjob)
+	default:
+		return nil, fmt.Errorf("不支持的资源类型: %s", req.Type)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &model.UpdateK8sInstanceResp{}, nil
 }
 
-// GetInstance 获取单个 Kubernetes 实例
-func (s *instanceService) GetInstance(ctx context.Context, instanceID int64) (model.K8sInstance, error) {
-	instance, err := s.instanceDAO.GetInstanceById(ctx, instanceID)
-	if err != nil {
-		return model.K8sInstance{}, fmt.Errorf("failed to get instance: %w", err)
-	}
 
-	return instance, nil
+// getJobStatus 获取Job状态
+func getJobStatus(job batchv1.Job) string {
+	if job.Status.Succeeded > 0 {
+		return "Succeeded"
+	}
+	if job.Status.Failed > 0 {
+		return "Failed"
+	}
+	if job.Status.Active > 0 {
+		return "Active"
+	}
+	return "Unknown"
 }
 
-// GetInstanceList 获取 Kubernetes 实例列表
-func (s *instanceService) GetInstanceList(ctx context.Context, req *model.GetK8sInstanceListRequest) ([]model.K8sInstance, error) {
-	// TODO: 实现基于请求参数的筛选逻辑
-	allInstances, err := s.instanceDAO.GetInstanceAll(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get instances: %w", err)
+// getCronJobStatus 获取CronJob状态
+func getCronJobStatus(cronJob batchv1.CronJob) string {
+	if len(cronJob.Status.Active) > 0 {
+		return "Active"
 	}
-
-	return allInstances, nil
+	if cronJob.Spec.Suspend != nil && *cronJob.Spec.Suspend {
+		return "Suspended"
+	}
+	return "Scheduled"
 }
+

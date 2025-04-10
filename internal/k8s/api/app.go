@@ -122,33 +122,33 @@ func (h *K8sAppHandler) GetClusterNamespacesUnique(ctx *gin.Context) {
 
 // CreateK8sInstance 创建 Kubernetes 实例
 func (h *K8sAppHandler) CreateK8sInstance(ctx *gin.Context) {
-	var req model.CreateK8sInstanceRequest
+	var req model.K8sInstance
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.instanceService.CreateInstance(ctx, &req)
+		return h.instanceService.CreateInstance(ctx, &req)
 	})
 }
 
 // UpdateK8sInstance 更新 Kubernetes 实例
 func (h *K8sAppHandler) UpdateK8sInstance(ctx *gin.Context) {
-	var req model.UpdateK8sInstanceRequest
+	var req model.K8sInstance
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.instanceService.UpdateInstance(ctx, &req)
+		return h.instanceService.UpdateInstance(ctx, &req)
 	})
 }
 
 // BatchDeleteK8sInstance 批量删除 Kubernetes 实例
 func (h *K8sAppHandler) BatchDeleteK8sInstance(ctx *gin.Context) {
-	var req model.BatchDeleteK8sInstanceRequest
+	var req model.BatchDeleteK8sInstanceReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.instanceService.BatchDeleteInstance(ctx, req.InstanceIDs)
+		return h.instanceService.BatchDeleteInstance(ctx, &req)
 	})
 }
 
 // BatchRestartK8sInstance 批量重启 Kubernetes 实例
 func (h *K8sAppHandler) BatchRestartK8sInstance(ctx *gin.Context) {
-	var req model.BatchRestartK8sInstanceRequest
+	var req model.BatchRestartK8sInstanceReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.instanceService.BatchRestartInstance(ctx, req.InstanceIDs)
+		return h.instanceService.BatchRestartInstance(ctx, &req)
 	})
 }
 
@@ -159,17 +159,36 @@ func (h *K8sAppHandler) GetK8sInstanceByApp(ctx *gin.Context) {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	instances, err := h.instanceService.GetInstanceByApp(ctx, appID)
+
+	clusterID, err := utils.GetQueryParam[int64](ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetQueryParam[string](ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req := &model.GetK8sInstanceByAppReq{
+		AppID:     int(appID),
+		ClusterID: int(clusterID),
+		Namespace: namespace,
+	}
+	
+	resp, err := h.instanceService.GetInstanceByApp(ctx, req)
 	if err != nil {
 		utils.ErrorWithDetails(ctx, err.Error(), "获取实例失败")
 		return
 	}
-	utils.SuccessWithData(ctx, instances)
+	utils.SuccessWithData(ctx, resp.Items)
 }
 
 // GetK8sInstanceList 获取 Kubernetes 实例列表
 func (h *K8sAppHandler) GetK8sInstanceList(ctx *gin.Context) {
-	var req model.GetK8sInstanceListRequest
+	var req model.GetK8sInstanceListReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.instanceService.GetInstanceList(ctx, &req)
 	})
@@ -177,17 +196,43 @@ func (h *K8sAppHandler) GetK8sInstanceList(ctx *gin.Context) {
 
 // GetK8sInstance 获取单个 Kubernetes 实例
 func (h *K8sAppHandler) GetK8sInstance(ctx *gin.Context) {
-	id, err := utils.GetQueryParam[int64](ctx, "id")
+	name, err := utils.GetQueryParam[string](ctx, "name")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	instance, err := h.instanceService.GetInstance(ctx, id)
+
+	namespace, err := utils.GetQueryParam[string](ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	clusterID, err := utils.GetQueryParam[int64](ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	t, err := utils.GetQueryParam[string](ctx, "type")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req := &model.GetK8sInstanceReq{
+		Name:      name,
+		Namespace: namespace,
+		ClusterID: int(clusterID),
+		Type:      t,
+	}
+
+	resp, err := h.instanceService.GetInstance(ctx, req)
 	if err != nil {
 		utils.ErrorWithDetails(ctx, err.Error(), "获取实例失败")
 		return
 	}
-	utils.SuccessWithData(ctx, instance)
+	utils.SuccessWithData(ctx, resp.Item)
 }
 
 // GetK8sAppList 获取 Kubernetes 应用列表

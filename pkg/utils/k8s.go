@@ -28,8 +28,6 @@ package utils
 import (
 	"context"
 	"fmt"
-	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"log"
 	"strings"
 	"time"
@@ -42,12 +40,13 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
-	//core "k8s.io/api/core/v1"
+
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
@@ -1162,497 +1161,577 @@ func GetDeploymentsByAppName(ctx context.Context, clusterId int, appName string,
 
 	return instances, nil
 }
-func GetK8sInstanceOne(ctx context.Context, clusterId int, client client.K8sClient, logger *zap.Logger) ([]model.K8sInstance, error) {
-	// 获取 Kubernetes 客户端
-	kubeClient, err := GetKubeClient(clusterId, client, logger)
-	if err != nil {
-		logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
+
+
+/*
+	下面是k8s_app部分的工具函数
+*/
+
+// 构建Deployment创建配置
+func BuildDeploymentConfig(req *model.K8sInstance) *appsv1.Deployment {
+	replicas := int32(req.Replicas)
+	if replicas <= 0 {
+		replicas = 1 // 默认至少1个副本
 	}
 
-	// 假设默认 namespace 是 "default"
-	deploymentsClient := kubeClient.AppsV1().Deployments("default")
-
-	// 获取所有 Deployment 信息
-	deployments, err := deploymentsClient.List(ctx, metav1.ListOptions{})
-	if err != nil {
-		logger.Error("获取 Deployments 列表失败", zap.Error(err))
-		return nil, fmt.Errorf("failed to list Deployments: %w", err)
-	}
-
-	// 将 Deployment 列表转换为 K8sInstance 列表
-	var k8sInstances []model.K8sInstance
-	for _, deployment := range deployments.Items {
-		k8sInstance := model.K8sInstance{
-			Name:      deployment.Name,
-			Namespace: deployment.Namespace,
-			Image:     deployment.Spec.Template.Spec.Containers[0].Image, // 假设只使用第一个容器的镜像
-			Replicas:  int(*deployment.Spec.Replicas),
-		}
-		k8sInstances = append(k8sInstances, k8sInstance)
-	}
-
-	// 返回填充好的 K8sInstance 列表
-	return k8sInstances, nil
-}
-
-// 解析 JSON 并转换成 []corev1.ServicePort
-func ParsePorts(portJson string) ([]corev1.ServicePort, error) {
-	// 解析 YAML 数据到 map
-	var rawData struct {
-		Ports []struct {
-			ContainerPort int32  `yaml:"containerPort"`
-			Protocol      string `yaml:"protocol"`
-		} `yaml:"ports"`
-	}
-
-	if err := yaml.Unmarshal([]byte(portJson), &rawData); err != nil {
-		return nil, fmt.Errorf("error unmarshalling YAML: %v", err)
-	}
-
-	// 转换到 corev1.ServicePort
-	var servicePorts []corev1.ServicePort
-	for _, p := range rawData.Ports {
-		servicePorts = append(servicePorts, corev1.ServicePort{
-			Port:     p.ContainerPort,
-			Protocol: corev1.Protocol(p.Protocol),
-		})
-	}
-
-	return servicePorts, nil
-}
-func ParseK8sInstance(ctx context.Context, instance *model.K8sInstance) (appsv1.Deployment, corev1.Service, error) {
-
-	// 解析端口
-	portJson, err2 := ParsePorts(instance.PortJson)
-	if len(portJson) == 0 {
-		return appsv1.Deployment{}, corev1.Service{}, fmt.Errorf("instance containerCore portJson is nil")
-	}
-	if err2 != nil {
-		return appsv1.Deployment{}, corev1.Service{}, fmt.Errorf("instance ContainerCore PortJson parse fail")
-	}
-	// 构建deployment
-	deployment := appsv1.Deployment{}
-	deployment.APIVersion = "apps/v1"
-	deployment.Kind = "Deployment"
-	deployment.ObjectMeta.Name = instance.Name
-	deployment.ObjectMeta.Namespace = instance.Namespace
-
-	replicas := int32(instance.Replicas) // 将 int 转换为 int32
-	deployment.Spec.Replicas = &replicas // 使用 int32 指针
-
-	deployment.Spec.Selector = &metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			"app": instance.Name,
+	// 创建Deployment对象
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   req.Namespace,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: req.Labels,
+			},
+			Template: buildPodTemplateSpec(req),
+			Strategy: buildDeploymentStrategy(req.Strategy),
 		},
 	}
 
-	deployment.Spec.Template.ObjectMeta.Labels = map[string]string{
-		"app": instance.Name,
+	return deployment
+}
+
+// 构建StatefulSet创建配置
+func BuildStatefulSetConfig(req *model.K8sInstance) *appsv1.StatefulSet {
+	replicas := int32(req.Replicas)
+	if replicas <= 0 {
+		replicas = 1 // 默认至少1个副本
 	}
 
-	deployment.Spec.Template.Spec.Containers = []corev1.Container{
-		{
-			Name:  instance.Name,
-			Image: instance.Image,
-			Ports: []corev1.ContainerPort{
-				{
-					ContainerPort: portJson[0].Port,
-					Protocol:      corev1.Protocol(portJson[0].Protocol),
+	// 创建StatefulSet对象
+	statefulSet := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   req.Namespace,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: req.Labels,
+			},
+			Template:             buildPodTemplateSpec(req),
+			ServiceName:          req.ServiceName,
+			PodManagementPolicy:  appsv1.ParallelPodManagement, // 默认并行管理
+			UpdateStrategy:       buildStatefulSetUpdateStrategy(req.Strategy),
+			VolumeClaimTemplates: buildVolumeClaimTemplates(req.Volumes), // 构建PVC模板
+		},
+	}
+
+	return statefulSet
+}
+
+// 构建DaemonSet创建配置
+func BuildDaemonSetConfig(req *model.K8sInstance) *appsv1.DaemonSet {
+	// 创建DaemonSet对象
+	daemonSet := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   req.Namespace,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: req.Labels,
+			},
+			Template:             buildPodTemplateSpec(req),
+			UpdateStrategy:       buildDaemonSetUpdateStrategy(req.Strategy),
+			MinReadySeconds:      0, // 默认值
+			RevisionHistoryLimit: int32Ptr(10), // 默认保留10个历史版本
+		},
+	}
+
+	return daemonSet
+}
+
+// 构建Job创建配置
+func BuildJobConfig(req *model.K8sInstance) *batchv1.Job {
+	// 创建Job对象
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   req.Namespace,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Spec: batchv1.JobSpec{
+			Template:              buildPodTemplateSpec(req),
+			BackoffLimit:          int32Ptr(6), // 默认重试6次
+			TTLSecondsAfterFinished: int32Ptr(3600), // 作业完成后1小时删除
+			Parallelism:           int32Ptr(1), // 默认并行度1
+			Completions:           int32Ptr(1), // 默认完成1次
+			ActiveDeadlineSeconds: int64Ptr(3600 * 24), // 默认最长运行时间24小时
+		},
+	}
+
+	return job
+}
+
+// 构建CronJob创建配置
+func BuildCronJobConfig(req *model.K8sInstance) *batchv1.CronJob {
+	// 创建CronJob对象
+	cronJob := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   req.Namespace,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Spec: batchv1.CronJobSpec{
+			Schedule:                   "0 * * * *", // 默认每小时执行一次，后续可以通过额外的字段指定
+			ConcurrencyPolicy:          batchv1.ForbidConcurrent, // 默认禁止并发执行
+			SuccessfulJobsHistoryLimit: int32Ptr(3), // 保留3个成功的历史记录
+			FailedJobsHistoryLimit:     int32Ptr(1), // 保留1个失败的历史记录
+			StartingDeadlineSeconds:    int64Ptr(60), // 启动截止期限60秒
+			JobTemplate: batchv1.JobTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      req.Labels,
+					Annotations: req.Annotations,
+				},
+				Spec: batchv1.JobSpec{
+					Template:    buildPodTemplateSpec(req),
+					BackoffLimit: int32Ptr(3), // 默认重试3次
 				},
 			},
 		},
 	}
 
-	// 构建service
-	service := corev1.Service{}
-	service.APIVersion = "v1"
-	service.Kind = "Service"
-	service.ObjectMeta.Name = instance.Name
-	service.ObjectMeta.Namespace = instance.Namespace
-	service.Spec.Selector = map[string]string{"app": instance.Name}
-	service.Spec.Ports = []corev1.ServicePort{
-		{
-			Port:       portJson[0].Port,
-			Protocol:   corev1.Protocol(portJson[0].Protocol),
-			TargetPort: intstr.FromInt(int(portJson[0].Port)),
-		},
-	}
-	service.Spec.Type = corev1.ServiceTypeNodePort // Note:这里硬编码了下，由于传入参数的问题
-
-	return deployment, service, nil
+	return cronJob
 }
 
-// 解析K8SApp请求的代码
-func ParseK8sApp(ctx context.Context, app *model.K8sApp) ([]appsv1.Deployment, []corev1.Service, error) {
-	if len(app.K8sInstances) == 0 {
-		return nil, nil, fmt.Errorf("no instances provided")
+// 构建Pod模板配置
+func buildPodTemplateSpec(req *model.K8sInstance) corev1.PodTemplateSpec {
+	// 构建Pod模板
+	podTemplate := corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Spec: corev1.PodSpec{
+			Containers:    []corev1.Container{buildContainer(req)},
+			NodeSelector:  req.NodeSelector,
+			Affinity:      buildAffinity(req.Affinity),
+			Tolerations:   buildTolerations(req.Tolerations),
+			RestartPolicy: corev1.RestartPolicyAlways, // 默认始终重启策略
+			Volumes:       buildVolumes(req.Volumes),
+		},
 	}
-	var deployments []appsv1.Deployment
-	var services []corev1.Service
-	for _, instance := range app.K8sInstances {
-		portJson, err2 := ParsePorts(instance.ContainerCore.PortJson)
-		if portJson == nil {
-			return nil, nil, fmt.Errorf("instance containerCore portJson is nil")
+
+	return podTemplate
+}
+
+// 构建容器配置
+func buildContainer(req *model.K8sInstance) corev1.Container {
+	// 解析CPU和内存资源限制及请求
+	resources := corev1.ResourceRequirements{}
+	
+	if req.ContainerCore.CPU != "" || req.ContainerCore.Memory != "" {
+		resources.Limits = corev1.ResourceList{}
+		if req.ContainerCore.CPU != "" {
+			resources.Limits[corev1.ResourceCPU] = resource.MustParse(req.ContainerCore.CPU)
 		}
-		if err2 != nil {
-			return nil, nil, fmt.Errorf("instance ContainerCore PortJson parse fail")
+		if req.ContainerCore.Memory != "" {
+			resources.Limits[corev1.ResourceMemory] = resource.MustParse(req.ContainerCore.Memory)
 		}
-		// step1:构建deployment
-		// 方式1构建deployment
-		//deploy := map[string]interface{}{
-		//	"apiVersion": "apps/v1",
-		//	"kind":       "Deployment",
-		//	"metadata": map[string]interface{}{
-		//		"name":      app.Name,
-		//		"namespace": app.Namespace,
-		//	},
-		//	"spec": map[string]interface{}{
-		//		"replicas": instance.Replicas,
-		//		"selector": map[string]interface{}{
-		//			"matchLabels": map[string]interface{}{
-		//				"app": app.Name,
-		//			},
-		//		},
-		//		"template": map[string]interface{}{
-		//			"metadata": map[string]interface{}{
-		//				"labels": map[string]interface{}{
-		//					"app": app.Name,
-		//				},
-		//			},
-		//			"spec": map[string]interface{}{
-		//				"containers": []map[string]interface{}{
-		//					{
-		//						"name":  instance.Name,
-		//						"image": instance.Image,
-		//						"ports": []map[string]interface{}{
-		//							{
-		//								"containerPort": portJson[0].Port,
-		//								"protocol":      portJson[0].Protocol,
-		//							},
-		//						},
-		//					},
-		//				},
-		//			},
-		//		},
-		//	},
-		//}
-		//
-		//deployBytes, err := json.Marshal(deploy) // 将 map 转换为 *appsv1.Deployment
-		//if err != nil {
-		//	log.Fatalf("Error marshaling deploy: %v", err)
-		//}
-		//
-		//var deployment appsv1.Deployment
-		//err = json.Unmarshal(deployBytes, &deployment)
-		//if err != nil {
-		//	log.Fatalf("Error unmarshaling deploy: %v", err)
-		//}
-		//
-		//deployments = append(deployments, deployment) // 将转换后的 deployment 添加到 deployments 切片中
+	}
+	
+	if req.ContainerCore.CPURequest != "" || req.ContainerCore.MemRequest != "" {
+		resources.Requests = corev1.ResourceList{}
+		if req.ContainerCore.CPURequest != "" {
+			resources.Requests[corev1.ResourceCPU] = resource.MustParse(req.ContainerCore.CPURequest)
+		}
+		if req.ContainerCore.MemRequest != "" {
+			resources.Requests[corev1.ResourceMemory] = resource.MustParse(req.ContainerCore.MemRequest)
+		}
+	}
 
-		//方式2构建deployment
-		//replicas := int32(instance.Replicas) // 将 int 转换为 int32
-		//deployment := appsv1.Deployment{
-		//	TypeMeta: metav1.TypeMeta{
-		//		APIVersion: "apps/v1",
-		//		Kind:       "Deployment",
-		//	},
-		//	ObjectMeta: metav1.ObjectMeta{
-		//		Name:      app.Name,
-		//		Namespace: app.Namespace,
-		//	},
-		//	Spec: appsv1.DeploymentSpec{
-		//		Replicas: &replicas, // 注意：Replicas 是指针类型
-		//		Selector: &metav1.LabelSelector{
-		//			MatchLabels: map[string]string{
-		//				"app": app.Name,
-		//			},
-		//		},
-		//		Template: corev1.PodTemplateSpec{
-		//			ObjectMeta: metav1.ObjectMeta{
-		//				Labels: map[string]string{
-		//					"app": app.Name,
-		//				},
-		//			},
-		//			Spec: corev1.PodSpec{
-		//				Containers: []corev1.Container{
-		//					{
-		//						Name:  instance.Name,
-		//						Image: instance.Image,
-		//						Ports: []corev1.ContainerPort{
-		//							{
-		//								ContainerPort: portJson[0].Port,
-		//								Protocol:      corev1.Protocol(portJson[0].Protocol),
-		//							},
-		//						},
-		//					},
-		//				},
-		//			},
-		//		},
-		//	},
-		//}
-		//deployments = append(deployments, deployment)
+	// 构建环境变量
+	var envVars []corev1.EnvVar
+	for key, value := range req.ContainerCore.Envs {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  key,
+			Value: value,
+		})
+	}
 
-		// 方式3构建deployment
-		// 构建 Deployment
-		deployment := appsv1.Deployment{}
-		deployment.APIVersion = "apps/v1"
-		deployment.Kind = "Deployment"
-		deployment.ObjectMeta.Name = app.Name
-		deployment.ObjectMeta.Namespace = app.Namespace
+	// 构建容器
+	container := corev1.Container{
+		Name:            "app",
+		Image:           req.Image,
+		Command:         req.ContainerCore.Command,
+		Args:            req.ContainerCore.Args,
+		Env:             envVars,
+		Resources:       resources,
+		VolumeMounts:    buildVolumeMounts(req.ContainerCore.Volumes),
+		LivenessProbe:   buildProbe(req.LivenessProbe),
+		ReadinessProbe:  buildProbe(req.ReadinessProbe),
+		StartupProbe:    buildProbe(req.StartupProbe),
+		ImagePullPolicy: corev1.PullIfNotPresent, // 默认拉取策略
+	}
 
-		replicas := int32(instance.Replicas) // 将 int 转换为 int32
-		deployment.Spec.Replicas = &replicas // 使用 int32 指针
+	return container
+}
 
-		deployment.Spec.Selector = &metav1.LabelSelector{
-			MatchLabels: map[string]string{
-				"app": app.Name,
+// 构建探针配置
+func buildProbe(probe *model.Probe) *corev1.Probe {
+	if probe == nil {
+		return nil
+	}
+
+	k8sProbe := &corev1.Probe{
+		InitialDelaySeconds: int32(probe.InitialDelaySeconds),
+		TimeoutSeconds:      int32(probe.TimeoutSeconds),
+		PeriodSeconds:       int32(probe.PeriodSeconds),
+		SuccessThreshold:    int32(probe.SuccessThreshold),
+		FailureThreshold:    int32(probe.FailureThreshold),
+	}
+
+	// 根据探针类型设置具体的探测方式
+	switch probe.Type {
+	case "http":
+		k8sProbe.HTTPGet = &corev1.HTTPGetAction{
+			Path: probe.Path,
+			Port: intstr.FromInt(probe.Port),
+		}
+	case "tcp":
+		k8sProbe.TCPSocket = &corev1.TCPSocketAction{
+			Port: intstr.FromInt(probe.Port),
+		}
+	case "exec":
+		k8sProbe.Exec = &corev1.ExecAction{
+			Command: probe.Command,
+		}
+	}
+
+	return k8sProbe
+}
+
+// 构建亲和性配置
+func buildAffinity(affinity *model.Affinity) *corev1.Affinity {
+	if affinity == nil {
+		return nil
+	}
+
+	k8sAffinity := &corev1.Affinity{}
+
+	// 节点亲和性
+	if len(affinity.NodeAffinity) > 0 {
+		k8sAffinity.NodeAffinity = &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: buildNodeSelector(affinity.NodeAffinity),
+		}
+	}
+
+	// Pod亲和性
+	if len(affinity.PodAffinity) > 0 {
+		k8sAffinity.PodAffinity = &corev1.PodAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: buildPodAffinityTerms(affinity.PodAffinity),
+		}
+	}
+
+	// Pod反亲和性
+	if len(affinity.PodAntiAffinity) > 0 {
+		k8sAffinity.PodAntiAffinity = &corev1.PodAntiAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: buildPodAffinityTerms(affinity.PodAntiAffinity),
+		}
+	}
+
+	return k8sAffinity
+}
+
+// 构建节点选择器
+func buildNodeSelector(rules []model.AffinityRule) *corev1.NodeSelector {
+	// 简化的实现，实际中可能需要更复杂的逻辑
+	nodeSelectorTerms := []corev1.NodeSelectorTerm{}
+	
+	for _, rule := range rules {
+		// 根据AffinityRule构建表达式
+		var operator corev1.NodeSelectorOperator
+		switch rule.Operator {
+		case "In":
+			operator = corev1.NodeSelectorOpIn
+		case "NotIn":
+			operator = corev1.NodeSelectorOpNotIn
+		case "Exists":
+			operator = corev1.NodeSelectorOpExists
+		case "DoesNotExist":
+			operator = corev1.NodeSelectorOpDoesNotExist
+		case "Gt":
+			operator = corev1.NodeSelectorOpGt
+		case "Lt":
+			operator = corev1.NodeSelectorOpLt
+		default:
+			operator = corev1.NodeSelectorOpIn
+		}
+		
+		term := corev1.NodeSelectorTerm{
+			MatchExpressions: []corev1.NodeSelectorRequirement{
+				{
+					Key:      rule.Key,
+					Operator: operator,
+					Values:   rule.Values,
+				},
 			},
 		}
+		nodeSelectorTerms = append(nodeSelectorTerms, term)
+	}
+	
+	return &corev1.NodeSelector{
+		NodeSelectorTerms: nodeSelectorTerms,
+	}
+}
 
-		deployment.Spec.Template.ObjectMeta.Labels = map[string]string{
-			"app": app.Name,
+// 构建Pod亲和性条款
+func buildPodAffinityTerms(rules []model.AffinityRule) []corev1.PodAffinityTerm {
+	terms := []corev1.PodAffinityTerm{}
+	
+	for _, rule := range rules {
+		// 根据AffinityRule构建表达式
+		var operator metav1.LabelSelectorOperator
+		switch rule.Operator {
+		case "In":
+			operator = metav1.LabelSelectorOpIn
+		case "NotIn":
+			operator = metav1.LabelSelectorOpNotIn
+		case "Exists":
+			operator = metav1.LabelSelectorOpExists
+		case "DoesNotExist":
+			operator = metav1.LabelSelectorOpDoesNotExist
+		default:
+			operator = metav1.LabelSelectorOpIn 
 		}
-
-		deployment.Spec.Template.Spec.Containers = []corev1.Container{
-			{
-				Name:  instance.Name,
-				Image: instance.Image,
-				Ports: []corev1.ContainerPort{
+		
+		term := corev1.PodAffinityTerm{
+			LabelSelector: &metav1.LabelSelector{
+				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
-						ContainerPort: portJson[0].Port,
-						Protocol:      corev1.Protocol(portJson[0].Protocol),
+						Key:      rule.Key,
+						Operator: operator,
+						Values:   rule.Values,
 					},
 				},
 			},
 		}
-		deployments = append(deployments, deployment)
-		// step2:构建service
-		// 方式1构建service
-		//service := map[string]interface{}{
-		//	"apiVersion": "v1",
-		//	"kind":       "Service",
-		//	"metadata": map[string]interface{}{
-		//		"name":      app.Name,
-		//		"namespace": app.Namespace,
-		//	},
-		//	"spec": map[string]interface{}{
-		//		"selector": map[string]interface{}{
-		//			"app": app.Name,
-		//		},
-		//		"ports": []map[string]interface{}{
-		//			{
-		//				"port":       portJson[0].Port,
-		//				"protocol":   portJson[0].Protocol,
-		//				"targetPort": portJson[0].Port,
-		//			},
-		//		},
-		//		"type": app.ServiceType,
-		//	},
-		//}
-		//
-		//serviceBytes, err := json.Marshal(service) // 将 map 转换为 *core.Service
-		//if err != nil {
-		//	log.Fatalf("Error marshaling service: %v", err)
-		//}
-		//var svc corev1.Service
-		//err = json.Unmarshal(serviceBytes, &svc)
-		//if err != nil {
-		//	log.Fatalf("Error unmarshaling service: %v", err)
-		//}
-		//
-		//services = append(services, svc) // 将转换后的 service 添加到 services 切片中
+		terms = append(terms, term)
+	}
+	
+	return terms
+}
 
-		// 方式2构建service
-		service := corev1.Service{}
-		service.APIVersion = "v1"
-		service.Kind = "Service"
-		service.ObjectMeta.Name = app.Name
-		service.ObjectMeta.Namespace = app.Namespace
-		service.Spec.Selector = map[string]string{"app": app.Name}
-		service.Spec.Ports = []corev1.ServicePort{
-			{
-				Port:       portJson[0].Port,
-				Protocol:   corev1.Protocol(portJson[0].Protocol),
-				TargetPort: intstr.FromInt(int(portJson[0].Port)),
-			},
+// 构建容忍配置
+func buildTolerations(tolerations []model.Toleration) []corev1.Toleration {
+	if len(tolerations) == 0 {
+		return nil
+	}
+
+	k8sTolerations := make([]corev1.Toleration, 0, len(tolerations))
+	for _, t := range tolerations {
+		k8sToleration := corev1.Toleration{
+			Key:      t.Key,
+			Operator: corev1.TolerationOperator(t.Operator),
+			Value:    t.Value,
+			Effect:   corev1.TaintEffect(t.Effect),
 		}
-		service.Spec.Type = corev1.ServiceType(app.ServiceType)
-		services = append(services, service)
-
-	}
-	return deployments, services, nil
-}
-func ConvertCornJob(job model.K8sCronjob) (batchv1.CronJob, error) {
-	var cronJob batchv1.CronJob
-	cronJob.APIVersion = "batch/v1"
-	cronJob.Kind = "CronJob"
-	cronJob.ObjectMeta = metav1.ObjectMeta{
-		Name:      job.Name,
-		Namespace: job.Namespace,
-	}
-	cronJob.Spec.Schedule = job.Schedule
-	cronJob.Spec.JobTemplate = batchv1.JobTemplateSpec{}
-	cronJob.Spec.JobTemplate.Spec.Template = corev1.PodTemplateSpec{}
-	cronJob.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy = corev1.RestartPolicyOnFailure
-	cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers = []corev1.Container{
-		{
-			Name:    job.Name,
-			Image:   job.Image,
-			Command: job.Commands,
-			Args:    job.Args,
-		},
-	}
-	return cronJob, nil
-}
-func CreateCornJob(ctx context.Context, clusterId int, job model.K8sCronjob, client client.K8sClient, logger *zap.Logger) error {
-	cornJob, err := ConvertCornJob(job)
-	if err != nil {
-		return err
-	}
-	kubeClient, err := GetKubeClient(clusterId, client, logger)
-	if err != nil {
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
-	}
-	cronJobsClient := kubeClient.BatchV1().CronJobs(job.Namespace)
-	_, err = cronJobsClient.Create(ctx, &cornJob, metav1.CreateOptions{})
-	if err != nil {
-		logger.Error("Failed to create CronJob in Kubernetes", zap.Error(err))
-		return err
+		k8sTolerations = append(k8sTolerations, k8sToleration)
 	}
 
-	logger.Info("Successfully created CronJob", zap.String("name", job.Name), zap.String("namespace", job.Namespace))
-	return nil
-
-}
-func UpdateCronJob(ctx context.Context, clusterId int, job model.K8sCronjob, client client.K8sClient, logger *zap.Logger) error {
-	// Convert the job model to CronJob resource
-	cronJob, err := ConvertCornJob(job)
-	if err != nil {
-		return err
-	}
-
-	// Get the Kubernetes client for the specified cluster
-	kubeClient, err := GetKubeClient(clusterId, client, logger)
-	if err != nil {
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
-	}
-
-	// Get the CronJobs client for the specified namespace
-	cronJobsClient := kubeClient.BatchV1().CronJobs(job.Namespace)
-
-	// Try to update the CronJob resource in Kubernetes
-	updatedCronJob, err := cronJobsClient.Update(ctx, &cronJob, metav1.UpdateOptions{})
-	if err != nil {
-		logger.Error("Failed to update CronJob in Kubernetes", zap.Error(err))
-		return err
-	}
-
-	// Log successful update
-	logger.Info("Successfully updated CronJob", zap.String("name", job.Name), zap.String("namespace", job.Namespace), zap.String("name", updatedCronJob.Name))
-
-	return nil
-}
-func DeleteCronJob(ctx context.Context, clusterId int, job *model.K8sCronjob, client client.K8sClient, logger *zap.Logger) error {
-	// Get the Kubernetes client for the specified cluster
-	kubeClient, err := GetKubeClient(clusterId, client, logger)
-	if err != nil {
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
-	}
-	// Get the CronJobs client for the specified namespace
-	cronJobsClient := kubeClient.BatchV1().CronJobs(job.Namespace)
-	// Try to delete the CronJob resource in Kubernetes
-	err = cronJobsClient.Delete(ctx, job.Name, metav1.DeleteOptions{})
-	if err != nil {
-		logger.Error("Failed to delete CronJob in Kubernetes", zap.Error(err))
-	}
-	return nil
+	return k8sTolerations
 }
 
-func GetLastSuccessfulPod(ctx context.Context, clusterId int, job *model.K8sCronjob, client client.K8sClient, logger *zap.Logger) (*corev1.Pod, error) {
-	// 获取 K8s 客户端
-	kubeClient, err := GetKubeClient(clusterId, client, logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
+// 构建卷配置
+func buildVolumes(volumes []model.Volume) []corev1.Volume {
+	if len(volumes) == 0 {
+		return nil
 	}
 
-	// 获取 Job 资源
-	jobsClient := kubeClient.BatchV1().Jobs(job.Namespace)
-	labelSelector := fmt.Sprintf("job-name=%s", job.Name)
-
-	// 查询匹配的 Job 列表
-	jobList, err := jobsClient.List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
-	if err != nil {
-		logger.Error("Failed to list jobs", zap.Error(err))
-		return nil, err
-	}
-
-	// 如果没有找到 Job，返回错误
-	if len(jobList.Items) == 0 {
-		return nil, fmt.Errorf("no jobs found for CronJob %s", job.Name)
-	}
-
-	// 获取 Pod 资源
-	podsClient := kubeClient.CoreV1().Pods(job.Namespace)
-
-	// 遍历 Job，查找最近的成功 Pod
-	var lastSuccessfulPod *corev1.Pod
-	for _, jobItem := range jobList.Items {
-		// 获取 Job 的 Pod
-		podList, err := podsClient.List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("job-name=%s", jobItem.Name)})
-		if err != nil {
-			logger.Error("Failed to list pods for job", zap.String("job", jobItem.Name), zap.Error(err))
-			continue
+	k8sVolumes := make([]corev1.Volume, 0, len(volumes))
+	for _, v := range volumes {
+		k8sVolume := corev1.Volume{
+			Name: v.Name,
 		}
 
-		// 选出最近的成功 Pod
-		for i, pod := range podList.Items {
-			if pod.Status.Phase == corev1.PodSucceeded {
-				// 比较创建时间，选出最新的 Pod
-				if lastSuccessfulPod == nil || pod.CreationTimestamp.After(lastSuccessfulPod.CreationTimestamp.Time) {
-					lastSuccessfulPod = &podList.Items[i]
-				}
+		// 根据卷类型设置对应的卷来源
+		switch v.Type {
+		case "ConfigMap":
+			k8sVolume.VolumeSource = corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: v.SourceName,
+					},
+				},
+			}
+		case "Secret":
+			k8sVolume.VolumeSource = corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: v.SourceName,
+				},
+			}
+		case "PVC":
+			k8sVolume.VolumeSource = corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: v.SourceName,
+				},
+			}
+		case "EmptyDir":
+			k8sVolume.VolumeSource = corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			}
+		case "HostPath":
+			k8sVolume.VolumeSource = corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: v.SourceName,
+				},
 			}
 		}
+
+		k8sVolumes = append(k8sVolumes, k8sVolume)
 	}
 
-	if lastSuccessfulPod == nil {
-		return nil, fmt.Errorf("no successful pod found for CronJob %s", job.Name)
-	}
-
-	return lastSuccessfulPod, nil
+	return k8sVolumes
 }
-func GetCronJobLastPod(ctx context.Context, clusterId int, job *model.K8sCronjob, client client.K8sClient, logger *zap.Logger) (model.K8sPod, error) {
-	// 获取 K8s 客户端
-	kubeClient, err := GetKubeClient(clusterId, client, logger)
-	if err != nil {
-		return model.K8sPod{}, fmt.Errorf("failed to get Kubernetes client for cluster %d: %w", clusterId, err)
+
+// 构建卷挂载配置
+func buildVolumeMounts(volumes []model.Volume) []corev1.VolumeMount {
+	if len(volumes) == 0 {
+		return nil
 	}
 
-	// 获取 CronJob 资源
-	cronJobsClient := kubeClient.BatchV1().CronJobs(job.Namespace)
-	cronJob, err := cronJobsClient.Get(ctx, job.Name, metav1.GetOptions{})
-	if err != nil {
-		return model.K8sPod{}, fmt.Errorf("failed to get CronJob %s in namespace %s for cluster %d: %w", job.Name, job.Namespace, clusterId, err)
+	volumeMounts := make([]corev1.VolumeMount, 0, len(volumes))
+	for _, v := range volumes {
+		volumeMount := corev1.VolumeMount{
+			Name:      v.Name,
+			MountPath: v.MountPath,
+			SubPath:   v.SubPath,
+			ReadOnly:  v.ReadOnly,
+		}
+		volumeMounts = append(volumeMounts, volumeMount)
 	}
 
-	// 检查 CronJob 是否已经被调度
-	if cronJob.Status.LastScheduleTime == nil {
-		return model.K8sPod{}, fmt.Errorf("CronJob %s has not been scheduled yet", job.Name)
-	}
-
-	// 调用 GetLastSuccessfulPod 获取最近的成功 Pod
-	lastSuccessfulPod, err := GetLastSuccessfulPod(ctx, clusterId, job, client, logger)
-	if err != nil {
-		logger.Warn("Failed to get last successful pod", zap.Error(err))
-		return model.K8sPod{}, fmt.Errorf("no successful pod found for CronJob %s", job.Name)
-	}
-
-	return model.K8sPod{
-		Name:      lastSuccessfulPod.Name,
-		Namespace: lastSuccessfulPod.Namespace,
-		Status:    string(lastSuccessfulPod.Status.Phase),
-		NodeName:  lastSuccessfulPod.Spec.NodeName,
-	}, nil
+	return volumeMounts
 }
+
+// 构建持久卷声明模板
+func buildVolumeClaimTemplates(volumes []model.Volume) []corev1.PersistentVolumeClaim {
+	// 筛选出PVC类型的卷
+	var pvcVolumes []model.Volume
+	for _, v := range volumes {
+		if v.Type == "PVC" {
+			pvcVolumes = append(pvcVolumes, v)
+		}
+	}
+
+	if len(pvcVolumes) == 0 {
+		return nil
+	}
+
+	// 构建PVC模板
+	templates := make([]corev1.PersistentVolumeClaim, 0, len(pvcVolumes))
+	for _, v := range pvcVolumes {
+		pvc := corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: v.Name,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse(v.Size),
+					},
+				},
+			},
+		}
+		templates = append(templates, pvc)
+	}
+
+	return templates
+}
+
+// 构建Deployment更新策略
+func buildDeploymentStrategy(strategy string) appsv1.DeploymentStrategy {
+	deploymentStrategy := appsv1.DeploymentStrategy{}
+	
+	switch strategy {
+	case "RollingUpdate":
+		deploymentStrategy.Type = appsv1.RollingUpdateDeploymentStrategyType
+		deploymentStrategy.RollingUpdate = &appsv1.RollingUpdateDeployment{
+			MaxUnavailable: &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+			MaxSurge:       &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+		}
+	case "Recreate":
+		deploymentStrategy.Type = appsv1.RecreateDeploymentStrategyType
+	default:
+		// 默认使用RollingUpdate
+		deploymentStrategy.Type = appsv1.RollingUpdateDeploymentStrategyType
+		deploymentStrategy.RollingUpdate = &appsv1.RollingUpdateDeployment{
+			MaxUnavailable: &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+			MaxSurge:       &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+		}
+	}
+	
+	return deploymentStrategy
+}
+
+// 构建StatefulSet更新策略
+func buildStatefulSetUpdateStrategy(strategy string) appsv1.StatefulSetUpdateStrategy {
+	updateStrategy := appsv1.StatefulSetUpdateStrategy{}
+	
+	switch strategy {
+	case "RollingUpdate":
+		updateStrategy.Type = appsv1.RollingUpdateStatefulSetStrategyType
+		updateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
+			Partition: int32Ptr(0),
+		}
+	case "OnDelete":
+		updateStrategy.Type = appsv1.OnDeleteStatefulSetStrategyType
+	default:
+		// 默认使用RollingUpdate
+		updateStrategy.Type = appsv1.RollingUpdateStatefulSetStrategyType
+		updateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
+			Partition: int32Ptr(0),
+		}
+	}
+	
+	return updateStrategy
+}
+
+// 构建DaemonSet更新策略
+func buildDaemonSetUpdateStrategy(strategy string) appsv1.DaemonSetUpdateStrategy {
+	updateStrategy := appsv1.DaemonSetUpdateStrategy{}
+	
+	switch strategy {
+	case "RollingUpdate":
+		updateStrategy.Type = appsv1.RollingUpdateDaemonSetStrategyType
+		updateStrategy.RollingUpdate = &appsv1.RollingUpdateDaemonSet{
+			MaxUnavailable: &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+		}
+	case "OnDelete":
+		updateStrategy.Type = appsv1.OnDeleteDaemonSetStrategyType
+	default:
+		// 默认使用RollingUpdate
+		updateStrategy.Type = appsv1.RollingUpdateDaemonSetStrategyType
+		updateStrategy.RollingUpdate = &appsv1.RollingUpdateDaemonSet{
+			MaxUnavailable: &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+		}
+	}
+	
+	return updateStrategy
+}
+
+// 创建int32指针
+func int32Ptr(i int32) *int32 {
+	return &i
+}
+
+// 创建int64指针
+func int64Ptr(i int64) *int64 {
+	return &i
+}
+
+
