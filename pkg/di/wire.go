@@ -29,7 +29,6 @@ package di
 
 import (
 	aiHandler "github.com/GoSimplicity/AI-CloudOps/internal/ai/api"
-	aiClient "github.com/GoSimplicity/AI-CloudOps/internal/ai/client"
 	aiService "github.com/GoSimplicity/AI-CloudOps/internal/ai/service"
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	"github.com/GoSimplicity/AI-CloudOps/internal/job"
@@ -81,7 +80,6 @@ func InitWebServer() *Cmd {
 		job.NewTimedScheduler,
 		job.NewTimedTask,
 		client.NewK8sClient,
-		aiClient.NewAIClient,
 		cache.NewMonitorCache,
 		cache.NewAlertConfigCache,
 		cache.NewRuleConfigCache,

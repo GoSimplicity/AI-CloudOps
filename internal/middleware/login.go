@@ -60,7 +60,8 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 			path == "/api/monitor/prometheus_configs/prometheus" ||
 			path == "/api/monitor/prometheus_configs/prometheus_alert" ||
 			path == "/api/monitor/prometheus_configs/prometheus_record" ||
-			path == "/api/monitor/prometheus_configs/alertManager" {
+			path == "/api/monitor/prometheus_configs/alertManager" ||
+			strings.HasPrefix(path, "/api/ai/chat/ws") {
 			return
 		}
 

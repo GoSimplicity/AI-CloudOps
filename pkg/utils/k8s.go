@@ -1314,7 +1314,9 @@ func buildPodTemplateSpec(req *model.K8sInstance) corev1.PodTemplateSpec {
 			Annotations: req.Annotations,
 		},
 		Spec: corev1.PodSpec{
-			Containers:    []corev1.Container{buildContainer(req)},
+			Containers:    []corev1.Container{
+				buildContainer(req),
+			},
 			NodeSelector:  req.NodeSelector,
 			Affinity:      buildAffinity(req.Affinity),
 			Tolerations:   buildTolerations(req.Tolerations),
@@ -1362,7 +1364,7 @@ func buildContainer(req *model.K8sInstance) corev1.Container {
 
 	// 构建容器
 	container := corev1.Container{
-		Name:            "app",
+		Name:            req.ContainerCore.Name,
 		Image:           req.Image,
 		Command:         req.ContainerCore.Command,
 		Args:            req.ContainerCore.Args,
@@ -1372,7 +1374,7 @@ func buildContainer(req *model.K8sInstance) corev1.Container {
 		LivenessProbe:   buildProbe(req.LivenessProbe),
 		ReadinessProbe:  buildProbe(req.ReadinessProbe),
 		StartupProbe:    buildProbe(req.StartupProbe),
-		ImagePullPolicy: corev1.PullIfNotPresent, // 默认拉取策略
+		ImagePullPolicy: corev1.PullPolicy(req.PullPolicy),
 	}
 
 	return container

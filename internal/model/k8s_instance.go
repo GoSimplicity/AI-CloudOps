@@ -25,13 +25,12 @@
 
 package model
 
-// K8sInstance 扩展模型
 type K8sInstance struct {
 	Model
 	Name          string `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:实例名称"` // 实例名称
 	UserID        int    `json:"user_id" gorm:"comment:创建者用户ID"`                                     // 创建者用户ID
 	ClusterID     int    `json:"cluster_id" gorm:"comment:所属集群ID"`                                   // 所属集群ID
-	ContainerCore `json:"containerCore" gorm:"embedded"`
+	ContainerCore `json:"containerCore" gorm:"embedded"` // 容器配置
 	Image         string `json:"image,omitempty" gorm:"comment:镜像"`                        // 镜像
 	Replicas      int    `json:"replicas,omitempty" gorm:"default:1;comment:副本数量"`         // 副本数量
 	K8sAppID      int    `json:"k8s_app_id" gorm:"index;comment:关联的 Kubernetes 应用ID"`      // 关联的 Kubernetes 应用ID，修正字段名称为k8s_app_id
@@ -61,7 +60,6 @@ type K8sInstance struct {
 	AppName       string `json:"app_name,omitempty" gorm:"-"`        // 应用名称(关联查询)
 }
 
-// Probe 探针配置
 type Probe struct {
 	Type                string   `json:"type"`                            // 探针类型(http/tcp/exec)
 	Path                string   `json:"path,omitempty"`                  // HTTP路径
@@ -74,7 +72,6 @@ type Probe struct {
 	FailureThreshold    int      `json:"failure_threshold,omitempty"`     // 失败阈值
 }
 
-// Volume 卷配置
 type Volume struct {
 	Name       string `json:"name"`                  // 卷名称
 	Type       string `json:"type"`                  // 卷类型(ConfigMap, Secret, PVC, EmptyDir等)
@@ -85,14 +82,12 @@ type Volume struct {
 	Size       string `json:"size,omitempty"`       // 存储大小
 }
 
-// Affinity 亲和性配置
 type Affinity struct {
 	NodeAffinity    []AffinityRule `json:"node_affinity,omitempty"`     // 节点亲和性
 	PodAffinity     []AffinityRule `json:"pod_affinity,omitempty"`      // Pod亲和性
 	PodAntiAffinity []AffinityRule `json:"pod_anti_affinity,omitempty"` // Pod反亲和性
 }
 
-// AffinityRule 亲和性规则
 type AffinityRule struct {
 	Key      string   `json:"key"`              // 标签键
 	Operator string   `json:"operator"`         // 操作符(In, NotIn, Exists等)
@@ -100,7 +95,6 @@ type AffinityRule struct {
 	Weight   int      `json:"weight,omitempty"` // 权重(1-100)
 }
 
-// Toleration 容忍配置
 type Toleration struct {
 	Key      string `json:"key,omitempty"`      // 键
 	Operator string `json:"operator,omitempty"` // 操作符(Equal, Exists)
@@ -108,7 +102,6 @@ type Toleration struct {
 	Effect   string `json:"effect,omitempty"`   // 影响(NoSchedule, PreferNoSchedule, NoExecute)
 }
 
-// CreateK8sInstanceReq 创建K8s实例请求
 type CreateK8sInstanceReq struct {
 	Name           string            `json:"name" binding:"required,min=1,max=200"` // 实例名称
 	UserID         int               `json:"user_id" binding:"required"`            // 创建者用户ID
@@ -132,13 +125,9 @@ type CreateK8sInstanceReq struct {
 	Volumes        []Volume          `json:"volumes,omitempty"`                     // 卷配置，添加缺失的卷配置字段
 }
 
-
-
-// CreateK8sInstanceResp 创建K8s实例响应
 type CreateK8sInstanceResp struct {
 }
 
-// UpdateK8sInstanceReq 更新K8s实例请求
 type UpdateK8sInstanceReq struct {
 	ID            int           `json:"id" binding:"required"`                 // 实例ID
 	Name          string        `json:"name" binding:"required,min=1,max=200"` // 实例名称
@@ -163,7 +152,6 @@ type UpdateK8sInstanceReq struct {
 	Tolerations    []Toleration      `json:"tolerations,omitempty"`     // 容忍配置
 }
 
-// UpdateK8sInstanceResp 更新K8s实例响应
 type UpdateK8sInstanceResp struct {
 	InstanceID int `json:"instance_id"` // 实例ID
 }

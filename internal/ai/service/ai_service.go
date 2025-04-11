@@ -2,70 +2,218 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"os"
+	"time"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/ai/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/cloudwego/eino-ext/components/model/openai"
+	enioModel "github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/components/prompt"
+	"github.com/cloudwego/eino/schema"
+	"go.uber.org/zap"
 )
 
 type AIService interface {
 	SendChatMessage(ctx context.Context, message model.ChatMessage) (*model.ChatCompletionResponse, error)
-	SendStreamingChatMessage(ctx context.Context, message model.ChatMessage, callback func(model.ChunkChatCompletionResponse) error) error
-	UploadFile(ctx context.Context, filePath string, user string) (*model.FileUploadResponse, error)
-	StopResponse(ctx context.Context, taskID string, user string) error
-	SendFeedback(ctx context.Context, messageID string, rating string, user string, content string) error
-	GetSuggestedQuestions(ctx context.Context, messageID string, user string) ([]string, error)
-	GetMessages(ctx context.Context, conversationID string, user string, firstID string, limit int) (map[string]interface{}, error)
-	GetConversations(ctx context.Context, user string, lastID string, limit int, sortBy string) (map[string]interface{}, error)
-	DeleteConversation(ctx context.Context, conversationID string, user string) error
-	RenameConversation(ctx context.Context, conversationID string, name string, autoGenerate bool, user string) (map[string]interface{}, error)
+	StreamChatMessage(ctx context.Context, message model.ChatMessage, responseChan chan<- model.StreamResponse) error
 }
 
 type aiService struct {
-	client client.AIClient
+	logger *zap.Logger
 }
 
-func NewAIService(client client.AIClient) AIService {
+func NewAIService(logger *zap.Logger) AIService {
 	return &aiService{
-		client: client,
+		logger: logger,
 	}
 }
 
-func (s *aiService) SendChatMessage(ctx context.Context, message model.ChatMessage) (*model.ChatCompletionResponse, error) {
-	return s.client.SendChatMessage(ctx, message)
+// SendChatMessage 发送聊天消息
+func (a *aiService) SendChatMessage(ctx context.Context, message model.ChatMessage) (*model.ChatCompletionResponse, error) {
+	// 创建带超时的上下文
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// 创建 OpenAI 聊天模型
+	cm := a.createOpenAIChatModel(ctx)
+	if cm == nil {
+		return nil, fmt.Errorf("创建聊天模型失败")
+	}
+	
+	// 根据消息内容创建模板消息
+	messages := a.createMessagesFromRequest(message)
+	
+	// 获取流式响应
+	streamResult := a.stream(ctx, cm, messages)
+	if streamResult == nil {
+		return nil, fmt.Errorf("获取流式响应失败")
+	}
+	
+	// 处理流式响应
+	content, err := a.reportStream(streamResult)
+	if err != nil {
+		return nil, err
+	}
+
+	// 组装响应
+	return &model.ChatCompletionResponse{
+		Answer: content,
+	}, nil
 }
 
-func (s *aiService) SendStreamingChatMessage(ctx context.Context, message model.ChatMessage, callback func(model.ChunkChatCompletionResponse) error) error {
-	return s.client.SendStreamingChatMessage(ctx, message, callback)
+// StreamChatMessage 流式发送聊天消息，结果通过channel返回
+func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMessage, responseChan chan<- model.StreamResponse) error {
+	defer close(responseChan)
+	
+	// 创建带超时的上下文
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// 创建 OpenAI 聊天模型
+	cm := a.createOpenAIChatModel(ctx)
+	if cm == nil {
+		return fmt.Errorf("创建聊天模型失败")
+	}
+	
+	// 根据消息内容创建模板消息
+	messages := a.createMessagesFromRequest(message)
+	
+	// 获取流式响应
+	streamResult := a.stream(ctx, cm, messages)
+	if streamResult == nil {
+		return fmt.Errorf("获取流式响应失败")
+	}
+	
+	defer streamResult.Close()
+
+	// 逐个处理流式响应并发送到channel
+	for {
+		message, err := streamResult.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				responseChan <- model.StreamResponse{
+					Error: "请求超时",
+				}
+				return fmt.Errorf("请求超时")
+			}
+			responseChan <- model.StreamResponse{
+				Error: err.Error(),
+			}
+			return err
+		}
+		
+		responseChan <- model.StreamResponse{
+			Content: message.Content,
+			Done:    false,
+		}
+	}
+	
+	// 发送完成信号
+	responseChan <- model.StreamResponse{
+		Content: "",
+		Done:    true,
+	}
+	
+	return nil
 }
 
-func (s *aiService) UploadFile(ctx context.Context, filePath string, user string) (*model.FileUploadResponse, error) {
-	return s.client.UploadFile(ctx, filePath, user)
+func (a *aiService) stream(ctx context.Context, llm enioModel.ChatModel, in []*schema.Message) *schema.StreamReader[*schema.Message] {
+	result, err := llm.Stream(ctx, in)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			a.logger.Error("llm生成超时", zap.Error(err))
+		} else {
+			a.logger.Error("llm生成失败", zap.Error(err))
+		}
+		return nil
+	}
+	return result
 }
 
-func (s *aiService) StopResponse(ctx context.Context, taskID string, user string) error {
-	return s.client.StopResponse(ctx, taskID, user)
+func (a *aiService) createOpenAIChatModel(ctx context.Context) enioModel.ChatModel {
+	key := os.Getenv("OPENAI_API_KEY")
+	modelName := os.Getenv("OPENAI_MODEL_NAME")
+	baseURL := os.Getenv("OPENAI_BASE_URL")
+	chatModel, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
+		Model:   modelName,
+		APIKey:  key,
+		BaseURL: baseURL,
+		Timeout: 25 * time.Second, // 设置单次请求超时时间
+	})
+	if err != nil {
+		a.logger.Error("创建openai聊天模型失败", zap.Error(err))
+		return nil
+	}
+	return chatModel
 }
 
-func (s *aiService) SendFeedback(ctx context.Context, messageID string, rating string, user string, content string) error {
-	return s.client.SendFeedback(ctx, messageID, rating, user, content)
+func (a *aiService) createMessagesFromRequest(message model.ChatMessage) []*schema.Message {
+	template := a.createTemplate()
+
+	// 使用模板生成消息
+	messages, err := template.Format(context.Background(), map[string]any{
+		"role":         message.Role,
+		"style":        message.Style,
+		"question":     message.Question,
+		"chat_history": convertToSchemaMessages(message.ChatHistory),
+	})
+	if err != nil {
+		a.logger.Error("生成消息失败", zap.Error(err))
+		return nil
+	}
+	return messages
 }
 
-func (s *aiService) GetSuggestedQuestions(ctx context.Context, messageID string, user string) ([]string, error) {
-	return s.client.GetSuggestedQuestions(ctx, messageID, user)
+// 将自定义聊天历史转换为schema中的消息格式
+func convertToSchemaMessages(history []model.HistoryMessage) []*schema.Message {
+	var result []*schema.Message
+	for _, msg := range history {
+		if msg.Role == "user" {
+			result = append(result, schema.UserMessage(msg.Content))
+		} else if msg.Role == "assistant" {
+			result = append(result, schema.AssistantMessage(msg.Content, nil))
+		}
+	}
+	return result
 }
 
-func (s *aiService) GetMessages(ctx context.Context, conversationID string, user string, firstID string, limit int) (map[string]interface{}, error) {
-	return s.client.GetMessages(ctx, conversationID, user, firstID, limit)
+func (a *aiService) createTemplate() prompt.ChatTemplate {
+	// 创建模板，使用 FString 格式
+	return prompt.FromMessages(schema.FString,
+		// 系统消息模板
+		schema.SystemMessage("你是一个{role}。你需要用{style}规范的语气回答问题。你的目标是帮助使用AI-CloudOps开源项目的用户回答问题，同时提供一些有用的建议。"),
+
+		// 插入需要的对话历史（新对话的话这里不填）
+		schema.MessagesPlaceholder("chat_history", true),
+
+		// 用户消息模板
+		schema.UserMessage("问题: {question}"),
+	)
 }
 
-func (s *aiService) GetConversations(ctx context.Context, user string, lastID string, limit int, sortBy string) (map[string]interface{}, error) {
-	return s.client.GetConversations(ctx, user, lastID, limit, sortBy)
-}
+func (a *aiService) reportStream(sr *schema.StreamReader[*schema.Message]) (string, error) {
+	if sr == nil {
+		return "", fmt.Errorf("流式响应为空")
+	}
+	
+	defer sr.Close()
 
-func (s *aiService) DeleteConversation(ctx context.Context, conversationID string, user string) error {
-	return s.client.DeleteConversation(ctx, conversationID, user)
-}
+	var content string
+	for {
+		message, err := sr.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		content += message.Content
+	}
 
-func (s *aiService) RenameConversation(ctx context.Context, conversationID string, name string, autoGenerate bool, user string) (map[string]interface{}, error) {
-	return s.client.RenameConversation(ctx, conversationID, name, autoGenerate, user)
+	return content, nil
 }

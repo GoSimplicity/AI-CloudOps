@@ -8,7 +8,6 @@ package di
 
 import (
 	api8 "github.com/GoSimplicity/AI-CloudOps/internal/ai/api"
-	client2 "github.com/GoSimplicity/AI-CloudOps/internal/ai/client"
 	service6 "github.com/GoSimplicity/AI-CloudOps/internal/ai/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	"github.com/GoSimplicity/AI-CloudOps/internal/job"
@@ -165,8 +164,7 @@ func InitWebServer() *Cmd {
 	instanceDAO := dao4.NewInstanceDAO(db)
 	serviceInstanceService := service5.NewInstanceService(instanceDAO, logger)
 	instanceHandler := api7.NewInstanceHandler(serviceInstanceService)
-	aiClient := client2.NewAIClient(logger)
-	aiService := service6.NewAIService(aiClient)
+	aiService := service6.NewAIService(logger)
 	aiHandler := api8.NewAIHandler(aiService)
 	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, processHandler, templateHandler, instanceHandler, aiHandler)
 	createK8sClusterTask := job.NewCreateK8sClusterTask(logger, k8sClient, clusterDAO)

@@ -26,6 +26,7 @@
 package model
 
 type ContainerCore struct {
+	Name       string            `json:"name,omitempty" gorm:"comment:容器名称"` // 容器名称
 	CPU        string            `json:"cpu,omitempty" gorm:"comment:CPU 资源限制"`        // CPU 资源限制(如 "100m", "0.5")
 	Memory     string            `json:"memory,omitempty" gorm:"comment:内存资源限制"`      // 内存资源限制(如 "512Mi", "2Gi")
 	CPURequest string            `json:"cpu_request,omitempty" gorm:"comment:CPU 资源请求"` // CPU 资源请求
@@ -33,6 +34,7 @@ type ContainerCore struct {
 	Command    []string          `json:"command,omitempty" gorm:"serializer:json;comment:容器启动命令"` // 容器启动命令
 	Args       []string          `json:"args,omitempty" gorm:"serializer:json;comment:容器启动参数"`    // 容器启动参数
 	Envs       map[string]string `json:"envs,omitempty" gorm:"serializer:json;comment:环境变量"`       // 环境变量
+	PullPolicy string            `json:"pull_policy,omitempty" gorm:"comment:镜像拉取策略"` // 镜像拉取策略
 	Volumes    []Volume          `json:"volumes,omitempty" gorm:"serializer:json;comment:挂载卷"`      // 挂载卷
 }
 
