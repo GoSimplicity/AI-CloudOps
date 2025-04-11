@@ -27,20 +27,19 @@ package user
 
 import (
 	"context"
-	"errors"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
 )
 
 type CronjobService interface {
-	CreateCronjobOne(ctx context.Context, cornjob model.K8sCronjob) error
-	GetCronjobList(ctx context.Context) ([]*model.K8sCronjob, error)
-	GetCronjobOne(ctx context.Context, id int64) (*model.K8sCronjob, error)
-	UpdateCronjobOne(ctx context.Context, id int64, cornjob model.K8sCronjob) error
+	CreateCronjob(ctx context.Context, req *model.CreateK8sCronjobRequest) error
+	GetCronjobList(ctx context.Context, req *model.GetK8sCronjobListRequest) ([]*model.K8sCronjob, error)
+	GetCronjob(ctx context.Context, id int64) (*model.K8sCronjob, error)
+	UpdateCronjob(ctx context.Context, req *model.UpdateK8sCronjobRequest) error
 	BatchDeleteCronjob(ctx context.Context, ids []int64) error
 	GetCronjobLastPod(ctx context.Context, id int64) (model.K8sPod, error)
 }
@@ -59,76 +58,33 @@ func NewCronjobService(dao admin.ClusterDAO, k8scornjobDAO user.CornJobDAO, clie
 		l:             l,
 	}
 }
-func (c *cronjobService) CreateCronjobOne(ctx context.Context, job model.K8sCronjob) error {
 
-	err := c.k8scornjobDAO.CreateCornJobOne(ctx, &job)
-	if err != nil {
-		return errors.New("Create Cronjob One fail")
-	}
-	// 构建cornjob
-	K8sCluster, err := c.dao.GetClusterByName(ctx, job.Cluster)
-	if err != nil {
-		return errors.New("Create Cronjob One Get Cluster By Name fail")
-	}
-	err = pkg.CreateCornJob(ctx, K8sCluster.ID, job, c.client, c.l)
-	if err != nil {
-		return errors.New("pkg Create Cron job  fail")
-	}
-	return nil
-}
-func (c *cronjobService) GetCronjobList(ctx context.Context) ([]*model.K8sCronjob, error) {
-	return c.k8scornjobDAO.GetCronjobList(ctx)
-}
-func (c *cronjobService) GetCronjobOne(ctx context.Context, id int64) (*model.K8sCronjob, error) {
-	return c.k8scornjobDAO.GetCronjobOne(ctx, id)
-}
-func (c *cronjobService) UpdateCronjobOne(ctx context.Context, id int64, cornjob model.K8sCronjob) error {
-	// 更新数据库
-	c.k8scornjobDAO.UpdateCronjobOne(ctx, id, cornjob)
-	// 实例更新
-	K8sCluster, err := c.dao.GetClusterByName(ctx, cornjob.Cluster)
-	if err != nil {
-		return errors.New("Create Cronjob One Get Cluster By Name fail")
-	}
-	err = pkg.UpdateCronJob(ctx, K8sCluster.ID, cornjob, c.client, c.l)
-	if err != nil {
-		return errors.New("pkg Update Cron job  fail")
-	}
-	return nil
-}
+// BatchDeleteCronjob implements CronjobService.
 func (c *cronjobService) BatchDeleteCronjob(ctx context.Context, ids []int64) error {
-
-	// 批量删除k8s实例
-	for _, id := range ids {
-		job, err := c.k8scornjobDAO.GetCronjobOne(ctx, id)
-		if err != nil {
-			return errors.New("Batch Delete Cronjob Get Cronjob One fail")
-		}
-		K8sCluster, err := c.dao.GetClusterByName(ctx, job.Cluster)
-		if err != nil {
-			return errors.New("Batch Delete Cronjob Get Cluster By Name fail")
-		}
-		err = pkg.DeleteCronJob(ctx, K8sCluster.ID, job, c.client, c.l)
-		if err != nil {
-			return errors.New("Batch Delete Cronjob Delete Cronjob fail")
-
-		}
-	}
-	// 批量删除数据库记录
-	err := c.k8scornjobDAO.BatchDeleteCronjob(ctx, ids)
-	if err != nil {
-		return errors.New("Batch Delete Cronjob fail")
-	}
-	return nil
+	panic("unimplemented")
 }
+
+// CreateCronjob implements CronjobService.
+func (c *cronjobService) CreateCronjob(ctx context.Context, req *model.CreateK8sCronjobRequest) error {
+	panic("unimplemented")
+}
+
+// GetCronjob implements CronjobService.
+func (c *cronjobService) GetCronjob(ctx context.Context, id int64) (*model.K8sCronjob, error) {
+	panic("unimplemented")
+}
+
+// GetCronjobLastPod implements CronjobService.
 func (c *cronjobService) GetCronjobLastPod(ctx context.Context, id int64) (model.K8sPod, error) {
-	job, err := c.k8scornjobDAO.GetCronjobOne(ctx, id)
-	if err != nil {
-		return model.K8sPod{}, errors.New("Get Cronjob Last Pod Get Cronjob One fail")
-	}
-	K8sCluster, err := c.dao.GetClusterByName(ctx, job.Cluster)
-	if err != nil {
-		return model.K8sPod{}, errors.New("Get Cronjob Last Pod Get Cluster By Name fail")
-	}
-	return pkg.GetCronJobLastPod(ctx, K8sCluster.ID, job, c.client, c.l)
+	panic("unimplemented")
+}
+
+// GetCronjobList implements CronjobService.
+func (c *cronjobService) GetCronjobList(ctx context.Context, req *model.GetK8sCronjobListRequest) ([]*model.K8sCronjob, error) {
+	panic("unimplemented")
+}
+
+// UpdateCronjob implements CronjobService.
+func (c *cronjobService) UpdateCronjob(ctx context.Context, req *model.UpdateK8sCronjobRequest) error {
+	panic("unimplemented")
 }

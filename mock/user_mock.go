@@ -27,7 +27,6 @@ package mock
 
 import (
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -105,27 +104,27 @@ func (u *UserMock) CreateUserAdmin() error {
 	}
 
 	// 为管理员用户添加所有权限
-	userIDStr := strconv.FormatInt(int64(adminUser.ID), 10)
-	paths := []string{"/*"}
-	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
+	// userIDStr := strconv.FormatInt(int64(adminUser.ID), 10)
+	// paths := []string{"/*"}
+	// methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
 
-	for _, path := range paths {
-		for _, method := range methods {
-			if ok, err := u.ce.AddPolicy(userIDStr, path, method); err == nil && ok {
-				log.Printf("成功添加权限策略: 用户=%s, 路径=%s, 方法=%s", userIDStr, path, method)
-			} else if err != nil {
-				log.Printf("添加权限策略失败: %v", err)
-			} else {
-				log.Printf("权限策略已存在: 用户=%s, 路径=%s, 方法=%s", userIDStr, path, method)
-			}
-		}
-	}
+	// for _, path := range paths {
+	// 	for _, method := range methods {
+	// 		if ok, err := u.ce.AddPolicy(userIDStr, path, method); err == nil && ok {
+	// 			log.Printf("成功添加权限策略: 用户=%s, 路径=%s, 方法=%s", userIDStr, path, method)
+	// 		} else if err != nil {
+	// 			log.Printf("添加权限策略失败: %v", err)
+	// 		} else {
+	// 			log.Printf("权限策略已存在: 用户=%s, 路径=%s, 方法=%s", userIDStr, path, method)
+	// 		}
+	// 	}
+	// }
 
-	err = u.ce.SavePolicy()
-	if err != nil {
-		log.Printf("保存策略失败: %v\n", err)
-		return err
-	}
+	// err = u.ce.SavePolicy()
+	// if err != nil {
+	// 	log.Printf("保存策略失败: %v\n", err)
+	// 	return err
+	// }
 
 	log.Println("[用户模块Mock结束]")
 	return nil

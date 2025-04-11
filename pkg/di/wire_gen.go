@@ -7,14 +7,16 @@
 package di
 
 import (
+	api8 "github.com/GoSimplicity/AI-CloudOps/internal/ai/api"
+	service6 "github.com/GoSimplicity/AI-CloudOps/internal/ai/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	"github.com/GoSimplicity/AI-CloudOps/internal/job"
 	api5 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
+	user2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
 	admin2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
-	user2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/user"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/user"
 	api4 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	service4 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	api6 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
@@ -110,14 +112,13 @@ func InitWebServer() *Cmd {
 	k8sYamlTaskHandler := api5.NewK8sYamlTaskHandler(logger, yamlTaskService)
 	yamlTemplateService := admin2.NewYamlTemplateService(yamlTemplateDAO, yamlTaskDAO, k8sClient, logger)
 	k8sYamlTemplateHandler := api5.NewK8sYamlTemplateHandler(logger, yamlTemplateService)
-	instanceDAO := user.NewInstanceDAO(db, logger)
-	instanceService := user2.NewInstanceService(clusterDAO, instanceDAO, k8sClient, logger)
-	appDAO := user.NewAppDAO(db, logger)
-	appService := user2.NewAppService(clusterDAO, appDAO, instanceDAO, k8sClient, logger)
-	projectDAO := user.NewProjectDAO(db, logger)
-	projectService := user2.NewProjectService(clusterDAO, projectDAO, appDAO, instanceDAO, k8sClient, logger)
-	cornJobDAO := user.NewCornJobDAO(db, logger)
-	cronjobService := user2.NewCronjobService(clusterDAO, cornJobDAO, k8sClient, logger)
+	instanceService := user.NewInstanceService(clusterDAO, k8sClient, logger)
+	appDAO := user2.NewAppDAO(db, logger)
+	appService := user.NewAppService(clusterDAO, appDAO, k8sClient, logger)
+	projectDAO := user2.NewProjectDAO(db, logger)
+	projectService := user.NewProjectService(clusterDAO, projectDAO, appDAO, k8sClient, logger)
+	cornJobDAO := user2.NewCornJobDAO(db, logger)
+	cronjobService := user.NewCronjobService(clusterDAO, cornJobDAO, k8sClient, logger)
 	k8sAppHandler := api5.NewK8sAppHandler(logger, instanceService, appService, projectService, cronjobService)
 	alertManagerEventDAO := alert.NewAlertManagerEventDAO(db, logger, userDAO)
 	scrapePoolDAO := scrape.NewScrapePoolDAO(db, logger, userDAO)
@@ -160,10 +161,12 @@ func InitWebServer() *Cmd {
 	templateDAO := dao4.NewTemplateDAO(db)
 	templateService := service5.NewTemplateService(templateDAO, logger)
 	templateHandler := api7.NewTemplateHandler(templateService)
-	daoInstanceDAO := dao4.NewInstanceDAO(db)
-	serviceInstanceService := service5.NewInstanceService(daoInstanceDAO, logger)
+	instanceDAO := dao4.NewInstanceDAO(db)
+	serviceInstanceService := service5.NewInstanceService(instanceDAO, logger)
 	instanceHandler := api7.NewInstanceHandler(serviceInstanceService)
-	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, processHandler, templateHandler, instanceHandler)
+	aiService := service6.NewAIService(logger)
+	aiHandler := api8.NewAIHandler(aiService)
+	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, processHandler, templateHandler, instanceHandler, aiHandler)
 	createK8sClusterTask := job.NewCreateK8sClusterTask(logger, k8sClient, clusterDAO)
 	updateK8sClusterTask := job.NewUpdateK8sClusterTask(logger, k8sClient, clusterDAO)
 	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, treeEcsDAO, clusterDAO, k8sClient)

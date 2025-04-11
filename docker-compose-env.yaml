@@ -24,7 +24,7 @@ services:
         "--collation-server=utf8mb4_general_ci",
         "--explicit_defaults_for_timestamp=true",
         "--lower_case_table_names=1",
-        "--max_connections=1000",
+        "--max_connections=1000"
       ]
     privileged: true
     restart: always
