@@ -44,6 +44,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/pkg/di"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 )
 
@@ -66,6 +67,10 @@ func Init() error {
 	//if err := di.InitTrans(); err != nil {
 	//	return fmt.Errorf("初始化翻译器失败: %v", err)
 	//}
+
+	if err := godotenv.Load(); err != nil {
+		log.Printf("加载.env文件失败: %v", err)
+	}
 
 	// 设置请求头打印路由
 	cmd.Server.GET("/headers", printHeaders)

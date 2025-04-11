@@ -50,6 +50,7 @@ require (
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/invopop/yaml v0.1.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/meguminnnnnnnnn/go-openai v0.0.0-20250408071642-761325becfd6 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/nikolalohinski/gonja v1.5.3 // indirect
