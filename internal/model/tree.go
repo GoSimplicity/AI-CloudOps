@@ -25,39 +25,6 @@
 
 package model
 
-import (
-	"database/sql/driver"
-	"strings"
-)
-
-// ResourceTree 表示 CMDB 中的资源树节点，包含资源的基本信息
-type ResourceTree struct {
-	InstanceName      string     `json:"instanceName" gorm:"uniqueIndex;type:varchar(100);comment:资源实例名称，支持模糊搜索"` // 资源实例名称，支持模糊搜索
-	Hash              string     `json:"hash" gorm:"uniqueIndex;type:varchar(200);comment:用于资源更新的哈希值"`            // 增量更新的哈希值
-	Vendor            string     `json:"vendor" gorm:"varchar(50);comment:云厂商名称，1=个人，2=阿里云，3=华为云，4=腾讯云，5=AWS"`    // 云厂商名称
-	CreateByOrder     bool       `json:"createByOrder" gorm:"comment:是否由工单创建，工单创建的资源不会被自动更新删除"`                   // 是否由工单创建的标识
-	Image             string     `json:"image" gorm:"type:varchar(100);comment:镜像名称"`                             // 镜像名称
-	VpcId             string     `json:"vpcId" gorm:"type:varchar(100);comment:专有网络 VPC ID"`                      // 专有网络 VPC ID
-	ZoneId            string     `json:"zoneId" gorm:"type:varchar(100);comment:实例所属可用区 ID，如 cn-hangzhou-g"`      // 可用区 ID
-	Env               string     `json:"env" gorm:"type:varchar(50);comment:环境标识，如 dev、stage、prod"`               // 环境标识
-	PayType           string     `json:"payType" gorm:"type:varchar(50);comment:付费类型，按量付费或包年包月"`                  // 付费类型
-	Status            string     `json:"status" gorm:"type:varchar(50);comment:资源状态，如 运行中、已停止、创建中"`               // 资源状态
-	Description       string     `json:"description" gorm:"type:text;comment:资源描述，如 CentOS 7.4 操作系统"`             // 资源描述
-	Tags              StringList `json:"tags" gorm:"type:varchar(500);comment:资源标签集合，用于分类和筛选"`                    // 资源标签
-	SecurityGroupIds  StringList `json:"securityGroupIds" gorm:"type:varchar(500);comment:安全组 ID 列表"`             // 安全组 ID 列表
-	PrivateIpAddress  string     `json:"privateIpAddress" gorm:"type:varchar(500);comment:私有 IP 地址列表"`            // 私有 IP 地址列表
-	PublicIpAddress   string     `json:"publicIpAddress" gorm:"type:varchar(500);comment:公网 IP 地址列表"`             // 公网 IP 地址列表
-	IpAddr            string     `json:"ipAddr" gorm:"type:varchar(45);uniqueIndex;comment:单个公网 IP 地址"`           // 单个公网 IP 地址
-	Port              int        `json:"port" gorm:"comment:端口号;default:22"`
-	Username          string     `json:"username" gorm:"comment:用户名;default:root"`
-	Password          string     `json:"-" gorm:"-"`                                                // 明文密码不存储
-	EncryptedPassword string     `json:"encryptedPassword" gorm:"type:varchar(500);comment:加密后的密码"` // 加密后的密码
-	Key               string     `json:"key" gorm:"comment:秘钥"`
-	Mode              string     `json:"mode" gorm:"comment:认证方式;default:password"`
-	CreationTime      string     `json:"creationTime" gorm:"type:varchar(30);comment:创建时间，ISO 8601 格式"` // 创建时间，ISO 8601 格式
-}
-
-// TreeNode 表示服务树的节点, 包含节点的层级关系和相关资源绑定
 type TreeNode struct {
 	Model
 
@@ -85,37 +52,8 @@ type TreeNode struct {
 	RdAdminUsers  StringList  `json:"rd_admin_users" gorm:"-"`  // 研发负责人姓名列表，前端使用
 	RdMemberUsers StringList  `json:"rd_member_users" gorm:"-"` // 研发工程师姓名列表，前端使用
 	Children      []*TreeNode `json:"children" gorm:"-"`        // 子节点列表，前端使用
-
-	// 节点统计信息
-	EcsNum           int `json:"ecsNum" gorm:"-"`           // 绑定的 ECS 数量
-	ElbNum           int `json:"elbNum" gorm:"-"`           // 绑定的 ELB 数量
-	RdsNum           int `json:"rdsNum" gorm:"-"`           // 绑定的 RDS 数量
-	NodeNum          int `json:"nodeNum" gorm:"-"`          // 子节点数量
-	LeafNodeNum      int `json:"leafNodeNum" gorm:"-"`      // 叶子节点数量
-	EcsCpuTotal      int `json:"ecsCpuTotal" gorm:"-"`      // 绑定的 ECS 总 CPU 核数
-	ElbBandWithTotal int `json:"elbBandWithTotal" gorm:"-"` // 绑定的 ELB 带宽上限
-	EcsMemoryTotal   int `json:"ecsMemoryTotal" gorm:"-"`   // 绑定的 ECS 总内存
-	EcsDiskTotal     int `json:"ecsDiskTotal" gorm:"-"`     // 绑定的 ECS 总磁盘空间
-
-	// 分类统计数据
-	GroupByVendor    []*ChartItem   `json:"groupByVendor" gorm:"-"`    // 按厂商分类统计
-	GroupByZoneId    []*ChartItem   `json:"groupByZoneId" gorm:"-"`    // 按可用区分类统计
-	GroupByOSName    map[string]int `json:"-" gorm:"-"`                // 按操作系统分类映射
-	GroupByVendorElb []*ChartItem   `json:"groupByVendorElb" gorm:"-"` // 按厂商分类统计 ELB
-	GroupByVendorRds []*ChartItem   `json:"groupByVendorRds" gorm:"-"` // 按厂商分类统计 RDS
-
-	// 操作权限
-	CanAdminNode bool   `json:"canAdminNode" gorm:"-"` // 是否有权限操作此节点
-	NodePath     string `json:"nodePath" gorm:"-"`     // 节点路径, 格式如: a.b.c.d
 }
 
-// ChartItem 用于前端展示的图表数据结构
-type ChartItem struct {
-	Name  string `json:"name"`  // 分类名称
-	Value int    `json:"value"` // 分类对应的值
-}
-
-// ResourceEcs 表示 ECS 资源的结构体, 包含虚拟机的硬件和网络信息
 type ResourceEcs struct {
 	Model
 	ResourceTree
@@ -134,6 +72,7 @@ type ResourceEcs struct {
 	NetworkInterfaces StringList `json:"networkInterfaces" gorm:"type:varchar(500);comment:弹性网卡 ID 集合"` // 弹性网卡 ID 集合
 	DiskIds           StringList `json:"diskIds" gorm:"type:varchar(500);comment:云盘 ID 集合"`             // 云盘 ID 集合
 	Status            string     `json:"status" gorm:"type:varchar(50);comment:资源状态，如 运行中、已停止、创建中"`     // 资源状态
+	
 	// 时间相关字段
 	StartTime       string `json:"startTime" gorm:"type:varchar(30);comment:最近启动时间, ISO 8601 标准, UTC+0 时间"`       // 最近启动时间
 	AutoReleaseTime string `json:"autoReleaseTime" gorm:"type:varchar(30);comment:自动释放时间, ISO 8601 标准, UTC+0 时间"` // 自动释放时间
@@ -144,7 +83,6 @@ type ResourceEcs struct {
 	CreateResourceType int         `json:"createResourceType" gorm:"-"`
 }
 
-// EcsBuyWorkOrder 购买 ECS 工作订单的结构体
 type EcsBuyWorkOrder struct {
 	Vendor         string `json:"vendor" gorm:"type:varchar(50);comment:云厂商名称, 例: 阿里云"`                    // 云厂商名称
 	Num            int    `json:"num" gorm:"comment:购买的 ECS 实例数量"`                                         // 购买的 ECS 实例数量
@@ -153,7 +91,6 @@ type EcsBuyWorkOrder struct {
 	Hostnames      string `json:"hostnames" gorm:"type:text;comment:主机名, 支持多条记录, 用 \\n 分隔"`                // 主机名, 支持多条记录, 用 \n 分隔
 }
 
-// ResourceElb 表示负载均衡器资源的结构体
 type ResourceElb struct {
 	Model
 	ResourceTree
@@ -169,7 +106,6 @@ type ResourceElb struct {
 	CreateResourceType int         `json:"createResourceType" gorm:"-"`
 }
 
-// ResourceRds 表示 RDS 资源的结构体
 type ResourceRds struct {
 	Model
 	ResourceTree
@@ -194,17 +130,28 @@ type BindResourceReq struct {
 	ResourceIds []int `json:"resource_ids" binding:"required,min=1"`
 }
 
-// StringList 封装了 []string 类型，用于与数据库中的逗号分隔字符串进行转换
-type StringList []string
-
-func (m *StringList) Scan(val interface{}) error {
-	s := val.([]uint8)
-	ss := strings.Split(string(s), "|")
-	*m = ss
-	return nil
-}
-
-func (m StringList) Value() (driver.Value, error) {
-	str := strings.Join(m, "|")
-	return str, nil
+type ResourceTree struct {
+	InstanceName      string     `json:"instanceName" gorm:"uniqueIndex;type:varchar(100);comment:资源实例名称，支持模糊搜索"` // 资源实例名称，支持模糊搜索
+	Hash              string     `json:"hash" gorm:"uniqueIndex;type:varchar(200);comment:用于资源更新的哈希值"`            // 增量更新的哈希值
+	Vendor            string     `json:"vendor" gorm:"varchar(50);comment:云厂商名称，1=个人，2=阿里云，3=华为云，4=腾讯云，5=AWS"`    // 云厂商名称
+	CreateByOrder     bool       `json:"createByOrder" gorm:"comment:是否由工单创建，工单创建的资源不会被自动更新删除"`                   // 是否由工单创建的标识
+	Image             string     `json:"image" gorm:"type:varchar(100);comment:镜像名称"`                             // 镜像名称
+	VpcId             string     `json:"vpcId" gorm:"type:varchar(100);comment:专有网络 VPC ID"`                      // 专有网络 VPC ID
+	ZoneId            string     `json:"zoneId" gorm:"type:varchar(100);comment:实例所属可用区 ID，如 cn-hangzhou-g"`      // 可用区 ID
+	Env               string     `json:"env" gorm:"type:varchar(50);comment:环境标识，如 dev、stage、prod"`               // 环境标识
+	PayType           string     `json:"payType" gorm:"type:varchar(50);comment:付费类型，按量付费或包年包月"`                  // 付费类型
+	Status            string     `json:"status" gorm:"type:varchar(50);comment:资源状态，如 运行中、已停止、创建中"`               // 资源状态
+	Description       string     `json:"description" gorm:"type:text;comment:资源描述，如 CentOS 7.4 操作系统"`             // 资源描述
+	Tags              StringList `json:"tags" gorm:"type:varchar(500);comment:资源标签集合，用于分类和筛选"`                    // 资源标签
+	SecurityGroupIds  StringList `json:"securityGroupIds" gorm:"type:varchar(500);comment:安全组 ID 列表"`             // 安全组 ID 列表
+	PrivateIpAddress  string     `json:"privateIpAddress" gorm:"type:varchar(500);comment:私有 IP 地址列表"`            // 私有 IP 地址列表
+	PublicIpAddress   string     `json:"publicIpAddress" gorm:"type:varchar(500);comment:公网 IP 地址列表"`             // 公网 IP 地址列表
+	IpAddr            string     `json:"ipAddr" gorm:"type:varchar(45);uniqueIndex;comment:单个公网 IP 地址"`           // 单个公网 IP 地址
+	Port              int        `json:"port" gorm:"comment:端口号;default:22"`
+	Username          string     `json:"username" gorm:"comment:用户名;default:root"`
+	Password          string     `json:"-" gorm:"-"`                                                // 明文密码不存储
+	EncryptedPassword string     `json:"encryptedPassword" gorm:"type:varchar(500);comment:加密后的密码"` // 加密后的密码
+	Key               string     `json:"key" gorm:"comment:秘钥"`
+	Mode              string     `json:"mode" gorm:"comment:认证方式;default:password"`
+	CreationTime      string     `json:"creationTime" gorm:"type:varchar(30);comment:创建时间，ISO 8601 格式"` // 创建时间，ISO 8601 格式
 }
