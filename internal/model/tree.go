@@ -180,15 +180,15 @@ type ResourceRds struct {
 // ResourceVpc VPC资源
 type ResourceVpc struct {
 	ResourceBase
-	VpcName          string     `json:"vpcName" gorm:"type:varchar(100);comment:VPC名称"`
-	CidrBlock        string     `json:"cidrBlock" gorm:"type:varchar(50);comment:IPv4网段"`
-	Ipv6CidrBlock    string     `json:"ipv6CidrBlock" gorm:"type:varchar(50);comment:IPv6网段"`
-	VSwitchIds       StringList `json:"vSwitchIds" gorm:"type:varchar(500);comment:交换机ID列表"`
-	RouteTableIds    StringList `json:"routeTableIds" gorm:"type:varchar(500);comment:路由表ID列表"`
-	NatGatewayIds    StringList `json:"natGatewayIds" gorm:"type:varchar(500);comment:NAT网关ID列表"`
-	IsDefault        bool       `json:"isDefault" gorm:"comment:是否为默认VPC"`
-	NetworkAclIds    StringList `json:"networkAclIds" gorm:"type:varchar(500);comment:网络ACL ID列表"`
-	ResourceGroupId  string     `json:"resourceGroupId" gorm:"type:varchar(100);comment:资源组ID"`
+	VpcName         string     `json:"vpcName" gorm:"type:varchar(100);comment:VPC名称"`
+	CidrBlock       string     `json:"cidrBlock" gorm:"type:varchar(50);comment:IPv4网段"`
+	Ipv6CidrBlock   string     `json:"ipv6CidrBlock" gorm:"type:varchar(50);comment:IPv6网段"`
+	VSwitchIds      StringList `json:"vSwitchIds" gorm:"type:varchar(500);comment:交换机ID列表"`
+	RouteTableIds   StringList `json:"routeTableIds" gorm:"type:varchar(500);comment:路由表ID列表"`
+	NatGatewayIds   StringList `json:"natGatewayIds" gorm:"type:varchar(500);comment:NAT网关ID列表"`
+	IsDefault       bool       `json:"isDefault" gorm:"comment:是否为默认VPC"`
+	NetworkAclIds   StringList `json:"networkAclIds" gorm:"type:varchar(500);comment:网络ACL ID列表"`
+	ResourceGroupId string     `json:"resourceGroupId" gorm:"type:varchar(100);comment:资源组ID"`
 	// 多对多关系
 	VpcTreeNodes []*TreeNode `json:"vpcTreeNodes" gorm:"many2many:resource_vpc_tree_nodes;comment:关联服务树节点"`
 }
@@ -226,22 +226,22 @@ type ResourceCreationRequest struct {
 
 // EcsCreationParams ECS创建参数
 type EcsCreationParams struct {
-	Provider         CloudProvider     `json:"provider" binding:"required"`
-	Region           string            `json:"region" binding:"required"`
-	ZoneId           string            `json:"zoneId" binding:"required"`
-	InstanceType     string            `json:"instanceType" binding:"required"`
-	ImageId          string            `json:"imageId" binding:"required"`
-	VSwitchId        string            `json:"vSwitchId" binding:"required"`
-	SecurityGroupIds []string          `json:"securityGroupIds" binding:"required"`
-	Quantity         int               `json:"quantity" binding:"required,min=1,max=100"`
-	HostnamePrefix   string            `json:"hostnamePrefix" binding:"required"`
-	InstanceName     string            `json:"instanceName"`
-	PayType          PaymentType       `json:"payType" binding:"required"`
-	TreeNodeId       uint              `json:"treeNodeId" binding:"required"`
-	Description      string            `json:"description"`
-	SystemDiskCategory string          `json:"systemDiskCategory"`
-	DryRun           bool              `json:"dryRun"`
-	Tags             map[string]string `json:"tags"`
+	Provider           CloudProvider     `json:"provider" binding:"required"`
+	Region             string            `json:"region" binding:"required"`
+	ZoneId             string            `json:"zoneId" binding:"required"`
+	InstanceType       string            `json:"instanceType" binding:"required"`
+	ImageId            string            `json:"imageId" binding:"required"`
+	VSwitchId          string            `json:"vSwitchId" binding:"required"`
+	SecurityGroupIds   []string          `json:"securityGroupIds" binding:"required"`
+	Quantity           int               `json:"quantity" binding:"required,min=1,max=100"`
+	HostnamePrefix     string            `json:"hostnamePrefix" binding:"required"`
+	InstanceName       string            `json:"instanceName"`
+	PayType            PaymentType       `json:"payType" binding:"required"`
+	TreeNodeId         uint              `json:"treeNodeId" binding:"required"`
+	Description        string            `json:"description"`
+	SystemDiskCategory string            `json:"systemDiskCategory"`
+	DryRun             bool              `json:"dryRun"`
+	Tags               map[string]string `json:"tags"`
 }
 
 // ElbCreationParams ELB创建参数
@@ -290,18 +290,18 @@ type VpcCreationParams struct {
 
 // DiskCreationParams 磁盘创建参数
 type DiskCreationParams struct {
-	Provider         CloudProvider     `json:"provider" binding:"required"`
-	Region           string            `json:"region" binding:"required"`
-	ZoneId           string            `json:"zoneId" binding:"required"`
-	DiskName         string            `json:"diskName" binding:"required"`
-	DiskCategory     string            `json:"diskCategory" binding:"required"`
-	Size             int               `json:"size" binding:"required,min=20"`
-	VpcId            string            `json:"vpcId" binding:"required"`
-	InstanceId       string            `json:"instanceId"`
-	PayType          PaymentType       `json:"payType" binding:"required"`
-	TreeNodeId       uint              `json:"treeNodeId" binding:"required"`
-	Description      string            `json:"description"`
-	Tags             map[string]string `json:"tags"`
+	Provider     CloudProvider     `json:"provider" binding:"required"`
+	Region       string            `json:"region" binding:"required"`
+	ZoneId       string            `json:"zoneId" binding:"required"`
+	DiskName     string            `json:"diskName" binding:"required"`
+	DiskCategory string            `json:"diskCategory" binding:"required"`
+	Size         int               `json:"size" binding:"required,min=20"`
+	VpcId        string            `json:"vpcId" binding:"required"`
+	InstanceId   string            `json:"instanceId"`
+	PayType      PaymentType       `json:"payType" binding:"required"`
+	TreeNodeId   uint              `json:"treeNodeId" binding:"required"`
+	Description  string            `json:"description"`
+	Tags         map[string]string `json:"tags"`
 }
 
 // ResourceBindingRequest 资源绑定请求
@@ -313,33 +313,33 @@ type ResourceBindingRequest struct {
 
 // SyncResourcesReq 同步资源请求
 type SyncResourcesReq struct {
-	Provider CloudProvider `json:"provider" binding:"required"`
-	Region   string        `json:"region" binding:"required"`
-	PageSize int           `json:"pageSize" binding:"required,min=1"`
-	PageNumber int          `json:"pageNumber" binding:"required,min=1"`
+	Provider   CloudProvider `json:"provider" binding:"required"`
+	Region     string        `json:"region" binding:"required"`
+	PageSize   int           `json:"pageSize" binding:"required,min=1"`
+	PageNumber int           `json:"pageNumber" binding:"required,min=1"`
 }
 
 // ListResourcesBaseReq 资源列表基础查询参数
 type ListResourcesBaseReq struct {
-	Page     int                 `form:"page" json:"page"`
-	PageSize int                 `form:"pageSize" json:"pageSize"`
-	Provider CloudProvider       `form:"provider" json:"provider"`
-	Region   string              `form:"region" json:"region"`
-	Env      string              `form:"env" json:"env"`
-	Status   ResourceStatus      `form:"status" json:"status"`
-	TreeNodeId uint              `form:"treeNodeId" json:"treeNodeId"`
-	Keyword   string             `form:"keyword" json:"keyword"`
-	OrderBy   string             `form:"orderBy" json:"orderBy"`
-	OrderDesc bool               `form:"orderDesc" json:"orderDesc"`
+	Page       int            `form:"page" json:"page"`
+	PageSize   int            `form:"pageSize" json:"pageSize"`
+	Provider   CloudProvider  `form:"provider" json:"provider"`
+	Region     string         `form:"region" json:"region"`
+	Env        string         `form:"env" json:"env"`
+	Status     ResourceStatus `form:"status" json:"status"`
+	TreeNodeId uint           `form:"treeNodeId" json:"treeNodeId"`
+	Keyword    string         `form:"keyword" json:"keyword"`
+	OrderBy    string         `form:"orderBy" json:"orderBy"`
+	OrderDesc  bool           `form:"orderDesc" json:"orderDesc"`
 }
 
 // ListEcsResourcesReq ECS资源列表查询参数
 type ListEcsResourcesReq struct {
 	ListResourcesBaseReq
-	OsType      string `form:"osType" json:"osType"`
+	OsType       string `form:"osType" json:"osType"`
 	InstanceType string `form:"instanceType" json:"instanceType"`
-	IpAddr      string `form:"ipAddr" json:"ipAddr"`
-	VmType      int    `form:"vmType" json:"vmType"`
+	IpAddr       string `form:"ipAddr" json:"ipAddr"`
+	VmType       int    `form:"vmType" json:"vmType"`
 }
 
 // ListElbResourcesReq ELB资源列表查询参数
@@ -352,45 +352,45 @@ type ListElbResourcesReq struct {
 // ListRdsResourcesReq RDS资源列表查询参数
 type ListRdsResourcesReq struct {
 	ListResourcesBaseReq
-	Engine        string `form:"engine" json:"engine"`
-	EngineVersion string `form:"engineVersion" json:"engineVersion"`
+	Engine         string `form:"engine" json:"engine"`
+	EngineVersion  string `form:"engineVersion" json:"engineVersion"`
 	DBInstanceType string `form:"dbInstanceType" json:"dbInstanceType"`
 }
 
 // ListVpcResourcesReq VPC资源列表查询参数
 type ListVpcResourcesReq struct {
 	ListResourcesBaseReq
-	CidrBlock     string `form:"cidrBlock" json:"cidrBlock"`
-	IsDefault     bool   `form:"isDefault" json:"isDefault"`
-	VpcName       string `form:"vpcName" json:"vpcName"`
+	CidrBlock string `form:"cidrBlock" json:"cidrBlock"`
+	IsDefault bool   `form:"isDefault" json:"isDefault"`
+	VpcName   string `form:"vpcName" json:"vpcName"`
 }
 
 // CreateNodeReq 创建节点请求
 type CreateNodeReq struct {
-	Title       string   `json:"title" binding:"required"`
-	Pid         int      `json:"pId" binding:"required"`
-	Desc        string   `json:"desc"`
-	ServiceCode string   `json:"serviceCode"`
-	OpsAdminIds []uint   `json:"opsAdminIds"`
-	RdAdminIds  []uint   `json:"rdAdminIds"`
-	RdMemberIds []uint   `json:"rdMemberIds"`
+	Title       string `json:"title" binding:"required"`
+	Pid         int    `json:"pId" binding:"required"`
+	Desc        string `json:"desc"`
+	ServiceCode string `json:"serviceCode"`
+	OpsAdminIds []uint `json:"opsAdminIds"`
+	RdAdminIds  []uint `json:"rdAdminIds"`
+	RdMemberIds []uint `json:"rdMemberIds"`
 }
 
 // UpdateNodeReq 更新节点请求
 type UpdateNodeReq struct {
-	ID          uint     `json:"id" binding:"required"`
-	Title       string   `json:"title"`
-	Desc        string   `json:"desc"`
-	ServiceCode string   `json:"serviceCode"`
-	OpsAdminIds []uint   `json:"opsAdminIds"`
-	RdAdminIds  []uint   `json:"rdAdminIds"`
-	RdMemberIds []uint   `json:"rdMemberIds"`
+	ID          uint   `json:"id" binding:"required"`
+	Title       string `json:"title"`
+	Desc        string `json:"desc"`
+	ServiceCode string `json:"serviceCode"`
+	OpsAdminIds []uint `json:"opsAdminIds"`
+	RdAdminIds  []uint `json:"rdAdminIds"`
+	RdMemberIds []uint `json:"rdMemberIds"`
 }
 
 // NodeAdminReq 节点管理员请求
 type NodeAdminReq struct {
-	NodeId  uint   `json:"nodeId" binding:"required"`
-	UserId  uint   `json:"userId" binding:"required"`
+	NodeId    uint   `json:"nodeId" binding:"required"`
+	UserId    uint   `json:"userId" binding:"required"`
 	AdminType string `json:"adminType" binding:"required,oneof=ops rd"`
 }
 
@@ -496,7 +496,7 @@ type NodePathResp struct {
 // CloudProviderResp 云厂商响应
 type CloudProviderResp struct {
 	Provider  CloudProvider `json:"provider"`
-	LocalName string              `json:"localName"`
+	LocalName string        `json:"localName"`
 }
 
 type TreeNodeDetailResp struct {

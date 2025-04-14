@@ -1,3 +1,28 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package provider
 
 import (
@@ -120,7 +145,7 @@ func (a *aliyunProvider) CreateInstance(ctx context.Context, region string, conf
 		return err
 	}
 
-	a.logger.Info("创建ECS实例成功", 
+	a.logger.Info("创建ECS实例成功",
 		zap.Strings("instanceIds", tea.StringSliceValue(response.Body.InstanceIdSets.InstanceIdSet)))
 	return nil
 }
@@ -503,12 +528,12 @@ func (a *aliyunProvider) ListInstances(ctx context.Context, region string, pageS
 		if len(instance.VpcAttributes.PrivateIpAddress.IpAddress) > 0 {
 			privateIp = tea.StringValue(instance.VpcAttributes.PrivateIpAddress.IpAddress[0])
 		}
-		
+
 		publicIp := ""
 		if len(instance.PublicIpAddress.IpAddress) > 0 {
 			publicIp = tea.StringValue(instance.PublicIpAddress.IpAddress[0])
 		}
-		
+
 		ecsResp := &model.ResourceECSResp{
 			ResourceEcs: model.ResourceEcs{
 				ComputeResource: model.ComputeResource{

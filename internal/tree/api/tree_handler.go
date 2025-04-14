@@ -1,3 +1,28 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package api
 
 import (
@@ -7,19 +32,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// TreeHandler 服务树API处理器
 type TreeHandler struct {
 	service service.TreeService
 }
 
-// NewTreeHandler 创建服务树处理器
 func NewTreeHandler(service service.TreeService) *TreeHandler {
 	return &TreeHandler{
 		service: service,
 	}
 }
 
-// RegisterRouters 注册路由
 func (h *TreeHandler) RegisterRouters(server *gin.Engine) {
 	treeGroup := server.Group("/api/tree")
 	{
@@ -28,14 +50,14 @@ func (h *TreeHandler) RegisterRouters(server *gin.Engine) {
 		treeGroup.GET("/children/:parentId", h.GetChildNodes)
 		treeGroup.GET("/path/:nodeId", h.GetNodePath)
 		treeGroup.GET("/resources/:nodeId", h.GetNodeResources)
-		
+
 		treeGroup.POST("/create", h.CreateNode)
 		treeGroup.POST("/update", h.UpdateNode)
 		treeGroup.POST("/delete/:id", h.DeleteNode)
-		
+
 		treeGroup.POST("/bind_resource", h.BindResource)
 		treeGroup.POST("/unbind_resource", h.UnbindResource)
-		
+
 		treeGroup.POST("/add_admin", h.AddNodeAdmin)
 		treeGroup.POST("/remove_admin", h.RemoveNodeAdmin)
 		treeGroup.POST("/add_member", h.AddNodeMember)
@@ -57,7 +79,7 @@ func (h *TreeHandler) GetNodeDetail(ctx *gin.Context) {
 		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
-	
+
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetNodeById(ctx, nodeId)
 	})
@@ -70,7 +92,7 @@ func (h *TreeHandler) GetChildNodes(ctx *gin.Context) {
 		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
-	
+
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetChildNodes(ctx, parentId)
 	})
@@ -83,7 +105,7 @@ func (h *TreeHandler) GetNodePath(ctx *gin.Context) {
 		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
-	
+
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetNodePath(ctx, nodeId)
 	})
@@ -96,7 +118,7 @@ func (h *TreeHandler) GetNodeResources(ctx *gin.Context) {
 		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
-	
+
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetNodeResources(ctx, nodeId)
 	})
@@ -105,7 +127,7 @@ func (h *TreeHandler) GetNodeResources(ctx *gin.Context) {
 // CreateNode 创建节点
 func (h *TreeHandler) CreateNode(ctx *gin.Context) {
 	var req model.CreateNodeReq
-	
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.CreateNode(ctx, &req)
 	})
@@ -114,7 +136,7 @@ func (h *TreeHandler) CreateNode(ctx *gin.Context) {
 // UpdateNode 更新节点
 func (h *TreeHandler) UpdateNode(ctx *gin.Context) {
 	var req model.UpdateNodeReq
-	
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateNode(ctx, &req)
 	})
@@ -127,7 +149,7 @@ func (h *TreeHandler) DeleteNode(ctx *gin.Context) {
 		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
-	
+
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.service.DeleteNode(ctx, nodeId)
 	})
@@ -136,7 +158,7 @@ func (h *TreeHandler) DeleteNode(ctx *gin.Context) {
 // BindResource 绑定资源到节点
 func (h *TreeHandler) BindResource(ctx *gin.Context) {
 	var req model.ResourceBindingRequest
-	
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.BindResource(ctx, &req)
 	})
@@ -145,7 +167,7 @@ func (h *TreeHandler) BindResource(ctx *gin.Context) {
 // UnbindResource 解绑节点资源
 func (h *TreeHandler) UnbindResource(ctx *gin.Context) {
 	var req model.ResourceBindingRequest
-	
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UnbindResource(ctx, &req)
 	})
@@ -154,7 +176,7 @@ func (h *TreeHandler) UnbindResource(ctx *gin.Context) {
 // AddNodeAdmin 添加节点管理员
 func (h *TreeHandler) AddNodeAdmin(ctx *gin.Context) {
 	var req model.NodeAdminReq
-	
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.AddNodeAdmin(ctx, &req)
 	})
@@ -163,7 +185,7 @@ func (h *TreeHandler) AddNodeAdmin(ctx *gin.Context) {
 // RemoveNodeAdmin 移除节点管理员
 func (h *TreeHandler) RemoveNodeAdmin(ctx *gin.Context) {
 	var req model.NodeAdminReq
-	
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.RemoveNodeAdmin(ctx, &req)
 	})
@@ -172,7 +194,7 @@ func (h *TreeHandler) RemoveNodeAdmin(ctx *gin.Context) {
 // AddNodeMember 添加节点成员
 func (h *TreeHandler) AddNodeMember(ctx *gin.Context) {
 	var req model.NodeMemberReq
-	
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.AddNodeMember(ctx, &req)
 	})
@@ -181,7 +203,7 @@ func (h *TreeHandler) AddNodeMember(ctx *gin.Context) {
 // RemoveNodeMember 移除节点成员
 func (h *TreeHandler) RemoveNodeMember(ctx *gin.Context) {
 	var req model.NodeMemberReq
-	
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.RemoveNodeMember(ctx, &req)
 	})

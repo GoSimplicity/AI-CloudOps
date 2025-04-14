@@ -1,3 +1,28 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package service
 
 import (
@@ -17,7 +42,7 @@ type EcsService interface {
 	CreateEcsResource(ctx context.Context, params *model.EcsCreationParams) error
 	StartEcsResource(ctx context.Context, provider model.CloudProvider, region string, instanceID string) error
 	StopEcsResource(ctx context.Context, provider model.CloudProvider, region string, instanceID string) error
-	
+
 	// 磁盘管理
 	ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (*model.PageResp, error)
 	CreateDisk(ctx context.Context, provider model.CloudProvider, region string, params *model.DiskCreationParams) error
@@ -27,27 +52,26 @@ type EcsService interface {
 }
 
 type ecsService struct {
-	AliyunProvider provider.AliyunProvider
+	AliyunProvider  provider.AliyunProvider
 	TencentProvider provider.TencentProvider
-	HuaweiProvider provider.HuaweiProvider
-	AWSProvider provider.AwsProvider
-	AzureProvider provider.AzureProvider
-	GCPProvider provider.GcpProvider
-	logger *zap.Logger
-	dao    dao.EcsDAO
+	HuaweiProvider  provider.HuaweiProvider
+	AWSProvider     provider.AwsProvider
+	AzureProvider   provider.AzureProvider
+	GCPProvider     provider.GcpProvider
+	logger          *zap.Logger
+	dao             dao.EcsDAO
 }
-
 
 func NewEcsService(logger *zap.Logger, dao dao.EcsDAO, AliyunProvider provider.AliyunProvider, TencentProvider provider.TencentProvider, HuaweiProvider provider.HuaweiProvider, AWSProvider provider.AwsProvider, AzureProvider provider.AzureProvider, GCPProvider provider.GcpProvider) EcsService {
 	return &ecsService{
-		logger: logger,
-		dao:    dao,
-		AliyunProvider: AliyunProvider,
+		logger:          logger,
+		dao:             dao,
+		AliyunProvider:  AliyunProvider,
 		TencentProvider: TencentProvider,
-		HuaweiProvider: HuaweiProvider,
-		AWSProvider: AWSProvider,
-		AzureProvider: AzureProvider,
-		GCPProvider: GCPProvider,
+		HuaweiProvider:  HuaweiProvider,
+		AWSProvider:     AWSProvider,
+		AzureProvider:   AzureProvider,
+		GCPProvider:     GCPProvider,
 	}
 }
 
@@ -81,7 +105,7 @@ func (e *ecsService) CreateEcsResource(ctx context.Context, params *model.EcsCre
 	}
 
 	if err != nil {
-		e.logger.Error("[CreateEcsResource] 创建云实例失败", 
+		e.logger.Error("[CreateEcsResource] 创建云实例失败",
 			zap.String("provider", string(params.Provider)),
 			zap.String("region", params.Region),
 			zap.Error(err))
@@ -112,7 +136,7 @@ func (e *ecsService) StartEcsResource(ctx context.Context, provider model.CloudP
 	}
 
 	if err != nil {
-		e.logger.Error("[StartEcsResource] 启动云实例失败", 
+		e.logger.Error("[StartEcsResource] 启动云实例失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.String("instanceID", instanceID),
@@ -144,7 +168,7 @@ func (e *ecsService) StopEcsResource(ctx context.Context, provider model.CloudPr
 	}
 
 	if err != nil {
-		e.logger.Error("[StopEcsResource] 停止云实例失败", 
+		e.logger.Error("[StopEcsResource] 停止云实例失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.String("instanceID", instanceID),
@@ -200,7 +224,7 @@ func (e *ecsService) ListDisks(ctx context.Context, provider model.CloudProvider
 	}
 
 	if err != nil {
-		e.logger.Error("[ListDisks] 获取磁盘列表失败", 
+		e.logger.Error("[ListDisks] 获取磁盘列表失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.Error(err))
@@ -234,7 +258,7 @@ func (e *ecsService) CreateDisk(ctx context.Context, provider model.CloudProvide
 	}
 
 	if err != nil {
-		e.logger.Error("[CreateDisk] 创建磁盘失败", 
+		e.logger.Error("[CreateDisk] 创建磁盘失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.Error(err))
@@ -265,7 +289,7 @@ func (e *ecsService) DeleteDisk(ctx context.Context, provider model.CloudProvide
 	}
 
 	if err != nil {
-		e.logger.Error("[DeleteDisk] 删除磁盘失败", 
+		e.logger.Error("[DeleteDisk] 删除磁盘失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.String("diskID", diskID),
@@ -297,7 +321,7 @@ func (e *ecsService) AttachDisk(ctx context.Context, provider model.CloudProvide
 	}
 
 	if err != nil {
-		e.logger.Error("[AttachDisk] 挂载磁盘失败", 
+		e.logger.Error("[AttachDisk] 挂载磁盘失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.String("diskID", diskID),
@@ -330,7 +354,7 @@ func (e *ecsService) DetachDisk(ctx context.Context, provider model.CloudProvide
 	}
 
 	if err != nil {
-		e.logger.Error("[DetachDisk] 卸载磁盘失败", 
+		e.logger.Error("[DetachDisk] 卸载磁盘失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.String("diskID", diskID),

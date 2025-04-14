@@ -1,3 +1,28 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package service
 
 import (
@@ -56,7 +81,7 @@ func (r *resourceService) RestartResource(ctx context.Context, resourceType stri
 	// 首先停止资源
 	err := r.StopResource(ctx, resourceType, id)
 	if err != nil {
-		r.logger.Error("重启资源失败：停止资源出错", 
+		r.logger.Error("重启资源失败：停止资源出错",
 			zap.String("resourceType", resourceType),
 			zap.Int("id", id),
 			zap.Error(err))
@@ -66,7 +91,7 @@ func (r *resourceService) RestartResource(ctx context.Context, resourceType stri
 	// 然后启动资源
 	err = r.StartResource(ctx, resourceType, id)
 	if err != nil {
-		r.logger.Error("重启资源失败：启动资源出错", 
+		r.logger.Error("重启资源失败：启动资源出错",
 			zap.String("resourceType", resourceType),
 			zap.Int("id", id),
 			zap.Error(err))
@@ -81,7 +106,7 @@ func (r *resourceService) StartResource(ctx context.Context, resourceType string
 	// 获取资源信息
 	resource, err := r.dao.GetResourceById(ctx, resourceType, id)
 	if err != nil {
-		r.logger.Error("启动资源失败：获取资源信息出错", 
+		r.logger.Error("启动资源失败：获取资源信息出错",
 			zap.String("resourceType", resourceType),
 			zap.Int("id", id),
 			zap.Error(err))
@@ -117,7 +142,7 @@ func (r *resourceService) startEcsInstance(ctx context.Context, provider model.C
 	}
 
 	if err != nil {
-		r.logger.Error("启动实例失败", 
+		r.logger.Error("启动实例失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.String("instanceID", instanceID),
@@ -133,7 +158,7 @@ func (r *resourceService) StopResource(ctx context.Context, resourceType string,
 	// 获取资源信息
 	resource, err := r.dao.GetResourceById(ctx, resourceType, id)
 	if err != nil {
-		r.logger.Error("停止资源失败：获取资源信息出错", 
+		r.logger.Error("停止资源失败：获取资源信息出错",
 			zap.String("resourceType", resourceType),
 			zap.Int("id", id),
 			zap.Error(err))
@@ -169,7 +194,7 @@ func (r *resourceService) stopEcsInstance(ctx context.Context, provider model.Cl
 	}
 
 	if err != nil {
-		r.logger.Error("停止实例失败", 
+		r.logger.Error("停止实例失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.String("instanceID", instanceID),
@@ -185,7 +210,7 @@ func (r *resourceService) SyncResources(ctx context.Context, provider model.Clou
 	// 同步ECS资源
 	err := r.syncEcsResources(ctx, provider, region, pageSize, pageNumber)
 	if err != nil {
-		r.logger.Error("同步ECS资源失败", 
+		r.logger.Error("同步ECS资源失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.Error(err))
@@ -221,7 +246,7 @@ func (r *resourceService) syncEcsResources(ctx context.Context, provider model.C
 	}
 
 	if err != nil {
-		r.logger.Error("获取实例列表失败", 
+		r.logger.Error("获取实例列表失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.Error(err))
@@ -232,7 +257,7 @@ func (r *resourceService) syncEcsResources(ctx context.Context, provider model.C
 	for _, instance := range instances {
 		err = r.dao.SaveOrUpdateResource(ctx, instance)
 		if err != nil {
-			r.logger.Error("保存或更新ECS资源失败", 
+			r.logger.Error("保存或更新ECS资源失败",
 				zap.String("instanceId", instance.InstanceId),
 				zap.Error(err))
 			// 继续处理其他实例，不中断整个同步过程
@@ -240,7 +265,7 @@ func (r *resourceService) syncEcsResources(ctx context.Context, provider model.C
 		}
 	}
 
-	r.logger.Info("同步ECS资源完成", 
+	r.logger.Info("同步ECS资源完成",
 		zap.String("provider", string(provider)),
 		zap.String("region", region),
 		zap.Int("count", len(instances)))
@@ -253,7 +278,7 @@ func (r *resourceService) DeleteResource(ctx context.Context, resourceType strin
 	// 获取资源信息
 	resource, err := r.dao.GetResourceById(ctx, resourceType, id)
 	if err != nil {
-		r.logger.Error("删除资源失败：获取资源信息出错", 
+		r.logger.Error("删除资源失败：获取资源信息出错",
 			zap.String("resourceType", resourceType),
 			zap.Int("id", id),
 			zap.Error(err))
@@ -277,7 +302,7 @@ func (r *resourceService) DeleteResource(ctx context.Context, resourceType strin
 	// 从数据库中删除资源记录
 	err = r.dao.DeleteResource(ctx, resourceType, id)
 	if err != nil {
-		r.logger.Error("从数据库删除资源记录失败", 
+		r.logger.Error("从数据库删除资源记录失败",
 			zap.String("resourceType", resourceType),
 			zap.Int("id", id),
 			zap.Error(err))
@@ -308,7 +333,7 @@ func (r *resourceService) deleteEcsInstance(ctx context.Context, provider model.
 	}
 
 	if err != nil {
-		r.logger.Error("删除实例失败", 
+		r.logger.Error("删除实例失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.String("instanceID", instanceID),
