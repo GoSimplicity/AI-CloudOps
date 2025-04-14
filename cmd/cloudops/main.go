@@ -61,7 +61,7 @@ func Init() error {
 	}
 
 	// 初始化 Web 服务器和其他组件
-	cmd := di.InitWebServer()
+	cmd := di.ProvideCmd()
 
 	// 初始化翻译器
 	//if err := di.InitTrans(); err != nil {
@@ -92,8 +92,6 @@ func Init() error {
 			log.Fatalf("启动定时任务失败: %v", err)
 		}
 	}()
-
-	go cmd.Start.StartWorker()
 
 	// 启动异步任务服务器
 	go func() {

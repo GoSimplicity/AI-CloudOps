@@ -1,127 +1,343 @@
-/*
- * MIT License
- *
- * Copyright (c) 2024 Bamboo
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *
- */
-
 package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/provider"
 	"go.uber.org/zap"
 )
 
 type EcsService interface {
-	GetEcsUnbindList(ctx context.Context) ([]*model.ResourceEcs, error)
-	GetEcsList(ctx context.Context) ([]*model.ResourceEcs, error)
-	BindEcs(ctx context.Context, ecsID int, treeNodeID int) error
-	UnBindEcs(ctx context.Context, ecsID int, treeNodeID int) error
-	GetEcsById(ctx context.Context, id int) (*model.ResourceEcs, error)
+	// 资源管理
+	ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error)
+	GetEcsResourceById(ctx context.Context, id int) (*model.ResourceECSResp, error)
+	CreateEcsResource(ctx context.Context, params *model.EcsCreationParams) error
+	StartEcsResource(ctx context.Context, provider model.CloudProvider, region string, instanceID string) error
+	StopEcsResource(ctx context.Context, provider model.CloudProvider, region string, instanceID string) error
+	
+	// 磁盘管理
+	ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (*model.PageResp, error)
+	CreateDisk(ctx context.Context, provider model.CloudProvider, region string, params *model.DiskCreationParams) error
+	DeleteDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string) error
+	AttachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error
+	DetachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error
 }
 
 type ecsService struct {
-	logger  *zap.Logger
-	ecsDao  dao.TreeEcsDAO
-	nodeDao dao.TreeNodeDAO
+	AliyunProvider provider.AliyunProvider
+	TencentProvider provider.TencentProvider
+	HuaweiProvider provider.HuaweiProvider
+	AWSProvider provider.AwsProvider
+	AzureProvider provider.AzureProvider
+	GCPProvider provider.GcpProvider
+	logger *zap.Logger
+	dao    dao.EcsDAO
 }
 
-func NewEcsService(logger *zap.Logger, ecsDao dao.TreeEcsDAO, nodeDao dao.TreeNodeDAO) EcsService {
+
+func NewEcsService(logger *zap.Logger, dao dao.EcsDAO, AliyunProvider provider.AliyunProvider, TencentProvider provider.TencentProvider, HuaweiProvider provider.HuaweiProvider, AWSProvider provider.AwsProvider, AzureProvider provider.AzureProvider, GCPProvider provider.GcpProvider) EcsService {
 	return &ecsService{
-		logger:  logger,
-		ecsDao:  ecsDao,
-		nodeDao: nodeDao,
+		logger: logger,
+		dao:    dao,
+		AliyunProvider: AliyunProvider,
+		TencentProvider: TencentProvider,
+		HuaweiProvider: HuaweiProvider,
+		AWSProvider: AWSProvider,
+		AzureProvider: AzureProvider,
+		GCPProvider: GCPProvider,
 	}
 }
 
-func (s *ecsService) BindEcs(ctx context.Context, ecsID int, treeNodeID int) error {
-	ecs, err := s.ecsDao.GetByID(ctx, ecsID)
-	if err != nil {
-		s.logger.Error("BindEcs 获取 ECS 失败", zap.Error(err))
-		return err
-	}
-
-	node, err := s.nodeDao.GetByIDNoPreload(ctx, treeNodeID)
-	if err != nil {
-		s.logger.Error("BindEcs 获取树节点失败", zap.Error(err))
-		return err
-	}
-
-	return s.ecsDao.AddBindNodes(ctx, ecs, node)
-}
-
-func (s *ecsService) GetEcsList(ctx context.Context) ([]*model.ResourceEcs, error) {
-	list, err := s.ecsDao.GetAll(ctx)
-	if err != nil {
-		s.logger.Error("GetEcsList failed", zap.Error(err))
-		return nil, err
-	}
-
-	return list, nil
-}
-
-func (s *ecsService) GetEcsUnbindList(ctx context.Context) ([]*model.ResourceEcs, error) {
-	ecs, err := s.ecsDao.GetAll(ctx)
-	if err != nil {
-		s.logger.Error("GetEcsUnbindList failed", zap.Error(err))
-		return nil, err
-	}
-
-	// 筛选出未绑定的 ECS 资源
-	unbindEcs := make([]*model.ResourceEcs, 0, len(ecs))
-	for _, e := range ecs {
-		if len(e.BindNodes) == 0 {
-			unbindEcs = append(unbindEcs, e)
+// CreateEcsResource 创建ECS资源
+func (e *ecsService) CreateEcsResource(ctx context.Context, params *model.EcsCreationParams) error {
+	if params.Provider == model.CloudProviderLocal {
+		err := e.dao.CreateEcsResource(ctx, params)
+		if err != nil {
+			e.logger.Error("[CreateEcsResource] 创建ECS资源失败", zap.Error(err))
+			return err
 		}
+		return nil
 	}
 
-	return unbindEcs, nil
+	var err error
+	switch params.Provider {
+	case model.CloudProviderAliyun:
+		err = e.AliyunProvider.CreateInstance(ctx, params.Region, params)
+	case model.CloudProviderTencent:
+		err = e.TencentProvider.CreateInstance(ctx, params.Region, params)
+	case model.CloudProviderHuawei:
+		err = e.HuaweiProvider.CreateInstance(ctx, params.Region, params)
+	case model.CloudProviderAWS:
+		err = e.AWSProvider.CreateInstance(ctx, params.Region, params)
+	case model.CloudProviderAzure:
+		err = e.AzureProvider.CreateInstance(ctx, params.Region, params)
+	case model.CloudProviderGCP:
+		err = e.GCPProvider.CreateInstance(ctx, params.Region, params)
+	default:
+		return fmt.Errorf("[CreateEcsResource] 不支持的云提供商: %s", params.Provider)
+	}
+
+	if err != nil {
+		e.logger.Error("[CreateEcsResource] 创建云实例失败", 
+			zap.String("provider", string(params.Provider)),
+			zap.String("region", params.Region),
+			zap.Error(err))
+		return fmt.Errorf("[CreateEcsResource] 创建云实例失败: %w", err)
+	}
+
+	return nil
 }
 
-func (s *ecsService) UnBindEcs(ctx context.Context, ecsID int, treeNodeID int) error {
-	ecs, err := s.ecsDao.GetByID(ctx, ecsID)
-	if err != nil {
-		s.logger.Error("UnBindEcs 获取 ECS 失败", zap.Error(err))
-		return err
+// StartEcsResource 启动ECS资源
+func (e *ecsService) StartEcsResource(ctx context.Context, provider model.CloudProvider, region string, instanceID string) error {
+	var err error
+	switch provider {
+	case model.CloudProviderAliyun:
+		err = e.AliyunProvider.StartInstance(ctx, region, instanceID)
+	case model.CloudProviderTencent:
+		err = e.TencentProvider.StartInstance(ctx, region, instanceID)
+	case model.CloudProviderHuawei:
+		err = e.HuaweiProvider.StartInstance(ctx, region, instanceID)
+	case model.CloudProviderAWS:
+		err = e.AWSProvider.StartInstance(ctx, region, instanceID)
+	case model.CloudProviderAzure:
+		err = e.AzureProvider.StartInstance(ctx, region, instanceID)
+	case model.CloudProviderGCP:
+		err = e.GCPProvider.StartInstance(ctx, region, instanceID)
+	default:
+		return fmt.Errorf("[StartEcsResource] 不支持的云提供商: %s", provider)
 	}
 
-	node, err := s.nodeDao.GetByIDNoPreload(ctx, treeNodeID)
 	if err != nil {
-		s.logger.Error("UnBindEcs 获取树节点失败", zap.Error(err))
-		return err
+		e.logger.Error("[StartEcsResource] 启动云实例失败", 
+			zap.String("provider", string(provider)),
+			zap.String("region", region),
+			zap.String("instanceID", instanceID),
+			zap.Error(err))
+		return fmt.Errorf("[StartEcsResource] 启动云实例失败: %w", err)
 	}
 
-	return s.ecsDao.RemoveBindNodes(ctx, ecs, node)
+	return nil
 }
 
-// GetEcsById 根据ID获取ECS资源
-func (s *ecsService) GetEcsById(ctx context.Context, id int) (*model.ResourceEcs, error) {
-	ecs, err := s.ecsDao.GetByID(ctx, id)
+// StopEcsResource 停止ECS资源
+func (e *ecsService) StopEcsResource(ctx context.Context, provider model.CloudProvider, region string, instanceID string) error {
+	var err error
+	switch provider {
+	case model.CloudProviderAliyun:
+		err = e.AliyunProvider.StopInstance(ctx, region, instanceID)
+	case model.CloudProviderTencent:
+		err = e.TencentProvider.StopInstance(ctx, region, instanceID)
+	case model.CloudProviderHuawei:
+		err = e.HuaweiProvider.StopInstance(ctx, region, instanceID)
+	case model.CloudProviderAWS:
+		err = e.AWSProvider.StopInstance(ctx, region, instanceID)
+	case model.CloudProviderAzure:
+		err = e.AzureProvider.StopInstance(ctx, region, instanceID)
+	case model.CloudProviderGCP:
+		err = e.GCPProvider.StopInstance(ctx, region, instanceID)
+	default:
+		return fmt.Errorf("[StopEcsResource] 不支持的云提供商: %s", provider)
+	}
+
 	if err != nil {
-		s.logger.Error("获取ECS资源失败", zap.Error(err))
+		e.logger.Error("[StopEcsResource] 停止云实例失败", 
+			zap.String("provider", string(provider)),
+			zap.String("region", region),
+			zap.String("instanceID", instanceID),
+			zap.Error(err))
+		return fmt.Errorf("[StopEcsResource] 停止云实例失败: %w", err)
+	}
+
+	return nil
+}
+
+// GetEcsResourceById 获取ECS资源详情
+func (e *ecsService) GetEcsResourceById(ctx context.Context, id int) (*model.ResourceECSResp, error) {
+	resource, err := e.dao.GetEcsResourceById(ctx, id)
+	if err != nil {
+		e.logger.Error("[GetEcsResourceById] 获取ECS资源详情失败", zap.Error(err))
 		return nil, err
 	}
+	return resource, nil
+}
 
-	return ecs, nil
+// ListEcsResources 获取ECS资源列表
+func (e *ecsService) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error) {
+	resources, err := e.dao.ListEcsResources(ctx, req)
+	if err != nil {
+		e.logger.Error("[ListEcsResources] 获取ECS资源列表失败", zap.Error(err))
+		return nil, err
+	}
+	return resources, nil
+}
+
+// ListDisks 获取磁盘列表
+func (e *ecsService) ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (*model.PageResp, error) {
+	var (
+		result []*model.PageResp
+		err    error
+	)
+
+	switch provider {
+	case model.CloudProviderAliyun:
+		result, err = e.AliyunProvider.ListDisks(ctx, region, pageSize, pageNumber)
+	case model.CloudProviderTencent:
+		result, err = e.TencentProvider.ListDisks(ctx, region, pageSize, pageNumber)
+	case model.CloudProviderHuawei:
+		result, err = e.HuaweiProvider.ListDisks(ctx, region, pageSize, pageNumber)
+	case model.CloudProviderAWS:
+		result, err = e.AWSProvider.ListDisks(ctx, region, pageSize, pageNumber)
+	case model.CloudProviderAzure:
+		result, err = e.AzureProvider.ListDisks(ctx, region, pageSize, pageNumber)
+	case model.CloudProviderGCP:
+		result, err = e.GCPProvider.ListDisks(ctx, region, pageSize, pageNumber)
+	default:
+		return nil, fmt.Errorf("[ListDisks] 不支持的云提供商: %s", provider)
+	}
+
+	if err != nil {
+		e.logger.Error("[ListDisks] 获取磁盘列表失败", 
+			zap.String("provider", string(provider)),
+			zap.String("region", region),
+			zap.Error(err))
+		return nil, fmt.Errorf("[ListDisks] 获取磁盘列表失败: %w", err)
+	}
+
+	if len(result) > 0 {
+		return result[0], nil
+	}
+	return &model.PageResp{}, nil
+}
+
+// CreateDisk 创建磁盘
+func (e *ecsService) CreateDisk(ctx context.Context, provider model.CloudProvider, region string, params *model.DiskCreationParams) error {
+	var err error
+	switch provider {
+	case model.CloudProviderAliyun:
+		err = e.AliyunProvider.CreateDisk(ctx, region, params)
+	case model.CloudProviderTencent:
+		err = e.TencentProvider.CreateDisk(ctx, region, params)
+	case model.CloudProviderHuawei:
+		err = e.HuaweiProvider.CreateDisk(ctx, region, params)
+	case model.CloudProviderAWS:
+		err = e.AWSProvider.CreateDisk(ctx, region, params)
+	case model.CloudProviderAzure:
+		err = e.AzureProvider.CreateDisk(ctx, region, params)
+	case model.CloudProviderGCP:
+		err = e.GCPProvider.CreateDisk(ctx, region, params)
+	default:
+		return fmt.Errorf("[CreateDisk] 不支持的云提供商: %s", provider)
+	}
+
+	if err != nil {
+		e.logger.Error("[CreateDisk] 创建磁盘失败", 
+			zap.String("provider", string(provider)),
+			zap.String("region", region),
+			zap.Error(err))
+		return fmt.Errorf("[CreateDisk] 创建磁盘失败: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteDisk 删除磁盘
+func (e *ecsService) DeleteDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string) error {
+	var err error
+	switch provider {
+	case model.CloudProviderAliyun:
+		err = e.AliyunProvider.DeleteDisk(ctx, region, diskID)
+	case model.CloudProviderTencent:
+		err = e.TencentProvider.DeleteDisk(ctx, region, diskID)
+	case model.CloudProviderHuawei:
+		err = e.HuaweiProvider.DeleteDisk(ctx, region, diskID)
+	case model.CloudProviderAWS:
+		err = e.AWSProvider.DeleteDisk(ctx, region, diskID)
+	case model.CloudProviderAzure:
+		err = e.AzureProvider.DeleteDisk(ctx, region, diskID)
+	case model.CloudProviderGCP:
+		err = e.GCPProvider.DeleteDisk(ctx, region, diskID)
+	default:
+		return fmt.Errorf("[DeleteDisk] 不支持的云提供商: %s", provider)
+	}
+
+	if err != nil {
+		e.logger.Error("[DeleteDisk] 删除磁盘失败", 
+			zap.String("provider", string(provider)),
+			zap.String("region", region),
+			zap.String("diskID", diskID),
+			zap.Error(err))
+		return fmt.Errorf("[DeleteDisk] 删除磁盘失败: %w", err)
+	}
+
+	return nil
+}
+
+// AttachDisk 挂载磁盘
+func (e *ecsService) AttachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error {
+	var err error
+	switch provider {
+	case model.CloudProviderAliyun:
+		err = e.AliyunProvider.AttachDisk(ctx, region, diskID, instanceID)
+	case model.CloudProviderTencent:
+		err = e.TencentProvider.AttachDisk(ctx, region, diskID, instanceID)
+	case model.CloudProviderHuawei:
+		err = e.HuaweiProvider.AttachDisk(ctx, region, diskID, instanceID)
+	case model.CloudProviderAWS:
+		err = e.AWSProvider.AttachDisk(ctx, region, diskID, instanceID)
+	case model.CloudProviderAzure:
+		err = e.AzureProvider.AttachDisk(ctx, region, diskID, instanceID)
+	case model.CloudProviderGCP:
+		err = e.GCPProvider.AttachDisk(ctx, region, diskID, instanceID)
+	default:
+		return fmt.Errorf("[AttachDisk] 不支持的云提供商: %s", provider)
+	}
+
+	if err != nil {
+		e.logger.Error("[AttachDisk] 挂载磁盘失败", 
+			zap.String("provider", string(provider)),
+			zap.String("region", region),
+			zap.String("diskID", diskID),
+			zap.String("instanceID", instanceID),
+			zap.Error(err))
+		return fmt.Errorf("[AttachDisk] 挂载磁盘失败: %w", err)
+	}
+
+	return nil
+}
+
+// DetachDisk 卸载磁盘
+func (e *ecsService) DetachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error {
+	var err error
+	switch provider {
+	case model.CloudProviderAliyun:
+		err = e.AliyunProvider.DetachDisk(ctx, region, diskID, instanceID)
+	case model.CloudProviderTencent:
+		err = e.TencentProvider.DetachDisk(ctx, region, diskID, instanceID)
+	case model.CloudProviderHuawei:
+		err = e.HuaweiProvider.DetachDisk(ctx, region, diskID, instanceID)
+	case model.CloudProviderAWS:
+		err = e.AWSProvider.DetachDisk(ctx, region, diskID, instanceID)
+	case model.CloudProviderAzure:
+		err = e.AzureProvider.DetachDisk(ctx, region, diskID, instanceID)
+	case model.CloudProviderGCP:
+		err = e.GCPProvider.DetachDisk(ctx, region, diskID, instanceID)
+	default:
+		return fmt.Errorf("[DetachDisk] 不支持的云提供商: %s", provider)
+	}
+
+	if err != nil {
+		e.logger.Error("[DetachDisk] 卸载磁盘失败", 
+			zap.String("provider", string(provider)),
+			zap.String("region", region),
+			zap.String("diskID", diskID),
+			zap.String("instanceID", instanceID),
+			zap.Error(err))
+		return fmt.Errorf("[DetachDisk] 卸载磁盘失败: %w", err)
+	}
+
+	return nil
 }

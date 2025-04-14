@@ -33,7 +33,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
-	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 )
@@ -48,17 +47,15 @@ type ScrapeJobService interface {
 
 type scrapeJobService struct {
 	dao     scrapeJobDao.ScrapeJobDAO
-	treeDao treeDao.TreeNodeDAO
 	cache   cache.MonitorCache
 	userDao userDao.UserDAO
 	l       *zap.Logger
 }
 
-func NewPrometheusScrapeService(dao scrapeJobDao.ScrapeJobDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO, treeDao treeDao.TreeNodeDAO) ScrapeJobService {
+func NewPrometheusScrapeService(dao scrapeJobDao.ScrapeJobDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO) ScrapeJobService {
 	return &scrapeJobService{
 		dao:     dao,
 		userDao: userDao,
-		treeDao: treeDao,
 		l:       l,
 		cache:   cache,
 	}
@@ -236,7 +233,7 @@ func (s *scrapeJobService) buildUserInfo(ctx context.Context, jobs []*model.Moni
 
 // buildTreeNodeInfo 构建树节点信息
 func (s *scrapeJobService) buildTreeNodeInfo(ctx context.Context, jobs []*model.MonitorScrapeJob) error {
-	if len(jobs) == 0 || s.treeDao == nil {
+	if len(jobs) == 0 {
 		return nil
 	}
 
@@ -265,31 +262,31 @@ func (s *scrapeJobService) buildTreeNodeInfo(ctx context.Context, jobs []*model.
 		return nil
 	}
 
-	// 批量获取节点信息
-	nodes, err := s.treeDao.GetByIDs(ctx, nodeIDs)
-	if err != nil {
-		s.l.Error("批量获取树节点信息失败", zap.Error(err))
-		return err
-	}
+	// // 批量获取节点信息
+	// nodes, err := s.treeDao.GetByIDs(ctx, nodeIDs)
+	// if err != nil {
+	// 	s.l.Error("批量获取树节点信息失败", zap.Error(err))
+	// 	return err
+	// }
 
-	// 构建节点映射
-	nodeMap := make(map[int]string, len(nodes))
-	for _, node := range nodes {
-		nodeMap[node.ID] = node.Title
-	}
+	// // 构建节点映射
+	// nodeMap := make(map[int]string, len(nodes))
+	// for _, node := range nodes {
+	// 	nodeMap[node.ID] = node.Title
+	// }
 
-	// 填充节点名称
-	for _, job := range jobs {
-		names := make([]string, 0, len(job.TreeNodeIDs))
-		for _, idStr := range job.TreeNodeIDs {
-			if id, err := strconv.Atoi(idStr); err == nil {
-				if name := nodeMap[id]; name != "" {
-					names = append(names, name)
-				}
-			}
-		}
-		job.TreeNodeNames = names
-	}
+	// // 填充节点名称
+	// for _, job := range jobs {
+	// 	names := make([]string, 0, len(job.TreeNodeIDs))
+	// 	for _, idStr := range job.TreeNodeIDs {
+	// 		if id, err := strconv.Atoi(idStr); err == nil {
+	// 			if name := nodeMap[id]; name != "" {
+	// 				names = append(names, name)
+	// 			}
+	// 		}
+	// 	}
+	// 	job.TreeNodeNames = names
+	// }
 
 	return nil
 }
