@@ -11,7 +11,7 @@ import (
 )
 
 type ResourceService interface {
-	SyncResources(ctx context.Context, provider model.CloudProvider, region string) error
+	SyncResources(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) error
 	DeleteResource(ctx context.Context, resourceType string, id int) error
 	StartResource(ctx context.Context, resourceType string, id int) error
 	StopResource(ctx context.Context, resourceType string, id int) error
@@ -181,9 +181,9 @@ func (r *resourceService) stopEcsInstance(ctx context.Context, provider model.Cl
 }
 
 // SyncResources 同步资源
-func (r *resourceService) SyncResources(ctx context.Context, provider model.CloudProvider, region string) error {
+func (r *resourceService) SyncResources(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) error {
 	// 同步ECS资源
-	err := r.syncEcsResources(ctx, provider, region)
+	err := r.syncEcsResources(ctx, provider, region, pageSize, pageNumber)
 	if err != nil {
 		r.logger.Error("同步ECS资源失败", 
 			zap.String("provider", string(provider)),
@@ -198,11 +198,7 @@ func (r *resourceService) SyncResources(ctx context.Context, provider model.Clou
 }
 
 // 同步ECS资源的具体实现
-func (r *resourceService) syncEcsResources(ctx context.Context, provider model.CloudProvider, region string) error {
-	// 默认每页大小和起始页码
-	pageSize := 50
-	pageNumber := 1
-
+func (r *resourceService) syncEcsResources(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) error {
 	var instances []*model.ResourceECSResp
 	var err error
 

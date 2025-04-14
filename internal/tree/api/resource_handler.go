@@ -93,7 +93,7 @@ func (h *ResourceHandler) SyncResources(ctx *gin.Context) {
 	var req model.SyncResourcesReq
 	
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.resourceService.SyncResources(ctx, req.Provider, req.Region)
+		return nil, h.resourceService.SyncResources(ctx, req.Provider, req.Region, req.PageSize, req.PageNumber)
 	})
 }
 

@@ -315,6 +315,8 @@ type ResourceBindingRequest struct {
 type SyncResourcesReq struct {
 	Provider CloudProvider `json:"provider" binding:"required"`
 	Region   string        `json:"region" binding:"required"`
+	PageSize int           `json:"pageSize" binding:"required,min=1"`
+	PageNumber int          `json:"pageNumber" binding:"required,min=1"`
 }
 
 // ListResourcesBaseReq 资源列表基础查询参数
