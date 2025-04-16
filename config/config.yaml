@@ -9,13 +9,10 @@ jwt:
   issuer: "K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx"
   expiration: 3600
 redis:
-  # addr: "redis:6379"
-  addr: "localhost:36379"
+  addr: "redis:6379"
   password: "v6SxhWHyZC7S"
 mysql:
-  # addr: "root:root@tcp(mysql:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
-  addr: "root:root@tcp(localhost:33069)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
-
+  addr: "root:root@tcp(mysql:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
 tree:
   check_status_cron: "@every 300s"
 k8s:
@@ -23,14 +20,9 @@ k8s:
 prometheus:
   refresh_cron: "@every 15s"
   local_yaml_dir: ./local_yaml
-  enable_alert: 0  # 1 开启告警 0 关闭告警
+  enable_alert: 0 # 1 开启告警 0 关闭告警
   enable_record: 0 # 1 开启记录 0 关闭记录
   alert_webhook_addr: "http://localhost:8889/api/v1/alerts/receive"
   httpSdAPI: "http://localhost:8888/api/not_auth/getTreeNodeBindIps"
 mock:
   enabled: true # 是否开启mock
-terraform:
-  bin_path: "/opt/homebrew/bin/terraform"
-ai:
-  base_url: "http://localhost/v1" # dify API地址
-  api_key: "xxx" # dify API密钥
