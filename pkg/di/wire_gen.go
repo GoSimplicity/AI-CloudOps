@@ -31,6 +31,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	api8 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	dao4 "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/provider"
 	service6 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -149,7 +150,26 @@ func ProvideCmd() *Cmd {
 	instanceHandler := api6.NewInstanceHandler(serviceInstanceService)
 	aiService := service5.NewAIService(logger)
 	aiHandler := api7.NewAIHandler(aiService)
-	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, processHandler, templateHandler, instanceHandler, aiHandler)
+	resourceDAO := dao4.NewResourceDAO(db)
+	aliyunProvider := provider.NewAliyunProvider(logger, resourceDAO)
+	tencentProvider := provider.NewTencentProvider()
+	huaweiProvider := provider.NewHuaweiProvider()
+	awsProvider := provider.NewAwsProvider()
+	azureProvider := provider.NewAzureProvider()
+	gcpProvider := provider.NewGcpProvider()
+	resourceService := service6.NewResourceService(logger, resourceDAO, aliyunProvider, tencentProvider, huaweiProvider, awsProvider, azureProvider, gcpProvider)
+	ecsDAO := dao4.NewEcsDAO(db)
+	ecsService := service6.NewEcsService(logger, ecsDAO, aliyunProvider, tencentProvider, huaweiProvider, awsProvider, azureProvider, gcpProvider)
+	vpcDAO := dao4.NewVpcDAO(logger, db)
+	vpcService := service6.NewVpcService(logger, vpcDAO, aliyunProvider, tencentProvider, huaweiProvider, awsProvider, azureProvider, gcpProvider)
+	elbDAO := dao4.NewElbDAO(db)
+	elbService := service6.NewElbService(logger, elbDAO)
+	rdsDAO := dao4.NewRdsDAO(db)
+	rdsService := service6.NewRdsService(logger, rdsDAO)
+	cloudDAO := dao4.NewCloudDAO(db)
+	cloudService := service6.NewCloudService(logger, cloudDAO)
+	resourceHandler := api8.NewResourceHandler(resourceService, ecsService, vpcService, elbService, rdsService, cloudService)
+	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, processHandler, templateHandler, instanceHandler, aiHandler, resourceHandler)
 	createK8sClusterTask := job.NewCreateK8sClusterTask(logger, k8sClient, clusterDAO)
 	updateK8sClusterTask := job.NewUpdateK8sClusterTask(logger, k8sClient, clusterDAO)
 	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient)
@@ -185,6 +205,8 @@ var DaoSet = wire.NewSet(alert.NewAlertManagerEventDAO, alert.NewAlertManagerOnD
 var UtilSet = wire.NewSet(utils.NewJWTHandler)
 
 var JobSet = wire.NewSet(job.NewTimedScheduler, job.NewTimedTask, job.NewCreateK8sClusterTask, job.NewUpdateK8sClusterTask, job.NewRoutes)
+
+var ProviderSet = wire.NewSet(provider.NewAliyunProvider, provider.NewTencentProvider, provider.NewAwsProvider, provider.NewHuaweiProvider, provider.NewAzureProvider, provider.NewGcpProvider)
 
 var CronSet = wire.NewSet(cron.NewCronManager)
 

@@ -68,6 +68,7 @@ func (h *ResourceHandler) RegisterRouters(server *gin.Engine) {
 			ecsGroup.POST("/stop/:id", h.StopEcs)
 			ecsGroup.POST("/restart/:id", h.RestartEcs)
 			ecsGroup.POST("/delete/:id", h.DeleteEcs)
+			ecsGroup.POST("/instance_options", h.ListInstanceOptions)
 		}
 
 		// VPC相关接口
@@ -118,7 +119,7 @@ func (h *ResourceHandler) SyncResources(ctx *gin.Context) {
 	var req model.SyncResourcesReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.resourceService.SyncResources(ctx, req.Provider, req.Region, req.PageSize, req.PageNumber)
+		return nil, h.resourceService.SyncResources(ctx, req.Provider, req.Region)
 	})
 }
 
@@ -500,5 +501,14 @@ func (h *ResourceHandler) ListSecurityGroups(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.cloudService.ListSecurityGroups(ctx, provider, region)
+	})
+}
+
+// ListInstanceOptions 获取实例选项
+func (h *ResourceHandler) ListInstanceOptions(ctx *gin.Context) {
+	var req model.ListInstanceOptionsReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.ecsService.ListInstanceOptions(ctx, &req)
 	})
 }

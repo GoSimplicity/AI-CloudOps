@@ -29,18 +29,24 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/client"
 	openapiv2 "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	ecs "github.com/alibabacloud-go/ecs-20140526/v2/client"
 	"github.com/alibabacloud-go/tea/tea"
 	vpc "github.com/alibabacloud-go/vpc-20160428/v2/client"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 type AliyunProvider interface {
+	SyncResources(ctx context.Context, region string) error
+
 	// 资源管理
 	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSResp, error)
 	CreateInstance(ctx context.Context, region string, config *model.EcsCreationParams) error
@@ -59,19 +65,25 @@ type AliyunProvider interface {
 	DeleteDisk(ctx context.Context, region string, diskID string) error
 	AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error
 	DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error
+
+	ListRegions(ctx context.Context) ([]*model.RegionResp, error)
+	GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error)
+	ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error)
 }
 
 type aliyunProvider struct {
 	logger          *zap.Logger
+	dao             dao.ResourceDAO
 	accessKeyId     string
 	accessKeySecret string
 }
 
-func NewAliyunProvider(logger *zap.Logger) AliyunProvider {
+func NewAliyunProvider(logger *zap.Logger, dao dao.ResourceDAO) AliyunProvider {
 	accessKeyId := os.Getenv("ALIYUN_ACCESS_KEY_ID")
 	accessKeySecret := os.Getenv("ALIYUN_ACCESS_KEY_SECRET")
 	return &aliyunProvider{
 		logger:          logger,
+		dao:             dao,
 		accessKeyId:     accessKeyId,
 		accessKeySecret: accessKeySecret,
 	}
@@ -83,6 +95,7 @@ func (a *aliyunProvider) createEcsClient(region string) (*ecs.Client, error) {
 		AccessKeyId:     tea.String(a.accessKeyId),
 		AccessKeySecret: tea.String(a.accessKeySecret),
 		RegionId:        tea.String(region),
+		Endpoint:        tea.String("ecs.aliyuncs.com"),
 	}
 	return ecs.NewClient(config)
 }
@@ -106,23 +119,36 @@ func (a *aliyunProvider) CreateInstance(ctx context.Context, region string, conf
 	}
 
 	request := &ecs.RunInstancesRequest{
-		RegionId:         tea.String(region),
-		ZoneId:           tea.String(config.ZoneId),
-		ImageId:          tea.String(config.ImageId),
-		InstanceType:     tea.String(config.InstanceType),
-		SecurityGroupIds: tea.StringSlice(config.SecurityGroupIds),
-		VSwitchId:        tea.String(config.VSwitchId),
-		InstanceName:     tea.String(config.InstanceName),
-		HostName:         tea.String(config.HostnamePrefix),
-		Description:      tea.String(config.Description),
-		Amount:           tea.Int32(int32(config.Quantity)),
-		DryRun:           tea.Bool(config.DryRun),
+		RegionId:           tea.String(region),
+		ZoneId:             tea.String(config.ZoneId),
+		ImageId:            tea.String(config.ImageId),
+		InstanceType:       tea.String(config.InstanceType),
+		SecurityGroupIds:   tea.StringSlice(config.SecurityGroupIds),
+		VSwitchId:          tea.String(config.VSwitchId),
+		InstanceName:       tea.String(config.InstanceName),
+		HostName:           tea.String(config.Hostname),
+		Password:           tea.String(config.Password),
+		Description:        tea.String(config.Description),
+		Amount:             tea.Int32(int32(config.Amount)),
+		DryRun:             tea.Bool(config.DryRun),
+		InstanceChargeType: tea.String(string(config.InstanceChargeType)),
 	}
 
 	// 设置系统盘
 	if config.SystemDiskCategory != "" {
 		request.SystemDisk = &ecs.RunInstancesRequestSystemDisk{
 			Category: tea.String(config.SystemDiskCategory),
+			Size:     tea.String(strconv.Itoa(config.SystemDiskSize)),
+		}
+	}
+
+	// 设置数据盘
+	if config.DataDiskCategory != "" {
+		request.DataDisk = []*ecs.RunInstancesRequestDataDisk{
+			{
+				Category: tea.String(config.DataDiskCategory),
+				Size:     tea.Int32(int32(config.DataDiskSize)),
+			},
 		}
 	}
 
@@ -605,4 +631,977 @@ func (a *aliyunProvider) ListVPCs(ctx context.Context, region string, pageSize i
 	}
 
 	return result, nil
+}
+
+// SyncResources 同步资源
+func (a *aliyunProvider) SyncResources(ctx context.Context, region string) error {
+	return nil
+}
+
+// // ListRegions 列出区域
+// func (a *aliyunProvider) ListRegions(ctx context.Context) ([]*model.RegionResp, error) {
+// 	client, err := a.createEcsClient("cn-hangzhou")
+// 	if err != nil {
+// 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
+// 		return nil, err
+// 	}
+
+// 	request := &ecs.DescribeRegionsRequest{
+// 		AcceptLanguage: tea.String("zh-CN"),
+// 	}
+
+// 	a.logger.Info("开始查询区域列表")
+// 	response, err := client.DescribeRegions(request)
+// 	if err != nil {
+// 		a.logger.Error("查询区域列表失败", zap.Error(err))
+// 		return nil, err
+// 	}
+
+// 	result := make([]*model.RegionResp, 0, len(response.Body.Regions.Region))
+// 	for _, region := range response.Body.Regions.Region {
+// 		regionResp := &model.RegionResp{
+// 			RegionId:       tea.StringValue(region.RegionId),
+// 			LocalName:      tea.StringValue(region.LocalName),
+// 			RegionEndpoint: tea.StringValue(region.RegionEndpoint),
+// 		}
+// 		result = append(result, regionResp)
+// 	}
+
+// 	a.logger.Info("查询区域列表成功", zap.Int("count", len(result)))
+// 	return result, nil
+// }
+
+// // GetZonesByVpc 获取VPC下的可用区
+// func (a *aliyunProvider) GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error) {
+// 	client, err := a.createVpcClient(region)
+// 	if err != nil {
+// 		a.logger.Error("创建VPC客户端失败", zap.Error(err))
+// 		return nil, err
+// 	}
+
+// 	// 首先获取VPC信息
+// 	vpcRequest := &vpc.DescribeVpcsRequest{
+// 		RegionId: tea.String(region),
+// 		VpcId:    tea.String(vpcId),
+// 	}
+
+// 	a.logger.Info("开始查询VPC信息", zap.String("region", region), zap.String("vpcId", vpcId))
+// 	vpcResponse, err := client.DescribeVpcs(vpcRequest)
+// 	if err != nil {
+// 		a.logger.Error("查询VPC信息失败", zap.Error(err))
+// 		return nil, err
+// 	}
+
+// 	if len(vpcResponse.Body.Vpcs.Vpc) == 0 {
+// 		a.logger.Error("未找到指定的VPC", zap.String("vpcId", vpcId))
+// 		return nil, fmt.Errorf("未找到指定的VPC: %s", vpcId)
+// 	}
+
+// 	// 获取可用区信息
+// 	request := &vpc.DescribeZonesRequest{
+// 		RegionId: tea.String(region),
+// 	}
+
+// 	a.logger.Info("开始查询可用区列表", zap.String("region", region))
+// 	response, err := client.DescribeZones(request)
+// 	if err != nil {
+// 		a.logger.Error("查询可用区列表失败", zap.Error(err))
+// 		return nil, err
+// 	}
+
+// 	// 获取VPC关联的交换机信息
+// 	vSwitchRequest := &vpc.DescribeVSwitchesRequest{
+// 		RegionId: tea.String(region),
+// 		VpcId:    tea.String(vpcId),
+// 	}
+
+// 	vSwitchResponse, err := client.DescribeVSwitches(vSwitchRequest)
+// 	if err != nil {
+// 		a.logger.Error("查询交换机列表失败", zap.Error(err))
+// 		return nil, err
+// 	}
+
+// 	// 创建一个map来存储VPC关联的可用区
+// 	vpcZones := make(map[string]bool)
+// 	for _, vSwitch := range vSwitchResponse.Body.VSwitches.VSwitch {
+// 		vpcZones[tea.StringValue(vSwitch.ZoneId)] = true
+// 	}
+
+// 	// 过滤出VPC关联的可用区
+// 	result := make([]*model.ZoneResp, 0)
+// 	for _, zone := range response.Body.Zones.Zone {
+// 		zoneId := tea.StringValue(zone.ZoneId)
+// 		if _, exists := vpcZones[zoneId]; exists {
+// 			zoneResp := &model.ZoneResp{
+// 				ZoneId:    zoneId,
+// 				LocalName: tea.StringValue(zone.LocalName),
+// 			}
+// 			result = append(result, zoneResp)
+// 		}
+// 	}
+
+// 	a.logger.Info("查询VPC关联的可用区成功", zap.Int("count", len(result)))
+// 	return result, nil
+// }
+
+// // ListInstanceOptions 列出实例选项
+// func (a *aliyunProvider) ListInstanceOptions(_ context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+// 	a.logger.Info("开始查询实例选项", zap.String("payType", payType), zap.String("region", region), zap.String("zone", zone), zap.String("instanceType", instanceType), zap.String("systemDiskCategory", systemDiskCategory), zap.String("dataDiskCategory", dataDiskCategory))
+// 	client, err := a.createEcsClient(region)
+// 	if err != nil {
+// 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
+// 		return nil, err
+// 	}
+
+// 	// 根据传入的参数判断需要查询的资源类型
+// 	switch {
+// 	case payType == "":
+// 		// 如果payType为空，则返回可用的付费类型
+// 		return a.listAvailablePayTypes()
+// 	case region == "":
+// 		// 如果payType已选择但region为空，则返回可用地域列表
+// 		return a.listAvailableRegions(client)
+// 	case zone == "":
+// 		// 如果region已选择但zone为空，则返回该region下的可用区列表
+// 		return a.listAvailableZones(client, region)
+// 	case instanceType == "":
+// 		// 如果zone已选择但instanceType为空，则返回该region和zone下可用的实例规格
+// 		return a.listAvailableInstanceTypes(client, region, zone, payType)
+// 	case systemDiskCategory == "":
+// 		// 如果instanceType已选择但systemDiskCategory为空，则返回可用的系统盘类型
+// 		return a.listAvailableSystemDiskCategories(client, region, zone, instanceType)
+// 	case dataDiskCategory == "":
+// 		// 如果systemDiskCategory已选择但dataDiskCategory为空，则返回可用的数据盘类型
+// 		return a.listAvailableDataDiskCategories(client, region, zone, instanceType)
+// 	default:
+// 		// 所有选项都已选择，返回完整的配置信息
+// 		return a.getCompleteConfiguration(payType, region, zone, instanceType, systemDiskCategory, dataDiskCategory)
+// 	}
+// }
+
+// // listAvailablePayTypes 获取可用的付费类型
+// func (a *aliyunProvider) listAvailablePayTypes() ([]interface{}, error) {
+// 	return []interface{}{
+// 		map[string]string{
+// 			"id":          "PrePaid",
+// 			"name":        "包年包月",
+// 			"description": "包年包月模式",
+// 		},
+// 		map[string]string{
+// 			"id":          "PostPaid",
+// 			"name":        "按量付费",
+// 			"description": "按量付费模式",
+// 		},
+// 	}, nil
+// }
+
+// // listAvailableRegions 获取可用地域列表
+// func (a *aliyunProvider) listAvailableRegions(client *ecs.Client) ([]interface{}, error) {
+// 	request := &ecs.DescribeRegionsRequest{
+// 		AcceptLanguage: tea.String("zh-CN"),
+// 	}
+
+// 	response, err := client.DescribeRegions(request)
+// 	if err != nil {
+// 		a.logger.Error("获取地域列表失败", zap.Error(err))
+// 		return nil, err
+// 	}
+
+// 	var regions []interface{}
+// 	for _, region := range response.Body.Regions.Region {
+// 		regions = append(regions, map[string]string{
+// 			"id":       *region.RegionId,
+// 			"name":     *region.LocalName,
+// 			"endpoint": *region.RegionEndpoint,
+// 		})
+// 	}
+
+// 	return regions, nil
+// }
+
+// // listAvailableZones 获取指定地域下的可用区列表
+// func (a *aliyunProvider) listAvailableZones(client *ecs.Client, region string) ([]interface{}, error) {
+// 	request := &ecs.DescribeZonesRequest{
+// 		RegionId: tea.String(region),
+// 	}
+
+// 	response, err := client.DescribeZones(request)
+// 	if err != nil {
+// 		a.logger.Error("获取可用区列表失败", zap.String("region", region), zap.Error(err))
+// 		return nil, err
+// 	}
+
+// 	var zones []interface{}
+// 	for _, zone := range response.Body.Zones.Zone {
+// 		zones = append(zones, map[string]string{
+// 			"id":   *zone.ZoneId,
+// 			"name": *zone.LocalName,
+// 		})
+// 	}
+
+// 	return zones, nil
+// }
+
+// // listAvailableInstanceTypes 获取指定地域和可用区下可用的实例规格
+// func (a *aliyunProvider) listAvailableInstanceTypes(client *ecs.Client, region string, zone string, payType string) ([]interface{}, error) {
+// 	request := &ecs.DescribeAvailableResourceRequest{
+// 		RegionId:            tea.String(region),
+// 		ZoneId:              tea.String(zone),
+// 		DestinationResource: tea.String("InstanceType"),
+// 	}
+
+// 	// 根据付费类型设置ResourceType
+// 	if payType == "PrePaid" {
+// 		request.InstanceChargeType = tea.String("PrePaid") // 包年包月
+// 	} else {
+// 		request.InstanceChargeType = tea.String("PostPaid") // 按量付费
+// 	}
+
+// 	response, err := client.DescribeAvailableResource(request)
+// 	if err != nil {
+// 		a.logger.Error("获取可用实例规格失败", zap.String("region", region), zap.String("zone", zone), zap.Error(err))
+// 		return nil, err
+// 	}
+
+// 	// 提前分配容量，减少内存重新分配
+// 	instanceTypes := make([]interface{}, 0, 50)
+
+// 	// 添加空指针检查
+// 	if response == nil || response.Body == nil || response.Body.AvailableZones == nil || response.Body.AvailableZones.AvailableZone == nil {
+// 		a.logger.Warn("API响应数据为空", zap.String("region", region), zap.String("zone", zone))
+// 		return instanceTypes, nil
+// 	}
+
+// 	// 使用map收集可用实例类型ID，避免重复
+// 	availableInstanceTypeMap := make(map[string]bool)
+
+// 	// 扁平化嵌套循环，减少代码复杂度
+// 	for _, availableZone := range response.Body.AvailableZones.AvailableZone {
+// 		// 跳过不匹配的可用区
+// 		if availableZone == nil || availableZone.ZoneId == nil || *availableZone.ZoneId != zone {
+// 			continue
+// 		}
+
+// 		// 跳过无资源的可用区
+// 		if availableZone.AvailableResources == nil || availableZone.AvailableResources.AvailableResource == nil {
+// 			continue
+// 		}
+
+// 		// 遍历可用资源
+// 		for _, availableResource := range availableZone.AvailableResources.AvailableResource {
+// 			// 跳过无支持资源的项
+// 			if availableResource == nil || availableResource.SupportedResources == nil ||
+// 			   availableResource.SupportedResources.SupportedResource == nil {
+// 				continue
+// 			}
+
+// 			// 收集所有可用的实例类型ID
+// 			for _, supportedResource := range availableResource.SupportedResources.SupportedResource {
+// 				if supportedResource != nil && supportedResource.Status != nil &&
+// 				   supportedResource.Value != nil && *supportedResource.Status == "Available" {
+// 					availableInstanceTypeMap[*supportedResource.Value] = true
+// 				}
+// 			}
+// 		}
+// 	}
+
+// 	// 如果没有可用实例类型，直接返回
+// 	if len(availableInstanceTypeMap) == 0 {
+// 		return instanceTypes, nil
+// 	}
+
+// 	// 将map转换为切片，便于批量查询
+// 	availableInstanceTypeIds := make([]*string, 0, len(availableInstanceTypeMap))
+// 	for typeId := range availableInstanceTypeMap {
+// 		id := typeId // 创建局部变量避免闭包问题
+// 		availableInstanceTypeIds = append(availableInstanceTypeIds, &id)
+// 	}
+
+// 	// 批量获取实例类型详情，每次最多查询10个
+// 	batchSize := 10
+// 	for i := 0; i < len(availableInstanceTypeIds); i += batchSize {
+// 		end := i + batchSize
+// 		if end > len(availableInstanceTypeIds) {
+// 			end = len(availableInstanceTypeIds)
+// 		}
+
+// 		batchRequest := &ecs.DescribeInstanceTypesRequest{
+// 			InstanceTypes: availableInstanceTypeIds[i:end],
+// 		}
+
+// 		batchResponse, err := client.DescribeInstanceTypes(batchRequest)
+// 		if err != nil {
+// 			a.logger.Warn("批量获取实例规格详情失败", zap.Error(err))
+// 			continue
+// 		}
+
+// 		if batchResponse.Body.InstanceTypes == nil || batchResponse.Body.InstanceTypes.InstanceType == nil {
+// 			continue
+// 		}
+
+// 		// 处理返回的实例类型信息
+// 		for _, info := range batchResponse.Body.InstanceTypes.InstanceType {
+// 			if info == nil || info.InstanceTypeId == nil {
+// 				continue
+// 			}
+
+// 			instanceTypes = append(instanceTypes, map[string]interface{}{
+// 				"id":          *info.InstanceTypeId,
+// 				"name":        *info.InstanceTypeId,
+// 				"cpuCount":    *info.CpuCoreCount,
+// 				"memorySize":  *info.MemorySize,
+// 				"family":      *info.InstanceTypeFamily,
+// 				"description": fmt.Sprintf("%d核 %.1fGB", *info.CpuCoreCount, *info.MemorySize),
+// 			})
+// 		}
+// 	}
+
+// 	return instanceTypes, nil
+// }
+
+// // getInstanceTypeDetails 获取实例类型的详细信息
+// func (a *aliyunProvider) getInstanceTypeDetails(client *ecs.Client, instanceType string) (map[string]interface{}, error) {
+// 	request := &ecs.DescribeInstanceTypesRequest{
+// 		InstanceTypes: []*string{tea.String(instanceType)},
+// 	}
+
+// 	response, err := client.DescribeInstanceTypes(request)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	if len(response.Body.InstanceTypes.InstanceType) > 0 {
+// 		info := response.Body.InstanceTypes.InstanceType[0]
+// 		return map[string]interface{}{
+// 			"id":          *info.InstanceTypeId,
+// 			"name":        *info.InstanceTypeId, // 可以根据需要进行格式化显示
+// 			"cpuCount":    *info.CpuCoreCount,
+// 			"memorySize":  *info.MemorySize,
+// 			"family":      *info.InstanceTypeFamily,
+// 			"description": fmt.Sprintf("%d核 %.1fGB", *info.CpuCoreCount, *info.MemorySize),
+// 		}, nil
+// 	}
+
+// 	return map[string]interface{}{
+// 		"id":          instanceType,
+// 		"name":        instanceType,
+// 		"description": instanceType,
+// 	}, nil
+// }
+
+// // listAvailableSystemDiskCategories 获取可用的系统盘类型
+// func (a *aliyunProvider) listAvailableSystemDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]interface{}, error) {
+// 	request := &ecs.DescribeAvailableResourceRequest{
+// 		RegionId:            tea.String(region),
+// 		ZoneId:              tea.String(zone),
+// 		InstanceType:        tea.String(instanceType),
+// 		DestinationResource: tea.String("SystemDisk"),
+// 	}
+
+// 	response, err := client.DescribeAvailableResource(request)
+// 	if err != nil {
+// 		a.logger.Error("获取可用系统盘类型失败", zap.String("region", region), zap.String("zone", zone), zap.String("instanceType", instanceType), zap.Error(err))
+// 		return nil, err
+// 	}
+
+// 	var diskTypes []interface{}
+// 	for _, resource := range response.Body.AvailableZones.AvailableZone {
+// 		if *resource.ZoneId == zone {
+// 			for _, resources := range resource.AvailableResources.AvailableResource {
+// 				for _, resource := range resources.SupportedResources.SupportedResource {
+// 					if *resource.Status == "Available" {
+// 						diskName := a.getDiskCategoryName(*resource.Value)
+// 						diskTypes = append(diskTypes, map[string]string{
+// 							"id":          *resource.Value,
+// 							"name":        diskName,
+// 							"description": diskName,
+// 						})
+// 					}
+// 				}
+// 			}
+// 		}
+// 	}
+
+// 	return diskTypes, nil
+// }
+
+// // listAvailableDataDiskCategories 获取可用的数据盘类型
+// func (a *aliyunProvider) listAvailableDataDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]interface{}, error) {
+// 	request := &ecs.DescribeAvailableResourceRequest{
+// 		RegionId:            tea.String(region),
+// 		ZoneId:              tea.String(zone),
+// 		InstanceType:        tea.String(instanceType),
+// 		DestinationResource: tea.String("DataDisk"),
+// 	}
+
+// 	response, err := client.DescribeAvailableResource(request)
+// 	if err != nil {
+// 		a.logger.Error("获取可用数据盘类型失败", zap.String("region", region), zap.String("zone", zone), zap.String("instanceType", instanceType), zap.Error(err))
+// 		return nil, err
+// 	}
+
+// 	var diskTypes []interface{}
+// 	for _, resource := range response.Body.AvailableZones.AvailableZone {
+// 		if *resource.ZoneId == zone {
+// 			for _, resources := range resource.AvailableResources.AvailableResource {
+// 				for _, resource := range resources.SupportedResources.SupportedResource {
+// 					if *resource.Status == "Available" {
+// 						// 获取磁盘类型的友好名称
+// 						diskName := a.getDiskCategoryName(*resource.Value)
+// 						diskTypes = append(diskTypes, map[string]string{
+// 							"id":          *resource.Value,
+// 							"name":        diskName,
+// 							"description": diskName,
+// 						})
+// 					}
+// 				}
+// 			}
+// 		}
+// 	}
+
+// 	return diskTypes, nil
+// }
+
+// // getDiskCategoryName 获取磁盘类型的友好名称
+// func (a *aliyunProvider) getDiskCategoryName(category string) string {
+// 	switch category {
+// 	case "cloud":
+// 		return "普通云盘"
+// 	case "cloud_efficiency":
+// 		return "高效云盘"
+// 	case "cloud_ssd":
+// 		return "SSD云盘"
+// 	case "cloud_essd":
+// 		return "ESSD云盘"
+// 	case "cloud_essd_entry":
+// 		return "ESSD入门级云盘"
+// 	case "cloud_essd_performance":
+// 		return "ESSD性能型云盘"
+// 	case "cloud_essd_extreme":
+// 		return "ESSD极致型云盘"
+// 	default:
+// 		return category
+// 	}
+// }
+
+// // getCompleteConfiguration 获取完整的配置信息
+// func (a *aliyunProvider) getCompleteConfiguration(payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+// 	// 这里可以返回所有选项的完整配置，以及可能的价格信息等
+// 	// 或者直接返回一个成功标志，表示所有选项都是有效的
+// 	return []interface{}{
+// 		map[string]interface{}{
+// 			"payType":            payType,
+// 			"region":             region,
+// 			"zone":               zone,
+// 			"instanceType":       instanceType,
+// 			"systemDiskCategory": systemDiskCategory,
+// 			"dataDiskCategory":   dataDiskCategory,
+// 			"valid":              true,
+// 		},
+// 	}, nil
+// }
+
+// ListRegions 列出区域
+func (a *aliyunProvider) ListRegions(ctx context.Context) ([]*model.RegionResp, error) {
+	client, err := a.createEcsClient("cn-hangzhou")
+	if err != nil {
+		a.logger.Error("创建ECS客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	request := &ecs.DescribeRegionsRequest{
+		AcceptLanguage: tea.String("zh-CN"),
+	}
+
+	a.logger.Info("开始查询区域列表")
+	response, err := client.DescribeRegions(request)
+	if err != nil {
+		a.logger.Error("查询区域列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	result := make([]*model.RegionResp, 0, len(response.Body.Regions.Region))
+	for _, region := range response.Body.Regions.Region {
+		result = append(result, &model.RegionResp{
+			RegionId:       tea.StringValue(region.RegionId),
+			LocalName:      tea.StringValue(region.LocalName),
+			RegionEndpoint: tea.StringValue(region.RegionEndpoint),
+		})
+	}
+
+	a.logger.Info("查询区域列表成功", zap.Int("count", len(result)))
+	return result, nil
+}
+
+// GetZonesByVpc 获取VPC下的可用区
+func (a *aliyunProvider) GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error) {
+	client, err := a.createVpcClient(region)
+	if err != nil {
+		a.logger.Error("创建VPC客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 首先获取VPC信息
+	vpcRequest := &vpc.DescribeVpcsRequest{
+		RegionId: tea.String(region),
+		VpcId:    tea.String(vpcId),
+	}
+
+	a.logger.Info("开始查询VPC信息", zap.String("region", region), zap.String("vpcId", vpcId))
+	vpcResponse, err := client.DescribeVpcs(vpcRequest)
+	if err != nil {
+		a.logger.Error("查询VPC信息失败", zap.Error(err))
+		return nil, err
+	}
+
+	if len(vpcResponse.Body.Vpcs.Vpc) == 0 {
+		a.logger.Error("未找到指定的VPC", zap.String("vpcId", vpcId))
+		return nil, fmt.Errorf("未找到指定的VPC: %s", vpcId)
+	}
+
+	// 并行获取可用区信息和VPC关联的交换机信息
+	var zonesResponse *vpc.DescribeZonesResponse
+	var vSwitchResponse *vpc.DescribeVSwitchesResponse
+	var zonesErr, vSwitchErr error
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		request := &vpc.DescribeZonesRequest{
+			RegionId: tea.String(region),
+		}
+		zonesResponse, zonesErr = client.DescribeZones(request)
+	}()
+
+	go func() {
+		defer wg.Done()
+		vSwitchRequest := &vpc.DescribeVSwitchesRequest{
+			RegionId: tea.String(region),
+			VpcId:    tea.String(vpcId),
+		}
+		vSwitchResponse, vSwitchErr = client.DescribeVSwitches(vSwitchRequest)
+	}()
+
+	wg.Wait()
+
+	if zonesErr != nil {
+		a.logger.Error("查询可用区列表失败", zap.Error(zonesErr))
+		return nil, zonesErr
+	}
+
+	if vSwitchErr != nil {
+		a.logger.Error("查询交换机列表失败", zap.Error(vSwitchErr))
+		return nil, vSwitchErr
+	}
+
+	// 创建一个map来存储VPC关联的可用区
+	vpcZones := make(map[string]bool, len(vSwitchResponse.Body.VSwitches.VSwitch))
+	for _, vSwitch := range vSwitchResponse.Body.VSwitches.VSwitch {
+		vpcZones[tea.StringValue(vSwitch.ZoneId)] = true
+	}
+
+	// 过滤出VPC关联的可用区
+	result := make([]*model.ZoneResp, 0, len(vpcZones))
+	for _, zone := range zonesResponse.Body.Zones.Zone {
+		zoneId := tea.StringValue(zone.ZoneId)
+		if _, exists := vpcZones[zoneId]; exists {
+			result = append(result, &model.ZoneResp{
+				ZoneId:    zoneId,
+				LocalName: tea.StringValue(zone.LocalName),
+			})
+		}
+	}
+
+	a.logger.Info("查询VPC关联的可用区成功", zap.Int("count", len(result)))
+	return result, nil
+}
+
+// ListInstanceOptions 列出实例选项
+func (a *aliyunProvider) ListInstanceOptions(_ context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+	a.logger.Info("开始查询实例选项",
+		zap.String("payType", payType),
+		zap.String("region", region),
+		zap.String("zone", zone),
+		zap.String("instanceType", instanceType),
+		zap.String("systemDiskCategory", systemDiskCategory),
+		zap.String("dataDiskCategory", dataDiskCategory))
+
+	// 依次判断每个选项是否为空，实现扁平化流程控制
+	if payType == "" {
+		return a.listAvailablePayTypes()
+	}
+
+	client, err := a.createEcsClient(region)
+	if err != nil {
+		a.logger.Error("创建ECS客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	if region == "" {
+		return a.listAvailableRegions(client)
+	}
+
+	if zone == "" {
+		return a.listAvailableZones(client, region)
+	}
+
+	if instanceType == "" {
+		return a.listAvailableInstanceTypes(client, region, zone, payType)
+	}
+
+	if systemDiskCategory == "" {
+		return a.listAvailableSystemDiskCategories(client, region, zone, instanceType)
+	}
+
+	if dataDiskCategory == "" {
+		return a.listAvailableDataDiskCategories(client, region, zone, instanceType)
+	}
+
+	// 所有选项都已选择，返回完整的配置信息
+	return a.getCompleteConfiguration(payType, region, zone, instanceType, systemDiskCategory, dataDiskCategory)
+}
+
+// listAvailablePayTypes 获取可用的付费类型
+func (a *aliyunProvider) listAvailablePayTypes() ([]interface{}, error) {
+	return []interface{}{
+		map[string]string{
+			"id":          "PrePaid",
+			"name":        "包年包月",
+			"description": "包年包月模式",
+		},
+		map[string]string{
+			"id":          "PostPaid",
+			"name":        "按量付费",
+			"description": "按量付费模式",
+		},
+	}, nil
+}
+
+// listAvailableRegions 获取可用地域列表
+func (a *aliyunProvider) listAvailableRegions(client *ecs.Client) ([]interface{}, error) {
+	request := &ecs.DescribeRegionsRequest{
+		AcceptLanguage: tea.String("zh-CN"),
+	}
+
+	response, err := client.DescribeRegions(request)
+	if err != nil {
+		a.logger.Error("获取地域列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	regions := make([]interface{}, 0, len(response.Body.Regions.Region))
+	for _, region := range response.Body.Regions.Region {
+		if region == nil || region.RegionId == nil {
+			continue
+		}
+
+		regions = append(regions, map[string]string{
+			"id":       *region.RegionId,
+			"name":     *region.LocalName,
+			"endpoint": *region.RegionEndpoint,
+		})
+	}
+
+	return regions, nil
+}
+
+// listAvailableZones 获取指定地域下的可用区列表
+func (a *aliyunProvider) listAvailableZones(client *ecs.Client, region string) ([]interface{}, error) {
+	request := &ecs.DescribeZonesRequest{
+		RegionId: tea.String(region),
+	}
+
+	response, err := client.DescribeZones(request)
+	if err != nil {
+		a.logger.Error("获取可用区列表失败", zap.String("region", region), zap.Error(err))
+		return nil, err
+	}
+
+	zones := make([]interface{}, 0, len(response.Body.Zones.Zone))
+	for _, zone := range response.Body.Zones.Zone {
+		if zone == nil || zone.ZoneId == nil {
+			continue
+		}
+
+		zones = append(zones, map[string]string{
+			"id":   *zone.ZoneId,
+			"name": *zone.LocalName,
+		})
+	}
+
+	return zones, nil
+}
+
+// listAvailableInstanceTypes 获取指定地域和可用区下可用的实例规格
+func (a *aliyunProvider) listAvailableInstanceTypes(client *ecs.Client, region string, zone string, payType string) ([]interface{}, error) {
+	request := &ecs.DescribeAvailableResourceRequest{
+		RegionId:            tea.String(region),
+		ZoneId:              tea.String(zone),
+		DestinationResource: tea.String("InstanceType"),
+	}
+
+	// 根据付费类型设置ResourceType
+	if payType == "PrePaid" {
+		request.InstanceChargeType = tea.String("PrePaid") // 包年包月
+	} else {
+		request.InstanceChargeType = tea.String("PostPaid") // 按量付费
+	}
+
+	response, err := client.DescribeAvailableResource(request)
+	if err != nil {
+		a.logger.Error("获取可用实例规格失败", zap.String("region", region), zap.String("zone", zone), zap.Error(err))
+		return nil, err
+	}
+
+	// 提前分配容量，减少内存重新分配
+	availableInstanceTypeMap := make(map[string]bool)
+
+	// 添加空指针检查
+	if response == nil || response.Body == nil || response.Body.AvailableZones == nil || response.Body.AvailableZones.AvailableZone == nil {
+		a.logger.Warn("API响应数据为空", zap.String("region", region), zap.String("zone", zone))
+		return []interface{}{}, nil
+	}
+
+	// 扁平化处理可用实例类型收集
+	for _, availableZone := range response.Body.AvailableZones.AvailableZone {
+		// 跳过不匹配的可用区
+		if availableZone == nil || availableZone.ZoneId == nil || *availableZone.ZoneId != zone {
+			continue
+		}
+
+		// 跳过无资源的可用区
+		if availableZone.AvailableResources == nil || availableZone.AvailableResources.AvailableResource == nil {
+			continue
+		}
+
+		// 扁平化处理资源遍历和实例类型收集
+		for _, resource := range availableZone.AvailableResources.AvailableResource {
+			if resource == nil || resource.SupportedResources == nil || resource.SupportedResources.SupportedResource == nil {
+				continue
+			}
+
+			for _, supportedResource := range resource.SupportedResources.SupportedResource {
+				if supportedResource != nil && supportedResource.Status != nil &&
+					supportedResource.Value != nil && *supportedResource.Status == "Available" {
+					availableInstanceTypeMap[*supportedResource.Value] = true
+				}
+			}
+		}
+	}
+
+	// 如果没有可用实例类型，直接返回
+	if len(availableInstanceTypeMap) == 0 {
+		return []interface{}{}, nil
+	}
+
+	// 批量查询实例类型详情
+	return a.batchFetchInstanceTypeDetails(client, availableInstanceTypeMap)
+}
+
+// batchFetchInstanceTypeDetails 批量获取实例类型详情
+func (a *aliyunProvider) batchFetchInstanceTypeDetails(client *ecs.Client, instanceTypeMap map[string]bool) ([]interface{}, error) {
+	// 将map转换为切片，便于批量查询
+	instanceTypeIds := make([]*string, 0, len(instanceTypeMap))
+	for typeId := range instanceTypeMap {
+		id := typeId // 创建局部变量避免闭包问题
+		instanceTypeIds = append(instanceTypeIds, &id)
+	}
+
+	// 批量获取实例类型详情，提高查询效率
+	instanceTypes := make([]interface{}, 0, len(instanceTypeIds))
+	batchSize := 10 // 阿里云API批量查询上限
+
+	// 计算需要的批次数
+	batchCount := (len(instanceTypeIds) + batchSize - 1) / batchSize
+
+	// 使用错误组合
+	var errGroup errgroup.Group
+	resultCh := make(chan map[string]interface{}, len(instanceTypeIds))
+
+	// 并行请求各批次
+	for i := 0; i < batchCount; i++ {
+		startIdx := i * batchSize
+		endIdx := (i + 1) * batchSize
+		if endIdx > len(instanceTypeIds) {
+			endIdx = len(instanceTypeIds)
+		}
+
+		batchIds := instanceTypeIds[startIdx:endIdx]
+
+		// 为每个批次创建一个goroutine
+		errGroup.Go(func() error {
+			batchRequest := &ecs.DescribeInstanceTypesRequest{
+				InstanceTypes: batchIds,
+			}
+
+			batchResponse, err := client.DescribeInstanceTypes(batchRequest)
+			if err != nil {
+				a.logger.Warn("批量获取实例规格详情失败", zap.Error(err))
+				return nil // 不中断其他批次
+			}
+
+			if batchResponse.Body.InstanceTypes == nil || batchResponse.Body.InstanceTypes.InstanceType == nil {
+				return nil
+			}
+
+			// 处理返回的实例类型信息
+			for _, info := range batchResponse.Body.InstanceTypes.InstanceType {
+				if info == nil || info.InstanceTypeId == nil {
+					continue
+				}
+
+				resultCh <- map[string]interface{}{
+					"id":          *info.InstanceTypeId,
+					"name":        *info.InstanceTypeId,
+					"cpuCount":    *info.CpuCoreCount,
+					"memorySize":  *info.MemorySize,
+					"family":      *info.InstanceTypeFamily,
+					"description": fmt.Sprintf("%d核 %.1fGB", *info.CpuCoreCount, *info.MemorySize),
+				}
+			}
+
+			return nil
+		})
+	}
+
+	// 等待所有goroutine完成
+	go func() {
+		errGroup.Wait()
+		close(resultCh)
+	}()
+
+	// 收集结果
+	for result := range resultCh {
+		instanceTypes = append(instanceTypes, result)
+	}
+
+	return instanceTypes, nil
+}
+
+// 扁平化处理磁盘类型查询
+func (a *aliyunProvider) listAvailableDiskCategories(client *ecs.Client, region string, zone string, instanceType string, diskType string) ([]interface{}, error) {
+	request := &ecs.DescribeAvailableResourceRequest{
+		RegionId:            tea.String(region),
+		ZoneId:              tea.String(zone),
+		InstanceType:        tea.String(instanceType),
+		DestinationResource: tea.String(diskType), // SystemDisk 或 DataDisk
+	}
+
+	response, err := client.DescribeAvailableResource(request)
+	if err != nil {
+		a.logger.Error("获取可用磁盘类型失败",
+			zap.String("region", region),
+			zap.String("zone", zone),
+			zap.String("instanceType", instanceType),
+			zap.String("diskType", diskType),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// 检查响应是否为空
+	if response == nil || response.Body == nil || response.Body.AvailableZones == nil ||
+		response.Body.AvailableZones.AvailableZone == nil {
+		return []interface{}{}, nil
+	}
+
+	// 使用map去重
+	diskTypesMap := make(map[string]string)
+
+	// 扁平化处理
+	for _, availableZone := range response.Body.AvailableZones.AvailableZone {
+		// 只处理指定可用区
+		if availableZone == nil || availableZone.ZoneId == nil || *availableZone.ZoneId != zone {
+			continue
+		}
+
+		// 缺少资源信息
+		if availableZone.AvailableResources == nil || availableZone.AvailableResources.AvailableResource == nil {
+			continue
+		}
+
+		// 遍历资源
+		for _, resource := range availableZone.AvailableResources.AvailableResource {
+			// 缺少支持的资源
+			if resource == nil || resource.SupportedResources == nil || resource.SupportedResources.SupportedResource == nil {
+				continue
+			}
+
+			// 遍历支持的资源
+			for _, supportedResource := range resource.SupportedResources.SupportedResource {
+				if supportedResource == nil || supportedResource.Status == nil || supportedResource.Value == nil {
+					continue
+				}
+
+				// 只添加可用状态的资源
+				if *supportedResource.Status != "Available" {
+					continue
+				}
+
+				diskValue := *supportedResource.Value
+				diskName := a.getDiskCategoryName(diskValue)
+				diskTypesMap[diskValue] = diskName
+			}
+		}
+	}
+
+	// 转换为结果列表
+	diskTypes := make([]interface{}, 0, len(diskTypesMap))
+	for value, name := range diskTypesMap {
+		diskTypes = append(diskTypes, map[string]string{
+			"id":          value,
+			"name":        name,
+			"description": name,
+		})
+	}
+
+	return diskTypes, nil
+}
+
+// listAvailableSystemDiskCategories 获取可用的系统盘类型
+func (a *aliyunProvider) listAvailableSystemDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]interface{}, error) {
+	return a.listAvailableDiskCategories(client, region, zone, instanceType, "SystemDisk")
+}
+
+// listAvailableDataDiskCategories 获取可用的数据盘类型
+func (a *aliyunProvider) listAvailableDataDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]interface{}, error) {
+	return a.listAvailableDiskCategories(client, region, zone, instanceType, "DataDisk")
+}
+
+// getDiskCategoryName 获取磁盘类型的友好名称
+func (a *aliyunProvider) getDiskCategoryName(category string) string {
+	switch category {
+	case "cloud":
+		return "普通云盘"
+	case "cloud_efficiency":
+		return "高效云盘"
+	case "cloud_ssd":
+		return "SSD云盘"
+	case "cloud_essd":
+		return "ESSD云盘"
+	case "cloud_essd_entry":
+		return "ESSD入门级云盘"
+	case "cloud_essd_performance":
+		return "ESSD性能型云盘"
+	case "cloud_essd_extreme":
+		return "ESSD极致型云盘"
+	default:
+		return category
+	}
+}
+
+// getCompleteConfiguration 获取完整的配置信息
+func (a *aliyunProvider) getCompleteConfiguration(payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+	return []interface{}{
+		map[string]interface{}{
+			"payType":            payType,
+			"region":             region,
+			"zone":               zone,
+			"instanceType":       instanceType,
+			"systemDiskCategory": systemDiskCategory,
+			"dataDiskCategory":   dataDiskCategory,
+			"valid":              true,
+		},
+	}, nil
 }

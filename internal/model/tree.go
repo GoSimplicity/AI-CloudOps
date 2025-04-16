@@ -57,8 +57,8 @@ const (
 type PaymentType string
 
 const (
-	PaymentTypeOnDemand PaymentType = "on_demand" // 按量付费
-	PaymentTypeReserved PaymentType = "reserved"  // 包年包月
+	PaymentTypeOnDemand PaymentType = "PostPaid" // 按量付费
+	PaymentTypeReserved PaymentType = "PrePaid"  // 包年包月
 )
 
 // TreeNode 服务树节点结构
@@ -233,14 +233,24 @@ type EcsCreationParams struct {
 	ImageId            string            `json:"imageId" binding:"required"`
 	VSwitchId          string            `json:"vSwitchId" binding:"required"`
 	SecurityGroupIds   []string          `json:"securityGroupIds" binding:"required"`
-	Quantity           int               `json:"quantity" binding:"required,min=1,max=100"`
-	HostnamePrefix     string            `json:"hostnamePrefix" binding:"required"`
-	InstanceName       string            `json:"instanceName"`
-	PayType            PaymentType       `json:"payType" binding:"required"`
-	TreeNodeId         uint              `json:"treeNodeId" binding:"required"`
+	Amount             int               `json:"amount" binding:"required,min=1,max=100"` // 创建数量
+	Hostname           string            `json:"hostname" binding:"required"`             // 主机名
+	Password           string            `json:"password" binding:"required"`             // 密码
+	InstanceName       string            `json:"instanceName"`                            // 实例名称
+	TreeNodeId         int               `json:"treeNodeId"`
 	Description        string            `json:"description"`
 	SystemDiskCategory string            `json:"systemDiskCategory"`
-	DryRun             bool              `json:"dryRun"`
+	AutoRenewPeriod    int               `json:"autoRenewPeriod"`
+	PeriodUnit         string            `json:"periodUnit"` // Month 月 Year 年
+	Period             int               `json:"period"`
+	AutoRenew          bool              `json:"autoRenew"`          // 是否自动续费
+	InstanceChargeType PaymentType       `json:"instanceChargeType"` // 付费类型
+	SpotStrategy       string            `json:"spotStrategy"`       // NoSpot 默认值 表示正常按量付费 SpotAsPriceGo 表示自动竞价
+	SpotDuration       int               `json:"spotDuration"`       // 竞价时长
+	SystemDiskSize     int               `json:"systemDiskSize"`     // 系统盘大小
+	DataDiskSize       int               `json:"dataDiskSize"`       // 数据盘大小
+	DataDiskCategory   string            `json:"dataDiskCategory"`   // 数据盘类型
+	DryRun             bool              `json:"dryRun"`             // 是否仅预览而不创建
 	Tags               map[string]string `json:"tags"`
 }
 
@@ -313,10 +323,8 @@ type ResourceBindingRequest struct {
 
 // SyncResourcesReq 同步资源请求
 type SyncResourcesReq struct {
-	Provider   CloudProvider `json:"provider" binding:"required"`
-	Region     string        `json:"region" binding:"required"`
-	PageSize   int           `json:"pageSize" binding:"required,min=1"`
-	PageNumber int           `json:"pageNumber" binding:"required,min=1"`
+	Provider CloudProvider `json:"provider" binding:"required"`
+	Region   string        `json:"region" binding:"required"`
 }
 
 // ListResourcesBaseReq 资源列表基础查询参数
@@ -431,8 +439,9 @@ type PageResp struct {
 
 // RegionResp 区域信息响应
 type RegionResp struct {
-	RegionId  string `json:"regionId"`
-	LocalName string `json:"localName"`
+	RegionId       string `json:"regionId"`       // 区域ID
+	LocalName      string `json:"localName"`      // 区域名称
+	RegionEndpoint string `json:"regionEndpoint"` // 区域终端节点
 }
 
 // ZoneResp 可用区信息响应
@@ -514,4 +523,14 @@ type NodeResourceResp struct {
 	ResourceElb
 	ResourceRds
 	ResourceVpc
+}
+
+type ListInstanceOptionsReq struct {
+	Provider           CloudProvider `json:"provider" binding:"required"`
+	PayType            string        `json:"payType"`
+	Region             string        `json:"region"`
+	Zone               string        `json:"zone"`
+	InstanceType       string        `json:"instanceType"`
+	SystemDiskCategory string        `json:"systemDiskCategory"`
+	DataDiskCategory   string        `json:"dataDiskCategory"`
 }

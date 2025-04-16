@@ -32,6 +32,8 @@ import (
 )
 
 type AzureProvider interface {
+	SyncResources(ctx context.Context, region string) error
+
 	// 资源管理
 	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSResp, error)
 	CreateInstance(ctx context.Context, region string, config *model.EcsCreationParams) error
@@ -50,6 +52,8 @@ type AzureProvider interface {
 	DeleteDisk(ctx context.Context, region string, diskID string) error
 	AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error
 	DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error
+
+	ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error)
 }
 
 type azureProvider struct {
@@ -121,5 +125,13 @@ func (a *azureProvider) StartInstance(ctx context.Context, region string, instan
 
 // StopInstance implements AzureProvider.
 func (a *azureProvider) StopInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+func (a *azureProvider) SyncResources(ctx context.Context, region string) error {
+	panic("unimplemented")
+}
+
+func (a *azureProvider) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
 	panic("unimplemented")
 }

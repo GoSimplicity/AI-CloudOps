@@ -49,6 +49,8 @@ type EcsService interface {
 	DeleteDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string) error
 	AttachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error
 	DetachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error
+
+	ListInstanceOptions(ctx context.Context, req *model.ListInstanceOptionsReq) ([]interface{}, error)
 }
 
 type ecsService struct {
@@ -364,4 +366,33 @@ func (e *ecsService) DetachDisk(ctx context.Context, provider model.CloudProvide
 	}
 
 	return nil
+}
+
+// ListInstanceOptions 获取实例选项
+func (e *ecsService) ListInstanceOptions(ctx context.Context, req *model.ListInstanceOptionsReq) ([]interface{}, error) {
+	var result []interface{}
+	var err error
+	switch req.Provider {
+	case model.CloudProviderAliyun:
+		result, err = e.AliyunProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
+	case model.CloudProviderTencent:
+		result, err = e.TencentProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
+	case model.CloudProviderHuawei:
+		result, err = e.HuaweiProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
+	case model.CloudProviderAWS:
+		result, err = e.AWSProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
+	case model.CloudProviderAzure:
+		result, err = e.AzureProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
+	case model.CloudProviderGCP:
+		result, err = e.GCPProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
+	default:
+		return nil, fmt.Errorf("[ListInstanceOptions] 不支持的云提供商: %s", req.Provider)
+	}
+
+	if err != nil {
+		e.logger.Error("[ListInstanceOptions] 获取实例选项失败", zap.Error(err))
+		return nil, fmt.Errorf("[ListInstanceOptions] 获取实例选项失败: %w", err)
+	}
+
+	return result, nil
 }

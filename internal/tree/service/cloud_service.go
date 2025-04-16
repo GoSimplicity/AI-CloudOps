@@ -45,10 +45,10 @@ type CloudService interface {
 
 type cloudService struct {
 	logger *zap.Logger
-	dao    *dao.CloudDAO
+	dao    dao.CloudDAO
 }
 
-func NewCloudService(logger *zap.Logger, dao *dao.CloudDAO) CloudService {
+func NewCloudService(logger *zap.Logger, dao dao.CloudDAO) CloudService {
 	return &cloudService{
 		logger: logger,
 		dao:    dao,

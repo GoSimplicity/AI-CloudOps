@@ -31,8 +31,10 @@ import (
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	prometheusApi "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
 	systemApi "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
+	resourceApi "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	userApi "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	workorderApi "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -69,6 +71,7 @@ func InitGinServer(
 	templateHandler *workorderApi.TemplateHandler,
 	instanceHandler *workorderApi.InstanceHandler,
 	aiHandler *aiHandler.AIHandler,
+	resourceHandler *resourceApi.ResourceHandler,
 
 ) *gin.Engine {
 	server := gin.Default()
@@ -103,5 +106,6 @@ func InitGinServer(
 	templateHandler.RegisterRouters(server)
 	instanceHandler.RegisterRouters(server)
 	aiHandler.RegisterRouters(server)
+	resourceHandler.RegisterRouters(server)
 	return server
 }

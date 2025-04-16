@@ -36,7 +36,7 @@ import (
 )
 
 type ResourceService interface {
-	SyncResources(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) error
+	SyncResources(ctx context.Context, provider model.CloudProvider, region string) error
 	DeleteResource(ctx context.Context, resourceType string, id int) error
 	StartResource(ctx context.Context, resourceType string, id int) error
 	StopResource(ctx context.Context, resourceType string, id int) error
@@ -206,41 +206,49 @@ func (r *resourceService) stopEcsInstance(ctx context.Context, provider model.Cl
 }
 
 // SyncResources 同步资源
-func (r *resourceService) SyncResources(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) error {
-	// 同步ECS资源
-	err := r.syncEcsResources(ctx, provider, region, pageSize, pageNumber)
-	if err != nil {
-		r.logger.Error("同步ECS资源失败",
-			zap.String("provider", string(provider)),
-			zap.String("region", region),
-			zap.Error(err))
-		return fmt.Errorf("同步ECS资源失败: %w", err)
+func (r *resourceService) SyncResources(ctx context.Context, provider model.CloudProvider, region string) error {
+	syncErr := make(chan error, 1)
+
+	// 异步同步资源
+	go func() {
+		// 同步ECS资源
+		err := r.syncEcsResources(ctx, provider, region)
+		syncErr <- err // 无论是否出错，都要发送信号
+	}()
+
+	// 等待同步完成或超时
+	select {
+	case err := <-syncErr:
+		// 同步完成
+		if err != nil {
+			return fmt.Errorf("同步ECS资源失败: %v", err)
+		}
+		return nil
+
+	case <-ctx.Done():
+		// 上下文取消（如超时或手动取消）
+		return fmt.Errorf("同步取消: %v", ctx.Err())
 	}
-
-	//TODO: 同步其他资源(暂不支持)
-
-	return nil
 }
 
 // 同步ECS资源的具体实现
-func (r *resourceService) syncEcsResources(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) error {
-	var instances []*model.ResourceECSResp
+func (r *resourceService) syncEcsResources(ctx context.Context, provider model.CloudProvider, region string) error {
 	var err error
 
-	// 根据不同的云提供商获取实例列表
+	// 根据不同的云提供商进行同步
 	switch provider {
 	case model.CloudProviderAliyun:
-		instances, err = r.AliyunProvider.ListInstances(ctx, region, pageSize, pageNumber)
+		err = r.AliyunProvider.SyncResources(ctx, region)
 	case model.CloudProviderTencent:
-		instances, err = r.TencentProvider.ListInstances(ctx, region, pageSize, pageNumber)
+		err = r.TencentProvider.SyncResources(ctx, region)
 	case model.CloudProviderHuawei:
-		instances, err = r.HuaweiProvider.ListInstances(ctx, region, pageSize, pageNumber)
+		err = r.HuaweiProvider.SyncResources(ctx, region)
 	case model.CloudProviderAWS:
-		instances, err = r.AWSProvider.ListInstances(ctx, region, pageSize, pageNumber)
+		err = r.AWSProvider.SyncResources(ctx, region)
 	case model.CloudProviderAzure:
-		instances, err = r.AzureProvider.ListInstances(ctx, region, pageSize, pageNumber)
+		err = r.AzureProvider.SyncResources(ctx, region)
 	case model.CloudProviderGCP:
-		instances, err = r.GCPProvider.ListInstances(ctx, region, pageSize, pageNumber)
+		err = r.GCPProvider.SyncResources(ctx, region)
 	default:
 		return fmt.Errorf("不支持的云提供商: %s", provider)
 	}
@@ -253,22 +261,9 @@ func (r *resourceService) syncEcsResources(ctx context.Context, provider model.C
 		return fmt.Errorf("获取实例列表失败: %w", err)
 	}
 
-	// 将获取到的实例保存到数据库
-	for _, instance := range instances {
-		err = r.dao.SaveOrUpdateResource(ctx, instance)
-		if err != nil {
-			r.logger.Error("保存或更新ECS资源失败",
-				zap.String("instanceId", instance.InstanceId),
-				zap.Error(err))
-			// 继续处理其他实例，不中断整个同步过程
-			continue
-		}
-	}
-
 	r.logger.Info("同步ECS资源完成",
 		zap.String("provider", string(provider)),
-		zap.String("region", region),
-		zap.Int("count", len(instances)))
+		zap.String("region", region))
 
 	return nil
 }

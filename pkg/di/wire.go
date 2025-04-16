@@ -52,6 +52,7 @@ import (
 	authService "github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	treeHandler "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	treeProvider "github.com/GoSimplicity/AI-CloudOps/internal/tree/provider"
 	treeService "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	userHandler "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -195,6 +196,15 @@ var JobSet = wire.NewSet(
 	job.NewRoutes,
 )
 
+var ProviderSet = wire.NewSet(
+	treeProvider.NewAliyunProvider,
+	treeProvider.NewTencentProvider,
+	treeProvider.NewAwsProvider,
+	treeProvider.NewHuaweiProvider,
+	treeProvider.NewAzureProvider,
+	treeProvider.NewGcpProvider,
+)
+
 var CronSet = wire.NewSet(
 	cron.NewCronManager,
 )
@@ -235,6 +245,7 @@ func ProvideCmd() *Cmd {
 		CacheSet,
 		ClientSet,
 		CronSet,
+		ProviderSet,
 	)
 	return &Cmd{}
 }

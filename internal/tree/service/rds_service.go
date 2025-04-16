@@ -41,10 +41,10 @@ type RdsService interface {
 
 type rdsService struct {
 	logger *zap.Logger
-	dao    *dao.RdsDAO
+	dao    dao.RdsDAO
 }
 
-func NewRdsService(logger *zap.Logger, dao *dao.RdsDAO) RdsService {
+func NewRdsService(logger *zap.Logger, dao dao.RdsDAO) RdsService {
 	return &rdsService{
 		logger: logger,
 		dao:    dao,

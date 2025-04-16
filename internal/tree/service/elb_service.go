@@ -41,10 +41,10 @@ type ElbService interface {
 
 type elbService struct {
 	logger *zap.Logger
-	dao    *dao.ElbDAO
+	dao    dao.ElbDAO
 }
 
-func NewElbService(logger *zap.Logger, dao *dao.ElbDAO) ElbService {
+func NewElbService(logger *zap.Logger, dao dao.ElbDAO) ElbService {
 	return &elbService{
 		logger: logger,
 		dao:    dao,

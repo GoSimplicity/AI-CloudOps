@@ -33,6 +33,8 @@ import (
 )
 
 type ResourceDAO interface {
+	BeginTx(ctx context.Context) (*gorm.DB, error)
+
 	SyncResources(ctx context.Context, provider model.CloudProvider, region string) error
 	DeleteResource(ctx context.Context, resourceType string, id int) error
 	StartResource(ctx context.Context, resourceType string, id int) error
@@ -40,6 +42,11 @@ type ResourceDAO interface {
 	RestartResource(ctx context.Context, resourceType string, id int) error
 	GetResourceById(ctx context.Context, resourceType string, id int) (*model.ResourceBase, error)
 	SaveOrUpdateResource(ctx context.Context, resource interface{}) error
+
+	SaveRegion(ctx context.Context, tx *gorm.DB, region string) error
+	SaveZones(ctx context.Context, tx *gorm.DB, region string, azs []string) error
+	SaveInstanceTypes(ctx context.Context, tx *gorm.DB, region string, instanceTypes []string) error
+	SaveCombinations(ctx context.Context, tx *gorm.DB, combinations []string) error
 }
 
 type resourceDAO struct {
@@ -84,5 +91,34 @@ func (r *resourceDAO) GetResourceById(ctx context.Context, resourceType string, 
 
 // SaveOrUpdateResource implements ResourceDAO.
 func (r *resourceDAO) SaveOrUpdateResource(ctx context.Context, resource interface{}) error {
+	panic("unimplemented")
+}
+
+// BeginTx 实现 ResourceDAO 接口，开启数据库事务
+func (r *resourceDAO) BeginTx(ctx context.Context) (*gorm.DB, error) {
+	tx := r.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	return tx, nil
+}
+
+// SaveCombinations implements ResourceDAO.
+func (r *resourceDAO) SaveCombinations(ctx context.Context, tx *gorm.DB, combinations []string) error {
+	panic("unimplemented")
+}
+
+// SaveInstanceTypes implements ResourceDAO.
+func (r *resourceDAO) SaveInstanceTypes(ctx context.Context, tx *gorm.DB, region string, instanceTypes []string) error {
+	panic("unimplemented")
+}
+
+// SaveRegion implements ResourceDAO.
+func (r *resourceDAO) SaveRegion(ctx context.Context, tx *gorm.DB, region string) error {
+	panic("unimplemented")
+}
+
+// SaveZones implements ResourceDAO.
+func (r *resourceDAO) SaveZones(ctx context.Context, tx *gorm.DB, region string, azs []string) error {
 	panic("unimplemented")
 }

@@ -59,10 +59,10 @@ type TreeService interface {
 
 type treeService struct {
 	logger *zap.Logger
-	dao    *dao.TreeDAO
+	dao    dao.TreeDAO
 }
 
-func NewTreeService(logger *zap.Logger, dao *dao.TreeDAO) TreeService {
+func NewTreeService(logger *zap.Logger, dao dao.TreeDAO) TreeService {
 	return &treeService{
 		logger: logger,
 		dao:    dao,
