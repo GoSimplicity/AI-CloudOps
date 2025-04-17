@@ -346,6 +346,14 @@ func GetParamID(ctx *gin.Context) (int, error) {
 	return paramID, nil
 }
 
+func GetStringParam(ctx *gin.Context, key string) (string, error) {
+	value := ctx.Param(key)
+	if value == "" {
+		return "", fmt.Errorf("缺少 '%s' 参数", key)
+	}
+	return value, nil
+}
+
 // GetQueryParam 从查询参数中解析指定类型的值
 func GetQueryParam[T any](ctx *gin.Context, key string) (T, error) {
 	var result T

@@ -37,10 +37,10 @@ import (
 
 type ResourceService interface {
 	SyncResources(ctx context.Context, provider model.CloudProvider, region string) error
-	DeleteResource(ctx context.Context, resourceType string, id int) error
-	StartResource(ctx context.Context, resourceType string, id int) error
-	StopResource(ctx context.Context, resourceType string, id int) error
-	RestartResource(ctx context.Context, resourceType string, id int) error
+	DeleteResource(ctx context.Context, resourceType string, id string) error
+	StartResource(ctx context.Context, resourceType string, id string) error
+	StopResource(ctx context.Context, resourceType string, id string) error
+	RestartResource(ctx context.Context, resourceType string, id string) error
 }
 
 type resourceService struct {
@@ -77,13 +77,13 @@ func NewResourceService(
 }
 
 // RestartResource 重启资源
-func (r *resourceService) RestartResource(ctx context.Context, resourceType string, id int) error {
+func (r *resourceService) RestartResource(ctx context.Context, resourceType string, id string) error {
 	// 首先停止资源
 	err := r.StopResource(ctx, resourceType, id)
 	if err != nil {
 		r.logger.Error("重启资源失败：停止资源出错",
 			zap.String("resourceType", resourceType),
-			zap.Int("id", id),
+			zap.String("id", id),
 			zap.Error(err))
 		return fmt.Errorf("停止资源失败: %w", err)
 	}
@@ -93,7 +93,7 @@ func (r *resourceService) RestartResource(ctx context.Context, resourceType stri
 	if err != nil {
 		r.logger.Error("重启资源失败：启动资源出错",
 			zap.String("resourceType", resourceType),
-			zap.Int("id", id),
+			zap.String("id", id),
 			zap.Error(err))
 		return fmt.Errorf("启动资源失败: %w", err)
 	}
@@ -102,20 +102,20 @@ func (r *resourceService) RestartResource(ctx context.Context, resourceType stri
 }
 
 // StartResource 启动资源
-func (r *resourceService) StartResource(ctx context.Context, resourceType string, id int) error {
+func (r *resourceService) StartResource(ctx context.Context, resourceType string, id string) error {
 	// 获取资源信息
 	resource, err := r.dao.GetResourceById(ctx, resourceType, id)
 	if err != nil {
 		r.logger.Error("启动资源失败：获取资源信息出错",
 			zap.String("resourceType", resourceType),
-			zap.Int("id", id),
+			zap.String("id", id),
 			zap.Error(err))
 		return fmt.Errorf("获取资源信息失败: %w", err)
 	}
 
 	switch resourceType {
 	case "ecs":
-		return r.startEcsInstance(ctx, resource.Provider, resource.Region, resource.InstanceId)
+		return r.startEcsInstance(ctx, resource.Provider, resource.RegionId, resource.InstanceId)
 	default:
 		return fmt.Errorf("不支持的资源类型: %s", resourceType)
 	}
@@ -154,20 +154,20 @@ func (r *resourceService) startEcsInstance(ctx context.Context, provider model.C
 }
 
 // StopResource 停止资源
-func (r *resourceService) StopResource(ctx context.Context, resourceType string, id int) error {
+func (r *resourceService) StopResource(ctx context.Context, resourceType string, id string) error {
 	// 获取资源信息
 	resource, err := r.dao.GetResourceById(ctx, resourceType, id)
 	if err != nil {
 		r.logger.Error("停止资源失败：获取资源信息出错",
 			zap.String("resourceType", resourceType),
-			zap.Int("id", id),
+			zap.String("id", id),
 			zap.Error(err))
 		return fmt.Errorf("获取资源信息失败: %w", err)
 	}
 
 	switch resourceType {
 	case "ecs":
-		return r.stopEcsInstance(ctx, resource.Provider, resource.Region, resource.InstanceId)
+		return r.stopEcsInstance(ctx, resource.Provider, resource.RegionId, resource.InstanceId)
 	default:
 		return fmt.Errorf("不支持的资源类型: %s", resourceType)
 	}
@@ -269,40 +269,20 @@ func (r *resourceService) syncEcsResources(ctx context.Context, provider model.C
 }
 
 // DeleteResource 删除资源
-func (r *resourceService) DeleteResource(ctx context.Context, resourceType string, id int) error {
-	// 获取资源信息
-	resource, err := r.dao.GetResourceById(ctx, resourceType, id)
-	if err != nil {
-		r.logger.Error("删除资源失败：获取资源信息出错",
-			zap.String("resourceType", resourceType),
-			zap.Int("id", id),
-			zap.Error(err))
-		return fmt.Errorf("获取资源信息失败: %w", err)
-	}
+func (r *resourceService) DeleteResource(ctx context.Context, resourceType string, id string) error {
+	// var err error
+	// switch resourceType {
+	// case "ecs":
+	// 	// 删除ECS实例
+	// 	err = r.deleteEcsInstance(ctx, model.CloudProviderAliyun, region, id)
+	// // 可以添加其他资源类型的处理逻辑
+	// default:
+	// 	return fmt.Errorf("不支持的资源类型: %s", resourceType)
+	// }
 
-	// 根据资源类型执行不同的删除逻辑
-	switch resourceType {
-	case "ecs":
-		// 删除ECS实例
-		err = r.deleteEcsInstance(ctx, resource.Provider, resource.Region, resource.InstanceId)
-	// 可以添加其他资源类型的处理逻辑
-	default:
-		return fmt.Errorf("不支持的资源类型: %s", resourceType)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	// 从数据库中删除资源记录
-	err = r.dao.DeleteResource(ctx, resourceType, id)
-	if err != nil {
-		r.logger.Error("从数据库删除资源记录失败",
-			zap.String("resourceType", resourceType),
-			zap.Int("id", id),
-			zap.Error(err))
-		return fmt.Errorf("从数据库删除资源记录失败: %w", err)
-	}
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }

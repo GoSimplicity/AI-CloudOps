@@ -49,7 +49,6 @@ func (h *TreeHandler) RegisterRouters(server *gin.Engine) {
 		treeGroup.GET("/detail/:id", h.GetNodeDetail)
 		treeGroup.GET("/children/:parentId", h.GetChildNodes)
 		treeGroup.GET("/path/:nodeId", h.GetNodePath)
-		treeGroup.GET("/resources/:nodeId", h.GetNodeResources)
 
 		treeGroup.POST("/create", h.CreateNode)
 		treeGroup.POST("/update", h.UpdateNode)
@@ -108,19 +107,6 @@ func (h *TreeHandler) GetNodePath(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetNodePath(ctx, nodeId)
-	})
-}
-
-// GetNodeResources 获取节点关联的资源
-func (h *TreeHandler) GetNodeResources(ctx *gin.Context) {
-	nodeId, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetNodeResources(ctx, nodeId)
 	})
 }
 

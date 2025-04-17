@@ -237,7 +237,6 @@ func (cm *cronManager) StartCheckK8sStatusManager(ctx context.Context) error {
 // checkClusterStatus 检查单个集群状态
 func (cm *cronManager) checkClusterStatus(ctx context.Context, cluster *model.K8sCluster) error {
 	// 获取k8s客户端
-
 	clientset, err := cm.k8sClient.GetKubeClient(cluster.ID)
 	if err != nil {
 		cm.logger.Warn("获取k8s客户端失败",

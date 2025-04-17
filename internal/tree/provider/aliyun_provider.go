@@ -48,8 +48,8 @@ type AliyunProvider interface {
 	SyncResources(ctx context.Context, region string) error
 
 	// 资源管理
-	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSResp, error)
-	CreateInstance(ctx context.Context, region string, config *model.EcsCreationParams) error
+	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) (*model.ResourceECSResp, error)
+	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
 	DeleteInstance(ctx context.Context, region string, instanceID string) error
 	StartInstance(ctx context.Context, region string, instanceID string) error
 	StopInstance(ctx context.Context, region string, instanceID string) error
@@ -111,7 +111,7 @@ func (a *aliyunProvider) createVpcClient(region string) (*vpc.Client, error) {
 }
 
 // CreateInstance 创建ECS实例
-func (a *aliyunProvider) CreateInstance(ctx context.Context, region string, config *model.EcsCreationParams) error {
+func (a *aliyunProvider) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -233,7 +233,7 @@ func (a *aliyunProvider) DeleteInstance(ctx context.Context, region string, inst
 
 	request := &ecs.DeleteInstanceRequest{
 		InstanceId: tea.String(instanceID),
-		Force:      tea.Bool(true),
+		Force:      tea.Bool(true), // 强制删除
 	}
 
 	a.logger.Info("开始删除ECS实例", zap.String("region", region), zap.String("instanceID", instanceID))
@@ -512,10 +512,8 @@ func (a *aliyunProvider) ListDisks(ctx context.Context, region string, pageSize 
 	// 这里需要根据实际情况转换为PageResp
 	result := []*model.PageResp{
 		{
-			Total:    total,
-			Page:     pageNumber,
-			PageSize: pageSize,
-			Data:     response.Body.Disks.Disk,
+			Total: total,
+			Data:  response.Body.Disks.Disk,
 		},
 	}
 
@@ -523,20 +521,18 @@ func (a *aliyunProvider) ListDisks(ctx context.Context, region string, pageSize 
 }
 
 // ListInstances 列出ECS实例
-func (a *aliyunProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSResp, error) {
+func (a *aliyunProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) (*model.ResourceECSResp, error) {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
 		return nil, err
 	}
-
 	request := &ecs.DescribeInstancesRequest{
 		RegionId:   tea.String(region),
 		PageSize:   tea.Int32(int32(pageSize)),
 		PageNumber: tea.Int32(int32(pageNumber)),
 	}
 
-	a.logger.Info("开始查询ECS实例列表", zap.String("region", region))
 	response, err := client.DescribeInstances(request)
 	if err != nil {
 		a.logger.Error("查询ECS实例列表失败", zap.Error(err))
@@ -544,93 +540,52 @@ func (a *aliyunProvider) ListInstances(ctx context.Context, region string, pageS
 	}
 
 	total := int64(tea.Int32Value(response.Body.TotalCount))
-	a.logger.Info("查询ECS实例列表成功", zap.Int64("total", total))
 
-	// 转换为ResourceECSResp
-	result := make([]*model.ResourceECSResp, 0, len(response.Body.Instances.Instance))
-	for _, instance := range response.Body.Instances.Instance {
-		// 安全处理IP地址，避免空切片导致的索引越界
-		privateIp := ""
-		if len(instance.VpcAttributes.PrivateIpAddress.IpAddress) > 0 {
-			privateIp = tea.StringValue(instance.VpcAttributes.PrivateIpAddress.IpAddress[0])
-		}
-
-		publicIp := ""
-		if len(instance.PublicIpAddress.IpAddress) > 0 {
-			publicIp = tea.StringValue(instance.PublicIpAddress.IpAddress[0])
-		}
-
-		ecsResp := &model.ResourceECSResp{
-			ResourceEcs: model.ResourceEcs{
-				ComputeResource: model.ComputeResource{
-					ResourceBase: model.ResourceBase{
-						InstanceName:     tea.StringValue(instance.InstanceName),
-						InstanceId:       tea.StringValue(instance.InstanceId),
-						Provider:         model.CloudProvider(tea.StringValue(instance.RegionId)),
-						Region:           tea.StringValue(instance.RegionId),
-						ZoneId:           tea.StringValue(instance.ZoneId),
-						VpcId:            tea.StringValue(instance.VpcAttributes.VpcId),
-						Status:           model.ResourceStatus(tea.StringValue(instance.Status)),
-						CreationTime:     tea.StringValue(instance.CreationTime),
-						Description:      tea.StringValue(instance.Description),
-						PrivateIpAddress: privateIp,
-						PublicIpAddress:  publicIp,
-					},
-					Cpu:          int(tea.Int32Value(instance.Cpu)),
-					Memory:       int(tea.Int32Value(instance.Memory)) / 1024, // 转换为GB
-					InstanceType: tea.StringValue(instance.InstanceType),
-					IpAddr:       privateIp,
+	instances := response.Body.Instances.Instance
+	result := make([]*model.ResourceEcs, len(instances))
+	for i, instance := range instances {
+		// 将阿里云ECS实例转换为我们的模型
+		result[i] = &model.ResourceEcs{
+			ComputeResource: model.ComputeResource{
+				ResourceBase: model.ResourceBase{
+					InstanceName:       tea.StringValue(instance.InstanceName),
+					InstanceId:         tea.StringValue(instance.InstanceId),
+					Provider:           model.CloudProviderAliyun,
+					RegionId:           tea.StringValue(instance.RegionId),
+					ZoneId:             tea.StringValue(instance.ZoneId),
+					VpcId:              tea.StringValue(instance.VpcAttributes.VpcId),
+					Status:             tea.StringValue(instance.Status),
+					CreationTime:       tea.StringValue(instance.CreationTime),
+					InstanceChargeType: tea.StringValue(instance.InstanceChargeType),
+					Description:        tea.StringValue(instance.Description),
+					SecurityGroupIds:   model.StringList(tea.StringSliceValue(instance.SecurityGroupIds.SecurityGroupId)),
+					PrivateIpAddress:   model.StringList(tea.StringSliceValue(instance.VpcAttributes.PrivateIpAddress.IpAddress)),
+					PublicIpAddress:    model.StringList(tea.StringSliceValue(instance.PublicIpAddress.IpAddress)),
+					LastSyncTime:       time.Now(),
 				},
-				OsType:   tea.StringValue(instance.OSType),
-				OSName:   tea.StringValue(instance.OSName),
-				Hostname: tea.StringValue(instance.HostName),
+				Cpu:          int(tea.Int32Value(instance.Cpu)),
+				Memory:       int(tea.Int32Value(instance.Memory)) / 1024,
+				InstanceType: tea.StringValue(instance.InstanceType),
+				ImageId:      tea.StringValue(instance.ImageId),
+				HostName:     tea.StringValue(instance.HostName),
+				IpAddr:       tea.StringValue(instance.VpcAttributes.PrivateIpAddress.IpAddress[0]),
 			},
-			CreatedAt: tea.StringValue(instance.CreationTime),
-			UpdatedAt: time.Now().Format(time.RFC3339),
+			OsType:          tea.StringValue(instance.OSType),
+			OSName:          tea.StringValue(instance.OSName),
+			StartTime:       tea.StringValue(instance.StartTime),
+			AutoReleaseTime: tea.StringValue(instance.AutoReleaseTime),
 		}
-		result = append(result, ecsResp)
 	}
 
-	return result, nil
+	return &model.ResourceECSResp{
+		Total: total,
+		Data:  result,
+	}, nil
 }
 
-// ListVPCs 列出VPC
+// ListVPCs 获取VPC列表
 func (a *aliyunProvider) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
-	client, err := a.createVpcClient(region)
-	if err != nil {
-		a.logger.Error("创建VPC客户端失败", zap.Error(err))
-		return nil, err
-	}
-
-	request := &vpc.DescribeVpcsRequest{
-		RegionId:   tea.String(region),
-		PageSize:   tea.Int32(int32(pageSize)),
-		PageNumber: tea.Int32(int32(pageNumber)),
-	}
-
-	a.logger.Info("开始查询VPC列表", zap.String("region", region))
-	response, err := client.DescribeVpcs(request)
-	if err != nil {
-		a.logger.Error("查询VPC列表失败", zap.Error(err))
-		return nil, err
-	}
-
-	total := int64(tea.Int32Value(response.Body.TotalCount))
-	a.logger.Info("查询VPC列表成功", zap.Int64("total", total))
-
-	// 转换为VpcResp
-	result := make([]*model.VpcResp, 0, len(response.Body.Vpcs.Vpc))
-	for _, vpc := range response.Body.Vpcs.Vpc {
-		vpcResp := &model.VpcResp{
-			VpcId:       tea.StringValue(vpc.VpcId),
-			VpcName:     tea.StringValue(vpc.VpcName),
-			CidrBlock:   tea.StringValue(vpc.CidrBlock),
-			Description: tea.StringValue(vpc.Description),
-		}
-		result = append(result, vpcResp)
-	}
-
-	return result, nil
+	panic("unimplemented")
 }
 
 // SyncResources 同步资源

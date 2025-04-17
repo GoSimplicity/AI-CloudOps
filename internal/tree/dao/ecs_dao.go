@@ -35,7 +35,7 @@ import (
 type EcsDAO interface {
 	ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error)
 	GetEcsResourceById(ctx context.Context, id int) (*model.ResourceECSResp, error)
-	CreateEcsResource(ctx context.Context, params *model.EcsCreationParams) error
+	CreateEcsResource(ctx context.Context, params *model.CreateEcsResourceReq) error
 }
 
 type ecsDAO struct {
@@ -49,7 +49,7 @@ func NewEcsDAO(db *gorm.DB) EcsDAO {
 }
 
 // CreateEcsResource implements EcsDAO.
-func (e *ecsDAO) CreateEcsResource(ctx context.Context, params *model.EcsCreationParams) error {
+func (e *ecsDAO) CreateEcsResource(ctx context.Context, params *model.CreateEcsResourceReq) error {
 	if err := e.db.Create(params).Error; err != nil {
 		return err
 	}

@@ -61,55 +61,55 @@ func (h *ResourceHandler) RegisterRouters(server *gin.Engine) {
 		// ECS相关接口
 		ecsGroup := resourceGroup.Group("/ecs")
 		{
-			ecsGroup.GET("/list", h.ListEcsResources)
-			ecsGroup.GET("/detail/:id", h.GetEcsDetail)
+			ecsGroup.POST("/list", h.ListEcsResources)
+			ecsGroup.POST("/detail", h.GetEcsDetail)
 			ecsGroup.POST("/create", h.CreateEcsResource)
-			ecsGroup.POST("/start/:id", h.StartEcs)
-			ecsGroup.POST("/stop/:id", h.StopEcs)
-			ecsGroup.POST("/restart/:id", h.RestartEcs)
-			ecsGroup.POST("/delete/:id", h.DeleteEcs)
+			ecsGroup.POST("/start", h.StartEcs)
+			ecsGroup.POST("/stop", h.StopEcs)
+			ecsGroup.POST("/restart", h.RestartEcs)
+			ecsGroup.DELETE("/delete", h.DeleteEcs)
 			ecsGroup.POST("/instance_options", h.ListInstanceOptions)
 		}
 
 		// VPC相关接口
 		vpcGroup := resourceGroup.Group("/vpc")
 		{
-			vpcGroup.GET("/detail/:id", h.GetVpcDetail)
+			vpcGroup.POST("/detail", h.GetVpcDetail)
 			vpcGroup.POST("/create", h.CreateVpcResource)
-			vpcGroup.POST("/delete/:id", h.DeleteVpc)
+			vpcGroup.POST("/delete", h.DeleteVpc)
 		}
 
 		// ELB相关接口
 		elbGroup := resourceGroup.Group("/elb")
 		{
-			elbGroup.GET("/list", h.ListElbResources)
-			elbGroup.GET("/detail/:id", h.GetElbDetail)
+			elbGroup.POST("/list", h.ListElbResources)
+			elbGroup.POST("/detail", h.GetElbDetail)
 			elbGroup.POST("/create", h.CreateElbResource)
-			elbGroup.POST("/delete/:id", h.DeleteElb)
+			elbGroup.POST("/delete", h.DeleteElb)
 		}
 
 		// RDS相关接口
 		rdsGroup := resourceGroup.Group("/rds")
 		{
-			rdsGroup.GET("/list", h.ListRdsResources)
-			rdsGroup.GET("/detail/:id", h.GetRdsDetail)
+			rdsGroup.POST("/list", h.ListRdsResources)
+			rdsGroup.POST("/detail", h.GetRdsDetail)
 			rdsGroup.POST("/create", h.CreateRdsResource)
-			rdsGroup.POST("/start/:id", h.StartRds)
-			rdsGroup.POST("/stop/:id", h.StopRds)
-			rdsGroup.POST("/restart/:id", h.RestartRds)
-			rdsGroup.POST("/delete/:id", h.DeleteRds)
+			rdsGroup.POST("/start", h.StartRds)
+			rdsGroup.POST("/stop", h.StopRds)
+			rdsGroup.POST("/restart", h.RestartRds)
+			rdsGroup.POST("/delete", h.DeleteRds)
 		}
 
 		// 云厂商相关接口
 		cloudGroup := resourceGroup.Group("/cloud")
 		{
-			cloudGroup.GET("/providers", h.ListCloudProviders)
-			cloudGroup.GET("/regions/:provider", h.ListRegions)
-			cloudGroup.GET("/zones/:provider/:region", h.ListZones)
-			cloudGroup.GET("/instance_types/:provider/:region", h.ListInstanceTypes)
-			cloudGroup.GET("/images/:provider/:region", h.ListImages)
-			cloudGroup.GET("/vpcs/:provider/:region", h.ListVpcs)
-			cloudGroup.GET("/security_groups/:provider/:region", h.ListSecurityGroups)
+			cloudGroup.POST("/providers", h.ListCloudProviders)
+			cloudGroup.POST("/regions", h.ListRegions)
+			cloudGroup.POST("/zones", h.ListZones)
+			cloudGroup.POST("/instance_types", h.ListInstanceTypes)
+			cloudGroup.POST("/images", h.ListImages)
+			cloudGroup.POST("/vpcs", h.ListVpcs)
+			cloudGroup.POST("/security_groups", h.ListSecurityGroups)
 		}
 	}
 }
@@ -129,32 +129,23 @@ func (h *ResourceHandler) SyncResources(ctx *gin.Context) {
 func (h *ResourceHandler) ListEcsResources(ctx *gin.Context) {
 	var req model.ListEcsResourcesReq
 
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.ecsService.ListEcsResources(ctx, &req)
 	})
 }
 
 // GetEcsDetail 获取ECS资源详情
 func (h *ResourceHandler) GetEcsDetail(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.GetEcsDetailReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.ecsService.GetEcsResourceById(ctx, id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.ecsService.GetEcsResourceById(ctx, &req)
 	})
 }
 
 // CreateEcsResource 创建ECS资源
 func (h *ResourceHandler) CreateEcsResource(ctx *gin.Context) {
-	var req model.EcsCreationParams
+	var req model.CreateEcsResourceReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.ecsService.CreateEcsResource(ctx, &req)
@@ -163,53 +154,37 @@ func (h *ResourceHandler) CreateEcsResource(ctx *gin.Context) {
 
 // StartEcs 启动ECS实例
 func (h *ResourceHandler) StartEcs(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.StartEcsReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.resourceService.StartResource(ctx, "ecs", id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.StartEcsResource(ctx, &req)
 	})
 }
 
 // StopEcs 停止ECS实例
 func (h *ResourceHandler) StopEcs(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.StopEcsReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.resourceService.StopResource(ctx, "ecs", id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.StopEcsResource(ctx, &req)
 	})
 }
 
 // RestartEcs 重启ECS实例
 func (h *ResourceHandler) RestartEcs(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.RestartEcsReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.resourceService.RestartResource(ctx, "ecs", id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.RestartEcsResource(ctx, &req)
 	})
 }
 
 // DeleteEcs 删除ECS实例
 func (h *ResourceHandler) DeleteEcs(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.DeleteEcsReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.resourceService.DeleteResource(ctx, "ecs", id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.DeleteEcsResource(ctx, &req)
 	})
 }
 
@@ -217,14 +192,10 @@ func (h *ResourceHandler) DeleteEcs(ctx *gin.Context) {
 
 // GetVpcDetail 获取VPC资源详情
 func (h *ResourceHandler) GetVpcDetail(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.GetVpcDetailReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.vpcService.GetVpcResourceById(ctx, id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.vpcService.GetVpcResourceById(ctx, &req)
 	})
 }
 
@@ -239,14 +210,10 @@ func (h *ResourceHandler) CreateVpcResource(ctx *gin.Context) {
 
 // DeleteVpc 删除VPC资源
 func (h *ResourceHandler) DeleteVpc(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.DeleteVpcReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.resourceService.DeleteResource(ctx, "vpc", id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.vpcService.DeleteVpcResource(ctx, &req)
 	})
 }
 
@@ -256,26 +223,17 @@ func (h *ResourceHandler) DeleteVpc(ctx *gin.Context) {
 func (h *ResourceHandler) ListElbResources(ctx *gin.Context) {
 	var req model.ListElbResourcesReq
 
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.elbService.ListElbResources(ctx, &req)
 	})
 }
 
 // GetElbDetail 获取ELB资源详情
 func (h *ResourceHandler) GetElbDetail(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.GetElbDetailReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.elbService.GetElbResourceById(ctx, id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.elbService.GetElbResourceById(ctx, &req)
 	})
 }
 
@@ -290,14 +248,10 @@ func (h *ResourceHandler) CreateElbResource(ctx *gin.Context) {
 
 // DeleteElb 删除ELB实例
 func (h *ResourceHandler) DeleteElb(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.DeleteElbReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.resourceService.DeleteResource(ctx, "elb", id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.elbService.DeleteElbResource(ctx, &req)
 	})
 }
 
@@ -307,26 +261,17 @@ func (h *ResourceHandler) DeleteElb(ctx *gin.Context) {
 func (h *ResourceHandler) ListRdsResources(ctx *gin.Context) {
 	var req model.ListRdsResourcesReq
 
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.rdsService.ListRdsResources(ctx, &req)
 	})
 }
 
 // GetRdsDetail 获取RDS资源详情
 func (h *ResourceHandler) GetRdsDetail(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.GetRdsDetailReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.rdsService.GetRdsResourceById(ctx, id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.rdsService.GetRdsResourceById(ctx, &req)
 	})
 }
 
@@ -341,53 +286,37 @@ func (h *ResourceHandler) CreateRdsResource(ctx *gin.Context) {
 
 // StartRds 启动RDS实例
 func (h *ResourceHandler) StartRds(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.StartRdsReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.resourceService.StartResource(ctx, "rds", id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.rdsService.StartRdsResource(ctx, &req)
 	})
 }
 
 // StopRds 停止RDS实例
 func (h *ResourceHandler) StopRds(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.StopRdsReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.resourceService.StopResource(ctx, "rds", id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.rdsService.StopRdsResource(ctx, &req)
 	})
 }
 
 // RestartRds 重启RDS实例
 func (h *ResourceHandler) RestartRds(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.RestartRdsReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.resourceService.RestartResource(ctx, "rds", id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.rdsService.RestartRdsResource(ctx, &req)
 	})
 }
 
 // DeleteRds 删除RDS实例
 func (h *ResourceHandler) DeleteRds(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.DeleteRdsReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.resourceService.DeleteResource(ctx, "rds", id)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.rdsService.DeleteRdsResource(ctx, &req)
 	})
 }
 
@@ -402,105 +331,55 @@ func (h *ResourceHandler) ListCloudProviders(ctx *gin.Context) {
 
 // ListRegions 获取指定云厂商的区域列表
 func (h *ResourceHandler) ListRegions(ctx *gin.Context) {
-	provider := model.CloudProvider(ctx.Param("provider"))
+	var req model.ListRegionsReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.cloudService.ListRegions(ctx, provider)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.cloudService.ListRegions(ctx, &req)
 	})
 }
 
 // ListZones 获取指定区域的可用区列表
 func (h *ResourceHandler) ListZones(ctx *gin.Context) {
-	provider, err := utils.GetQueryParam[model.CloudProvider](ctx, "provider")
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.ListZonesReq
 
-	region, err := utils.GetQueryParam[string](ctx, "region")
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.cloudService.ListZones(ctx, provider, region)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.cloudService.ListZones(ctx, &req)
 	})
 }
 
 // ListInstanceTypes 获取实例类型列表
 func (h *ResourceHandler) ListInstanceTypes(ctx *gin.Context) {
-	provider, err := utils.GetQueryParam[model.CloudProvider](ctx, "provider")
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.ListInstanceTypesReq
 
-	region, err := utils.GetQueryParam[string](ctx, "region")
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.cloudService.ListInstanceTypes(ctx, provider, region)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.cloudService.ListInstanceTypes(ctx, &req)
 	})
 }
 
 // ListImages 获取镜像列表
 func (h *ResourceHandler) ListImages(ctx *gin.Context) {
-	provider, err := utils.GetQueryParam[model.CloudProvider](ctx, "provider")
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.ListImagesReq
 
-	region, err := utils.GetQueryParam[string](ctx, "region")
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.cloudService.ListImages(ctx, provider, region)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.cloudService.ListImages(ctx, &req)
 	})
 }
 
 // ListVpcs 获取VPC列表
 func (h *ResourceHandler) ListVpcs(ctx *gin.Context) {
-	provider, err := utils.GetQueryParam[model.CloudProvider](ctx, "provider")
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.ListVpcsReq
 
-	region, err := utils.GetQueryParam[string](ctx, "region")
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.cloudService.ListVpcs(ctx, provider, region)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.cloudService.ListVpcs(ctx, &req)
 	})
 }
 
 // ListSecurityGroups 获取安全组列表
 func (h *ResourceHandler) ListSecurityGroups(ctx *gin.Context) {
-	provider, err := utils.GetQueryParam[model.CloudProvider](ctx, "provider")
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	var req model.ListSecurityGroupsReq
 
-	region, err := utils.GetQueryParam[string](ctx, "region")
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.cloudService.ListSecurityGroups(ctx, provider, region)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.cloudService.ListSecurityGroups(ctx, &req)
 	})
 }
 

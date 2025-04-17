@@ -39,7 +39,6 @@ type TreeService interface {
 	GetNodeById(ctx context.Context, id int) (*model.TreeNodeDetailResp, error)
 	GetChildNodes(ctx context.Context, parentId int) ([]model.TreeNodeResp, error)
 	GetNodePath(ctx context.Context, nodeId int) ([]model.TreeNodePathResp, error)
-	GetNodeResources(ctx context.Context, nodeId int) ([]model.NodeResourceResp, error)
 
 	// 节点管理
 	CreateNode(ctx context.Context, req *model.CreateNodeReq) (*model.TreeNodeResp, error)
@@ -106,11 +105,6 @@ func (t *treeService) GetNodeById(ctx context.Context, id int) (*model.TreeNodeD
 
 // GetNodePath implements TreeService.
 func (t *treeService) GetNodePath(ctx context.Context, nodeId int) ([]model.TreeNodePathResp, error) {
-	panic("unimplemented")
-}
-
-// GetNodeResources implements TreeService.
-func (t *treeService) GetNodeResources(ctx context.Context, nodeId int) ([]model.NodeResourceResp, error) {
 	panic("unimplemented")
 }
 

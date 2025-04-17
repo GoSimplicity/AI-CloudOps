@@ -35,8 +35,12 @@ import (
 
 type RdsService interface {
 	ListRdsResources(ctx context.Context, req *model.ListRdsResourcesReq) (*model.PageResp, error)
-	GetRdsResourceById(ctx context.Context, id int) (*model.ResourceRDSResp, error)
-	CreateRdsResource(ctx context.Context, params *model.RdsCreationParams) error
+	GetRdsResourceById(ctx context.Context, req *model.GetRdsDetailReq) (*model.ResourceRDSResp, error)
+	CreateRdsResource(ctx context.Context, req *model.RdsCreationParams) error
+	DeleteRdsResource(ctx context.Context, req *model.DeleteRdsReq) error
+	StartRdsResource(ctx context.Context, req *model.StartRdsReq) error
+	StopRdsResource(ctx context.Context, req *model.StopRdsReq) error
+	RestartRdsResource(ctx context.Context, req *model.RestartRdsReq) error
 }
 
 type rdsService struct {
@@ -44,24 +48,44 @@ type rdsService struct {
 	dao    dao.RdsDAO
 }
 
-func NewRdsService(logger *zap.Logger, dao dao.RdsDAO) RdsService {
-	return &rdsService{
-		logger: logger,
-		dao:    dao,
-	}
+// CreateRdsResource implements RdsService.
+func (r *rdsService) CreateRdsResource(ctx context.Context, req *model.RdsCreationParams) error {
+	panic("unimplemented")
 }
 
-// CreateRdsResource implements RdsService.
-func (r *rdsService) CreateRdsResource(ctx context.Context, params *model.RdsCreationParams) error {
+// DeleteRdsResource implements RdsService.
+func (r *rdsService) DeleteRdsResource(ctx context.Context, req *model.DeleteRdsReq) error {
 	panic("unimplemented")
 }
 
 // GetRdsResourceById implements RdsService.
-func (r *rdsService) GetRdsResourceById(ctx context.Context, id int) (*model.ResourceRDSResp, error) {
+func (r *rdsService) GetRdsResourceById(ctx context.Context, req *model.GetRdsDetailReq) (*model.ResourceRDSResp, error) {
 	panic("unimplemented")
 }
 
 // ListRdsResources implements RdsService.
 func (r *rdsService) ListRdsResources(ctx context.Context, req *model.ListRdsResourcesReq) (*model.PageResp, error) {
 	panic("unimplemented")
+}
+
+// RestartRdsResource implements RdsService.
+func (r *rdsService) RestartRdsResource(ctx context.Context, req *model.RestartRdsReq) error {
+	panic("unimplemented")
+}
+
+// StartRdsResource implements RdsService.
+func (r *rdsService) StartRdsResource(ctx context.Context, req *model.StartRdsReq) error {
+	panic("unimplemented")
+}
+
+// StopRdsResource implements RdsService.
+func (r *rdsService) StopRdsResource(ctx context.Context, req *model.StopRdsReq) error {
+	panic("unimplemented")
+}
+
+func NewRdsService(logger *zap.Logger, dao dao.RdsDAO) RdsService {
+	return &rdsService{
+		logger: logger,
+		dao:    dao,
+	}
 }

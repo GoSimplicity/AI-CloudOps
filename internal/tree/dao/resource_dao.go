@@ -40,7 +40,7 @@ type ResourceDAO interface {
 	StartResource(ctx context.Context, resourceType string, id int) error
 	StopResource(ctx context.Context, resourceType string, id int) error
 	RestartResource(ctx context.Context, resourceType string, id int) error
-	GetResourceById(ctx context.Context, resourceType string, id int) (*model.ResourceBase, error)
+	GetResourceById(ctx context.Context, resourceType string, id string) (*model.ResourceBase, error)
 	SaveOrUpdateResource(ctx context.Context, resource interface{}) error
 
 	SaveRegion(ctx context.Context, tx *gorm.DB, region string) error
@@ -85,7 +85,7 @@ func (r *resourceDAO) SyncResources(ctx context.Context, provider model.CloudPro
 }
 
 // GetResourceById implements ResourceDAO.
-func (r *resourceDAO) GetResourceById(ctx context.Context, resourceType string, id int) (*model.ResourceBase, error) {
+func (r *resourceDAO) GetResourceById(ctx context.Context, resourceType string, id string) (*model.ResourceBase, error) {
 	panic("unimplemented")
 }
 

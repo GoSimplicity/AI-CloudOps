@@ -36,7 +36,7 @@ type GcpProvider interface {
 
 	// 资源管理
 	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSResp, error)
-	CreateInstance(ctx context.Context, region string, config *model.EcsCreationParams) error
+	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
 	DeleteInstance(ctx context.Context, region string, instanceID string) error
 	StartInstance(ctx context.Context, region string, instanceID string) error
 	StopInstance(ctx context.Context, region string, instanceID string) error
@@ -74,7 +74,7 @@ func (g *gcpProvider) CreateDisk(ctx context.Context, region string, config *mod
 }
 
 // CreateInstance implements GcpProvider.
-func (g *gcpProvider) CreateInstance(ctx context.Context, region string, config *model.EcsCreationParams) error {
+func (g *gcpProvider) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
 	panic("unimplemented")
 }
 

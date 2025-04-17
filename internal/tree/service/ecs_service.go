@@ -38,10 +38,12 @@ import (
 type EcsService interface {
 	// 资源管理
 	ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error)
-	GetEcsResourceById(ctx context.Context, id int) (*model.ResourceECSResp, error)
-	CreateEcsResource(ctx context.Context, params *model.EcsCreationParams) error
-	StartEcsResource(ctx context.Context, provider model.CloudProvider, region string, instanceID string) error
-	StopEcsResource(ctx context.Context, provider model.CloudProvider, region string, instanceID string) error
+	GetEcsResourceById(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceECSResp, error)
+	CreateEcsResource(ctx context.Context, params *model.CreateEcsResourceReq) error
+	StartEcsResource(ctx context.Context, req *model.StartEcsReq) error
+	StopEcsResource(ctx context.Context, req *model.StopEcsReq) error
+	RestartEcsResource(ctx context.Context, req *model.RestartEcsReq) error
+	DeleteEcsResource(ctx context.Context, req *model.DeleteEcsReq) error
 
 	// 磁盘管理
 	ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (*model.PageResp, error)
@@ -78,7 +80,7 @@ func NewEcsService(logger *zap.Logger, dao dao.EcsDAO, AliyunProvider provider.A
 }
 
 // CreateEcsResource 创建ECS资源
-func (e *ecsService) CreateEcsResource(ctx context.Context, params *model.EcsCreationParams) error {
+func (e *ecsService) CreateEcsResource(ctx context.Context, params *model.CreateEcsResourceReq) error {
 	if params.Provider == model.CloudProviderLocal {
 		err := e.dao.CreateEcsResource(ctx, params)
 		if err != nil {
@@ -118,30 +120,30 @@ func (e *ecsService) CreateEcsResource(ctx context.Context, params *model.EcsCre
 }
 
 // StartEcsResource 启动ECS资源
-func (e *ecsService) StartEcsResource(ctx context.Context, provider model.CloudProvider, region string, instanceID string) error {
+func (e *ecsService) StartEcsResource(ctx context.Context, req *model.StartEcsReq) error {
 	var err error
-	switch provider {
+	switch req.Provider {
 	case model.CloudProviderAliyun:
-		err = e.AliyunProvider.StartInstance(ctx, region, instanceID)
+		err = e.AliyunProvider.StartInstance(ctx, req.Region, req.InstanceId)
 	case model.CloudProviderTencent:
-		err = e.TencentProvider.StartInstance(ctx, region, instanceID)
+		err = e.TencentProvider.StartInstance(ctx, req.Region, req.InstanceId)
 	case model.CloudProviderHuawei:
-		err = e.HuaweiProvider.StartInstance(ctx, region, instanceID)
+		err = e.HuaweiProvider.StartInstance(ctx, req.Region, req.InstanceId)
 	case model.CloudProviderAWS:
-		err = e.AWSProvider.StartInstance(ctx, region, instanceID)
+		err = e.AWSProvider.StartInstance(ctx, req.Region, req.InstanceId)
 	case model.CloudProviderAzure:
-		err = e.AzureProvider.StartInstance(ctx, region, instanceID)
+		err = e.AzureProvider.StartInstance(ctx, req.Region, req.InstanceId)
 	case model.CloudProviderGCP:
-		err = e.GCPProvider.StartInstance(ctx, region, instanceID)
+		err = e.GCPProvider.StartInstance(ctx, req.Region, req.InstanceId)
 	default:
-		return fmt.Errorf("[StartEcsResource] 不支持的云提供商: %s", provider)
+		return fmt.Errorf("[StartEcsResource] 不支持的云提供商: %s", req.Provider)
 	}
 
 	if err != nil {
 		e.logger.Error("[StartEcsResource] 启动云实例失败",
-			zap.String("provider", string(provider)),
-			zap.String("region", region),
-			zap.String("instanceID", instanceID),
+			zap.String("provider", string(req.Provider)),
+			zap.String("region", req.Region),
+			zap.String("instanceID", req.InstanceId),
 			zap.Error(err))
 		return fmt.Errorf("[StartEcsResource] 启动云实例失败: %w", err)
 	}
@@ -150,30 +152,30 @@ func (e *ecsService) StartEcsResource(ctx context.Context, provider model.CloudP
 }
 
 // StopEcsResource 停止ECS资源
-func (e *ecsService) StopEcsResource(ctx context.Context, provider model.CloudProvider, region string, instanceID string) error {
+func (e *ecsService) StopEcsResource(ctx context.Context, req *model.StopEcsReq) error {
 	var err error
-	switch provider {
+	switch req.Provider {
 	case model.CloudProviderAliyun:
-		err = e.AliyunProvider.StopInstance(ctx, region, instanceID)
+		err = e.AliyunProvider.StopInstance(ctx, req.Region, req.InstanceId)
 	case model.CloudProviderTencent:
-		err = e.TencentProvider.StopInstance(ctx, region, instanceID)
+		err = e.TencentProvider.StopInstance(ctx, req.Region, req.InstanceId)
 	case model.CloudProviderHuawei:
-		err = e.HuaweiProvider.StopInstance(ctx, region, instanceID)
+		err = e.HuaweiProvider.StopInstance(ctx, req.Region, req.InstanceId)
 	case model.CloudProviderAWS:
-		err = e.AWSProvider.StopInstance(ctx, region, instanceID)
+		err = e.AWSProvider.StopInstance(ctx, req.Region, req.InstanceId)
 	case model.CloudProviderAzure:
-		err = e.AzureProvider.StopInstance(ctx, region, instanceID)
+		err = e.AzureProvider.StopInstance(ctx, req.Region, req.InstanceId)
 	case model.CloudProviderGCP:
-		err = e.GCPProvider.StopInstance(ctx, region, instanceID)
+		err = e.GCPProvider.StopInstance(ctx, req.Region, req.InstanceId)
 	default:
-		return fmt.Errorf("[StopEcsResource] 不支持的云提供商: %s", provider)
+		return fmt.Errorf("[StopEcsResource] 不支持的云提供商: %s", req.Provider)
 	}
 
 	if err != nil {
 		e.logger.Error("[StopEcsResource] 停止云实例失败",
-			zap.String("provider", string(provider)),
-			zap.String("region", region),
-			zap.String("instanceID", instanceID),
+			zap.String("provider", string(req.Provider)),
+			zap.String("region", req.Region),
+			zap.String("instanceID", req.InstanceId),
 			zap.Error(err))
 		return fmt.Errorf("[StopEcsResource] 停止云实例失败: %w", err)
 	}
@@ -181,24 +183,60 @@ func (e *ecsService) StopEcsResource(ctx context.Context, provider model.CloudPr
 	return nil
 }
 
-// GetEcsResourceById 获取ECS资源详情
-func (e *ecsService) GetEcsResourceById(ctx context.Context, id int) (*model.ResourceECSResp, error) {
-	resource, err := e.dao.GetEcsResourceById(ctx, id)
-	if err != nil {
-		e.logger.Error("[GetEcsResourceById] 获取ECS资源详情失败", zap.Error(err))
-		return nil, err
+// RestartEcsResource 重启ECS资源
+func (e *ecsService) RestartEcsResource(ctx context.Context, req *model.RestartEcsReq) error {
+	return nil
+}
+
+// DeleteEcsResource 删除ECS资源
+func (e *ecsService) DeleteEcsResource(ctx context.Context, req *model.DeleteEcsReq) error {
+	var err error
+	switch req.Provider {
+	case model.CloudProviderAliyun:
+		err = e.AliyunProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
+	case model.CloudProviderTencent:
+		err = e.TencentProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
+	case model.CloudProviderHuawei:
+		err = e.HuaweiProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
+	case model.CloudProviderAWS:
+		err = e.AWSProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
+	case model.CloudProviderAzure:
+		err = e.AzureProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
+	case model.CloudProviderGCP:
+		err = e.GCPProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
+	default:
+		return fmt.Errorf("[DeleteEcsResource] 不支持的云提供商: %s", req.Provider)
 	}
-	return resource, nil
+
+	if err != nil {
+		e.logger.Error("[DeleteEcsResource] 删除云实例失败",
+			zap.String("provider", string(req.Provider)),
+			zap.String("region", req.Region),
+			zap.String("instanceID", req.InstanceId),
+			zap.Error(err))
+		return fmt.Errorf("[DeleteEcsResource] 删除云实例失败: %w", err)
+	}
+
+	return nil
+}
+
+// GetEcsResourceById 获取ECS资源详情
+func (e *ecsService) GetEcsResourceById(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceECSResp, error) {
+	return nil, nil
 }
 
 // ListEcsResources 获取ECS资源列表
 func (e *ecsService) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error) {
-	resources, err := e.dao.ListEcsResources(ctx, req)
+	resources, err := e.AliyunProvider.ListInstances(ctx, req.Region, req.PageSize, req.PageNumber)
 	if err != nil {
 		e.logger.Error("[ListEcsResources] 获取ECS资源列表失败", zap.Error(err))
 		return nil, err
 	}
-	return resources, nil
+
+	return &model.PageResp{
+		Total: resources.Total,
+		Data:  resources.Data,
+	}, nil
 }
 
 // ListDisks 获取磁盘列表
