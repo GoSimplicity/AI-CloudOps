@@ -108,10 +108,3 @@ type NodePathResp struct {
 type TreeNodePathResp struct {
 	Path []*TreeNodeResp `json:"path"`
 }
-
-// NodeResourcesResp 节点资源响应
-type NodeResourcesResp struct {
-	EcsResources []ResourceECSResp `json:"ecsResources"`
-	ElbResources []ResourceELBResp `json:"elbResources"`
-	RdsResources []ResourceRDSResp `json:"rdsResources"`
-}

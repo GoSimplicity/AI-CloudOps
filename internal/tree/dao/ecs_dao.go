@@ -34,7 +34,7 @@ import (
 
 type EcsDAO interface {
 	ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error)
-	GetEcsResourceById(ctx context.Context, id int) (*model.ResourceECSResp, error)
+	GetEcsResourceById(ctx context.Context, id int) (*model.ResourceEcs, error)
 	CreateEcsResource(ctx context.Context, params *model.CreateEcsResourceReq) error
 }
 
@@ -57,8 +57,12 @@ func (e *ecsDAO) CreateEcsResource(ctx context.Context, params *model.CreateEcsR
 }
 
 // GetEcsResourceById implements EcsDAO.
-func (e *ecsDAO) GetEcsResourceById(ctx context.Context, id int) (*model.ResourceECSResp, error) {
-	panic("unimplemented")
+func (e *ecsDAO) GetEcsResourceById(ctx context.Context, id int) (*model.ResourceEcs, error) {
+	var result model.ResourceEcs
+	if err := e.db.Where("id = ?", id).First(&result).Error; err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // ListEcsResources implements EcsDAO.

@@ -48,7 +48,8 @@ type AliyunProvider interface {
 	SyncResources(ctx context.Context, region string) error
 
 	// 资源管理
-	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) (*model.ResourceECSResp, error)
+	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceEcs, int64, error)
+	GetInstanceDetail(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error)
 	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
 	DeleteInstance(ctx context.Context, region string, instanceID string) error
 	StartInstance(ctx context.Context, region string, instanceID string) error
@@ -521,11 +522,11 @@ func (a *aliyunProvider) ListDisks(ctx context.Context, region string, pageSize 
 }
 
 // ListInstances 列出ECS实例
-func (a *aliyunProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) (*model.ResourceECSResp, error) {
+func (a *aliyunProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceEcs, int64, error) {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, err
+		return nil, 0, err
 	}
 	request := &ecs.DescribeInstancesRequest{
 		RegionId:   tea.String(region),
@@ -536,7 +537,7 @@ func (a *aliyunProvider) ListInstances(ctx context.Context, region string, pageS
 	response, err := client.DescribeInstances(request)
 	if err != nil {
 		a.logger.Error("查询ECS实例列表失败", zap.Error(err))
-		return nil, err
+		return nil, 0, err
 	}
 
 	total := int64(tea.Int32Value(response.Body.TotalCount))
@@ -577,10 +578,60 @@ func (a *aliyunProvider) ListInstances(ctx context.Context, region string, pageS
 		}
 	}
 
-	return &model.ResourceECSResp{
-		Total: total,
-		Data:  result,
-	}, nil
+	if len(result) == 0 {
+		return []*model.ResourceEcs{}, 0, nil
+	}
+
+	return result, total, nil
+}
+
+// GetInstanceDetail 获取ECS实例详情
+func (a *aliyunProvider) GetInstanceDetail(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error) {
+	client, err := a.createEcsClient(region)
+	if err != nil {
+		a.logger.Error("创建ECS客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	request := &ecs.DescribeInstanceAttributeRequest{
+		InstanceId: tea.String(instanceID),
+	}
+
+	response, err := client.DescribeInstanceAttribute(request)
+	if err != nil {
+		a.logger.Error("查询ECS实例详情失败", zap.Error(err))
+		return nil, err
+	}
+
+	instance := response.Body
+	result := &model.ResourceEcs{
+		ComputeResource: model.ComputeResource{
+			ResourceBase: model.ResourceBase{
+				InstanceName:       tea.StringValue(instance.InstanceName),
+				InstanceId:         tea.StringValue(instance.InstanceId),
+				Provider:           model.CloudProviderAliyun,
+				RegionId:           tea.StringValue(instance.RegionId),
+				ZoneId:             tea.StringValue(instance.ZoneId),
+				VpcId:              tea.StringValue(instance.VpcAttributes.VpcId),
+				Status:             tea.StringValue(instance.Status),
+				CreationTime:       tea.StringValue(instance.CreationTime),
+				InstanceChargeType: tea.StringValue(instance.InstanceChargeType),
+				Description:        tea.StringValue(instance.Description),
+				SecurityGroupIds:   model.StringList(tea.StringSliceValue(instance.SecurityGroupIds.SecurityGroupId)),
+				PrivateIpAddress:   model.StringList(tea.StringSliceValue(instance.VpcAttributes.PrivateIpAddress.IpAddress)),
+				PublicIpAddress:    model.StringList(tea.StringSliceValue(instance.PublicIpAddress.IpAddress)),
+				LastSyncTime:       time.Now(),
+			},
+			Cpu:          int(tea.Int32Value(instance.Cpu)),
+			Memory:       int(tea.Int32Value(instance.Memory)) / 1024,
+			InstanceType: tea.StringValue(instance.InstanceType),
+			ImageId:      tea.StringValue(instance.ImageId),
+			HostName:     tea.StringValue(instance.HostName),
+			IpAddr:       tea.StringValue(instance.VpcAttributes.PrivateIpAddress.IpAddress[0]),
+		},
+	}
+
+	return result, nil
 }
 
 // ListVPCs 获取VPC列表

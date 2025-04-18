@@ -35,7 +35,7 @@ type AwsProvider interface {
 	SyncResources(ctx context.Context, region string) error
 
 	// 资源管理
-	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSResp, error)
+	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error)
 	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
 	DeleteInstance(ctx context.Context, region string, instanceID string) error
 	StartInstance(ctx context.Context, region string, instanceID string) error
@@ -109,7 +109,7 @@ func (a *awsProvider) ListDisks(ctx context.Context, region string, pageSize int
 }
 
 // ListInstances implements AwsProvider.
-func (a *awsProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSResp, error) {
+func (a *awsProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error) {
 	panic("unimplemented")
 }
 

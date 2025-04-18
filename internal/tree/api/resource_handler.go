@@ -62,13 +62,13 @@ func (h *ResourceHandler) RegisterRouters(server *gin.Engine) {
 		ecsGroup := resourceGroup.Group("/ecs")
 		{
 			ecsGroup.POST("/list", h.ListEcsResources)
+			ecsGroup.POST("/instance_options", h.ListInstanceOptions)
 			ecsGroup.POST("/detail", h.GetEcsDetail)
 			ecsGroup.POST("/create", h.CreateEcsResource)
+			ecsGroup.DELETE("/delete", h.DeleteEcs)
 			ecsGroup.POST("/start", h.StartEcs)
 			ecsGroup.POST("/stop", h.StopEcs)
 			ecsGroup.POST("/restart", h.RestartEcs)
-			ecsGroup.DELETE("/delete", h.DeleteEcs)
-			ecsGroup.POST("/instance_options", h.ListInstanceOptions)
 		}
 
 		// VPC相关接口

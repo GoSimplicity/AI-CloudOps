@@ -35,7 +35,7 @@ type TencentProvider interface {
 	SyncResources(ctx context.Context, region string) error
 
 	// 资源管理
-	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSResp, error)
+	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error)
 	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
 	DeleteInstance(ctx context.Context, region string, instanceID string) error
 	StartInstance(ctx context.Context, region string, instanceID string) error
@@ -109,7 +109,7 @@ func (t *tencentProvider) ListDisks(ctx context.Context, region string, pageSize
 }
 
 // ListInstances implements TencentProvider.
-func (t *tencentProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSResp, error) {
+func (t *tencentProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error) {
 	panic("unimplemented")
 }
 

@@ -78,10 +78,15 @@ type ListEcsResourcesReq struct {
 	Region     string        `form:"region" json:"region"`
 }
 
-// ResourceECSResp ECS资源响应
-type ResourceECSResp struct {
+// ResourceECSListResp ECS资源列表响应
+type ResourceECSListResp struct {
 	Total int64          `json:"total"`
 	Data  []*ResourceEcs `json:"data"`
+}
+
+// ResourceECSDetailResp ECS资源详情响应
+type ResourceECSDetailResp struct {
+	Data *ResourceEcs `json:"data"`
 }
 
 // StartEcsReq ECS启动请求

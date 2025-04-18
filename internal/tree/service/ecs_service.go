@@ -38,7 +38,7 @@ import (
 type EcsService interface {
 	// 资源管理
 	ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error)
-	GetEcsResourceById(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceECSResp, error)
+	GetEcsResourceById(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceECSDetailResp, error)
 	CreateEcsResource(ctx context.Context, params *model.CreateEcsResourceReq) error
 	StartEcsResource(ctx context.Context, req *model.StartEcsReq) error
 	StopEcsResource(ctx context.Context, req *model.StopEcsReq) error
@@ -221,21 +221,37 @@ func (e *ecsService) DeleteEcsResource(ctx context.Context, req *model.DeleteEcs
 }
 
 // GetEcsResourceById 获取ECS资源详情
-func (e *ecsService) GetEcsResourceById(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceECSResp, error) {
-	return nil, nil
+func (e *ecsService) GetEcsResourceById(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceECSDetailResp, error) {
+	var err error
+	var result *model.ResourceEcs
+	switch req.Provider {
+	case model.CloudProviderAliyun:
+		result, err = e.AliyunProvider.GetInstanceDetail(ctx, req.Region, req.InstanceId)
+	default:
+		return nil, fmt.Errorf("[GetEcsResourceById] 不支持的云提供商: %s", req.Provider)
+	}
+
+	if err != nil {
+		e.logger.Error("[GetEcsResourceById] 获取ECS资源详情失败", zap.Error(err))
+		return nil, fmt.Errorf("[GetEcsResourceById] 获取ECS资源详情失败: %w", err)
+	}
+
+	return &model.ResourceECSDetailResp{
+		Data: result,
+	}, nil
 }
 
 // ListEcsResources 获取ECS资源列表
 func (e *ecsService) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error) {
-	resources, err := e.AliyunProvider.ListInstances(ctx, req.Region, req.PageSize, req.PageNumber)
+	resources, total, err := e.AliyunProvider.ListInstances(ctx, req.Region, req.PageSize, req.PageNumber)
 	if err != nil {
 		e.logger.Error("[ListEcsResources] 获取ECS资源列表失败", zap.Error(err))
 		return nil, err
 	}
 
 	return &model.PageResp{
-		Total: resources.Total,
-		Data:  resources.Data,
+		Total: total,
+		Data:  resources,
 	}, nil
 }
 
