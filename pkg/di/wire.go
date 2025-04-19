@@ -199,10 +199,11 @@ var JobSet = wire.NewSet(
 var ProviderSet = wire.NewSet(
 	treeProvider.NewAliyunProvider,
 	treeProvider.NewTencentProvider,
-	treeProvider.NewAwsProvider,
 	treeProvider.NewHuaweiProvider,
+	treeProvider.NewAWSProvider,
 	treeProvider.NewAzureProvider,
-	treeProvider.NewGcpProvider,
+	treeProvider.NewGCPProvider,
+	treeProvider.NewProviderFactory,
 )
 
 var CronSet = wire.NewSet(

@@ -31,107 +31,104 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 )
 
-type HuaweiProvider interface {
-	SyncResources(ctx context.Context, region string) error
-
-	// 资源管理
-	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error)
-	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
-	DeleteInstance(ctx context.Context, region string, instanceID string) error
-	StartInstance(ctx context.Context, region string, instanceID string) error
-	StopInstance(ctx context.Context, region string, instanceID string) error
-
-	// 网络管理
-	ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error)
-	CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error
-	DeleteVPC(ctx context.Context, region string, vpcID string) error
-
-	// 存储管理
-	ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error)
-	CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error
-	DeleteDisk(ctx context.Context, region string, diskID string) error
-	AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-	DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-
-	ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error)
+type HuaweiProviderImpl struct {
 }
 
-type huaweiProvider struct {
-}
-
-func NewHuaweiProvider() HuaweiProvider {
-	return &huaweiProvider{}
-}
-
-// AttachDisk implements HuaweiProvider.
-func (h *huaweiProvider) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
+// AttachDisk implements Provider.
+func (h *HuaweiProviderImpl) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// CreateDisk implements HuaweiProvider.
-func (h *huaweiProvider) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
+// CreateDisk implements Provider.
+func (h *HuaweiProviderImpl) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
 	panic("unimplemented")
 }
 
-// CreateInstance implements HuaweiProvider.
-func (h *huaweiProvider) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
+// CreateInstance implements Provider.
+func (h *HuaweiProviderImpl) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
 	panic("unimplemented")
 }
 
-// CreateVPC implements HuaweiProvider.
-func (h *huaweiProvider) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
+// CreateVPC implements Provider.
+func (h *HuaweiProviderImpl) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
 	panic("unimplemented")
 }
 
-// DeleteDisk implements HuaweiProvider.
-func (h *huaweiProvider) DeleteDisk(ctx context.Context, region string, diskID string) error {
+// DeleteDisk implements Provider.
+func (h *HuaweiProviderImpl) DeleteDisk(ctx context.Context, region string, diskID string) error {
 	panic("unimplemented")
 }
 
-// DeleteInstance implements HuaweiProvider.
-func (h *huaweiProvider) DeleteInstance(ctx context.Context, region string, instanceID string) error {
+// DeleteInstance implements Provider.
+func (h *HuaweiProviderImpl) DeleteInstance(ctx context.Context, region string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// DeleteVPC implements HuaweiProvider.
-func (h *huaweiProvider) DeleteVPC(ctx context.Context, region string, vpcID string) error {
+// DeleteVPC implements Provider.
+func (h *HuaweiProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID string) error {
 	panic("unimplemented")
 }
 
-// DetachDisk implements HuaweiProvider.
-func (h *huaweiProvider) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
+// DetachDisk implements Provider.
+func (h *HuaweiProviderImpl) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// ListDisks implements HuaweiProvider.
-func (h *huaweiProvider) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
+// GetInstanceDetail implements Provider.
+func (h *HuaweiProviderImpl) GetInstanceDetail(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error) {
 	panic("unimplemented")
 }
 
-// ListInstances implements HuaweiProvider.
-func (h *huaweiProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error) {
+// GetZonesByVpc implements Provider.
+func (h *HuaweiProviderImpl) GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error) {
 	panic("unimplemented")
 }
 
-// ListVPCs implements HuaweiProvider.
-func (h *huaweiProvider) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
+// ListDisks implements Provider.
+func (h *HuaweiProviderImpl) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
 	panic("unimplemented")
 }
 
-// StartInstance implements HuaweiProvider.
-func (h *huaweiProvider) StartInstance(ctx context.Context, region string, instanceID string) error {
+// ListInstanceOptions implements Provider.
+func (h *HuaweiProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
 	panic("unimplemented")
 }
 
-// StopInstance implements HuaweiProvider.
-func (h *huaweiProvider) StopInstance(ctx context.Context, region string, instanceID string) error {
+// ListInstances implements Provider.
+func (h *HuaweiProviderImpl) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceEcs, int64, error) {
 	panic("unimplemented")
 }
 
-func (h *huaweiProvider) SyncResources(ctx context.Context, region string) error {
+// ListRegions implements Provider.
+func (h *HuaweiProviderImpl) ListRegions(ctx context.Context) ([]*model.RegionResp, error) {
 	panic("unimplemented")
 }
 
-func (h *huaweiProvider) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+// ListVPCs implements Provider.
+func (h *HuaweiProviderImpl) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
 	panic("unimplemented")
+}
+
+// StartInstance implements Provider.
+func (h *HuaweiProviderImpl) StartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+// StopInstance implements Provider.
+func (h *HuaweiProviderImpl) StopInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+// SyncResources implements Provider.
+func (h *HuaweiProviderImpl) SyncResources(ctx context.Context, region string) error {
+	panic("unimplemented")
+}
+
+// RestartInstance implements Provider.
+func (h *HuaweiProviderImpl) RestartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+func NewHuaweiProvider() *HuaweiProviderImpl {
+	return &HuaweiProviderImpl{}
 }

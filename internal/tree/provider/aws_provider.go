@@ -31,107 +31,104 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 )
 
-type AwsProvider interface {
-	SyncResources(ctx context.Context, region string) error
-
-	// 资源管理
-	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error)
-	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
-	DeleteInstance(ctx context.Context, region string, instanceID string) error
-	StartInstance(ctx context.Context, region string, instanceID string) error
-	StopInstance(ctx context.Context, region string, instanceID string) error
-
-	// 网络管理
-	ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error)
-	CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error
-	DeleteVPC(ctx context.Context, region string, vpcID string) error
-
-	// 存储管理
-	ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error)
-	CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error
-	DeleteDisk(ctx context.Context, region string, diskID string) error
-	AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-	DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-
-	ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error)
+type AWSProviderImpl struct {
 }
 
-type awsProvider struct {
-}
-
-func NewAwsProvider() AwsProvider {
-	return &awsProvider{}
-}
-
-// AttachDisk implements AwsProvider.
-func (a *awsProvider) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
+// AttachDisk implements Provider.
+func (a *AWSProviderImpl) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// CreateDisk implements AwsProvider.
-func (a *awsProvider) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
+// CreateDisk implements Provider.
+func (a *AWSProviderImpl) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
 	panic("unimplemented")
 }
 
-// CreateInstance implements AwsProvider.
-func (a *awsProvider) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
+// CreateInstance implements Provider.
+func (a *AWSProviderImpl) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
 	panic("unimplemented")
 }
 
-// CreateVPC implements AwsProvider.
-func (a *awsProvider) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
+// CreateVPC implements Provider.
+func (a *AWSProviderImpl) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
 	panic("unimplemented")
 }
 
-// DeleteDisk implements AwsProvider.
-func (a *awsProvider) DeleteDisk(ctx context.Context, region string, diskID string) error {
+// DeleteDisk implements Provider.
+func (a *AWSProviderImpl) DeleteDisk(ctx context.Context, region string, diskID string) error {
 	panic("unimplemented")
 }
 
-// DeleteInstance implements AwsProvider.
-func (a *awsProvider) DeleteInstance(ctx context.Context, region string, instanceID string) error {
+// DeleteInstance implements Provider.
+func (a *AWSProviderImpl) DeleteInstance(ctx context.Context, region string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// DeleteVPC implements AwsProvider.
-func (a *awsProvider) DeleteVPC(ctx context.Context, region string, vpcID string) error {
+// DeleteVPC implements Provider.
+func (a *AWSProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID string) error {
 	panic("unimplemented")
 }
 
-// DetachDisk implements AwsProvider.
-func (a *awsProvider) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
+// DetachDisk implements Provider.
+func (a *AWSProviderImpl) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// ListDisks implements AwsProvider.
-func (a *awsProvider) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
+// GetInstanceDetail implements Provider.
+func (a *AWSProviderImpl) GetInstanceDetail(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error) {
 	panic("unimplemented")
 }
 
-// ListInstances implements AwsProvider.
-func (a *awsProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error) {
+// GetZonesByVpc implements Provider.
+func (a *AWSProviderImpl) GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error) {
 	panic("unimplemented")
 }
 
-// ListVPCs implements AwsProvider.
-func (a *awsProvider) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
+// ListDisks implements Provider.
+func (a *AWSProviderImpl) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
 	panic("unimplemented")
 }
 
-// StartInstance implements AwsProvider.
-func (a *awsProvider) StartInstance(ctx context.Context, region string, instanceID string) error {
+// ListInstanceOptions implements Provider.
+func (a *AWSProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
 	panic("unimplemented")
 }
 
-// StopInstance implements AwsProvider.
-func (a *awsProvider) StopInstance(ctx context.Context, region string, instanceID string) error {
+// ListInstances implements Provider.
+func (a *AWSProviderImpl) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceEcs, int64, error) {
 	panic("unimplemented")
 }
 
-func (a *awsProvider) SyncResources(ctx context.Context, region string) error {
+// ListRegions implements Provider.
+func (a *AWSProviderImpl) ListRegions(ctx context.Context) ([]*model.RegionResp, error) {
 	panic("unimplemented")
 }
 
-func (a *awsProvider) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+// ListVPCs implements Provider.
+func (a *AWSProviderImpl) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
 	panic("unimplemented")
+}
+
+// StartInstance implements Provider.
+func (a *AWSProviderImpl) StartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+// StopInstance implements Provider.
+func (a *AWSProviderImpl) StopInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+// SyncResources implements Provider.
+func (a *AWSProviderImpl) SyncResources(ctx context.Context, region string) error {
+	panic("unimplemented")
+}
+
+// RestartInstance implements Provider.
+func (a *AWSProviderImpl) RestartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+func NewAWSProvider() *AWSProviderImpl {
+	return &AWSProviderImpl{}
 }

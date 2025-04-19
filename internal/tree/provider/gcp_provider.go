@@ -31,107 +31,104 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 )
 
-type GcpProvider interface {
-	SyncResources(ctx context.Context, region string) error
-
-	// 资源管理
-	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error)
-	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
-	DeleteInstance(ctx context.Context, region string, instanceID string) error
-	StartInstance(ctx context.Context, region string, instanceID string) error
-	StopInstance(ctx context.Context, region string, instanceID string) error
-
-	// 网络管理
-	ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error)
-	CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error
-	DeleteVPC(ctx context.Context, region string, vpcID string) error
-
-	// 存储管理
-	ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error)
-	CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error
-	DeleteDisk(ctx context.Context, region string, diskID string) error
-	AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-	DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-
-	ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error)
+type GCPProviderImpl struct {
 }
 
-type gcpProvider struct {
-}
-
-func NewGcpProvider() GcpProvider {
-	return &gcpProvider{}
-}
-
-// AttachDisk implements GcpProvider.
-func (g *gcpProvider) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
+// AttachDisk implements Provider.
+func (g *GCPProviderImpl) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// CreateDisk implements GcpProvider.
-func (g *gcpProvider) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
+// CreateDisk implements Provider.
+func (g *GCPProviderImpl) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
 	panic("unimplemented")
 }
 
-// CreateInstance implements GcpProvider.
-func (g *gcpProvider) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
+// CreateInstance implements Provider.
+func (g *GCPProviderImpl) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
 	panic("unimplemented")
 }
 
-// CreateVPC implements GcpProvider.
-func (g *gcpProvider) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
+// CreateVPC implements Provider.
+func (g *GCPProviderImpl) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
 	panic("unimplemented")
 }
 
-// DeleteDisk implements GcpProvider.
-func (g *gcpProvider) DeleteDisk(ctx context.Context, region string, diskID string) error {
+// DeleteDisk implements Provider.
+func (g *GCPProviderImpl) DeleteDisk(ctx context.Context, region string, diskID string) error {
 	panic("unimplemented")
 }
 
-// DeleteInstance implements GcpProvider.
-func (g *gcpProvider) DeleteInstance(ctx context.Context, region string, instanceID string) error {
+// DeleteInstance implements Provider.
+func (g *GCPProviderImpl) DeleteInstance(ctx context.Context, region string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// DeleteVPC implements GcpProvider.
-func (g *gcpProvider) DeleteVPC(ctx context.Context, region string, vpcID string) error {
+// DeleteVPC implements Provider.
+func (g *GCPProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID string) error {
 	panic("unimplemented")
 }
 
-// DetachDisk implements GcpProvider.
-func (g *gcpProvider) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
+// DetachDisk implements Provider.
+func (g *GCPProviderImpl) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// ListDisks implements GcpProvider.
-func (g *gcpProvider) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
+// GetInstanceDetail implements Provider.
+func (g *GCPProviderImpl) GetInstanceDetail(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error) {
 	panic("unimplemented")
 }
 
-// ListInstances implements GcpProvider.
-func (g *gcpProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error) {
+// GetZonesByVpc implements Provider.
+func (g *GCPProviderImpl) GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error) {
 	panic("unimplemented")
 }
 
-// ListVPCs implements GcpProvider.
-func (g *gcpProvider) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
+// ListDisks implements Provider.
+func (g *GCPProviderImpl) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
 	panic("unimplemented")
 }
 
-// StartInstance implements GcpProvider.
-func (g *gcpProvider) StartInstance(ctx context.Context, region string, instanceID string) error {
+// ListInstanceOptions implements Provider.
+func (g *GCPProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
 	panic("unimplemented")
 }
 
-// StopInstance implements GcpProvider.
-func (g *gcpProvider) StopInstance(ctx context.Context, region string, instanceID string) error {
+// ListInstances implements Provider.
+func (g *GCPProviderImpl) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceEcs, int64, error) {
 	panic("unimplemented")
 }
 
-func (g *gcpProvider) SyncResources(ctx context.Context, region string) error {
+// ListRegions implements Provider.
+func (g *GCPProviderImpl) ListRegions(ctx context.Context) ([]*model.RegionResp, error) {
 	panic("unimplemented")
 }
 
-func (g *gcpProvider) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+// ListVPCs implements Provider.
+func (g *GCPProviderImpl) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
 	panic("unimplemented")
+}
+
+// StartInstance implements Provider.
+func (g *GCPProviderImpl) StartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+// StopInstance implements Provider.
+func (g *GCPProviderImpl) StopInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+// SyncResources implements Provider.
+func (g *GCPProviderImpl) SyncResources(ctx context.Context, region string) error {
+	panic("unimplemented")
+}
+
+// RestartInstance implements Provider.
+func (g *GCPProviderImpl) RestartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+func NewGCPProvider() *GCPProviderImpl {
+	return &GCPProviderImpl{}
 }

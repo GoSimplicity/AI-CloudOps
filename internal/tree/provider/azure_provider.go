@@ -31,107 +31,104 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 )
 
-type AzureProvider interface {
-	SyncResources(ctx context.Context, region string) error
-
-	// 资源管理
-	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error)
-	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
-	DeleteInstance(ctx context.Context, region string, instanceID string) error
-	StartInstance(ctx context.Context, region string, instanceID string) error
-	StopInstance(ctx context.Context, region string, instanceID string) error
-
-	// 网络管理
-	ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error)
-	CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error
-	DeleteVPC(ctx context.Context, region string, vpcID string) error
-
-	// 存储管理
-	ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error)
-	CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error
-	DeleteDisk(ctx context.Context, region string, diskID string) error
-	AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-	DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-
-	ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error)
+type AzureProviderImpl struct {
 }
 
-type azureProvider struct {
-}
-
-func NewAzureProvider() AzureProvider {
-	return &azureProvider{}
-}
-
-// AttachDisk implements AzureProvider.
-func (a *azureProvider) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
+// AttachDisk implements Provider.
+func (a *AzureProviderImpl) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// CreateDisk implements AzureProvider.
-func (a *azureProvider) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
+// CreateDisk implements Provider.
+func (a *AzureProviderImpl) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
 	panic("unimplemented")
 }
 
-// CreateInstance implements AzureProvider.
-func (a *azureProvider) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
+// CreateInstance implements Provider.
+func (a *AzureProviderImpl) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
 	panic("unimplemented")
 }
 
-// CreateVPC implements AzureProvider.
-func (a *azureProvider) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
+// CreateVPC implements Provider.
+func (a *AzureProviderImpl) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
 	panic("unimplemented")
 }
 
-// DeleteDisk implements AzureProvider.
-func (a *azureProvider) DeleteDisk(ctx context.Context, region string, diskID string) error {
+// DeleteDisk implements Provider.
+func (a *AzureProviderImpl) DeleteDisk(ctx context.Context, region string, diskID string) error {
 	panic("unimplemented")
 }
 
-// DeleteInstance implements AzureProvider.
-func (a *azureProvider) DeleteInstance(ctx context.Context, region string, instanceID string) error {
+// DeleteInstance implements Provider.
+func (a *AzureProviderImpl) DeleteInstance(ctx context.Context, region string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// DeleteVPC implements AzureProvider.
-func (a *azureProvider) DeleteVPC(ctx context.Context, region string, vpcID string) error {
+// DeleteVPC implements Provider.
+func (a *AzureProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID string) error {
 	panic("unimplemented")
 }
 
-// DetachDisk implements AzureProvider.
-func (a *azureProvider) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
+// DetachDisk implements Provider.
+func (a *AzureProviderImpl) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// ListDisks implements AzureProvider.
-func (a *azureProvider) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
+// GetInstanceDetail implements Provider.
+func (a *AzureProviderImpl) GetInstanceDetail(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error) {
 	panic("unimplemented")
 }
 
-// ListInstances implements AzureProvider.
-func (a *azureProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error) {
+// GetZonesByVpc implements Provider.
+func (a *AzureProviderImpl) GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error) {
 	panic("unimplemented")
 }
 
-// ListVPCs implements AzureProvider.
-func (a *azureProvider) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
+// ListDisks implements Provider.
+func (a *AzureProviderImpl) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
 	panic("unimplemented")
 }
 
-// StartInstance implements AzureProvider.
-func (a *azureProvider) StartInstance(ctx context.Context, region string, instanceID string) error {
+// ListInstanceOptions implements Provider.
+func (a *AzureProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
 	panic("unimplemented")
 }
 
-// StopInstance implements AzureProvider.
-func (a *azureProvider) StopInstance(ctx context.Context, region string, instanceID string) error {
+// ListInstances implements Provider.
+func (a *AzureProviderImpl) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceEcs, int64, error) {
 	panic("unimplemented")
 }
 
-func (a *azureProvider) SyncResources(ctx context.Context, region string) error {
+// ListRegions implements Provider.
+func (a *AzureProviderImpl) ListRegions(ctx context.Context) ([]*model.RegionResp, error) {
 	panic("unimplemented")
 }
 
-func (a *azureProvider) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+// ListVPCs implements Provider.
+func (a *AzureProviderImpl) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
 	panic("unimplemented")
+}
+
+// StartInstance implements Provider.
+func (a *AzureProviderImpl) StartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+// StopInstance implements Provider.
+func (a *AzureProviderImpl) StopInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+// SyncResources implements Provider.
+func (a *AzureProviderImpl) SyncResources(ctx context.Context, region string) error {
+	panic("unimplemented")
+}
+
+// RestartInstance implements Provider.
+func (a *AzureProviderImpl) RestartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+func NewAzureProvider() *AzureProviderImpl {
+	return &AzureProviderImpl{}
 }

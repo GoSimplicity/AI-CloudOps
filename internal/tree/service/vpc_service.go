@@ -43,12 +43,7 @@ type VpcService interface {
 type vpcService struct {
 	logger          *zap.Logger
 	dao             dao.VpcDAO
-	AliyunProvider  provider.AliyunProvider
-	TencentProvider provider.TencentProvider
-	HuaweiProvider  provider.HuaweiProvider
-	AWSProvider     provider.AwsProvider
-	AzureProvider   provider.AzureProvider
-	GCPProvider     provider.GcpProvider
+	providerFactory *provider.ProviderFactory
 }
 
 // CreateVpcResource implements VpcService.
@@ -66,15 +61,10 @@ func (v *vpcService) GetVpcResourceById(ctx context.Context, req *model.GetVpcDe
 	panic("unimplemented")
 }
 
-func NewVpcService(logger *zap.Logger, dao dao.VpcDAO, AliyunProvider provider.AliyunProvider, TencentProvider provider.TencentProvider, HuaweiProvider provider.HuaweiProvider, AWSProvider provider.AwsProvider, AzureProvider provider.AzureProvider, GCPProvider provider.GcpProvider) VpcService {
+func NewVpcService(logger *zap.Logger, dao dao.VpcDAO, providerFactory *provider.ProviderFactory) VpcService {
 	return &vpcService{
 		logger:          logger,
 		dao:             dao,
-		AliyunProvider:  AliyunProvider,
-		TencentProvider: TencentProvider,
-		HuaweiProvider:  HuaweiProvider,
-		AWSProvider:     AWSProvider,
-		AzureProvider:   AzureProvider,
-		GCPProvider:     GCPProvider,
+		providerFactory: providerFactory,
 	}
 }

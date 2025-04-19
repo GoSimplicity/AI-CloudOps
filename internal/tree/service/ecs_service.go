@@ -56,26 +56,16 @@ type EcsService interface {
 }
 
 type ecsService struct {
-	AliyunProvider  provider.AliyunProvider
-	TencentProvider provider.TencentProvider
-	HuaweiProvider  provider.HuaweiProvider
-	AWSProvider     provider.AwsProvider
-	AzureProvider   provider.AzureProvider
-	GCPProvider     provider.GcpProvider
+	providerFactory *provider.ProviderFactory
 	logger          *zap.Logger
 	dao             dao.EcsDAO
 }
 
-func NewEcsService(logger *zap.Logger, dao dao.EcsDAO, AliyunProvider provider.AliyunProvider, TencentProvider provider.TencentProvider, HuaweiProvider provider.HuaweiProvider, AWSProvider provider.AwsProvider, AzureProvider provider.AzureProvider, GCPProvider provider.GcpProvider) EcsService {
+func NewEcsService(logger *zap.Logger, dao dao.EcsDAO, providerFactory *provider.ProviderFactory) EcsService {
 	return &ecsService{
 		logger:          logger,
 		dao:             dao,
-		AliyunProvider:  AliyunProvider,
-		TencentProvider: TencentProvider,
-		HuaweiProvider:  HuaweiProvider,
-		AWSProvider:     AWSProvider,
-		AzureProvider:   AzureProvider,
-		GCPProvider:     GCPProvider,
+		providerFactory: providerFactory,
 	}
 }
 
@@ -90,24 +80,12 @@ func (e *ecsService) CreateEcsResource(ctx context.Context, params *model.Create
 		return nil
 	}
 
-	var err error
-	switch params.Provider {
-	case model.CloudProviderAliyun:
-		err = e.AliyunProvider.CreateInstance(ctx, params.Region, params)
-	case model.CloudProviderTencent:
-		err = e.TencentProvider.CreateInstance(ctx, params.Region, params)
-	case model.CloudProviderHuawei:
-		err = e.HuaweiProvider.CreateInstance(ctx, params.Region, params)
-	case model.CloudProviderAWS:
-		err = e.AWSProvider.CreateInstance(ctx, params.Region, params)
-	case model.CloudProviderAzure:
-		err = e.AzureProvider.CreateInstance(ctx, params.Region, params)
-	case model.CloudProviderGCP:
-		err = e.GCPProvider.CreateInstance(ctx, params.Region, params)
-	default:
-		return fmt.Errorf("[CreateEcsResource] 不支持的云提供商: %s", params.Provider)
+	cloudProvider, err := e.providerFactory.GetProvider(params.Provider)
+	if err != nil {
+		return fmt.Errorf("[CreateEcsResource] 获取云提供商失败: %w", err)
 	}
 
+	err = cloudProvider.CreateInstance(ctx, params.Region, params)
 	if err != nil {
 		e.logger.Error("[CreateEcsResource] 创建云实例失败",
 			zap.String("provider", string(params.Provider)),
@@ -121,24 +99,12 @@ func (e *ecsService) CreateEcsResource(ctx context.Context, params *model.Create
 
 // StartEcsResource 启动ECS资源
 func (e *ecsService) StartEcsResource(ctx context.Context, req *model.StartEcsReq) error {
-	var err error
-	switch req.Provider {
-	case model.CloudProviderAliyun:
-		err = e.AliyunProvider.StartInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderTencent:
-		err = e.TencentProvider.StartInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderHuawei:
-		err = e.HuaweiProvider.StartInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderAWS:
-		err = e.AWSProvider.StartInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderAzure:
-		err = e.AzureProvider.StartInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderGCP:
-		err = e.GCPProvider.StartInstance(ctx, req.Region, req.InstanceId)
-	default:
-		return fmt.Errorf("[StartEcsResource] 不支持的云提供商: %s", req.Provider)
+	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
+	if err != nil {
+		return fmt.Errorf("[StartEcsResource] 获取云提供商失败: %w", err)
 	}
 
+	err = cloudProvider.StartInstance(ctx, req.Region, req.InstanceId)
 	if err != nil {
 		e.logger.Error("[StartEcsResource] 启动云实例失败",
 			zap.String("provider", string(req.Provider)),
@@ -153,24 +119,12 @@ func (e *ecsService) StartEcsResource(ctx context.Context, req *model.StartEcsRe
 
 // StopEcsResource 停止ECS资源
 func (e *ecsService) StopEcsResource(ctx context.Context, req *model.StopEcsReq) error {
-	var err error
-	switch req.Provider {
-	case model.CloudProviderAliyun:
-		err = e.AliyunProvider.StopInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderTencent:
-		err = e.TencentProvider.StopInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderHuawei:
-		err = e.HuaweiProvider.StopInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderAWS:
-		err = e.AWSProvider.StopInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderAzure:
-		err = e.AzureProvider.StopInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderGCP:
-		err = e.GCPProvider.StopInstance(ctx, req.Region, req.InstanceId)
-	default:
-		return fmt.Errorf("[StopEcsResource] 不支持的云提供商: %s", req.Provider)
+	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
+	if err != nil {
+		return fmt.Errorf("[StopEcsResource] 获取云提供商失败: %w", err)
 	}
 
+	err = cloudProvider.StopInstance(ctx, req.Region, req.InstanceId)
 	if err != nil {
 		e.logger.Error("[StopEcsResource] 停止云实例失败",
 			zap.String("provider", string(req.Provider)),
@@ -185,29 +139,32 @@ func (e *ecsService) StopEcsResource(ctx context.Context, req *model.StopEcsReq)
 
 // RestartEcsResource 重启ECS资源
 func (e *ecsService) RestartEcsResource(ctx context.Context, req *model.RestartEcsReq) error {
+	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
+	if err != nil {
+		return fmt.Errorf("[RestartEcsResource] 获取云提供商失败: %w", err)
+	}
+
+	err = cloudProvider.RestartInstance(ctx, req.Region, req.InstanceId)
+	if err != nil {
+		e.logger.Error("[RestartEcsResource] 重启云实例失败",
+			zap.String("provider", string(req.Provider)),
+			zap.String("region", req.Region),
+			zap.String("instanceID", req.InstanceId),
+			zap.Error(err))
+		return fmt.Errorf("[RestartEcsResource] 重启云实例失败: %w", err)
+	}
+
 	return nil
 }
 
 // DeleteEcsResource 删除ECS资源
 func (e *ecsService) DeleteEcsResource(ctx context.Context, req *model.DeleteEcsReq) error {
-	var err error
-	switch req.Provider {
-	case model.CloudProviderAliyun:
-		err = e.AliyunProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderTencent:
-		err = e.TencentProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderHuawei:
-		err = e.HuaweiProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderAWS:
-		err = e.AWSProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderAzure:
-		err = e.AzureProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
-	case model.CloudProviderGCP:
-		err = e.GCPProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
-	default:
-		return fmt.Errorf("[DeleteEcsResource] 不支持的云提供商: %s", req.Provider)
+	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
+	if err != nil {
+		return fmt.Errorf("[DeleteEcsResource] 获取云提供商失败: %w", err)
 	}
 
+	err = cloudProvider.DeleteInstance(ctx, req.Region, req.InstanceId)
 	if err != nil {
 		e.logger.Error("[DeleteEcsResource] 删除云实例失败",
 			zap.String("provider", string(req.Provider)),
@@ -222,15 +179,12 @@ func (e *ecsService) DeleteEcsResource(ctx context.Context, req *model.DeleteEcs
 
 // GetEcsResourceById 获取ECS资源详情
 func (e *ecsService) GetEcsResourceById(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceECSDetailResp, error) {
-	var err error
-	var result *model.ResourceEcs
-	switch req.Provider {
-	case model.CloudProviderAliyun:
-		result, err = e.AliyunProvider.GetInstanceDetail(ctx, req.Region, req.InstanceId)
-	default:
-		return nil, fmt.Errorf("[GetEcsResourceById] 不支持的云提供商: %s", req.Provider)
+	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
+	if err != nil {
+		return nil, fmt.Errorf("[GetEcsResourceById] 获取云提供商失败: %w", err)
 	}
 
+	result, err := cloudProvider.GetInstanceDetail(ctx, req.Region, req.InstanceId)
 	if err != nil {
 		e.logger.Error("[GetEcsResourceById] 获取ECS资源详情失败", zap.Error(err))
 		return nil, fmt.Errorf("[GetEcsResourceById] 获取ECS资源详情失败: %w", err)
@@ -243,7 +197,12 @@ func (e *ecsService) GetEcsResourceById(ctx context.Context, req *model.GetEcsDe
 
 // ListEcsResources 获取ECS资源列表
 func (e *ecsService) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error) {
-	resources, total, err := e.AliyunProvider.ListInstances(ctx, req.Region, req.PageSize, req.PageNumber)
+	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
+	if err != nil {
+		return nil, fmt.Errorf("[ListEcsResources] 获取云提供商失败: %w", err)
+	}
+
+	resources, total, err := cloudProvider.ListInstances(ctx, req.Region, req.PageSize, req.PageNumber)
 	if err != nil {
 		e.logger.Error("[ListEcsResources] 获取ECS资源列表失败", zap.Error(err))
 		return nil, err
@@ -257,28 +216,12 @@ func (e *ecsService) ListEcsResources(ctx context.Context, req *model.ListEcsRes
 
 // ListDisks 获取磁盘列表
 func (e *ecsService) ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (*model.PageResp, error) {
-	var (
-		result []*model.PageResp
-		err    error
-	)
-
-	switch provider {
-	case model.CloudProviderAliyun:
-		result, err = e.AliyunProvider.ListDisks(ctx, region, pageSize, pageNumber)
-	case model.CloudProviderTencent:
-		result, err = e.TencentProvider.ListDisks(ctx, region, pageSize, pageNumber)
-	case model.CloudProviderHuawei:
-		result, err = e.HuaweiProvider.ListDisks(ctx, region, pageSize, pageNumber)
-	case model.CloudProviderAWS:
-		result, err = e.AWSProvider.ListDisks(ctx, region, pageSize, pageNumber)
-	case model.CloudProviderAzure:
-		result, err = e.AzureProvider.ListDisks(ctx, region, pageSize, pageNumber)
-	case model.CloudProviderGCP:
-		result, err = e.GCPProvider.ListDisks(ctx, region, pageSize, pageNumber)
-	default:
-		return nil, fmt.Errorf("[ListDisks] 不支持的云提供商: %s", provider)
+	cloudProvider, err := e.providerFactory.GetProvider(provider)
+	if err != nil {
+		return nil, fmt.Errorf("[ListDisks] 获取云提供商失败: %w", err)
 	}
 
+	result, err := cloudProvider.ListDisks(ctx, region, pageSize, pageNumber)
 	if err != nil {
 		e.logger.Error("[ListDisks] 获取磁盘列表失败",
 			zap.String("provider", string(provider)),
@@ -295,24 +238,12 @@ func (e *ecsService) ListDisks(ctx context.Context, provider model.CloudProvider
 
 // CreateDisk 创建磁盘
 func (e *ecsService) CreateDisk(ctx context.Context, provider model.CloudProvider, region string, params *model.DiskCreationParams) error {
-	var err error
-	switch provider {
-	case model.CloudProviderAliyun:
-		err = e.AliyunProvider.CreateDisk(ctx, region, params)
-	case model.CloudProviderTencent:
-		err = e.TencentProvider.CreateDisk(ctx, region, params)
-	case model.CloudProviderHuawei:
-		err = e.HuaweiProvider.CreateDisk(ctx, region, params)
-	case model.CloudProviderAWS:
-		err = e.AWSProvider.CreateDisk(ctx, region, params)
-	case model.CloudProviderAzure:
-		err = e.AzureProvider.CreateDisk(ctx, region, params)
-	case model.CloudProviderGCP:
-		err = e.GCPProvider.CreateDisk(ctx, region, params)
-	default:
-		return fmt.Errorf("[CreateDisk] 不支持的云提供商: %s", provider)
+	cloudProvider, err := e.providerFactory.GetProvider(provider)
+	if err != nil {
+		return fmt.Errorf("[CreateDisk] 获取云提供商失败: %w", err)
 	}
 
+	err = cloudProvider.CreateDisk(ctx, region, params)
 	if err != nil {
 		e.logger.Error("[CreateDisk] 创建磁盘失败",
 			zap.String("provider", string(provider)),
@@ -326,24 +257,12 @@ func (e *ecsService) CreateDisk(ctx context.Context, provider model.CloudProvide
 
 // DeleteDisk 删除磁盘
 func (e *ecsService) DeleteDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string) error {
-	var err error
-	switch provider {
-	case model.CloudProviderAliyun:
-		err = e.AliyunProvider.DeleteDisk(ctx, region, diskID)
-	case model.CloudProviderTencent:
-		err = e.TencentProvider.DeleteDisk(ctx, region, diskID)
-	case model.CloudProviderHuawei:
-		err = e.HuaweiProvider.DeleteDisk(ctx, region, diskID)
-	case model.CloudProviderAWS:
-		err = e.AWSProvider.DeleteDisk(ctx, region, diskID)
-	case model.CloudProviderAzure:
-		err = e.AzureProvider.DeleteDisk(ctx, region, diskID)
-	case model.CloudProviderGCP:
-		err = e.GCPProvider.DeleteDisk(ctx, region, diskID)
-	default:
-		return fmt.Errorf("[DeleteDisk] 不支持的云提供商: %s", provider)
+	cloudProvider, err := e.providerFactory.GetProvider(provider)
+	if err != nil {
+		return fmt.Errorf("[DeleteDisk] 获取云提供商失败: %w", err)
 	}
 
+	err = cloudProvider.DeleteDisk(ctx, region, diskID)
 	if err != nil {
 		e.logger.Error("[DeleteDisk] 删除磁盘失败",
 			zap.String("provider", string(provider)),
@@ -358,24 +277,12 @@ func (e *ecsService) DeleteDisk(ctx context.Context, provider model.CloudProvide
 
 // AttachDisk 挂载磁盘
 func (e *ecsService) AttachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error {
-	var err error
-	switch provider {
-	case model.CloudProviderAliyun:
-		err = e.AliyunProvider.AttachDisk(ctx, region, diskID, instanceID)
-	case model.CloudProviderTencent:
-		err = e.TencentProvider.AttachDisk(ctx, region, diskID, instanceID)
-	case model.CloudProviderHuawei:
-		err = e.HuaweiProvider.AttachDisk(ctx, region, diskID, instanceID)
-	case model.CloudProviderAWS:
-		err = e.AWSProvider.AttachDisk(ctx, region, diskID, instanceID)
-	case model.CloudProviderAzure:
-		err = e.AzureProvider.AttachDisk(ctx, region, diskID, instanceID)
-	case model.CloudProviderGCP:
-		err = e.GCPProvider.AttachDisk(ctx, region, diskID, instanceID)
-	default:
-		return fmt.Errorf("[AttachDisk] 不支持的云提供商: %s", provider)
+	cloudProvider, err := e.providerFactory.GetProvider(provider)
+	if err != nil {
+		return fmt.Errorf("[AttachDisk] 获取云提供商失败: %w", err)
 	}
 
+	err = cloudProvider.AttachDisk(ctx, region, diskID, instanceID)
 	if err != nil {
 		e.logger.Error("[AttachDisk] 挂载磁盘失败",
 			zap.String("provider", string(provider)),
@@ -391,24 +298,12 @@ func (e *ecsService) AttachDisk(ctx context.Context, provider model.CloudProvide
 
 // DetachDisk 卸载磁盘
 func (e *ecsService) DetachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error {
-	var err error
-	switch provider {
-	case model.CloudProviderAliyun:
-		err = e.AliyunProvider.DetachDisk(ctx, region, diskID, instanceID)
-	case model.CloudProviderTencent:
-		err = e.TencentProvider.DetachDisk(ctx, region, diskID, instanceID)
-	case model.CloudProviderHuawei:
-		err = e.HuaweiProvider.DetachDisk(ctx, region, diskID, instanceID)
-	case model.CloudProviderAWS:
-		err = e.AWSProvider.DetachDisk(ctx, region, diskID, instanceID)
-	case model.CloudProviderAzure:
-		err = e.AzureProvider.DetachDisk(ctx, region, diskID, instanceID)
-	case model.CloudProviderGCP:
-		err = e.GCPProvider.DetachDisk(ctx, region, diskID, instanceID)
-	default:
-		return fmt.Errorf("[DetachDisk] 不支持的云提供商: %s", provider)
+	cloudProvider, err := e.providerFactory.GetProvider(provider)
+	if err != nil {
+		return fmt.Errorf("[DetachDisk] 获取云提供商失败: %w", err)
 	}
 
+	err = cloudProvider.DetachDisk(ctx, region, diskID, instanceID)
 	if err != nil {
 		e.logger.Error("[DetachDisk] 卸载磁盘失败",
 			zap.String("provider", string(provider)),
@@ -424,25 +319,12 @@ func (e *ecsService) DetachDisk(ctx context.Context, provider model.CloudProvide
 
 // ListInstanceOptions 获取实例选项
 func (e *ecsService) ListInstanceOptions(ctx context.Context, req *model.ListInstanceOptionsReq) ([]interface{}, error) {
-	var result []interface{}
-	var err error
-	switch req.Provider {
-	case model.CloudProviderAliyun:
-		result, err = e.AliyunProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
-	case model.CloudProviderTencent:
-		result, err = e.TencentProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
-	case model.CloudProviderHuawei:
-		result, err = e.HuaweiProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
-	case model.CloudProviderAWS:
-		result, err = e.AWSProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
-	case model.CloudProviderAzure:
-		result, err = e.AzureProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
-	case model.CloudProviderGCP:
-		result, err = e.GCPProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
-	default:
-		return nil, fmt.Errorf("[ListInstanceOptions] 不支持的云提供商: %s", req.Provider)
+	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
+	if err != nil {
+		return nil, fmt.Errorf("[ListInstanceOptions] 获取云提供商失败: %w", err)
 	}
 
+	result, err := cloudProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
 	if err != nil {
 		e.logger.Error("[ListInstanceOptions] 获取实例选项失败", zap.Error(err))
 		return nil, fmt.Errorf("[ListInstanceOptions] 获取实例选项失败: %w", err)

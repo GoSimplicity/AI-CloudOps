@@ -31,107 +31,104 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 )
 
-type TencentProvider interface {
-	SyncResources(ctx context.Context, region string) error
-
-	// 资源管理
-	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error)
-	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
-	DeleteInstance(ctx context.Context, region string, instanceID string) error
-	StartInstance(ctx context.Context, region string, instanceID string) error
-	StopInstance(ctx context.Context, region string, instanceID string) error
-
-	// 网络管理
-	ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error)
-	CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error
-	DeleteVPC(ctx context.Context, region string, vpcID string) error
-
-	// 存储管理
-	ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error)
-	CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error
-	DeleteDisk(ctx context.Context, region string, diskID string) error
-	AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-	DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-
-	ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error)
+type TencentProviderImpl struct {
 }
 
-type tencentProvider struct {
-}
-
-func NewTencentProvider() TencentProvider {
-	return &tencentProvider{}
-}
-
-// AttachDisk implements TencentProvider.
-func (t *tencentProvider) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
+// AttachDisk implements Provider.
+func (t *TencentProviderImpl) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// CreateDisk implements TencentProvider.
-func (t *tencentProvider) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
+// CreateDisk implements Provider.
+func (t *TencentProviderImpl) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
 	panic("unimplemented")
 }
 
-// CreateInstance implements TencentProvider.
-func (t *tencentProvider) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
+// CreateInstance implements Provider.
+func (t *TencentProviderImpl) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
 	panic("unimplemented")
 }
 
-// CreateVPC implements TencentProvider.
-func (t *tencentProvider) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
+// CreateVPC implements Provider.
+func (t *TencentProviderImpl) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
 	panic("unimplemented")
 }
 
-// DeleteDisk implements TencentProvider.
-func (t *tencentProvider) DeleteDisk(ctx context.Context, region string, diskID string) error {
+// DeleteDisk implements Provider.
+func (t *TencentProviderImpl) DeleteDisk(ctx context.Context, region string, diskID string) error {
 	panic("unimplemented")
 }
 
-// DeleteInstance implements TencentProvider.
-func (t *tencentProvider) DeleteInstance(ctx context.Context, region string, instanceID string) error {
+// DeleteInstance implements Provider.
+func (t *TencentProviderImpl) DeleteInstance(ctx context.Context, region string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// DeleteVPC implements TencentProvider.
-func (t *tencentProvider) DeleteVPC(ctx context.Context, region string, vpcID string) error {
+// DeleteVPC implements Provider.
+func (t *TencentProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID string) error {
 	panic("unimplemented")
 }
 
-// DetachDisk implements TencentProvider.
-func (t *tencentProvider) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
+// DetachDisk implements Provider.
+func (t *TencentProviderImpl) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
 	panic("unimplemented")
 }
 
-// ListDisks implements TencentProvider.
-func (t *tencentProvider) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
+// GetInstanceDetail implements Provider.
+func (t *TencentProviderImpl) GetInstanceDetail(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error) {
 	panic("unimplemented")
 }
 
-// ListInstances implements TencentProvider.
-func (t *tencentProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceECSListResp, error) {
+// GetZonesByVpc implements Provider.
+func (t *TencentProviderImpl) GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error) {
 	panic("unimplemented")
 }
 
-// ListVPCs implements TencentProvider.
-func (t *tencentProvider) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
+// ListDisks implements Provider.
+func (t *TencentProviderImpl) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
 	panic("unimplemented")
 }
 
-// StartInstance implements TencentProvider.
-func (t *tencentProvider) StartInstance(ctx context.Context, region string, instanceID string) error {
+// ListInstanceOptions implements Provider.
+func (t *TencentProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
 	panic("unimplemented")
 }
 
-// StopInstance implements TencentProvider.
-func (t *tencentProvider) StopInstance(ctx context.Context, region string, instanceID string) error {
+// ListInstances implements Provider.
+func (t *TencentProviderImpl) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceEcs, int64, error) {
 	panic("unimplemented")
 }
 
-func (t *tencentProvider) SyncResources(ctx context.Context, region string) error {
+// ListRegions implements Provider.
+func (t *TencentProviderImpl) ListRegions(ctx context.Context) ([]*model.RegionResp, error) {
 	panic("unimplemented")
 }
 
-func (t *tencentProvider) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+// ListVPCs implements Provider.
+func (t *TencentProviderImpl) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
 	panic("unimplemented")
+}
+
+// StartInstance implements Provider.
+func (t *TencentProviderImpl) StartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+// StopInstance implements Provider.
+func (t *TencentProviderImpl) StopInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+// SyncResources implements Provider.
+func (t *TencentProviderImpl) SyncResources(ctx context.Context, region string) error {
+	panic("unimplemented")
+}
+
+// RestartInstance implements Provider.
+func (t *TencentProviderImpl) RestartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+func NewTencentProvider() *TencentProviderImpl {
+	return &TencentProviderImpl{}
 }

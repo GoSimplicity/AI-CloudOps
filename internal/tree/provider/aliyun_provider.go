@@ -44,45 +44,17 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type AliyunProvider interface {
-	SyncResources(ctx context.Context, region string) error
-
-	// 资源管理
-	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceEcs, int64, error)
-	GetInstanceDetail(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error)
-	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
-	DeleteInstance(ctx context.Context, region string, instanceID string) error
-	StartInstance(ctx context.Context, region string, instanceID string) error
-	StopInstance(ctx context.Context, region string, instanceID string) error
-
-	// 网络管理
-	ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error)
-	CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error
-	DeleteVPC(ctx context.Context, region string, vpcID string) error
-
-	// 存储管理
-	ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error)
-	CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error
-	DeleteDisk(ctx context.Context, region string, diskID string) error
-	AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-	DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-
-	ListRegions(ctx context.Context) ([]*model.RegionResp, error)
-	GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error)
-	ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error)
-}
-
-type aliyunProvider struct {
+type AliyunProviderImpl struct {
 	logger          *zap.Logger
 	dao             dao.ResourceDAO
 	accessKeyId     string
 	accessKeySecret string
 }
 
-func NewAliyunProvider(logger *zap.Logger, dao dao.ResourceDAO) AliyunProvider {
+func NewAliyunProvider(logger *zap.Logger, dao dao.ResourceDAO) *AliyunProviderImpl {
 	accessKeyId := os.Getenv("ALIYUN_ACCESS_KEY_ID")
 	accessKeySecret := os.Getenv("ALIYUN_ACCESS_KEY_SECRET")
-	return &aliyunProvider{
+	return &AliyunProviderImpl{
 		logger:          logger,
 		dao:             dao,
 		accessKeyId:     accessKeyId,
@@ -91,7 +63,7 @@ func NewAliyunProvider(logger *zap.Logger, dao dao.ResourceDAO) AliyunProvider {
 }
 
 // 创建ECS客户端
-func (a *aliyunProvider) createEcsClient(region string) (*ecs.Client, error) {
+func (a *AliyunProviderImpl) createEcsClient(region string) (*ecs.Client, error) {
 	config := &openapi.Config{
 		AccessKeyId:     tea.String(a.accessKeyId),
 		AccessKeySecret: tea.String(a.accessKeySecret),
@@ -102,7 +74,7 @@ func (a *aliyunProvider) createEcsClient(region string) (*ecs.Client, error) {
 }
 
 // 创建VPC客户端
-func (a *aliyunProvider) createVpcClient(region string) (*vpc.Client, error) {
+func (a *AliyunProviderImpl) createVpcClient(region string) (*vpc.Client, error) {
 	config := &openapiv2.Config{
 		AccessKeyId:     tea.String(a.accessKeyId),
 		AccessKeySecret: tea.String(a.accessKeySecret),
@@ -112,7 +84,7 @@ func (a *aliyunProvider) createVpcClient(region string) (*vpc.Client, error) {
 }
 
 // CreateInstance 创建ECS实例
-func (a *aliyunProvider) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
+func (a *AliyunProviderImpl) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -178,7 +150,7 @@ func (a *aliyunProvider) CreateInstance(ctx context.Context, region string, conf
 }
 
 // StartInstance 启动ECS实例
-func (a *aliyunProvider) StartInstance(ctx context.Context, region string, instanceID string) error {
+func (a *AliyunProviderImpl) StartInstance(ctx context.Context, region string, instanceID string) error {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -201,7 +173,7 @@ func (a *aliyunProvider) StartInstance(ctx context.Context, region string, insta
 }
 
 // StopInstance 停止ECS实例
-func (a *aliyunProvider) StopInstance(ctx context.Context, region string, instanceID string) error {
+func (a *AliyunProviderImpl) StopInstance(ctx context.Context, region string, instanceID string) error {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -224,8 +196,13 @@ func (a *aliyunProvider) StopInstance(ctx context.Context, region string, instan
 	return nil
 }
 
+// RestartInstance 重启ECS实例
+func (a *AliyunProviderImpl) RestartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
 // DeleteInstance 删除ECS实例
-func (a *aliyunProvider) DeleteInstance(ctx context.Context, region string, instanceID string) error {
+func (a *AliyunProviderImpl) DeleteInstance(ctx context.Context, region string, instanceID string) error {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -249,7 +226,7 @@ func (a *aliyunProvider) DeleteInstance(ctx context.Context, region string, inst
 }
 
 // AttachDisk 挂载磁盘
-func (a *aliyunProvider) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
+func (a *AliyunProviderImpl) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -273,7 +250,7 @@ func (a *aliyunProvider) AttachDisk(ctx context.Context, region string, diskID s
 }
 
 // CreateDisk 创建磁盘
-func (a *aliyunProvider) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
+func (a *AliyunProviderImpl) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -313,7 +290,7 @@ func (a *aliyunProvider) CreateDisk(ctx context.Context, region string, config *
 }
 
 // CreateVPC 创建VPC
-func (a *aliyunProvider) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
+func (a *AliyunProviderImpl) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
 	client, err := a.createVpcClient(region)
 	if err != nil {
 		a.logger.Error("创建VPC客户端失败", zap.Error(err))
@@ -367,7 +344,7 @@ func (a *aliyunProvider) CreateVPC(ctx context.Context, region string, config *m
 }
 
 // 等待VPC可用
-func (a *aliyunProvider) waitForVpcAvailable(client *vpc.Client, region string, vpcId string) error {
+func (a *AliyunProviderImpl) waitForVpcAvailable(client *vpc.Client, region string, vpcId string) error {
 	request := &vpc.DescribeVpcAttributeRequest{
 		RegionId: tea.String(region),
 		VpcId:    tea.String(vpcId),
@@ -390,7 +367,7 @@ func (a *aliyunProvider) waitForVpcAvailable(client *vpc.Client, region string, 
 }
 
 // DeleteDisk 删除磁盘
-func (a *aliyunProvider) DeleteDisk(ctx context.Context, region string, diskID string) error {
+func (a *AliyunProviderImpl) DeleteDisk(ctx context.Context, region string, diskID string) error {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -413,7 +390,7 @@ func (a *aliyunProvider) DeleteDisk(ctx context.Context, region string, diskID s
 }
 
 // DeleteVPC 删除VPC
-func (a *aliyunProvider) DeleteVPC(ctx context.Context, region string, vpcID string) error {
+func (a *AliyunProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID string) error {
 	client, err := a.createVpcClient(region)
 	if err != nil {
 		a.logger.Error("创建VPC客户端失败", zap.Error(err))
@@ -463,7 +440,7 @@ func (a *aliyunProvider) DeleteVPC(ctx context.Context, region string, vpcID str
 }
 
 // DetachDisk 卸载磁盘
-func (a *aliyunProvider) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
+func (a *AliyunProviderImpl) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -487,7 +464,7 @@ func (a *aliyunProvider) DetachDisk(ctx context.Context, region string, diskID s
 }
 
 // ListDisks 列出磁盘
-func (a *aliyunProvider) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
+func (a *AliyunProviderImpl) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -522,7 +499,7 @@ func (a *aliyunProvider) ListDisks(ctx context.Context, region string, pageSize 
 }
 
 // ListInstances 列出ECS实例
-func (a *aliyunProvider) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceEcs, int64, error) {
+func (a *AliyunProviderImpl) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceEcs, int64, error) {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -586,7 +563,7 @@ func (a *aliyunProvider) ListInstances(ctx context.Context, region string, pageS
 }
 
 // GetInstanceDetail 获取ECS实例详情
-func (a *aliyunProvider) GetInstanceDetail(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error) {
+func (a *AliyunProviderImpl) GetInstanceDetail(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error) {
 	client, err := a.createEcsClient(region)
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -635,17 +612,17 @@ func (a *aliyunProvider) GetInstanceDetail(ctx context.Context, region string, i
 }
 
 // ListVPCs 获取VPC列表
-func (a *aliyunProvider) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
+func (a *AliyunProviderImpl) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
 	panic("unimplemented")
 }
 
 // SyncResources 同步资源
-func (a *aliyunProvider) SyncResources(ctx context.Context, region string) error {
+func (a *AliyunProviderImpl) SyncResources(ctx context.Context, region string) error {
 	return nil
 }
 
 // ListRegions 列出区域
-func (a *aliyunProvider) ListRegions(ctx context.Context) ([]*model.RegionResp, error) {
+func (a *AliyunProviderImpl) ListRegions(ctx context.Context) ([]*model.RegionResp, error) {
 	client, err := a.createEcsClient("cn-hangzhou")
 	if err != nil {
 		a.logger.Error("创建ECS客户端失败", zap.Error(err))
@@ -677,7 +654,7 @@ func (a *aliyunProvider) ListRegions(ctx context.Context) ([]*model.RegionResp, 
 }
 
 // GetZonesByVpc 获取VPC下的可用区
-func (a *aliyunProvider) GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error) {
+func (a *AliyunProviderImpl) GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error) {
 	client, err := a.createVpcClient(region)
 	if err != nil {
 		a.logger.Error("创建VPC客户端失败", zap.Error(err))
@@ -762,7 +739,7 @@ func (a *aliyunProvider) GetZonesByVpc(ctx context.Context, region string, vpcId
 }
 
 // ListInstanceOptions 列出实例选项
-func (a *aliyunProvider) ListInstanceOptions(_ context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) ListInstanceOptions(_ context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
 	a.logger.Info("开始查询实例选项",
 		zap.String("payType", payType),
 		zap.String("region", region),
@@ -807,7 +784,7 @@ func (a *aliyunProvider) ListInstanceOptions(_ context.Context, payType string, 
 }
 
 // listAvailablePayTypes 获取可用的付费类型
-func (a *aliyunProvider) listAvailablePayTypes() ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailablePayTypes() ([]interface{}, error) {
 	return []interface{}{
 		map[string]string{
 			"id":          "PrePaid",
@@ -823,7 +800,7 @@ func (a *aliyunProvider) listAvailablePayTypes() ([]interface{}, error) {
 }
 
 // listAvailableRegions 获取可用地域列表
-func (a *aliyunProvider) listAvailableRegions(client *ecs.Client) ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailableRegions(client *ecs.Client) ([]interface{}, error) {
 	request := &ecs.DescribeRegionsRequest{
 		AcceptLanguage: tea.String("zh-CN"),
 	}
@@ -851,7 +828,7 @@ func (a *aliyunProvider) listAvailableRegions(client *ecs.Client) ([]interface{}
 }
 
 // listAvailableZones 获取指定地域下的可用区列表
-func (a *aliyunProvider) listAvailableZones(client *ecs.Client, region string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailableZones(client *ecs.Client, region string) ([]interface{}, error) {
 	request := &ecs.DescribeZonesRequest{
 		RegionId: tea.String(region),
 	}
@@ -878,7 +855,7 @@ func (a *aliyunProvider) listAvailableZones(client *ecs.Client, region string) (
 }
 
 // listAvailableInstanceTypes 获取指定地域和可用区下可用的实例规格
-func (a *aliyunProvider) listAvailableInstanceTypes(client *ecs.Client, region string, zone string, payType string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailableInstanceTypes(client *ecs.Client, region string, zone string, payType string) ([]interface{}, error) {
 	request := &ecs.DescribeAvailableResourceRequest{
 		RegionId:            tea.String(region),
 		ZoneId:              tea.String(zone),
@@ -944,7 +921,7 @@ func (a *aliyunProvider) listAvailableInstanceTypes(client *ecs.Client, region s
 }
 
 // batchFetchInstanceTypeDetails 批量获取实例类型详情
-func (a *aliyunProvider) batchFetchInstanceTypeDetails(client *ecs.Client, instanceTypeMap map[string]bool) ([]interface{}, error) {
+func (a *AliyunProviderImpl) batchFetchInstanceTypeDetails(client *ecs.Client, instanceTypeMap map[string]bool) ([]interface{}, error) {
 	// 将map转换为切片，便于批量查询
 	instanceTypeIds := make([]*string, 0, len(instanceTypeMap))
 	for typeId := range instanceTypeMap {
@@ -1024,7 +1001,7 @@ func (a *aliyunProvider) batchFetchInstanceTypeDetails(client *ecs.Client, insta
 }
 
 // 扁平化处理磁盘类型查询
-func (a *aliyunProvider) listAvailableDiskCategories(client *ecs.Client, region string, zone string, instanceType string, diskType string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailableDiskCategories(client *ecs.Client, region string, zone string, instanceType string, diskType string) ([]interface{}, error) {
 	request := &ecs.DescribeAvailableResourceRequest{
 		RegionId:            tea.String(region),
 		ZoneId:              tea.String(zone),
@@ -1103,17 +1080,17 @@ func (a *aliyunProvider) listAvailableDiskCategories(client *ecs.Client, region 
 }
 
 // listAvailableSystemDiskCategories 获取可用的系统盘类型
-func (a *aliyunProvider) listAvailableSystemDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailableSystemDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]interface{}, error) {
 	return a.listAvailableDiskCategories(client, region, zone, instanceType, "SystemDisk")
 }
 
 // listAvailableDataDiskCategories 获取可用的数据盘类型
-func (a *aliyunProvider) listAvailableDataDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailableDataDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]interface{}, error) {
 	return a.listAvailableDiskCategories(client, region, zone, instanceType, "DataDisk")
 }
 
 // getDiskCategoryName 获取磁盘类型的友好名称
-func (a *aliyunProvider) getDiskCategoryName(category string) string {
+func (a *AliyunProviderImpl) getDiskCategoryName(category string) string {
 	switch category {
 	case "cloud":
 		return "普通云盘"
@@ -1135,7 +1112,7 @@ func (a *aliyunProvider) getDiskCategoryName(category string) string {
 }
 
 // getCompleteConfiguration 获取完整的配置信息
-func (a *aliyunProvider) getCompleteConfiguration(payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) getCompleteConfiguration(payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
 	return []interface{}{
 		map[string]interface{}{
 			"payType":            payType,
