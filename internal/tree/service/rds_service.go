@@ -34,82 +34,58 @@ import (
 )
 
 type RdsService interface {
-	GetRdsUnbindList(ctx context.Context) ([]*model.ResourceRds, error)
-	GetRdsList(ctx context.Context) ([]*model.ResourceRds, error)
-	BindRds(ctx context.Context, rdsID int, treeNodeID int) error
-	UnBindRds(ctx context.Context, rdsID int, treeNodeID int) error
+	ListRdsResources(ctx context.Context, req *model.ListRdsResourcesReq) (*model.PageResp, error)
+	GetRdsResourceById(ctx context.Context, req *model.GetRdsDetailReq) (*model.ResourceRDSResp, error)
+	CreateRdsResource(ctx context.Context, req *model.RdsCreationParams) error
+	DeleteRdsResource(ctx context.Context, req *model.DeleteRdsReq) error
+	StartRdsResource(ctx context.Context, req *model.StartRdsReq) error
+	StopRdsResource(ctx context.Context, req *model.StopRdsReq) error
+	RestartRdsResource(ctx context.Context, req *model.RestartRdsReq) error
 }
 
 type rdsService struct {
-	logger  *zap.Logger
-	rdsDao  dao.TreeRdsDAO
-	nodeDao dao.TreeNodeDAO
+	logger *zap.Logger
+	dao    dao.RdsDAO
 }
 
-func NewRdsService(logger *zap.Logger, rdsDao dao.TreeRdsDAO, nodeDao dao.TreeNodeDAO) RdsService {
+// CreateRdsResource implements RdsService.
+func (r *rdsService) CreateRdsResource(ctx context.Context, req *model.RdsCreationParams) error {
+	panic("unimplemented")
+}
+
+// DeleteRdsResource implements RdsService.
+func (r *rdsService) DeleteRdsResource(ctx context.Context, req *model.DeleteRdsReq) error {
+	panic("unimplemented")
+}
+
+// GetRdsResourceById implements RdsService.
+func (r *rdsService) GetRdsResourceById(ctx context.Context, req *model.GetRdsDetailReq) (*model.ResourceRDSResp, error) {
+	panic("unimplemented")
+}
+
+// ListRdsResources implements RdsService.
+func (r *rdsService) ListRdsResources(ctx context.Context, req *model.ListRdsResourcesReq) (*model.PageResp, error) {
+	panic("unimplemented")
+}
+
+// RestartRdsResource implements RdsService.
+func (r *rdsService) RestartRdsResource(ctx context.Context, req *model.RestartRdsReq) error {
+	panic("unimplemented")
+}
+
+// StartRdsResource implements RdsService.
+func (r *rdsService) StartRdsResource(ctx context.Context, req *model.StartRdsReq) error {
+	panic("unimplemented")
+}
+
+// StopRdsResource implements RdsService.
+func (r *rdsService) StopRdsResource(ctx context.Context, req *model.StopRdsReq) error {
+	panic("unimplemented")
+}
+
+func NewRdsService(logger *zap.Logger, dao dao.RdsDAO) RdsService {
 	return &rdsService{
-		logger:  logger,
-		rdsDao:  rdsDao,
-		nodeDao: nodeDao,
+		logger: logger,
+		dao:    dao,
 	}
-}
-
-func (s *rdsService) BindRds(ctx context.Context, rdsID int, treeNodeID int) error {
-	rds, err := s.rdsDao.GetByIDNoPreload(ctx, rdsID)
-	if err != nil {
-		s.logger.Error("BindRds 获取 RDS 失败", zap.Error(err))
-		return err
-	}
-
-	node, err := s.nodeDao.GetByIDNoPreload(ctx, treeNodeID)
-	if err != nil {
-		s.logger.Error("BindRds 获取树节点失败", zap.Error(err))
-		return err
-	}
-
-	return s.rdsDao.AddBindNodes(ctx, rds, node)
-}
-
-func (s *rdsService) GetRdsList(ctx context.Context) ([]*model.ResourceRds, error) {
-	list, err := s.rdsDao.GetAll(ctx)
-	if err != nil {
-		s.logger.Error("GetRdsList failed", zap.Error(err))
-		return nil, err
-	}
-
-	return list, nil
-}
-
-func (s *rdsService) GetRdsUnbindList(ctx context.Context) ([]*model.ResourceRds, error) {
-	rds, err := s.rdsDao.GetAll(ctx)
-	if err != nil {
-		s.logger.Error("GetRdsUnbindList failed", zap.Error(err))
-		return nil, err
-	}
-
-	// 筛选出未绑定的 RDS 资源
-	unbindRds := make([]*model.ResourceRds, 0, len(rds))
-	for _, e := range rds {
-		if len(e.BindNodes) == 0 {
-			unbindRds = append(unbindRds, e)
-		}
-	}
-
-	return unbindRds, nil
-}
-
-func (s *rdsService) UnBindRds(ctx context.Context, rdsID int, treeNodeID int) error {
-	rds, err := s.rdsDao.GetByIDNoPreload(ctx, rdsID)
-	if err != nil {
-		s.logger.Error("UnBindRds 获取 RDS 失败", zap.Error(err))
-		return err
-	}
-
-	node, err := s.nodeDao.GetByIDNoPreload(ctx, treeNodeID)
-	if err != nil {
-		s.logger.Error("UnBindRds 获取树节点失败", zap.Error(err))
-		return err
-	}
-
-	return s.rdsDao.RemoveBindNodes(ctx, rds, node)
 }

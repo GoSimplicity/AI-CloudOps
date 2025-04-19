@@ -5,6 +5,10 @@ go 1.22.0
 toolchain go1.22.5
 
 require (
+	github.com/alibabacloud-go/darabonba-openapi v0.2.1
+	github.com/alibabacloud-go/ecs-20140526/v2 v2.1.3
+	github.com/alibabacloud-go/tea v1.3.8
+	github.com/alibabacloud-go/vpc-20160428/v2 v2.0.117
 	github.com/casbin/casbin/v2 v2.93.0
 	github.com/casbin/gorm-adapter/v3 v3.28.0
 	github.com/cloudwego/eino v0.3.21
@@ -20,6 +24,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/terraform-exec v0.21.0
 	github.com/hibiken/asynq v0.22.0
+	github.com/joho/godotenv v1.5.1
 	github.com/openkruise/kruise-api v1.7.0
 	github.com/prometheus/alertmanager v0.27.0
 	github.com/prometheus/common v0.55.0
@@ -44,13 +49,22 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/alibabacloud-go/alibabacloud-gateway-spi v0.0.5 // indirect
+	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.7 // indirect
+	github.com/alibabacloud-go/debug v1.0.1 // indirect
+	github.com/alibabacloud-go/endpoint-util v1.1.0 // indirect
+	github.com/alibabacloud-go/openapi-util v0.1.0 // indirect
+	github.com/alibabacloud-go/tea-utils v1.4.5 // indirect
+	github.com/alibabacloud-go/tea-utils/v2 v2.0.7 // indirect
+	github.com/alibabacloud-go/tea-xml v1.1.2 // indirect
+	github.com/aliyun/credentials-go v1.4.5 // indirect
+	github.com/clbanning/mxj/v2 v2.7.0 // indirect
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.0.0-20250409091823-253e634f1159 // indirect
 	github.com/getkin/kin-openapi v0.118.0 // indirect
 	github.com/go-redis/redis/v8 v8.11.2 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/invopop/yaml v0.1.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/meguminnnnnnnnn/go-openai v0.0.0-20250408071642-761325becfd6 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/nikolalohinski/gonja v1.5.3 // indirect
@@ -59,6 +73,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
+	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
 )
 

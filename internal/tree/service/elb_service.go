@@ -34,82 +34,40 @@ import (
 )
 
 type ElbService interface {
-	GetElbUnbindList(ctx context.Context) ([]*model.ResourceElb, error)
-	GetElbList(ctx context.Context) ([]*model.ResourceElb, error)
-	BindElb(ctx context.Context, elbID int, treeNodeID int) error
-	UnBindElb(ctx context.Context, elbID int, treeNodeID int) error
+	ListElbResources(ctx context.Context, req *model.ListElbResourcesReq) (*model.PageResp, error)
+	GetElbResourceById(ctx context.Context, req *model.GetElbDetailReq) (*model.ResourceELBResp, error)
+	CreateElbResource(ctx context.Context, req *model.ElbCreationParams) error
+	DeleteElbResource(ctx context.Context, req *model.DeleteElbReq) error
 }
 
 type elbService struct {
-	logger  *zap.Logger
-	elbDao  dao.TreeElbDAO
-	nodeDao dao.TreeNodeDAO
+	logger *zap.Logger
+	dao    dao.ElbDAO
 }
 
-func NewElbService(logger *zap.Logger, elbDao dao.TreeElbDAO, nodeDao dao.TreeNodeDAO) ElbService {
+// CreateElbResource implements ElbService.
+func (e *elbService) CreateElbResource(ctx context.Context, req *model.ElbCreationParams) error {
+	panic("unimplemented")
+}
+
+// DeleteElbResource implements ElbService.
+func (e *elbService) DeleteElbResource(ctx context.Context, req *model.DeleteElbReq) error {
+	panic("unimplemented")
+}
+
+// GetElbResourceById implements ElbService.
+func (e *elbService) GetElbResourceById(ctx context.Context, req *model.GetElbDetailReq) (*model.ResourceELBResp, error) {
+	panic("unimplemented")
+}
+
+// ListElbResources implements ElbService.
+func (e *elbService) ListElbResources(ctx context.Context, req *model.ListElbResourcesReq) (*model.PageResp, error) {
+	panic("unimplemented")
+}
+
+func NewElbService(logger *zap.Logger, dao dao.ElbDAO) ElbService {
 	return &elbService{
-		logger:  logger,
-		elbDao:  elbDao,
-		nodeDao: nodeDao,
+		logger: logger,
+		dao:    dao,
 	}
-}
-
-func (s *elbService) BindElb(ctx context.Context, elbID int, treeNodeID int) error {
-	elb, err := s.elbDao.GetByIDNoPreload(ctx, elbID)
-	if err != nil {
-		s.logger.Error("BindElb 获取 ELB 失败", zap.Error(err))
-		return err
-	}
-
-	node, err := s.nodeDao.GetByIDNoPreload(ctx, treeNodeID)
-	if err != nil {
-		s.logger.Error("BindElb 获取树节点失败", zap.Error(err))
-		return err
-	}
-
-	return s.elbDao.AddBindNodes(ctx, elb, node)
-}
-
-func (s *elbService) GetElbList(ctx context.Context) ([]*model.ResourceElb, error) {
-	list, err := s.elbDao.GetAll(ctx)
-	if err != nil {
-		s.logger.Error("GetElbList failed", zap.Error(err))
-		return nil, err
-	}
-
-	return list, nil
-}
-
-func (s *elbService) GetElbUnbindList(ctx context.Context) ([]*model.ResourceElb, error) {
-	elb, err := s.elbDao.GetAll(ctx)
-	if err != nil {
-		s.logger.Error("GetElbUnbindList failed", zap.Error(err))
-		return nil, err
-	}
-
-	// 筛选出未绑定的 ELB 资源
-	unbindElb := make([]*model.ResourceElb, 0, len(elb))
-	for _, e := range elb {
-		if len(e.BindNodes) == 0 {
-			unbindElb = append(unbindElb, e)
-		}
-	}
-
-	return unbindElb, nil
-}
-
-func (s *elbService) UnBindElb(ctx context.Context, elbID int, treeNodeID int) error {
-	elb, err := s.elbDao.GetByIDNoPreload(ctx, elbID)
-	if err != nil {
-		s.logger.Error("UnBindElb 获取 ELB 失败", zap.Error(err))
-		return err
-	}
-
-	node, err := s.nodeDao.GetByIDNoPreload(ctx, treeNodeID)
-	if err != nil {
-		s.logger.Error("UnBindElb 获取树节点失败", zap.Error(err))
-		return err
-	}
-
-	return s.elbDao.RemoveBindNodes(ctx, elb, node)
 }

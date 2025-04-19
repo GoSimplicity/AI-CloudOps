@@ -31,9 +31,10 @@ import (
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	prometheusApi "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
 	systemApi "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
-	treeApi "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
+	resourceApi "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	userApi "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	workorderApi "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -43,12 +44,6 @@ func InitGinServer(
 	userHdl *userApi.UserHandler,
 	authApiHdl *systemApi.ApiHandler,
 	authRoleHdl *systemApi.RoleHandler,
-	treeNodeHdl *treeApi.TreeNodeHandler,
-	treeAliResourceHdl *treeApi.AliResourceHandler,
-	treeEcsResourceHdl *treeApi.EcsResourceHandler,
-	treeEcsHdl *treeApi.EcsHandler,
-	treeElbHdl *treeApi.ElbHandler,
-	treeRdsHdl *treeApi.RdsHandler,
 	notAuthHdl *notAuthHandler.NotAuthHandler,
 	k8sClusterHdl *k8sApi.K8sClusterHandler,
 	k8sConfigMapHdl *k8sApi.K8sConfigMapHandler,
@@ -76,6 +71,7 @@ func InitGinServer(
 	templateHandler *workorderApi.TemplateHandler,
 	instanceHandler *workorderApi.InstanceHandler,
 	aiHandler *aiHandler.AIHandler,
+	resourceHandler *resourceApi.ResourceHandler,
 
 ) *gin.Engine {
 	server := gin.Default()
@@ -84,12 +80,6 @@ func InitGinServer(
 	authApiHdl.RegisterRouters(server)
 	authRoleHdl.RegisterRouters(server)
 	auditHdl.RegisterRouters(server)
-	treeEcsHdl.RegisterRouters(server)
-	treeEcsResourceHdl.RegisterRouters(server)
-	treeAliResourceHdl.RegisterRouters(server)
-	treeElbHdl.RegisterRouters(server)
-	treeRdsHdl.RegisterRouters(server)
-	treeNodeHdl.RegisterRouters(server)
 	notAuthHdl.RegisterRouters(server)
 	alertEventHdl.RegisterRouters(server)
 	alertPoolHdl.RegisterRouters(server)
@@ -116,5 +106,6 @@ func InitGinServer(
 	templateHandler.RegisterRouters(server)
 	instanceHandler.RegisterRouters(server)
 	aiHandler.RegisterRouters(server)
+	resourceHandler.RegisterRouters(server)
 	return server
 }

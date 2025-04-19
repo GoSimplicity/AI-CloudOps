@@ -26,10 +26,13 @@
 package model
 
 import (
+	"database/sql/driver"
+	"strings"
 	"time"
 
 	"gorm.io/plugin/soft_delete"
 )
+
 
 type Model struct {
 	ID        int                   `json:"id" gorm:"primaryKey;autoIncrement;comment:主键ID"`
@@ -43,4 +46,18 @@ type ListReq struct {
 	Page   int    `json:"page" form:"page" binding:"required,min=1"`
 	Size   int    `json:"size" form:"size" binding:"required,min=1,max=100"`
 	Search string `json:"search" form:"search" binding:"omitempty"`
+}
+
+type StringList []string
+
+func (m *StringList) Scan(val interface{}) error {
+	s := val.([]uint8)
+	ss := strings.Split(string(s), "|")
+	*m = ss
+	return nil
+}
+
+func (m StringList) Value() (driver.Value, error) {
+	str := strings.Join(m, "|")
+	return str, nil
 }

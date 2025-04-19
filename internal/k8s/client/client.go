@@ -183,7 +183,7 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 	} else {
 		host := kubeConfig.Host
 		if host == "" {
-			host = "unknown"
+			host = fmt.Sprintf("cluster-%d", clusterID)
 		}
 		k.ClusterNamespaces[host] = namespaces
 	}
@@ -279,6 +279,12 @@ func (k *k8sClient) RefreshClients(ctx context.Context) error {
 	}
 
 	for _, cluster := range clusters {
+		// 检查 KubeConfigContent 是否为空
+		if cluster.KubeConfigContent == "" {
+			k.logger.Warn("集群的 KubeConfig 内容为空，跳过初始化", zap.Int("ClusterID", cluster.ID))
+			continue
+		}
+
 		restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
 		if err != nil {
 			k.logger.Error("解析 kubeconfig 失败", zap.Int("ClusterID", cluster.ID), zap.Error(err))
@@ -673,6 +679,24 @@ func (k *k8sClient) RestartJob(ctx context.Context, namespace string, name strin
 		return err
 	}
 
+	// 获取原始 Job 配置
+	job, err := client.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		k.logger.Error("获取 Job 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
+		return fmt.Errorf("重启 Job 失败，无法获取 Job 配置: %w", err)
+	}
+
+	// 创建新的 Job 对象
+	newJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        job.Name,
+			Namespace:   job.Namespace,
+			Labels:      job.Labels,
+			Annotations: job.Annotations,
+		},
+		Spec: job.Spec,
+	}
+
 	// 删除旧的 Job
 	err = client.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
@@ -680,19 +704,11 @@ func (k *k8sClient) RestartJob(ctx context.Context, namespace string, name strin
 		return fmt.Errorf("重启 Job 失败，无法删除旧 Job: %w", err)
 	}
 
-	// 获取原始 Job 配置并重新创建
-	job, err := k.GetJob(ctx, namespace, name, clusterID)
-	if err != nil {
-		return fmt.Errorf("重启 Job 失败，无法获取 Job 配置: %w", err)
-	}
+	// 等待 Job 被完全删除
+	time.Sleep(2 * time.Second)
 
-	// 清除不需要的字段
-	job.ResourceVersion = ""
-	job.UID = ""
-	job.CreationTimestamp = metav1.Time{}
-	job.Status = batchv1.JobStatus{}
-
-	_, err = client.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
+	// 创建新的 Job
+	_, err = client.BatchV1().Jobs(namespace).Create(ctx, newJob, metav1.CreateOptions{})
 	if err != nil {
 		k.logger.Error("重新创建 Job 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
 		return fmt.Errorf("重启 Job 失败，无法重新创建 Job: %w", err)

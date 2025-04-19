@@ -55,6 +55,12 @@ const QuotaName = "compute-quota"
 
 // EnsureNamespace 确保指定的命名空间存在，如果不存在则创建
 func EnsureNamespace(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) error {
+	// 检查命名空间参数是否为空
+	if namespace == "" {
+		log.Printf("EnsureNamespace: 命名空间名称不能为空")
+		return fmt.Errorf("命名空间名称不能为空")
+	}
+
 	// 获取命名空间
 	_, err := kubeClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 	if err != nil {
@@ -86,6 +92,12 @@ func EnsureNamespace(ctx context.Context, kubeClient *kubernetes.Clientset, name
 
 // ApplyLimitRange 应用 LimitRange 到指定命名空间
 func ApplyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, cluster *model.K8sCluster) error {
+	// 检查资源限制值是否有效
+	cpuLimit := ensureValidResourceValue(cluster.CpuLimit, "100m")
+	memoryLimit := ensureValidResourceValue(cluster.MemoryLimit, "128Mi")
+	cpuRequest := ensureValidResourceValue(cluster.CpuRequest, "10m")
+	memoryRequest := ensureValidResourceValue(cluster.MemoryRequest, "64Mi")
+
 	limitRange := &corev1.LimitRange{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "resource-limits",
@@ -96,12 +108,12 @@ func ApplyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, name
 				{
 					Type: corev1.LimitTypeContainer,
 					Default: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse(cluster.CpuLimit),
-						corev1.ResourceMemory: resource.MustParse(cluster.MemoryLimit),
+						corev1.ResourceCPU:    resource.MustParse(cpuLimit),
+						corev1.ResourceMemory: resource.MustParse(memoryLimit),
 					},
 					DefaultRequest: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse(cluster.CpuRequest),
-						corev1.ResourceMemory: resource.MustParse(cluster.MemoryRequest),
+						corev1.ResourceCPU:    resource.MustParse(cpuRequest),
+						corev1.ResourceMemory: resource.MustParse(memoryRequest),
 					},
 				},
 			},
@@ -119,7 +131,7 @@ func ApplyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, name
 		// 处理其他错误
 		log.Printf("ApplyLimitRange: 创建 LimitRange 失败 %s/%s: %v", namespace, limitRange.Name, err)
 		return fmt.Errorf("创建 LimitRange 失败 (namespace: %s, cpuLimit: %s, memoryLimit: %s): %w",
-			namespace, cluster.CpuLimit, cluster.MemoryLimit, err)
+			namespace, cpuLimit, memoryLimit, err)
 	}
 
 	log.Printf("ApplyLimitRange: LimitRange 创建成功 %s/%s", namespace, limitRange.Name)
@@ -128,6 +140,12 @@ func ApplyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, name
 
 // ApplyResourceQuota 应用 ResourceQuota 到指定命名空间
 func ApplyResourceQuota(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, cluster *model.K8sCluster) error {
+	// 检查资源限制值是否有效
+	cpuLimit := ensureValidResourceValue(cluster.CpuLimit, "100m")
+	memoryLimit := ensureValidResourceValue(cluster.MemoryLimit, "128Mi")
+	cpuRequest := ensureValidResourceValue(cluster.CpuRequest, "10m")
+	memoryRequest := ensureValidResourceValue(cluster.MemoryRequest, "64Mi")
+
 	resourceQuota := &corev1.ResourceQuota{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      QuotaName,
@@ -135,10 +153,10 @@ func ApplyResourceQuota(ctx context.Context, kubeClient *kubernetes.Clientset, n
 		},
 		Spec: corev1.ResourceQuotaSpec{
 			Hard: corev1.ResourceList{
-				corev1.ResourceRequestsCPU:    resource.MustParse(cluster.CpuRequest),
-				corev1.ResourceRequestsMemory: resource.MustParse(cluster.MemoryRequest),
-				corev1.ResourceLimitsCPU:      resource.MustParse(cluster.CpuLimit),
-				corev1.ResourceLimitsMemory:   resource.MustParse(cluster.MemoryLimit),
+				corev1.ResourceRequestsCPU:    resource.MustParse(cpuRequest),
+				corev1.ResourceRequestsMemory: resource.MustParse(memoryRequest),
+				corev1.ResourceLimitsCPU:      resource.MustParse(cpuLimit),
+				corev1.ResourceLimitsMemory:   resource.MustParse(memoryLimit),
 			},
 		},
 	}
@@ -154,11 +172,28 @@ func ApplyResourceQuota(ctx context.Context, kubeClient *kubernetes.Clientset, n
 		// 处理其他错误
 		log.Printf("ApplyResourceQuota: 创建 ResourceQuota 失败 %s/%s: %v", namespace, resourceQuota.Name, err)
 		return fmt.Errorf("创建 ResourceQuota 失败 (namespace: %s, cpuRequest: %s, memoryRequest: %s, cpuLimit: %s, memoryLimit: %s): %w",
-			namespace, cluster.CpuRequest, cluster.MemoryRequest, cluster.CpuLimit, cluster.MemoryLimit, err)
+			namespace, cpuRequest, memoryRequest, cpuLimit, memoryLimit, err)
 	}
 
 	log.Printf("ApplyResourceQuota: ResourceQuota 创建成功 %s/%s", namespace, resourceQuota.Name)
 	return nil
+}
+
+// ensureValidResourceValue 确保资源值有效，如果无效则返回默认值
+func ensureValidResourceValue(value string, defaultValue string) string {
+	if value == "" {
+		log.Printf("资源值为空，使用默认值: %s", defaultValue)
+		return defaultValue
+	}
+	
+	// 尝试解析资源值，验证其有效性
+	_, err := resource.ParseQuantity(value)
+	if err != nil {
+		log.Printf("资源值 '%s' 无效，使用默认值: %s, 错误: %v", value, defaultValue, err)
+		return defaultValue
+	}
+	
+	return value
 }
 
 // GetTaintsMapFromTaints 将 taints 转换为键为 "Key:Value:Effect" 的 map
@@ -1335,20 +1370,20 @@ func buildContainer(req *model.K8sInstance) corev1.Container {
 	
 	if req.ContainerCore.CPU != "" || req.ContainerCore.Memory != "" {
 		resources.Limits = corev1.ResourceList{}
-		if req.ContainerCore.CPU != "" {
+		if req.ContainerCore.CPU != "" && req.ContainerCore.CPU != "0" {
 			resources.Limits[corev1.ResourceCPU] = resource.MustParse(req.ContainerCore.CPU)
 		}
-		if req.ContainerCore.Memory != "" {
+		if req.ContainerCore.Memory != "" && req.ContainerCore.Memory != "0" {
 			resources.Limits[corev1.ResourceMemory] = resource.MustParse(req.ContainerCore.Memory)
 		}
 	}
 	
 	if req.ContainerCore.CPURequest != "" || req.ContainerCore.MemRequest != "" {
 		resources.Requests = corev1.ResourceList{}
-		if req.ContainerCore.CPURequest != "" {
+		if req.ContainerCore.CPURequest != "" && req.ContainerCore.CPURequest != "0" {
 			resources.Requests[corev1.ResourceCPU] = resource.MustParse(req.ContainerCore.CPURequest)
 		}
-		if req.ContainerCore.MemRequest != "" {
+		if req.ContainerCore.MemRequest != "" && req.ContainerCore.MemRequest != "0" {
 			resources.Requests[corev1.ResourceMemory] = resource.MustParse(req.ContainerCore.MemRequest)
 		}
 	}
@@ -1634,6 +1669,12 @@ func buildVolumeClaimTemplates(volumes []model.Volume) []corev1.PersistentVolume
 	// 构建PVC模板
 	templates := make([]corev1.PersistentVolumeClaim, 0, len(pvcVolumes))
 	for _, v := range pvcVolumes {
+		// 确保Size字段有效
+		size := v.Size
+		if size == "" || size == "0" {
+			size = "1Gi" // 设置默认值
+		}
+		
 		pvc := corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: v.Name,
@@ -1644,7 +1685,7 @@ func buildVolumeClaimTemplates(volumes []model.Volume) []corev1.PersistentVolume
 				},
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: resource.MustParse(v.Size),
+						corev1.ResourceStorage: resource.MustParse(size),
 					},
 				},
 			},
@@ -1735,5 +1776,4 @@ func int32Ptr(i int32) *int32 {
 func int64Ptr(i int64) *int64 {
 	return &i
 }
-
 

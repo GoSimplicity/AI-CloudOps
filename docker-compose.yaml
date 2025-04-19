@@ -1,5 +1,3 @@
-version: '3'
-
 ######################## 先启动 docker-compose-env.yaml 再启动此文件 ########################
 
 services:
@@ -39,8 +37,4 @@ services:
 networks:
   cloudOps_net:
     external: true
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-
+    name: cloudOps_net

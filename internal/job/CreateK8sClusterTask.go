@@ -84,6 +84,13 @@ func (k *CreateK8sClusterTask) ProcessTask(ctx context.Context, t *asynq.Task) e
 		lastError  error
 	)
 
+	// 验证资源配额格式
+	if err := k.validateResourceQuantities(p.Cluster); err != nil {
+		k.dao.UpdateClusterStatus(ctx, p.Cluster.ID, "ERROR")
+		k.l.Error("资源配额格式验证失败", zap.Error(err))
+		return err
+	}
+
 	for retryCount < maxRetries {
 		select {
 		case <-ctx.Done():
@@ -114,6 +121,33 @@ func (k *CreateK8sClusterTask) ProcessTask(ctx context.Context, t *asynq.Task) e
 			k.dao.UpdateClusterStatus(ctx, p.Cluster.ID, "SUCCESS")
 			return nil
 		}
+	}
+
+	return nil
+}
+
+// validateResourceQuantities 验证资源配额格式
+func (k *CreateK8sClusterTask) validateResourceQuantities(cluster *model.K8sCluster) error {
+	// 检查并设置默认值，避免空字符串导致解析错误
+	if cluster.CpuRequest == "" {
+		cluster.CpuRequest = "500m"  // 修改为小于或等于CpuLimit的值
+	}
+	if cluster.MemoryRequest == "" {
+		cluster.MemoryRequest = "512Mi"  // 修改为小于或等于MemoryLimit的值
+	}
+	if cluster.CpuLimit == "" {
+		cluster.CpuLimit = "1000m"  // 确保CpuLimit大于或等于CpuRequest
+	}
+	if cluster.MemoryLimit == "" {
+		cluster.MemoryLimit = "1Gi"  // 确保MemoryLimit大于或等于MemoryRequest
+	}
+
+	// 确保Request不大于Limit
+	if cluster.CpuRequest > cluster.CpuLimit {
+		cluster.CpuRequest = cluster.CpuLimit
+	}
+	if cluster.MemoryRequest > cluster.MemoryLimit {
+		cluster.MemoryRequest = cluster.MemoryLimit
 	}
 
 	return nil
