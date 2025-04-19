@@ -198,7 +198,25 @@ func (a *AliyunProviderImpl) StopInstance(ctx context.Context, region string, in
 
 // RestartInstance 重启ECS实例
 func (a *AliyunProviderImpl) RestartInstance(ctx context.Context, region string, instanceID string) error {
-	panic("unimplemented")
+	client, err := a.createEcsClient(region)
+	if err != nil {
+		a.logger.Error("创建ECS客户端失败", zap.Error(err))
+		return err
+	}
+
+	request := &ecs.RebootInstanceRequest{
+		InstanceId: tea.String(instanceID),
+	}
+
+	a.logger.Info("开始重启ECS实例", zap.String("region", region), zap.String("instanceID", instanceID))
+	_, err = client.RebootInstance(request)
+	if err != nil {
+		a.logger.Error("重启ECS实例失败", zap.Error(err))
+		return err
+	}
+
+	a.logger.Info("重启ECS实例成功", zap.String("instanceID", instanceID))
+	return nil
 }
 
 // DeleteInstance 删除ECS实例
