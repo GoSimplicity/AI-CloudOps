@@ -117,6 +117,13 @@ type DeleteEcsReq struct {
 	InstanceId string        `json:"instanceId" binding:"required"`
 }
 
+// GetEcsDetailReq 获取ECS详情请求
+type GetEcsDetailReq struct {
+	Provider   CloudProvider `json:"provider" binding:"required"`
+	Region     string        `json:"region" binding:"required"`
+	InstanceId string        `json:"instanceId" binding:"required"`
+}
+
 // ListInstanceOptionsReq 实例选项列表请求
 type ListInstanceOptionsReq struct {
 	Provider           CloudProvider `json:"provider" binding:"required"`
@@ -128,9 +135,14 @@ type ListInstanceOptionsReq struct {
 	DataDiskCategory   string        `json:"dataDiskCategory"`
 }
 
-// GetEcsDetailReq 获取ECS详情请求
-type GetEcsDetailReq struct {
-	Provider   CloudProvider `json:"provider" binding:"required"`
-	Region     string        `json:"region" binding:"required"`
-	InstanceId string        `json:"instanceId" binding:"required"`
+type ListInstanceOptionsResp struct {
+	DataDiskCategory   string `json:"dataDiskCategory"`
+	SystemDiskCategory string `json:"systemDiskCategory"`
+	InstanceType       string `json:"instanceType"`
+	Region             string `json:"region"`
+	Zone               string `json:"zone"`
+	PayType            string `json:"payType"`
+	Valid              bool   `json:"valid"`
+	Cpu                int    `json:"cpu"`
+	Memory             int    `json:"memory"`
 }

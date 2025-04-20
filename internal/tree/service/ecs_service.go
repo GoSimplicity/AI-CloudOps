@@ -52,7 +52,7 @@ type EcsService interface {
 	AttachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error
 	DetachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error
 
-	ListInstanceOptions(ctx context.Context, req *model.ListInstanceOptionsReq) ([]interface{}, error)
+	ListInstanceOptions(ctx context.Context, req *model.ListInstanceOptionsReq) ([]*model.ListInstanceOptionsResp, error)
 }
 
 type ecsService struct {
@@ -318,7 +318,7 @@ func (e *ecsService) DetachDisk(ctx context.Context, provider model.CloudProvide
 }
 
 // ListInstanceOptions 获取实例选项
-func (e *ecsService) ListInstanceOptions(ctx context.Context, req *model.ListInstanceOptionsReq) ([]interface{}, error) {
+func (e *ecsService) ListInstanceOptions(ctx context.Context, req *model.ListInstanceOptionsReq) ([]*model.ListInstanceOptionsResp, error) {
 	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		return nil, fmt.Errorf("[ListInstanceOptions] 获取云提供商失败: %w", err)

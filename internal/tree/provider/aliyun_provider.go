@@ -471,7 +471,6 @@ func (a *AliyunProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID
 			return fmt.Errorf("删除交换机(%s)失败: %w", vSwitchId, err)
 		}
 
-		// 等待交换机删除完成
 		time.Sleep(5 * time.Second)
 	}
 
@@ -874,7 +873,7 @@ func (a *AliyunProviderImpl) GetZonesByVpc(ctx context.Context, region string, v
 }
 
 // ListInstanceOptions 列出实例选项
-func (a *AliyunProviderImpl) ListInstanceOptions(_ context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) ListInstanceOptions(_ context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]*model.ListInstanceOptionsResp, error) {
 	a.logger.Info("开始查询实例选项",
 		zap.String("payType", payType),
 		zap.String("region", region),
@@ -919,23 +918,22 @@ func (a *AliyunProviderImpl) ListInstanceOptions(_ context.Context, payType stri
 }
 
 // listAvailablePayTypes 获取可用的付费类型
-func (a *AliyunProviderImpl) listAvailablePayTypes() ([]interface{}, error) {
-	return []interface{}{
-		map[string]string{
-			"id":          "PrePaid",
-			"name":        "包年包月",
-			"description": "包年包月模式",
+func (a *AliyunProviderImpl) listAvailablePayTypes() ([]*model.ListInstanceOptionsResp, error) {
+	result := []*model.ListInstanceOptionsResp{
+		{
+			PayType: "PrePaid",
+			Valid:   true,
 		},
-		map[string]string{
-			"id":          "PostPaid",
-			"name":        "按量付费",
-			"description": "按量付费模式",
+		{
+			PayType: "PostPaid",
+			Valid:   true,
 		},
-	}, nil
+	}
+	return result, nil
 }
 
 // listAvailableRegions 获取可用地域列表
-func (a *AliyunProviderImpl) listAvailableRegions(client *ecs.Client) ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailableRegions(client *ecs.Client) ([]*model.ListInstanceOptionsResp, error) {
 	request := &ecs.DescribeRegionsRequest{
 		AcceptLanguage: tea.String("zh-CN"),
 	}
@@ -946,16 +944,15 @@ func (a *AliyunProviderImpl) listAvailableRegions(client *ecs.Client) ([]interfa
 		return nil, err
 	}
 
-	regions := make([]interface{}, 0, len(response.Body.Regions.Region))
+	regions := make([]*model.ListInstanceOptionsResp, 0, len(response.Body.Regions.Region))
 	for _, region := range response.Body.Regions.Region {
 		if region == nil || region.RegionId == nil {
 			continue
 		}
 
-		regions = append(regions, map[string]string{
-			"id":       *region.RegionId,
-			"name":     *region.LocalName,
-			"endpoint": *region.RegionEndpoint,
+		regions = append(regions, &model.ListInstanceOptionsResp{
+			Region: *region.RegionId,
+			Valid:  true,
 		})
 	}
 
@@ -963,7 +960,7 @@ func (a *AliyunProviderImpl) listAvailableRegions(client *ecs.Client) ([]interfa
 }
 
 // listAvailableZones 获取指定地域下的可用区列表
-func (a *AliyunProviderImpl) listAvailableZones(client *ecs.Client, region string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailableZones(client *ecs.Client, region string) ([]*model.ListInstanceOptionsResp, error) {
 	request := &ecs.DescribeZonesRequest{
 		RegionId: tea.String(region),
 	}
@@ -974,15 +971,16 @@ func (a *AliyunProviderImpl) listAvailableZones(client *ecs.Client, region strin
 		return nil, err
 	}
 
-	zones := make([]interface{}, 0, len(response.Body.Zones.Zone))
+	zones := make([]*model.ListInstanceOptionsResp, 0, len(response.Body.Zones.Zone))
 	for _, zone := range response.Body.Zones.Zone {
 		if zone == nil || zone.ZoneId == nil {
 			continue
 		}
 
-		zones = append(zones, map[string]string{
-			"id":   *zone.ZoneId,
-			"name": *zone.LocalName,
+		zones = append(zones, &model.ListInstanceOptionsResp{
+			Region: region,
+			Zone:   *zone.ZoneId,
+			Valid:  true,
 		})
 	}
 
@@ -990,7 +988,7 @@ func (a *AliyunProviderImpl) listAvailableZones(client *ecs.Client, region strin
 }
 
 // listAvailableInstanceTypes 获取指定地域和可用区下可用的实例规格
-func (a *AliyunProviderImpl) listAvailableInstanceTypes(client *ecs.Client, region string, zone string, payType string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailableInstanceTypes(client *ecs.Client, region string, zone string, payType string) ([]*model.ListInstanceOptionsResp, error) {
 	request := &ecs.DescribeAvailableResourceRequest{
 		RegionId:            tea.String(region),
 		ZoneId:              tea.String(zone),
@@ -1016,7 +1014,7 @@ func (a *AliyunProviderImpl) listAvailableInstanceTypes(client *ecs.Client, regi
 	// 添加空指针检查
 	if response == nil || response.Body == nil || response.Body.AvailableZones == nil || response.Body.AvailableZones.AvailableZone == nil {
 		a.logger.Warn("API响应数据为空", zap.String("region", region), zap.String("zone", zone))
-		return []interface{}{}, nil
+		return []*model.ListInstanceOptionsResp{}, nil
 	}
 
 	// 扁平化处理可用实例类型收集
@@ -1048,15 +1046,15 @@ func (a *AliyunProviderImpl) listAvailableInstanceTypes(client *ecs.Client, regi
 
 	// 如果没有可用实例类型，直接返回
 	if len(availableInstanceTypeMap) == 0 {
-		return []interface{}{}, nil
+		return []*model.ListInstanceOptionsResp{}, nil
 	}
 
 	// 批量查询实例类型详情
-	return a.batchFetchInstanceTypeDetails(client, availableInstanceTypeMap)
+	return a.batchFetchInstanceTypeDetails(client, availableInstanceTypeMap, region, zone, payType)
 }
 
 // batchFetchInstanceTypeDetails 批量获取实例类型详情
-func (a *AliyunProviderImpl) batchFetchInstanceTypeDetails(client *ecs.Client, instanceTypeMap map[string]bool) ([]interface{}, error) {
+func (a *AliyunProviderImpl) batchFetchInstanceTypeDetails(client *ecs.Client, instanceTypeMap map[string]bool, region string, zone string, payType string) ([]*model.ListInstanceOptionsResp, error) {
 	// 将map转换为切片，便于批量查询
 	instanceTypeIds := make([]*string, 0, len(instanceTypeMap))
 	for typeId := range instanceTypeMap {
@@ -1065,7 +1063,7 @@ func (a *AliyunProviderImpl) batchFetchInstanceTypeDetails(client *ecs.Client, i
 	}
 
 	// 批量获取实例类型详情，提高查询效率
-	instanceTypes := make([]interface{}, 0, len(instanceTypeIds))
+	instanceTypes := make([]*model.ListInstanceOptionsResp, 0, len(instanceTypeIds))
 	batchSize := 10 // 阿里云API批量查询上限
 
 	// 计算需要的批次数
@@ -1073,7 +1071,7 @@ func (a *AliyunProviderImpl) batchFetchInstanceTypeDetails(client *ecs.Client, i
 
 	// 使用错误组合
 	var errGroup errgroup.Group
-	resultCh := make(chan map[string]interface{}, len(instanceTypeIds))
+	resultCh := make(chan *model.ListInstanceOptionsResp, len(instanceTypeIds))
 
 	// 并行请求各批次
 	for i := 0; i < batchCount; i++ {
@@ -1107,13 +1105,14 @@ func (a *AliyunProviderImpl) batchFetchInstanceTypeDetails(client *ecs.Client, i
 					continue
 				}
 
-				resultCh <- map[string]interface{}{
-					"id":          *info.InstanceTypeId,
-					"name":        *info.InstanceTypeId,
-					"cpuCount":    *info.CpuCoreCount,
-					"memorySize":  *info.MemorySize,
-					"family":      *info.InstanceTypeFamily,
-					"description": fmt.Sprintf("%d核 %.1fGB", *info.CpuCoreCount, *info.MemorySize),
+				resultCh <- &model.ListInstanceOptionsResp{
+					PayType:      payType,
+					Region:       region,
+					Zone:         zone,
+					InstanceType: *info.InstanceTypeId,
+					Cpu:          int(tea.Int32Value(info.CpuCoreCount)),
+					Memory:       int(tea.Float32Value(info.MemorySize)),
+					Valid:        true,
 				}
 			}
 
@@ -1136,7 +1135,7 @@ func (a *AliyunProviderImpl) batchFetchInstanceTypeDetails(client *ecs.Client, i
 }
 
 // 扁平化处理磁盘类型查询
-func (a *AliyunProviderImpl) listAvailableDiskCategories(client *ecs.Client, region string, zone string, instanceType string, diskType string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailableDiskCategories(client *ecs.Client, region string, zone string, instanceType string, diskType string) ([]*model.ListInstanceOptionsResp, error) {
 	request := &ecs.DescribeAvailableResourceRequest{
 		RegionId:            tea.String(region),
 		ZoneId:              tea.String(zone),
@@ -1158,11 +1157,11 @@ func (a *AliyunProviderImpl) listAvailableDiskCategories(client *ecs.Client, reg
 	// 检查响应是否为空
 	if response == nil || response.Body == nil || response.Body.AvailableZones == nil ||
 		response.Body.AvailableZones.AvailableZone == nil {
-		return []interface{}{}, nil
+		return []*model.ListInstanceOptionsResp{}, nil
 	}
 
 	// 使用map去重
-	diskTypesMap := make(map[string]string)
+	diskTypesMap := make(map[string]bool)
 
 	// 扁平化处理
 	for _, availableZone := range response.Body.AvailableZones.AvailableZone {
@@ -1194,69 +1193,57 @@ func (a *AliyunProviderImpl) listAvailableDiskCategories(client *ecs.Client, reg
 					continue
 				}
 
-				diskValue := *supportedResource.Value
-				diskName := a.getDiskCategoryName(diskValue)
-				diskTypesMap[diskValue] = diskName
+				diskTypesMap[*supportedResource.Value] = true
 			}
 		}
 	}
 
 	// 转换为结果列表
-	diskTypes := make([]interface{}, 0, len(diskTypesMap))
-	for value, name := range diskTypesMap {
-		diskTypes = append(diskTypes, map[string]string{
-			"id":          value,
-			"name":        name,
-			"description": name,
-		})
+	result := make([]*model.ListInstanceOptionsResp, 0, len(diskTypesMap))
+	for diskCategory := range diskTypesMap {
+		if diskType == "SystemDisk" {
+			result = append(result, &model.ListInstanceOptionsResp{
+				Region:             region,
+				Zone:               zone,
+				InstanceType:       instanceType,
+				SystemDiskCategory: diskCategory,
+				Valid:              true,
+			})
+		} else {
+			result = append(result, &model.ListInstanceOptionsResp{
+				Region:           region,
+				Zone:             zone,
+				InstanceType:     instanceType,
+				DataDiskCategory: diskCategory,
+				Valid:            true,
+			})
+		}
 	}
 
-	return diskTypes, nil
+	return result, nil
 }
 
 // listAvailableSystemDiskCategories 获取可用的系统盘类型
-func (a *AliyunProviderImpl) listAvailableSystemDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailableSystemDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]*model.ListInstanceOptionsResp, error) {
 	return a.listAvailableDiskCategories(client, region, zone, instanceType, "SystemDisk")
 }
 
 // listAvailableDataDiskCategories 获取可用的数据盘类型
-func (a *AliyunProviderImpl) listAvailableDataDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]interface{}, error) {
+func (a *AliyunProviderImpl) listAvailableDataDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]*model.ListInstanceOptionsResp, error) {
 	return a.listAvailableDiskCategories(client, region, zone, instanceType, "DataDisk")
 }
 
-// getDiskCategoryName 获取磁盘类型的友好名称
-func (a *AliyunProviderImpl) getDiskCategoryName(category string) string {
-	switch category {
-	case "cloud":
-		return "普通云盘"
-	case "cloud_efficiency":
-		return "高效云盘"
-	case "cloud_ssd":
-		return "SSD云盘"
-	case "cloud_essd":
-		return "ESSD云盘"
-	case "cloud_essd_entry":
-		return "ESSD入门级云盘"
-	case "cloud_essd_performance":
-		return "ESSD性能型云盘"
-	case "cloud_essd_extreme":
-		return "ESSD极致型云盘"
-	default:
-		return category
-	}
-}
-
 // getCompleteConfiguration 获取完整的配置信息
-func (a *AliyunProviderImpl) getCompleteConfiguration(payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
-	return []interface{}{
-		map[string]interface{}{
-			"payType":            payType,
-			"region":             region,
-			"zone":               zone,
-			"instanceType":       instanceType,
-			"systemDiskCategory": systemDiskCategory,
-			"dataDiskCategory":   dataDiskCategory,
-			"valid":              true,
+func (a *AliyunProviderImpl) getCompleteConfiguration(payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]*model.ListInstanceOptionsResp, error) {
+	return []*model.ListInstanceOptionsResp{
+		{
+			PayType:            payType,
+			Region:             region,
+			Zone:               zone,
+			InstanceType:       instanceType,
+			SystemDiskCategory: systemDiskCategory,
+			DataDiskCategory:   dataDiskCategory,
+			Valid:              true,
 		},
 	}, nil
 }

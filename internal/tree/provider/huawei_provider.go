@@ -90,7 +90,7 @@ func (h *HuaweiProviderImpl) ListDisks(ctx context.Context, region string, pageS
 }
 
 // ListInstanceOptions implements Provider.
-func (h *HuaweiProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+func (h *HuaweiProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]*model.ListInstanceOptionsResp, error) {
 	panic("unimplemented")
 }
 

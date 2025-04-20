@@ -90,7 +90,7 @@ func (a *AWSProviderImpl) ListDisks(ctx context.Context, region string, pageSize
 }
 
 // ListInstanceOptions implements Provider.
-func (a *AWSProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]interface{}, error) {
+func (a *AWSProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]*model.ListInstanceOptionsResp, error) {
 	panic("unimplemented")
 }
 
