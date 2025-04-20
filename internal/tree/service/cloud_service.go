@@ -39,7 +39,7 @@ type CloudService interface {
 	ListZones(ctx context.Context, req *model.ListZonesReq) ([]model.ZoneResp, error)
 	ListInstanceTypes(ctx context.Context, req *model.ListInstanceTypesReq) ([]model.InstanceTypeResp, error)
 	ListImages(ctx context.Context, req *model.ListImagesReq) ([]model.ImageResp, error)
-	ListVpcs(ctx context.Context, req *model.ListVpcsReq) ([]model.VpcResp, error)
+	ListVpcs(ctx context.Context, req *model.ListVpcsReq) ([]model.ResourceVpc, error)
 	ListSecurityGroups(ctx context.Context, req *model.ListSecurityGroupsReq) ([]model.SecurityGroupResp, error)
 }
 
@@ -74,7 +74,7 @@ func (c *cloudService) ListSecurityGroups(ctx context.Context, req *model.ListSe
 }
 
 // ListVpcs implements CloudService.
-func (c *cloudService) ListVpcs(ctx context.Context, req *model.ListVpcsReq) ([]model.VpcResp, error) {
+func (c *cloudService) ListVpcs(ctx context.Context, req *model.ListVpcsReq) ([]model.ResourceVpc, error) {
 	panic("unimplemented")
 }
 

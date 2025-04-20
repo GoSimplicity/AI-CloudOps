@@ -76,7 +76,8 @@ func (h *ResourceHandler) RegisterRouters(server *gin.Engine) {
 		{
 			vpcGroup.POST("/detail", h.GetVpcDetail)
 			vpcGroup.POST("/create", h.CreateVpcResource)
-			vpcGroup.POST("/delete", h.DeleteVpc)
+			vpcGroup.DELETE("/delete", h.DeleteVpc)
+			vpcGroup.POST("/list", h.ListVpcResources)
 		}
 
 		// ELB相关接口
@@ -201,7 +202,7 @@ func (h *ResourceHandler) GetVpcDetail(ctx *gin.Context) {
 
 // CreateVpcResource 创建VPC资源
 func (h *ResourceHandler) CreateVpcResource(ctx *gin.Context) {
-	var req model.VpcCreationParams
+	var req model.CreateVpcResourceReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.vpcService.CreateVpcResource(ctx, &req)
@@ -389,5 +390,14 @@ func (h *ResourceHandler) ListInstanceOptions(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.ecsService.ListInstanceOptions(ctx, &req)
+	})
+}
+
+// ListVpcResources 获取VPC列表
+func (h *ResourceHandler) ListVpcResources(ctx *gin.Context) {
+	var req model.ListVpcResourcesReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.vpcService.ListVpcResources(ctx, &req)
 	})
 }

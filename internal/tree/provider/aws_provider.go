@@ -50,7 +50,7 @@ func (a *AWSProviderImpl) CreateInstance(ctx context.Context, region string, con
 }
 
 // CreateVPC implements Provider.
-func (a *AWSProviderImpl) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
+func (a *AWSProviderImpl) CreateVPC(ctx context.Context, region string, config *model.CreateVpcResourceReq) error {
 	panic("unimplemented")
 }
 
@@ -105,7 +105,7 @@ func (a *AWSProviderImpl) ListRegions(ctx context.Context) ([]*model.RegionResp,
 }
 
 // ListVPCs implements Provider.
-func (a *AWSProviderImpl) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
+func (a *AWSProviderImpl) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceVpc, int64, error) {
 	panic("unimplemented")
 }
 
@@ -126,6 +126,11 @@ func (a *AWSProviderImpl) SyncResources(ctx context.Context, region string) erro
 
 // RestartInstance implements Provider.
 func (a *AWSProviderImpl) RestartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+// GetVpcDetail 获取VPC详情
+func (a *AWSProviderImpl) GetVpcDetail(ctx context.Context, region string, vpcID string) (*model.ResourceVpc, error) {
 	panic("unimplemented")
 }
 

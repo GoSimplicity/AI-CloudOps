@@ -36,7 +36,7 @@ import (
 type VpcDAO interface {
 	ListVpcResources(ctx context.Context, req *model.ListVpcResourcesReq) (*model.PageResp, error)
 	GetVpcResourceById(ctx context.Context, id int) (*model.ResourceVpc, error)
-	CreateVpcResource(ctx context.Context, req *model.VpcCreationParams) error
+	CreateVpcResource(ctx context.Context, req *model.CreateVpcResourceReq) error
 	DeleteVpcResource(ctx context.Context, id int) error
 }
 
@@ -53,7 +53,7 @@ func NewVpcDAO(logger *zap.Logger, db *gorm.DB) VpcDAO {
 }
 
 // CreateVpcResource implements VpcDAO.
-func (v *vpcDAO) CreateVpcResource(ctx context.Context, req *model.VpcCreationParams) error {
+func (v *vpcDAO) CreateVpcResource(ctx context.Context, req *model.CreateVpcResourceReq) error {
 	panic("unimplemented")
 }
 

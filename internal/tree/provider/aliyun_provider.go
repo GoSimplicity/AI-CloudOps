@@ -27,6 +27,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -308,7 +309,7 @@ func (a *AliyunProviderImpl) CreateDisk(ctx context.Context, region string, conf
 }
 
 // CreateVPC 创建VPC
-func (a *AliyunProviderImpl) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
+func (a *AliyunProviderImpl) CreateVPC(ctx context.Context, region string, config *model.CreateVpcResourceReq) error {
 	client, err := a.createVpcClient(region)
 	if err != nil {
 		a.logger.Error("创建VPC客户端失败", zap.Error(err))
@@ -415,7 +416,19 @@ func (a *AliyunProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID
 		return err
 	}
 
-	// 先查询并删除所有交换机
+	// 先查询VPC详情，获取相关资源
+	vpcDetailRequest := &vpc.DescribeVpcAttributeRequest{
+		RegionId: tea.String(region),
+		VpcId:    tea.String(vpcID),
+	}
+
+	_, err = client.DescribeVpcAttribute(vpcDetailRequest)
+	if err != nil {
+		a.logger.Error("查询VPC详情失败", zap.Error(err))
+		return err
+	}
+
+	// 查询并删除所有交换机
 	vSwitchRequest := &vpc.DescribeVSwitchesRequest{
 		RegionId: tea.String(region),
 		VpcId:    tea.String(vpcID),
@@ -428,16 +441,63 @@ func (a *AliyunProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID
 		return err
 	}
 
+	// 检查交换机是否有依赖资源
 	for _, vSwitch := range vSwitchResponse.Body.VSwitches.VSwitch {
-		deleteVSwitchRequest := &vpc.DeleteVSwitchRequest{
-			VSwitchId: vSwitch.VSwitchId,
+		vSwitchId := tea.StringValue(vSwitch.VSwitchId)
+
+		// 检查交换机下是否有ECS实例
+		ecsClient, err := a.createEcsClient(region)
+		if err == nil {
+			ecsRequest := &ecs.DescribeInstancesRequest{
+				RegionId:  tea.String(region),
+				VSwitchId: tea.String(vSwitchId),
+			}
+			ecsResponse, err := ecsClient.DescribeInstances(ecsRequest)
+			if err == nil && ecsResponse.Body != nil && len(ecsResponse.Body.Instances.Instance) > 0 {
+				a.logger.Warn("交换机下存在ECS实例，无法删除", zap.String("vSwitchID", vSwitchId))
+				return fmt.Errorf("交换机(%s)下存在ECS实例，请先删除相关实例", vSwitchId)
+			}
 		}
 
-		a.logger.Info("删除交换机", zap.String("vSwitchID", tea.StringValue(vSwitch.VSwitchId)))
+		// 删除交换机
+		deleteVSwitchRequest := &vpc.DeleteVSwitchRequest{
+			VSwitchId: tea.String(vSwitchId),
+		}
+
+		a.logger.Info("删除交换机", zap.String("vSwitchID", vSwitchId))
 		_, err = client.DeleteVSwitch(deleteVSwitchRequest)
 		if err != nil {
 			a.logger.Error("删除交换机失败", zap.Error(err))
-			return err
+			return fmt.Errorf("删除交换机(%s)失败: %w", vSwitchId, err)
+		}
+
+		// 等待交换机删除完成
+		time.Sleep(5 * time.Second)
+	}
+
+	// 检查并删除NAT网关
+	natClient, err := a.createVpcClient(region)
+	if err == nil {
+		natRequest := &vpc.DescribeNatGatewaysRequest{
+			RegionId: tea.String(region),
+			VpcId:    tea.String(vpcID),
+		}
+		natResponse, err := natClient.DescribeNatGateways(natRequest)
+		if err == nil && natResponse.Body != nil {
+			for _, nat := range natResponse.Body.NatGateways.NatGateway {
+				natId := tea.StringValue(nat.NatGatewayId)
+				deleteNatRequest := &vpc.DeleteNatGatewayRequest{
+					RegionId:     tea.String(region),
+					NatGatewayId: tea.String(natId),
+				}
+				a.logger.Info("删除NAT网关", zap.String("natGatewayID", natId))
+				_, err = natClient.DeleteNatGateway(deleteNatRequest)
+				if err != nil {
+					a.logger.Error("删除NAT网关失败", zap.Error(err))
+					return fmt.Errorf("删除NAT网关(%s)失败: %w", natId, err)
+				}
+				time.Sleep(5 * time.Second)
+			}
 		}
 	}
 
@@ -630,8 +690,65 @@ func (a *AliyunProviderImpl) GetInstanceDetail(ctx context.Context, region strin
 }
 
 // ListVPCs 获取VPC列表
-func (a *AliyunProviderImpl) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
-	panic("unimplemented")
+func (a *AliyunProviderImpl) ListVPCs(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceVpc, int64, error) {
+	client, err := a.createVpcClient(region)
+	if err != nil {
+		a.logger.Error("创建VPC客户端失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	request := &vpc.DescribeVpcsRequest{
+		RegionId:   tea.String(region),
+		PageNumber: tea.Int32(int32(pageNumber)),
+		PageSize:   tea.Int32(int32(pageSize)),
+	}
+
+	response, err := client.DescribeVpcs(request)
+	if err != nil {
+		a.logger.Error("查询VPC列表失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	total := int64(tea.Int32Value(response.Body.TotalCount))
+	a.logger.Info("查询VPC列表成功", zap.Int64("total", total))
+
+	result := make([]*model.ResourceVpc, len(response.Body.Vpcs.Vpc))
+	for i, vpc := range response.Body.Vpcs.Vpc {
+		var tags []string
+		if vpc.Tags != nil && vpc.Tags.Tag != nil {
+			tags = make([]string, 0, len(vpc.Tags.Tag))
+			for _, tag := range vpc.Tags.Tag {
+				if tag == nil || tag.Key == nil || tag.Value == nil {
+					continue
+				}
+				tags = append(tags, fmt.Sprintf("%s=%s", tea.StringValue(tag.Key), tea.StringValue(tag.Value)))
+			}
+		}
+		result[i] = &model.ResourceVpc{
+			ResourceBase: model.ResourceBase{
+				InstanceName: tea.StringValue(vpc.VpcName),
+				InstanceId:   tea.StringValue(vpc.VpcId),
+				Provider:     model.CloudProviderAliyun,
+				RegionId:     tea.StringValue(vpc.RegionId),
+				VpcId:        tea.StringValue(vpc.VpcId),
+				Status:       tea.StringValue(vpc.Status),
+				CreationTime: tea.StringValue(vpc.CreationTime),
+				Description:  tea.StringValue(vpc.Description),
+				LastSyncTime: time.Now(),
+				Tags:         model.StringList(tags),
+			},
+			VpcName:         tea.StringValue(vpc.VpcName),
+			CidrBlock:       tea.StringValue(vpc.CidrBlock),
+			Ipv6CidrBlock:   tea.StringValue(vpc.Ipv6CidrBlock),
+			VSwitchIds:      model.StringList(tea.StringSliceValue(vpc.VSwitchIds.VSwitchId)),
+			RouteTableIds:   model.StringList(tea.StringSliceValue(vpc.RouterTableIds.RouterTableIds)),
+			NatGatewayIds:   model.StringList(tea.StringSliceValue(vpc.NatGatewayIds.NatGatewayIds)),
+			IsDefault:       tea.BoolValue(vpc.IsDefault),
+			ResourceGroupId: tea.StringValue(vpc.ResourceGroupId),
+		}
+	}
+
+	return result, total, nil
 }
 
 // SyncResources 同步资源
@@ -1141,5 +1258,54 @@ func (a *AliyunProviderImpl) getCompleteConfiguration(payType string, region str
 			"dataDiskCategory":   dataDiskCategory,
 			"valid":              true,
 		},
+	}, nil
+}
+
+// GetVpcDetail 获取VPC详情
+func (a *AliyunProviderImpl) GetVpcDetail(ctx context.Context, region string, vpcID string) (*model.ResourceVpc, error) {
+	client, err := a.createVpcClient(region)
+	if err != nil {
+		a.logger.Error("创建VPC客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	request := &vpc.DescribeVpcAttributeRequest{
+		RegionId: tea.String(region),
+		VpcId:    tea.String(vpcID),
+	}
+
+	response, err := client.DescribeVpcAttribute(request)
+	if err != nil {
+		a.logger.Error("获取VPC详情失败", zap.Error(err))
+		return nil, err
+	}
+
+	if response == nil || response.Body == nil {
+		return nil, errors.New("获取VPC详情失败，响应为空")
+	}
+
+	tagList := make([]string, 0, len(response.Body.Tags.Tag))
+	for _, tag := range response.Body.Tags.Tag {
+		tagList = append(tagList, fmt.Sprintf("%s=%s", tea.StringValue(tag.Key), tea.StringValue(tag.Value)))
+	}
+
+	return &model.ResourceVpc{
+		ResourceBase: model.ResourceBase{
+			InstanceName: tea.StringValue(response.Body.VpcName),
+			InstanceId:   tea.StringValue(response.Body.VpcId),
+			Provider:     model.CloudProviderAliyun,
+			RegionId:     tea.StringValue(response.Body.RegionId),
+			Status:       tea.StringValue(response.Body.Status),
+			Description:  tea.StringValue(response.Body.Description),
+			CreationTime: tea.StringValue(response.Body.CreationTime),
+			Tags:         model.StringList(tagList),
+		},
+		VpcName:         tea.StringValue(response.Body.VpcName),
+		CidrBlock:       tea.StringValue(response.Body.CidrBlock),
+		Ipv6CidrBlock:   tea.StringValue(response.Body.Ipv6CidrBlock),
+		VSwitchIds:      model.StringList(tea.StringSliceValue(response.Body.VSwitchIds.VSwitchId)),
+		RouteTableIds:   []string{tea.StringValue(response.Body.VRouterId)},
+		IsDefault:       tea.BoolValue(response.Body.IsDefault),
+		ResourceGroupId: tea.StringValue(response.Body.ResourceGroupId),
 	}, nil
 }

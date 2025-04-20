@@ -38,7 +38,7 @@ type CloudDAO interface {
 	ListZones(ctx context.Context, provider model.CloudProvider, region string) ([]model.ZoneResp, error)
 	ListInstanceTypes(ctx context.Context, provider model.CloudProvider, region string) ([]model.InstanceTypeResp, error)
 	ListImages(ctx context.Context, provider model.CloudProvider, region string) ([]model.ImageResp, error)
-	ListVpcs(ctx context.Context, provider model.CloudProvider, region string) ([]model.VpcResp, error)
+	ListVpcs(ctx context.Context, provider model.CloudProvider, region string) ([]model.ResourceVpc, error)
 	ListSecurityGroups(ctx context.Context, provider model.CloudProvider, region string) ([]model.SecurityGroupResp, error)
 }
 
@@ -78,7 +78,7 @@ func (c *cloudDAO) ListSecurityGroups(ctx context.Context, provider model.CloudP
 }
 
 // ListVpcs 获取VPC列表
-func (c *cloudDAO) ListVpcs(ctx context.Context, provider model.CloudProvider, region string) ([]model.VpcResp, error) {
+func (c *cloudDAO) ListVpcs(ctx context.Context, provider model.CloudProvider, region string) ([]model.ResourceVpc, error) {
 	panic("unimplemented")
 }
 

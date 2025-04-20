@@ -50,7 +50,7 @@ func (h *HuaweiProviderImpl) CreateInstance(ctx context.Context, region string, 
 }
 
 // CreateVPC implements Provider.
-func (h *HuaweiProviderImpl) CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error {
+func (h *HuaweiProviderImpl) CreateVPC(ctx context.Context, region string, config *model.CreateVpcResourceReq) error {
 	panic("unimplemented")
 }
 
@@ -105,7 +105,7 @@ func (h *HuaweiProviderImpl) ListRegions(ctx context.Context) ([]*model.RegionRe
 }
 
 // ListVPCs implements Provider.
-func (h *HuaweiProviderImpl) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error) {
+func (h *HuaweiProviderImpl) ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceVpc, int64, error) {
 	panic("unimplemented")
 }
 
@@ -126,6 +126,11 @@ func (h *HuaweiProviderImpl) SyncResources(ctx context.Context, region string) e
 
 // RestartInstance implements Provider.
 func (h *HuaweiProviderImpl) RestartInstance(ctx context.Context, region string, instanceID string) error {
+	panic("unimplemented")
+}
+
+// GetVpcDetail 获取VPC详情
+func (h *HuaweiProviderImpl) GetVpcDetail(ctx context.Context, region string, vpcID string) (*model.ResourceVpc, error) {
 	panic("unimplemented")
 }
 

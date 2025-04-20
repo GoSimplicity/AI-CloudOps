@@ -44,9 +44,10 @@ type Provider interface {
 	RestartInstance(ctx context.Context, region string, instanceID string) error
 
 	// 网络管理
-	ListVPCs(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.VpcResp, error)
-	CreateVPC(ctx context.Context, region string, config *model.VpcCreationParams) error
+	ListVPCs(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceVpc, int64, error)
+	CreateVPC(ctx context.Context, region string, config *model.CreateVpcResourceReq) error
 	DeleteVPC(ctx context.Context, region string, vpcID string) error
+	GetVpcDetail(ctx context.Context, region string, vpcID string) (*model.ResourceVpc, error)
 
 	// 存储管理
 	ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error)

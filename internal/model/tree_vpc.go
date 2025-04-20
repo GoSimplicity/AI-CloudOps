@@ -35,24 +35,23 @@ type ResourceVpc struct {
 	RouteTableIds   StringList `json:"routeTableIds" gorm:"type:varchar(500);comment:路由表ID列表"`
 	NatGatewayIds   StringList `json:"natGatewayIds" gorm:"type:varchar(500);comment:NAT网关ID列表"`
 	IsDefault       bool       `json:"isDefault" gorm:"comment:是否为默认VPC"`
-	NetworkAclIds   StringList `json:"networkAclIds" gorm:"type:varchar(500);comment:网络ACL ID列表"`
 	ResourceGroupId string     `json:"resourceGroupId" gorm:"type:varchar(100);comment:资源组ID"`
 	// 多对多关系
 	VpcTreeNodes []*TreeNode `json:"vpcTreeNodes" gorm:"many2many:resource_vpc_tree_nodes;comment:关联服务树节点"`
 }
 
-// VpcCreationParams VPC创建参数
-type VpcCreationParams struct {
+// CreateVpcResourceReq VPC创建参数
+type CreateVpcResourceReq struct {
 	Provider         CloudProvider     `json:"provider" binding:"required"`
 	Region           string            `json:"region" binding:"required"`
 	ZoneId           string            `json:"zoneId" binding:"required"`
 	VpcName          string            `json:"vpcName" binding:"required"`
-	CidrBlock        string            `json:"cidrBlock" binding:"required"`
 	Description      string            `json:"description"`
+	CidrBlock        string            `json:"cidrBlock" binding:"required"`        // cidr网段
+	VSwitchName      string            `json:"vSwitchName" binding:"required"`      // 交换机名称
+	VSwitchCidrBlock string            `json:"vSwitchCidrBlock" binding:"required"` // 交换机网段
+	DryRun           bool              `json:"dryRun"`                              // 是否仅预览而不创建
 	Tags             map[string]string `json:"tags"`
-	TreeNodeId       uint              `json:"treeNodeId" binding:"required"`
-	VSwitchName      string            `json:"vSwitchName" binding:"required"`
-	VSwitchCidrBlock string            `json:"vSwitchCidrBlock" binding:"required"`
 }
 
 // ListVpcResourcesReq VPC资源列表查询参数
@@ -63,22 +62,25 @@ type ListVpcResourcesReq struct {
 	Region     string        `form:"region" json:"region"`
 }
 
-// VpcResp VPC响应
-type VpcResp struct {
-	VpcId        string `json:"vpcId"`
-	VpcName      string `json:"vpcName"`
-	CidrBlock    string `json:"cidrBlock"`
-	Description  string `json:"description"`
-	Status       string `json:"status"`
-	CreationTime string `json:"creationTime"`
+// ResourceVPCListResp VPC资源列表响应
+type ResourceVPCListResp struct {
+	Total int64          `json:"total"`
+	Data  []*ResourceVpc `json:"data"`
 }
 
+// ResourceVPCDetailResp VPC资源详情响应
+type ResourceVPCDetailResp struct {
+	Data *ResourceVpc `json:"data"`
+}
+
+// GetVpcDetailReq 获取VPC详情请求
 type GetVpcDetailReq struct {
 	Provider CloudProvider `json:"provider" binding:"required"`
 	Region   string        `json:"region" binding:"required"`
 	VpcId    string        `json:"vpcId" binding:"required"`
 }
 
+// DeleteVpcReq VPC删除请求
 type DeleteVpcReq struct {
 	Provider CloudProvider `json:"provider" binding:"required"`
 	Region   string        `json:"region" binding:"required"`

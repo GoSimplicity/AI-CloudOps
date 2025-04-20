@@ -36,8 +36,9 @@ import (
 
 type VpcService interface {
 	GetVpcResourceById(ctx context.Context, req *model.GetVpcDetailReq) (*model.ResourceVpc, error)
-	CreateVpcResource(ctx context.Context, req *model.VpcCreationParams) error
+	CreateVpcResource(ctx context.Context, req *model.CreateVpcResourceReq) error
 	DeleteVpcResource(ctx context.Context, req *model.DeleteVpcReq) error
+	ListVpcResources(ctx context.Context, req *model.ListVpcResourcesReq) (*model.PageResp, error)
 }
 
 type vpcService struct {
@@ -46,25 +47,58 @@ type vpcService struct {
 	providerFactory *provider.ProviderFactory
 }
 
-// CreateVpcResource implements VpcService.
-func (v *vpcService) CreateVpcResource(ctx context.Context, req *model.VpcCreationParams) error {
-	panic("unimplemented")
-}
-
-// DeleteVpcResource implements VpcService.
-func (v *vpcService) DeleteVpcResource(ctx context.Context, req *model.DeleteVpcReq) error {
-	panic("unimplemented")
-}
-
-// GetVpcResourceById implements VpcService.
-func (v *vpcService) GetVpcResourceById(ctx context.Context, req *model.GetVpcDetailReq) (*model.ResourceVpc, error) {
-	panic("unimplemented")
-}
-
 func NewVpcService(logger *zap.Logger, dao dao.VpcDAO, providerFactory *provider.ProviderFactory) VpcService {
 	return &vpcService{
 		logger:          logger,
 		dao:             dao,
 		providerFactory: providerFactory,
 	}
+}
+
+// CreateVpcResource 创建VPC
+func (v *vpcService) CreateVpcResource(ctx context.Context, req *model.CreateVpcResourceReq) error {
+	provider, err := v.providerFactory.GetProvider(req.Provider)
+	if err != nil {
+		return err
+	}
+
+	return provider.CreateVPC(ctx, req.Region, req)
+}
+
+// DeleteVpcResource 删除VPC
+func (v *vpcService) DeleteVpcResource(ctx context.Context, req *model.DeleteVpcReq) error {
+	provider, err := v.providerFactory.GetProvider(req.Provider)
+	if err != nil {
+		return err
+	}
+
+	return provider.DeleteVPC(ctx, req.Region, req.VpcId)
+}
+
+// GetVpcResourceById 获取VPC详情
+func (v *vpcService) GetVpcResourceById(ctx context.Context, req *model.GetVpcDetailReq) (*model.ResourceVpc, error) {
+	provider, err := v.providerFactory.GetProvider(req.Provider)
+	if err != nil {
+		return nil, err
+	}
+
+	return provider.GetVpcDetail(ctx, req.Region, req.VpcId)
+}
+
+// ListVpcResources 获取VPC列表
+func (v *vpcService) ListVpcResources(ctx context.Context, req *model.ListVpcResourcesReq) (*model.PageResp, error) {
+	provider, err := v.providerFactory.GetProvider(req.Provider)
+	if err != nil {
+		return nil, err
+	}
+
+	vpcList, total, err := provider.ListVPCs(ctx, req.Region, req.PageNumber, req.PageSize)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.PageResp{
+		Total: total,
+		Data:  vpcList,
+	}, nil
 }
