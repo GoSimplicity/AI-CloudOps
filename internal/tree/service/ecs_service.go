@@ -324,7 +324,7 @@ func (e *ecsService) ListInstanceOptions(ctx context.Context, req *model.ListIns
 		return nil, fmt.Errorf("[ListInstanceOptions] 获取云提供商失败: %w", err)
 	}
 
-	result, err := cloudProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.SystemDiskCategory, req.DataDiskCategory)
+	result, err := cloudProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.ImageId, req.SystemDiskCategory, req.DataDiskCategory, req.PageSize, req.PageNumber)
 	if err != nil {
 		e.logger.Error("[ListInstanceOptions] 获取实例选项失败", zap.Error(err))
 		return nil, fmt.Errorf("[ListInstanceOptions] 获取实例选项失败: %w", err)

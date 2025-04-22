@@ -131,8 +131,11 @@ type ListInstanceOptionsReq struct {
 	Region             string        `json:"region"`
 	Zone               string        `json:"zone"`
 	InstanceType       string        `json:"instanceType"`
+	ImageId            string        `json:"imageId"`
 	SystemDiskCategory string        `json:"systemDiskCategory"`
 	DataDiskCategory   string        `json:"dataDiskCategory"`
+	PageSize           int           `json:"pageSize"`
+	PageNumber         int           `json:"pageNumber"`
 }
 
 type ListInstanceOptionsResp struct {
@@ -143,6 +146,10 @@ type ListInstanceOptionsResp struct {
 	Zone               string `json:"zone"`
 	PayType            string `json:"payType"`
 	Valid              bool   `json:"valid"`
+	ImageId            string `json:"imageId"`
+	OSName             string `json:"osName"`
+	OSType             string `json:"osType"`
+	Architecture       string `json:"architecture"`
 	Cpu                int    `json:"cpu"`
 	Memory             int    `json:"memory"`
 }

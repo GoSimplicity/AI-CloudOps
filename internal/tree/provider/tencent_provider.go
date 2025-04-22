@@ -90,7 +90,7 @@ func (t *TencentProviderImpl) ListDisks(ctx context.Context, region string, page
 }
 
 // ListInstanceOptions implements Provider.
-func (t *TencentProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]*model.ListInstanceOptionsResp, error) {
+func (t *TencentProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, imageId string, systemDiskCategory string, dataDiskCategory string, pageSize int, pageNumber int) ([]*model.ListInstanceOptionsResp, error) {
 	panic("unimplemented")
 }
 

@@ -873,7 +873,7 @@ func (a *AliyunProviderImpl) GetZonesByVpc(ctx context.Context, region string, v
 }
 
 // ListInstanceOptions 列出实例选项
-func (a *AliyunProviderImpl) ListInstanceOptions(_ context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]*model.ListInstanceOptionsResp, error) {
+func (a *AliyunProviderImpl) ListInstanceOptions(_ context.Context, payType string, region string, zone string, instanceType string, imageId string, systemDiskCategory string, dataDiskCategory string, pageSize int, pageNumber int) ([]*model.ListInstanceOptionsResp, error) {
 	a.logger.Info("开始查询实例选项",
 		zap.String("payType", payType),
 		zap.String("region", region),
@@ -905,6 +905,10 @@ func (a *AliyunProviderImpl) ListInstanceOptions(_ context.Context, payType stri
 		return a.listAvailableInstanceTypes(client, region, zone, payType)
 	}
 
+	if imageId == "" {
+		return a.listAvailableInstanceTypeImages(client, region, zone, payType, instanceType, pageSize, pageNumber)
+	}
+
 	if systemDiskCategory == "" {
 		return a.listAvailableSystemDiskCategories(client, region, zone, instanceType)
 	}
@@ -914,12 +918,12 @@ func (a *AliyunProviderImpl) ListInstanceOptions(_ context.Context, payType stri
 	}
 
 	// 所有选项都已选择，返回完整的配置信息
-	return a.getCompleteConfiguration(payType, region, zone, instanceType, systemDiskCategory, dataDiskCategory)
+	return a.getCompleteConfiguration(payType, region, zone, instanceType, imageId, systemDiskCategory, dataDiskCategory)
 }
 
 // listAvailablePayTypes 获取可用的付费类型
 func (a *AliyunProviderImpl) listAvailablePayTypes() ([]*model.ListInstanceOptionsResp, error) {
-	result := []*model.ListInstanceOptionsResp{
+	return []*model.ListInstanceOptionsResp{
 		{
 			PayType: "PrePaid",
 			Valid:   true,
@@ -928,8 +932,7 @@ func (a *AliyunProviderImpl) listAvailablePayTypes() ([]*model.ListInstanceOptio
 			PayType: "PostPaid",
 			Valid:   true,
 		},
-	}
-	return result, nil
+	}, nil
 }
 
 // listAvailableRegions 获取可用地域列表
@@ -942,6 +945,10 @@ func (a *AliyunProviderImpl) listAvailableRegions(client *ecs.Client) ([]*model.
 	if err != nil {
 		a.logger.Error("获取地域列表失败", zap.Error(err))
 		return nil, err
+	}
+
+	if response == nil || response.Body == nil || response.Body.Regions == nil {
+		return []*model.ListInstanceOptionsResp{}, nil
 	}
 
 	regions := make([]*model.ListInstanceOptionsResp, 0, len(response.Body.Regions.Region))
@@ -971,6 +978,10 @@ func (a *AliyunProviderImpl) listAvailableZones(client *ecs.Client, region strin
 		return nil, err
 	}
 
+	if response == nil || response.Body == nil || response.Body.Zones == nil {
+		return []*model.ListInstanceOptionsResp{}, nil
+	}
+
 	zones := make([]*model.ListInstanceOptionsResp, 0, len(response.Body.Zones.Zone))
 	for _, zone := range response.Body.Zones.Zone {
 		if zone == nil || zone.ZoneId == nil {
@@ -993,13 +1004,7 @@ func (a *AliyunProviderImpl) listAvailableInstanceTypes(client *ecs.Client, regi
 		RegionId:            tea.String(region),
 		ZoneId:              tea.String(zone),
 		DestinationResource: tea.String("InstanceType"),
-	}
-
-	// 根据付费类型设置ResourceType
-	if payType == "PrePaid" {
-		request.InstanceChargeType = tea.String("PrePaid") // 包年包月
-	} else {
-		request.InstanceChargeType = tea.String("PostPaid") // 按量付费
+		InstanceChargeType:  tea.String(payType),
 	}
 
 	response, err := client.DescribeAvailableResource(request)
@@ -1053,6 +1058,67 @@ func (a *AliyunProviderImpl) listAvailableInstanceTypes(client *ecs.Client, regi
 	return a.batchFetchInstanceTypeDetails(client, availableInstanceTypeMap, region, zone, payType)
 }
 
+// listAvailableInstanceTypeImages 获取指定地域和可用区下可用的实例类型和镜像信息
+func (a *AliyunProviderImpl) listAvailableInstanceTypeImages(client *ecs.Client, region string, zone string, payType string, instanceType string, pageSize int, pageNumber int) ([]*model.ListInstanceOptionsResp, error) {
+	// 获取可用镜像信息
+	imagesRequest := &ecs.DescribeImagesRequest{
+		RegionId:        tea.String(region),
+		Status:          tea.String("Available"),
+		ImageOwnerAlias: tea.String("system"),
+		PageSize:        tea.Int32(int32(pageSize)),
+		PageNumber:      tea.Int32(int32(pageNumber)),
+	}
+
+	imagesResponse, imagesErr := client.DescribeImages(imagesRequest)
+	if imagesErr != nil {
+		a.logger.Error("查询可用镜像失败", zap.Error(imagesErr))
+		return nil, imagesErr
+	}
+
+	// 处理镜像数据
+	type ImageInfo struct {
+		ImageId      string
+		OSName       string
+		OSType       string
+		Architecture string
+	}
+
+	availableImages := make([]*ImageInfo, 0)
+	if imagesResponse != nil && imagesResponse.Body != nil &&
+		imagesResponse.Body.Images != nil && imagesResponse.Body.Images.Image != nil {
+		for _, image := range imagesResponse.Body.Images.Image {
+			if image == nil || image.ImageId == nil || image.OSName == nil {
+				continue
+			}
+
+			availableImages = append(availableImages, &ImageInfo{
+				ImageId:      tea.StringValue(image.ImageId),
+				OSName:       tea.StringValue(image.OSName),
+				OSType:       tea.StringValue(image.OSType),
+				Architecture: tea.StringValue(image.Architecture),
+			})
+		}
+	}
+
+	// 组合结果 - 为每个镜像关联指定的实例类型
+	result := make([]*model.ListInstanceOptionsResp, 0, len(availableImages))
+	for _, image := range availableImages {
+		result = append(result, &model.ListInstanceOptionsResp{
+			InstanceType: instanceType,
+			Region:       region,
+			Zone:         zone,
+			PayType:      payType,
+			ImageId:      image.ImageId,
+			OSName:       image.OSName,
+			OSType:       image.OSType,
+			Architecture: image.Architecture,
+			Valid:        true,
+		})
+	}
+
+	return result, nil
+}
+
 // batchFetchInstanceTypeDetails 批量获取实例类型详情
 func (a *AliyunProviderImpl) batchFetchInstanceTypeDetails(client *ecs.Client, instanceTypeMap map[string]bool, region string, zone string, payType string) ([]*model.ListInstanceOptionsResp, error) {
 	// 将map转换为切片，便于批量查询
@@ -1095,7 +1161,9 @@ func (a *AliyunProviderImpl) batchFetchInstanceTypeDetails(client *ecs.Client, i
 				return nil // 不中断其他批次
 			}
 
-			if batchResponse.Body.InstanceTypes == nil || batchResponse.Body.InstanceTypes.InstanceType == nil {
+			if batchResponse == nil || batchResponse.Body == nil ||
+				batchResponse.Body.InstanceTypes == nil ||
+				batchResponse.Body.InstanceTypes.InstanceType == nil {
 				return nil
 			}
 
@@ -1234,13 +1302,14 @@ func (a *AliyunProviderImpl) listAvailableDataDiskCategories(client *ecs.Client,
 }
 
 // getCompleteConfiguration 获取完整的配置信息
-func (a *AliyunProviderImpl) getCompleteConfiguration(payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]*model.ListInstanceOptionsResp, error) {
+func (a *AliyunProviderImpl) getCompleteConfiguration(payType string, region string, zone string, instanceType string, imageId string, systemDiskCategory string, dataDiskCategory string) ([]*model.ListInstanceOptionsResp, error) {
 	return []*model.ListInstanceOptionsResp{
 		{
 			PayType:            payType,
 			Region:             region,
 			Zone:               zone,
 			InstanceType:       instanceType,
+			ImageId:            imageId,
 			SystemDiskCategory: systemDiskCategory,
 			DataDiskCategory:   dataDiskCategory,
 			Valid:              true,

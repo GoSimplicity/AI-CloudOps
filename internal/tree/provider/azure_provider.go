@@ -90,7 +90,7 @@ func (a *AzureProviderImpl) ListDisks(ctx context.Context, region string, pageSi
 }
 
 // ListInstanceOptions implements Provider.
-func (a *AzureProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]*model.ListInstanceOptionsResp, error) {
+func (a *AzureProviderImpl) ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, imageId string, systemDiskCategory string, dataDiskCategory string, pageSize int, pageNumber int) ([]*model.ListInstanceOptionsResp, error) {
 	panic("unimplemented")
 }
 

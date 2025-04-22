@@ -58,5 +58,5 @@ type Provider interface {
 
 	ListRegions(ctx context.Context) ([]*model.RegionResp, error)
 	GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error)
-	ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, systemDiskCategory string, dataDiskCategory string) ([]*model.ListInstanceOptionsResp, error)
+	ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, imageId string, systemDiskCategory string, dataDiskCategory string, pageSize int, pageNumber int) ([]*model.ListInstanceOptionsResp, error)
 }
