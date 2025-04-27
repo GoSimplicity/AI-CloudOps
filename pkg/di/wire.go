@@ -150,6 +150,7 @@ var ServiceSet = wire.NewSet(
 	treeService.NewElbService,
 	treeService.NewRdsService,
 	treeService.NewResourceService,
+	treeService.NewSecurityGroupService,
 )
 
 var DaoSet = wire.NewSet(

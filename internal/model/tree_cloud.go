@@ -77,16 +77,6 @@ type ListImagesReq struct {
 	Region   string        `json:"region" binding:"required"`
 }
 
-type ListVpcsReq struct {
-	Provider CloudProvider `json:"provider" binding:"required"`
-	Region   string        `json:"region" binding:"required"`
-}
-
-type ListSecurityGroupsReq struct {
-	Provider CloudProvider `json:"provider" binding:"required"`
-	Region   string        `json:"region" binding:"required"`
-}
-
 // RegionResp 区域信息响应
 type RegionResp struct {
 	RegionId       string `json:"regionId"`       // 区域ID

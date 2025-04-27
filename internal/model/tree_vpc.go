@@ -86,3 +86,8 @@ type DeleteVpcReq struct {
 	Region   string        `json:"region" binding:"required"`
 	VpcId    string        `json:"vpcId" binding:"required"`
 }
+
+type ListVpcsReq struct {
+	Provider CloudProvider `json:"provider" binding:"required"`
+	Region   string        `json:"region" binding:"required"`
+}

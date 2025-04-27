@@ -137,3 +137,19 @@ func (g *GCPProviderImpl) GetVpcDetail(ctx context.Context, region string, vpcID
 func NewGCPProvider() *GCPProviderImpl {
 	return &GCPProviderImpl{}
 }
+
+func (g *GCPProviderImpl) CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) error {
+	return nil
+}
+
+func (g *GCPProviderImpl) DeleteSecurityGroup(ctx context.Context, region string, securityGroupID string) error {
+	return nil
+}
+
+func (g *GCPProviderImpl) GetSecurityGroupDetail(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error) {
+	return nil, nil
+}
+
+func (g *GCPProviderImpl) ListSecurityGroups(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceSecurityGroup, int64, error) {
+	return nil, 0, nil
+}

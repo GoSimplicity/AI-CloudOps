@@ -137,3 +137,19 @@ func (t *TencentProviderImpl) GetVpcDetail(ctx context.Context, region string, v
 func NewTencentProvider() *TencentProviderImpl {
 	return &TencentProviderImpl{}
 }
+
+func (t *TencentProviderImpl) CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) error {
+	return nil
+}
+
+func (t *TencentProviderImpl) DeleteSecurityGroup(ctx context.Context, region string, securityGroupID string) error {
+	return nil
+}
+
+func (t *TencentProviderImpl) GetSecurityGroupDetail(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error) {
+	return nil, nil
+}
+
+func (t *TencentProviderImpl) ListSecurityGroups(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceSecurityGroup, int64, error) {
+	return nil, 0, nil
+}

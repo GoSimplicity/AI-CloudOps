@@ -33,22 +33,24 @@ import (
 )
 
 type ResourceHandler struct {
-	resourceService service.ResourceService
-	ecsService      service.EcsService
-	vpcService      service.VpcService
-	elbService      service.ElbService
-	rdsService      service.RdsService
-	cloudService    service.CloudService
+	resourceService      service.ResourceService
+	ecsService           service.EcsService
+	vpcService           service.VpcService
+	elbService           service.ElbService
+	rdsService           service.RdsService
+	cloudService         service.CloudService
+	securityGroupService service.SecurityGroupService
 }
 
-func NewResourceHandler(resourceService service.ResourceService, ecsService service.EcsService, vpcService service.VpcService, elbService service.ElbService, rdsService service.RdsService, cloudService service.CloudService) *ResourceHandler {
+func NewResourceHandler(resourceService service.ResourceService, ecsService service.EcsService, vpcService service.VpcService, elbService service.ElbService, rdsService service.RdsService, cloudService service.CloudService, securityGroupService service.SecurityGroupService) *ResourceHandler {
 	return &ResourceHandler{
-		resourceService: resourceService,
-		ecsService:      ecsService,
-		vpcService:      vpcService,
-		elbService:      elbService,
-		rdsService:      rdsService,
-		cloudService:    cloudService,
+		resourceService:      resourceService,
+		ecsService:           ecsService,
+		vpcService:           vpcService,
+		elbService:           elbService,
+		rdsService:           rdsService,
+		cloudService:         cloudService,
+		securityGroupService: securityGroupService,
 	}
 }
 
@@ -78,6 +80,15 @@ func (h *ResourceHandler) RegisterRouters(server *gin.Engine) {
 			vpcGroup.POST("/create", h.CreateVpcResource)
 			vpcGroup.DELETE("/delete", h.DeleteVpc)
 			vpcGroup.POST("/list", h.ListVpcResources)
+		}
+
+		// 安全组相关接口
+		securityGroupGroup := resourceGroup.Group("/security_group")
+		{
+			securityGroupGroup.POST("/create", h.CreateSecurityGroup)
+			securityGroupGroup.DELETE("/delete", h.DeleteSecurityGroup)
+			securityGroupGroup.POST("/list", h.ListSecurityGroups)
+			securityGroupGroup.POST("/detail", h.GetSecurityGroupDetail)
 		}
 
 		// ELB相关接口
@@ -375,15 +386,6 @@ func (h *ResourceHandler) ListVpcs(ctx *gin.Context) {
 	})
 }
 
-// ListSecurityGroups 获取安全组列表
-func (h *ResourceHandler) ListSecurityGroups(ctx *gin.Context) {
-	var req model.ListSecurityGroupsReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.cloudService.ListSecurityGroups(ctx, &req)
-	})
-}
-
 // ListInstanceOptions 获取实例选项
 func (h *ResourceHandler) ListInstanceOptions(ctx *gin.Context) {
 	var req model.ListInstanceOptionsReq
@@ -399,5 +401,43 @@ func (h *ResourceHandler) ListVpcResources(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.vpcService.ListVpcResources(ctx, &req)
+	})
+}
+
+// 安全组相关接口
+
+// CreateSecurityGroup 创建安全组
+func (h *ResourceHandler) CreateSecurityGroup(ctx *gin.Context) {
+	var req model.CreateSecurityGroupReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.securityGroupService.CreateSecurityGroup(ctx, &req)
+	})
+}
+
+// DeleteSecurityGroup 删除安全组
+func (h *ResourceHandler) DeleteSecurityGroup(ctx *gin.Context) {
+	var req model.DeleteSecurityGroupReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.securityGroupService.DeleteSecurityGroup(ctx, &req)
+	})
+}
+
+// ListSecurityGroups 获取安全组列表
+func (h *ResourceHandler) ListSecurityGroups(ctx *gin.Context) {
+	var req model.ListSecurityGroupsReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.securityGroupService.ListSecurityGroups(ctx, &req)
+	})
+}
+
+// GetSecurityGroupDetail 获取安全组详情
+func (h *ResourceHandler) GetSecurityGroupDetail(ctx *gin.Context) {
+	var req model.GetSecurityGroupDetailReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.securityGroupService.GetSecurityGroupDetail(ctx, &req)
 	})
 }

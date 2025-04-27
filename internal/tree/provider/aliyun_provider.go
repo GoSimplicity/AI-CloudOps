@@ -1365,3 +1365,188 @@ func (a *AliyunProviderImpl) GetVpcDetail(ctx context.Context, region string, vp
 		ResourceGroupId: tea.StringValue(response.Body.ResourceGroupId),
 	}, nil
 }
+
+func (a *AliyunProviderImpl) CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) error {
+	client, err := a.createEcsClient(region)
+	if err != nil {
+		a.logger.Error("创建ECS客户端失败", zap.Error(err))
+		return err
+	}
+
+	request := &ecs.CreateSecurityGroupRequest{
+		RegionId:          tea.String(region),
+		SecurityGroupName: tea.String(config.SecurityGroupName),
+		Description:       tea.String(config.Description),
+		VpcId:             tea.String(config.VpcId),
+	}
+
+	// 设置标签
+	if len(config.Tags) > 0 {
+		tags := make([]*ecs.CreateSecurityGroupRequestTag, 0, len(config.Tags))
+		for k, v := range config.Tags {
+			tags = append(tags, &ecs.CreateSecurityGroupRequestTag{
+				Key:   tea.String(k),
+				Value: tea.String(v),
+			})
+		}
+		request.Tag = tags
+	}
+
+	a.logger.Info("开始创建安全组", zap.String("region", region), zap.Any("config", config))
+	response, err := client.CreateSecurityGroup(request)
+	if err != nil {
+		a.logger.Error("创建安全组失败", zap.Error(err))
+		return err
+	}
+
+	a.logger.Info("创建安全组成功", zap.String("securityGroupID", tea.StringValue(response.Body.SecurityGroupId)))
+
+	// 如果有安全组规则，添加规则
+	if len(config.SecurityGroupRules) > 0 {
+		for _, rule := range config.SecurityGroupRules {
+			authRequest := &ecs.AuthorizeSecurityGroupRequest{
+				RegionId:        tea.String(region),
+				SecurityGroupId: response.Body.SecurityGroupId,
+				IpProtocol:      tea.String(rule.IpProtocol),
+				PortRange:       tea.String(rule.PortRange),
+				SourceCidrIp:    tea.String(rule.SourceCidrIp),
+				Description:     tea.String(rule.Description),
+			}
+
+			_, err := client.AuthorizeSecurityGroup(authRequest)
+			if err != nil {
+				a.logger.Error("添加安全组规则失败", zap.Error(err), zap.Any("rule", rule))
+				return err
+			}
+		}
+		a.logger.Info("添加安全组规则成功", zap.Int("ruleCount", len(config.SecurityGroupRules)))
+	}
+
+	return nil
+}
+
+func (a *AliyunProviderImpl) DeleteSecurityGroup(ctx context.Context, region string, securityGroupID string) error {
+	client, err := a.createEcsClient(region)
+	if err != nil {
+		a.logger.Error("创建ECS客户端失败", zap.Error(err))
+		return err
+	}
+
+	request := &ecs.DeleteSecurityGroupRequest{
+		RegionId:        tea.String(region),
+		SecurityGroupId: tea.String(securityGroupID),
+	}
+
+	a.logger.Info("开始删除安全组", zap.String("region", region), zap.String("securityGroupID", securityGroupID))
+	_, err = client.DeleteSecurityGroup(request)
+	if err != nil {
+		a.logger.Error("删除安全组失败", zap.Error(err))
+		return err
+	}
+
+	a.logger.Info("删除安全组成功", zap.String("securityGroupID", securityGroupID))
+	return nil
+}
+
+func (a *AliyunProviderImpl) GetSecurityGroupDetail(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error) {
+	client, err := a.createEcsClient(region)
+	if err != nil {
+		a.logger.Error("创建ECS客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	request := &ecs.DescribeSecurityGroupAttributeRequest{
+		RegionId:        tea.String(region),
+		SecurityGroupId: tea.String(securityGroupID),
+	}
+
+	a.logger.Info("开始获取安全组详情", zap.String("region", region), zap.String("securityGroupID", securityGroupID))
+	response, err := client.DescribeSecurityGroupAttribute(request)
+	if err != nil {
+		a.logger.Error("获取安全组详情失败", zap.Error(err))
+		return nil, err
+	}
+
+	if response == nil || response.Body == nil {
+		return nil, errors.New("获取安全组详情失败，响应为空")
+	}
+
+	// 获取安全组规则
+	rules := make([]*model.SecurityGroupRule, 0)
+	for _, rule := range response.Body.Permissions.Permission {
+		rules = append(rules, &model.SecurityGroupRule{
+			IpProtocol:   tea.StringValue(rule.IpProtocol),
+			PortRange:    tea.StringValue(rule.PortRange),
+			Direction:    tea.StringValue(rule.Direction),
+			Policy:       tea.StringValue(rule.Policy),
+			SourceCidrIp: tea.StringValue(rule.SourceCidrIp),
+			Description:  tea.StringValue(rule.Description),
+		})
+	}
+
+	return &model.ResourceSecurityGroup{
+		ResourceBase: model.ResourceBase{
+			InstanceName: tea.StringValue(response.Body.SecurityGroupName),
+			InstanceId:   tea.StringValue(response.Body.SecurityGroupId),
+			Provider:     model.CloudProviderAliyun,
+			RegionId:     region,
+			Status:       "Available", // 阿里云安全组没有状态字段，默认为可用
+			Description:  tea.StringValue(response.Body.Description),
+			CreationTime: "", // 阿里云安全组属性中没有创建时间
+		},
+		SecurityGroupName:  tea.StringValue(response.Body.SecurityGroupName),
+		VpcId:              tea.StringValue(response.Body.VpcId),
+		SecurityGroupRules: rules,
+	}, nil
+}
+
+func (a *AliyunProviderImpl) ListSecurityGroups(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceSecurityGroup, int64, error) {
+	client, err := a.createEcsClient(region)
+	if err != nil {
+		a.logger.Error("创建ECS客户端失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	request := &ecs.DescribeSecurityGroupsRequest{
+		RegionId:   tea.String(region),
+		PageNumber: tea.Int32(int32(pageNumber)),
+		PageSize:   tea.Int32(int32(pageSize)),
+	}
+
+	a.logger.Info("开始获取安全组列表", zap.String("region", region), zap.Int("pageNumber", pageNumber), zap.Int("pageSize", pageSize))
+	response, err := client.DescribeSecurityGroups(request)
+	if err != nil {
+		a.logger.Error("获取安全组列表失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	if response == nil || response.Body == nil {
+		return nil, 0, errors.New("获取安全组列表失败，响应为空")
+	}
+
+	securityGroups := make([]*model.ResourceSecurityGroup, 0, len(response.Body.SecurityGroups.SecurityGroup))
+	for _, sg := range response.Body.SecurityGroups.SecurityGroup {
+		// 获取标签
+		tagList := make([]string, 0, len(sg.Tags.Tag))
+		for _, tag := range sg.Tags.Tag {
+			tagList = append(tagList, fmt.Sprintf("%s=%s", tea.StringValue(tag.TagKey), tea.StringValue(tag.TagValue)))
+		}
+
+		securityGroups = append(securityGroups, &model.ResourceSecurityGroup{
+			ResourceBase: model.ResourceBase{
+				InstanceName: tea.StringValue(sg.SecurityGroupName),
+				InstanceId:   tea.StringValue(sg.SecurityGroupId),
+				Provider:     model.CloudProviderAliyun,
+				RegionId:     region,
+				Status:       "Available", // 阿里云安全组没有状态字段，默认为可用
+				Description:  tea.StringValue(sg.Description),
+				CreationTime: tea.StringValue(sg.CreationTime),
+				Tags:         model.StringList(tagList),
+			},
+			SecurityGroupName: tea.StringValue(sg.SecurityGroupName),
+			VpcId:             tea.StringValue(sg.VpcId),
+		})
+	}
+
+	return securityGroups, int64(tea.Int32Value(response.Body.TotalCount)), nil
+}

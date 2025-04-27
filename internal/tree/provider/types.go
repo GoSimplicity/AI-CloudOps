@@ -49,6 +49,12 @@ type Provider interface {
 	DeleteVPC(ctx context.Context, region string, vpcID string) error
 	GetVpcDetail(ctx context.Context, region string, vpcID string) (*model.ResourceVpc, error)
 
+	// 安全管理
+	ListSecurityGroups(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceSecurityGroup, int64, error)
+	CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) error
+	DeleteSecurityGroup(ctx context.Context, region string, securityGroupID string) error
+	GetSecurityGroupDetail(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error)
+
 	// 存储管理
 	ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error)
 	CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error

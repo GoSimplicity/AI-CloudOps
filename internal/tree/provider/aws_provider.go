@@ -137,3 +137,19 @@ func (a *AWSProviderImpl) GetVpcDetail(ctx context.Context, region string, vpcID
 func NewAWSProvider() *AWSProviderImpl {
 	return &AWSProviderImpl{}
 }
+
+func (a *AWSProviderImpl) CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) error {
+	return nil
+}
+
+func (a *AWSProviderImpl) DeleteSecurityGroup(ctx context.Context, region string, securityGroupID string) error {
+	return nil
+}
+
+func (a *AWSProviderImpl) GetSecurityGroupDetail(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error) {
+	return nil, nil
+}
+
+func (a *AWSProviderImpl) ListSecurityGroups(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceSecurityGroup, int64, error) {
+	return nil, 0, nil
+}

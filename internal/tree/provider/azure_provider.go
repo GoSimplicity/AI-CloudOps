@@ -137,3 +137,19 @@ func (a *AzureProviderImpl) GetVpcDetail(ctx context.Context, region string, vpc
 func NewAzureProvider() *AzureProviderImpl {
 	return &AzureProviderImpl{}
 }
+
+func (a *AzureProviderImpl) CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) error {
+	return nil
+}
+
+func (a *AzureProviderImpl) DeleteSecurityGroup(ctx context.Context, region string, securityGroupID string) error {
+	return nil
+}
+
+func (a *AzureProviderImpl) GetSecurityGroupDetail(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error) {
+	return nil, nil
+}
+
+func (a *AzureProviderImpl) ListSecurityGroups(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceSecurityGroup, int64, error) {
+	return nil, 0, nil
+}

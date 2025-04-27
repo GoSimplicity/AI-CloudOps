@@ -137,3 +137,19 @@ func (h *HuaweiProviderImpl) GetVpcDetail(ctx context.Context, region string, vp
 func NewHuaweiProvider() *HuaweiProviderImpl {
 	return &HuaweiProviderImpl{}
 }
+
+func (h *HuaweiProviderImpl) CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) error {
+	return nil
+}
+
+func (h *HuaweiProviderImpl) DeleteSecurityGroup(ctx context.Context, region string, securityGroupID string) error {
+	return nil
+}
+
+func (h *HuaweiProviderImpl) GetSecurityGroupDetail(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error) {
+	return nil, nil
+}
+
+func (h *HuaweiProviderImpl) ListSecurityGroups(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceSecurityGroup, int64, error) {
+	return nil, 0, nil
+}
