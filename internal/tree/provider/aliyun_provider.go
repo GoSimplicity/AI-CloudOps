@@ -1378,6 +1378,8 @@ func (a *AliyunProviderImpl) CreateSecurityGroup(ctx context.Context, region str
 		SecurityGroupName: tea.String(config.SecurityGroupName),
 		Description:       tea.String(config.Description),
 		VpcId:             tea.String(config.VpcId),
+		SecurityGroupType: tea.String(config.SecurityGroupType),
+		ResourceGroupId:   tea.String(config.ResourceGroupId),
 	}
 
 	// 设置标签

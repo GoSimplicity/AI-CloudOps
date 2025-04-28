@@ -63,7 +63,7 @@ type CreateSecurityGroupReq struct {
 	VpcId              string               `json:"vpcId" binding:"required"`
 	SecurityGroupType  string               `json:"securityGroupType"`
 	ResourceGroupId    string               `json:"resourceGroupId"`
-	TreeNodeId         uint                 `json:"treeNodeId" binding:"required"`
+	TreeNodeId         uint                 `json:"treeNodeId"`
 	SecurityGroupRules []*SecurityGroupRule `json:"securityGroupRules"`
 	Tags               map[string]string    `json:"tags"`
 }
@@ -128,4 +128,3 @@ type ResourceSecurityGroupRuleListResp struct {
 	Total int64                    `json:"total"`
 	Data  []*ResourceSecurityGroup `json:"data"`
 }
-

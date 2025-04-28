@@ -45,8 +45,8 @@ func (r *Routes) RegisterHandlers() *asynq.ServeMux {
 	mux := asynq.NewServeMux()
 
 	// 注册任务
-	mux.HandleFunc(DeferCreateK8sCluster, r.CreateK8sCluster.ProcessTask)
-	mux.HandleFunc(DeferUpdateK8sCluster, r.UpdateK8sCluster.ProcessTask)
+	// mux.HandleFunc(DeferCreateK8sCluster, r.CreateK8sCluster.ProcessTask)
+	// mux.HandleFunc(DeferUpdateK8sCluster, r.UpdateK8sCluster.ProcessTask)
 	mux.HandleFunc(DeferTimedTask, r.TimedTask.ProcessTask)
 
 	return mux
