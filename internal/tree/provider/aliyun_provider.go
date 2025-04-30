@@ -1209,6 +1209,7 @@ func (a *AliyunProviderImpl) listAvailableDiskCategories(client *ecs.Client, reg
 		ZoneId:              tea.String(zone),
 		InstanceType:        tea.String(instanceType),
 		DestinationResource: tea.String(diskType), // SystemDisk 或 DataDisk
+		ResourceType:        tea.String("instance"),
 	}
 
 	response, err := client.DescribeAvailableResource(request)

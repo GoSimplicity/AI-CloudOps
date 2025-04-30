@@ -49,7 +49,7 @@ type Provider interface {
 	DeleteVPC(ctx context.Context, region string, vpcID string) error
 	GetVpcDetail(ctx context.Context, region string, vpcID string) (*model.ResourceVpc, error)
 
-	// 安全管理
+	// 安全组管理
 	ListSecurityGroups(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceSecurityGroup, int64, error)
 	CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) error
 	DeleteSecurityGroup(ctx context.Context, region string, securityGroupID string) error

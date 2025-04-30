@@ -57,8 +57,8 @@ type CreateEcsResourceReq struct {
 	Description        string            `json:"description"`
 	SystemDiskCategory string            `json:"systemDiskCategory"`
 	AutoRenewPeriod    int               `json:"autoRenewPeriod"`
-	PeriodUnit         string            `json:"periodUnit"` // Month 月 Year 年
-	Period             int               `json:"period"`
+	PeriodUnit         string            `json:"periodUnit"`         // Month 月 Year 年
+	Period             int               `json:"period"`             // 购买时长
 	AutoRenew          bool              `json:"autoRenew"`          // 是否自动续费
 	InstanceChargeType string            `json:"instanceChargeType"` // 付费类型
 	SpotStrategy       string            `json:"spotStrategy"`       // NoSpot 默认值 表示正常按量付费 SpotAsPriceGo 表示自动竞价
