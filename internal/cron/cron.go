@@ -36,8 +36,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
-	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,23 +48,21 @@ var (
 
 type CronManager interface {
 	StartOnDutyHistoryManager(ctx context.Context) error
-	StartCheckHostStatusManager(ctx context.Context) error
+	// StartCheckHostStatusManager(ctx context.Context) error
 	StartCheckK8sStatusManager(ctx context.Context) error
 }
 
 type cronManager struct {
 	logger    *zap.Logger
 	onDutyDao alert.AlertManagerOnDutyDAO
-	ecsDao    treeDao.TreeEcsDAO
 	k8sDao    admin.ClusterDAO
 	k8sClient client.K8sClient
 }
 
-func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, ecsDao treeDao.TreeEcsDAO, k8sDao admin.ClusterDAO, k8sClient client.K8sClient) CronManager {
+func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, k8sDao admin.ClusterDAO, k8sClient client.K8sClient) CronManager {
 	return &cronManager{
 		logger:    logger,
 		onDutyDao: onDutyDao,
-		ecsDao:    ecsDao,
 		k8sDao:    k8sDao,
 		k8sClient: k8sClient,
 	}
@@ -121,69 +117,69 @@ func (cm *cronManager) fillOnDutyHistory(ctx context.Context) {
 	}
 }
 
-// StartCheckHostStatusManager 定期检查ecs主机状态
-func (cm *cronManager) StartCheckHostStatusManager(ctx context.Context) error {
-	cm.logger.Info("开始检查ecs主机状态")
+// // StartCheckHostStatusManager 定期检查ecs主机状态
+// func (cm *cronManager) StartCheckHostStatusManager(ctx context.Context) error {
+// 	cm.logger.Info("开始检查ecs主机状态")
 
-	// 获取所有ECS主机
-	ecss, err := cm.ecsDao.GetAll(ctx)
-	if err != nil {
-		cm.logger.Error("获取ecs主机失败", zap.Error(err))
-		return err
-	}
-	if len(ecss) == 0 {
-		return nil
-	}
+// 	// 获取所有ECS主机
+// 	ecss, err := cm.ecsDao.GetAll(ctx)
+// 	if err != nil {
+// 		cm.logger.Error("获取ecs主机失败", zap.Error(err))
+// 		return err
+// 	}
+// 	if len(ecss) == 0 {
+// 		return nil
+// 	}
 
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(ecss))
+// 	var wg sync.WaitGroup
+// 	errChan := make(chan error, len(ecss))
 
-	for _, ecs := range ecss {
-		wg.Add(1)
-		go func(ecs *model.ResourceEcs) {
-			defer wg.Done()
+// 	for _, ecs := range ecss {
+// 		wg.Add(1)
+// 		go func(ecs *model.ResourceEcs) {
+// 			defer wg.Done()
 
-			// 检查IP地址
-			if ecs.IpAddr == "" {
-				cm.logger.Warn("目标ecs没有绑定公网ip",
-					zap.String("hostname", ecs.Hostname),
-					zap.Int("id", ecs.ID))
-				return
-			}
+// 			// 检查IP地址
+// 			if ecs.IpAddr == "" {
+// 				cm.logger.Warn("目标ecs没有绑定公网ip",
+// 					zap.String("hostname", ecs.Hostname),
+// 					zap.Int("id", ecs.ID))
+// 				return
+// 			}
 
-			// 发送ping请求检查状态
-			if ok := pkg.Ping(ecs.IpAddr); !ok {
-				cm.logger.Debug("ping请求失败",
-					zap.String("ip", ecs.IpAddr),
-					zap.String("hostname", ecs.Hostname))
-				ecs.Status = "ERROR"
-			} else {
-				ecs.Status = "RUNNING"
-			}
+// 			// 发送ping请求检查状态
+// 			if ok := pkg.Ping(ecs.IpAddr); !ok {
+// 				cm.logger.Debug("ping请求失败",
+// 					zap.String("ip", ecs.IpAddr),
+// 					zap.String("hostname", ecs.Hostname))
+// 				ecs.Status = "ERROR"
+// 			} else {
+// 				ecs.Status = "RUNNING"
+// 			}
 
-			// 更新主机状态
-			if err := cm.ecsDao.UpdateStatus(ctx, ecs.ID, ecs.Status); err != nil {
-				cm.logger.Error("更新主机状态失败",
-					zap.Error(err),
-					zap.String("hostname", ecs.Hostname),
-					zap.String("status", ecs.Status))
-				errChan <- err
-			}
-		}(ecs)
-	}
+// 			// // 更新主机状态
+// 			// if err := cm.ecsDao.UpdateStatus(ctx, ecs.ID, ecs.Status); err != nil {
+// 			// 	cm.logger.Error("更新主机状态失败",
+// 			// 		zap.Error(err),
+// 			// 		zap.String("hostname", ecs.Hostname),
+// 			// 		zap.String("status", ecs.Status))
+// 			// 	errChan <- err
+// 			// }
+// 		}(ecs)
+// 	}
 
-	// 等待所有检查完成
-	wg.Wait()
-	close(errChan)
+// 	// 等待所有检查完成
+// 	wg.Wait()
+// 	close(errChan)
 
-	// 检查是否有错误发生
-	if len(errChan) > 0 {
-		return <-errChan
-	}
+// 	// 检查是否有错误发生
+// 	if len(errChan) > 0 {
+// 		return <-errChan
+// 	}
 
-	cm.logger.Info("完成ecs主机状态检查")
-	return nil
-}
+// 	cm.logger.Info("完成ecs主机状态检查")
+// 	return nil
+// }
 
 // StartCheckK8sStatusManager 启动k8s状态检查任务
 func (cm *cronManager) StartCheckK8sStatusManager(ctx context.Context) error {
@@ -241,7 +237,6 @@ func (cm *cronManager) StartCheckK8sStatusManager(ctx context.Context) error {
 // checkClusterStatus 检查单个集群状态
 func (cm *cronManager) checkClusterStatus(ctx context.Context, cluster *model.K8sCluster) error {
 	// 获取k8s客户端
-
 	clientset, err := cm.k8sClient.GetKubeClient(cluster.ID)
 	if err != nil {
 		cm.logger.Warn("获取k8s客户端失败",

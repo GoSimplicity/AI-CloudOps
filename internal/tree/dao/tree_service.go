@@ -23,19 +23,19 @@
  *
  */
 
-package di
+package dao
 
-import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/job"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/gin-gonic/gin"
-	"github.com/hibiken/asynq"
-)
+import "gorm.io/gorm"
 
-type Cmd struct {
-	Server    *gin.Engine
-	Start     service.AliResourceService
-	Routes    *job.Routes
-	Asynq     *asynq.Server
-	Scheduler *job.TimedScheduler
+type TreeDAO interface {
+}
+
+type treeDAO struct {
+	db *gorm.DB
+}
+
+func NewTreeDAO(db *gorm.DB) TreeDAO {
+	return &treeDAO{
+		db: db,
+	}
 }
