@@ -1,6 +1,4 @@
 #!/bin/bash
-
-# 终止脚本执行并返回错误状态码，如果有任何命令失败
 set -euo pipefail
 
 echo_info() {
