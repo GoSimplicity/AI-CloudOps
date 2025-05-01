@@ -60,17 +60,17 @@ func Init() error {
 		return fmt.Errorf("初始化配置失败: %v", err)
 	}
 
+	if err := godotenv.Load(); err != nil {
+		log.Printf("加载.env文件失败: %v", err)
+	}
+
 	// 初始化 Web 服务器和其他组件
-	cmd := di.InitWebServer()
+	cmd := di.ProvideCmd()
 
 	// 初始化翻译器
 	//if err := di.InitTrans(); err != nil {
 	//	return fmt.Errorf("初始化翻译器失败: %v", err)
 	//}
-
-	if err := godotenv.Load(); err != nil {
-		log.Printf("加载.env文件失败: %v", err)
-	}
 
 	// 设置请求头打印路由
 	cmd.Server.GET("/headers", printHeaders)
@@ -92,8 +92,6 @@ func Init() error {
 			log.Fatalf("启动定时任务失败: %v", err)
 		}
 	}()
-
-	go cmd.Start.StartWorker()
 
 	// 启动异步任务服务器
 	go func() {

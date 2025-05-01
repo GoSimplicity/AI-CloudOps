@@ -7,19 +7,19 @@
 package di
 
 import (
-	api8 "github.com/GoSimplicity/AI-CloudOps/internal/ai/api"
-	service6 "github.com/GoSimplicity/AI-CloudOps/internal/ai/service"
+	api7 "github.com/GoSimplicity/AI-CloudOps/internal/ai/api"
+	service5 "github.com/GoSimplicity/AI-CloudOps/internal/ai/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	"github.com/GoSimplicity/AI-CloudOps/internal/job"
-	api5 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
+	api4 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	user2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
 	admin2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/user"
-	api4 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
-	service4 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
-	api6 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
+	api3 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
+	service3 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
+	api5 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
@@ -29,17 +29,20 @@ import (
 	api2 "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	api3 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
-	dao3 "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	service3 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
+	api8 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
+	dao4 "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/provider"
+	service6 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	service2 "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
-	api7 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
-	dao4 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
-	service5 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
+	api6 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
+	dao3 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
+	service4 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/gin-gonic/gin"
+	"github.com/google/wire"
+	"github.com/hibiken/asynq"
 )
 
 import (
@@ -48,7 +51,7 @@ import (
 
 // Injectors from wire.go:
 
-func InitWebServer() *Cmd {
+func ProvideCmd() *Cmd {
 	cmdable := InitRedis()
 	handler := utils.NewJWTHandler(cmdable)
 	logger := InitLogger()
@@ -66,52 +69,33 @@ func InitWebServer() *Cmd {
 	apiService := service.NewApiService(logger, apiDAO)
 	apiHandler := api2.NewApiHandler(apiService)
 	roleHandler := api2.NewRoleHandler(roleService, apiService, logger)
-	treeNodeDAO := dao3.NewTreeNodeDAO(db, logger)
-	treeNodeService := service3.NewTreeNodeService(treeNodeDAO, userDAO, logger)
-	treeNodeHandler := api3.NewTreeNodeHandler(treeNodeService)
-	treeAliResourceDAO := dao3.NewAliResourceDAO(cmdable)
-	treeEcsDAO := dao3.NewTreeEcsDAO(db, logger)
-	treeEcsResourceDAO := dao3.NewEcsResourceDAO(logger, db)
-	aliResourceService := service3.NewAliResourceService(logger, treeAliResourceDAO, cmdable, treeEcsDAO, treeEcsResourceDAO)
-	aliResourceHandler := api3.NewAliResourceHandler(aliResourceService)
-	ecsResourceService := service3.NewEcsResourceService(logger, treeEcsResourceDAO, treeEcsDAO)
-	ecsResourceHandler := api3.NewEcsResourceHandler(ecsResourceService)
-	ecsService := service3.NewEcsService(logger, treeEcsDAO, treeNodeDAO)
-	ecsSSH := ssh.NewSSH(logger)
-	ecsHandler := api3.NewEcsHandler(ecsService, logger, ecsSSH)
-	treeElbDAO := dao3.NewTreeElbDAO(db, logger)
-	elbService := service3.NewElbService(logger, treeElbDAO, treeNodeDAO)
-	elbHandler := api3.NewElbHandler(elbService)
-	treeRdsDAO := dao3.NewTreeRdsDAO(db, logger)
-	rdsService := service3.NewRdsService(logger, treeRdsDAO, treeNodeDAO)
-	rdsHandler := api3.NewRdsHandler(rdsService)
-	notAuthService := service4.NewNotAuthService(logger, treeNodeDAO)
-	notAuthHandler := api4.NewNotAuthHandler(notAuthService)
+	notAuthService := service3.NewNotAuthService(logger)
+	notAuthHandler := api3.NewNotAuthHandler(notAuthService)
 	clusterDAO := admin.NewClusterDAO(db, logger)
 	k8sClient := client.NewK8sClient(logger, clusterDAO)
 	asynqClient := InitAsynqClient()
 	clusterService := admin2.NewClusterService(clusterDAO, k8sClient, logger, asynqClient)
-	k8sClusterHandler := api5.NewK8sClusterHandler(logger, clusterService)
+	k8sClusterHandler := api4.NewK8sClusterHandler(logger, clusterService)
 	configMapService := admin2.NewConfigMapService(clusterDAO, k8sClient, logger)
-	k8sConfigMapHandler := api5.NewK8sConfigMapHandler(logger, configMapService)
+	k8sConfigMapHandler := api4.NewK8sConfigMapHandler(logger, configMapService)
 	deploymentService := admin2.NewDeploymentService(clusterDAO, k8sClient, logger)
-	k8sDeploymentHandler := api5.NewK8sDeploymentHandler(logger, deploymentService)
+	k8sDeploymentHandler := api4.NewK8sDeploymentHandler(logger, deploymentService)
 	namespaceService := admin2.NewNamespaceService(clusterDAO, k8sClient, logger)
-	k8sNamespaceHandler := api5.NewK8sNamespaceHandler(logger, namespaceService)
+	k8sNamespaceHandler := api4.NewK8sNamespaceHandler(logger, namespaceService)
 	nodeService := admin2.NewNodeService(clusterDAO, k8sClient, logger)
-	k8sNodeHandler := api5.NewK8sNodeHandler(logger, nodeService)
+	k8sNodeHandler := api4.NewK8sNodeHandler(logger, nodeService)
 	podService := admin2.NewPodService(clusterDAO, k8sClient, logger)
-	k8sPodHandler := api5.NewK8sPodHandler(logger, podService)
+	k8sPodHandler := api4.NewK8sPodHandler(logger, podService)
 	svcService := admin2.NewSvcService(clusterDAO, k8sClient, logger)
-	k8sSvcHandler := api5.NewK8sSvcHandler(logger, svcService)
+	k8sSvcHandler := api4.NewK8sSvcHandler(logger, svcService)
 	taintService := admin2.NewTaintService(clusterDAO, k8sClient, logger)
-	k8sTaintHandler := api5.NewK8sTaintHandler(logger, taintService)
+	k8sTaintHandler := api4.NewK8sTaintHandler(logger, taintService)
 	yamlTaskDAO := admin.NewYamlTaskDAO(db, logger)
 	yamlTemplateDAO := admin.NewYamlTemplateDAO(db, logger)
 	yamlTaskService := admin2.NewYamlTaskService(yamlTaskDAO, clusterDAO, yamlTemplateDAO, k8sClient, logger)
-	k8sYamlTaskHandler := api5.NewK8sYamlTaskHandler(logger, yamlTaskService)
+	k8sYamlTaskHandler := api4.NewK8sYamlTaskHandler(logger, yamlTaskService)
 	yamlTemplateService := admin2.NewYamlTemplateService(yamlTemplateDAO, yamlTaskDAO, k8sClient, logger)
-	k8sYamlTemplateHandler := api5.NewK8sYamlTemplateHandler(logger, yamlTemplateService)
+	k8sYamlTemplateHandler := api4.NewK8sYamlTemplateHandler(logger, yamlTemplateService)
 	instanceService := user.NewInstanceService(clusterDAO, k8sClient, logger)
 	appDAO := user2.NewAppDAO(db, logger)
 	appService := user.NewAppService(clusterDAO, appDAO, k8sClient, logger)
@@ -119,7 +103,7 @@ func InitWebServer() *Cmd {
 	projectService := user.NewProjectService(clusterDAO, projectDAO, appDAO, k8sClient, logger)
 	cornJobDAO := user2.NewCornJobDAO(db, logger)
 	cronjobService := user.NewCronjobService(clusterDAO, cornJobDAO, k8sClient, logger)
-	k8sAppHandler := api5.NewK8sAppHandler(logger, instanceService, appService, projectService, cronjobService)
+	k8sAppHandler := api4.NewK8sAppHandler(logger, instanceService, appService, projectService, cronjobService)
 	alertManagerEventDAO := alert.NewAlertManagerEventDAO(db, logger, userDAO)
 	scrapePoolDAO := scrape.NewScrapePoolDAO(db, logger, userDAO)
 	scrapeJobDAO := scrape.NewScrapeJobDAO(db, logger, userDAO)
@@ -133,43 +117,64 @@ func InitWebServer() *Cmd {
 	recordConfigCache := cache.NewRecordConfig(logger, scrapePoolDAO, alertManagerRecordDAO)
 	monitorCache := cache.NewMonitorCache(promConfigCache, alertConfigCache, ruleConfigCache, recordConfigCache, logger)
 	alertManagerEventService := alert2.NewAlertManagerEventService(alertManagerEventDAO, monitorCache, logger, userDAO, alertManagerSendDAO)
-	alertEventHandler := api6.NewAlertEventHandler(logger, alertManagerEventService)
+	alertEventHandler := api5.NewAlertEventHandler(logger, alertManagerEventService)
 	alertManagerPoolService := alert2.NewAlertManagerPoolService(alertManagerPoolDAO, alertManagerSendDAO, monitorCache, logger, userDAO)
-	alertPoolHandler := api6.NewAlertPoolHandler(logger, alertManagerPoolService)
+	alertPoolHandler := api5.NewAlertPoolHandler(logger, alertManagerPoolService)
 	alertManagerRuleService := alert2.NewAlertManagerRuleService(alertManagerRuleDAO, monitorCache, logger, userDAO)
-	alertRuleHandler := api6.NewAlertRuleHandler(logger, alertManagerRuleService)
+	alertRuleHandler := api5.NewAlertRuleHandler(logger, alertManagerRuleService)
 	configYamlService := yaml.NewPrometheusConfigService(promConfigCache, alertConfigCache, ruleConfigCache, recordConfigCache)
-	configYamlHandler := api6.NewConfigYamlHandler(logger, configYamlService)
+	configYamlHandler := api5.NewConfigYamlHandler(logger, configYamlService)
 	alertManagerOnDutyDAO := alert.NewAlertManagerOnDutyDAO(db, logger, userDAO)
 	alertManagerOnDutyService := alert2.NewAlertManagerOnDutyService(alertManagerOnDutyDAO, alertManagerSendDAO, monitorCache, logger, userDAO)
-	onDutyGroupHandler := api6.NewOnDutyGroupHandler(logger, alertManagerOnDutyService)
+	onDutyGroupHandler := api5.NewOnDutyGroupHandler(logger, alertManagerOnDutyService)
 	alertManagerRecordService := alert2.NewAlertManagerRecordService(alertManagerRecordDAO, scrapePoolDAO, monitorCache, logger, userDAO)
-	recordRuleHandler := api6.NewRecordRuleHandler(logger, alertManagerRecordService)
+	recordRuleHandler := api5.NewRecordRuleHandler(logger, alertManagerRecordService)
 	scrapePoolService := scrape2.NewPrometheusPoolService(scrapePoolDAO, monitorCache, logger, userDAO, scrapeJobDAO)
-	scrapePoolHandler := api6.NewScrapePoolHandler(logger, scrapePoolService)
-	scrapeJobService := scrape2.NewPrometheusScrapeService(scrapeJobDAO, monitorCache, logger, userDAO, treeNodeDAO)
-	scrapeJobHandler := api6.NewScrapeJobHandler(logger, scrapeJobService)
+	scrapePoolHandler := api5.NewScrapePoolHandler(logger, scrapePoolService)
+	scrapeJobService := scrape2.NewPrometheusScrapeService(scrapeJobDAO, monitorCache, logger, userDAO)
+	scrapeJobHandler := api5.NewScrapeJobHandler(logger, scrapeJobService)
 	alertManagerSendService := alert2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, monitorCache, logger, userDAO)
-	sendGroupHandler := api6.NewSendGroupHandler(logger, alertManagerSendService)
+	sendGroupHandler := api5.NewSendGroupHandler(logger, alertManagerSendService)
 	auditHandler := api2.NewAuditHandler(auditService)
-	formDesignDAO := dao4.NewFormDesignDAO(db)
-	formDesignService := service5.NewFormDesignService(formDesignDAO, logger)
-	formDesignHandler := api7.NewFormDesignHandler(formDesignService)
-	processDAO := dao4.NewProcessDAO(db)
-	processService := service5.NewProcessService(processDAO, logger)
-	processHandler := api7.NewProcessHandler(processService)
-	templateDAO := dao4.NewTemplateDAO(db)
-	templateService := service5.NewTemplateService(templateDAO, logger)
-	templateHandler := api7.NewTemplateHandler(templateService)
-	instanceDAO := dao4.NewInstanceDAO(db)
-	serviceInstanceService := service5.NewInstanceService(instanceDAO, logger)
-	instanceHandler := api7.NewInstanceHandler(serviceInstanceService)
-	aiService := service6.NewAIService(logger)
-	aiHandler := api8.NewAIHandler(aiService)
-	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, treeNodeHandler, aliResourceHandler, ecsResourceHandler, ecsHandler, elbHandler, rdsHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, processHandler, templateHandler, instanceHandler, aiHandler)
+	formDesignDAO := dao3.NewFormDesignDAO(db)
+	formDesignService := service4.NewFormDesignService(formDesignDAO, logger)
+	formDesignHandler := api6.NewFormDesignHandler(formDesignService)
+	processDAO := dao3.NewProcessDAO(db)
+	processService := service4.NewProcessService(processDAO, logger)
+	processHandler := api6.NewProcessHandler(processService)
+	templateDAO := dao3.NewTemplateDAO(db)
+	templateService := service4.NewTemplateService(templateDAO, logger)
+	templateHandler := api6.NewTemplateHandler(templateService)
+	instanceDAO := dao3.NewInstanceDAO(db)
+	serviceInstanceService := service4.NewInstanceService(instanceDAO, logger)
+	instanceHandler := api6.NewInstanceHandler(serviceInstanceService)
+	aiService := service5.NewAIService(logger)
+	aiHandler := api7.NewAIHandler(aiService)
+	resourceDAO := dao4.NewResourceDAO(db)
+	aliyunProviderImpl := provider.NewAliyunProvider(logger, resourceDAO)
+	tencentProviderImpl := provider.NewTencentProvider()
+	huaweiProviderImpl := provider.NewHuaweiProvider()
+	awsProviderImpl := provider.NewAWSProvider()
+	azureProviderImpl := provider.NewAzureProvider()
+	gcpProviderImpl := provider.NewGCPProvider()
+	providerFactory := provider.NewProviderFactory(aliyunProviderImpl, tencentProviderImpl, huaweiProviderImpl, awsProviderImpl, azureProviderImpl, gcpProviderImpl)
+	resourceService := service6.NewResourceService(logger, resourceDAO, providerFactory)
+	ecsDAO := dao4.NewEcsDAO(db)
+	ecsService := service6.NewEcsService(logger, ecsDAO, providerFactory)
+	vpcDAO := dao4.NewVpcDAO(logger, db)
+	vpcService := service6.NewVpcService(logger, vpcDAO, providerFactory)
+	elbDAO := dao4.NewElbDAO(db)
+	elbService := service6.NewElbService(logger, elbDAO)
+	rdsDAO := dao4.NewRdsDAO(db)
+	rdsService := service6.NewRdsService(logger, rdsDAO)
+	cloudDAO := dao4.NewCloudDAO(db)
+	cloudService := service6.NewCloudService(logger, cloudDAO)
+	securityGroupService := service6.NewSecurityGroupService(providerFactory, logger)
+	resourceHandler := api8.NewResourceHandler(resourceService, ecsService, vpcService, elbService, rdsService, cloudService, securityGroupService)
+	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, processHandler, templateHandler, instanceHandler, aiHandler, resourceHandler)
 	createK8sClusterTask := job.NewCreateK8sClusterTask(logger, k8sClient, clusterDAO)
 	updateK8sClusterTask := job.NewUpdateK8sClusterTask(logger, k8sClient, clusterDAO)
-	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, treeEcsDAO, clusterDAO, k8sClient)
+	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient)
 	timedTask := job.NewTimedTask(logger, k8sClient, monitorCache, cronManager)
 	routes := job.NewRoutes(createK8sClusterTask, updateK8sClusterTask, timedTask)
 	server := InitAsynqServer()
@@ -177,10 +182,48 @@ func InitWebServer() *Cmd {
 	timedScheduler := job.NewTimedScheduler(scheduler)
 	cmd := &Cmd{
 		Server:    engine,
-		Start:     aliResourceService,
 		Routes:    routes,
 		Asynq:     server,
 		Scheduler: timedScheduler,
 	}
 	return cmd
 }
+
+// wire.go:
+
+type Cmd struct {
+	Server    *gin.Engine
+	Routes    *job.Routes
+	Asynq     *asynq.Server
+	Scheduler *job.TimedScheduler
+}
+
+var HandlerSet = wire.NewSet(api2.NewRoleHandler, api2.NewApiHandler, api2.NewAuditHandler, api.NewUserHandler, api3.NewNotAuthHandler, api4.NewK8sPodHandler, api4.NewK8sAppHandler, api4.NewK8sNodeHandler, api4.NewK8sConfigMapHandler, api4.NewK8sClusterHandler, api4.NewK8sDeploymentHandler, api4.NewK8sNamespaceHandler, api4.NewK8sSvcHandler, api4.NewK8sTaintHandler, api4.NewK8sYamlTaskHandler, api4.NewK8sYamlTemplateHandler, api7.NewAIHandler, api5.NewAlertPoolHandler, api5.NewConfigYamlHandler, api5.NewOnDutyGroupHandler, api5.NewRecordRuleHandler, api5.NewAlertRuleHandler, api5.NewSendGroupHandler, api5.NewScrapeJobHandler, api5.NewScrapePoolHandler, api5.NewAlertEventHandler, api6.NewFormDesignHandler, api6.NewInstanceHandler, api6.NewTemplateHandler, api6.NewProcessHandler, api8.NewResourceHandler, api8.NewTreeHandler)
+
+var ServiceSet = wire.NewSet(admin2.NewClusterService, admin2.NewConfigMapService, admin2.NewDeploymentService, admin2.NewNamespaceService, admin2.NewPodService, admin2.NewSvcService, admin2.NewNodeService, admin2.NewTaintService, admin2.NewYamlTaskService, admin2.NewYamlTemplateService, user.NewAppService, user.NewInstanceService, user.NewCronjobService, user.NewProjectService, service2.NewUserService, service.NewApiService, service.NewRoleService, service.NewAuditService, service5.NewAIService, alert2.NewAlertManagerEventService, alert2.NewAlertManagerOnDutyService, alert2.NewAlertManagerPoolService, alert2.NewAlertManagerRecordService, alert2.NewAlertManagerRuleService, alert2.NewAlertManagerSendService, scrape2.NewPrometheusScrapeService, scrape2.NewPrometheusPoolService, yaml.NewPrometheusConfigService, service3.NewNotAuthService, service4.NewFormDesignService, service4.NewInstanceService, service4.NewTemplateService, service4.NewProcessService, service6.NewTreeService, service6.NewCloudService, service6.NewEcsService, service6.NewVpcService, service6.NewElbService, service6.NewRdsService, service6.NewResourceService, service6.NewSecurityGroupService)
+
+var DaoSet = wire.NewSet(alert.NewAlertManagerEventDAO, alert.NewAlertManagerOnDutyDAO, alert.NewAlertManagerPoolDAO, alert.NewAlertManagerRecordDAO, alert.NewAlertManagerRuleDAO, alert.NewAlertManagerSendDAO, scrape.NewScrapeJobDAO, scrape.NewScrapePoolDAO, dao2.NewUserDAO, dao.NewRoleDAO, dao.NewApiDAO, dao.NewAuditDAO, admin.NewClusterDAO, admin.NewYamlTemplateDAO, admin.NewYamlTaskDAO, user2.NewAppDAO, user2.NewProjectDAO, user2.NewCornJobDAO, dao3.NewFormDesignDAO, dao3.NewTemplateDAO, dao3.NewInstanceDAO, dao3.NewProcessDAO, dao4.NewTreeDAO, dao4.NewCloudDAO, dao4.NewEcsDAO, dao4.NewVpcDAO, dao4.NewElbDAO, dao4.NewRdsDAO, dao4.NewResourceDAO)
+
+var UtilSet = wire.NewSet(utils.NewJWTHandler)
+
+var JobSet = wire.NewSet(job.NewTimedScheduler, job.NewTimedTask, job.NewCreateK8sClusterTask, job.NewUpdateK8sClusterTask, job.NewRoutes)
+
+var ProviderSet = wire.NewSet(provider.NewAliyunProvider, provider.NewTencentProvider, provider.NewHuaweiProvider, provider.NewAWSProvider, provider.NewAzureProvider, provider.NewGCPProvider, provider.NewProviderFactory)
+
+var CronSet = wire.NewSet(cron.NewCronManager)
+
+var Injector = wire.NewSet(
+	InitMiddlewares,
+	InitGinServer,
+	InitLogger,
+	InitRedis,
+	InitDB,
+	InitCasbin,
+	InitAsynqClient,
+	InitAsynqServer,
+	InitScheduler, wire.Struct(new(Cmd), "*"),
+)
+
+var CacheSet = wire.NewSet(cache.NewMonitorCache, cache.NewAlertConfigCache, cache.NewRuleConfigCache, cache.NewRecordConfig, cache.NewPromConfigCache)
+
+var ClientSet = wire.NewSet(client.NewK8sClient)

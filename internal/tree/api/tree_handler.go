@@ -26,178 +26,171 @@
 package api
 
 import (
-	"strconv"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
-type TreeNodeHandler struct {
-	service service.TreeNodeService
+type TreeHandler struct {
+	service service.TreeService
 }
 
-func NewTreeNodeHandler(service service.TreeNodeService) *TreeNodeHandler {
-	return &TreeNodeHandler{
+func NewTreeHandler(service service.TreeService) *TreeHandler {
+	return &TreeHandler{
 		service: service,
 	}
 }
 
-func (t *TreeNodeHandler) RegisterRouters(server *gin.Engine) {
-	treeNodeGroup := server.Group("/api/tree/node")
+func (h *TreeHandler) RegisterRouters(server *gin.Engine) {
+	treeGroup := server.Group("/api/tree")
+	{
+		treeGroup.GET("/list", h.GetTree)
+		treeGroup.GET("/detail/:id", h.GetNodeDetail)
+		treeGroup.GET("/children/:parentId", h.GetChildNodes)
+		treeGroup.GET("/path/:nodeId", h.GetNodePath)
 
-	// 树节点相关路由
-	treeNodeGroup.GET("/listTreeNode", t.ListTreeNode)                    // 获取树节点列表
-	treeNodeGroup.GET("/selectTreeNode", t.SelectTreeNode)                // 获取指定层级的树节点
-	treeNodeGroup.GET("/getTopTreeNode", t.GetTopTreeNode)                // 获取顶层树节点
-	treeNodeGroup.GET("/listLeafTreeNode", t.ListLeafTreeNodes)           // 获取叶子节点列表
-	treeNodeGroup.POST("/createTreeNode", t.CreateTreeNode)               // 创建树节点
-	treeNodeGroup.DELETE("/deleteTreeNode/:id", t.DeleteTreeNode)         // 删除树节点
-	treeNodeGroup.GET("/getChildrenTreeNode/:pid", t.GetChildrenTreeNode) // 获取子节点列表
-	treeNodeGroup.POST("/updateTreeNode", t.UpdateTreeNode)               // 更新树节点
+		treeGroup.POST("/create", h.CreateNode)
+		treeGroup.POST("/update", h.UpdateNode)
+		treeGroup.POST("/delete/:id", h.DeleteNode)
+
+		treeGroup.POST("/bind_resource", h.BindResource)
+		treeGroup.POST("/unbind_resource", h.UnbindResource)
+
+		treeGroup.POST("/add_admin", h.AddNodeAdmin)
+		treeGroup.POST("/remove_admin", h.RemoveNodeAdmin)
+		treeGroup.POST("/add_member", h.AddNodeMember)
+		treeGroup.POST("/remove_member", h.RemoveNodeMember)
+	}
 }
 
-func (t *TreeNodeHandler) ListTreeNode(ctx *gin.Context) {
-	list, err := t.service.ListTreeNodes(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, "获取树节点列表失败: "+err.Error())
-		return
-	}
-
-	utils.SuccessWithData(ctx, list)
+// GetTree 获取整个服务树
+func (h *TreeHandler) GetTree(ctx *gin.Context) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetTree(ctx)
+	})
 }
 
-func (t *TreeNodeHandler) SelectTreeNode(ctx *gin.Context) {
-	levelStr := ctx.DefaultQuery("level", "0")
-	levelLtStr := ctx.DefaultQuery("levelLt", "0")
-
-	level, err := strconv.Atoi(levelStr)
+// GetNodeDetail 获取节点详情
+func (h *TreeHandler) GetNodeDetail(ctx *gin.Context) {
+	nodeId, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.BadRequestWithDetails(ctx, err.Error(), "level参数必须为有效的整数")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	levelLt, err := strconv.Atoi(levelLtStr)
-	if err != nil {
-		utils.BadRequestWithDetails(ctx, err.Error(), "levelLt参数必须为有效的整数")
-		return
-	}
-
-	nodes, err := t.service.SelectTreeNode(ctx, level, levelLt)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, "查询指定层级的树节点失败: "+err.Error())
-		return
-	}
-
-	utils.SuccessWithData(ctx, nodes)
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetNodeById(ctx, nodeId)
+	})
 }
 
-func (t *TreeNodeHandler) GetTopTreeNode(ctx *gin.Context) {
-	nodes, err := t.service.GetTopTreeNode(ctx)
+// GetChildNodes 获取子节点列表
+func (h *TreeHandler) GetChildNodes(ctx *gin.Context) {
+	parentId, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "获取顶层树节点失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	utils.SuccessWithData(ctx, nodes)
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetChildNodes(ctx, parentId)
+	})
 }
 
-func (t *TreeNodeHandler) ListLeafTreeNodes(ctx *gin.Context) {
-	list, err := t.service.ListLeafTreeNodes(ctx)
+// GetNodePath 获取节点路径
+func (h *TreeHandler) GetNodePath(ctx *gin.Context) {
+	nodeId, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "获取叶子节点列表失败: "+err.Error())
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	utils.SuccessWithData(ctx, list)
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetNodePath(ctx, nodeId)
+	})
 }
 
-func (t *TreeNodeHandler) CreateTreeNode(ctx *gin.Context) {
-	var req model.TreeNode
+// CreateNode 创建节点
+func (h *TreeHandler) CreateNode(ctx *gin.Context) {
+	var req model.CreateNodeReq
 
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查输入的树节点数据是否完整")
-		return
-	}
-
-	if req.Title == "" {
-		utils.BadRequestWithDetails(ctx, "节点名称不能为空", "请提供有效的节点名称")
-		return
-	}
-
-	if err := t.service.CreateTreeNode(ctx, &req); err != nil {
-		utils.ErrorWithMessage(ctx, "创建树节点失败: "+err.Error())
-		return
-	}
-
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.service.CreateNode(ctx, &req)
+	})
 }
 
-func (t *TreeNodeHandler) DeleteTreeNode(ctx *gin.Context) {
-	id := ctx.Param("id")
-	if id == "" {
-		utils.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要删除的树节点ID")
-		return
-	}
+// UpdateNode 更新节点
+func (h *TreeHandler) UpdateNode(ctx *gin.Context) {
+	var req model.UpdateNodeReq
 
-	nodeId, err := strconv.Atoi(id)
-	if err != nil {
-		utils.BadRequestWithDetails(ctx, err.Error(), "节点ID必须为有效的整数")
-		return
-	}
-
-	if err := t.service.DeleteTreeNode(ctx, nodeId); err != nil {
-		utils.ErrorWithMessage(ctx, "删除树节点失败: "+err.Error())
-		return
-	}
-
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.UpdateNode(ctx, &req)
+	})
 }
 
-func (t *TreeNodeHandler) GetChildrenTreeNode(ctx *gin.Context) {
-	pid := ctx.Param("pid")
-	if pid == "" {
-		utils.BadRequestWithDetails(ctx, "父节点ID不能为空", "请提供有效的父节点ID")
-		return
-	}
-
-	parentId, err := strconv.Atoi(pid)
+// DeleteNode 删除节点
+func (h *TreeHandler) DeleteNode(ctx *gin.Context) {
+	nodeId, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.BadRequestWithDetails(ctx, err.Error(), "父节点ID必须为有效的整数")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	list, err := t.service.GetChildrenTreeNodes(ctx, parentId)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, "获取子节点列表失败: "+err.Error())
-		return
-	}
-
-	utils.SuccessWithData(ctx, list)
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, h.service.DeleteNode(ctx, nodeId)
+	})
 }
 
-func (t *TreeNodeHandler) UpdateTreeNode(ctx *gin.Context) {
-	var req model.TreeNode
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestWithDetails(ctx, err.Error(), "请求参数格式错误,请检查更新的树节点数据是否完整")
-		return
-	}
+// BindResource 绑定资源到节点
+func (h *TreeHandler) BindResource(ctx *gin.Context) {
+	var req model.ResourceBindingRequest
 
-	if req.ID == 0 {
-		utils.BadRequestWithDetails(ctx, "节点ID不能为空", "请提供要更新的节点ID")
-		return
-	}
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.BindResource(ctx, &req)
+	})
+}
 
-	if req.Title == "" {
-		utils.BadRequestWithDetails(ctx, "节点名称不能为空", "请提供有效的节点名称")
-		return
-	}
+// UnbindResource 解绑节点资源
+func (h *TreeHandler) UnbindResource(ctx *gin.Context) {
+	var req model.ResourceBindingRequest
 
-	if err := t.service.UpdateTreeNode(ctx, &req); err != nil {
-		utils.ErrorWithMessage(ctx, "更新树节点失败: "+err.Error())
-		return
-	}
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.UnbindResource(ctx, &req)
+	})
+}
 
-	utils.Success(ctx)
+// AddNodeAdmin 添加节点管理员
+func (h *TreeHandler) AddNodeAdmin(ctx *gin.Context) {
+	var req model.NodeAdminReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.AddNodeAdmin(ctx, &req)
+	})
+}
+
+// RemoveNodeAdmin 移除节点管理员
+func (h *TreeHandler) RemoveNodeAdmin(ctx *gin.Context) {
+	var req model.NodeAdminReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.RemoveNodeAdmin(ctx, &req)
+	})
+}
+
+// AddNodeMember 添加节点成员
+func (h *TreeHandler) AddNodeMember(ctx *gin.Context) {
+	var req model.NodeMemberReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.AddNodeMember(ctx, &req)
+	})
+}
+
+// RemoveNodeMember 移除节点成员
+func (h *TreeHandler) RemoveNodeMember(ctx *gin.Context) {
+	var req model.NodeMemberReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.RemoveNodeMember(ctx, &req)
+	})
 }
