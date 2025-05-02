@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="renderer" content="webkit" />
+    <meta name="description" content="A Modern Back-end Management System" />
+    <meta name="keywords" content="Vben Admin Vue3 Vite" />
+    <meta name="author" content="Vben" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=0"
+    />
+    <!-- 由 vite 注入 VITE_APP_TITLE 变量，在 .env 文件内配置 -->
+    <title><%= VITE_APP_TITLE %></title>
+    <link rel="icon" href="/favicon.ico" />
+    <script>
+      // 生产环境下注入百度统计
+      if (window._VBEN_ADMIN_PRO_APP_CONF_) {
+        var _hmt = _hmt || [];
+        (function () {
+          var hm = document.createElement('script');
+          hm.src =
+            'https://hm.baidu.com/hm.js?b38e689f40558f20a9a686d7f6f33edf';
+          var s = document.getElementsByTagName('script')[0];
+          s.parentNode.insertBefore(hm, s);
+        })();
+      }
+    </script>
+    <style>
+      #dify-chatbot-bubble-button {
+        background-color: #1c64f2 !important;
+        border-radius: 50% !important;
+        box-shadow: 0 4px 12px rgba(28, 100, 242, 0.3) !important;
+        transition: all 0.3s ease !important;
+      }
+      #dify-chatbot-bubble-button:hover {
+        transform: scale(1.05) !important;
+        box-shadow: 0 6px 16px rgba(28, 100, 242, 0.4) !important;
+      }
+      #dify-chatbot-bubble-window {
+        width: 24rem !important;
+        height: 40rem !important;
+        border-radius: 20px !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1) !important;
+        overflow: hidden !important;
+        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+      }
+      #dify-chatbot-bubble-window header {
+        border-radius: 20px 20px 0 0 !important;
+      }
+      #dify-chatbot-bubble-window .message-container {
+        padding: 12px !important;
+      }
+      #dify-chatbot-bubble-window .message {
+        border-radius: 24px !important;
+        padding: 10px 14px !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
