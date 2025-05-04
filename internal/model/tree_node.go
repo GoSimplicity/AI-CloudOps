@@ -25,86 +25,199 @@
 
 package model
 
+import (
+	"fmt"
+	"time"
+)
+
 // TreeNode 服务树节点结构
 type TreeNode struct {
 	Model
-	Title       string `json:"title" gorm:"type:varchar(50);comment:节点名称"`       // 节点名称
-	Pid         int    `json:"pId" gorm:"index;comment:父节点ID"`                   // 父节点ID
-	Level       int    `json:"level" gorm:"comment:节点层级"`                        // 节点层级
-	IsLeaf      bool   `json:"isLeaf" gorm:"comment:是否为叶子节点"`                    // 是否为叶子节点
-	Desc        string `json:"desc" gorm:"type:text;comment:节点描述"`               // 节点描述
-	ServiceCode string `json:"serviceCode" gorm:"type:varchar(50);comment:服务代码"` // 服务代码，唯一标识服务
+	Name        string `json:"name" gorm:"type:varchar(50);not null;comment:节点名称"`         // 节点名称
+	ParentID    int    `json:"parentId" gorm:"index;comment:父节点ID"`                        // 父节点ID
+	Path        string `json:"path" gorm:"type:varchar(255);comment:节点路径"`                 // 节点完整路径
+	Level       int    `json:"level" gorm:"comment:节点层级"`                                  // 节点层级
+	Description string `json:"description" gorm:"type:text;comment:节点描述"`                  // 节点描述
+	ServiceCode string `json:"serviceCode" gorm:"type:varchar(50);comment:服务代码"`           // 服务代码，唯一标识服务
+	Creator     string `json:"creator" gorm:"type:varchar(50);comment:创建者"`                // 创建者
+	Status      string `json:"status" gorm:"type:varchar(20);default:active;comment:节点状态"` // 节点状态：active, inactive, deleted
 
-	// 责任团队信息
-	OpsAdmins []*User `json:"ops_admins" gorm:"many2many:tree_node_ops_admins;comment:运维负责人列表"` // 运维负责人
-	RdAdmins  []*User `json:"rd_admins" gorm:"many2many:tree_node_rd_admins;comment:研发负责人列表"`   // 研发负责人
-	RdMembers []*User `json:"rd_members" gorm:"many2many:tree_node_rd_members;comment:研发工程师列表"` // 研发工程师
+	// 关联关系
+	Admins  []*User `json:"admins" gorm:"many2many:tree_node_admins;comment:管理员列表"`  // 管理员列表
+	Members []*User `json:"members" gorm:"many2many:tree_node_members;comment:成员列表"` // 普通成员列表
+
+	// 资源统计
+	ChildCount    int `json:"childCount" gorm:"-"`    // 子节点数量
+	ResourceCount int `json:"resourceCount" gorm:"-"` // 关联资源数量
 
 	// 前端展示相关，不存储在数据库
-	Key           string      `json:"key" gorm:"-"`             // 节点唯一标识
-	Label         string      `json:"label" gorm:"-"`           // 节点显示名称
-	Value         int         `json:"value" gorm:"-"`           // 节点值
-	OpsAdminUsers StringList  `json:"ops_admin_users" gorm:"-"` // 运维负责人姓名列表
-	RdAdminUsers  StringList  `json:"rd_admin_users" gorm:"-"`  // 研发负责人姓名列表
-	RdMemberUsers StringList  `json:"rd_member_users" gorm:"-"` // 研发工程师姓名列表
-	Children      []*TreeNode `json:"children" gorm:"-"`        // 子节点列表
+	Key         string      `json:"key" gorm:"-"`         // 节点唯一标识
+	Title       string      `json:"title" gorm:"-"`       // 节点显示名称
+	ParentName  string      `json:"parentName" gorm:"-"`  // 父节点名称
+	AdminUsers  StringList  `json:"adminUsers" gorm:"-"`  // 管理员用户名列表
+	MemberUsers StringList  `json:"memberUsers" gorm:"-"` // 成员用户名列表
+	Children    []*TreeNode `json:"children" gorm:"-"`    // 子节点列表
+	CreateTime  string      `json:"createTime" gorm:"-"`  // 创建时间格式化
+	UpdateTime  string      `json:"updateTime" gorm:"-"`  // 更新时间格式化
+	IsLeaf      bool        `json:"isLeaf" gorm:"-"`      // 是否为叶子节点
 }
 
-// CreateNodeReq 创建节点请求
-type CreateNodeReq struct {
-	Title       string `json:"title" binding:"required"`
-	Pid         int    `json:"pId" binding:"required"`
-	Desc        string `json:"desc"`
+// TableName 设置表名
+func (TreeNode) TableName() string {
+	return "tree_nodes"
+}
+
+// BeforeSave 保存前的钩子
+func (t *TreeNode) BeforeSave() error {
+	// 生成节点路径
+	t.Path = generateNodePath(t.ParentID, t.Name)
+
+	// 设置节点层级
+	if t.ParentID == 0 {
+		t.Level = 1
+	} else {
+		// 这里假设父节点已经存在，实际实现中需要查询父节点
+		t.Level = t.Level + 1
+	}
+
+	return nil
+}
+
+// AfterFind 查询后的钩子
+func (t *TreeNode) AfterFind() error {
+	// 设置前端展示字段
+	t.Key = fmt.Sprintf("node-%d", t.ID)
+	t.Title = t.Name
+	t.CreateTime = t.CreatedAt.Format("2006-01-02 15:04:05")
+	t.UpdateTime = t.UpdatedAt.Format("2006-01-02 15:04:05")
+	return nil
+}
+
+// generateNodePath 生成节点路径
+func generateNodePath(parentID int, name string) string {
+	if parentID == 0 {
+		return "/" + name
+	}
+	// 实际实现中应该查询父节点的路径，然后拼接
+	return fmt.Sprintf("/%d/%s", parentID, name)
+}
+
+// TreeNodeCreateReq 创建节点请求
+type TreeNodeCreateReq struct {
+	Name        string `json:"name" binding:"required"`
+	ParentID    int    `json:"parentId"`
+	Description string `json:"description"`
 	ServiceCode string `json:"serviceCode"`
-	OpsAdminIds []uint `json:"opsAdminIds"`
-	RdAdminIds  []uint `json:"rdAdminIds"`
-	RdMemberIds []uint `json:"rdMemberIds"`
+	AdminIDs    []int  `json:"adminIds"`
+	MemberIDs   []int  `json:"memberIds"`
+	Status      string `json:"status" binding:"omitempty,oneof=active inactive"`
 }
 
-// UpdateNodeReq 更新节点请求
-type UpdateNodeReq struct {
-	ID          uint   `json:"id" binding:"required"`
-	Title       string `json:"title"`
-	Desc        string `json:"desc"`
+// TreeNodeUpdateReq 更新节点请求
+type TreeNodeUpdateReq struct {
+	ID          int    `json:"id" binding:"required"`
+	Name        string `json:"name" binding:"omitempty,min=1,max=50"`
+	Description string `json:"description"`
 	ServiceCode string `json:"serviceCode"`
-	OpsAdminIds []uint `json:"opsAdminIds"`
-	RdAdminIds  []uint `json:"rdAdminIds"`
-	RdMemberIds []uint `json:"rdMemberIds"`
+	AdminIDs    []int  `json:"adminIds"`
+	MemberIDs   []int  `json:"memberIds"`
+	Status      string `json:"status" binding:"omitempty,oneof=active inactive deleted"`
 }
 
-// NodeAdminReq 节点管理员请求
-type NodeAdminReq struct {
-	NodeId    uint   `json:"nodeId" binding:"required"`
-	UserId    uint   `json:"userId" binding:"required"`
-	AdminType string `json:"adminType" binding:"required,oneof=ops rd"`
+// TreeNodeMemberReq 节点成员请求
+type TreeNodeMemberReq struct {
+	NodeID int    `json:"nodeId" binding:"required"`
+	UserID int    `json:"userId" binding:"required"`
+	Type   string `json:"type" binding:"required,oneof=admin member"` // admin 或 member
 }
 
-// NodeMemberReq 节点成员请求
-type NodeMemberReq struct {
-	NodeId uint `json:"nodeId" binding:"required"`
-	UserId uint `json:"userId" binding:"required"`
+// TreeNodeResourceBindReq 资源绑定请求
+type TreeNodeResourceBindReq struct {
+	NodeID       int      `json:"nodeId" binding:"required"`
+	ResourceType string   `json:"resourceType" binding:"required"`
+	ResourceIDs  []string `json:"resourceIds" binding:"required"`
+}
+
+// TreeNodeResourceUnbindReq 资源解绑请求
+type TreeNodeResourceUnbindReq struct {
+	NodeID       int    `json:"nodeId" binding:"required"`
+	ResourceID   string `json:"resourceId" binding:"required"`
+	ResourceType string `json:"resourceType" binding:"required"`
 }
 
 // TreeNodeResp 服务树节点响应
 type TreeNodeResp struct {
-	TreeNode
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	ParentID    int       `json:"parentId"`
+	Path        string    `json:"path"`
+	Level       int       `json:"level"`
+	Description string    `json:"description"`
+	ServiceCode string    `json:"serviceCode"`
+	Creator     string    `json:"creator"`
+	Status      string    `json:"status"`
+	Key         string    `json:"key"`
+	Title       string    `json:"title"`
+	ParentName  string    `json:"parentName"`
+	ChildCount  int       `json:"childCount"`
+	CreateTime  string    `json:"createTime"`
+	UpdateTime  string    `json:"updateTime"`
+	CreatedAt   time.Time `json:"-"`
+	UpdatedAt   time.Time `json:"-"`
+}
+
+// TreeNodeDetailReq 服务树节点详情请求
+type TreeNodeDetailReq struct {
 }
 
 // TreeNodeDetailResp 服务树节点详情响应
 type TreeNodeDetailResp struct {
-	TreeNode
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
+	TreeNodeResp
+	AdminUsers    StringList `json:"adminUsers"`
+	MemberUsers   StringList `json:"memberUsers"`
+	ResourceCount int        `json:"resourceCount"`
 }
 
-// NodePathResp 节点路径响应
-type NodePathResp struct {
-	Path []*TreeNodeResp `json:"path"`
+// TreeNodePathReq 节点路径请求
+type TreeNodePathReq struct {
 }
 
-// TreeNodePathResp 服务树节点路径响应
+// TreeNodePathResp 节点路径响应
 type TreeNodePathResp struct {
-	Path []*TreeNodeResp `json:"path"`
+	Path  []*TreeNodeResp `json:"path"`
+	Total int             `json:"total"`
+}
+
+// TreeStatisticsResp 服务树统计响应
+type TreeStatisticsResp struct {
+	TotalNodes     int `json:"totalNodes"`     // 节点总数
+	TotalResources int `json:"totalResources"` // 资源总数
+	TotalMembers   int `json:"totalMembers"`   // 成员总数
+	ActiveNodes    int `json:"activeNodes"`    // 活跃节点数
+	InactiveNodes  int `json:"inactiveNodes"`  // 非活跃节点数
+}
+
+type TreeNodeResourceResp struct {
+	ID                 int    `json:"id"`                 // 资源ID
+	ResourceID         string `json:"resourceId"`         // 资源ID
+	ResourceType       string `json:"resourceType"`       // 资源类型
+	ResourceName       string `json:"resourceName"`       // 资源名称
+	ResourceStatus     string `json:"resourceStatus"`     // 资源状态
+	ResourceCreateTime string `json:"resourceCreateTime"` // 资源创建时间
+	ResourceUpdateTime string `json:"resourceUpdateTime"` // 资源更新时间
+	ResourceDeleteTime string `json:"resourceDeleteTime"` // 资源删除时间
+}
+
+// TreeNodeListReq 服务树节点列表请求
+type TreeNodeListReq struct {
+	ParentID int `json:"parentId"`
+	Level    int `json:"level"`
+}
+
+// TreeNodeDeleteReq 服务树节点删除请求
+type TreeNodeDeleteReq struct {
+}
+
+// TreeNodeResourceReq 服务树节点资源请求
+type TreeNodeResourceReq struct {
 }

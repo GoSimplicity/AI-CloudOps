@@ -27,6 +27,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
@@ -34,26 +35,31 @@ import (
 )
 
 type TreeService interface {
-	// 树结构操作
-	GetTree(ctx context.Context) ([]model.TreeNodeResp, error)
-	GetNodeById(ctx context.Context, id int) (*model.TreeNodeDetailResp, error)
-	GetChildNodes(ctx context.Context, parentId int) ([]model.TreeNodeResp, error)
-	GetNodePath(ctx context.Context, nodeId int) ([]model.TreeNodePathResp, error)
+	// 树结构相关接口
+	GetTreeList(ctx context.Context, req *model.TreeNodeListReq) ([]*model.TreeNode, error)
+	GetNodeDetail(ctx context.Context, id int) (*model.TreeNodeDetailResp, error)
+	GetChildNodes(ctx context.Context, parentId int) ([]*model.TreeNodeResp, error)
+	GetNodePath(ctx context.Context, nodeId int) (*model.TreeNodePathResp, error)
+	GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsResp, error)
 
-	// 节点管理
-	CreateNode(ctx context.Context, req *model.CreateNodeReq) (*model.TreeNodeResp, error)
-	UpdateNode(ctx context.Context, req *model.UpdateNodeReq) error
+	// 节点管理接口
+	CreateNode(ctx context.Context, node *model.TreeNodeCreateReq) (*model.TreeNodeResp, error)
+	CreateChildNode(ctx context.Context, parentId int, node *model.TreeNodeCreateReq) (*model.TreeNodeResp, error)
+	UpdateNode(ctx context.Context, node *model.TreeNodeUpdateReq) error
 	DeleteNode(ctx context.Context, id int) error
 
-	// 资源绑定
-	BindResource(ctx context.Context, req *model.ResourceBindingRequest) error
-	UnbindResource(ctx context.Context, req *model.ResourceBindingRequest) error
+	// 资源绑定接口
+	GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResourceResp, error)
+	BindResource(ctx context.Context, req *model.TreeNodeResourceBindReq) error
+	UnbindResource(ctx context.Context, req *model.TreeNodeResourceUnbindReq) error
+	GetResourceTypes(ctx context.Context) ([]string, error)
 
-	// 成员管理
-	AddNodeAdmin(ctx context.Context, req *model.NodeAdminReq) error
-	RemoveNodeAdmin(ctx context.Context, req *model.NodeAdminReq) error
-	AddNodeMember(ctx context.Context, req *model.NodeMemberReq) error
-	RemoveNodeMember(ctx context.Context, req *model.NodeMemberReq) error
+	// 成员管理接口
+	GetNodeMembers(ctx context.Context, req *model.TreeNodeMemberReq) ([]*model.User, error)
+	AddNodeMember(ctx context.Context, req *model.TreeNodeMemberReq) error
+	RemoveNodeMember(ctx context.Context, nodeId int, userId int) error
+	AddNodeAdmin(ctx context.Context, nodeId int, userId int) error
+	RemoveNodeAdmin(ctx context.Context, nodeId int, userId int) error
 }
 
 type treeService struct {
@@ -68,67 +74,272 @@ func NewTreeService(logger *zap.Logger, dao dao.TreeDAO) TreeService {
 	}
 }
 
-// AddNodeAdmin implements TreeService.
-func (t *treeService) AddNodeAdmin(ctx context.Context, req *model.NodeAdminReq) error {
-	panic("unimplemented")
+// AddNodeAdmin 添加节点管理员
+func (t *treeService) AddNodeAdmin(ctx context.Context, nodeId int, userId int) error {
+	t.logger.Info("添加节点管理员", zap.Int("nodeId", nodeId), zap.Int("userId", userId))
+	return t.dao.AddNodeMember(ctx, nodeId, userId, "admin")
 }
 
-// AddNodeMember implements TreeService.
-func (t *treeService) AddNodeMember(ctx context.Context, req *model.NodeMemberReq) error {
-	panic("unimplemented")
+// AddNodeMember 添加节点成员
+func (t *treeService) AddNodeMember(ctx context.Context, req *model.TreeNodeMemberReq) error {
+	t.logger.Info("添加节点成员", zap.Int("nodeId", req.NodeID), zap.Int("userId", req.UserID))
+	return t.dao.AddNodeMember(ctx, req.NodeID, req.UserID, "member")
 }
 
-// BindResource implements TreeService.
-func (t *treeService) BindResource(ctx context.Context, req *model.ResourceBindingRequest) error {
-	panic("unimplemented")
+// BindResource 绑定资源到节点
+func (t *treeService) BindResource(ctx context.Context, req *model.TreeNodeResourceBindReq) error {
+	t.logger.Info("绑定资源到节点", zap.Int("nodeId", req.NodeID), zap.String("resourceType", req.ResourceType))
+	return t.dao.BindResource(ctx, req.NodeID, req.ResourceType, req.ResourceIDs)
 }
 
-// CreateNode implements TreeService.
-func (t *treeService) CreateNode(ctx context.Context, req *model.CreateNodeReq) (*model.TreeNodeResp, error) {
-	panic("unimplemented")
+// CreateChildNode 创建子节点
+func (t *treeService) CreateChildNode(ctx context.Context, parentId int, req *model.TreeNodeCreateReq) (*model.TreeNodeResp, error) {
+	t.logger.Info("创建子节点", zap.Int("parentId", parentId), zap.String("name", req.Name))
+
+	// 获取父节点信息以确定子节点的层级
+	parentNode, err := t.dao.GetNodeDetail(ctx, parentId)
+	if err != nil {
+		t.logger.Error("获取父节点失败", zap.Int("parentId", parentId), zap.Error(err))
+		return nil, err
+	}
+
+	// 创建节点实体
+	node := &model.TreeNode{
+		Name:        req.Name,
+		Description: req.Description,
+		ParentID:    parentId,
+		Level:       parentNode.Level + 1,
+		Status:      "active",
+		Model: model.Model{
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+	}
+
+	// 调用DAO创建节点
+	if err := t.dao.CreateNode(ctx, node); err != nil {
+		t.logger.Error("创建子节点失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 返回创建的节点信息
+	return &model.TreeNodeResp{
+		ID:          int(node.ID),
+		Name:        node.Name,
+		Description: node.Description,
+		ParentID:    node.ParentID,
+		ParentName:  parentNode.Name,
+		Level:       node.Level,
+		Status:      node.Status,
+		CreatedAt:   node.CreatedAt,
+		UpdatedAt:   node.UpdatedAt,
+	}, nil
 }
 
-// DeleteNode implements TreeService.
+// CreateNode 创建根节点
+func (t *treeService) CreateNode(ctx context.Context, req *model.TreeNodeCreateReq) (*model.TreeNodeResp, error) {
+	t.logger.Info("创建根节点", zap.String("name", req.Name))
+
+	// 创建节点实体
+	node := &model.TreeNode{
+		Name:        req.Name,
+		Description: req.Description,
+		ParentID:    0, // 根节点
+		Level:       1, // 第一层
+		Status:      "active",
+		Model: model.Model{
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
+	}
+
+	// 调用DAO创建节点
+	if err := t.dao.CreateNode(ctx, node); err != nil {
+		t.logger.Error("创建根节点失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 返回创建的节点信息
+	return &model.TreeNodeResp{
+		ID:          int(node.ID),
+		Name:        node.Name,
+		Description: node.Description,
+		ParentID:    node.ParentID,
+		Level:       node.Level,
+		Status:      node.Status,
+		CreatedAt:   node.CreatedAt,
+		UpdatedAt:   node.UpdatedAt,
+	}, nil
+}
+
+// DeleteNode 删除节点
 func (t *treeService) DeleteNode(ctx context.Context, id int) error {
-	panic("unimplemented")
+	t.logger.Info("删除节点", zap.Int("id", id))
+	return t.dao.DeleteNode(ctx, id)
 }
 
-// GetChildNodes implements TreeService.
-func (t *treeService) GetChildNodes(ctx context.Context, parentId int) ([]model.TreeNodeResp, error) {
-	panic("unimplemented")
+// GetChildNodes 获取子节点列表
+func (t *treeService) GetChildNodes(ctx context.Context, parentId int) ([]*model.TreeNodeResp, error) {
+	t.logger.Info("获取子节点列表", zap.Int("parentId", parentId))
+
+	// 调用DAO获取子节点
+	nodes, err := t.dao.GetChildNodes(ctx, parentId)
+	if err != nil {
+		t.logger.Error("获取子节点失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 转换为响应格式
+	result := make([]*model.TreeNodeResp, 0, len(nodes))
+	for _, node := range nodes {
+		result = append(result, &model.TreeNodeResp{
+			ID:          int(node.ID),
+			Name:        node.Name,
+			Description: node.Description,
+			ParentID:    node.ParentID,
+			ParentName:  node.ParentName,
+			Level:       node.Level,
+			Status:      node.Status,
+			ChildCount:  node.ChildCount,
+			CreatedAt:   node.CreatedAt,
+			UpdatedAt:   node.UpdatedAt,
+		})
+	}
+
+	return result, nil
 }
 
-// GetNodeById implements TreeService.
-func (t *treeService) GetNodeById(ctx context.Context, id int) (*model.TreeNodeDetailResp, error) {
-	panic("unimplemented")
+// GetNodeDetail 获取节点详情
+func (t *treeService) GetNodeDetail(ctx context.Context, id int) (*model.TreeNodeDetailResp, error) {
+	t.logger.Info("获取节点详情", zap.Int("id", id))
+
+	// 调用DAO获取节点详情
+	node, err := t.dao.GetNodeDetail(ctx, id)
+	if err != nil {
+		t.logger.Error("获取节点详情失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 提取管理员和成员用户名
+	adminUsers := model.StringList{}
+	memberUsers := model.StringList{}
+
+	for _, admin := range node.Admins {
+		adminUsers = append(adminUsers, admin.Username)
+	}
+
+	for _, member := range node.Members {
+		memberUsers = append(memberUsers, member.Username)
+	}
+
+	// 转换为响应格式
+	return &model.TreeNodeDetailResp{
+		TreeNodeResp: model.TreeNodeResp{
+			ID:          int(node.ID),
+			Name:        node.Name,
+			Description: node.Description,
+			ParentID:    node.ParentID,
+			ParentName:  node.ParentName,
+			Level:       node.Level,
+			Status:      node.Status,
+			ChildCount:  node.ChildCount,
+			CreatedAt:   node.CreatedAt,
+			UpdatedAt:   node.UpdatedAt,
+		},
+		AdminUsers:    adminUsers,
+		MemberUsers:   memberUsers,
+		ResourceCount: node.ResourceCount,
+	}, nil
 }
 
-// GetNodePath implements TreeService.
-func (t *treeService) GetNodePath(ctx context.Context, nodeId int) ([]model.TreeNodePathResp, error) {
-	panic("unimplemented")
+// GetNodeMembers 获取节点成员列表
+func (t *treeService) GetNodeMembers(ctx context.Context, req *model.TreeNodeMemberReq) ([]*model.User, error) {
+	t.logger.Info("获取节点成员列表", zap.Int("nodeId", req.NodeID), zap.Int("userId", req.UserID))
+	return t.dao.GetNodeMembers(ctx, req.NodeID, req.UserID, req.Type)
 }
 
-// GetTree implements TreeService.
-func (t *treeService) GetTree(ctx context.Context) ([]model.TreeNodeResp, error) {
-	panic("unimplemented")
+// GetNodePath 获取节点路径
+func (t *treeService) GetNodePath(ctx context.Context, nodeId int) (*model.TreeNodePathResp, error) {
+	t.logger.Info("获取节点路径", zap.Int("nodeId", nodeId))
+
+	// 调用DAO获取节点路径
+	path, err := t.dao.GetNodePath(ctx, nodeId)
+	if err != nil {
+		t.logger.Error("获取节点路径失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 转换为响应格式
+	nodes := make([]*model.TreeNodeResp, 0, len(path))
+	for _, node := range path {
+		nodes = append(nodes, &model.TreeNodeResp{
+			ID:   int(node.ID),
+			Name: node.Name,
+		})
+	}
+
+	return &model.TreeNodePathResp{
+		Path:  nodes,
+		Total: len(nodes),
+	}, nil
 }
 
-// RemoveNodeAdmin implements TreeService.
-func (t *treeService) RemoveNodeAdmin(ctx context.Context, req *model.NodeAdminReq) error {
-	panic("unimplemented")
+// GetNodeResources 获取节点资源列表
+func (t *treeService) GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResourceResp, error) {
+	t.logger.Info("获取节点资源列表", zap.Int("nodeId", nodeId))
+	return t.dao.GetNodeResources(ctx, nodeId)
 }
 
-// RemoveNodeMember implements TreeService.
-func (t *treeService) RemoveNodeMember(ctx context.Context, req *model.NodeMemberReq) error {
-	panic("unimplemented")
+// GetResourceTypes 获取资源类型列表
+func (t *treeService) GetResourceTypes(ctx context.Context) ([]string, error) {
+	t.logger.Info("获取资源类型列表")
+	return t.dao.GetResourceTypes(ctx)
 }
 
-// UnbindResource implements TreeService.
-func (t *treeService) UnbindResource(ctx context.Context, req *model.ResourceBindingRequest) error {
-	panic("unimplemented")
+// GetTreeList 获取树节点列表
+func (t *treeService) GetTreeList(ctx context.Context, req *model.TreeNodeListReq) ([]*model.TreeNode, error) {
+	t.logger.Info("获取树节点列表", zap.Any("req", req))
+	return t.dao.GetTreeList(ctx, req)
 }
 
-// UpdateNode implements TreeService.
-func (t *treeService) UpdateNode(ctx context.Context, req *model.UpdateNodeReq) error {
-	panic("unimplemented")
+// GetTreeStatistics 获取树统计信息
+func (t *treeService) GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsResp, error) {
+	t.logger.Info("获取树统计信息")
+	return t.dao.GetTreeStatistics(ctx)
+}
+
+// RemoveNodeAdmin 移除节点管理员
+func (t *treeService) RemoveNodeAdmin(ctx context.Context, nodeId int, userId int) error {
+	t.logger.Info("移除节点管理员", zap.Int("nodeId", nodeId), zap.Int("userId", userId))
+	return t.dao.RemoveNodeMember(ctx, nodeId, userId, "admin")
+}
+
+// RemoveNodeMember 移除节点成员
+func (t *treeService) RemoveNodeMember(ctx context.Context, nodeId int, userId int) error {
+	t.logger.Info("移除节点成员", zap.Int("nodeId", nodeId), zap.Int("userId", userId))
+	return t.dao.RemoveNodeMember(ctx, nodeId, userId, "member")
+}
+
+// UnbindResource 解绑资源
+func (t *treeService) UnbindResource(ctx context.Context, req *model.TreeNodeResourceUnbindReq) error {
+	t.logger.Info("解绑资源", zap.Int("nodeId", req.NodeID), zap.String("resourceType", req.ResourceType), zap.String("resourceId", req.ResourceID))
+	return t.dao.UnbindResource(ctx, req.NodeID, req.ResourceType, req.ResourceID)
+}
+
+// UpdateNode 更新节点
+func (t *treeService) UpdateNode(ctx context.Context, req *model.TreeNodeUpdateReq) error {
+	t.logger.Info("更新节点", zap.Int("id", req.ID), zap.String("name", req.Name))
+
+	// 创建更新实体
+	node := &model.TreeNode{
+		Name:        req.Name,
+		Description: req.Description,
+		Status:      req.Status,
+		Model: model.Model{
+			ID:        req.ID,
+			UpdatedAt: time.Now(),
+		},
+	}
+
+	return t.dao.UpdateNode(ctx, node)
 }

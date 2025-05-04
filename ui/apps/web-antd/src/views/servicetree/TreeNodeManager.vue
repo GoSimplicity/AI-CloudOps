@@ -345,7 +345,7 @@ const addMemberModalVisible = ref(false);
 const resourceDetailModalVisible = ref(false);
 
 // 节点表单状态
-const nodeFormRef = ref(null);
+const nodeFormRef = ref<any>(null);
 const nodeForm = reactive({
   id: 0,
   name: '',
@@ -716,7 +716,7 @@ const parentNodeOptions = computed(() => {
 // 获取当前选中的节点
 const selectedNode = computed(() => {
   if (selectedKeys.value.length > 0 && typeof selectedKeys.value[0] === 'string' && selectedKeys.value[0] in nodesDetails) {
-    return nodesDetails[selectedKeys.value[0]];
+    return nodesDetails[selectedKeys.value[0] as keyof typeof nodesDetails];
   }
   return null;
 });
@@ -862,7 +862,7 @@ const showEditNodeModal = (nodeKey: string) => {
   currentParentKey.value = '';
 
   if (nodeKey in nodesDetails) {
-    const nodeDetail = nodesDetails[nodeKey];
+    const nodeDetail = nodesDetails[nodeKey as keyof typeof nodesDetails];
     if (nodeDetail) {
       nodeForm.id = nodeDetail.id;
       nodeForm.name = nodeDetail.name;
@@ -879,7 +879,7 @@ const confirmDeleteNode = (nodeKey: string) => {
     return;
   }
 
-  const nodeDetail = nodesDetails[nodeKey];
+  const nodeDetail = nodesDetails[nodeKey as keyof typeof nodesDetails];
 
   if (!nodeDetail) {
     message.error('未找到节点信息');
