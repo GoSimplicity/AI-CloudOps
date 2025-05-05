@@ -1,3 +1,28 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package service
 
 import (
@@ -41,16 +66,16 @@ func (a *aiService) SendChatMessage(ctx context.Context, message model.ChatMessa
 	if cm == nil {
 		return nil, fmt.Errorf("创建聊天模型失败")
 	}
-	
+
 	// 根据消息内容创建模板消息
 	messages := a.createMessagesFromRequest(message)
-	
+
 	// 获取流式响应
 	streamResult := a.stream(ctx, cm, messages)
 	if streamResult == nil {
 		return nil, fmt.Errorf("获取流式响应失败")
 	}
-	
+
 	// 处理流式响应
 	content, err := a.reportStream(streamResult)
 	if err != nil {
@@ -66,7 +91,7 @@ func (a *aiService) SendChatMessage(ctx context.Context, message model.ChatMessa
 // StreamChatMessage 流式发送聊天消息，结果通过channel返回
 func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMessage, responseChan chan<- model.StreamResponse) error {
 	defer close(responseChan)
-	
+
 	// 创建带超时的上下文
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -76,16 +101,16 @@ func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMes
 	if cm == nil {
 		return fmt.Errorf("创建聊天模型失败")
 	}
-	
+
 	// 根据消息内容创建模板消息
 	messages := a.createMessagesFromRequest(message)
-	
+
 	// 获取流式响应
 	streamResult := a.stream(ctx, cm, messages)
 	if streamResult == nil {
 		return fmt.Errorf("获取流式响应失败")
 	}
-	
+
 	defer streamResult.Close()
 
 	// 逐个处理流式响应并发送到channel
@@ -106,19 +131,19 @@ func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMes
 			}
 			return err
 		}
-		
+
 		responseChan <- model.StreamResponse{
 			Content: message.Content,
 			Done:    false,
 		}
 	}
-	
+
 	// 发送完成信号
 	responseChan <- model.StreamResponse{
 		Content: "",
 		Done:    true,
 	}
-	
+
 	return nil
 }
 
@@ -200,7 +225,7 @@ func (a *aiService) reportStream(sr *schema.StreamReader[*schema.Message]) (stri
 	if sr == nil {
 		return "", fmt.Errorf("流式响应为空")
 	}
-	
+
 	defer sr.Close()
 
 	var content string

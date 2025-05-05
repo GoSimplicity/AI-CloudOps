@@ -35,6 +35,10 @@ import (
 	"gorm.io/gorm"
 )
 
+type contextKey string
+
+const txKey contextKey = "transaction"
+
 type TreeDAO interface {
 	// 树结构相关接口
 	GetTreeList(ctx context.Context, req *model.TreeNodeListReq) ([]*model.TreeNode, error)
@@ -42,11 +46,13 @@ type TreeDAO interface {
 	GetChildNodes(ctx context.Context, parentId int) ([]*model.TreeNode, error)
 	GetNodePath(ctx context.Context, nodeId int) ([]*model.TreeNode, error)
 	GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsResp, error)
+	GetNodeLevel(ctx context.Context, nodeId int) (int, error)
 
 	// 节点管理接口
 	CreateNode(ctx context.Context, node *model.TreeNode) error
 	UpdateNode(ctx context.Context, node *model.TreeNode) error
 	DeleteNode(ctx context.Context, id int) error
+	UpdateNodePath(ctx context.Context, nodeId int, path string) error
 
 	// 资源绑定接口
 	GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResourceResp, error)
@@ -58,6 +64,8 @@ type TreeDAO interface {
 	GetNodeMembers(ctx context.Context, nodeId int, userId int, memberType string) ([]*model.User, error)
 	AddNodeMember(ctx context.Context, nodeId int, userId int, memberType string) error
 	RemoveNodeMember(ctx context.Context, nodeId int, userId int, memberType string) error
+
+	Transaction(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 type treeDAO struct {
@@ -286,7 +294,7 @@ func (t *treeDAO) DeleteNode(ctx context.Context, id int) error {
 // GetChildNodes 获取子节点列表
 func (t *treeDAO) GetChildNodes(ctx context.Context, parentId int) ([]*model.TreeNode, error) {
 	var nodes []*model.TreeNode
-	if err := t.db.Where("parent_id = ?", parentId).Find(&nodes).Error; err != nil {
+	if err := t.db.WithContext(ctx).Where("parent_id = ?", parentId).Find(&nodes).Error; err != nil {
 		t.logger.Error("获取子节点失败", zap.Int("parentId", parentId), zap.Error(err))
 		return nil, err
 	}
@@ -298,34 +306,40 @@ func (t *treeDAO) GetChildNodes(ctx context.Context, parentId int) ([]*model.Tre
 			nodeIds = append(nodeIds, int(node.ID))
 		}
 
-		// 获取子节点数
-		childCounts := make(map[int]int)
-		rows, err := t.db.Raw(`
-			 SELECT parent_id, COUNT(*) as count 
-			 FROM tree_nodes 
-			 WHERE parent_id IN (?)
-			 GROUP BY parent_id
-		 `, nodeIds).Rows()
-
-		if err != nil {
-			t.logger.Error("获取子节点数量失败", zap.Error(err))
-			return nil, err
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var parentID int
-			var count int
-			if err := rows.Scan(&parentID, &count); err != nil {
-				t.logger.Error("扫描子节点数量失败", zap.Error(err))
-				return nil, err
+		// 获取父节点的路径，用于构建子节点路径前缀
+		var parentNode model.TreeNode
+		parentPath := ""
+		if parentId > 0 {
+			if err := t.db.WithContext(ctx).Select("path").First(&parentNode, parentId).Error; err == nil {
+				parentPath = parentNode.Path
+			} else {
+				t.logger.Warn("获取父节点路径失败", zap.Int("parentId", parentId), zap.Error(err))
 			}
-			childCounts[parentID] = count
+		}
+
+		// 获取子节点数 - 使用路径前缀优化查询
+		childCounts := make(map[int]int)
+		for _, node := range nodes {
+			// 构建子节点路径
+			nodePath := fmt.Sprintf("%s/%d", parentPath, node.ID)
+			if parentPath == "" {
+				nodePath = fmt.Sprintf("/%d", node.ID)
+			}
+
+			// 使用LIKE查询获取直接子节点数量
+			var count int64
+			pathPattern := nodePath + "/%"
+			// 不包括更深层级的节点，只计算直接子节点
+			if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("path LIKE ? AND path NOT LIKE ?", pathPattern, pathPattern+"/%").Count(&count).Error; err != nil {
+				t.logger.Error("获取子节点数量失败", zap.Int("nodeId", int(node.ID)), zap.Error(err))
+				continue
+			}
+			childCounts[int(node.ID)] = int(count)
 		}
 
 		// 获取资源数
 		resourceCounts := make(map[int]int)
-		rows, err = t.db.Raw(`
+		rows, err := t.db.WithContext(ctx).Raw(`
 			 SELECT tree_node_id, COUNT(*) as count 
 			 FROM tree_node_resources 
 			 WHERE tree_node_id IN (?)
@@ -847,6 +861,43 @@ func (t *treeDAO) UpdateNode(ctx context.Context, node *model.TreeNode) error {
 
 	if err := t.db.Model(&model.TreeNode{}).Where("id = ?", node.ID).Updates(updateMap).Error; err != nil {
 		t.logger.Error("更新节点失败", zap.Int("id", int(node.ID)), zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// GetNodeLevel 获取节点层级
+func (t *treeDAO) GetNodeLevel(ctx context.Context, nodeId int) (int, error) {
+	var node model.TreeNode
+	if err := t.db.WithContext(ctx).Where("id = ?", nodeId).First(&node).Error; err != nil {
+		t.logger.Error("节点不存在", zap.Int("id", nodeId), zap.Error(err))
+		return 0, err
+	}
+
+	return node.Level, nil
+}
+
+// Transaction 暴露给service层使用
+func (t *treeDAO) Transaction(ctx context.Context, fn func(ctx context.Context) error) error {
+	err := t.db.Transaction(func(tx *gorm.DB) error {
+		txCtx := context.WithValue(ctx, txKey, tx)
+
+		err := fn(txCtx)
+		if err != nil {
+			t.logger.Error("事务执行失败", zap.Error(err))
+			return err
+		}
+		return nil
+	})
+
+	return err
+}
+
+// UpdateNodePath 更新节点路径
+func (t *treeDAO) UpdateNodePath(ctx context.Context, nodeId int, path string) error {
+	if err := t.db.Model(&model.TreeNode{}).Where("id = ?", nodeId).Update("path", path).Error; err != nil {
+		t.logger.Error("更新节点路径失败", zap.Int("nodeId", nodeId), zap.String("path", path), zap.Error(err))
 		return err
 	}
 

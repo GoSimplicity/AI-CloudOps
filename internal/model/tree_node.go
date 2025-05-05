@@ -57,8 +57,6 @@ type TreeNode struct {
 	AdminUsers  StringList  `json:"adminUsers" gorm:"-"`  // 管理员用户名列表
 	MemberUsers StringList  `json:"memberUsers" gorm:"-"` // 成员用户名列表
 	Children    []*TreeNode `json:"children" gorm:"-"`    // 子节点列表
-	CreateTime  string      `json:"createTime" gorm:"-"`  // 创建时间格式化
-	UpdateTime  string      `json:"updateTime" gorm:"-"`  // 更新时间格式化
 	IsLeaf      bool        `json:"isLeaf" gorm:"-"`      // 是否为叶子节点
 }
 
@@ -69,17 +67,10 @@ func (TreeNode) TableName() string {
 
 // BeforeSave 保存前的钩子
 func (t *TreeNode) BeforeSave() error {
-	// 生成节点路径
-	t.Path = generateNodePath(t.ParentID, t.Name)
-
-	// 设置节点层级
-	if t.ParentID == 0 {
-		t.Level = 1
-	} else {
-		// 这里假设父节点已经存在，实际实现中需要查询父节点
-		t.Level = t.Level + 1
+	// 基本验证
+	if t.Name == "" {
+		return fmt.Errorf("节点名称不能为空")
 	}
-
 	return nil
 }
 
@@ -88,18 +79,26 @@ func (t *TreeNode) AfterFind() error {
 	// 设置前端展示字段
 	t.Key = fmt.Sprintf("node-%d", t.ID)
 	t.Title = t.Name
-	t.CreateTime = t.CreatedAt.Format("2006-01-02 15:04:05")
-	t.UpdateTime = t.UpdatedAt.Format("2006-01-02 15:04:05")
-	return nil
-}
+	// 如果子节点数量为-1，则表示该节点为叶子节点
+	t.IsLeaf = t.ChildCount == -1
 
-// generateNodePath 生成节点路径
-func generateNodePath(parentID int, name string) string {
-	if parentID == 0 {
-		return "/" + name
+	// 如果管理员列表不为空，设置管理员用户名列表
+	if len(t.Admins) > 0 {
+		t.AdminUsers = make(StringList, 0, len(t.Admins))
+		for _, admin := range t.Admins {
+			t.AdminUsers = append(t.AdminUsers, admin.Username)
+		}
 	}
-	// 实际实现中应该查询父节点的路径，然后拼接
-	return fmt.Sprintf("/%d/%s", parentID, name)
+
+	// 如果成员列表不为空，设置成员用户名列表
+	if len(t.Members) > 0 {
+		t.MemberUsers = make(StringList, 0, len(t.Members))
+		for _, member := range t.Members {
+			t.MemberUsers = append(t.MemberUsers, member.Username)
+		}
+	}
+
+	return nil
 }
 
 // TreeNodeCreateReq 创建节点请求
@@ -160,8 +159,6 @@ type TreeNodeResp struct {
 	Title       string    `json:"title"`
 	ParentName  string    `json:"parentName"`
 	ChildCount  int       `json:"childCount"`
-	CreateTime  string    `json:"createTime"`
-	UpdateTime  string    `json:"updateTime"`
 	CreatedAt   time.Time `json:"-"`
 	UpdatedAt   time.Time `json:"-"`
 }
