@@ -221,7 +221,8 @@ var Injector = wire.NewSet(
 	InitCasbin,
 	InitAsynqClient,
 	InitAsynqServer,
-	InitScheduler, wire.Struct(new(Cmd), "*"),
+	InitScheduler,
+	InitAgent, wire.Struct(new(Cmd), "*"),
 )
 
 var CacheSet = wire.NewSet(cache.NewMonitorCache, cache.NewAlertConfigCache, cache.NewRuleConfigCache, cache.NewRecordConfig, cache.NewPromConfigCache)

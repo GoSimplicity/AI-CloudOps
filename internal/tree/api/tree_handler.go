@@ -131,7 +131,7 @@ func (h *TreeHandler) CreateNode(ctx *gin.Context) {
 	var req model.TreeNodeCreateReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.CreateNode(ctx, &req)
+		return nil, h.service.CreateNode(ctx, &req)
 	})
 }
 

@@ -30,6 +30,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -40,6 +41,7 @@ import (
 	"time"
 
 	"github.com/go-ping/ping"
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
 func ConvertToIntList(stringList []string) ([]int, error) {
@@ -294,4 +296,49 @@ func GetLocalIPs() ([]string, error) {
 	}
 
 	return ips, nil
+}
+
+// buildTextResult 构建标准的文本返回结果
+func buildTextResult(text string) *mcp.CallToolResult {
+	// 检查空字符串
+	if text == "" {
+		text = "{}"
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{
+				Type: "text",
+				Text: text,
+			},
+		},
+	}
+}
+
+// TextResult 将任意类型转换为 mcp.CallToolResult
+func TextResult[T any](item T) (*mcp.CallToolResult, error) {
+	switch v := any(item).(type) {
+	case []byte:
+		return buildTextResult(string(v)), nil
+	case string:
+		return buildTextResult(v), nil
+	case []string:
+		// 优化：预分配容量
+		contents := make([]mcp.Content, 0, len(v))
+		for _, s := range v {
+			contents = append(contents, &mcp.TextContent{
+				Type: "text",
+				Text: s,
+			})
+		}
+		return &mcp.CallToolResult{Content: contents}, nil
+	case *mcp.CallToolResult:
+		return v, nil
+	default:
+		bytes, err := json.Marshal(item)
+		if err != nil {
+			return nil, fmt.Errorf("无法将项目序列化为JSON: %v", err)
+		}
+		return buildTextResult(string(bytes)), nil
+	}
 }

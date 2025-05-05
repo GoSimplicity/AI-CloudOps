@@ -12,12 +12,12 @@ require (
 	github.com/alibabacloud-go/vpc-20160428/v2 v2.0.117
 	github.com/casbin/casbin/v2 v2.93.0
 	github.com/casbin/gorm-adapter/v3 v3.28.0
-	github.com/cloudwego/eino v0.3.21
+	github.com/cloudwego/eino v0.3.27
 	github.com/cloudwego/eino-ext/components/model/openai v0.0.0-20250411030116-6d40409f0920
+	github.com/cloudwego/eino-ext/components/tool/mcp v0.0.0-20250429121045-a2545a66f5cf
 	github.com/fatih/color v1.16.0
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-contrib/gzip v1.2.3
-	github.com/gin-contrib/static v1.1.5
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
@@ -29,6 +29,7 @@ require (
 	github.com/hashicorp/terraform-exec v0.21.0
 	github.com/hibiken/asynq v0.22.0
 	github.com/joho/godotenv v1.5.1
+	github.com/mark3labs/mcp-go v0.25.0
 	github.com/openkruise/kruise-api v1.7.0
 	github.com/prometheus/alertmanager v0.27.0
 	github.com/prometheus/common v0.55.0
@@ -79,6 +80,7 @@ require (
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
 	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 )
 
 require (

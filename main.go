@@ -55,7 +55,7 @@ import (
 )
 
 // 开发模式下注释此行，生产模式下取消注释
-// //go:embed ui/apps/web-antd/dist/*
+//go:embed ui/apps/web-antd/dist/*
 var embeddedFiles embed.FS
 
 func main() {
@@ -306,7 +306,7 @@ func showBootInfo(port string, isProductionMode bool) {
 	if !isProductionMode {
 		modeText = "开发模式 (仅API)"
 	}
-	
+
 	color.Green("AI-CloudOps 启动成功 (%s)", modeText)
 	fmt.Printf("%s  ", color.GreenString("➜"))
 	fmt.Printf("%s    ", color.New(color.Bold).Sprint("Local:"))
