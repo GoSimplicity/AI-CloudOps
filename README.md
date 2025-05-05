@@ -2,6 +2,8 @@
 
 AI 驱动的云原生运维平台
 
+![AI-CloudOps](https://socialify.git.ci/GoSimplicity/AI-CloudOps/image?description=1&font=Inter&forks=1&issues=1&name=1&pattern=Charlie+Brown&pulls=1&stargazers=1&theme=Dark)
+
 ## 目录
 
 - [AI+CloudOps](#aicloudops)
