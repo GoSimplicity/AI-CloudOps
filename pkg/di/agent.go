@@ -42,11 +42,15 @@ import (
 
 func InitAgent() *react.Agent {
 	ctx := context.Background()
+	baseUrl := os.Getenv("OPENAI_BASE_URL")
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	modelName := os.Getenv("OPENAI_MODEL_NAME")
+
 	model, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		BaseURL: os.Getenv("OPENAI_BASE_URL"),
-		APIKey:  os.Getenv("OPENAI_API_KEY"),
+		BaseURL: baseUrl,
+		APIKey:  apiKey,
 		Timeout: 60 * time.Second,
-		Model:   os.Getenv("OPENAI_MODEL"),
+		Model:   modelName,
 		// Options: &api.Options{
 		// 	Temperature: 0.7,
 		// 	NumPredict:  100,
@@ -102,7 +106,7 @@ func InitAgent() *react.Agent {
 	if len(allMcpTools) == 0 {
 		fmt.Println("没有加载到任何MCP工具，返回nil")
 		return nil
-	}	
+	}
 
 	fmt.Printf("总共加载了 %d 个MCP工具\n", len(allMcpTools))
 

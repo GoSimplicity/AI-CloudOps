@@ -133,6 +133,7 @@ import { message } from 'ant-design-vue';
 import MarkdownIt from 'markdown-it';
 // @ts-ignore
 import MarkdownItHighlight from 'markdown-it-highlight';
+import {chat} from '#/api/core'
 
 // 初始化markdown解析器
 const md = new MarkdownIt({
@@ -147,7 +148,7 @@ const drawerVisible = ref(false);
 const globalInputMessage = ref('');
 const sending = ref(false);
 const messagesContainer = ref(null);
-let socket: WebSocket | null = null;
+// let socket: WebSocket | null = null;
 let currentResponse = '';
 
 // 抽屉样式
@@ -253,76 +254,77 @@ const renderMarkdown = (content: string): string => {
 };
 
 // 初始化WebSocket连接
-const initWebSocket = () => {
-  if (socket !== null) {
-    return;
-  }
+// const initWebSocket = () => {
+//   if (socket !== null) {
+//     return;
+//   }
 
-  socket = new WebSocket('ws://localhost:8889/api/ai/chat/ws');
+//   socket = new WebSocket('ws://localhost:8889/api/ai/chat/ws');
 
-  socket.onopen = () => {
-    console.log('WebSocket连接已建立');
-  };
+//   socket.onopen = () => {
+//     console.log('WebSocket连接已建立');
+//   };
 
-  socket.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    if (data.type === 'message') {
-      if (!data.done) {
-        // 累积响应内容
-        currentResponse += data.content || '';
+//   socket.onmessage = (event) => {
+//     const data = JSON.parse(event.data);
+//     if (data.type === 'message') {
+//       if (!data.done) {
+//         // 累积响应内容
+//         currentResponse += data.content || '';
 
-        // 更新最后一条AI消息
-        if (chatMessages[chatMessages.length - 1]?.type === 'ai') {
-          chatMessages[chatMessages.length - 1]!.content = currentResponse;
-        }
+//         // 更新最后一条AI消息
+//         if (chatMessages[chatMessages.length - 1]?.type === 'ai') {
+//           chatMessages[chatMessages.length - 1]!.content = currentResponse;
+//         }
 
-        // 滚动到底部
-        nextTick(() => {
-          scrollToBottom();
-        });
-      } else {
-        // 消息完成，更新聊天历史
-        sending.value = false;
+//         // 滚动到底部
+//         nextTick(() => {
+//           scrollToBottom();
+//         });
+//       } else {
+//         // 消息完成，更新聊天历史
+//         sending.value = false;
 
-        // 将完整回复添加到聊天历史
-        chatHistory.push({
-          role: 'assistant',
-          content: currentResponse
-        });
+//         // 将完整回复添加到聊天历史
+//         chatHistory.push({
+//           role: 'assistant',
+//           content: currentResponse
+//         });
 
-        // 重置当前响应
-        currentResponse = '';
-      }
-    }
-  };
+//         // 重置当前响应
+//         currentResponse = '';
+//       }
+//     }
+//   };
 
-  socket.onerror = (error) => {
-    console.error('WebSocket错误:', error);
-    message.error('连接服务器失败，请稍后重试');
-    sending.value = false;
-  };
+//   socket.onerror = (error) => {
+//     console.error('WebSocket错误:', error);
+//     message.error('连接服务器失败，请稍后重试');
+//     sending.value = false;
+//   };
 
-  socket.onclose = () => {
-    console.log('WebSocket连接已关闭');
-    socket = null;
-  };
-};
+//   socket.onclose = () => {
+//     console.log('WebSocket连接已关闭');
+//     socket = null;
+//   };
+// };
 
 // 切换聊天抽屉显示状态
 const toggleChatDrawer = () => {
   drawerVisible.value = !drawerVisible.value;
   if (drawerVisible.value) {
-    initWebSocket();
+    // initWebSocket();
     nextTick(() => {
       scrollToBottom();
     });
-  } else {
-    // 关闭抽屉时关闭WebSocket连接
-    if (socket) {
-      socket.close();
-      socket = null;
-    }
-  }
+  } 
+  // else {
+  //   // 关闭抽屉时关闭WebSocket连接
+  //   if (socket) {
+  //     socket.close();
+  //     socket = null;
+  //   }
+  // }
 };
 
 // 发送消息
@@ -332,11 +334,11 @@ const sendMessage = async (value: string) => {
     return;
   }
 
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
-    initWebSocket();
-    message.warning('正在连接服务器，请稍后重试');
-    return;
-  }
+  // if (!socket || socket.readyState !== WebSocket.OPEN) {
+  //   initWebSocket();
+  //   message.warning('正在连接服务器，请稍后重试');
+  //   return;
+  // }
 
   // 添加用户消息
   chatMessages.push({
@@ -375,8 +377,36 @@ const sendMessage = async (value: string) => {
     chatHistory: chatHistory.slice(0, -1) // 不包括当前问题
   };
 
-  // 发送消息到WebSocket
-  socket.send(JSON.stringify(messageToSend));
+  // 发送HTTP请求而不是WebSocket
+  try {
+    const response = await chat(messageToSend);
+    
+    // 更新最后一条AI消息
+    if (chatMessages[chatMessages.length - 1]?.type === 'ai') {
+      chatMessages[chatMessages.length - 1]!.content = response.answer;
+    }
+    
+    // 将完整回复添加到聊天历史
+    chatHistory.push({
+      role: 'assistant',
+      content: response.answer
+    });
+    
+    // 滚动到底部
+    nextTick(() => {
+      scrollToBottom();
+    });
+    
+  } catch (error) {
+    console.error('请求错误:', error);
+    message.error('连接服务器失败，请稍后重试');
+    // 移除AI消息占位
+    if (chatMessages[chatMessages.length - 1]?.type === 'ai') {
+      chatMessages.pop();
+    }
+  } finally {
+    sending.value = false;
+  }
 };
 
 // 格式化时间
@@ -420,10 +450,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', () => { });
 
   // 关闭WebSocket连接
-  if (socket) {
-    socket.close();
-    socket = null;
-  }
+  // if (socket) {
+  //   socket.close();
+  //   socket = null;
+  // }
 });
 </script>
 
