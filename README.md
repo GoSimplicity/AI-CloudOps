@@ -4,13 +4,15 @@ AI 驱动的云原生运维平台
 
 ## 目录
 
-- [AI+CloudOps](#AICloudOps)
+- [AI+CloudOps](#aicloudops)
   - [目录](#目录)
   - [项目介绍](#项目介绍)
+  - [项目演示](#项目演示)
   - [快速开始](#快速开始)
+    - [环境准备](#环境准备)
     - [克隆项目](#克隆项目)
-    - [运行后端项目](#运行后端项目)
-    - [运行前端项目](#运行前端项目)
+    - [开发模式](#开发模式)
+    - [生产模式](#生产模式)
   - [项目结构](#项目结构)
   - [许可证](#许可证)
   - [联系方式](#联系方式)
@@ -29,61 +31,90 @@ AI+CloudOps 是一个面向企业的 AI 驱动云原生运维管理平台，旨�
 
 ## 项目演示
 
-![image 1](image/1.png)
-![image 2](image/2.png)
-![image 3](image/3.png)
-![image 4](image/4.png)
-![image 5](image/5.png)
-![image 6](image/6.png)
-![image 7](image/7.png)
-![image 8](image/8.png)
+![项目界面展示1](image/1.png)
+![项目界面展示2](image/2.png)
+![项目界面展示3](image/3.png)
+![项目界面展示4](image/4.png)
+![项目界面展示5](image/5.png)
+![项目界面展示6](image/6.png)
+![项目界面展示7](image/7.png)
+![项目界面展示8](image/8.png)
 
 ## 快速开始
 
+### 环境准备
+
+- Go 1.21+
+- Node.js 21.x (推荐)
+- pnpm
+- Docker & Docker Compose
+
 ### 克隆项目
 
-首先，将项目克隆到本地：
-
 ```bash
+# 克隆项目
 git clone https://github.com/GoSimplicity/AI-CloudOps.git
+cd AI-CloudOps
 ```
 
-### 运行后端项目
+### 开发模式
 
-进入项目目录并安装依赖：
+1. **启动依赖服务**：
 
 ```bash
-go mod tidy
+# 启动所需的中间件(MySQL, Redis等)
+docker-compose -f docker-compose-env.yaml up -d
 ```
 
-启动后端服务：
+2. **前端开发模式**：
 
 ```bash
-go run cmd/cloudops/main.go
-```
-
-### 运行前端项目
-
-前端项目地址：<https://github.com/GoSimplicity/AI-CloudOps-web>
-
-```bash
-# clone前端项目
-git clone https://github.com/GoSimplicity/AI-CloudOps-web.git
-```
-
-进入前端目录并安装依赖：
-
-```bash
-# 进入项目根目录
-cd AI-CloudOps-web
-# 推荐使用 node21 版本
+# 进入前端目录
+cd ui
+# 安装依赖
 pnpm install
+# 启动开发服务器
+pnpm dev
 ```
 
-启动前端项目：
+3. **后端开发模式**：
 
 ```bash
-pnpm run dev
+# 在项目根目录
+go mod tidy
+# 运行后端服务
+go run main.go
+```
+
+### 生产模式
+
+1. **构建前端**：
+
+```bash
+# 进入前端目录
+cd ui
+# 安装依赖
+pnpm install
+# 构建前端静态文件
+pnpm build
+```
+
+2. **启动应用**：
+
+```bash
+# 返回项目根目录
+cd ..
+# 启动整合了前端的后端应用(前端静态文件已嵌入)
+go run main.go
+```
+
+3. **使用 Docker Compose 启动完整应用**：
+
+```bash
+# 启动依赖服务
+docker-compose -f docker-compose-env.yaml up -d
+# 启动应用服务
+docker-compose up -d
 ```
 
 ## 项目结构
@@ -91,18 +122,30 @@ pnpm run dev
 ```text
 AI-CloudOps/
 │
-├── LICENSE               # 许可证文件
-├── README.md             # 项目说明文档
-├── Makefile              # 项目构建和管理文件
-├── go.mod                # Go 模块依赖文件
-├── go.sum                # Go 依赖校验文件
-├── config/               # 配置文件目录
-├── doc/                  # 项目文档目录
-├── pkg/                  # 公共库和工具包
-├── deploy/               # 部署相关文件
-├── internal/             # 内部模块与业务逻辑
+├── bin/                  # 编译产物目录
 ├── cmd/                  # 可执行程序的主入口
-└── scripts/              # 各种脚本文件
+├── config/               # 配置文件目录
+├── data/                 # 数据文件
+├── deploy/               # 部署相关文件
+├── dify/                 # Dify AI集成
+├── docker-compose-env.yaml # 开发环境依赖服务配置
+├── docker-compose.yaml   # 应用服务配置
+├── Dockerfile            # Docker构建文件
+├── image/                # 项目图片资源
+├── internal/             # 内部模块与业务逻辑
+├── LICENSE               # 许可证文件
+├── local_yaml/           # 本地配置文件
+├── logs/                 # 日志文件目录
+├── main.go               # 主程序入口
+├── Makefile              # 项目构建和管理文件
+├── modd.conf             # 开发热重载配置
+├── pkg/                  # 公共库和工具包
+├── python/               # Python脚本和AI模型
+├── README.md             # 项目说明文档
+├── terraform/            # 基础设施即代码
+├── test/                 # 测试文件
+├── tmp/                  # 临时文件
+└── ui/                   # 前端项目目录(AI-CloudOps-web)
 ```
 
 ## 许可证
