@@ -4,3 +4,4 @@ export * from './user';
 export * from './tree';
 export * from './prometheus';
 export * from './k8s';
+export * from './ai'
