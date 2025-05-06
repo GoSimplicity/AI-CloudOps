@@ -27,7 +27,9 @@ package di
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -36,6 +38,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/flow/agent/react"
+	"github.com/cloudwego/eino/schema"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -110,12 +113,33 @@ func InitAgent() *react.Agent {
 
 	fmt.Printf("总共加载了 %d 个MCP工具\n", len(allMcpTools))
 
+	// 自定义工具调用检查器，检查所有流式输出中是否包含工具调用
+	toolCallChecker := func(ctx context.Context, sr *schema.StreamReader[*schema.Message]) (bool, error) {
+		defer sr.Close()
+		for {
+			msg, err := sr.Recv()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					// 流结束
+					break
+				}
+				return false, err
+			}
+
+			if len(msg.ToolCalls) > 0 {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
 	// 创建React Agent
 	reactAgent, err := react.NewAgent(ctx, &react.AgentConfig{
 		Model: model,
 		ToolsConfig: compose.ToolsNodeConfig{
 			Tools: allMcpTools,
 		},
+		StreamToolCallChecker: toolCallChecker, 
 	})
 	if err != nil {
 		fmt.Printf("创建React Agent失败: %v\n", err)
