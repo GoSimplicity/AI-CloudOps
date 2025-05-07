@@ -27,11 +27,13 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/cloudwego/eino/components/prompt"
 	"github.com/cloudwego/eino/flow/agent/react"
 	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
@@ -67,7 +69,7 @@ func (a *aiService) SendChatMessage(ctx context.Context, message model.ChatMessa
 	result, err := a.agent.Generate(ctx, []*schema.Message{
 		{
 			Role:    schema.System,
-			Content: "你是一个{role}。你需要用{style}规范的语气回答问题。你的目标是帮助使用AI-CloudOps开源项目的用户回答问题，同时提供一些有用的建议。",
+			Content: "你是一个AI-CloudOps项目专家。你需要用严谨规范的语气回答问题。你的目标是帮助使用AI-CloudOps开源项目的用户回答问题，同时提供一些有用的建议。",
 		},
 		{
 			Role:    schema.User,
@@ -100,16 +102,42 @@ func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMes
 		return fmt.Errorf("agent未初始化")
 	}
 
-	// 创建消息
-	messages := []*schema.Message{
-		{
-			Role:    schema.System,
-			Content: "你是一个" + message.Role + "。你需要用" + message.Style + "规范的语气回答问题。你的目标是帮助使用AI-CloudOps开源项目的用户回答问题，同时提供一些有用的建议。",
-		},
-		{
+	// 创建模版
+	template := prompt.FromMessages(
+		schema.FString,
+		schema.SystemMessage("你是一个{role}，专注于云计算和DevOps领域的专家。你需要用{style}规范的语气回答问题，保持简洁和友好。你的目标是帮助使用AI-CloudOps开源项目的用户回答问题，同时提供一些有用的建议和最佳实践。请基于事实回答，如果不确定，请明确表示。你可以解释复杂的技术概念，提供代码示例，并引导用户解决云环境中的常见问题。记住，你的回答应该既有教育意义又有实用价值，帮助用户更好地理解和使用AI-CloudOps。"),
+		schema.MessagesPlaceholder("history_key", false), // 消息占位符
+		&schema.Message{
 			Role:    schema.User,
-			Content: message.Question,
+			Content: "我现在在使用AI-CloudOps平台，请为我下面的问题提供帮助: {question}",
 		},
+	)
+
+	// 获取历史记录
+	histories := make([]*schema.Message, 0, len(message.ChatHistory))
+	for i := range message.ChatHistory {
+		histories = append(histories, &schema.Message{
+			Role:    schema.RoleType(message.ChatHistory[i].Role),
+			Content: message.ChatHistory[i].Content,
+		})
+	}
+
+	// 准备变量
+	variables := map[string]any{
+		"role":        "AI-CloudOps项目专家",
+		"style":       "严谨、专业",
+		"history_key": histories,
+		"question":    message.Question,
+	}
+
+	// 格式化模板
+	messages, err := template.Format(ctx, variables)
+	if err != nil {
+		a.logger.Error("格式化模板发生错误", zap.Error(err))
+		responseChan <- model.StreamResponse{
+			Error: fmt.Sprintf("格式化模板失败: %v", err),
+		}
+		return fmt.Errorf("格式化模板失败: %v", err)
 	}
 
 	// 使用agent的流式响应
@@ -131,7 +159,7 @@ func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMes
 			break
 		}
 		if err != nil {
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				responseChan <- model.StreamResponse{
 					Error: "请求超时",
 				}
@@ -142,7 +170,6 @@ func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMes
 			}
 			return err
 		}
-
 		responseChan <- model.StreamResponse{
 			Content: chunk.Content,
 			Done:    false,
