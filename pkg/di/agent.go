@@ -84,7 +84,7 @@ func InitAgent() *react.Agent {
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name:    "devops-robot",
+		Name:    "AI-CloudOps",
 		Version: "1.0.0",
 	}
 
@@ -139,7 +139,7 @@ func InitAgent() *react.Agent {
 		ToolsConfig: compose.ToolsNodeConfig{
 			Tools: allMcpTools,
 		},
-		StreamToolCallChecker: toolCallChecker, 
+		StreamToolCallChecker: toolCallChecker,
 	})
 	if err != nil {
 		fmt.Printf("创建React Agent失败: %v\n", err)

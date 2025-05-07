@@ -55,7 +55,8 @@ import (
 )
 
 // 开发模式下注释此行，生产模式下取消注释
-////go:embed ui/apps/web-antd/dist/*
+//
+//go:embed ui/apps/web-antd/dist/*
 var embeddedFiles embed.FS
 
 func main() {

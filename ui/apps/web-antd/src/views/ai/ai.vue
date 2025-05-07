@@ -186,7 +186,7 @@ const chatMessages = reactive<ChatMessage[]>([
 // 聊天历史记录
 const chatHistory = reactive<ChatHistoryItem[]>([
   {
-    role: 'CloudOps小助手',
+    role: 'assistant',
     content: '您好！我是AI-CloudOps助手，可以回答您关于云运维的问题。请问有什么我可以帮助您的？'
   }
 ]);
