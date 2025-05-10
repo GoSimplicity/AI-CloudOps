@@ -39,11 +39,12 @@ func InitTables(db *gorm.DB) error {
 		&model.CasbinRule{},
 
 		// tree
+		&model.TreeNodeAdmin{},
+		&model.TreeNodeMember{},
 		&model.TreeNode{},
 		&model.ResourceEcs{},
 		&model.ResourceElb{},
 		&model.ResourceRds{},
-		&model.TerraformConfig{},
 
 		// k8s
 
@@ -55,6 +56,7 @@ func InitTables(db *gorm.DB) error {
 		&model.K8sInstance{}, // 外键依赖 K8sApp，确保 K8sApp 先创建
 		&model.K8sCronjob{},
 		&model.K8sPod{},
+
 		// prometheus
 		&model.MonitorScrapePool{},
 		&model.MonitorScrapeJob{},

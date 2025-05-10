@@ -35,7 +35,6 @@ import (
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	einomcp "github.com/cloudwego/eino-ext/components/tool/mcp"
-	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/flow/agent/react"
 	"github.com/cloudwego/eino/schema"
@@ -63,8 +62,6 @@ func InitAgent() *react.Agent {
 		fmt.Printf("初始化OpenAI模型失败: %v\n", err)
 		return nil
 	}
-
-	var allMcpTools []tool.BaseTool
 
 	// 初始化MCP客户端
 	cliMcp, err := client.NewSSEMCPClient(os.Getenv("MCP_URL"))
@@ -103,15 +100,13 @@ func InitAgent() *react.Agent {
 		fmt.Printf("获取MCP工具失败: %v\n", err)
 		return nil
 	}
-	allMcpTools = append(allMcpTools, mcpTools...)
-	fmt.Printf("成功加载MCP工具，获取到 %d 个工具\n", len(mcpTools))
 
-	if len(allMcpTools) == 0 {
+	if len(mcpTools) == 0 {
 		fmt.Println("没有加载到任何MCP工具，返回nil")
 		return nil
 	}
 
-	fmt.Printf("总共加载了 %d 个MCP工具\n", len(allMcpTools))
+	fmt.Printf("总共加载了 %d 个MCP工具\n", len(mcpTools))
 
 	// 自定义工具调用检查器，检查所有流式输出中是否包含工具调用
 	toolCallChecker := func(ctx context.Context, sr *schema.StreamReader[*schema.Message]) (bool, error) {
@@ -137,7 +132,7 @@ func InitAgent() *react.Agent {
 	reactAgent, err := react.NewAgent(ctx, &react.AgentConfig{
 		Model: model,
 		ToolsConfig: compose.ToolsNodeConfig{
-			Tools: allMcpTools,
+			Tools: mcpTools,
 		},
 		StreamToolCallChecker: toolCallChecker,
 	})
@@ -152,6 +147,5 @@ func InitAgent() *react.Agent {
 	} else {
 		fmt.Println("成功创建React Agent")
 	}
-
 	return reactAgent
 }

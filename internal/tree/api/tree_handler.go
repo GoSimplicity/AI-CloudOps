@@ -46,34 +46,27 @@ func (h *TreeHandler) RegisterRouters(server *gin.Engine) {
 	treeGroup := server.Group("/api/tree")
 	{
 		// 树结构相关接口
-		treeGroup.GET("/list", h.GetTreeList)
+		treeGroup.POST("/list", h.GetTreeList)
 		treeGroup.GET("/detail/:id", h.GetNodeDetail)
-		treeGroup.GET("/children/:parentId", h.GetChildNodes)
-		treeGroup.GET("/path/:nodeId", h.GetNodePath)
 		treeGroup.GET("/statistics", h.GetTreeStatistics)
 
 		// 节点管理接口
 		treeGroup.POST("/node/create", h.CreateNode)
-		treeGroup.POST("/node/create_child", h.CreateChildNode)
-		treeGroup.PUT("/node/update", h.UpdateNode)
+		treeGroup.POST("/node/update", h.UpdateNode)
 		treeGroup.DELETE("/node/delete/:id", h.DeleteNode)
 
+		// 成员管理接口
+		treeGroup.POST("/member/add", h.AddNodeMember)
+		treeGroup.POST("/member/remove", h.RemoveNodeMember)
+
 		// 资源绑定接口
-		treeGroup.GET("/resources/:nodeId", h.GetNodeResources)
+		treeGroup.GET("/resources/:id", h.GetNodeResources)
 		treeGroup.POST("/resource/bind", h.BindResource)
 		treeGroup.POST("/resource/unbind", h.UnbindResource)
 		treeGroup.GET("/resource/types", h.GetResourceTypes)
-
-		// 成员管理接口
-		treeGroup.GET("/members/:nodeId", h.GetNodeMembers)
-		treeGroup.POST("/member/add", h.AddNodeMember)
-		treeGroup.POST("/member/remove", h.RemoveNodeMember)
-		treeGroup.POST("/admin/add", h.AddNodeAdmin)
-		treeGroup.POST("/admin/remove", h.RemoveNodeAdmin)
 	}
 }
 
-// 获取整个服务树结构
 func (h *TreeHandler) GetTreeList(ctx *gin.Context) {
 	var req model.TreeNodeListReq
 
@@ -82,7 +75,6 @@ func (h *TreeHandler) GetTreeList(ctx *gin.Context) {
 	})
 }
 
-// 获取节点详情
 func (h *TreeHandler) GetNodeDetail(ctx *gin.Context) {
 	var req model.TreeNodeDetailReq
 	id, err := utils.GetParamID(ctx)
@@ -96,55 +88,21 @@ func (h *TreeHandler) GetNodeDetail(ctx *gin.Context) {
 	})
 }
 
-// 获取子节点列表
-func (h *TreeHandler) GetChildNodes(ctx *gin.Context) {
-	var req model.TreeNodeListReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.GetChildNodes(ctx, req.ParentID)
-	})
-}
-
-// 获取节点路径
-func (h *TreeHandler) GetNodePath(ctx *gin.Context) {
-	var req model.TreeNodePathReq
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.GetNodePath(ctx, id)
-	})
-}
-
-// 获取服务树统计信息
 func (h *TreeHandler) GetTreeStatistics(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetTreeStatistics(ctx)
 	})
 }
 
-// 创建节点
 func (h *TreeHandler) CreateNode(ctx *gin.Context) {
 	var req model.TreeNodeCreateReq
-
+	user := ctx.MustGet("user").(utils.UserClaims)
+	req.CreatorID = user.Uid
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateNode(ctx, &req)
 	})
 }
 
-// 创建子节点
-func (h *TreeHandler) CreateChildNode(ctx *gin.Context) {
-	var req model.TreeNodeCreateReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.CreateChildNode(ctx, req.ParentID, &req)
-	})
-}
-
-// 更新节点
 func (h *TreeHandler) UpdateNode(ctx *gin.Context) {
 	var req model.TreeNodeUpdateReq
 
@@ -153,7 +111,6 @@ func (h *TreeHandler) UpdateNode(ctx *gin.Context) {
 	})
 }
 
-// 删除节点
 func (h *TreeHandler) DeleteNode(ctx *gin.Context) {
 	var req model.TreeNodeDeleteReq
 
@@ -168,7 +125,6 @@ func (h *TreeHandler) DeleteNode(ctx *gin.Context) {
 	})
 }
 
-// 获取节点绑定的资源
 func (h *TreeHandler) GetNodeResources(ctx *gin.Context) {
 	var req model.TreeNodeResourceReq
 	id, err := utils.GetParamID(ctx)
@@ -182,7 +138,6 @@ func (h *TreeHandler) GetNodeResources(ctx *gin.Context) {
 	})
 }
 
-// 绑定资源
 func (h *TreeHandler) BindResource(ctx *gin.Context) {
 	var req model.TreeNodeResourceBindReq
 
@@ -191,7 +146,6 @@ func (h *TreeHandler) BindResource(ctx *gin.Context) {
 	})
 }
 
-// 解绑资源
 func (h *TreeHandler) UnbindResource(ctx *gin.Context) {
 	var req model.TreeNodeResourceUnbindReq
 
@@ -200,23 +154,12 @@ func (h *TreeHandler) UnbindResource(ctx *gin.Context) {
 	})
 }
 
-// 获取可绑定的资源类型
 func (h *TreeHandler) GetResourceTypes(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetResourceTypes(ctx)
 	})
 }
 
-// 获取节点成员
-func (h *TreeHandler) GetNodeMembers(ctx *gin.Context) {
-	var req model.TreeNodeMemberReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.GetNodeMembers(ctx, &req)
-	})
-}
-
-// 添加成员
 func (h *TreeHandler) AddNodeMember(ctx *gin.Context) {
 	var req model.TreeNodeMemberReq
 
@@ -225,29 +168,10 @@ func (h *TreeHandler) AddNodeMember(ctx *gin.Context) {
 	})
 }
 
-// 移除成员
 func (h *TreeHandler) RemoveNodeMember(ctx *gin.Context) {
 	var req model.TreeNodeMemberReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.RemoveNodeMember(ctx, req.NodeID, req.UserID)
-	})
-}
-
-// 添加管理员
-func (h *TreeHandler) AddNodeAdmin(ctx *gin.Context) {
-	var req model.TreeNodeMemberReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.AddNodeAdmin(ctx, req.NodeID, req.UserID)
-	})
-}
-
-// 移除管理员
-func (h *TreeHandler) RemoveNodeAdmin(ctx *gin.Context) {
-	var req model.TreeNodeMemberReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.RemoveNodeAdmin(ctx, req.NodeID, req.UserID)
+		return nil, h.service.RemoveNodeMember(ctx, &req)
 	})
 }
