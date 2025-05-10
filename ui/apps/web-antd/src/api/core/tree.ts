@@ -259,6 +259,130 @@ export interface ListSecurityGroupRulesReq {
   region: string;
 }
 
+// 树节点管理
+export interface TreeNode {
+  id: number;
+  name: string;
+  parentId: number;
+  level: number;
+  description: string;
+  creatorId: number;
+  status: string;
+  isLeaf: boolean;
+  childCount?: number;
+  resourceCount?: number;
+  parentName?: string;
+  adminUsers?: string[];
+  memberUsers?: string[];
+  children?: TreeNode[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TreeNodeCreateReq {
+  name: string;
+  parentId: number;
+  creatorId: number;
+  description: string;
+  isLeaf: boolean;
+  status?: string;
+}
+
+export interface TreeNodeUpdateReq {
+  id: number;
+  name: string;
+  parentId: number;
+  description: string;
+  isLeaf: boolean;
+  status?: string;
+}
+
+export interface TreeNodeMemberReq {
+  nodeId: number;
+  userId: number;
+  type: string; // admin 或 member
+}
+
+export interface TreeNodeResourceBindReq {
+  nodeId: number;
+  resourceType: string;
+  resourceIds: string[];
+}
+
+export interface TreeNodeResourceUnbindReq {
+  nodeId: number;
+  resourceId: string;
+  resourceType: string;
+}
+
+export interface TreeNodeResp {
+  id: number;
+  name: string;
+  parentId: number;
+  level: number;
+  description: string;
+  creatorId: number;
+  status: string;
+  parentName: string;
+  childCount: number;
+  isLeaf: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TreeNodeDetailReq {
+  id: number;
+}
+
+export interface TreeNodeDetailResp extends TreeNodeResp {
+  adminUsers: string[];
+  memberUsers: string[];
+  resourceCount: number;
+}
+
+export interface TreeStatisticsResp {
+  totalNodes: number;
+  totalResources: number;
+  totalAdmins: number;
+  totalMembers: number;
+  activeNodes: number;
+  inactiveNodes: number;
+}
+
+export interface TreeNodeResourceResp {
+  id: number;
+  resourceId: string;
+  resourceType: string;
+  resourceName: string;
+  resourceStatus: string;
+  resourceCreateTime: string;
+  resourceUpdateTime: string;
+  resourceDeleteTime: string;
+}
+
+export interface TreeNodeListReq {
+  level?: number;
+  status?: string;
+}
+
+export interface TreeNodeListResp {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  name: string;
+  parentId: number;
+  level: number;
+  creatorId: number;
+  status: string;
+  children?: TreeNodeListResp[];
+  isLeaf: boolean;
+}
+
+export interface TreeNodeDeleteReq {
+  id: number;
+}
+
+
 export function getVpcResourceList(req: ListVpcResourcesReq) {
   return requestClient.post('/resource/vpc/list', req);
 }
@@ -325,4 +449,137 @@ export function getSecurityGroupDetail(req: GetSecurityGroupDetailReq) {
 
 export function getAllTreeNodes() {
   return requestClient.get('/resource/tree_node');
+}
+
+
+export interface TreeNode {
+  id: number;
+  name: string;
+  parentId: number;
+  level: number;
+  description: string;
+  creatorId: number;
+  status: string;
+  isLeaf: boolean;
+  childCount?: number;
+  resourceCount?: number;
+  parentName?: string;
+  adminUsers?: string[];
+  memberUsers?: string[];
+  children?: TreeNode[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TreeNodeCreateReq {
+  name: string;
+  parentId: number;
+  creatorId: number;
+  description: string;
+  isLeaf: boolean;
+  status?: string;
+}
+
+export interface TreeNodeUpdateReq {
+  id: number;
+  name: string;
+  parentId: number;
+  description: string;
+  isLeaf: boolean;
+  status?: string;
+}
+
+export interface TreeNodeMemberReq {
+  nodeId: number;
+  userId: number;
+  type: string; // admin 或 member
+}
+
+export interface TreeNodeResp {
+  id: number;
+  name: string;
+  parentId: number;
+  level: number;
+  description: string;
+  creatorId: number;
+  status: string;
+  parentName: string;
+  childCount: number;
+  isLeaf: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TreeNodeDetailReq {
+  id: number;
+}
+
+export interface TreeNodeDetailResp extends TreeNodeResp {
+  adminUsers: string[];
+  memberUsers: string[];
+  resourceCount: number;
+}
+
+export interface TreeStatisticsResp {
+  totalNodes: number;
+  totalResources: number;
+  totalAdmins: number;
+  totalMembers: number;
+  activeNodes: number;
+  inactiveNodes: number;
+}
+
+export interface TreeNodeListReq {
+  level?: number;
+  status?: string;
+}
+
+export interface TreeNodeListResp {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  name: string;
+  parentId: number;
+  level: number;
+  creatorId: number;
+  status: string;
+  children?: TreeNodeListResp[];
+  isLeaf: boolean;
+}
+
+export interface TreeNodeDeleteReq {
+  id: number;
+}
+
+// 树结构相关接口
+export function getTreeList(req: TreeNodeListReq) {
+  return requestClient.post('/tree/list', req);
+}
+
+export function getNodeDetail(id: number) {
+  return requestClient.get(`/tree/detail/${id}`);
+}
+
+export function getTreeStatistics() {
+  return requestClient.get('/tree/statistics');
+}
+
+export function createNode(req: TreeNodeCreateReq) {
+  return requestClient.post('/tree/node/create', req);
+}
+
+export function updateNode(req: TreeNodeUpdateReq) {
+  return requestClient.post('/tree/node/update', req);
+}
+
+export function deleteNode(id: number) {
+  return requestClient.delete(`/tree/node/delete/${id}`);
+}
+
+export function addNodeMember(req: TreeNodeMemberReq) {
+  return requestClient.post('/tree/member/add', req);
+}
+
+export function removeNodeMember(req: TreeNodeMemberReq) {
+  return requestClient.post('/tree/member/remove', req);
 }
