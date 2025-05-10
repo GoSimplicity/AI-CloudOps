@@ -440,7 +440,33 @@ func (t *treeDAO) GetTreeList(ctx context.Context, req *model.TreeNodeListReq) (
 		node.ChildCount = childCounts[node.ID]
 	}
 
-	return nodes, nil
+	// 构建树形结构
+	nodeMap := make(map[int]*model.TreeNode)
+	var rootNodes []*model.TreeNode
+
+	for _, node := range nodes {
+		nodeClone := *node
+		nodeMap[node.ID] = &nodeClone
+		nodeMap[node.ID].Children = make([]*model.TreeNode, 0)
+	}
+
+	for _, node := range nodes {
+		if node.ParentID == 0 || nodeMap[node.ParentID] == nil {
+			// 这是根节点或父节点不在当前结果集中
+			rootNodes = append(rootNodes, nodeMap[node.ID])
+		} else {
+			// 将当前节点添加到其父节点的子节点列表中
+			parent := nodeMap[node.ParentID]
+			parent.Children = append(parent.Children, nodeMap[node.ID])
+		}
+	}
+
+	// 如果请求特定层级，则返回该层级的所有节点
+	if req.Level > 0 {
+		return nodes, nil
+	}
+
+	return rootNodes, nil
 }
 
 // GetTreeStatistics 获取树统计信息

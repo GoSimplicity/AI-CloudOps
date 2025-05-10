@@ -47,7 +47,7 @@
           <template #cover>
             <div class="stat-card">
               <TeamOutlined class="card-icon" />
-              <div class="stat-number">{{ statistics.totalUsers }}</div>
+              <div class="stat-number">{{ statistics.totalAdmins }}</div>
               <div class="stat-label">管理员数</div>
             </div>
           </template>
@@ -58,8 +58,8 @@
           <template #cover>
             <div class="stat-card">
               <ClockCircleOutlined class="card-icon" />
-              <div class="stat-number">{{ statistics.lastUpdate }}</div>
-              <div class="stat-label">最近更新</div>
+              <div class="stat-number">{{ statistics.activeNodes }}</div>
+              <div class="stat-label">活跃节点</div>
             </div>
           </template>
         </a-card>
@@ -67,43 +67,39 @@
     </a-row>
 
     <div class="tree-visualization">
-      <a-card title="服务树结构可视化" :bordered="false" class="tree-card">
-        <a-radio-group v-model:value="viewMode" button-style="solid" class="view-selector">
-          <a-radio-button value="tree">树形视图</a-radio-button>
-          <a-radio-button value="graph">网络视图</a-radio-button>
-        </a-radio-group>
-
-        <div class="tree-content">
-          <a-spin :spinning="loading">
-            <a-tree v-if="viewMode === 'tree'" :tree-data="treeData" :defaultExpandedKeys="['1']"
-              :showLine="{ showLeafIcon: false }" @select="onTreeNodeSelect" class="service-tree">
-              <template #title="{ title, key }">
-                <span class="tree-node-title">
-                  {{ title }}
-                  <a-tag v-if="getNodeResourceCount(key) > 0" color="blue">
-                    {{ getNodeResourceCount(key) }}
-                  </a-tag>
-                </span>
-              </template>
-            </a-tree>
-
-            <div v-else-if="viewMode === 'graph'" class="graph-view">
-              <!-- 这里可以放置假的网络图 -->
-              <div class="graph-placeholder">
-                <div class="graph-node central-node">根节点</div>
-                <div class="graph-connections">
-                  <div v-for="(node, index) in 5" :key="index" class="graph-node child-node" :style="{
-                    left: `${Math.cos(index * Math.PI * 2 / 5) * 120 + 150}px`,
-                    top: `${Math.sin(index * Math.PI * 2 / 5) * 120 + 150}px`
-                  }">
-                    子节点 {{ index + 1 }}
-                  </div>
-                </div>
-              </div>
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-card title="树形视图" :bordered="false" class="tree-card">
+            <div class="tree-content">
+              <a-spin :spinning="loading">
+                <a-tree :tree-data="treeData" :defaultExpandedKeys="['1']"
+                  :showLine="{ showLeafIcon: false }" @select="onTreeNodeSelect" class="service-tree">
+                  <template #title="{ title, key }">
+                    <span class="tree-node-title">
+                      {{ title }}
+                      <a-tag v-if="getNodeResourceCount(key) > 0" color="blue">
+                        {{ getNodeResourceCount(key) }}
+                      </a-tag>
+                    </span>
+                  </template>
+                </a-tree>
+              </a-spin>
             </div>
-          </a-spin>
-        </div>
-      </a-card>
+          </a-card>
+        </a-col>
+        <a-col :span="12">
+          <a-card title="网络视图" :bordered="false" class="graph-card">
+            <div class="graph-content">
+              <a-spin :spinning="loading">
+                <div class="graph-view">
+                  <div ref="chartContainer" style="width: 100%; height: 350px;"></div>
+                  <a-empty v-if="treeData.length === 0" description="暂无树形数据" />
+                </div>
+              </a-spin>
+            </div>
+          </a-card>
+        </a-col>
+      </a-row>
     </div>
 
     <a-row :gutter="16" class="node-details-row">
@@ -116,16 +112,24 @@
             <a-descriptions-item label="节点名称">
               {{ selectedNode.name }}
             </a-descriptions-item>
-            <a-descriptions-item label="路径">
-              {{ selectedNode.path }}
+            <a-descriptions-item label="父节点">
+              {{ selectedNode.parentName || '无' }}
+            </a-descriptions-item>
+            <a-descriptions-item label="层级">
+              {{ selectedNode.level }}
             </a-descriptions-item>
             <a-descriptions-item label="管理员">
-              <a-tag v-for="admin in selectedNode.admins" :key="admin" color="blue">
+              <a-tag v-for="admin in selectedNode.adminUsers" :key="admin" color="blue">
                 {{ admin }}
               </a-tag>
             </a-descriptions-item>
+            <a-descriptions-item label="成员">
+              <a-tag v-for="member in selectedNode.memberUsers" :key="member" color="green">
+                {{ member }}
+              </a-tag>
+            </a-descriptions-item>
             <a-descriptions-item label="创建时间">
-              {{ selectedNode.createTime }}
+              {{ selectedNode.createdAt }}
             </a-descriptions-item>
             <a-descriptions-item label="描述">
               {{ selectedNode.description || '无' }}
@@ -159,7 +163,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   ReloadOutlined,
@@ -169,234 +173,223 @@ import {
   TeamOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons-vue';
+import { getTreeStatistics, getTreeList, getNodeDetail } from '#/api/core/tree';
+import type { TreeNodeListReq, TreeStatisticsResp, TreeNodeDetailResp } from '#/api/core/tree';
+import { message } from 'ant-design-vue';
+import * as echarts from 'echarts';
 
 const router = useRouter();
 const loading = ref(false);
-const viewMode = ref('tree');
-const selectedNode = ref<{
-  id: number;
-  name: string;
-  path: string;
-  admins: string[];
-  createTime: string;
-  description: string;
-} | null>(null);
+const selectedNode = ref<TreeNodeDetailResp | null>(null);
+const chartContainer = ref<HTMLElement | null>(null);
+let chart: echarts.ECharts | null = null;
 
 // 统计数据
-const statistics = reactive({
-  totalNodes: 35,
-  totalResources: 187,
-  totalUsers: 42,
-  lastUpdate: '2小时前',
+const statistics = reactive<TreeStatisticsResp>({
+  totalNodes: 0,
+  totalResources: 0,
+  totalAdmins: 0,
+  totalMembers: 0,
+  activeNodes: 0,
+  inactiveNodes: 0
 });
 
 // 树形数据
-const treeData = ref([
-  {
-    title: '总部',
-    key: '1',
-    children: [
-      {
-        title: '技术部',
-        key: '1-1',
-        children: [
-          {
-            title: '后端组',
-            key: '1-1-1',
-          },
-          {
-            title: '前端组',
-            key: '1-1-2',
-          },
-          {
-            title: '运维组',
-            key: '1-1-3',
-          },
-        ],
-      },
-      {
-        title: '产品部',
-        key: '1-2',
-        children: [
-          {
-            title: '产品设计组',
-            key: '1-2-1',
-          },
-          {
-            title: '用户体验组',
-            key: '1-2-2',
-          },
-        ],
-      },
-      {
-        title: '运营部',
-        key: '1-3',
-      },
-      {
-        title: '财务部',
-        key: '1-4',
-      },
-    ],
-  },
-]);
+const treeData = ref<any[]>([]);
 
-// 节点资源数据
-const nodeResources: Record<string, { count: number }> = reactive({
-  '1-1-1': { count: 28 },
-  '1-1-2': { count: 15 },
-  '1-1-3': { count: 45 },
-  '1-2-1': { count: 8 },
-  '1-2-2': { count: 6 },
-  '1-3': { count: 12 },
-  '1-4': { count: 7 },
-});
-
-// 节点详细信息模拟数据
-interface NodeData {
-  id: number;
-  name: string;
-  path: string;
-  admins: string[];
-  createTime: string;
-  description: string;
-}
-
-const nodesData: Record<string, NodeData> = {
-  '1': {
-    id: 1,
-    name: '总部',
-    path: '/总部',
-    admins: ['admin', 'root'],
-    createTime: '2023-05-10 10:00:00',
-    description: '公司总部节点，所有业务的顶层结构',
-  },
-  '1-1': {
-    id: 2,
-    name: '技术部',
-    path: '/总部/技术部',
-    admins: ['tech_lead', 'cto'],
-    createTime: '2023-05-15 14:30:00',
-    description: '负责公司所有技术相关工作的部门',
-  },
-  '1-1-1': {
-    id: 3,
-    name: '后端组',
-    path: '/总部/技术部/后端组',
-    admins: ['backend_lead', 'tech_lead'],
-    createTime: '2023-06-01 09:15:00',
-    description: '负责后端服务开发和维护',
-  },
-  '1-1-2': {
-    id: 4,
-    name: '前端组',
-    path: '/总部/技术部/前端组',
-    admins: ['frontend_lead', 'tech_lead'],
-    createTime: '2023-06-01 09:20:00',
-    description: '负责前端界面开发和用户交互',
-  },
-  '1-1-3': {
-    id: 5,
-    name: '运维组',
-    path: '/总部/技术部/运维组',
-    admins: ['ops_lead', 'tech_lead'],
-    createTime: '2023-06-01 09:25:00',
-    description: '负责基础设施和服务运维',
-  },
-  '1-2': {
-    id: 6,
-    name: '产品部',
-    path: '/总部/产品部',
-    admins: ['product_lead', 'cpo'],
-    createTime: '2023-05-15 15:00:00',
-    description: '负责产品规划和设计',
-  },
-  '1-2-1': {
-    id: 7,
-    name: '产品设计组',
-    path: '/总部/产品部/产品设计组',
-    admins: ['design_lead', 'product_lead'],
-    createTime: '2023-06-02 10:30:00',
-    description: '负责产品原型和详细设计',
-  },
-  '1-2-2': {
-    id: 8,
-    name: '用户体验组',
-    path: '/总部/产品部/用户体验组',
-    admins: ['ux_lead', 'product_lead'],
-    createTime: '2023-06-02 10:35:00',
-    description: '负责用户体验研究和改进',
-  },
-  '1-3': {
-    id: 9,
-    name: '运营部',
-    path: '/总部/运营部',
-    admins: ['operation_lead', 'coo'],
-    createTime: '2023-05-15 15:30:00',
-    description: '负责市场营销和运营',
-  },
-  '1-4': {
-    id: 10,
-    name: '财务部',
-    path: '/总部/财务部',
-    admins: ['finance_lead', 'cfo'],
-    createTime: '2023-05-15 16:00:00',
-    description: '负责财务管理和预算控制',
-  },
-};
+// 节点资源数据映射
+const nodeResources = reactive<Record<string, { count: number }>>({});
 
 // 资源表格列定义
 const ecsColumns = [
-  { title: '实例名称', dataIndex: 'instanceName', key: 'instanceName' },
+  { title: '实例名称', dataIndex: 'name', key: 'name' },
   { title: '状态', dataIndex: 'status', key: 'status' },
-  { title: 'IP地址', dataIndex: 'ipAddr', key: 'ipAddr' },
-  { title: '规格', dataIndex: 'instanceType', key: 'instanceType' },
+  { title: 'IP地址', dataIndex: 'ip', key: 'ip' },
+  { title: '规格', dataIndex: 'type', key: 'type' },
 ];
 
 const rdsColumns = [
-  { title: '实例名称', dataIndex: 'instanceName', key: 'instanceName' },
+  { title: '实例名称', dataIndex: 'name', key: 'name' },
   { title: '状态', dataIndex: 'status', key: 'status' },
   { title: '类型', dataIndex: 'dbType', key: 'dbType' },
-  { title: '规格', dataIndex: 'instanceType', key: 'instanceType' },
+  { title: '规格', dataIndex: 'type', key: 'type' },
 ];
 
 const elbColumns = [
-  { title: '实例名称', dataIndex: 'instanceName', key: 'instanceName' },
+  { title: '实例名称', dataIndex: 'name', key: 'name' },
   { title: '状态', dataIndex: 'status', key: 'status' },
-  { title: 'IP地址', dataIndex: 'ipAddr', key: 'ipAddr' },
+  { title: 'IP地址', dataIndex: 'ip', key: 'ip' },
   { title: '类型', dataIndex: 'loadBalancerType', key: 'loadBalancerType' },
 ];
 
-// 模拟资源数据
+// 选中节点的资源
 const selectedNodeResources = reactive({
-  ecs: [
-    { key: '1', instanceName: 'web-server-1', status: '运行中', ipAddr: '10.0.0.1', instanceType: 'ecs.g6.xlarge' },
-    { key: '2', instanceName: 'web-server-2', status: '运行中', ipAddr: '10.0.0.2', instanceType: 'ecs.g6.xlarge' },
-    { key: '3', instanceName: 'api-server-1', status: '运行中', ipAddr: '10.0.0.3', instanceType: 'ecs.g6.2xlarge' },
-  ],
-  rds: [
-    { key: '1', instanceName: 'main-db', status: '运行中', dbType: 'MySQL', instanceType: 'rds.mysql.s3.large' },
-    { key: '2', instanceName: 'read-db', status: '运行中', dbType: 'MySQL', instanceType: 'rds.mysql.s3.large' },
-  ],
-  elb: [
-    { key: '1', instanceName: 'web-lb', status: '运行中', ipAddr: '47.100.123.45', loadBalancerType: '公网' },
-    { key: '2', instanceName: 'api-lb', status: '运行中', ipAddr: '10.0.0.100', loadBalancerType: '内网' },
-  ],
+  ecs: [],
+  rds: [],
+  elb: [],
 });
 
 // 获取节点资源数量
-const getNodeResourceCount = (key: string): number => {
+const getNodeResourceCount = (key: number): number => {
   return nodeResources[key]?.count || 0;
 };
 
+// 初始化ECharts图表
+const initChart = () => {
+  if (chartContainer.value) {
+    chart = echarts.init(chartContainer.value);
+    updateChart();
+  }
+};
+
+// 更新图表数据
+const updateChart = () => {
+  if (!chart || treeData.value.length === 0) return;
+
+  // 准备节点数据
+  const nodes: any[] = [];
+  const links: any[] = [];
+  
+  // 创建实际节点关系的映射，用于检查连线
+  const nodeRelations = new Map();
+  
+  // 将树形数据中的父子关系存储到映射中
+  const buildRelationsMap = (node: any) => {
+    if (node.children && node.children.length > 0) {
+      node.children.forEach((child: any) => {
+        // 记录父子关系: 子节点ID -> 父节点ID
+        nodeRelations.set(child.key.toString(), node.key.toString());
+        buildRelationsMap(child);
+      });
+    }
+  };
+  
+  // 为每个根节点建立关系映射
+  treeData.value.forEach((rootNode) => {
+    buildRelationsMap(rootNode);
+  });
+
+  // 递归处理树节点及其关系
+  const processNode = (node: any) => {
+    // 添加当前节点
+    nodes.push({
+      name: node.title,
+      id: node.key.toString(),
+      value: getNodeResourceCount(node.key),
+      symbolSize: Math.max(30, 40 + (getNodeResourceCount(node.key) * 2)),
+      itemStyle: {
+        color: nodeRelations.has(node.key.toString()) ? '#1890ff' : '#722ed1'
+      },
+      label: {
+        show: true,
+        position: 'inside',
+        formatter: (params: any) => {
+          return params.data.name;
+        }
+      }
+    });
+    
+    // 如果节点存在于关系映射中，添加连接关系
+    if (nodeRelations.has(node.key.toString())) {
+      const parentId = nodeRelations.get(node.key.toString());
+      links.push({
+        source: parentId,
+        target: node.key.toString(),
+        lineStyle: {
+          width: 2,
+          curveness: 0.2
+        }
+      });
+    }
+    
+    // 递归处理子节点
+    if (node.children && node.children.length > 0) {
+      node.children.forEach((child: any) => {
+        processNode(child);
+      });
+    }
+  };
+  
+  // 处理所有顶级节点及其子节点
+  treeData.value.forEach((rootNode) => {
+    processNode(rootNode);
+  });
+
+  const option = {
+    tooltip: {
+      trigger: 'item',
+      formatter: '{b}'
+    },
+    animationDurationUpdate: 1500,
+    animationEasingUpdate: 'quinticInOut' as const, 
+    series: [
+      {
+        type: 'graph',
+        layout: 'force',
+        data: nodes,
+        links: links,
+        roam: true,
+        label: {
+          show: true,
+          position: 'inside',
+          color: '#fff',
+          fontWeight: 'bold'
+        },
+        lineStyle: {
+          color: 'source',
+          curveness: 0.3
+        },
+        emphasis: {
+          focus: 'adjacency',
+          lineStyle: {
+            width: 4
+          }
+        },
+        force: {
+          repulsion: 300,
+          edgeLength: 150
+        }
+      }
+    ]
+  };
+
+  chart.setOption(option);
+};
+
+// 监听窗口大小变化，调整图表大小
+window.addEventListener('resize', () => {
+  if (chart) {
+    chart.resize();
+  }
+});
+
+// 监听树数据变化，更新图表
+watch(treeData, () => {
+  if (chart) {
+    updateChart();
+  }
+}, { deep: true });
+
 // 树节点选择事件
-const onTreeNodeSelect = (selectedKeys: string[]): void => {
+const onTreeNodeSelect = async (selectedKeys: number[]): Promise<void> => {
   if (selectedKeys.length > 0) {
     const key = selectedKeys[0];
-    if (typeof key === 'string') {
-      const node = nodesData[key]; // 此处可能为 undefined
-      selectedNode.value = node ? { ...node } : null; // 安全赋值
-    } else {
+    try {
+      loading.value = true;
+      // 获取节点详情
+      const nodeDetailRes = await getNodeDetail(Number(key));
+      if (nodeDetailRes) {
+        selectedNode.value = nodeDetailRes;
+      } else {
+        selectedNode.value = null;
+        message.error('获取节点详情失败');
+      }
+    } catch (error) {
+      console.error('获取节点数据失败:', error);
+      message.error('获取节点数据失败');
       selectedNode.value = null;
+    } finally {
+      loading.value = false;
     }
   } else {
     selectedNode.value = null;
@@ -404,20 +397,86 @@ const onTreeNodeSelect = (selectedKeys: string[]): void => {
 };
 
 // 刷新数据
-const refreshData = () => {
+const refreshData = async () => {
   loading.value = true;
-  setTimeout(() => {
+  try {
+    // 获取统计数据
+    const statsRes = await getTreeStatistics();
+    if (statsRes) {
+      // 直接使用返回的数据对象，不需要检查code
+      Object.assign(statistics, statsRes);
+    } else {
+      message.error('获取统计数据失败：返回格式不正确');
+    }
+
+    // 获取树节点数据
+    const listReq: TreeNodeListReq = {}; // 可以添加筛选条件
+    const treeRes = await getTreeList(listReq);
+    if (treeRes && Array.isArray(treeRes)) {
+      // 将后端返回的树状结构转换为前端所需格式
+      treeData.value = treeRes.map((node: any) => {
+        // 递归处理子节点
+        if (node.children && Array.isArray(node.children)) {
+          node.children = processTreeNodes(node.children);
+        }
+        
+        // 记录资源数量
+        if (node.resourceCount && node.resourceCount > 0) {
+          nodeResources[node.id] = { count: node.resourceCount };
+        }
+        
+        return {
+          key: node.id,
+          title: node.name,
+          ...node
+        };
+      });
+      
+      // 更新图表
+      setTimeout(() => {
+        updateChart();
+      }, 100);
+    } else if (treeRes.code !== 0) {
+      message.error(`获取服务树数据失败: ${treeRes.message || '未知错误'}`);
+    } else {
+      message.error('获取服务树数据失败: 返回数据格式不正确');
+    }
+    
+    // 递归处理树节点的辅助函数
+    function processTreeNodes(nodes: any[]): any[] {
+      return nodes.map((node: any) => {
+        if (node.children && Array.isArray(node.children)) {
+          node.children = processTreeNodes(node.children);
+        }
+        
+        // 记录资源数量
+        if (node.resourceCount && node.resourceCount > 0) {
+          nodeResources[node.id] = { count: node.resourceCount };
+        }
+        
+        return {
+          key: node.id,
+          title: node.name,
+          ...node
+        };
+      });
+    }
+  } catch (error) {
+    console.error('加载数据失败:', error);
+    message.error('加载数据失败，请稍后重试');
+  } finally {
     loading.value = false;
-  }, 1000);
+  }
 };
 
 // 导航到节点管理页面
 const navigateToManagePage = () => {
-  router.push('/tree/manage');
+  router.push('/tree_node_manager');
 };
 
 onMounted(() => {
   refreshData();
+  initChart();
 });
 </script>
 
@@ -456,13 +515,12 @@ onMounted(() => {
   .tree-visualization {
     margin-bottom: 24px;
 
-    .tree-card {
-      .view-selector {
-        margin-bottom: 16px;
-      }
+    .tree-card, .graph-card {
+      height: 400px;
+      overflow: auto;
 
-      .tree-content {
-        min-height: 300px;
+      .tree-content, .graph-content {
+        height: 100%;
 
         .service-tree {
           margin-top: 16px;
@@ -473,63 +531,18 @@ onMounted(() => {
           align-items: center;
           gap: 8px;
         }
-
-        .graph-view {
-          height: 350px;
-          width: 100%;
-          border-radius: 4px;
-          position: relative;
-
-          .graph-placeholder {
-            height: 100%;
-            position: relative;
-
-            .graph-node {
-              position: absolute;
-              padding: 8px 16px;
-              border-radius: 20px;
-              background: #1890ff;
-              color: white;
-              font-weight: 500;
-              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-              z-index: 2;
-            }
-
-            .central-node {
-              top: 150px;
-              left: 150px;
-              background: #722ed1;
-            }
-
-            .child-node {
-              transition: all 0.3s;
-
-              &:hover {
-                transform: scale(1.1);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-              }
-            }
-
-            .graph-connections {
-              &::before {
-                content: '';
-                position: absolute;
-                top: 160px;
-                left: 160px;
-                width: 240px;
-                height: 240px;
-                border-radius: 50%;
-                z-index: 1;
-              }
-            }
-          }
-        }
       }
+    }
+
+    .graph-view {
+      height: 350px;
+      width: 100%;
+      border-radius: 4px;
+      position: relative;
     }
   }
 
   .node-details-row {
-
     .details-card,
     .resources-card {
       height: 100%;

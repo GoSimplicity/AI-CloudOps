@@ -267,12 +267,12 @@ func (t *treeService) GetNodeDetail(ctx context.Context, id int) (*model.TreeNod
 	// 提取用户名
 	adminUserNames := make([]string, 0, len(adminUsers))
 	for _, user := range adminUsers {
-		adminUserNames = append(adminUserNames, user.Username)
+		adminUserNames = append(adminUserNames, user.RealName)
 	}
 
 	memberUserNames := make([]string, 0, len(memberUsers))
 	for _, user := range memberUsers {
-		memberUserNames = append(memberUserNames, user.Username)
+		memberUserNames = append(memberUserNames, user.RealName)
 	}
 
 	return &model.TreeNodeDetailResp{
