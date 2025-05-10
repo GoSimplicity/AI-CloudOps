@@ -72,6 +72,7 @@ func InitGinServer(
 	instanceHandler *workorderApi.InstanceHandler,
 	aiHandler *aiHandler.AIHandler,
 	resourceHandler *resourceApi.ResourceHandler,
+	treeHandler *resourceApi.TreeHandler,
 
 ) *gin.Engine {
 	server := gin.Default()
@@ -107,5 +108,6 @@ func InitGinServer(
 	instanceHandler.RegisterRouters(server)
 	aiHandler.RegisterRouters(server)
 	resourceHandler.RegisterRouters(server)
+	treeHandler.RegisterRouters(server)
 	return server
 }

@@ -27,13 +27,17 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components/prompt"
+	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/flow/agent"
 	"github.com/cloudwego/eino/flow/agent/react"
 	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
@@ -141,7 +145,7 @@ func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMes
 	}
 
 	// 使用agent的流式响应
-	streamResult, err := a.agent.Stream(ctx, messages)
+	streamResult, err := a.agent.Stream(ctx, messages, agent.WithComposeOptions(compose.WithCallbacks(&LoggerCallback{})))
 	if err != nil {
 		a.logger.Error("获取流式响应失败", zap.Error(err))
 		responseChan <- model.StreamResponse{
@@ -158,6 +162,7 @@ func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMes
 		if err == io.EOF {
 			break
 		}
+		fmt.Printf("工具调用: %v", chunk.ToolCalls)
 		if err != nil {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				responseChan <- model.StreamResponse{
@@ -183,4 +188,33 @@ func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMes
 	}
 
 	return nil
+}
+
+type LoggerCallback struct {
+	callbacks.HandlerBuilder
+}
+
+func (cb *LoggerCallback) OnStart(ctx context.Context, info *callbacks.RunInfo, input callbacks.CallbackInput) context.Context {
+	fmt.Println("==================")
+	inputStr, _ := json.MarshalIndent(input, "", "  ")
+	fmt.Printf("[OnStart] %s\n", string(inputStr))
+	return ctx
+}
+
+func (cb *LoggerCallback) OnEnd(ctx context.Context, info *callbacks.RunInfo, output callbacks.CallbackOutput) context.Context {
+	return ctx
+}
+
+func (cb *LoggerCallback) OnError(ctx context.Context, info *callbacks.RunInfo, err error) context.Context {
+	return ctx
+}
+
+func (cb *LoggerCallback) OnEndWithStreamOutput(ctx context.Context, info *callbacks.RunInfo,
+	output *schema.StreamReader[callbacks.CallbackOutput]) context.Context {
+	return ctx
+}
+
+func (cb *LoggerCallback) OnStartWithStreamInput(ctx context.Context, info *callbacks.RunInfo,
+	input *schema.StreamReader[callbacks.CallbackInput]) context.Context {
+	return ctx
 }

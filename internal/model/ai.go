@@ -21,14 +21,16 @@ type ChatCompletionResponse struct {
 
 // StreamResponse 流式响应
 type StreamResponse struct {
-	Content string `json:"content"`
-	Error   string `json:"error,omitempty"`
-	Done    bool   `json:"done"`
+	Content  string `json:"content"`
+	Error    string `json:"error,omitempty"`
+	Done     bool   `json:"done"`
+	ToolName string `json:"toolName"`
+	ToolDesc string `json:"toolDesc"`
 }
 
 // WSResponse WebSocket响应格式
 type WSResponse struct {
-	Type    string `json:"type"`            // message 或 error
+	Type    string `json:"type"` // message 或 error
 	Content string `json:"content,omitempty"`
 	Error   string `json:"error,omitempty"`
 	Done    bool   `json:"done"`
