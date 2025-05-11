@@ -28,12 +28,11 @@ package service
 import (
 	"context"
 	"errors"
-	"time"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
+	"strconv"
 )
 
 const (
@@ -267,13 +266,24 @@ func (t *treeService) GetNodeDetail(ctx context.Context, id int) (*model.TreeNod
 	// 提取用户名
 	adminUserNames := make([]string, 0, len(adminUsers))
 	for _, user := range adminUsers {
-		adminUserNames = append(adminUserNames, user.RealName)
+		strId := strconv.Itoa(user.ID)
+		adminUserNames = append(adminUserNames, strId)
 	}
 
 	memberUserNames := make([]string, 0, len(memberUsers))
 	for _, user := range memberUsers {
-		memberUserNames = append(memberUserNames, user.RealName)
+		strId := strconv.Itoa(user.ID)
+		memberUserNames = append(memberUserNames, strId)
 	}
+
+	// 获取创建人
+	creator, err := t.userDao.GetUserByID(ctx, node.CreatorID)
+	if err != nil {
+		t.logger.Error("获取创建人失败", zap.Int("id", node.CreatorID), zap.Error(err))
+		return nil, err
+	}
+
+	node.CreatorName = creator.Username
 
 	return &model.TreeNodeDetailResp{
 		TreeNodeResp: model.TreeNodeResp{
@@ -283,6 +293,7 @@ func (t *treeService) GetNodeDetail(ctx context.Context, id int) (*model.TreeNod
 			ParentID:    node.ParentID,
 			ParentName:  node.ParentName,
 			Level:       node.Level,
+			CreatorName: node.CreatorName,
 			CreatorID:   node.CreatorID,
 			Status:      node.Status,
 			ChildCount:  node.ChildCount,
@@ -437,14 +448,18 @@ func (t *treeService) UpdateNode(ctx context.Context, req *model.TreeNodeUpdateR
 		return errors.New("节点名称不能为空")
 	}
 
+	if req.ParentID == req.ID {
+		return errors.New("节点不能成为自己的子节点")
+	}
+
 	// 创建更新实体
 	node := &model.TreeNode{
 		Name:        req.Name,
 		Description: req.Description,
 		Status:      req.Status,
+		ParentID:    req.ParentID,
 		Model: model.Model{
-			ID:        req.ID,
-			UpdatedAt: time.Now(),
+			ID: req.ID,
 		},
 	}
 

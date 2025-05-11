@@ -46,9 +46,10 @@ type TreeNode struct {
 	ChildCount    int         `json:"childCount" gorm:"-"`    // 子节点数量
 	ResourceCount int         `json:"resourceCount" gorm:"-"` // 关联资源数量
 	ParentName    string      `json:"parentName" gorm:"-"`    // 父节点名称
-	AdminUsers    StringList  `json:"adminUsers" gorm:"-"`    // 管理员用户名列表
-	MemberUsers   StringList  `json:"memberUsers" gorm:"-"`   // 成员用户名列表
-	Children      []*TreeNode `json:"children" gorm:"-"`      // 子节点列表
+	CreatorName   string      `json:"creatorName" gorm:"-"`
+	AdminUsers    StringList  `json:"adminUsers" gorm:"-"`  // 管理员用户名列表
+	MemberUsers   StringList  `json:"memberUsers" gorm:"-"` // 成员用户名列表
+	Children      []*TreeNode `json:"children" gorm:"-"`    // 子节点列表
 }
 
 // TreeNodeAdmin 节点管理员关联表
@@ -81,14 +82,13 @@ type TreeNodeUpdateReq struct {
 	Name        string `json:"name" binding:"required,min=1,max=50"`
 	ParentID    int    `json:"parentId"`
 	Description string `json:"description"`
-	IsLeaf      bool   `json:"isLeaf"`
 	Status      string `json:"status" binding:"omitempty,oneof=active inactive"`
 }
 
 // TreeNodeMemberReq 节点成员请求
 type TreeNodeMemberReq struct {
 	NodeID int    `json:"nodeId" binding:"required"`
-	UserID int    `json:"userId" binding:"required"`
+	UserID int    `json:"userId"`
 	Type   string `json:"type" binding:"required,oneof=admin member"` // admin 或 member
 }
 
@@ -115,6 +115,7 @@ type TreeNodeResp struct {
 	Description string    `json:"description"`
 	CreatorID   int       `json:"creatorId"`
 	Status      string    `json:"status"`
+	CreatorName string    `json:"creatorName"`
 	ParentName  string    `json:"parentName"`
 	ChildCount  int       `json:"childCount"`
 	IsLeaf      bool      `json:"isLeaf"`
