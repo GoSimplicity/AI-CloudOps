@@ -52,10 +52,10 @@
             placeholder="选择状态"
             allow-clear
           >
-            <a-select-option value="running">运行中</a-select-option>
-            <a-select-option value="stopped">已停止</a-select-option>
-            <a-select-option value="starting">启动中</a-select-option>
-            <a-select-option value="stopping">停止中</a-select-option>
+            <a-select-option value="Running">运行中</a-select-option>
+            <a-select-option value="Stopped">已停止</a-select-option>
+            <a-select-option value="Starting">启动中</a-select-option>
+            <a-select-option value="Stopping">停止中</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item>
@@ -69,7 +69,7 @@
       </a-form>
     </a-card>
 
-    <a-tabs v-model:activeKey="activeTab" class="resource-tabs">
+    <a-tabs v-model:activeKey="activeTab" class="resource-tabs" @change="handleTabChange">
       <a-tab-pane key="ecs" tab="云服务器 ECS">
         <a-card class="resource-card">
           <template #extra>
@@ -82,14 +82,25 @@
             :data-source="ecsData"
             :loading="loading"
             :pagination="pagination"
-            row-key="id"
             @change="handleTableChange"
+            row-key="instance_id"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'status'">
                 <a-tag :color="getStatusColor(record.status)">
                   {{ getStatusText(record.status) }}
                 </a-tag>
+              </template>
+              <template v-if="column.key === 'ipAddr'">
+                <div>
+                  <div>内网: {{ record.private_ip_address?.join(', ') || '-' }}</div>
+                  <div v-if="record.public_ip_address && record.public_ip_address.length > 0">
+                    公网: {{ record.public_ip_address?.join(', ') }}
+                  </div>
+                </div>
+              </template>
+              <template v-if="column.key === 'region'">
+                {{ record.region_id }}/{{ record.zone_id }}
               </template>
               <template v-if="column.key === 'action'">
                 <a-dropdown>
@@ -98,13 +109,13 @@
                       <a-menu-item key="detail" @click="handleViewDetail('ecs', record)">
                         <info-circle-outlined /> 详情
                       </a-menu-item>
-                      <a-menu-item key="start" @click="handleEcsAction('start', record)" v-if="record.status === 'stopped'">
+                      <a-menu-item key="start" @click="handleEcsAction('start', record)" v-if="record.status === 'Stopped'">
                         <play-circle-outlined /> 启动
                       </a-menu-item>
-                      <a-menu-item key="stop" @click="handleEcsAction('stop', record)" v-if="record.status === 'running'">
+                      <a-menu-item key="stop" @click="handleEcsAction('stop', record)" v-if="record.status === 'Running'">
                         <pause-circle-outlined /> 停止
                       </a-menu-item>
-                      <a-menu-item key="restart" @click="handleEcsAction('restart', record)" v-if="record.status === 'running'">
+                      <a-menu-item key="restart" @click="handleEcsAction('restart', record)" v-if="record.status === 'Running'">
                         <reload-outlined /> 重启
                       </a-menu-item>
                       <a-menu-item key="delete" @click="handleDeleteResource('ecs', record)">
@@ -259,195 +270,345 @@
     <a-modal
       v-model:visible="modals.ecs"
       title="创建云服务器实例"
-      width="700px"
-      @ok="handleCreateResource('ecs')"
-      :confirmLoading="modalLoading"
+      width="800px"
+      :footer="null"
+      :destroyOnClose="true"
     >
-      <a-form :model="ecsForm" layout="vertical">
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="实例名称" name="instanceName" :rules="[{ required: true, message: '请输入实例名称' }]">
-              <a-input v-model:value="ecsForm.instanceName" placeholder="请输入实例名称" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="云厂商" name="provider" :rules="[{ required: true, message: '请选择云厂商' }]">
-              <a-select v-model:value="ecsForm.provider" placeholder="请选择云厂商">
-                <a-select-option v-for="provider in cloudProviders" :key="provider.value" :value="provider.value">
-                  {{ provider.label }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-        
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="地区" name="region" :rules="[{ required: true, message: '请选择地区' }]">
-              <a-select v-model:value="ecsForm.region" placeholder="请选择地区">
-                <a-select-option v-for="region in regions" :key="region.value" :value="region.value">
-                  {{ region.label }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="可用区" name="zone" :rules="[{ required: true, message: '请选择可用区' }]">
-              <a-select v-model:value="ecsForm.zone" placeholder="请选择可用区">
-                <a-select-option v-for="zone in zones" :key="zone.value" :value="zone.value">
-                  {{ zone.label }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-        
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="实例类型" name="instanceType" :rules="[{ required: true, message: '请选择实例类型' }]">
-              <a-select v-model:value="ecsForm.instanceType" placeholder="请选择实例类型">
-                <a-select-option v-for="type in instanceTypes" :key="type.value" :value="type.value">
-                  {{ type.label }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="镜像" name="imageId" :rules="[{ required: true, message: '请选择镜像' }]">
-              <a-select v-model:value="ecsForm.imageId" placeholder="请选择镜像">
-                <a-select-option v-for="image in images" :key="image.value" :value="image.value">
-                  {{ image.label }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-        
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="VPC" name="vpcId" :rules="[{ required: true, message: '请选择VPC' }]">
-              <a-select v-model:value="ecsForm.vpcId" placeholder="请选择VPC">
-                <a-select-option v-for="vpc in vpcs" :key="vpc.value" :value="vpc.value">
-                  {{ vpc.label }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="安全组" name="securityGroupId" :rules="[{ required: true, message: '请选择安全组' }]">
-              <a-select 
-                v-model:value="ecsForm.securityGroupIds" 
-                mode="multiple" 
-                placeholder="请选择安全组"
-              >
-                <a-select-option v-for="sg in securityGroups" :key="sg.value" :value="sg.value">
-                  {{ sg.label }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-        
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="付费类型" name="instanceChargeType" :rules="[{ required: true, message: '请选择付费类型' }]">
-              <a-radio-group v-model:value="ecsForm.instanceChargeType">
-                <a-radio value="PostPaid">按量付费</a-radio>
-                <a-radio value="PrePaid">包年包月</a-radio>
-              </a-radio-group>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="密码设置" name="password" :rules="[{ required: true, message: '请输入密码' }]">
-              <a-input-password v-model:value="ecsForm.password" placeholder="请输入密码" />
-            </a-form-item>
-          </a-col>
-        </a-row>
-        
-        <a-form-item label="描述" name="description">
-          <a-textarea v-model:value="ecsForm.description" placeholder="请输入描述信息" :rows="2" />
-        </a-form-item>
-        
-        <a-form-item label="标签" name="tags">
-          <a-select 
-            v-model:value="ecsForm.tags" 
-            mode="tags" 
-            placeholder="输入标签后按Enter确认"
-          />
-        </a-form-item>
+      <a-steps :current="currentStep" size="small" class="create-steps">
+        <a-step title="基础配置" />
+        <a-step title="网络配置" />
+        <a-step title="系统配置" />
+        <a-step title="确认信息" />
+      </a-steps>
+
+      <a-form :model="createForm" layout="vertical" ref="createFormRef" class="create-form">
+        <!-- 步骤 1: 基础配置 -->
+        <div v-if="currentStep === 0">
+          <a-form-item label="云服务商" name="provider" :rules="[{ required: true }]">
+            <a-select v-model:value="createForm.provider" placeholder="选择云服务商" @change="handleProviderChange">
+              <a-select-option value="aliyun">阿里云</a-select-option>
+              <a-select-option value="aws">AWS</a-select-option>
+              <a-select-option value="tencent">腾讯云</a-select-option>
+            </a-select>
+          </a-form-item>
+
+          <a-form-item label="付费类型" name="payType" :rules="[{ required: true }]">
+            <a-select v-model:value="createForm.payType" placeholder="选择付费类型" @change="handlePayTypeChange"
+              :disabled="!createForm.provider">
+              <a-select-option value="PostPaid">按量付费</a-select-option>
+              <a-select-option value="PrePaid">包年包月</a-select-option>
+            </a-select>
+          </a-form-item>
+
+          <a-form-item label="地域" name="region" :rules="[{ required: true }]">
+            <a-select v-model:value="createForm.region" placeholder="选择地域" @change="handleRegionChange"
+              :disabled="!createForm.payType">
+              <a-select-option v-for="data in regionOptions" :key="data.region" :value="data.region">
+                {{ data.region }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+
+          <a-form-item label="可用区" name="zoneId" :rules="[{ required: true }]">
+            <a-select v-model:value="createForm.zoneId" placeholder="选择可用区" @change="handleZoneChange"
+              :disabled="!createForm.region">
+              <a-select-option v-for="zone in zoneOptions" :key="zone.zone" :value="zone.zone">
+                {{ zone.zone }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+
+          <a-form-item label="实例规格" name="instanceType" :rules="[{ required: true }]">
+            <a-select v-model:value="createForm.instanceType" placeholder="选择实例规格" @change="handleInstanceTypeChange"
+              :disabled="!createForm.zoneId" show-search :filter-option="filterInstanceType" :options="instanceTypeOptions.map(type => ({
+                value: type.instanceType,
+                label: `${type.instanceType} (${type.cpu}核${type.memory}GB)`
+              }))">
+            </a-select>
+          </a-form-item>
+
+          <a-form-item label="镜像" name="imageId" :rules="[{ required: true }]">
+            <a-select v-model:value="createForm.imageId" placeholder="选择镜像" @change="handleImageIdChange"
+              :disabled="!createForm.instanceType" show-search :filter-option="filterImage" :options="imageOptions.map(image => ({
+                value: image.imageId,
+                label: `${image.osName} (${image.osType} - ${image.architecture})`
+              }))" :virtual="false" :dropdown-style="{ maxHeight: '400px', overflow: 'auto' }">
+            </a-select>
+          </a-form-item>
+        </div>
+
+        <!-- 步骤 2: 网络配置 -->
+        <div v-if="currentStep === 1">
+          <a-form-item label="实例数量" name="amount" :rules="[{ required: true }]">
+            <a-input-number v-model:value="createForm.amount" :min="1" :max="100" style="width: 100%" />
+          </a-form-item>
+
+          <a-form-item label="VPC" name="vpcId" :rules="[{ required: true }]">
+            <a-select v-model:value="createForm.vpcId" placeholder="选择VPC" @change="handleVpcChange"
+              :loading="vpcLoading">
+              <a-select-option v-for="vpc in vpcOptions" :key="vpc.vpcId" :value="vpc.vpcId">
+                {{ vpc.vpcName }} ({{ vpc.cidrBlock }})
+              </a-select-option>
+              <a-empty v-if="vpcOptions.length === 0" :image="Empty.PRESENTED_IMAGE_SIMPLE" description="暂无VPC资源" />
+            </a-select>
+          </a-form-item>
+
+          <a-form-item label="交换机" name="vSwitchId" :rules="[{ required: true }]">
+            <a-select v-model:value="createForm.vSwitchId" placeholder="选择交换机" :loading="vSwitchLoading"
+              :disabled="!createForm.vpcId">
+              <a-select-option v-for="vSwitch in vSwitchOptions" :key="vSwitch.vSwitchId" :value="vSwitch.vSwitchId">
+                {{ vSwitch.vSwitchName }} ({{ vSwitch.cidrBlock }})
+              </a-select-option>
+              <a-empty v-if="vSwitchOptions.length === 0" :image="Empty.PRESENTED_IMAGE_SIMPLE" description="暂无可用交换机" />
+            </a-select>
+          </a-form-item>
+
+          <a-form-item label="安全组" name="securityGroupIds" :rules="[{ required: true }]">
+            <a-select v-model:value="createForm.securityGroupIds" placeholder="选择安全组" mode="multiple"
+              :loading="securityGroupLoading" :disabled="!createForm.vpcId">
+              <a-select-option v-for="sg in securityGroupOptions" :key="sg.securityGroupId" :value="sg.securityGroupId">
+                {{ sg.securityGroupName }} ({{ sg.description || '无描述' }})
+              </a-select-option>
+              <a-empty v-if="securityGroupOptions.length === 0" :image="Empty.PRESENTED_IMAGE_SIMPLE"
+                description="暂无可用安全组" />
+            </a-select>
+          </a-form-item>
+        </div>
+
+        <!-- 步骤 3: 系统配置 -->
+        <div v-if="currentStep === 2">
+          <a-form-item label="实例名称" name="instanceName" :rules="[{ required: true }]">
+            <a-input v-model:value="createForm.instanceName" placeholder="实例名称，如web-server-01" />
+          </a-form-item>
+
+          <a-form-item label="主机名" name="hostname" :rules="[{ required: true }]">
+            <a-input v-model:value="createForm.hostname" placeholder="主机名，如cloudops" />
+          </a-form-item>
+
+          <a-form-item label="登录密码" name="password" :rules="[{ required: true }]">
+            <a-input-password v-model:value="createForm.password" placeholder="请输入登录密码" />
+          </a-form-item>
+
+          <a-form-item label="实例描述" name="description">
+            <a-textarea v-model:value="createForm.description" placeholder="实例描述" :rows="2" />
+          </a-form-item>
+
+          <a-form-item label="系统盘类型" name="systemDiskCategory" :rules="[{ required: true }]">
+            <a-select v-model:value="createForm.systemDiskCategory" placeholder="选择系统盘类型"
+              @change="handleSystemDiskCategoryChange">
+              <a-select-option v-for="disk in systemDiskOptions" :key="disk.systemDiskCategory"
+                :value="disk.systemDiskCategory">
+                {{ disk.systemDiskCategory }}
+              </a-select-option>
+              <a-empty v-if="systemDiskOptions.length === 0" :image="Empty.PRESENTED_IMAGE_SIMPLE"
+                description="暂无可用系统盘类型" />
+            </a-select>
+          </a-form-item>
+
+          <a-form-item label="系统盘大小 (GB)" name="systemDiskSize" :rules="[{ required: true }]">
+            <a-slider v-model:value="createForm.systemDiskSize" :min="20" :max="500" :step="10"
+              :marks="{ 20: '20G', 100: '100G', 200: '200G', 500: '500G' }" />
+          </a-form-item>
+
+          <a-form-item label="数据盘类型" name="dataDiskCategory">
+            <a-select v-model:value="createForm.dataDiskCategory" placeholder="选择数据盘类型"
+              @change="handleDataDiskCategoryChange" :disabled="!createForm.systemDiskCategory">
+              <a-select-option v-for="disk in dataDiskOptions" :key="disk.dataDiskCategory"
+                :value="disk.dataDiskCategory">
+                {{ disk.dataDiskCategory }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+
+          <a-form-item label="数据盘大小 (GB)" name="dataDiskSize">
+            <a-slider v-model:value="createForm.dataDiskSize" :min="20" :max="2000" :step="10"
+              :marks="{ 20: '20G', 100: '100G', 500: '500G', 2000: '2TB' }" :disabled="!createForm.dataDiskCategory" />
+          </a-form-item>
+
+          <a-form-item label="标签" name="tags">
+            <div class="tag-input-container">
+              <div v-for="(tag, index) in tagsArray" :key="index" class="tag-item">
+                <a-tag closable @close="removeTag(index)">{{ tag }}</a-tag>
+              </div>
+              <a-input v-model:value="tagInputValue" placeholder="输入标签，格式为key=value，按回车添加" @pressEnter="addTag"
+                style="width: 200px" />
+            </div>
+          </a-form-item>
+        </div>
+
+        <!-- 步骤 4: 确认信息 -->
+        <div v-if="currentStep === 3" class="confirmation-step">
+          <a-descriptions bordered :column="1" size="small">
+            <a-descriptions-item label="云服务商">{{ getProviderName(createForm.provider) }}</a-descriptions-item>
+            <a-descriptions-item label="付费类型">{{ getPayTypeName(createForm.payType) }}</a-descriptions-item>
+            <a-descriptions-item label="地域">
+              {{ getRegionById(createForm.region)?.region || createForm.region }}
+            </a-descriptions-item>
+            <a-descriptions-item label="可用区">
+              {{ getZoneById(createForm.zoneId)?.zone || createForm.zoneId }}
+            </a-descriptions-item>
+            <a-descriptions-item label="实例规格">
+              {{ getInstanceTypeById(createForm.instanceType)?.instanceType || createForm.instanceType }}
+            </a-descriptions-item>
+            <a-descriptions-item label="镜像">{{ createForm.imageId }}</a-descriptions-item>
+            <a-descriptions-item label="实例数量">{{ createForm.amount }}</a-descriptions-item>
+            <a-descriptions-item label="VPC">
+              {{ getVpcById(createForm.vpcId)?.vpcName || createForm.vpcId }}
+            </a-descriptions-item>
+            <a-descriptions-item label="交换机">
+              {{ getVSwitchById(createForm.vSwitchId)?.vSwitchName || createForm.vSwitchId }}
+            </a-descriptions-item>
+            <a-descriptions-item label="安全组">
+              <template v-if="createForm.securityGroupIds && createForm.securityGroupIds.length > 0">
+                <a-tag v-for="(sgId, idx) in createForm.securityGroupIds" :key="idx" color="blue">
+                  {{ getSecurityGroupById(sgId)?.securityGroupName || sgId }}
+                </a-tag>
+              </template>
+              <template v-else>
+                <span>未选择安全组</span>
+              </template>
+            </a-descriptions-item>
+            <a-descriptions-item label="实例名称">{{ createForm.instanceName }}</a-descriptions-item>
+            <a-descriptions-item label="系统盘">
+              {{ getSystemDiskById(createForm.systemDiskCategory)?.systemDiskCategory ||
+                createForm.systemDiskCategory }} {{ createForm.systemDiskSize }}GB
+            </a-descriptions-item>
+            <a-descriptions-item label="数据盘" v-if="createForm.dataDiskCategory">
+              {{ getDataDiskById(createForm.dataDiskCategory)?.dataDiskCategory ||
+                createForm.dataDiskCategory }} {{ createForm.dataDiskSize }}GB
+            </a-descriptions-item>
+            <a-descriptions-item label="标签" v-if="tagsArray.length > 0">
+              <a-tag v-for="(tag, index) in tagsArray" :key="index" color="blue">{{ tag }}</a-tag>
+            </a-descriptions-item>
+          </a-descriptions>
+
+          <a-alert type="info" showIcon style="margin-top: 20px;">
+            <template #message>
+              <span>创建 ECS 服务器后，服务器将立即启动，实例费用将根据付费类型收取。</span>
+            </template>
+          </a-alert>
+        </div>
+
+        <div class="steps-action">
+          <a-button v-if="currentStep > 0" style="margin-right: 8px" @click="prevStep">
+            上一步
+          </a-button>
+          <a-button v-if="currentStep < 3" type="primary" @click="nextStep">
+            下一步
+          </a-button>
+          <a-button v-if="currentStep === 3" type="primary" @click="handleCreateSubmit" :loading="createLoading">
+            创建实例
+          </a-button>
+        </div>
       </a-form>
     </a-modal>
 
     <!-- 资源详情对话框 -->
-    <a-modal
+    <a-drawer
       v-model:visible="detailVisible"
       :title="`${resourceDetailTitle}详情`"
-      width="800px"
-      footer={null}
+      width="600"
+      :destroyOnClose="true"
+      class="detail-drawer"
     >
-      <a-descriptions bordered :column="2">
+      <a-skeleton :loading="detailLoading" active>
         <template v-if="resourceType === 'ecs'">
-          <a-descriptions-item label="实例名称" span="2">{{ resourceDetail?.instanceName }}</a-descriptions-item>
-          <a-descriptions-item label="实例ID">{{ resourceDetail?.instanceId }}</a-descriptions-item>
-          <a-descriptions-item label="状态">
-            <a-tag :color="getStatusColor(resourceDetail?.status)">
-              {{ getStatusText(resourceDetail?.status) }}
-            </a-tag>
-          </a-descriptions-item>
-          <a-descriptions-item label="云厂商">{{ getProviderName(resourceDetail?.provider) }}</a-descriptions-item>
-          <a-descriptions-item label="地区/可用区">{{ resourceDetail?.regionId }}/{{ resourceDetail?.zoneId }}</a-descriptions-item>
-          <a-descriptions-item label="实例类型">{{ resourceDetail?.instanceType }}</a-descriptions-item>
-          <a-descriptions-item label="配置">{{ resourceDetail?.cpu }}核 {{ resourceDetail?.memory }}GB</a-descriptions-item>
-          <a-descriptions-item label="私有IP" span="2">
-            <template v-for="(ip, index) in resourceDetail?.privateIpAddress" :key="index">
-              <a-tag>{{ ip }}</a-tag>
-            </template>
-          </a-descriptions-item>
-          <a-descriptions-item label="公网IP" span="2">
-            <template v-for="(ip, index) in resourceDetail?.publicIpAddress" :key="index">
-              <a-tag>{{ ip }}</a-tag>
-            </template>
-          </a-descriptions-item>
-          <a-descriptions-item label="VPC ID">{{ resourceDetail?.vpcId }}</a-descriptions-item>
-          <a-descriptions-item label="安全组">
-            <template v-for="(sg, index) in resourceDetail?.securityGroupIds" :key="index">
-              <a-tag>{{ sg }}</a-tag>
-            </template>
-          </a-descriptions-item>
-          <a-descriptions-item label="创建时间" span="2">{{ resourceDetail?.creationTime }}</a-descriptions-item>
+          <a-descriptions bordered :column="1">
+            <a-descriptions-item label="实例 ID">{{ resourceDetail.instance_id }}</a-descriptions-item>
+            <a-descriptions-item label="实例名称">{{ resourceDetail.instance_name }}</a-descriptions-item>
+            <a-descriptions-item label="实例状态">
+              <a-tag :color="getStatusColor(resourceDetail.status)">
+                {{ getStatusText(resourceDetail.status) }}
+              </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="区域">{{ resourceDetail.region_id }}</a-descriptions-item>
+            <a-descriptions-item label="可用区">{{ resourceDetail.zone_id }}</a-descriptions-item>
+            <a-descriptions-item label="实例规格">{{ resourceDetail.instanceType }}</a-descriptions-item>
+            <a-descriptions-item label="CPU">{{ resourceDetail.cpu }} 核</a-descriptions-item>
+            <a-descriptions-item label="内存">{{ resourceDetail.memory }} GB</a-descriptions-item>
+            <a-descriptions-item label="操作系统">{{ resourceDetail.osName }}</a-descriptions-item>
+            <a-descriptions-item label="IP 地址">
+              <div>
+                <div>内网: {{ resourceDetail.private_ip_address?.join(', ') || '-' }}</div>
+                <div v-if="resourceDetail.public_ip_address && resourceDetail.public_ip_address.length > 0">
+                  公网: {{ resourceDetail.public_ip_address?.join(', ') }}
+                </div>
+              </div>
+            </a-descriptions-item>
+            <a-descriptions-item label="创建时间">{{ resourceDetail.creation_time }}</a-descriptions-item>
+            <a-descriptions-item label="付费方式">
+              {{ getPayTypeName(resourceDetail.instance_charge_type) }}
+            </a-descriptions-item>
+          </a-descriptions>
+
+          <a-divider orientation="left">磁盘信息</a-divider>
+          <a-table :dataSource="disks" :columns="diskColumns" :pagination="false" size="small"
+            :row-key="(record: any) => record.diskId"></a-table>
+
+          <a-divider orientation="left">标签</a-divider>
+          <div class="tag-list">
+            <a-tag v-for="(tag, index) in resourceDetail.tags" :key="index" color="blue">{{ tag }}</a-tag>
+            <a-empty v-if="!resourceDetail.tags || resourceDetail.tags.length === 0" :image="Empty.PRESENTED_IMAGE_SIMPLE"
+              description="暂无标签" />
+          </div>
+
+          <div class="drawer-actions">
+            <a-button-group>
+              <a-button type="primary" :disabled="resourceDetail.status === 'Running'" @click="handleEcsAction('start', resourceDetail)">
+                <play-circle-outlined /> 启动
+              </a-button>
+              <a-button :disabled="resourceDetail.status !== 'Running'" @click="handleEcsAction('stop', resourceDetail)">
+                <pause-circle-outlined /> 停止
+              </a-button>
+              <a-button :disabled="resourceDetail.status !== 'Running'" @click="handleEcsAction('restart', resourceDetail)">
+                <reload-outlined /> 重启
+              </a-button>
+            </a-button-group>
+            <a-button danger @click="handleDeleteResource('ecs', resourceDetail)">
+              <delete-outlined /> 删除
+            </a-button>
+          </div>
         </template>
-        
-        <template v-else-if="resourceType === 'vpc'">
-          <a-descriptions-item label="VPC名称" span="2">{{ resourceDetail?.instanceName }}</a-descriptions-item>
-          <a-descriptions-item label="VPC ID">{{ resourceDetail?.instanceId }}</a-descriptions-item>
-          <a-descriptions-item label="状态">{{ resourceDetail?.status }}</a-descriptions-item>
-          <a-descriptions-item label="云厂商">{{ getProviderName(resourceDetail?.provider) }}</a-descriptions-item>
-          <a-descriptions-item label="地区">{{ resourceDetail?.regionId }}</a-descriptions-item>
-          <a-descriptions-item label="CIDR块" span="2">{{ resourceDetail?.cidrBlock }}</a-descriptions-item>
-          <a-descriptions-item label="创建时间" span="2">{{ resourceDetail?.creationTime }}</a-descriptions-item>
+
+        <template v-else>
+          <a-descriptions bordered :column="2">
+            <a-descriptions-item label="名称" span="2">{{ resourceDetail?.instanceName }}</a-descriptions-item>
+            <a-descriptions-item label="ID">{{ resourceDetail?.instanceId || resourceDetail?.id }}</a-descriptions-item>
+            <a-descriptions-item label="状态" v-if="resourceDetail?.status">
+              <a-tag :color="getStatusColor(resourceDetail?.status)">
+                {{ getStatusText(resourceDetail?.status) }}
+              </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="云厂商">{{ getProviderName(resourceDetail?.provider) }}</a-descriptions-item>
+            <a-descriptions-item label="地区">{{ resourceDetail?.regionId }}</a-descriptions-item>
+            <!-- 其他资源类型的特定字段 -->
+            <template v-if="resourceType === 'vpc'">
+              <a-descriptions-item label="CIDR块" span="2">{{ resourceDetail?.cidrBlock }}</a-descriptions-item>
+            </template>
+            <a-descriptions-item label="创建时间" span="2">{{ resourceDetail?.creationTime }}</a-descriptions-item>
+            <a-descriptions-item label="描述" span="2">{{ resourceDetail?.description }}</a-descriptions-item>
+            <a-descriptions-item label="标签" span="2">
+              <template v-if="resourceDetail?.tags && resourceDetail.tags.length > 0">
+                <a-tag v-for="(tag, index) in resourceDetail?.tags" :key="index">{{ tag }}</a-tag>
+              </template>
+              <template v-else>
+                <span>无标签</span>
+              </template>
+            </a-descriptions-item>
+          </a-descriptions>
         </template>
-        
-        <!-- 其他资源类型的详情可以根据需要添加 -->
-        
-        <a-descriptions-item label="标签" span="2">
-          <template v-for="(tag, index) in resourceDetail?.tags" :key="index">
-            <a-tag>{{ tag }}</a-tag>
-          </template>
-        </a-descriptions-item>
-        <a-descriptions-item label="描述" span="2">{{ resourceDetail?.description }}</a-descriptions-item>
-        <a-descriptions-item label="最后同步时间" span="2">{{ resourceDetail?.lastSyncTime }}</a-descriptions-item>
-      </a-descriptions>
+      </a-skeleton>
       
       <div style="margin-top: 24px; text-align: right;">
         <a-button @click="detailVisible = false">关闭</a-button>
       </div>
-    </a-modal>
+    </a-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue';
-import { message, Modal } from 'ant-design-vue';
+import { ref, reactive, onMounted, computed, watch } from 'vue';
+import { message, Modal, Empty } from 'ant-design-vue';
 import {
   SyncOutlined,
   PlusOutlined,
@@ -457,15 +618,97 @@ import {
   PauseCircleOutlined,
   ReloadOutlined,
   DeleteOutlined,
-  DownOutlined
+  DownOutlined,
+  EyeOutlined,
+  MoreOutlined
 } from '@ant-design/icons-vue';
+
+// 导入API方法
+import {
+  getEcsResourceList,
+  getEcsResourceDetail,
+  createEcsResource,
+  startEcsResource,
+  stopEcsResource,
+  restartEcsResource,
+  deleteEcsResource,
+  getInstanceOptions,
+  getVpcResourceList,
+  listSecurityGroups,
+} from '#/api/core/tree';
+
+// 接口定义
+interface ResourceEcs {
+  instance_id: string;
+  instance_name: string;
+  cloud_provider: string;
+  region_id: string;
+  zone_id: string;
+  status: string;
+  cpu: number;
+  memory: number;
+  instanceType: string;
+  osName: string;
+  private_ip_address?: string[];
+  public_ip_address?: string[];
+  creation_time: string;
+  instance_charge_type: string;
+  diskIds?: string[];
+  tags?: string[];
+}
+
+interface Disk {
+  diskId: string;
+  diskName: string;
+  type: string;
+  category: string;
+  size: number;
+}
+
+interface VpcOption {
+  vpcId: string;
+  vpcName: string;
+  cidrBlock: string;
+  description?: string;
+}
+
+interface VSwitchOption {
+  vSwitchId: string;
+  vSwitchName: string;
+  cidrBlock: string;
+  zoneId: string;
+  vpcId: string;
+}
+
+interface SecurityGroupOption {
+  securityGroupId: string;
+  securityGroupName: string;
+  description?: string;
+  vpcId: string;
+}
+
+interface ListInstanceOptionsResp {
+  region: string;
+  zone: string;
+  instanceType: string;
+  cpu: number;
+  memory: number;
+  imageId: string;
+  osName: string;
+  osType: string;
+  architecture: string;
+  systemDiskCategory: string;
+  dataDiskCategory: string;
+  payType: string;
+  valid: boolean;
+}
 
 // 云厂商列表
 const cloudProviders = [
-  { label: '阿里云', value: 'ALIYUN' },
-  { label: '腾讯云', value: 'TENCENT' },
-  { label: '华为云', value: 'HUAWEI' },
-  { label: 'AWS', value: 'AWS' }
+  { label: '阿里云', value: 'aliyun' },
+  { label: '腾讯云', value: 'tencent' },
+  { label: '华为云', value: 'huawei' },
+  { label: 'AWS', value: 'aws' }
 ];
 
 // 区域列表
@@ -477,51 +720,16 @@ const regions = [
   { label: '华南1（深圳）', value: 'cn-shenzhen' }
 ];
 
-// 可用区列表
-const zones = [
-  { label: '华北2可用区A', value: 'cn-beijing-a' },
-  { label: '华北2可用区B', value: 'cn-beijing-b' },
-  { label: '华北2可用区C', value: 'cn-beijing-c' },
-  { label: '华东1可用区A', value: 'cn-hangzhou-a' },
-  { label: '华东1可用区B', value: 'cn-hangzhou-b' }
-];
-
-// 实例类型列表
-const instanceTypes = [
-  { label: 'ecs.g6.large (2核8GB)', value: 'ecs.g6.large' },
-  { label: 'ecs.g6.xlarge (4核16GB)', value: 'ecs.g6.xlarge' },
-  { label: 'ecs.g6.2xlarge (8核32GB)', value: 'ecs.g6.2xlarge' },
-  { label: 'ecs.c6.large (2核4GB)', value: 'ecs.c6.large' },
-  { label: 'ecs.c6.xlarge (4核8GB)', value: 'ecs.c6.xlarge' }
-];
-
-// 镜像列表
-const images = [
-  { label: 'CentOS 7.9 64位', value: 'centos_7_9_x64' },
-  { label: 'Ubuntu 20.04 64位', value: 'ubuntu_20_04_x64' },
-  { label: 'Debian 10.9 64位', value: 'debian_10_9_x64' },
-  { label: 'Windows Server 2019', value: 'win_server_2019' }
-];
-
-// VPC列表
-const vpcs = [
-  { label: 'vpc-default (172.16.0.0/16)', value: 'vpc-default' },
-  { label: 'vpc-prod (10.0.0.0/16)', value: 'vpc-prod' },
-  { label: 'vpc-test (192.168.0.0/16)', value: 'vpc-test' }
-];
-
-// 安全组列表
-const securityGroups = [
-  { label: 'sg-default (默认安全组)', value: 'sg-default' },
-  { label: 'sg-web (Web服务安全组)', value: 'sg-web' },
-  { label: 'sg-db (数据库安全组)', value: 'sg-db' }
-];
-
 // 活动标签页
 const activeTab = ref('ecs');
 
 // 加载状态
 const loading = ref(false);
+const detailLoading = ref(false);
+const createLoading = ref(false);
+const vpcLoading = ref(false);
+const vSwitchLoading = ref(false);
+const securityGroupLoading = ref(false);
 
 // 分页配置
 const pagination = reactive({
@@ -535,10 +743,12 @@ const pagination = reactive({
 
 // 过滤条件
 const filterForm = reactive({
-  provider: undefined,
-  region: undefined,
+  provider: 'aliyun',
+  region: 'cn-hangzhou',
   name: '',
-  status: undefined
+  status: undefined,
+  pageNumber: 1,
+  pageSize: 10
 });
 
 // 模态框状态
@@ -550,13 +760,11 @@ const modals = reactive({
   rds: false
 });
 
-// 模态框加载状态
-const modalLoading = ref(false);
-
-// 详情模态框
+// 详情抽屉
 const detailVisible = ref(false);
 const resourceType = ref('');
-const resourceDetail = ref<Record<string, any>>({});
+const resourceDetail = ref<any>({});
+const disks = ref<Disk[]>([]);
 const resourceDetailTitle = computed(() => {
   const typeMap: Record<string, string> = {
     'ecs': '云服务器',
@@ -568,31 +776,60 @@ const resourceDetailTitle = computed(() => {
   return typeMap[resourceType.value] || '资源';
 });
 
-// ECS表单数据
-const ecsForm = reactive({
-  instanceName: '',
-  provider: 'ALIYUN',
-  region: 'cn-hangzhou',
-  zone: 'cn-hangzhou-a',
-  instanceType: 'ecs.g6.large',
-  imageId: 'centos_7_9_x64',
-  vpcId: 'vpc-default',
-  securityGroupIds: ['sg-default'],
-  instanceChargeType: 'PostPaid',
+// ECS相关状态
+const ecsData = ref<ResourceEcs[]>([]);
+const currentStep = ref(0);
+const createFormRef = ref(null);
+const tagsArray = ref<string[]>([]);
+const tagInputValue = ref('');
+const regionOptions = ref<ListInstanceOptionsResp[]>([]);
+const zoneOptions = ref<ListInstanceOptionsResp[]>([]);
+const instanceTypeOptions = ref<ListInstanceOptionsResp[]>([]);
+const imageOptions = ref<ListInstanceOptionsResp[]>([]);
+const systemDiskOptions = ref<ListInstanceOptionsResp[]>([]);
+const dataDiskOptions = ref<ListInstanceOptionsResp[]>([]);
+const vpcOptions = ref<VpcOption[]>([]);
+const vSwitchOptions = ref<VSwitchOption[]>([]);
+const securityGroupOptions = ref<SecurityGroupOption[]>([]);
+
+// 创建表单数据
+const createForm = reactive({
+  provider: 'aliyun',
+  region: '',
+  imageId: '',
+  instanceType: '',
+  amount: 1,
+  zoneId: '',
+  vpcId: '',
+  vSwitchId: '',
+  securityGroupIds: [] as string[],
+  hostname: '',
   password: '',
+  instanceName: '',
+  payType: '',
+  instanceChargeType: '',
+  spotStrategy: 'NoSpot',
   description: '',
-  tags: []
+  systemDiskCategory: '',
+  systemDiskSize: 40,
+  dataDiskCategory: '',
+  dataDiskSize: 100,
+  dryRun: false,
+  tags: {} as Record<string, string>,
+  periodUnit: 'Month',
+  period: 1,
+  autoRenew: false,
+  spotDuration: 1,
 });
 
 // ECS表格列定义
 const ecsColumns = [
-  { title: '实例名称', dataIndex: 'instanceName', key: 'instanceName' },
-  { title: '实例ID', dataIndex: 'instanceId', key: 'instanceId' },
-  { title: '状态', dataIndex: 'status', key: 'status' },
-  { title: '规格', dataIndex: 'instanceType', key: 'instanceType' },
-  { title: 'IP地址', dataIndex: 'primaryIp', key: 'primaryIp' },
-  { title: '地区/可用区', dataIndex: 'regionAndZone', key: 'regionAndZone' },
-  { title: '创建时间', dataIndex: 'creationTime', key: 'creationTime' },
+  { title: '实例名称/ID', dataIndex: 'instance_name', key: 'instanceName', width: 180, ellipsis: true },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
+  { title: '规格', dataIndex: 'instanceType', key: 'instanceType', width: 130, ellipsis: true },
+  { title: 'IP地址', dataIndex: 'ipAddr', key: 'ipAddr', width: 160, ellipsis: true },
+  { title: '地区/可用区', dataIndex: 'region', key: 'region', width: 160, ellipsis: true },
+  { title: '创建时间', dataIndex: 'creation_time', key: 'creation_time', width: 170 },
   { title: '操作', key: 'action', fixed: 'right', width: 120 }
 ];
 
@@ -642,75 +879,14 @@ const rdsColumns = [
   { title: '操作', key: 'action', fixed: 'right', width: 120 }
 ];
 
-// 模拟数据 - ECS
-const ecsData = ref([
-  {
-    id: 1,
-    instanceName: 'web-server-prod-01',
-    instanceId: 'i-2ze4ljs82kismj45cxxx',
-    status: 'running',
-    instanceType: 'ecs.g6.large',
-    primaryIp: '172.16.1.10',
-    regionAndZone: '华东1(杭州)/可用区A',
-    regionId: 'cn-hangzhou',
-    zoneId: 'cn-hangzhou-a',
-    cpu: 2,
-    memory: 8,
-    provider: 'ALIYUN',
-    vpcId: 'vpc-default',
-    securityGroupIds: ['sg-default', 'sg-web'],
-    privateIpAddress: ['172.16.1.10'],
-    publicIpAddress: ['47.98.123.456'],
-    creationTime: '2023-10-01 12:34:56',
-    description: '生产环境Web服务器',
-    tags: ['env:prod', 'app:web'],
-    lastSyncTime: '2025-04-30 10:00:00'
-  },
-  {
-    id: 2,
-    instanceName: 'app-server-prod-01',
-    instanceId: 'i-2ze4ljs82kismj45cyyy',
-    status: 'running',
-    instanceType: 'ecs.g6.xlarge',
-    primaryIp: '172.16.1.20',
-    regionAndZone: '华东1(杭州)/可用区B',
-    regionId: 'cn-hangzhou',
-    zoneId: 'cn-hangzhou-b',
-    cpu: 4,
-    memory: 16,
-    provider: 'ALIYUN',
-    vpcId: 'vpc-default',
-    securityGroupIds: ['sg-default'],
-    privateIpAddress: ['172.16.1.20'],
-    publicIpAddress: [],
-    creationTime: '2023-10-02 15:24:36',
-    description: '生产环境应用服务器',
-    tags: ['env:prod', 'app:backend'],
-    lastSyncTime: '2025-04-30 10:00:00'
-  },
-  {
-    id: 3,
-    instanceName: 'db-proxy-prod-01',
-    instanceId: 'i-2ze4ljs82kismj45czzz',
-    status: 'stopped',
-    instanceType: 'ecs.c6.large',
-    primaryIp: '172.16.1.30',
-    regionAndZone: '华东1(杭州)/可用区B',
-    regionId: 'cn-hangzhou',
-    zoneId: 'cn-hangzhou-b',
-    cpu: 2,
-    memory: 4,
-    provider: 'ALIYUN',
-    vpcId: 'vpc-default',
-    securityGroupIds: ['sg-default', 'sg-db'],
-    privateIpAddress: ['172.16.1.30'],
-    publicIpAddress: [],
-    creationTime: '2023-10-03 08:12:45',
-    description: '生产环境数据库代理',
-    tags: ['env:prod', 'app:db-proxy'],
-    lastSyncTime: '2025-04-30 10:00:00'
-  }
-]);
+// 磁盘表格列定义
+const diskColumns = [
+  { title: '磁盘名称', dataIndex: 'diskName', key: 'diskName' },
+  { title: '磁盘ID', dataIndex: 'diskId', key: 'diskId' },
+  { title: '类型', dataIndex: 'type', key: 'type' },
+  { title: '类别', dataIndex: 'category', key: 'category' },
+  { title: '大小(GB)', dataIndex: 'size', key: 'size' },
+];
 
 // 模拟数据 - VPC
 const vpcData = ref([
@@ -720,7 +896,7 @@ const vpcData = ref([
     instanceId: 'vpc-2zeisljxz9bmxhj2qyyy',
     cidrBlock: '172.16.0.0/16',
     regionId: 'cn-hangzhou',
-    provider: 'ALIYUN',
+    provider: 'aliyun',
     status: 'Available',
     creationTime: '2023-09-01 09:00:00',
     description: '默认VPC',
@@ -733,7 +909,7 @@ const vpcData = ref([
     instanceId: 'vpc-2zeisljxz9bmxhj2qzzz',
     cidrBlock: '10.0.0.0/16',
     regionId: 'cn-hangzhou',
-    provider: 'ALIYUN',
+    provider: 'aliyun',
     status: 'Available',
     creationTime: '2023-09-05 14:30:00',
     description: '生产环境VPC',
@@ -748,7 +924,7 @@ const sgData = ref([
     id: 1,
     instanceName: 'sg-default',
     instanceId: 'sg-2ze8mmbpj96wr4i8xxxx',
-    provider: 'ALIYUN',
+    provider: 'aliyun',
     regionId: 'cn-hangzhou',
     vpcId: 'vpc-default',
     creationTime: '2023-09-01 09:10:00',
@@ -760,7 +936,7 @@ const sgData = ref([
     id: 2,
     instanceName: 'sg-web',
     instanceId: 'sg-2ze8mmbpj96wr4i8yyyy',
-    provider: 'ALIYUN',
+    provider: 'aliyun',
     regionId: 'cn-hangzhou',
     vpcId: 'vpc-default',
     creationTime: '2023-09-10 11:20:00',
@@ -772,7 +948,7 @@ const sgData = ref([
     id: 3,
     instanceName: 'sg-db',
     instanceId: 'sg-2ze8mmbpj96wr4i8zzzz',
-    provider: 'ALIYUN',
+    provider: 'aliyun',
     regionId: 'cn-hangzhou',
     vpcId: 'vpc-default',
     creationTime: '2023-09-10 11:25:00',
@@ -792,7 +968,7 @@ const elbData = ref([
     addressType: '公网',
     address: '47.98.234.567',
     regionId: 'cn-hangzhou',
-    provider: 'ALIYUN',
+    provider: 'aliyun',
     creationTime: '2023-10-05 16:40:00',
     description: '生产环境Web负载均衡器',
     tags: ['env:prod', 'service:web'],
@@ -806,7 +982,7 @@ const elbData = ref([
     addressType: '内网',
     address: '172.16.5.10',
     regionId: 'cn-hangzhou',
-    provider: 'ALIYUN',
+    provider: 'aliyun',
     creationTime: '2023-10-05 16:50:00',
     description: '生产环境API负载均衡器',
     tags: ['env:prod', 'service:api'],
@@ -826,7 +1002,7 @@ const rdsData = ref([
     regionAndZone: '华东1(杭州)/可用区B',
     regionId: 'cn-hangzhou',
     zoneId: 'cn-hangzhou-b',
-    provider: 'ALIYUN',
+    provider: 'aliyun',
     vpcId: 'vpc-default',
     creationTime: '2023-10-10 10:00:00',
     description: '生产环境MySQL主库',
@@ -843,7 +1019,7 @@ const rdsData = ref([
     regionAndZone: '华东1(杭州)/可用区C',
     regionId: 'cn-hangzhou',
     zoneId: 'cn-hangzhou-c',
-    provider: 'ALIYUN',
+    provider: 'aliyun',
     vpcId: 'vpc-default',
     creationTime: '2023-10-10 10:30:00',
     description: '生产环境MySQL从库',
@@ -852,16 +1028,48 @@ const rdsData = ref([
   }
 ]);
 
+// 步骤变化标志
+const stepChanged = ref(false);
+
+// 组件挂载时执行
+onMounted(() => {
+  fetchEcsList();
+});
+
+// 监听步骤变化
+watch(currentStep, async (newVal, oldVal) => {
+  stepChanged.value = true;
+
+  // 当从第三步返回第二步时，确保系统盘信息不丢失
+  if (newVal === 2 && oldVal === 3) {
+    if (createForm.imageId && createForm.instanceType && !createForm.systemDiskCategory) {
+      await refreshSystemDiskOptions();
+    }
+  }
+
+  // 当从第一步返回第零步时，确保实例类型和镜像兼容
+  if (newVal === 0 && oldVal === 1) {
+    if (createForm.imageId && createForm.instanceType) {
+      await verifyInstanceTypeAndImageCompatibility();
+    }
+  }
+
+  stepChanged.value = false;
+});
+
 // 获取状态颜色
 const getStatusColor = (status: string) => {
   const statusColorMap: Record<string, string> = {
+    'Running': 'green',
+    'Stopped': 'red',
+    'Starting': 'blue',
+    'Stopping': 'orange',
+    'Creating': 'purple',
+    'Available': 'green',
     'running': 'green',
     'stopped': 'red',
     'starting': 'blue',
-    'stopping': 'orange',
-    'creating': 'blue',
-    'deleting': 'orange',
-    'Available': 'green'
+    'stopping': 'orange'
   };
   return statusColorMap[status] || 'default';
 };
@@ -869,13 +1077,16 @@ const getStatusColor = (status: string) => {
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusTextMap: Record<string, string> = {
+    'Running': '运行中',
+    'Stopped': '已停止',
+    'Starting': '启动中',
+    'Stopping': '停止中',
+    'Creating': '创建中',
+    'Available': '可用',
     'running': '运行中',
     'stopped': '已停止',
     'starting': '启动中',
-    'stopping': '停止中',
-    'creating': '创建中',
-    'deleting': '删除中',
-    'Available': '可用'
+    'stopping': '停止中'
   };
   return statusTextMap[status] || status;
 };
@@ -883,46 +1094,273 @@ const getStatusText = (status: string) => {
 // 获取云厂商名称
 const getProviderName = (provider: string) => {
   const providerMap: Record<string, string> = {
-    'ALIYUN': '阿里云',
-    'TENCENT': '腾讯云',
-    'HUAWEI': '华为云',
-    'AWS': 'AWS'
+    'aliyun': '阿里云',
+    'tencent': '腾讯云',
+    'huawei': '华为云',
+    'aws': 'AWS'
   };
   return providerMap[provider] || provider;
 };
 
-// 组件挂载时执行
-onMounted(() => {
-  // 初始化页面数据
-  // 实际项目中可能需要根据用户权限和设置加载不同的数据
-  pagination.total = ecsData.value.length;
-});
+// 获取付费类型名称
+const getPayTypeName = (payType: string): string => {
+  const map: Record<string, string> = {
+    'PostPaid': '按量付费',
+    'PrePaid': '包年包月',
+  };
+  return map[payType] || payType;
+};
+
+// 获取区域名称
+const getRegionById = (regionId: string) => {
+  return regionOptions.value.find(region => region.region === regionId);
+};
+
+// 获取可用区名称
+const getZoneById = (zoneId: string) => {
+  return zoneOptions.value.find(zone => zone.zone === zoneId);
+};
+
+// 获取实例类型详情
+const getInstanceTypeById = (instanceTypeId: string) => {
+  return instanceTypeOptions.value.find(type => type.instanceType === instanceTypeId);
+};
+
+// 获取系统盘类型详情
+const getSystemDiskById = (diskId: string) => {
+  return systemDiskOptions.value.find(disk => disk.systemDiskCategory === diskId);
+};
+
+// 获取数据盘类型详情
+const getDataDiskById = (diskId: string) => {
+  return dataDiskOptions.value.find(disk => disk.dataDiskCategory === diskId);
+};
+
+// 获取VPC详情
+const getVpcById = (vpcId: string) => {
+  return vpcOptions.value.find(vpc => vpc.vpcId === vpcId);
+};
+
+// 获取交换机详情
+const getVSwitchById = (vSwitchId: string) => {
+  return vSwitchOptions.value.find(vSwitch => vSwitch.vSwitchId === vSwitchId);
+};
+
+// 获取安全组详情
+const getSecurityGroupById = (securityGroupId: string) => {
+  return securityGroupOptions.value.find(sg => sg.securityGroupId === securityGroupId);
+};
+
+// 刷新系统盘选项
+const refreshSystemDiskOptions = async () => {
+  try {
+    const req = {
+      provider: createForm.provider,
+      payType: createForm.payType,
+      region: createForm.region,
+      zone: createForm.zoneId,
+      instanceType: createForm.instanceType,
+      imageId: createForm.imageId
+    };
+
+    const response = await getInstanceOptions(req);
+    systemDiskOptions.value = response || [];
+  } catch (error) {
+    console.error('刷新系统盘选项失败:', error);
+    message.error('获取系统盘类型列表失败');
+  }
+};
+
+// 验证实例类型和镜像兼容性
+const verifyInstanceTypeAndImageCompatibility = async () => {
+  try {
+    const req = {
+      provider: createForm.provider,
+      payType: createForm.payType,
+      region: createForm.region,
+      zone: createForm.zoneId,
+      instanceType: createForm.instanceType,
+      imageId: createForm.imageId
+    };
+
+    const response = await getInstanceOptions(req);
+
+    // 如果没有返回数据，说明当前实例类型和镜像不兼容
+    if (!response || response.length === 0) {
+      message.warning('当前选择的实例类型与镜像架构不兼容，请重新选择');
+      createForm.imageId = '';
+
+      // 重新加载镜像列表
+      await handleInstanceTypeChange(createForm.instanceType);
+    }
+  } catch (error) {
+    console.error('验证实例类型和镜像兼容性失败:', error);
+  }
+};
+
+// 实例类型过滤器
+const filterInstanceType = (input: string, option: any) => {
+  const normalizedInput = input.toLowerCase().replace(/\s+/g, '');
+  const normalizedLabel = option.label.toLowerCase().replace(/\s+/g, '');
+  return normalizedLabel.indexOf(normalizedInput) >= 0;
+};
+
+// 镜像过滤器
+const filterImage = (input: string, option: any) => {
+  const normalizedInput = input.toLowerCase().replace(/\s+/g, '');
+  const normalizedLabel = option.label.toLowerCase().replace(/\s+/g, '');
+  return normalizedLabel.indexOf(normalizedInput) >= 0;
+};
+
+// 获取ECS列表
+const fetchEcsList = async () => {
+  loading.value = true;
+  try {
+    const params = {
+      provider: filterForm.provider,
+      region: filterForm.region,
+      pageNumber: pagination.current,
+      pageSize: pagination.pageSize,
+      instanceName: filterForm.name || undefined,
+      status: filterForm.status || undefined
+    };
+    const response = await getEcsResourceList(params);
+    ecsData.value = response.data || [];
+    pagination.total = response.total || 0;
+  } catch (error) {
+    message.error('获取ECS实例列表失败');
+    console.error('获取ECS实例列表失败:', error);
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 获取VPC选项
+const fetchVpcOptions = async () => {
+  if (!createForm.provider || !createForm.region) return;
+
+  vpcLoading.value = true;
+  vpcOptions.value = [];
+  createForm.vpcId = '';
+  createForm.vSwitchId = '';
+
+  try {
+    const req = {
+      pageNumber: 1,
+      pageSize: 50,
+      provider: createForm.provider,
+      region: createForm.region,
+    };
+
+    const response = await getVpcResourceList(req);
+
+    vpcOptions.value = response.data.map((vpc: any) => ({
+      vpcId: vpc.instance_id || vpc.vpc_id || vpc.vpcId,
+      vpcName: vpc.vpcName || vpc.instance_name || '',
+      cidrBlock: vpc.cidrBlock || '',
+      description: vpc.description || ''
+    }));
+
+    vSwitchLoading.value = true;
+    const vSwitches: VSwitchOption[] = [];
+
+    for (const vpc of response.data) {
+      if (vpc.vSwitchIds && Array.isArray(vpc.vSwitchIds) && vpc.vSwitchIds.length > 0) {
+        for (const vSwitchId of vpc.vSwitchIds) {
+          vSwitches.push({
+            vSwitchId: vSwitchId,
+            vSwitchName: `交换机-${vSwitchId.substring(vSwitchId.length - 8)}`,
+            cidrBlock: '',
+            zoneId: '',
+            vpcId: vpc.instance_id || vpc.vpc_id || vpc.vpcId
+          });
+        }
+      }
+    }
+
+    vSwitchOptions.value = vSwitches;
+  } catch (error) {
+    message.error('获取VPC列表失败');
+    console.error('获取VPC列表失败:', error);
+  } finally {
+    vpcLoading.value = false;
+    vSwitchLoading.value = false;
+  }
+};
+
+// 获取安全组选项
+const fetchSecurityGroupOptions = async () => {
+  if (!createForm.provider || !createForm.region) return;
+
+  securityGroupLoading.value = true;
+  securityGroupOptions.value = [];
+  createForm.securityGroupIds = [];
+
+  try {
+    const req = {
+      provider: createForm.provider,
+      region: createForm.region,
+      pageNumber: 1,
+      pageSize: 100
+    };
+
+    const response = await listSecurityGroups(req);
+
+    securityGroupOptions.value = response.data.map((sg: any) => ({
+      securityGroupId: sg.instance_id || sg.security_group_id,
+      securityGroupName: sg.securityGroupName || sg.instance_name,
+      description: sg.description || '',
+      vpcId: sg.vpcId || sg.vpc_id || ''
+    }));
+  } catch (error) {
+    message.error('获取安全组列表失败');
+    console.error('获取安全组列表失败:', error);
+  } finally {
+    securityGroupLoading.value = false;
+  }
+};
 
 // 处理表格变化
 const handleTableChange = (pag: any) => {
   pagination.current = pag.current;
   pagination.pageSize = pag.pageSize;
-  // 实际应用中这里应该发起请求获取新的分页数据
+  filterForm.pageNumber = pag.current;
+  filterForm.pageSize = pag.pageSize;
+  
+  if (activeTab.value === 'ecs') {
+    fetchEcsList();
+  }
+};
+
+// 处理标签页切换
+const handleTabChange = (key: string) => {
+  // 切换到ECS标签页时刷新数据
+  if (key === 'ecs') {
+    fetchEcsList();
+  }
 };
 
 // 处理搜索
 const handleSearch = () => {
-  loading.value = true;
-  
-  // 这里应该根据 filterForm 中的条件向后端发起请求
-  // 模拟搜索请求
-  setTimeout(() => {
-    loading.value = false;
-    message.success('搜索完成');
-  }, 500);
+  pagination.current = 1;
+  if (activeTab.value === 'ecs') {
+    fetchEcsList();
+  }
 };
 
 // 重置过滤条件
 const resetFilter = () => {
-  Object.keys(filterForm).forEach(key => {
-    (filterForm as Record<string, any>)[key] = undefined;
-  });
+  filterForm.provider = 'aliyun';
+  filterForm.region = 'cn-hangzhou';
   filterForm.name = '';
+  filterForm.status = undefined;
+  filterForm.pageNumber = 1;
+  filterForm.pageSize = 10;
+  pagination.current = 1;
+  
+  if (activeTab.value === 'ecs') {
+    fetchEcsList();
+  }
 };
 
 // 同步资源
@@ -932,79 +1370,133 @@ const handleSyncResources = () => {
     return;
   }
   
-  loading.value = true;
   message.loading('正在同步资源，请稍候...', 2);
   
-  // 模拟同步请求
   setTimeout(() => {
-    loading.value = false;
+    if (activeTab.value === 'ecs') {
+      fetchEcsList();
+    }
     message.success('资源同步成功');
   }, 2000);
 };
 
 // 显示创建模态框
 const showCreateModal = (type: string) => {
+  if (type === 'ecs') {
+    currentStep.value = 0;
+    Object.assign(createForm, {
+      provider: 'aliyun',
+      region: '',
+      imageId: '',
+      instanceType: '',
+      amount: 1,
+      zoneId: '',
+      vpcId: '',
+      vSwitchId: '',
+      securityGroupIds: [],
+      hostname: '',
+      password: '',
+      instanceName: '',
+      payType: '',
+      instanceChargeType: '',
+      spotStrategy: 'NoSpot',
+      description: '',
+      systemDiskCategory: '',
+      systemDiskSize: 40,
+      dataDiskCategory: '',
+      dataDiskSize: 100,
+      dryRun: false,
+      tags: {},
+      periodUnit: 'Month',
+      period: 1,
+      autoRenew: false,
+      spotDuration: 1,
+    });
+    tagsArray.value = [];
+    tagInputValue.value = '';
+  }
+  
   (modals as Record<string, boolean>)[type] = true;
 };
 
-// 处理创建资源
-const handleCreateResource = (type: string) => {
-  modalLoading.value = true;
-  
-  // 模拟创建请求
-  setTimeout(() => {
-    modalLoading.value = false;
-    (modals as Record<string, boolean>)[type] = false;
-    message.success(`${type === 'ecs' ? '云服务器' : type === 'vpc' ? 'VPC' : type === 'sg' ? '安全组' : type === 'elb' ? '负载均衡' : '数据库'}创建请求已提交`);
-    
-    // 重置表单
-    if (type === 'ecs') {
-      Object.assign(ecsForm, {
-        instanceName: '',
-        provider: 'ALIYUN',
-        region: 'cn-hangzhou',
-        zone: 'cn-hangzhou-a',
-        instanceType: 'ecs.g6.large',
-        imageId: 'centos_7_9_x64',
-        vpcId: 'vpc-default',
-        securityGroupIds: ['sg-default'],
-        instanceChargeType: 'PostPaid',
-        password: '',
-        description: '',
-        tags: []
-      });
-    }
-  }, 1500);
-};
-
-// 查看资源详情
-const handleViewDetail = (type: string, record: any) => {
+// 显示资源详情
+const handleViewDetail = async (type: string, record: any) => {
   resourceType.value = type;
-  resourceDetail.value = record;
   detailVisible.value = true;
+  detailLoading.value = true;
+  
+  try {
+    if (type === 'ecs') {
+      const req = {
+        provider: record.cloud_provider,
+        region: record.region_id,
+        instanceId: record.instance_id
+      };
+
+      const response = await getEcsResourceDetail(req);
+      resourceDetail.value = response.data;
+
+      if (resourceDetail.value.diskIds && resourceDetail.value.diskIds.length > 0) {
+        disks.value = resourceDetail.value.diskIds.map((diskId: string, index: number) => {
+          return {
+            diskId: diskId,
+            diskName: index === 0 ? '系统盘' : `数据盘${index}`,
+            type: index === 0 ? 'system' : 'data',
+            category: 'cloud_essd',
+            size: index === 0 ? 40 : 100
+          };
+        });
+      } else {
+        disks.value = [];
+      }
+    } else {
+      // 对于其他资源类型，直接显示模拟数据
+      resourceDetail.value = record;
+    }
+  } catch (error) {
+    message.error(`获取${resourceDetailTitle.value}详情失败`);
+    console.error(`获取${resourceDetailTitle.value}详情失败:`, error);
+  } finally {
+    detailLoading.value = false;
+  }
 };
 
 // 处理ECS操作(启动/停止/重启)
-const handleEcsAction = (action: string, record: any) => {
+const handleEcsAction = async (action: string, record: any) => {
   const actionMap: Record<string, string> = {
     'start': '启动',
     'stop': '停止',
     'restart': '重启'
   };
   
-  message.loading(`正在${actionMap[action]}云服务器，请稍候...`, 1);
+  const hide = message.loading(`正在${actionMap[action]}云服务器，请稍候...`, 0);
   
-  // 模拟操作请求
-  setTimeout(() => {
-    // 更新本地数据状态
+  try {
+    const req = {
+      provider: record.cloud_provider,
+      region: record.region_id,
+      instanceId: record.instance_id
+    };
+
     if (action === 'start') {
-      record.status = 'running';
+      await startEcsResource(req);
+      record.status = 'Starting';
     } else if (action === 'stop') {
-      record.status = 'stopped';
+      await stopEcsResource(req);
+      record.status = 'Stopping';
+    } else if (action === 'restart') {
+      await restartEcsResource(req);
+      record.status = 'Stopping';
     }
     
-    message.success(`云服务器${actionMap[action]}操作已完成`);
-  }, 1500);
+    message.success(`云服务器${actionMap[action]}操作已提交`);
+    setTimeout(() => fetchEcsList(), 2000);
+  } catch (error) {
+    message.error(`${actionMap[action]}云服务器失败`);
+    console.error(`${actionMap[action]}云服务器失败:`, error);
+  } finally {
+    hide();
+  }
 };
 
 // 处理RDS操作(启动/停止/重启)
@@ -1042,32 +1534,455 @@ const handleDeleteResource = (type: string, record: any) => {
   
   Modal.confirm({
     title: `确定要删除${typeMap[type]}吗？`,
-    content: `您正在删除${typeMap[type]}: ${record.instanceName}，该操作不可恢复。`,
+    content: `您正在删除${typeMap[type]}: ${record.instance_name || record.instanceName}，该操作不可恢复。`,
     okText: '确认删除',
     okType: 'danger',
     cancelText: '取消',
-    onOk() {
-      message.loading(`正在删除${typeMap[type]}，请稍候...`, 1);
-      
-      // 模拟删除请求
-      setTimeout(() => {
-        // 从本地数据中移除
-        if (type === 'ecs') {
-          ecsData.value = ecsData.value.filter(item => item.id !== record.id);
-        } else if (type === 'vpc') {
-          vpcData.value = vpcData.value.filter(item => item.id !== record.id);
-        } else if (type === 'sg') {
-          sgData.value = sgData.value.filter(item => item.id !== record.id);
-        } else if (type === 'elb') {
-          elbData.value = elbData.value.filter(item => item.id !== record.id);
-        } else if (type === 'rds') {
-          rdsData.value = rdsData.value.filter(item => item.id !== record.id);
-        }
+    async onOk() {
+      if (type === 'ecs') {
+        const hide = message.loading(`正在删除${typeMap[type]}，请稍候...`, 0);
         
-        message.success(`${typeMap[type]}删除成功`);
-      }, 1500);
+        try {
+          const req = {
+            provider: record.cloud_provider,
+            region: record.region_id,
+            instanceId: record.instance_id
+          };
+
+          await deleteEcsResource(req);
+          
+          message.success(`${typeMap[type]}删除成功`);
+          
+          // 关闭详情抽屉（如果当前打开）
+          if (detailVisible.value && resourceDetail.value && 
+              resourceDetail.value.instance_id === record.instance_id) {
+            detailVisible.value = false;
+          }
+          
+          // 刷新列表
+          fetchEcsList();
+        } catch (error) {
+          message.error(`删除${typeMap[type]}失败`);
+          console.error(`删除${typeMap[type]}失败:`, error);
+        } finally {
+          hide();
+        }
+      } else {
+        // 模拟其他资源类型的删除操作
+        message.loading(`正在删除${typeMap[type]}，请稍候...`, 1);
+        
+        setTimeout(() => {
+          if (type === 'vpc') {
+            vpcData.value = vpcData.value.filter(item => item.id !== record.id);
+          } else if (type === 'sg') {
+            sgData.value = sgData.value.filter(item => item.id !== record.id);
+          } else if (type === 'elb') {
+            elbData.value = elbData.value.filter(item => item.id !== record.id);
+          } else if (type === 'rds') {
+            rdsData.value = rdsData.value.filter(item => item.id !== record.id);
+          }
+          
+          message.success(`${typeMap[type]}删除成功`);
+          
+          // 关闭详情抽屉（如果当前打开）
+          if (detailVisible.value && resourceType.value === type && 
+              resourceDetail.value && resourceDetail.value.id === record.id) {
+            detailVisible.value = false;
+          }
+        }, 1500);
+      }
     }
   });
+};
+
+// 创建表单步骤控制
+const nextStep = async () => {
+  if (currentStep.value < 3) {
+    if (currentStep.value === 0) {
+      // 进入网络配置前，先验证实例类型和镜像是否兼容
+      if (createForm.imageId && createForm.instanceType) {
+        await verifyInstanceTypeAndImageCompatibility();
+      }
+
+      await fetchVpcOptions();
+      await fetchSecurityGroupOptions();
+    } else if (currentStep.value === 1 && !stepChanged.value) {
+      // 进入系统配置前，确保系统盘类型已加载
+      if (createForm.imageId && createForm.instanceType && (!systemDiskOptions.value.length || !createForm.systemDiskCategory)) {
+        await refreshSystemDiskOptions();
+      }
+    }
+    currentStep.value += 1;
+  }
+};
+
+const prevStep = async () => {
+  if (currentStep.value > 0) {
+    currentStep.value -= 1;
+
+    // 如果从第三步返回第二步，确保系统盘信息不丢失
+    if (currentStep.value === 2 && !stepChanged.value) {
+      if (createForm.imageId && createForm.instanceType && !createForm.systemDiskCategory) {
+        await refreshSystemDiskOptions();
+      }
+    }
+
+    // 如果从第一步返回第零步，需要确保实例类型和镜像兼容
+    if (currentStep.value === 0 && !stepChanged.value) {
+      if (createForm.imageId && createForm.instanceType) {
+        await verifyInstanceTypeAndImageCompatibility();
+      }
+    }
+  }
+};
+
+// 标签操作
+const addTag = () => {
+  if (tagInputValue.value && tagInputValue.value.includes('=')) {
+    tagsArray.value.push(tagInputValue.value);
+
+    const parts = tagInputValue.value.split('=');
+    if (parts.length === 2 && createForm.tags) {
+      const key = parts[0]?.trim();
+      const value = parts[1]?.trim();
+
+      if (key && value) {
+        createForm.tags[key] = value;
+      } else {
+        message.warning('标签格式不正确，请确保包含 key=value 格式');
+      }
+    }
+
+    tagInputValue.value = '';
+  } else {
+    message.warning('标签格式应为 key=value');
+  }
+};
+
+const removeTag = (index: number) => {
+  if (index >= 0 && index < tagsArray.value.length) {
+    const tag = tagsArray.value[index];
+    if (tag) {
+      const parts = tag.split('=');
+      if (parts.length === 2) {
+        const key = parts[0]?.trim();
+        if (key && createForm.tags && key in createForm.tags) {
+          delete createForm.tags[key];
+        }
+      }
+
+      tagsArray.value.splice(index, 1);
+    }
+  }
+};
+
+// 创建实例提交
+const handleCreateSubmit = async () => {
+  createLoading.value = true;
+
+  // 再次验证实例类型与镜像的兼容性
+  if (createForm.imageId && createForm.instanceType) {
+    await verifyInstanceTypeAndImageCompatibility();
+
+    // 确保系统盘类型已设置
+    if (!createForm.systemDiskCategory) {
+      await refreshSystemDiskOptions();
+    }
+
+    // 如果验证后镜像被清空，说明不兼容
+    if (!createForm.imageId) {
+      message.error('实例类型与镜像架构不兼容，请返回修改');
+      createLoading.value = false;
+      return;
+    }
+  }
+
+  createForm.instanceChargeType = createForm.payType;
+
+  try {
+    const createParams = {
+      provider: createForm.provider,
+      periodUnit: createForm.periodUnit,
+      period: createForm.period,
+      region: createForm.region,
+      zoneId: createForm.zoneId,
+      autoRenew: createForm.autoRenew,
+      instanceChargeType: createForm.instanceChargeType,
+      spotStrategy: createForm.spotStrategy,
+      spotDuration: createForm.spotDuration,
+      systemDiskSize: createForm.systemDiskSize,
+      systemDiskCategory: createForm.systemDiskCategory,
+      dataDiskSize: createForm.dataDiskSize,
+      dataDiskCategory: createForm.dataDiskCategory,
+      dryRun: createForm.dryRun,
+      tags: createForm.tags,
+      imageId: createForm.imageId,
+      instanceType: createForm.instanceType,
+      amount: createForm.amount || 1,
+      vpcId: createForm.vpcId,
+      vSwitchId: createForm.vSwitchId,
+      securityGroupIds: createForm.securityGroupIds,
+      hostname: createForm.hostname,
+      password: createForm.password,
+      instanceName: createForm.instanceName,
+      payType: createForm.payType,
+      description: createForm.description
+    };
+
+    await createEcsResource(createParams);
+    message.success('ECS实例创建成功');
+    modals.ecs = false;
+    setTimeout(() => fetchEcsList(), 50000);
+  } catch (error) {
+    message.error('创建ECS实例失败');
+    console.error('创建ECS实例失败:', error);
+  } finally {
+    createLoading.value = false;
+  }
+};
+
+// 表单联动处理
+const handleProviderChange = async (value: string) => {
+  createForm.payType = '';
+  createForm.region = '';
+  createForm.zoneId = '';
+  createForm.instanceType = '';
+  createForm.imageId = '';
+  createForm.systemDiskCategory = '';
+  createForm.dataDiskCategory = '';
+  createForm.vpcId = '';
+  createForm.vSwitchId = '';
+  createForm.securityGroupIds = [];
+
+  regionOptions.value = [];
+  zoneOptions.value = [];
+  instanceTypeOptions.value = [];
+  imageOptions.value = [];
+  systemDiskOptions.value = [];
+  dataDiskOptions.value = [];
+  vpcOptions.value = [];
+  vSwitchOptions.value = [];
+  securityGroupOptions.value = [];
+
+  try {
+    const req = { provider: value };
+    const response = await getInstanceOptions(req);
+    regionOptions.value = response || [];
+  } catch (error) {
+    message.error('获取地域列表失败');
+  }
+};
+
+const handlePayTypeChange = async (value: string) => {
+  createForm.region = '';
+  createForm.zoneId = '';
+  createForm.instanceType = '';
+  createForm.imageId = '';
+  createForm.systemDiskCategory = '';
+  createForm.dataDiskCategory = '';
+  createForm.vpcId = '';
+  createForm.vSwitchId = '';
+  createForm.securityGroupIds = [];
+
+  zoneOptions.value = [];
+  instanceTypeOptions.value = [];
+  imageOptions.value = [];
+  systemDiskOptions.value = [];
+  dataDiskOptions.value = [];
+  vpcOptions.value = [];
+  vSwitchOptions.value = [];
+  securityGroupOptions.value = [];
+
+  try {
+    const req = {
+      provider: createForm.provider,
+      payType: value
+    };
+    const response = await getInstanceOptions(req);
+    regionOptions.value = response || [];
+
+    if (regionOptions.value.length === 0) {
+      // 使用备选数据
+      regionOptions.value = [
+        { region: 'cn-beijing', valid: true, dataDiskCategory: '', systemDiskCategory: '', instanceType: '', zone: '', payType: '', cpu: 0, memory: 0, imageId: '', osName: '', osType: '', architecture: '' },
+        { region: 'cn-hangzhou', valid: true, dataDiskCategory: '', systemDiskCategory: '', instanceType: '', zone: '', payType: '', cpu: 0, memory: 0, imageId: '', osName: '', osType: '', architecture: '' },
+        { region: 'cn-shanghai', valid: true, dataDiskCategory: '', systemDiskCategory: '', instanceType: '', zone: '', payType: '', cpu: 0, memory: 0, imageId: '', osName: '', osType: '', architecture: '' },
+        { region: 'cn-shenzhen', valid: true, dataDiskCategory: '', systemDiskCategory: '', instanceType: '', zone: '', payType: '', cpu: 0, memory: 0, imageId: '', osName: '', osType: '', architecture: '' }
+      ];
+    }
+  } catch (error) {
+    console.error('获取地域列表失败:', error);
+    message.error('获取地域列表失败');
+  }
+};
+
+const handleRegionChange = async (value: string) => {
+  createForm.zoneId = '';
+  createForm.instanceType = '';
+  createForm.imageId = '';
+  createForm.systemDiskCategory = '';
+  createForm.dataDiskCategory = '';
+  createForm.vpcId = '';
+  createForm.vSwitchId = '';
+  createForm.securityGroupIds = [];
+
+  zoneOptions.value = [];
+  instanceTypeOptions.value = [];
+  imageOptions.value = [];
+  systemDiskOptions.value = [];
+  dataDiskOptions.value = [];
+  vpcOptions.value = [];
+  vSwitchOptions.value = [];
+  securityGroupOptions.value = [];
+
+  try {
+    const req = {
+      provider: createForm.provider,
+      payType: createForm.payType,
+      region: value
+    };
+    const response = await getInstanceOptions(req);
+    zoneOptions.value = response || [];
+  } catch (error) {
+    console.error('获取可用区列表失败:', error);
+    message.error('获取可用区列表失败');
+  }
+};
+
+const handleZoneChange = async (value: string) => {
+  createForm.instanceType = '';
+  createForm.imageId = '';
+  createForm.systemDiskCategory = '';
+  createForm.dataDiskCategory = '';
+
+  instanceTypeOptions.value = [];
+  imageOptions.value = [];
+  systemDiskOptions.value = [];
+  dataDiskOptions.value = [];
+
+  try {
+    const req = {
+      provider: createForm.provider,
+      payType: createForm.payType,
+      region: createForm.region,
+      zone: value
+    };
+    const response = await getInstanceOptions(req);
+    instanceTypeOptions.value = response || [];
+  } catch (error) {
+    console.error('获取实例规格列表失败:', error);
+    message.error('获取实例规格列表失败');
+  }
+};
+
+const handleInstanceTypeChange = async (value: string) => {
+  createForm.imageId = '';
+  createForm.systemDiskCategory = '';
+  createForm.dataDiskCategory = '';
+
+  imageOptions.value = [];
+  systemDiskOptions.value = [];
+  dataDiskOptions.value = [];
+
+  try {
+    const req = {
+      provider: createForm.provider,
+      payType: createForm.payType,
+      pageNumber: 1,
+      pageSize: 10,
+      region: createForm.region,
+      zone: createForm.zoneId,
+      instanceType: value
+    };
+    const response = await getInstanceOptions(req);
+    imageOptions.value = response || [];
+
+    if (imageOptions.value.length === 0) {
+      message.warning('当前配置下没有可用的镜像选项');
+    }
+  } catch (error) {
+    console.error('获取镜像列表失败:', error);
+    message.error('获取镜像列表失败');
+  }
+};
+
+const handleImageIdChange = async (value: string) => {
+  createForm.systemDiskCategory = '';
+  createForm.dataDiskCategory = '';
+
+  systemDiskOptions.value = [];
+  dataDiskOptions.value = [];
+
+  try {
+    const req = {
+      provider: createForm.provider,
+      payType: createForm.payType,
+      region: createForm.region,
+      zone: createForm.zoneId,
+      instanceType: createForm.instanceType,
+      imageId: value
+    };
+    const response = await getInstanceOptions(req);
+
+    // 如果响应为空，可能是实例类型和镜像不兼容
+    if (!response || response.length === 0) {
+      message.warning('选择的镜像与实例规格不兼容，请重新选择');
+      createForm.imageId = '';
+      return;
+    }
+
+    systemDiskOptions.value = response || [];
+  } catch (error) {
+    console.error('获取系统盘类型列表失败:', error);
+    message.error('获取系统盘类型列表失败');
+  }
+};
+
+const handleSystemDiskCategoryChange = async (value: string) => {
+  createForm.dataDiskCategory = '';
+  dataDiskOptions.value = [];
+
+  createForm.systemDiskCategory = value;
+
+  try {
+    const req = {
+      provider: createForm.provider,
+      payType: createForm.payType,
+      region: createForm.region,
+      zone: createForm.zoneId,
+      instanceType: createForm.instanceType,
+      imageId: createForm.imageId,
+      systemDiskCategory: value
+    };
+    const response = await getInstanceOptions(req);
+    dataDiskOptions.value = response || [];
+  } catch (error) {
+    console.error('获取数据盘类型列表失败:', error);
+    message.error('获取数据盘类型列表失败');
+  }
+};
+
+const handleVpcChange = (vpcId: string) => {
+  createForm.vSwitchId = '';
+  createForm.securityGroupIds = [];
+
+  const filteredVSwitches = vSwitchOptions.value.filter(vSwitch => vSwitch.vpcId === vpcId);
+  const zoneVSwitch = filteredVSwitches.find(vSwitch => vSwitch.zoneId === createForm.zoneId);
+
+  if (zoneVSwitch) {
+    createForm.vSwitchId = zoneVSwitch.vSwitchId;
+  } else if (filteredVSwitches.length > 0) {
+    createForm.vSwitchId = filteredVSwitches[0]?.vSwitchId || '';
+  }
+
+  const filteredSecurityGroups = securityGroupOptions.value.filter(sg => sg.vpcId === vpcId);
+  if (filteredSecurityGroups.length > 0) {
+    createForm.securityGroupIds = [filteredSecurityGroups[0]?.securityGroupId || ''];
+  }
+};
+
+const handleDataDiskCategoryChange = () => {
+  // 数据盘类型选择变更时的处理逻辑
 };
 </script>
 
@@ -1099,6 +2014,54 @@ const handleDeleteResource = (type: string, record: any) => {
   
   :deep(.ant-table-pagination.ant-pagination) {
     margin: 16px;
+  }
+
+  .create-steps {
+    margin-bottom: 24px;
+  }
+
+  .create-form {
+    max-height: 500px;
+    overflow-y: auto;
+    padding: 0 12px;
+  }
+
+  .steps-action {
+    margin-top: 24px;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: this;
+  }
+
+  .drawer-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 24px;
+  }
+
+  .tag-input-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .tag-item {
+    margin-bottom: 4px;
+  }
+
+  :deep(.ant-form-item) {
+    margin-bottom: 20px;
+  }
+
+  :deep(.ant-tag) {
+    margin-right: 0;
   }
 }
 </style>

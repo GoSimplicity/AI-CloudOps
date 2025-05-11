@@ -32,7 +32,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
-	"strconv"
 )
 
 const (
@@ -266,14 +265,12 @@ func (t *treeService) GetNodeDetail(ctx context.Context, id int) (*model.TreeNod
 	// 提取用户名
 	adminUserNames := make([]string, 0, len(adminUsers))
 	for _, user := range adminUsers {
-		strId := strconv.Itoa(user.ID)
-		adminUserNames = append(adminUserNames, strId)
+		adminUserNames = append(adminUserNames, user.Username)
 	}
 
 	memberUserNames := make([]string, 0, len(memberUsers))
 	for _, user := range memberUsers {
-		strId := strconv.Itoa(user.ID)
-		memberUserNames = append(memberUserNames, strId)
+		memberUserNames = append(memberUserNames, user.Username)
 	}
 
 	// 获取创建人

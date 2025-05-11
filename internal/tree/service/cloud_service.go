@@ -41,11 +41,17 @@ type CloudService interface {
 	ListImages(ctx context.Context, req *model.ListImagesReq) ([]model.ImageResp, error)
 	ListVpcs(ctx context.Context, req *model.ListVpcsReq) ([]model.ResourceVpc, error)
 	ListSecurityGroups(ctx context.Context, req *model.ListSecurityGroupsReq) ([]model.SecurityGroupResp, error)
+	GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsResp, error)
 }
 
 type cloudService struct {
 	logger *zap.Logger
 	dao    dao.CloudDAO
+}
+
+// GetTreeStatistics implements CloudService.
+func (c *cloudService) GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsResp, error) {
+	panic("unimplemented")
 }
 
 // ListCloudProviders implements CloudService.

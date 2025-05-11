@@ -112,3 +112,15 @@ type SecurityGroupResp struct {
 	SecurityGroupName string `json:"securityGroupName"`
 	Description       string `json:"description"`
 }
+
+// CloudStatisticsResp 云厂商统计响应
+type CloudStatisticsResp struct {
+	RegionDistribution      int     `json:"regionDistribution"`      // 各区域资源数量分布
+	TotalEcsCount           int     `json:"totalEcsCount"`           // ECS实例总数
+	RunningEcsCount         int     `json:"runningEcsCount"`         // 运行中的ECS实例数
+	StoppedEcsCount         int     `json:"stoppedEcsCount"`         // 已停止的ECS实例数
+	TotalVpcCount           int     `json:"totalVpcCount"`           // VPC总数
+	TotalSecurityGroupCount int     `json:"totalSecurityGroupCount"` // 安全组总数
+	TotalMonthlyCost        float64 `json:"totalMonthlyCost"`        // 月度总费用
+	UpdateTime              int64   `json:"updateTime"`              // 统计数据更新时间戳
+}
