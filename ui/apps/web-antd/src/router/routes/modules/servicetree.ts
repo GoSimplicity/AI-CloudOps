@@ -45,6 +45,7 @@ const routes: RouteRecordRaw[] = [
         path: '/ecs_resource_operation',
         component: () => import('#/views/servicetree/ECSResourceOperation.vue'),
         meta: {
+          hideInMenu: true,
           title: 'ECS管理',
           icon: 'mdi:server',
         },
@@ -54,6 +55,7 @@ const routes: RouteRecordRaw[] = [
         path: '/vpc_resource_operation',
         component: () => import('#/views/servicetree/VPCResourceOperation.vue'),
         meta: {
+          hideInMenu: true,
           title: 'VPC管理',
           icon: 'mdi:lan',
         },
@@ -64,6 +66,7 @@ const routes: RouteRecordRaw[] = [
         component: () =>
           import('#/views/servicetree/SecurityGroupOperation.vue'),
         meta: {
+          hideInMenu: true,
           title: '安全组管理',
           icon: 'mdi:shield-outline',
         },
@@ -73,6 +76,7 @@ const routes: RouteRecordRaw[] = [
         path: '/elb_resource_operation',
         component: () => import('#/views/servicetree/ELBResourceOperation.vue'),
         meta: {
+          hideInMenu: true,
           title: 'ELB管理',
           icon: 'mdi:server-network',
         },
@@ -82,6 +86,7 @@ const routes: RouteRecordRaw[] = [
         path: '/rds_resource_operation',
         component: () => import('#/views/servicetree/RDSResourceOperation.vue'),
         meta: {
+          hideInMenu: true,
           title: 'RDS管理',
           icon: 'mdi:database',
         },

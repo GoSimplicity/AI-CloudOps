@@ -209,7 +209,8 @@
                         添加管理员
                       </a-button>
                     </div>
-                    <a-table :dataSource="allUsers.filter(user => selectedNode?.adminUsers?.includes(String(user.id)))" :columns="adminColumns" :pagination="{ pageSize: 10 }"
+                    <!-- TODO: 现在是获取全部用户然后根据username过滤(PS: 偷个懒，此处插个眼后续修改...) -->
+                    <a-table :dataSource="allUsers.filter(user => selectedNode?.adminUsers?.includes(user.username))" :columns="adminColumns" :pagination="{ pageSize: 10 }"
                       size="middle">
                       <template #bodyCell="{ column, record }">
                         <template v-if="column.key === 'action'">
@@ -235,7 +236,8 @@
                         添加成员
                       </a-button>
                     </div>
-                    <a-table :dataSource="allUsers.filter(user => selectedNode?.memberUsers?.includes(String(user.id)))" :columns="memberColumns" :pagination="{ pageSize: 10 }"
+                    <!-- TODO: 现在是获取全部用户然后根据username过滤(PS: 偷个懒，此处插个眼后续修改...) -->
+                    <a-table :dataSource="allUsers.filter(user => selectedNode?.memberUsers?.includes(user.username))" :columns="memberColumns" :pagination="{ pageSize: 10 }"
                       size="middle">
                       <template #bodyCell="{ column, record }">
                         <template v-if="column.key === 'action'">

@@ -234,7 +234,7 @@ import {
   createAlertRuleApi,
   updateAlertRuleApi,
   deleteAlertRuleApi,
-  getAllTreeNodes,
+  getTreeList,
   validateExprApi,
   getAllAlertManagerPoolApi,
   getAllMonitorSendGroupApi,
@@ -456,7 +456,7 @@ const getLeafNodes = (nodes: TreeNode[]): TreeNode[] => {
 // 获取树节点数据
 const fetchTreeNodes = async () => {
   try {
-    const response = await getAllTreeNodes();
+    const response = await getTreeList({});
     if (!response) {
       treeData.value = [];
       leafNodes.value = [];

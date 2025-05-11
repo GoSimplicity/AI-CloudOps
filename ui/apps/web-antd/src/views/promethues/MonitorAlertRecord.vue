@@ -257,7 +257,7 @@ import {
   deleteRecordRuleApi,
   getAllMonitorScrapePoolApi,
   getRecordRulesTotalApi,
-  getAllTreeNodes,
+  getTreeList,
   validateExprApi,
 } from '#/api';
 import { Icon } from '@iconify/vue';
@@ -557,7 +557,7 @@ const fetchPools = async () => {
 // 获取所有树节点数据
 const fetchTreeNodes = async () => {
   try {
-    const response = await getAllTreeNodes(); // 调用获取树节点 API
+    const response = await getTreeList({});
     treeNodeOptions.value = response;
   } catch (error: any) {
     message.error(error.message || '获取树节点数据失败，请稍后重试');

@@ -122,6 +122,7 @@ func (h *ResourceHandler) RegisterRouters(server *gin.Engine) {
 			cloudGroup.POST("/images", h.ListImages)
 			cloudGroup.POST("/vpcs", h.ListVpcs)
 			cloudGroup.POST("/security_groups", h.ListSecurityGroups)
+			cloudGroup.GET("/statistics", h.GetTreeStatistics)
 		}
 	}
 }
@@ -439,5 +440,11 @@ func (h *ResourceHandler) GetSecurityGroupDetail(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.securityGroupService.GetSecurityGroupDetail(ctx, &req)
+	})
+}
+
+func (h *ResourceHandler) GetTreeStatistics(ctx *gin.Context) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.cloudService.GetTreeStatistics(ctx)
 	})
 }

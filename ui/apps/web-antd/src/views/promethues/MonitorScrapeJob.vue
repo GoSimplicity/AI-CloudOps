@@ -320,7 +320,7 @@ import {
   updateScrapeJobApi,
   deleteScrapeJobApi,
   getAllMonitorScrapePoolApi,
-  getAllTreeNodes,
+  getTreeList,
   getMonitorScrapeJobTotalApi
 } from '#/api';
 import type { MonitorScrapeJobItem, createScrapeJobReq, updateScrapeJobReq } from '#/api/core/prometheus';
@@ -471,7 +471,7 @@ const getLeafNodes = (nodes: TreeNode[]): TreeNode[] => {
 // 获取树节点数据
 const fetchTreeNodes = async () => {
   try {
-    const response = await getAllTreeNodes();
+    const response = await getTreeList({});
     if (!response) {
       treeData.value = [];
       leafNodes.value = [];
