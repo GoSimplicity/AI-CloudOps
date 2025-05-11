@@ -280,7 +280,7 @@ func (t *treeDAO) GetChildNodes(ctx context.Context, parentId int) ([]*model.Tre
 // GetNode 获取节点详情
 func (t *treeDAO) GetNode(ctx context.Context, id int) (*model.TreeNode, error) {
 	var node model.TreeNode
-	if err := t.db.WithContext(ctx).First(&node, id).Error; err != nil {
+	if err := t.db.WithContext(ctx).Where("id = ?", id).First(&node).Error; err != nil {
 		t.logger.Error("节点不存在", zap.Int("id", id), zap.Error(err))
 		return nil, errors.New("节点不存在")
 	}
@@ -607,7 +607,7 @@ func (t *treeDAO) UpdateNode(ctx context.Context, node *model.TreeNode) error {
 		"name":        node.Name,
 		"description": node.Description,
 		"status":      node.Status,
-		"updated_at":  node.UpdatedAt,
+		"parent_id":   node.ParentID,
 	}
 
 	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("id = ?", node.ID).Updates(updateMap).Error; err != nil {

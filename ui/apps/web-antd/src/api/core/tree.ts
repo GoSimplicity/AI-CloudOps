@@ -267,6 +267,7 @@ export interface TreeNode {
   level: number;
   description: string;
   creatorId: number;
+  creatorName: string;
   status: string;
   isLeaf: boolean;
   childCount?: number;
@@ -485,7 +486,6 @@ export interface TreeNodeUpdateReq {
   name: string;
   parentId: number;
   description: string;
-  isLeaf: boolean;
   status?: string;
 }
 

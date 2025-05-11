@@ -77,7 +77,7 @@
                   <a-descriptions-item label="父节点">{{ selectedNode.parentName || '无' }}</a-descriptions-item>
                   <a-descriptions-item label="创建时间">{{ selectedNode.createdAt }}</a-descriptions-item>
                   <a-descriptions-item label="更新时间">{{ selectedNode.updatedAt }}</a-descriptions-item>
-                  <a-descriptions-item label="创建者">{{ selectedNode.creatorId }}</a-descriptions-item>
+                  <a-descriptions-item label="创建者">{{ selectedNode.creatorName }}</a-descriptions-item>
                   <a-descriptions-item label="子节点数">{{ selectedNode.childCount }}</a-descriptions-item>
                   <a-descriptions-item label="资源数">{{ selectedNode.resourceCount }}</a-descriptions-item>
                   <a-descriptions-item label="状态">{{ selectedNode.status }}</a-descriptions-item>
@@ -209,13 +209,18 @@
                         添加管理员
                       </a-button>
                     </div>
-                    <a-table :dataSource="selectedNode.adminUsers" :columns="adminColumns" :pagination="{ pageSize: 10 }"
+                    <a-table :dataSource="allUsers.filter(user => selectedNode?.adminUsers?.includes(String(user.id)))" :columns="adminColumns" :pagination="{ pageSize: 10 }"
                       size="middle">
                       <template #bodyCell="{ column, record }">
                         <template v-if="column.key === 'action'">
-                          <a-button size="small" type="link" danger @click="confirmRemoveMember(record, 'admin')">
-                            移除
-                          </a-button>
+                          <a-space>
+                            <a-button size="small" type="link" @click="showEditMemberModal(record, 'admin')">
+                              编辑
+                            </a-button>
+                            <a-button size="small" type="link" danger @click="confirmRemoveMember(record, 'admin')">
+                              移除
+                            </a-button>
+                          </a-space>
                         </template>
                       </template>
                     </a-table>
@@ -230,13 +235,18 @@
                         添加成员
                       </a-button>
                     </div>
-                    <a-table :dataSource="selectedNode.memberUsers" :columns="memberColumns" :pagination="{ pageSize: 10 }"
+                    <a-table :dataSource="allUsers.filter(user => selectedNode?.memberUsers?.includes(String(user.id)))" :columns="memberColumns" :pagination="{ pageSize: 10 }"
                       size="middle">
                       <template #bodyCell="{ column, record }">
                         <template v-if="column.key === 'action'">
-                          <a-button size="small" type="link" danger @click="confirmRemoveMember(record, 'member')">
-                            移除
-                          </a-button>
+                          <a-space>
+                            <a-button size="small" type="link" @click="showEditMemberModal(record, 'member')">
+                              编辑
+                            </a-button>
+                            <a-button size="small" type="link" danger @click="confirmRemoveMember(record, 'member')">
+                              移除
+                            </a-button>
+                          </a-space>
                         </template>
                       </template>
                     </a-table>
@@ -258,8 +268,8 @@
         <a-form-item label="节点名称" name="name">
           <a-input v-model:value="nodeForm.name" placeholder="请输入节点名称" />
         </a-form-item>
-        <a-form-item label="父节点" name="parentId" v-if="!isEditMode">
-          <a-select v-model:value="nodeForm.parentId" placeholder="请选择父节点" :disabled="!!currentParentId">
+        <a-form-item label="父节点" name="parentId">
+          <a-select v-model:value="nodeForm.parentId" placeholder="请选择父节点" :disabled="!!currentParentId && !isEditMode">
             <a-select-option :value="0">无 (创建顶级节点)</a-select-option>
             <a-select-option v-for="option in parentNodeOptions" :key="option.value" :value="option.value">
               {{ option.label }}
@@ -270,10 +280,13 @@
           <a-textarea v-model:value="nodeForm.description" placeholder="请输入节点描述" :rows="4" />
         </a-form-item>
         <a-form-item label="节点类型" name="isLeaf">
-          <a-radio-group v-model:value="nodeForm.isLeaf">
+          <a-radio-group v-model:value="nodeForm.isLeaf" :disabled="isEditMode">
             <a-radio :value="false">目录节点</a-radio>
             <a-radio :value="true">叶子节点</a-radio>
           </a-radio-group>
+          <div v-if="isEditMode" class="ant-form-item-extra">
+            节点类型创建后不可修改
+          </div>
         </a-form-item>
         <a-form-item label="状态" name="status">
           <a-select v-model:value="nodeForm.status" placeholder="请选择状态">
@@ -309,7 +322,30 @@
       <a-form :model="memberForm" layout="vertical">
         <a-form-item label="选择用户" name="userId">
           <a-select v-model:value="memberForm.userId" placeholder="请选择用户" :options="userOptions"
-            style="width: 100%" :filter-option="filterUserOption"></a-select>
+            style="width: 100%" :filter-option="filterUserOption" optionLabelProp="label" :defaultValue="undefined">
+            <template #option="{ value, label }">
+              <div>
+                <span>{{ label }}</span>
+                <span style="float: right; color: #999">(ID: {{ value }})</span>
+              </div>
+            </template>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 编辑成员模态框 -->
+    <a-modal v-model:open="editMemberModalVisible" :title="editMemberForm.type === 'admin' ? '编辑管理员' : '编辑成员'"
+      @ok="handleEditMember" :confirmLoading="confirmLoading" width="600px">
+      <a-form :model="editMemberForm" layout="vertical">
+        <a-form-item label="用户信息" name="userId">
+          <a-input :value="editMemberForm.username" disabled />
+        </a-form-item>
+        <a-form-item label="成员类型" name="type">
+          <a-radio-group v-model:value="editMemberForm.type">
+            <a-radio value="admin">管理员</a-radio>
+            <a-radio value="member">普通成员</a-radio>
+          </a-radio-group>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -350,6 +386,7 @@ import {
   deleteNode, 
   addNodeMember, 
   removeNodeMember,
+  getAllUsers
 } from '#/api'; 
 
 import type {
@@ -359,6 +396,7 @@ import type {
   TreeNodeMemberReq,
   TreeNode
 } from '#/api'; 
+import { number } from 'echarts';
 
 const router = useRouter();
 const loading = ref(false);
@@ -374,6 +412,7 @@ const memberTabKey = ref('admins');
 const createNodeModalVisible = ref(false);
 const bindResourceModalVisible = ref(false);
 const addMemberModalVisible = ref(false);
+const editMemberModalVisible = ref(false);
 const resourceDetailModalVisible = ref(false);
 
 // 数据状态
@@ -381,6 +420,23 @@ const treeData = ref<any[]>([]);
 const nodeDetails = ref<Record<string, TreeNode>>({});
 const currentNodeDetail = ref<TreeNode | null>(null);
 const treeStatistics = ref<any>(null);
+const allUsers = ref<{
+  id: number;
+  created_at: number;
+  updated_at: number;
+  deleted_at: number;
+  username: string;
+  password: string;
+  real_name: string;
+  domain: string;
+  desc: string;
+  mobile: string;
+  fei_shu_user_id: string;
+  account_type: number;
+  home_path: string;
+  enable: number;
+  apis: any[];
+}[]>([]);
 
 // 节点表单状态
 const nodeFormRef = ref<any>(null);
@@ -407,7 +463,16 @@ const bindResourceForm = reactive({
 // 成员表单
 const memberForm = reactive<TreeNodeMemberReq & { type: string }>({
   nodeId: 0,
+  userId: undefined as unknown as number,
+  type: 'admin', // 'admin' 或 'member'
+});
+
+// 编辑成员表单
+const editMemberForm = reactive({
+  nodeId: 0,
   userId: 0,
+  username: '',
+  originalType: '',
   type: 'admin', // 'admin' 或 'member'
 });
 
@@ -426,8 +491,12 @@ const resourcesData = reactive({
 // 父节点选项
 const parentNodeOptions = ref<{ label: string; value: number }[]>([]);
 
-// 用户选项
-const userOptions = ref<{ label: string; value: number }[]>([]);
+const userOptions = computed(() => {
+  return allUsers.value.map(user => ({
+    label: user.username,
+    value: user.id
+  }));
+});
 
 // 可用资源选项
 const availableResources = ref([]);
@@ -488,28 +557,22 @@ const availableResourceColumns = computed(() => {
 
 // 成员表格列定义
 const adminColumns = [
-  { title: '用户ID', dataIndex: 'userId', key: 'userId' },
   { title: '用户名', dataIndex: 'username', key: 'username' },
-  { title: '显示名称', dataIndex: 'displayName', key: 'displayName' },
-  { title: '邮箱', dataIndex: 'email', key: 'email' },
-  { title: '部门', dataIndex: 'department', key: 'department' },
-  { title: '添加时间', dataIndex: 'addedTime', key: 'addedTime' },
+  { title: '真实姓名', dataIndex: 'real_name', key: 'real_name', customRender: ({ text }: { text: string }) => text || '-' },
+  { title: '手机号码', dataIndex: 'mobile', key: 'mobile', customRender: ({ text }: { text: string }) => text || '-' },
   { title: '操作', key: 'action' },
 ];
 
 const memberColumns = [
-  { title: '用户ID', dataIndex: 'userId', key: 'userId' },
   { title: '用户名', dataIndex: 'username', key: 'username' },
-  { title: '显示名称', dataIndex: 'displayName', key: 'displayName' },
-  { title: '邮箱', dataIndex: 'email', key: 'email' },
-  { title: '部门', dataIndex: 'department', key: 'department' },
-  { title: '添加时间', dataIndex: 'addedTime', key: 'addedTime' },
+  { title: '真实姓名', dataIndex: 'real_name', key: 'real_name', customRender: ({ text }: { text: string }) => text || '-' },
+  { title: '手机号码', dataIndex: 'mobile', key: 'mobile', customRender: ({ text }: { text: string }) => text || '-' },
   { title: '操作', key: 'action' },
 ];
 
 // 选中的节点
 const selectedNode = computed(() => {
-  if (selectedKeys.value.length > 0) {
+  if (selectedKeys.value.length > 0 && selectedKeys.value[0]) {
     const key = selectedKeys.value[0];
     if (key !== undefined) {
       const id = parseInt(key.toString());
@@ -565,6 +628,19 @@ const goBack = () => {
   router.push('/tree/overview');
 };
 
+// 获取所有用户
+const loadAllUsers = async () => {
+  try {
+    const res = await getAllUsers();
+    if (res) {
+      allUsers.value = res;
+    }
+  } catch (error) {
+    console.error('获取用户列表失败:', error);
+    message.error('获取用户列表失败');
+  }
+};
+
 // 修复树形数据加载函数
 const loadTreeData = async () => {
   loading.value = true;
@@ -574,6 +650,14 @@ const loadTreeData = async () => {
     
     // 构建节点详细信息缓存
     const processNode = (node: any) => {
+      // 确保节点有默认的adminUsers和memberUsers数组
+      if (!node.adminUsers) {
+        node.adminUsers = [];
+      }
+      if (!node.memberUsers) {
+        node.memberUsers = [];
+      }
+      
       nodeDetails.value[node.id] = node;
       if (node.children && node.children.length > 0) {
         node.children.forEach(processNode);
@@ -609,12 +693,28 @@ const loadTreeData = async () => {
 
 // 更新父节点选项
 const updateParentNodeOptions = (nodes: any[]) => {
-  parentNodeOptions.value = nodes
-    .filter(node => !node.isLeaf) // 只有非叶节点才能作为父节点
-    .map(node => ({
-      label: node.name,
-      value: node.id,
-    }));
+  const collectNodes = (node: any, result: any[] = []) => {
+    if (!node.isLeaf) {
+      result.push({
+        label: node.name,
+        value: node.id,
+      });
+    }
+    
+    if (node.children && node.children.length > 0) {
+      node.children.forEach((child: any) => collectNodes(child, result));
+    }
+    
+    return result;
+  };
+  
+  // 首先清空当前选项
+  parentNodeOptions.value = [];
+  
+  // 对每个顶级节点收集可作为父节点的选项
+  nodes.forEach(node => {
+    collectNodes(node, parentNodeOptions.value);
+  });
 };
 
 // 获取节点详情
@@ -627,6 +727,15 @@ const loadNodeDetail = async (nodeId: number) => {
   
   try {
     const res = await getNodeDetail(nodeId);
+    
+    // 确保返回的数据有adminUsers和memberUsers数组
+    if (!res.adminUsers) {
+      res.adminUsers = [];
+    }
+    if (!res.memberUsers) {
+      res.memberUsers = [];
+    }
+    
     nodeDetails.value[nodeId] = res;
     currentNodeDetail.value = res;
     return res;
@@ -647,9 +756,22 @@ const loadStatistics = async () => {
   }
 };
 
-const refreshData = () => {
-  loadTreeData();
-  loadStatistics();
+const refreshListData = async () => {
+  await loadTreeData();
+  await loadStatistics();
+};
+
+const refreshData = async () => {
+  await loadTreeData();
+  await loadStatistics();
+  await loadAllUsers();
+  
+  if (selectedKeys.value.length > 0 && selectedKeys.value[0]) {
+    const nodeId = parseInt(selectedKeys.value[0].toString());
+    if (nodeId > 0) {
+      await loadNodeDetail(nodeId);
+    }
+  }
 };
 
 const onSearchChange = () => {
@@ -732,7 +854,7 @@ const showEditNodeModal = async (nodeKey: string) => {
     nodeForm.id = nodeDetail.id;
     nodeForm.name = nodeDetail.name;
     nodeForm.parentId = nodeDetail.parentId;
-    nodeForm.description = nodeDetail.description;
+    nodeForm.description = nodeDetail.description || '';
     nodeForm.isLeaf = nodeDetail.isLeaf;
     nodeForm.status = nodeDetail.status;
   }
@@ -759,7 +881,7 @@ const confirmDeleteNode = (nodeKey: string) => {
       try {
         await deleteNode(nodeId);
         message.success(`节点 "${nodeDetail.name}" 已删除`);
-        refreshData();
+        refreshListData();
       } catch (error) {
         console.error('删除节点失败:', error);
         message.error('删除节点失败');
@@ -782,7 +904,7 @@ const handleCreateOrUpdateNode = () => {
             parentId: nodeForm.parentId,
             description: nodeForm.description,
             isLeaf: nodeForm.isLeaf,
-            status: nodeForm.status,
+            status: nodeForm.status
           };
           
           await updateNode(updateReq);
@@ -875,11 +997,23 @@ const showAddMemberModal = (type: string) => {
   
   memberForm.type = type;
   memberForm.nodeId = selectedNode.value.id;
-  memberForm.userId = 0;
+  memberForm.userId = undefined as unknown as number;
   addMemberModalVisible.value = true;
+};
+
+const showEditMemberModal = (record: any, type: string) => {
+  if (!selectedNode.value) {
+    message.warning('请先选择节点');
+    return;
+  }
   
-  // 在实际应用中这里需要加载可选用户列表
-  // loadAvailableUsers(type);
+  editMemberForm.nodeId = selectedNode.value.id;
+  editMemberForm.userId = record.id; // 修复：使用record.id而不是userId
+  editMemberForm.username = record.username;
+  editMemberForm.originalType = type;
+  editMemberForm.type = type;
+  
+  editMemberModalVisible.value = true;
 };
 
 const handleAddMember = async () => {
@@ -891,12 +1025,19 @@ const handleAddMember = async () => {
   confirmLoading.value = true;
 
   try {
-    await addNodeMember(memberForm);
+    await addNodeMember({
+      nodeId: memberForm.nodeId,
+      userId: memberForm.userId,
+      type: memberForm.type
+    });
+    
     message.success(`成功添加${memberForm.type === 'admin' ? '管理员' : '成员'}`);
+    
     // 刷新节点详情
     if (selectedNode.value) {
       await loadNodeDetail(selectedNode.value.id);
     }
+    
     addMemberModalVisible.value = false;
   } catch (error) {
     console.error('添加成员失败:', error);
@@ -906,10 +1047,51 @@ const handleAddMember = async () => {
   }
 };
 
-const confirmRemoveMember = async (username: string, type: string) => {
+const handleEditMember = async () => {
+  confirmLoading.value = true;
+
+  try {
+    // 如果类型发生了变化，需要先移除原类型，再添加新类型
+    if (editMemberForm.type !== editMemberForm.originalType) {
+      // 先移除原类型
+      await removeNodeMember({
+        nodeId: editMemberForm.nodeId,
+        userId: editMemberForm.userId,
+        type: editMemberForm.originalType
+      });
+      
+      // 添加新类型
+      await addNodeMember({
+        nodeId: editMemberForm.nodeId,
+        userId: editMemberForm.userId,
+        type: editMemberForm.type
+      });
+      
+      message.success(`成功将 "${editMemberForm.username}" 从${editMemberForm.originalType === 'admin' ? '管理员' : '普通成员'}修改为${editMemberForm.type === 'admin' ? '管理员' : '普通成员'}`);
+    } else {
+      message.info('未做任何修改');
+    }
+    
+    // 刷新节点详情
+    if (selectedNode.value) {
+      await loadNodeDetail(selectedNode.value.id);
+    }
+    
+    editMemberModalVisible.value = false;
+  } catch (error) {
+    console.error('编辑成员失败:', error);
+    message.error('编辑成员失败');
+  } finally {
+    confirmLoading.value = false;
+  }
+};
+
+const confirmRemoveMember = (record: any, type: string) => {
   if (!selectedNode.value) return;
   
   const roleText = type === 'admin' ? '管理员' : '成员';
+  const username = record.username;
+  const userId = record.id; // 修复：使用record.id而不是record.userId
 
   Modal.confirm({
     title: '确认移除',
@@ -921,7 +1103,7 @@ const confirmRemoveMember = async (username: string, type: string) => {
       try {
         const req: TreeNodeMemberReq = {
           nodeId: selectedNode.value!.id,
-          userId: 0, // 这里需要获取用户ID
+          userId: userId,
           type: type
         };
         
