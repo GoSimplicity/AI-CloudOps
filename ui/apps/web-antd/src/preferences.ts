@@ -13,6 +13,6 @@ export const overridesPreferences = defineOverridesPreferences({
     name: import.meta.env.VITE_APP_TITLE,
   },
   theme: {
-    mode: 'dark',
+    mode: 'light',
   },
 });
