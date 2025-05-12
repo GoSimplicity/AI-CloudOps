@@ -23,7 +23,7 @@
       <a-row :gutter="16">
         <a-col :span="6">
           <a-card class="stats-card">
-            <a-statistic title="总流程数" :value="stats?.total" :value-style="{ color: '#3f8600' }">
+            <a-statistic title="总流程数" :value="stats.total" :value-style="{ color: '#3f8600' }">
               <template #prefix>
                 <ApartmentOutlined />
               </template>
@@ -32,7 +32,7 @@
         </a-col>
         <a-col :span="6">
           <a-card class="stats-card">
-            <a-statistic title="已发布" :value="stats?.published" :value-style="{ color: '#52c41a' }">
+            <a-statistic title="已发布" :value="stats.published" :value-style="{ color: '#52c41a' }">
               <template #prefix>
                 <CheckCircleOutlined />
               </template>
@@ -41,7 +41,7 @@
         </a-col>
         <a-col :span="6">
           <a-card class="stats-card">
-            <a-statistic title="草稿" :value="stats?.draft" :value-style="{ color: '#faad14' }">
+            <a-statistic title="草稿" :value="stats.draft" :value-style="{ color: '#faad14' }">
               <template #prefix>
                 <EditOutlined />
               </template>
@@ -50,7 +50,7 @@
         </a-col>
         <a-col :span="6">
           <a-card class="stats-card">
-            <a-statistic title="已禁用" :value="stats?.disabled" :value-style="{ color: '#cf1322' }">
+            <a-statistic title="已禁用" :value="stats.disabled" :value-style="{ color: '#cf1322' }">
               <template #prefix>
                 <StopOutlined />
               </template>
@@ -62,7 +62,7 @@
 
     <div class="table-container">
       <a-card>
-        <a-table :data-source="paginatedProcesses" :columns="columns" :pagination="false" :loading="loading"
+        <a-table :data-source="processList" :columns="columns" :pagination="false" :loading="loading"
           row-key="id" bordered>
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">
@@ -88,17 +88,17 @@
 
             <template v-if="column.key === 'creator'">
               <div class="creator-info">
-                <a-avatar size="small" :style="{ backgroundColor: getAvatarColor(record.creatorName) }">
-                  {{ getInitials(record.creatorName) }}
+                <a-avatar size="small" :style="{ backgroundColor: getAvatarColor(record.creator_name) }">
+                  {{ getInitials(record.creator_name) }}
                 </a-avatar>
-                <span class="creator-name">{{ record.creatorName }}</span>
+                <span class="creator-name">{{ record.creator_name }}</span>
               </div>
             </template>
 
             <template v-if="column.key === 'createdAt'">
               <div class="date-info">
-                <span class="date">{{ formatDate(record.createdAt) }}</span>
-                <span class="time">{{ formatTime(record.createdAt) }}</span>
+                <span class="date">{{ formatDate(record.created_at) }}</span>
+                <span class="time">{{ formatTime(record.created_at) }}</span>
               </div>
             </template>
 
@@ -112,7 +112,7 @@
                 </a-button>
                 <a-dropdown>
                   <template #overlay>
-                    <a-menu @click="handleCommand(column.key, record)">
+                    <a-menu @click="(e: any) => handleCommand(e.key, record)">
                       <a-menu-item key="publish" v-if="record.status === 0">发布</a-menu-item>
                       <a-menu-item key="unpublish" v-if="record.status === 1">取消发布</a-menu-item>
                       <a-menu-item key="clone">克隆</a-menu-item>
@@ -131,9 +131,10 @@
         </a-table>
 
         <div class="pagination-container">
-          <a-pagination v-model:current="currentPage" :total="totalItems" :page-size="pageSize"
-            :page-size-options="['10', '20', '50', '100']" :show-size-changer="true" @change="handleCurrentChange"
-            @show-size-change="handleSizeChange" :show-total="(total: number) => `共 ${total} 条`" />
+          <a-pagination v-model:current="currentPage" :total="total" :page-size="pageSize"
+            :page-size-options="['10', '20', '50', '100']" :show-size-changer="true" 
+            @change="handleCurrentChange" @showSizeChange="handleSizeChange" 
+            :show-total="(total: number) => `共 ${total} 条`" />
         </div>
       </a-card>
     </div>
@@ -150,8 +151,8 @@
           <a-textarea v-model:value="processDialog.form.description" :rows="3" placeholder="请输入流程描述" />
         </a-form-item>
 
-        <a-form-item label="关联表单" name="formID">
-          <a-select v-model:value="processDialog.form.formID" placeholder="请选择关联表单" style="width: 100%">
+        <a-form-item label="关联表单" name="form_design_id">
+          <a-select v-model:value="processDialog.form.form_design_id" placeholder="请选择关联表单" style="width: 100%">
             <a-select-option v-for="form in forms" :key="form.id" :value="form.id">
               {{ form.name }}
             </a-select-option>
@@ -171,8 +172,8 @@
         <div class="nodes-editor">
           <div class="node-list">
             <a-collapse>
-              <a-collapse-panel v-for="(node, index) in processDialog.form.nodes" :key="index"
-                :header="node.name || `节点 ${index + 1}`">
+              <a-collapse-panel v-for="(node, index) in processDialog.form.definition.steps" :key="index"
+                :header="node.step || `节点 ${index + 1}`">
                 <template #extra>
                   <a-button type="text" danger @click.stop="removeNode(index)" size="small">
                     <DeleteOutlined />
@@ -180,47 +181,15 @@
                 </template>
 
                 <a-form-item label="节点名称">
-                  <a-input v-model:value="node.name" placeholder="节点名称" />
+                  <a-input v-model:value="node.step" placeholder="节点名称" />
                 </a-form-item>
 
-                <a-form-item label="节点类型">
-                  <a-select v-model:value="node.type" style="width: 100%">
-                    <a-select-option value="start">开始节点</a-select-option>
-                    <a-select-option value="approval">审批节点</a-select-option>
-                    <a-select-option value="notice">通知节点</a-select-option>
-                    <a-select-option value="condition">条件节点</a-select-option>
-                    <a-select-option value="end">结束节点</a-select-option>
-                  </a-select>
+                <a-form-item label="角色">
+                  <a-input v-model:value="node.role" placeholder="节点角色" />
                 </a-form-item>
 
-                <a-form-item label="处理人" v-if="node.type === 'approval'">
-                  <a-select v-model:value="node.approvers" mode="multiple" style="width: 100%" placeholder="选择处理人">
-                    <a-select-option v-for="user in users" :key="user.id" :value="user.id">
-                      {{ user.name }}
-                    </a-select-option>
-                  </a-select>
-                </a-form-item>
-
-                <a-form-item label="通知人" v-if="node.type === 'notice'">
-                  <a-select v-model:value="node.notifyUsers" mode="multiple" style="width: 100%" placeholder="选择通知人">
-                    <a-select-option v-for="user in users" :key="user.id" :value="user.id">
-                      {{ user.name }}
-                    </a-select-option>
-                  </a-select>
-                </a-form-item>
-
-                <a-form-item label="条件表达式" v-if="node.type === 'condition'">
-                  <a-textarea v-model:value="node.condition" placeholder="请输入条件表达式" :rows="2" />
-                </a-form-item>
-
-                <a-form-item label="下一节点">
-                  <a-select v-model:value="node.nextNode" style="width: 100%" placeholder="选择下一节点">
-                    <a-select-option :value="null">无（结束流程）</a-select-option>
-                    <a-select-option v-for="(otherNode, otherIndex) in processDialog.form.nodes" :key="otherIndex"
-                      :value="otherIndex" :disabled="otherIndex === index">
-                      {{ otherNode.name || `节点 ${otherIndex + 1}` }}
-                    </a-select-option>
-                  </a-select>
+                <a-form-item label="动作">
+                  <a-input v-model:value="node.action" placeholder="节点动作" />
                 </a-form-item>
               </a-collapse-panel>
             </a-collapse>
@@ -258,51 +227,32 @@
         <a-descriptions bordered :column="2">
           <a-descriptions-item label="ID">{{ detailDialog.process.id }}</a-descriptions-item>
           <a-descriptions-item label="版本">v{{ detailDialog.process.version }}</a-descriptions-item>
-          <a-descriptions-item label="创建人">{{ detailDialog.process.creatorName }}</a-descriptions-item>
-          <a-descriptions-item label="创建时间">{{ formatFullDateTime(detailDialog.process.createdAt)
-          }}</a-descriptions-item>
-          <a-descriptions-item label="关联表单">{{ getFormName(detailDialog.process.formID) }}</a-descriptions-item>
+          <a-descriptions-item label="创建人">{{ detailDialog.process.creator_name }}</a-descriptions-item>
+          <a-descriptions-item label="创建时间">{{ formatFullDateTime(detailDialog.process.created_at) }}</a-descriptions-item>
+          <a-descriptions-item label="关联表单">{{ getFormName(detailDialog.process.form_design_id) }}</a-descriptions-item>
           <a-descriptions-item label="描述">{{ detailDialog.process.description || '无描述' }}</a-descriptions-item>
         </a-descriptions>
 
         <div class="process-preview">
           <h3>流程节点</h3>
           <div class="process-flow-chart">
-            <div v-for="(node, index) in detailDialog.process.nodes" :key="index" class="process-node"
-              :class="'node-type-' + node.type">
+            <div v-for="(step, index) in parsedDefinition(detailDialog.process)" :key="index" class="process-node"
+              :class="`node-type-${getNodeTypeClass(step.action)}`">
               <div class="node-header">
-                <span class="node-type-badge">{{ getNodeTypeName(node.type) }}</span>
-                <span class="node-name">{{ node.name }}</span>
+                <span class="node-type-badge">{{ getNodeTypeName(step.action) }}</span>
+                <span class="node-name">{{ step.step }}</span>
               </div>
               <div class="node-content">
-                <div v-if="node.type === 'approval'" class="node-approvers">
-                  <div>处理人：</div>
-                  <a-avatar-group :max-count="3" size="small">
-                    <a-tooltip v-for="userId in node.approvers" :key="userId" :title="getUserName(userId)">
-                      <a-avatar :style="{ backgroundColor: getAvatarColor(getUserName(userId)) }">
-                        {{ getInitials(getUserName(userId)) }}
-                      </a-avatar>
-                    </a-tooltip>
-                  </a-avatar-group>
+                <div class="node-role">
+                  <div>角色：{{ step.role }}</div>
                 </div>
-                <div v-if="node.type === 'notice'" class="node-notify-users">
-                  <div>通知人：</div>
-                  <a-avatar-group :max-count="3" size="small">
-                    <a-tooltip v-for="userId in node.notifyUsers" :key="userId" :title="getUserName(userId)">
-                      <a-avatar :style="{ backgroundColor: getAvatarColor(getUserName(userId)) }">
-                        {{ getInitials(getUserName(userId)) }}
-                      </a-avatar>
-                    </a-tooltip>
-                  </a-avatar-group>
-                </div>
-                <div v-if="node.type === 'condition'" class="node-condition">
-                  <div>条件：</div>
-                  <div class="condition-expression">{{ node.condition }}</div>
+                <div class="node-action">
+                  <div>动作：{{ step.action }}</div>
                 </div>
               </div>
-              <div class="node-footer" v-if="node.nextNode !== null">
+              <div class="node-footer" v-if="index < parsedDefinition(detailDialog.process).length - 1">
                 <ArrowDownOutlined />
-                <div>下一节点：{{ getNodeName(detailDialog.process.nodes, node.nextNode) }}</div>
+                <div>下一节点：{{ parsedDefinition(detailDialog.process)[index + 1]?.step || '结束' }}</div>
               </div>
             </div>
           </div>
@@ -331,39 +281,27 @@ import {
   ArrowDownOutlined
 } from '@ant-design/icons-vue';
 
-// 基于Golang模型的类型定义
-interface ProcessNode {
-  name: string;
-  type: string; // start, approval, notice, condition, end
-  approvers?: number[]; // 用于审批节点
-  notifyUsers?: number[]; // 用于通知节点
-  condition?: string; // 用于条件节点
-  nextNode: number | null; // 下一个节点的索引，null表示结束
-}
-
-interface Process {
-  id: number;
-  name: string;
-  description: string;
-  formID: number;
-  nodes: ProcessNode[];
-  version: number;
-  status: number; // 0-草稿，1-已发布，2-已禁用
-  creatorID: number;
-  creatorName: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface Form {
-  id: number;
-  name: string;
-}
-
-interface User {
-  id: number;
-  name: string;
-}
+import {
+  type Process,
+  type ProcessReq,
+  type FormDesign,
+  type ListProcessReq,
+  type DetailProcessReqReq,
+  type PublishProcessReq,
+  type CloneProcessReq,
+  type DeleteProcessReqReq,
+  type Step,
+  type Definition,
+  listProcess,
+  detailProcess,
+  createProcess,
+  updateProcess,
+  deleteProcess,
+  publishProcess as publishProcessApi,
+  cloneProcess as cloneProcessApi,
+  listFormDesign,
+  type ListFormDesignReq
+} from '#/api/core/workorder';
 
 // 列定义
 const columns = [
@@ -396,13 +334,13 @@ const columns = [
   },
   {
     title: '创建人',
-    dataIndex: 'creatorName',
+    dataIndex: 'creator_name',
     key: 'creator',
     width: 150,
   },
   {
     title: '创建时间',
-    dataIndex: 'createdAt',
+    dataIndex: 'created_at',
     key: 'createdAt',
     width: 180,
   },
@@ -420,184 +358,40 @@ const searchQuery = ref('');
 const statusFilter = ref(null);
 const currentPage = ref(1);
 const pageSize = ref(10);
+const total = ref(0);
 
 // 统计数据
 const stats = reactive({
-  total: 36,
-  published: 24,
-  draft: 10,
-  disabled: 2
+  total: 0,
+  published: 0,
+  draft: 0,
+  disabled: 0
 });
 
-// 模拟流程数据
-const processes = ref<Process[]>([
-  {
-    id: 1,
-    name: '员工入职审批流程',
-    description: '新员工入职审批流程',
-    formID: 1,
-    nodes: [
-      { name: '开始', type: 'start', nextNode: 1 },
-      { name: '部门经理审批', type: 'approval', approvers: [101, 102], nextNode: 2 },
-      { name: '人力资源审批', type: 'approval', approvers: [103], nextNode: 3 },
-      { name: '通知入职', type: 'notice', notifyUsers: [101, 103, 104], nextNode: 4 },
-      { name: '结束', type: 'end', nextNode: null }
-    ],
-    version: 2,
-    status: 1, // 已发布
-    creatorID: 101,
-    creatorName: '张三',
-    createdAt: new Date('2025-01-15T08:30:00'),
-    updatedAt: new Date('2025-02-10T14:45:00')
-  },
-  {
-    id: 2,
-    name: '休假申请流程',
-    description: '员工休假申请审批流程',
-    formID: 2,
-    nodes: [
-      { name: '开始', type: 'start', nextNode: 1 },
-      { name: '判断休假天数', type: 'condition', condition: '休假天数 > 3', nextNode: 2 },
-      { name: '部门经理审批', type: 'approval', approvers: [101, 102], nextNode: 3 },
-      { name: '人力资源备案', type: 'notice', notifyUsers: [103], nextNode: 4 },
-      { name: '结束', type: 'end', nextNode: null }
-    ],
-    version: 1,
-    status: 1, // 已发布
-    creatorID: 102,
-    creatorName: '李四',
-    createdAt: new Date('2025-01-20T10:15:00'),
-    updatedAt: new Date('2025-01-20T10:15:00')
-  },
-  {
-    id: 3,
-    name: 'IT设备申请流程',
-    description: 'IT设备申请审批流程',
-    formID: 4,
-    nodes: [
-      { name: '开始', type: 'start', nextNode: 1 },
-      { name: '部门经理审批', type: 'approval', approvers: [101, 102], nextNode: 2 },
-      { name: '判断金额', type: 'condition', condition: '金额 > 5000', nextNode: 3 },
-      { name: '财务审批', type: 'approval', approvers: [105], nextNode: 4 },
-      { name: 'IT部门处理', type: 'approval', approvers: [106], nextNode: 5 },
-      { name: '结束', type: 'end', nextNode: null }
-    ],
-    version: 3,
-    status: 1, // 已发布
-    creatorID: 103,
-    creatorName: '王五',
-    createdAt: new Date('2025-01-05T09:20:00'),
-    updatedAt: new Date('2025-03-15T11:30:00')
-  },
-  {
-    id: 4,
-    name: '报销审批流程',
-    description: '员工报销审批流程',
-    formID: 5,
-    nodes: [
-      { name: '开始', type: 'start', nextNode: 1 },
-      { name: '部门经理审批', type: 'approval', approvers: [101, 102], nextNode: 2 },
-      { name: '判断金额', type: 'condition', condition: '金额 > 10000', nextNode: 3 },
-      { name: '财务总监审批', type: 'approval', approvers: [107], nextNode: 4 },
-      { name: '财务处理', type: 'approval', approvers: [105], nextNode: 5 },
-      { name: '结束', type: 'end', nextNode: null }
-    ],
-    version: 1,
-    status: 0, // 草稿
-    creatorID: 104,
-    creatorName: '赵六',
-    createdAt: new Date('2025-03-10T16:45:00'),
-    updatedAt: new Date('2025-03-10T16:45:00')
-  },
-  {
-    id: 5,
-    name: '项目立项流程',
-    description: '新项目立项审批流程',
-    formID: 3,
-    nodes: [
-      { name: '开始', type: 'start', nextNode: 1 },
-      { name: '部门经理审批', type: 'approval', approvers: [101, 102], nextNode: 2 },
-      { name: '技术评估', type: 'approval', approvers: [106, 108], nextNode: 3 },
-      { name: '财务评估', type: 'approval', approvers: [105], nextNode: 4 },
-      { name: '总经理审批', type: 'approval', approvers: [109], nextNode: 5 },
-      { name: '通知相关部门', type: 'notice', notifyUsers: [101, 103, 105, 106], nextNode: 6 },
-      { name: '结束', type: 'end', nextNode: null }
-    ],
-    version: 2,
-    status: 1, // 已发布
-    creatorID: 102,
-    creatorName: '李四',
-    createdAt: new Date('2025-02-05T11:30:00'),
-    updatedAt: new Date('2025-02-20T09:15:00')
-  }
-]);
+// 流程列表
+const processList = ref<Process[]>([]);
 
-// 模拟表单数据
-const forms = ref<Form[]>([
-  { id: 1, name: '员工入职表单' },
-  { id: 2, name: '休假申请表' },
-  { id: 3, name: 'IT支持请求' },
-  { id: 4, name: '设备采购申请' },
-  { id: 5, name: '差旅报销单' }
-]);
-
-// 模拟用户数据
-const users = ref<User[]>([
-  { id: 101, name: '张三' },
-  { id: 102, name: '李四' },
-  { id: 103, name: '王五' },
-  { id: 104, name: '赵六' },
-  { id: 105, name: '财务经理' },
-  { id: 106, name: 'IT主管' },
-  { id: 107, name: '财务总监' },
-  { id: 108, name: '技术总监' },
-  { id: 109, name: '总经理' }
-]);
-
-// 过滤和分页
-const filteredProcesses = computed(() => {
-  let result = [...processes.value];
-
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase();
-    result = result.filter(process =>
-      process.name.toLowerCase().includes(query) ||
-      (process.description && process.description.toLowerCase().includes(query))
-    );
-  }
-
-  if (statusFilter.value !== null) {
-    result = result.filter(process => process.status === statusFilter.value);
-  }
-
-  return result;
-});
-
-const totalItems = computed(() => filteredProcesses.value.length);
-
-const paginatedProcesses = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value;
-  const end = start + pageSize.value;
-  return filteredProcesses.value.slice(start, end);
-});
+// 表单列表
+const forms = ref<FormDesign[]>([]);
 
 // 流程对话框
 const processDialog = reactive({
   visible: false,
   isEdit: false,
   form: {
-    id: 0,
+    id: undefined,
     name: '',
     description: '',
-    formID: null as number | null,
-    nodes: [] as ProcessNode[],
-    version: 1,
+    form_design_id: undefined as number | undefined,
+    definition: {
+      steps: [] as Step[]
+    } as Definition,
+    version: undefined,
     status: 0,
-    creatorID: 101, // 模拟用户ID
-    creatorName: '当前用户', // 模拟用户名
-    createdAt: new Date(),
-    updatedAt: new Date()
-  }
+    category_id: undefined,
+    creator_id: undefined,
+    creator_name: undefined
+  } as ProcessReq
 });
 
 // 表单验证规则
@@ -606,7 +400,7 @@ const formRules = {
     { required: true, message: '请输入流程名称', trigger: 'blur' },
     { min: 3, max: 50, message: '长度应为3到50个字符', trigger: 'blur' }
   ],
-  formID: [
+  form_design_id: [
     { required: true, message: '请选择关联表单', trigger: 'change' }
   ]
 };
@@ -616,8 +410,8 @@ const cloneDialog = reactive({
   visible: false,
   form: {
     name: '',
-    originalId: 0
-  }
+    id: 0
+  } as CloneProcessReq
 });
 
 // 详情对话框
@@ -626,63 +420,165 @@ const detailDialog = reactive({
   process: null as Process | null
 });
 
+// 初始化加载数据
+const loadProcesses = async () => {
+  loading.value = true;
+  try {
+    const params: ListProcessReq = {
+      page: currentPage.value,
+      size: pageSize.value,
+      search: searchQuery.value || undefined,
+      status: statusFilter.value || undefined
+    };
+    
+    const res = await listProcess(params);
+    if (res) {
+      processList.value = res.items || [];
+      total.value = res.total || 0;
+      
+      // 更新统计数据
+      stats.total = res.total || 0;
+      stats.published = processList.value.filter((p: any) => p.status === 1).length;
+      stats.draft = processList.value.filter((p: any) => p.status === 0).length;
+      stats.disabled = processList.value.filter((p: any) => p.status === 2).length;
+    }
+  } catch (error) {
+    message.error('加载流程数据失败');
+    console.error('Failed to load processes:', error);
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 加载表单列表
+const loadForms = async () => {
+  try {
+    const params: ListFormDesignReq = {
+      page: 1,
+      size: 100,
+      status: 1 // 只获取已发布的表单
+    };
+    
+    const res = await listFormDesign(params);
+    if (res) {
+      forms.value = res.items || [];
+    }
+  } catch (error) {
+    message.error('加载表单数据失败');
+    console.error('Failed to load forms:', error);
+  }
+};
+
 // 方法
 const handleSizeChange = (current: number, size: number) => {
   pageSize.value = size;
   currentPage.value = 1;
+  loadProcesses();
 };
 
 const handleCurrentChange = (page: number) => {
   currentPage.value = page;
+  loadProcesses();
 };
 
 const handleSearch = () => {
   currentPage.value = 1;
+  loadProcesses();
 };
 
 const handleStatusChange = () => {
   currentPage.value = 1;
+  loadProcesses();
 };
 
 const handleCreateProcess = () => {
   processDialog.isEdit = false;
   processDialog.form = {
-    id: 0,
     name: '',
     description: '',
-    formID: null,
-    nodes: [
-      { name: '开始', type: 'start', nextNode: null }
-    ],
-    version: 1,
-    status: 0,
-    creatorID: 101,
-    creatorName: '当前用户',
-    createdAt: new Date(),
-    updatedAt: new Date()
+    form_design_id: undefined as unknown as number,
+    definition: {
+      steps: [
+        { step: '开始', role: '系统', action: 'start' }
+      ]
+    },
+    status: 0
   };
   processDialog.visible = true;
 };
 
-const handleEditProcess = (row: Process) => {
+const parsedDefinition = (process: Process): Step[] => {
+  try {
+    if (typeof process.definition === 'string') {
+      return JSON.parse(process.definition).steps || [];
+    }
+    return [];
+  } catch (error) {
+    console.error('解析流程定义失败:', error);
+    return [];
+  }
+};
+
+const handleEditProcess = async (row: Process) => {
   processDialog.isEdit = true;
-  processDialog.form = JSON.parse(JSON.stringify(row));
-  processDialog.visible = true;
-  detailDialog.visible = false;
+  loading.value = true;
+  
+  try {
+    const res = await detailProcess({ id: row.id });
+    if (res) {
+      const process = res;
+      
+      processDialog.form = {
+        id: process.id,
+        name: process.name,
+        description: process.description,
+        form_design_id: process.form_design_id,
+        definition: typeof process.definition === 'string' 
+          ? JSON.parse(process.definition) 
+          : { steps: [] },
+        version: process.version,
+        status: process.status,
+        category_id: process.category_id,
+        creator_id: process.creator_id,
+        creator_name: process.creator_name
+      };
+      
+      processDialog.visible = true;
+      detailDialog.visible = false;
+    }
+  } catch (error) {
+    message.error('获取流程详情失败');
+    console.error('Failed to get process details:', error);
+  } finally {
+    loading.value = false;
+  }
 };
 
-const handleViewProcess = (row: Process) => {
-  detailDialog.process = row;
-  detailDialog.visible = true;
+const handleViewProcess = async (row: Process) => {
+  loading.value = true;
+  
+  try {
+    const res = await detailProcess({ id: row.id });
+    if (res) {
+      detailDialog.process = res;
+      detailDialog.visible = true;
+    }
+  } catch (error) {
+    message.error('获取流程详情失败');
+    console.error('Failed to get process details:', error);
+  } finally {
+    loading.value = false;
+  }
 };
 
-const handleCommand = (command: string, row: Process) => {
+const handleCommand = async (command: string, row: Process) => {
   switch (command) {
     case 'publish':
-      publishProcess(row);
+      await publishProcess(row);
       break;
     case 'unpublish':
-      unpublishProcess(row);
+      // 后端可能没有取消发布的接口，这里可以通过更新状态实现
+      await updateProcessStatus(row, 0);
       break;
     case 'clone':
       showCloneDialog(row);
@@ -693,53 +589,66 @@ const handleCommand = (command: string, row: Process) => {
   }
 };
 
-const publishProcess = (process: Process) => {
-  const index = processes.value.findIndex(p => p.id === process.id);
-  if (index !== -1) {
-    const process = processes.value[index];
-    if (process) {
-      process.status = 1;
-      process.updatedAt = new Date();
+const publishProcess = async (process: Process) => {
+  try {
+    const params: PublishProcessReq = {
+      id: process.id
+    };
+    
+    const res = await publishProcessApi(params);
+    if (res) {
       message.success(`流程 "${process.name}" 已发布`);
+      loadProcesses();
     }
+  } catch (error) {
+    message.error('发布流程失败');
+    console.error('Failed to publish process:', error);
   }
 };
 
-const unpublishProcess = (process: Process) => {
-  const index = processes.value.findIndex(p => p.id === process.id);
-  if (index !== -1) {
-    const process = processes.value[index];
-    if (process) {
-      process.status = 0;
-      process.updatedAt = new Date();
-      message.success(`流程 "${process.name}" 已取消发布`);
+const updateProcessStatus = async (process: Process, status: number) => {
+  try {
+    const updatedProcess: ProcessReq = {
+      id: process.id,
+      name: process.name,
+      description: process.description,
+      form_design_id: process.form_design_id,
+      definition: typeof process.definition === 'string' 
+        ? JSON.parse(process.definition) 
+        : { steps: [] },
+      status: status
+    };
+    
+    const res = await updateProcess(updatedProcess);
+    if (res) {
+      message.success(`流程 "${process.name}" 状态已更新`);
+      loadProcesses();
     }
+  } catch (error) {
+    message.error('更新流程状态失败');
+    console.error('Failed to update process status:', error);
   }
 };
 
 const showCloneDialog = (process: Process) => {
-  cloneDialog.form.name = `${process.name} 的副本`;
-  cloneDialog.form.originalId = process.id;
+  cloneDialog.form = {
+    id: process.id,
+    name: `${process.name} 的副本`
+  };
   cloneDialog.visible = true;
 };
 
-const confirmClone = () => {
-  const originalProcess = processes.value.find(p => p.id === cloneDialog.form.originalId);
-  if (originalProcess) {
-    const newId = Math.max(...processes.value.map(p => p.id)) + 1;
-    const clonedProcess: Process = {
-      ...JSON.parse(JSON.stringify(originalProcess)),
-      id: newId,
-      name: cloneDialog.form.name,
-      status: 0, // 总是草稿
-      version: 1,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    processes.value.push(clonedProcess);
-    cloneDialog.visible = false;
-    message.success(`流程 "${originalProcess.name}" 已克隆为 "${cloneDialog.form.name}"`);
+const confirmClone = async () => {
+  try {
+    const res = await cloneProcessApi(cloneDialog.form);
+    if (res) {
+      message.success(`流程已克隆为 "${cloneDialog.form.name}"`);
+      cloneDialog.visible = false;
+      loadProcesses();
+    }
+  } catch (error) {
+    message.error('克隆流程失败');
+    console.error('Failed to clone process:', error);
   }
 };
 
@@ -750,128 +659,109 @@ const confirmDelete = (process: Process) => {
     okText: '删除',
     okType: 'danger',
     cancelText: '取消',
-    onOk() {
-      const index = processes.value.findIndex(p => p.id === process.id);
-      if (index !== -1) {
-        processes.value.splice(index, 1);
-        message.success(`流程 "${process.name}" 已删除`);
+    async onOk() {
+      try {
+        const params: DeleteProcessReqReq = {
+          id: process.id
+        };
+        
+        const res = await deleteProcess(params);
+        if (res) {
+          message.success(`流程 "${process.name}" 已删除`);
+          loadProcesses();
+        }
+      } catch (error) {
+        message.error('删除流程失败');
+        console.error('Failed to delete process:', error);
       }
     }
   });
 };
 
 const addNode = () => {
-  processDialog.form.nodes.push({
-    name: '',
-    type: 'approval',
-    approvers: [],
-    nextNode: null
+  processDialog.form.definition.steps.push({
+    step: '',
+    role: '',
+    action: ''
   });
 };
 
 const removeNode = (index: number) => {
-  // 检查是否有其他节点引用了这个要删除的节点
-  const hasReferences = processDialog.form.nodes.some(
-    (node, nodeIndex) => nodeIndex !== index && node.nextNode === index
-  );
-
-  if (hasReferences) {
-    message.warning('该节点被其他节点引用，请先修改相关节点的引用关系');
-    return;
-  }
-
-  processDialog.form.nodes.splice(index, 1);
-
-  // 更新其他节点的引用关系
-  processDialog.form.nodes.forEach(node => {
-    if (node.nextNode !== null && node.nextNode > index) {
-      node.nextNode -= 1;
-    }
-  });
+  processDialog.form.definition.steps.splice(index, 1);
 };
 
-const saveProcess = () => {
-  if (processDialog.form.name.trim() === '') {
-    message.error('流程名称不能为空');
-    return;
-  }
-
-  if (processDialog.form.formID === null) {
-    message.error('请选择关联表单');
-    return;
-  }
-
-  if (processDialog.form.nodes.length === 0) {
-    message.error('流程至少需要一个节点');
-    return;
-  }
-
-  // 验证流程节点是否有效
-  for (let i = 0; i < processDialog.form.nodes.length; i++) {
-    const node = processDialog.form.nodes[i];
-    if (!node) continue;
-
-    if (!node.name) {
-      message.error(`节点 ${i + 1} 名称不能为空`);
+const saveProcess = async () => {
+  try {
+    if (processDialog.form.name.trim() === '') {
+      message.error('流程名称不能为空');
       return;
     }
 
-    if (node.type === 'approval' && (!node.approvers || node.approvers.length === 0)) {
-      message.error(`审批节点 "${node.name}" 必须指定处理人`);
+    if (!processDialog.form.form_design_id) {
+      message.error('请选择关联表单');
       return;
     }
 
-    if (node.type === 'notice' && (!node.notifyUsers || node.notifyUsers.length === 0)) {
-      message.error(`通知节点 "${node.name}" 必须指定通知人`);
+    if (processDialog.form.definition.steps.length === 0) {
+      message.error('流程至少需要一个节点');
       return;
     }
 
-    if (node.type === 'condition' && (!node.condition || node.condition.trim() === '')) {
-      message.error(`条件节点 "${node.name}" 必须指定条件表达式`);
-      return;
+    // 验证流程节点是否有效
+    for (let i = 0; i < processDialog.form.definition.steps.length; i++) {
+      const step = processDialog.form.definition.steps[i];
+      if (!step?.step) {
+        message.error(`节点 ${i + 1} 名称不能为空`);
+        return;
+      }
+      if (!step?.role) {
+        message.error(`节点 ${i + 1} 角色不能为空`);
+        return;
+      }
+      if (!step?.action) {
+        message.error(`节点 ${i + 1} 动作不能为空`);
+        return;
+      }
     }
+
+    if (processDialog.isEdit) {
+      // 更新现有流程
+      const res = await updateProcess(processDialog.form);
+      if (res) {
+        message.success(`流程 "${processDialog.form.name}" 已更新`);
+      }
+    } else {
+      // 创建新流程
+      const res = await createProcess(processDialog.form);
+      if (res) {
+        message.success(`流程 "${processDialog.form.name}" 已创建`);
+      }
+    }
+    
+    processDialog.visible = false;
+    loadProcesses();
+  } catch (error) {
+    message.error(processDialog.isEdit ? '更新流程失败' : '创建流程失败');
+    console.error('Failed to save process:', error);
   }
-
-  // 确保 formID 不为 null
-  const formToSave = {
-    ...processDialog.form,
-    formID: processDialog.form.formID as number
-  };
-
-  if (processDialog.isEdit) {
-    // 更新现有流程
-    const index = processes.value.findIndex(p => p.id === formToSave.id);
-    if (index !== -1) {
-      formToSave.updatedAt = new Date();
-      processes.value[index] = formToSave;
-      message.success(`流程 "${formToSave.name}" 已更新`);
-    }
-  } else {
-    // 创建新流程
-    const newId = Math.max(...processes.value.map(p => p.id)) + 1;
-    formToSave.id = newId;
-    processes.value.push(formToSave);
-    message.success(`流程 "${formToSave.name}" 已创建`);
-  }
-  processDialog.visible = false;
 };
 
 // 辅助方法
-const formatDate = (date: Date) => {
-  if (!date) return '';
-  const d = new Date(date);
+const formatDate = (dateStr: string | undefined) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
   return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
 };
 
-const formatTime = (date: Date) => {
-  if (!date) return '';
-  const d = new Date(date);
+const formatTime = (dateStr: string | undefined) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
   return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 };
 
-const formatFullDateTime = (date: Date) => {
-  if (!date) return '';
-  const d = new Date(date);
+const formatFullDateTime = (dateStr: string | undefined) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
   return d.toLocaleString('zh-CN', {
     year: 'numeric',
     month: 'long',
@@ -881,7 +771,7 @@ const formatFullDateTime = (date: Date) => {
   });
 };
 
-const getInitials = (name: string) => {
+const getInitials = (name: string | undefined) => {
   if (!name) return '';
   return name
     .split('')
@@ -899,7 +789,9 @@ const getStatusClass = (status: number) => {
   }
 };
 
-const getAvatarColor = (name: string) => {
+const getAvatarColor = (name: string | undefined) => {
+  if (!name) return '#1890ff';
+  
   // 根据名称生成一致的颜色
   const colors = [
     '#1890ff', '#52c41a', '#faad14', '#f5222d',
@@ -915,38 +807,40 @@ const getAvatarColor = (name: string) => {
 };
 
 const getFormName = (formId: number) => {
-  const form = forms.value.find(f => f.id === formId);
+  const form = forms.value.find((f: any) => f.id === formId);
   return form ? form.name : '未知表单';
 };
 
-const getUserName = (userId: number) => {
-  const user = users.value.find(u => u.id === userId);
-  return user ? user.name : '未知用户';
+const getNodeTypeClass = (action: string) => {
+  // 根据action映射到UI展示类型
+  const map: Record<string, string> = {
+    'start': 'start',
+    'approve': 'approval',
+    'notify': 'notice',
+    'condition': 'condition',
+    'end': 'end',
+    'review': 'approval'
+  };
+  return map[action] || 'approval';
 };
 
-const getNodeTypeName = (type: string) => {
+const getNodeTypeName = (action: string) => {
+  // 根据action映射到展示的节点类型名称
   const typeMap: Record<string, string> = {
     'start': '开始',
-    'approval': '审批',
-    'notice': '通知',
+    'approve': '审批',
+    'notify': '通知',
     'condition': '条件',
-    'end': '结束'
+    'end': '结束',
+    'review': '审核'
   };
-  return typeMap[type] || type;
+  return typeMap[action] || action;
 };
 
-const getNodeName = (nodes: ProcessNode[], index: number | null) => {
-  if (index === null) return '无';
-  return nodes[index] ? (nodes[index].name || `节点 ${index + 1}`) : '无效节点';
-};
-
-// 模拟初始化
+// 加载数据
 onMounted(() => {
-  loading.value = true;
-  // 模拟API加载
-  setTimeout(() => {
-    loading.value = false;
-  }, 800);
+  loadForms();
+  loadProcesses();
 });
 </script>
 
@@ -961,16 +855,6 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
-}
-
-.page-title {
-  font-size: 28px;
-  color: #1f2937;
-  margin: 0;
-  background: linear-gradient(90deg, #1890ff 0%, #52c41a 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 700;
 }
 
 .header-actions {
@@ -1199,24 +1083,8 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-.node-approvers,
-.node-notify-users {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.node-condition {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.condition-expression {
-  background-color: #f5f5f5;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-family: monospace;
+.node-role, .node-action {
+  margin-bottom: 8px;
 }
 
 .node-footer {

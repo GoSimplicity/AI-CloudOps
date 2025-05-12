@@ -23,7 +23,7 @@
       <a-row :gutter="16">
         <a-col :span="6">
           <a-card class="stats-card">
-            <a-statistic title="总表单数" :value="stats?.total" :value-style="{ color: '#3f8600' }">
+            <a-statistic title="总表单数" :value="stats.total" :value-style="{ color: '#3f8600' }">
               <template #prefix>
                 <FormOutlined />
               </template>
@@ -32,7 +32,7 @@
         </a-col>
         <a-col :span="6">
           <a-card class="stats-card">
-            <a-statistic title="已发布" :value="stats?.published" :value-style="{ color: '#52c41a' }">
+            <a-statistic title="已发布" :value="stats.published" :value-style="{ color: '#52c41a' }">
               <template #prefix>
                 <CheckCircleOutlined />
               </template>
@@ -41,7 +41,7 @@
         </a-col>
         <a-col :span="6">
           <a-card class="stats-card">
-            <a-statistic title="草稿" :value="stats?.draft" :value-style="{ color: '#faad14' }">
+            <a-statistic title="草稿" :value="stats.draft" :value-style="{ color: '#faad14' }">
               <template #prefix>
                 <EditOutlined />
               </template>
@@ -50,7 +50,7 @@
         </a-col>
         <a-col :span="6">
           <a-card class="stats-card">
-            <a-statistic title="已禁用" :value="stats?.disabled" :value-style="{ color: '#cf1322' }">
+            <a-statistic title="已禁用" :value="stats.disabled" :value-style="{ color: '#cf1322' }">
               <template #prefix>
                 <StopOutlined />
               </template>
@@ -88,17 +88,17 @@
 
             <template v-if="column.key === 'creator'">
               <div class="creator-info">
-                <a-avatar size="small" :style="{ backgroundColor: getAvatarColor(record.creatorName) }">
-                  {{ getInitials(record.creatorName) }}
+                <a-avatar size="small" :style="{ backgroundColor: getAvatarColor(record.creator_name) }">
+                  {{ getInitials(record.creator_name) }}
                 </a-avatar>
-                <span class="creator-name">{{ record.creatorName }}</span>
+                <span class="creator-name">{{ record.creator_name }}</span>
               </div>
             </template>
 
             <template v-if="column.key === 'createdAt'">
               <div class="date-info">
-                <span class="date">{{ formatDate(record.createdAt) }}</span>
-                <span class="time">{{ formatTime(record.createdAt) }}</span>
+                <span class="date">{{ formatDate(record.created_at) }}</span>
+                <span class="time">{{ formatTime(record.created_at) }}</span>
               </div>
             </template>
 
@@ -112,7 +112,7 @@
                 </a-button>
                 <a-dropdown>
                   <template #overlay>
-                    <a-menu @click="handleCommand">
+                    <a-menu @click="(key: any) => handleMenuClick(key, record)">
                       <a-menu-item key="publish" v-if="record.status === 0">发布</a-menu-item>
                       <a-menu-item key="unpublish" v-if="record.status === 1">取消发布</a-menu-item>
                       <a-menu-item key="clone">克隆</a-menu-item>
@@ -133,7 +133,7 @@
         <div class="pagination-container">
           <a-pagination v-model:current="currentPage" :total="totalItems" :page-size="pageSize"
             :page-size-options="['10', '20', '50', '100']" :show-size-changer="true" @change="handleCurrentChange"
-            @show-size-change="handleSizeChange" :show-total="(total: number) => `共 ${total} 条`" />
+            @showSizeChange="handleSizeChange" :show-total="(total: number) => `共 ${total} 条`" />
         </div>
       </a-card>
     </div>
@@ -150,8 +150,8 @@
           <a-textarea v-model:value="formDialog.form.description" :rows="3" placeholder="请输入表单描述" />
         </a-form-item>
 
-        <a-form-item label="分类" name="categoryID">
-          <a-select v-model:value="formDialog.form.categoryID" placeholder="请选择分类" style="width: 100%">
+        <a-form-item label="分类" name="category_id">
+          <a-select v-model:value="formDialog.form.category_id" placeholder="请选择分类" style="width: 100%">
             <a-select-option v-for="cat in categories" :key="cat.id" :value="cat.id">
               {{ cat.name }}
             </a-select-option>
@@ -238,14 +238,14 @@
         <a-descriptions bordered :column="2">
           <a-descriptions-item label="ID">{{ detailDialog.form.id }}</a-descriptions-item>
           <a-descriptions-item label="版本">v{{ detailDialog.form.version }}</a-descriptions-item>
-          <a-descriptions-item label="创建人">{{ detailDialog.form.creatorName }}</a-descriptions-item>
-          <a-descriptions-item label="创建时间">{{ formatFullDateTime(detailDialog.form.createdAt) }}</a-descriptions-item>
+          <a-descriptions-item label="创建人">{{ detailDialog.form.creator_name }}</a-descriptions-item>
+          <a-descriptions-item label="创建时间">{{ formatFullDateTime(detailDialog.form.created_at || '') }}</a-descriptions-item>
           <a-descriptions-item label="描述" :span="2">{{ detailDialog.form.description || '无描述' }}</a-descriptions-item>
         </a-descriptions>
 
         <div class="schema-preview">
           <h3>表单结构</h3>
-          <a-table :data-source="detailDialog.form.schema.fields" :columns="schemaColumns" :pagination="false" bordered
+          <a-table :data-source="parsedSchema.fields" :columns="schemaColumns" :pagination="false" bordered
             size="small" row-key="field">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'required'">
@@ -278,37 +278,26 @@ import {
   DeleteOutlined,
   DownOutlined
 } from '@ant-design/icons-vue';
+import {
+  listFormDesign,
+  detailFormDesign,
+  createFormDesign,
+  updateFormDesign,
+  deleteFormDesign,
+  publishFormDesign,
+  cloneFormDesign
+} from '#/api/core/workorder';
 
-// 基于Golang模型的类型定义
-interface Field {
-  type: string;
-  label: string;
-  field: string;
-  required: boolean;
-}
-
-interface Schema {
-  fields: Field[];
-}
-
-interface FormDesign {
-  id: number;
-  name: string;
-  description: string;
-  schema: Schema;
-  version: number;
-  status: number; // 0-草稿，1-已发布，2-已禁用
-  categoryID: number;
-  creatorID: number;
-  creatorName: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface Category {
-  id: number;
-  name: string;
-}
+import type {
+  FormDesign,
+  Field,
+  Schema,
+  FormDesignReq,
+  ListFormDesignReq,
+  DetailFormDesignReq,
+  PublishFormDesignReq,
+  CloneFormDesignReq,
+} from '#/api/core/workorder';
 
 // 列定义
 const columns = [
@@ -341,13 +330,13 @@ const columns = [
   },
   {
     title: '创建人',
-    dataIndex: 'creatorName',
+    dataIndex: 'creator_name',
     key: 'creator',
     width: 150,
   },
   {
     title: '创建时间',
-    dataIndex: 'createdAt',
+    dataIndex: 'created_at',
     key: 'createdAt',
     width: 180,
   },
@@ -393,235 +382,18 @@ const searchQuery = ref('');
 const statusFilter = ref(null);
 const currentPage = ref(1);
 const pageSize = ref(10);
+const formDesigns = ref<FormDesign[]>([]);
 
 // 统计数据
 const stats = reactive({
-  total: 48,
-  published: 32,
-  draft: 12,
-  disabled: 4
+  total: 0,
+  published: 0,
+  draft: 0,
+  disabled: 0
 });
 
-// 模拟表单设计数据
-const formDesigns = ref<FormDesign[]>([
-  {
-    id: 1,
-    name: '员工入职表单',
-    description: '新员工入职流程使用的表单',
-    schema: {
-      fields: [
-        { type: 'text', label: '姓名', field: 'fullName', required: true },
-        { type: 'date', label: '入职日期', field: 'startDate', required: true },
-        { type: 'select', label: '部门', field: 'department', required: true },
-        { type: 'text', label: '职位', field: 'position', required: true },
-        { type: 'textarea', label: '备注', field: 'comments', required: false }
-      ]
-    },
-    version: 2,
-    status: 1, // 已发布
-    categoryID: 1,
-    creatorID: 101,
-    creatorName: '张三',
-    createdAt: new Date('2025-01-15T08:30:00'),
-    updatedAt: new Date('2025-02-10T14:45:00')
-  },
-  {
-    id: 2,
-    name: '休假申请表',
-    description: '员工申请休假使用的表单',
-    schema: {
-      fields: [
-        { type: 'text', label: '员工姓名', field: 'empName', required: true },
-        { type: 'date', label: '开始日期', field: 'startDate', required: true },
-        { type: 'date', label: '结束日期', field: 'endDate', required: true },
-        { type: 'select', label: '休假类型', field: 'vacationType', required: true },
-        { type: 'textarea', label: '原因', field: 'reason', required: false }
-      ]
-    },
-    version: 1,
-    status: 1, // 已发布
-    categoryID: 2,
-    creatorID: 102,
-    creatorName: '李四',
-    createdAt: new Date('2025-01-20T10:15:00'),
-    updatedAt: new Date('2025-01-20T10:15:00')
-  },
-  {
-    id: 3,
-    name: 'IT支持请求',
-    description: '请求IT支持和报告问题使用的表单',
-    schema: {
-      fields: [
-        { type: 'text', label: '申请人姓名', field: 'requesterName', required: true },
-        { type: 'select', label: '问题类别', field: 'issueCategory', required: true },
-        { type: 'radio', label: '优先级', field: 'priority', required: true },
-        { type: 'textarea', label: '描述', field: 'description', required: true },
-        { type: 'checkbox', label: '需要后续跟进', field: 'followUp', required: false }
-      ]
-    },
-    version: 3,
-    status: 1, // 已发布
-    categoryID: 3,
-    creatorID: 103,
-    creatorName: '王五',
-    createdAt: new Date('2025-01-05T09:20:00'),
-    updatedAt: new Date('2025-03-15T11:30:00')
-  },
-  {
-    id: 4,
-    name: '设备采购申请',
-    description: '申请采购新设备的表单',
-    schema: {
-      fields: [
-        { type: 'text', label: '申请人姓名', field: 'requesterName', required: true },
-        { type: 'text', label: '物品描述', field: 'itemDescription', required: true },
-        { type: 'number', label: '预计费用', field: 'estimatedCost', required: true },
-        { type: 'select', label: '部门', field: 'department', required: true },
-        { type: 'textarea', label: '申请理由', field: 'justification', required: true }
-      ]
-    },
-    version: 1,
-    status: 0, // 草稿
-    categoryID: 4,
-    creatorID: 104,
-    creatorName: '赵六',
-    createdAt: new Date('2025-03-10T16:45:00'),
-    updatedAt: new Date('2025-03-10T16:45:00')
-  },
-  {
-    id: 5,
-    name: '差旅报销单',
-    description: '提交差旅费用报销的表单',
-    schema: {
-      fields: [
-        { type: 'text', label: '员工姓名', field: 'empName', required: true },
-        { type: 'date', label: '出行日期', field: 'travelDate', required: true },
-        { type: 'text', label: '目的地', field: 'destination', required: true },
-        { type: 'number', label: '总金额', field: 'totalAmount', required: true },
-        { type: 'textarea', label: '行程概要', field: 'tripSummary', required: true }
-      ]
-    },
-    version: 2,
-    status: 1, // 已发布
-    categoryID: 2,
-    creatorID: 105,
-    creatorName: '钱七',
-    createdAt: new Date('2025-02-05T13:20:00'),
-    updatedAt: new Date('2025-03-01T09:10:00')
-  },
-  {
-    id: 6,
-    name: '项目提案表',
-    description: '提交新项目提案的表单',
-    schema: {
-      fields: [
-        { type: 'text', label: '项目标题', field: 'projectTitle', required: true },
-        { type: 'text', label: '项目负责人', field: 'projectLead', required: true },
-        { type: 'date', label: '预计开始日期', field: 'startDate', required: true },
-        { type: 'number', label: '预算估计', field: 'budget', required: true },
-        { type: 'textarea', label: '项目描述', field: 'description', required: true },
-        { type: 'select', label: '部门', field: 'department', required: true }
-      ]
-    },
-    version: 1,
-    status: 0, // 草稿
-    categoryID: 5,
-    creatorID: 106,
-    creatorName: '孙八',
-    createdAt: new Date('2025-03-15T11:00:00'),
-    updatedAt: new Date('2025-03-15T11:00:00')
-  },
-  {
-    id: 7,
-    name: '绩效评估表',
-    description: '年度员工绩效评估表单',
-    schema: {
-      fields: [
-        { type: 'text', label: '员工姓名', field: 'empName', required: true },
-        { type: 'text', label: '经理姓名', field: 'managerName', required: true },
-        { type: 'date', label: '评估周期开始', field: 'periodStart', required: true },
-        { type: 'date', label: '评估周期结束', field: 'periodEnd', required: true },
-        { type: 'select', label: '总体评级', field: 'overallRating', required: true },
-        { type: 'textarea', label: '优势', field: 'strengths', required: true },
-        { type: 'textarea', label: '需改进方面', field: 'improvements', required: true }
-      ]
-    },
-    version: 3,
-    status: 1, // 已发布
-    categoryID: 1,
-    creatorID: 107,
-    creatorName: '周九',
-    createdAt: new Date('2024-11-20T14:30:00'),
-    updatedAt: new Date('2025-02-25T09:45:00')
-  },
-  {
-    id: 8,
-    name: '客户反馈调查',
-    description: '收集客户反馈的表单',
-    schema: {
-      fields: [
-        { type: 'text', label: '客户名称', field: 'customerName', required: false },
-        { type: 'radio', label: '整体满意度', field: 'satisfaction', required: true },
-        { type: 'checkbox', label: '使用的服务', field: 'services', required: true },
-        { type: 'textarea', label: '评论', field: 'comments', required: false },
-        { type: 'checkbox', label: '是否需要后续联系', field: 'followUp', required: false }
-      ]
-    },
-    version: 2,
-    status: 2, // 已禁用
-    categoryID: 6,
-    creatorID: 108,
-    creatorName: '吴十',
-    createdAt: new Date('2025-01-12T15:20:00'),
-    updatedAt: new Date('2025-03-05T16:30:00')
-  },
-  {
-    id: 9,
-    name: '供应商注册表',
-    description: '注册新供应商的表单',
-    schema: {
-      fields: [
-        { type: 'text', label: '公司名称', field: 'companyName', required: true },
-        { type: 'text', label: '联系人', field: 'contactPerson', required: true },
-        { type: 'text', label: '电子邮件', field: 'email', required: true },
-        { type: 'text', label: '电话', field: 'phone', required: true },
-        { type: 'textarea', label: '公司简介', field: 'description', required: true },
-        { type: 'select', label: '行业', field: 'industry', required: true }
-      ]
-    },
-    version: 1,
-    status: 1, // 已发布
-    categoryID: 7,
-    creatorID: 109,
-    creatorName: '郑十一',
-    createdAt: new Date('2025-02-18T13:40:00'),
-    updatedAt: new Date('2025-02-18T13:40:00')
-  },
-  {
-    id: 10,
-    name: '培训申请表',
-    description: '申请员工培训项目的表单',
-    schema: {
-      fields: [
-        { type: 'text', label: '员工姓名', field: 'empName', required: true },
-        { type: 'select', label: '培训类型', field: 'trainingType', required: true },
-        { type: 'date', label: '申请日期', field: 'requestedDate', required: true },
-        { type: 'number', label: '预计费用', field: 'estimatedCost', required: true },
-        { type: 'textarea', label: '申请理由', field: 'justification', required: true }
-      ]
-    },
-    version: 1,
-    status: 0, // 草稿
-    categoryID: 1,
-    creatorID: 110,
-    creatorName: '刘十二',
-    createdAt: new Date('2025-03-20T10:30:00'),
-    updatedAt: new Date('2025-03-20T10:30:00')
-  }
-]);
-
-// 模拟分类数据
-const categories = ref<Category[]>([
+// 分类数据
+const categories = ref<{ id: number; name: string }[]>([
   { id: 1, name: '人力资源' },
   { id: 2, name: '财务部门' },
   { id: 3, name: 'IT部门' },
@@ -663,20 +435,16 @@ const formDialog = reactive({
   visible: false,
   isEdit: false,
   form: {
-    id: 0,
+    id: undefined,
     name: '',
     description: '',
     schema: {
       fields: [] as Field[]
     },
-    version: 1,
+    version: undefined,
     status: 0,
-    categoryID: null as number | null,
-    creatorID: 101, // 模拟用户ID
-    creatorName: '当前用户', // 模拟用户名
-    createdAt: new Date(),
-    updatedAt: new Date()
-  }
+    category_id: undefined
+  } as FormDesignReq
 });
 
 // 表单验证规则
@@ -685,7 +453,7 @@ const formRules = {
     { required: true, message: '请输入表单名称', trigger: 'blur' },
     { min: 3, max: 50, message: '长度应为3到50个字符', trigger: 'blur' }
   ],
-  categoryID: [
+  category_id: [
     { required: true, message: '请选择分类', trigger: 'change' }
   ]
 };
@@ -705,57 +473,154 @@ const detailDialog = reactive({
   form: null as FormDesign | null
 });
 
+const parsedSchema = computed(() => {
+  if (!detailDialog.form || !detailDialog.form.schema) {
+    return { fields: [] };
+  }
+  
+  try {
+    return typeof detailDialog.form.schema === 'string' 
+      ? JSON.parse(detailDialog.form.schema)
+      : detailDialog.form.schema;
+  } catch (error) {
+    console.error('解析schema失败:', error);
+    return { fields: [] };
+  }
+});
+
+// 加载表单列表
+const loadFormDesigns = async () => {
+  loading.value = true;
+  try {
+    const params: ListFormDesignReq = {
+      page: currentPage.value,
+      size: pageSize.value,
+      search: searchQuery.value || undefined,
+      status: statusFilter.value !== null ? statusFilter.value : undefined
+    };
+    
+    const response = await listFormDesign(params);
+    if (response) {
+      formDesigns.value = response.list || [];
+      updateStats(response);
+    }
+  } catch (error) {
+    console.error('加载表单列表失败:', error);
+    message.error('加载表单列表失败');
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 更新统计数据
+const updateStats = (data: any) => {
+  if (data.statistics) {
+    stats.total = data.statistics.total || 0;
+    stats.published = data.statistics.published || 0;
+    stats.draft = data.statistics.draft || 0;
+    stats.disabled = data.statistics.disabled || 0;
+  } else {
+    // 从列表数据计算
+    stats.total = formDesigns.value.length;
+    stats.published = formDesigns.value.filter(form => form.status === 1).length;
+    stats.draft = formDesigns.value.filter(form => form.status === 0).length;
+    stats.disabled = formDesigns.value.filter(form => form.status === 2).length;
+  }
+};
+
 // 方法
 const handleSizeChange = (current: number, size: number) => {
   pageSize.value = size;
   currentPage.value = 1;
+  loadFormDesigns();
 };
 
 const handleCurrentChange = (page: number) => {
   currentPage.value = page;
+  loadFormDesigns();
 };
 
 const handleSearch = () => {
   currentPage.value = 1;
+  loadFormDesigns();
 };
 
 const handleStatusChange = () => {
   currentPage.value = 1;
+  loadFormDesigns();
 };
 
 const handleCreateForm = () => {
   formDialog.isEdit = false;
   formDialog.form = {
-    id: 0,
     name: '',
     description: '',
     schema: {
       fields: []
     },
-    version: 1,
     status: 0,
-    categoryID: null,
-    creatorID: 101,
-    creatorName: '当前用户',
-    createdAt: new Date(),
-    updatedAt: new Date()
+    category_id: undefined
   };
   formDialog.visible = true;
 };
 
-const handleEditForm = (row: FormDesign) => {
-  formDialog.isEdit = true;
-  formDialog.form = JSON.parse(JSON.stringify(row));
-  formDialog.visible = true;
-  detailDialog.visible = false;
+const handleEditForm = async (row: FormDesign) => {
+  loading.value = true;
+  try {
+    const response = await detailFormDesign({ id: row.id });
+    if (response) {
+      const formData = response;
+      formDialog.isEdit = true;
+      
+      // 解析schema字符串为对象
+      let schemaObj: Schema;
+      try {
+        schemaObj = typeof formData.schema === 'string' 
+          ? JSON.parse(formData.schema)
+          : formData.schema;
+      } catch (error) {
+        console.error('解析schema失败:', error);
+        schemaObj = { fields: [] };
+      }
+      
+      formDialog.form = {
+        id: formData.id,
+        name: formData.name,
+        description: formData.description,
+        schema: schemaObj,
+        version: formData.version,
+        status: formData.status,
+        category_id: formData.category_id
+      };
+      
+      formDialog.visible = true;
+      detailDialog.visible = false;
+    }
+  } catch (error) {
+    console.error('加载表单详情失败:', error);
+    message.error('加载表单详情失败');
+  } finally {
+    loading.value = false;
+  }
 };
 
-const handleViewForm = (row: FormDesign) => {
-  detailDialog.form = row;
-  detailDialog.visible = true;
+const handleViewForm = async (row: FormDesign) => {
+  loading.value = true;
+  try {
+    const response = await detailFormDesign({ id: row.id });
+    if (response) {
+      detailDialog.form = response;
+      detailDialog.visible = true;
+    }
+  } catch (error) {
+    console.error('加载表单详情失败:', error);
+    message.error('加载表单详情失败');
+  } finally {
+    loading.value = false;
+  }
 };
 
-const handleCommand = (command: string, row: FormDesign) => {
+const handleMenuClick = (command: string, row: FormDesign) => {
   switch (command) {
     case 'publish':
       publishForm(row);
@@ -772,27 +637,44 @@ const handleCommand = (command: string, row: FormDesign) => {
   }
 };
 
-const publishForm = (form: FormDesign) => {
-  const index = formDesigns.value.findIndex(f => f.id === form.id);
-  if (index !== -1) {
-    const formDesign = formDesigns.value[index];
-    if (formDesign) {
-      formDesign.status = 1;
-      formDesign.updatedAt = new Date();
+const publishForm = async (form: FormDesign) => {
+  try {
+    const params: PublishFormDesignReq = { id: form.id };
+    const response = await publishFormDesign(params);
+    if (response) {
       message.success(`表单 "${form.name}" 已发布`);
+      loadFormDesigns();
     }
+  } catch (error) {
+    console.error('发布表单失败:', error);
+    message.error('发布表单失败');
   }
 };
 
-const unpublishForm = (form: FormDesign) => {
-  const index = formDesigns.value.findIndex(f => f.id === form.id);
-  if (index !== -1) {
-    const formDesign = formDesigns.value[index];
-    if (formDesign) {
-      formDesign.status = 0;
-      formDesign.updatedAt = new Date();
+const unpublishForm = async (form: FormDesign) => {
+  try {
+    // 假设后端未提供取消发布接口，使用更新接口将状态改为草稿
+    const schemaObj = typeof form.schema === 'string' 
+      ? JSON.parse(form.schema)
+      : form.schema;
+      
+    const params: FormDesignReq = {
+      id: form.id,
+      name: form.name,
+      description: form.description,
+      schema: schemaObj,
+      status: 0, // 设置为草稿
+      category_id: form.category_id
+    };
+    
+    const response = await updateFormDesign(params);
+    if (response) {
       message.success(`表单 "${form.name}" 已取消发布`);
+      loadFormDesigns();
     }
+  } catch (error) {
+    console.error('取消发布表单失败:', error);
+    message.error('取消发布表单失败');
   }
 };
 
@@ -802,23 +684,22 @@ const showCloneDialog = (form: FormDesign) => {
   cloneDialog.visible = true;
 };
 
-const confirmClone = () => {
-  const originalForm = formDesigns.value.find(f => f.id === cloneDialog.form.originalId);
-  if (originalForm) {
-    const newId = Math.max(...formDesigns.value.map(f => f.id)) + 1;
-    const clonedForm: FormDesign = {
-      ...JSON.parse(JSON.stringify(originalForm)),
-      id: newId,
+const confirmClone = async () => {
+  try {
+    const params: CloneFormDesignReq = {
       name: cloneDialog.form.name,
-      status: 0, // 总是草稿
-      version: 1,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      id: cloneDialog.form.originalId
     };
-
-    formDesigns.value.push(clonedForm);
-    cloneDialog.visible = false;
-    message.success(`表单 "${originalForm.name}" 已克隆为 "${cloneDialog.form.name}"`);
+    
+    const response = await cloneFormDesign(params);
+    if (response) {
+      message.success(`表单已克隆为 "${cloneDialog.form.name}"`);
+      cloneDialog.visible = false;
+      loadFormDesigns();
+    }
+  } catch (error) {
+    console.error('克隆表单失败:', error);
+    message.error('克隆表单失败');
   }
 };
 
@@ -829,11 +710,14 @@ const confirmDelete = (form: FormDesign) => {
     okText: '删除',
     okType: 'danger',
     cancelText: '取消',
-    onOk() {
-      const index = formDesigns.value.findIndex(f => f.id === form.id);
-      if (index !== -1) {
-        formDesigns.value.splice(index, 1);
+    async onOk() {
+      try {
+        await deleteFormDesign({ id: form.id });
         message.success(`表单 "${form.name}" 已删除`);
+        loadFormDesigns();
+      } catch (error) {
+        console.error('删除表单失败:', error);
+        message.error('删除表单失败');
       }
     }
   });
@@ -852,51 +736,58 @@ const removeField = (index: number) => {
   formDialog.form.schema.fields.splice(index, 1);
 };
 
-const saveForm = () => {
+const saveForm = async () => {
   if (formDialog.form.name.trim() === '') {
     message.error('表单名称不能为空');
     return;
   }
 
-  if (formDialog.form.categoryID === null) {
+  if (!formDialog.form.category_id) {
     message.error('请选择分类');
     return;
   }
 
-  if (formDialog.isEdit) {
-    // 更新现有表单
-    const index = formDesigns.value.findIndex(f => f.id === formDialog.form.id);
-    if (index !== -1) {
-      formDialog.form.updatedAt = new Date();
-      formDesigns.value[index] = { ...formDialog.form } as FormDesign;
+  try {
+    const formData: FormDesignReq = {
+      ...formDialog.form,
+      // 确保schema是符合类型的对象
+      schema: formDialog.form.schema
+    };
+
+    if (formDialog.isEdit) {
+      // 更新现有表单
+      await updateFormDesign(formData);
       message.success(`表单 "${formDialog.form.name}" 已更新`);
+    } else {
+      // 创建新表单
+      await createFormDesign(formData);
+      message.success(`表单 "${formDialog.form.name}" 已创建`);
     }
-  } else {
-    // 创建新表单
-    const newId = Math.max(...formDesigns.value.map(f => f.id)) + 1;
-    formDialog.form.id = newId;
-    formDesigns.value.push({ ...formDialog.form } as FormDesign);
-    message.success(`表单 "${formDialog.form.name}" 已创建`);
+    
+    formDialog.visible = false;
+    loadFormDesigns();
+  } catch (error) {
+    console.error('保存表单失败:', error);
+    message.error('保存表单失败');
   }
-  formDialog.visible = false;
 };
 
 // 辅助方法
-const formatDate = (date: Date) => {
-  if (!date) return '';
-  const d = new Date(date);
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
   return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
 };
 
-const formatTime = (date: Date) => {
-  if (!date) return '';
-  const d = new Date(date);
+const formatTime = (dateStr: string) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
   return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 };
 
-const formatFullDateTime = (date: Date) => {
-  if (!date) return '';
-  const d = new Date(date);
+const formatFullDateTime = (dateStr: string) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
   return d.toLocaleString('zh-CN', {
     year: 'numeric',
     month: 'long',
@@ -939,13 +830,9 @@ const getAvatarColor = (name: string) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-// 模拟初始化
+// 初始化
 onMounted(() => {
-  loading.value = true;
-  // 模拟API加载
-  setTimeout(() => {
-    loading.value = false;
-  }, 800);
+  loadFormDesigns();
 });
 </script>
 
