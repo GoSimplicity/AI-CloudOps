@@ -327,6 +327,7 @@ export interface UserPerformance {
   id: number;
   user_id: number;
   user_name: string;
+  department: string;
   date: string;
   assigned_count: number;
   completed_count: number;
@@ -339,129 +340,129 @@ export interface UserPerformance {
 
 // 表单设计相关接口
 export async function createFormDesign(data: FormDesignReq) {
-  return requestClient.post('/api/workorder/form_design/create', data);
+  return requestClient.post('/workorder/form_design/create', data);
 }
 
 export async function updateFormDesign(data: FormDesignReq) {
-  return requestClient.post('/api/workorder/form_design/update', data);
+  return requestClient.post('/workorder/form_design/update', data);
 }
 
 export async function deleteFormDesign(data: DetailFormDesignReq) {
-  return requestClient.post('/api/workorder/form_design/delete', data);
+  return requestClient.post('/workorder/form_design/delete', data);
 }
 
 export async function listFormDesign(data: ListFormDesignReq) {
-  return requestClient.post('/api/workorder/form_design/list', data);
+  return requestClient.post('/workorder/form_design/list', data);
 }
 
 export async function detailFormDesign(data: DetailFormDesignReq) {
-  return requestClient.post('/api/workorder/form_design/detail', data);
+  return requestClient.post('/workorder/form_design/detail', data);
 }
 
 export async function publishFormDesign(data: PublishFormDesignReq) {
-  return requestClient.post('/api/workorder/form_design/publish', data);
+  return requestClient.post('/workorder/form_design/publish', data);
 }
 
 export async function cloneFormDesign(data: CloneFormDesignReq) {
-  return requestClient.post('/api/workorder/form_design/clone', data);
+  return requestClient.post('/workorder/form_design/clone', data);
 }
 
 // 流程定义相关接口
 export async function createProcess(data: ProcessReq) {
-  return requestClient.post('/api/workorder/process/create', data);
+  return requestClient.post('/workorder/process/create', data);
 }
 
 export async function updateProcess(data: ProcessReq) {
-  return requestClient.post('/api/workorder/process/update', data);
+  return requestClient.post('/workorder/process/update', data);
 }
 
 export async function deleteProcess(data: DeleteProcessReqReq) {
-  return requestClient.post('/api/workorder/process/delete', data);
+  return requestClient.post('/workorder/process/delete', data);
 }
 
 export async function listProcess(data: ListProcessReq) {
-  return requestClient.post('/api/workorder/process/list', data);
+  return requestClient.post('/workorder/process/list', data);
 }
 
 export async function detailProcess(data: DetailProcessReqReq) {
-  return requestClient.post('/api/workorder/process/detail', data);
+  return requestClient.post('/workorder/process/detail', data);
 }
 
 export async function publishProcess(data: PublishProcessReq) {
-  return requestClient.post('/api/workorder/process/publish', data);
+  return requestClient.post('/workorder/process/publish', data);
 }
 
 export async function cloneProcess(data: CloneProcessReq) {
-  return requestClient.post('/api/workorder/process/clone', data);
+  return requestClient.post('/workorder/process/clone', data);
 }
 
 // 工单模板相关接口
 export async function createTemplate(data: TemplateReq) {
-  return requestClient.post('/api/workorder/template/create', data);
+  return requestClient.post('/workorder/template/create', data);
 }
 
 export async function updateTemplate(data: TemplateReq) {
-  return requestClient.post('/api/workorder/template/update', data);
+  return requestClient.post('/workorder/template/update', data);
 }
 
 export async function deleteTemplate(data: DeleteTemplateReq) {
-  return requestClient.post('/api/workorder/template/delete', data);
+  return requestClient.post('/workorder/template/delete', data);
 }
 
 export async function listTemplate(data: ListTemplateReq) {
-  return requestClient.post('/api/workorder/template/list', data);
+  return requestClient.post('/workorder/template/list', data);
 }
 
 export async function detailTemplate(data: DetailTemplateReq) {
-  return requestClient.post('/api/workorder/template/detail', data);
+  return requestClient.post('/workorder/template/detail', data);
 }
 
 // 工单实例相关接口
 export async function createInstance(data: InstanceReq) {
-  return requestClient.post('/api/workorder/instance/create', data);
+  return requestClient.post('/workorder/instance/create', data);
 }
 
 export async function approveInstance(data: InstanceFlowReq) {
-  return requestClient.post('/api/workorder/instance/approve', data);
+  return requestClient.post('/workorder/instance/approve', data);
 }
 
 export async function actionInstance(data: InstanceFlowReq) {
-  return requestClient.post('/api/workorder/instance/action', data);
+  return requestClient.post('/workorder/instance/action', data);
 }
 
 export async function commentInstance(data: InstanceCommentReq) {
-  return requestClient.post('/api/workorder/instance/comment', data);
+  return requestClient.post('/workorder/instance/comment', data);
 }
 
 export async function listInstance(data: ListInstanceReq) {
-  return requestClient.post('/api/workorder/instance/list', data);
+  return requestClient.post('/workorder/instance/list', data);
 }
 
 export async function detailInstance(data: DetailInstanceReq) {
-  return requestClient.post('/api/workorder/instance/detail', data);
+  return requestClient.post('/workorder/instance/detail', data);
 }
 
 export async function deleteInstance(data: DeleteInstanceReq) {
-  return requestClient.post('/api/workorder/instance/delete', data);
+  return requestClient.post('/workorder/instance/delete', data);
 }
 
 // 工单统计相关接口
 export async function getStatisticsOverview() {
-  return requestClient.post('/api/workorder/statistics/overview');
+  return requestClient.post('/workorder/statistics/overview');
 }
 
 export async function getStatisticsTrend() {
-  return requestClient.post('/api/workorder/statistics/trend');
+  return requestClient.post('/workorder/statistics/trend');
 }
 
 export async function getStatisticsCategory() {
-  return requestClient.post('/api/workorder/statistics/category');
+  return requestClient.post('/workorder/statistics/category');
 }
 
 export async function getStatisticsPerformance() {
-  return requestClient.post('/api/workorder/statistics/performance');
+  return requestClient.post('/workorder/statistics/performance');
 }
 
 export async function getStatisticsUser() {
-  return requestClient.post('/api/workorder/statistics/user');
+  return requestClient.post('/workorder/statistics/user');
 }

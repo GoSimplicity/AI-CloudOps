@@ -105,6 +105,7 @@ var HandlerSet = wire.NewSet(
 	workorderHandler.NewInstanceHandler,
 	workorderHandler.NewTemplateHandler,
 	workorderHandler.NewProcessHandler,
+	workorderHandler.NewStatisticsHandler,
 	treeHandler.NewResourceHandler,
 	treeHandler.NewTreeHandler,
 )
@@ -143,6 +144,7 @@ var ServiceSet = wire.NewSet(
 	workorderService.NewInstanceService,
 	workorderService.NewTemplateService,
 	workorderService.NewProcessService,
+	workorderService.NewStatisticsService,
 	treeService.NewTreeService,
 	treeService.NewCloudService,
 	treeService.NewEcsService,
@@ -176,6 +178,7 @@ var DaoSet = wire.NewSet(
 	workorderDao.NewTemplateDAO,
 	workorderDao.NewInstanceDAO,
 	workorderDao.NewProcessDAO,
+	workorderDao.NewStatisticsDAO,
 	treeDao.NewTreeDAO,
 	treeDao.NewCloudDAO,
 	treeDao.NewEcsDAO,

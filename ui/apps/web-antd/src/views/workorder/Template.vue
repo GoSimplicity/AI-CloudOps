@@ -466,7 +466,7 @@ const loadProcesses = async () => {
   try {
     const response = await listProcess({
       page: 1,
-      size: 1000,  // 假设获取所有流程
+      size: 100,  
       status: 1     // 只获取已启用的流程
     });
     if (response && response) {

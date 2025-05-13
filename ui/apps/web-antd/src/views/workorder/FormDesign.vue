@@ -501,7 +501,7 @@ const loadFormDesigns = async () => {
     
     const response = await listFormDesign(params);
     if (response) {
-      formDesigns.value = response.list || [];
+      formDesigns.value = response || [];
       updateStats(response);
     }
   } catch (error) {
