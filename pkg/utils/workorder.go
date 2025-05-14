@@ -32,7 +32,12 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 )
 
+// ConvertFormDesignReq 转换表单设计请求
 func ConvertFormDesignReq(formDesign *model.FormDesignReq) (*model.FormDesign, error) {
+	if formDesign == nil {
+		return nil, fmt.Errorf("表单设计请求不能为空")
+	}
+
 	formDesignMarshal, err := json.Marshal(formDesign.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("序列化表单 Schema 失败: %v", err)
@@ -51,29 +56,35 @@ func ConvertFormDesignReq(formDesign *model.FormDesignReq) (*model.FormDesign, e
 		CreatorName: formDesign.CreatorName,
 	}, nil
 }
-func ConvertFormDesign(formDesign *model.FormDesign) (*model.FormDesignReq, error) {
-	var p model.Schema
-	err := json.Unmarshal([]byte(formDesign.Schema), &p)
 
-	if err != nil {
-		return nil, fmt.Errorf("序列化表单 Schema 失败: %v", err)
+// ConvertCreateProcessReq 转换创建流程请求
+func ConvertCreateProcessReq(process *model.CreateProcessReq) (*model.Process, error) {
+	if process == nil {
+		return nil, fmt.Errorf("流程请求不能为空")
 	}
-	return &model.FormDesignReq{
-		Model: model.Model{
-			ID: formDesign.ID,
-		},
-		Name:        formDesign.Name,
-		Description: formDesign.Description,
-		Schema:      p,
-		Version:     formDesign.Version,
-		Status:      formDesign.Status,
-		CategoryID:  formDesign.CategoryID,
-		CreatorID:   formDesign.CreatorID,
-		CreatorName: formDesign.CreatorName,
+
+	processMarshal, err := json.Marshal(process.Definition)
+	if err != nil {
+		return nil, fmt.Errorf("序列化流程 Schema 失败: %v", err)
+	}
+	return &model.Process{
+		Name:         process.Name,
+		Description:  process.Description,
+		FormDesignID: process.FormDesignID,
+		Definition:   string(processMarshal),
+		Version:      process.Version,
+		Status:       process.Status,
+		CategoryID:   process.CategoryID,
+		CreatorID:    process.CreatorID,
 	}, nil
 }
 
-func ConvertProcessReq(process *model.ProcessReq) (*model.Process, error) {
+// ConvertProcessReq 转换流程请求
+func ConvertUpdateProcessReq(process *model.UpdateProcessReq) (*model.Process, error) {
+	if process == nil {
+		return nil, fmt.Errorf("流程请求不能为空")
+	}
+
 	processMarshal, err := json.Marshal(process.Definition)
 	if err != nil {
 		return nil, fmt.Errorf("序列化流程 Schema 失败: %v", err)
@@ -90,10 +101,15 @@ func ConvertProcessReq(process *model.ProcessReq) (*model.Process, error) {
 		Status:       process.Status,
 		CategoryID:   process.CategoryID,
 		CreatorID:    process.CreatorID,
-		CreatorName:  process.CreatorName,
 	}, nil
 }
+
+// ConvertTemplateReq 转换模板请求
 func ConvertTemplateReq(template *model.TemplateReq) (*model.Template, error) {
+	if template == nil {
+		return nil, fmt.Errorf("模板请求不能为空")
+	}
+
 	templateMarshal, err := json.Marshal(template.DefaultValues)
 	if err != nil {
 		return nil, fmt.Errorf("序列化模板 Schema 失败: %v", err)
@@ -113,13 +129,20 @@ func ConvertTemplateReq(template *model.TemplateReq) (*model.Template, error) {
 	}, nil
 }
 
+// ConvertInstanceReq 转换实例请求为实例模型
 func ConvertInstanceReq(instance *model.InstanceReq) (*model.Instance, error) {
+	if instance == nil {
+		return nil, fmt.Errorf("实例请求不能为空")
+	}
+
 	instanceMarshal, err := json.Marshal(instance.FormData)
 	if err != nil {
 		return nil, fmt.Errorf("序列化实例 Schema 失败: %v", err)
 	}
 	return &model.Instance{
-		ID:             instance.ID,
+		Model: model.Model{
+			ID: instance.ID,
+		},
 		Title:          instance.Title,
 		ProcessID:      instance.ProcessID,
 		ProcessVersion: instance.ProcessVersion,
@@ -129,30 +152,22 @@ func ConvertInstanceReq(instance *model.InstanceReq) (*model.Instance, error) {
 		DueDate:        instance.DueDate,
 	}, nil
 }
-func ConvertInstance(instance *model.Instance) (*model.InstanceReq, error) {
-	var p model.FormData
-	err := json.Unmarshal([]byte(instance.FormData), &p)
-	if err != nil {
-		return nil, fmt.Errorf("序列化实例 Schema 失败: %v", err)
-	}
-	return &model.InstanceReq{
-		ID:             instance.ID,
-		Title:          instance.Title,
-		ProcessID:      instance.ProcessID,
-		ProcessVersion: instance.ProcessVersion,
-		FormData:       p,
-		Status:         instance.Status,
-		CategoryID:     instance.CategoryID,
-	}, nil
-}
+
+// ConvertInstanceFlowReq 转换实例流程请求
 func ConvertInstanceFlowReq(instance *model.InstanceFlowReq) (*model.InstanceFlow, error) {
+	if instance == nil {
+		return nil, fmt.Errorf("实例流程请求不能为空")
+	}
+
 	instanceMarshal, err := json.Marshal(instance.FormData)
 	if err != nil {
-		return nil, fmt.Errorf("序列化实例 Schema 失败: %v", err)
-
+		return nil, fmt.Errorf("序列化实例流程 Schema 失败: %v", err)
 	}
+
 	return &model.InstanceFlow{
-		ID:           instance.ID,
+		Model: model.Model{
+			ID: instance.ID,
+		},
 		InstanceID:   instance.InstanceID,
 		NodeID:       instance.NodeID,
 		NodeName:     instance.NodeName,
@@ -163,17 +178,23 @@ func ConvertInstanceFlowReq(instance *model.InstanceFlowReq) (*model.InstanceFlo
 		Comment:      instance.Comment,
 		FormData:     string(instanceMarshal),
 		Attachments:  instance.Attachments,
-		CreatedAt:    instance.CreatedAt,
 	}, nil
 }
 
+// ConvertInstanceCommentReq 转换实例评论请求
 func ConvertInstanceCommentReq(instanceComment *model.InstanceCommentReq) (*model.InstanceComment, error) {
+	if instanceComment == nil {
+		return nil, fmt.Errorf("实例评论请求不能为空")
+	}
+
 	return &model.InstanceComment{
-		ID:          instanceComment.ID,
+		Model: model.Model{
+			ID: instanceComment.ID,
+		},
 		InstanceID:  instanceComment.InstanceID,
+		Content:     instanceComment.Content,
 		Attachments: instanceComment.Attachments,
 		CreatorID:   instanceComment.CreatorID,
 		CreatorName: instanceComment.CreatorName,
-		CreatedAt:   instanceComment.CreatedAt,
 	}, nil
 }

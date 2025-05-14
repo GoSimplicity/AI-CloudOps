@@ -439,7 +439,7 @@ const loadTemplates = async () => {
   try {
     const params: ListTemplateReq = {
       page: currentPage.value,
-      size: pageSize.value,
+      page_size: pageSize.value,
       search: searchQuery.value || undefined,
       status: statusFilter.value || undefined
     };
@@ -466,7 +466,7 @@ const loadProcesses = async () => {
   try {
     const response = await listProcess({
       page: 1,
-      size: 100,  
+      page_size: 100,  
       status: 1     // 只获取已启用的流程
     });
     if (response && response) {

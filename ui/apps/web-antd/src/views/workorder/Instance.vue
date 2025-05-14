@@ -639,7 +639,7 @@ const fetchStatistics = async () => {
 
 const fetchProcesses = async () => {
   try {
-    const response = await listProcess({ page: 1, size: 100, status: 1 }); // 只获取已发布的流程
+    const response = await listProcess({ page: 1, page_size: 100, status: 1 }); // 只获取已发布的流程
     if (response && response.list) {
       processes.value = response.list;
     }
@@ -651,7 +651,7 @@ const fetchProcesses = async () => {
 
 const fetchFormDesigns = async () => {
   try {
-    const response = await listFormDesign({ page: 1, size: 100, status: 1 }); // 只获取已发布的表单
+    const response = await listFormDesign({ page: 1, page_size: 100, status: 1 }); // 只获取已发布的表单
     if (response && response.list) {
       formDesigns.value = response.list;
     }

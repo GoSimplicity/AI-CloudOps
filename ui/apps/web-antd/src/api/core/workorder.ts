@@ -3,7 +3,7 @@ import { requestClient } from '#/api/request';
 // 表单设计相关类型
 export interface ListFormDesignReq {
   page: number;
-  size: number;
+  page_size: number;
   status?: number;
   search?: string;
 }
@@ -92,12 +92,19 @@ export interface DetailProcessReqReq {
 
 export interface ListProcessReq {
   page: number;
-  size: number;
+  page_size: number;
   status?: number;
   search?: string;
 }
 
 export interface PublishProcessReq {
+  id: number;
+}
+
+export interface DetailProcessReq {
+  id: number;
+}
+export interface DeleteProcessReq {
   id: number;
 }
 
@@ -137,7 +144,7 @@ export interface DetailTemplateReq {
 
 export interface ListTemplateReq {
   page: number;
-  size: number;
+  page_size: number;
   status?: number;
   search?: string;
 }
@@ -377,7 +384,7 @@ export async function updateProcess(data: ProcessReq) {
 }
 
 export async function deleteProcess(data: DeleteProcessReqReq) {
-  return requestClient.post('/workorder/process/delete', data);
+  return requestClient.delete(`/workorder/process/delete/${data.id}`);
 }
 
 export async function listProcess(data: ListProcessReq) {

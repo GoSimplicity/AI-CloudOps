@@ -7,7 +7,7 @@ import (
 // ListReq 列表请求
 type ListFormDesignReq struct {
 	Page     int    `json:"page" form:"page" binding:"required,min=1"`
-	PageSize int    `json:"size" form:"size" binding:"required,min=10,max=100"`
+	PageSize int    `json:"page_size" form:"size" binding:"required,min=10,max=100"`
 	Status   int    `json:"status" form:"status" binding:"omitempty"`
 	Search   string `json:"search" form:"search" binding:"omitempty"`
 }
@@ -38,15 +38,15 @@ type Schema struct {
 
 // FormDesign 表单设计表
 type FormDesignReq struct {
-	Model
+	ID          int    `json:"id"`
 	Name        string `json:"name" gorm:"column:name;not null;comment:表单名称"`
 	Description string `json:"description" gorm:"column:description;comment:表单描述"`
-	Schema      Schema `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
+	Schema      string `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
 	Version     int    `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
 	Status      int8   `json:"status" gorm:"column:status;not null;default:0;comment:状态：0-草稿，1-已发布，2-已禁用"`
 	CategoryID  int    `json:"category_id" gorm:"column:category_id;comment:分类ID"`
 	CreatorID   int    `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	CreatorName string `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
+	CreatorName string `json:"creator_name"`
 }
 
 // FormDesign 表单设计表
@@ -59,11 +59,53 @@ type FormDesign struct {
 	Status      int8   `json:"status" gorm:"column:status;not null;default:0;comment:状态：0-草稿，1-已发布，2-已禁用"`
 	CategoryID  int    `json:"category_id" gorm:"column:category_id;comment:分类ID"`
 	CreatorID   int    `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	CreatorName string `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
+	CreatorName string `json:"creator_name" gorm:"-"`
 }
 
 func (FormDesign) TableName() string {
 	return "form_design"
+}
+
+// Process 流程定义表
+type ProcessReq struct {
+	ID           int    `json:"id"`
+	Name         string `json:"name" gorm:"column:name;not null;comment:流程名称"`
+	Description  string `json:"description" gorm:"column:description;comment:流程描述"`
+	FormDesignID int    `json:"form_design_id" gorm:"column:form_design_id;not null;comment:关联的表单设计ID"`
+	Definition   string `json:"definition" gorm:"column:definition;type:json;not null;comment:流程定义JSON"`
+	Version      int    `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
+	Status       int8   `json:"status" gorm:"column:status;not null;default:0;comment:状态：0-草稿，1-已发布，2-已禁用"`
+	CategoryID   int    `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID    int    `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+}
+
+// Process 流程定义表
+type CreateProcessReq struct {
+	Name         string     `json:"name" gorm:"column:name;not null;comment:流程名称"`
+	Description  string     `json:"description" gorm:"column:description;comment:流程描述"`
+	FormDesignID int        `json:"form_design_id" gorm:"column:form_design_id;not null;comment:关联的表单设计ID"`
+	Definition   Definition `json:"definition" gorm:"column:definition;type:json;not null;comment:流程定义JSON"`
+	Version      int        `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
+	Status       int8       `json:"status" gorm:"column:status;not null;default:0;comment:状态：0-草稿，1-已发布，2-已禁用"`
+	CategoryID   int        `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID    int        `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+}
+
+type UpdateProcessReq struct {
+	ID           int        `json:"id"`
+	Name         string     `json:"name"`
+	Description  string     `json:"description"`
+	FormDesignID int        `json:"form_design_id"`
+	Definition   Definition `json:"definition"`
+	Version      int        `json:"version"`
+	Status       int8       `json:"status"`
+	CategoryID   int        `json:"category_id"`
+	CreatorID    int        `json:"creator_id"`
+}
+
+// Definition 流程定义
+type Definition struct {
+	Steps []Step `json:"steps"`
 }
 
 // Step 流程步骤
@@ -73,40 +115,25 @@ type Step struct {
 	Action string `json:"action"`
 }
 
-// Definition 流程定义
-type Definition struct {
-	Steps []Step `json:"steps"`
-}
-
-// Process 流程定义表
-type ProcessReq struct {
-	Model
-	Name         string     `json:"name" gorm:"column:name;not null;comment:流程名称"`
-	Description  string     `json:"description" gorm:"column:description;comment:流程描述"`
-	FormDesignID int        `json:"form_design_id" gorm:"column:form_design_id;not null;comment:关联的表单设计ID"`
-	Definition   Definition `json:"definition" gorm:"column:definition;type:json;not null;comment:流程定义JSON"`
-	Version      int        `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
-	Status       int8       `json:"status" gorm:"column:status;not null;default:0;comment:状态：0-草稿，1-已发布，2-已禁用"`
-	CategoryID   int        `json:"category_id" gorm:"column:category_id;comment:分类ID"`
-	CreatorID    int        `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	CreatorName  string     `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
-}
-type DeleteProcessReqReq struct {
+type DeleteProcessReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
 
-type DetailProcessReqReq struct {
+type DetailProcessReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
+
 type ListProcessReq struct {
 	Page     int    `json:"page" form:"page" binding:"required,min=1"`
-	PageSize int    `json:"size" form:"size" binding:"required,min=10,max=100"`
+	PageSize int    `json:"page_size" form:"size" binding:"required,min=10,max=100"`
 	Status   int    `json:"status" form:"status" binding:"omitempty"`
 	Search   string `json:"search" form:"search" binding:"omitempty"`
 }
+
 type PublishProcessReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
+
 type CloneProcessReq struct {
 	ID   int    `json:"id" form:"id" binding:"required"`
 	Name string `json:"name" form:"name" binding:"required"`
@@ -134,32 +161,35 @@ type DefaultValues struct {
 	Approver string `json:"approver"`
 	Deadline string `json:"deadline"`
 }
+
 type DeleteTemplateReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
+
 type DetailTemplateReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
+
 type ListTemplateReq struct {
 	Page     int    `json:"page" form:"page" binding:"required,min=1"`
-	PageSize int    `json:"size" form:"size" binding:"required,min=10,max=100"`
+	PageSize int    `json:"page_size" form:"size" binding:"required,min=10,max=100"`
 	Status   int    `json:"status" form:"status" binding:"omitempty"`
 	Search   string `json:"search" form:"search" binding:"omitempty"`
 }
 
 // Template 工单模板表
 type TemplateReq struct {
-	Model
-	Name          string        `json:"name" gorm:"column:name;not null;comment:模板名称"`
-	Description   string        `json:"description" gorm:"column:description;comment:模板描述"`
-	ProcessID     int           `json:"process_id" gorm:"column:process_id;not null;comment:关联的流程ID"`
-	DefaultValues DefaultValues `json:"default_values" gorm:"column:default_values;type:json;comment:默认值JSON"`
-	Icon          string        `json:"icon" gorm:"column:icon;comment:图标URL"`
-	Status        int8          `json:"status" gorm:"column:status;not null;default:1;comment:状态：0-禁用，1-启用"`
-	SortOrder     int           `json:"sort_order" gorm:"column:sort_order;default:0;comment:排序顺序"`
-	CategoryID    int           `json:"category_id" gorm:"column:category_id;comment:分类ID"`
-	CreatorID     int           `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	CreatorName   string        `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
+	ID            int    `json:"id"`
+	Name          string `json:"name" gorm:"column:name;not null;comment:模板名称"`
+	Description   string `json:"description" gorm:"column:description;comment:模板描述"`
+	ProcessID     int    `json:"process_id" gorm:"column:process_id;not null;comment:关联的流程ID"`
+	DefaultValues string `json:"default_values" gorm:"column:default_values;type:json;comment:默认值JSON"`
+	Icon          string `json:"icon" gorm:"column:icon;comment:图标URL"`
+	Status        int8   `json:"status" gorm:"column:status;not null;default:1;comment:状态：0-禁用，1-启用"`
+	SortOrder     int    `json:"sort_order" gorm:"column:sort_order;default:0;comment:排序顺序"`
+	CategoryID    int    `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID     int    `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	CreatorName   string `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
 }
 
 // Template 工单模板表
@@ -226,7 +256,7 @@ type InstanceReq struct {
 
 // Instance 工单实例表
 type Instance struct {
-	ID             int       `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
+	Model
 	Title          string    `json:"title" gorm:"column:title;not null;comment:工单标题"`
 	ProcessID      int       `json:"process_id" gorm:"column:process_id;not null;comment:流程ID"`
 	ProcessVersion int       `json:"process_version" gorm:"column:process_version;not null;comment:流程版本"`
@@ -239,8 +269,6 @@ type Instance struct {
 	CreatorName    string    `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
 	AssigneeID     int       `json:"assignee_id" gorm:"column:assignee_id;comment:当前处理人ID"`
 	AssigneeName   string    `json:"assignee_name" gorm:"column:assignee_name;comment:当前处理人姓名"`
-	CreatedAt      time.Time `json:"created_at" gorm:"column:created_at;not null;comment:创建时间"`
-	UpdatedAt      time.Time `json:"updated_at" gorm:"column:updated_at;not null;comment:更新时间"`
 	CompletedAt    time.Time `json:"completed_at" gorm:"column:completed_at;comment:完成时间"`
 	DueDate        time.Time `json:"due_date" gorm:"column:due_date;comment:截止时间"`
 }
@@ -265,18 +293,17 @@ type InstanceFlowReq struct {
 	CreatedAt    time.Time `json:"created_at" gorm:"column:created_at;not null;comment:创建时间"`
 }
 type InstanceFlow struct {
-	ID           int       `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
-	InstanceID   int       `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
-	NodeID       string    `json:"node_id" gorm:"column:node_id;not null;comment:节点ID"`
-	NodeName     string    `json:"node_name" gorm:"column:node_name;not null;comment:节点名称"`
-	Action       string    `json:"action" gorm:"column:action;not null;comment:操作：approve-同意，reject-拒绝，transfer-转交，comment-评论"`
-	TargetUserID int       `json:"target_user_id,omitempty" gorm:"column:target_user_id;comment:转交用户ID"` // 允许为空
-	OperatorID   int       `json:"operator_id" gorm:"column:operator_id;not null;comment:操作人ID"`
-	OperatorName string    `json:"operator_name" gorm:"column:operator_name;not null;comment:操作人姓名"`
-	Comment      string    `json:"comment" gorm:"column:comment;type:text;comment:处理意见"`
-	FormData     string    `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据（如有修改）"`
-	Attachments  string    `json:"attachments" gorm:"column:attachments;type:json;comment:附件列表"`
-	CreatedAt    time.Time `json:"created_at" gorm:"column:created_at;not null;comment:创建时间"`
+	Model
+	InstanceID   int    `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
+	NodeID       string `json:"node_id" gorm:"column:node_id;not null;comment:节点ID"`
+	NodeName     string `json:"node_name" gorm:"column:node_name;not null;comment:节点名称"`
+	Action       string `json:"action" gorm:"column:action;not null;comment:操作：approve-同意，reject-拒绝，transfer-转交，comment-评论"`
+	TargetUserID int    `json:"target_user_id,omitempty" gorm:"column:target_user_id;comment:转交用户ID"` // 允许为空
+	OperatorID   int    `json:"operator_id" gorm:"column:operator_id;not null;comment:操作人ID"`
+	OperatorName string `json:"operator_name" gorm:"column:operator_name;not null;comment:操作人姓名"`
+	Comment      string `json:"comment" gorm:"column:comment;type:text;comment:处理意见"`
+	FormData     string `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据（如有修改）"`
+	Attachments  string `json:"attachments" gorm:"column:attachments;type:json;comment:附件列表"`
 }
 
 func (InstanceFlow) TableName() string {
@@ -296,14 +323,13 @@ type InstanceCommentReq struct {
 }
 
 type InstanceComment struct {
-	ID          int       `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
-	InstanceID  int       `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
-	Content     string    `json:"content" gorm:"column:content;type:text;not null;comment:评论内容"`
-	Attachments string    `json:"attachments" gorm:"column:attachments;type:json;comment:附件列表"`
-	CreatorID   int       `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	CreatorName string    `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
-	CreatedAt   time.Time `json:"created_at" gorm:"column:created_at;not null;comment:创建时间"`
-	ParentID    int       `json:"parent_id" gorm:"column:parent_id;default:0;comment:父评论ID，用于回复功能"`
+	Model
+	InstanceID  int    `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
+	Content     string `json:"content" gorm:"column:content;type:text;not null;comment:评论内容"`
+	Attachments string `json:"attachments" gorm:"column:attachments;type:json;comment:附件列表"`
+	CreatorID   int    `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	CreatorName string `json:"creator_name" gorm:"column:creator_name;not null;comment:创建人姓名"`
+	ParentID    int    `json:"parent_id" gorm:"column:parent_id;default:0;comment:父评论ID，用于回复功能"`
 }
 
 func (InstanceComment) TableName() string {
