@@ -36,10 +36,10 @@ import (
 type ProcessDAO interface {
 	CreateProcess(ctx context.Context, process *model.Process) error
 	UpdateProcess(ctx context.Context, process *model.Process) error
-	DeleteProcess(ctx context.Context, id int64) error
+	DeleteProcess(ctx context.Context, id int) error
 	ListProcess(ctx context.Context, req model.ListProcessReq) ([]model.Process, error)
-	GetProcess(ctx context.Context, id int64) (model.Process, error)
-	PublishProcess(ctx context.Context, id int64) error
+	GetProcess(ctx context.Context, id int) (model.Process, error)
+	PublishProcess(ctx context.Context, id int) error
 }
 
 type processDAO struct {
@@ -65,7 +65,7 @@ func (p *processDAO) CreateProcess(ctx context.Context, process *model.Process) 
 }
 
 // DeleteProcess implements ProcessDAO.
-func (p *processDAO) DeleteProcess(ctx context.Context, id int64) error {
+func (p *processDAO) DeleteProcess(ctx context.Context, id int) error {
 	result := p.db.WithContext(ctx).Delete(&model.Process{}, id)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -77,7 +77,7 @@ func (p *processDAO) DeleteProcess(ctx context.Context, id int64) error {
 }
 
 // GetProcess implements ProcessDAO.
-func (p *processDAO) GetProcess(ctx context.Context, id int64) (model.Process, error) {
+func (p *processDAO) GetProcess(ctx context.Context, id int) (model.Process, error) {
 	var process model.Process
 	result := p.db.WithContext(ctx).First(&process, id)
 	if result.Error != nil {
@@ -128,7 +128,7 @@ func (p *processDAO) UpdateProcess(ctx context.Context, process *model.Process) 
 	return nil
 }
 
-func (p *processDAO) PublishProcess(ctx context.Context, id int64) error {
+func (p *processDAO) PublishProcess(ctx context.Context, id int) error {
 	result := p.db.WithContext(ctx).Model(&model.Process{}).Where("id = ?", id).Update("status", 1)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {

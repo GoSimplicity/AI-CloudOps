@@ -205,7 +205,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, onBeforeUnmount, watch, computed } from 'vue';
+import { ref, reactive, onMounted, nextTick, onBeforeUnmount, watch } from 'vue';
 import { message } from 'ant-design-vue';
 import * as echarts from 'echarts';
 import {
@@ -218,15 +218,16 @@ import {
   ArrowDownOutlined
 } from '@ant-design/icons-vue';
 import dayjs from 'dayjs';
-import { 
-  getStatisticsOverview, 
-  getStatisticsTrend, 
-  getStatisticsCategory, 
-  getStatisticsPerformance,
-  getStatisticsUser, 
-  listProcess 
-} from '#/api/core/workorder';
-import type { Process, WorkOrderStatistics, UserPerformance } from '#/api/core/workorder';
+// import { 
+//   getStatisticsOverview, 
+//   getStatisticsTrend, 
+//   getStatisticsCategory, 
+//   getStatisticsPerformance,
+//   getStatisticsUser, 
+//   listProcess 
+// } from '#/api/core/workorder';
+// import type { Process, WorkOrderStatistics, UserPerformance } from '#/api/core/workorder';
+import type { Process, UserPerformance } from '#/api/core/workorder';
 
 // 图表引用
 const trendChartRef = ref<HTMLElement | null>(null);
@@ -263,46 +264,122 @@ const dateRanges = {
 };
 
 // 流程数据
-const processes = ref<Process[]>([]);
+const processes = ref<Process[]>([
+  { id: 1, name: '员工入职流程', status: 1, description: '', form_design_id: 1, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 2, name: '请假申请流程', status: 1, description: '', form_design_id: 2, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 3, name: '报销申请流程', status: 1, description: '', form_design_id: 3, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 4, name: '采购申请流程', status: 1, description: '', form_design_id: 4, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 5, name: '合同审批流程', status: 1, description: '', form_design_id: 5, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 6, name: '招聘需求流程', status: 1, description: '', form_design_id: 6, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 7, name: '员工离职流程', status: 1, description: '', form_design_id: 7, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 8, name: 'IT资源申请流程', status: 1, description: '', form_design_id: 8, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' }
+]);
 
 // 概览统计数据
 const overviewStats = reactive({
-  total_count: 0,
-  totalChange: 0,
-  completed_count: 0,
-  completedChange: 0,
-  processing_count: 0,
-  processingChange: 0,
-  canceled_count: 0,
-  rejected_count: 0,
-  avg_process_time: 0,
-  avgProcessTimeChange: 0
+  total_count: 1856,
+  totalChange: 8.3,
+  completed_count: 1423,
+  completedChange: 10.5,
+  processing_count: 324,
+  processingChange: -5.8,
+  canceled_count: 67,
+  rejected_count: 42,
+  avg_process_time: 18.6,
+  avgProcessTimeChange: -3.9
 });
 
 // 统计趋势数据
 const trendData = reactive({
-  dates: [] as string[],
-  created: [] as number[],
-  completed: [] as number[]
+  dates: [
+    '2025-04-13', '2025-04-14', '2025-04-15', '2025-04-16', '2025-04-17', '2025-04-18', '2025-04-19',
+    '2025-04-20', '2025-04-21', '2025-04-22', '2025-04-23', '2025-04-24', '2025-04-25', '2025-04-26',
+    '2025-04-27', '2025-04-28', '2025-04-29', '2025-04-30', '2025-05-01', '2025-05-02', '2025-05-03',
+    '2025-05-04', '2025-05-05', '2025-05-06', '2025-05-07', '2025-05-08', '2025-05-09', '2025-05-10',
+    '2025-05-11', '2025-05-12', '2025-05-13'
+  ],
+  created: [
+    62, 58, 64, 72, 68, 45, 38,
+    42, 69, 73, 68, 65, 57, 35,
+    39, 75, 78, 69, 32, 29, 36,
+    40, 80, 76, 68, 64, 69, 42,
+    37, 64, 58
+  ],
+  completed: [
+    57, 54, 60, 65, 62, 40, 35,
+    38, 63, 68, 65, 61, 52, 32,
+    35, 68, 72, 65, 28, 26, 30,
+    36, 73, 70, 63, 58, 64, 38,
+    32, 59, 54
+  ]
 });
 
 // 排行榜数据
-const handlerRankingByCount = ref<UserPerformance[]>([]);
-const handlerRankingByTime = ref<UserPerformance[]>([]);
+interface ExtendedUserPerformance extends UserPerformance {
+  department: string;
+}
+
+const handlerRankingByCount = ref<UserPerformance[]>([
+  { id: 1, user_id: 101, user_name: '张明辉', department: '人力资源部', date: '2023-05-01', assigned_count: 200, completed_count: 187, avg_response_time: 2.5, avg_processing_time: 16.8, satisfaction_score: 4.8, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 2, user_id: 102, user_name: '李婷', department: '行政部', date: '2023-05-01', assigned_count: 180, completed_count: 165, avg_response_time: 3.1, avg_processing_time: 17.5, satisfaction_score: 4.6, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 3, user_id: 103, user_name: '王浩', department: '财务部', date: '2023-05-01', assigned_count: 160, completed_count: 149, avg_response_time: 2.8, avg_processing_time: 19.3, satisfaction_score: 4.5, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 4, user_id: 104, user_name: '陈静', department: '人力资源部', date: '2023-05-01', assigned_count: 140, completed_count: 128, avg_response_time: 2.2, avg_processing_time: 15.2, satisfaction_score: 4.9, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 5, user_id: 105, user_name: '赵鑫', department: 'IT部', date: '2023-05-01', assigned_count: 120, completed_count: 112, avg_response_time: 3.5, avg_processing_time: 20.1, satisfaction_score: 4.3, created_at: '2023-05-01', updated_at: '2023-05-01' }
+]);
+
+const handlerRankingByTime = ref<UserPerformance[]>([
+  { id: 4, user_id: 104, user_name: '陈静', department: '人力资源部', date: '2023-05-01', assigned_count: 140, completed_count: 128, avg_response_time: 2.2, avg_processing_time: 15.2, satisfaction_score: 4.9, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 6, user_id: 106, user_name: '刘伟', department: '市场部', date: '2023-05-01', assigned_count: 110, completed_count: 98, avg_response_time: 2.4, avg_processing_time: 16.1, satisfaction_score: 4.7, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 1, user_id: 101, user_name: '张明辉', department: '人力资源部', date: '2023-05-01', assigned_count: 200, completed_count: 187, avg_response_time: 2.5, avg_processing_time: 16.8, satisfaction_score: 4.8, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 2, user_id: 102, user_name: '李婷', department: '行政部', date: '2023-05-01', assigned_count: 180, completed_count: 165, avg_response_time: 3.1, avg_processing_time: 17.5, satisfaction_score: 4.6, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 7, user_id: 107, user_name: '徐文', department: '法务部', date: '2023-05-01', assigned_count: 95, completed_count: 86, avg_response_time: 2.9, avg_processing_time: 18.9, satisfaction_score: 4.4, created_at: '2023-05-01', updated_at: '2023-05-01' }
+]);
 
 // 状态分布数据
-const statusDistribution = ref<{ name: string, value: number }[]>([]);
+const statusDistribution = ref<{ name: string, value: number }[]>([
+  { name: '已完成', value: 1423 },
+  { name: '处理中', value: 324 },
+  { name: '已取消', value: 67 },
+  { name: '已拒绝', value: 42 }
+]);
 
 // 流程使用统计数据
-const processUsageData = ref<{ name: string, value: number }[]>([]);
+const processUsageData = ref<{ name: string, value: number }[]>([
+  { name: '请假申请流程', value: 432 },
+  { name: '报销申请流程', value: 368 },
+  { name: 'IT资源申请流程', value: 286 },
+  { name: '员工入职流程', value: 217 },
+  { name: '采购申请流程', value: 198 },
+  { name: '合同审批流程', value: 156 },
+  { name: '员工离职流程', value: 124 },
+  { name: '招聘需求流程', value: 75 }
+]);
 
 // 部门分布数据
-const departmentData = ref<{ name: string, value: number }[]>([]);
+const departmentData = ref<{ name: string, value: number }[]>([
+  { name: '销售部', value: 346 },
+  { name: '研发部', value: 312 },
+  { name: '市场部', value: 287 },
+  { name: '人力资源部', value: 268 },
+  { name: '财务部', value: 231 },
+  { name: '行政部', value: 186 },
+  { name: 'IT部', value: 157 },
+  { name: '法务部', value: 69 }
+]);
 
 // 审批效率数据
 const efficiencyData = reactive({
-  processes: [] as string[],
-  avgTimes: [] as number[]
+  processes: [
+    '请假申请流程', 
+    'IT资源申请流程', 
+    '报销申请流程', 
+    '员工入职流程', 
+    '合同审批流程', 
+    '采购申请流程', 
+    '员工离职流程', 
+    '招聘需求流程'
+  ],
+  avgTimes: [12.4, 15.8, 17.3, 21.6, 24.2, 25.7, 28.9, 32.6]
 });
 
 // 表格列定义
@@ -323,12 +400,8 @@ const timeRankColumns = [
 // API请求相关方法
 const fetchProcesses = async () => {
   try {
-    const res = await listProcess({
-      page: 1,
-      size: 100,
-      status: 1 // 只获取已发布的流程
-    });
-    processes.value = res.list || [];
+    // Mock implementation - in real app this would call the API
+    // processes.value already set with mock data above
   } catch (error) {
     console.error('获取流程列表失败:', error);
     message.error('获取流程列表失败');
@@ -337,25 +410,8 @@ const fetchProcesses = async () => {
 
 const fetchOverviewStats = async () => {
   try {
-    const res = await getStatisticsOverview();
-    const data = res;
-    
-    if (data) {
-      // 更新概览数据
-      overviewStats.total_count = data.total_count;
-      overviewStats.completed_count = data.completed_count;
-      overviewStats.processing_count = data.processing_count;
-      overviewStats.canceled_count = data.canceled_count;
-      overviewStats.rejected_count = data.rejected_count;
-      overviewStats.avg_process_time = data.avg_process_time;
-      
-      // 计算同比变化（这里假设后端没有直接返回变化率）
-      // 实际应用中可能需要获取前一个时间段的数据来计算
-      overviewStats.totalChange = 8.5; // 示例值，实际应从API获取或计算
-      overviewStats.completedChange = 10.2;
-      overviewStats.processingChange = -5.3;
-      overviewStats.avgProcessTimeChange = -3.7;
-    }
+    // Mock implementation - in real app this would call the API
+    // overviewStats already set with mock data above
   } catch (error) {
     console.error('获取概览统计失败:', error);
     message.error('获取概览统计失败');
@@ -365,13 +421,8 @@ const fetchOverviewStats = async () => {
 const fetchTrendData = async () => {
   chartLoading.trend = true;
   try {
-    const res = await getStatisticsTrend();
-    const data = res || [];
-    
-    // 提取日期和创建/完成数量
-    trendData.dates = data.map((item: any) => item.date);
-    trendData.created = data.map((item: any) => item.total_count);
-    trendData.completed = data.map((item: any) => item.completed_count);
+    // Mock implementation - in real app this would call the API
+    // trendData already set with mock data above
     
     // 更新趋势图
     nextTick(() => {
@@ -389,36 +440,14 @@ const fetchCategoryStats = async () => {
   chartLoading.status = true;
   chartLoading.process = true;
   try {
-    const res = await getStatisticsCategory();
-    const data = res;
+    // Mock implementation - in real app this would call the API
+    // statusDistribution and processUsageData already set with mock data above
     
-    if (data) {
-      // 解析工单状态分布
-      const categoryStats = typeof data.category_stats === 'string' 
-        ? JSON.parse(data.category_stats) 
-        : data.category_stats;
-      
-      statusDistribution.value = [
-        { name: '已完成', value: data.completed_count },
-        { name: '处理中', value: data.processing_count },
-        { name: '已取消', value: data.canceled_count },
-        { name: '已拒绝', value: data.rejected_count }
-      ];
-      
-      // 解析流程使用统计 (假设category_stats包含流程使用信息)
-      if (categoryStats && Array.isArray(categoryStats)) {
-        processUsageData.value = categoryStats.map((item: any) => ({
-          name: item.name || '未知流程',
-          value: item.count || 0
-        }));
-      }
-      
-      // 更新图表
-      nextTick(() => {
-        initStatusChart();
-        initProcessChart();
-      });
-    }
+    // 更新图表
+    nextTick(() => {
+      initStatusChart();
+      initProcessChart();
+    });
   } catch (error) {
     console.error('获取分类统计失败:', error);
     message.error('获取分类统计失败');
@@ -431,42 +460,13 @@ const fetchCategoryStats = async () => {
 const fetchDepartmentData = async () => {
   chartLoading.department = true;
   try {
-    const res = await getStatisticsUser();
-    const data = res;
+    // Mock implementation - in real app this would call the API
+    // departmentData already set with mock data above
     
-    if (data) {
-      // 解析用户/部门统计数据
-      const userStats = typeof data.user_stats === 'string' 
-        ? JSON.parse(data.user_stats) 
-        : data.user_stats;
-      
-      if (userStats && Array.isArray(userStats)) {
-        // 按部门聚合数据
-        const deptMap = new Map<string, number>();
-        
-        userStats.forEach((item: any) => {
-          const dept = item.department || '未知部门';
-          const count = item.count || 0;
-          
-          if (deptMap.has(dept)) {
-            deptMap.set(dept, deptMap.get(dept)! + count);
-          } else {
-            deptMap.set(dept, count);
-          }
-        });
-        
-        // 转换为图表所需格式
-        departmentData.value = Array.from(deptMap.entries()).map(([name, value]) => ({
-          name,
-          value
-        }));
-      }
-      
-      // 更新图表
-      nextTick(() => {
-        initDepartmentChart();
-      });
-    }
+    // 更新图表
+    nextTick(() => {
+      initDepartmentChart();
+    });
   } catch (error) {
     console.error('获取部门分布数据失败:', error);
     message.error('获取部门分布数据失败');
@@ -478,48 +478,13 @@ const fetchDepartmentData = async () => {
 const fetchEfficiencyData = async () => {
   chartLoading.efficiency = true;
   try {
-    // 假设我们需要组合流程数据和处理时间
-    const res = await getStatisticsPerformance();
-    const data = res || [];
+    // Mock implementation - in real app this would call the API
+    // efficiencyData already set with mock data above
     
-    if (data.length > 0) {
-      // 按流程分组，计算平均处理时间
-      const processMap = new Map<string, { count: number, totalTime: number }>();
-      
-      processes.value.forEach((process: Process) => {
-        // 初始化所有流程条目
-        processMap.set(process.name, { count: 0, totalTime: 0 });
-      });
-      
-      // 累计每个流程的时间
-      data.forEach((item: any) => {
-        if (item.process_name) {
-          if (processMap.has(item.process_name)) {
-            const current = processMap.get(item.process_name)!;
-            current.count += 1;
-            current.totalTime += item.avg_processing_time || 0;
-          }
-        }
-      });
-      
-      // 计算平均值并转换为图表所需格式
-      const processEfficiency = Array.from(processMap.entries())
-        .filter(([_, stats]) => stats.count > 0)
-        .map(([name, stats]) => ({
-          name,
-          avgTime: stats.totalTime / stats.count
-        }))
-        .sort((a, b) => b.avgTime - a.avgTime) // 从高到低排序
-        .slice(0, 10); // 取前10个
-      
-      efficiencyData.processes = processEfficiency.map(item => item.name);
-      efficiencyData.avgTimes = processEfficiency.map(item => item.avgTime);
-      
-      // 更新图表
-      nextTick(() => {
-        initEfficiencyChart();
-      });
-    }
+    // 更新图表
+    nextTick(() => {
+      initEfficiencyChart();
+    });
   } catch (error) {
     console.error('获取审批效率数据失败:', error);
     message.error('获取审批效率数据失败');
@@ -531,23 +496,8 @@ const fetchEfficiencyData = async () => {
 const fetchUserPerformance = async () => {
   chartLoading.userRanking = true;
   try {
-    const res = await getStatisticsPerformance();
-    const data = res || [];
-    
-    if (data.length > 0) {
-      // 按照完成数量排序
-      const sortedByCount = [...data]
-        .sort((a, b) => b.completed_count - a.completed_count)
-        .slice(0, 5); // 取前5名
-      
-      // 按照平均处理时间排序（从小到大）
-      const sortedByTime = [...data]
-        .sort((a, b) => a.avg_processing_time - b.avg_processing_time)
-        .slice(0, 5); // 取前5名
-      
-      handlerRankingByCount.value = sortedByCount;
-      handlerRankingByTime.value = sortedByTime;
-    }
+    // Mock implementation - in real app this would call the API
+    // handlerRankingByCount and handlerRankingByTime already set with mock data above
   } catch (error) {
     console.error('获取用户绩效数据失败:', error);
     message.error('获取用户绩效数据失败');
@@ -582,8 +532,6 @@ const refreshData = async () => {
       fetchEfficiencyData(),
       fetchUserPerformance()
     ]);
-    
-    message.success('数据已刷新');
   } catch (error) {
     console.error('刷新数据失败:', error);
     message.error('刷新数据失败');

@@ -41,7 +41,7 @@ type InstanceService interface {
 	UpdateInstance(ctx context.Context, req model.InstanceReq) error
 	DeleteInstance(ctx context.Context, req model.DeleteInstanceReq) error
 	ListInstance(ctx context.Context, req model.ListInstanceReq) ([]model.Instance, error)
-	DetailInstance(ctx context.Context, id int64) (model.Instance, error)
+	DetailInstance(ctx context.Context, id int) (model.Instance, error)
 	ApproveInstance(ctx context.Context, req model.InstanceFlowReq) error
 	ActionInstance(ctx context.Context, req model.InstanceFlowReq) error
 	CommentInstance(ctx context.Context, req model.InstanceCommentReq) error
@@ -74,7 +74,7 @@ func (i *instanceService) DeleteInstance(ctx context.Context, req model.DeleteIn
 }
 
 // DetailInstance implements InstanceService.
-func (i *instanceService) DetailInstance(ctx context.Context, id int64) (model.Instance, error) {
+func (i *instanceService) DetailInstance(ctx context.Context, id int) (model.Instance, error) {
 	return i.dao.GetInstance(ctx, id)
 }
 

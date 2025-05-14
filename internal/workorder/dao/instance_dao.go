@@ -36,9 +36,9 @@ import (
 type InstanceDAO interface {
 	CreateInstance(ctx context.Context, req *model.Instance) error
 	UpdateInstance(ctx context.Context, req *model.Instance) error
-	DeleteInstance(ctx context.Context, id int64) error
+	DeleteInstance(ctx context.Context, id int) error
 	ListInstance(ctx context.Context, req model.ListInstanceReq) ([]model.Instance, error)
-	GetInstance(ctx context.Context, id int64) (model.Instance, error)
+	GetInstance(ctx context.Context, id int) (model.Instance, error)
 	CreateInstanceFlow(ctx context.Context, req *model.InstanceFlow) error
 	CreateInstanceComment(ctx context.Context, req *model.InstanceComment) error
 }
@@ -65,7 +65,7 @@ func (i *instanceDAO) CreateInstance(ctx context.Context, instance *model.Instan
 }
 
 // DeleteInstance implements InstanceDAO.
-func (i *instanceDAO) DeleteInstance(ctx context.Context, id int64) error {
+func (i *instanceDAO) DeleteInstance(ctx context.Context, id int) error {
 	if err := i.db.WithContext(ctx).Delete(&model.Instance{}, id).Error; err != nil {
 		return err
 	}
@@ -73,7 +73,7 @@ func (i *instanceDAO) DeleteInstance(ctx context.Context, id int64) error {
 }
 
 // GetInstance implements InstanceDAO.
-func (i *instanceDAO) GetInstance(ctx context.Context, id int64) (model.Instance, error) {
+func (i *instanceDAO) GetInstance(ctx context.Context, id int) (model.Instance, error) {
 	var instance model.Instance
 	if err := i.db.WithContext(ctx).Where("id = ?", id).First(&instance).Error; err != nil {
 		return instance, err

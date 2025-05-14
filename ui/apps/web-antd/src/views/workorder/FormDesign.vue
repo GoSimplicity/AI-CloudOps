@@ -112,13 +112,13 @@
                 </a-button>
                 <a-dropdown>
                   <template #overlay>
-                    <a-menu @click="(key: any) => handleMenuClick(key, record)">
-                      <a-menu-item key="publish" v-if="record.status === 0">发布</a-menu-item>
-                      <a-menu-item key="unpublish" v-if="record.status === 1">取消发布</a-menu-item>
-                      <a-menu-item key="clone">克隆</a-menu-item>
-                      <a-menu-divider />
-                      <a-menu-item key="delete" danger>删除</a-menu-item>
-                    </a-menu>
+                    <a-menu @click="(e: any) => handleMenuClick(e.key, record)">
+                    <a-menu-item key="publish" v-if="record.status === 0">发布</a-menu-item>
+                    <a-menu-item key="unpublish" v-if="record.status === 1">取消发布</a-menu-item>
+                    <a-menu-item key="clone">克隆</a-menu-item>
+                    <a-menu-divider />
+                    <a-menu-item key="delete" danger>删除</a-menu-item>
+                  </a-menu>
                   </template>
                   <a-button size="small">
                     更多
@@ -138,18 +138,20 @@
       </a-card>
     </div>
 
-    <!-- 表单创建/编辑对话框 -->
-    <a-modal v-model:visible="formDialog.visible" :title="formDialog.isEdit ? '编辑表单设计' : '创建表单设计'" width="760px"
-      @ok="saveForm" :destroy-on-close="true">
-      <a-form ref="formRef" :model="formDialog.form" :rules="formRules" layout="vertical">
-        <a-form-item label="表单名称" name="name">
-          <a-input v-model:value="formDialog.form.name" placeholder="请输入表单名称" />
-        </a-form-item>
+<!-- 表单创建/编辑对话框 -->
+<a-modal v-model:visible="formDialog.visible" :title="formDialog.isEdit ? '编辑表单设计' : '创建表单设计'" width="760px"
+  @ok="saveForm" :destroy-on-close="true">
+  <a-form ref="formRef" :model="formDialog.form" :rules="formRules" layout="vertical">
+    <a-form-item label="表单名称" name="name">
+      <a-input v-model:value="formDialog.form.name" placeholder="请输入表单名称" />
+    </a-form-item>
 
-        <a-form-item label="描述" name="description">
-          <a-textarea v-model:value="formDialog.form.description" :rows="3" placeholder="请输入表单描述" />
-        </a-form-item>
+    <a-form-item label="描述" name="description">
+      <a-textarea v-model:value="formDialog.form.description" :rows="3" placeholder="请输入表单描述" />
+    </a-form-item>
 
+    <a-row :gutter="16">
+      <a-col :span="12">
         <a-form-item label="分类" name="category_id">
           <a-select v-model:value="formDialog.form.category_id" placeholder="请选择分类" style="width: 100%">
             <a-select-option v-for="cat in categories" :key="cat.id" :value="cat.id">
@@ -157,68 +159,75 @@
             </a-select-option>
           </a-select>
         </a-form-item>
-
-        <a-form-item label="状态" name="status">
-          <a-radio-group v-model:value="formDialog.form.status">
-            <a-radio :value="0">草稿</a-radio>
-            <a-radio :value="1">已发布</a-radio>
-            <a-radio :value="2">已禁用</a-radio>
-          </a-radio-group>
+      </a-col>
+      <a-col :span="12">
+        <a-form-item label="版本号" name="version">
+          <a-input-number v-model:value="formDialog.form.version" :min="1" style="width: 100%" placeholder="请输入版本号" />
         </a-form-item>
+      </a-col>
+    </a-row>
 
-        <a-divider orientation="left">表单结构</a-divider>
+    <a-form-item label="状态" name="status">
+      <a-radio-group v-model:value="formDialog.form.status">
+        <a-radio :value="0">草稿</a-radio>
+        <a-radio :value="1">已发布</a-radio>
+        <a-radio :value="2">已禁用</a-radio>
+      </a-radio-group>
+    </a-form-item>
 
-        <div class="schema-editor">
-          <div class="field-list">
-            <a-collapse>
-              <a-collapse-panel v-for="(field, index) in formDialog.form.schema.fields" :key="index"
-                :header="field.label || `字段 ${index + 1}`">
-                <template #extra>
-                  <a-button type="text" danger @click.stop="removeField(index)" size="small">
-                    <DeleteOutlined />
-                  </a-button>
-                </template>
+    <a-divider orientation="left">表单结构</a-divider>
 
-                <a-form-item label="字段类型">
-                  <a-select v-model:value="field.type" style="width: 100%">
-                    <a-select-option value="text">文本框</a-select-option>
-                    <a-select-option value="number">数字</a-select-option>
-                    <a-select-option value="date">日期</a-select-option>
-                    <a-select-option value="select">下拉选择</a-select-option>
-                    <a-select-option value="checkbox">复选框</a-select-option>
-                    <a-select-option value="radio">单选框</a-select-option>
-                    <a-select-option value="textarea">多行文本</a-select-option>
-                  </a-select>
-                </a-form-item>
-
-                <a-form-item label="标签名称">
-                  <a-input v-model:value="field.label" placeholder="字段标签" />
-                </a-form-item>
-
-                <a-form-item label="字段名称">
-                  <a-input v-model:value="field.field" placeholder="字段名称" />
-                </a-form-item>
-
-                <a-form-item label="是否必填">
-                  <a-switch v-model:checked="field.required" />
-                </a-form-item>
-              </a-collapse-panel>
-            </a-collapse>
-
-            <div class="add-field-button">
-              <a-button type="dashed" block @click="addField" style="margin-top: 16px">
-                <PlusOutlined /> 添加字段
+    <div class="schema-editor">
+      <div class="field-list">
+        <a-collapse>
+          <a-collapse-panel v-for="(field, index) in formDialog.form.schema.fields" :key="index"
+            :header="field.label || `字段 ${index + 1}`">
+            <template #extra>
+              <a-button type="text" danger @click.stop="removeField(index)" size="small">
+                <DeleteOutlined />
               </a-button>
-            </div>
-          </div>
+            </template>
+
+            <a-form-item label="字段类型">
+              <a-select v-model:value="field.type" style="width: 100%">
+                <a-select-option value="text">文本框</a-select-option>
+                <a-select-option value="number">数字</a-select-option>
+                <a-select-option value="date">日期</a-select-option>
+                <a-select-option value="select">下拉选择</a-select-option>
+                <a-select-option value="checkbox">复选框</a-select-option>
+                <a-select-option value="radio">单选框</a-select-option>
+                <a-select-option value="textarea">多行文本</a-select-option>
+              </a-select>
+            </a-form-item>
+
+            <a-form-item label="标签名称">
+              <a-input v-model:value="field.label" placeholder="字段标签" />
+            </a-form-item>
+
+            <a-form-item label="字段名称">
+              <a-input v-model:value="field.field" placeholder="字段名称" />
+            </a-form-item>
+
+            <a-form-item label="是否必填">
+              <a-switch v-model:checked="field.required" />
+            </a-form-item>
+          </a-collapse-panel>
+        </a-collapse>
+
+        <div class="add-field-button">
+          <a-button type="dashed" block @click="addField" style="margin-top: 16px">
+            <PlusOutlined /> 添加字段
+          </a-button>
         </div>
-      </a-form>
-    </a-modal>
+      </div>
+    </div>
+  </a-form>
+</a-modal>
 
     <!-- 克隆对话框 -->
     <a-modal v-model:visible="cloneDialog.visible" title="克隆表单" @ok="confirmClone" :destroy-on-close="true">
       <a-form :model="cloneDialog.form" layout="vertical">
-        <a-form-item label="新表单名称" name="name">
+        <a-form-item label="新表单名称" name="name" :rules="[{ required: true, message: '请输入新表单名称' }]">
           <a-input v-model:value="cloneDialog.form.name" placeholder="请输入新表单名称" />
         </a-form-item>
       </a-form>
@@ -252,6 +261,9 @@
                 <a-tag :color="record.required ? 'red' : ''">
                   {{ record.required ? '必填' : '可选' }}
                 </a-tag>
+              </template>
+              <template v-if="column.key === 'type'">
+                {{ getFieldTypeName(record.type) }}
               </template>
             </template>
           </a-table>
@@ -294,7 +306,6 @@ import type {
   Schema,
   FormDesignReq,
   ListFormDesignReq,
-  DetailFormDesignReq,
   PublishFormDesignReq,
   CloneFormDesignReq,
 } from '#/api/core/workorder';
@@ -455,6 +466,10 @@ const formRules = {
   ],
   category_id: [
     { required: true, message: '请选择分类', trigger: 'change' }
+  ],
+  version: [
+    { required: true, message: '请输入版本号', trigger: 'change' },
+    { type: 'number', min: 1, message: '版本号必须大于0', trigger: 'change' }
   ]
 };
 
@@ -531,7 +546,7 @@ const updateStats = (data: any) => {
 // 方法
 const handleSizeChange = (current: number, size: number) => {
   pageSize.value = size;
-  currentPage.value = 1;
+  currentPage.value = current;
   loadFormDesigns();
 };
 
@@ -558,6 +573,7 @@ const handleCreateForm = () => {
     schema: {
       fields: []
     },
+    version: 1,
     status: 0,
     category_id: undefined
   };
@@ -685,10 +701,15 @@ const showCloneDialog = (form: FormDesign) => {
 };
 
 const confirmClone = async () => {
+  if (!cloneDialog.form.name.trim()) {
+    message.error('请输入新表单名称');
+    return;
+  }
+  
   try {
     const params: CloneFormDesignReq = {
-      name: cloneDialog.form.name,
-      id: cloneDialog.form.originalId
+      id: cloneDialog.form.originalId, 
+      name: cloneDialog.form.name    
     };
     
     const response = await cloneFormDesign(params);
@@ -746,6 +767,14 @@ const saveForm = async () => {
     message.error('请选择分类');
     return;
   }
+  
+  // 验证字段名称是否重复
+  const fieldNames = formDialog.form.schema.fields.map(field => field.field);
+  const uniqueFieldNames = new Set(fieldNames);
+  if (fieldNames.length !== uniqueFieldNames.size) {
+    message.error('表单中存在重复的字段名称，请修改');
+    return;
+  }
 
   try {
     const formData: FormDesignReq = {
@@ -770,6 +799,20 @@ const saveForm = async () => {
     console.error('保存表单失败:', error);
     message.error('保存表单失败');
   }
+};
+
+// 获取字段类型名称
+const getFieldTypeName = (type: string) => {
+  const typeMap: Record<string, string> = {
+    'text': '文本框',
+    'number': '数字',
+    'date': '日期',
+    'select': '下拉选择',
+    'checkbox': '复选框',
+    'radio': '单选框',
+    'textarea': '多行文本'
+  };
+  return typeMap[type] || type;
 };
 
 // 辅助方法
@@ -854,7 +897,6 @@ onMounted(() => {
   color: #1f2937;
   margin: 0;
   background: linear-gradient(90deg, #1890ff 0%, #52c41a 100%);
-  -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   font-weight: 700;
 }
@@ -914,7 +956,6 @@ onMounted(() => {
 .description-text {
   color: #606266;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

@@ -137,7 +137,7 @@ func ProvideCmd() *Cmd {
 	sendGroupHandler := api5.NewSendGroupHandler(logger, alertManagerSendService)
 	auditHandler := api2.NewAuditHandler(auditService)
 	formDesignDAO := dao3.NewFormDesignDAO(db)
-	formDesignService := service4.NewFormDesignService(formDesignDAO, logger)
+	formDesignService := service4.NewFormDesignService(formDesignDAO, userDAO, logger)
 	formDesignHandler := api6.NewFormDesignHandler(formDesignService)
 	processDAO := dao3.NewProcessDAO(db)
 	processService := service4.NewProcessService(processDAO, logger)

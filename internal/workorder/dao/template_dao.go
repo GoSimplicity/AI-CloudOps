@@ -36,9 +36,9 @@ import (
 type TemplateDAO interface {
 	CreateTemplate(ctx context.Context, template *model.Template) error
 	UpdateTemplate(ctx context.Context, template *model.Template) error
-	DeleteTemplate(ctx context.Context, id int64) error
+	DeleteTemplate(ctx context.Context, id int) error
 	ListTemplate(ctx context.Context, req model.ListTemplateReq) ([]model.Template, error)
-	GetTemplate(ctx context.Context, id int64) (model.Template, error)
+	GetTemplate(ctx context.Context, id int) (model.Template, error)
 }
 
 type templateDAO struct {
@@ -63,7 +63,7 @@ func (t *templateDAO) CreateTemplate(ctx context.Context, template *model.Templa
 }
 
 // DeleteTemplate implements TemplateDAO.
-func (t *templateDAO) DeleteTemplate(ctx context.Context, id int64) error {
+func (t *templateDAO) DeleteTemplate(ctx context.Context, id int) error {
 	if err := t.db.WithContext(ctx).Delete(&model.Template{}, id).Error; err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func (t *templateDAO) DeleteTemplate(ctx context.Context, id int64) error {
 }
 
 // GetTemplate implements TemplateDAO.
-func (t *templateDAO) GetTemplate(ctx context.Context, id int64) (model.Template, error) {
+func (t *templateDAO) GetTemplate(ctx context.Context, id int) (model.Template, error) {
 	var template model.Template
 	if err := t.db.WithContext(ctx).First(&template, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
