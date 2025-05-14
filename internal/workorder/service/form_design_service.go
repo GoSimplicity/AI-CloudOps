@@ -42,7 +42,7 @@ type FormDesignService interface {
 	DeleteFormDesign(ctx context.Context, id int) error
 	PublishFormDesign(ctx context.Context, id int) error
 	CloneFormDesign(ctx context.Context, id int, name string) error
-	DetailFormDesign(ctx context.Context, id int) (*model.FormDesign, error)
+	DetailFormDesign(ctx context.Context, id int, userId int) (*model.FormDesign, error)
 	ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) ([]model.FormDesign, error)
 }
 
@@ -96,9 +96,9 @@ func (f *formDesignService) CloneFormDesign(ctx context.Context, id int, name st
 }
 
 // DetailFormDesign 获取表单设计详情
-func (f *formDesignService) DetailFormDesign(ctx context.Context, id int) (*model.FormDesign, error) {
+func (f *formDesignService) DetailFormDesign(ctx context.Context, id int, userId int) (*model.FormDesign, error) {
 	// 根据userid查询中文名称
-	user, err := f.userDao.GetUserByID(ctx, int(id))
+	user, err := f.userDao.GetUserByID(ctx, userId)
 	if err != nil {
 		f.l.Error("获取用户失败", zap.Error(err))
 		return nil, err

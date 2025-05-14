@@ -268,7 +268,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { message, Modal } from 'ant-design-vue';
 import {
   PlusOutlined,
@@ -286,10 +286,9 @@ import {
   type ProcessReq,
   type FormDesign,
   type ListProcessReq,
-  type DetailProcessReqReq,
+  type DeleteProcessReq,
   type PublishProcessReq,
   type CloneProcessReq,
-  type DeleteProcessReqReq,
   type Step,
   type Definition,
   listProcess,
@@ -426,14 +425,14 @@ const loadProcesses = async () => {
   try {
     const params: ListProcessReq = {
       page: currentPage.value,
-      size: pageSize.value,
+      page_size: pageSize.value,
       search: searchQuery.value || undefined,
       status: statusFilter.value || undefined
     };
     
     const res = await listProcess(params);
     if (res) {
-      processList.value = res.items || [];
+      processList.value = res || [];
       total.value = res.total || 0;
       
       // 更新统计数据
@@ -455,7 +454,7 @@ const loadForms = async () => {
   try {
     const params: ListFormDesignReq = {
       page: 1,
-      size: 100,
+      page_size: 100,
       status: 1 // 只获取已发布的表单
     };
     
@@ -470,7 +469,7 @@ const loadForms = async () => {
 };
 
 // 方法
-const handleSizeChange = (current: number, size: number) => {
+const handleSizeChange = (_: number, size: number) => {
   pageSize.value = size;
   currentPage.value = 1;
   loadProcesses();
@@ -510,7 +509,8 @@ const handleCreateProcess = () => {
 const parsedDefinition = (process: Process): Step[] => {
   try {
     if (typeof process.definition === 'string') {
-      return JSON.parse(process.definition).steps || [];
+      const parsed = JSON.parse(process.definition);
+      return parsed.steps || [];
     }
     return [];
   } catch (error) {
@@ -528,14 +528,34 @@ const handleEditProcess = async (row: Process) => {
     if (res) {
       const process = res;
       
+      // 解析流程定义
+      let definitionObj: Definition;
+      try {
+        if (typeof process.definition === 'string') {
+          definitionObj = JSON.parse(process.definition) as Definition;
+        } else {
+          // 如果不是字符串，确保有正确的结构
+          definitionObj = {
+            steps: []
+          };
+          console.warn('流程定义不是有效的JSON字符串');
+        }
+      } catch (e) {
+        console.error('解析流程定义失败', e);
+        definitionObj = { steps: [] };
+      }
+      
+      // 确保steps属性存在
+      if (!definitionObj.steps) {
+        definitionObj.steps = [];
+      }
+      
       processDialog.form = {
         id: process.id,
         name: process.name,
         description: process.description,
         form_design_id: process.form_design_id,
-        definition: typeof process.definition === 'string' 
-          ? JSON.parse(process.definition) 
-          : { steps: [] },
+        definition: definitionObj,
         version: process.version,
         status: process.status,
         category_id: process.category_id,
@@ -577,7 +597,7 @@ const handleCommand = async (command: string, row: Process) => {
       await publishProcess(row);
       break;
     case 'unpublish':
-      // 后端可能没有取消发布的接口，这里可以通过更新状态实现
+      // 取消发布就是把状态改为草稿
       await updateProcessStatus(row, 0);
       break;
     case 'clone':
@@ -608,15 +628,37 @@ const publishProcess = async (process: Process) => {
 
 const updateProcessStatus = async (process: Process, status: number) => {
   try {
+    // 首先获取完整的流程信息
+    const processDetail = await detailProcess({ id: process.id });
+    if (!processDetail) {
+      message.error('获取流程详情失败');
+      return;
+    }
+    
+    // 解析流程定义
+    let definitionObj: Definition;
+    try {
+      if (typeof processDetail.definition === 'string') {
+        definitionObj = JSON.parse(processDetail.definition) as Definition;
+      } else {
+        definitionObj = { steps: [] };
+      }
+    } catch (e) {
+      console.error('解析流程定义失败', e);
+      definitionObj = { steps: [] };
+    }
+    
+    // 准备更新请求
     const updatedProcess: ProcessReq = {
-      id: process.id,
-      name: process.name,
-      description: process.description,
-      form_design_id: process.form_design_id,
-      definition: typeof process.definition === 'string' 
-        ? JSON.parse(process.definition) 
-        : { steps: [] },
-      status: status
+      id: processDetail.id,
+      name: processDetail.name,
+      description: processDetail.description,
+      form_design_id: processDetail.form_design_id,
+      definition: definitionObj,
+      status: status,
+      version: processDetail.version,
+      category_id: processDetail.category_id,
+      creator_id: processDetail.creator_id
     };
     
     const res = await updateProcess(updatedProcess);
@@ -640,6 +682,11 @@ const showCloneDialog = (process: Process) => {
 
 const confirmClone = async () => {
   try {
+    if (!cloneDialog.form.name.trim()) {
+      message.error('请输入新流程名称');
+      return;
+    }
+    
     const res = await cloneProcessApi(cloneDialog.form);
     if (res) {
       message.success(`流程已克隆为 "${cloneDialog.form.name}"`);
@@ -661,7 +708,7 @@ const confirmDelete = (process: Process) => {
     cancelText: '取消',
     async onOk() {
       try {
-        const params: DeleteProcessReqReq = {
+        const params: DeleteProcessReq = {
           id: process.id
         };
         
@@ -912,7 +959,6 @@ onMounted(() => {
 .description-text {
   color: #606266;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

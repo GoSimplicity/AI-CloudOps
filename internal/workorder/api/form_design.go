@@ -94,8 +94,10 @@ func (h *FormDesignHandler) ListFormDesign(ctx *gin.Context) {
 func (h *FormDesignHandler) DetailFormDesign(ctx *gin.Context) {
 	var req model.DetailFormDesignReq
 
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.DetailFormDesign(ctx, req.ID)
+		return h.service.DetailFormDesign(ctx, req.ID, user.Uid)
 	})
 }
 

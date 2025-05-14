@@ -50,7 +50,6 @@ func NewProcessDAO(db *gorm.DB) ProcessDAO {
 	return &processDAO{
 		db: db,
 	}
-
 }
 
 // CreateProcess implements ProcessDAO.
@@ -115,7 +114,16 @@ func (p *processDAO) ListProcess(ctx context.Context, req model.ListProcessReq) 
 
 // UpdateProcess implements ProcessDAO.
 func (p *processDAO) UpdateProcess(ctx context.Context, process *model.Process) error {
-	result := p.db.WithContext(ctx).Model(&model.Process{}).Where("id = ?", process.ID).Updates(process)
+	result := p.db.WithContext(ctx).Model(&model.Process{}).Where("id = ?", process.ID).Updates(map[string]interface{}{
+		"name":          process.Name,
+		"description":   process.Description,
+		"form_design_id": process.FormDesignID,
+		"definition":    process.Definition,
+		"version":       process.Version,
+		"status":        process.Status,
+		"category_id":   process.CategoryID,
+		"creator_id":    process.CreatorID,
+	})
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return fmt.Errorf("表单设计不存在")

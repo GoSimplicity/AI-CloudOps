@@ -47,7 +47,7 @@ func (h *ProcessHandler) RegisterRouters(server *gin.Engine) {
 	{
 		processGroup.POST("/create", h.CreateProcess)
 		processGroup.POST("/update", h.UpdateProcess)
-		processGroup.POST("/delete", h.DeleteProcess)
+		processGroup.DELETE("/delete/:id", h.DeleteProcess)
 		processGroup.POST("/list", h.ListProcess)
 		processGroup.POST("/detail", h.DetailProcess)
 		processGroup.POST("/publish", h.PublishProcess)
@@ -56,26 +56,28 @@ func (h *ProcessHandler) RegisterRouters(server *gin.Engine) {
 }
 
 func (h *ProcessHandler) CreateProcess(ctx *gin.Context) {
-	var req model.ProcessReq
+	var req model.CreateProcessReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateProcess(ctx, &req)
 	})
 }
 
 func (h *ProcessHandler) UpdateProcess(ctx *gin.Context) {
-	var req model.ProcessReq
+	var req model.UpdateProcessReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateProcess(ctx, &req)
 	})
-
 }
 
 func (h *ProcessHandler) DeleteProcess(ctx *gin.Context) {
-	var id model.DeleteProcessReqReq
-	utils.HandleRequest(ctx, &id, func() (interface{}, error) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.service.DeleteProcess(ctx, id)
 	})
-
 }
 
 func (h *ProcessHandler) ListProcess(ctx *gin.Context) {
@@ -86,9 +88,12 @@ func (h *ProcessHandler) ListProcess(ctx *gin.Context) {
 }
 
 func (h *ProcessHandler) DetailProcess(ctx *gin.Context) {
-	var req model.DetailProcessReqReq
+	var req model.DetailProcessReq
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.DetailProcess(ctx, req)
+		return h.service.DetailProcess(ctx, req.ID, user.Uid)
 	})
 }
 
@@ -104,5 +109,4 @@ func (h *ProcessHandler) CloneProcess(ctx *gin.Context) {
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CloneProcess(ctx, req)
 	})
-
 }

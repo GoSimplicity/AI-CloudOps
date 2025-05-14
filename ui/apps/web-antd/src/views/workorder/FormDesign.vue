@@ -509,7 +509,7 @@ const loadFormDesigns = async () => {
   try {
     const params: ListFormDesignReq = {
       page: currentPage.value,
-      size: pageSize.value,
+      page_size: pageSize.value,
       search: searchQuery.value || undefined,
       status: statusFilter.value !== null ? statusFilter.value : undefined
     };
