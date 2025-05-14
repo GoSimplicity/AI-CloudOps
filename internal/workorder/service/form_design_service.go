@@ -32,28 +32,31 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
 
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 )
 
 type FormDesignService interface {
 	CreateFormDesign(ctx context.Context, formDesignReq *model.FormDesignReq) error
 	UpdateFormDesign(ctx context.Context, formDesign *model.FormDesignReq) error
-	DeleteFormDesign(ctx context.Context, id int64) error
-	PublishFormDesign(ctx context.Context, id int64) error
-	CloneFormDesign(ctx context.Context, name string) error
-	DetailFormDesign(ctx context.Context, id int64) (*model.FormDesign, error)
+	DeleteFormDesign(ctx context.Context, id int) error
+	PublishFormDesign(ctx context.Context, id int) error
+	CloneFormDesign(ctx context.Context, id int, name string) error
+	DetailFormDesign(ctx context.Context, id int) (*model.FormDesign, error)
 	ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) ([]model.FormDesign, error)
 }
 
 type formDesignService struct {
-	dao dao.FormDesignDAO
-	l   *zap.Logger
+	dao     dao.FormDesignDAO
+	userDao userDao.UserDAO
+	l       *zap.Logger
 }
 
-func NewFormDesignService(dao dao.FormDesignDAO, l *zap.Logger) FormDesignService {
+func NewFormDesignService(dao dao.FormDesignDAO, userDao userDao.UserDAO, l *zap.Logger) FormDesignService {
 	return &formDesignService{
-		dao: dao,
-		l:   l,
+		dao:     dao,
+		userDao: userDao,
+		l:       l,
 	}
 }
 
@@ -78,23 +81,38 @@ func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq 
 }
 
 // DeleteFormDesign 删除表单设计
-func (f *formDesignService) DeleteFormDesign(ctx context.Context, id int64) error {
+func (f *formDesignService) DeleteFormDesign(ctx context.Context, id int) error {
 	return f.dao.DeleteFormDesign(ctx, id)
 }
 
 // PublishFormDesign 发布表单设计
-func (f *formDesignService) PublishFormDesign(ctx context.Context, id int64) error {
+func (f *formDesignService) PublishFormDesign(ctx context.Context, id int) error {
 	return f.dao.PublishFormDesign(ctx, id)
 }
 
 // CloneFormDesign 克隆表单设计
-func (f *formDesignService) CloneFormDesign(ctx context.Context, name string) error {
-	return f.dao.CloneFormDesign(ctx, name)
+func (f *formDesignService) CloneFormDesign(ctx context.Context, id int, name string) error {
+	return f.dao.CloneFormDesign(ctx, id, name)
 }
 
 // DetailFormDesign 获取表单设计详情
-func (f *formDesignService) DetailFormDesign(ctx context.Context, id int64) (*model.FormDesign, error) {
-	return f.dao.GetFormDesign(ctx, id)
+func (f *formDesignService) DetailFormDesign(ctx context.Context, id int) (*model.FormDesign, error) {
+	// 根据userid查询中文名称
+	user, err := f.userDao.GetUserByID(ctx, int(id))
+	if err != nil {
+		f.l.Error("获取用户失败", zap.Error(err))
+		return nil, err
+	}
+
+	formDesign, err := f.dao.GetFormDesign(ctx, id)
+	if err != nil {
+		f.l.Error("获取表单设计失败", zap.Error(err))
+		return nil, err
+	}
+
+	formDesign.CreatorName = user.Username
+
+	return formDesign, nil
 }
 
 // ListFormDesign 获取表单设计列表

@@ -58,6 +58,10 @@ func (h *FormDesignHandler) RegisterRouters(server *gin.Engine) {
 func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
 	var req model.FormDesignReq
 
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	req.CreatorID = user.Uid
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateFormDesign(ctx, &req)
 	})
@@ -107,6 +111,6 @@ func (h *FormDesignHandler) CloneFormDesign(ctx *gin.Context) {
 	var req model.CloneFormDesignReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CloneFormDesign(ctx, req.Name)
+		return nil, h.service.CloneFormDesign(ctx, req.ID, req.Name)
 	})
 }

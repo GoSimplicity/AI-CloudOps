@@ -38,7 +38,9 @@ func ConvertFormDesignReq(formDesign *model.FormDesignReq) (*model.FormDesign, e
 		return nil, fmt.Errorf("序列化表单 Schema 失败: %v", err)
 	}
 	return &model.FormDesign{
-		ID:          formDesign.ID,
+		Model: model.Model{
+			ID: formDesign.ID,
+		},
 		Name:        formDesign.Name,
 		Description: formDesign.Description,
 		Schema:      string(formDesignMarshal),
@@ -57,7 +59,9 @@ func ConvertFormDesign(formDesign *model.FormDesign) (*model.FormDesignReq, erro
 		return nil, fmt.Errorf("序列化表单 Schema 失败: %v", err)
 	}
 	return &model.FormDesignReq{
-		ID:          formDesign.ID,
+		Model: model.Model{
+			ID: formDesign.ID,
+		},
 		Name:        formDesign.Name,
 		Description: formDesign.Description,
 		Schema:      p,
@@ -75,7 +79,9 @@ func ConvertProcessReq(process *model.ProcessReq) (*model.Process, error) {
 		return nil, fmt.Errorf("序列化流程 Schema 失败: %v", err)
 	}
 	return &model.Process{
-		ID:           process.ID,
+		Model: model.Model{
+			ID: process.ID,
+		},
 		Name:         process.Name,
 		Description:  process.Description,
 		FormDesignID: process.FormDesignID,
@@ -93,7 +99,9 @@ func ConvertTemplateReq(template *model.TemplateReq) (*model.Template, error) {
 		return nil, fmt.Errorf("序列化模板 Schema 失败: %v", err)
 	}
 	return &model.Template{
-		ID:            template.ID,
+		Model: model.Model{
+			ID: template.ID,
+		},
 		Name:          template.Name,
 		Description:   template.Description,
 		ProcessID:     template.ProcessID,

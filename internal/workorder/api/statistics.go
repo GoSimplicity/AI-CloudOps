@@ -26,6 +26,8 @@
 package api
 
 import (
+	"net/http"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/gin-gonic/gin"
 )
@@ -52,17 +54,41 @@ func (h *StatisticsHandler) RegisterRouters(server *gin.Engine) {
 }
 
 func (h *StatisticsHandler) GetOverview(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    []string{},
+	})
 }
 
 func (h *StatisticsHandler) GetTrend(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    []string{},
+	})
 }
 
 func (h *StatisticsHandler) GetCategoryStats(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    []string{},
+	})
 }
 
 func (h *StatisticsHandler) GetPerformanceStats(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    []string{},
+	})
 }
 
 func (h *StatisticsHandler) GetUserStats(ctx *gin.Context) {
-
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"message": "success",
+		"data":    []string{},
+	})
 }

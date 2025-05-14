@@ -10,7 +10,7 @@
             {{ process.name }}
           </a-select-option>
         </a-select>
-        <a-button @click="refreshData">
+        <a-button @click="refreshData" :loading="loading">
           <template #icon>
             <ReloadOutlined />
           </template>
@@ -24,7 +24,7 @@
       <a-row :gutter="16" class="stats-row">
         <a-col :span="6">
           <a-card class="stats-card">
-            <a-statistic title="总工单数" :value="overviewStats.total" :value-style="{ color: '#40a9ff' }">
+            <a-statistic title="总工单数" :value="overviewStats.total_count" :value-style="{ color: '#40a9ff' }">
               <template #prefix>
                 <FileDoneOutlined />
               </template>
@@ -33,7 +33,7 @@
               <span :class="overviewStats.totalChange >= 0 ? 'increase' : 'decrease'">
                 <ArrowUpOutlined v-if="overviewStats.totalChange >= 0" />
                 <ArrowDownOutlined v-else />
-                {{ Math.abs(overviewStats.totalChange) }}%
+                {{ Math.abs(overviewStats.totalChange || 0) }}%
               </span>
               比上期
             </div>
@@ -41,7 +41,7 @@
         </a-col>
         <a-col :span="6">
           <a-card class="stats-card">
-            <a-statistic title="已完成" :value="overviewStats.completed" :value-style="{ color: '#52c41a' }">
+            <a-statistic title="已完成" :value="overviewStats.completed_count" :value-style="{ color: '#52c41a' }">
               <template #prefix>
                 <CheckCircleOutlined />
               </template>
@@ -50,7 +50,7 @@
               <span :class="overviewStats.completedChange >= 0 ? 'increase' : 'decrease'">
                 <ArrowUpOutlined v-if="overviewStats.completedChange >= 0" />
                 <ArrowDownOutlined v-else />
-                {{ Math.abs(overviewStats.completedChange) }}%
+                {{ Math.abs(overviewStats.completedChange || 0) }}%
               </span>
               比上期
             </div>
@@ -58,16 +58,16 @@
         </a-col>
         <a-col :span="6">
           <a-card class="stats-card">
-            <a-statistic title="处理中" :value="overviewStats.inProgress" :value-style="{ color: '#faad14' }">
+            <a-statistic title="处理中" :value="overviewStats.processing_count" :value-style="{ color: '#faad14' }">
               <template #prefix>
                 <SyncOutlined />
               </template>
             </a-statistic>
             <div class="stat-change">
-              <span :class="overviewStats.inProgressChange >= 0 ? 'increase' : 'decrease'">
-                <ArrowUpOutlined v-if="overviewStats.inProgressChange >= 0" />
+              <span :class="overviewStats.processingChange >= 0 ? 'increase' : 'decrease'">
+                <ArrowUpOutlined v-if="overviewStats.processingChange >= 0" />
                 <ArrowDownOutlined v-else />
-                {{ Math.abs(overviewStats.inProgressChange) }}%
+                {{ Math.abs(overviewStats.processingChange || 0) }}%
               </span>
               比上期
             </div>
@@ -75,7 +75,7 @@
         </a-col>
         <a-col :span="6">
           <a-card class="stats-card">
-            <a-statistic title="平均处理时间" :value="overviewStats.avgProcessTime" suffix="小时"
+            <a-statistic title="平均处理时间" :value="overviewStats.avg_process_time" suffix="小时"
               :value-style="{ color: '#722ed1' }">
               <template #prefix>
                 <ClockCircleOutlined />
@@ -85,7 +85,7 @@
               <span :class="overviewStats.avgProcessTimeChange <= 0 ? 'increase' : 'decrease'">
                 <ArrowDownOutlined v-if="overviewStats.avgProcessTimeChange <= 0" />
                 <ArrowUpOutlined v-else />
-                {{ Math.abs(overviewStats.avgProcessTimeChange) }}%
+                {{ Math.abs(overviewStats.avgProcessTimeChange || 0) }}%
               </span>
               比上期
             </div>
@@ -97,12 +97,16 @@
       <a-row :gutter="16" class="chart-row">
         <a-col :span="16">
           <a-card title="工单趋势" class="chart-card">
-            <div class="trend-chart-container" ref="trendChartRef"></div>
+            <a-spin :spinning="chartLoading.trend">
+              <div class="trend-chart-container" ref="trendChartRef"></div>
+            </a-spin>
           </a-card>
         </a-col>
         <a-col :span="8">
           <a-card title="工单状态分布" class="chart-card">
-            <div class="status-chart-container" ref="statusChartRef"></div>
+            <a-spin :spinning="chartLoading.status">
+              <div class="status-chart-container" ref="statusChartRef"></div>
+            </a-spin>
           </a-card>
         </a-col>
       </a-row>
@@ -111,12 +115,16 @@
       <a-row :gutter="16" class="chart-row">
         <a-col :span="12">
           <a-card title="流程使用统计" class="chart-card">
-            <div class="process-chart-container" ref="processChartRef"></div>
+            <a-spin :spinning="chartLoading.process">
+              <div class="process-chart-container" ref="processChartRef"></div>
+            </a-spin>
           </a-card>
         </a-col>
         <a-col :span="12">
           <a-card title="部门工单分布" class="chart-card">
-            <div class="department-chart-container" ref="departmentChartRef"></div>
+            <a-spin :spinning="chartLoading.department">
+              <div class="department-chart-container" ref="departmentChartRef"></div>
+            </a-spin>
           </a-card>
         </a-col>
       </a-row>
@@ -125,7 +133,9 @@
       <a-row :gutter="16" class="chart-row">
         <a-col :span="24">
           <a-card title="审批效率分析" class="chart-card">
-            <div class="efficiency-chart-container" ref="efficiencyChartRef"></div>
+            <a-spin :spinning="chartLoading.efficiency">
+              <div class="efficiency-chart-container" ref="efficiencyChartRef"></div>
+            </a-spin>
           </a-card>
         </a-col>
       </a-row>
@@ -134,55 +144,59 @@
       <a-row :gutter="16" class="chart-row">
         <a-col :span="12">
           <a-card title="处理人排行榜 - 处理工单数" class="chart-card">
-            <a-table :dataSource="handlerRankingByCount" :pagination="false" :columns="rankColumns" size="small">
-              <template #bodyCell="{ column, record, index }">
-                <template v-if="column.key === 'rank'">
-                  <div class="rank-cell">
-                    <a-tag :color="getRankColor(index)">第 {{ index + 1 }} 名</a-tag>
-                  </div>
+            <a-spin :spinning="chartLoading.userRanking">
+              <a-table :dataSource="handlerRankingByCount" :pagination="false" :columns="rankColumns" size="small">
+                <template #bodyCell="{ column, record, index }">
+                  <template v-if="column.key === 'rank'">
+                    <div class="rank-cell">
+                      <a-tag :color="getRankColor(index)">第 {{ index + 1 }} 名</a-tag>
+                    </div>
+                  </template>
+                  <template v-if="column.key === 'user'">
+                    <div class="user-cell">
+                      <a-avatar size="small" :style="{ backgroundColor: getAvatarColor(record.user_name) }">
+                        {{ getInitials(record.user_name) }}
+                      </a-avatar>
+                      <span>{{ record.user_name }}</span>
+                    </div>
+                  </template>
+                  <template v-if="column.key === 'count'">
+                    <a-progress :percent="getPercentage(record.completed_count, handlerRankingByCount[0]?.completed_count || 0)"
+                      :show-info="false" status="active" :stroke-color="getProgressColor(index)" />
+                    <span class="count-value">{{ record.completed_count }}</span>
+                  </template>
                 </template>
-                <template v-if="column.key === 'user'">
-                  <div class="user-cell">
-                    <a-avatar size="small" :style="{ backgroundColor: getAvatarColor(record.name) }">
-                      {{ getInitials(record.name) }}
-                    </a-avatar>
-                    <span>{{ record.name }}</span>
-                  </div>
-                </template>
-                <template v-if="column.key === 'count'">
-                  <a-progress :percent="getPercentage(record.count, handlerRankingByCount[0]?.count || 0)"
-                    :show-info="false" status="active" :stroke-color="getProgressColor(index)" />
-                  <span class="count-value">{{ record.count }}</span>
-                </template>
-              </template>
-            </a-table>
+              </a-table>
+            </a-spin>
           </a-card>
         </a-col>
         <a-col :span="12">
           <a-card title="处理人排行榜 - 平均处理时间" class="chart-card">
-            <a-table :dataSource="handlerRankingByTime" :pagination="false" :columns="timeRankColumns" size="small">
-              <template #bodyCell="{ column, record, index }">
-                <template v-if="column.key === 'rank'">
-                  <div class="rank-cell">
-                    <a-tag :color="getRankColor(index, true)">第 {{ index + 1 }} 名</a-tag>
-                  </div>
+            <a-spin :spinning="chartLoading.userRanking">
+              <a-table :dataSource="handlerRankingByTime" :pagination="false" :columns="timeRankColumns" size="small">
+                <template #bodyCell="{ column, record, index }">
+                  <template v-if="column.key === 'rank'">
+                    <div class="rank-cell">
+                      <a-tag :color="getRankColor(index, true)">第 {{ index + 1 }} 名</a-tag>
+                    </div>
+                  </template>
+                  <template v-if="column.key === 'user'">
+                    <div class="user-cell">
+                      <a-avatar size="small" :style="{ backgroundColor: getAvatarColor(record.user_name) }">
+                        {{ getInitials(record.user_name) }}
+                      </a-avatar>
+                      <span>{{ record.user_name }}</span>
+                    </div>
+                  </template>
+                  <template v-if="column.key === 'time'">
+                    <a-progress
+                      :percent="getPercentage(handlerRankingByTime[handlerRankingByTime.length - 1]?.avg_processing_time || 0, record.avg_processing_time)"
+                      :show-info="false" status="active" :stroke-color="getProgressColor(index, true)" />
+                    <span class="time-value">{{ record.avg_processing_time }}小时</span>
+                  </template>
                 </template>
-                <template v-if="column.key === 'user'">
-                  <div class="user-cell">
-                    <a-avatar size="small" :style="{ backgroundColor: getAvatarColor(record.name) }">
-                      {{ getInitials(record.name) }}
-                    </a-avatar>
-                    <span>{{ record.name }}</span>
-                  </div>
-                </template>
-                <template v-if="column.key === 'time'">
-                  <a-progress
-                    :percent="getPercentage(handlerRankingByTime[handlerRankingByTime.length - 1]?.time || 0, record.time)"
-                    :show-info="false" status="active" :stroke-color="getProgressColor(index, true)" />
-                  <span class="time-value">{{ record.time }}小时</span>
-                </template>
-              </template>
-            </a-table>
+              </a-table>
+            </a-spin>
           </a-card>
         </a-col>
       </a-row>
@@ -204,6 +218,16 @@ import {
   ArrowDownOutlined
 } from '@ant-design/icons-vue';
 import dayjs from 'dayjs';
+// import { 
+//   getStatisticsOverview, 
+//   getStatisticsTrend, 
+//   getStatisticsCategory, 
+//   getStatisticsPerformance,
+//   getStatisticsUser, 
+//   listProcess 
+// } from '#/api/core/workorder';
+// import type { Process, WorkOrderStatistics, UserPerformance } from '#/api/core/workorder';
+import type { Process, UserPerformance } from '#/api/core/workorder';
 
 // 图表引用
 const trendChartRef = ref<HTMLElement | null>(null);
@@ -221,6 +245,15 @@ let efficiencyChart: echarts.ECharts | null = null;
 
 // 数据和过滤相关
 const loading = ref(false);
+const chartLoading = reactive({
+  trend: false,
+  status: false,
+  process: false,
+  department: false,
+  efficiency: false,
+  userRanking: false
+});
+
 const processFilter = ref(null);
 const dateRange = ref([dayjs().subtract(30, 'days'), dayjs()]);
 const dateRanges = {
@@ -230,107 +263,253 @@ const dateRanges = {
   '今年': [dayjs().startOf('year'), dayjs()]
 };
 
-// 模拟流程数据
-const processes = ref([
-  { id: 1, name: '员工入职审批流程' },
-  { id: 2, name: '休假申请流程' },
-  { id: 3, name: 'IT设备申请流程' },
-  { id: 4, name: '报销审批流程' },
-  { id: 5, name: '项目立项流程' }
+// 流程数据
+const processes = ref<Process[]>([
+  { id: 1, name: '员工入职流程', status: 1, description: '', form_design_id: 1, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 2, name: '请假申请流程', status: 1, description: '', form_design_id: 2, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 3, name: '报销申请流程', status: 1, description: '', form_design_id: 3, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 4, name: '采购申请流程', status: 1, description: '', form_design_id: 4, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 5, name: '合同审批流程', status: 1, description: '', form_design_id: 5, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 6, name: '招聘需求流程', status: 1, description: '', form_design_id: 6, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 7, name: '员工离职流程', status: 1, description: '', form_design_id: 7, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' },
+  { id: 8, name: 'IT资源申请流程', status: 1, description: '', form_design_id: 8, definition: "", version: 1, created_at: '', updated_at: '', creator_id: 1, creator_name: '系统管理员' }
 ]);
 
 // 概览统计数据
 const overviewStats = reactive({
-  total: 458,
-  totalChange: 12.5,
-  completed: 347,
-  completedChange: 15.2,
-  inProgress: 111,
-  inProgressChange: -8.3,
-  avgProcessTime: 36.4,
-  avgProcessTimeChange: -5.7
+  total_count: 1856,
+  totalChange: 8.3,
+  completed_count: 1423,
+  completedChange: 10.5,
+  processing_count: 324,
+  processingChange: -5.8,
+  canceled_count: 67,
+  rejected_count: 42,
+  avg_process_time: 18.6,
+  avgProcessTimeChange: -3.9
+});
+
+// 统计趋势数据
+const trendData = reactive({
+  dates: [
+    '2025-04-13', '2025-04-14', '2025-04-15', '2025-04-16', '2025-04-17', '2025-04-18', '2025-04-19',
+    '2025-04-20', '2025-04-21', '2025-04-22', '2025-04-23', '2025-04-24', '2025-04-25', '2025-04-26',
+    '2025-04-27', '2025-04-28', '2025-04-29', '2025-04-30', '2025-05-01', '2025-05-02', '2025-05-03',
+    '2025-05-04', '2025-05-05', '2025-05-06', '2025-05-07', '2025-05-08', '2025-05-09', '2025-05-10',
+    '2025-05-11', '2025-05-12', '2025-05-13'
+  ],
+  created: [
+    62, 58, 64, 72, 68, 45, 38,
+    42, 69, 73, 68, 65, 57, 35,
+    39, 75, 78, 69, 32, 29, 36,
+    40, 80, 76, 68, 64, 69, 42,
+    37, 64, 58
+  ],
+  completed: [
+    57, 54, 60, 65, 62, 40, 35,
+    38, 63, 68, 65, 61, 52, 32,
+    35, 68, 72, 65, 28, 26, 30,
+    36, 73, 70, 63, 58, 64, 38,
+    32, 59, 54
+  ]
 });
 
 // 排行榜数据
-const handlerRankingByCount = ref([
-  { name: '张三', department: '人力资源部', count: 86 },
-  { name: '李四', department: '财务部', count: 73 },
-  { name: '王五', department: 'IT部门', count: 65 },
-  { name: '赵六', department: '营销部', count: 54 },
-  { name: '钱七', department: '人力资源部', count: 47 }
+interface ExtendedUserPerformance extends UserPerformance {
+  department: string;
+}
+
+const handlerRankingByCount = ref<UserPerformance[]>([
+  { id: 1, user_id: 101, user_name: '张明辉', department: '人力资源部', date: '2023-05-01', assigned_count: 200, completed_count: 187, avg_response_time: 2.5, avg_processing_time: 16.8, satisfaction_score: 4.8, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 2, user_id: 102, user_name: '李婷', department: '行政部', date: '2023-05-01', assigned_count: 180, completed_count: 165, avg_response_time: 3.1, avg_processing_time: 17.5, satisfaction_score: 4.6, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 3, user_id: 103, user_name: '王浩', department: '财务部', date: '2023-05-01', assigned_count: 160, completed_count: 149, avg_response_time: 2.8, avg_processing_time: 19.3, satisfaction_score: 4.5, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 4, user_id: 104, user_name: '陈静', department: '人力资源部', date: '2023-05-01', assigned_count: 140, completed_count: 128, avg_response_time: 2.2, avg_processing_time: 15.2, satisfaction_score: 4.9, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 5, user_id: 105, user_name: '赵鑫', department: 'IT部', date: '2023-05-01', assigned_count: 120, completed_count: 112, avg_response_time: 3.5, avg_processing_time: 20.1, satisfaction_score: 4.3, created_at: '2023-05-01', updated_at: '2023-05-01' }
 ]);
 
-const handlerRankingByTime = ref([
-  { name: '刘八', department: 'IT部门', time: 12.5 },
-  { name: '孙九', department: '财务部', time: 15.3 },
-  { name: '周十', department: '人力资源部', time: 18.7 },
-  { name: '吴十一', department: '行政部', time: 22.4 },
-  { name: '郑十二', department: '销售部', time: 24.8 }
+const handlerRankingByTime = ref<UserPerformance[]>([
+  { id: 4, user_id: 104, user_name: '陈静', department: '人力资源部', date: '2023-05-01', assigned_count: 140, completed_count: 128, avg_response_time: 2.2, avg_processing_time: 15.2, satisfaction_score: 4.9, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 6, user_id: 106, user_name: '刘伟', department: '市场部', date: '2023-05-01', assigned_count: 110, completed_count: 98, avg_response_time: 2.4, avg_processing_time: 16.1, satisfaction_score: 4.7, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 1, user_id: 101, user_name: '张明辉', department: '人力资源部', date: '2023-05-01', assigned_count: 200, completed_count: 187, avg_response_time: 2.5, avg_processing_time: 16.8, satisfaction_score: 4.8, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 2, user_id: 102, user_name: '李婷', department: '行政部', date: '2023-05-01', assigned_count: 180, completed_count: 165, avg_response_time: 3.1, avg_processing_time: 17.5, satisfaction_score: 4.6, created_at: '2023-05-01', updated_at: '2023-05-01' },
+  { id: 7, user_id: 107, user_name: '徐文', department: '法务部', date: '2023-05-01', assigned_count: 95, completed_count: 86, avg_response_time: 2.9, avg_processing_time: 18.9, satisfaction_score: 4.4, created_at: '2023-05-01', updated_at: '2023-05-01' }
 ]);
+
+// 状态分布数据
+const statusDistribution = ref<{ name: string, value: number }[]>([
+  { name: '已完成', value: 1423 },
+  { name: '处理中', value: 324 },
+  { name: '已取消', value: 67 },
+  { name: '已拒绝', value: 42 }
+]);
+
+// 流程使用统计数据
+const processUsageData = ref<{ name: string, value: number }[]>([
+  { name: '请假申请流程', value: 432 },
+  { name: '报销申请流程', value: 368 },
+  { name: 'IT资源申请流程', value: 286 },
+  { name: '员工入职流程', value: 217 },
+  { name: '采购申请流程', value: 198 },
+  { name: '合同审批流程', value: 156 },
+  { name: '员工离职流程', value: 124 },
+  { name: '招聘需求流程', value: 75 }
+]);
+
+// 部门分布数据
+const departmentData = ref<{ name: string, value: number }[]>([
+  { name: '销售部', value: 346 },
+  { name: '研发部', value: 312 },
+  { name: '市场部', value: 287 },
+  { name: '人力资源部', value: 268 },
+  { name: '财务部', value: 231 },
+  { name: '行政部', value: 186 },
+  { name: 'IT部', value: 157 },
+  { name: '法务部', value: 69 }
+]);
+
+// 审批效率数据
+const efficiencyData = reactive({
+  processes: [
+    '请假申请流程', 
+    'IT资源申请流程', 
+    '报销申请流程', 
+    '员工入职流程', 
+    '合同审批流程', 
+    '采购申请流程', 
+    '员工离职流程', 
+    '招聘需求流程'
+  ],
+  avgTimes: [12.4, 15.8, 17.3, 21.6, 24.2, 25.7, 28.9, 32.6]
+});
 
 // 表格列定义
 const rankColumns = [
   { title: '排名', key: 'rank', width: '15%' },
-  { title: '处理人', key: 'user', dataIndex: 'name', width: '25%' },
+  { title: '处理人', key: 'user', dataIndex: 'user_name', width: '25%' },
   { title: '部门', dataIndex: 'department', width: '25%' },
   { title: '处理工单数', key: 'count', width: '35%' }
 ];
 
 const timeRankColumns = [
   { title: '排名', key: 'rank', width: '15%' },
-  { title: '处理人', key: 'user', dataIndex: 'name', width: '25%' },
+  { title: '处理人', key: 'user', dataIndex: 'user_name', width: '25%' },
   { title: '部门', dataIndex: 'department', width: '25%' },
   { title: '平均处理时间', key: 'time', width: '35%' }
 ];
 
-// 模拟工单趋势数据
-const trendData = {
-  dates: [
-    '2025-03-01', '2025-03-05', '2025-03-10', '2025-03-15',
-    '2025-03-20', '2025-03-25', '2025-03-31', '2025-04-05'
-  ],
-  created: [42, 65, 53, 78, 62, 58, 70, 65],
-  completed: [35, 52, 48, 64, 56, 42, 65, 60]
+// API请求相关方法
+const fetchProcesses = async () => {
+  try {
+    // Mock implementation - in real app this would call the API
+    // processes.value already set with mock data above
+  } catch (error) {
+    console.error('获取流程列表失败:', error);
+    message.error('获取流程列表失败');
+  }
 };
 
-// 模拟工单状态分布数据
-const statusData = [
-  { value: 347, name: '已完成' },
-  { value: 62, name: '处理中' },
-  { value: 28, name: '等待审批' },
-  { value: 15, name: '已退回' },
-  { value: 6, name: '已取消' }
-];
+const fetchOverviewStats = async () => {
+  try {
+    // Mock implementation - in real app this would call the API
+    // overviewStats already set with mock data above
+  } catch (error) {
+    console.error('获取概览统计失败:', error);
+    message.error('获取概览统计失败');
+  }
+};
 
-// 模拟流程使用统计数据
-const processUsageData = [
-  { name: '员工入职审批流程', value: 125 },
-  { name: '休假申请流程', value: 98 },
-  { name: 'IT设备申请流程', value: 67 },
-  { name: '报销审批流程', value: 108 },
-  { name: '项目立项流程', value: 60 }
-];
+const fetchTrendData = async () => {
+  chartLoading.trend = true;
+  try {
+    // Mock implementation - in real app this would call the API
+    // trendData already set with mock data above
+    
+    // 更新趋势图
+    nextTick(() => {
+      initTrendChart();
+    });
+  } catch (error) {
+    console.error('获取趋势数据失败:', error);
+    message.error('获取趋势数据失败');
+  } finally {
+    chartLoading.trend = false;
+  }
+};
 
-// 模拟部门分布数据
-const departmentData = [
-  { name: '人力资源部', value: 120 },
-  { name: '财务部', value: 92 },
-  { name: 'IT部门', value: 85 },
-  { name: '市场部', value: 78 },
-  { name: '销售部', value: 66 },
-  { name: '行政部', value: 45 }
-];
+const fetchCategoryStats = async () => {
+  chartLoading.status = true;
+  chartLoading.process = true;
+  try {
+    // Mock implementation - in real app this would call the API
+    // statusDistribution and processUsageData already set with mock data above
+    
+    // 更新图表
+    nextTick(() => {
+      initStatusChart();
+      initProcessChart();
+    });
+  } catch (error) {
+    console.error('获取分类统计失败:', error);
+    message.error('获取分类统计失败');
+  } finally {
+    chartLoading.status = false;
+    chartLoading.process = false;
+  }
+};
 
-// 模拟审批效率数据
-const efficiencyData = {
-  processes: ['员工入职审批流程', '休假申请流程', 'IT设备申请流程', '报销审批流程', '项目立项流程'],
-  avgTimes: [42, 24, 36, 48, 56] // 平均完成时间（小时）
+const fetchDepartmentData = async () => {
+  chartLoading.department = true;
+  try {
+    // Mock implementation - in real app this would call the API
+    // departmentData already set with mock data above
+    
+    // 更新图表
+    nextTick(() => {
+      initDepartmentChart();
+    });
+  } catch (error) {
+    console.error('获取部门分布数据失败:', error);
+    message.error('获取部门分布数据失败');
+  } finally {
+    chartLoading.department = false;
+  }
+};
+
+const fetchEfficiencyData = async () => {
+  chartLoading.efficiency = true;
+  try {
+    // Mock implementation - in real app this would call the API
+    // efficiencyData already set with mock data above
+    
+    // 更新图表
+    nextTick(() => {
+      initEfficiencyChart();
+    });
+  } catch (error) {
+    console.error('获取审批效率数据失败:', error);
+    message.error('获取审批效率数据失败');
+  } finally {
+    chartLoading.efficiency = false;
+  }
+};
+
+const fetchUserPerformance = async () => {
+  chartLoading.userRanking = true;
+  try {
+    // Mock implementation - in real app this would call the API
+    // handlerRankingByCount and handlerRankingByTime already set with mock data above
+  } catch (error) {
+    console.error('获取用户绩效数据失败:', error);
+    message.error('获取用户绩效数据失败');
+  } finally {
+    chartLoading.userRanking = false;
+  }
 };
 
 // 方法
 const handleDateRangeChange = (dates: any) => {
   if (dates && dates.length === 2) {
-    // 这里可以处理日期范围变更
+    // 根据日期范围变更获取数据
     refreshData();
   }
 };
@@ -339,28 +518,29 @@ const handleProcessChange = () => {
   refreshData();
 };
 
-const refreshData = () => {
+const refreshData = async () => {
   loading.value = true;
-  // 模拟API请求
-  setTimeout(() => {
-    initCharts();
+  
+  try {
+    // 并行请求所有数据
+    await Promise.all([
+      fetchProcesses(),
+      fetchOverviewStats(),
+      fetchTrendData(),
+      fetchCategoryStats(),
+      fetchDepartmentData(),
+      fetchEfficiencyData(),
+      fetchUserPerformance()
+    ]);
+  } catch (error) {
+    console.error('刷新数据失败:', error);
+    message.error('刷新数据失败');
+  } finally {
     loading.value = false;
-    message.success('数据已刷新');
-  }, 800);
+  }
 };
 
-// 初始化所有图表
-const initCharts = () => {
-  nextTick(() => {
-    initTrendChart();
-    initStatusChart();
-    initProcessChart();
-    initDepartmentChart();
-    initEfficiencyChart();
-  });
-};
-
-// 工单趋势图表
+// 图表初始化方法
 const initTrendChart = () => {
   if (!trendChartRef.value) return;
 
@@ -431,7 +611,6 @@ const initTrendChart = () => {
   trendChart.setOption(option);
 };
 
-// 工单状态分布图表
 const initStatusChart = () => {
   if (!statusChartRef.value) return;
 
@@ -449,7 +628,7 @@ const initStatusChart = () => {
       orient: 'vertical',
       right: 10,
       top: 'center',
-      data: statusData.map(item => item.name)
+      data: statusDistribution.value.map(item => item.name)
     },
     series: [
       {
@@ -476,8 +655,8 @@ const initStatusChart = () => {
         labelLine: {
           show: false
         },
-        data: statusData,
-        color: ['#52c41a', '#faad14', '#1890ff', '#f5222d', '#bfbfbf']
+        data: statusDistribution.value,
+        color: ['#52c41a', '#faad14', '#bfbfbf', '#f5222d']
       }
     ]
   };
@@ -485,7 +664,6 @@ const initStatusChart = () => {
   statusChart.setOption(option);
 };
 
-// 流程使用统计图表
 const initProcessChart = () => {
   if (!processChartRef.value) return;
 
@@ -514,14 +692,14 @@ const initProcessChart = () => {
     },
     yAxis: {
       type: 'category',
-      data: processUsageData.map(item => item.name),
+      data: processUsageData.value.map(item => item.name),
       inverse: true
     },
     series: [
       {
         name: '工单数',
         type: 'bar',
-        data: processUsageData.map(item => ({
+        data: processUsageData.value.map(item => ({
           value: item.value,
           itemStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
@@ -541,7 +719,6 @@ const initProcessChart = () => {
   processChart.setOption(option);
 };
 
-// 部门工单分布图表
 const initDepartmentChart = () => {
   if (!departmentChartRef.value) return;
 
@@ -559,7 +736,7 @@ const initDepartmentChart = () => {
       type: 'scroll',
       orient: 'horizontal',
       bottom: 0,
-      data: departmentData.map(item => item.name)
+      data: departmentData.value.map(item => item.name)
     },
     series: [
       {
@@ -581,7 +758,7 @@ const initDepartmentChart = () => {
         labelLine: {
           show: true
         },
-        data: departmentData,
+        data: departmentData.value,
         color: ['#1890ff', '#52c41a', '#faad14', '#722ed1', '#13c2c2', '#eb2f96']
       }
     ]
@@ -590,7 +767,6 @@ const initDepartmentChart = () => {
   departmentChart.setOption(option);
 };
 
-// 审批效率分析图表
 const initEfficiencyChart = () => {
   if (!efficiencyChartRef.value) return;
 
@@ -662,14 +838,13 @@ const getInitials = (name: string) => {
 };
 
 const getAvatarColor = (name: string) => {
-  // 根据名称生成一致的颜色
   const colors = [
     '#1890ff', '#52c41a', '#faad14', '#f5222d',
     '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16'
   ];
 
   let hash = 0;
-  for (let i = 0; i < name.length; i++) {
+  for (let i = 0; i < (name || '').length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
 
@@ -701,6 +876,7 @@ const getProgressColor = (index: number, isTime: boolean = false) => {
 };
 
 const getPercentage = (value: number, max: number) => {
+  if (!max) return 0;
   return Math.round((value / max) * 100);
 };
 

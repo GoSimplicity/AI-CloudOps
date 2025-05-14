@@ -23,21 +23,21 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
-        name: '工单实例',
-        path: '/instance',
-        component: () => import('#/views/workorder/Instance.vue'),
-        meta: {
-          icon: 'lucide:file-text',
-          title: '工单实例',
-        },
-      },
-      {
         name: '流程管理',
         path: '/process',
         component: () => import('#/views/workorder/Process.vue'),
         meta: {
           icon: 'lucide:git-branch',
           title: '流程管理',
+        },
+      },
+      {
+        name: '工单实例',
+        path: '/instance',
+        component: () => import('#/views/workorder/Instance.vue'),
+        meta: {
+          icon: 'lucide:file-text',
+          title: '工单实例',
         },
       },
       {

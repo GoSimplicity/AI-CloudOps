@@ -36,11 +36,11 @@ import (
 type FormDesignDAO interface {
 	CreateFormDesign(ctx context.Context, formDesign *model.FormDesign) error
 	UpdateFormDesign(ctx context.Context, formDesign *model.FormDesign) error
-	DeleteFormDesign(ctx context.Context, id int64) error
-	PublishFormDesign(ctx context.Context, id int64) error
+	DeleteFormDesign(ctx context.Context, id int) error
+	PublishFormDesign(ctx context.Context, id int) error
 	ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) ([]model.FormDesign, error)
-	GetFormDesign(ctx context.Context, id int64) (*model.FormDesign, error)
-	CloneFormDesign(ctx context.Context, name string) error
+	GetFormDesign(ctx context.Context, id int) (*model.FormDesign, error)
+	CloneFormDesign(ctx context.Context, id int, name string) error
 }
 
 type formDesignDAO struct {
@@ -93,7 +93,7 @@ func (f *formDesignDAO) UpdateFormDesign(ctx context.Context, formDesign *model.
 }
 
 // DeleteFormDesign 删除表单设计
-func (f *formDesignDAO) DeleteFormDesign(ctx context.Context, id int64) error {
+func (f *formDesignDAO) DeleteFormDesign(ctx context.Context, id int) error {
 	result := f.db.WithContext(ctx).Delete(&model.FormDesign{}, id)
 	if result.Error != nil {
 		return result.Error
@@ -107,7 +107,7 @@ func (f *formDesignDAO) DeleteFormDesign(ctx context.Context, id int64) error {
 }
 
 // PublishFormDesign 发布表单设计
-func (f *formDesignDAO) PublishFormDesign(ctx context.Context, id int64) error {
+func (f *formDesignDAO) PublishFormDesign(ctx context.Context, id int) error {
 	result := f.db.WithContext(ctx).Model(&model.FormDesign{}).
 		Where("id = ? AND status = 0", id).
 		Updates(map[string]interface{}{
@@ -126,7 +126,7 @@ func (f *formDesignDAO) PublishFormDesign(ctx context.Context, id int64) error {
 }
 
 // GetFormDesign 获取表单设计
-func (f *formDesignDAO) GetFormDesign(ctx context.Context, id int64) (*model.FormDesign, error) {
+func (f *formDesignDAO) GetFormDesign(ctx context.Context, id int) (*model.FormDesign, error) {
 	var formDesign model.FormDesign
 
 	if err := f.db.WithContext(ctx).First(&formDesign, id).Error; err != nil {
@@ -140,10 +140,10 @@ func (f *formDesignDAO) GetFormDesign(ctx context.Context, id int64) (*model.For
 }
 
 // CloneFormDesign 克隆表单设计
-func (f *formDesignDAO) CloneFormDesign(ctx context.Context, name string) error {
+func (f *formDesignDAO) CloneFormDesign(ctx context.Context, id int, name string) error {
 	var originalFormDesign model.FormDesign
 
-	if err := f.db.WithContext(ctx).First(&originalFormDesign).Error; err != nil {
+	if err := f.db.WithContext(ctx).Where("id = ?", id).First(&originalFormDesign).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return fmt.Errorf("表单设计不存在")
 		}
@@ -151,8 +151,9 @@ func (f *formDesignDAO) CloneFormDesign(ctx context.Context, name string) error 
 	}
 
 	clonedFormDesign := originalFormDesign
-	clonedFormDesign.ID = 0
 	clonedFormDesign.Name = name
+	clonedFormDesign.Status = 0 // 克隆后默认为草稿状态
+	clonedFormDesign.ID = 0
 
 	if err := f.db.WithContext(ctx).Create(&clonedFormDesign).Error; err != nil {
 		if err == gorm.ErrDuplicatedKey {
