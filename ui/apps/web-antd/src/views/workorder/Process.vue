@@ -152,7 +152,7 @@
         </a-form-item>
 
         <a-form-item label="关联表单" name="form_design_id">
-          <a-select v-model:value="processDialog.form.form_design_id" placeholder="请选择关联表单" style="width: 100%">
+          <a-select v-model:value="processDialog.form.form_design_id" placeholder="请选择关联表单" style="width: 100%" :default-value="undefined">
             <a-select-option v-for="form in forms" :key="form.id" :value="form.id">
               {{ form.name }}
             </a-select-option>
@@ -460,7 +460,7 @@ const loadForms = async () => {
     
     const res = await listFormDesign(params);
     if (res) {
-      forms.value = res.items || [];
+      forms.value = res || [];
     }
   } catch (error) {
     message.error('加载表单数据失败');
