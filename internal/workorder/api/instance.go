@@ -45,41 +45,76 @@ func NewInstanceHandler(service service.InstanceService) *InstanceHandler {
 func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 	instanceGroup := server.Group("/api/workorder/instance")
 	{
-		instanceGroup.POST("/create", h.CreateInstance)
-		instanceGroup.POST("/approve", h.ApproveInstance)
-		instanceGroup.POST("/action", h.ActionInstance)
-		instanceGroup.POST("/comment", h.CommentInstance)
-		instanceGroup.POST("/list", h.ListInstance)
-		instanceGroup.POST("/detail", h.DetailInstance)
-		instanceGroup.POST("/delete", h.DeleteInstance)
+		// 工单实例基本操作
+		instanceGroup.POST("/create", h.CreateInstance)       // 创建工单实例
+		instanceGroup.POST("/update", h.UpdateInstance)       // 更新工单实例
+		instanceGroup.DELETE("/delete/:id", h.DeleteInstance) // 删除工单实例
+
+		// 工单流程操作
+		instanceGroup.POST("/approve", h.ApproveInstance)   // 审批工单
+		instanceGroup.POST("/action", h.ActionInstance)     // 处理工单（完成/拒绝/取消）
+		instanceGroup.POST("/comment", h.CommentInstance)   // 添加评论
+		instanceGroup.POST("/transfer", h.TransferInstance) // 转交工单
+
+		// 查询操作
+		instanceGroup.POST("/list", h.ListInstance)             // 获取工单列表
+		instanceGroup.POST("/detail", h.DetailInstance)         // 获取工单详情
+		instanceGroup.POST("/my", h.MyInstance)                 // 获取我的工单
+		instanceGroup.POST("/statistics", h.InstanceStatistics) // 获取工单统计
 	}
 }
 
 func (h *InstanceHandler) CreateInstance(ctx *gin.Context) {
-	var req model.InstanceReq
+	var req model.CreateInstanceReq
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CreateInstance(ctx, req)
+		return nil, h.service.CreateInstance(ctx, req, user.Uid, user.Username)
+	})
+}
+
+func (h *InstanceHandler) UpdateInstance(ctx *gin.Context) {
+	var req model.UpdateInstanceReq
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.UpdateInstance(ctx, req)
 	})
 }
 
 func (h *InstanceHandler) ApproveInstance(ctx *gin.Context) {
 	var req model.InstanceFlowReq
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.ApproveInstance(ctx, req)
+		req.Action = "approve" // 确保操作类型为审批
+		return nil, h.service.ProcessInstanceFlow(ctx, req, user.Uid, user.Username)
 	})
 }
 
 func (h *InstanceHandler) ActionInstance(ctx *gin.Context) {
 	var req model.InstanceFlowReq
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.ActionInstance(ctx, req)
+		return nil, h.service.ProcessInstanceFlow(ctx, req, user.Uid, user.Username)
+	})
+}
+
+func (h *InstanceHandler) TransferInstance(ctx *gin.Context) {
+	var req model.InstanceFlowReq
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		req.Action = "transfer" // 确保操作类型为转交
+		return nil, h.service.ProcessInstanceFlow(ctx, req, user.Uid, user.Username)
 	})
 }
 
 func (h *InstanceHandler) CommentInstance(ctx *gin.Context) {
 	var req model.InstanceCommentReq
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CommentInstance(ctx, req)
+		return nil, h.service.CommentInstance(ctx, req, user.Uid, user.Username)
 	})
 }
 
@@ -90,18 +125,38 @@ func (h *InstanceHandler) ListInstance(ctx *gin.Context) {
 	})
 }
 
+func (h *InstanceHandler) MyInstance(ctx *gin.Context) {
+	var req model.ListInstanceReq
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		// 根据当前用户角色决定查询条件
+		// 如果是处理人，查询分配给我的工单
+		req.AssigneeID = user.Uid
+		return h.service.ListInstance(ctx, req)
+	})
+}
+
 func (h *InstanceHandler) DetailInstance(ctx *gin.Context) {
 	var req model.DetailInstanceReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.DetailInstance(ctx, req.ID)
 	})
-
 }
 
 func (h *InstanceHandler) DeleteInstance(ctx *gin.Context) {
-	var req model.DeleteInstanceReq
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.DeleteInstance(ctx, req)
-	})
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		return
+	}
 
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, h.service.DeleteInstance(ctx, id)
+	})
+}
+
+func (h *InstanceHandler) InstanceStatistics(ctx *gin.Context) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetInstanceStatistics(ctx)
+	})
 }
