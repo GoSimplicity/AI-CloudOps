@@ -401,12 +401,12 @@ const accountResourceChart = ref();
 // 云资源统计数据
 const cloudStats = ref<CloudStatistics>({
   regionDistribution: 12,
-  totalEcsCount: 128,
-  runningEcsCount: 96,
-  stoppedEcsCount: 32,
-  totalVpcCount: 24,
-  totalSecurityGroupCount: 35,
-  totalMonthlyCost: 12567.89,
+  totalEcsCount: 1,
+  runningEcsCount: 1,
+  stoppedEcsCount: 0,
+  totalVpcCount: 1,
+  totalSecurityGroupCount: 1,
+  totalMonthlyCost: 10.94,
   updateTime: Date.now(),
 });
 
@@ -514,65 +514,17 @@ const fetchCloudAccounts = () => {
   setTimeout(() => {
     cloudAccounts.value = [
       {
-        id: 1,
+        id: 1754247775246957,
         name: '生产环境-阿里云',
         provider: 'aliyun',
         accountId: 'aliyun123456',
         accessKey: 'LTAI4*********',
         regions: ['cn-beijing', 'cn-shanghai', 'cn-hangzhou'],
         isEnabled: true,
-        lastSyncTime: '2023-05-15 14:30:22',
+        lastSyncTime: '2025-05-15 14:30:22',
         description: '阿里云生产环境账户',
         syncing: false,
-      },
-      {
-        id: 2,
-        name: '测试环境-腾讯云',
-        provider: 'tencent',
-        accountId: 'tencent789012',
-        accessKey: 'AKIDz8*********',
-        regions: ['ap-beijing', 'ap-shanghai'],
-        isEnabled: true,
-        lastSyncTime: '2023-05-14 09:15:36',
-        description: '腾讯云测试环境账户',
-        syncing: false,
-      },
-      {
-        id: 3,
-        name: '开发环境-华为云',
-        provider: 'huawei',
-        accountId: 'huawei345678',
-        accessKey: 'HWSK0*********',
-        regions: ['cn-north-4', 'cn-east-3'],
-        isEnabled: false,
-        lastSyncTime: '2023-05-10 16:42:18',
-        description: '华为云开发环境账户',
-        syncing: false,
-      },
-      {
-        id: 4,
-        name: '备用环境-AWS',
-        provider: 'aws',
-        accountId: 'aws987654',
-        accessKey: 'AKIA5*********',
-        regions: ['us-east-1', 'us-west-2', 'ap-northeast-1'],
-        isEnabled: true,
-        lastSyncTime: '2023-05-12 18:20:45',
-        description: 'AWS备用环境账户',
-        syncing: false,
-      },
-      {
-        id: 5,
-        name: '数据分析-Azure',
-        provider: 'azure',
-        accountId: 'azure112233',
-        accessKey: 'AZRN2*********',
-        regions: ['eastus', 'westeurope'],
-        isEnabled: true,
-        lastSyncTime: '2023-05-11 11:05:30',
-        description: 'Azure数据分析环境账户',
-        syncing: false,
-      },
+      }
     ];
     loading.value = false;
   }, 500);
@@ -687,11 +639,11 @@ const initRegionDistributionChart = () => {
   
   // 模拟区域分布数据
   const regionData = [
-    { name: '华北地区', value: 42 },
-    { name: '华东地区', value: 35 },
-    { name: '华南地区', value: 28 },
-    { name: '西南地区', value: 15 },
-    { name: '海外地区', value: 8 }
+    { name: '华北地区', value: 1 },
+    { name: '华东地区', value: 0 },
+    { name: '华南地区', value: 0 },
+    { name: '西南地区', value: 0 },
+    { name: '海外地区', value: 0 }
   ];
   
   const option = {

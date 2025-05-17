@@ -898,22 +898,9 @@ const vpcData = ref([
     regionId: 'cn-hangzhou',
     provider: 'aliyun',
     status: 'Available',
-    creationTime: '2023-09-01 09:00:00',
+    creationTime: '2025-05-01 09:02:04',
     description: '默认VPC',
     tags: ['default'],
-    lastSyncTime: '2025-04-30 10:00:00'
-  },
-  {
-    id: 2,
-    instanceName: 'vpc-prod',
-    instanceId: 'vpc-2zeisljxz9bmxhj2qzzz',
-    cidrBlock: '10.0.0.0/16',
-    regionId: 'cn-hangzhou',
-    provider: 'aliyun',
-    status: 'Available',
-    creationTime: '2023-09-05 14:30:00',
-    description: '生产环境VPC',
-    tags: ['env:prod'],
     lastSyncTime: '2025-04-30 10:00:00'
   }
 ]);
@@ -927,33 +914,9 @@ const sgData = ref([
     provider: 'aliyun',
     regionId: 'cn-hangzhou',
     vpcId: 'vpc-default',
-    creationTime: '2023-09-01 09:10:00',
+    creationTime: '2025-09-01 09:15:41',
     description: '默认安全组',
     tags: ['default'],
-    lastSyncTime: '2025-04-30 10:00:00'
-  },
-  {
-    id: 2,
-    instanceName: 'sg-web',
-    instanceId: 'sg-2ze8mmbpj96wr4i8yyyy',
-    provider: 'aliyun',
-    regionId: 'cn-hangzhou',
-    vpcId: 'vpc-default',
-    creationTime: '2023-09-10 11:20:00',
-    description: 'Web服务安全组',
-    tags: ['service:web'],
-    lastSyncTime: '2025-04-30 10:00:00'
-  },
-  {
-    id: 3,
-    instanceName: 'sg-db',
-    instanceId: 'sg-2ze8mmbpj96wr4i8zzzz',
-    provider: 'aliyun',
-    regionId: 'cn-hangzhou',
-    vpcId: 'vpc-default',
-    creationTime: '2023-09-10 11:25:00',
-    description: '数据库安全组',
-    tags: ['service:db'],
     lastSyncTime: '2025-04-30 10:00:00'
   }
 ]);
@@ -969,24 +932,10 @@ const elbData = ref([
     address: '47.98.234.567',
     regionId: 'cn-hangzhou',
     provider: 'aliyun',
-    creationTime: '2023-10-05 16:40:00',
+    creationTime: '2025-05-05 16:40:32',
     description: '生产环境Web负载均衡器',
     tags: ['env:prod', 'service:web'],
-    lastSyncTime: '2025-04-30 10:00:00'
-  },
-  {
-    id: 2,
-    instanceName: 'api-lb-prod',
-    instanceId: 'lb-2zejplm93vgl58s1yyyy',
-    status: 'running',
-    addressType: '内网',
-    address: '172.16.5.10',
-    regionId: 'cn-hangzhou',
-    provider: 'aliyun',
-    creationTime: '2023-10-05 16:50:00',
-    description: '生产环境API负载均衡器',
-    tags: ['env:prod', 'service:api'],
-    lastSyncTime: '2025-04-30 10:00:00'
+    lastSyncTime: '2025-04-30 10:02:44'
   }
 ]);
 
@@ -1004,27 +953,10 @@ const rdsData = ref([
     zoneId: 'cn-hangzhou-b',
     provider: 'aliyun',
     vpcId: 'vpc-default',
-    creationTime: '2023-10-10 10:00:00',
+    creationTime: '2025-05-10 10:03:56',
     description: '生产环境MySQL主库',
     tags: ['env:prod', 'db:mysql', 'role:master'],
-    lastSyncTime: '2025-04-30 10:00:00'
-  },
-  {
-    id: 2,
-    instanceName: 'mysql-prod-slave',
-    instanceId: 'rm-2ze3o57f291q7yyyy',
-    status: 'running',
-    dbType: 'MySQL 5.7',
-    instanceType: 'rds.mysql.s3.large',
-    regionAndZone: '华东1(杭州)/可用区C',
-    regionId: 'cn-hangzhou',
-    zoneId: 'cn-hangzhou-c',
-    provider: 'aliyun',
-    vpcId: 'vpc-default',
-    creationTime: '2023-10-10 10:30:00',
-    description: '生产环境MySQL从库',
-    tags: ['env:prod', 'db:mysql', 'role:slave'],
-    lastSyncTime: '2025-04-30 10:00:00'
+    lastSyncTime: '2025-04-30 10:04:31'
   }
 ]);
 

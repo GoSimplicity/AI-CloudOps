@@ -275,8 +275,11 @@ interface Pool {
 }
 
 interface TreeNode {
-  id: number;
+  id: number | string;
   title: string;
+  name?: string;
+  children?: TreeNode[];
+  isLeaf?: boolean;
 }
 
 // 数据源
@@ -554,11 +557,38 @@ const fetchPools = async () => {
   }
 };
 
+// 递归处理树节点数据，使其适合下拉选择框
+const processTreeNodes = (nodes: any[]): TreeNode[] => {
+  const flattenedNodes: TreeNode[] = [];
+  
+  const processNode = (node: any) => {
+    const processedNode: TreeNode = {
+      id: node.id,
+      title: node.name,
+      isLeaf: node.isLeaf
+    };
+    
+    flattenedNodes.push(processedNode);
+    
+    if (node.children && node.children.length > 0) {
+      node.children.forEach((child: any) => processNode(child));
+    }
+  };
+  
+  nodes.forEach(node => processNode(node));
+  return flattenedNodes;
+};
+
 // 获取所有树节点数据
 const fetchTreeNodes = async () => {
   try {
     const response = await getTreeList({});
-    treeNodeOptions.value = response;
+    if (!response) {
+      treeNodeOptions.value = [];
+      return;
+    }
+    // 处理树节点数据，将其转换为适合下拉选择框的扁平结构
+    treeNodeOptions.value = processTreeNodes(response);
   } catch (error: any) {
     message.error(error.message || '获取树节点数据失败，请稍后重试');
     console.error(error);
@@ -647,5 +677,4 @@ onMounted(() => {
   cursor: not-allowed;
   opacity: 0.5;
 }
-
 </style>

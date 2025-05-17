@@ -1,13 +1,13 @@
 <template>
   <div class="alarm-prediction-container">
     <div class="header">
-      <h1 class="title">智能运维告警预测系统</h1>
+      <h1 class="title">智能副本数预测与自动伸缩系统</h1>
       <div class="actions">
-        <a-select v-model:value="timeRange" style="width: 150px" class="time-selector">
-          <a-select-option value="1h">未来1小时</a-select-option>
-          <a-select-option value="6h">未来6小时</a-select-option>
-          <a-select-option value="24h">未来24小时</a-select-option>
-          <a-select-option value="7d">未来7天</a-select-option>
+        <a-select v-model:value="predictionTimeRange" style="width: 150px" class="time-selector">
+          <a-select-option value="1h">预测1小时内</a-select-option>
+          <a-select-option value="6h">预测6小时内</a-select-option>
+          <a-select-option value="24h">预测24小时内</a-select-option>
+          <a-select-option value="7d">预测7天内</a-select-option>
         </a-select>
         <a-button type="primary" class="refresh-btn" @click="refreshData">
           <template #icon><sync-outlined /></template>
@@ -20,29 +20,35 @@
       <div class="stats-cards">
         <a-card class="stat-card prediction-card">
           <template #title>
-            <thunderbolt-outlined /> 预测告警总数
+            <cloud-server-outlined /> 当前副本数
           </template>
-          <div class="stat-value">{{ predictionStats.total }}</div>
-          <div class="stat-trend" :class="predictionStats.trend > 0 ? 'up' : 'down'">
-            <template v-if="predictionStats.trend > 0">
-              <arrow-up-outlined /> +{{ predictionStats.trend }}%
+          <div class="stat-value">{{ deploymentStats.currentReplicas }}</div>
+          <div class="stat-trend" :class="deploymentStats.replicasTrend > 0 ? 'up' : 'down'">
+            <template v-if="deploymentStats.replicasTrend > 0">
+              <arrow-up-outlined /> +{{ deploymentStats.replicasTrend }}
+            </template>
+            <template v-else-if="deploymentStats.replicasTrend < 0">
+              <arrow-down-outlined /> {{ deploymentStats.replicasTrend }}
             </template>
             <template v-else>
-              <arrow-down-outlined /> {{ predictionStats.trend }}%
+              <minus-outlined /> 无变化
             </template>
           </div>
         </a-card>
         <a-card class="stat-card prediction-card">
           <template #title>
-            <warning-outlined /> 高危告警预测
+            <rocket-outlined /> 推荐副本数
           </template>
-          <div class="stat-value">{{ predictionStats.critical }}</div>
-          <div class="stat-trend" :class="predictionStats.criticalTrend > 0 ? 'up' : 'down'">
-            <template v-if="predictionStats.criticalTrend > 0">
-              <arrow-up-outlined /> +{{ predictionStats.criticalTrend }}%
+          <div class="stat-value">{{ deploymentStats.recommendedReplicas }}</div>
+          <div class="stat-trend" :class="getRecommendationClass()">
+            <template v-if="deploymentStats.recommendedReplicas > deploymentStats.currentReplicas">
+              <arrow-up-outlined /> 建议扩容
+            </template>
+            <template v-else-if="deploymentStats.recommendedReplicas < deploymentStats.currentReplicas">
+              <arrow-down-outlined /> 建议缩容
             </template>
             <template v-else>
-              <arrow-down-outlined /> {{ predictionStats.criticalTrend }}%
+              <check-outlined /> 副本数合适
             </template>
           </div>
         </a-card>
@@ -50,18 +56,18 @@
           <template #title>
             <line-chart-outlined /> 预测准确率
           </template>
-          <div class="stat-value">{{ predictionStats.accuracy }}%</div>
+          <div class="stat-value">{{ deploymentStats.modelAccuracy }}%</div>
           <div class="stat-trend up">
-            <arrow-up-outlined /> +{{ predictionStats.accuracyImprovement }}%
+            <arrow-up-outlined /> +{{ deploymentStats.accuracyImprovement }}%
           </div>
         </a-card>
         <a-card class="stat-card prediction-card">
           <template #title>
-            <clock-circle-outlined /> 预测提前时间
+            <clock-circle-outlined /> 更新时间
           </template>
-          <div class="stat-value">{{ predictionStats.leadTime }}分钟</div>
-          <div class="stat-trend up">
-            <arrow-up-outlined /> +{{ predictionStats.leadTimeImprovement }}%
+          <div class="stat-value">{{ deploymentStats.nextUpdateTime }}</div>
+          <div class="stat-trend neutral">
+            <reload-outlined /> 每 {{ deploymentStats.updateInterval }}s 更新
           </div>
         </a-card>
       </div>
@@ -69,35 +75,35 @@
       <div class="charts-container">
         <a-card class="chart-card">
           <template #title>
-            <area-chart-outlined /> 未来告警趋势预测
+            <area-chart-outlined /> 负载与副本数历史趋势
           </template>
-          <div class="chart" ref="trendChartRef"></div>
+          <div class="chart" ref="loadChartRef"></div>
         </a-card>
 
         <a-card class="chart-card">
           <template #title>
-            <pie-chart-outlined /> 告警类型分布预测
+            <pie-chart-outlined /> 资源利用率分布
           </template>
-          <div class="chart" ref="typeChartRef"></div>
+          <div class="chart" ref="resourceChartRef"></div>
         </a-card>
       </div>
 
       <a-card class="prediction-table-card">
         <template #title>
-          <table-outlined /> 告警预测详情
-          <a-tag color="warning" v-if="hasHighRiskPredictions" class="blink-tag">
-            <warning-outlined /> 高风险预警
+          <table-outlined /> 副本数调整历史
+          <a-tag color="warning" v-if="hasAutoScaleEvents" class="blink-tag">
+            <warning-outlined /> 自动伸缩事件
           </a-tag>
         </template>
-        <a-table :columns="columns" :data-source="predictionList" :pagination="{ pageSize: 5 }" :loading="loading">
+        <a-table :columns="columns" :data-source="scaleHistory" :pagination="{ pageSize: 5 }" :loading="loading">
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'severity'">
-              <a-tag :color="getSeverityColor(record.severity)">
-                {{ record.severity }}
+            <template v-if="column.key === 'scaleType'">
+              <a-tag :color="getScaleTypeColor(record.scaleType)">
+                {{ record.scaleType }}
               </a-tag>
             </template>
-            <template v-if="column.key === 'probability'">
-              <a-progress :percent="record.probability" :stroke-color="getProbabilityColor(record.probability)"
+            <template v-if="column.key === 'confidence'">
+              <a-progress :percent="record.confidence" :stroke-color="getConfidenceColor(record.confidence)"
                 size="small" />
             </template>
             <template v-if="column.key === 'action'">
@@ -108,46 +114,46 @@
       </a-card>
     </div>
 
-    <a-modal v-model:visible="detailModalVisible" title="告警预测详情" width="700px" :footer="null"
+    <a-modal v-model:visible="detailModalVisible" title="伸缩事件详情" width="700px" :footer="null"
       class="prediction-detail-modal">
-      <template v-if="selectedPrediction">
+      <template v-if="selectedScaleEvent">
         <div class="prediction-detail-header">
           <div class="prediction-id">
-            <span class="label">预测ID:</span>
-            <span class="value">{{ selectedPrediction.id }}</span>
+            <span class="label">事件ID:</span>
+            <span class="value">{{ selectedScaleEvent.id }}</span>
           </div>
-          <a-tag :color="getSeverityColor(selectedPrediction.severity)" class="severity-tag">
-            {{ selectedPrediction.severity }}
+          <a-tag :color="getScaleTypeColor(selectedScaleEvent.scaleType)" class="severity-tag">
+            {{ selectedScaleEvent.scaleType }}
           </a-tag>
         </div>
 
         <div class="prediction-detail-content">
           <div class="detail-item">
-            <span class="label">预测资源:</span>
-            <span class="value">{{ selectedPrediction.resource }}</span>
+            <span class="label">操作资源:</span>
+            <span class="value">{{ selectedScaleEvent.resource }}</span>
           </div>
           <div class="detail-item">
-            <span class="label">预测时间:</span>
-            <span class="value">{{ selectedPrediction.predictedTime }}</span>
+            <span class="label">事件时间:</span>
+            <span class="value">{{ selectedScaleEvent.timestamp }}</span>
           </div>
           <div class="detail-item">
-            <span class="label">告警类型:</span>
-            <span class="value">{{ selectedPrediction.type }}</span>
+            <span class="label">副本变化:</span>
+            <span class="value">{{ selectedScaleEvent.oldReplicas }} → {{ selectedScaleEvent.newReplicas }}</span>
           </div>
           <div class="detail-item">
-            <span class="label">发生概率:</span>
-            <a-progress :percent="selectedPrediction.probability"
-              :stroke-color="getProbabilityColor(selectedPrediction.probability)" size="small" />
+            <span class="label">预测置信度:</span>
+            <a-progress :percent="selectedScaleEvent.confidence"
+              :stroke-color="getConfidenceColor(selectedScaleEvent.confidence)" size="small" />
           </div>
           <div class="detail-item">
-            <span class="label">可能原因:</span>
-            <span class="value">{{ selectedPrediction.possibleCause }}</span>
+            <span class="label">触发原因:</span>
+            <span class="value">{{ selectedScaleEvent.reason }}</span>
           </div>
           <div class="detail-item">
-            <span class="label">建议操作:</span>
-            <div class="recommendation-list">
-              <div v-for="(rec, index) in selectedPrediction.recommendations" :key="index" class="recommendation-item">
-                <check-circle-outlined /> {{ rec }}
+            <span class="label">模型特征:</span>
+            <div class="features-list">
+              <div v-for="(feature, index) in selectedScaleEvent.features" :key="index" class="feature-item">
+                <check-circle-outlined /> {{ feature.name }}: {{ feature.value }}
               </div>
             </div>
           </div>
@@ -159,17 +165,17 @@
         </div>
 
         <div class="prediction-actions">
-          <a-button type="primary">
-            <template #icon><notification-outlined /></template>
-            设置提醒
+          <a-button type="primary" @click="handleAction('apply')">
+            <template #icon><check-circle-outlined /></template>
+            确认应用
           </a-button>
-          <a-button>
+          <a-button @click="handleAction('export')">
             <template #icon><export-outlined /></template>
-            导出报告
+            导出数据
           </a-button>
-          <a-button type="dashed">
-            <template #icon><solution-outlined /></template>
-            自动修复
+          <a-button type="dashed" @click="handleAction('manual')">
+            <template #icon><edit-outlined /></template>
+            手动设置
           </a-button>
         </div>
       </template>
@@ -178,76 +184,81 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from 'vue';
+import { ref, onMounted, computed, nextTick, onUnmounted } from 'vue';
 import * as echarts from 'echarts';
 import {
   SyncOutlined,
-  ThunderboltOutlined,
+  CloudServerOutlined,
+  RocketOutlined,
   WarningOutlined,
   ArrowUpOutlined,
   ArrowDownOutlined,
+  MinusOutlined,
+  CheckOutlined,
   LineChartOutlined,
   ClockCircleOutlined,
+  ReloadOutlined,
   AreaChartOutlined,
   PieChartOutlined,
   TableOutlined,
   CheckCircleOutlined,
-  NotificationOutlined,
   ExportOutlined,
-  SolutionOutlined
+  EditOutlined
 } from '@ant-design/icons-vue';
+import { message } from 'ant-design-vue';
 
 // 状态定义
-const timeRange = ref('24h');
+const predictionTimeRange = ref('24h');
 const loading = ref(false);
-const trendChartRef = ref(null);
-const typeChartRef = ref(null);
+const loadChartRef = ref(null);
+const resourceChartRef = ref(null);
 const metricChartRef = ref(null);
 const detailModalVisible = ref(false);
-const selectedPrediction = ref<any>(null);
+const selectedScaleEvent = ref<any>(null);
+let updateTimer: any = null;
 
-// 模拟数据
-const predictionStats = ref({
-  total: 52,
-  trend: 8,
-  critical: 11,
-  criticalTrend: -3,
-  accuracy: 96,
-  accuracyImprovement: "3.2",
-  leadTime: 42,
-  leadTimeImprovement: 12
+// 模拟数据 - 部署统计数据
+const deploymentStats = ref({
+  currentReplicas: 4,
+  recommendedReplicas: 6,
+  replicasTrend: 2,
+  modelAccuracy: 92.5,
+  accuracyImprovement: 3.2,
+  updateInterval: 30,
+  nextUpdateTime: "15:30:25"
 });
 
+// 表格列定义
 const columns = [
   {
-    title: '预测ID',
+    title: '事件ID',
     dataIndex: 'id',
     key: 'id',
   },
   {
-    title: '资源',
+    title: '资源名称',
     dataIndex: 'resource',
     key: 'resource',
   },
   {
-    title: '告警类型',
-    dataIndex: 'type',
-    key: 'type',
+    title: '操作类型',
+    dataIndex: 'scaleType',
+    key: 'scaleType',
   },
   {
-    title: '预测时间',
-    dataIndex: 'predictedTime',
-    key: 'predictedTime',
+    title: '时间',
+    dataIndex: 'timestamp',
+    key: 'timestamp',
   },
   {
-    title: '严重程度',
-    dataIndex: 'severity',
-    key: 'severity',
+    title: '副本变化',
+    dataIndex: 'replicaChange',
+    key: 'replicaChange',
   },
   {
-    title: '发生概率',
-    dataIndex: 'probability',
-    key: 'probability',
+    title: '预测置信度',
+    dataIndex: 'confidence',
+    key: 'confidence',
   },
   {
     title: '操作',
@@ -255,168 +266,107 @@ const columns = [
   },
 ];
 
-// 生成当前时间后的随机时间
-const generateFutureTime = (maxHours = 24) => {
-  const now = new Date();
-  const futureDate = new Date(now.getTime() + Math.random() * maxHours * 60 * 60 * 1000);
-  return `${futureDate.getFullYear()}-${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')} ${String(futureDate.getHours()).padStart(2, '0')}:${String(futureDate.getMinutes()).padStart(2, '0')}`;
-};
-
-// 获取当前年份
-const currentYear = new Date().getFullYear();
-
-// 模拟预测列表数据
-const predictionList = ref([
+// 副本数调整历史数据
+const scaleHistory = ref([
   {
-    id: `PRED-${currentYear}-0127`,
-    resource: 'API网关服务 (api-gateway-prod)',
-    type: '响应时间异常',
-    predictedTime: generateFutureTime(2),
-    severity: '严重',
-    probability: 94,
-    possibleCause: '后端服务连接池耗尽，数据库查询性能下降导致API响应延迟',
-    recommendations: [
-      '扩展后端服务实例数量',
-      '优化关键路径SQL查询',
-      '增加连接池容量并调整超时参数'
+    id: 'SCALE-2025-0517-001',
+    resource: 'frontend-service',
+    scaleType: '扩容',
+    timestamp: '2025-05-17 14:00:25',
+    oldReplicas: 2,
+    newReplicas: 4,
+    replicaChange: '2 → 4',
+    confidence: 95,
+    reason: '预测到流量高峰，CPU利用率预期超过80%',
+    features: [
+      { name: 'CPU利用率', value: '78%' },
+      { name: '内存利用率', value: '65%' },
+      { name: '请求量/分钟', value: '2450' },
+      { name: '响应时间', value: '180ms' }
     ]
   },
   {
-    id: `PRED-${currentYear}-0128`,
-    resource: '主数据库集群 (postgres-main-01)',
-    type: '连接数接近上限',
-    predictedTime: generateFutureTime(5),
-    severity: '警告',
-    probability: 82,
-    possibleCause: '应用服务未正确释放数据库连接，连接泄漏导致可用连接数减少',
-    recommendations: [
-      '检查应用代码中的连接关闭逻辑',
-      '实施连接池监控告警',
-      '临时增加最大连接数限制'
-    ]
-  },
-  {
-    id: `PRED-${currentYear}-0129`,
-    resource: '对象存储服务 (oss-bucket-media)',
-    type: '存储容量告警',
-    predictedTime: generateFutureTime(10),
-    severity: '一般',
-    probability: 68,
-    possibleCause: '媒体文件上传量激增，清理策略未及时执行',
-    recommendations: [
-      '启动紧急清理过期媒体文件任务',
-      '调整自动清理策略频率',
-      '评估扩展存储容量需求'
-    ]
-  },
-  {
-    id: `PRED-${currentYear}-0130`,
-    resource: '微服务集群 (payment-service)',
-    type: '服务熔断风险',
-    predictedTime: generateFutureTime(1),
-    severity: '严重',
-    probability: 91,
-    possibleCause: '第三方支付网关响应缓慢，导致服务调用超时增加',
-    recommendations: [
-      '临时增加熔断器超时阈值',
-      '启用支付请求本地缓存',
-      '切换至备用支付网关'
-    ]
-  },
-  {
-    id: `PRED-${currentYear}-0131`,
-    resource: '消息队列集群 (rabbitmq-prod-02)',
-    type: '队列积压',
-    predictedTime: generateFutureTime(4),
-    severity: '警告',
-    probability: 76,
-    possibleCause: '消费者处理能力下降，新版本代码引入性能回退',
-    recommendations: [
-      '回滚至上一版本消费者代码',
-      '增加消费者实例数量',
-      '优化消息处理逻辑'
-    ]
-  },
-  {
-    id: `PRED-${currentYear}-0132`,
-    resource: 'CDN边缘节点 (cdn-edge-east)',
-    type: '缓存命中率下降',
-    predictedTime: generateFutureTime(8),
-    severity: '一般',
-    probability: 63,
-    possibleCause: '新内容发布导致缓存失效请求增加，源站负载上升',
-    recommendations: [
-      '预热热门内容缓存',
-      '调整缓存策略',
-      '临时增加源站容量'
-    ]
-  },
-  {
-    id: `PRED-${currentYear}-0133`,
-    resource: '容器编排平台 (k8s-prod-cluster)',
-    type: '节点资源不足',
-    predictedTime: generateFutureTime(3),
-    severity: '严重',
-    probability: 89,
-    possibleCause: '自动扩缩容策略参数设置不合理，新应用部署资源请求过高',
-    recommendations: [
-      '调整HPA配置参数',
-      '优化容器资源请求设置',
-      '紧急添加新的工作节点'
+    id: 'SCALE-2025-0516-008',
+    resource: 'api-gateway',
+    scaleType: '缩容',
+    timestamp: '2025-05-16 23:15:10',
+    oldReplicas: 6,
+    newReplicas: 3,
+    replicaChange: '6 → 3',
+    confidence: 88,
+    reason: '夜间流量下降，资源利用率低',
+    features: [
+      { name: 'CPU利用率', value: '22%' },
+      { name: '内存利用率', value: '35%' },
+      { name: '请求量/分钟', value: '320' },
+      { name: '响应时间', value: '90ms' }
     ]
   }
 ]);
 
 // 计算属性
-const hasHighRiskPredictions = computed(() => {
-  return predictionList.value.some(item => item.severity === '严重' && item.probability > 80);
+const hasAutoScaleEvents = computed(() => {
+  return scaleHistory.value.some(item => item.confidence > 90);
 });
 
 // 方法
 const refreshData = () => {
   loading.value = true;
   setTimeout(() => {
-    // 模拟数据刷新
-    predictionStats.value = {
-      total: Math.floor(Math.random() * 30) + 40,
-      trend: Math.floor(Math.random() * 20) - 5,
-      critical: Math.floor(Math.random() * 10) + 8,
-      criticalTrend: Math.floor(Math.random() * 20) - 10,
-      accuracy: Math.floor(Math.random() * 5) + 93,
-      accuracyImprovement: (Math.random() * 3 + 1).toFixed(1),
-      leadTime: Math.floor(Math.random() * 20) + 30,
-      leadTimeImprovement: Math.floor(Math.random() * 10) + 8
+    // 模拟从预测服务获取数据
+    message.success('数据已从预测服务刷新');
+    
+    // 更新推荐副本数和统计数据
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    
+    // 模拟从预测服务返回的推荐副本数
+    const newRecommendedReplicas = Math.floor(Math.random() * 4) + 3; // 随机3-6之间
+    
+    deploymentStats.value = {
+      currentReplicas: deploymentStats.value.currentReplicas,
+      recommendedReplicas: newRecommendedReplicas,
+      replicasTrend: newRecommendedReplicas - deploymentStats.value.currentReplicas,
+      modelAccuracy: 92.8,
+      accuracyImprovement: 3.5,
+      updateInterval: 30,
+      nextUpdateTime: `${hours}:${minutes}:${seconds}`
     };
 
-    // 更新预测列表
-    predictionList.value.forEach(item => {
-      item.predictedTime = generateFutureTime(24);
-      item.probability = Math.floor(Math.random() * 30) + 65;
-    });
+    // 模拟自动调整副本数
+    applyRecommendedReplicas();
 
     // 重新初始化图表
     initCharts();
     loading.value = false;
-  }, 1000);
+  }, 800);
 };
 
-const getSeverityColor = (severity: string): string => {
-  switch (severity) {
-    case '严重': return 'red';
-    case '警告': return 'orange';
-    case '一般': return 'blue';
-    default: return 'green';
+const getRecommendationClass = () => {
+  if (deploymentStats.value.recommendedReplicas > deploymentStats.value.currentReplicas) return 'up';
+  if (deploymentStats.value.recommendedReplicas < deploymentStats.value.currentReplicas) return 'down';
+  return 'neutral';
+};
+
+const getScaleTypeColor = (scaleType: string): string => {
+  switch (scaleType) {
+    case '扩容': return 'green';
+    case '缩容': return 'blue';
+    case '无变化': return 'gray';
+    default: return 'orange';
   }
 };
 
-const getProbabilityColor = (probability: number): string => {
-  if (probability >= 80) return '#ff4d4f';
-  if (probability >= 60) return '#faad14';
-  return '#52c41a';
+const getConfidenceColor = (confidence: number): string => {
+  if (confidence >= 90) return '#52c41a';
+  if (confidence >= 70) return '#faad14';
+  return '#ff4d4f';
 };
 
 const showDetails = (record: any) => {
-  selectedPrediction.value = record;
+  selectedScaleEvent.value = record;
   detailModalVisible.value = true;
 
   // 在模态框显示后初始化指标图表
@@ -425,29 +375,92 @@ const showDetails = (record: any) => {
   }, 100);
 };
 
-// 初始化趋势预测图表
-const initTrendChart = () => {
-  if (!trendChartRef.value) return;
+// 应用推荐的副本数
+const applyRecommendedReplicas = () => {
+  // 模拟通过修改 deployment.Spec.Replicas 字段调整副本数
+  if (deploymentStats.value.currentReplicas !== deploymentStats.value.recommendedReplicas) {
+    // 添加新的伸缩事件记录
+    const now = new Date();
+    const formattedTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    
+    const scaleType = deploymentStats.value.recommendedReplicas > deploymentStats.value.currentReplicas ? '扩容' : '缩容';
+    const reason = scaleType === '扩容' 
+      ? '预测到流量增加，提前扩容以保证服务质量' 
+      : '预测到流量减少，缩容以节约资源成本';
+    
+    const eventId = `SCALE-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(scaleHistory.value.length + 1).padStart(3, '0')}`;
+    
+    // 生成模拟的特征数据
+    const cpuUsage = scaleType === '扩容' ? `${Math.floor(Math.random() * 15) + 70}%` : `${Math.floor(Math.random() * 20) + 15}%`;
+    const memUsage = scaleType === '扩容' ? `${Math.floor(Math.random() * 15) + 60}%` : `${Math.floor(Math.random() * 25) + 30}%`;
+    const reqPerMin = scaleType === '扩容' ? `${Math.floor(Math.random() * 1000) + 2000}` : `${Math.floor(Math.random() * 500) + 200}`;
+    const respTime = scaleType === '扩容' ? `${Math.floor(Math.random() * 100) + 150}ms` : `${Math.floor(Math.random() * 50) + 80}ms`;
+    
+    const newEvent = {
+      id: eventId,
+      resource: 'frontend-service',
+      scaleType: scaleType,
+      timestamp: formattedTime,
+      oldReplicas: deploymentStats.value.currentReplicas,
+      newReplicas: deploymentStats.value.recommendedReplicas,
+      replicaChange: `${deploymentStats.value.currentReplicas} → ${deploymentStats.value.recommendedReplicas}`,
+      confidence: Math.floor(Math.random() * 10) + 85, // 85-95之间的随机值
+      reason: reason,
+      features: [
+        { name: 'CPU利用率', value: cpuUsage },
+        { name: '内存利用率', value: memUsage },
+        { name: '请求量/分钟', value: reqPerMin },
+        { name: '响应时间', value: respTime }
+      ]
+    };
+    
+    // 将新事件添加到历史列表的开头
+    scaleHistory.value.unshift(newEvent);
+    
+    // 更新当前副本数为推荐副本数
+    deploymentStats.value.currentReplicas = deploymentStats.value.recommendedReplicas;
+    
+    // message.success(`已自动${scaleType}至${deploymentStats.value.currentReplicas}个副本`);
+  }
+};
 
-  const chart = echarts.init(trendChartRef.value);
+// 处理按钮点击事件
+const handleAction = (action: string) => {
+  switch (action) {
+    case 'apply':
+      message.success('已手动确认应用副本数调整');
+      break;
+    case 'export':
+      message.success('预测数据已导出');
+      break;
+    case 'manual':
+      message.success('已打开手动设置副本数对话框');
+      break;
+  }
+  
+  // 延迟关闭模态框
+  setTimeout(() => {
+    detailModalVisible.value = false;
+  }, 1000);
+};
 
-  // 生成未来24小时的时间点
+// 初始化负载与副本数历史趋势图表
+const initLoadChart = () => {
+  if (!loadChartRef.value) return;
+
+  const chart = echarts.init(loadChartRef.value);
+
+  // 生成过去24小时的时间点
   const now = new Date();
-  const hours = Array.from({ length: 24 }, (_, i) => {
-    const futureTime = new Date(now.getTime() + i * 60 * 60 * 1000);
-    return `${String(futureTime.getHours()).padStart(2, '0')}:00`;
+  const hours = Array.from({ length: 12 }, (_, i) => {
+    const pastTime = new Date(now.getTime() - (11 - i) * 2 * 60 * 60 * 1000);
+    return `${String(pastTime.getHours()).padStart(2, '0')}:00`;
   });
 
-  // 生成模拟数据
-  const generateData = (baseValue: number, variance: number) => {
-    return Array.from({ length: 24 }, (_, i) => {
-      // 模拟工作时间段(9:00-18:00)告警增多的情况
-      const hour = (now.getHours() + i) % 24;
-      const isWorkHour = hour >= 9 && hour <= 18;
-      const workHourFactor = isWorkHour ? 1.5 : 0.7;
-      return Math.floor(Math.random() * variance * workHourFactor) + baseValue * workHourFactor;
-    });
-  };
+  // 生成副本数和负载数据
+  const replicaData = [2, 2, 3, 3, 4, 4, 5, 6, 6, 4, 4, 4];
+  const cpuLoadData = [30, 35, 55, 65, 75, 82, 88, 90, 75, 60, 50, 45];
+  const requestsData = [800, 950, 1500, 2200, 2800, 3100, 3400, 3500, 2800, 2000, 1600, 1300];
 
   const option = {
     tooltip: {
@@ -457,9 +470,9 @@ const initTrendChart = () => {
       }
     },
     legend: {
-      data: ['严重告警', '警告告警', '一般告警'],
+      data: ['副本数', 'CPU负载(%)', '请求数/分钟(/100)'],
       textStyle: {
-        color: '#333333'  // 修改为深色字体
+        color: '#333333'
       }
     },
     grid: {
@@ -473,85 +486,54 @@ const initTrendChart = () => {
       data: hours,
       axisLine: {
         lineStyle: {
-          color: '#333333'  // 修改为深色
+          color: '#333333'
         }
       },
       axisLabel: {
-        color: '#333333'  // 修改为深色字体
+        color: '#333333'
       }
     },
     yAxis: {
       type: 'value',
-      name: '预测告警数',
+      name: '数值',
       nameTextStyle: {
-        color: '#333333'  // 修改为深色字体
+        color: '#333333'
       },
       axisLine: {
         lineStyle: {
-          color: '#333333'  // 修改为深色
+          color: '#333333'
         }
       },
       axisLabel: {
-        color: '#333333'  // 修改为深色字体
+        color: '#333333'
       },
       splitLine: {
         lineStyle: {
-          color: 'rgba(0, 0, 0, 0.1)'  // 修改为浅灰色
+          color: 'rgba(0, 0, 0, 0.1)'
         }
       }
     },
     series: [
       {
-        name: '严重告警',
+        name: '副本数',
         type: 'line',
-        stack: 'Total',
-        data: generateData(3, 3),
-        areaStyle: {
-          opacity: 0.3,
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(255, 77, 79, 0.8)' },
-            { offset: 1, color: 'rgba(255, 77, 79, 0.1)' }
-          ])
-        },
+        data: replicaData,
         lineStyle: {
-          width: 2
+          width: 4,
+          type: 'dashed'
         },
         itemStyle: {
-          color: '#ff4d4f'
+          color: '#722ed1'
         },
         emphasis: {
           focus: 'series'
         },
-        smooth: true
+        smooth: false
       },
       {
-        name: '警告告警',
+        name: 'CPU负载(%)',
         type: 'line',
-        stack: 'Total',
-        data: generateData(5, 4),
-        areaStyle: {
-          opacity: 0.3,
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(250, 173, 20, 0.8)' },
-            { offset: 1, color: 'rgba(250, 173, 20, 0.1)' }
-          ])
-        },
-        lineStyle: {
-          width: 2
-        },
-        itemStyle: {
-          color: '#faad14'
-        },
-        emphasis: {
-          focus: 'series'
-        },
-        smooth: true
-      },
-      {
-        name: '一般告警',
-        type: 'line',
-        stack: 'Total',
-        data: generateData(7, 5),
+        data: cpuLoadData,
         areaStyle: {
           opacity: 0.3,
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -569,6 +551,28 @@ const initTrendChart = () => {
           focus: 'series'
         },
         smooth: true
+      },
+      {
+        name: '请求数/分钟(/100)',
+        type: 'line',
+        data: requestsData.map(val => val / 100),
+        areaStyle: {
+          opacity: 0.3,
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(82, 196, 26, 0.8)' },
+            { offset: 1, color: 'rgba(82, 196, 26, 0.1)' }
+          ])
+        },
+        lineStyle: {
+          width: 2
+        },
+        itemStyle: {
+          color: '#52c41a'
+        },
+        emphasis: {
+          focus: 'series'
+        },
+        smooth: true
       }
     ]
   };
@@ -581,35 +585,35 @@ const initTrendChart = () => {
   });
 };
 
-// 初始化告警类型分布图表
-const initTypeChart = () => {
-  if (!typeChartRef.value) return;
+// 初始化资源利用率分布图表
+const initResourceChart = () => {
+  if (!resourceChartRef.value) return;
 
-  const chart = echarts.init(typeChartRef.value);
+  const chart = echarts.init(resourceChartRef.value);
 
   const option = {
     tooltip: {
       trigger: 'item',
-      formatter: '{a} <br/>{b}: {c} ({d}%)'
+      formatter: '{a} <br/>{b}: {c}%'
     },
     legend: {
       orient: 'vertical',
       right: 10,
       top: 'center',
-      data: ['性能相关', '资源容量', '连接问题', '服务可用性', '安全风险'],
+      data: ['CPU使用率', '内存使用率', '网络I/O', '磁盘I/O', '空闲资源'],
       textStyle: {
-        color: '#333333'  // 修改为深色字体
+        color: '#333333'
       }
     },
     series: [
       {
-        name: '告警类型',
+        name: '资源利用率',
         type: 'pie',
         radius: ['50%', '70%'],
         avoidLabelOverlap: false,
         itemStyle: {
           borderRadius: 10,
-          borderColor: '#ffffff',  // 修改为白色背景
+          borderColor: '#ffffff',
           borderWidth: 2
         },
         label: {
@@ -621,18 +625,18 @@ const initTypeChart = () => {
             show: true,
             fontSize: '18',
             fontWeight: 'bold',
-            color: '#333333'  // 修改为深色字体
+            color: '#333333'
           }
         },
         labelLine: {
           show: false
         },
         data: [
-          { value: 32, name: '性能相关', itemStyle: { color: '#ff4d4f' } },
-          { value: 26, name: '资源容量', itemStyle: { color: '#faad14' } },
-          { value: 19, name: '连接问题', itemStyle: { color: '#1890ff' } },
-          { value: 14, name: '服务可用性', itemStyle: { color: '#52c41a' } },
-          { value: 9, name: '安全风险', itemStyle: { color: '#722ed1' } }
+          { value: 35, name: 'CPU使用率', itemStyle: { color: '#ff4d4f' } },
+          { value: 28, name: '内存使用率', itemStyle: { color: '#faad14' } },
+          { value: 18, name: '网络I/O', itemStyle: { color: '#1890ff' } },
+          { value: 12, name: '磁盘I/O', itemStyle: { color: '#52c41a' } },
+          { value: 7, name: '空闲资源', itemStyle: { color: '#d9d9d9' } }
         ]
       }
     ]
@@ -652,31 +656,25 @@ const initMetricChart = () => {
 
   const chart = echarts.init(metricChartRef.value);
 
-  // 生成过去6小时到未来6小时的时间点
-  const now = new Date();
-  const hours = Array.from({ length: 13 }, (_, i) => {
-    const time = new Date(now.getTime() + (i - 6) * 60 * 60 * 1000);
-    return `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;
-  });
+  // 生成时间轴
+  const hours = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
 
-  // 生成模拟数据，在预测时间点附近有明显变化
-  const generateMetricData = (baseValue: number, anomalyFactor: number) => {
-    const data = [];
-    for (let i = 0; i < 13; i++) {
-      if (i < 6) {
-        // 过去数据，相对平稳但有小波动
-        data.push(Math.floor(Math.random() * 15) + baseValue);
-      } else if (i === 6) {
-        // 当前时间点，开始有轻微变化
-        data.push(Math.floor(Math.random() * 15) + baseValue + 5);
-      } else {
-        // 未来数据，呈现明显趋势
-        const trend = (i - 6) * anomalyFactor;
-        data.push(Math.floor(Math.random() * 10) + baseValue + trend);
-      }
-    }
-    return data;
-  };
+  // 根据当前选中的事件生成相应的指标数据
+  let cpuData, memoryData, requestsData, responseTimeData;
+  
+  if (selectedScaleEvent.value.scaleType === '扩容') {
+    // 扩容场景
+    cpuData = [50, 55, 62, 70, 75, 82, 85, 80, 75, 72];
+    memoryData = [45, 48, 52, 58, 65, 70, 68, 65, 62, 60];
+    requestsData = [15, 18, 22, 26, 30, 31, 28, 26, 24, 22];
+    responseTimeData = [120, 130, 150, 165, 180, 190, 170, 160, 150, 140];
+  } else {
+    // 缩容场景
+    cpuData = [60, 55, 48, 40, 35, 28, 22, 18, 15, 12];
+    memoryData = [55, 50, 45, 40, 35, 30, 28, 25, 22, 20];
+    requestsData = [20, 18, 15, 12, 10, 8, 7, 6, 5, 4];
+    responseTimeData = [150, 140, 130, 120, 110, 100, 95, 90, 85, 80];
+  }
 
   const option = {
     tooltip: {
@@ -691,9 +689,9 @@ const initMetricChart = () => {
       }
     },
     legend: {
-      data: ['CPU使用率', '内存使用率', '响应时间'],
+      data: ['CPU利用率', '内存利用率', '请求数(百/分钟)', '响应时间(ms)'],
       textStyle: {
-        color: '#333333'  // 修改为深色字体
+        color: '#333333'
       }
     },
     grid: {
@@ -707,75 +705,63 @@ const initMetricChart = () => {
       data: hours,
       axisLine: {
         lineStyle: {
-          color: '#333333'  // 修改为深色
+          color: '#333333'
         }
       },
       axisLabel: {
-        color: '#333333',  // 修改为深色字体
-        formatter: function(value: string) {
-          return value;
-        }
-      },
-      axisPointer: {
-        label: {
-          formatter: function (params: any) {
-            return '时间: ' + params.value;
-          }
-        }
+        color: '#333333'
       }
     },
     yAxis: {
       type: 'value',
-      name: '使用率/响应时间',
+      name: '数值',
       nameTextStyle: {
-        color: '#333333'  // 修改为深色字体
+        color: '#333333'
       },
       axisLine: {
         lineStyle: {
-          color: '#333333'  // 修改为深色
+          color: '#333333'
         }
       },
       axisLabel: {
-        color: '#333333'  // 修改为深色字体
+        color: '#333333'
       },
       splitLine: {
         lineStyle: {
-          color: 'rgba(0, 0, 0, 0.1)'  // 修改为浅灰色
+          color: 'rgba(0, 0, 0, 0.1)'
         }
       }
     },
     series: [
       {
-        name: 'CPU使用率',
+        name: 'CPU利用率',
         type: 'line',
-        data: generateMetricData(45, 8),
+        data: cpuData,
         markArea: {
           itemStyle: {
             color: 'rgba(255, 77, 79, 0.1)'
           },
           data: [
             [
-              { xAxis: '6' },
-              { xAxis: '12' }
+              { xAxis: selectedScaleEvent.value.scaleType === '扩容' ? '4' : '2' },
+              { xAxis: selectedScaleEvent.value.scaleType === '扩容' ? '7' : '5' }
             ]
           ]
         },
         markPoint: {
           data: [
-            { type: 'max', name: '最大值' },
-            { type: 'min', name: '最小值' }
+            { type: selectedScaleEvent.value.scaleType === '扩容' ? 'max' : 'min', name: selectedScaleEvent.value.scaleType === '扩容' ? '最大值' : '最小值' }
           ]
         },
         markLine: {
           data: [
-            { type: 'average', name: '平均值' },
             {
-              yAxis: 85,
+              yAxis: selectedScaleEvent.value.scaleType === '扩容' ? 75 : 25,
               lineStyle: {
-                color: '#ff4d4f'
+                color: selectedScaleEvent.value.scaleType === '扩容' ? '#ff4d4f' : '#52c41a'
               },
               label: {
-                formatter: '告警阈值',
+                formatter: selectedScaleEvent.value.scaleType === '扩容' ? '扩容阈值' : '缩容阈值',
                 position: 'end'
               }
             }
@@ -793,9 +779,9 @@ const initMetricChart = () => {
         smooth: true
       },
       {
-        name: '内存使用率',
+        name: '内存利用率',
         type: 'line',
-        data: generateMetricData(60, 5),
+        data: memoryData,
         lineStyle: {
           width: 3
         },
@@ -808,14 +794,29 @@ const initMetricChart = () => {
         smooth: true
       },
       {
-        name: '响应时间',
+        name: '请求数(百/分钟)',
         type: 'line',
-        data: generateMetricData(30, 12),
+        data: requestsData,
         lineStyle: {
           width: 3
         },
         itemStyle: {
           color: '#1890ff'
+        },
+        emphasis: {
+          focus: 'series'
+        },
+        smooth: true
+      },
+      {
+        name: '响应时间(ms)',
+        type: 'line',
+        data: responseTimeData,
+        lineStyle: {
+          width: 3
+        },
+        itemStyle: {
+          color: '#52c41a'
         },
         emphasis: {
           focus: 'series'
@@ -836,14 +837,27 @@ const initMetricChart = () => {
 // 初始化所有图表
 const initCharts = () => {
   nextTick(() => {
-    initTrendChart();
-    initTypeChart();
+    initLoadChart();
+    initResourceChart();
   });
+};
+
+// 自动更新推荐副本数的定时器
+const startAutoUpdate = () => {
+  updateTimer = setInterval(() => {
+    console.log('自动从预测服务获取推荐副本数...');
+    refreshData();
+  }, deploymentStats.value.updateInterval * 1000);
 };
 
 // 生命周期钩子
 onMounted(() => {
   refreshData();
+  startAutoUpdate();
+});
+
+onUnmounted(() => {
+  if (updateTimer) clearInterval(updateTimer);
 });
 </script>
 
@@ -936,7 +950,11 @@ onMounted(() => {
   color: #ff4d4f;
 }
 
-.chart-cards {
+.neutral {
+  color: #1890ff;
+}
+
+.charts-container {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
@@ -960,6 +978,76 @@ onMounted(() => {
   height: 280px;
 }
 
+.prediction-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.prediction-detail-content {
+  margin-bottom: 24px;
+}
+
+.detail-item {
+  margin-bottom: 12px;
+}
+
+.detail-item .label {
+  font-weight: bold;
+  margin-right: 8px;
+  color: #666;
+  min-width: 100px;
+  display: inline-block;
+}
+
+.features-list {
+  margin-top: 8px;
+}
+
+.feature-item {
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prediction-detail-chart {
+  margin-bottom: 24px;
+}
+
+.chart-title {
+  font-weight: bold;
+  margin-bottom: 12px;
+  color: #333;
+}
+
+.metric-chart {
+  height: 300px;
+}
+
+.prediction-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.blink-tag {
+  animation: blink 1.5s linear infinite;
+}
+
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 @keyframes glowing {
   0% {
     background-position: 0 0;
@@ -980,7 +1068,7 @@ onMounted(() => {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .chart-cards {
+  .charts-container {
     grid-template-columns: 1fr;
   }
 }
