@@ -41,7 +41,6 @@ export interface FormDesignReq {
   status?: number;
   category_id?: number;
   creator_id?: number;
-  creator_name?: string;
 }
 
 export interface FormDesign {
@@ -180,10 +179,6 @@ export interface Template {
 }
 
 // 工单实例相关类型
-export interface DeleteInstanceReq {
-  id: number;
-}
-
 export interface DetailInstanceReq {
   id: number;
 }
@@ -196,42 +191,42 @@ export interface ListInstanceReq {
   date_range?: string[];
   creator_id?: number;
   assignee_id?: number;
+  workflow_id?: number;
 }
 
 export interface FormData {
+  approved_days: number;
   reason: string;
   date_range: string[];
   type: string;
-  approved_days: number;
 }
 
-export interface InstanceReq {
-  id?: number;
+export interface CreateInstanceReq {
   title: string;
-  process_id: number;
-  process_version: number;
+  workflow_id: number;
   form_data: FormData;
-  current_node: string;
-  status?: number;
+  description?: string;
   priority?: number;
   category_id?: number;
-  creator_id?: number;
-  creator_name?: string;
-  assignee_id?: number;
-  assignee_name?: string;
-  created_at?: string;
-  updated_at?: string;
-  completed_at?: string;
-  due_date?: string;
+}
+
+export interface UpdateInstanceReq {
+  id: number;
+  title: string;
+  form_data: FormData;
+  description?: string;
+  priority?: number;
+  category_id?: number;
 }
 
 export interface Instance {
   id: number;
   title: string;
-  process_id: number;
-  process_version: number;
+  workflow_id: number;
   form_data: string;
-  current_node: string;
+  description?: string;
+  current_step: string;
+  current_role: string;
   status: number;
   priority: number;
   category_id?: number;
@@ -239,52 +234,39 @@ export interface Instance {
   creator_name: string;
   assignee_id?: number;
   assignee_name?: string;
-  created_at: string;
-  updated_at: string;
   completed_at?: string;
   due_date?: string;
+  created_at?: string;
+  updated_at?: string;
+  flows?: InstanceFlow[];
+  comments?: InstanceComment[];
 }
 
 // 工单流转记录相关类型
 export interface InstanceFlowReq {
-  id?: number;
   instance_id: number;
-  node_id: string;
-  node_name: string;
   action: string;
-  target_user_id?: number;
-  operator_id: number;
-  operator_name: string;
   comment?: string;
   form_data?: FormData;
-  attachments?: string;
-  created_at?: string;
 }
 
 export interface InstanceFlow {
   id: number;
   instance_id: number;
-  node_id: string;
-  node_name: string;
+  step: string;
   action: string;
-  target_user_id?: number;
   operator_id: number;
   operator_name: string;
   comment?: string;
-  form_data: string;
-  attachments?: string;
-  created_at: string;
+  form_data?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // 工单评论相关类型
 export interface InstanceCommentReq {
-  id?: number;
   instance_id: number;
   content: string;
-  attachments?: string;
-  creator_id: number;
-  creator_name: string;
-  created_at?: string;
   parent_id?: number;
 }
 
@@ -292,11 +274,11 @@ export interface InstanceComment {
   id: number;
   instance_id: number;
   content: string;
-  attachments?: string;
   creator_id: number;
   creator_name: string;
-  created_at: string;
-  parent_id?: number;
+  parent_id: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // 工单分类相关类型
@@ -425,8 +407,12 @@ export async function detailTemplate(data: DetailTemplateReq) {
 }
 
 // 工单实例相关接口
-export async function createInstance(data: InstanceReq) {
+export async function createInstance(data: CreateInstanceReq) {
   return requestClient.post('/workorder/instance/create', data);
+}
+
+export async function updateInstance(data: UpdateInstanceReq) {
+  return requestClient.post('/workorder/instance/update', data);
 }
 
 export async function approveInstance(data: InstanceFlowReq) {
@@ -441,6 +427,10 @@ export async function commentInstance(data: InstanceCommentReq) {
   return requestClient.post('/workorder/instance/comment', data);
 }
 
+export async function transferInstance(data: InstanceFlowReq) {
+  return requestClient.post('/workorder/instance/transfer', data);
+}
+
 export async function listInstance(data: ListInstanceReq) {
   return requestClient.post('/workorder/instance/list', data);
 }
@@ -449,8 +439,16 @@ export async function detailInstance(data: DetailInstanceReq) {
   return requestClient.post('/workorder/instance/detail', data);
 }
 
-export async function deleteInstance(data: DeleteInstanceReq) {
-  return requestClient.post('/workorder/instance/delete', data);
+export async function deleteInstance(data: DetailInstanceReq) {
+  return requestClient.delete(`/workorder/instance/delete/${data.id}`);
+}
+
+export async function myInstance(data: ListInstanceReq) {
+  return requestClient.post('/workorder/instance/my', data);
+}
+
+export async function instanceStatistics(data: any) {
+  return requestClient.post('/workorder/instance/statistics', data);
 }
 
 // 工单统计相关接口

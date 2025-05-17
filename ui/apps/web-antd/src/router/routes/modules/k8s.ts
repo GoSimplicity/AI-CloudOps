@@ -87,54 +87,54 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
-  {
-    component: BasicLayout,
-    meta: {
-      order: 4,
-      title: 'k8s应用管理',
-    },
-    name: 'K8sApp',
-    path: '/k8s_app',
-    children: [
-      {
-        name: 'K8sInstance',
-        path: '/k8s_instance',
-        component: () => import('#/views/k8s/K8sInstance.vue'),
-        meta: {
-          icon: 'lucide:database',
-          title: '实例管理',
-        },
-      },
-      {
-        name: 'K8sApps',
-        path: '/k8s_apps',
-        component: () => import('#/views/k8s/K8sApps.vue'),
-        meta: {
-          hideInMenu: true,
-          icon: 'lucide:list-check',
-          title: '应用管理',
-        },
-      },
-      {
-        name: 'K8sProject',
-        path: '/k8s_project',
-        component: () => import('#/views/k8s/K8sProject.vue'),
-        meta: {
-          icon: 'lucide:bell-ring',
-          title: '项目管理',
-        },
-      },
-      {
-        name: 'CronJob',
-        path: '/k8s_cronjob',
-        component: () => import('#/views/k8s/K8sCronJob.vue'),
-        meta: {
-          icon: 'lucide:box',
-          title: 'CronJob管理',
-        },
-      },
-    ],
-  },
+  // {
+  //   component: BasicLayout,
+  //   meta: {
+  //     order: 4,
+  //     title: 'k8s应用管理',
+  //   },
+  //   name: 'K8sApp',
+  //   path: '/k8s_app',
+  //   children: [
+  //     {
+  //       name: 'K8sInstance',
+  //       path: '/k8s_instance',
+  //       component: () => import('#/views/k8s/K8sInstance.vue'),
+  //       meta: {
+  //         icon: 'lucide:database',
+  //         title: '实例管理',
+  //       },
+  //     },
+  //     {
+  //       name: 'K8sApps',
+  //       path: '/k8s_apps',
+  //       component: () => import('#/views/k8s/K8sApps.vue'),
+  //       meta: {
+  //         hideInMenu: true,
+  //         icon: 'lucide:list-check',
+  //         title: '应用管理',
+  //       },
+  //     },
+  //     {
+  //       name: 'K8sProject',
+  //       path: '/k8s_project',
+  //       component: () => import('#/views/k8s/K8sProject.vue'),
+  //       meta: {
+  //         icon: 'lucide:bell-ring',
+  //         title: '项目管理',
+  //       },
+  //     },
+  //     {
+  //       name: 'CronJob',
+  //       path: '/k8s_cronjob',
+  //       component: () => import('#/views/k8s/K8sCronJob.vue'),
+  //       meta: {
+  //         icon: 'lucide:box',
+  //         title: 'CronJob管理',
+  //       },
+  //     },
+  //   ],
+  // },
 ];
 
 export default routes;

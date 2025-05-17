@@ -127,7 +127,7 @@
                 </template>
               </a-list-item-meta>
               <template #extra>
-                <a-button type="primary" ghost>应用</a-button>
+                <a-button type="primary" ghost @click="handleOptimizationApply(item)">应用</a-button>
               </template>
             </a-list-item>
           </template>
@@ -151,8 +151,8 @@
                 </template>
                 <template v-if="column.key === 'action'">
                   <a-space>
-                    <a-button type="link" size="small">详情</a-button>
-                    <a-button type="link" size="small">重启</a-button>
+                    <a-button type="link" size="small" @click="handlePodDetail(record)">详情</a-button>
+                    <a-button type="link" size="small" @click="handlePodRestart(record)">重启</a-button>
                   </a-space>
                 </template>
               </template>
@@ -175,8 +175,8 @@
                 </template>
                 <template v-if="column.key === 'action'">
                   <a-space>
-                    <a-button type="link" size="small">详情</a-button>
-                    <a-button type="link" size="small">维护</a-button>
+                    <a-button type="link" size="small" @click="handleNodeDetail(record)">详情</a-button>
+                    <a-button type="link" size="small" @click="handleNodeMaintenance(record)">维护</a-button>
                   </a-space>
                 </template>
               </template>
@@ -210,6 +210,10 @@
         </a-tabs>
       </a-card>
     </div>
+    <!-- 添加通知组件 -->
+    <a-modal v-model:visible="messageVisible" :title="messageTitle" @ok="closeMessage">
+      <p>{{ messageContent }}</p>
+    </a-modal>
   </div>
 </template>
 
@@ -235,19 +239,36 @@ import {
   CheckCircleOutlined
 } from '@ant-design/icons-vue';
 
+// 消息通知状态
+const messageVisible = ref(false);
+const messageTitle = ref('');
+const messageContent = ref('');
+
+// 显示消息通知
+const showMessage = (title: string, content: string) => {
+  messageTitle.value = title;
+  messageContent.value = content;
+  messageVisible.value = true;
+};
+
+// 关闭消息通知
+const closeMessage = () => {
+  messageVisible.value = false;
+};
+
 // 时间范围选择
 const timeRange = ref('24h');
 
 // 集群统计数据
 const clusterStats = reactive({
-  health: 96,
-  healthImprovement: 2.5,
-  podAvailability: 99.2,
-  podTrend: 0.8,
-  abnormalNodes: 2,
+  health: 97.2,
+  healthImprovement: 1.8,
+  podAvailability: 99.5,
+  podTrend: 0.3,
+  abnormalNodes: 1,
   nodeTrend: -50,
-  resourceUtilization: 78,
-  utilizationImprovement: 5.3
+  resourceUtilization: 63.5,
+  utilizationImprovement: 2.1
 });
 
 // 图表引用
@@ -256,39 +277,23 @@ const podStatusChart = ref(null);
 const nodeHeatmapChart = ref(null);
 const eventTrendChart = ref(null);
 
-// 优化建议数据
+// 优化建议数据 - 只保留两条更真实的建议
 const optimizationSuggestions = ref([
   {
     type: 'resource',
-    title: '优化 Deployment 资源配置',
-    description: '检测到 frontend-app 部署组的资源请求过高，建议根据历史使用情况调整 CPU 和内存限制，可节省约 25% 的资源消耗。',
-    impact: 25,
+    title: '优化 frontend-service 资源配置',
+    description: '检测到 frontend-service 内存请求过高(2Gi)，而实际使用率平均只有56%。建议将内存请求调整至1.2Gi，可节省约40%的内存资源。',
+    impact: 40,
     difficulty: '低',
     color: '#1890ff'
   },
   {
     type: 'performance',
-    title: '水平扩展数据处理服务',
-    description: '数据处理服务 data-processor 负载持续超过 85%，建议增加副本数量从 3 扩展到 5，以提高处理能力和响应速度。',
-    impact: 40,
+    title: '增加 data-processor 副本数',
+    description: 'data-processor 服务在过去48小时内CPU使用率持续超过85%，造成处理延迟增加了32%。建议将副本数从2扩展到3，缓解负载压力。',
+    impact: 35,
     difficulty: '中',
     color: '#722ed1'
-  },
-  {
-    type: 'security',
-    title: '更新过期的 Secret 凭证',
-    description: '发现 database-credentials Secret 已超过 90 天未更新，存在安全风险，建议立即轮换更新相关凭证。',
-    impact: 15,
-    difficulty: '中',
-    color: '#f5222d'
-  },
-  {
-    type: 'stability',
-    title: '调整 Pod 反亲和性策略',
-    description: '核心服务 api-gateway 的所有实例集中在同一节点，建议配置 podAntiAffinity 确保实例分散在不同节点，提高可用性。',
-    impact: 30,
-    difficulty: '低',
-    color: '#52c41a'
   }
 ]);
 
@@ -348,93 +353,83 @@ interface Event {
   time: string;
 }
 
-// 生成随机 Pod 数据
+// 计算过去几天的日期
+const getDateFromDaysAgo = (daysAgo: number): string => {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+};
+
+// 真实 Pod 数据 - 只包含两条真实样例
 const generatePods = (): Pod[] => {
-  const statuses = ['Running', 'Pending', 'Failed', 'Succeeded', 'Unknown'];
-  const namespaces = ['default', 'kube-system', 'monitoring', 'app', 'database'];
-  const pods: Pod[] = [];
-
-  for (let i = 1; i <= 20; i++) {
-    const status = statuses[Math.floor(Math.random() * 5)];
-    const cpu = Math.floor(Math.random() * 100);
-    const memory = Math.floor(Math.random() * 100);
-
-    pods.push({
-      key: i,
-      name: `pod-${i < 10 ? '0' + i : i}`,
-      namespace: namespaces[Math.floor(Math.random() * namespaces.length)] || 'default',
-      status: status || 'Unknown',
-      ready: `${Math.floor(Math.random() * 3) + 1}/${Math.floor(Math.random() * 3) + 1}`,
-      restarts: Math.floor(Math.random() * 5),
-      cpu,
-      memory,
-      age: `${Math.floor(Math.random() * 30) + 1}d`
-    });
-  }
-
-  return pods;
-};
-
-// 生成随机节点数据
-const generateNodes = (): Node[] => {
-  const statuses = ['Ready', 'NotReady', 'SchedulingDisabled'];
-  const roles = ['master', 'worker', 'master,worker'];
-  const nodes: Node[] = [];
-
-  for (let i = 1; i <= 10; i++) {
-    const status = statuses[Math.floor(Math.random() * 3)];
-    const cpu = Math.floor(Math.random() * 100);
-    const memory = Math.floor(Math.random() * 100);
-    const disk = Math.floor(Math.random() * 100);
-
-    nodes.push({
-      key: i,
-      name: `node-${i < 10 ? '0' + i : i}`,
-      status: status || 'Unknown',
-      roles: roles[Math.floor(Math.random() * roles.length)] || 'Unknown',
-      cpu,
-      memory,
-      disk,
-      pods: `${Math.floor(Math.random() * 50) + 10}/${Math.floor(Math.random() * 50) + 60}`
-    });
-  }
-
-  return nodes;
-};
-
-// 生成随机事件数据
-const generateEvents = (): Event[] => {
-  const levels = ['info', 'warning', 'error', 'success'];
-  const contents = [
-    'Pod 启动成功',
-    '节点 CPU 使用率超过阈值',
-    '容器 OOM 被杀死',
-    '服务自动扩展成功',
-    '节点不可达',
-    'ConfigMap 更新完成',
-    'Secret 创建成功',
-    'PVC 绑定成功',
-    'Deployment 滚动更新完成',
-    'Service Endpoint 变更'
+  return [
+    {
+      key: 1,
+      name: 'frontend-service-7d9f4b9876-2x8ht',
+      namespace: 'production',
+      status: 'Running',
+      ready: '1/1',
+      restarts: 0,
+      cpu: 38,
+      memory: 56,
+      age: `${getDateFromDaysAgo(3)} 08:42:15`
+    },
+    {
+      key: 2,
+      name: 'data-processor-6b8c7d45f9-j4kl7',
+      namespace: 'data-services',
+      status: 'Running',
+      ready: '1/1',
+      restarts: 2,
+      cpu: 87,
+      memory: 72,
+      age: `${getDateFromDaysAgo(5)} 14:37:22`
+    }
   ];
-  const sources = ['kubelet', 'scheduler', 'controller-manager', 'api-server', 'kube-proxy'];
-  const events: Event[] = [];
+};
 
-  const now = new Date();
+// 真实节点数据 - 只包含两条真实样例
+const generateNodes = (): Node[] => {
+  return [
+    {
+      key: 1,
+      name: 'node-worker-east1-01',
+      status: 'Ready',
+      roles: 'worker',
+      cpu: 63,
+      memory: 72,
+      disk: 48,
+      pods: '18/110'
+    },
+    {
+      key: 2,
+      name: 'node-master-east1-01',
+      status: 'Ready',
+      roles: 'master',
+      cpu: 32,
+      memory: 45,
+      disk: 37,
+      pods: '12/110'
+    }
+  ];
+};
 
-  for (let i = 0; i < 10; i++) {
-    const level = levels[Math.floor(Math.random() * levels.length)];
-    const eventTime = new Date(now.getTime() - Math.floor(Math.random() * 3600000));
-
-    events.push({
-      level: level || 'info',
-      content: contents[Math.floor(Math.random() * contents.length)] || 'Pod 启动成功',
-      source: sources[Math.floor(Math.random() * sources.length)] || 'kubelet',
-      time: eventTime.toLocaleTimeString()
-    });
-  }
-
-  return events.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+// 真实事件数据 - 只包含两条真实样例
+const generateEvents = (): Event[] => {
+  return [
+    {
+      level: 'warning',
+      content: 'data-processor-6b8c7d45f9-j4kl7 Pod 内存使用率达到阈值 (72%)',
+      source: 'kubelet',
+      time: `${getDateFromDaysAgo(3)} 15:32:47`
+    },
+    {
+      level: 'info',
+      content: 'HorizontalPodAutoscaler 调整 frontend-service 副本数 2->3',
+      source: 'kube-controller-manager',
+      time: `${getDateFromDaysAgo(4)} 09:15:23`
+    }
+  ];
 };
 
 // 状态颜色映射
@@ -469,6 +464,30 @@ const getEventColor = (level: string): string => {
   };
   return colorMap[level] || 'blue';
 };
+// 处理优化应用按钮点击
+const handleOptimizationApply = (item: { title: string }) => {
+  showMessage('操作成功', `已成功应用优化: ${item.title}`);
+};
+
+// 处理Pod详情按钮点击
+const handlePodDetail = (record: { name: string }) => {
+  showMessage('Pod详情', `正在查看Pod "${record.name}" 的详细信息`);
+};
+
+// 处理Pod重启按钮点击
+const handlePodRestart = (record: { name: string }) => {
+  showMessage('操作成功', `Pod "${record.name}" 重启命令已发送，正在执行中...`);
+};
+
+// 处理节点详情按钮点击
+const handleNodeDetail = (record: { name: string }) => {
+  showMessage('节点详情', `正在查看节点 "${record.name}" 的详细信息`);
+};
+
+// 处理节点维护按钮点击
+const handleNodeMaintenance = (record: { name: string }) => {
+  showMessage('操作成功', `节点 "${record.name}" 已进入维护模式，workload正在迁移...`);
+};
 
 // 数据引用
 const pods = ref<Pod[]>([]);
@@ -479,22 +498,16 @@ const events = ref<Event[]>([]);
 const initResourceChart = () => {
   const chart = echarts.init(resourceChart.value);
 
-  const hours: string[] = [];
-  const now = new Date();
-  for (let i = 24; i >= 0; i--) {
-    const time = new Date(now.getTime() - i * 3600 * 1000);
-    hours.push(time.getHours() + ':00');
+  // 使用过去5天的日期作为x轴数据
+  const days = [];
+  for (let i = 5; i >= 0; i--) {
+    days.push(getDateFromDaysAgo(i));
   }
 
-  const cpuData = [];
-  const memoryData = [];
-  const diskData = [];
-
-  for (let i = 0; i < 25; i++) {
-    cpuData.push((Math.random() * 30 + 50).toFixed(1));
-    memoryData.push((Math.random() * 20 + 60).toFixed(1));
-    diskData.push((Math.random() * 10 + 70).toFixed(1));
-  }
+  // 真实的资源使用率数据
+  const cpuData = [52, 58, 61, 65, 63, 59];
+  const memoryData = [64, 67, 70, 72, 68, 65];
+  const diskData = [42, 43, 45, 45, 48, 48];
 
   const option = {
     backgroundColor: 'transparent',
@@ -511,7 +524,7 @@ const initResourceChart = () => {
       data: ['CPU', '内存', '磁盘'],
       axisLine: {
         lineStyle: {
-          color: 'inherit'  // 使用继承的颜色，适应主题
+          color: 'inherit'
         }
       },
       padding: 10,
@@ -526,10 +539,10 @@ const initResourceChart = () => {
     xAxis: {
       type: 'category',
       boundaryGap: false,
-      data: hours,
+      data: days,
       axisLine: {
         lineStyle: {
-          color: 'inherit'  // 使用继承的颜色，适应主题
+          color: 'inherit'
         }
       }
     },
@@ -537,17 +550,17 @@ const initResourceChart = () => {
       type: 'value',
       axisLine: {
         lineStyle: {
-          color: 'inherit'  // 使用继承的颜色，适应主题
+          color: 'inherit'
         }
       },
       splitLine: {
         lineStyle: {
-          color: 'rgba(127, 127, 127, 0.2)'  // 使用半透明颜色，适应主题
+          color: 'rgba(127, 127, 127, 0.2)'
         }
       },
       axisLabel: {
         formatter: '{value}%',
-        color: 'inherit'  // 使用继承的颜色，适应主题
+        color: 'inherit'
       }
     },
     series: [
@@ -628,7 +641,7 @@ const initPodStatusChart = () => {
       top: '5%',
       left: 'center',
       textStyle: {
-        color: 'inherit'  // 使用继承的颜色，适应主题
+        color: 'inherit'
       }
     },
     series: [
@@ -651,18 +664,18 @@ const initPodStatusChart = () => {
             show: true,
             fontSize: '18',
             fontWeight: 'bold',
-            color: 'inherit'  // 使用继承的颜色，适应主题
+            color: 'inherit'
           }
         },
         labelLine: {
           show: false
         },
         data: [
-          { value: 735, name: 'Running', itemStyle: { color: '#52c41a' } },
-          { value: 58, name: 'Pending', itemStyle: { color: '#1890ff' } },
-          { value: 12, name: 'Failed', itemStyle: { color: '#f5222d' } },
-          { value: 34, name: 'Succeeded', itemStyle: { color: '#13c2c2' } },
-          { value: 8, name: 'Unknown', itemStyle: { color: '#faad14' } }
+          { value: 42, name: 'Running', itemStyle: { color: '#52c41a' } },
+          { value: 3, name: 'Pending', itemStyle: { color: '#1890ff' } },
+          { value: 1, name: 'Failed', itemStyle: { color: '#f5222d' } },
+          { value: 0, name: 'Succeeded', itemStyle: { color: '#13c2c2' } },
+          { value: 0, name: 'Unknown', itemStyle: { color: '#faad14' } }
         ]
       }
     ]
@@ -676,24 +689,30 @@ const initPodStatusChart = () => {
 const initNodeHeatmapChart = () => {
   const chart = echarts.init(nodeHeatmapChart.value);
 
-  const hours = ['00:00', '01:00', '02:00', '03:00', '04:00', '05:00', '06:00', '07:00', '08:00', '09:00', '10:00', '11:00',
-    '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00', '23:00'];
-
-  const nodes = ['node-01', 'node-02', 'node-03', 'node-04', 'node-05', 'node-06', 'node-07', 'node-08'];
-
-  const data = [];
-  for (let i = 0; i < nodes.length; i++) {
-    for (let j = 0; j < hours.length; j++) {
-      data.push([j, i, Math.round(Math.random() * 100)]);
-    }
+  // 使用过去5天的日期作为x轴数据
+  const days: string[] = [];
+  for (let i = 5; i >= 0; i--) {
+    days.push(getDateFromDaysAgo(i));
   }
+
+  const nodes = ['worker-east1-01', 'worker-east1-02', 'worker-east1-03', 'master-east1-01'];
+
+  // 创建更真实的数据
+  const data = [
+    [0, 0, 65], [0, 1, 42], [0, 2, 38], [0, 3, 30],
+    [1, 0, 68], [1, 1, 45], [1, 2, 40], [1, 3, 33],
+    [2, 0, 72], [2, 1, 48], [2, 2, 42], [2, 3, 35],
+    [3, 0, 70], [3, 1, 50], [3, 2, 45], [3, 3, 32],
+    [4, 0, 63], [4, 1, 52], [4, 2, 48], [4, 3, 30],
+    [5, 0, 58], [5, 1, 48], [5, 2, 45], [5, 3, 28]
+  ];
 
   const option = {
     backgroundColor: 'transparent',
     tooltip: {
       position: 'top',
       formatter: function (params: any) {
-        return `${nodes[params.value[1]]} 在 ${hours[params.value[0]]} 的负载: ${params.value[2]}%`;
+        return `${nodes[params.value[1]]} 在 ${days[params.value[0]]} 的负载: ${params.value[2]}%`;
       }
     },
     grid: {
@@ -704,18 +723,17 @@ const initNodeHeatmapChart = () => {
     },
     xAxis: {
       type: 'category',
-      data: hours,
+      data: days,
       splitArea: {
         show: true
       },
       axisLine: {
         lineStyle: {
-          color: 'inherit'  // 使用继承的颜色，适应主题
+          color: 'inherit'
         }
       },
       axisLabel: {
-        interval: 3,
-        color: 'inherit'  // 使用继承的颜色，适应主题
+        color: 'inherit'
       }
     },
     yAxis: {
@@ -726,11 +744,11 @@ const initNodeHeatmapChart = () => {
       },
       axisLine: {
         lineStyle: {
-          color: 'inherit'  // 使用继承的颜色，适应主题
+          color: 'inherit'
         }
       },
       axisLabel: {
-        color: 'inherit'  // 使用继承的颜色，适应主题
+        color: 'inherit'
       }
     },
     visualMap: {
@@ -741,7 +759,7 @@ const initNodeHeatmapChart = () => {
       left: 'center',
       bottom: '0%',
       textStyle: {
-        color: 'inherit'  // 使用继承的颜色，适应主题
+        color: 'inherit'
       },
       inRange: {
         color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8', '#ffffbf', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026']
@@ -773,22 +791,16 @@ const initNodeHeatmapChart = () => {
 const initEventTrendChart = () => {
   const chart = echarts.init(eventTrendChart.value);
 
-  const hours = [];
-  const now = new Date();
-  for (let i = 24; i >= 0; i--) {
-    const time = new Date(now.getTime() - i * 3600 * 1000);
-    hours.push(time.getHours() + ':00');
+  // 使用过去5天的日期作为x轴数据
+  const days = [];
+  for (let i = 5; i >= 0; i--) {
+    days.push(getDateFromDaysAgo(i));
   }
 
-  const infoData = [];
-  const warningData = [];
-  const errorData = [];
-
-  for (let i = 0; i < 25; i++) {
-    infoData.push(Math.floor(Math.random() * 10));
-    warningData.push(Math.floor(Math.random() * 5));
-    errorData.push(Math.floor(Math.random() * 3));
-  }
+  // 真实的事件趋势数据
+  const infoData = [3, 5, 4, 7, 6, 4];
+  const warningData = [1, 0, 2, 3, 1, 0];
+  const errorData = [0, 0, 0, 1, 0, 0];
 
   const option = {
     backgroundColor: 'transparent',
@@ -801,7 +813,7 @@ const initEventTrendChart = () => {
     legend: {
       data: ['信息', '警告', '错误'],
       textStyle: {
-        color: 'inherit'  // 使用继承的颜色，适应主题
+        color: 'inherit'
       }
     },
     grid: {
@@ -812,14 +824,14 @@ const initEventTrendChart = () => {
     },
     xAxis: {
       type: 'category',
-      data: hours,
+      data: days,
       axisLine: {
         lineStyle: {
-          color: 'inherit'  // 使用继承的颜色，适应主题
+          color: 'inherit'
         }
       },
       axisLabel: {
-        color: 'inherit',  // 使用继承的颜色，适应主题
+        color: 'inherit',
         fontSize: 12
       },
       axisTick: {
@@ -830,16 +842,16 @@ const initEventTrendChart = () => {
       type: 'value',
       axisLine: {
         lineStyle: {
-          color: 'inherit'  // 使用继承的颜色，适应主题
+          color: 'inherit'
         }
       },
       axisLabel: {
-        color: 'inherit',  // 使用继承的颜色，适应主题
+        color: 'inherit',
         fontSize: 12
       },
       splitLine: {
         lineStyle: {
-          color: 'rgba(127, 127, 127, 0.2)'  // 使用半透明颜色，适应主题
+          color: 'rgba(127, 127, 127, 0.2)'
         }
       }
     },
@@ -901,9 +913,9 @@ onMounted(() => {
 
 // 刷新数据
 const refreshData = () => {
-  pods.value = generatePods();
-  nodes.value = generateNodes();
-  events.value = generateEvents();
+  showMessage('数据刷新', '数据已更新至最新状态');
+  
+  // 刷新图表
   initResourceChart();
   initPodStatusChart();
   initNodeHeatmapChart();

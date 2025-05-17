@@ -342,3 +342,5 @@ func TextResult[T any](item T) (*mcp.CallToolResult, error) {
 		return buildTextResult(string(bytes)), nil
 	}
 }
+
+

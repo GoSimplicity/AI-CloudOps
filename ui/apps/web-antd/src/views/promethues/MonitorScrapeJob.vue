@@ -77,7 +77,7 @@
         <!-- 创建时间列 -->
         <template #created_at="{ record }">
           <a-tooltip :title="formatDate(record.created_at)">
-            {{ formatDate(record.created_at) }}
+            {{ record.created_at }}
           </a-tooltip>
         </template>
       </a-table>
@@ -190,7 +190,7 @@
         </a-row>
 
         <a-form-item label="树节点" name="tree_node_ids">
-          <a-tree-select v-model:value="addForm.tree_node_ids" :tree-data="leafNodes" :tree-checkable="true"
+          <a-tree-select v-model:value="addForm.tree_node_ids" :tree-data="treeData" :tree-checkable="true"
             :tree-default-expand-all="true" :show-checked-strategy="SHOW_PARENT" placeholder="请选择树节点"
             style="width: 100%" />
         </a-form-item>
@@ -294,7 +294,7 @@
         </a-row>
 
         <a-form-item label="树节点" name="tree_node_ids" :rules="[{ required: true, message: '请选择树节点' }]">
-          <a-tree-select v-model:value="editForm.tree_node_ids" :tree-data="leafNodes" :tree-checkable="true"
+          <a-tree-select v-model:value="editForm.tree_node_ids" :tree-data="treeData" :tree-checkable="true"
             :tree-default-expand-all="true" :show-checked-strategy="SHOW_PARENT" placeholder="请选择树节点"
             style="width: 100%" />
         </a-form-item>
@@ -359,12 +359,12 @@ interface Pool {
 }
 
 interface TreeNode {
-  id: string;
+  id: string | number;
   title: string;
   children?: TreeNode[];
-  isLeaf?: number;
-  value?: string;
-  key?: string;
+  isLeaf?: boolean;
+  value?: string | number;
+  key?: string | number;
 }
 
 // 数据源（待从后端获取）
@@ -434,16 +434,15 @@ const columns = [
 
 // 树形数据
 const treeData = ref<TreeNode[]>([]);
-const leafNodes = ref<TreeNode[]>([]);
 
 // 递归处理树节点数据
 const processTreeData = (nodes: any[]): TreeNode[] => {
   return nodes.map(node => {
     const processedNode: TreeNode = {
-      id: node.id,
-      title: node.name || node.title,
-      key: node.id,
-      value: node.id,
+      id: String(node.id),
+      title: node.name,
+      key: String(node.id),
+      value: String(node.id),
       isLeaf: node.isLeaf
     };
 
@@ -455,30 +454,15 @@ const processTreeData = (nodes: any[]): TreeNode[] => {
   });
 };
 
-// 递归获取所有叶子节点
-const getLeafNodes = (nodes: TreeNode[]): TreeNode[] => {
-  let leaves: TreeNode[] = [];
-  nodes.forEach(node => {
-    if (node.isLeaf === 1) {
-      leaves.push(node);
-    } else if (node.children) {
-      leaves = leaves.concat(getLeafNodes(node.children));
-    }
-  });
-  return leaves;
-};
-
 // 获取树节点数据
 const fetchTreeNodes = async () => {
   try {
     const response = await getTreeList({});
     if (!response) {
       treeData.value = [];
-      leafNodes.value = [];
       return;
     }
     treeData.value = processTreeData(response);
-    leafNodes.value = getLeafNodes(treeData.value);
   } catch (error: any) {
     message.error(error.message || '获取树节点数据失败');
   }
@@ -587,13 +571,6 @@ const formatTreeNodeNames = (treeNodeNames: string[]) => {
   if (!Array.isArray(treeNodeNames)) return '';
   return treeNodeNames.join(', ');
 };
-
-// 在组件挂载时获取数据
-onMounted(() => {
-  fetchResources();
-  fetchPools();
-  fetchTreeNodes();
-});
 
 // 打开新增模态框
 const openAddModal = () => {
@@ -753,6 +730,13 @@ const handleDelete = (record: MonitorScrapeJobItem) => {
     },
   });
 };
+
+// 在组件挂载时获取数据
+onMounted(() => {
+  fetchResources();
+  fetchPools();
+  fetchTreeNodes();
+});
 </script>
 
 <style scoped>

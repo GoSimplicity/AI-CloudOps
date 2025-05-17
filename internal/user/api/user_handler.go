@@ -115,7 +115,7 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 		return
 	}
 
-	accessToken, refreshToken, err := u.ijwt.SetLoginToken(ctx, user.ID)
+	accessToken, refreshToken, err := u.ijwt.SetLoginToken(ctx, user.ID, user.Username)
 	if err != nil {
 		u.l.Error("生成令牌失败", zap.Error(err))
 		utils.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "登录失败")
@@ -184,7 +184,7 @@ func (u *UserHandler) RefreshToken(ctx *gin.Context) {
 		return
 	}
 
-	newToken, err := u.ijwt.SetJWTToken(ctx, rc.Uid, rc.Ssid)
+	newToken, err := u.ijwt.SetJWTToken(ctx, rc.Uid, rc.Username, rc.Ssid)
 	if err != nil {
 		u.l.Error("生成新令牌失败", zap.Error(err))
 		utils.InternalServerError(ctx, http.StatusInternalServerError, err.Error(), "刷新令牌失败")

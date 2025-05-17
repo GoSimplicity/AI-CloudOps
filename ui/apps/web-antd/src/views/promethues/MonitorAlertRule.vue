@@ -103,7 +103,7 @@
           </a-select>
         </a-form-item>
         <a-form-item label="树节点" name="treeNodeId">
-          <a-tree-select v-model:value="addForm.tree_node_id" :tree-data="leafNodes" :tree-default-expand-all="true"
+          <a-tree-select v-model:value="addForm.tree_node_id" :tree-data="treeData" :tree-default-expand-all="true"
             placeholder="请选择树节点" style="width: 100%" />
         </a-form-item>
         <a-form-item label="表达式" name="expr">
@@ -169,7 +169,7 @@
           </a-select>
         </a-form-item>
         <a-form-item label="树节点" name="treeNodeId">
-          <a-tree-select v-model:value="editForm.tree_node_id" :tree-data="leafNodes" :tree-default-expand-all="true"
+          <a-tree-select v-model:value="editForm.tree_node_id" :tree-data="treeData" :tree-default-expand-all="true"
             placeholder="请选择树节点" style="width: 100%" />
         </a-form-item>
         <a-form-item label="启用" name="enable">
@@ -245,12 +245,12 @@ import type { AlertRuleItem } from '#/api/core/prometheus';
 
 // 定义树节点数据类型
 interface TreeNode {
-  id: string;
+  id: string | number;
   title: string;
   children?: TreeNode[];
-  isLeaf?: number;
-  value?: string;
-  key?: string;
+  isLeaf?: boolean;
+  value?: string | number;
+  key?: string | number;
 }
 
 interface ScrapePool {
@@ -282,9 +282,6 @@ const loading = ref(false);
 
 // 树形数据
 const treeData = ref<TreeNode[]>([]);
-const leafNodes = ref<TreeNode[]>([]);
-
-
 
 // 表格列配置
 const columns = [
@@ -365,7 +362,6 @@ const columns = [
 const isAddModalVisible = ref(false);
 const isEditModalVisible = ref(false);
 
-
 // 处理表格变化
 const handlePageChange = (page: number, size: number) => {
   current.value = page;
@@ -426,10 +422,10 @@ const processTreeData = (nodes: any[]): TreeNode[] => {
   return nodes.map(node => {
     const processedNode: TreeNode = {
       id: node.id,
-      title: node.name || node.title,
+      title: node.name,
       key: node.id,
       value: node.id,
-      isLeaf: node.isLeaf
+      isLeaf: node.isLeaf === true
     };
 
     if (node.children && node.children.length > 0) {
@@ -440,30 +436,15 @@ const processTreeData = (nodes: any[]): TreeNode[] => {
   });
 };
 
-// 递归获取所有叶子节点
-const getLeafNodes = (nodes: TreeNode[]): TreeNode[] => {
-  let leaves: TreeNode[] = [];
-  nodes.forEach(node => {
-    if (node.isLeaf === 1) {
-      leaves.push(node);
-    } else if (node.children) {
-      leaves = leaves.concat(getLeafNodes(node.children));
-    }
-  });
-  return leaves;
-};
-
 // 获取树节点数据
 const fetchTreeNodes = async () => {
   try {
     const response = await getTreeList({});
     if (!response) {
       treeData.value = [];
-      leafNodes.value = [];
       return;
     }
     treeData.value = processTreeData(response);
-    leafNodes.value = getLeafNodes(treeData.value);
   } catch (error: any) {
     message.error(error.message || '获取树节点数据失败');
     console.error(error);
@@ -689,7 +670,6 @@ const handleDelete = (record: AlertRuleItem) => {
         message.success('AlertRule已删除');
         fetchAlertRules();
       } catch (error: any) {
-
         message.error(error.message || '删除AlertRule失败');
         console.error(error);
       } finally {
@@ -706,7 +686,6 @@ const fetchAlertRules = async () => {
     const response = await getAlertRulesListApi(current.value, pageSizeRef.value, searchText.value);
     data.value = response;
     total.value = await getMonitorAlertRuleTotalApi();
-
   } catch (error: any) {
     message.error(error.message || '获取AlertRules数据失败');
     console.error(error);

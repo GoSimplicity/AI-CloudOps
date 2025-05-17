@@ -53,7 +53,30 @@ func ConvertFormDesignReq(formDesign *model.FormDesignReq) (*model.FormDesign, e
 		Status:      formDesign.Status,
 		CategoryID:  formDesign.CategoryID,
 		CreatorID:   formDesign.CreatorID,
-		CreatorName: formDesign.CreatorName,
+	}, nil
+}
+
+// ConvertTemplateReq 转换模板请求
+func ConvertTemplateReq(template *model.TemplateReq) (*model.Template, error) {
+	if template == nil {
+		return nil, fmt.Errorf("模板请求不能为空")
+	}
+
+	templateMarshal, err := json.Marshal(template.DefaultValues)
+	if err != nil {
+		return nil, fmt.Errorf("序列化模板 Schema 失败: %v", err)
+	}
+	return &model.Template{
+		Model: model.Model{
+			ID: template.ID,
+		},
+		Name:          template.Name,
+		Description:   template.Description,
+		ProcessID:     template.ProcessID,
+		DefaultValues: string(templateMarshal),
+		Status:        template.Status,
+		CategoryID:    template.CategoryID,
+		CreatorID:     template.CreatorID,
 	}, nil
 }
 
@@ -104,53 +127,54 @@ func ConvertUpdateProcessReq(process *model.UpdateProcessReq) (*model.Process, e
 	}, nil
 }
 
-// ConvertTemplateReq 转换模板请求
-func ConvertTemplateReq(template *model.TemplateReq) (*model.Template, error) {
-	if template == nil {
-		return nil, fmt.Errorf("模板请求不能为空")
+// ConvertCreateInstanceReq 转换创建实例请求为实例模型
+func ConvertCreateInstanceReq(req *model.CreateInstanceReq) (*model.Instance, error) {
+	if req == nil {
+		return nil, fmt.Errorf("创建实例请求不能为空")
 	}
 
-	templateMarshal, err := json.Marshal(template.DefaultValues)
+	formDataMarshal, err := json.Marshal(req.FormData)
 	if err != nil {
-		return nil, fmt.Errorf("序列化模板 Schema 失败: %v", err)
+		return nil, fmt.Errorf("序列化实例表单数据失败: %v", err)
 	}
-	return &model.Template{
-		Model: model.Model{
-			ID: template.ID,
-		},
-		Name:          template.Name,
-		Description:   template.Description,
-		ProcessID:     template.ProcessID,
-		DefaultValues: string(templateMarshal),
-		Status:        template.Status,
-		CategoryID:    template.CategoryID,
-		CreatorID:     template.CreatorID,
-		CreatorName:   template.CreatorName,
-	}, nil
+	
+	instance := &model.Instance{
+		Title:       req.Title,
+		WorkflowID:  req.WorkflowID,
+		FormData:    string(formDataMarshal),
+		CurrentStep: "提交申请", // 默认初始步骤
+		CurrentRole: "申请人", // 默认初始角色
+		Status:      model.InstanceStatusDraft, // 默认为草稿状态
+		Priority:    req.Priority,
+		CategoryID:  req.CategoryID,
+		// CreatorID 和 CreatorName 需要从上下文中获取，这里不能直接从请求中获取
+	}
+	
+	return instance, nil
 }
 
-// ConvertInstanceReq 转换实例请求为实例模型
-func ConvertInstanceReq(instance *model.InstanceReq) (*model.Instance, error) {
-	if instance == nil {
-		return nil, fmt.Errorf("实例请求不能为空")
+// ConvertUpdateInstanceReq 转换更新实例请求为实例模型
+func ConvertUpdateInstanceReq(req *model.UpdateInstanceReq) (*model.Instance, error) {
+	if req == nil {
+		return nil, fmt.Errorf("更新实例请求不能为空")
 	}
 
-	instanceMarshal, err := json.Marshal(instance.FormData)
+	formDataMarshal, err := json.Marshal(req.FormData)
 	if err != nil {
-		return nil, fmt.Errorf("序列化实例 Schema 失败: %v", err)
+		return nil, fmt.Errorf("序列化实例表单数据失败: %v", err)
 	}
-	return &model.Instance{
+	
+	instance := &model.Instance{
 		Model: model.Model{
-			ID: instance.ID,
+			ID: req.ID,
 		},
-		Title:          instance.Title,
-		ProcessID:      instance.ProcessID,
-		ProcessVersion: instance.ProcessVersion,
-		FormData:       string(instanceMarshal),
-		Status:         instance.Status,
-		CategoryID:     instance.CategoryID,
-		DueDate:        instance.DueDate,
-	}, nil
+		Title:      req.Title,
+		FormData:   string(formDataMarshal),
+		Priority:   req.Priority,
+		CategoryID: req.CategoryID,
+	}
+	
+	return instance, nil
 }
 
 // ConvertInstanceFlowReq 转换实例流程请求
@@ -161,23 +185,16 @@ func ConvertInstanceFlowReq(instance *model.InstanceFlowReq) (*model.InstanceFlo
 
 	instanceMarshal, err := json.Marshal(instance.FormData)
 	if err != nil {
-		return nil, fmt.Errorf("序列化实例流程 Schema 失败: %v", err)
+		return nil, fmt.Errorf("序列化实例流程表单数据失败: %v", err)
 	}
 
 	return &model.InstanceFlow{
-		Model: model.Model{
-			ID: instance.ID,
-		},
-		InstanceID:   instance.InstanceID,
-		NodeID:       instance.NodeID,
-		NodeName:     instance.NodeName,
-		Action:       instance.Action,
-		TargetUserID: instance.TargetUserID,
-		OperatorID:   instance.OperatorID,
-		OperatorName: instance.OperatorName,
-		Comment:      instance.Comment,
-		FormData:     string(instanceMarshal),
-		Attachments:  instance.Attachments,
+		InstanceID: instance.InstanceID,
+		Step:       "", // 需要从上下文中获取当前步骤
+		Action:     instance.Action,
+		Comment:    instance.Comment,
+		FormData:   string(instanceMarshal),
+		// OperatorID 和 OperatorName 需要从上下文中获取
 	}, nil
 }
 
@@ -188,13 +205,9 @@ func ConvertInstanceCommentReq(instanceComment *model.InstanceCommentReq) (*mode
 	}
 
 	return &model.InstanceComment{
-		Model: model.Model{
-			ID: instanceComment.ID,
-		},
-		InstanceID:  instanceComment.InstanceID,
-		Content:     instanceComment.Content,
-		Attachments: instanceComment.Attachments,
-		CreatorID:   instanceComment.CreatorID,
-		CreatorName: instanceComment.CreatorName,
+		InstanceID: instanceComment.InstanceID,
+		Content:    instanceComment.Content,
+		ParentID:   instanceComment.ParentID,
+		// CreatorID 和 CreatorName 需要从上下文中获取
 	}, nil
 }

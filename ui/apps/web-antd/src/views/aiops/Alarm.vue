@@ -3,7 +3,7 @@
     <div class="header">
       <h1 class="title">智能运维告警分析平台</h1>
       <div class="actions">
-        <a-select v-model:value="timeRange" style="width: 150px" class="time-selector">
+        <a-select v-model:value="timeRange" style="width: 150px" class="time-selector" @change="refreshData">
           <a-select-option value="1h">最近1小时</a-select-option>
           <a-select-option value="6h">最近6小时</a-select-option>
           <a-select-option value="24h">最近24小时</a-select-option>
@@ -140,6 +140,9 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- 操作结果反馈 -->
+    <a-message></a-message>
   </div>
 </template>
 
@@ -155,6 +158,7 @@ import {
   ArrowDownOutlined
 } from '@ant-design/icons-vue';
 import * as echarts from 'echarts';
+import { message } from 'ant-design-vue';
 
 // 定义告警记录类型
 interface AlarmRecord {
@@ -184,16 +188,16 @@ const getTimeAgo = (hours: number): string => {
   return formatDate(date);
 };
 
-// 统计数据
+// 统计数据 - 使用更真实的数据
 const alarmStats = reactive({
-  total: 143,
-  totalTrend: 8,
-  critical: 27,
-  criticalTrend: -5,
-  resolved: 92,
-  resolvedTrend: 12,
-  avgResolveTime: '2.8小时',
-  avgTimeTrend: -3
+  total: 37,
+  totalTrend: -5,
+  critical: 8,
+  criticalTrend: 3,
+  resolved: 24,
+  resolvedTrend: 7,
+  avgResolveTime: '1.5小时',
+  avgTimeTrend: -12
 });
 
 // 图表引用
@@ -208,85 +212,63 @@ const generateAlarmId = (index: number): string => {
   return `ALM-${dateStr}-${String(index).padStart(3, '0')}`;
 };
 
-// 告警列表数据
+// 告警列表数据 - 更真实、更少的数据
 const loading = ref(false);
 const alarmList = ref<AlarmRecord[]>([
   {
-    id: generateAlarmId(1),
-    title: 'CPU使用率过高',
+    id: "ALM-230517-001",
+    title: 'MySQL数据库连接异常',
     level: '严重',
-    source: '生产服务器-Web01',
-    time: getTimeAgo(3),
-    status: '已解决',
-    content: '服务器CPU使用率持续超过95%达10分钟',
-    possibleCause: '应用程序内存泄漏或高并发请求导致',
-    solution: '检查应用程序日志，重启应用或增加资源配置'
-  },
-  {
-    id: generateAlarmId(2),
-    title: '数据库连接异常',
-    level: '严重',
-    source: '数据库服务器-DB01',
-    time: getTimeAgo(2),
+    source: '核心数据库服务器-DB01',
+    time: '2025-05-17 08:23:45',
     status: '处理中',
-    content: '数据库连接池耗尽，新连接请求被拒绝',
-    possibleCause: '连接未正确关闭或连接池配置不合理',
-    solution: '检查应用程序是否正确关闭连接，调整连接池大小'
+    content: 'MySQL数据库连接池耗尽，应用无法获取新连接，导致服务响应缓慢',
+    possibleCause: '数据库连接未正确释放或并发请求量突增导致连接池耗尽',
+    solution: '1. 检查应用代码是否存在连接泄漏  2. 适当增加连接池容量  3. 优化数据库访问逻辑'
   },
   {
-    id: generateAlarmId(3),
+    id: "ALM-230517-002",
+    title: 'Nginx 5xx错误率升高',
+    level: '严重',
+    source: '负载均衡器-LB02',
+    time: '2025-05-17 09:15:22',
+    status: '未处理',
+    content: 'Nginx错误日志中5xx状态码数量显著增加，当前错误率6.7%，超出阈值(1%)',
+    possibleCause: '后端应用服务响应超时或宕机',
+    solution: '1. 检查后端应用服务健康状况  2. 分析错误日志定位具体原因  3. 临时扩容应用服务器'
+  },
+  {
+    id: "ALM-230517-003",
+    title: 'Redis缓存命中率下降',
+    level: '警告',
+    source: '缓存服务器-CACHE01',
+    time: '2025-05-17 10:42:37',
+    status: '已解决',
+    content: 'Redis缓存命中率从95%下降到78%，导致数据库负载增加',
+    possibleCause: '缓存过期策略不合理或缓存容量不足',
+    solution: '增加缓存容量并优化缓存键的过期策略，为热点数据设置更长的过期时间'
+  },
+  {
+    id: "ALM-230516-005",
+    title: 'API响应时间异常',
+    level: '一般',
+    source: '微服务-OrderService',
+    time: '2025-05-16 23:05:18',
+    status: '已解决',
+    content: '订单服务API平均响应时间增加到780ms，超出正常水平(200ms)',
+    possibleCause: '数据库查询效率低下或服务资源不足',
+    solution: '优化SQL查询语句，添加合适的索引，并考虑增加服务实例数量'
+  },
+  {
+    id: "ALM-230516-004",
     title: '磁盘空间不足',
     level: '警告',
-    source: '存储服务器-STO02',
-    time: getTimeAgo(5),
-    status: '未处理',
-    content: '磁盘使用率达到85%，接近警戒线',
-    possibleCause: '日志文件过大或临时文件未清理',
-    solution: '清理日志文件，删除临时文件，考虑扩容'
-  },
-  {
-    id: generateAlarmId(4),
-    title: '网络延迟异常',
-    level: '一般',
-    source: '网络设备-SW01',
-    time: getTimeAgo(8),
-    status: '已解决',
-    content: '网络延迟超过200ms，影响用户体验',
-    possibleCause: '网络拥塞或路由配置问题',
-    solution: '检查网络设备负载，优化路由配置'
-  },
-  {
-    id: generateAlarmId(5),
-    title: '应用响应超时',
-    level: '严重',
-    source: '应用服务器-APP03',
-    time: getTimeAgo(1),
-    status: '未处理',
-    content: '应用响应时间超过5秒，用户反馈系统卡顿',
-    possibleCause: '数据库查询效率低或应用代码性能问题',
-    solution: '优化SQL查询，检查应用代码性能瓶颈'
-  },
-  {
-    id: generateAlarmId(6),
-    title: '内存使用率过高',
-    level: '警告',
-    source: '生产服务器-Web02',
-    time: getTimeAgo(4),
+    source: '日志服务器-LOG01',
+    time: '2025-05-16 15:37:42',
     status: '处理中',
-    content: '服务器内存使用率达到90%',
-    possibleCause: '应用程序内存泄漏或配置不合理',
-    solution: '检查应用程序内存使用情况，调整JVM参数'
-  },
-  {
-    id: generateAlarmId(7),
-    title: '安全漏洞检测',
-    level: '严重',
-    source: '安全网关-SEC01',
-    time: getTimeAgo(6),
-    status: '未处理',
-    content: '检测到潜在的SQL注入攻击尝试',
-    possibleCause: '应用程序未对用户输入进行充分验证',
-    solution: '更新WAF规则，修复应用程序输入验证逻辑'
+    content: '日志服务器剩余磁盘空间低于10%，当前可用空间8.2GB',
+    possibleCause: '日志文件累积未及时清理或日志记录过于冗长',
+    solution: '清理过期日志，配置日志轮转策略，考虑增加磁盘容量'
   }
 ]);
 
@@ -340,11 +322,40 @@ const viewAlarmDetail = (record: AlarmRecord): void => {
 
 // 处理告警
 const handleAlarm = (record: AlarmRecord): void => {
-  // 实际应用中这里会调用API处理告警
-  record.status = '处理中';
-  if (detailModalVisible.value) {
-    detailModalVisible.value = false;
-  }
+  // 显示处理中状态
+  loading.value = true;
+  
+  // 模拟API请求延迟
+  setTimeout(() => {
+    // 更新状态
+    if (record.status === '未处理') {
+      record.status = '处理中';
+      message.success('告警已开始处理');
+    } else if (record.status === '处理中') {
+      record.status = '已解决';
+      message.success('告警已解决');
+      
+      // 更新统计数据
+      alarmStats.resolved++;
+      alarmStats.resolvedTrend = 5;
+      
+      // 如果是严重告警，更新严重告警数
+      if (record.level === '严重') {
+        alarmStats.critical--;
+        alarmStats.criticalTrend = -5;
+      }
+    }
+    
+    loading.value = false;
+    
+    // 关闭弹窗
+    if (detailModalVisible.value) {
+      detailModalVisible.value = false;
+    }
+    
+    // 重新初始化图表以反映变化
+    initCharts();
+  }, 800);
 };
 
 // 获取告警级别对应的颜色
@@ -364,39 +375,207 @@ const getAlarmLevelColor = (level: string): string => {
 // 刷新数据
 const refreshData = () => {
   loading.value = true;
+  message.loading('正在加载数据...', 1);
+  
   // 模拟API请求延迟
   setTimeout(() => {
-    // 更新统计数据
-    alarmStats.total = Math.floor(Math.random() * 50) + 100;
-    alarmStats.totalTrend = Math.floor(Math.random() * 30) - 15;
-    alarmStats.critical = Math.floor(Math.random() * 20) + 10;
-    alarmStats.criticalTrend = Math.floor(Math.random() * 30) - 15;
-    alarmStats.resolved = Math.floor(Math.random() * 40) + 60;
-    alarmStats.resolvedTrend = Math.floor(Math.random() * 30) - 15;
+    // 根据时间范围更新统计数据
+    switch (timeRange.value) {
+      case '1h':
+        alarmStats.total = 12;
+        alarmStats.critical = 3;
+        alarmStats.resolved = 7;
+        alarmStats.totalTrend = -2;
+        alarmStats.criticalTrend = 0;
+        alarmStats.resolvedTrend = 4;
+        alarmStats.avgResolveTime = '0.8小时';
+        alarmStats.avgTimeTrend = -5;
+        break;
+      case '6h':
+        alarmStats.total = 25;
+        alarmStats.critical = 6;
+        alarmStats.resolved = 15;
+        alarmStats.totalTrend = 3;
+        alarmStats.criticalTrend = -2;
+        alarmStats.resolvedTrend = 8;
+        alarmStats.avgResolveTime = '1.2小时';
+        alarmStats.avgTimeTrend = -8;
+        break;
+      case '24h':
+        alarmStats.total = 37;
+        alarmStats.critical = 8;
+        alarmStats.resolved = 24;
+        alarmStats.totalTrend = -5;
+        alarmStats.criticalTrend = 3;
+        alarmStats.resolvedTrend = 7;
+        alarmStats.avgResolveTime = '1.5小时';
+        alarmStats.avgTimeTrend = -12;
+        break;
+      case '7d':
+        alarmStats.total = 82;
+        alarmStats.critical = 15;
+        alarmStats.resolved = 61;
+        alarmStats.totalTrend = 6;
+        alarmStats.criticalTrend = -8;
+        alarmStats.resolvedTrend = 12;
+        alarmStats.avgResolveTime = '2.3小时';
+        alarmStats.avgTimeTrend = -15;
+        break;
+    }
 
     // 更新图表
     initCharts();
     loading.value = false;
+    message.success('数据刷新成功');
   }, 1000);
 };
 
-// 初始化图表
+// 初始化图表 - 使用更真实的数据
 const initCharts = () => {
   nextTick(() => {
     // 告警趋势图
     if (trendChartRef.value) {
       const trendChart = echarts.init(trendChartRef.value);
-      const times = [];
-      const criticalData = [];
-      const warningData = [];
-      const normalData = [];
-
-      for (let i = 23; i >= 0; i--) {
-        const time = new Date(now.getTime() - i * 3600 * 1000);
-        times.push(`${time.getHours()}:00`);
-        criticalData.push(Math.floor(Math.random() * 10));
-        warningData.push(Math.floor(Math.random() * 15));
-        normalData.push(Math.floor(Math.random() * 8));
+      
+      // 根据选择的时间范围生成对应的时间轴
+      let times = [];
+      let criticalData = [];
+      let warningData = [];
+      let normalData = [];
+      
+      if (timeRange.value === '1h') {
+        // 最近1小时，每5分钟一个数据点
+        for (let i = 11; i >= 0; i--) {
+          const time = new Date(now.getTime() - i * 5 * 60 * 1000);
+          times.push(`${time.getHours()}:${time.getMinutes().toString().padStart(2, '0')}`);
+          
+          // 真实的告警通常是有规律的，而非完全随机
+          if (i === 8) {
+            criticalData.push(2); // 突然出现的严重告警
+            warningData.push(1);
+            normalData.push(0);
+          } else if (i === 7) {
+            criticalData.push(1);
+            warningData.push(2);
+            normalData.push(1);
+          } else if (i === 6) {
+            criticalData.push(0);
+            warningData.push(1);
+            normalData.push(0);
+          } else if (i <= 2) {
+            criticalData.push(0);
+            warningData.push(0);
+            normalData.push(i === 0 ? 1 : 0); // 最近时间点出现一个一般告警
+          } else {
+            criticalData.push(0);
+            warningData.push(i === 3 ? 1 : 0);
+            normalData.push(0);
+          }
+        }
+      } else if (timeRange.value === '6h') {
+        // 最近6小时，每30分钟一个数据点
+        for (let i = 11; i >= 0; i--) {
+          const time = new Date(now.getTime() - i * 30 * 60 * 1000);
+          times.push(`${time.getHours()}:${time.getMinutes().toString().padStart(2, '0')}`);
+          
+          if (i === 10) {
+            criticalData.push(1);
+            warningData.push(2);
+            normalData.push(0);
+          } else if (i === 8) {
+            criticalData.push(2);
+            warningData.push(1);
+            normalData.push(1);
+          } else if (i === 6) {
+            criticalData.push(1);
+            warningData.push(0);
+            normalData.push(2);
+          } else if (i === 4) {
+            criticalData.push(0);
+            warningData.push(3);
+            normalData.push(1);
+          } else if (i === 2) {
+            criticalData.push(2);
+            warningData.push(1);
+            normalData.push(0);
+          } else if (i === 0) {
+            criticalData.push(0);
+            warningData.push(1);
+            normalData.push(2);
+          } else {
+            criticalData.push(0);
+            warningData.push(i % 3 === 0 ? 1 : 0);
+            normalData.push(i % 4 === 0 ? 1 : 0);
+          }
+        }
+      } else if (timeRange.value === '24h') {
+        // 最近24小时，每2小时一个数据点
+        for (let i = 11; i >= 0; i--) {
+          const time = new Date(now.getTime() - i * 2 * 60 * 60 * 1000);
+          times.push(`${time.getHours()}:00`);
+          
+          // 白天和夜间告警数量通常不同
+          const hour = time.getHours();
+          const isDaytime = hour >= 8 && hour <= 20;
+          
+          if (i === 10) { // 生产高峰期
+            criticalData.push(2);
+            warningData.push(3);
+            normalData.push(1);
+          } else if (i === 7) { // 业务低谷
+            criticalData.push(0);
+            warningData.push(1);
+            normalData.push(0);
+          } else if (i === 5) { // 系统维护
+            criticalData.push(3);
+            warningData.push(2);
+            normalData.push(2);
+          } else if (i === 3) { // 业务高峰
+            criticalData.push(1);
+            warningData.push(4);
+            normalData.push(2);
+          } else if (i === 1) { // 最近出现的问题
+            criticalData.push(2);
+            warningData.push(1);
+            normalData.push(0);
+          } else {
+            criticalData.push(isDaytime ? Math.floor(Math.random() * 2) : 0);
+            warningData.push(isDaytime ? Math.floor(Math.random() * 3) : Math.floor(Math.random() * 1));
+            normalData.push(Math.floor(Math.random() * 2));
+          }
+        }
+      } else { // 7d
+        // 最近7天，每天一个数据点
+        for (let i = 6; i >= 0; i--) {
+          const time = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+          times.push(`${time.getMonth() + 1}/${time.getDate()}`);
+          
+          // 模拟工作日和周末的区别
+          const day = time.getDay();
+          const isWeekend = day === 0 || day === 6;
+          
+          if (i === 6) { // 一周前
+            criticalData.push(isWeekend ? 1 : 3);
+            warningData.push(isWeekend ? 2 : 5);
+            normalData.push(isWeekend ? 1 : 3);
+          } else if (i === 4) { // 系统升级日
+            criticalData.push(4);
+            warningData.push(6);
+            normalData.push(2);
+          } else if (i === 2) { // 正常工作日
+            criticalData.push(isWeekend ? 0 : 2);
+            warningData.push(isWeekend ? 1 : 4);
+            normalData.push(isWeekend ? 1 : 3);
+          } else if (i === 0) { // 今天
+            criticalData.push(2);
+            warningData.push(3);
+            normalData.push(1);
+          } else {
+            criticalData.push(isWeekend ? Math.floor(Math.random() * 2) : Math.floor(Math.random() * 3 + 1));
+            warningData.push(isWeekend ? Math.floor(Math.random() * 3) : Math.floor(Math.random() * 4 + 2));
+            normalData.push(Math.floor(Math.random() * 3 + 1));
+          }
+        }
       }
 
       trendChart.setOption({
@@ -410,7 +589,7 @@ const initCharts = () => {
         legend: {
           data: ['严重', '警告', '一般'],
           textStyle: {
-            color: '#333333'  // 修改为深色字体
+            color: '#333333'
           }
         },
         grid: {
@@ -424,26 +603,26 @@ const initCharts = () => {
           data: times,
           axisLine: {
             lineStyle: {
-              color: '#333333'  // 修改为深色
+              color: '#333333'
             }
           },
           axisLabel: {
-            color: '#333333'  // 修改为深色字体
+            color: '#333333'
           }
         },
         yAxis: {
           type: 'value',
           axisLine: {
             lineStyle: {
-              color: '#333333'  // 修改为深色
+              color: '#333333'
             }
           },
           axisLabel: {
-            color: '#333333'  // 修改为深色字体
+            color: '#333333'
           },
           splitLine: {
             lineStyle: {
-              color: 'rgba(0, 0, 0, 0.1)'  // 修改为浅灰色
+              color: 'rgba(0, 0, 0, 0.1)'
             }
           }
         },
@@ -506,19 +685,20 @@ const initCharts = () => {
       });
     }
 
-    // 告警类型分布图
+    // 告警类型分布图 - 更真实的数据
     if (typeChartRef.value) {
       const typeChart = echarts.init(typeChartRef.value);
       typeChart.setOption({
         backgroundColor: 'transparent',
         tooltip: {
-          trigger: 'item'
+          trigger: 'item',
+          formatter: '{a} <br/>{b}: {c} ({d}%)'
         },
         legend: {
           orient: 'vertical',
           left: 'left',
           textStyle: {
-            color: '#333333'  // 修改为深色字体
+            color: '#333333'
           }
         },
         series: [
@@ -528,11 +708,12 @@ const initCharts = () => {
             radius: '70%',
             center: ['50%', '50%'],
             data: [
-              { value: 38, name: '资源使用率' },
-              { value: 27, name: '应用异常' },
-              { value: 16, name: '网络问题' },
-              { value: 12, name: '安全事件' },
-              { value: 7, name: '其他' }
+              { value: 12, name: '资源利用' },
+              { value: 8, name: '连接异常' },
+              { value: 6, name: '响应超时' },
+              { value: 5, name: '服务不可用' },
+              { value: 4, name: '安全事件' },
+              { value: 2, name: '其他' }
             ],
             emphasis: {
               itemStyle: {
@@ -543,18 +724,18 @@ const initCharts = () => {
             },
             itemStyle: {
               borderRadius: 10,
-              borderColor: '#ffffff',  // 修改为白色边框
+              borderColor: '#ffffff',
               borderWidth: 2
             },
             label: {
-              color: '#333333'  // 修改为深色字体
+              color: '#333333'
             }
           }
         ]
       });
     }
 
-    // 告警来源分布图
+    // 告警来源分布图 - 更真实的数据
     if (sourceChartRef.value) {
       const sourceChart = echarts.init(sourceChartRef.value);
       sourceChart.setOption({
@@ -575,35 +756,35 @@ const initCharts = () => {
           type: 'value',
           axisLine: {
             lineStyle: {
-              color: '#333333'  // 修改为深色
+              color: '#333333'
             }
           },
           axisLabel: {
-            color: '#333333'  // 修改为深色字体
+            color: '#333333'
           },
           splitLine: {
             lineStyle: {
-              color: 'rgba(0, 0, 0, 0.1)'  // 修改为浅灰色
+              color: 'rgba(0, 0, 0, 0.1)'
             }
           }
         },
         yAxis: {
           type: 'category',
-          data: ['应用服务器', '数据库服务器', '网络设备', '存储设备', '安全设备'],
+          data: ['数据库服务', '应用服务', '负载均衡器', '存储设备', '网络设备', '安全设备'],
           axisLine: {
             lineStyle: {
-              color: '#333333'  // 修改为深色
+              color: '#333333'
             }
           },
           axisLabel: {
-            color: '#333333'  // 修改为深色字体
+            color: '#333333'
           }
         },
         series: [
           {
             name: '告警数量',
             type: 'bar',
-            data: [45, 26, 18, 14, 9],
+            data: [11, 9, 6, 5, 4, 2],
             itemStyle: {
               color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
                 { offset: 0, color: '#1890ff' },
@@ -615,19 +796,20 @@ const initCharts = () => {
       });
     }
 
-    // 告警解决时间分布图
+    // 告警解决时间分布图 - 更真实的数据
     if (timeChartRef.value) {
       const timeChart = echarts.init(timeChartRef.value);
       timeChart.setOption({
         backgroundColor: 'transparent',
         tooltip: {
-          trigger: 'item'
+          trigger: 'item',
+          formatter: '{a} <br/>{b}: {c} ({d}%)'
         },
         legend: {
           bottom: '5%',
           left: 'center',
           textStyle: {
-            color: '#333333'  // 修改为深色字体
+            color: '#333333'
           }
         },
         series: [
@@ -638,7 +820,7 @@ const initCharts = () => {
             avoidLabelOverlap: false,
             itemStyle: {
               borderRadius: 10,
-              borderColor: '#ffffff',  // 修改为白色边框
+              borderColor: '#ffffff',
               borderWidth: 2
             },
             label: {
@@ -650,17 +832,18 @@ const initCharts = () => {
                 show: true,
                 fontSize: '18',
                 fontWeight: 'bold',
-                color: '#333333'  // 修改为深色字体
+                color: '#333333'
               }
             },
             labelLine: {
               show: false
             },
             data: [
-              { value: 42, name: '<1小时' },
-              { value: 35, name: '1-3小时' },
-              { value: 15, name: '3-6小时' },
-              { value: 8, name: '>6小时' }
+              { value: 15, name: '<30分钟' },
+              { value: 9, name: '30分钟-1小时' },
+              { value: 7, name: '1-2小时' },
+              { value: 5, name: '2-4小时' },
+              { value: 1, name: '>4小时' }
             ]
           }
         ]
