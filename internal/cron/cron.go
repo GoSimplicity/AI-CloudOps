@@ -239,6 +239,7 @@ func (cm *cronManager) checkClusterStatus(ctx context.Context, cluster *model.K8
 	// 获取k8s客户端
 	clientset, err := cm.k8sClient.GetKubeClient(cluster.ID)
 	if err != nil {
+		cm.k8sClient.RefreshClients(ctx)
 		cm.logger.Warn("获取k8s客户端失败",
 			zap.Error(err),
 			zap.String("cluster", cluster.Name))
