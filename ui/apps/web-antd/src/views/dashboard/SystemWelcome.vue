@@ -35,7 +35,7 @@
           <a-card class="stat-card" :bordered="false">
             <div class="stat-header">
               <span class="stat-title">云资源使用率</span>
-              <a-tag color="processing">{{ resourceStatus }}</a-tag>
+              <a-tag :color="getResourceTagColor">{{ resourceStatus }}</a-tag>
             </div>
             <div class="stat-body">
               <span class="stat-number">{{ resourceRate }}%</span>
@@ -84,6 +84,7 @@
                   v-model:value="timeRange"
                   size="small"
                   button-style="solid"
+                  @change="handleTimeRangeChange"
                 >
                   <a-radio-button value="day">今日</a-radio-button>
                   <a-radio-button value="week">本周</a-radio-button>
@@ -96,16 +97,9 @@
         </a-col>
         <a-col :span="8">
           <a-card title="实时监控动态" :bordered="false">
-            <a-timeline>
-              <a-timeline-item
-                v-for="(item, index) in timelineItems"
-                :key="index"
-                :color="item.color"
-              >
-                {{ item.content }}
-                <div class="timeline-time">{{ item.time }}</div>
-              </a-timeline-item>
-            </a-timeline>
+            <div class="no-data-message">
+              暂未获取监控数据，请检查服务是否启动
+            </div>
           </a-card>
         </a-col>
       </a-row>
@@ -114,50 +108,36 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import * as echarts from 'echarts';
 
 const currentDate = ref('');
 const currentTime = ref('');
-const onlineTime = ref('1分钟内');
+const onlineTime = ref('');
+const startTime = Date.now();
 
 // 动态数据
-const accuracyRate = ref(98.7);
-const accuracyIncrease = ref(8);
-const resourceRate = ref(78.3);
+const accuracyRate = ref(97.2);
+const accuracyIncrease = ref(6.3);
+const resourceRate = ref(68.4);
 const resourceStatus = ref('优化建议');
-const healthRate = ref(95.2);
+const healthRate = ref(94.5);
 const healthStatus = ref({ color: 'success', text: '良好' });
-const alertRate = ref(89.5);
-const alertStatus = ref({ color: 'warning', text: '3个待处理' });
+const alertRate = ref(92.1);
+const alertStatus = ref({ color: 'warning', text: '2个待处理' });
 
-// 时间轴数据
-const timelineItems = ref([
-  {
-    color: 'green',
-    content: 'AI预测：系统负载将在2小时后达到峰值',
-    time: '10分钟前',
-  },
-  {
-    color: 'blue',
-    content: '自动扩容：已添加2个新的服务节点',
-    time: '30分钟前',
-  },
-  {
-    color: 'red',
-    content: '检测到异常流量，已自动启动防护',
-    time: '1小时前',
-  },
-  {
-    color: 'gray',
-    content: '日常巡检完成，系统运行正常',
-    time: '2小时前',
-  },
-]);
+// 根据资源使用率设置不同的标签颜色
+const getResourceTagColor = computed(() => {
+  if (resourceRate.value > 85) return 'error';
+  if (resourceRate.value > 70) return 'warning';
+  return 'processing';
+});
 
 // 更新日期和时间
 const updateDateTime = () => {
   const now = new Date();
+  
+  // 更真实的日期格式
   currentDate.value = now.toLocaleDateString('zh-CN', {
     year: 'numeric',
     month: 'long',
@@ -165,35 +145,207 @@ const updateDateTime = () => {
     weekday: 'long',
   });
 
+  // 更真实的时间格式
   currentTime.value = now.toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hour12: false,
   });
+  
+  // 计算在线时长
+  const elapsedMs = Date.now() - startTime;
+  const hours = Math.floor(elapsedMs / 3600000);
+  const minutes = Math.floor((elapsedMs % 3600000) / 60000);
+  const seconds = Math.floor((elapsedMs % 60000) / 1000);
+  
+  if (hours > 0) {
+    onlineTime.value = `${hours}小时${minutes}分钟`;
+  } else if (minutes > 0) {
+    onlineTime.value = `${minutes}分钟${seconds}秒`;
+  } else {
+    onlineTime.value = `${seconds}秒`;
+  }
 };
 
-// 更新动态数据
+// 更新动态数据 - 使用更真实的变化模式
 const updateDynamicData = () => {
-  // 随机波动数据
-  accuracyRate.value = +(95 + Math.random() * 4).toFixed(1);
-  accuracyIncrease.value = +(5 + Math.random() * 5).toFixed(1);
-  resourceRate.value = +(70 + Math.random() * 15).toFixed(1);
-  healthRate.value = +(90 + Math.random() * 8).toFixed(1);
-  alertRate.value = +(85 + Math.random() * 10).toFixed(1);
-
-  // 更新在线时长
-  const minutes = Math.floor(Date.now() / 60000) % 60;
-  onlineTime.value = `${minutes}分钟内`;
-
+  // 生成真实的小幅度波动数据，避免大幅波动
+  const generateSmallChange = (base: number, maxChange = 0.5) => {
+    return +(base + (Math.random() * 2 - 1) * maxChange).toFixed(1);
+  };
+  
+  // 小幅度波动准确率 (95-99%)
+  accuracyRate.value = Math.max(95, Math.min(99, generateSmallChange(accuracyRate.value, 0.3)));
+  
+  // 同比增长小幅波动 (5-8%)
+  accuracyIncrease.value = Math.max(5, Math.min(8, generateSmallChange(accuracyIncrease.value, 0.2)));
+  
+  // 资源使用率波动 (60-85%)，有小的波动趋势
+  const resourceTrend = Math.sin(Date.now() / 10000000) * 5; // 缓慢的波动趋势
+  resourceRate.value = Math.max(60, Math.min(85, generateSmallChange(resourceRate.value + resourceTrend * 0.1, 0.6)));
+  
+  // 根据资源使用率更新状态
+  if (resourceRate.value > 80) {
+    resourceStatus.value = '需要优化';
+  } else if (resourceRate.value > 70) {
+    resourceStatus.value = '优化建议';
+  } else {
+    resourceStatus.value = '运行良好';
+  }
+  
+  // 系统健康度 (90-99%)
+  healthRate.value = Math.max(90, Math.min(99, generateSmallChange(healthRate.value, 0.2)));
+  
+  // 根据健康度更新状态文本
+  if (healthRate.value > 95) {
+    healthStatus.value = { color: 'success', text: '优良' };
+  } else if (healthRate.value > 90) {
+    healthStatus.value = { color: 'success', text: '良好' };
+  } else {
+    healthStatus.value = { color: 'warning', text: '一般' };
+  }
+  
+  // 智能告警处理率 (85-98%)
+  alertRate.value = Math.max(85, Math.min(98, generateSmallChange(alertRate.value, 0.4)));
+  
+  // 模拟不同的告警数量和状态
+  const pendingAlerts = Math.floor(Math.random() * 5);
+  if (pendingAlerts === 0) {
+    alertStatus.value = { color: 'success', text: '全部处理' };
+  } else if (pendingAlerts === 1) {
+    alertStatus.value = { color: 'processing', text: '1个待处理' };
+  } else {
+    alertStatus.value = { color: 'warning', text: `${pendingAlerts}个待处理` };
+  }
+  
   // 更新图表
   updateCharts();
 };
 
+// 定义响应式变量
+const dataLoaded = ref(true);
+const timelineItems = ref<Array<{
+  color: string;
+  content: string;
+  time: string;
+}>>([]);
+
+// 定期更新时间轴数据
+const updateTimeline = () => {
+  // 有5%的概率显示"暂未获取监控数据"状态
+  if (Math.random() < 0.05 && dataLoaded.value) {
+    dataLoaded.value = false;
+    timelineItems.value = [];
+    
+    // 5秒后恢复数据
+    setTimeout(() => {
+      dataLoaded.value = true;
+      generateTimeline();
+    }, 5000);
+  } else if (!dataLoaded.value) {
+    // 已经在无数据状态，不做处理
+  } else {
+    generateTimeline();
+  }
+};
+
+// 生成新的时间轴数据
+const generateTimeline = () => {
+  // 事件类型
+  const eventTypes = [
+    { color: 'green', content: 'AI预测：系统负载将在{n}小时后达到峰值', probability: 0.2 },
+    { color: 'blue', content: '自动扩容：已添加{n}个新的服务节点', probability: 0.15 },
+    { color: 'orange', content: '检测到网络延迟略有波动，已自动优化', probability: 0.1 },
+    { color: 'red', content: '发现异常访问模式，已启动安全防护', probability: 0.05 },
+    { color: 'gray', content: '系统定时备份完成，数据完整性校验通过', probability: 0.1 },
+    { color: 'purple', content: 'AI模型更新完成，预测准确率提升{n}%', probability: 0.1 },
+    { color: 'cyan', content: '智能调度：已优化{n}个容器资源分配', probability: 0.15 },
+    { color: 'green', content: '流量分析：用户访问高峰期预计在{n}分钟后到来', probability: 0.15 }
+  ];
+
+  // 随机生成一个新事件
+  if (Math.random() < 0.3 && timelineItems.value.length > 0) {  // 30%概率添加新事件
+    // 基于概率选择事件类型
+    let randomValue = Math.random();
+    let cumulativeProbability = 0;
+    let selectedEvent = eventTypes[0];
+    
+    for (const eventType of eventTypes) {
+      cumulativeProbability += eventType.probability;
+      if (randomValue <= cumulativeProbability) {
+        selectedEvent = eventType;
+        break;
+      }
+    }
+    
+    // 替换占位符
+    if (!selectedEvent) {
+      return;
+    }
+    
+    let content = selectedEvent.content;
+    if (content.includes('{n}')) {
+      const num = Math.floor(Math.random() * 5) + 1;
+      content = content.replace('{n}', num.toString());
+    }
+    
+    // 创建新事件并添加到顶部
+    const newEvent = {
+      color: selectedEvent.color,
+      content: content,
+      time: '刚刚'
+    };
+    
+    timelineItems.value.unshift(newEvent);
+    
+    // 更新旧事件的时间
+    updateEventTimes();
+    
+    // 保持最多显示5条
+    if (timelineItems.value.length > 5) {
+      timelineItems.value.pop();
+    }
+  } else {
+    // 仅更新事件时间
+    updateEventTimes();
+  }
+};
+
+// 更新事件时间
+const updateEventTimes = () => {
+  type TimeTerm = '刚刚' | '1分钟前' | '3分钟前' | '7分钟前' | '12分钟前' | '18分钟前' | 
+                 '25分钟前' | '32分钟前' | '47分钟前' | '1小时前' | '1小时23分钟前' | 
+                 '1小时45分钟前' | '2小时15分钟前' | '3小时前';
+                 
+  const timeTerms: TimeTerm[] = ['刚刚', '1分钟前', '3分钟前', '7分钟前', '12分钟前', '18分钟前', 
+                    '25分钟前', '32分钟前', '47分钟前', '1小时前', '1小时23分钟前', 
+                    '1小时45分钟前', '2小时15分钟前', '3小时前'];
+  
+  timelineItems.value.forEach((item: { time: string }, index: number) => {
+    if (item.time === '刚刚' && index > 0) {
+      item.time = '1分钟前';
+    } else if (item.time !== '刚刚') {
+      // 找到当前时间在数组中的位置
+      const currentIndex = timeTerms.indexOf(item.time as TimeTerm);
+      if (currentIndex !== -1 && currentIndex < timeTerms.length - 1) {
+        // 随机决定是否更新时间（70%概率）
+        if (Math.random() < 0.7) {
+          const nextTime = timeTerms[currentIndex + 1];
+          if (nextTime) {
+            item.time = nextTime;
+          }
+        }
+      }
+    }
+  });
+};
+
 // 初始更新并设置定时器
 updateDateTime();
-setInterval(updateDateTime, 1000);
-setInterval(updateDynamicData, 5000);
+setInterval(updateDateTime, 600000);
+setInterval(updateDynamicData, 600000);
+setInterval(updateTimeline, 600000);
 
 const timeRange = ref('day');
 
@@ -202,6 +354,13 @@ const resourceChart = ref();
 const healthChart = ref();
 const alertChart = ref();
 const analysisChart = ref();
+
+// 处理时间范围变化
+const handleTimeRangeChange = () => {
+  if (analysisChart.value) {
+    updateAnalysisChart();
+  }
+};
 
 // 更新图表数据
 const updateCharts = () => {
@@ -266,9 +425,130 @@ const updateCharts = () => {
   }
 };
 
+// 生成更真实的分析图表数据
+const generateAnalysisData = (range: string) => {
+  const now = new Date();
+  
+  let xAxisData: string[] = [];
+  let dataPoints = 0;
+  
+  // 根据选择的时间范围设置X轴数据
+  if (range === 'day') {
+    xAxisData = ['00:00', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00', '23:59'];
+    dataPoints = 9;
+  } else if (range === 'week') {
+    xAxisData = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    dataPoints = 7;
+  } else if (range === 'month') {
+    xAxisData = ['1日', '5日', '10日', '15日', '20日', '25日', '30日'];
+    dataPoints = 7;
+  }
+  
+  // 模拟系统负载 - 工作时间较高的模式
+  const loadData = Array(dataPoints).fill(0).map((_, i) => {
+    if (range === 'day') {
+      // 日负载: 9-18点较高
+      const timeHour = Math.floor(i * 24 / (dataPoints - 1));
+      return timeHour >= 9 && timeHour <= 18 
+        ? 50 + Math.random() * 30 
+        : 20 + Math.random() * 20;
+    } else if (range === 'week') {
+      // 周负载: 工作日较高
+      return i < 5 ? 60 + Math.random() * 20 : 30 + Math.random() * 15;
+    } else {
+      // 月负载: 工作日较高
+      return 40 + Math.random() * 30;
+    }
+  });
+  
+  // 模拟资源使用 - 与负载相关但略高
+  const resourceData = loadData.map(load => Math.min(95, load * 1.2 + Math.random() * 10));
+  
+  // 模拟告警数量 - 负载高的时候告警可能更多
+  const alertData = loadData.map(load => Math.max(0, Math.floor((load - 30) / 20 + Math.random() * 3)));
+  
+  return {
+    xAxisData,
+    loadData,
+    resourceData,
+    alertData
+  };
+};
+
+// 更新分析图表
+const updateAnalysisChart = () => {
+  if (!analysisChart.value) return;
+  
+  const chart = echarts.getInstanceByDom(analysisChart.value);
+  if (!chart) return; // 添加空值检查
+  
+  const data = generateAnalysisData(timeRange.value);
+  
+  chart.setOption({
+    tooltip: {
+      trigger: 'axis',
+    },
+    legend: {
+      data: ['系统负载', '资源使用', '告警数量'],
+      textStyle: {
+        color: '#a6a6a6',
+      },
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true,
+    },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: data.xAxisData,
+      axisLine: {
+        lineStyle: {
+          color: '#a6a6a6',
+        },
+      },
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: {
+        lineStyle: {
+          color: '#a6a6a6',
+        },
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#303030',
+        },
+      },
+    },
+    series: [
+      {
+        name: '系统负载',
+        type: 'line',
+        smooth: true,
+        data: data.loadData,
+      },
+      {
+        name: '资源使用',
+        type: 'line',
+        smooth: true,
+        data: data.resourceData,
+      },
+      {
+        name: '告警数量',
+        type: 'line',
+        smooth: true,
+        data: data.alertData,
+      },
+    ],
+  });
+};
+
 onMounted(() => {
   // 初始化圆环图表
-  const initGaugeChart = (el: HTMLElement, value: number, color: string) => {
+  const initGaugeChart = (el: HTMLElement | null | undefined, value: number, color: string) => {
     const chart = echarts.init(el);
     chart.setOption({
       series: [
@@ -317,11 +597,20 @@ onMounted(() => {
         },
       ],
     });
+    return chart;
   };
 
-  // 初始化趋势图表
-  const initAnalysisChart = () => {
+  // 初始化各图表
+  initGaugeChart(accuracyChart.value, accuracyRate.value, '#87d068');
+  initGaugeChart(resourceChart.value, resourceRate.value, '#1890ff');
+  initGaugeChart(healthChart.value, healthRate.value, '#87d068');
+  initGaugeChart(alertChart.value, alertRate.value, '#ffc53d');
+  
+  // 设置分析图表
+  if (analysisChart.value) {
     const chart = echarts.init(analysisChart.value);
+    const data = generateAnalysisData(timeRange.value);
+    
     chart.setOption({
       tooltip: {
         trigger: 'axis',
@@ -341,16 +630,7 @@ onMounted(() => {
       xAxis: {
         type: 'category',
         boundaryGap: false,
-        data: [
-          '00:00',
-          '03:00',
-          '06:00',
-          '09:00',
-          '12:00',
-          '15:00',
-          '18:00',
-          '21:00',
-        ],
+        data: data.xAxisData,
         axisLine: {
           lineStyle: {
             color: '#a6a6a6',
@@ -375,52 +655,31 @@ onMounted(() => {
           name: '系统负载',
           type: 'line',
           smooth: true,
-          data: [30, 40, 35, 50, 45, 65, 55, 40],
+          data: data.loadData,
         },
         {
           name: '资源使用',
           type: 'line',
           smooth: true,
-          data: [45, 50, 40, 60, 55, 75, 65, 50],
+          data: data.resourceData,
         },
         {
           name: '告警数量',
           type: 'line',
           smooth: true,
-          data: [5, 3, 4, 8, 6, 4, 3, 2],
+          data: data.alertData,
         },
       ],
     });
-
-    // 定时更新趋势图数据
+    
+    // 定时更新分析图表数据（每10分钟）
     setInterval(() => {
-      chart.setOption({
-        series: [
-          {
-            data: Array(8)
-              .fill(0)
-              .map(() => Math.floor(30 + Math.random() * 40)),
-          },
-          {
-            data: Array(8)
-              .fill(0)
-              .map(() => Math.floor(40 + Math.random() * 40)),
-          },
-          {
-            data: Array(8)
-              .fill(0)
-              .map(() => Math.floor(2 + Math.random() * 8)),
-          },
-        ],
-      });
-    }, 50000);
-  };
-
-  initGaugeChart(accuracyChart.value, accuracyRate.value, '#87d068');
-  initGaugeChart(resourceChart.value, resourceRate.value, '#1890ff');
-  initGaugeChart(healthChart.value, healthRate.value, '#87d068');
-  initGaugeChart(alertChart.value, alertRate.value, '#ffc53d');
-  initAnalysisChart();
+      updateAnalysisChart();
+    }, 600000);
+  }
+  
+  // 立即触发一次时间轴更新以初始化数据
+  updateTimeline();
 });
 </script>
 
@@ -528,6 +787,16 @@ onMounted(() => {
   font-size: 12px;
   color: var(--ant-text-color-secondary);
   margin-top: 4px;
+}
+
+.no-data-message {
+  text-align: center;
+  padding: 20px;
+  color: #ff4d4f;
+  font-size: 14px;
+  background: rgba(255, 77, 79, 0.1);
+  border-radius: 4px;
+  margin: 10px 0;
 }
 
 :deep(.ant-card) {

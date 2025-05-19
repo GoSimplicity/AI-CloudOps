@@ -277,14 +277,14 @@ const processes = ref<Process[]>([
 
 // 概览统计数据
 const overviewStats = reactive({
-  total_count: 1856,
+  total_count: 17,
   totalChange: 8.3,
-  completed_count: 1423,
+  completed_count: 2,
   completedChange: 10.5,
-  processing_count: 324,
+  processing_count: 5,
   processingChange: -5.8,
-  canceled_count: 67,
-  rejected_count: 42,
+  canceled_count: 3,
+  rejected_count: 6,
   avg_process_time: 18.6,
   avgProcessTimeChange: -3.9
 });

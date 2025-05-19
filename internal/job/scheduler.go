@@ -49,13 +49,13 @@ func NewTimedScheduler(scheduler *asynq.Scheduler) *TimedScheduler {
 }
 
 func (s *TimedScheduler) RegisterTimedTasks() error {
-	// // K8s 客户端刷新任务 - 每5分钟
-	// if err := s.registerTask(
-	// 	RefreshK8sClientsTask,
-	// 	"@every 5m",
-	// ); err != nil {
-	// 	return err
-	// }
+	// K8s 客户端刷新任务 - 每5分钟
+	if err := s.registerTask(
+		RefreshK8sClientsTask,
+		"@every 5m",
+	); err != nil {
+		return err
+	}
 
 	// Prometheus 缓存刷新任务 - 每10秒
 	if err := s.registerTask(
@@ -73,13 +73,13 @@ func (s *TimedScheduler) RegisterTimedTasks() error {
 	// 	return err
 	// }
 
-	// // K8s 状态检查任务 - 每10秒
-	// if err := s.registerTask(
-	// 	CheckK8sStatusTask,
-	// 	"@every 10s",
-	// ); err != nil {
-	// 	return err
-	// }
+	// K8s 状态检查任务 - 每10秒
+	if err := s.registerTask(
+		CheckK8sStatusTask,
+		"@every 10s",
+	); err != nil {
+		return err
+	}
 
 	return nil
 }
