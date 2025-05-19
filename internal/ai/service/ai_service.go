@@ -162,7 +162,6 @@ func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMes
 		if err == io.EOF {
 			break
 		}
-		fmt.Printf("工具调用: %v", chunk.ToolCalls)
 		if err != nil {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				responseChan <- model.StreamResponse{

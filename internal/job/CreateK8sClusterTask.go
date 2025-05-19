@@ -39,6 +39,7 @@ import (
 	"github.com/hibiken/asynq"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type CreateK8sClusterTask struct {
@@ -130,16 +131,16 @@ func (k *CreateK8sClusterTask) ProcessTask(ctx context.Context, t *asynq.Task) e
 func (k *CreateK8sClusterTask) validateResourceQuantities(cluster *model.K8sCluster) error {
 	// 检查并设置默认值，避免空字符串导致解析错误
 	if cluster.CpuRequest == "" {
-		cluster.CpuRequest = "500m"  // 修改为小于或等于CpuLimit的值
+		cluster.CpuRequest = "500m" // 修改为小于或等于CpuLimit的值
 	}
 	if cluster.MemoryRequest == "" {
-		cluster.MemoryRequest = "512Mi"  // 修改为小于或等于MemoryLimit的值
+		cluster.MemoryRequest = "512Mi" // 修改为小于或等于MemoryLimit的值
 	}
 	if cluster.CpuLimit == "" {
-		cluster.CpuLimit = "1000m"  // 确保CpuLimit大于或等于CpuRequest
+		cluster.CpuLimit = "1000m" // 确保CpuLimit大于或等于CpuRequest
 	}
 	if cluster.MemoryLimit == "" {
-		cluster.MemoryLimit = "1Gi"  // 确保MemoryLimit大于或等于MemoryRequest
+		cluster.MemoryLimit = "1Gi" // 确保MemoryLimit大于或等于MemoryRequest
 	}
 
 	// 确保Request不大于Limit
@@ -158,10 +159,18 @@ func (k *CreateK8sClusterTask) processClusterConfig(ctx context.Context, cluster
 	ctx, cancel := context.WithTimeout(ctx, initTimeout)
 	defer cancel()
 
-	kubeClient, err := utils.InitAadGetKubeClient(ctx, cluster, k.l, k.client)
+	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
 	if err != nil {
-		k.l.Error("初始化 Kubernetes 客户端失败", zap.Error(err))
-		return fmt.Errorf("初始化 Kubernetes 客户端失败: %w", err)
+		return err
+	}
+
+	if err := k.client.InitClient(ctx, cluster.ID, restConfig); err != nil {
+		return err
+	}
+
+	kubeClient, err := k.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		return err
 	}
 
 	// 确保有命名空间配置
