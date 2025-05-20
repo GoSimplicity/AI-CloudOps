@@ -1,76 +1,110 @@
 <template>
-  <div>
-    <!-- 查询和操作 -->
-    <div class="custom-toolbar">
-      <!-- 查询功能 -->
+  <div class="monitor-page">
+    <!-- 页面标题区域 -->
+    <div class="page-header">
+      <h2 class="page-title">告警事件管理</h2>
+      <div class="page-description">管理和监控Prometheus告警事件及处理状态</div>
+    </div>
+
+    <!-- 查询和操作工具栏 -->
+    <div class="dashboard-card custom-toolbar">
       <div class="search-filters">
-        <!-- 搜索输入框 -->
-        <a-input v-model:value="searchText" placeholder="请输入告警事件名称" style="width: 200px" />
-        <a-button type="primary" size="middle" @click="handleSearch">
+        <a-input 
+          v-model:value="searchText" 
+          placeholder="请输入告警事件名称" 
+          class="search-input"
+        >
+          <template #prefix>
+            <SearchOutlined class="search-icon" />
+          </template>
+        </a-input>
+        <a-button type="primary" class="action-button" @click="handleSearch">
           <template #icon>
             <SearchOutlined />
           </template>
           搜索
         </a-button>
-        <a-button @click="handleReset">
+        <a-button class="action-button reset-button" @click="handleReset">
           <template #icon>
             <ReloadOutlined />
           </template>
           重置
         </a-button>
       </div>
-      <!-- 操作按钮 -->
       <div class="action-buttons">
-        <a-button type="primary" @click="handleBatchSilence" :disabled="data.length === 0">
+        <a-button type="primary" class="add-button" @click="handleBatchSilence" :disabled="data.length === 0">
           批量屏蔽告警
         </a-button>
       </div>
     </div>
 
     <!-- 告警事件列表表格 -->
-    <a-table :columns="columns" :data-source="data" row-key="id" :loading="loading" :pagination="false">
-      <!-- 标签组列 -->
-      <template #labels="{ record }">
-        <a-tag v-for="label in record.labels" :key="label" color="purple">
-          {{ label }}
-        </a-tag>
-      </template>
-      <!-- 操作列 -->
-      <template #action="{ record }">
-        <a-space>
-          <a-tooltip title="屏蔽告警">
-            <a-button type="link" @click="handleSilence(record)">
-              <template #icon>
-                <Icon icon="mdi:bell-off-outline" style="font-size: 22px" />
-              </template>
-            </a-button>
-          </a-tooltip>
-          <a-tooltip title="认领告警">
-            <a-button type="link" @click="handleClaim(record)">
-              <template #icon>
-                <Icon icon="mdi:hand-back-right-outline" style="font-size: 22px" />
-              </template>
-            </a-button>
-          </a-tooltip>
-          <a-tooltip title="取消屏蔽">
-            <a-button type="link" @click="handleCancelSilence(record)">
-              <template #icon>
-                <Icon icon="mdi:bell-ring-outline" style="font-size: 22px" />
-              </template>
-            </a-button>
-          </a-tooltip>
-        </a-space>
-      </template>
-    </a-table>
+    <div class="dashboard-card table-container">
+      <a-table 
+        :columns="columns" 
+        :data-source="data" 
+        row-key="id" 
+        :loading="loading" 
+        :pagination="false"
+        class="custom-table"
+        :scroll="{ x: 1200 }"
+      >
+        <!-- 标签组列 -->
+        <template #labels="{ record }">
+          <div class="tag-container">
+            <a-tag v-for="label in record.labels" :key="label" class="tech-tag label-tag">
+              {{ label }}
+            </a-tag>
+          </div>
+        </template>
+        
+        <!-- 操作列 -->
+        <template #action="{ record }">
+          <div class="action-column">
+            <a-tooltip title="屏蔽告警">
+              <a-button type="primary" shape="circle" class="edit-button" @click="handleSilence(record)">
+                <template #icon>
+                  <Icon icon="mdi:bell-off-outline" />
+                </template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip title="认领告警">
+              <a-button type="primary" shape="circle" class="claim-button" @click="handleClaim(record)">
+                <template #icon>
+                  <Icon icon="mdi:hand-back-right-outline" />
+                </template>
+              </a-button>
+            </a-tooltip>
+            <a-tooltip title="取消屏蔽">
+              <a-button type="primary" danger shape="circle" class="delete-button" @click="handleCancelSilence(record)">
+                <template #icon>
+                  <Icon icon="mdi:bell-ring-outline" />
+                </template>
+              </a-button>
+            </a-tooltip>
+          </div>
+        </template>
+      </a-table>
 
-    <!-- 分页器 -->
-    <a-pagination v-model:current="current" v-model:pageSize="pageSizeRef" :page-size-options="pageSizeOptions"
-      :total="total" show-size-changer @change="handlePageChange" @showSizeChange="handleSizeChange" class="pagination">
-      <template #buildOptionText="props">
-        <span v-if="props.value !== '50'">{{ props.value }}条/页</span>
-        <span v-else>全部</span>
-      </template>
-    </a-pagination>
+      <!-- 分页器 -->
+      <div class="pagination-container">
+        <a-pagination 
+          v-model:current="current" 
+          v-model:pageSize="pageSizeRef" 
+          :page-size-options="pageSizeOptions"
+          :total="total" 
+          show-size-changer 
+          @change="handlePageChange" 
+          @showSizeChange="handleSizeChange" 
+          class="custom-pagination"
+        >
+          <template #buildOptionText="props">
+            <span v-if="props.value !== '50'">{{ props.value }}条/页</span>
+            <span v-else>全部</span>
+          </template>
+        </a-pagination>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -347,12 +381,41 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.monitor-page {
+  padding: 20px;
+  background-color: #f0f2f5;
+  min-height: 100vh;
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.page-description {
+  color: #666;
+  font-size: 14px;
+}
+
+.dashboard-card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  margin-bottom: 24px;
+  transition: all 0.3s;
+}
+
 .custom-toolbar {
-  padding: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
 }
 
 .search-filters {
@@ -361,15 +424,159 @@ onMounted(() => {
   align-items: center;
 }
 
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+.search-input {
+  width: 250px;
+  border-radius: 4px;
+  transition: all 0.3s;
 }
 
-.pagination {
-  margin-top: 16px;
-  text-align: right;
+.search-input:hover,
+.search-input:focus {
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.search-icon {
+  color: #bfbfbf;
+}
+
+.action-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.reset-button {
+  background-color: #f5f5f5;
+  color: #595959;
+  border-color: #d9d9d9;
+}
+
+.reset-button:hover {
+  background-color: #e6e6e6;
+  border-color: #b3b3b3;
+}
+
+.add-button {
+  background: linear-gradient(45deg, #1890ff, #36bdf4);
+  border: none;
+  box-shadow: 0 2px 6px rgba(24, 144, 255, 0.4);
+}
+
+.add-button:hover {
+  background: linear-gradient(45deg, #096dd9, #1890ff);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(24, 144, 255, 0.5);
+}
+
+.table-container {
+  overflow: hidden;
+}
+
+.custom-table {
+  margin-top: 8px;
+}
+
+:deep(.ant-table) {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+:deep(.ant-table-thead > tr > th) {
+  background-color: #f7f9fc;
+  font-weight: 600;
+  color: #1f1f1f;
+  padding: 16px 12px;
+}
+
+:deep(.ant-table-tbody > tr > td) {
+  padding: 12px;
+}
+
+:deep(.ant-table-tbody > tr:hover > td) {
+  background-color: #f0f7ff;
+}
+
+.tag-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tech-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.label-tag {
+  background-color: #f6ffed;
+  color: #389e0d;
+  border-left: 3px solid #52c41a;
+}
+
+.action-column {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.edit-button {
+  background: #1890ff;
+  border: none;
+  box-shadow: 0 2px 4px rgba(24, 144, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-button:hover {
+  background: #096dd9;
+  transform: scale(1.05);
+}
+
+.claim-button {
+  background: #52c41a;
+  border: none;
+  box-shadow: 0 2px 4px rgba(82, 196, 26, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.claim-button:hover {
+  background: #389e0d;
+  transform: scale(1.05);
+}
+
+.delete-button {
+  background: #ff4d4f;
+  border: none;
+  box-shadow: 0 2px 4px rgba(255, 77, 79, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-button:hover {
+  background: #cf1322;
+  transform: scale(1.05);
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.custom-pagination {
   margin-right: 12px;
 }
 </style>

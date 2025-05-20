@@ -1,28 +1,38 @@
 <template>
-  <div>
-    <!-- 查询和操作 -->
-    <div class="custom-toolbar">
-      <!-- 查询功能 -->
+  <div class="monitor-page">
+    <!-- 页面标题区域 -->
+    <div class="page-header">
+      <h2 class="page-title">采集任务管理</h2>
+      <div class="page-description">管理和配置Prometheus的采集任务及相关设置</div>
+    </div>
+
+    <!-- 查询和操作工具栏 -->
+    <div class="dashboard-card custom-toolbar">
       <div class="search-filters">
-        <!-- 搜索输入框 -->
-        <a-input v-model:value="searchText" placeholder="请输入采集任务名称" style="width: 200px" allow-clear
-          @pressEnter="handleSearch" />
-        <a-button type="primary" @click="handleSearch">
+        <a-input 
+          v-model:value="searchText" 
+          placeholder="请输入采集任务名称" 
+          class="search-input"
+        >
+          <template #prefix>
+            <SearchOutlined class="search-icon" />
+          </template>
+        </a-input>
+        <a-button type="primary" class="action-button" @click="handleSearch">
           <template #icon>
             <SearchOutlined />
           </template>
           搜索
         </a-button>
-        <a-button @click="handleReset">
+        <a-button class="action-button reset-button" @click="handleReset">
           <template #icon>
             <ReloadOutlined />
           </template>
           重置
         </a-button>
       </div>
-      <!-- 操作按钮 -->
       <div class="action-buttons">
-        <a-button type="primary" @click="openAddModal">
+        <a-button type="primary" class="add-button" @click="openAddModal">
           <template #icon>
             <PlusOutlined />
           </template>
@@ -31,273 +41,339 @@
       </div>
     </div>
 
-    <!-- 数据加载状态 -->
-    <a-spin :spinning="loading">
-      <!-- 表格 -->
-      <a-table :dataSource="data" :columns="columns" :pagination="false">
-        <!-- 服务发现类型列 -->
-        <template #serviceDiscoveryType="{ record }">
-          <a-tag :color="record.service_discovery_type === 'k8s' ? 'blue' : 'green'">
-            {{ record.service_discovery_type === 'k8s' ? 'Kubernetes' : 'HTTP' }}
-          </a-tag>
-        </template>
-        <!-- 关联采集池列 -->
-        <template #poolName="{ record }">
-          <a-tag color="purple">{{ getPoolName(record.pool_id) }}</a-tag>
-        </template>
-        <!-- 创建者列 -->
-        <template #createUserName="{ record }">
-          <a-tag color="cyan">{{ record.create_user_name }}</a-tag>
-        </template>
-        <!-- 操作列 -->
-        <template #action="{ record }">
-          <a-space>
-            <a-tooltip title="编辑资源信息">
-              <a-button type="link" @click="openEditModal(record)">
-                <template #icon>
-                  <Icon icon="clarity:note-edit-line" style="font-size: 22px" />
-                </template>
-              </a-button>
+    <!-- 采集任务列表表格 -->
+    <div class="dashboard-card table-container">
+      <a-spin :spinning="loading">
+        <a-table 
+          :columns="columns" 
+          :data-source="data" 
+          row-key="id" 
+          :pagination="false"
+          class="custom-table"
+          :scroll="{ x: 1200 }"
+        >
+          <!-- 服务发现类型列 -->
+          <template #serviceDiscoveryType="{ record }">
+            <a-tag :color="record.service_discovery_type === 'k8s' ? 'blue' : 'green'" class="tech-tag">
+              {{ record.service_discovery_type === 'k8s' ? 'Kubernetes' : 'HTTP' }}
+            </a-tag>
+          </template>
+          
+          <!-- 关联采集池列 -->
+          <template #poolName="{ record }">
+            <a-tag color="purple" class="tech-tag">{{ getPoolName(record.pool_id) }}</a-tag>
+          </template>
+          
+          <!-- 树节点列 -->
+          <template #treeNodeNames="{ record }">
+            <div class="tag-container">
+              <a-tooltip :title="formatTreeNodeNames(record.tree_node_names)">
+                <span>{{ formatTreeNodeNames(record.tree_node_names) }}</span>
+              </a-tooltip>
+            </div>
+          </template>
+          
+          <!-- 创建者列 -->
+          <template #createUserName="{ record }">
+            <a-tag color="cyan" class="tech-tag">{{ record.create_user_name }}</a-tag>
+          </template>
+          
+          <!-- 创建时间列 -->
+          <template #created_at="{ record }">
+            <a-tooltip :title="formatDate(record.created_at)">
+              {{ record.created_at }}
             </a-tooltip>
-            <a-tooltip title="删除资源">
-              <a-button type="link" danger @click="handleDelete(record)">
-                <template #icon>
-                  <Icon icon="ant-design:delete-outlined" style="font-size: 22px" />
-                </template>
-              </a-button>
-            </a-tooltip>
-          </a-space>
-        </template>
-        <!-- 树节点列 -->
-        <template #treeNodeNames="{ record }">
-          <a-tooltip :title="formatTreeNodeNames(record.tree_node_names)">
-            <span>{{ formatTreeNodeNames(record.tree_node_names) }}</span>
-          </a-tooltip>
-        </template>
-        <!-- 创建时间列 -->
-        <template #created_at="{ record }">
-          <a-tooltip :title="formatDate(record.created_at)">
-            {{ record.created_at }}
-          </a-tooltip>
-        </template>
-      </a-table>
+          </template>
+          
+          <!-- 操作列 -->
+          <template #action="{ record }">
+            <div class="action-column">
+              <a-tooltip title="编辑资源信息">
+                <a-button type="primary" shape="circle" class="edit-button" @click="openEditModal(record)">
+                  <template #icon>
+                    <Icon icon="clarity:note-edit-line" />
+                  </template>
+                </a-button>
+              </a-tooltip>
+              <a-tooltip title="删除资源">
+                <a-button type="primary" danger shape="circle" class="delete-button" @click="handleDelete(record)">
+                  <template #icon>
+                    <Icon icon="ant-design:delete-outlined" />
+                  </template>
+                </a-button>
+              </a-tooltip>
+            </div>
+          </template>
+        </a-table>
 
-      <!-- 分页器 -->
-      <a-pagination v-model:current="current" v-model:pageSize="pageSizeRef" :page-size-options="pageSizeOptions"
-        :total="total" show-size-changer @change="handlePageChange" @showSizeChange="handleSizeChange"
-        class="pagination">
-        <template #buildOptionText="props">
-          <span v-if="props.value !== '50'">{{ props.value }}条/页</span>
-          <span v-else>全部</span>
-        </template>
-      </a-pagination>
-    </a-spin>
+        <!-- 分页器 -->
+        <div class="pagination-container">
+          <a-pagination 
+            v-model:current="current" 
+            v-model:pageSize="pageSizeRef" 
+            :page-size-options="pageSizeOptions"
+            :total="total" 
+            show-size-changer 
+            @change="handlePageChange" 
+            @showSizeChange="handleSizeChange" 
+            class="custom-pagination"
+          >
+            <template #buildOptionText="props">
+              <span v-if="props.value !== '50'">{{ props.value }}条/页</span>
+              <span v-else>全部</span>
+            </template>
+          </a-pagination>
+        </div>
+      </a-spin>
+    </div>
 
     <!-- 新增采集任务模态框 -->
-    <a-modal v-model:visible="isAddModalVisible" title="新增采集任务" @ok="handleAdd" @cancel="closeAddModal" :okText="'提交'"
-      :cancelText="'取消'" :confirmLoading="confirmLoading" :maskClosable="false" width="600px">
-      <a-form :model="addForm" layout="vertical" ref="addFormRef">
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="采集任务名称" name="name" :rules="[{ required: true, message: '请输入采集任务名称' }]">
-              <a-input v-model:value="addForm.name" placeholder="请输入采集任务名称" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="启用" name="enable">
-              <a-switch v-model:checked="addForm.enable" :checked-children="'启用'" :un-checked-children="'禁用'" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+    <a-modal 
+      title="新增采集任务" 
+      v-model:visible="isAddModalVisible" 
+      @ok="handleAdd" 
+      @cancel="closeAddModal"
+      :width="700"
+      :confirmLoading="confirmLoading"
+      :maskClosable="false"
+      class="custom-modal"
+    >
+      <a-form ref="addFormRef" :model="addForm" layout="vertical" class="custom-form">
+        <div class="form-section">
+          <div class="section-title">基本信息</div>
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="采集任务名称" name="name" :rules="[{ required: true, message: '请输入采集任务名称' }]">
+                <a-input v-model:value="addForm.name" placeholder="请输入采集任务名称" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="启用" name="enable">
+                <a-switch v-model:checked="addForm.enable" :checked-children="'启用'" :un-checked-children="'禁用'" class="tech-switch" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </div>
 
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="服务发现类型" name="service_discovery_type"
-              :rules="[{ required: true, message: '请选择服务发现类型' }]">
-              <a-select v-model:value="addForm.service_discovery_type" placeholder="请选择服务发现类型">
-                <a-select-option value="http">HTTP</a-select-option>
-                <a-select-option value="k8s">Kubernetes</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="协议方案" name="scheme" :rules="[{ required: true, message: '请选择协议方案' }]">
-              <a-select v-model:value="addForm.scheme" placeholder="请选择协议方案">
-                <a-select-option value="http">HTTP</a-select-option>
-                <a-select-option value="https">HTTPS</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <div class="form-section">
+          <div class="section-title">服务配置</div>
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="服务发现类型" name="service_discovery_type" :rules="[{ required: true, message: '请选择服务发现类型' }]">
+                <a-select v-model:value="addForm.service_discovery_type" placeholder="请选择服务发现类型">
+                  <a-select-option value="http">HTTP</a-select-option>
+                  <a-select-option value="k8s">Kubernetes</a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="协议方案" name="scheme" :rules="[{ required: true, message: '请选择协议方案' }]">
+                <a-select v-model:value="addForm.scheme" placeholder="请选择协议方案">
+                  <a-select-option value="http">HTTP</a-select-option>
+                  <a-select-option value="https">HTTPS</a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+          </a-row>
 
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="监控采集路径" name="metrics_path" :rules="[{ required: true, message: '请输入监控采集路径' }]">
-              <a-input v-model:value="addForm.metrics_path" placeholder="请输入监控采集路径" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="采集间隔（秒）" name="scrape_interval" :rules="[
-              { required: true, message: '请输入采集间隔' },
-              { type: 'number', min: 1, message: '采集间隔必须大于0' }
-            ]">
-              <a-input-number v-model:value="addForm.scrape_interval" :min="1" style="width: 100%;"
-                placeholder="请输入采集间隔（秒）" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="监控采集路径" name="metrics_path" :rules="[{ required: true, message: '请输入监控采集路径' }]">
+                <a-input v-model:value="addForm.metrics_path" placeholder="请输入监控采集路径" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="端口" name="port" :rules="[
+                { required: true, message: '请输入端口' },
+                { type: 'number', min: 1, max: 65535, message: '端口必须在1-65535之间' }
+              ]">
+                <a-input-number v-model:value="addForm.port" :min="1" :max="65535" class="full-width" placeholder="请输入端口" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </div>
 
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="采集超时（秒）" name="scrape_timeout" :rules="[
-              { required: true, message: '请输入采集超时' },
-              { type: 'number', min: 1, message: '采集超时必须大于0' }
-            ]">
-              <a-input-number v-model:value="addForm.scrape_timeout" :min="1" style="width: 100%;"
-                placeholder="请输入采集超时（秒）" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="关联采集池" name="pool_id" :rules="[{ required: true, message: '请选择关联采集池' }]">
-              <a-select v-model:value="addForm.pool_id" placeholder="请选择关联采集池">
-                <a-select-option v-for="pool in pools" :key="pool.id" :value="pool.id">
-                  {{ pool.name }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <div class="form-section">
+          <div class="section-title">采集配置</div>
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="采集间隔（秒）" name="scrape_interval" :rules="[
+                { required: true, message: '请输入采集间隔' },
+                { type: 'number', min: 1, message: '采集间隔必须大于0' }
+              ]">
+                <a-input-number v-model:value="addForm.scrape_interval" :min="1" class="full-width" placeholder="请输入采集间隔（秒）" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="采集超时（秒）" name="scrape_timeout" :rules="[
+                { required: true, message: '请输入采集超时' },
+                { type: 'number', min: 1, message: '采集超时必须大于0' }
+              ]">
+                <a-input-number v-model:value="addForm.scrape_timeout" :min="1" class="full-width" placeholder="请输入采集超时（秒）" />
+              </a-form-item>
+            </a-col>
+          </a-row>
 
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="刷新间隔（秒）" name="refresh_interval" :rules="[
-              { required: true, message: '请输入刷新间隔' },
-              { type: 'number', min: 1, message: '刷新间隔必须大于0' }
-            ]">
-              <a-input-number v-model:value="addForm.refresh_interval" :min="1" style="width: 100%;"
-                placeholder="请输入刷新间隔（秒）" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="端口" name="port" :rules="[
-              { required: true, message: '请输入端口' },
-              { type: 'number', min: 1, max: 65535, message: '端口必须在1-65535之间' }
-            ]">
-              <a-input-number v-model:value="addForm.port" :min="1" :max="65535" style="width: 100%;"
-                placeholder="请输入端口" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="刷新间隔（秒）" name="refresh_interval" :rules="[
+                { required: true, message: '请输入刷新间隔' },
+                { type: 'number', min: 1, message: '刷新间隔必须大于0' }
+              ]">
+                <a-input-number v-model:value="addForm.refresh_interval" :min="1" class="full-width" placeholder="请输入刷新间隔（秒）" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="关联采集池" name="pool_id" :rules="[{ required: true, message: '请选择关联采集池' }]">
+                <a-select v-model:value="addForm.pool_id" placeholder="请选择关联采集池">
+                  <a-select-option v-for="pool in pools" :key="pool.id" :value="pool.id">
+                    {{ pool.name }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </div>
 
-        <a-form-item label="树节点" name="tree_node_ids">
-          <a-tree-select v-model:value="addForm.tree_node_ids" :tree-data="treeData" :tree-checkable="true"
-            :tree-default-expand-all="true" :show-checked-strategy="SHOW_PARENT" placeholder="请选择树节点"
-            style="width: 100%" />
-        </a-form-item>
+        <div class="form-section">
+          <div class="section-title">树节点配置</div>
+          <a-form-item label="树节点" name="tree_node_ids" :rules="[{ required: true, message: '请选择树节点' }]">
+            <a-tree-select 
+              v-model:value="addForm.tree_node_ids" 
+              :tree-data="treeData" 
+              :tree-checkable="true"
+              :tree-default-expand-all="true" 
+              :show-checked-strategy="SHOW_PARENT" 
+              placeholder="请选择树节点"
+              class="full-width" 
+            />
+          </a-form-item>
+        </div>
       </a-form>
     </a-modal>
 
     <!-- 编辑采集任务模态框 -->
-    <a-modal v-model:visible="isEditModalVisible" title="编辑采集任务" @ok="handleUpdate" @cancel="closeEditModal"
-      :okText="'提交'" :cancelText="'取消'" :confirmLoading="confirmLoading" :maskClosable="false" width="600px">
-      <a-form :model="editForm" layout="vertical" ref="editFormRef" @submit.prevent>
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="采集任务名称" name="name" :rules="[{ required: true, message: '请输入采集任务名称' }]">
-              <a-input v-model:value="editForm.name" placeholder="请输入采集任务名称" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="启用" name="enable">
-              <a-switch v-model:checked="editForm.enable" :checked-children="'启用'" :un-checked-children="'禁用'" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+    <a-modal 
+      title="编辑采集任务" 
+      v-model:visible="isEditModalVisible" 
+      @ok="handleUpdate" 
+      @cancel="closeEditModal"
+      :width="700"
+      :confirmLoading="confirmLoading"
+      :maskClosable="false"
+      class="custom-modal"
+    >
+      <a-form ref="editFormRef" :model="editForm" layout="vertical" class="custom-form" @submit.prevent>
+        <div class="form-section">
+          <div class="section-title">基本信息</div>
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="采集任务名称" name="name" :rules="[{ required: true, message: '请输入采集任务名称' }]">
+                <a-input v-model:value="editForm.name" placeholder="请输入采集任务名称" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="启用" name="enable">
+                <a-switch v-model:checked="editForm.enable" :checked-children="'启用'" :un-checked-children="'禁用'" class="tech-switch" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </div>
 
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="服务发现类型" name="service_discovery_type"
-              :rules="[{ required: true, message: '请选择服务发现类型' }]">
-              <a-select v-model:value="editForm.service_discovery_type" placeholder="请选择服务发现类型">
-                <a-select-option value="http">HTTP</a-select-option>
-                <a-select-option value="k8s">Kubernetes</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="协议方案" name="scheme" :rules="[{ required: true, message: '请选择协议方案' }]">
-              <a-select v-model:value="editForm.scheme" placeholder="请选择协议方案">
-                <a-select-option value="http">HTTP</a-select-option>
-                <a-select-option value="https">HTTPS</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <div class="form-section">
+          <div class="section-title">服务配置</div>
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="服务发现类型" name="service_discovery_type" :rules="[{ required: true, message: '请选择服务发现类型' }]">
+                <a-select v-model:value="editForm.service_discovery_type" placeholder="请选择服务发现类型">
+                  <a-select-option value="http">HTTP</a-select-option>
+                  <a-select-option value="k8s">Kubernetes</a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="协议方案" name="scheme" :rules="[{ required: true, message: '请选择协议方案' }]">
+                <a-select v-model:value="editForm.scheme" placeholder="请选择协议方案">
+                  <a-select-option value="http">HTTP</a-select-option>
+                  <a-select-option value="https">HTTPS</a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+          </a-row>
 
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="监控采集路径" name="metrics_path" :rules="[{ required: true, message: '请输入监控采集路径' }]">
-              <a-input v-model:value="editForm.metrics_path" placeholder="请输入监控采集路径" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="采集间隔（秒）" name="scrape_interval" :rules="[
-              { required: true, message: '请输入采集间隔' },
-              { type: 'number', min: 1, message: '采集间隔必须大于0' }
-            ]">
-              <a-input-number v-model:value="editForm.scrape_interval" :min="1" style="width: 100%;"
-                placeholder="请输入采集间隔（秒）" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="监控采集路径" name="metrics_path" :rules="[{ required: true, message: '请输入监控采集路径' }]">
+                <a-input v-model:value="editForm.metrics_path" placeholder="请输入监控采集路径" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="端口" name="port" :rules="[
+                { required: true, message: '请输入端口' },
+                { type: 'number', min: 1, max: 65535, message: '端口必须在1-65535之间' }
+              ]">
+                <a-input-number v-model:value="editForm.port" :min="1" :max="65535" class="full-width" placeholder="请输入端口" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </div>
 
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="采集超时（秒）" name="scrape_timeout" :rules="[
-              { required: true, message: '请输入采集超时' },
-              { type: 'number', min: 1, message: '采集超时必须大于0' }
-            ]">
-              <a-input-number v-model:value="editForm.scrape_timeout" :min="1" style="width: 100%;"
-                placeholder="请输入采集超时（秒）" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="关联采集池" name="pool_id" :rules="[{ required: true, message: '请选择关联采集池' }]">
-              <a-select v-model:value="editForm.pool_id" placeholder="请选择关联采集池">
-                <a-select-option v-for="pool in pools" :key="pool.id" :value="pool.id">
-                  {{ pool.name }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <div class="form-section">
+          <div class="section-title">采集配置</div>
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="采集间隔（秒）" name="scrape_interval" :rules="[
+                { required: true, message: '请输入采集间隔' },
+                { type: 'number', min: 1, message: '采集间隔必须大于0' }
+              ]">
+                <a-input-number v-model:value="editForm.scrape_interval" :min="1" class="full-width" placeholder="请输入采集间隔（秒）" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="采集超时（秒）" name="scrape_timeout" :rules="[
+                { required: true, message: '请输入采集超时' },
+                { type: 'number', min: 1, message: '采集超时必须大于0' }
+              ]">
+                <a-input-number v-model:value="editForm.scrape_timeout" :min="1" class="full-width" placeholder="请输入采集超时（秒）" />
+              </a-form-item>
+            </a-col>
+          </a-row>
 
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="刷新间隔（秒）" name="refresh_interval" :rules="[
-              { required: true, message: '请输入刷新间隔' },
-              { type: 'number', min: 1, message: '刷新间隔必须大于0' }
-            ]">
-              <a-input-number v-model:value="editForm.refresh_interval" :min="1" style="width: 100%;"
-                placeholder="请输入刷新间隔（秒）" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="端口" name="port" :rules="[
-              { required: true, message: '请输入端口' },
-              { type: 'number', min: 1, max: 65535, message: '端口必须在1-65535之间' }
-            ]">
-              <a-input-number v-model:value="editForm.port" :min="1" :max="65535" style="width: 100%;"
-                placeholder="请输入端口" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="刷新间隔（秒）" name="refresh_interval" :rules="[
+                { required: true, message: '请输入刷新间隔' },
+                { type: 'number', min: 1, message: '刷新间隔必须大于0' }
+              ]">
+                <a-input-number v-model:value="editForm.refresh_interval" :min="1" class="full-width" placeholder="请输入刷新间隔（秒）" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="关联采集池" name="pool_id" :rules="[{ required: true, message: '请选择关联采集池' }]">
+                <a-select v-model:value="editForm.pool_id" placeholder="请选择关联采集池">
+                  <a-select-option v-for="pool in pools" :key="pool.id" :value="pool.id">
+                    {{ pool.name }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </div>
 
-        <a-form-item label="树节点" name="tree_node_ids" :rules="[{ required: true, message: '请选择树节点' }]">
-          <a-tree-select v-model:value="editForm.tree_node_ids" :tree-data="treeData" :tree-checkable="true"
-            :tree-default-expand-all="true" :show-checked-strategy="SHOW_PARENT" placeholder="请选择树节点"
-            style="width: 100%" />
-        </a-form-item>
+        <div class="form-section">
+          <div class="section-title">树节点配置</div>
+          <a-form-item label="树节点" name="tree_node_ids" :rules="[{ required: true, message: '请选择树节点' }]">
+            <a-tree-select 
+              v-model:value="editForm.tree_node_ids" 
+              :tree-data="treeData" 
+              :tree-checkable="true"
+              :tree-default-expand-all="true" 
+              :show-checked-strategy="SHOW_PARENT" 
+              placeholder="请选择树节点"
+              class="full-width" 
+            />
+          </a-form-item>
+        </div>
       </a-form>
     </a-modal>
   </div>
@@ -384,51 +460,61 @@ const columns = [
     title: 'id',
     dataIndex: 'id',
     key: 'id',
+    width: 80,
   },
   {
     title: '采集任务名称',
     dataIndex: 'name',
     key: 'name',
+    width: 150,
   },
   {
     title: '服务发现类型',
     dataIndex: 'service_discovery_type',
     key: 'service_discovery_type',
     slots: { customRender: 'serviceDiscoveryType' },
+    width: 120,
   },
   {
     title: '监控采集路径',
     dataIndex: 'metrics_path',
     key: 'metrics_path',
+    width: 130,
   },
   {
     title: '关联采集池',
     dataIndex: 'pool_id',
     key: 'pool_id',
     slots: { customRender: 'poolName' },
+    width: 120,
   },
   {
     title: '树节点',
     dataIndex: 'tree_node_names',
     key: 'tree_node_names',
     slots: { customRender: 'treeNodeNames' },
+    width: 150,
   },
   {
     title: '创建者',
     dataIndex: 'create_user_name',
     key: 'create_user_name',
     slots: { customRender: 'createUserName' },
+    width: 100,
   },
   {
     title: '创建时间',
     dataIndex: 'created_at',
     key: 'created_at',
     slots: { customRender: 'created_at' },
+    width: 170,
   },
   {
     title: '操作',
     key: 'action',
     slots: { customRender: 'action' },
+    fixed: 'right',
+    width: 120,
   },
 ];
 
@@ -740,12 +826,41 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.monitor-page {
+  padding: 20px;
+  background-color: #f0f2f5;
+  min-height: 100vh;
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.page-description {
+  color: #666;
+  font-size: 14px;
+}
+
+.dashboard-card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  margin-bottom: 24px;
+  transition: all 0.3s;
+}
+
 .custom-toolbar {
-  padding: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
 }
 
 .search-filters {
@@ -754,33 +869,205 @@ onMounted(() => {
   align-items: center;
 }
 
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.pagination {
-  margin-top: 16px;
-  text-align: right;
-  margin-right: 12px;
-}
-
-.dynamic-delete-button {
-  cursor: pointer;
-  position: relative;
-  top: 4px;
-  font-size: 24px;
-  color: #999;
+.search-input {
+  width: 250px;
+  border-radius: 4px;
   transition: all 0.3s;
 }
 
-.dynamic-delete-button:hover {
-  color: #777;
+.search-input:hover,
+.search-input:focus {
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
 }
 
-.dynamic-delete-button[disabled] {
-  cursor: not-allowed;
-  opacity: 0.5;
+.search-icon {
+  color: #bfbfbf;
+}
+
+.action-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.reset-button {
+  background-color: #f5f5f5;
+  color: #595959;
+  border-color: #d9d9d9;
+}
+
+.reset-button:hover {
+  background-color: #e6e6e6;
+  border-color: #b3b3b3;
+}
+
+.add-button {
+  background: linear-gradient(45deg, #1890ff, #36bdf4);
+  border: none;
+  box-shadow: 0 2px 6px rgba(24, 144, 255, 0.4);
+}
+
+.add-button:hover {
+  background: linear-gradient(45deg, #096dd9, #1890ff);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(24, 144, 255, 0.5);
+}
+
+.table-container {
+  overflow: hidden;
+}
+
+.custom-table {
+  margin-top: 8px;
+}
+
+:deep(.ant-table) {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+:deep(.ant-table-thead > tr > th) {
+  background-color: #f7f9fc;
+  font-weight: 600;
+  color: #1f1f1f;
+  padding: 16px 12px;
+}
+
+:deep(.ant-table-tbody > tr > td) {
+  padding: 12px;
+}
+
+:deep(.ant-table-tbody > tr:hover > td) {
+  background-color: #f0f7ff;
+}
+
+.tag-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tech-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.action-column {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.edit-button {
+  background: #1890ff;
+  border: none;
+  box-shadow: 0 2px 4px rgba(24, 144, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-button:hover {
+  background: #096dd9;
+  transform: scale(1.05);
+}
+
+.delete-button {
+  background: #ff4d4f;
+  border: none;
+  box-shadow: 0 2px 4px rgba(255, 77, 79, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-button:hover {
+  background: #cf1322;
+  transform: scale(1.05);
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.custom-pagination {
+  margin-right: 12px;
+}
+
+/* 模态框样式 */
+:deep(.custom-modal .ant-modal-content) {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+:deep(.custom-modal .ant-modal-header) {
+  padding: 20px 24px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+:deep(.custom-modal .ant-modal-title) {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+:deep(.custom-modal .ant-modal-body) {
+  padding: 24px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+:deep(.custom-modal .ant-modal-footer) {
+  padding: 16px 24px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 表单样式 */
+.custom-form {
+  width: 100%;
+}
+
+.form-section {
+  margin-bottom: 28px;
+  padding: 0;
+  position: relative;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 16px;
+  padding-left: 12px;
+  border-left: 4px solid #1890ff;
+}
+
+:deep(.custom-form .ant-form-item-label > label) {
+  font-weight: 500;
+  color: #333;
+}
+
+.full-width {
+  width: 100%;
+}
+
+:deep(.tech-switch) {
+  background-color: rgba(0, 0, 0, 0.25);
+}
+
+:deep(.tech-switch.ant-switch-checked) {
+  background: linear-gradient(45deg, #1890ff, #36cfc9);
 }
 </style>

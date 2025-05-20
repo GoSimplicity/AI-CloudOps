@@ -1,66 +1,98 @@
 <template>
-  <a-layout class="calendar-layout">
-    <a-layout-header class="header">
-      <div class="header-title">值班表</div>
-      <div class="header-info">
-        <span>值班组名称：{{ dutyGroupName }};</span>
-        <span>总值班人数：{{ totalOnDutyUsers }}</span>
+  <div class="monitor-page">
+    <!-- 页面标题区域 -->
+    <div class="page-header">
+      <h2 class="page-title">值班表</h2>
+      <div class="page-description">管理和查看值班人员安排及换班记录</div>
+    </div>
+
+    <!-- 值班信息卡片 -->
+    <div class="dashboard-card custom-toolbar">
+      <div class="duty-info">
+        <div class="info-item">
+          <span class="info-label">值班组名称：</span>
+          <span class="info-value">{{ dutyGroupName }}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">总值班人数：</span>
+          <span class="info-value">{{ totalOnDutyUsers }}</span>
+        </div>
       </div>
-    </a-layout-header>
+    </div>
 
-    <a-layout-content class="calendar-content">
-      <a-card bordered="{false}" class="calendar-card">
-        <div class="calendar">
-          <div
-            class="day prev-month"
-            v-for="day in previousMonthDays"
-            :key="'prev-' + day.date"
-          >
-            <div class="day-number">{{ day.date }}</div>
+    <!-- 日历展示区 -->
+    <div class="dashboard-card calendar-container">
+      <div class="calendar">
+        <div
+          class="calendar-day prev-month"
+          v-for="day in previousMonthDays"
+          :key="'prev-' + day.date"
+        >
+          <div class="day-header">
+            <div class="day-number">{{ day.date.split('-')[2] }}</div>
             <div class="day-weekday">{{ day.weekday }}</div>
-            <div class="day-user">
-              {{ day.user_id ? `值班人: ${createUserName}` : '没有找到值班人' }}
-            </div>
           </div>
-
-          <div
-            class="day"
-            v-for="day in daysInMonth"
-            :key="day.date"
-            @click="isCurrentMonth(day.date) ? openSwapModal(day) : null"
-            :class="{
-              'has-user': day.user_id,
-              'no-user': !day.user_id,
-              disabled: !isCurrentMonth(day.date),
-            }"
-          >
-            <div class="day-number">{{ day.date }}</div>
-            <div class="day-weekday">{{ day.weekday }}</div>
-            <div class="day-user">
+          <div class="day-content">
+            <div class="day-user" :class="{'no-user': !day.user_id}">
               {{ day.user_id ? `值班人: ${createUserName}` : '没有找到值班人' }}
             </div>
           </div>
         </div>
-      </a-card>
 
-      <a-modal
-        title="换班记录"
-        v-model:visible="isSwapModalVisible"
-        @ok="handleSwap"
-        @cancel="closeSwapModal"
-      >
-        <a-form layout="vertical">
-          <a-form-item label="值班人ID" required>
-            <a-input-number
-              v-model:value="swapForm.on_duty_user_id"
-              placeholder="请输入新值班人ID"
-            />
-          </a-form-item>
-          <p>调换日期: {{ swapForm.date }}</p>
-        </a-form>
-      </a-modal>
-    </a-layout-content>
-  </a-layout>
+        <div
+          class="calendar-day"
+          v-for="day in daysInMonth"
+          :key="day.date"
+          @click="isCurrentMonth(day.date) ? openSwapModal(day) : null"
+          :class="{
+            'has-user': day.user_id,
+            'no-user': !day.user_id,
+            'disabled': !isCurrentMonth(day.date),
+          }"
+        >
+          <div class="day-header">
+            <div class="day-number">{{ day.date.split('-')[2] }}</div>
+            <div class="day-weekday">{{ day.weekday }}</div>
+          </div>
+          <div class="day-content">
+            <div class="day-user" :class="{'no-user': !day.user_id}">
+              {{ day.user_id ? `值班人: ${createUserName}` : '没有找到值班人' }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 换班模态框 -->
+    <a-modal 
+      title="换班记录" 
+      v-model:visible="isSwapModalVisible" 
+      @ok="handleSwap" 
+      @cancel="closeSwapModal"
+      :width="500"
+      class="custom-modal"
+    >
+      <a-form ref="swapFormRef" :model="swapForm" layout="vertical" class="custom-form">
+        <div class="form-section">
+          <div class="section-title">换班信息</div>
+          <a-row :gutter="16">
+            <a-col :span="24">
+              <a-form-item label="调换日期" name="date">
+                <a-input v-model:value="swapForm.date" disabled />
+              </a-form-item>
+            </a-col>
+          </a-row>
+          <a-row :gutter="16">
+            <a-col :span="24">
+              <a-form-item label="值班人ID" name="on_duty_user_id" :rules="[{ required: true, message: '请输入新值班人ID' }]">
+                <a-input-number v-model:value="swapForm.on_duty_user_id" placeholder="请输入新值班人ID" class="full-width" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </div>
+      </a-form>
+    </a-modal>
+  </div>
 </template>
 
 <script lang="ts" setup>
@@ -235,93 +267,210 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.calendar-layout {
-  height: 100vh;
-  background-color: var(--ant-layout-background);
+.monitor-page {
+  padding: 20px;
+  background-color: #f0f2f5;
+  min-height: 100vh;
 }
 
-.header {
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.page-description {
+  color: #666;
+  font-size: 14px;
+}
+
+.dashboard-card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  margin-bottom: 24px;
+  transition: all 0.3s;
+}
+
+.custom-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 20px;
-  background: var(--ant-layout-header-background);
 }
 
-.header-title {
-  font-size: 1.5em;
+.duty-info {
+  display: flex;
+  gap: 24px;
+  align-items: center;
 }
 
-.header-info {
-  font-size: 1em;
-  color: var(--ant-text-color-secondary);
+.info-item {
+  display: flex;
+  align-items: center;
 }
 
-.calendar-content {
-  padding: 20px;
+.info-label {
+  font-weight: 500;
+  color: #555;
+  margin-right: 8px;
 }
 
-.calendar-card {
-  border-radius: 8px;
-  padding: 20px;
+.info-value {
+  font-weight: 600;
+  color: #1890ff;
+}
+
+.calendar-container {
+  padding: 24px;
 }
 
 .calendar {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 10px;
+  gap: 16px;
 }
 
-.day {
+.calendar-day {
+  background: #fff;
   border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  transition: all 0.3s ease;
+  cursor: pointer;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  min-height: 120px;
+  border: 1px solid #f0f0f0;
+}
+
+.calendar-day:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.calendar-day.has-user {
+  border-left: 4px solid #52c41a;
+}
+
+.calendar-day.no-user {
+  border-left: 4px solid #ff4d4f;
+}
+
+.calendar-day.prev-month {
+  background: #f9f9f9;
+  color: #999;
+  cursor: default;
+}
+
+.calendar-day.disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.day-header {
+  padding: 8px 12px;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  cursor: pointer;
-  padding: 10px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  transition: background-color 0.3s, transform 0.2s, box-shadow 0.3s;
-}
-
-.day:hover {
-  transform: scale(1.03);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-}
-
-.prev-month {
-  background-color: #e0e0e0;
-  color: #757575;
-}
-
-.has-user {
-  background-color: #a5d6a7;
-  color: #2e7d32;
-}
-
-.no-user {
-  background-color: #ffccbc;
-  color: #d84315;
-}
-
-.disabled {
-  background-color: #e0e0e0; /* 灰色背景 */
-  color: #757575; /* 灰色文字 */
-  cursor: not-allowed; /* 禁止指针 */
 }
 
 .day-number {
-  font-size: 1.1em;
-  font-weight: bold;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
 }
 
 .day-weekday {
-  font-size: 0.85em;
+  font-size: 12px;
   color: #888;
 }
 
+.day-content {
+  padding: 12px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 .day-user {
-  margin-top: 8px;
-  font-size: 0.85em;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: #e6f7ff;
+  color: #1890ff;
+  margin-bottom: 8px;
+}
+
+.day-user.no-user {
+  background: #fff2f0;
+  color: #ff4d4f;
+}
+
+/* 模态框样式 */
+:deep(.custom-modal .ant-modal-content) {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+:deep(.custom-modal .ant-modal-header) {
+  padding: 20px 24px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+:deep(.custom-modal .ant-modal-title) {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+:deep(.custom-modal .ant-modal-body) {
+  padding: 24px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+:deep(.custom-modal .ant-modal-footer) {
+  padding: 16px 24px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 表单样式 */
+.custom-form {
+  width: 100%;
+}
+
+.form-section {
+  margin-bottom: 28px;
+  padding: 0;
+  position: relative;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 16px;
+  padding-left: 12px;
+  border-left: 4px solid #1890ff;
+}
+
+:deep(.custom-form .ant-form-item-label > label) {
+  font-weight: 500;
+  color: #333;
+}
+
+.full-width {
+  width: 100%;
 }
 </style>
