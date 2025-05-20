@@ -1,293 +1,366 @@
 <template>
-  <div class="cluster-management-dashboard">
-    <!-- 顶部统计卡片 -->
-    <div class="dashboard-stats">
-      <a-card class="stat-card" :bordered="false">
-        <template #title>
-          <span class="stat-title"><cluster-outlined /> 集群总数</span>
-        </template>
-        <div class="stat-content">
+  <div class="service-manager cluster-manager">
+    <!-- 仪表板标题 -->
+    <div class="dashboard-header">
+      <h2 class="dashboard-title">
+        <ClusterOutlined class="dashboard-icon" />
+        Kubernetes 集群管理器
+      </h2>
+      <div class="dashboard-stats">
+        <div class="stat-item">
           <div class="stat-value">{{ clusters.length }}</div>
-          <div class="stat-trend">
-            <rise-outlined v-if="clusters.length > 0" style="color: #52c41a" /> 在线运行中
-          </div>
+          <div class="stat-label">集群总数</div>
         </div>
-      </a-card>
-      
-      <a-card class="stat-card" :bordered="false">
-        <template #title>
-          <span class="stat-title"><environment-outlined /> 环境分布</span>
-        </template>
-        <div class="stat-chart">
-          <div v-for="(count, env) in envDistribution" :key="env" class="env-badge">
-            <a-tag :color="getEnvColor(env)">{{ getEnvName(env) }}: {{ count }}</a-tag>
-          </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ Object.keys(envDistribution).length }}</div>
+          <div class="stat-label">环境分类</div>
         </div>
-      </a-card>
-      
-      <a-card class="stat-card" :bordered="false">
-        <template #title>
-          <span class="stat-title"><api-outlined /> 资源状态</span>
-        </template>
-        <div class="stat-content">
-          <a-progress :percent="resourceUtilization" status="active" />
-          <div class="resource-details">资源使用率</div>
-        </div>
-      </a-card>
+      </div>
     </div>
 
-    <!-- 工具栏和筛选器 -->
-    <div class="action-toolbar">
-      <!-- 查询功能 -->
-      <div class="search-area">
+    <!-- 查询和操作工具栏 -->
+    <div class="control-panel">
+      <div class="search-filters">
         <a-input-search
           v-model:value="searchText"
-          placeholder="搜索集群名称..."
-          allow-clear
-          class="search-input"
+          placeholder="搜索集群名称"
+          class="control-item search-input"
           @search="onSearch"
+          allow-clear
         >
-          <template #prefix>
-            <search-outlined />
-          </template>
+          <template #prefix><SearchOutlined /></template>
         </a-input-search>
         
         <a-select
           v-model:value="filterEnv"
           placeholder="环境筛选"
-          style="width: 120px"
+          class="control-item env-selector"
           allow-clear
           @change="onEnvFilterChange"
         >
-          <a-select-option value="dev">开发环境</a-select-option>
-          <a-select-option value="prod">生产环境</a-select-option>
-          <a-select-option value="stage">阶段环境</a-select-option>
-          <a-select-option value="rc">发布候选</a-select-option>
-          <a-select-option value="press">压力测试</a-select-option>
+          <template #suffixIcon><EnvironmentOutlined /></template>
+          <a-select-option value="dev">
+            <span class="env-option">
+              <ApiOutlined />
+              开发环境
+            </span>
+          </a-select-option>
+          <a-select-option value="prod">
+            <span class="env-option">
+              <ApiOutlined />
+              生产环境
+            </span>
+          </a-select-option>
+          <a-select-option value="stage">
+            <span class="env-option">
+              <ApiOutlined />
+              阶段环境
+            </span>
+          </a-select-option>
+          <a-select-option value="rc">
+            <span class="env-option">
+              <ApiOutlined />
+              发布候选
+            </span>
+          </a-select-option>
+          <a-select-option value="press">
+            <span class="env-option">
+              <ApiOutlined />
+              压力测试
+            </span>
+          </a-select-option>
         </a-select>
       </div>
-
-      <!-- 操作按钮 -->
+      
       <div class="action-buttons">
-        <a-button type="primary" @click="isAddModalVisible = true">
-          <template #icon><plus-outlined /></template>
+        <a-tooltip title="刷新数据">
+          <a-button type="primary" class="refresh-btn" @click="refreshData" :loading="loading">
+            <template #icon><ReloadOutlined /></template>
+          </a-button>
+        </a-tooltip>
+        
+        <a-button 
+          type="primary" 
+          class="create-btn" 
+          @click="isAddModalVisible = true"
+        >
+          <template #icon><PlusOutlined /></template>
           新增集群
         </a-button>
+        
         <a-button 
           type="primary" 
           danger 
-          ghost
-          :disabled="selectedRows.length === 0"
-          @click="showBatchDeleteConfirm"
+          class="delete-btn" 
+          @click="showBatchDeleteConfirm" 
+          :disabled="!selectedRows.length"
         >
-          <template #icon><delete-outlined /></template>
-          批量删除
-        </a-button>
-        <a-button type="primary" ghost @click="refreshData">
-          <template #icon><reload-outlined /></template>
-          刷新
+          <template #icon><DeleteOutlined /></template>
+          批量删除 {{ selectedRows.length ? `(${selectedRows.length})` : '' }}
         </a-button>
       </div>
     </div>
 
-    <!-- 卡片视图/表格切换 -->
+    <!-- 状态摘要卡片 -->
+    <div class="status-summary">
+      <div class="summary-card total-card">
+        <div class="card-content">
+          <div class="card-metric">
+            <DashboardOutlined class="metric-icon" />
+            <div class="metric-value">{{ clusters.length }}</div>
+          </div>
+          <div class="card-title">集群总数</div>
+        </div>
+        <div class="card-footer">
+          <div class="footer-text">管理您的全部Kubernetes集群</div>
+        </div>
+      </div>
+      
+      <div class="summary-card running-card">
+        <div class="card-content">
+          <div class="card-metric">
+            <CheckCircleOutlined class="metric-icon" />
+            <div class="metric-value">{{ resourceUtilization }}%</div>
+          </div>
+          <div class="card-title">资源使用率</div>
+        </div>
+        <div class="card-footer">
+          <a-progress 
+            :percent="resourceUtilization" 
+            :stroke-color="{ from: '#1890ff', to: '#52c41a' }" 
+            size="small" 
+            :show-info="false" 
+          />
+          <div class="footer-text">集群资源平均使用率</div>
+        </div>
+      </div>
+      
+      <div class="summary-card env-card">
+        <div class="card-content">
+          <div class="card-metric">
+            <EnvironmentOutlined class="metric-icon" />
+            <div class="metric-value">{{ Object.keys(envDistribution).length }}</div>
+          </div>
+          <div class="card-title">环境分类</div>
+        </div>
+        <div class="card-footer">
+          <div class="env-distribution">
+            <div v-for="(count, env) in envDistribution" :key="env" class="env-badge">
+              <a-tag :color="getEnvColor(env)">{{ getEnvName(env) }}: {{ count }}</a-tag>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 视图切换 -->
     <div class="view-toggle">
       <a-radio-group v-model:value="viewMode" button-style="solid">
         <a-radio-button value="table">
-          <unordered-list-outlined />
+          <UnorderedListOutlined />
           表格视图
         </a-radio-button>
         <a-radio-button value="card">
-          <appstore-outlined />
+          <AppstoreOutlined />
           卡片视图
         </a-radio-button>
       </a-radio-group>
     </div>
 
     <!-- 表格视图 -->
-    <div v-if="viewMode === 'table'" class="table-view">
-      <a-spin :spinning="loading">
-        <a-table 
-          :dataSource="filteredData" 
-          :rowSelection="rowSelection"
-          :rowKey="(record: any) => record.id"
-          :pagination="{ 
-            pageSize: 10,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total: number) => `共 ${total} 条数据`
-          }"
-          :scroll="{ x: 1200 }"
-          bordered
-        >
-          <!-- 使用 v-slot 代替 column.slots -->
-          <a-table-column key="id" title="ID" data-index="id" width="80" />
+    <a-table
+      v-if="viewMode === 'table'"
+      :columns="columns"
+      :data-source="filteredData"
+      :row-selection="rowSelection"
+      :loading="loading"
+      row-key="id"
+      :pagination="{ 
+        pageSize: 10, 
+        showSizeChanger: true, 
+        showQuickJumper: true,
+        showTotal: (total: number) => `共 ${total} 条数据`
+      }"
+      class="services-table cluster-table"
+    >
+      <!-- 集群名称列 -->
+      <template #name="{ text, record }">
+        <div class="cluster-name">
+          <ClusterOutlined />
+          <a @click="handleViewNodes(record.id)">{{ text }}</a>
+        </div>
+      </template>
+      
+      <!-- 环境列 -->
+      <template #env="{ text }">
+        <a-tag :color="getEnvColor(text)" class="env-tag">
+          <span class="status-dot"></span>
+          {{ getEnvName(text) }}
+        </a-tag>
+      </template>
+      
+      <!-- 状态列 -->
+      <template #status="{ text }">
+        <a-tag :color="getStatusColor(text)" class="status-tag">
+          <span class="status-dot"></span>
+          {{ text }}
+        </a-tag>
+      </template>
+
+      <!-- 创建时间列 -->
+      <template #created_at="{ text }">
+        <div class="timestamp">
+          <ClockCircleOutlined />
+          <a-tooltip :title="formatDateTime(text)">
+            {{ formatDate(text) }}
+          </a-tooltip>
+        </div>
+      </template>
+
+      <!-- 操作列 -->
+      <template #action="{ record }">
+        <div class="action-column">
+          <a-tooltip title="编辑集群">
+            <a-button type="primary" ghost shape="circle" @click="handleEdit(record.id)">
+              <template #icon><EditOutlined /></template>
+            </a-button>
+          </a-tooltip>
           
-          <a-table-column key="name" title="集群名称" data-index="name" width="180" 
-            :sorter="(a: any, b: any) => a.name.localeCompare(b.name)">
-            <template #default="{ record }">
-              <a-tooltip :title="record.name">
-                <a @click="handleViewNodes(record.id)" class="cluster-name">
-                  {{ record.name }}
-                </a>
-              </a-tooltip>
-            </template>
-          </a-table-column>
+          <a-tooltip title="查看节点">
+            <a-button type="primary" ghost shape="circle" @click="handleViewNodes(record.id)">
+              <template #icon><EyeOutlined /></template>
+            </a-button>
+          </a-tooltip>
           
-          <a-table-column key="name_zh" title="集群中文名称" data-index="name_zh" width="150" />
-          
-          <a-table-column key="env" title="所属环境" data-index="env" width="120"
-            :filters="[
-              { text: '开发环境', value: 'dev' },
-              { text: '生产环境', value: 'prod' },
-              { text: '阶段环境', value: 'stage' },
-              { text: '发布候选', value: 'rc' },
-              { text: '压力测试', value: 'press' },
-            ]"
-            :onFilter="(value: string, record: any) => record.env === value"
-          >
-            <template #default="{ record }">
-              <a-tag :color="getEnvColor(record.env)">
-                {{ getEnvName(record.env) }}
-              </a-tag>
-            </template>
-          </a-table-column>
-          
-          <a-table-column key="status" title="集群状态" data-index="status" width="120">
-            <template #default="{ record }">
-              <a-badge :status="getStatusType(record.status)" :text="record.status" />
-            </template>
-          </a-table-column>
-          
-          <a-table-column key="user_id" title="创建用户" data-index="user_id" width="120" />
-          
-          <a-table-column key="version" title="集群版本" data-index="version" width="120" />
-          
-          <a-table-column key="created_at" title="创建时间" data-index="created_at" width="150"
-            :sorter="(a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()"
-          >
-            <template #default="{ record }">
-              <a-tooltip :title="formatDateTime(record.created_at)">
-                {{ formatDate(record.created_at) }}
-              </a-tooltip>
-            </template>
-          </a-table-column>
-          
-          <a-table-column key="action" title="操作" fixed="right" width="150">
-            <template #default="{ record }">
-              <div class="action-column">
-                <a-tooltip title="编辑集群">
-                  <a-button type="primary" shape="circle" size="small" @click="handleEdit(record.id)">
-                    <template #icon><edit-outlined /></template>
-                  </a-button>
-                </a-tooltip>
-                
-                <a-tooltip title="查看节点">
-                  <a-button type="primary" shape="circle" size="small" @click="handleViewNodes(record.id)">
-                    <template #icon><eye-outlined /></template>
-                  </a-button>
-                </a-tooltip>
-                
-                <a-popconfirm
-                  title="确定删除这个集群吗?"
-                  ok-text="删除"
-                  cancel-text="取消"
-                  @confirm="handleDelete(record.id)"
-                >
-                  <a-tooltip title="删除集群">
-                    <a-button type="primary" danger shape="circle" size="small">
-                      <template #icon><delete-outlined /></template>
-                    </a-button>
-                  </a-tooltip>
-                </a-popconfirm>
-              </div>
-            </template>
-          </a-table-column>
-        </a-table>
-      </a-spin>
-    </div>
+          <a-tooltip title="删除集群">
+            <a-popconfirm
+              title="确定要删除该集群吗?"
+              description="此操作不可撤销"
+              @confirm="handleDelete(record.id)"
+              ok-text="确定"
+              cancel-text="取消"
+            >
+              <a-button type="primary" danger ghost shape="circle">
+                <template #icon><DeleteOutlined /></template>
+              </a-button>
+            </a-popconfirm>
+          </a-tooltip>
+        </div>
+      </template>
+
+      <!-- 空状态 -->
+      <template #emptyText>
+        <div class="empty-state">
+          <ClusterOutlined style="font-size: 48px; color: #d9d9d9; margin-bottom: 16px" />
+          <p>暂无集群数据</p>
+          <a-button type="primary" @click="isAddModalVisible = true">新增第一个集群</a-button>
+        </div>
+      </template>
+    </a-table>
 
     <!-- 卡片视图 -->
-    <div v-else-if="viewMode === 'card'" class="card-view">
+    <div v-else class="card-view">
       <a-spin :spinning="loading">
-        <a-empty v-if="filteredData.length === 0" description="暂无数据" />
-        <div v-else class="cluster-cards">
-          <a-card 
-            v-for="item in filteredData" 
-            :key="item.id" 
-            class="cluster-card"
-            :hoverable="true"
-          >
-            <template #title>
-              <div class="card-title">
-                <span>{{ item.name }}</span>
-                <a-tag :color="getEnvColor(item.env)">{{ getEnvName(item.env) }}</a-tag>
+        <a-empty v-if="filteredData.length === 0" description="暂无集群数据" />
+        <div v-else class="service-cards cluster-cards">
+          <a-checkbox-group v-model:value="selectedCardIds" class="card-checkbox-group">
+            <div v-for="cluster in filteredData" :key="cluster.id" class="service-card cluster-card">
+              <div class="card-header">
+                <a-checkbox :value="cluster.id" class="card-checkbox" />
+                <div class="service-title cluster-title">
+                  <ClusterOutlined class="service-icon" />
+                  <h3>{{ cluster.name }}</h3>
+                </div>
+                <a-tag :color="getEnvColor(cluster.env)" class="card-type-tag env-tag">
+                  <span class="status-dot"></span>
+                  {{ getEnvName(cluster.env) }}
+                </a-tag>
               </div>
-            </template>
-            <template #extra>
-              <a-dropdown>
-                <template #overlay>
-                  <a-menu>
-                    <a-menu-item key="1" @click="handleEdit(item.id)">
-                      <edit-outlined /> 编辑集群
-                    </a-menu-item>
-                    <a-menu-item key="2" @click="handleViewNodes(item.id)">
-                      <eye-outlined /> 查看节点
-                    </a-menu-item>
-                    <a-menu-divider />
-                    <a-menu-item key="3" danger @click="showDeleteConfirm(item.id)">
-                      <delete-outlined /> 删除集群
-                    </a-menu-item>
-                  </a-menu>
-                </template>
-                <more-outlined style="font-size: 18px" />
-              </a-dropdown>
-            </template>
-            
-            <div class="card-content">
-              <p><strong>集群ID:</strong> {{ item.id }}</p>
-              <p><strong>中文名称:</strong> {{ item.name_zh || '-' }}</p>
-              <p><strong>版本:</strong> {{ item.version || '-' }}</p>
-              <p><strong>状态:</strong> <a-badge :status="getStatusType(item.env)" :text="getEnvName(item.env)" /></p>
-              <p><strong>创建时间:</strong> {{ formatDate(item.created_at) }}</p>
-            </div>
-            
-            <template #actions>
-              <div class="card-actions">
-                <a-button type="primary" size="small" @click="handleViewNodes(item.id)">
-                  <template #icon><cluster-outlined /></template>
+              
+              <div class="card-content">
+                <div class="card-detail name-zh-detail">
+                  <span class="detail-label">中文名称:</span>
+                  <span class="detail-value">
+                    {{ cluster.name_zh || '-' }}
+                  </span>
+                </div>
+                <div class="card-detail version-detail">
+                  <span class="detail-label">版本:</span>
+                  <span class="detail-value">
+                    {{ cluster.version || '-' }}
+                  </span>
+                </div>
+                <div class="card-detail status-detail">
+                  <span class="detail-label">状态:</span>
+                  <span class="detail-value">
+                    <a-badge :status="getStatusType(cluster.status)" :text="cluster.status || '未知'" />
+                  </span>
+                </div>
+                <div class="card-detail created-detail">
+                  <span class="detail-label">创建时间:</span>
+                  <span class="detail-value">
+                    <ClockCircleOutlined />
+                    {{ formatDate(cluster.created_at) }}
+                  </span>
+                </div>
+              </div>
+              
+              <div class="card-footer card-action-footer">
+                <a-button type="primary" ghost size="small" @click="handleViewNodes(cluster.id)">
+                  <template #icon><EyeOutlined /></template>
                   查看节点
                 </a-button>
-                <a-button type="primary" ghost size="small" @click="handleEdit(item.id)">
-                  <template #icon><edit-outlined /></template>
+                <a-button type="primary" ghost size="small" @click="handleEdit(cluster.id)">
+                  <template #icon><EditOutlined /></template>
                   编辑
                 </a-button>
+                <a-popconfirm
+                  title="确定要删除该集群吗?"
+                  @confirm="handleDelete(cluster.id)"
+                  ok-text="确定"
+                  cancel-text="取消"
+                >
+                  <a-button type="primary" danger ghost size="small">
+                    <template #icon><DeleteOutlined /></template>
+                    删除
+                  </a-button>
+                </a-popconfirm>
               </div>
-            </template>
-          </a-card>
+            </div>
+          </a-checkbox-group>
         </div>
       </a-spin>
     </div>
 
-    <!-- 新增集群模态框 - 使用 open 替代 visible -->
+    <!-- 新增集群模态框 -->
     <a-modal
-      title="新增集群"
       v-model:open="isAddModalVisible"
-      :width="700"
+      title="新增集群"
+      :width="800"
       @ok="handleAdd"
       @cancel="closeAddModal"
       :confirmLoading="submitLoading"
+      class="cluster-modal"
     >
-      <a-form :model="addForm" layout="vertical">
+      <a-alert type="info" show-icon class="modal-alert">
+        <template #message>新增Kubernetes集群</template>
+        <template #description>请填写集群的基本信息和连接配置</template>
+      </a-alert>
+      
+      <a-form :model="addForm" layout="vertical" class="cluster-form">
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="集群名称" name="name" :rules="[{ required: true, message: '请输入集群名称' }]">
-              <a-input v-model:value="addForm.name" placeholder="请输入集群名称" />
+              <a-input v-model:value="addForm.name" placeholder="请输入集群名称" class="form-input">
+                <template #prefix><ClusterOutlined /></template>
+              </a-input>
             </a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="集群中文名称" name="name_zh">
-              <a-input v-model:value="addForm.name_zh" placeholder="请输入集群中文名称" />
+              <a-input v-model:value="addForm.name_zh" placeholder="请输入集群中文名称" class="form-input">
+                <template #prefix><FontSizeOutlined /></template>
+              </a-input>
             </a-form-item>
           </a-col>
         </a-row>
@@ -295,7 +368,8 @@
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="环境" name="env" :rules="[{ required: true, message: '请选择环境' }]">
-              <a-select v-model:value="addForm.env" placeholder="请选择环境">
+              <a-select v-model:value="addForm.env" placeholder="请选择环境" class="form-select">
+                <template #suffixIcon><EnvironmentOutlined /></template>
                 <a-select-option value="dev">开发环境</a-select-option>
                 <a-select-option value="prod">生产环境</a-select-option>
                 <a-select-option value="stage">阶段环境</a-select-option>
@@ -306,7 +380,9 @@
           </a-col>
           <a-col :span="12">
             <a-form-item label="集群版本" name="version">
-              <a-input v-model:value="addForm.version" placeholder="请输入集群版本" />
+              <a-input v-model:value="addForm.version" placeholder="请输入集群版本" class="form-input">
+                <template #prefix><TagOutlined /></template>
+              </a-input>
             </a-form-item>
           </a-col>
         </a-row>
@@ -348,11 +424,15 @@
             placeholder="请选择限制命名空间"
             style="width: 100%"
             :token-separators="[',']"
-          ></a-select>
+          >
+            <template #suffixIcon><PartitionOutlined /></template>
+          </a-select>
         </a-form-item>
         
         <a-form-item label="API 服务器地址" name="api_server_addr">
-          <a-input v-model:value="addForm.api_server_addr" placeholder="请输入 API 服务器地址" />
+          <a-input v-model:value="addForm.api_server_addr" placeholder="请输入 API 服务器地址" class="form-input">
+            <template #prefix><ApiOutlined /></template>
+          </a-input>
         </a-form-item>
         
         <a-form-item label="KubeConfig 内容" name="kube_config_content">
@@ -360,6 +440,7 @@
             v-model:value="addForm.kube_config_content"
             placeholder="请输入 KubeConfig 内容"
             :auto-size="{ minRows: 4, maxRows: 8 }"
+            class="form-textarea"
           />
         </a-form-item>
         
@@ -380,25 +461,35 @@
       </a-form>
     </a-modal>
 
-    <!-- 编辑集群模态框 - 使用 open 替代 visible -->
+    <!-- 编辑集群模态框 -->
     <a-modal
-      title="编辑集群"
       v-model:open="isEditModalVisible"
-      :width="700"
+      title="编辑集群"
+      :width="800"
       @ok="handleUpdate"
       @cancel="closeEditModal"
       :confirmLoading="submitLoading"
+      class="cluster-modal"
     >
-      <a-form :model="editForm" layout="vertical">
+      <a-alert v-if="editForm.id" type="info" show-icon class="modal-alert">
+        <template #message>编辑集群: {{ editForm.name }}</template>
+        <template #description>ID: {{ editForm.id }} | 环境: {{ getEnvName(editForm.env) }}</template>
+      </a-alert>
+      
+      <a-form :model="editForm" layout="vertical" class="cluster-form">
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="集群名称" name="name" :rules="[{ required: true, message: '请输入集群名称' }]">
-              <a-input v-model:value="editForm.name" placeholder="请输入集群名称" />
+              <a-input v-model:value="editForm.name" placeholder="请输入集群名称" class="form-input">
+                <template #prefix><ClusterOutlined /></template>
+              </a-input>
             </a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="集群中文名称" name="name_zh">
-              <a-input v-model:value="editForm.name_zh" placeholder="请输入集群中文名称" />
+              <a-input v-model:value="editForm.name_zh" placeholder="请输入集群中文名称" class="form-input">
+                <template #prefix><FontSizeOutlined /></template>
+              </a-input>
             </a-form-item>
           </a-col>
         </a-row>
@@ -406,7 +497,8 @@
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="环境" name="env" :rules="[{ required: true, message: '请选择环境' }]">
-              <a-select v-model:value="editForm.env" placeholder="请选择环境">
+              <a-select v-model:value="editForm.env" placeholder="请选择环境" class="form-select">
+                <template #suffixIcon><EnvironmentOutlined /></template>
                 <a-select-option value="dev">开发环境</a-select-option>
                 <a-select-option value="prod">生产环境</a-select-option>
                 <a-select-option value="stage">阶段环境</a-select-option>
@@ -417,7 +509,9 @@
           </a-col>
           <a-col :span="12">
             <a-form-item label="集群版本" name="version">
-              <a-input v-model:value="editForm.version" placeholder="请输入集群版本" />
+              <a-input v-model:value="editForm.version" placeholder="请输入集群版本" class="form-input">
+                <template #prefix><TagOutlined /></template>
+              </a-input>
             </a-form-item>
           </a-col>
         </a-row>
@@ -459,11 +553,15 @@
             placeholder="请选择限制命名空间"
             style="width: 100%"
             :token-separators="[',']"
-          ></a-select>
+          >
+            <template #suffixIcon><PartitionOutlined /></template>
+          </a-select>
         </a-form-item>
         
         <a-form-item label="API 服务器地址" name="api_server_addr">
-          <a-input v-model:value="editForm.api_server_addr" placeholder="请输入 API 服务器地址" />
+          <a-input v-model:value="editForm.api_server_addr" placeholder="请输入 API 服务器地址" class="form-input">
+            <template #prefix><ApiOutlined /></template>
+          </a-input>
         </a-form-item>
         
         <a-form-item label="KubeConfig 内容" name="kube_config_content">
@@ -471,6 +569,7 @@
             v-model:value="editForm.kube_config_content"
             placeholder="请输入 KubeConfig 内容"
             :auto-size="{ minRows: 4, maxRows: 8 }"
+            class="form-textarea"
           />
         </a-form-item>
         
@@ -494,7 +593,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { message, Modal } from 'ant-design-vue';
 import { 
   getAllClustersApi, 
@@ -515,10 +614,15 @@ import {
   ClusterOutlined,
   EnvironmentOutlined,
   ApiOutlined,
-  MoreOutlined,
   UnorderedListOutlined,
   AppstoreOutlined,
-  RiseOutlined // 使用 RiseOutlined 替代不存在的 TrendUpOutlined
+  CloudServerOutlined,
+  ClockCircleOutlined,
+  CheckCircleOutlined,
+  DashboardOutlined,
+  PartitionOutlined,
+  TagOutlined,
+  FontSizeOutlined
 } from '@ant-design/icons-vue';
 
 // 路由和状态管理
@@ -533,6 +637,77 @@ const isAddModalVisible = ref(false);
 const isEditModalVisible = ref(false);
 const viewMode = ref<'table' | 'card'>('table');
 const resourceUtilization = ref(68); // 模拟数据，实际应从API获取
+const selectedCardIds = ref<number[]>([]);
+
+// 表格列配置
+const columns = [
+  {
+    title: '集群名称',
+    dataIndex: 'name',
+    key: 'name',
+    width: '20%',
+    sorter: (a: ClustersItem, b: ClustersItem) => a.name.localeCompare(b.name),
+    slots: { customRender: 'name' },
+  },
+  {
+    title: '中文名称',
+    dataIndex: 'name_zh',
+    key: 'name_zh',
+    width: '15%'
+  },
+  {
+    title: '环境',
+    dataIndex: 'env',
+    key: 'env',
+    width: '10%',
+    slots: { customRender: 'env' },
+    filters: [
+      { text: '开发环境', value: 'dev' },
+      { text: '生产环境', value: 'prod' },
+      { text: '阶段环境', value: 'stage' },
+      { text: '发布候选', value: 'rc' },
+      { text: '压力测试', value: 'press' },
+    ],
+    onFilter: (value: string, record: ClustersItem) => record.env === value,
+  },
+  {
+    title: '状态',
+    dataIndex: 'status',
+    key: 'status',
+    width: '10%',
+    slots: { customRender: 'status' },
+  },
+  {
+    title: '版本',
+    dataIndex: 'version',
+    key: 'version',
+    width: '10%',
+  },
+  {
+    title: '创建者',
+    dataIndex: 'user_id',
+    key: 'user_id',
+    width: '10%',
+  },
+  {
+    title: '创建时间',
+    dataIndex: 'created_at',
+    key: 'created_at',
+    width: '15%',
+    sorter: (a: ClustersItem, b: ClustersItem) => {
+      if (!a.created_at || !b.created_at) return 0;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    },
+    slots: { customRender: 'created_at' },
+  },
+  {
+    title: '操作',
+    key: 'action',
+    width: '15%',
+    fixed: 'right',
+    slots: { customRender: 'action' },
+  },
+];
 
 // 计算属性：环境分布
 const envDistribution = computed(() => {
@@ -558,12 +733,22 @@ const filteredData = computed(() => {
   });
 });
 
+// 根据卡片选择更新 selectedRows
+watch(selectedCardIds, (newValue) => {
+  selectedRows.value = clusters.value.filter(cluster => 
+    newValue.includes(cluster.id)
+  );
+});
+
 // 批量选择配置
 const rowSelection = {
-  selectedRowKeys: computed(() => selectedRows.value.map((row: ClustersItem) => row.id)),
-  onChange: (selectedRowKeys: any[], selectedRowData: ClustersItem[]) => {
-    selectedRows.value = selectedRowData;
+  onChange: (selectedRowKeys: number[], selectedRowsData: ClustersItem[]) => {
+    selectedRows.value = selectedRowsData;
+    selectedCardIds.value = selectedRowsData.map(row => row.id);
   },
+  getCheckboxProps: (record: ClustersItem) => ({
+    disabled: false, // 可以根据条件禁用某些行的选择
+  }),
 };
 
 // 新增、编辑表单
@@ -726,20 +911,6 @@ const handleUpdate = async () => {
   }
 };
 
-// 删除确认对话框
-const showDeleteConfirm = (id: number) => {
-  Modal.confirm({
-    title: '确定要删除此集群吗?',
-    content: '删除后将无法恢复，集群相关配置和资源将被清除。',
-    okText: '删除',
-    okType: 'danger',
-    cancelText: '取消',
-    async onOk() {
-      await handleDelete(id);
-    },
-  });
-};
-
 // 批量删除确认
 const showBatchDeleteConfirm = () => {
   if (selectedRows.value.length === 0) {
@@ -761,6 +932,7 @@ const showBatchDeleteConfirm = () => {
         }
         message.success(`成功删除 ${selectedRows.value.length} 个集群`);
         selectedRows.value = [];
+        selectedCardIds.value = [];
         getClusters();
       } catch (error: any) {
         message.error(error.message || '批量删除集群失败');
@@ -811,6 +983,22 @@ const getEnvColor = (env: string): string => {
   return colorMap[env] || 'default';
 };
 
+// 状态颜色映射
+const getStatusColor = (status: string): string => {
+  if (!status) return 'default';
+  
+  const statusMap: Record<string, string> = {
+    'Running': 'green',
+    'Pending': 'orange',
+    'Warning': 'orange',
+    'Error': 'red',
+    'Failed': 'red',
+    'Unknown': 'gray'
+  };
+  
+  return statusMap[status] || 'default';
+};
+
 // 环境名称映射
 const getEnvName = (env: string): string => {
   const nameMap: Record<string, string> = {
@@ -843,213 +1031,562 @@ const getStatusType = (status: string): string => {
 const formatDate = (dateString: string): string => {
   if (!dateString) return '-';
   const date = new Date(dateString);
-  return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 };
 
 // 日期时间格式化
 const formatDateTime = (dateString: string): string => {
   if (!dateString) return '-';
   const date = new Date(dateString);
-  return `${formatDate(dateString)} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
 };
 
 onMounted(() => {
-  console.log('Page mounted, fetching clusters...');
   getClusters();
 });
 </script>
 
-<style scoped>
-.cluster-management-dashboard {
+<style>
+:root {
+  --primary-color: #1890ff;
+  --success-color: #52c41a;
+  --warning-color: #faad14;
+  --error-color: #f5222d;
+  --font-size-base: 14px;
+  --border-radius-base: 4px;
+  --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --transition-duration: 0.3s;
+}
+
+.cluster-manager {
   background-color: #f0f2f5;
-  padding: 20px;
-  min-height: 100vh;
-}
-
-.dashboard-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.stat-card {
   border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.stat-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.09);
-}
-
-.stat-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 15px;
-  color: #555;
-}
-
-.stat-content {
-  padding: 8px 0;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: 600;
-  color: #1890ff;
-  margin-bottom: 8px;
-}
-
-.stat-trend {
-  font-size: 13px;
-  color: #52c41a;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.stat-chart {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.env-badge {
-  margin-bottom: 4px;
-}
-
-.resource-details {
-  margin-top: 8px;
-  font-size: 13px;
-  color: #666;
-}
-
-.action-toolbar {
-  background: white;
-  border-radius: 8px;
-  padding: 16px;
+/* 仪表板标题样式 */
+.dashboard-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f0f0f0;
 }
 
-.search-area {
+.dashboard-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+}
+
+.dashboard-icon {
+  margin-right: 14px;
+  font-size: 28px;
+  color: #1890ff;
+}
+
+.dashboard-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.stat-item {
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  border-radius: 8px;
+  padding: 10px 18px;
+  color: white;
+  min-width: 120px;
+  text-align: center;
+  box-shadow: 0 3px 8px rgba(24, 144, 255, 0.2);
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.stat-label {
+  font-size: 12px;
+  opacity: 0.9;
+  margin-top: 4px;
+}
+
+/* 控制面板样式 */
+.control-panel {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.search-filters {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  flex: 1;
+}
+
+.control-item {
+  min-width: 200px;
 }
 
 .search-input {
-  width: 250px;
-  border-radius: 4px;
+  flex-grow: 1;
+  max-width: 300px;
+}
+
+.env-selector {
+  width: 200px;
 }
 
 .action-buttons {
   display: flex;
-  gap: 8px;
+  gap: 16px;
+  align-items: center;
+  margin-left: 20px;
 }
 
-.view-toggle {
-  margin-bottom: 16px;
+.refresh-btn {
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  border: none;
+  height: 36px;
+  width: 36px;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
 }
 
-.table-view {
+.create-btn {
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  border: none;
+  height: 36px;
+  padding: 0 16px;
+  font-weight: 500;
+}
+
+.delete-btn {
+  background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%);
+  border: none;
+  height: 36px;
+  padding: 0 16px;
+  font-weight: 500;
+}
+
+.env-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.env-option :deep(svg) {
+  margin-right: 4px;
+}
+
+/* 状态摘要卡片 */
+.status-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.summary-card {
   background: white;
   border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+
+.card-content {
+  padding: 24px;
+  flex-grow: 1;
+}
+
+.card-title {
+  font-size: 14px;
+  color: #8c8c8c;
+  margin-top: 10px;
+}
+
+.card-metric {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.metric-icon {
+  font-size: 28px;
+  margin-right: 16px;
+}
+
+.metric-value {
+  font-size: 32px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.total-card .metric-icon {
+  color: #1890ff;
+}
+
+.running-card .metric-icon {
+  color: #52c41a;
+}
+
+.env-card .metric-icon {
+  color: #722ed1;
+}
+
+.card-footer {
+  padding: 14px 24px;
+  background-color: #fafafa;
+  border-top: 1px solid #f0f0f0;
+}
+
+.footer-text {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 6px;
+}
+
+.env-distribution {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* 视图切换按钮 */
+.view-toggle {
+  margin-bottom: 20px;
+  text-align: right;
+}
+
+.view-toggle :deep(.ant-radio-button-wrapper) {
+  padding: 0 16px;
+  height: 36px;
+  line-height: 34px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.view-toggle :deep(.ant-radio-button-wrapper svg) {
+  margin-right: 6px;
+}
+
+/* 集群表格样式 */
+.cluster-table {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.cluster-table :deep(.ant-table-thead > tr > th) {
+  background-color: #f5f7fa;
+  font-weight: 600;
+  padding: 14px 16px;
+}
+
+.cluster-table :deep(.ant-table-tbody > tr > td) {
+  padding: 12px 16px;
+}
+
+.cluster-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+}
+
+.cluster-name a {
+  color: #1890ff;
+}
+
+.env-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.timestamp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #595959;
 }
 
 .action-column {
   display: flex;
-  gap: 8px;
-}
-
-.card-view {
-  margin-top: 16px;
-}
-
-.cluster-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-
-.cluster-card {
-  border-radius: 8px;
-  overflow: hidden;
-  transition: all 0.3s;
-  height: 100%;
-}
-
-.cluster-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  transform: translateY(-4px);
-}
-
-.card-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 500;
-}
-
-.card-content {
-  padding: 8px 0;
-  font-size: 14px;
-}
-
-.card-content p {
-  margin-bottom: 8px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
+  gap: 12px;
   justify-content: center;
 }
 
-.cluster-name {
-  color: #1890ff;
-  font-weight: 500;
-  transition: color 0.3s;
+.action-column :deep(.ant-btn) {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
 }
 
-.cluster-name:hover {
-  color: #40a9ff;
-  text-decoration: underline;
-}
-
-:deep(.ant-modal-content) {
+/* 卡片视图容器 */
+.card-view {
+  background: white;
   border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* 卡片容器布局优化 - 横向排列 */
+.card-checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 30px;
+  padding: 10px;
+}
+
+/* 卡片样式优化 */
+.cluster-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s, box-shadow 0.3s;
   overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 350px;
+  border: 1px solid #eaeaea;
+  margin-bottom: 20px;
 }
 
-:deep(.ant-table-tbody > tr.ant-table-row:hover > td) {
-  background-color: rgba(24, 144, 255, 0.05);
+.cluster-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-:deep(.ant-table-column-sorter) {
-  color: #bfbfbf;
+/* 卡片头部样式 */
+.card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  background-color: #fafafa;
+  position: relative;
 }
 
-:deep(.ant-form-item-label > label) {
-  font-weight: 500;
+.cluster-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-right: 45px;
 }
 
-:deep(.ant-divider-inner-text) {
-  font-size: 13px;
-  color: #888;
+.cluster-title h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.service-icon {
+  font-size: 20px;
+  color: #1890ff;
+}
+
+.card-type-tag {
+  position: absolute;
+  top: 12px;
+  right: 50px;
+  padding: 2px 10px;
+}
+
+.card-checkbox {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+/* 卡片内容区域 */
+.card-content {
+  padding: 20px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #fff;
+}
+
+.card-detail {
+  display: flex;
+  align-items: center;
+  line-height: 1.5;
+}
+
+.detail-label {
+  color: #666;
+  min-width: 100px;
+  font-size: 14px;
+}
+
+.detail-value {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #333;
+  flex: 1;
+}
+
+/* 卡片底部按钮区域 */
+.card-action-footer {
+  padding: 16px 20px;
+  background-color: #f5f7fa;
+  border-top: 1px solid #eeeeee;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.card-action-footer .ant-btn {
+  flex: 1;
+  min-width: 80px;
+  border-radius: 4px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-action-footer .ant-btn svg {
+  margin-right: 8px;
+}
+
+/* 集群模态框样式 */
+.cluster-modal {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.modal-alert {
+  margin-bottom: 16px;
+}
+
+.cluster-form {
+  padding: 10px;
+}
+
+.form-input {
+  border-radius: 8px;
+  height: 42px;
+}
+
+.form-select {
+  border-radius: 8px;
+  height: 42px;
+}
+
+.form-textarea {
+  border-radius: 8px;
+  line-height: 1.5;
+}
+
+/* 空状态样式 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 0;
+}
+
+/* 响应式调整 */
+@media (max-width: 1400px) {
+  .card-checkbox-group {
+    justify-content: space-around;
+  }
+  
+  .cluster-card {
+    width: 320px;
+  }
+}
+
+@media (max-width: 768px) {
+  .card-checkbox-group {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .cluster-card {
+    width: 100%;
+    max-width: 450px;
+  }
+  
+  .card-action-footer {
+    flex-wrap: wrap;
+  }
+  
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .dashboard-stats {
+    margin-top: 16px;
+    width: 100%;
+  }
+  
+  .control-panel {
+    flex-direction: column;
+  }
+  
+  .search-filters {
+    margin-bottom: 16px;
+  }
+  
+  .action-buttons {
+    margin-left: 0;
+    justify-content: flex-end;
+  }
 }
 </style>

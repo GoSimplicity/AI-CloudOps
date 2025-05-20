@@ -7,6 +7,7 @@ export interface ClustersItem {
   name: string;
   name_zh: string;
   user_id: number;
+  status: string;
   cpu_request: string;
   cpu_limit: string;
   memory_request: string;
@@ -88,7 +89,7 @@ export interface GetNodeDetailRes {
   name: string;
   cluster_id: number;
   status: string;
-  schedule_enable: boolean;
+  schedulable: boolean;
   roles: string[];
   age: string;
   ip: string;
@@ -156,7 +157,7 @@ export async function deleteClusterApi(id: number) {
 }
 
 export async function batchDeleteClusterApi(data: number[]) {
-  return requestClient.delete('/k8s/clusters/batch_delete', data);
+  return requestClient.delete('/k8s/clusters/batch_delete', { data });
 }
 
 export async function getNodeListApi(id: number) {

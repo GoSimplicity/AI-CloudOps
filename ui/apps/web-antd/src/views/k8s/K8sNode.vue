@@ -1,266 +1,353 @@
 <template>
-  <div class="node-management-container">
-    <!-- 页面标题和状态概览 -->
+  <div class="service-manager node-manager">
+    <!-- 仪表板标题 -->
     <div class="dashboard-header">
-      <div class="header-title">
-        <cluster-outlined class="title-icon" />
-        <div>
-          <h2 class="page-title">Kubernetes 节点管理</h2>
-          <p class="subtitle">集群 ID: {{ route.query.cluster_id }}</p>
+      <h2 class="dashboard-title">
+        <ClusterOutlined class="dashboard-icon" />
+        Kubernetes 节点管理
+      </h2>
+      <div class="dashboard-stats">
+        <div class="stat-item">
+          <div class="stat-value">{{ nodes.length }}</div>
+          <div class="stat-label">节点总数</div>
         </div>
-      </div>
-      <div class="status-overview">
-        <a-card class="status-card">
-          <template #title>
-            <check-circle-outlined class="status-icon success" />
-            <span>健康节点</span>
-          </template>
-          <div class="status-value">{{ healthyNodes }}</div>
-        </a-card>
-        <a-card class="status-card">
-          <template #title>
-            <warning-outlined class="status-icon warning" />
-            <span>警告节点</span>
-          </template>
-          <div class="status-value">{{ warningNodes }}</div>
-        </a-card>
-        <a-card class="status-card">
-          <template #title>
-            <stop-outlined class="status-icon error" />
-            <span>故障节点</span>
-          </template>
-          <div class="status-value">{{ errorNodes }}</div>
-        </a-card>
+        <div class="stat-item">
+          <div class="stat-value">{{ route.query.cluster_id }}</div>
+          <div class="stat-label">集群ID</div>
+        </div>
       </div>
     </div>
 
-    <!-- 操作栏 -->
-    <div class="node-actions">
-      <div class="search-area">
+    <!-- 查询和操作工具栏 -->
+    <div class="control-panel">
+      <div class="search-filters">
         <a-input-search
           v-model:value="searchText"
-          allow-clear
-          placeholder="搜索节点名称、IP或角色..."
-          style="width: 300px"
+          placeholder="搜索节点名称、IP或角色"
+          class="control-item search-input"
           @search="handleSearch"
+          allow-clear
         >
-          <template #prefix>
-            <search-outlined />
-          </template>
+          <template #prefix><SearchOutlined /></template>
         </a-input-search>
+        
         <a-select
           v-model:value="statusFilter"
-          allow-clear
           placeholder="状态筛选"
-          style="width: 150px; margin-left: 8px"
+          class="control-item status-selector"
+          allow-clear
           @change="handleFilterChange"
         >
-          <a-select-option value="Ready">正常</a-select-option>
-          <a-select-option value="NotReady">异常</a-select-option>
-          <a-select-option value="Unknown">未知</a-select-option>
+          <template #suffixIcon><ApiOutlined /></template>
+          <a-select-option value="Ready">
+            <span class="status-option">
+              <CheckCircleOutlined style="color: #52c41a" />
+              正常
+            </span>
+          </a-select-option>
+          <a-select-option value="NotReady">
+            <span class="status-option">
+              <StopOutlined style="color: #f5222d" />
+              异常
+            </span>
+          </a-select-option>
+          <a-select-option value="Unknown">
+            <span class="status-option">
+              <WarningOutlined style="color: #faad14" />
+              未知
+            </span>
+          </a-select-option>
         </a-select>
+        
         <a-select
           v-model:value="roleFilter"
-          allow-clear
           placeholder="角色筛选"
-          style="width: 150px; margin-left: 8px"
+          class="control-item role-selector"
+          allow-clear
           @change="handleFilterChange"
         >
-          <a-select-option value="master">Master</a-select-option>
-          <a-select-option value="worker">Worker</a-select-option>
+          <template #suffixIcon><UserOutlined /></template>
+          <a-select-option value="master">
+            <span class="role-option">
+              <CrownOutlined style="color: #722ed1" />
+              Master
+            </span>
+          </a-select-option>
+          <a-select-option value="worker">
+            <span class="role-option">
+              <CodeSandboxOutlined style="color: #1890ff" />
+              Worker
+            </span>
+          </a-select-option>
         </a-select>
       </div>
+      
       <div class="action-buttons">
+        <a-tooltip title="刷新数据">
+          <a-button type="primary" class="refresh-btn" @click="refreshData" :loading="loading">
+            <template #icon><ReloadOutlined /></template>
+          </a-button>
+        </a-tooltip>
+        
         <a-dropdown>
+          <a-button type="primary" class="manage-btn">
+            <template #icon><SettingOutlined /></template>
+            节点管理
+          </a-button>
           <template #overlay>
             <a-menu>
               <a-menu-item key="1" @click="isAddLabelModalVisible = true">
-                <tag-outlined /> 添加节点标签
+                <TagOutlined /> 添加节点标签
               </a-menu-item>
               <a-menu-item key="2" @click="isAddTaintModalVisible = true">
-                <warning-outlined /> 添加 Taint
+                <WarningOutlined /> 添加 Taint
               </a-menu-item>
               <a-menu-item key="3" @click="isDeleteTaintModalVisible = true">
-                <delete-outlined /> 删除 Taint
+                <DeleteOutlined /> 删除 Taint
               </a-menu-item>
               <a-menu-item key="4" @click="handleClearTaints">
-                <clear-outlined /> 清空 Taint
+                <ClearOutlined /> 清空 Taint
               </a-menu-item>
             </a-menu>
           </template>
-          <a-button type="primary">
-            节点管理
-            <down-outlined />
-          </a-button>
         </a-dropdown>
+        
         <a-button 
           type="primary" 
+          danger
           @click="handleToggleSchedule()" 
           :disabled="!hasSelectedNode"
+          class="schedule-btn"
         >
-          <schedule-outlined />
+          <template #icon><ScheduleOutlined /></template>
           启用/禁用调度
-        </a-button>
-        <a-button 
-          type="primary" 
-          ghost 
-          @click="refreshData"
-        >
-          <reload-outlined />
-          刷新
         </a-button>
       </div>
     </div>
 
-    <!-- 节点表格 -->
-    <div class="node-table-container">
-      <a-spin :spinning="loading" tip="加载节点数据...">
-        <a-table
-          :row-selection="{ 
-            type: 'radio', 
-            onChange: onSelectChange,
-            selectedRowKeys: selectedRowKeys
-          }"
-          :columns="columns"
-          :data-source="filteredData"
-          :pagination="{ 
-            pageSize: 10, 
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total) => `共 ${total} 个节点`
-          }"
-          :scroll="{ x: '100%' }"
-          row-key="name"
-          bordered
-        >
-          <!-- 节点名称列 -->
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'name'">
-              <div class="node-name-cell">
-                <div class="node-status-dot" :class="getNodeStatusClass(record.status)"></div>
-                <span>{{ record.name }}</span>
-              </div>
-            </template>
-            
-            <!-- 状态列 -->
-            <template v-else-if="column.key === 'status'">
-              <a-tag :color="getStatusColor(record.status)">
-                {{ record.status }}
-              </a-tag>
-            </template>
-            
-            <!-- 角色列 -->
-            <template v-else-if="column.key === 'roles'">
-              <div class="roles-cell">
-                <template v-if="record.roles && typeof record.roles === 'string'">
-                  <a-tag 
-                    v-for="role in record.roles.split(',').filter(Boolean)" 
-                    :key="role" 
-                    :color="getRoleColor(role)"
-                  >
-                    {{ role }}
-                  </a-tag>
-                </template>
-                <a-tag v-else color="default">未知</a-tag>
-              </div>
-            </template>
-            
-            <!-- 节点信息列 -->
-            <template v-else-if="column.key === 'info'">
-              <div class="node-info-cell">
-                <a-tooltip title="CPU使用率">
-                  <progress-chart 
-                    type="cpu" 
-                    :percentage="30" 
-                    :title="`CPU: 30%`" 
-                    color="#1890ff" 
-                  />
-                </a-tooltip>
-                <a-tooltip title="内存使用率">
-                  <progress-chart 
-                    type="memory" 
-                    :percentage="45" 
-                    :title="`内存: 45%`" 
-                    color="#52c41a" 
-                  />
-                </a-tooltip>
-                <a-tooltip title="磁盘使用率">
-                  <progress-chart 
-                    type="disk" 
-                    :percentage="25" 
-                    :title="`磁盘: 25%`" 
-                    color="#722ed1" 
-                  />
-                </a-tooltip>
-              </div>
-            </template>
-            
-            <!-- 标签列 -->
-            <template v-else-if="column.key === 'labels'">
-              <div class="labels-cell">
-                <a-tag v-for="(label, index) in getNodeLabels(record)" :key="index" color="blue">
-                  {{ label }}
-                </a-tag>
-                <a-tag v-if="getNodeLabels(record).length > 3" color="blue">
-                  +{{ getNodeLabels(record).length - 3 }}
-                </a-tag>
-              </div>
-            </template>
-            
-            <!-- 操作列 -->
-            <template v-else-if="column.key === 'action'">
-              <div class="action-cell">
-                <a-tooltip title="查看详情">
-                  <a-button type="primary" shape="circle" size="small" @click="handleViewDetails(record)">
-                    <template #icon><eye-outlined /></template>
-                  </a-button>
-                </a-tooltip>
-                <a-tooltip title="删除标签">
-                  <a-button type="primary" shape="circle" size="small" @click="showDeleteLabelModal(record)">
-                    <template #icon><tag-outlined /></template>
-                  </a-button>
-                </a-tooltip>
-                <a-tooltip :title="record.schedulable ? '禁用调度' : '启用调度'">
-                  <a-button 
-                    :type="record.schedulable ? 'default' : 'primary'" 
-                    shape="circle" 
-                    size="small" 
-                    @click="handleToggleSchedule(record)"
-                  >
-                    <template #icon>
-                      <pause-outlined v-if="record.schedulable" />
-                      <caret-right-outlined v-else />
-                    </template>
-                  </a-button>
-                </a-tooltip>
-                <a-dropdown>
-                  <template #overlay>
-                    <a-menu>
-                      <a-menu-item key="1" @click="handleAddLabel(record)">
-                        <tag-outlined /> 添加标签
-                      </a-menu-item>
-                      <a-menu-item key="2" @click="handleAddTaint(record)">
-                        <warning-outlined /> 添加 Taint
-                      </a-menu-item>
-                      <a-menu-item key="3" @click="handleDeleteTaint(record)">
-                        <delete-outlined /> 删除 Taint
-                      </a-menu-item>
-                      <a-menu-divider />
-                      <a-menu-item key="4" @click="handleCordon(record)" danger>
-                        <stop-outlined /> 维护模式
-                      </a-menu-item>
-                    </a-menu>
-                  </template>
-                  <a-button type="primary" shape="circle" size="small">
-                    <template #icon><more-outlined /></template>
-                  </a-button>
-                </a-dropdown>
-              </div>
-            </template>
-          </template>
-        </a-table>
-      </a-spin>
+    <!-- 状态摘要卡片 -->
+    <div class="status-summary">
+      <div class="summary-card total-card">
+        <div class="card-content">
+          <div class="card-metric">
+            <DashboardOutlined class="metric-icon" />
+            <div class="metric-value">{{ nodes.length }}</div>
+          </div>
+          <div class="card-title">节点总数</div>
+        </div>
+        <div class="card-footer">
+          <div class="footer-text">全部Kubernetes节点</div>
+        </div>
+      </div>
+      
+      <div class="summary-card healthy-card">
+        <div class="card-content">
+          <div class="card-metric">
+            <CheckCircleOutlined class="metric-icon" />
+            <div class="metric-value">{{ healthyNodes }}</div>
+          </div>
+          <div class="card-title">健康节点</div>
+        </div>
+        <div class="card-footer">
+          <a-progress 
+            :percent="healthyPercentage" 
+            :stroke-color="{ from: '#1890ff', to: '#52c41a' }" 
+            size="small" 
+            :show-info="false" 
+          />
+          <div class="footer-text">{{ healthyPercentage }}% 节点正常运行</div>
+        </div>
+      </div>
+      
+      <div class="summary-card problem-card">
+        <div class="card-content">
+          <div class="card-metric">
+            <WarningOutlined class="metric-icon" />
+            <div class="metric-value">{{ warningNodes + errorNodes }}</div>
+          </div>
+          <div class="card-title">问题节点</div>
+        </div>
+        <div class="card-footer">
+          <a-progress 
+            :percent="problemPercentage" 
+            status="exception" 
+            size="small" 
+            :show-info="false"
+          />
+          <div class="footer-text">{{ warningNodes }} 个警告, {{ errorNodes }} 个错误</div>
+        </div>
+      </div>
     </div>
+
+    <!-- 表格视图 -->
+    <a-table
+      :columns="columns"
+      :data-source="filteredData"
+      :row-selection="{ 
+        type: 'radio', 
+        onChange: onSelectChange,
+        selectedRowKeys: selectedRowKeys
+      }"
+      :loading="loading"
+      row-key="name"
+      :pagination="{ 
+        pageSize: 10, 
+        showSizeChanger: true, 
+        showQuickJumper: true,
+        showTotal: (total: number) => `共 ${total} 条数据`
+      }"
+      class="services-table node-table"
+    >
+      <!-- 节点名称列 -->
+      <template #name="{ text, record }">
+        <div class="node-name">
+          <div class="node-status-dot" :class="getNodeStatusClass(record.status)"></div>
+          <span>{{ text }}</span>
+        </div>
+      </template>
+      
+      <!-- 状态列 -->
+      <template #status="{ text }">
+        <a-tag :color="getStatusColor(text)" class="status-tag">
+          <span class="status-dot"></span>
+          {{ text }}
+        </a-tag>
+      </template>
+
+      <!-- IP地址列 -->
+      <template #ip="{ text }">
+        <span class="ip-address">
+          <GlobalOutlined />
+          {{ text }}
+        </span>
+      </template>
+
+      <!-- 角色列 -->
+      <template #roles="{ text }">
+        <div class="roles-cell">
+          <template v-if="text && typeof text === 'string'">
+            <a-tag 
+              v-for="role in text.split(',').filter(Boolean)" 
+              :key="role" 
+              :color="getRoleColor(role)"
+              class="role-tag"
+            >
+              <span class="status-dot"></span>
+              {{ role }}
+            </a-tag>
+          </template>
+          <a-tag v-else color="default" class="role-tag">
+            <span class="status-dot"></span>
+            未知
+          </a-tag>
+        </div>
+      </template>
+
+      <!-- 创建时间列 -->
+      <template #age="{ text }">
+        <div class="timestamp">
+          <ClockCircleOutlined />
+          <span>{{ text }}</span>
+        </div>
+      </template>
+
+      <!-- 资源使用列 -->
+      <template #info="{ record }">
+        <div class="node-info-cell">
+          <a-tooltip title="CPU使用率">
+            <progress-chart 
+              type="cpu" 
+              :percentage="30" 
+              :title="`CPU: 30%`" 
+              color="#1890ff" 
+            />
+          </a-tooltip>
+          <a-tooltip title="内存使用率">
+            <progress-chart 
+              type="memory" 
+              :percentage="45" 
+              :title="`内存: 45%`" 
+              color="#52c41a" 
+            />
+          </a-tooltip>
+          <a-tooltip title="磁盘使用率">
+            <progress-chart 
+              type="disk" 
+              :percentage="25" 
+              :title="`磁盘: 25%`" 
+              color="#722ed1" 
+            />
+          </a-tooltip>
+        </div>
+      </template>
+
+      <!-- 标签列 -->
+      <template #labels="{ record }">
+        <div class="labels-cell">
+          <a-tag v-for="(label, index) in getNodeLabels(record)" :key="index" color="blue" class="label-tag">
+            {{ label }}
+          </a-tag>
+          <a-tag v-if="getNodeLabels(record).length > 3" color="blue" class="label-tag">
+            +{{ getNodeLabels(record).length - 3 }}
+          </a-tag>
+        </div>
+      </template>
+
+      <!-- 操作列 -->
+      <template #action="{ record }">
+        <div class="action-column">
+          <a-tooltip title="查看详情">
+            <a-button type="primary" ghost shape="circle" @click="handleViewDetails(record)">
+              <template #icon><EyeOutlined /></template>
+            </a-button>
+          </a-tooltip>
+          
+          <a-tooltip title="删除标签">
+            <a-button type="primary" ghost shape="circle" @click="showDeleteLabelModal(record)">
+              <template #icon><TagOutlined /></template>
+            </a-button>
+          </a-tooltip>
+          
+          <a-tooltip :title="record.schedulable ? '禁用调度' : '启用调度'">
+            <a-button 
+              :type="record.schedulable ? 'primary' : 'primary'" 
+              :ghost="record.schedulable"
+              :danger="!record.schedulable"
+              shape="circle" 
+              @click="handleToggleSchedule(record)"
+            >
+              <template #icon>
+                <PauseOutlined v-if="record.schedulable" />
+                <CaretRightOutlined v-else />
+              </template>
+            </a-button>
+          </a-tooltip>
+          
+          <a-dropdown>
+            <a-button type="primary" ghost shape="circle">
+              <template #icon><MoreOutlined /></template>
+            </a-button>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="1" @click="handleAddLabel(record)">
+                  <TagOutlined /> 添加标签
+                </a-menu-item>
+                <a-menu-item key="2" @click="handleAddTaint(record)">
+                  <WarningOutlined /> 添加 Taint
+                </a-menu-item>
+                <a-menu-item key="3" @click="handleDeleteTaint(record)">
+                  <DeleteOutlined /> 删除 Taint
+                </a-menu-item>
+                <a-menu-divider />
+                <a-menu-item key="4" @click="handleCordon(record)" danger>
+                  <StopOutlined /> 维护模式
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+        </div>
+      </template>
+    </a-table>
 
     <!-- 添加标签模态框 -->
     <a-modal
@@ -269,15 +356,17 @@
       :confirm-loading="submitLoading"
       @cancel="closeAddLabelModal"
       @ok="handleSubmitAddLabel"
+      class="node-modal"
     >
-      <a-form :model="labelForm" layout="vertical">
-        <a-alert
-          type="info"
-          show-icon
-          banner
-          message="节点标签可用于 Pod 调度及资源分配"
-          style="margin-bottom: 16px"
-        />
+      <a-alert
+        type="info"
+        show-icon
+        banner
+        message="节点标签可用于 Pod 调度及资源分配"
+        style="margin-bottom: 16px"
+        class="modal-alert"
+      />
+      <a-form :model="labelForm" layout="vertical" class="node-form">
         <a-form-item
           label="节点名称"
           name="nodeName"
@@ -288,9 +377,14 @@
             placeholder="请选择节点名称"
             show-search
             :filter-option="filterNodeOption"
+            class="form-select"
           >
+            <template #suffixIcon><ClusterOutlined /></template>
             <a-select-option v-for="node in filteredData" :key="node.name" :value="node.name">
-              {{ node.name }}
+              <span class="node-option">
+                <ClusterOutlined />
+                {{ node.name }}
+              </span>
             </a-select-option>
           </a-select>
         </a-form-item>
@@ -302,7 +396,9 @@
               name="key"
               :rules="[{ required: true, message: '请输入标签键' }]"
             >
-              <a-input v-model:value="labelForm.key" placeholder="请输入标签键" />
+              <a-input v-model:value="labelForm.key" placeholder="请输入标签键" class="form-input">
+                <template #prefix><TagOutlined /></template>
+              </a-input>
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -311,7 +407,9 @@
               name="value"
               :rules="[{ required: true, message: '请输入标签值' }]"
             >
-              <a-input v-model:value="labelForm.value" placeholder="请输入标签值" />
+              <a-input v-model:value="labelForm.value" placeholder="请输入标签值" class="form-input">
+                <template #prefix><TagsOutlined /></template>
+              </a-input>
             </a-form-item>
           </a-col>
         </a-row>
@@ -333,15 +431,17 @@
       :confirm-loading="submitLoading"
       @cancel="closeAddTaintModal"
       @ok="handleSubmitAddTaint"
+      class="node-modal"
     >
-      <a-form :model="taintForm" layout="vertical">
-        <a-alert
-          type="info"
-          show-icon
-          banner
-          message="Taint 用于阻止 Pod 调度到节点上"
-          style="margin-bottom: 16px"
-        />
+      <a-alert
+        type="info"
+        show-icon
+        banner
+        message="Taint 用于阻止 Pod 调度到节点上"
+        style="margin-bottom: 16px"
+        class="modal-alert"
+      />
+      <a-form :model="taintForm" layout="vertical" class="node-form">
         <a-form-item
           label="节点名称"
           name="nodeName"
@@ -352,9 +452,14 @@
             placeholder="请选择节点名称"
             show-search
             :filter-option="filterNodeOption"
+            class="form-select"
           >
+            <template #suffixIcon><ClusterOutlined /></template>
             <a-select-option v-for="node in filteredData" :key="node.name" :value="node.name">
-              {{ node.name }} ({{ node.ip }})
+              <span class="node-option">
+                <ClusterOutlined />
+                {{ node.name }} ({{ node.ip }})
+              </span>
             </a-select-option>
           </a-select>
         </a-form-item>
@@ -364,20 +469,10 @@
           name="taintYaml"
           :rules="[{ required: true, message: '请输入 Taint YAML' }]"
         >
-          <a-textarea
-            v-model:value="taintForm.taintYaml"
-            :rows="6"
-            :auto-size="{ minRows: 6, maxRows: 10 }"
-            placeholder="示例：- key: &quot;example-key&quot;
-  value: &quot;example-value&quot; 
-  effect: &quot;NoSchedule&quot;"
-          />
-        </a-form-item>
-        
-        <a-form-item>
-          <div class="taint-actions">
-            <a-button type="primary" @click="checkTaintYaml(taintForm.nodeName)">
-              <code-outlined /> 验证 YAML 格式
+          <div class="yaml-actions">
+            <a-button type="primary" size="small" @click="checkTaintYaml(taintForm.nodeName)">
+              <template #icon><CodeOutlined /></template>
+              验证 YAML 格式
             </a-button>
             <a-popover title="Taint 效果说明" placement="right">
               <template #content>
@@ -385,11 +480,21 @@
                 <p><strong>PreferNoSchedule</strong>: 尽量不调度</p>
                 <p><strong>NoExecute</strong>: 驱逐现有 Pod</p>
               </template>
-              <a-button>
-                <question-circle-outlined /> 效果说明
+              <a-button size="small">
+                <template #icon><QuestionCircleOutlined /></template>
+                效果说明
               </a-button>
             </a-popover>
           </div>
+          <a-textarea
+            v-model:value="taintForm.taintYaml"
+            :rows="6"
+            :auto-size="{ minRows: 6, maxRows: 10 }"
+            placeholder="示例：- key: &quot;example-key&quot;
+  value: &quot;example-value&quot; 
+  effect: &quot;NoSchedule&quot;"
+            class="yaml-editor"
+          />
         </a-form-item>
         
         <a-form-item>
@@ -409,15 +514,17 @@
       :confirm-loading="submitLoading"
       @cancel="closeDeleteTaintModal"
       @ok="handleSubmitDeleteTaint"
+      class="node-modal"
     >
-      <a-form :model="deleteTaintForm" layout="vertical">
-        <a-alert
-          type="info"
-          show-icon
-          banner
-          message="删除 Taint 将允许 Pod 重新调度到节点上"
-          style="margin-bottom: 16px"
-        />
+      <a-alert
+        type="info"
+        show-icon
+        banner
+        message="删除 Taint 将允许 Pod 重新调度到节点上"
+        style="margin-bottom: 16px"
+        class="modal-alert"
+      />
+      <a-form :model="deleteTaintForm" layout="vertical" class="node-form">
         <a-form-item
           label="节点名称"
           name="nodeName"
@@ -428,9 +535,14 @@
             placeholder="请选择节点名称"
             show-search
             :filter-option="filterNodeOption"
+            class="form-select"
           >
+            <template #suffixIcon><ClusterOutlined /></template>
             <a-select-option v-for="node in filteredData" :key="node.name" :value="node.name">
-              {{ node.name }} ({{ node.ip }})
+              <span class="node-option">
+                <ClusterOutlined />
+                {{ node.name }} ({{ node.ip }})
+              </span>
             </a-select-option>
           </a-select>
         </a-form-item>
@@ -440,6 +552,12 @@
           name="taintYaml"
           :rules="[{ required: true, message: '请输入 Taint YAML' }]"
         >
+          <div class="yaml-actions">
+            <a-button type="primary" size="small" @click="checkTaintYaml(deleteTaintForm.nodeName)">
+              <template #icon><CodeOutlined /></template>
+              验证 YAML 格式
+            </a-button>
+          </div>
           <a-textarea
             v-model:value="deleteTaintForm.taintYaml"
             :rows="6"
@@ -447,13 +565,8 @@
             placeholder="示例：- key: &quot;example-key&quot;
   value: &quot;example-value&quot; 
   effect: &quot;NoSchedule&quot;"
+            class="yaml-editor"
           />
-        </a-form-item>
-        
-        <a-form-item>
-          <a-button type="primary" @click="checkTaintYaml(deleteTaintForm.nodeName)">
-            <code-outlined /> 验证 YAML 格式
-          </a-button>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -465,6 +578,7 @@
       :confirm-loading="submitLoading"
       @cancel="closeDeleteLabelModal"
       @ok="handleDeleteLabel"
+      class="node-modal"
     >
       <a-alert
         type="warning"
@@ -472,16 +586,25 @@
         banner
         message="删除标签可能会影响依赖此标签的 Pod 调度"
         style="margin-bottom: 16px"
+        class="modal-alert"
       />
-      <a-form :model="deleteLabelForm" layout="vertical">
+      <a-form :model="deleteLabelForm" layout="vertical" class="node-form">
         <a-form-item
           label="选择标签"
           name="label"
           :rules="[{ required: true, message: '请选择标签' }]"
         >
-          <a-select v-model:value="deleteLabelForm.label" placeholder="请选择标签">
+          <a-select 
+            v-model:value="deleteLabelForm.label" 
+            placeholder="请选择标签"
+            class="form-select"
+          >
+            <template #suffixIcon><TagOutlined /></template>
             <a-select-option v-for="(label, index) in labelOptions" :key="index" :value="label">
-              {{ label }}
+              <span class="label-option">
+                <TagOutlined />
+                {{ label }}
+              </span>
             </a-select-option>
           </a-select>
         </a-form-item>
@@ -495,24 +618,24 @@
       width="800px"
       @cancel="closeViewDetailsModal"
       :footer="null"
+      class="yaml-modal node-detail-modal"
     >
       <a-spin :spinning="detailsLoading">
         <div v-if="selectedNodeDetails" class="node-details">
-          <div class="node-details-header">
-            <div class="node-title-area">
-              <div class="node-status-badge" :class="getNodeStatusClass(selectedNodeDetails.status)"></div>
-              <h2>{{ selectedNodeDetails.name }}</h2>
-            </div>
-            <a-tag :color="getStatusColor(selectedNodeDetails.status)">{{ selectedNodeDetails.status }}</a-tag>
-          </div>
-          
-          <a-divider />
+          <a-alert class="yaml-info" type="info" show-icon>
+            <template #message>
+              <span>{{ selectedNodeDetails.name }}</span>
+            </template>
+            <template #description>
+              <div>状态: {{ selectedNodeDetails.status }} | IP: {{ selectedNodeDetails.ip }}</div>
+            </template>
+          </a-alert>
           
           <a-tabs default-active-key="1">
             <a-tab-pane key="1" tab="基本信息">
               <div class="details-grid">
                 <div class="detail-card">
-                  <h4><environment-outlined /> 基础配置</h4>
+                  <h4><EnvironmentOutlined /> 基础配置</h4>
                   <div class="detail-item">
                     <div class="detail-label">IP 地址:</div>
                     <div class="detail-value">{{ selectedNodeDetails.ip }}</div>
@@ -522,14 +645,19 @@
                     <div class="detail-value">
                       <template v-if="selectedNodeDetails.roles && typeof selectedNodeDetails.roles === 'string'">
                         <a-tag 
-                          v-for="role in selectedNodeDetails.roles.split(',').filter(Boolean)" 
+                          v-for="role in (selectedNodeDetails.roles as string[])" 
                           :key="role" 
                           :color="getRoleColor(role)"
+                          class="role-tag"
                         >
+                          <span class="status-dot"></span>
                           {{ role }}
                         </a-tag>
                       </template>
-                      <a-tag v-else color="default">未知</a-tag>
+                      <a-tag v-else color="default" class="role-tag">
+                        <span class="status-dot"></span>
+                        未知
+                      </a-tag>
                     </div>
                   </div>
                   <div class="detail-item">
@@ -539,7 +667,8 @@
                   <div class="detail-item">
                     <div class="detail-label">调度状态:</div>
                     <div class="detail-value">
-                      <a-tag :color="selectedNodeDetails.schedulable ? 'green' : 'red'">
+                      <a-tag :color="selectedNodeDetails.schedulable ? 'green' : 'red'" class="status-tag">
+                        <span class="status-dot"></span>
                         {{ selectedNodeDetails.schedulable ? '可调度' : '不可调度' }}
                       </a-tag>
                     </div>
@@ -547,7 +676,7 @@
                 </div>
                 
                 <div class="detail-card">
-                  <h4><api-outlined /> 资源状态</h4>
+                  <h4><ApiOutlined /> 资源状态</h4>
                   <div class="detail-item">
                     <div class="detail-label">CPU 请求:</div>
                     <div class="detail-value">{{ selectedNodeDetails.cpu_request_info }}</div>
@@ -606,9 +735,10 @@
               <div class="details-grid">
                 <div class="detail-card">
                   <div class="card-header">
-                    <h4><tag-outlined /> 节点标签</h4>
+                    <h4><TagOutlined /> 节点标签</h4>
                     <a-button type="primary" size="small" @click="handleAddLabel(selectedNodeDetails)">
-                      <plus-outlined /> 添加标签
+                      <template #icon><PlusOutlined /></template>
+                      添加标签
                     </a-button>
                   </div>
                   <div class="labels-list">
@@ -619,6 +749,7 @@
                       color="blue"
                       closable
                       @close="handleQuickDeleteLabel(label)"
+                      class="label-tag"
                     >
                       {{ label }}
                     </a-tag>
@@ -627,9 +758,10 @@
                 
                 <div class="detail-card">
                   <div class="card-header">
-                    <h4><warning-outlined /> 节点污点</h4>
+                    <h4><WarningOutlined /> 节点污点</h4>
                     <a-button type="primary" size="small" @click="handleAddTaint(selectedNodeDetails)">
-                      <plus-outlined /> 添加污点
+                      <template #icon><PlusOutlined /></template>
+                      添加污点
                     </a-button>
                   </div>
                   <div class="taints-list">
@@ -640,7 +772,9 @@
                       :color="getTaintColor(taint)"
                       closable
                       @close="handleQuickDeleteTaint(taint)"
+                      class="taint-tag"
                     >
+                      <span class="status-dot"></span>
                       {{ taint }}
                     </a-tag>
                   </div>
@@ -659,7 +793,7 @@
                     <div class="event-card">
                       <div class="event-header">
                         <span class="event-reason">{{ event.reason }}</span>
-                        <span class="event-time">{{ formatTime(event.last_time) }}</span>
+                        <span class="event-time">{{ formatTime(new Date(event.last_time).getTime()) }}</span>
                       </div>
                       <div class="event-message">{{ event.message }}</div>
                       <div class="event-meta">
@@ -668,8 +802,8 @@
                         <span><strong>发生次数:</strong> {{ event.count }}</span>
                       </div>
                       <div class="event-time-range">
-                        <calendar-outlined /> 
-                        {{ formatTime(event.first_time) }} - {{ formatTime(event.last_time) }}
+                        <CalendarOutlined /> 
+                        {{ formatTime(new Date(event.first_time).getTime()) }} - {{ formatTime(new Date(event.last_time).getTime()) }}
                       </div>
                     </div>
                   </a-timeline-item>
@@ -679,18 +813,23 @@
             </a-tab-pane>
           </a-tabs>
           
-          <a-divider />
-          
           <div class="modal-footer">
             <a-space>
               <a-button @click="closeViewDetailsModal">关闭</a-button>
-              <a-button type="primary" @click="refreshNodeDetails(selectedNodeDetails)">
-                <reload-outlined /> 刷新数据
+              <a-button type="primary" ghost @click="refreshNodeDetails(selectedNodeDetails)">
+                <template #icon><ReloadOutlined /></template>
+                刷新数据
               </a-button>
               <a-button 
-                :type="selectedNodeDetails.schedulable ? 'default' : 'primary'" 
+                :type="selectedNodeDetails.schedulable ? 'primary' : 'primary'" 
+                :ghost="!selectedNodeDetails.schedulable"
+                :danger="selectedNodeDetails.schedulable"
                 @click="handleToggleSchedule(selectedNodeDetails)"
               >
+                <template #icon>
+                  <PauseOutlined v-if="selectedNodeDetails.schedulable" />
+                  <CaretRightOutlined v-else />
+                </template>
                 {{ selectedNodeDetails.schedulable ? '禁用调度' : '启用调度' }}
               </a-button>
             </a-space>
@@ -722,6 +861,7 @@ import {
   ReloadOutlined,
   SearchOutlined,
   TagOutlined,
+  TagsOutlined,
   WarningOutlined,
   CheckCircleOutlined,
   StopOutlined,
@@ -738,6 +878,14 @@ import {
   ClearOutlined,
   CalendarOutlined,
   ScheduleOutlined,
+  SettingOutlined,
+  GlobalOutlined,
+  ClockCircleOutlined,
+  UserOutlined,
+  CrownOutlined,
+  CodeSandboxOutlined,
+  DashboardOutlined,
+  PartitionOutlined
 } from '@ant-design/icons-vue';
 
 // 自定义节点类型接口
@@ -850,6 +998,18 @@ const errorNodes = computed(() => {
   return nodes.value.filter((node) => node.status === 'NotReady').length;
 });
 
+// 健康节点百分比
+const healthyPercentage = computed(() => {
+  if (nodes.value.length === 0) return 0;
+  return Math.round((healthyNodes.value / nodes.value.length) * 100);
+});
+
+// 问题节点百分比
+const problemPercentage = computed(() => {
+  if (nodes.value.length === 0) return 0;
+  return Math.round(((warningNodes.value + errorNodes.value) / nodes.value.length) * 100);
+});
+
 // 计算属性：过滤后的节点数据
 const filteredData = computed(() => {
   let result = [...nodes.value];
@@ -896,15 +1056,16 @@ const columns = [
     title: '节点名称', 
     dataIndex: 'name', 
     key: 'name', 
-    fixed: 'left',
-    width: 220,
+    width: '15%',
     sorter: (a: NodeItem, b: NodeItem) => a.name.localeCompare(b.name),
+    slots: { customRender: 'name' },
   },
   { 
     title: '状态', 
     dataIndex: 'status', 
     key: 'status', 
-    width: 100,
+    width: '10%',
+    slots: { customRender: 'status' },
     filters: [
       { text: '正常', value: 'Ready' },
       { text: '异常', value: 'NotReady' },
@@ -916,35 +1077,41 @@ const columns = [
     title: 'IP 地址', 
     dataIndex: 'ip', 
     key: 'ip',
-    width: 120,
+    width: '12%',
+    slots: { customRender: 'ip' },
   },
   { 
     title: '角色', 
     dataIndex: 'roles', 
     key: 'roles',
-    width: 120,
+    width: '12%',
+    slots: { customRender: 'roles' },
   },
   { 
     title: '创建时间', 
     dataIndex: 'age', 
     key: 'age',
-    width: 100,
+    width: '10%',
+    slots: { customRender: 'age' },
   },
   { 
     title: '资源使用', 
     key: 'info',
-    width: 240,
+    width: '20%',
+    slots: { customRender: 'info' },
   },
   { 
     title: '标签', 
     key: 'labels',
-    width: 200,
+    width: '12%',
+    slots: { customRender: 'labels' },
   },
   { 
     title: '操作', 
     key: 'action',
+    width: '13%',
     fixed: 'right',
-    width: 180,
+    slots: { customRender: 'action' },
   },
 ];
 
@@ -954,9 +1121,9 @@ const getStatusColor = (status: string | undefined): string => {
   if (!status) return 'default';
   
   const statusMap: Record<string, string> = {
-    'Ready': 'success',
-    'NotReady': 'error',
-    'Unknown': 'warning',
+    'Ready': 'green',
+    'NotReady': 'red',
+    'Unknown': 'orange',
   };
   
   return statusMap[status] || 'default';
@@ -1081,11 +1248,10 @@ const handleSearch = (value: string): void => {
 const handleFilterChange = (): void => {
   // 状态和角色筛选器变化时会自动通过计算属性更新表格数据
 };
-
 // 选择表格行
 const onSelectChange = (keys: string[], rows: NodeItem[]): void => {
   selectedRowKeys.value = keys;
-  selectedNode.value = rows.length > 0 ? rows[0] : null;
+  selectedNode.value = rows.length > 0 ? rows[0] as NodeItem : null;
 };
 
 // 打开用户选择的节点详情
@@ -1105,7 +1271,7 @@ const handleCordon = (record: NodeItem): void => {
 const handleViewDetails = async (record: NodeItem): Promise<void> => {
   detailsLoading.value = true;
   try {
-    const res = await getNodeDetailsApi(record.name, record.cluster_id);
+    const res = await getNodeDetailsApi(record.name, String(record.cluster_id));
     selectedNodeDetails.value = res;
     isViewDetailsModalVisible.value = true;
   } catch (error: any) {
@@ -1121,7 +1287,7 @@ const refreshNodeDetails = async (node: GetNodeDetailRes): Promise<void> => {
   
   detailsLoading.value = true;
   try {
-    const res = await getNodeDetailsApi(node.name, node.cluster_id);
+    const res = await getNodeDetailsApi(node.name, String(node.cluster_id));
     selectedNodeDetails.value = res;
     message.success('节点详情刷新成功');
   } catch (error: any) {
@@ -1153,22 +1319,19 @@ const handleSubmitAddLabel = async (): Promise<void> => {
   try {
     await addNodeLabelApi({
       cluster_id,
-      labels: [key, value], // 标签是交替格式 key, val
+      labels: [key, value],
       mod_type: 'add',
-      node_name: nodeName,
+      node_name: [nodeName],
     });
     message.success('标签添加成功');
     
-    // 清除表单数据
     labelForm.nodeName = '';
     labelForm.key = '';
     labelForm.value = '';
     
-    // 刷新数据
     getNodes();
     
-    // 如果当前有节点详情打开，刷新详情
-    if (selectedNodeDetails.value && selectedNodeDetails.value.name === nodeName) {
+    if (selectedNodeDetails.value?.name === nodeName) {
       refreshNodeDetails(selectedNodeDetails.value);
     }
     
@@ -1205,16 +1368,14 @@ const handleQuickDeleteLabel = (label: string): void => {
           cluster_id: Number(route.query.cluster_id),
           labels: [key, val],
           mod_type: 'del',
-          node_name: selectedNodeDetails.value.name,
+          node_name: [selectedNodeDetails.value.name],
         });
         message.success('标签删除成功');
         
-        // 刷新节点详情
         if (selectedNodeDetails.value) {
           refreshNodeDetails(selectedNodeDetails.value);
         }
         
-        // 刷新节点列表
         getNodes();
       } catch (error: any) {
         message.error(error.message || '删除标签失败');
@@ -1259,14 +1420,12 @@ const handleDeleteLabel = async (): Promise<void> => {
       cluster_id,
       labels: [key, val],
       mod_type: 'del',
-      node_name: selectedNodeDetails.value.name,
+      node_name: [selectedNodeDetails.value.name],
     });
     message.success('标签删除成功');
     
-    // 刷新数据
     getNodes();
     
-    // 刷新节点详情
     if (selectedNodeDetails.value) {
       refreshNodeDetails(selectedNodeDetails.value);
     }
@@ -1299,19 +1458,15 @@ const handleSubmitAddTaint = async (): Promise<void> => {
     });
     message.success('Taint添加成功');
     
-    // 清除表单数据
     taintForm.nodeName = '';
     taintForm.taintYaml = '';
     
-    // 刷新数据
     getNodes();
     
-    // 如果当前有节点详情打开，刷新详情
-    if (selectedNodeDetails.value && selectedNodeDetails.value.name === taintForm.nodeName) {
+    if (selectedNodeDetails.value?.name === taintForm.nodeName) {
       refreshNodeDetails(selectedNodeDetails.value);
     }
     
-    // 关闭模态框
     isAddTaintModalVisible.value = false;
   } catch (error: any) {
     message.error(error.message || '添加Taint失败');
@@ -1340,19 +1495,15 @@ const handleSubmitDeleteTaint = async (): Promise<void> => {
     });
     message.success('Taint删除成功');
     
-    // 清除表单数据
     deleteTaintForm.nodeName = '';
     deleteTaintForm.taintYaml = '';
     
-    // 刷新数据
     getNodes();
     
-    // 如果当前有节点详情打开，刷新详情
-    if (selectedNodeDetails.value && selectedNodeDetails.value.name === deleteTaintForm.nodeName) {
+    if (selectedNodeDetails.value?.name === deleteTaintForm.nodeName) {
       refreshNodeDetails(selectedNodeDetails.value);
     }
     
-    // 关闭模态框
     isDeleteTaintModalVisible.value = false;
   } catch (error: any) {
     message.error(error.message || '删除Taint失败');
@@ -1376,11 +1527,9 @@ const handleQuickDeleteTaint = (taint: string): void => {
           return;
         }
         
-        // 将单行taint转换为yaml格式
         const taintParts = taint.split(':');
-        const keyValue = taintParts[0].trim().split('=');
-        const effect = taintParts[1] ? taintParts[1].trim() : 'NoSchedule';
-        
+        const keyValue = taintParts[0]?.trim().split('=') || [];
+        const effect = taintParts[1]?.trim() || 'NoSchedule';
         const taintYaml = `- key: "${keyValue[0]}"
   value: "${keyValue[1]}" 
   effect: "${effect}"`;
@@ -1393,12 +1542,10 @@ const handleQuickDeleteTaint = (taint: string): void => {
         });
         message.success('污点删除成功');
         
-        // 刷新节点详情
         if (selectedNodeDetails.value) {
           refreshNodeDetails(selectedNodeDetails.value);
         }
         
-        // 刷新节点列表
         getNodes();
       } catch (error: any) {
         message.error(error.message || '删除污点失败');
@@ -1472,7 +1619,7 @@ const handleToggleSchedule = (record: NodeItem | GetNodeDetailRes | null = null,
     record = selectedNode.value;
   }
   
-  const schedulable = newState !== null ? newState : !record.schedulable;
+  const schedulable = newState !== null ? newState : !(record as NodeItem).schedulable;
   const action = schedulable ? '启用' : '禁用';
   
   Modal.confirm({
@@ -1545,123 +1692,253 @@ onMounted(() => {
 });
 </script>
 
-<style scoped>
-.node-management-container {
-  background-color: #f0f2f5;
-  padding: 24px;
-  min-height: 100vh;
+<style>
+:root {
+  --primary-color: #1890ff;
+  --success-color: #52c41a;
+  --warning-color: #faad14;
+  --error-color: #f5222d;
+  --font-size-base: 14px;
+  --border-radius-base: 4px;
+  --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --transition-duration: 0.3s;
 }
 
-/* 页面标题和状态概览 */
+.node-manager {
+  background-color: #f0f2f5;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* 仪表板标题样式 */
 .dashboard-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
+  align-items: center;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f0f0f0;
 }
 
-.header-title {
+.dashboard-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0;
   display: flex;
   align-items: center;
-  gap: 16px;
 }
 
-.title-icon {
-  font-size: 32px;
-  color: #1890ff;
-  background-color: rgba(24, 144, 255, 0.1);
-  padding: 12px;
-  border-radius: 8px;
-}
-
-.page-title {
-  margin: 0;
-  color: #262626;
-  font-weight: 600;
-}
-
-.subtitle {
-  margin: 4px 0 0;
-  color: #8c8c8c;
-  font-size: 14px;
-}
-
-.status-overview {
-  display: flex;
-  gap: 16px;
-}
-
-.status-card {
-  width: 150px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s;
-}
-
-.status-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.status-icon {
-  margin-right: 8px;
-  font-size: 14px;
-}
-
-.status-icon.success {
-  color: #52c41a;
-}
-
-.status-icon.warning {
-  color: #faad14;
-}
-
-.status-icon.error {
-  color: #f5222d;
-}
-
-.status-value {
+.dashboard-icon {
+  margin-right: 14px;
   font-size: 28px;
-  font-weight: 600;
-  color: #1f1f1f;
-  text-align: center;
+  color: #1890ff;
 }
 
-/* 操作栏 */
-.node-actions {
-  background-color: white;
+.dashboard-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.stat-item {
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
   border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 24px;
+  padding: 10px 18px;
+  color: white;
+  min-width: 120px;
+  text-align: center;
+  box-shadow: 0 3px 8px rgba(24, 144, 255, 0.2);
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.stat-label {
+  font-size: 12px;
+  opacity: 0.9;
+  margin-top: 4px;
+}
+
+/* 控制面板样式 */
+.control-panel {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-bottom: 24px;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
-.search-area {
+.search-filters {
   display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
   align-items: center;
+  flex: 1;
+}
+
+.control-item {
+  min-width: 200px;
+}
+
+.search-input {
+  flex-grow: 1;
+  max-width: 300px;
 }
 
 .action-buttons {
   display: flex;
-  gap: 12px;
+  gap: 16px;
+  align-items: center;
+  margin-left: 20px;
 }
 
-/* 节点表格 */
-.node-table-container {
-  background-color: white;
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-/* 节点名称单元格 */
-.node-name-cell {
+.refresh-btn {
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  border: none;
+  height: 36px;
+  width: 36px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+}
+
+.manage-btn {
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  border: none;
+  height: 36px;
+  padding: 0 16px;
+  font-weight: 500;
+}
+
+.schedule-btn {
+  background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%);
+  border: none;
+  height: 36px;
+  padding: 0 16px;
+  font-weight: 500;
+}
+
+.status-option,
+.role-option,
+.node-option,
+.label-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-option :deep(svg),
+.role-option :deep(svg),
+.node-option :deep(svg),
+.label-option :deep(svg) {
+  margin-right: 4px;
+}
+
+/* 状态摘要卡片 */
+.status-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.summary-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+
+.card-content {
+  padding: 24px;
+  flex-grow: 1;
+}
+
+.card-title {
+  font-size: 14px;
+  color: #8c8c8c;
+  margin-top: 10px;
+}
+
+.card-metric {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.metric-icon {
+  font-size: 28px;
+  margin-right: 16px;
+}
+
+.metric-value {
+  font-size: 32px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.total-card .metric-icon {
+  color: #1890ff;
+}
+
+.healthy-card .metric-icon {
+  color: #52c41a;
+}
+
+.problem-card .metric-icon {
+  color: #f5222d;
+}
+
+.card-footer {
+  padding: 14px 24px;
+  background-color: #fafafa;
+  border-top: 1px solid #f0f0f0;
+}
+
+.footer-text {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 6px;
+}
+
+/* 节点表格样式 */
+.node-table {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  margin-top: 20px;
+}
+
+.node-table :deep(.ant-table-thead > tr > th) {
+  background-color: #f5f7fa;
+  font-weight: 600;
+  padding: 14px 16px;
+}
+
+.node-table :deep(.ant-table-tbody > tr > td) {
+  padding: 12px 16px;
+}
+
+.node-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
 }
 
 .node-status-dot {
@@ -1686,11 +1963,67 @@ onMounted(() => {
   background-color: #d9d9d9;
 }
 
-/* 角色单元格 */
+.status-tag,
+.role-tag,
+.label-tag,
+.taint-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.ip-address {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Courier New', monospace;
+  color: #595959;
+}
+
+.timestamp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #595959;
+}
+
 .roles-cell {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.labels-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.action-column {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.action-column :deep(.ant-btn) {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
 }
 
 /* 节点信息单元格 */
@@ -1700,24 +2033,12 @@ onMounted(() => {
   align-items: center;
 }
 
-/* 标签单元格 */
-.labels-cell {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-/* 操作单元格 */
-.action-cell {
-  display: flex;
-  gap: 8px;
-}
-
 /* 进度图表组件 */
 .progress-chart {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 4px;
 }
 
 .chart-icon {
@@ -1744,35 +2065,53 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-/* Taint操作按钮 */
-.taint-actions {
-  display: flex;
-  gap: 8px;
+/* 节点详情和模态框样式 */
+.node-modal {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* 节点详情样式 */
-.node-details-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.modal-alert {
   margin-bottom: 16px;
 }
 
-.node-title-area {
+.node-form {
+  padding: 10px;
+}
+
+.form-input,
+.form-select {
+  border-radius: 8px;
+  height: 42px;
+}
+
+.yaml-editor {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  padding: 12px;
+  transition: all 0.3s;
+  tab-size: 2;
+}
+
+.yaml-actions {
   display: flex;
-  align-items: center;
+  justify-content: flex-end;
   gap: 12px;
+  margin-bottom: 10px;
 }
 
-.node-status-badge {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
+.yaml-modal {
+  font-family: "Consolas", "Monaco", monospace;
 }
 
-.node-details-header h2 {
-  margin: 0;
-  font-weight: 600;
+.yaml-info {
+  margin-bottom: 16px;
+}
+
+.node-detail-modal .ant-tabs-nav {
+  margin-bottom: 16px;
 }
 
 .details-grid {
@@ -1923,5 +2262,47 @@ onMounted(() => {
 .modal-footer {
   display: flex;
   justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* 响应式调整 */
+@media (max-width: 1400px) {
+  .status-summary {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+  
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .dashboard-stats {
+    margin-top: 16px;
+    width: 100%;
+  }
+  
+  .control-panel {
+    flex-direction: column;
+  }
+  
+  .search-filters {
+    margin-bottom: 16px;
+  }
+  
+  .action-buttons {
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+  
+  .node-info-cell {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>
