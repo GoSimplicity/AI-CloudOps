@@ -49,6 +49,7 @@
     "ant-design-x-vue": "^1.0.6",
     "dayjs": "^1.11.13",
     "echarts": "^5.5.1",
+    "js-yaml": "^4.1.0",
     "markdown-it": "^14.1.0",
     "markdown-it-highlight": "^0.2.0",
     "pinia": "2.2.2",
