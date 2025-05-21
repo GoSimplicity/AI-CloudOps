@@ -107,6 +107,8 @@ pnpm build
 # 返回项目根目录
 cd ..
 # 启动整合了前端的后端应用(前端静态文件已嵌入)
+# 默认为开发模式，如需启动生产模式请取消代码下述注释
+# // //go:embed ui/apps/web-antd/dist/*
 go run main.go
 ```
 
