@@ -45,22 +45,23 @@ func NewInstanceHandler(service service.InstanceService) *InstanceHandler {
 func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 	instanceGroup := server.Group("/api/workorder/instance")
 	{
-		// 工单实例基本操作
-		instanceGroup.POST("/create", h.CreateInstance)       // 创建工单实例
-		instanceGroup.POST("/update", h.UpdateInstance)       // 更新工单实例
-		instanceGroup.DELETE("/delete/:id", h.DeleteInstance) // 删除工单实例
+		instanceGroup.POST("/", h.CreateInstance)
+		instanceGroup.PUT("/:id", h.UpdateInstance)
+		instanceGroup.DELETE("/:id", h.DeleteInstance)
+		instanceGroup.GET("/", h.ListInstance)
+		instanceGroup.GET("/:id", h.GetInstance)
+		instanceGroup.GET("/my", h.GetMyInstances)
 
-		// 工单流程操作
-		instanceGroup.POST("/approve", h.ApproveInstance)   // 审批工单
-		instanceGroup.POST("/action", h.ActionInstance)     // 处理工单（完成/拒绝/取消）
-		instanceGroup.POST("/comment", h.CommentInstance)   // 添加评论
-		instanceGroup.POST("/transfer", h.TransferInstance) // 转交工单
+		// 流程操作
+		instanceGroup.POST("/:id/action", h.ProcessAction)
+		instanceGroup.POST("/:id/comment", h.AddComment)
+		instanceGroup.POST("/:id/attachment", h.UploadAttachment)        // 新增附件上传
+		instanceGroup.DELETE("/:id/attachment/:aid", h.DeleteAttachment) // 新增附件删除
 
-		// 查询操作
-		instanceGroup.POST("/list", h.ListInstance)             // 获取工单列表
-		instanceGroup.POST("/detail", h.DetailInstance)         // 获取工单详情
-		instanceGroup.POST("/my", h.MyInstance)                 // 获取我的工单
-		instanceGroup.POST("/statistics", h.InstanceStatistics) // 获取工单统计
+		// 流程查看
+		instanceGroup.GET("/:id/flows", h.GetInstanceFlows)
+		instanceGroup.GET("/:id/comments", h.GetInstanceComments)
+		instanceGroup.GET("/:id/attachments", h.GetInstanceAttachments)
 	}
 }
 

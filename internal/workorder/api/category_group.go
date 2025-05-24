@@ -32,82 +32,69 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type ProcessHandler struct {
-	service service.ProcessService
+type CategoryGroupHandler struct {
+	service service.CategoryGroupService
 }
 
-func NewProcessHandler(service service.ProcessService) *ProcessHandler {
-	return &ProcessHandler{
+func NewCategoryGroupHandler(service service.CategoryGroupService) *CategoryGroupHandler {
+	return &CategoryGroupHandler{
 		service: service,
 	}
 }
 
-func (h *ProcessHandler) RegisterRouters(server *gin.Engine) {
-	processGroup := server.Group("/api/workorder/process")
+func (h *CategoryGroupHandler) RegisterRouters(server *gin.Engine) {
+	categoryGroup := server.Group("/api/workorder/category")
 	{
-		processGroup.POST("/", h.CreateProcess)
-		processGroup.PUT("/:id", h.UpdateProcess)
-		processGroup.DELETE("/:id", h.DeleteProcess)
-		processGroup.GET("/", h.ListProcess)
-		processGroup.GET("/:id", h.GetProcess)
-		processGroup.POST("/:id/publish", h.PublishProcess)
-		processGroup.POST("/:id/clone", h.CloneProcess)
-		processGroup.GET("/:id/validate", h.ValidateProcess)
+		categoryGroup.POST("/", h.CreateCategory)
+		categoryGroup.PUT("/:id", h.UpdateCategory)
+		categoryGroup.DELETE("/:id", h.DeleteCategory)
+		categoryGroup.GET("/", h.ListCategory)
+		categoryGroup.GET("/:id", h.GetCategory)
+		categoryGroup.GET("/tree", h.GetCategoryTree)
 	}
 }
 
-func (h *ProcessHandler) CreateProcess(ctx *gin.Context) {
-	var req model.CreateProcessReq
+func (h *CategoryGroupHandler) CreateCategory(ctx *gin.Context) {
+	var req model.CreateCategoryReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CreateProcess(ctx, &req)
+		return nil, h.service.CreateCategory(ctx, &req)
 	})
 }
 
-func (h *ProcessHandler) UpdateProcess(ctx *gin.Context) {
-	var req model.UpdateProcessReq
+func (h *CategoryGroupHandler) UpdateCategory(ctx *gin.Context) {
+	var req model.UpdateCategoryReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.UpdateProcess(ctx, &req)
+		return nil, h.service.UpdateCategory(ctx, &req)
 	})
 }
 
-func (h *ProcessHandler) DeleteProcess(ctx *gin.Context) {
+func (h *CategoryGroupHandler) DeleteCategory(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.service.DeleteProcess(ctx, id)
+		return nil, h.service.DeleteCategory(ctx, id)
 	})
 }
 
-func (h *ProcessHandler) ListProcess(ctx *gin.Context) {
-	var req model.ListProcessReq
+func (h *CategoryGroupHandler) ListCategory(ctx *gin.Context) {
+	var req model.ListCategoryReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.ListProcess(ctx, req)
+		return h.service.ListCategory(ctx, req)
 	})
 }
 
-func (h *ProcessHandler) DetailProcess(ctx *gin.Context) {
-	var req model.DetailProcessReq
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
+func (h *CategoryGroupHandler) GetCategory(ctx *gin.Context) {
+	var req model.DetailCategoryReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.DetailProcess(ctx, req.ID, user.Uid)
+		return h.service.GetCategory(ctx, req.ID)
 	})
 }
 
-func (h *ProcessHandler) PublishProcess(ctx *gin.Context) {
-	var req model.PublishProcessReq
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.PublishProcess(ctx, req)
-	})
-}
-
-func (h *ProcessHandler) CloneProcess(ctx *gin.Context) {
-	var req model.CloneProcessReq
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CloneProcess(ctx, req)
+func (h *CategoryGroupHandler) GetCategoryTree(ctx *gin.Context) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetCategoryTree(ctx)
 	})
 }

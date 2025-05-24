@@ -45,12 +45,14 @@ func NewStatisticsHandler(service service.StatisticsService) *StatisticsHandler 
 func (h *StatisticsHandler) RegisterRouters(server *gin.Engine) {
 	statsGroup := server.Group("/api/workorder/statistics")
 	{
-		statsGroup.POST("/overview", h.GetOverview)
-		statsGroup.POST("/trend", h.GetTrend)
-		statsGroup.POST("/category", h.GetCategoryStats)
-		statsGroup.POST("/performance", h.GetPerformanceStats)
-		statsGroup.POST("/user", h.GetUserStats)
+		statsGroup.GET("/overview", h.GetOverview)
+		statsGroup.GET("/trend", h.GetTrend)
+		statsGroup.GET("/category", h.GetCategoryStats)
+		statsGroup.GET("/performance", h.GetPerformanceStats)
+		statsGroup.GET("/user", h.GetUserStats)
+		statsGroup.GET("/export", h.ExportStats)
 	}
+
 }
 
 func (h *StatisticsHandler) GetOverview(ctx *gin.Context) {

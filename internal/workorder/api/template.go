@@ -45,45 +45,75 @@ func NewTemplateHandler(service service.TemplateService) *TemplateHandler {
 func (h *TemplateHandler) RegisterRouters(server *gin.Engine) {
 	templateGroup := server.Group("/api/workorder/template")
 	{
-		templateGroup.POST("/create", h.CreateTemplate)
-		templateGroup.POST("/update", h.UpdateTemplate)
-		templateGroup.POST("/delete", h.DeleteTemplate)
-		templateGroup.POST("/list", h.ListTemplate)
-		templateGroup.POST("/detail", h.DetailTemplate)
+		templateGroup.POST("/", h.CreateTemplate)
+		templateGroup.PUT("/:id", h.UpdateTemplate)
+		templateGroup.DELETE("/:id", h.DeleteTemplate)
+		templateGroup.GET("/", h.ListTemplate)
+		templateGroup.GET("/:id", h.GetTemplate)
+		templateGroup.POST("/:id/enable", h.EnableTemplate)   // 新增启用功能
+		templateGroup.POST("/:id/disable", h.DisableTemplate) // 新增禁用功能
 	}
 }
 
 func (h *TemplateHandler) CreateTemplate(ctx *gin.Context) {
-	var req model.TemplateReq
+	var req model.CreateTemplateReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CreateTemplate(ctx, req)
+		return nil, h.service.CreateTemplate(ctx, &req)
 	})
 }
 
 func (h *TemplateHandler) UpdateTemplate(ctx *gin.Context) {
-	var req model.TemplateReq
+	var req model.UpdateTemplateReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.UpdateTemplate(ctx, req)
+		return nil, h.service.UpdateTemplate(ctx, &req)
 	})
 }
 
 func (h *TemplateHandler) DeleteTemplate(ctx *gin.Context) {
-	var req model.DeleteTemplateReq
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.DeleteTemplate(ctx, req)
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		return
+	}
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, h.service.DeleteTemplate(ctx, id)
 	})
 }
 
 func (h *TemplateHandler) ListTemplate(ctx *gin.Context) {
 	var req model.ListTemplateReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.ListTemplate(ctx, req)
+		return h.service.ListTemplate(ctx, &req)
 	})
 }
 
-func (h *TemplateHandler) DetailTemplate(ctx *gin.Context) {
-	var req model.DetailTemplateReq
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.DetailTemplate(ctx, req)
+func (h *TemplateHandler) GetTemplate(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		return
+	}
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetTemplate(ctx, id)
+	})
+}
+
+// 新增启用模板方法
+func (h *TemplateHandler) EnableTemplate(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		return
+	}
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, h.service.EnableTemplate(ctx, id)
+	})
+}
+
+// 新增禁用模板方法
+func (h *TemplateHandler) DisableTemplate(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		return
+	}
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, h.service.DisableTemplate(ctx, id)
 	})
 }

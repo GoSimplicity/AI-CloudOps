@@ -43,24 +43,25 @@ func NewFormDesignHandler(service service.FormDesignService) *FormDesignHandler 
 }
 
 func (h *FormDesignHandler) RegisterRouters(server *gin.Engine) {
-	formDesignGroup := server.Group("/api/workorder/form_design")
+	formDesignGroup := server.Group("/api/workorder/form-design")
 	{
-		formDesignGroup.POST("/create", h.CreateFormDesign)
-		formDesignGroup.POST("/update", h.UpdateFormDesign)
-		formDesignGroup.POST("/delete", h.DeleteFormDesign)
-		formDesignGroup.POST("/list", h.ListFormDesign)
-		formDesignGroup.POST("/detail", h.DetailFormDesign)
-		formDesignGroup.POST("/publish", h.PublishFormDesign)
-		formDesignGroup.POST("/clone", h.CloneFormDesign)
+		formDesignGroup.POST("/", h.CreateFormDesign)
+		formDesignGroup.PUT("/:id", h.UpdateFormDesign)
+		formDesignGroup.DELETE("/:id", h.DeleteFormDesign)
+		formDesignGroup.GET("/", h.ListFormDesign)
+		formDesignGroup.GET("/:id", h.DetailFormDesign)
+		formDesignGroup.POST("/:id/publish", h.PublishFormDesign)
+		formDesignGroup.POST("/:id/clone", h.CloneFormDesign)
+		formDesignGroup.POST("/:id/preview", h.PreviewFormDesign)
 	}
 }
 
 func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
-	var req model.FormDesignReq
+	var req model.CreateFormDesignReq
 
 	user := ctx.MustGet("user").(utils.UserClaims)
 
-	req.CreatorID = user.Uid
+	req.CategoryID = &user.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateFormDesign(ctx, &req)
@@ -68,7 +69,7 @@ func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
 }
 
 func (h *FormDesignHandler) UpdateFormDesign(ctx *gin.Context) {
-	var req model.FormDesignReq
+	var req model.UpdateFormDesignReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateFormDesign(ctx, &req)
@@ -114,5 +115,13 @@ func (h *FormDesignHandler) CloneFormDesign(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CloneFormDesign(ctx, req.ID, req.Name)
+	})
+}
+
+func (h *FormDesignHandler) PreviewFormDesign(ctx *gin.Context) {
+	var req model.PreviewFormDesignReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.PreviewFormDesign(ctx, req.Schema)
 	})
 }

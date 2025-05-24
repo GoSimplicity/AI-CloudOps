@@ -36,11 +36,11 @@ import (
 )
 
 type TemplateService interface {
-	CreateTemplate(ctx context.Context, req model.TemplateReq) error
-	UpdateTemplate(ctx context.Context, req model.TemplateReq) error
-	DeleteTemplate(ctx context.Context, req model.DeleteTemplateReq) error
-	ListTemplate(ctx context.Context, req model.ListTemplateReq) ([]model.Template, error)
-	DetailTemplate(ctx context.Context, req model.DetailTemplateReq) (*model.Template, error)
+	CreateTemplate(ctx context.Context, req *model.CreateTemplateReq) error
+	UpdateTemplate(ctx context.Context, req *model.UpdateTemplateReq) error
+	DeleteTemplate(ctx context.Context, req *model.DeleteTemplateReq) error
+	ListTemplate(ctx context.Context, req *model.ListTemplateReq) ([]model.Template, error)
+	DetailTemplate(ctx context.Context, req *model.DetailTemplateReq) (*model.Template, error)
 }
 
 type templateService struct {
@@ -55,8 +55,8 @@ func NewTemplateService(dao dao.TemplateDAO, l *zap.Logger) TemplateService {
 	}
 }
 
-// CreateTemplate implements TemplateService.
-func (t *templateService) CreateTemplate(ctx context.Context, req model.TemplateReq) error {
+// CreateTemplate 创建模板
+func (t *templateService) CreateTemplate(ctx context.Context, req *model.CreateTemplateReq) error {
 	template, err := utils.ConvertTemplateReq(&req)
 	if err != nil {
 		return err
@@ -64,13 +64,13 @@ func (t *templateService) CreateTemplate(ctx context.Context, req model.Template
 	return t.dao.CreateTemplate(ctx, template)
 }
 
-// DeleteTemplate implements TemplateService.
-func (t *templateService) DeleteTemplate(ctx context.Context, req model.DeleteTemplateReq) error {
+// DeleteTemplate 删除模板
+func (t *templateService) DeleteTemplate(ctx context.Context, req *model.DeleteTemplateReq) error {
 	return t.dao.DeleteTemplate(ctx, req.ID)
 }
 
-// DetailTemplate implements TemplateService.
-func (t *templateService) DetailTemplate(ctx context.Context, req model.DetailTemplateReq) (*model.Template, error) {
+// DetailTemplate 查看模板详情
+func (t *templateService) DetailTemplate(ctx context.Context, req *model.DetailTemplateReq) (*model.Template, error) {
 	template, err := t.dao.GetTemplate(ctx, req.ID)
 	if err != nil {
 		t.l.Error("获取模板失败", zap.Error(err))
@@ -79,8 +79,8 @@ func (t *templateService) DetailTemplate(ctx context.Context, req model.DetailTe
 	return &template, nil
 }
 
-// ListTemplate implements TemplateService.
-func (t *templateService) ListTemplate(ctx context.Context, req model.ListTemplateReq) ([]model.Template, error) {
+// ListTemplate 获取模板列表
+func (t *templateService) ListTemplate(ctx context.Context, req *model.ListTemplateReq) ([]model.Template, error) {
 	templates, err := t.dao.ListTemplate(ctx, req)
 	if err != nil {
 		t.l.Error("获取模板列表失败", zap.Error(err))
@@ -89,8 +89,8 @@ func (t *templateService) ListTemplate(ctx context.Context, req model.ListTempla
 	return templates, nil
 }
 
-// UpdateTemplate implements TemplateService.
-func (t *templateService) UpdateTemplate(ctx context.Context, req model.TemplateReq) error {
+// UpdateTemplate 更新模板
+func (t *templateService) UpdateTemplate(ctx context.Context, req *model.UpdateTemplateReq) error {
 	template, err := utils.ConvertTemplateReq(&req)
 	if err != nil {
 		return err
