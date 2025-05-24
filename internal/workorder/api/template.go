@@ -57,8 +57,9 @@ func (h *TemplateHandler) RegisterRouters(server *gin.Engine) {
 
 func (h *TemplateHandler) CreateTemplate(ctx *gin.Context) {
 	var req model.CreateTemplateReq
+	user := ctx.MustGet("user").(utils.UserClaims) // Get user claims
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CreateTemplate(ctx, &req)
+		return nil, h.service.CreateTemplate(ctx, &req, user.Uid, user.Username) // Pass user info
 	})
 }
 

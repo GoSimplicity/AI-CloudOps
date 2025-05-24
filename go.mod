@@ -79,6 +79,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
+	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect

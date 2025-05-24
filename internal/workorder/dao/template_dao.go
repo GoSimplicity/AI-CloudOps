@@ -29,7 +29,10 @@ import (
 	"context"
 	"fmt"
 
+	"fmt"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap" // Added for logging
 	"gorm.io/gorm"
 )
 
@@ -39,15 +42,18 @@ type TemplateDAO interface {
 	DeleteTemplate(ctx context.Context, id int) error
 	ListTemplate(ctx context.Context, req model.ListTemplateReq) ([]model.Template, error)
 	GetTemplate(ctx context.Context, id int) (model.Template, error)
+	UpdateTemplateStatus(ctx context.Context, id int, status int8) error // Added UpdateTemplateStatus
 }
 
 type templateDAO struct {
-	db *gorm.DB
+	db     *gorm.DB
+	logger *zap.Logger // Added logger
 }
 
-func NewTemplateDAO(db *gorm.DB) TemplateDAO {
+func NewTemplateDAO(db *gorm.DB, logger *zap.Logger) TemplateDAO { // Updated constructor
 	return &templateDAO{
-		db: db,
+		db:     db,
+		logger: logger, // Set logger
 	}
 }
 
@@ -98,8 +104,8 @@ func (t *templateDAO) ListTemplate(ctx context.Context, req model.ListTemplateRe
 	}
 
 	// 分页
-	offset := (req.Page - 1) * req.PageSize
-	if err := db.Offset(offset).Limit(req.PageSize).Find(&templates).Error; err != nil {
+	offset := (req.Page - 1) * req.Size // Changed PageSize to Size
+	if err := db.Offset(offset).Limit(req.Size).Find(&templates).Error; err != nil { // Changed PageSize to Size
 		return nil, err
 	}
 
@@ -120,4 +126,20 @@ func (t *templateDAO) UpdateTemplate(ctx context.Context, template *model.Templa
 	}
 	return nil
 
+}
+
+// UpdateTemplateStatus 更新模板状态
+func (t *templateDAO) UpdateTemplateStatus(ctx context.Context, id int, status int8) error {
+	t.logger.Debug("开始更新模板状态 (DAO)", zap.Int("id", id), zap.Int8("status", status))
+	result := t.db.WithContext(ctx).Model(&model.Template{}).Where("id = ?", id).Update("status", status)
+	if result.Error != nil {
+		t.logger.Error("更新模板状态失败 (DAO)", zap.Error(result.Error), zap.Int("id", id))
+		return fmt.Errorf("更新模板 (ID: %d) 状态失败: %w", id, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		t.logger.Warn("更新模板状态：未找到记录 (DAO)", zap.Int("id", id))
+		return fmt.Errorf("未找到模板 (ID: %d)", id) // Or return nil if "not found" is not an error for status update
+	}
+	t.logger.Debug("模板状态更新成功 (DAO)", zap.Int("id", id))
+	return nil
 }

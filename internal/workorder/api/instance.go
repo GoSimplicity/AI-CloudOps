@@ -49,8 +49,8 @@ func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 		instanceGroup.PUT("/:id", h.UpdateInstance)
 		instanceGroup.DELETE("/:id", h.DeleteInstance)
 		instanceGroup.GET("/", h.ListInstance)
-		instanceGroup.GET("/:id", h.GetInstance)
-		instanceGroup.GET("/my", h.GetMyInstances)
+		instanceGroup.GET("/:id", h.DetailInstance) // Corrected to use h.DetailInstance as per subtask
+		instanceGroup.GET("/my", h.MyInstance)     // Corrected to use h.MyInstance as per subtask
 
 		// 流程操作
 		instanceGroup.POST("/:id/action", h.ProcessAction)
@@ -82,7 +82,7 @@ func (h *InstanceHandler) UpdateInstance(ctx *gin.Context) {
 }
 
 func (h *InstanceHandler) ApproveInstance(ctx *gin.Context) {
-	var req model.InstanceFlowReq
+	var req model.InstanceActionReq
 	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -92,16 +92,17 @@ func (h *InstanceHandler) ApproveInstance(ctx *gin.Context) {
 }
 
 func (h *InstanceHandler) ActionInstance(ctx *gin.Context) {
-	var req model.InstanceFlowReq
+	var req model.InstanceActionReq
 	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		// Action is expected to be set in the request body by the client for generic actions
 		return nil, h.service.ProcessInstanceFlow(ctx, req, user.Uid, user.Username)
 	})
 }
 
 func (h *InstanceHandler) TransferInstance(ctx *gin.Context) {
-	var req model.InstanceFlowReq
+	var req model.InstanceActionReq
 	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {

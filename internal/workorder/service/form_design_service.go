@@ -37,13 +37,14 @@ import (
 )
 
 type FormDesignService interface {
-	CreateFormDesign(ctx context.Context, formDesignReq *model.FormDesignReq) error
-	UpdateFormDesign(ctx context.Context, formDesign *model.FormDesignReq) error
+	CreateFormDesign(ctx context.Context, formDesignReq *model.CreateFormDesignReq, creatorID int, creatorName string) error
+	UpdateFormDesign(ctx context.Context, formDesignReq *model.UpdateFormDesignReq) error
 	DeleteFormDesign(ctx context.Context, id int) error
-	PublishFormDesign(ctx context.Context, id int) error
+	PublishFormDesign(ctx context.Context, id int) error // Corrected typo PublishFormDescrollern
 	CloneFormDesign(ctx context.Context, id int, name string) error
 	DetailFormDesign(ctx context.Context, id int, userId int) (*model.FormDesign, error)
 	ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) ([]model.FormDesign, error)
+	PreviewFormDesign(ctx context.Context, id int, schema model.FormSchema, userID int) error // Signature updated as per subtask
 }
 
 type formDesignService struct {
@@ -61,22 +62,38 @@ func NewFormDesignService(dao dao.FormDesignDAO, userDao userDao.UserDAO, l *zap
 }
 
 // CreateFormDesign 创建表单设计
-func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq *model.FormDesignReq) error {
-	formDesign, err := utils.ConvertFormDesignReq(formDesignReq)
+func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq *model.CreateFormDesignReq, creatorID int, creatorName string) error {
+	formDesign, err := utils.ConvertCreateFormDesignReqToModel(formDesignReq)
 	if err != nil {
-		f.l.Error("转换表单设计请求失败", zap.Error(err))
+		f.l.Error("转换创建表单设计请求失败", zap.Error(err))
 		return err
 	}
+	formDesign.CreatorID = creatorID
+	formDesign.CreatorName = creatorName // This is gorm:"-" so it's for response, not DB storage.
+	                                     // Actual CreatorName might be fetched during Get/List operations.
+	formDesign.Status = 0 // Default to draft
+	formDesign.Version = 1 // Default to version 1
+
 	return f.dao.CreateFormDesign(ctx, formDesign)
 }
 
 // UpdateFormDesign 更新表单设计
-func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq *model.FormDesignReq) error {
-	formDesign, err := utils.ConvertFormDesignReq(formDesignReq)
+func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq *model.UpdateFormDesignReq) error {
+	formDesign, err := utils.ConvertUpdateFormDesignReqToModel(formDesignReq)
 	if err != nil {
-		f.l.Error("转换表单设计请求失败", zap.Error(err))
+		f.l.Error("转换更新表单设计请求失败", zap.Error(err))
 		return err
 	}
+	// Note: Version increment logic might be needed here or in DAO if status changes from non-published to published.
+	// Status changes (e.g., to published) are handled by PublishFormDesign.
+	// Here, we assume the request might carry a status or it's an update to a draft.
+	// The ConvertUpdateFormDesignReqToModel doesn't set status/version, so they'd be zero-valued if not in req.
+	// The DAO update only updates specific fields, so if formDesign.Status is 0, it won't update it unless explicitly set.
+	// If formDesignReq had Status and Version fields, they would be mapped in the converter.
+	// Current UpdateFormDesignReq does not have Status or Version.
+	// So, this update will primarily update Name, Description, Schema, CategoryID.
+	// Version and Status are managed by other operations like Publish or Clone.
+
 	return f.dao.UpdateFormDesign(ctx, formDesign)
 }
 
@@ -118,4 +135,22 @@ func (f *formDesignService) DetailFormDesign(ctx context.Context, id int, userId
 // ListFormDesign 获取表单设计列表
 func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) ([]model.FormDesign, error) {
 	return f.dao.ListFormDesign(ctx, req)
+}
+
+// PreviewFormDesign 预览表单设计
+// For now, this is a placeholder. Actual preview might involve more complex logic.
+func (f *formDesignService) PreviewFormDesign(ctx context.Context, id int, schema model.FormSchema, userID int) error {
+	f.l.Info("开始预览表单设计",
+		zap.Int("formDesignID", id),
+		zap.Any("schema", schema),
+		zap.Int("userID", userID))
+
+	// Placeholder implementation:
+	// In a real scenario, this might involve:
+	// 1. Validating the schema.
+	// 2. Potentially storing a temporary preview version or rendering it.
+	// 3. Checking user permissions (hence userID).
+	// For this subtask, we just log and return nil.
+	f.l.Info("表单设计预览功能占位实现完成。")
+	return nil
 }

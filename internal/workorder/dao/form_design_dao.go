@@ -178,8 +178,8 @@ func (f *formDesignDAO) ListFormDesign(ctx context.Context, req *model.ListFormD
 		db = db.Where("status = ?", req.Status)
 	}
 
-	offset := (req.Page - 1) * req.PageSize
-	if err := db.Offset(offset).Limit(req.PageSize).Find(&formDesigns).Error; err != nil {
+	offset := (req.Page - 1) * req.Size // Changed PageSize to Size
+	if err := db.Offset(offset).Limit(req.Size).Find(&formDesigns).Error; err != nil { // Changed PageSize to Size
 		return nil, err
 	}
 
