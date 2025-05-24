@@ -58,8 +58,9 @@ func (h *ProcessHandler) RegisterRouters(server *gin.Engine) {
 
 func (h *ProcessHandler) CreateProcess(ctx *gin.Context) {
 	var req model.CreateProcessReq
+	user := ctx.MustGet("user").(utils.UserClaims) // Get user claims
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CreateProcess(ctx, &req)
+		return nil, h.service.CreateProcess(ctx, &req, user.Uid, user.Username) // Pass user info
 	})
 }
 

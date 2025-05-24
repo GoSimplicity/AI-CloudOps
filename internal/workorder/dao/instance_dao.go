@@ -44,18 +44,26 @@ type InstanceDAO interface {
 	CreateInstanceComment(ctx context.Context, comment model.InstanceComment) error
 	GetInstanceFlows(ctx context.Context, instanceID int) ([]model.InstanceFlow, error)
 	GetInstanceComments(ctx context.Context, instanceID int) ([]model.InstanceComment, error)
-	GetWorkflow(ctx context.Context, workflowID int) (model.Process, error)
+	GetProcess(ctx context.Context, processID int) (model.Process, error) // Renamed from GetWorkflow
 	GetInstanceStatistics(ctx context.Context) (interface{}, error)
 	GetInstanceTrend(ctx context.Context) ([]interface{}, error)
-}
+
+	// Attachment methods
+	CreateInstanceAttachment(ctx context.Context, attachment *model.InstanceAttachment) (*model.InstanceAttachment, error)
+	DeleteInstanceAttachment(ctx context.Context, instanceID int, attachmentID int) error
+	GetInstanceAttachments(ctx context.Context, instanceID int) ([]model.InstanceAttachment, error)
+	"go.uber.org/zap" // Added for logging
+)
 
 type instanceDAO struct {
-	db *gorm.DB
+	db     *gorm.DB
+	logger *zap.Logger // Added logger
 }
 
-func NewInstanceDAO(db *gorm.DB) InstanceDAO {
+func NewInstanceDAO(db *gorm.DB, logger *zap.Logger) InstanceDAO { // Updated constructor
 	return &instanceDAO{
-		db: db,
+		db:     db,
+		logger: logger, // Set logger
 	}
 }
 
@@ -105,23 +113,52 @@ func (i *instanceDAO) ListInstance(ctx context.Context, req model.ListInstanceRe
 	db := i.db.WithContext(ctx).Model(&model.Instance{})
 
 	// 构建查询条件
-	if req.Keyword != "" {
-		db = db.Where("title LIKE ?", "%"+req.Keyword+"%")
+	if req.Search != "" { // Changed from Keyword to Search (from embedded ListReq)
+		db = db.Where("title LIKE ?", "%"+req.Search+"%")
 	}
-	if req.Status != 0 {
-		db = db.Where("status = ?", req.Status)
+	if req.Status != nil { // Specific field from ListInstanceReq
+		db = db.Where("status = ?", *req.Status)
 	}
-	if len(req.DateRange) == 2 {
-		db = db.Where("created_at BETWEEN ? AND ?", req.DateRange[0], req.DateRange[1])
+	// Date range filter from ListInstanceReq
+	if req.StartDate != nil && req.EndDate != nil {
+		db = db.Where("created_at BETWEEN ? AND ?", req.StartDate, req.EndDate)
+	} else if req.StartDate != nil {
+		db = db.Where("created_at >= ?", req.StartDate)
+	} else if req.EndDate != nil {
+		db = db.Where("created_at <= ?", req.EndDate)
 	}
-	if req.CreatorID != 0 {
-		db = db.Where("creator_id = ?", req.CreatorID)
+
+	if req.CreatorID != nil { // Specific field from ListInstanceReq
+		db = db.Where("creator_id = ?", *req.CreatorID)
 	}
-	if req.AssigneeID != 0 {
-		db = db.Where("assignee_id = ?", req.AssigneeID)
+	if req.AssigneeID != nil { // Specific field from ListInstanceReq
+		db = db.Where("assignee_id = ?", *req.AssigneeID)
 	}
-	if req.WorkflowID != 0 {
-		db = db.Where("workflow_id = ?", req.WorkflowID)
+	if req.ProcessID != nil { // Specific field from ListInstanceReq, was WorkflowID
+		db = db.Where("process_id = ?", *req.ProcessID)
+	}
+	if req.CategoryID != nil { // Specific field from ListInstanceReq
+		db = db.Where("category_id = ?", *req.CategoryID)
+	}
+	if req.Priority != nil { // Specific field from ListInstanceReq
+		db = db.Where("priority = ?", *req.Priority)
+	}
+	if req.TemplateID != nil { // Specific field from ListInstanceReq
+		db = db.Where("template_id = ?", *req.TemplateID)
+	}
+	// TODO: Handle req.Tags and req.Overdue if necessary.
+	// Example for Tags (if stored as comma-separated string):
+	// if len(req.Tags) > 0 {
+	// 	for _, tag := range req.Tags {
+	// 		db = db.Where("tags LIKE ?", "%"+tag+"%")
+	// 	}
+	// }
+	// Example for Overdue:
+	// if req.Overdue != nil && *req.Overdue {
+	// 	db = db.Where("due_date < ? AND status NOT IN (?)", time.Now(), []int8{model.InstanceStatusCompleted, model.InstanceStatusCancelled, model.InstanceStatusRejected})
+	// } else if req.Overdue != nil && !*req.Overdue {
+	// 	db = db.Where("due_date >= ? OR status IN (?)", time.Now(), []int8{model.InstanceStatusCompleted, model.InstanceStatusCancelled, model.InstanceStatusRejected})
+	// }
 	}
 
 	// 获取总数
@@ -130,15 +167,15 @@ func (i *instanceDAO) ListInstance(ctx context.Context, req model.ListInstanceRe
 	}
 
 	// 分页查询
-	if req.Page <= 0 {
+	if req.Page <= 0 { // Page from embedded ListReq
 		req.Page = 1
 	}
-	if req.PageSize <= 0 {
-		req.PageSize = 10
+	if req.Size <= 0 { // Size from embedded ListReq (was PageSize)
+		req.Size = 10
 	}
-	offset := (req.Page - 1) * req.PageSize
+	offset := (req.Page - 1) * req.Size // Use Size
 	
-	if err := db.Order("created_at DESC").Offset(offset).Limit(req.PageSize).Find(&instances).Error; err != nil {
+	if err := db.Order("created_at DESC").Offset(offset).Limit(req.Size).Find(&instances).Error; err != nil { // Use Size
 		return nil, 0, err
 	}
 
@@ -209,12 +246,12 @@ func (i *instanceDAO) GetInstanceComments(ctx context.Context, instanceID int) (
 	return comments, nil
 }
 
-// GetWorkflow 获取工作流定义
-func (i *instanceDAO) GetWorkflow(ctx context.Context, workflowID int) (model.Process, error) {
+// GetProcess 获取流程定义
+func (i *instanceDAO) GetProcess(ctx context.Context, processID int) (model.Process, error) { // Renamed from GetWorkflow
 	var process model.Process
-	if err := i.db.WithContext(ctx).Where("id = ?", workflowID).First(&process).Error; err != nil {
+	if err := i.db.WithContext(ctx).Where("id = ?", processID).First(&process).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return model.Process{}, fmt.Errorf("工作流定义不存在")
+			return model.Process{}, fmt.Errorf("流程定义不存在") // Changed error message
 		}
 		return model.Process{}, err
 	}
@@ -262,4 +299,43 @@ func (i *instanceDAO) GetInstanceTrend(ctx context.Context) ([]interface{}, erro
 	}
 	
 	return trend, nil
+}
+
+// CreateInstanceAttachment 创建工单附件记录
+func (i *instanceDAO) CreateInstanceAttachment(ctx context.Context, attachment *model.InstanceAttachment) (*model.InstanceAttachment, error) {
+	i.logger.Debug("开始创建工单附件 (DAO)", zap.Any("attachment", attachment))
+	if err := i.db.WithContext(ctx).Create(attachment).Error; err != nil {
+		i.logger.Error("创建工单附件失败 (DAO)", zap.Error(err), zap.Any("attachment", attachment))
+		return nil, fmt.Errorf("创建工单附件失败: %w", err)
+	}
+	i.logger.Debug("工单附件创建成功 (DAO)", zap.Int("id", attachment.ID))
+	return attachment, nil
+}
+
+// DeleteInstanceAttachment 删除工单附件记录
+func (i *instanceDAO) DeleteInstanceAttachment(ctx context.Context, instanceID int, attachmentID int) error {
+	i.logger.Debug("开始删除工单附件 (DAO)", zap.Int("instanceID", instanceID), zap.Int("attachmentID", attachmentID))
+	result := i.db.WithContext(ctx).Where("id = ? AND instance_id = ?", attachmentID, instanceID).Delete(&model.InstanceAttachment{})
+	if result.Error != nil {
+		i.logger.Error("删除工单附件失败 (DAO)", zap.Error(result.Error), zap.Int("attachmentID", attachmentID))
+		return fmt.Errorf("删除工单附件 (ID: %d) 失败: %w", attachmentID, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		i.logger.Warn("删除工单附件：未找到记录 (DAO)", zap.Int("attachmentID", attachmentID), zap.Int("instanceID", instanceID))
+		return fmt.Errorf("未找到附件 (ID: %d) 或附件不属于工单 (ID: %d)", attachmentID, instanceID)
+	}
+	i.logger.Debug("工单附件删除成功 (DAO)", zap.Int("attachmentID", attachmentID))
+	return nil
+}
+
+// GetInstanceAttachments 获取指定工单的所有附件记录
+func (i *instanceDAO) GetInstanceAttachments(ctx context.Context, instanceID int) ([]model.InstanceAttachment, error) {
+	i.logger.Debug("开始获取工单附件列表 (DAO)", zap.Int("instanceID", instanceID))
+	var attachments []model.InstanceAttachment
+	if err := i.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order("created_at DESC").Find(&attachments).Error; err != nil {
+		i.logger.Error("获取工单附件列表失败 (DAO)", zap.Error(err), zap.Int("instanceID", instanceID))
+		return nil, fmt.Errorf("获取工单 (ID: %d) 的附件列表失败: %w", instanceID, err)
+	}
+	i.logger.Debug("工单附件列表获取成功 (DAO)", zap.Int("count", len(attachments)))
+	return attachments, nil
 }

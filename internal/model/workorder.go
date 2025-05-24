@@ -109,8 +109,8 @@ type DetailFormDesignReq struct {
 }
 
 type ListFormDesignReq struct {
-	PageRequest
-	CategoryID *int `json:"category_id" form:"category_id"`
+	ListReq
+	CategoryID *int `json:"category_id" form:"category_id"` // 分类ID
 }
 
 type PublishFormDesignReq struct {
@@ -238,9 +238,9 @@ type DetailProcessReq struct {
 }
 
 type ListProcessReq struct {
-	PageRequest
-	CategoryID   *int `json:"category_id" form:"category_id"`
-	FormDesignID *int `json:"form_design_id" form:"form_design_id"`
+	ListReq
+	CategoryID   *int `json:"category_id" form:"category_id"`   // 分类ID
+	FormDesignID *int `json:"form_design_id" form:"form_design_id"` // 表单设计ID
 }
 
 type PublishProcessReq struct {
@@ -332,9 +332,15 @@ type DetailTemplateReq struct {
 }
 
 type ListTemplateReq struct {
-	PageRequest
-	CategoryID *int `json:"category_id" form:"category_id"`
-	ProcessID  *int `json:"process_id" form:"process_id"`
+	ListReq
+	CategoryID *int `json:"category_id" form:"category_id"` // 分类ID
+	ProcessID  *int `json:"process_id" form:"process_id"`   // 流程ID
+}
+
+// ValidateProcessResp 定义了流程校验的响应结构
+type ValidateProcessResp struct {
+	IsValid bool     `json:"is_valid"`           // 是否有效
+	Errors  []string `json:"errors,omitempty"` // 错误信息列表
 }
 
 // 模板响应
@@ -446,39 +452,40 @@ type DetailInstanceReq struct {
 }
 
 type ListInstanceReq struct {
-	PageRequest
-	Status     *int8      `json:"status" form:"status"`
-	Priority   *int8      `json:"priority" form:"priority"`
-	CategoryID *int       `json:"category_id" form:"category_id"`
-	CreatorID  *int       `json:"creator_id" form:"creator_id"`
-	AssigneeID *int       `json:"assignee_id" form:"assignee_id"`
-	ProcessID  *int       `json:"process_id" form:"process_id"`
-	TemplateID *int       `json:"template_id" form:"template_id"`
-	StartDate  *time.Time `json:"start_date" form:"start_date"`
-	EndDate    *time.Time `json:"end_date" form:"end_date"`
-	Tags       []string   `json:"tags" form:"tags"`
-	Overdue    *bool      `json:"overdue" form:"overdue"`
+	ListReq
+	Status     *int8      `json:"status" form:"status"`           // 状态
+	Priority   *int8      `json:"priority" form:"priority"`       // 优先级
+	CategoryID *int       `json:"category_id" form:"category_id"` // 分类ID
+	CreatorID  *int       `json:"creator_id" form:"creator_id"`   // 创建人ID
+	AssigneeID *int       `json:"assignee_id" form:"assignee_id"` // 当前处理人ID
+	ProcessID  *int       `json:"process_id" form:"process_id"`   // 流程ID
+	TemplateID *int       `json:"template_id" form:"template_id"` // 模板ID
+	StartDate  *time.Time `json:"start_date" form:"start_date"`   // 开始日期
+	EndDate    *time.Time `json:"end_date" form:"end_date"`       // 结束日期
+	Tags       []string   `json:"tags" form:"tags"`               // 标签
+	Overdue    *bool      `json:"overdue" form:"overdue"`         // 是否超时
 }
 
 type MyInstanceReq struct {
-	PageRequest
+	ListReq
 	Type       string     `json:"type" form:"type" binding:"omitempty,oneof=created assigned"` // created: 我创建的, assigned: 分配给我的
-	Status     *int8      `json:"status" form:"status"`
-	Priority   *int8      `json:"priority" form:"priority"`
-	CategoryID *int       `json:"category_id" form:"category_id"`
-	ProcessID  *int       `json:"process_id" form:"process_id"`
-	StartDate  *time.Time `json:"start_date" form:"start_date"`
-	EndDate    *time.Time `json:"end_date" form:"end_date"`
+	Status     *int8      `json:"status" form:"status"`                                       // 状态
+	Priority   *int8      `json:"priority" form:"priority"`                                   // 优先级
+	CategoryID *int       `json:"category_id" form:"category_id"`                             // 分类ID
+	ProcessID  *int       `json:"process_id" form:"process_id"`                               // 流程ID
+	StartDate  *time.Time `json:"start_date" form:"start_date"`                               // 开始日期
+	EndDate    *time.Time `json:"end_date" form:"end_date"`                                   // 结束日期
 }
 
 // 工单流程操作请求
+// InstanceActionReq 定义了工单流程操作的请求结构
 type InstanceActionReq struct {
-	InstanceID int                    `json:"instance_id" binding:"required"`
-	Action     string                 `json:"action" binding:"required,oneof=approve reject transfer revoke"`
-	Comment    string                 `json:"comment" binding:"omitempty,max=1000"`
-	FormData   map[string]interface{} `json:"form_data"`
-	AssigneeID *int                   `json:"assignee_id"` // 转交时使用
-	StepID     string                 `json:"step_id"`     // 指定步骤ID
+	InstanceID int                    `json:"instance_id" binding:"required"`           // 工单实例ID
+	Action     string                 `json:"action" binding:"required,oneof=approve reject transfer revoke"` // 操作类型：approve, reject, transfer, revoke
+	Comment    string                 `json:"comment" binding:"omitempty,max=1000"`     // 评论或备注
+	FormData   map[string]interface{} `json:"form_data"`                                // 表单数据
+	AssigneeID *int                   `json:"assignee_id"`                              // 指派给的用户ID (转交时使用)
+	StepID     string                 `json:"step_id"`                                  // 步骤ID (可选，用于指定特定步骤)
 }
 
 type InstanceCommentReq struct {

@@ -104,8 +104,8 @@ func (p *processDAO) ListProcess(ctx context.Context, req model.ListProcessReq) 
 	}
 
 	// 分页
-	offset := (req.Page - 1) * req.PageSize
-	if err := db.Offset(offset).Limit(req.PageSize).Find(&processes).Error; err != nil {
+	offset := (req.Page - 1) * req.Size // Changed PageSize to Size
+	if err := db.Offset(offset).Limit(req.Size).Find(&processes).Error; err != nil { // Changed PageSize to Size
 		return nil, err
 	}
 
