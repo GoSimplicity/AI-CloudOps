@@ -48,6 +48,7 @@ type CategoryDAO interface {
 	CheckNameExists(ctx context.Context, name string, excludeID *int) (bool, error)
 	GetCategoryChildren(ctx context.Context, parentID int) ([]model.Category, error)
 	BatchUpdateStatus(ctx context.Context, ids []int, status int8) error
+	GetCategoryTree(ctx context.Context, status *int8) ([]model.Category, error)
 }
 
 type categoryDAO struct {
@@ -342,6 +343,48 @@ func (dao *categoryDAO) BatchUpdateStatus(ctx context.Context, ids []int, status
 		zap.Ints("ids", ids),
 		zap.Int64("affected", result.RowsAffected))
 	return nil
+}
+
+// GetCategoryTree 获取分类树
+func (dao *categoryDAO) GetCategoryTree(ctx context.Context, status *int8) ([]model.Category, error) {
+	dao.logger.Debug("开始获取分类树", zap.Any("status", status))
+
+	// 获取所有分类
+	query := dao.db.WithContext(ctx)
+	if status != nil {
+		query = query.Where("status = ?", *status)
+	}
+
+	var allCategories []model.Category
+	if err := query.Order("sort_order ASC, id ASC").Find(&allCategories).Error; err != nil {
+		dao.logger.Error("获取分类树失败", zap.Error(err))
+		return nil, fmt.Errorf("获取分类树失败: %w", err)
+	}
+
+	// 构建分类树
+	categoryMap := make(map[int]*model.Category)
+	var rootCategories []model.Category
+
+	// 第一步：将所有分类加入map
+	for i := range allCategories {
+		category := allCategories[i]
+		categoryMap[category.ID] = &allCategories[i]
+	}
+
+	// 第二步：构建树结构
+	for i := range allCategories {
+		category := allCategories[i]
+		if category.ParentID == nil || *category.ParentID == 0 {
+			// 根分类
+			rootCategories = append(rootCategories, category)
+		} else if parent, exists := categoryMap[*category.ParentID]; exists {
+			// 添加到父分类的子分类列表
+			parent.Children = append(parent.Children, category)
+		}
+	}
+
+	dao.logger.Debug("分类树获取成功", zap.Int("root_count", len(rootCategories)))
+	return rootCategories, nil
 }
 
 // 私有辅助方法

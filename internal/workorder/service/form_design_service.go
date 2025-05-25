@@ -42,10 +42,10 @@ type FormDesignService interface {
 	UpdateFormDesign(ctx context.Context, formDesignReq *model.UpdateFormDesignReq) error
 	DeleteFormDesign(ctx context.Context, id int) error
 	PublishFormDesign(ctx context.Context, id int) error
-	CloneFormDesign(ctx context.Context, id int, name string, creatorID int) (*model.FormDesign, error)
-	DetailFormDesign(ctx context.Context, id int) (*model.FormDesign, error)
-	ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) (*model.ListResp[model.FormDesign], error)
-	PreviewFormDesign(ctx context.Context, id int, schema model.FormSchema, userID int) error
+	CloneFormDesign(ctx context.Context, id int, name string, creatorID int) (*model.FormDesignResp, error)
+	DetailFormDesign(ctx context.Context, id int) (*model.FormDesignResp, error)
+	ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) (*model.ListResp[model.FormDesignItem], error)
+	PreviewFormDesign(ctx context.Context, id int, userID int) (*model.PreviewFormDesignResp, error)
 	CheckFormDesignNameExists(ctx context.Context, name string, excludeID ...int) (bool, error)
 }
 
@@ -182,7 +182,7 @@ func (f *formDesignService) PublishFormDesign(ctx context.Context, id int) error
 }
 
 // CloneFormDesign 克隆表单设计
-func (f *formDesignService) CloneFormDesign(ctx context.Context, id int, name string, creatorID int) (*model.FormDesign, error) {
+func (f *formDesignService) CloneFormDesign(ctx context.Context, id int, name string, creatorID int) (*model.FormDesignResp, error) {
 	// 检查新名称是否已存在
 	exists, err := f.dao.CheckFormDesignNameExists(ctx, name)
 	if err != nil {
@@ -219,7 +219,7 @@ func (f *formDesignService) CloneFormDesign(ctx context.Context, id int, name st
 }
 
 // DetailFormDesign 获取表单设计详情
-func (f *formDesignService) DetailFormDesign(ctx context.Context, id int) (*model.FormDesign, error) {
+func (f *formDesignService) DetailFormDesign(ctx context.Context, id int) (*model.FormDesignResp, error) {
 	// 获取表单设计
 	formDesign, err := f.dao.GetFormDesign(ctx, id)
 	if err != nil {
@@ -242,7 +242,7 @@ func (f *formDesignService) DetailFormDesign(ctx context.Context, id int) (*mode
 }
 
 // ListFormDesign 获取表单设计列表
-func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) (*model.ListResp[model.FormDesign], error) {
+func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) (*model.ListResp[model.FormDesignItem], error) {
 	// 参数验证
 	if req.Page <= 0 {
 		req.Page = 1
@@ -302,30 +302,71 @@ func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListF
 }
 
 // PreviewFormDesign 预览表单设计
-func (f *formDesignService) PreviewFormDesign(ctx context.Context, id int, schema model.FormSchema, userID int) error {
+func (f *formDesignService) PreviewFormDesign(ctx context.Context, id int, userID int) (*model.PreviewFormDesignResp, error) {
 	// 检查表单设计是否存在
-	_, err := f.dao.GetFormDesign(ctx, id)
+	formDesign, err := f.dao.GetFormDesign(ctx, id)
 	if err != nil {
 		f.l.Error("获取表单设计失败", zap.Error(err), zap.Int("id", id))
-		return err
+		return nil, err
 	}
 
 	// 检查用户是否存在
-	_, err = f.userDao.GetUserByID(ctx, userID)
+	user, err := f.userDao.GetUserByID(ctx, userID)
 	if err != nil {
 		f.l.Error("获取用户失败", zap.Error(err), zap.Int("userID", userID))
-		return fmt.Errorf("用户不存在: %w", err)
+		return nil, fmt.Errorf("用户不存在: %w", err)
 	}
 
-	f.l.Info("预览表单设计",
-		zap.Int("formDesignID", id),
-		zap.Int("userID", userID))
+	// 验证schema格式
+	if err := f.validateFormSchema(formDesign.Schema); err != nil {
+		f.l.Error("表单结构验证失败", zap.Error(err), zap.Int("formDesignID", id))
+		return nil, fmt.Errorf("表单结构验证失败: %w", err)
+	}
 
-	// TODO: 实现预览逻辑
-	// 1. 验证 schema 格式
-	// 2. 生成预览数据
-	// 3. 可能需要临时存储预览状态
-	// 4. 记录预览操作日志
+	// 检查字段名称唯一性
+	if err := f.checkFieldNameUniqueness(formDesign.Schema); err != nil {
+		f.l.Error("表单字段名称重复", zap.Error(err), zap.Int("formDesignID", id))
+		return nil, err
+	}
+
+	// 记录预览操作日志
+	f.l.Info("预览表单设计成功",
+		zap.Int("formDesignID", id),
+		zap.Int("userID", userID),
+		zap.String("userName", user.Username),
+		zap.Int("fieldCount", len(formDesign.Schema.Fields)))
+
+	return &model.PreviewFormDesignResp{
+		ID:     id,
+		Schema: formDesign.Schema,
+	}, nil
+}
+
+// validateFormSchema 验证表单结构
+func (f *formDesignService) validateFormSchema(schema model.FormSchema) error {
+	// 检查是否有字段
+	if len(schema.Fields) == 0 {
+		return fmt.Errorf("表单必须至少包含一个字段")
+	}
+
+	// 验证每个字段
+	for _, field := range schema.Fields {
+		// 检查必填属性
+		if field.Type == "" {
+			return fmt.Errorf("字段类型不能为空: %s", field.Name)
+		}
+		if field.Label == "" {
+			return fmt.Errorf("字段标签不能为空: %s", field.Name)
+		}
+		if field.Name == "" {
+			return fmt.Errorf("字段名称不能为空")
+		}
+
+		// 检查选项类型字段
+		if isOptionField(field.Type) && len(field.Options) == 0 {
+			return fmt.Errorf("选项类型字段必须包含选项: %s", field.Name)
+		}
+	}
 
 	return nil
 }
@@ -339,4 +380,27 @@ func (f *formDesignService) CheckFormDesignNameExists(ctx context.Context, name 
 	}
 
 	return exists, nil
+}
+
+// checkFieldNameUniqueness 检查字段名称唯一性
+func (f *formDesignService) checkFieldNameUniqueness(schema model.FormSchema) error {
+	nameMap := make(map[string]bool)
+	for _, field := range schema.Fields {
+		if nameMap[field.Name] {
+			return fmt.Errorf("字段名称重复: %s", field.Name)
+		}
+		nameMap[field.Name] = true
+	}
+	return nil
+}
+
+// isOptionField 判断是否为选项类型字段
+func isOptionField(fieldType string) bool {
+	optionTypes := map[string]bool{
+		"select":      true,
+		"radio":       true,
+		"checkbox":    true,
+		"multiselect": true,
+	}
+	return optionTypes[fieldType]
 }

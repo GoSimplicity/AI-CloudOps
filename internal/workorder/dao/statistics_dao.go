@@ -447,12 +447,7 @@ func (dao *statisticsDAO) GetWorkloadByCategory(ctx context.Context, startDate *
 		return nil, fmt.Errorf("按分类获取工单负载统计失败: %w", err)
 	}
 
-	// 计算百分比
-	for i := range results {
-		if totalCount > 0 {
-			results[i].Percentage = int64((float64(results[i].Count) / float64(totalCount)) * 100)
-		}
-	}
+
 
 	dao.logger.Debug("按分类获取工单负载统计成功")
 	return results, nil

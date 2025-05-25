@@ -45,7 +45,6 @@ type ListReq struct {
 	Page   int    `json:"page" form:"page" binding:"required,min=1"`
 	Size   int    `json:"size" form:"size" binding:"required,min=10,max=100"`
 	Search string `json:"search" form:"search" binding:"omitempty"`
-	Status *int8  `json:"status" form:"status" binding:"omitempty"`
 }
 
 // ListResp 通用列表响应

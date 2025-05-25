@@ -45,33 +45,23 @@ func NewCategoryGroupHandler(service service.CategoryGroupService) *CategoryGrou
 func (h *CategoryGroupHandler) RegisterRouters(server *gin.Engine) {
 	categoryGroup := server.Group("/api/workorder/category")
 	{
-		categoryGroup.POST("/", h.CreateCategory)
-		categoryGroup.PUT("/:id", h.UpdateCategory)
-		categoryGroup.DELETE("/:id", h.DeleteCategory)
-		categoryGroup.GET("/", h.ListCategory)
-		categoryGroup.GET("/:id", h.GetCategory)
+		categoryGroup.POST("/create", h.CreateCategory)
+		categoryGroup.POST("/update/:id", h.UpdateCategory)
+		categoryGroup.DELETE("/delete/:id", h.DeleteCategory)
+		categoryGroup.GET("/list", h.ListCategory)
+		categoryGroup.GET("/detail/:id", h.GetCategory)
 		categoryGroup.GET("/tree", h.GetCategoryTree)
-		categoryGroup.PUT("/batch/status", h.BatchUpdateStatus)
+		categoryGroup.POST("/batch/status", h.BatchUpdateStatus)
 	}
 }
 
 func (h *CategoryGroupHandler) CreateCategory(ctx *gin.Context) {
 	var req model.CreateCategoryReq
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		// 从上下文中获取用户信息
-		userID, exists := ctx.Get("userID")
-		if !exists {
-			userID = 0 // 默认值
-		}
-		userName, exists := ctx.Get("userName")
-		if !exists {
-			userName = "" // 默认值
-		}
-
-		creatorID, _ := userID.(int)
-		creatorName, _ := userName.(string)
-
-		return h.service.CreateCategory(ctx, &req, creatorID, creatorName)
+		return h.service.CreateCategory(ctx, &req, user.Uid, user.Username)
 	})
 }
 
@@ -82,18 +72,12 @@ func (h *CategoryGroupHandler) UpdateCategory(ctx *gin.Context) {
 	}
 
 	var req model.UpdateCategoryReq
+	req.ID = id
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		// 设置ID
-		req.ID = id
-
-		// 从上下文中获取用户ID
-		userID, exists := ctx.Get("userID")
-		if !exists {
-			userID = 0 // 默认值
-		}
-
-		uid, _ := userID.(int)
-		return h.service.UpdateCategory(ctx, &req, uid)
+		return h.service.UpdateCategory(ctx, &req, user.Uid)
 	})
 }
 
@@ -103,15 +87,10 @@ func (h *CategoryGroupHandler) DeleteCategory(ctx *gin.Context) {
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		// 从上下文中获取用户ID
-		userID, exists := ctx.Get("userID")
-		if !exists {
-			userID = 0 // 默认值
-		}
+	user := ctx.MustGet("user").(utils.UserClaims)
 
-		uid, _ := userID.(int)
-		return nil, h.service.DeleteCategory(ctx, id, uid)
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, h.service.DeleteCategory(ctx, id, user.Uid)
 	})
 }
 
@@ -145,14 +124,9 @@ func (h *CategoryGroupHandler) BatchUpdateStatus(ctx *gin.Context) {
 		Status int8  `json:"status" binding:"required"`
 	}
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		// 从上下文中获取用户ID
-		userID, exists := ctx.Get("userID")
-		if !exists {
-			userID = 0 // 默认值
-		}
+	user := ctx.MustGet("user").(utils.UserClaims)
 
-		uid, _ := userID.(int)
-		return nil, h.service.BatchUpdateStatus(ctx, req.IDs, req.Status, uid)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.BatchUpdateStatus(ctx, req.IDs, req.Status, user.Uid)
 	})
 }

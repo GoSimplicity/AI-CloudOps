@@ -27,6 +27,7 @@ package dao
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -47,10 +48,10 @@ type FormDesignDAO interface {
 	UpdateFormDesign(ctx context.Context, formDesign *model.FormDesign) error
 	DeleteFormDesign(ctx context.Context, id int) error
 	PublishFormDesign(ctx context.Context, id int) error
-	ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) (*model.ListResp[model.FormDesign], error)
-	GetFormDesign(ctx context.Context, id int) (*model.FormDesign, error)
-	CloneFormDesign(ctx context.Context, id int, name string, creatorID int) (*model.FormDesign, error)
-	GetFormDesignsByIDs(ctx context.Context, ids []int) ([]model.FormDesign, error)
+	ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) (*model.ListResp[model.FormDesignItem], error)
+	GetFormDesign(ctx context.Context, id int) (*model.FormDesignResp, error)
+	CloneFormDesign(ctx context.Context, id int, name string, creatorID int) (*model.FormDesignResp, error)
+	GetFormDesignsByIDs(ctx context.Context, ids []int) ([]model.FormDesignResp, error)
 	UpdateFormDesignStatus(ctx context.Context, id int, status int8) error
 	CheckFormDesignNameExists(ctx context.Context, name string, excludeID ...int) (bool, error)
 }
@@ -150,10 +151,9 @@ func (f *formDesignDAO) DeleteFormDesign(ctx context.Context, id int) error {
 func (f *formDesignDAO) PublishFormDesign(ctx context.Context, id int) error {
 	result := f.db.WithContext(ctx).
 		Model(&model.FormDesign{}).
-		Where("id = ? AND status = ?", id, 0). // 0为草稿状态
+		Where("id = ? AND status = ?", id, 0). // 0为草稿状态，其实在service中已经检查了，这里只是防御编程一下下
 		Updates(map[string]interface{}{
-			"status":     1, // 1为已发布状态
-			"updated_at": time.Now(),
+			"status": 1, // 1为已发布状态
 		})
 
 	if result.Error != nil {
@@ -171,7 +171,7 @@ func (f *formDesignDAO) PublishFormDesign(ctx context.Context, id int) error {
 }
 
 // GetFormDesign 获取表单设计
-func (f *formDesignDAO) GetFormDesign(ctx context.Context, id int) (*model.FormDesign, error) {
+func (f *formDesignDAO) GetFormDesign(ctx context.Context, id int) (*model.FormDesignResp, error) {
 	var formDesign model.FormDesign
 
 	err := f.db.WithContext(ctx).
@@ -187,17 +187,18 @@ func (f *formDesignDAO) GetFormDesign(ctx context.Context, id int) (*model.FormD
 		return nil, fmt.Errorf("获取表单设计失败: %w", err)
 	}
 
-	// 反序列化Schema
-	if err := f.deserializeSchema(&formDesign); err != nil {
-		f.logger.Error("反序列化表单schema失败", zap.Error(err), zap.Int("id", id))
-		return nil, fmt.Errorf("反序列化表单schema失败: %w", err)
+	// 转换为响应对象
+	resp, err := f.convertToFormDesignResp(&formDesign)
+	if err != nil {
+		f.logger.Error("转换表单设计响应失败", zap.Error(err), zap.Int("id", id))
+		return nil, fmt.Errorf("转换表单设计响应失败: %w", err)
 	}
 
-	return &formDesign, nil
+	return resp, nil
 }
 
 // CloneFormDesign 克隆表单设计
-func (f *formDesignDAO) CloneFormDesign(ctx context.Context, id int, name string, creatorID int) (*model.FormDesign, error) {
+func (f *formDesignDAO) CloneFormDesign(ctx context.Context, id int, name string, creatorID int) (*model.FormDesignResp, error) {
 	// 使用事务确保数据一致性
 	var clonedFormDesign *model.FormDesign
 	err := f.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -237,16 +238,23 @@ func (f *formDesignDAO) CloneFormDesign(ctx context.Context, id int, name string
 		return nil, err
 	}
 
+	// 重新获取完整的表单设计数据（包括关联数据）
+	formDesign, err := f.GetFormDesign(ctx, clonedFormDesign.ID)
+	if err != nil {
+		f.logger.Error("获取克隆后的表单设计失败", zap.Error(err), zap.Int("id", clonedFormDesign.ID))
+		return nil, fmt.Errorf("获取克隆后的表单设计失败: %w", err)
+	}
+
 	f.logger.Info("克隆表单设计成功",
 		zap.Int("originalID", id),
 		zap.Int("newID", clonedFormDesign.ID),
 		zap.String("newName", name))
 
-	return clonedFormDesign, nil
+	return formDesign, nil
 }
 
 // ListFormDesign 获取表单设计列表
-func (f *formDesignDAO) ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) (*model.ListResp[model.FormDesign], error) {
+func (f *formDesignDAO) ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) (*model.ListResp[model.FormDesignItem], error) {
 	var formDesigns []model.FormDesign
 	var total int64
 
@@ -274,21 +282,31 @@ func (f *formDesignDAO) ListFormDesign(ctx context.Context, req *model.ListFormD
 		return nil, fmt.Errorf("获取表单设计列表失败: %w", err)
 	}
 
-	// 反序列化Schema（用于列表展示可能不需要，根据业务需求决定）
-	for i := range formDesigns {
-		if err := f.deserializeSchema(&formDesigns[i]); err != nil {
-			f.logger.Warn("反序列化表单schema失败", zap.Error(err), zap.Int("id", formDesigns[i].ID))
-			// 列表展示时可以容忍单个记录的schema反序列化失败
-		}
+	// 转换为FormDesignItem
+	items := make([]model.FormDesignItem, 0, len(formDesigns))
+	for _, design := range formDesigns {
+		items = append(items, model.FormDesignItem{
+			ID:          design.ID,
+			Name:        design.Name,
+			Description: design.Description,
+			Version:     design.Version,
+			Status:      design.Status,
+			CategoryID:  design.CategoryID,
+			Category:    design.Category,
+			CreatorID:   design.CreatorID,
+			CreatorName: design.CreatorName,
+			CreatedAt:   design.CreatedAt,
+			UpdatedAt:   design.UpdatedAt,
+		})
 	}
 
-	result := &model.ListResp[model.FormDesign]{
-		Items: formDesigns,
+	result := &model.ListResp[model.FormDesignItem]{
+		Items: items,
 		Total: total,
 	}
 
 	f.logger.Info("获取表单设计列表成功",
-		zap.Int("count", len(formDesigns)),
+		zap.Int("count", len(items)),
 		zap.Int64("total", total),
 		zap.Int("page", req.Page),
 		zap.Int("size", req.Size))
@@ -297,9 +315,9 @@ func (f *formDesignDAO) ListFormDesign(ctx context.Context, req *model.ListFormD
 }
 
 // GetFormDesignsByIDs 批量获取表单设计
-func (f *formDesignDAO) GetFormDesignsByIDs(ctx context.Context, ids []int) ([]model.FormDesign, error) {
+func (f *formDesignDAO) GetFormDesignsByIDs(ctx context.Context, ids []int) ([]model.FormDesignResp, error) {
 	if len(ids) == 0 {
-		return []model.FormDesign{}, nil
+		return []model.FormDesignResp{}, nil
 	}
 
 	var formDesigns []model.FormDesign
@@ -313,14 +331,18 @@ func (f *formDesignDAO) GetFormDesignsByIDs(ctx context.Context, ids []int) ([]m
 		return nil, fmt.Errorf("批量获取表单设计失败: %w", err)
 	}
 
-	// 反序列化Schema
+	// 转换为响应对象
+	resps := make([]model.FormDesignResp, 0, len(formDesigns))
 	for i := range formDesigns {
-		if err := f.deserializeSchema(&formDesigns[i]); err != nil {
-			f.logger.Warn("反序列化表单schema失败", zap.Error(err), zap.Int("id", formDesigns[i].ID))
+		resp, err := f.convertToFormDesignResp(&formDesigns[i])
+		if err != nil {
+			f.logger.Warn("转换表单设计响应失败", zap.Error(err), zap.Int("id", formDesigns[i].ID))
+			continue
 		}
+		resps = append(resps, *resp)
 	}
 
-	return formDesigns, nil
+	return resps, nil
 }
 
 // UpdateFormDesignStatus 更新表单设计状态
@@ -375,12 +397,12 @@ func (f *formDesignDAO) buildListQuery(db *gorm.DB, req *model.ListFormDesignReq
 	}
 
 	// 状态过滤
-	if req.Status != nil {
+	if req.Status != nil && *req.Status != 0 {
 		db = db.Where("status = ?", *req.Status)
 	}
 
 	// 分类过滤
-	if req.CategoryID != nil {
+	if req.CategoryID != nil && *req.CategoryID != 0 {
 		db = db.Where("category_id = ?", *req.CategoryID)
 	}
 
@@ -389,16 +411,34 @@ func (f *formDesignDAO) buildListQuery(db *gorm.DB, req *model.ListFormDesignReq
 
 // serializeSchema 序列化FormSchema到JSON字符串
 func (f *formDesignDAO) serializeSchema(formDesign *model.FormDesign) error {
-	// 这里假设FormDesign结构体中有一个FormSchema字段需要序列化
-	// 根据实际的model结构调整
+	formDesign.Schema = string(formDesign.Schema)
 	return nil
 }
 
-// deserializeSchema 反序列化JSON字符串到FormSchema
-func (f *formDesignDAO) deserializeSchema(formDesign *model.FormDesign) error {
-	// 这里假设需要将JSON字符串反序列化为FormSchema结构
-	// 根据实际的model结构调整
-	return nil
+// convertToFormDesignResp 将FormDesign转换为FormDesignResp
+func (f *formDesignDAO) convertToFormDesignResp(formDesign *model.FormDesign) (*model.FormDesignResp, error) {
+	// 反序列化Schema
+	var schema model.FormSchema
+	if formDesign.Schema != "" {
+		if err := json.Unmarshal([]byte(formDesign.Schema), &schema); err != nil {
+			return nil, fmt.Errorf("反序列化schema失败: %w", err)
+		}
+	}
+
+	return &model.FormDesignResp{
+		ID:          formDesign.ID,
+		Name:        formDesign.Name,
+		Description: formDesign.Description,
+		Schema:      schema,
+		Version:     formDesign.Version,
+		Status:      formDesign.Status,
+		CategoryID:  formDesign.CategoryID,
+		Category:    formDesign.Category,
+		CreatorID:   formDesign.CreatorID,
+		CreatorName: formDesign.CreatorName,
+		CreatedAt:   formDesign.CreatedAt,
+		UpdatedAt:   formDesign.UpdatedAt,
+	}, nil
 }
 
 // isDuplicateKeyError 判断是否为重复键错误

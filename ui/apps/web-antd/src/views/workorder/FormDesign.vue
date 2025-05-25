@@ -8,10 +8,20 @@
           </template>
           创建新表单
         </a-button>
-        <a-input-search v-model:value="searchQuery" placeholder="搜索表单..." style="width: 250px" @search="handleSearch"
-          allow-clear />
-        <a-select v-model:value="statusFilter" placeholder="状态" style="width: 120px" @change="handleStatusChange">
-          <a-select-option :value="null">全部</a-select-option>
+        <a-input-search 
+          v-model:value="searchQuery" 
+          placeholder="搜索表单..." 
+          style="width: 250px" 
+          @search="handleSearch"
+          allow-clear 
+        />
+        <a-select 
+          v-model:value="statusFilter" 
+          placeholder="状态" 
+          style="width: 120px" 
+          @change="handleStatusChange"
+        >
+          <a-select-option :value="undefined">全部</a-select-option>
           <a-select-option :value="0">草稿</a-select-option>
           <a-select-option :value="1">已发布</a-select-option>
           <a-select-option :value="2">已禁用</a-select-option>
@@ -62,8 +72,14 @@
 
     <div class="table-container">
       <a-card>
-        <a-table :data-source="paginatedForms" :columns="columns" :pagination="false" :loading="loading" row-key="id"
-          bordered>
+        <a-table 
+          :data-source="paginatedForms" 
+          :columns="columns" 
+          :pagination="false" 
+          :loading="loading" 
+          row-key="id"
+          bordered
+        >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">
               <div class="form-name-cell">
@@ -88,7 +104,7 @@
 
             <template v-if="column.key === 'creator'">
               <div class="creator-info">
-                <a-avatar size="small" :style="{ backgroundColor: getAvatarColor(record.creator_name) }">
+                <a-avatar size="small" :style="{ backgroundColor: getAvatarColor(record.creator_name || '') }">
                   {{ getInitials(record.creator_name) }}
                 </a-avatar>
                 <span class="creator-name">{{ record.creator_name }}</span>
@@ -113,12 +129,12 @@
                 <a-dropdown>
                   <template #overlay>
                     <a-menu @click="(e: any) => handleMenuClick(e.key, record)">
-                    <a-menu-item key="publish" v-if="record.status === 0">发布</a-menu-item>
-                    <a-menu-item key="unpublish" v-if="record.status === 1">取消发布</a-menu-item>
-                    <a-menu-item key="clone">克隆</a-menu-item>
-                    <a-menu-divider />
-                    <a-menu-item key="delete" danger>删除</a-menu-item>
-                  </a-menu>
+                      <a-menu-item key="publish" v-if="record.status === 0">发布</a-menu-item>
+                      <a-menu-item key="unpublish" v-if="record.status === 1">取消发布</a-menu-item>
+                      <a-menu-item key="clone">克隆</a-menu-item>
+                      <a-menu-divider />
+                      <a-menu-item key="delete" danger>删除</a-menu-item>
+                    </a-menu>
                   </template>
                   <a-button size="small">
                     更多
@@ -131,101 +147,110 @@
         </a-table>
 
         <div class="pagination-container">
-          <a-pagination v-model:current="currentPage" :total="totalItems" :page-size="pageSize"
-            :page-size-options="['10', '20', '50', '100']" :show-size-changer="true" @change="handleCurrentChange"
-            @showSizeChange="handleSizeChange" :show-total="(total: number) => `共 ${total} 条`" />
+          <a-pagination 
+            v-model:current="currentPage" 
+            :total="totalItems" 
+            :page-size="pageSize"
+            :page-size-options="['10', '20', '50', '100']" 
+            :show-size-changer="true" 
+            @change="handleCurrentChange"
+            @showSizeChange="handleSizeChange" 
+            :show-total="(total: number) => `共 ${total} 条`" 
+          />
         </div>
       </a-card>
     </div>
 
-<!-- 表单创建/编辑对话框 -->
-<a-modal v-model:visible="formDialog.visible" :title="formDialog.isEdit ? '编辑表单设计' : '创建表单设计'" width="760px"
-  @ok="saveForm" :destroy-on-close="true">
-  <a-form ref="formRef" :model="formDialog.form" :rules="formRules" layout="vertical">
-    <a-form-item label="表单名称" name="name">
-      <a-input v-model:value="formDialog.form.name" placeholder="请输入表单名称" />
-    </a-form-item>
-
-    <a-form-item label="描述" name="description">
-      <a-textarea v-model:value="formDialog.form.description" :rows="3" placeholder="请输入表单描述" />
-    </a-form-item>
-
-    <a-row :gutter="16">
-      <a-col :span="12">
-        <a-form-item label="分类" name="category_id">
-          <a-select v-model:value="formDialog.form.category_id" placeholder="请选择分类" style="width: 100%">
-            <a-select-option v-for="cat in categories" :key="cat.id" :value="cat.id">
-              {{ cat.name }}
-            </a-select-option>
-          </a-select>
+    <!-- 表单创建/编辑对话框 -->
+    <a-modal 
+      :open="formDialogVisible" 
+      :title="formDialog.isEdit ? '编辑表单设计' : '创建表单设计'" 
+      width="760px"
+      @ok="saveForm" 
+      @cancel="closeFormDialog"
+      :destroy-on-close="true"
+    >
+      <a-form ref="formRef" :model="formDialog.form" :rules="formRules" layout="vertical">
+        <a-form-item label="表单名称" name="name">
+          <a-input v-model:value="formDialog.form.name" placeholder="请输入表单名称" />
         </a-form-item>
-      </a-col>
-      <a-col :span="12">
-        <a-form-item label="版本号" name="version">
-          <a-input-number v-model:value="formDialog.form.version" :min="1" style="width: 100%" placeholder="请输入版本号" />
+
+        <a-form-item label="描述" name="description">
+          <a-textarea v-model:value="formDialog.form.description" :rows="3" placeholder="请输入表单描述" />
         </a-form-item>
-      </a-col>
-    </a-row>
 
-    <a-form-item label="状态" name="status">
-      <a-radio-group v-model:value="formDialog.form.status">
-        <a-radio :value="0">草稿</a-radio>
-        <a-radio :value="1">已发布</a-radio>
-        <a-radio :value="2">已禁用</a-radio>
-      </a-radio-group>
-    </a-form-item>
-
-    <a-divider orientation="left">表单结构</a-divider>
-
-    <div class="schema-editor">
-      <div class="field-list">
-        <a-collapse>
-          <a-collapse-panel v-for="(field, index) in formDialog.form.schema.fields" :key="index"
-            :header="field.label || `字段 ${index + 1}`">
-            <template #extra>
-              <a-button type="text" danger @click.stop="removeField(index)" size="small">
-                <DeleteOutlined />
-              </a-button>
-            </template>
-
-            <a-form-item label="字段类型">
-              <a-select v-model:value="field.type" style="width: 100%">
-                <a-select-option value="text">文本框</a-select-option>
-                <a-select-option value="number">数字</a-select-option>
-                <a-select-option value="date">日期</a-select-option>
-                <a-select-option value="select">下拉选择</a-select-option>
-                <a-select-option value="checkbox">复选框</a-select-option>
-                <a-select-option value="radio">单选框</a-select-option>
-                <a-select-option value="textarea">多行文本</a-select-option>
+        <a-row :gutter="16">
+          <a-col :span="24">
+            <a-form-item label="分类" name="category_id">
+              <a-select v-model:value="formDialog.form.category_id" placeholder="请选择分类" style="width: 100%">
+                <a-select-option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                  {{ cat.name }}
+                </a-select-option>
               </a-select>
             </a-form-item>
+          </a-col>
+        </a-row>
 
-            <a-form-item label="标签名称">
-              <a-input v-model:value="field.label" placeholder="字段标签" />
-            </a-form-item>
+        <a-divider orientation="left">表单结构</a-divider>
 
-            <a-form-item label="字段名称">
-              <a-input v-model:value="field.field" placeholder="字段名称" />
-            </a-form-item>
+        <div class="schema-editor">
+          <div class="field-list">
+            <a-collapse>
+              <a-collapse-panel 
+                v-for="(field, index) in formDialog.form.schema.fields" 
+                :key="index"
+                :header="field.label || `字段 ${index + 1}`"
+              >
+                <template #extra>
+                  <a-button type="text" danger @click.stop="removeField(index)" size="small">
+                    <DeleteOutlined />
+                  </a-button>
+                </template>
 
-            <a-form-item label="是否必填">
-              <a-switch v-model:checked="field.required" />
-            </a-form-item>
-          </a-collapse-panel>
-        </a-collapse>
+                <a-form-item label="字段类型">
+                  <a-select v-model:value="field.type" style="width: 100%">
+                    <a-select-option value="text">文本框</a-select-option>
+                    <a-select-option value="number">数字</a-select-option>
+                    <a-select-option value="date">日期</a-select-option>
+                    <a-select-option value="select">下拉选择</a-select-option>
+                    <a-select-option value="checkbox">复选框</a-select-option>
+                    <a-select-option value="radio">单选框</a-select-option>
+                    <a-select-option value="textarea">多行文本</a-select-option>
+                  </a-select>
+                </a-form-item>
 
-        <div class="add-field-button">
-          <a-button type="dashed" block @click="addField" style="margin-top: 16px">
-            <PlusOutlined /> 添加字段
-          </a-button>
+                <a-form-item label="标签名称">
+                  <a-input v-model:value="field.label" placeholder="字段标签" />
+                </a-form-item>
+
+                <a-form-item label="字段名称">
+                  <a-input v-model:value="field.name" placeholder="字段名称" />
+                </a-form-item>
+
+                <a-form-item label="是否必填">
+                  <a-switch v-model:checked="field.required" />
+                </a-form-item>
+              </a-collapse-panel>
+            </a-collapse>
+
+            <div class="add-field-button">
+              <a-button type="dashed" block @click="addField" style="margin-top: 16px">
+                <PlusOutlined /> 添加字段
+              </a-button>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-  </a-form>
-</a-modal>
+      </a-form>
+    </a-modal>
 
     <!-- 克隆对话框 -->
-    <a-modal v-model:visible="cloneDialog.visible" title="克隆表单" @ok="confirmClone" :destroy-on-close="true">
+    <a-modal 
+      :open="cloneDialogVisible" 
+      title="克隆表单" 
+      @ok="confirmClone" 
+      @cancel="closeCloneDialog"
+      :destroy-on-close="true"
+    >
       <a-form :model="cloneDialog.form" layout="vertical">
         <a-form-item label="新表单名称" name="name" :rules="[{ required: true, message: '请输入新表单名称' }]">
           <a-input v-model:value="cloneDialog.form.name" placeholder="请输入新表单名称" />
@@ -234,12 +259,20 @@
     </a-modal>
 
     <!-- 详情对话框 -->
-    <a-modal v-model:visible="detailDialog.visible" title="表单详情" width="70%" :footer="null" class="detail-dialog">
+    <a-modal 
+      :open="detailDialogVisible" 
+      title="表单详情" 
+      width="70%" 
+      :footer="null" 
+      @cancel="closeDetailDialog"
+      class="detail-dialog"
+    >
       <div v-if="detailDialog.form" class="form-details">
         <div class="detail-header">
           <h2>{{ detailDialog.form.name }}</h2>
           <a-tag
-            :color="detailDialog.form.status === 0 ? 'orange' : detailDialog.form.status === 1 ? 'green' : 'default'">
+            :color="detailDialog.form.status === 0 ? 'orange' : detailDialog.form.status === 1 ? 'green' : 'default'"
+          >
             {{ detailDialog.form.status === 0 ? '草稿' : detailDialog.form.status === 1 ? '已发布' : '已禁用' }}
           </a-tag>
         </div>
@@ -254,8 +287,14 @@
 
         <div class="schema-preview">
           <h3>表单结构</h3>
-          <a-table :data-source="parsedSchema.fields" :columns="schemaColumns" :pagination="false" bordered
-            size="small" row-key="field">
+          <a-table 
+            :data-source="parsedSchema.fields" 
+            :columns="schemaColumns" 
+            :pagination="false" 
+            bordered
+            size="small" 
+            row-key="name"
+          >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'required'">
                 <a-tag :color="record.required ? 'red' : ''">
@@ -270,7 +309,7 @@
         </div>
 
         <div class="detail-footer">
-          <a-button @click="detailDialog.visible = false">关闭</a-button>
+          <a-button @click="closeDetailDialog">关闭</a-button>
           <a-button type="primary" @click="handleEditForm(detailDialog.form)">编辑</a-button>
         </div>
       </div>
@@ -297,18 +336,42 @@ import {
   updateFormDesign,
   deleteFormDesign,
   publishFormDesign,
-  cloneFormDesign
+  cloneFormDesign,
+  type FormDesignResp,
+  type FormDesignItem,
+  type FormField,
+  type FormSchema,
+  type FormDesignReq,
+  type ListFormDesignReq,
+  type DetailFormDesignReq,
+  type PublishFormDesignReq,
+  type CloneFormDesignReq,
+  type Category
 } from '#/api/core/workorder';
 
-import type {
-  FormDesign,
-  Field,
-  Schema,
-  FormDesignReq,
-  ListFormDesignReq,
-  PublishFormDesignReq,
-  CloneFormDesignReq,
-} from '#/api/core/workorder';
+// 响应式数据类型
+interface Statistics {
+  total: number;
+  published: number;
+  draft: number;
+  disabled: number;
+}
+
+interface FormDialogState {
+  isEdit: boolean;
+  form: FormDesignReq;
+}
+
+interface CloneDialogState {
+  form: {
+    name: string;
+    originalId: number;
+  };
+}
+
+interface DetailDialogState {
+  form: FormDesignResp | null;
+}
 
 // 列定义
 const columns = [
@@ -330,14 +393,14 @@ const columns = [
     dataIndex: 'version',
     key: 'version',
     width: 100,
-    align: 'center',
+    align: 'center' as const,
   },
   {
     title: '状态',
     dataIndex: 'status',
     key: 'status',
     width: 120,
-    align: 'center',
+    align: 'center' as const,
   },
   {
     title: '创建人',
@@ -355,7 +418,7 @@ const columns = [
     title: '操作',
     key: 'action',
     width: 200,
-    align: 'center',
+    align: 'center' as const,
   },
 ];
 
@@ -375,8 +438,8 @@ const schemaColumns = [
   },
   {
     title: '字段名',
-    dataIndex: 'field',
-    key: 'field',
+    dataIndex: 'name',
+    key: 'name',
     width: 180,
   },
   {
@@ -388,15 +451,20 @@ const schemaColumns = [
 ];
 
 // 状态数据
-const loading = ref(false);
-const searchQuery = ref('');
-const statusFilter = ref(null);
-const currentPage = ref(1);
-const pageSize = ref(10);
-const formDesigns = ref<FormDesign[]>([]);
+const loading = ref<boolean>(false);
+const searchQuery = ref<string>('');
+const statusFilter = ref<number | undefined>(undefined);
+const currentPage = ref<number>(1);
+const pageSize = ref<number>(10);
+const formDesigns = ref<FormDesignItem[]>([]);
+
+// 模态框控制
+const formDialogVisible = ref<boolean>(false);
+const cloneDialogVisible = ref<boolean>(false);
+const detailDialogVisible = ref<boolean>(false);
 
 // 统计数据
-const stats = reactive({
+const stats = reactive<Statistics>({
   total: 0,
   published: 0,
   draft: 0,
@@ -404,14 +472,14 @@ const stats = reactive({
 });
 
 // 分类数据
-const categories = ref<{ id: number; name: string }[]>([
-  { id: 1, name: '人力资源' },
-  { id: 2, name: '财务部门' },
-  { id: 3, name: 'IT部门' },
-  { id: 4, name: '运营部门' },
-  { id: 5, name: '项目管理' },
-  { id: 6, name: '客户服务' },
-  { id: 7, name: '采购部门' }
+const categories = ref<Category[]>([
+  { id: 1, name: '人力资源', sort_order: 1, status: 1, created_at: '', updated_at: '' },
+  { id: 2, name: '财务部门', sort_order: 2, status: 1, created_at: '', updated_at: '' },
+  { id: 3, name: 'IT部门', sort_order: 3, status: 1, created_at: '', updated_at: '' },
+  { id: 4, name: '运营部门', sort_order: 4, status: 1, created_at: '', updated_at: '' },
+  { id: 5, name: '项目管理', sort_order: 5, status: 1, created_at: '', updated_at: '' },
+  { id: 6, name: '客户服务', sort_order: 6, status: 1, created_at: '', updated_at: '' },
+  { id: 7, name: '采购部门', sort_order: 7, status: 1, created_at: '', updated_at: '' }
 ]);
 
 // 过滤和分页
@@ -426,7 +494,7 @@ const filteredForms = computed(() => {
     );
   }
 
-  if (statusFilter.value !== null) {
+  if (statusFilter.value !== undefined) {
     result = result.filter(form => form.status === statusFilter.value);
   }
 
@@ -442,20 +510,16 @@ const paginatedForms = computed(() => {
 });
 
 // 表单对话框
-const formDialog = reactive({
-  visible: false,
+const formDialog = reactive<FormDialogState>({
   isEdit: false,
   form: {
-    id: undefined,
     name: '',
     description: '',
     schema: {
-      fields: [] as Field[]
+      fields: []
     },
-    version: undefined,
-    status: 0,
     category_id: undefined
-  } as FormDesignReq
+  }
 });
 
 // 表单验证规则
@@ -466,16 +530,11 @@ const formRules = {
   ],
   category_id: [
     { required: true, message: '请选择分类', trigger: 'change' }
-  ],
-  version: [
-    { required: true, message: '请输入版本号', trigger: 'change' },
-    { type: 'number', min: 1, message: '版本号必须大于0', trigger: 'change' }
   ]
 };
 
 // 克隆对话框
-const cloneDialog = reactive({
-  visible: false,
+const cloneDialog = reactive<CloneDialogState>({
   form: {
     name: '',
     originalId: 0
@@ -483,9 +542,8 @@ const cloneDialog = reactive({
 });
 
 // 详情对话框
-const detailDialog = reactive({
-  visible: false,
-  form: null as FormDesign | null
+const detailDialog = reactive<DetailDialogState>({
+  form: null
 });
 
 const parsedSchema = computed(() => {
@@ -503,20 +561,32 @@ const parsedSchema = computed(() => {
   }
 });
 
+// 对话框控制方法
+const closeFormDialog = (): void => {
+  formDialogVisible.value = false;
+};
+
+const closeCloneDialog = (): void => {
+  cloneDialogVisible.value = false;
+};
+
+const closeDetailDialog = (): void => {
+  detailDialogVisible.value = false;
+};
+
 // 加载表单列表
-const loadFormDesigns = async () => {
+const loadFormDesigns = async (): Promise<void> => {
   loading.value = true;
   try {
     const params: ListFormDesignReq = {
       page: currentPage.value,
-      page_size: pageSize.value,
+      size: pageSize.value,
       search: searchQuery.value || undefined,
-      status: statusFilter.value !== null ? statusFilter.value : undefined
+      status: statusFilter.value !== undefined ? statusFilter.value : undefined
     };
-    
     const response = await listFormDesign(params);
     if (response) {
-      formDesigns.value = response || [];
+      formDesigns.value = Array.isArray(response.items) ? response.items : [];
       updateStats(response);
     }
   } catch (error) {
@@ -528,7 +598,7 @@ const loadFormDesigns = async () => {
 };
 
 // 更新统计数据
-const updateStats = (data: any) => {
+const updateStats = (data: any): void => {
   if (data.statistics) {
     stats.total = data.statistics.total || 0;
     stats.published = data.statistics.published || 0;
@@ -537,35 +607,35 @@ const updateStats = (data: any) => {
   } else {
     // 从列表数据计算
     stats.total = formDesigns.value.length;
-    stats.published = formDesigns.value.filter(form => form.status === 1).length;
-    stats.draft = formDesigns.value.filter(form => form.status === 0).length;
-    stats.disabled = formDesigns.value.filter(form => form.status === 2).length;
+    stats.published = formDesigns.value.filter((form: { status: number }) => form.status === 1).length;
+    stats.draft = formDesigns.value.filter((form: { status: number }) => form.status === 0).length;
+    stats.disabled = formDesigns.value.filter((form: { status: number }) => form.status === 2).length;
   }
 };
 
 // 方法
-const handleSizeChange = (current: number, size: number) => {
+const handleSizeChange = (current: number, size: number): void => {
   pageSize.value = size;
   currentPage.value = current;
   loadFormDesigns();
 };
 
-const handleCurrentChange = (page: number) => {
+const handleCurrentChange = (page: number): void => {
   currentPage.value = page;
   loadFormDesigns();
 };
 
-const handleSearch = () => {
+const handleSearch = (): void => {
   currentPage.value = 1;
   loadFormDesigns();
 };
 
-const handleStatusChange = () => {
+const handleStatusChange = (): void => {
   currentPage.value = 1;
   loadFormDesigns();
 };
 
-const handleCreateForm = () => {
+const handleCreateForm = (): void => {
   formDialog.isEdit = false;
   formDialog.form = {
     name: '',
@@ -573,14 +643,12 @@ const handleCreateForm = () => {
     schema: {
       fields: []
     },
-    version: 1,
-    status: 0,
     category_id: undefined
   };
-  formDialog.visible = true;
+  formDialogVisible.value = true;
 };
 
-const handleEditForm = async (row: FormDesign) => {
+const handleEditForm = async (row: FormDesignItem | FormDesignResp): Promise<void> => {
   loading.value = true;
   try {
     const response = await detailFormDesign({ id: row.id });
@@ -589,7 +657,7 @@ const handleEditForm = async (row: FormDesign) => {
       formDialog.isEdit = true;
       
       // 解析schema字符串为对象
-      let schemaObj: Schema;
+      let schemaObj: FormSchema;
       try {
         schemaObj = typeof formData.schema === 'string' 
           ? JSON.parse(formData.schema)
@@ -604,13 +672,11 @@ const handleEditForm = async (row: FormDesign) => {
         name: formData.name,
         description: formData.description,
         schema: schemaObj,
-        version: formData.version,
-        status: formData.status,
         category_id: formData.category_id
       };
       
-      formDialog.visible = true;
-      detailDialog.visible = false;
+      formDialogVisible.value = true;
+      detailDialogVisible.value = false;
     }
   } catch (error) {
     console.error('加载表单详情失败:', error);
@@ -620,13 +686,13 @@ const handleEditForm = async (row: FormDesign) => {
   }
 };
 
-const handleViewForm = async (row: FormDesign) => {
+const handleViewForm = async (row: FormDesignItem): Promise<void> => {
   loading.value = true;
   try {
     const response = await detailFormDesign({ id: row.id });
     if (response) {
       detailDialog.form = response;
-      detailDialog.visible = true;
+      detailDialogVisible.value = true;
     }
   } catch (error) {
     console.error('加载表单详情失败:', error);
@@ -636,7 +702,7 @@ const handleViewForm = async (row: FormDesign) => {
   }
 };
 
-const handleMenuClick = (command: string, row: FormDesign) => {
+const handleMenuClick = (command: string, row: FormDesignItem): void => {
   switch (command) {
     case 'publish':
       publishForm(row);
@@ -653,7 +719,7 @@ const handleMenuClick = (command: string, row: FormDesign) => {
   }
 };
 
-const publishForm = async (form: FormDesign) => {
+const publishForm = async (form: FormDesignItem): Promise<void> => {
   try {
     const params: PublishFormDesignReq = { id: form.id };
     const response = await publishFormDesign(params);
@@ -667,26 +733,30 @@ const publishForm = async (form: FormDesign) => {
   }
 };
 
-const unpublishForm = async (form: FormDesign) => {
+const unpublishForm = async (form: FormDesignItem): Promise<void> => {
   try {
-    // 假设后端未提供取消发布接口，使用更新接口将状态改为草稿
-    const schemaObj = typeof form.schema === 'string' 
-      ? JSON.parse(form.schema)
-      : form.schema;
+    // 先获取详细信息
+    const detailResponse = await detailFormDesign({ id: form.id });
+    if (detailResponse && detailResponse.data) {
+      const formData = detailResponse.data;
       
-    const params: FormDesignReq = {
-      id: form.id,
-      name: form.name,
-      description: form.description,
-      schema: schemaObj,
-      status: 0, // 设置为草稿
-      category_id: form.category_id
-    };
-    
-    const response = await updateFormDesign(params);
-    if (response) {
-      message.success(`表单 "${form.name}" 已取消发布`);
-      loadFormDesigns();
+      const schemaObj = typeof formData.schema === 'string' 
+        ? JSON.parse(formData.schema)
+        : formData.schema;
+        
+      const params: FormDesignReq = {
+        id: form.id,
+        name: form.name,
+        description: form.description,
+        schema: schemaObj,
+        category_id: form.category_id
+      };
+      
+      const response = await updateFormDesign(params);
+      if (response) {
+        message.success(`表单 "${form.name}" 已取消发布`);
+        loadFormDesigns();
+      }
     }
   } catch (error) {
     console.error('取消发布表单失败:', error);
@@ -694,13 +764,13 @@ const unpublishForm = async (form: FormDesign) => {
   }
 };
 
-const showCloneDialog = (form: FormDesign) => {
+const showCloneDialog = (form: FormDesignItem): void => {
   cloneDialog.form.name = `${form.name} 的副本`;
   cloneDialog.form.originalId = form.id;
-  cloneDialog.visible = true;
+  cloneDialogVisible.value = true;
 };
 
-const confirmClone = async () => {
+const confirmClone = async (): Promise<void> => {
   if (!cloneDialog.form.name.trim()) {
     message.error('请输入新表单名称');
     return;
@@ -715,7 +785,7 @@ const confirmClone = async () => {
     const response = await cloneFormDesign(params);
     if (response) {
       message.success(`表单已克隆为 "${cloneDialog.form.name}"`);
-      cloneDialog.visible = false;
+      cloneDialogVisible.value = false;
       loadFormDesigns();
     }
   } catch (error) {
@@ -724,7 +794,7 @@ const confirmClone = async () => {
   }
 };
 
-const confirmDelete = (form: FormDesign) => {
+const confirmDelete = (form: FormDesignItem): void => {
   Modal.confirm({
     title: '警告',
     content: `确定要删除表单 "${form.name}" 吗？`,
@@ -733,7 +803,8 @@ const confirmDelete = (form: FormDesign) => {
     cancelText: '取消',
     async onOk() {
       try {
-        await deleteFormDesign({ id: form.id });
+        const params: DetailFormDesignReq = { id: form.id };
+        await deleteFormDesign(params);
         message.success(`表单 "${form.name}" 已删除`);
         loadFormDesigns();
       } catch (error) {
@@ -744,20 +815,22 @@ const confirmDelete = (form: FormDesign) => {
   });
 };
 
-const addField = () => {
-  formDialog.form.schema.fields.push({
+const addField = (): void => {
+  const newField: FormField = {
+    id: `field_${Date.now()}`,
     type: 'text',
     label: '',
-    field: '',
+    name: '',
     required: false
-  });
+  };
+  formDialog.form.schema.fields.push(newField);
 };
 
-const removeField = (index: number) => {
+const removeField = (index: number): void => {
   formDialog.form.schema.fields.splice(index, 1);
 };
 
-const saveForm = async () => {
+const saveForm = async (): Promise<void> => {
   if (formDialog.form.name.trim() === '') {
     message.error('表单名称不能为空');
     return;
@@ -769,7 +842,7 @@ const saveForm = async () => {
   }
   
   // 验证字段名称是否重复
-  const fieldNames = formDialog.form.schema.fields.map(field => field.field);
+  const fieldNames = formDialog.form.schema.fields.map(field => field.name);
   const uniqueFieldNames = new Set(fieldNames);
   if (fieldNames.length !== uniqueFieldNames.size) {
     message.error('表单中存在重复的字段名称，请修改');
@@ -779,21 +852,18 @@ const saveForm = async () => {
   try {
     const formData: FormDesignReq = {
       ...formDialog.form,
-      // 确保schema是符合类型的对象
       schema: formDialog.form.schema
     };
 
     if (formDialog.isEdit) {
-      // 更新现有表单
       await updateFormDesign(formData);
       message.success(`表单 "${formDialog.form.name}" 已更新`);
     } else {
-      // 创建新表单
       await createFormDesign(formData);
       message.success(`表单 "${formDialog.form.name}" 已创建`);
     }
     
-    formDialog.visible = false;
+    formDialogVisible.value = false;
     loadFormDesigns();
   } catch (error) {
     console.error('保存表单失败:', error);
@@ -802,7 +872,7 @@ const saveForm = async () => {
 };
 
 // 获取字段类型名称
-const getFieldTypeName = (type: string) => {
+const getFieldTypeName = (type: string): string => {
   const typeMap: Record<string, string> = {
     'text': '文本框',
     'number': '数字',
@@ -816,19 +886,19 @@ const getFieldTypeName = (type: string) => {
 };
 
 // 辅助方法
-const formatDate = (dateStr: string) => {
+const formatDate = (dateStr: string): string => {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
 };
 
-const formatTime = (dateStr: string) => {
+const formatTime = (dateStr: string): string => {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 };
 
-const formatFullDateTime = (dateStr: string) => {
+const formatFullDateTime = (dateStr: string): string => {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   return d.toLocaleString('zh-CN', {
@@ -840,7 +910,7 @@ const formatFullDateTime = (dateStr: string) => {
   });
 };
 
-const getInitials = (name: string) => {
+const getInitials = (name: string): string => {
   if (!name) return '';
   return name
     .split('')
@@ -849,7 +919,7 @@ const getInitials = (name: string) => {
     .toUpperCase();
 };
 
-const getStatusClass = (status: number) => {
+const getStatusClass = (status: number): string => {
   switch (status) {
     case 0: return 'status-draft';
     case 1: return 'status-published';
@@ -858,19 +928,17 @@ const getStatusClass = (status: number) => {
   }
 };
 
-const getAvatarColor = (name: string) => {
-  // 根据名称生成一致的颜色
+const getAvatarColor = (name: string): string => {
   const colors = [
     '#1890ff', '#52c41a', '#faad14', '#f5222d',
     '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16'
   ];
-
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
 
-  return colors[Math.abs(hash) % colors.length];
+  return colors[Math.abs(hash) % colors.length]!;
 };
 
 // 初始化
