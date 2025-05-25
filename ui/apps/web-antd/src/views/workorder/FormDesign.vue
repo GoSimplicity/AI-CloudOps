@@ -129,6 +129,10 @@
                 <a-dropdown>
                   <template #overlay>
                     <a-menu @click="(e: any) => handleMenuClick(e.key, record)">
+                      <a-menu-item key="preview">
+                        <EyeOutlined /> 预览
+                      </a-menu-item>
+                      <a-menu-divider />
                       <a-menu-item key="publish" v-if="record.status === 0">发布</a-menu-item>
                       <a-menu-item key="unpublish" v-if="record.status === 1">取消发布</a-menu-item>
                       <a-menu-item key="clone">克隆</a-menu-item>
@@ -199,7 +203,8 @@
               <a-collapse-panel 
                 v-for="(field, index) in formDialog.form.schema.fields" 
                 :key="index"
-                :header="field.label || `字段 ${index + 1}`"
+                :header="getFieldPanelHeader(field, index)"
+                :class="getFieldPanelClass(field)"
               >
                 <template #extra>
                   <a-button type="text" danger @click.stop="removeField(index)" size="small">
@@ -207,8 +212,8 @@
                   </a-button>
                 </template>
 
-                <a-form-item label="字段类型">
-                  <a-select v-model:value="field.type" style="width: 100%">
+                <a-form-item label="字段类型" :required="true">
+                  <a-select v-model:value="field.type" style="width: 100%" @change="handleFieldTypeChange(field)">
                     <a-select-option value="text">文本框</a-select-option>
                     <a-select-option value="number">数字</a-select-option>
                     <a-select-option value="date">日期</a-select-option>
@@ -219,16 +224,81 @@
                   </a-select>
                 </a-form-item>
 
-                <a-form-item label="标签名称">
-                  <a-input v-model:value="field.label" placeholder="字段标签" />
+                <a-form-item label="标签名称" :required="true">
+                  <a-input 
+                    v-model:value="field.label" 
+                    placeholder="字段标签" 
+                    :status="!field.label.trim() ? 'error' : ''"
+                  />
+                  <div v-if="!field.label.trim()" class="field-error">
+                    字段标签不能为空
+                  </div>
                 </a-form-item>
 
-                <a-form-item label="字段名称">
-                  <a-input v-model:value="field.name" placeholder="字段名称" />
+                <a-form-item label="字段名称" :required="true">
+                  <a-input 
+                    v-model:value="field.name" 
+                    placeholder="字段名称（英文、数字、下划线）" 
+                    :status="getFieldNameStatus(field.name, index)"
+                    @blur="validateFieldName(field, index)"
+                  />
+                  <div v-if="getFieldNameError(field.name, index)" class="field-error">
+                    {{ getFieldNameError(field.name, index) }}
+                  </div>
                 </a-form-item>
 
                 <a-form-item label="是否必填">
                   <a-switch v-model:checked="field.required" />
+                </a-form-item>
+
+                <!-- 选项配置 -->
+                <template v-if="['select', 'radio', 'checkbox'].includes(field.type)">
+                  <a-form-item 
+                    label="选项配置" 
+                    :required="true"
+                    :help="getOptionsHelp(field)"
+                  >
+                    <div 
+                      v-for="(option, optIndex) in field.options" 
+                      :key="optIndex" 
+                      class="option-item"
+                    >
+                      <a-input 
+                        v-model:value="option.label" 
+                        placeholder="选项标签" 
+                        style="width: 45%; margin-right: 8px;"
+                        :status="!option.label.trim() ? 'error' : ''"
+                      />
+                      <a-input 
+                        v-model:value="option.value" 
+                        placeholder="选项值" 
+                        style="width: 45%; margin-right: 8px;"
+                        :status="!option.value.trim() ? 'error' : ''"
+                      />
+                      <a-button type="text" danger @click="removeOption(field, optIndex)" size="small">
+                        <DeleteOutlined />
+                      </a-button>
+                    </div>
+                    
+                    <!-- 选项验证错误提示 -->
+                    <div v-if="getOptionsError(field)" class="field-error">
+                      {{ getOptionsError(field) }}
+                    </div>
+                    
+                    <a-button 
+                      type="dashed" 
+                      @click="addOption(field)" 
+                      size="small" 
+                      style="width: 100%; margin-top: 8px;"
+                    >
+                      <PlusOutlined /> 添加选项
+                    </a-button>
+                  </a-form-item>
+                </template>
+
+                <!-- 占位符 -->
+                <a-form-item label="占位符">
+                  <a-input v-model:value="field.placeholder" placeholder="请输入占位符" />
                 </a-form-item>
               </a-collapse-panel>
             </a-collapse>
@@ -239,6 +309,17 @@
               </a-button>
             </div>
           </div>
+        </div>
+
+        <!-- 表单验证错误汇总 -->
+        <div v-if="formValidationErrors.length > 0" class="form-validation-summary">
+          <a-alert
+            message="表单验证错误"
+            :description="formValidationErrors.join('；')"
+            type="error"
+            show-icon
+            style="margin-bottom: 16px"
+          />
         </div>
       </a-form>
     </a-modal>
@@ -258,11 +339,157 @@
       </a-form>
     </a-modal>
 
+    <!-- 预览对话框 -->
+    <a-modal 
+      :open="previewDialogVisible" 
+      title="表单预览" 
+      width="80%" 
+      :footer="null" 
+      @cancel="closePreviewDialog"
+      class="preview-dialog"
+    >
+      <div v-if="previewDialog.form" class="form-preview-wrapper">
+        <a-spin :spinning="previewLoading">
+          <div class="preview-header">
+            <h3>{{ previewDialog.form.name }}</h3>
+            <p v-if="previewDialog.form.description" class="preview-description">
+              {{ previewDialog.form.description }}
+            </p>
+            <div class="preview-mode-notice">
+              <a-alert
+                message="预览模式"
+                description="您可以查看和选择表单字段，但无法提交表单。"
+                type="info"
+                show-icon
+                banner
+              />
+            </div>
+          </div>
+          
+          <div class="preview-form">
+            <a-form 
+              :model="previewFormData" 
+              layout="vertical" 
+              class="dynamic-form"
+            >
+              <template v-for="field in parsedPreviewSchema.fields" :key="field.id">
+                <a-form-item 
+                  :label="field.label" 
+                  :name="field.name"
+                  :required="field.required"
+                  class="form-field"
+                >
+                  <!-- 文本输入框 -->
+                  <a-input 
+                    v-if="field.type === 'text'"
+                    v-model:value="previewFormData[field.name]"
+                    :placeholder="field.placeholder"
+                    class="preview-input"
+                  />
+
+                  <!-- 数字输入框 -->
+                  <a-input-number 
+                    v-else-if="field.type === 'number'"
+                    v-model:value="previewFormData[field.name]"
+                    :placeholder="field.placeholder"
+                    style="width: 100%"
+                    class="preview-input"
+                  />
+
+                  <!-- 日期选择器 -->
+                  <a-date-picker 
+                    v-else-if="field.type === 'date'"
+                    v-model:value="previewFormData[field.name]"
+                    :placeholder="field.placeholder"
+                    style="width: 100%"
+                    class="preview-input"
+                  />
+
+                  <!-- 下拉选择 -->
+                  <a-select 
+                    v-else-if="field.type === 'select'"
+                    v-model:value="previewFormData[field.name]"
+                    :placeholder="field.placeholder || '请选择'"
+                    style="width: 100%"
+                    class="preview-input"
+                  >
+                    <a-select-option 
+                      v-for="option in field.options" 
+                      :key="option.value" 
+                      :value="option.value"
+                    >
+                      {{ option.label }}
+                    </a-select-option>
+                  </a-select>
+
+                  <!-- 单选框组 -->
+                  <a-radio-group 
+                    v-else-if="field.type === 'radio'"
+                    v-model:value="previewFormData[field.name]"
+                    class="preview-radio-group"
+                  >
+                    <div class="radio-options">
+                      <a-radio 
+                        v-for="option in field.options" 
+                        :key="option.value" 
+                        :value="option.value"
+                        class="preview-radio"
+                      >
+                        {{ option.label }}
+                      </a-radio>
+                    </div>
+                  </a-radio-group>
+
+                  <!-- 复选框组 -->
+                  <a-checkbox-group 
+                    v-else-if="field.type === 'checkbox'"
+                    v-model:value="previewFormData[field.name]"
+                    class="preview-checkbox-group"
+                  >
+                    <div class="checkbox-options">
+                      <a-checkbox 
+                        v-for="option in field.options" 
+                        :key="option.value" 
+                        :value="option.value"
+                        class="preview-checkbox"
+                      >
+                        {{ option.label }}
+                      </a-checkbox>
+                    </div>
+                  </a-checkbox-group>
+
+                  <!-- 多行文本 -->
+                  <a-textarea 
+                    v-else-if="field.type === 'textarea'"
+                    v-model:value="previewFormData[field.name]"
+                    :placeholder="field.placeholder"
+                    :rows="4"
+                    class="preview-input"
+                  />
+                </a-form-item>
+              </template>
+
+              <div class="preview-form-actions">
+                <a-tooltip title="预览模式下无法提交表单">
+                  <a-button type="primary" disabled size="large">
+                    提交表单 (预览模式)
+                  </a-button>
+                </a-tooltip>
+                <a-button @click="resetPreviewForm" size="large" style="margin-left: 12px;">
+                  重置表单
+                </a-button>
+              </div>
+            </a-form>
+          </div>
+        </a-spin>
+      </div>
+    </a-modal>
+
     <!-- 详情对话框 -->
     <a-modal 
       :open="detailDialogVisible" 
       title="表单详情" 
-      width="70%" 
+      width="80%" 
       :footer="null" 
       @cancel="closeDetailDialog"
       class="detail-dialog"
@@ -277,36 +504,40 @@
           </a-tag>
         </div>
 
-        <a-descriptions bordered :column="2">
-          <a-descriptions-item label="ID">{{ detailDialog.form.id }}</a-descriptions-item>
-          <a-descriptions-item label="版本">v{{ detailDialog.form.version }}</a-descriptions-item>
-          <a-descriptions-item label="创建人">{{ detailDialog.form.creator_name }}</a-descriptions-item>
-          <a-descriptions-item label="创建时间">{{ formatFullDateTime(detailDialog.form.created_at || '') }}</a-descriptions-item>
-          <a-descriptions-item label="描述" :span="2">{{ detailDialog.form.description || '无描述' }}</a-descriptions-item>
-        </a-descriptions>
+        <a-tabs default-active-key="1" @change="handleTabChange">
+          <a-tab-pane key="1" tab="基本信息">
+            <a-descriptions bordered :column="2">
+              <a-descriptions-item label="ID">{{ detailDialog.form.id }}</a-descriptions-item>
+              <a-descriptions-item label="版本">v{{ detailDialog.form.version }}</a-descriptions-item>
+              <a-descriptions-item label="创建人">{{ detailDialog.form.creator_name }}</a-descriptions-item>
+              <a-descriptions-item label="创建时间">{{ formatFullDateTime(detailDialog.form.created_at || '') }}</a-descriptions-item>
+              <a-descriptions-item label="描述" :span="2">{{ detailDialog.form.description || '无描述' }}</a-descriptions-item>
+            </a-descriptions>
 
-        <div class="schema-preview">
-          <h3>表单结构</h3>
-          <a-table 
-            :data-source="parsedSchema.fields" 
-            :columns="schemaColumns" 
-            :pagination="false" 
-            bordered
-            size="small" 
-            row-key="name"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'required'">
-                <a-tag :color="record.required ? 'red' : ''">
-                  {{ record.required ? '必填' : '可选' }}
-                </a-tag>
-              </template>
-              <template v-if="column.key === 'type'">
-                {{ getFieldTypeName(record.type) }}
-              </template>
-            </template>
-          </a-table>
-        </div>
+            <div class="schema-preview">
+              <h3>表单结构</h3>
+              <a-table 
+                :data-source="parsedSchema.fields" 
+                :columns="schemaColumns" 
+                :pagination="false" 
+                bordered
+                size="small" 
+                row-key="name"
+              >
+                <template #bodyCell="{ column, record }">
+                  <template v-if="column.key === 'required'">
+                    <a-tag :color="record.required ? 'red' : ''">
+                      {{ record.required ? '必填' : '可选' }}
+                    </a-tag>
+                  </template>
+                  <template v-if="column.key === 'type'">
+                    {{ getFieldTypeName(record.type) }}
+                  </template>
+                </template>
+              </a-table>
+            </div>
+          </a-tab-pane>
+        </a-tabs>
 
         <div class="detail-footer">
           <a-button @click="closeDetailDialog">关闭</a-button>
@@ -327,7 +558,8 @@ import {
   EditOutlined,
   StopOutlined,
   DeleteOutlined,
-  DownOutlined
+  DownOutlined,
+  EyeOutlined
 } from '@ant-design/icons-vue';
 import {
   listFormDesign,
@@ -337,6 +569,7 @@ import {
   deleteFormDesign,
   publishFormDesign,
   cloneFormDesign,
+  previewFormDesign,
   type FormDesignResp,
   type FormDesignItem,
   type FormField,
@@ -370,6 +603,10 @@ interface CloneDialogState {
 }
 
 interface DetailDialogState {
+  form: FormDesignResp | null;
+}
+
+interface PreviewDialogState {
   form: FormDesignResp | null;
 }
 
@@ -452,16 +689,24 @@ const schemaColumns = [
 
 // 状态数据
 const loading = ref<boolean>(false);
+const previewLoading = ref<boolean>(false);
 const searchQuery = ref<string>('');
 const statusFilter = ref<number | undefined>(undefined);
 const currentPage = ref<number>(1);
 const pageSize = ref<number>(10);
 const formDesigns = ref<FormDesignItem[]>([]);
 
+// 预览表单数据
+const previewFormData = ref<Record<string, any>>({});
+
+// 表单验证错误
+const formValidationErrors = ref<string[]>([]);
+
 // 模态框控制
 const formDialogVisible = ref<boolean>(false);
 const cloneDialogVisible = ref<boolean>(false);
 const detailDialogVisible = ref<boolean>(false);
+const previewDialogVisible = ref<boolean>(false);
 
 // 统计数据
 const stats = reactive<Statistics>({
@@ -546,6 +791,11 @@ const detailDialog = reactive<DetailDialogState>({
   form: null
 });
 
+// 预览对话框
+const previewDialog = reactive<PreviewDialogState>({
+  form: null
+});
+
 const parsedSchema = computed(() => {
   if (!detailDialog.form || !detailDialog.form.schema) {
     return { fields: [] };
@@ -561,9 +811,217 @@ const parsedSchema = computed(() => {
   }
 });
 
+const parsedPreviewSchema = computed(() => {
+  if (!previewDialog.form || !previewDialog.form.schema) {
+    return { fields: [] };
+  }
+  
+  try {
+    return typeof previewDialog.form.schema === 'string' 
+      ? JSON.parse(previewDialog.form.schema)
+      : previewDialog.form.schema;
+  } catch (error) {
+    console.error('解析预览schema失败:', error);
+    return { fields: [] };
+  }
+});
+
+// 重置预览表单
+const resetPreviewForm = (): void => {
+  if (previewDialog.form) {
+    initPreviewFormData(previewDialog.form.schema);
+    message.success('表单已重置');
+  }
+};
+
+// 字段验证方法
+const validateFieldName = (field: FormField, index: number): void => {
+  // 触发重新计算验证状态
+  field.name = field.name.trim();
+};
+
+const getFieldNameStatus = (name: string, index: number): string => {
+  const error = getFieldNameError(name, index);
+  return error ? 'error' : '';
+};
+
+const getFieldNameError = (name: string, currentIndex: number): string => {
+  if (!name.trim()) {
+    return '字段名称不能为空';
+  }
+  
+  // 验证字段名格式
+  const namePattern = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+  if (!namePattern.test(name)) {
+    return '字段名称必须以字母开头，只能包含字母、数字和下划线';
+  }
+  
+  // 检查重复
+  const fieldNames = formDialog.form.schema.fields.map((field, index) => 
+    index === currentIndex ? name : field.name
+  );
+  const duplicateCount = fieldNames.filter(n => n === name).length;
+  if (duplicateCount > 1) {
+    return '字段名称不能重复';
+  }
+  
+  return '';
+};
+
+const getOptionsError = (field: FormField): string => {
+  if (!['select', 'radio', 'checkbox'].includes(field.type)) {
+    return '';
+  }
+  
+  if (!field.options || field.options.length === 0) {
+    return '选项类型字段至少需要一个选项';
+  }
+  
+  // 检查是否有空的选项
+  const hasEmptyOption = field.options.some(option => 
+    !option.label.trim() || !option.value.trim()
+  );
+  
+  if (hasEmptyOption) {
+    return '所有选项的标签和值都不能为空';
+  }
+  
+  // 检查选项值是否重复
+  const values = field.options.map(option => option.value);
+  const uniqueValues = new Set(values);
+  if (values.length !== uniqueValues.size) {
+    return '选项值不能重复';
+  }
+  
+  return '';
+};
+
+const getOptionsHelp = (field: FormField): string => {
+  if (!['select', 'radio', 'checkbox'].includes(field.type)) {
+    return '';
+  }
+  return '至少需要添加一个选项，且所有选项的标签和值都不能为空';
+};
+
+const getFieldPanelHeader = (field: FormField, index: number): string => {
+  if (field.label) {
+    return field.label;
+  }
+  return `字段 ${index + 1}`;
+};
+
+const getFieldPanelClass = (field: FormField): string => {
+  const hasErrors = validateField(field);
+  return hasErrors ? 'field-panel-error' : '';
+};
+
+const validateField = (field: FormField): boolean => {
+  // 检查基本字段
+  if (!field.label.trim() || !field.name.trim()) {
+    return true;
+  }
+  
+  // 检查字段名格式
+  const namePattern = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+  if (!namePattern.test(field.name)) {
+    return true;
+  }
+  
+  // 检查选项类型字段的选项
+  if (['select', 'radio', 'checkbox'].includes(field.type)) {
+    if (!field.options || field.options.length === 0) {
+      return true;
+    }
+    
+    const hasEmptyOption = field.options.some(option => 
+      !option.label.trim() || !option.value.trim()
+    );
+    
+    if (hasEmptyOption) {
+      return true;
+    }
+  }
+  
+  return false;
+};
+
+const handleFieldTypeChange = (field: FormField): void => {
+  // 当字段类型改变时，初始化选项
+  if (['select', 'radio', 'checkbox'].includes(field.type)) {
+    if (!field.options || field.options.length === 0) {
+      field.options = [{ label: '', value: '' }];
+    }
+  } else {
+    // 非选项类型字段，清空选项
+    field.options = [];
+  }
+};
+
+const validateFormFields = (): string[] => {
+  const errors: string[] = [];
+  
+  if (formDialog.form.schema.fields.length === 0) {
+    errors.push('表单至少需要一个字段');
+    return errors;
+  }
+  
+  // 收集所有字段名用于重复检查
+  const fieldNames = formDialog.form.schema.fields.map(field => field.name);
+  const uniqueFieldNames = new Set(fieldNames.filter(name => name.trim()));
+  
+  if (fieldNames.length !== uniqueFieldNames.size) {
+    errors.push('存在重复的字段名称');
+  }
+  
+  formDialog.form.schema.fields.forEach((field, index) => {
+    const fieldPrefix = `字段${index + 1}`;
+    
+    // 验证基本字段
+    if (!field.label.trim()) {
+      errors.push(`${fieldPrefix}: 标签不能为空`);
+    }
+    
+    if (!field.name.trim()) {
+      errors.push(`${fieldPrefix}: 字段名称不能为空`);
+    } else {
+      // 验证字段名格式
+      const namePattern = /^[a-zA-Z][a-zA-Z0-9_]*$/;
+      if (!namePattern.test(field.name)) {
+        errors.push(`${fieldPrefix}: 字段名称格式不正确（必须以字母开头，只能包含字母、数字和下划线）`);
+      }
+    }
+    
+    // 验证选项类型字段
+    if (['select', 'radio', 'checkbox'].includes(field.type)) {
+      if (!field.options || field.options.length === 0) {
+        errors.push(`${fieldPrefix}: 选项类型字段必须包含至少一个选项`);
+      } else {
+        // 检查选项内容
+        const hasEmptyOption = field.options.some(option => 
+          !option.label.trim() || !option.value.trim()
+        );
+        
+        if (hasEmptyOption) {
+          errors.push(`${fieldPrefix}: 所有选项的标签和值都不能为空`);
+        }
+        
+        // 检查选项值重复
+        const values = field.options.map(option => option.value);
+        const uniqueValues = new Set(values);
+        if (values.length !== uniqueValues.size) {
+          errors.push(`${fieldPrefix}: 选项值不能重复`);
+        }
+      }
+    }
+  });
+  
+  return errors;
+};
+
 // 对话框控制方法
 const closeFormDialog = (): void => {
   formDialogVisible.value = false;
+  formValidationErrors.value = [];
 };
 
 const closeCloneDialog = (): void => {
@@ -572,6 +1030,97 @@ const closeCloneDialog = (): void => {
 
 const closeDetailDialog = (): void => {
   detailDialogVisible.value = false;
+};
+
+const closePreviewDialog = (): void => {
+  previewDialogVisible.value = false;
+  previewDialog.form = null;
+  previewFormData.value = {};
+};
+
+// 标签页切换处理
+const handleTabChange = async (activeKey: string): Promise<void> => {
+  if (activeKey === '2' && detailDialog.form) {
+    // 切换到预览标签页时加载预览数据
+    await loadPreviewData(detailDialog.form.id);
+  }
+};
+
+// 处理预览
+const handlePreviewForm = async (row: FormDesignItem): Promise<void> => {
+  previewLoading.value = true;
+  previewDialogVisible.value = true;
+  
+  try {
+    const response = await previewFormDesign({ id: row.id });
+    if (response) {
+      previewDialog.form = response;
+      // 初始化预览表单数据
+      initPreviewFormData(response.schema);
+    }
+  } catch (error) {
+    console.error('加载预览数据失败:', error);
+    message.error('加载预览数据失败');
+  } finally {
+    previewLoading.value = false;
+  }
+};
+
+// 加载预览数据
+const loadPreviewData = async (formId: number): Promise<void> => {
+  previewLoading.value = true;
+  try {
+    const response = await previewFormDesign({ id: formId });
+    if (response && response.data) {
+      // 初始化预览表单数据
+      initPreviewFormData(response.data.schema);
+    }
+  } catch (error) {
+    console.error('加载预览数据失败:', error);
+    message.error('加载预览数据失败');
+  } finally {
+    previewLoading.value = false;
+  }
+};
+
+// 初始化预览表单数据
+const initPreviewFormData = (schema: any): void => {
+  const data: Record<string, any> = {};
+  
+  try {
+    const schemaObj = typeof schema === 'string' ? JSON.parse(schema) : schema;
+    
+    if (schemaObj.fields && Array.isArray(schemaObj.fields)) {
+      schemaObj.fields.forEach((field: FormField) => {
+        // 根据字段类型设置默认值
+        switch (field.type) {
+          case 'text':
+          case 'textarea':
+            data[field.name] = field.default_value || '';
+            break;
+          case 'number':
+            data[field.name] = field.default_value || undefined;
+            break;
+          case 'date':
+            data[field.name] = field.default_value || undefined;
+            break;
+          case 'select':
+          case 'radio':
+            data[field.name] = field.default_value || undefined;
+            break;
+          case 'checkbox':
+            data[field.name] = field.default_value || [];
+            break;
+          default:
+            data[field.name] = field.default_value || '';
+        }
+      });
+    }
+  } catch (error) {
+    console.error('初始化预览表单数据失败:', error);
+  }
+  
+  previewFormData.value = data;
 };
 
 // 加载表单列表
@@ -645,6 +1194,7 @@ const handleCreateForm = (): void => {
     },
     category_id: undefined
   };
+  formValidationErrors.value = [];
   formDialogVisible.value = true;
 };
 
@@ -675,6 +1225,7 @@ const handleEditForm = async (row: FormDesignItem | FormDesignResp): Promise<voi
         category_id: formData.category_id
       };
       
+      formValidationErrors.value = [];
       formDialogVisible.value = true;
       detailDialogVisible.value = false;
     }
@@ -704,6 +1255,9 @@ const handleViewForm = async (row: FormDesignItem): Promise<void> => {
 
 const handleMenuClick = (command: string, row: FormDesignItem): void => {
   switch (command) {
+    case 'preview':
+      handlePreviewForm(row);
+      break;
     case 'publish':
       publishForm(row);
       break;
@@ -821,16 +1375,35 @@ const addField = (): void => {
     type: 'text',
     label: '',
     name: '',
-    required: false
+    required: false,
+    options: []
   };
   formDialog.form.schema.fields.push(newField);
 };
 
 const removeField = (index: number): void => {
   formDialog.form.schema.fields.splice(index, 1);
+  // 重新验证表单
+  formValidationErrors.value = validateFormFields();
+};
+
+// 添加选项
+const addOption = (field: FormField): void => {
+  if (!field.options) {
+    field.options = [];
+  }
+  field.options.push({ label: '', value: '' });
+};
+
+// 删除选项
+const removeOption = (field: FormField, index: number): void => {
+  if (field.options) {
+    field.options.splice(index, 1);
+  }
 };
 
 const saveForm = async (): Promise<void> => {
+  // 先验证基本信息
   if (formDialog.form.name.trim() === '') {
     message.error('表单名称不能为空');
     return;
@@ -841,11 +1414,12 @@ const saveForm = async (): Promise<void> => {
     return;
   }
   
-  // 验证字段名称是否重复
-  const fieldNames = formDialog.form.schema.fields.map(field => field.name);
-  const uniqueFieldNames = new Set(fieldNames);
-  if (fieldNames.length !== uniqueFieldNames.size) {
-    message.error('表单中存在重复的字段名称，请修改');
+  // 验证字段
+  const fieldErrors = validateFormFields();
+  formValidationErrors.value = fieldErrors;
+  
+  if (fieldErrors.length > 0) {
+    message.error('表单验证失败，请检查字段配置');
     return;
   }
 
@@ -864,6 +1438,7 @@ const saveForm = async (): Promise<void> => {
     }
     
     formDialogVisible.value = false;
+    formValidationErrors.value = [];
     loadFormDesigns();
   } catch (error) {
     console.error('保存表单失败:', error);
@@ -1082,6 +1657,28 @@ onMounted(() => {
   margin-top: 16px;
 }
 
+.option-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+/* 字段验证错误样式 */
+.field-error {
+  color: #ff4d4f;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.field-panel-error :deep(.ant-collapse-header) {
+  border-left: 3px solid #ff4d4f;
+  background-color: #fff2f0;
+}
+
+.form-validation-summary {
+  margin-top: 16px;
+}
+
 .detail-dialog .form-details {
   margin-bottom: 20px;
 }
@@ -1114,5 +1711,169 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+/* 预览表单样式 */
+.form-preview-wrapper {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 24px;
+  min-height: 400px;
+}
+
+.preview-header {
+  text-align: center;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.preview-header h3 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.preview-description {
+  margin: 0 0 16px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.preview-mode-notice {
+  margin-top: 16px;
+}
+
+.preview-form {
+  background: white;
+  border-radius: 8px;
+  padding: 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.dynamic-form .form-field {
+  margin-bottom: 24px;
+}
+
+.dynamic-form .form-field :deep(.ant-form-item-label) {
+  font-weight: 500;
+  color: #333;
+}
+
+.dynamic-form .form-field :deep(.ant-form-item-required::before) {
+  content: '*';
+  color: #ff4d4f;
+  margin-right: 4px;
+}
+
+/* 预览模式下的输入框样式 */
+.preview-input {
+  transition: all 0.3s ease;
+}
+
+.preview-input:hover {
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
+  border-color: #40a9ff;
+}
+
+.preview-input:focus {
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+  border-color: #1890ff;
+}
+
+/* 单选框和复选框组样式 */
+.preview-radio-group,
+.preview-checkbox-group {
+  padding: 8px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.preview-radio-group:hover,
+.preview-checkbox-group:hover {
+  background-color: #f5f5f5;
+}
+
+.radio-options,
+.checkbox-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preview-radio,
+.preview-checkbox {
+  transition: all 0.3s ease;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.preview-radio:hover,
+.preview-checkbox:hover {
+  background-color: #e6f7ff;
+}
+
+.preview-form-actions {
+  margin-top: 32px;
+  text-align: center;
+  padding-top: 24px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .form-preview-wrapper {
+    padding: 16px;
+  }
+  
+  .preview-form {
+    padding: 20px;
+  }
+  
+  .preview-header h3 {
+    font-size: 20px;
+  }
+  
+  .radio-options,
+  .checkbox-options {
+    gap: 8px;
+  }
+  
+  .preview-form-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .preview-form-actions .ant-btn {
+    width: 100%;
+    max-width: 200px;
+  }
+}
+
+/* 焦点状态增强 */
+.preview-input:focus-within,
+.preview-radio-group:focus-within,
+.preview-checkbox-group:focus-within {
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+  border-radius: 6px;
+}
+
+/* 选中状态样式 */
+.preview-radio :deep(.ant-radio-checked .ant-radio-inner),
+.preview-checkbox :deep(.ant-checkbox-checked .ant-checkbox-inner) {
+  background-color: #1890ff;
+  border-color: #1890ff;
+}
+
+/* 禁用状态的提示样式 */
+.preview-form-actions .ant-btn[disabled] {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 </style>
