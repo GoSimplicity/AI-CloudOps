@@ -61,37 +61,7 @@ func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
 
 	user := ctx.MustGet("user").(utils.UserClaims)
 
-	// TODO: Review this logic. CategoryID is likely a separate selection,
-	// not directly the user's ID. This might be placeholder.
-	// For now, it's kept to ensure compilation and address in business logic phase.
-	// If CategoryID is meant to be optional or derived differently, this will need change.
-	// req.CategoryID = &user.Uid
-
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		// Ensure req.CategoryID is properly handled if it's not set above or comes from the request.
-		// If it's part of the request body, the above line `req.CategoryID = &user.Uid` might be overriding it.
-		// For this subtask, we assume the request binding populates req.CategoryID if sent by client.
-		// If client does not send it, and it's optional, it would be nil.
-		// If it's mandatory and not set by client, validation should catch it.
-		// The line `req.CategoryID = &user.Uid` is problematic and likely incorrect.
-		// Temporarily commenting it out to rely on client-sent CategoryID or binding validation.
-		// If it was intended to set a default or override, that needs clarification.
-		// For the purpose of this task (fixing compilation/type errors),
-		// we will assume CategoryID comes from the request or is intentionally nil.
-		// The original code `req.CategoryID = &user.Uid` is suspicious.
-		// Let's assume CategoryID is part of the CreateFormDesignReq and is bound from the request.
-		// If it's not provided and is required, binding:"required" in the model should handle it.
-		// If it's optional, then it can be nil.
-		// The line `req.CategoryID = &user.Uid` seems like a bug or placeholder.
-		// I will remove it as it's likely incorrect to assign user ID to category ID.
-		// The form design's category should be chosen by the user, not be the user's ID.
-		// If `user.Uid` was intended for something else (e.g. CreatorID), that's handled separately.
-		// The model `CreateFormDesignReq` has `CategoryID *int`.
-		// The `utils.HandleRequest` will bind the JSON body to `req`.
-		// So, if "category_id" is in the JSON, it will be populated.
-		// The explicit `req.CategoryID = &user.Uid` overrides this.
-		// This is almost certainly not the intended logic for a CategoryID.
-		// I will remove this line.
 		return nil, h.service.CreateFormDesign(ctx, &req, user.Uid, user.Username)
 	})
 }
@@ -110,7 +80,6 @@ func (h *FormDesignHandler) DeleteFormDesign(ctx *gin.Context) {
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.DeleteFormDesign(ctx, req.ID)
 	})
-
 }
 
 func (h *FormDesignHandler) ListFormDesign(ctx *gin.Context) {
@@ -123,10 +92,8 @@ func (h *FormDesignHandler) ListFormDesign(ctx *gin.Context) {
 func (h *FormDesignHandler) DetailFormDesign(ctx *gin.Context) {
 	var req model.DetailFormDesignReq
 
-	user := ctx.MustGet("user").(utils.UserClaims)
-
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.DetailFormDesign(ctx, req.ID, user.Uid)
+		return h.service.DetailFormDesign(ctx, req.ID)
 	})
 }
 
@@ -141,15 +108,19 @@ func (h *FormDesignHandler) PublishFormDesign(ctx *gin.Context) {
 func (h *FormDesignHandler) CloneFormDesign(ctx *gin.Context) {
 	var req model.CloneFormDesignReq
 
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CloneFormDesign(ctx, req.ID, req.Name)
+		return h.service.CloneFormDesign(ctx, req.ID, req.Name, user.Uid)
 	})
 }
 
 func (h *FormDesignHandler) PreviewFormDesign(ctx *gin.Context) {
 	var req model.PreviewFormDesignReq
 
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.PreviewFormDesign(ctx, req.Schema)
+		return nil, h.service.PreviewFormDesign(ctx, req.ID, req.Schema, user.Uid)
 	})
 }

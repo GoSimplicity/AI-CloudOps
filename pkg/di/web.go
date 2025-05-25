@@ -71,6 +71,7 @@ func InitGinServer(
 	templateHandler *workorderApi.TemplateHandler,
 	instanceHandler *workorderApi.InstanceHandler,
 	statisticsHandler *workorderApi.StatisticsHandler,
+	categoryHandler *workorderApi.CategoryGroupHandler,
 	aiHandler *aiHandler.AIHandler,
 	resourceHandler *resourceApi.ResourceHandler,
 	treeHandler *resourceApi.TreeHandler,
@@ -108,6 +109,7 @@ func InitGinServer(
 	templateHandler.RegisterRouters(server)
 	instanceHandler.RegisterRouters(server)
 	statisticsHandler.RegisterRouters(server)
+	categoryHandler.RegisterRouters(server)
 	aiHandler.RegisterRouters(server)
 	resourceHandler.RegisterRouters(server)
 	treeHandler.RegisterRouters(server)

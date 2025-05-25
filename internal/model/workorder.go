@@ -26,21 +26,25 @@
 package model
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 )
 
 // ==================== 表单设计相关 ====================
 
-// 表单字段定义
+// FormField 表单字段定义
 type FormField struct {
 	ID           string                 `json:"id"`                       // 字段唯一标识
-	Type         string                 `json:"type" binding:"required"`  // 字段类型：input, textarea, select, radio, checkbox, date, file等
+	Type         string                 `json:"type" binding:"required"`  // 字段类型
 	Label        string                 `json:"label" binding:"required"` // 字段标签
 	Name         string                 `json:"name" binding:"required"`  // 字段名称
 	Required     bool                   `json:"required"`                 // 是否必填
 	Placeholder  string                 `json:"placeholder"`              // 占位符
 	DefaultValue interface{}            `json:"default_value"`            // 默认值
-	Options      []FormFieldOption      `json:"options"`                  // 选项列表（select, radio, checkbox使用）
+	Options      []FormFieldOption      `json:"options"`                  // 选项列表
 	Validation   FormFieldValidation    `json:"validation"`               // 验证规则
 	Props        map[string]interface{} `json:"props"`                    // 其他属性
 	SortOrder    int                    `json:"sort_order"`               // 排序
@@ -62,11 +66,11 @@ type FormFieldValidation struct {
 
 type FormSchema struct {
 	Fields []FormField `json:"fields"`
-	Layout string      `json:"layout"` // 布局类型：grid, flex等
+	Layout string      `json:"layout"` // 布局类型
 	Style  string      `json:"style"`  // 样式配置
 }
 
-// 表单设计实体
+// FormDesign 表单设计实体（DAO层）
 type FormDesign struct {
 	Model
 	Name        string    `json:"name" gorm:"column:name;not null;comment:表单名称"`
@@ -84,7 +88,7 @@ func (FormDesign) TableName() string {
 	return "form_design"
 }
 
-// 表单设计请求
+// 表单设计请求结构
 type CreateFormDesignReq struct {
 	Name        string     `json:"name" binding:"required,min=1,max=100"`
 	Description string     `json:"description" binding:"omitempty,max=500"`
@@ -110,7 +114,7 @@ type DetailFormDesignReq struct {
 
 type ListFormDesignReq struct {
 	ListReq
-	CategoryID *int `json:"category_id" form:"category_id"` // 分类ID
+	CategoryID *int `json:"category_id" form:"category_id"`
 }
 
 type PublishFormDesignReq struct {
@@ -123,10 +127,11 @@ type CloneFormDesignReq struct {
 }
 
 type PreviewFormDesignReq struct {
+	ID     int        `json:"id" binding:"required"`
 	Schema FormSchema `json:"schema" binding:"required"`
 }
 
-// 表单设计响应
+// 表单设计响应结构
 type FormDesignResp struct {
 	ID          int        `json:"id"`
 	Name        string     `json:"name"`
@@ -142,28 +147,43 @@ type FormDesignResp struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
+// 表单设计列表项（用于列表展示）
+type FormDesignItem struct {
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Version     int       `json:"version"`
+	Status      int8      `json:"status"`
+	CategoryID  *int      `json:"category_id"`
+	Category    *Category `json:"category"`
+	CreatorID   int       `json:"creator_id"`
+	CreatorName string    `json:"creator_name"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 // ==================== 流程定义相关 ====================
 
-// 流程步骤定义
+// ProcessStep 流程步骤定义
 type ProcessStep struct {
-	ID         string                 `json:"id"`          // 步骤唯一标识
-	Name       string                 `json:"name"`        // 步骤名称
-	Type       string                 `json:"type"`        // 步骤类型：start, approve, notify, condition, end
-	Roles      []string               `json:"roles"`       // 可处理角色列表
-	Users      []int                  `json:"users"`       // 可处理用户ID列表
-	Actions    []string               `json:"actions"`     // 可执行操作：approve, reject, transfer
-	Conditions []ProcessCondition     `json:"conditions"`  // 条件设置
-	TimeLimit  *int                   `json:"time_limit"`  // 时间限制（小时）
-	AutoAssign bool                   `json:"auto_assign"` // 是否自动分配
-	Parallel   bool                   `json:"parallel"`    // 是否并行处理
-	Props      map[string]interface{} `json:"props"`       // 其他属性
-	Position   ProcessPosition        `json:"position"`    // 位置信息（用于流程图）
+	ID         string                 `json:"id"`
+	Name       string                 `json:"name"`
+	Type       string                 `json:"type"`
+	Roles      []string               `json:"roles"`
+	Users      []int                  `json:"users"`
+	Actions    []string               `json:"actions"`
+	Conditions []ProcessCondition     `json:"conditions"`
+	TimeLimit  *int                   `json:"time_limit"`
+	AutoAssign bool                   `json:"auto_assign"`
+	Parallel   bool                   `json:"parallel"`
+	Props      map[string]interface{} `json:"props"`
+	Position   ProcessPosition        `json:"position"`
 }
 
 type ProcessCondition struct {
-	Field    string      `json:"field"`    // 字段名
-	Operator string      `json:"operator"` // 操作符：eq, ne, gt, lt, in等
-	Value    interface{} `json:"value"`    // 值
+	Field    string      `json:"field"`
+	Operator string      `json:"operator"`
+	Value    interface{} `json:"value"`
 }
 
 type ProcessPosition struct {
@@ -172,10 +192,10 @@ type ProcessPosition struct {
 }
 
 type ProcessConnection struct {
-	From      string `json:"from"`      // 起始步骤ID
-	To        string `json:"to"`        // 目标步骤ID
-	Condition string `json:"condition"` // 连接条件
-	Label     string `json:"label"`     // 连接标签
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Condition string `json:"condition"`
+	Label     string `json:"label"`
 }
 
 type ProcessDefinition struct {
@@ -191,7 +211,7 @@ type ProcessVariable struct {
 	Description  string      `json:"description"`
 }
 
-// 流程实体
+// Process 流程实体（DAO层）
 type Process struct {
 	Model
 	Name         string      `json:"name" gorm:"column:name;not null;comment:流程名称"`
@@ -211,7 +231,7 @@ func (Process) TableName() string {
 	return "process"
 }
 
-// 流程请求
+// 流程请求结构
 type CreateProcessReq struct {
 	Name         string            `json:"name" binding:"required,min=1,max=100"`
 	Description  string            `json:"description" binding:"omitempty,max=500"`
@@ -239,8 +259,9 @@ type DetailProcessReq struct {
 
 type ListProcessReq struct {
 	ListReq
-	CategoryID   *int `json:"category_id" form:"category_id"`   // 分类ID
-	FormDesignID *int `json:"form_design_id" form:"form_design_id"` // 表单设计ID
+	Name        *string `json:"name" form:"name"`
+	CategoryID   *int   `json:"category_id" form:"category_id"`
+	FormDesignID *int   `json:"form_design_id" form:"form_design_id"`
 }
 
 type PublishProcessReq struct {
@@ -252,7 +273,7 @@ type CloneProcessReq struct {
 	Name string `json:"name" binding:"required,min=1,max=100"`
 }
 
-// 流程响应
+// 流程响应结构
 type ProcessResp struct {
 	ID           int               `json:"id"`
 	Name         string            `json:"name"`
@@ -270,16 +291,38 @@ type ProcessResp struct {
 	UpdatedAt    time.Time         `json:"updated_at"`
 }
 
+type ValidateProcessResp struct {
+	IsValid bool     `json:"is_valid"`
+	Errors  []string `json:"errors,omitempty"`
+}
+
+// 流程列表项（用于列表展示）
+type ProcessItem struct {
+	ID           int         `json:"id"`
+	Name         string      `json:"name"`
+	Description  string      `json:"description"`
+	FormDesignID int         `json:"form_design_id"`
+	FormDesign   *FormDesign `json:"form_design"`
+	Version      int         `json:"version"`
+	Status       int8        `json:"status"`
+	CategoryID   *int        `json:"category_id"`
+	Category     *Category   `json:"category"`
+	CreatorID    int         `json:"creator_id"`
+	CreatorName  string      `json:"creator_name"`
+	CreatedAt    time.Time   `json:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at"`
+}
+
 // ==================== 工单模板相关 ====================
 
 type TemplateDefaultValues struct {
-	Fields    map[string]interface{} `json:"fields"`    // 字段默认值
-	Approvers []int                  `json:"approvers"` // 默认审批人
-	Priority  int8                   `json:"priority"`  // 默认优先级
-	DueHours  *int                   `json:"due_hours"` // 默认截止时间（小时）
+	Fields    map[string]interface{} `json:"fields"`
+	Approvers []int                  `json:"approvers"`
+	Priority  int8                   `json:"priority"`
+	DueHours  *int                   `json:"due_hours"`
 }
 
-// 模板实体
+// Template 模板实体（DAO层）
 type Template struct {
 	Model
 	Name          string    `json:"name" gorm:"column:name;not null;comment:模板名称"`
@@ -300,7 +343,7 @@ func (Template) TableName() string {
 	return "template"
 }
 
-// 模板请求
+// 模板请求结构
 type CreateTemplateReq struct {
 	Name          string                `json:"name" binding:"required,min=1,max=100"`
 	Description   string                `json:"description" binding:"omitempty,max=500"`
@@ -333,17 +376,11 @@ type DetailTemplateReq struct {
 
 type ListTemplateReq struct {
 	ListReq
-	CategoryID *int `json:"category_id" form:"category_id"` // 分类ID
-	ProcessID  *int `json:"process_id" form:"process_id"`   // 流程ID
+	CategoryID *int `json:"category_id" form:"category_id"`
+	ProcessID  *int `json:"process_id" form:"process_id"`
 }
 
-// ValidateProcessResp 定义了流程校验的响应结构
-type ValidateProcessResp struct {
-	IsValid bool     `json:"is_valid"`           // 是否有效
-	Errors  []string `json:"errors,omitempty"` // 错误信息列表
-}
-
-// 模板响应
+// 模板响应结构
 type TemplateResp struct {
 	ID            int                   `json:"id"`
 	Name          string                `json:"name"`
@@ -360,6 +397,24 @@ type TemplateResp struct {
 	CreatorName   string                `json:"creator_name"`
 	CreatedAt     time.Time             `json:"created_at"`
 	UpdatedAt     time.Time             `json:"updated_at"`
+}
+
+// 模板列表项（用于列表展示）
+type TemplateItem struct {
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	ProcessID   int       `json:"process_id"`
+	Process     *Process  `json:"process"`
+	Icon        string    `json:"icon"`
+	Status      int8      `json:"status"`
+	SortOrder   int       `json:"sort_order"`
+	CategoryID  *int      `json:"category_id"`
+	Category    *Category `json:"category"`
+	CreatorID   int       `json:"creator_id"`
+	CreatorName string    `json:"creator_name"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // ==================== 工单实例相关 ====================
@@ -384,41 +439,93 @@ const (
 	PriorityCritical int8 = 4 // 严重
 )
 
-// 工单实例实体
+// JSONMap 自定义JSON类型，用于处理map[string]interface{}
+type JSONMap map[string]interface{}
+
+// StringSlice 自定义字符串切片类型，用于处理数组到逗号分隔字符串的转换
+type StringSlice []string
+
+// Value 实现driver.Valuer接口，存储到数据库时转为逗号分隔的字符串
+func (s StringSlice) Value() (driver.Value, error) {
+	if len(s) == 0 {
+		return "", nil
+	}
+	return strings.Join(s, ","), nil
+}
+
+// Scan 实现sql.Scanner接口，从数据库读取时转为字符串切片
+func (s *StringSlice) Scan(value interface{}) error {
+	if value == nil {
+		*s = nil
+		return nil
+	}
+
+	var str string
+	switch v := value.(type) {
+	case []byte:
+		str = string(v)
+	case string:
+		str = v
+	default:
+		return fmt.Errorf("无法扫描 %T 到 StringSlice", value)
+	}
+
+	if str == "" {
+		*s = StringSlice{}
+		return nil
+	}
+
+	*s = strings.Split(str, ",")
+	return nil
+}
+
+// MarshalJSON 实现json.Marshaler接口
+func (s StringSlice) MarshalJSON() ([]byte, error) {
+	return json.Marshal([]string(s))
+}
+
+// UnmarshalJSON 实现json.Unmarshaler接口
+func (s *StringSlice) UnmarshalJSON(data []byte) error {
+	var slice []string
+	if err := json.Unmarshal(data, &slice); err != nil {
+		return err
+	}
+	*s = StringSlice(slice)
+	return nil
+}
+
+// Instance 工单实例
 type Instance struct {
 	Model
-	Title        string     `json:"title" gorm:"column:title;not null;comment:工单标题"`
-	TemplateID   *int       `json:"template_id" gorm:"column:template_id;comment:模板ID"`
-	ProcessID    int        `json:"process_id" gorm:"column:process_id;not null;comment:流程ID"`
-	FormData     string     `json:"form_data" gorm:"column:form_data;type:json;not null;comment:表单数据"`
-	CurrentStep  string     `json:"current_step" gorm:"column:current_step;not null;comment:当前步骤"`
-	Status       int8       `json:"status" gorm:"column:status;not null;comment:状态"`
-	Priority     int8       `json:"priority" gorm:"column:priority;default:1;comment:优先级"`
-	CategoryID   *int       `json:"category_id" gorm:"column:category_id;comment:分类ID"`
-	CreatorID    int        `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	Description  string     `json:"description" gorm:"column:description;comment:描述"`
-	CreatorName  string     `json:"creator_name" gorm:"-"`
-	AssigneeID   *int       `json:"assignee_id" gorm:"column:assignee_id;comment:当前处理人ID"`
-	AssigneeName string     `json:"assignee_name" gorm:"-"`
-	CompletedAt  *time.Time `json:"completed_at" gorm:"column:completed_at;comment:完成时间"`
-	DueDate      *time.Time `json:"due_date" gorm:"column:due_date;comment:截止时间"`
-	Tags         string     `json:"tags" gorm:"column:tags;comment:标签，逗号分隔"`
-	ProcessData  string     `json:"process_data" gorm:"column:process_data;type:json;comment:流程运行数据"`
+	Title        string      `json:"title" gorm:"column:title;not null;comment:工单标题"`
+	TemplateID   *int        `json:"template_id" gorm:"column:template_id;comment:模板ID"`
+	ProcessID    int         `json:"process_id" gorm:"column:process_id;not null;comment:流程ID"`
+	FormData     JSONMap     `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
+	CurrentStep  string      `json:"current_step" gorm:"column:current_step;not null;comment:当前步骤"`
+	Status       int8        `json:"status" gorm:"column:status;not null;comment:状态"`
+	Priority     int8        `json:"priority" gorm:"column:priority;default:1;comment:优先级"`
+	CategoryID   *int        `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID    int         `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	Description  string      `json:"description" gorm:"column:description;comment:描述"`
+	CreatorName  string      `json:"creator_name" gorm:"-"`
+	AssigneeID   *int        `json:"assignee_id" gorm:"column:assignee_id;comment:当前处理人ID"`
+	AssigneeName string      `json:"assignee_name" gorm:"-"`
+	CompletedAt  *time.Time  `json:"completed_at" gorm:"column:completed_at;comment:完成时间"`
+	DueDate      *time.Time  `json:"due_date" gorm:"column:due_date;comment:截止时间"`
+	Tags         StringSlice `json:"tags" gorm:"column:tags;comment:标签"`
+	ProcessData  JSONMap     `json:"process_data" gorm:"column:process_data;type:json;comment:流程数据"`
 
-	// 关联数据（不存储在数据库）
-	Template    *Template            `json:"template" gorm:"foreignKey:TemplateID"`
-	Process     *Process             `json:"process" gorm:"foreignKey:ProcessID"`
-	Category    *Category            `json:"category" gorm:"foreignKey:CategoryID"`
-	Flows       []InstanceFlow       `json:"flows" gorm:"-"`
-	Comments    []InstanceComment    `json:"comments" gorm:"-"`
-	Attachments []InstanceAttachment `json:"attachments" gorm:"-"`
+	// 关联数据
+	Template *Template `json:"template" gorm:"foreignKey:TemplateID"`
+	Process  *Process  `json:"process" gorm:"foreignKey:ProcessID"`
+	Category *Category `json:"category" gorm:"foreignKey:CategoryID"`
 }
 
 func (Instance) TableName() string {
 	return "instance"
 }
 
-// 工单实例请求
+// 工单实例请求结构
 type CreateInstanceReq struct {
 	Title       string                 `json:"title" binding:"required,min=1,max=200"`
 	TemplateID  *int                   `json:"template_id"`
@@ -453,39 +560,37 @@ type DetailInstanceReq struct {
 
 type ListInstanceReq struct {
 	ListReq
-	Status     *int8      `json:"status" form:"status"`           // 状态
-	Priority   *int8      `json:"priority" form:"priority"`       // 优先级
-	CategoryID *int       `json:"category_id" form:"category_id"` // 分类ID
-	CreatorID  *int       `json:"creator_id" form:"creator_id"`   // 创建人ID
-	AssigneeID *int       `json:"assignee_id" form:"assignee_id"` // 当前处理人ID
-	ProcessID  *int       `json:"process_id" form:"process_id"`   // 流程ID
-	TemplateID *int       `json:"template_id" form:"template_id"` // 模板ID
-	StartDate  *time.Time `json:"start_date" form:"start_date"`   // 开始日期
-	EndDate    *time.Time `json:"end_date" form:"end_date"`       // 结束日期
-	Tags       []string   `json:"tags" form:"tags"`               // 标签
-	Overdue    *bool      `json:"overdue" form:"overdue"`         // 是否超时
+	Status     *int8      `json:"status" form:"status"`
+	Priority   *int8      `json:"priority" form:"priority"`
+	CategoryID *int       `json:"category_id" form:"category_id"`
+	CreatorID  *int       `json:"creator_id" form:"creator_id"`
+	AssigneeID *int       `json:"assignee_id" form:"assignee_id"`
+	ProcessID  *int       `json:"process_id" form:"process_id"`
+	TemplateID *int       `json:"template_id" form:"template_id"`
+	StartDate  *time.Time `json:"start_date" form:"start_date"`
+	EndDate    *time.Time `json:"end_date" form:"end_date"`
+	Tags       []string   `json:"tags" form:"tags"`
+	Overdue    *bool      `json:"overdue" form:"overdue"`
 }
 
 type MyInstanceReq struct {
 	ListReq
-	Type       string     `json:"type" form:"type" binding:"omitempty,oneof=created assigned"` // created: 我创建的, assigned: 分配给我的
-	Status     *int8      `json:"status" form:"status"`                                       // 状态
-	Priority   *int8      `json:"priority" form:"priority"`                                   // 优先级
-	CategoryID *int       `json:"category_id" form:"category_id"`                             // 分类ID
-	ProcessID  *int       `json:"process_id" form:"process_id"`                               // 流程ID
-	StartDate  *time.Time `json:"start_date" form:"start_date"`                               // 开始日期
-	EndDate    *time.Time `json:"end_date" form:"end_date"`                                   // 结束日期
+	Type       string     `json:"type" form:"type" binding:"omitempty,oneof=created assigned"`
+	Status     *int8      `json:"status" form:"status"`
+	Priority   *int8      `json:"priority" form:"priority"`
+	CategoryID *int       `json:"category_id" form:"category_id"`
+	ProcessID  *int       `json:"process_id" form:"process_id"`
+	StartDate  *time.Time `json:"start_date" form:"start_date"`
+	EndDate    *time.Time `json:"end_date" form:"end_date"`
 }
 
-// 工单流程操作请求
-// InstanceActionReq 定义了工单流程操作的请求结构
 type InstanceActionReq struct {
-	InstanceID int                    `json:"instance_id" binding:"required"`           // 工单实例ID
-	Action     string                 `json:"action" binding:"required,oneof=approve reject transfer revoke"` // 操作类型：approve, reject, transfer, revoke
-	Comment    string                 `json:"comment" binding:"omitempty,max=1000"`     // 评论或备注
-	FormData   map[string]interface{} `json:"form_data"`                                // 表单数据
-	AssigneeID *int                   `json:"assignee_id"`                              // 指派给的用户ID (转交时使用)
-	StepID     string                 `json:"step_id"`                                  // 步骤ID (可选，用于指定特定步骤)
+	InstanceID int                    `json:"instance_id" binding:"required"`
+	Action     string                 `json:"action" binding:"required,oneof=approve reject transfer revoke"`
+	Comment    string                 `json:"comment" binding:"omitempty,max=1000"`
+	FormData   map[string]interface{} `json:"form_data"`
+	AssigneeID *int                   `json:"assignee_id"`
+	StepID     string                 `json:"step_id"`
 }
 
 type InstanceCommentReq struct {
@@ -494,7 +599,7 @@ type InstanceCommentReq struct {
 	ParentID   *int   `json:"parent_id"`
 }
 
-// 工单实例响应
+// 工单实例响应结构
 type InstanceResp struct {
 	ID           int                    `json:"id"`
 	Title        string                 `json:"title"`
@@ -523,31 +628,58 @@ type InstanceResp struct {
 	Flows       []InstanceFlowResp       `json:"flows"`
 	Comments    []InstanceCommentResp    `json:"comments"`
 	Attachments []InstanceAttachmentResp `json:"attachments"`
-	NextSteps   []string                 `json:"next_steps"` // 下一步可执行的操作
-	IsOverdue   bool                     `json:"is_overdue"` // 是否超时
+	NextSteps   []string                 `json:"next_steps"`
+	IsOverdue   bool                     `json:"is_overdue"`
+}
+
+// 工单实例列表项（用于列表展示）
+type InstanceItem struct {
+	ID           int        `json:"id"`
+	Title        string     `json:"title"`
+	TemplateID   *int       `json:"template_id"`
+	Template     *Template  `json:"template"`
+	ProcessID    int        `json:"process_id"`
+	Process      *Process   `json:"process"`
+	CurrentStep  string     `json:"current_step"`
+	Status       int8       `json:"status"`
+	Priority     int8       `json:"priority"`
+	CategoryID   *int       `json:"category_id"`
+	Category     *Category  `json:"category"`
+	CreatorID    int        `json:"creator_id"`
+	CreatorName  string     `json:"creator_name"`
+	AssigneeID   *int       `json:"assignee_id"`
+	AssigneeName string     `json:"assignee_name"`
+	CompletedAt  *time.Time `json:"completed_at"`
+	DueDate      *time.Time `json:"due_date"`
+	Tags         []string   `json:"tags"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	IsOverdue    bool       `json:"is_overdue"`
 }
 
 // ==================== 工单流转记录相关 ====================
 
+// InstanceFlow 工单流转记录实体（DAO层）
 type InstanceFlow struct {
 	Model
-	InstanceID   int    `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
-	StepID       string `json:"step_id" gorm:"column:step_id;not null;comment:步骤ID"`
-	StepName     string `json:"step_name" gorm:"column:step_name;not null;comment:步骤名称"`
-	Action       string `json:"action" gorm:"column:action;not null;comment:操作"`
-	OperatorID   int    `json:"operator_id" gorm:"column:operator_id;not null;comment:操作人ID"`
-	OperatorName string `json:"operator_name" gorm:"-"`
-	Comment      string `json:"comment" gorm:"column:comment;type:text;comment:处理意见"`
-	FormData     string `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
-	Duration     *int   `json:"duration" gorm:"column:duration;comment:处理时长(分钟)"`
-	FromStepID   string `json:"from_step_id" gorm:"column:from_step_id;comment:来源步骤ID"`
-	ToStepID     string `json:"to_step_id" gorm:"column:to_step_id;comment:目标步骤ID"`
+	InstanceID   int     `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
+	StepID       string  `json:"step_id" gorm:"column:step_id;not null;comment:步骤ID"`
+	StepName     string  `json:"step_name" gorm:"column:step_name;not null;comment:步骤名称"`
+	Action       string  `json:"action" gorm:"column:action;not null;comment:操作"`
+	OperatorID   int     `json:"operator_id" gorm:"column:operator_id;not null;comment:操作人ID"`
+	OperatorName string  `json:"operator_name" gorm:"-"`
+	Comment      string  `json:"comment" gorm:"column:comment;type:text;comment:处理意见"`
+	FormData     JSONMap `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
+	Duration     *int    `json:"duration" gorm:"column:duration;comment:处理时长(分钟)"`
+	FromStepID   string  `json:"from_step_id" gorm:"column:from_step_id;comment:来源步骤ID"`
+	ToStepID     string  `json:"to_step_id" gorm:"column:to_step_id;comment:目标步骤ID"`
 }
 
 func (InstanceFlow) TableName() string {
 	return "instance_flow"
 }
 
+// 工单流转记录响应结构
 type InstanceFlowResp struct {
 	ID           int                    `json:"id"`
 	InstanceID   int                    `json:"instance_id"`
@@ -566,6 +698,7 @@ type InstanceFlowResp struct {
 
 // ==================== 工单评论相关 ====================
 
+// InstanceComment 工单评论实体（DAO层）
 type InstanceComment struct {
 	Model
 	InstanceID  int    `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
@@ -580,6 +713,7 @@ func (InstanceComment) TableName() string {
 	return "instance_comment"
 }
 
+// 工单评论响应结构
 type InstanceCommentResp struct {
 	ID          int                   `json:"id"`
 	InstanceID  int                   `json:"instance_id"`
@@ -594,6 +728,7 @@ type InstanceCommentResp struct {
 
 // ==================== 工单附件相关 ====================
 
+// InstanceAttachment 工单附件实体（DAO层）
 type InstanceAttachment struct {
 	Model
 	InstanceID   int    `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
@@ -609,6 +744,7 @@ func (InstanceAttachment) TableName() string {
 	return "instance_attachment"
 }
 
+// 工单附件响应结构
 type InstanceAttachmentResp struct {
 	ID           int       `json:"id"`
 	InstanceID   int       `json:"instance_id"`
@@ -623,6 +759,7 @@ type InstanceAttachmentResp struct {
 
 // ==================== 分类相关 ====================
 
+// Category 分类实体（DAO层）
 type Category struct {
 	ID          int        `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
 	Name        string     `json:"name" gorm:"column:name;not null;comment:分类名称"`
@@ -642,53 +779,57 @@ func (Category) TableName() string {
 	return "category"
 }
 
-// 分类请求结构体
+// 分类请求结构
 type CreateCategoryReq struct {
-	Name        string `json:"name" binding:"required"` // 分类名称
-	ParentID    *int   `json:"parent_id"`               // 父分类ID
-	Icon        string `json:"icon"`                    // 图标
-	SortOrder   int    `json:"sort_order"`              // 排序顺序
-	Description string `json:"description"`             // 分类描述
+	Name        string `json:"name" binding:"required"`
+	ParentID    *int   `json:"parent_id"`
+	Icon        string `json:"icon"`
+	SortOrder   int    `json:"sort_order"`
+	Description string `json:"description"`
 }
 
 type UpdateCategoryReq struct {
-	ID          int    `json:"id" binding:"required"`     // 分类ID
-	Name        string `json:"name" binding:"required"`   // 分类名称
-	ParentID    *int   `json:"parent_id"`                 // 父分类ID
-	Icon        string `json:"icon"`                      // 图标
-	SortOrder   int    `json:"sort_order"`                // 排序顺序
-	Description string `json:"description"`               // 分类描述
-	Status      int8   `json:"status" binding:"required"` // 状态
+	ID          int    `json:"id" binding:"required"`
+	Name        string `json:"name" binding:"required"`
+	ParentID    *int   `json:"parent_id"`
+	Icon        string `json:"icon"`
+	SortOrder   int    `json:"sort_order"`
+	Description string `json:"description"`
+	Status      int8   `json:"status" binding:"required"`
+}
+
+type DeleteCategoryReq struct {
+	ID int `json:"id" form:"id" binding:"required"`
 }
 
 type ListCategoryReq struct {
-	Name     string `json:"name" form:"name"`                                    // 分类名称
-	Status   *int8  `json:"status" form:"status"`                                // 状态
-	Page     int    `json:"page" form:"page" binding:"required,min=1"`           // 页码
-	PageSize int    `json:"page_size" form:"page_size" binding:"required,min=1"` // 每页数量
+	Name     string `json:"name" form:"name"`
+	Status   *int8  `json:"status" form:"status"`
+	Page     int    `json:"page" form:"page" binding:"required,min=1"`
+	PageSize int    `json:"page_size" form:"page_size" binding:"required,min=1"`
 }
 
 type DetailCategoryReq struct {
-	ID int `json:"id" uri:"id" binding:"required"` // 分类ID
+	ID int `json:"id" uri:"id" binding:"required"`
 }
 
-// 分类响应结构体
+// 分类响应结构
 type CategoryResp struct {
-	ID          int        `json:"id"`          // 分类ID
-	Name        string     `json:"name"`        // 分类名称
-	ParentID    *int       `json:"parent_id"`   // 父分类ID
-	Icon        string     `json:"icon"`        // 图标
-	SortOrder   int        `json:"sort_order"`  // 排序顺序
-	Status      int8       `json:"status"`      // 状态
-	Description string     `json:"description"` // 分类描述
-	CreatedAt   time.Time  `json:"created_at"`  // 创建时间
-	UpdatedAt   time.Time  `json:"updated_at"`  // 更新时间
-	Children    []Category `json:"children"`    // 子分类
+	ID          int        `json:"id"`
+	Name        string     `json:"name"`
+	ParentID    *int       `json:"parent_id"`
+	Icon        string     `json:"icon"`
+	SortOrder   int        `json:"sort_order"`
+	Status      int8       `json:"status"`
+	Description string     `json:"description"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	Children    []Category `json:"children"`
 }
 
 // ==================== 统计相关 ====================
 
-// 统计请求
+// 统计请求结构
 type OverviewStatsReq struct {
 	StartDate *time.Time `json:"start_date" form:"start_date"`
 	EndDate   *time.Time `json:"end_date" form:"end_date"`
@@ -720,58 +861,76 @@ type UserStatsReq struct {
 	UserID    *int       `json:"user_id" form:"user_id"`
 }
 
-// 统计响应
+// 统计响应结构
 type OverviewStatsResp struct {
-	TotalCount      int     `json:"total_count"`
-	CompletedCount  int     `json:"completed_count"`
-	ProcessingCount int     `json:"processing_count"`
-	PendingCount    int     `json:"pending_count"`
-	OverdueCount    int     `json:"overdue_count"`
+	TotalCount      int64   `json:"total_count"`
+	CompletedCount  int64   `json:"completed_count"`
+	ProcessingCount int64   `json:"processing_count"`
+	PendingCount    int64   `json:"pending_count"`
+	OverdueCount    int64   `json:"overdue_count"`
 	CompletionRate  float64 `json:"completion_rate"`
 	AvgProcessTime  float64 `json:"avg_process_time"`
-	TodayCreated    int     `json:"today_created"`
-	TodayCompleted  int     `json:"today_completed"`
+	TodayCreated    int64   `json:"today_created"`
+	TodayCompleted  int64   `json:"today_completed"`
 }
 
 type TrendStatsResp struct {
 	Dates            []string `json:"dates"`
-	CreatedCounts    []int    `json:"created_counts"`
-	CompletedCounts  []int    `json:"completed_counts"`
-	ProcessingCounts []int    `json:"processing_counts"`
+	CreatedCounts    []int64  `json:"created_counts"`
+	CompletedCounts  []int64  `json:"completed_counts"`
+	ProcessingCounts []int64  `json:"processing_counts"`
 }
 
 type CategoryStatsItem struct {
 	CategoryID   int     `json:"category_id"`
 	CategoryName string  `json:"category_name"`
-	Count        int     `json:"count"`
+	Count        int64   `json:"count"`
 	Percentage   float64 `json:"percentage"`
 }
 
 type CategoryStatsResp struct {
-	Items []CategoryStatsItem `json:"items"`
+	Items      []CategoryStatsItem `json:"items"`
+	TotalCount int64               `json:"total_count"`
+	Total      int64               `json:"total"`
+	Count      int64               `json:"count"`
+	Percentage int64               `json:"percentage"`
 }
 
+// PerformanceStatsItem 绩效统计项
 type PerformanceStatsItem struct {
 	UserID            int     `json:"user_id"`
 	UserName          string  `json:"user_name"`
-	AssignedCount     int     `json:"assigned_count"`
-	CompletedCount    int     `json:"completed_count"`
+	AssignedCount     int64   `json:"assigned_count"`
+	CompletedCount    int64   `json:"completed_count"`
 	CompletionRate    float64 `json:"completion_rate"`
 	AvgResponseTime   float64 `json:"avg_response_time"`
 	AvgProcessingTime float64 `json:"avg_processing_time"`
-	OverdueCount      int     `json:"overdue_count"`
+	OverdueCount      int64   `json:"overdue_count"`
+	SatisfactionScore float64 `json:"satisfaction_score"`
 }
 
+// PerformanceStatsResp 绩效统计响应
 type PerformanceStatsResp struct {
-	Items []PerformanceStatsItem `json:"items"`
+	Items             []PerformanceStatsItem `json:"items"`
+	UserID            int                    `json:"user_id"`             // 用户ID
+	TotalAssigned     int64                  `json:"total_assigned"`      // 总分配数
+	TotalCompleted    int64                  `json:"total_completed"`     // 总完成数
+	TotalOverdue      int64                  `json:"total_overdue"`       // 总超时数
+	AvgResponseTime   float64                `json:"avg_response_time"`   // 平均响应时间
+	AvgProcessingTime float64                `json:"avg_processing_time"` // 平均处理时间
+	CompletionRate    float64                `json:"completion_rate"`     // 总完成率
+	CompletedCount    int64                  `json:"completed_count"`     // 总完成数（兼容字段）
+	OverdueCount      int64                  `json:"overdue_count"`       // 总超时数（兼容字段）
+	AssignedCount     int64                  `json:"assigned_count"`      // 总分配数（兼容字段）
 }
 
 type UserStatsResp struct {
-	CreatedCount      int     `json:"created_count"`
-	AssignedCount     int     `json:"assigned_count"`
-	CompletedCount    int     `json:"completed_count"`
-	PendingCount      int     `json:"pending_count"`
-	OverdueCount      int     `json:"overdue_count"`
+	UserID            int     `json:"user_id"`
+	CreatedCount      int64   `json:"created_count"`
+	AssignedCount     int64   `json:"assigned_count"`
+	CompletedCount    int64   `json:"completed_count"`
+	PendingCount      int64   `json:"pending_count"`
+	OverdueCount      int64   `json:"overdue_count"`
 	AvgResponseTime   float64 `json:"avg_response_time"`
 	AvgProcessingTime float64 `json:"avg_processing_time"`
 	SatisfactionScore float64 `json:"satisfaction_score"`
@@ -779,6 +938,7 @@ type UserStatsResp struct {
 
 // ==================== 实体表定义（用于统计） ====================
 
+// WorkOrderStatistics 工单统计实体（DAO层）
 type WorkOrderStatistics struct {
 	ID              int       `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
 	Date            time.Time `json:"date" gorm:"column:date;not null;index;comment:统计日期"`
@@ -801,6 +961,7 @@ func (WorkOrderStatistics) TableName() string {
 	return "work_order_statistics"
 }
 
+// UserPerformance 用户绩效实体（DAO层）
 type UserPerformance struct {
 	ID                int       `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
 	UserID            int       `json:"user_id" gorm:"column:user_id;not null;index;comment:用户ID"`

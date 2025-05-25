@@ -48,12 +48,10 @@ type ListReq struct {
 	Status *int8  `json:"status" form:"status" binding:"omitempty"`
 }
 
-// 通用分页请求
-type PageRequest struct {
-}
-type ListResponse struct {
-	Total int         `json:"total"`
-	Items interface{} `json:"items"`
+// ListResp 通用列表响应
+type ListResp[T any] struct {
+	Items []T   `json:"items"` // 数据列表
+	Total int64 `json:"total"` // 总数
 }
 
 type StringList []string
