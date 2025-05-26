@@ -3,7 +3,7 @@ import { requestClient } from '#/api/request';
 // 表单设计相关类型
 export interface ListFormDesignReq {
   page: number;
-  page_size: number;
+  size: number;
   category_id?: number;
   status?: number;
   search?: string;
@@ -122,33 +122,33 @@ export interface Category {
 
 // 表单设计相关接口
 export async function createFormDesign(data: FormDesignReq) {
-  return requestClient.post('/api/workorder/form-design/create', data);
+  return requestClient.post('/workorder/form-design/create', data);
 }
 
 export async function updateFormDesign(data: FormDesignReq) {
-  return requestClient.put(`/api/workorder/form-design/update/${data.id}`, data);
+  return requestClient.put(`/workorder/form-design/update/${data.id}`, data);
 }
 
 export async function deleteFormDesign(data: DetailFormDesignReq) {
-  return requestClient.delete(`/api/workorder/form-design/delete/${data.id}`);
+  return requestClient.delete(`/workorder/form-design/delete/${data.id}`);
 }
 
 export async function listFormDesign(data: ListFormDesignReq) {
-  return requestClient.get('/api/workorder/form-design/list', { params: data });
+  return requestClient.get('/workorder/form-design/list', { params: data });
 }
 
 export async function detailFormDesign(data: DetailFormDesignReq) {
-  return requestClient.get(`/api/workorder/form-design/detail/${data.id}`);
+  return requestClient.get(`/workorder/form-design/detail/${data.id}`);
 }
 
 export async function publishFormDesign(data: PublishFormDesignReq) {
-  return requestClient.post(`/api/workorder/form-design/publish/${data.id}`);
+  return requestClient.post(`/workorder/form-design/publish/${data.id}`);
 }
 
 export async function cloneFormDesign(data: CloneFormDesignReq) {
-  return requestClient.post(`/api/workorder/form-design/clone/${data.id}`, data);
+  return requestClient.post(`/workorder/form-design/clone/${data.id}`, data);
 }
 
 export async function previewFormDesign(data: DetailFormDesignReq) {
-  return requestClient.get(`/api/workorder/form-design/preview/${data.id}`);
+  return requestClient.get(`/workorder/form-design/preview/${data.id}`);
 }
