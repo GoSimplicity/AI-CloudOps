@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-// Category 分类实体（DAO层）
+// Category 分类实体
 type Category struct {
 	ID          int        `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
 	Name        string     `json:"name" gorm:"column:name;not null;comment:分类名称"`

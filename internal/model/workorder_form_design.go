@@ -40,7 +40,7 @@ type FormSchema struct {
 	Style  string      `json:"style"`                     // 样式配置
 }
 
-// FormDesign 表单设计实体（DAO层）
+// FormDesign 表单设计实体
 type FormDesign struct {
 	Model
 	Name        string    `json:"name" gorm:"column:name;not null;comment:表单名称"`

@@ -44,16 +44,9 @@ type ProcessService interface {
 	ListProcess(ctx context.Context, req *model.ListProcessReq) (*model.ListResp[model.Process], error)
 	DetailProcess(ctx context.Context, id int, userID int) (*model.Process, error)
 	GetProcessWithRelations(ctx context.Context, id int) (*model.Process, error)
-	PublishProcess(ctx context.Context, req *model.PublishProcessReq) error
+	PublishProcess(ctx context.Context, id int) error
 	CloneProcess(ctx context.Context, req *model.CloneProcessReq, creatorID int) (*model.Process, error)
-	UpdateProcessStatus(ctx context.Context, id int, status int8) error
-	CheckProcessNameExists(ctx context.Context, name string, excludeID ...int) (bool, error)
-	GetProcessesByIDs(ctx context.Context, ids []int) ([]model.Process, error)
-	GetProcessesByFormDesignID(ctx context.Context, formDesignID int) ([]model.Process, error)
-	GetProcessesByCategoryID(ctx context.Context, categoryID int) ([]model.Process, error)
 	ValidateProcess(ctx context.Context, id int, userID int) (*model.ValidateProcessResp, error)
-	GetPublishedProcesses(ctx context.Context) ([]model.Process, error)
-	BatchUpdateProcessStatus(ctx context.Context, ids []int, status int8) error
 }
 
 type processService struct {
@@ -72,12 +65,8 @@ func NewProcessService(dao dao.ProcessDAO, userDao userDao.UserDAO, l *zap.Logge
 
 // CreateProcess 创建流程
 func (p *processService) CreateProcess(ctx context.Context, req *model.CreateProcessReq, creatorID int, creatorName string) error {
-	if req == nil {
-		return fmt.Errorf("创建流程请求不能为空")
-	}
-
 	// 检查流程名称是否已存在
-	exists, err := p.dao.CheckProcessNameExists(ctx, req.Name)
+	exists, err := p.checkProcessNameExists(ctx, req.Name)
 	if err != nil {
 		p.l.Error("检查流程名称失败", zap.Error(err), zap.String("name", req.Name))
 		return fmt.Errorf("检查流程名称失败: %w", err)
@@ -100,9 +89,7 @@ func (p *processService) CreateProcess(ctx context.Context, req *model.CreatePro
 
 	// 如果有流程定义，进行验证和序列化
 	if len(req.Definition.Steps) > 0 || len(req.Definition.Connections) > 0 {
-		// 需要传指针类型
-		def := req.Definition
-		if err := p.validateProcessDefinition(&def); err != nil {
+		if err := p.validateProcessDefinition(&req.Definition); err != nil {
 			p.l.Error("流程定义验证失败", zap.Error(err))
 			return fmt.Errorf("流程定义验证失败: %w", err)
 		}
@@ -115,8 +102,7 @@ func (p *processService) CreateProcess(ctx context.Context, req *model.CreatePro
 		process.Definition = string(definitionJSON)
 	}
 
-	err = p.dao.CreateProcess(ctx, process)
-	if err != nil {
+	if err := p.dao.CreateProcess(ctx, process); err != nil {
 		p.l.Error("创建流程失败", zap.Error(err), zap.String("name", req.Name))
 		return err
 	}
@@ -156,7 +142,7 @@ func (p *processService) UpdateProcess(ctx context.Context, req *model.UpdatePro
 		Description:  req.Description,
 		FormDesignID: req.FormDesignID,
 		CategoryID:   req.CategoryID,
-		Status:       existingProcess.Status,      // 保持原有状态
+		Status:       existingProcess.Status,
 		Version:      existingProcess.Version + 1, // 版本号递增
 		CreatorID:    existingProcess.CreatorID,
 		CreatorName:  existingProcess.CreatorName,
@@ -179,8 +165,7 @@ func (p *processService) UpdateProcess(ctx context.Context, req *model.UpdatePro
 		process.Definition = existingProcess.Definition
 	}
 
-	err = p.dao.UpdateProcess(ctx, process)
-	if err != nil {
+	if err := p.dao.UpdateProcess(ctx, process); err != nil {
 		p.l.Error("更新流程失败", zap.Error(err), zap.Int("id", req.ID))
 		return err
 	}
@@ -195,8 +180,7 @@ func (p *processService) DeleteProcess(ctx context.Context, id int) error {
 		return fmt.Errorf("流程ID无效")
 	}
 
-	err := p.dao.DeleteProcess(ctx, id)
-	if err != nil {
+	if err := p.dao.DeleteProcess(ctx, id); err != nil {
 		p.l.Error("删除流程失败", zap.Error(err), zap.Int("id", id))
 		return err
 	}
@@ -212,15 +196,7 @@ func (p *processService) ListProcess(ctx context.Context, req *model.ListProcess
 	}
 
 	// 设置默认分页参数
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-	if req.Size <= 0 {
-		req.Size = 10
-	}
-	if req.Size > 100 {
-		req.Size = 100 // 限制最大页面大小
-	}
+	p.setDefaultPagination(req)
 
 	result, err := p.dao.ListProcess(ctx, req)
 	if err != nil {
@@ -246,8 +222,7 @@ func (p *processService) DetailProcess(ctx context.Context, id int, userID int) 
 
 	// 获取创建者信息
 	if process.CreatorID > 0 {
-		user, err := p.userDao.GetUserByID(ctx, process.CreatorID)
-		if err != nil {
+		if user, err := p.userDao.GetUserByID(ctx, process.CreatorID); err != nil {
 			p.l.Warn("获取创建者信息失败", zap.Error(err), zap.Int("creatorID", process.CreatorID))
 		} else {
 			process.CreatorName = user.Username
@@ -273,13 +248,13 @@ func (p *processService) GetProcessWithRelations(ctx context.Context, id int) (*
 }
 
 // PublishProcess 发布流程
-func (p *processService) PublishProcess(ctx context.Context, req *model.PublishProcessReq) error {
-	if req == nil || req.ID <= 0 {
-		return fmt.Errorf("发布流程请求无效")
+func (p *processService) PublishProcess(ctx context.Context, id int) error {
+	if id <= 0 {
+		return fmt.Errorf("流程ID无效")
 	}
 
 	// 获取流程详情并验证
-	process, err := p.dao.GetProcess(ctx, req.ID)
+	process, err := p.dao.GetProcess(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -291,22 +266,21 @@ func (p *processService) PublishProcess(ctx context.Context, req *model.PublishP
 
 	var definition model.ProcessDefinition
 	if err := json.Unmarshal([]byte(process.Definition), &definition); err != nil {
-		p.l.Error("解析流程定义失败", zap.Error(err), zap.Int("id", req.ID))
+		p.l.Error("解析流程定义失败", zap.Error(err), zap.Int("id", id))
 		return fmt.Errorf("解析流程定义失败: %w", err)
 	}
 
 	if err := p.validateProcessDefinition(&definition); err != nil {
-		p.l.Error("流程定义验证失败", zap.Error(err), zap.Int("id", req.ID))
+		p.l.Error("流程定义验证失败", zap.Error(err), zap.Int("id", id))
 		return fmt.Errorf("流程定义验证失败: %w", err)
 	}
 
-	err = p.dao.PublishProcess(ctx, req.ID)
-	if err != nil {
-		p.l.Error("发布流程失败", zap.Error(err), zap.Int("id", req.ID))
+	if err := p.dao.PublishProcess(ctx, id); err != nil {
+		p.l.Error("发布流程失败", zap.Error(err), zap.Int("id", id))
 		return err
 	}
 
-	p.l.Info("发布流程成功", zap.Int("id", req.ID))
+	p.l.Info("发布流程成功", zap.Int("id", id))
 	return nil
 }
 
@@ -321,7 +295,7 @@ func (p *processService) CloneProcess(ctx context.Context, req *model.CloneProce
 	}
 
 	// 检查新名称是否已存在
-	exists, err := p.dao.CheckProcessNameExists(ctx, req.Name)
+	exists, err := p.checkProcessNameExists(ctx, req.Name)
 	if err != nil {
 		p.l.Error("检查流程名称失败", zap.Error(err), zap.String("name", req.Name))
 		return nil, fmt.Errorf("检查流程名称失败: %w", err)
@@ -338,103 +312,6 @@ func (p *processService) CloneProcess(ctx context.Context, req *model.CloneProce
 
 	p.l.Info("克隆流程成功", zap.Int("originalID", req.ID), zap.Int("newID", clonedProcess.ID), zap.String("newName", req.Name))
 	return clonedProcess, nil
-}
-
-// UpdateProcessStatus 更新流程状态
-func (p *processService) UpdateProcessStatus(ctx context.Context, id int, status int8) error {
-	if id <= 0 {
-		return fmt.Errorf("流程ID无效")
-	}
-
-	err := p.dao.UpdateProcessStatus(ctx, id, status)
-	if err != nil {
-		p.l.Error("更新流程状态失败", zap.Error(err), zap.Int("id", id), zap.Int8("status", status))
-		return err
-	}
-
-	p.l.Info("更新流程状态成功", zap.Int("id", id), zap.Int8("status", status))
-	return nil
-}
-
-// CheckProcessNameExists 检查流程名称是否存在
-func (p *processService) CheckProcessNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
-	if name == "" {
-		return false, fmt.Errorf("流程名称不能为空")
-	}
-
-	return p.dao.CheckProcessNameExists(ctx, name, excludeID...)
-}
-
-// GetProcessesByIDs 批量获取流程
-func (p *processService) GetProcessesByIDs(ctx context.Context, ids []int) ([]model.Process, error) {
-	if len(ids) == 0 {
-		return []model.Process{}, nil
-	}
-
-	processes, err := p.dao.GetProcessesByIDs(ctx, ids)
-	if err != nil {
-		p.l.Error("批量获取流程失败", zap.Error(err), zap.Ints("ids", ids))
-		return nil, err
-	}
-
-	return processes, nil
-}
-
-// GetProcessesByFormDesignID 根据表单设计ID获取流程
-func (p *processService) GetProcessesByFormDesignID(ctx context.Context, formDesignID int) ([]model.Process, error) {
-	if formDesignID <= 0 {
-		return nil, fmt.Errorf("表单设计ID无效")
-	}
-
-	processes, err := p.dao.GetProcessesByFormDesignID(ctx, formDesignID)
-	if err != nil {
-		p.l.Error("根据表单设计ID获取流程失败", zap.Error(err), zap.Int("formDesignID", formDesignID))
-		return nil, err
-	}
-
-	return processes, nil
-}
-
-// GetProcessesByCategoryID 根据分类ID获取流程
-func (p *processService) GetProcessesByCategoryID(ctx context.Context, categoryID int) ([]model.Process, error) {
-	if categoryID <= 0 {
-		return nil, fmt.Errorf("分类ID无效")
-	}
-
-	processes, err := p.dao.GetProcessesByCategoryID(ctx, categoryID)
-	if err != nil {
-		p.l.Error("根据分类ID获取流程失败", zap.Error(err), zap.Int("categoryID", categoryID))
-		return nil, err
-	}
-
-	return processes, nil
-}
-
-// GetPublishedProcesses 获取已发布的流程
-func (p *processService) GetPublishedProcesses(ctx context.Context) ([]model.Process, error) {
-	processes, err := p.dao.GetPublishedProcesses(ctx)
-	if err != nil {
-		p.l.Error("获取已发布流程失败", zap.Error(err))
-		return nil, err
-	}
-
-	return processes, nil
-}
-
-// BatchUpdateProcessStatus 批量更新流程状态
-func (p *processService) BatchUpdateProcessStatus(ctx context.Context, ids []int, status int8) error {
-	if len(ids) == 0 {
-		return fmt.Errorf("ID列表不能为空")
-	}
-
-	err := p.dao.BatchUpdateProcessStatus(ctx, ids, status)
-	if err != nil {
-		p.l.Error("批量更新流程状态失败", zap.Error(err), zap.Ints("ids", ids), zap.Int8("status", status))
-		return err
-	}
-
-	p.l.Info("批量更新流程状态成功", zap.Ints("ids", ids), zap.Int8("status", status))
-	return nil
 }
 
 // ValidateProcess 校验流程定义
@@ -483,6 +360,27 @@ func (p *processService) ValidateProcess(ctx context.Context, id int, userID int
 
 	p.l.Info("流程校验完成", zap.Int("processID", id), zap.Bool("isValid", resp.IsValid), zap.Strings("errors", resp.Errors))
 	return resp, nil
+}
+
+// checkProcessNameExists 检查流程名称是否存在
+func (p *processService) checkProcessNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
+	if name == "" {
+		return false, fmt.Errorf("流程名称不能为空")
+	}
+	return p.dao.CheckProcessNameExists(ctx, name, excludeID...)
+}
+
+// setDefaultPagination 设置默认分页参数
+func (p *processService) setDefaultPagination(req *model.ListProcessReq) {
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.Size <= 0 {
+		req.Size = 10
+	}
+	if req.Size > 100 {
+		req.Size = 100
+	}
 }
 
 // validateProcessDefinition 验证流程定义的业务逻辑

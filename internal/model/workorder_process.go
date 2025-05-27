@@ -56,7 +56,7 @@ type ProcessVariable struct {
 	Description  string      `json:"description"`   // 变量描述
 }
 
-// Process 流程实体（DAO层）
+// Process 流程实体
 type Process struct {
 	Model
 	Name         string      `json:"name" gorm:"column:name;not null;comment:流程名称"`
@@ -107,6 +107,10 @@ type DetailProcessReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
 
+type GetProcessWithRelationsReq struct {
+	ID int `json:"id" form:"id" binding:"required"`
+}
+
 // ListProcessReq 流程列表请求
 type ListProcessReq struct {
 	ListReq
@@ -144,6 +148,11 @@ type ProcessResp struct {
 	CreatorName  string            `json:"creator_name"`
 	CreatedAt    time.Time         `json:"created_at"`
 	UpdatedAt    time.Time         `json:"updated_at"`
+}
+
+// ValidateProcessReq 请求
+type ValidateProcessReq struct {
+	ID int `json:"id" binding:"required"`
 }
 
 // ValidateProcessResp 流程验证响应

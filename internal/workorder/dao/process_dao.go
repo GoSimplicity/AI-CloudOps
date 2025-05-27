@@ -55,14 +55,8 @@ type ProcessDAO interface {
 	GetProcessWithRelations(ctx context.Context, id int) (*model.Process, error)
 	PublishProcess(ctx context.Context, id int) error
 	CloneProcess(ctx context.Context, id int, name string, creatorID int) (*model.Process, error)
-	UpdateProcessStatus(ctx context.Context, id int, status int8) error
 	CheckProcessNameExists(ctx context.Context, name string, excludeID ...int) (bool, error)
-	GetProcessesByIDs(ctx context.Context, ids []int) ([]model.Process, error)
-	GetProcessesByFormDesignID(ctx context.Context, formDesignID int) ([]model.Process, error)
-	GetProcessesByCategoryID(ctx context.Context, categoryID int) ([]model.Process, error)
 	ValidateProcessDefinition(ctx context.Context, definition *model.ProcessDefinition) error
-	GetPublishedProcesses(ctx context.Context) ([]model.Process, error)
-	BatchUpdateProcessStatus(ctx context.Context, ids []int, status int8) error
 }
 
 type processDAO struct {
@@ -86,12 +80,6 @@ func (d *processDAO) CreateProcess(ctx context.Context, process *model.Process) 
 	// 验证关联的表单设计是否存在
 	if err := d.validateFormDesignExists(ctx, process.FormDesignID); err != nil {
 		return err
-	}
-
-	// 序列化Definition
-	if err := d.serializeDefinition(process); err != nil {
-		d.logger.Error("序列化流程定义失败", zap.Error(err), zap.String("name", process.Name))
-		return fmt.Errorf("序列化流程定义失败: %w", err)
 	}
 
 	if err := d.db.WithContext(ctx).Create(process).Error; err != nil {
@@ -119,12 +107,6 @@ func (d *processDAO) UpdateProcess(ctx context.Context, process *model.Process) 
 	// 验证关联的表单设计是否存在
 	if err := d.validateFormDesignExists(ctx, process.FormDesignID); err != nil {
 		return err
-	}
-
-	// 序列化Definition
-	if err := d.serializeDefinition(process); err != nil {
-		d.logger.Error("序列化流程定义失败", zap.Error(err), zap.Int("id", process.ID))
-		return fmt.Errorf("序列化流程定义失败: %w", err)
 	}
 
 	updateData := map[string]interface{}{
@@ -229,12 +211,6 @@ func (d *processDAO) GetProcess(ctx context.Context, id int) (*model.Process, er
 		return nil, fmt.Errorf("获取流程失败: %w", err)
 	}
 
-	// 反序列化Definition
-	if err := d.deserializeDefinition(&process); err != nil {
-		d.logger.Error("反序列化流程定义失败", zap.Error(err), zap.Int("id", id))
-		return nil, fmt.Errorf("反序列化流程定义失败: %w", err)
-	}
-
 	return &process, nil
 }
 
@@ -257,12 +233,6 @@ func (d *processDAO) GetProcessWithRelations(ctx context.Context, id int) (*mode
 		}
 		d.logger.Error("获取流程及关联数据失败", zap.Error(err), zap.Int("id", id))
 		return nil, fmt.Errorf("获取流程及关联数据失败: %w", err)
-	}
-
-	// 反序列化Definition
-	if err := d.deserializeDefinition(&process); err != nil {
-		d.logger.Error("反序列化流程定义失败", zap.Error(err), zap.Int("id", id))
-		return nil, fmt.Errorf("反序列化流程定义失败: %w", err)
 	}
 
 	return &process, nil
@@ -298,13 +268,6 @@ func (d *processDAO) ListProcess(ctx context.Context, req *model.ListProcessReq)
 		return nil, fmt.Errorf("获取流程列表失败: %w", err)
 	}
 
-	// 反序列化Definition（用于列表展示可能不需要，根据业务需求决定）
-	for i := range processes {
-		if err := d.deserializeDefinition(&processes[i]); err != nil {
-			d.logger.Warn("反序列化流程定义失败", zap.Error(err), zap.Int("id", processes[i].ID))
-		}
-	}
-
 	result := &model.ListResp[model.Process]{
 		Items: processes,
 		Total: total,
@@ -331,15 +294,17 @@ func (d *processDAO) PublishProcess(ctx context.Context, id int) error {
 		return err
 	}
 
-	var definition model.ProcessDefinition
-	if err := json.Unmarshal([]byte(process.Definition), &definition); err != nil {
-		d.logger.Error("解析流程定义失败", zap.Error(err), zap.Int("id", id))
-		return fmt.Errorf("解析流程定义失败: %w", err)
-	}
+	if process.Definition != "" {
+		var definition model.ProcessDefinition
+		if err := json.Unmarshal([]byte(process.Definition), &definition); err != nil {
+			d.logger.Error("解析流程定义失败", zap.Error(err), zap.Int("id", id))
+			return fmt.Errorf("解析流程定义失败: %w", err)
+		}
 
-	if err := d.ValidateProcessDefinition(ctx, &definition); err != nil {
-		d.logger.Error("流程定义验证失败", zap.Error(err), zap.Int("id", id))
-		return fmt.Errorf("流程定义验证失败: %w", err)
+		if err := d.ValidateProcessDefinition(ctx, &definition); err != nil {
+			d.logger.Error("流程定义验证失败", zap.Error(err), zap.Int("id", id))
+			return fmt.Errorf("流程定义验证失败: %w", err)
+		}
 	}
 
 	result := d.db.WithContext(ctx).
@@ -418,34 +383,6 @@ func (d *processDAO) CloneProcess(ctx context.Context, id int, name string, crea
 	return clonedProcess, nil
 }
 
-// UpdateProcessStatus 更新流程状态
-func (d *processDAO) UpdateProcessStatus(ctx context.Context, id int, status int8) error {
-	if id <= 0 {
-		return ErrProcessInvalidID
-	}
-
-	result := d.db.WithContext(ctx).
-		Model(&model.Process{}).
-		Where("id = ?", id).
-		Updates(map[string]interface{}{
-			"status":     status,
-			"updated_at": time.Now(),
-		})
-
-	if result.Error != nil {
-		d.logger.Error("更新流程状态失败", zap.Error(result.Error), zap.Int("id", id), zap.Int8("status", status))
-		return fmt.Errorf("更新流程状态失败: %w", result.Error)
-	}
-
-	if result.RowsAffected == 0 {
-		d.logger.Warn("流程不存在", zap.Int("id", id))
-		return ErrProcessNotFound
-	}
-
-	d.logger.Info("更新流程状态成功", zap.Int("id", id), zap.Int8("status", status))
-	return nil
-}
-
 // CheckProcessNameExists 检查流程名称是否存在
 func (d *processDAO) CheckProcessNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
 	var count int64
@@ -461,88 +398,6 @@ func (d *processDAO) CheckProcessNameExists(ctx context.Context, name string, ex
 	}
 
 	return count > 0, nil
-}
-
-// GetProcessesByIDs 批量获取流程
-func (d *processDAO) GetProcessesByIDs(ctx context.Context, ids []int) ([]model.Process, error) {
-	if len(ids) == 0 {
-		return []model.Process{}, nil
-	}
-
-	var processes []model.Process
-	err := d.db.WithContext(ctx).
-		Preload("FormDesign").
-		Preload("Category").
-		Where("id IN ?", ids).
-		Find(&processes).Error
-
-	if err != nil {
-		d.logger.Error("批量获取流程失败", zap.Error(err), zap.Ints("ids", ids))
-		return nil, fmt.Errorf("批量获取流程失败: %w", err)
-	}
-
-	// 反序列化Definition
-	for i := range processes {
-		if err := d.deserializeDefinition(&processes[i]); err != nil {
-			d.logger.Warn("反序列化流程定义失败", zap.Error(err), zap.Int("id", processes[i].ID))
-		}
-	}
-
-	return processes, nil
-}
-
-// GetProcessesByFormDesignID 根据表单设计ID获取流程
-func (d *processDAO) GetProcessesByFormDesignID(ctx context.Context, formDesignID int) ([]model.Process, error) {
-	if formDesignID <= 0 {
-		return nil, fmt.Errorf("表单设计ID无效")
-	}
-
-	var processes []model.Process
-	err := d.db.WithContext(ctx).
-		Preload("Category").
-		Where("form_design_id = ?", formDesignID).
-		Find(&processes).Error
-
-	if err != nil {
-		d.logger.Error("根据表单设计ID获取流程失败", zap.Error(err), zap.Int("formDesignID", formDesignID))
-		return nil, fmt.Errorf("根据表单设计ID获取流程失败: %w", err)
-	}
-
-	// 反序列化Definition
-	for i := range processes {
-		if err := d.deserializeDefinition(&processes[i]); err != nil {
-			d.logger.Warn("反序列化流程定义失败", zap.Error(err), zap.Int("id", processes[i].ID))
-		}
-	}
-
-	return processes, nil
-}
-
-// GetProcessesByCategoryID 根据分类ID获取流程
-func (d *processDAO) GetProcessesByCategoryID(ctx context.Context, categoryID int) ([]model.Process, error) {
-	if categoryID <= 0 {
-		return nil, fmt.Errorf("分类ID无效")
-	}
-
-	var processes []model.Process
-	err := d.db.WithContext(ctx).
-		Preload("FormDesign").
-		Where("category_id = ?", categoryID).
-		Find(&processes).Error
-
-	if err != nil {
-		d.logger.Error("根据分类ID获取流程失败", zap.Error(err), zap.Int("categoryID", categoryID))
-		return nil, fmt.Errorf("根据分类ID获取流程失败: %w", err)
-	}
-
-	// 反序列化Definition
-	for i := range processes {
-		if err := d.deserializeDefinition(&processes[i]); err != nil {
-			d.logger.Warn("反序列化流程定义失败", zap.Error(err), zap.Int("id", processes[i].ID))
-		}
-	}
-
-	return processes, nil
 }
 
 // ValidateProcessDefinition 验证流程定义
@@ -572,6 +427,9 @@ func (d *processDAO) ValidateProcessDefinition(ctx context.Context, definition *
 
 	// 验证连接
 	for _, conn := range definition.Connections {
+		if conn.From == "" || conn.To == "" {
+			return fmt.Errorf("连接的起始和目标步骤ID不能为空")
+		}
 		if !stepIDs[conn.From] {
 			return fmt.Errorf("连接的起始步骤不存在: %s", conn.From)
 		}
@@ -583,62 +441,14 @@ func (d *processDAO) ValidateProcessDefinition(ctx context.Context, definition *
 	return nil
 }
 
-// GetPublishedProcesses 获取已发布的流程
-func (d *processDAO) GetPublishedProcesses(ctx context.Context) ([]model.Process, error) {
-	var processes []model.Process
-	err := d.db.WithContext(ctx).
-		Preload("FormDesign").
-		Preload("Category").
-		Where("status = ?", 1). // 1为已发布状态
-		Order("name ASC").
-		Find(&processes).Error
-
-	if err != nil {
-		d.logger.Error("获取已发布流程失败", zap.Error(err))
-		return nil, fmt.Errorf("获取已发布流程失败: %w", err)
-	}
-
-	// 反序列化Definition
-	for i := range processes {
-		if err := d.deserializeDefinition(&processes[i]); err != nil {
-			d.logger.Warn("反序列化流程定义失败", zap.Error(err), zap.Int("id", processes[i].ID))
-		}
-	}
-
-	return processes, nil
-}
-
-// BatchUpdateProcessStatus 批量更新流程状态
-func (d *processDAO) BatchUpdateProcessStatus(ctx context.Context, ids []int, status int8) error {
-	if len(ids) == 0 {
-		return fmt.Errorf("ID列表不能为空")
-	}
-
-	result := d.db.WithContext(ctx).
-		Model(&model.Process{}).
-		Where("id IN ?", ids).
-		Updates(map[string]interface{}{
-			"status":     status,
-			"updated_at": time.Now(),
-		})
-
-	if result.Error != nil {
-		d.logger.Error("批量更新流程状态失败", zap.Error(result.Error), zap.Ints("ids", ids), zap.Int8("status", status))
-		return fmt.Errorf("批量更新流程状态失败: %w", result.Error)
-	}
-
-	d.logger.Info("批量更新流程状态成功", zap.Ints("ids", ids), zap.Int8("status", status), zap.Int64("affected", result.RowsAffected))
-	return nil
-}
-
-// 辅助方法
+// 私有辅助方法
 
 // buildProcessListQuery 构建流程列表查询条件
 func (d *processDAO) buildProcessListQuery(db *gorm.DB, req *model.ListProcessReq) *gorm.DB {
-	// 搜索条件
-	if req.Search != "" {
-		searchPattern := "%" + strings.TrimSpace(req.Search) + "%"
-		db = db.Where("name LIKE ? OR description LIKE ?", searchPattern, searchPattern)
+	// 名称搜索
+	if req.Name != nil && *req.Name != "" {
+		searchPattern := "%" + strings.TrimSpace(*req.Name) + "%"
+		db = db.Where("name LIKE ?", searchPattern)
 	}
 
 	// 状态过滤
@@ -651,31 +461,15 @@ func (d *processDAO) buildProcessListQuery(db *gorm.DB, req *model.ListProcessRe
 		db = db.Where("category_id = ?", *req.CategoryID)
 	}
 
-	// 表单设计过滤
-	if req.FormDesignID != nil {
-		db = db.Where("form_design_id = ?", *req.FormDesignID)
-	}
-
 	return db
-}
-
-// serializeDefinition 序列化流程定义到JSON字符串
-func (d *processDAO) serializeDefinition(process *model.Process) error {
-	// 这里假设process.Definition字段需要序列化
-	// 如果Definition已经是string类型的JSON，则可能不需要这个方法
-	// 根据实际的model结构调整
-	return nil
-}
-
-// deserializeDefinition 反序列化JSON字符串到流程定义
-func (d *processDAO) deserializeDefinition(process *model.Process) error {
-	// 这里假设需要将JSON字符串反序列化为ProcessDefinition结构
-	// 根据实际的model结构调整
-	return nil
 }
 
 // validateFormDesignExists 验证关联的表单设计是否存在
 func (d *processDAO) validateFormDesignExists(ctx context.Context, formDesignID int) error {
+	if formDesignID <= 0 {
+		return fmt.Errorf("表单设计ID无效")
+	}
+
 	var count int64
 	err := d.db.WithContext(ctx).
 		Model(&model.FormDesign{}).
