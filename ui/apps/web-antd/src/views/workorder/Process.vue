@@ -349,30 +349,32 @@
           <div class="connection-list">
             <div v-for="(connection, index) in processDialog.form.definition.connections" :key="index" class="connection-item">
               <a-row :gutter="16" align="middle">
-                <a-col :span="5">
-                  <a-select v-model:value="connection.from" placeholder="来源步骤">
+                <a-col :span="10">
+                  <a-select v-model:value="connection.from" placeholder="来源步骤" class="select-step">
                     <a-select-option v-for="step in processDialog.form.definition.steps" :key="step.id" :value="step.id">
                       {{ step.name }}
                     </a-select-option>
                   </a-select>
                 </a-col>
-                <a-col :span="5">
-                  <a-select v-model:value="connection.to" placeholder="目标步骤">
+                <a-col :span="10">
+                  <a-select v-model:value="connection.to" placeholder="目标步骤" class="select-step">
                     <a-select-option v-for="step in processDialog.form.definition.steps" :key="step.id" :value="step.id">
                       {{ step.name }}
                     </a-select-option>
                   </a-select>
                 </a-col>
-                <a-col :span="6">
-                  <a-input v-model:value="connection.condition" placeholder="条件表达式" />
-                </a-col>
-                <a-col :span="6">
-                  <a-input v-model:value="connection.label" placeholder="连接标签" />
-                </a-col>
-                <a-col :span="2">
+                <a-col :span="4">
                   <a-button type="text" danger @click="removeConnection(index)" size="small">
                     <DeleteOutlined />
                   </a-button>
+                </a-col>
+              </a-row>
+              <a-row :gutter="16" style="margin-top: 8px">
+                <a-col :span="12">
+                  <a-input v-model:value="connection.condition" placeholder="条件表达式" />
+                </a-col>
+                <a-col :span="12">
+                  <a-input v-model:value="connection.label" placeholder="连接标签" />
                 </a-col>
               </a-row>
             </div>
@@ -453,7 +455,7 @@
         <div class="process-preview">
           <h3>流程步骤</h3>
           <div class="process-flow-chart">
-            <div v-for="(step, index) in detailDialog.process.definition.steps" :key="index" class="process-node"
+            <div v-for="(step, index) in parseProcessSteps(detailDialog.process)" :key="index" class="process-node"
               :class="`node-type-${getNodeTypeClass(step.type)}`">
               <div class="node-header">
                 <span class="node-type-badge">{{ getNodeTypeName(step.type) }}</span>
@@ -468,22 +470,22 @@
                   <div v-if="step.parallel"><strong>并行处理：</strong>是</div>
                 </div>
               </div>
-              <div class="node-footer" v-if="index < detailDialog.process.definition.steps.length - 1">
+              <div class="node-footer" v-if="getNextStepName(step.id, detailDialog.process)">
                 <ArrowDownOutlined />
-                <div>下一步骤：{{ detailDialog.process.definition.steps[index + 1]?.name || '结束' }}</div>
+                <div>下一步骤：{{ getNextStepName(step.id, detailDialog.process) }}</div>
               </div>
             </div>
           </div>
 
-          <div v-if="detailDialog.process.definition.connections?.length" class="connections-section">
+          <div v-if="parseProcessConnections(detailDialog.process)?.length" class="connections-section">
             <h3>流程连接</h3>
-            <a-table :data-source="detailDialog.process.definition.connections" :columns="connectionColumns" :pagination="false" size="small">
+            <a-table :data-source="parseProcessConnections(detailDialog.process)" :columns="connectionDisplayColumns" :pagination="false" size="small">
             </a-table>
           </div>
 
-          <div v-if="detailDialog.process.definition.variables?.length" class="variables-section">
+          <div v-if="parseProcessVariables(detailDialog.process)?.length" class="variables-section">
             <h3>流程变量</h3>
-            <a-table :data-source="detailDialog.process.definition.variables" :columns="variableColumns" :pagination="false" size="small">
+            <a-table :data-source="parseProcessVariables(detailDialog.process)" :columns="variableColumns" :pagination="false" size="small">
             </a-table>
           </div>
         </div>
@@ -498,7 +500,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
 import { message, Modal } from 'ant-design-vue';
 import {
   PlusOutlined,
@@ -520,7 +522,6 @@ import {
   type PublishProcessReq,
   type CloneProcessReq,
   type ListProcessReq,
-  type DetailProcessReq,
   type ProcessStep,
   type ProcessConnection,
   type ProcessVariable,
@@ -530,14 +531,13 @@ import {
   createProcess,
   updateProcess,
   deleteProcess,
-  publishProcess as publishProcessApi,
-  cloneProcess as cloneProcessApi,
-  updateProcessStatus as updateProcessStatusApi,
-  validateProcess,
-  checkProcessNameExists
+  publishProcess,
+  cloneProcess,
+  validateProcess
 } from '#/api/core/workorder_process';
 
-import { listFormDesign } from '#/api/core/workorder_form_design';
+import {listFormDesign} from '#/api/core/workorder_form_design'
+import type { ListFormDesignReq } from '#/api/core/workorder';
 
 // 列定义
 const columns = [
@@ -606,6 +606,28 @@ const columns = [
 const connectionColumns = [
   { title: '来源步骤', dataIndex: 'from', key: 'from' },
   { title: '目标步骤', dataIndex: 'to', key: 'to' },
+  { title: '条件', dataIndex: 'condition', key: 'condition' },
+  { title: '标签', dataIndex: 'label', key: 'label' },
+];
+
+// 用于显示连接的表格列
+const connectionDisplayColumns = [
+  { 
+    title: '来源步骤',
+    dataIndex: 'from', 
+    key: 'from',
+    customRender: ({ text, record }: any) => {
+      return getStepNameById(text, record._process);
+    }
+  },
+  { 
+    title: '目标步骤', 
+    dataIndex: 'to', 
+    key: 'to',
+    customRender: ({ text, record }: any) => {
+      return getStepNameById(text, record._process);
+    }
+  },
   { title: '条件', dataIndex: 'condition', key: 'condition' },
   { title: '标签', dataIndex: 'label', key: 'label' },
 ];
@@ -695,6 +717,66 @@ const generateId = () => {
   return 'step_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 };
 
+// 解析流程定义JSON字符串
+const parseProcessDefinition = (process: any): ProcessDefinition => {
+  if (!process) return { steps: [], connections: [], variables: [] };
+  
+  if (typeof process.definition === 'string') {
+    try {
+      return JSON.parse(process.definition);
+    } catch (e) {
+      console.error('Error parsing process definition:', e);
+      return { steps: [], connections: [], variables: [] };
+    }
+  }
+  
+  return process.definition || { steps: [], connections: [], variables: [] };
+};
+
+// 解析流程步骤
+const parseProcessSteps = (process: any): ProcessStep[] => {
+  const definition = parseProcessDefinition(process);
+  return definition.steps || [];
+};
+
+// 解析流程连接
+const parseProcessConnections = (process: any): any[] => {
+  const definition = parseProcessDefinition(process);
+  return (definition.connections || []).map(conn => ({
+    ...conn,
+    _process: process // 添加流程引用以便在渲染时获取步骤名称
+  }));
+};
+
+// 解析流程变量
+const parseProcessVariables = (process: any): ProcessVariable[] => {
+  const definition = parseProcessDefinition(process);
+  return definition.variables || [];
+};
+
+// 根据步骤ID获取步骤名称
+const getStepNameById = (stepId: string, process: any): string => {
+  if (!process || !stepId) return '未知步骤';
+  
+  const steps = parseProcessSteps(process);
+  const step = steps.find(s => s.id === stepId);
+  return step ? step.name : '未知步骤';
+};
+
+// 获取下一个步骤的名称
+const getNextStepName = (stepId: string, process: any): string => {
+  if (!process || !stepId) return '';
+  
+  const connections = parseProcessConnections(process);
+  const nextConnection = connections.find(conn => conn.from === stepId);
+  
+  if (nextConnection) {
+    return getStepNameById(nextConnection.to, process);
+  }
+  
+  return '';
+};
+
 // 初始化加载数据
 const loadProcesses = async () => {
   loading.value = true;
@@ -704,18 +786,19 @@ const loadProcesses = async () => {
       size: pageSize.value,
       name: searchQuery.value || undefined,
       status: statusFilter.value || undefined,
+      category_id: categoryFilter.value || undefined
     };
     
     const res = await listProcess(params);
-    if (res) {
+    if (res && res.items) {
       processList.value = res.items || [];
       total.value = res.total || 0;
       
       // 更新统计数据
       stats.total = res.total || 0;
-      stats.published = processList.value.filter((p: any) => p.status === 1).length;
-      stats.draft = processList.value.filter((p: any) => p.status === 0).length;
-      stats.disabled = processList.value.filter((p: any) => p.status === 2).length;
+      stats.published = processList.value.filter((p: ProcessItem) => p.status === 1).length;
+      stats.draft = processList.value.filter((p: ProcessItem) => p.status === 0).length;
+      stats.disabled = processList.value.filter((p: ProcessItem) => p.status === 2).length;
     }
   } catch (error) {
     message.error('加载流程数据失败');
@@ -728,12 +811,12 @@ const loadProcesses = async () => {
 // 加载表单列表
 const loadForms = async () => {
   try {
-    const res = await listFormDesign({
+    const params: ListFormDesignReq = {
       page: 1,
       size: 100,
-      status: 1
-    });
-    forms.value = res.items || [];
+    };
+    const res = await listFormDesign(params)
+    forms.value = res.items;
   } catch (error) {
     console.error('Failed to load forms:', error);
   }
@@ -742,7 +825,7 @@ const loadForms = async () => {
 // 加载分类列表
 const loadCategories = async () => {
   try {
-    // 这里需要根据实际的分类API接口调用
+    // 这里模拟分类列表数据，实际应调用相关API
     categories.value = [
       { id: 1, name: '人事管理' },
       { id: 2, name: '财务管理' },
@@ -756,7 +839,7 @@ const loadCategories = async () => {
 // 加载用户列表
 const loadUsers = async () => {
   try {
-    // 这里需要根据实际的用户API接口调用
+    // 这里模拟用户列表数据，实际应调用相关API
     users.value = [
       { id: 1, name: '张三' },
       { id: 2, name: '李四' },
@@ -799,8 +882,8 @@ const handleCreateProcess = () => {
   processDialog.form = {
     name: '',
     description: '',
-    form_design_id: 0,
-    category_id: 0,
+    form_design_id: undefined,
+    category_id: undefined,
     definition: {
       steps: [
         {
@@ -832,18 +915,24 @@ const handleEditProcess = async (row: ProcessItem) => {
   try {
     const res = await detailProcess({ id: row.id });
     if (res) {
+      // 确保从字符串转换为对象
+      const definition = typeof res.definition === 'string' 
+        ? JSON.parse(res.definition) 
+        : res.definition;
+      
       processDialog.form = {
         id: res.id,
         name: res.name,
         description: res.description,
         form_design_id: res.form_design_id,
         category_id: res.category_id,
-        definition: res.definition
+        status: res.status,
+        definition: definition
       };
       
       processDialog.visible = true;
       detailDialog.visible = false;
-      activeStepKeys.value = processDialog.form.definition.steps.map((_, index) => index.toString());
+      activeStepKeys.value = processDialog.form.definition.steps.map((step: any, index: number) => index.toString());
     }
   } catch (error) {
     message.error('获取流程详情失败');
@@ -873,10 +962,11 @@ const handleViewProcess = async (row: ProcessItem) => {
 const handleCommand = async (command: string, row: ProcessItem) => {
   switch (command) {
     case 'publish':
-      await publishProcess(row);
+      await publishProcessHandler(row);
       break;
     case 'unpublish':
-      await updateProcessStatus(row, 0);
+      // 实际项目中应使用unpublishProcess API，这里简化处理
+      message.info('取消发布功能需要实现相应的API');
       break;
     case 'validate':
       await validateProcessHandler(row);
@@ -890,13 +980,13 @@ const handleCommand = async (command: string, row: ProcessItem) => {
   }
 };
 
-const publishProcess = async (process: ProcessItem) => {
+const publishProcessHandler = async (process: ProcessItem) => {
   try {
     const params: PublishProcessReq = {
       id: process.id
     };
     
-    await publishProcessApi(params);
+    await publishProcess(params);
     message.success(`流程 "${process.name}" 已发布`);
     loadProcesses();
   } catch (error) {
@@ -905,24 +995,13 @@ const publishProcess = async (process: ProcessItem) => {
   }
 };
 
-const updateProcessStatus = async (process: ProcessItem, status: number) => {
-  try {
-    await updateProcessStatusApi(process.id, status);
-    message.success(`流程 "${process.name}" 状态已更新`);
-    loadProcesses();
-  } catch (error) {
-    message.error('更新流程状态失败');
-    console.error('Failed to update process status:', error);
-  }
-};
-
 const validateProcessHandler = async (process: ProcessItem) => {
   try {
     const res = await validateProcess(process.id);
-    if (res.is_valid) {
+    if (res && res.is_valid) {
       message.success(`流程 "${process.name}" 验证通过`);
     } else {
-      message.error(`流程验证失败：${res.errors?.join(', ')}`);
+      message.error(`流程验证失败：${res?.errors?.join(', ') || '未知错误'}`);
     }
   } catch (error) {
     message.error('验证流程失败');
@@ -945,7 +1024,7 @@ const confirmClone = async () => {
       return;
     }
     
-    await cloneProcessApi(cloneDialog.form);
+    await cloneProcess(cloneDialog.form);
     message.success(`流程已克隆为 "${cloneDialog.form.name}"`);
     cloneDialog.visible = false;
     loadProcesses();
@@ -1067,22 +1146,13 @@ const saveProcess = async () => {
       }
     }
 
-    // 检查名称是否已存在（仅在新建时检查）
-    if (!processDialog.isEdit) {
-      const nameCheck = await checkProcessNameExists(processDialog.form.name);
-      if (nameCheck.exists) {
-        message.error('流程名称已存在');
-        return;
-      }
-    }
-
     if (processDialog.isEdit && processDialog.form.id) {
       // 更新现有流程
       const updateData: UpdateProcessReq = {
         id: processDialog.form.id,
         name: processDialog.form.name,
-        description: processDialog.form.description,
-        form_design_id: processDialog.form.form_design_id,
+        description: processDialog.form.description || '',
+        form_design_id: processDialog.form.form_design_id!,
         definition: processDialog.form.definition,
         category_id: processDialog.form.category_id
       };
@@ -1094,7 +1164,7 @@ const saveProcess = async () => {
       const createData: CreateProcessReq = {
         name: processDialog.form.name,
         description: processDialog.form.description,
-        form_design_id: processDialog.form.form_design_id,
+        form_design_id: processDialog.form.form_design_id!,
         definition: processDialog.form.definition,
         category_id: processDialog.form.category_id
       };
@@ -1109,6 +1179,18 @@ const saveProcess = async () => {
     message.error(processDialog.isEdit ? '更新流程失败' : '创建流程失败');
     console.error('Failed to save process:', error);
   }
+};
+
+// 检查流程名是否存在（简化实现，实际应调用API）
+const checkProcessNameExists = async (name: string) => {
+  // 模拟API调用
+  return { exists: false };
+};
+
+// 更新流程状态（简化实现，实际应调用API）
+const updateProcessStatus = async (id: number, status: number) => {
+  message.info(`更新流程状态为 ${status}`);
+  // 实际项目中应调用相应的API
 };
 
 // 辅助方法
@@ -1172,13 +1254,13 @@ const getAvatarColor = (name: string | undefined) => {
 
 const getFormName = (formId: number | undefined) => {
   if (!formId) return '未知表单';
-  const form = forms.value.find((f: any) => f.id === formId);
+  const form = forms.value.find(f => f.id === formId);
   return form ? form.name : '未知表单';
 };
 
 const getCategoryName = (categoryId: number | undefined) => {
   if (!categoryId) return '无分类';
-  const category = categories.value.find((c: any) => c.id === categoryId);
+  const category = categories.value.find(c => c.id === categoryId);
   return category ? category.name : '无分类';
 };
 
@@ -1568,6 +1650,12 @@ onMounted(() => {
   gap: 12px;
   padding-top: 16px;
   border-top: 1px solid #f0f0f0;
+}
+
+/* 下拉框宽度修复 */
+.select-step {
+  width: 100% !important;
+  min-width: 180px;
 }
 
 /* 响应式设计 */

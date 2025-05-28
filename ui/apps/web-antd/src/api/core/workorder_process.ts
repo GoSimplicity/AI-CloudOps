@@ -60,7 +60,7 @@ export interface ProcessDefinition {
 export interface CreateProcessReq {
   name: string;
   description?: string;
-  form_design_id: number;
+  form_design_id?: number;
   definition: ProcessDefinition;
   category_id?: number;
 }
@@ -153,85 +153,45 @@ export interface ProcessItem {
 
 // 创建流程
 export async function createProcess(data: CreateProcessReq) {
-  return requestClient.post('/workorder/process/', data);
+  return requestClient.post('/workorder/process/create', data);
 }
 
 // 更新流程
 export async function updateProcess(data: UpdateProcessReq) {
-  return requestClient.put(`/workorder/process/${data.id}`, data);
+  return requestClient.put(`/workorder/process/update/${data.id}`, data);
 }
 
 // 删除流程
 export async function deleteProcess(data: DeleteProcessReq) {
-  return requestClient.delete(`/workorder/process/${data.id}`);
+  return requestClient.delete(`/workorder/process/delete/${data.id}`);
 }
 
 // 获取流程详情
 export async function detailProcess(data: DetailProcessReq) {
-  return requestClient.get(`/workorder/process/${data.id}/detail`);
-}
-
-// 获取流程（基础信息）
-export async function getProcess(data: DetailProcessReq) {
-  return requestClient.get(`/workorder/process/${data.id}`);
+  return requestClient.get(`/workorder/process/detail/${data.id}`);
 }
 
 // 获取流程及关联信息
 export async function getProcessWithRelations(data: DetailProcessReq) {
-  return requestClient.get(`/workorder/process/${data.id}/relations`);
+  return requestClient.get(`/workorder/process/relations/${data.id}`);
 }
 
 // 流程列表
 export async function listProcess(params: ListProcessReq) {
-  return requestClient.get('/workorder/process/', { params });
+  return requestClient.get('/workorder/process/list', { params });
 }
 
 // 发布流程
 export async function publishProcess(data: PublishProcessReq) {
-  return requestClient.post(`/workorder/process/${data.id}/publish`);
+  return requestClient.post(`/workorder/process/publish/${data.id}`);
 }
 
 // 克隆流程
 export async function cloneProcess(data: CloneProcessReq) {
-  return requestClient.post(`/workorder/process/${data.id}/clone`, data);
-}
-
-// 修改流程状态
-export async function updateProcessStatus(id: number, status: number) {
-  return requestClient.put(`/workorder/process/${id}/status`, { status });
+  return requestClient.post(`/workorder/process/clone/${data.id}`, data);
 }
 
 // 校验流程
 export async function validateProcess(id: number) {
-  return requestClient.get(`/workorder/process/${id}/validate`);
-}
-
-// 获取已发布流程
-export async function getPublishedProcesses() {
-  return requestClient.get('/workorder/process/published');
-}
-
-// 根据表单设计ID获取流程
-export async function getProcessesByFormDesignID(formDesignID: number) {
-  return requestClient.get(`/workorder/process/form-design/${formDesignID}`);
-}
-
-// 根据分类ID获取流程
-export async function getProcessesByCategoryID(categoryID: number) {
-  return requestClient.get(`/workorder/process/category/${categoryID}`);
-}
-
-// 批量修改流程状态
-export async function batchUpdateProcessStatus(data: { ids: number[]; status: number }) {
-  return requestClient.post('/workorder/process/batch-status', data);
-}
-
-// 检查流程名称是否存在
-export async function checkProcessNameExists(name: string) {
-  return requestClient.get('/workorder/process/check-name', { params: { name } });
-}
-
-// 批量获取流程
-export async function batchGetProcesses(ids: number[]) {
-  return requestClient.post('/workorder/process/batch-get', { ids });
+  return requestClient.get(`/workorder/process/validate/${id}`);
 }
