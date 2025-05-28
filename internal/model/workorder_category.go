@@ -1,21 +1,43 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package model
 
 import "time"
 
 // Category 分类实体
 type Category struct {
-	ID          int        `json:"id" gorm:"primaryKey;column:id;comment:主键ID"`
-	Name        string     `json:"name" gorm:"column:name;not null;comment:分类名称"`
-	ParentID    *int       `json:"parent_id" gorm:"column:parent_id;comment:父分类ID"`
-	Icon        string     `json:"icon" gorm:"column:icon;comment:图标"`
-	SortOrder   int        `json:"sort_order" gorm:"column:sort_order;default:0;comment:排序顺序"`
-	Status      int8       `json:"status" gorm:"column:status;not null;default:1;comment:状态：0-禁用，1-启用"`
-	Description string     `json:"description" gorm:"column:description;comment:分类描述"`
-	CreatedAt   time.Time  `json:"created_at" gorm:"column:created_at;not null;comment:创建时间"`
-	UpdatedAt   time.Time  `json:"updated_at" gorm:"column:updated_at;not null;comment:更新时间"`
-	DeletedAt   *time.Time `json:"deleted_at" gorm:"column:deleted_at;index;comment:删除时间"`
-	CreatorID   int        `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	CreatorName string     `json:"creator_name" gorm:"-"`
+	Model
+	Name        string `json:"name" gorm:"column:name;not null;comment:分类名称"`
+	ParentID    *int   `json:"parent_id" gorm:"column:parent_id;comment:父分类ID"`
+	Icon        string `json:"icon" gorm:"column:icon;comment:图标"`
+	SortOrder   int    `json:"sort_order" gorm:"column:sort_order;default:0;comment:排序顺序"`
+	Status      int8   `json:"status" gorm:"column:status;not null;default:1;comment:状态：0-禁用，1-启用"`
+	Description string `json:"description" gorm:"column:description;comment:分类描述"`
+	CreatorID   int    `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	CreatorName string `json:"creator_name" gorm:"-"`
 
 	Children []Category `json:"children" gorm:"-"`
 	Parent   *Category  `json:"parent,omitempty" gorm:"foreignKey:ParentID"`
@@ -29,19 +51,20 @@ func (Category) TableName() string {
 type CreateCategoryReq struct {
 	Name        string `json:"name" binding:"required,min=1,max=100"`
 	ParentID    *int   `json:"parent_id"`
-	Icon        string `json:"icon" binding:"omitempty,url"`
+	Icon        string `json:"icon"`
 	SortOrder   int    `json:"sort_order"`
 	Description string `json:"description" binding:"omitempty,max=500"`
 }
 
+// UpdateCategoryReq 更新分类请求结构
 type UpdateCategoryReq struct {
-	ID          int    `json:"id" binding:"required"`
-	Name        string `json:"name" binding:"required,min=1,max=100"`
-	ParentID    *int   `json:"parent_id"`
-	Icon        string `json:"icon" binding:"omitempty,url"`
-	SortOrder   int    `json:"sort_order"`
-	Description string `json:"description" binding:"omitempty,max=500"`
-	Status      int8   `json:"status" binding:"required,oneof=0 1"`
+	ID          int    `json:"id" binding:"required"`                   // 分类ID，必填
+	Name        string `json:"name" binding:"required,min=1,max=100"`   // 分类名称，必填，长度1-100
+	ParentID    *int   `json:"parent_id"`                               // 父分类ID，可选
+	Icon        string `json:"icon"`                                    // 图标，可选
+	SortOrder   int    `json:"sort_order"`                              // 排序顺序，可选
+	Description string `json:"description" binding:"omitempty,max=500"` // 分类描述，最大500字符
+	Status      *int8  `json:"status" binding:"required,oneof=0 1"`     // 状态，必填，0-禁用，1-启用
 }
 
 type DeleteCategoryReq struct {
@@ -49,10 +72,8 @@ type DeleteCategoryReq struct {
 }
 
 type ListCategoryReq struct {
-	Name     string `json:"name" form:"name"`
-	Status   *int8  `json:"status" form:"status"`
-	Page     int    `json:"page" form:"page" binding:"required,min=1"`
-	PageSize int    `json:"page_size" form:"page_size" binding:"required,min=1,max=100"`
+	ListReq
+	Status *int8 `json:"status" form:"status"`
 }
 
 type DetailCategoryReq struct {
@@ -62,6 +83,12 @@ type DetailCategoryReq struct {
 // TreeCategoryReq 获取分类树请求
 type TreeCategoryReq struct {
 	Status *int8 `json:"status" form:"status"`
+}
+
+// BatchUpdateStatusReq 批量更新状态请求
+type BatchUpdateStatusReq struct {
+	IDs    []int `json:"ids" binding:"required"`
+	Status int8  `json:"status" binding:"required,oneof=0 1"`
 }
 
 // 分类响应结构

@@ -47,7 +47,6 @@ type CategoryDAO interface {
 	CheckCategoryExists(ctx context.Context, id int) (bool, error)
 	CheckNameExists(ctx context.Context, name string, excludeID *int) (bool, error)
 	GetCategoryChildren(ctx context.Context, parentID int) ([]model.Category, error)
-	BatchUpdateStatus(ctx context.Context, ids []int, status int8) error
 	GetCategoryTree(ctx context.Context, status *int8) ([]model.Category, error)
 }
 
@@ -71,14 +70,14 @@ func (dao *categoryDAO) CreateCategory(ctx context.Context, category *model.Cate
 
 	if err := dao.validateCategory(ctx, category, true); err != nil {
 		dao.logger.Error("分类验证失败", zap.Error(err))
-		return nil, err
+		return nil, fmt.Errorf("分类信息有误：%v", err)
 	}
 
 	if err := dao.db.WithContext(ctx).Create(category).Error; err != nil {
 		dao.logger.Error("创建分类失败",
 			zap.Error(err),
 			zap.String("name", category.Name))
-		return nil, fmt.Errorf("创建分类失败: %w", err)
+		return nil, fmt.Errorf("创建分类失败，请稍后重试，错误信息：%v", err)
 	}
 
 	dao.logger.Info("分类创建成功",
@@ -95,7 +94,7 @@ func (dao *categoryDAO) UpdateCategory(ctx context.Context, category *model.Cate
 
 	if err := dao.validateCategory(ctx, category, false); err != nil {
 		dao.logger.Error("分类验证失败", zap.Error(err))
-		return nil, err
+		return nil, fmt.Errorf("分类信息有误：%v", err)
 	}
 
 	// 构建更新数据，避免零值问题
@@ -110,12 +109,12 @@ func (dao *categoryDAO) UpdateCategory(ctx context.Context, category *model.Cate
 		dao.logger.Error("更新分类失败",
 			zap.Error(err),
 			zap.Int("id", category.ID))
-		return nil, fmt.Errorf("更新分类失败: %w", err)
+		return nil, fmt.Errorf("更新分类失败，请稍后重试，错误信息：%v", err)
 	}
 
 	if result.RowsAffected == 0 {
 		dao.logger.Warn("更新分类：未找到记录", zap.Int("id", category.ID))
-		return nil, gorm.ErrRecordNotFound
+		return nil, fmt.Errorf("未找到要更新的分类，id=%d", category.ID)
 	}
 
 	// 获取更新后的记录
@@ -124,7 +123,7 @@ func (dao *categoryDAO) UpdateCategory(ctx context.Context, category *model.Cate
 		dao.logger.Error("获取更新后的分类失败",
 			zap.Error(err),
 			zap.Int("id", category.ID))
-		return nil, err
+		return nil, fmt.Errorf("获取更新后的分类信息失败，请稍后重试，错误信息：%v", err)
 	}
 
 	dao.logger.Info("分类更新成功", zap.Int("id", category.ID))
@@ -138,10 +137,10 @@ func (dao *categoryDAO) DeleteCategory(ctx context.Context, id int) error {
 	// 检查是否存在子分类
 	children, err := dao.GetCategoryChildren(ctx, id)
 	if err != nil {
-		return fmt.Errorf("检查子分类失败: %w", err)
+		return fmt.Errorf("删除分类前检查子分类失败，请稍后重试，错误信息：%v", err)
 	}
 	if len(children) > 0 {
-		return errors.New("存在子分类，无法删除")
+		return errors.New("该分类下存在子分类，无法删除")
 	}
 
 	result := dao.db.WithContext(ctx).Delete(&model.Category{}, id)
@@ -149,12 +148,12 @@ func (dao *categoryDAO) DeleteCategory(ctx context.Context, id int) error {
 		dao.logger.Error("删除分类失败",
 			zap.Error(err),
 			zap.Int("id", id))
-		return fmt.Errorf("删除分类失败: %w", err)
+		return fmt.Errorf("删除分类失败，请稍后重试，错误信息：%v", err)
 	}
 
 	if result.RowsAffected == 0 {
 		dao.logger.Warn("删除分类：未找到记录", zap.Int("id", id))
-		return gorm.ErrRecordNotFound
+		return fmt.Errorf("未找到要删除的分类，id=%d", id)
 	}
 
 	dao.logger.Info("分类删除成功", zap.Int("id", id))
@@ -164,10 +163,10 @@ func (dao *categoryDAO) DeleteCategory(ctx context.Context, id int) error {
 // ListCategory 列出分类 (分页)
 func (dao *categoryDAO) ListCategory(ctx context.Context, req model.ListCategoryReq) ([]model.Category, int64, error) {
 	dao.logger.Debug("开始列出分类",
-		zap.String("name", req.Name),
+		zap.String("name", req.Search),
 		zap.Any("status", req.Status),
 		zap.Int("page", req.Page),
-		zap.Int("page_size", req.PageSize))
+		zap.Int("page_size", req.Size))
 
 	var categories []model.Category
 	var total int64
@@ -178,11 +177,11 @@ func (dao *categoryDAO) ListCategory(ctx context.Context, req model.ListCategory
 	// 计算总数
 	if err := db.Count(&total).Error; err != nil {
 		dao.logger.Error("计算分类总数失败", zap.Error(err))
-		return nil, 0, fmt.Errorf("计算分类总数失败: %w", err)
+		return nil, 0, fmt.Errorf("获取分类总数失败，请稍后重试，错误信息：%v", err)
 	}
 
 	// 分页参数验证和设置
-	page, pageSize := dao.validatePagination(req.Page, req.PageSize)
+	page, pageSize := dao.validatePagination(req.Page, req.Size)
 	offset := (page - 1) * pageSize
 
 	// 执行查询
@@ -191,7 +190,7 @@ func (dao *categoryDAO) ListCategory(ctx context.Context, req model.ListCategory
 		Order("sort_order ASC, id ASC").
 		Find(&categories).Error; err != nil {
 		dao.logger.Error("查询分类列表失败", zap.Error(err))
-		return nil, 0, fmt.Errorf("查询分类列表失败: %w", err)
+		return nil, 0, fmt.Errorf("获取分类列表失败，请稍后重试，错误信息：%v", err)
 	}
 
 	dao.logger.Debug("分类列表获取成功",
@@ -213,7 +212,7 @@ func (dao *categoryDAO) GetCategory(ctx context.Context, id int) (*model.Categor
 		dao.logger.Error("获取分类详情失败",
 			zap.Error(err),
 			zap.Int("id", id))
-		return nil, fmt.Errorf("获取分类详情失败: %w", err)
+		return nil, fmt.Errorf("获取分类详情失败，请稍后重试，错误信息：%v", err)
 	}
 
 	dao.logger.Debug("分类详情获取成功", zap.Int("id", id))
@@ -230,7 +229,7 @@ func (dao *categoryDAO) GetAllCategories(ctx context.Context) ([]model.Category,
 		Order("sort_order ASC, id ASC").
 		Find(&categories).Error; err != nil {
 		dao.logger.Error("获取所有分类失败", zap.Error(err))
-		return nil, fmt.Errorf("获取所有分类失败: %w", err)
+		return nil, fmt.Errorf("获取所有分类失败，请稍后重试，错误信息：%v", err)
 	}
 
 	dao.logger.Debug("所有分类获取成功", zap.Int("count", len(categories)))
@@ -253,7 +252,7 @@ func (dao *categoryDAO) GetCategoriesByIDs(ctx context.Context, ids []int) ([]mo
 		dao.logger.Error("根据ID列表获取分类失败",
 			zap.Error(err),
 			zap.Ints("ids", ids))
-		return nil, fmt.Errorf("根据ID列表获取分类失败: %w", err)
+		return nil, fmt.Errorf("获取分类信息失败，请稍后重试，错误信息：%v", err)
 	}
 
 	dao.logger.Debug("根据ID列表获取分类成功",
@@ -271,7 +270,7 @@ func (dao *categoryDAO) CheckCategoryExists(ctx context.Context, id int) (bool, 
 		dao.logger.Error("检查分类是否存在失败",
 			zap.Error(err),
 			zap.Int("id", id))
-		return false, fmt.Errorf("检查分类是否存在失败: %w", err)
+		return false, fmt.Errorf("检查分类是否存在失败，请稍后重试，错误信息：%v", err)
 	}
 	return count > 0, nil
 }
@@ -291,7 +290,7 @@ func (dao *categoryDAO) CheckNameExists(ctx context.Context, name string, exclud
 		dao.logger.Error("检查分类名称是否存在失败",
 			zap.Error(err),
 			zap.String("name", name))
-		return false, fmt.Errorf("检查分类名称是否存在失败: %w", err)
+		return false, fmt.Errorf("检查分类名称是否存在失败，请稍后重试，错误信息：%v", err)
 	}
 	return count > 0, nil
 }
@@ -308,41 +307,13 @@ func (dao *categoryDAO) GetCategoryChildren(ctx context.Context, parentID int) (
 		dao.logger.Error("获取子分类失败",
 			zap.Error(err),
 			zap.Int("parent_id", parentID))
-		return nil, fmt.Errorf("获取子分类失败: %w", err)
+		return nil, fmt.Errorf("获取子分类失败，请稍后重试，错误信息：%v", err)
 	}
 
 	dao.logger.Debug("获取子分类成功",
 		zap.Int("parent_id", parentID),
 		zap.Int("count", len(children)))
 	return children, nil
-}
-
-// BatchUpdateStatus 批量更新分类状态
-func (dao *categoryDAO) BatchUpdateStatus(ctx context.Context, ids []int, status int8) error {
-	if len(ids) == 0 {
-		return nil
-	}
-
-	dao.logger.Debug("批量更新分类状态",
-		zap.Ints("ids", ids),
-		zap.Int8("status", status))
-
-	result := dao.db.WithContext(ctx).
-		Model(&model.Category{}).
-		Where("id IN ?", ids).
-		Update("status", status)
-
-	if err := result.Error; err != nil {
-		dao.logger.Error("批量更新分类状态失败",
-			zap.Error(err),
-			zap.Ints("ids", ids))
-		return fmt.Errorf("批量更新分类状态失败: %w", err)
-	}
-
-	dao.logger.Info("批量更新分类状态成功",
-		zap.Ints("ids", ids),
-		zap.Int64("affected", result.RowsAffected))
-	return nil
 }
 
 // GetCategoryTree 获取分类树
@@ -358,33 +329,11 @@ func (dao *categoryDAO) GetCategoryTree(ctx context.Context, status *int8) ([]mo
 	var allCategories []model.Category
 	if err := query.Order("sort_order ASC, id ASC").Find(&allCategories).Error; err != nil {
 		dao.logger.Error("获取分类树失败", zap.Error(err))
-		return nil, fmt.Errorf("获取分类树失败: %w", err)
+		return nil, fmt.Errorf("获取分类树失败，请稍后重试，错误信息：%v", err)
 	}
 
-	// 构建分类树
-	categoryMap := make(map[int]*model.Category)
-	var rootCategories []model.Category
-
-	// 第一步：将所有分类加入map
-	for i := range allCategories {
-		category := allCategories[i]
-		categoryMap[category.ID] = &allCategories[i]
-	}
-
-	// 第二步：构建树结构
-	for i := range allCategories {
-		category := allCategories[i]
-		if category.ParentID == nil || *category.ParentID == 0 {
-			// 根分类
-			rootCategories = append(rootCategories, category)
-		} else if parent, exists := categoryMap[*category.ParentID]; exists {
-			// 添加到父分类的子分类列表
-			parent.Children = append(parent.Children, category)
-		}
-	}
-
-	dao.logger.Debug("分类树获取成功", zap.Int("root_count", len(rootCategories)))
-	return rootCategories, nil
+	dao.logger.Debug("分类树获取成功", zap.Int("count", len(allCategories)))
+	return allCategories, nil
 }
 
 // 私有辅助方法
@@ -404,7 +353,7 @@ func (dao *categoryDAO) validateCategory(ctx context.Context, category *model.Ca
 
 	exists, err := dao.CheckNameExists(ctx, category.Name, excludeID)
 	if err != nil {
-		return err
+		return fmt.Errorf("检查分类名称时发生错误，请稍后重试，错误信息：%v", err)
 	}
 	if exists {
 		return errors.New("分类名称已存在")
@@ -424,9 +373,63 @@ func (dao *categoryDAO) validateCategory(ctx context.Context, category *model.Ca
 		if !isCreate && category.ID == *category.ParentID {
 			return errors.New("不能将自己设为父分类")
 		}
+
+		// 防止将父分类设为自己的子分类
+		if !isCreate {
+			// 获取当前数据库中的分类
+			dbCategory, err := dao.GetCategory(ctx, category.ID)
+			if err != nil {
+				return err
+			}
+			if dbCategory == nil {
+				return errors.New("要更新的分类不存在")
+			}
+			// 只有当 parentID 发生变化时才检查循环引用
+			var dbParentID int
+			if dbCategory.ParentID != nil {
+				dbParentID = *dbCategory.ParentID
+			}
+			if dbParentID != *category.ParentID {
+				if err := dao.checkCircularReference(ctx, category.ID, *category.ParentID); err != nil {
+					return err
+				}
+			}
+		}
 	}
 
 	return nil
+}
+
+// checkCircularReference 检查循环引用
+func (dao *categoryDAO) checkCircularReference(ctx context.Context, categoryID, parentID int) error {
+	// 如果 parentID 为 0 或 nil，直接返回
+	if parentID == 0 {
+		return nil
+	}
+	visited := make(map[int]bool)
+	return dao.dfsCheckCircular(ctx, categoryID, parentID, visited)
+}
+
+// dfsCheckCircular 深度优先搜索检查循环引用
+func (dao *categoryDAO) dfsCheckCircular(ctx context.Context, targetID, currentID int, visited map[int]bool) error {
+	if currentID == targetID {
+		return errors.New("设置父分类会产生循环引用")
+	}
+
+	if visited[currentID] {
+		return nil
+	}
+	visited[currentID] = true
+
+	// 获取当前分类的父ID，向上递归
+	category, err := dao.GetCategory(ctx, currentID)
+	if err != nil {
+		return err
+	}
+	if category == nil || category.ParentID == nil || *category.ParentID == 0 {
+		return nil
+	}
+	return dao.dfsCheckCircular(ctx, targetID, *category.ParentID, visited)
 }
 
 // buildUpdateData 构建更新数据
@@ -454,11 +457,11 @@ func (dao *categoryDAO) buildListQuery(ctx context.Context, req model.ListCatego
 	db := dao.db.WithContext(ctx).Model(&model.Category{})
 
 	// 名称搜索
-	if req.Name != "" {
-		db = db.Where("name LIKE ?", "%"+strings.TrimSpace(req.Name)+"%")
+	if req.Search != "" {
+		db = db.Where("name LIKE ?", "%"+strings.TrimSpace(req.Search)+"%")
 	}
 
-	// 状态筛选
+	// 状态过滤
 	if req.Status != nil {
 		db = db.Where("status = ?", *req.Status)
 	}
