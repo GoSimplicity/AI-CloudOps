@@ -134,8 +134,9 @@
                   <template #overlay>
                     <a-menu @click="(e: any) => handleCommand(e.key, record)">
                       <a-menu-item key="submit" v-if="record.status === 0">提交</a-menu-item>
-                      <a-menu-item key="process" v-if="record.status === 1">处理</a-menu-item>
+                      <a-menu-item key="approve" v-if="record.status === 1">批准</a-menu-item>
                       <a-menu-item key="reject" v-if="record.status === 1">拒绝</a-menu-item>
+                      <a-menu-item key="transfer" v-if="record.status === 1">转交</a-menu-item>
                       <a-menu-divider />
                       <a-menu-item key="delete" danger>删除</a-menu-item>
                     </a-menu>
@@ -180,9 +181,8 @@
 
         <a-descriptions bordered :column="2">
           <a-descriptions-item label="工单ID">{{ detailDialog.instance.id }}</a-descriptions-item>
-          <a-descriptions-item label="流程ID">{{ detailDialog.instance.workflow_id }}</a-descriptions-item>
+          <a-descriptions-item label="流程ID">{{ detailDialog.instance.process_id }}</a-descriptions-item>
           <a-descriptions-item label="当前节点">{{ detailDialog.instance.current_step }}</a-descriptions-item>
-          <a-descriptions-item label="当前角色">{{ detailDialog.instance.current_role }}</a-descriptions-item>
           <a-descriptions-item label="创建人">{{ detailDialog.instance.creator_name }}</a-descriptions-item>
           <a-descriptions-item label="提交时间">{{ formatFullDateTime(detailDialog.instance.created_at || '') }}</a-descriptions-item>
           <a-descriptions-item v-if="detailDialog.instance.assignee_name" label="处理人">
@@ -193,6 +193,9 @@
           </a-descriptions-item>
           <a-descriptions-item v-if="detailDialog.instance.due_date" label="截止时间">
             {{ formatFullDateTime(detailDialog.instance.due_date || '') }}
+          </a-descriptions-item>
+          <a-descriptions-item v-if="detailDialog.instance.is_overdue" label="是否逾期">
+            <a-tag color="red">已逾期</a-tag>
           </a-descriptions-item>
         </a-descriptions>
 
@@ -218,7 +221,7 @@
             <a-timeline-item v-for="flow in instanceFlows" :key="flow.id" :color="getFlowColor(flow.action)">
               <div class="flow-item">
                 <div class="flow-header">
-                  <span class="flow-node">{{ flow.step }}</span>
+                  <span class="flow-node">{{ flow.step_name }}</span>
                   <span class="flow-action">{{ getFlowActionText(flow.action) }}</span>
                   <span class="flow-time">{{ formatFullDateTime(flow.created_at || '') }}</span>
                 </div>
@@ -227,6 +230,9 @@
                 </div>
                 <div class="flow-comment" v-if="flow.comment">
                   备注: {{ flow.comment }}
+                </div>
+                <div class="flow-duration" v-if="flow.duration">
+                  处理时长: {{ formatDuration(flow.duration) }}
                 </div>
               </div>
             </a-timeline-item>
@@ -244,9 +250,27 @@
                 <div class="comment-info">
                   <div class="comment-author">{{ comment.creator_name }}</div>
                   <div class="comment-time">{{ formatFullDateTime(comment.created_at || '') }}</div>
+                  <a-tag v-if="comment.is_system" color="blue" size="small">系统</a-tag>
                 </div>
               </div>
               <div class="comment-content">{{ comment.content }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="instanceAttachments && instanceAttachments.length > 0" class="attachments-section">
+          <h3>附件</h3>
+          <div class="attachment-list">
+            <div v-for="attachment in instanceAttachments" :key="attachment.id" class="attachment-item">
+              <div class="attachment-info">
+                <span class="attachment-name">{{ attachment.file_name }}</span>
+                <span class="attachment-size">{{ formatFileSize(attachment.file_size) }}</span>
+                <span class="attachment-uploader">上传者: {{ attachment.uploader_name }}</span>
+              </div>
+              <div class="attachment-actions">
+                <a-button size="small" type="link" @click="downloadAttachment(attachment)">下载</a-button>
+                <a-button size="small" type="link" danger @click="deleteAttachmentConfirm(attachment.id)">删除</a-button>
+              </div>
             </div>
           </div>
         </div>
@@ -261,6 +285,9 @@
             <a-button danger @click="processInstance(detailDialog.instance, 'reject')">
               拒绝
             </a-button>
+            <a-button @click="showTransferDialog">
+              转交
+            </a-button>
           </div>
         </div>
 
@@ -272,6 +299,24 @@
               提交评论
             </a-button>
           </div>
+        </div>
+
+        <div class="action-area">
+          <a-divider orientation="left">上传附件</a-divider>
+          <a-upload
+            :before-upload="beforeUpload"
+            :file-list="uploadFileList"
+            @change="handleUploadChange"
+            multiple
+          >
+            <a-button>
+              <UploadOutlined />
+              选择文件
+            </a-button>
+          </a-upload>
+          <a-button type="primary" @click="uploadAttachment" :disabled="uploadFileList.length === 0" class="mt-8">
+            上传附件
+          </a-button>
         </div>
 
         <div class="detail-footer">
@@ -293,47 +338,88 @@
       :destroy-on-close="false"
     >
       <!-- 步骤1：选择流程 -->
-      <div v-if="!selectedWorkflow && !instanceDialog.isEdit" class="process-selection">
+      <div v-if="!selectedProcess && !instanceDialog.isEdit" class="process-selection">
         <a-form-item label="标题">
           <a-input v-model:value="newInstance.title" placeholder="请输入工单标题" />
         </a-form-item>
         
         <a-form-item label="选择流程">
           <a-select 
-            v-model:value="newInstance.workflow_id" 
+            v-model:value="newInstance.process_id" 
             placeholder="请选择流程" 
             style="width: 100%" 
-            @change="handleSelectWorkflow"
+            @change="handleSelectProcess"
           >
-            <a-select-option v-for="workflow in workflows" :key="workflow.id" :value="workflow.id">
-              {{ workflow.name }}
+            <a-select-option v-for="process in processes" :key="process.id" :value="process.id">
+              {{ process.name }}
             </a-select-option>
           </a-select>
         </a-form-item>
         
-        <a-form-item label="表单设计">
+        <a-form-item label="模板">
           <a-select 
-            v-model:value="selectedFormDesignId" 
-            placeholder="请选择表单设计" 
+            v-model:value="newInstance.template_id" 
+            placeholder="请选择模板(可选)" 
             style="width: 100%" 
-            @change="handleSelectFormDesign"
+            allow-clear
           >
-            <a-select-option v-for="design in formDesigns" :key="design.id" :value="design.id">
-              {{ design.name }}
+            <a-select-option v-for="template in templates" :key="template.id" :value="template.id">
+              {{ template.name }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        
+        <a-form-item label="分类">
+          <a-select 
+            v-model:value="newInstance.category_id" 
+            placeholder="请选择分类(可选)" 
+            style="width: 100%" 
+            allow-clear
+          >
+            <a-select-option v-for="category in categories" :key="category.id" :value="category.id">
+              {{ category.name }}
             </a-select-option>
           </a-select>
         </a-form-item>
         
         <a-form-item label="优先级">
           <a-select v-model:value="newInstance.priority" placeholder="请选择优先级" style="width: 100%">
-            <a-select-option :value="0">低</a-select-option>
-            <a-select-option :value="1">中</a-select-option>
-            <a-select-option :value="2">高</a-select-option>
+            <a-select-option :value="1">低</a-select-option>
+            <a-select-option :value="2">中</a-select-option>
+            <a-select-option :value="3">高</a-select-option>
+          </a-select>
+        </a-form-item>
+        
+        <a-form-item label="指定处理人">
+          <a-select 
+            v-model:value="newInstance.assignee_id" 
+            placeholder="请选择处理人(可选)" 
+            style="width: 100%" 
+            allow-clear
+          >
+            <a-select-option v-for="user in users" :key="user.id" :value="user.id">
+              {{ user.name }}
+            </a-select-option>
           </a-select>
         </a-form-item>
         
         <a-form-item label="截止日期">
-          <a-date-picker v-model:value="dueDate" style="width: 100%" />
+          <a-date-picker 
+            v-model:value="dueDate" 
+            style="width: 100%" 
+            :show-time="{ format: 'HH:mm:ss' }"
+            format="YYYY-MM-DD HH:mm:ss"
+          />
+        </a-form-item>
+
+        <a-form-item label="标签">
+          <a-select
+            v-model:value="newInstance.tags"
+            mode="tags"
+            style="width: 100%"
+            placeholder="输入标签"
+            :token-separators="[',']"
+          />
         </a-form-item>
 
         <a-form-item label="描述">
@@ -342,7 +428,7 @@
       </div>
 
       <!-- 步骤2：填写表单字段 -->
-      <div v-if="selectedWorkflow || instanceDialog.isEdit" class="instance-form">
+      <div v-if="selectedProcess || instanceDialog.isEdit" class="instance-form">
         <div class="instance-form-header">
           <a-button 
             v-if="!instanceDialog.isEdit" 
@@ -356,8 +442,8 @@
 
           <div class="instance-form-title">
             <template v-if="!instanceDialog.isEdit">
-              <h3>{{ selectedWorkflow?.name }}</h3>
-              <p>{{ selectedWorkflow?.description }}</p>
+              <h3>{{ selectedProcess?.name }}</h3>
+              <p>{{ selectedProcess?.description }}</p>
             </template>
             
             <template v-else>
@@ -365,20 +451,6 @@
             </template>
           </div>
         </div>
-
-        <!-- 编辑模式下的完成时间设置 -->
-        <a-form-item 
-          v-if="instanceDialog.isEdit && instanceDialog.instance?.status === 2" 
-          label="完成时间"
-          class="mt-16"
-        >
-          <a-date-picker 
-            v-model:value="completedDate" 
-            :show-time="{ format: 'HH:mm:ss' }"
-            format="YYYY-MM-DD HH:mm:ss"
-            style="width: 100%" 
-          />
-        </a-form-item>
 
         <a-form layout="vertical">
           <template v-if="formFields.length > 0">
@@ -419,9 +491,9 @@
                 style="width: 100%"
                 :placeholder="`请选择${field.label}`"
               >
-                <a-select-option value="选项1">选项1</a-select-option>
-                <a-select-option value="选项2">选项2</a-select-option>
-                <a-select-option value="选项3">选项3</a-select-option>
+                <a-select-option v-for="option in field.options" :key="option" :value="option">
+                  {{ option }}
+                </a-select-option>
               </a-select>
 
               <!-- 复选框 -->
@@ -437,9 +509,9 @@
                 v-else-if="field.type === 'radio'" 
                 v-model:value="formDataValues[field.field]"
               >
-                <a-radio value="选项1">选项1</a-radio>
-                <a-radio value="选项2">选项2</a-radio>
-                <a-radio value="选项3">选项3</a-radio>
+                <a-radio v-for="option in field.options" :key="option" :value="option">
+                  {{ option }}
+                </a-radio>
               </a-radio-group>
 
               <!-- 多行文本 -->
@@ -454,6 +526,28 @@
           <a-alert v-else type="warning" message="未找到表单字段定义" />
         </a-form>
       </div>
+    </a-modal>
+
+    <!-- 转交对话框 -->
+    <a-modal
+      v-model:visible="transferDialog.visible"
+      title="工单转交"
+      @ok="confirmTransfer"
+      okText="转交"
+      cancelText="取消"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="转交给" required>
+          <a-select v-model:value="transferDialog.assigneeId" placeholder="请选择处理人">
+            <a-select-option v-for="user in users" :key="user.id" :value="user.id">
+              {{ user.name }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="转交说明">
+          <a-textarea v-model:value="transferDialog.comment" :rows="3" placeholder="请输入转交说明..." />
+        </a-form-item>
+      </a-form>
     </a-modal>
 
     <!-- 删除确认对话框 -->
@@ -480,7 +574,8 @@ import {
   ClockCircleOutlined,
   CloseCircleOutlined,
   DownOutlined,
-  ArrowLeftOutlined
+  ArrowLeftOutlined,
+  UploadOutlined
 } from '@ant-design/icons-vue';
 import dayjs from 'dayjs';
 import {
@@ -489,30 +584,49 @@ import {
   createInstance,
   updateInstance,
   deleteInstance,
-  approveInstance,
   actionInstance,
+  transferInstance,
   commentInstance,
-  listProcess,
-  listFormDesign,
-  type ListProcessReq,
-  type Instance,
+  getInstanceComments,
+  getInstanceFlows,
+  getInstanceAttachments,
+  uploadAttachment,
+  deleteAttachment,
+  myInstance,
   type ListInstanceReq,
+  type MyInstanceReq,
+  type Instance,
   type CreateInstanceReq,
   type UpdateInstanceReq,
   type InstanceFlowReq,
   type InstanceCommentReq,
   type InstanceFlow,
   type InstanceComment,
-  type ListFormDesignReq,
-} from '#/api/core/workorder';
+  type InstanceAttachment,
+} from '#/api/core/workorder_instance';
 
 // 定义类型
-interface Workflow {
+interface Process {
   id: number;
   name: string;
   description?: string;
-  form_design_id: number;
   version: number;
+}
+
+interface Template {
+  id: number;
+  name: string;
+  description?: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+}
+
+interface User {
+  id: number;
+  name: string;
 }
 
 interface Field {
@@ -520,37 +634,15 @@ interface Field {
   label: string;
   type: string;
   required: boolean;
-}
-
-interface FormDesign {
-  id: number;
-  name: string;
-  schema: string | Schema;
-  description?: string;
-  status?: number;
-  version?: number;
-  category_id?: number;
-  creator_id?: number;
-  creator_name?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
-interface Schema {
-  fields: Field[];
+  options?: string[];
 }
 
 interface WorkOrderStatistics {
-  id: number;
-  date: string;
   total_count: number;
   completed_count: number;
   processing_count: number;
   canceled_count: number;
   rejected_count: number;
-  avg_process_time: number;
-  created_at: string;
-  updated_at: string;
 }
 
 // 状态数据
@@ -564,26 +656,23 @@ const dateRange = ref<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
 const processingComment = ref('');
 const newComment = ref('');
 const dueDate = ref<dayjs.Dayjs | null>(null);
-const completedDate = ref<dayjs.Dayjs | null>(null);
-const selectedFormDesignId = ref<number | null>(null);
+const uploadFileList = ref<any[]>([]);
 
 // 数据源
 const instances = ref<Instance[]>([]);
-const workflows = ref<Workflow[]>([]);
-const formDesigns = ref<FormDesign[]>([]);
+const processes = ref<Process[]>([]);
+const templates = ref<Template[]>([]);
+const categories = ref<Category[]>([]);
+const users = ref<User[]>([]);
 const instanceFlows = ref<InstanceFlow[]>([]);
 const instanceComments = ref<InstanceComment[]>([]);
+const instanceAttachments = ref<InstanceAttachment[]>([]);
 const statistics = ref<WorkOrderStatistics>({
-  id: 0,
-  date: '',
   total_count: 0,
   completed_count: 0,
   processing_count: 0,
   canceled_count: 0,
-  rejected_count: 0,
-  avg_process_time: 0,
-  created_at: '',
-  updated_at: ''
+  rejected_count: 0
 });
 
 // 表单字段和数据
@@ -597,14 +686,19 @@ const detailDialog = reactive({
   instance: null as Instance | null
 });
 
-// 实例创建/编辑对话框
 const instanceDialog = reactive({
   visible: false,
   isEdit: false,
   instance: null as Instance | null,
 });
 
-// 删除对话框
+const transferDialog = reactive({
+  visible: false,
+  instanceId: 0,
+  assigneeId: null as number | null,
+  comment: ''
+});
+
 const deleteDialog = reactive({
   visible: false,
   instanceId: 0
@@ -613,18 +707,14 @@ const deleteDialog = reactive({
 // 新工单实例
 const newInstance = reactive<CreateInstanceReq>({
   title: '',
-  workflow_id: 0,
-  form_data: {
-    approved_days: 0,
-    reason: '',
-    date_range: [],
-    type: ''
-  },
-  priority: 1
+  process_id: 0,
+  form_data: {},
+  priority: 1,
+  tags: []
 });
 
 // 选择的流程
-const selectedWorkflow = ref<Workflow | null>(null);
+const selectedProcess = ref<Process | null>(null);
 
 // 列定义
 const columns = [
@@ -669,7 +759,7 @@ const columns = [
   {
     title: '操作',
     key: 'action',
-    width: 180,
+    width: 200,
     align: 'center',
   },
 ];
@@ -686,24 +776,38 @@ watch(
 // 方法
 const fetchInstances = async () => {
   try {
+    loading.value = true;
     const params: ListInstanceReq = {
-      page: 1,
-      page_size: 100,
+      page: currentPage.value,
+      size: pageSize.value, // 使用 size 而不是 page_size
     };
 
+    if (searchQuery.value) {
+      params.title = searchQuery.value;
+    }
+
+    if (statusFilter.value !== null) {
+      params.status = statusFilter.value;
+    }
+
+    if (dateRange.value) {
+      params.start_date = dateRange.value[0].format('YYYY-MM-DD');
+      params.end_date = dateRange.value[1].format('YYYY-MM-DD');
+    }
+
     const response = await listInstance(params);
-    // 确保 response 是一个数组
-    if (response && Array.isArray(response)) {
-      instances.value = response;
-      totalItems.value = response.length || 0;
-    } else if (response && typeof response === 'object' && Array.isArray(response.data)) {
-      instances.value = response.data;
-      totalItems.value = response.total || response.data.length || 0;
+
+    // 按照 res.items 获取数据
+    if (response && typeof response === 'object' && Array.isArray(response.items)) {
+      instances.value = response.items;
+      totalItems.value = typeof response.total === 'number' ? response.total : response.items.length;
     } else {
       instances.value = [];
       totalItems.value = 0;
-      console.warn('Unexpected response format:', response);
     }
+
+    // 计算统计数据
+    calculateStatistics();
   } catch (error) {
     message.error('获取工单列表失败');
     console.error('Failed to fetch instances:', error);
@@ -714,97 +818,86 @@ const fetchInstances = async () => {
   }
 };
 
-const fetchStatistics = async () => {
+// 获取我的工单
+const fetchMyInstances = async (type: 'created' | 'assigned' | 'all' = 'all') => {
   try {
-    // 假设有一个API来获取统计数据
-    // 此处仅示例
-    statistics.value = {
-      id: 1,
-      date: dayjs().format('YYYY-MM-DD'),
-      total_count: 125,
-      completed_count: 78,
-      processing_count: 35,
-      canceled_count: 5,
-      rejected_count: 7,
-      avg_process_time: 24,
-      created_at: '',
-      updated_at: ''
+    loading.value = true;
+    const params: MyInstanceReq = {
+      page: currentPage.value,
+      size: pageSize.value, // 使用 size 而不是 page_size
+      type: type
     };
+
+    if (searchQuery.value) {
+      params.title = searchQuery.value;
+    }
+
+    if (statusFilter.value !== null) {
+      params.status = statusFilter.value;
+    }
+
+    if (dateRange.value) {
+      params.start_date = dateRange.value[0].format('YYYY-MM-DD');
+      params.end_date = dateRange.value[1].format('YYYY-MM-DD');
+    }
+
+    const response = await myInstance(params);
+    
+    if (response && Array.isArray(response)) {
+      instances.value = response;
+      totalItems.value = response.length;
+    } else if (response && typeof response === 'object' && Array.isArray(response.data)) {
+      instances.value = response.data;
+      totalItems.value = response.total || response.data.length;
+    } else {
+      instances.value = [];
+      totalItems.value = 0;
+    }
+    
+    // 计算统计数据
+    calculateStatistics();
   } catch (error) {
-    console.error('Failed to fetch statistics:', error);
+    message.error('获取我的工单失败');
+    console.error('Failed to fetch my instances:', error);
+    instances.value = [];
+    totalItems.value = 0;
+  } finally {
+    loading.value = false;
   }
 };
 
-const fetchWorkflows = async () => {
-  try {
-    const params: ListProcessReq = {
-      page: 1,
-      page_size: 100
-    };
-    const response = await listProcess(params);
-    if (response && Array.isArray(response)) {
-      workflows.value = response;
-    } else if (response && typeof response === 'object' && Array.isArray(response.data)) {
-      workflows.value = response.data;
-    } else {
-      workflows.value = [];
-      console.warn('Unexpected workflows response format:', response);
-    }
-  } catch (error) {
-    message.error('获取流程列表失败');
-    console.error('Failed to fetch workflows:', error);
-    workflows.value = [];
-  }
-};
-
-// 在fetchFormDesigns后添加额外的日志
-const fetchFormDesigns = async () => {
-  try {
-    const params: ListFormDesignReq = {
-      page: 1,
-      page_size: 100
-    };
-    const response = await listFormDesign(params);
-    if (response && Array.isArray(response)) {
-      formDesigns.value = response;
-    } else if (response && typeof response === 'object' && Array.isArray(response.data)) {
-      formDesigns.value = response.data;
-    } else {
-      formDesigns.value = [];
-      console.warn('Unexpected form designs response format:', response);
-    }
-    
-    console.log('表单设计列表:', formDesigns.value);
-    
-    // 检查每个表单设计的schema格式
-    formDesigns.value.forEach((design, index) => {
-      console.log(`表单设计 #${index+1} (ID: ${design.id}):`);
-      console.log('- 名称:', design.name);
-      
-      // 检查schema格式
-      if (typeof design.schema === 'string') {
-        try {
-          const parsedSchema = JSON.parse(design.schema);
-          console.log('- Schema解析成功，字段数量:', parsedSchema.fields?.length || 0);
-        } catch (e) {
-          console.error('- Schema解析失败:', e);
-        }
-      } else if (typeof design.schema === 'object') {
-        console.log('- Schema已是对象，字段数量:', design.schema.fields?.length || 0);
-      } else {
-        console.error('- Schema格式异常:', typeof design.schema);
+const calculateStatistics = () => {
+  const stats = instances.value.reduce(
+    (acc, instance) => {
+      acc.total_count++;
+      switch (instance.status) {
+        case 1:
+          acc.processing_count++;
+          break;
+        case 2:
+          acc.completed_count++;
+          break;
+        case 3:
+          acc.rejected_count++;
+          break;
       }
-    });
-  } catch (error) {
-    message.error('获取表单设计列表失败');
-    console.error('Failed to fetch form designs:', error);
-    formDesigns.value = [];
-  }
+      return acc;
+    },
+    {
+      total_count: 0,
+      completed_count: 0,
+      processing_count: 0,
+      canceled_count: 0,
+      rejected_count: 0
+    }
+  );
+  
+  statistics.value = stats;
 };
 
 const fetchInstanceDetail = async (id: number) => {
   try {
-    const response = await detailInstance({ id });
+    const response = await detailInstance(id);
     if (!response) {
       message.error('获取工单详情失败: 无响应数据');
       return;
@@ -826,92 +919,81 @@ const fetchInstanceDetail = async (id: number) => {
       formData.value = {};
     }
     
-    // 获取流转记录和评论
-    instanceFlows.value = Array.isArray(response.flows) ? response.flows : [];
-    instanceComments.value = Array.isArray(response.comments) ? response.comments : [];
+    // 获取流转记录、评论和附件
+    await Promise.all([
+      fetchInstanceFlows(id),
+      fetchInstanceComments(id),
+      fetchInstanceAttachments(id)
+    ]);
   } catch (error) {
     message.error('获取工单详情失败');
     console.error('Failed to fetch instance detail:', error);
   }
 };
 
-const handleSelectWorkflow = async (workflowId: number) => {
+const fetchInstanceFlows = async (id: number) => {
   try {
-    // 找到选中的流程
-    selectedWorkflow.value = workflows.value.find(w => w.id === workflowId) || null;
+    const response = await getInstanceFlows(id);
+    instanceFlows.value = Array.isArray(response) ? response : [];
+  } catch (error) {
+    console.error('Failed to fetch instance flows:', error);
+    instanceFlows.value = [];
+  }
+};
+
+const fetchInstanceComments = async (id: number) => {
+  try {
+    const response = await getInstanceComments(id);
+    instanceComments.value = Array.isArray(response) ? response : [];
+  } catch (error) {
+    console.error('Failed to fetch instance comments:', error);
+    instanceComments.value = [];
+  }
+};
+
+const fetchInstanceAttachments = async (id: number) => {
+  try {
+    const response = await getInstanceAttachments(id);
+    instanceAttachments.value = Array.isArray(response) ? response : [];
+  } catch (error) {
+    console.error('Failed to fetch instance attachments:', error);
+    instanceAttachments.value = [];
+  }
+};
+
+const handleSelectProcess = async (processId: number) => {
+  try {
+    selectedProcess.value = processes.value.find(p => p.id === processId) || null;
     
-    // 如果流程有关联表单设计，默认选中它
-    if (selectedWorkflow.value?.form_design_id) {
-      selectedFormDesignId.value = selectedWorkflow.value.form_design_id;
-      handleSelectFormDesign(selectedFormDesignId.value);
-    } else {
-      // 否则清空表单字段
-      formFields.value = [];
-    }
+    // 模拟获取流程对应的表单字段
+    formFields.value = [
+      { field: 'reason', label: '申请原因', type: 'textarea', required: true },
+      { field: 'amount', label: '金额', type: 'number', required: true },
+      { field: 'date_range', label: '日期范围', type: 'date', required: true },
+      { field: 'type', label: '类型', type: 'select', required: true, options: ['选项1', '选项2', '选项3'] },
+      { field: 'urgent', label: '是否紧急', type: 'checkbox', required: false }
+    ];
+    
+    // 初始化表单数据
+    formFields.value.forEach((field: Field) => {
+      if (field.type === 'checkbox') {
+        formDataValues[field.field] = false;
+      } else if (field.type === 'number') {
+        formDataValues[field.field] = 0;
+      } else if (field.type === 'date') {
+        formDataValues[field.field] = null;
+      } else {
+        formDataValues[field.field] = '';
+      }
+    });
   } catch (error) {
     message.error('获取流程详情失败');
-    console.error('Failed to fetch workflow detail:', error);
+    console.error('Failed to fetch process detail:', error);
   }
 };
 
-const handleSelectFormDesign = (formDesignId: number) => {
-  try {
-    // 找到选中的表单设计
-    const formDesign = formDesigns.value.find(design => design.id === formDesignId);
-    
-    if (!formDesign) {
-      message.error('未找到表单设计');
-      return;
-    }
-    
-    // 解析表单设计的schema
-    let schema: Schema;
-    if (typeof formDesign.schema === 'string') {
-      try {
-        schema = JSON.parse(formDesign.schema);
-      } catch (e) {
-        message.error('表单设计结构解析失败');
-        console.error('Failed to parse form design schema:', e);
-        return;
-      }
-    } else {
-      schema = formDesign.schema as Schema;
-    }
-    
-    // 设置表单字段
-    if (schema && Array.isArray(schema.fields)) {
-      formFields.value = schema.fields;
-      
-      // 初始化表单数据
-      formFields.value.forEach((field: Field) => {
-        if (field.type === 'checkbox') {
-          formDataValues[field.field] = false;
-        } else if (field.type === 'number') {
-          formDataValues[field.field] = 0;
-        } else if (field.type === 'date') {
-          formDataValues[field.field] = null;
-        } else {
-          formDataValues[field.field] = '';
-        }
-      });
-      
-      console.log('加载表单字段成功:', formFields.value);
-    } else {
-      console.error('表单设计schema中未找到fields字段或fields不是数组:', schema);
-      message.warning('表单设计结构不完整，未找到字段定义');
-      formFields.value = [];
-    }
-  } catch (error) {
-    message.error('解析表单设计失败');
-    console.error('Failed to parse form design:', error);
-    formFields.value = [];
-  }
-};
-
-// 返回选择流程页面
 const backToProcessSelection = () => {
-  selectedWorkflow.value = null;
-  selectedFormDesignId.value = null;
+  selectedProcess.value = null;
   formFields.value = [];
   Object.keys(formDataValues).forEach(key => delete formDataValues[key]);
 };
@@ -940,23 +1022,22 @@ const handleDateRangeChange = () => {
 const handleCreateInstance = () => {
   instanceDialog.isEdit = false;
   instanceDialog.instance = null;
-  selectedWorkflow.value = null;
-  selectedFormDesignId.value = null;
+  selectedProcess.value = null;
   
   // 重置新实例数据
   Object.assign(newInstance, {
     title: '',
-    workflow_id: 0,
+    process_id: 0,
     form_data: {},
     description: '',
-    priority: 1
+    priority: 1,
+    tags: []
   });
   
   // 清空表单数据
   Object.keys(formDataValues).forEach(key => delete formDataValues[key]);
   
   dueDate.value = null;
-  completedDate.value = null;
   formFields.value = [];
   instanceDialog.visible = true;
 };
@@ -964,13 +1045,6 @@ const handleCreateInstance = () => {
 const handleEditInstance = (instance: Instance) => {
   instanceDialog.isEdit = true;
   instanceDialog.instance = JSON.parse(JSON.stringify(instance));
-  
-  // 如果有完成时间，设置到日期选择器
-  if (instance.completed_at) {
-    completedDate.value = dayjs(instance.completed_at);
-  } else {
-    completedDate.value = null;
-  }
   
   // 解析表单数据
   let instanceFormData: Record<string, any> = {};
@@ -983,12 +1057,10 @@ const handleEditInstance = (instance: Instance) => {
     }
   } else if (instance.form_data && typeof instance.form_data === 'object') {
     instanceFormData = instance.form_data as Record<string, any>;
-  } else {
-    instanceFormData = {};
   }
   
-  // 获取表单字段定义
-  fetchWorkflowFormFields(instance.workflow_id);
+  // 设置表单字段和数据
+  fetchProcessFormFields(instance.process_id);
   
   // 清空现有数据
   Object.keys(formDataValues).forEach(key => delete formDataValues[key]);
@@ -1002,69 +1074,19 @@ const handleEditInstance = (instance: Instance) => {
   detailDialog.visible = false;
 };
 
-const fetchWorkflowFormFields = async (workflowId: number) => {
+const fetchProcessFormFields = async (processId: number) => {
   try {
-    // 找到关联的流程
-    const workflow = workflows.value.find(w => w.id === workflowId);
-    
-    if (workflow && workflow.form_design_id) {
-      // 找到关联的表单设计
-      const formDesign = formDesigns.value.find(design => design.id === workflow.form_design_id);
-      
-      if (formDesign) {
-        // 解析表单设计的schema
-        let schema: Schema;
-        if (typeof formDesign.schema === 'string') {
-          try {
-            schema = JSON.parse(formDesign.schema);
-          } catch (e) {
-            message.error('表单设计结构解析失败');
-            console.error('Failed to parse form design schema:', e);
-            return;
-          }
-        } else {
-          schema = formDesign.schema;
-        }
-        
-        // 设置表单字段
-        if (schema && Array.isArray(schema.fields)) {
-          formFields.value = schema.fields;
-        } else {
-          // 使用默认字段
-          formFields.value = [
-            { field: 'reason', label: '请假原因', type: 'text', required: true },
-            { field: 'date_range', label: '请假日期范围', type: 'date', required: true },
-            { field: 'type', label: '请假类型', type: 'select', required: true },
-            { field: 'approved_days', label: '可请假天数', type: 'number', required: false }
-          ];
-        }
-      } else {
-        // 如果找不到表单设计，使用默认字段
-        formFields.value = [
-          { field: 'reason', label: '请假原因', type: 'text', required: true },
-          { field: 'date_range', label: '请假日期范围', type: 'date', required: true },
-          { field: 'type', label: '请假类型', type: 'select', required: true },
-          { field: 'approved_days', label: '可请假天数', type: 'number', required: false }
-        ];
-      }
-    } else {
-      // 如果找不到流程或流程没有关联表单设计，使用默认字段
-      formFields.value = [
-        { field: 'reason', label: '请假原因', type: 'text', required: true },
-        { field: 'date_range', label: '请假日期范围', type: 'date', required: true },
-        { field: 'type', label: '请假类型', type: 'select', required: true },
-        { field: 'approved_days', label: '可请假天数', type: 'number', required: false }
-      ];
-    }
-  } catch (error) {
-    console.error('Failed to fetch workflow form fields:', error);
-    // 使用默认字段
+    // 模拟获取流程对应的表单字段
     formFields.value = [
-      { field: 'reason', label: '请假原因', type: 'text', required: true },
-      { field: 'date_range', label: '请假日期范围', type: 'date', required: true },
-      { field: 'type', label: '请假类型', type: 'select', required: true },
-      { field: 'approved_days', label: '可请假天数', type: 'number', required: false }
+      { field: 'reason', label: '申请原因', type: 'textarea', required: true },
+      { field: 'amount', label: '金额', type: 'number', required: true },
+      { field: 'date_range', label: '日期范围', type: 'date', required: true },
+      { field: 'type', label: '类型', type: 'select', required: true, options: ['选项1', '选项2', '选项3'] },
+      { field: 'urgent', label: '是否紧急', type: 'checkbox', required: false }
     ];
+  } catch (error) {
+    console.error('Failed to fetch process form fields:', error);
+    formFields.value = [];
   }
 };
 
@@ -1073,16 +1095,26 @@ const handleViewInstance = async (instance: Instance) => {
   detailDialog.visible = true;
 };
 
-const handleCommand = (command: string, instance: Instance) => {
+const handleCommand = async (command: string, instance: Instance) => {
   switch (command) {
     case 'submit':
-      submitInstance(instance);
+      await actionInstance(instance.id, {
+        instance_id: instance.id,
+        action: 'approve',
+        step_id: instance.current_step
+      });
+      message.success(`工单 #${instance.id} 已提交`);
+      fetchInstances();
       break;
-    case 'process':
-      handleViewInstance(instance);
+    case 'approve':
+      await processInstance(instance, 'approve');
       break;
     case 'reject':
-      handleViewInstance(instance);
+      await processInstance(instance, 'reject');
+      break;
+    case 'transfer':
+      transferDialog.instanceId = instance.id;
+      transferDialog.visible = true;
       break;
     case 'delete':
       deleteDialog.instanceId = instance.id;
@@ -1092,8 +1124,7 @@ const handleCommand = (command: string, instance: Instance) => {
 };
 
 const saveInstance = async () => {
-  // 验证必填字段
-  if (!selectedWorkflow.value && !instanceDialog.isEdit && !newInstance.workflow_id) {
+  if (!selectedProcess.value && !instanceDialog.isEdit && !newInstance.process_id) {
     message.error('请选择流程');
     return;
   }
@@ -1103,113 +1134,33 @@ const saveInstance = async () => {
     return;
   }
   
-  // 验证表单字段
-  const missingFields = formFields.value
-    .filter((field: Field) => {
-      // 检查字段是否必填且值是否为空
-      // 对于数字类型，0是有效值；对于布尔类型，false是有效值
-      if (field.required) {
-        const value = formDataValues[field.field];
-        if (field.type === 'number') {
-          return value === null || value === undefined || value === '';
-        } else if (field.type === 'checkbox') {
-          return value === null || value === undefined;
-        } else if (Array.isArray(value)) {
-          return value.length === 0;
-        } else {
-          return value === null || value === undefined || value === '';
-        }
-      }
-      return false;
-    })
-    .map((field: Field) => field.label);
-
-  if (missingFields.length > 0) {
-    message.error(`请填写必填字段: ${missingFields.join(', ')}`);
-    return;
-  }
-  
   try {
     if (instanceDialog.isEdit && instanceDialog.instance) {
-      // 构建更新请求
-      const formDataObj = {
-        approved_days: formDataValues.approved_days || 0,
-        reason: formDataValues.reason || '',
-        date_range: formDataValues.date_range || [],
-        type: formDataValues.type || ''
-      };
-      
       const updateData: UpdateInstanceReq = {
         id: instanceDialog.instance.id,
         title: instanceDialog.instance.title,
-        form_data: formDataObj as any,
-        priority: instanceDialog.instance.priority,
-        category_id: instanceDialog.instance.category_id
+        form_data: formDataValues,
+        priority: instanceDialog.instance.priority
       };
       
-      if (instanceDialog.instance.description) {
-        updateData.description = instanceDialog.instance.description;
-      }
-      
-      // 由于 UpdateInstanceReq 接口中不包含 due_date 和 completed_at
-      // 我们需要创建一个扩展的请求对象
-      const extendedUpdateData: any = { ...updateData };
-      
-      if (dueDate.value) {
-        extendedUpdateData.due_date = dueDate.value.format('YYYY-MM-DD HH:mm:ss');
-      }
-      
-      if (completedDate.value && instanceDialog.instance.status === 2) {
-        extendedUpdateData.completed_at = completedDate.value.format('YYYY-MM-DD HH:mm:ss');
-      }
-      
-      await updateInstance(extendedUpdateData);
+      await updateInstance(instanceDialog.instance.id, updateData);
       message.success('工单更新成功');
-      instanceDialog.visible = false;
-      fetchInstances();
     } else {
-      // 创建新实例
-      const formDataObj = {
-        approved_days: formDataValues.approved_days || 0,
-        reason: formDataValues.reason || '',
-        date_range: formDataValues.date_range || [],
-        type: formDataValues.type || ''
-      };
-      
-      newInstance.form_data = formDataObj as any;
-      
-      // 由于 CreateInstanceReq 接口中不包含 due_date
-      // 我们需要创建一个扩展的请求对象
-      const extendedNewInstance: any = { ...newInstance };
+      newInstance.form_data = formDataValues;
       
       if (dueDate.value) {
-        extendedNewInstance.due_date = dueDate.value.format('YYYY-MM-DD HH:mm:ss');
+        newInstance.due_date = dueDate.value.format('YYYY-MM-DD HH:mm:ss');
       }
       
-      await createInstance(extendedNewInstance);
+      await createInstance(newInstance);
       message.success('工单创建成功');
-      instanceDialog.visible = false;
-      fetchInstances();
     }
+    
+    instanceDialog.visible = false;
+    fetchInstances();
   } catch (error) {
     message.error('保存工单失败');
     console.error('Failed to save instance:', error);
-  }
-};
-
-const submitInstance = async (instance: Instance) => {
-  try {
-    const flowData: InstanceFlowReq = {
-      instance_id: instance.id,
-      action: 'submit'
-    };
-    
-    await actionInstance(flowData);
-    message.success(`工单 #${instance.id} 已提交`);
-    fetchInstances();
-  } catch (error) {
-    message.error('提交工单失败');
-    console.error('Failed to submit instance:', error);
   }
 };
 
@@ -1222,11 +1173,12 @@ const processInstance = async (instance: Instance, action: string) => {
   try {
     const flowData: InstanceFlowReq = {
       instance_id: instance.id,
-      action: action,
-      comment: processingComment.value
+      action: action as any,
+      comment: processingComment.value,
+      step_id: instance.current_step
     };
     
-    await approveInstance(flowData);
+    await actionInstance(instance.id, flowData);
     message.success(`工单 #${instance.id} 已${action === 'approve' ? '批准' : '拒绝'}`);
     detailDialog.visible = false;
     processingComment.value = '';
@@ -1234,6 +1186,44 @@ const processInstance = async (instance: Instance, action: string) => {
   } catch (error) {
     message.error('处理工单失败');
     console.error('Failed to process instance:', error);
+  }
+};
+
+const showTransferDialog = () => {
+  if (detailDialog.instance) {
+    transferDialog.instanceId = detailDialog.instance.id;
+    transferDialog.visible = true;
+  }
+};
+
+const confirmTransfer = async () => {
+  if (!transferDialog.assigneeId) {
+    message.warning('请选择转交人');
+    return;
+  }
+  
+  try {
+    const transferData: InstanceFlowReq = {
+      instance_id: transferDialog.instanceId,
+      action: 'transfer',
+      comment: transferDialog.comment,
+      assignee_id: transferDialog.assigneeId,
+      step_id: detailDialog.instance?.current_step || ''
+    };
+    
+    await transferInstance(transferDialog.instanceId, transferData);
+    message.success('工单转交成功');
+    transferDialog.visible = false;
+    transferDialog.assigneeId = null;
+    transferDialog.comment = '';
+    
+    if (detailDialog.visible && detailDialog.instance) {
+      fetchInstanceDetail(detailDialog.instance.id);
+    }
+    fetchInstances();
+  } catch (error) {
+    message.error('工单转交失败');
+    console.error('Failed to transfer instance:', error);
   }
 };
 
@@ -1249,21 +1239,75 @@ const addComment = async () => {
       content: newComment.value
     };
     
-    await commentInstance(commentData);
+    await commentInstance(detailDialog.instance.id, commentData);
     message.success('评论已添加');
     newComment.value = '';
     
     // 刷新评论列表
-    fetchInstanceDetail(detailDialog.instance.id);
+    fetchInstanceComments(detailDialog.instance.id);
   } catch (error) {
     message.error('添加评论失败');
     console.error('Failed to add comment:', error);
   }
 };
 
+const beforeUpload = (file: any) => {
+  return false; // 阻止自动上传
+};
+
+const handleUploadChange = (info: any) => {
+  uploadFileList.value = info.fileList;
+};
+
+const uploadAttachment = async () => {
+  if (!detailDialog.instance || uploadFileList.value.length === 0) {
+    return;
+  }
+  
+  try {
+    const formData = new FormData();
+    uploadFileList.value.forEach(file => {
+      formData.append('files', file.originFileObj);
+    });
+    
+    await uploadAttachment(detailDialog.instance.id, formData);
+    message.success('附件上传成功');
+    uploadFileList.value = [];
+    
+    // 刷新附件列表
+    fetchInstanceAttachments(detailDialog.instance.id);
+  } catch (error) {
+    message.error('附件上传失败');
+    console.error('Failed to upload attachment:', error);
+  }
+};
+
+const downloadAttachment = (attachment: InstanceAttachment) => {
+  // 实现下载逻辑
+  const link = document.createElement('a');
+  link.href = attachment.file_path;
+  link.download = attachment.file_name;
+  link.click();
+};
+
+const deleteAttachmentConfirm = async (attachmentId: number) => {
+  if (!detailDialog.instance) return;
+  
+  try {
+    await deleteAttachment(detailDialog.instance.id, attachmentId);
+    message.success('附件删除成功');
+    
+    // 刷新附件列表
+    fetchInstanceAttachments(detailDialog.instance.id);
+  } catch (error) {
+    message.error('附件删除失败');
+    console.error('Failed to delete attachment:', error);
+  }
+};
+
 const confirmDelete = async () => {
   try {
-    await deleteInstance({ id: deleteDialog.instanceId });
+    await deleteInstance(deleteDialog.instanceId);
     message.success(`工单 #${deleteDialog.instanceId} 已删除`);
     deleteDialog.visible = false;
     fetchInstances();
@@ -1276,20 +1320,37 @@ const confirmDelete = async () => {
 // 辅助方法
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '';
-  const date = dayjs(dateStr);
-  return date.format('YYYY-MM-DD');
+  return dayjs(dateStr).format('YYYY-MM-DD');
 };
 
 const formatTime = (dateStr: string) => {
   if (!dateStr) return '';
-  const date = dayjs(dateStr);
-  return date.format('HH:mm');
+  return dayjs(dateStr).format('HH:mm');
 };
 
 const formatFullDateTime = (dateStr: string) => {
   if (!dateStr) return '';
-  const date = dayjs(dateStr);
-  return date.format('YYYY-MM-DD HH:mm:ss');
+  return dayjs(dateStr).format('YYYY-MM-DD HH:mm:ss');
+};
+
+const formatDuration = (minutes: number) => {
+  if (minutes < 60) {
+    return `${minutes}分钟`;
+  } else if (minutes < 1440) {
+    return `${Math.floor(minutes / 60)}小时${minutes % 60}分钟`;
+  } else {
+    const days = Math.floor(minutes / 1440);
+    const hours = Math.floor((minutes % 1440) / 60);
+    return `${days}天${hours}小时`;
+  }
+};
+
+const formatFileSize = (bytes: number) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
 const getInitials = (name: string) => {
@@ -1333,42 +1394,43 @@ const getStatusText = (status: number) => {
 
 const getPriorityColor = (priority: number) => {
   switch (priority) {
-    case 0: return 'green';
-    case 1: return 'blue';
-    case 2: return 'red';
+    case 1: return 'green';
+    case 2: return 'blue';
+    case 3: return 'red';
     default: return 'default';
   }
 };
 
 const getPriorityText = (priority: number) => {
   switch (priority) {
-    case 0: return '低';
-    case 1: return '中';
-    case 2: return '高';
+    case 1: return '低';
+    case 2: return '中';
+    case 3: return '高';
     default: return '未知';
   }
 };
 
 const getFlowColor = (action: string) => {
   switch (action) {
-    case 'submit': return 'blue';
     case 'approve': return 'green';
     case 'reject': return 'red';
+    case 'transfer': return 'blue';
     default: return 'gray';
   }
 };
 
 const getFlowActionText = (action: string) => {
   switch (action) {
-    case 'submit': return '提交';
     case 'approve': return '批准';
     case 'reject': return '拒绝';
+    case 'transfer': return '转交';
+    case 'revoke': return '撤回';
+    case 'cancel': return '取消';
     default: return action;
   }
 };
 
 const getAvatarColor = (name: string) => {
-  // 根据名称生成一致的颜色
   const colors = [
     '#1890ff', '#52c41a', '#faad14', '#f5222d',
     '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16'
@@ -1384,12 +1446,36 @@ const getAvatarColor = (name: string) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
+// 模拟数据初始化
+const initMockData = () => {
+  processes.value = [
+    { id: 1, name: '请假申请流程', description: '员工请假申请审批流程', version: 1 },
+    { id: 2, name: '报销申请流程', description: '费用报销申请审批流程', version: 1 },
+    { id: 3, name: '采购申请流程', description: '物品采购申请审批流程', version: 1 }
+  ];
+  
+  templates.value = [
+    { id: 1, name: '通用模板', description: '通用工单模板' },
+    { id: 2, name: '紧急模板', description: '紧急工单模板' }
+  ];
+  
+  categories.value = [
+    { id: 1, name: '人事类' },
+    { id: 2, name: '财务类' },
+    { id: 3, name: '采购类' }
+  ];
+  
+  users.value = [
+    { id: 1, name: '张三' },
+    { id: 2, name: '李四' },
+    { id: 3, name: '王五' }
+  ];
+};
+
 // 初始化
 onMounted(() => {
+  initMockData();
   fetchInstances();
-  fetchStatistics();
-  fetchWorkflows();
-  fetchFormDesigns();
 });
 </script>
 
@@ -1496,6 +1582,7 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .pagination-container {
@@ -1521,21 +1608,17 @@ onMounted(() => {
   color: #1f2937;
 }
 
-.form-data-preview {
+.form-data-preview,
+.flow-records,
+.comments-section,
+.attachments-section {
   margin-top: 24px;
 }
 
-.form-data-preview h3 {
-  margin-bottom: 16px;
-  color: #1f2937;
-  font-size: 18px;
-}
-
-.flow-records, .comments-section {
-  margin-top: 24px;
-}
-
-.flow-records h3, .comments-section h3 {
+.form-data-preview h3,
+.flow-records h3,
+.comments-section h3,
+.attachments-section h3 {
   margin-bottom: 16px;
   color: #1f2937;
   font-size: 18px;
@@ -1569,12 +1652,15 @@ onMounted(() => {
   margin-left: auto;
 }
 
-.flow-operator, .flow-comment {
+.flow-operator,
+.flow-comment,
+.flow-duration {
   font-size: 14px;
   margin-top: 4px;
 }
 
-.comment-list {
+.comment-list,
+.attachment-list {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1596,6 +1682,7 @@ onMounted(() => {
 .comment-info {
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
 
 .comment-author {
@@ -1609,6 +1696,36 @@ onMounted(() => {
 
 .comment-content {
   white-space: pre-line;
+}
+
+.attachment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
+
+.attachment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.attachment-name {
+  font-weight: 500;
+}
+
+.attachment-size,
+.attachment-uploader {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.attachment-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .detail-footer {
@@ -1655,5 +1772,36 @@ onMounted(() => {
 
 .mt-16 {
   margin-top: 16px;
+}
+
+.mt-8 {
+  margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .form-instance-container {
+    padding: 16px;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .action-buttons {
+    justify-content: flex-start;
+  }
+  
+  .detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
 }
 </style>

@@ -75,5 +75,9 @@ func InitTables(db *gorm.DB) error {
 		&model.Instance{},
 		&model.InstanceFlow{},
 		&model.InstanceComment{},
+		&model.InstanceAttachment{},
+		&model.Category{},
+		&model.WorkOrderStatistics{},
+		&model.UserPerformance{},
 	)
 }

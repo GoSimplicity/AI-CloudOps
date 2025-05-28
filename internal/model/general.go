@@ -33,7 +33,6 @@ import (
 	"gorm.io/plugin/soft_delete"
 )
 
-
 type Model struct {
 	ID        int                   `json:"id" gorm:"primaryKey;autoIncrement;comment:主键ID"`
 	CreatedAt time.Time             `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`
@@ -44,8 +43,14 @@ type Model struct {
 // ListReq 列表请求
 type ListReq struct {
 	Page   int    `json:"page" form:"page" binding:"required,min=1"`
-	Size   int    `json:"size" form:"size" binding:"required,min=1,max=100"`
+	Size   int    `json:"size" form:"size" binding:"required,min=10,max=100"`
 	Search string `json:"search" form:"search" binding:"omitempty"`
+}
+
+// ListResp 通用列表响应
+type ListResp[T any] struct {
+	Items []T   `json:"items"` // 数据列表
+	Total int64 `json:"total"` // 总数
 }
 
 type StringList []string
