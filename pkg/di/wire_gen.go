@@ -140,7 +140,7 @@ func ProvideCmd() *Cmd {
 	formDesignService := service4.NewFormDesignService(formDesignDAO, userDAO, logger)
 	formDesignHandler := api6.NewFormDesignHandler(formDesignService)
 	processDAO := dao3.NewProcessDAO(db, logger)
-	processService := service4.NewProcessService(processDAO, userDAO, logger)
+	processService := service4.NewProcessService(processDAO, formDesignDAO, userDAO, logger)
 	processHandler := api6.NewProcessHandler(processService)
 	templateDAO := dao3.NewTemplateDAO(db, logger)
 	templateService := service4.NewTemplateService(templateDAO, logger)

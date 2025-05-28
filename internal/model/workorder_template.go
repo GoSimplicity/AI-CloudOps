@@ -31,7 +31,7 @@ type Template struct {
 
 // TableName 指定模板表名
 func (Template) TableName() string {
-	return "template"
+	return "workorder_template"
 }
 
 // 模板请求结构
@@ -72,10 +72,10 @@ type DetailTemplateReq struct {
 // ListTemplateReq 模板列表请求
 type ListTemplateReq struct {
 	ListReq
-	Name       *string `json:"name" form:"name"`           // 模板名称
+	Name       *string `json:"name" form:"name"` // 模板名称
 	CategoryID *int    `json:"category_id" form:"category_id"`
 	ProcessID  *int    `json:"process_id" form:"process_id"`
-	Status     *int8   `json:"status" form:"status"`       // 状态过滤
+	Status     *int8   `json:"status" form:"status"` // 状态过滤
 }
 
 // 模板响应结构

@@ -59,7 +59,7 @@ func (h *ProcessHandler) RegisterRouters(server *gin.Engine) {
 	}
 }
 
-// 创建流程
+// CreateProcess 创建流程
 func (h *ProcessHandler) CreateProcess(ctx *gin.Context) {
 	var req model.CreateProcessReq
 
@@ -70,7 +70,7 @@ func (h *ProcessHandler) CreateProcess(ctx *gin.Context) {
 	})
 }
 
-// 更新流程
+// UpdateProcess 更新流程
 func (h *ProcessHandler) UpdateProcess(ctx *gin.Context) {
 	var req model.UpdateProcessReq
 
@@ -86,7 +86,7 @@ func (h *ProcessHandler) UpdateProcess(ctx *gin.Context) {
 	})
 }
 
-// 删除流程
+// DeleteProcess 删除流程
 func (h *ProcessHandler) DeleteProcess(ctx *gin.Context) {
 	var req model.DeleteProcessReq
 
@@ -102,7 +102,7 @@ func (h *ProcessHandler) DeleteProcess(ctx *gin.Context) {
 	})
 }
 
-// 获取流程列表
+// ListProcess 获取流程列表
 func (h *ProcessHandler) ListProcess(ctx *gin.Context) {
 	var req model.ListProcessReq
 
@@ -118,8 +118,8 @@ func (h *ProcessHandler) ListProcess(ctx *gin.Context) {
 	}
 
 	// 从查询参数中获取其他过滤条件
-	if name := ctx.Query("name"); name != "" {
-		req.Name = &name
+	if name := ctx.Query("search"); name != "" {
+		req.Search = name
 	}
 	if categoryIDStr := ctx.Query("categoryID"); categoryIDStr != "" {
 		if categoryID, err := strconv.Atoi(categoryIDStr); err == nil {
@@ -138,7 +138,7 @@ func (h *ProcessHandler) ListProcess(ctx *gin.Context) {
 	})
 }
 
-// 获取流程详情
+// DetailProcess 获取流程详情
 func (h *ProcessHandler) DetailProcess(ctx *gin.Context) {
 	var req model.DetailProcessReq
 
@@ -156,7 +156,7 @@ func (h *ProcessHandler) DetailProcess(ctx *gin.Context) {
 	})
 }
 
-// 获取流程关联信息
+// GetProcessWithRelations 获取流程关联信息
 func (h *ProcessHandler) GetProcessWithRelations(ctx *gin.Context) {
 	var req model.GetProcessWithRelationsReq
 
@@ -172,7 +172,7 @@ func (h *ProcessHandler) GetProcessWithRelations(ctx *gin.Context) {
 	})
 }
 
-// 发布流程
+// PublishProcess 发布流程
 func (h *ProcessHandler) PublishProcess(ctx *gin.Context) {
 	var req model.PublishProcessReq
 
@@ -188,7 +188,7 @@ func (h *ProcessHandler) PublishProcess(ctx *gin.Context) {
 	})
 }
 
-// 克隆流程
+// CloneProcess 克隆流程
 func (h *ProcessHandler) CloneProcess(ctx *gin.Context) {
 	var req model.CloneProcessReq
 
@@ -206,7 +206,7 @@ func (h *ProcessHandler) CloneProcess(ctx *gin.Context) {
 	})
 }
 
-// 验证流程
+// ValidateProcess 验证流程
 func (h *ProcessHandler) ValidateProcess(ctx *gin.Context) {
 	var req model.ValidateProcessReq
 

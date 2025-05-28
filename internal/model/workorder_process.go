@@ -74,7 +74,7 @@ type Process struct {
 
 // TableName 指定流程表名
 func (Process) TableName() string {
-	return "process"
+	return "workorder_process"
 }
 
 // 流程请求结构
@@ -114,10 +114,9 @@ type GetProcessWithRelationsReq struct {
 // ListProcessReq 流程列表请求
 type ListProcessReq struct {
 	ListReq
-	Name         *string `json:"name" form:"name"`
-	CategoryID   *int    `json:"category_id" form:"category_id"`
-	FormDesignID *int    `json:"form_design_id" form:"form_design_id"`
-	Status       *int8   `json:"status" form:"status"`
+	CategoryID   *int  `json:"category_id" form:"category_id"`
+	FormDesignID *int  `json:"form_design_id" form:"form_design_id"`
+	Status       *int8 `json:"status" form:"status"`
 }
 
 // PublishProcessReq 发布流程请求

@@ -28,6 +28,7 @@ package dao
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -203,7 +204,7 @@ func (d *processDAO) GetProcess(ctx context.Context, id int) (*model.Process, er
 	err := d.db.WithContext(ctx).First(&process, id).Error
 
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			d.logger.Warn("流程不存在", zap.Int("id", id))
 			return nil, ErrProcessNotFound
 		}
@@ -227,7 +228,7 @@ func (d *processDAO) GetProcessWithRelations(ctx context.Context, id int) (*mode
 		First(&process, id).Error
 
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			d.logger.Warn("流程不存在", zap.Int("id", id))
 			return nil, ErrProcessNotFound
 		}
@@ -341,7 +342,7 @@ func (d *processDAO) CloneProcess(ctx context.Context, id int, name string, crea
 		// 获取原始流程
 		var originalProcess model.Process
 		if err := tx.Where("id = ?", id).First(&originalProcess).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrProcessNotFound
 			}
 			return fmt.Errorf("获取原始流程失败: %w", err)
@@ -446,8 +447,8 @@ func (d *processDAO) ValidateProcessDefinition(ctx context.Context, definition *
 // buildProcessListQuery 构建流程列表查询条件
 func (d *processDAO) buildProcessListQuery(db *gorm.DB, req *model.ListProcessReq) *gorm.DB {
 	// 名称搜索
-	if req.Name != nil && *req.Name != "" {
-		searchPattern := "%" + strings.TrimSpace(*req.Name) + "%"
+	if req.Search != "" {
+		searchPattern := "%" + strings.TrimSpace(req.Search) + "%"
 		db = db.Where("name LIKE ?", searchPattern)
 	}
 
@@ -459,6 +460,10 @@ func (d *processDAO) buildProcessListQuery(db *gorm.DB, req *model.ListProcessRe
 	// 分类过滤
 	if req.CategoryID != nil {
 		db = db.Where("category_id = ?", *req.CategoryID)
+	}
+
+	if req.FormDesignID != nil && *req.FormDesignID > 0 {
+		db = db.Where("form_design_id = ?", *req.FormDesignID)
 	}
 
 	return db
