@@ -3,7 +3,8 @@ import { requestClient } from '#/api/request';
 // 表单设计相关类型
 export interface ListFormDesignReq {
   page: number;
-  page_size: number;
+  size: number;
+  category_id?: number;
   status?: number;
   search?: string;
 }
@@ -17,30 +18,50 @@ export interface PublishFormDesignReq {
 }
 
 export interface CloneFormDesignReq {
-  name: string;
   id: number;
+  name: string;
 }
 
-export interface Field {
+export interface FormFieldOption {
+  label: string;
+  value: any;
+}
+
+export interface FormFieldValidation {
+  min_length?: number;
+  max_length?: number;
+  min?: number;
+  max?: number;
+  pattern?: string;
+  message?: string;
+}
+
+export interface FormField {
+  id: string;
   type: string;
   label: string;
-  field: string;
+  name: string;
   required: boolean;
+  placeholder?: string;
+  default_value?: any;
+  options?: FormFieldOption[];
+  validation?: FormFieldValidation;
+  props?: Record<string, any>;
+  sort_order?: number;
 }
 
-export interface Schema {
-  fields: Field[];
+export interface FormSchema {
+  fields: FormField[];
+  layout?: string;
+  style?: string;
 }
 
 export interface FormDesignReq {
   id?: number;
   name: string;
   description: string;
-  schema: Schema;
-  version?: number;
-  status?: number;
+  schema: FormSchema;
   category_id?: number;
-  creator_id?: number;
 }
 
 export interface FormDesign {
@@ -55,6 +76,35 @@ export interface FormDesign {
   creator_name: string;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface FormDesignResp {
+  id: number;
+  name: string;
+  description: string;
+  schema: FormSchema;
+  version: number;
+  status: number;
+  category_id?: number;
+  category?: Category;
+  creator_id: number;
+  creator_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FormDesignItem {
+  id: number;
+  name: string;
+  description: string;
+  version: number;
+  status: number;
+  category_id?: number;
+  category?: Category;
+  creator_id: number;
+  creator_name: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // 流程定义相关类型
@@ -91,7 +141,7 @@ export interface DetailProcessReqReq {
 
 export interface ListProcessReq {
   page: number;
-  page_size: number;
+  size: number;
   status?: number;
   search?: string;
 }
@@ -143,7 +193,7 @@ export interface DetailTemplateReq {
 
 export interface ListTemplateReq {
   page: number;
-  page_size: number;
+  size: number;
   status?: number;
   search?: string;
 }
@@ -174,109 +224,6 @@ export interface Template {
   category_id?: number;
   creator_id: number;
   creator_name: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
-// 工单实例相关类型
-export interface DetailInstanceReq {
-  id: number;
-}
-
-export interface ListInstanceReq {
-  page: number;
-  page_size: number;
-  status?: number;
-  keyword?: string;
-  date_range?: string[];
-  creator_id?: number;
-  assignee_id?: number;
-  workflow_id?: number;
-}
-
-export interface FormData {
-  approved_days: number;
-  reason: string;
-  date_range: string[];
-  type: string;
-}
-
-export interface CreateInstanceReq {
-  title: string;
-  workflow_id: number;
-  form_data: FormData;
-  description?: string;
-  priority?: number;
-  category_id?: number;
-}
-
-export interface UpdateInstanceReq {
-  id: number;
-  title: string;
-  form_data: FormData;
-  description?: string;
-  priority?: number;
-  category_id?: number;
-}
-
-export interface Instance {
-  id: number;
-  title: string;
-  workflow_id: number;
-  form_data: string;
-  description?: string;
-  current_step: string;
-  current_role: string;
-  status: number;
-  priority: number;
-  category_id?: number;
-  creator_id: number;
-  creator_name: string;
-  assignee_id?: number;
-  assignee_name?: string;
-  completed_at?: string;
-  due_date?: string;
-  created_at?: string;
-  updated_at?: string;
-  flows?: InstanceFlow[];
-  comments?: InstanceComment[];
-}
-
-// 工单流转记录相关类型
-export interface InstanceFlowReq {
-  instance_id: number;
-  action: string;
-  comment?: string;
-  form_data?: FormData;
-}
-
-export interface InstanceFlow {
-  id: number;
-  instance_id: number;
-  step: string;
-  action: string;
-  operator_id: number;
-  operator_name: string;
-  comment?: string;
-  form_data?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
-// 工单评论相关类型
-export interface InstanceCommentReq {
-  instance_id: number;
-  content: string;
-  parent_id?: number;
-}
-
-export interface InstanceComment {
-  id: number;
-  instance_id: number;
-  content: string;
-  creator_id: number;
-  creator_name: string;
-  parent_id: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -329,31 +276,35 @@ export interface UserPerformance {
 
 // 表单设计相关接口
 export async function createFormDesign(data: FormDesignReq) {
-  return requestClient.post('/workorder/form_design/create', data);
+  return requestClient.post('/workorder/form-design/create', data);
 }
 
 export async function updateFormDesign(data: FormDesignReq) {
-  return requestClient.post('/workorder/form_design/update', data);
+  return requestClient.put(`/workorder/form-design/update/${data.id}`, data);
 }
 
 export async function deleteFormDesign(data: DetailFormDesignReq) {
-  return requestClient.post('/workorder/form_design/delete', data);
+  return requestClient.delete(`/workorder/form-design/delete/${data.id}`);
 }
 
 export async function listFormDesign(data: ListFormDesignReq) {
-  return requestClient.post('/workorder/form_design/list', data);
+  return requestClient.get('/workorder/form-design/list', { params: data });
 }
 
 export async function detailFormDesign(data: DetailFormDesignReq) {
-  return requestClient.post('/workorder/form_design/detail', data);
+  return requestClient.get(`/workorder/form-design/detail/${data.id}`);
 }
 
 export async function publishFormDesign(data: PublishFormDesignReq) {
-  return requestClient.post('/workorder/form_design/publish', data);
+  return requestClient.post(`/workorder/form-design/publish/${data.id}`);
 }
 
 export async function cloneFormDesign(data: CloneFormDesignReq) {
-  return requestClient.post('/workorder/form_design/clone', data);
+  return requestClient.post(`/workorder/form-design/clone/${data.id}`, data);
+}
+
+export async function previewFormDesign(data: DetailFormDesignReq) {
+  return requestClient.get(`/workorder/form-design/preview/${data.id}`);
 }
 
 // 流程定义相关接口
@@ -406,46 +357,6 @@ export async function detailTemplate(data: DetailTemplateReq) {
   return requestClient.post('/workorder/template/detail', data);
 }
 
-// 工单实例相关接口
-export async function createInstance(data: CreateInstanceReq) {
-  return requestClient.post('/workorder/instance/create', data);
-}
-
-export async function updateInstance(data: UpdateInstanceReq) {
-  return requestClient.post('/workorder/instance/update', data);
-}
-
-export async function approveInstance(data: InstanceFlowReq) {
-  return requestClient.post('/workorder/instance/approve', data);
-}
-
-export async function actionInstance(data: InstanceFlowReq) {
-  return requestClient.post('/workorder/instance/action', data);
-}
-
-export async function commentInstance(data: InstanceCommentReq) {
-  return requestClient.post('/workorder/instance/comment', data);
-}
-
-export async function transferInstance(data: InstanceFlowReq) {
-  return requestClient.post('/workorder/instance/transfer', data);
-}
-
-export async function listInstance(data: ListInstanceReq) {
-  return requestClient.post('/workorder/instance/list', data);
-}
-
-export async function detailInstance(data: DetailInstanceReq) {
-  return requestClient.post('/workorder/instance/detail', data);
-}
-
-export async function deleteInstance(data: DetailInstanceReq) {
-  return requestClient.delete(`/workorder/instance/delete/${data.id}`);
-}
-
-export async function myInstance(data: ListInstanceReq) {
-  return requestClient.post('/workorder/instance/my', data);
-}
 
 export async function instanceStatistics(data: any) {
   return requestClient.post('/workorder/instance/statistics', data);
