@@ -27,6 +27,7 @@ package dao
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -36,50 +37,54 @@ import (
 	"gorm.io/gorm"
 )
 
+// 错误定义
 var (
-	ErrInstanceNotFound    = fmt.Errorf("工单实例不存在")
-	ErrInstanceExists      = fmt.Errorf("工单实例已存在")
-	ErrInstanceInvalidID   = fmt.Errorf("工单实例ID无效")
-	ErrInstanceNilPointer  = fmt.Errorf("工单实例对象为空")
-	ErrAttachmentNotFound  = fmt.Errorf("附件不存在")
-	ErrAttachmentNotBelong = fmt.Errorf("附件不属于指定工单")
+	ErrInstanceNotFound     = errors.New("工单实例不存在")
+	ErrInstanceExists       = errors.New("工单实例已存在")
+	ErrInstanceInvalidID    = errors.New("工单实例ID无效")
+	ErrInstanceNilPointer   = errors.New("工单实例对象为空")
+	ErrAttachmentNotFound   = errors.New("附件不存在")
+	ErrAttachmentNotBelong  = errors.New("附件不属于指定工单")
+	ErrInvalidParameters    = errors.New("参数无效")
+	ErrFlowNilPointer       = errors.New("流程记录对象为空")
+	ErrCommentNilPointer    = errors.New("评论对象为空")
+	ErrAttachmentNilPointer = errors.New("附件对象为空")
+	ErrTransferFailed       = errors.New("工单转移失败")
+)
+
+// 常量定义
+const (
+	DefaultBatchSize = 100
+	DefaultPageSize  = 20
+	MaxPageSize      = 1000
 )
 
 type InstanceDAO interface {
+	// 实例CRUD
 	CreateInstance(ctx context.Context, instance *model.Instance) error
 	UpdateInstance(ctx context.Context, instance *model.Instance) error
 	DeleteInstance(ctx context.Context, id int) error
-	ListInstance(ctx context.Context, req *model.ListInstanceReq) (*model.ListResp[model.Instance], error)
 	GetInstance(ctx context.Context, id int) (*model.Instance, error)
 	GetInstanceWithRelations(ctx context.Context, id int) (*model.Instance, error)
+	ListInstance(ctx context.Context, req *model.ListInstanceReq) (*model.ListResp[model.Instance], error)
 	BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8) error
 
-	// Flow methods
+	// 流程方法
 	CreateInstanceFlow(ctx context.Context, flow *model.InstanceFlow) error
 	GetInstanceFlows(ctx context.Context, instanceID int) ([]model.InstanceFlow, error)
 	BatchCreateInstanceFlows(ctx context.Context, flows []model.InstanceFlow) error
 
-	// Comment methods
+	// 评论方法
 	CreateInstanceComment(ctx context.Context, comment *model.InstanceComment) error
 	GetInstanceComments(ctx context.Context, instanceID int) ([]model.InstanceComment, error)
 	GetInstanceCommentsTree(ctx context.Context, instanceID int) ([]model.InstanceComment, error)
 
-	// Attachment methods
+	// 附件方法
 	CreateInstanceAttachment(ctx context.Context, attachment *model.InstanceAttachment) (*model.InstanceAttachment, error)
 	DeleteInstanceAttachment(ctx context.Context, instanceID int, attachmentID int) error
 	GetInstanceAttachments(ctx context.Context, instanceID int) ([]model.InstanceAttachment, error)
 	BatchDeleteInstanceAttachments(ctx context.Context, instanceID int, attachmentIDs []int) error
 
-	// Process methods
-	GetProcess(ctx context.Context, processID int) (*model.Process, error)
-
-	// Statistics methods
-	GetInstanceStatistics(ctx context.Context, req *model.OverviewStatsReq) (*model.OverviewStatsResp, error)
-	GetInstanceTrend(ctx context.Context, req *model.TrendStatsReq) (*model.TrendStatsResp, error)
-	GetCategoryStatistics(ctx context.Context, req *model.CategoryStatsReq) (*model.CategoryStatsResp, error)
-	GetUserPerformanceStatistics(ctx context.Context, req *model.PerformanceStatsReq) (*model.PerformanceStatsResp, error)
-
-	// Business methods
 	GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (*model.ListResp[model.Instance], error)
 	GetOverdueInstances(ctx context.Context) ([]model.Instance, error)
 	TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error
@@ -103,6 +108,11 @@ func (d *instanceDAO) CreateInstance(ctx context.Context, instance *model.Instan
 		return ErrInstanceNilPointer
 	}
 
+	// 数据验证
+	if err := d.validateInstance(instance); err != nil {
+		return fmt.Errorf("实例数据验证失败: %w", err)
+	}
+
 	// 处理零值时间
 	d.normalizeTimeFields(instance)
 
@@ -124,28 +134,19 @@ func (d *instanceDAO) UpdateInstance(ctx context.Context, instance *model.Instan
 	if instance == nil {
 		return ErrInstanceNilPointer
 	}
-	if instance.ID == 0 {
+	if instance.ID <= 0 {
 		return ErrInstanceInvalidID
+	}
+
+	// 数据验证
+	if err := d.validateInstance(instance); err != nil {
+		return fmt.Errorf("实例数据验证失败: %w", err)
 	}
 
 	// 处理零值时间
 	d.normalizeTimeFields(instance)
 
-	updateData := map[string]interface{}{
-		"title":        instance.Title,
-		"form_data":    instance.FormData,
-		"current_step": instance.CurrentStep,
-		"status":       instance.Status,
-		"priority":     instance.Priority,
-		"description":  instance.Description,
-		"assignee_id":  instance.AssigneeID,
-		"completed_at": instance.CompletedAt,
-		"due_date":     instance.DueDate,
-		"tags":         instance.Tags,
-		"process_data": instance.ProcessData,
-		"updated_at":   time.Now(),
-	}
-
+	updateData := d.buildUpdateData(instance)
 	result := d.db.WithContext(ctx).
 		Model(&model.Instance{}).
 		Where("id = ?", instance.ID).
@@ -173,29 +174,23 @@ func (d *instanceDAO) DeleteInstance(ctx context.Context, id int) error {
 
 	// 使用事务删除相关数据
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 删除相关的流转记录
-		if err := tx.Where("instance_id = ?", id).Delete(&model.InstanceFlow{}).Error; err != nil {
-			return fmt.Errorf("删除工单流转记录失败: %w", err)
+		// 验证工单是否存在
+		var count int64
+		if err := tx.Model(&model.Instance{}).Where("id = ?", id).Count(&count).Error; err != nil {
+			return fmt.Errorf("查询工单实例失败: %w", err)
+		}
+		if count == 0 {
+			return ErrInstanceNotFound
 		}
 
-		// 删除相关的评论
-		if err := tx.Where("instance_id = ?", id).Delete(&model.InstanceComment{}).Error; err != nil {
-			return fmt.Errorf("删除工单评论失败: %w", err)
-		}
-
-		// 删除相关的附件记录（注意：这里只删除数据库记录，不删除实际文件）
-		if err := tx.Where("instance_id = ?", id).Delete(&model.InstanceAttachment{}).Error; err != nil {
-			return fmt.Errorf("删除工单附件记录失败: %w", err)
+		// 删除相关数据的顺序很重要，从子表到主表
+		if err := d.deleteRelatedData(tx, id); err != nil {
+			return err
 		}
 
 		// 删除工单实例
-		result := tx.Delete(&model.Instance{}, id)
-		if result.Error != nil {
-			return fmt.Errorf("删除工单实例失败: %w", result.Error)
-		}
-
-		if result.RowsAffected == 0 {
-			return ErrInstanceNotFound
+		if err := tx.Delete(&model.Instance{}, id).Error; err != nil {
+			return fmt.Errorf("删除工单实例失败: %w", err)
 		}
 
 		return nil
@@ -220,7 +215,7 @@ func (d *instanceDAO) GetInstance(ctx context.Context, id int) (*model.Instance,
 	err := d.db.WithContext(ctx).First(&instance, id).Error
 
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			d.logger.Warn("工单实例不存在", zap.Int("id", id))
 			return nil, ErrInstanceNotFound
 		}
@@ -245,7 +240,7 @@ func (d *instanceDAO) GetInstanceWithRelations(ctx context.Context, id int) (*mo
 		First(&instance, id).Error
 
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			d.logger.Warn("工单实例不存在", zap.Int("id", id))
 			return nil, ErrInstanceNotFound
 		}
@@ -258,12 +253,14 @@ func (d *instanceDAO) GetInstanceWithRelations(ctx context.Context, id int) (*mo
 
 // ListInstance 获取工单实例列表
 func (d *instanceDAO) ListInstance(ctx context.Context, req *model.ListInstanceReq) (*model.ListResp[model.Instance], error) {
+	if err := d.validateListRequest(req); err != nil {
+		return nil, fmt.Errorf("请求参数验证失败: %w", err)
+	}
+
 	var instances []model.Instance
 	var total int64
 
 	db := d.db.WithContext(ctx).Model(&model.Instance{})
-
-	// 构建查询条件
 	db = d.buildInstanceListQuery(db, req)
 
 	// 获取总数
@@ -304,7 +301,14 @@ func (d *instanceDAO) ListInstance(ctx context.Context, req *model.ListInstanceR
 // BatchUpdateInstanceStatus 批量更新工单状态
 func (d *instanceDAO) BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8) error {
 	if len(ids) == 0 {
-		return fmt.Errorf("ID列表不能为空")
+		return ErrInvalidParameters
+	}
+
+	// 验证ID的有效性
+	for _, id := range ids {
+		if id <= 0 {
+			return ErrInstanceInvalidID
+		}
 	}
 
 	result := d.db.WithContext(ctx).
@@ -327,7 +331,11 @@ func (d *instanceDAO) BatchUpdateInstanceStatus(ctx context.Context, ids []int, 
 // CreateInstanceFlow 创建工单流程记录
 func (d *instanceDAO) CreateInstanceFlow(ctx context.Context, flow *model.InstanceFlow) error {
 	if flow == nil {
-		return fmt.Errorf("流程记录对象为空")
+		return ErrFlowNilPointer
+	}
+
+	if err := d.validateFlow(flow); err != nil {
+		return fmt.Errorf("流程记录验证失败: %w", err)
 	}
 
 	if err := d.db.WithContext(ctx).Create(flow).Error; err != nil {
@@ -342,7 +350,7 @@ func (d *instanceDAO) CreateInstanceFlow(ctx context.Context, flow *model.Instan
 // GetInstanceFlows 获取工单流程记录
 func (d *instanceDAO) GetInstanceFlows(ctx context.Context, instanceID int) ([]model.InstanceFlow, error) {
 	if instanceID <= 0 {
-		return nil, fmt.Errorf("工单ID无效")
+		return nil, ErrInstanceInvalidID
 	}
 
 	var flows []model.InstanceFlow
@@ -365,7 +373,14 @@ func (d *instanceDAO) BatchCreateInstanceFlows(ctx context.Context, flows []mode
 		return nil
 	}
 
-	if err := d.db.WithContext(ctx).CreateInBatches(flows, 100).Error; err != nil {
+	// 验证流程记录
+	for i, flow := range flows {
+		if err := d.validateFlow(&flow); err != nil {
+			return fmt.Errorf("第%d个流程记录验证失败: %w", i+1, err)
+		}
+	}
+
+	if err := d.db.WithContext(ctx).CreateInBatches(flows, DefaultBatchSize).Error; err != nil {
 		d.logger.Error("批量创建工单流程记录失败", zap.Error(err), zap.Int("count", len(flows)))
 		return fmt.Errorf("批量创建工单流程记录失败: %w", err)
 	}
@@ -377,7 +392,11 @@ func (d *instanceDAO) BatchCreateInstanceFlows(ctx context.Context, flows []mode
 // CreateInstanceComment 创建工单评论
 func (d *instanceDAO) CreateInstanceComment(ctx context.Context, comment *model.InstanceComment) error {
 	if comment == nil {
-		return fmt.Errorf("评论对象为空")
+		return ErrCommentNilPointer
+	}
+
+	if err := d.validateComment(comment); err != nil {
+		return fmt.Errorf("评论验证失败: %w", err)
 	}
 
 	if err := d.db.WithContext(ctx).Create(comment).Error; err != nil {
@@ -392,7 +411,7 @@ func (d *instanceDAO) CreateInstanceComment(ctx context.Context, comment *model.
 // GetInstanceComments 获取工单评论
 func (d *instanceDAO) GetInstanceComments(ctx context.Context, instanceID int) ([]model.InstanceComment, error) {
 	if instanceID <= 0 {
-		return nil, fmt.Errorf("工单ID无效")
+		return nil, ErrInstanceInvalidID
 	}
 
 	var comments []model.InstanceComment
@@ -416,15 +435,18 @@ func (d *instanceDAO) GetInstanceCommentsTree(ctx context.Context, instanceID in
 		return nil, err
 	}
 
-	// 构建评论树结构（这里需要根据实际的Comment结构来实现）
-	// 简化实现，返回按层级排序的评论
-	return comments, nil
+	// 构建评论树结构
+	return d.buildCommentTree(comments), nil
 }
 
 // CreateInstanceAttachment 创建工单附件记录
 func (d *instanceDAO) CreateInstanceAttachment(ctx context.Context, attachment *model.InstanceAttachment) (*model.InstanceAttachment, error) {
 	if attachment == nil {
-		return nil, fmt.Errorf("附件对象为空")
+		return nil, ErrAttachmentNilPointer
+	}
+
+	if err := d.validateAttachment(attachment); err != nil {
+		return nil, fmt.Errorf("附件验证失败: %w", err)
 	}
 
 	d.logger.Debug("开始创建工单附件", zap.Int("instanceID", attachment.InstanceID), zap.String("fileName", attachment.FileName))
@@ -441,7 +463,7 @@ func (d *instanceDAO) CreateInstanceAttachment(ctx context.Context, attachment *
 // DeleteInstanceAttachment 删除工单附件记录
 func (d *instanceDAO) DeleteInstanceAttachment(ctx context.Context, instanceID int, attachmentID int) error {
 	if instanceID <= 0 || attachmentID <= 0 {
-		return fmt.Errorf("工单ID或附件ID无效")
+		return ErrInvalidParameters
 	}
 
 	d.logger.Debug("开始删除工单附件", zap.Int("instanceID", instanceID), zap.Int("attachmentID", attachmentID))
@@ -467,7 +489,7 @@ func (d *instanceDAO) DeleteInstanceAttachment(ctx context.Context, instanceID i
 // GetInstanceAttachments 获取指定工单的所有附件记录
 func (d *instanceDAO) GetInstanceAttachments(ctx context.Context, instanceID int) ([]model.InstanceAttachment, error) {
 	if instanceID <= 0 {
-		return nil, fmt.Errorf("工单ID无效")
+		return nil, ErrInstanceInvalidID
 	}
 
 	d.logger.Debug("开始获取工单附件列表", zap.Int("instanceID", instanceID))
@@ -490,7 +512,14 @@ func (d *instanceDAO) GetInstanceAttachments(ctx context.Context, instanceID int
 // BatchDeleteInstanceAttachments 批量删除工单附件
 func (d *instanceDAO) BatchDeleteInstanceAttachments(ctx context.Context, instanceID int, attachmentIDs []int) error {
 	if instanceID <= 0 || len(attachmentIDs) == 0 {
-		return fmt.Errorf("工单ID无效或附件ID列表为空")
+		return ErrInvalidParameters
+	}
+
+	// 验证附件ID的有效性
+	for _, id := range attachmentIDs {
+		if id <= 0 {
+			return ErrInvalidParameters
+		}
 	}
 
 	result := d.db.WithContext(ctx).
@@ -506,288 +535,16 @@ func (d *instanceDAO) BatchDeleteInstanceAttachments(ctx context.Context, instan
 	return nil
 }
 
-// GetProcess 获取流程定义
-func (d *instanceDAO) GetProcess(ctx context.Context, processID int) (*model.Process, error) {
-	if processID <= 0 {
-		return nil, fmt.Errorf("流程ID无效")
-	}
-
-	var process model.Process
-	err := d.db.WithContext(ctx).
-		Preload("FormDesign").
-		Preload("Category").
-		First(&process, processID).Error
-
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			d.logger.Warn("流程定义不存在", zap.Int("processID", processID))
-			return nil, ErrProcessNotFound
-		}
-		d.logger.Error("获取流程定义失败", zap.Error(err), zap.Int("processID", processID))
-		return nil, fmt.Errorf("获取流程定义失败: %w", err)
-	}
-
-	return &process, nil
-}
-
-// GetInstanceStatistics 获取工单统计信息
-func (d *instanceDAO) GetInstanceStatistics(ctx context.Context, req *model.OverviewStatsReq) (*model.OverviewStatsResp, error) {
-	var stats model.OverviewStatsResp
-
-	db := d.db.WithContext(ctx).Model(&model.Instance{})
-
-	// 应用时间范围过滤
-	if req.StartDate != nil && req.EndDate != nil {
-		db = db.Where("created_at BETWEEN ? AND ?", req.StartDate, req.EndDate)
-	}
-
-	// 获取各状态统计
-	var statusStats []struct {
-		Status int8  `json:"status"`
-		Count  int64 `json:"count"`
-	}
-
-	if err := db.Select("status, count(*) as count").Group("status").Find(&statusStats).Error; err != nil {
-		d.logger.Error("获取状态统计失败", zap.Error(err))
-		return nil, fmt.Errorf("获取状态统计失败: %w", err)
-	}
-
-	// 处理统计结果
-	for _, stat := range statusStats {
-		switch stat.Status {
-		case model.InstanceStatusCompleted:
-			stats.CompletedCount = stat.Count
-		case model.InstanceStatusProcessing:
-			stats.ProcessingCount = stat.Count
-		case model.InstanceStatusPending:
-			stats.PendingCount = stat.Count
-		}
-		stats.TotalCount += stat.Count
-	}
-
-	// 计算完成率
-	if stats.TotalCount > 0 {
-		stats.CompletionRate = float64(stats.CompletedCount) / float64(stats.TotalCount) * 100
-	}
-
-	// 获取超时工单数
-	var overdueCount int64
-	err := db.Where("due_date < ? AND status NOT IN ?", time.Now(),
-		[]int8{model.InstanceStatusCompleted, model.InstanceStatusCancelled, model.InstanceStatusRejected}).
-		Count(&overdueCount).Error
-	if err != nil {
-		d.logger.Error("获取超时工单数失败", zap.Error(err))
-		return nil, fmt.Errorf("获取超时工单数失败: %w", err)
-	}
-	stats.OverdueCount = overdueCount
-
-	// 获取今日创建和完成数
-	today := time.Now().Truncate(24 * time.Hour)
-	tomorrow := today.Add(24 * time.Hour)
-
-	var todayCreated, todayCompleted int64
-	db.Where("created_at >= ? AND created_at < ?", today, tomorrow).Count(&todayCreated)
-	db.Where("completed_at >= ? AND completed_at < ?", today, tomorrow).Count(&todayCompleted)
-
-	stats.TodayCreated = todayCreated
-	stats.TodayCompleted = todayCompleted
-
-	return &stats, nil
-}
-
-// GetInstanceTrend 获取工单趋势
-func (d *instanceDAO) GetInstanceTrend(ctx context.Context, req *model.TrendStatsReq) (*model.TrendStatsResp, error) {
-	var result model.TrendStatsResp
-
-	db := d.db.WithContext(ctx).Model(&model.Instance{}).
-		Where("created_at BETWEEN ? AND ?", req.StartDate, req.EndDate)
-
-	// 应用分类过滤
-	if req.CategoryID != nil {
-		db = db.Where("category_id = ?", *req.CategoryID)
-	}
-
-	// 根据维度构建查询
-	var dateFormat string
-	switch req.Dimension {
-	case "day":
-		dateFormat = "%Y-%m-%d"
-	case "week":
-		dateFormat = "%Y-%u"
-	case "month":
-		dateFormat = "%Y-%m"
-	default:
-		dateFormat = "%Y-%m-%d"
-	}
-
-	var trendData []struct {
-		Date            string `json:"date"`
-		CreatedCount    int64  `json:"created_count"`
-		CompletedCount  int64  `json:"completed_count"`
-		ProcessingCount int64  `json:"processing_count"`
-	}
-
-	err := db.Select(fmt.Sprintf(`
-		 DATE_FORMAT(created_at, '%s') as date,
-		 COUNT(*) as created_count,
-		 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed_count,
-		 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as processing_count
-	 `, dateFormat), model.InstanceStatusCompleted, model.InstanceStatusProcessing).
-		Group("date").
-		Order("date ASC").
-		Find(&trendData).Error
-
-	if err != nil {
-		d.logger.Error("获取工单趋势失败", zap.Error(err))
-		return nil, fmt.Errorf("获取工单趋势失败: %w", err)
-	}
-
-	// 构建返回结果
-	for _, data := range trendData {
-		result.Dates = append(result.Dates, data.Date)
-		result.CreatedCounts = append(result.CreatedCounts, data.CreatedCount)
-		result.CompletedCounts = append(result.CompletedCounts, data.CompletedCount)
-		result.ProcessingCounts = append(result.ProcessingCounts, data.ProcessingCount)
-	}
-
-	return &result, nil
-}
-
-// GetCategoryStatistics 获取分类统计
-func (d *instanceDAO) GetCategoryStatistics(ctx context.Context, req *model.CategoryStatsReq) (*model.CategoryStatsResp, error) {
-	db := d.db.WithContext(ctx).Model(&model.Instance{}).
-		Joins("LEFT JOIN category ON instance.category_id = category.id")
-
-	// 应用时间范围过滤
-	if req.StartDate != nil && req.EndDate != nil {
-		db = db.Where("instance.created_at BETWEEN ? AND ?", req.StartDate, req.EndDate)
-	}
-
-	top := req.Top
-	if top == 0 {
-		top = 10
-	}
-
-	var categoryStats []struct {
-		CategoryID   int    `json:"category_id"`
-		CategoryName string `json:"category_name"`
-		Count        int64  `json:"count"`
-	}
-
-	err := db.Select("instance.category_id, COALESCE(category.name, '未分类') as category_name, count(*) as count").
-		Group("instance.category_id, category.name").
-		Order("count DESC").
-		Limit(top).
-		Find(&categoryStats).Error
-
-	if err != nil {
-		d.logger.Error("获取分类统计失败", zap.Error(err))
-		return nil, fmt.Errorf("获取分类统计失败: %w", err)
-	}
-
-	// 计算总数用于计算百分比
-	var total int64
-	for _, stat := range categoryStats {
-		total += stat.Count
-	}
-
-	result := &model.CategoryStatsResp{
-		Items: make([]model.CategoryStatsItem, len(categoryStats)),
-	}
-
-	for i, stat := range categoryStats {
-		percentage := float64(0)
-		if total > 0 {
-			percentage = float64(stat.Count) / float64(total) * 100
-		}
-
-		result.Items[i] = model.CategoryStatsItem{
-			CategoryID:   stat.CategoryID,
-			CategoryName: stat.CategoryName,
-			Count:        stat.Count,
-			Percentage:   percentage,
-		}
-	}
-
-	return result, nil
-}
-
-// GetUserPerformanceStatistics 获取用户绩效统计
-func (d *instanceDAO) GetUserPerformanceStatistics(ctx context.Context, req *model.PerformanceStatsReq) (*model.PerformanceStatsResp, error) {
-	db := d.db.WithContext(ctx).Model(&model.Instance{})
-
-	// 应用时间范围过滤
-	if req.StartDate != nil && req.EndDate != nil {
-		db = db.Where("created_at BETWEEN ? AND ?", req.StartDate, req.EndDate)
-	}
-
-	// 应用用户过滤
-	if req.UserID != nil {
-		db = db.Where("assignee_id = ?", *req.UserID)
-	}
-
-	top := req.Top
-	if top == 0 {
-		top = 20
-	}
-
-	var userStats []struct {
-		UserID            int     `json:"user_id"`
-		UserName          string  `json:"user_name"`
-		AssignedCount     int64   `json:"assigned_count"`
-		CompletedCount    int64   `json:"completed_count"`
-		OverdueCount      int64   `json:"overdue_count"`
-		AvgResponseTime   float64 `json:"avg_response_time"`
-		AvgProcessingTime float64 `json:"avg_processing_time"`
-	}
-
-	err := db.Select(`
-		 assignee_id as user_id,
-		 assignee_name as user_name,
-		 COUNT(*) as assigned_count,
-		 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed_count,
-		 SUM(CASE WHEN due_date < NOW() AND status NOT IN (?, ?, ?) THEN 1 ELSE 0 END) as overdue_count,
-		 AVG(CASE WHEN completed_at IS NOT NULL THEN TIMESTAMPDIFF(HOUR, created_at, completed_at) END) as avg_processing_time
-	 `, model.InstanceStatusCompleted,
-		model.InstanceStatusCompleted, model.InstanceStatusCancelled, model.InstanceStatusRejected).
-		Where("assignee_id IS NOT NULL").
-		Group("assignee_id, assignee_name").
-		Order("completed_count DESC").
-		Limit(top).
-		Find(&userStats).Error
-
-	if err != nil {
-		d.logger.Error("获取用户绩效统计失败", zap.Error(err))
-		return nil, fmt.Errorf("获取用户绩效统计失败: %w", err)
-	}
-
-	result := &model.PerformanceStatsResp{
-		Items: make([]model.PerformanceStatsItem, len(userStats)),
-	}
-
-	for i, stat := range userStats {
-		completionRate := float64(0)
-		if stat.AssignedCount > 0 {
-			completionRate = float64(stat.CompletedCount) / float64(stat.AssignedCount) * 100
-		}
-
-		result.Items[i] = model.PerformanceStatsItem{
-			UserID:            stat.UserID,
-			UserName:          stat.UserName,
-			AssignedCount:     stat.AssignedCount,
-			CompletedCount:    stat.CompletedCount,
-			CompletionRate:    completionRate,
-			AvgResponseTime:   stat.AvgResponseTime,
-			AvgProcessingTime: stat.AvgProcessingTime,
-			OverdueCount:      stat.OverdueCount,
-		}
-	}
-
-	return result, nil
-}
-
 // GetMyInstances 获取我的工单
 func (d *instanceDAO) GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (*model.ListResp[model.Instance], error) {
+	if userID <= 0 {
+		return nil, ErrInvalidParameters
+	}
+
+	if err := d.validateMyInstanceRequest(req); err != nil {
+		return nil, fmt.Errorf("请求参数验证失败: %w", err)
+	}
+
 	var instances []model.Instance
 	var total int64
 
@@ -857,21 +614,30 @@ func (d *instanceDAO) GetOverdueInstances(ctx context.Context) ([]model.Instance
 
 // TransferInstance 转移工单
 func (d *instanceDAO) TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error {
-	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 更新工单处理人
-		result := tx.Model(&model.Instance{}).
-			Where("id = ? AND assignee_id = ?", instanceID, fromUserID).
-			Updates(map[string]interface{}{
-				"assignee_id": toUserID,
-				"updated_at":  time.Now(),
-			})
+	if instanceID <= 0 || fromUserID <= 0 || toUserID <= 0 {
+		return ErrInvalidParameters
+	}
 
-		if result.Error != nil {
-			return fmt.Errorf("更新工单处理人失败: %w", result.Error)
+	if fromUserID == toUserID {
+		return fmt.Errorf("转移人和接收人不能为同一人")
+	}
+
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 验证工单是否存在且属于fromUser
+		var instance model.Instance
+		if err := tx.Where("id = ? AND assignee_id = ?", instanceID, fromUserID).First(&instance).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("工单不存在或不属于当前用户")
+			}
+			return fmt.Errorf("查询工单失败: %w", err)
 		}
 
-		if result.RowsAffected == 0 {
-			return fmt.Errorf("工单不存在或不属于当前用户")
+		// 更新工单处理人
+		if err := tx.Model(&instance).Updates(map[string]interface{}{
+			"assignee_id": toUserID,
+			"updated_at":  time.Now(),
+		}).Error; err != nil {
+			return fmt.Errorf("更新工单处理人失败: %w", err)
 		}
 
 		// 创建转移记录
@@ -890,11 +656,156 @@ func (d *instanceDAO) TransferInstance(ctx context.Context, instanceID int, from
 			return fmt.Errorf("创建转移记录失败: %w", err)
 		}
 
+		d.logger.Info("工单转移成功",
+			zap.Int("instanceID", instanceID),
+			zap.Int("fromUserID", fromUserID),
+			zap.Int("toUserID", toUserID))
+
 		return nil
 	})
 }
 
-// 辅助方法
+// 私有辅助方法
+
+// validateInstance 验证工单实例数据
+func (d *instanceDAO) validateInstance(instance *model.Instance) error {
+	if strings.TrimSpace(instance.Title) == "" {
+		return fmt.Errorf("工单标题不能为空")
+	}
+	if len(instance.Title) > 200 {
+		return fmt.Errorf("工单标题过长")
+	}
+	if instance.ProcessID <= 0 {
+		return fmt.Errorf("流程ID无效")
+	}
+	if instance.CreatorID <= 0 {
+		return fmt.Errorf("创建人ID无效")
+	}
+	return nil
+}
+
+// validateFlow 验证流程记录数据
+func (d *instanceDAO) validateFlow(flow *model.InstanceFlow) error {
+	if flow.InstanceID <= 0 {
+		return fmt.Errorf("工单ID无效")
+	}
+	if strings.TrimSpace(flow.StepID) == "" {
+		return fmt.Errorf("步骤ID不能为空")
+	}
+	if flow.OperatorID <= 0 {
+		return fmt.Errorf("操作人ID无效")
+	}
+	return nil
+}
+
+// validateComment 验证评论数据
+func (d *instanceDAO) validateComment(comment *model.InstanceComment) error {
+	if comment.InstanceID <= 0 {
+		return fmt.Errorf("工单ID无效")
+	}
+	if comment.UserID <= 0 {
+		return fmt.Errorf("用户ID无效")
+	}
+	if strings.TrimSpace(comment.Content) == "" {
+		return fmt.Errorf("评论内容不能为空")
+	}
+	return nil
+}
+
+// validateAttachment 验证附件数据
+func (d *instanceDAO) validateAttachment(attachment *model.InstanceAttachment) error {
+	if attachment.InstanceID <= 0 {
+		return fmt.Errorf("工单ID无效")
+	}
+	if strings.TrimSpace(attachment.FileName) == "" {
+		return fmt.Errorf("文件名不能为空")
+	}
+	if strings.TrimSpace(attachment.FilePath) == "" {
+		return fmt.Errorf("文件路径不能为空")
+	}
+	return nil
+}
+
+// validateListRequest 验证列表请求参数
+func (d *instanceDAO) validateListRequest(req *model.ListInstanceReq) error {
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.Size <= 0 {
+		req.Size = DefaultPageSize
+	}
+	if req.Size > MaxPageSize {
+		req.Size = MaxPageSize
+	}
+	return nil
+}
+
+// validateMyInstanceRequest 验证我的工单请求参数
+func (d *instanceDAO) validateMyInstanceRequest(req *model.MyInstanceReq) error {
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.Size <= 0 {
+		req.Size = DefaultPageSize
+	}
+	if req.Size > MaxPageSize {
+		req.Size = MaxPageSize
+	}
+	return nil
+}
+
+// buildUpdateData 构建更新数据
+func (d *instanceDAO) buildUpdateData(instance *model.Instance) map[string]interface{} {
+	updateData := map[string]interface{}{
+		"updated_at": time.Now(),
+	}
+
+	if instance.Title != "" {
+		updateData["title"] = instance.Title
+	}
+	if instance.FormData != nil {
+		updateData["form_data"] = instance.FormData
+	}
+	if instance.CurrentStep != "" {
+		updateData["current_step"] = instance.CurrentStep
+	}
+	updateData["status"] = instance.Status
+	updateData["priority"] = instance.Priority
+	updateData["description"] = instance.Description
+	updateData["assignee_id"] = instance.AssigneeID
+	updateData["completed_at"] = instance.CompletedAt
+	updateData["due_date"] = instance.DueDate
+	updateData["tags"] = instance.Tags
+	updateData["process_data"] = instance.ProcessData
+
+	return updateData
+}
+
+// deleteRelatedData 删除相关数据
+func (d *instanceDAO) deleteRelatedData(tx *gorm.DB, instanceID int) error {
+	// 删除相关的流转记录
+	if err := tx.Where("instance_id = ?", instanceID).Delete(&model.InstanceFlow{}).Error; err != nil {
+		return fmt.Errorf("删除工单流转记录失败: %w", err)
+	}
+
+	// 删除相关的评论
+	if err := tx.Where("instance_id = ?", instanceID).Delete(&model.InstanceComment{}).Error; err != nil {
+		return fmt.Errorf("删除工单评论失败: %w", err)
+	}
+
+	// 删除相关的附件记录
+	if err := tx.Where("instance_id = ?", instanceID).Delete(&model.InstanceAttachment{}).Error; err != nil {
+		return fmt.Errorf("删除工单附件记录失败: %w", err)
+	}
+
+	return nil
+}
+
+// buildCommentTree 构建评论树结构
+func (d *instanceDAO) buildCommentTree(comments []model.InstanceComment) []model.InstanceComment {
+	// 简化实现，实际应根据parent_id构建树结构
+	return comments
+}
 
 // buildInstanceListQuery 构建工单列表查询条件
 func (d *instanceDAO) buildInstanceListQuery(db *gorm.DB, req *model.ListInstanceReq) *gorm.DB {
@@ -1019,31 +930,12 @@ func (d *instanceDAO) normalizeTimeFields(instance *model.Instance) {
 	}
 }
 
-// ConvertToResp 转换为响应结构
-func (d *instanceDAO) ConvertFlowToResp(flow *model.InstanceFlow) *model.InstanceFlowResp {
-	return &model.InstanceFlowResp{
-		ID:           flow.ID,
-		InstanceID:   flow.InstanceID,
-		StepID:       flow.StepID,
-		StepName:     flow.StepName,
-		Action:       flow.Action,
-		OperatorID:   flow.OperatorID,
-		OperatorName: flow.OperatorName,
-		Comment:      flow.Comment,
-		FormData:     map[string]interface{}(flow.FormData), // 直接转换
-		Duration:     flow.Duration,
-		FromStepID:   flow.FromStepID,
-		ToStepID:     flow.ToStepID,
-		CreatedAt:    flow.CreatedAt,
-	}
-}
-
 // isDuplicateKeyError 判断是否为重复键错误
 func (d *instanceDAO) isDuplicateKeyError(err error) bool {
 	if err == nil {
 		return false
 	}
-	return err == gorm.ErrDuplicatedKey ||
+	return errors.Is(err, gorm.ErrDuplicatedKey) ||
 		strings.Contains(err.Error(), "UNIQUE constraint failed") ||
 		strings.Contains(err.Error(), "Duplicate entry") ||
 		strings.Contains(err.Error(), "duplicate key")

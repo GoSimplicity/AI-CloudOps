@@ -46,12 +46,11 @@ func (h *CategoryGroupHandler) RegisterRouters(server *gin.Engine) {
 	categoryGroup := server.Group("/api/workorder/category")
 	{
 		categoryGroup.POST("/create", h.CreateCategory)
-		categoryGroup.POST("/update/:id", h.UpdateCategory)
+		categoryGroup.PUT("/update/:id", h.UpdateCategory)
 		categoryGroup.DELETE("/delete/:id", h.DeleteCategory)
 		categoryGroup.GET("/list", h.ListCategory)
-		categoryGroup.GET("/detail/:id", h.GetCategory)
+		categoryGroup.GET("/detail/:id", h.DetailCategory)
 		categoryGroup.GET("/tree", h.GetCategoryTree)
-		categoryGroup.POST("/batch/status", h.BatchUpdateStatus)
 	}
 }
 
@@ -101,7 +100,7 @@ func (h *CategoryGroupHandler) ListCategory(ctx *gin.Context) {
 	})
 }
 
-func (h *CategoryGroupHandler) GetCategory(ctx *gin.Context) {
+func (h *CategoryGroupHandler) DetailCategory(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		return
@@ -115,18 +114,5 @@ func (h *CategoryGroupHandler) GetCategory(ctx *gin.Context) {
 func (h *CategoryGroupHandler) GetCategoryTree(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetCategoryTree(ctx)
-	})
-}
-
-func (h *CategoryGroupHandler) BatchUpdateStatus(ctx *gin.Context) {
-	var req struct {
-		IDs    []int `json:"ids" binding:"required"`
-		Status int8  `json:"status" binding:"required"`
-	}
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.BatchUpdateStatus(ctx, req.IDs, req.Status, user.Uid)
 	})
 }

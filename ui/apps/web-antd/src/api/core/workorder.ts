@@ -1,4 +1,5 @@
 import { requestClient } from '#/api/request';
+import type { Category } from '#/api/core/workorder_category'
 
 // 表单设计相关类型
 export interface ListFormDesignReq {
@@ -228,19 +229,7 @@ export interface Template {
   updated_at?: string;
 }
 
-// 工单分类相关类型
-export interface Category {
-  id: number;
-  name: string;
-  parent_id?: number;
-  icon?: string;
-  sort_order: number;
-  status: number;
-  description?: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string;
-}
+
 
 // 工单统计相关类型
 export interface WorkOrderStatistics {

@@ -42,7 +42,6 @@ type CategoryGroupService interface {
 	ListCategory(ctx context.Context, req model.ListCategoryReq) (*model.ListResp[model.CategoryResp], error)
 	GetCategory(ctx context.Context, id int) (*model.CategoryResp, error)
 	GetCategoryTree(ctx context.Context) ([]model.CategoryResp, error)
-	BatchUpdateStatus(ctx context.Context, ids []int, status int8, userID int) error
 }
 
 type categoryGroupService struct {
@@ -60,7 +59,7 @@ func NewCategoryGroupService(categoryDAO dao.CategoryDAO, userDAO userdao.UserDA
 }
 
 // convertToCategoryResp 将 model.Category 转换为 model.CategoryResp
-func convertToCategoryResp(category *model.Category) *model.CategoryResp {
+func (s *categoryGroupService) convertToCategoryResp(category *model.Category) *model.CategoryResp {
 	if category == nil {
 		return nil
 	}
@@ -74,15 +73,16 @@ func convertToCategoryResp(category *model.Category) *model.CategoryResp {
 		Description: category.Description,
 		CreatedAt:   category.CreatedAt,
 		UpdatedAt:   category.UpdatedAt,
-		Children:    []model.CategoryResp{},
+		CreatorName: category.CreatorName,
+		Children:    make([]model.CategoryResp, 0), // 确保初始化为空切片而不是nil
 	}
 }
 
 // convertToCategoryRespList 将 []model.Category 转换为 []model.CategoryResp
-func convertToCategoryRespList(categories []model.Category) []model.CategoryResp {
+func (s *categoryGroupService) convertToCategoryRespList(categories []model.Category) []model.CategoryResp {
 	resps := make([]model.CategoryResp, 0, len(categories))
 	for _, category := range categories {
-		resp := convertToCategoryResp(&category)
+		resp := s.convertToCategoryResp(&category)
 		if resp != nil {
 			resps = append(resps, *resp)
 		}
@@ -104,6 +104,8 @@ func (s *categoryGroupService) CreateCategory(ctx context.Context, req *model.Cr
 		SortOrder:   req.SortOrder,
 		Description: req.Description,
 		Status:      1, // 默认为启用状态
+		CreatorID:   creatorID,
+		CreatorName: creatorName,
 	}
 
 	createdCategory, err := s.categoryDAO.CreateCategory(ctx, category)
@@ -116,7 +118,7 @@ func (s *categoryGroupService) CreateCategory(ctx context.Context, req *model.Cr
 		zap.Int("id", createdCategory.ID),
 		zap.String("name", createdCategory.Name))
 
-	return convertToCategoryResp(createdCategory), nil
+	return s.convertToCategoryResp(createdCategory), nil
 }
 
 // UpdateCategory 更新分类的实现
@@ -136,13 +138,15 @@ func (s *categoryGroupService) UpdateCategory(ctx context.Context, req *model.Up
 
 	// 构建更新的分类对象
 	category := &model.Category{
-		ID:          req.ID,
+		Model: model.Model{
+			ID: req.ID,
+		},
 		Name:        req.Name,
 		ParentID:    req.ParentID,
 		Icon:        req.Icon,
 		SortOrder:   req.SortOrder,
 		Description: req.Description,
-		Status:      req.Status,
+		Status:      *req.Status,
 	}
 
 	updatedCategory, err := s.categoryDAO.UpdateCategory(ctx, category)
@@ -155,7 +159,7 @@ func (s *categoryGroupService) UpdateCategory(ctx context.Context, req *model.Up
 		zap.Int("id", updatedCategory.ID),
 		zap.String("name", updatedCategory.Name))
 
-	return convertToCategoryResp(updatedCategory), nil
+	return s.convertToCategoryResp(updatedCategory), nil
 }
 
 // DeleteCategory 删除分类的实现
@@ -193,7 +197,7 @@ func (s *categoryGroupService) ListCategory(ctx context.Context, req model.ListC
 		return nil, fmt.Errorf("列出分类失败: %w", err)
 	}
 
-	categoryResps := convertToCategoryRespList(categories)
+	categoryResps := s.convertToCategoryRespList(categories)
 
 	s.logger.Debug("分类列表获取成功",
 		zap.Int("count", len(categoryResps)),
@@ -220,7 +224,7 @@ func (s *categoryGroupService) GetCategory(ctx context.Context, id int) (*model.
 	}
 
 	s.logger.Debug("分类详情获取成功", zap.Int("id", category.ID))
-	return convertToCategoryResp(category), nil
+	return s.convertToCategoryResp(category), nil
 }
 
 // GetCategoryTree 获取分类树结构的实现
@@ -233,91 +237,44 @@ func (s *categoryGroupService) GetCategoryTree(ctx context.Context) ([]model.Cat
 		return nil, fmt.Errorf("获取所有分类失败: %w", err)
 	}
 
-	// 构建分类映射
+	// 构建分类映射，使用指针
 	categoryMap := make(map[int]*model.CategoryResp)
 	for i := range allCategories {
-		categoryResp := convertToCategoryResp(&allCategories[i])
+		categoryResp := s.convertToCategoryResp(&allCategories[i])
 		if categoryResp != nil {
+			// 确保Children不为nil
+			categoryResp.Children = make([]model.CategoryResp, 0)
 			categoryMap[allCategories[i].ID] = categoryResp
 		}
 	}
 
-	// 构建树结构
-	var rootCategories []model.CategoryResp
-	for _, category := range allCategories {
-		respNode, exists := categoryMap[category.ID]
-		if !exists {
-			continue
-		}
+	// 递归构建树结构
+	var buildTree func(parentID *int) []model.CategoryResp
+	buildTree = func(parentID *int) []model.CategoryResp {
+		var children []model.CategoryResp
 
-		if category.ParentID == nil || *category.ParentID == 0 {
-			// 根节点
-			rootCategories = append(rootCategories, *respNode)
-		} else {
-			// 子节点，添加到父节点的Children中
-			if parentNode, found := categoryMap[*category.ParentID]; found {
-				childCategory := model.CategoryResp{
-					ID:          respNode.ID,
-					Name:        respNode.Name,
-					ParentID:    respNode.ParentID,
-					Icon:        respNode.Icon,
-					SortOrder:   respNode.SortOrder,
-					Status:      respNode.Status,
-					Description: respNode.Description,
-					CreatedAt:   respNode.CreatedAt,
-					UpdatedAt:   respNode.UpdatedAt,
-					Children:    respNode.Children,
+		for _, category := range allCategories {
+			// 判断是否为当前父节点的直接子节点
+			if (parentID == nil && (category.ParentID == nil || *category.ParentID == 0)) ||
+				(parentID != nil && category.ParentID != nil && *category.ParentID == *parentID) {
+
+				if node, exists := categoryMap[category.ID]; exists {
+					// 递归构建当前节点的子树
+					node.Children = buildTree(&category.ID)
+					children = append(children, *node)
 				}
-				parentNode.Children = append(parentNode.Children, childCategory)
-			} else {
-				// 孤立节点，父节点不存在
-				s.logger.Warn("发现孤立分类节点（父节点未找到）",
-					zap.Int("categoryID", category.ID),
-					zap.Intp("parentID", category.ParentID))
-				// 将孤立节点添加到根级别
-				rootCategories = append(rootCategories, *respNode)
 			}
 		}
+
+		return children
 	}
 
-	s.logger.Debug("分类树获取成功", zap.Int("rootCategoriesCount", len(rootCategories)))
+	// 构建完整的树结构，从根节点开始
+	rootCategories := buildTree(nil)
+
+	s.logger.Debug("分类树获取成功",
+		zap.Int("rootCategoriesCount", len(rootCategories)),
+		zap.Int("totalCategories", len(allCategories)))
+
 	return rootCategories, nil
-}
-
-// BatchUpdateStatus 批量更新分类状态的实现
-func (s *categoryGroupService) BatchUpdateStatus(ctx context.Context, ids []int, status int8, userID int) error {
-	if len(ids) == 0 {
-		return nil
-	}
-
-	s.logger.Info("开始批量更新分类状态",
-		zap.Ints("ids", ids),
-		zap.Int8("status", status),
-		zap.Int("userID", userID))
-
-	// 验证所有分类是否存在
-	categories, err := s.categoryDAO.GetCategoriesByIDs(ctx, ids)
-	if err != nil {
-		s.logger.Error("批量更新状态失败：获取分类信息失败", zap.Error(err), zap.Ints("ids", ids))
-		return fmt.Errorf("获取分类信息失败: %w", err)
-	}
-
-	if len(categories) != len(ids) {
-		s.logger.Warn("部分分类不存在",
-			zap.Int("requested", len(ids)),
-			zap.Int("found", len(categories)))
-		// 可以选择继续处理存在的分类，或者返回错误
-	}
-
-	err = s.categoryDAO.BatchUpdateStatus(ctx, ids, status)
-	if err != nil {
-		s.logger.Error("批量更新分类状态失败", zap.Error(err), zap.Ints("ids", ids))
-		return fmt.Errorf("批量更新分类状态失败: %w", err)
-	}
-
-	s.logger.Info("批量更新分类状态成功",
-		zap.Ints("ids", ids),
-		zap.Int8("status", status))
-
-	return nil
 }

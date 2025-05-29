@@ -6,6 +6,7 @@ import "time"
 type InstanceComment struct {
 	Model
 	InstanceID  int    `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
+	UserID      int    `json:"user_id" gorm:"column:user_id;not null;comment:用户ID"`
 	Content     string `json:"content" gorm:"column:content;type:text;not null;comment:评论内容"`
 	CreatorID   int    `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
 	CreatorName string `json:"creator_name" gorm:"-"`
@@ -22,6 +23,7 @@ func (InstanceComment) TableName() string {
 type InstanceCommentResp struct {
 	ID          int                   `json:"id"`
 	InstanceID  int                   `json:"instance_id"`
+	UserID      int                   `json:"user_id"`
 	Content     string                `json:"content"`
 	CreatorID   int                   `json:"creator_id"`
 	CreatorName string                `json:"creator_name"`

@@ -23,6 +23,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        name: '分类管理',
+        path: '/category',
+        component: () => import('#/views/workorder/Category.vue'),
+        meta: {
+          icon: 'lucide:folder',
+          title: '分类管理',
+        },
+      },
+      {
         name: '流程管理',
         path: '/process',
         component: () => import('#/views/workorder/Process.vue'),
