@@ -579,8 +579,8 @@ import {
   type DetailFormDesignReq,
   type PublishFormDesignReq,
   type CloneFormDesignReq,
-  type Category
 } from '#/api/core/workorder';
+import type { Category } from '#/api/core/workorder_category'
 
 // 响应式数据类型
 interface Statistics {
@@ -717,15 +717,8 @@ const stats = reactive<Statistics>({
 });
 
 // 分类数据
-const categories = ref<Category[]>([
-  { id: 1, name: '人力资源', sort_order: 1, status: 1, created_at: '', updated_at: '' },
-  { id: 2, name: '财务部门', sort_order: 2, status: 1, created_at: '', updated_at: '' },
-  { id: 3, name: 'IT部门', sort_order: 3, status: 1, created_at: '', updated_at: '' },
-  { id: 4, name: '运营部门', sort_order: 4, status: 1, created_at: '', updated_at: '' },
-  { id: 5, name: '项目管理', sort_order: 5, status: 1, created_at: '', updated_at: '' },
-  { id: 6, name: '客户服务', sort_order: 6, status: 1, created_at: '', updated_at: '' },
-  { id: 7, name: '采购部门', sort_order: 7, status: 1, created_at: '', updated_at: '' }
-]);
+// 分类数据，改为从接口获取
+const categories = ref<Category[]>([]);
 
 // 过滤和分页
 const filteredForms = computed(() => {

@@ -76,12 +76,6 @@ func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 		// 流程查看
 		instanceGroup.GET("/:id/flows", h.GetInstanceFlows)
 		instanceGroup.GET("/process/:pid/definition", h.GetProcessDefinition)
-
-		// 统计分析
-		instanceGroup.GET("/statistics/overview", h.GetInstanceStatistics)
-		instanceGroup.GET("/statistics/trend", h.GetInstanceTrend)
-		instanceGroup.GET("/statistics/category", h.GetCategoryStatistics)
-		instanceGroup.GET("/statistics/performance", h.GetUserPerformanceStatistics)
 	}
 }
 
@@ -91,7 +85,7 @@ func (h *InstanceHandler) CreateInstance(ctx *gin.Context) {
 	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CreateInstance(ctx, &req, user.Uid, user.Username)
+		return h.service.CreateInstance(ctx, &req, user.Uid, user.Username)
 	})
 }
 
@@ -103,9 +97,11 @@ func (h *InstanceHandler) UpdateInstance(ctx *gin.Context) {
 		return
 	}
 
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		req.ID = id
-		return nil, h.service.UpdateInstance(ctx, &req)
+		return nil, h.service.UpdateInstance(ctx, &req, user.Uid)
 	})
 }
 
@@ -116,8 +112,10 @@ func (h *InstanceHandler) DeleteInstance(ctx *gin.Context) {
 		return
 	}
 
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.service.DeleteInstance(ctx, id)
+		return nil, h.service.DeleteInstance(ctx, id, user.Uid)
 	})
 }
 
@@ -148,8 +146,10 @@ func (h *InstanceHandler) BatchUpdateInstanceStatus(ctx *gin.Context) {
 		Status int8  `json:"status" binding:"required"`
 	}
 
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.BatchUpdateInstanceStatus(ctx, req.IDs, req.Status)
+		return nil, h.service.BatchUpdateInstanceStatus(ctx, req.IDs, req.Status, user.Uid)
 	})
 }
 
@@ -260,8 +260,10 @@ func (h *InstanceHandler) DeleteAttachment(ctx *gin.Context) {
 		return
 	}
 
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.service.DeleteAttachment(ctx, id, attachmentID)
+		return nil, h.service.DeleteAttachment(ctx, id, attachmentID, user.Uid)
 	})
 }
 
@@ -288,8 +290,10 @@ func (h *InstanceHandler) BatchDeleteAttachments(ctx *gin.Context) {
 		AttachmentIDs []int `json:"attachment_ids" binding:"required"`
 	}
 
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.BatchDeleteAttachments(ctx, id, req.AttachmentIDs)
+		return nil, h.service.BatchDeleteAttachments(ctx, id, req.AttachmentIDs, user.Uid)
 	})
 }
 
@@ -324,37 +328,5 @@ func (h *InstanceHandler) TransferInstance(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.TransferInstance(ctx, id, user.Uid, req.ToUserID, req.Comment)
-	})
-}
-
-// GetInstanceStatistics 获取工单统计信息
-func (h *InstanceHandler) GetInstanceStatistics(ctx *gin.Context) {
-	var req model.OverviewStatsReq
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.GetInstanceStatistics(ctx, &req)
-	})
-}
-
-// GetInstanceTrend 获取工单趋势
-func (h *InstanceHandler) GetInstanceTrend(ctx *gin.Context) {
-	var req model.TrendStatsReq
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.GetInstanceTrend(ctx, &req)
-	})
-}
-
-// GetCategoryStatistics 获取分类统计
-func (h *InstanceHandler) GetCategoryStatistics(ctx *gin.Context) {
-	var req model.CategoryStatsReq
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.GetCategoryStatistics(ctx, &req)
-	})
-}
-
-// GetUserPerformanceStatistics 获取用户绩效统计
-func (h *InstanceHandler) GetUserPerformanceStatistics(ctx *gin.Context) {
-	var req model.PerformanceStatsReq
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.GetUserPerformanceStatistics(ctx, &req)
 	})
 }

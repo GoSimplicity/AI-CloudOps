@@ -590,7 +590,7 @@ import {
   getInstanceComments,
   getInstanceFlows,
   getInstanceAttachments,
-  uploadAttachment,
+  uploadAttachment as apiUploadAttachment,
   deleteAttachment,
   myInstance,
   type ListInstanceReq,
@@ -1270,10 +1270,9 @@ const uploadAttachment = async () => {
       formData.append('files', file.originFileObj);
     });
     
-    await uploadAttachment(detailDialog.instance.id, formData);
+    await uploadAttachment();
     message.success('附件上传成功');
     uploadFileList.value = [];
-    
     // 刷新附件列表
     fetchInstanceAttachments(detailDialog.instance.id);
   } catch (error) {

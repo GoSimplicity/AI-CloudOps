@@ -146,7 +146,7 @@ func ProvideCmd() *Cmd {
 	templateService := service4.NewTemplateService(templateDAO, logger)
 	templateHandler := api6.NewTemplateHandler(templateService)
 	instanceDAO := dao3.NewInstanceDAO(db, logger)
-	serviceInstanceService := service4.NewInstanceService(instanceDAO, userDAO, logger)
+	serviceInstanceService := service4.NewInstanceService(instanceDAO, processDAO, userDAO, logger)
 	instanceHandler := api6.NewInstanceHandler(serviceInstanceService)
 	statisticsDAO := dao3.NewStatisticsDAO(db, logger)
 	statisticsService := service4.NewStatisticsService(statisticsDAO, userDAO, logger)
