@@ -43,12 +43,6 @@ var (
 	ErrInstanceExists       = errors.New("工单实例已存在")
 	ErrInstanceInvalidID    = errors.New("工单实例ID无效")
 	ErrInstanceNilPointer   = errors.New("工单实例对象为空")
-	ErrAttachmentNotFound   = errors.New("附件不存在")
-	ErrAttachmentNotBelong  = errors.New("附件不属于指定工单")
-	ErrInvalidParameters    = errors.New("参数无效")
-	ErrFlowNilPointer       = errors.New("流程记录对象为空")
-	ErrCommentNilPointer    = errors.New("评论对象为空")
-	ErrAttachmentNilPointer = errors.New("附件对象为空")
 	ErrTransferFailed       = errors.New("工单转移失败")
 )
 
@@ -68,22 +62,6 @@ type InstanceDAO interface {
 	GetInstanceWithRelations(ctx context.Context, id int) (*model.Instance, error)
 	ListInstance(ctx context.Context, req *model.ListInstanceReq) (*model.ListResp[model.Instance], error)
 	BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8) error
-
-	// 流程方法
-	CreateInstanceFlow(ctx context.Context, flow *model.InstanceFlow) error
-	GetInstanceFlows(ctx context.Context, instanceID int) ([]model.InstanceFlow, error)
-	BatchCreateInstanceFlows(ctx context.Context, flows []model.InstanceFlow) error
-
-	// 评论方法
-	CreateInstanceComment(ctx context.Context, comment *model.InstanceComment) error
-	GetInstanceComments(ctx context.Context, instanceID int) ([]model.InstanceComment, error)
-	GetInstanceCommentsTree(ctx context.Context, instanceID int) ([]model.InstanceComment, error)
-
-	// 附件方法
-	CreateInstanceAttachment(ctx context.Context, attachment *model.InstanceAttachment) (*model.InstanceAttachment, error)
-	DeleteInstanceAttachment(ctx context.Context, instanceID int, attachmentID int) error
-	GetInstanceAttachments(ctx context.Context, instanceID int) ([]model.InstanceAttachment, error)
-	BatchDeleteInstanceAttachments(ctx context.Context, instanceID int, attachmentIDs []int) error
 
 	GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (*model.ListResp[model.Instance], error)
 	GetOverdueInstances(ctx context.Context) ([]model.Instance, error)
@@ -301,7 +279,7 @@ func (d *instanceDAO) ListInstance(ctx context.Context, req *model.ListInstanceR
 // BatchUpdateInstanceStatus 批量更新工单状态
 func (d *instanceDAO) BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8) error {
 	if len(ids) == 0 {
-		return ErrInvalidParameters
+		return errors.New("参数无效")
 	}
 
 	// 验证ID的有效性
@@ -328,217 +306,10 @@ func (d *instanceDAO) BatchUpdateInstanceStatus(ctx context.Context, ids []int, 
 	return nil
 }
 
-// CreateInstanceFlow 创建工单流程记录
-func (d *instanceDAO) CreateInstanceFlow(ctx context.Context, flow *model.InstanceFlow) error {
-	if flow == nil {
-		return ErrFlowNilPointer
-	}
-
-	if err := d.validateFlow(flow); err != nil {
-		return fmt.Errorf("流程记录验证失败: %w", err)
-	}
-
-	if err := d.db.WithContext(ctx).Create(flow).Error; err != nil {
-		d.logger.Error("创建工单流程记录失败", zap.Error(err), zap.Int("instanceID", flow.InstanceID))
-		return fmt.Errorf("创建工单流程记录失败: %w", err)
-	}
-
-	d.logger.Info("创建工单流程记录成功", zap.Int("id", flow.ID), zap.Int("instanceID", flow.InstanceID))
-	return nil
-}
-
-// GetInstanceFlows 获取工单流程记录
-func (d *instanceDAO) GetInstanceFlows(ctx context.Context, instanceID int) ([]model.InstanceFlow, error) {
-	if instanceID <= 0 {
-		return nil, ErrInstanceInvalidID
-	}
-
-	var flows []model.InstanceFlow
-	err := d.db.WithContext(ctx).
-		Where("instance_id = ?", instanceID).
-		Order("created_at ASC").
-		Find(&flows).Error
-
-	if err != nil {
-		d.logger.Error("获取工单流程记录失败", zap.Error(err), zap.Int("instanceID", instanceID))
-		return nil, fmt.Errorf("获取工单流程记录失败: %w", err)
-	}
-
-	return flows, nil
-}
-
-// BatchCreateInstanceFlows 批量创建工单流程记录
-func (d *instanceDAO) BatchCreateInstanceFlows(ctx context.Context, flows []model.InstanceFlow) error {
-	if len(flows) == 0 {
-		return nil
-	}
-
-	// 验证流程记录
-	for i, flow := range flows {
-		if err := d.validateFlow(&flow); err != nil {
-			return fmt.Errorf("第%d个流程记录验证失败: %w", i+1, err)
-		}
-	}
-
-	if err := d.db.WithContext(ctx).CreateInBatches(flows, DefaultBatchSize).Error; err != nil {
-		d.logger.Error("批量创建工单流程记录失败", zap.Error(err), zap.Int("count", len(flows)))
-		return fmt.Errorf("批量创建工单流程记录失败: %w", err)
-	}
-
-	d.logger.Info("批量创建工单流程记录成功", zap.Int("count", len(flows)))
-	return nil
-}
-
-// CreateInstanceComment 创建工单评论
-func (d *instanceDAO) CreateInstanceComment(ctx context.Context, comment *model.InstanceComment) error {
-	if comment == nil {
-		return ErrCommentNilPointer
-	}
-
-	if err := d.validateComment(comment); err != nil {
-		return fmt.Errorf("评论验证失败: %w", err)
-	}
-
-	if err := d.db.WithContext(ctx).Create(comment).Error; err != nil {
-		d.logger.Error("创建工单评论失败", zap.Error(err), zap.Int("instanceID", comment.InstanceID))
-		return fmt.Errorf("创建工单评论失败: %w", err)
-	}
-
-	d.logger.Info("创建工单评论成功", zap.Int("id", comment.ID), zap.Int("instanceID", comment.InstanceID))
-	return nil
-}
-
-// GetInstanceComments 获取工单评论
-func (d *instanceDAO) GetInstanceComments(ctx context.Context, instanceID int) ([]model.InstanceComment, error) {
-	if instanceID <= 0 {
-		return nil, ErrInstanceInvalidID
-	}
-
-	var comments []model.InstanceComment
-	err := d.db.WithContext(ctx).
-		Where("instance_id = ?", instanceID).
-		Order("created_at ASC").
-		Find(&comments).Error
-
-	if err != nil {
-		d.logger.Error("获取工单评论失败", zap.Error(err), zap.Int("instanceID", instanceID))
-		return nil, fmt.Errorf("获取工单评论失败: %w", err)
-	}
-
-	return comments, nil
-}
-
-// GetInstanceCommentsTree 获取工单评论树结构
-func (d *instanceDAO) GetInstanceCommentsTree(ctx context.Context, instanceID int) ([]model.InstanceComment, error) {
-	comments, err := d.GetInstanceComments(ctx, instanceID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 构建评论树结构
-	return d.buildCommentTree(comments), nil
-}
-
-// CreateInstanceAttachment 创建工单附件记录
-func (d *instanceDAO) CreateInstanceAttachment(ctx context.Context, attachment *model.InstanceAttachment) (*model.InstanceAttachment, error) {
-	if attachment == nil {
-		return nil, ErrAttachmentNilPointer
-	}
-
-	if err := d.validateAttachment(attachment); err != nil {
-		return nil, fmt.Errorf("附件验证失败: %w", err)
-	}
-
-	d.logger.Debug("开始创建工单附件", zap.Int("instanceID", attachment.InstanceID), zap.String("fileName", attachment.FileName))
-
-	if err := d.db.WithContext(ctx).Create(attachment).Error; err != nil {
-		d.logger.Error("创建工单附件失败", zap.Error(err), zap.Int("instanceID", attachment.InstanceID))
-		return nil, fmt.Errorf("创建工单附件失败: %w", err)
-	}
-
-	d.logger.Info("创建工单附件成功", zap.Int("id", attachment.ID), zap.String("fileName", attachment.FileName))
-	return attachment, nil
-}
-
-// DeleteInstanceAttachment 删除工单附件记录
-func (d *instanceDAO) DeleteInstanceAttachment(ctx context.Context, instanceID int, attachmentID int) error {
-	if instanceID <= 0 || attachmentID <= 0 {
-		return ErrInvalidParameters
-	}
-
-	d.logger.Debug("开始删除工单附件", zap.Int("instanceID", instanceID), zap.Int("attachmentID", attachmentID))
-
-	result := d.db.WithContext(ctx).
-		Where("id = ? AND instance_id = ?", attachmentID, instanceID).
-		Delete(&model.InstanceAttachment{})
-
-	if result.Error != nil {
-		d.logger.Error("删除工单附件失败", zap.Error(result.Error), zap.Int("attachmentID", attachmentID))
-		return fmt.Errorf("删除工单附件失败: %w", result.Error)
-	}
-
-	if result.RowsAffected == 0 {
-		d.logger.Warn("附件不存在或不属于指定工单", zap.Int("attachmentID", attachmentID), zap.Int("instanceID", instanceID))
-		return ErrAttachmentNotBelong
-	}
-
-	d.logger.Info("删除工单附件成功", zap.Int("attachmentID", attachmentID))
-	return nil
-}
-
-// GetInstanceAttachments 获取指定工单的所有附件记录
-func (d *instanceDAO) GetInstanceAttachments(ctx context.Context, instanceID int) ([]model.InstanceAttachment, error) {
-	if instanceID <= 0 {
-		return nil, ErrInstanceInvalidID
-	}
-
-	d.logger.Debug("开始获取工单附件列表", zap.Int("instanceID", instanceID))
-
-	var attachments []model.InstanceAttachment
-	err := d.db.WithContext(ctx).
-		Where("instance_id = ?", instanceID).
-		Order("created_at DESC").
-		Find(&attachments).Error
-
-	if err != nil {
-		d.logger.Error("获取工单附件列表失败", zap.Error(err), zap.Int("instanceID", instanceID))
-		return nil, fmt.Errorf("获取工单附件列表失败: %w", err)
-	}
-
-	d.logger.Debug("获取工单附件列表成功", zap.Int("count", len(attachments)))
-	return attachments, nil
-}
-
-// BatchDeleteInstanceAttachments 批量删除工单附件
-func (d *instanceDAO) BatchDeleteInstanceAttachments(ctx context.Context, instanceID int, attachmentIDs []int) error {
-	if instanceID <= 0 || len(attachmentIDs) == 0 {
-		return ErrInvalidParameters
-	}
-
-	// 验证附件ID的有效性
-	for _, id := range attachmentIDs {
-		if id <= 0 {
-			return ErrInvalidParameters
-		}
-	}
-
-	result := d.db.WithContext(ctx).
-		Where("instance_id = ? AND id IN ?", instanceID, attachmentIDs).
-		Delete(&model.InstanceAttachment{})
-
-	if result.Error != nil {
-		d.logger.Error("批量删除工单附件失败", zap.Error(result.Error), zap.Ints("attachmentIDs", attachmentIDs))
-		return fmt.Errorf("批量删除工单附件失败: %w", result.Error)
-	}
-
-	d.logger.Info("批量删除工单附件成功", zap.Ints("attachmentIDs", attachmentIDs), zap.Int64("affected", result.RowsAffected))
-	return nil
-}
-
 // GetMyInstances 获取我的工单
 func (d *instanceDAO) GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (*model.ListResp[model.Instance], error) {
 	if userID <= 0 {
-		return nil, ErrInvalidParameters
+		return nil, errors.New("参数无效")
 	}
 
 	if err := d.validateMyInstanceRequest(req); err != nil {
@@ -615,7 +386,7 @@ func (d *instanceDAO) GetOverdueInstances(ctx context.Context) ([]model.Instance
 // TransferInstance 转移工单
 func (d *instanceDAO) TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error {
 	if instanceID <= 0 || fromUserID <= 0 || toUserID <= 0 {
-		return ErrInvalidParameters
+		return errors.New("参数无效")
 	}
 
 	if fromUserID == toUserID {
@@ -680,48 +451,6 @@ func (d *instanceDAO) validateInstance(instance *model.Instance) error {
 	}
 	if instance.CreatorID <= 0 {
 		return fmt.Errorf("创建人ID无效")
-	}
-	return nil
-}
-
-// validateFlow 验证流程记录数据
-func (d *instanceDAO) validateFlow(flow *model.InstanceFlow) error {
-	if flow.InstanceID <= 0 {
-		return fmt.Errorf("工单ID无效")
-	}
-	if strings.TrimSpace(flow.StepID) == "" {
-		return fmt.Errorf("步骤ID不能为空")
-	}
-	if flow.OperatorID <= 0 {
-		return fmt.Errorf("操作人ID无效")
-	}
-	return nil
-}
-
-// validateComment 验证评论数据
-func (d *instanceDAO) validateComment(comment *model.InstanceComment) error {
-	if comment.InstanceID <= 0 {
-		return fmt.Errorf("工单ID无效")
-	}
-	if comment.UserID <= 0 {
-		return fmt.Errorf("用户ID无效")
-	}
-	if strings.TrimSpace(comment.Content) == "" {
-		return fmt.Errorf("评论内容不能为空")
-	}
-	return nil
-}
-
-// validateAttachment 验证附件数据
-func (d *instanceDAO) validateAttachment(attachment *model.InstanceAttachment) error {
-	if attachment.InstanceID <= 0 {
-		return fmt.Errorf("工单ID无效")
-	}
-	if strings.TrimSpace(attachment.FileName) == "" {
-		return fmt.Errorf("文件名不能为空")
-	}
-	if strings.TrimSpace(attachment.FilePath) == "" {
-		return fmt.Errorf("文件路径不能为空")
 	}
 	return nil
 }
@@ -799,12 +528,6 @@ func (d *instanceDAO) deleteRelatedData(tx *gorm.DB, instanceID int) error {
 	}
 
 	return nil
-}
-
-// buildCommentTree 构建评论树结构
-func (d *instanceDAO) buildCommentTree(comments []model.InstanceComment) []model.InstanceComment {
-	// 简化实现，实际应根据parent_id构建树结构
-	return comments
 }
 
 // buildInstanceListQuery 构建工单列表查询条件

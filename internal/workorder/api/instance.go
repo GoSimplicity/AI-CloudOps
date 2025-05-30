@@ -35,12 +35,18 @@ import (
 )
 
 type InstanceHandler struct {
-	service service.InstanceService
+	service           service.InstanceService
+	flowService       service.InstanceFlowService
+	commentService    service.InstanceCommentService
+	attachmentService service.InstanceAttachmentService
 }
 
-func NewInstanceHandler(service service.InstanceService) *InstanceHandler {
+func NewInstanceHandler(service service.InstanceService, flowService service.InstanceFlowService, commentService service.InstanceCommentService, attachmentService service.InstanceAttachmentService) *InstanceHandler {
 	return &InstanceHandler{
-		service: service,
+		service:           service,
+		flowService:       flowService,
+		commentService:    commentService,
+		attachmentService: attachmentService,
 	}
 }
 
@@ -164,7 +170,7 @@ func (h *InstanceHandler) ProcessInstanceFlow(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		req.InstanceID = id
-		return nil, h.service.ProcessInstanceFlow(ctx, &req, user.Uid, user.Username)
+		return nil, h.flowService.ProcessInstanceFlow(ctx, &req, user.Uid, user.Username)
 	})
 }
 
@@ -176,7 +182,7 @@ func (h *InstanceHandler) GetInstanceFlows(ctx *gin.Context) {
 	}
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetInstanceFlows(ctx, id)
+		return h.flowService.GetInstanceFlows(ctx, id)
 	})
 }
 
@@ -190,7 +196,7 @@ func (h *InstanceHandler) GetProcessDefinition(ctx *gin.Context) {
 	}
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetProcessDefinition(ctx, processID)
+		return h.flowService.GetProcessDefinition(ctx, processID)
 	})
 }
 
@@ -205,7 +211,7 @@ func (h *InstanceHandler) CommentInstance(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		req.InstanceID = id
-		return nil, h.service.CommentInstance(ctx, &req, user.Uid, user.Username)
+		return nil, h.commentService.CommentInstance(ctx, &req, user.Uid, user.Username)
 	})
 }
 
@@ -217,7 +223,7 @@ func (h *InstanceHandler) GetInstanceComments(ctx *gin.Context) {
 	}
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetInstanceComments(ctx, id)
+		return h.commentService.GetInstanceComments(ctx, id)
 	})
 }
 
@@ -236,13 +242,12 @@ func (h *InstanceHandler) UploadAttachment(ctx *gin.Context) {
 	}
 	defer file.Close()
 
-	// 这里需要实现文件保存逻辑，返回文件路径
-	// 示例代码，实际应该根据具体的文件存储服务实现
-	filePath := "/uploads/" + header.Filename // 简化示例
+	//TODO: 这里需要实现文件保存逻辑，返回文件路径
+	filePath := "/uploads/" + header.Filename
 	fileType := header.Header.Get("Content-Type")
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.UploadAttachment(ctx, id, header.Filename, header.Size, filePath, fileType, user.Uid, user.Username)
+		return h.attachmentService.UploadAttachment(ctx, id, header.Filename, header.Size, filePath, fileType, user.Uid, user.Username)
 	})
 }
 
@@ -263,7 +268,7 @@ func (h *InstanceHandler) DeleteAttachment(ctx *gin.Context) {
 	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.service.DeleteAttachment(ctx, id, attachmentID, user.Uid)
+		return nil, h.attachmentService.DeleteAttachment(ctx, id, attachmentID, user.Uid)
 	})
 }
 
@@ -275,7 +280,7 @@ func (h *InstanceHandler) GetInstanceAttachments(ctx *gin.Context) {
 	}
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetInstanceAttachments(ctx, id)
+		return h.attachmentService.GetInstanceAttachments(ctx, id)
 	})
 }
 
@@ -293,7 +298,7 @@ func (h *InstanceHandler) BatchDeleteAttachments(ctx *gin.Context) {
 	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.BatchDeleteAttachments(ctx, id, req.AttachmentIDs, user.Uid)
+		return nil, h.attachmentService.BatchDeleteAttachments(ctx, id, req.AttachmentIDs, user.Uid)
 	})
 }
 
