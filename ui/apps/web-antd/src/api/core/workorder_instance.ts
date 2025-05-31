@@ -171,27 +171,27 @@ export interface InstanceAttachmentResp {
 
 // 创建工单实例
 export async function createInstance(data: CreateInstanceReq) {
-  return requestClient.post('/api/workorder/instance', data);
+  return requestClient.post('/api/workorder/instance/create', data);
 }
 
 // 更新工单实例
 export async function updateInstance(id: number, data: UpdateInstanceReq) {
-  return requestClient.put(`/api/workorder/instance/${id}`, data);
+  return requestClient.put(`/api/workorder/instance/update/${id}`, data);
 }
 
 // 删除工单实例
 export async function deleteInstance(id: number) {
-  return requestClient.delete(`/api/workorder/instance/${id}`);
+  return requestClient.delete(`/api/workorder/instance/delete/${id}`);
 }
 
 // 获取工单实例详情
 export async function detailInstance(id: number) {
-  return requestClient.get(`/api/workorder/instance/${id}`);
+  return requestClient.get(`/api/workorder/instance/detail/${id}`);
 }
 
 // 列表查询工单实例
 export async function listInstance(params: ListInstanceReq) {
-  return requestClient.get('/api/workorder/instance', { params });
+  return requestClient.get('/api/workorder/instance/list', { params });
 }
 
 // 批量更新工单状态
@@ -211,27 +211,27 @@ export async function overdueInstance(params?: ListInstanceReq) {
 
 // 工单流程操作
 export async function actionInstance(id: number, data: InstanceFlowReq) {
-  return requestClient.post(`/api/workorder/instance/${id}/action`, data);
+  return requestClient.post(`/api/workorder/instance/action/${id}`, data);
 }
 
 // 工单转交
 export async function transferInstance(id: number, data: { to_user_id: number; comment?: string }) {
-  return requestClient.post(`/api/workorder/instance/${id}/transfer`, data);
+  return requestClient.post(`/api/workorder/instance/transfer/${id}`, data);
 }
 
 // 添加工单评论
 export async function commentInstance(id: number, data: InstanceCommentReq) {
-  return requestClient.post(`/api/workorder/instance/${id}/comment`, data);
+  return requestClient.post(`/api/workorder/instance/comment/${id}`, data);
 }
 
 // 获取工单评论
 export async function getInstanceComments(id: number) {
-  return requestClient.get(`/api/workorder/instance/${id}/comments`);
+  return requestClient.get(`/api/workorder/instance/comments/${id}`);
 }
 
 // 获取工单流程流转记录
 export async function getInstanceFlows(id: number) {
-  return requestClient.get(`/api/workorder/instance/${id}/flows`);
+  return requestClient.get(`/api/workorder/instance/flows/${id}`);
 }
 
 // 获取流程定义
@@ -243,7 +243,7 @@ export async function getProcessDefinition(pid: number) {
 
 // 上传附件
 export async function uploadAttachment(id: number, data: FormData) {
-  return requestClient.post(`/api/workorder/instance/${id}/attachment`, data, {
+  return requestClient.post(`/api/workorder/instance/attachment/${id}`, data, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 }
@@ -255,10 +255,10 @@ export async function deleteAttachment(id: number, aid: number) {
 
 // 获取工单附件列表
 export async function getInstanceAttachments(id: number) {
-  return requestClient.get(`/api/workorder/instance/${id}/attachments`);
+  return requestClient.get(`/api/workorder/instance/attachments/${id}`);
 }
 
 // 批量删除附件
 export async function batchDeleteAttachments(id: number, data: { attachment_ids: number[] }) {
-  return requestClient.delete(`/api/workorder/instance/${id}/attachments/batch`, { data });
+  return requestClient.delete(`/api/workorder/instance/attachments/batch/${id}`, { data });
 }

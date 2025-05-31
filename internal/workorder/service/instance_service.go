@@ -86,7 +86,13 @@ type instanceService struct {
 	logger     *zap.Logger
 }
 
-func NewInstanceService(dao dao.InstanceDAO, processDao dao.ProcessDAO, flowDao dao.InstanceFlowDAO, userDao userdao.UserDAO, logger *zap.Logger) InstanceService {
+func NewInstanceService(
+	dao dao.InstanceDAO,
+	processDao dao.ProcessDAO,
+	flowDao dao.InstanceFlowDAO,
+	userDao userdao.UserDAO,
+	logger *zap.Logger,
+) InstanceService {
 	return &instanceService{
 		dao:        dao,
 		userDao:    userDao,
@@ -102,7 +108,7 @@ func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateI
 		return nil, fmt.Errorf("参数验证失败: %w", err)
 	}
 
-	// 验证流程是否存在
+	// 验证流程是否存在并取出表单数据
 	process, err := s.processDao.GetProcess(ctx, req.ProcessID)
 	if err != nil {
 		if errors.Is(err, dao.ErrProcessNotFound) {
@@ -112,14 +118,8 @@ func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateI
 		return nil, fmt.Errorf("获取流程定义失败: %w", err)
 	}
 
-	// 解析流程定义
-	processDef, err := s.parseProcessDefinition(process.Definition)
-	if err != nil {
-		return nil, fmt.Errorf("流程定义解析失败: %w", err)
-	}
-
 	// 创建工单实例
-	instance, err := s.buildInstanceFromRequest(req, creatorID, creatorName, processDef)
+	instance, err := s.buildInstanceFromRequest(ctx, req, creatorID, creatorName, process)
 	if err != nil {
 		return nil, fmt.Errorf("构建工单实例失败: %w", err)
 	}
@@ -267,11 +267,7 @@ func (s *instanceService) ListInstance(ctx context.Context, req *model.ListInsta
 
 // BatchUpdateInstanceStatus 批量更新工单状态
 func (s *instanceService) BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8, operatorID int) error {
-	if len(ids) == 0 {
-		return ErrInvalidRequest
-	}
-
-	if operatorID <= 0 {
+	if len(ids) == 0 || operatorID <= 0 {
 		return ErrInvalidRequest
 	}
 
@@ -361,14 +357,50 @@ func (s *instanceService) TransferInstance(ctx context.Context, instanceID int, 
 		return fmt.Errorf("转移目标用户不能是当前用户")
 	}
 
+	// 检查工单是否存在
+	instance, err := s.dao.GetInstance(ctx, instanceID)
+	if err != nil {
+		if errors.Is(err, dao.ErrInstanceNotFound) {
+			return ErrInstanceNotFound
+		}
+		return fmt.Errorf("获取工单实例失败: %w", err)
+	}
+
+	// 验证转移权限
+	if instance.AssigneeID == nil || *instance.AssigneeID != fromUserID {
+		return ErrUnauthorized
+	}
+
 	// 验证目标用户是否存在
-	if _, err := s.userDao.GetUserByID(ctx, toUserID); err != nil {
+	toUser, err := s.userDao.GetUserByID(ctx, toUserID)
+	if err != nil {
 		return ErrUserNotFound
 	}
 
 	if err := s.dao.TransferInstance(ctx, instanceID, fromUserID, toUserID, comment); err != nil {
-		s.logger.Error("转移工单失败", zap.Error(err))
+		s.logger.Error("转移工单失败", zap.Error(err),
+			zap.Int("instanceID", instanceID),
+			zap.Int("fromUserID", fromUserID),
+			zap.Int("toUserID", toUserID))
 		return fmt.Errorf("转移工单失败: %w", err)
+	}
+
+	// 记录工单流转
+	flow := &model.InstanceFlow{
+		InstanceID:   instanceID,
+		StepID:       instance.CurrentStep,
+		StepName:     "转交",
+		Action:       "transfer",
+		OperatorID:   fromUserID,
+		OperatorName: "", 
+		Comment:      comment,
+		FromUserID:   fromUserID,
+		ToUserID:     toUserID,
+		ToUserName:   toUser.Username,
+	}
+
+	if err := s.flowDao.CreateInstanceFlow(ctx, flow); err != nil {
+		s.logger.Warn("记录工单转交流程失败", zap.Error(err), zap.Int("instanceID", instanceID))
 	}
 
 	s.logger.Info("转移工单成功",
@@ -471,21 +503,26 @@ func (s *instanceService) normalizePagination(page, size *int) {
 	}
 }
 
-// parseProcessDefinition 解析流程定义
-func (s *instanceService) parseProcessDefinition(definition string) (*model.ProcessDefinition, error) {
-	var processDef model.ProcessDefinition
-	if err := json.Unmarshal([]byte(definition), &processDef); err != nil {
-		return nil, ErrProcessDefinition
-	}
-	return &processDef, nil
-}
-
 // buildInstanceFromRequest 从请求构建工单实例
-func (s *instanceService) buildInstanceFromRequest(req *model.CreateInstanceReq, creatorID int, creatorName string, processDef *model.ProcessDefinition) (*model.Instance, error) {
-	// 序列化表单数据
+func (s *instanceService) buildInstanceFromRequest(ctx context.Context, req *model.CreateInstanceReq, creatorID int, creatorName string, process *model.Process) (*model.Instance, error) {
 	var formData model.JSONMap
-	if req.FormData != nil {
-		formData = model.JSONMap(req.FormData)
+
+	if process.FormDesign != nil {
+		// 将表单设计的schema解析为表单数据
+		var schema map[string]interface{}
+		if err := json.Unmarshal([]byte(process.FormDesign.Schema), &schema); err != nil {
+			return nil, fmt.Errorf("解析表单设计schema失败: %w", err)
+		}
+		formData = schema
+	}
+
+	var processData model.JSONMap
+	if process.Definition != "" {
+		var definition map[string]interface{}
+		if err := json.Unmarshal([]byte(process.Definition), &definition); err != nil {
+			return nil, fmt.Errorf("解析流程定义失败: %w", err)
+		}
+		processData = definition
 	}
 
 	// 处理标签
@@ -495,7 +532,7 @@ func (s *instanceService) buildInstanceFromRequest(req *model.CreateInstanceReq,
 	}
 
 	// 确定初始步骤和状态
-	initialStep, initialStatus := s.determineInitialStepAndStatus(processDef)
+	initialStep, initialStatus := s.determineInitialStepAndStatus(process.Definition)
 
 	// 构建实例对象
 	instance := &model.Instance{
@@ -505,6 +542,7 @@ func (s *instanceService) buildInstanceFromRequest(req *model.CreateInstanceReq,
 		FormData:    formData,
 		Status:      initialStatus,
 		Priority:    req.Priority,
+		ProcessData: processData,
 		CategoryID:  req.CategoryID,
 		CreatorID:   creatorID,
 		CreatorName: creatorName,
@@ -516,14 +554,24 @@ func (s *instanceService) buildInstanceFromRequest(req *model.CreateInstanceReq,
 	// 设置初始步骤和处理人
 	if initialStep != nil {
 		instance.CurrentStep = initialStep.ID
-		s.assignInitialHandler(instance, req.AssigneeID, initialStep)
+		s.assignInitialHandler(ctx, instance, req.AssigneeID, initialStep)
 	}
 
 	return instance, nil
 }
 
 // determineInitialStepAndStatus 确定初始步骤和状态
-func (s *instanceService) determineInitialStepAndStatus(processDef *model.ProcessDefinition) (*model.ProcessStep, int8) {
+func (s *instanceService) determineInitialStepAndStatus(processDefStr string) (*model.ProcessStep, int8) {
+	if processDefStr == "" {
+		return nil, model.InstanceStatusDraft
+	}
+
+	var processDef model.ProcessDefinition
+	if err := json.Unmarshal([]byte(processDefStr), &processDef); err != nil {
+		s.logger.Error("解析流程定义失败", zap.Error(err))
+		return nil, model.InstanceStatusDraft
+	}
+
 	var initialStep *model.ProcessStep
 	var initialStatus int8 = model.InstanceStatusDraft
 
@@ -531,7 +579,6 @@ func (s *instanceService) determineInitialStepAndStatus(processDef *model.Proces
 	for i, step := range processDef.Steps {
 		if step.Type == "start" {
 			initialStep = &processDef.Steps[i]
-			initialStatus = model.InstanceStatusProcessing
 			break
 		}
 	}
@@ -539,24 +586,29 @@ func (s *instanceService) determineInitialStepAndStatus(processDef *model.Proces
 	if initialStep == nil && len(processDef.Steps) > 0 {
 		// 如果没有明确的开始步骤，使用第一个步骤
 		initialStep = &processDef.Steps[0]
-		initialStatus = model.InstanceStatusProcessing
 	}
 
 	return initialStep, initialStatus
 }
 
 // assignInitialHandler 分配初始处理人
-func (s *instanceService) assignInitialHandler(instance *model.Instance, assigneeID *int, initialStep *model.ProcessStep) {
+func (s *instanceService) assignInitialHandler(ctx context.Context, instance *model.Instance, assigneeID *int, initialStep *model.ProcessStep) {
 	if assigneeID != nil && *assigneeID > 0 {
 		instance.AssigneeID = assigneeID
-		if user, err := s.userDao.GetUserByID(context.Background(), *assigneeID); err == nil {
+		if user, err := s.userDao.GetUserByID(ctx, *assigneeID); err == nil {
 			instance.AssigneeName = user.Username
+		} else {
+			instance.AssigneeName = "未知"
+			s.logger.Warn("获取指定处理人信息失败", zap.Error(err), zap.Int("assigneeID", *assigneeID))
 		}
-	} else if len(initialStep.Users) > 0 {
+	} else if initialStep != nil && len(initialStep.Users) > 0 {
 		// 使用步骤定义中的第一个用户
 		instance.AssigneeID = &initialStep.Users[0]
-		if user, err := s.userDao.GetUserByID(context.Background(), initialStep.Users[0]); err == nil {
+		if user, err := s.userDao.GetUserByID(ctx, initialStep.Users[0]); err == nil {
 			instance.AssigneeName = user.Username
+		} else {
+			instance.AssigneeName = "未知"
+			s.logger.Warn("获取步骤处理人信息失败", zap.Error(err), zap.Int("assigneeID", initialStep.Users[0]))
 		}
 	}
 }
@@ -598,9 +650,6 @@ func (s *instanceService) updateInstanceFields(instance *model.Instance, req *mo
 	}
 	if req.DueDate != nil {
 		instance.DueDate = req.DueDate
-	}
-	if req.FormData != nil {
-		instance.FormData = model.JSONMap(req.FormData)
 	}
 	if len(req.Tags) > 0 {
 		instance.Tags = model.StringSlice(req.Tags)

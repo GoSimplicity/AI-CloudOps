@@ -201,7 +201,8 @@ func (d *processDAO) GetProcess(ctx context.Context, id int) (*model.Process, er
 	}
 
 	var process model.Process
-	err := d.db.WithContext(ctx).First(&process, id).Error
+
+	err := d.db.WithContext(ctx).Preload("FormDesign").First(&process, id).Error
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
