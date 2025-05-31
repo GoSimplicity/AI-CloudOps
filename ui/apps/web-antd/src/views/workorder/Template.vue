@@ -143,8 +143,8 @@
     </div>
 
     <!-- 模板创建/编辑对话框 -->
-    <a-modal v-model:visible="templateDialog.visible" :title="templateDialog.isEdit ? '编辑模板' : '创建模板'" width="760px"
-      @ok="saveTemplate" :destroy-on-close="true">
+    <a-modal v-model:visible="templateDialog.visible" :title="templateDialog.isEdit ? '编辑模板' : '创建模板'" width="800px"
+      @ok="saveTemplate" :destroy-on-close="true" :confirm-loading="templateDialog.loading">
       <a-form ref="formRef" :model="templateDialog.form" :rules="formRules" layout="vertical">
         <a-form-item label="模板名称" name="name">
           <a-input v-model:value="templateDialog.form.name" placeholder="请输入模板名称" />
@@ -170,7 +170,7 @@
           </a-select>
         </a-form-item>
 
-        <a-form-item label="状态" name="status">
+        <a-form-item label="状态" name="status" v-if="templateDialog.isEdit">
           <a-radio-group v-model:value="templateDialog.form.status">
             <a-radio :value="1">启用</a-radio>
             <a-radio :value="0">禁用</a-radio>
@@ -179,19 +179,86 @@
 
         <a-divider orientation="left">默认值设置</a-divider>
 
-        <a-form-item label="审核人" name="approver">
-          <a-input v-model:value="templateDialog.form.default_values.approver" placeholder="请输入默认审核人" />
-        </a-form-item>
+        <!-- 结构化默认值配置 -->
+        <a-card title="默认值配置" size="small" class="default-values-card">
+          
+          <!-- 优先级设置 -->
+          <a-form-item label="默认优先级" style="margin-bottom: 16px;">
+            <a-select v-model:value="templateDialog.defaultValues.priority" placeholder="请选择优先级" style="width: 100%">
+              <a-select-option :value="1">低</a-select-option>
+              <a-select-option :value="2">中</a-select-option>
+              <a-select-option :value="3">高</a-select-option>
+              <a-select-option :value="4">紧急</a-select-option>
+            </a-select>
+          </a-form-item>
 
-        <a-form-item label="截止日期" name="deadline">
-          <a-date-picker 
-            v-model:value="templateDialog.form.default_values.deadline" 
-            style="width: 100%" 
-            @change="handleDeadlineChange"
-          />
-        </a-form-item>
+          <!-- 审批人设置 -->
+          <a-form-item label="默认审批人" style="margin-bottom: 16px;">
+            <a-select 
+              v-model:value="templateDialog.defaultValues.approvers" 
+              mode="multiple"
+              placeholder="请选择审批人" 
+              style="width: 100%"
+              :loading="loadingUsers"
+            >
+              <a-select-option v-for="user in users" :key="user.id" :value="user.id">
+                {{ user.name }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
 
-        <a-form-item label="排序" name="sort_order">
+          <!-- 处理时限设置 -->
+          <a-form-item label="默认处理时限（小时）" style="margin-bottom: 16px;">
+            <a-input-number 
+              v-model:value="templateDialog.defaultValues.due_hours" 
+              :min="1" 
+              :max="720"
+              placeholder="请输入小时数"
+              style="width: 100%" 
+            />
+          </a-form-item>
+
+          <!-- 自定义字段设置 -->
+          <a-form-item label="自定义字段" style="margin-bottom: 16px;">
+            <div class="custom-fields-section">
+              <div v-for="(field, index) in templateDialog.defaultValues.customFields" :key="index" class="field-row">
+                <a-input 
+                  v-model:value="field.key" 
+                  placeholder="字段名"
+                  style="width: 200px; margin-right: 8px;"
+                />
+                <a-input 
+                  v-model:value="field.value" 
+                  placeholder="默认值"
+                  style="width: 200px; margin-right: 8px;"
+                />
+                <a-button type="text" danger @click="removeCustomField(index)">
+                  <template #icon>
+                    <DeleteOutlined />
+                  </template>
+                </a-button>
+              </div>
+              <a-button type="dashed" @click="addCustomField" style="width: 100%; margin-top: 8px;">
+                <template #icon>
+                  <PlusOutlined />
+                </template>
+                添加自定义字段
+              </a-button>
+            </div>
+          </a-form-item>
+
+          <!-- JSON预览 -->
+          <a-form-item label="JSON预览">
+            <a-textarea 
+              :value="generateDefaultValuesJSON()"
+              :rows="6" 
+              readonly
+              class="json-preview"
+            />
+          </a-form-item>
+        </a-card>
+
+        <a-form-item label="排序" name="sort_order" style="margin-top: 16px;">
           <a-input-number v-model:value="templateDialog.form.sort_order" :min="0" style="width: 100%" />
         </a-form-item>
 
@@ -202,26 +269,16 @@
     </a-modal>
 
     <!-- 克隆对话框 -->
-    <a-modal v-model:visible="cloneDialog.visible" title="克隆模板" @ok="confirmClone" :destroy-on-close="true">
+    <a-modal v-model:visible="cloneDialog.visible" title="克隆模板" @ok="confirmClone" :destroy-on-close="true" :confirm-loading="cloneDialog.loading">
       <a-form :model="cloneDialog.form" layout="vertical">
         <a-form-item label="新模板名称" name="name">
           <a-input v-model:value="cloneDialog.form.name" placeholder="请输入新模板名称" />
-        </a-form-item>
-        <a-form-item label="描述" name="description">
-          <a-textarea v-model:value="cloneDialog.form.description" :rows="3" placeholder="请输入模板描述" />
-        </a-form-item>
-        <a-form-item label="分类" name="category_id">
-          <a-select v-model:value="cloneDialog.form.category_id" placeholder="请选择分类" style="width: 100%">
-            <a-select-option v-for="cat in categories" :key="cat.id" :value="cat.id">
-              {{ cat.name }}
-            </a-select-option>
-          </a-select>
         </a-form-item>
       </a-form>
     </a-modal>
 
     <!-- 预览对话框 -->
-    <a-modal v-model:visible="previewDialog.visible" title="模板预览" width="80%" footer={null} class="preview-dialog">
+    <a-modal v-model:visible="previewDialog.visible" title="模板预览" width="80%" :footer="null" class="preview-dialog">
       <div v-if="previewDialog.template" class="template-details">
         <div class="detail-header">
           <h2>{{ previewDialog.template.name }}</h2>
@@ -267,39 +324,63 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { message, Modal } from 'ant-design-vue';
-import dayjs from 'dayjs';
 import {
   PlusOutlined,
   FileOutlined,
   FileTextOutlined,
   SettingOutlined,
   PlusCircleOutlined,
-  DeleteOutlined,
-  DownOutlined
+  DownOutlined,
+  DeleteOutlined
 } from '@ant-design/icons-vue';
 import {
-  type Template,
-  type TemplateReq,
-  type DetailTemplateReq,
-  type DeleteTemplateReq,
+  type TemplateItem,
+  type CreateTemplateReq,
+  type UpdateTemplateReq,
+  type CloneTemplateReq,
   type ListTemplateReq,
-  type DefaultValues,
   createTemplate,
   updateTemplate,
   deleteTemplate,
   listTemplate,
   detailTemplate,
-  listProcess,
-  type Process
-} from '#/api/core/workorder';
+  enableTemplate,
+  disableTemplate,
+  cloneTemplate
+} from '#/api/core/workorder_template';
+import { listProcess } from '#/api/core/workorder_process';
+import { listCategory, type CategoryResp } from '#/api/core/workorder_category';
+import { getAllUsers } from '#/api/core/user';
 
 // 类型定义
 interface Category {
   id: number;
   name: string;
   color: string;
+}
+
+interface Process {
+  id: number;
+  name: string;
+}
+
+interface User {
+  id: number;
+  name: string;
+}
+
+interface CustomField {
+  key: string;
+  value: string;
+}
+
+interface DefaultValues {
+  priority: number | null;
+  approvers: number[];
+  due_hours: number | null;
+  customFields: CustomField[];
 }
 
 // 表格列定义
@@ -353,14 +434,16 @@ const columns = [
 
 // 状态数据
 const loading = ref(false);
+const loadingUsers = ref(false);
 const searchQuery = ref('');
-const categoryFilter = ref(null);
-const statusFilter = ref(null);
+const categoryFilter = ref<number | null>(null);
+const statusFilter = ref<0 | 1 | null>(null);
 const currentPage = ref(1);
 const pageSize = ref(10);
 const totalItems = ref(0);
-const templates = ref<Template[]>([]);
+const templates = ref<TemplateItem[]>([]);
 const processes = ref<Process[]>([]);
+const users = ref<User[]>([]);
 
 // 统计数据
 const stats = reactive({
@@ -371,52 +454,46 @@ const stats = reactive({
 });
 
 // 分类数据
-const categories = ref<Category[]>([
-  { id: 1, name: '邮件模板', color: '#1890ff' },
-  { id: 2, name: '通知模板', color: '#52c41a' },
-  { id: 3, name: '报表模板', color: '#722ed1' },
-  { id: 4, name: '文档模板', color: '#fa8c16' },
-  { id: 5, name: '销售模板', color: '#eb2f96' }
-]);
+const categories = ref<Category[]>([]);
 
 // 模板对话框
 const templateDialog = reactive({
   visible: false,
   isEdit: false,
+  loading: false,
   form: {
-    id: undefined,
+    id: undefined as number | undefined,
     name: '',
     description: '',
     process_id: 0,
-    default_values: {
-      approver: '',
-      deadline: ''
-    } as DefaultValues,
-    deadline_value: null as any,
+    default_values: {} as any,
     icon: '',
-    status: 1,
+    status: 1 as 0 | 1,
     sort_order: 0,
-    category_id: undefined,
-    creator_id: undefined,
-    creator_name: ''
-  } as TemplateReq
+    category_id: undefined as number | undefined
+  },
+  defaultValues: {
+    priority: null,
+    approvers: [],
+    due_hours: null,
+    customFields: []
+  } as DefaultValues
 });
 
 // 克隆对话框
 const cloneDialog = reactive({
   visible: false,
+  loading: false,
   form: {
-    name: '',
-    description: '',
-    category_id: undefined as number | undefined,
-    originalId: 0
+    id: 0,
+    name: ''
   }
 });
 
 // 预览对话框
 const previewDialog = reactive({
   visible: false,
-  template: null as Template | null
+  template: null as TemplateItem | null
 });
 
 // 表单验证规则
@@ -433,26 +510,159 @@ const formRules = {
   ]
 };
 
-// 方法
+// 表单引用
+const formRef = ref();
+
+// 默认值配置相关方法
+const addCustomField = () => {
+  templateDialog.defaultValues.customFields.push({
+    key: '',
+    value: ''
+  });
+};
+
+const removeCustomField = (index: number) => {
+  templateDialog.defaultValues.customFields.splice(index, 1);
+};
+
+const generateDefaultValuesJSON = () => {
+  const defaultValues: any = {};
+
+  // 构建 fields 对象
+  const fields: any = {};
+  templateDialog.defaultValues.customFields.forEach(field => {
+    if (field.key && field.value) {
+      fields[field.key] = field.value;
+    }
+  });
+  
+  if (Object.keys(fields).length > 0) {
+    defaultValues.fields = fields;
+  }
+
+  // 添加其他字段
+  if (templateDialog.defaultValues.priority !== null) {
+    defaultValues.priority = templateDialog.defaultValues.priority;
+  }
+
+  if (templateDialog.defaultValues.approvers.length > 0) {
+    defaultValues.approvers = templateDialog.defaultValues.approvers;
+  }
+
+  if (templateDialog.defaultValues.due_hours !== null) {
+    defaultValues.due_hours = templateDialog.defaultValues.due_hours;
+  }
+
+  return JSON.stringify(defaultValues, null, 2);
+};
+
+const parseDefaultValues = (jsonStr: string | object) => {
+  try {
+    let parsed: any = {};
+    
+    if (typeof jsonStr === 'string') {
+      parsed = JSON.parse(jsonStr);
+    } else if (jsonStr && typeof jsonStr === 'object') {
+      parsed = jsonStr;
+    }
+
+    // 重置默认值
+    templateDialog.defaultValues = {
+      priority: parsed.priority || null,
+      approvers: parsed.approvers || [],
+      due_hours: parsed.due_hours || null,
+      customFields: []
+    };
+
+    // 解析自定义字段
+    if (parsed.fields && typeof parsed.fields === 'object') {
+      templateDialog.defaultValues.customFields = Object.entries(parsed.fields).map(([key, value]) => ({
+        key,
+        value: String(value)
+      }));
+    }
+  } catch (error) {
+    console.warn('解析默认值失败:', error);
+    // 重置为默认值
+    templateDialog.defaultValues = {
+      priority: null,
+      approvers: [],
+      due_hours: null,
+      customFields: []
+    };
+  }
+};
+
+// 加载用户列表
+const loadUsers = async () => {
+  loadingUsers.value = true;
+  try {
+    const response = await getAllUsers();
+    users.value = response || [];
+  } catch (error) {
+    console.error('加载用户列表失败:', error);
+    message.error('加载用户列表失败');
+  } finally {
+    loadingUsers.value = false;
+  }
+};
+
+// 加载分类数据
+const loadCategories = async () => {
+  try {
+    const response = await listCategory({
+      page: 1,
+      size: 100, 
+      status: 1 
+    });
+    
+    if (response?.items) {
+      categories.value = response.items.map((item: CategoryResp, index: number) => ({
+        id: item.id,
+        name: item.name,
+        color: generateCategoryColor(index)
+      }));
+    }
+  } catch (error) {
+    console.error('加载分类列表失败:', error);
+    message.error('加载分类列表失败');
+  }
+};
+
+// 生成分类颜色
+const generateCategoryColor = (index: number) => {
+  const colors = [
+    'blue', 'green', 'orange', 'red', 
+    'purple', 'cyan', 'magenta', 'lime',
+    'pink', 'yellow', 'volcano', 'geekblue'
+  ];
+  return colors[index % colors.length];
+};
+
+// 加载模板列表
 const loadTemplates = async () => {
   loading.value = true;
   try {
     const params: ListTemplateReq = {
       page: currentPage.value,
-      page_size: pageSize.value,
-      search: searchQuery.value || undefined,
-      status: statusFilter.value || undefined
+      size: pageSize.value
     };
 
+    if (searchQuery.value) {
+      params.name = searchQuery.value;
+    }
+    if (categoryFilter.value !== null) {
+      params.category_id = categoryFilter.value;
+    }
+    if (statusFilter.value !== null) {
+      params.status = statusFilter.value;
+    }
+
     const response = await listTemplate(params);
-    if (response && response) {
-      templates.value = response.list || [];
+    if (response) {
+      templates.value = response.items || [];
       totalItems.value = response.total || 0;
-      
-      // 更新统计数据
       updateStats();
-    } else {
-      message.error('获取模板列表失败');
     }
   } catch (error) {
     console.error('加载模板列表失败:', error);
@@ -466,11 +676,10 @@ const loadProcesses = async () => {
   try {
     const response = await listProcess({
       page: 1,
-      page_size: 100,  
-      status: 1     // 只获取已启用的流程
+      size: 100
     });
-    if (response && response) {
-      processes.value = response.list || [];
+    if (response) {
+      processes.value = response.items || [];
     }
   } catch (error) {
     console.error('加载流程列表失败:', error);
@@ -479,19 +688,13 @@ const loadProcesses = async () => {
 };
 
 const updateStats = () => {
-  // 计算统计数据
   stats.total = totalItems.value;
+  stats.regular = templates.value.filter((t: TemplateItem) => !isSystemTemplate(t)).length;
+  stats.system = templates.value.filter((t: TemplateItem) => isSystemTemplate(t)).length;
   
-  // 计算常规模板数量 (不是系统模板的)
-  stats.regular = templates.value.filter((t: Template) => !isSystemTemplate(t)).length;
-  
-  // 计算系统模板数量 (假设creator_id为1的是系统模板)
-  stats.system = templates.value.filter((t: Template) => isSystemTemplate(t)).length;
-  
-  // 计算最近7天新增的模板数量
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  stats.recentAdded = templates.value.filter((t: Template) => {
+  stats.recentAdded = templates.value.filter((t: TemplateItem) => {
     const createdAt = new Date(t.created_at || '');
     return createdAt >= sevenDaysAgo;
   }).length;
@@ -526,24 +729,29 @@ const handleStatusChange = () => {
 const handleCreateTemplate = () => {
   templateDialog.isEdit = false;
   templateDialog.form = {
+    id: undefined,
     name: '',
     description: '',
     process_id: 0,
-    default_values: {
-      approver: '',
-      deadline: ''
-    },
+    default_values: {},
     icon: '',
     status: 1,
     sort_order: 0,
-    category_id: undefined,
-    creator_id: undefined,
-    creator_name: ''
+    category_id: undefined
   };
+  
+  // 重置默认值配置
+  templateDialog.defaultValues = {
+    priority: null,
+    approvers: [],
+    due_hours: null,
+    customFields: []
+  };
+  
   templateDialog.visible = true;
 };
 
-const handleEditTemplate = async (template: Template) => {
+const handleEditTemplate = async (template: TemplateItem) => {
   if (isSystemTemplate(template)) {
     message.warning('系统模板不可编辑');
     return;
@@ -551,23 +759,26 @@ const handleEditTemplate = async (template: Template) => {
 
   loading.value = true;
   try {
-    const res = await detailTemplate({ id: template.id });
-    if (res && res) {
-      const templateData = res;
+    const response = await detailTemplate(template.id);
+    if (response) {
+      const templateData = response;
       templateDialog.isEdit = true;
+      
       templateDialog.form = {
         id: templateData.id,
         name: templateData.name,
-        description: templateData.description,
+        description: templateData.description || '',
         process_id: templateData.process_id,
-        default_values: JSON.parse(templateData.default_values || '{}'),
+        default_values: templateData.default_values || {},
         icon: templateData.icon || '',
         status: templateData.status,
-        sort_order: templateData.sort_order,
-        category_id: templateData.category_id,
-        creator_id: templateData.creator_id,
-        creator_name: templateData.creator_name
+        sort_order: templateData.sort_order || 0,
+        category_id: templateData.category_id
       };
+
+      // 解析默认值到结构化表单
+      parseDefaultValues(templateData.default_values);
+      
       templateDialog.visible = true;
       previewDialog.visible = false;
     }
@@ -579,12 +790,12 @@ const handleEditTemplate = async (template: Template) => {
   }
 };
 
-const handlePreviewTemplate = async (template: Template) => {
+const handlePreviewTemplate = async (template: TemplateItem) => {
   loading.value = true;
   try {
-    const res = await detailTemplate({ id: template.id });
-    if (res && res) {
-      previewDialog.template = res;
+    const response = await detailTemplate(template.id);
+    if (response) {
+      previewDialog.template = response;
       previewDialog.visible = true;
     }
   } catch (error) {
@@ -595,13 +806,13 @@ const handlePreviewTemplate = async (template: Template) => {
   }
 };
 
-const handleCommand = (command: string, template: Template) => {
+const handleCommand = (command: string, template: TemplateItem) => {
   switch (command) {
     case 'enable':
-      enableTemplate(template);
+      handleEnableTemplate(template);
       break;
     case 'disable':
-      disableTemplate(template);
+      handleDisableTemplate(template);
       break;
     case 'clone':
       showCloneDialog(template);
@@ -612,23 +823,9 @@ const handleCommand = (command: string, template: Template) => {
   }
 };
 
-const enableTemplate = async (template: Template) => {
+const handleEnableTemplate = async (template: TemplateItem) => {
   try {
-    const templateReq: TemplateReq = {
-      id: template.id,
-      name: template.name,
-      description: template.description,
-      process_id: template.process_id,
-      default_values: JSON.parse(template.default_values || '{}'),
-      icon: template.icon,
-      status: 1,
-      sort_order: template.sort_order,
-      category_id: template.category_id,
-      creator_id: template.creator_id,
-      creator_name: template.creator_name
-    };
-    
-    await updateTemplate(templateReq);
+    await enableTemplate(template.id);
     message.success(`模板 "${template.name}" 已启用`);
     loadTemplates();
   } catch (error) {
@@ -637,23 +834,9 @@ const enableTemplate = async (template: Template) => {
   }
 };
 
-const disableTemplate = async (template: Template) => {
+const handleDisableTemplate = async (template: TemplateItem) => {
   try {
-    const templateReq: TemplateReq = {
-      id: template.id,
-      name: template.name,
-      description: template.description,
-      process_id: template.process_id,
-      default_values: JSON.parse(template.default_values || '{}'),
-      icon: template.icon,
-      status: 0,
-      sort_order: template.sort_order,
-      category_id: template.category_id,
-      creator_id: template.creator_id,
-      creator_name: template.creator_name
-    };
-    
-    await updateTemplate(templateReq);
+    await disableTemplate(template.id);
     message.success(`模板 "${template.name}" 已禁用`);
     loadTemplates();
   } catch (error) {
@@ -662,46 +845,38 @@ const disableTemplate = async (template: Template) => {
   }
 };
 
-const showCloneDialog = (template: Template) => {
+const showCloneDialog = (template: TemplateItem) => {
+  cloneDialog.form.id = template.id;
   cloneDialog.form.name = `${template.name} 副本`;
-  cloneDialog.form.description = template.description;
-  cloneDialog.form.category_id = template.category_id;
-  cloneDialog.form.originalId = template.id;
   cloneDialog.visible = true;
 };
 
 const confirmClone = async () => {
+  if (!cloneDialog.form.name.trim()) {
+    message.error('请输入新模板名称');
+    return;
+  }
+
+  cloneDialog.loading = true;
   try {
-    // 首先获取原模板的详细信息
-    const res = await detailTemplate({ id: cloneDialog.form.originalId });
-    if (res && res) {
-      const originalTemplate = res;
-      
-      // 创建新模板请求对象
-      const newTemplate: TemplateReq = {
-        name: cloneDialog.form.name,
-        description: cloneDialog.form.description,
-        process_id: originalTemplate.process_id,
-        default_values: JSON.parse(originalTemplate.default_values || '{}'),
-        icon: originalTemplate.icon,
-        status: 1, // 默认启用
-        sort_order: originalTemplate.sort_order,
-        category_id: cloneDialog.form.category_id || originalTemplate.category_id
-      };
-      
-      // 创建克隆模板
-      await createTemplate(newTemplate);
-      message.success(`模板 "${originalTemplate.name}" 已克隆为 "${cloneDialog.form.name}"`);
-      cloneDialog.visible = false;
-      loadTemplates();
-    }
+    const data: CloneTemplateReq = {
+      id: cloneDialog.form.id,
+      name: cloneDialog.form.name
+    };
+    
+    await cloneTemplate(data);
+    message.success(`模板已克隆为 "${cloneDialog.form.name}"`);
+    cloneDialog.visible = false;
+    loadTemplates();
   } catch (error) {
     console.error('克隆模板失败:', error);
     message.error('克隆模板失败');
+  } finally {
+    cloneDialog.loading = false;
   }
 };
 
-const confirmDelete = (template: Template) => {
+const confirmDelete = (template: TemplateItem) => {
   if (isSystemTemplate(template)) {
     message.warning('系统模板不可删除');
     return;
@@ -715,7 +890,7 @@ const confirmDelete = (template: Template) => {
     cancelText: '取消',
     async onOk() {
       try {
-        await deleteTemplate({ id: template.id });
+        await deleteTemplate(template.id);
         message.success(`模板 "${template.name}" 已删除`);
         loadTemplates();
       } catch (error) {
@@ -726,16 +901,17 @@ const confirmDelete = (template: Template) => {
   });
 };
 
-const handleDeadlineChange = (value: any) => {
-  if (value) {
-    templateDialog.form.default_values.deadline = value.format('YYYY-MM-DD');
-  } else {
-    templateDialog.form.default_values.deadline = '';
-  }
-};
-
 const saveTemplate = async () => {
-  if (templateDialog.form.name.trim() === '') {
+  // 先验证表单
+  try {
+    await formRef.value?.validate();
+  } catch (error) {
+    console.log('表单验证失败:', error);
+    return;
+  }
+
+  // 验证必填字段
+  if (!templateDialog.form.name.trim()) {
     message.error('模板名称不能为空');
     return;
   }
@@ -750,14 +926,61 @@ const saveTemplate = async () => {
     return;
   }
 
+  // 构建默认值对象
+  let defaultValues: any = {};
+
+  // 构建 fields 对象
+  const fields: any = {};
+  templateDialog.defaultValues.customFields.forEach(field => {
+    if (field.key && field.value) {
+      fields[field.key] = field.value;
+    }
+  });
+  
+  if (Object.keys(fields).length > 0) {
+    defaultValues.fields = fields;
+  }
+
+  // 添加其他字段
+  if (templateDialog.defaultValues.priority !== null) {
+    defaultValues.priority = templateDialog.defaultValues.priority;
+  }
+
+  if (templateDialog.defaultValues.approvers.length > 0) {
+    defaultValues.approvers = templateDialog.defaultValues.approvers;
+  }
+
+  if (templateDialog.defaultValues.due_hours !== null) {
+    defaultValues.due_hours = templateDialog.defaultValues.due_hours;
+  }
+
+  templateDialog.loading = true;
   try {
-    if (templateDialog.isEdit) {
-      // 更新现有模板
-      await updateTemplate(templateDialog.form);
+    if (templateDialog.isEdit && templateDialog.form.id) {
+      const data: UpdateTemplateReq = {
+        id: templateDialog.form.id,
+        name: templateDialog.form.name,
+        description: templateDialog.form.description || '',
+        process_id: templateDialog.form.process_id,
+        default_values: defaultValues,
+        icon: templateDialog.form.icon || '',
+        category_id: templateDialog.form.category_id,
+        sort_order: templateDialog.form.sort_order || 0,
+        status: templateDialog.form.status
+      };
+      await updateTemplate(data);
       message.success(`模板 "${templateDialog.form.name}" 已更新`);
     } else {
-      // 创建新模板
-      await createTemplate(templateDialog.form);
+      const data: CreateTemplateReq = {
+        name: templateDialog.form.name,
+        description: templateDialog.form.description || '',
+        process_id: templateDialog.form.process_id,
+        default_values: defaultValues,
+        icon: templateDialog.form.icon || '',
+        category_id: templateDialog.form.category_id,
+        sort_order: templateDialog.form.sort_order || 0
+      };
+      await createTemplate(data);
       message.success(`模板 "${templateDialog.form.name}" 已创建`);
     }
     templateDialog.visible = false;
@@ -765,6 +988,8 @@ const saveTemplate = async () => {
   } catch (error) {
     console.error('保存模板失败:', error);
     message.error('保存模板失败');
+  } finally {
+    templateDialog.loading = false;
   }
 };
 
@@ -793,13 +1018,17 @@ const formatFullDateTime = (dateStr: string) => {
   });
 };
 
-const formatDefaultValues = (jsonStr: string) => {
+const formatDefaultValues = (jsonStr: string | object) => {
   try {
     if (!jsonStr) return '{}';
-    const obj = JSON.parse(jsonStr);
-    return JSON.stringify(obj, null, 2);
+    if (typeof jsonStr === 'string') {
+      const obj = JSON.parse(jsonStr);
+      return JSON.stringify(obj, null, 2);
+    } else {
+      return JSON.stringify(jsonStr, null, 2);
+    }
   } catch (e) {
-    return jsonStr;
+    return typeof jsonStr === 'string' ? jsonStr : JSON.stringify(jsonStr);
   }
 };
 
@@ -813,7 +1042,6 @@ const getInitials = (name: string) => {
 };
 
 const getAvatarColor = (name: string) => {
-  // 根据名称生成一致的颜色
   const colors = [
     '#1890ff', '#52c41a', '#faad14', '#f5222d',
     '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16'
@@ -834,20 +1062,21 @@ const getCategoryName = (categoryId?: number) => {
 };
 
 const getCategoryColor = (categoryId?: number) => {
-  if (!categoryId) return '';
+  if (!categoryId) return 'default';
   const category = categories.value.find(c => c.id === categoryId);
-  return category ? category.color : '';
+  return category ? category.color : 'default';
 };
 
-// 判断是否是系统模板 (假设creator_id为1的是系统模板)
-const isSystemTemplate = (template: Template) => {
+const isSystemTemplate = (template: TemplateItem) => {
   return template.creator_id === 1;
 };
 
 // 初始化
 onMounted(() => {
+  loadCategories();
   loadTemplates();
   loadProcesses();
+  loadUsers();
 });
 </script>
 
@@ -979,5 +1208,32 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.default-values-card {
+  margin-bottom: 16px;
+}
+
+.custom-fields-section {
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  padding: 16px;
+  background-color: #fafafa;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.field-row:last-child {
+  margin-bottom: 0;
+}
+
+.json-preview {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  background-color: #f6f8fa;
+  border: 1px solid #e1e4e8;
 }
 </style>

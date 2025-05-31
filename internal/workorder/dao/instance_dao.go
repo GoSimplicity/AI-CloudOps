@@ -39,11 +39,11 @@ import (
 
 // 错误定义
 var (
-	ErrInstanceNotFound     = errors.New("工单实例不存在")
-	ErrInstanceExists       = errors.New("工单实例已存在")
-	ErrInstanceInvalidID    = errors.New("工单实例ID无效")
-	ErrInstanceNilPointer   = errors.New("工单实例对象为空")
-	ErrTransferFailed       = errors.New("工单转移失败")
+	ErrInstanceNotFound   = errors.New("工单实例不存在")
+	ErrInstanceExists     = errors.New("工单实例已存在")
+	ErrInstanceInvalidID  = errors.New("工单实例ID无效")
+	ErrInstanceNilPointer = errors.New("工单实例对象为空")
+	ErrTransferFailed     = errors.New("工单转移失败")
 )
 
 // 常量定义
@@ -59,10 +59,10 @@ type InstanceDAO interface {
 	UpdateInstance(ctx context.Context, instance *model.Instance) error
 	DeleteInstance(ctx context.Context, id int) error
 	GetInstance(ctx context.Context, id int) (*model.Instance, error)
+	GetInstanceByTemplateID(ctx context.Context, templateID int) ([]model.Instance, error)
 	GetInstanceWithRelations(ctx context.Context, id int) (*model.Instance, error)
 	ListInstance(ctx context.Context, req *model.ListInstanceReq) (*model.ListResp[model.Instance], error)
 	BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8) error
-
 	GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (*model.ListResp[model.Instance], error)
 	GetOverdueInstances(ctx context.Context) ([]model.Instance, error)
 	TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error
@@ -304,6 +304,17 @@ func (d *instanceDAO) BatchUpdateInstanceStatus(ctx context.Context, ids []int, 
 
 	d.logger.Info("批量更新工单状态成功", zap.Ints("ids", ids), zap.Int8("status", status), zap.Int64("affected", result.RowsAffected))
 	return nil
+}
+
+// GetInstanceByTemplateID 获取关联工单
+func (d *instanceDAO) GetInstanceByTemplateID(ctx context.Context, templateID int) ([]model.Instance, error) {
+	var instances []model.Instance
+	err := d.db.WithContext(ctx).Where("template_id = ?", templateID).Find(&instances).Error
+	if err != nil {
+		d.logger.Error("获取关联工单失败", zap.Error(err), zap.Int("templateID", templateID))
+		return nil, fmt.Errorf("获取关联工单失败: %w", err)
+	}
+	return instances, nil
 }
 
 // GetMyInstances 获取我的工单
