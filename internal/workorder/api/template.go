@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -47,18 +45,14 @@ func NewTemplateHandler(service service.TemplateService) *TemplateHandler {
 func (h *TemplateHandler) RegisterRouters(server *gin.Engine) {
 	templateGroup := server.Group("/api/workorder/template")
 	{
-		templateGroup.POST("/", h.CreateTemplate)
-		templateGroup.PUT("/:id", h.UpdateTemplate)
-		templateGroup.DELETE("/:id", h.DeleteTemplate)
-		templateGroup.GET("/", h.ListTemplate)
-		templateGroup.GET("/:id", h.DetailTemplate)
-		templateGroup.POST("/:id/enable", h.EnableTemplate)
-		templateGroup.POST("/:id/disable", h.DisableTemplate)
-		templateGroup.GET("/process/:process_id", h.GetTemplatesByProcessID)
-		templateGroup.GET("/category/:category_id", h.GetTemplatesByCategory)
-		templateGroup.POST("/batch/status", h.BatchUpdateStatus)
-		templateGroup.GET("/count", h.GetTemplateCount)
-		templateGroup.GET("/check-name", h.CheckTemplateName)
+		templateGroup.POST("/create", h.CreateTemplate)
+		templateGroup.PUT("/update/:id", h.UpdateTemplate)
+		templateGroup.DELETE("/delete/:id", h.DeleteTemplate)
+		templateGroup.GET("/list", h.ListTemplate)
+		templateGroup.GET("/detail/:id", h.DetailTemplate)
+		templateGroup.PUT("/enable/:id", h.EnableTemplate)
+		templateGroup.PUT("/disable/:id", h.DisableTemplate)
+		templateGroup.POST("/clone/:id", h.CloneTemplate)
 	}
 }
 
@@ -66,6 +60,7 @@ func (h *TemplateHandler) RegisterRouters(server *gin.Engine) {
 func (h *TemplateHandler) CreateTemplate(ctx *gin.Context) {
 	var req model.CreateTemplateReq
 	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateTemplate(ctx, &req, user.Uid, user.Username)
 	})
@@ -74,13 +69,18 @@ func (h *TemplateHandler) CreateTemplate(ctx *gin.Context) {
 // UpdateTemplate 更新模板
 func (h *TemplateHandler) UpdateTemplate(ctx *gin.Context) {
 	var req model.UpdateTemplateReq
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的模板ID")
 		return
 	}
+
 	req.ID = id
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.UpdateTemplate(ctx, &req)
+		return nil, h.service.UpdateTemplate(ctx, &req, user.Uid)
 	})
 }
 
@@ -88,16 +88,21 @@ func (h *TemplateHandler) UpdateTemplate(ctx *gin.Context) {
 func (h *TemplateHandler) DeleteTemplate(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的模板ID")
 		return
 	}
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.service.DeleteTemplate(ctx, id)
+		return nil, h.service.DeleteTemplate(ctx, id, user.Uid)
 	})
 }
 
 // ListTemplate 获取模板列表
 func (h *TemplateHandler) ListTemplate(ctx *gin.Context) {
 	var req model.ListTemplateReq
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ListTemplate(ctx, &req)
 	})
@@ -107,10 +112,14 @@ func (h *TemplateHandler) ListTemplate(ctx *gin.Context) {
 func (h *TemplateHandler) DetailTemplate(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的模板ID")
 		return
 	}
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.DetailTemplate(ctx, id)
+		return h.service.DetailTemplate(ctx, id, user.Uid)
 	})
 }
 
@@ -118,9 +127,12 @@ func (h *TemplateHandler) DetailTemplate(ctx *gin.Context) {
 func (h *TemplateHandler) EnableTemplate(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的模板ID")
 		return
 	}
+
 	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.service.EnableTemplate(ctx, id, user.Uid)
 	})
@@ -130,85 +142,31 @@ func (h *TemplateHandler) EnableTemplate(ctx *gin.Context) {
 func (h *TemplateHandler) DisableTemplate(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的模板ID")
 		return
 	}
+
 	user := ctx.MustGet("user").(utils.UserClaims)
+
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.service.DisableTemplate(ctx, id, user.Uid)
 	})
 }
 
-// GetTemplatesByProcessID 根据流程ID获取模板列表
-func (h *TemplateHandler) GetTemplatesByProcessID(ctx *gin.Context) {
-	processIDStr := ctx.Param("process_id")
-	processID, err := strconv.Atoi(processIDStr)
+// CloneTemplate 克隆模板
+func (h *TemplateHandler) CloneTemplate(ctx *gin.Context) {
+	var req model.CloneTemplateReq
+
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的流程ID")
+		utils.ErrorWithMessage(ctx, "无效的模板ID")
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetTemplatesByProcessID(ctx, processID)
-	})
-}
-
-// GetTemplatesByCategory 根据分类ID获取模板列表
-func (h *TemplateHandler) GetTemplatesByCategory(ctx *gin.Context) {
-	categoryIDStr := ctx.Param("category_id")
-	categoryID, err := strconv.Atoi(categoryIDStr)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的分类ID")
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetTemplatesByCategory(ctx, categoryID)
-	})
-}
-
-// BatchUpdateStatus 批量更新状态
-func (h *TemplateHandler) BatchUpdateStatus(ctx *gin.Context) {
-	var req struct {
-		IDs    []int `json:"ids" binding:"required"`
-		Status int8  `json:"status" binding:"required,oneof=0 1"`
-	}
+	req.ID = id
+	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.BatchUpdateStatus(ctx, req.IDs, req.Status)
-	})
-}
-
-// GetTemplateCount 获取模板总数
-func (h *TemplateHandler) GetTemplateCount(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetTemplateCount(ctx)
-	})
-}
-
-// CheckTemplateName 检查模板名称是否存在
-func (h *TemplateHandler) CheckTemplateName(ctx *gin.Context) {
-	name := ctx.Query("name")
-	if name == "" {
-		utils.ErrorWithMessage(ctx, "模板名称不能为空")
-		return
-	}
-
-	excludeIDStr := ctx.Query("exclude_id")
-	excludeID := 0
-	if excludeIDStr != "" {
-		var err error
-		excludeID, err = strconv.Atoi(excludeIDStr)
-		if err != nil {
-			utils.ErrorWithMessage(ctx, "无效的排除ID")
-			return
-		}
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		exists, err := h.service.IsTemplateNameExists(ctx, name, excludeID)
-		if err != nil {
-			return nil, err
-		}
-		return map[string]bool{"exists": exists}, nil
+		return h.service.CloneTemplate(ctx, &req, user.Uid)
 	})
 }
