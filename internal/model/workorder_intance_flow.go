@@ -12,12 +12,15 @@ type InstanceFlow struct {
 	StepName     string  `json:"step_name" gorm:"column:step_name;not null;comment:步骤名称"`
 	Action       string  `json:"action" gorm:"column:action;not null;comment:操作"`
 	OperatorID   int     `json:"operator_id" gorm:"column:operator_id;not null;comment:操作人ID"`
-	OperatorName string  `json:"operator_name" gorm:"-"` // 不存储到数据库中
+	OperatorName string  `json:"operator_name" gorm:"-"`
 	Comment      string  `json:"comment" gorm:"column:comment;type:text;comment:处理意见"`
 	FormData     JSONMap `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
 	Duration     *int    `json:"duration" gorm:"column:duration;comment:处理时长(分钟)"`
 	FromStepID   string  `json:"from_step_id" gorm:"column:from_step_id;comment:来源步骤ID"`
 	ToStepID     string  `json:"to_step_id" gorm:"column:to_step_id;comment:目标步骤ID"`
+	FromUserID   int     `json:"from_user_id" gorm:"column:from_user_id;comment:来源用户ID"`
+	ToUserID     int     `json:"to_user_id" gorm:"column:to_user_id;comment:目标用户ID"`
+	ToUserName   string  `json:"to_user_name" gorm:"-"`
 }
 
 // TableName 指定工单流转记录表名

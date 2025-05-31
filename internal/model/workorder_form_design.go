@@ -1,6 +1,8 @@
 package model
 
-import "time"
+import (
+	"time"
+)
 
 // FormField 表单字段定义
 type FormField struct {

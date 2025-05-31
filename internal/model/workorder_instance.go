@@ -144,27 +144,25 @@ func (Instance) TableName() string {
 
 // 工单实例请求结构
 type CreateInstanceReq struct {
-	Title       string                 `json:"title" binding:"required,min=1,max=200"`
-	TemplateID  *int                   `json:"template_id"`
-	ProcessID   int                    `json:"process_id" binding:"required"`
-	FormData    map[string]interface{} `json:"form_data" binding:"required"`
-	Description string                 `json:"description" binding:"omitempty,max=1000"`
-	Priority    int8                   `json:"priority" binding:"omitempty,oneof=0 1 2 3 4"`
-	CategoryID  *int                   `json:"category_id"`
-	DueDate     *time.Time             `json:"due_date"`
-	Tags        []string               `json:"tags"`
-	AssigneeID  *int                   `json:"assignee_id"`
+	Title       string     `json:"title" binding:"required,min=1,max=200"`       // 工单标题
+	TemplateID  *int       `json:"template_id"`                                  // 模板ID
+	ProcessID   int        `json:"process_id" binding:"required"`                // 流程ID
+	Description string     `json:"description" binding:"omitempty,max=1000"`     // 描述
+	Priority    int8       `json:"priority" binding:"omitempty,oneof=0 1 2 3 4"` // 优先级
+	CategoryID  *int       `json:"category_id"`                                  // 分类ID
+	DueDate     *time.Time `json:"due_date"`                                     // 截止时间
+	Tags        []string   `json:"tags"`                                         // 标签
+	AssigneeID  *int       `json:"assignee_id"`                                  // 处理人ID
 }
 
 type UpdateInstanceReq struct {
-	ID          int                    `json:"id" binding:"required"`
-	Title       string                 `json:"title" binding:"required,min=1,max=200"`
-	FormData    map[string]interface{} `json:"form_data" binding:"required"`
-	Description string                 `json:"description" binding:"omitempty,max=1000"`
-	Priority    int8                   `json:"priority" binding:"omitempty,oneof=0 1 2 3 4"`
-	CategoryID  *int                   `json:"category_id"`
-	DueDate     *time.Time             `json:"due_date"`
-	Tags        []string               `json:"tags"`
+	ID          int        `json:"id" form:"id" binding:"required"`
+	Title       string     `json:"title" form:"title" binding:"required,min=1,max=200"`
+	Description string     `json:"description" form:"description" binding:"omitempty,max=1000"`
+	Priority    int8       `json:"priority" form:"priority" binding:"omitempty,oneof=0 1 2 3 4"`
+	CategoryID  *int       `json:"category_id" form:"category_id"`
+	DueDate     *time.Time `json:"due_date" form:"due_date"`
+	Tags        []string   `json:"tags" form:"tags"`
 }
 
 type DeleteInstanceReq struct {
@@ -203,13 +201,18 @@ type MyInstanceReq struct {
 	EndDate    *time.Time `json:"end_date" form:"end_date"`
 }
 
+type TransferInstanceReq struct {
+	AssigneeID int    `json:"assignee_id" binding:"required"`
+	Comment    string `json:"comment"`
+}
+
 type InstanceActionReq struct {
-	InstanceID int                    `json:"instance_id" binding:"required"`
-	Action     string                 `json:"action" binding:"required,oneof=approve reject transfer revoke cancel"`
-	Comment    string                 `json:"comment" binding:"omitempty,max=1000"`
-	FormData   map[string]interface{} `json:"form_data"`
-	AssigneeID *int                   `json:"assignee_id" binding:"omitempty,min=1"`
-	StepID     string                 `json:"step_id" binding:"required"`
+	InstanceID int                    `json:"instance_id" binding:"required"`                                        // 工单ID
+	Action     string                 `json:"action" binding:"required,oneof=approve reject transfer revoke cancel"` // 操作
+	Comment    string                 `json:"comment" binding:"omitempty,max=1000"`                                  // 备注
+	FormData   map[string]interface{} `json:"form_data"`                                                             // 表单数据
+	AssigneeID *int                   `json:"assignee_id" binding:"omitempty,min=1"`                                 // 转移给谁
+	StepID     string                 `json:"step_id" binding:"required"`                                            // 当前步骤
 }
 
 type InstanceCommentReq struct {

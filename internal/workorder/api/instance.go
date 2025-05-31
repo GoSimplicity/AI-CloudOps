@@ -41,7 +41,12 @@ type InstanceHandler struct {
 	attachmentService service.InstanceAttachmentService
 }
 
-func NewInstanceHandler(service service.InstanceService, flowService service.InstanceFlowService, commentService service.InstanceCommentService, attachmentService service.InstanceAttachmentService) *InstanceHandler {
+func NewInstanceHandler(
+	service service.InstanceService,
+	flowService service.InstanceFlowService,
+	commentService service.InstanceCommentService,
+	attachmentService service.InstanceAttachmentService,
+) *InstanceHandler {
 	return &InstanceHandler{
 		service:           service,
 		flowService:       flowService,
@@ -54,33 +59,33 @@ func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 	instanceGroup := server.Group("/api/workorder/instance")
 	{
 		// 基础CRUD操作
-		instanceGroup.POST("/", h.CreateInstance)
-		instanceGroup.PUT("/:id", h.UpdateInstance)
-		instanceGroup.DELETE("/:id", h.DeleteInstance)
-		instanceGroup.GET("/", h.ListInstance)
-		instanceGroup.GET("/:id", h.GetInstance)
-		instanceGroup.PATCH("/batch/status", h.BatchUpdateInstanceStatus)
+		instanceGroup.POST("/create", h.CreateInstance)
+		instanceGroup.PUT("/update/:id", h.UpdateInstance)
+		instanceGroup.DELETE("/delete/:id", h.DeleteInstance)
+		instanceGroup.GET("/list", h.ListInstance)
+		instanceGroup.GET("/detail/:id", h.DetailInstance)
+		instanceGroup.POST("/transfer/:id", h.TransferInstance)
 
 		// 用户相关
 		instanceGroup.GET("/my", h.GetMyInstances)
 		instanceGroup.GET("/overdue", h.GetOverdueInstances)
 
 		// 流程操作
-		instanceGroup.POST("/:id/action", h.ProcessInstanceFlow)
-		instanceGroup.POST("/:id/transfer", h.TransferInstance)
+		instanceGroup.POST("/action/:id", h.ProcessInstanceFlow)
 
 		// 评论功能
-		instanceGroup.POST("/:id/comment", h.CommentInstance)
-		instanceGroup.GET("/:id/comments", h.GetInstanceComments)
+		instanceGroup.POST("/comment/:id", h.CommentInstance)
+		instanceGroup.GET("/comments/:id", h.GetInstanceComments)
 
-		// 附件功能
-		instanceGroup.POST("/:id/attachment", h.UploadAttachment)
-		instanceGroup.DELETE("/:id/attachment/:aid", h.DeleteAttachment)
-		instanceGroup.GET("/:id/attachments", h.GetInstanceAttachments)
-		instanceGroup.DELETE("/:id/attachments/batch", h.BatchDeleteAttachments)
+		// TODO: 附件功能暂不支持
+		// // 附件功能
+		// instanceGroup.POST("/attachment/:id", h.UploadAttachment)
+		// instanceGroup.DELETE("/:id/attachment/:aid", h.DeleteAttachment)
+		// instanceGroup.GET("/attachments/:id", h.GetInstanceAttachments)
+		// instanceGroup.DELETE("/attachments/batch/:id", h.BatchDeleteAttachments)
 
 		// 流程查看
-		instanceGroup.GET("/:id/flows", h.GetInstanceFlows)
+		instanceGroup.GET("/flows/:id", h.GetInstanceFlows)
 		instanceGroup.GET("/process/:pid/definition", h.GetProcessDefinition)
 	}
 }
@@ -98,15 +103,17 @@ func (h *InstanceHandler) CreateInstance(ctx *gin.Context) {
 // UpdateInstance 更新工单实例
 func (h *InstanceHandler) UpdateInstance(ctx *gin.Context) {
 	var req model.UpdateInstanceReq
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
+	req.ID = id
+
 	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		req.ID = id
 		return nil, h.service.UpdateInstance(ctx, &req, user.Uid)
 	})
 }
@@ -125,8 +132,8 @@ func (h *InstanceHandler) DeleteInstance(ctx *gin.Context) {
 	})
 }
 
-// GetInstance 获取工单实例详情
-func (h *InstanceHandler) GetInstance(ctx *gin.Context) {
+// DetailInstance 获取工单实例详情
+func (h *InstanceHandler) DetailInstance(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		return
@@ -140,28 +147,16 @@ func (h *InstanceHandler) GetInstance(ctx *gin.Context) {
 // ListInstance 获取工单实例列表
 func (h *InstanceHandler) ListInstance(ctx *gin.Context) {
 	var req model.ListInstanceReq
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ListInstance(ctx, &req)
-	})
-}
-
-// BatchUpdateInstanceStatus 批量更新工单状态
-func (h *InstanceHandler) BatchUpdateInstanceStatus(ctx *gin.Context) {
-	var req struct {
-		IDs    []int `json:"ids" binding:"required"`
-		Status int8  `json:"status" binding:"required"`
-	}
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.BatchUpdateInstanceStatus(ctx, req.IDs, req.Status, user.Uid)
 	})
 }
 
 // ProcessInstanceFlow 处理工单流程
 func (h *InstanceHandler) ProcessInstanceFlow(ctx *gin.Context) {
 	var req model.InstanceActionReq
+
 	user := ctx.MustGet("user").(utils.UserClaims)
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -321,10 +316,8 @@ func (h *InstanceHandler) GetOverdueInstances(ctx *gin.Context) {
 
 // TransferInstance 转移工单
 func (h *InstanceHandler) TransferInstance(ctx *gin.Context) {
-	var req struct {
-		ToUserID int    `json:"to_user_id" binding:"required"`
-		Comment  string `json:"comment"`
-	}
+	var req model.TransferInstanceReq
+
 	user := ctx.MustGet("user").(utils.UserClaims)
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -332,6 +325,6 @@ func (h *InstanceHandler) TransferInstance(ctx *gin.Context) {
 	}
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.TransferInstance(ctx, id, user.Uid, req.ToUserID, req.Comment)
+		return nil, h.service.TransferInstance(ctx, id, user.Uid, req.AssigneeID, req.Comment)
 	})
 }
