@@ -22,16 +22,15 @@
  * THE SOFTWARE.
  *
  */
-
 package api
 
 import (
-	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -48,358 +47,229 @@ func NewStatisticsHandler(service service.StatisticsService) *StatisticsHandler 
 func (h *StatisticsHandler) RegisterRouters(server *gin.Engine) {
 	statsGroup := server.Group("/api/workorder/statistics")
 	{
-		statsGroup.GET("/overview", h.GetOverview)
-		statsGroup.GET("/trend", h.GetTrend)
-		statsGroup.GET("/category", h.GetCategoryStats)
-		statsGroup.GET("/performance", h.GetPerformanceStats)
-		statsGroup.GET("/user", h.GetUserStats)
-		statsGroup.GET("/export", h.ExportStats)
+		statsGroup.GET("/overview", h.GetOverview)             // 概览统计
+		statsGroup.GET("/trend", h.GetTrend)                   // 趋势统计
+		statsGroup.GET("/category", h.GetCategoryStats)        // 分类统计
+		statsGroup.GET("/user", h.GetUserStats)                // 用户统计
+		statsGroup.GET("/template", h.GetTemplateStats)        // 模板统计
+		statsGroup.GET("/status", h.GetStatusDistribution)     // 状态分布
+		statsGroup.GET("/priority", h.GetPriorityDistribution) // 优先级分布
 	}
 }
 
-// GetOverview 获取工单总览统计数据
+// GetOverview 获取工单总览统计
 func (h *StatisticsHandler) GetOverview(ctx *gin.Context) {
-	req := &model.OverviewStatsReq{}
-
-	// 解析可选的日期参数
-	if startDateStr := ctx.Query("start_date"); startDateStr != "" {
-		if startDate, err := time.Parse("2006-01-02", startDateStr); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    400,
-				"message": "开始日期格式错误，请使用 YYYY-MM-DD 格式",
-				"data":    nil,
-			})
-			return
-		} else {
-			req.StartDate = &startDate
-		}
-	}
-
-	if endDateStr := ctx.Query("end_date"); endDateStr != "" {
-		if endDate, err := time.Parse("2006-01-02", endDateStr); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    400,
-				"message": "结束日期格式错误，请使用 YYYY-MM-DD 格式",
-				"data":    nil,
-			})
-			return
-		} else {
-			req.EndDate = &endDate
-		}
-	}
-
-	result, err := h.service.GetOverview(ctx.Request.Context(), req)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"code":    500,
-			"message": err.Error(),
-			"data":    nil,
-		})
+	req := h.parseStatsRequest(ctx)
+	if req == nil {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    result,
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return h.service.GetOverview(ctx, req)
 	})
 }
 
-// GetTrend 获取工单趋势统计数据
+// GetTrend 获取工单趋势统计
 func (h *StatisticsHandler) GetTrend(ctx *gin.Context) {
-	req := &model.TrendStatsReq{}
-
-	// 解析必需的日期参数
-	startDateStr := ctx.Query("start_date")
-	if startDateStr == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"code":    400,
-			"message": "开始日期不能为空",
-			"data":    nil,
-		})
+	req := h.parseStatsRequest(ctx)
+	if req == nil {
 		return
 	}
 
-	startDate, err := time.Parse("2006-01-02", startDateStr)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"code":    400,
-			"message": "开始日期格式错误，请使用 YYYY-MM-DD 格式",
-			"data":    nil,
-		})
+	// 趋势统计需要维度参数
+	dimension := ctx.DefaultQuery("dimension", "day")
+	if !isValidDimension(dimension) {
+		utils.ErrorWithMessage(ctx, "维度参数只能是 day、week 或 month")
 		return
 	}
-	req.StartDate = startDate
+	req.Dimension = dimension
 
-	endDateStr := ctx.Query("end_date")
-	if endDateStr == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"code":    400,
-			"message": "结束日期不能为空",
-			"data":    nil,
-		})
-		return
-	}
-
-	endDate, err := time.Parse("2006-01-02", endDateStr)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"code":    400,
-			"message": "结束日期格式错误，请使用 YYYY-MM-DD 格式",
-			"data":    nil,
-		})
-		return
-	}
-	req.EndDate = endDate
-
-	// 解析统计维度参数
-	req.Dimension = ctx.DefaultQuery("dimension", "day")
-
-	// 解析可选的分类ID参数
-	if categoryIDStr := ctx.Query("category_id"); categoryIDStr != "" {
-		if categoryID, err := strconv.Atoi(categoryIDStr); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    400,
-				"message": "分类ID格式错误",
-				"data":    nil,
-			})
-			return
-		} else {
-			req.CategoryID = &categoryID
-		}
-	}
-
-	result, err := h.service.GetTrend(ctx.Request.Context(), req)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"code":    500,
-			"message": err.Error(),
-			"data":    nil,
-		})
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    result,
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return h.service.GetTrend(ctx, req)
 	})
 }
 
-// GetCategoryStats 获取按分类统计的工单数据
+// GetCategoryStats 获取分类统计
 func (h *StatisticsHandler) GetCategoryStats(ctx *gin.Context) {
-	req := &model.CategoryStatsReq{}
-
-	// 解析可选的日期参数
-	if startDateStr := ctx.Query("start_date"); startDateStr != "" {
-		if startDate, err := time.Parse("2006-01-02", startDateStr); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    400,
-				"message": "开始日期格式错误，请使用 YYYY-MM-DD 格式",
-				"data":    nil,
-			})
-			return
-		} else {
-			req.StartDate = &startDate
-		}
-	}
-
-	if endDateStr := ctx.Query("end_date"); endDateStr != "" {
-		if endDate, err := time.Parse("2006-01-02", endDateStr); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    400,
-				"message": "结束日期格式错误，请使用 YYYY-MM-DD 格式",
-				"data":    nil,
-			})
-			return
-		} else {
-			req.EndDate = &endDate
-		}
-	}
-
-	// 解析可选的top参数
-	if topStr := ctx.Query("top"); topStr != "" {
-		if top, err := strconv.Atoi(topStr); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    400,
-				"message": "top参数格式错误",
-				"data":    nil,
-			})
-			return
-		} else {
-			req.Top = top
-		}
-	}
-
-	result, err := h.service.GetCategoryStats(ctx.Request.Context(), req)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"code":    500,
-			"message": err.Error(),
-			"data":    nil,
-		})
+	req := h.parseStatsRequest(ctx)
+	if req == nil {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    result,
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return h.service.GetCategoryStats(ctx, req)
 	})
 }
 
-// GetPerformanceStats 获取操作员绩效统计数据
-func (h *StatisticsHandler) GetPerformanceStats(ctx *gin.Context) {
-	req := &model.PerformanceStatsReq{}
-
-	// 解析可选的日期参数
-	if startDateStr := ctx.Query("start_date"); startDateStr != "" {
-		if startDate, err := time.Parse("2006-01-02", startDateStr); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    400,
-				"message": "开始日期格式错误，请使用 YYYY-MM-DD 格式",
-				"data":    nil,
-			})
-			return
-		} else {
-			req.StartDate = &startDate
-		}
-	}
-
-	if endDateStr := ctx.Query("end_date"); endDateStr != "" {
-		if endDate, err := time.Parse("2006-01-02", endDateStr); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    400,
-				"message": "结束日期格式错误，请使用 YYYY-MM-DD 格式",
-				"data":    nil,
-			})
-			return
-		} else {
-			req.EndDate = &endDate
-		}
-	}
-
-	// 解析可选的用户ID参数
-	if userIDStr := ctx.Query("user_id"); userIDStr != "" {
-		if userID, err := strconv.Atoi(userIDStr); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    400,
-				"message": "用户ID格式错误",
-				"data":    nil,
-			})
-			return
-		} else {
-			req.UserID = &userID
-		}
-	}
-
-	// 解析可选的top参数
-	if topStr := ctx.Query("top"); topStr != "" {
-		if top, err := strconv.Atoi(topStr); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    400,
-				"message": "top参数格式错误",
-				"data":    nil,
-			})
-			return
-		} else {
-			req.Top = top
-		}
-	}
-
-	result, err := h.service.GetPerformanceStats(ctx.Request.Context(), req)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"code":    500,
-			"message": err.Error(),
-			"data":    nil,
-		})
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    result,
-	})
-}
-
-// GetUserStats 获取特定用户的统计数据
+// GetUserStats 获取用户统计
 func (h *StatisticsHandler) GetUserStats(ctx *gin.Context) {
-	req := &model.UserStatsReq{}
-
-	// 解析必需的用户ID参数
-	userIDStr := ctx.Query("user_id")
-	if userIDStr == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"code":    400,
-			"message": "用户ID不能为空",
-			"data":    nil,
-		})
+	req := h.parseStatsRequest(ctx)
+	if req == nil {
 		return
 	}
 
-	userID, err := strconv.Atoi(userIDStr)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"code":    400,
-			"message": "用户ID格式错误",
-			"data":    nil,
-		})
-		return
-	}
-	req.UserID = &userID
-
-	// 解析可选的日期参数
-	if startDateStr := ctx.Query("start_date"); startDateStr != "" {
-		if startDate, err := time.Parse("2006-01-02", startDateStr); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    400,
-				"message": "开始日期格式错误，请使用 YYYY-MM-DD 格式",
-				"data":    nil,
-			})
-			return
-		} else {
-			req.StartDate = &startDate
-		}
-	}
-
-	if endDateStr := ctx.Query("end_date"); endDateStr != "" {
-		if endDate, err := time.Parse("2006-01-02", endDateStr); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    400,
-				"message": "结束日期格式错误，请使用 YYYY-MM-DD 格式",
-				"data":    nil,
-			})
-			return
-		} else {
-			req.EndDate = &endDate
-		}
-	}
-
-	result, err := h.service.GetUserStats(ctx.Request.Context(), req)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"code":    500,
-			"message": err.Error(),
-			"data":    nil,
-		})
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data":    result,
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return h.service.GetUserStats(ctx, req)
 	})
 }
 
-// ExportStats 导出统计数据（占位方法）
-func (h *StatisticsHandler) ExportStats(ctx *gin.Context) {
-	// TODO: 实现统计数据导出功能
-	ctx.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "导出功能开发中",
-		"data":    nil,
+// GetTemplateStats 获取模板统计
+func (h *StatisticsHandler) GetTemplateStats(ctx *gin.Context) {
+	req := h.parseStatsRequest(ctx)
+	if req == nil {
+		return
+	}
+
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return h.service.GetTemplateStats(ctx, req)
 	})
+}
+
+// GetStatusDistribution 获取状态分布
+func (h *StatisticsHandler) GetStatusDistribution(ctx *gin.Context) {
+	req := h.parseStatsRequest(ctx)
+	if req == nil {
+		return
+	}
+
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return h.service.GetStatusDistribution(ctx, req)
+	})
+}
+
+// GetPriorityDistribution 获取优先级分布
+func (h *StatisticsHandler) GetPriorityDistribution(ctx *gin.Context) {
+	req := h.parseStatsRequest(ctx)
+	if req == nil {
+		return
+	}
+
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return h.service.GetPriorityDistribution(ctx, req)
+	})
+}
+
+// parseStatsRequest 统一解析统计请求参数
+func (h *StatisticsHandler) parseStatsRequest(ctx *gin.Context) *model.StatsReq {
+	req := &model.StatsReq{}
+
+	// 解析日期参数
+	if startDateStr := ctx.Query("start_date"); startDateStr != "" {
+		startDate, err := parseTimeRFC3339(startDateStr)
+		if err != nil {
+			utils.ErrorWithMessage(ctx, "开始日期格式错误，请使用 RFC3339 格式")
+			return nil
+		}
+		req.StartDate = &startDate
+	}
+
+	if endDateStr := ctx.Query("end_date"); endDateStr != "" {
+		endDate, err := parseTimeRFC3339(endDateStr)
+		if err != nil {
+			utils.ErrorWithMessage(ctx, "结束日期格式错误，请使用 RFC3339 格式")
+			return nil
+		}
+		req.EndDate = &endDate
+	}
+
+	// 验证日期范围
+	if req.StartDate != nil && req.EndDate != nil && req.StartDate.After(*req.EndDate) {
+		utils.ErrorWithMessage(ctx, "开始日期不能晚于结束日期")
+		return nil
+	}
+
+	// 解析筛选参数
+	if categoryIDStr := ctx.Query("category_id"); categoryIDStr != "" {
+		categoryID, err := strconv.Atoi(categoryIDStr)
+		if err != nil {
+			utils.ErrorWithMessage(ctx, "分类ID必须是数字")
+			return nil
+		}
+		req.CategoryID = &categoryID
+	}
+
+	if userIDStr := ctx.Query("user_id"); userIDStr != "" {
+		userID, err := strconv.Atoi(userIDStr)
+		if err != nil {
+			utils.ErrorWithMessage(ctx, "用户ID必须是数字")
+			return nil
+		}
+		req.UserID = &userID
+	}
+
+	if status := ctx.Query("status"); status != "" {
+		req.Status = &status
+	}
+
+	if priority := ctx.Query("priority"); priority != "" {
+		req.Priority = &priority
+	}
+
+	// 解析排行数量参数
+	if topStr := ctx.Query("top"); topStr != "" {
+		top, err := strconv.Atoi(topStr)
+		if err != nil || top <= 0 || top > 50 {
+			utils.ErrorWithMessage(ctx, "top参数必须是1-50之间的数字")
+			return nil
+		}
+		req.Top = top
+	} else {
+		req.Top = 10 // 默认值
+	}
+
+	// 解析排序字段
+	if sortBy := ctx.Query("sort_by"); sortBy != "" {
+		if !isValidSortBy(sortBy) {
+			utils.ErrorWithMessage(ctx, "sort_by参数只能是 count、completion_rate 或 avg_process_time")
+			return nil
+		}
+		req.SortBy = sortBy
+	}
+
+	return req
+}
+
+// parseTimeRFC3339 解析RFC3339格式的时间字符串
+func parseTimeRFC3339(timeStr string) (time.Time, error) {
+	// 尝试多种格式解析时间
+	// 先尝试完整的RFC3339格式
+	t, err := time.Parse(time.RFC3339, timeStr)
+	if err == nil {
+		return t, nil
+	}
+	
+	// 再尝试带时区的格式
+	t, err = time.Parse("2006-01-02T15:04:05Z07:00", timeStr)
+	if err == nil {
+		return t, nil
+	}
+	
+	// 再尝试不带时区的格式
+	t, err = time.Parse("2006-01-02T15:04:05", timeStr)
+	if err == nil {
+		return t, nil
+	}
+	
+	// 最后尝试只有日期的格式
+	return time.Parse("2006-01-02", timeStr)
+}
+
+// isValidDimension 验证维度参数
+func isValidDimension(dimension string) bool {
+	validDimensions := map[string]bool{
+		"day":   true,
+		"week":  true,
+		"month": true,
+	}
+	return validDimensions[dimension]
+}
+
+// isValidSortBy 验证排序字段参数
+func isValidSortBy(sortBy string) bool {
+	validSortBy := map[string]bool{
+		"count":            true,
+		"completion_rate":  true,
+		"avg_process_time": true,
+	}
+	return validSortBy[sortBy]
 }
