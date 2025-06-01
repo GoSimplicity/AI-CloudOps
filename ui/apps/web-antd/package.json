@@ -47,6 +47,7 @@
     "@vueuse/core": "^11.0.3",
     "ant-design-vue": "^4.2.3",
     "ant-design-x-vue": "^1.0.6",
+    "axios": "^1.7.7",
     "dayjs": "^1.11.13",
     "echarts": "^5.5.1",
     "js-yaml": "^4.1.0",
