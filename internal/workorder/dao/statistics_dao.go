@@ -36,11 +36,13 @@ import (
 )
 
 type StatisticsDAO interface {
-	GetOverviewStats(ctx context.Context, startDate *time.Time, endDate *time.Time) (*model.OverviewStatsResp, error)
-	GetInstanceTrendStats(ctx context.Context, startDate time.Time, endDate time.Time, dimension string, categoryID *int) (*model.TrendStatsResp, error)
-	GetWorkloadByCategory(ctx context.Context, startDate *time.Time, endDate *time.Time, top *int) ([]model.CategoryStatsResp, error)
-	GetOperatorPerformance(ctx context.Context, startDate *time.Time, endDate *time.Time, userID *int, top *int) ([]model.PerformanceStatsResp, error)
-	GetStatsByUser(ctx context.Context, startDate *time.Time, endDate *time.Time, userID *int) (*model.UserStatsResp, error)
+	GetOverviewStats(ctx context.Context, req *model.StatsReq) (*model.OverviewStats, error)
+	GetTrendStats(ctx context.Context, req *model.StatsReq) (*model.TrendStats, error)
+	GetCategoryStats(ctx context.Context, req *model.StatsReq) ([]model.CategoryStats, error)
+	GetUserStats(ctx context.Context, req *model.StatsReq) ([]model.UserStats, error)
+	GetTemplateStats(ctx context.Context, req *model.StatsReq) ([]model.TemplateStats, error)
+	GetStatusDistribution(ctx context.Context, req *model.StatsReq) ([]model.StatusDistribution, error)
+	GetPriorityDistribution(ctx context.Context, req *model.StatsReq) ([]model.PriorityDistribution, error)
 }
 
 type statisticsDAO struct {
@@ -55,527 +57,416 @@ func NewStatisticsDAO(db *gorm.DB, logger *zap.Logger) StatisticsDAO {
 	}
 }
 
-// SQLDialect 数据库方言类型
-type SQLDialect string
+// GetOverviewStats 获取总览统计 - 基于统计表
+func (d *statisticsDAO) GetOverviewStats(ctx context.Context, req *model.StatsReq) (*model.OverviewStats, error) {
+	var result model.OverviewStats
 
-const (
-	SQLiteDialect   SQLDialect = "sqlite"
-	MySQLDialect    SQLDialect = "mysql"
-	PostgresDialect SQLDialect = "postgres"
-)
+	query := d.db.WithContext(ctx).Model(&model.WorkOrderStatistics{})
+	query = d.applyStatisticsDateFilter(query, req.StartDate, req.EndDate)
 
-// getSQLDialect 获取当前数据库方言
-func (dao *statisticsDAO) getSQLDialect() SQLDialect {
-	switch dao.db.Dialector.Name() {
-	case "mysql":
-		return MySQLDialect
-	case "postgres":
-		return PostgresDialect
-	default:
-		return SQLiteDialect
-	}
-}
-
-// buildDateSelectSQL 构建日期选择SQL
-func (dao *statisticsDAO) buildDateSelectSQL(dimension string) (string, error) {
-	dialect := dao.getSQLDialect()
-
-	switch dialect {
-	case SQLiteDialect:
-		return dao.buildSQLiteDateSQL(dimension)
-	case MySQLDialect:
-		return dao.buildMySQLDateSQL(dimension)
-	case PostgresDialect:
-		return dao.buildPostgresDateSQL(dimension)
-	default:
-		return "", fmt.Errorf("不支持的数据库方言: %s", dialect)
-	}
-}
-
-// buildSQLiteDateSQL SQLite日期SQL
-func (dao *statisticsDAO) buildSQLiteDateSQL(dimension string) (string, error) {
-	switch dimension {
-	case "day":
-		return "DATE(created_at) as date_str", nil
-	case "week":
-		return "strftime('%Y-%W', created_at) as date_str", nil
-	case "month":
-		return "strftime('%Y-%m', created_at) as date_str", nil
-	default:
-		return "", fmt.Errorf("无效的统计维度: %s", dimension)
-	}
-}
-
-// buildMySQLDateSQL MySQL日期SQL
-func (dao *statisticsDAO) buildMySQLDateSQL(dimension string) (string, error) {
-	switch dimension {
-	case "day":
-		return "DATE_FORMAT(created_at, '%Y-%m-%d') as date_str", nil
-	case "week":
-		return "DATE_FORMAT(created_at, '%x-%v') as date_str", nil
-	case "month":
-		return "DATE_FORMAT(created_at, '%Y-%m') as date_str", nil
-	default:
-		return "", fmt.Errorf("无效的统计维度: %s", dimension)
-	}
-}
-
-// buildPostgresDateSQL PostgreSQL日期SQL
-func (dao *statisticsDAO) buildPostgresDateSQL(dimension string) (string, error) {
-	switch dimension {
-	case "day":
-		return "TO_CHAR(created_at, 'YYYY-MM-DD') as date_str", nil
-	case "week":
-		return "TO_CHAR(created_at, 'IYYY-IW') as date_str", nil
-	case "month":
-		return "TO_CHAR(created_at, 'YYYY-MM') as date_str", nil
-	default:
-		return "", fmt.Errorf("无效的统计维度: %s", dimension)
-	}
-}
-
-// buildTimeDifferenceSQL 构建时间差SQL
-func (dao *statisticsDAO) buildTimeDifferenceSQL() string {
-	dialect := dao.getSQLDialect()
-
-	switch dialect {
-	case MySQLDialect:
-		return "AVG(TIMESTAMPDIFF(SECOND, created_at, completed_at))"
-	case PostgresDialect:
-		return "AVG(EXTRACT(EPOCH FROM (completed_at - created_at)))"
-	default: // SQLite
-		return "AVG(CAST(strftime('%s', completed_at) - strftime('%s', created_at) AS REAL))"
-	}
-}
-
-// dateRangeScope 日期范围查询作用域
-func dateRangeScope(startDate *time.Time, endDate *time.Time, tableName ...string) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		tablePrefix := ""
-		if len(tableName) > 0 && tableName[0] != "" {
-			tablePrefix = tableName[0] + "."
-		}
-		columnName := tablePrefix + "created_at"
-
-		if startDate != nil && endDate != nil {
-			endOfDay := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 59, 999999999, endDate.Location())
-			return db.Where(columnName+" BETWEEN ? AND ?", *startDate, endOfDay)
-		}
-		if startDate != nil {
-			return db.Where(columnName+" >= ?", *startDate)
-		}
-		if endDate != nil {
-			endOfDay := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 59, 999999999, endDate.Location())
-			return db.Where(columnName+" <= ?", endOfDay)
-		}
-		return db
-	}
-}
-
-// todayRange 获取今日时间范围
-func todayRange() (time.Time, time.Time) {
-	now := time.Now()
-	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
-	end := start.Add(24 * time.Hour)
-	return start, end
-}
-
-// getStatusCounts 获取各状态工单数量的通用方法
-func (dao *statisticsDAO) getStatusCounts(ctx context.Context, startDate *time.Time, endDate *time.Time) (map[string]int64, error) {
-	var results []struct {
-		Status int8  `gorm:"column:status"`
-		Count  int64 `gorm:"column:count"`
-	}
-
-	err := dao.db.WithContext(ctx).Model(&model.Instance{}).
-		Select("status, COUNT(*) as count").
-		Scopes(dateRangeScope(startDate, endDate)).
-		Group("status").
-		Scan(&results).Error
+	// 从统计表聚合数据
+	err := query.Select(`
+		 SUM(total_count) as total_count,
+		 SUM(completed_count) as completed_count,
+		 SUM(processing_count) as processing_count,
+		 SUM(pending_count) as pending_count,
+		 SUM(overdue_count) as overdue_count,
+		 ROUND(AVG(avg_process_time), 2) as avg_process_time,
+		 ROUND(AVG(avg_response_time), 2) as avg_response_time
+	 `).Scan(&result).Error
 
 	if err != nil {
-		return nil, err
-	}
-
-	counts := make(map[string]int64)
-	for _, result := range results {
-		switch result.Status {
-		case model.InstanceStatusCompleted:
-			counts["completed"] = result.Count
-		case model.InstanceStatusProcessing:
-			counts["processing"] = result.Count
-		case model.InstanceStatusPending:
-			counts["pending"] = result.Count
-		}
-	}
-
-	return counts, nil
-}
-
-// GetOverviewStats 获取总览统计数据
-func (dao *statisticsDAO) GetOverviewStats(ctx context.Context, startDate *time.Time, endDate *time.Time) (*model.OverviewStatsResp, error) {
-	dao.logger.Debug("开始获取总览统计数据",
-		zap.Timep("startDate", startDate),
-		zap.Timep("endDate", endDate))
-
-	overview := &model.OverviewStatsResp{}
-	now := time.Now()
-
-	// 使用事务确保数据一致性
-	err := dao.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 获取总工单数
-		if err := tx.Model(&model.Instance{}).
-			Scopes(dateRangeScope(startDate, endDate)).
-			Count(&overview.TotalCount).Error; err != nil {
-			return fmt.Errorf("获取总工单数失败: %w", err)
-		}
-
-		// 获取各状态统计
-		statusCounts, err := dao.getStatusCountsInTx(ctx, tx, startDate, endDate)
-		if err != nil {
-			return fmt.Errorf("获取状态统计失败: %w", err)
-		}
-
-		overview.CompletedCount = statusCounts["completed"]
-		overview.ProcessingCount = statusCounts["processing"]
-		overview.PendingCount = statusCounts["pending"]
-
-		// 获取超时工单数
-		if err := tx.Model(&model.Instance{}).
-			Scopes(dateRangeScope(startDate, endDate)).
-			Where("status NOT IN ? AND due_date < ?",
-				[]int8{model.InstanceStatusCompleted, model.InstanceStatusCancelled, model.InstanceStatusRejected}, now).
-			Count(&overview.OverdueCount).Error; err != nil {
-			return fmt.Errorf("获取超时工单数失败: %w", err)
-		}
-
-		// 计算完成率
-		var relevantTotal int64
-		if err := tx.Model(&model.Instance{}).
-			Scopes(dateRangeScope(startDate, endDate)).
-			Where("status NOT IN ?", []int8{model.InstanceStatusDraft, model.InstanceStatusCancelled}).
-			Count(&relevantTotal).Error; err != nil {
-			return fmt.Errorf("获取相关总数失败: %w", err)
-		}
-
-		if relevantTotal > 0 {
-			overview.CompletionRate = (float64(overview.CompletedCount) / float64(relevantTotal)) * 100
-		}
-
-		// 计算平均处理时长
-		avgTime, err := dao.getAvgProcessTimeInTx(ctx, tx, startDate, endDate)
-		if err != nil {
-			dao.logger.Warn("获取平均处理时长失败", zap.Error(err))
-		} else {
-			overview.AvgProcessTime = avgTime
-		}
-
-		// 获取今日统计
-		todayStart, todayEnd := todayRange()
-		if err := tx.Model(&model.Instance{}).
-			Where("created_at >= ? AND created_at < ?", todayStart, todayEnd).
-			Count(&overview.TodayCreated).Error; err != nil {
-			return fmt.Errorf("获取今日创建工单数失败: %w", err)
-		}
-
-		if err := tx.Model(&model.Instance{}).
-			Where("status = ? AND completed_at >= ? AND completed_at < ?",
-				model.InstanceStatusCompleted, todayStart, todayEnd).
-			Count(&overview.TodayCompleted).Error; err != nil {
-			return fmt.Errorf("获取今日完成工单数失败: %w", err)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		dao.logger.Error("获取总览统计数据失败", zap.Error(err))
-		return nil, err
-	}
-
-	dao.logger.Debug("总览统计数据获取成功")
-	return overview, nil
-}
-
-// getStatusCountsInTx 在事务中获取状态统计
-func (dao *statisticsDAO) getStatusCountsInTx(ctx context.Context, tx *gorm.DB, startDate *time.Time, endDate *time.Time) (map[string]int64, error) {
-	var results []struct {
-		Status int8  `gorm:"column:status"`
-		Count  int64 `gorm:"column:count"`
-	}
-
-	err := tx.WithContext(ctx).Model(&model.Instance{}).
-		Select("status, COUNT(*) as count").
-		Scopes(dateRangeScope(startDate, endDate)).
-		Group("status").
-		Scan(&results).Error
-
-	if err != nil {
-		return nil, err
-	}
-
-	counts := make(map[string]int64)
-	for _, result := range results {
-		switch result.Status {
-		case model.InstanceStatusCompleted:
-			counts["completed"] = result.Count
-		case model.InstanceStatusProcessing:
-			counts["processing"] = result.Count
-		case model.InstanceStatusPending:
-			counts["pending"] = result.Count
-		}
-	}
-
-	return counts, nil
-}
-
-// getAvgProcessTimeInTx 在事务中获取平均处理时长
-func (dao *statisticsDAO) getAvgProcessTimeInTx(ctx context.Context, tx *gorm.DB, startDate *time.Time, endDate *time.Time) (float64, error) {
-	type DurationResult struct {
-		AvgDuration float64 `gorm:"column:avg_duration"`
-	}
-
-	var result DurationResult
-	timeDiffSQL := dao.buildTimeDifferenceSQL()
-
-	err := tx.WithContext(ctx).Model(&model.Instance{}).
-		Select(timeDiffSQL+" as avg_duration").
-		Where("status = ? AND completed_at IS NOT NULL AND created_at IS NOT NULL",
-			model.InstanceStatusCompleted).
-		Scopes(dateRangeScope(startDate, endDate)).
-		Scan(&result).Error
-
-	if err != nil {
-		return 0, err
-	}
-
-	return result.AvgDuration / 3600, nil // 转换为小时
-}
-
-// GetInstanceTrendStats 获取工单趋势统计
-func (dao *statisticsDAO) GetInstanceTrendStats(ctx context.Context, startDate time.Time, endDate time.Time, dimension string, categoryID *int) (*model.TrendStatsResp, error) {
-	dao.logger.Debug("开始获取工单趋势统计",
-		zap.Time("startDate", startDate),
-		zap.Time("endDate", endDate),
-		zap.String("dimension", dimension),
-		zap.Intp("categoryID", categoryID))
-
-	// 构建日期选择SQL
-	dateSelectSQL, err := dao.buildDateSelectSQL(dimension)
-	if err != nil {
-		return nil, err
-	}
-
-	var results []struct {
-		DateStr         string `gorm:"column:date_str"`
-		CreatedCount    int64  `gorm:"column:created_count"`
-		CompletedCount  int64  `gorm:"column:completed_count"`
-		ProcessingCount int64  `gorm:"column:processing_count"`
-	}
-
-	endOfDay := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 59, 999999999, endDate.Location())
-
-	query := dao.db.WithContext(ctx).Model(&model.Instance{}).
-		Select(dateSelectSQL+
-			", COUNT(*) as created_count"+
-			", SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed_count"+
-			", SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as processing_count",
-			model.InstanceStatusCompleted, model.InstanceStatusProcessing).
-		Where("created_at BETWEEN ? AND ?", startDate, endOfDay)
-
-	if categoryID != nil && *categoryID > 0 {
-		query = query.Where("category_id = ?", *categoryID)
-	}
-
-	err = query.Group("date_str").Order("date_str ASC").Scan(&results).Error
-	if err != nil {
-		dao.logger.Error("获取工单趋势统计失败", zap.Error(err))
-		return nil, fmt.Errorf("获取工单趋势统计失败: %w", err)
-	}
-
-	// 构建响应
-	resp := &model.TrendStatsResp{
-		Dates:            make([]string, len(results)),
-		CreatedCounts:    make([]int64, len(results)),
-		CompletedCounts:  make([]int64, len(results)),
-		ProcessingCounts: make([]int64, len(results)),
-	}
-
-	for i, res := range results {
-		resp.Dates[i] = res.DateStr
-		resp.CreatedCounts[i] = res.CreatedCount
-		resp.CompletedCounts[i] = res.CompletedCount
-		resp.ProcessingCounts[i] = res.ProcessingCount
-	}
-
-	dao.logger.Debug("工单趋势统计获取成功")
-	return resp, nil
-}
-
-// GetWorkloadByCategory 按分类获取工单负载统计
-func (dao *statisticsDAO) GetWorkloadByCategory(ctx context.Context, startDate *time.Time, endDate *time.Time, top *int) ([]model.CategoryStatsResp, error) {
-	dao.logger.Debug("开始按分类获取工单负载统计",
-		zap.Timep("startDate", startDate),
-		zap.Timep("endDate", endDate),
-		zap.Intp("top", top))
-
-	var results []model.CategoryStatsResp
-
-	// 获取总工单数用于计算百分比
-	var totalCount int64
-	if err := dao.db.WithContext(ctx).Model(&model.Instance{}).
-		Scopes(dateRangeScope(startDate, endDate)).
-		Count(&totalCount).Error; err != nil {
-		dao.logger.Error("获取总工单数失败", zap.Error(err))
-		return nil, fmt.Errorf("获取总工单数失败: %w", err)
-	}
-
-	// 构建查询
-	query := dao.db.WithContext(ctx).Model(&model.Instance{}).
-		Select("instance.category_id, COALESCE(category.name, '未分类') as category_name, COUNT(instance.id) as count").
-		Joins("LEFT JOIN category ON category.id = instance.category_id").
-		Scopes(dateRangeScope(startDate, endDate, "instance")).
-		Group("instance.category_id, category.name").
-		Order("count DESC")
-
-	if top != nil && *top > 0 {
-		query = query.Limit(*top)
-	}
-
-	if err := query.Scan(&results).Error; err != nil {
-		dao.logger.Error("按分类获取工单负载统计失败", zap.Error(err))
-		return nil, fmt.Errorf("按分类获取工单负载统计失败: %w", err)
-	}
-
-
-
-	dao.logger.Debug("按分类获取工单负载统计成功")
-	return results, nil
-}
-
-// GetOperatorPerformance 获取操作员绩效统计
-func (dao *statisticsDAO) GetOperatorPerformance(ctx context.Context, startDate *time.Time, endDate *time.Time, userID *int, top *int) ([]model.PerformanceStatsResp, error) {
-	dao.logger.Debug("开始获取操作员绩效统计",
-		zap.Timep("startDate", startDate),
-		zap.Timep("endDate", endDate),
-		zap.Intp("userID", userID),
-		zap.Intp("top", top))
-
-	var results []model.PerformanceStatsResp
-	now := time.Now()
-
-	query := dao.db.WithContext(ctx).Model(&model.Instance{}).
-		Select(`assignee_id as user_id,
-				 COUNT(*) as assigned_count,
-				 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed_count,
-				 SUM(CASE WHEN status NOT IN (?, ?, ?) AND due_date < ? THEN 1 ELSE 0 END) as overdue_count`,
-			model.InstanceStatusCompleted,
-			model.InstanceStatusCompleted, model.InstanceStatusCancelled, model.InstanceStatusRejected, now).
-		Where("assignee_id IS NOT NULL").
-		Scopes(dateRangeScope(startDate, endDate))
-
-	if userID != nil && *userID > 0 {
-		query = query.Where("assignee_id = ?", *userID)
-	}
-
-	query = query.Group("assignee_id").Order("completed_count DESC")
-
-	if top != nil && *top > 0 {
-		query = query.Limit(*top)
-	}
-
-	if err := query.Scan(&results).Error; err != nil {
-		dao.logger.Error("获取操作员绩效统计失败", zap.Error(err))
-		return nil, fmt.Errorf("获取操作员绩效统计失败: %w", err)
+		return nil, fmt.Errorf("获取总览统计失败: %w", err)
 	}
 
 	// 计算完成率
-	for i := range results {
-		if results[i].AssignedCount > 0 {
-			results[i].CompletionRate = (float64(results[i].CompletedCount) / float64(results[i].AssignedCount)) * 100
-		}
-		// TODO: 实现平均响应时间和处理时间的计算
-		results[i].AvgResponseTime = 0
-		results[i].AvgProcessingTime = 0
+	if result.TotalCount > 0 {
+		result.CompletionRate = float64(result.CompletedCount) / float64(result.TotalCount) * 100
 	}
 
-	dao.logger.Debug("操作员绩效统计获取成功")
-	return results, nil
-}
-
-// GetStatsByUser 获取用户个人相关的统计数据
-func (dao *statisticsDAO) GetStatsByUser(ctx context.Context, startDate *time.Time, endDate *time.Time, userID *int) (*model.UserStatsResp, error) {
-	if userID == nil || *userID == 0 {
-		return nil, fmt.Errorf("用户ID不能为空")
+	// 今日统计
+	today := time.Now().Format("2006-01-02")
+	var todayStats struct {
+		TodayCreated   int64 `json:"today_created"`
+		TodayCompleted int64 `json:"today_completed"`
 	}
 
-	dao.logger.Debug("开始获取用户个人统计",
-		zap.Timep("startDate", startDate),
-		zap.Timep("endDate", endDate),
-		zap.Int("userID", *userID))
-
-	stats := &model.UserStatsResp{
-		UserID: *userID,
-	}
-	now := time.Now()
-
-	// 使用事务确保数据一致性
-	err := dao.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 创建的工单数
-		if err := tx.Model(&model.Instance{}).
-			Scopes(dateRangeScope(startDate, endDate)).
-			Where("creator_id = ?", *userID).
-			Count(&stats.CreatedCount).Error; err != nil {
-			return fmt.Errorf("获取用户创建工单数失败: %w", err)
-		}
-
-		// 分配的工单数
-		if err := tx.Model(&model.Instance{}).
-			Scopes(dateRangeScope(startDate, endDate)).
-			Where("assignee_id = ?", *userID).
-			Count(&stats.AssignedCount).Error; err != nil {
-			return fmt.Errorf("获取用户分配工单数失败: %w", err)
-		}
-
-		// 完成的工单数
-		if err := tx.Model(&model.Instance{}).
-			Scopes(dateRangeScope(startDate, endDate)).
-			Where("assignee_id = ? AND status = ?", *userID, model.InstanceStatusCompleted).
-			Count(&stats.CompletedCount).Error; err != nil {
-			return fmt.Errorf("获取用户完成工单数失败: %w", err)
-		}
-
-		// 待处理工单数
-		if err := tx.Model(&model.Instance{}).
-			Scopes(dateRangeScope(startDate, endDate)).
-			Where("assignee_id = ? AND status IN ?", *userID,
-				[]int8{model.InstanceStatusPending, model.InstanceStatusProcessing}).
-			Count(&stats.PendingCount).Error; err != nil {
-			return fmt.Errorf("获取用户待处理工单数失败: %w", err)
-		}
-
-		// 超时工单数
-		if err := tx.Model(&model.Instance{}).
-			Scopes(dateRangeScope(startDate, endDate)).
-			Where("assignee_id = ? AND status NOT IN ? AND due_date < ?",
-				*userID, []int8{model.InstanceStatusCompleted, model.InstanceStatusCancelled, model.InstanceStatusRejected}, now).
-			Count(&stats.OverdueCount).Error; err != nil {
-			return fmt.Errorf("获取用户超时工单数失败: %w", err)
-		}
-
-		return nil
-	})
+	err = d.db.WithContext(ctx).Model(&model.WorkOrderStatistics{}).
+		Where("DATE(date) = ?", today).
+		Select(`
+			 COALESCE(total_count, 0) as today_created,
+			 COALESCE(completed_count, 0) as today_completed
+		 `).
+		Scan(&todayStats).Error
 
 	if err != nil {
-		dao.logger.Error("获取用户个人统计失败", zap.Error(err), zap.Int("userID", *userID))
-		return nil, err
+		d.logger.Warn("获取今日统计失败", zap.Error(err))
+	} else {
+		result.TodayCreated = todayStats.TodayCreated
+		result.TodayCompleted = todayStats.TodayCompleted
 	}
 
-	// TODO: 实现平均响应时间、处理时间和满意度评分的计算
-	stats.AvgResponseTime = 0
-	stats.AvgProcessingTime = 0
-	stats.SatisfactionScore = 0
+	return &result, nil
+}
 
-	dao.logger.Debug("用户个人统计获取成功")
-	return stats, nil
+// GetTrendStats 获取趋势统计 - 基于统计表
+func (d *statisticsDAO) GetTrendStats(ctx context.Context, req *model.StatsReq) (*model.TrendStats, error) {
+	if req.StartDate == nil || req.EndDate == nil {
+		return nil, fmt.Errorf("趋势统计需要指定时间范围")
+	}
+
+	dateFormat := d.getStatisticsDateFormat(req.Dimension)
+
+	query := d.db.WithContext(ctx).Model(&model.WorkOrderStatistics{})
+	query = d.applyStatisticsDateFilter(query, req.StartDate, req.EndDate)
+
+	var trendData []struct {
+		Date           string  `json:"date"`
+		CreatedCount   int64   `json:"created_count"`
+		CompletedCount int64   `json:"completed_count"`
+		CompletionRate float64 `json:"completion_rate"`
+		AvgProcessTime float64 `json:"avg_process_time"`
+	}
+
+	// 修复GROUP BY问题 - 确保SELECT的列都在GROUP BY中
+	err := query.Select(fmt.Sprintf(`
+		%s as date,
+		SUM(total_count) as created_count,
+		SUM(completed_count) as completed_count,
+		ROUND(SUM(completed_count) * 100.0 / NULLIF(SUM(total_count), 0), 2) as completion_rate,
+		ROUND(AVG(avg_process_time), 2) as avg_process_time
+	`, dateFormat)).
+		Group(dateFormat). // 直接使用dateFormat作为GROUP BY
+		Order("date").
+		Scan(&trendData).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("获取趋势统计失败: %w", err)
+	}
+
+	// 转换为返回格式
+	result := &model.TrendStats{
+		Dates:           make([]string, len(trendData)),
+		CreatedCounts:   make([]int64, len(trendData)),
+		CompletedCounts: make([]int64, len(trendData)),
+		CompletionRates: make([]float64, len(trendData)),
+		AvgProcessTimes: make([]float64, len(trendData)),
+	}
+
+	for i, data := range trendData {
+		result.Dates[i] = data.Date
+		result.CreatedCounts[i] = data.CreatedCount
+		result.CompletedCounts[i] = data.CompletedCount
+		result.CompletionRates[i] = data.CompletionRate
+		result.AvgProcessTimes[i] = data.AvgProcessTime
+	}
+
+	return result, nil
+}
+
+// GetCategoryStats 获取分类统计 - 基于分类绩效表
+func (d *statisticsDAO) GetCategoryStats(ctx context.Context, req *model.StatsReq) ([]model.CategoryStats, error) {
+	query := d.db.WithContext(ctx).Model(&model.CategoryPerformance{})
+	query = d.applyCategoryDateFilter(query, req.StartDate, req.EndDate)
+
+	if req.CategoryID != nil {
+		query = query.Where("category_id = ?", *req.CategoryID)
+	}
+
+	var categories []model.CategoryStats
+	err := query.Select(`
+		 category_id,
+		 category_name,
+		 SUM(total_count) as count,
+		 ROUND(SUM(completed_count) * 100.0 / NULLIF(SUM(total_count), 0), 2) as completion_rate,
+		 ROUND(AVG(avg_processing_time), 2) as avg_process_time
+	 `).
+		Group("category_id, category_name").
+		Order("count DESC").
+		Limit(req.Top).
+		Scan(&categories).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("获取分类统计失败: %w", err)
+	}
+
+	// 计算百分比
+	var total int64
+	for _, cat := range categories {
+		total += cat.Count
+	}
+
+	for i := range categories {
+		if total > 0 {
+			categories[i].Percentage = float64(categories[i].Count) / float64(total) * 100
+		}
+	}
+
+	return categories, nil
+}
+
+// GetUserStats 获取用户统计 - 基于用户绩效表
+func (d *statisticsDAO) GetUserStats(ctx context.Context, req *model.StatsReq) ([]model.UserStats, error) {
+	query := d.db.WithContext(ctx).Model(&model.UserPerformance{})
+	query = d.applyUserDateFilter(query, req.StartDate, req.EndDate)
+
+	if req.UserID != nil {
+		query = query.Where("user_id = ?", *req.UserID)
+	}
+
+	var users []model.UserStats
+	err := query.Select(`
+		 user_id,
+		 user_name,
+		 SUM(assigned_count) as assigned_count,
+		 SUM(completed_count) as completed_count,
+		 SUM(pending_count) as pending_count,
+		 SUM(overdue_count) as overdue_count,
+		 ROUND(SUM(completed_count) * 100.0 / NULLIF(SUM(assigned_count), 0), 2) as completion_rate,
+		 ROUND(AVG(avg_response_time), 2) as avg_response_time,
+		 ROUND(AVG(avg_processing_time), 2) as avg_processing_time
+	 `).
+		Group("user_id, user_name").
+		Order(d.getUserSortField(req.SortBy)).
+		Limit(req.Top).
+		Scan(&users).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("获取用户统计失败: %w", err)
+	}
+
+	return users, nil
+}
+
+// GetTemplateStats 获取模板统计 - 基于模板绩效表
+func (d *statisticsDAO) GetTemplateStats(ctx context.Context, req *model.StatsReq) ([]model.TemplateStats, error) {
+	query := d.db.WithContext(ctx).Model(&model.TemplatePerformance{})
+	query = d.applyTemplateeDateFilter(query, req.StartDate, req.EndDate)
+
+	if req.CategoryID != nil {
+		query = query.Where("category_id = ?", *req.CategoryID)
+	}
+
+	var templates []model.TemplateStats
+	err := query.Select(`
+		 template_id,
+		 template_name,
+		 '' as category_name,
+		 SUM(usage_count) as count,
+		 ROUND(SUM(completed_count) * 100.0 / NULLIF(SUM(usage_count), 0), 2) as completion_rate,
+		 ROUND(AVG(avg_processing_time), 2) as avg_processing_time
+	 `).
+		Group("template_id, template_name").
+		Order("count DESC").
+		Limit(req.Top).
+		Scan(&templates).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("获取模板统计失败: %w", err)
+	}
+
+	// 获取分类名称
+	for i := range templates {
+		var categoryName string
+		d.db.WithContext(ctx).Model(&model.TemplatePerformance{}).
+			Where("template_id = ?", templates[i].TemplateID).
+			Joins("LEFT JOIN workorder_categories c ON workorder_template_performance.category_id = c.id").
+			Select("COALESCE(c.name, '未分类')").
+			Limit(1).
+			Scan(&categoryName)
+		templates[i].CategoryName = categoryName
+	}
+
+	// 计算百分比
+	var total int64
+	for _, tmpl := range templates {
+		total += tmpl.Count
+	}
+
+	for i := range templates {
+		if total > 0 {
+			templates[i].Percentage = float64(templates[i].Count) / float64(total) * 100
+		}
+	}
+
+	return templates, nil
+}
+
+// GetStatusDistribution 获取状态分布
+func (d *statisticsDAO) GetStatusDistribution(ctx context.Context, req *model.StatsReq) ([]model.StatusDistribution, error) {
+	query := d.db.WithContext(ctx).Model(&model.Instance{})
+	query = d.applyWorkOrderDateFilter(query, req.StartDate, req.EndDate)
+	query = d.applyWorkOrderCommonFilters(query, req)
+
+	var distribution []model.StatusDistribution
+	err := query.Select(`
+		 status,
+		 COUNT(*) as count
+	 `).
+		Group("status").
+		Order("count DESC").
+		Scan(&distribution).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("获取状态分布失败: %w", err)
+	}
+
+	// 计算百分比
+	var total int64
+	for _, item := range distribution {
+		total += item.Count
+	}
+
+	for i := range distribution {
+		if total > 0 {
+			distribution[i].Percentage = float64(distribution[i].Count) / float64(total) * 100
+		}
+	}
+
+	return distribution, nil
+}
+
+// GetPriorityDistribution 获取优先级分布
+func (d *statisticsDAO) GetPriorityDistribution(ctx context.Context, req *model.StatsReq) ([]model.PriorityDistribution, error) {
+	query := d.db.WithContext(ctx).Model(&model.Instance{})
+	query = d.applyWorkOrderDateFilter(query, req.StartDate, req.EndDate)
+	query = d.applyWorkOrderCommonFilters(query, req)
+
+	var distribution []model.PriorityDistribution
+	err := query.Select(`
+		 priority,
+		 COUNT(*) as count
+	 `).
+		Group("priority").
+		Order("count DESC").
+		Scan(&distribution).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("获取优先级分布失败: %w", err)
+	}
+
+	// 计算百分比
+	var total int64
+	for _, item := range distribution {
+		total += item.Count
+	}
+
+	for i := range distribution {
+		if total > 0 {
+			distribution[i].Percentage = float64(distribution[i].Count) / float64(total) * 100
+		}
+	}
+
+	return distribution, nil
+}
+
+// 统计表日期过滤
+func (d *statisticsDAO) applyStatisticsDateFilter(query *gorm.DB, startDate, endDate *time.Time) *gorm.DB {
+	if startDate != nil {
+		query = query.Where("date >= ?", startDate.Format("2006-01-02"))
+	}
+	if endDate != nil {
+		query = query.Where("date <= ?", endDate.Format("2006-01-02"))
+	}
+	return query
+}
+
+// 分类绩效表日期过滤
+func (d *statisticsDAO) applyCategoryDateFilter(query *gorm.DB, startDate, endDate *time.Time) *gorm.DB {
+	if startDate != nil {
+		query = query.Where("date >= ?", startDate.Format("2006-01-02"))
+	}
+	if endDate != nil {
+		query = query.Where("date <= ?", endDate.Format("2006-01-02"))
+	}
+	return query
+}
+
+// 用户绩效表日期过滤
+func (d *statisticsDAO) applyUserDateFilter(query *gorm.DB, startDate, endDate *time.Time) *gorm.DB {
+	if startDate != nil {
+		query = query.Where("date >= ?", startDate.Format("2006-01-02"))
+	}
+	if endDate != nil {
+		query = query.Where("date <= ?", endDate.Format("2006-01-02"))
+	}
+	return query
+}
+
+// 模板绩效表日期过滤
+func (d *statisticsDAO) applyTemplateeDateFilter(query *gorm.DB, startDate, endDate *time.Time) *gorm.DB {
+	if startDate != nil {
+		query = query.Where("date >= ?", startDate.Format("2006-01-02"))
+	}
+	if endDate != nil {
+		query = query.Where("date <= ?", endDate.Format("2006-01-02"))
+	}
+	return query
+}
+
+// 工单表日期过滤（用于状态和优先级分布）
+func (d *statisticsDAO) applyWorkOrderDateFilter(query *gorm.DB, startDate, endDate *time.Time) *gorm.DB {
+	if startDate != nil {
+		query = query.Where("created_at >= ?", startDate)
+	}
+	if endDate != nil {
+		query = query.Where("created_at <= ?", endDate)
+	}
+	return query
+}
+
+// 工单表通用过滤条件
+func (d *statisticsDAO) applyWorkOrderCommonFilters(query *gorm.DB, req *model.StatsReq) *gorm.DB {
+	if req.CategoryID != nil {
+		query = query.Where("category_id = ?", *req.CategoryID)
+	}
+	if req.UserID != nil {
+		query = query.Where("assigned_to = ?", *req.UserID)
+	}
+	if req.Status != nil && *req.Status != "" {
+		query = query.Where("status = ?", *req.Status)
+	}
+	if req.Priority != nil && *req.Priority != "" {
+		query = query.Where("priority = ?", *req.Priority)
+	}
+	return query
+}
+
+func (d *statisticsDAO) getStatisticsDateFormat(dimension string) string {
+	switch dimension {
+	case "day":
+		return "DATE(date)"
+	case "week":
+		return "DATE_FORMAT(date, '%Y-%u')"
+	case "month":
+		return "DATE_FORMAT(date, '%Y-%m')"
+	default:
+		return "DATE(date)"
+	}
+}
+
+// 统计表分组字段
+func (d *statisticsDAO) getStatisticsGroupBy(dimension string) string {
+	switch dimension {
+	case "day":
+		return "DATE(date)"
+	case "week":
+		return "YEAR(date), WEEK(date)"
+	case "month":
+		return "YEAR(date), MONTH(date)"
+	default:
+		return "DATE(date)"
+	}
+}
+
+// 获取用户排序字段
+func (d *statisticsDAO) getUserSortField(sortBy string) string {
+	switch sortBy {
+	case "completion_rate":
+		return "completion_rate DESC"
+	case "avg_process_time":
+		return "avg_processing_time ASC"
+	default:
+		return "assigned_count DESC"
+	}
 }

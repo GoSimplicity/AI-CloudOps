@@ -79,5 +79,7 @@ func InitTables(db *gorm.DB) error {
 		&model.Category{},
 		&model.WorkOrderStatistics{},
 		&model.UserPerformance{},
+		&model.CategoryPerformance{},
+		&model.TemplatePerformance{},
 	)
 }
