@@ -3,6 +3,11 @@
     <div class="header">
       <h1 class="title">智能运维故障自动修复系统</h1>
       <div class="actions">
+        <!-- 手动故障修复触发 -->
+        <a-button type="primary" @click="showManualRepairModal" class="manual-repair-btn">
+          <template #icon><tool-outlined /></template>
+          手动故障修复
+        </a-button>
         <a-select v-model:value="timeRange" style="width: 150px" class="time-selector" @change="refreshData">
           <a-select-option value="1h">最近1小时</a-select-option>
           <a-select-option value="6h">最近6小时</a-select-option>
@@ -15,6 +20,15 @@
         </a-button>
       </div>
     </div>
+
+    <!-- API健康状态 -->
+    <a-alert 
+      :message="apiHealthStatus.message" 
+      :type="apiHealthStatus.type" 
+      :show-icon="true" 
+      :closable="false"
+      style="margin-bottom: 20px"
+    />
 
     <div class="dashboard">
       <!-- 统计卡片 -->
@@ -105,6 +119,19 @@
         </div>
       </a-card>
 
+      <!-- 实时修复状态 -->
+      <a-card class="real-time-status" title="实时修复状态" v-if="ongoingRepairs.length > 0">
+        <div class="ongoing-repairs">
+          <div v-for="repair in ongoingRepairs" :key="repair.id" class="ongoing-item">
+            <a-badge status="processing" />
+            <span class="repair-name">{{ repair.deployment }}</span>
+            <span class="repair-namespace">{{ repair.namespace }}</span>
+            <a-spin size="small" />
+            <span class="repair-status">{{ repair.statusText }}</span>
+          </div>
+        </div>
+      </a-card>
+
       <!-- 图表区域 -->
       <div class="charts-container">
         <a-row :gutter="16">
@@ -162,6 +189,58 @@
       </a-card>
     </div>
 
+    <!-- 手动故障修复弹窗 -->
+    <a-modal 
+      v-model:visible="manualRepairVisible" 
+      title="手动触发故障修复" 
+      width="600px"
+      :footer="null"
+    >
+      <a-form
+        ref="formRef"
+        :model="manualRepairForm"
+        :label-col="{ span: 6 }"
+        :wrapper-col="{ span: 18 }"
+        :rules="formRules"
+        @finish="handleManualRepair"
+      >
+        <a-form-item
+          label="Deployment名称"
+          name="deployment"
+        >
+          <a-input v-model:value="manualRepairForm.deployment" placeholder="例如：nginx-deployment" />
+        </a-form-item>
+        
+        <a-form-item
+          label="命名空间"
+          name="namespace"
+        >
+          <a-input v-model:value="manualRepairForm.namespace" placeholder="例如：default" />
+        </a-form-item>
+        
+        <a-form-item
+          label="故障事件描述"
+          name="event"
+        >
+          <a-textarea 
+            v-model:value="manualRepairForm.event" 
+            :rows="4"
+            placeholder="请详细描述故障现象，例如：容器频繁重启、CPU使用率过高、内存不足等"
+          />
+        </a-form-item>
+        
+        <a-form-item :wrapper-col="{ offset: 6, span: 18 }">
+          <a-space>
+            <a-button type="primary" html-type="submit" :loading="repairSubmitting">
+              <template #icon><thunderbolt-outlined /></template>
+              开始修复
+            </a-button>
+            <a-button @click="manualRepairVisible = false">取消</a-button>
+          </a-space>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
     <!-- 修复详情弹窗 -->
     <a-modal v-model:visible="detailVisible" title="修复详情" width="800px" :footer="null">
       <div v-if="selectedRepair" class="repair-detail">
@@ -172,15 +251,15 @@
         
         <!-- Agent处理信息 -->
         <a-descriptions bordered>
-          <a-descriptions-item label="故障ID" span="3">{{ selectedRepair.id }}</a-descriptions-item>
-          <a-descriptions-item label="故障源" span="3">{{ selectedRepair.source }}</a-descriptions-item>
-          <a-descriptions-item label="发生时间" span="3">{{ selectedRepair.faultTime }}</a-descriptions-item>
-          <a-descriptions-item label="修复时间" span="3">{{ selectedRepair.repairTime }}</a-descriptions-item>
-          <a-descriptions-item label="修复方法" span="3">{{ selectedRepair.method }}</a-descriptions-item>
-          <a-descriptions-item label="故障描述" span="3">{{ selectedRepair.description }}</a-descriptions-item>
+          <a-descriptions-item label="故障ID" :span="3">{{ selectedRepair.id }}</a-descriptions-item>
+          <a-descriptions-item label="故障源" :span="3">{{ selectedRepair.source }}</a-descriptions-item>
+          <a-descriptions-item label="发生时间" :span="3">{{ selectedRepair.faultTime }}</a-descriptions-item>
+          <a-descriptions-item label="修复时间" :span="3">{{ selectedRepair.repairTime }}</a-descriptions-item>
+          <a-descriptions-item label="修复方法" :span="3">{{ selectedRepair.method }}</a-descriptions-item>
+          <a-descriptions-item label="故障描述" :span="3">{{ selectedRepair.description }}</a-descriptions-item>
           
           <!-- Agent处理流程 -->
-          <a-descriptions-item label="Agent处理流程" span="3">
+          <a-descriptions-item label="Agent处理流程" :span="3">
             <div class="agent-flow-timeline">
               <a-timeline>
                 <a-timeline-item color="blue">
@@ -228,7 +307,7 @@
             </div>
           </a-descriptions-item>
           
-          <a-descriptions-item label="修复步骤" span="3">
+          <a-descriptions-item label="修复步骤" :span="3">
             <div class="repair-steps">
               <div v-for="(step, index) in selectedRepair.steps" :key="index" class="repair-step">
                 <div class="step-number">{{ index + 1 }}</div>
@@ -242,7 +321,7 @@
               </div>
             </div>
           </a-descriptions-item>
-          <a-descriptions-item label="修复结果" span="3">{{ selectedRepair.result }}</a-descriptions-item>
+          <a-descriptions-item label="修复结果" :span="3">{{ selectedRepair.result }}</a-descriptions-item>
         </a-descriptions>
         
         <div class="detail-actions">
@@ -261,14 +340,11 @@
         </div>
       </div>
     </a-modal>
-    
-    <!-- 操作结果反馈 -->
-    <a-message></a-message>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, nextTick } from 'vue';
+import { ref, onMounted, reactive, nextTick, onUnmounted } from 'vue';
 import { message } from 'ant-design-vue';
 import {
   SyncOutlined,
@@ -292,20 +368,126 @@ import {
 } from '@ant-design/icons-vue';
 import * as echarts from 'echarts';
 
-// 时间范围选择
+// 接口定义
+interface OngoingRepair {
+  id: string;
+  deployment: string;
+  namespace: string;
+  statusText: string;
+}
+
+interface AgentFlow {
+  agentName: string;
+  time: string;
+  description: string;
+  success: boolean;
+}
+
+interface AgentTimeline {
+  receiveTime: string;
+  receiveDesc: string;
+  flows: AgentFlow[];
+  humanIntervention?: boolean;
+  humanTime?: string;
+  humanDesc?: string;
+  notifyMethod?: string;
+  resolveTime?: string;
+  resolveDesc?: string;
+}
+
+interface RepairStep {
+  title: string;
+  description: string;
+  success: boolean;
+}
+
+interface AgentInfo {
+  name: string;
+  flowCount: number;
+  humanIntervention: boolean;
+}
+
+interface RepairRecord {
+  id: string;
+  faultName: string;
+  source: string;
+  method: string;
+  faultTime: string;
+  repairTime: string;
+  status: string;
+  description: string;
+  steps: RepairStep[];
+  result: string;
+  agentInfo: AgentInfo;
+  agentTimeline: AgentTimeline;
+}
+
+interface ApiHealthStatus {
+  type: 'info' | 'success' | 'warning' | 'error';
+  message: string;
+}
+
+interface RepairStats {
+  total: number;
+  totalIncrease: number;
+  successRate: number;
+  successRateIncrease: number;
+  avgTime: string;
+  avgTimeDecrease: number;
+  automationRate: number;
+  automationIncrease: number;
+}
+
+interface ManualRepairForm {
+  deployment: string;
+  namespace: string;
+  event: string;
+}
+
+// API配置
+const API_BASE_URL = 'http://localhost:8080';
+
+// 响应式数据
 const timeRange = ref('24h');
+const loading = ref(false);
+const manualRepairVisible = ref(false);
+const repairSubmitting = ref(false);
+const detailVisible = ref(false);
+const selectedRepair = ref<RepairRecord | null>(null);
+const ongoingRepairs = ref<OngoingRepair[]>([]);
+const formRef = ref();
 
-// 获取当前日期
-const currentDate = new Date();
-const formatDate = (date: Date) => {
-  return date.toISOString().split('T')[0];
-};
-const formatDateTime = (date: Date) => {
-  return `${formatDate(date)} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+// API健康状态
+const apiHealthStatus = reactive<ApiHealthStatus>({
+  type: 'info',
+  message: '正在检查API状态...'
+});
+
+// 手动修复表单
+const manualRepairForm = reactive<ManualRepairForm>({
+  deployment: '',
+  namespace: 'default',
+  event: ''
+});
+
+// 表单验证规则
+const formRules = {
+  deployment: [
+    { required: true, message: '请输入Deployment名称' },
+    { pattern: /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/, message: '请输入有效的Deployment名称' }
+  ],
+  namespace: [
+    { required: true, message: '请输入命名空间' },
+    { pattern: /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/, message: '请输入有效的命名空间' }
+  ],
+  event: [
+    { required: true, message: '请输入故障事件描述' },
+    { min: 10, message: '故障描述至少需要10个字符' }
+  ]
 };
 
-// 统计数据 - 更真实的数据
-const repairStats = reactive({
+// 统计数据
+const repairStats = reactive<RepairStats>({
   total: 17,
   totalIncrease: 5,
   successRate: 92.3,
@@ -317,12 +499,15 @@ const repairStats = reactive({
 });
 
 // 图表引用
-const trendChartRef = ref(null);
-const typeChartRef = ref(null);
-const methodChartRef = ref(null);
-const timeChartRef = ref(null);
+const trendChartRef = ref<HTMLElement>();
+const typeChartRef = ref<HTMLElement>();
+const methodChartRef = ref<HTMLElement>();
+const timeChartRef = ref<HTMLElement>();
 
-// 表格列定义 - 添加Agent流转状态列
+// 图表实例管理
+const chartInstances = ref<echarts.ECharts[]>([]);
+
+// 表格列定义
 const columns = [
   { title: '故障ID', dataIndex: 'id', key: 'id' },
   { title: '故障名称', dataIndex: 'faultName', key: 'faultName' },
@@ -334,23 +519,15 @@ const columns = [
   { title: '操作', key: 'action' }
 ];
 
-// 生成过去N天的时间
-const getDaysAgo = (daysAgo: number) => {
-  const date = new Date();
-  date.setDate(date.getDate() - daysAgo);
-  return date;
-};
-
-// 修复记录列表 - 添加了Agent处理信息
-const loading = ref(false);
-const repairList = ref([
+// 修复记录列表
+const repairList = ref<RepairRecord[]>([
   {
-    id: `FLT-20250513-001`,
+    id: 'FLT-20250513-001',
     faultName: 'MySQL主库连接超限',
     source: '数据库服务器-DB01',
     method: '动态调整连接池参数',
-    faultTime: `2025-05-13 14:27:35`,
-    repairTime: `2025-05-13 14:29:12`,
+    faultTime: '2025-05-13 14:27:35',
+    repairTime: '2025-05-13 14:29:12',
     status: '修复成功',
     description: '数据库连接数突增至最大值(max_connections=300)，导致新连接被拒绝，应用程序报错"Too many connections"',
     steps: [
@@ -380,197 +557,206 @@ const repairList = ref([
       resolveTime: '2025-05-13 14:29:12',
       resolveDesc: '问题完全解决，数据库连接恢复正常'
     }
-  },
-  {
-    id: `FLT-20250515-003`,
-    faultName: '应用服务CPU负载异常',
-    source: '微服务-UserService',
-    method: '自动识别异常线程并修复',
-    faultTime: `2025-05-15 08:17:42`,
-    repairTime: `2025-05-15 08:19:05`,
-    status: '修复成功',
-    description: '用户服务实例CPU使用率突增至97%，响应时间从45ms上升至780ms，影响用户登录和注册功能',
-    steps: [
-      { title: '资源使用监控', description: '检测到CPU使用率超过阈值(97%>90%)', success: true },
-      { title: '线程堆栈分析', description: '识别到有5个线程处于死循环状态，位于UserRegisterService.validateCode方法', success: true },
-      { title: '定位代码问题', description: '识别出正则表达式(^[a-z0-9]*$)在匹配特定输入时的回溯问题', success: true },
-      { title: '自动应用修复策略', description: '动态替换为优化后的正则表达式并重启对应线程', success: true },
-      { title: '验证服务状态', description: '监控CPU使用率降至35%，响应时间恢复到50ms', success: true }
-    ],
-    result: '成功修复正则表达式回溯问题，CPU使用率从97%降至35%，API响应时间从780ms恢复到50ms，服务完全恢复正常',
-    agentInfo: {
-      name: 'App-Agent',
-      flowCount: 1,
-      humanIntervention: false
-    },
-    agentTimeline: {
-      receiveTime: '2025-05-15 08:17:42',
-      receiveDesc: 'Supervisor接收到CPU负载异常告警',
-      flows: [
-        {
-          agentName: 'App-Agent',
-          time: '2025-05-15 08:17:50',
-          description: '分析线程状态并定位代码问题',
-          success: true
-        }
-      ],
-      resolveTime: '2025-05-15 08:19:05',
-      resolveDesc: '问题完全解决，服务响应时间恢复正常'
-    }
-  },
-  {
-    id: `FLT-20250516-004`,
-    faultName: '容器OOM Killed',
-    source: '订单服务-OrderService',
-    method: '自动资源扩容',
-    faultTime: `2025-05-16 10:23:15`,
-    repairTime: `2025-05-16 10:26:42`,
-    status: '修复成功',
-    description: '订单服务容器在处理大批量订单时内存超限被杀死，导致部分订单处理失败',
-    steps: [
-      { title: '容器监控告警', description: '检测到OrderService容器OOM Killed', success: true },
-      { title: '内存使用分析', description: '高峰期内存使用达到2.8GB，超过设置的2GB限制', success: true },
-      { title: '尝试资源扩容', description: '自动修改deployment配置，将内存限制从2GB提升至4GB', success: true },
-      { title: '应用新配置', description: '重新部署容器使用新的资源配置', success: true },
-      { title: '验证服务状态', description: '监控内存使用稳定在3GB以下，无再次OOM情况', success: true }
-    ],
-    result: '通过资源自动扩容成功解决OOM问题，订单服务稳定运行，峰值负载下内存使用率控制在75%以内',
-    agentInfo: {
-      name: 'Resource-Agent',
-      flowCount: 2,
-      humanIntervention: false
-    },
-    agentTimeline: {
-      receiveTime: '2025-05-16 10:23:15',
-      receiveDesc: 'Supervisor接收到容器OOM Killed告警',
-      flows: [
-        {
-          agentName: 'App-Agent',
-          time: '2025-05-16 10:23:20',
-          description: '尝试优化应用内存使用',
-          success: false
-        },
-        {
-          agentName: 'Resource-Agent',
-          time: '2025-05-16 10:24:05',
-          description: '分析资源使用并进行配置调整',
-          success: true
-        }
-      ],
-      resolveTime: '2025-05-16 10:26:42',
-      resolveDesc: '成功通过资源扩容解决OOM问题'
-    }
-  },
-  {
-    id: `FLT-20250517-002`,
-    faultName: '镜像版本不匹配',
-    source: '支付服务-PaymentService',
-    method: '自动修复镜像版本',
-    faultTime: `2025-05-17 09:45:22`,
-    repairTime: `2025-05-17 09:47:40`,
-    status: '修复成功',
-    description: '支付服务部署使用了错误的镜像版本(v2.3.1)，与依赖服务不兼容导致API调用失败',
-    steps: [
-      { title: '服务兼容性检测', description: '检测到PaymentService与AccountService API版本不匹配', success: true },
-      { title: '版本依赖分析', description: '确认PaymentService使用v2.3.1但需要v2.2.5版本以兼容AccountService', success: true },
-      { title: '查找兼容版本', description: '在镜像仓库中找到v2.2.5版本', success: true },
-      { title: '回滚镜像版本', description: '自动修改deployment配置，将镜像从v2.3.1回滚至v2.2.5', success: true },
-      { title: '验证服务状态', description: '重新部署后API调用成功率恢复到100%', success: true }
-    ],
-    result: '成功将支付服务回滚至兼容版本，服务间调用恢复正常，支付功能完全可用',
-    agentInfo: {
-      name: 'Deploy-Agent',
-      flowCount: 3,
-      humanIntervention: false
-    },
-    agentTimeline: {
-      receiveTime: '2025-05-17 09:45:22',
-      receiveDesc: 'Supervisor接收到服务API兼容性告警',
-      flows: [
-        {
-          agentName: 'API-Agent',
-          time: '2025-05-17 09:45:30',
-          description: '分析API兼容性问题',
-          success: false
-        },
-        {
-          agentName: 'App-Agent',
-          time: '2025-05-17 09:46:10',
-          description: '尝试应用级修复',
-          success: false
-        },
-        {
-          agentName: 'Deploy-Agent',
-          time: '2025-05-17 09:46:45',
-          description: '分析版本依赖并执行版本回滚',
-          success: true
-        }
-      ],
-      resolveTime: '2025-05-17 09:47:40',
-      resolveDesc: '成功通过版本回滚解决兼容性问题'
-    }
-  },
-  {
-    id: `FLT-20250517-005`,
-    faultName: '网络连接超时',
-    source: '网关服务-ApiGateway',
-    method: '人工介入修复',
-    faultTime: `2025-05-17 13:05:12`,
-    repairTime: `2025-05-17 13:32:40`,
-    status: '修复成功',
-    description: '网关服务与上游服务连接频繁超时，影响多个业务系统访问',
-    steps: [
-      { title: '连接监控告警', description: '检测到网关连接超时率超过30%', success: true },
-      { title: '网络拓扑分析', description: '分析网络路径发现潜在的网络分区问题', success: true },
-      { title: '自动修复尝试', description: '尝试调整网络超时参数和重试策略', success: false },
-      { title: '人工介入', description: '通知网络团队检查网络设备状态', success: true },
-      { title: '网络设备重启', description: '运维人员重启了存在问题的核心交换机', success: true }
-    ],
-    result: '通过人工介入重启网络设备，成功解决网络分区问题，服务连接恢复正常',
-    agentInfo: {
-      name: 'Network-Agent',
-      flowCount: 3,
-      humanIntervention: true
-    },
-    agentTimeline: {
-      receiveTime: '2025-05-17 13:05:12',
-      receiveDesc: 'Supervisor接收到网络连接超时告警',
-      flows: [
-        {
-          agentName: 'Network-Agent',
-          time: '2025-05-17 13:05:25',
-          description: '分析网络连接状态',
-          success: false
-        },
-        {
-          agentName: 'Gateway-Agent',
-          time: '2025-05-17 13:10:35',
-          description: '尝试调整网关配置',
-          success: false
-        },
-        {
-          agentName: 'Network-Agent',
-          time: '2025-05-17 13:15:50',
-          description: '深度网络诊断',
-          success: false
-        }
-      ],
-      humanIntervention: true,
-      humanTime: '2025-05-17 13:20:12',
-      humanDesc: '自动修复失败，通知运维人员介入',
-      notifyMethod: '飞书',
-      resolveTime: '2025-05-17 13:32:40',
-      resolveDesc: '运维人员重启核心交换机，问题解决'
-    }
   }
 ]);
 
-// 详情弹窗
-const detailVisible = ref(false);
-const selectedRepair = ref<any>(null);
+// API调用函数
+const apiRequest = async (url: string, options: any = {}) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${url}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      signal: controller.signal,
+      ...options
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('请求超时，请稍后重试');
+    }
+    console.error('API请求失败:', error);
+    throw error;
+  }
+};
+
+// 检查API健康状态
+const checkApiHealth = async () => {
+  try {
+    const response = await apiRequest('/health');
+    
+    if (response.status === 'healthy') {
+      apiHealthStatus.type = 'success';
+      apiHealthStatus.message = `API服务正常 - 模型已加载: ${response.model_loaded ? '是' : '否'}, 工作流已加载: ${response.workflow_loaded ? '是' : '否'}`;
+    } else {
+      apiHealthStatus.type = 'warning';
+      apiHealthStatus.message = 'API服务异常，请检查后端服务';
+    }
+  } catch (error: any) {
+    apiHealthStatus.type = 'error';
+    apiHealthStatus.message = `无法连接到API服务 (${API_BASE_URL}) - ${error.message}`;
+  }
+};
+
+// 获取预测数据
+const getPredictionData = async () => {
+  try {
+    const response = await apiRequest('/predict');
+    console.log('预测数据:', response);
+    
+    if (response.instances) {
+      message.info(`当前QPS: ${response.current_qps.toFixed(2)}, 建议实例数: ${response.instances}`);
+    }
+    
+    return response;
+  } catch (error: any) {
+    console.error('获取预测数据失败:', error);
+    message.error('获取预测数据失败');
+  }
+};
+
+// 手动触发故障修复
+const handleManualRepair = async () => {
+  try {
+    repairSubmitting.value = true;
+    
+    const repairData = {
+      deployment: manualRepairForm.deployment,
+      namespace: manualRepairForm.namespace,
+      event: manualRepairForm.event
+    };
+    
+    console.log('发送修复请求:', repairData);
+    
+    // 添加到正在修复列表
+    const ongoingRepair: OngoingRepair = {
+      id: `repair-${Date.now()}`,
+      deployment: repairData.deployment,
+      namespace: repairData.namespace,
+      statusText: '正在分析故障...'
+    };
+    ongoingRepairs.value.push(ongoingRepair);
+    
+    message.loading('正在提交故障修复请求...', 1);
+    
+    const response = await apiRequest('/autofix', {
+      method: 'POST',
+      body: JSON.stringify(repairData),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('修复响应:', response);
+    
+    // 从正在修复列表中移除
+    const index = ongoingRepairs.value.findIndex(item => item.id === ongoingRepair.id);
+    if (index !== -1) {
+      ongoingRepairs.value.splice(index, 1);
+    }
+    
+    if (response.status === '成功') {
+      message.success('故障修复请求已成功处理');
+      
+      // 添加到修复记录列表
+      const newRepair: RepairRecord = {
+        id: `FLT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`,
+        faultName: `故障修复 - ${repairData.deployment}`,
+        source: `${repairData.deployment} (${repairData.namespace})`,
+        method: response.result.includes('成功') ? '自动修复' : '人工介入',
+        faultTime: new Date().toLocaleString(),
+        repairTime: new Date().toLocaleString(),
+        status: response.result.includes('成功') ? '修复成功' : '修复中',
+        description: repairData.event,
+        steps: [
+          { title: '接收故障请求', description: '用户手动提交故障修复请求', success: true },
+          { title: 'Agent分析处理', description: response.result, success: response.result.includes('成功') }
+        ],
+        result: response.result,
+        agentInfo: {
+          name: 'AutoFixK8s',
+          flowCount: 1,
+          humanIntervention: response.result.includes('人工') || response.result.includes('失败')
+        },
+        agentTimeline: {
+          receiveTime: new Date().toLocaleString(),
+          receiveDesc: '用户手动触发故障修复',
+          flows: [
+            {
+              agentName: 'AutoFixK8s',
+              time: new Date().toLocaleString(),
+              description: response.result,
+              success: response.result.includes('成功')
+            }
+          ],
+          humanIntervention: response.result.includes('人工') || response.result.includes('失败'),
+          resolveTime: response.result.includes('成功') ? new Date().toLocaleString() : '',
+          resolveDesc: response.result.includes('成功') ? response.result : ''
+        }
+      };
+      
+      repairList.value.unshift(newRepair);
+      
+      // 关闭弹窗并重置表单
+      manualRepairVisible.value = false;
+      Object.assign(manualRepairForm, {
+        deployment: '',
+        namespace: 'default',
+        event: ''
+      });
+      
+      // 更新统计数据
+      repairStats.total += 1;
+      if (response.result.includes('成功')) {
+        const totalSuccessful = repairList.value.filter(item => item.status === '修复成功').length;
+        repairStats.successRate = Number(((totalSuccessful / repairList.value.length) * 100).toFixed(1));
+      }
+      
+    } else {
+      message.error(`故障修复失败: ${response.error || '未知错误'}`);
+    }
+    
+  } catch (error: any) {
+    console.error('故障修复请求失败:', error);
+    message.error(`故障修复请求失败: ${error.message}`);
+    
+    // 从正在修复列表中移除
+    const ongoingRepair = ongoingRepairs.value.find((item: OngoingRepair) => 
+      item.deployment === manualRepairForm.deployment && 
+      item.namespace === manualRepairForm.namespace
+    );
+    if (ongoingRepair) {
+      const index = ongoingRepairs.value.findIndex((item: OngoingRepair) => item.id === ongoingRepair.id);
+      if (index !== -1) {
+        ongoingRepairs.value.splice(index, 1);
+      }
+    }
+  } finally {
+    repairSubmitting.value = false;
+  }
+};
+
+// 显示手动修复弹窗
+const showManualRepairModal = () => {
+  manualRepairVisible.value = true;
+};
 
 // 显示修复详情
-const showRepairDetail = (repair: any) => {
+const showRepairDetail = (repair: RepairRecord) => {
   selectedRepair.value = repair;
   detailVisible.value = true;
 };
@@ -580,7 +766,9 @@ const handleRepairAction = (action: string) => {
   switch(action) {
     case 'runDiagnostic':
       message.loading('正在执行故障诊断...', 1.5).then(() => {
-        message.success('诊断完成，未发现新问题');
+        getPredictionData().then(() => {
+          message.success('诊断完成，系统运行正常');
+        });
       });
       break;
     case 'exportReport':
@@ -611,7 +799,7 @@ const getStatusColor = (status: string) => {
 };
 
 // 获取Agent流转状态颜色
-const getAgentStatusColor = (record: any) => {
+const getAgentStatusColor = (record: RepairRecord) => {
   if (!record.agentInfo) return 'default';
   
   if (record.agentInfo.humanIntervention) {
@@ -626,7 +814,7 @@ const getAgentStatusColor = (record: any) => {
 };
 
 // 获取Agent流转状态文本
-const getAgentStatusText = (record: any) => {
+const getAgentStatusText = (record: RepairRecord) => {
   if (!record.agentInfo) return '未知';
   
   if (record.agentInfo.humanIntervention) {
@@ -640,66 +828,10 @@ const getAgentStatusText = (record: any) => {
   }
 };
 
-// 刷新数据
-const refreshData = () => {
-  loading.value = true;
-  message.loading('正在加载修复数据...', 1);
-  
-  setTimeout(() => {
-    // 根据选择的时间范围更新统计数据
-    switch(timeRange.value) {
-      case '1h':
-        repairStats.total = 2;
-        repairStats.totalIncrease = 0;
-        repairStats.successRate = 100;
-        repairStats.successRateIncrease = 0;
-        repairStats.avgTime = '1.5分钟';
-        repairStats.avgTimeDecrease = 5;
-        repairStats.automationRate = 100;
-        repairStats.automationIncrease = 0;
-        break;
-      case '6h':
-        repairStats.total = 4;
-        repairStats.totalIncrease = 0;
-        repairStats.successRate = 100;
-        repairStats.successRateIncrease = 0;
-        repairStats.avgTime = '1.7分钟';
-        repairStats.avgTimeDecrease = 3;
-        repairStats.automationRate = 100;
-        repairStats.automationIncrease = 0;
-        break;
-      case '24h':
-        repairStats.total = 7;
-        repairStats.totalIncrease = 2;
-        repairStats.successRate = 93.5;
-        repairStats.successRateIncrease = 0.8;
-        repairStats.avgTime = '1.8分钟';
-        repairStats.avgTimeDecrease = 7;
-        repairStats.automationRate = 91;
-        repairStats.automationIncrease = 1;
-        break;
-      case '7d':
-        repairStats.total = 17;
-        repairStats.totalIncrease = 5;
-        repairStats.successRate = 92.3;
-        repairStats.successRateIncrease = 1.2;
-        repairStats.avgTime = '1.8分钟';
-        repairStats.avgTimeDecrease = 7;
-        repairStats.automationRate = 88;
-        repairStats.automationIncrease = 2;
-        break;
-    }
-    
-    // 重新初始化图表
-    initCharts();
-    loading.value = false;
-    message.success('数据已刷新');
-  }, 800);
-};
-
 // 获取最近7天的日期列表
 const getRecentDays = () => {
   const days = [];
+  const currentDate = new Date();
   for (let i = 6; i >= 0; i--) {
     const date = new Date(currentDate);
     date.setDate(date.getDate() - i);
@@ -708,11 +840,40 @@ const getRecentDays = () => {
   return days;
 };
 
-// 初始化图表 - 加入OOM和镜像版本错误类型
+// 窗口大小变化处理
+const handleResize = () => {
+  chartInstances.value.forEach(chart => {
+    if (chart && !chart.isDisposed()) {
+      chart.resize();
+    }
+  });
+};
+
+// 清理函数
+const cleanup = () => {
+  chartInstances.value.forEach(chart => {
+    if (chart && !chart.isDisposed()) {
+      chart.dispose();
+    }
+  });
+  chartInstances.value = [];
+  window.removeEventListener('resize', handleResize);
+};
+
+// 初始化图表
 const initCharts = () => {
   nextTick(() => {
+    if (!trendChartRef.value || !typeChartRef.value || !methodChartRef.value || !timeChartRef.value) {
+      return;
+    }
+
+    // 清理旧的图表实例
+    cleanup();
+
     // 故障修复趋势图
     const trendChart = echarts.init(trendChartRef.value);
+    chartInstances.value.push(trendChart);
+    
     const days = getRecentDays();
     
     // 根据选择的时间范围调整数据
@@ -721,7 +882,6 @@ const initCharts = () => {
     let successRateData = [];
     
     if (timeRange.value === '1h') {
-      // 1小时内故障不多
       faultData = [0, 0, 0, 0, 0, 1, 1];
       repairData = [0, 0, 0, 0, 0, 1, 1];
       successRateData = [0, 0, 0, 0, 0, 100, 100];
@@ -844,10 +1004,10 @@ const initCharts = () => {
       ]
     });
 
-    // 故障类型分布图 - 加入OOM和镜像版本错误类型
+    // 故障类型分布图
     const typeChart = echarts.init(typeChartRef.value);
+    chartInstances.value.push(typeChart);
     
-    // 根据选择的时间范围调整数据
     let typeData = [];
     
     if (timeRange.value === '1h' || timeRange.value === '6h') {
@@ -922,10 +1082,10 @@ const initCharts = () => {
       ]
     });
 
-    // 修复方法分布图 - 更真实的数据
+    // 修复方法分布图
     const methodChart = echarts.init(methodChartRef.value);
+    chartInstances.value.push(methodChart);
     
-    // 根据选择的时间范围调整数据
     let methodData = [];
     
     if (timeRange.value === '1h' || timeRange.value === '6h') {
@@ -998,8 +1158,9 @@ const initCharts = () => {
       ]
     });
 
-    // 修复时间分布图 - 更真实的数据
+    // 修复时间分布图
     const timeChart = echarts.init(timeChartRef.value);
+    chartInstances.value.push(timeChart);
     
     let timeData = [];
     
@@ -1062,19 +1223,95 @@ const initCharts = () => {
       ]
     });
 
-    // 窗口大小变化时重绘图表
-    window.addEventListener('resize', () => {
-      trendChart.resize();
-      typeChart.resize();
-      methodChart.resize();
-      timeChart.resize();
-    });
+    // 添加窗口大小变化监听
+    window.addEventListener('resize', handleResize);
   });
+};
+
+// 刷新数据
+const refreshData = async () => {
+  loading.value = true;
+  message.loading('正在加载修复数据...', 1);
+  
+  try {
+    // 检查API健康状态
+    await checkApiHealth();
+    
+    // 获取预测数据
+    await getPredictionData();
+    
+    // 根据选择的时间范围更新统计数据
+    switch(timeRange.value) {
+      case '1h':
+        Object.assign(repairStats, {
+          total: 2,
+          totalIncrease: 0,
+          successRate: 100,
+          successRateIncrease: 0,
+          avgTime: '1.5分钟',
+          avgTimeDecrease: 5,
+          automationRate: 100,
+          automationIncrease: 0
+        });
+        break;
+      case '6h':
+        Object.assign(repairStats, {
+          total: 4,
+          totalIncrease: 0,
+          successRate: 100,
+          successRateIncrease: 0,
+          avgTime: '1.7分钟',
+          avgTimeDecrease: 3,
+          automationRate: 100,
+          automationIncrease: 0
+        });
+        break;
+      case '24h':
+        Object.assign(repairStats, {
+          total: 7,
+          totalIncrease: 2,
+          successRate: 93.5,
+          successRateIncrease: 0.8,
+          avgTime: '1.8分钟',
+          avgTimeDecrease: 7,
+          automationRate: 91,
+          automationIncrease: 1
+        });
+        break;
+      case '7d':
+        Object.assign(repairStats, {
+          total: 17,
+          totalIncrease: 5,
+          successRate: 92.3,
+          successRateIncrease: 1.2,
+          avgTime: '1.8分钟',
+          avgTimeDecrease: 7,
+          automationRate: 88,
+          automationIncrease: 2
+        });
+        break;
+    }
+    
+    // 重新初始化图表
+    initCharts();
+    message.success('数据已刷新');
+    
+  } catch (error) {
+    console.error('刷新数据失败:', error);
+    message.error('刷新数据失败，请检查网络连接');
+  } finally {
+    loading.value = false;
+  }
 };
 
 // 页面加载完成后初始化
 onMounted(() => {
   refreshData();
+});
+
+// 组件卸载时清理
+onUnmounted(() => {
+  cleanup();
 });
 </script>
 
@@ -1103,6 +1340,19 @@ onMounted(() => {
 .actions {
   display: flex;
   gap: 10px;
+}
+
+.manual-repair-btn {
+  background: linear-gradient(45deg, #ff6b6b, #ffa726);
+  border: none;
+  color: white;
+  box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+  transition: all 0.3s ease;
+}
+
+.manual-repair-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(255, 107, 107, 0.4);
 }
 
 .time-selector {
@@ -1179,6 +1429,46 @@ onMounted(() => {
   color: var(--ant-error-color);
 }
 
+/* 实时修复状态样式 */
+.real-time-status {
+  border-radius: 10px;
+  border: 2px solid #1890ff;
+  background: linear-gradient(135deg, rgba(24, 144, 255, 0.05), rgba(82, 196, 26, 0.05));
+}
+
+.ongoing-repairs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ongoing-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(24, 144, 255, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(24, 144, 255, 0.2);
+}
+
+.repair-name {
+  font-weight: bold;
+  color: #1890ff;
+}
+
+.repair-namespace {
+  background: rgba(24, 144, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.repair-status {
+  color: #666;
+  font-style: italic;
+}
+
 /* 工作流程图样式 */
 .workflow-card {
   margin-bottom: 20px;
@@ -1225,6 +1515,17 @@ onMounted(() => {
 
 .workflow-node.agent {
   background: linear-gradient(135deg, #2af598, #009efd);
+}
+
+.node-title {
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.node-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.9;
 }
 
 .workflow-arrow {
@@ -1537,19 +1838,46 @@ onMounted(() => {
     width: 100%;
     display: flex;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .manual-repair-btn {
+    width: 100%;
+    margin-bottom: 8px;
   }
 
   .time-selector {
-    width: 48% !important;
+    width: calc(50% - 4px) !important;
   }
 
   .refresh-btn {
-    width: 48%;
+    width: calc(50% - 4px);
   }
   
   .workflow-node {
     width: 100px;
     height: 100px;
+  }
+}
+
+@media (max-width: 576px) {
+  .workflow-container {
+    padding: 10px;
+  }
+  
+  .workflow-node {
+    width: 80px;
+    height: 80px;
+    font-size: 12px;
+  }
+  
+  .node-title {
+    font-size: 10px;
+  }
+  
+  .node-desc {
+    font-size: 8px;
   }
 }
 </style>

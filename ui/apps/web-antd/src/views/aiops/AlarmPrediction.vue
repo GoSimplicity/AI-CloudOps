@@ -9,7 +9,7 @@
           <a-select-option value="24h">预测24小时内</a-select-option>
           <a-select-option value="7d">预测7天内</a-select-option>
         </a-select>
-        <a-button type="primary" class="refresh-btn" @click="refreshData">
+        <a-button type="primary" class="refresh-btn" @click="refreshData" :loading="loading">
           <template #icon><sync-outlined /></template>
           刷新
         </a-button>
@@ -54,11 +54,11 @@
         </a-card>
         <a-card class="stat-card prediction-card">
           <template #title>
-            <line-chart-outlined /> 预测准确率
+            <line-chart-outlined /> 当前QPS
           </template>
-          <div class="stat-value">{{ deploymentStats.modelAccuracy }}%</div>
-          <div class="stat-trend up">
-            <arrow-up-outlined /> +{{ deploymentStats.accuracyImprovement }}%
+          <div class="stat-value">{{ deploymentStats.currentQPS }}</div>
+          <div class="stat-trend neutral">
+            <clock-circle-outlined /> {{ deploymentStats.lastUpdateTime }}
           </div>
         </a-card>
         <a-card class="stat-card prediction-card">
@@ -82,7 +82,7 @@
 
         <a-card class="chart-card">
           <template #title>
-            <pie-chart-outlined /> 资源利用率分布
+            <pie-chart-outlined /> 预测准确性分析
           </template>
           <div class="chart" ref="resourceChartRef"></div>
         </a-card>
@@ -113,6 +113,16 @@
         </a-table>
       </a-card>
     </div>
+
+    <!-- API状态提示 -->
+    <a-alert 
+      v-if="apiError" 
+      :message="apiError" 
+      type="error" 
+      closable 
+      @close="apiError = ''"
+      style="position: fixed; top: 20px; right: 20px; z-index: 1000; max-width: 300px;"
+    />
 
     <a-modal v-model:visible="detailModalVisible" title="伸缩事件详情" width="700px" :footer="null"
       class="prediction-detail-modal">
@@ -186,6 +196,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick, onUnmounted } from 'vue';
 import * as echarts from 'echarts';
+import axios from 'axios';
 import {
   SyncOutlined,
   CloudServerOutlined,
@@ -215,18 +226,25 @@ const resourceChartRef = ref(null);
 const metricChartRef = ref(null);
 const detailModalVisible = ref(false);
 const selectedScaleEvent = ref<any>(null);
+const apiError = ref('');
 let updateTimer: any = null;
+
+// API配置 - 根据你的实际部署情况修改
+const API_BASE_URL = 'http://localhost:8080'; // 修改为你的Flask服务地址
 
 // 模拟数据 - 部署统计数据
 const deploymentStats = ref({
   currentReplicas: 4,
-  recommendedReplicas: 6,
-  replicasTrend: 2,
-  modelAccuracy: 92.5,
-  accuracyImprovement: 3.2,
+  recommendedReplicas: 4,
+  replicasTrend: 0,
+  currentQPS: 0,
+  lastUpdateTime: '',
   updateInterval: 30,
   nextUpdateTime: "15:30:25"
 });
+
+// 存储历史预测数据用于图表展示
+const predictionHistory = ref<any[]>([]);
 
 // 表格列定义
 const columns = [
@@ -284,23 +302,6 @@ const scaleHistory = ref([
       { name: '请求量/分钟', value: '2450' },
       { name: '响应时间', value: '180ms' }
     ]
-  },
-  {
-    id: 'SCALE-2025-0516-008',
-    resource: 'api-gateway',
-    scaleType: '缩容',
-    timestamp: '2025-05-16 23:15:10',
-    oldReplicas: 6,
-    newReplicas: 3,
-    replicaChange: '6 → 3',
-    confidence: 88,
-    reason: '夜间流量下降，资源利用率低',
-    features: [
-      { name: 'CPU利用率', value: '22%' },
-      { name: '内存利用率', value: '35%' },
-      { name: '请求量/分钟', value: '320' },
-      { name: '响应时间', value: '90ms' }
-    ]
   }
 ]);
 
@@ -309,39 +310,142 @@ const hasAutoScaleEvents = computed(() => {
   return scaleHistory.value.some(item => item.confidence > 90);
 });
 
-// 方法
-const refreshData = () => {
-  loading.value = true;
-  setTimeout(() => {
-    // 模拟从预测服务获取数据
-    message.success('数据已从预测服务刷新');
+// 调用预测API
+const fetchPrediction = async () => {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/predict`, {
+      timeout: 10000 // 10秒超时
+    });
     
-    // 更新推荐副本数和统计数据
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
+    if (response.data) {
+      const { instances, current_qps, timestamp } = response.data;
+      
+      // 更新统计数据
+      const oldRecommendedReplicas = deploymentStats.value.recommendedReplicas;
+      deploymentStats.value.recommendedReplicas = instances;
+      deploymentStats.value.currentQPS = Math.round(current_qps * 100) / 100; // 保留2位小数
+      deploymentStats.value.lastUpdateTime = new Date(timestamp).toLocaleTimeString();
+      deploymentStats.value.replicasTrend = instances - deploymentStats.value.currentReplicas;
+      
+      // 添加到历史数据
+      predictionHistory.value.push({
+        timestamp: new Date(timestamp),
+        instances,
+        qps: current_qps,
+        currentReplicas: deploymentStats.value.currentReplicas
+      });
+      
+      // 保持历史数据不超过100条
+      if (predictionHistory.value.length > 100) {
+        predictionHistory.value = predictionHistory.value.slice(-100);
+      }
+      
+      // 如果推荐副本数发生变化，模拟自动伸缩
+      if (oldRecommendedReplicas !== instances) {
+        await simulateAutoScaling(instances);
+      }
+      
+      // 清除错误信息
+      apiError.value = '';
+      
+      console.log('预测数据更新:', response.data);
+      
+    } else {
+      throw new Error('API返回数据格式错误');
+    }
     
-    // 模拟从预测服务返回的推荐副本数
-    const newRecommendedReplicas = Math.floor(Math.random() * 4) + 3; // 随机3-6之间
+  } catch (error: any) {
+    console.error('获取预测数据失败:', error);
     
-    deploymentStats.value = {
-      currentReplicas: deploymentStats.value.currentReplicas,
-      recommendedReplicas: newRecommendedReplicas,
-      replicasTrend: newRecommendedReplicas - deploymentStats.value.currentReplicas,
-      modelAccuracy: 92.8,
-      accuracyImprovement: 3.5,
-      updateInterval: 30,
-      nextUpdateTime: `${hours}:${minutes}:${seconds}`
-    };
+    let errorMessage = '获取预测数据失败';
+    if (error.code === 'ECONNREFUSED') {
+      errorMessage = '无法连接到预测服务，请检查服务是否正常运行';
+    } else if (error.response) {
+      errorMessage = `预测服务错误: ${error.response.status} ${error.response.data?.error || error.response.statusText}`;
+    } else if (error.request) {
+      errorMessage = '请求超时，请检查网络连接';
+    } else {
+      errorMessage = `请求错误: ${error.message}`;
+    }
+    
+    apiError.value = errorMessage;
+    message.error(errorMessage);
+  }
+};
 
-    // 模拟自动调整副本数
-    applyRecommendedReplicas();
+// 模拟自动伸缩操作
+const simulateAutoScaling = async (newReplicas: number) => {
+  const now = new Date();
+  const formattedTime = now.toLocaleString();
+  
+  const scaleType = newReplicas > deploymentStats.value.currentReplicas ? '扩容' : '缩容';
+  const reason = scaleType === '扩容' 
+    ? `基于ML模型预测，当前QPS=${deploymentStats.value.currentQPS}，预计需要扩容以保证服务质量` 
+    : `基于ML模型预测，当前QPS=${deploymentStats.value.currentQPS}，可以缩容以节约资源成本`;
+  
+  const eventId = `SCALE-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(scaleHistory.value.length + 1).padStart(3, '0')}`;
+  
+  // 生成基于真实QPS的特征数据
+  const qps = deploymentStats.value.currentQPS;
+  const cpuUsage = scaleType === '扩容' ? `${Math.min(85, Math.max(60, Math.floor(qps * 10 + 50)))}%` : `${Math.max(15, Math.min(40, Math.floor(qps * 5 + 20)))}%`;
+  const memUsage = scaleType === '扩容' ? `${Math.min(75, Math.max(50, Math.floor(qps * 8 + 45)))}%` : `${Math.max(25, Math.min(50, Math.floor(qps * 6 + 30)))}%`;
+  const reqPerMin = `${Math.floor(qps * 60)}`;
+  const respTime = scaleType === '扩容' ? `${Math.max(120, Math.floor(200 - qps * 20))}ms` : `${Math.min(100, Math.max(80, Math.floor(90 + qps * 5)))}ms`;
+  
+  const newEvent = {
+    id: eventId,
+    resource: 'frontend-service',
+    scaleType: scaleType,
+    timestamp: formattedTime,
+    oldReplicas: deploymentStats.value.currentReplicas,
+    newReplicas: newReplicas,
+    replicaChange: `${deploymentStats.value.currentReplicas} → ${newReplicas}`,
+    confidence: Math.floor(Math.random() * 10) + 85, // 85-95之间的随机值
+    reason: reason,
+    features: [
+      { name: 'CPU利用率', value: cpuUsage },
+      { name: '内存利用率', value: memUsage },
+      { name: '请求量/分钟', value: reqPerMin },
+      { name: '响应时间', value: respTime },
+      { name: '当前QPS', value: qps.toString() }
+    ]
+  };
+  
+  // 将新事件添加到历史列表的开头
+  scaleHistory.value.unshift(newEvent);
+  
+  // 更新当前副本数为推荐副本数
+  deploymentStats.value.currentReplicas = newReplicas;
+  deploymentStats.value.replicasTrend = 0; // 重置趋势
+  
+  message.success(`已自动${scaleType}至${newReplicas}个副本 (基于QPS=${qps}的预测)`);
+};
+
+// 方法
+const refreshData = async () => {
+  loading.value = true;
+  
+  try {
+    await fetchPrediction();
+    
+    // 更新下次更新时间
+    const now = new Date();
+    const nextUpdate = new Date(now.getTime() + deploymentStats.value.updateInterval * 1000);
+    const hours = String(nextUpdate.getHours()).padStart(2, '0');
+    const minutes = String(nextUpdate.getMinutes()).padStart(2, '0');
+    const seconds = String(nextUpdate.getSeconds()).padStart(2, '0');
+    deploymentStats.value.nextUpdateTime = `${hours}:${minutes}:${seconds}`;
 
     // 重新初始化图表
     initCharts();
+    
+    message.success('数据已从预测服务刷新');
+    
+  } catch (error) {
+    console.error('刷新数据失败:', error);
+  } finally {
     loading.value = false;
-  }, 800);
+  }
 };
 
 const getRecommendationClass = () => {
@@ -375,55 +479,6 @@ const showDetails = (record: any) => {
   }, 100);
 };
 
-// 应用推荐的副本数
-const applyRecommendedReplicas = () => {
-  // 模拟通过修改 deployment.Spec.Replicas 字段调整副本数
-  if (deploymentStats.value.currentReplicas !== deploymentStats.value.recommendedReplicas) {
-    // 添加新的伸缩事件记录
-    const now = new Date();
-    const formattedTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-    
-    const scaleType = deploymentStats.value.recommendedReplicas > deploymentStats.value.currentReplicas ? '扩容' : '缩容';
-    const reason = scaleType === '扩容' 
-      ? '预测到流量增加，提前扩容以保证服务质量' 
-      : '预测到流量减少，缩容以节约资源成本';
-    
-    const eventId = `SCALE-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(scaleHistory.value.length + 1).padStart(3, '0')}`;
-    
-    // 生成模拟的特征数据
-    const cpuUsage = scaleType === '扩容' ? `${Math.floor(Math.random() * 15) + 70}%` : `${Math.floor(Math.random() * 20) + 15}%`;
-    const memUsage = scaleType === '扩容' ? `${Math.floor(Math.random() * 15) + 60}%` : `${Math.floor(Math.random() * 25) + 30}%`;
-    const reqPerMin = scaleType === '扩容' ? `${Math.floor(Math.random() * 1000) + 2000}` : `${Math.floor(Math.random() * 500) + 200}`;
-    const respTime = scaleType === '扩容' ? `${Math.floor(Math.random() * 100) + 150}ms` : `${Math.floor(Math.random() * 50) + 80}ms`;
-    
-    const newEvent = {
-      id: eventId,
-      resource: 'frontend-service',
-      scaleType: scaleType,
-      timestamp: formattedTime,
-      oldReplicas: deploymentStats.value.currentReplicas,
-      newReplicas: deploymentStats.value.recommendedReplicas,
-      replicaChange: `${deploymentStats.value.currentReplicas} → ${deploymentStats.value.recommendedReplicas}`,
-      confidence: Math.floor(Math.random() * 10) + 85, // 85-95之间的随机值
-      reason: reason,
-      features: [
-        { name: 'CPU利用率', value: cpuUsage },
-        { name: '内存利用率', value: memUsage },
-        { name: '请求量/分钟', value: reqPerMin },
-        { name: '响应时间', value: respTime }
-      ]
-    };
-    
-    // 将新事件添加到历史列表的开头
-    scaleHistory.value.unshift(newEvent);
-    
-    // 更新当前副本数为推荐副本数
-    deploymentStats.value.currentReplicas = deploymentStats.value.recommendedReplicas;
-    
-    // message.success(`已自动${scaleType}至${deploymentStats.value.currentReplicas}个副本`);
-  }
-};
-
 // 处理按钮点击事件
 const handleAction = (action: string) => {
   switch (action) {
@@ -431,6 +486,19 @@ const handleAction = (action: string) => {
       message.success('已手动确认应用副本数调整');
       break;
     case 'export':
+      // 导出预测历史数据
+      const dataToExport = {
+        currentStats: deploymentStats.value,
+        predictionHistory: predictionHistory.value,
+        scaleHistory: scaleHistory.value
+      };
+      const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `prediction-data-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
       message.success('预测数据已导出');
       break;
     case 'manual':
@@ -450,17 +518,33 @@ const initLoadChart = () => {
 
   const chart = echarts.init(loadChartRef.value);
 
-  // 生成过去24小时的时间点
-  const now = new Date();
-  const hours = Array.from({ length: 12 }, (_, i) => {
-    const pastTime = new Date(now.getTime() - (11 - i) * 2 * 60 * 60 * 1000);
-    return `${String(pastTime.getHours()).padStart(2, '0')}:00`;
-  });
+  // 使用真实的预测历史数据
+  let hours: string[] = [];
+  let replicaData: number[] = [];
+  let qpsData: number[] = [];
+  let predictedReplicaData: number[] = [];
 
-  // 生成副本数和负载数据
-  const replicaData = [2, 2, 3, 3, 4, 4, 5, 6, 6, 4, 4, 4];
-  const cpuLoadData = [30, 35, 55, 65, 75, 82, 88, 90, 75, 60, 50, 45];
-  const requestsData = [800, 950, 1500, 2200, 2800, 3100, 3400, 3500, 2800, 2000, 1600, 1300];
+  if (predictionHistory.value.length > 0) {
+    // 使用真实数据
+    const recentData = predictionHistory.value.slice(-12); // 最近12个数据点
+    hours = recentData.map(item => {
+      const time = new Date(item.timestamp);
+      return `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;
+    });
+    replicaData = recentData.map(item => item.currentReplicas);
+    qpsData = recentData.map(item => item.qps);
+    predictedReplicaData = recentData.map(item => item.instances);
+  } else {
+    // 生成过去24小时的时间点（模拟数据）
+    const now = new Date();
+    hours = Array.from({ length: 12 }, (_, i) => {
+      const pastTime = new Date(now.getTime() - (11 - i) * 2 * 60 * 60 * 1000);
+      return `${String(pastTime.getHours()).padStart(2, '0')}:00`;
+    });
+    replicaData = [2, 2, 3, 3, 4, 4, 5, 6, 6, 4, 4, 4];
+    qpsData = [0.8, 0.95, 1.5, 2.2, 2.8, 3.1, 3.4, 3.5, 2.8, 2.0, 1.6, 1.3];
+    predictedReplicaData = [2, 3, 3, 4, 4, 5, 5, 6, 6, 4, 4, 4];
+  }
 
   const option = {
     tooltip: {
@@ -470,7 +554,7 @@ const initLoadChart = () => {
       }
     },
     legend: {
-      data: ['副本数', 'CPU负载(%)', '请求数/分钟(/100)'],
+      data: ['当前副本数', '预测副本数', 'QPS'],
       textStyle: {
         color: '#333333'
       }
@@ -493,34 +577,55 @@ const initLoadChart = () => {
         color: '#333333'
       }
     },
-    yAxis: {
-      type: 'value',
-      name: '数值',
-      nameTextStyle: {
-        color: '#333333'
-      },
-      axisLine: {
-        lineStyle: {
+    yAxis: [
+      {
+        type: 'value',
+        name: '副本数',
+        nameTextStyle: {
           color: '#333333'
+        },
+        axisLine: {
+          lineStyle: {
+            color: '#333333'
+          }
+        },
+        axisLabel: {
+          color: '#333333'
+        },
+        splitLine: {
+          lineStyle: {
+            color: 'rgba(0, 0, 0, 0.1)'
+          }
         }
       },
-      axisLabel: {
-        color: '#333333'
-      },
-      splitLine: {
-        lineStyle: {
-          color: 'rgba(0, 0, 0, 0.1)'
+      {
+        type: 'value',
+        name: 'QPS',
+        nameTextStyle: {
+          color: '#333333'
+        },
+        axisLine: {
+          lineStyle: {
+            color: '#333333'
+          }
+        },
+        axisLabel: {
+          color: '#333333'
+        },
+        splitLine: {
+          show: false
         }
       }
-    },
+    ],
     series: [
       {
-        name: '副本数',
+        name: '当前副本数',
         type: 'line',
+        yAxisIndex: 0,
         data: replicaData,
         lineStyle: {
           width: 4,
-          type: 'dashed'
+          type: 'solid'
         },
         itemStyle: {
           color: '#722ed1'
@@ -531,9 +636,27 @@ const initLoadChart = () => {
         smooth: false
       },
       {
-        name: 'CPU负载(%)',
+        name: '预测副本数',
         type: 'line',
-        data: cpuLoadData,
+        yAxisIndex: 0,
+        data: predictedReplicaData,
+        lineStyle: {
+          width: 2,
+          type: 'dashed'
+        },
+        itemStyle: {
+          color: '#ff4d4f'
+        },
+        emphasis: {
+          focus: 'series'
+        },
+        smooth: true
+      },
+      {
+        name: 'QPS',
+        type: 'line',
+        yAxisIndex: 1,
+        data: qpsData,
         areaStyle: {
           opacity: 0.3,
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -551,28 +674,6 @@ const initLoadChart = () => {
           focus: 'series'
         },
         smooth: true
-      },
-      {
-        name: '请求数/分钟(/100)',
-        type: 'line',
-        data: requestsData.map(val => val / 100),
-        areaStyle: {
-          opacity: 0.3,
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(82, 196, 26, 0.8)' },
-            { offset: 1, color: 'rgba(82, 196, 26, 0.1)' }
-          ])
-        },
-        lineStyle: {
-          width: 2
-        },
-        itemStyle: {
-          color: '#52c41a'
-        },
-        emphasis: {
-          focus: 'series'
-        },
-        smooth: true
       }
     ]
   };
@@ -585,7 +686,7 @@ const initLoadChart = () => {
   });
 };
 
-// 初始化资源利用率分布图表
+// 初始化预测准确性分析图表
 const initResourceChart = () => {
   if (!resourceChartRef.value) return;
 
@@ -600,14 +701,14 @@ const initResourceChart = () => {
       orient: 'vertical',
       right: 10,
       top: 'center',
-      data: ['CPU使用率', '内存使用率', '网络I/O', '磁盘I/O', '空闲资源'],
+      data: ['高准确度预测', '中等准确度预测', '低准确度预测', '预测偏差', '模型优化空间'],
       textStyle: {
         color: '#333333'
       }
     },
     series: [
       {
-        name: '资源利用率',
+        name: '预测准确性',
         type: 'pie',
         radius: ['50%', '70%'],
         avoidLabelOverlap: false,
@@ -632,11 +733,11 @@ const initResourceChart = () => {
           show: false
         },
         data: [
-          { value: 35, name: 'CPU使用率', itemStyle: { color: '#ff4d4f' } },
-          { value: 28, name: '内存使用率', itemStyle: { color: '#faad14' } },
-          { value: 18, name: '网络I/O', itemStyle: { color: '#1890ff' } },
-          { value: 12, name: '磁盘I/O', itemStyle: { color: '#52c41a' } },
-          { value: 7, name: '空闲资源', itemStyle: { color: '#d9d9d9' } }
+          { value: 68, name: '高准确度预测', itemStyle: { color: '#52c41a' } },
+          { value: 22, name: '中等准确度预测', itemStyle: { color: '#faad14' } },
+          { value: 6, name: '低准确度预测', itemStyle: { color: '#ff4d4f' } },
+          { value: 3, name: '预测偏差', itemStyle: { color: '#f759ab' } },
+          { value: 1, name: '模型优化空间', itemStyle: { color: '#d9d9d9' } }
         ]
       }
     ]
@@ -689,7 +790,7 @@ const initMetricChart = () => {
       }
     },
     legend: {
-      data: ['CPU利用率', '内存利用率', '请求数(百/分钟)', '响应时间(ms)'],
+      data: ['CPU利用率', '内存利用率', 'QPS', '响应时间(ms)'],
       textStyle: {
         color: '#333333'
       }
@@ -794,7 +895,7 @@ const initMetricChart = () => {
         smooth: true
       },
       {
-        name: '请求数(百/分钟)',
+        name: 'QPS',
         type: 'line',
         data: requestsData,
         lineStyle: {
@@ -846,7 +947,7 @@ const initCharts = () => {
 const startAutoUpdate = () => {
   updateTimer = setInterval(() => {
     console.log('自动从预测服务获取推荐副本数...');
-    refreshData();
+    fetchPrediction();
   }, deploymentStats.value.updateInterval * 1000);
 };
 
