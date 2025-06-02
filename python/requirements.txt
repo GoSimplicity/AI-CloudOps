@@ -4,3 +4,10 @@ numpy
 pandas
 requests
 scikit-learn
+langgraph
+langchain
+langchain_openai
+langchain_experimental
+langsmith
+kubernetes
+openai

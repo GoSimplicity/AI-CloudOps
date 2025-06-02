@@ -54,7 +54,7 @@ class Config:
     SCALER_PATH = "time_qps_auto_scaling_scaler.pkl"
     
     # LLM配置
-    LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5")
+    LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5:3b")
     LLM_API_KEY = os.getenv("LLM_API_KEY", "ollama")
     LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://127.0.0.1:11434/v1")
     
@@ -78,13 +78,13 @@ except Exception as e:
     model = None
     scaler = None
 
-# 设置环境变量
-def set_if_undefined(var: str):
-    if not os.environ.get(var):
-        os.environ[var] = getpass.getpass(f"请提供您的 {var}:")
+# # 设置环境变量
+# def set_if_undefined(var: str):
+#     if not os.environ.get(var):
+#         os.environ[var] = getpass.getpass(f"请提供您的 {var}:")
 
-# 设置必要的环境变量
-set_if_undefined("TAVILY_API_KEY")
+# # 设置必要的环境变量
+# set_if_undefined("TAVILY_API_KEY")
 
 # 从Prometheus获取QPS
 def get_qps_from_prometheus():
