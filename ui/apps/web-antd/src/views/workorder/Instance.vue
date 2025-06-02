@@ -415,7 +415,7 @@
             allow-clear
           >
             <a-select-option v-for="user in users" :key="user.id" :value="user.id">
-              {{ user.name }}
+              {{ user.username }}
             </a-select-option>
           </a-select>
         </a-form-item>
@@ -651,6 +651,7 @@ interface Category {
 interface User {
   id: number;
   name: string;
+  username: string;
 }
 
 interface Field {
@@ -1304,7 +1305,7 @@ const saveInstance = async () => {
       };
       
       if (dueDate.value) {
-        createData.due_date = dueDate.value.format('YYYY-MM-DD HH:mm:ss');
+        createData.due_date = dueDate.value.toISOString();
       }
       
       await createInstance(createData);

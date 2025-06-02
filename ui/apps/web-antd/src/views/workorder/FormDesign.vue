@@ -581,6 +581,7 @@ import {
   type CloneFormDesignReq,
 } from '#/api/core/workorder';
 import type { Category } from '#/api/core/workorder_category'
+import { listCategory } from '#/api/core/workorder_category'
 
 // 响应式数据类型
 interface Statistics {
@@ -716,8 +717,7 @@ const stats = reactive<Statistics>({
   disabled: 0
 });
 
-// 分类数据
-// 分类数据，改为从接口获取
+// 分类数据 - 修复变量名
 const categories = ref<Category[]>([]);
 
 // 过滤和分页
@@ -1509,9 +1509,32 @@ const getAvatarColor = (name: string): string => {
   return colors[Math.abs(hash) % colors.length]!;
 };
 
-// 初始化
-onMounted(() => {
-  loadFormDesigns();
+// 修复加载分类函数
+const loadCategories = async (): Promise<void> => {
+  try {
+    // 请求所有分类数据，不进行分页
+    const response = await listCategory({ page: 1, size: 100 });
+    if (response && response.items) {
+      categories.value = response.items;
+      console.log('分类数据加载成功:', categories.value);
+    } else {
+      console.warn('分类接口返回数据格式异常:', response);
+      categories.value = [];
+    }
+  } catch (error) {
+    console.error('加载分类列表失败:', error);
+    message.error('加载分类列表失败');
+    categories.value = [];
+  }
+};
+
+// 初始化 - 修复函数调用
+onMounted(async () => {
+  // 并行加载表单设计列表和分类数据
+  await Promise.all([
+    loadFormDesigns(),
+    loadCategories()
+  ]);
 });
 </script>
 

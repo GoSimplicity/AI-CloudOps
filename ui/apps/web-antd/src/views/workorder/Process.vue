@@ -539,6 +539,10 @@ import {
 import {listFormDesign} from '#/api/core/workorder_form_design'
 import type { ListFormDesignReq } from '#/api/core/workorder';
 
+// 添加分类接口导入
+import type { Category } from '#/api/core/workorder_category'
+import { listCategory } from '#/api/core/workorder_category'
+
 // 列定义
 const columns = [
   {
@@ -657,10 +661,10 @@ const stats = reactive({
   disabled: 0
 });
 
-// 数据列表
+// 数据列表 - 修复分类数据类型
 const processList = ref<ProcessItem[]>([]);
 const forms = ref<any[]>([]);
-const categories = ref<any[]>([]);
+const categories = ref<Category[]>([]); // 使用正确的类型
 const roles = ref<string[]>(['admin', 'user', 'manager', 'reviewer']);
 const users = ref<any[]>([]);
 
@@ -816,23 +820,37 @@ const loadForms = async () => {
       size: 100,
     };
     const res = await listFormDesign(params)
-    forms.value = res.items;
+    if (res && res.items) {
+      forms.value = res.items;
+      console.log('表单数据加载成功:', forms.value);
+    } else {
+      console.warn('表单接口返回数据格式异常:', res);
+      forms.value = [];
+    }
   } catch (error) {
     console.error('Failed to load forms:', error);
+    message.error('加载表单列表失败');
+    forms.value = [];
   }
 };
 
-// 加载分类列表
-const loadCategories = async () => {
+// 修复加载分类列表函数
+const loadCategories = async (): Promise<void> => {
   try {
-    // 这里模拟分类列表数据，实际应调用相关API
-    categories.value = [
-      { id: 1, name: '人事管理' },
-      { id: 2, name: '财务管理' },
-      { id: 3, name: '采购管理' }
-    ];
+    // 使用真实的分类接口
+    const response = await listCategory({ page: 1, size: 100 });
+    if (response && response.items) {
+      categories.value = response.items;
+      console.log('分类数据加载成功:', categories.value);
+    } else {
+      console.warn('分类接口返回数据格式异常:', response);
+      categories.value = [];
+    }
   } catch (error) {
     console.error('Failed to load categories:', error);
+    message.error('加载分类列表失败');
+    // 出错时提供默认的分类数据
+    categories.value = [];
   }
 };
 
@@ -840,13 +858,16 @@ const loadCategories = async () => {
 const loadUsers = async () => {
   try {
     // 这里模拟用户列表数据，实际应调用相关API
+    // 如果有用户管理接口，可以替换为真实接口调用
     users.value = [
       { id: 1, name: '张三' },
       { id: 2, name: '李四' },
       { id: 3, name: '王五' }
     ];
+    console.log('用户数据加载成功:', users.value);
   } catch (error) {
     console.error('Failed to load users:', error);
+    users.value = [];
   }
 };
 
@@ -1286,12 +1307,21 @@ const getNodeTypeName = (type: string) => {
   return typeMap[type] || type;
 };
 
-// 加载数据
-onMounted(() => {
-  loadForms();
-  loadCategories();
-  loadUsers();
-  loadProcesses();
+// 修复初始化加载 - 并行加载所有数据
+onMounted(async () => {
+  try {
+    // 并行加载所有数据，提高加载效率
+    await Promise.all([
+      loadForms(),
+      loadCategories(),
+      loadUsers(),
+      loadProcesses()
+    ]);
+    console.log('所有数据加载完成');
+  } catch (error) {
+    console.error('初始化数据加载失败:', error);
+    message.error('初始化数据加载失败，请刷新页面重试');
+  }
 });
 </script>
 
