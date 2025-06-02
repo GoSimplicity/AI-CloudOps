@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-qps-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-qps
+  template:
+    metadata:
+      labels:
+        app: nginx-qps
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:latest
+          ports:
+            - containerPort: 80
+        - name: qps-generator
+          image: alpine:latest
+          command:
+            [
+              "sh",
+              "-c",
+              "apk add curl; while true; do curl -s http://ingress-nginx-controller.ingress-nginx:80; sleep 0.1; done",
+            ]

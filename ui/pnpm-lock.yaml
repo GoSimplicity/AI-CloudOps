@@ -183,6 +183,9 @@ importers:
       ant-design-x-vue:
         specifier: ^1.0.6
         version: 1.0.6(ant-design-vue@4.2.3(vue@3.5.3(typescript@5.5.4)))(vue@3.5.3(typescript@5.5.4))
+      axios:
+        specifier: ^1.7.7
+        version: 1.7.7
       dayjs:
         specifier: ^1.11.13
         version: 1.11.13

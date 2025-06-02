@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: machine-learning-python
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: machine-learning-python
+  template:
+    metadata:
+      labels:
+        app: machine-learning-python
+    spec:
+      containers:
+        - name: machine-learning-python
+          image: Bamboo/machine-learning-python:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: machine-learning-python
+spec:
+  selector:
+    app: machine-learning-python
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP
