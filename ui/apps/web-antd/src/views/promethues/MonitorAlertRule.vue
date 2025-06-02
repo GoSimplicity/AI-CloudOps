@@ -100,6 +100,11 @@
           </a-tag>
         </template>
         
+        <!-- IP地址列 -->
+        <template #ip_address="{ record }">
+          <span>{{ record.ip_address || '-' }}</span>
+        </template>
+        
         <!-- 操作列 -->
         <template #action="{ record }">
           <div class="action-column">
@@ -184,14 +189,20 @@
           </a-row>
           <a-row :gutter="16">
             <a-col :span="24">
-              <a-form-item label="树节点" name="treeNodeId">
-                <a-tree-select 
-                  v-model:value="addForm.tree_node_id" 
-                  :tree-data="treeData" 
-                  :tree-default-expand-all="true"
-                  placeholder="请选择树节点" 
-                  class="full-width" 
-                />
+              <a-form-item label="目标地址" name="ip_address" :rules="[{ required: true, message: '请输入IP地址和端口' }]">
+                <div class="ip-port-container">
+                  <a-input 
+                    v-model:value="addForm.ip" 
+                    placeholder="请输入IP地址" 
+                    class="ip-input"
+                  />
+                  <span class="separator">:</span>
+                  <a-input 
+                    v-model:value="addForm.port" 
+                    placeholder="端口" 
+                    class="port-input"
+                  />
+                </div>
               </a-form-item>
             </a-col>
           </a-row>
@@ -318,14 +329,20 @@
           </a-row>
           <a-row :gutter="16">
             <a-col :span="24">
-              <a-form-item label="树节点" name="treeNodeId">
-                <a-tree-select 
-                  v-model:value="editForm.tree_node_id" 
-                  :tree-data="treeData" 
-                  :tree-default-expand-all="true"
-                  placeholder="请选择树节点" 
-                  class="full-width" 
-                />
+              <a-form-item label="目标地址" name="ip_address" :rules="[{ required: true, message: '请输入IP地址和端口' }]">
+                <div class="ip-port-container">
+                  <a-input 
+                    v-model:value="editForm.ip" 
+                    placeholder="请输入IP地址" 
+                    class="ip-input"
+                  />
+                  <span class="separator">:</span>
+                  <a-input 
+                    v-model:value="editForm.port" 
+                    placeholder="端口" 
+                    class="port-input"
+                  />
+                </div>
               </a-form-item>
             </a-col>
           </a-row>
@@ -432,7 +449,6 @@ import {
   createAlertRuleApi,
   updateAlertRuleApi,
   deleteAlertRuleApi,
-  getTreeList,
   validateExprApi,
   getAllAlertManagerPoolApi,
   getAllMonitorSendGroupApi,
@@ -440,16 +456,6 @@ import {
 } from '#/api';
 import { Icon } from '@iconify/vue';
 import type { AlertRuleItem } from '#/api/core/prometheus';
-
-// 定义树节点数据类型
-interface TreeNode {
-  id: string | number;
-  title: string;
-  children?: TreeNode[];
-  isLeaf?: boolean;
-  value?: string | number;
-  key?: string | number;
-}
 
 interface ScrapePool {
   id: number;
@@ -478,9 +484,6 @@ const searchText = ref('');
 // 加载状态
 const loading = ref(false);
 
-// 树形数据
-const treeData = ref<TreeNode[]>([]);
-
 // 表格列配置
 const columns = [
   {
@@ -508,10 +511,10 @@ const columns = [
     sorter: (a: AlertRuleItem, b: AlertRuleItem) => (a.send_group_id || 0) - (b.send_group_id || 0),
   },
   {
-    title: '绑定树节点ID',
-    dataIndex: 'tree_node_id',
-    key: 'tree_node_id',
-    sorter: (a: AlertRuleItem, b: AlertRuleItem) => (a.tree_node_id || 0) - (b.tree_node_id || 0),
+    title: 'IP地址',
+    dataIndex: 'ip_address',
+    key: 'ip_address',
+    slots: { customRender: 'ip_address' },
   },
   {
     title: '严重性',
@@ -618,40 +621,6 @@ const removeEditAnnotation = (annotation: any) => {
   }
 };
 
-// 递归处理树节点数据
-const processTreeData = (nodes: any[]): TreeNode[] => {
-  return nodes.map(node => {
-    const processedNode: TreeNode = {
-      id: node.id,
-      title: node.name,
-      key: node.id,
-      value: node.id,
-      isLeaf: node.isLeaf === true
-    };
-
-    if (node.children && node.children.length > 0) {
-      processedNode.children = processTreeData(node.children);
-    }
-
-    return processedNode;
-  });
-};
-
-// 获取树节点数据
-const fetchTreeNodes = async () => {
-  try {
-    const response = await getTreeList({});
-    if (!response) {
-      treeData.value = [];
-      return;
-    }
-    treeData.value = processTreeData(response);
-  } catch (error: any) {
-    message.error(error.message || '获取树节点数据失败');
-    console.error(error);
-  }
-};
-
 // 获取实例池数据
 const fetchScrapePools = async () => {
   try {
@@ -691,7 +660,8 @@ const addForm = reactive({
   name: '',
   pool_id: null,
   send_group_id: null,
-  tree_node_id: null,
+  ip: '',
+  port: '',
   enable: true,
   expr: '',
   severity: '',
@@ -699,13 +669,11 @@ const addForm = reactive({
   for_time: '',
   labels: [
     { labelKey: 'severity', labelValue: '', key: Date.now() },
-    { labelKey: 'bind_tree_node', labelValue: '', key: Date.now() + 1 },
     { labelKey: 'alert_send_group', labelValue: '', key: Date.now() + 2 },
     { labelKey: 'alert_rule_id', labelValue: '', key: Date.now() + 3 }
   ],
   annotations: [
     { labelKey: 'severity', labelValue: '', key: Date.now() },
-    { labelKey: 'bind_tree_node', labelValue: '', key: Date.now() + 1 },
     { labelKey: 'alert_send_group', labelValue: '', key: Date.now() + 2 }
   ],
 });
@@ -716,7 +684,8 @@ const editForm = reactive({
   name: '',
   pool_id: null,
   send_group_id: null,
-  tree_node_id: null,
+  ip: '',
+  port: '',
   enable: true,
   expr: '',
   severity: '',
@@ -736,7 +705,8 @@ const resetAddForm = () => {
   addForm.name = '';
   addForm.pool_id = null;
   addForm.send_group_id = null;
-  addForm.tree_node_id = null;
+  addForm.ip = '';
+  addForm.port = '';
   addForm.enable = true;
   addForm.expr = '';
   addForm.severity = '';
@@ -744,13 +714,11 @@ const resetAddForm = () => {
   addForm.for_time = '';
   addForm.labels = [
     { labelKey: 'severity', labelValue: '', key: Date.now() },
-    { labelKey: 'bind_tree_node', labelValue: '', key: Date.now() + 1 },
     { labelKey: 'alert_send_group', labelValue: '', key: Date.now() + 2 },
     { labelKey: 'alert_rule_id', labelValue: '', key: Date.now() + 3 }
   ];
   addForm.annotations = [
     { labelKey: 'severity', labelValue: '', key: Date.now() },
-    { labelKey: 'bind_tree_node', labelValue: '', key: Date.now() + 1 },
     { labelKey: 'alert_send_group', labelValue: '', key: Date.now() + 2 }
   ];
 };
@@ -762,12 +730,16 @@ const closeAddModal = () => {
 
 // 显示编辑模态框
 const showEditModal = (record: AlertRuleItem) => {
+  // 解析IP地址（假设格式为ip:port）
+  const ipParts = record.ip_address?.split(':') || ['', ''];
+  
   Object.assign(editForm, {
     id: record.id,
     name: record.name,
     pool_id: record.pool_id || null,
     send_group_id: record.send_group_id || null,
-    tree_node_id: record.tree_node_id || null,
+    ip: ipParts[0] || '',
+    port: ipParts[1] || '',
     enable: record.enable,
     expr: record.expr,
     severity: record.severity,
@@ -803,14 +775,31 @@ const closeEditModal = () => {
 // 提交新增 AlertRule
 const handleAdd = async () => {
   try {
-    // 表单验证逻辑可以在此添加
+    // 表单验证逻辑
     if (addForm.name === '' || addForm.pool_id === 0) {
       message.error('请填写所有必填项');
       return;
     }
 
+    if (!addForm.ip || !addForm.port) {
+      message.error('请填写IP地址和端口');
+      return;
+    }
+
+    // 组合IP地址
+    const ip_address = `${addForm.ip}:${addForm.port}`;
+
+    // 创建符合 createAlertRuleReq 类型的数据
     const formData = {
-      ...addForm,
+      name: addForm.name,
+      pool_id: addForm.pool_id,
+      send_group_id: addForm.send_group_id,
+      ip_address,
+      enable: addForm.enable,
+      expr: addForm.expr,
+      severity: addForm.severity,
+      grafana_link: addForm.grafana_link,
+      for_time: addForm.for_time,
       labels: addForm.labels
         .filter(item => item.labelKey.trim() !== '' && item.labelValue.trim() !== '')
         .map(item => `${item.labelKey},${item.labelValue}`),
@@ -819,7 +808,7 @@ const handleAdd = async () => {
         .map(item => `${item.labelKey},${item.labelValue}`),
     };
 
-    await createAlertRuleApi(formData); // 调用创建 API
+    await createAlertRuleApi(formData);
     message.success('新增AlertRule成功');
     fetchAlertRules();
     closeAddModal();
@@ -837,8 +826,26 @@ const handleEdit = async () => {
       return;
     }
 
+    if (!editForm.ip || !editForm.port) {
+      message.error('请填写IP地址和端口');
+      return;
+    }
+
+    // 组合IP地址
+    const ip_address = `${editForm.ip}:${editForm.port}`;
+
+    // 创建符合 updateAlertRuleReq 类型的数据
     const formData = {
-      ...editForm,
+      id: editForm.id,
+      name: editForm.name,
+      pool_id: editForm.pool_id,
+      send_group_id: editForm.send_group_id,
+      ip_address,
+      enable: editForm.enable,
+      expr: editForm.expr,
+      severity: editForm.severity,
+      grafana_link: editForm.grafana_link,
+      for_time: editForm.for_time,
       labels: editForm.labels
         .filter(item => item.labelKey.trim() !== '' && item.labelValue.trim() !== '')
         .map(item => `${item.labelKey},${item.labelValue}`),
@@ -847,7 +854,7 @@ const handleEdit = async () => {
         .map(item => `${item.labelKey},${item.labelValue}`),
     };
 
-    await updateAlertRuleApi(formData); // 调用更新 API
+    await updateAlertRuleApi(formData);
     message.success('更新AlertRule成功');
     fetchAlertRules();
     closeEditModal();
@@ -867,7 +874,7 @@ const handleDelete = (record: AlertRuleItem) => {
     onOk: async () => {
       try {
         loading.value = true;
-        await deleteAlertRuleApi(record.id); // 调用删除 API
+        await deleteAlertRuleApi(record.id);
         message.success('AlertRule已删除');
         fetchAlertRules();
       } catch (error: any) {
@@ -926,7 +933,6 @@ const validateEditExpression = async () => {
 // 在组件加载时获取数据
 onMounted(() => {
   fetchAlertRules();
-  fetchTreeNodes();
   fetchScrapePools();
   fetchSendGroups();
 });
@@ -1170,6 +1176,27 @@ onMounted(() => {
 
 .custom-pagination {
   margin-right: 12px;
+}
+
+/* IP地址和端口输入框样式 */
+.ip-port-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ip-input {
+  flex: 3;
+}
+
+.port-input {
+  flex: 1;
+}
+
+.separator {
+  font-weight: bold;
+  color: #8c8c8c;
+  font-size: 16px;
 }
 
 /* 模态框样式 */

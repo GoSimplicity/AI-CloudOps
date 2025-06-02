@@ -28,7 +28,6 @@ package scrape
 import (
 	"context"
 	"errors"
-	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
@@ -91,12 +90,6 @@ func (s *scrapeJobService) GetMonitorScrapeJobList(ctx context.Context, listReq 
 	if err := s.buildUserInfo(ctx, jobs); err != nil {
 		s.l.Error("填充用户信息失败", zap.Error(err))
 		return nil, err
-	}
-
-	// 填充树节点信息
-	if err := s.buildTreeNodeInfo(ctx, jobs); err != nil {
-		s.l.Error("填充树节点信息失败", zap.Error(err))
-		return jobs, err
 	}
 
 	return jobs, nil
@@ -227,66 +220,6 @@ func (s *scrapeJobService) buildUserInfo(ctx context.Context, jobs []*model.Moni
 			job.CreateUserName = "未知用户"
 		}
 	}
-
-	return nil
-}
-
-// buildTreeNodeInfo 构建树节点信息
-func (s *scrapeJobService) buildTreeNodeInfo(ctx context.Context, jobs []*model.MonitorScrapeJob) error {
-	if len(jobs) == 0 {
-		return nil
-	}
-
-	// 收集唯一树节点ID
-	nodeIDs := make([]int, 0)
-	seen := make(map[int]bool)
-	for _, job := range jobs {
-		for _, idStr := range job.TreeNodeIDs {
-			if idStr == "" {
-				continue
-			}
-
-			id, err := strconv.Atoi(idStr)
-			if err != nil {
-				s.l.Error("转换树节点ID失败", zap.String("id", idStr), zap.Error(err))
-				continue
-			}
-			if !seen[id] {
-				nodeIDs = append(nodeIDs, id)
-				seen[id] = true
-			}
-		}
-	}
-
-	if len(nodeIDs) == 0 {
-		return nil
-	}
-
-	// // 批量获取节点信息
-	// nodes, err := s.treeDao.GetByIDs(ctx, nodeIDs)
-	// if err != nil {
-	// 	s.l.Error("批量获取树节点信息失败", zap.Error(err))
-	// 	return err
-	// }
-
-	// // 构建节点映射
-	// nodeMap := make(map[int]string, len(nodes))
-	// for _, node := range nodes {
-	// 	nodeMap[node.ID] = node.Title
-	// }
-
-	// // 填充节点名称
-	// for _, job := range jobs {
-	// 	names := make([]string, 0, len(job.TreeNodeIDs))
-	// 	for _, idStr := range job.TreeNodeIDs {
-	// 		if id, err := strconv.Atoi(idStr); err == nil {
-	// 			if name := nodeMap[id]; name != "" {
-	// 				names = append(names, name)
-	// 			}
-	// 		}
-	// 	}
-	// 	job.TreeNodeNames = names
-	// }
 
 	return nil
 }

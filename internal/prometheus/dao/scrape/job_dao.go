@@ -139,7 +139,7 @@ func (s *scrapeJobDAO) UpdateMonitorScrapeJob(ctx context.Context, monitorScrape
 			"relabel_configs_yaml_string": monitorScrapeJob.RelabelConfigsYamlString,
 			"refresh_interval":            monitorScrapeJob.RefreshInterval,
 			"port":                        monitorScrapeJob.Port,
-			"tree_node_ids":               monitorScrapeJob.TreeNodeIDs,
+			"ip_address":                  monitorScrapeJob.IpAddress,
 			"kube_config_file_path":       monitorScrapeJob.KubeConfigFilePath,
 			"tls_ca_file_path":            monitorScrapeJob.TlsCaFilePath,
 			"tls_ca_content":              monitorScrapeJob.TlsCaContent,

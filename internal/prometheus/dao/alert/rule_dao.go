@@ -156,7 +156,7 @@ func (a *alertManagerRuleDAO) UpdateMonitorAlertRule(ctx context.Context, monito
 			"name":          monitorAlertRule.Name,
 			"pool_id":       monitorAlertRule.PoolID,
 			"send_group_id": monitorAlertRule.SendGroupID,
-			"tree_node_id":  monitorAlertRule.TreeNodeID,
+			"ip_address":    monitorAlertRule.IpAddress,
 			"enable":        monitorAlertRule.Enable,
 			"expr":          monitorAlertRule.Expr,
 			"severity":      monitorAlertRule.Severity,

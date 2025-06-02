@@ -75,14 +75,13 @@ export interface MonitorScrapeJobItem {
   relabel_configs_yaml_string: string;
   refresh_interval: number;
   port: number;
-  tree_node_ids: string[];
+  ip_address: string[];
   kube_config_file_path: string;
   tls_ca_file_path: string;
   tls_ca_content: string;
   bearer_token: string;
   bearer_token_file: string;
   kubernetes_sd_role: string;
-  tree_node_names: string[];
   create_user_name: string;
 }
 
@@ -98,7 +97,7 @@ export interface createScrapeJobReq {
   relabel_configs_yaml_string: string;
   refresh_interval: number;
   port: number;
-  tree_node_ids: string[];
+  ip_address: string;
   kube_config_file_path: string;
   tls_ca_file_path: string;
   tls_ca_content: string;
@@ -120,7 +119,7 @@ export interface updateScrapeJobReq {
   relabel_configs_yaml_string: string;
   refresh_interval: number;
   port: number;
-  tree_node_ids: string[];
+  ip_address: string;
   kube_config_file_path: string;
   tls_ca_file_path: string;
   tls_ca_content: string;
@@ -178,8 +177,8 @@ export interface AlertRuleItem {
   name: string;
   user_id: number;
   pool_id?: number | null;
+  ip_address: string;
   send_group_id?: number | null;
-  tree_node_id?: number | null;
   enable: boolean;
   expr: string;
   severity: string;
@@ -188,7 +187,6 @@ export interface AlertRuleItem {
   labels: string[];
   annotations: string[];
   node_path: string;
-  tree_node_names: string[];
   pool_name: string;
   send_group_name: string;
   create_user_name: string;
@@ -198,7 +196,6 @@ export interface createAlertRuleReq {
   name: string;
   pool_id?: number | null;
   send_group_id?: number | null;
-  tree_node_id?: number | null;
   enable: boolean;
   expr: string;
   severity: string;
@@ -213,7 +210,6 @@ export interface updateAlertRuleReq {
   name: string;
   pool_id?: number | null;
   send_group_id?: number | null;
-  tree_node_id?: number | null;
   enable: boolean;
   expr: string;
   severity: string;
@@ -253,14 +249,13 @@ export interface AlertRecordItem {
   name: string;
   user_id: number;
   pool_id: number;
-  tree_node_id: number;
   enable: boolean;
   for_time: string;
   expr: string;
   labels: string[];
   annotations: string[];
-  node_path: string;
-  tree_node_names: string[];
+  ip_address: string;
+  port: number;
   pool_name: string;
   send_group_name: string;
   create_user_name: string;
@@ -269,7 +264,6 @@ export interface AlertRecordItem {
 export interface createAlertManagerRecordReq {
   name: string;
   pool_id?: number | null;
-  tree_node_id?: number | null;
   enable: boolean;
   for_time: string;
   expr: string;
@@ -281,7 +275,6 @@ export interface updateAlertManagerRecordReq {
   id: number;
   name: string;
   pool_id?: number | null;
-  tree_node_id?: number | null;
   enable: boolean;
   for_time: string;
   expr: string;
@@ -309,7 +302,6 @@ export interface SendGroupItem {
   first_upgrade_users: any[];
   upgrade_minutes: number;
   second_upgrade_users: any[];
-  tree_node_names: string[];
   static_receive_user_names: string[];
   first_user_names: string[];
   second_user_names: string[];

@@ -133,7 +133,7 @@
           </a-row>
           
           <a-row :gutter="16">
-            <a-col :xs="24" :sm="12">
+            <a-col :span="24">
               <a-form-item label="Prometheus 实例池" name="poolId" :rules="[{ required: true, message: '请选择实例池' }]">
                 <a-select
                   v-model:value="addForm.pool_id"
@@ -150,21 +150,23 @@
                 </a-select>
               </a-form-item>
             </a-col>
+          </a-row>
+
+          <a-row :gutter="16">
             <a-col :xs="24" :sm="12">
-              <a-form-item label="树节点" name="tree_node_id">
-                <a-select
-                  v-model:value="addForm.tree_node_id"
-                  placeholder="请选择树节点"
-                  class="full-width"
-                >
-                  <a-select-option
-                    v-for="node in treeNodeOptions"
-                    :key="node.id"
-                    :value="node.id"
-                  >
-                    {{ node.title }}
-                  </a-select-option>
-                </a-select>
+              <a-form-item label="IP地址" name="ip_address" :rules="[
+                { required: true, message: '请输入IP地址' },
+                { pattern: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, message: '请输入有效的IP地址' }
+              ]">
+                <a-input v-model:value="addForm.ip_address" placeholder="例如: 192.168.1.100" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="端口" name="port" :rules="[
+                { required: true, message: '请输入端口号' },
+                { pattern: /^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/, message: '请输入有效的端口号(1-65535)' }
+              ]">
+                <a-input v-model:value="addForm.port" placeholder="例如: 9090" />
               </a-form-item>
             </a-col>
           </a-row>
@@ -228,7 +230,7 @@
           </a-row>
           
           <a-row :gutter="16">
-            <a-col :xs="24" :sm="12">
+            <a-col :span="24">
               <a-form-item label="Prometheus 实例池" name="poolId" :rules="[{ required: true, message: '请选择实例池' }]">
                 <a-select
                   v-model:value="editForm.pool_id"
@@ -245,21 +247,23 @@
                 </a-select>
               </a-form-item>
             </a-col>
+          </a-row>
+
+          <a-row :gutter="16">
             <a-col :xs="24" :sm="12">
-              <a-form-item label="树节点" name="TreeNodeID">
-                <a-select
-                  v-model:value="editForm.tree_node_id"
-                  placeholder="请选择树节点"
-                  class="full-width"
-                >
-                  <a-select-option
-                    v-for="node in treeNodeOptions"
-                    :key="node.id"
-                    :value="node.id"
-                  >
-                    {{ node.title }}
-                  </a-select-option>
-                </a-select>
+              <a-form-item label="IP地址" name="ip_address" :rules="[
+                { required: true, message: '请输入IP地址' },
+                { pattern: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, message: '请输入有效的IP地址' }
+              ]">
+                <a-input v-model:value="editForm.ip_address" placeholder="例如: 192.168.1.100" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12">
+              <a-form-item label="端口" name="port" :rules="[
+                { required: true, message: '请输入端口号' },
+                { pattern: /^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/, message: '请输入有效的端口号(1-65535)' }
+              ]">
+                <a-input v-model:value="editForm.port" placeholder="例如: 9090" />
               </a-form-item>
             </a-col>
           </a-row>
@@ -316,25 +320,16 @@ import {
   deleteRecordRuleApi,
   getAllMonitorScrapePoolApi,
   getRecordRulesTotalApi,
-  getTreeList,
   validateExprApi,
 } from '#/api';
 import { Icon } from '@iconify/vue';
 import type { AlertRecordItem } from '#/api';
 import type { FormInstance } from 'ant-design-vue';
 
-// 定义 Pool 和 TreeNode 类型
+// 定义 Pool 类型
 interface Pool {
   id: number;
   name: string;
-}
-
-interface TreeNode {
-  id: number | string;
-  title: string;
-  name?: string;
-  children?: TreeNode[];
-  isLeaf?: boolean;
 }
 
 // 数据源
@@ -342,7 +337,6 @@ const data = ref<AlertRecordItem[]>([]);
 
 // 下拉框数据源
 const poolOptions = ref<Pool[]>([]);
-const treeNodeOptions = ref<TreeNode[]>([]);
 
 // 搜索文本
 const searchText = ref('');
@@ -400,9 +394,9 @@ const columns = [
     width: 180,
   },
   {
-    title: '绑定树节点id',
-    dataIndex: 'tree_node_id',
-    key: 'tree_node_id',
+    title: 'IP地址',
+    dataIndex: 'ip_address',
+    key: 'ip_address',
     width: 120,
   },
   {
@@ -450,7 +444,8 @@ const isEditModalVisible = ref(false);
 const addForm = reactive({
   name: '',
   pool_id: null,
-  tree_node_id: null,
+  ip_address: '',
+  port: '',
   enable: false,
   for_time: '15s',
   expr: '',
@@ -463,7 +458,8 @@ const editForm = reactive({
   id: 0,
   name: '',
   pool_id: null,
-  tree_node_id: null,
+  ip_address: '',
+  port: '',
   enable: true,
   for_time: '',
   expr: '',
@@ -481,7 +477,8 @@ const showAddModal = () => {
 const resetAddForm = () => {
   addForm.name = '';
   addForm.pool_id = null;
-  addForm.tree_node_id = null;
+  addForm.ip_address = '';
+  addForm.port = '';
   addForm.enable = false;
   addForm.for_time = '15s';
   addForm.expr = '';
@@ -500,7 +497,8 @@ const showEditModal = (record: AlertRecordItem) => {
     id: record.id,
     name: record.name,
     pool_id: record.pool_id,
-    tree_node_id: record.tree_node_id,
+    ip_address: record.ip_address,
+    port: record.port,
     enable: record.enable,
     for_time: record.for_time,
     expr: record.expr,
@@ -523,7 +521,8 @@ const handleAdd = async () => {
     const payload = {
       name: addForm.name,
       pool_id: addForm.pool_id,
-      tree_node_id: addForm.tree_node_id,
+      ip_address: addForm.ip_address,
+      port: addForm.port,
       enable: addForm.enable,
       for_time: addForm.for_time,
       expr: addForm.expr,
@@ -532,7 +531,7 @@ const handleAdd = async () => {
     };
 
     loading.value = true;
-    await createRecordRuleApi(payload); // 调用创建 API
+    await createRecordRuleApi(payload);
     loading.value = false;
     message.success('新增记录成功');
     fetchRecordRules();
@@ -553,7 +552,8 @@ const handleUpdate = async () => {
       id: editForm.id,
       name: editForm.name,
       pool_id: editForm.pool_id,
-      tree_node_id: editForm.tree_node_id,
+      ip_address: editForm.ip_address,
+      port: editForm.port,
       enable: editForm.enable,
       for_time: editForm.for_time,
       expr: editForm.expr,
@@ -562,7 +562,7 @@ const handleUpdate = async () => {
     };
 
     loading.value = true;
-    await updateRecordRuleApi(payload); // 调用更新 API
+    await updateRecordRuleApi(payload);
     loading.value = false;
     message.success('更新记录规则成功');
     fetchRecordRules();
@@ -584,7 +584,7 @@ const handleDelete = (record: AlertRecordItem) => {
     onOk: async () => {
       try {
         loading.value = true;
-        await deleteRecordRuleApi(record.id); // 调用删除 API
+        await deleteRecordRuleApi(record.id);
         loading.value = false;
         message.success('记录规则已删除');
         fetchRecordRules();
@@ -601,7 +601,7 @@ const handleDelete = (record: AlertRecordItem) => {
 const fetchRecordRules = async () => {
   try {
     loading.value = true;
-    const response = await getRecordRulesListApi(current.value, pageSizeRef.value, searchText.value); // 调用获取数据 API
+    const response = await getRecordRulesListApi(current.value, pageSizeRef.value, searchText.value);
     data.value = response;
     total.value = await getRecordRulesTotalApi();
     loading.value = false;
@@ -615,48 +615,10 @@ const fetchRecordRules = async () => {
 // 获取所有实例池数据
 const fetchPools = async () => {
   try {
-    const response = await getAllMonitorScrapePoolApi(); // 调用获取实例池 API
+    const response = await getAllMonitorScrapePoolApi();
     poolOptions.value = response;
   } catch (error: any) {
     message.error(error.message || '获取实例池数据失败，请稍后重试');
-    console.error(error);
-  }
-};
-
-// 递归处理树节点数据，使其适合下拉选择框
-const processTreeNodes = (nodes: any[]): TreeNode[] => {
-  const flattenedNodes: TreeNode[] = [];
-  
-  const processNode = (node: any) => {
-    const processedNode: TreeNode = {
-      id: node.id,
-      title: node.name,
-      isLeaf: node.isLeaf
-    };
-    
-    flattenedNodes.push(processedNode);
-    
-    if (node.children && node.children.length > 0) {
-      node.children.forEach((child: any) => processNode(child));
-    }
-  };
-  
-  nodes.forEach(node => processNode(node));
-  return flattenedNodes;
-};
-
-// 获取所有树节点数据
-const fetchTreeNodes = async () => {
-  try {
-    const response = await getTreeList({});
-    if (!response) {
-      treeNodeOptions.value = [];
-      return;
-    }
-    // 处理树节点数据，将其转换为适合下拉选择框的扁平结构
-    treeNodeOptions.value = processTreeNodes(response);
-  } catch (error: any) {
-    message.error(error.message || '获取树节点数据失败，请稍后重试');
     console.error(error);
   }
 };
@@ -669,7 +631,7 @@ const validateAddExpression = async () => {
       return;
     }
     const payload = { promql_expr: addForm.expr };
-    await validateExprApi(payload); // 调用验证 API
+    await validateExprApi(payload);
     message.success('表达式验证成功');
   } catch (error: any) {
     message.error(error.message || '表达式验证失败，请稍后重试');
@@ -685,7 +647,7 @@ const validateEditExpression = async () => {
       return;
     }
     const payload = { promql_expr: editForm.expr };
-    await validateExprApi(payload); // 调用验证 API
+    await validateExprApi(payload);
     message.success('表达式验证成功');
   } catch (error: any) {
     message.error(error.message || '表达式验证失败，请稍后重试');
@@ -697,7 +659,6 @@ const validateEditExpression = async () => {
 onMounted(() => {
   fetchRecordRules();
   fetchPools();
-  fetchTreeNodes();
 });
 </script>
 

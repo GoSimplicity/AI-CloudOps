@@ -27,17 +27,19 @@ package service
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"go.uber.org/zap"
 )
 
 type NotAuthService interface {
-	BuildPrometheusServiceDiscovery(ctx context.Context, leafNodeIdList []string, port int) ([]*targetgroup.Group, error)
+	BuildPrometheusServiceDiscovery(ctx context.Context, ipAddress string) ([]*targetgroup.Group, error)
 }
 
 type notAuthService struct {
-	l           *zap.Logger
+	l *zap.Logger
 }
 
 func NewNotAuthService(l *zap.Logger) NotAuthService {
@@ -46,63 +48,24 @@ func NewNotAuthService(l *zap.Logger) NotAuthService {
 	}
 }
 
-// BuildPrometheusServiceDiscovery 构建 Prometheus 服务发现的目标组，支持多个标签
-func (n *notAuthService) BuildPrometheusServiceDiscovery(ctx context.Context, leafNodeIdList []string, port int) ([]*targetgroup.Group, error) {
-	// leafNodeIntList, err := promPkg.ConvertToIntList(leafNodeIdList)
-	// if err != nil {
-	// 	n.l.Warn("无效的 leafNodeIdList", zap.Strings("leafNodeIdList", leafNodeIdList), zap.Error(err))
-	// 	return nil, err
-	// }
+// BuildPrometheusServiceDiscovery 构建 Prometheus 服务发现的目标组
+func (n *notAuthService) BuildPrometheusServiceDiscovery(ctx context.Context, ipAddress string) ([]*targetgroup.Group, error) {
+	if ipAddress == "" {
+		n.l.Warn("IP 地址为空")
+		return nil, fmt.Errorf("IP 地址不能为空")
+	}
 
-	// leafNodeList, err := n.treeNodeDao.GetByIDs(ctx, leafNodeIntList)
-	// if err != nil {
-	// 	n.l.Error("根据 leafNodeIdList 获取树节点失败", zap.Ints("leafNodeIdList", leafNodeIntList), zap.Error(err))
-	// 	return nil, fmt.Errorf("获取树节点失败: %w", err)
-	// }
+	// 创建目标组
+	tg := &targetgroup.Group{
+		Targets: []model.LabelSet{
+			{
+				model.AddressLabel: model.LabelValue(ipAddress),
+			},
+		},
+		Labels: model.LabelSet{
+			"instance": model.LabelValue(ipAddress),
+		},
+	}
 
-	// 初始化目标组列表
-	// tgList := make([]*targetgroup.Group, 0, len(leafNodeList))
-
-	// for _, node := range leafNodeList {
-	// 	// 检查节点是否绑定了 ECS 实例
-	// 	if node.BindEcs == nil || len(node.BindEcs) == 0 {
-	// 		n.l.Warn("leaf node without bind ecs", zap.Int("node_id", node.ID))
-	// 		continue
-	// 	}
-
-	// 	for _, ecs := range node.BindEcs {
-	// 		// 检查 ecs.Tags 是否为空或有偶数个元素
-	// 		if len(ecs.Tags) == 0 {
-	// 			// 如果标签为空,直接跳过
-	// 			continue
-	// 		}
-	// 		if len(ecs.Tags)%2 != 0 {
-	// 			n.l.Warn("ECS 实例的 Tags 格式不正确，必须为偶数个元素", zap.Int("node_id", node.ID), zap.Any("ecs", ecs))
-	// 			continue
-	// 		}
-
-	// 		// 构建 Prometheus 的标签映射
-	// 		labels, err := promPkg.ParseTags(ecs.Tags)
-	// 		if err != nil {
-	// 			n.l.Warn("解析 ECS 实例的 Tags 失败", zap.Int("node_id", node.ID), zap.Any("ecs", ecs), zap.Error(err))
-	// 			continue
-	// 		}
-
-	// 		target := fmt.Sprintf("%s:%d", ecs.IpAddr, port)
-
-	// 		// 创建目标组
-	// 		tg := &targetgroup.Group{
-	// 			Targets: []promModel.LabelSet{
-	// 				{
-	// 					promModel.AddressLabel: promModel.LabelValue(target),
-	// 				},
-	// 			},
-	// 			Labels: labels,
-	// 		}
-
-	// 		tgList = append(tgList, tg)
-	// 	}
-	// }
-
-	return nil, nil
+	return []*targetgroup.Group{tg}, nil
 }
