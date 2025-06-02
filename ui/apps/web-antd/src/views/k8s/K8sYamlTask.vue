@@ -1,5 +1,5 @@
 <template>
-  <div class="service-manager task-manager">
+  <div class="service-manager yaml-task-manager">
     <!-- 仪表板标题 -->
     <div class="dashboard-header">
       <h2 class="dashboard-title">
@@ -9,11 +9,15 @@
       <div class="dashboard-stats">
         <div class="stat-item">
           <div class="stat-value">{{ tasks.length }}</div>
-          <div class="stat-label">任务</div>
+          <div class="stat-label">任务总数</div>
         </div>
         <div class="stat-item">
           <div class="stat-value">{{ templates.length }}</div>
           <div class="stat-label">可用模板</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ clusters.length }}</div>
+          <div class="stat-label">集群连接</div>
         </div>
       </div>
     </div>
@@ -39,9 +43,13 @@
           </a-button>
         </a-tooltip>
         
-        <a-button type="primary" class="create-btn" @click="showCreateModal">
+        <a-button 
+          type="primary" 
+          class="create-btn" 
+          @click="showCreateModal"
+        >
           <template #icon><PlusOutlined /></template>
-          创建任务
+          新建任务
         </a-button>
       </div>
     </div>
@@ -57,11 +65,11 @@
           <div class="card-title">任务总数</div>
         </div>
         <div class="card-footer">
-          <div class="footer-text">已配置YAML任务</div>
+          <div class="footer-text">管理您的全部YAML任务</div>
         </div>
       </div>
       
-      <div class="summary-card template-card">
+      <div class="summary-card running-card">
         <div class="card-content">
           <div class="card-metric">
             <FileOutlined class="metric-icon" />
@@ -70,48 +78,20 @@
           <div class="card-title">可用模板</div>
         </div>
         <div class="card-footer">
-          <a-progress 
-            :percent="templates.length > 0 ? 100 : 0" 
-            :stroke-color="{ from: '#1890ff', to: '#52c41a' }" 
-            size="small" 
-            :show-info="false" 
-          />
-          <div class="footer-text">模板可直接使用</div>
+          <div class="footer-text">部署模板库</div>
         </div>
       </div>
       
-      <div class="summary-card cluster-card">
+      <div class="summary-card env-card">
         <div class="card-content">
           <div class="card-metric">
             <CloudServerOutlined class="metric-icon" />
             <div class="metric-value">{{ clusters.length }}</div>
           </div>
-          <div class="card-title">可用集群</div>
+          <div class="card-title">集群连接</div>
         </div>
         <div class="card-footer">
-          <a-progress 
-            :percent="clusters.length > 0 ? 100 : 0" 
-            :status="clusters.length > 0 ? 'success' : 'exception'" 
-            size="small" 
-            :show-info="false"
-          />
-          <div class="footer-text">{{ clusters.length > 0 ? '集群连接正常' : '无可用集群' }}</div>
-        </div>
-      </div>
-      
-      <div class="summary-card system-card">
-        <div class="card-content">
-          <div class="card-metric">
-            <AppstoreOutlined class="metric-icon" />
-            <div class="metric-value">运行中</div>
-          </div>
-          <div class="card-title">系统状态</div>
-        </div>
-        <div class="card-footer">
-          <div class="system-status">
-            <span class="status-indicator"></span>
-            <span class="status-text">系统在线</span>
-          </div>
+          <div class="footer-text">{{ clusters.length > 0 ? '连接正常' : '等待连接' }}</div>
         </div>
       </div>
     </div>
@@ -120,7 +100,7 @@
     <div class="view-toggle">
       <a-radio-group v-model:value="viewMode" button-style="solid">
         <a-radio-button value="table">
-          <TableOutlined />
+          <UnorderedListOutlined />
           表格视图
         </a-radio-button>
         <a-radio-button value="card">
@@ -143,13 +123,13 @@
         showQuickJumper: true,
         showTotal: (total: number) => `共 ${total} 条数据`
       }"
-      class="services-table task-table"
+      class="services-table yaml-task-table"
     >
       <!-- 任务名称列 -->
       <template #name="{ text }">
         <div class="task-name">
           <FileProtectOutlined />
-          <span>{{ text }}</span>
+          <span class="task-title">{{ text }}</span>
         </div>
       </template>
       
@@ -157,8 +137,8 @@
       <template #created_at="{ text }">
         <div class="timestamp">
           <ClockCircleOutlined />
-          <a-tooltip :title="formatFullDate(text)">
-            <span>{{ formatDate(text) }}</span>
+          <a-tooltip :title="formatDateTime(text)">
+            {{ formatDate(text) }}
           </a-tooltip>
         </div>
       </template>
@@ -167,8 +147,8 @@
       <template #updated_at="{ text }">
         <div class="timestamp">
           <ClockCircleOutlined />
-          <a-tooltip :title="formatFullDate(text)">
-            <span>{{ formatDate(text) }}</span>
+          <a-tooltip :title="formatDateTime(text)">
+            {{ formatDate(text) }}
           </a-tooltip>
         </div>
       </template>
@@ -203,11 +183,11 @@
           </a-tooltip>
         </div>
       </template>
-      
+
       <!-- 空状态 -->
       <template #emptyText>
         <div class="empty-state">
-          <InboxOutlined style="font-size: 48px; color: #d9d9d9; margin-bottom: 16px" />
+          <FileProtectOutlined style="font-size: 48px; color: #d9d9d9; margin-bottom: 16px" />
           <p>暂无任务数据</p>
           <a-button type="primary" @click="showCreateModal">创建第一个任务</a-button>
         </div>
@@ -217,39 +197,21 @@
     <!-- 卡片视图 -->
     <div v-else class="card-view">
       <a-spin :spinning="loading">
-        <a-empty v-if="filteredTasks.length === 0" description="暂无任务数据">
-          <template #extra>
-            <a-button type="primary" @click="showCreateModal">创建第一个任务</a-button>
-          </template>
-        </a-empty>
-        <div v-else class="service-cards task-cards">
-          <div v-for="task in filteredTasks" :key="task.id" class="service-card task-card">
+        <a-empty v-if="filteredTasks.length === 0" description="暂无任务数据" />
+        <div v-else class="service-cards yaml-task-cards">
+          <div v-for="task in filteredTasks" :key="task.id" class="service-card yaml-task-card">
             <div class="card-header">
               <div class="service-title task-title">
                 <FileProtectOutlined class="service-icon" />
                 <h3>{{ task.name }}</h3>
               </div>
+              <a-tag color="blue" class="card-type-tag">
+                <span class="status-dot"></span>
+                YAML任务
+              </a-tag>
             </div>
             
             <div class="card-content">
-              <div class="card-detail created-detail">
-                <span class="detail-label">创建时间:</span>
-                <span class="detail-value">
-                  <ClockCircleOutlined />
-                  <a-tooltip :title="formatFullDate(task.created_at)">
-                    {{ formatDate(task.created_at) }}
-                  </a-tooltip>
-                </span>
-              </div>
-              <div class="card-detail updated-detail">
-                <span class="detail-label">更新时间:</span>
-                <span class="detail-value">
-                  <ClockCircleOutlined />
-                  <a-tooltip :title="formatFullDate(task.updated_at)">
-                    {{ formatDate(task.updated_at) }}
-                  </a-tooltip>
-                </span>
-              </div>
               <div class="card-detail template-detail">
                 <span class="detail-label">模板:</span>
                 <span class="detail-value">
@@ -265,8 +227,18 @@
                 </span>
               </div>
               <div class="card-detail variables-detail">
-                <span class="detail-label">变量数量:</span>
-                <span class="detail-value">{{ task.variables?.length || 0 }}</span>
+                <span class="detail-label">变量:</span>
+                <span class="detail-value">
+                  <CodeOutlined />
+                  {{ task.variables?.length || 0 }} 个
+                </span>
+              </div>
+              <div class="card-detail created-detail">
+                <span class="detail-label">创建时间:</span>
+                <span class="detail-value">
+                  <ClockCircleOutlined />
+                  {{ formatDate(task.created_at) }}
+                </span>
               </div>
             </div>
             
@@ -298,106 +270,114 @@
 
     <!-- 创建/编辑任务模态框 -->
     <a-modal
-      v-model:visible="modalVisible"
+      v-model:open="modalVisible"
       :title="isEdit ? '编辑任务' : '创建任务'"
       @ok="handleSubmit"
-      width="800px"
+      @cancel="closeModal"
+      width="900px"
       :okText="isEdit ? '保存更改' : '创建任务'"
-      :maskClosable="false"
-      class="task-modal"
+      :confirmLoading="submitLoading"
+      class="yaml-task-modal"
     >
-      <a-form 
-        :model="formState" 
-        :rules="rules" 
-        ref="formRef"
-        layout="vertical"
-        class="task-form"
-      >
-        <a-form-item label="任务名称" name="name">
-          <a-input 
-            v-model:value="formState.name" 
-            placeholder="请输入任务名称" 
-            class="form-input"
-          >
-            <template #prefix>
-              <FileOutlined />
-            </template>
-          </a-input>
-        </a-form-item>
-        
-        <div class="form-row">
-          <a-form-item label="选择模板" name="template_id" class="form-col">
-            <a-select
-              v-model:value="formState.template_id"
-              placeholder="请选择模板"
-              class="form-select"
-              :options="templates.map(item => ({
-                value: item.id,
-                label: item.name
-              }))"
-            >
-              <template #suffixIcon>
-                <DownOutlined />
-              </template>
-            </a-select>
-          </a-form-item>
-          
-          <a-form-item label="选择集群" name="cluster_id" class="form-col">
-            <a-select
-              v-model:value="formState.cluster_id"
-              placeholder="请选择集群"
-              class="form-select"
-              :options="clusters.map(item => ({
-                value: item.id,
-                label: item.name
-              }))"
-            >
-              <template #suffixIcon>
-                <DownOutlined />
-              </template>
-            </a-select>
+      <a-alert type="info" show-icon class="modal-alert">
+        <template #message>{{ isEdit ? '编辑YAML任务' : '创建YAML任务' }}</template>
+        <template #description>{{ isEdit ? '修改任务配置和变量信息' : '请配置任务的基本信息和部署参数' }}</template>
+      </a-alert>
+      
+      <a-form :model="formState" layout="vertical" class="yaml-task-form" ref="formRef">
+        <div class="form-section">
+          <div class="section-title">基本信息</div>
+          <a-form-item label="任务名称" name="name" :rules="rules.name">
+            <a-input v-model:value="formState.name" placeholder="请输入任务名称" class="form-input">
+              <template #prefix><FileProtectOutlined /></template>
+            </a-input>
           </a-form-item>
         </div>
         
-        <a-form-item label="变量列表" name="variables">
-          <div class="variables-header">
-            <span class="variables-title">设置任务变量</span>
-            <a-button type="primary" ghost @click="addVariable" class="add-var-btn">
-              <template #icon><PlusOutlined /></template>
+        <div class="form-section">
+          <div class="section-title">配置选择</div>
+          <a-row :gutter="16">
+            <a-col :span="12">
+              <a-form-item label="选择模板" name="template_id" :rules="rules.template_id">
+                <a-select
+                  v-model:value="formState.template_id"
+                  placeholder="请选择模板"
+                  class="form-select"
+                >
+                  <template #suffixIcon><FileOutlined /></template>
+                  <a-select-option v-for="template in templates" :key="template.id" :value="template.id">
+                    {{ template.name }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="选择集群" name="cluster_id" :rules="rules.cluster_id">
+                <a-select
+                  v-model:value="formState.cluster_id"
+                  placeholder="请选择集群"
+                  class="form-select"
+                >
+                  <template #suffixIcon><CloudServerOutlined /></template>
+                  <a-select-option v-for="cluster in clusters" :key="cluster.id" :value="cluster.id">
+                    {{ cluster.name }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </div>
+        
+        <div class="form-section">
+          <div class="section-header">
+            <div class="section-title">变量配置</div>
+            <a-button type="primary" ghost @click="addVariable" class="add-variable-btn">
+              <PlusOutlined />
               添加变量
             </a-button>
           </div>
           
-          <a-empty v-if="!formState.variables?.length" class="variables-empty">
-            <template #description>
-              <span>暂无变量，点击上方按钮添加</span>
-            </template>
-          </a-empty>
-          
-          <div v-else class="variables-container">
-            <div v-for="(variable, index) in formState.variables" :key="index" class="variable-item">
-              <a-input
-                v-model:value="formState.variables[index]"
-                placeholder="key=value"
-                class="variable-input"
-              >
-                <template #prefix>
-                  <CodeOutlined />
-                </template>
-              </a-input>
-              <a-button type="text" danger @click="removeVariable(index)" class="remove-var-btn">
-                <template #icon><DeleteOutlined /></template>
-              </a-button>
+          <div class="variables-area">
+            <a-empty v-if="!formState.variables?.length" class="variables-empty">
+              <template #image>
+                <CodeOutlined style="font-size: 48px; color: #d9d9d9;" />
+              </template>
+              <template #description>
+                <span>暂无变量，点击上方按钮添加变量</span>
+              </template>
+            </a-empty>
+            
+            <div v-else class="variables-list">
+              <div v-for="(variable, index) in formState.variables" :key="index" class="variable-row">
+                <div class="variable-number">{{ index + 1 }}</div>
+                <a-input
+                  v-model:value="formState.variables[index]"
+                  placeholder="key=value"
+                  class="variable-input"
+                >
+                  <template #prefix>
+                    <CodeOutlined />
+                  </template>
+                </a-input>
+                <a-button 
+                  type="text" 
+                  danger 
+                  @click="removeVariable(index)" 
+                  class="remove-variable-btn"
+                >
+                  <DeleteOutlined />
+                </a-button>
+              </div>
             </div>
           </div>
-        </a-form-item>
+        </div>
       </a-form>
     </a-modal>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { message } from 'ant-design-vue';
 import type { FormInstance } from 'ant-design-vue';
 import {
@@ -409,13 +389,11 @@ import {
   DeleteOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
-  DownOutlined,
   AppstoreOutlined,
   CloudServerOutlined,
   CodeOutlined,
-  InboxOutlined,
-  TableOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  UnorderedListOutlined
 } from '@ant-design/icons-vue';
 import {
   getYamlTaskListApi,
@@ -438,18 +416,30 @@ interface YamlTask {
   updated_at?: string;
 }
 
+interface ClusterItem {
+  id: number;
+  name: string;
+}
+
+interface TemplateItem {
+  id: number;
+  name: string;
+}
+
 // 状态变量
 const loading = ref(false);
+const submitLoading = ref(false);
 const tasks = ref<YamlTask[]>([]);
 const searchText = ref('');
 const modalVisible = ref(false);
 const isEdit = ref(false);
 const formRef = ref<FormInstance>();
-const clusters = ref<Array<{id: number, name: string}>>([]);
-const templates = ref<Array<{id: number, name: string}>>([]);
+const clusters = ref<ClusterItem[]>([]);
+const templates = ref<TemplateItem[]>([]);
 const viewMode = ref<'table' | 'card'>('table');
 
-const formState = ref<Partial<YamlTask>>({
+// 表单状态
+const formState = reactive<Partial<YamlTask>>({
   name: '',
   template_id: undefined,
   cluster_id: undefined,
@@ -481,7 +471,10 @@ const columns = [
     dataIndex: 'created_at',
     key: 'created_at',
     width: '25%',
-    sorter: (a: YamlTask, b: YamlTask) => new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime(),
+    sorter: (a: YamlTask, b: YamlTask) => {
+      if (!a.created_at || !b.created_at) return 0;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    },
     slots: { customRender: 'created_at' },
   },
   {
@@ -489,7 +482,10 @@ const columns = [
     dataIndex: 'updated_at',
     key: 'updated_at',
     width: '25%',
-    sorter: (a: YamlTask, b: YamlTask) => new Date(a.updated_at || '').getTime() - new Date(b.updated_at || '').getTime(),
+    sorter: (a: YamlTask, b: YamlTask) => {
+      if (!a.updated_at || !b.updated_at) return 0;
+      return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+    },
     slots: { customRender: 'updated_at' },
   },
   {
@@ -501,33 +497,6 @@ const columns = [
   },
 ];
 
-// 日期格式化函数
-const formatDate = (dateString?: string) => {
-  if (!dateString) return '-';
-  const date = new Date(dateString);
-  return `${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
-};
-
-const formatFullDate = (dateString?: string) => {
-  if (!dateString) return '-';
-  const date = new Date(dateString);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
-};
-
-// 根据ID获取模板名称
-const getTemplateName = (id?: number) => {
-  if (!id) return '-';
-  const template = templates.value.find(t => t.id === id);
-  return template ? template.name : '-';
-};
-
-// 根据ID获取集群名称
-const getClusterName = (id?: number) => {
-  if (!id) return '-';
-  const cluster = clusters.value.find(c => c.id === id);
-  return cluster ? cluster.name : '-';
-};
-
 // 计算属性：过滤后的任务列表
 const filteredTasks = computed(() => {
   const searchValue = searchText.value.toLowerCase().trim();
@@ -535,9 +504,36 @@ const filteredTasks = computed(() => {
   return tasks.value.filter(task => task.name.toLowerCase().includes(searchValue));
 });
 
-// 搜索
+// 日期格式化函数
+const formatDate = (dateString?: string): string => {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
+
+const formatDateTime = (dateString?: string): string => {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+};
+
+// 根据ID获取模板名称
+const getTemplateName = (id?: number): string => {
+  if (!id) return '-';
+  const template = templates.value.find(t => t.id === id);
+  return template ? template.name : '-';
+};
+
+// 根据ID获取集群名称
+const getClusterName = (id?: number): string => {
+  if (!id) return '-';
+  const cluster = clusters.value.find(c => c.id === id);
+  return cluster ? cluster.name : '-';
+};
+
+// 搜索处理
 const onSearch = () => {
-  // 搜索逻辑已经在计算属性中实现，这里可以添加其他触发行为
+  // 搜索逻辑已在计算属性中实现
 };
 
 // 获取集群列表
@@ -553,7 +549,6 @@ const getClusters = async () => {
 // 获取模板列表
 const getTemplates = async () => {
   try {
-    // 这里暂时使用第一个集群的模板列表
     const firstCluster = clusters.value[0];
     if (firstCluster) {
       const res = await getYamlTemplateApi(firstCluster.id);
@@ -580,39 +575,39 @@ const getTasks = async () => {
 // 显示创建模态框
 const showCreateModal = () => {
   isEdit.value = false;
-  formState.value = {
+  Object.assign(formState, {
     name: '',
     template_id: undefined,
     cluster_id: undefined,
     variables: [],
-  };
+  });
   modalVisible.value = true;
 };
 
 // 显示编辑模态框
 const handleEdit = (record: YamlTask) => {
   isEdit.value = true;
-  formState.value = {
+  Object.assign(formState, {
     id: record.id,
     name: record.name,
     template_id: record.template_id,
     cluster_id: record.cluster_id,
     variables: [...record.variables],
-  };
+  });
   modalVisible.value = true;
 };
 
 // 添加变量
 const addVariable = () => {
-  if (!formState.value.variables) {
-    formState.value.variables = [];
+  if (!formState.variables) {
+    formState.variables = [];
   }
-  formState.value.variables.push('');
+  formState.variables.push('');
 };
 
 // 删除变量
 const removeVariable = (index: number) => {
-  formState.value.variables?.splice(index, 1);
+  formState.variables?.splice(index, 1);
 };
 
 // 应用任务
@@ -633,28 +628,25 @@ const handleSubmit = async () => {
   try {
     await formRef.value?.validate();
     
-    // 过滤掉空的变量
-    const variables = formState.value.variables?.filter(v => v.trim()) || [];
-    const hide = message.loading(isEdit.value ? '正在更新任务...' : '正在创建任务...', 0);
+    const variables = formState.variables?.filter(v => v.trim()) || [];
+    submitLoading.value = true;
     
     if (isEdit.value) {
       await updateYamlTaskApi({
-        id: formState.value.id,
-        name: formState.value.name,
-        template_id: formState.value.template_id,
-        cluster_id: formState.value.cluster_id,
+        id: formState.id!,
+        name: formState.name!,
+        template_id: formState.template_id!,
+        cluster_id: formState.cluster_id!,
         variables,
       });
-      hide();
       message.success('任务更新成功');
     } else {
       await createYamlTaskApi({
-        name: formState.value.name,
-        template_id: formState.value.template_id,
-        cluster_id: formState.value.cluster_id,
+        name: formState.name!,
+        template_id: formState.template_id!,
+        cluster_id: formState.cluster_id!,
         variables,
       });
-      hide();
       message.success('任务创建成功');
     }
     
@@ -662,6 +654,8 @@ const handleSubmit = async () => {
     getTasks();
   } catch (error: any) {
     message.error(error.message || (isEdit.value ? '更新任务失败' : '创建任务失败'));
+  } finally {
+    submitLoading.value = false;
   }
 };
 
@@ -679,6 +673,11 @@ const handleDelete = async (task: YamlTask) => {
   }
 };
 
+// 关闭模态框
+const closeModal = () => {
+  modalVisible.value = false;
+};
+
 // 页面加载时获取数据
 onMounted(async () => {
   await getClusters();
@@ -688,6 +687,7 @@ onMounted(async () => {
 </script>
 
 <style>
+/* 继承集群管理页面的基础样式 */
 :root {
   --primary-color: #1890ff;
   --success-color: #52c41a;
@@ -699,7 +699,7 @@ onMounted(async () => {
   --transition-duration: 0.3s;
 }
 
-.task-manager {
+.yaml-task-manager {
   background-color: #f0f2f5;
   border-radius: 8px;
   padding: 24px;
@@ -866,16 +866,12 @@ onMounted(async () => {
   color: #1890ff;
 }
 
-.template-card .metric-icon {
+.running-card .metric-icon {
   color: #52c41a;
 }
 
-.cluster-card .metric-icon {
+.env-card .metric-icon {
   color: #722ed1;
-}
-
-.system-card .metric-icon {
-  color: #fa8c16;
 }
 
 .card-footer {
@@ -888,25 +884,6 @@ onMounted(async () => {
   font-size: 12px;
   color: #8c8c8c;
   margin-top: 6px;
-}
-
-.system-status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.status-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #52c41a;
-  display: inline-block;
-}
-
-.status-text {
-  font-size: 13px;
-  color: #52c41a;
 }
 
 /* 视图切换按钮 */
@@ -927,21 +904,21 @@ onMounted(async () => {
   margin-right: 6px;
 }
 
-/* 任务表格样式 */
-.task-table {
+/* YAML任务表格样式 */
+.yaml-task-table {
   background: white;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
-.task-table :deep(.ant-table-thead > tr > th) {
+.yaml-task-table :deep(.ant-table-thead > tr > th) {
   background-color: #f5f7fa;
   font-weight: 600;
   padding: 14px 16px;
 }
 
-.task-table :deep(.ant-table-tbody > tr > td) {
+.yaml-task-table :deep(.ant-table-tbody > tr > td) {
   padding: 12px 16px;
 }
 
@@ -950,6 +927,10 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   font-weight: 500;
+}
+
+.task-title {
+  color: #1890ff;
 }
 
 .timestamp {
@@ -982,16 +963,15 @@ onMounted(async () => {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
-/* 卡片容器布局优化 - 横向排列 */
-.task-cards {
+/* YAML任务卡片样式 */
+.yaml-task-cards {
   display: flex;
   flex-wrap: wrap;
   gap: 30px;
   padding: 10px;
 }
 
-/* 卡片样式优化 */
-.task-card, .service-card {
+.yaml-task-card {
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
@@ -1005,12 +985,11 @@ onMounted(async () => {
   margin-bottom: 20px;
 }
 
-.task-card:hover, .service-card:hover {
+.yaml-task-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-/* 卡片头部样式 */
 .card-header {
   padding: 16px 20px;
   border-bottom: 1px solid #f0f0f0;
@@ -1018,14 +997,14 @@ onMounted(async () => {
   position: relative;
 }
 
-.task-title, .service-title {
+.service-title {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-right: 45px;
 }
 
-.task-title h3, .service-title h3 {
+.service-title h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
@@ -1039,7 +1018,21 @@ onMounted(async () => {
   color: #1890ff;
 }
 
-/* 卡片内容区域 */
+.card-type-tag {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 2px 10px;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
 .card-content {
   padding: 20px;
   flex-grow: 1;
@@ -1070,7 +1063,6 @@ onMounted(async () => {
   flex: 1;
 }
 
-/* 卡片底部按钮区域 */
 .card-action-footer {
   padding: 16px 20px;
   background-color: #f5f7fa;
@@ -1094,6 +1086,129 @@ onMounted(async () => {
   margin-right: 8px;
 }
 
+/* YAML任务模态框样式 */
+.yaml-task-modal {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.modal-alert {
+  margin-bottom: 16px;
+}
+
+.yaml-task-form {
+  padding: 10px;
+}
+
+.form-section {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.form-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  border-radius: 2px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.form-input,
+.form-select {
+  border-radius: 8px;
+  height: 42px;
+}
+
+.add-variable-btn {
+  border-radius: 10px;
+  height: 40px;
+  font-weight: 500;
+}
+
+.variables-area {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.variables-empty {
+  padding: 40px 0;
+  margin: 0;
+}
+
+.variables-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.variable-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: white;
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.variable-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.variable-input {
+  flex: 1;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.remove-variable-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.remove-variable-btn:hover {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
 /* 空状态样式 */
 .empty-state {
   display: flex;
@@ -1102,129 +1217,53 @@ onMounted(async () => {
   padding: 32px 0;
 }
 
-/* 表单样式 */
-.task-form {
-  padding: 10px;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.form-input, .form-select {
-  border-radius: 8px;
-  height: 42px;
-}
-
-.variables-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.variables-title {
-  font-weight: 500;
-  color: #333;
-}
-
-.add-var-btn {
-  border-radius: 6px;
-  height: 36px;
-}
-
-.variables-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-height: 300px;
-  overflow-y: auto;
-  padding: 12px;
-  background: #f9f9f9;
-  border-radius: 8px;
-}
-
-.variable-item {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.variable-input {
-  flex: 1;
-  border-radius: 6px;
-  border: 1px solid #d9d9d9;
-  background: white;
-  transition: all 0.3s;
-}
-
-.variable-input:hover {
-  border-color: #40a9ff;
-}
-
-.remove-var-btn {
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s;
-}
-
-.remove-var-btn:hover {
-  background: #fff2f0;
-  color: #ff4d4f;
-}
-
-.variables-empty {
-  padding: 24px 0;
-  background: #f9f9f9;
-  border-radius: 8px;
-}
-
 /* 响应式调整 */
 @media (max-width: 1400px) {
-  .task-cards {
+  .yaml-task-cards {
     justify-content: space-around;
   }
   
-  .task-card, .service-card {
+  .yaml-task-card {
     width: 320px;
   }
 }
 
 @media (max-width: 768px) {
-  .search-filters {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .control-panel {
-    flex-direction: column;
-    gap: 20px;
-  }
-  
-  .action-buttons {
-    margin-left: 0;
-    justify-content: space-between;
-    width: 100%;
-  }
-  
-  .form-row {
-    grid-template-columns: 1fr;
-  }
-  
-  .task-cards {
+  .yaml-task-cards {
     flex-direction: column;
     align-items: center;
   }
   
-  .task-card, .service-card {
+  .yaml-task-card {
     width: 100%;
     max-width: 450px;
+  }
+  
+  .card-action-footer {
+    flex-wrap: wrap;
+  }
+  
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .dashboard-stats {
+    margin-top: 16px;
+    width: 100%;
+  }
+  
+  .control-panel {
+    flex-direction: column;
+  }
+  
+  .search-filters {
+    margin-bottom: 16px;
+  }
+  
+  .action-buttons {
+    margin-left: 0;
+    justify-content: flex-end;
   }
 }
 </style>
