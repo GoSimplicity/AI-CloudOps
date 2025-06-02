@@ -79,9 +79,8 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 		alert.Annotations["description_value"],
 	)
 
-	// 获取告警严重性和绑定的服务节点
+	// 获取告警严重性
 	severity := constant.AlertSeverity(alert.Labels["severity"])
-	treeNode := alert.Labels["bind_tree_node"]
 
 	// 根据严重性获取标题颜色
 	alertHeaderColor, ok := constant.SeverityTitleColorMap[severity]
@@ -94,7 +93,6 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	msgSeverity := fmt.Sprintf(`**🌡️告警级别：**\n%s`, severity)
 	alertStatus := constant.AlertStatus(alert.Status)
 	msgStatus := fmt.Sprintf(`**📝当前状态：**\n<font color='%s'>%s</font>`, constant.StatusColorMap[alertStatus], constant.StatusChineseMap[alertStatus])
-	msgStreeNode := fmt.Sprintf(`**🏝️ 绑定的服务树：**\n<font color='green'>%s</font>`, treeNode)
 	msgTime := fmt.Sprintf(`**🕐 触发时间：**\n%s`, alert.StartsAt.Format("2006-01-02 15:04:05"))
 
 	// 构建 Grafana 和规则链接
@@ -197,7 +195,6 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	labelMap := pkg.CloneMap(alert.Labels)
 	delete(labelMap, "alertname")
 	delete(labelMap, "severity")
-	delete(labelMap, "bind_tree_node")
 	delete(labelMap, "alert_rule_id")
 	delete(labelMap, "alert_send_group")
 
@@ -236,7 +233,6 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 		msgAnno,          // 第一行 anno 信息
 		msgSeverity,      // 第二行告警级别
 		msgStatus,        // 第二行当前状态
-		msgStreeNode,     // 绑定的服务树
 		msgTime,          // 触发时间
 		msgUpgrade,       // 升级状态
 		msgOnduty,        // 值班组信息
@@ -279,7 +275,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 // buildFeishuCardContent 构建 Feishu 卡片内容的 JSON 字符串
 func (wc *webhookContent) buildFeishuCardContent(
 	alertHeaderColor, alertHeader, msgLabel, msgAnno, msgSeverity, msgStatus,
-	msgStreeNode, msgTime, msgUpgrade, msgOnduty, msgGrafana, msgSendGroup, msgExpr string,
+	msgTime, msgUpgrade, msgOnduty, msgGrafana, msgSendGroup, msgExpr string,
 	buttonURL1, buttonURL2, buttonURL3,
 	buttonURL4, buttonURL5, buttonURL6 string,
 ) (string, error) {
@@ -292,7 +288,6 @@ func (wc *webhookContent) buildFeishuCardContent(
 		msgAnno,          // 第一行 anno 信息
 		msgSeverity,      // 第二行告警级别
 		msgStatus,        // 第二行当前状态
-		msgStreeNode,     // 绑定的服务树
 		msgTime,          // 触发时间
 		msgUpgrade,       // 升级状态
 		msgOnduty,        // 值班组信息

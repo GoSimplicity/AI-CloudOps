@@ -64,12 +64,12 @@
             <a-tag color="purple" class="tech-tag">{{ getPoolName(record.pool_id) }}</a-tag>
           </template>
           
-          <!-- 树节点列 -->
-          <template #treeNodeNames="{ record }">
+          <!-- IP地址+端口列 -->
+          <template #ipAddress="{ record }">
             <div class="tag-container">
-              <a-tooltip :title="formatTreeNodeNames(record.tree_node_names)">
-                <span>{{ formatTreeNodeNames(record.tree_node_names) }}</span>
-              </a-tooltip>
+              <a-tag color="blue" class="tech-tag">
+                {{ record.ip_address }}:{{ record.port }}
+              </a-tag>
             </div>
           </template>
           
@@ -120,7 +120,7 @@
           >
             <template #buildOptionText="props">
               <span v-if="props.value !== '50'">{{ props.value }}条/页</span>
-              <span v-else>全部</span>
+              <span v-else">全部</span>
             </template>
           </a-pagination>
         </div>
@@ -183,11 +183,12 @@
               </a-form-item>
             </a-col>
             <a-col :xs="24" :sm="12">
-              <a-form-item label="端口" name="port" :rules="[
-                { required: true, message: '请输入端口' },
-                { type: 'number', min: 1, max: 65535, message: '端口必须在1-65535之间' }
-              ]">
-                <a-input-number v-model:value="addForm.port" :min="1" :max="65535" class="full-width" placeholder="请输入端口" />
+              <a-form-item label="关联采集池" name="pool_id" :rules="[{ required: true, message: '请选择关联采集池' }]">
+                <a-select v-model:value="addForm.pool_id" placeholder="请选择关联采集池">
+                  <a-select-option v-for="pool in pools" :key="pool.id" :value="pool.id">
+                    {{ pool.name }}
+                  </a-select-option>
+                </a-select>
               </a-form-item>
             </a-col>
           </a-row>
@@ -224,29 +225,30 @@
               </a-form-item>
             </a-col>
             <a-col :xs="24" :sm="12">
-              <a-form-item label="关联采集池" name="pool_id" :rules="[{ required: true, message: '请选择关联采集池' }]">
-                <a-select v-model:value="addForm.pool_id" placeholder="请选择关联采集池">
-                  <a-select-option v-for="pool in pools" :key="pool.id" :value="pool.id">
-                    {{ pool.name }}
-                  </a-select-option>
-                </a-select>
+              <a-form-item label="端口" name="port" :rules="[
+                { required: true, message: '请输入端口' },
+                { type: 'number', min: 1, max: 65535, message: '端口必须在1-65535之间' }
+              ]">
+                <a-input-number v-model:value="addForm.port" :min="1" :max="65535" class="full-width" placeholder="请输入端口" />
               </a-form-item>
             </a-col>
           </a-row>
         </div>
 
         <div class="form-section">
-          <div class="section-title">树节点配置</div>
-          <a-form-item label="树节点" name="tree_node_ids" :rules="[{ required: true, message: '请选择树节点' }]">
-            <a-tree-select 
-              v-model:value="addForm.tree_node_ids" 
-              :tree-data="treeData" 
-              :tree-checkable="true"
-              :tree-default-expand-all="true" 
-              :show-checked-strategy="SHOW_PARENT" 
-              placeholder="请选择树节点"
-              class="full-width" 
+          <div class="section-title">目标地址配置</div>
+          <a-form-item label="IP地址" name="ip_address" :rules="[
+            { required: true, message: '请输入IP地址' },
+            { pattern: /^(\d{1,3}\.){3}\d{1,3}$/, message: '请输入正确的IP地址格式' }
+          ]">
+            <a-input 
+              v-model:value="addForm.ip_address" 
+              placeholder="请输入IP地址，如：192.168.1.100"
             />
+            <div class="form-help-text">
+              <Icon icon="ant-design:info-circle-outlined" />
+              请输入单个IP地址，端口配置在上方端口字段
+            </div>
           </a-form-item>
         </div>
       </a-form>
@@ -308,11 +310,12 @@
               </a-form-item>
             </a-col>
             <a-col :xs="24" :sm="12">
-              <a-form-item label="端口" name="port" :rules="[
-                { required: true, message: '请输入端口' },
-                { type: 'number', min: 1, max: 65535, message: '端口必须在1-65535之间' }
-              ]">
-                <a-input-number v-model:value="editForm.port" :min="1" :max="65535" class="full-width" placeholder="请输入端口" />
+              <a-form-item label="关联采集池" name="pool_id" :rules="[{ required: true, message: '请选择关联采集池' }]">
+                <a-select v-model:value="editForm.pool_id" placeholder="请选择关联采集池">
+                  <a-select-option v-for="pool in pools" :key="pool.id" :value="pool.id">
+                    {{ pool.name }}
+                  </a-select-option>
+                </a-select>
               </a-form-item>
             </a-col>
           </a-row>
@@ -349,29 +352,30 @@
               </a-form-item>
             </a-col>
             <a-col :xs="24" :sm="12">
-              <a-form-item label="关联采集池" name="pool_id" :rules="[{ required: true, message: '请选择关联采集池' }]">
-                <a-select v-model:value="editForm.pool_id" placeholder="请选择关联采集池">
-                  <a-select-option v-for="pool in pools" :key="pool.id" :value="pool.id">
-                    {{ pool.name }}
-                  </a-select-option>
-                </a-select>
+              <a-form-item label="端口" name="port" :rules="[
+                { required: true, message: '请输入端口' },
+                { type: 'number', min: 1, max: 65535, message: '端口必须在1-65535之间' }
+              ]">
+                <a-input-number v-model:value="editForm.port" :min="1" :max="65535" class="full-width" placeholder="请输入端口" />
               </a-form-item>
             </a-col>
           </a-row>
         </div>
 
         <div class="form-section">
-          <div class="section-title">树节点配置</div>
-          <a-form-item label="树节点" name="tree_node_ids" :rules="[{ required: true, message: '请选择树节点' }]">
-            <a-tree-select 
-              v-model:value="editForm.tree_node_ids" 
-              :tree-data="treeData" 
-              :tree-checkable="true"
-              :tree-default-expand-all="true" 
-              :show-checked-strategy="SHOW_PARENT" 
-              placeholder="请选择树节点"
-              class="full-width" 
+          <div class="section-title">目标地址配置</div>
+          <a-form-item label="IP地址" name="ip_address" :rules="[
+            { required: true, message: '请输入IP地址' },
+            { pattern: /^(\d{1,3}\.){3}\d{1,3}$/, message: '请输入正确的IP地址格式' }
+          ]">
+            <a-input 
+              v-model:value="editForm.ip_address" 
+              placeholder="请输入IP地址，如：192.168.1.100"
             />
+            <div class="form-help-text">
+              <Icon icon="ant-design:info-circle-outlined" />
+              请输入单个IP地址，端口配置在上方端口字段
+            </div>
           </a-form-item>
         </div>
       </a-form>
@@ -382,7 +386,6 @@
 <script lang="ts" setup>
 import { reactive, ref, onMounted } from 'vue';
 import { message, Modal } from 'ant-design-vue';
-import { TreeSelect } from 'ant-design-vue';
 import { Icon } from '@iconify/vue';
 import dayjs from 'dayjs';
 import {
@@ -396,11 +399,9 @@ import {
   updateScrapeJobApi,
   deleteScrapeJobApi,
   getAllMonitorScrapePoolApi,
-  getTreeList,
   getMonitorScrapeJobTotalApi
 } from '#/api';
 import type { MonitorScrapeJobItem, createScrapeJobReq, updateScrapeJobReq } from '#/api/core/prometheus';
-const { SHOW_PARENT } = TreeSelect;
 
 // 分页相关
 const pageSizeOptions = ref<string[]>(['10', '20', '30', '40', '50']);
@@ -434,15 +435,6 @@ interface Pool {
   name: string;
 }
 
-interface TreeNode {
-  id: string | number;
-  title: string;
-  children?: TreeNode[];
-  isLeaf?: boolean;
-  value?: string | number;
-  key?: string | number;
-}
-
 // 数据源（待从后端获取）
 const data = ref<MonitorScrapeJobItem[]>([]);
 
@@ -454,7 +446,7 @@ const formatDate = (date: string) => {
   return dayjs(date).format('YYYY-MM-DD HH:mm:ss');
 };
 
-// 表格列配置 - 精简后的列
+// 表格列配置 - 更新IP地址列显示
 const columns = [
   {
     title: 'id',
@@ -489,10 +481,10 @@ const columns = [
     width: 120,
   },
   {
-    title: '树节点',
-    dataIndex: 'tree_node_names',
-    key: 'tree_node_names',
-    slots: { customRender: 'treeNodeNames' },
+    title: '目标地址',
+    dataIndex: 'ip_address',
+    key: 'ip_address',
+    slots: { customRender: 'ipAddress' },
     width: 150,
   },
   {
@@ -518,42 +510,6 @@ const columns = [
   },
 ];
 
-// 树形数据
-const treeData = ref<TreeNode[]>([]);
-
-// 递归处理树节点数据
-const processTreeData = (nodes: any[]): TreeNode[] => {
-  return nodes.map(node => {
-    const processedNode: TreeNode = {
-      id: String(node.id),
-      title: node.name,
-      key: String(node.id),
-      value: String(node.id),
-      isLeaf: node.isLeaf
-    };
-
-    if (node.children && node.children.length > 0) {
-      processedNode.children = processTreeData(node.children);
-    }
-
-    return processedNode;
-  });
-};
-
-// 获取树节点数据
-const fetchTreeNodes = async () => {
-  try {
-    const response = await getTreeList({});
-    if (!response) {
-      treeData.value = [];
-      return;
-    }
-    treeData.value = processTreeData(response);
-  } catch (error: any) {
-    message.error(error.message || '获取树节点数据失败');
-  }
-};
-
 // 模态框相关状态
 const isAddModalVisible = ref(false);
 const isEditModalVisible = ref(false);
@@ -564,7 +520,7 @@ const confirmLoading = ref(false);
 const addFormRef = ref();
 const editFormRef = ref();
 
-// 表单数据模型
+// 表单数据模型 - 修改为字符串类型
 const addForm = reactive({
   name: '',
   enable: true,
@@ -576,7 +532,7 @@ const addForm = reactive({
   pool_id: null as number | null,
   refresh_interval: 30,
   port: 9100,
-  tree_node_ids: [] as string[],
+  ip_address: '', // 字符串类型，单个IP
   relabel_configs_yaml_string: '',
   kube_config_file_path: '',
   tls_ca_file_path: '',
@@ -598,7 +554,7 @@ const editForm = reactive({
   pool_id: null as number | null,
   refresh_interval: 30,
   port: 9100,
-  tree_node_ids: [] as string[],
+  ip_address: '', // 字符串类型，单个IP
   relabel_configs_yaml_string: '',
   kube_config_file_path: '',
   tls_ca_file_path: '',
@@ -633,9 +589,8 @@ const fetchResources = async () => {
     const response = await getMonitorScrapeJobListApi(current.value, pageSizeRef.value, searchText.value);
     data.value = response.map((item: any) => ({
       ...item,
-      // 确保 treeNodeIds 始终是字符串数组
-      tree_node_ids: Array.isArray(item.tree_node_ids) ? item.tree_node_ids.map(String) : [],
-      tree_node_names: Array.isArray(item.tree_node_names) ? item.tree_node_names : []
+      // 处理IP地址字段 - 如果是数组则取第一个，否则保持原值
+      ip_address: Array.isArray(item.ip_address) ? item.ip_address[0] || '' : (item.ip_address || '')
     }));
     total.value = await getMonitorScrapeJobTotalApi();
 
@@ -650,12 +605,6 @@ const fetchResources = async () => {
 const getPoolName = (poolId: number) => {
   const pool = pools.value.find(p => p.id === poolId);
   return pool ? pool.name : '未知';
-};
-
-// 格式化树节点名称
-const formatTreeNodeNames = (treeNodeNames: string[]) => {
-  if (!Array.isArray(treeNodeNames)) return '';
-  return treeNodeNames.join(', ');
 };
 
 // 打开新增模态框
@@ -682,7 +631,7 @@ const resetAddForm = () => {
   addForm.pool_id = null;
   addForm.refresh_interval = 30;
   addForm.port = 9100;
-  addForm.tree_node_ids = [];
+  addForm.ip_address = ''; // 重置为空字符串
   addForm.relabel_configs_yaml_string = '';
   addForm.kube_config_file_path = '';
   addForm.tls_ca_file_path = '';
@@ -699,7 +648,12 @@ const handleAdd = async () => {
     // 表单验证
     await addFormRef.value.validateFields();
 
-    // 确保 treeNodeIds 是字符串数组
+    // 检查IP地址
+    if (!addForm.ip_address || addForm.ip_address.trim() === '') {
+      message.error('请输入IP地址');
+      return;
+    }
+
     const formData: createScrapeJobReq = {
       name: addForm.name,
       enable: addForm.enable,
@@ -711,7 +665,7 @@ const handleAdd = async () => {
       pool_id: addForm.pool_id!,
       refresh_interval: addForm.refresh_interval,
       port: addForm.port,
-      tree_node_ids: addForm.tree_node_ids.map(String),
+      ip_address: addForm.ip_address, 
       relabel_configs_yaml_string: addForm.relabel_configs_yaml_string,
       kube_config_file_path: addForm.kube_config_file_path,
       tls_ca_file_path: addForm.tls_ca_file_path,
@@ -748,7 +702,10 @@ const openEditModal = (record: MonitorScrapeJobItem) => {
     pool_id: record.pool_id,
     refresh_interval: record.refresh_interval,
     port: record.port,
-    tree_node_ids: record.tree_node_ids?.filter(id => id && id.trim() !== '').map(String) || [],
+    // 处理IP地址 - 如果是数组取第一个，否则保持原值
+    ip_address: Array.isArray(record.ip_address) 
+      ? (record.ip_address[0] || '') 
+      : (record.ip_address || ''),
   });
   isEditModalVisible.value = true;
 };
@@ -765,7 +722,12 @@ const handleUpdate = async () => {
     // 表单验证
     await editFormRef.value.validateFields();
 
-    // 确保 treeNodeIds 是字符串数组
+    // 检查IP地址
+    if (!editForm.ip_address || editForm.ip_address.trim() === '') {
+      message.error('请输入IP地址');
+      return;
+    }
+
     const formData: updateScrapeJobReq = {
       id: editForm.id,
       name: editForm.name,
@@ -778,7 +740,7 @@ const handleUpdate = async () => {
       pool_id: editForm.pool_id!,
       refresh_interval: editForm.refresh_interval,
       port: editForm.port,
-      tree_node_ids: editForm.tree_node_ids.map(String),
+      ip_address: editForm.ip_address, 
       relabel_configs_yaml_string: editForm.relabel_configs_yaml_string,
       kube_config_file_path: editForm.kube_config_file_path,
       tls_ca_file_path: editForm.tls_ca_file_path,
@@ -821,11 +783,11 @@ const handleDelete = (record: MonitorScrapeJobItem) => {
 onMounted(() => {
   fetchResources();
   fetchPools();
-  fetchTreeNodes();
 });
 </script>
 
 <style scoped>
+/* 保持原有样式，只添加表单帮助文本样式 */
 .monitor-page {
   padding: 20px;
   background-color: #f0f2f5;
@@ -1003,6 +965,16 @@ onMounted(() => {
 
 .custom-pagination {
   margin-right: 12px;
+}
+
+/* 表单帮助文本样式 */
+.form-help-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #666;
+  font-size: 12px;
+  margin-top: 4px;
 }
 
 /* 模态框样式 */

@@ -29,7 +29,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -312,7 +311,7 @@ func (p *promConfigCache) GenerateScrapeConfigs(ctx context.Context, pool *model
 			}
 
 			// 拼接 SD API URL
-			sdURL := fmt.Sprintf("%s?port=%d&leafNodeIds=%s", p.httpSdAPI, job.Port, strings.Join(job.TreeNodeIDs, ","))
+			sdURL := fmt.Sprintf("%s?port=%d&ipAddress=%s", p.httpSdAPI, job.Port, job.IpAddress)
 
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				&http.SDConfig{

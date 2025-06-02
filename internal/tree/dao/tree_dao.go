@@ -45,6 +45,7 @@ type TreeDAO interface {
 	GetChildNodes(ctx context.Context, parentId int) ([]*model.TreeNode, error)
 	GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsResp, error)
 	GetNodeLevel(ctx context.Context, nodeId int) (int, error)
+	GetLeafNodesByIDs(ctx context.Context, ids []int) ([]*model.TreeNode, error)
 
 	CreateNode(ctx context.Context, node *model.TreeNode) error
 	UpdateNode(ctx context.Context, node *model.TreeNode) error
@@ -539,6 +540,16 @@ func (t *treeDAO) GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsR
 	}
 
 	return stats, nil
+}
+
+// GetLeafNodesByIDs 根据ID列表获取叶子节点
+func (t *treeDAO) GetLeafNodesByIDs(ctx context.Context, ids []int) ([]*model.TreeNode, error) {
+	var nodes []*model.TreeNode
+	if err := t.db.WithContext(ctx).Where("id IN ? AND is_leaf = ?", ids, true).Find(&nodes).Error; err != nil {
+		t.logger.Error("获取叶子节点失败", zap.Ints("ids", ids), zap.Error(err))
+		return nil, fmt.Errorf("获取叶子节点失败: %w", err)
+	}
+	return nodes, nil
 }
 
 // RemoveNodeMember 移除节点成员

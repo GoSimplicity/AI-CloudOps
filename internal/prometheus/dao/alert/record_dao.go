@@ -163,15 +163,15 @@ func (a *alertManagerRecordDAO) UpdateMonitorRecordRule(ctx context.Context, rec
 		Model(&model.MonitorRecordRule{}).
 		Where("id = ? AND deleted_at = ?", recordRule.ID, 0).
 		Updates(map[string]interface{}{
-			"name":         recordRule.Name,
-			"pool_id":      recordRule.PoolID,
-			"tree_node_id": recordRule.TreeNodeID,
-			"enable":       recordRule.Enable,
-			"for_time":     recordRule.ForTime,
-			"expr":         recordRule.Expr,
-			"labels":       recordRule.Labels,
-			"annotations":  recordRule.Annotations,
-			"updated_at":   getTime(),
+			"name":        recordRule.Name,
+			"pool_id":     recordRule.PoolID,
+			"ip_address":  recordRule.IpAddress,
+			"enable":      recordRule.Enable,
+			"for_time":    recordRule.ForTime,
+			"expr":        recordRule.Expr,
+			"labels":      recordRule.Labels,
+			"annotations": recordRule.Annotations,
+			"updated_at":  getTime(),
 		}).Error; err != nil {
 		a.l.Error("更新 MonitorRecordRule 失败", zap.Error(err), zap.Int("id", recordRule.ID))
 		return err
