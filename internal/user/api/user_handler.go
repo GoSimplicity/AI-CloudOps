@@ -64,6 +64,7 @@ func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
 		userGroup.POST("/logout", u.Logout)
 		userGroup.GET("/profile", u.Profile)
 		userGroup.GET("/codes", u.GetPermCode)
+		userGroup.GET("/detail/:id", u.GetUserDetail)
 		userGroup.GET("/list", u.GetUserList)
 		userGroup.POST("/change_password", u.ChangePassword)
 		userGroup.POST("/write_off", u.WriteOff)
@@ -311,4 +312,20 @@ func (u *UserHandler) DeleteUser(ctx *gin.Context) {
 	}
 
 	utils.Success(ctx)
+}
+
+func (u *UserHandler) GetUserDetail(ctx *gin.Context) {
+	var req model.GetUserDetailRequest
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "用户ID格式错误")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return u.service.GetUserDetail(ctx, req.ID)
+	})
 }

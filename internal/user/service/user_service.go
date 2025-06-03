@@ -44,6 +44,7 @@ type UserService interface {
 	Login(ctx context.Context, user *model.User) (*model.User, error)
 	GetProfile(ctx context.Context, uid int) (*model.User, error)
 	GetPermCode(ctx context.Context, uid int) ([]string, error)
+	GetUserDetail(ctx context.Context, uid int) (*model.User, error)
 	GetUserList(ctx context.Context) ([]*model.User, error)
 	ChangePassword(ctx context.Context, uid int, oldPassword, newPassword string) error
 	WriteOff(ctx context.Context, username, password string) error
@@ -172,16 +173,24 @@ func (us *userService) WriteOff(ctx context.Context, username string, password s
 		return constants.ErrorPasswordIncorrect
 	}
 
-	// 注销账号
 	return us.dao.WriteOff(ctx, username, password)
 }
 
 func (us *userService) DeleteUser(ctx context.Context, uid int) error {
 	// 删除用户角色关联
-	if err := us.roleSvc.DeleteUserAllRoles(ctx, uid); err != nil {
+	if err := us.roleSvc.DeleteRole(ctx, uid); err != nil {
 		us.l.Error("删除用户角色关联失败", zap.Int("uid", uid), zap.Error(err))
 		return err
 	}
 
 	return us.dao.DeleteUser(ctx, uid)
+}
+
+func (us *userService) GetUserDetail(ctx context.Context, uid int) (*model.User, error) {
+	user, err := us.dao.GetUserByID(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }

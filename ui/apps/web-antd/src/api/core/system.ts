@@ -1,6 +1,5 @@
 import { requestClient } from '#/api/request';
 
-export namespace SystemApi {
   // API管理相关接口
   export interface ListApisReq {
     page_number: number; // 页码
@@ -34,59 +33,84 @@ export namespace SystemApi {
   }
 
   // 角色管理相关接口
-  export interface ListRolesReq {
-    page_number: number; // 页码
-    page_size: number; // 每页数量
+  export interface Role {
+    id: number;
+    name: string; // 角色名称
+    code: string; // 角色编码
+    description: string; // 角色描述
+    status: 0 | 1; // 状态 0禁用 1启用
+    is_system: 0 | 1; // 是否系统角色 0否 1是
+    apis?: any[]; // 关联API
+    users?: any[]; // 关联用户
+    created_at?: string;
+    updated_at?: string;
   }
 
-  export interface Role {
-    name: string; // 角色名称
-    domain: string; // 域ID
-    path: string; // 路径
-    method: string; // 方法
+  export interface ListRolesReq {
+    page: number; // 页码
+    size: number; // 每页数量
+    search?: string; // 搜索关键词
+    status?: 0 | 1; // 状态筛选
   }
 
   export interface CreateRoleReq {
     name: string; // 角色名称
-    domain: string; // 域ID
-    path: string; // 路径
-    method: string; // 方法
+    code: string; // 角色编码
+    description?: string; // 角色描述
+    status: 0 | 1; // 状态
+    api_ids?: number[]; // 关联的API ID列表
   }
 
   export interface UpdateRoleReq {
-    new_role: Role; // 新角色信息
-    old_role: Role; // 旧角色信息
+    id: number; // 角色ID
+    name: string; // 角色名称
+    code: string; // 角色编码
+    description?: string; // 角色描述
+    status: 0 | 1; // 状态
+    api_ids?: number[]; // 关联的API ID列表
   }
 
   export interface DeleteRoleReq {
-    name: string; // 角色名称
-    domain: string; // 域ID
-    path: string; // 路径
-    method: string; // 方法
+    id: number; // 角色ID
   }
 
-  export interface ListUserRolesReq {
-    page_number: number; // 页码
-    page_size: number; // 每页数量
+  export interface AssignRoleApiReq {
+    role_id: number; // 角色ID
+    api_ids: number[]; // API ID列表
   }
 
-  export interface UpdateUserRoleReq {
+  export interface RevokeRoleApiReq {
+    role_id: number; // 角色ID
+    api_ids: number[]; // API ID列表
+  }
+
+  export interface AssignRolesToUserReq {
     user_id: number; // 用户ID
-    api_ids?: number[]; // API ID列表
     role_ids: number[]; // 角色ID列表
   }
-}
+
+  export interface RevokeRolesFromUserReq {
+    user_id: number; // 用户ID
+    role_ids: number[]; // 角色ID列表
+  }
+
+  export interface CheckUserPermissionReq {
+    user_id: number; // 用户ID
+    method: string; // 请求方法
+    path: string; // 请求路径
+  }
+
 
 // API管理
-export function listApisApi(data: SystemApi.ListApisReq) {
+export function listApisApi(data: ListApisReq) {
   return requestClient.post('/apis/list', data);
 }
 
-export function createApiApi(data: SystemApi.CreateApiReq) {
+export function createApiApi(data: CreateApiReq) {
   return requestClient.post('/apis/create', data);
 }
 
-export function updateApiApi(data: SystemApi.UpdateApiReq) {
+export function updateApiApi(data: UpdateApiReq) {
   return requestClient.post('/apis/update', data);
 }
 
@@ -95,28 +119,61 @@ export function deleteApiApi(id: string) {
 }
 
 // 角色管理
-export function listRolesApi(data: SystemApi.ListRolesReq) {
-  return requestClient.post('/roles/list', data);
+export function listRolesApi(data: ListRolesReq) {
+  return requestClient.post('/role/list', data);
 }
 
-export function createRoleApi(data: SystemApi.CreateRoleReq) {
-  return requestClient.post('/roles/create', data);
+export function createRoleApi(data: CreateRoleReq) {
+  return requestClient.post('/role/create', data);
 }
 
-export function updateRoleApi(data: SystemApi.UpdateRoleReq) {
-  return requestClient.post('/roles/update', data);
+export function updateRoleApi(data: UpdateRoleReq) {
+  return requestClient.post('/role/update', data);
 }
 
-export function deleteRoleApi(data: SystemApi.DeleteRoleReq) {
-  return requestClient.post('/roles/delete', data);
+export function deleteRoleApi(data: DeleteRoleReq) {
+  return requestClient.post('/role/delete', data);
 }
 
-// 获取用户角色
-export function getUserRolesApi(data: SystemApi.ListUserRolesReq) {
-  return requestClient.post('/roles/user/roles', data);
+export function getRoleDetailApi(id: number) {
+  return requestClient.get(`/role/detail/${id}`);
 }
 
-// 更新用户角色
-export function updateUserRoleApi(data: SystemApi.UpdateUserRoleReq) {
-  return requestClient.post('/permissions/user/assign', data);
+// 角色权限管理
+export function assignApisToRoleApi(data: AssignRoleApiReq) {
+  return requestClient.post('/role/assign-apis', data);
+}
+
+export function revokeApisFromRoleApi(data: RevokeRoleApiReq) {
+  return requestClient.post('/role/revoke-apis', data);
+}
+
+export function getRoleApisApi(id: number) {
+  return requestClient.get(`/role/apis/${id}`);
+}
+
+// 用户角色管理
+export function assignRolesToUserApi(data: AssignRolesToUserReq) {
+  return requestClient.post('/role/assign_users', data);
+}
+
+export function revokeRolesFromUserApi(data: RevokeRolesFromUserReq) {
+  return requestClient.post('/role/revoke_users', data);
+}
+
+export function getRoleUsersApi(id: number) {
+  return requestClient.get(`/role/users/${id}`);
+}
+
+export function getUserRolesApi(id: number) {
+  return requestClient.get(`/role/user_roles/${id}`);
+}
+
+// 权限检查
+export function checkUserPermissionApi(data: CheckUserPermissionReq) {
+  return requestClient.post('/role/check_permission', data);
+}
+
+export function getUserPermissionsApi(id: number) {
+  return requestClient.get(`/role/user_permissions/${id}`);
 }

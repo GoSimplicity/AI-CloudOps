@@ -26,141 +26,216 @@
 package api
 
 import (
-	"strconv"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type RoleHandler struct {
-	svc    service.RoleService
-	apiSvc service.ApiService
-	l      *zap.Logger
+	svc service.RoleService
 }
 
-func NewRoleHandler(svc service.RoleService, apiSvc service.ApiService, l *zap.Logger) *RoleHandler {
+func NewRoleHandler(svc service.RoleService) *RoleHandler {
 	return &RoleHandler{
-		svc:    svc,
-		apiSvc: apiSvc,
-		l:      l,
+		svc: svc,
 	}
 }
 
 func (r *RoleHandler) RegisterRouters(server *gin.Engine) {
-	roleGroup := server.Group("/api/roles")
+	roleGroup := server.Group("/api/role")
+	{
+		// 角色管理
+		roleGroup.POST("/list", r.ListRoles)
+		roleGroup.POST("/create", r.CreateRole)
+		roleGroup.POST("/update", r.UpdateRole)
+		roleGroup.POST("/delete", r.DeleteRole)
+		roleGroup.GET("/detail/:id", r.GetRoleDetail)
 
-	roleGroup.POST("/list", r.ListRoles)
-	roleGroup.POST("/create", r.CreateRole)
-	roleGroup.POST("/update", r.UpdateRole)
-	roleGroup.POST("/delete", r.DeleteRole)
-	roleGroup.POST("/user/roles", r.GetUserRoles)
+		// 角色权限管理
+		roleGroup.POST("/assign-apis", r.AssignApisToRole)
+		roleGroup.POST("/revoke-apis", r.RevokeApisFromRole)
+		roleGroup.GET("/apis/:id", r.GetRoleApis)
+
+		// 用户角色管理
+		roleGroup.POST("/assign_users", r.AssignRolesToUser)
+		roleGroup.POST("/revoke_users", r.RevokeRolesFromUser)
+		roleGroup.GET("/users/:id", r.GetRoleUsers)
+		roleGroup.GET("/user_roles/:id", r.GetUserRoles)
+
+		// 权限检查
+		roleGroup.POST("/check_permission", r.CheckUserPermission)
+		roleGroup.GET("/user_permissions/:id", r.GetUserPermissions)
+	}
 }
 
 // ListRoles 获取角色列表
-func (r *RoleHandler) ListRoles(c *gin.Context) {
+func (r *RoleHandler) ListRoles(ctx *gin.Context) {
 	var req model.ListRolesRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		r.l.Error("绑定请求参数失败", zap.Error(err))
-		utils.ErrorWithMessage(c, err.Error())
-		return
-	}
 
-	// 调用service获取角色列表
-	resp, err := r.svc.ListRoles(c.Request.Context(), req.PageNumber, req.PageSize)
-	if err != nil {
-		r.l.Error("获取角色列表失败", zap.Error(err))
-		utils.ErrorWithMessage(c, err.Error())
-		return
-	}
-
-	utils.SuccessWithData(c, gin.H{
-		"items": resp.Items,
-		"total": resp.Total,
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return r.svc.ListRoles(ctx, &req)
 	})
 }
 
 // CreateRole 创建角色
-func (r *RoleHandler) CreateRole(c *gin.Context) {
+func (r *RoleHandler) CreateRole(ctx *gin.Context) {
 	var req model.CreateRoleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		r.l.Error("绑定请求参数失败", zap.Error(err))
-		utils.ErrorWithMessage(c, err.Error())
-		return
-	}
 
-	// 创建角色
-	if err := r.svc.CreateRole(c.Request.Context(), &req); err != nil {
-		r.l.Error("创建角色失败", zap.Error(err))
-		utils.ErrorWithMessage(c, err.Error())
-		return
-	}
-
-	utils.Success(c)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return r.svc.CreateRole(ctx, &req)
+	})
 }
 
 // UpdateRole 更新角色
-func (r *RoleHandler) UpdateRole(c *gin.Context) {
+func (r *RoleHandler) UpdateRole(ctx *gin.Context) {
 	var req model.UpdateRoleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		r.l.Error("绑定请求参数失败", zap.Error(err))
-		utils.ErrorWithMessage(c, err.Error())
-		return
-	}
 
-	// 更新角色基本信息
-	if err := r.svc.UpdateRole(c.Request.Context(), &req); err != nil {
-		r.l.Error("更新角色失败", zap.Error(err))
-		utils.ErrorWithMessage(c, err.Error())
-		return
-	}
-
-	utils.Success(c)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return r.svc.UpdateRole(ctx, &req)
+	})
 }
 
 // DeleteRole 删除角色
-func (r *RoleHandler) DeleteRole(c *gin.Context) {
+func (r *RoleHandler) DeleteRole(ctx *gin.Context) {
 	var req model.DeleteRoleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		r.l.Error("绑定请求参数失败", zap.Error(err))
-		utils.ErrorWithMessage(c, err.Error())
-		return
-	}
 
-	if err := r.svc.DeleteRole(c.Request.Context(), &req); err != nil {
-		r.l.Error("删除角色失败", zap.Error(err))
-		utils.ErrorWithMessage(c, err.Error())
-		return
-	}
-
-	utils.Success(c)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, r.svc.DeleteRole(ctx, req.ID)
+	})
 }
 
-// GetUserRoles 获取用户角色
-func (r *RoleHandler) GetUserRoles(c *gin.Context) {
-	var req model.ListUserRolesRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		r.l.Error("绑定请求参数失败", zap.Error(err))
-		utils.ErrorWithMessage(c, err.Error())
-		return
-	}
+// GetRoleDetail 获取角色详情
+func (r *RoleHandler) GetRoleDetail(ctx *gin.Context) {
+	var req model.GetRoleRequest
 
-	// 从URL参数中获取用户ID
-	userId, err := strconv.Atoi(c.Query("user_id"))
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		r.l.Error("解析用户ID失败", zap.Error(err))
-		utils.ErrorWithMessage(c, "无效的用户ID")
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	resp, err := r.svc.GetUserRoles(c.Request.Context(), userId, req.PageNumber, req.PageSize)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return r.svc.GetRoleByID(ctx, id)
+	})
+}
+
+// AssignApisToRole 为角色分配API权限
+func (r *RoleHandler) AssignApisToRole(ctx *gin.Context) {
+	var req model.AssignRoleApiRequest
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, r.svc.AssignApisToRole(ctx, req.RoleID, req.ApiIds)
+	})
+}
+
+// RevokeApisFromRole 撤销角色的API权限
+func (r *RoleHandler) RevokeApisFromRole(ctx *gin.Context) {
+	var req model.RevokeRoleApiRequest
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, r.svc.RevokeApisFromRole(ctx, req.RoleID, req.ApiIds)
+	})
+}
+
+// GetRoleApis 获取角色的API权限列表
+func (r *RoleHandler) GetRoleApis(ctx *gin.Context) {
+	var req model.GetRoleApiRequest
+
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		r.l.Error("获取用户角色失败", zap.Error(err))
-		utils.ErrorWithMessage(c, err.Error())
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	utils.SuccessWithData(c, resp)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return r.svc.GetRoleApis(ctx, id)
+	})
+}
+
+// AssignRolesToUser 为用户分配角色
+func (r *RoleHandler) AssignRolesToUser(ctx *gin.Context) {
+	var req model.AssignRolesToUserRequest
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	req.UserID = user.Uid
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, r.svc.AssignRolesToUser(ctx, req.UserID, req.RoleIds, 0)
+	})
+}
+
+// RevokeRolesFromUser 撤销用户角色
+func (r *RoleHandler) RevokeRolesFromUser(ctx *gin.Context) {
+	var req model.RevokeRolesFromUserRequest
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	req.UserID = user.Uid
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, r.svc.RevokeRolesFromUser(ctx, req.UserID, req.RoleIds)
+	})
+}
+
+// GetRoleUsers 获取角色下的用户列表
+func (r *RoleHandler) GetRoleUsers(ctx *gin.Context) {
+	var req model.GetRoleUsersRequest
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return r.svc.GetRoleUsers(ctx, id)
+	})
+}
+
+// GetUserRoles 获取用户的角色列表
+func (r *RoleHandler) GetUserRoles(ctx *gin.Context) {
+	var req model.GetUserRolesRequest
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return r.svc.GetUserRoles(ctx, req.ID)
+	})
+}
+
+// CheckUserPermission 检查用户权限
+func (r *RoleHandler) CheckUserPermission(ctx *gin.Context) {
+	var req model.CheckUserPermissionRequest
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+	req.UserID = user.Uid
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return r.svc.CheckUserPermission(ctx, req.UserID, req.Method, req.Path)
+	})
+}
+
+// GetUserPermissions 获取用户的所有权限
+func (r *RoleHandler) GetUserPermissions(ctx *gin.Context) {
+	var req model.GetUserPermissionsRequest
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return r.svc.GetUserPermissions(ctx, req.ID)
+	})
 }

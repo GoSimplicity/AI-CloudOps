@@ -1,448 +1,1228 @@
 <template>
   <div class="role-management-container">
-    <!-- 顶部卡片 -->
-    <div class="dashboard-card">
-      <div class="card-title">
-        <Icon icon="material-symbols:badge-outline" class="title-icon" />
-        <h2>角色管理</h2>
-      </div>
-
-      <!-- 查询和操作 -->
-      <div class="custom-toolbar">
-        <!-- 查询功能 -->
-        <div class="search-filters">
-          <a-input
-            v-model:value="searchText" 
-            placeholder="请输入角色名称"
-            class="search-input"
-            @pressEnter="handleSearch"
-          >
-            <template #prefix>
-              <Icon icon="ri:search-line" />
-            </template>
-          </a-input>
-          <a-button type="primary" @click="handleSearch" class="search-button">
-            <template #icon><Icon icon="ri:search-line" /></template>
-            搜索
-          </a-button>
+    <!-- 顶部统计卡片 -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon role-icon">
+          <Icon icon="material-symbols:badge-outline" />
         </div>
-        <!-- 操作按钮 -->
-        <div class="action-buttons">
-          <a-button type="primary" @click="handleAdd" class="add-button">
-            <template #icon><Icon icon="material-symbols:add" /></template>
-            创建角色
-          </a-button>
+        <div class="stat-content">
+          <div class="stat-value">{{ roleList.length }}</div>
+          <div class="stat-label">总角色数</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon active-icon">
+          <Icon icon="material-symbols:check-circle-outline" />
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ activeRoles }}</div>
+          <div class="stat-label">启用角色</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon system-icon">
+          <Icon icon="material-symbols:admin-panel-settings-outline" />
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ systemRoles }}</div>
+          <div class="stat-label">系统角色</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon user-icon">
+          <Icon icon="material-symbols:group-outline" />
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ totalUsers }}</div>
+          <div class="stat-label">关联用户</div>
         </div>
       </div>
     </div>
 
-    <!-- 角色列表表格 -->
-    <div class="table-container">
-      <a-table 
-        :columns="columns" 
-        :data-source="filteredRoleList" 
-        row-key="id" 
-        :loading="loading"
-        :pagination="pagination"
-        @change="handleTableChange"
-        class="role-table"
-      >
-        <!-- 方法列自定义渲染 -->
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.dataIndex === 'method'">
-            <a-tag :color="getMethodColor(record.method)" class="method-tag">
-              {{ record.method }}
-            </a-tag>
-          </template>
-          <template v-if="column.key === 'action'">
-            <a-space>
-              <a-tooltip title="编辑角色">
-                <a-button type="link" @click="handleEdit(record)" class="action-button edit-button">
-                  <template #icon><Icon icon="clarity:note-edit-line" /></template>
-                </a-button>
-              </a-tooltip>
-              <a-tooltip title="删除角色">
-                <a-popconfirm
-                  title="确定要删除这个角色吗?"
-                  ok-text="确定"
-                  cancel-text="取消"
-                  placement="left"
-                  @confirm="handleDelete(record)"
-                >
-                  <a-button type="link" danger class="action-button delete-button">
-                    <template #icon><Icon icon="ant-design:delete-outlined" /></template>
-                  </a-button>
-                </a-popconfirm>
-              </a-tooltip>
-            </a-space>
-          </template>
-        </template>
-      </a-table>
-    </div>
-
-    <!-- 角色表单弹窗 -->
-    <a-modal
-      v-model:visible="isModalVisible"
-      :title="modalTitle"
-      @ok="handleModalSubmit"
-      @cancel="handleModalCancel"
-      :okText="'保存'"
-      :cancelText="'取消'"
-      width="600px"
-      class="custom-modal role-modal"
-      :maskClosable="false"
-      :destroyOnClose="true"
-    >
-      <div class="modal-content">
-        <div class="modal-header-icon">
-          <div class="icon-wrapper" :class="{ 'edit-icon': modalTitle === '编辑角色' }">
-            <Icon :icon="modalTitle === '创建角色' ? 'mdi:shield-plus' : 'mdi:shield-edit'" />
-          </div>
-          <div class="header-text">{{ modalTitle === '创建角色' ? '创建新角色' : '编辑角色信息' }}</div>
+    <!-- 主控制面板 -->
+    <div class="main-panel">
+      <div class="panel-header">
+        <div class="header-title">
+          <Icon icon="material-symbols:shield-person-outline" class="title-icon" />
+          <h2>角色权限管理</h2>
         </div>
         
-        <a-form :model="formData" layout="vertical" :rules="formRules" class="role-form">
-          <div class="form-section">
-            <div class="section-title">
-              <Icon icon="mdi:information-outline" class="section-icon" />
-              <span>基本信息</span>
-            </div>
+        <!-- 搜索和筛选区域 -->
+        <div class="search-section">
+          <div class="search-group">
+            <a-input
+              v-model:value="searchParams.search"
+              placeholder="搜索角色名称或编码"
+              class="search-input"
+              @pressEnter="handleSearch"
+              allowClear
+            >
+              <template #prefix>
+                <Icon icon="ri:search-line" />
+              </template>
+            </a-input>
             
-            <div class="form-row">
-              <a-form-item label="角色名称" name="name" class="form-item">
-                <a-input 
-                  v-model:value="formData.name" 
-                  placeholder="请输入角色名称" 
-                  class="custom-input"
-                />
-              </a-form-item>
-              
-              <a-form-item label="域ID" name="domain" class="form-item">
-                <a-input 
-                  v-model:value="formData.domain" 
-                  placeholder="请输入域ID" 
-                  class="custom-input"
-                />
-              </a-form-item>
+            <a-select
+              v-model:value="searchParams.status"
+              placeholder="状态筛选"
+              class="status-filter"
+              allowClear
+            >
+              <a-select-option :value="1">
+                <div class="status-option">
+                  <div class="status-dot active"></div>
+                  <span>启用</span>
+                </div>
+              </a-select-option>
+              <a-select-option :value="0">
+                <div class="status-option">
+                  <div class="status-dot inactive"></div>
+                  <span>禁用</span>
+                </div>
+              </a-select-option>
+            </a-select>
+            
+            <a-button type="primary" @click="handleSearch" class="search-btn">
+              <template #icon><Icon icon="ri:search-line" /></template>
+              搜索
+            </a-button>
+          </div>
+          
+          <div class="action-group">
+            <!-- 视图切换按钮 -->
+            <a-radio-group 
+              v-model:value="viewMode" 
+              button-style="solid" 
+              size="small"
+              class="view-toggle"
+            >
+              <a-radio-button value="card">
+                卡片
+              </a-radio-button>
+              <a-radio-button value="list">
+                列表
+              </a-radio-button>
+            </a-radio-group>
+            
+            <a-button @click="handleRefresh" class="refresh-btn">
+              <template #icon><Icon icon="material-symbols:refresh" /></template>
+              刷新
+            </a-button>
+            <a-button type="primary" @click="handleAdd" class="add-btn">
+              <template #icon><Icon icon="material-symbols:add" /></template>
+              新建角色
+            </a-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 卡片视图 -->
+      <div v-if="viewMode === 'card'" class="role-grid">
+        <div 
+          v-for="role in paginatedRoles" 
+          :key="role.id" 
+          class="role-card"
+          :class="{ 'system-role': role.is_system }"
+        >
+          <div class="role-header">
+            <div class="role-title">
+              <div class="role-name">{{ role.name }}</div>
+              <div class="role-code">{{ role.code }}</div>
+            </div>
+            <div class="role-status">
+              <a-switch 
+                v-model:checked="role.status" 
+                :checked-value="1" 
+                :unchecked-value="0"
+                @change="handleStatusChange(role)"
+                :disabled="role.is_system === 1"
+                size="small"
+              />
             </div>
           </div>
           
-          <div class="form-section">
-            <div class="section-title">
-              <Icon icon="mdi:web" class="section-icon" />
-              <span>API访问权限</span>
+          <div class="role-description">
+            {{ role.description || '暂无描述' }}
+          </div>
+          
+          <div class="role-stats">
+            <div class="stat-item">
+              <Icon icon="material-symbols:api" />
+              <span>{{ role.apis?.length || 0 }} 个权限</span>
             </div>
-            
-            <div class="form-row">
-              <a-form-item label="访问路径" name="path" class="full-width">
-                <a-input 
-                  v-model:value="formData.path" 
-                  placeholder="请输入API路径，例如：/api/users" 
-                  class="custom-input"
-                  prefix-icon="mdi:link-variant"
-                >
-                  <template #prefix>
-                    <Icon icon="mdi:link-variant" class="input-icon" />
-                  </template>
-                </a-input>
-              </a-form-item>
-            </div>
-            
-            <div class="form-row">
-              <a-form-item label="HTTP方法" name="method" class="form-item">
-                <a-select 
-                  v-model:value="formData.method" 
-                  placeholder="请选择HTTP方法" 
-                  class="custom-select"
-                  dropdown-class-name="method-dropdown"
-                >
-                  <a-select-option value="GET" class="method-option">
-                    <div class="method-option-content">
-                      <div class="method-badge get">GET</div>
-                      <span class="method-description">查询数据</span>
-                    </div>
-                  </a-select-option>
-                  <a-select-option value="POST" class="method-option">
-                    <div class="method-option-content">
-                      <div class="method-badge post">POST</div>
-                      <span class="method-description">创建数据</span>
-                    </div>
-                  </a-select-option>
-                  <a-select-option value="PUT" class="method-option">
-                    <div class="method-option-content">
-                      <div class="method-badge put">PUT</div>
-                      <span class="method-description">更新数据</span>
-                    </div>
-                  </a-select-option>
-                  <a-select-option value="DELETE" class="method-option">
-                    <div class="method-option-content">
-                      <div class="method-badge delete">DELETE</div>
-                      <span class="method-description">删除数据</span>
-                    </div>
-                  </a-select-option>
-                  <a-select-option value="*" class="method-option">
-                    <div class="method-option-content">
-                      <div class="method-badge all">ALL</div>
-                      <span class="method-description">所有方法</span>
-                    </div>
-                  </a-select-option>
-                </a-select>
-              </a-form-item>
+            <div class="stat-item">
+              <Icon icon="material-symbols:group" />
+              <span>{{ role.users?.length || 0 }} 个用户</span>
             </div>
           </div>
           
-          <div class="role-preview" v-if="formData.name && formData.path && formData.method">
-            <div class="preview-title">角色预览</div>
-            <div class="preview-content">
-              <div class="preview-item">
-                <span class="preview-label">角色名称:</span>
-                <span class="preview-value">{{ formData.name }}</span>
+          <div class="role-tags">
+            <a-tag v-if="role.is_system === 1" color="red" class="system-tag">
+              <Icon icon="material-symbols:admin-panel-settings" />
+              系统角色
+            </a-tag>
+            <a-tag :color="role.status === 1 ? 'green' : 'default'" class="status-tag">
+              {{ role.status === 1 ? '已启用' : '已禁用' }}
+            </a-tag>
+          </div>
+          
+          <div class="role-actions">
+            <a-tooltip title="查看详情">
+              <a-button type="text" @click="handleView(role)" class="action-btn view-btn">
+                <Icon icon="material-symbols:visibility-outline" />
+              </a-button>
+            </a-tooltip>
+            <a-tooltip title="编辑角色">
+              <a-button type="text" @click="handleEdit(role)" class="action-btn edit-btn">
+                <Icon icon="material-symbols:edit-outline" />
+              </a-button>
+            </a-tooltip>
+            <a-tooltip title="权限管理">
+              <a-button type="text" @click="handlePermission(role)" class="action-btn permission-btn">
+                <Icon icon="material-symbols:key-outline" />
+              </a-button>
+            </a-tooltip>
+            <a-tooltip title="删除角色">
+              <a-popconfirm
+                title="确定要删除这个角色吗？"
+                @confirm="handleDelete(role)"
+                :disabled="role.is_system === 1"
+              >
+                <a-button 
+                  type="text" 
+                  danger 
+                  :disabled="role.is_system === 1"
+                  class="action-btn delete-btn"
+                >
+                  <Icon icon="material-symbols:delete-outline" />
+                </a-button>
+              </a-popconfirm>
+            </a-tooltip>
+          </div>
+          
+          <div class="role-time">
+            <small>创建时间：{{ formatTime(role.created_at) }}</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- 列表视图 -->
+      <div v-else class="role-table-container">
+        <a-table
+          :columns="tableColumns"
+          :data-source="paginatedRoles"
+          :pagination="false"
+          :scroll="{ x: 1200 }"
+          row-key="id"
+          class="role-table"
+          size="middle"
+        >
+          <template #bodyCell="{ column, record, text }">
+            <!-- 角色名称列 -->
+            <template v-if="column.key === 'name'">
+              <div class="name-cell">
+                <div class="role-name-text">{{ record.name }}</div>
+                <div class="role-code-text">{{ record.code }}</div>
               </div>
-              <div class="preview-item">
-                <span class="preview-label">权限范围:</span>
-                <span class="preview-value permission-value">
-                  <a-tag :color="getMethodColor(formData.method)" class="preview-method-tag">
-                    {{ formData.method }}
-                  </a-tag>
-                  <span class="path-value">{{ formData.path || '/' }}</span>
+            </template>
+            
+            <!-- 角色类型列 -->
+            <template v-if="column.key === 'type'">
+              <a-tag v-if="record.is_system === 1" color="orange">
+                <Icon icon="material-symbols:admin-panel-settings" />
+                系统角色
+              </a-tag>
+              <a-tag v-else color="blue">
+                <Icon icon="material-symbols:person-outline" />
+                自定义角色
+              </a-tag>
+            </template>
+            
+            <!-- 状态列 -->
+            <template v-if="column.key === 'status'">
+              <a-switch 
+                v-model:checked="record.status" 
+                :checked-value="1" 
+                :unchecked-value="0"
+                @change="handleStatusChange(record)"
+                :disabled="record.is_system === 1"
+                size="small"
+              />
+              <div class="status-text">
+                {{ record.status === 1 ? '已启用' : '已禁用' }}
+              </div>
+            </template>
+            
+            <!-- 描述列 -->
+            <template v-if="column.key === 'description'">
+              <div class="description-cell">
+                {{ record.description || '暂无描述' }}
+              </div>
+            </template>
+            
+            <!-- 权限数量列 -->
+            <template v-if="column.key === 'apis'">
+              <div class="count-cell">
+                <Icon icon="material-symbols:api" />
+                {{ record.apis?.length || 0 }}
+              </div>
+            </template>
+            
+            <!-- 用户数量列 -->
+            <template v-if="column.key === 'users'">
+              <div class="count-cell">
+                <Icon icon="material-symbols:group" />
+                {{ record.users?.length || 0 }}
+              </div>
+            </template>
+            
+            <!-- 创建时间列 -->
+            <template v-if="column.key === 'created_at'">
+              <div class="time-cell">
+                {{ formatTime(record.created_at) }}
+              </div>
+            </template>
+            
+            <!-- 操作列 -->
+            <template v-if="column.key === 'actions'">
+              <div class="table-actions">
+                <a-tooltip title="查看详情">
+                  <a-button type="text" @click="handleView(record)" class="table-action-btn view-btn">
+                    <Icon icon="material-symbols:visibility-outline" />
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip title="编辑角色">
+                  <a-button type="text" @click="handleEdit(record)" class="table-action-btn edit-btn">
+                    <Icon icon="material-symbols:edit-outline" />
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip title="权限管理">
+                  <a-button type="text" @click="handlePermission(record)" class="table-action-btn permission-btn">
+                    <Icon icon="material-symbols:key-outline" />
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip title="删除角色">
+                  <a-popconfirm
+                    title="确定要删除这个角色吗？"
+                    @confirm="handleDelete(record)"
+                    :disabled="record.is_system === 1"
+                  >
+                    <a-button 
+                      type="text" 
+                      danger 
+                      :disabled="record.is_system === 1"
+                      class="table-action-btn delete-btn"
+                    >
+                      <Icon icon="material-symbols:delete-outline" />
+                    </a-button>
+                  </a-popconfirm>
+                </a-tooltip>
+              </div>
+            </template>
+          </template>
+        </a-table>
+      </div>
+      
+      <!-- 分页 -->
+      <div class="pagination-container">
+        <a-pagination
+          v-model:current="pagination.current"
+          v-model:page-size="pagination.pageSize"
+          :total="filteredRoles.length"
+          :show-size-changer="true"
+          :show-quick-jumper="true"
+          :show-total="(total: number, range: [number, number]) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`"
+          class="custom-pagination"
+        />
+      </div>
+    </div>
+
+    <!-- 后续的模态框代码保持不变 -->
+    <!-- 查看详情模态框 -->
+    <a-modal
+      v-model:open="viewModalVisible"
+      title="角色详情"
+      width="900px"
+      :mask-closable="false"
+      :footer="null"
+      class="view-modal"
+    >
+      <!-- 查看模态框内容保持不变 -->
+      <div class="view-content" v-if="viewModalVisible && viewRoleData">
+        <!-- 基本信息 -->
+        <div class="view-section">
+          <div class="section-header">
+            <Icon icon="material-symbols:info-outline" />
+            <span>基本信息</span>
+          </div>
+          <div class="info-grid">
+            <div class="info-item">
+              <label>角色名称</label>
+              <div class="info-value">{{ viewRoleData.name }}</div>
+            </div>
+            <div class="info-item">
+              <label>角色编码</label>
+              <div class="info-value code">{{ viewRoleData.code }}</div>
+            </div>
+            <div class="info-item">
+              <label>角色状态</label>
+              <div class="info-value">
+                <a-tag :color="viewRoleData.status === 1 ? 'green' : 'default'">
+                  <div class="status-option">
+                    <div class="status-dot" :class="viewRoleData.status === 1 ? 'active' : 'inactive'"></div>
+                    <span>{{ viewRoleData.status === 1 ? '已启用' : '已禁用' }}</span>
+                  </div>
+                </a-tag>
+              </div>
+            </div>
+            <div class="info-item">
+              <label>角色类型</label>
+              <div class="info-value">
+                <a-tag v-if="viewRoleData.is_system === 1" color="orange">
+                  <Icon icon="material-symbols:admin-panel-settings" />
+                  系统角色
+                </a-tag>
+                <a-tag v-else color="blue">
+                  <Icon icon="material-symbols:person-outline" />
+                  自定义角色
+                </a-tag>
+              </div>
+            </div>
+            <div class="info-item full-width">
+              <label>角色描述</label>
+              <div class="info-value description">
+                {{ viewRoleData.description || '暂无描述' }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 统计信息 -->
+        <div class="view-section">
+          <div class="section-header">
+            <Icon icon="material-symbols:analytics-outline" />
+            <span>统计信息</span>
+          </div>
+          <div class="stats-row">
+            <div class="stats-item">
+              <div class="stats-icon api-stats">
+                <Icon icon="material-symbols:api" />
+              </div>
+              <div class="stats-info">
+                <div class="stats-number">{{ viewRoleData.apis?.length || 0 }}</div>
+                <div class="stats-label">关联权限</div>
+              </div>
+            </div>
+            <div class="stats-item">
+              <div class="stats-icon user-stats">
+                <Icon icon="material-symbols:group" />
+              </div>
+              <div class="stats-info">
+                <div class="stats-number">{{ viewRoleData.users?.length || 0 }}</div>
+                <div class="stats-label">关联用户</div>
+              </div>
+            </div>
+            <div class="stats-item">
+              <div class="stats-icon time-stats">
+                <Icon icon="material-symbols:schedule" />
+              </div>
+              <div class="stats-info">
+                <div class="stats-number">{{ formatTime(viewRoleData.created_at) }}</div>
+                <div class="stats-label">创建时间</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 权限列表 -->
+        <div class="view-section">
+          <div class="section-header">
+            <Icon icon="material-symbols:key-outline" />
+            <span>权限详情</span>
+            <div class="section-extra">
+              <a-input
+                v-model:value="viewApiSearch"
+                placeholder="搜索权限"
+                size="small"
+                class="mini-search"
+                style="width: 200px;"
+                allowClear
+              >
+                <template #prefix>
+                  <Icon icon="ri:search-line" />
+                </template>
+              </a-input>
+            </div>
+          </div>
+          
+          <div v-if="viewRoleData.apis && viewRoleData.apis.length > 0" class="apis-container">
+            <div class="apis-summary">
+              <span>共 {{ filteredViewApis.length }} 个权限</span>
+              <div class="method-stats">
+                <span v-for="(count, method) in viewApiMethodStats" :key="method" class="method-stat">
+                  <span class="method-badge" :class="method.toLowerCase()">{{ method }}</span>
+                  <span>{{ count }}</span>
                 </span>
               </div>
             </div>
+            
+            <div class="apis-list">
+              <div v-for="api in filteredViewApis" :key="api.id" class="api-detail-item">
+                <div class="api-method-badge" :class="getMethodClass(api.method)">
+                  {{ formatMethod(api.method) }}
+                </div>
+                <div class="api-detail-info">
+                  <div class="api-detail-name">{{ api.name }}</div>
+                  <div class="api-detail-path">{{ api.path }}</div>
+                  <div class="api-detail-desc" v-if="api.description">
+                    {{ api.description }}
+                  </div>
+                </div>
+                <div class="api-detail-meta">
+                  <div class="api-category" v-if="api.category">
+                    <Icon icon="material-symbols:category-outline" />
+                    {{ api.category }}
+                  </div>
+                  <div class="api-created">
+                    <Icon icon="material-symbols:schedule" />
+                    {{ formatTime(api.created_at) }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div v-else class="empty-apis">
+            <Icon icon="material-symbols:security-outline" class="empty-icon" />
+            <div class="empty-text">该角色暂未分配任何权限</div>
+          </div>
+        </div>
+
+        <!-- 关联用户 -->
+        <div class="view-section">
+          <div class="section-header">
+            <Icon icon="material-symbols:group-outline" />
+            <span>关联用户</span>
+            <div class="section-extra">
+              <a-input
+                v-model:value="viewUserSearch"
+                placeholder="搜索用户"
+                size="small"
+                class="mini-search"
+                style="width: 200px;"
+                allowClear
+              >
+                <template #prefix>
+                  <Icon icon="ri:search-line" />
+                </template>
+              </a-input>
+            </div>
+          </div>
+          
+          <div v-if="viewRoleData.users && viewRoleData.users.length > 0" class="users-container">
+            <div class="users-summary">
+              <span>共 {{ filteredViewUsers.length }} 个用户</span>
+            </div>
+            
+            <div class="users-list">
+              <div v-for="user in filteredViewUsers" :key="user.id" class="user-detail-item">
+                <div class="user-avatar">
+                  <Icon icon="material-symbols:person" v-if="!user.avatar" />
+                  <img v-else :src="user.avatar" :alt="user.username" />
+                </div>
+                <div class="user-detail-info">
+                  <div class="user-detail-name">
+                    {{ user.real_name || user.username }}
+                    <a-tag v-if="user.username" size="small" color="blue">{{ user.username }}</a-tag>
+                  </div>
+                  <div class="user-detail-email" v-if="user.email">{{ user.email }}</div>
+                  <div class="user-detail-phone" v-if="user.phone">{{ user.phone }}</div>
+                </div>
+                <div class="user-detail-status">
+                  <a-tag :color="user.status === 1 ? 'green' : 'default'" size="small">
+                    {{ user.status === 1 ? '正常' : '禁用' }}
+                  </a-tag>
+                  <div class="user-login-time" v-if="user.last_login_at">
+                    最后登录：{{ formatTime(user.last_login_at) }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div v-else class="empty-users">
+            <Icon icon="material-symbols:group-off-outline" class="empty-icon" />
+            <div class="empty-text">该角色暂无关联用户</div>
+          </div>
+        </div>
+
+        <!-- 操作记录 -->
+        <div class="view-section">
+          <div class="section-header">
+            <Icon icon="material-symbols:history" />
+            <span>操作记录</span>
+          </div>
+          <div class="timeline-container">
+            <div class="timeline-item">
+              <div class="timeline-dot create"></div>
+              <div class="timeline-content">
+                <div class="timeline-title">角色创建</div>
+                <div class="timeline-time">{{ formatTime(viewRoleData.created_at) }}</div>
+              </div>
+            </div>
+            <div class="timeline-item" v-if="viewRoleData.updated_at && viewRoleData.updated_at !== viewRoleData.created_at">
+              <div class="timeline-dot update"></div>
+              <div class="timeline-content">
+                <div class="timeline-title">最后更新</div>
+                <div class="timeline-time">{{ formatTime(viewRoleData.updated_at) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <template #footer>
+        <div class="view-footer">
+          <a-space>
+            <a-button @click="viewModalVisible = false">关闭</a-button>
+            <a-button type="primary" @click="handleEditFromView">
+              <Icon icon="material-symbols:edit-outline" />
+              编辑角色
+            </a-button>
+            <a-button @click="handlePermissionFromView">
+              <Icon icon="material-symbols:key-outline" />
+              权限管理
+            </a-button>
+          </a-space>
+        </div>
+      </template>
+    </a-modal>
+
+    <!-- 角色表单弹窗 -->
+    <a-modal
+      v-model:open="modalVisible"
+      :title="modalTitle"
+      width="800px"
+      :mask-closable="false"
+      :destroy-on-close="true"
+      class="role-modal"
+      :key="modalVisible ? 'open' : 'closed'"
+    >
+      <div class="modal-content" v-if="modalVisible">
+        <a-form
+          ref="formRef"
+          :model="formData"
+          :rules="formRules"
+          layout="vertical"
+          class="role-form"
+          :key="formData.id || 'new'"
+        >
+          <div class="form-section">
+            <div class="section-header">
+              <Icon icon="material-symbols:info-outline" />
+              <span>基本信息</span>
+            </div>
+            <div class="form-grid">
+              <a-form-item label="角色名称" name="name">
+                <a-input 
+                  v-model:value="formData.name" 
+                  placeholder="请输入角色名称"
+                />
+              </a-form-item>
+              <a-form-item label="角色编码" name="code">
+                <a-input 
+                  v-model:value="formData.code" 
+                  placeholder="请输入角色编码"
+                />
+              </a-form-item>
+            </div>
+            <a-form-item label="角色描述" name="description">
+              <a-textarea 
+                v-model:value="formData.description" 
+                placeholder="请输入角色描述"
+                :rows="3"
+              />
+            </a-form-item>
+            <a-form-item label="角色状态" name="status">
+              <a-radio-group v-model:value="formData.status" class="status-radio">
+                <a-radio :value="1">
+                  <div class="radio-option">
+                    <div class="status-dot active"></div>
+                    <span>启用</span>
+                  </div>
+                </a-radio>
+                <a-radio :value="0">
+                  <div class="radio-option">
+                    <div class="status-dot inactive"></div>
+                    <span>禁用</span>
+                  </div>
+                </a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </div>
+          
+          <div class="form-section">
+            <div class="section-header">
+              <Icon icon="material-symbols:key-outline" />
+              <span>权限配置</span>
+            </div>
+            <a-form-item label="关联API权限" name="api_ids">
+              <a-select
+                v-if="apiList.length > 0 && modalVisible"
+                v-model:value="formData.api_ids"
+                mode="multiple"
+                placeholder="请选择API权限"
+                class="api-select"
+                :filter-option="filterOption"
+                show-search
+                :key="`api-select-${modalVisible}-${formData.id || 'new'}-${apiList.length}`"
+                :get-popup-container="getPopupContainer"
+                :dropdown-match-select-width="false"
+              >
+                <a-select-option 
+                  v-for="api in apiList" 
+                  :key="api.id" 
+                  :value="api.id"
+                  :label="api.name"
+                >
+                  <div class="api-option">
+                    <div class="api-method" :class="getMethodClass(api.method)">
+                      {{ formatMethod(api.method) }}
+                    </div>
+                    <div class="api-info">
+                      <div class="api-name">{{ api.name }}</div>
+                      <div class="api-path">{{ api.path }}</div>
+                    </div>
+                  </div>
+                </a-select-option>
+              </a-select>
+            </a-form-item>
           </div>
         </a-form>
       </div>
       
       <template #footer>
-        <div class="modal-footer">
-          <a-button @click="handleModalCancel" class="cancel-button">
-            取消
-          </a-button>
-          <a-button type="primary" @click="handleModalSubmit" class="submit-button">
-            <Icon icon="mdi:content-save" class="button-icon" />
+        <a-space>
+          <a-button @click="handleCancel">取消</a-button>
+          <a-button type="primary" @click="handleSubmit" :loading="submitLoading">
+            <Icon icon="material-symbols:save-outline" />
             保存
           </a-button>
+        </a-space>
+      </template>
+    </a-modal>
+
+    <!-- 权限管理弹窗 -->
+    <a-modal
+      v-model:open="permissionModalVisible"
+      title="权限管理"
+      width="1000px"
+      :mask-closable="false"
+      class="permission-modal"
+      :key="permissionModalVisible ? 'perm-open' : 'perm-closed'"
+    >
+      <div class="permission-content" v-if="permissionModalVisible">
+        <div class="permission-header">
+          <div class="role-info">
+            <Icon icon="material-symbols:badge-outline" />
+            <span>{{ currentRole?.name }}</span>
+          </div>
+          <div class="permission-stats">
+            <span>已分配 {{ assignedApis.length }} 个权限</span>
+          </div>
         </div>
+        
+        <a-tabs v-model:activeKey="permissionTab" class="permission-tabs">
+          <a-tab-pane key="assigned" tab="已分配权限">
+            <div class="api-list">
+              <div 
+                v-for="api in assignedApis" 
+                :key="api.id" 
+                class="api-item assigned"
+              >
+                <div class="api-method" :class="api.method.toLowerCase()">
+                  {{ api.method }}
+                </div>
+                <div class="api-details">
+                  <div class="api-name">{{ api.name }}</div>
+                  <div class="api-path">{{ api.path }}</div>
+                </div>
+                <a-button 
+                  type="text" 
+                  danger 
+                  @click="handleRevokeApi(api)"
+                  class="revoke-btn"
+                >
+                  <Icon icon="material-symbols:remove-circle-outline" />
+                  移除
+                </a-button>
+              </div>
+            </div>
+          </a-tab-pane>
+          
+          <a-tab-pane key="available" tab="可分配权限">
+            <div class="api-search">
+              <a-input
+                v-model:value="apiSearchText"
+                placeholder="搜索API权限"
+                class="search-input"
+              >
+                <template #prefix>
+                  <Icon icon="ri:search-line" />
+                </template>
+              </a-input>
+            </div>
+            <div class="api-list">
+              <div 
+                v-for="api in availableApis" 
+                :key="api.id" 
+                class="api-item available"
+              >
+                <div class="api-method" :class="api.method.toLowerCase()">
+                  {{ api.method }}
+                </div>
+                <div class="api-details">
+                  <div class="api-name">{{ api.name }}</div>
+                  <div class="api-path">{{ api.path }}</div>
+                </div>
+                <a-button 
+                  type="primary" 
+                  size="small"
+                  @click="handleAssignApi(api)"
+                  class="assign-btn"
+                >
+                  <Icon icon="material-symbols:add-circle-outline" />
+                  分配
+                </a-button>
+              </div>
+            </div>
+          </a-tab-pane>
+        </a-tabs>
+      </div>
+      
+      <template #footer>
+        <a-button @click="permissionModalVisible = false">关闭</a-button>
       </template>
     </a-modal>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, computed, onMounted, nextTick, onBeforeUnmount, watch } from 'vue';
 import { message } from 'ant-design-vue';
+import { Icon } from '@iconify/vue';
+import type { FormInstance } from 'ant-design-vue';
+import type { Role, ListRolesReq, CreateRoleReq, UpdateRoleReq, DeleteRoleReq } from '#/api/core/system';
 import { 
   listRolesApi, 
   createRoleApi, 
   updateRoleApi, 
   deleteRoleApi,
-  listApisApi,
+  getRoleDetailApi,
+  assignApisToRoleApi,
+  revokeApisFromRoleApi,
+  getRoleApisApi
 } from '#/api/core/system';
-import type { SystemApi } from '#/api/core/system';
-import { Icon } from '@iconify/vue';
 
-interface ApiItem {
-  id: number;
-  name: string;
-  path: string;
-  method: string;
-  description?: string;
-  version?: string;
-  category?: number;
-  is_public: number;
-}
+import { listApisApi } from '#/api/core/system';
 
-// 表格加载状态
+// 表单引用
+const formRef = ref<FormInstance>();
+
+// 视图模式状态
+const viewMode = ref<'card' | 'list'>('card');
+
+// 表格列配置
+const tableColumns = [
+  {
+    title: '角色名称',
+    key: 'name',
+    width: 200,
+    fixed: 'left'
+  },
+  {
+    title: '角色类型',
+    key: 'type',
+    width: 120,
+    align: 'center'
+  },
+  {
+    title: '状态',
+    key: 'status',
+    width: 120,
+    align: 'center'
+  },
+  {
+    title: '描述',
+    key: 'description',
+    width: 250,
+    ellipsis: true
+  },
+  {
+    title: '权限数',
+    key: 'apis',
+    width: 100,
+    align: 'center'
+  },
+  {
+    title: '用户数',
+    key: 'users',
+    width: 100,
+    align: 'center'
+  },
+  {
+    title: '创建时间',
+    key: 'created_at',
+    width: 160,
+    align: 'center'
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 180,
+    align: 'center',
+    fixed: 'right'
+  }
+];
+
+// 响应式数据
 const loading = ref(false);
+const submitLoading = ref(false);
+const modalVisible = ref(false);
+const permissionModalVisible = ref(false);
+const viewModalVisible = ref(false);
+const modalTitle = ref('');
+const roleList = ref<Role[]>([]);
+const apiList = ref<any[]>([]);
+const currentRole = ref<Role | null>(null);
+const assignedApis = ref<any[]>([]);
+const apiSearchText = ref('');
+const permissionTab = ref('assigned');
+const viewRoleData = ref<Role | null>(null);
+const viewApiSearch = ref('');
+const viewUserSearch = ref('');
 
-// 搜索文本
-const searchText = ref('');
-
-// 角色列表数据
-const roleList = ref<any[]>([]);
-
-// API选项
-const apiOptions = ref<{label: string, value: number}[]>([]);
+// 搜索参数
+const searchParams = reactive<ListRolesReq>({
+  page: 1,
+  size: 10,
+  search: '',
+  status: undefined
+});
 
 // 分页配置
 const pagination = reactive({
   current: 1,
-  pageSize: 10,
-  total: 0,
-  showSizeChanger: true,
-  showQuickJumper: true,
-  showTotal: (total: number) => `共 ${total} 条记录`
+  pageSize: 12,
+  total: 0
 });
+
+// 初始化表单数据的函数
+const initFormData = () => ({
+  name: '',
+  code: '',
+  description: '',
+  status: 1 as 0 | 1,
+  api_ids: []
+});
+
+// 表单数据
+const formData = reactive<Partial<CreateRoleReq & UpdateRoleReq>>(initFormData());
 
 // 表单验证规则
 const formRules = {
   name: [{ required: true, message: '请输入角色名称', trigger: 'blur' }],
-  domain: [{ required: true, message: '请输入域ID', trigger: 'blur' }],
-  path: [{ required: true, message: '请输入路径', trigger: 'blur' }],
-  method: [{ required: true, message: '请选择方法', trigger: 'change' }]
+  code: [{ required: true, message: '请输入角色编码', trigger: 'blur' }],
+  status: [{ required: true, message: '请选择角色状态', trigger: 'change' }]
 };
 
-// 过滤后的角色列表
-const filteredRoleList = computed(() => {
-  const searchValue = searchText.value.trim().toLowerCase();
-  if (!searchValue) return roleList.value;
-  
-  return roleList.value.filter(role => 
-    role.name.toLowerCase().includes(searchValue)
-  );
-});
-
-// 模态框相关
-const isModalVisible = ref(false);
-const modalTitle = ref('创建角色');
-const formData = reactive<Partial<SystemApi.Role>>({
-  name: '',
-  domain: '',
-  path: '',
-  method: ''
-});
-
-// 当前编辑的角色信息（用于更新）
-const currentRole = reactive<Partial<SystemApi.Role>>({
-  name: '',
-  domain: '',
-  path: '',
-  method: ''
-});
-
-// 获取所有API
-const fetchApis = async () => {
-  try {
-    // 获取API列表
-    const apiRes = await listApisApi({
-      page_number: 1,
-      page_size: 1000
-    });
-    if (apiRes && apiRes.list) {
-      apiOptions.value = apiRes.list.map((api: ApiItem) => ({
-        label: `${api.name} (${api.path}) [${api.method}]`,
-        value: api.id
-      }));
-    }
-  } catch (error: any) {
-    message.error(error.message || '获取权限数据失败');
+// 工具函数 - 修复method相关问题
+const formatMethod = (method: any): string => {
+  if (typeof method === 'string') {
+    return method.toUpperCase();
   }
+  return String(method || 'UNKNOWN').toUpperCase();
 };
 
-// 表格列配置
-const columns = [
-  {
-    title: '角色名称',
-    dataIndex: 'name',
-    key: 'name',
-    width: 180
-  },
-  {
-    title: '域ID',
-    dataIndex: 'domain',
-    key: 'domain',
-    width: 180
-  },
-  {
-    title: '路径',
-    dataIndex: 'path',
-    key: 'path',
-    ellipsis: true,
-  },
-  {
-    title: '方法',
-    dataIndex: 'method',
-    key: 'method',
-    width: 120
-  },
-  {
-    title: '操作',
-    key: 'action',
-    width: 120,
-    fixed: 'right'
-  },
-];
-
-// 处理表格变化（分页、排序、筛选）
-const handleTableChange = (pag: any) => {
-  pagination.current = pag.current;
-  pagination.pageSize = pag.pageSize;
-  fetchRoleList();
+const getMethodClass = (method: any): string => {
+  const methodStr = formatMethod(method).toLowerCase();
+  return ['get', 'post', 'put', 'delete', 'patch'].includes(methodStr) ? methodStr : 'unknown';
 };
 
-// 获取角色列表
+// 修复getPopupContainer函数
+const getPopupContainer = (trigger?: HTMLElement): HTMLElement => {
+  // 如果没有传入trigger或trigger已被销毁，返回document.body
+  if (!trigger || !trigger.parentNode) {
+    return document.body;
+  }
+  
+  // 尝试找到最近的模态框容器
+  let container = trigger.parentNode as HTMLElement;
+  while (container && container !== document.body) {
+    if (container.classList?.contains('ant-modal-body') || 
+        container.classList?.contains('ant-modal-wrap')) {
+      return container;
+    }
+    container = container.parentNode as HTMLElement;
+  }
+  
+  return document.body;
+};
+
+// 计算属性
+const activeRoles = computed(() => 
+  roleList.value.filter((role: Role) => role.status === 1).length
+);
+
+const systemRoles = computed(() => 
+  roleList.value.filter((role: Role) => role.is_system === 1).length
+);
+
+const totalUsers = computed(() => 
+  roleList.value.reduce((total: number, role: Role) => total + (role.users?.length || 0), 0)
+);
+
+const filteredRoles = computed(() => {
+  let filtered = roleList.value;
+  
+  if (searchParams.search) {
+    const searchText = searchParams.search.toLowerCase();
+    filtered = filtered.filter((role: Role) => 
+      role.name.toLowerCase().includes(searchText) ||
+      role.code.toLowerCase().includes(searchText)
+    );
+  }
+  
+  if (searchParams.status !== undefined) {
+    filtered = filtered.filter((role: Role) => role.status === searchParams.status);
+  }
+  
+  return filtered;
+});
+
+const paginatedRoles = computed(() => {
+  const start = (pagination.current - 1) * pagination.pageSize;
+  const end = start + pagination.pageSize;
+  return filteredRoles.value.slice(start, end);
+});
+
+const availableApis = computed(() => {
+  if (!currentRole.value) return [];
+  
+  const assignedIds = assignedApis.value.map(api => api.id);
+  let available = apiList.value.filter(api => !assignedIds.includes(api.id));
+  
+  if (apiSearchText.value) {
+    const searchText = apiSearchText.value.toLowerCase();
+    available = available.filter(api => 
+      api.name.toLowerCase().includes(searchText) ||
+      api.path.toLowerCase().includes(searchText)
+    );
+  }
+  
+  return available;
+});
+
+// 查看页面的计算属性
+const filteredViewApis = computed(() => {
+  if (!viewRoleData.value?.apis) return [];
+  
+  let filtered = viewRoleData.value.apis;
+  if (viewApiSearch.value) {
+    const searchText = viewApiSearch.value.toLowerCase();
+    filtered = filtered.filter((api: any) => 
+      api.name.toLowerCase().includes(searchText) ||
+      api.path.toLowerCase().includes(searchText) ||
+      (api.description && api.description.toLowerCase().includes(searchText))
+    );
+  }
+  
+  return filtered;
+});
+
+const filteredViewUsers = computed(() => {
+  if (!viewRoleData.value?.users) return [];
+  
+  let filtered = viewRoleData.value.users;
+  if (viewUserSearch.value) {
+    const searchText = viewUserSearch.value.toLowerCase();
+    filtered = filtered.filter((user: any) => 
+      (user.username && user.username.toLowerCase().includes(searchText)) ||
+      (user.real_name && user.real_name.toLowerCase().includes(searchText)) ||
+      (user.email && user.email.toLowerCase().includes(searchText)) ||
+      (user.phone && user.phone.toLowerCase().includes(searchText))
+    );
+  }
+  
+  return filtered;
+});
+
+const viewApiMethodStats = computed(() => {
+  if (!viewRoleData.value?.apis) return {};
+  
+  const stats: Record<string, number> = {};
+  viewRoleData.value.apis.forEach((api: any) => {
+    const method = formatMethod(api.method);
+    stats[method] = (stats[method] || 0) + 1;
+  });
+  
+  return stats;
+});
+
+// 其他工具函数
+const formatTime = (timeStr: string | undefined) => {
+  if (!timeStr) return '-';
+  return new Date(timeStr).toLocaleString('zh-CN');
+};
+
+const filterOption = (input: string, option: any) => {
+  if (!option?.label) return false;
+  return option.label.toLowerCase().includes(input.toLowerCase());
+};
+
+// 数据获取函数
 const fetchRoleList = async () => {
   loading.value = true;
   try {
-    const res = await listRolesApi({
-      page_number: pagination.current,
-      page_size: pagination.pageSize
-    });
-    if (res && res.items) {
-      roleList.value = res.items;
-      pagination.total = res.total || res.items.length;
-    } else {
-      roleList.value = [];
-      pagination.total = 0;
+    const response = await listRolesApi(searchParams);
+    if (response) {
+      roleList.value = response.items || [];
+      pagination.total = response.total || 0;
     }
   } catch (error: any) {
     message.error(error.message || '获取角色列表失败');
-    roleList.value = [];
-    pagination.total = 0;
   } finally {
     loading.value = false;
   }
 };
 
-// 处理搜索
-const handleSearch = () => {
-  pagination.current = 1; // 搜索时重置到第一页
-  // 搜索功能已通过 computed 属性 filteredRoleList 实现
-};
-
-// 处理添加
-const handleAdd = () => {
-  modalTitle.value = '创建角色';
-  Object.assign(formData, {
-    name: '',
-    domain: '',
-    path: '',
-    method: ''
-  });
-  isModalVisible.value = true;
-};
-
-// 处理编辑
-const handleEdit = async (record: SystemApi.Role) => {
-  modalTitle.value = '编辑角色';
-  
-  // 保存当前角色信息用于更新
-  Object.assign(currentRole, {
-    name: record.name,
-    domain: record.domain,
-    path: record.path,
-    method: record.method
-  });
-  
-  // 设置表单数据
-  Object.assign(formData, {
-    name: record.name,
-    domain: record.domain,
-    path: record.path,
-    method: record.method
-  });
-
-  isModalVisible.value = true;
-};
-
-// 处理删除
-const handleDelete = async (record: SystemApi.Role) => {
+const fetchApiList = async () => {
   try {
-    await deleteRoleApi({
-      name: record.name,
-      domain: record.domain,
-      path: record.path,
-      method: record.method
+    const response = await listApisApi({
+      page_number: 1,
+      page_size: 1000
     });
+    
+    // 确保API数据的method字段是字符串
+    const safeApiList = (response.list || []).map((api: any) => ({
+      ...api,
+      method: formatMethod(api.method),
+      name: api.name || '未命名API',
+      path: api.path || '/'
+    }));
+    
+    apiList.value = safeApiList;
+  } catch (error: any) {
+    message.error(error.message || '获取API列表失败');
+  }
+};
+
+const fetchRoleApis = async (roleId: number) => {
+  try {
+    const response = await getRoleApisApi(roleId);
+    
+    // 确保返回的API数据也是安全的
+    const safeAssignedApis = (response.items || []).map((api: any) => ({
+      ...api,
+      method: formatMethod(api.method),
+      name: api.name || '未命名API',
+      path: api.path || '/'
+    }));
+    
+    assignedApis.value = safeAssignedApis;
+  } catch (error: any) {
+    message.error(error.message || '获取角色权限失败');
+  }
+};
+
+// 事件处理函数
+const handleSearch = () => {
+  pagination.current = 1;
+  fetchRoleList();
+};
+
+const handleRefresh = () => {
+  searchParams.search = '';
+  searchParams.status = undefined;
+  pagination.current = 1;
+  fetchRoleList();
+};
+
+const handleAdd = async () => {
+  modalTitle.value = '新建角色';
+  
+  // 先清理数据
+  Object.assign(formData, initFormData());
+  
+  // 确保DOM更新后再显示模态框
+  await nextTick();
+  modalVisible.value = true;
+  
+  // 再次等待确保模态框渲染完成
+  await nextTick();
+  formRef.value?.resetFields();
+};
+
+const handleEdit = async (role: Role) => {
+  try {
+    modalTitle.value = '编辑角色';
+    
+    // 先关闭模态框并清理状态
+    modalVisible.value = false;
+    await nextTick();
+    
+    // 获取角色详情
+    const response = await getRoleDetailApi(role.id);
+    const roleDetail = response;
+    
+    // 设置表单数据
+    Object.assign(formData, {
+      id: roleDetail.id,
+      name: roleDetail.name,
+      code: roleDetail.code,
+      description: roleDetail.description,
+      status: roleDetail.status,
+      api_ids: roleDetail.apis?.map((api: any) => api.id) || []
+    });
+    
+    // 打开模态框
+    modalVisible.value = true;
+    
+    // 等待DOM更新后清除验证状态
+    await nextTick();
+    formRef.value?.clearValidate();
+  } catch (error: any) {
+    message.error(error.message || '获取角色详情失败');
+  }
+};
+
+const handleView = async (role: Role) => {
+  try {
+    // 获取角色详情
+    const response = await getRoleDetailApi(role.id);
+    viewRoleData.value = response;
+    
+    // 清空搜索条件
+    viewApiSearch.value = '';
+    viewUserSearch.value = '';
+    
+    // 显示模态框
+    viewModalVisible.value = true;
+  } catch (error: any) {
+    message.error(error.message || '获取角色详情失败');
+  }
+};
+
+const handlePermission = async (role: Role) => {
+  currentRole.value = role;
+  await fetchRoleApis(role.id);
+  permissionModalVisible.value = true;
+};
+
+const handleDelete = async (role: Role) => {
+  try {
+    await deleteRoleApi({ id: role.id });
     message.success('删除成功');
     fetchRoleList();
   } catch (error: any) {
@@ -450,108 +1230,262 @@ const handleDelete = async (record: SystemApi.Role) => {
   }
 };
 
-// 处理模态框提交
-const handleModalSubmit = async () => {
-  // 表单验证
-  if (!formData.name || !formData.domain || !formData.path || !formData.method) {
-    message.warning('请填写完整的角色信息');
-    return;
-  }
-  
+const handleStatusChange = async (role: Role) => {
+  const originalStatus = role.status;
   try {
-    if (modalTitle.value === '创建角色') {
-      await createRoleApi({
-        ...formData as SystemApi.CreateRoleReq
-      });
+    await updateRoleApi({
+      id: role.id,
+      name: role.name,
+      code: role.code,
+      description: role.description,
+      status: role.status,
+      api_ids: role.apis?.map((api: any) => api.id) || []
+    });
+    message.success('状态更新成功');
+  } catch (error: any) {
+    message.error(error.message || '状态更新失败');
+    // 回滚状态
+    role.status = originalStatus;
+  }
+};
+
+const handleSubmit = async () => {
+  try {
+    await formRef.value?.validate();
+    submitLoading.value = true;
+    
+    if (formData.id) {
+      await updateRoleApi(formData as UpdateRoleReq);
+      message.success('更新成功');
     } else {
-      await updateRoleApi({
-        old_role: {
-          ...currentRole as SystemApi.Role
-        },
-        new_role: {
-          ...formData as SystemApi.Role
-        }
-      });
+      await createRoleApi(formData as CreateRoleReq);
+      message.success('创建成功');
     }
-    message.success(`${modalTitle.value}成功`);
-    isModalVisible.value = false;
+    
+    handleCancel();
     fetchRoleList();
   } catch (error: any) {
-    message.error(error.message || `${modalTitle.value}失败`);
+    if (error.errorFields) {
+      // 表单验证错误
+      return;
+    }
+    message.error(error.message || '操作失败');
+  } finally {
+    submitLoading.value = false;
   }
 };
 
-// 处理模态框取消
-const handleModalCancel = () => {
-  isModalVisible.value = false;
+const handleCancel = async () => {
+  modalVisible.value = false;
+  
+  // 等待模态框关闭动画完成后清理数据
+  setTimeout(() => {
+    Object.assign(formData, initFormData());
+    formRef.value?.resetFields();
+  }, 300);
 };
 
-// 根据HTTP方法获取颜色
-const getMethodColor = (method: string): string => {
-  switch (method) {
-    case 'GET': return '#1890ff';  // 蓝色
-    case 'POST': return '#52c41a';  // 绿色
-    case 'PUT': return '#faad14';  // 黄色
-    case 'DELETE': return '#f5222d';  // 红色
-    case '*': return '#722ed1';  // 紫色
-    default: return '#d9d9d9';  // 灰色
+const handleAssignApi = async (api: any) => {
+  if (!currentRole.value) return;
+  
+  try {
+    await assignApisToRoleApi({
+      role_id: currentRole.value.id,
+      api_ids: [api.id]
+    });
+    message.success('权限分配成功');
+    await fetchRoleApis(currentRole.value.id);
+  } catch (error: any) {
+    message.error(error.message || '权限分配失败');
   }
 };
 
+const handleRevokeApi = async (api: any) => {
+  if (!currentRole.value) return;
+  
+  try {
+    await revokeApisFromRoleApi({
+      role_id: currentRole.value.id,
+      api_ids: [api.id]
+    });
+    message.success('权限移除成功');
+    await fetchRoleApis(currentRole.value.id);
+  } catch (error: any) {
+    message.error(error.message || '权限移除失败');
+  }
+};
+
+// 从查看页面跳转到编辑的函数
+const handleEditFromView = () => {
+  if (viewRoleData.value) {
+    viewModalVisible.value = false;
+    handleEdit(viewRoleData.value);
+  }
+};
+
+// 从查看页面跳转到权限管理的函数
+const handlePermissionFromView = () => {
+  if (viewRoleData.value) {
+    viewModalVisible.value = false;
+    handlePermission(viewRoleData.value);
+  }
+};
+
+// 监听模态框状态变化，确保状态同步
+watch(modalVisible, async (newVal) => {
+  if (!newVal) {
+    // 模态框关闭时，延迟清理数据
+    setTimeout(() => {
+      Object.assign(formData, initFormData());
+    }, 300);
+  }
+});
+
+// 监听视图模式变化，调整分页大小
+watch(viewMode, (newMode) => {
+  if (newMode === 'list') {
+    pagination.pageSize = 20; // 列表模式下显示更多数据
+  } else {
+    pagination.pageSize = 12; // 卡片模式下显示较少数据
+  }
+  pagination.current = 1; // 重置到第一页
+});
+
+// 组件卸载时清理状态
+onBeforeUnmount(() => {
+  modalVisible.value = false;
+  permissionModalVisible.value = false;
+  viewModalVisible.value = false;
+  currentRole.value = null;
+  viewRoleData.value = null;
+  Object.assign(formData, initFormData());
+});
+
+// 初始化
 onMounted(() => {
   fetchRoleList();
-  fetchApis();
+  fetchApiList();
 });
 </script>
 
 <style scoped>
-/* 整体容器样式 */
+/* 原有样式保持不变 */
 .role-management-container {
-  padding: 20px;
-  background-color: #f0f2f5;
+  padding: 24px;
+  background-color: #f5f5f5;
   min-height: 100vh;
-  font-family: 'Roboto', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
-/* 顶部卡片样式 */
-.dashboard-card {
-  background: #fff;
+/* 统计卡片 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: white;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   padding: 20px;
-  margin-bottom: 20px;
-  transition: all 0.3s;
-}
-
-.card-title {
   display: flex;
   align-items: center;
+  gap: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e8e8e8;
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: white;
+}
+
+.role-icon {
+  background-color: #1890ff;
+}
+
+.active-icon {
+  background-color: #52c41a;
+}
+
+.system-icon {
+  background-color: #faad14;
+}
+
+.user-icon {
+  background-color: #722ed1;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: #262626;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #8c8c8c;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* 主面板 */
+.main-panel {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e8e8e8;
+}
+
+.panel-header {
+  margin-bottom: 24px;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 20px;
 }
 
 .title-icon {
-  font-size: 28px;
-  margin-right: 10px;
+  font-size: 24px;
   color: #1890ff;
 }
 
-.card-title h2 {
-  margin: 0;
+.header-title h2 {
   font-size: 20px;
-  font-weight: 500;
-  color: #1e293b;
+  font-weight: 600;
+  color: #262626;
+  margin: 0;
 }
 
-/* 工具栏样式 */
-.custom-toolbar {
+.search-section {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
-.search-filters {
+.search-group {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -559,439 +1493,1309 @@ onMounted(() => {
 
 .search-input {
   width: 280px;
-  border-radius: 6px;
-  transition: all 0.3s;
 }
 
-.search-input:hover, 
-.search-input:focus {
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+.status-filter {
+  width: 140px;
 }
 
-.search-button {
-  border-radius: 6px;
+.status-option {
   display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  font-size: 14px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-dot.active {
+  background: #52c41a;
+}
+
+.status-dot.inactive {
+  background: #d9d9d9;
+}
+
+.action-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 视图切换按钮样式 */
+.view-toggle {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.view-toggle :deep(.ant-radio-button-wrapper) {
+  height: 32px;
+  line-height: 30px;
+  padding: 0 12px;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
+  font-size: 14px;
+  border: 1px solid #d9d9d9;
 }
 
-.add-button {
-  border-radius: 6px;
-  background: linear-gradient(90deg, #1890ff, #36cfc9);
-  border: none;
-  box-shadow: 0 2px 6px rgba(24, 144, 255, 0.3);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.3s;
+.view-toggle :deep(.ant-radio-button-wrapper:first-child) {
+  border-right: none;
 }
 
-.add-button:hover {
-  background: linear-gradient(90deg, #40a9ff, #5cdbd3);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4);
-}
-
-/* 表格容器样式 */
-.table-container {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 20px;
-  overflow: hidden;
-}
-
-.role-table {
-  width: 100%;
-}
-
-/* HTTP方法标签样式 */
-.method-tag {
-  border-radius: 4px;
-  padding: 2px 8px;
-  font-size: 12px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border: none;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-/* 操作按钮样式 */
-.action-button {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s;
-}
-
-.action-button:hover {
-  background-color: #f0f0f0;
-  transform: translateY(-1px);
-}
-
-.edit-button {
-  color: #1890ff;
-}
-
-.delete-button {
-  color: #f5222d;
-}
-
-/* 角色模态框样式 */
-:deep(.role-modal .ant-modal-content) {
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
-:deep(.role-modal .ant-modal-header) {
-  background: #fff;
-  padding: 20px 24px 0;
-  border-bottom: none;
-}
-
-:deep(.role-modal .ant-modal-title) {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-:deep(.role-modal .ant-modal-body) {
-  padding: 0 24px 24px;
-}
-
-:deep(.role-modal .ant-modal-footer) {
-  border-top: 1px solid #f0f0f0;
-  padding: 16px 24px;
-}
-
-/* 模态框内容样式 */
-.modal-content {
-  padding: 0;
-}
-
-.modal-header-icon {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 24px;
-  padding-top: 20px;
-}
-
-.icon-wrapper {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #1890ff, #36cfc9);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.25);
-}
-
-.icon-wrapper svg {
-  font-size: 32px;
+.view-toggle :deep(.ant-radio-button-wrapper-checked) {
+  background: #1890ff;
+  border-color: #1890ff;
   color: white;
 }
 
-.edit-icon {
-  background: linear-gradient(135deg, #52c41a, #13c2c2);
+.view-toggle :deep(.ant-radio-button-wrapper:hover) {
+  color: #1890ff;
+  border-color: #1890ff;
 }
 
-.header-text {
-  font-size: 16px;
-  color: #1e293b;
-  font-weight: 500;
+.view-toggle :deep(.ant-radio-button-wrapper-checked:hover) {
+  color: white;
 }
 
-/* 表单样式 */
-.role-form {
-  margin-top: 16px;
-}
-
-.form-section {
+/* 角色网格保持原有样式 */
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
   margin-bottom: 24px;
+}
+
+.role-card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e8e8e8;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.role-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border-color: #1890ff;
+}
+
+.role-card.system-role {
+  border-left: 4px solid #faad14;
+}
+
+.role-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.role-title {
+  flex: 1;
+}
+
+.role-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #262626;
+  margin-bottom: 4px;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.role-code {
+  font-size: 12px;
+  color: #8c8c8c;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  line-height: 1.4;
+}
+
+.role-description {
+  color: #595959;
+  line-height: 1.5;
+  margin-bottom: 12px;
+  min-height: 40px;
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.role-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #8c8c8c;
+  line-height: 1.4;
+}
+
+.stat-item svg {
+  color: #1890ff;
+  font-size: 14px;
+}
+
+.role-tags {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.system-tag, .status-tag {
+  border-radius: 4px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.role-actions {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+  margin-bottom: 8px;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  border: none;
+  font-size: 16px;
+  padding: 0;
+}
+
+.view-btn:hover {
+  background-color: #e6f7ff;
+  color: #1890ff;
+}
+
+.edit-btn:hover {
+  background-color: #f6ffed;
+  color: #52c41a;
+}
+
+.permission-btn:hover {
+  background-color: #fff7e6;
+  color: #faad14;
+}
+
+.delete-btn:hover {
+  background-color: #fff2f0;
+  color: #ff4d4f;
+}
+
+.role-time {
+  text-align: center;
+  color: #bfbfbf;
+  font-size: 12px;
+}
+
+/* 表格容器样式 */
+.role-table-container {
+  margin-bottom: 24px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #f0f0f0;
+}
+
+/* 表格自定义样式 */
+.role-table {
+  background: white;
+}
+
+.role-table :deep(.ant-table) {
+  border-radius: 0;
+}
+
+.role-table :deep(.ant-table-thead > tr > th) {
+  background: #fafafa;
+  font-weight: 600;
+  color: #262626;
+  border-bottom: 2px solid #f0f0f0;
+  padding: 16px 12px;
+  font-size: 14px;
+}
+
+.role-table :deep(.ant-table-tbody > tr > td) {
+  padding: 16px 12px;
+  border-bottom: 1px solid #f5f5f5;
+  vertical-align: middle;
+}
+
+.role-table :deep(.ant-table-tbody > tr:hover > td) {
+  background: #fafafa;
+}
+
+/* 表格单元格样式 */
+.name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.role-name-text {
+  font-weight: 600;
+  color: #262626;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.role-code-text {
+  font-size: 12px;
+  color: #8c8c8c;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  display: inline-block;
+  width: fit-content;
+  line-height: 1.3;
+}
+
+.status-text {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 4px;
+  text-align: center;
+}
+
+.description-cell {
+  color: #595959;
+  line-height: 1.4;
+  font-size: 14px;
+  max-width: 250px;
+  word-break: break-word;
+}
+
+.count-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-weight: 500;
+  color: #262626;
+}
+
+.count-cell svg {
+  color: #1890ff;
+  font-size: 14px;
+}
+
+.time-cell {
+  color: #8c8c8c;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 表格操作按钮 */
+.table-actions {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+
+.table-action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  border: none;
+  font-size: 14px;
+  padding: 0;
+}
+
+.table-action-btn.view-btn:hover {
+  background-color: #e6f7ff;
+  color: #1890ff;
+}
+
+.table-action-btn.edit-btn:hover {
+  background-color: #f6ffed;
+  color: #52c41a;
+}
+
+.table-action-btn.permission-btn:hover {
+  background-color: #fff7e6;
+  color: #faad14;
+}
+
+.table-action-btn.delete-btn:hover {
+  background-color: #fff2f0;
+  color: #ff4d4f;
+}
+
+/* 分页 */
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 其他原有样式保持不变... */
+/* 查看模态框样式 */
+.view-modal :deep(.ant-modal-body) {
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.view-content {
+  padding: 0;
+}
+
+.view-section {
+  margin-bottom: 32px;
+}
+
+.view-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f0f0f0;
+  color: #262626;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.section-header svg {
+  color: #1890ff;
+  font-size: 18px;
+}
+
+.section-extra {
+  margin-left: auto;
+}
+
+.mini-search {
+  border-radius: 6px;
+}
+
+/* 基本信息网格 */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.info-item label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #8c8c8c;
+  margin: 0;
+}
+
+.info-value {
+  font-size: 15px;
+  color: #262626;
+  line-height: 1.5;
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-value.code {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  background: #f5f5f5;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  display: inline-block;
+  width: fit-content;
+}
+
+.info-value.description {
+  background: #fafafa;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #f0f0f0;
+  min-height: 50px;
+  align-items: flex-start;
+}
+
+/* 统计信息行 */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.stats-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+}
+
+.stats-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
+}
+
+.api-stats {
+  background: linear-gradient(135deg, #1890ff, #40a9ff);
+}
+
+.user-stats {
+  background: linear-gradient(135deg, #52c41a, #73d13d);
+}
+
+.time-stats {
+  background: linear-gradient(135deg, #faad14, #ffc53d);
+}
+
+.stats-info {
+  flex: 1;
+}
+
+.stats-number {
+  font-size: 18px;
+  font-weight: 600;
+  color: #262626;
+  line-height: 1.2;
+}
+
+.stats-label {
+  font-size: 13px;
+  color: #8c8c8c;
+  margin-top: 2px;
+}
+
+/* 权限容器 */
+.apis-container, .users-container {
   border: 1px solid #f0f0f0;
   border-radius: 8px;
   overflow: hidden;
 }
 
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.apis-summary, .users-summary {
   padding: 12px 16px;
-  background-color: #f9f9f9;
+  background: #fafafa;
   border-bottom: 1px solid #f0f0f0;
-  color: #1e293b;
-  font-weight: 500;
-}
-
-.section-icon {
-  color: #1890ff;
-  font-size: 18px;
-}
-
-.form-row {
   display: flex;
-  gap: 16px;
-  padding: 16px;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: #595959;
 }
 
-.form-item {
-  flex: 1;
-  margin-bottom: 0;
+.method-stats {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
-.full-width {
-  width: 100%;
-}
-
-:deep(.custom-input) {
-  border-radius: 6px;
-  transition: all 0.3s;
-  height: 38px;
-}
-
-:deep(.input-icon) {
-  color: #8c8c8c;
-  margin-right: 8px;
-}
-
-:deep(.custom-input:hover) {
-  border-color: #40a9ff;
-}
-
-:deep(.custom-input:focus) {
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
-}
-
-:deep(.custom-select) {
-  width: 100%;
-}
-
-:deep(.custom-select .ant-select-selector) {
-  border-radius: 6px !important;
-  transition: all 0.3s;
-  height: 38px !important;
-  padding: 0 11px !important;
-}
-
-:deep(.custom-select .ant-select-selection-item) {
-  line-height: 36px !important;
-}
-
-:deep(.custom-select:hover .ant-select-selector) {
-  border-color: #40a9ff !important;
-}
-
-:deep(.custom-select.ant-select-focused .ant-select-selector) {
-  border-color: #1890ff !important;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2) !important;
-}
-
-/* 方法选择器下拉样式 */
-:deep(.method-dropdown) {
-  border-radius: 8px;
-  overflow: hidden;
-  padding: 4px;
-}
-
-:deep(.method-option) {
-  padding: 8px 12px;
-  border-radius: 6px;
-  margin-bottom: 4px;
-}
-
-:deep(.method-option:hover) {
-  background-color: #f5f5f5;
-}
-
-.method-option-content {
+.method-stat {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
+  font-size: 12px;
 }
 
 .method-badge {
-  font-size: 12px;
-  font-weight: bold;
-  padding: 2px 8px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
   color: white;
-  min-width: 60px;
-  text-align: center;
+  font-weight: 500;
+  font-size: 10px;
+  text-transform: uppercase;
 }
 
 .method-badge.get {
-  background-color: #1890ff;
+  background: #1890ff;
 }
 
 .method-badge.post {
-  background-color: #52c41a;
+  background: #52c41a;
 }
 
 .method-badge.put {
-  background-color: #faad14;
+  background: #faad14;
 }
 
 .method-badge.delete {
-  background-color: #f5222d;
+  background: #f5222d;
 }
 
-.method-badge.all {
-  background-color: #722ed1;
+.method-badge.patch {
+  background: #722ed1;
 }
 
-.method-description {
-  color: #595959;
-  font-size: 14px;
+/* 权限列表 */
+.apis-list {
+  max-height: 300px;
+  overflow-y: auto;
 }
 
-/* 角色预览区域 */
-.role-preview {
-  margin-top: 24px;
-  background-color: #f9f9f9;
-  border-radius: 8px;
-  padding: 16px;
-  border: 1px dashed #d9d9d9;
-}
-
-.preview-title {
-  font-weight: 500;
-  color: #1e293b;
-  margin-bottom: 12px;
+.api-detail-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid #f5f5f5;
+  transition: background-color 0.2s ease;
 }
 
-.preview-title::before {
-  content: '';
-  display: inline-block;
-  width: 4px;
-  height: 16px;
-  background: linear-gradient(to bottom, #1890ff, #36cfc9);
-  border-radius: 2px;
-  margin-right: 8px;
+.api-detail-item:hover {
+  background: #fafafa;
 }
 
-.preview-content {
+.api-detail-item:last-child {
+  border-bottom: none;
+}
+
+.api-method-badge {
+  font-size: 11px;
+  font-weight: bold;
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: white;
+  min-width: 60px;
+  text-align: center;
+  text-transform: uppercase;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.api-detail-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.api-detail-name {
+  font-weight: 600;
+  color: #262626;
+  font-size: 15px;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.api-detail-path {
+  font-size: 13px;
+  color: #8c8c8c;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.api-detail-desc {
+  font-size: 12px;
+  color: #595959;
+  line-height: 1.4;
+}
+
+.api-detail-meta {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.preview-item {
-  display: flex;
-  align-items: center;
-}
-
-.preview-label {
-  min-width: 80px;
-  color: #8c8c8c;
-  margin-right: 8px;
-}
-
-.preview-value {
-  font-weight: 500;
-  color: #1e293b;
-}
-
-.permission-value {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.preview-method-tag {
+  gap: 4px;
   font-size: 12px;
-  padding: 0 8px;
-  height: 24px;
-  line-height: 24px;
-  font-weight: bold;
+  color: #8c8c8c;
+  text-align: right;
+  flex-shrink: 0;
 }
 
-.path-value {
-  font-family: monospace;
-  background-color: #f0f0f0;
-  padding: 2px 8px;
-  border-radius: 4px;
+.api-category, .api-created {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+/* 用户列表 */
+.users-list {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.user-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid #f5f5f5;
+  transition: background-color 0.2s ease;
+}
+
+.user-detail-item:hover {
+  background: #fafafa;
+}
+
+.user-detail-item:last-child {
+  border-bottom: none;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-avatar svg {
+  font-size: 20px;
+  color: #8c8c8c;
+}
+
+.user-detail-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-detail-name {
+  font-weight: 600;
+  color: #262626;
+  font-size: 15px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.user-detail-email, .user-detail-phone {
+  font-size: 13px;
+  color: #8c8c8c;
+  margin-bottom: 2px;
+}
+
+.user-detail-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.user-login-time {
+  font-size: 11px;
+  color: #bfbfbf;
+  text-align: right;
+}
+
+/* 空状态 */
+.empty-apis, .empty-users {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #8c8c8c;
+}
+
+.empty-icon {
+  font-size: 48px;
+  color: #d9d9d9;
+  margin-bottom: 12px;
+}
+
+.empty-text {
+  font-size: 14px;
+  color: #8c8c8c;
+}
+
+/* 时间线 */
+.timeline-container {
+  padding-left: 20px;
+}
+
+.timeline-item {
+  position: relative;
+  padding-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 12px;
+  bottom: -8px;
+  width: 2px;
+  background: #f0f0f0;
+}
+
+.timeline-item:last-child::before {
+  display: none;
+}
+
+.timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  position: absolute;
+  left: -18px;
+  top: 6px;
+  border: 2px solid white;
+  z-index: 1;
+}
+
+.timeline-dot.create {
+  background: #52c41a;
+}
+
+.timeline-dot.update {
+  background: #1890ff;
+}
+
+.timeline-content {
+  flex: 1;
+}
+
+.timeline-title {
+  font-weight: 500;
+  color: #262626;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.timeline-time {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+/* 底部操作栏 */
+.view-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 模态框样式修复 */
+.role-modal :deep(.ant-select-dropdown) {
+  z-index: 1060;
+}
+
+.modal-content {
+  position: relative;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* 表单样式 */
+.form-section {
+  margin-bottom: 24px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.status-radio {
+  display: flex;
+  gap: 24px;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
   font-size: 14px;
 }
 
-/* 模态框页脚 */
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
+.api-select {
+  width: 100%;
 }
 
-.cancel-button {
-  border-radius: 6px;
-  border: 1px solid #d9d9d9;
-  background-color: white;
-  color: #595959;
-  padding: 0 16px;
-  height: 36px;
-  transition: all 0.3s;
+.api-select :deep(.ant-select-selector) {
+  min-height: 32px;
 }
 
-.cancel-button:hover {
-  color: #1890ff;
-  border-color: #1890ff;
-}
-
-.submit-button {
-  border-radius: 6px;
-  border: none;
-  background: linear-gradient(90deg, #1890ff, #36cfc9);
-  color: white;
-  padding: 0 16px;
-  height: 36px;
+.api-option {
   display: flex;
   align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.api-method {
+  font-size: 10px;
+  font-weight: bold;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: white;
+  min-width: 50px;
+  text-align: center;
+  text-transform: uppercase;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.api-method.get {
+  background: #1890ff;
+}
+
+.api-method.post {
+  background: #52c41a;
+}
+
+.api-method.put {
+  background: #faad14;
+}
+
+.api-method.delete {
+  background: #f5222d;
+}
+
+.api-info {
+  flex: 1;
+}
+
+.api-name {
+  font-weight: 500;
+  color: #262626;
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.api-path {
+  font-size: 12px;
+  color: #8c8c8c;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+/* 权限管理模态框 */
+.permission-modal :deep(.ant-select-dropdown) {
+  z-index: 1060;
+}
+
+.permission-content {
+  padding: 16px 0;
+}
+
+.permission-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.role-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #262626;
+}
+
+.permission-stats {
+  color: #8c8c8c;
+  font-size: 14px;
+}
+
+.api-search {
+  margin-bottom: 16px;
+}
+
+.api-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.api-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  transition: all 0.3s ease;
+}
+
+.api-item:hover {
+  border-color: #d9d9d9;
+  background: #fafafa;
+}
+
+.api-item.assigned {
+  background: #f6ffed;
+  border-color: #b7eb8f;
+}
+
+.api-details {
+  flex: 1;
+}
+
+.assign-btn, .revoke-btn {
+  border-radius: 4px;
+  font-size: 12px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 60px;
+  padding: 0 12px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+/* 按钮样式统一 */
+.search-btn {
+  min-width: 80px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
-  box-shadow: 0 2px 6px rgba(24, 144, 255, 0.25);
-  transition: all 0.3s;
+  font-size: 14px;
+  white-space: nowrap;
+  padding: 0 16px;
 }
 
-.submit-button:hover {
-  background: linear-gradient(90deg, #40a9ff, #5cdbd3);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.35);
+.refresh-btn {
+  min-width: 72px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  white-space: nowrap;
+  padding: 0 16px;
 }
 
-.button-icon {
+.add-btn {
+  min-width: 100px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  white-space: nowrap;
+  padding: 0 16px;
+}
+
+/* 模态框按钮 */
+.role-modal .ant-modal-footer .ant-btn {
+  min-width: 80px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  white-space: nowrap;
+  padding: 0 16px;
+}
+
+/* 确保按钮内容居中 */
+.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.ant-btn-sm {
+  gap: 4px;
+}
+
+/* 修复图标按钮 */
+.ant-btn[class*="icon-only"] {
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  gap: 0;
+}
+
+/* 修复开关组件 */
+.ant-switch-small {
+  min-width: 28px;
+  height: 16px;
+}
+
+/* 输入框高度统一 */
+.ant-input,
+.ant-select-selector {
+  height: 32px;
+  line-height: 30px;
+  font-size: 14px;
+}
+
+/* 表单标签 */
+.ant-form-item-label > label {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* 模态框标题 */
+.ant-modal-title {
   font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* 修复分页按钮 */
+.custom-pagination .ant-pagination-item,
+.custom-pagination .ant-pagination-prev,
+.custom-pagination .ant-pagination-next {
+  min-width: 32px;
+  height: 32px;
+  line-height: 30px;
+  font-size: 14px;
+}
+
+/* 确保所有文字都能完整显示 */
+* {
+  box-sizing: border-box;
+}
+
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 如果需要文字省略，可以添加这个类 */
+.multiline-ellipsis {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .custom-toolbar {
+  .role-management-container {
+    padding: 16px;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .search-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-group {
+    justify-content: center;
+  }
+  
+  .role-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .api-detail-item, .user-detail-item {
     flex-direction: column;
     align-items: flex-start;
+    gap: 12px;
   }
   
-  .search-filters {
+  .api-detail-meta, .user-detail-status {
+    align-self: stretch;
+    text-align: left;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .section-extra {
+    margin-left: 0;
+    align-self: stretch;
+  }
+  
+  .mini-search {
+    width: 100% !important;
+  }
+  
+  .search-btn,
+  .refresh-btn,
+  .add-btn {
+    min-width: 60px;
+    font-size: 13px;
+    padding: 0 12px;
+  }
+  
+  .role-name {
+    font-size: 15px;
+  }
+  
+  .stat-value {
+    font-size: 20px;
+  }
+  
+  /* 移动端表格横向滚动 */
+  .role-table-container {
+    overflow-x: auto;
+  }
+  
+  /* 移动端视图切换器 */
+  .view-toggle {
     width: 100%;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
   }
   
+  .view-toggle :deep(.ant-radio-button-wrapper) {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
   .search-input {
     width: 100%;
   }
   
-  .form-row {
+  .search-group {
     flex-direction: column;
+  }
+  
+  .search-btn,
+  .refresh-btn,
+  .add-btn {
+    min-width: 50px;
+    font-size: 12px;
+    padding: 0 8px;
+    height: 30px;
+  }
+  
+  .action-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+  
+  .table-action-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+  
+  .role-name {
+    font-size: 14px;
+  }
+  
+  .stat-value {
+    font-size: 18px;
+  }
+  
+  .stat-label {
+    font-size: 13px;
+  }
+  
+  .view-modal :deep(.ant-modal-body) {
+    padding: 16px;
+  }
+  
+  .method-stats {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  
+  .apis-summary, .users-summary {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .view-footer {
+    justify-content: center;
+  }
+  
+  .view-footer .ant-space {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

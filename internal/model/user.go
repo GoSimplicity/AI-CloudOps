@@ -68,14 +68,19 @@ type UpdateProfileRequest struct {
 	UserId       int    `json:"user_id" binding:"required"`                // 用户ID
 	RealName     string `json:"real_name" binding:"required"`              // 真实姓名
 	Desc         string `json:"desc"`                                      // 描述
-	Mobile       string `json:"mobile" binding:"required,len=11"`          // 手机号
+	Mobile       string `json:"mobile" binding:"required"`                 // 手机号
 	FeiShuUserId string `json:"fei_shu_user_id"`                           // 飞书用户ID
 	AccountType  int    `json:"account_type" binding:"required,oneof=1 2"` // 账号类型
 	HomePath     string `json:"home_path" binding:"required"`              // 默认首页
-	Enable       int    `json:"enable" binding:"required,oneof=1 2"`       // 用户状态
+	Enable       int    `json:"enable" default:"1"`                        // 用户状态
 }
 
 // DeleteUserRequest 删除用户请求
 type DeleteUserRequest struct {
 	UserId int `json:"user_id" binding:"required"` // 用户ID
+}
+
+// GetUserDetailRequest 获取用户详情请求
+type GetUserDetailRequest struct {
+	ID int `json:"id"` // 用户ID
 }

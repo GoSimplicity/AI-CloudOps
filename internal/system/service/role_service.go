@@ -28,184 +28,291 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
-	"github.com/casbin/casbin/v2"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type RoleService interface {
-	ListRoles(ctx context.Context, page, pageSize int) (*model.GenerateRoleResp, error)
-	CreateRole(ctx context.Context, req *model.CreateRoleRequest) error
-	UpdateRole(ctx context.Context, req *model.UpdateRoleRequest) error
-	DeleteRole(ctx context.Context, req *model.DeleteRoleRequest) error
-	GetUserRoles(ctx context.Context, userId int, page, pageSize int) (*model.GenerateRoleResp, error)
-	DeleteUserAllRoles(ctx context.Context, userId int) error
+	// 角色管理
+	ListRoles(ctx context.Context, req *model.ListRolesRequest) (*model.ListResp[*model.Role], error)
+	CreateRole(ctx context.Context, req *model.CreateRoleRequest) (*model.Role, error)
+	UpdateRole(ctx context.Context, req *model.UpdateRoleRequest) (*model.Role, error)
+	DeleteRole(ctx context.Context, id int) error
+	GetRoleByID(ctx context.Context, id int) (*model.Role, error)
+
+	// 角色权限管理
+	AssignApisToRole(ctx context.Context, roleID int, apiIds []int) error
+	RevokeApisFromRole(ctx context.Context, roleID int, apiIds []int) error
+	GetRoleApis(ctx context.Context, roleID int) (*model.ListResp[*model.Api], error)
+
+	// 用户角色管理
+	AssignRolesToUser(ctx context.Context, userID int, roleIds []int, grantedBy int) error
+	RevokeRolesFromUser(ctx context.Context, userID int, roleIds []int) error
+	GetRoleUsers(ctx context.Context, roleID int) (*model.ListResp[*model.User], error)
+	GetUserRoles(ctx context.Context, userID int) (*model.ListResp[*model.Role], error)
+
+	// 权限检查
+	CheckUserPermission(ctx context.Context, userID int, method, path string) (bool, error)
+	GetUserPermissions(ctx context.Context, userID int) (*model.ListResp[*model.Api], error)
 }
 
 type roleService struct {
-	roleDao  dao.RoleDAO
-	enforcer *casbin.Enforcer
-	l        *zap.Logger
+	roleDao dao.RoleDAO
+	l       *zap.Logger
 }
 
-func NewRoleService(roleDao dao.RoleDAO, enforcer *casbin.Enforcer, l *zap.Logger) RoleService {
+func NewRoleService(roleDao dao.RoleDAO, l *zap.Logger) RoleService {
 	return &roleService{
-		roleDao:  roleDao,
-		enforcer: enforcer,
-		l:        l,
+		roleDao: roleDao,
+		l:       l,
 	}
 }
 
 // ListRoles 获取角色列表
-func (r *roleService) ListRoles(ctx context.Context, page, pageSize int) (*model.GenerateRoleResp, error) {
-	resp, err := r.roleDao.ListRoles(ctx, page, pageSize)
+func (s *roleService) ListRoles(ctx context.Context, req *model.ListRolesRequest) (*model.ListResp[*model.Role], error) {
+	roles, total, err := s.roleDao.ListRoles(ctx, req)
 	if err != nil {
-		r.l.Error("获取角色列表失败", zap.Error(err))
+		s.l.Error("获取角色列表失败", zap.Error(err))
 		return nil, err
 	}
 
-	return resp, nil
+	return &model.ListResp[*model.Role]{
+		Items: roles,
+		Total: total,
+	}, nil
 }
 
-// CreateRole 创建新角色
-func (r *roleService) CreateRole(ctx context.Context, req *model.CreateRoleRequest) error {
-	exist, err := r.enforcer.HasPolicy(req.Name, req.Domain, req.Path, req.Method)
+// CreateRole 创建角色
+func (s *roleService) CreateRole(ctx context.Context, req *model.CreateRoleRequest) (*model.Role, error) {
+	// 检查角色名称和编码是否已存在
+	exists, err := s.roleDao.CheckRoleExists(ctx, req.Name, req.Code, 0)
 	if err != nil {
-		r.l.Error("检查角色是否存在失败", zap.Error(err))
-		return err
+		s.l.Error("检查角色是否存在失败", zap.Error(err))
+		return nil, err
 	}
-	if exist {
-		r.l.Error("角色已存在", zap.String("name", req.Name), zap.String("domain", req.Domain), zap.String("path", req.Path), zap.String("method", req.Method))
-		return errors.New("角色已存在")
+	if exists {
+		s.l.Error("角色名称或编码已存在", zap.String("name", req.Name), zap.String("code", req.Code))
+		return nil, errors.New("角色名称或编码已存在")
 	}
 
-	// 创建角色
-	_, err = r.enforcer.AddPolicy(req.Name, req.Domain, req.Path, req.Method)
+	role := &model.Role{
+		Name:        req.Name,
+		Code:        req.Code,
+		Description: req.Description,
+		Status:      int8(req.Status),
+		IsSystem:    0, // 创建的角色默认不是系统角色
+	}
+
+	createdRole, err := s.roleDao.CreateRole(ctx, role, req.ApiIds)
 	if err != nil {
-		r.l.Error("创建角色失败", zap.Error(err))
-		return err
+		s.l.Error("创建角色失败", zap.Error(err))
+		return nil, err
 	}
 
-	// 保存策略
-	if err := r.enforcer.SavePolicy(); err != nil {
-		r.l.Error("保存策略失败", zap.Error(err))
-		return err
-	}
-
-	return nil
+	return createdRole, nil
 }
 
-// UpdateRole 更新角色信息
-func (r *roleService) UpdateRole(ctx context.Context, req *model.UpdateRoleRequest) error {
-	oldRole := req.OldRole
-	newRole := req.NewRole
-
-	// 检查旧角色是否存在
-	exist, err := r.enforcer.HasPolicy(oldRole.Name, oldRole.Domain, oldRole.Path, oldRole.Method)
+// UpdateRole 更新角色
+func (s *roleService) UpdateRole(ctx context.Context, req *model.UpdateRoleRequest) (*model.Role, error) {
+	// 检查角色是否存在
+	existingRole, err := s.roleDao.GetRoleByID(ctx, req.ID)
 	if err != nil {
-		r.l.Error("检查旧角色是否存在失败", zap.Error(err), zap.Any("oldRole", oldRole))
-		return fmt.Errorf("检查旧角色是否存在失败: %w", err)
+		s.l.Error("获取角色失败", zap.Error(err))
+		return nil, err
 	}
 
-	if !exist {
-		r.l.Error("旧角色不存在",
-			zap.String("name", oldRole.Name),
-			zap.String("domain", oldRole.Domain),
-			zap.String("path", oldRole.Path),
-			zap.String("method", oldRole.Method))
-		return errors.New("旧角色不存在")
+	// 系统角色不允许修改某些字段
+	if existingRole.IsSystem == 1 {
+		s.l.Error("系统角色不允许修改", zap.Int("role_id", req.ID))
+		return nil, errors.New("系统角色不允许修改")
 	}
 
-	// 检查新角色是否已存在（避免冲突）
-	if oldRole.Name != newRole.Name || oldRole.Domain != newRole.Domain ||
-		oldRole.Path != newRole.Path || oldRole.Method != newRole.Method {
-		exist, err = r.enforcer.HasPolicy(newRole.Name, newRole.Domain, newRole.Path, newRole.Method)
-		if err != nil {
-			r.l.Error("检查新角色是否存在失败", zap.Error(err), zap.Any("newRole", newRole))
-			return fmt.Errorf("检查新角色是否存在失败: %w", err)
-		}
-		if exist {
-			r.l.Error("新角色已存在", zap.Any("newRole", newRole))
-			return errors.New("新角色已存在")
-		}
-	}
-	// 更新角色策略
-	_, err = r.enforcer.UpdatePolicy(
-		[]string{oldRole.Name, oldRole.Domain, oldRole.Path, oldRole.Method},
-		[]string{newRole.Name, newRole.Domain, newRole.Path, newRole.Method})
+	// 检查角色名称和编码是否已被其他角色使用
+	exists, err := s.roleDao.CheckRoleExists(ctx, req.Name, req.Code, req.ID)
 	if err != nil {
-		r.l.Error("更新角色失败", zap.Error(err), zap.Any("oldRole", oldRole), zap.Any("newRole", newRole))
-		return fmt.Errorf("更新角色失败: %w", err)
+		s.l.Error("检查角色是否存在失败", zap.Error(err))
+		return nil, err
+	}
+	if exists {
+		s.l.Error("角色名称或编码已被其他角色使用", zap.String("name", req.Name), zap.String("code", req.Code))
+		return nil, errors.New("角色名称或编码已被其他角色使用")
 	}
 
-	// 保存策略
-	if err := r.enforcer.SavePolicy(); err != nil {
-		r.l.Error("保存策略失败", zap.Error(err))
-		return fmt.Errorf("保存策略失败: %w", err)
+	role := &model.Role{
+		Model:       model.Model{ID: req.ID},
+		Name:        req.Name,
+		Code:        req.Code,
+		Description: req.Description,
+		Status:      int8(req.Status),
 	}
 
-	return nil
+	updatedRole, err := s.roleDao.UpdateRole(ctx, role, req.ApiIds)
+	if err != nil {
+		s.l.Error("更新角色失败", zap.Error(err))
+		return nil, err
+	}
+
+	return updatedRole, nil
 }
 
 // DeleteRole 删除角色
-func (r *roleService) DeleteRole(ctx context.Context, req *model.DeleteRoleRequest) error {
+func (s *roleService) DeleteRole(ctx context.Context, id int) error {
 	// 检查角色是否存在
-	exist, err := r.enforcer.HasPolicy(req.Name, req.Domain, req.Path, req.Method)
-	if err != nil {
-		r.l.Error("检查角色是否存在失败", zap.Error(err))
+	role, err := s.roleDao.GetRoleByID(ctx, id)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		s.l.Error("获取角色失败", zap.Error(err))
 		return err
 	}
 
-	if !exist {
-		r.l.Error("角色不存在", zap.Any("role", req))
-		return errors.New("角色不存在")
+	if role == nil {
+		return nil
 	}
 
-	// 删除角色策略
-	_, err = r.enforcer.RemovePolicy(req.Name, req.Domain, req.Path, req.Method)
+	// 系统角色不允许删除
+	if role.IsSystem == 1 {
+		s.l.Error("系统角色不允许删除", zap.Int("role_id", id))
+		return errors.New("系统角色不允许删除")
+	}
+
+	// 检查是否有用户关联该角色
+	hasUsers, err := s.roleDao.CheckRoleHasUsers(ctx, id)
 	if err != nil {
-		r.l.Error("删除角色策略失败", zap.Error(err))
+		s.l.Error("检查角色是否有关联用户失败", zap.Error(err))
 		return err
 	}
+	if hasUsers {
+		s.l.Error("角色下还有关联用户，不允许删除", zap.Int("role_id", id))
+		return errors.New("角色下还有关联用户，不允许删除")
+	}
 
-	// 保存策略
-	if err := r.enforcer.SavePolicy(); err != nil {
-		r.l.Error("保存策略失败", zap.Error(err))
-		return fmt.Errorf("保存策略失败: %w", err)
+	err = s.roleDao.DeleteRole(ctx, id)
+	if err != nil {
+		s.l.Error("删除角色失败", zap.Error(err))
+		return err
 	}
 
 	return nil
 }
 
-// GetUserRoles 获取用户角色
-func (r *roleService) GetUserRoles(ctx context.Context, userId int, page, pageSize int) (*model.GenerateRoleResp, error) {
-	roles, err := r.roleDao.GetRolesByUserId(ctx, userId, page, pageSize)
+// GetRoleByID 根据ID获取角色
+func (s *roleService) GetRoleByID(ctx context.Context, id int) (*model.Role, error) {
+	role, err := s.roleDao.GetRoleByID(ctx, id)
 	if err != nil {
-		r.l.Error("获取用户角色失败", zap.Error(err))
+		s.l.Error("获取角色详情失败", zap.Error(err))
 		return nil, err
 	}
 
-	return roles, nil
+	return role, nil
 }
 
-// DeleteUserAllRoles 删除用户所有角色
-func (r *roleService) DeleteUserAllRoles(ctx context.Context, userId int) error {
-	// 删除用户所有角色
-	_, err := r.enforcer.RemoveFilteredPolicy(0, strconv.Itoa(userId))
+// AssignApisToRole 为角色分配API权限
+func (s *roleService) AssignApisToRole(ctx context.Context, roleID int, apiIds []int) error {
+	s.l.Info("为角色分配API权限", zap.Int("role_id", roleID), zap.Ints("api_ids", apiIds))
+
+	err := s.roleDao.AssignApisToRole(ctx, roleID, apiIds)
 	if err != nil {
-		r.l.Error("删除用户所有角色失败", zap.Error(err))
+		s.l.Error("为角色分配API权限失败", zap.Error(err))
 		return err
 	}
 
-	// 保存策略
-	if err := r.enforcer.SavePolicy(); err != nil {
-		r.l.Error("保存策略失败", zap.Error(err))
-		return fmt.Errorf("保存策略失败: %w", err)
+	return nil
+}
+
+// RevokeApisFromRole 撤销角色的API权限
+func (s *roleService) RevokeApisFromRole(ctx context.Context, roleID int, apiIds []int) error {
+	err := s.roleDao.RevokeApisFromRole(ctx, roleID, apiIds)
+	if err != nil {
+		s.l.Error("撤销角色API权限失败", zap.Error(err))
+		return err
 	}
 
 	return nil
+}
+
+// GetRoleApis 获取角色的API权限列表
+func (s *roleService) GetRoleApis(ctx context.Context, roleID int) (*model.ListResp[*model.Api], error) {
+	apis, err := s.roleDao.GetRoleApis(ctx, roleID)
+	if err != nil {
+		s.l.Error("获取角色API权限失败", zap.Error(err))
+		return nil, err
+	}
+
+	return &model.ListResp[*model.Api]{
+		Items: apis,
+	}, nil
+}
+
+// AssignRolesToUser 为用户分配角色
+func (s *roleService) AssignRolesToUser(ctx context.Context, userID int, roleIds []int, grantedBy int) error {
+	err := s.roleDao.AssignRolesToUser(ctx, userID, roleIds, grantedBy)
+	if err != nil {
+		s.l.Error("为用户分配角色失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// RevokeRolesFromUser 撤销用户角色
+func (s *roleService) RevokeRolesFromUser(ctx context.Context, userID int, roleIds []int) error {
+	err := s.roleDao.RevokeRolesFromUser(ctx, userID, roleIds)
+	if err != nil {
+		s.l.Error("撤销用户角色失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// GetRoleUsers 获取角色下的用户列表
+func (s *roleService) GetRoleUsers(ctx context.Context, roleID int) (*model.ListResp[*model.User], error) {
+	users, err := s.roleDao.GetRoleUsers(ctx, roleID)
+	if err != nil {
+		s.l.Error("获取角色用户列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	return &model.ListResp[*model.User]{
+		Items: users,
+	}, nil
+}
+
+// GetUserRoles 获取用户的角色列表
+func (s *roleService) GetUserRoles(ctx context.Context, userID int) (*model.ListResp[*model.Role], error) {
+	roles, err := s.roleDao.GetUserRoles(ctx, userID)
+	if err != nil {
+		s.l.Error("获取用户角色列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	return &model.ListResp[*model.Role]{
+		Items: roles,
+	}, nil
+}
+
+// CheckUserPermission 检查用户权限
+func (s *roleService) CheckUserPermission(ctx context.Context, userID int, method, path string) (bool, error) {
+	hasPermission, err := s.roleDao.CheckUserPermission(ctx, userID, method, path)
+	if err != nil {
+		s.l.Error("检查用户权限失败", zap.Error(err))
+		return false, err
+	}
+
+	return hasPermission, nil
+}
+
+// GetUserPermissions 获取用户的所有权限
+func (s *roleService) GetUserPermissions(ctx context.Context, userID int) (*model.ListResp[*model.Api], error) {
+	permissions, err := s.roleDao.GetUserPermissions(ctx, userID)
+	if err != nil {
+		s.l.Error("获取用户权限列表失败", zap.Error(err))
+		return nil, err
+	}
+
+	return &model.ListResp[*model.Api]{
+		Items: permissions,
+	}, nil
 }
