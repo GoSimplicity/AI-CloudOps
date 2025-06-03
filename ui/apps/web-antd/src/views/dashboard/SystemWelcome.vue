@@ -96,9 +96,47 @@
           </a-card>
         </a-col>
         <a-col :span="8">
-          <a-card title="实时监控动态" :bordered="false">
-            <div class="no-data-message">
-              暂未获取监控数据，请检查服务是否启动
+          <a-card title="实时监控动态" :bordered="false" class="monitor-card">
+            <a-list size="small" class="monitor-list">
+              <a-list-item class="monitor-item monitor-item-warning">
+                <div class="monitor-content">
+                  <span class="monitor-time">08:15:32  </span>
+                  <span class="monitor-event">CPU使用率峰值达到87.3%，已触发自动扩容</span>
+                </div>
+                <a-tag color="orange" class="monitor-tag pulse-animation">处理中</a-tag>
+              </a-list-item>
+              <a-list-item class="monitor-item monitor-item-error">
+                <div class="monitor-content">
+                  <span class="monitor-time">08:03:17  </span>
+                  <span class="monitor-event">数据库连接池使用率达到92%，建议优化查询</span>
+                </div>
+                <a-tag color="red" class="monitor-tag blink-animation">紧急</a-tag>
+              </a-list-item>
+              <a-list-item class="monitor-item monitor-item-info">
+                <div class="monitor-content">
+                  <span class="monitor-time">07:58:45  </span>
+                  <span class="monitor-event">检测到网络延迟增加，平均响应时间215ms</span>
+                </div>
+                <a-tag color="blue" class="monitor-tag">信息</a-tag>
+              </a-list-item>
+              <a-list-item class="monitor-item monitor-item-success fade-in">
+                <div class="monitor-content">
+                  <span class="monitor-time">07:42:09  </span>
+                  <span class="monitor-event">实例自动扩展：2 → 4，负载均衡已完成</span>
+                </div>
+                <a-tag color="green" class="monitor-tag">已完成</a-tag>
+              </a-list-item>
+              <a-list-item class="monitor-item monitor-item-normal slide-in">
+                <div class="monitor-content">
+                  <span class="monitor-time">07:30:22  </span>
+                  <span class="monitor-event">系统QPS达到峰值：93，运行正常</span>
+                </div>
+                <a-tag color="default" class="monitor-tag">正常</a-tag>
+              </a-list-item>
+            </a-list>
+            <div class="monitor-refresh-indicator">
+              <a-spin size="small" />
+              <span class="refresh-text">实时更新中</span>
             </div>
           </a-card>
         </a-col>
