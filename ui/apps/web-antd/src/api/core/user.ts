@@ -19,6 +19,7 @@ type RegisterParams = {
   mobile: string;
   fei_shu_user_id: string;
   real_name: string;
+  email: string;
   desc: string;
   home_path: string
 };
@@ -27,11 +28,12 @@ type updateUserInfoReq = {
   user_id: number;
   real_name: string;
   desc: string;
-  mobile: string;
+  mobile: string; 
   fei_shu_user_id: string;
   account_type: number;
+  email: string;
   home_path: string;
-  enable: number;
+  enable: 0 | 1;
 }
 
 export async function getUserInfoApi() {
@@ -56,4 +58,8 @@ export async function deleteUser(id: number) {
 
 export async function updateUserInfo(data: updateUserInfoReq) {
   return requestClient.post('/user/profile/update', data);
+}
+
+export async function getUserDetailApi(id: number) {
+  return requestClient.get(`/user/detail/${id}`);
 }
