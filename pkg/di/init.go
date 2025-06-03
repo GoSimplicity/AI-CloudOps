@@ -36,7 +36,9 @@ func InitTables(db *gorm.DB) error {
 		&model.User{},
 		&model.Api{},
 		&model.AuditLog{},
-		&model.CasbinRule{},
+		&model.Role{},
+		&model.RoleApi{},
+		&model.UserRole{},
 
 		// tree
 		&model.TreeNodeAdmin{},
