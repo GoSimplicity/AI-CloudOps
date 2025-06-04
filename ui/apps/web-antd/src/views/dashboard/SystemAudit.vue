@@ -526,7 +526,7 @@ const changePage = (page: number, pageSize?: number) => {
   loadAuditLogs()
 }
 
-const handlePageSizeChange = (current: number, size: number) => {
+const handlePageSizeChange = (_: number, size: number) => {
   pagination.value.page = 1
   pagination.value.size = size
   selectedIds.value = []
