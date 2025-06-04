@@ -40,14 +40,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/datatypes"
 )
 
 const (
-	OperationCreate = "create"
-	OperationUpdate = "update"
-	OperationDelete = "delete"
-	OperationQuery  = "query"
-	Unknown         = "unknown"
+	OperationCreate = "CREATE"
+	OperationUpdate = "UPDATE"
+	OperationDelete = "DELETE"
+	OperationQuery  = "VIEW"
+	Unknown         = "UNKNOWN"
 )
 
 var operationTypeMap = map[string]string{
@@ -102,7 +103,7 @@ func (m *AuditLogMiddleware) AuditLog() gin.HandlerFunc {
 			return
 		}
 
-		var requestBody []byte
+		var requestBody datatypes.JSON
 
 		if c.Request.Body != nil {
 			// 使用bufferPool复用buffer
@@ -114,8 +115,18 @@ func (m *AuditLogMiddleware) AuditLog() gin.HandlerFunc {
 			if _, err := io.CopyN(buf, c.Request.Body, 1024*1024); err != nil && err != io.EOF {
 				m.l.Error("读取请求体失败", zap.Error(err))
 			}
-			requestBody = buf.Bytes()
-			c.Request.Body = io.NopCloser(bytes.NewBuffer(requestBody))
+
+			// 尝试将请求体转换为JSON
+			if buf.Len() > 0 {
+				var jsonData interface{}
+				if err := json.Unmarshal(buf.Bytes(), &jsonData); err == nil {
+					if jsonBytes, err := json.Marshal(jsonData); err == nil {
+						requestBody = jsonBytes
+					}
+				}
+			}
+
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(buf.Bytes()))
 		}
 
 		// 包装ResponseWriter以捕获响应体
@@ -129,19 +140,37 @@ func (m *AuditLogMiddleware) AuditLog() gin.HandlerFunc {
 		c.Writer = blw
 
 		startTime := time.Now()
+		traceID := c.GetHeader("X-Trace-ID")
+
 		c.Next()
 
 		// 获取用户id,如果不存在则使用0表示未登录用户
-		var userID uint
-		if user, exists := c.Get("user"); exists {
-			if uc, ok := user.(*utils.UserClaims); ok {
-				userID = uint(uc.Uid)
+		var userID int
+		if user, exists := c.MustGet("user").(utils.UserClaims); exists {
+			userID = int(user.Uid)
+		}
+
+		// 获取错误信息
+		var errorMsg string
+		if len(c.Errors) > 0 {
+			errorMsg = c.Errors.String()
+		}
+
+		// 处理响应体
+		var responseBody datatypes.JSON
+		if blw.body.Len() > 0 {
+			var jsonData interface{}
+			if err := json.Unmarshal(blw.body.Bytes(), &jsonData); err == nil {
+				if jsonBytes, err := json.Marshal(jsonData); err == nil {
+					responseBody = jsonBytes
+				}
 			}
 		}
 
-		// 构建基础日志
-		auditLog := &model.AuditLog{
+		// 构建审计日志请求
+		auditLogReq := &model.CreateAuditLogRequest{
 			UserID:        userID,
+			TraceID:       traceID,
 			IPAddress:     c.ClientIP(),
 			UserAgent:     c.Request.UserAgent(),
 			HttpMethod:    c.Request.Method,
@@ -151,20 +180,14 @@ func (m *AuditLogMiddleware) AuditLog() gin.HandlerFunc {
 			TargetID:      parseTargetID(c, requestBody),
 			StatusCode:    c.Writer.Status(),
 			RequestBody:   requestBody,
-			ResponseBody:  blw.body.Bytes(),
-			CreatedAt:     startTime.Unix(),
-			Duration:      time.Since(startTime).Milliseconds(),
+			ResponseBody:  responseBody,
+			Duration:      time.Since(startTime).Microseconds(), // 使用微秒
+			ErrorMsg:      errorMsg,
 		}
-
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
 		// 异步存储
-		go func(log *model.AuditLog) {
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			defer cancel()
-
-			if err := m.auditSvc.RecordOperationLog(ctx, log); err != nil {
-				m.l.Error("保存审计日志失败", zap.Error(err))
-			}
-		}(auditLog)
+		m.auditSvc.CreateAuditLogAsync(ctx, auditLogReq)
 	}
 }
 
@@ -185,7 +208,7 @@ func parseTargetType(c *gin.Context) string {
 // 常见ID字段名
 var idFields = []string{"id", "ID", "Id", "targetId", "target_id"}
 
-func parseTargetID(c *gin.Context, reqBody []byte) string {
+func parseTargetID(c *gin.Context, reqBody datatypes.JSON) string {
 	// 优先从URL参数获取
 	if id := c.Param("id"); id != "" {
 		return id

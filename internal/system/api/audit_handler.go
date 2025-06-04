@@ -26,178 +26,174 @@
 package api
 
 import (
-	"strconv"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type AuditHandler struct {
-	svc service.AuditService
+	svc    service.AuditService
+	logger *zap.Logger
 }
 
-func NewAuditHandler(svc service.AuditService) *AuditHandler {
+func NewAuditHandler(svc service.AuditService, logger *zap.Logger) *AuditHandler {
 	return &AuditHandler{
-		svc: svc,
+		svc:    svc,
+		logger: logger,
 	}
 }
 
 func (h *AuditHandler) RegisterRouters(server *gin.Engine) {
 	auditGroup := server.Group("/api/audit")
 
+	// 查询相关接口
 	auditGroup.POST("/list", h.ListAuditLogs)
 	auditGroup.GET("/detail/:id", h.GetAuditLogDetail)
-	auditGroup.GET("/types", h.GetAuditTypes)
-	auditGroup.GET("/statistics", h.GetAuditStatistics)
 	auditGroup.POST("/search", h.SearchAuditLogs)
+
+	// 统计和分析接口
+	auditGroup.GET("/statistics", h.GetAuditStatistics)
+	auditGroup.GET("/types", h.GetAuditTypes)
+
+	// 导出接口
 	auditGroup.POST("/export", h.ExportAuditLogs)
+
+	// 管理接口 - 需要管理员权限
 	auditGroup.DELETE("/:id", h.DeleteAuditLog)
 	auditGroup.POST("/batch-delete", h.BatchDeleteLogs)
 	auditGroup.POST("/archive", h.ArchiveAuditLogs)
+
+	// 创建接口 - 通常由系统内部调用
+	auditGroup.POST("/create", h.CreateAuditLog)
+	auditGroup.POST("/batch-create", h.BatchCreateAuditLogs)
+}
+
+// CreateAuditLog 创建单个审计日志
+func (h *AuditHandler) CreateAuditLog(ctx *gin.Context) {
+	var req model.CreateAuditLogRequest
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.svc.CreateAuditLog(ctx, &req)
+	})
+}
+
+// BatchCreateAuditLogs 批量创建审计日志 - 高性能批处理
+func (h *AuditHandler) BatchCreateAuditLogs(ctx *gin.Context) {
+	var req model.AuditLogBatch
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.svc.BatchCreateAuditLogs(ctx, req.Logs)
+	})
 }
 
 // ListAuditLogs 获取审计日志列表
-func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
+func (h *AuditHandler) ListAuditLogs(ctx *gin.Context) {
 	var req model.ListAuditLogsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Error(c)
-		return
-	}
 
-	logs, total, err := h.svc.ListAuditLogs(c.Request.Context(), &req)
-	if err != nil {
-		utils.Error(c)
-		return
-	}
-
-	utils.SuccessWithData(c, gin.H{
-		"list":  logs,
-		"total": total,
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.svc.ListAuditLogs(ctx, &req)
 	})
 }
 
 // GetAuditLogDetail 获取审计日志详情
-func (h *AuditHandler) GetAuditLogDetail(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+func (h *AuditHandler) GetAuditLogDetail(ctx *gin.Context) {
+	var req model.GetAuditLogDetailRequest
+
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.Error(c)
+		utils.ErrorWithMessage(ctx, "无效的审计日志ID")
 		return
 	}
 
-	detail, err := h.svc.GetAuditLogDetail(c.Request.Context(), uint(id))
-	if err != nil {
-		utils.Error(c)
-		return
-	}
+	req.ID = id
 
-	utils.SuccessWithData(c, detail)
-}
-
-// GetAuditTypes 获取审计类型列表
-func (h *AuditHandler) GetAuditTypes(c *gin.Context) {
-	types, err := h.svc.GetAuditTypes(c.Request.Context())
-	if err != nil {
-		utils.Error(c)
-		return
-	}
-
-	utils.SuccessWithData(c, types)
-}
-
-// GetAuditStatistics 获取审计统计信息
-func (h *AuditHandler) GetAuditStatistics(c *gin.Context) {
-	stats, err := h.svc.GetAuditStatistics(c.Request.Context())
-	if err != nil {
-		utils.Error(c)
-		return
-	}
-
-	utils.SuccessWithData(c, stats)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.svc.GetAuditLogDetail(ctx, req.ID)
+	})
 }
 
 // SearchAuditLogs 搜索审计日志
-func (h *AuditHandler) SearchAuditLogs(c *gin.Context) {
-	var req model.ListAuditLogsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Error(c)
-		return
-	}
+func (h *AuditHandler) SearchAuditLogs(ctx *gin.Context) {
+	var req model.SearchAuditLogsRequest
 
-	logs, total, err := h.svc.SearchAuditLogs(c.Request.Context(), &req)
-	if err != nil {
-		utils.Error(c)
-		return
-	}
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.svc.SearchAuditLogs(ctx, &req)
+	})
+}
 
-	utils.SuccessWithData(c, gin.H{
-		"list":  logs,
-		"total": total,
+// GetAuditStatistics 获取审计统计信息
+func (h *AuditHandler) GetAuditStatistics(ctx *gin.Context) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.svc.GetAuditStatistics(ctx)
+	})
+}
+
+// GetAuditTypes 获取审计类型列表
+func (h *AuditHandler) GetAuditTypes(ctx *gin.Context) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.svc.GetAuditTypes(ctx)
 	})
 }
 
 // ExportAuditLogs 导出审计日志
-func (h *AuditHandler) ExportAuditLogs(c *gin.Context) {
-	var req model.ListAuditLogsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Error(c)
-		return
+func (h *AuditHandler) ExportAuditLogs(ctx *gin.Context) {
+	var req model.ExportAuditLogsRequest
+
+	var contentType string
+	var filename string
+	switch req.Format { // 设置响应头
+	case "csv":
+		contentType = "text/csv"
+		filename = "audit_logs.csv"
+	case "xlsx":
+		contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+		filename = "audit_logs.xlsx"
+	case "json":
+		contentType = "application/json"
+		filename = "audit_logs.json"
 	}
 
-	data, err := h.svc.ExportAuditLogs(c.Request.Context(), &req)
-	if err != nil {
-		utils.Error(c)
-		return
-	}
+	ctx.Header("Content-Type", contentType)
+	ctx.Header("Content-Disposition", "attachment; filename="+filename)
 
-	utils.SuccessWithData(c, data)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.svc.ExportAuditLogs(ctx, &req)
+	})
 }
 
-// DeleteAuditLog 删除单条审计日志
-func (h *AuditHandler) DeleteAuditLog(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+// DeleteAuditLog 删除审计日志
+func (h *AuditHandler) DeleteAuditLog(ctx *gin.Context) {
+	var req model.DeleteAuditLogRequest
+
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.Error(c)
+		utils.ErrorWithMessage(ctx, "无效的审计日志ID")
 		return
 	}
 
-	if err := h.svc.DeleteAuditLog(c.Request.Context(), uint(id)); err != nil {
-		utils.Error(c)
-		return
-	}
+	req.ID = id
 
-	utils.Success(c)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.svc.DeleteAuditLog(ctx, req.ID)
+	})
 }
 
 // BatchDeleteLogs 批量删除审计日志
-func (h *AuditHandler) BatchDeleteLogs(c *gin.Context) {
-	var ids []uint
-	if err := c.ShouldBindJSON(&ids); err != nil {
-		utils.Error(c)
-		return
-	}
+func (h *AuditHandler) BatchDeleteLogs(ctx *gin.Context) {
+	var req model.BatchDeleteRequest
 
-	if err := h.svc.BatchDeleteLogs(c.Request.Context(), ids); err != nil {
-		utils.Error(c)
-		return
-	}
-
-	utils.Success(c)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.svc.BatchDeleteAuditLogs(ctx, req.IDs)
+	})
 }
 
 // ArchiveAuditLogs 归档审计日志
-func (h *AuditHandler) ArchiveAuditLogs(c *gin.Context) {
-	var req model.ListAuditLogsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Error(c)
-		return
-	}
+func (h *AuditHandler) ArchiveAuditLogs(ctx *gin.Context) {
+	var req model.ArchiveAuditLogsRequest
 
-	if err := h.svc.ArchiveAuditLogs(c.Request.Context(), &req); err != nil {
-		utils.Error(c)
-		return
-	}
-
-	utils.Success(c)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.svc.ArchiveAuditLogs(ctx, &req)
+	})
 }
