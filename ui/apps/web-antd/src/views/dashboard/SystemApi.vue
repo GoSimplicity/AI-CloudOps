@@ -261,7 +261,7 @@
 import { onMounted, reactive, ref, computed } from 'vue';
 import { message } from 'ant-design-vue';
 import { listApisApi, createApiApi, updateApiApi, deleteApiApi } from '#/api/core/system';
-import type { SystemApi } from '#/api/core/system';
+import type { UpdateApiReq, CreateApiReq } from '#/api/core/system';
 import { Icon } from '@iconify/vue';
 
 // 表格加载状态
@@ -296,7 +296,7 @@ const filteredApiList = computed(() => {
 // 对话框相关
 const modalVisible = ref(false);
 const modalTitle = ref('新增API');
-const formData = reactive<SystemApi.CreateApiReq>({
+const formData = reactive<CreateApiReq>({
   name: '',
   path: '',
   method: 1,
@@ -454,7 +454,7 @@ const handleModalOk = async () => {
       await createApiApi(formData);
       message.success('新增API成功');
     } else {
-      await updateApiApi(formData as SystemApi.UpdateApiReq);
+      await updateApiApi(formData as UpdateApiReq);
       message.success('编辑API成功');
     }
     modalVisible.value = false;

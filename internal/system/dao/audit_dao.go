@@ -27,131 +27,248 @@ package dao
 
 import (
 	"context"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 type AuditDAO interface {
-	CreateAuditLog(ctx context.Context, req *model.AuditLog) error
-	ListAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) ([]*model.AuditLog, int64, error)
-	GetAuditLogDetail(ctx context.Context, id uint) (*model.AuditLogDetail, error)
-	GetAuditTypes(ctx context.Context) ([]string, error)
-	GetAuditStatistics(ctx context.Context) (interface{}, error)
-	SearchAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) ([]*model.AuditLog, int64, error)
-	ExportAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) (interface{}, error)
-	DeleteAuditLog(ctx context.Context, id uint) error
-	BatchDeleteLogs(ctx context.Context, ids []uint) error
-	ArchiveAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) error
+	CreateAuditLog(ctx context.Context, log *model.AuditLog) error
+	BatchCreateAuditLogs(ctx context.Context, logs []model.AuditLog) error
+	GetAuditLogByID(ctx context.Context, id int) (*model.AuditLog, error)
+	ListAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) (int64, []model.AuditLog, error)
+	SearchAuditLogs(ctx context.Context, req *model.SearchAuditLogsRequest) (int64, []model.AuditLog, error)
+	GetAuditStatistics(ctx context.Context) (*model.AuditStatistics, error)
+	DeleteAuditLog(ctx context.Context, id int) error
+	BatchDeleteAuditLogs(ctx context.Context, ids []int) error
+	ArchiveAuditLogs(ctx context.Context, startTime, endTime int64) error
 }
 
 type auditDAO struct {
 	db *gorm.DB
-	l  *zap.Logger
 }
 
-func NewAuditDAO(db *gorm.DB, l *zap.Logger) AuditDAO {
-	return &auditDAO{
-		db: db,
-		l:  l,
-	}
+func NewAuditDAO(db *gorm.DB) AuditDAO {
+	return &auditDAO{db: db}
 }
 
-// ListAuditLogs 获取审计日志列表
-func (d *auditDAO) ListAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) ([]*model.AuditLog, int64, error) {
-	var (
-		logs  []*model.AuditLog
-		total int64
-		err   error
-	)
+// CreateAuditLog 创建单条审计日志
+func (d *auditDAO) CreateAuditLog(ctx context.Context, log *model.AuditLog) error {
+	return d.db.WithContext(ctx).Create(log).Error
+}
 
-	query := d.db.WithContext(ctx).Model(&model.AuditLog{})
-
-	if req.UserID > 0 {
-		query = query.Where("user_id = ?", req.UserID)
-	}
-	if req.OperationType != "" {
-		query = query.Where("operation_type = ?", req.OperationType)
-	}
-	query = query.Where("created_at BETWEEN ? AND ?", req.StartTime, req.EndTime)
-
-	if err = query.Count(&total).Error; err != nil {
-		d.l.Error("统计审计日志总数失败", zap.Error(err))
-		return nil, 0, err
+// BatchCreateAuditLogs 批量创建审计日志 - 优化批次大小
+func (d *auditDAO) BatchCreateAuditLogs(ctx context.Context, logs []model.AuditLog) error {
+	if len(logs) == 0 {
+		return nil
 	}
 
-	offset := (req.PageNumber - 1) * req.PageSize
-	if err = query.Order("created_at DESC").
+	// 动态调整批次大小，大批量数据使用更大的批次
+	batchSize := 100
+	if len(logs) > 1000 {
+		batchSize = 500
+	}
+
+	return d.db.WithContext(ctx).CreateInBatches(logs, batchSize).Error
+}
+
+// GetAuditLogByID 根据ID获取审计日志
+func (d *auditDAO) GetAuditLogByID(ctx context.Context, id int) (*model.AuditLog, error) {
+	var log model.AuditLog
+	err := d.db.WithContext(ctx).First(&log, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &log, nil
+}
+
+// ListAuditLogs 获取审计日志列表 - 修复分页问题
+func (d *auditDAO) ListAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) (int64, []model.AuditLog, error) {
+	var total int64
+	var logs []model.AuditLog
+
+	// 始终执行精确计数，确保分页数据准确
+	countQuery := d.buildListQuery(ctx, req)
+	if err := countQuery.Count(&total).Error; err != nil {
+		return 0, nil, err
+	}
+
+	if total == 0 {
+		return 0, logs, nil
+	}
+
+	// 计算偏移量
+	offset := (req.Page - 1) * req.Size
+
+	// 验证偏移量是否超出范围
+	if offset >= int(total) {
+		return total, logs, nil // 返回空结果但保留总数
+	}
+
+	// 构建数据查询
+	dataQuery := d.buildListQuery(ctx, req)
+
+	// 优化大偏移量查询
+	if offset > 5000 {
+		// 使用游标分页优化
+		err := d.efficientPaginationQuery(ctx, req, dataQuery, &logs)
+		return total, logs, err
+	}
+
+	// 常规分页查询
+	err := dataQuery.
+		Select("id, user_id, trace_id, ip_address, http_method, endpoint, operation_type, target_type, target_id, status_code, duration, error_msg, created_at").
 		Offset(offset).
-		Limit(req.PageSize).
-		Find(&logs).Error; err != nil {
-		d.l.Error("查询审计日志列表失败", zap.Error(err))
-		return nil, 0, err
-	}
+		Limit(req.Size).
+		Order("created_at DESC, id DESC"). // 添加id作为第二排序字段，确保结果稳定
+		Find(&logs).Error
 
-	return logs, total, nil
+	return total, logs, err
 }
 
-// GetAuditLogDetail 获取审计日志详情
-func (d *auditDAO) GetAuditLogDetail(ctx context.Context, id uint) (*model.AuditLogDetail, error) {
-	var detail model.AuditLogDetail
-	err := d.db.WithContext(ctx).
-		Model(&model.AuditLog{}).
-		Select("id, username, operation_type, target_type, target_id, created_at").
-		Where("id = ?", id).
-		First(&detail).Error
+// efficientPaginationQuery 优化的大偏移量分页查询
+func (d *auditDAO) efficientPaginationQuery(ctx context.Context, req *model.ListAuditLogsRequest, baseQuery *gorm.DB, logs *[]model.AuditLog) error {
+	offset := (req.Page - 1) * req.Size
+
+	// 使用子查询获取ID，然后JOIN查询完整数据
+	subQuery := baseQuery.
+		Select("id").
+		Offset(offset).
+		Limit(req.Size).
+		Order("created_at DESC, id DESC")
+
+	return d.db.WithContext(ctx).
+		Table("audit_logs").
+		Select("audit_logs.*").
+		Joins("JOIN (?) AS sub ON audit_logs.id = sub.id", subQuery).
+		Order("audit_logs.created_at DESC, audit_logs.id DESC").
+		Find(logs).Error
+}
+
+// SearchAuditLogs 搜索审计日志 - 修复搜索分页问题
+func (d *auditDAO) SearchAuditLogs(ctx context.Context, req *model.SearchAuditLogsRequest) (int64, []model.AuditLog, error) {
+	var total int64
+	var logs []model.AuditLog
+
+	query := d.buildSearchQuery(ctx, req)
+
+	// 计数查询
+	countQuery := d.buildSearchQuery(ctx, req)
+	if err := countQuery.Count(&total).Error; err != nil {
+		return 0, nil, err
+	}
+
+	if total == 0 {
+		return 0, logs, nil
+	}
+
+	// 验证分页参数
+	offset := (req.Page - 1) * req.Size
+	if offset >= int(total) {
+		return total, logs, nil
+	}
+
+	// 分页查询
+	err := query.
+		Offset(offset).
+		Limit(req.Size).
+		Order("created_at DESC, id DESC").
+		Find(&logs).Error
+
+	return total, logs, err
+}
+
+// GetAuditStatistics 获取审计统计信息 - 优化统计查询性能
+func (d *auditDAO) GetAuditStatistics(ctx context.Context) (*model.AuditStatistics, error) {
+	stats := &model.AuditStatistics{}
+
+	// 使用一个查询获取基础统计信息
+	var basicStats struct {
+		TotalCount  int64   `json:"total_count"`
+		TodayCount  int64   `json:"today_count"`
+		ErrorCount  int64   `json:"error_count"`
+		AvgDuration float64 `json:"avg_duration"`
+	}
+
+	today := time.Now().Truncate(24 * time.Hour)
+
+	// 优化：使用子查询一次性获取多个统计值
+	err := d.db.WithContext(ctx).Raw(`
+		  SELECT 
+			  COUNT(*) as total_count,
+			  COUNT(CASE WHEN created_at >= ? THEN 1 END) as today_count,
+			  COUNT(CASE WHEN status_code >= 400 OR error_msg != '' THEN 1 END) as error_count,
+			  AVG(duration) as avg_duration
+		  FROM audit_logs
+	  `, today).Scan(&basicStats).Error
+
 	if err != nil {
-		d.l.Error("获取审计日志详情失败", zap.Error(err), zap.Uint("id", id))
 		return nil, err
 	}
-	return &detail, nil
-}
 
-// GetAuditTypes 获取审计类型列表
-func (d *auditDAO) GetAuditTypes(ctx context.Context) ([]string, error) {
-	var types []string
-	err := d.db.WithContext(ctx).
-		Model(&model.AuditLog{}).
-		Distinct("operation_type").
-		Order("operation_type").
-		Pluck("operation_type", &types).Error
-	if err != nil {
-		d.l.Error("获取审计类型列表失败", zap.Error(err))
-	}
-	return types, err
-}
+	stats.TotalCount = basicStats.TotalCount
+	stats.TodayCount = basicStats.TodayCount
+	stats.ErrorCount = basicStats.ErrorCount
+	stats.AvgDuration = basicStats.AvgDuration
 
-// GetAuditStatistics 获取审计统计信息
-func (d *auditDAO) GetAuditStatistics(ctx context.Context) (interface{}, error) {
-	var stats struct {
-		Total       int64 `json:"total"`
-		CreateCount int64 `json:"create_count"`
-		UpdateCount int64 `json:"update_count"`
-		DeleteCount int64 `json:"delete_count"`
-		OtherCount  int64 `json:"other_count"`
-	}
+	// 并发获取其他统计信息
+	errChan := make(chan error, 4)
 
-	db := d.db.WithContext(ctx).Model(&model.AuditLog{})
+	// 操作类型分布
+	go func() {
+		var typeDistribution []model.TypeDistributionItem
+		err := d.db.WithContext(ctx).Model(&model.AuditLog{}).
+			Select("operation_type as type, COUNT(*) as count").
+			Group("operation_type").
+			Order("count DESC").
+			Limit(10).
+			Find(&typeDistribution).Error
+		stats.TypeDistribution = typeDistribution
+		errChan <- err
+	}()
 
-	if err := db.Count(&stats.Total).Error; err != nil {
-		d.l.Error("获取审计日志总数失败", zap.Error(err))
-		return nil, err
-	}
+	// 状态码分布
+	go func() {
+		var statusDistribution []model.StatusDistributionItem
+		err := d.db.WithContext(ctx).Model(&model.AuditLog{}).
+			Select("status_code as status, COUNT(*) as count").
+			Group("status_code").
+			Order("count DESC").
+			Limit(10).
+			Find(&statusDistribution).Error
+		stats.StatusDistribution = statusDistribution
+		errChan <- err
+	}()
 
-	operationTypes := []string{"CREATE", "UPDATE", "DELETE", "OTHER"}
-	countMap := map[string]*int64{
-		"CREATE": &stats.CreateCount,
-		"UPDATE": &stats.UpdateCount,
-		"DELETE": &stats.DeleteCount,
-		"OTHER":  &stats.OtherCount,
-	}
+	// 最近活动
+	go func() {
+		var recentActivity []model.RecentActivityItem
+		err := d.db.WithContext(ctx).Model(&model.AuditLog{}).
+			Select("CAST(UNIX_TIMESTAMP(created_at) AS SIGNED) as time, operation_type, user_id, target_type, status_code, duration").
+			Order("created_at DESC").
+			Limit(20).
+			Find(&recentActivity).Error
+		stats.RecentActivity = recentActivity
+		errChan <- err
+	}()
 
-	for _, opType := range operationTypes {
-		if err := db.Where("operation_type = ?", opType).Count(countMap[opType]).Error; err != nil {
-			d.l.Error("获取操作类型统计数据失败",
-				zap.String("operation_type", opType),
-				zap.Error(err))
+	// 24小时趋势
+	go func() {
+		var hourlyTrend []model.HourlyTrendItem
+		err := d.db.WithContext(ctx).Model(&model.AuditLog{}).
+			Select("HOUR(created_at) as hour, COUNT(*) as count").
+			Where("created_at >= ?", time.Now().Add(-24*time.Hour)).
+			Group("HOUR(created_at)").
+			Order("hour").
+			Find(&hourlyTrend).Error
+		stats.HourlyTrend = hourlyTrend
+		errChan <- err
+	}()
+
+	// 等待所有goroutine完成
+	for i := 0; i < 4; i++ {
+		if err := <-errChan; err != nil {
 			return nil, err
 		}
 	}
@@ -159,103 +276,151 @@ func (d *auditDAO) GetAuditStatistics(ctx context.Context) (interface{}, error) 
 	return stats, nil
 }
 
-// SearchAuditLogs 搜索审计日志
-func (d *auditDAO) SearchAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) ([]*model.AuditLog, int64, error) {
-	var (
-		logs  []*model.AuditLog
-		total int64
-		err   error
-	)
+// DeleteAuditLog 删除单条审计日志
+func (d *auditDAO) DeleteAuditLog(ctx context.Context, id int) error {
+	return d.db.WithContext(ctx).Delete(&model.AuditLog{}, id).Error
+}
 
-	query := d.db.WithContext(ctx).Model(&model.AuditLog{})
+// BatchDeleteAuditLogs 批量删除审计日志 - 优化大批量删除
+func (d *auditDAO) BatchDeleteAuditLogs(ctx context.Context, ids []int) error {
+	if len(ids) == 0 {
+		return nil
+	}
 
+	// 分批删除，避免锁表时间过长
+	batchSize := 1000
+	for i := 0; i < len(ids); i += batchSize {
+		end := i + batchSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+
+		if err := d.db.WithContext(ctx).Delete(&model.AuditLog{}, ids[i:end]).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ArchiveAuditLogs 归档审计日志 - 优化归档性能
+func (d *auditDAO) ArchiveAuditLogs(ctx context.Context, startTime, endTime int64) error {
+	start := time.Unix(startTime, 0)
+	end := time.Unix(endTime, 0)
+
+	// 分批处理，避免长时间锁表
+	batchSize := 10000
+	for {
+		var count int64
+		// 检查还有多少数据需要处理
+		err := d.db.WithContext(ctx).Model(&model.AuditLog{}).
+			Where("created_at BETWEEN ? AND ?", start, end).
+			Count(&count).Error
+		if err != nil {
+			return err
+		}
+
+		if count == 0 {
+			break
+		}
+
+		// 分批删除
+		err = d.db.WithContext(ctx).
+			Where("created_at BETWEEN ? AND ?", start, end).
+			Limit(batchSize).
+			Delete(&model.AuditLog{}).Error
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// buildSearchQuery 修复搜索查询构建
+func (d *auditDAO) buildSearchQuery(ctx context.Context, req *model.SearchAuditLogsRequest) *gorm.DB {
+	query := d.buildListQuery(ctx, &req.ListAuditLogsRequest)
+
+	if req.Advanced != nil {
+		adv := req.Advanced
+
+		// 使用IN查询优化多值搜索
+		if len(adv.IPAddressList) > 0 {
+			query = query.Where("ip_address IN ?", adv.IPAddressList)
+		}
+
+		if len(adv.StatusCodeList) > 0 {
+			query = query.Where("status_code IN ?", adv.StatusCodeList)
+		}
+
+		// 范围查询优化
+		if adv.DurationMin > 0 {
+			query = query.Where("duration >= ?", adv.DurationMin)
+		}
+
+		if adv.DurationMax > 0 {
+			query = query.Where("duration <= ?", adv.DurationMax)
+		}
+
+		// 布尔查询优化
+		if adv.HasError != nil {
+			if *adv.HasError {
+				query = query.Where("status_code >= 400 OR error_msg != ''")
+			} else {
+				query = query.Where("status_code < 400 AND (error_msg = '' OR error_msg IS NULL)")
+			}
+		}
+
+		// LIKE查询放在最后，减少索引失效影响
+		if adv.EndpointPattern != "" {
+			query = query.Where("endpoint LIKE ?", "%"+adv.EndpointPattern+"%")
+		}
+	}
+
+	return query
+}
+
+// buildListQuery 修复上下文问题和查询逻辑
+func (d *auditDAO) buildListQuery(ctx context.Context, req *model.ListAuditLogsRequest) *gorm.DB {
+	query := d.db.WithContext(ctx).Model(&model.AuditLog{}) // 使用传入的ctx
+
+	// 时间范围查询
+	if req.StartTime > 0 && req.EndTime > 0 {
+		start := time.Unix(req.StartTime, 0)
+		end := time.Unix(req.EndTime, 0)
+		query = query.Where("created_at BETWEEN ? AND ?", start, end)
+	} else if req.StartTime > 0 {
+		query = query.Where("created_at >= ?", time.Unix(req.StartTime, 0))
+	} else if req.EndTime > 0 {
+		query = query.Where("created_at <= ?", time.Unix(req.EndTime, 0))
+	}
+
+	// 精确匹配字段
 	if req.UserID > 0 {
 		query = query.Where("user_id = ?", req.UserID)
 	}
+
 	if req.OperationType != "" {
 		query = query.Where("operation_type = ?", req.OperationType)
 	}
-	query = query.Where("created_at BETWEEN ? AND ?", req.StartTime, req.EndTime)
 
-	if err = query.Count(&total).Error; err != nil {
-		d.l.Error("统计搜索结果总数失败", zap.Error(err))
-		return nil, 0, err
+	if req.StatusCode > 0 {
+		query = query.Where("status_code = ?", req.StatusCode)
 	}
 
-	offset := (req.PageNumber - 1) * req.PageSize
-	if err = query.Order("created_at DESC").
-		Offset(offset).
-		Limit(req.PageSize).
-		Find(&logs).Error; err != nil {
-		d.l.Error("搜索审计日志失败", zap.Error(err))
-		return nil, 0, err
+	if req.TraceID != "" {
+		query = query.Where("trace_id = ?", req.TraceID)
 	}
 
-	return logs, total, nil
-}
-
-// ExportAuditLogs 导出审计日志
-func (d *auditDAO) ExportAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) (interface{}, error) {
-	var logs []*model.AuditLog
-	err := d.db.WithContext(ctx).
-		Model(&model.AuditLog{}).
-		Where("created_at BETWEEN ? AND ?", req.StartTime, req.EndTime).
-		Order("created_at DESC").
-		Find(&logs).Error
-	if err != nil {
-		d.l.Error("导出审计日志失败", zap.Error(err))
-		return nil, err
+	if req.TargetType != "" {
+		query = query.Where("target_type = ?", req.TargetType)
 	}
-	return logs, nil
-}
 
-// DeleteAuditLog 删除单条审计日志
-func (d *auditDAO) DeleteAuditLog(ctx context.Context, id uint) error {
-	result := d.db.WithContext(ctx).Delete(&model.AuditLog{}, id)
-	if result.Error != nil {
-		d.l.Error("删除审计日志失败", zap.Error(result.Error), zap.Uint("id", id))
-		return result.Error
+	// 模糊搜索（放在最后）
+	if req.Search != "" {
+		search := "%" + req.Search + "%"
+		query = query.Where("trace_id LIKE ? OR endpoint LIKE ? OR error_msg LIKE ?", search, search, search)
 	}
-	if result.RowsAffected == 0 {
-		d.l.Warn("要删除的审计日志不存在", zap.Uint("id", id))
-	}
-	return nil
-}
 
-// BatchDeleteLogs 批量删除审计日志
-func (d *auditDAO) BatchDeleteLogs(ctx context.Context, ids []uint) error {
-	result := d.db.WithContext(ctx).Delete(&model.AuditLog{}, ids)
-	if result.Error != nil {
-		d.l.Error("批量删除审计日志失败", zap.Error(result.Error), zap.Uints("ids", ids))
-		return result.Error
-	}
-	if int64(len(ids)) != result.RowsAffected {
-		d.l.Warn("部分审计日志不存在",
-			zap.Int64("deleted", result.RowsAffected),
-			zap.Int("expected", len(ids)))
-	}
-	return nil
-}
-
-// ArchiveAuditLogs 归档审计日志
-func (d *auditDAO) ArchiveAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) error {
-	result := d.db.WithContext(ctx).
-		Where("created_at BETWEEN ? AND ?", req.StartTime, req.EndTime).
-		Delete(&model.AuditLog{})
-	if result.Error != nil {
-		d.l.Error("归档审计日志失败", zap.Error(result.Error))
-		return result.Error
-	}
-	d.l.Info("归档审计日志成功", zap.Int64("archived_count", result.RowsAffected))
-	return nil
-}
-
-// CreateAuditLog 创建审计日志
-func (d *auditDAO) CreateAuditLog(ctx context.Context, req *model.AuditLog) error {
-	//if err := d.db.WithContext(ctx).Create(req).Error; err != nil {
-	//	d.l.Error("创建审计日志失败", zap.Error(err))
-	//	return err
-	//}
-
-	return nil
+	return query
 }

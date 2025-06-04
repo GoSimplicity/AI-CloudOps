@@ -51,6 +51,15 @@ const routes: RouteRecordRaw[] = [
           title: '角色权限',
         },
       },
+      {
+        name: '审计日志',
+        path: '/system_audit',
+        component: () => import('#/views/dashboard/SystemAudit.vue'),
+        meta: {
+          icon: 'lucide:file-text',
+          title: '审计日志',
+        },
+      },
     ],
   },
 ];
