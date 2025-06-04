@@ -49,16 +49,13 @@ func (h *AuditHandler) RegisterRouters(server *gin.Engine) {
 	auditGroup := server.Group("/api/audit")
 
 	// 查询相关接口
-	auditGroup.POST("/list", h.ListAuditLogs)
+	auditGroup.GET("/list", h.ListAuditLogs)
 	auditGroup.GET("/detail/:id", h.GetAuditLogDetail)
-	auditGroup.POST("/search", h.SearchAuditLogs)
+	auditGroup.GET("/search", h.SearchAuditLogs)
 
 	// 统计和分析接口
 	auditGroup.GET("/statistics", h.GetAuditStatistics)
 	auditGroup.GET("/types", h.GetAuditTypes)
-
-	// 导出接口
-	auditGroup.POST("/export", h.ExportAuditLogs)
 
 	// 管理接口 - 需要管理员权限
 	auditGroup.DELETE("/:id", h.DeleteAuditLog)
@@ -134,32 +131,6 @@ func (h *AuditHandler) GetAuditStatistics(ctx *gin.Context) {
 func (h *AuditHandler) GetAuditTypes(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.svc.GetAuditTypes(ctx)
-	})
-}
-
-// ExportAuditLogs 导出审计日志
-func (h *AuditHandler) ExportAuditLogs(ctx *gin.Context) {
-	var req model.ExportAuditLogsRequest
-
-	var contentType string
-	var filename string
-	switch req.Format { // 设置响应头
-	case "csv":
-		contentType = "text/csv"
-		filename = "audit_logs.csv"
-	case "xlsx":
-		contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-		filename = "audit_logs.xlsx"
-	case "json":
-		contentType = "application/json"
-		filename = "audit_logs.json"
-	}
-
-	ctx.Header("Content-Type", contentType)
-	ctx.Header("Content-Disposition", "attachment; filename="+filename)
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.svc.ExportAuditLogs(ctx, &req)
 	})
 }
 

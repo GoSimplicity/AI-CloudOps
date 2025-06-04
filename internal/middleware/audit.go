@@ -49,7 +49,23 @@ const (
 	OperationDelete = "DELETE"
 	OperationQuery  = "VIEW"
 	Unknown         = "UNKNOWN"
+
+	// 请求体大小限制
+	maxBodySize = 1024 * 1024 // 1MB
 )
+
+// 预定义跳过审计的路径
+var skipAuditPaths = map[string]bool{
+	"/api/user/login":                                   true,
+	"/api/user/logout":                                  true,
+	"/api/user/refresh_token":                           true,
+	"/api/user/signup":                                  true,
+	"/api/not_auth/getTreeNodeBindIps":                  true,
+	"/api/monitor/prometheus_configs/prometheus":        true,
+	"/api/monitor/prometheus_configs/prometheus_alert":  true,
+	"/api/monitor/prometheus_configs/prometheus_record": true,
+	"/api/monitor/prometheus_configs/alertManager":      true,
+}
 
 var operationTypeMap = map[string]string{
 	"POST":   OperationCreate,
@@ -59,6 +75,7 @@ var operationTypeMap = map[string]string{
 	"GET":    OperationQuery,
 }
 
+// 使用对象池优化内存使用
 var bufferPool = sync.Pool{
 	New: func() interface{} {
 		return new(bytes.Buffer)
@@ -89,30 +106,24 @@ func NewAuditLogMiddleware(auditSvc service.AuditService, l *zap.Logger) *AuditL
 
 func (m *AuditLogMiddleware) AuditLog() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 跳过登录接口的审计
-		if c.Request.URL.Path == "/api/user/login" ||
-			c.Request.URL.Path == "/api/user/logout" ||
-			c.Request.URL.Path == "/api/user/refresh_token" ||
-			c.Request.URL.Path == "/api/user/signup" ||
-			c.Request.URL.Path == "/api/not_auth/getTreeNodeBindIps" ||
-			c.Request.URL.Path == "/api/monitor/prometheus_configs/prometheus" ||
-			c.Request.URL.Path == "/api/monitor/prometheus_configs/prometheus_alert" ||
-			c.Request.URL.Path == "/api/monitor/prometheus_configs/prometheus_record" ||
-			c.Request.URL.Path == "/api/monitor/prometheus_configs/alertManager" {
+		// 快速检查是否需要跳过审计
+		if skipAuditPaths[c.Request.URL.Path] {
 			c.Next()
 			return
 		}
 
 		var requestBody datatypes.JSON
+		startTime := time.Now()
+		traceID := c.GetHeader("X-Trace-ID")
 
-		if c.Request.Body != nil {
-			// 使用bufferPool复用buffer
+		// 只处理非GET请求的请求体
+		if c.Request.Method != "GET" && c.Request.Body != nil {
 			buf := bufferPool.Get().(*bytes.Buffer)
 			buf.Reset()
 			defer bufferPool.Put(buf)
 
 			// 限制读取大小,避免内存溢出
-			if _, err := io.CopyN(buf, c.Request.Body, 1024*1024); err != nil && err != io.EOF {
+			if _, err := io.CopyN(buf, c.Request.Body, maxBodySize); err != nil && err != io.EOF {
 				m.l.Error("读取请求体失败", zap.Error(err))
 			}
 
@@ -138,13 +149,14 @@ func (m *AuditLogMiddleware) AuditLog() gin.HandlerFunc {
 		defer bufferPool.Put(blw.body)
 
 		c.Writer = blw
-
-		startTime := time.Now()
-		traceID := c.GetHeader("X-Trace-ID")
-
 		c.Next()
 
-		// 获取用户id,如果不存在则使用0表示未登录用户
+		// 如果是GET请求，不记录审计日志，提前返回
+		if c.Request.Method == "GET" {
+			return
+		}
+
+		// 获取用户ID
 		var userID int
 		if user, exists := c.MustGet("user").(utils.UserClaims); exists {
 			userID = int(user.Uid)
@@ -184,13 +196,16 @@ func (m *AuditLogMiddleware) AuditLog() gin.HandlerFunc {
 			Duration:      time.Since(startTime).Microseconds(), // 使用微秒
 			ErrorMsg:      errorMsg,
 		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		// 异步存储
+
+		// 异步存储审计日志
 		m.auditSvc.CreateAuditLogAsync(ctx, auditLogReq)
 	}
 }
 
+// 解析目标类型
 func parseTargetType(c *gin.Context) string {
 	path := c.Request.URL.Path
 	if path == "" {
@@ -208,6 +223,7 @@ func parseTargetType(c *gin.Context) string {
 // 常见ID字段名
 var idFields = []string{"id", "ID", "Id", "targetId", "target_id"}
 
+// 解析目标ID
 func parseTargetID(c *gin.Context, reqBody datatypes.JSON) string {
 	// 优先从URL参数获取
 	if id := c.Param("id"); id != "" {

@@ -27,10 +27,6 @@ package dao
 
 import (
 	"context"
-	"encoding/csv"
-	"encoding/json"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -44,7 +40,6 @@ type AuditDAO interface {
 	ListAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) (int64, []model.AuditLog, error)
 	SearchAuditLogs(ctx context.Context, req *model.SearchAuditLogsRequest) (int64, []model.AuditLog, error)
 	GetAuditStatistics(ctx context.Context) (*model.AuditStatistics, error)
-	ExportAuditLogs(ctx context.Context, req *model.ExportAuditLogsRequest) ([]byte, error)
 	DeleteAuditLog(ctx context.Context, id int) error
 	BatchDeleteAuditLogs(ctx context.Context, ids []int) error
 	ArchiveAuditLogs(ctx context.Context, startTime, endTime int64) error
@@ -281,43 +276,6 @@ func (d *auditDAO) GetAuditStatistics(ctx context.Context) (*model.AuditStatisti
 	return stats, nil
 }
 
-// ExportAuditLogs 导出审计日志 - 修复导出查询
-func (d *auditDAO) ExportAuditLogs(ctx context.Context, req *model.ExportAuditLogsRequest) ([]byte, error) {
-	query := d.buildListQuery(ctx, &req.ListAuditLogsRequest) // 修复ctx传递
-
-	// 限制导出数量防止内存溢出
-	if req.MaxRows > 0 && req.MaxRows < 50000 {
-		query = query.Limit(req.MaxRows)
-	} else {
-		query = query.Limit(50000) // 默认最大5万条
-	}
-
-	// 使用流式查询处理大数据量
-	rows, err := query.Order("created_at DESC").Rows()
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var logs []model.AuditLog
-	for rows.Next() {
-		var log model.AuditLog
-		if err := d.db.ScanRows(rows, &log); err != nil {
-			return nil, err
-		}
-		logs = append(logs, log)
-	}
-
-	switch req.Format {
-	case "json":
-		return json.Marshal(logs)
-	case "csv":
-		return d.exportAsCSV(logs, req.Fields)
-	default:
-		return nil, fmt.Errorf("不支持的导出格式: %s", req.Format)
-	}
-}
-
 // DeleteAuditLog 删除单条审计日志
 func (d *auditDAO) DeleteAuditLog(ctx context.Context, id int) error {
 	return d.db.WithContext(ctx).Delete(&model.AuditLog{}, id).Error
@@ -420,77 +378,6 @@ func (d *auditDAO) buildSearchQuery(ctx context.Context, req *model.SearchAuditL
 	}
 
 	return query
-}
-
-// exportAsCSV 导出为CSV格式 - 优化内存使用
-func (d *auditDAO) exportAsCSV(logs []model.AuditLog, fields []string) ([]byte, error) {
-	var buf strings.Builder
-	// 预分配内存，减少重新分配
-	buf.Grow(len(logs) * 200) // 估算每行200字符
-
-	writer := csv.NewWriter(&buf)
-
-	// 默认字段
-	if len(fields) == 0 {
-		fields = []string{"id", "user_id", "trace_id", "ip_address", "http_method",
-			"endpoint", "operation_type", "target_type", "target_id", "status_code",
-			"duration", "error_msg", "created_at"}
-	}
-
-	// 写入表头
-	if err := writer.Write(fields); err != nil {
-		return nil, err
-	}
-
-	// 批量写入数据，减少系统调用
-	records := make([][]string, 0, len(logs))
-	for _, log := range logs {
-		record := make([]string, len(fields))
-		for i, field := range fields {
-			record[i] = d.getFieldValue(log, field)
-		}
-		records = append(records, record)
-	}
-
-	if err := writer.WriteAll(records); err != nil {
-		return nil, err
-	}
-
-	return []byte(buf.String()), nil
-}
-
-// getFieldValue 获取字段值 - 提取公共方法
-func (d *auditDAO) getFieldValue(log model.AuditLog, field string) string {
-	switch field {
-	case "id":
-		return fmt.Sprintf("%d", log.ID)
-	case "user_id":
-		return fmt.Sprintf("%d", log.UserID)
-	case "trace_id":
-		return log.TraceID
-	case "ip_address":
-		return log.IPAddress
-	case "http_method":
-		return log.HttpMethod
-	case "endpoint":
-		return log.Endpoint
-	case "operation_type":
-		return log.OperationType
-	case "target_type":
-		return log.TargetType
-	case "target_id":
-		return log.TargetID
-	case "status_code":
-		return fmt.Sprintf("%d", log.StatusCode)
-	case "duration":
-		return fmt.Sprintf("%d", log.Duration)
-	case "error_msg":
-		return log.ErrorMsg
-	case "created_at":
-		return log.CreatedAt.Format("2006-01-02 15:04:05")
-	default:
-		return ""
-	}
 }
 
 // buildListQuery 修复上下文问题和查询逻辑

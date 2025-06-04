@@ -37,6 +37,7 @@ type AuditLog struct {
 	IPAddress     string         `json:"ip_address" gorm:"size:45;not null;comment:操作IP地址"`
 	UserAgent     string         `json:"user_agent" gorm:"size:500;comment:用户代理"`
 	HttpMethod    string         `json:"http_method" gorm:"size:10;not null;index:idx_method_status;comment:HTTP请求方法"`
+	Description   string         `json:"description" gorm:"size:255;comment:描述"`
 	Endpoint      string         `json:"endpoint" gorm:"size:255;not null;index;comment:请求端点"`
 	OperationType string         `json:"operation_type" gorm:"type:VARCHAR(20);index:idx_operation_time;not null;comment:操作类型"`
 	TargetType    string         `json:"target_type" gorm:"size:64;not null;index;comment:目标资源类型"`
@@ -147,14 +148,6 @@ type RecentActivityItem struct {
 type HourlyTrendItem struct {
 	Hour  int   `json:"hour"`
 	Count int64 `json:"count"`
-}
-
-// ExportAuditLogsRequest 导出审计日志请求
-type ExportAuditLogsRequest struct {
-	ListAuditLogsRequest
-	Format  string   `json:"format" binding:"oneof=csv json excel" form:"format"`
-	Fields  []string `json:"fields" form:"fields"`
-	MaxRows int      `json:"max_rows" binding:"max=10000" form:"max_rows"`
 }
 
 type DeleteAuditLogRequest struct {

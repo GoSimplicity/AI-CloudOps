@@ -114,13 +114,6 @@ export interface HourlyTrendItem {
   count: number;
 }
 
-// 导出审计日志请求
-export interface ExportAuditLogsRequest extends ListAuditLogsRequest {
-  format: 'csv' | 'json' | 'excel';
-  fields?: string[];
-  max_rows?: number;
-}
-
 // 批量删除请求
 export interface BatchDeleteRequest {
   ids: number[];
@@ -141,7 +134,7 @@ export interface AuditTypeInfo {
 
 // 查询相关接口
 export function listAuditLogsApi(data: ListAuditLogsRequest) {
-  return requestClient.post('/audit/list', data);
+  return requestClient.get('/audit/list', { params: data });
 }
 
 export function getAuditLogDetailApi(id: number) {
@@ -149,7 +142,7 @@ export function getAuditLogDetailApi(id: number) {
 }
 
 export function searchAuditLogsApi(data: SearchAuditLogsRequest) {
-  return requestClient.post('/audit/search', data);
+  return requestClient.get('/audit/search', { params: data });
 }
 
 // 统计和分析接口
@@ -159,11 +152,6 @@ export function getAuditStatisticsApi() {
 
 export function getAuditTypesApi() {
   return requestClient.get('/audit/types');
-}
-
-// 导出接口
-export function exportAuditLogsApi(data: ExportAuditLogsRequest) {
-  return requestClient.post('/audit/export', data);
 }
 
 // 管理接口

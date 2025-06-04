@@ -48,9 +48,9 @@
       </div>
 
       <!-- 查询和操作 -->
-      <div class="custom-toolbar">
-        <!-- 查询功能 -->
-        <div class="search-filters">
+      <div class="toolbar">
+        <!-- 搜索区域 -->
+        <div class="search-section">
           <a-input
             v-model:value="searchForm.search"
             placeholder="搜索关键词、Trace ID..."
@@ -86,93 +86,48 @@
             <a-select-option value="404">404 - 未找到</a-select-option>
             <a-select-option value="500">500 - 服务器错误</a-select-option>
           </a-select>
+
+          <a-date-picker
+            v-model:value="startTime"
+            show-time
+            placeholder="开始时间"
+            class="date-picker"
+            format="YYYY-MM-DD HH:mm:ss"
+          />
           
-          <a-button type="primary" @click="handleSearch" class="search-button">
+          <a-date-picker
+            v-model:value="endTime"
+            show-time
+            placeholder="结束时间"
+            class="date-picker"
+            format="YYYY-MM-DD HH:mm:ss"
+          />
+        </div>
+        
+        <!-- 操作按钮 -->
+        <div class="action-section">
+          <a-button type="primary" @click="handleSearch" class="action-btn">
             <template #icon><Icon icon="ri:search-line" /></template>
             搜索
           </a-button>
           
-          <a-button @click="handleReset" class="reset-button">
+          <a-button @click="handleReset" class="action-btn">
             <template #icon><Icon icon="ri:refresh-line" /></template>
             重置
           </a-button>
-        </div>
-        
-        <!-- 操作按钮 -->
-        <div class="action-buttons">
+          
           <a-button 
             v-if="selectedIds.length > 0" 
             type="primary" 
             danger 
             @click="handleBatchDelete" 
-            class="batch-delete-button"
+            class="action-btn"
           >
             <template #icon><Icon icon="ant-design:delete-outlined" /></template>
             删除选中 ({{ selectedIds.length }})
           </a-button>
-          
-          <a-button type="primary" @click="handleExport" class="export-button">
-            <template #icon><Icon icon="material-symbols:download" /></template>
-            导出
-          </a-button>
         </div>
       </div>
-
-      <!-- 高级筛选 -->
-      <a-collapse class="advanced-filters" ghost>
-        <a-collapse-panel key="advanced" header="高级筛选">
-          <template #extra>
-            <Icon icon="ri:filter-line" />
-          </template>
-          <div class="advanced-form">
-            <div class="form-row">
-              <a-form-item label="用户ID" class="form-item">
-                <a-input-number
-                  v-model:value="searchForm.user_id"
-                  placeholder="用户ID"
-                  class="custom-input"
-                  :min="0"
-                />
-              </a-form-item>
-              
-              <a-form-item label="每页条数" class="form-item">
-                <a-select
-                  v-model:value="pagination.size"
-                  @change="handlePageSizeChange"
-                  class="custom-select"
-                >
-                  <a-select-option :value="10">10条/页</a-select-option>
-                  <a-select-option :value="20">20条/页</a-select-option>
-                  <a-select-option :value="50">50条/页</a-select-option>
-                  <a-select-option :value="100">100条/页</a-select-option>
-                </a-select>
-              </a-form-item>
-            </div>
-            
-            <div class="form-row">
-              <a-form-item label="开始时间" class="form-item">
-                <a-date-picker
-                  v-model:value="startTime"
-                  show-time
-                  placeholder="请选择开始时间"
-                  class="date-picker"
-                  format="YYYY-MM-DD HH:mm:ss"
-                />
-              </a-form-item>
-              
-              <a-form-item label="结束时间" class="form-item">
-                <a-date-picker
-                  v-model:value="endTime"
-                  show-time
-                  placeholder="请选择结束时间"
-                  class="date-picker"
-                  format="YYYY-MM-DD HH:mm:ss"
-                />
-              </a-form-item>
-            </div>
-          </div>
-        </a-collapse-panel>
-      </a-collapse>
     </div>
 
     <!-- 审计日志列表表格 -->
@@ -265,14 +220,14 @@
       v-model:visible="showDetail"
       title="审计日志详情"
       :footer="null"
-      class="custom-modal detail-modal"
+      class="detail-modal"
       :maskClosable="false"
       :destroyOnClose="true"
       :width="900"
     >
       <div class="modal-content">
-        <div class="modal-header-icon">
-          <div class="icon-wrapper detail-icon">
+        <div class="modal-header">
+          <div class="header-icon">
             <Icon icon="material-symbols:history-edu" />
           </div>
           <div class="header-text">日志详细信息</div>
@@ -303,7 +258,7 @@
               </a-tag>
             </div>
             <div class="detail-item">
-              <label>端点:</label>
+              <label>请求路径:</label>
               <span class="endpoint-path">{{ selectedLog.endpoint }}</span>
             </div>
             <div class="detail-item">
@@ -382,7 +337,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import dayjs, { Dayjs } from 'dayjs'
 import {
@@ -394,8 +349,7 @@ import {
   getAuditStatisticsApi,
   getAuditTypesApi,
   deleteAuditLogApi,
-  batchDeleteLogsApi,
-  exportAuditLogsApi
+  batchDeleteLogsApi
 } from '#/api/core/audit'
 import { Icon } from '@iconify/vue'
 
@@ -459,7 +413,7 @@ const columns = [
     width: 100
   },
   {
-    title: '端点',
+    title: '请求路径',
     dataIndex: 'endpoint',
     key: 'endpoint',
     ellipsis: true,
@@ -502,8 +456,8 @@ const loadAuditLogs = async () => {
       ...searchForm.value,
       page: pagination.value.page,
       size: pagination.value.size,
-      start_time: startTime.value ? startTime.value.valueOf() : undefined,
-      end_time: endTime.value ? endTime.value.valueOf() : undefined
+      // start_time: startTime.value ? startTime.value.valueOf() : undefined,
+      // end_time: endTime.value ? endTime.value.valueOf() : undefined
     }
     
     const response = await listAuditLogsApi(params)
@@ -607,24 +561,6 @@ const handleBatchDelete = async () => {
   }
 }
 
-const handleExport = async () => {
-  try {
-    const params = {
-      ...searchForm.value,
-      format: 'excel' as const,
-      max_rows: 10000,
-      page: pagination.value.page,
-      size: pagination.value.size,
-      start_time: startTime.value ? startTime.value.valueOf() : undefined,
-      end_time: endTime.value ? endTime.value.valueOf() : undefined
-    }
-    await exportAuditLogsApi(params)
-    message.success('导出成功')
-  } catch (error: any) {
-    message.error(error.message || '导出失败')
-  }
-}
-
 // 工具函数
 const formatTime = (timeStr: string) => {
   return dayjs(timeStr).format('YYYY-MM-DD HH:mm:ss')
@@ -681,75 +617,79 @@ onMounted(() => {
 <style scoped>
 /* 整体容器样式 */
 .audit-management-container {
-  padding: 20px;
-  background-color: #f0f2f5;
+  padding: 24px;
+  background-color: #f5f7fa;
   min-height: 100vh;
-  font-family: 'Roboto', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* 顶部卡片样式 */
 .dashboard-card {
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 24px;
   margin-bottom: 20px;
-  transition: all 0.3s;
+  border: 1px solid #f0f0f0;
 }
 
 .card-title {
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .title-icon {
-  font-size: 28px;
-  margin-right: 10px;
+  font-size: 24px;
+  margin-right: 12px;
   color: #1890ff;
 }
 
 .card-title h2 {
   margin: 0;
   font-size: 20px;
-  font-weight: 500;
-  color: #1e293b;
+  font-weight: 600;
+  color: #262626;
 }
 
 /* 统计卡片样式 */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
 }
 
 .stat-card {
-  background: linear-gradient(135deg, #fff, #f8f9fa);
+  background: #fff;
   border: 1px solid #f0f0f0;
   border-radius: 8px;
-  padding: 16px;
+  padding: 20px;
   display: flex;
   align-items: center;
   gap: 16px;
   transition: all 0.3s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #d9d9d9;
 }
 
 .stat-icon {
   width: 48px;
   height: 48px;
-  border-radius: 50%;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 24px;
   color: white;
+  flex-shrink: 0;
 }
 
 .stat-icon.total {
@@ -773,174 +713,115 @@ onMounted(() => {
 }
 
 .stat-number {
-  font-size: 20px;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: 24px;
+  font-weight: 700;
+  color: #262626;
   line-height: 1.2;
+  margin-bottom: 4px;
 }
 
 .stat-label {
-  color: #64748b;
+  color: #8c8c8c;
   font-size: 14px;
-  margin-top: 4px;
+  font-weight: 500;
 }
 
 /* 工具栏样式 */
-.custom-toolbar {
+.toolbar {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 20px;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 16px;
 }
 
-.search-filters {
+.search-section {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  flex: 1;
 }
 
 .search-input {
   width: 280px;
   border-radius: 6px;
-  transition: all 0.3s;
-}
-
-.search-input:hover, 
-.search-input:focus {
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
 }
 
 .filter-select {
-  min-width: 140px;
+  min-width: 120px;
   border-radius: 6px;
 }
 
-:deep(.filter-select .ant-select-selector) {
-  border-radius: 6px !important;
-}
-
-.search-button {
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.reset-button {
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.batch-delete-button {
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.3s;
-}
-
-.export-button {
-  border-radius: 6px;
-  background: linear-gradient(90deg, #1890ff, #36cfc9);
-  border: none;
-  box-shadow: 0 2px 6px rgba(24, 144, 255, 0.3);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.3s;
-}
-
-.export-button:hover {
-  background: linear-gradient(90deg, #40a9ff, #5cdbd3);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4);
-}
-
-/* 高级筛选样式 */
-.advanced-filters {
-  margin-top: 16px;
-}
-
-:deep(.advanced-filters .ant-collapse-header) {
-  padding: 12px 0 !important;
-}
-
-.advanced-form {
-  padding-top: 16px;
-}
-
-.form-row {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 16px;
-}
-
-.form-item {
-  flex: 1;
-  margin-bottom: 0;
-}
-
-:deep(.custom-input) {
-  border-radius: 6px;
-  transition: all 0.3s;
-}
-
-:deep(.custom-select .ant-select-selector) {
-  border-radius: 6px !important;
+.date-picker {
+  width: 200px;
 }
 
 :deep(.date-picker .ant-picker) {
-  width: 100%;
   border-radius: 6px;
+}
+
+.action-section {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  border-radius: 6px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
 }
 
 /* 表格容器样式 */
 .table-container {
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   overflow: hidden;
+  border: 1px solid #f0f0f0;
 }
 
 .audit-table {
   width: 100%;
 }
 
+:deep(.audit-table .ant-table-thead > tr > th) {
+  background-color: #fafafa;
+  font-weight: 600;
+  color: #262626;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+:deep(.audit-table .ant-table-tbody > tr:hover > td) {
+  background-color: #f5f5f5;
+}
+
 /* 表格内容样式 */
 .time-cell {
   font-size: 13px;
   color: #595959;
-  font-family: 'Roboto Mono', monospace;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', monospace;
 }
 
 .endpoint-cell {
-  font-family: 'Roboto Mono', 'Courier New', monospace;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', monospace;
   color: #595959;
   background-color: #f5f5f5;
-  padding: 2px 6px;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .duration-cell {
-  font-family: 'Roboto Mono', monospace;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', monospace;
   font-size: 13px;
   color: #595959;
+  font-weight: 500;
 }
 
 /* 标签样式 */
@@ -948,13 +829,12 @@ onMounted(() => {
   border-radius: 4px;
   padding: 2px 8px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   border: none;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .method-tag {
-  font-family: 'Roboto Mono', monospace;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', monospace;
   letter-spacing: 0.5px;
 }
 
@@ -962,15 +842,12 @@ onMounted(() => {
 .action-button {
   width: 32px;
   height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-radius: 6px;
   transition: all 0.2s;
+  border: none;
 }
 
 .action-button:hover {
-  background-color: #f0f0f0;
   transform: translateY(-1px);
 }
 
@@ -978,78 +855,72 @@ onMounted(() => {
   color: #1890ff;
 }
 
+.view-button:hover {
+  background-color: #e6f7ff;
+  color: #096dd9;
+}
+
 .delete-button {
-  color: #f5222d;
+  color: #ff4d4f;
+}
+
+.delete-button:hover {
+  background-color: #fff2f0;
+  color: #cf1322;
 }
 
 /* 详情模态框样式 */
 :deep(.detail-modal .ant-modal-content) {
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 :deep(.detail-modal .ant-modal-header) {
   background: #fff;
-  padding: 20px 24px 0;
-  border-bottom: none;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 :deep(.detail-modal .ant-modal-title) {
   font-size: 18px;
   font-weight: 600;
-  color: #1e293b;
-}
-
-:deep(.detail-modal .ant-modal-body) {
-  padding: 0;
+  color: #262626;
 }
 
 .modal-content {
-  padding: 20px 24px 24px;
+  padding: 0;
 }
 
-.modal-header-icon {
+.modal-header {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  margin-bottom: 30px;
+  gap: 12px;
+  padding: 20px 0 16px;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 20px;
 }
 
-.icon-wrapper {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
+.header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #722ed1, #b37feb);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.25);
-}
-
-.detail-icon {
-  background: linear-gradient(135deg, #722ed1, #b37feb);
-}
-
-.icon-wrapper svg {
-  font-size: 32px;
   color: white;
+  font-size: 20px;
 }
 
 .header-text {
   font-size: 16px;
-  color: #1e293b;
-  font-weight: 500;
+  color: #262626;
+  font-weight: 600;
 }
 
 /* 详情内容样式 */
-.detail-content {
-  margin-top: 0;
-}
-
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -1062,67 +933,65 @@ onMounted(() => {
 
 .detail-item label {
   font-weight: 600;
-  color: #1e293b;
+  color: #262626;
   font-size: 14px;
 }
 
 .detail-item span {
-  color: #64748b;
+  color: #595959;
   word-break: break-all;
 }
 
 .trace-id {
-  font-family: 'Roboto Mono', monospace;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', monospace;
   font-size: 12px;
   background-color: #f5f5f5;
-  padding: 2px 6px;
+  padding: 4px 8px;
   border-radius: 4px;
 }
 
 .endpoint-path {
-  font-family: 'Roboto Mono', monospace;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', monospace;
   font-size: 12px;
-  color: #595959;
   background-color: #f5f5f5;
   padding: 4px 8px;
   border-radius: 4px;
 }
 
 .duration-badge {
-  font-family: 'Roboto Mono', monospace;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', monospace;
   background-color: #f0f2f5;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 13px;
+  font-weight: 500;
 }
 
 .detail-section {
-  margin-bottom: 24px;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  margin-bottom: 20px;
   border: 1px solid #f0f0f0;
+  border-radius: 8px;
   overflow: hidden;
 }
 
 .section-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 12px 16px;
-  background-color: #f9f9f9;
+  background-color: #fafafa;
   border-bottom: 1px solid #f0f0f0;
-  font-weight: 500;
-  color: #1e293b;
+  font-weight: 600;
+  color: #262626;
 }
 
 .section-icon {
   color: #1890ff;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .error-section .section-icon.error-icon {
-  color: #f5222d;
+  color: #ff4d4f;
 }
 
 .section-content {
@@ -1134,51 +1003,84 @@ onMounted(() => {
   border: 1px solid #e9ecef;
   border-radius: 6px;
   padding: 12px;
-  font-family: 'Roboto Mono', 'Courier New', monospace;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', monospace;
   font-size: 12px;
   white-space: pre-wrap;
   overflow-x: auto;
   max-height: 200px;
   margin: 0;
   line-height: 1.5;
+  color: #262626;
 }
 
 .error-section .code-block {
-  background-color: #fff5f5;
+  background-color: #fff2f0;
   border-color: #ffccc7;
   color: #a8071a;
 }
 
 /* 响应式设计 */
+@media (max-width: 1200px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-section {
+    margin-bottom: 16px;
+  }
+  
+  .action-section {
+    justify-content: flex-end;
+  }
+}
+
 @media (max-width: 768px) {
   .audit-management-container {
-    padding: 10px;
+    padding: 16px;
+  }
+  
+  .dashboard-card {
+    padding: 20px;
   }
   
   .stats-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
   
-  .custom-toolbar {
+  .search-section {
     flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .search-filters {
-    width: 100%;
-    margin-bottom: 12px;
+    align-items: stretch;
   }
   
   .search-input {
     width: 100%;
   }
   
-  .form-row {
+  .filter-select,
+  .date-picker {
+    width: 100%;
+  }
+  
+  .action-section {
     flex-direction: column;
+    align-items: stretch;
   }
   
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .action-section {
+    gap: 12px;
+  }
+  
+  .action-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

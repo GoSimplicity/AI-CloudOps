@@ -43,7 +43,6 @@ type AuditService interface {
 	SearchAuditLogs(ctx context.Context, req *model.SearchAuditLogsRequest) (*model.ListResp[model.AuditLog], error)
 	GetAuditStatistics(ctx context.Context) (*model.AuditStatistics, error)
 	GetAuditTypes(ctx context.Context) ([]model.AuditTypeInfo, error)
-	ExportAuditLogs(ctx context.Context, req *model.ExportAuditLogsRequest) ([]byte, error)
 	DeleteAuditLog(ctx context.Context, id int) error
 	BatchDeleteAuditLogs(ctx context.Context, ids []int) error
 	ArchiveAuditLogs(ctx context.Context, req *model.ArchiveAuditLogsRequest) error
@@ -231,23 +230,6 @@ func (s *auditService) GetAuditTypes(ctx context.Context) ([]model.AuditTypeInfo
 	}
 
 	return auditTypes, nil
-}
-
-// 导出审计日志
-func (s *auditService) ExportAuditLogs(ctx context.Context, req *model.ExportAuditLogsRequest) ([]byte, error) {
-	// 限制导出数量，防止内存溢出
-	if req.Size <= 0 || req.Size > 10000 {
-		req.Size = 10000
-		s.logger.Warn("审计日志导出数量已限制", zap.Int("max_limit", 10000))
-	}
-
-	data, err := s.dao.ExportAuditLogs(ctx, req)
-	if err != nil {
-		s.logger.Error("导出审计日志失败", zap.Error(err), zap.Any("request", req))
-		return nil, fmt.Errorf("导出审计日志失败: %w", err)
-	}
-
-	return data, nil
 }
 
 // 删除审计日志
