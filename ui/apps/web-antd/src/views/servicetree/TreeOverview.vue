@@ -25,7 +25,7 @@
           <template #cover>
             <div class="stat-card">
               <AppstoreOutlined class="card-icon" />
-              <div class="stat-number">{{ statistics.totalNodes }}</div>
+              <div class="stat-number">{{ statistics?.totalNodes || 0 }}</div>
               <div class="stat-label">总节点数</div>
             </div>
           </template>
@@ -36,7 +36,7 @@
           <template #cover>
             <div class="stat-card">
               <CloudServerOutlined class="card-icon" />
-              <div class="stat-number">{{ statistics.totalResources }}</div>
+              <div class="stat-number">{{ statistics?.totalResources || 0 }}</div>
               <div class="stat-label">资源总数</div>
             </div>
           </template>
@@ -47,7 +47,7 @@
           <template #cover>
             <div class="stat-card">
               <TeamOutlined class="card-icon" />
-              <div class="stat-number">{{ statistics.totalAdmins }}</div>
+              <div class="stat-number">{{ statistics?.totalAdmins || 0 }}</div>
               <div class="stat-label">管理员数</div>
             </div>
           </template>
@@ -58,7 +58,7 @@
           <template #cover>
             <div class="stat-card">
               <ClockCircleOutlined class="card-icon" />
-              <div class="stat-number">{{ statistics.activeNodes }}</div>
+              <div class="stat-number">{{ statistics?.activeNodes || 0 }}</div>
               <div class="stat-label">活跃节点</div>
             </div>
           </template>
@@ -72,8 +72,13 @@
           <a-card title="树形视图" :bordered="false" class="tree-card">
             <div class="tree-content">
               <a-spin :spinning="loading">
-                <a-tree :tree-data="treeData" :defaultExpandedKeys="['1']"
-                  :showLine="{ showLeafIcon: false }" @select="onTreeNodeSelect" class="service-tree">
+                <a-tree 
+                  :tree-data="treeData" 
+                  :defaultExpandedKeys="defaultExpandedKeys"
+                  :showLine="{ showLeafIcon: false }" 
+                  @select="onTreeNodeSelect" 
+                  class="service-tree"
+                >
                   <template #title="{ title, key }">
                     <span class="tree-node-title">
                       {{ title }}
@@ -118,18 +123,33 @@
             <a-descriptions-item label="层级">
               {{ selectedNode.level }}
             </a-descriptions-item>
-            <a-descriptions-item label="管理员">
-              <a-tag v-for="admin in selectedNode.adminUsers" :key="admin" color="blue">
-                {{ admin }}
+            <a-descriptions-item label="状态">
+              <a-tag :color="selectedNode.status === 'active' ? 'green' : 'red'">
+                {{ selectedNode.status === 'active' ? '活跃' : '非活跃' }}
               </a-tag>
             </a-descriptions-item>
-            <a-descriptions-item label="成员">
-              <a-tag v-for="member in selectedNode.memberUsers" :key="member" color="green">
-                {{ member }}
+            <a-descriptions-item label="节点类型">
+              <a-tag :color="selectedNode.isLeaf ? 'blue' : 'orange'">
+                {{ selectedNode.isLeaf ? '叶子节点' : '目录节点' }}
               </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="管理员数量">
+              {{ selectedNode.adminUsers?.length || 0 }}
+            </a-descriptions-item>
+            <a-descriptions-item label="成员数量">
+              {{ selectedNode.memberUsers?.length || 0 }}
+            </a-descriptions-item>
+            <a-descriptions-item label="子节点数">
+              {{ selectedNode.childCount || 0 }}
+            </a-descriptions-item>
+            <a-descriptions-item label="资源数">
+              {{ selectedNode.resourceCount || 0 }}
             </a-descriptions-item>
             <a-descriptions-item label="创建时间">
-              {{ selectedNode.createdAt }}
+              {{ formatDateTime(selectedNode.createdAt) }}
+            </a-descriptions-item>
+            <a-descriptions-item label="更新时间">
+              {{ formatDateTime(selectedNode.updatedAt) }}
             </a-descriptions-item>
             <a-descriptions-item label="描述">
               {{ selectedNode.description || '无' }}
@@ -141,20 +161,25 @@
 
       <a-col :span="12">
         <a-card title="绑定资源" :bordered="false" v-if="selectedNode" class="resources-card">
-          <a-tabs default-active-key="ecs">
-            <a-tab-pane key="ecs" tab="云服务器">
-              <a-table :dataSource="selectedNodeResources.ecs" :columns="ecsColumns" :pagination="{ pageSize: 5 }"
-                size="small" />
-            </a-tab-pane>
-            <a-tab-pane key="rds" tab="数据库">
-              <a-table :dataSource="selectedNodeResources.rds" :columns="rdsColumns" :pagination="{ pageSize: 5 }"
-                size="small" />
-            </a-tab-pane>
-            <a-tab-pane key="elb" tab="负载均衡">
-              <a-table :dataSource="selectedNodeResources.elb" :columns="elbColumns" :pagination="{ pageSize: 5 }"
-                size="small" />
-            </a-tab-pane>
-          </a-tabs>
+          <a-spin :spinning="resourceLoading">
+            <a-table 
+              :dataSource="nodeResources" 
+              :columns="resourceColumns" 
+              :pagination="{ pageSize: 8, size: 'small' }"
+              size="small"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'resourceStatus'">
+                  <a-tag :color="getResourceStatusColor(record.resourceStatus)">
+                    {{ record.resourceStatus }}
+                  </a-tag>
+                </template>
+                <template v-if="column.key === 'resourceCreateTime'">
+                  {{ formatDateTime(record.resourceCreateTime) }}
+                </template>
+              </template>
+            </a-table>
+          </a-spin>
         </a-card>
         <a-empty v-else description="请选择节点查看资源" />
       </a-col>
@@ -163,7 +188,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue';
+import { ref, reactive, onMounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   ReloadOutlined,
@@ -173,65 +198,163 @@ import {
   TeamOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons-vue';
-import { getTreeStatistics, getTreeList, getNodeDetail } from '#/api/core/tree';
-import type { TreeNodeListReq, TreeStatisticsResp, TreeNodeDetailResp } from '#/api/core/tree';
 import { message } from 'ant-design-vue';
 import * as echarts from 'echarts';
+import { 
+  getTreeList,
+  getNodeDetail,
+  getTreeStatistics,
+  getNodeResources,
+  type TreeNodeDetail,
+  type TreeNodeListItem,
+  type TreeStatistics,
+  type TreeNodeResource,
+  type GetTreeListParams,
+} from '#/api/core/tree_node';
 
 const router = useRouter();
 const loading = ref(false);
-const selectedNode = ref<TreeNodeDetailResp | null>(null);
+const resourceLoading = ref(false);
+const selectedNode = ref<TreeNodeDetail | null>(null);
 const chartContainer = ref<HTMLElement | null>(null);
 let chart: echarts.ECharts | null = null;
 
 // 统计数据
-const statistics = reactive<TreeStatisticsResp>({
-  totalNodes: 0,
-  totalResources: 0,
-  totalAdmins: 0,
-  totalMembers: 0,
-  activeNodes: 0,
-  inactiveNodes: 0
-});
+const statistics = ref<TreeStatistics | null>(null);
 
 // 树形数据
 const treeData = ref<any[]>([]);
+const defaultExpandedKeys = ref<string[]>([]);
 
-// 节点资源数据映射
-const nodeResources = reactive<Record<string, { count: number }>>({});
+// 节点详情缓存
+const nodeDetails = ref<Record<string, TreeNodeDetail>>({});
+
+// 节点资源数据
+const nodeResources = ref<TreeNodeResource[]>([]);
 
 // 资源表格列定义
-const ecsColumns = [
-  { title: '实例名称', dataIndex: 'name', key: 'name' },
-  { title: '状态', dataIndex: 'status', key: 'status' },
-  { title: 'IP地址', dataIndex: 'ip', key: 'ip' },
-  { title: '规格', dataIndex: 'type', key: 'type' },
+const resourceColumns = [
+  { title: '资源名称', dataIndex: 'resourceName', key: 'resourceName' },
+  { title: '资源类型', dataIndex: 'resourceType', key: 'resourceType' },
+  { title: '状态', dataIndex: 'resourceStatus', key: 'resourceStatus' },
+  { title: '创建时间', dataIndex: 'resourceCreateTime', key: 'resourceCreateTime' },
 ];
 
-const rdsColumns = [
-  { title: '实例名称', dataIndex: 'name', key: 'name' },
-  { title: '状态', dataIndex: 'status', key: 'status' },
-  { title: '类型', dataIndex: 'dbType', key: 'dbType' },
-  { title: '规格', dataIndex: 'type', key: 'type' },
-];
+// 工具函数
+const formatDateTime = (dateStr: string) => {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString('zh-CN');
+};
 
-const elbColumns = [
-  { title: '实例名称', dataIndex: 'name', key: 'name' },
-  { title: '状态', dataIndex: 'status', key: 'status' },
-  { title: 'IP地址', dataIndex: 'ip', key: 'ip' },
-  { title: '类型', dataIndex: 'loadBalancerType', key: 'loadBalancerType' },
-];
-
-// 选中节点的资源
-const selectedNodeResources = reactive({
-  ecs: [],
-  rds: [],
-  elb: [],
-});
+const getResourceStatusColor = (status: string) => {
+  const colorMap: Record<string, string> = {
+    'running': 'green',
+    'stopped': 'red',
+    'starting': 'orange',
+    'stopping': 'orange',
+    'active': 'green',
+    'inactive': 'red',
+  };
+  return colorMap[status] || 'default';
+};
 
 // 获取节点资源数量
-const getNodeResourceCount = (key: number): number => {
-  return nodeResources[key]?.count || 0;
+const getNodeResourceCount = (key: string | number): number => {
+  const nodeId = parseInt(key.toString());
+  return nodeDetails.value[nodeId]?.resourceCount || 0;
+};
+
+// 修复后的数据加载函数
+const loadTreeData = async () => {
+  try {
+    const params: GetTreeListParams = {};
+    const response = await getTreeList(params);
+    
+    // 检查响应数据结构
+    const data = response.data || response;
+    const items = data.items || data;
+    
+    if (!Array.isArray(items)) {
+      console.error('API返回的数据格式不正确:', response);
+      message.error('数据格式错误');
+      return;
+    }
+    
+    // 处理树节点数据并缓存详情
+    const processNode = (node: TreeNodeListItem) => {
+      nodeDetails.value[node.id] = {
+        id: node.id,
+        name: node.name,
+        parentId: node.parentId,
+        level: node.level,
+        description: '',
+        creatorId: node.creatorId,
+        status: node.status,
+        isLeaf: node.isLeaf,
+        createdAt: node.created_at,
+        updatedAt: node.updated_at,
+        creatorName: '',
+        parentName: '',
+        childCount: node.children?.length || 0,
+        adminUsers: [],
+        memberUsers: [],
+        resourceCount: 0,
+      };
+      
+      if (node.children && node.children.length > 0) {
+        node.children.forEach(processNode);
+      }
+    };
+    
+    items.forEach(processNode);
+    
+    // 构建树形结构
+    const transformNode = (node: TreeNodeListItem): any => ({
+      key: node.id.toString(),
+      title: node.name,
+      isLeaf: node.isLeaf,
+      children: node.children && node.children.length > 0 
+        ? node.children.map(transformNode) 
+        : undefined
+    });
+    
+    treeData.value = items.map(transformNode);
+    
+    // 设置默认展开的键
+    if (treeData.value.length > 0) {
+      defaultExpandedKeys.value = [treeData.value[0].key];
+    }
+    
+    console.log('树形数据加载成功:', treeData.value);
+  } catch (error) {
+    console.error('加载树形数据失败:', error);
+    message.error('加载树形数据失败');
+  }
+};
+
+const loadStatistics = async () => {
+  try {
+    const res = await getTreeStatistics();
+    statistics.value = res;
+  } catch (error) {
+    console.error('获取统计数据失败:', error);
+    message.error('获取统计数据失败');
+  }
+};
+
+const loadNodeResources = async (nodeId: number) => {
+  if (!nodeId) return;
+  
+  resourceLoading.value = true;
+  try {
+    const res = await getNodeResources(nodeId);
+    nodeResources.value = res;
+  } catch (error) {
+    console.error('获取节点资源失败:', error);
+    message.error('获取节点资源失败');
+  } finally {
+    resourceLoading.value = false;
+  }
 };
 
 // 初始化ECharts图表
@@ -246,55 +369,56 @@ const initChart = () => {
 const updateChart = () => {
   if (!chart || treeData.value.length === 0) return;
 
-  // 准备节点数据
   const nodes: any[] = [];
   const links: any[] = [];
   
-  // 创建实际节点关系的映射，用于检查连线
+  // 创建节点关系映射
   const nodeRelations = new Map();
   
-  // 将树形数据中的父子关系存储到映射中
-  const buildRelationsMap = (node: any) => {
+  const buildRelationsMap = (node: any, parentKey?: string) => {
+    if (parentKey) {
+      nodeRelations.set(node.key, parentKey);
+    }
+    
     if (node.children && node.children.length > 0) {
       node.children.forEach((child: any) => {
-        // 记录父子关系: 子节点ID -> 父节点ID
-        nodeRelations.set(child.key.toString(), node.key.toString());
-        buildRelationsMap(child);
+        buildRelationsMap(child, node.key);
       });
     }
   };
   
-  // 为每个根节点建立关系映射
+  // 建立关系映射
   treeData.value.forEach((rootNode) => {
     buildRelationsMap(rootNode);
   });
 
-  // 递归处理树节点及其关系
+  // 递归处理树节点
   const processNode = (node: any) => {
-    // 添加当前节点
+    const resourceCount = getNodeResourceCount(node.key);
+    
     nodes.push({
       name: node.title,
-      id: node.key.toString(),
-      value: getNodeResourceCount(node.key),
-      symbolSize: Math.max(30, 40 + (getNodeResourceCount(node.key) * 2)),
+      id: node.key,
+      value: resourceCount,
+      symbolSize: Math.max(30, 30 + (resourceCount * 2)),
       itemStyle: {
-        color: nodeRelations.has(node.key.toString()) ? '#1890ff' : '#722ed1'
+        color: node.isLeaf ? '#52c41a' : '#1890ff'
       },
       label: {
         show: true,
         position: 'inside',
-        formatter: (params: any) => {
-          return params.data.name;
-        }
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 12
       }
     });
     
-    // 如果节点存在于关系映射中，添加连接关系
-    if (nodeRelations.has(node.key.toString())) {
-      const parentId = nodeRelations.get(node.key.toString());
+    // 添加父子连接关系
+    if (nodeRelations.has(node.key)) {
+      const parentKey = nodeRelations.get(node.key);
       links.push({
-        source: parentId,
-        target: node.key.toString(),
+        source: parentKey,
+        target: node.key,
         lineStyle: {
           width: 2,
           curveness: 0.2
@@ -310,7 +434,7 @@ const updateChart = () => {
     }
   };
   
-  // 处理所有顶级节点及其子节点
+  // 处理所有节点
   treeData.value.forEach((rootNode) => {
     processNode(rootNode);
   });
@@ -318,10 +442,12 @@ const updateChart = () => {
   const option = {
     tooltip: {
       trigger: 'item',
-      formatter: '{b}'
+      formatter: (params: any) => {
+        return `${params.data.name}<br/>资源数量: ${params.data.value}`;
+      }
     },
     animationDurationUpdate: 1500,
-    animationEasingUpdate: 'quinticInOut' as const, 
+    animationEasingUpdate: 'quinticInOut',
     series: [
       {
         type: 'graph',
@@ -329,15 +455,21 @@ const updateChart = () => {
         data: nodes,
         links: links,
         roam: true,
+        focusNodeAdjacency: true,
+        itemStyle: {
+          borderColor: '#fff',
+          borderWidth: 1,
+          shadowBlur: 10,
+          shadowColor: 'rgba(0, 0, 0, 0.3)'
+        },
         label: {
           show: true,
-          position: 'inside',
-          color: '#fff',
-          fontWeight: 'bold'
+          position: 'inside'
         },
         lineStyle: {
           color: 'source',
-          curveness: 0.3
+          curveness: 0.3,
+          opacity: 0.9
         },
         emphasis: {
           focus: 'adjacency',
@@ -346,53 +478,53 @@ const updateChart = () => {
           }
         },
         force: {
-          repulsion: 300,
-          edgeLength: 150
+          repulsion: 400,
+          edgeLength: [100, 200],
+          gravity: 0.1
         }
       }
     ]
   };
 
-  chart.setOption(option);
+  chart.setOption(option as any);
 };
 
-// 监听窗口大小变化，调整图表大小
-window.addEventListener('resize', () => {
-  if (chart) {
-    chart.resize();
-  }
-});
-
-// 监听树数据变化，更新图表
-watch(treeData, () => {
-  if (chart) {
-    updateChart();
-  }
-}, { deep: true });
-
 // 树节点选择事件
-const onTreeNodeSelect = async (selectedKeys: number[]): Promise<void> => {
+const onTreeNodeSelect = async (selectedKeys: string[]) => {
   if (selectedKeys.length > 0) {
-    const key = selectedKeys[0];
-    try {
+    const nodeId = parseInt(selectedKeys[0] || '0');
+    
+    if (nodeId > 0) {
       loading.value = true;
-      // 获取节点详情
-      const nodeDetailRes = await getNodeDetail(Number(key));
-      if (nodeDetailRes) {
-        selectedNode.value = nodeDetailRes;
-      } else {
+      try {
+        // 从缓存获取或加载节点详情
+        let nodeDetail = nodeDetails.value[nodeId];
+        if (!nodeDetail) {
+          nodeDetail = await getNodeDetail(nodeId);
+          if (nodeDetail) {
+            nodeDetails.value[nodeId] = nodeDetail;
+          }
+        }
+        
+        if (nodeDetail) {
+          selectedNode.value = nodeDetail;
+          // 加载节点资源
+          await loadNodeResources(nodeId);
+        } else {
+          selectedNode.value = null;
+          message.error('获取节点详情失败');
+        }
+      } catch (error) {
+        console.error('获取节点数据失败:', error);
+        message.error('获取节点数据失败');
         selectedNode.value = null;
-        message.error('获取节点详情失败');
+      } finally {
+        loading.value = false;
       }
-    } catch (error) {
-      console.error('获取节点数据失败:', error);
-      message.error('获取节点数据失败');
-      selectedNode.value = null;
-    } finally {
-      loading.value = false;
     }
   } else {
     selectedNode.value = null;
+    nodeResources.value = [];
   }
 };
 
@@ -400,70 +532,21 @@ const onTreeNodeSelect = async (selectedKeys: number[]): Promise<void> => {
 const refreshData = async () => {
   loading.value = true;
   try {
-    // 获取统计数据
-    const statsRes = await getTreeStatistics();
-    if (statsRes) {
-      // 直接使用返回的数据对象，不需要检查code
-      Object.assign(statistics, statsRes);
-    } else {
-      message.error('获取统计数据失败：返回格式不正确');
-    }
-
-    // 获取树节点数据
-    const listReq: TreeNodeListReq = {}; // 可以添加筛选条件
-    const treeRes = await getTreeList(listReq);
-    if (treeRes && Array.isArray(treeRes)) {
-      // 将后端返回的树状结构转换为前端所需格式
-      treeData.value = treeRes.map((node: any) => {
-        // 递归处理子节点
-        if (node.children && Array.isArray(node.children)) {
-          node.children = processTreeNodes(node.children);
-        }
-        
-        // 记录资源数量
-        if (node.resourceCount && node.resourceCount > 0) {
-          nodeResources[node.id] = { count: node.resourceCount };
-        }
-        
-        return {
-          key: node.id,
-          title: node.name,
-          ...node
-        };
-      });
-      
-      // 更新图表
-      setTimeout(() => {
-        updateChart();
-      }, 100);
-    } else if (treeRes.code !== 0) {
-      message.error(`获取服务树数据失败: ${treeRes.message || '未知错误'}`);
-    } else {
-      message.error('获取服务树数据失败: 返回数据格式不正确');
-    }
+    await Promise.all([
+      loadTreeData(),
+      loadStatistics(),
+    ]);
     
-    // 递归处理树节点的辅助函数
-    function processTreeNodes(nodes: any[]): any[] {
-      return nodes.map((node: any) => {
-        if (node.children && Array.isArray(node.children)) {
-          node.children = processTreeNodes(node.children);
-        }
-        
-        // 记录资源数量
-        if (node.resourceCount && node.resourceCount > 0) {
-          nodeResources[node.id] = { count: node.resourceCount };
-        }
-        
-        return {
-          key: node.id,
-          title: node.name,
-          ...node
-        };
-      });
+    // 初始化或更新图表
+    await nextTick();
+    if (chart) {
+      updateChart();
+    } else {
+      initChart();
     }
   } catch (error) {
-    console.error('加载数据失败:', error);
-    message.error('加载数据失败，请稍后重试');
+    console.error('刷新数据失败:', error);
+    message.error('刷新数据失败');
   } finally {
     loading.value = false;
   }
@@ -474,9 +557,23 @@ const navigateToManagePage = () => {
   router.push('/tree_node_manager');
 };
 
+// 监听窗口大小变化
+const handleResize = () => {
+  if (chart) {
+    chart.resize();
+  }
+};
+
+// 监听树数据变化，更新图表
+watch(treeData, () => {
+  if (chart) {
+    updateChart();
+  }
+}, { deep: true });
+
 onMounted(() => {
   refreshData();
-  initChart();
+  window.addEventListener('resize', handleResize);
 });
 </script>
 
@@ -498,16 +595,19 @@ onMounted(() => {
         font-size: 36px;
         color: #1890ff;
         margin-bottom: 16px;
+        display: block;
       }
 
       .stat-number {
         font-size: 28px;
         font-weight: 600;
         margin-bottom: 8px;
+        color: #262626;
       }
 
       .stat-label {
         font-size: 14px;
+        color: #8c8c8c;
       }
     }
   }
@@ -516,20 +616,23 @@ onMounted(() => {
     margin-bottom: 24px;
 
     .tree-card, .graph-card {
-      height: 400px;
-      overflow: auto;
+      height: 420px;
 
       .tree-content, .graph-content {
         height: 100%;
 
         .service-tree {
           margin-top: 16px;
+          height: calc(100% - 16px);
+          overflow: auto;
         }
 
         .tree-node-title {
           display: flex;
           align-items: center;
           gap: 8px;
+          justify-content: space-between;
+          width: 100%;
         }
       }
     }
@@ -539,13 +642,42 @@ onMounted(() => {
       width: 100%;
       border-radius: 4px;
       position: relative;
+      border: 1px solid #f0f0f0;
     }
   }
 
   .node-details-row {
     .details-card,
     .resources-card {
-      height: 100%;
+      min-height: 400px;
+    }
+  }
+}
+
+// 响应式调整
+@media (max-width: 768px) {
+  .overview-container {
+    padding: 8px;
+    
+    .dashboard-cards {
+      .stat-card {
+        padding: 16px 0;
+        
+        .card-icon {
+          font-size: 28px;
+        }
+        
+        .stat-number {
+          font-size: 24px;
+        }
+      }
+    }
+    
+    .tree-visualization {
+      .tree-card, .graph-card {
+        height: 300px;
+        margin-bottom: 16px;
+      }
     }
   }
 }

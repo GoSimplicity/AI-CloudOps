@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -40,7 +41,7 @@ type contextKey string
 const txKey contextKey = "transaction"
 
 type TreeDAO interface {
-	GetTreeList(ctx context.Context, req *model.TreeNodeListReq) ([]*model.TreeNode, error)
+	GetTreeList(ctx context.Context, req *model.GetTreeListReq) ([]*model.TreeNode, error)
 	GetNode(ctx context.Context, id int) (*model.TreeNode, error)
 	GetChildNodes(ctx context.Context, parentId int) ([]*model.TreeNode, error)
 	GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsResp, error)
@@ -49,6 +50,7 @@ type TreeDAO interface {
 
 	CreateNode(ctx context.Context, node *model.TreeNode) error
 	UpdateNode(ctx context.Context, node *model.TreeNode) error
+	UpdateNodeStatus(ctx context.Context, id int, status string) error
 	DeleteNode(ctx context.Context, id int) error
 
 	GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResourceResp, error)
@@ -75,10 +77,18 @@ func NewTreeDAO(logger *zap.Logger, db *gorm.DB) TreeDAO {
 	}
 }
 
+// getDB 获取数据库连接，优先获取事务连接
+func (t *treeDAO) getDB(ctx context.Context) *gorm.DB {
+	if tx, ok := ctx.Value(txKey).(*gorm.DB); ok {
+		return tx.WithContext(ctx)
+	}
+	return t.db.WithContext(ctx)
+}
+
 // checkNodeExists 检查节点是否存在的辅助函数
 func (t *treeDAO) checkNodeExists(ctx context.Context, id int) error {
 	var count int64
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("id = ?", id).Count(&count).Error; err != nil {
+	if err := t.getDB(ctx).Model(&model.TreeNode{}).Where("id = ?", id).Count(&count).Error; err != nil {
 		t.logger.Error("检查节点存在性失败", zap.Int("nodeId", id), zap.Error(err))
 		return fmt.Errorf("检查节点失败: %w", err)
 	}
@@ -89,282 +99,74 @@ func (t *treeDAO) checkNodeExists(ctx context.Context, id int) error {
 	return nil
 }
 
-// AddNodeMember 添加节点成员
-func (t *treeDAO) AddNodeMember(ctx context.Context, nodeId int, userId int, memberType string) error {
-	// 检查节点是否存在
-	if err := t.checkNodeExists(ctx, nodeId); err != nil {
-		return err
-	}
-
-	// 检查用户是否存在
-	var userCount int64
-	if err := t.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", userId).Count(&userCount).Error; err != nil {
+// checkUserExists 检查用户是否存在的辅助函数
+func (t *treeDAO) checkUserExists(ctx context.Context, userId int) error {
+	var count int64
+	if err := t.getDB(ctx).Model(&model.User{}).Where("id = ?", userId).Count(&count).Error; err != nil {
 		t.logger.Error("检查用户存在性失败", zap.Int("userId", userId), zap.Error(err))
 		return fmt.Errorf("检查用户失败: %w", err)
 	}
 
-	if userCount == 0 {
+	if count == 0 {
 		return errors.New("用户不存在")
 	}
-
-	// 根据成员类型添加关系
-	switch memberType {
-	case "admin":
-		// 创建管理员关系
-		admin := model.TreeNodeAdmin{
-			TreeNodeID: nodeId,
-			UserID:     userId,
-		}
-		result := t.db.WithContext(ctx).Where("tree_node_id = ? AND user_id = ?", nodeId, userId).First(&model.TreeNodeAdmin{})
-		if result.Error != nil {
-			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-				// 记录不存在，创建新记录
-				if err := t.db.WithContext(ctx).Create(&admin).Error; err != nil {
-					t.logger.Error("添加节点管理员失败", zap.Int("nodeId", nodeId), zap.Int("userId", userId), zap.Error(err))
-					return fmt.Errorf("添加节点管理员失败: %w", err)
-				}
-			} else {
-				t.logger.Error("查询节点管理员失败", zap.Int("nodeId", nodeId), zap.Int("userId", userId), zap.Error(result.Error))
-				return fmt.Errorf("查询节点管理员失败: %w", result.Error)
-			}
-		}
-	case "member":
-		// 创建成员关系
-		member := model.TreeNodeMember{
-			TreeNodeID: nodeId,
-			UserID:     userId,
-		}
-		result := t.db.WithContext(ctx).Where("tree_node_id = ? AND user_id = ?", nodeId, userId).First(&model.TreeNodeMember{})
-		if result.Error != nil {
-			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-				// 记录不存在，创建新记录
-				if err := t.db.WithContext(ctx).Create(&member).Error; err != nil {
-					t.logger.Error("添加节点成员失败", zap.Int("nodeId", nodeId), zap.Int("userId", userId), zap.Error(err))
-					return fmt.Errorf("添加节点成员失败: %w", err)
-				}
-			} else {
-				t.logger.Error("查询节点成员失败", zap.Int("nodeId", nodeId), zap.Int("userId", userId), zap.Error(result.Error))
-				return fmt.Errorf("查询节点成员失败: %w", result.Error)
-			}
-		}
-	default:
-		return errors.New("无效的成员类型")
-	}
-
 	return nil
 }
 
-// BindResource 绑定资源到节点
-func (t *treeDAO) BindResource(ctx context.Context, nodeId int, resourceType string, resourceIds []string) error {
-	// 暂时留空
-	return nil
-}
+// calculateLevel 计算节点层级
+func (t *treeDAO) calculateLevel(ctx context.Context, parentId int) (int, error) {
+	if parentId == 0 {
+		return 1, nil
+	}
 
-// CreateNode 创建节点
-func (t *treeDAO) CreateNode(ctx context.Context, node *model.TreeNode) error {
-	// 检查父节点是否存在
-	if node.ParentID != 0 {
-		if err := t.checkNodeExists(ctx, node.ParentID); err != nil {
-			return errors.New("父节点不存在")
+	var parentLevel int
+	if err := t.getDB(ctx).Model(&model.TreeNode{}).
+		Select("level").
+		Where("id = ?", parentId).
+		Scan(&parentLevel).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, errors.New("父节点不存在")
 		}
+		t.logger.Error("获取父节点层级失败", zap.Int("parentId", parentId), zap.Error(err))
+		return 0, fmt.Errorf("获取父节点层级失败: %w", err)
 	}
 
-	// 检查节点名称是否重复
-	var count int64
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("name = ? AND parent_id = ?", node.Name, node.ParentID).Count(&count).Error; err != nil {
-		t.logger.Error("检查节点名称失败", zap.String("name", node.Name), zap.Error(err))
-		return fmt.Errorf("检查节点名称失败: %w", err)
-	}
-
-	if count > 0 {
-		return errors.New("同级节点下已存在相同名称的节点")
-	}
-
-	// 创建节点
-	if err := t.db.WithContext(ctx).Create(node).Error; err != nil {
-		t.logger.Error("创建节点失败", zap.String("name", node.Name), zap.Error(err))
-		return fmt.Errorf("创建节点失败: %w", err)
-	}
-
-	return nil
+	return parentLevel + 1, nil
 }
 
-// DeleteNode 删除节点
-func (t *treeDAO) DeleteNode(ctx context.Context, id int) error {
-	// 检查节点是否存在
-	if err := t.checkNodeExists(ctx, id); err != nil {
-		return err
-	}
-
-	// 检查是否有子节点
+// updateChildrenIsLeaf 更新子节点的叶子节点状态
+func (t *treeDAO) updateChildrenIsLeaf(ctx context.Context, parentId int) error {
+	// 检查父节点是否有子节点
 	var childCount int64
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("parent_id = ?", id).Count(&childCount).Error; err != nil {
-		t.logger.Error("检查子节点失败", zap.Int("id", id), zap.Error(err))
-		return fmt.Errorf("检查子节点失败: %w", err)
+	if err := t.getDB(ctx).Model(&model.TreeNode{}).Where("parent_id = ?", parentId).Count(&childCount).Error; err != nil {
+		return fmt.Errorf("检查子节点数量失败: %w", err)
 	}
 
-	if childCount > 0 {
-		return errors.New("该节点下存在子节点，无法删除")
+	// 更新父节点的叶子节点状态
+	isLeaf := childCount == 0
+	if err := t.getDB(ctx).Model(&model.TreeNode{}).Where("id = ?", parentId).Update("is_leaf", isLeaf).Error; err != nil {
+		return fmt.Errorf("更新父节点叶子状态失败: %w", err)
 	}
 
-	// 使用事务确保操作的原子性
-	return t.Transaction(ctx, func(txCtx context.Context) error {
-		tx := t.db.WithContext(txCtx)
-
-		// 删除节点成员关系
-		if err := tx.Where("tree_node_id = ?", id).Delete(&model.TreeNodeAdmin{}).Error; err != nil {
-			t.logger.Error("删除管理员关系失败", zap.Int("id", id), zap.Error(err))
-			return fmt.Errorf("删除管理员关系失败: %w", err)
-		}
-
-		if err := tx.Where("tree_node_id = ?", id).Delete(&model.TreeNodeMember{}).Error; err != nil {
-			t.logger.Error("删除成员关系失败", zap.Int("id", id), zap.Error(err))
-			return fmt.Errorf("删除成员关系失败: %w", err)
-		}
-
-		// 删除节点
-		if err := tx.Delete(&model.TreeNode{}, id).Error; err != nil {
-			t.logger.Error("删除节点失败", zap.Int("id", id), zap.Error(err))
-			return fmt.Errorf("删除节点失败: %w", err)
-		}
-
-		return nil
-	})
-}
-
-// GetChildNodes 获取子节点列表
-func (t *treeDAO) GetChildNodes(ctx context.Context, parentId int) ([]*model.TreeNode, error) {
-	var nodes []*model.TreeNode
-	if err := t.db.WithContext(ctx).Where("parent_id = ?", parentId).Find(&nodes).Error; err != nil {
-		t.logger.Error("获取子节点失败", zap.Int("parentId", parentId), zap.Error(err))
-		return nil, fmt.Errorf("获取子节点失败: %w", err)
-	}
-
-	// 批量获取子节点的子节点数
-	if len(nodes) > 0 {
-		nodeIds := make([]int, 0, len(nodes))
-		for _, node := range nodes {
-			nodeIds = append(nodeIds, node.ID)
-		}
-
-		// 使用一次查询获取所有子节点的子节点数
-		type ChildCount struct {
-			ParentID int
-			Count    int
-		}
-		var childCounts []ChildCount
-
-		if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).
-			Select("parent_id as parent_id, count(*) as count").
-			Where("parent_id IN ?", nodeIds).
-			Group("parent_id").
-			Scan(&childCounts).Error; err != nil {
-			t.logger.Error("获取子节点数量失败", zap.Error(err))
-			return nil, fmt.Errorf("获取子节点数量失败: %w", err)
-		}
-
-		// 构建映射以便快速查找
-		countMap := make(map[int]int)
-		for _, cc := range childCounts {
-			countMap[cc.ParentID] = cc.Count
-		}
-
-		// 更新节点的子节点数
-		for _, node := range nodes {
-			node.ChildCount = countMap[node.ID]
-		}
-	}
-
-	return nodes, nil
-}
-
-// GetNode 获取节点详情
-func (t *treeDAO) GetNode(ctx context.Context, id int) (*model.TreeNode, error) {
-	var node model.TreeNode
-	if err := t.db.WithContext(ctx).Where("id = ?", id).First(&node).Error; err != nil {
-		t.logger.Error("节点不存在", zap.Int("id", id), zap.Error(err))
-		return nil, errors.New("节点不存在")
-	}
-
-	// 获取父节点名称
-	if node.ParentID != 0 {
-		var parentNode model.TreeNode
-		if err := t.db.WithContext(ctx).Select("name").First(&parentNode, node.ParentID).Error; err == nil {
-			node.ParentName = parentNode.Name
-		} else {
-			t.logger.Warn("获取父节点名称失败", zap.Int("parentId", node.ParentID), zap.Error(err))
-		}
-	}
-
-	// 获取子节点数量
-	var childCount int64
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("parent_id = ?", id).Count(&childCount).Error; err != nil {
-		t.logger.Error("获取子节点数量失败", zap.Int("id", id), zap.Error(err))
-		return nil, fmt.Errorf("获取子节点数量失败: %w", err)
-	}
-	node.ChildCount = int(childCount)
-
-	return &node, nil
-}
-
-// GetNodeMembers 获取节点成员列表
-func (t *treeDAO) GetNodeMembers(ctx context.Context, nodeId int, userId int, memberType string) ([]*model.User, error) {
-	// 根据memberType不同查不同的关联表
-	var users []*model.User
-	query := t.db.WithContext(ctx).Model(&model.User{})
-
-	if memberType == "admin" {
-		// 查询管理员
-		query = query.Joins("JOIN tree_node_admins ON tree_node_admins.user_id = users.id").
-			Where("tree_node_admins.tree_node_id = ?", nodeId)
-	} else if memberType == "member" {
-		// 查询普通成员
-		query = query.Joins("JOIN tree_node_members ON tree_node_members.user_id = users.id").
-			Where("tree_node_members.tree_node_id = ?", nodeId)
-	} else {
-		// 查询所有成员（管理员和普通成员）
-		subQuery1 := t.db.Model(&model.TreeNodeAdmin{}).Select("user_id").Where("tree_node_id = ?", nodeId)
-		subQuery2 := t.db.Model(&model.TreeNodeMember{}).Select("user_id").Where("tree_node_id = ?", nodeId)
-		query = query.Where("users.id IN (?) OR users.id IN (?)", subQuery1, subQuery2)
-	}
-
-	// 如果指定了用户ID，则进一步过滤
-	if userId > 0 {
-		query = query.Where("users.id = ?", userId)
-	}
-
-	if err := query.Find(&users).Error; err != nil {
-		t.logger.Error("获取节点成员失败",
-			zap.Int("nodeId", nodeId),
-			zap.String("memberType", memberType),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取节点成员失败: %w", err)
-	}
-
-	return users, nil
-}
-
-// GetNodeResources 获取节点绑定的资源列表
-func (t *treeDAO) GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResourceResp, error) {
-	// 暂时留空
-	return nil, nil
-}
-
-// GetResourceTypes 获取所有资源类型
-func (t *treeDAO) GetResourceTypes(ctx context.Context) ([]string, error) {
-	// 暂时留空
-	return nil, nil
+	return nil
 }
 
 // GetTreeList 获取树节点列表
-func (t *treeDAO) GetTreeList(ctx context.Context, req *model.TreeNodeListReq) ([]*model.TreeNode, error) {
+func (t *treeDAO) GetTreeList(ctx context.Context, req *model.GetTreeListReq) ([]*model.TreeNode, error) {
 	var nodes []*model.TreeNode
-	query := t.db.WithContext(ctx)
+	query := t.getDB(ctx).Model(&model.TreeNode{})
 
 	// 根据请求参数过滤
 	if req.Level > 0 {
 		query = query.Where("level = ?", req.Level)
 	}
+
+	if req.Status != "" {
+		query = query.Where("status = ?", req.Status)
+	}
+
+	// 排序
+	query = query.Order("level ASC, parent_id ASC, name ASC")
 
 	// 执行查询
 	if err := query.Find(&nodes).Error; err != nil {
@@ -376,7 +178,26 @@ func (t *treeDAO) GetTreeList(ctx context.Context, req *model.TreeNodeListReq) (
 		return nodes, nil
 	}
 
-	// 获取所有节点ID和父节点ID
+	// 批量获取额外信息
+	if err := t.batchLoadNodeExtraInfo(ctx, nodes); err != nil {
+		return nil, err
+	}
+
+	// 如果请求特定层级，返回平铺结构
+	if req.Level > 0 {
+		return nodes, nil
+	}
+
+	// 构建树形结构
+	return t.buildTreeStructure(nodes), nil
+}
+
+// batchLoadNodeExtraInfo 批量加载节点的额外信息
+func (t *treeDAO) batchLoadNodeExtraInfo(ctx context.Context, nodes []*model.TreeNode) error {
+	if len(nodes) == 0 {
+		return nil
+	}
+
 	nodeIds := make([]int, 0, len(nodes))
 	parentIdSet := make(map[int]struct{})
 	for _, node := range nodes {
@@ -395,16 +216,16 @@ func (t *treeDAO) GetTreeList(ctx context.Context, req *model.TreeNodeListReq) (
 		}
 
 		var parents []struct {
-			ID   int
-			Name string
+			ID   int    `gorm:"column:id"`
+			Name string `gorm:"column:name"`
 		}
 
-		if err := t.db.WithContext(ctx).Table("tree_nodes").
+		if err := t.getDB(ctx).Table("tree_nodes").
 			Select("id, name").
 			Where("id IN ?", parentIds).
-			Find(&parents).Error; err != nil {
+			Scan(&parents).Error; err != nil {
 			t.logger.Error("获取父节点名称失败", zap.Error(err))
-			return nil, fmt.Errorf("获取父节点名称失败: %w", err)
+			return fmt.Errorf("获取父节点名称失败: %w", err)
 		}
 
 		for _, p := range parents {
@@ -420,13 +241,13 @@ func (t *treeDAO) GetTreeList(ctx context.Context, req *model.TreeNodeListReq) (
 	}
 	var counts []ChildCount
 
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).
+	if err := t.getDB(ctx).Model(&model.TreeNode{}).
 		Select("parent_id, COUNT(*) as count").
 		Where("parent_id IN ?", nodeIds).
 		Group("parent_id").
 		Scan(&counts).Error; err != nil {
 		t.logger.Error("获取子节点数量失败", zap.Error(err))
-		return nil, fmt.Errorf("获取子节点数量失败: %w", err)
+		return fmt.Errorf("获取子节点数量失败: %w", err)
 	}
 
 	for _, c := range counts {
@@ -438,48 +259,135 @@ func (t *treeDAO) GetTreeList(ctx context.Context, req *model.TreeNodeListReq) (
 		if node.ParentID != 0 {
 			node.ParentName = parentMap[node.ParentID]
 		}
-		node.ChildCount = childCounts[node.ID]
+		childCount := childCounts[node.ID]
+		node.ChildCount = childCount
+		node.IsLeaf = childCount == 0
 	}
 
-	// 构建树形结构
+	return nil
+}
+
+// buildTreeStructure 构建树形结构
+func (t *treeDAO) buildTreeStructure(nodes []*model.TreeNode) []*model.TreeNode {
 	nodeMap := make(map[int]*model.TreeNode)
 	var rootNodes []*model.TreeNode
 
+	// 初始化节点映射和子节点列表
 	for _, node := range nodes {
 		nodeClone := *node
+		nodeClone.Children = make([]*model.TreeNode, 0)
 		nodeMap[node.ID] = &nodeClone
-		nodeMap[node.ID].Children = make([]*model.TreeNode, 0)
 	}
 
+	// 构建父子关系
 	for _, node := range nodes {
+		currentNode := nodeMap[node.ID]
 		if node.ParentID == 0 || nodeMap[node.ParentID] == nil {
 			// 这是根节点或父节点不在当前结果集中
-			rootNodes = append(rootNodes, nodeMap[node.ID])
+			rootNodes = append(rootNodes, currentNode)
 		} else {
 			// 将当前节点添加到其父节点的子节点列表中
 			parent := nodeMap[node.ParentID]
-			parent.Children = append(parent.Children, nodeMap[node.ID])
+			parent.Children = append(parent.Children, currentNode)
 		}
 	}
 
-	// 如果请求特定层级，则返回该层级的所有节点
-	if req.Level > 0 {
+	return rootNodes
+}
+
+// GetNode 获取节点详情
+func (t *treeDAO) GetNode(ctx context.Context, id int) (*model.TreeNode, error) {
+	var node model.TreeNode
+	if err := t.getDB(ctx).Where("id = ?", id).First(&node).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("节点不存在")
+		}
+		t.logger.Error("获取节点失败", zap.Int("id", id), zap.Error(err))
+		return nil, fmt.Errorf("获取节点失败: %w", err)
+	}
+
+	// 获取父节点名称
+	if node.ParentID != 0 {
+		var parentNode model.TreeNode
+		if err := t.getDB(ctx).Select("name").First(&parentNode, node.ParentID).Error; err == nil {
+			node.ParentName = parentNode.Name
+		} else {
+			t.logger.Warn("获取父节点名称失败", zap.Int("parentId", node.ParentID), zap.Error(err))
+		}
+	}
+
+	// 获取子节点数量
+	var childCount int64
+	if err := t.getDB(ctx).Model(&model.TreeNode{}).Where("parent_id = ?", id).Count(&childCount).Error; err != nil {
+		t.logger.Error("获取子节点数量失败", zap.Int("id", id), zap.Error(err))
+		return nil, fmt.Errorf("获取子节点数量失败: %w", err)
+	}
+	node.ChildCount = int(childCount)
+	node.IsLeaf = childCount == 0
+
+	return &node, nil
+}
+
+// GetChildNodes 获取子节点列表
+func (t *treeDAO) GetChildNodes(ctx context.Context, parentId int) ([]*model.TreeNode, error) {
+	var nodes []*model.TreeNode
+	if err := t.getDB(ctx).Where("parent_id = ?", parentId).Order("name ASC").Find(&nodes).Error; err != nil {
+		t.logger.Error("获取子节点失败", zap.Int("parentId", parentId), zap.Error(err))
+		return nil, fmt.Errorf("获取子节点失败: %w", err)
+	}
+
+	if len(nodes) == 0 {
 		return nodes, nil
 	}
 
-	return rootNodes, nil
+	// 批量获取子节点的子节点数
+	nodeIds := make([]int, 0, len(nodes))
+	for _, node := range nodes {
+		nodeIds = append(nodeIds, node.ID)
+	}
+
+	// 使用一次查询获取所有子节点的子节点数
+	type ChildCount struct {
+		ParentID int `gorm:"column:parent_id"`
+		Count    int `gorm:"column:count"`
+	}
+	var childCounts []ChildCount
+
+	if err := t.getDB(ctx).Model(&model.TreeNode{}).
+		Select("parent_id, count(*) as count").
+		Where("parent_id IN ?", nodeIds).
+		Group("parent_id").
+		Scan(&childCounts).Error; err != nil {
+		t.logger.Error("获取子节点数量失败", zap.Error(err))
+		return nil, fmt.Errorf("获取子节点数量失败: %w", err)
+	}
+
+	// 构建映射以便快速查找
+	countMap := make(map[int]int)
+	for _, cc := range childCounts {
+		countMap[cc.ParentID] = cc.Count
+	}
+
+	// 更新节点的子节点数和叶子节点状态
+	for _, node := range nodes {
+		childCount := countMap[node.ID]
+		node.ChildCount = childCount
+		node.IsLeaf = childCount == 0
+	}
+
+	return nodes, nil
 }
 
 // GetTreeStatistics 获取树统计信息
 func (t *treeDAO) GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsResp, error) {
-	var stats = &model.TreeStatisticsResp{}
+	stats := &model.TreeStatisticsResp{}
 
 	err := t.Transaction(ctx, func(txCtx context.Context) error {
-		tx := t.db.WithContext(txCtx)
+		db := t.getDB(txCtx)
 
 		// 获取节点总数
 		var totalNodes int64
-		if err := tx.Model(&model.TreeNode{}).Count(&totalNodes).Error; err != nil {
+		if err := db.Model(&model.TreeNode{}).Count(&totalNodes).Error; err != nil {
 			t.logger.Error("获取节点总数失败", zap.Error(err))
 			return fmt.Errorf("获取节点总数失败: %w", err)
 		}
@@ -487,12 +395,12 @@ func (t *treeDAO) GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsR
 
 		// 获取活跃和非活跃节点数
 		type StatusCount struct {
-			Status string
-			Count  int64
+			Status string `gorm:"column:status"`
+			Count  int64  `gorm:"column:count"`
 		}
 		var statusCounts []StatusCount
 
-		if err := tx.Model(&model.TreeNode{}).
+		if err := db.Model(&model.TreeNode{}).
 			Select("status, COUNT(*) as count").
 			Group("status").
 			Scan(&statusCounts).Error; err != nil {
@@ -511,7 +419,7 @@ func (t *treeDAO) GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsR
 
 		// 获取管理员总数（去重）
 		var totalAdmins int64
-		if err := tx.Model(&model.TreeNodeAdmin{}).
+		if err := db.Model(&model.TreeNodeAdmin{}).
 			Select("COUNT(DISTINCT user_id)").
 			Scan(&totalAdmins).Error; err != nil {
 			t.logger.Error("获取管理员总数失败", zap.Error(err))
@@ -521,7 +429,7 @@ func (t *treeDAO) GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsR
 
 		// 获取成员总数（去重）
 		var totalMembers int64
-		if err := tx.Model(&model.TreeNodeMember{}).
+		if err := db.Model(&model.TreeNodeMember{}).
 			Select("COUNT(DISTINCT user_id)").
 			Scan(&totalMembers).Error; err != nil {
 			t.logger.Error("获取成员总数失败", zap.Error(err))
@@ -529,8 +437,13 @@ func (t *treeDAO) GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsR
 		}
 		stats.TotalMembers = int(totalMembers)
 
-		// 资源总数暂时设置为0
-		stats.TotalResources = 0
+		// 获取资源总数
+		var totalResources int64
+		if err := db.Model(&model.TreeNodeResource{}).Count(&totalResources).Error; err != nil {
+			t.logger.Error("获取资源总数失败", zap.Error(err))
+			return fmt.Errorf("获取资源总数失败: %w", err)
+		}
+		stats.TotalResources = int(totalResources)
 
 		return nil
 	})
@@ -542,14 +455,581 @@ func (t *treeDAO) GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsR
 	return stats, nil
 }
 
+// GetNodeLevel 获取节点层级
+func (t *treeDAO) GetNodeLevel(ctx context.Context, nodeId int) (int, error) {
+	var level int
+	err := t.getDB(ctx).Model(&model.TreeNode{}).
+		Select("level").
+		Where("id = ?", nodeId).
+		Scan(&level).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, errors.New("节点不存在")
+		}
+		t.logger.Error("获取节点层级失败", zap.Int("id", nodeId), zap.Error(err))
+		return 0, fmt.Errorf("获取节点层级失败: %w", err)
+	}
+
+	return level, nil
+}
+
 // GetLeafNodesByIDs 根据ID列表获取叶子节点
 func (t *treeDAO) GetLeafNodesByIDs(ctx context.Context, ids []int) ([]*model.TreeNode, error) {
+	if len(ids) == 0 {
+		return []*model.TreeNode{}, nil
+	}
+
 	var nodes []*model.TreeNode
-	if err := t.db.WithContext(ctx).Where("id IN ? AND is_leaf = ?", ids, true).Find(&nodes).Error; err != nil {
+	if err := t.getDB(ctx).Where("id IN ? AND is_leaf = ?", ids, true).Find(&nodes).Error; err != nil {
 		t.logger.Error("获取叶子节点失败", zap.Ints("ids", ids), zap.Error(err))
 		return nil, fmt.Errorf("获取叶子节点失败: %w", err)
 	}
 	return nodes, nil
+}
+
+// CreateNode 创建节点
+func (t *treeDAO) CreateNode(ctx context.Context, node *model.TreeNode) error {
+	// 参数验证
+	if node == nil {
+		return errors.New("节点信息不能为空")
+	}
+	if strings.TrimSpace(node.Name) == "" {
+		return errors.New("节点名称不能为空")
+	}
+
+	// 检查父节点是否存在（如果有父节点）
+	if node.ParentID != 0 {
+		if err := t.checkNodeExists(ctx, node.ParentID); err != nil {
+			return errors.New("父节点不存在")
+		}
+	}
+
+	// 计算节点层级
+	level, err := t.calculateLevel(ctx, node.ParentID)
+	if err != nil {
+		return err
+	}
+	node.Level = level
+
+	// 检查节点名称是否在同级重复
+	var count int64
+	if err := t.getDB(ctx).Model(&model.TreeNode{}).
+		Where("name = ? AND parent_id = ?", node.Name, node.ParentID).
+		Count(&count).Error; err != nil {
+		t.logger.Error("检查节点名称失败", zap.String("name", node.Name), zap.Error(err))
+		return fmt.Errorf("检查节点名称失败: %w", err)
+	}
+
+	if count > 0 {
+		return errors.New("同级节点下已存在相同名称的节点")
+	}
+
+	// 设置默认值
+	if node.Status == "" {
+		node.Status = "active"
+	}
+
+	// 使用事务创建节点
+	return t.Transaction(ctx, func(txCtx context.Context) error {
+		db := t.getDB(txCtx)
+
+		// 创建节点
+		if err := db.Create(node).Error; err != nil {
+			t.logger.Error("创建节点失败", zap.String("name", node.Name), zap.Error(err))
+			return fmt.Errorf("创建节点失败: %w", err)
+		}
+
+		// 更新父节点的叶子节点状态
+		if node.ParentID != 0 {
+			if err := t.updateChildrenIsLeaf(txCtx, node.ParentID); err != nil {
+				t.logger.Error("更新父节点叶子状态失败", zap.Int("parentId", node.ParentID), zap.Error(err))
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
+// UpdateNode 更新节点
+func (t *treeDAO) UpdateNode(ctx context.Context, node *model.TreeNode) error {
+	// 参数验证
+	if node == nil {
+		return errors.New("节点信息不能为空")
+	}
+	if strings.TrimSpace(node.Name) == "" {
+		return errors.New("节点名称不能为空")
+	}
+
+	// 检查节点是否存在
+	existingNode, err := t.GetNode(ctx, node.ID)
+	if err != nil {
+		return err
+	}
+
+	// 如果父节点ID发生变化，需要验证新的父节点
+	if node.ParentID != existingNode.ParentID {
+		if node.ParentID != 0 {
+			if err := t.checkNodeExists(ctx, node.ParentID); err != nil {
+				return errors.New("父节点不存在")
+			}
+			// 不能将节点移动到自己的子节点下
+			if err := t.checkNotDescendant(ctx, node.ID, node.ParentID); err != nil {
+				return err
+			}
+		}
+
+		// 重新计算层级
+		level, err := t.calculateLevel(ctx, node.ParentID)
+		if err != nil {
+			return err
+		}
+		node.Level = level
+	}
+
+	// 检查节点名称是否与同级节点重复
+	var count int64
+	if err := t.getDB(ctx).Model(&model.TreeNode{}).
+		Where("name = ? AND parent_id = ? AND id != ?", node.Name, node.ParentID, node.ID).
+		Count(&count).Error; err != nil {
+		t.logger.Error("检查节点名称失败", zap.String("name", node.Name), zap.Error(err))
+		return fmt.Errorf("检查节点名称失败: %w", err)
+	}
+
+	if count > 0 {
+		return errors.New("同级节点下已存在相同名称的节点")
+	}
+
+	// 使用事务更新
+	return t.Transaction(ctx, func(txCtx context.Context) error {
+		db := t.getDB(txCtx)
+
+		// 更新节点信息，只更新允许修改的字段
+		updateMap := map[string]interface{}{
+			"name":        node.Name,
+			"description": node.Description,
+			"status":      node.Status,
+			"parent_id":   node.ParentID,
+			"level":       node.Level,
+		}
+
+		if err := db.Model(&model.TreeNode{}).Where("id = ?", node.ID).Updates(updateMap).Error; err != nil {
+			t.logger.Error("更新节点失败", zap.Int("id", node.ID), zap.Error(err))
+			return fmt.Errorf("更新节点失败: %w", err)
+		}
+
+		// 如果父节点发生变化，需要更新相关节点的叶子状态
+		if node.ParentID != existingNode.ParentID {
+			// 更新旧父节点的叶子状态
+			if existingNode.ParentID != 0 {
+				if err := t.updateChildrenIsLeaf(txCtx, existingNode.ParentID); err != nil {
+					return err
+				}
+			}
+
+			// 更新新父节点的叶子状态
+			if node.ParentID != 0 {
+				if err := t.updateChildrenIsLeaf(txCtx, node.ParentID); err != nil {
+					return err
+				}
+			}
+
+			// 如果层级发生变化，需要递归更新所有子节点的层级
+			if node.Level != existingNode.Level {
+				if err := t.updateDescendantLevels(txCtx, node.ID, node.Level); err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+}
+
+// checkNotDescendant 检查targetId不是nodeId的后代节点
+func (t *treeDAO) checkNotDescendant(ctx context.Context, nodeId, targetId int) error {
+	// 递归查找所有子节点
+	var isDescendant bool
+	err := t.checkDescendantRecursive(ctx, nodeId, targetId, &isDescendant)
+	if err != nil {
+		return err
+	}
+
+	if isDescendant {
+		return errors.New("不能将节点移动到自己的子节点下")
+	}
+
+	return nil
+}
+
+// checkDescendantRecursive 递归检查是否为后代节点
+func (t *treeDAO) checkDescendantRecursive(ctx context.Context, nodeId, targetId int, isDescendant *bool) error {
+	if *isDescendant {
+		return nil
+	}
+
+	var childIds []int
+	if err := t.getDB(ctx).Model(&model.TreeNode{}).
+		Where("parent_id = ?", nodeId).
+		Pluck("id", &childIds).Error; err != nil {
+		return fmt.Errorf("查询子节点失败: %w", err)
+	}
+
+	for _, childId := range childIds {
+		if childId == targetId {
+			*isDescendant = true
+			return nil
+		}
+		if err := t.checkDescendantRecursive(ctx, childId, targetId, isDescendant); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// updateDescendantLevels 递归更新所有后代节点的层级
+func (t *treeDAO) updateDescendantLevels(ctx context.Context, parentId, parentLevel int) error {
+	var children []*model.TreeNode
+	if err := t.getDB(ctx).Where("parent_id = ?", parentId).Find(&children).Error; err != nil {
+		return fmt.Errorf("查询子节点失败: %w", err)
+	}
+
+	for _, child := range children {
+		newLevel := parentLevel + 1
+		if err := t.getDB(ctx).Model(&model.TreeNode{}).
+			Where("id = ?", child.ID).
+			Update("level", newLevel).Error; err != nil {
+			return fmt.Errorf("更新子节点层级失败: %w", err)
+		}
+
+		// 递归更新子节点的子节点
+		if err := t.updateDescendantLevels(ctx, child.ID, newLevel); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// DeleteNode 删除节点
+func (t *treeDAO) DeleteNode(ctx context.Context, id int) error {
+	// 检查节点是否存在
+	node, err := t.GetNode(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// 检查是否有子节点
+	var childCount int64
+	if err := t.getDB(ctx).Model(&model.TreeNode{}).Where("parent_id = ?", id).Count(&childCount).Error; err != nil {
+		t.logger.Error("检查子节点失败", zap.Int("id", id), zap.Error(err))
+		return fmt.Errorf("检查子节点失败: %w", err)
+	}
+
+	if childCount > 0 {
+		return errors.New("该节点下存在子节点，无法删除")
+	}
+
+	// 使用事务确保操作的原子性
+	return t.Transaction(ctx, func(txCtx context.Context) error {
+		db := t.getDB(txCtx)
+
+		// 删除节点资源关系
+		if err := db.Where("tree_node_id = ?", id).Delete(&model.TreeNodeResource{}).Error; err != nil {
+			t.logger.Error("删除资源关系失败", zap.Int("id", id), zap.Error(err))
+			return fmt.Errorf("删除资源关系失败: %w", err)
+		}
+
+		// 删除节点管理员关系
+		if err := db.Where("tree_node_id = ?", id).Delete(&model.TreeNodeAdmin{}).Error; err != nil {
+			t.logger.Error("删除管理员关系失败", zap.Int("id", id), zap.Error(err))
+			return fmt.Errorf("删除管理员关系失败: %w", err)
+		}
+
+		// 删除节点成员关系
+		if err := db.Where("tree_node_id = ?", id).Delete(&model.TreeNodeMember{}).Error; err != nil {
+			t.logger.Error("删除成员关系失败", zap.Int("id", id), zap.Error(err))
+			return fmt.Errorf("删除成员关系失败: %w", err)
+		}
+
+		// 删除节点
+		if err := db.Delete(&model.TreeNode{}, id).Error; err != nil {
+			t.logger.Error("删除节点失败", zap.Int("id", id), zap.Error(err))
+			return fmt.Errorf("删除节点失败: %w", err)
+		}
+
+		// 更新父节点的叶子节点状态
+		if node.ParentID != 0 {
+			if err := t.updateChildrenIsLeaf(txCtx, node.ParentID); err != nil {
+				t.logger.Error("更新父节点叶子状态失败", zap.Int("parentId", node.ParentID), zap.Error(err))
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
+// GetNodeResources 获取节点绑定的资源列表
+func (t *treeDAO) GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResourceResp, error) {
+	var resources []*model.TreeNodeResource
+	if err := t.getDB(ctx).Where("tree_node_id = ?", nodeId).Find(&resources).Error; err != nil {
+		t.logger.Error("获取节点资源失败", zap.Int("nodeId", nodeId), zap.Error(err))
+		return nil, fmt.Errorf("获取节点资源失败: %w", err)
+	}
+
+	// 转换为响应结构
+	resp := make([]*model.TreeNodeResourceResp, 0, len(resources))
+	for _, resource := range resources {
+		resp = append(resp, &model.TreeNodeResourceResp{
+			ID:           resource.ID,
+			ResourceID:   resource.ResourceID,
+			ResourceType: resource.ResourceType,
+			// 这里可以根据实际需求补充资源详细信息的获取逻辑
+			ResourceName:   resource.ResourceID, // 暂时使用资源ID作为名称
+			ResourceStatus: "unknown",           // 需要根据实际资源类型查询具体状态
+		})
+	}
+
+	return resp, nil
+}
+
+// BindResource 绑定资源到节点
+func (t *treeDAO) BindResource(ctx context.Context, nodeId int, resourceType string, resourceIds []string) error {
+	// 检查节点是否存在
+	if err := t.checkNodeExists(ctx, nodeId); err != nil {
+		return err
+	}
+
+	// 验证参数
+	if resourceType == "" {
+		return errors.New("资源类型不能为空")
+	}
+	if len(resourceIds) == 0 {
+		return errors.New("资源ID列表不能为空")
+	}
+
+	// 使用事务确保操作的原子性
+	return t.Transaction(ctx, func(txCtx context.Context) error {
+		db := t.getDB(txCtx)
+
+		for _, resourceId := range resourceIds {
+			if strings.TrimSpace(resourceId) == "" {
+				continue // 跳过空的资源ID
+			}
+
+			// 检查资源绑定是否已存在
+			var count int64
+			if err := db.Model(&model.TreeNodeResource{}).
+				Where("tree_node_id = ? AND resource_id = ? AND resource_type = ?",
+					nodeId, resourceId, resourceType).
+				Count(&count).Error; err != nil {
+				t.logger.Error("检查资源绑定失败",
+					zap.Int("nodeId", nodeId),
+					zap.String("resourceId", resourceId),
+					zap.String("resourceType", resourceType),
+					zap.Error(err))
+				return fmt.Errorf("检查资源绑定失败: %w", err)
+			}
+
+			if count > 0 {
+				t.logger.Warn("资源已存在绑定关系",
+					zap.Int("nodeId", nodeId),
+					zap.String("resourceId", resourceId),
+					zap.String("resourceType", resourceType))
+				continue
+			}
+
+			// 创建资源绑定关系
+			resource := &model.TreeNodeResource{
+				TreeNodeID:   nodeId,
+				ResourceID:   resourceId,
+				ResourceType: resourceType,
+			}
+			if err := db.Create(resource).Error; err != nil {
+				t.logger.Error("创建资源绑定关系失败",
+					zap.Int("nodeId", nodeId),
+					zap.String("resourceId", resourceId),
+					zap.String("resourceType", resourceType),
+					zap.Error(err))
+				return fmt.Errorf("创建资源绑定关系失败: %w", err)
+			}
+		}
+
+		return nil
+	})
+}
+
+// UnbindResource 解绑资源
+func (t *treeDAO) UnbindResource(ctx context.Context, nodeId int, resourceType string, resourceId string) error {
+	// 检查节点是否存在
+	if err := t.checkNodeExists(ctx, nodeId); err != nil {
+		return err
+	}
+
+	// 验证参数
+	if resourceType == "" {
+		return errors.New("资源类型不能为空")
+	}
+	if strings.TrimSpace(resourceId) == "" {
+		return errors.New("资源ID不能为空")
+	}
+
+	db := t.getDB(ctx)
+	result := db.Where("tree_node_id = ? AND resource_type = ? AND resource_id = ?",
+		nodeId, resourceType, resourceId).Delete(&model.TreeNodeResource{})
+
+	if result.Error != nil {
+		t.logger.Error("解绑资源失败",
+			zap.Int("nodeId", nodeId),
+			zap.String("resourceType", resourceType),
+			zap.String("resourceId", resourceId),
+			zap.Error(result.Error))
+		return fmt.Errorf("解绑资源失败: %w", result.Error)
+	}
+
+	// 检查是否实际删除了记录
+	if result.RowsAffected == 0 {
+		return errors.New("未找到要解绑的资源关系")
+	}
+
+	return nil
+}
+
+// GetResourceTypes 获取所有资源类型
+func (t *treeDAO) GetResourceTypes(ctx context.Context) ([]string, error) {
+	var types []string
+	if err := t.getDB(ctx).Model(&model.TreeNodeResource{}).
+		Distinct("resource_type").
+		Pluck("resource_type", &types).Error; err != nil {
+		t.logger.Error("获取资源类型失败", zap.Error(err))
+		return nil, fmt.Errorf("获取资源类型失败: %w", err)
+	}
+
+	return types, nil
+}
+
+// UpdateNodeStatus 更新节点状态
+func (t *treeDAO) UpdateNodeStatus(ctx context.Context, id int, status string) error {
+	if status != "active" && status != "inactive" {
+		return errors.New("状态只能是active或inactive")
+	}
+
+	return t.getDB(ctx).Model(&model.TreeNode{}).Where("id = ?", id).Update("status", status).Error
+}
+
+// GetNodeMembers 获取节点成员列表
+func (t *treeDAO) GetNodeMembers(ctx context.Context, nodeId int, userId int, memberType string) ([]*model.User, error) {
+	var users []*model.User
+	db := t.getDB(ctx)
+
+	query := db.Model(&model.User{})
+
+	switch memberType {
+	case "admin":
+		// 查询管理员
+		query = query.Joins("JOIN tree_node_admins ON tree_node_admins.user_id = users.id").
+			Where("tree_node_admins.tree_node_id = ?", nodeId)
+	case "member":
+		// 查询普通成员
+		query = query.Joins("JOIN tree_node_members ON tree_node_members.user_id = users.id").
+			Where("tree_node_members.tree_node_id = ?", nodeId)
+	case "all", "":
+		// 查询所有成员（管理员和普通成员）
+		subQuery1 := db.Model(&model.TreeNodeAdmin{}).Select("user_id").Where("tree_node_id = ?", nodeId)
+		subQuery2 := db.Model(&model.TreeNodeMember{}).Select("user_id").Where("tree_node_id = ?", nodeId)
+		query = query.Where("users.id IN (?) OR users.id IN (?)", subQuery1, subQuery2)
+	default:
+		return nil, errors.New("无效的成员类型，必须是 admin、member 或 all")
+	}
+
+	// 如果指定了用户ID，则进一步过滤
+	if userId > 0 {
+		query = query.Where("users.id = ?", userId)
+	}
+
+	if err := query.Find(&users).Error; err != nil {
+		t.logger.Error("获取节点成员失败",
+			zap.Int("nodeId", nodeId),
+			zap.String("memberType", memberType),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取节点成员失败: %w", err)
+	}
+
+	return users, nil
+}
+
+// AddNodeMember 添加节点成员
+func (t *treeDAO) AddNodeMember(ctx context.Context, nodeId int, userId int, memberType string) error {
+	// 检查节点是否存在
+	if err := t.checkNodeExists(ctx, nodeId); err != nil {
+		return err
+	}
+
+	// 检查用户是否存在
+	if err := t.checkUserExists(ctx, userId); err != nil {
+		return err
+	}
+
+	db := t.getDB(ctx)
+
+	// 根据成员类型添加关系
+	switch memberType {
+	case "admin":
+		// 检查管理员关系是否已存在
+		var count int64
+		if err := db.Model(&model.TreeNodeAdmin{}).
+			Where("tree_node_id = ? AND user_id = ?", nodeId, userId).
+			Count(&count).Error; err != nil {
+			t.logger.Error("检查管理员关系失败", zap.Int("nodeId", nodeId), zap.Int("userId", userId), zap.Error(err))
+			return fmt.Errorf("检查管理员关系失败: %w", err)
+		}
+
+		if count > 0 {
+			return errors.New("用户已经是该节点的管理员")
+		}
+
+		// 创建管理员关系
+		admin := &model.TreeNodeAdmin{
+			TreeNodeID: nodeId,
+			UserID:     userId,
+		}
+		if err := db.Create(admin).Error; err != nil {
+			t.logger.Error("添加节点管理员失败", zap.Int("nodeId", nodeId), zap.Int("userId", userId), zap.Error(err))
+			return fmt.Errorf("添加节点管理员失败: %w", err)
+		}
+
+	case "member":
+		// 检查成员关系是否已存在
+		var count int64
+		if err := db.Model(&model.TreeNodeMember{}).
+			Where("tree_node_id = ? AND user_id = ?", nodeId, userId).
+			Count(&count).Error; err != nil {
+			t.logger.Error("检查成员关系失败", zap.Int("nodeId", nodeId), zap.Int("userId", userId), zap.Error(err))
+			return fmt.Errorf("检查成员关系失败: %w", err)
+		}
+
+		if count > 0 {
+			return errors.New("用户已经是该节点的成员")
+		}
+
+		// 创建成员关系
+		member := &model.TreeNodeMember{
+			TreeNodeID: nodeId,
+			UserID:     userId,
+		}
+		if err := db.Create(member).Error; err != nil {
+			t.logger.Error("添加节点成员失败", zap.Int("nodeId", nodeId), zap.Int("userId", userId), zap.Error(err))
+			return fmt.Errorf("添加节点成员失败: %w", err)
+		}
+
+	default:
+		return errors.New("无效的成员类型，必须是 admin 或 member")
+	}
+
+	return nil
 }
 
 // RemoveNodeMember 移除节点成员
@@ -559,17 +1039,18 @@ func (t *treeDAO) RemoveNodeMember(ctx context.Context, nodeId int, userId int, 
 		return err
 	}
 
+	db := t.getDB(ctx)
 	var result *gorm.DB
 
 	switch memberType {
 	case "admin":
 		// 删除管理员关系
-		result = t.db.WithContext(ctx).Where("tree_node_id = ? AND user_id = ?", nodeId, userId).Delete(&model.TreeNodeAdmin{})
+		result = db.Where("tree_node_id = ? AND user_id = ?", nodeId, userId).Delete(&model.TreeNodeAdmin{})
 	case "member":
 		// 删除成员关系
-		result = t.db.WithContext(ctx).Where("tree_node_id = ? AND user_id = ?", nodeId, userId).Delete(&model.TreeNodeMember{})
+		result = db.Where("tree_node_id = ? AND user_id = ?", nodeId, userId).Delete(&model.TreeNodeMember{})
 	default:
-		return errors.New("无效的成员类型")
+		return errors.New("无效的成员类型，必须是 admin 或 member")
 	}
 
 	if result.Error != nil {
@@ -585,90 +1066,49 @@ func (t *treeDAO) RemoveNodeMember(ctx context.Context, nodeId int, userId int, 
 	return nil
 }
 
-// UnbindResource 解绑资源
-func (t *treeDAO) UnbindResource(ctx context.Context, nodeId int, resourceType string, resourceId string) error {
-	// 暂时留空
-	return nil
-}
+// GetUserNodes 获取用户相关的节点
+func (t *treeDAO) GetUserNodes(ctx context.Context, userId int, role string) ([]*model.TreeNode, error) {
+	var nodes []*model.TreeNode
+	db := t.getDB(ctx)
 
-// UpdateNode 更新节点
-func (t *treeDAO) UpdateNode(ctx context.Context, node *model.TreeNode) error {
-	// 检查节点是否存在
-	var existingNode model.TreeNode
-	if err := t.db.WithContext(ctx).First(&existingNode, node.ID).Error; err != nil {
-		t.logger.Error("节点不存在", zap.Int("id", node.ID), zap.Error(err))
-		return errors.New("节点不存在")
+	query := db.Model(&model.TreeNode{})
+
+	switch role {
+	case "admin":
+		// 查询用户作为管理员的节点
+		query = query.Joins("JOIN tree_node_admins ON tree_node_admins.tree_node_id = tree_nodes.id").
+			Where("tree_node_admins.user_id = ?", userId)
+	case "member":
+		// 查询用户作为成员的节点
+		query = query.Joins("JOIN tree_node_members ON tree_node_members.tree_node_id = tree_nodes.id").
+			Where("tree_node_members.user_id = ?", userId)
+	case "all", "":
+		// 查询用户相关的所有节点
+		subQuery1 := db.Model(&model.TreeNodeAdmin{}).Select("tree_node_id").Where("user_id = ?", userId)
+		subQuery2 := db.Model(&model.TreeNodeMember{}).Select("tree_node_id").Where("user_id = ?", userId)
+		query = query.Where("tree_nodes.id IN (?) OR tree_nodes.id IN (?)", subQuery1, subQuery2)
+	default:
+		return nil, errors.New("无效的角色类型，必须是 admin、member 或 all")
 	}
 
-	// 检查节点名称是否与同级节点重复
-	var count int64
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).
-		Where("name = ? AND parent_id = ? AND id != ?", node.Name, existingNode.ParentID, node.ID).
-		Count(&count).Error; err != nil {
-		t.logger.Error("检查节点名称失败", zap.String("name", node.Name), zap.Error(err))
-		return fmt.Errorf("检查节点名称失败: %w", err)
+	if err := query.Order("tree_nodes.level ASC, tree_nodes.name ASC").Find(&nodes).Error; err != nil {
+		t.logger.Error("获取用户节点失败", zap.Int("userId", userId), zap.String("role", role), zap.Error(err))
+		return nil, fmt.Errorf("获取用户节点失败: %w", err)
 	}
 
-	if count > 0 {
-		return errors.New("同级节点下已存在相同名称的节点")
-	}
-
-	// 更新节点信息，只更新允许修改的字段
-	updateMap := map[string]interface{}{
-		"name":        node.Name,
-		"description": node.Description,
-		"status":      node.Status,
-		"parent_id":   node.ParentID,
-	}
-
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("id = ?", node.ID).Updates(updateMap).Error; err != nil {
-		t.logger.Error("更新节点失败", zap.Int("id", node.ID), zap.Error(err))
-		return fmt.Errorf("更新节点失败: %w", err)
-	}
-
-	return nil
-}
-
-// GetNodeLevel 获取节点层级
-func (t *treeDAO) GetNodeLevel(ctx context.Context, nodeId int) (int, error) {
-	var level int
-	err := t.db.WithContext(ctx).Model(&model.TreeNode{}).
-		Select("level").
-		Where("id = ?", nodeId).
-		Scan(&level).Error
-
-	if err != nil {
-		t.logger.Error("获取节点层级失败", zap.Int("id", nodeId), zap.Error(err))
-		return 0, fmt.Errorf("获取节点层级失败: %w", err)
-	}
-
-	return level, nil
+	return nodes, nil
 }
 
 // Transaction 提供事务支持
 func (t *treeDAO) Transaction(ctx context.Context, fn func(ctx context.Context) error) error {
-	var resultErr error
-	err := t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		txCtx := context.WithValue(ctx, txKey, tx)
-
-		// 执行事务函数
-		if err := fn(txCtx); err != nil {
-			t.logger.Error("事务执行失败", zap.Error(err))
-			return err
-		}
-
-		// 获取事务上下文中可能存储的结果
-		if v := txCtx.Value("result"); v != nil {
-			if e, ok := v.(error); ok {
-				resultErr = e
-			}
-		}
-
-		return nil
-	})
-
-	if resultErr != nil {
-		return resultErr
+	// 如果已经在事务中，直接执行函数
+	if _, ok := ctx.Value(txKey).(*gorm.DB); ok {
+		return fn(ctx)
 	}
-	return err
+
+	// 开始新事务
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		txCtx := context.WithValue(ctx, txKey, tx)
+		return fn(txCtx)
+	})
 }

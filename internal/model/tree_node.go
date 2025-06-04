@@ -66,45 +66,152 @@ type TreeNodeMember struct {
 	UserID     int `gorm:"index:idx_node_member,unique;not null;comment:用户ID"`
 }
 
-// TreeNodeCreateReq 创建节点请求
-type TreeNodeCreateReq struct {
-	Name        string `json:"name" binding:"required,min=1,max=50"`
-	ParentID    int    `json:"parentId"`
-	CreatorID   int    `json:"creatorId"`
+// TreeNodeResource 节点资源关联表
+type TreeNodeResource struct {
+	ID           int    `gorm:"primaryKey;autoIncrement"`
+	TreeNodeID   int    `gorm:"index:idx_node_resource;not null;comment:节点ID"`
+	ResourceID   string `gorm:"index:idx_node_resource;not null;comment:资源ID"`
+	ResourceType string `gorm:"type:varchar(50);not null;comment:资源类型"`
+}
+
+// ==================== 请求结构体 ====================
+
+// GetTreeListReq 获取树节点列表请求
+type GetTreeListReq struct {
+	Level  int    `json:"level" form:"level" binding:"omitempty,min=1"`
+	Status string `json:"status" form:"status" binding:"omitempty,oneof=active inactive deleted"`
+}
+
+// GetNodeDetailReq 获取节点详情请求
+type GetNodeDetailReq struct {
+	ID int `json:"id" form:"id" binding:"required"`
+}
+
+// GetChildNodesReq 获取子节点列表请求
+type GetChildNodesReq struct {
+	ID int `json:"id" form:"id" binding:"required"`
+}
+
+// CreateNodeReq 创建节点请求
+type CreateNodeReq struct {
+	Name        string `json:"name" form:"name" binding:"required,min=1,max=50"`
+	ParentID    int    `json:"parentId" form:"parentId"` // 父节点ID，0表示根节点
+	CreatorID   int    `json:"creatorId" form:"creatorId"`
+	Description string `json:"description" form:"description"`
+	IsLeaf      bool   `json:"isLeaf" form:"isLeaf"`
+	Status      string `json:"status" form:"status" binding:"omitempty,oneof=active inactive"`
+}
+
+// UpdateNodeReq 更新节点请求
+type UpdateNodeReq struct {
+	ID          int    `json:"id" form:"id" binding:"required"`
+	Name        string `json:"name" form:"name" binding:"required,min=1,max=50"`
+	ParentID    int    `json:"parentId" form:"parentId"`
 	Description string `json:"description"`
-	IsLeaf      bool   `json:"isLeaf"`
 	Status      string `json:"status" binding:"omitempty,oneof=active inactive"`
 }
 
-// TreeNodeUpdateReq 更新节点请求
-type TreeNodeUpdateReq struct {
-	ID          int    `json:"id" binding:"required"`
-	Name        string `json:"name" binding:"required,min=1,max=50"`
-	ParentID    int    `json:"parentId"`
-	Description string `json:"description"`
-	Status      string `json:"status" binding:"omitempty,oneof=active inactive"`
+// UpdateNodeStatusReq 更新节点状态请求
+type UpdateNodeStatusReq struct {
+	ID     int    `json:"id" binding:"required"`
+	Status string `json:"status" binding:"required,oneof=active inactive"`
 }
 
-// TreeNodeMemberReq 节点成员请求
-type TreeNodeMemberReq struct {
-	NodeID int    `json:"nodeId" binding:"required"`
-	UserID int    `json:"userId"`
-	Type   string `json:"type" binding:"required,oneof=admin member"` // admin 或 member
+// DeleteNodeReq 删除节点请求
+type DeleteNodeReq struct {
+	ID int `json:"id" binding:"required"`
 }
 
-// TreeNodeResourceBindReq 资源绑定请求
-type TreeNodeResourceBindReq struct {
+// MoveNodeReq 移动节点请求
+type MoveNodeReq struct {
+	ID          int `json:"id" form:"id" binding:"required"`
+	NewParentID int `json:"newParentId" form:"newParentId"`
+}
+
+// GetNodeMembersReq 获取节点成员请求
+type GetNodeMembersReq struct {
+	ID   int    `json:"id" binding:"required"`
+	Type string `json:"type" binding:"omitempty,oneof=admin member"`
+}
+
+// AddNodeMemberReq 添加节点成员请求
+type AddNodeMemberReq struct {
+	NodeID     int    `json:"nodeId" binding:"required"`
+	UserID     int    `json:"userId" binding:"required"`
+	MemberType string `json:"memberType" binding:"required,oneof=admin member"`
+}
+
+// RemoveNodeMemberReq 移除节点成员请求
+type RemoveNodeMemberReq struct {
+	NodeID     int    `json:"nodeId" binding:"required"`
+	UserID     int    `json:"userId" binding:"required"`
+	MemberType string `json:"memberType" binding:"required,oneof=admin member"`
+}
+
+// BatchAddNodeMembersReq 批量添加节点成员请求
+type BatchAddNodeMembersReq struct {
+	NodeID     int    `json:"nodeId" binding:"required"`
+	UserIDs    []int  `json:"userIds" binding:"required,min=1"`
+	MemberType string `json:"memberType" binding:"required,oneof=admin member"`
+}
+
+// BatchRemoveNodeMembersReq 批量移除节点成员请求
+type BatchRemoveNodeMembersReq struct {
+	NodeID     int    `json:"nodeId" binding:"required"`
+	UserIDs    []int  `json:"userIds" binding:"required,min=1"`
+	MemberType string `json:"memberType" binding:"required,oneof=admin member"`
+}
+
+// GetNodeResourcesReq 获取节点资源请求
+type GetNodeResourcesReq struct {
+	ID int `json:"id" binding:"required"`
+}
+
+// BindResourceReq 绑定资源请求
+type BindResourceReq struct {
 	NodeID       int      `json:"nodeId" binding:"required"`
 	ResourceType string   `json:"resourceType" binding:"required"`
 	ResourceIDs  []string `json:"resourceIds" binding:"required,min=1"`
 }
 
-// TreeNodeResourceUnbindReq 资源解绑请求
-type TreeNodeResourceUnbindReq struct {
+// UnbindResourceReq 解绑资源请求
+type UnbindResourceReq struct {
 	NodeID       int    `json:"nodeId" binding:"required"`
 	ResourceID   string `json:"resourceId" binding:"required"`
 	ResourceType string `json:"resourceType" binding:"required"`
 }
+
+// CheckNodePermissionReq 检查节点权限请求
+type CheckNodePermissionReq struct {
+	UserID    int    `json:"userId" binding:"required"`
+	NodeID    int    `json:"nodeId" binding:"required"`
+	Operation string `json:"operation" binding:"required"`
+}
+
+// GetUserNodesReq 获取用户相关节点请求
+type GetUserNodesReq struct {
+	UserID int    `json:"userId" binding:"required"`
+	Role   string `json:"role" binding:"omitempty,oneof=admin member"`
+}
+
+// BatchCreateNodesReq 批量创建节点请求
+type BatchCreateNodesReq struct {
+	CreatorID int             `json:"creatorId"`
+	Nodes     []CreateNodeReq `json:"nodes" binding:"required,min=1"`
+}
+
+// BatchDeleteNodesReq 批量删除节点请求
+type BatchDeleteNodesReq struct {
+	NodeIDs []int `json:"nodeIds" binding:"required,min=1"`
+}
+
+// BatchUpdateNodeStatusReq 批量更新节点状态请求
+type BatchUpdateNodeStatusReq struct {
+	NodeIDs []int  `json:"nodeIds" binding:"required,min=1"`
+	Status  string `json:"status" binding:"required,oneof=active inactive"`
+}
+
+// ==================== 响应结构体 ====================
 
 // TreeNodeResp 服务树节点响应
 type TreeNodeResp struct {
@@ -123,16 +230,26 @@ type TreeNodeResp struct {
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
-// TreeNodeDetailReq 服务树节点详情请求
-type TreeNodeDetailReq struct {
-}
-
 // TreeNodeDetailResp 服务树节点详情响应
 type TreeNodeDetailResp struct {
 	TreeNodeResp
 	AdminUsers    StringList `json:"adminUsers"`
 	MemberUsers   StringList `json:"memberUsers"`
 	ResourceCount int        `json:"resourceCount"`
+}
+
+// TreeNodeListResp 服务树节点列表响应
+type TreeNodeListResp struct {
+	ID        int                 `json:"id"`
+	CreatedAt time.Time           `json:"created_at"`
+	UpdatedAt time.Time           `json:"updated_at"`
+	Name      string              `json:"name"`
+	ParentID  int                 `json:"parentId"`
+	Level     int                 `json:"level"`
+	CreatorID int                 `json:"creatorId"`
+	Status    string              `json:"status"`
+	Children  []*TreeNodeListResp `json:"children"`
+	IsLeaf    bool                `json:"isLeaf"`
 }
 
 // TreeStatisticsResp 服务树统计响应
@@ -155,32 +272,4 @@ type TreeNodeResourceResp struct {
 	ResourceCreateTime string `json:"resourceCreateTime"` // 资源创建时间
 	ResourceUpdateTime string `json:"resourceUpdateTime"` // 资源更新时间
 	ResourceDeleteTime string `json:"resourceDeleteTime"` // 资源删除时间
-}
-
-// TreeNodeListReq 服务树节点列表请求
-type TreeNodeListReq struct {
-	Level  int    `json:"level"`
-	Status string `json:"status" binding:"omitempty,oneof=active inactive deleted"`
-}
-
-// TreeNodeListResp 服务树节点列表响应
-type TreeNodeListResp struct {
-	ID        int                 `json:"id"`
-	CreatedAt time.Time           `json:"created_at"`
-	UpdatedAt time.Time           `json:"updated_at"`
-	Name      string              `json:"name"`
-	ParentID  int                 `json:"parentId"`
-	Level     int                 `json:"level"`
-	CreatorID int                 `json:"creatorId"`
-	Status    string              `json:"status"`
-	Children  []*TreeNodeListResp `json:"children"`
-	IsLeaf    bool                `json:"isLeaf"`
-}
-
-// TreeNodeDeleteReq 服务树节点删除请求
-type TreeNodeDeleteReq struct {
-}
-
-// TreeNodeResourceReq 服务树节点资源请求
-type TreeNodeResourceReq struct {
 }

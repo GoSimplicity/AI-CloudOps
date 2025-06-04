@@ -33,14 +33,13 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"github.com/casbin/casbin/v2"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 // InitMiddlewares 初始化中间件
-func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, enforcer *casbin.Enforcer, auditSvc service.AuditService) []gin.HandlerFunc {
+func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, roleSvc service.RoleService, auditSvc service.AuditService) []gin.HandlerFunc {
 	return []gin.HandlerFunc{
 		cors.New(cors.Config{
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
@@ -56,8 +55,8 @@ func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, enforcer *casbin.Enforcer, 
 			MaxAge: 12 * time.Hour,
 		}),
 		middleware.NewJWTMiddleware(ih).CheckLogin(),
-		// middleware.NewCasbinMiddleware(enforcer).CheckCasbin(),
 		middleware.NewLogMiddleware(l).Log(),
+		middleware.NewAuthMiddleware(roleSvc).CheckAuth(),
 		middleware.NewAuditLogMiddleware(auditSvc, l).AuditLog(),
 	}
 }

@@ -46,132 +46,226 @@ func (h *TreeHandler) RegisterRouters(server *gin.Engine) {
 	treeGroup := server.Group("/api/tree")
 	{
 		// 树结构相关接口
-		treeGroup.POST("/list", h.GetTreeList)
+		treeGroup.GET("/list", h.GetTreeList)
 		treeGroup.GET("/detail/:id", h.GetNodeDetail)
+		treeGroup.GET("/children/:id", h.GetChildNodes)
 		treeGroup.GET("/statistics", h.GetTreeStatistics)
 
 		// 节点管理接口
 		treeGroup.POST("/node/create", h.CreateNode)
-		treeGroup.POST("/node/update", h.UpdateNode)
+		treeGroup.PUT("/node/update/:id", h.UpdateNode)
 		treeGroup.DELETE("/node/delete/:id", h.DeleteNode)
+		treeGroup.PUT("/node/move/:id", h.MoveNode)
+		treeGroup.PUT("/node/status/:id", h.UpdateNodeStatus)
 
 		// 成员管理接口
+		treeGroup.GET("/members/:id", h.GetNodeMembers)
 		treeGroup.POST("/member/add", h.AddNodeMember)
-		treeGroup.POST("/member/remove", h.RemoveNodeMember)
+		treeGroup.DELETE("/member/remove", h.RemoveNodeMember)
 
 		// 资源绑定接口
 		treeGroup.GET("/resources/:id", h.GetNodeResources)
 		treeGroup.POST("/resource/bind", h.BindResource)
-		treeGroup.POST("/resource/unbind", h.UnbindResource)
+		treeGroup.DELETE("/resource/unbind", h.UnbindResource)
 		treeGroup.GET("/resource/types", h.GetResourceTypes)
 	}
 }
 
+// GetTreeList 获取树节点列表
 func (h *TreeHandler) GetTreeList(ctx *gin.Context) {
-	var req model.TreeNodeListReq
+	var req model.GetTreeListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetTreeList(ctx, &req)
 	})
 }
 
+// GetNodeDetail 获取节点详情
 func (h *TreeHandler) GetNodeDetail(ctx *gin.Context) {
-	var req model.TreeNodeDetailReq
+	var req model.GetNodeDetailReq
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		utils.ErrorWithMessage(ctx, "无效的节点ID")
 		return
 	}
+	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.GetNodeDetail(ctx, id)
+		return h.service.GetNodeDetail(ctx, req.ID)
 	})
 }
 
+// GetChildNodes 获取子节点列表
+func (h *TreeHandler) GetChildNodes(ctx *gin.Context) {
+	var req model.GetChildNodesReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的节点ID")
+		return
+	}
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.service.GetChildNodes(ctx, req.ID)
+	})
+}
+
+// GetTreeStatistics 获取树统计信息
 func (h *TreeHandler) GetTreeStatistics(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetTreeStatistics(ctx)
 	})
 }
 
+// CreateNode 创建节点
 func (h *TreeHandler) CreateNode(ctx *gin.Context) {
-	var req model.TreeNodeCreateReq
+	var req model.CreateNodeReq
+
 	user := ctx.MustGet("user").(utils.UserClaims)
 	req.CreatorID = user.Uid
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateNode(ctx, &req)
 	})
 }
 
+// UpdateNode 更新节点
 func (h *TreeHandler) UpdateNode(ctx *gin.Context) {
-	var req model.TreeNodeUpdateReq
+	var req model.UpdateNodeReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的节点ID")
+		return
+	}
+	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateNode(ctx, &req)
 	})
 }
 
+// UpdateNodeStatus 更新节点状态
+func (h *TreeHandler) UpdateNodeStatus(ctx *gin.Context) {
+	var req model.UpdateNodeStatusReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的节点ID")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.UpdateNodeStatus(ctx, &req)
+	})
+}
+
+// DeleteNode 删除节点
 func (h *TreeHandler) DeleteNode(ctx *gin.Context) {
-	var req model.TreeNodeDeleteReq
+	var req model.DeleteNodeReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		utils.ErrorWithMessage(ctx, "无效的节点ID")
 		return
 	}
+	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.DeleteNode(ctx, id)
+		return nil, h.service.DeleteNode(ctx, req.ID)
 	})
 }
 
-func (h *TreeHandler) GetNodeResources(ctx *gin.Context) {
-	var req model.TreeNodeResourceReq
+// MoveNode 移动节点
+func (h *TreeHandler) MoveNode(ctx *gin.Context) {
+	var req model.MoveNodeReq
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		utils.ErrorWithMessage(ctx, "无效的节点ID")
 		return
 	}
+	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.GetNodeResources(ctx, id)
+		return nil, h.service.MoveNode(ctx, req.ID, req.NewParentID)
 	})
 }
 
-func (h *TreeHandler) BindResource(ctx *gin.Context) {
-	var req model.TreeNodeResourceBindReq
+// GetNodeMembers 获取节点成员
+func (h *TreeHandler) GetNodeMembers(ctx *gin.Context) {
+	var req model.GetNodeMembersReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的节点ID")
+		return
+	}
+	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.BindResource(ctx, &req)
+		return h.service.GetNodeMembers(ctx, req.ID, req.Type)
 	})
 }
 
-func (h *TreeHandler) UnbindResource(ctx *gin.Context) {
-	var req model.TreeNodeResourceUnbindReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.UnbindResource(ctx, &req)
-	})
-}
-
-func (h *TreeHandler) GetResourceTypes(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetResourceTypes(ctx)
-	})
-}
-
+// AddNodeMember 添加节点成员
 func (h *TreeHandler) AddNodeMember(ctx *gin.Context) {
-	var req model.TreeNodeMemberReq
+	var req model.AddNodeMemberReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.AddNodeMember(ctx, &req)
 	})
 }
 
+// RemoveNodeMember 移除节点成员
 func (h *TreeHandler) RemoveNodeMember(ctx *gin.Context) {
-	var req model.TreeNodeMemberReq
+	var req model.RemoveNodeMemberReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.RemoveNodeMember(ctx, &req)
+	})
+}
+
+// GetNodeResources 获取节点资源
+func (h *TreeHandler) GetNodeResources(ctx *gin.Context) {
+	var req model.GetNodeResourcesReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的节点ID")
+		return
+	}
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.service.GetNodeResources(ctx, req.ID)
+	})
+}
+
+// BindResource 绑定资源
+func (h *TreeHandler) BindResource(ctx *gin.Context) {
+	var req model.BindResourceReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.BindResource(ctx, &req)
+	})
+}
+
+// UnbindResource 解绑资源
+func (h *TreeHandler) UnbindResource(ctx *gin.Context) {
+	var req model.UnbindResourceReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.UnbindResource(ctx, &req)
+	})
+}
+
+// GetResourceTypes 获取资源类型列表
+func (h *TreeHandler) GetResourceTypes(ctx *gin.Context) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetResourceTypes(ctx)
 	})
 }
