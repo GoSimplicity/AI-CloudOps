@@ -28,8 +28,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"sync"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
@@ -38,7 +36,7 @@ import (
 
 type AuditService interface {
 	CreateAuditLog(ctx context.Context, req *model.CreateAuditLogRequest) error
-	CreateAuditLogAsync(ctx context.Context, req *model.CreateAuditLogRequest) // 新增异步接口
+	CreateAuditLogAsync(ctx context.Context, req *model.CreateAuditLogRequest)
 	BatchCreateAuditLogs(ctx context.Context, logs []model.AuditLog) error
 	ListAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) (*model.ListResp[model.AuditLog], error)
 	GetAuditLogDetail(ctx context.Context, id int) (*model.AuditLog, error)
@@ -49,91 +47,78 @@ type AuditService interface {
 	DeleteAuditLog(ctx context.Context, id int) error
 	BatchDeleteAuditLogs(ctx context.Context, ids []int) error
 	ArchiveAuditLogs(ctx context.Context, req *model.ArchiveAuditLogsRequest) error
-	Close() error // 修改为返回error
+	Close() error
 }
 
 type auditService struct {
-	dao    dao.AuditDAO
-	logger *zap.Logger
-
-	// 性能优化相关字段
-	logChannel    chan *model.AuditLog
-	batchSize     int
-	flushInterval time.Duration
-	buffer        []*model.AuditLog
-	bufferMutex   sync.Mutex
-	done          chan struct{}
-	wg            sync.WaitGroup
-	closed        bool
-	closeMutex    sync.RWMutex
+	dao       dao.AuditDAO
+	logger    *zap.Logger
+	asyncChan chan *model.AuditLog
+	done      chan struct{}
 }
 
 func NewAuditService(dao dao.AuditDAO, logger *zap.Logger) AuditService {
 	s := &auditService{
-		dao:           dao,
-		logger:        logger,
-		logChannel:    make(chan *model.AuditLog, 10000), // 缓冲队列
-		batchSize:     100,                               // 批量大小
-		flushInterval: 5 * time.Second,                   // 刷新间隔
-		buffer:        make([]*model.AuditLog, 0, 100),
-		done:          make(chan struct{}),
-		closed:        false,
+		dao:       dao,
+		logger:    logger,
+		asyncChan: make(chan *model.AuditLog, 1000),
+		done:      make(chan struct{}),
 	}
 
-	// 启动后台批量处理协程
-	s.wg.Add(1)
-	go s.batchProcessor()
+	// 启动单个后台处理协程
+	go s.processAsync()
 
 	return s
 }
 
-// 检查服务是否已关闭
-func (s *auditService) isClosed() bool {
-	s.closeMutex.RLock()
-	defer s.closeMutex.RUnlock()
-	return s.closed
-}
-
 // 同步创建审计日志
 func (s *auditService) CreateAuditLog(ctx context.Context, req *model.CreateAuditLogRequest) error {
-	if s.isClosed() {
-		return fmt.Errorf("审计服务已关闭")
-	}
-
 	auditLog := s.buildAuditLog(req)
-
 	if err := s.dao.CreateAuditLog(ctx, auditLog); err != nil {
-		s.logger.Error("创建审计日志失败", zap.Error(err), zap.Any("请求", req))
+		s.logger.Error("创建审计日志失败", zap.Error(err))
 		return fmt.Errorf("创建审计日志失败: %w", err)
 	}
-
 	return nil
 }
 
-// 异步创建审计日志 - 用于middleware高性能场景
+// 异步创建审计日志
 func (s *auditService) CreateAuditLogAsync(ctx context.Context, req *model.CreateAuditLogRequest) {
-	if s.isClosed() {
-		s.logger.Warn("审计服务已关闭，丢弃日志",
-			zap.String("操作", req.OperationType))
-		return
-	}
-
 	auditLog := s.buildAuditLog(req)
 
 	select {
-	case s.logChannel <- auditLog:
+	case s.asyncChan <- auditLog:
 		// 成功入队
-	case <-ctx.Done():
-		// 上下文取消
-		s.logger.Debug("上下文取消，丢弃审计日志",
-			zap.String("操作", req.OperationType))
-		return
 	default:
-		// 队列满时直接丢弃并记录，避免创建goroutine
-		s.logger.Warn("审计日志队列已满，丢弃日志",
+		// 队列满时记录并丢弃
+		s.logger.Warn("审计日志队列已满",
 			zap.String("操作", req.OperationType),
-			zap.String("端点", req.Endpoint),
-			zap.String("用户ID", fmt.Sprintf("%d", req.UserID)))
+			zap.String("端点", req.Endpoint))
+	}
+}
+
+// 简化的异步处理
+func (s *auditService) processAsync() {
+	for {
+		select {
+		case log := <-s.asyncChan:
+			ctx := context.Background()
+			if err := s.dao.CreateAuditLog(ctx, log); err != nil {
+				s.logger.Error("异步创建审计日志失败", zap.Error(err))
+			}
+		case <-s.done:
+			// 处理剩余日志
+			for {
+				select {
+				case log := <-s.asyncChan:
+					ctx := context.Background()
+					if err := s.dao.CreateAuditLog(ctx, log); err != nil {
+						s.logger.Error("关闭时处理审计日志失败", zap.Error(err))
+					}
+				default:
+					return
+				}
+			}
+		}
 	}
 }
 
@@ -157,123 +142,8 @@ func (s *auditService) buildAuditLog(req *model.CreateAuditLogRequest) *model.Au
 	}
 }
 
-// 后台批量处理协程
-func (s *auditService) batchProcessor() {
-	defer s.wg.Done()
-	ticker := time.NewTicker(s.flushInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case log := <-s.logChannel:
-			s.bufferMutex.Lock()
-			s.buffer = append(s.buffer, log)
-			shouldFlush := len(s.buffer) >= s.batchSize
-			s.bufferMutex.Unlock()
-
-			if shouldFlush {
-				s.flushBufferWithContext(context.Background())
-			}
-
-		case <-ticker.C:
-			s.flushBufferWithContext(context.Background())
-
-		case <-s.done:
-			// 处理剩余队列中的日志，设置超时避免死锁
-			s.logger.Info("审计服务正在关闭，处理剩余日志")
-			s.drainChannel()
-			return
-		}
-	}
-}
-
-// 排空剩余的日志
-func (s *auditService) drainChannel() {
-	timeout := time.After(10 * time.Second) // 增加超时时间
-	processed := 0
-
-	for {
-		select {
-		case log := <-s.logChannel:
-			s.bufferMutex.Lock()
-			s.buffer = append(s.buffer, log)
-			processed++
-			// 达到批量大小或缓冲区快满时立即刷新
-			if len(s.buffer) >= s.batchSize {
-				s.bufferMutex.Unlock()
-				s.flushBufferWithContext(context.Background())
-			} else {
-				s.bufferMutex.Unlock()
-			}
-		case <-timeout:
-			s.logger.Warn("关闭超时，可能丢失一些日志",
-				zap.Int("已处理", processed))
-			s.flushBufferWithContext(context.Background())
-			return
-		default:
-			// 队列为空，刷新缓冲区并退出
-			s.flushBufferWithContext(context.Background())
-			s.logger.Info("所有剩余日志已处理",
-				zap.Int("已处理", processed))
-			return
-		}
-	}
-}
-
-// 带上下文的刷新缓冲区
-func (s *auditService) flushBufferWithContext(ctx context.Context) {
-	s.bufferMutex.Lock()
-	if len(s.buffer) == 0 {
-		s.bufferMutex.Unlock()
-		return
-	}
-
-	logs := make([]model.AuditLog, len(s.buffer))
-	for i, log := range s.buffer {
-		logs[i] = *log
-	}
-	count := len(s.buffer)
-	s.buffer = s.buffer[:0] // 清空缓冲区，但保持容量
-	s.bufferMutex.Unlock()
-
-	// 使用传入的context，但设置最大超时
-	flushCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	// 最多重试3次
-	maxRetries := 3
-	var err error
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		err = s.dao.BatchCreateAuditLogs(flushCtx, logs)
-		if err == nil {
-			break
-		}
-		s.logger.Warn("批量写入审计日志失败，正在重试", 
-			zap.Error(err), 
-			zap.Int("数量", count), 
-			zap.Int("重试次数", attempt))
-		
-		// 如果不是最后一次尝试，则等待一段时间再重试
-		if attempt < maxRetries {
-			time.Sleep(time.Duration(attempt*500) * time.Millisecond)
-		}
-	}
-	
-	if err != nil {
-		s.logger.Error("批量写入审计日志最终失败，放弃处理", 
-			zap.Error(err), 
-			zap.Int("数量", count), 
-			zap.Int("尝试次数", maxRetries))
-	} else {
-		s.logger.Debug("成功刷新审计日志", zap.Int("数量", count))
-	}
-}
-
+// 批量创建审计日志
 func (s *auditService) BatchCreateAuditLogs(ctx context.Context, logs []model.AuditLog) error {
-	if s.isClosed() {
-		return fmt.Errorf("审计服务已关闭")
-	}
-
 	if len(logs) == 0 {
 		return nil
 	}
@@ -282,13 +152,15 @@ func (s *auditService) BatchCreateAuditLogs(ctx context.Context, logs []model.Au
 		s.logger.Error("批量创建审计日志失败", zap.Error(err), zap.Int("count", len(logs)))
 		return fmt.Errorf("批量创建审计日志失败: %w", err)
 	}
-
 	return nil
 }
 
+// 获取审计日志列表
 func (s *auditService) ListAuditLogs(ctx context.Context, req *model.ListAuditLogsRequest) (*model.ListResp[model.AuditLog], error) {
-	if s.isClosed() {
-		return nil, fmt.Errorf("审计服务已关闭")
+	// 参数校验
+	req.Size = s.validatePageSize(req.Size, 10, 100)
+	if req.Page <= 0 {
+		req.Page = 1
 	}
 
 	total, logs, err := s.dao.ListAuditLogs(ctx, req)
@@ -303,23 +175,22 @@ func (s *auditService) ListAuditLogs(ctx context.Context, req *model.ListAuditLo
 	}, nil
 }
 
+// 获取审计日志详情
 func (s *auditService) GetAuditLogDetail(ctx context.Context, id int) (*model.AuditLog, error) {
-	if s.isClosed() {
-		return nil, fmt.Errorf("审计服务已关闭")
-	}
-
 	log, err := s.dao.GetAuditLogByID(ctx, id)
 	if err != nil {
 		s.logger.Error("获取审计日志详情失败", zap.Error(err), zap.Int("id", id))
 		return nil, fmt.Errorf("获取审计日志详情失败: %w", err)
 	}
-
 	return log, nil
 }
 
+// 搜索审计日志
 func (s *auditService) SearchAuditLogs(ctx context.Context, req *model.SearchAuditLogsRequest) (*model.ListResp[model.AuditLog], error) {
-	if s.isClosed() {
-		return nil, fmt.Errorf("审计服务已关闭")
+	// 参数校验
+	req.Size = s.validatePageSize(req.Size, 10, 100)
+	if req.Page <= 0 {
+		req.Page = 1
 	}
 
 	total, logs, err := s.dao.SearchAuditLogs(ctx, req)
@@ -334,25 +205,18 @@ func (s *auditService) SearchAuditLogs(ctx context.Context, req *model.SearchAud
 	}, nil
 }
 
+// 获取审计统计信息
 func (s *auditService) GetAuditStatistics(ctx context.Context) (*model.AuditStatistics, error) {
-	if s.isClosed() {
-		return nil, fmt.Errorf("审计服务已关闭")
-	}
-
 	stats, err := s.dao.GetAuditStatistics(ctx)
 	if err != nil {
 		s.logger.Error("获取审计统计信息失败", zap.Error(err))
 		return nil, fmt.Errorf("获取审计统计信息失败: %w", err)
 	}
-
 	return stats, nil
 }
 
+// 获取审计类型列表
 func (s *auditService) GetAuditTypes(ctx context.Context) ([]model.AuditTypeInfo, error) {
-	if s.isClosed() {
-		return nil, fmt.Errorf("审计服务已关闭")
-	}
-
 	auditTypes := []model.AuditTypeInfo{
 		{Type: "CREATE", Description: "创建操作", Category: "数据操作"},
 		{Type: "UPDATE", Description: "更新操作", Category: "数据操作"},
@@ -369,9 +233,12 @@ func (s *auditService) GetAuditTypes(ctx context.Context) ([]model.AuditTypeInfo
 	return auditTypes, nil
 }
 
+// 导出审计日志
 func (s *auditService) ExportAuditLogs(ctx context.Context, req *model.ExportAuditLogsRequest) ([]byte, error) {
-	if s.isClosed() {
-		return nil, fmt.Errorf("审计服务已关闭")
+	// 限制导出数量，防止内存溢出
+	if req.Size <= 0 || req.Size > 10000 {
+		req.Size = 10000
+		s.logger.Warn("审计日志导出数量已限制", zap.Int("max_limit", 10000))
 	}
 
 	data, err := s.dao.ExportAuditLogs(ctx, req)
@@ -383,77 +250,59 @@ func (s *auditService) ExportAuditLogs(ctx context.Context, req *model.ExportAud
 	return data, nil
 }
 
+// 删除审计日志
 func (s *auditService) DeleteAuditLog(ctx context.Context, id int) error {
-	if s.isClosed() {
-		return fmt.Errorf("审计服务已关闭")
-	}
-
 	if err := s.dao.DeleteAuditLog(ctx, id); err != nil {
 		s.logger.Error("删除审计日志失败", zap.Error(err), zap.Int("ID", id))
 		return fmt.Errorf("删除审计日志失败: %w", err)
 	}
-
 	return nil
 }
 
+// 批量删除审计日志
 func (s *auditService) BatchDeleteAuditLogs(ctx context.Context, ids []int) error {
-	if s.isClosed() {
-		return fmt.Errorf("审计服务已关闭")
-	}
-
 	if len(ids) == 0 {
 		return nil
+	}
+
+	// 限制批量删除数量
+	if len(ids) > 1000 {
+		s.logger.Warn("批量删除审计日志数量过多，已限制为最大值",
+			zap.Int("原始数量", len(ids)), zap.Int("最大数量", 1000))
+		ids = ids[:1000]
 	}
 
 	if err := s.dao.BatchDeleteAuditLogs(ctx, ids); err != nil {
 		s.logger.Error("批量删除审计日志失败", zap.Error(err), zap.Ints("ID列表", ids))
 		return fmt.Errorf("批量删除审计日志失败: %w", err)
 	}
-
 	return nil
 }
 
+// 归档审计日志
 func (s *auditService) ArchiveAuditLogs(ctx context.Context, req *model.ArchiveAuditLogsRequest) error {
-	if s.isClosed() {
-		return fmt.Errorf("审计服务已关闭")
-	}
-
 	if err := s.dao.ArchiveAuditLogs(ctx, req.StartTime, req.EndTime); err != nil {
 		s.logger.Error("归档审计日志失败", zap.Error(err), zap.Any("请求", req))
 		return fmt.Errorf("归档审计日志失败: %w", err)
 	}
-
 	return nil
 }
 
-// 关闭服务，确保所有日志都被处理
+// 关闭服务
 func (s *auditService) Close() error {
-	s.closeMutex.Lock()
-	if s.closed {
-		s.closeMutex.Unlock()
-		return nil // 已经关闭
-	}
-	s.closed = true
-	s.closeMutex.Unlock()
-
 	s.logger.Info("关闭审计服务...")
-
-	// 发送关闭信号
 	close(s.done)
+	s.logger.Info("审计服务关闭成功")
+	return nil
+}
 
-	// 等待后台协程完成，设置超时避免无限等待
-	done := make(chan struct{})
-	go func() {
-		s.wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		s.logger.Info("审计服务关闭成功")
-		return nil
-	case <-time.After(15 * time.Second): // 总超时时间
-		s.logger.Error("超时等待审计服务关闭")
-		return fmt.Errorf("超时等待审计服务关闭")
+// 工具方法：校验分页大小
+func (s *auditService) validatePageSize(size, defaultSize, maxSize int) int {
+	if size <= 0 {
+		return defaultSize
 	}
+	if size > maxSize {
+		return maxSize
+	}
+	return size
 }

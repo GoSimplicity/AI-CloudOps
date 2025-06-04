@@ -1189,3 +1189,8 @@ CREATE TABLE `users` (
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2025-01-26 10:52:57
+
+CREATE INDEX idx_audit_logs_created_id ON audit_logs(created_at DESC, id DESC);
+CREATE INDEX idx_audit_logs_user_created ON audit_logs(user_id, created_at DESC);
+CREATE INDEX idx_audit_logs_operation_created ON audit_logs(operation_type, created_at DESC);
+CREATE INDEX idx_audit_logs_status_created ON audit_logs(status_code, created_at DESC);
