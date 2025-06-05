@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/ai/mcp/tools/hello"
+	"github.com/GoSimplicity/AI-CloudOps/internal/ai/mcp/tools/k8s"
 	getime "github.com/GoSimplicity/AI-CloudOps/internal/ai/mcp/tools/time"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -158,5 +159,6 @@ func RunMCPServerWithOption(cfg *MCP) error {
 func RegisterTools(server *server.MCPServer) {
 	getime.RegisterTools(server)
 	hello.RegisterTools(server)
+	k8s.RegisterTools(server)
 	// TODO: 注册其他工具
 }
