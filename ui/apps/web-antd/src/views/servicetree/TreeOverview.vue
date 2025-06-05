@@ -82,9 +82,14 @@
                   <template #title="{ title, key }">
                     <span class="tree-node-title">
                       {{ title }}
-                      <a-tag v-if="getNodeResourceCount(key) > 0" color="blue">
-                        {{ getNodeResourceCount(key) }}
-                      </a-tag>
+                      <a-space>
+                        <a-tag v-if="getNodeResourceCount(key) > 0" color="blue">
+                          资源: {{ getNodeResourceCount(key) }}
+                        </a-tag>
+                        <a-tag v-if="getNodeMemberCount(key) > 0" color="green">
+                          成员: {{ getNodeMemberCount(key) }}
+                        </a-tag>
+                      </a-space>
                     </span>
                   </template>
                 </a-tree>
@@ -110,51 +115,97 @@
     <a-row :gutter="16" class="node-details-row">
       <a-col :span="12">
         <a-card title="节点详情" :bordered="false" v-if="selectedNode" class="details-card">
-          <a-descriptions :column="1" bordered>
-            <a-descriptions-item label="节点ID">
-              {{ selectedNode.id }}
-            </a-descriptions-item>
-            <a-descriptions-item label="节点名称">
-              {{ selectedNode.name }}
-            </a-descriptions-item>
-            <a-descriptions-item label="父节点">
-              {{ selectedNode.parentName || '无' }}
-            </a-descriptions-item>
-            <a-descriptions-item label="层级">
-              {{ selectedNode.level }}
-            </a-descriptions-item>
-            <a-descriptions-item label="状态">
-              <a-tag :color="selectedNode.status === 'active' ? 'green' : 'red'">
-                {{ selectedNode.status === 'active' ? '活跃' : '非活跃' }}
-              </a-tag>
-            </a-descriptions-item>
-            <a-descriptions-item label="节点类型">
-              <a-tag :color="selectedNode.isLeaf ? 'blue' : 'orange'">
-                {{ selectedNode.isLeaf ? '叶子节点' : '目录节点' }}
-              </a-tag>
-            </a-descriptions-item>
-            <a-descriptions-item label="管理员数量">
-              {{ selectedNode.adminUsers?.length || 0 }}
-            </a-descriptions-item>
-            <a-descriptions-item label="成员数量">
-              {{ selectedNode.memberUsers?.length || 0 }}
-            </a-descriptions-item>
-            <a-descriptions-item label="子节点数">
-              {{ selectedNode.childCount || 0 }}
-            </a-descriptions-item>
-            <a-descriptions-item label="资源数">
-              {{ selectedNode.resourceCount || 0 }}
-            </a-descriptions-item>
-            <a-descriptions-item label="创建时间">
-              {{ formatDateTime(selectedNode.createdAt) }}
-            </a-descriptions-item>
-            <a-descriptions-item label="更新时间">
-              {{ formatDateTime(selectedNode.updatedAt) }}
-            </a-descriptions-item>
-            <a-descriptions-item label="描述">
-              {{ selectedNode.description || '无' }}
-            </a-descriptions-item>
-          </a-descriptions>
+          <a-spin :spinning="nodeDetailLoading">
+            <a-descriptions :column="1" bordered>
+              <a-descriptions-item label="节点ID">
+                {{ selectedNode.id }}
+              </a-descriptions-item>
+              <a-descriptions-item label="节点名称">
+                {{ selectedNode.name }}
+              </a-descriptions-item>
+              <a-descriptions-item label="父节点">
+                {{ selectedNode.parentName || '无' }}
+              </a-descriptions-item>
+              <a-descriptions-item label="层级">
+                {{ selectedNode.level }}
+              </a-descriptions-item>
+              <a-descriptions-item label="状态">
+                <a-tag :color="selectedNode.status === 'active' ? 'green' : 'red'">
+                  {{ selectedNode.status === 'active' ? '活跃' : '非活跃' }}
+                </a-tag>
+              </a-descriptions-item>
+              <a-descriptions-item label="节点类型">
+                <a-tag :color="selectedNode.isLeaf ? 'blue' : 'orange'">
+                  {{ selectedNode.isLeaf ? '叶子节点' : '目录节点' }}
+                </a-tag>
+              </a-descriptions-item>
+              <a-descriptions-item label="管理员">
+                <div v-if="selectedNode.adminUsers && selectedNode.adminUsers.length > 0">
+                  <div class="member-list">
+                    <a-tag 
+                      v-for="admin in selectedNode.adminUsers.slice(0, 3)" 
+                      :key="admin"
+                      color="blue"
+                      style="margin-bottom: 4px;"
+                    >
+                      {{ admin }}
+                    </a-tag>
+                    <a-tag 
+                      v-if="selectedNode.adminUsers.length > 3" 
+                      color="blue"
+                      style="margin-bottom: 4px;"
+                    >
+                      +{{ selectedNode.adminUsers.length - 3 }}...
+                    </a-tag>
+                  </div>
+                  <div class="member-count">
+                    共 {{ selectedNode.adminUsers.length }} 名管理员
+                  </div>
+                </div>
+                <span v-else class="empty-text">暂无管理员</span>
+              </a-descriptions-item>
+              <a-descriptions-item label="普通成员">
+                <div v-if="selectedNode.memberUsers && selectedNode.memberUsers.length > 0">
+                  <div class="member-list">
+                    <a-tag 
+                      v-for="member in selectedNode.memberUsers.slice(0, 3)" 
+                      :key="member"
+                      color="green"
+                      style="margin-bottom: 4px;"
+                    >
+                      {{ member }}
+                    </a-tag>
+                    <a-tag 
+                      v-if="selectedNode.memberUsers.length > 3" 
+                      color="green"
+                      style="margin-bottom: 4px;"
+                    >
+                      +{{ selectedNode.memberUsers.length - 3 }}...
+                    </a-tag>
+                  </div>
+                  <div class="member-count">
+                    共 {{ selectedNode.memberUsers.length }} 名成员
+                  </div>
+                </div>
+                <span v-else class="empty-text">暂无普通成员</span>
+              </a-descriptions-item>
+              <a-descriptions-item label="子节点数">
+                {{ selectedNode.childCount || 0 }}
+              </a-descriptions-item>
+              <a-descriptions-item label="资源数">
+                {{ selectedNode.resourceCount || 0 }}
+              </a-descriptions-item>
+              <a-descriptions-item label="创建时间">
+                {{ formatDateTime(selectedNode.createdAt) }}
+              </a-descriptions-item>
+              <a-descriptions-item label="更新时间">
+                {{ formatDateTime(selectedNode.updatedAt) }}
+              </a-descriptions-item>
+              <a-descriptions-item label="描述">
+                {{ selectedNode.description || '无' }}
+              </a-descriptions-item>
+            </a-descriptions>
+          </a-spin>
         </a-card>
         <a-empty v-else description="请选择节点查看详情" />
       </a-col>
@@ -167,6 +218,7 @@
               :columns="resourceColumns" 
               :pagination="{ pageSize: 8, size: 'small' }"
               size="small"
+              :locale="{ emptyText: '暂无绑定资源' }"
             >
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'resourceStatus'">
@@ -188,7 +240,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch, nextTick } from 'vue';
+import { ref, onMounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   ReloadOutlined,
@@ -205,6 +257,7 @@ import {
   getNodeDetail,
   getTreeStatistics,
   getNodeResources,
+  getNodeMembers,
   type TreeNodeDetail,
   type TreeNodeListItem,
   type TreeStatistics,
@@ -212,9 +265,19 @@ import {
   type GetTreeListParams,
 } from '#/api/core/tree_node';
 
+interface UserInfo {
+  id: number;
+  username: string;
+  real_name: string;
+  mobile: string;
+  account_type: number;
+  enable: number;
+}
+
 const router = useRouter();
 const loading = ref(false);
 const resourceLoading = ref(false);
+const nodeDetailLoading = ref(false);
 const selectedNode = ref<TreeNodeDetail | null>(null);
 const chartContainer = ref<HTMLElement | null>(null);
 let chart: echarts.ECharts | null = null;
@@ -241,9 +304,18 @@ const resourceColumns = [
 ];
 
 // 工具函数
-const formatDateTime = (dateStr: string) => {
+const formatDateTime = (dateStr: string | number) => {
   if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleString('zh-CN');
+  
+  let date: Date;
+  if (typeof dateStr === 'number') {
+    // 如果是时间戳，需要转换为毫秒
+    date = new Date(dateStr * 1000);
+  } else {
+    date = new Date(dateStr);
+  }
+  
+  return date.toLocaleString('zh-CN');
 };
 
 const getResourceStatusColor = (status: string) => {
@@ -264,6 +336,40 @@ const getNodeResourceCount = (key: string | number): number => {
   return nodeDetails.value[nodeId]?.resourceCount || 0;
 };
 
+// 获取节点成员总数
+const getNodeMemberCount = (key: string | number): number => {
+  const nodeId = parseInt(key.toString());
+  const node = nodeDetails.value[nodeId];
+  if (!node) return 0;
+  
+  const adminUsers = node.adminUsers || [];
+  const memberUsers = node.memberUsers || [];
+  
+  const allUsers = new Set([...adminUsers, ...memberUsers]);
+  return allUsers.size;
+};
+
+// 加载节点成员信息
+const loadNodeMembers = async (nodeId: number): Promise<{ adminUsers: UserInfo[], memberUsers: UserInfo[] }> => {
+  try {
+    const [adminRes, memberRes] = await Promise.all([
+      getNodeMembers(nodeId, { type: 'admin' }),
+      getNodeMembers(nodeId, { type: 'member' })
+    ]);
+    
+    return {
+      adminUsers: adminRes || [],
+      memberUsers: memberRes || []
+    };
+  } catch (error) {
+    console.error('获取节点成员失败:', error);
+    return {
+      adminUsers: [],
+      memberUsers: []
+    };
+  }
+};
+
 // 修复后的数据加载函数
 const loadTreeData = async () => {
   try {
@@ -281,7 +387,10 @@ const loadTreeData = async () => {
     }
     
     // 处理树节点数据并缓存详情
-    const processNode = (node: TreeNodeListItem) => {
+    const processNode = async (node: TreeNodeListItem) => {
+      // 加载节点成员信息
+      const members = await loadNodeMembers(node.id);
+      
       nodeDetails.value[node.id] = {
         id: node.id,
         name: node.name,
@@ -296,17 +405,22 @@ const loadTreeData = async () => {
         creatorName: '',
         parentName: '',
         childCount: node.children?.length || 0,
-        adminUsers: [],
-        memberUsers: [],
+        adminUsers: members.adminUsers.map(user => user.username),
+        memberUsers: members.memberUsers.map(user => user.username),
         resourceCount: 0,
       };
       
       if (node.children && node.children.length > 0) {
-        node.children.forEach(processNode);
+        for (const child of node.children) {
+          await processNode(child);
+        }
       }
     };
     
-    items.forEach(processNode);
+    // 处理所有节点（串行处理，避免并发请求过多）
+    for (const item of items) {
+      await processNode(item);
+    }
     
     // 构建树形结构
     const transformNode = (node: TreeNodeListItem): any => ({
@@ -326,6 +440,7 @@ const loadTreeData = async () => {
     }
     
     console.log('树形数据加载成功:', treeData.value);
+    console.log('节点详情缓存:', nodeDetails.value);
   } catch (error) {
     console.error('加载树形数据失败:', error);
     message.error('加载树形数据失败');
@@ -348,10 +463,16 @@ const loadNodeResources = async (nodeId: number) => {
   resourceLoading.value = true;
   try {
     const res = await getNodeResources(nodeId);
-    nodeResources.value = res;
+    nodeResources.value = res || [];
+    
+    // 更新节点详情中的资源数量
+    if (nodeDetails.value[nodeId]) {
+      nodeDetails.value[nodeId].resourceCount = nodeResources.value.length;
+    }
   } catch (error) {
     console.error('获取节点资源失败:', error);
     message.error('获取节点资源失败');
+    nodeResources.value = [];
   } finally {
     resourceLoading.value = false;
   }
@@ -395,12 +516,14 @@ const updateChart = () => {
   // 递归处理树节点
   const processNode = (node: any) => {
     const resourceCount = getNodeResourceCount(node.key);
+    const memberCount = getNodeMemberCount(node.key);
+    const totalValue = resourceCount + memberCount;
     
     nodes.push({
       name: node.title,
       id: node.key,
-      value: resourceCount,
-      symbolSize: Math.max(30, 30 + (resourceCount * 2)),
+      value: totalValue,
+      symbolSize: Math.max(30, 30 + (totalValue * 2)),
       itemStyle: {
         color: node.isLeaf ? '#52c41a' : '#1890ff'
       },
@@ -443,7 +566,13 @@ const updateChart = () => {
     tooltip: {
       trigger: 'item',
       formatter: (params: any) => {
-        return `${params.data.name}<br/>资源数量: ${params.data.value}`;
+        const nodeId = parseInt(params.data.id);
+        const nodeDetail = nodeDetails.value[nodeId];
+        const resourceCount = nodeDetail?.resourceCount || 0;
+        const adminCount = nodeDetail?.adminUsers?.length || 0;
+        const memberCount = nodeDetail?.memberUsers?.length || 0;
+        
+        return `${params.data.name}<br/>资源数量: ${resourceCount}<br/>管理员: ${adminCount}<br/>成员: ${memberCount}`;
       }
     },
     animationDurationUpdate: 1500,
@@ -495,14 +624,24 @@ const onTreeNodeSelect = async (selectedKeys: string[]) => {
     const nodeId = parseInt(selectedKeys[0] || '0');
     
     if (nodeId > 0) {
-      loading.value = true;
+      nodeDetailLoading.value = true;
       try {
         // 从缓存获取或加载节点详情
         let nodeDetail = nodeDetails.value[nodeId];
         if (!nodeDetail) {
-          nodeDetail = await getNodeDetail(nodeId);
-          if (nodeDetail) {
-            nodeDetails.value[nodeId] = nodeDetail;
+          // 如果缓存中没有，重新加载
+          const [detailRes, membersRes] = await Promise.all([
+            getNodeDetail(nodeId),
+            loadNodeMembers(nodeId)
+          ]);
+          
+          if (detailRes) {
+            nodeDetail = {
+              ...detailRes,
+              adminUsers: membersRes.adminUsers,
+              memberUsers: membersRes.memberUsers
+            };
+            nodeDetails.value[nodeId] = nodeDetail as TreeNodeDetail;
           }
         }
         
@@ -519,7 +658,7 @@ const onTreeNodeSelect = async (selectedKeys: string[]) => {
         message.error('获取节点数据失败');
         selectedNode.value = null;
       } finally {
-        loading.value = false;
+        nodeDetailLoading.value = false;
       }
     }
   } else {
@@ -650,6 +789,26 @@ onMounted(() => {
     .details-card,
     .resources-card {
       min-height: 400px;
+    }
+    
+    .member-list {
+      margin-bottom: 8px;
+      
+      .ant-tag {
+        margin-right: 4px;
+        margin-bottom: 4px;
+      }
+    }
+    
+    .member-count {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+    
+    .empty-text {
+      color: #999;
+      font-style: italic;
     }
   }
 }

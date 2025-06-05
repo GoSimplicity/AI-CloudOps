@@ -179,12 +179,20 @@
                 <a-tabs v-model:activeKey="memberTabKey">
                   <a-tab-pane key="admins" tab="管理员">
                     <div class="member-header">
-                      <a-button type="primary" size="small" @click="showAddMemberModal('admin')">
-                        <template #icon>
-                          <PlusOutlined />
-                        </template>
-                        添加管理员
-                      </a-button>
+                      <a-space>
+                        <a-button type="primary" size="small" @click="showAddMemberModal('admin')">
+                          <template #icon>
+                            <PlusOutlined />
+                          </template>
+                          添加管理员
+                        </a-button>
+                        <a-button size="small" @click="loadNodeMembers(selectedNode.id)">
+                          <template #icon>
+                            <ReloadOutlined />
+                          </template>
+                          刷新
+                        </a-button>
+                      </a-space>
                     </div>
                     <a-table 
                       :dataSource="adminUsers" 
@@ -192,8 +200,19 @@
                       :pagination="{ pageSize: 10 }"
                       size="middle"
                       :loading="memberLoading"
+                      :locale="{ emptyText: '暂无管理员' }"
                     >
                       <template #bodyCell="{ column, record }">
+                        <template v-if="column.key === 'account_type'">
+                          <a-tag :color="record.account_type === 2 ? 'blue' : 'green'">
+                            {{ record.account_type === 2 ? '超级管理员' : '普通用户' }}
+                          </a-tag>
+                        </template>
+                        <template v-if="column.key === 'enable'">
+                          <a-tag :color="record.enable === 1 ? 'green' : 'red'">
+                            {{ record.enable === 1 ? '启用' : '禁用' }}
+                          </a-tag>
+                        </template>
                         <template v-if="column.key === 'action'">
                           <a-space>
                             <a-button size="small" type="link" danger @click="confirmRemoveMember(record, 'admin')">
@@ -207,12 +226,20 @@
 
                   <a-tab-pane key="members" tab="普通成员">
                     <div class="member-header">
-                      <a-button type="primary" size="small" @click="showAddMemberModal('member')">
-                        <template #icon>
-                          <PlusOutlined />
-                        </template>
-                        添加成员
-                      </a-button>
+                      <a-space>
+                        <a-button type="primary" size="small" @click="showAddMemberModal('member')">
+                          <template #icon>
+                            <PlusOutlined />
+                          </template>
+                          添加成员
+                        </a-button>
+                        <a-button size="small" @click="loadNodeMembers(selectedNode.id)">
+                          <template #icon>
+                            <ReloadOutlined />
+                          </template>
+                          刷新
+                        </a-button>
+                      </a-space>
                     </div>
                     <a-table 
                       :dataSource="memberUsers" 
@@ -220,8 +247,19 @@
                       :pagination="{ pageSize: 10 }"
                       size="middle"
                       :loading="memberLoading"
+                      :locale="{ emptyText: '暂无普通成员' }"
                     >
                       <template #bodyCell="{ column, record }">
+                        <template v-if="column.key === 'account_type'">
+                          <a-tag :color="record.account_type === 2 ? 'blue' : 'green'">
+                            {{ record.account_type === 2 ? '超级管理员' : '普通用户' }}
+                          </a-tag>
+                        </template>
+                        <template v-if="column.key === 'enable'">
+                          <a-tag :color="record.enable === 1 ? 'green' : 'red'">
+                            {{ record.enable === 1 ? '启用' : '禁用' }}
+                          </a-tag>
+                        </template>
                         <template v-if="column.key === 'action'">
                           <a-space>
                             <a-button size="small" type="link" danger @click="confirmRemoveMember(record, 'member')">
@@ -355,18 +393,82 @@
       width="600px"
     >
       <a-form :model="memberForm" layout="vertical">
-        <a-form-item label="选择用户" name="userId">
+        <a-form-item label="选择用户" name="userId" :rules="[{ required: true, message: '请选择用户', trigger: 'change' }]">
           <a-select 
             v-model:value="memberForm.userId" 
             placeholder="请选择用户" 
             show-search
             :filter-option="filterUserOption"
             style="width: 100%"
+            :loading="userListLoading"
+            :not-found-content="userListLoading ? '加载中...' : availableUsers.length === 0 ? '暂无可添加的用户' : '无匹配结果'"
           >
-            <a-select-option v-for="user in availableUsers" :key="user.id" :value="user.id">
-              {{ user.username }} ({{ user.real_name || '未设置姓名' }})
+            <a-select-option 
+              v-for="user in availableUsers" 
+              :key="user.id" 
+              :value="user.id"
+              :disabled="user.enable !== 1"
+            >
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <strong>{{ user.username }}</strong>
+                  <span v-if="user.real_name" style="margin-left: 8px; color: #666;">
+                    ({{ user.real_name }})
+                  </span>
+                </div>
+                <div style="font-size: 12px; color: #999;">
+                  <span v-if="user.mobile">{{ user.mobile }}</span>
+                  <a-tag 
+                    v-if="user.account_type === 2" 
+                    color="blue" 
+                    size="small" 
+                    style="margin-left: 4px;"
+                  >
+                    超管
+                  </a-tag>
+                  <a-tag 
+                    v-if="user.enable !== 1" 
+                    color="red" 
+                    size="small" 
+                    style="margin-left: 4px;"
+                  >
+                    已禁用
+                  </a-tag>
+                </div>
+              </div>
             </a-select-option>
           </a-select>
+          <div v-if="!userListLoading && availableUsers.length === 0" style="margin-top: 8px; color: #999; font-size: 12px;">
+            暂无可添加的用户
+          </div>
+        </a-form-item>
+        
+        <!-- 显示当前节点已有成员信息 -->
+        <a-form-item label="当前成员统计">
+          <a-space>
+            <a-tag color="blue">管理员: {{ adminUsers.length }}人</a-tag>
+            <a-tag color="green">普通成员: {{ memberUsers.length }}人</a-tag>
+          </a-space>
+        </a-form-item>
+
+        <!-- 显示选中用户的详细信息 -->
+        <a-form-item v-if="selectedUserInfo" label="用户信息">
+          <a-descriptions size="small" :column="1" bordered>
+            <a-descriptions-item label="用户名">{{ selectedUserInfo.username }}</a-descriptions-item>
+            <a-descriptions-item label="真实姓名">{{ selectedUserInfo.real_name || '未设置' }}</a-descriptions-item>
+            <a-descriptions-item label="手机号">{{ selectedUserInfo.mobile || '未设置' }}</a-descriptions-item>
+            <a-descriptions-item label="域">{{ selectedUserInfo.domain }}</a-descriptions-item>
+            <a-descriptions-item label="账号类型">
+              <a-tag :color="selectedUserInfo.account_type === 2 ? 'blue' : 'green'">
+                {{ selectedUserInfo.account_type === 2 ? '超级管理员' : '普通用户' }}
+              </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="状态">
+              <a-tag :color="selectedUserInfo.enable === 1 ? 'green' : 'red'">
+                {{ selectedUserInfo.enable === 1 ? '启用' : '禁用' }}
+              </a-tag>
+            </a-descriptions-item>
+          </a-descriptions>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -440,6 +542,26 @@ import {
   type UnbindResourceParams,
 } from '#/api/core/tree_node';
 
+import { getAllUsers } from '#/api/core/user';
+
+interface UserInfo {
+  id: number;
+  created_at: number;
+  updated_at: number;
+  deleted_at: number;
+  username: string;
+  password: string;
+  real_name: string;
+  domain: string;
+  desc: string;
+  mobile: string;
+  fei_shu_user_id: string;
+  account_type: number;
+  home_path: string;
+  enable: number;
+  apis: any[];
+}
+
 const router = useRouter();
 
 // 基础状态
@@ -448,6 +570,7 @@ const confirmLoading = ref(false);
 const resourceLoading = ref(false);
 const memberLoading = ref(false);
 const availableResourceLoading = ref(false);
+const userListLoading = ref(false);
 
 // 搜索和树状态
 const searchValue = ref('');
@@ -470,9 +593,10 @@ const treeData = ref<any[]>([]);
 const nodeDetails = ref<Record<string, TreeNodeDetail>>({});
 const treeStatistics = ref<TreeStatistics | null>(null);
 const nodeResources = ref<TreeNodeResource[]>([]);
-const adminUsers = ref<any[]>([]);
-const memberUsers = ref<any[]>([]);
-const availableUsers = ref<any[]>([]);
+const adminUsers = ref<UserInfo[]>([]);
+const memberUsers = ref<UserInfo[]>([]);
+const availableUsers = ref<UserInfo[]>([]);
+const allUsers = ref<UserInfo[]>([]);
 const availableResources = ref<any[]>([]);
 const resourceTypes = ref<{ label: string; value: string }[]>([]);
 const currentResourceDetail = ref<TreeNodeResource>({} as TreeNodeResource);
@@ -526,6 +650,13 @@ const selectedNode = computed((): TreeNodeDetail | null => {
   return null;
 });
 
+const selectedUserInfo = computed((): UserInfo | null => {
+  if (memberForm.userId && availableUsers.value.length > 0) {
+    return availableUsers.value.find(user => user.id === memberForm.userId) || null;
+  }
+  return null;
+});
+
 const filteredTreeData = computed(() => {
   if (!searchValue.value) {
     return treeData.value;
@@ -573,6 +704,8 @@ const adminColumns = [
   { title: '用户名', dataIndex: 'username', key: 'username' },
   { title: '真实姓名', dataIndex: 'real_name', key: 'real_name', customRender: ({ text }: { text: string }) => text || '-' },
   { title: '手机号', dataIndex: 'mobile', key: 'mobile', customRender: ({ text }: { text: string }) => text || '-' },
+  { title: '账号类型', dataIndex: 'account_type', key: 'account_type' },
+  { title: '状态', dataIndex: 'enable', key: 'enable' },
   { title: '操作', key: 'action', width: 100 },
 ];
 
@@ -580,6 +713,8 @@ const memberColumns = [
   { title: '用户名', dataIndex: 'username', key: 'username' },
   { title: '真实姓名', dataIndex: 'real_name', key: 'real_name', customRender: ({ text }: { text: string }) => text || '-' },
   { title: '手机号', dataIndex: 'mobile', key: 'mobile', customRender: ({ text }: { text: string }) => text || '-' },
+  { title: '账号类型', dataIndex: 'account_type', key: 'account_type' },
+  { title: '状态', dataIndex: 'enable', key: 'enable' },
   { title: '操作', key: 'action', width: 100 },
 ];
 
@@ -593,9 +728,18 @@ const availableResourceColumns = computed(() => {
 });
 
 // 工具函数
-const formatDateTime = (dateStr: string) => {
+const formatDateTime = (dateStr: string | number) => {
   if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleString('zh-CN');
+  
+  let date: Date;
+  if (typeof dateStr === 'number') {
+    // 如果是时间戳，需要转换为毫秒
+    date = new Date(dateStr * 1000);
+  } else {
+    date = new Date(dateStr);
+  }
+  
+  return date.toLocaleString('zh-CN');
 };
 
 const getResourceStatusColor = (status: string) => {
@@ -611,10 +755,52 @@ const getResourceStatusColor = (status: string) => {
 };
 
 const filterUserOption = (input: string, option: any) => {
-  return option.children.toLowerCase().includes(input.toLowerCase());
+  const text = option?.children || '';
+  return text.toLowerCase().includes(input.toLowerCase());
 };
 
-// 修复后的数据加载函数
+// 数据加载函数
+const loadAllUsers = async () => {
+  try {
+    userListLoading.value = true;
+    const response = await getAllUsers();
+    
+    if (response) {
+      allUsers.value = response;
+      console.log('用户列表加载成功:', allUsers.value.length, '个用户');
+    } else {
+      console.error('获取用户列表响应格式错误:', response);
+      message.error('获取用户列表失败');
+      allUsers.value = [];
+    }
+  } catch (error) {
+    console.error('获取用户列表失败:', error);
+    message.error('获取用户列表失败');
+    allUsers.value = [];
+  } finally {
+    userListLoading.value = false;
+  }
+};
+
+const loadAvailableUsers = () => {
+  if (allUsers.value.length === 0) {
+    availableUsers.value = [];
+    return;
+  }
+
+  // 过滤掉已经是当前节点成员的用户
+  const currentAdminIds = adminUsers.value.map(user => user.id);
+  const currentMemberIds = memberUsers.value.map(user => user.id);
+  const existingUserIds = [...currentAdminIds, ...currentMemberIds];
+  
+  // 过滤出未添加的用户，只显示启用的用户
+  availableUsers.value = allUsers.value.filter(user => 
+    !existingUserIds.includes(user.id)
+  );
+  
+  console.log('可用用户列表更新:', availableUsers.value.length, '个用户');
+};
+
 const loadTreeData = async () => {
   loading.value = true;
   try {
@@ -723,11 +909,18 @@ const loadNodeMembers = async (nodeId: number) => {
     const adminRes = await getNodeMembers(nodeId, { type: 'admin' });
     const memberRes = await getNodeMembers(nodeId, { type: 'member' });
     
-    adminUsers.value = adminRes;
-    memberUsers.value = memberRes;
+    adminUsers.value = adminRes || [];
+    memberUsers.value = memberRes || [];
+    
+    // 更新可用用户列表
+    loadAvailableUsers();
+    
+    console.log('节点成员加载成功 - 管理员:', adminUsers.value.length, '成员:', memberUsers.value.length);
   } catch (error) {
     console.error('获取节点成员失败:', error);
     message.error('获取节点成员失败');
+    adminUsers.value = [];
+    memberUsers.value = [];
   } finally {
     memberLoading.value = false;
   }
@@ -786,6 +979,7 @@ const refreshData = async () => {
     loadTreeData(),
     loadStatistics(),
     loadResourceTypes(),
+    loadAllUsers(),
   ]);
   
   if (selectedNode.value) {
@@ -1090,24 +1284,10 @@ const showAddMemberModal = (type: 'admin' | 'member') => {
   memberForm.userId = 0;
   memberForm.memberType = type;
   
-  // 加载可用用户列表
+  // 更新可用用户列表
   loadAvailableUsers();
   
   addMemberModalVisible.value = true;
-};
-
-const loadAvailableUsers = async () => {
-  try {
-    // 这里应该调用实际的API获取用户列表
-    // const res = await getAllUsers();
-    // availableUsers.value = res;
-    
-    // 临时模拟数据
-    availableUsers.value = [];
-  } catch (error) {
-    console.error('获取用户列表失败:', error);
-    message.error('获取用户列表失败');
-  }
 };
 
 const handleAddMember = async () => {
@@ -1116,13 +1296,27 @@ const handleAddMember = async () => {
     return;
   }
 
+  // 检查用户是否已经是成员
+  const allCurrentMembers = [...adminUsers.value, ...memberUsers.value];
+  const isAlreadyMember = allCurrentMembers.some(member => member.id === memberForm.userId);
+  
+  if (isAlreadyMember) {
+    message.warning('该用户已经是当前节点的成员');
+    return;
+  }
+
   confirmLoading.value = true;
   try {
     await addNodeMember(memberForm);
-    message.success(`成功添加${memberForm.memberType === 'admin' ? '管理员' : '成员'}`);
+    
+    const selectedUser = availableUsers.value.find(user => user.id === memberForm.userId);
+    const userName = selectedUser ? selectedUser.username : '用户';
+    const roleText = memberForm.memberType === 'admin' ? '管理员' : '成员';
+    
+    message.success(`成功添加${roleText}: ${userName}`);
     
     if (selectedNode.value) {
-      loadNodeMembers(selectedNode.value.id);
+      await loadNodeMembers(selectedNode.value.id);
     }
     
     addMemberModalVisible.value = false;
@@ -1134,7 +1328,7 @@ const handleAddMember = async () => {
   }
 };
 
-const confirmRemoveMember = (record: any, type: 'admin' | 'member') => {
+const confirmRemoveMember = (record: UserInfo, type: 'admin' | 'member') => {
   if (!selectedNode.value) return;
   
   const roleText = type === 'admin' ? '管理员' : '成员';
@@ -1157,7 +1351,7 @@ const confirmRemoveMember = (record: any, type: 'admin' | 'member') => {
         message.success(`${roleText} "${record.username}" 已移除`);
         
         if (selectedNode.value) {
-          loadNodeMembers(selectedNode.value.id);
+          await loadNodeMembers(selectedNode.value.id);
         }
       } catch (error) {
         console.error('移除成员失败:', error);
@@ -1167,8 +1361,13 @@ const confirmRemoveMember = (record: any, type: 'admin' | 'member') => {
   });
 };
 
-onMounted(() => {
-  refreshData();
+// 监听表单变化
+watch(() => memberForm.userId, () => {
+  // 当用户选择变化时，触发计算属性更新
+});
+
+onMounted(async () => {
+  await refreshData();
 });
 
 watch(searchValue, (newVal) => {
