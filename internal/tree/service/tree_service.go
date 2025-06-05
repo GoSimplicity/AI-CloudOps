@@ -65,10 +65,9 @@ type TreeService interface {
 	MoveNode(ctx context.Context, nodeId, newParentId int) error
 
 	// 资源绑定接口
-	GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResourceResp, error)
+	GetNodeResources(ctx context.Context, nodeId int) (model.ListResp[*model.ResourceBase], error)
 	BindResource(ctx context.Context, req *model.BindResourceReq) error
 	UnbindResource(ctx context.Context, req *model.UnbindResourceReq) error
-	GetResourceTypes(ctx context.Context) ([]string, error)
 
 	// 成员管理接口
 	GetNodeMembers(ctx context.Context, nodeId int, memberType string) ([]*model.User, error)
@@ -92,10 +91,6 @@ func NewTreeService(logger *zap.Logger, dao dao.TreeDAO, userDao userDao.UserDAO
 
 // GetTreeList 获取树节点列表
 func (t *treeService) GetTreeList(ctx context.Context, req *model.GetTreeListReq) (model.ListResp[*model.TreeNodeListResp], error) {
-	if req == nil {
-		req = &model.GetTreeListReq{}
-	}
-
 	if req.Level < 0 {
 		return model.ListResp[*model.TreeNodeListResp]{}, errors.New("层级不能为负数")
 	}
@@ -504,58 +499,38 @@ func (t *treeService) UpdateNodeStatus(ctx context.Context, req *model.UpdateNod
 }
 
 // GetNodeResources 获取节点资源列表
-func (t *treeService) GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResourceResp, error) {
+func (t *treeService) GetNodeResources(ctx context.Context, nodeId int) (model.ListResp[*model.ResourceBase], error) {
 	if err := validateID(nodeId); err != nil {
-		return nil, err
+		return model.ListResp[*model.ResourceBase]{}, err
 	}
-
-	t.logger.Debug("获取节点资源", zap.Int("nodeId", nodeId))
 
 	resources, err := t.dao.GetNodeResources(ctx, nodeId)
 	if err != nil {
 		t.logger.Error("获取节点资源失败", zap.Int("nodeId", nodeId), zap.Error(err))
-		return nil, err
+		return model.ListResp[*model.ResourceBase]{}, err
 	}
 
-	return resources, nil
+	return model.ListResp[*model.ResourceBase]{
+		Items: resources,
+		Total: int64(len(resources)),
+	}, nil
 }
 
 // BindResource 绑定资源到节点
 func (t *treeService) BindResource(ctx context.Context, req *model.BindResourceReq) error {
-	if req == nil {
-		return errors.New("请求参数不能为空")
-	}
-
 	if err := validateID(req.NodeID); err != nil {
 		return err
-	}
-
-	if strings.TrimSpace(req.ResourceType) == "" {
-		return errors.New("资源类型不能为空")
 	}
 
 	if len(req.ResourceIDs) == 0 {
 		return errors.New("资源ID列表不能为空")
 	}
 
-	// 过滤空的资源ID
-	validResourceIDs := make([]string, 0, len(req.ResourceIDs))
-	for _, resourceID := range req.ResourceIDs {
-		if trimmed := strings.TrimSpace(resourceID); trimmed != "" {
-			validResourceIDs = append(validResourceIDs, trimmed)
-		}
+	if req.ResourceType == "" {
+		return errors.New("资源类型不能为空")
 	}
 
-	if len(validResourceIDs) == 0 {
-		return errors.New("没有有效的资源ID")
-	}
-
-	t.logger.Info("绑定资源",
-		zap.Int("nodeId", req.NodeID),
-		zap.String("resourceType", req.ResourceType),
-		zap.Strings("resourceIds", validResourceIDs))
-
-	return t.dao.BindResource(ctx, req.NodeID, req.ResourceType, validResourceIDs)
+	return t.dao.BindResource(ctx, req.NodeID, req.ResourceType, req.ResourceIDs)
 }
 
 // UnbindResource 解绑资源
@@ -582,19 +557,6 @@ func (t *treeService) UnbindResource(ctx context.Context, req *model.UnbindResou
 		zap.String("resourceId", req.ResourceID))
 
 	return t.dao.UnbindResource(ctx, req.NodeID, req.ResourceType, req.ResourceID)
-}
-
-// GetResourceTypes 获取资源类型列表
-func (t *treeService) GetResourceTypes(ctx context.Context) ([]string, error) {
-	t.logger.Debug("获取资源类型列表")
-
-	types, err := t.dao.GetResourceTypes(ctx)
-	if err != nil {
-		t.logger.Error("获取资源类型列表失败", zap.Error(err))
-		return nil, err
-	}
-
-	return types, nil
 }
 
 // convertToTreeNodeListResp 将数据模型转换为响应模型

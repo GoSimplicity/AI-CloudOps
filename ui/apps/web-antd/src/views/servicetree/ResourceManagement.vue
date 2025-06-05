@@ -289,6 +289,10 @@
               <a-select-option value="aliyun">阿里云</a-select-option>
               <a-select-option value="aws">AWS</a-select-option>
               <a-select-option value="tencent">腾讯云</a-select-option>
+              <a-select-option value="huawei">华为云</a-select-option>
+              <a-select-option value="azure">Azure</a-select-option>
+              <a-select-option value="gcp">Google Cloud</a-select-option>
+              <a-select-option value="local">本地环境</a-select-option>
             </a-select>
           </a-form-item>
 
@@ -619,11 +623,8 @@ import {
   ReloadOutlined,
   DeleteOutlined,
   DownOutlined,
-  EyeOutlined,
-  MoreOutlined
 } from '@ant-design/icons-vue';
 
-// 导入API方法
 import {
   getEcsResourceList,
   getEcsResourceDetail,
@@ -1151,13 +1152,13 @@ const fetchEcsList = async () => {
     const params = {
       provider: filterForm.provider,
       region: filterForm.region,
-      pageNumber: pagination.current,
-      pageSize: pagination.pageSize,
+      page: pagination.current,
+      size: pagination.pageSize,
       instanceName: filterForm.name || undefined,
       status: filterForm.status || undefined
     };
     const response = await getEcsResourceList(params);
-    ecsData.value = response.data || [];
+    ecsData.value = response.items || [];
     pagination.total = response.total || 0;
   } catch (error) {
     message.error('获取ECS实例列表失败');
@@ -1632,6 +1633,16 @@ const handleCreateSubmit = async () => {
   createForm.instanceChargeType = createForm.payType;
 
   try {
+    // 将 Record<string, string> 类型的 tags 转换为 string[] 类型
+    const tagsArray: string[] = [];
+    if (createForm.tags) {
+      for (const key in createForm.tags) {
+        if (Object.prototype.hasOwnProperty.call(createForm.tags, key)) {
+          tagsArray.push(`${key}=${createForm.tags[key]}`);
+        }
+      }
+    }
+
     const createParams = {
       provider: createForm.provider,
       periodUnit: createForm.periodUnit,
@@ -1647,7 +1658,7 @@ const handleCreateSubmit = async () => {
       dataDiskSize: createForm.dataDiskSize,
       dataDiskCategory: createForm.dataDiskCategory,
       dryRun: createForm.dryRun,
-      tags: createForm.tags,
+      tags: tagsArray, // 使用转换后的字符串数组
       imageId: createForm.imageId,
       instanceType: createForm.instanceType,
       amount: createForm.amount || 1,

@@ -109,7 +109,7 @@ func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMes
 	// 创建模版
 	template := prompt.FromMessages(
 		schema.FString,
-		schema.SystemMessage("你是一个{role}，专注于云计算和DevOps领域的专家。你需要用{style}规范的语气回答问题，保持简洁和友好。你的目标是帮助使用AI-CloudOps开源项目的用户回答问题，同时提供一些有用的建议和最佳实践。请基于事实回答，如果不确定，请明确表示。你可以解释复杂的技术概念，提供代码示例，并引导用户解决云环境中的常见问题。记住，你的回答应该既有教育意义又有实用价值，帮助用户更好地理解和使用AI-CloudOps。"),
+		schema.SystemMessage("你是一个{role}，专注于云计算和DevOps领域的专家。你需要用{style}规范的语气回答问题，保持简洁和友好。你的目标是帮助使用AI-CloudOps开源项目的用户回答问题，同时提供一些有用的建议和最佳实践。请基于事实回答，如果不确定，请明确表示。你可以解释复杂的技术概念，提供代码示例，并引导用户解决云环境中的常见问题。记住，你的回答应该既有教育意义又有实用价值，帮助用户更好地理解和使用AI-CloudOps。请使用Markdown格式输出，包括适当的标题、列表、代码块和强调，使回答更加结构化和易于阅读。"),
 		schema.MessagesPlaceholder("history_key", false), // 消息占位符
 		&schema.Message{
 			Role:    schema.User,
@@ -145,7 +145,7 @@ func (a *aiService) StreamChatMessage(ctx context.Context, message model.ChatMes
 	}
 
 	// 使用agent的流式响应
-	streamResult, err := a.agent.Stream(ctx, messages, agent.WithComposeOptions(compose.WithCallbacks(&LoggerCallback{})))
+	streamResult, err := a.agent.Stream(context.Background(), messages, agent.WithComposeOptions(compose.WithCallbacks(&LoggerCallback{})))
 	if err != nil {
 		a.logger.Error("获取流式响应失败", zap.Error(err))
 		responseChan <- model.StreamResponse{

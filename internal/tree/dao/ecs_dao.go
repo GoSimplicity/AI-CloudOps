@@ -33,9 +33,10 @@ import (
 )
 
 type EcsDAO interface {
-	ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error)
+	ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) ([]*model.ResourceEcs, error)
 	GetEcsResourceById(ctx context.Context, id int) (*model.ResourceEcs, error)
-	CreateEcsResource(ctx context.Context, params *model.CreateEcsResourceReq) error
+	CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error
+	DeleteEcsResource(ctx context.Context, instanceId string) error
 }
 
 type ecsDAO struct {
@@ -48,9 +49,9 @@ func NewEcsDAO(db *gorm.DB) EcsDAO {
 	}
 }
 
-// CreateEcsResource implements EcsDAO.
-func (e *ecsDAO) CreateEcsResource(ctx context.Context, params *model.CreateEcsResourceReq) error {
-	if err := e.db.Create(params).Error; err != nil {
+// CreateEcsResource 创建ECS资源
+func (e *ecsDAO) CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
+	if err := e.db.WithContext(ctx).Create(resource).Error; err != nil {
 		return err
 	}
 	return nil
@@ -65,7 +66,42 @@ func (e *ecsDAO) GetEcsResourceById(ctx context.Context, id int) (*model.Resourc
 	return &result, nil
 }
 
-// ListEcsResources implements EcsDAO.
-func (e *ecsDAO) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error) {
-	panic("unimplemented")
+// ListEcsResources 获取ECS资源列表
+func (e *ecsDAO) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) ([]*model.ResourceEcs, error) {
+	var result []*model.ResourceEcs
+	var total int64
+
+	query := e.db.WithContext(ctx).Model(&model.ResourceEcs{})
+
+	if req.Provider != "" {
+		query = query.Where("provider = ?", req.Provider)
+	}
+
+	if req.Region != "" {
+		query = query.Where("region = ?", req.Region)
+	}
+
+	if req.Search != "" {
+		query = query.Where("name LIKE ? OR instance_id LIKE ?", "%"+req.Search+"%", "%"+req.Search+"%")
+	}
+
+	// 获取总数
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	// 分页查询
+	offset := (req.Page - 1) * req.Size
+	if err := query.Offset(offset).Limit(req.Size).Find(&result).Error; err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (e *ecsDAO) DeleteEcsResource(ctx context.Context, instanceId string) error {
+	if err := e.db.WithContext(ctx).Where("id = ?", instanceId).Delete(&model.ResourceEcs{}).Error; err != nil {
+		return err
+	}
+	return nil
 }

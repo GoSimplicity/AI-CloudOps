@@ -31,8 +31,8 @@ import "time"
 type ResourceBase struct {
 	Model
 
-	InstanceName       string        `json:"instance_name" gorm:"uniqueIndex;type:varchar(100);comment:资源实例名称"`
-	InstanceId         string        `json:"instance_id" gorm:"uniqueIndex;type:varchar(100);comment:资源实例ID"`
+	InstanceName       string        `json:"instance_name" gorm:"type:varchar(100);comment:资源实例名称"`
+	InstanceId         string        `json:"instance_id" gorm:"type:varchar(100);comment:资源实例ID"`
 	Provider           CloudProvider `json:"cloud_provider" gorm:"type:varchar(50);comment:云厂商"`
 	RegionId           string        `json:"region_id" gorm:"type:varchar(50);comment:地区，如cn-hangzhou"`
 	ZoneId             string        `json:"zone_id" gorm:"type:varchar(100);comment:可用区ID"`
@@ -50,7 +50,7 @@ type ResourceBase struct {
 	// 资源创建和管理标志
 	CreateByOrder bool      `json:"create_by_order" gorm:"comment:是否由工单创建"`
 	LastSyncTime  time.Time `json:"last_sync_time" gorm:"comment:最后同步时间"`
-	TreeNodeID    uint      `json:"tree_node_id" gorm:"comment:关联的服务树节点ID"`
+	TreeNodeID    int       `json:"tree_node_id" gorm:"comment:关联的服务树节点ID"`
 }
 
 // ComputeResource 计算资源通用属性
@@ -60,7 +60,7 @@ type ComputeResource struct {
 	Memory       int    `json:"memory" gorm:"comment:内存大小,单位GiB"`
 	InstanceType string `json:"instanceType" gorm:"type:varchar(100);comment:实例类型"`
 	ImageId      string `json:"imageId" gorm:"type:varchar(100);comment:镜像ID"`
-	IpAddr       string `json:"ipAddr" gorm:"type:varchar(45);uniqueIndex;comment:主IP地址"`
+	IpAddr       string `json:"ipAddr" gorm:"type:varchar(45);comment:主IP地址"`
 	Port         int    `json:"port" gorm:"comment:端口号;default:22"`
 	HostName     string `json:"hostname" gorm:"comment:主机名"`
 	Password     string `json:"password" gorm:"type:varchar(500);comment:密码"`

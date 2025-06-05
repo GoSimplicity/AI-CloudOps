@@ -12,6 +12,7 @@ export interface ResourceEcs {
   zone_id: string;
   vpc_id: string;
   status: string;
+  imageName: string;
   creation_time: string;
   environment: string;
   instance_charge_type: string;
@@ -57,12 +58,12 @@ export interface CreateEcsResourceReq {
   dataDiskSize: number; // 数据盘大小
   dataDiskCategory: string; // 数据盘类型
   dryRun: boolean; // 是否仅预览而不创建
-  tags: Record<string, string>;
+  tags: string[];
 }
 
 export interface ListEcsResourceReq {
-  pageNumber: number;
-  pageSize: number;
+  page: number;
+  size: number;
   provider: string;
   region: string;
 }
@@ -548,7 +549,7 @@ export interface TreeNodeDeleteReq {
 
 // 树结构相关接口
 export function getTreeList(req: TreeNodeListReq) {
-  return requestClient.post('/tree/list', req);
+  return requestClient.get('/tree/list', { params: req });
 }
 
 export function getNodeDetail(id: number) {

@@ -71,7 +71,7 @@ type TreeNodeResource struct {
 	ID           int    `gorm:"primaryKey;autoIncrement"`
 	TreeNodeID   int    `gorm:"index:idx_node_resource;not null;comment:节点ID"`
 	ResourceID   string `gorm:"index:idx_node_resource;not null;comment:资源ID"`
-	ResourceType string `gorm:"type:varchar(50);not null;comment:资源类型"`
+	ResourceType string `gorm:"type:varchar(50);not null;comment:资源类型，可选：ecs,elb,rds,local"`
 }
 
 // ==================== 请求结构体 ====================
@@ -164,13 +164,13 @@ type BatchRemoveNodeMembersReq struct {
 
 // GetNodeResourcesReq 获取节点资源请求
 type GetNodeResourcesReq struct {
-	ID int `json:"id" binding:"required"`
+	ID int `json:"id" form:"id" binding:"required"`
 }
 
 // BindResourceReq 绑定资源请求
 type BindResourceReq struct {
 	NodeID       int      `json:"nodeId" binding:"required"`
-	ResourceType string   `json:"resourceType" binding:"required"`
+	ResourceType string   `json:"resourceType" binding:"omitempty,oneof=ecs elb rds local"`
 	ResourceIDs  []string `json:"resourceIds" binding:"required,min=1"`
 }
 

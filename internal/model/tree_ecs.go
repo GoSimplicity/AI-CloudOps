@@ -31,6 +31,7 @@ type ResourceEcs struct {
 	OsType            string     `json:"osType" gorm:"type:varchar(50);comment:操作系统类型,如win,linux"`
 	VmType            int        `json:"vmType" gorm:"default:1;comment:设备类型,1=虚拟设备,2=物理设备"`
 	OSName            string     `json:"osName" gorm:"type:varchar(100);comment:操作系统名称"`
+	ImageName         string     `json:"imageName" gorm:"type:varchar(100);comment:镜像名称"`
 	Disk              int        `json:"disk" gorm:"comment:系统盘大小,单位GiB"`
 	NetworkInterfaces StringList `json:"networkInterfaces" gorm:"type:varchar(500);comment:弹性网卡ID集合"`
 	DiskIds           StringList `json:"diskIds" gorm:"type:varchar(500);comment:云盘ID集合"`
@@ -42,40 +43,45 @@ type ResourceEcs struct {
 
 // CreateEcsResourceReq ECS创建参数
 type CreateEcsResourceReq struct {
-	Provider           CloudProvider     `json:"provider" binding:"required"`
-	Region             string            `json:"region" binding:"required"`
-	ZoneId             string            `json:"zoneId" binding:"required"`
-	InstanceType       string            `json:"instanceType" binding:"required"`
-	ImageId            string            `json:"imageId" binding:"required"`
-	VSwitchId          string            `json:"vSwitchId" binding:"required"`
-	SecurityGroupIds   []string          `json:"securityGroupIds" binding:"required"`
-	Amount             int               `json:"amount" binding:"required,min=1,max=100"` // 创建数量
-	Hostname           string            `json:"hostname" binding:"required"`             // 主机名
-	Password           string            `json:"password" binding:"required"`             // 密码
-	InstanceName       string            `json:"instanceName"`                            // 实例名称
-	TreeNodeId         int               `json:"treeNodeId"`
-	Description        string            `json:"description"`
-	SystemDiskCategory string            `json:"systemDiskCategory"`
-	AutoRenewPeriod    int               `json:"autoRenewPeriod"`
-	PeriodUnit         string            `json:"periodUnit"`         // Month 月 Year 年
-	Period             int               `json:"period"`             // 购买时长
-	AutoRenew          bool              `json:"autoRenew"`          // 是否自动续费
-	InstanceChargeType string            `json:"instanceChargeType"` // 付费类型
-	SpotStrategy       string            `json:"spotStrategy"`       // NoSpot 默认值 表示正常按量付费 SpotAsPriceGo 表示自动竞价
-	SpotDuration       int               `json:"spotDuration"`       // 竞价时长
-	SystemDiskSize     int               `json:"systemDiskSize"`     // 系统盘大小
-	DataDiskSize       int               `json:"dataDiskSize"`       // 数据盘大小
-	DataDiskCategory   string            `json:"dataDiskCategory"`   // 数据盘类型
-	DryRun             bool              `json:"dryRun"`             // 是否仅预览而不创建
-	Tags               map[string]string `json:"tags"`
+	Provider           CloudProvider `json:"provider" binding:"required"`           // 云提供商
+	Region             string        `json:"region"`                                // 区域
+	ZoneId             string        `json:"zoneId"`                                // 可用区ID
+	InstanceType       string        `json:"instanceType"`                          // 实例类型
+	ImageId            string        `json:"imageId"`                               // 镜像ID
+	VSwitchId          string        `json:"vSwitchId"`                             // 交换机ID
+	SecurityGroupIds   []string      `json:"securityGroupIds"`                      // 安全组ID
+	Amount             int           `json:"amount"`                                // 创建数量
+	Hostname           string        `json:"hostname" binding:"required"`           // 主机名
+	Password           string        `json:"password" binding:"required"`           // 密码
+	InstanceName       string        `json:"instanceName"`                          // 实例名称
+	TreeNodeId         int           `json:"treeNodeId"`                            // 服务树节点ID
+	Description        string        `json:"description"`                           // 描述
+	SystemDiskCategory string        `json:"systemDiskCategory"`                    // 系统盘类型
+	AutoRenewPeriod    int           `json:"autoRenewPeriod"`                       // 自动续费周期
+	PeriodUnit         string        `json:"periodUnit"`                            // Month 月 Year 年
+	Period             int           `json:"period"`                                // 购买时长
+	AutoRenew          bool          `json:"autoRenew"`                             // 是否自动续费
+	InstanceChargeType string        `json:"instanceChargeType"`                    // 付费类型
+	SpotStrategy       string        `json:"spotStrategy"`                          // NoSpot 默认值 表示正常按量付费 SpotAsPriceGo 表示自动竞价
+	SpotDuration       int           `json:"spotDuration"`                          // 竞价时长
+	SystemDiskSize     int           `json:"systemDiskSize"`                        // 系统盘大小
+	DataDiskSize       int           `json:"dataDiskSize"`                          // 数据盘大小
+	DataDiskCategory   string        `json:"dataDiskCategory"`                      // 数据盘类型
+	DryRun             bool          `json:"dryRun"`                                // 是否仅预览而不创建
+	Tags               StringList    `json:"tags"`                                  // 资源标签
+	OsType             string        `json:"osType"`                                // 操作系统类型,如win,linux
+	ImageName          string        `json:"imageName"`                             // 镜像名称
+	AuthMode           string        `json:"authMode" binding:"oneof=password key"` // 认证方式,password或key
+	Key                string        `json:"key"`                                   // 密钥内容,当authMode为key时使用
+	IpAddr             string        `json:"ipAddr"`                                // IP地址
+	Port               int           `json:"port"`                                  // SSH端口号
 }
 
 // ListEcsResourcesReq ECS资源列表查询参数
 type ListEcsResourcesReq struct {
-	PageNumber int           `form:"pageNumber" json:"pageNumber"`
-	PageSize   int           `form:"pageSize" json:"pageSize"`
-	Provider   CloudProvider `form:"provider" json:"provider"`
-	Region     string        `form:"region" json:"region"`
+	ListReq
+	Provider CloudProvider `form:"provider" json:"provider"`
+	Region   string        `form:"region" json:"region"`
 }
 
 // ResourceECSListResp ECS资源列表响应

@@ -362,9 +362,10 @@
             placeholder="请选择资源类型"
             @change="onResourceTypeChange"
           >
-            <a-select-option v-for="type in resourceTypes" :key="type.value" :value="type.value">
-              {{ type.label }}
-            </a-select-option>
+            <a-select-option value="ecs">云服务器</a-select-option>
+            <a-select-option value="elb">负载均衡</a-select-option>
+            <a-select-option value="rds">数据库</a-select-option>
+            <a-select-option value="local">本地集群</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="选择资源" name="resourceIds">
@@ -527,7 +528,6 @@ import {
   getNodeResources,
   bindResource,
   unbindResource,
-  getResourceTypes,
   type TreeNodeDetail,
   type TreeNodeListItem,
   type TreeStatistics,
@@ -541,6 +541,8 @@ import {
   type BindResourceParams,
   type UnbindResourceParams,
 } from '#/api/core/tree_node';
+
+import { getEcsResourceList, type ListEcsResourceReq } from '#/api/core/tree';
 
 import { getAllUsers } from '#/api/core/user';
 
@@ -598,7 +600,6 @@ const memberUsers = ref<UserInfo[]>([]);
 const availableUsers = ref<UserInfo[]>([]);
 const allUsers = ref<UserInfo[]>([]);
 const availableResources = ref<any[]>([]);
-const resourceTypes = ref<{ label: string; value: string }[]>([]);
 const currentResourceDetail = ref<TreeNodeResource>({} as TreeNodeResource);
 
 // 表单状态
@@ -807,61 +808,139 @@ const loadTreeData = async () => {
     const params: GetTreeListParams = {};
     const response = await getTreeList(params);
     
+    // 更严格的数据验证
+    console.log('原始API响应:', response);
+    
     // 检查响应数据结构
-    const data = response.data || response;
+    const data = response?.data || response;
+    if (!data) {
+      console.error('API返回空数据:', response);
+      treeData.value = [];
+      return;
+    }
+    
     const items = data.items || data;
     
+    // 确保 items 是数组
     if (!Array.isArray(items)) {
-      console.error('API返回的数据格式不正确:', response);
-      message.error('数据格式错误');
+      console.error('API返回的数据不是数组:', items);
+      console.error('完整响应:', response);
+      treeData.value = [];
+      message.error('数据格式错误：期望数组格式');
+      return;
+    }
+    
+    // 验证数组中的元素
+    const validItems = items.filter(item => {
+      if (!item || typeof item !== 'object') {
+        console.warn('跳过无效的节点数据:', item);
+        return false;
+      }
+      if (!item.id || !item.name) {
+        console.warn('跳过缺少必要字段的节点:', item);
+        return false;
+      }
+      return true;
+    });
+    
+    if (validItems.length === 0) {
+      console.warn('没有有效的节点数据');
+      treeData.value = [];
       return;
     }
     
     // 处理树节点数据
     const processNode = (node: TreeNodeListItem) => {
-      nodeDetails.value[node.id] = {
-        id: node.id,
-        name: node.name,
-        parentId: node.parentId,
-        level: node.level,
-        description: '',
-        creatorId: node.creatorId,
-        status: node.status,
-        isLeaf: node.isLeaf,
-        createdAt: node.created_at,
-        updatedAt: node.updated_at,
-        creatorName: '',
-        parentName: '',
-        childCount: node.children?.length || 0,
-        adminUsers: [],
-        memberUsers: [],
-        resourceCount: 0,
-      };
-      
-      if (node.children && node.children.length > 0) {
-        node.children.forEach(processNode);
+      try {
+        // 确保节点有必要的属性
+        const processedNode = {
+          id: node.id || 0,
+          name: node.name || '未命名节点',
+          parentId: node.parentId || 0,
+          level: node.level || 0,
+          description: node.description || '',
+          creatorId: node.creatorId || 0,
+          status: node.status || 'active',
+          isLeaf: Boolean(node.isLeaf),
+          createdAt: node.created_at || '',
+          updatedAt: node.updated_at || '',
+          creatorName: '',
+          parentName: '',
+          childCount: Array.isArray(node.children) ? node.children.length : 0,
+          adminUsers: [],
+          memberUsers: [],
+          resourceCount: 0,
+        };
+        
+        nodeDetails.value[processedNode.id] = processedNode;
+        
+        // 递归处理子节点
+        if (Array.isArray(node.children) && node.children.length > 0) {
+          node.children.forEach(child => {
+            if (child && typeof child === 'object') {
+              processNode(child);
+            }
+          });
+        }
+      } catch (error) {
+        console.error('处理节点时出错:', node, error);
       }
     };
     
-    items.forEach(processNode);
+    // 处理所有有效节点
+    validItems.forEach(processNode);
     
     // 构建树形结构
-    const transformNode = (node: TreeNodeListItem): any => ({
-      key: node.id.toString(),
-      title: node.name,
-      isLeaf: node.isLeaf,
-      children: node.children && node.children.length > 0 
-        ? node.children.map(transformNode) 
-        : undefined
-    });
+    const transformNode = (node: TreeNodeListItem): any => {
+      try {
+        const transformed = {
+          key: String(node.id || 0),
+          title: node.name || '未命名节点',
+          isLeaf: Boolean(node.isLeaf),
+          children: undefined as any
+        };
+        
+        // 处理子节点
+        if (Array.isArray(node.children) && node.children.length > 0) {
+          const validChildren = node.children.filter(child => 
+            child && typeof child === 'object' && child.id && child.name
+          );
+          
+          if (validChildren.length > 0) {
+            transformed.children = validChildren.map(transformNode);
+          }
+        }
+        
+        return transformed;
+      } catch (error) {
+        console.error('转换节点时出错:', node, error);
+        return {
+          key: String(node.id || Math.random()),
+          title: '错误节点',
+          isLeaf: true
+        };
+      }
+    };
     
-    treeData.value = items.map(transformNode);
-    updateParentNodeOptions(items);
+    // 转换为树形数据
+    const transformedData = validItems.map(transformNode);
     
-    console.log('树形数据加载成功:', treeData.value);
+    // 最终验证
+    if (!Array.isArray(transformedData)) {
+      console.error('转换后的数据不是数组:', transformedData);
+      treeData.value = [];
+      return;
+    }
+    
+    treeData.value = transformedData;
+    updateParentNodeOptions(validItems);
+    
+    console.log('树形数据加载成功:', treeData.value.length, '个根节点');
+    
   } catch (error) {
     console.error('加载树形数据失败:', error);
     message.error('加载树形数据失败');
+    treeData.value = [];
   } finally {
     loading.value = false;
   }
@@ -892,7 +971,7 @@ const loadNodeResources = async (nodeId: number) => {
   resourceLoading.value = true;
   try {
     const res = await getNodeResources(nodeId);
-    nodeResources.value = res;
+    nodeResources.value = res.items;
   } catch (error) {
     console.error('获取节点资源失败:', error);
     message.error('获取节点资源失败');
@@ -923,18 +1002,6 @@ const loadNodeMembers = async (nodeId: number) => {
     memberUsers.value = [];
   } finally {
     memberLoading.value = false;
-  }
-};
-
-const loadResourceTypes = async () => {
-  try {
-    const res = await getResourceTypes();
-    resourceTypes.value = res.map((type: any) => ({
-      label: type.name,
-      value: type.value,
-    }));
-  } catch (error) {
-    console.error('获取资源类型失败:', error);
   }
 };
 
@@ -978,7 +1045,6 @@ const refreshData = async () => {
   await Promise.all([
     loadTreeData(),
     loadStatistics(),
-    loadResourceTypes(),
     loadAllUsers(),
   ]);
   
@@ -1176,13 +1242,11 @@ const showBindResourceModal = () => {
     return;
   }
   
-  bindResourceForm.resourceType = resourceTypes.value[0]?.value || '';
+  bindResourceForm.resourceType = '';
   bindResourceForm.resourceIds = [];
   bindResourceModalVisible.value = true;
   
-  if (bindResourceForm.resourceType) {
-    loadAvailableResources(bindResourceForm.resourceType);
-  }
+  loadAvailableResources(bindResourceForm.resourceType);
 };
 
 const onResourceTypeChange = (resourceType: string) => {
@@ -1190,15 +1254,18 @@ const onResourceTypeChange = (resourceType: string) => {
   loadAvailableResources(resourceType);
 };
 
-const loadAvailableResources = async (resourceType: string) => {
+// 获取可用资源
+const loadAvailableResources = async (_: string) => {
   availableResourceLoading.value = true;
   try {
-    // 这里应该调用实际的API获取可用资源
-    // const res = await getAvailableResources(resourceType);
-    // availableResources.value = res;
-    
-    // 临时模拟数据
-    availableResources.value = [];
+    const params: ListEcsResourceReq = {
+      page: 1,
+      size: 100,
+      provider: 'local',
+      region: '',
+    };
+    const res = await getEcsResourceList(params);
+    availableResources.value = res.items;
   } catch (error) {
     console.error('获取可用资源失败:', error);
     message.error('获取可用资源失败');

@@ -42,16 +42,16 @@ type ResourceElb struct {
 
 // ElbCreationParams ELB创建参数
 type ElbCreationParams struct {
-	Provider          CloudProvider     `json:"provider" binding:"required"`
-	Region            string            `json:"region" binding:"required"`
-	ZoneId            string            `json:"zoneId" binding:"required"`
-	LoadBalancerType  string            `json:"loadBalancerType" binding:"required"`
-	VpcId             string            `json:"vpcId" binding:"required"`
-	AddressType       string            `json:"addressType" binding:"required"`
-	BandwidthCapacity int               `json:"bandwidthCapacity"`
-	TreeNodeId        uint              `json:"treeNodeId" binding:"required"`
-	Description       string            `json:"description"`
-	Tags              map[string]string `json:"tags"`
+	Provider          CloudProvider `json:"provider" binding:"required"`
+	Region            string        `json:"region" binding:"required"`
+	ZoneId            string        `json:"zoneId" binding:"required"`
+	LoadBalancerType  string        `json:"loadBalancerType" binding:"required"`
+	VpcId             string        `json:"vpcId" binding:"required"`
+	AddressType       string        `json:"addressType" binding:"required"`
+	BandwidthCapacity int           `json:"bandwidthCapacity"`
+	TreeNodeId        uint          `json:"treeNodeId" binding:"required"`
+	Description       string        `json:"description"`
+	Tags              StringList    `json:"tags"`
 }
 
 // ListElbResourcesReq ELB资源列表查询参数

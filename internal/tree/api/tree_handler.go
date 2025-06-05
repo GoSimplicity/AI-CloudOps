@@ -67,7 +67,6 @@ func (h *TreeHandler) RegisterRouters(server *gin.Engine) {
 		treeGroup.GET("/resources/:id", h.GetNodeResources)
 		treeGroup.POST("/resource/bind", h.BindResource)
 		treeGroup.DELETE("/resource/unbind", h.UnbindResource)
-		treeGroup.GET("/resource/types", h.GetResourceTypes)
 	}
 }
 
@@ -246,6 +245,7 @@ func (h *TreeHandler) GetNodeResources(ctx *gin.Context) {
 		utils.ErrorWithMessage(ctx, "无效的节点ID")
 		return
 	}
+
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -268,12 +268,5 @@ func (h *TreeHandler) UnbindResource(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UnbindResource(ctx, &req)
-	})
-}
-
-// GetResourceTypes 获取资源类型列表
-func (h *TreeHandler) GetResourceTypes(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetResourceTypes(ctx)
 	})
 }

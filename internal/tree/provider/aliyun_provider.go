@@ -126,17 +126,17 @@ func (a *AliyunProviderImpl) CreateInstance(ctx context.Context, region string, 
 		}
 	}
 
-	// 设置标签
-	if len(config.Tags) > 0 {
-		tags := make([]*ecs.RunInstancesRequestTag, 0, len(config.Tags))
-		for k, v := range config.Tags {
-			tags = append(tags, &ecs.RunInstancesRequestTag{
-				Key:   tea.String(k),
-				Value: tea.String(v),
-			})
-		}
-		request.Tag = tags
-	}
+	// // 设置标签
+	// if len(config.Tags) > 0 {
+	// 	tags := make([]*ecs.RunInstancesRequestTag, 0, len(config.Tags))
+	// 	for k, v := range config.Tags {
+	// 		tags = append(tags, &ecs.RunInstancesRequestTag{
+	// 			Key:   tea.String(strconv.Itoa(k)),
+	// 			Value: tea.String(v),
+	// 		})
+	// 	}
+	// 	request.Tag = tags
+	// }
 
 	a.logger.Info("开始创建ECS实例", zap.String("region", region), zap.Any("config", config))
 	response, err := client.RunInstances(request)

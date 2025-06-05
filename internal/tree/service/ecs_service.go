@@ -28,6 +28,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
@@ -37,7 +39,7 @@ import (
 
 type EcsService interface {
 	// 资源管理
-	ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error)
+	ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (model.ListResp[*model.ResourceEcs], error)
 	GetEcsResourceById(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceECSDetailResp, error)
 	CreateEcsResource(ctx context.Context, params *model.CreateEcsResourceReq) error
 	StartEcsResource(ctx context.Context, req *model.StartEcsReq) error
@@ -72,7 +74,27 @@ func NewEcsService(logger *zap.Logger, dao dao.EcsDAO, providerFactory *provider
 // CreateEcsResource 创建ECS资源
 func (e *ecsService) CreateEcsResource(ctx context.Context, params *model.CreateEcsResourceReq) error {
 	if params.Provider == model.CloudProviderLocal {
-		err := e.dao.CreateEcsResource(ctx, params)
+		err := e.dao.CreateEcsResource(ctx, &model.ResourceEcs{
+			ComputeResource: model.ComputeResource{
+				ResourceBase: model.ResourceBase{
+					Description:  params.Description,
+					TreeNodeID:   params.TreeNodeId,
+					Tags:         params.Tags,
+					LastSyncTime: time.Now(),
+					Provider:     params.Provider,
+					InstanceName: params.InstanceName,
+				},
+				InstanceType: params.InstanceType,
+				HostName:     params.Hostname,
+				Password:     params.Password,
+				IpAddr:       params.IpAddr,
+				Port:         params.Port,
+				AuthMode:     params.AuthMode,
+				Key:          params.Key,
+			},
+			OsType:    params.OsType,
+			ImageName: params.ImageName,
+		})
 		if err != nil {
 			e.logger.Error("[CreateEcsResource] 创建ECS资源失败", zap.Error(err))
 			return err
@@ -159,6 +181,15 @@ func (e *ecsService) RestartEcsResource(ctx context.Context, req *model.RestartE
 
 // DeleteEcsResource 删除ECS资源
 func (e *ecsService) DeleteEcsResource(ctx context.Context, req *model.DeleteEcsReq) error {
+	if req.Provider == model.CloudProviderLocal {
+		err := e.dao.DeleteEcsResource(ctx, req.InstanceId)
+		if err != nil {
+			e.logger.Error("[DeleteEcsResource] 删除ECS资源失败", zap.Error(err))
+			return fmt.Errorf("[DeleteEcsResource] 删除ECS资源失败: %w", err)
+		}
+		return nil
+	}
+
 	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		return fmt.Errorf("[DeleteEcsResource] 获取云提供商失败: %w", err)
@@ -179,6 +210,21 @@ func (e *ecsService) DeleteEcsResource(ctx context.Context, req *model.DeleteEcs
 
 // GetEcsResourceById 获取ECS资源详情
 func (e *ecsService) GetEcsResourceById(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceECSDetailResp, error) {
+	if req.Provider == model.CloudProviderLocal {
+		intId, err := strconv.ParseInt(req.InstanceId, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("[GetEcsResourceById] 转换实例ID失败: %w", err)
+		}
+		resource, err := e.dao.GetEcsResourceById(ctx, int(intId))
+		if err != nil {
+			e.logger.Error("[GetEcsResourceById] 获取ECS资源失败", zap.Error(err))
+			return nil, fmt.Errorf("[GetEcsResourceById] 获取ECS资源失败: %w", err)
+		}
+		return &model.ResourceECSDetailResp{
+			Data: resource,
+		}, nil
+	}
+
 	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		return nil, fmt.Errorf("[GetEcsResourceById] 获取云提供商失败: %w", err)
@@ -196,21 +242,41 @@ func (e *ecsService) GetEcsResourceById(ctx context.Context, req *model.GetEcsDe
 }
 
 // ListEcsResources 获取ECS资源列表
-func (e *ecsService) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (*model.PageResp, error) {
+func (e *ecsService) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (model.ListResp[*model.ResourceEcs], error) {
+	if req.Provider == model.CloudProviderLocal {
+		resources, err := e.dao.ListEcsResources(ctx, req)
+		if err != nil {
+			return model.ListResp[*model.ResourceEcs]{
+				Total: 0,
+				Items: []*model.ResourceEcs{},
+			}, err
+		}
+		return model.ListResp[*model.ResourceEcs]{
+			Total: int64(len(resources)),
+			Items: resources,
+		}, nil
+	}
+
 	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
 	if err != nil {
-		return nil, fmt.Errorf("[ListEcsResources] 获取云提供商失败: %w", err)
+		return model.ListResp[*model.ResourceEcs]{
+			Total: 0,
+			Items: []*model.ResourceEcs{},
+		}, fmt.Errorf("[ListEcsResources] 获取云提供商失败: %w", err)
 	}
 
-	resources, total, err := cloudProvider.ListInstances(ctx, req.Region, req.PageSize, req.PageNumber)
+	resources, total, err := cloudProvider.ListInstances(ctx, req.Region, req.Size, req.Page)
 	if err != nil {
 		e.logger.Error("[ListEcsResources] 获取ECS资源列表失败", zap.Error(err))
-		return nil, err
+		return model.ListResp[*model.ResourceEcs]{
+			Total: 0,
+			Items: []*model.ResourceEcs{},
+		}, err
 	}
 
-	return &model.PageResp{
+	return model.ListResp[*model.ResourceEcs]{
 		Total: total,
-		Data:  resources,
+		Items: resources,
 	}, nil
 }
 

@@ -50,7 +50,6 @@ func InitTables(db *gorm.DB) error {
 		&model.ResourceRds{},
 
 		// k8s
-
 		&model.K8sCluster{},
 		&model.K8sProject{},
 		&model.K8sYamlTask{},
