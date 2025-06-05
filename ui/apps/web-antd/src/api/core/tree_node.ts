@@ -44,6 +44,7 @@ export interface TreeNodeListItem {
   name: string;
   parentId: number;
   level: number;
+  description: string;
   creatorId: number;
   status: string;
   children: TreeNodeListItem[];
@@ -209,9 +210,4 @@ export const bindResource = (data: BindResourceParams) => {
 // 解绑资源
 export const unbindResource = (data: UnbindResourceParams) => {
   return requestClient.delete('/tree/resource/unbind', { data });
-};
-
-// 获取资源类型
-export const getResourceTypes = () => {
-  return requestClient.get('/tree/resource/types');
 };

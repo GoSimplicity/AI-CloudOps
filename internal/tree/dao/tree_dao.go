@@ -53,10 +53,9 @@ type TreeDAO interface {
 	UpdateNodeStatus(ctx context.Context, id int, status string) error
 	DeleteNode(ctx context.Context, id int) error
 
-	GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResourceResp, error)
+	GetNodeResources(ctx context.Context, nodeId int) ([]*model.ResourceBase, error)
 	BindResource(ctx context.Context, nodeId int, resourceType string, resourceIds []string) error
 	UnbindResource(ctx context.Context, nodeId int, resourceType string, resourceId string) error
-	GetResourceTypes(ctx context.Context) ([]string, error)
 
 	GetNodeMembers(ctx context.Context, nodeId int, userId int, memberType string) ([]*model.User, error)
 	AddNodeMember(ctx context.Context, nodeId int, userId int, memberType string) error
@@ -773,27 +772,36 @@ func (t *treeDAO) DeleteNode(ctx context.Context, id int) error {
 }
 
 // GetNodeResources 获取节点绑定的资源列表
-func (t *treeDAO) GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResourceResp, error) {
-	var resources []*model.TreeNodeResource
-	if err := t.getDB(ctx).Where("tree_node_id = ?", nodeId).Find(&resources).Error; err != nil {
-		t.logger.Error("获取节点资源失败", zap.Int("nodeId", nodeId), zap.Error(err))
-		return nil, fmt.Errorf("获取节点资源失败: %w", err)
+func (t *treeDAO) GetNodeResources(ctx context.Context, nodeId int) ([]*model.ResourceBase, error) {
+	if err := t.checkNodeExists(ctx, nodeId); err != nil {
+		return nil, err
 	}
 
-	// 转换为响应结构
-	resp := make([]*model.TreeNodeResourceResp, 0, len(resources))
-	for _, resource := range resources {
-		resp = append(resp, &model.TreeNodeResourceResp{
-			ID:           resource.ID,
-			ResourceID:   resource.ResourceID,
-			ResourceType: resource.ResourceType,
-			// 这里可以根据实际需求补充资源详细信息的获取逻辑
-			ResourceName:   resource.ResourceID, // 暂时使用资源ID作为名称
-			ResourceStatus: "unknown",           // 需要根据实际资源类型查询具体状态
-		})
+	// 获取节点资源关系
+	var nodeResources []model.TreeNodeResource
+	if err := t.getDB(ctx).Where("tree_node_id = ?", nodeId).Find(&nodeResources).Error; err != nil {
+		t.logger.Error("获取节点资源关系失败", zap.Int("nodeId", nodeId), zap.Error(err))
+		return nil, fmt.Errorf("获取节点资源关系失败: %w", err)
 	}
 
-	return resp, nil
+	if len(nodeResources) == 0 {
+		return []*model.ResourceBase{}, nil
+	}
+
+	// 收集所有资源ID
+	resourceIDs := make([]string, len(nodeResources))
+	for i, nr := range nodeResources {
+		resourceIDs[i] = nr.ResourceID
+	}
+
+	// 查询资源基本信息
+	var resources []*model.ResourceBase
+	if err := t.getDB(ctx).Where("id IN ?", resourceIDs).Find(&resources).Error; err != nil {
+		t.logger.Error("获取资源基本信息失败", zap.Strings("resourceIDs", resourceIDs), zap.Error(err))
+		return nil, fmt.Errorf("获取资源基本信息失败: %w", err)
+	}
+
+	return resources, nil
 }
 
 // BindResource 绑定资源到节点
@@ -803,61 +811,60 @@ func (t *treeDAO) BindResource(ctx context.Context, nodeId int, resourceType str
 		return err
 	}
 
-	// 验证参数
-	if resourceType == "" {
-		return errors.New("资源类型不能为空")
-	}
-	if len(resourceIds) == 0 {
-		return errors.New("资源ID列表不能为空")
-	}
-
-	// 使用事务确保操作的原子性
 	return t.Transaction(ctx, func(txCtx context.Context) error {
 		db := t.getDB(txCtx)
 
+		// 批量检查已存在的绑定关系
+		var existingBindings []model.TreeNodeResource
+		if err := db.Where("tree_node_id = ? AND resource_type = ? AND resource_id IN ?",
+			nodeId, resourceType, resourceIds).Find(&existingBindings).Error; err != nil {
+			t.logger.Error("查询现有资源绑定失败",
+				zap.Int("nodeId", nodeId),
+				zap.String("resourceType", resourceType),
+				zap.Error(err))
+			return fmt.Errorf("查询现有资源绑定失败: %w", err)
+		}
+
+		// 创建已存在绑定的映射，用于快速查找
+		existingMap := make(map[string]bool)
+		for _, binding := range existingBindings {
+			existingMap[binding.ResourceID] = true
+		}
+
+		// 批量插入新的绑定关系
+		var newBindings []model.TreeNodeResource
 		for _, resourceId := range resourceIds {
 			if strings.TrimSpace(resourceId) == "" {
-				continue // 跳过空的资源ID
+				t.logger.Warn("跳过空资源ID", zap.Int("nodeId", nodeId))
+				continue
 			}
 
-			// 检查资源绑定是否已存在
-			var count int64
-			if err := db.Model(&model.TreeNodeResource{}).
-				Where("tree_node_id = ? AND resource_id = ? AND resource_type = ?",
-					nodeId, resourceId, resourceType).
-				Count(&count).Error; err != nil {
-				t.logger.Error("检查资源绑定失败",
-					zap.Int("nodeId", nodeId),
-					zap.String("resourceId", resourceId),
-					zap.String("resourceType", resourceType),
-					zap.Error(err))
-				return fmt.Errorf("检查资源绑定失败: %w", err)
-			}
-
-			if count > 0 {
-				t.logger.Warn("资源已存在绑定关系",
+			if existingMap[resourceId] {
+				t.logger.Debug("资源已存在绑定关系",
 					zap.Int("nodeId", nodeId),
 					zap.String("resourceId", resourceId),
 					zap.String("resourceType", resourceType))
 				continue
 			}
 
-			// 创建资源绑定关系
-			resource := &model.TreeNodeResource{
+			newBindings = append(newBindings, model.TreeNodeResource{
 				TreeNodeID:   nodeId,
 				ResourceID:   resourceId,
 				ResourceType: resourceType,
-			}
-			if err := db.Create(resource).Error; err != nil {
-				t.logger.Error("创建资源绑定关系失败",
-					zap.Int("nodeId", nodeId),
-					zap.String("resourceId", resourceId),
-					zap.String("resourceType", resourceType),
-					zap.Error(err))
-				return fmt.Errorf("创建资源绑定关系失败: %w", err)
-			}
+			})
 		}
 
+		// 如果有新的绑定关系，批量创建
+		if len(newBindings) > 0 {
+			if err := db.Create(&newBindings).Error; err != nil {
+				t.logger.Error("批量创建资源绑定关系失败",
+					zap.Int("nodeId", nodeId),
+					zap.String("resourceType", resourceType),
+					zap.Int("count", len(newBindings)),
+					zap.Error(err))
+				return fmt.Errorf("批量创建资源绑定关系失败: %w", err)
+			}
+		}
 		return nil
 	})
 }
@@ -869,46 +876,43 @@ func (t *treeDAO) UnbindResource(ctx context.Context, nodeId int, resourceType s
 		return err
 	}
 
-	// 验证参数
-	if resourceType == "" {
-		return errors.New("资源类型不能为空")
-	}
-	if strings.TrimSpace(resourceId) == "" {
-		return errors.New("资源ID不能为空")
-	}
+	return t.Transaction(ctx, func(txCtx context.Context) error {
+		db := t.getDB(txCtx)
+		var count int64
+		if err := db.Model(&model.TreeNodeResource{}).
+			Where("tree_node_id = ? AND resource_type = ? AND resource_id = ?",
+				nodeId, resourceType, resourceId).
+			Count(&count).Error; err != nil {
+			t.logger.Error("检查资源绑定关系失败",
+				zap.Int("nodeId", nodeId),
+				zap.String("resourceType", resourceType),
+				zap.String("resourceId", resourceId),
+				zap.Error(err))
+			return fmt.Errorf("检查资源绑定关系失败: %w", err)
+		}
 
-	db := t.getDB(ctx)
-	result := db.Where("tree_node_id = ? AND resource_type = ? AND resource_id = ?",
-		nodeId, resourceType, resourceId).Delete(&model.TreeNodeResource{})
+		if count == 0 {
+			t.logger.Warn("未找到要解绑的资源关系",
+				zap.Int("nodeId", nodeId),
+				zap.String("resourceType", resourceType),
+				zap.String("resourceId", resourceId))
+			return errors.New("未找到要解绑的资源关系")
+		}
 
-	if result.Error != nil {
-		t.logger.Error("解绑资源失败",
-			zap.Int("nodeId", nodeId),
-			zap.String("resourceType", resourceType),
-			zap.String("resourceId", resourceId),
-			zap.Error(result.Error))
-		return fmt.Errorf("解绑资源失败: %w", result.Error)
-	}
+		// 执行删除操作
+		result := db.Where("tree_node_id = ? AND resource_type = ? AND resource_id = ?",
+			nodeId, resourceType, resourceId).Delete(&model.TreeNodeResource{})
 
-	// 检查是否实际删除了记录
-	if result.RowsAffected == 0 {
-		return errors.New("未找到要解绑的资源关系")
-	}
-
-	return nil
-}
-
-// GetResourceTypes 获取所有资源类型
-func (t *treeDAO) GetResourceTypes(ctx context.Context) ([]string, error) {
-	var types []string
-	if err := t.getDB(ctx).Model(&model.TreeNodeResource{}).
-		Distinct("resource_type").
-		Pluck("resource_type", &types).Error; err != nil {
-		t.logger.Error("获取资源类型失败", zap.Error(err))
-		return nil, fmt.Errorf("获取资源类型失败: %w", err)
-	}
-
-	return types, nil
+		if result.Error != nil {
+			t.logger.Error("解绑资源失败",
+				zap.Int("nodeId", nodeId),
+				zap.String("resourceType", resourceType),
+				zap.String("resourceId", resourceId),
+				zap.Error(result.Error))
+			return fmt.Errorf("解绑资源失败: %w", result.Error)
+		}
+		return nil
+	})
 }
 
 // UpdateNodeStatus 更新节点状态
