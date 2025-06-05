@@ -193,7 +193,7 @@ export const addNodeMember = (data: AddNodeMemberParams) => {
 
 // 移除节点成员
 export const removeNodeMember = (data: RemoveNodeMemberParams) => {
-  return requestClient.delete('/tree/member/remove', { data });
+  return requestClient.delete(`/tree/member/remove/${data.nodeId}`, { data });
 };
 
 // 获取节点资源

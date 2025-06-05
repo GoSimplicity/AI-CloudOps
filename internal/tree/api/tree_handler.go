@@ -61,7 +61,7 @@ func (h *TreeHandler) RegisterRouters(server *gin.Engine) {
 		// 成员管理接口
 		treeGroup.GET("/members/:id", h.GetNodeMembers)
 		treeGroup.POST("/member/add", h.AddNodeMember)
-		treeGroup.DELETE("/member/remove", h.RemoveNodeMember)
+		treeGroup.DELETE("/member/remove/:id", h.RemoveNodeMember)
 
 		// 资源绑定接口
 		treeGroup.GET("/resources/:id", h.GetNodeResources)
@@ -223,6 +223,14 @@ func (h *TreeHandler) AddNodeMember(ctx *gin.Context) {
 // RemoveNodeMember 移除节点成员
 func (h *TreeHandler) RemoveNodeMember(ctx *gin.Context) {
 	var req model.RemoveNodeMemberReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的节点ID")
+		return
+	}
+
+	req.NodeID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.RemoveNodeMember(ctx, &req)

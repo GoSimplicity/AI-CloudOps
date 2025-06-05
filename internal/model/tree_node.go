@@ -136,16 +136,16 @@ type GetNodeMembersReq struct {
 
 // AddNodeMemberReq 添加节点成员请求
 type AddNodeMemberReq struct {
-	NodeID     int    `json:"nodeId" binding:"required"`
-	UserID     int    `json:"userId" binding:"required"`
-	MemberType string `json:"memberType" binding:"required,oneof=admin member"`
+	NodeID     int    `json:"nodeId" form:"nodeId" binding:"required"`
+	UserID     int    `json:"userId" form:"userId" binding:"required"`
+	MemberType string `json:"memberType" form:"memberType" binding:"required,oneof=admin member"`
 }
 
 // RemoveNodeMemberReq 移除节点成员请求
 type RemoveNodeMemberReq struct {
-	NodeID     int    `json:"nodeId" binding:"required"`
-	UserID     int    `json:"userId" binding:"required"`
-	MemberType string `json:"memberType" binding:"required,oneof=admin member"`
+	NodeID     int    `json:"nodeId" form:"nodeId" binding:"required"`
+	UserID     int    `json:"userId" form:"userId" binding:"required"`
+	MemberType string `json:"memberType" form:"memberType" binding:"required,oneof=admin member"`
 }
 
 // BatchAddNodeMembersReq 批量添加节点成员请求
