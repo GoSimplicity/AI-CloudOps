@@ -65,7 +65,7 @@ type TreeNodeService interface {
 	MoveNode(ctx context.Context, nodeId, newParentId int) error
 
 	// 资源绑定接口
-	GetNodeResources(ctx context.Context, nodeId int) (model.ListResp[*model.ResourceBase], error)
+	GetNodeResources(ctx context.Context, nodeId int) (model.ListResp[*model.TreeNodeResource], error)
 	BindResource(ctx context.Context, req *model.BindResourceReq) error
 	UnbindResource(ctx context.Context, req *model.UnbindResourceReq) error
 
@@ -499,18 +499,18 @@ func (t *treeService) UpdateNodeStatus(ctx context.Context, req *model.UpdateNod
 }
 
 // GetNodeResources 获取节点资源列表
-func (t *treeService) GetNodeResources(ctx context.Context, nodeId int) (model.ListResp[*model.ResourceBase], error) {
+func (t *treeService) GetNodeResources(ctx context.Context, nodeId int) (model.ListResp[*model.TreeNodeResource], error) {
 	if err := validateID(nodeId); err != nil {
-		return model.ListResp[*model.ResourceBase]{}, err
+		return model.ListResp[*model.TreeNodeResource]{}, err
 	}
 
 	resources, err := t.dao.GetNodeResources(ctx, nodeId)
 	if err != nil {
 		t.logger.Error("获取节点资源失败", zap.Int("nodeId", nodeId), zap.Error(err))
-		return model.ListResp[*model.ResourceBase]{}, err
+		return model.ListResp[*model.TreeNodeResource]{}, err
 	}
 
-	return model.ListResp[*model.ResourceBase]{
+	return model.ListResp[*model.TreeNodeResource]{
 		Items: resources,
 		Total: int64(len(resources)),
 	}, nil

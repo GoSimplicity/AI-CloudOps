@@ -25,9 +25,32 @@
 
 package model
 
+import "time"
+
 // ResourceEcs 服务器资源
 type ResourceEcs struct {
-	ResourceBase
+	Model
+
+	InstanceName       string        `json:"instance_name" gorm:"type:varchar(100);comment:资源实例名称"`
+	InstanceId         string        `json:"instance_id" gorm:"type:varchar(100);comment:资源实例ID"`
+	Provider           CloudProvider `json:"cloud_provider" gorm:"type:varchar(50);comment:云厂商"`
+	RegionId           string        `json:"region_id" gorm:"type:varchar(50);comment:地区，如cn-hangzhou"`
+	ZoneId             string        `json:"zone_id" gorm:"type:varchar(100);comment:可用区ID"`
+	VpcId              string        `json:"vpc_id" gorm:"type:varchar(100);comment:VPC ID"`
+	Status             string        `json:"status" gorm:"type:varchar(50);comment:资源状态"`
+	CreationTime       string        `json:"creation_time" gorm:"type:varchar(30);comment:创建时间,ISO8601格式"`
+	Env                string        `json:"environment" gorm:"type:varchar(50);comment:环境标识,如dev,prod"`
+	InstanceChargeType string        `json:"instance_charge_type" gorm:"type:varchar(50);comment:付费类型"`
+	Description        string        `json:"description" gorm:"type:text;comment:资源描述"`
+	Tags               StringList    `json:"tags" gorm:"type:varchar(500);comment:资源标签集合"`
+	SecurityGroupIds   StringList    `json:"security_group_ids" gorm:"type:varchar(500);comment:安全组ID列表"`
+	PrivateIpAddress   StringList    `json:"private_ip_address" gorm:"type:varchar(500);comment:私有IP地址"`
+	PublicIpAddress    StringList    `json:"public_ip_address" gorm:"type:varchar(500);comment:公网IP地址"`
+
+	// 资源创建和管理标志
+	CreateByOrder bool      `json:"create_by_order" gorm:"comment:是否由工单创建"`
+	LastSyncTime  time.Time `json:"last_sync_time" gorm:"comment:最后同步时间"`
+	TreeNodeID    int       `json:"tree_node_id" gorm:"comment:关联的服务树节点ID"`
 
 	Cpu               int        `json:"cpu" gorm:"comment:CPU核数"`
 	Memory            int        `json:"memory" gorm:"comment:内存大小,单位GiB"`
@@ -48,8 +71,40 @@ type ResourceEcs struct {
 	DiskIds           StringList `json:"diskIds" gorm:"type:varchar(500);comment:云盘ID集合"`
 	StartTime         string     `json:"startTime" gorm:"type:varchar(30);comment:最近启动时间"`
 	AutoReleaseTime   string     `json:"autoReleaseTime" gorm:"type:varchar(30);comment:自动释放时间"`
+
 	// 多对多关系
 	EcsTreeNodes []*TreeNode `json:"ecsTreeNodes" gorm:"many2many:resource_ecs_tree_nodes;comment:关联服务树节点"`
+}
+
+// =============== 请求模型 ===============
+
+// ListEcsResourcesReq ECS资源列表查询参数
+type ListEcsResourcesReq struct {
+	ListReq
+	Provider CloudProvider `form:"provider" json:"provider"`
+	Region   string        `form:"region" json:"region"`
+}
+
+// ListEcsResourceOptionsReq 实例选项列表请求
+type ListEcsResourceOptionsReq struct {
+	ListReq
+	Provider           CloudProvider `json:"provider" binding:"required"` // 云提供商
+	ResourceType       string        `json:"resourceType"`                // 资源类型
+	PayType            string        `json:"payType"`                     // 付费类型
+	Region             string        `json:"region"`                      // 区域
+	Zone               string        `json:"zone"`                        // 可用区
+	InstanceType       string        `json:"instanceType"`                // 实例类型
+	ImageId            string        `json:"imageId"`                     // 镜像ID
+	SystemDiskCategory string        `json:"systemDiskCategory"`          // 系统盘类型
+	DataDiskCategory   string        `json:"dataDiskCategory"`            // 数据盘类型
+}
+
+// GetEcsDetailReq 获取ECS详情请求
+type GetEcsDetailReq struct {
+	ID         int           `json:"id" form:"id" binding:"required"` // 内部ID（从URL参数获取）
+	Provider   CloudProvider `json:"provider"`                        // 云提供商
+	Region     string        `json:"region"`                          // 区域
+	InstanceId string        `json:"instanceId"`                      // 实例ID
 }
 
 // CreateEcsResourceReq ECS创建参数
@@ -88,12 +143,97 @@ type CreateEcsResourceReq struct {
 	Port               int           `json:"port"`                                  // SSH端口号
 }
 
-// ListEcsResourcesReq ECS资源列表查询参数
-type ListEcsResourcesReq struct {
-	ListReq
-	Provider CloudProvider `form:"provider" json:"provider"`
-	Region   string        `form:"region" json:"region"`
+// UpdateEcsReq ECS更新请求（新增）
+type UpdateEcsReq struct {
+	ID               int           `json:"id"`               // 内部ID（从URL参数获取）
+	Provider         CloudProvider `json:"provider"`         // 云提供商
+	Region           string        `json:"region"`           // 区域
+	InstanceId       string        `json:"instanceId"`       // 实例ID
+	InstanceName     string        `json:"instanceName"`     // 实例名称
+	Description      string        `json:"description"`      // 描述
+	Tags             StringList    `json:"tags"`             // 资源标签
+	SecurityGroupIds []string      `json:"securityGroupIds"` // 安全组ID
+	Hostname         string        `json:"hostname"`         // 主机名
+	Password         string        `json:"password"`         // 密码（用于更新密码）
+	TreeNodeId       int           `json:"treeNodeId"`       // 服务树节点ID
+	Env              string        `json:"environment"`      // 环境标识
+	IpAddr           string        `json:"ipAddr"`           // IP地址
+	Port             int           `json:"port"`             // SSH端口号
+	AuthMode         string        `json:"authMode"`         // 认证方式
+	Key              string        `json:"key"`              // 密钥内容
 }
+
+// DeleteEcsReq ECS删除请求
+type DeleteEcsReq struct {
+	ID         int           `json:"id"`         // 内部ID（从URL参数获取）
+	Provider   CloudProvider `json:"provider"`   // 云提供商
+	Region     string        `json:"region"`     // 区域
+	InstanceId string        `json:"instanceId"` // 实例ID
+	Force      bool          `json:"force"`      // 是否强制删除
+}
+
+// StartEcsReq ECS启动请求
+type StartEcsReq struct {
+	ID         int           `json:"id"`         // 内部ID（从URL参数获取）
+	Provider   CloudProvider `json:"provider"`   // 云提供商
+	Region     string        `json:"region"`     // 区域
+	InstanceId string        `json:"instanceId"` // 实例ID
+}
+
+// StopEcsReq ECS停止请求
+type StopEcsReq struct {
+	ID         int           `json:"id"`         // 内部ID（从URL参数获取）
+	Provider   CloudProvider `json:"provider"`   // 云提供商
+	Region     string        `json:"region"`     // 区域
+	InstanceId string        `json:"instanceId"` // 实例ID
+	ForceStop  bool          `json:"forceStop"`  // 是否强制停止
+}
+
+// RestartEcsReq ECS重启请求
+type RestartEcsReq struct {
+	ID         int           `json:"id"`         // 内部ID（从URL参数获取）
+	Provider   CloudProvider `json:"provider"`   // 云提供商
+	Region     string        `json:"region"`     // 区域
+	InstanceId string        `json:"instanceId"` // 实例ID
+	ForceStop  bool          `json:"forceStop"`  // 是否强制重启
+}
+
+// ResizeEcsReq ECS调整规格请求（新增）
+type ResizeEcsReq struct {
+	ID           int           `json:"id"`           // 内部ID（从URL参数获取）
+	Provider     CloudProvider `json:"provider"`     // 云提供商
+	Region       string        `json:"region"`       // 区域
+	InstanceId   string        `json:"instanceId"`   // 实例ID
+	InstanceType string        `json:"instanceType"` // 新的实例类型
+	SystemDisk   ResizeDisk    `json:"systemDisk"`   // 系统盘调整参数
+	DataDisks    []ResizeDisk  `json:"dataDisks"`    // 数据盘调整参数
+	DryRun       bool          `json:"dryRun"`       // 是否仅预览
+}
+
+// ResetEcsPasswordReq ECS重置密码请求（新增）
+type ResetEcsPasswordReq struct {
+	ID          int           `json:"id"`          // 内部ID（从URL参数获取）
+	Provider    CloudProvider `json:"provider"`    // 云提供商
+	Region      string        `json:"region"`      // 区域
+	InstanceId  string        `json:"instanceId"`  // 实例ID
+	NewPassword string        `json:"newPassword"` // 新密码
+	KeyPairName string        `json:"keyPairName"` // 密钥对名称（如果使用密钥认证）
+}
+
+// RenewEcsReq ECS续费请求（新增）
+type RenewEcsReq struct {
+	ID                int           `json:"id"`                // 内部ID（从URL参数获取）
+	Provider          CloudProvider `json:"provider"`          // 云提供商
+	Region            string        `json:"region"`            // 区域
+	InstanceId        string        `json:"instanceId"`        // 实例ID
+	Period            int           `json:"period"`            // 续费时长
+	PeriodUnit        string        `json:"periodUnit"`        // 时长单位：Month/Year
+	AutoRenew         bool          `json:"autoRenew"`         // 是否自动续费
+	AutoRenewPeriod   int           `json:"autoRenewPeriod"`   // 自动续费周期
+	ExpectedStartTime string        `json:"expectedStartTime"` // 预期生效时间
+}
+
+// =============== 响应模型 ===============
 
 // ResourceECSListResp ECS资源列表响应
 type ResourceECSListResp struct {
@@ -104,55 +244,6 @@ type ResourceECSListResp struct {
 // ResourceECSDetailResp ECS资源详情响应
 type ResourceECSDetailResp struct {
 	Data *ResourceEcs `json:"data"`
-}
-
-// StartEcsReq ECS启动请求
-type StartEcsReq struct {
-	Provider   CloudProvider `json:"provider" binding:"required"`
-	Region     string        `json:"region" binding:"required"`
-	InstanceId string        `json:"instanceId" binding:"required"`
-}
-
-// StopEcsReq ECS停止请求
-type StopEcsReq struct {
-	Provider   CloudProvider `json:"provider" binding:"required"`
-	Region     string        `json:"region" binding:"required"`
-	InstanceId string        `json:"instanceId" binding:"required"`
-}
-
-// RestartEcsReq ECS重启请求
-type RestartEcsReq struct {
-	Provider   CloudProvider `json:"provider" binding:"required"`
-	Region     string        `json:"region" binding:"required"`
-	InstanceId string        `json:"instanceId" binding:"required"`
-}
-
-// DeleteEcsReq ECS删除请求
-type DeleteEcsReq struct {
-	Provider   CloudProvider `json:"provider" binding:"required"`
-	Region     string        `json:"region" binding:"required"`
-	InstanceId string        `json:"instanceId" binding:"required"`
-}
-
-// GetEcsDetailReq 获取ECS详情请求
-type GetEcsDetailReq struct {
-	Provider   CloudProvider `json:"provider" binding:"required"`
-	Region     string        `json:"region" binding:"required"`
-	InstanceId string        `json:"instanceId" binding:"required"`
-}
-
-// ListInstanceOptionsReq 实例选项列表请求
-type ListEcsResourceOptionsReq struct {
-	ListReq
-	Provider           CloudProvider `json:"provider" binding:"required"` // 云提供商
-	ResourceType       string        `json:"resourceType"`                // 资源类型
-	PayType            string        `json:"payType"`                     // 付费类型
-	Region             string        `json:"region"`                      // 区域
-	Zone               string        `json:"zone"`                        // 可用区
-	InstanceType       string        `json:"instanceType"`                // 实例类型
-	ImageId            string        `json:"imageId"`                     // 镜像ID
-	SystemDiskCategory string        `json:"systemDiskCategory"`          // 系统盘类型
-	DataDiskCategory   string        `json:"dataDiskCategory"`            // 数据盘类型
 }
 
 // ListEcsResourceOptionsResp 实例选项列表响应
@@ -172,21 +263,30 @@ type ListEcsResourceOptionsResp struct {
 	Memory             int    `json:"memory"`
 }
 
+// =============== 其他辅助模型 ===============
+
+// ListRegionsReq 区域列表请求
 type ListRegionsReq struct {
 	Provider CloudProvider `json:"provider" binding:"required"`
 }
 
+// ListZonesReq 可用区列表请求
 type ListZonesReq struct {
+	Provider CloudProvider `json:"provider" binding:"required"`
+	Region   string        `json:"region" binding:"required"`
 }
 
+// ListInstanceTypesReq 实例类型列表请求
 type ListInstanceTypesReq struct {
 	Provider CloudProvider `json:"provider" binding:"required"`
 	Region   string        `json:"region" binding:"required"`
 }
 
+// ListImagesReq 镜像列表请求
 type ListImagesReq struct {
 	Provider CloudProvider `json:"provider" binding:"required"`
 	Region   string        `json:"region" binding:"required"`
+	OsType   string        `json:"osType"` // 操作系统类型过滤
 }
 
 // RegionResp 区域信息响应

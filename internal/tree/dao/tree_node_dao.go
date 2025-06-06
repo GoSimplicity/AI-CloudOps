@@ -53,7 +53,7 @@ type TreeNodeDAO interface {
 	UpdateNodeStatus(ctx context.Context, id int, status string) error
 	DeleteNode(ctx context.Context, id int) error
 
-	GetNodeResources(ctx context.Context, nodeId int) ([]*model.ResourceBase, error)
+	GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResource, error)
 	BindResource(ctx context.Context, nodeId int, resourceType string, resourceIds []string) error
 	UnbindResource(ctx context.Context, nodeId int, resourceType string, resourceId string) error
 
@@ -772,7 +772,7 @@ func (t *treeNodeDAO) DeleteNode(ctx context.Context, id int) error {
 }
 
 // GetNodeResources 获取节点绑定的资源列表
-func (t *treeNodeDAO) GetNodeResources(ctx context.Context, nodeId int) ([]*model.ResourceBase, error) {
+func (t *treeNodeDAO) GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResource, error) {
 	if err := t.checkNodeExists(ctx, nodeId); err != nil {
 		return nil, err
 	}
@@ -785,7 +785,7 @@ func (t *treeNodeDAO) GetNodeResources(ctx context.Context, nodeId int) ([]*mode
 	}
 
 	if len(nodeResources) == 0 {
-		return []*model.ResourceBase{}, nil
+		return []*model.TreeNodeResource{}, nil
 	}
 
 	// 收集所有资源ID
@@ -795,7 +795,7 @@ func (t *treeNodeDAO) GetNodeResources(ctx context.Context, nodeId int) ([]*mode
 	}
 
 	// 查询资源基本信息
-	var resources []*model.ResourceBase
+	var resources []*model.TreeNodeResource
 	if err := t.getDB(ctx).Where("id IN ?", resourceIDs).Find(&resources).Error; err != nil {
 		t.logger.Error("获取资源基本信息失败", zap.Strings("resourceIDs", resourceIDs), zap.Error(err))
 		return nil, fmt.Errorf("获取资源基本信息失败: %w", err)

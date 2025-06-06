@@ -26,7 +26,9 @@
 package api
 
 import (
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -45,43 +47,195 @@ func (h *TreeEcsHandler) RegisterRouters(server *gin.Engine) {
 	{
 		ecsGroup.POST("/list", h.ListEcsResources)
 		ecsGroup.POST("/instance_options", h.ListInstanceOptions)
-		ecsGroup.POST("/detail", h.GetEcsDetail)
+		ecsGroup.POST("/detail/:id", h.GetEcsDetail)
 		ecsGroup.POST("/create", h.CreateEcsResource)
-		ecsGroup.DELETE("/delete", h.DeleteEcs)
-		ecsGroup.POST("/start", h.StartEcs)
-		ecsGroup.POST("/stop", h.StopEcs)
-		ecsGroup.POST("/restart", h.RestartEcs)
+		ecsGroup.POST("/update/:id", h.UpdateEcs)
+		ecsGroup.DELETE("/delete/:id", h.DeleteEcs)
+		ecsGroup.POST("/start/:id", h.StartEcs)
+		ecsGroup.POST("/stop/:id", h.StopEcs)
+		ecsGroup.POST("/restart/:id", h.RestartEcs)
+		ecsGroup.POST("/resize/:id", h.ResizeEcs)
+		ecsGroup.POST("/reset_password/:id", h.ResetEcsPassword)
+		ecsGroup.POST("/renew/:id", h.RenewEcs)
 	}
 }
 
-func (h *TreeEcsHandler) ListEcsResources(c *gin.Context) {
+// ListEcsResources 获取ECS实例列表
+func (h *TreeEcsHandler) ListEcsResources(ctx *gin.Context) {
+	var req model.ListEcsResourcesReq
 
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.ecsService.ListEcsResources(ctx, &req)
+	})
 }
 
-func (h *TreeEcsHandler) ListInstanceOptions(c *gin.Context) {
+// ListInstanceOptions 获取ECS实例规格列表
+func (h *TreeEcsHandler) ListInstanceOptions(ctx *gin.Context) {
+	var req model.ListEcsResourceOptionsReq
 
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.ecsService.ListEcsResourceOptions(ctx, &req)
+	})
 }
 
-func (h *TreeEcsHandler) GetEcsDetail(c *gin.Context) {
+// GetEcsDetail 获取ECS实例详情
+func (h *TreeEcsHandler) GetEcsDetail(ctx *gin.Context) {
+	var req model.GetEcsDetailReq
 
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的实例ID")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.ecsService.GetEcsDetail(ctx, &req)
+	})
 }
 
-func (h *TreeEcsHandler) CreateEcsResource(c *gin.Context) {
+// CreateEcsResource 创建ECS实例
+func (h *TreeEcsHandler) CreateEcsResource(ctx *gin.Context) {
+	var req model.CreateEcsResourceReq
 
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.CreateEcsResource(ctx, &req)
+	})
 }
 
-func (h *TreeEcsHandler) DeleteEcs(c *gin.Context) {
+// DeleteEcs 删除ECS实例
+func (h *TreeEcsHandler) DeleteEcs(ctx *gin.Context) {
+	var req model.DeleteEcsReq
 
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的实例ID")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.DeleteEcs(ctx, &req)
+	})
 }
 
-func (h *TreeEcsHandler) StartEcs(c *gin.Context) {
+// StartEcs 启动ECS实例
+func (h *TreeEcsHandler) StartEcs(ctx *gin.Context) {
+	var req model.StartEcsReq
 
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的实例ID")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.StartEcs(ctx, &req)
+	})
 }
 
-func (h *TreeEcsHandler) StopEcs(c *gin.Context) {
+// StopEcs 停止ECS实例
+func (h *TreeEcsHandler) StopEcs(ctx *gin.Context) {
+	var req model.StopEcsReq
 
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的实例ID")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.StopEcs(ctx, &req)
+	})
 }
 
-func (h *TreeEcsHandler) RestartEcs(c *gin.Context) {
+// RestartEcs 重启ECS实例
+func (h *TreeEcsHandler) RestartEcs(ctx *gin.Context) {
+	var req model.RestartEcsReq
 
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的实例ID")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.RestartEcs(ctx, &req)
+	})
+}
+
+// UpdateEcs 更新ECS实例
+func (h *TreeEcsHandler) UpdateEcs(ctx *gin.Context) {
+	var req model.UpdateEcsReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的实例ID")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.UpdateEcs(ctx, &req)
+	})
+}
+
+// ResizeEcs 调整ECS实例规格
+func (h *TreeEcsHandler) ResizeEcs(ctx *gin.Context) {
+	var req model.ResizeEcsReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的实例ID")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.ResizeEcs(ctx, &req)
+	})
+}
+
+// ResetEcsPassword 重置ECS实例密码
+func (h *TreeEcsHandler) ResetEcsPassword(ctx *gin.Context) {
+	var req model.ResetEcsPasswordReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的实例ID")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.ResetEcsPassword(ctx, &req)
+	})
+}
+
+// RenewEcs 续费ECS实例
+func (h *TreeEcsHandler) RenewEcs(ctx *gin.Context) {
+	var req model.RenewEcsReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的实例ID")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.ecsService.RenewEcs(ctx, &req)
+	})
 }

@@ -31,8 +31,28 @@ import (
 
 // ResourceDisk 磁盘资源模型
 type ResourceDisk struct {
-	// 继承基础字段
-	ResourceBase
+	Model
+
+	InstanceName       string        `json:"instance_name" gorm:"type:varchar(100);comment:资源实例名称"`
+	InstanceId         string        `json:"instance_id" gorm:"type:varchar(100);comment:资源实例ID"`
+	Provider           CloudProvider `json:"cloud_provider" gorm:"type:varchar(50);comment:云厂商"`
+	RegionId           string        `json:"region_id" gorm:"type:varchar(50);comment:地区，如cn-hangzhou"`
+	ZoneId             string        `json:"zone_id" gorm:"type:varchar(100);comment:可用区ID"`
+	VpcId              string        `json:"vpc_id" gorm:"type:varchar(100);comment:VPC ID"`
+	Status             string        `json:"status" gorm:"type:varchar(50);comment:资源状态"`
+	CreationTime       string        `json:"creation_time" gorm:"type:varchar(30);comment:创建时间,ISO8601格式"`
+	Env                string        `json:"environment" gorm:"type:varchar(50);comment:环境标识,如dev,prod"`
+	InstanceChargeType string        `json:"instance_charge_type" gorm:"type:varchar(50);comment:付费类型"`
+	Description        string        `json:"description" gorm:"type:text;comment:资源描述"`
+	Tags               StringList    `json:"tags" gorm:"type:varchar(500);comment:资源标签集合"`
+	SecurityGroupIds   StringList    `json:"security_group_ids" gorm:"type:varchar(500);comment:安全组ID列表"`
+	PrivateIpAddress   StringList    `json:"private_ip_address" gorm:"type:varchar(500);comment:私有IP地址"`
+	PublicIpAddress    StringList    `json:"public_ip_address" gorm:"type:varchar(500);comment:公网IP地址"`
+
+	// 资源创建和管理标志
+	CreateByOrder bool      `json:"create_by_order" gorm:"comment:是否由工单创建"`
+	LastSyncTime  time.Time `json:"last_sync_time" gorm:"comment:最后同步时间"`
+	TreeNodeID    int       `json:"tree_node_id" gorm:"comment:关联的服务树节点ID"`
 
 	// 磁盘特有字段
 	DiskID             string     `json:"disk_id" gorm:"column:disk_id;size:64;index;comment:磁盘ID"`
@@ -91,10 +111,33 @@ type AttachDiskReq struct {
 	DeleteWithInstance bool   `json:"delete_with_instance"`
 }
 
+// DiskCreationParams 磁盘创建参数
+type DiskCreationParams struct {
+	Provider     CloudProvider     `json:"provider" binding:"required"`
+	Region       string            `json:"region" binding:"required"`
+	ZoneId       string            `json:"zoneId" binding:"required"`
+	DiskName     string            `json:"diskName" binding:"required"`
+	DiskCategory string            `json:"diskCategory" binding:"required"`
+	Size         int               `json:"size" binding:"required,min=20"`
+	VpcId        string            `json:"vpcId" binding:"required"`
+	InstanceId   string            `json:"instanceId"`
+	PayType      string            `json:"payType" binding:"required"`
+	TreeNodeId   uint              `json:"treeNodeId" binding:"required"`
+	Description  string            `json:"description"`
+	Tags         map[string]string `json:"tags"`
+}
+
 // DetachDiskReq 卸载磁盘请求
 type DetachDiskReq struct {
 	DiskId     string `json:"disk_id" validate:"required" binding:"required"`
 	InstanceId string `json:"instance_id" validate:"required" binding:"required"`
+}
+
+// ResizeDisk 磁盘调整参数
+type ResizeDisk struct {
+	DiskId       string `json:"diskId"`       // 磁盘ID
+	NewSize      int    `json:"newSize"`      // 新的磁盘大小（GB）
+	DiskCategory string `json:"diskCategory"` // 磁盘类型
 }
 
 // DiskListReq 磁盘列表请求
