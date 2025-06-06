@@ -34,7 +34,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/provider"
-	"github.com/alibabacloud-go/ecs-20140526/v2/client"
 	"go.uber.org/zap"
 )
 
@@ -49,7 +48,7 @@ type TreeEcsService interface {
 	DeleteEcsResource(ctx context.Context, req *model.DeleteEcsReq) error
 
 	// 磁盘管理
-	ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (model.ListResp[*client.DescribeDisksResponseBodyDisksDisk], error)
+	ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (model.ListResp[*model.ResourceDisk], error)
 	CreateDisk(ctx context.Context, provider model.CloudProvider, region string, params *model.DiskCreationParams) error
 	DeleteDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string) error
 	AttachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error
@@ -227,7 +226,7 @@ func (e *treeEcsService) GetEcsResourceById(ctx context.Context, req *model.GetE
 		return nil, fmt.Errorf("[GetEcsResourceById] 获取云提供商失败: %w", err)
 	}
 
-	result, err := cloudProvider.GetInstanceDetail(ctx, req.Region, req.InstanceId)
+	result, err := cloudProvider.GetInstance(ctx, req.Region, req.InstanceId)
 	if err != nil {
 		e.logger.Error("[GetEcsResourceById] 获取ECS资源详情失败", zap.Error(err))
 		return nil, fmt.Errorf("[GetEcsResourceById] 获取ECS资源详情失败: %w", err)
@@ -262,7 +261,7 @@ func (e *treeEcsService) ListEcsResources(ctx context.Context, req *model.ListEc
 		}, fmt.Errorf("[ListEcsResources] 获取云提供商失败: %w", err)
 	}
 
-	resources, total, err := cloudProvider.ListInstances(ctx, req.Region, req.Size, req.Page)
+	resources, err := cloudProvider.ListInstances(ctx, req.Region, req.Size, req.Page)
 	if err != nil {
 		e.logger.Error("[ListEcsResources] 获取ECS资源列表失败", zap.Error(err))
 		return model.ListResp[*model.ResourceEcs]{
@@ -272,36 +271,36 @@ func (e *treeEcsService) ListEcsResources(ctx context.Context, req *model.ListEc
 	}
 
 	return model.ListResp[*model.ResourceEcs]{
-		Total: total,
+		Total: int64(len(resources)),
 		Items: resources,
 	}, nil
 }
 
 // ListDisks 获取磁盘列表
-func (e *treeEcsService) ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (model.ListResp[*client.DescribeDisksResponseBodyDisksDisk], error) {
+func (e *treeEcsService) ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (model.ListResp[*model.ResourceDisk], error) {
 	cloudProvider, err := e.providerFactory.GetProvider(provider)
 	if err != nil {
-		return model.ListResp[*client.DescribeDisksResponseBodyDisksDisk]{
+		return model.ListResp[*model.ResourceDisk]{
 			Total: 0,
-			Items: []*client.DescribeDisksResponseBodyDisksDisk{},
+			Items: []*model.ResourceDisk{},
 		}, fmt.Errorf("[ListDisks] 获取云提供商失败: %w", err)
 	}
 
-	result, err := cloudProvider.ListDisks(ctx, region, pageSize, pageNumber)
+	result, err := cloudProvider.ListDisks(ctx, region, pageNumber, pageSize)
 	if err != nil {
 		e.logger.Error("[ListDisks] 获取磁盘列表失败",
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.Error(err))
-		return model.ListResp[*client.DescribeDisksResponseBodyDisksDisk]{
+		return model.ListResp[*model.ResourceDisk]{
 			Total: 0,
-			Items: []*client.DescribeDisksResponseBodyDisksDisk{},
+			Items: []*model.ResourceDisk{},
 		}, fmt.Errorf("[ListDisks] 获取磁盘列表失败: %w", err)
 	}
 
-	return model.ListResp[*client.DescribeDisksResponseBodyDisksDisk]{
-		Total: result.Total,
-		Items: result.Items,
+	return model.ListResp[*model.ResourceDisk]{
+		Total: int64(len(result)),
+		Items: result,
 	}, nil
 }
 
@@ -312,7 +311,12 @@ func (e *treeEcsService) CreateDisk(ctx context.Context, provider model.CloudPro
 		return fmt.Errorf("[CreateDisk] 获取云提供商失败: %w", err)
 	}
 
-	err = cloudProvider.CreateDisk(ctx, region, params)
+	err = cloudProvider.CreateDisk(ctx, region, &model.CreateDiskReq{
+		DiskName:     params.DiskName,
+		DiskCategory: params.DiskCategory,
+		Size:         params.Size,
+		Description:  params.Description,
+	})
 	if err != nil {
 		e.logger.Error("[CreateDisk] 创建磁盘失败",
 			zap.String("provider", string(provider)),
@@ -351,7 +355,7 @@ func (e *treeEcsService) AttachDisk(ctx context.Context, provider model.CloudPro
 		return fmt.Errorf("[AttachDisk] 获取云提供商失败: %w", err)
 	}
 
-	err = cloudProvider.AttachDisk(ctx, region, "", "", "", 0, "", instanceID)
+	err = cloudProvider.AttachDisk(ctx, region, diskID, instanceID)
 	if err != nil {
 		e.logger.Error("[AttachDisk] 挂载磁盘失败",
 			zap.String("provider", string(provider)),

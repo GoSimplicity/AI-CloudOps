@@ -29,40 +29,40 @@ import (
 	"context"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	ecs "github.com/alibabacloud-go/ecs-20140526/v2/client"
 )
 
 type Provider interface {
+	// 基础服务
 	SyncResources(ctx context.Context, region string) error
+	ListRegions(ctx context.Context) ([]*model.RegionResp, error)
+	GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error)
 
-	// 资源管理
-	ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceEcs, int64, error)
-	GetInstanceDetail(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error)
+	// ECS实例管理
+	ListInstances(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceEcs, error)
+	GetInstance(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error)
 	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
 	DeleteInstance(ctx context.Context, region string, instanceID string) error
 	StartInstance(ctx context.Context, region string, instanceID string) error
 	StopInstance(ctx context.Context, region string, instanceID string) error
 	RestartInstance(ctx context.Context, region string, instanceID string) error
 
-	// 网络管理
-	ListVPCs(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceVpc, int64, error)
+	// VPC网络管理
+	ListVPCs(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceVpc, error)
+	GetVPC(ctx context.Context, region string, vpcID string) (*model.ResourceVpc, error)
 	CreateVPC(ctx context.Context, region string, config *model.CreateVpcResourceReq) error
 	DeleteVPC(ctx context.Context, region string, vpcID string) error
-	GetVpcDetail(ctx context.Context, region string, vpcID string) (*model.ResourceVpc, error)
 
 	// 安全组管理
-	ListSecurityGroups(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceSecurityGroup, int64, error)
+	ListSecurityGroups(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceSecurityGroup, error)
+	GetSecurityGroup(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error)
 	CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) error
 	DeleteSecurityGroup(ctx context.Context, region string, securityGroupID string) error
-	GetSecurityGroupDetail(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error)
 
-	// 存储管理
-	ListDisks(ctx context.Context, region string, page int, size int) (model.ListResp[*ecs.DescribeDisksResponseBodyDisksDisk], error)
-	CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error
+	// 磁盘管理
+	ListDisks(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceDisk, error)
+	GetDisk(ctx context.Context, region string, diskID string) (*model.ResourceDisk, error)
+	CreateDisk(ctx context.Context, region string, config *model.CreateDiskReq) error
 	DeleteDisk(ctx context.Context, region string, diskID string) error
-	AttachDisk(ctx context.Context, region string, zoneId string, diskCategory string, diskName string, diskSize int, description string, instanceID string) error
-	DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error
-
-	ListRegions(ctx context.Context) ([]*model.RegionResp, error)
-	GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error)
+	AttachDisk(ctx context.Context, region string, diskID, instanceID string) error
+	DetachDisk(ctx context.Context, region string, diskID, instanceID string) error
 }

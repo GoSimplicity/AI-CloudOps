@@ -82,7 +82,7 @@ func (v *treeVpcService) GetVpcResourceById(ctx context.Context, req *model.GetV
 		return nil, err
 	}
 
-	return provider.GetVpcDetail(ctx, req.Region, req.VpcId)
+	return provider.GetVPC(ctx, req.Region, req.VpcId)
 }
 
 // ListVpcResources 获取VPC列表
@@ -92,13 +92,13 @@ func (v *treeVpcService) ListVpcResources(ctx context.Context, req *model.ListVp
 		return model.ListResp[*model.ResourceVpc]{}, err
 	}
 
-	vpcList, total, err := provider.ListVPCs(ctx, req.Region, req.PageNumber, req.PageSize)
+	vpcList, err := provider.ListVPCs(ctx, req.Region, req.PageNumber, req.PageSize)
 	if err != nil {
 		return model.ListResp[*model.ResourceVpc]{}, err
 	}
 
 	return model.ListResp[*model.ResourceVpc]{
-		Total: total,
+		Total: int64(len(vpcList)),
 		Items: vpcList,
 	}, nil
 }

@@ -2,6 +2,7 @@ package aliyun
 
 import (
 	"context"
+	"fmt"
 
 	ecs "github.com/alibabacloud-go/ecs-20140526/v2/client"
 	"github.com/alibabacloud-go/tea/tea"
@@ -186,4 +187,37 @@ func (d *DiskService) ListDisks(ctx context.Context, req *ListDisksRequest) (*Li
 		Disks: response.Body.Disks.Disk,
 		Total: total,
 	}, nil
+}
+
+func (d *DiskService) GetDisk(ctx context.Context, region string, diskID string) (*ecs.DescribeDisksResponseBodyDisksDisk, error) {
+	client, err := d.sdk.CreateEcsClient(region)
+	if err != nil {
+		d.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 创建查询磁盘请求
+	request := &ecs.DescribeDisksRequest{
+		DiskIds: tea.String(diskID),
+	}
+
+	// 调用API查询磁盘信息
+	response, err := client.DescribeDisks(request)
+	if err != nil {
+		d.sdk.logger.Error("查询磁盘信息失败",
+			zap.String("diskID", diskID),
+			zap.String("region", region),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// 检查是否找到磁盘
+	if len(response.Body.Disks.Disk) == 0 {
+		d.sdk.logger.Warn("未找到指定磁盘",
+			zap.String("diskID", diskID),
+			zap.String("region", region))
+		return nil, fmt.Errorf("disk not found: %s", diskID)
+	}
+
+	return response.Body.Disks.Disk[0], nil
 }

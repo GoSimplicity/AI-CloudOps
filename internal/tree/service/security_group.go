@@ -71,7 +71,7 @@ func (s *treeSecurityGroupService) GetSecurityGroupDetail(ctx context.Context, r
 		return nil, err
 	}
 
-	securityGroup, err := cloudProvider.GetSecurityGroupDetail(ctx, req.Region, req.SecurityGroupId)
+	securityGroup, err := cloudProvider.GetSecurityGroup(ctx, req.Region, req.SecurityGroupId)
 	if err != nil {
 		s.logger.Error("获取安全组详情失败", zap.Error(err), zap.Any("req", req))
 		return nil, err
@@ -89,15 +89,15 @@ func (s *treeSecurityGroupService) ListSecurityGroups(ctx context.Context, req *
 		return nil, err
 	}
 
-	securityGroups, total, err := cloudProvider.ListSecurityGroups(ctx, req.Region, req.PageNumber, req.PageSize)
+	securityGroups, err := cloudProvider.ListSecurityGroups(ctx, req.Region, req.PageNumber, req.PageSize)
 	if err != nil {
 		s.logger.Error("获取安全组列表失败", zap.Error(err), zap.Any("req", req))
 		return nil, err
 	}
 
-	s.logger.Info("获取安全组列表成功", zap.Any("req", req), zap.Int("count", len(securityGroups)), zap.Int64("total", total))
+	s.logger.Info("获取安全组列表成功", zap.Any("req", req), zap.Int("count", len(securityGroups)), zap.Int64("total", int64(len(securityGroups))))
 	return &model.ResourceSecurityGroupListResp{
-		Total: total,
+		Total: int64(len(securityGroups)),
 		Data:  securityGroups,
 	}, nil
 }
