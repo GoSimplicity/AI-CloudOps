@@ -32,34 +32,34 @@ import (
 	"gorm.io/gorm"
 )
 
-type RdsDAO interface {
+type TreeRdsDAO interface {
 	// RDS资源接口
-	ListRdsResources(ctx context.Context, req *model.ListRdsResourcesReq) (*model.PageResp, error)
+	ListRdsResources(ctx context.Context, req *model.ListRdsResourcesReq) (model.ListResp[*model.ResourceRds], error)
 	GetRdsResourceById(ctx context.Context, id int) (*model.ResourceRDSResp, error)
 	CreateRdsResource(ctx context.Context, params *model.RdsCreationParams) error
 }
 
-type rdsDAO struct {
+type treeRdsDAO struct {
 	db *gorm.DB
 }
 
-func NewRdsDAO(db *gorm.DB) RdsDAO {
-	return &rdsDAO{
+func NewTreeRdsDAO(db *gorm.DB) TreeRdsDAO {
+	return &treeRdsDAO{
 		db: db,
 	}
 }
 
 // CreateRdsResource implements RdsDAO.
-func (r *rdsDAO) CreateRdsResource(ctx context.Context, params *model.RdsCreationParams) error {
+func (r *treeRdsDAO) CreateRdsResource(ctx context.Context, params *model.RdsCreationParams) error {
 	panic("unimplemented")
 }
 
 // GetRdsResourceById implements RdsDAO.
-func (r *rdsDAO) GetRdsResourceById(ctx context.Context, id int) (*model.ResourceRDSResp, error) {
+func (r *treeRdsDAO) GetRdsResourceById(ctx context.Context, id int) (*model.ResourceRDSResp, error) {
 	panic("unimplemented")
 }
 
 // ListRdsResources implements RdsDAO.
-func (r *rdsDAO) ListRdsResources(ctx context.Context, req *model.ListRdsResourcesReq) (*model.PageResp, error) {
+func (r *treeRdsDAO) ListRdsResources(ctx context.Context, req *model.ListRdsResourcesReq) (model.ListResp[*model.ResourceRds], error) {
 	panic("unimplemented")
 }

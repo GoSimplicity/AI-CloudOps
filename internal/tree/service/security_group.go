@@ -8,27 +8,27 @@ import (
 	"go.uber.org/zap"
 )
 
-type SecurityGroupService interface {
+type TreeSecurityGroupService interface {
 	CreateSecurityGroup(ctx context.Context, req *model.CreateSecurityGroupReq) error
 	DeleteSecurityGroup(ctx context.Context, req *model.DeleteSecurityGroupReq) error
 	ListSecurityGroups(ctx context.Context, req *model.ListSecurityGroupsReq) (*model.ResourceSecurityGroupListResp, error)
 	GetSecurityGroupDetail(ctx context.Context, req *model.GetSecurityGroupDetailReq) (*model.ResourceSecurityGroup, error)
 }
 
-type securityGroupService struct {
+type treeSecurityGroupService struct {
 	providerFactory *provider.ProviderFactory
 	logger          *zap.Logger
 }
 
-func NewSecurityGroupService(providerFactory *provider.ProviderFactory, logger *zap.Logger) SecurityGroupService {
-	return &securityGroupService{
+func NewTreeSecurityGroupService(providerFactory *provider.ProviderFactory, logger *zap.Logger) TreeSecurityGroupService {
+	return &treeSecurityGroupService{
 		providerFactory: providerFactory,
 		logger:          logger,
 	}
 }
 
 // CreateSecurityGroup 创建安全组
-func (s *securityGroupService) CreateSecurityGroup(ctx context.Context, req *model.CreateSecurityGroupReq) error {
+func (s *treeSecurityGroupService) CreateSecurityGroup(ctx context.Context, req *model.CreateSecurityGroupReq) error {
 	cloudProvider, err := s.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		s.logger.Error("获取云提供商失败", zap.Error(err), zap.String("provider", string(req.Provider)))
@@ -46,7 +46,7 @@ func (s *securityGroupService) CreateSecurityGroup(ctx context.Context, req *mod
 }
 
 // DeleteSecurityGroup 删除安全组
-func (s *securityGroupService) DeleteSecurityGroup(ctx context.Context, req *model.DeleteSecurityGroupReq) error {
+func (s *treeSecurityGroupService) DeleteSecurityGroup(ctx context.Context, req *model.DeleteSecurityGroupReq) error {
 	cloudProvider, err := s.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		s.logger.Error("获取云提供商失败", zap.Error(err), zap.String("provider", string(req.Provider)))
@@ -64,7 +64,7 @@ func (s *securityGroupService) DeleteSecurityGroup(ctx context.Context, req *mod
 }
 
 // GetSecurityGroupDetail 获取安全组详情
-func (s *securityGroupService) GetSecurityGroupDetail(ctx context.Context, req *model.GetSecurityGroupDetailReq) (*model.ResourceSecurityGroup, error) {
+func (s *treeSecurityGroupService) GetSecurityGroupDetail(ctx context.Context, req *model.GetSecurityGroupDetailReq) (*model.ResourceSecurityGroup, error) {
 	cloudProvider, err := s.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		s.logger.Error("获取云提供商失败", zap.Error(err), zap.String("provider", string(req.Provider)))
@@ -82,7 +82,7 @@ func (s *securityGroupService) GetSecurityGroupDetail(ctx context.Context, req *
 }
 
 // ListSecurityGroups 获取安全组列表
-func (s *securityGroupService) ListSecurityGroups(ctx context.Context, req *model.ListSecurityGroupsReq) (*model.ResourceSecurityGroupListResp, error) {
+func (s *treeSecurityGroupService) ListSecurityGroups(ctx context.Context, req *model.ListSecurityGroupsReq) (*model.ResourceSecurityGroupListResp, error) {
 	cloudProvider, err := s.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		s.logger.Error("获取云提供商失败", zap.Error(err), zap.String("provider", string(req.Provider)))

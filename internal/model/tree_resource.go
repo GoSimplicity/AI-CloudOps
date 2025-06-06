@@ -53,38 +53,6 @@ type ResourceBase struct {
 	TreeNodeID    int       `json:"tree_node_id" gorm:"comment:关联的服务树节点ID"`
 }
 
-// ComputeResource 计算资源通用属性
-type ComputeResource struct {
-	ResourceBase
-	Cpu          int    `json:"cpu" gorm:"comment:CPU核数"`
-	Memory       int    `json:"memory" gorm:"comment:内存大小,单位GiB"`
-	InstanceType string `json:"instanceType" gorm:"type:varchar(100);comment:实例类型"`
-	ImageId      string `json:"imageId" gorm:"type:varchar(100);comment:镜像ID"`
-	IpAddr       string `json:"ipAddr" gorm:"type:varchar(45);comment:主IP地址"`
-	Port         int    `json:"port" gorm:"comment:端口号;default:22"`
-	HostName     string `json:"hostname" gorm:"comment:主机名"`
-	Password     string `json:"password" gorm:"type:varchar(500);comment:密码"`
-	Key          string `json:"key" gorm:"comment:密钥"`
-	AuthMode     string `json:"authMode" gorm:"comment:认证方式;default:password"` // password或key
-}
-
-// ResourceCreationRequest 资源创建请求
-type ResourceCreationRequest struct {
-	Model
-
-	RequestType    string        `json:"requestType" gorm:"type:varchar(50);comment:请求类型,如ecs,elb,rds"`
-	Provider       CloudProvider `json:"provider" gorm:"type:varchar(50);comment:云厂商"`
-	Region         string        `json:"region" gorm:"type:varchar(50);comment:地区"`
-	Status         string        `json:"status" gorm:"type:varchar(50);comment:请求状态"`
-	TreeNodeId     uint          `json:"treeNodeId" gorm:"comment:关联的服务树节点ID"`
-	CreatedBy      uint          `json:"createdBy" gorm:"comment:创建者ID"`
-	ApprovedBy     uint          `json:"approvedBy" gorm:"comment:审批者ID"`
-	ApprovedAt     time.Time     `json:"approvedAt" gorm:"comment:审批时间"`
-	ExecutedAt     time.Time     `json:"executedAt" gorm:"comment:执行时间"`
-	RequestContent string        `json:"requestContent" gorm:"type:text;comment:请求详情JSON"`
-	ResultContent  string        `json:"resultContent" gorm:"type:text;comment:结果详情JSON"`
-}
-
 // DiskCreationParams 磁盘创建参数
 type DiskCreationParams struct {
 	Provider     CloudProvider     `json:"provider" binding:"required"`
@@ -99,23 +67,4 @@ type DiskCreationParams struct {
 	TreeNodeId   uint              `json:"treeNodeId" binding:"required"`
 	Description  string            `json:"description"`
 	Tags         map[string]string `json:"tags"`
-}
-
-// ResourceBindingRequest 资源绑定请求
-type ResourceBindingRequest struct {
-	NodeId       uint   `json:"nodeId" binding:"required"`
-	ResourceIds  []uint `json:"resourceIds" binding:"required,min=1"`
-	ResourceType string `json:"resourceType" binding:"required,oneof=ecs elb rds"`
-}
-
-// SyncResourcesReq 同步资源请求
-type SyncResourcesReq struct {
-	Provider CloudProvider `json:"provider" binding:"required"`
-	Region   string        `json:"region" binding:"required"`
-}
-
-// PageResp 分页响应
-type PageResp struct {
-	Total int64       `json:"total"`
-	Data  interface{} `json:"data"`
 }

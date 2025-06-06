@@ -34,21 +34,21 @@ import (
 	"go.uber.org/zap"
 )
 
-type VpcService interface {
+type TreeVpcService interface {
 	GetVpcResourceById(ctx context.Context, req *model.GetVpcDetailReq) (*model.ResourceVpc, error)
 	CreateVpcResource(ctx context.Context, req *model.CreateVpcResourceReq) error
 	DeleteVpcResource(ctx context.Context, req *model.DeleteVpcReq) error
-	ListVpcResources(ctx context.Context, req *model.ListVpcResourcesReq) (*model.PageResp, error)
+	ListVpcResources(ctx context.Context, req *model.ListVpcResourcesReq) (model.ListResp[*model.ResourceVpc], error)
 }
 
-type vpcService struct {
+type treeVpcService struct {
 	logger          *zap.Logger
-	dao             dao.VpcDAO
+	dao             dao.TreeVpcDAO
 	providerFactory *provider.ProviderFactory
 }
 
-func NewVpcService(logger *zap.Logger, dao dao.VpcDAO, providerFactory *provider.ProviderFactory) VpcService {
-	return &vpcService{
+func NewTreeVpcService(logger *zap.Logger, dao dao.TreeVpcDAO, providerFactory *provider.ProviderFactory) TreeVpcService {
+	return &treeVpcService{
 		logger:          logger,
 		dao:             dao,
 		providerFactory: providerFactory,
@@ -56,7 +56,7 @@ func NewVpcService(logger *zap.Logger, dao dao.VpcDAO, providerFactory *provider
 }
 
 // CreateVpcResource 创建VPC
-func (v *vpcService) CreateVpcResource(ctx context.Context, req *model.CreateVpcResourceReq) error {
+func (v *treeVpcService) CreateVpcResource(ctx context.Context, req *model.CreateVpcResourceReq) error {
 	provider, err := v.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		return err
@@ -66,7 +66,7 @@ func (v *vpcService) CreateVpcResource(ctx context.Context, req *model.CreateVpc
 }
 
 // DeleteVpcResource 删除VPC
-func (v *vpcService) DeleteVpcResource(ctx context.Context, req *model.DeleteVpcReq) error {
+func (v *treeVpcService) DeleteVpcResource(ctx context.Context, req *model.DeleteVpcReq) error {
 	provider, err := v.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func (v *vpcService) DeleteVpcResource(ctx context.Context, req *model.DeleteVpc
 }
 
 // GetVpcResourceById 获取VPC详情
-func (v *vpcService) GetVpcResourceById(ctx context.Context, req *model.GetVpcDetailReq) (*model.ResourceVpc, error) {
+func (v *treeVpcService) GetVpcResourceById(ctx context.Context, req *model.GetVpcDetailReq) (*model.ResourceVpc, error) {
 	provider, err := v.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		return nil, err
@@ -86,19 +86,19 @@ func (v *vpcService) GetVpcResourceById(ctx context.Context, req *model.GetVpcDe
 }
 
 // ListVpcResources 获取VPC列表
-func (v *vpcService) ListVpcResources(ctx context.Context, req *model.ListVpcResourcesReq) (*model.PageResp, error) {
+func (v *treeVpcService) ListVpcResources(ctx context.Context, req *model.ListVpcResourcesReq) (model.ListResp[*model.ResourceVpc], error) {
 	provider, err := v.providerFactory.GetProvider(req.Provider)
 	if err != nil {
-		return nil, err
+		return model.ListResp[*model.ResourceVpc]{}, err
 	}
 
 	vpcList, total, err := provider.ListVPCs(ctx, req.Region, req.PageNumber, req.PageSize)
 	if err != nil {
-		return nil, err
+		return model.ListResp[*model.ResourceVpc]{}, err
 	}
 
-	return &model.PageResp{
+	return model.ListResp[*model.ResourceVpc]{
 		Total: total,
-		Data:  vpcList,
+		Items: vpcList,
 	}, nil
 }

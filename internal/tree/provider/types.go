@@ -29,6 +29,7 @@ import (
 	"context"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	ecs "github.com/alibabacloud-go/ecs-20140526/v2/client"
 )
 
 type Provider interface {
@@ -56,13 +57,12 @@ type Provider interface {
 	GetSecurityGroupDetail(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error)
 
 	// 存储管理
-	ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error)
+	ListDisks(ctx context.Context, region string, page int, size int) (model.ListResp[*ecs.DescribeDisksResponseBodyDisksDisk], error)
 	CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error
 	DeleteDisk(ctx context.Context, region string, diskID string) error
-	AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error
+	AttachDisk(ctx context.Context, region string, zoneId string, diskCategory string, diskName string, diskSize int, description string, instanceID string) error
 	DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error
 
 	ListRegions(ctx context.Context) ([]*model.RegionResp, error)
 	GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error)
-	ListInstanceOptions(ctx context.Context, payType string, region string, zone string, instanceType string, imageId string, systemDiskCategory string, dataDiskCategory string, pageSize int, pageNumber int) ([]*model.ListInstanceOptionsResp, error)
 }

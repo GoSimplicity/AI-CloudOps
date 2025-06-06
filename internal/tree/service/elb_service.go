@@ -33,8 +33,8 @@ import (
 	"go.uber.org/zap"
 )
 
-type ElbService interface {
-	ListElbResources(ctx context.Context, req *model.ListElbResourcesReq) (*model.PageResp, error)
+type TreeElbService interface {
+	ListElbResources(ctx context.Context, req *model.ListElbResourcesReq) (model.ListResp[*model.ResourceElb], error)
 	GetElbResourceById(ctx context.Context, req *model.GetElbDetailReq) (*model.ResourceELBResp, error)
 	CreateElbResource(ctx context.Context, req *model.ElbCreationParams) error
 	DeleteElbResource(ctx context.Context, req *model.DeleteElbReq) error
@@ -42,7 +42,14 @@ type ElbService interface {
 
 type elbService struct {
 	logger *zap.Logger
-	dao    dao.ElbDAO
+	dao    dao.TreeElbDAO
+}
+
+func NewTreeElbService(logger *zap.Logger, dao dao.TreeElbDAO) TreeElbService {
+	return &elbService{
+		logger: logger,
+		dao:    dao,
+	}
 }
 
 // CreateElbResource implements ElbService.
@@ -61,13 +68,6 @@ func (e *elbService) GetElbResourceById(ctx context.Context, req *model.GetElbDe
 }
 
 // ListElbResources implements ElbService.
-func (e *elbService) ListElbResources(ctx context.Context, req *model.ListElbResourcesReq) (*model.PageResp, error) {
+func (e *elbService) ListElbResources(ctx context.Context, req *model.ListElbResourcesReq) (model.ListResp[*model.ResourceElb], error) {
 	panic("unimplemented")
-}
-
-func NewElbService(logger *zap.Logger, dao dao.ElbDAO) ElbService {
-	return &elbService{
-		logger: logger,
-		dao:    dao,
-	}
 }

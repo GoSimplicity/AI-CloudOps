@@ -50,7 +50,7 @@ const (
 	DefaultStatus = NodeStatusActive
 )
 
-type TreeService interface {
+type TreeNodeService interface {
 	// 树结构相关接口
 	GetTreeList(ctx context.Context, req *model.GetTreeListReq) (model.ListResp[*model.TreeNodeListResp], error)
 	GetNodeDetail(ctx context.Context, id int) (*model.TreeNodeDetailResp, error)
@@ -77,11 +77,11 @@ type TreeService interface {
 
 type treeService struct {
 	logger  *zap.Logger
-	dao     dao.TreeDAO
+	dao     dao.TreeNodeDAO
 	userDao userDao.UserDAO
 }
 
-func NewTreeService(logger *zap.Logger, dao dao.TreeDAO, userDao userDao.UserDAO) TreeService {
+func NewTreeNodeService(logger *zap.Logger, dao dao.TreeNodeDAO, userDao userDao.UserDAO) TreeNodeService {
 	return &treeService{
 		logger:  logger,
 		dao:     dao,

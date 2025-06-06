@@ -31,13 +31,13 @@ import "time"
 type CloudProvider string
 
 const (
-	CloudProviderLocal   CloudProvider = "local"   // 本地环境
-	CloudProviderAliyun  CloudProvider = "aliyun"  // 阿里云
-	CloudProviderHuawei  CloudProvider = "huawei"  // 华为云
-	CloudProviderTencent CloudProvider = "tencent" // 腾讯云
-	CloudProviderAWS     CloudProvider = "aws"     // AWS
-	CloudProviderAzure   CloudProvider = "azure"   // Azure
-	CloudProviderGCP     CloudProvider = "gcp"     // Google Cloud
+	CloudProviderAliyun CloudProvider = "aliyun" // 阿里云
+	CloudProviderLocal  CloudProvider = "local"  // 本地环境
+	// CloudProviderHuawei  CloudProvider = "huawei"  // 华为云
+	// CloudProviderTencent CloudProvider = "tencent" // 腾讯云
+	// CloudProviderAWS     CloudProvider = "aws"     // AWS
+	// CloudProviderAzure   CloudProvider = "azure"   // Azure
+	// CloudProviderGCP     CloudProvider = "gcp"     // Google Cloud
 )
 
 // CloudAccount 云账户信息
@@ -46,81 +46,62 @@ type CloudAccount struct {
 	Name            string        `json:"name" gorm:"type:varchar(100);comment:账户名称"`
 	Provider        CloudProvider `json:"provider" gorm:"type:varchar(50);comment:云厂商"`
 	AccountId       string        `json:"accountId" gorm:"type:varchar(100);comment:账户ID"`
-	AccessKey       string        `json:"-" gorm:"type:varchar(100);comment:访问密钥ID"`
-	EncryptedSecret string        `json:"-" gorm:"type:varchar(500);comment:加密的访问密钥"`
+	AccessKey       string        `json:"accessKey" gorm:"type:varchar(100);comment:访问密钥ID"`
+	EncryptedSecret string        `json:"encryptedSecret" gorm:"type:varchar(500);comment:加密的访问密钥"`
 	Regions         StringList    `json:"regions" gorm:"type:varchar(500);comment:可用区域列表"`
 	IsEnabled       bool          `json:"isEnabled" gorm:"comment:是否启用"`
 	LastSyncTime    time.Time     `json:"lastSyncTime" gorm:"comment:最后同步时间"`
 	Description     string        `json:"description" gorm:"type:text;comment:账户描述"`
 }
 
-// CloudProviderResp 云厂商响应
-type CloudProviderResp struct {
-	Provider  CloudProvider `json:"provider"`
-	LocalName string        `json:"localName"`
+// CreateCloudAccountReq 创建云账号请求
+type CreateCloudAccountReq struct {
+	Name        string        `json:"name" binding:"required" validate:"max=100"`
+	Provider    CloudProvider `json:"provider" binding:"required"`
+	AccountId   string        `json:"accountId" binding:"required" validate:"max=100"`
+	AccessKey   string        `json:"accessKey" binding:"required" validate:"max=100"`
+	SecretKey   string        `json:"secretKey" binding:"required"`
+	Regions     []string      `json:"regions"`
+	IsEnabled   bool          `json:"isEnabled"`
+	Description string        `json:"description" validate:"max=500"`
 }
 
-type ListRegionsReq struct {
-	Provider CloudProvider `json:"provider" binding:"required"`
+// UpdateCloudAccountReq 更新云账号请求
+type UpdateCloudAccountReq struct {
+	ID          int           `json:"id"`
+	Name        string        `json:"name" validate:"max=100"`
+	Provider    CloudProvider `json:"provider"`
+	AccountId   string        `json:"accountId" validate:"max=100"`
+	AccessKey   string        `json:"accessKey" validate:"max=100"`
+	SecretKey   string        `json:"secretKey"`
+	Regions     []string      `json:"regions"`
+	IsEnabled   bool          `json:"isEnabled"`
+	Description string        `json:"description" validate:"max=500"`
 }
 
-type ListZonesReq struct {
+// GetCloudAccountReq 获取云账号详情请求
+type GetCloudAccountReq struct {
+	ID int `json:"id" uri:"id" binding:"required"`
 }
 
-type ListInstanceTypesReq struct {
-	Provider CloudProvider `json:"provider" binding:"required"`
-	Region   string        `json:"region" binding:"required"`
+// ListCloudAccountsReq 获取云账号列表请求
+type ListCloudAccountsReq struct {
+	Page     int           `json:"page" form:"page"`
+	PageSize int           `json:"pageSize" form:"pageSize"`
+	Name     string        `json:"name" form:"name"`
+	Provider CloudProvider `json:"provider" form:"provider"`
+	Enabled  bool          `json:"enabled" form:"enabled"`
 }
 
-type ListImagesReq struct {
-	Provider CloudProvider `json:"provider" binding:"required"`
-	Region   string        `json:"region" binding:"required"`
+// TestCloudAccountReq 测试云账号连接请求
+type TestCloudAccountReq struct {
+	ID int `json:"id" uri:"id" binding:"required"`
 }
 
-// RegionResp 区域信息响应
-type RegionResp struct {
-	RegionId       string `json:"regionId"`       // 区域ID
-	LocalName      string `json:"localName"`      // 区域名称
-	RegionEndpoint string `json:"regionEndpoint"` // 区域终端节点
-}
-
-// ZoneResp 可用区信息响应
-type ZoneResp struct {
-	ZoneId    string `json:"zoneId"`
-	LocalName string `json:"localName"`
-}
-
-// InstanceTypeResp 实例类型响应
-type InstanceTypeResp struct {
-	InstanceTypeId string `json:"instanceTypeId"`
-	CpuCoreCount   int    `json:"cpuCoreCount"`
-	MemorySize     int    `json:"memorySize"`
-	Description    string `json:"description"`
-}
-
-// ImageResp 镜像响应
-type ImageResp struct {
-	ImageId     string `json:"imageId"`
-	ImageName   string `json:"imageName"`
-	OSType      string `json:"osType"`
-	Description string `json:"description"`
-}
-
-// SecurityGroupResp 安全组响应
-type SecurityGroupResp struct {
-	SecurityGroupId   string `json:"securityGroupId"`
-	SecurityGroupName string `json:"securityGroupName"`
-	Description       string `json:"description"`
-}
-
-// CloudStatisticsResp 云厂商统计响应
-type CloudStatisticsResp struct {
-	RegionDistribution      int     `json:"regionDistribution"`      // 各区域资源数量分布
-	TotalEcsCount           int     `json:"totalEcsCount"`           // ECS实例总数
-	RunningEcsCount         int     `json:"runningEcsCount"`         // 运行中的ECS实例数
-	StoppedEcsCount         int     `json:"stoppedEcsCount"`         // 已停止的ECS实例数
-	TotalVpcCount           int     `json:"totalVpcCount"`           // VPC总数
-	TotalSecurityGroupCount int     `json:"totalSecurityGroupCount"` // 安全组总数
-	TotalMonthlyCost        float64 `json:"totalMonthlyCost"`        // 月度总费用
-	UpdateTime              int64   `json:"updateTime"`              // 统计数据更新时间戳
+// SyncCloudReq 同步云资源请求
+type SyncCloudReq struct {
+	AccountIds   []int    `json:"accountIds"`   // 要同步的账号ID列表，为空则同步所有启用的账号
+	ResourceType string   `json:"resourceType"` // 资源类型：ecs,vpc,sg等，为空则同步所有类型
+	Regions      []string `json:"regions"`      // 要同步的区域列表，为空则同步所有区域
+	Force        bool     `json:"force"`        // 是否强制重新同步
 }

@@ -32,25 +32,25 @@ import (
 	"gorm.io/gorm"
 )
 
-type EcsDAO interface {
+type TreeEcsDAO interface {
 	ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) ([]*model.ResourceEcs, error)
 	GetEcsResourceById(ctx context.Context, id int) (*model.ResourceEcs, error)
 	CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error
 	DeleteEcsResource(ctx context.Context, instanceId string) error
 }
 
-type ecsDAO struct {
+type treeEcsDAO struct {
 	db *gorm.DB
 }
 
-func NewEcsDAO(db *gorm.DB) EcsDAO {
-	return &ecsDAO{
+func NewTreeEcsDAO(db *gorm.DB) TreeEcsDAO {
+	return &treeEcsDAO{
 		db: db,
 	}
 }
 
 // CreateEcsResource 创建ECS资源
-func (e *ecsDAO) CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
+func (e *treeEcsDAO) CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
 	if err := e.db.WithContext(ctx).Create(resource).Error; err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func (e *ecsDAO) CreateEcsResource(ctx context.Context, resource *model.Resource
 }
 
 // GetEcsResourceById implements EcsDAO.
-func (e *ecsDAO) GetEcsResourceById(ctx context.Context, id int) (*model.ResourceEcs, error) {
+func (e *treeEcsDAO) GetEcsResourceById(ctx context.Context, id int) (*model.ResourceEcs, error) {
 	var result model.ResourceEcs
 	if err := e.db.Where("id = ?", id).First(&result).Error; err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (e *ecsDAO) GetEcsResourceById(ctx context.Context, id int) (*model.Resourc
 }
 
 // ListEcsResources 获取ECS资源列表
-func (e *ecsDAO) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) ([]*model.ResourceEcs, error) {
+func (e *treeEcsDAO) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) ([]*model.ResourceEcs, error) {
 	var result []*model.ResourceEcs
 	var total int64
 
@@ -99,7 +99,7 @@ func (e *ecsDAO) ListEcsResources(ctx context.Context, req *model.ListEcsResourc
 	return result, nil
 }
 
-func (e *ecsDAO) DeleteEcsResource(ctx context.Context, instanceId string) error {
+func (e *treeEcsDAO) DeleteEcsResource(ctx context.Context, instanceId string) error {
 	if err := e.db.WithContext(ctx).Where("id = ?", instanceId).Delete(&model.ResourceEcs{}).Error; err != nil {
 		return err
 	}

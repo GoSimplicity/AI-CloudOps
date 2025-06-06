@@ -34,10 +34,11 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/provider"
+	"github.com/alibabacloud-go/ecs-20140526/v2/client"
 	"go.uber.org/zap"
 )
 
-type EcsService interface {
+type TreeEcsService interface {
 	// 资源管理
 	ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (model.ListResp[*model.ResourceEcs], error)
 	GetEcsResourceById(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceECSDetailResp, error)
@@ -48,23 +49,21 @@ type EcsService interface {
 	DeleteEcsResource(ctx context.Context, req *model.DeleteEcsReq) error
 
 	// 磁盘管理
-	ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (*model.PageResp, error)
+	ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (model.ListResp[*client.DescribeDisksResponseBodyDisksDisk], error)
 	CreateDisk(ctx context.Context, provider model.CloudProvider, region string, params *model.DiskCreationParams) error
 	DeleteDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string) error
 	AttachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error
 	DetachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error
-
-	ListInstanceOptions(ctx context.Context, req *model.ListInstanceOptionsReq) ([]*model.ListInstanceOptionsResp, error)
 }
 
-type ecsService struct {
+type treeEcsService struct {
 	providerFactory *provider.ProviderFactory
 	logger          *zap.Logger
-	dao             dao.EcsDAO
+	dao             dao.TreeEcsDAO
 }
 
-func NewEcsService(logger *zap.Logger, dao dao.EcsDAO, providerFactory *provider.ProviderFactory) EcsService {
-	return &ecsService{
+func NewTreeEcsService(logger *zap.Logger, dao dao.TreeEcsDAO, providerFactory *provider.ProviderFactory) TreeEcsService {
+	return &treeEcsService{
 		logger:          logger,
 		dao:             dao,
 		providerFactory: providerFactory,
@@ -72,28 +71,26 @@ func NewEcsService(logger *zap.Logger, dao dao.EcsDAO, providerFactory *provider
 }
 
 // CreateEcsResource 创建ECS资源
-func (e *ecsService) CreateEcsResource(ctx context.Context, params *model.CreateEcsResourceReq) error {
+func (e *treeEcsService) CreateEcsResource(ctx context.Context, params *model.CreateEcsResourceReq) error {
 	if params.Provider == model.CloudProviderLocal {
 		err := e.dao.CreateEcsResource(ctx, &model.ResourceEcs{
-			ComputeResource: model.ComputeResource{
-				ResourceBase: model.ResourceBase{
-					Description:  params.Description,
-					TreeNodeID:   params.TreeNodeId,
-					Tags:         params.Tags,
-					LastSyncTime: time.Now(),
-					Provider:     params.Provider,
-					InstanceName: params.InstanceName,
-				},
-				InstanceType: params.InstanceType,
-				HostName:     params.Hostname,
-				Password:     params.Password,
-				IpAddr:       params.IpAddr,
-				Port:         params.Port,
-				AuthMode:     params.AuthMode,
-				Key:          params.Key,
+			ResourceBase: model.ResourceBase{
+				Description:  params.Description,
+				TreeNodeID:   params.TreeNodeId,
+				Tags:         params.Tags,
+				LastSyncTime: time.Now(),
+				Provider:     params.Provider,
+				InstanceName: params.InstanceName,
 			},
-			OsType:    params.OsType,
-			ImageName: params.ImageName,
+			InstanceType: params.InstanceType,
+			HostName:     params.Hostname,
+			Password:     params.Password,
+			IpAddr:       params.IpAddr,
+			Port:         params.Port,
+			AuthMode:     params.AuthMode,
+			Key:          params.Key,
+			OsType:       params.OsType,
+			ImageName:    params.ImageName,
 		})
 		if err != nil {
 			e.logger.Error("[CreateEcsResource] 创建ECS资源失败", zap.Error(err))
@@ -120,7 +117,7 @@ func (e *ecsService) CreateEcsResource(ctx context.Context, params *model.Create
 }
 
 // StartEcsResource 启动ECS资源
-func (e *ecsService) StartEcsResource(ctx context.Context, req *model.StartEcsReq) error {
+func (e *treeEcsService) StartEcsResource(ctx context.Context, req *model.StartEcsReq) error {
 	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		return fmt.Errorf("[StartEcsResource] 获取云提供商失败: %w", err)
@@ -140,7 +137,7 @@ func (e *ecsService) StartEcsResource(ctx context.Context, req *model.StartEcsRe
 }
 
 // StopEcsResource 停止ECS资源
-func (e *ecsService) StopEcsResource(ctx context.Context, req *model.StopEcsReq) error {
+func (e *treeEcsService) StopEcsResource(ctx context.Context, req *model.StopEcsReq) error {
 	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		return fmt.Errorf("[StopEcsResource] 获取云提供商失败: %w", err)
@@ -160,7 +157,7 @@ func (e *ecsService) StopEcsResource(ctx context.Context, req *model.StopEcsReq)
 }
 
 // RestartEcsResource 重启ECS资源
-func (e *ecsService) RestartEcsResource(ctx context.Context, req *model.RestartEcsReq) error {
+func (e *treeEcsService) RestartEcsResource(ctx context.Context, req *model.RestartEcsReq) error {
 	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
 	if err != nil {
 		return fmt.Errorf("[RestartEcsResource] 获取云提供商失败: %w", err)
@@ -180,7 +177,7 @@ func (e *ecsService) RestartEcsResource(ctx context.Context, req *model.RestartE
 }
 
 // DeleteEcsResource 删除ECS资源
-func (e *ecsService) DeleteEcsResource(ctx context.Context, req *model.DeleteEcsReq) error {
+func (e *treeEcsService) DeleteEcsResource(ctx context.Context, req *model.DeleteEcsReq) error {
 	if req.Provider == model.CloudProviderLocal {
 		err := e.dao.DeleteEcsResource(ctx, req.InstanceId)
 		if err != nil {
@@ -209,7 +206,7 @@ func (e *ecsService) DeleteEcsResource(ctx context.Context, req *model.DeleteEcs
 }
 
 // GetEcsResourceById 获取ECS资源详情
-func (e *ecsService) GetEcsResourceById(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceECSDetailResp, error) {
+func (e *treeEcsService) GetEcsResourceById(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceECSDetailResp, error) {
 	if req.Provider == model.CloudProviderLocal {
 		intId, err := strconv.ParseInt(req.InstanceId, 10, 64)
 		if err != nil {
@@ -242,7 +239,7 @@ func (e *ecsService) GetEcsResourceById(ctx context.Context, req *model.GetEcsDe
 }
 
 // ListEcsResources 获取ECS资源列表
-func (e *ecsService) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (model.ListResp[*model.ResourceEcs], error) {
+func (e *treeEcsService) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (model.ListResp[*model.ResourceEcs], error) {
 	if req.Provider == model.CloudProviderLocal {
 		resources, err := e.dao.ListEcsResources(ctx, req)
 		if err != nil {
@@ -281,10 +278,13 @@ func (e *ecsService) ListEcsResources(ctx context.Context, req *model.ListEcsRes
 }
 
 // ListDisks 获取磁盘列表
-func (e *ecsService) ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (*model.PageResp, error) {
+func (e *treeEcsService) ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (model.ListResp[*client.DescribeDisksResponseBodyDisksDisk], error) {
 	cloudProvider, err := e.providerFactory.GetProvider(provider)
 	if err != nil {
-		return nil, fmt.Errorf("[ListDisks] 获取云提供商失败: %w", err)
+		return model.ListResp[*client.DescribeDisksResponseBodyDisksDisk]{
+			Total: 0,
+			Items: []*client.DescribeDisksResponseBodyDisksDisk{},
+		}, fmt.Errorf("[ListDisks] 获取云提供商失败: %w", err)
 	}
 
 	result, err := cloudProvider.ListDisks(ctx, region, pageSize, pageNumber)
@@ -293,17 +293,20 @@ func (e *ecsService) ListDisks(ctx context.Context, provider model.CloudProvider
 			zap.String("provider", string(provider)),
 			zap.String("region", region),
 			zap.Error(err))
-		return nil, fmt.Errorf("[ListDisks] 获取磁盘列表失败: %w", err)
+		return model.ListResp[*client.DescribeDisksResponseBodyDisksDisk]{
+			Total: 0,
+			Items: []*client.DescribeDisksResponseBodyDisksDisk{},
+		}, fmt.Errorf("[ListDisks] 获取磁盘列表失败: %w", err)
 	}
 
-	if len(result) > 0 {
-		return result[0], nil
-	}
-	return &model.PageResp{}, nil
+	return model.ListResp[*client.DescribeDisksResponseBodyDisksDisk]{
+		Total: result.Total,
+		Items: result.Items,
+	}, nil
 }
 
 // CreateDisk 创建磁盘
-func (e *ecsService) CreateDisk(ctx context.Context, provider model.CloudProvider, region string, params *model.DiskCreationParams) error {
+func (e *treeEcsService) CreateDisk(ctx context.Context, provider model.CloudProvider, region string, params *model.DiskCreationParams) error {
 	cloudProvider, err := e.providerFactory.GetProvider(provider)
 	if err != nil {
 		return fmt.Errorf("[CreateDisk] 获取云提供商失败: %w", err)
@@ -322,7 +325,7 @@ func (e *ecsService) CreateDisk(ctx context.Context, provider model.CloudProvide
 }
 
 // DeleteDisk 删除磁盘
-func (e *ecsService) DeleteDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string) error {
+func (e *treeEcsService) DeleteDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string) error {
 	cloudProvider, err := e.providerFactory.GetProvider(provider)
 	if err != nil {
 		return fmt.Errorf("[DeleteDisk] 获取云提供商失败: %w", err)
@@ -342,13 +345,13 @@ func (e *ecsService) DeleteDisk(ctx context.Context, provider model.CloudProvide
 }
 
 // AttachDisk 挂载磁盘
-func (e *ecsService) AttachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error {
+func (e *treeEcsService) AttachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error {
 	cloudProvider, err := e.providerFactory.GetProvider(provider)
 	if err != nil {
 		return fmt.Errorf("[AttachDisk] 获取云提供商失败: %w", err)
 	}
 
-	err = cloudProvider.AttachDisk(ctx, region, diskID, instanceID)
+	err = cloudProvider.AttachDisk(ctx, region, "", "", "", 0, "", instanceID)
 	if err != nil {
 		e.logger.Error("[AttachDisk] 挂载磁盘失败",
 			zap.String("provider", string(provider)),
@@ -363,7 +366,7 @@ func (e *ecsService) AttachDisk(ctx context.Context, provider model.CloudProvide
 }
 
 // DetachDisk 卸载磁盘
-func (e *ecsService) DetachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error {
+func (e *treeEcsService) DetachDisk(ctx context.Context, provider model.CloudProvider, region string, diskID string, instanceID string) error {
 	cloudProvider, err := e.providerFactory.GetProvider(provider)
 	if err != nil {
 		return fmt.Errorf("[DetachDisk] 获取云提供商失败: %w", err)
@@ -381,20 +384,4 @@ func (e *ecsService) DetachDisk(ctx context.Context, provider model.CloudProvide
 	}
 
 	return nil
-}
-
-// ListInstanceOptions 获取实例选项
-func (e *ecsService) ListInstanceOptions(ctx context.Context, req *model.ListInstanceOptionsReq) ([]*model.ListInstanceOptionsResp, error) {
-	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
-	if err != nil {
-		return nil, fmt.Errorf("[ListInstanceOptions] 获取云提供商失败: %w", err)
-	}
-
-	result, err := cloudProvider.ListInstanceOptions(ctx, req.PayType, req.Region, req.Zone, req.InstanceType, req.ImageId, req.SystemDiskCategory, req.DataDiskCategory, req.PageSize, req.PageNumber)
-	if err != nil {
-		e.logger.Error("[ListInstanceOptions] 获取实例选项失败", zap.Error(err))
-		return nil, fmt.Errorf("[ListInstanceOptions] 获取实例选项失败: %w", err)
-	}
-
-	return result, nil
 }

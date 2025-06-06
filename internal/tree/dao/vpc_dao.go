@@ -33,41 +33,41 @@ import (
 	"gorm.io/gorm"
 )
 
-type VpcDAO interface {
-	ListVpcResources(ctx context.Context, req *model.ListVpcResourcesReq) (*model.PageResp, error)
+type TreeVpcDAO interface {
+	ListVpcResources(ctx context.Context, req *model.ListVpcResourcesReq) (model.ListResp[*model.ResourceVpc], error)
 	GetVpcResourceById(ctx context.Context, id int) (*model.ResourceVpc, error)
 	CreateVpcResource(ctx context.Context, req *model.CreateVpcResourceReq) error
 	DeleteVpcResource(ctx context.Context, id int) error
 }
 
-type vpcDAO struct {
+type treeVpcDAO struct {
 	logger *zap.Logger
 	db     *gorm.DB
 }
 
-func NewVpcDAO(logger *zap.Logger, db *gorm.DB) VpcDAO {
-	return &vpcDAO{
+func NewTreeVpcDAO(logger *zap.Logger, db *gorm.DB) TreeVpcDAO {
+	return &treeVpcDAO{
 		logger: logger,
 		db:     db,
 	}
 }
 
 // CreateVpcResource implements VpcDAO.
-func (v *vpcDAO) CreateVpcResource(ctx context.Context, req *model.CreateVpcResourceReq) error {
+func (v *treeVpcDAO) CreateVpcResource(ctx context.Context, req *model.CreateVpcResourceReq) error {
 	panic("unimplemented")
 }
 
 // DeleteVpcResource implements VpcDAO.
-func (v *vpcDAO) DeleteVpcResource(ctx context.Context, id int) error {
+func (v *treeVpcDAO) DeleteVpcResource(ctx context.Context, id int) error {
 	panic("unimplemented")
 }
 
 // GetVpcResourceById implements VpcDAO.
-func (v *vpcDAO) GetVpcResourceById(ctx context.Context, id int) (*model.ResourceVpc, error) {
+func (v *treeVpcDAO) GetVpcResourceById(ctx context.Context, id int) (*model.ResourceVpc, error) {
 	panic("unimplemented")
 }
 
 // ListVpcResources implements VpcDAO.
-func (v *vpcDAO) ListVpcResources(ctx context.Context, req *model.ListVpcResourcesReq) (*model.PageResp, error) {
+func (v *treeVpcDAO) ListVpcResources(ctx context.Context, req *model.ListVpcResourcesReq) (model.ListResp[*model.ResourceVpc], error) {
 	panic("unimplemented")
 }

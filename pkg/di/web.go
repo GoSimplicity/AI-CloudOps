@@ -66,16 +66,20 @@ func InitGinServer(
 	scrapeJobHdl *prometheusApi.ScrapeJobHandler,
 	sendGroupHdl *prometheusApi.SendGroupHandler,
 	auditHdl *systemApi.AuditHandler,
-	fromdesignHandler *workorderApi.FormDesignHandler,
-	processHandler *workorderApi.ProcessHandler,
-	templateHandler *workorderApi.TemplateHandler,
-	instanceHandler *workorderApi.InstanceHandler,
-	statisticsHandler *workorderApi.StatisticsHandler,
-	categoryHandler *workorderApi.CategoryGroupHandler,
-	aiHandler *aiHandler.AIHandler,
-	resourceHandler *resourceApi.ResourceHandler,
-	treeHandler *resourceApi.TreeHandler,
-
+	formDesignHdl *workorderApi.FormDesignHandler,
+	processHdl *workorderApi.ProcessHandler,
+	templateHdl *workorderApi.TemplateHandler,
+	instanceHdl *workorderApi.InstanceHandler,
+	statisticsHdl *workorderApi.StatisticsHandler,
+	categoryHdl *workorderApi.CategoryGroupHandler,
+	aiHdl *aiHandler.AIHandler,
+	treeNodeHdl *resourceApi.TreeNodeHandler,
+	treeEcsHdl *resourceApi.TreeEcsHandler,
+	treeVpcHdl *resourceApi.TreeVpcHandler,
+	treeSecurityGroupHdl *resourceApi.TreeSecurityGroupHandler,
+	treeCloudHdl *resourceApi.TreeCloudHandler,
+	treeRdsHdl *resourceApi.TreeRdsHandler,
+	treeElbHdl *resourceApi.TreeElbHandler,
 ) *gin.Engine {
 	server := gin.Default()
 	server.Use(m...)
@@ -104,14 +108,19 @@ func InitGinServer(
 	k8sTaintHdl.RegisterRouters(server)
 	k8sYamlTaskHdl.RegisterRouters(server)
 	k8sYamlTemplateHdl.RegisterRouters(server)
-	fromdesignHandler.RegisterRouters(server)
-	processHandler.RegisterRouters(server)
-	templateHandler.RegisterRouters(server)
-	instanceHandler.RegisterRouters(server)
-	statisticsHandler.RegisterRouters(server)
-	categoryHandler.RegisterRouters(server)
-	aiHandler.RegisterRouters(server)
-	resourceHandler.RegisterRouters(server)
-	treeHandler.RegisterRouters(server)
+	formDesignHdl.RegisterRouters(server)
+	processHdl.RegisterRouters(server)
+	templateHdl.RegisterRouters(server)
+	instanceHdl.RegisterRouters(server)
+	statisticsHdl.RegisterRouters(server)
+	categoryHdl.RegisterRouters(server)
+	aiHdl.RegisterRouters(server)
+	treeNodeHdl.RegisterRouters(server)
+	treeEcsHdl.RegisterRouters(server)
+	treeVpcHdl.RegisterRouters(server)
+	treeSecurityGroupHdl.RegisterRouters(server)
+	treeCloudHdl.RegisterRouters(server)
+	treeRdsHdl.RegisterRouters(server)
+	treeElbHdl.RegisterRouters(server)
 	return server
 }

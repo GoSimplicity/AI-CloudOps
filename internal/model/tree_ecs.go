@@ -27,7 +27,18 @@ package model
 
 // ResourceEcs 服务器资源
 type ResourceEcs struct {
-	ComputeResource
+	ResourceBase
+
+	Cpu               int        `json:"cpu" gorm:"comment:CPU核数"`
+	Memory            int        `json:"memory" gorm:"comment:内存大小,单位GiB"`
+	InstanceType      string     `json:"instanceType" gorm:"type:varchar(100);comment:实例类型"`
+	ImageId           string     `json:"imageId" gorm:"type:varchar(100);comment:镜像ID"`
+	IpAddr            string     `json:"ipAddr" gorm:"type:varchar(45);comment:主IP地址"`
+	Port              int        `json:"port" gorm:"comment:端口号;default:22"`
+	HostName          string     `json:"hostname" gorm:"comment:主机名"`
+	Password          string     `json:"password" gorm:"type:varchar(500);comment:密码"`
+	Key               string     `json:"key" gorm:"comment:密钥"`
+	AuthMode          string     `json:"authMode" gorm:"comment:认证方式;default:password"` // password或key
 	OsType            string     `json:"osType" gorm:"type:varchar(50);comment:操作系统类型,如win,linux"`
 	VmType            int        `json:"vmType" gorm:"default:1;comment:设备类型,1=虚拟设备,2=物理设备"`
 	OSName            string     `json:"osName" gorm:"type:varchar(100);comment:操作系统名称"`
@@ -158,4 +169,57 @@ type ListInstanceOptionsResp struct {
 	Architecture       string `json:"architecture"`
 	Cpu                int    `json:"cpu"`
 	Memory             int    `json:"memory"`
+}
+
+type ListRegionsReq struct {
+	Provider CloudProvider `json:"provider" binding:"required"`
+}
+
+type ListZonesReq struct {
+}
+
+type ListInstanceTypesReq struct {
+	Provider CloudProvider `json:"provider" binding:"required"`
+	Region   string        `json:"region" binding:"required"`
+}
+
+type ListImagesReq struct {
+	Provider CloudProvider `json:"provider" binding:"required"`
+	Region   string        `json:"region" binding:"required"`
+}
+
+// RegionResp 区域信息响应
+type RegionResp struct {
+	RegionId       string `json:"regionId"`       // 区域ID
+	LocalName      string `json:"localName"`      // 区域名称
+	RegionEndpoint string `json:"regionEndpoint"` // 区域终端节点
+}
+
+// ZoneResp 可用区信息响应
+type ZoneResp struct {
+	ZoneId    string `json:"zoneId"`
+	LocalName string `json:"localName"`
+}
+
+// InstanceTypeResp 实例类型响应
+type InstanceTypeResp struct {
+	InstanceTypeId string `json:"instanceTypeId"`
+	CpuCoreCount   int    `json:"cpuCoreCount"`
+	MemorySize     int    `json:"memorySize"`
+	Description    string `json:"description"`
+}
+
+// ImageResp 镜像响应
+type ImageResp struct {
+	ImageId     string `json:"imageId"`
+	ImageName   string `json:"imageName"`
+	OSType      string `json:"osType"`
+	Description string `json:"description"`
+}
+
+// SecurityGroupResp 安全组响应
+type SecurityGroupResp struct {
+	SecurityGroupId   string `json:"securityGroupId"`
+	SecurityGroupName string `json:"securityGroupName"`
+	Description       string `json:"description"`
 }

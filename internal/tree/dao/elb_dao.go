@@ -32,34 +32,34 @@ import (
 	"gorm.io/gorm"
 )
 
-type ElbDAO interface {
+type TreeElbDAO interface {
 	// ELB资源接口
-	ListElbResources(ctx context.Context, req *model.ListElbResourcesReq) (*model.PageResp, error)
+	ListElbResources(ctx context.Context, req *model.ListElbResourcesReq) (model.ListResp[*model.ResourceElb], error)
 	GetElbResourceById(ctx context.Context, id int) (*model.ResourceELBResp, error)
 	CreateElbResource(ctx context.Context, params *model.ElbCreationParams) error
 }
 
-type elbDAO struct {
+type treeElbDAO struct {
 	db *gorm.DB
 }
 
-func NewElbDAO(db *gorm.DB) ElbDAO {
-	return &elbDAO{
+func NewTreeElbDAO(db *gorm.DB) TreeElbDAO {
+	return &treeElbDAO{
 		db: db,
 	}
 }
 
 // CreateElbResource implements ElbDAO.
-func (e *elbDAO) CreateElbResource(ctx context.Context, params *model.ElbCreationParams) error {
+func (e *treeElbDAO) CreateElbResource(ctx context.Context, params *model.ElbCreationParams) error {
 	panic("unimplemented")
 }
 
 // GetElbResourceById implements ElbDAO.
-func (e *elbDAO) GetElbResourceById(ctx context.Context, id int) (*model.ResourceELBResp, error) {
+func (e *treeElbDAO) GetElbResourceById(ctx context.Context, id int) (*model.ResourceELBResp, error) {
 	panic("unimplemented")
 }
 
 // ListElbResources implements ElbDAO.
-func (e *elbDAO) ListElbResources(ctx context.Context, req *model.ListElbResourcesReq) (*model.PageResp, error) {
+func (e *treeElbDAO) ListElbResources(ctx context.Context, req *model.ListElbResourcesReq) (model.ListResp[*model.ResourceElb], error) {
 	panic("unimplemented")
 }

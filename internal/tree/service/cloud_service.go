@@ -33,65 +33,59 @@ import (
 	"go.uber.org/zap"
 )
 
-type CloudService interface {
-	ListCloudProviders(ctx context.Context) ([]model.CloudProviderResp, error)
-	ListRegions(ctx context.Context, req *model.ListRegionsReq) ([]model.RegionResp, error)
-	ListZones(ctx context.Context, req *model.ListZonesReq) ([]model.ZoneResp, error)
-	ListInstanceTypes(ctx context.Context, req *model.ListInstanceTypesReq) ([]model.InstanceTypeResp, error)
-	ListImages(ctx context.Context, req *model.ListImagesReq) ([]model.ImageResp, error)
-	ListVpcs(ctx context.Context, req *model.ListVpcsReq) ([]model.ResourceVpc, error)
-	ListSecurityGroups(ctx context.Context, req *model.ListSecurityGroupsReq) ([]model.SecurityGroupResp, error)
-	GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsResp, error)
+type TreeCloudService interface {
+	CreateCloudAccount(ctx context.Context, req *model.CreateCloudAccountReq) error
+	UpdateCloudAccount(ctx context.Context, id int, req *model.UpdateCloudAccountReq) error
+	DeleteCloudAccount(ctx context.Context, id int) error
+	GetCloudAccount(ctx context.Context, id int) (*model.CloudAccount, error)
+	ListCloudAccounts(ctx context.Context, req *model.ListCloudAccountsReq) (model.ListResp[model.CloudAccount], error)
+	TestCloudAccount(ctx context.Context, id int) error
+	SyncCloudResources(ctx context.Context, req *model.SyncCloudReq) error
 }
 
-type cloudService struct {
+type treeCloudService struct {
 	logger *zap.Logger
-	dao    dao.CloudDAO
+	dao    dao.TreeCloudDAO
 }
 
-// GetTreeStatistics implements CloudService.
-func (c *cloudService) GetTreeStatistics(ctx context.Context) (*model.TreeStatisticsResp, error) {
-	panic("unimplemented")
-}
-
-// ListCloudProviders implements CloudService.
-func (c *cloudService) ListCloudProviders(ctx context.Context) ([]model.CloudProviderResp, error) {
-	panic("unimplemented")
-}
-
-// ListImages implements CloudService.
-func (c *cloudService) ListImages(ctx context.Context, req *model.ListImagesReq) ([]model.ImageResp, error) {
-	panic("unimplemented")
-}
-
-// ListInstanceTypes implements CloudService.
-func (c *cloudService) ListInstanceTypes(ctx context.Context, req *model.ListInstanceTypesReq) ([]model.InstanceTypeResp, error) {
-	panic("unimplemented")
-}
-
-// ListRegions implements CloudService.
-func (c *cloudService) ListRegions(ctx context.Context, req *model.ListRegionsReq) ([]model.RegionResp, error) {
-	panic("unimplemented")
-}
-
-// ListSecurityGroups implements CloudService.
-func (c *cloudService) ListSecurityGroups(ctx context.Context, req *model.ListSecurityGroupsReq) ([]model.SecurityGroupResp, error) {
-	panic("unimplemented")
-}
-
-// ListVpcs implements CloudService.
-func (c *cloudService) ListVpcs(ctx context.Context, req *model.ListVpcsReq) ([]model.ResourceVpc, error) {
-	panic("unimplemented")
-}
-
-// ListZones implements CloudService.
-func (c *cloudService) ListZones(ctx context.Context, req *model.ListZonesReq) ([]model.ZoneResp, error) {
-	panic("unimplemented")
-}
-
-func NewCloudService(logger *zap.Logger, dao dao.CloudDAO) CloudService {
-	return &cloudService{
+func NewTreeCloudService(logger *zap.Logger, dao dao.TreeCloudDAO) TreeCloudService {
+	return &treeCloudService{
 		logger: logger,
 		dao:    dao,
 	}
+}
+
+// CreateCloudAccount implements TreeCloudService.
+func (t *treeCloudService) CreateCloudAccount(ctx context.Context, req *model.CreateCloudAccountReq) error {
+	panic("unimplemented")
+}
+
+// DeleteCloudAccount implements TreeCloudService.
+func (t *treeCloudService) DeleteCloudAccount(ctx context.Context, id int) error {
+	panic("unimplemented")
+}
+
+// GetCloudAccount implements TreeCloudService.
+func (t *treeCloudService) GetCloudAccount(ctx context.Context, id int) (*model.CloudAccount, error) {
+	panic("unimplemented")
+}
+
+// ListCloudAccounts implements TreeCloudService.
+func (t *treeCloudService) ListCloudAccounts(ctx context.Context, req *model.ListCloudAccountsReq) (model.ListResp[model.CloudAccount], error) {
+	panic("unimplemented")
+}
+
+// SyncCloudResources implements TreeCloudService.
+func (t *treeCloudService) SyncCloudResources(ctx context.Context, req *model.SyncCloudReq) error {
+	panic("unimplemented")
+}
+
+// TestCloudAccount implements TreeCloudService.
+func (t *treeCloudService) TestCloudAccount(ctx context.Context, id int) error {
+	panic("unimplemented")
+}
+
+// UpdateCloudAccount implements TreeCloudService.
+func (t *treeCloudService) UpdateCloudAccount(ctx context.Context, id int, req *model.UpdateCloudAccountReq) error {
+	panic("unimplemented")
 }
