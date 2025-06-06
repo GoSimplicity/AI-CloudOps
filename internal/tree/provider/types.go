@@ -36,6 +36,12 @@ type Provider interface {
 	SyncResources(ctx context.Context, region string) error
 	ListRegions(ctx context.Context) ([]*model.RegionResp, error)
 	GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error)
+	ListRegionOptions(ctx context.Context) ([]*model.ListEcsResourceOptionsResp, error)
+	ListRegionZones(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error)
+	ListRegionInstanceTypes(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error)
+	ListRegionImages(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error)
+	ListRegionSystemDiskCategories(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error)
+	ListRegionDataDiskCategories(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error)
 
 	// ECS实例管理
 	ListInstances(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceEcs, error)

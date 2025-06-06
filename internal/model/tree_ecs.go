@@ -142,20 +142,21 @@ type GetEcsDetailReq struct {
 }
 
 // ListInstanceOptionsReq 实例选项列表请求
-type ListInstanceOptionsReq struct {
-	Provider           CloudProvider `json:"provider" binding:"required"`
-	PayType            string        `json:"payType"`
-	Region             string        `json:"region"`
-	Zone               string        `json:"zone"`
-	InstanceType       string        `json:"instanceType"`
-	ImageId            string        `json:"imageId"`
-	SystemDiskCategory string        `json:"systemDiskCategory"`
-	DataDiskCategory   string        `json:"dataDiskCategory"`
-	PageSize           int           `json:"pageSize"`
-	PageNumber         int           `json:"pageNumber"`
+type ListEcsResourceOptionsReq struct {
+	ListReq
+	Provider           CloudProvider `json:"provider" binding:"required"` // 云提供商
+	ResourceType       string        `json:"resourceType"`                // 资源类型
+	PayType            string        `json:"payType"`                     // 付费类型
+	Region             string        `json:"region"`                      // 区域
+	Zone               string        `json:"zone"`                        // 可用区
+	InstanceType       string        `json:"instanceType"`                // 实例类型
+	ImageId            string        `json:"imageId"`                     // 镜像ID
+	SystemDiskCategory string        `json:"systemDiskCategory"`          // 系统盘类型
+	DataDiskCategory   string        `json:"dataDiskCategory"`            // 数据盘类型
 }
 
-type ListInstanceOptionsResp struct {
+// ListEcsResourceOptionsResp 实例选项列表响应
+type ListEcsResourceOptionsResp struct {
 	DataDiskCategory   string `json:"dataDiskCategory"`
 	SystemDiskCategory string `json:"systemDiskCategory"`
 	InstanceType       string `json:"instanceType"`

@@ -46,6 +46,7 @@ type TreeEcsService interface {
 	StopEcsResource(ctx context.Context, req *model.StopEcsReq) error
 	RestartEcsResource(ctx context.Context, req *model.RestartEcsReq) error
 	DeleteEcsResource(ctx context.Context, req *model.DeleteEcsReq) error
+	ListEcsResourceOptions(ctx context.Context, req *model.ListEcsResourceOptionsReq) (model.ListResp[*model.ListEcsResourceOptionsResp], error)
 
 	// 磁盘管理
 	ListDisks(ctx context.Context, provider model.CloudProvider, region string, pageSize int, pageNumber int) (model.ListResp[*model.ResourceDisk], error)
@@ -388,4 +389,95 @@ func (e *treeEcsService) DetachDisk(ctx context.Context, provider model.CloudPro
 	}
 
 	return nil
+}
+
+// ListEcsResourceOptions 获取ECS资源选项列表
+func (e *treeEcsService) ListEcsResourceOptions(ctx context.Context, req *model.ListEcsResourceOptionsReq) (model.ListResp[*model.ListEcsResourceOptionsResp], error) {
+	cloudProvider, err := e.providerFactory.GetProvider(req.Provider)
+	if err != nil {
+		return model.ListResp[*model.ListEcsResourceOptionsResp]{
+			Total: 0,
+			Items: []*model.ListEcsResourceOptionsResp{},
+		}, fmt.Errorf("[ListEcsResourceOptions] 获取云提供商失败: %w", err)
+	}
+
+	switch req.ResourceType {
+	case "region":
+		result, err := cloudProvider.ListRegionOptions(ctx)
+		if err != nil {
+			return model.ListResp[*model.ListEcsResourceOptionsResp]{
+				Total: 0,
+				Items: []*model.ListEcsResourceOptionsResp{},
+			}, fmt.Errorf("[ListEcsResourceOptions] 获取区域列表失败: %w", err)
+		}
+		return model.ListResp[*model.ListEcsResourceOptionsResp]{
+			Total: int64(len(result)),
+			Items: result,
+		}, nil
+	case "zone":
+		result, err := cloudProvider.ListRegionZones(ctx, req.Region)
+		if err != nil {
+			return model.ListResp[*model.ListEcsResourceOptionsResp]{
+				Total: 0,
+				Items: []*model.ListEcsResourceOptionsResp{},
+			}, fmt.Errorf("[ListEcsResourceOptions] 获取可用区列表失败: %w", err)
+		}
+		return model.ListResp[*model.ListEcsResourceOptionsResp]{
+			Total: int64(len(result)),
+			Items: result,
+		}, nil
+	case "instanceType":
+		result, err := cloudProvider.ListRegionInstanceTypes(ctx, req.Region)
+		if err != nil {
+			return model.ListResp[*model.ListEcsResourceOptionsResp]{
+				Total: 0,
+				Items: []*model.ListEcsResourceOptionsResp{},
+			}, fmt.Errorf("[ListEcsResourceOptions] 获取实例类型列表失败: %w", err)
+		}
+		return model.ListResp[*model.ListEcsResourceOptionsResp]{
+			Total: int64(len(result)),
+			Items: result,
+		}, nil
+	case "imageId":
+		result, err := cloudProvider.ListRegionImages(ctx, req.Region)
+		if err != nil {
+			return model.ListResp[*model.ListEcsResourceOptionsResp]{
+				Total: 0,
+				Items: []*model.ListEcsResourceOptionsResp{},
+			}, fmt.Errorf("[ListEcsResourceOptions] 获取镜像列表失败: %w", err)
+		}
+		return model.ListResp[*model.ListEcsResourceOptionsResp]{
+			Total: int64(len(result)),
+			Items: result,
+		}, nil
+	case "systemDiskCategory":
+		result, err := cloudProvider.ListRegionSystemDiskCategories(ctx, req.Region)
+		if err != nil {
+			return model.ListResp[*model.ListEcsResourceOptionsResp]{
+				Total: 0,
+				Items: []*model.ListEcsResourceOptionsResp{},
+			}, fmt.Errorf("[ListEcsResourceOptions] 获取系统盘类型列表失败: %w", err)
+		}
+		return model.ListResp[*model.ListEcsResourceOptionsResp]{
+			Total: int64(len(result)),
+			Items: result,
+		}, nil
+	case "dataDiskCategory":
+		result, err := cloudProvider.ListRegionDataDiskCategories(ctx, req.Region)
+		if err != nil {
+			return model.ListResp[*model.ListEcsResourceOptionsResp]{
+				Total: 0,
+				Items: []*model.ListEcsResourceOptionsResp{},
+			}, fmt.Errorf("[ListEcsResourceOptions] 获取数据盘类型列表失败: %w", err)
+		}
+		return model.ListResp[*model.ListEcsResourceOptionsResp]{
+			Total: int64(len(result)),
+			Items: result,
+		}, nil
+	}
+
+	return model.ListResp[*model.ListEcsResourceOptionsResp]{
+		Total: 0,
+		Items: []*model.ListEcsResourceOptionsResp{},
+	}, fmt.Errorf("[ListEcsResourceOptions] 未知的资源类型: %s", req.ResourceType)
 }
