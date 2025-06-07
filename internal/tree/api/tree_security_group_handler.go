@@ -43,7 +43,7 @@ func NewTreeSecurityGroupHandler(securityGroupService service.TreeSecurityGroupS
 }
 
 func (h *TreeSecurityGroupHandler) RegisterRouters(server *gin.Engine) {
-	securityGroupGroup := server.Group("/security_group")
+	securityGroupGroup := server.Group("/api/tree/security_group")
 	{
 		securityGroupGroup.POST("/create", h.CreateSecurityGroup)
 		securityGroupGroup.DELETE("/delete/:id", h.DeleteSecurityGroup)

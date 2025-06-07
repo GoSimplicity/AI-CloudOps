@@ -43,7 +43,7 @@ func NewTreeRdsHandler(rdsService service.TreeRdsService) *TreeRdsHandler {
 }
 
 func (h *TreeRdsHandler) RegisterRouters(server *gin.Engine) {
-	rdsGroup := server.Group("/rds")
+	rdsGroup := server.Group("/api/tree/rds")
 	{
 		rdsGroup.POST("/list", h.ListRdsResources)
 		rdsGroup.POST("/detail/:id", h.GetRdsDetail)

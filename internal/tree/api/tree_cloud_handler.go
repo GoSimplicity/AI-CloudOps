@@ -44,7 +44,7 @@ func NewTreeCloudHandler(cloudService service.TreeCloudService) *TreeCloudHandle
 
 // RegisterRoutes 注册路由
 func (h *TreeCloudHandler) RegisterRouters(r gin.IRouter) {
-	cloudGroup := r.Group("/tree/cloud")
+	cloudGroup := r.Group("/api/tree/cloud")
 	{
 		cloudGroup.POST("/accounts/create", h.CreateCloudAccount)
 		cloudGroup.GET("/accounts/list", h.ListCloudAccounts)

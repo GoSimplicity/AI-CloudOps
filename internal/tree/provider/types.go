@@ -44,7 +44,7 @@ type Provider interface {
 	ListRegionDataDiskCategories(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error)
 
 	// ECS实例管理
-	ListInstances(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceEcs, error)
+	ListInstances(ctx context.Context, region string, page, size int) ([]*model.ResourceEcs, int64, error)
 	GetInstance(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error)
 	CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error
 	DeleteInstance(ctx context.Context, region string, instanceID string) error

@@ -43,13 +43,13 @@ func NewTreeEcsHandler(ecsService service.TreeEcsService) *TreeEcsHandler {
 }
 
 func (h *TreeEcsHandler) RegisterRouters(server *gin.Engine) {
-	ecsGroup := server.Group("/ecs")
+	ecsGroup := server.Group("/api/tree/ecs")
 	{
-		ecsGroup.POST("/list", h.ListEcsResources)
-		ecsGroup.POST("/instance_options", h.ListInstanceOptions)
-		ecsGroup.POST("/detail/:id", h.GetEcsDetail)
+		ecsGroup.GET("/list", h.ListEcsResources)
+		ecsGroup.GET("/instance_options", h.ListInstanceOptions)
+		ecsGroup.GET("/detail/:id", h.GetEcsDetail)
 		ecsGroup.POST("/create", h.CreateEcsResource)
-		ecsGroup.POST("/update/:id", h.UpdateEcs)
+		ecsGroup.PUT("/update/:id", h.UpdateEcs)
 		ecsGroup.DELETE("/delete/:id", h.DeleteEcs)
 		ecsGroup.POST("/start/:id", h.StartEcs)
 		ecsGroup.POST("/stop/:id", h.StopEcs)

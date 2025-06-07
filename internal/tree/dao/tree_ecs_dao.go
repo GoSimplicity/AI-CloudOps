@@ -39,7 +39,7 @@ type TreeEcsDAO interface {
 	GetEcsResourceByInstanceId(ctx context.Context, instanceId string) (*model.ResourceEcs, error)
 	CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error
 	UpdateEcsResource(ctx context.Context, resource *model.ResourceEcs) error
-	DeleteEcsResource(ctx context.Context, instanceId string) error
+	DeleteEcsResource(ctx context.Context, id int) error
 
 	// 状态更新操作
 	UpdateEcsStatus(ctx context.Context, instanceId string, status string) error
@@ -76,6 +76,72 @@ func NewTreeEcsDAO(db *gorm.DB) TreeEcsDAO {
 	}
 }
 
+// CreateEcsResource 创建ECS资源
+func (t *treeEcsDAO) CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
+	if err := t.db.WithContext(ctx).Create(resource).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteEcsResource 删除ECS资源
+func (t *treeEcsDAO) DeleteEcsResource(ctx context.Context, id int) error {
+	if err := t.db.WithContext(ctx).Where("id = ?", id).Delete(&model.ResourceEcs{}).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetEcsResourceById 根据ID获取ECS资源
+func (t *treeEcsDAO) GetEcsResourceById(ctx context.Context, id int) (*model.ResourceEcs, error) {
+	var resource model.ResourceEcs
+
+	if err := t.db.WithContext(ctx).Where("id = ?", id).First(&resource).Error; err != nil {
+		return nil, err
+	}
+
+	return &resource, nil
+}
+
+// ListEcsResources 获取ECS资源列表
+func (t *treeEcsDAO) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) ([]*model.ResourceEcs, int64, error) {
+	var resources []*model.ResourceEcs
+	var total int64
+
+	db := t.db.WithContext(ctx).Model(&model.ResourceEcs{})
+
+	// 构建查询条件
+	if req.Provider != "" {
+		db = db.Where("provider = ?", req.Provider)
+	}
+
+	if req.Region != "" {
+		db = db.Where("region_id = ?", req.Region)
+	}
+
+	// 计算总数
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 处理分页和排序
+	if req.Size > 0 && req.Page > 0 {
+		offset := (req.Page - 1) * req.Size
+		db = db.Offset(offset).Limit(req.Size)
+	}
+
+	// 按照创建时间排序
+	db = db.Order("created_at DESC")
+
+	if err := db.Find(&resources).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return resources, total, nil
+}
+
 // BatchDeleteEcsResources implements TreeEcsDAO.
 func (t *treeEcsDAO) BatchDeleteEcsResources(ctx context.Context, instanceIds []string) error {
 	panic("unimplemented")
@@ -101,21 +167,6 @@ func (t *treeEcsDAO) CountEcsResourcesByStatus(ctx context.Context, status strin
 	panic("unimplemented")
 }
 
-// CreateEcsResource implements TreeEcsDAO.
-func (t *treeEcsDAO) CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
-	panic("unimplemented")
-}
-
-// DeleteEcsResource implements TreeEcsDAO.
-func (t *treeEcsDAO) DeleteEcsResource(ctx context.Context, instanceId string) error {
-	panic("unimplemented")
-}
-
-// GetEcsResourceById implements TreeEcsDAO.
-func (t *treeEcsDAO) GetEcsResourceById(ctx context.Context, id int) (*model.ResourceEcs, error) {
-	panic("unimplemented")
-}
-
 // GetEcsResourceByInstanceId implements TreeEcsDAO.
 func (t *treeEcsDAO) GetEcsResourceByInstanceId(ctx context.Context, instanceId string) (*model.ResourceEcs, error) {
 	panic("unimplemented")
@@ -138,11 +189,6 @@ func (t *treeEcsDAO) GetEcsResourcesByRegion(ctx context.Context, region string)
 
 // GetEcsResourcesByStatus implements TreeEcsDAO.
 func (t *treeEcsDAO) GetEcsResourcesByStatus(ctx context.Context, status string) ([]*model.ResourceEcs, error) {
-	panic("unimplemented")
-}
-
-// ListEcsResources implements TreeEcsDAO.
-func (t *treeEcsDAO) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) ([]*model.ResourceEcs, int64, error) {
 	panic("unimplemented")
 }
 

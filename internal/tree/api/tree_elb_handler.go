@@ -43,7 +43,7 @@ func NewTreeElbHandler(elbService service.TreeElbService) *TreeElbHandler {
 }
 
 func (h *TreeElbHandler) RegisterRouters(server *gin.Engine) {
-	elbGroup := server.Group("/elb")
+	elbGroup := server.Group("/api/tree/elb")
 	{
 		elbGroup.POST("/list", h.ListElbResources)
 		elbGroup.POST("/detail/:id", h.GetElbDetail)

@@ -141,28 +141,28 @@ func (a *AliyunProviderImpl) GetZonesByVpc(ctx context.Context, region string, v
 }
 
 // ECS实例管理
-func (a *AliyunProviderImpl) ListInstances(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceEcs, error) {
+func (a *AliyunProviderImpl) ListInstances(ctx context.Context, region string, page, size int) ([]*model.ResourceEcs, int64, error) {
 	if region == "" {
-		return nil, fmt.Errorf("region cannot be empty")
+		return nil, 0, fmt.Errorf("region cannot be empty")
 	}
-	if pageNumber <= 0 || pageSize <= 0 {
-		return nil, fmt.Errorf("pageNumber and pageSize must be positive integers")
+	if page <= 0 || size <= 0 {
+		return nil, 0, fmt.Errorf("page and size must be positive integers")
 	}
 
 	req := &aliyun.ListInstancesRequest{
 		Region: region,
-		Page:   pageNumber,
-		Size:   pageSize,
+		Page:   page,
+		Size:   size,
 	}
 
 	resp, err := a.ecsService.ListInstances(ctx, req)
 	if err != nil {
 		a.logger.Error("failed to list instances", zap.Error(err), zap.String("region", region))
-		return nil, fmt.Errorf("list instances failed: %w", err)
+		return nil, 0, fmt.Errorf("list instances failed: %w", err)
 	}
 
 	if resp == nil || len(resp.Instances) == 0 {
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	result := make([]*model.ResourceEcs, 0, len(resp.Instances))
@@ -173,7 +173,7 @@ func (a *AliyunProviderImpl) ListInstances(ctx context.Context, region string, p
 		result = append(result, a.convertToResourceEcsFromListInstance(instance))
 	}
 
-	return result, nil
+	return result, resp.Total, nil
 }
 
 func (a *AliyunProviderImpl) GetInstance(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error) {
@@ -666,6 +666,8 @@ func (a *AliyunProviderImpl) convertToResourceEcsFromListInstance(instance *ecs.
 		}
 	}
 
+	lastSyncTime := time.Now()
+
 	return &model.ResourceEcs{
 		InstanceName:       tea.StringValue(instance.InstanceName),
 		InstanceId:         tea.StringValue(instance.InstanceId),
@@ -680,7 +682,7 @@ func (a *AliyunProviderImpl) convertToResourceEcsFromListInstance(instance *ecs.
 		SecurityGroupIds:   model.StringList(securityGroupIds),
 		PrivateIpAddress:   model.StringList(privateIPs),
 		PublicIpAddress:    model.StringList(publicIPs),
-		LastSyncTime:       time.Now(),
+		LastSyncTime:       &lastSyncTime,
 		Tags:               model.StringList(tags),
 		Cpu:                int(tea.Int32Value(instance.Cpu)),
 		Memory:             memory,
@@ -722,6 +724,8 @@ func (a *AliyunProviderImpl) convertToResourceEcsFromInstanceDetail(instance *ec
 		memory = 1 // 如果小于1GB但大于0，设为1GB
 	}
 
+	lastSyncTime := time.Now()
+
 	return &model.ResourceEcs{
 		InstanceName:       tea.StringValue(instance.InstanceName),
 		InstanceId:         tea.StringValue(instance.InstanceId),
@@ -736,7 +740,7 @@ func (a *AliyunProviderImpl) convertToResourceEcsFromInstanceDetail(instance *ec
 		SecurityGroupIds:   model.StringList(securityGroupIds),
 		PrivateIpAddress:   model.StringList(privateIPs),
 		PublicIpAddress:    model.StringList(publicIPs),
-		LastSyncTime:       time.Now(),
+		LastSyncTime:       &lastSyncTime,
 		Cpu:                int(tea.Int32Value(instance.Cpu)),
 		Memory:             memory,
 		InstanceType:       tea.StringValue(instance.InstanceType),

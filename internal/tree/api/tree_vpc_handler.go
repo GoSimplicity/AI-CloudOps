@@ -43,7 +43,7 @@ func NewTreeVpcHandler(vpcService service.TreeVpcService) *TreeVpcHandler {
 }
 
 func (h *TreeVpcHandler) RegisterRouters(server *gin.Engine) {
-	vpcGroup := server.Group("/vpc")
+	vpcGroup := server.Group("/api/tree/vpc")
 	{
 		vpcGroup.POST("/detail/:id", h.GetVpcDetail)
 		vpcGroup.POST("/create", h.CreateVpcResource)

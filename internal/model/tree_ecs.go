@@ -31,6 +31,7 @@ import "time"
 type ResourceEcs struct {
 	Model
 
+	// 资源实例信息
 	InstanceName       string        `json:"instance_name" gorm:"type:varchar(100);comment:资源实例名称"`
 	InstanceId         string        `json:"instance_id" gorm:"type:varchar(100);comment:资源实例ID"`
 	Provider           CloudProvider `json:"cloud_provider" gorm:"type:varchar(50);comment:云厂商"`
@@ -48,10 +49,11 @@ type ResourceEcs struct {
 	PublicIpAddress    StringList    `json:"public_ip_address" gorm:"type:varchar(500);comment:公网IP地址"`
 
 	// 资源创建和管理标志
-	CreateByOrder bool      `json:"create_by_order" gorm:"comment:是否由工单创建"`
-	LastSyncTime  time.Time `json:"last_sync_time" gorm:"comment:最后同步时间"`
-	TreeNodeID    int       `json:"tree_node_id" gorm:"comment:关联的服务树节点ID"`
+	CreateByOrder bool       `json:"create_by_order" gorm:"comment:是否由工单创建;default:false"`
+	LastSyncTime  *time.Time `json:"last_sync_time" gorm:"comment:最后同步时间"`
+	TreeNodeID    int        `json:"tree_node_id" gorm:"comment:关联的服务树节点ID;default:0"`
 
+	// 资源规格信息
 	Cpu               int        `json:"cpu" gorm:"comment:CPU核数"`
 	Memory            int        `json:"memory" gorm:"comment:内存大小,单位GiB"`
 	InstanceType      string     `json:"instanceType" gorm:"type:varchar(100);comment:实例类型"`
@@ -59,7 +61,7 @@ type ResourceEcs struct {
 	IpAddr            string     `json:"ipAddr" gorm:"type:varchar(45);comment:主IP地址"`
 	Port              int        `json:"port" gorm:"comment:端口号;default:22"`
 	HostName          string     `json:"hostname" gorm:"comment:主机名"`
-	Password          string     `json:"password" gorm:"type:varchar(500);comment:密码"`
+	Password          string     `json:"-" gorm:"type:varchar(500);comment:密码,加密存储"`
 	Key               string     `json:"key" gorm:"comment:密钥"`
 	AuthMode          string     `json:"authMode" gorm:"comment:认证方式;default:password"` // password或key
 	OsType            string     `json:"osType" gorm:"type:varchar(50);comment:操作系统类型,如win,linux"`
@@ -101,10 +103,10 @@ type ListEcsResourceOptionsReq struct {
 
 // GetEcsDetailReq 获取ECS详情请求
 type GetEcsDetailReq struct {
-	ID         int           `json:"id" form:"id" binding:"required"` // 内部ID（从URL参数获取）
-	Provider   CloudProvider `json:"provider"`                        // 云提供商
-	Region     string        `json:"region"`                          // 区域
-	InstanceId string        `json:"instanceId"`                      // 实例ID
+	ID         int           `json:"id" form:"id"`                 // 内部ID（从URL参数获取）
+	Provider   CloudProvider `json:"provider" form:"provider"`     // 云提供商
+	Region     string        `json:"region" form:"region"`         // 区域
+	InstanceId string        `json:"instanceId" form:"instanceId"` // 实例ID
 }
 
 // CreateEcsResourceReq ECS创建参数

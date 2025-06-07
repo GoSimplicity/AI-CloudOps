@@ -43,7 +43,7 @@ func NewTreeNodeHandler(service service.TreeNodeService) *TreeNodeHandler {
 }
 
 func (h *TreeNodeHandler) RegisterRouters(server *gin.Engine) {
-	treeGroup := server.Group("/api/tree")
+	treeGroup := server.Group("/api/tree/node")
 	{
 		// 树结构相关接口
 		treeGroup.GET("/list", h.GetTreeList)
