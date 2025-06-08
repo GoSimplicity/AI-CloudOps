@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "rules/*.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+  
+  - job_name: 'aiops-platform'
+    static_configs:
+      - targets: ['aiops-platform:8080']
+    metrics_path: '/api/v1/health/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
