@@ -250,6 +250,8 @@ type ResourceECSDetailResp struct {
 
 // ListEcsResourceOptionsResp 实例选项列表响应
 type ListEcsResourceOptionsResp struct {
+	Value              string `json:"value"`
+	Label              string `json:"label"`
 	DataDiskCategory   string `json:"dataDiskCategory"`
 	SystemDiskCategory string `json:"systemDiskCategory"`
 	InstanceType       string `json:"instanceType"`

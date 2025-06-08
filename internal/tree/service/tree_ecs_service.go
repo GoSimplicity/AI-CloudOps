@@ -87,14 +87,12 @@ func (t *treeEcsService) CreateEcsResource(ctx context.Context, req *model.Creat
 			t.logger.Error("创建ECS实例失败", zap.Error(err))
 			return err
 		}
-
-		return nil
 	}
 
 	// 加密密码
 	req.Password = utils.Base64EncryptWithMagic(req.Password)
 
-	// 走到这里就是创建本地ECS实例
+	// 创建本地ECS实例
 	err := t.dao.CreateEcsResource(ctx, convertCreateEcsResourceReqToResourceEcs(req))
 	if err != nil {
 		t.logger.Error("创建本地ECS实例失败", zap.Error(err))
@@ -118,10 +116,9 @@ func (t *treeEcsService) DeleteEcs(ctx context.Context, req *model.DeleteEcsReq)
 			t.logger.Error("删除ECS实例失败", zap.Error(err))
 			return err
 		}
-
-		return nil
 	}
 
+	// 删除本地ECS实例
 	err := t.dao.DeleteEcsResource(ctx, req.ID)
 	if err != nil {
 		t.logger.Error("删除本地ECS实例失败", zap.Error(err))
@@ -133,46 +130,17 @@ func (t *treeEcsService) DeleteEcs(ctx context.Context, req *model.DeleteEcsReq)
 
 // GetEcsDetail 获取ECS实例详情
 func (t *treeEcsService) GetEcsDetail(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceEcs, error) {
-	if req.Provider != model.CloudProviderLocal {
-		provider, err := t.providerFactory.GetProvider(req.Provider)
-		if err != nil {
-			t.logger.Error("获取云提供商失败", zap.Error(err))
-			return nil, err
-		}
-
-		resource, err := provider.GetInstance(ctx, req.Region, req.InstanceId)
-		if err != nil {
-			t.logger.Error("获取ECS实例详情失败", zap.Error(err))
-			return nil, err
-		}
-
-		return resource, nil
+	resource, err := t.dao.GetEcsResourceById(ctx, req.ID)
+	if err != nil {
+		t.logger.Error("获取ECS实例详情失败", zap.Error(err), zap.Int("id", req.ID))
+		return nil, err
 	}
 
-	return t.dao.GetEcsResourceById(ctx, req.ID)
+	return resource, nil
 }
 
 // ListEcsResources 获取ECS实例列表
 func (t *treeEcsService) ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (model.ListResp[*model.ResourceEcs], error) {
-	if req.Provider != model.CloudProviderLocal {
-		provider, err := t.providerFactory.GetProvider(req.Provider)
-		if err != nil {
-			t.logger.Error("获取云提供商失败", zap.Error(err))
-			return model.ListResp[*model.ResourceEcs]{}, err
-		}
-
-		resources, total, err := provider.ListInstances(ctx, req.Region, req.Page, req.Size)
-		if err != nil {
-			t.logger.Error("获取ECS实例列表失败", zap.Error(err))
-			return model.ListResp[*model.ResourceEcs]{}, err
-		}
-
-		return model.ListResp[*model.ResourceEcs]{
-			Total: total,
-			Items: resources,
-		}, nil
-	}
-
 	resources, total, err := t.dao.ListEcsResources(ctx, req)
 	if err != nil {
 		t.logger.Error("获取ECS实例列表失败", zap.Error(err))
