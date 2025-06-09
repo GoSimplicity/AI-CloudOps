@@ -1,6 +1,6 @@
 <template>
   <div class="tree-manager-container">
-    <a-page-header title="服务树节点管理" subtitle="创建、编辑和管理服务树节点" :backIcon="true" @back="goBack">
+    <a-page-header title="服务树节点管理" subtitle="创建、编辑和管理服务树节点" :back-icon="true" @back="goBack">
       <template #extra>
         <a-space>
           <a-button type="primary" @click="showCreateNodeModal">
@@ -38,11 +38,21 @@
           </template>
 
           <a-spin :spinning="loading">
-            <a-input-search v-model:value="searchValue" placeholder="搜索节点" style="margin-bottom: 16px"
-              @change="onSearchChange" allowClear />
+            <a-input-search 
+              v-model:value="searchValue" 
+              placeholder="搜索节点" 
+              style="margin-bottom: 16px"
+              @change="onSearchChange" 
+              allow-clear 
+            />
 
-            <a-tree v-model:expandedKeys="expandedKeys" v-model:selectedKeys="selectedKeys"
-              :tree-data="filteredTreeData" :showLine="{ showLeafIcon: false }" @select="onSelect">
+            <a-tree 
+              v-model:expanded-keys="expandedKeys" 
+              v-model:selected-keys="selectedKeys"
+              :tree-data="filteredTreeData" 
+              :show-line="{ showLeafIcon: false }" 
+              @select="onSelect"
+            >
               <template #title="{ title, key }">
                 <span class="tree-node-title">
                   {{ title }}
@@ -68,7 +78,7 @@
       <a-col :span="18">
         <div v-if="selectedNode">
           <a-card :bordered="false" class="detail-card">
-            <a-tabs v-model:activeKey="activeTabKey">
+            <a-tabs v-model:active-key="activeTabKey">
               <a-tab-pane key="basicInfo" tab="基本信息">
                 <a-descriptions title="节点详情" :column="3" bordered>
                   <a-descriptions-item label="节点ID">{{ selectedNode.id }}</a-descriptions-item>
@@ -149,7 +159,7 @@
                 </div>
                 
                 <a-table 
-                  :dataSource="nodeResources" 
+                  :data-source="nodeResources" 
                   :columns="resourceColumns" 
                   :pagination="{ pageSize: 10 }"
                   size="middle"
@@ -176,7 +186,7 @@
               </a-tab-pane>
 
               <a-tab-pane key="members" tab="成员管理">
-                <a-tabs v-model:activeKey="memberTabKey">
+                <a-tabs v-model:active-key="memberTabKey">
                   <a-tab-pane key="admins" tab="管理员">
                     <div class="member-header">
                       <a-space>
@@ -195,7 +205,7 @@
                       </a-space>
                     </div>
                     <a-table 
-                      :dataSource="adminUsers" 
+                      :data-source="adminUsers" 
                       :columns="adminColumns" 
                       :pagination="{ pageSize: 10 }"
                       size="middle"
@@ -242,7 +252,7 @@
                       </a-space>
                     </div>
                     <a-table 
-                      :dataSource="memberUsers" 
+                      :data-source="memberUsers" 
                       :columns="memberColumns" 
                       :pagination="{ pageSize: 10 }"
                       size="middle"
@@ -282,9 +292,9 @@
     <!-- 创建/编辑节点模态框 -->
     <a-modal 
       v-model:open="createNodeModalVisible"
-      :title="isEditMode ? '编辑节点' : currentParentId ? '添加子节点' : '创建顶级节点'" 
+      :title="getNodeModalTitle" 
       @ok="handleCreateOrUpdateNode"
-      :confirmLoading="confirmLoading" 
+      :confirm-loading="confirmLoading" 
       width="600px"
     >
       <a-form :model="nodeForm" :rules="nodeFormRules" ref="nodeFormRef" layout="vertical">
@@ -329,7 +339,7 @@
       v-model:open="moveNodeModalVisible"
       title="移动节点" 
       @ok="handleMoveNode"
-      :confirmLoading="confirmLoading" 
+      :confirm-loading="confirmLoading" 
       width="500px"
     >
       <a-form layout="vertical">
@@ -339,7 +349,7 @@
         <a-form-item label="移动到" name="newParentId">
           <a-select v-model:value="moveForm.newParentId" placeholder="请选择新的父节点">
             <a-select-option :value="0">根节点</a-select-option>
-            <a-select-option v-for="option in parentNodeOptions" :key="option.value" :value="option.value">
+            <a-select-option v-for="option in moveNodeOptions" :key="option.value" :value="option.value">
               {{ option.label }}
             </a-select-option>
           </a-select>
@@ -352,7 +362,7 @@
       v-model:open="bindResourceModalVisible" 
       title="绑定资源" 
       @ok="handleBindResource"
-      :confirmLoading="confirmLoading" 
+      :confirm-loading="confirmLoading" 
       width="800px"
     >
       <a-form :model="bindResourceForm" layout="vertical">
@@ -370,8 +380,8 @@
         </a-form-item>
         <a-form-item label="选择资源" name="resourceIds">
           <a-table 
-            :dataSource="availableResources"
-            :rowSelection="{ 
+            :data-source="availableResources"
+            :row-selection="{ 
               selectedRowKeys: bindResourceForm.resourceIds, 
               onChange: onSelectedResourcesChange,
               type: 'checkbox'
@@ -388,9 +398,9 @@
     <!-- 添加成员模态框 -->
     <a-modal 
       v-model:open="addMemberModalVisible" 
-      :title="memberForm.memberType === 'admin' ? '添加管理员' : '添加成员'"
+      :title="getMemberModalTitle"
       @ok="handleAddMember" 
-      :confirmLoading="confirmLoading" 
+      :confirm-loading="confirmLoading" 
       width="600px"
     >
       <a-form :model="memberForm" layout="vertical">
@@ -501,7 +511,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   PlusOutlined,
@@ -691,20 +701,58 @@ const filteredTreeData = computed(() => {
     .filter(Boolean);
 });
 
+// 动态计算模态框标题
+const getNodeModalTitle = computed(() => {
+  if (isEditMode.value) return '编辑节点';
+  if (currentParentId.value) return '添加子节点';
+  return '创建顶级节点';
+});
+
+const getMemberModalTitle = computed(() => {
+  return memberForm.memberType === 'admin' ? '添加管理员' : '添加成员';
+});
+
+// 移动节点选项（排除自身和子节点）
+const moveNodeOptions = computed(() => {
+  if (!selectedNode.value) return parentNodeOptions.value;
+  
+  // 排除自身和自身的子节点
+  const excludeIds = [selectedNode.value.id];
+  
+  return parentNodeOptions.value.filter(option => 
+    !excludeIds.includes(option.value)
+  );
+});
+
 // 表格列定义
 const resourceColumns = [
   { title: '资源ID', dataIndex: 'resourceId', key: 'resourceId' },
   { title: '资源名称', dataIndex: 'resourceName', key: 'resourceName' },
   { title: '资源类型', dataIndex: 'resourceType', key: 'resourceType' },
   { title: '状态', dataIndex: 'resourceStatus', key: 'resourceStatus' },
-  { title: '创建时间', dataIndex: 'resourceCreateTime', key: 'resourceCreateTime', customRender: ({ text }: { text: string }) => formatDateTime(text) },
+  { 
+    title: '创建时间', 
+    dataIndex: 'resourceCreateTime', 
+    key: 'resourceCreateTime', 
+    customRender: ({ text }: { text: string }) => formatDateTime(text) 
+  },
   { title: '操作', key: 'action', width: 120 },
 ];
 
 const adminColumns = [
   { title: '用户名', dataIndex: 'username', key: 'username' },
-  { title: '真实姓名', dataIndex: 'real_name', key: 'real_name', customRender: ({ text }: { text: string }) => text || '-' },
-  { title: '手机号', dataIndex: 'mobile', key: 'mobile', customRender: ({ text }: { text: string }) => text || '-' },
+  { 
+    title: '真实姓名', 
+    dataIndex: 'real_name', 
+    key: 'real_name', 
+    customRender: ({ text }: { text: string }) => text || '-' 
+  },
+  { 
+    title: '手机号', 
+    dataIndex: 'mobile', 
+    key: 'mobile', 
+    customRender: ({ text }: { text: string }) => text || '-' 
+  },
   { title: '账号类型', dataIndex: 'account_type', key: 'account_type' },
   { title: '状态', dataIndex: 'enable', key: 'enable' },
   { title: '操作', key: 'action', width: 100 },
@@ -712,8 +760,18 @@ const adminColumns = [
 
 const memberColumns = [
   { title: '用户名', dataIndex: 'username', key: 'username' },
-  { title: '真实姓名', dataIndex: 'real_name', key: 'real_name', customRender: ({ text }: { text: string }) => text || '-' },
-  { title: '手机号', dataIndex: 'mobile', key: 'mobile', customRender: ({ text }: { text: string }) => text || '-' },
+  { 
+    title: '真实姓名', 
+    dataIndex: 'real_name', 
+    key: 'real_name', 
+    customRender: ({ text }: { text: string }) => text || '-' 
+  },
+  { 
+    title: '手机号', 
+    dataIndex: 'mobile', 
+    key: 'mobile', 
+    customRender: ({ text }: { text: string }) => text || '-' 
+  },
   { title: '账号类型', dataIndex: 'account_type', key: 'account_type' },
   { title: '状态', dataIndex: 'enable', key: 'enable' },
   { title: '操作', key: 'action', width: 100 },
@@ -724,7 +782,12 @@ const availableResourceColumns = computed(() => {
     { title: '资源ID', dataIndex: 'id', key: 'id' },
     { title: '资源名称', dataIndex: 'name', key: 'name' },
     { title: '状态', dataIndex: 'status', key: 'status' },
-    { title: '创建时间', dataIndex: 'createTime', key: 'createTime', customRender: ({ text }: { text: string }) => formatDateTime(text) },
+    { 
+      title: '创建时间', 
+      dataIndex: 'createTime', 
+      key: 'createTime', 
+      customRender: ({ text }: { text: string }) => formatDateTime(text) 
+    },
   ];
 });
 
@@ -756,7 +819,8 @@ const getResourceStatusColor = (status: string) => {
 };
 
 const filterUserOption = (input: string, option: any) => {
-  const text = option?.children || '';
+  if (!option?.children) return false;
+  const text = String(option.children);
   return text.toLowerCase().includes(input.toLowerCase());
 };
 
@@ -956,7 +1020,9 @@ const loadNodeDetail = async (nodeId: number) => {
     }
     
     const res = await getNodeDetail(nodeId);
-    nodeDetails.value[nodeId] = res;
+    if (res) {
+      nodeDetails.value[nodeId] = res;
+    }
     return res;
   } catch (error) {
     console.error('获取节点详情失败:', error);
@@ -971,10 +1037,11 @@ const loadNodeResources = async (nodeId: number) => {
   resourceLoading.value = true;
   try {
     const res = await getNodeResources(nodeId);
-    nodeResources.value = res.items;
+    nodeResources.value = res?.items || [];
   } catch (error) {
     console.error('获取节点资源失败:', error);
     message.error('获取节点资源失败');
+    nodeResources.value = [];
   } finally {
     resourceLoading.value = false;
   }
@@ -1049,11 +1116,35 @@ const refreshData = async () => {
   ]);
   
   if (selectedNode.value) {
-    await Promise.all([
-      loadNodeDetail(selectedNode.value.id),
-      loadNodeResources(selectedNode.value.id),
-      loadNodeMembers(selectedNode.value.id),
-    ]);
+    // 检查节点是否还存在于树中
+    const nodeExists = treeData.value.some(node => {
+      const findNode = (nodes: any[]): boolean => {
+        for (const n of nodes) {
+          if (n.key === selectedNode.value?.id.toString()) {
+            return true;
+          }
+          if (n.children && n.children.length > 0) {
+            if (findNode(n.children)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+      return findNode([node]);
+    });
+    
+    if (nodeExists) {
+      await Promise.all([
+        loadNodeDetail(selectedNode.value.id),
+        loadNodeResources(selectedNode.value.id),
+        loadNodeMembers(selectedNode.value.id),
+      ]);
+    } else {
+      // 节点已被删除，清空选择
+      selectedKeys.value = [];
+      message.info('当前选中的节点已不存在，请重新选择节点');
+    }
   }
 };
 
@@ -1168,7 +1259,7 @@ const confirmDeleteNode = (nodeKey: string) => {
       try {
         await deleteNode(nodeId);
         message.success(`节点 "${nodeDetail.name}" 已删除`);
-        refreshData();
+        await refreshData();
       } catch (error) {
         console.error('删除节点失败:', error);
         message.error('删除节点失败');
@@ -1177,44 +1268,47 @@ const confirmDeleteNode = (nodeKey: string) => {
   });
 };
 
-const handleCreateOrUpdateNode = () => {
-  if (nodeFormRef.value) {
-    nodeFormRef.value.validate().then(async () => {
-      confirmLoading.value = true;
+const handleCreateOrUpdateNode = async () => {
+  if (!nodeFormRef.value) return;
+  
+  try {
+    await nodeFormRef.value.validate();
+    confirmLoading.value = true;
 
-      try {
-        if (isEditMode.value && nodeForm.id) {
-          const updateParams: UpdateNodeParams = {
-            name: nodeForm.name,
-            parentId: nodeForm.parentId,
-            description: nodeForm.description,
-            status: nodeForm.status,
-          };
-          
-          await updateNode(nodeForm.id, updateParams);
-          message.success('节点更新成功！');
-        } else {
-          const createParams: CreateNodeParams = {
-            name: nodeForm.name,
-            parentId: nodeForm.parentId,
-            description: nodeForm.description,
-            isLeaf: nodeForm.isLeaf,
-            status: nodeForm.status,
-          };
-          
-          await createNode(createParams);
-          message.success('节点创建成功！');
-        }
-        
-        refreshData();
-        createNodeModalVisible.value = false;
-      } catch (error) {
-        console.error('节点操作失败:', error);
-        message.error('节点操作失败');
-      } finally {
-        confirmLoading.value = false;
-      }
-    });
+    if (isEditMode.value && nodeForm.id) {
+      const updateParams: UpdateNodeParams = {
+        name: nodeForm.name,
+        parentId: nodeForm.parentId,
+        description: nodeForm.description,
+        status: nodeForm.status,
+      };
+      
+      await updateNode(nodeForm.id, updateParams);
+      message.success('节点更新成功！');
+    } else {
+      const createParams: CreateNodeParams = {
+        name: nodeForm.name,
+        parentId: nodeForm.parentId,
+        description: nodeForm.description,
+        isLeaf: nodeForm.isLeaf,
+        status: nodeForm.status,
+      };
+      
+      await createNode(createParams);
+      message.success('节点创建成功！');
+    }
+    
+    await refreshData();
+    createNodeModalVisible.value = false;
+  } catch (error: any) {
+    if (error?.errorFields) {
+      // 表单验证失败，不需要显示错误消息
+      return;
+    }
+    console.error('节点操作失败:', error);
+    message.error('节点操作失败');
+  } finally {
+    confirmLoading.value = false;
   }
 };
 
@@ -1225,7 +1319,7 @@ const handleMoveNode = async () => {
   try {
     await moveNode(selectedNode.value.id, moveForm);
     message.success('节点移动成功');
-    refreshData();
+    await refreshData();
     moveNodeModalVisible.value = false;
   } catch (error) {
     console.error('移动节点失败:', error);
@@ -1244,31 +1338,37 @@ const showBindResourceModal = () => {
   
   bindResourceForm.resourceType = '';
   bindResourceForm.resourceIds = [];
+  availableResources.value = [];
   bindResourceModalVisible.value = true;
-  
-  loadAvailableResources(bindResourceForm.resourceType);
 };
 
 const onResourceTypeChange = (resourceType: string) => {
   bindResourceForm.resourceIds = [];
-  loadAvailableResources(resourceType);
+  if (resourceType) {
+    loadAvailableResources(resourceType);
+  } else {
+    availableResources.value = [];
+  }
 };
 
 // 获取可用资源
-const loadAvailableResources = async (_: string) => {
+const loadAvailableResources = async (resourceType: string) => {
+  if (!resourceType) return;
+  
   availableResourceLoading.value = true;
   try {
     const params: ListEcsResourceReq = {
       page: 1,
       size: 100,
-      provider: 'local',
+      provider: resourceType === 'local' ? 'local' : 'cloud',
       region: '',
     };
     const res = await getEcsResourceList(params);
-    availableResources.value = res.items;
+    availableResources.value = res?.items || [];
   } catch (error) {
     console.error('获取可用资源失败:', error);
     message.error('获取可用资源失败');
+    availableResources.value = [];
   } finally {
     availableResourceLoading.value = false;
   }
@@ -1296,7 +1396,7 @@ const handleBindResource = async () => {
     await bindResource(params);
     message.success(`成功绑定 ${bindResourceForm.resourceIds.length} 个资源`);
     
-    loadNodeResources(selectedNode.value.id);
+    await loadNodeResources(selectedNode.value.id);
     bindResourceModalVisible.value = false;
   } catch (error) {
     console.error('绑定资源失败:', error);
@@ -1325,7 +1425,7 @@ const confirmUnbindResource = (resource: TreeNodeResource) => {
         message.success(`资源 "${resource.resourceName}" 已解绑`);
         
         if (selectedNode.value) {
-          loadNodeResources(selectedNode.value.id);
+          await loadNodeResources(selectedNode.value.id);
         }
       } catch (error) {
         console.error('解绑资源失败:', error);
@@ -1433,14 +1533,14 @@ watch(() => memberForm.userId, () => {
   // 当用户选择变化时，触发计算属性更新
 });
 
-onMounted(async () => {
-  await refreshData();
-});
-
 watch(searchValue, (newVal) => {
   if (newVal) {
     expandAll();
   }
+});
+
+onMounted(async () => {
+  await refreshData();
 });
 </script>
 

@@ -52,11 +52,11 @@ func (h *TreeNodeHandler) RegisterRouters(server *gin.Engine) {
 		treeGroup.GET("/statistics", h.GetTreeStatistics)
 
 		// 节点管理接口
-		treeGroup.POST("/node/create", h.CreateNode)
-		treeGroup.PUT("/node/update/:id", h.UpdateNode)
-		treeGroup.DELETE("/node/delete/:id", h.DeleteNode)
-		treeGroup.PUT("/node/move/:id", h.MoveNode)
-		treeGroup.PUT("/node/status/:id", h.UpdateNodeStatus)
+		treeGroup.POST("/create", h.CreateNode)
+		treeGroup.PUT("/update/:id", h.UpdateNode)
+		treeGroup.DELETE("/delete/:id", h.DeleteNode)
+		treeGroup.PUT("/move/:id", h.MoveNode)
+		treeGroup.PUT("/status/:id", h.UpdateNodeStatus)
 
 		// 成员管理接口
 		treeGroup.GET("/members/:id", h.GetNodeMembers)

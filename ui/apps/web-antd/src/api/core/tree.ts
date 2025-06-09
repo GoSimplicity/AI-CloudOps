@@ -386,67 +386,67 @@ export interface TreeNodeDeleteReq {
 
 
 export function getVpcResourceList(req: ListVpcResourcesReq) {
-  return requestClient.post('/resource/vpc/list', req);
+  return requestClient.post('/tree/vpc/list', req);
 }
 
 export function createVpcResource(req: CreateVpcResourceReq) {
-  return requestClient.post('/resource/vpc/create', req);
+  return requestClient.post('/tree/vpc/create', req);
 }
 
 export function getVpcResourceDetail(req: GetVpcDetailReq) {
-  return requestClient.post('/resource/vpc/detail', req);
+  return requestClient.post('/tree/vpc/detail', req);
 }
 
 export function deleteVpcResource(req: DeleteVpcReq) {
-  return requestClient.delete('/resource/vpc/delete', { data: req });
+  return requestClient.delete('/tree/vpc/delete', { data: req });
 }
 
 export function getEcsResourceList(req: ListEcsResourceReq) {
-  return requestClient.post('/resource/ecs/list', req);
+  return requestClient.post('/tree/ecs/list', req);
 }
 
 export function getEcsResourceDetail(req: GetEcsDetailReq) {
-  return requestClient.post('/resource/ecs/detail', req);
+  return requestClient.post('/tree/ecs/detail', req);
 }
 
 export function createEcsResource(req: CreateEcsResourceReq) {
-  return requestClient.post('/resource/ecs/create', req);
+  return requestClient.post('/tree/ecs/create', req);
 }
 
 export function startEcsResource(req: StartEcsReq) {
-  return requestClient.post('/resource/ecs/start', req);
+  return requestClient.post('/tree/ecs/start', req);
 }
 
 export function stopEcsResource(req: StopEcsReq) {
-  return requestClient.post('/resource/ecs/stop', req);
+  return requestClient.post('/tree/ecs/stop', req);
 }
 
 export function restartEcsResource(req: RestartEcsReq) {
-  return requestClient.post('/resource/ecs/restart', req);
+  return requestClient.post('/tree/ecs/restart', req);
 }
 
 export function deleteEcsResource(req: DeleteEcsReq) {
-  return requestClient.delete('/resource/ecs/delete', { data: req });
+  return requestClient.delete('/tree/ecs/delete', { data: req });
 }
 
 export function getInstanceOptions(req: ListInstanceOptionsReq) {
-  return requestClient.post('/resource/ecs/instance_options', req);
+  return requestClient.post('/tree/ecs/instance_options', req);
 }
 
 export function createSecurityGroup(req: CreateSecurityGroupReq) {
-  return requestClient.post('/resource/security_group/create', req);
+  return requestClient.post('/tree/security_group/create', req);
 }
 
 export function deleteSecurityGroup(req: DeleteSecurityGroupReq) {
-  return requestClient.delete('/resource/security_group/delete', { data: req });
+  return requestClient.delete('/tree/security_group/delete', { data: req });
 }
 
 export function listSecurityGroups(req: ListSecurityGroupsReq) {
-  return requestClient.post('/resource/security_group/list', req);
+  return requestClient.post('/tree/security_group/list', req);
 }
 
 export function getSecurityGroupDetail(req: GetSecurityGroupDetailReq) {
-  return requestClient.post('/resource/security_group/detail', req);
+  return requestClient.post('/tree/security_group/detail', req);
 }
 
 export interface TreeNode {

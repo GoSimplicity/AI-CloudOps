@@ -139,27 +139,27 @@ export interface UnbindResourceParams {
 // API接口
 // 获取树节点列表
 export const getTreeList = (params?: GetTreeListParams) => {
-  return requestClient.get('/tree/list', { params });
+  return requestClient.get('/tree/node/list', { params });
 };
 
 // 获取节点详情
 export const getNodeDetail = (id: number) => {
-  return requestClient.get(`/tree/detail/${id}`);
+  return requestClient.get(`/tree/node/detail/${id}`);
 };
 
 // 获取子节点列表
 export const getChildNodes = (id: number) => {
-  return requestClient.get(`/tree/children/${id}`);
+  return requestClient.get(`/tree/node/children/${id}`);
 };
 
 // 获取树统计信息
 export const getTreeStatistics = () => {
-  return requestClient.get('/tree/statistics');
+  return requestClient.get('/tree/node/statistics');
 };
 
 // 创建节点
 export const createNode = (data: CreateNodeParams) => {
-  return requestClient.post('/tree/node/create', data);
+  return requestClient.post('/tree/node/create', data );
 };
 
 // 更新节点
@@ -169,7 +169,7 @@ export const updateNode = (id: number, data: UpdateNodeParams) => {
 
 // 删除节点
 export const deleteNode = (id: number) => {
-  return requestClient.delete(`/tree/node/delete/${id}`);
+  return requestClient.delete(`/tree/node/delete/${id}`, { data: { id: id } });
 };
 
 // 移动节点
@@ -184,30 +184,30 @@ export const updateNodeStatus = (id: number, data: UpdateNodeStatusParams) => {
 
 // 获取节点成员
 export const getNodeMembers = (id: number, params?: GetNodeMembersParams) => {
-  return requestClient.get(`/tree/members/${id}`, { params });
+  return requestClient.get(`/tree/node/members/${id}`, { params });
 };
 
 // 添加节点成员
 export const addNodeMember = (data: AddNodeMemberParams) => {
-  return requestClient.post('/tree/member/add', data);
+  return requestClient.post('/tree/node/member/add', data);
 };
 
 // 移除节点成员
 export const removeNodeMember = (data: RemoveNodeMemberParams) => {
-  return requestClient.delete(`/tree/member/remove/${data.nodeId}`, { data });
+  return requestClient.delete(`/tree/node/member/remove/${data.nodeId}`, { data: data });
 };
 
 // 获取节点资源
 export const getNodeResources = (id: number) => {
-  return requestClient.get(`/tree/resources/${id}`);
+  return requestClient.get(`/tree/node/resources/${id}`);
 };
 
 // 绑定资源
 export const bindResource = (data: BindResourceParams) => {
-  return requestClient.post('/tree/resource/bind', data);
+  return requestClient.post('/tree/node/resource/bind', data );
 };
 
 // 解绑资源
 export const unbindResource = (data: UnbindResourceParams) => {
-  return requestClient.delete('/tree/resource/unbind', { data });
+  return requestClient.delete('/tree/node/resource/unbind', { data });
 };
