@@ -27,755 +27,80 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
-	"strconv"
-	"sync"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	openapi "github.com/alibabacloud-go/darabonba-openapi/client"
-	openapiv2 "github.com/alibabacloud-go/darabonba-openapi/v2/client"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/aliyun"
 	ecs "github.com/alibabacloud-go/ecs-20140526/v2/client"
 	"github.com/alibabacloud-go/tea/tea"
 	vpc "github.com/alibabacloud-go/vpc-20160428/v2/client"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 type AliyunProviderImpl struct {
-	logger          *zap.Logger
-	dao             dao.ResourceDAO
-	accessKeyId     string
-	accessKeySecret string
+	logger               *zap.Logger
+	sdk                  *aliyun.SDK
+	ecsService           *aliyun.EcsService
+	vpcService           *aliyun.VpcService
+	diskService          *aliyun.DiskService
+	securityGroupService *aliyun.SecurityGroupService
 }
 
-func NewAliyunProvider(logger *zap.Logger, dao dao.ResourceDAO) *AliyunProviderImpl {
+func NewAliyunProvider(logger *zap.Logger) *AliyunProviderImpl {
 	accessKeyId := os.Getenv("ALIYUN_ACCESS_KEY_ID")
 	accessKeySecret := os.Getenv("ALIYUN_ACCESS_KEY_SECRET")
+
+	// 检查必要的环境变量
+	if accessKeyId == "" || accessKeySecret == "" {
+		logger.Error("ALIYUN_ACCESS_KEY_ID and ALIYUN_ACCESS_KEY_SECRET environment variables are required")
+		return nil
+	}
+
+	sdk := aliyun.NewSDK(logger, accessKeyId, accessKeySecret)
+
 	return &AliyunProviderImpl{
-		logger:          logger,
-		dao:             dao,
-		accessKeyId:     accessKeyId,
-		accessKeySecret: accessKeySecret,
+		logger:               logger,
+		sdk:                  sdk,
+		ecsService:           aliyun.NewEcsService(sdk),
+		vpcService:           aliyun.NewVpcService(sdk),
+		diskService:          aliyun.NewDiskService(sdk),
+		securityGroupService: aliyun.NewSecurityGroupService(sdk),
 	}
 }
 
-// 创建ECS客户端
-func (a *AliyunProviderImpl) createEcsClient(region string) (*ecs.Client, error) {
-	config := &openapi.Config{
-		AccessKeyId:     tea.String(a.accessKeyId),
-		AccessKeySecret: tea.String(a.accessKeySecret),
-		RegionId:        tea.String(region),
-		Endpoint:        tea.String("ecs.aliyuncs.com"),
-	}
-	return ecs.NewClient(config)
-}
-
-// 创建VPC客户端
-func (a *AliyunProviderImpl) createVpcClient(region string) (*vpc.Client, error) {
-	config := &openapiv2.Config{
-		AccessKeyId:     tea.String(a.accessKeyId),
-		AccessKeySecret: tea.String(a.accessKeySecret),
-		RegionId:        tea.String(region),
-	}
-	return vpc.NewClient(config)
-}
-
-// CreateInstance 创建ECS实例
-func (a *AliyunProviderImpl) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return err
-	}
-
-	request := &ecs.RunInstancesRequest{
-		RegionId:           tea.String(region),
-		ZoneId:             tea.String(config.ZoneId),
-		ImageId:            tea.String(config.ImageId),
-		InstanceType:       tea.String(config.InstanceType),
-		SecurityGroupIds:   tea.StringSlice(config.SecurityGroupIds),
-		VSwitchId:          tea.String(config.VSwitchId),
-		InstanceName:       tea.String(config.InstanceName),
-		HostName:           tea.String(config.Hostname),
-		Password:           tea.String(config.Password),
-		Description:        tea.String(config.Description),
-		Amount:             tea.Int32(int32(config.Amount)),
-		DryRun:             tea.Bool(config.DryRun),
-		InstanceChargeType: tea.String(string(config.InstanceChargeType)),
-	}
-
-	// 设置系统盘
-	if config.SystemDiskCategory != "" {
-		request.SystemDisk = &ecs.RunInstancesRequestSystemDisk{
-			Category: tea.String(config.SystemDiskCategory),
-			Size:     tea.String(strconv.Itoa(config.SystemDiskSize)),
-		}
-	}
-
-	// 设置数据盘
-	if config.DataDiskCategory != "" {
-		request.DataDisk = []*ecs.RunInstancesRequestDataDisk{
-			{
-				Category: tea.String(config.DataDiskCategory),
-				Size:     tea.Int32(int32(config.DataDiskSize)),
-			},
-		}
-	}
-
-	// // 设置标签
-	// if len(config.Tags) > 0 {
-	// 	tags := make([]*ecs.RunInstancesRequestTag, 0, len(config.Tags))
-	// 	for k, v := range config.Tags {
-	// 		tags = append(tags, &ecs.RunInstancesRequestTag{
-	// 			Key:   tea.String(strconv.Itoa(k)),
-	// 			Value: tea.String(v),
-	// 		})
-	// 	}
-	// 	request.Tag = tags
-	// }
-
-	a.logger.Info("开始创建ECS实例", zap.String("region", region), zap.Any("config", config))
-	response, err := client.RunInstances(request)
-	if err != nil {
-		a.logger.Error("创建ECS实例失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("创建ECS实例成功",
-		zap.Strings("instanceIds", tea.StringSliceValue(response.Body.InstanceIdSets.InstanceIdSet)))
-	return nil
-}
-
-// StartInstance 启动ECS实例
-func (a *AliyunProviderImpl) StartInstance(ctx context.Context, region string, instanceID string) error {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return err
-	}
-
-	request := &ecs.StartInstanceRequest{
-		InstanceId: tea.String(instanceID),
-	}
-
-	a.logger.Info("开始启动ECS实例", zap.String("region", region), zap.String("instanceID", instanceID))
-	_, err = client.StartInstance(request)
-	if err != nil {
-		a.logger.Error("启动ECS实例失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("启动ECS实例成功", zap.String("instanceID", instanceID))
-	return nil
-}
-
-// StopInstance 停止ECS实例
-func (a *AliyunProviderImpl) StopInstance(ctx context.Context, region string, instanceID string) error {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return err
-	}
-
-	request := &ecs.StopInstanceRequest{
-		InstanceId: tea.String(instanceID),
-		ForceStop:  tea.Bool(false),
-	}
-
-	a.logger.Info("开始停止ECS实例", zap.String("region", region), zap.String("instanceID", instanceID))
-	_, err = client.StopInstance(request)
-	if err != nil {
-		a.logger.Error("停止ECS实例失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("停止ECS实例成功", zap.String("instanceID", instanceID))
-	return nil
-}
-
-// RestartInstance 重启ECS实例
-func (a *AliyunProviderImpl) RestartInstance(ctx context.Context, region string, instanceID string) error {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return err
-	}
-
-	request := &ecs.RebootInstanceRequest{
-		InstanceId: tea.String(instanceID),
-	}
-
-	a.logger.Info("开始重启ECS实例", zap.String("region", region), zap.String("instanceID", instanceID))
-	_, err = client.RebootInstance(request)
-	if err != nil {
-		a.logger.Error("重启ECS实例失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("重启ECS实例成功", zap.String("instanceID", instanceID))
-	return nil
-}
-
-// DeleteInstance 删除ECS实例
-func (a *AliyunProviderImpl) DeleteInstance(ctx context.Context, region string, instanceID string) error {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return err
-	}
-
-	request := &ecs.DeleteInstanceRequest{
-		InstanceId: tea.String(instanceID),
-		Force:      tea.Bool(true), // 强制删除
-	}
-
-	a.logger.Info("开始删除ECS实例", zap.String("region", region), zap.String("instanceID", instanceID))
-	_, err = client.DeleteInstance(request)
-	if err != nil {
-		a.logger.Error("删除ECS实例失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("删除ECS实例成功", zap.String("instanceID", instanceID))
-	return nil
-}
-
-// AttachDisk 挂载磁盘
-func (a *AliyunProviderImpl) AttachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return err
-	}
-
-	request := &ecs.AttachDiskRequest{
-		DiskId:     tea.String(diskID),
-		InstanceId: tea.String(instanceID),
-	}
-
-	a.logger.Info("开始挂载磁盘", zap.String("region", region), zap.String("diskID", diskID), zap.String("instanceID", instanceID))
-	_, err = client.AttachDisk(request)
-	if err != nil {
-		a.logger.Error("挂载磁盘失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("挂载磁盘成功", zap.String("diskID", diskID), zap.String("instanceID", instanceID))
-	return nil
-}
-
-// CreateDisk 创建磁盘
-func (a *AliyunProviderImpl) CreateDisk(ctx context.Context, region string, config *model.DiskCreationParams) error {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return err
-	}
-
-	request := &ecs.CreateDiskRequest{
-		RegionId:     tea.String(region),
-		ZoneId:       tea.String(config.ZoneId),
-		DiskName:     tea.String(config.DiskName),
-		DiskCategory: tea.String(config.DiskCategory),
-		Size:         tea.Int32(int32(config.Size)),
-		Description:  tea.String(config.Description),
-	}
-
-	// 设置标签
-	if len(config.Tags) > 0 {
-		tags := make([]*ecs.CreateDiskRequestTag, 0, len(config.Tags))
-		for k, v := range config.Tags {
-			tags = append(tags, &ecs.CreateDiskRequestTag{
-				Key:   tea.String(k),
-				Value: tea.String(v),
-			})
-		}
-		request.Tag = tags
-	}
-
-	a.logger.Info("开始创建磁盘", zap.String("region", region), zap.Any("config", config))
-	response, err := client.CreateDisk(request)
-	if err != nil {
-		a.logger.Error("创建磁盘失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("创建磁盘成功", zap.String("diskID", tea.StringValue(response.Body.DiskId)))
-	return nil
-}
-
-// CreateVPC 创建VPC
-func (a *AliyunProviderImpl) CreateVPC(ctx context.Context, region string, config *model.CreateVpcResourceReq) error {
-	client, err := a.createVpcClient(region)
-	if err != nil {
-		a.logger.Error("创建VPC客户端失败", zap.Error(err))
-		return err
-	}
-
-	// 创建VPC
-	vpcRequest := &vpc.CreateVpcRequest{
-		RegionId:    tea.String(region),
-		VpcName:     tea.String(config.VpcName),
-		CidrBlock:   tea.String(config.CidrBlock),
-		Description: tea.String(config.Description),
-	}
-
-	a.logger.Info("开始创建VPC", zap.String("region", region), zap.Any("config", config))
-	vpcResponse, err := client.CreateVpc(vpcRequest)
-	if err != nil {
-		a.logger.Error("创建VPC失败", zap.Error(err))
-		return err
-	}
-
-	vpcId := tea.StringValue(vpcResponse.Body.VpcId)
-	a.logger.Info("创建VPC成功", zap.String("vpcID", vpcId))
-
-	// 等待VPC可用
-	err = a.waitForVpcAvailable(client, region, vpcId)
-	if err != nil {
-		a.logger.Error("等待VPC可用失败", zap.Error(err))
-		return err
-	}
-
-	// 创建交换机
-	vSwitchRequest := &vpc.CreateVSwitchRequest{
-		RegionId:    tea.String(region),
-		ZoneId:      tea.String(config.ZoneId),
-		VpcId:       tea.String(vpcId),
-		VSwitchName: tea.String(config.VSwitchName),
-		CidrBlock:   tea.String(config.VSwitchCidrBlock),
-		Description: tea.String(config.Description),
-	}
-
-	a.logger.Info("开始创建交换机", zap.String("vpcID", vpcId), zap.String("vSwitchName", config.VSwitchName))
-	vSwitchResponse, err := client.CreateVSwitch(vSwitchRequest)
-	if err != nil {
-		a.logger.Error("创建交换机失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("创建交换机成功", zap.String("vSwitchID", tea.StringValue(vSwitchResponse.Body.VSwitchId)))
-	return nil
-}
-
-// 等待VPC可用
-func (a *AliyunProviderImpl) waitForVpcAvailable(client *vpc.Client, region string, vpcId string) error {
-	request := &vpc.DescribeVpcAttributeRequest{
-		RegionId: tea.String(region),
-		VpcId:    tea.String(vpcId),
-	}
-
-	for i := 0; i < 10; i++ {
-		response, err := client.DescribeVpcAttribute(request)
-		if err != nil {
-			return err
-		}
-
-		if tea.StringValue(response.Body.Status) == "Available" {
-			return nil
-		}
-
-		time.Sleep(5 * time.Second)
-	}
-
-	return fmt.Errorf("等待VPC可用超时")
-}
-
-// DeleteDisk 删除磁盘
-func (a *AliyunProviderImpl) DeleteDisk(ctx context.Context, region string, diskID string) error {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return err
-	}
-
-	request := &ecs.DeleteDiskRequest{
-		DiskId: tea.String(diskID),
-	}
-
-	a.logger.Info("开始删除磁盘", zap.String("region", region), zap.String("diskID", diskID))
-	_, err = client.DeleteDisk(request)
-	if err != nil {
-		a.logger.Error("删除磁盘失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("删除磁盘成功", zap.String("diskID", diskID))
-	return nil
-}
-
-// DeleteVPC 删除VPC
-func (a *AliyunProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID string) error {
-	client, err := a.createVpcClient(region)
-	if err != nil {
-		a.logger.Error("创建VPC客户端失败", zap.Error(err))
-		return err
-	}
-
-	// 先查询VPC详情，获取相关资源
-	vpcDetailRequest := &vpc.DescribeVpcAttributeRequest{
-		RegionId: tea.String(region),
-		VpcId:    tea.String(vpcID),
-	}
-
-	_, err = client.DescribeVpcAttribute(vpcDetailRequest)
-	if err != nil {
-		a.logger.Error("查询VPC详情失败", zap.Error(err))
-		return err
-	}
-
-	// 查询并删除所有交换机
-	vSwitchRequest := &vpc.DescribeVSwitchesRequest{
-		RegionId: tea.String(region),
-		VpcId:    tea.String(vpcID),
-	}
-
-	a.logger.Info("查询VPC下的交换机", zap.String("region", region), zap.String("vpcID", vpcID))
-	vSwitchResponse, err := client.DescribeVSwitches(vSwitchRequest)
-	if err != nil {
-		a.logger.Error("查询交换机失败", zap.Error(err))
-		return err
-	}
-
-	// 检查交换机是否有依赖资源
-	for _, vSwitch := range vSwitchResponse.Body.VSwitches.VSwitch {
-		vSwitchId := tea.StringValue(vSwitch.VSwitchId)
-
-		// 检查交换机下是否有ECS实例
-		ecsClient, err := a.createEcsClient(region)
-		if err == nil {
-			ecsRequest := &ecs.DescribeInstancesRequest{
-				RegionId:  tea.String(region),
-				VSwitchId: tea.String(vSwitchId),
-			}
-			ecsResponse, err := ecsClient.DescribeInstances(ecsRequest)
-			if err == nil && ecsResponse.Body != nil && len(ecsResponse.Body.Instances.Instance) > 0 {
-				a.logger.Warn("交换机下存在ECS实例，无法删除", zap.String("vSwitchID", vSwitchId))
-				return fmt.Errorf("交换机(%s)下存在ECS实例，请先删除相关实例", vSwitchId)
-			}
-		}
-
-		// 删除交换机
-		deleteVSwitchRequest := &vpc.DeleteVSwitchRequest{
-			VSwitchId: tea.String(vSwitchId),
-		}
-
-		a.logger.Info("删除交换机", zap.String("vSwitchID", vSwitchId))
-		_, err = client.DeleteVSwitch(deleteVSwitchRequest)
-		if err != nil {
-			a.logger.Error("删除交换机失败", zap.Error(err))
-			return fmt.Errorf("删除交换机(%s)失败: %w", vSwitchId, err)
-		}
-
-		time.Sleep(5 * time.Second)
-	}
-
-	// 检查并删除NAT网关
-	natClient, err := a.createVpcClient(region)
-	if err == nil {
-		natRequest := &vpc.DescribeNatGatewaysRequest{
-			RegionId: tea.String(region),
-			VpcId:    tea.String(vpcID),
-		}
-		natResponse, err := natClient.DescribeNatGateways(natRequest)
-		if err == nil && natResponse.Body != nil {
-			for _, nat := range natResponse.Body.NatGateways.NatGateway {
-				natId := tea.StringValue(nat.NatGatewayId)
-				deleteNatRequest := &vpc.DeleteNatGatewayRequest{
-					RegionId:     tea.String(region),
-					NatGatewayId: tea.String(natId),
-				}
-				a.logger.Info("删除NAT网关", zap.String("natGatewayID", natId))
-				_, err = natClient.DeleteNatGateway(deleteNatRequest)
-				if err != nil {
-					a.logger.Error("删除NAT网关失败", zap.Error(err))
-					return fmt.Errorf("删除NAT网关(%s)失败: %w", natId, err)
-				}
-				time.Sleep(5 * time.Second)
-			}
-		}
-	}
-
-	// 删除VPC
-	request := &vpc.DeleteVpcRequest{
-		VpcId: tea.String(vpcID),
-	}
-
-	a.logger.Info("开始删除VPC", zap.String("region", region), zap.String("vpcID", vpcID))
-	_, err = client.DeleteVpc(request)
-	if err != nil {
-		a.logger.Error("删除VPC失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("删除VPC成功", zap.String("vpcID", vpcID))
-	return nil
-}
-
-// DetachDisk 卸载磁盘
-func (a *AliyunProviderImpl) DetachDisk(ctx context.Context, region string, diskID string, instanceID string) error {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return err
-	}
-
-	request := &ecs.DetachDiskRequest{
-		DiskId:     tea.String(diskID),
-		InstanceId: tea.String(instanceID),
-	}
-
-	a.logger.Info("开始卸载磁盘", zap.String("region", region), zap.String("diskID", diskID), zap.String("instanceID", instanceID))
-	_, err = client.DetachDisk(request)
-	if err != nil {
-		a.logger.Error("卸载磁盘失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("卸载磁盘成功", zap.String("diskID", diskID), zap.String("instanceID", instanceID))
-	return nil
-}
-
-// ListDisks 列出磁盘
-func (a *AliyunProviderImpl) ListDisks(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.PageResp, error) {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, err
-	}
-
-	request := &ecs.DescribeDisksRequest{
-		RegionId:   tea.String(region),
-		PageSize:   tea.Int32(int32(pageSize)),
-		PageNumber: tea.Int32(int32(pageNumber)),
-	}
-
-	a.logger.Info("开始查询磁盘列表", zap.String("region", region))
-	response, err := client.DescribeDisks(request)
-	if err != nil {
-		a.logger.Error("查询磁盘列表失败", zap.Error(err))
-		return nil, err
-	}
-
-	total := int64(tea.Int32Value(response.Body.TotalCount))
-	a.logger.Info("查询磁盘列表成功", zap.Int64("total", total))
-
-	// 这里需要根据实际情况转换为PageResp
-	result := []*model.PageResp{
-		{
-			Total: total,
-			Data:  response.Body.Disks.Disk,
-		},
-	}
-
-	return result, nil
-}
-
-// ListInstances 列出ECS实例
-func (a *AliyunProviderImpl) ListInstances(ctx context.Context, region string, pageSize int, pageNumber int) ([]*model.ResourceEcs, int64, error) {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, 0, err
-	}
-	request := &ecs.DescribeInstancesRequest{
-		RegionId:   tea.String(region),
-		PageSize:   tea.Int32(int32(pageSize)),
-		PageNumber: tea.Int32(int32(pageNumber)),
-	}
-
-	response, err := client.DescribeInstances(request)
-	if err != nil {
-		a.logger.Error("查询ECS实例列表失败", zap.Error(err))
-		return nil, 0, err
-	}
-
-	total := int64(tea.Int32Value(response.Body.TotalCount))
-
-	instances := response.Body.Instances.Instance
-	result := make([]*model.ResourceEcs, len(instances))
-	for i, instance := range instances {
-		// 将阿里云ECS实例转换为我们的模型
-		result[i] = &model.ResourceEcs{
-			ComputeResource: model.ComputeResource{
-				ResourceBase: model.ResourceBase{
-					InstanceName:       tea.StringValue(instance.InstanceName),
-					InstanceId:         tea.StringValue(instance.InstanceId),
-					Provider:           model.CloudProviderAliyun,
-					RegionId:           tea.StringValue(instance.RegionId),
-					ZoneId:             tea.StringValue(instance.ZoneId),
-					VpcId:              tea.StringValue(instance.VpcAttributes.VpcId),
-					Status:             tea.StringValue(instance.Status),
-					CreationTime:       tea.StringValue(instance.CreationTime),
-					InstanceChargeType: tea.StringValue(instance.InstanceChargeType),
-					Description:        tea.StringValue(instance.Description),
-					SecurityGroupIds:   model.StringList(tea.StringSliceValue(instance.SecurityGroupIds.SecurityGroupId)),
-					PrivateIpAddress:   model.StringList(tea.StringSliceValue(instance.VpcAttributes.PrivateIpAddress.IpAddress)),
-					PublicIpAddress:    model.StringList(tea.StringSliceValue(instance.PublicIpAddress.IpAddress)),
-					LastSyncTime:       time.Now(),
-				},
-				Cpu:          int(tea.Int32Value(instance.Cpu)),
-				Memory:       int(tea.Int32Value(instance.Memory)) / 1024,
-				InstanceType: tea.StringValue(instance.InstanceType),
-				ImageId:      tea.StringValue(instance.ImageId),
-				HostName:     tea.StringValue(instance.HostName),
-				IpAddr:       tea.StringValue(instance.VpcAttributes.PrivateIpAddress.IpAddress[0]),
-			},
-			OsType:          tea.StringValue(instance.OSType),
-			OSName:          tea.StringValue(instance.OSName),
-			StartTime:       tea.StringValue(instance.StartTime),
-			AutoReleaseTime: tea.StringValue(instance.AutoReleaseTime),
-		}
-	}
-
-	if len(result) == 0 {
-		return []*model.ResourceEcs{}, 0, nil
-	}
-
-	return result, total, nil
-}
-
-// GetInstanceDetail 获取ECS实例详情
-func (a *AliyunProviderImpl) GetInstanceDetail(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error) {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, err
-	}
-
-	request := &ecs.DescribeInstanceAttributeRequest{
-		InstanceId: tea.String(instanceID),
-	}
-
-	response, err := client.DescribeInstanceAttribute(request)
-	if err != nil {
-		a.logger.Error("查询ECS实例详情失败", zap.Error(err))
-		return nil, err
-	}
-
-	instance := response.Body
-	result := &model.ResourceEcs{
-		ComputeResource: model.ComputeResource{
-			ResourceBase: model.ResourceBase{
-				InstanceName:       tea.StringValue(instance.InstanceName),
-				InstanceId:         tea.StringValue(instance.InstanceId),
-				Provider:           model.CloudProviderAliyun,
-				RegionId:           tea.StringValue(instance.RegionId),
-				ZoneId:             tea.StringValue(instance.ZoneId),
-				VpcId:              tea.StringValue(instance.VpcAttributes.VpcId),
-				Status:             tea.StringValue(instance.Status),
-				CreationTime:       tea.StringValue(instance.CreationTime),
-				InstanceChargeType: tea.StringValue(instance.InstanceChargeType),
-				Description:        tea.StringValue(instance.Description),
-				SecurityGroupIds:   model.StringList(tea.StringSliceValue(instance.SecurityGroupIds.SecurityGroupId)),
-				PrivateIpAddress:   model.StringList(tea.StringSliceValue(instance.VpcAttributes.PrivateIpAddress.IpAddress)),
-				PublicIpAddress:    model.StringList(tea.StringSliceValue(instance.PublicIpAddress.IpAddress)),
-				LastSyncTime:       time.Now(),
-			},
-			Cpu:          int(tea.Int32Value(instance.Cpu)),
-			Memory:       int(tea.Int32Value(instance.Memory)) / 1024,
-			InstanceType: tea.StringValue(instance.InstanceType),
-			ImageId:      tea.StringValue(instance.ImageId),
-			HostName:     tea.StringValue(instance.HostName),
-			IpAddr:       tea.StringValue(instance.VpcAttributes.PrivateIpAddress.IpAddress[0]),
-		},
-	}
-
-	return result, nil
-}
-
-// ListVPCs 获取VPC列表
-func (a *AliyunProviderImpl) ListVPCs(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceVpc, int64, error) {
-	client, err := a.createVpcClient(region)
-	if err != nil {
-		a.logger.Error("创建VPC客户端失败", zap.Error(err))
-		return nil, 0, err
-	}
-
-	request := &vpc.DescribeVpcsRequest{
-		RegionId:   tea.String(region),
-		PageNumber: tea.Int32(int32(pageNumber)),
-		PageSize:   tea.Int32(int32(pageSize)),
-	}
-
-	response, err := client.DescribeVpcs(request)
-	if err != nil {
-		a.logger.Error("查询VPC列表失败", zap.Error(err))
-		return nil, 0, err
-	}
-
-	total := int64(tea.Int32Value(response.Body.TotalCount))
-	a.logger.Info("查询VPC列表成功", zap.Int64("total", total))
-
-	result := make([]*model.ResourceVpc, len(response.Body.Vpcs.Vpc))
-	for i, vpc := range response.Body.Vpcs.Vpc {
-		var tags []string
-		if vpc.Tags != nil && vpc.Tags.Tag != nil {
-			tags = make([]string, 0, len(vpc.Tags.Tag))
-			for _, tag := range vpc.Tags.Tag {
-				if tag == nil || tag.Key == nil || tag.Value == nil {
-					continue
-				}
-				tags = append(tags, fmt.Sprintf("%s=%s", tea.StringValue(tag.Key), tea.StringValue(tag.Value)))
-			}
-		}
-		result[i] = &model.ResourceVpc{
-			ResourceBase: model.ResourceBase{
-				InstanceName: tea.StringValue(vpc.VpcName),
-				InstanceId:   tea.StringValue(vpc.VpcId),
-				Provider:     model.CloudProviderAliyun,
-				RegionId:     tea.StringValue(vpc.RegionId),
-				VpcId:        tea.StringValue(vpc.VpcId),
-				Status:       tea.StringValue(vpc.Status),
-				CreationTime: tea.StringValue(vpc.CreationTime),
-				Description:  tea.StringValue(vpc.Description),
-				LastSyncTime: time.Now(),
-				Tags:         model.StringList(tags),
-			},
-			VpcName:         tea.StringValue(vpc.VpcName),
-			CidrBlock:       tea.StringValue(vpc.CidrBlock),
-			Ipv6CidrBlock:   tea.StringValue(vpc.Ipv6CidrBlock),
-			VSwitchIds:      model.StringList(tea.StringSliceValue(vpc.VSwitchIds.VSwitchId)),
-			RouteTableIds:   model.StringList(tea.StringSliceValue(vpc.RouterTableIds.RouterTableIds)),
-			NatGatewayIds:   model.StringList(tea.StringSliceValue(vpc.NatGatewayIds.NatGatewayIds)),
-			IsDefault:       tea.BoolValue(vpc.IsDefault),
-			ResourceGroupId: tea.StringValue(vpc.ResourceGroupId),
-		}
-	}
-
-	return result, total, nil
-}
-
-// SyncResources 同步资源
+// 基础服务
 func (a *AliyunProviderImpl) SyncResources(ctx context.Context, region string) error {
+	if region == "" {
+		return fmt.Errorf("region cannot be empty")
+	}
+
+	a.logger.Info("starting resource sync", zap.String("region", region))
+
+	// TODO: 实现具体的资源同步逻辑
+	// 可以包括同步ECS实例、VPC、安全组等资源
+
+	a.logger.Info("resource sync completed", zap.String("region", region))
 	return nil
 }
 
-// ListRegions 列出区域
 func (a *AliyunProviderImpl) ListRegions(ctx context.Context) ([]*model.RegionResp, error) {
-	client, err := a.createEcsClient("cn-hangzhou")
+	regions, err := a.ecsService.ListRegions(ctx)
 	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, err
+		a.logger.Error("failed to list regions", zap.Error(err))
+		return nil, fmt.Errorf("list regions failed: %w", err)
 	}
 
-	request := &ecs.DescribeRegionsRequest{
-		AcceptLanguage: tea.String("zh-CN"),
+	if len(regions) == 0 {
+		return []*model.RegionResp{}, nil
 	}
 
-	a.logger.Info("开始查询区域列表")
-	response, err := client.DescribeRegions(request)
-	if err != nil {
-		a.logger.Error("查询区域列表失败", zap.Error(err))
-		return nil, err
-	}
-
-	result := make([]*model.RegionResp, 0, len(response.Body.Regions.Region))
-	for _, region := range response.Body.Regions.Region {
+	result := make([]*model.RegionResp, 0, len(regions))
+	for _, region := range regions {
+		if region == nil {
+			continue
+		}
 		result = append(result, &model.RegionResp{
 			RegionId:       tea.StringValue(region.RegionId),
 			LocalName:      tea.StringValue(region.LocalName),
@@ -783,773 +108,846 @@ func (a *AliyunProviderImpl) ListRegions(ctx context.Context) ([]*model.RegionRe
 		})
 	}
 
-	a.logger.Info("查询区域列表成功", zap.Int("count", len(result)))
 	return result, nil
 }
 
-// GetZonesByVpc 获取VPC下的可用区
 func (a *AliyunProviderImpl) GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error) {
-	client, err := a.createVpcClient(region)
+	if region == "" || vpcId == "" {
+		return nil, fmt.Errorf("region and vpcId cannot be empty")
+	}
+
+	zones, _, err := a.vpcService.GetZonesByVpc(ctx, region, vpcId)
 	if err != nil {
-		a.logger.Error("创建VPC客户端失败", zap.Error(err))
-		return nil, err
+		a.logger.Error("failed to get zones by VPC", zap.Error(err), zap.String("vpcId", vpcId))
+		return nil, fmt.Errorf("get zones by VPC failed: %w", err)
 	}
 
-	// 首先获取VPC信息
-	vpcRequest := &vpc.DescribeVpcsRequest{
-		RegionId: tea.String(region),
-		VpcId:    tea.String(vpcId),
+	if len(zones) == 0 {
+		return nil, nil
 	}
 
-	a.logger.Info("开始查询VPC信息", zap.String("region", region), zap.String("vpcId", vpcId))
-	vpcResponse, err := client.DescribeVpcs(vpcRequest)
-	if err != nil {
-		a.logger.Error("查询VPC信息失败", zap.Error(err))
-		return nil, err
-	}
-
-	if len(vpcResponse.Body.Vpcs.Vpc) == 0 {
-		a.logger.Error("未找到指定的VPC", zap.String("vpcId", vpcId))
-		return nil, fmt.Errorf("未找到指定的VPC: %s", vpcId)
-	}
-
-	// 并行获取可用区信息和VPC关联的交换机信息
-	var zonesResponse *vpc.DescribeZonesResponse
-	var vSwitchResponse *vpc.DescribeVSwitchesResponse
-	var zonesErr, vSwitchErr error
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		request := &vpc.DescribeZonesRequest{
-			RegionId: tea.String(region),
+	result := make([]*model.ZoneResp, 0, len(zones))
+	for _, zone := range zones {
+		if zone == nil {
+			continue
 		}
-		zonesResponse, zonesErr = client.DescribeZones(request)
-	}()
-
-	go func() {
-		defer wg.Done()
-		vSwitchRequest := &vpc.DescribeVSwitchesRequest{
-			RegionId: tea.String(region),
-			VpcId:    tea.String(vpcId),
-		}
-		vSwitchResponse, vSwitchErr = client.DescribeVSwitches(vSwitchRequest)
-	}()
-
-	wg.Wait()
-
-	if zonesErr != nil {
-		a.logger.Error("查询可用区列表失败", zap.Error(zonesErr))
-		return nil, zonesErr
+		result = append(result, &model.ZoneResp{
+			ZoneId:    tea.StringValue(zone.ZoneId),
+			LocalName: tea.StringValue(zone.LocalName),
+		})
 	}
 
-	if vSwitchErr != nil {
-		a.logger.Error("查询交换机列表失败", zap.Error(vSwitchErr))
-		return nil, vSwitchErr
-	}
-
-	// 创建一个map来存储VPC关联的可用区
-	vpcZones := make(map[string]bool, len(vSwitchResponse.Body.VSwitches.VSwitch))
-	for _, vSwitch := range vSwitchResponse.Body.VSwitches.VSwitch {
-		vpcZones[tea.StringValue(vSwitch.ZoneId)] = true
-	}
-
-	// 过滤出VPC关联的可用区
-	result := make([]*model.ZoneResp, 0, len(vpcZones))
-	for _, zone := range zonesResponse.Body.Zones.Zone {
-		zoneId := tea.StringValue(zone.ZoneId)
-		if _, exists := vpcZones[zoneId]; exists {
-			result = append(result, &model.ZoneResp{
-				ZoneId:    zoneId,
-				LocalName: tea.StringValue(zone.LocalName),
-			})
-		}
-	}
-
-	a.logger.Info("查询VPC关联的可用区成功", zap.Int("count", len(result)))
 	return result, nil
 }
 
-// ListInstanceOptions 列出实例选项
-func (a *AliyunProviderImpl) ListInstanceOptions(_ context.Context, payType string, region string, zone string, instanceType string, imageId string, systemDiskCategory string, dataDiskCategory string, pageSize int, pageNumber int) ([]*model.ListInstanceOptionsResp, error) {
-	a.logger.Info("开始查询实例选项",
-		zap.String("payType", payType),
-		zap.String("region", region),
-		zap.String("zone", zone),
-		zap.String("instanceType", instanceType),
-		zap.String("systemDiskCategory", systemDiskCategory),
-		zap.String("dataDiskCategory", dataDiskCategory))
-
-	// 依次判断每个选项是否为空，实现扁平化流程控制
-	if payType == "" {
-		return a.listAvailablePayTypes()
-	}
-
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, err
-	}
-
+// ECS实例管理
+func (a *AliyunProviderImpl) ListInstances(ctx context.Context, region string, page, size int) ([]*model.ResourceEcs, int64, error) {
 	if region == "" {
-		return a.listAvailableRegions(client)
+		return nil, 0, fmt.Errorf("region cannot be empty")
+	}
+	if page <= 0 || size <= 0 {
+		return nil, 0, fmt.Errorf("page and size must be positive integers")
 	}
 
-	if zone == "" {
-		return a.listAvailableZones(client, region)
+	req := &aliyun.ListInstancesRequest{
+		Region: region,
+		Page:   page,
+		Size:   size,
 	}
 
-	if instanceType == "" {
-		return a.listAvailableInstanceTypes(client, region, zone, payType)
-	}
-
-	if imageId == "" {
-		return a.listAvailableInstanceTypeImages(client, region, zone, payType, instanceType, pageSize, pageNumber)
-	}
-
-	if systemDiskCategory == "" {
-		return a.listAvailableSystemDiskCategories(client, region, zone, instanceType)
-	}
-
-	if dataDiskCategory == "" {
-		return a.listAvailableDataDiskCategories(client, region, zone, instanceType)
-	}
-
-	// 所有选项都已选择，返回完整的配置信息
-	return a.getCompleteConfiguration(payType, region, zone, instanceType, imageId, systemDiskCategory, dataDiskCategory)
-}
-
-// listAvailablePayTypes 获取可用的付费类型
-func (a *AliyunProviderImpl) listAvailablePayTypes() ([]*model.ListInstanceOptionsResp, error) {
-	return []*model.ListInstanceOptionsResp{
-		{
-			PayType: "PrePaid",
-			Valid:   true,
-		},
-		{
-			PayType: "PostPaid",
-			Valid:   true,
-		},
-	}, nil
-}
-
-// listAvailableRegions 获取可用地域列表
-func (a *AliyunProviderImpl) listAvailableRegions(client *ecs.Client) ([]*model.ListInstanceOptionsResp, error) {
-	request := &ecs.DescribeRegionsRequest{
-		AcceptLanguage: tea.String("zh-CN"),
-	}
-
-	response, err := client.DescribeRegions(request)
+	resp, err := a.ecsService.ListInstances(ctx, req)
 	if err != nil {
-		a.logger.Error("获取地域列表失败", zap.Error(err))
-		return nil, err
+		a.logger.Error("failed to list instances", zap.Error(err), zap.String("region", region))
+		return nil, 0, fmt.Errorf("list instances failed: %w", err)
 	}
 
-	if response == nil || response.Body == nil || response.Body.Regions == nil {
-		return []*model.ListInstanceOptionsResp{}, nil
+	if resp == nil || len(resp.Instances) == 0 {
+		return nil, 0, nil
 	}
 
-	regions := make([]*model.ListInstanceOptionsResp, 0, len(response.Body.Regions.Region))
-	for _, region := range response.Body.Regions.Region {
-		if region == nil || region.RegionId == nil {
+	result := make([]*model.ResourceEcs, 0, len(resp.Instances))
+	for _, instance := range resp.Instances {
+		if instance == nil {
 			continue
 		}
-
-		regions = append(regions, &model.ListInstanceOptionsResp{
-			Region: *region.RegionId,
-			Valid:  true,
-		})
+		result = append(result, a.convertToResourceEcsFromListInstance(instance))
 	}
 
-	return regions, nil
+	return result, resp.Total, nil
 }
 
-// listAvailableZones 获取指定地域下的可用区列表
-func (a *AliyunProviderImpl) listAvailableZones(client *ecs.Client, region string) ([]*model.ListInstanceOptionsResp, error) {
-	request := &ecs.DescribeZonesRequest{
-		RegionId: tea.String(region),
+func (a *AliyunProviderImpl) GetInstance(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error) {
+	if region == "" || instanceID == "" {
+		return nil, fmt.Errorf("region and instanceID cannot be empty")
 	}
 
-	response, err := client.DescribeZones(request)
+	instance, err := a.ecsService.GetInstanceDetail(ctx, region, instanceID)
 	if err != nil {
-		a.logger.Error("获取可用区列表失败", zap.String("region", region), zap.Error(err))
-		return nil, err
+		a.logger.Error("failed to get instance detail", zap.Error(err), zap.String("instanceID", instanceID))
+		return nil, fmt.Errorf("get instance detail failed: %w", err)
 	}
 
-	if response == nil || response.Body == nil || response.Body.Zones == nil {
-		return []*model.ListInstanceOptionsResp{}, nil
+	if instance == nil {
+		return nil, fmt.Errorf("instance not found")
 	}
 
-	zones := make([]*model.ListInstanceOptionsResp, 0, len(response.Body.Zones.Zone))
-	for _, zone := range response.Body.Zones.Zone {
-		if zone == nil || zone.ZoneId == nil {
-			continue
-		}
-
-		zones = append(zones, &model.ListInstanceOptionsResp{
-			Region: region,
-			Zone:   *zone.ZoneId,
-			Valid:  true,
-		})
-	}
-
-	return zones, nil
+	return a.convertToResourceEcsFromInstanceDetail(instance), nil
 }
 
-// listAvailableInstanceTypes 获取指定地域和可用区下可用的实例规格
-func (a *AliyunProviderImpl) listAvailableInstanceTypes(client *ecs.Client, region string, zone string, payType string) ([]*model.ListInstanceOptionsResp, error) {
-	request := &ecs.DescribeAvailableResourceRequest{
-		RegionId:            tea.String(region),
-		ZoneId:              tea.String(zone),
-		DestinationResource: tea.String("InstanceType"),
-		InstanceChargeType:  tea.String(payType),
+func (a *AliyunProviderImpl) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
+	if region == "" {
+		return fmt.Errorf("region cannot be empty")
+	}
+	if config == nil {
+		return fmt.Errorf("config cannot be nil")
 	}
 
-	response, err := client.DescribeAvailableResource(request)
+	req := &aliyun.CreateInstanceRequest{
+		Region:             region,
+		ZoneId:             config.ZoneId,
+		ImageId:            config.ImageId,
+		InstanceType:       config.InstanceType,
+		SecurityGroupIds:   config.SecurityGroupIds,
+		VSwitchId:          config.VSwitchId,
+		InstanceName:       config.InstanceName,
+		Hostname:           config.Hostname,
+		Password:           config.Password,
+		Description:        config.Description,
+		Amount:             config.Amount,
+		DryRun:             config.DryRun,
+		InstanceChargeType: string(config.InstanceChargeType),
+		SystemDiskCategory: config.SystemDiskCategory,
+		SystemDiskSize:     config.SystemDiskSize,
+		DataDiskCategory:   config.DataDiskCategory,
+		DataDiskSize:       config.DataDiskSize,
+	}
+
+	_, err := a.ecsService.CreateInstance(ctx, req)
 	if err != nil {
-		a.logger.Error("获取可用实例规格失败", zap.String("region", region), zap.String("zone", zone), zap.Error(err))
-		return nil, err
+		a.logger.Error("failed to create instance", zap.Error(err), zap.String("region", region))
+		return fmt.Errorf("create instance failed: %w", err)
 	}
 
-	// 提前分配容量，减少内存重新分配
-	availableInstanceTypeMap := make(map[string]bool)
-
-	// 添加空指针检查
-	if response == nil || response.Body == nil || response.Body.AvailableZones == nil || response.Body.AvailableZones.AvailableZone == nil {
-		a.logger.Warn("API响应数据为空", zap.String("region", region), zap.String("zone", zone))
-		return []*model.ListInstanceOptionsResp{}, nil
-	}
-
-	// 扁平化处理可用实例类型收集
-	for _, availableZone := range response.Body.AvailableZones.AvailableZone {
-		// 跳过不匹配的可用区
-		if availableZone == nil || availableZone.ZoneId == nil || *availableZone.ZoneId != zone {
-			continue
-		}
-
-		// 跳过无资源的可用区
-		if availableZone.AvailableResources == nil || availableZone.AvailableResources.AvailableResource == nil {
-			continue
-		}
-
-		// 扁平化处理资源遍历和实例类型收集
-		for _, resource := range availableZone.AvailableResources.AvailableResource {
-			if resource == nil || resource.SupportedResources == nil || resource.SupportedResources.SupportedResource == nil {
-				continue
-			}
-
-			for _, supportedResource := range resource.SupportedResources.SupportedResource {
-				if supportedResource != nil && supportedResource.Status != nil &&
-					supportedResource.Value != nil && *supportedResource.Status == "Available" {
-					availableInstanceTypeMap[*supportedResource.Value] = true
-				}
-			}
-		}
-	}
-
-	// 如果没有可用实例类型，直接返回
-	if len(availableInstanceTypeMap) == 0 {
-		return []*model.ListInstanceOptionsResp{}, nil
-	}
-
-	// 批量查询实例类型详情
-	return a.batchFetchInstanceTypeDetails(client, availableInstanceTypeMap, region, zone, payType)
+	return nil
 }
 
-// listAvailableInstanceTypeImages 获取指定地域和可用区下可用的实例类型和镜像信息
-func (a *AliyunProviderImpl) listAvailableInstanceTypeImages(client *ecs.Client, region string, zone string, payType string, instanceType string, pageSize int, pageNumber int) ([]*model.ListInstanceOptionsResp, error) {
-	// 获取可用镜像信息
-	imagesRequest := &ecs.DescribeImagesRequest{
-		RegionId:        tea.String(region),
-		Status:          tea.String("Available"),
-		ImageOwnerAlias: tea.String("system"),
-		PageSize:        tea.Int32(int32(pageSize)),
-		PageNumber:      tea.Int32(int32(pageNumber)),
+func (a *AliyunProviderImpl) DeleteInstance(ctx context.Context, region string, instanceID string) error {
+	if region == "" || instanceID == "" {
+		return fmt.Errorf("region and instanceID cannot be empty")
 	}
 
-	imagesResponse, imagesErr := client.DescribeImages(imagesRequest)
-	if imagesErr != nil {
-		a.logger.Error("查询可用镜像失败", zap.Error(imagesErr))
-		return nil, imagesErr
+	err := a.ecsService.DeleteInstance(ctx, region, instanceID, true)
+	if err != nil {
+		a.logger.Error("failed to delete instance", zap.Error(err), zap.String("instanceID", instanceID))
+		return fmt.Errorf("delete instance failed: %w", err)
 	}
 
-	// 处理镜像数据
-	type ImageInfo struct {
-		ImageId      string
-		OSName       string
-		OSType       string
-		Architecture string
+	return nil
+}
+
+func (a *AliyunProviderImpl) StartInstance(ctx context.Context, region string, instanceID string) error {
+	if region == "" || instanceID == "" {
+		return fmt.Errorf("region and instanceID cannot be empty")
 	}
 
-	availableImages := make([]*ImageInfo, 0)
-	if imagesResponse != nil && imagesResponse.Body != nil &&
-		imagesResponse.Body.Images != nil && imagesResponse.Body.Images.Image != nil {
-		for _, image := range imagesResponse.Body.Images.Image {
-			if image == nil || image.ImageId == nil || image.OSName == nil {
-				continue
-			}
+	err := a.ecsService.StartInstance(ctx, region, instanceID)
+	if err != nil {
+		a.logger.Error("failed to start instance", zap.Error(err), zap.String("instanceID", instanceID))
+		return fmt.Errorf("start instance failed: %w", err)
+	}
 
-			availableImages = append(availableImages, &ImageInfo{
-				ImageId:      tea.StringValue(image.ImageId),
-				OSName:       tea.StringValue(image.OSName),
-				OSType:       tea.StringValue(image.OSType),
-				Architecture: tea.StringValue(image.Architecture),
-			})
+	return nil
+}
+
+func (a *AliyunProviderImpl) StopInstance(ctx context.Context, region string, instanceID string) error {
+	if region == "" || instanceID == "" {
+		return fmt.Errorf("region and instanceID cannot be empty")
+	}
+
+	err := a.ecsService.StopInstance(ctx, region, instanceID, false)
+	if err != nil {
+		a.logger.Error("failed to stop instance", zap.Error(err), zap.String("instanceID", instanceID))
+		return fmt.Errorf("stop instance failed: %w", err)
+	}
+
+	return nil
+}
+
+func (a *AliyunProviderImpl) RestartInstance(ctx context.Context, region string, instanceID string) error {
+	if region == "" || instanceID == "" {
+		return fmt.Errorf("region and instanceID cannot be empty")
+	}
+
+	err := a.ecsService.RestartInstance(ctx, region, instanceID)
+	if err != nil {
+		a.logger.Error("failed to restart instance", zap.Error(err), zap.String("instanceID", instanceID))
+		return fmt.Errorf("restart instance failed: %w", err)
+	}
+
+	return nil
+}
+
+// VPC网络管理
+func (a *AliyunProviderImpl) ListVPCs(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceVpc, error) {
+	if region == "" {
+		return nil, fmt.Errorf("region cannot be empty")
+	}
+	if pageNumber <= 0 || pageSize <= 0 {
+		return nil, fmt.Errorf("pageNumber and pageSize must be positive integers")
+	}
+
+	req := &aliyun.ListVpcsRequest{
+		Region: region,
+		Page:   pageNumber,
+		Size:   pageSize,
+	}
+
+	resp, err := a.vpcService.ListVpcs(ctx, req)
+	if err != nil {
+		a.logger.Error("failed to list VPCs", zap.Error(err), zap.String("region", region))
+		return nil, fmt.Errorf("list VPCs failed: %w", err)
+	}
+
+	if resp == nil || len(resp.Vpcs) == 0 {
+		return nil, nil
+	}
+
+	result := make([]*model.ResourceVpc, 0, len(resp.Vpcs))
+	for _, vpcData := range resp.Vpcs {
+		if vpcData == nil {
+			continue
 		}
-	}
-
-	// 组合结果 - 为每个镜像关联指定的实例类型
-	result := make([]*model.ListInstanceOptionsResp, 0, len(availableImages))
-	for _, image := range availableImages {
-		result = append(result, &model.ListInstanceOptionsResp{
-			InstanceType: instanceType,
-			Region:       region,
-			Zone:         zone,
-			PayType:      payType,
-			ImageId:      image.ImageId,
-			OSName:       image.OSName,
-			OSType:       image.OSType,
-			Architecture: image.Architecture,
-			Valid:        true,
-		})
+		result = append(result, a.convertToResourceVpcFromListVpc(vpcData, region))
 	}
 
 	return result, nil
 }
 
-// batchFetchInstanceTypeDetails 批量获取实例类型详情
-func (a *AliyunProviderImpl) batchFetchInstanceTypeDetails(client *ecs.Client, instanceTypeMap map[string]bool, region string, zone string, payType string) ([]*model.ListInstanceOptionsResp, error) {
-	// 将map转换为切片，便于批量查询
-	instanceTypeIds := make([]*string, 0, len(instanceTypeMap))
-	for typeId := range instanceTypeMap {
-		id := typeId // 创建局部变量避免闭包问题
-		instanceTypeIds = append(instanceTypeIds, &id)
+func (a *AliyunProviderImpl) GetVPC(ctx context.Context, region string, vpcID string) (*model.ResourceVpc, error) {
+	if region == "" || vpcID == "" {
+		return nil, fmt.Errorf("region and vpcID cannot be empty")
 	}
 
-	// 批量获取实例类型详情，提高查询效率
-	instanceTypes := make([]*model.ListInstanceOptionsResp, 0, len(instanceTypeIds))
-	batchSize := 10 // 阿里云API批量查询上限
-
-	// 计算需要的批次数
-	batchCount := (len(instanceTypeIds) + batchSize - 1) / batchSize
-
-	// 使用错误组合
-	var errGroup errgroup.Group
-	resultCh := make(chan *model.ListInstanceOptionsResp, len(instanceTypeIds))
-
-	// 并行请求各批次
-	for i := 0; i < batchCount; i++ {
-		startIdx := i * batchSize
-		endIdx := (i + 1) * batchSize
-		if endIdx > len(instanceTypeIds) {
-			endIdx = len(instanceTypeIds)
-		}
-
-		batchIds := instanceTypeIds[startIdx:endIdx]
-
-		// 为每个批次创建一个goroutine
-		errGroup.Go(func() error {
-			batchRequest := &ecs.DescribeInstanceTypesRequest{
-				InstanceTypes: batchIds,
-			}
-
-			batchResponse, err := client.DescribeInstanceTypes(batchRequest)
-			if err != nil {
-				a.logger.Warn("批量获取实例规格详情失败", zap.Error(err))
-				return nil // 不中断其他批次
-			}
-
-			if batchResponse == nil || batchResponse.Body == nil ||
-				batchResponse.Body.InstanceTypes == nil ||
-				batchResponse.Body.InstanceTypes.InstanceType == nil {
-				return nil
-			}
-
-			// 处理返回的实例类型信息
-			for _, info := range batchResponse.Body.InstanceTypes.InstanceType {
-				if info == nil || info.InstanceTypeId == nil {
-					continue
-				}
-
-				resultCh <- &model.ListInstanceOptionsResp{
-					PayType:      payType,
-					Region:       region,
-					Zone:         zone,
-					InstanceType: *info.InstanceTypeId,
-					Cpu:          int(tea.Int32Value(info.CpuCoreCount)),
-					Memory:       int(tea.Float32Value(info.MemorySize)),
-					Valid:        true,
-				}
-			}
-
-			return nil
-		})
+	vpcDetail, err := a.vpcService.GetVpcDetail(ctx, region, vpcID)
+	if err != nil {
+		a.logger.Error("failed to get VPC detail", zap.Error(err), zap.String("vpcID", vpcID))
+		return nil, fmt.Errorf("get VPC detail failed: %w", err)
 	}
 
-	// 等待所有goroutine完成
-	go func() {
-		errGroup.Wait()
-		close(resultCh)
-	}()
-
-	// 收集结果
-	for result := range resultCh {
-		instanceTypes = append(instanceTypes, result)
+	if vpcDetail == nil {
+		return nil, fmt.Errorf("VPC not found")
 	}
 
-	return instanceTypes, nil
+	return a.convertToResourceVpcFromDetail(vpcDetail, region), nil
 }
 
-// 扁平化处理磁盘类型查询
-func (a *AliyunProviderImpl) listAvailableDiskCategories(client *ecs.Client, region string, zone string, instanceType string, diskType string) ([]*model.ListInstanceOptionsResp, error) {
-	request := &ecs.DescribeAvailableResourceRequest{
-		RegionId:            tea.String(region),
-		ZoneId:              tea.String(zone),
-		InstanceType:        tea.String(instanceType),
-		DestinationResource: tea.String(diskType), // SystemDisk 或 DataDisk
-		ResourceType:        tea.String("instance"),
+func (a *AliyunProviderImpl) CreateVPC(ctx context.Context, region string, config *model.CreateVpcResourceReq) error {
+	if region == "" {
+		return fmt.Errorf("region cannot be empty")
+	}
+	if config == nil {
+		return fmt.Errorf("config cannot be nil")
 	}
 
-	response, err := client.DescribeAvailableResource(request)
+	req := &aliyun.CreateVpcRequest{
+		Region:           region,
+		VpcName:          config.VpcName,
+		CidrBlock:        config.CidrBlock,
+		Description:      config.Description,
+		ZoneId:           config.ZoneId,
+		VSwitchName:      config.VSwitchName,
+		VSwitchCidrBlock: config.VSwitchCidrBlock,
+	}
+
+	_, err := a.vpcService.CreateVPC(ctx, req)
 	if err != nil {
-		a.logger.Error("获取可用磁盘类型失败",
-			zap.String("region", region),
-			zap.String("zone", zone),
-			zap.String("instanceType", instanceType),
-			zap.String("diskType", diskType),
-			zap.Error(err))
-		return nil, err
+		a.logger.Error("failed to create VPC", zap.Error(err), zap.String("region", region))
+		return fmt.Errorf("create VPC failed: %w", err)
 	}
 
-	// 检查响应是否为空
-	if response == nil || response.Body == nil || response.Body.AvailableZones == nil ||
-		response.Body.AvailableZones.AvailableZone == nil {
-		return []*model.ListInstanceOptionsResp{}, nil
+	return nil
+}
+
+func (a *AliyunProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID string) error {
+	if region == "" || vpcID == "" {
+		return fmt.Errorf("region and vpcID cannot be empty")
 	}
 
-	// 使用map去重
-	diskTypesMap := make(map[string]bool)
+	err := a.vpcService.DeleteVPC(ctx, region, vpcID)
+	if err != nil {
+		a.logger.Error("failed to delete VPC", zap.Error(err), zap.String("vpcID", vpcID))
+		return fmt.Errorf("delete VPC failed: %w", err)
+	}
 
-	// 扁平化处理
-	for _, availableZone := range response.Body.AvailableZones.AvailableZone {
-		// 只处理指定可用区
-		if availableZone == nil || availableZone.ZoneId == nil || *availableZone.ZoneId != zone {
+	return nil
+}
+
+// 安全组管理
+func (a *AliyunProviderImpl) ListSecurityGroups(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceSecurityGroup, error) {
+	if region == "" {
+		return nil, fmt.Errorf("region cannot be empty")
+	}
+	if pageNumber <= 0 || pageSize <= 0 {
+		return nil, fmt.Errorf("pageNumber and pageSize must be positive integers")
+	}
+
+	req := &aliyun.ListSecurityGroupsRequest{
+		Region:     region,
+		PageNumber: pageNumber,
+		PageSize:   pageSize,
+	}
+
+	resp, err := a.securityGroupService.ListSecurityGroups(ctx, req)
+	if err != nil {
+		a.logger.Error("failed to list security groups", zap.Error(err), zap.String("region", region))
+		return nil, fmt.Errorf("list security groups failed: %w", err)
+	}
+
+	if resp == nil || len(resp.SecurityGroups) == 0 {
+		return nil, nil
+	}
+
+	result := make([]*model.ResourceSecurityGroup, 0, len(resp.SecurityGroups))
+	for _, sg := range resp.SecurityGroups {
+		if sg == nil {
 			continue
 		}
-
-		// 缺少资源信息
-		if availableZone.AvailableResources == nil || availableZone.AvailableResources.AvailableResource == nil {
-			continue
-		}
-
-		// 遍历资源
-		for _, resource := range availableZone.AvailableResources.AvailableResource {
-			// 缺少支持的资源
-			if resource == nil || resource.SupportedResources == nil || resource.SupportedResources.SupportedResource == nil {
-				continue
-			}
-
-			// 遍历支持的资源
-			for _, supportedResource := range resource.SupportedResources.SupportedResource {
-				if supportedResource == nil || supportedResource.Status == nil || supportedResource.Value == nil {
-					continue
-				}
-
-				// 只添加可用状态的资源
-				if *supportedResource.Status != "Available" {
-					continue
-				}
-
-				diskTypesMap[*supportedResource.Value] = true
-			}
-		}
-	}
-
-	// 转换为结果列表
-	result := make([]*model.ListInstanceOptionsResp, 0, len(diskTypesMap))
-	for diskCategory := range diskTypesMap {
-		if diskType == "SystemDisk" {
-			result = append(result, &model.ListInstanceOptionsResp{
-				Region:             region,
-				Zone:               zone,
-				InstanceType:       instanceType,
-				SystemDiskCategory: diskCategory,
-				Valid:              true,
-			})
-		} else {
-			result = append(result, &model.ListInstanceOptionsResp{
-				Region:           region,
-				Zone:             zone,
-				InstanceType:     instanceType,
-				DataDiskCategory: diskCategory,
-				Valid:            true,
-			})
-		}
+		result = append(result, a.convertToResourceSecurityGroupFromList(sg, region))
 	}
 
 	return result, nil
 }
 
-// listAvailableSystemDiskCategories 获取可用的系统盘类型
-func (a *AliyunProviderImpl) listAvailableSystemDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]*model.ListInstanceOptionsResp, error) {
-	return a.listAvailableDiskCategories(client, region, zone, instanceType, "SystemDisk")
-}
+func (a *AliyunProviderImpl) GetSecurityGroup(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error) {
+	if region == "" || securityGroupID == "" {
+		return nil, fmt.Errorf("region and securityGroupID cannot be empty")
+	}
 
-// listAvailableDataDiskCategories 获取可用的数据盘类型
-func (a *AliyunProviderImpl) listAvailableDataDiskCategories(client *ecs.Client, region string, zone string, instanceType string) ([]*model.ListInstanceOptionsResp, error) {
-	return a.listAvailableDiskCategories(client, region, zone, instanceType, "DataDisk")
-}
-
-// getCompleteConfiguration 获取完整的配置信息
-func (a *AliyunProviderImpl) getCompleteConfiguration(payType string, region string, zone string, instanceType string, imageId string, systemDiskCategory string, dataDiskCategory string) ([]*model.ListInstanceOptionsResp, error) {
-	return []*model.ListInstanceOptionsResp{
-		{
-			PayType:            payType,
-			Region:             region,
-			Zone:               zone,
-			InstanceType:       instanceType,
-			ImageId:            imageId,
-			SystemDiskCategory: systemDiskCategory,
-			DataDiskCategory:   dataDiskCategory,
-			Valid:              true,
-		},
-	}, nil
-}
-
-// GetVpcDetail 获取VPC详情
-func (a *AliyunProviderImpl) GetVpcDetail(ctx context.Context, region string, vpcID string) (*model.ResourceVpc, error) {
-	client, err := a.createVpcClient(region)
+	sg, err := a.securityGroupService.GetSecurityGroupDetail(ctx, region, securityGroupID)
 	if err != nil {
-		a.logger.Error("创建VPC客户端失败", zap.Error(err))
-		return nil, err
+		a.logger.Error("failed to get security group detail", zap.Error(err), zap.String("securityGroupID", securityGroupID))
+		return nil, fmt.Errorf("get security group detail failed: %w", err)
 	}
 
-	request := &vpc.DescribeVpcAttributeRequest{
-		RegionId: tea.String(region),
-		VpcId:    tea.String(vpcID),
+	if sg == nil {
+		return nil, fmt.Errorf("security group not found")
 	}
 
-	response, err := client.DescribeVpcAttribute(request)
-	if err != nil {
-		a.logger.Error("获取VPC详情失败", zap.Error(err))
-		return nil, err
-	}
-
-	if response == nil || response.Body == nil {
-		return nil, errors.New("获取VPC详情失败，响应为空")
-	}
-
-	tagList := make([]string, 0, len(response.Body.Tags.Tag))
-	for _, tag := range response.Body.Tags.Tag {
-		tagList = append(tagList, fmt.Sprintf("%s=%s", tea.StringValue(tag.Key), tea.StringValue(tag.Value)))
-	}
-
-	return &model.ResourceVpc{
-		ResourceBase: model.ResourceBase{
-			InstanceName: tea.StringValue(response.Body.VpcName),
-			InstanceId:   tea.StringValue(response.Body.VpcId),
-			Provider:     model.CloudProviderAliyun,
-			RegionId:     tea.StringValue(response.Body.RegionId),
-			Status:       tea.StringValue(response.Body.Status),
-			Description:  tea.StringValue(response.Body.Description),
-			CreationTime: tea.StringValue(response.Body.CreationTime),
-			Tags:         model.StringList(tagList),
-		},
-		VpcName:         tea.StringValue(response.Body.VpcName),
-		CidrBlock:       tea.StringValue(response.Body.CidrBlock),
-		Ipv6CidrBlock:   tea.StringValue(response.Body.Ipv6CidrBlock),
-		VSwitchIds:      model.StringList(tea.StringSliceValue(response.Body.VSwitchIds.VSwitchId)),
-		RouteTableIds:   []string{tea.StringValue(response.Body.VRouterId)},
-		IsDefault:       tea.BoolValue(response.Body.IsDefault),
-		ResourceGroupId: tea.StringValue(response.Body.ResourceGroupId),
-	}, nil
+	return a.convertToResourceSecurityGroupFromDetail(sg, region), nil
 }
 
 func (a *AliyunProviderImpl) CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) error {
-	client, err := a.createEcsClient(region)
+	if region == "" {
+		return fmt.Errorf("region cannot be empty")
+	}
+	if config == nil {
+		return fmt.Errorf("config cannot be nil")
+	}
+
+	req := &aliyun.CreateSecurityGroupRequest{
+		Region:            region,
+		SecurityGroupName: config.SecurityGroupName,
+		Description:       config.Description,
+		VpcId:             config.VpcId,
+		SecurityGroupType: config.SecurityGroupType,
+		ResourceGroupId:   config.ResourceGroupId,
+		Tags:              config.Tags,
+	}
+
+	_, err := a.securityGroupService.CreateSecurityGroup(ctx, req)
 	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return err
-	}
-
-	request := &ecs.CreateSecurityGroupRequest{
-		RegionId:          tea.String(region),
-		SecurityGroupName: tea.String(config.SecurityGroupName),
-		Description:       tea.String(config.Description),
-		VpcId:             tea.String(config.VpcId),
-		SecurityGroupType: tea.String(config.SecurityGroupType),
-		ResourceGroupId:   tea.String(config.ResourceGroupId),
-	}
-
-	// 设置标签
-	if len(config.Tags) > 0 {
-		tags := make([]*ecs.CreateSecurityGroupRequestTag, 0, len(config.Tags))
-		for k, v := range config.Tags {
-			tags = append(tags, &ecs.CreateSecurityGroupRequestTag{
-				Key:   tea.String(k),
-				Value: tea.String(v),
-			})
-		}
-		request.Tag = tags
-	}
-
-	a.logger.Info("开始创建安全组", zap.String("region", region), zap.Any("config", config))
-	response, err := client.CreateSecurityGroup(request)
-	if err != nil {
-		a.logger.Error("创建安全组失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("创建安全组成功", zap.String("securityGroupID", tea.StringValue(response.Body.SecurityGroupId)))
-
-	// 如果有安全组规则，添加规则
-	if len(config.SecurityGroupRules) > 0 {
-		for _, rule := range config.SecurityGroupRules {
-			authRequest := &ecs.AuthorizeSecurityGroupRequest{
-				RegionId:        tea.String(region),
-				SecurityGroupId: response.Body.SecurityGroupId,
-				IpProtocol:      tea.String(rule.IpProtocol),
-				PortRange:       tea.String(rule.PortRange),
-				SourceCidrIp:    tea.String(rule.SourceCidrIp),
-				Description:     tea.String(rule.Description),
-			}
-
-			_, err := client.AuthorizeSecurityGroup(authRequest)
-			if err != nil {
-				a.logger.Error("添加安全组规则失败", zap.Error(err), zap.Any("rule", rule))
-				return err
-			}
-		}
-		a.logger.Info("添加安全组规则成功", zap.Int("ruleCount", len(config.SecurityGroupRules)))
+		a.logger.Error("failed to create security group", zap.Error(err), zap.String("region", region))
+		return fmt.Errorf("create security group failed: %w", err)
 	}
 
 	return nil
 }
 
 func (a *AliyunProviderImpl) DeleteSecurityGroup(ctx context.Context, region string, securityGroupID string) error {
-	client, err := a.createEcsClient(region)
+	if region == "" || securityGroupID == "" {
+		return fmt.Errorf("region and securityGroupID cannot be empty")
+	}
+
+	err := a.securityGroupService.DeleteSecurityGroup(ctx, region, securityGroupID)
 	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return err
+		a.logger.Error("failed to delete security group", zap.Error(err), zap.String("securityGroupID", securityGroupID))
+		return fmt.Errorf("delete security group failed: %w", err)
 	}
 
-	request := &ecs.DeleteSecurityGroupRequest{
-		RegionId:        tea.String(region),
-		SecurityGroupId: tea.String(securityGroupID),
-	}
-
-	a.logger.Info("开始删除安全组", zap.String("region", region), zap.String("securityGroupID", securityGroupID))
-	_, err = client.DeleteSecurityGroup(request)
-	if err != nil {
-		a.logger.Error("删除安全组失败", zap.Error(err))
-		return err
-	}
-
-	a.logger.Info("删除安全组成功", zap.String("securityGroupID", securityGroupID))
 	return nil
 }
 
-func (a *AliyunProviderImpl) GetSecurityGroupDetail(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error) {
-	client, err := a.createEcsClient(region)
+// 磁盘管理 - 需要修改以符合新接口
+func (a *AliyunProviderImpl) ListDisks(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceDisk, error) {
+	if region == "" {
+		return nil, fmt.Errorf("region cannot be empty")
+	}
+	if pageNumber <= 0 || pageSize <= 0 {
+		return nil, fmt.Errorf("pageNumber and pageSize must be positive integers")
+	}
+
+	req := &aliyun.ListDisksRequest{
+		Region: region,
+		Page:   pageNumber,
+		Size:   pageSize,
+	}
+
+	resp, err := a.diskService.ListDisks(ctx, req)
 	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, err
+		a.logger.Error("failed to list disks", zap.Error(err), zap.String("region", region))
+		return nil, fmt.Errorf("list disks failed: %w", err)
 	}
 
-	request := &ecs.DescribeSecurityGroupAttributeRequest{
-		RegionId:        tea.String(region),
-		SecurityGroupId: tea.String(securityGroupID),
+	if resp == nil || len(resp.Disks) == 0 {
+		return nil, nil
 	}
 
-	a.logger.Info("开始获取安全组详情", zap.String("region", region), zap.String("securityGroupID", securityGroupID))
-	response, err := client.DescribeSecurityGroupAttribute(request)
+	result := make([]*model.ResourceDisk, 0, len(resp.Disks))
+	for _, disk := range resp.Disks {
+		if disk == nil {
+			continue
+		}
+		result = append(result, a.convertToResourceDiskFromList(disk, region))
+	}
+
+	return result, nil
+}
+
+func (a *AliyunProviderImpl) GetDisk(ctx context.Context, region string, diskID string) (*model.ResourceDisk, error) {
+	if region == "" || diskID == "" {
+		return nil, fmt.Errorf("region and diskID cannot be empty")
+	}
+
+	disk, err := a.diskService.GetDisk(ctx, region, diskID)
 	if err != nil {
-		a.logger.Error("获取安全组详情失败", zap.Error(err))
-		return nil, err
+		a.logger.Error("failed to get disk detail", zap.Error(err), zap.String("diskID", diskID))
+		return nil, fmt.Errorf("get disk detail failed: %w", err)
 	}
 
-	if response == nil || response.Body == nil {
-		return nil, errors.New("获取安全组详情失败，响应为空")
+	if disk == nil {
+		return nil, fmt.Errorf("disk not found")
 	}
 
-	// 获取安全组规则
-	rules := make([]*model.SecurityGroupRule, 0)
-	for _, rule := range response.Body.Permissions.Permission {
-		rules = append(rules, &model.SecurityGroupRule{
-			IpProtocol:   tea.StringValue(rule.IpProtocol),
-			PortRange:    tea.StringValue(rule.PortRange),
-			Direction:    tea.StringValue(rule.Direction),
-			Policy:       tea.StringValue(rule.Policy),
-			SourceCidrIp: tea.StringValue(rule.SourceCidrIp),
-			Description:  tea.StringValue(rule.Description),
-		})
+	return a.convertToResourceDiskFromDetail(disk, region), nil
+}
+
+func (a *AliyunProviderImpl) CreateDisk(ctx context.Context, region string, config *model.CreateDiskReq) error {
+	if region == "" {
+		return fmt.Errorf("region cannot be empty")
+	}
+	if config == nil {
+		return fmt.Errorf("config cannot be nil")
+	}
+
+	req := &aliyun.CreateDiskRequest{
+		Region:       region,
+		ZoneId:       config.ZoneId,
+		DiskName:     config.DiskName,
+		DiskCategory: config.DiskCategory,
+		Size:         config.Size,
+		Description:  config.Description,
+	}
+
+	_, err := a.diskService.CreateDisk(ctx, req)
+	if err != nil {
+		a.logger.Error("failed to create disk", zap.Error(err), zap.String("region", region))
+		return fmt.Errorf("create disk failed: %w", err)
+	}
+
+	return nil
+}
+
+func (a *AliyunProviderImpl) DeleteDisk(ctx context.Context, region string, diskID string) error {
+	if region == "" || diskID == "" {
+		return fmt.Errorf("region and diskID cannot be empty")
+	}
+
+	err := a.diskService.DeleteDisk(ctx, region, diskID)
+	if err != nil {
+		a.logger.Error("failed to delete disk", zap.Error(err), zap.String("diskID", diskID))
+		return fmt.Errorf("delete disk failed: %w", err)
+	}
+
+	return nil
+}
+
+func (a *AliyunProviderImpl) AttachDisk(ctx context.Context, region string, diskID, instanceID string) error {
+	if region == "" || diskID == "" || instanceID == "" {
+		return fmt.Errorf("region, diskID and instanceID cannot be empty")
+	}
+
+	err := a.diskService.AttachDisk(ctx, region, diskID, instanceID)
+	if err != nil {
+		a.logger.Error("failed to attach disk", zap.Error(err), zap.String("diskID", diskID), zap.String("instanceID", instanceID))
+		return fmt.Errorf("attach disk failed: %w", err)
+	}
+
+	return nil
+}
+
+func (a *AliyunProviderImpl) DetachDisk(ctx context.Context, region string, diskID, instanceID string) error {
+	if region == "" || diskID == "" || instanceID == "" {
+		return fmt.Errorf("region, diskID and instanceID cannot be empty")
+	}
+
+	err := a.diskService.DetachDisk(ctx, region, diskID, instanceID)
+	if err != nil {
+		a.logger.Error("failed to detach disk", zap.Error(err), zap.String("diskID", diskID), zap.String("instanceID", instanceID))
+		return fmt.Errorf("detach disk failed: %w", err)
+	}
+
+	return nil
+}
+
+func (a *AliyunProviderImpl) ListRegionOptions(ctx context.Context) ([]*model.ListEcsResourceOptionsResp, error) {
+	return nil, nil
+}
+
+func (a *AliyunProviderImpl) ListRegionZones(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error) {
+	return nil, nil
+}
+
+func (a *AliyunProviderImpl) ListRegionInstanceTypes(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error) {
+	return nil, nil
+}
+
+func (a *AliyunProviderImpl) ListRegionImages(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error) {
+	return nil, nil
+}
+
+func (a *AliyunProviderImpl) ListRegionSystemDiskCategories(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error) {
+	return nil, nil
+}
+
+func (a *AliyunProviderImpl) ListRegionDataDiskCategories(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error) {
+	return nil, nil
+}
+
+// 转换函数
+func (a *AliyunProviderImpl) convertToResourceEcsFromListInstance(instance *ecs.DescribeInstancesResponseBodyInstancesInstance) *model.ResourceEcs {
+	if instance == nil {
+		return nil
+	}
+
+	var securityGroupIds []string
+	if instance.SecurityGroupIds != nil && instance.SecurityGroupIds.SecurityGroupId != nil {
+		securityGroupIds = tea.StringSliceValue(instance.SecurityGroupIds.SecurityGroupId)
+	}
+
+	var privateIPs []string
+	if instance.VpcAttributes != nil && instance.VpcAttributes.PrivateIpAddress != nil && instance.VpcAttributes.PrivateIpAddress.IpAddress != nil {
+		privateIPs = tea.StringSliceValue(instance.VpcAttributes.PrivateIpAddress.IpAddress)
+	}
+
+	var publicIPs []string
+	if instance.PublicIpAddress != nil && instance.PublicIpAddress.IpAddress != nil {
+		publicIPs = tea.StringSliceValue(instance.PublicIpAddress.IpAddress)
+	}
+
+	var vpcId string
+	if instance.VpcAttributes != nil {
+		vpcId = tea.StringValue(instance.VpcAttributes.VpcId)
+	}
+
+	// 计算内存，阿里云返回的是MB，转换为GB
+	memory := int(tea.Int32Value(instance.Memory)) / 1024
+	if memory == 0 && tea.Int32Value(instance.Memory) > 0 {
+		memory = 1 // 如果小于1GB但大于0，设为1GB
+	}
+
+	var tags []string
+	if instance.Tags != nil && instance.Tags.Tag != nil {
+		tags = make([]string, 0, len(instance.Tags.Tag))
+		for _, tag := range instance.Tags.Tag {
+			if tag == nil || tag.TagKey == nil || tag.TagValue == nil {
+				continue
+			}
+			tags = append(tags, fmt.Sprintf("%s=%s", tea.StringValue(tag.TagKey), tea.StringValue(tag.TagValue)))
+		}
+	}
+
+	lastSyncTime := time.Now()
+
+	return &model.ResourceEcs{
+		InstanceName:       tea.StringValue(instance.InstanceName),
+		InstanceId:         tea.StringValue(instance.InstanceId),
+		Provider:           model.CloudProviderAliyun,
+		RegionId:           tea.StringValue(instance.RegionId),
+		ZoneId:             tea.StringValue(instance.ZoneId),
+		VpcId:              vpcId,
+		Status:             tea.StringValue(instance.Status),
+		CreationTime:       tea.StringValue(instance.CreationTime),
+		InstanceChargeType: tea.StringValue(instance.InstanceChargeType),
+		Description:        tea.StringValue(instance.Description),
+		SecurityGroupIds:   model.StringList(securityGroupIds),
+		PrivateIpAddress:   model.StringList(privateIPs),
+		PublicIpAddress:    model.StringList(publicIPs),
+		LastSyncTime:       &lastSyncTime,
+		Tags:               model.StringList(tags),
+		Cpu:                int(tea.Int32Value(instance.Cpu)),
+		Memory:             memory,
+		InstanceType:       tea.StringValue(instance.InstanceType),
+		ImageId:            tea.StringValue(instance.ImageId),
+		HostName:           tea.StringValue(instance.HostName),
+		IpAddr:             getFirstIP(privateIPs),
+	}
+}
+
+func (a *AliyunProviderImpl) convertToResourceEcsFromInstanceDetail(instance *ecs.DescribeInstanceAttributeResponseBody) *model.ResourceEcs {
+	if instance == nil {
+		return nil
+	}
+
+	var securityGroupIds []string
+	if instance.SecurityGroupIds != nil && instance.SecurityGroupIds.SecurityGroupId != nil {
+		securityGroupIds = tea.StringSliceValue(instance.SecurityGroupIds.SecurityGroupId)
+	}
+
+	var privateIPs []string
+	if instance.VpcAttributes != nil && instance.VpcAttributes.PrivateIpAddress != nil && instance.VpcAttributes.PrivateIpAddress.IpAddress != nil {
+		privateIPs = tea.StringSliceValue(instance.VpcAttributes.PrivateIpAddress.IpAddress)
+	}
+
+	var publicIPs []string
+	if instance.PublicIpAddress != nil && instance.PublicIpAddress.IpAddress != nil {
+		publicIPs = tea.StringSliceValue(instance.PublicIpAddress.IpAddress)
+	}
+
+	var vpcId string
+	if instance.VpcAttributes != nil {
+		vpcId = tea.StringValue(instance.VpcAttributes.VpcId)
+	}
+
+	// 计算内存，阿里云返回的是MB，转换为GB
+	memory := int(tea.Int32Value(instance.Memory)) / 1024
+	if memory == 0 && tea.Int32Value(instance.Memory) > 0 {
+		memory = 1 // 如果小于1GB但大于0，设为1GB
+	}
+
+	lastSyncTime := time.Now()
+
+	return &model.ResourceEcs{
+		InstanceName:       tea.StringValue(instance.InstanceName),
+		InstanceId:         tea.StringValue(instance.InstanceId),
+		Provider:           model.CloudProviderAliyun,
+		RegionId:           tea.StringValue(instance.RegionId),
+		ZoneId:             tea.StringValue(instance.ZoneId),
+		VpcId:              vpcId,
+		Status:             tea.StringValue(instance.Status),
+		CreationTime:       tea.StringValue(instance.CreationTime),
+		InstanceChargeType: tea.StringValue(instance.InstanceChargeType),
+		Description:        tea.StringValue(instance.Description),
+		SecurityGroupIds:   model.StringList(securityGroupIds),
+		PrivateIpAddress:   model.StringList(privateIPs),
+		PublicIpAddress:    model.StringList(publicIPs),
+		LastSyncTime:       &lastSyncTime,
+		Cpu:                int(tea.Int32Value(instance.Cpu)),
+		Memory:             memory,
+		InstanceType:       tea.StringValue(instance.InstanceType),
+		ImageId:            tea.StringValue(instance.ImageId),
+		HostName:           tea.StringValue(instance.HostName),
+		IpAddr:             getFirstIP(privateIPs),
+	}
+}
+
+func (a *AliyunProviderImpl) convertToResourceVpcFromListVpc(vpcData *vpc.DescribeVpcsResponseBodyVpcsVpc, region string) *model.ResourceVpc {
+	if vpcData == nil {
+		return nil
+	}
+
+	var tags []string
+	if vpcData.Tags != nil && vpcData.Tags.Tag != nil {
+		tags = make([]string, 0, len(vpcData.Tags.Tag))
+		for _, tag := range vpcData.Tags.Tag {
+			if tag == nil || tag.Key == nil || tag.Value == nil {
+				continue
+			}
+			tags = append(tags, fmt.Sprintf("%s=%s", tea.StringValue(tag.Key), tea.StringValue(tag.Value)))
+		}
+	}
+
+	var vSwitchIds []string
+	if vpcData.VSwitchIds != nil && vpcData.VSwitchIds.VSwitchId != nil {
+		vSwitchIds = tea.StringSliceValue(vpcData.VSwitchIds.VSwitchId)
+	}
+
+	return &model.ResourceVpc{
+		InstanceName:    tea.StringValue(vpcData.VpcName),
+		InstanceId:      tea.StringValue(vpcData.VpcId),
+		Provider:        model.CloudProviderAliyun,
+		RegionId:        region,
+		VpcId:           tea.StringValue(vpcData.VpcId),
+		Status:          tea.StringValue(vpcData.Status),
+		CreationTime:    tea.StringValue(vpcData.CreationTime),
+		Description:     tea.StringValue(vpcData.Description),
+		LastSyncTime:    time.Now(),
+		Tags:            model.StringList(tags),
+		VpcName:         tea.StringValue(vpcData.VpcName),
+		CidrBlock:       tea.StringValue(vpcData.CidrBlock),
+		Ipv6CidrBlock:   tea.StringValue(vpcData.Ipv6CidrBlock),
+		VSwitchIds:      model.StringList(vSwitchIds),
+		IsDefault:       tea.BoolValue(vpcData.IsDefault),
+		ResourceGroupId: tea.StringValue(vpcData.ResourceGroupId),
+	}
+}
+
+func (a *AliyunProviderImpl) convertToResourceVpcFromDetail(vpcDetail *vpc.DescribeVpcAttributeResponseBody, region string) *model.ResourceVpc {
+	if vpcDetail == nil {
+		return nil
+	}
+
+	var tags []string
+	if vpcDetail.Tags != nil && vpcDetail.Tags.Tag != nil {
+		tags = make([]string, 0, len(vpcDetail.Tags.Tag))
+		for _, tag := range vpcDetail.Tags.Tag {
+			if tag == nil || tag.Key == nil || tag.Value == nil {
+				continue
+			}
+			tags = append(tags, fmt.Sprintf("%s=%s", tea.StringValue(tag.Key), tea.StringValue(tag.Value)))
+		}
+	}
+
+	var vSwitchIds []string
+	if vpcDetail.VSwitchIds != nil && vpcDetail.VSwitchIds.VSwitchId != nil {
+		vSwitchIds = tea.StringSliceValue(vpcDetail.VSwitchIds.VSwitchId)
+	}
+
+	return &model.ResourceVpc{
+		InstanceName:    tea.StringValue(vpcDetail.VpcName),
+		InstanceId:      tea.StringValue(vpcDetail.VpcId),
+		Provider:        model.CloudProviderAliyun,
+		RegionId:        region,
+		VpcId:           tea.StringValue(vpcDetail.VpcId),
+		Status:          tea.StringValue(vpcDetail.Status),
+		CreationTime:    tea.StringValue(vpcDetail.CreationTime),
+		Description:     tea.StringValue(vpcDetail.Description),
+		LastSyncTime:    time.Now(),
+		Tags:            model.StringList(tags),
+		VpcName:         tea.StringValue(vpcDetail.VpcName),
+		CidrBlock:       tea.StringValue(vpcDetail.CidrBlock),
+		Ipv6CidrBlock:   tea.StringValue(vpcDetail.Ipv6CidrBlock),
+		VSwitchIds:      model.StringList(vSwitchIds),
+		IsDefault:       tea.BoolValue(vpcDetail.IsDefault),
+		ResourceGroupId: tea.StringValue(vpcDetail.ResourceGroupId),
+	}
+}
+
+func (a *AliyunProviderImpl) convertToResourceSecurityGroupFromList(sg *ecs.DescribeSecurityGroupsResponseBodySecurityGroupsSecurityGroup, region string) *model.ResourceSecurityGroup {
+	if sg == nil {
+		return nil
+	}
+
+	var tags []string
+	if sg.Tags != nil && sg.Tags.Tag != nil {
+		tags = make([]string, 0, len(sg.Tags.Tag))
+		for _, tag := range sg.Tags.Tag {
+			if tag == nil || tag.TagKey == nil || tag.TagValue == nil {
+				continue
+			}
+			tags = append(tags, fmt.Sprintf("%s=%s", tea.StringValue(tag.TagKey), tea.StringValue(tag.TagValue)))
+		}
 	}
 
 	return &model.ResourceSecurityGroup{
-		ResourceBase: model.ResourceBase{
-			InstanceName: tea.StringValue(response.Body.SecurityGroupName),
-			InstanceId:   tea.StringValue(response.Body.SecurityGroupId),
-			Provider:     model.CloudProviderAliyun,
-			RegionId:     region,
-			Status:       "Available", // 阿里云安全组没有状态字段，默认为可用
-			Description:  tea.StringValue(response.Body.Description),
-			CreationTime: "", // 阿里云安全组属性中没有创建时间
-		},
-		SecurityGroupName:  tea.StringValue(response.Body.SecurityGroupName),
-		VpcId:              tea.StringValue(response.Body.VpcId),
-		SecurityGroupRules: rules,
-	}, nil
+		InstanceName:      tea.StringValue(sg.SecurityGroupName),
+		InstanceId:        tea.StringValue(sg.SecurityGroupId),
+		Provider:          model.CloudProviderAliyun,
+		RegionId:          region,
+		VpcId:             tea.StringValue(sg.VpcId),
+		Description:       tea.StringValue(sg.Description),
+		LastSyncTime:      time.Now(),
+		Tags:              model.StringList(tags),
+		SecurityGroupName: tea.StringValue(sg.SecurityGroupName),
+	}
 }
 
-func (a *AliyunProviderImpl) ListSecurityGroups(ctx context.Context, region string, pageNumber int, pageSize int) ([]*model.ResourceSecurityGroup, int64, error) {
-	client, err := a.createEcsClient(region)
-	if err != nil {
-		a.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, 0, err
+func (a *AliyunProviderImpl) convertToResourceSecurityGroupFromDetail(sg *ecs.DescribeSecurityGroupAttributeResponseBody, region string) *model.ResourceSecurityGroup {
+	return &model.ResourceSecurityGroup{
+		InstanceName:      tea.StringValue(sg.SecurityGroupName),
+		InstanceId:        tea.StringValue(sg.SecurityGroupId),
+		Provider:          model.CloudProviderAliyun,
+		RegionId:          region,
+		VpcId:             tea.StringValue(sg.VpcId),
+		Description:       tea.StringValue(sg.Description),
+		LastSyncTime:      time.Now(),
+		SecurityGroupName: tea.StringValue(sg.SecurityGroupName),
+	}
+}
+
+func (a *AliyunProviderImpl) convertToResourceDiskFromList(disk *ecs.DescribeDisksResponseBodyDisksDisk, region string) *model.ResourceDisk {
+	if disk == nil {
+		return nil
 	}
 
-	request := &ecs.DescribeSecurityGroupsRequest{
-		RegionId:   tea.String(region),
-		PageNumber: tea.Int32(int32(pageNumber)),
-		PageSize:   tea.Int32(int32(pageSize)),
-	}
-
-	a.logger.Info("开始获取安全组列表", zap.String("region", region), zap.Int("pageNumber", pageNumber), zap.Int("pageSize", pageSize))
-	response, err := client.DescribeSecurityGroups(request)
-	if err != nil {
-		a.logger.Error("获取安全组列表失败", zap.Error(err))
-		return nil, 0, err
-	}
-
-	if response == nil || response.Body == nil {
-		return nil, 0, errors.New("获取安全组列表失败，响应为空")
-	}
-
-	securityGroups := make([]*model.ResourceSecurityGroup, 0, len(response.Body.SecurityGroups.SecurityGroup))
-	for _, sg := range response.Body.SecurityGroups.SecurityGroup {
-		// 获取标签
-		tagList := make([]string, 0, len(sg.Tags.Tag))
-		for _, tag := range sg.Tags.Tag {
-			tagList = append(tagList, fmt.Sprintf("%s=%s", tea.StringValue(tag.TagKey), tea.StringValue(tag.TagValue)))
+	var tags []string
+	if disk.Tags != nil && disk.Tags.Tag != nil {
+		tags = make([]string, 0, len(disk.Tags.Tag))
+		for _, tag := range disk.Tags.Tag {
+			if tag == nil || tag.TagKey == nil || tag.TagValue == nil {
+				continue
+			}
+			tags = append(tags, fmt.Sprintf("%s=%s", tea.StringValue(tag.TagKey), tea.StringValue(tag.TagValue)))
 		}
-
-		securityGroups = append(securityGroups, &model.ResourceSecurityGroup{
-			ResourceBase: model.ResourceBase{
-				InstanceName: tea.StringValue(sg.SecurityGroupName),
-				InstanceId:   tea.StringValue(sg.SecurityGroupId),
-				Provider:     model.CloudProviderAliyun,
-				RegionId:     region,
-				Status:       "Available", // 阿里云安全组没有状态字段，默认为可用
-				Description:  tea.StringValue(sg.Description),
-				CreationTime: tea.StringValue(sg.CreationTime),
-				Tags:         model.StringList(tagList),
-			},
-			SecurityGroupName: tea.StringValue(sg.SecurityGroupName),
-			VpcId:             tea.StringValue(sg.VpcId),
-		})
 	}
 
-	return securityGroups, int64(tea.Int32Value(response.Body.TotalCount)), nil
+	return &model.ResourceDisk{
+		InstanceName: tea.StringValue(disk.DiskName),
+		InstanceId:   tea.StringValue(disk.DiskId),
+		Provider:     model.CloudProviderAliyun,
+		RegionId:     region,
+		ZoneId:       tea.StringValue(disk.ZoneId),
+		Status:       tea.StringValue(disk.Status),
+		CreationTime: tea.StringValue(disk.CreationTime),
+		Description:  tea.StringValue(disk.Description),
+		LastSyncTime: time.Now(),
+		Tags:         model.StringList(tags),
+		DiskID:       tea.StringValue(disk.DiskId),
+		DiskName:     tea.StringValue(disk.DiskName),
+		Size:         int(tea.Int32Value(disk.Size)),
+		Category:     tea.StringValue(disk.Category),
+		InstanceID:   tea.StringValue(disk.InstanceId),
+	}
+}
+
+func (a *AliyunProviderImpl) convertToResourceDiskFromDetail(disk *ecs.DescribeDisksResponseBodyDisksDisk, region string) *model.ResourceDisk {
+	if disk == nil {
+		return nil
+	}
+
+	var tags []string
+	if disk.Tags != nil && disk.Tags.Tag != nil {
+		tags = make([]string, 0, len(disk.Tags.Tag))
+		for _, tag := range disk.Tags.Tag {
+			if tag == nil || tag.TagKey == nil || tag.TagValue == nil {
+				continue
+			}
+			tags = append(tags, fmt.Sprintf("%s=%s", tea.StringValue(tag.TagKey), tea.StringValue(tag.TagValue)))
+		}
+	}
+
+	return &model.ResourceDisk{
+		InstanceName: tea.StringValue(disk.DiskName),
+		InstanceId:   tea.StringValue(disk.DiskId),
+		Provider:     model.CloudProviderAliyun,
+		RegionId:     region,
+		ZoneId:       tea.StringValue(disk.ZoneId),
+		Status:       tea.StringValue(disk.Status),
+		CreationTime: tea.StringValue(disk.CreationTime),
+		Description:  tea.StringValue(disk.Description),
+		LastSyncTime: time.Now(),
+		Tags:         model.StringList(tags),
+		DiskID:       tea.StringValue(disk.DiskId),
+		DiskName:     tea.StringValue(disk.DiskName),
+		Size:         int(tea.Int32Value(disk.Size)),
+		Category:     tea.StringValue(disk.Category),
+		InstanceID:   tea.StringValue(disk.InstanceId),
+	}
+}
+
+// 工具函数
+func getFirstIP(ips []string) string {
+	if len(ips) > 0 {
+		return ips[0]
+	}
+	return ""
 }
