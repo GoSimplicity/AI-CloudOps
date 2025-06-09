@@ -37,20 +37,10 @@ type ProviderFactory struct {
 
 func NewProviderFactory(
 	aliyun *AliyunProviderImpl,
-	tencent *TencentProviderImpl,
-	huawei *HuaweiProviderImpl,
-	aws *AWSProviderImpl,
-	azure *AzureProviderImpl,
-	gcp *GCPProviderImpl,
 ) *ProviderFactory {
 	return &ProviderFactory{
 		providers: map[model.CloudProvider]Provider{
-			model.CloudProviderAliyun:  aliyun,
-			model.CloudProviderTencent: tencent,
-			model.CloudProviderHuawei:  huawei,
-			model.CloudProviderAWS:     aws,
-			model.CloudProviderAzure:   azure,
-			model.CloudProviderGCP:     gcp,
+			model.CloudProviderAliyun: aliyun,
 		},
 	}
 }

@@ -107,8 +107,13 @@ var HandlerSet = wire.NewSet(
 	workorderHandler.NewProcessHandler,
 	workorderHandler.NewStatisticsHandler,
 	workorderHandler.NewCategoryGroupHandler,
-	treeHandler.NewResourceHandler,
-	treeHandler.NewTreeHandler,
+	treeHandler.NewTreeNodeHandler,
+	treeHandler.NewTreeCloudHandler,
+	treeHandler.NewTreeEcsHandler,
+	treeHandler.NewTreeVpcHandler,
+	treeHandler.NewTreeSecurityGroupHandler,
+	treeHandler.NewTreeRdsHandler,
+	treeHandler.NewTreeElbHandler,
 )
 
 var ServiceSet = wire.NewSet(
@@ -150,14 +155,13 @@ var ServiceSet = wire.NewSet(
 	workorderService.NewInstanceFlowService,
 	workorderService.NewInstanceCommentService,
 	workorderService.NewInstanceAttachmentService,
-	treeService.NewTreeService,
-	treeService.NewCloudService,
-	treeService.NewEcsService,
-	treeService.NewVpcService,
-	treeService.NewElbService,
-	treeService.NewRdsService,
-	treeService.NewResourceService,
-	treeService.NewSecurityGroupService,
+	treeService.NewTreeNodeService,
+	treeService.NewTreeCloudService,
+	treeService.NewTreeEcsService,
+	treeService.NewTreeVpcService,
+	treeService.NewTreeElbService,
+	treeService.NewTreeRdsService,
+	treeService.NewTreeSecurityGroupService,
 )
 
 var DaoSet = wire.NewSet(
@@ -188,13 +192,13 @@ var DaoSet = wire.NewSet(
 	workorderDao.NewInstanceCommentDAO,
 	workorderDao.NewInstanceAttachmentDAO,
 	workorderDao.NewInstanceFlowDAO,
-	treeDao.NewTreeDAO,
-	treeDao.NewCloudDAO,
-	treeDao.NewEcsDAO,
-	treeDao.NewVpcDAO,
-	treeDao.NewElbDAO,
-	treeDao.NewRdsDAO,
-	treeDao.NewResourceDAO,
+	treeDao.NewTreeNodeDAO,
+	treeDao.NewTreeCloudDAO,
+	treeDao.NewTreeEcsDAO,
+	treeDao.NewTreeVpcDAO,
+	treeDao.NewTreeElbDAO,
+	treeDao.NewTreeRdsDAO,
+	treeDao.NewTreeSecurityGroupDAO,
 )
 
 var UtilSet = wire.NewSet(
@@ -211,11 +215,6 @@ var JobSet = wire.NewSet(
 
 var ProviderSet = wire.NewSet(
 	treeProvider.NewAliyunProvider,
-	treeProvider.NewTencentProvider,
-	treeProvider.NewHuaweiProvider,
-	treeProvider.NewAWSProvider,
-	treeProvider.NewAzureProvider,
-	treeProvider.NewGCPProvider,
 	treeProvider.NewProviderFactory,
 )
 
