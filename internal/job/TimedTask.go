@@ -75,7 +75,6 @@ func (t *TimedTask) ProcessTask(ctx context.Context, task *asynq.Task) error {
 
 	// 定义任务处理映射
 	taskHandlers := map[string]func(context.Context) error{
-		RefreshK8sClientsTask:      t.k8sClient.RefreshClients,
 		RefreshPrometheusCacheTask: t.promCache.MonitorCacheManager,
 		CheckK8sStatusTask:         t.cronMgr.StartCheckK8sStatusManager,
 		CheckHostStatusTask:        t.cronMgr.StartCheckHostStatusManager,
