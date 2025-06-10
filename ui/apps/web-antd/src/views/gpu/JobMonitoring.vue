@@ -381,7 +381,7 @@
   </template>
   
   <script setup lang="ts">
-  import { ref, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue';
+  import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
   import { message, Modal } from 'ant-design-vue';
   import {
     PlayCircleOutlined,

@@ -61,6 +61,25 @@ export interface CreateEcsResourceReq {
   tags: string[];
 }
 
+export interface UpdateEcsResourceReq {
+  id: number;
+  provider: string;
+  region: string;
+  instanceId: string;
+  instanceName: string;
+  description: string;
+  tags: string[];
+  securityGroupIds: string[];
+  hostname: string;
+  password: string;
+  treeNodeId: number;
+  environment: string;
+  ipAddr: string;
+  port: number;
+  authMode: string;
+  key: string;
+}
+
 export interface ListEcsResourceReq {
   page: number;
   size: number;
@@ -402,15 +421,19 @@ export function deleteVpcResource(req: DeleteVpcReq) {
 }
 
 export function getEcsResourceList(req: ListEcsResourceReq) {
-  return requestClient.post('/tree/ecs/list', req);
+  return requestClient.get('/tree/ecs/list', { params: req });
 }
 
 export function getEcsResourceDetail(req: GetEcsDetailReq) {
-  return requestClient.post('/tree/ecs/detail', req);
+  return requestClient.get(`/tree/ecs/detail/${req.instanceId}`, { params: req });
 }
 
 export function createEcsResource(req: CreateEcsResourceReq) {
   return requestClient.post('/tree/ecs/create', req);
+}
+
+export function updateEcsResource(req: UpdateEcsResourceReq) {
+  return requestClient.put('/tree/ecs/update', req);
 }
 
 export function startEcsResource(req: StartEcsReq) {
@@ -426,7 +449,7 @@ export function restartEcsResource(req: RestartEcsReq) {
 }
 
 export function deleteEcsResource(req: DeleteEcsReq) {
-  return requestClient.delete('/tree/ecs/delete', { data: req });
+  return requestClient.delete(`/tree/ecs/delete/${req.instanceId}`, { data: req });
 }
 
 export function getInstanceOptions(req: ListInstanceOptionsReq) {
@@ -549,15 +572,15 @@ export interface TreeNodeDeleteReq {
 
 // 树结构相关接口
 export function getTreeList(req: TreeNodeListReq) {
-  return requestClient.get('/tree/list', { params: req });
+  return requestClient.get('/tree/node/list', { params: req });
 }
 
 export function getNodeDetail(id: number) {
-  return requestClient.get(`/tree/detail/${id}`);
+  return requestClient.get(`/tree/node/detail/${id}`);
 }
 
 export function getTreeStatistics() {
-  return requestClient.get('/tree/statistics');
+  return requestClient.get('/tree/node/statistics');
 }
 
 export function createNode(req: TreeNodeCreateReq) {
@@ -573,9 +596,9 @@ export function deleteNode(id: number) {
 }
 
 export function addNodeMember(req: TreeNodeMemberReq) {
-  return requestClient.post('/tree/member/add', req);
+  return requestClient.post('/tree/node/member/add', req);
 }
 
 export function removeNodeMember(req: TreeNodeMemberReq) {
-  return requestClient.post('/tree/member/remove', req);
+  return requestClient.post('/tree/node/member/remove', req);
 }

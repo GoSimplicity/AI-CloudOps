@@ -38,7 +38,7 @@ type ResourceEcs struct {
 	RegionId           string        `json:"region_id" gorm:"type:varchar(50);comment:地区，如cn-hangzhou"`
 	ZoneId             string        `json:"zone_id" gorm:"type:varchar(100);comment:可用区ID"`
 	VpcId              string        `json:"vpc_id" gorm:"type:varchar(100);comment:VPC ID"`
-	Status             string        `json:"status" gorm:"type:varchar(50);comment:资源状态"`
+	Status             string        `json:"status" gorm:"type:varchar(50);comment:资源状态;default:RUNNING;enum:RUNNING,STOPPED,STARTING,STOPPING,RESTARTING,DELETING,ERROR"`
 	CreationTime       string        `json:"creation_time" gorm:"type:varchar(30);comment:创建时间,ISO8601格式"`
 	Env                string        `json:"environment" gorm:"type:varchar(50);comment:环境标识,如dev,prod"`
 	InstanceChargeType string        `json:"instance_charge_type" gorm:"type:varchar(50);comment:付费类型"`
@@ -84,6 +84,7 @@ type ResourceEcs struct {
 type ListEcsResourcesReq struct {
 	ListReq
 	Provider CloudProvider `form:"provider" json:"provider"`
+	Status   string        `form:"status" json:"status"`
 	Region   string        `form:"region" json:"region"`
 }
 

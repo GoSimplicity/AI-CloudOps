@@ -27,20 +27,23 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net"
+	"os/exec"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/go-ping/ping"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -189,28 +192,32 @@ func StringSliceToMap(inputSlice []string) (map[string]string, error) {
 
 // Ping 检查指定的 IP 地址是否可达
 func Ping(ipAddr string) bool {
-	pinger, err := ping.NewPinger(ipAddr)
-	if err != nil {
-		fmt.Printf("创建 pinger 失败: %v\n", err)
+	// 检查IP地址是否为空
+	if ipAddr == "" {
 		return false
 	}
 
-	// 设置使用 IPv4，如果需要 IPv6，可以设置为 false
-	pinger.SetPrivileged(true) // 需要 root/管理员权限
+	// 使用系统命令执行ping操作
+	var cmd *exec.Cmd
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	// 设置超时时间
-	pinger.Timeout = time.Second * 3
+	// 根据操作系统选择不同的ping命令参数
+	if runtime.GOOS == "windows" {
+		cmd = exec.CommandContext(ctx, "ping", "-n", "1", "-w", "3000", ipAddr)
+	} else {
+		cmd = exec.CommandContext(ctx, "ping", "-c", "1", "-W", "3", ipAddr)
+	}
 
-	// 发送 1 个包
-	pinger.Count = 1
-
-	err = pinger.Run() // 开始 ping
+	// 执行命令并捕获输出
+	output, err := cmd.CombinedOutput()
 	if err != nil {
+		// 记录错误信息和输出以便调试
+		log.Printf("ping %s 失败: %v, 输出: %s", ipAddr, err, string(output))
 		return false
 	}
 
-	stats := pinger.Statistics()
-	return stats.PacketsRecv > 0
+	return true
 }
 
 // AesEncrypt AES加密
@@ -342,5 +349,3 @@ func TextResult[T any](item T) (*mcp.CallToolResult, error) {
 		return buildTextResult(string(bytes)), nil
 	}
 }
-
-

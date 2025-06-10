@@ -190,7 +190,28 @@ func (t *treeEcsService) StopEcs(ctx context.Context, req *model.StopEcsReq) err
 
 // UpdateEcs 更新ECS实例
 func (t *treeEcsService) UpdateEcs(ctx context.Context, req *model.UpdateEcsReq) error {
-	panic("unimplemented")
+	if req.Provider != model.CloudProviderLocal {
+		provider, err := t.providerFactory.GetProvider(req.Provider)
+		if err != nil {
+			t.logger.Error("获取云提供商失败", zap.Error(err))
+			return err
+		}
+
+		err = provider.StopInstance(ctx, req.Region, req.InstanceId)
+		if err != nil {
+			t.logger.Error("停止ECS实例失败", zap.Error(err))
+			return err
+		}
+	}
+
+	// 更新本地ECS实例
+	err := t.dao.UpdateEcsResource(ctx, convertUpdateEcsReqToResourceEcs(req))
+	if err != nil {
+		t.logger.Error("更新ECS实例失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 func convertCreateEcsResourceReqToResourceEcs(req *model.CreateEcsResourceReq) *model.ResourceEcs {
@@ -209,6 +230,29 @@ func convertCreateEcsResourceReqToResourceEcs(req *model.CreateEcsResourceReq) *
 		Port:         req.Port,
 		Password:     req.Password,
 		Description:  req.Description,
+	}
+}
+
+func convertUpdateEcsReqToResourceEcs(req *model.UpdateEcsReq) *model.ResourceEcs {
+	return &model.ResourceEcs{
+		Model: model.Model{
+			ID: req.ID,
+		},
+		InstanceName:     req.InstanceName,
+		InstanceId:       req.InstanceId,
+		Provider:         req.Provider,
+		RegionId:         req.Region,
+		Description:      req.Description,
+		Tags:             req.Tags,
+		SecurityGroupIds: model.StringList(req.SecurityGroupIds),
+		HostName:         req.Hostname,
+		Password:         req.Password,
+		TreeNodeID:       req.TreeNodeId,
+		Env:              req.Env,
+		IpAddr:           req.IpAddr,
+		Port:             req.Port,
+		AuthMode:         req.AuthMode,
+		Key:              req.Key,
 	}
 }
 

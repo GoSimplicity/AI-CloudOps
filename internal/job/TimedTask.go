@@ -78,6 +78,7 @@ func (t *TimedTask) ProcessTask(ctx context.Context, task *asynq.Task) error {
 		RefreshK8sClientsTask:      t.k8sClient.RefreshClients,
 		RefreshPrometheusCacheTask: t.promCache.MonitorCacheManager,
 		CheckK8sStatusTask:         t.cronMgr.StartCheckK8sStatusManager,
+		CheckHostStatusTask:        t.cronMgr.StartCheckHostStatusManager,
 	}
 
 	// 获取对应的处理函数
