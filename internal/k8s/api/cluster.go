@@ -57,6 +57,7 @@ func (k *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
 		clusters.POST("/update", k.UpdateCluster)               // 更新指定 ID 的集群
 		clusters.DELETE("/delete/:id", k.DeleteCluster)         // 删除指定 ID 的集群
 		clusters.DELETE("/batch_delete", k.BatchDeleteClusters) // 批量删除集群
+		clusters.POST("/refresh/:id", k.RefreshCluster)         // 刷新集群状态
 	}
 }
 
@@ -125,5 +126,17 @@ func (k *K8sClusterHandler) BatchDeleteClusters(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.clusterService.BatchDeleteClusters(ctx, req.IDs)
+	})
+}
+
+func (k *K8sClusterHandler) RefreshCluster(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, k.clusterService.RefreshClusterStatus(ctx, id)
 	})
 }

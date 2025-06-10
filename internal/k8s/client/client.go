@@ -32,10 +32,12 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/openkruise/kruise-api/client/clientset/versioned"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	discovery2 "k8s.io/client-go/discovery"
@@ -55,6 +57,7 @@ type K8sClient interface {
 	GetDynamicClient(clusterID int) (*dynamic.DynamicClient, error)
 	GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error)
 	RefreshClients(ctx context.Context) error
+	CheckClusterConnection(clusterID int) error
 	// 创建资源
 	CreateDeployment(ctx context.Context, namespace string, clusterID int, deployment *appsv1.Deployment) error
 	CreateStatefulSet(ctx context.Context, namespace string, clusterID int, statefulset *appsv1.StatefulSet) error
@@ -91,6 +94,8 @@ type K8sClient interface {
 	GetDaemonSetList(ctx context.Context, namespace string, clusterID int) ([]appsv1.DaemonSet, error)
 	GetJobList(ctx context.Context, namespace string, clusterID int) ([]batchv1.Job, error)
 	GetCronJobList(ctx context.Context, namespace string, clusterID int) ([]batchv1.CronJob, error)
+	// 清理资源
+	RemoveCluster(clusterID int)
 }
 
 type k8sClient struct {
@@ -106,8 +111,6 @@ type k8sClient struct {
 	logger            *zap.Logger
 	dao               admin.ClusterDAO
 }
-
-
 
 func NewK8sClient(logger *zap.Logger, dao admin.ClusterDAO) K8sClient {
 	return &k8sClient{
@@ -126,12 +129,22 @@ func NewK8sClient(logger *zap.Logger, dao admin.ClusterDAO) K8sClient {
 
 // InitClient 初始化指定集群 ID 的 Kubernetes 客户端
 func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *rest.Config) error {
+	if kubeConfig == nil {
+		return fmt.Errorf("kubeConfig 不能为空")
+	}
+
 	k.Lock()
 	defer k.Unlock()
 
 	// 检查客户端是否已经初始化
 	if _, exists := k.KubeClients[clusterID]; exists {
+		k.logger.Debug("客户端已初始化，跳过", zap.Int("ClusterID", clusterID))
 		return nil
+	}
+
+	// 设置超时
+	if kubeConfig.Timeout == 0 {
+		kubeConfig.Timeout = 10 * time.Second
 	}
 
 	// 保存 REST 配置
@@ -145,21 +158,21 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 	}
 	k.KubeClients[clusterID] = kubeClient
 
-	// 创建 Kruise 客户端
+	// 创建 Kruise 客户端（非关键组件，失败不阻塞）
 	kruiseClient, err := versioned.NewForConfig(kubeConfig)
 	if err != nil {
-		k.logger.Error("创建 Kruise 客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
-		return fmt.Errorf("创建 Kruise 客户端失败: %w", err)
+		k.logger.Warn("创建 Kruise 客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+	} else {
+		k.KruiseClients[clusterID] = kruiseClient
 	}
-	k.KruiseClients[clusterID] = kruiseClient
 
-	// 创建 Metrics 客户端
+	// 创建 Metrics 客户端（非关键组件，失败不阻塞）
 	metricsClientSet, err := metricsClient.NewForConfig(kubeConfig)
 	if err != nil {
-		k.logger.Error("创建 Metrics 客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
-		return fmt.Errorf("创建 Metrics 客户端失败: %w", err)
+		k.logger.Warn("创建 Metrics 客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+	} else {
+		k.MetricsClients[clusterID] = metricsClientSet
 	}
-	k.MetricsClients[clusterID] = metricsClientSet
 
 	// 创建动态客户端
 	dynamicClient, err := dynamic.NewForConfig(kubeConfig)
@@ -169,6 +182,7 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 	}
 	k.DynamicClients[clusterID] = dynamicClient
 
+	// 创建 Discovery 客户端
 	discoveryClient, err := discovery2.NewDiscoveryClientForConfig(kubeConfig)
 	if err != nil {
 		k.logger.Error("创建 Discovery 客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
@@ -176,18 +190,24 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 	}
 	k.DiscoveryClients[clusterID] = discoveryClient
 
-	// 获取并保存命名空间，直接使用 kubeClient
+	// 测试连接并获取命名空间
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	namespaces, err := k.getNamespacesDirectly(ctx, kubeClient)
 	if err != nil {
 		k.LastProbeErrors[clusterID] = err.Error()
+		k.logger.Warn("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
 	} else {
 		host := kubeConfig.Host
 		if host == "" {
 			host = fmt.Sprintf("cluster-%d", clusterID)
 		}
 		k.ClusterNamespaces[host] = namespaces
+		delete(k.LastProbeErrors, clusterID)
 	}
 
+	k.logger.Info("客户端初始化成功", zap.Int("ClusterID", clusterID))
 	return nil
 }
 
@@ -211,8 +231,43 @@ func (k *k8sClient) GetKubeClient(clusterID int) (*kubernetes.Clientset, error) 
 	client, exists := k.KubeClients[clusterID]
 	k.RUnlock()
 
+	if exists {
+		return client, nil
+	}
+
+	// 尝试初始化客户端
+	return k.initClientFromDB(clusterID)
+}
+
+// initClientFromDB 从数据库初始化客户端
+func (k *k8sClient) initClientFromDB(clusterID int) (*kubernetes.Clientset, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cluster, err := k.dao.GetClusterByID(ctx, clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("获取集群失败: %w", err)
+	}
+
+	if cluster.KubeConfigContent == "" {
+		return nil, fmt.Errorf("集群 %d 的 KubeConfig 内容为空", clusterID)
+	}
+
+	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
+	if err != nil {
+		return nil, fmt.Errorf("解析 kubeconfig 失败: %w", err)
+	}
+
+	if err := k.InitClient(ctx, clusterID, restConfig); err != nil {
+		return nil, fmt.Errorf("初始化 Kubernetes 客户端失败: %w", err)
+	}
+
+	k.RLock()
+	client, exists := k.KubeClients[clusterID]
+	k.RUnlock()
+
 	if !exists {
-		return nil, fmt.Errorf("集群 %d 的 KubeClient 未初始化", clusterID)
+		return nil, fmt.Errorf("集群 %d 的 KubeClient 初始化失败", clusterID)
 	}
 
 	return client, nil
@@ -260,14 +315,14 @@ func (k *k8sClient) GetDynamicClient(clusterID int) (*dynamic.DynamicClient, err
 // GetDiscoveryClient 获取指定集群 ID 的 Discovery 客户端
 func (k *k8sClient) GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error) {
 	k.RLock()
-	defer k.RUnlock()
+	client, exists := k.DiscoveryClients[clusterID]
+	k.RUnlock()
 
-	discoveryClient, exists := k.DiscoveryClients[clusterID]
 	if !exists {
-		return nil, fmt.Errorf("获取DiscoveryClient失败: %d", clusterID)
+		return nil, fmt.Errorf("集群 %d 的 DiscoveryClient 未初始化", clusterID)
 	}
 
-	return discoveryClient, nil
+	return client, nil
 }
 
 // RefreshClients 刷新所有集群的客户端
@@ -278,60 +333,85 @@ func (k *k8sClient) RefreshClients(ctx context.Context) error {
 		return err
 	}
 
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(clusters))
+
 	for _, cluster := range clusters {
-		// 检查 KubeConfigContent 是否为空
 		if cluster.KubeConfigContent == "" {
 			k.logger.Warn("集群的 KubeConfig 内容为空，跳过初始化", zap.Int("ClusterID", cluster.ID))
 			continue
 		}
 
-		restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
-		if err != nil {
-			k.logger.Error("解析 kubeconfig 失败", zap.Int("ClusterID", cluster.ID), zap.Error(err))
-			continue
-		}
-		if err = k.InitClient(ctx, cluster.ID, restConfig); err != nil {
-			k.logger.Error("初始化 Kubernetes 客户端失败", zap.Int("ClusterID", cluster.ID), zap.Error(err))
-		}
+		wg.Add(1)
+		go func(c *model.K8sCluster) {
+			defer wg.Done()
+
+			restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(c.KubeConfigContent))
+			if err != nil {
+				k.logger.Error("解析 kubeconfig 失败", zap.Int("ClusterID", c.ID), zap.Error(err))
+				errChan <- fmt.Errorf("解析集群 %d 的 kubeconfig 失败: %w", c.ID, err)
+				return
+			}
+
+			if err := k.InitClient(ctx, c.ID, restConfig); err != nil {
+				k.logger.Error("初始化 Kubernetes 客户端失败", zap.Int("ClusterID", c.ID), zap.Error(err))
+				errChan <- fmt.Errorf("初始化集群 %d 的客户端失败: %w", c.ID, err)
+			}
+		}(cluster)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// 收集所有错误
+	var errs []error
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("刷新客户端时发生 %d 个错误，第一个错误: %w", len(errs), errs[0])
 	}
 
 	return nil
 }
 
-// CreateCronJob 创建 CronJob 资源
-func (k *k8sClient) CreateCronJob(ctx context.Context, namespace string, clusterID int, cronjob *batchv1.CronJob) error {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return err
-	}
+// RemoveCluster 清理指定集群的客户端
+func (k *k8sClient) RemoveCluster(clusterID int) {
+	k.Lock()
+	defer k.Unlock()
 
-	_, err = client.BatchV1().CronJobs(namespace).Create(ctx, cronjob, metav1.CreateOptions{})
-	if err != nil {
-		k.logger.Error("创建 CronJob 失败", zap.Error(err), zap.String("namespace", namespace))
-		return fmt.Errorf("创建 CronJob 失败: %w", err)
-	}
+	delete(k.KubeClients, clusterID)
+	delete(k.KruiseClients, clusterID)
+	delete(k.MetricsClients, clusterID)
+	delete(k.DynamicClients, clusterID)
+	delete(k.RestConfigs, clusterID)
+	delete(k.DiscoveryClients, clusterID)
+	delete(k.LastProbeErrors, clusterID)
 
-	return nil
+	k.logger.Info("已清理集群客户端", zap.Int("ClusterID", clusterID))
 }
 
-// CreateDaemonSet 创建 DaemonSet 资源
-func (k *k8sClient) CreateDaemonSet(ctx context.Context, namespace string, clusterID int, daemonset *appsv1.DaemonSet) error {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return err
+// validateInputs 验证输入参数
+func (k *k8sClient) validateInputs(namespace, name string, clusterID int) error {
+	if namespace == "" {
+		return fmt.Errorf("namespace 不能为空")
 	}
-
-	_, err = client.AppsV1().DaemonSets(namespace).Create(ctx, daemonset, metav1.CreateOptions{})
-	if err != nil {
-		k.logger.Error("创建 DaemonSet 失败", zap.Error(err), zap.String("namespace", namespace))
-		return fmt.Errorf("创建 DaemonSet 失败: %w", err)
+	if name == "" {
+		return fmt.Errorf("资源名称不能为空")
 	}
-
+	if clusterID <= 0 {
+		return fmt.Errorf("clusterID 必须大于 0")
+	}
 	return nil
 }
 
 // CreateDeployment 创建 Deployment 资源
 func (k *k8sClient) CreateDeployment(ctx context.Context, namespace string, clusterID int, deployment *appsv1.Deployment) error {
+	if deployment == nil {
+		return fmt.Errorf("deployment 不能为空")
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return err
@@ -339,24 +419,8 @@ func (k *k8sClient) CreateDeployment(ctx context.Context, namespace string, clus
 
 	_, err = client.AppsV1().Deployments(namespace).Create(ctx, deployment, metav1.CreateOptions{})
 	if err != nil {
-		k.logger.Error("创建 Deployment 失败", zap.Error(err), zap.String("namespace", namespace))
+		k.logger.Error("创建 Deployment 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", deployment.Name))
 		return fmt.Errorf("创建 Deployment 失败: %w", err)
-	}
-
-	return nil
-}
-
-// CreateJob 创建 Job 资源
-func (k *k8sClient) CreateJob(ctx context.Context, namespace string, clusterID int, job *batchv1.Job) error {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return err
-	}
-
-	_, err = client.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
-	if err != nil {
-		k.logger.Error("创建 Job 失败", zap.Error(err), zap.String("namespace", namespace))
-		return fmt.Errorf("创建 Job 失败: %w", err)
 	}
 
 	return nil
@@ -364,6 +428,10 @@ func (k *k8sClient) CreateJob(ctx context.Context, namespace string, clusterID i
 
 // CreateStatefulSet 创建 StatefulSet 资源
 func (k *k8sClient) CreateStatefulSet(ctx context.Context, namespace string, clusterID int, statefulset *appsv1.StatefulSet) error {
+	if statefulset == nil {
+		return fmt.Errorf("statefulset 不能为空")
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return err
@@ -371,40 +439,90 @@ func (k *k8sClient) CreateStatefulSet(ctx context.Context, namespace string, clu
 
 	_, err = client.AppsV1().StatefulSets(namespace).Create(ctx, statefulset, metav1.CreateOptions{})
 	if err != nil {
-		k.logger.Error("创建 StatefulSet 失败", zap.Error(err), zap.String("namespace", namespace))
+		k.logger.Error("创建 StatefulSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", statefulset.Name))
 		return fmt.Errorf("创建 StatefulSet 失败: %w", err)
 	}
 
 	return nil
 }
 
-// DeleteCronJob 删除 CronJob 资源
-func (k *k8sClient) DeleteCronJob(ctx context.Context, namespace string, name string, clusterID int) error {
+// CheckClusterConnection 检查集群连接
+func (k *k8sClient) CheckClusterConnection(clusterID int) error {
+	client, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		k.logger.Error("获取集群客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
+		k.LastProbeErrors[clusterID] = err.Error()
+		return fmt.Errorf("获取集群客户端失败: %w", err)
+	}
+
+	// 检查集群版本
+	version, err := client.Discovery().ServerVersion()
+	if err != nil {
+		k.logger.Error("检查集群连接失败", zap.Int("clusterID", clusterID), zap.Error(err))
+		k.LastProbeErrors[clusterID] = err.Error()
+		return fmt.Errorf("检查集群连接失败: %w", err)
+	}
+
+	k.logger.Debug("集群连接成功", zap.Int("clusterID", clusterID), zap.String("version", version.String()))
+	delete(k.LastProbeErrors, clusterID)
+	return nil
+}
+
+// CreateDaemonSet 创建 DaemonSet 资源
+func (k *k8sClient) CreateDaemonSet(ctx context.Context, namespace string, clusterID int, daemonset *appsv1.DaemonSet) error {
+	if daemonset == nil {
+		return fmt.Errorf("daemonset 不能为空")
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	err = client.BatchV1().CronJobs(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	_, err = client.AppsV1().DaemonSets(namespace).Create(ctx, daemonset, metav1.CreateOptions{})
 	if err != nil {
-		k.logger.Error("删除 CronJob 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
-		return fmt.Errorf("删除 CronJob 失败: %w", err)
+		k.logger.Error("创建 DaemonSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", daemonset.Name))
+		return fmt.Errorf("创建 DaemonSet 失败: %w", err)
 	}
 
 	return nil
 }
 
-// DeleteDaemonSet 删除 DaemonSet 资源
-func (k *k8sClient) DeleteDaemonSet(ctx context.Context, namespace string, name string, clusterID int) error {
+// CreateJob 创建 Job 资源
+func (k *k8sClient) CreateJob(ctx context.Context, namespace string, clusterID int, job *batchv1.Job) error {
+	if job == nil {
+		return fmt.Errorf("job 不能为空")
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	err = client.AppsV1().DaemonSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	_, err = client.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
-		k.logger.Error("删除 DaemonSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
-		return fmt.Errorf("删除 DaemonSet 失败: %w", err)
+		k.logger.Error("创建 Job 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", job.Name))
+		return fmt.Errorf("创建 Job 失败: %w", err)
+	}
+
+	return nil
+}
+
+// CreateCronJob 创建 CronJob 资源
+func (k *k8sClient) CreateCronJob(ctx context.Context, namespace string, clusterID int, cronjob *batchv1.CronJob) error {
+	if cronjob == nil {
+		return fmt.Errorf("cronjob 不能为空")
+	}
+
+	client, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.BatchV1().CronJobs(namespace).Create(ctx, cronjob, metav1.CreateOptions{})
+	if err != nil {
+		k.logger.Error("创建 CronJob 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", cronjob.Name))
+		return fmt.Errorf("创建 CronJob 失败: %w", err)
 	}
 
 	return nil
@@ -412,13 +530,17 @@ func (k *k8sClient) DeleteDaemonSet(ctx context.Context, namespace string, name 
 
 // DeleteDeployment 删除 Deployment 资源
 func (k *k8sClient) DeleteDeployment(ctx context.Context, namespace string, name string, clusterID int) error {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return err
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
 	err = client.AppsV1().Deployments(namespace).Delete(ctx, name, metav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !errors.IsNotFound(err) {
 		k.logger.Error("删除 Deployment 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
 		return fmt.Errorf("删除 Deployment 失败: %w", err)
 	}
@@ -426,31 +548,19 @@ func (k *k8sClient) DeleteDeployment(ctx context.Context, namespace string, name
 	return nil
 }
 
-// DeleteJob 删除 Job 资源
-func (k *k8sClient) DeleteJob(ctx context.Context, namespace string, name string, clusterID int) error {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
+// DeleteStatefulSet 删除 StatefulSet 资源
+func (k *k8sClient) DeleteStatefulSet(ctx context.Context, namespace string, name string, clusterID int) error {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
 		return err
 	}
 
-	err = client.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{})
-	if err != nil {
-		k.logger.Error("删除 Job 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
-		return fmt.Errorf("删除 Job 失败: %w", err)
-	}
-
-	return nil
-}
-
-// DeleteStatefulSet 删除 StatefulSet 资源
-func (k *k8sClient) DeleteStatefulSet(ctx context.Context, namespace string, name string, clusterID int) error {
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
 	err = client.AppsV1().StatefulSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
-	if err != nil {
+	if err != nil && !errors.IsNotFound(err) {
 		k.logger.Error("删除 StatefulSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
 		return fmt.Errorf("删除 StatefulSet 失败: %w", err)
 	}
@@ -458,72 +568,72 @@ func (k *k8sClient) DeleteStatefulSet(ctx context.Context, namespace string, nam
 	return nil
 }
 
-// GetCronJob 获取 CronJob 资源
-func (k *k8sClient) GetCronJob(ctx context.Context, namespace string, name string, clusterID int) (*batchv1.CronJob, error) {
+// DeleteDaemonSet 删除 DaemonSet 资源
+func (k *k8sClient) DeleteDaemonSet(ctx context.Context, namespace string, name string, clusterID int) error {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return err
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	cronJob, err := client.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		k.logger.Error("获取 CronJob 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
-		return nil, fmt.Errorf("获取 CronJob 失败: %w", err)
+	err = client.AppsV1().DaemonSets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil && !errors.IsNotFound(err) {
+		k.logger.Error("删除 DaemonSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
+		return fmt.Errorf("删除 DaemonSet 失败: %w", err)
 	}
 
-	return cronJob, nil
+	return nil
 }
 
-// GetCronJobList 获取 CronJob 资源列表
-func (k *k8sClient) GetCronJobList(ctx context.Context, namespace string, clusterID int) ([]batchv1.CronJob, error) {
+// DeleteJob 删除 Job 资源
+func (k *k8sClient) DeleteJob(ctx context.Context, namespace string, name string, clusterID int) error {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return err
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	cronJobList, err := client.BatchV1().CronJobs(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		k.logger.Error("获取 CronJob 列表失败", zap.Error(err), zap.String("namespace", namespace))
-		return nil, fmt.Errorf("获取 CronJob 列表失败: %w", err)
+	err = client.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil && !errors.IsNotFound(err) {
+		k.logger.Error("删除 Job 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
+		return fmt.Errorf("删除 Job 失败: %w", err)
 	}
 
-	return cronJobList.Items, nil
+	return nil
 }
 
-// GetDaemonSet 获取 DaemonSet 资源
-func (k *k8sClient) GetDaemonSet(ctx context.Context, namespace string, name string, clusterID int) (*appsv1.DaemonSet, error) {
+// DeleteCronJob 删除 CronJob 资源
+func (k *k8sClient) DeleteCronJob(ctx context.Context, namespace string, name string, clusterID int) error {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return err
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	daemonSet, err := client.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		k.logger.Error("获取 DaemonSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
-		return nil, fmt.Errorf("获取 DaemonSet 失败: %w", err)
+	err = client.BatchV1().CronJobs(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil && !errors.IsNotFound(err) {
+		k.logger.Error("删除 CronJob 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
+		return fmt.Errorf("删除 CronJob 失败: %w", err)
 	}
 
-	return daemonSet, nil
-}
-
-// GetDaemonSetList 获取 DaemonSet 资源列表
-func (k *k8sClient) GetDaemonSetList(ctx context.Context, namespace string, clusterID int) ([]appsv1.DaemonSet, error) {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return nil, err
-	}
-
-	daemonSetList, err := client.AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		k.logger.Error("获取 DaemonSet 列表失败", zap.Error(err), zap.String("namespace", namespace))
-		return nil, fmt.Errorf("获取 DaemonSet 列表失败: %w", err)
-	}
-
-	return daemonSetList.Items, nil
+	return nil
 }
 
 // GetDeployment 获取 Deployment 资源
 func (k *k8sClient) GetDeployment(ctx context.Context, namespace string, name string, clusterID int) (*appsv1.Deployment, error) {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return nil, err
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return nil, err
@@ -538,56 +648,12 @@ func (k *k8sClient) GetDeployment(ctx context.Context, namespace string, name st
 	return deployment, nil
 }
 
-// GetDeploymentList 获取 Deployment 资源列表
-func (k *k8sClient) GetDeploymentList(ctx context.Context, namespace string, clusterID int) ([]appsv1.Deployment, error) {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return nil, err
-	}
-
-	deploymentList, err := client.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		k.logger.Error("获取 Deployment 列表失败", zap.Error(err), zap.String("namespace", namespace))
-		return nil, fmt.Errorf("获取 Deployment 列表失败: %w", err)
-	}
-
-	return deploymentList.Items, nil
-}
-
-// GetJob 获取 Job 资源
-func (k *k8sClient) GetJob(ctx context.Context, namespace string, name string, clusterID int) (*batchv1.Job, error) {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return nil, err
-	}
-
-	job, err := client.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		k.logger.Error("获取 Job 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
-		return nil, fmt.Errorf("获取 Job 失败: %w", err)
-	}
-
-	return job, nil
-}
-
-// GetJobList 获取 Job 资源列表
-func (k *k8sClient) GetJobList(ctx context.Context, namespace string, clusterID int) ([]batchv1.Job, error) {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return nil, err
-	}
-
-	jobList, err := client.BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		k.logger.Error("获取 Job 列表失败", zap.Error(err), zap.String("namespace", namespace))
-		return nil, fmt.Errorf("获取 Job 列表失败: %w", err)
-	}
-
-	return jobList.Items, nil
-}
-
 // GetStatefulSet 获取 StatefulSet 资源
 func (k *k8sClient) GetStatefulSet(ctx context.Context, namespace string, name string, clusterID int) (*appsv1.StatefulSet, error) {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return nil, err
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return nil, err
@@ -602,8 +668,92 @@ func (k *k8sClient) GetStatefulSet(ctx context.Context, namespace string, name s
 	return statefulSet, nil
 }
 
+// GetDaemonSet 获取 DaemonSet 资源
+func (k *k8sClient) GetDaemonSet(ctx context.Context, namespace string, name string, clusterID int) (*appsv1.DaemonSet, error) {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return nil, err
+	}
+
+	client, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	daemonSet, err := client.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		k.logger.Error("获取 DaemonSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
+		return nil, fmt.Errorf("获取 DaemonSet 失败: %w", err)
+	}
+
+	return daemonSet, nil
+}
+
+// GetJob 获取 Job 资源
+func (k *k8sClient) GetJob(ctx context.Context, namespace string, name string, clusterID int) (*batchv1.Job, error) {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return nil, err
+	}
+
+	client, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	job, err := client.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		k.logger.Error("获取 Job 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
+		return nil, fmt.Errorf("获取 Job 失败: %w", err)
+	}
+
+	return job, nil
+}
+
+// GetCronJob 获取 CronJob 资源
+func (k *k8sClient) GetCronJob(ctx context.Context, namespace string, name string, clusterID int) (*batchv1.CronJob, error) {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return nil, err
+	}
+
+	client, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	cronJob, err := client.BatchV1().CronJobs(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		k.logger.Error("获取 CronJob 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
+		return nil, fmt.Errorf("获取 CronJob 失败: %w", err)
+	}
+
+	return cronJob, nil
+}
+
+// GetDeploymentList 获取 Deployment 资源列表
+func (k *k8sClient) GetDeploymentList(ctx context.Context, namespace string, clusterID int) ([]appsv1.Deployment, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace 不能为空")
+	}
+
+	client, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	deploymentList, err := client.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		k.logger.Error("获取 Deployment 列表失败", zap.Error(err), zap.String("namespace", namespace))
+		return nil, fmt.Errorf("获取 Deployment 列表失败: %w", err)
+	}
+
+	return deploymentList.Items, nil
+}
+
 // GetStatefulSetList 获取 StatefulSet 资源列表
 func (k *k8sClient) GetStatefulSetList(ctx context.Context, namespace string, clusterID int) ([]appsv1.StatefulSet, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace 不能为空")
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return nil, err
@@ -618,50 +768,77 @@ func (k *k8sClient) GetStatefulSetList(ctx context.Context, namespace string, cl
 	return statefulSetList.Items, nil
 }
 
-// RestartCronJob 重启 CronJob 资源
-func (k *k8sClient) RestartCronJob(ctx context.Context, namespace string, name string, clusterID int) error {
+// GetDaemonSetList 获取 DaemonSet 资源列表
+func (k *k8sClient) GetDaemonSetList(ctx context.Context, namespace string, clusterID int) ([]appsv1.DaemonSet, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace 不能为空")
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// 通过添加重启注解来重启 CronJob
-	patchData := fmt.Sprintf(`{"spec":{"jobTemplate":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, time.Now().Format(time.RFC3339))
-	_, err = client.BatchV1().CronJobs(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
+	daemonSetList, err := client.AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		k.logger.Error("重启 CronJob 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
-		return fmt.Errorf("重启 CronJob 失败: %w", err)
+		k.logger.Error("获取 DaemonSet 列表失败", zap.Error(err), zap.String("namespace", namespace))
+		return nil, fmt.Errorf("获取 DaemonSet 列表失败: %w", err)
 	}
 
-	return nil
+	return daemonSetList.Items, nil
 }
 
-// RestartDaemonSet 重启 DaemonSet 资源
-func (k *k8sClient) RestartDaemonSet(ctx context.Context, namespace string, name string, clusterID int) error {
+// GetJobList 获取 Job 资源列表
+func (k *k8sClient) GetJobList(ctx context.Context, namespace string, clusterID int) ([]batchv1.Job, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace 不能为空")
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// 通过添加重启注解来重启 DaemonSet
-	patchData := fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, time.Now().Format(time.RFC3339))
-	_, err = client.AppsV1().DaemonSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
+	jobList, err := client.BatchV1().Jobs(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		k.logger.Error("重启 DaemonSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
-		return fmt.Errorf("重启 DaemonSet 失败: %w", err)
+		k.logger.Error("获取 Job 列表失败", zap.Error(err), zap.String("namespace", namespace))
+		return nil, fmt.Errorf("获取 Job 列表失败: %w", err)
 	}
 
-	return nil
+	return jobList.Items, nil
+}
+
+// GetCronJobList 获取 CronJob 资源列表
+func (k *k8sClient) GetCronJobList(ctx context.Context, namespace string, clusterID int) ([]batchv1.CronJob, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace 不能为空")
+	}
+
+	client, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	cronJobList, err := client.BatchV1().CronJobs(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		k.logger.Error("获取 CronJob 列表失败", zap.Error(err), zap.String("namespace", namespace))
+		return nil, fmt.Errorf("获取 CronJob 列表失败: %w", err)
+	}
+
+	return cronJobList.Items, nil
 }
 
 // RestartDeployment 重启 Deployment 资源
 func (k *k8sClient) RestartDeployment(ctx context.Context, namespace string, name string, clusterID int) error {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return err
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	// 通过添加重启注解来重启 Deployment
 	patchData := fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, time.Now().Format(time.RFC3339))
 	_, err = client.AppsV1().Deployments(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
 	if err != nil {
@@ -672,8 +849,54 @@ func (k *k8sClient) RestartDeployment(ctx context.Context, namespace string, nam
 	return nil
 }
 
+// RestartStatefulSet 重启 StatefulSet 资源
+func (k *k8sClient) RestartStatefulSet(ctx context.Context, namespace string, name string, clusterID int) error {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return err
+	}
+
+	client, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	patchData := fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, time.Now().Format(time.RFC3339))
+	_, err = client.AppsV1().StatefulSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
+	if err != nil {
+		k.logger.Error("重启 StatefulSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
+		return fmt.Errorf("重启 StatefulSet 失败: %w", err)
+	}
+
+	return nil
+}
+
+// RestartDaemonSet 重启 DaemonSet 资源
+func (k *k8sClient) RestartDaemonSet(ctx context.Context, namespace string, name string, clusterID int) error {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return err
+	}
+
+	client, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	patchData := fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, time.Now().Format(time.RFC3339))
+	_, err = client.AppsV1().DaemonSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
+	if err != nil {
+		k.logger.Error("重启 DaemonSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
+		return fmt.Errorf("重启 DaemonSet 失败: %w", err)
+	}
+
+	return nil
+}
+
 // RestartJob 重启 Job 资源
 func (k *k8sClient) RestartJob(ctx context.Context, namespace string, name string, clusterID int) error {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return err
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return err
@@ -697,9 +920,17 @@ func (k *k8sClient) RestartJob(ctx context.Context, namespace string, name strin
 		Spec: job.Spec,
 	}
 
+	// 清除运行时字段
+	newJob.ObjectMeta.ResourceVersion = ""
+	newJob.ObjectMeta.UID = ""
+	newJob.ObjectMeta.CreationTimestamp = metav1.Time{}
+
 	// 删除旧的 Job
-	err = client.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{})
-	if err != nil {
+	propagationPolicy := metav1.DeletePropagationBackground
+	err = client.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{
+		PropagationPolicy: &propagationPolicy,
+	})
+	if err != nil && !errors.IsNotFound(err) {
 		k.logger.Error("删除 Job 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
 		return fmt.Errorf("重启 Job 失败，无法删除旧 Job: %w", err)
 	}
@@ -717,51 +948,22 @@ func (k *k8sClient) RestartJob(ctx context.Context, namespace string, name strin
 	return nil
 }
 
-// RestartStatefulSet 重启 StatefulSet 资源
-func (k *k8sClient) RestartStatefulSet(ctx context.Context, namespace string, name string, clusterID int) error {
+// RestartCronJob 重启 CronJob 资源
+func (k *k8sClient) RestartCronJob(ctx context.Context, namespace string, name string, clusterID int) error {
+	if err := k.validateInputs(namespace, name, clusterID); err != nil {
+		return err
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	// 通过添加重启注解来重启 StatefulSet
-	patchData := fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, time.Now().Format(time.RFC3339))
-	_, err = client.AppsV1().StatefulSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
+	patchData := fmt.Sprintf(`{"spec":{"jobTemplate":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, time.Now().Format(time.RFC3339))
+	_, err = client.BatchV1().CronJobs(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
 	if err != nil {
-		k.logger.Error("重启 StatefulSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
-		return fmt.Errorf("重启 StatefulSet 失败: %w", err)
-	}
-
-	return nil
-}
-
-// UpdateCronJob 更新 CronJob 资源
-func (k *k8sClient) UpdateCronJob(ctx context.Context, namespace string, clusterID int, cronjob *batchv1.CronJob) error {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return err
-	}
-
-	_, err = client.BatchV1().CronJobs(namespace).Update(ctx, cronjob, metav1.UpdateOptions{})
-	if err != nil {
-		k.logger.Error("更新 CronJob 失败", zap.Error(err), zap.String("namespace", namespace))
-		return fmt.Errorf("更新 CronJob 失败: %w", err)
-	}
-
-	return nil
-}
-
-// UpdateDaemonSet 更新 DaemonSet 资源
-func (k *k8sClient) UpdateDaemonSet(ctx context.Context, namespace string, clusterID int, daemonset *appsv1.DaemonSet) error {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return err
-	}
-
-	_, err = client.AppsV1().DaemonSets(namespace).Update(ctx, daemonset, metav1.UpdateOptions{})
-	if err != nil {
-		k.logger.Error("更新 DaemonSet 失败", zap.Error(err), zap.String("namespace", namespace))
-		return fmt.Errorf("更新 DaemonSet 失败: %w", err)
+		k.logger.Error("重启 CronJob 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", name))
+		return fmt.Errorf("重启 CronJob 失败: %w", err)
 	}
 
 	return nil
@@ -769,6 +971,10 @@ func (k *k8sClient) UpdateDaemonSet(ctx context.Context, namespace string, clust
 
 // UpdateDeployment 更新 Deployment 资源
 func (k *k8sClient) UpdateDeployment(ctx context.Context, namespace string, clusterID int, deployment *appsv1.Deployment) error {
+	if deployment == nil {
+		return fmt.Errorf("deployment 不能为空")
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return err
@@ -776,24 +982,8 @@ func (k *k8sClient) UpdateDeployment(ctx context.Context, namespace string, clus
 
 	_, err = client.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{})
 	if err != nil {
-		k.logger.Error("更新 Deployment 失败", zap.Error(err), zap.String("namespace", namespace))
+		k.logger.Error("更新 Deployment 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", deployment.Name))
 		return fmt.Errorf("更新 Deployment 失败: %w", err)
-	}
-
-	return nil
-}
-
-// UpdateJob 更新 Job 资源
-func (k *k8sClient) UpdateJob(ctx context.Context, namespace string, clusterID int, job *batchv1.Job) error {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return err
-	}
-
-	_, err = client.BatchV1().Jobs(namespace).Update(ctx, job, metav1.UpdateOptions{})
-	if err != nil {
-		k.logger.Error("更新 Job 失败", zap.Error(err), zap.String("namespace", namespace))
-		return fmt.Errorf("更新 Job 失败: %w", err)
 	}
 
 	return nil
@@ -801,6 +991,10 @@ func (k *k8sClient) UpdateJob(ctx context.Context, namespace string, clusterID i
 
 // UpdateStatefulSet 更新 StatefulSet 资源
 func (k *k8sClient) UpdateStatefulSet(ctx context.Context, namespace string, clusterID int, statefulset *appsv1.StatefulSet) error {
+	if statefulset == nil {
+		return fmt.Errorf("statefulset 不能为空")
+	}
+
 	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return err
@@ -808,8 +1002,68 @@ func (k *k8sClient) UpdateStatefulSet(ctx context.Context, namespace string, clu
 
 	_, err = client.AppsV1().StatefulSets(namespace).Update(ctx, statefulset, metav1.UpdateOptions{})
 	if err != nil {
-		k.logger.Error("更新 StatefulSet 失败", zap.Error(err), zap.String("namespace", namespace))
+		k.logger.Error("更新 StatefulSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", statefulset.Name))
 		return fmt.Errorf("更新 StatefulSet 失败: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateDaemonSet 更新 DaemonSet 资源
+func (k *k8sClient) UpdateDaemonSet(ctx context.Context, namespace string, clusterID int, daemonset *appsv1.DaemonSet) error {
+	if daemonset == nil {
+		return fmt.Errorf("daemonset 不能为空")
+	}
+
+	client, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.AppsV1().DaemonSets(namespace).Update(ctx, daemonset, metav1.UpdateOptions{})
+	if err != nil {
+		k.logger.Error("更新 DaemonSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", daemonset.Name))
+		return fmt.Errorf("更新 DaemonSet 失败: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateJob 更新 Job 资源
+func (k *k8sClient) UpdateJob(ctx context.Context, namespace string, clusterID int, job *batchv1.Job) error {
+	if job == nil {
+		return fmt.Errorf("job 不能为空")
+	}
+
+	client, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.BatchV1().Jobs(namespace).Update(ctx, job, metav1.UpdateOptions{})
+	if err != nil {
+		k.logger.Error("更新 Job 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", job.Name))
+		return fmt.Errorf("更新 Job 失败: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateCronJob 更新 CronJob 资源
+func (k *k8sClient) UpdateCronJob(ctx context.Context, namespace string, clusterID int, cronjob *batchv1.CronJob) error {
+	if cronjob == nil {
+		return fmt.Errorf("cronjob 不能为空")
+	}
+
+	client, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.BatchV1().CronJobs(namespace).Update(ctx, cronjob, metav1.UpdateOptions{})
+	if err != nil {
+		k.logger.Error("更新 CronJob 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", cronjob.Name))
+		return fmt.Errorf("更新 CronJob 失败: %w", err)
 	}
 
 	return nil

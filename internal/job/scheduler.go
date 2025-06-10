@@ -32,7 +32,6 @@ import (
 )
 
 const (
-	RefreshK8sClientsTask      = "refresh_k8s_clients"
 	RefreshPrometheusCacheTask = "refresh_prometheus_cache"
 	CheckHostStatusTask        = "check_host_status"
 	CheckK8sStatusTask         = "check_k8s_status"
@@ -49,14 +48,6 @@ func NewTimedScheduler(scheduler *asynq.Scheduler) *TimedScheduler {
 }
 
 func (s *TimedScheduler) RegisterTimedTasks() error {
-	// K8s 客户端刷新任务 - 每5分钟
-	if err := s.registerTask(
-		RefreshK8sClientsTask,
-		"@every 5m",
-	); err != nil {
-		return err
-	}
-
 	// Prometheus 缓存刷新任务 - 每10秒
 	if err := s.registerTask(
 		RefreshPrometheusCacheTask,
