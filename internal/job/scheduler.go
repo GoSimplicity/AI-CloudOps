@@ -65,13 +65,13 @@ func (s *TimedScheduler) RegisterTimedTasks() error {
 		return err
 	}
 
-	// // 主机状态检查任务 - 每10秒
-	// if err := s.registerTask(
-	// 	CheckHostStatusTask,
-	// 	"@every 10s",
-	// ); err != nil {
-	// 	return err
-	// }
+	// 主机状态检查任务 - 每30秒
+	if err := s.registerTask(
+		CheckHostStatusTask,
+		"@every 30s",
+	); err != nil {
+		return err
+	}
 
 	// K8s 状态检查任务 - 每10秒
 	if err := s.registerTask(

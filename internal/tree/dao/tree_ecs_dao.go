@@ -121,6 +121,10 @@ func (t *treeEcsDAO) ListEcsResources(ctx context.Context, req *model.ListEcsRes
 		db = db.Where("region_id = ?", req.Region)
 	}
 
+	if req.Status != "" {
+		db = db.Where("status = ?", req.Status)
+	}
+
 	// 计算总数
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -209,12 +213,20 @@ func (t *treeEcsDAO) UpdateEcsRenewalInfo(ctx context.Context, instanceId string
 
 // UpdateEcsResource implements TreeEcsDAO.
 func (t *treeEcsDAO) UpdateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
-	panic("unimplemented")
+	if err := t.db.WithContext(ctx).Model(&model.ResourceEcs{}).Where("id = ?", resource.ID).Updates(resource).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // UpdateEcsStatus implements TreeEcsDAO.
 func (t *treeEcsDAO) UpdateEcsStatus(ctx context.Context, instanceId string, status string) error {
-	panic("unimplemented")
+	if err := t.db.WithContext(ctx).Model(&model.ResourceEcs{}).Where("id = ?", instanceId).Update("status", status).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // WithTx implements TreeEcsDAO.

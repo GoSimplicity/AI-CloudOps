@@ -498,7 +498,6 @@
     PlusOutlined,
     MinusCircleOutlined
   } from '@ant-design/icons-vue';
-  import { Icon } from '@iconify/vue';
   import type { FormInstance } from 'ant-design-vue';
   
   interface JobItem {
