@@ -210,6 +210,7 @@ var JobSet = wire.NewSet(
 	job.NewTimedTask,
 	job.NewCreateK8sClusterTask,
 	job.NewUpdateK8sClusterTask,
+	job.NewRefreshK8sClusterTask,
 	job.NewRoutes,
 )
 
