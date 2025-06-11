@@ -37,19 +37,16 @@ import (
 	"go.uber.org/zap"
 )
 
-// RefreshK8sClusterPayload 刷新K8s集群状态的任务载荷
 type RefreshK8sClusterPayload struct {
 	ClusterID int `json:"cluster_id"`
 }
 
-// RefreshK8sClusterTask 刷新K8s集群状态的任务处理器
 type RefreshK8sClusterTask struct {
 	l      *zap.Logger
 	client client.K8sClient
 	dao    admin.ClusterDAO
 }
 
-// NewRefreshK8sClusterTask 创建刷新K8s集群状态的任务处理器
 func NewRefreshK8sClusterTask(l *zap.Logger, client client.K8sClient, dao admin.ClusterDAO) *RefreshK8sClusterTask {
 	return &RefreshK8sClusterTask{
 		l:      l,

@@ -51,6 +51,7 @@
     "dayjs": "^1.11.13",
     "echarts": "^5.5.1",
     "js-yaml": "^4.1.0",
+    "lucide-vue-next": "^0.439.0",
     "markdown-it": "^14.1.0",
     "markdown-it-highlight": "^0.2.0",
     "pinia": "2.2.2",

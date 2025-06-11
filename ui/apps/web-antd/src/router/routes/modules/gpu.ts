@@ -14,21 +14,12 @@ const routes: RouteRecordRaw[] = [
     path: '/gpu',
     children: [
       {
-        name: 'VolcanoJobs',
-        path: '/jobs',
-        component: () => import('#/views/gpu/VolcanoJobs.vue'),
-        meta: {
-          icon: 'lucide:play-circle',
-          title: '训练作业',
-        },
-      },
-      {
         name: 'JobQueues',
         path: '/queues',
         component: () => import('#/views/gpu/JobQueues.vue'),
         meta: {
           icon: 'lucide:layers',
-          title: '作业队列',
+          title: '作业管理',
         },
       },
       {

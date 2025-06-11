@@ -190,7 +190,8 @@ func ProvideCmd() *Cmd {
 	updateK8sClusterTask := job.NewUpdateK8sClusterTask(logger, k8sClient, clusterDAO)
 	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, treeEcsDAO)
 	timedTask := job.NewTimedTask(logger, k8sClient, monitorCache, cronManager)
-	routes := job.NewRoutes(createK8sClusterTask, updateK8sClusterTask, timedTask)
+	refreshK8sClusterTask := job.NewRefreshK8sClusterTask(logger, k8sClient, clusterDAO)
+	routes := job.NewRoutes(createK8sClusterTask, updateK8sClusterTask, timedTask, refreshK8sClusterTask)
 	server := InitAsynqServer()
 	scheduler := InitScheduler()
 	timedScheduler := job.NewTimedScheduler(scheduler)
@@ -220,7 +221,7 @@ var DaoSet = wire.NewSet(alert.NewAlertManagerEventDAO, alert.NewAlertManagerOnD
 
 var UtilSet = wire.NewSet(utils.NewJWTHandler)
 
-var JobSet = wire.NewSet(job.NewTimedScheduler, job.NewTimedTask, job.NewCreateK8sClusterTask, job.NewUpdateK8sClusterTask, job.NewRoutes)
+var JobSet = wire.NewSet(job.NewTimedScheduler, job.NewTimedTask, job.NewCreateK8sClusterTask, job.NewUpdateK8sClusterTask, job.NewRefreshK8sClusterTask, job.NewRoutes)
 
 var ProviderSet = wire.NewSet(provider.NewAliyunProvider, provider.NewProviderFactory)
 
