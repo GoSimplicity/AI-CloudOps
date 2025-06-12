@@ -62,7 +62,3 @@ export async function logoutApi() {
 export async function getAccessCodesApi() {
   return requestClient.get<string[]>('/user/codes');
 }
-
-export const getUserList = () => {
-  return requestClient.get('/user/list');
-};

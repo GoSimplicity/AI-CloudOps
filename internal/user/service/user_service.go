@@ -40,15 +40,15 @@ import (
 )
 
 type UserService interface {
-	SignUp(ctx context.Context, user *model.User) error
-	Login(ctx context.Context, user *model.User) (*model.User, error)
+	SignUp(ctx context.Context, user *model.UserSignUpReq) error
+	Login(ctx context.Context, user *model.UserLoginReq) (*model.User, error)
 	GetProfile(ctx context.Context, uid int) (*model.User, error)
 	GetPermCode(ctx context.Context, uid int) ([]string, error)
 	GetUserDetail(ctx context.Context, uid int) (*model.User, error)
-	GetUserList(ctx context.Context) ([]*model.User, error)
+	GetUserList(ctx context.Context, req *model.ListReq) (model.ListResp[*model.User], error)
 	ChangePassword(ctx context.Context, uid int, oldPassword, newPassword string) error
 	WriteOff(ctx context.Context, username, password string) error
-	UpdateProfile(ctx context.Context, uid int, user *model.User) error
+	UpdateProfile(ctx context.Context, uid int, user *model.UpdateProfileReq) error
 	DeleteUser(ctx context.Context, uid int) error
 }
 
@@ -67,7 +67,7 @@ func NewUserService(dao dao.UserDAO, roleSvc service.RoleService, l *zap.Logger)
 }
 
 // SignUp 用户注册
-func (us *userService) SignUp(ctx context.Context, user *model.User) error {
+func (us *userService) SignUp(ctx context.Context, user *model.UserSignUpReq) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
@@ -75,7 +75,16 @@ func (us *userService) SignUp(ctx context.Context, user *model.User) error {
 
 	user.Password = string(hash)
 
-	if err := us.dao.CreateUser(ctx, user); err != nil {
+	if err := us.dao.CreateUser(ctx, &model.User{
+		Username:     user.Username,
+		Password:     user.Password,
+		RealName:     user.RealName,
+		Desc:         user.Desc,
+		Mobile:       user.Mobile,
+		FeiShuUserId: user.FeiShuUserId,
+		AccountType:  user.AccountType,
+		Enable:       1,
+	}); err != nil {
 		return err
 	}
 
@@ -83,7 +92,7 @@ func (us *userService) SignUp(ctx context.Context, user *model.User) error {
 }
 
 // Login 用户登录
-func (us *userService) Login(ctx context.Context, user *model.User) (*model.User, error) {
+func (us *userService) Login(ctx context.Context, user *model.UserLoginReq) (*model.User, error) {
 	u, err := us.dao.GetUserByUsername(ctx, user.Username)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return &model.User{}, constants.ErrorUserNotExist
@@ -115,12 +124,24 @@ func (us *userService) GetPermCode(ctx context.Context, uid int) ([]string, erro
 }
 
 // GetUserList 获取用户列表
-func (us *userService) GetUserList(ctx context.Context) ([]*model.User, error) {
-	return us.dao.GetAllUsers(ctx)
+func (us *userService) GetUserList(ctx context.Context, req *model.ListReq) (model.ListResp[*model.User], error) {
+	users, count, err := us.dao.GetAllUsers(ctx, req.Page, req.Size, req.Search)
+	if err != nil {
+		return model.ListResp[*model.User]{}, err
+	}
+
+	return model.ListResp[*model.User]{
+		Items: users,
+		Total: count,
+	}, nil
 }
 
 // ChangePassword 修改密码
 func (us *userService) ChangePassword(ctx context.Context, uid int, oldPassword string, newPassword string) error {
+	if oldPassword == newPassword {
+		return errors.New("新密码不能与旧密码相同")
+	}
+
 	// 验证旧密码是否正确
 	user, err := us.dao.GetUserByID(ctx, uid)
 	if err != nil {
@@ -141,7 +162,7 @@ func (us *userService) ChangePassword(ctx context.Context, uid int, oldPassword 
 }
 
 // UpdateProfile 修改用户信息
-func (us *userService) UpdateProfile(ctx context.Context, uid int, req *model.User) error {
+func (us *userService) UpdateProfile(ctx context.Context, uid int, req *model.UpdateProfileReq) error {
 	// 验证用户是否存在
 	user, err := us.dao.GetUserByID(ctx, uid)
 	if err != nil {

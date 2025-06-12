@@ -36,13 +36,25 @@ type updateUserInfoReq = {
   enable: 0 | 1;
 }
 
+type WriteOffReq = {
+  username: string;
+  password: string;
+}
+
+export interface ListReq {
+  page: number;
+  size: number;
+  search: string;
+}
+
 export async function getUserInfoApi() {
   return requestClient.get<UserInfo>('/user/profile');
 }
 
-export async function getAllUsers() {
-  return requestClient.get('/user/list');
-}
+export const getUserList = (data: ListReq) => {
+  return requestClient.get('/user/list', { params: data });
+};
+
 
 export async function registerApi(data: RegisterParams) {
   return requestClient.post('/user/signup', data);
@@ -62,4 +74,8 @@ export async function updateUserInfo(data: updateUserInfoReq) {
 
 export async function getUserDetailApi(id: number) {
   return requestClient.get(`/user/detail/${id}`);
+}
+
+export async function writeOffAccount(data: WriteOffReq) {
+  return requestClient.post('/user/write_off', data);
 }

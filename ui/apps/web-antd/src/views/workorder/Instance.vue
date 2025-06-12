@@ -627,7 +627,7 @@ import {
 
 import { listProcess } from '#/api/core/workorder_process';
 import { listCategory } from '#/api/core/workorder_category';
-import { getAllUsers } from '#/api/core/user';
+import { getUserList } from '#/api/core/user';
 
 // 定义类型
 interface Process {
@@ -1634,8 +1634,12 @@ const initData = async () => {
     categories.value = categoriesResponse?.items || [];
     
     // 获取用户列表
-    const usersResponse = await getAllUsers();
-    users.value = usersResponse || [];
+    const usersResponse = await getUserList({
+      page: 1,
+      size: 100,
+      search: ''
+    });
+    users.value = usersResponse.items || [];
     
     // 模板数据暂时使用模拟数据，后续可替换为真实接口
     templates.value = [
