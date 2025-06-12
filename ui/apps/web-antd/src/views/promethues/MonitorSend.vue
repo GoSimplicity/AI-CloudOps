@@ -348,8 +348,12 @@ const handleSizeChange = (page: number, size: number) => {
 // 获取用户列表
 const fetchUsers = async () => {
   try {
-    const users = await getUserList();
-    userOptions.value = users.map((user: { username: any; id: any }) => ({
+    const users = await getUserList({
+      page: 1,
+      size: 100,
+      search: ''
+    });
+    userOptions.value = users.items.map((user: { username: any; id: any }) => ({
       label: user.username,
       value: user.id,
     }));

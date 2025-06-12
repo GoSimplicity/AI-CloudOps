@@ -521,8 +521,12 @@ const handleDelete = (record: OnDutyGroupItem) => {
 const fetchUserList = async () => {
   try {
     loading.value = true;
-    const response = await getUserList();
-    availableUsers.value = response.map((user: any) => user.username);
+    const response = await getUserList({
+      page: 1,
+      size: 100,
+      search: ''
+    });
+    availableUsers.value = response.items.map((user: any) => user.username);
   } catch (error: any) {
     console.error('获取用户列表失败:', error);
     message.error(error.message || '获取用户列表失败');

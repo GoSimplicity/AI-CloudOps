@@ -352,7 +352,7 @@ import {
 } from '#/api/core/workorder_template';
 import { listProcess } from '#/api/core/workorder_process';
 import { listCategory, type CategoryResp } from '#/api/core/workorder_category';
-import { getAllUsers } from '#/api/core/user';
+import { getUserList } from '#/api/core/user';
 
 // 类型定义
 interface Category {
@@ -597,8 +597,12 @@ const parseDefaultValues = (jsonStr: string | object) => {
 const loadUsers = async () => {
   loadingUsers.value = true;
   try {
-    const response = await getAllUsers();
-    users.value = response || [];
+    const response = await getUserList({
+      page: 1,
+      size: 100,
+      search: ''
+    });
+    users.value = response.items || [];
   } catch (error) {
     console.error('加载用户列表失败:', error);
     message.error('加载用户列表失败');

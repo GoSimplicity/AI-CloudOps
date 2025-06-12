@@ -27,7 +27,6 @@ package mock
 
 import (
 	"log"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/casbin/casbin/v2"
@@ -82,8 +81,6 @@ func (u *UserMock) CreateUserAdmin() error {
 		HomePath:     "/",
 		Mobile:       "123123123",
 		FeiShuUserId: "123123123",
-		CreatedAt:    time.Now().Unix(),
-		UpdatedAt:    time.Now().Unix(),
 	}
 
 	// 使用 FirstOrCreate 方法查找或创建管理员用户

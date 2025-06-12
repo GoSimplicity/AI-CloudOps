@@ -554,7 +554,7 @@ import {
 
 import { getEcsResourceList, type ListEcsResourceReq } from '#/api/core/tree';
 
-import { getAllUsers } from '#/api/core/user';
+import { getUserList } from '#/api/core/user';
 
 interface UserInfo {
   id: number;
@@ -828,10 +828,14 @@ const filterUserOption = (input: string, option: any) => {
 const loadAllUsers = async () => {
   try {
     userListLoading.value = true;
-    const response = await getAllUsers();
+    const response = await getUserList({
+      page: 1,
+      size: 100,
+      search: ''
+    });
     
     if (response) {
-      allUsers.value = response;
+      allUsers.value = response.items;
       console.log('用户列表加载成功:', allUsers.value.length, '个用户');
     } else {
       console.error('获取用户列表响应格式错误:', response);

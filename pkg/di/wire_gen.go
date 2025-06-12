@@ -63,7 +63,7 @@ func ProvideCmd() *Cmd {
 	v := InitMiddlewares(handler, logger, roleService, auditService)
 	userDAO := dao2.NewUserDAO(db, logger)
 	userService := service2.NewUserService(userDAO, roleService, logger)
-	userHandler := api.NewUserHandler(userService, logger, handler)
+	userHandler := api.NewUserHandler(userService, handler)
 	enforcer := InitCasbin(db)
 	apiDAO := dao.NewApiDAO(db, enforcer, logger)
 	apiService := service.NewApiService(logger, apiDAO)

@@ -28,7 +28,6 @@ package dao
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -39,7 +38,7 @@ type UserDAO interface {
 	CreateUser(ctx context.Context, user *model.User) error
 	GetUserByUsername(ctx context.Context, username string) (*model.User, error)
 	GetUserByUsernames(ctx context.Context, usernames []string) ([]*model.User, error)
-	GetAllUsers(ctx context.Context) ([]*model.User, error)
+	GetAllUsers(ctx context.Context, page, size int, search string) ([]*model.User, int64, error)
 	GetUserByID(ctx context.Context, id int) (*model.User, error)
 	GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, error)
 	GetUserByStrIDs(ctx context.Context, ids []string) ([]*model.User, error)
@@ -62,14 +61,11 @@ func NewUserDAO(db *gorm.DB, l *zap.Logger) UserDAO {
 	}
 }
 
-func (u *userDAO) getTime() int64 {
-	return time.Now().Unix()
-}
-
 // CreateUser 创建用户
 func (u *userDAO) CreateUser(ctx context.Context, user *model.User) error {
-	user.CreatedAt = u.getTime()
-	user.UpdatedAt = u.getTime()
+	if user == nil {
+		return errors.New("用户信息不能为空")
+	}
 
 	// 使用事务和一次性查询检查唯一性约束
 	err := u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -103,7 +99,7 @@ func (u *userDAO) CreateUser(ctx context.Context, user *model.User) error {
 
 		// 创建用户
 		if err := tx.Create(user).Error; err != nil {
-			u.l.Error("创建用户失败", zap.Error(err))
+			u.l.Error("创建用户失败", zap.Error(err), zap.String("username", user.Username))
 			return err
 		}
 
@@ -120,7 +116,7 @@ func (u *userDAO) GetUserByUsername(ctx context.Context, username string) (*mode
 	}
 
 	var user model.User
-	if err := u.db.WithContext(ctx).Where("username = ? AND deleted_at = ?", username, 0).First(&user).Error; err != nil {
+	if err := u.db.WithContext(ctx).Where("username = ?", username).First(&user).Error; err != nil {
 		u.l.Error("根据用户名获取用户失败", zap.String("username", username), zap.Error(err))
 		return nil, err
 	}
@@ -129,28 +125,37 @@ func (u *userDAO) GetUserByUsername(ctx context.Context, username string) (*mode
 }
 
 // GetAllUsers 获取所有用户
-func (u *userDAO) GetAllUsers(ctx context.Context) ([]*model.User, error) {
+func (u *userDAO) GetAllUsers(ctx context.Context, page, size int, search string) ([]*model.User, int64, error) {
 	var users []*model.User
-	if err := u.db.WithContext(ctx).
-		Where("deleted_at = ?", 0).
-		Preload("Apis").
-		Find(&users).Error; err != nil {
-		u.l.Error("获取所有用户失败", zap.Error(err))
-		return nil, err
+	var count int64
+
+	query := u.db.WithContext(ctx).Model(&model.User{})
+	if search != "" {
+		query = query.Where("username LIKE ? OR real_name LIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 
-	return users, nil
+	if err := query.Count(&count).Error; err != nil {
+		u.l.Error("获取用户总数失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	if err := query.Order("id desc").Offset((page - 1) * size).Limit(size).Preload("Apis").Find(&users).Error; err != nil {
+		u.l.Error("获取所有用户失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	return users, count, nil
 }
 
 // GetUserByID 根据用户ID获取用户信息
 func (u *userDAO) GetUserByID(ctx context.Context, id int) (*model.User, error) {
 	if id <= 0 {
-		return nil, errors.New("invalid user id")
+		return nil, errors.New("无效的用户ID")
 	}
 
 	var user model.User
 	if err := u.db.WithContext(ctx).
-		Where("id = ? AND deleted_at = ?", id, 0).
+		Where("id = ?", id).
 		Preload("Apis").
 		First(&user).Error; err != nil {
 		u.l.Error("根据ID获取用户失败", zap.Int("id", id), zap.Error(err))
@@ -162,18 +167,23 @@ func (u *userDAO) GetUserByID(ctx context.Context, id int) (*model.User, error) 
 
 // GetPermCode 获取用户权限码
 func (u *userDAO) GetPermCode(ctx context.Context, uid int) ([]string, error) {
-	return nil, nil
+	if uid <= 0 {
+		return nil, errors.New("无效的用户ID")
+	}
+
+	// TODO: 实现权限码获取逻辑
+	return []string{}, nil
 }
 
 // GetUserByUsernames 批量获取用户信息
 func (u *userDAO) GetUserByUsernames(ctx context.Context, usernames []string) ([]*model.User, error) {
 	if len(usernames) == 0 {
-		return nil, errors.New("usernames cannot be empty")
+		return nil, errors.New("用户名列表不能为空")
 	}
 
 	var users []*model.User
 	if err := u.db.WithContext(ctx).
-		Where("username in (?) AND deleted_at = ?", usernames, 0).
+		Where("username in (?)", usernames).
 		Find(&users).Error; err != nil {
 		u.l.Error("批量获取用户失败", zap.Strings("usernames", usernames), zap.Error(err))
 		return nil, err
@@ -185,18 +195,26 @@ func (u *userDAO) GetUserByUsernames(ctx context.Context, usernames []string) ([
 // ChangePassword 修改密码
 func (u *userDAO) ChangePassword(ctx context.Context, uid int, password string) error {
 	if uid <= 0 {
-		return errors.New("invalid user id")
+		return errors.New("无效的用户ID")
 	}
 	if password == "" {
-		return errors.New("password cannot be empty")
+		return errors.New("密码不能为空")
 	}
 
-	if err := u.db.WithContext(ctx).
+	result := u.db.WithContext(ctx).
 		Model(&model.User{}).
-		Where("id = ? AND deleted_at = ?", uid, 0).
-		Update("password", password).Error; err != nil {
-		u.l.Error("修改密码失败", zap.Int("uid", uid), zap.Error(err))
-		return err
+		Where("id = ?", uid).
+		Updates(map[string]interface{}{
+			"password": password,
+		})
+
+	if result.Error != nil {
+		u.l.Error("修改密码失败", zap.Int("uid", uid), zap.Error(result.Error))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("用户不存在或已删除")
 	}
 
 	return nil
@@ -205,13 +223,13 @@ func (u *userDAO) ChangePassword(ctx context.Context, uid int, password string) 
 // UpdateProfile 更新用户信息
 func (u *userDAO) UpdateProfile(ctx context.Context, user *model.User) error {
 	if user == nil || user.ID <= 0 {
-		return errors.New("invalid user")
+		return errors.New("无效的用户信息")
 	}
 
 	// 使用事务和一次性查询检查唯一性约束
 	err := u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
-		query := tx.Model(&model.User{}).Where("deleted_at = ?", 0).
+		query := tx.Model(&model.User{}).
 			Where("id != ? AND ((mobile = ? AND mobile != '') OR (fei_shu_user_id = ? AND fei_shu_user_id != ''))",
 				user.ID, user.Mobile, user.FeiShuUserId)
 
@@ -224,12 +242,12 @@ func (u *userDAO) UpdateProfile(ctx context.Context, user *model.User) error {
 			// 进一步确定具体是哪个字段重复
 			var existingUser model.User
 			if user.Mobile != "" {
-				if err := tx.Where("id != ? AND mobile = ? AND deleted_at = ?", user.ID, user.Mobile, 0).First(&existingUser).Error; err == nil {
+				if err := tx.Where("id != ? AND mobile = ?", user.ID, user.Mobile).First(&existingUser).Error; err == nil {
 					return errors.New("手机号已存在")
 				}
 			}
 			if user.FeiShuUserId != "" {
-				if err := tx.Where("id != ? AND fei_shu_user_id = ? AND deleted_at = ?", user.ID, user.FeiShuUserId, 0).First(&existingUser).Error; err == nil {
+				if err := tx.Where("id != ? AND fei_shu_user_id = ?", user.ID, user.FeiShuUserId).First(&existingUser).Error; err == nil {
 					return errors.New("飞书用户ID已存在")
 				}
 			}
@@ -243,14 +261,19 @@ func (u *userDAO) UpdateProfile(ctx context.Context, user *model.User) error {
 			"account_type":    user.AccountType,
 			"home_path":       user.HomePath,
 			"enable":          user.Enable,
-			"updated_at":      u.getTime(),
 		}
 
-		if err := tx.Model(&model.User{}).
-			Where("id = ? AND deleted_at = ?", user.ID, 0).
-			Updates(updates).Error; err != nil {
-			u.l.Error("更新用户信息失败", zap.Int("uid", user.ID), zap.Error(err))
-			return err
+		result := tx.Model(&model.User{}).
+			Where("id = ?", user.ID).
+			Updates(updates)
+
+		if result.Error != nil {
+			u.l.Error("更新用户信息失败", zap.Int("uid", user.ID), zap.Error(result.Error))
+			return result.Error
+		}
+
+		if result.RowsAffected == 0 {
+			return errors.New("用户不存在或已删除")
 		}
 
 		return nil
@@ -262,21 +285,21 @@ func (u *userDAO) UpdateProfile(ctx context.Context, user *model.User) error {
 // WriteOff 注销用户
 func (u *userDAO) WriteOff(ctx context.Context, username string, password string) error {
 	if username == "" || password == "" {
-		return errors.New("username and password cannot be empty")
+		return errors.New("用户名和密码不能为空")
 	}
 
-	// 软删除用户
-	updates := map[string]interface{}{
-		"deleted_at": u.getTime(),
-		"updated_at": u.getTime(),
-	}
-
-	if err := u.db.WithContext(ctx).
+	result := u.db.WithContext(ctx).
 		Model(&model.User{}).
-		Where("username = ? AND deleted_at = ?", username, 0).
-		Updates(updates).Error; err != nil {
-		u.l.Error("注销用户失败", zap.String("username", username), zap.Error(err))
-		return err
+		Where("username = ?", username).
+		Delete(&model.User{})
+
+	if result.Error != nil {
+		u.l.Error("注销用户失败", zap.String("username", username), zap.Error(result.Error))
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("用户不存在或已删除")
 	}
 
 	return nil
@@ -284,16 +307,26 @@ func (u *userDAO) WriteOff(ctx context.Context, username string, password string
 
 // DeleteUser 删除用户
 func (u *userDAO) DeleteUser(ctx context.Context, uid int) error {
+	if uid <= 0 {
+		return errors.New("无效的用户ID")
+	}
+
 	return u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 删除用户API关联
 		if err := tx.Table("user_apis").Where("user_id = ?", uid).Delete(nil).Error; err != nil {
 			u.l.Warn("删除用户API关联失败", zap.Int("uid", uid), zap.Error(err))
+			// 继续执行，不中断事务
 		}
 
 		// 删除用户
-		if err := tx.Where("id = ? AND deleted_at = ?", uid, 0).Delete(&model.User{}).Error; err != nil {
-			u.l.Error("删除用户失败", zap.Int("uid", uid), zap.Error(err))
-			return err
+		result := tx.Where("id = ?", uid).Delete(&model.User{})
+		if result.Error != nil {
+			u.l.Error("删除用户失败", zap.Int("uid", uid), zap.Error(result.Error))
+			return result.Error
+		}
+
+		if result.RowsAffected == 0 {
+			return errors.New("用户不存在或已删除")
 		}
 
 		return nil
@@ -303,12 +336,12 @@ func (u *userDAO) DeleteUser(ctx context.Context, uid int) error {
 // GetUserByIDs 批量获取用户信息
 func (u *userDAO) GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, error) {
 	if len(ids) == 0 {
-		return nil, errors.New("ids cannot be empty")
+		return nil, errors.New("用户ID列表不能为空")
 	}
 
 	var users []*model.User
 	if err := u.db.WithContext(ctx).
-		Where("id in (?) AND deleted_at = ?", ids, 0).
+		Where("id in (?)", ids).
 		Find(&users).Error; err != nil {
 		u.l.Error("批量获取用户失败", zap.Ints("ids", ids), zap.Error(err))
 		return nil, err
@@ -317,14 +350,15 @@ func (u *userDAO) GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, e
 	return users, nil
 }
 
+// GetUserByStrIDs 根据字符串ID列表获取用户
 func (u *userDAO) GetUserByStrIDs(ctx context.Context, ids []string) ([]*model.User, error) {
 	if len(ids) == 0 {
-		return nil, errors.New("ids cannot be empty")
+		return nil, errors.New("用户ID列表不能为空")
 	}
 
 	var users []*model.User
 	if err := u.db.WithContext(ctx).
-		Where("id in (?) AND deleted_at = ?", ids, 0).
+		Where("id in (?)", ids).
 		Find(&users).Error; err != nil {
 		u.l.Error("批量获取用户失败", zap.Strings("ids", ids), zap.Error(err))
 		return nil, err

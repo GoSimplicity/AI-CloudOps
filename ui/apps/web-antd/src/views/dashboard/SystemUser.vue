@@ -923,7 +923,7 @@ import { message } from 'ant-design-vue';
 import { Icon } from '@iconify/vue';
 import type { FormInstance } from 'ant-design-vue';
 import { 
-  getAllUsers, 
+  getUserList, 
   registerApi, 
   updateUserInfo, 
   deleteUser, 
@@ -1234,9 +1234,13 @@ const viewApiMethodStats = computed(() => {
 const fetchUserList = async () => {
   loading.value = true;
   try {
-    const response = await getAllUsers();
-    userList.value = response || [];
-    pagination.total = response?.length || 0;
+    const response = await getUserList({
+      page: 1,
+      size: 100,
+      search: ''
+    });
+    userList.value = response.items || [];
+    pagination.total = response.total || 0;
   } catch (error: any) {
     message.error(error.message || '获取用户列表失败');
   } finally {
