@@ -813,7 +813,7 @@ import { ref, reactive, computed, onMounted, nextTick, onBeforeUnmount, watch } 
 import { message } from 'ant-design-vue';
 import { Icon } from '@iconify/vue';
 import type { FormInstance } from 'ant-design-vue';
-import type { Role, ListRolesReq, CreateRoleReq, UpdateRoleReq, DeleteRoleReq } from '#/api/core/system';
+import type { Role, ListRolesReq, CreateRoleReq, UpdateRoleReq } from '#/api/core/system';
 import { 
   listRolesApi, 
   createRoleApi, 
@@ -825,7 +825,7 @@ import {
   getRoleApisApi
 } from '#/api/core/system';
 
-import { listApisApi } from '#/api/core/system';
+import { listApisApi } from '#/api/core/api';
 
 // 表单引用
 const formRef = ref<FormInstance>();
@@ -1100,8 +1100,8 @@ const fetchRoleList = async () => {
 const fetchApiList = async () => {
   try {
     const response = await listApisApi({
-      page_number: 1,
-      page_size: 1000
+      page: 1,
+      size: 100
     });
     
     // 确保API数据的method字段是字符串
