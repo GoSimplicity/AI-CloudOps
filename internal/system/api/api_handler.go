@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -47,101 +45,78 @@ func NewApiHandler(svc service.ApiService) *ApiHandler {
 func (h *ApiHandler) RegisterRouters(server *gin.Engine) {
 	apiGroup := server.Group("/api/apis")
 
-	apiGroup.POST("/list", h.ListApis)
+	apiGroup.GET("/list", h.ListApis)
 	apiGroup.POST("/create", h.CreateAPI)
-	apiGroup.POST("/update", h.UpdateAPI)
-	apiGroup.DELETE("/:id", h.DeleteAPI)
+	apiGroup.PUT("/update/:id", h.UpdateAPI)
+	apiGroup.DELETE("/delete/:id", h.DeleteAPI)
+	apiGroup.GET("/detail/:id", h.DetailAPI)
 }
 
 // ListApis 获取API列表
-func (a *ApiHandler) ListApis(c *gin.Context) {
+func (a *ApiHandler) ListApis(ctx *gin.Context) {
 	var req model.ListApisRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Error(c)
-		return
-	}
 
-	// 调用service层获取API列表
-	apis, total, err := a.svc.ListApis(c.Request.Context(), req.PageNumber, req.PageSize)
-	if err != nil {
-		utils.Error(c)
-		return
-	}
-
-	utils.SuccessWithData(c, gin.H{
-		"list":  apis,
-		"total": total,
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return a.svc.ListApis(ctx, &req)
 	})
 }
 
 // CreateAPI 创建新的API
-func (a *ApiHandler) CreateAPI(c *gin.Context) {
+func (a *ApiHandler) CreateAPI(ctx *gin.Context) {
 	var req model.CreateApiRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Error(c)
-		return
-	}
 
-	// 构建API对象
-	api := &model.Api{
-		Name:        req.Name,
-		Path:        req.Path,
-		Method:      int8(req.Method),
-		Description: req.Description,
-		Version:     req.Version,
-		Category:    int8(req.Category),
-		IsPublic:    int8(req.IsPublic),
-	}
-
-	if err := a.svc.CreateApi(c.Request.Context(), api); err != nil {
-		utils.Error(c)
-		return
-	}
-
-	utils.Success(c)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, a.svc.CreateApi(ctx, &req)
+	})
 }
 
 // UpdateAPI 更新API信息
-func (a *ApiHandler) UpdateAPI(c *gin.Context) {
+func (a *ApiHandler) UpdateAPI(ctx *gin.Context) {
 	var req model.UpdateApiRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Error(c)
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	// 构建更新的API对象
-	api := &model.Api{
-		ID:          req.ID,
-		Name:        req.Name,
-		Path:        req.Path,
-		Method:      int8(req.Method),
-		Description: req.Description,
-		Version:     req.Version,
-		Category:    int8(req.Category),
-		IsPublic:    int8(req.IsPublic),
-	}
+	req.ID = id
 
-	if err := a.svc.UpdateApi(c.Request.Context(), api); err != nil {
-		utils.Error(c)
-		return
-	}
-
-	utils.Success(c)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, a.svc.UpdateApi(ctx, &req)
+	})
 }
 
 // DeleteAPI 删除API
-func (a *ApiHandler) DeleteAPI(c *gin.Context) {
-	// 从URL参数中获取API ID
-	id, err := strconv.Atoi(c.Param("id"))
+func (a *ApiHandler) DeleteAPI(ctx *gin.Context) {
+	var req model.DeleteApiRequest
+
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.Error(c)
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	if err := a.svc.DeleteApi(c.Request.Context(), id); err != nil {
-		utils.Error(c)
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, a.svc.DeleteApi(ctx, req.ID)
+	})
+}
+
+// DetailAPI 获取API详情
+func (a *ApiHandler) DetailAPI(ctx *gin.Context) {
+	var req model.GetApiRequest
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	utils.Success(c)
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return a.svc.GetApiById(ctx, id)
+	})
 }

@@ -29,10 +29,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/casbin/casbin/v2"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -42,20 +40,18 @@ type ApiDAO interface {
 	GetApiById(ctx context.Context, id int) (*model.Api, error)
 	UpdateApi(ctx context.Context, api *model.Api) error
 	DeleteApi(ctx context.Context, id int) error
-	ListApis(ctx context.Context, page, pageSize int) ([]*model.Api, int, error)
+	ListApis(ctx context.Context, page, size int, search string) ([]*model.Api, int64, error)
 }
 
 type apiDAO struct {
-	db       *gorm.DB
-	enforcer *casbin.Enforcer
-	l        *zap.Logger
+	db *gorm.DB
+	l  *zap.Logger
 }
 
-func NewApiDAO(db *gorm.DB, enforcer *casbin.Enforcer, l *zap.Logger) ApiDAO {
+func NewApiDAO(db *gorm.DB, l *zap.Logger) ApiDAO {
 	return &apiDAO{
-		db:       db,
-		enforcer: enforcer,
-		l:        l,
+		db: db,
+		l:  l,
 	}
 }
 
@@ -63,6 +59,10 @@ func NewApiDAO(db *gorm.DB, enforcer *casbin.Enforcer, l *zap.Logger) ApiDAO {
 func (a *apiDAO) CreateApi(ctx context.Context, api *model.Api) error {
 	if api == nil {
 		return errors.New("API对象不能为空")
+	}
+
+	if api.Name == "" {
+		return errors.New("API名称不能为空")
 	}
 
 	if api.Path == "" {
@@ -73,9 +73,14 @@ func (a *apiDAO) CreateApi(ctx context.Context, api *model.Api) error {
 		return errors.New("无效的HTTP方法")
 	}
 
-	api.CreatedAt = time.Now().Unix()
-	api.UpdatedAt = time.Now().Unix()
-	api.DeletedAt = 0
+	// 检查API名称是否已存在
+	var count int64
+	if err := a.db.WithContext(ctx).Model(&model.Api{}).Where("name = ? AND deleted_at = ?", api.Name, 0).Count(&count).Error; err != nil {
+		return fmt.Errorf("检查API名称失败: %v", err)
+	}
+	if count > 0 {
+		return errors.New("API名称已存在")
+	}
 
 	return a.db.WithContext(ctx).Create(api).Error
 }
@@ -87,7 +92,7 @@ func (a *apiDAO) GetApiById(ctx context.Context, id int) (*model.Api, error) {
 	}
 
 	var api model.Api
-	if err := a.db.WithContext(ctx).Where("id = ? AND deleted_at = ?", id, 0).First(&api).Error; err != nil {
+	if err := a.db.WithContext(ctx).Where("id = ?", id).First(&api).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -105,6 +110,10 @@ func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 
 	if api.ID <= 0 {
 		return errors.New("无效的API ID")
+	}
+
+	if api.Name == "" {
+		return errors.New("API名称不能为空")
 	}
 
 	if api.Path == "" {
@@ -125,6 +134,17 @@ func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 		return errors.New("API不存在")
 	}
 
+	// 检查API名称是否已被其他记录使用
+	if oldApi.Name != api.Name {
+		var count int64
+		if err := a.db.WithContext(ctx).Model(&model.Api{}).Where("name = ? AND id != ?", api.Name, api.ID).Count(&count).Error; err != nil {
+			return fmt.Errorf("检查API名称失败: %v", err)
+		}
+		if count > 0 {
+			return errors.New("API名称已被其他记录使用")
+		}
+	}
+
 	updates := map[string]interface{}{
 		"name":        api.Name,
 		"path":        api.Path,
@@ -133,7 +153,6 @@ func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 		"version":     api.Version,
 		"category":    api.Category,
 		"is_public":   api.IsPublic,
-		"update_time": time.Now().Unix(),
 	}
 
 	// 开启事务
@@ -144,67 +163,10 @@ func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 
 	// 更新API记录
 	if err := tx.Model(&model.Api{}).
-		Where("id = ? AND deleted_at = ?", api.ID, 0).
+		Where("id = ?", api.ID).
 		Updates(updates).Error; err != nil {
 		tx.Rollback()
 		return fmt.Errorf("更新API失败: %v", err)
-	}
-
-	// 如果API路径或方法发生变化，则需要更新casbin策略
-	if oldApi.Path != api.Path || oldApi.Method != api.Method {
-		// HTTP方法映射表
-		methodMap := map[int]string{
-			1: "GET",
-			2: "POST",
-			3: "PUT",
-			4: "DELETE",
-			5: "PATCH",
-			6: "OPTIONS",
-			7: "HEAD",
-		}
-
-		// 获取所有包含旧路径的策略
-		policies, err := a.enforcer.GetFilteredPolicy(1, fmt.Sprintf("%d", oldApi.ID))
-		if err != nil {
-			tx.Rollback()
-			a.l.Error("获取旧的API策略失败", zap.Error(err))
-			return fmt.Errorf("获取旧的API策略失败: %v", err)
-		}
-
-		if len(policies) > 0 {
-			// 遍历每个策略进行更新
-			for _, policy := range policies {
-				// 删除旧的策略
-				removed, err := a.enforcer.RemovePolicy(policy)
-				if err != nil {
-					tx.Rollback()
-					a.l.Error("删除旧的API策略失败", zap.Error(err))
-					return fmt.Errorf("删除旧的API策略失败: %v", err)
-				}
-
-				if !removed {
-					tx.Rollback()
-					a.l.Warn("没有找到要删除的API策略", zap.String("path", oldApi.Path))
-					return fmt.Errorf("没有找到要删除的API策略: %s", oldApi.Path)
-				}
-
-				// 添加新的策略
-				newPolicy := []string{policy[0], fmt.Sprintf("%d", api.ID), methodMap[int(api.Method)]}
-				_, err = a.enforcer.AddPolicy(newPolicy)
-				if err != nil {
-					tx.Rollback()
-					a.l.Error("添加新的API策略失败", zap.Error(err))
-					return fmt.Errorf("添加新的API策略失败: %v", err)
-				}
-			}
-
-			// 保存策略变更
-			if err = a.enforcer.SavePolicy(); err != nil {
-				tx.Rollback()
-				a.l.Error("保存API策略失败", zap.Error(err))
-				return fmt.Errorf("保存API策略失败: %v", err)
-			}
-		}
 	}
 
 	return tx.Commit().Error
@@ -216,12 +178,25 @@ func (a *apiDAO) DeleteApi(ctx context.Context, id int) error {
 		return errors.New("无效的API ID")
 	}
 
-	updates := map[string]interface{}{
-		"deleted_at":  1,
-		"update_time": time.Now().Unix(),
+	// 检查API是否存在
+	api, err := a.GetApiById(ctx, id)
+	if err != nil {
+		return err
+	}
+	if api == nil {
+		return errors.New("API不存在")
 	}
 
-	result := a.db.WithContext(ctx).Model(&model.Api{}).Where("id = ? AND deleted_at = ?", id, 0).Updates(updates)
+	// 检查API是否被角色使用
+	var count int64
+	if err := a.db.WithContext(ctx).Table("role_apis").Where("api_id = ?", id).Count(&count).Error; err != nil {
+		return fmt.Errorf("检查API使用情况失败: %v", err)
+	}
+	if count > 0 {
+		return errors.New("该API已被角色使用，无法删除")
+	}
+
+	result := a.db.WithContext(ctx).Model(&model.Api{}).Where("id = ?", id).Delete(&model.Api{})
 	if result.Error != nil {
 		return fmt.Errorf("删除API失败: %v", result.Error)
 	}
@@ -230,48 +205,36 @@ func (a *apiDAO) DeleteApi(ctx context.Context, id int) error {
 		return errors.New("API不存在或已被删除")
 	}
 
-	// 删除相关的casbin策略
-	policies, err := a.enforcer.GetFilteredPolicy(1, fmt.Sprintf("%d", id))
-	if err != nil {
-		return fmt.Errorf("获取API策略失败: %v", err)
-	}
-
-	if len(policies) > 0 {
-		_, err = a.enforcer.RemoveFilteredPolicy(1, fmt.Sprintf("%d", id))
-		if err != nil {
-			return fmt.Errorf("删除API策略失败: %v", err)
-		}
-
-		if err = a.enforcer.SavePolicy(); err != nil {
-			return fmt.Errorf("保存策略变更失败: %v", err)
-		}
-	}
-
 	return nil
 }
 
 // ListApis 分页获取API列表
-func (a *apiDAO) ListApis(ctx context.Context, page, pageSize int) ([]*model.Api, int, error) {
-	if page <= 0 || pageSize <= 0 {
-		return nil, 0, errors.New("无效的分页参数")
+func (a *apiDAO) ListApis(ctx context.Context, page, size int, search string) ([]*model.Api, int64, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 {
+		size = 10
+	}
+
+	query := a.db.WithContext(ctx).Model(&model.Api{})
+	if search != "" {
+		query = query.Where("name LIKE ? OR path LIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 
 	var apis []*model.Api
 	var total int64
 
-	// 构建基础查询
-	db := a.db.WithContext(ctx).Model(&model.Api{}).Where("deleted_at = ?", 0)
-
 	// 获取总数
-	if err := db.Count(&total).Error; err != nil {
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("获取API总数失败: %v", err)
 	}
 
 	// 获取分页数据
-	offset := (page - 1) * pageSize
-	if err := db.Offset(offset).Limit(pageSize).Order("id ASC").Find(&apis).Error; err != nil {
+	offset := (page - 1) * size
+	if err := query.Offset(offset).Limit(size).Order("id DESC").Find(&apis).Error; err != nil {
 		return nil, 0, fmt.Errorf("获取API列表失败: %v", err)
 	}
 
-	return apis, int(total), nil
+	return apis, total, nil
 }

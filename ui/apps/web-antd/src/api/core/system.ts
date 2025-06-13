@@ -2,8 +2,9 @@ import { requestClient } from '#/api/request';
 
   // API管理相关接口
   export interface ListApisReq {
-    page_number: number; // 页码
-    page_size: number; // 每页数量
+    page: number; // 页码
+    size: number; // 每页数量
+    search?: string; // 搜索关键词
   }
 
   export interface CreateApiReq {
@@ -103,7 +104,7 @@ import { requestClient } from '#/api/request';
 
 // API管理
 export function listApisApi(data: ListApisReq) {
-  return requestClient.post('/apis/list', data);
+  return requestClient.get('/apis/list', { params: data });
 }
 
 export function createApiApi(data: CreateApiReq) {
@@ -111,11 +112,15 @@ export function createApiApi(data: CreateApiReq) {
 }
 
 export function updateApiApi(data: UpdateApiReq) {
-  return requestClient.post('/apis/update', data);
+  return requestClient.put(`/apis/update/${data.id}`, data);
 }
 
-export function deleteApiApi(id: string) {
-  return requestClient.delete(`/apis/${id}`);
+export function deleteApiApi(id: number) {
+  return requestClient.delete(`/apis/delete/${id}`);
+}
+
+export function getApiDetailApi(id: number) {
+  return requestClient.get(`/apis/detail/${id}`);
 }
 
 // 角色管理

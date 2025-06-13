@@ -26,10 +26,7 @@
 package model
 
 type Api struct {
-	ID          int     `json:"id" gorm:"primaryKey;autoIncrement;comment:主键ID"`                                    // 主键ID，自增
-	CreatedAt   int64   `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`                                      // 创建时间，自动记录
-	UpdatedAt   int64   `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`                                      // 更新时间，自动记录
-	DeletedAt   int64   `json:"deleted_at" gorm:"index;default:0;comment:删除时间"`                                     // 软删除时间，使用普通索引
+	Model
 	Name        string  `json:"name" gorm:"type:varchar(50);uniqueIndex:idx_name_del;not null;comment:API名称"`       // API名称，唯一且非空
 	Path        string  `json:"path" gorm:"type:varchar(255);not null;comment:API路径"`                               // API路径，非空
 	Method      int8    `json:"method" gorm:"type:tinyint(1);not null;comment:HTTP请求方法 1GET 2POST 3PUT 4DELETE"`    // 请求方法，使用int8节省空间
@@ -50,10 +47,6 @@ type CreateApiRequest struct {
 	IsPublic    int    `json:"is_public" binding:"oneof=0 1"` // 是否公开
 }
 
-type GetApiRequest struct {
-	ID int `json:"id" binding:"required,gt=0"` // API ID
-}
-
 type UpdateApiRequest struct {
 	ID          int    `json:"id" binding:"required,gt=0"`    // API ID
 	Name        string `json:"name" binding:"required"`       // API名称
@@ -65,7 +58,14 @@ type UpdateApiRequest struct {
 	IsPublic    int    `json:"is_public" binding:"oneof=0 1"` // 是否公开
 }
 
+type DeleteApiRequest struct {
+	ID int `json:"id" binding:"required,gt=0"` // API ID
+}
+
+type GetApiRequest struct {
+	ID int `json:"id" binding:"required,gt=0"` // API ID
+}
+
 type ListApisRequest struct {
-	PageNumber int `json:"page_number" binding:"required,gt=0"` // 页码
-	PageSize   int `json:"page_size" binding:"required,gt=0"`   // 每页数量
+	ListReq
 }

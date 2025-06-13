@@ -39,20 +39,29 @@
     <div class="table-container">
       <a-table 
         :columns="columns" 
-        :data-source="filteredApiList" 
+        :data-source="apiList" 
         row-key="id" 
         :loading="loading"
         :pagination="{
+          current: pagination.current,
+          pageSize: pagination.pageSize,
+          total: pagination.total,
           showSizeChanger: true,
           showQuickJumper: true,
           showTotal: (total: number) => `共 ${total} 条记录`,
-          pageSize: 10
+          onChange: handlePageChange,
+          onShowSizeChange: handleSizeChange
         }"
         class="api-table"
       >
         <!-- 操作列 -->
         <template #action="{ record }">
           <a-space>
+            <a-tooltip title="查看详情">
+              <a-button type="link" @click="handleView(record)" class="action-button view-button">
+                <template #icon><Icon icon="clarity:details-line" /></template>
+              </a-button>
+            </a-tooltip>
             <a-tooltip title="编辑API">
               <a-button type="link" @click="handleEdit(record)" class="action-button edit-button">
                 <template #icon><Icon icon="clarity:note-edit-line" /></template>
@@ -110,10 +119,10 @@
     >
       <div class="modal-content">
         <div class="modal-header-icon">
-          <div class="icon-wrapper" :class="{ 'edit-icon': modalTitle === '编辑API' }">
-            <Icon :icon="modalTitle === '新增API' ? 'mdi:api-plus' : 'mdi:api-edit'" />
+          <div class="icon-wrapper" :class="{ 'edit-icon': modalTitle === '编辑API', 'view-icon': modalTitle === '查看API详情' }">
+            <Icon :icon="getModalIcon()" />
           </div>
-          <div class="header-text">{{ modalTitle === '新增API' ? '创建新接口' : '编辑接口信息' }}</div>
+          <div class="header-text">{{ getModalHeaderText() }}</div>
         </div>
         
         <a-form :model="formData" layout="vertical" class="api-form">
@@ -130,6 +139,7 @@
                     v-model:value="formData.name" 
                     placeholder="请输入API名称" 
                     class="custom-input"
+                    :disabled="isViewMode"
                   />
                 </a-form-item>
                 
@@ -138,6 +148,7 @@
                     v-model:value="formData.path" 
                     placeholder="请输入API路径，例如: /api/users" 
                     class="custom-input"
+                    :disabled="isViewMode"
                   >
                     <template #prefix>
                       <Icon icon="mdi:link-variant" class="input-icon" />
@@ -151,6 +162,7 @@
                     placeholder="请输入API描述" 
                     :rows="3"
                     class="custom-textarea"
+                    :disabled="isViewMode"
                   />
                 </a-form-item>
               </div>
@@ -169,6 +181,7 @@
                     v-model:value="formData.method"
                     placeholder="请选择请求方法"
                     class="method-select"
+                    :disabled="isViewMode"
                   >
                     <a-select-option v-for="method in methodOptions" :key="method.value" :value="method.value">
                       <div class="method-option-content">
@@ -187,6 +200,7 @@
                       v-model:value="formData.version" 
                       placeholder="例如: v1, v2.0" 
                       class="custom-input"
+                      :disabled="isViewMode"
                     >
                       <template #prefix>
                         <Icon icon="mdi:tag-outline" class="input-icon" />
@@ -200,6 +214,7 @@
                       placeholder="分类ID" 
                       class="category-input"
                       :min="0"
+                      :disabled="isViewMode"
                     />
                   </a-form-item>
                 </div>
@@ -211,6 +226,7 @@
                       :checkedValue="1" 
                       :unCheckedValue="0"
                       class="public-switch"
+                      :disabled="isViewMode"
                     />
                     <span class="switch-label">{{ formData.is_public === 1 ? '公开接口' : '私有接口' }}</span>
                     <div class="switch-hint">
@@ -245,9 +261,9 @@
         
         <div class="modal-footer">
           <a-button @click="handleModalCancel" class="cancel-button">
-            取消
+            {{ isViewMode ? '关闭' : '取消' }}
           </a-button>
-          <a-button type="primary" @click="handleModalOk" class="submit-button">
+          <a-button v-if="!isViewMode" type="primary" @click="handleModalOk" class="submit-button">
             <Icon icon="mdi:content-save" class="button-icon" />
             保存
           </a-button>
@@ -260,7 +276,7 @@
 <script lang="ts" setup>
 import { onMounted, reactive, ref, computed } from 'vue';
 import { message } from 'ant-design-vue';
-import { listApisApi, createApiApi, updateApiApi, deleteApiApi } from '#/api/core/system';
+import { listApisApi, createApiApi, updateApiApi, deleteApiApi, getApiDetailApi } from '#/api/core/system';
 import type { UpdateApiReq, CreateApiReq } from '#/api/core/system';
 import { Icon } from '@iconify/vue';
 
@@ -273,6 +289,13 @@ const searchText = ref('');
 // API列表数据
 const apiList = ref<any[]>([]);
 
+// 分页配置
+const pagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0
+});
+
 // 请求方法选项
 const methodOptions = [
   { label: 'GET', value: 1, icon: 'mdi:arrow-down-box', description: '查询数据' },
@@ -280,18 +303,6 @@ const methodOptions = [
   { label: 'PUT', value: 3, icon: 'mdi:pencil-box', description: '更新数据' },
   { label: 'DELETE', value: 4, icon: 'mdi:delete-box', description: '删除数据' }
 ];
-
-// 过滤后的API列表
-const filteredApiList = computed(() => {
-  const searchValue = searchText.value.trim().toLowerCase();
-  if (!searchValue) return apiList.value;
-  
-  return apiList.value.filter(api => 
-    api.name.toLowerCase().includes(searchValue) ||
-    api.path.toLowerCase().includes(searchValue) ||
-    api.description?.toLowerCase().includes(searchValue)
-  );
-});
 
 // 对话框相关
 const modalVisible = ref(false);
@@ -306,19 +317,66 @@ const formData = reactive<CreateApiReq>({
   is_public: 0
 });
 
+// 是否为查看模式
+const isViewMode = computed(() => modalTitle.value === '查看API详情');
+
+// 获取对话框图标
+const getModalIcon = () => {
+  if (modalTitle.value === '新增API') return 'mdi:api-plus';
+  if (modalTitle.value === '编辑API') return 'mdi:api-edit';
+  return 'mdi:eye-outline'; // 查看详情
+};
+
+// 获取对话框标题文本
+const getModalHeaderText = () => {
+  if (modalTitle.value === '新增API') return '创建新接口';
+  if (modalTitle.value === '编辑API') return '编辑接口信息';
+  return '查看接口详情';
+};
+
 // 获取API列表
 const fetchApiList = async () => {
   loading.value = true;
   try {
     const res = await listApisApi({
-      page_number: 1,
-      page_size: 999
+      page: pagination.current,
+      size: pagination.pageSize,
+      search: searchText.value.trim()
     });
-    apiList.value = res.list;
+    apiList.value = res.items;
+    pagination.total = res.total;
   } catch (error: any) {
     message.error(error.message || '获取API列表失败');
   }
   loading.value = false;
+};
+
+// 处理页码变化
+const handlePageChange = (page: number, pageSize: number) => {
+  pagination.current = page;
+  pagination.pageSize = pageSize;
+  fetchApiList();
+};
+
+// 处理每页条数变化
+const handleSizeChange = (current: number, size: number) => {
+  pagination.current = current;
+  pagination.pageSize = size;
+  fetchApiList();
+};
+
+// 获取API详情
+const fetchApiDetail = async (id: number) => {
+  loading.value = true;
+  try {
+    const res = await getApiDetailApi(id);
+    return res;
+  } catch (error: any) {
+    message.error(error.message || '获取API详情失败');
+    return null;
+  } finally {
+    loading.value = false;
+  }
 };
 
 // 表格列配置
@@ -367,7 +425,7 @@ const columns = [
     title: '操作',
     key: 'action',
     slots: { customRender: 'action' },
-    width: 120,
+    width: 160,
     fixed: 'right'
   },
 ];
@@ -396,8 +454,8 @@ const getMethodColor = (method: number) => {
 
 // 处理搜索
 const handleSearch = () => {
-  // 搜索功能已通过 computed 属性 filteredApiList 实现
-  // 不需要额外的处理逻辑
+  pagination.current = 1;
+  fetchApiList();
 };
 
 // 处理新增
@@ -415,11 +473,36 @@ const handleAdd = () => {
   modalVisible.value = true;
 };
 
+// 处理查看详情
+const handleView = async (record: any) => {
+  modalTitle.value = '查看API详情';
+  try {
+    const apiDetail = await fetchApiDetail(record.id);
+    if (apiDetail) {
+      Object.assign(formData, apiDetail);
+    } else {
+      Object.assign(formData, record);
+    }
+    modalVisible.value = true;
+  } catch (error: any) {
+    message.error(error.message || '获取API详情失败');
+  }
+};
+
 // 处理编辑
-const handleEdit = (record: any) => {
+const handleEdit = async (record: any) => {
   modalTitle.value = '编辑API';
-  Object.assign(formData, record);
-  modalVisible.value = true;
+  try {
+    const apiDetail = await fetchApiDetail(record.id);
+    if (apiDetail) {
+      Object.assign(formData, apiDetail);
+    } else {
+      Object.assign(formData, record);
+    }
+    modalVisible.value = true;
+  } catch (error: any) {
+    message.error(error.message || '获取API详情失败');
+  }
 };
 
 // 处理删除
