@@ -276,8 +276,8 @@
 <script lang="ts" setup>
 import { onMounted, reactive, ref, computed } from 'vue';
 import { message } from 'ant-design-vue';
-import { listApisApi, createApiApi, updateApiApi, deleteApiApi, getApiDetailApi } from '#/api/core/system';
-import type { UpdateApiReq, CreateApiReq } from '#/api/core/system';
+import { listApisApi, createApiApi, updateApiApi, deleteApiApi, getApiDetailApi } from '#/api/core/api';
+import type { UpdateApiReq, CreateApiReq } from '#/api/core/api';
 import { Icon } from '@iconify/vue';
 
 // 表格加载状态
