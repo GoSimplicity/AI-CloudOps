@@ -252,12 +252,25 @@ type MonitorOnDutyHistory struct {
 }
 
 type AlertEventSilenceRequest struct {
+	ID      int    `json:"id" binding:"required"`
+	UserID  int    `json:"user_id" binding:"required"`
 	UseName bool   `json:"use_name"` // 是否启用名称静默
 	Time    string `json:"time"`
 }
 
+type AlertEventClaimRequest struct {
+	ID     int `json:"id" binding:"required"`
+	UserID int `json:"user_id" binding:"required"`
+}
+
+type AlertEventUnSilenceRequest struct {
+	ID     int `json:"id" binding:"required"`
+	UserID int `json:"user_id" binding:"required"`
+}
+
 type BatchEventAlertSilenceRequest struct {
-	IDs []int `json:"ids" binding:"required"`
+	IDs    []int `json:"ids" binding:"required"`
+	UserID int   `json:"user_id" binding:"required"`
 	AlertEventSilenceRequest
 }
 

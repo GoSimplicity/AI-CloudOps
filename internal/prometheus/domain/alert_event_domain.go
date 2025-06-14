@@ -28,8 +28,9 @@ package domain
 import (
 	"context"
 	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"time"
+
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/prometheus/alertmanager/types"
@@ -111,4 +112,10 @@ func (d *AlertEventDomain) Validate() error {
 		return fmt.Errorf("用户信息不能为空")
 	}
 	return nil
+}
+
+// MarkAsUnSilenced 标记为已取消静默
+func (d *AlertEventDomain) MarkAsUnSilenced() {
+	d.Event.SilenceID = ""
+	d.Event.Status = "未屏蔽"
 }
