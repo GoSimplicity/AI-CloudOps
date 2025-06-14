@@ -28,7 +28,6 @@ package api
 import (
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -116,22 +115,19 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 // Logout 用户登出处理
 func (u *UserHandler) Logout(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		if err := u.ijwt.ClearToken(ctx); err != nil {
-			return nil, fmt.Errorf("登出失败: %w", err)
-		}
-		return nil, nil
+		return nil, u.ijwt.ClearToken(ctx)
 	})
 }
 
 // Profile 获取用户信息
 func (u *UserHandler) Profile(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		uc := ctx.MustGet("user").(ijwt.UserClaims)
-		user, err := u.service.GetProfile(ctx, uc.Uid)
-		if err != nil {
-			return nil, fmt.Errorf("获取用户信息失败: %w", err)
-		}
-		return user, nil
+	var req model.ProfileReq
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	req.ID = uc.Uid
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return u.service.GetProfile(ctx, req.ID)
 	})
 }
 
@@ -139,40 +135,41 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 func (u *UserHandler) RefreshToken(ctx *gin.Context) {
 	var req model.TokenRequest
 
+	rc := ijwt.RefreshClaims{}
+
+	key := viper.GetString("jwt.key2")
+	token, err := jwt.ParseWithClaims(req.RefreshToken, &rc, func(token *jwt.Token) (interface{}, error) {
+		return []byte(key), nil
+	})
+
+	if err != nil || token == nil || !token.Valid {
+		utils.ErrorWithMessage(ctx, "令牌无效，请重新登录")
+		return
+	}
+
+	if err = u.ijwt.CheckSession(ctx, rc.Ssid); err != nil {
+		utils.ErrorWithMessage(ctx, "会话已过期，请重新登录")
+		return
+	}
+
+	req.UserID = rc.Uid
+	req.Username = rc.Username
+	req.Ssid = rc.Ssid
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		rc := ijwt.RefreshClaims{}
-
-		key := viper.GetString("jwt.key2")
-		token, err := jwt.ParseWithClaims(req.RefreshToken, &rc, func(token *jwt.Token) (interface{}, error) {
-			return []byte(key), nil
-		})
-
-		if err != nil || token == nil || !token.Valid {
-			return nil, fmt.Errorf("令牌无效，请重新登录")
-		}
-
-		if err = u.ijwt.CheckSession(ctx, rc.Ssid); err != nil {
-			return nil, fmt.Errorf("会话已过期，请重新登录")
-		}
-
-		newToken, err := u.ijwt.SetJWTToken(ctx, rc.Uid, rc.Username, rc.Ssid)
-		if err != nil {
-			return nil, fmt.Errorf("刷新令牌失败: %w", err)
-		}
-
-		return newToken, nil
+		return u.ijwt.SetJWTToken(ctx, req.UserID, req.Username, req.Ssid)
 	})
 }
 
 // GetPermCode 获取权限码
 func (u *UserHandler) GetPermCode(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		uc := ctx.MustGet("user").(ijwt.UserClaims)
-		codes, err := u.service.GetPermCode(ctx, uc.Uid)
-		if err != nil {
-			return nil, fmt.Errorf("获取权限码失败: %w", err)
-		}
-		return codes, nil
+	var req model.GetPermCodeReq
+
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	req.ID = uc.Uid
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return u.service.GetPermCode(ctx, req.ID)
 	})
 }
 
@@ -189,21 +186,11 @@ func (u *UserHandler) GetUserList(ctx *gin.Context) {
 func (u *UserHandler) ChangePassword(ctx *gin.Context) {
 	var req model.ChangePasswordReq
 
+	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	req.UserID = uc.Uid
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		if req.NewPassword != req.ConfirmPassword {
-			return nil, fmt.Errorf("两次输入的新密码不一致")
-		}
-
-		uc := ctx.MustGet("user").(ijwt.UserClaims)
-		err := u.service.ChangePassword(ctx, uc.Uid, req.Password, req.NewPassword)
-		if err != nil {
-			if errors.Is(err, constants.ErrorPasswordIncorrect) {
-				return nil, fmt.Errorf("原密码错误")
-			}
-			return nil, fmt.Errorf("修改密码失败: %w", err)
-		}
-
-		return nil, nil
+		return nil, u.service.ChangePassword(ctx, &req)
 	})
 }
 
@@ -221,20 +208,24 @@ func (u *UserHandler) UpdateProfile(ctx *gin.Context) {
 	var req model.UpdateProfileReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, u.service.UpdateProfile(ctx, req.UserId, &req)
+		return nil, u.service.UpdateProfile(ctx, &req)
 	})
 }
 
 // DeleteUser 删除用户
 func (u *UserHandler) DeleteUser(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		id := ctx.Param("id")
-		idInt, err := strconv.Atoi(id)
-		if err != nil {
-			return nil, fmt.Errorf("用户ID格式错误")
-		}
+	var req model.DeleteUserReq
 
-		return nil, u.service.DeleteUser(ctx, idInt)
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "用户ID格式错误")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, u.service.DeleteUser(ctx, req.ID)
 	})
 }
 
@@ -242,13 +233,15 @@ func (u *UserHandler) DeleteUser(ctx *gin.Context) {
 func (u *UserHandler) GetUserDetail(ctx *gin.Context) {
 	var req model.GetUserDetailReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		id, err := utils.GetParamID(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("用户ID格式错误")
-		}
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "用户ID格式错误")
+		return
+	}
 
-		req.ID = id
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return u.service.GetUserDetail(ctx, req.ID)
 	})
 }

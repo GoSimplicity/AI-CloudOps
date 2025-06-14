@@ -46,9 +46,9 @@ type UserService interface {
 	GetPermCode(ctx context.Context, uid int) ([]string, error)
 	GetUserDetail(ctx context.Context, uid int) (*model.User, error)
 	GetUserList(ctx context.Context, req *model.ListReq) (model.ListResp[*model.User], error)
-	ChangePassword(ctx context.Context, uid int, oldPassword, newPassword string) error
+	ChangePassword(ctx context.Context, req *model.ChangePasswordReq) error
 	WriteOff(ctx context.Context, username, password string) error
-	UpdateProfile(ctx context.Context, uid int, user *model.UpdateProfileReq) error
+	UpdateProfile(ctx context.Context, user *model.UpdateProfileReq) error
 	DeleteUser(ctx context.Context, uid int) error
 }
 
@@ -137,34 +137,34 @@ func (us *userService) GetUserList(ctx context.Context, req *model.ListReq) (mod
 }
 
 // ChangePassword 修改密码
-func (us *userService) ChangePassword(ctx context.Context, uid int, oldPassword string, newPassword string) error {
-	if oldPassword == newPassword {
+func (us *userService) ChangePassword(ctx context.Context, req *model.ChangePasswordReq) error {
+	if req.Password == req.NewPassword {
 		return errors.New("新密码不能与旧密码相同")
 	}
 
 	// 验证旧密码是否正确
-	user, err := us.dao.GetUserByID(ctx, uid)
+	user, err := us.dao.GetUserByID(ctx, req.UserID)
 	if err != nil {
 		return err
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		return constants.ErrorPasswordIncorrect
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
 
 	// 修改密码
-	return us.dao.ChangePassword(ctx, uid, string(hash))
+	return us.dao.ChangePassword(ctx, req.UserID, string(hash))
 }
 
 // UpdateProfile 修改用户信息
-func (us *userService) UpdateProfile(ctx context.Context, uid int, req *model.UpdateProfileReq) error {
+func (us *userService) UpdateProfile(ctx context.Context, req *model.UpdateProfileReq) error {
 	// 验证用户是否存在
-	user, err := us.dao.GetUserByID(ctx, uid)
+	user, err := us.dao.GetUserByID(ctx, req.ID)
 	if err != nil {
 		return err
 	}

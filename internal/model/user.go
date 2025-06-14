@@ -58,10 +58,22 @@ type UserSignUpReq struct {
 // TokenRequest 刷新令牌请求
 type TokenRequest struct {
 	RefreshToken string `json:"refreshToken" binding:"required"` // 刷新令牌
+	UserID       int    `json:"user_id" binding:"required"`      // 用户ID
+	Username     string `json:"username" binding:"required"`     // 用户名
+	Ssid         string `json:"ssid" binding:"required"`         // 会话ID
+}
+
+type ProfileReq struct {
+	ID int `json:"id" binding:"required"` // 用户ID
+}
+
+type GetPermCodeReq struct {
+	ID int `json:"id" binding:"required"` // 用户ID
 }
 
 // ChangePasswordReq 修改密码请求
 type ChangePasswordReq struct {
+	UserID          int    `json:"user_id" binding:"required"`         // 用户ID
 	Username        string `json:"username" binding:"required"`        // 用户名
 	Password        string `json:"password" binding:"required"`        // 原密码
 	NewPassword     string `json:"newPassword" binding:"required"`     // 新密码
@@ -76,7 +88,7 @@ type WriteOffReq struct {
 
 // UpdateProfileReq 更新用户信息请求
 type UpdateProfileReq struct {
-	UserId       int    `json:"user_id" binding:"required"`                // 用户ID
+	ID           int    `json:"id" binding:"required"`                     // 用户ID
 	RealName     string `json:"real_name" binding:"required"`              // 真实姓名
 	Desc         string `json:"desc"`                                      // 描述
 	Mobile       string `json:"mobile" binding:"required"`                 // 手机号
@@ -88,7 +100,7 @@ type UpdateProfileReq struct {
 
 // DeleteUserReq 删除用户请求
 type DeleteUserReq struct {
-	UserId int `json:"user_id" binding:"required"` // 用户ID
+	ID int `json:"id" binding:"required"` // 用户ID
 }
 
 // GetUserDetailReq 获取用户详情请求
