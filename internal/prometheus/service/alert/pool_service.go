@@ -40,8 +40,8 @@ import (
 )
 
 type AlertManagerPoolService interface {
-	GetMonitorAlertManagerPoolList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorAlertManagerPool, error)
-	GetMonitorAlertManagerPoolAll(ctx context.Context) ([]*model.MonitorAlertManagerPool, error)
+	GetMonitorAlertManagerPoolList(ctx context.Context, listReq *model.ListReq) (model.ListResp[*model.MonitorAlertManagerPool], error)
+	GetMonitorAlertManagerPoolAll(ctx context.Context) (model.ListResp[*model.MonitorAlertManagerPool], error)
 	CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	DeleteMonitorAlertManagerPool(ctx context.Context, id int) error
@@ -66,25 +66,28 @@ func NewAlertManagerPoolService(dao alert.AlertManagerPoolDAO, sendDao alert.Ale
 	}
 }
 
-func (a *alertManagerPoolService) GetMonitorAlertManagerPoolList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorAlertManagerPool, error) {
+func (a *alertManagerPoolService) GetMonitorAlertManagerPoolList(ctx context.Context, listReq *model.ListReq) (model.ListResp[*model.MonitorAlertManagerPool], error) {
 	var pools []*model.MonitorAlertManagerPool
 
 	if listReq.Search != "" {
-		pools, err := a.dao.SearchMonitorAlertManagerPoolByName(ctx, listReq.Search)
+		pools, count, err := a.dao.SearchMonitorAlertManagerPoolByName(ctx, listReq.Search)
 		if err != nil {
 			a.l.Error("搜索告警事件失败", zap.String("search", listReq.Search), zap.Error(err))
-			return nil, err
+			return model.ListResp[*model.MonitorAlertManagerPool]{}, err
 		}
-		return pools, nil
+		return model.ListResp[*model.MonitorAlertManagerPool]{
+			Items: pools,
+			Total: count,
+		}, nil
 	}
 
 	offset := (listReq.Page - 1) * listReq.Size
 	limit := listReq.Size
 
-	pools, err := a.dao.GetMonitorAlertManagerPoolList(ctx, offset, limit)
+	pools, count, err := a.dao.GetMonitorAlertManagerPoolList(ctx, offset, limit)
 	if err != nil {
 		a.l.Error("获取告警事件列表失败", zap.Error(err))
-		return nil, err
+		return model.ListResp[*model.MonitorAlertManagerPool]{}, err
 	}
 
 	for _, pool := range pools {
@@ -99,7 +102,10 @@ func (a *alertManagerPoolService) GetMonitorAlertManagerPoolList(ctx context.Con
 		}
 	}
 
-	return pools, nil
+	return model.ListResp[*model.MonitorAlertManagerPool]{
+		Items: pools,
+		Total: count,
+	}, nil
 }
 
 func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
@@ -206,7 +212,7 @@ func (a *alertManagerPoolService) GetMonitorAlertManagerPoolTotal(ctx context.Co
 }
 
 func (a *alertManagerPoolService) checkAlertIpExists(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
-	pools, err := a.dao.GetAllAlertManagerPools(ctx)
+	pools, _, err := a.dao.GetAllAlertManagerPools(ctx)
 	if err != nil {
 		a.l.Error("检查 AlertManager Pool 是否存在失败", zap.Error(err))
 		return err
@@ -215,11 +221,14 @@ func (a *alertManagerPoolService) checkAlertIpExists(ctx context.Context, monito
 	return pkg.CheckAlertIpExists(monitorAlertManagerPool, pools)
 }
 
-func (a *alertManagerPoolService) GetMonitorAlertManagerPoolAll(ctx context.Context) ([]*model.MonitorAlertManagerPool, error) {
-	pools, err := a.dao.GetAllAlertManagerPools(ctx)
+func (a *alertManagerPoolService) GetMonitorAlertManagerPoolAll(ctx context.Context) (model.ListResp[*model.MonitorAlertManagerPool], error) {
+	pools, count, err := a.dao.GetAllAlertManagerPools(ctx)
 	if err != nil {
 		a.l.Error("获取所有告警池失败", zap.Error(err))
-		return nil, err
+		return model.ListResp[*model.MonitorAlertManagerPool]{}, err
 	}
-	return pools, nil
+	return model.ListResp[*model.MonitorAlertManagerPool]{
+		Items: pools,
+		Total: count,
+	}, nil
 }

@@ -298,3 +298,15 @@ type OnDutyOne struct {
 	User       *User  `json:"user"`
 	OriginUser string `json:"origin_user"` // 原始用户名
 }
+
+type DeleteMonitorAlertManagerPoolRequest struct {
+	ID int `json:"id" binding:"required"`
+}
+
+type GetMonitorAlertManagerPoolTotalRequest struct {
+	ID int `json:"id" binding:"required"`
+}
+
+type DeleteMonitorAlertRuleRequest struct {
+	ID int `json:"id" binding:"required"`
+}

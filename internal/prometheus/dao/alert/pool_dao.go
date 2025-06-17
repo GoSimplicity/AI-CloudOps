@@ -37,13 +37,13 @@ import (
 )
 
 type AlertManagerPoolDAO interface {
-	GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, error)
-	GetMonitorAlertManagerPoolList(ctx context.Context, offset, limit int) ([]*model.MonitorAlertManagerPool, error)
+	GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, int64, error)
+	GetMonitorAlertManagerPoolList(ctx context.Context, offset, limit int) ([]*model.MonitorAlertManagerPool, int64, error)
 	CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	DeleteMonitorAlertManagerPool(ctx context.Context, id int) error
 	GetMonitorAlertManagerPoolTotal(ctx context.Context) (int, error)
-	SearchMonitorAlertManagerPoolByName(ctx context.Context, name string) ([]*model.MonitorAlertManagerPool, error)
+	SearchMonitorAlertManagerPoolByName(ctx context.Context, name string) ([]*model.MonitorAlertManagerPool, int64, error)
 	GetAlertPoolByID(ctx context.Context, poolID int) (*model.MonitorAlertManagerPool, error)
 	CheckMonitorAlertManagerPoolExists(ctx context.Context, alertManagerPool *model.MonitorAlertManagerPool) (bool, error)
 }
@@ -63,15 +63,16 @@ func NewAlertManagerPoolDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO)
 }
 
 // GetAllAlertManagerPools 获取所有 AlertManagerPool
-func (a *alertManagerPoolDAO) GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, error) {
+func (a *alertManagerPoolDAO) GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, int64, error) {
 	var pools []*model.MonitorAlertManagerPool
+	var count int64
 
-	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).Find(&pools).Error; err != nil {
+	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).Find(&pools).Count(&count).Error; err != nil {
 		a.l.Error("获取所有 MonitorAlertManagerPool 失败", zap.Error(err))
-		return nil, err
+		return nil, 0, err
 	}
 
-	return pools, nil
+	return pools, count, nil
 }
 
 // CreateMonitorAlertManagerPool 创建 AlertManagerPool
@@ -137,21 +138,30 @@ func (a *alertManagerPoolDAO) DeleteMonitorAlertManagerPool(ctx context.Context,
 }
 
 // SearchMonitorAlertManagerPoolByName 通过名称搜索 AlertManagerPool
-func (a *alertManagerPoolDAO) SearchMonitorAlertManagerPoolByName(ctx context.Context, name string) ([]*model.MonitorAlertManagerPool, error) {
+func (a *alertManagerPoolDAO) SearchMonitorAlertManagerPoolByName(ctx context.Context, name string) ([]*model.MonitorAlertManagerPool, int64, error) {
 	if name == "" {
-		return nil, fmt.Errorf("搜索名称不能为空")
+		return nil, 0, fmt.Errorf("搜索名称不能为空")
 	}
 
 	var pools []*model.MonitorAlertManagerPool
+	var count int64
+
+	if err := a.db.WithContext(ctx).
+		Model(&model.MonitorAlertManagerPool{}).
+		Where("LOWER(name) LIKE ? AND deleted_at = ?", "%"+strings.ToLower(name)+"%", 0).
+		Count(&count).Error; err != nil {
+		a.l.Error("获取搜索结果总数失败", zap.Error(err))
+		return nil, 0, err
+	}
 
 	if err := a.db.WithContext(ctx).
 		Where("LOWER(name) LIKE ? AND deleted_at = ?", "%"+strings.ToLower(name)+"%", 0).
 		Find(&pools).Error; err != nil {
 		a.l.Error("通过名称搜索 MonitorAlertManagerPool 失败", zap.Error(err))
-		return nil, err
+		return nil, 0, err
 	}
 
-	return pools, nil
+	return pools, count, nil
 }
 
 // GetAlertPoolByID 通过 ID 获取 AlertManagerPool
@@ -194,19 +204,27 @@ func (a *alertManagerPoolDAO) CheckMonitorAlertManagerPoolExists(ctx context.Con
 }
 
 // GetMonitorAlertManagerPoolList 获取 AlertManagerPool 列表
-func (a *alertManagerPoolDAO) GetMonitorAlertManagerPoolList(ctx context.Context, offset int, limit int) ([]*model.MonitorAlertManagerPool, error) {
+func (a *alertManagerPoolDAO) GetMonitorAlertManagerPoolList(ctx context.Context, offset int, limit int) ([]*model.MonitorAlertManagerPool, int64, error) {
 	if offset < 0 || limit <= 0 {
-		return nil, fmt.Errorf("无效的分页参数: offset=%d, limit=%d", offset, limit)
+		return nil, 0, fmt.Errorf("无效的分页参数: offset=%d, limit=%d", offset, limit)
 	}
 
 	var pools []*model.MonitorAlertManagerPool
+	var count int64
 
-	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).Offset(offset).Limit(limit).Find(&pools).Error; err != nil {
-		a.l.Error("获取 MonitorAlertManagerPool 列表失败", zap.Error(err))
-		return nil, err
+	// 先获取总数
+	if err := a.db.WithContext(ctx).Model(&model.MonitorAlertManagerPool{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+		a.l.Error("获取 MonitorAlertManagerPool 总数失败", zap.Error(err))
+		return nil, 0, err
 	}
 
-	return pools, nil
+	// 再获取分页数据
+	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).Order("created_at DESC").Offset(offset).Limit(limit).Find(&pools).Error; err != nil {
+		a.l.Error("获取 MonitorAlertManagerPool 列表失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	return pools, count, nil
 }
 
 // GetMonitorAlertManagerPoolTotal 获取 AlertManager 集群池总数

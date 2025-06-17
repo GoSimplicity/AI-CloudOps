@@ -84,7 +84,7 @@ func (a *alertConfigCache) GetAlertManagerMainConfigYamlByIP(ip string) string {
 
 // GenerateAlertManagerMainConfig 生成所有AlertManager主配置文件
 func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) error {
-	pools, err := a.alertPoolDao.GetAllAlertManagerPools(ctx)
+	pools, _, err := a.alertPoolDao.GetAllAlertManagerPools(ctx)
 	if err != nil {
 		a.l.Error("[监控模块]扫描数据库中的AlertManager集群失败", zap.Error(err))
 		return err
