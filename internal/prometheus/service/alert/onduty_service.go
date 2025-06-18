@@ -215,7 +215,7 @@ func (a *alertManagerOnDutyService) UpdateMonitorOnDutyGroup(ctx context.Context
 
 // DeleteMonitorOnDutyGroup 删除值班组
 func (a *alertManagerOnDutyService) DeleteMonitorOnDutyGroup(ctx context.Context, id int) error {
-	sendGroups, err := a.sendDao.GetMonitorSendGroupByOnDutyGroupId(ctx, id)
+	sendGroups, _, err := a.sendDao.GetMonitorSendGroupByOnDutyGroupId(ctx, id)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		a.l.Error("获取关联发送组失败", zap.Error(err))
 		return err

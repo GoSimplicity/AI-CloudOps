@@ -123,9 +123,8 @@ import {
   claimAlertApi,
   cancelSilenceAlertApi,
   silenceBatchApi,
-  getAlertEventsTotalApi
-} from '#/api';
-import type { MonitorAlertEventItem } from '#/api/core/prometheus';
+} from '#/api/core/prometheus_alert_event';
+import type { MonitorAlertEventItem } from '#/api/core/prometheus_alert_event';
 
 // 状态变量
 const data = ref<MonitorAlertEventItem[]>([]);
@@ -256,13 +255,13 @@ const handleSizeChange = (_: number, size: number) => {
 const fetchResources = async () => {
   loading.value = true;
   try {
-    const response = await getAlertEventsListApi(
-      current.value,
-      pageSizeRef.value,
-      searchText.value
-    );
-    data.value = response as unknown as MonitorAlertEventItem[];
-    total.value = await getAlertEventsTotalApi();
+    const response = await getAlertEventsListApi({
+      page: current.value,
+      size: pageSizeRef.value,
+      search: searchText.value,
+    });
+    data.value = response.items;
+    total.value = response.total;
 
   } catch (error: any) {
     message.error(error.message || '获取告警事件数据失败，请稍后重试');

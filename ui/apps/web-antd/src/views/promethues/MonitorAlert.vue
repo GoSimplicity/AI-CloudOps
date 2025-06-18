@@ -328,8 +328,7 @@ import {
   createAlertManagerPoolApi,
   updateAlertManagerPoolApi,
   deleteAlertManagerPoolApi,
-  getAlertManagerPoolTotalApi,
-} from '#/api';
+} from '#/api/core/prometheus_alert_pool';
 import { Icon } from '@iconify/vue';
 import {
   SearchOutlined,
@@ -337,7 +336,7 @@ import {
   PlusOutlined,
   MinusCircleOutlined
 } from '@ant-design/icons-vue';
-import type { MonitorAlertPoolItem } from '#/api/core/prometheus';
+import type { MonitorAlertPoolItem } from '#/api/core/prometheus_alert_pool';
 
 // 分页相关
 const pageSizeOptions = ref<string[]>(['10', '20', '30', '40', '50']);
@@ -648,13 +647,13 @@ const handleDelete = (record: MonitorAlertPoolItem) => {
 // 获取数据
 const fetchAlertManagerPools = async () => {
   try {
-    const response = await getAlertManagerPoolListApi(
-      current.value,
-      pageSizeRef.value,
-      searchText.value
-    );
-    data.value = response;
-    total.value = await getAlertManagerPoolTotalApi();
+    const response = await getAlertManagerPoolListApi({
+      page: current.value,
+      size: pageSizeRef.value,
+      search: searchText.value,
+    });
+    data.value = response.items;
+    total.value = response.total;
 
   } catch (error: any) {
     message.error(error.message || '获取实例池数据失败');

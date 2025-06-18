@@ -310,3 +310,41 @@ type GetMonitorAlertManagerPoolTotalRequest struct {
 type DeleteMonitorAlertRuleRequest struct {
 	ID int `json:"id" binding:"required"`
 }
+
+type DeleteMonitorOnDutyGroupRequest struct {
+	ID int `json:"id" binding:"required"`
+}
+
+type GetMonitorOnDutyGroupReq struct {
+	ID int `json:"id" binding:"required"`
+}
+
+type GetMonitorOnDutyGroupFuturePlanReq struct {
+	ID        int    `json:"id" binding:"required"`
+	StartTime string `json:"start_time" binding:"required"`
+	EndTime   string `json:"end_time" binding:"required"`
+}
+
+type DeleteMonitorRecordRuleRequest struct {
+	ID int `json:"id" binding:"required"`
+}
+
+type EnableSwitchMonitorRecordRuleRequest struct {
+	ID int `json:"id" binding:"required"`
+}
+
+type DeleteMonitorScrapeJobRequest struct {
+	ID int `json:"id" binding:"required"`
+}
+
+type DeleteMonitorScrapePoolRequest struct {
+	ID int `json:"id" binding:"required"`
+}
+
+type DeleteMonitorSendGroupRequest struct {
+	ID int `json:"id" binding:"required"`
+}
+
+type GetMonitorSendGroupRequest struct {
+	ID int `json:"id" binding:"required"`
+}

@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -59,7 +57,6 @@ func (s *SendGroupHandler) RegisterRouters(server *gin.Engine) {
 		sendGroups.POST("/create", s.CreateMonitorSendGroup)
 		sendGroups.POST("/update", s.UpdateMonitorSendGroup)
 		sendGroups.DELETE("/:id", s.DeleteMonitorSendGroup)
-		sendGroups.GET("/total", s.GetMonitorSendGroupTotal)
 		sendGroups.GET("/all", s.GetMonitorSendGroupAll)
 	}
 }
@@ -68,18 +65,9 @@ func (s *SendGroupHandler) RegisterRouters(server *gin.Engine) {
 func (s *SendGroupHandler) GetMonitorSendGroupList(ctx *gin.Context) {
 	var listReq model.ListReq
 
-	if err := ctx.ShouldBindQuery(&listReq); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
-	list, err := s.alertSendService.GetMonitorSendGroupList(ctx, &listReq)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.SuccessWithData(ctx, list)
+	utils.HandleRequest(ctx, &listReq, func() (interface{}, error) {
+		return s.alertSendService.GetMonitorSendGroupList(ctx, &listReq)
+	})
 }
 
 // CreateMonitorSendGroup 创建新的发送组
@@ -87,95 +75,61 @@ func (s *SendGroupHandler) CreateMonitorSendGroup(ctx *gin.Context) {
 	var sendGroup model.MonitorSendGroup
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
-
-	if err := ctx.ShouldBindJSON(&sendGroup); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
 	sendGroup.UserID = uc.Uid
 
-	if err := s.alertSendService.CreateMonitorSendGroup(ctx, &sendGroup); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &sendGroup, func() (interface{}, error) {
+		return nil, s.alertSendService.CreateMonitorSendGroup(ctx, &sendGroup)
+	})
 }
 
 // UpdateMonitorSendGroup 更新现有的发送组
 func (s *SendGroupHandler) UpdateMonitorSendGroup(ctx *gin.Context) {
 	var sendGroup model.MonitorSendGroup
 
-	if err := ctx.ShouldBind(&sendGroup); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
-
 	sendGroup.UserID = uc.Uid
 
-	if err := s.alertSendService.UpdateMonitorSendGroup(ctx, &sendGroup); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &sendGroup, func() (interface{}, error) {
+		return nil, s.alertSendService.UpdateMonitorSendGroup(ctx, &sendGroup)
+	})
 }
 
 // DeleteMonitorSendGroup 删除指定的发送组
 func (s *SendGroupHandler) DeleteMonitorSendGroup(ctx *gin.Context) {
-	id := ctx.Param("id")
+	var req model.DeleteMonitorSendGroupRequest
 
-	intId, err := strconv.Atoi(id)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
-	if err := s.alertSendService.DeleteMonitorSendGroup(ctx, intId); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	req.ID = id
 
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, s.alertSendService.DeleteMonitorSendGroup(ctx, req.ID)
+	})
 }
 
 func (s *SendGroupHandler) GetMonitorSendGroup(ctx *gin.Context) {
-	id := ctx.Param("id")
+	var req model.GetMonitorSendGroupRequest
 
-	intId, err := strconv.Atoi(id)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
-	group, err := s.alertSendService.GetMonitorSendGroup(ctx, intId)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	req.ID = id
 
-	utils.SuccessWithData(ctx, group)
-}
-
-// GetMonitorSendGroupTotal 获取发送组总数
-func (s *SendGroupHandler) GetMonitorSendGroupTotal(ctx *gin.Context) {
-	total, err := s.alertSendService.GetMonitorSendGroupTotal(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-	utils.SuccessWithData(ctx, total)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.alertSendService.GetMonitorSendGroup(ctx, req.ID)
+	})
 }
 
 // GetMonitorSendGroupAll 获取所有发送组
 func (s *SendGroupHandler) GetMonitorSendGroupAll(ctx *gin.Context) {
-	groups, err := s.alertSendService.GetMonitorSendGroupAll(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-	utils.SuccessWithData(ctx, groups)
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return s.alertSendService.GetMonitorSendGroupAll(ctx)
+	})
 }

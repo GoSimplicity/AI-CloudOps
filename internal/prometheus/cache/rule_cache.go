@@ -51,7 +51,6 @@ type RuleConfigCache interface {
 }
 
 type ruleConfigCache struct {
-
 	AlertRuleMap  map[string]string
 	mu            sync.RWMutex
 	l             *zap.Logger
@@ -152,7 +151,7 @@ func (r *ruleConfigCache) GenerateAlertRuleConfigYaml(ctx context.Context) error
 
 // GeneratePrometheusAlertRuleConfigYamlOnePool 为单个采集池生成告警规则配置
 func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
-	rules, err := r.alertRuleDao.GetMonitorAlertRuleByPoolId(ctx, pool.ID)
+	rules, _, err := r.alertRuleDao.GetMonitorAlertRuleByPoolId(ctx, pool.ID)
 	if err != nil {
 		r.l.Error("[监控模块] 根据采集池ID获取告警规则失败",
 			zap.Error(err),
@@ -186,7 +185,7 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 		}
 
 		ruleGroup := RuleGroup{
-			Name:  rule.Name,
+			Name: rule.Name,
 
 			Rules: []rulefmt.Rule{oneRule},
 		}
@@ -201,7 +200,6 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 
 	ruleMap := make(map[string]string)
 	success := true
-
 
 	// 分片逻辑，将规则分配给不同的Prometheus实例
 	for i, ip := range pool.PrometheusInstances {
@@ -224,7 +222,6 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 			success = false
 			break
 		}
-
 
 		// 生成文件路径并写入
 		dir := fmt.Sprintf("%s/%s", r.localYamlDir, pool.Name)

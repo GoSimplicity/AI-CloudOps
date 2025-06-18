@@ -285,15 +285,15 @@ import {
   updateOnDutyApi,
   deleteOnDutyApi,
   getOnDutyTotalApi,
-  getUserList
-} from '#/api';
+} from '#/api/core/prometheus_onduty';
+import { getUserList } from '#/api/core/user';
 import { Icon } from '@iconify/vue';
 import {
   SearchOutlined,
   ReloadOutlined,
   PlusOutlined
 } from '@ant-design/icons-vue';
-import type { OnDutyGroupItem } from '#/api';
+import type { OnDutyGroupItem } from '#/api/core/prometheus_onduty';
 import { useRouter } from 'vue-router';
 import dayjs from 'dayjs';
 
@@ -545,9 +545,13 @@ const viewSchedule = (record: OnDutyGroupItem) => {
 const fetchOnDutyGroups = async () => {
   try {
     loading.value = true;
-    const response = await getOnDutyListApi(current.value, pageSizeRef.value, searchText.value.trim());
-    data.value = response;
-    total.value = await getOnDutyTotalApi();
+    const response = await getOnDutyListApi({
+      page: current.value,
+      size: pageSizeRef.value,
+      search: searchText.value.trim(),
+    });
+    data.value = response.items;
+    total.value = response.total;
 
   } catch (error: any) {
     console.error('获取值班组列表失败:', error);

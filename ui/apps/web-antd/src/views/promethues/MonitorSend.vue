@@ -210,12 +210,13 @@ import {
   createMonitorSendGroupApi,
   updateMonitorSendGroupApi,
   deleteMonitorSendGroupApi,
-  getUserList,
-  getMonitorSendGroupTotalApi,
-  getAllMonitorScrapePoolApi,
-  getAllOnDutyGroupApi,
-} from '#/api';
-import type { SendGroupItem, MonitorScrapePoolItem, OnDutyGroupItem } from '#/api';
+} from '#/api/core/prometheus_send_group';
+import { getUserList } from '#/api/core/user';
+import { getAllMonitorScrapePoolApi } from '#/api/core/prometheus_scrape_pool';
+import { getAllOnDutyGroupApi } from '#/api/core/prometheus_onduty';
+import type { SendGroupItem } from '#/api/core/prometheus_send_group';
+import type { MonitorScrapePoolItem } from '#/api/core/prometheus_scrape_pool';
+import type { OnDutyGroupItem } from '#/api/core/prometheus_onduty';
 import type { FormInstance } from 'ant-design-vue';
 
 // 分页相关
@@ -348,12 +349,12 @@ const handleSizeChange = (page: number, size: number) => {
 // 获取用户列表
 const fetchUsers = async () => {
   try {
-    const users = await getUserList({
+    const response = await getUserList({
       page: 1,
       size: 100,
       search: ''
     });
-    userOptions.value = users.items.map((user: { username: any; id: any }) => ({
+    userOptions.value = response.items.map((user: { username: any; id: any }) => ({
       label: user.username,
       value: user.id,
     }));
@@ -464,14 +465,13 @@ const handleDelete = (record: SendGroupItem) => {
 const fetchSendGroups = async () => {
   loading.value = true;
   try {
-    const response = await getMonitorSendGroupListApi(
-      current.value,
-      pageSizeRef.value,
-      searchText.value,
-    );
-    data.splice(0, data.length, ...response);
-    const totalCount = await getMonitorSendGroupTotalApi();
-    total.value = totalCount;
+    const response = await getMonitorSendGroupListApi({
+      page: current.value,
+      size: pageSizeRef.value,
+      search: searchText.value,
+    });
+    data.splice(0, data.length, ...response.items);
+    total.value = response.total;
   } catch (error: any) {
     message.error(error.message || '获取发送组数据失败');
     console.error(error);
@@ -484,7 +484,7 @@ const fetchSendGroups = async () => {
 const fetchScrapePools = async () => {
   try {
     const response = await getAllMonitorScrapePoolApi();
-    scrapePools.value = response;
+    scrapePools.value = response.items;
   } catch (error: any) {
     message.error(error.message || '获取采集池列表失败');
     console.error(error);
@@ -495,7 +495,7 @@ const fetchScrapePools = async () => {
 const fetchOnDutyGroups = async () => {
   try {
     const response = await getAllOnDutyGroupApi();
-    onDutyGroups.value = response;
+    onDutyGroups.value = response.items;
   } catch (error: any) {
     message.error(error.message || '获取值班组列表失败');
     console.error(error); 

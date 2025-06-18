@@ -40,7 +40,7 @@ import (
 )
 
 type AlertManagerRuleService interface {
-	GetMonitorAlertRuleList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorAlertRule, error)
+	GetMonitorAlertRuleList(ctx context.Context, listReq *model.ListReq) (model.ListResp[*model.MonitorAlertRule], error)
 	PromqlExprCheck(ctx context.Context, expr string) (bool, error)
 	CreateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error
 	UpdateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error
@@ -68,23 +68,26 @@ func NewAlertManagerRuleService(dao alert.AlertManagerRuleDAO, cache cache.Monit
 }
 
 // GetMonitorAlertRuleList 获取告警规则列表
-func (a *alertManagerRuleService) GetMonitorAlertRuleList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorAlertRule, error) {
+func (a *alertManagerRuleService) GetMonitorAlertRuleList(ctx context.Context, listReq *model.ListReq) (model.ListResp[*model.MonitorAlertRule], error) {
 	if listReq.Search != "" {
-		rules, err := a.dao.SearchMonitorAlertRuleByName(ctx, listReq.Search)
+		rules, total, err := a.dao.SearchMonitorAlertRuleByName(ctx, listReq.Search)
 		if err != nil {
 			a.l.Error("搜索告警规则失败", zap.String("search", listReq.Search), zap.Error(err))
-			return nil, err
+			return model.ListResp[*model.MonitorAlertRule]{}, err
 		}
-		return rules, nil
+		return model.ListResp[*model.MonitorAlertRule]{
+			Total: total,
+			Items: rules,
+		}, nil
 	}
 
 	offset := (listReq.Page - 1) * listReq.Size
 	limit := listReq.Size
 
-	rules, err := a.dao.GetMonitorAlertRuleList(ctx, offset, limit)
+	rules, total, err := a.dao.GetMonitorAlertRuleList(ctx, offset, limit)
 	if err != nil {
 		a.l.Error("获取告警规则列表失败", zap.Error(err))
-		return nil, err
+		return model.ListResp[*model.MonitorAlertRule]{}, err
 	}
 
 	for _, rule := range rules {
@@ -99,7 +102,10 @@ func (a *alertManagerRuleService) GetMonitorAlertRuleList(ctx context.Context, l
 		}
 	}
 
-	return rules, nil
+	return model.ListResp[*model.MonitorAlertRule]{
+		Total: total,
+		Items: rules,
+	}, nil
 }
 
 // PromqlExprCheck 检查 PromQL 表达式是否有效
