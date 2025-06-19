@@ -55,6 +55,7 @@ AI+CloudOps 是一个面向企业的 AI 驱动云原生运维管理平台，旨�
 - Node.js 21.x (推荐)
 - pnpm
 - Docker & Docker Compose
+- Python 3.11.x
 
 ### 克隆项目
 
@@ -91,6 +92,28 @@ pnpm dev
 go mod tidy
 # 运行后端服务
 go run main.go
+```
+
+4. **MCP SSE 启动**
+
+```bash
+go run cmd/mcp/mcp.go
+```
+
+5. **AIOps 服务启动**
+
+```bash
+cd python
+pip install -r requirements.txt
+
+# 训练流量预测模型
+cd data && python machine-learing.py && cd ..
+
+# 启动初始化脚本
+bash scripts/setup.sh
+
+# 启动主服务
+bash scripts/start.sh
 ```
 
 ### 生产模式
