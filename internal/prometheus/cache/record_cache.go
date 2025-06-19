@@ -149,7 +149,7 @@ func (r *recordConfigCache) GenerateRecordRuleConfigYaml(ctx context.Context) er
 
 // GeneratePrometheusRecordRuleConfigYamlOnePool 根据单个采集池生成Prometheus的预聚合规则配置YAML
 func (r *recordConfigCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
-	rules, err := r.alertRecordDao.GetMonitorRecordRuleByPoolId(ctx, pool.ID)
+	rules, _, err := r.alertRecordDao.GetMonitorRecordRuleByPoolId(ctx, pool.ID)
 	if err != nil {
 		r.l.Error("[监控模块] 根据采集池ID获取预聚合规则失败",
 			zap.Error(err),

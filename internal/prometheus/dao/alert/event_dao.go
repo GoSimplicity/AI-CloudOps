@@ -41,8 +41,8 @@ import (
 
 type AlertManagerEventDAO interface {
 	GetMonitorAlertEventById(ctx context.Context, id int) (*model.MonitorAlertEvent, error)
-	SearchMonitorAlertEventByName(ctx context.Context, name string) ([]*model.MonitorAlertEvent, error)
-	GetMonitorAlertEventList(ctx context.Context, offset, limit int) ([]*model.MonitorAlertEvent, error)
+	SearchMonitorAlertEventByName(ctx context.Context, name string) ([]*model.MonitorAlertEvent, int64, error)
+	GetMonitorAlertEventList(ctx context.Context, offset, limit int) ([]*model.MonitorAlertEvent, int64, error)
 	EventAlertClaim(ctx context.Context, event *model.MonitorAlertEvent) error
 	GetAlertEventByID(ctx context.Context, id int) (*model.MonitorAlertEvent, error)
 	UpdateAlertEvent(ctx context.Context, alertEvent *model.MonitorAlertEvent) error
@@ -94,35 +94,58 @@ func (a *alertManagerEventDAO) GetMonitorAlertEventById(ctx context.Context, id 
 }
 
 // SearchMonitorAlertEventByName 通过名称搜索告警事件
-func (a *alertManagerEventDAO) SearchMonitorAlertEventByName(ctx context.Context, name string) ([]*model.MonitorAlertEvent, error) {
+func (a *alertManagerEventDAO) SearchMonitorAlertEventByName(ctx context.Context, name string) ([]*model.MonitorAlertEvent, int64, error) {
 	if name == "" {
-		return nil, fmt.Errorf("搜索名称不能为空")
+		return nil, 0, fmt.Errorf("搜索名称不能为空")
 	}
 
 	var alertEvents []*model.MonitorAlertEvent
+	var total int64
 
+	// 先获取符合条件的记录总数
+	if err := a.db.WithContext(ctx).
+		Model(&model.MonitorAlertEvent{}).
+		Where("deleted_at = ?", 0).
+		Where("alert_name LIKE ?", "%"+name+"%").
+		Count(&total).Error; err != nil {
+		a.l.Error("获取搜索记录总数失败", zap.Error(err), zap.String("name", name))
+		return nil, 0, err
+	}
+
+	// 获取符合条件的记录列表
 	if err := a.db.WithContext(ctx).
 		Where("deleted_at = ?", 0).
 		Where("alert_name LIKE ?", "%"+name+"%").
 		Find(&alertEvents).Error; err != nil {
 		a.l.Error("通过名称搜索 MonitorAlertEvent 失败", zap.Error(err), zap.String("name", name))
-		return nil, err
+		return nil, 0, err
 	}
 
-	return alertEvents, nil
+	return alertEvents, total, nil
 }
 
 // GetMonitorAlertEventList 获取告警事件列表
-func (a *alertManagerEventDAO) GetMonitorAlertEventList(ctx context.Context, offset, limit int) ([]*model.MonitorAlertEvent, error) {
+func (a *alertManagerEventDAO) GetMonitorAlertEventList(ctx context.Context, offset, limit int) ([]*model.MonitorAlertEvent, int64, error) {
 	if offset < 0 {
-		return nil, fmt.Errorf("offset不能为负数")
+		return nil, 0, fmt.Errorf("offset不能为负数")
 	}
 	if limit <= 0 {
-		return nil, fmt.Errorf("limit必须大于0")
+		return nil, 0, fmt.Errorf("limit必须大于0")
 	}
 
 	var alertEvents []*model.MonitorAlertEvent
+	var total int64
 
+	// 先获取总数
+	if err := a.db.WithContext(ctx).
+		Model(&model.MonitorAlertEvent{}).
+		Where("deleted_at = ?", 0).
+		Count(&total).Error; err != nil {
+		a.l.Error("获取 MonitorAlertEvent 总数失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	// 获取分页数据
 	if err := a.db.WithContext(ctx).
 		Where("deleted_at = ?", 0).
 		Order("created_at DESC").
@@ -130,10 +153,10 @@ func (a *alertManagerEventDAO) GetMonitorAlertEventList(ctx context.Context, off
 		Limit(limit).
 		Find(&alertEvents).Error; err != nil {
 		a.l.Error("获取 MonitorAlertEvent 列表失败", zap.Error(err))
-		return nil, err
+		return nil, 0, err
 	}
 
-	return alertEvents, nil
+	return alertEvents, total, nil
 }
 
 // EventAlertClaim 认领告警事件

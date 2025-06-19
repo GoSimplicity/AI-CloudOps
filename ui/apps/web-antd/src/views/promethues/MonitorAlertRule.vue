@@ -449,13 +449,12 @@ import {
   createAlertRuleApi,
   updateAlertRuleApi,
   deleteAlertRuleApi,
-  validateExprApi,
-  getAllAlertManagerPoolApi,
-  getAllMonitorSendGroupApi,
-  getMonitorAlertRuleTotalApi
-} from '#/api';
+} from '#/api/core/prometheus_alert_rule';
+import { getAllAlertManagerPoolApi } from '#/api/core/prometheus_alert_pool';
+import { validateExprApi } from '#/api/core/prometheus_alert_rule';
+import { getAllMonitorSendGroupApi } from '#/api/core/prometheus_send_group';
 import { Icon } from '@iconify/vue';
-import type { AlertRuleItem } from '#/api/core/prometheus';
+import type { AlertRuleItem } from '#/api/core/prometheus_alert_rule';
 
 interface ScrapePool {
   id: number;
@@ -625,7 +624,7 @@ const removeEditAnnotation = (annotation: any) => {
 const fetchScrapePools = async () => {
   try {
     const response = await getAllAlertManagerPoolApi();
-    scrapePools.value = response;
+    scrapePools.value = response.items;
   } catch (error: any) {
     message.error(error.message || '获取实例池数据失败');
     console.error(error);
@@ -636,7 +635,7 @@ const fetchScrapePools = async () => {
 const fetchSendGroups = async () => {
   try {
     const response = await getAllMonitorSendGroupApi();
-    sendGroups.value = response;
+    sendGroups.value = response.items;
   } catch (error: any) {
     message.error(error.message || '获取发送组数据失败');
     console.error(error);
@@ -891,9 +890,13 @@ const handleDelete = (record: AlertRuleItem) => {
 const fetchAlertRules = async () => {
   try {
     loading.value = true;
-    const response = await getAlertRulesListApi(current.value, pageSizeRef.value, searchText.value);
-    data.value = response;
-    total.value = await getMonitorAlertRuleTotalApi();
+    const response = await getAlertRulesListApi({
+      page: current.value,
+      size: pageSizeRef.value,
+      search: searchText.value,
+    });
+    data.value = response.items;
+    total.value = response.total;
   } catch (error: any) {
     message.error(error.message || '获取AlertRules数据失败');
     console.error(error);

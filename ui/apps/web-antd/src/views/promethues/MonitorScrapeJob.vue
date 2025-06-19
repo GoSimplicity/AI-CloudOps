@@ -398,10 +398,9 @@ import {
   createScrapeJobApi,
   updateScrapeJobApi,
   deleteScrapeJobApi,
-  getAllMonitorScrapePoolApi,
-  getMonitorScrapeJobTotalApi
-} from '#/api';
-import type { MonitorScrapeJobItem, createScrapeJobReq, updateScrapeJobReq } from '#/api/core/prometheus';
+} from '#/api/core/prometheus_scrape_job';
+import { getAllMonitorScrapePoolApi } from '#/api/core/prometheus_scrape_pool';
+import type { MonitorScrapeJobItem, createScrapeJobReq, updateScrapeJobReq } from '#/api/core/prometheus_scrape_job';
 
 // 分页相关
 const pageSizeOptions = ref<string[]>(['10', '20', '30', '40', '50']);
@@ -571,11 +570,17 @@ const pools = ref<Pool[]>([]);
 const fetchPools = async () => {
   try {
     const response = await getAllMonitorScrapePoolApi();
-    pools.value = response.map((pool: any) => ({
-      id: pool.id,
-      name: pool.name,
-    }));
+    if (response && response.items) {
+      pools.value = response.items.map((pool: any) => ({
+        id: pool.id,
+        name: pool.name,
+      }));
+    } else {
+      pools.value = [];
+      console.error('获取采集池数据格式异常', response);
+    }
   } catch (error: any) {
+    pools.value = [];
     message.error(error.message || '获取采集池数据失败');
   }
 };
@@ -586,15 +591,26 @@ const fetchResources = async () => {
   if (current.value < 1) current.value = 1;
   loading.value = true;
   try {
-    const response = await getMonitorScrapeJobListApi(current.value, pageSizeRef.value, searchText.value);
-    data.value = response.map((item: any) => ({
-      ...item,
-      // 处理IP地址字段 - 如果是数组则取第一个，否则保持原值
-      ip_address: Array.isArray(item.ip_address) ? item.ip_address[0] || '' : (item.ip_address || '')
-    }));
-    total.value = await getMonitorScrapeJobTotalApi();
-
+    const response = await getMonitorScrapeJobListApi({
+      page: current.value,
+      size: pageSizeRef.value,
+      search: searchText.value,
+    });
+    if (response && response.items) {
+      data.value = response.items.map((item: any) => ({
+        ...item,
+        // 处理IP地址字段 - 如果是数组则取第一个，否则保持原值
+        ip_address: Array.isArray(item.ip_address) ? item.ip_address[0] || '' : (item.ip_address || '')
+      }));
+      total.value = response.total;
+    } else {
+      data.value = [];
+      total.value = 0;
+      console.error('获取采集任务数据格式异常', response);
+    }
   } catch (error: any) {
+    data.value = [];
+    total.value = 0;
     message.error(error.message || '获取采集任务数据失败');
   } finally {
     loading.value = false;

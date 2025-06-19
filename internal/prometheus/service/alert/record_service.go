@@ -40,7 +40,7 @@ import (
 )
 
 type AlertManagerRecordService interface {
-	GetMonitorRecordRuleList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorRecordRule, error)
+	GetMonitorRecordRuleList(ctx context.Context, listReq *model.ListReq) (model.ListResp[*model.MonitorRecordRule], error)
 	CreateMonitorRecordRule(ctx context.Context, monitorRecordRule *model.MonitorRecordRule) error
 	UpdateMonitorRecordRule(ctx context.Context, monitorRecordRule *model.MonitorRecordRule) error
 	DeleteMonitorRecordRule(ctx context.Context, id int) error
@@ -68,45 +68,75 @@ func NewAlertManagerRecordService(dao alert.AlertManagerRecordDAO, poolDao scrap
 	}
 }
 
-func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorRecordRule, error) {
+func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context, listReq *model.ListReq) (model.ListResp[*model.MonitorRecordRule], error) {
 	if listReq.Search != "" {
-		rules, err := a.dao.SearchMonitorRecordRuleByName(ctx, listReq.Search)
+		rules, count, err := a.dao.SearchMonitorRecordRuleByName(ctx, listReq.Search)
 		if err != nil {
 			a.l.Error("搜索记录规则失败", zap.String("search", listReq.Search), zap.Error(err))
-			return nil, err
+			return model.ListResp[*model.MonitorRecordRule]{}, err
 		}
-		return rules, nil
+		
+		// 为每条规则添加用户名和池名称
+		for _, rule := range rules {
+			user, err := a.userDao.GetUserByID(ctx, rule.UserID)
+			if err != nil {
+				a.l.Error("获取创建用户名失败", zap.Error(err))
+			} else {
+				if user.RealName == "" {
+					rule.CreateUserName = user.Username
+				} else {
+					rule.CreateUserName = user.RealName
+				}
+			}
+
+			pool, err := a.poolDao.GetMonitorScrapePoolById(ctx, rule.PoolID)
+			if err != nil {
+				a.l.Error("获取Prometheus实例池失败", zap.Error(err))
+			} else {
+				rule.PoolName = pool.Name
+			}
+		}
+		
+		return model.ListResp[*model.MonitorRecordRule]{
+			Total: count,
+			Items: rules,
+		}, nil
 	}
 
 	offset := (listReq.Page - 1) * listReq.Size
 	limit := listReq.Size
 
-	rules, err := a.dao.GetMonitorRecordRuleList(ctx, offset, limit)
+	rules, count, err := a.dao.GetMonitorRecordRuleList(ctx, offset, limit)
 	if err != nil {
 		a.l.Error("获取记录规则列表失败", zap.Error(err))
-		return nil, err
+		return model.ListResp[*model.MonitorRecordRule]{}, err
 	}
 
+	// 为每条规则添加用户名和池名称
 	for _, rule := range rules {
 		user, err := a.userDao.GetUserByID(ctx, rule.UserID)
 		if err != nil {
 			a.l.Error("获取创建用户名失败", zap.Error(err))
-		}
-
-		if user.RealName == "" {
-			rule.CreateUserName = user.Username
 		} else {
-			rule.CreateUserName = user.RealName
+			if user.RealName == "" {
+				rule.CreateUserName = user.Username
+			} else {
+				rule.CreateUserName = user.RealName
+			}
 		}
 
 		pool, err := a.poolDao.GetMonitorScrapePoolById(ctx, rule.PoolID)
 		if err != nil {
 			a.l.Error("获取Prometheus实例池失败", zap.Error(err))
+		} else {
+			rule.PoolName = pool.Name
 		}
-		rule.PoolName = pool.Name
 	}
 
-	return rules, nil
+	return model.ListResp[*model.MonitorRecordRule]{
+		Total: count,
+		Items: rules,
+	}, nil
 }
 
 func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context, monitorRecordRule *model.MonitorRecordRule) error {

@@ -1,5 +1,5 @@
 import { requestClient } from '#/api/request';
-
+import type { Category } from '#/api/core/workorder_category';
 // 表单设计相关类型
 export interface ListFormDesignReq {
   page: number;
@@ -101,23 +101,6 @@ export interface PreviewFormDesignResp {
 export interface ValidateFormDesignResp {
   is_valid: boolean;
   errors?: string[];
-}
-
-export interface Category {
-  id: number;
-  name: string;
-  parent_id?: number;
-  icon?: string;
-  sort_order: number;
-  status: number;
-  description?: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string;
-  creator_id: number;
-  creator_name: string;
-  children?: Category[];
-  parent?: Category;
 }
 
 // 表单设计相关接口

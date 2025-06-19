@@ -182,7 +182,7 @@ func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Cont
 	}
 
 	// 检查 AlertManager 集群池是否有关联的发送组
-	sendGroups, err := a.sendDao.GetMonitorSendGroupByPoolId(ctx, id)
+	sendGroups, _, err := a.sendDao.GetMonitorSendGroupByPoolId(ctx, id)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		a.l.Error("删除 AlertManager 集群池失败：获取关联发送组时出错", zap.Error(err))
 		return err

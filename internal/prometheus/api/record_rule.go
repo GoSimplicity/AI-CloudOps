@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -61,7 +59,6 @@ func (r *RecordRuleHandler) RegisterRouters(server *gin.Engine) {
 		recordRules.DELETE("/", r.BatchDeleteMonitorRecordRule)
 		recordRules.POST("/:id/enable", r.EnableSwitchMonitorRecordRule)
 		recordRules.POST("/enable", r.BatchEnableSwitchMonitorRecordRule)
-		recordRules.GET("/total", r.GetMonitorRecordRuleTotal)
 	}
 }
 
@@ -69,18 +66,9 @@ func (r *RecordRuleHandler) RegisterRouters(server *gin.Engine) {
 func (r *RecordRuleHandler) GetMonitorRecordRuleList(ctx *gin.Context) {
 	var listReq model.ListReq
 
-	if err := ctx.ShouldBindQuery(&listReq); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
-	list, err := r.alertRecordService.GetMonitorRecordRuleList(ctx, &listReq)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.SuccessWithData(ctx, list)
+	utils.HandleRequest(ctx, &listReq, func() (interface{}, error) {
+		return r.alertRecordService.GetMonitorRecordRuleList(ctx, &listReq)
+	})
 }
 
 // CreateMonitorRecordRule 创建新的预聚合规则
@@ -88,114 +76,78 @@ func (r *RecordRuleHandler) CreateMonitorRecordRule(ctx *gin.Context) {
 	var recordRule model.MonitorRecordRule
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
-	if err := ctx.ShouldBind(&recordRule); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
 	recordRule.UserID = uc.Uid
 
-	if err := r.alertRecordService.CreateMonitorRecordRule(ctx, &recordRule); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &recordRule, func() (interface{}, error) {
+		return nil, r.alertRecordService.CreateMonitorRecordRule(ctx, &recordRule)
+	})
 }
 
 // UpdateMonitorRecordRule 更新现有的预聚合规则
 func (r *RecordRuleHandler) UpdateMonitorRecordRule(ctx *gin.Context) {
 	var recordRule model.MonitorRecordRule
 
-	if err := ctx.ShouldBind(&recordRule); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
-	if err := r.alertRecordService.UpdateMonitorRecordRule(ctx, &recordRule); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.Success(ctx)
-}
-
-// DeleteMonitorRecordRule 删除指定的预聚合规则
-func (r *RecordRuleHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
-	id := ctx.Param("id")
-
-	intId, err := strconv.Atoi(id)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
-	if err := r.alertRecordService.DeleteMonitorRecordRule(ctx, intId); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+	recordRule.ID = id
+
+	utils.HandleRequest(ctx, &recordRule, func() (interface{}, error) {
+		return nil, r.alertRecordService.UpdateMonitorRecordRule(ctx, &recordRule)
+	})
+}
+
+// DeleteMonitorRecordRule 删除指定的预聚合规则
+func (r *RecordRuleHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
+	var req model.DeleteMonitorRecordRuleRequest
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
-	utils.Success(ctx)
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, r.alertRecordService.DeleteMonitorRecordRule(ctx, req.ID)
+	})
 }
 
 // BatchDeleteMonitorRecordRule 批量删除预聚合规则
 func (r *RecordRuleHandler) BatchDeleteMonitorRecordRule(ctx *gin.Context) {
 	var req model.BatchRequest
 
-	if err := ctx.ShouldBind(&req); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
-	if err := r.alertRecordService.BatchDeleteMonitorRecordRule(ctx, req.IDs); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, r.alertRecordService.BatchDeleteMonitorRecordRule(ctx, req.IDs)
+	})
 }
 
 // EnableSwitchMonitorRecordRule 切换预聚合规则的启用状态
 func (r *RecordRuleHandler) EnableSwitchMonitorRecordRule(ctx *gin.Context) {
-	id := ctx.Param("id")
+	var req model.EnableSwitchMonitorRecordRuleRequest
 
-	intId, err := strconv.Atoi(id)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
-	if err := r.alertRecordService.EnableSwitchMonitorRecordRule(ctx, intId); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	req.ID = id
 
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, r.alertRecordService.EnableSwitchMonitorRecordRule(ctx, req.ID)
+	})
 }
 
 // BatchEnableSwitchMonitorRecordRule 批量切换预聚合规则的启用状态
 func (r *RecordRuleHandler) BatchEnableSwitchMonitorRecordRule(ctx *gin.Context) {
 	var req model.BatchRequest
 
-	if err := ctx.ShouldBind(&req); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
-	if err := r.alertRecordService.BatchEnableSwitchMonitorRecordRule(ctx, req.IDs); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.Success(ctx)
-}
-
-// GetMonitorRecordRuleTotal 获取监控告警事件总数
-func (r *RecordRuleHandler) GetMonitorRecordRuleTotal(ctx *gin.Context) {
-	total, err := r.alertRecordService.GetMonitorRecordRuleTotal(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-	utils.SuccessWithData(ctx, total)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, r.alertRecordService.BatchEnableSwitchMonitorRecordRule(ctx, req.IDs)
+	})
 }

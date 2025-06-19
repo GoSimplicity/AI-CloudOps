@@ -318,12 +318,12 @@ import {
   createRecordRuleApi,
   updateRecordRuleApi,
   deleteRecordRuleApi,
-  getAllMonitorScrapePoolApi,
   getRecordRulesTotalApi,
-  validateExprApi,
-} from '#/api';
+} from '#/api/core/prometheus_alert_record';
+import { getAllMonitorScrapePoolApi } from '#/api/core/prometheus_scrape_pool';
+import { validateExprApi } from '#/api/core/prometheus_alert_rule';
 import { Icon } from '@iconify/vue';
-import type { AlertRecordItem } from '#/api';
+import type { AlertRecordItem } from '#/api/core/prometheus_alert_record';
 import type { FormInstance } from 'ant-design-vue';
 
 // 定义 Pool 类型
@@ -601,9 +601,13 @@ const handleDelete = (record: AlertRecordItem) => {
 const fetchRecordRules = async () => {
   try {
     loading.value = true;
-    const response = await getRecordRulesListApi(current.value, pageSizeRef.value, searchText.value);
-    data.value = response;
-    total.value = await getRecordRulesTotalApi();
+    const response = await getRecordRulesListApi({
+      page: current.value,
+      size: pageSizeRef.value,
+      search: searchText.value,
+    });
+    data.value = response.items;
+    total.value = response.total;
     loading.value = false;
   } catch (error: any) {
     loading.value = false;
@@ -616,7 +620,7 @@ const fetchRecordRules = async () => {
 const fetchPools = async () => {
   try {
     const response = await getAllMonitorScrapePoolApi();
-    poolOptions.value = response;
+    poolOptions.value = response.items;
   } catch (error: any) {
     message.error(error.message || '获取实例池数据失败，请稍后重试');
     console.error(error);

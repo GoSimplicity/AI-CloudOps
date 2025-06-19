@@ -37,10 +37,10 @@ import (
 )
 
 type AlertManagerSendDAO interface {
-	GetMonitorSendGroupByPoolId(ctx context.Context, poolId int) ([]*model.MonitorSendGroup, error)
-	GetMonitorSendGroupByOnDutyGroupId(ctx context.Context, onDutyGroupID int) ([]*model.MonitorSendGroup, error)
-	SearchMonitorSendGroupByName(ctx context.Context, name string) ([]*model.MonitorSendGroup, error)
-	GetMonitorSendGroupList(ctx context.Context, offset, limit int) ([]*model.MonitorSendGroup, error)
+	GetMonitorSendGroupByPoolId(ctx context.Context, poolId int) ([]*model.MonitorSendGroup, int64, error)
+	GetMonitorSendGroupByOnDutyGroupId(ctx context.Context, onDutyGroupID int) ([]*model.MonitorSendGroup, int64, error)
+	SearchMonitorSendGroupByName(ctx context.Context, name string) ([]*model.MonitorSendGroup, int64, error)
+	GetMonitorSendGroupList(ctx context.Context, offset, limit int) ([]*model.MonitorSendGroup, int64, error)
 	GetMonitorSendGroupById(ctx context.Context, id int) (*model.MonitorSendGroup, error)
 	CreateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error
 	UpdateMonitorSendGroup(ctx context.Context, tx *gorm.DB, monitorSendGroup *model.MonitorSendGroup) error
@@ -48,8 +48,7 @@ type AlertManagerSendDAO interface {
 	CheckMonitorSendGroupExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error)
 	CheckMonitorSendGroupNameExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error)
 	Transaction(ctx context.Context, fn func(tx *gorm.DB) error) error
-	GetMonitorSendGroupTotal(ctx context.Context) (int, error)
-	GetMonitorSendGroups(ctx context.Context) ([]*model.MonitorSendGroup, error)
+	GetMonitorSendGroups(ctx context.Context) ([]*model.MonitorSendGroup, int64, error)
 }
 
 type alertManagerSendDAO struct {
@@ -67,60 +66,100 @@ func NewAlertManagerSendDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO)
 }
 
 // GetMonitorSendGroupByPoolId 通过 poolId 获取 MonitorSendGroup
-func (a *alertManagerSendDAO) GetMonitorSendGroupByPoolId(ctx context.Context, poolId int) ([]*model.MonitorSendGroup, error) {
+func (a *alertManagerSendDAO) GetMonitorSendGroupByPoolId(ctx context.Context, poolId int) ([]*model.MonitorSendGroup, int64, error) {
 	if poolId <= 0 {
 		a.l.Error("GetMonitorSendGroupByPoolId 失败: 无效的 poolId", zap.Int("poolId", poolId))
-		return nil, fmt.Errorf("无效的 poolId: %d", poolId)
+		return nil, 0, fmt.Errorf("无效的 poolId: %d", poolId)
 	}
 
 	var sendGroups []*model.MonitorSendGroup
+	var count int64
+
+	// 先获取总数
+	if err := a.db.WithContext(ctx).
+		Model(&model.MonitorSendGroup{}).
+		Where("pool_id = ? AND deleted_at = ?", poolId, 0).
+		Count(&count).Error; err != nil {
+		a.l.Error("获取 MonitorSendGroup 总数失败", zap.Error(err), zap.Int("poolId", poolId))
+		return nil, 0, err
+	}
 
 	if err := a.db.WithContext(ctx).
 		Where("pool_id = ? AND deleted_at = ?", poolId, 0).
 		Find(&sendGroups).Error; err != nil {
 		a.l.Error("获取 MonitorSendGroup 失败", zap.Error(err), zap.Int("poolId", poolId))
-		return nil, err
+		return nil, 0, err
 	}
 
-	return sendGroups, nil
+	return sendGroups, count, nil
 }
 
 // GetMonitorSendGroupByOnDutyGroupId 通过 onDutyGroupID 获取 MonitorSendGroup
-func (a *alertManagerSendDAO) GetMonitorSendGroupByOnDutyGroupId(ctx context.Context, onDutyGroupID int) ([]*model.MonitorSendGroup, error) {
+func (a *alertManagerSendDAO) GetMonitorSendGroupByOnDutyGroupId(ctx context.Context, onDutyGroupID int) ([]*model.MonitorSendGroup, int64, error) {
 	if onDutyGroupID <= 0 {
 		a.l.Error("GetMonitorSendGroupByOnDutyGroupId 失败: 无效的 onDutyGroupID", zap.Int("onDutyGroupID", onDutyGroupID))
-		return nil, fmt.Errorf("无效的 onDutyGroupID: %d", onDutyGroupID)
+		return nil, 0, fmt.Errorf("无效的 onDutyGroupID: %d", onDutyGroupID)
 	}
 
 	var sendGroups []*model.MonitorSendGroup
+	var count int64
+
+	// 先获取总数
+	if err := a.db.WithContext(ctx).
+		Model(&model.MonitorSendGroup{}).
+		Where("on_duty_group_id = ? AND deleted_at = ?", onDutyGroupID, 0).
+		Count(&count).Error; err != nil {
+		a.l.Error("获取 MonitorSendGroup 总数失败", zap.Error(err), zap.Int("onDutyGroupID", onDutyGroupID))
+		return nil, 0, err
+	}
 
 	if err := a.db.WithContext(ctx).
 		Where("on_duty_group_id = ? AND deleted_at = ?", onDutyGroupID, 0).
 		Find(&sendGroups).Error; err != nil {
 		a.l.Error("获取 MonitorSendGroup 失败", zap.Error(err), zap.Int("onDutyGroupID", onDutyGroupID))
-		return nil, err
+		return nil, 0, err
 	}
 
-	return sendGroups, nil
+	return sendGroups, count, nil
 }
 
 // SearchMonitorSendGroupByName 通过名称搜索 MonitorSendGroup
-func (a *alertManagerSendDAO) SearchMonitorSendGroupByName(ctx context.Context, name string) ([]*model.MonitorSendGroup, error) {
+func (a *alertManagerSendDAO) SearchMonitorSendGroupByName(ctx context.Context, name string) ([]*model.MonitorSendGroup, int64, error) {
 	var sendGroups []*model.MonitorSendGroup
+	var count int64
+
+	// 先获取总数
+	if err := a.db.WithContext(ctx).
+		Model(&model.MonitorSendGroup{}).
+		Where("LOWER(name) LIKE ? AND deleted_at = ?", "%"+strings.ToLower(name)+"%", 0).
+		Count(&count).Error; err != nil {
+		a.l.Error("获取搜索结果总数失败", zap.Error(err))
+		return nil, 0, err
+	}
 
 	if err := a.db.WithContext(ctx).
 		Where("LOWER(name) LIKE ? AND deleted_at = ?", "%"+strings.ToLower(name)+"%", 0).
 		Find(&sendGroups).Error; err != nil {
 		a.l.Error("通过名称搜索 MonitorSendGroup 失败", zap.Error(err))
-		return nil, err
+		return nil, 0, err
 	}
 
-	return sendGroups, nil
+	return sendGroups, count, nil
 }
 
 // GetMonitorSendGroupList 获取所有 MonitorSendGroup
-func (a *alertManagerSendDAO) GetMonitorSendGroupList(ctx context.Context, offset, limit int) ([]*model.MonitorSendGroup, error) {
+func (a *alertManagerSendDAO) GetMonitorSendGroupList(ctx context.Context, offset, limit int) ([]*model.MonitorSendGroup, int64, error) {
 	var sendGroups []*model.MonitorSendGroup
+	var count int64
+
+	// 先获取总数
+	if err := a.db.WithContext(ctx).
+		Model(&model.MonitorSendGroup{}).
+		Where("deleted_at = ?", 0).
+		Count(&count).Error; err != nil {
+		a.l.Error("获取 MonitorSendGroup 总数失败", zap.Error(err))
+		return nil, 0, err
+	}
 
 	if err := a.db.WithContext(ctx).
 		Where("deleted_at = ?", 0).
@@ -128,10 +167,10 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupList(ctx context.Context, offse
 		Limit(limit).
 		Find(&sendGroups).Error; err != nil {
 		a.l.Error("获取所有 MonitorSendGroup 失败", zap.Error(err))
-		return nil, err
+		return nil, 0, err
 	}
 
-	return sendGroups, nil
+	return sendGroups, count, nil
 }
 
 // GetMonitorSendGroupById 通过 ID 获取 MonitorSendGroup
@@ -254,26 +293,24 @@ func (a *alertManagerSendDAO) UpdateMonitorSendGroup(ctx context.Context, tx *go
 	}).Error
 }
 
-// GetMonitorSendGroupTotal 获取监控告警事件总数
-func (a *alertManagerSendDAO) GetMonitorSendGroupTotal(ctx context.Context) (int, error) {
+// GetMonitorSendGroups 获取所有发送组
+func (a *alertManagerSendDAO) GetMonitorSendGroups(ctx context.Context) ([]*model.MonitorSendGroup, int64, error) {
+	var sendGroups []*model.MonitorSendGroup
 	var count int64
 
-	if err := a.db.WithContext(ctx).Model(&model.MonitorSendGroup{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
-		a.l.Error("获取监控告警事件总数失败", zap.Error(err))
-		return 0, err
+	// 先获取总数
+	if err := a.db.WithContext(ctx).
+		Model(&model.MonitorSendGroup{}).
+		Where("deleted_at = ?", 0).
+		Count(&count).Error; err != nil {
+		a.l.Error("获取发送组总数失败", zap.Error(err))
+		return nil, 0, err
 	}
-
-	return int(count), nil
-}
-
-// GetMonitorSendGroups 获取所有发送组
-func (a *alertManagerSendDAO) GetMonitorSendGroups(ctx context.Context) ([]*model.MonitorSendGroup, error) {
-	var sendGroups []*model.MonitorSendGroup
 
 	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).Find(&sendGroups).Error; err != nil {
 		a.l.Error("获取所有发送组失败", zap.Error(err))
-		return nil, err
+		return nil, 0, err
 	}
 
-	return sendGroups, nil
+	return sendGroups, count, nil
 }

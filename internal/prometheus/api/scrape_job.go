@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -58,7 +56,6 @@ func (s *ScrapeJobHandler) RegisterRouters(server *gin.Engine) {
 		scrapeJobs.POST("/create", s.CreateMonitorScrapeJob)
 		scrapeJobs.POST("/update", s.UpdateMonitorScrapeJob)
 		scrapeJobs.DELETE("/:id", s.DeleteMonitorScrapeJob)
-		scrapeJobs.GET("/total", s.GetMonitorScrapeJobTotal)
 	}
 }
 
@@ -66,18 +63,9 @@ func (s *ScrapeJobHandler) RegisterRouters(server *gin.Engine) {
 func (s *ScrapeJobHandler) GetMonitorScrapeJobList(ctx *gin.Context) {
 	var listReq model.ListReq
 
-	if err := ctx.ShouldBindQuery(&listReq); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
-	list, err := s.scrapeJobService.GetMonitorScrapeJobList(ctx, &listReq)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.SuccessWithData(ctx, list)
+	utils.HandleRequest(ctx, &listReq, func() (interface{}, error) {
+		return s.scrapeJobService.GetMonitorScrapeJobList(ctx, &listReq)
+	})
 }
 
 // CreateMonitorScrapeJob 创建监控采集 Job
@@ -85,62 +73,35 @@ func (s *ScrapeJobHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
 	var monitorScrapeJob model.MonitorScrapeJob
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
-	if err := ctx.ShouldBind(&monitorScrapeJob); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
 	monitorScrapeJob.UserID = uc.Uid
 
-	if err := s.scrapeJobService.CreateMonitorScrapeJob(ctx, &monitorScrapeJob); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &monitorScrapeJob, func() (interface{}, error) {
+		return nil, s.scrapeJobService.CreateMonitorScrapeJob(ctx, &monitorScrapeJob)
+	})
 }
 
 // UpdateMonitorScrapeJob 更新监控采集 Job
 func (s *ScrapeJobHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
 	var monitorScrapeJob model.MonitorScrapeJob
 
-	if err := ctx.ShouldBind(&monitorScrapeJob); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
-	if err := s.scrapeJobService.UpdateMonitorScrapeJob(ctx, &monitorScrapeJob); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &monitorScrapeJob, func() (interface{}, error) {
+		return nil, s.scrapeJobService.UpdateMonitorScrapeJob(ctx, &monitorScrapeJob)
+	})
 }
 
 // DeleteMonitorScrapeJob 删除监控采集 Job
 func (s *ScrapeJobHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
-	id := ctx.Param("id")
+	var req model.DeleteMonitorScrapeJobRequest
 
-	intId, err := strconv.Atoi(id)
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
-	if err := s.scrapeJobService.DeleteMonitorScrapeJob(ctx, intId); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	req.ID = id
 
-	utils.Success(ctx)
-}
-
-// GetMonitorScrapeJobTotal 获取监控采集作业总数
-func (s *ScrapeJobHandler) GetMonitorScrapeJobTotal(ctx *gin.Context) {
-	total, err := s.scrapeJobService.GetMonitorScrapeJobTotal(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-	utils.SuccessWithData(ctx, total)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, s.scrapeJobService.DeleteMonitorScrapeJob(ctx, req.ID)
+	})
 }

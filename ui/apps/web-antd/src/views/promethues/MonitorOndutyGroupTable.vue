@@ -99,7 +99,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { message } from 'ant-design-vue';
-import { getOnDutyApi, getOnDutyFuturePlanApi, createOnDutyChangeApi } from '#/api'; 
+import { getOnDutyApi, getOnDutyFuturePlanApi, createOnDutyChangeApi } from '#/api/core/prometheus_onduty'; 
 
 const dutyGroupName = ref('');
 const createUserName = ref('');

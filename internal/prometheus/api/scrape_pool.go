@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -59,7 +57,6 @@ func (s *ScrapePoolHandler) RegisterRouters(server *gin.Engine) {
 		scrapePools.POST("/create", s.CreateMonitorScrapePool)
 		scrapePools.POST("/update", s.UpdateMonitorScrapePool)
 		scrapePools.DELETE("/:id", s.DeleteMonitorScrapePool)
-		scrapePools.GET("/total", s.GetMonitorScrapePoolTotal)
 	}
 }
 
@@ -67,18 +64,9 @@ func (s *ScrapePoolHandler) RegisterRouters(server *gin.Engine) {
 func (s *ScrapePoolHandler) GetMonitorScrapePoolList(ctx *gin.Context) {
 	var listReq model.ListReq
 
-	if err := ctx.ShouldBindQuery(&listReq); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
-	list, err := s.scrapePoolService.GetMonitorScrapePoolList(ctx, &listReq)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.SuccessWithData(ctx, list)
+	utils.HandleRequest(ctx, &listReq, func() (interface{}, error) {
+		return s.scrapePoolService.GetMonitorScrapePoolList(ctx, &listReq)
+	})
 }
 
 // CreateMonitorScrapePool 创建监控采集池
@@ -86,70 +74,42 @@ func (s *ScrapePoolHandler) CreateMonitorScrapePool(ctx *gin.Context) {
 	var monitorScrapePool model.MonitorScrapePool
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
-	if err := ctx.ShouldBind(&monitorScrapePool); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
 	monitorScrapePool.UserID = uc.Uid
-	if err := s.scrapePoolService.CreateMonitorScrapePool(ctx, &monitorScrapePool); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
 
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &monitorScrapePool, func() (interface{}, error) {
+		return nil, s.scrapePoolService.CreateMonitorScrapePool(ctx, &monitorScrapePool)
+	})
 }
 
 // UpdateMonitorScrapePool 更新监控采集池
 func (s *ScrapePoolHandler) UpdateMonitorScrapePool(ctx *gin.Context) {
 	var monitorScrapePool model.MonitorScrapePool
 
-	if err := ctx.ShouldBind(&monitorScrapePool); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
-		return
-	}
-
-	if err := s.scrapePoolService.UpdateMonitorScrapePool(ctx, &monitorScrapePool); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &monitorScrapePool, func() (interface{}, error) {
+		return nil, s.scrapePoolService.UpdateMonitorScrapePool(ctx, &monitorScrapePool)
+	})
 }
 
 // DeleteMonitorScrapePool 删除监控采集池
 func (s *ScrapePoolHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
-	id := ctx.Param("id")
-	atom, err := strconv.Atoi(id)
+	var req model.DeleteMonitorScrapePoolRequest
+
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
-	if err := s.scrapePoolService.DeleteMonitorScrapePool(ctx, atom); err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
+	req.ID = id
 
-	utils.Success(ctx)
-}
-
-// GetMonitorScrapePoolTotal 获取监控采集池总数
-func (s *ScrapePoolHandler) GetMonitorScrapePoolTotal(ctx *gin.Context) {
-	total, err := s.scrapePoolService.GetMonitorScrapePoolTotal(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-	utils.SuccessWithData(ctx, total)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, s.scrapePoolService.DeleteMonitorScrapePool(ctx, req.ID)
+	})
 }
 
 // GetMonitorScrapePoolAll 获取所有监控采集池
 func (s *ScrapePoolHandler) GetMonitorScrapePoolAll(ctx *gin.Context) {
-	all, err := s.scrapePoolService.GetMonitorScrapePoolAll(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-	utils.SuccessWithData(ctx, all)
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return s.scrapePoolService.GetMonitorScrapePoolAll(ctx)
+	})
 }
