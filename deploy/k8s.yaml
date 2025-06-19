@@ -1,0 +1,198 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv
+  namespace: cloudOps
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/mysql
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+  namespace: cloudOps
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: ""
+  selector:
+    matchLabels:
+      type: local
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudOps-mysql
+  namespace: cloudOps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          securityContext:
+            runAsGroup: 0
+            runAsUser: 0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secrets
+                  key: root-password
+            - name: MYSQL_DATABASE
+              value: "cloudOps"
+          volumeMounts:
+            - name: mysql-storage
+              mountPath: /var/lib/mysql
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "0.5"
+              memory: "512Mi"
+      volumes:
+        - name: mysql-storage
+          persistentVolumeClaim:
+            claimName: mysql-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+  namespace: cloudOps
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3306
+      targetPort: 3306
+  selector:
+    app: mysql
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-nodeport
+  namespace: cloudOps
+spec:
+  type: NodePort
+  ports:
+    - port: 3306
+      nodePort: 30881
+  selector:
+    app: mysql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudOps-redis
+  namespace: cloudOps
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:6.2.5
+          securityContext:
+            runAsGroup: 0
+            runAsUser: 0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 6379
+          command:
+            - "redis-server"
+            - "--bind"
+            - "0.0.0.0"
+            - "--protected-mode"
+            - "no"
+            - "--port"
+            - "6379"
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secrets
+                  key: redis-password
+          resources:
+            limits:
+              cpu: "0.5"
+              memory: "512Mi"
+            requests:
+              cpu: "0.2"
+              memory: "256Mi"
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: cloudOps
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: 6379
+  selector:
+    app: redis
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-nodeport
+  namespace: cloudOps
+spec:
+  type: NodePort
+  ports:
+    - port: 6379
+      nodePort: 30882
+  selector:
+    app: redis
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secrets
+  namespace: cloudOps
+type: Opaque
+stringData:
+  root-password: "root"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secrets
+  namespace: cloudOps
+type: Opaque
+stringData:
+  redis-password: "v6SxhWHyZC7S"

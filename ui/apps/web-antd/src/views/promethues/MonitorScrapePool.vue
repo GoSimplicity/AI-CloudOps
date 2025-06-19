@@ -445,8 +445,8 @@ import {
   PlusOutlined,
   MinusCircleOutlined
 } from '@ant-design/icons-vue';
-import { getMonitorScrapePoolListApi, createMonitorScrapePoolApi, deleteMonitorScrapePoolApi, updateMonitorScrapePoolApi, getMonitorScrapePoolTotalApi } from '#/api'
-import type { createMonitorScrapePoolReq, updateMonitorScrapePoolReq, MonitorScrapePoolItem } from '#/api'
+import { getMonitorScrapePoolListApi, createMonitorScrapePoolApi, deleteMonitorScrapePoolApi, updateMonitorScrapePoolApi } from '#/api/core/prometheus_scrape_pool'
+import type { createMonitorScrapePoolReq, updateMonitorScrapePoolReq, MonitorScrapePoolItem } from '#/api/core/prometheus_scrape_pool'
 import { Icon } from '@iconify/vue';
 import type { FormInstance } from 'ant-design-vue';
 interface DynamicItem {
@@ -827,9 +827,13 @@ const handleUpdate = async () => {
 
 const fetchResources = async () => {
   try {
-    const response = await getMonitorScrapePoolListApi(current.value, pageSizeRef.value, searchText.value);
-    data.value = response;
-    total.value = await getMonitorScrapePoolTotalApi();
+    const response = await getMonitorScrapePoolListApi({
+      page: current.value,
+      size: pageSizeRef.value,
+      search: searchText.value,
+    });
+    data.value = response.items;
+    total.value = response.total;
   } catch (error: any) {
 
     message.error(error.message || '获取采集池数据失败');
