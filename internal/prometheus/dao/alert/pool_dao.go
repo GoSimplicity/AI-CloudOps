@@ -68,7 +68,7 @@ func (a *alertManagerPoolDAO) GetAllAlertManagerPools(ctx context.Context) ([]*m
 	var pools []*model.MonitorAlertManagerPool
 	var count int64
 
-	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).Find(&pools).Count(&count).Error; err != nil {
+	if err := a.db.WithContext(ctx).Find(&pools).Count(&count).Error; err != nil {
 		a.l.Error("获取所有 MonitorAlertManagerPool 失败", zap.Error(err))
 		return nil, 0, err
 	}
@@ -100,7 +100,7 @@ func (a *alertManagerPoolDAO) UpdateMonitorAlertManagerPool(ctx context.Context,
 
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertManagerPool{}).
-		Where("id = ? AND deleted_at = ?", monitorAlertManagerPool.ID, 0).
+		Where("id = ?", monitorAlertManagerPool.ID).
 		Updates(map[string]interface{}{
 			"name":                    monitorAlertManagerPool.Name,
 			"alert_manager_instances": monitorAlertManagerPool.AlertManagerInstances,
@@ -126,13 +126,18 @@ func (a *alertManagerPoolDAO) DeleteMonitorAlertManagerPool(ctx context.Context,
 		return fmt.Errorf("无效的 ID: %d", id)
 	}
 
-	if err := a.db.WithContext(ctx).
-		Model(&model.MonitorAlertManagerPool{}).
-		Where("id = ? AND deleted_at = ?", id, 0).
-		Update("deleted_at", time.Now()).
-		Error; err != nil {
-		a.l.Error("删除 MonitorAlertManagerPool 失败", zap.Error(err), zap.Int("id", id))
-		return fmt.Errorf("删除 ID 为 %d 的 MonitorAlertManagerPool 失败: %w", id, err)
+	result := a.db.WithContext(ctx).
+		Where("id = ?", id).
+		Delete(&model.MonitorAlertManagerPool{})
+	
+	if result.Error != nil {
+		a.l.Error("删除 MonitorAlertManagerPool 失败", zap.Error(result.Error), zap.Int("id", id))
+		return fmt.Errorf("删除 ID 为 %d 的 MonitorAlertManagerPool 失败: %w", id, result.Error)
+	}
+	
+	if result.RowsAffected == 0 {
+		a.l.Warn("尝试删除不存在的 MonitorAlertManagerPool", zap.Int("id", id))
+		return fmt.Errorf("ID 为 %d 的 MonitorAlertManagerPool 不存在", id)
 	}
 
 	return nil
@@ -149,14 +154,14 @@ func (a *alertManagerPoolDAO) SearchMonitorAlertManagerPoolByName(ctx context.Co
 
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertManagerPool{}).
-		Where("LOWER(name) LIKE ? AND deleted_at = ?", "%"+strings.ToLower(name)+"%", 0).
+		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
 		Count(&count).Error; err != nil {
 		a.l.Error("获取搜索结果总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	if err := a.db.WithContext(ctx).
-		Where("LOWER(name) LIKE ? AND deleted_at = ?", "%"+strings.ToLower(name)+"%", 0).
+		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
 		Find(&pools).Error; err != nil {
 		a.l.Error("通过名称搜索 MonitorAlertManagerPool 失败", zap.Error(err))
 		return nil, 0, err
@@ -174,7 +179,7 @@ func (a *alertManagerPoolDAO) GetAlertPoolByID(ctx context.Context, poolID int) 
 
 	var alertPool model.MonitorAlertManagerPool
 
-	if err := a.db.WithContext(ctx).Where("id = ? AND deleted_at = ?", poolID, 0).First(&alertPool).Error; err != nil {
+	if err := a.db.WithContext(ctx).Where("id = ?", poolID).First(&alertPool).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("未找到 ID 为 %d 的 AlertPool", poolID)
 		}
@@ -195,7 +200,7 @@ func (a *alertManagerPoolDAO) CheckMonitorAlertManagerPoolExists(ctx context.Con
 
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertManagerPool{}).
-		Where("name = ? AND deleted_at = ?", alertManagerPool.Name, 0).
+		Where("name = ?", alertManagerPool.Name).
 		Count(&count).Error; err != nil {
 		a.l.Error("检查 MonitorAlertManagerPool 是否存在失败", zap.Error(err))
 		return false, err
@@ -214,13 +219,13 @@ func (a *alertManagerPoolDAO) GetMonitorAlertManagerPoolList(ctx context.Context
 	var count int64
 
 	// 先获取总数
-	if err := a.db.WithContext(ctx).Model(&model.MonitorAlertManagerPool{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+	if err := a.db.WithContext(ctx).Model(&model.MonitorAlertManagerPool{}).Count(&count).Error; err != nil {
 		a.l.Error("获取 MonitorAlertManagerPool 总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	// 再获取分页数据
-	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).Order("created_at DESC").Offset(offset).Limit(limit).Find(&pools).Error; err != nil {
+	if err := a.db.WithContext(ctx).Order("created_at DESC").Offset(offset).Limit(limit).Find(&pools).Error; err != nil {
 		a.l.Error("获取 MonitorAlertManagerPool 列表失败", zap.Error(err))
 		return nil, 0, err
 	}
@@ -232,7 +237,7 @@ func (a *alertManagerPoolDAO) GetMonitorAlertManagerPoolList(ctx context.Context
 func (a *alertManagerPoolDAO) GetMonitorAlertManagerPoolTotal(ctx context.Context) (int, error) {
 	var count int64
 
-	if err := a.db.WithContext(ctx).Model(&model.MonitorAlertManagerPool{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+	if err := a.db.WithContext(ctx).Model(&model.MonitorAlertManagerPool{}).Count(&count).Error; err != nil {
 		a.l.Error("获取 MonitorAlertManagerPool 总数失败", zap.Error(err))
 		return 0, err
 	}

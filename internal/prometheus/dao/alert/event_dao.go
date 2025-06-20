@@ -77,7 +77,7 @@ func (a *alertManagerEventDAO) GetMonitorAlertEventById(ctx context.Context, id 
 
 	var alertEvent model.MonitorAlertEvent
 
-	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).First(&alertEvent, id).Error; err != nil {
+	if err := a.db.WithContext(ctx).First(&alertEvent, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("未找到ID为 %d 的告警事件", id)
 		}
@@ -100,7 +100,6 @@ func (a *alertManagerEventDAO) SearchMonitorAlertEventByName(ctx context.Context
 	// 先获取符合条件的记录总数
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertEvent{}).
-		Where("deleted_at = ?", 0).
 		Where("alert_name LIKE ?", "%"+name+"%").
 		Count(&total).Error; err != nil {
 		a.l.Error("获取搜索记录总数失败", zap.Error(err), zap.String("name", name))
@@ -109,7 +108,6 @@ func (a *alertManagerEventDAO) SearchMonitorAlertEventByName(ctx context.Context
 
 	// 获取符合条件的记录列表
 	if err := a.db.WithContext(ctx).
-		Where("deleted_at = ?", 0).
 		Where("alert_name LIKE ?", "%"+name+"%").
 		Find(&alertEvents).Error; err != nil {
 		a.l.Error("通过名称搜索 MonitorAlertEvent 失败", zap.Error(err), zap.String("name", name))
@@ -134,7 +132,6 @@ func (a *alertManagerEventDAO) GetMonitorAlertEventList(ctx context.Context, off
 	// 先获取总数
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertEvent{}).
-		Where("deleted_at = ?", 0).
 		Count(&total).Error; err != nil {
 		a.l.Error("获取 MonitorAlertEvent 总数失败", zap.Error(err))
 		return nil, 0, err
@@ -142,7 +139,6 @@ func (a *alertManagerEventDAO) GetMonitorAlertEventList(ctx context.Context, off
 
 	// 获取分页数据
 	if err := a.db.WithContext(ctx).
-		Where("deleted_at = ?", 0).
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(limit).
@@ -162,7 +158,7 @@ func (a *alertManagerEventDAO) EventAlertClaim(ctx context.Context, event *model
 
 	result := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertEvent{}).
-		Where("id = ? AND deleted_at = ?", event.ID, 0).
+		Where("id = ?", event.ID).
 		Updates(event)
 
 	if result.Error != nil {
@@ -186,7 +182,7 @@ func (a *alertManagerEventDAO) GetAlertEventByID(ctx context.Context, id int) (*
 
 	var alertEvent model.MonitorAlertEvent
 
-	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).First(&alertEvent, id).Error; err != nil {
+	if err := a.db.WithContext(ctx).First(&alertEvent, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("未找到ID为 %d 的告警事件", id)
 		}
@@ -204,7 +200,7 @@ func (a *alertManagerEventDAO) UpdateAlertEvent(ctx context.Context, alertEvent 
 	}
 
 	result := a.db.WithContext(ctx).
-		Where("id = ? AND deleted_at = ?", alertEvent.ID, 0).
+		Where("id = ?", alertEvent.ID).
 		Updates(map[string]interface{}{
 			"alert_name":       alertEvent.AlertName,
 			"fingerprint":      alertEvent.Fingerprint,
@@ -215,7 +211,6 @@ func (a *alertManagerEventDAO) UpdateAlertEvent(ctx context.Context, alertEvent 
 			"silence_id":       alertEvent.SilenceID,
 			"ren_ling_user_id": alertEvent.RenLingUserID,
 			"labels":           alertEvent.Labels,
-			"updated_at":       time.Now(),
 		})
 
 	if result.Error != nil {
@@ -267,7 +262,7 @@ func (a *alertManagerEventDAO) SendMessageToGroup(ctx context.Context, url strin
 func (a *alertManagerEventDAO) GetMonitorAlertEventTotal(ctx context.Context) (int, error) {
 	var count int64
 
-	if err := a.db.WithContext(ctx).Model(&model.MonitorAlertEvent{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+	if err := a.db.WithContext(ctx).Model(&model.MonitorAlertEvent{}).Count(&count).Error; err != nil {
 		a.l.Error("获取监控告警事件总数失败", zap.Error(err))
 		return 0, err
 	}
