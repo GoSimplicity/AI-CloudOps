@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -77,8 +78,8 @@ func (a *alertManagerPoolDAO) GetAllAlertManagerPools(ctx context.Context) ([]*m
 
 // CreateMonitorAlertManagerPool 创建 AlertManagerPool
 func (a *alertManagerPoolDAO) CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
-	monitorAlertManagerPool.CreatedAt = getTime()
-	monitorAlertManagerPool.UpdatedAt = getTime()
+	monitorAlertManagerPool.CreatedAt = time.Now()
+	monitorAlertManagerPool.UpdatedAt = time.Now()
 
 	if err := a.db.WithContext(ctx).Create(monitorAlertManagerPool).Error; err != nil {
 		a.l.Error("创建 MonitorAlertManagerPool 失败", zap.Error(err))
@@ -95,7 +96,7 @@ func (a *alertManagerPoolDAO) UpdateMonitorAlertManagerPool(ctx context.Context,
 		return fmt.Errorf("monitorAlertManagerPool 的 ID 必须设置且非零")
 	}
 
-	monitorAlertManagerPool.UpdatedAt = getTime()
+	monitorAlertManagerPool.UpdatedAt = time.Now()
 
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertManagerPool{}).
@@ -128,7 +129,7 @@ func (a *alertManagerPoolDAO) DeleteMonitorAlertManagerPool(ctx context.Context,
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertManagerPool{}).
 		Where("id = ? AND deleted_at = ?", id, 0).
-		Update("deleted_at", getTime()).
+		Update("deleted_at", time.Now()).
 		Error; err != nil {
 		a.l.Error("删除 MonitorAlertManagerPool 失败", zap.Error(err), zap.Int("id", id))
 		return fmt.Errorf("删除 ID 为 %d 的 MonitorAlertManagerPool 失败: %w", id, err)

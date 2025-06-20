@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -85,8 +86,8 @@ func (a *alertManagerOnDutyDAO) GetAllMonitorOnDutyGroup(ctx context.Context) ([
 
 // CreateMonitorOnDutyGroup 创建新的值班组
 func (a *alertManagerOnDutyDAO) CreateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error {
-	monitorOnDutyGroup.CreatedAt = getTime()
-	monitorOnDutyGroup.UpdatedAt = getTime()
+	monitorOnDutyGroup.CreatedAt = time.Now()
+	monitorOnDutyGroup.UpdatedAt = time.Now()
 
 	if err := a.db.WithContext(ctx).Create(monitorOnDutyGroup).Error; err != nil {
 		a.l.Error("创建值班组失败", zap.Error(err))
@@ -124,7 +125,7 @@ func (a *alertManagerOnDutyDAO) UpdateMonitorOnDutyGroup(ctx context.Context, mo
 		return fmt.Errorf("无效的值班组ID: %d", monitorOnDutyGroup.ID)
 	}
 
-	monitorOnDutyGroup.UpdatedAt = getTime()
+	monitorOnDutyGroup.UpdatedAt = time.Now()
 
 	// 使用单个事务处理所有更新操作
 	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -166,7 +167,7 @@ func (a *alertManagerOnDutyDAO) DeleteMonitorOnDutyGroup(ctx context.Context, id
 
 	result := a.db.WithContext(ctx).Model(&model.MonitorOnDutyGroup{}).
 		Where("id = ? AND deleted_at = ?", id, 0).
-		Update("deleted_at", getTime())
+		Update("deleted_at", time.Now())
 	if err := result.Error; err != nil {
 		a.l.Error("删除值班组失败", zap.Error(err), zap.Int("id", id))
 		return fmt.Errorf("删除值班组失败: %w", err)
@@ -201,8 +202,8 @@ func (a *alertManagerOnDutyDAO) SearchMonitorOnDutyGroupByName(ctx context.Conte
 
 // CreateMonitorOnDutyGroupChange 创建值班组变更记录
 func (a *alertManagerOnDutyDAO) CreateMonitorOnDutyGroupChange(ctx context.Context, monitorOnDutyGroupChange *model.MonitorOnDutyChange) error {
-	monitorOnDutyGroupChange.CreatedAt = getTime()
-	monitorOnDutyGroupChange.UpdatedAt = getTime()
+	monitorOnDutyGroupChange.CreatedAt = time.Now()
+	monitorOnDutyGroupChange.UpdatedAt = time.Now()
 
 	if err := a.db.WithContext(ctx).Create(monitorOnDutyGroupChange).Error; err != nil {
 		a.l.Error("创建值班组变更记录失败", zap.Error(err))
@@ -273,8 +274,8 @@ func (a *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx
 
 // CreateMonitorOnDutyHistory 创建值班历史记录
 func (a *alertManagerOnDutyDAO) CreateMonitorOnDutyHistory(ctx context.Context, monitorOnDutyHistory *model.MonitorOnDutyHistory) error {
-	monitorOnDutyHistory.CreatedAt = getTime()
-	monitorOnDutyHistory.UpdatedAt = getTime()
+	monitorOnDutyHistory.CreatedAt = time.Now()
+	monitorOnDutyHistory.UpdatedAt = time.Now()
 
 	if err := a.db.WithContext(ctx).Create(monitorOnDutyHistory).Error; err != nil {
 		a.l.Error("创建值班历史记录失败", zap.Error(err))

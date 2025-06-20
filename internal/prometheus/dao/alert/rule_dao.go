@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -148,8 +149,8 @@ func (a *alertManagerRuleDAO) GetMonitorAlertRuleList(ctx context.Context, offse
 
 // CreateMonitorAlertRule 创建 MonitorAlertRule
 func (a *alertManagerRuleDAO) CreateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error {
-	monitorAlertRule.UpdatedAt = getTime()
-	monitorAlertRule.CreatedAt = getTime()
+	monitorAlertRule.UpdatedAt = time.Now()
+	monitorAlertRule.CreatedAt = time.Now()
 
 	if err := a.db.WithContext(ctx).Create(monitorAlertRule).Error; err != nil {
 		a.l.Error("创建 MonitorAlertRule 失败", zap.Error(err))
@@ -198,7 +199,7 @@ func (a *alertManagerRuleDAO) UpdateMonitorAlertRule(ctx context.Context, monito
 			"for_time":      monitorAlertRule.ForTime,
 			"labels":        monitorAlertRule.Labels,
 			"annotations":   monitorAlertRule.Annotations,
-			"updated_at":    getTime(),
+			"updated_at":    time.Now(),
 		}).Error; err != nil {
 		a.l.Error("更新 MonitorAlertRule 失败", zap.Error(err), zap.Int("id", monitorAlertRule.ID))
 		return err
@@ -251,7 +252,7 @@ func (a *alertManagerRuleDAO) DeleteMonitorAlertRule(ctx context.Context, ruleID
 	}
 
 	result := a.db.WithContext(ctx).Model(&model.MonitorAlertRule{}).Where("id = ? AND deleted_at = ?", ruleID, 0).Updates(map[string]interface{}{
-		"deleted_at": getTime(),
+		"deleted_at": time.Now(),
 	})
 	if err := result.Error; err != nil {
 		a.l.Error("删除 MonitorAlertRule 失败", zap.Error(err), zap.Int("ruleID", ruleID))

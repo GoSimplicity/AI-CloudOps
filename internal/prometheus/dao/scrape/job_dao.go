@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -84,8 +85,8 @@ func (s *scrapeJobDAO) GetMonitorScrapeJobList(ctx context.Context, offset, limi
 
 // CreateMonitorScrapeJob 创建监控采集作业
 func (s *scrapeJobDAO) CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
-	monitorScrapeJob.CreatedAt = getTime()
-	monitorScrapeJob.UpdatedAt = getTime()
+	monitorScrapeJob.CreatedAt = time.Now()
+	monitorScrapeJob.UpdatedAt = time.Now()
 
 	if err := s.db.WithContext(ctx).Create(monitorScrapeJob).Error; err != nil {
 		s.l.Error("创建 MonitorScrapeJob 失败", zap.Error(err))
@@ -122,7 +123,7 @@ func (s *scrapeJobDAO) UpdateMonitorScrapeJob(ctx context.Context, monitorScrape
 		return fmt.Errorf("monitorScrapeJob 的 ID 必须大于 0")
 	}
 
-	monitorScrapeJob.UpdatedAt = getTime()
+	monitorScrapeJob.UpdatedAt = time.Now()
 
 	if err := s.db.WithContext(ctx).
 		Model(&model.MonitorScrapeJob{}).
@@ -166,7 +167,7 @@ func (s *scrapeJobDAO) DeleteMonitorScrapeJob(ctx context.Context, jobId int) er
 		Model(&model.MonitorScrapeJob{}).
 		Where("id = ? AND deleted_at = ?", jobId, 0).
 		Updates(map[string]interface{}{
-			"deleted_at": getTime(),
+			"deleted_at": time.Now(),
 		})
 	if err := result.Error; err != nil {
 		s.l.Error("删除 MonitorScrapeJob 失败", zap.Error(err), zap.Int("jobId", jobId))
