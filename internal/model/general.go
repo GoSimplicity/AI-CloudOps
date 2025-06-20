@@ -30,14 +30,14 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/plugin/soft_delete"
+	"gorm.io/gorm"
 )
 
 type Model struct {
-	ID        int                   `json:"id" gorm:"primaryKey;autoIncrement;comment:主键ID"`
-	CreatedAt time.Time             `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`
-	UpdatedAt time.Time             `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`
-	DeletedAt soft_delete.DeletedAt `json:"deleted_at" gorm:"index;comment:删除时间"`
+	ID        int            `json:"id" gorm:"primaryKey;autoIncrement;comment:主键ID"`
+	CreatedAt time.Time      `json:"created_at" gorm:"autoCreateTime;comment:创建时间"`
+	UpdatedAt time.Time      `json:"updated_at" gorm:"autoUpdateTime;comment:更新时间"`
+	DeletedAt gorm.DeletedAt `json:"deleted_at" gorm:"index;comment:删除时间"`
 }
 
 // ListReq 列表请求

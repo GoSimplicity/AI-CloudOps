@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -197,8 +198,8 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupById(ctx context.Context, id in
 
 // CreateMonitorSendGroup 创建 MonitorSendGroup
 func (a *alertManagerSendDAO) CreateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error {
-	monitorSendGroup.CreatedAt = getTime()
-	monitorSendGroup.UpdatedAt = getTime()
+	monitorSendGroup.CreatedAt = time.Now()
+	monitorSendGroup.UpdatedAt = time.Now()
 
 	if err := a.db.WithContext(ctx).Create(monitorSendGroup).Error; err != nil {
 		a.l.Error("创建 MonitorSendGroup 失败", zap.Error(err))
@@ -219,7 +220,7 @@ func (a *alertManagerSendDAO) DeleteMonitorSendGroup(ctx context.Context, id int
 		Model(&model.MonitorSendGroup{}).
 		Where("id = ? AND deleted_at = ?", id, 0).
 		Updates(map[string]interface{}{
-			"deleted_at": getTime(),
+			"deleted_at": time.Now(),
 		})
 	if err := result.Error; err != nil {
 		a.l.Error("删除 MonitorSendGroup 失败", zap.Error(err), zap.Int("id", id))
@@ -289,7 +290,7 @@ func (a *alertManagerSendDAO) UpdateMonitorSendGroup(ctx context.Context, tx *go
 		"notify_methods":          monitorSendGroup.NotifyMethods,
 		"need_upgrade":            monitorSendGroup.NeedUpgrade,
 		"upgrade_minutes":         monitorSendGroup.UpgradeMinutes,
-		"updated_at":              getTime(),
+		"updated_at":              time.Now(),
 	}).Error
 }
 
