@@ -165,9 +165,7 @@ func (a *alertManagerOnDutyDAO) DeleteMonitorOnDutyGroup(ctx context.Context, id
 		return fmt.Errorf("无效的值班组ID: %d", id)
 	}
 
-	result := a.db.WithContext(ctx).Model(&model.MonitorOnDutyGroup{}).
-		Where("id = ? AND deleted_at = ?", id, 0).
-		Update("deleted_at", time.Now())
+	result := a.db.WithContext(ctx).Delete(&model.MonitorOnDutyGroup{}, id)
 	if err := result.Error; err != nil {
 		a.l.Error("删除值班组失败", zap.Error(err), zap.Int("id", id))
 		return fmt.Errorf("删除值班组失败: %w", err)
