@@ -65,11 +65,6 @@ func NewScrapePoolDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO) Scrap
 	}
 }
 
-// getTime 获取当前时间戳
-func getTime() int64 {
-	return time.Now().Unix()
-}
-
 // GetAllMonitorScrapePool 获取所有监控采集池
 func (s *scrapePoolDAO) GetAllMonitorScrapePool(ctx context.Context) ([]*model.MonitorScrapePool, error) {
 	var pools []*model.MonitorScrapePool
@@ -109,8 +104,8 @@ func (s *scrapePoolDAO) CreateMonitorScrapePool(ctx context.Context, monitorScra
 		return fmt.Errorf("pool已存在,请勿重复创建")
 	}
 
-	monitorScrapePool.CreatedAt = getTime()
-	monitorScrapePool.UpdatedAt = getTime()
+	monitorScrapePool.CreatedAt = time.Now()
+	monitorScrapePool.UpdatedAt = time.Now()
 
 	if err := s.db.WithContext(ctx).Create(monitorScrapePool).Error; err != nil {
 		s.l.Error("创建 MonitorScrapePool 失败", zap.Error(err))
@@ -139,7 +134,7 @@ func (s *scrapePoolDAO) GetMonitorScrapePoolById(ctx context.Context, id int) (*
 
 // UpdateMonitorScrapePool 更新监控采集池
 func (s *scrapePoolDAO) UpdateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error {
-	monitorScrapePool.UpdatedAt = getTime()
+	monitorScrapePool.UpdatedAt = time.Now()
 
 	if monitorScrapePool.ID <= 0 {
 		s.l.Error("UpdateMonitorScrapePool 失败: ID 为 0", zap.Any("pool", monitorScrapePool))
@@ -183,7 +178,7 @@ func (s *scrapePoolDAO) DeleteMonitorScrapePool(ctx context.Context, poolId int)
 	result := s.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
 		Where("id = ? AND deleted_at = ?", poolId, 0).
-		Update("deleted_at", getTime())
+		Update("deleted_at", time.Now())
 
 	if result.Error != nil {
 		s.l.Error("删除 MonitorScrapePool 失败", zap.Error(result.Error), zap.Int("poolId", poolId))

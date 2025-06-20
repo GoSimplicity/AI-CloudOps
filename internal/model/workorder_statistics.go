@@ -119,7 +119,7 @@ type PriorityDistribution struct {
 
 // WorkOrderStatistics 工单统计表
 type WorkOrderStatistics struct {
-	ID              int       `json:"id" gorm:"primaryKey"`
+	Model
 	Date            time.Time `json:"date" gorm:"index;not null"`
 	TotalCount      int       `json:"total_count" gorm:"default:0"`
 	CompletedCount  int       `json:"completed_count" gorm:"default:0"`
@@ -128,8 +128,6 @@ type WorkOrderStatistics struct {
 	OverdueCount    int       `json:"overdue_count" gorm:"default:0"`
 	AvgProcessTime  float64   `json:"avg_process_time" gorm:"default:0"`
 	AvgResponseTime float64   `json:"avg_response_time" gorm:"default:0"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 func (WorkOrderStatistics) TableName() string {
@@ -138,7 +136,7 @@ func (WorkOrderStatistics) TableName() string {
 
 // UserPerformance 用户绩效表
 type UserPerformance struct {
-	ID                int       `json:"id" gorm:"primaryKey"`
+	Model
 	UserID            int       `json:"user_id" gorm:"index;not null"`
 	UserName          string    `json:"user_name" gorm:"not null"`
 	Date              time.Time `json:"date" gorm:"index;not null"`
@@ -148,8 +146,6 @@ type UserPerformance struct {
 	OverdueCount      int       `json:"overdue_count" gorm:"default:0"`
 	AvgResponseTime   float64   `json:"avg_response_time" gorm:"default:0"`
 	AvgProcessingTime float64   `json:"avg_processing_time" gorm:"default:0"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 func (UserPerformance) TableName() string {
@@ -158,7 +154,7 @@ func (UserPerformance) TableName() string {
 
 // CategoryPerformance 分类绩效表
 type CategoryPerformance struct {
-	ID                int       `json:"id" gorm:"primaryKey"`
+	Model
 	CategoryID        int       `json:"category_id" gorm:"index;not null"`
 	CategoryName      string    `json:"category_name" gorm:"not null"`
 	Date              time.Time `json:"date" gorm:"index;not null"`
@@ -166,8 +162,6 @@ type CategoryPerformance struct {
 	CompletedCount    int       `json:"completed_count" gorm:"default:0"`
 	OverdueCount      int       `json:"overdue_count" gorm:"default:0"`
 	AvgProcessingTime float64   `json:"avg_processing_time" gorm:"default:0"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 func (CategoryPerformance) TableName() string {
@@ -176,7 +170,7 @@ func (CategoryPerformance) TableName() string {
 
 // TemplatePerformance 模板绩效表
 type TemplatePerformance struct {
-	ID                int       `json:"id" gorm:"primaryKey"`
+	Model
 	TemplateID        int       `json:"template_id" gorm:"index;not null"`
 	TemplateName      string    `json:"template_name" gorm:"not null"`
 	CategoryID        *int      `json:"category_id" gorm:"index"`
@@ -184,8 +178,6 @@ type TemplatePerformance struct {
 	UsageCount        int       `json:"usage_count" gorm:"default:0"`
 	CompletedCount    int       `json:"completed_count" gorm:"default:0"`
 	AvgProcessingTime float64   `json:"avg_processing_time" gorm:"default:0"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 func (TemplatePerformance) TableName() string {

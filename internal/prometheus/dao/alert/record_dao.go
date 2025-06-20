@@ -28,6 +28,7 @@ package alert
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -146,8 +147,8 @@ func (a *alertManagerRecordDAO) GetMonitorRecordRuleList(ctx context.Context, of
 
 // CreateMonitorRecordRule 创建 MonitorRecordRule
 func (a *alertManagerRecordDAO) CreateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error {
-	recordRule.CreatedAt = getTime()
-	recordRule.UpdatedAt = getTime()
+	recordRule.CreatedAt = time.Now()
+	recordRule.UpdatedAt = time.Now()
 
 	if err := a.db.WithContext(ctx).Create(recordRule).Error; err != nil {
 		a.l.Error("创建 MonitorRecordRule 失败", zap.Error(err))
@@ -184,7 +185,7 @@ func (a *alertManagerRecordDAO) UpdateMonitorRecordRule(ctx context.Context, rec
 		return fmt.Errorf("monitorRecordRule 的 ID 必须设置且非零")
 	}
 
-	recordRule.UpdatedAt = getTime()
+	recordRule.UpdatedAt = time.Now()
 
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorRecordRule{}).
@@ -198,7 +199,7 @@ func (a *alertManagerRecordDAO) UpdateMonitorRecordRule(ctx context.Context, rec
 			"expr":        recordRule.Expr,
 			"labels":      recordRule.Labels,
 			"annotations": recordRule.Annotations,
-			"updated_at":  getTime(),
+			"updated_at":  time.Now(),
 		}).Error; err != nil {
 		a.l.Error("更新 MonitorRecordRule 失败", zap.Error(err), zap.Int("id", recordRule.ID))
 		return err
@@ -218,7 +219,7 @@ func (a *alertManagerRecordDAO) DeleteMonitorRecordRule(ctx context.Context, rul
 		Model(&model.MonitorRecordRule{}).
 		Where("id = ? AND deleted_at = ?", ruleID, 0).
 		Updates(map[string]interface{}{
-			"deleted_at": getTime(),
+			"deleted_at": time.Now(),
 		})
 
 	if err := result.Error; err != nil {
@@ -260,7 +261,7 @@ func (a *alertManagerRecordDAO) EnableSwitchMonitorRecordRule(ctx context.Contex
 		Where("id = ? AND deleted_at = ?", ruleID, 0).
 		Updates(map[string]interface{}{
 			"enable":     newEnable,
-			"updated_at": getTime(),
+			"updated_at": time.Now(),
 		}).Error; err != nil {
 		a.l.Error("更新 MonitorRecordRule 状态失败", zap.Error(err), zap.Int("ruleID", ruleID))
 		return err

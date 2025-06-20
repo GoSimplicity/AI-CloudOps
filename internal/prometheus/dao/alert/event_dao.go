@@ -68,11 +68,6 @@ func NewAlertManagerEventDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO
 	}
 }
 
-// 获取当前时间戳
-func getTime() int64 {
-	return time.Now().Unix()
-}
-
 // GetMonitorAlertEventById 获取告警事件
 func (a *alertManagerEventDAO) GetMonitorAlertEventById(ctx context.Context, id int) (*model.MonitorAlertEvent, error) {
 	if id <= 0 {
@@ -220,7 +215,7 @@ func (a *alertManagerEventDAO) UpdateAlertEvent(ctx context.Context, alertEvent 
 			"silence_id":       alertEvent.SilenceID,
 			"ren_ling_user_id": alertEvent.RenLingUserID,
 			"labels":           alertEvent.Labels,
-			"updated_at":       getTime(),
+			"updated_at":       time.Now(),
 		})
 
 	if result.Error != nil {
@@ -279,3 +274,8 @@ func (a *alertManagerEventDAO) GetMonitorAlertEventTotal(ctx context.Context) (i
 
 	return int(count), nil
 }
+
+// 获取当前时间戳（已弃用，模型已统一为 time.Time 类型，不再需要获取时间戳）
+// func getTime() int64 {
+//     return time.Now().Unix()
+// }
