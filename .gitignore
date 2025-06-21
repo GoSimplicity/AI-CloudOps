@@ -30,9 +30,6 @@ data/nginx/log
 # env file
 .env
 
-# Configuration files with sensitive data
-config/config.yaml
-
 # debug file
 __debug_bin*
 
