@@ -33,7 +33,7 @@ type CloudProvider string
 const (
 	CloudProviderAliyun CloudProvider = "aliyun" // 阿里云
 	CloudProviderLocal  CloudProvider = "local"  // 本地环境
-	// CloudProviderHuawei  CloudProvider = "huawei"  // 华为云
+	CloudProviderHuawei CloudProvider = "huawei" // 华为云
 	// CloudProviderTencent CloudProvider = "tencent" // 腾讯云
 	// CloudProviderAWS     CloudProvider = "aws"     // AWS
 	// CloudProviderAzure   CloudProvider = "azure"   // Azure
