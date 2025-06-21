@@ -29,7 +29,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -69,7 +68,7 @@ func NewScrapePoolDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO) Scrap
 func (s *scrapePoolDAO) GetAllMonitorScrapePool(ctx context.Context) ([]*model.MonitorScrapePool, error) {
 	var pools []*model.MonitorScrapePool
 
-	if err := s.db.WithContext(ctx).Where("deleted_at = ?", 0).Find(&pools).Error; err != nil {
+	if err := s.db.WithContext(ctx).Find(&pools).Error; err != nil {
 		s.l.Error("获取所有 MonitorScrapePool 记录失败", zap.Error(err))
 		return nil, err
 	}
@@ -81,7 +80,7 @@ func (s *scrapePoolDAO) GetAllMonitorScrapePool(ctx context.Context) ([]*model.M
 func (s *scrapePoolDAO) GetMonitorScrapePoolList(ctx context.Context, offset, limit int) ([]*model.MonitorScrapePool, error) {
 	var pools []*model.MonitorScrapePool
 
-	if err := s.db.WithContext(ctx).Where("deleted_at = ?", 0).Offset(offset).Limit(limit).Find(&pools).Error; err != nil {
+	if err := s.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&pools).Error; err != nil {
 		s.l.Error("获取所有 MonitorScrapePool 记录失败", zap.Error(err))
 		return nil, err
 	}
@@ -94,7 +93,7 @@ func (s *scrapePoolDAO) CreateMonitorScrapePool(ctx context.Context, monitorScra
 	// 检查是否已存在相同名称的pool
 	var count int64
 	if err := s.db.WithContext(ctx).Model(&model.MonitorScrapePool{}).
-		Where("name = ? AND deleted_at = ?", monitorScrapePool.Name, 0).
+		Where("name = ?", monitorScrapePool.Name).
 		Count(&count).Error; err != nil {
 		s.l.Error("检查 MonitorScrapePool 是否存在失败", zap.Error(err))
 		return err
@@ -103,9 +102,6 @@ func (s *scrapePoolDAO) CreateMonitorScrapePool(ctx context.Context, monitorScra
 	if count > 0 {
 		return fmt.Errorf("pool已存在,请勿重复创建")
 	}
-
-	monitorScrapePool.CreatedAt = time.Now()
-	monitorScrapePool.UpdatedAt = time.Now()
 
 	if err := s.db.WithContext(ctx).Create(monitorScrapePool).Error; err != nil {
 		s.l.Error("创建 MonitorScrapePool 失败", zap.Error(err))
@@ -124,7 +120,7 @@ func (s *scrapePoolDAO) GetMonitorScrapePoolById(ctx context.Context, id int) (*
 
 	var pool model.MonitorScrapePool
 
-	if err := s.db.WithContext(ctx).Where("deleted_at = ?", 0).First(&pool, id).Error; err != nil {
+	if err := s.db.WithContext(ctx).First(&pool, id).Error; err != nil {
 		s.l.Error("根据 ID 获取 MonitorScrapePool 失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
@@ -134,8 +130,6 @@ func (s *scrapePoolDAO) GetMonitorScrapePoolById(ctx context.Context, id int) (*
 
 // UpdateMonitorScrapePool 更新监控采集池
 func (s *scrapePoolDAO) UpdateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error {
-	monitorScrapePool.UpdatedAt = time.Now()
-
 	if monitorScrapePool.ID <= 0 {
 		s.l.Error("UpdateMonitorScrapePool 失败: ID 为 0", zap.Any("pool", monitorScrapePool))
 		return fmt.Errorf("monitorScrapePool 的 ID 必须设置且非零")
@@ -143,7 +137,7 @@ func (s *scrapePoolDAO) UpdateMonitorScrapePool(ctx context.Context, monitorScra
 
 	if err := s.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
-		Where("id = ? AND deleted_at = ?", monitorScrapePool.ID, 0).
+		Where("id = ?", monitorScrapePool.ID).
 		Updates(map[string]interface{}{
 			"name":                    monitorScrapePool.Name,
 			"prometheus_instances":    monitorScrapePool.PrometheusInstances,
@@ -159,7 +153,6 @@ func (s *scrapePoolDAO) UpdateMonitorScrapePool(ctx context.Context, monitorScra
 			"alert_manager_url":       monitorScrapePool.AlertManagerUrl,
 			"rule_file_path":          monitorScrapePool.RuleFilePath,
 			"record_file_path":        monitorScrapePool.RecordFilePath,
-			"updated_at":              monitorScrapePool.UpdatedAt,
 		}).Error; err != nil {
 		s.l.Error("更新 MonitorScrapePool 失败", zap.Error(err), zap.Int("id", monitorScrapePool.ID))
 		return err
@@ -176,9 +169,8 @@ func (s *scrapePoolDAO) DeleteMonitorScrapePool(ctx context.Context, poolId int)
 	}
 
 	result := s.db.WithContext(ctx).
-		Model(&model.MonitorScrapePool{}).
-		Where("id = ? AND deleted_at = ?", poolId, 0).
-		Update("deleted_at", time.Now())
+		Where("id = ?", poolId).
+		Delete(&model.MonitorScrapePool{})
 
 	if result.Error != nil {
 		s.l.Error("删除 MonitorScrapePool 失败", zap.Error(result.Error), zap.Int("poolId", poolId))
@@ -201,7 +193,7 @@ func (s *scrapePoolDAO) SearchMonitorScrapePoolsByName(ctx context.Context, name
 	var pools []*model.MonitorScrapePool
 
 	if err := s.db.WithContext(ctx).
-		Where("LOWER(name) LIKE ? AND deleted_at = ?", "%"+strings.ToLower(name)+"%", 0).
+		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
 		Find(&pools).Error; err != nil {
 		s.l.Error("通过名称搜索 MonitorScrapePool 失败", zap.Error(err))
 		return nil, err
@@ -215,7 +207,7 @@ func (s *scrapePoolDAO) GetMonitorScrapePoolSupportedAlert(ctx context.Context) 
 	var pools []*model.MonitorScrapePool
 
 	if err := s.db.WithContext(ctx).
-		Where("support_alert = ? AND deleted_at = ?", true, 0).
+		Where("support_alert = ?", true).
 		Find(&pools).Error; err != nil {
 		s.l.Error("获取支持警报的 MonitorScrapePool 失败", zap.Error(err))
 		return nil, err
@@ -229,7 +221,7 @@ func (s *scrapePoolDAO) GetMonitorScrapePoolSupportedRecord(ctx context.Context)
 	var pools []*model.MonitorScrapePool
 
 	if err := s.db.WithContext(ctx).
-		Where("support_record = ? AND deleted_at = ?", true, 0).
+		Where("support_record = ?", true).
 		Find(&pools).Error; err != nil {
 		s.l.Error("获取支持记录规则的 MonitorScrapePool 失败", zap.Error(err))
 		return nil, err
@@ -248,7 +240,7 @@ func (s *scrapePoolDAO) CheckMonitorScrapePoolExists(ctx context.Context, scrape
 
 	if err := s.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
-		Where("name = ? AND deleted_at = ?", scrapePool.Name, 0).
+		Where("name = ?", scrapePool.Name).
 		Count(&count).Error; err != nil {
 		s.l.Error("检查 MonitorScrapePool 是否存在失败", zap.Error(err))
 		return false, err
@@ -261,7 +253,7 @@ func (s *scrapePoolDAO) CheckMonitorScrapePoolExists(ctx context.Context, scrape
 func (s *scrapePoolDAO) GetMonitorScrapePoolTotal(ctx context.Context) (int, error) {
 	var count int64
 
-	if err := s.db.WithContext(ctx).Model(&model.MonitorScrapePool{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&model.MonitorScrapePool{}).Count(&count).Error; err != nil {
 		s.l.Error("获取监控采集池总数失败", zap.Error(err))
 		return 0, err
 	}

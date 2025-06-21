@@ -29,7 +29,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -75,7 +74,7 @@ func (s *scrapeJobDAO) GetMonitorScrapeJobList(ctx context.Context, offset, limi
 
 	var jobs []*model.MonitorScrapeJob
 
-	if err := s.db.WithContext(ctx).Where("deleted_at = ?", 0).Offset(offset).Limit(limit).Find(&jobs).Error; err != nil {
+	if err := s.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&jobs).Error; err != nil {
 		s.l.Error("获取监控采集作业列表失败", zap.Error(err))
 		return nil, err
 	}
@@ -85,9 +84,6 @@ func (s *scrapeJobDAO) GetMonitorScrapeJobList(ctx context.Context, offset, limi
 
 // CreateMonitorScrapeJob 创建监控采集作业
 func (s *scrapeJobDAO) CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
-	monitorScrapeJob.CreatedAt = time.Now()
-	monitorScrapeJob.UpdatedAt = time.Now()
-
 	if err := s.db.WithContext(ctx).Create(monitorScrapeJob).Error; err != nil {
 		s.l.Error("创建 MonitorScrapeJob 失败", zap.Error(err))
 		return err
@@ -106,7 +102,7 @@ func (s *scrapeJobDAO) GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId 
 	var jobs []*model.MonitorScrapeJob
 
 	if err := s.db.WithContext(ctx).
-		Where("deleted_at = ? AND enable = ?", 0, 1).
+		Where("enable = ?", 1).
 		Where("pool_id = ?", poolId).
 		Find(&jobs).Error; err != nil {
 		s.l.Error("获取 MonitorScrapeJob 失败", zap.Error(err), zap.Int("poolId", poolId))
@@ -123,11 +119,9 @@ func (s *scrapeJobDAO) UpdateMonitorScrapeJob(ctx context.Context, monitorScrape
 		return fmt.Errorf("monitorScrapeJob 的 ID 必须大于 0")
 	}
 
-	monitorScrapeJob.UpdatedAt = time.Now()
-
 	if err := s.db.WithContext(ctx).
 		Model(&model.MonitorScrapeJob{}).
-		Where("id = ? AND deleted_at = ?", monitorScrapeJob.ID, 0).
+		Where("id = ?", monitorScrapeJob.ID).
 		Updates(map[string]interface{}{
 			"name":                        monitorScrapeJob.Name,
 			"enable":                      monitorScrapeJob.Enable,
@@ -164,11 +158,9 @@ func (s *scrapeJobDAO) DeleteMonitorScrapeJob(ctx context.Context, jobId int) er
 	}
 
 	result := s.db.WithContext(ctx).
-		Model(&model.MonitorScrapeJob{}).
-		Where("id = ? AND deleted_at = ?", jobId, 0).
-		Updates(map[string]interface{}{
-			"deleted_at": time.Now(),
-		})
+		Where("id = ?", jobId).
+		Delete(&model.MonitorScrapeJob{})
+
 	if err := result.Error; err != nil {
 		s.l.Error("删除 MonitorScrapeJob 失败", zap.Error(err), zap.Int("jobId", jobId))
 		return fmt.Errorf("删除 ID 为 %d 的 MonitorScrapeJob 失败: %w", jobId, err)
@@ -190,7 +182,7 @@ func (s *scrapeJobDAO) SearchMonitorScrapeJobsByName(ctx context.Context, name s
 	var jobs []*model.MonitorScrapeJob
 
 	if err := s.db.WithContext(ctx).
-		Where("deleted_at = ? AND LOWER(name) LIKE ?", 0, "%"+strings.ToLower(name)+"%").
+		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
 		Find(&jobs).Error; err != nil {
 		s.l.Error("通过名称搜索 MonitorScrapeJob 失败", zap.Error(err))
 		return nil, err
@@ -209,7 +201,7 @@ func (s *scrapeJobDAO) CheckMonitorScrapeJobExists(ctx context.Context, name str
 
 	if err := s.db.WithContext(ctx).
 		Model(&model.MonitorScrapeJob{}).
-		Where("deleted_at = ? AND name = ?", 0, name).
+		Where("name = ?", name).
 		Count(&count).Error; err != nil {
 		s.l.Error("检查 MonitorScrapeJob 是否存在失败", zap.Error(err))
 		return false, err
@@ -228,7 +220,7 @@ func (s *scrapeJobDAO) GetMonitorScrapeJobById(ctx context.Context, id int) (*mo
 	var scrapeJob model.MonitorScrapeJob
 
 	if err := s.db.WithContext(ctx).
-		Where("id = ? AND deleted_at = ?", id, 0).
+		Where("id = ?", id).
 		First(&scrapeJob).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("未找到ID为 %d 的记录", id)
@@ -250,7 +242,7 @@ func (s *scrapeJobDAO) CheckMonitorInstanceExists(ctx context.Context, poolID in
 
 	if err := s.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
-		Where("id = ? AND deleted_at = ?", poolID, 0).
+		Where("id = ?", poolID).
 		Count(&count).Error; err != nil {
 		s.l.Error("检查监控实例是否存在失败", zap.Error(err))
 		return false, err
@@ -263,7 +255,7 @@ func (s *scrapeJobDAO) CheckMonitorInstanceExists(ctx context.Context, poolID in
 func (s *scrapeJobDAO) GetMonitorScrapeJobTotal(ctx context.Context) (int, error) {
 	var count int64
 
-	if err := s.db.WithContext(ctx).Model(&model.MonitorScrapeJob{}).Where("deleted_at = ?", 0).Count(&count).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&model.MonitorScrapeJob{}).Count(&count).Error; err != nil {
 		s.l.Error("获取监控采集作业总数失败", zap.Error(err))
 		return 0, err
 	}

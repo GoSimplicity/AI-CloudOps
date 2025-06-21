@@ -191,6 +191,10 @@ AI-CloudOps/
 - Email: [wzijian62@gmail.com](mailto:wzijian62@gmail.com)
 - 微信：GoSimplicity（加我后可邀请进微信群交流）
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=GoSimplicity/AI-CloudOps&type=Date)](https://www.star-history.com/#GoSimplicity/AI-CloudOps&Date)
+
 ## 致谢
 
 感谢所有为本项目贡献代码、文档和建议的人！AI+CloudOps 的发展离不开社区的支持和贡献。

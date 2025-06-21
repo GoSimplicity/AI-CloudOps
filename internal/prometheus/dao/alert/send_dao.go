@@ -79,14 +79,14 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupByPoolId(ctx context.Context, p
 	// 先获取总数
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorSendGroup{}).
-		Where("pool_id = ? AND deleted_at = ?", poolId, 0).
+		Where("pool_id = ?", poolId).
 		Count(&count).Error; err != nil {
 		a.l.Error("获取 MonitorSendGroup 总数失败", zap.Error(err), zap.Int("poolId", poolId))
 		return nil, 0, err
 	}
 
 	if err := a.db.WithContext(ctx).
-		Where("pool_id = ? AND deleted_at = ?", poolId, 0).
+		Where("pool_id = ?", poolId).
 		Find(&sendGroups).Error; err != nil {
 		a.l.Error("获取 MonitorSendGroup 失败", zap.Error(err), zap.Int("poolId", poolId))
 		return nil, 0, err
@@ -108,14 +108,14 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupByOnDutyGroupId(ctx context.Con
 	// 先获取总数
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorSendGroup{}).
-		Where("on_duty_group_id = ? AND deleted_at = ?", onDutyGroupID, 0).
+		Where("on_duty_group_id = ?", onDutyGroupID).
 		Count(&count).Error; err != nil {
 		a.l.Error("获取 MonitorSendGroup 总数失败", zap.Error(err), zap.Int("onDutyGroupID", onDutyGroupID))
 		return nil, 0, err
 	}
 
 	if err := a.db.WithContext(ctx).
-		Where("on_duty_group_id = ? AND deleted_at = ?", onDutyGroupID, 0).
+		Where("on_duty_group_id = ?", onDutyGroupID).
 		Find(&sendGroups).Error; err != nil {
 		a.l.Error("获取 MonitorSendGroup 失败", zap.Error(err), zap.Int("onDutyGroupID", onDutyGroupID))
 		return nil, 0, err
@@ -132,14 +132,14 @@ func (a *alertManagerSendDAO) SearchMonitorSendGroupByName(ctx context.Context, 
 	// 先获取总数
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorSendGroup{}).
-		Where("LOWER(name) LIKE ? AND deleted_at = ?", "%"+strings.ToLower(name)+"%", 0).
+		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
 		Count(&count).Error; err != nil {
 		a.l.Error("获取搜索结果总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	if err := a.db.WithContext(ctx).
-		Where("LOWER(name) LIKE ? AND deleted_at = ?", "%"+strings.ToLower(name)+"%", 0).
+		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
 		Find(&sendGroups).Error; err != nil {
 		a.l.Error("通过名称搜索 MonitorSendGroup 失败", zap.Error(err))
 		return nil, 0, err
@@ -156,14 +156,12 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupList(ctx context.Context, offse
 	// 先获取总数
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorSendGroup{}).
-		Where("deleted_at = ?", 0).
 		Count(&count).Error; err != nil {
 		a.l.Error("获取 MonitorSendGroup 总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	if err := a.db.WithContext(ctx).
-		Where("deleted_at = ?", 0).
 		Offset(offset).
 		Limit(limit).
 		Find(&sendGroups).Error; err != nil {
@@ -184,7 +182,7 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupById(ctx context.Context, id in
 	var sendGroup model.MonitorSendGroup
 
 	if err := a.db.WithContext(ctx).
-		Where("id = ? AND deleted_at = ?", id, 0).
+		Where("id = ?", id).
 		First(&sendGroup).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("未找到 ID 为 %d 的记录", id)
@@ -198,9 +196,6 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupById(ctx context.Context, id in
 
 // CreateMonitorSendGroup 创建 MonitorSendGroup
 func (a *alertManagerSendDAO) CreateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error {
-	monitorSendGroup.CreatedAt = time.Now()
-	monitorSendGroup.UpdatedAt = time.Now()
-
 	if err := a.db.WithContext(ctx).Create(monitorSendGroup).Error; err != nil {
 		a.l.Error("创建 MonitorSendGroup 失败", zap.Error(err))
 		return err
@@ -217,11 +212,9 @@ func (a *alertManagerSendDAO) DeleteMonitorSendGroup(ctx context.Context, id int
 	}
 
 	result := a.db.WithContext(ctx).
-		Model(&model.MonitorSendGroup{}).
-		Where("id = ? AND deleted_at = ?", id, 0).
-		Updates(map[string]interface{}{
-			"deleted_at": time.Now(),
-		})
+		Where("id = ?", id).
+		Delete(&model.MonitorSendGroup{})
+
 	if err := result.Error; err != nil {
 		a.l.Error("删除 MonitorSendGroup 失败", zap.Error(err), zap.Int("id", id))
 		return fmt.Errorf("删除 ID 为 %d 的 MonitorSendGroup 失败: %w", id, err)
@@ -244,7 +237,7 @@ func (a *alertManagerSendDAO) CheckMonitorSendGroupExists(ctx context.Context, s
 
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorSendGroup{}).
-		Where("id = ? AND deleted_at = ?", sendGroup.ID, 0).
+		Where("id = ?", sendGroup.ID).
 		Count(&count).Error; err != nil {
 		a.l.Error("检查 MonitorSendGroup 是否存在失败", zap.Error(err))
 		return false, err
@@ -262,7 +255,7 @@ func (a *alertManagerSendDAO) CheckMonitorSendGroupNameExists(ctx context.Contex
 	var count int64
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorSendGroup{}).
-		Where("name = ? AND deleted_at = ?", sendGroup.Name, 0).
+		Where("name = ?", sendGroup.Name).
 		Count(&count).Error; err != nil {
 		a.l.Error("检查 MonitorSendGroup 名称是否存在失败", zap.Error(err))
 		return false, err
@@ -302,13 +295,12 @@ func (a *alertManagerSendDAO) GetMonitorSendGroups(ctx context.Context) ([]*mode
 	// 先获取总数
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorSendGroup{}).
-		Where("deleted_at = ?", 0).
 		Count(&count).Error; err != nil {
 		a.l.Error("获取发送组总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
-	if err := a.db.WithContext(ctx).Where("deleted_at = ?", 0).Find(&sendGroups).Error; err != nil {
+	if err := a.db.WithContext(ctx).Find(&sendGroups).Error; err != nil {
 		a.l.Error("获取所有发送组失败", zap.Error(err))
 		return nil, 0, err
 	}
