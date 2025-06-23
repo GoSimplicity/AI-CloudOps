@@ -29,6 +29,7 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	huawei "github.com/GoSimplicity/AI-CloudOps/internal/tree/provider/huawei"
 )
 
 type ProviderFactory struct {
@@ -37,10 +38,12 @@ type ProviderFactory struct {
 
 func NewProviderFactory(
 	aliyun *AliyunProviderImpl,
+	huaweiProvider *huawei.HuaweiProviderImpl,
 ) *ProviderFactory {
 	return &ProviderFactory{
 		providers: map[model.CloudProvider]Provider{
 			model.CloudProviderAliyun: aliyun,
+			model.CloudProviderHuawei: huaweiProvider,
 		},
 	}
 }
