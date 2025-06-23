@@ -28,6 +28,7 @@ require (
 	github.com/google/wire v0.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hibiken/asynq v0.22.0
+	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.1.155
 	github.com/joho/godotenv v1.5.1
 	github.com/mark3labs/mcp-go v0.25.0
 	github.com/openkruise/kruise-api v1.7.0
@@ -82,6 +83,7 @@ require (
 	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
+	go.mongodb.org/mongo-driver v1.14.0 // indirect
 )
 
 require (
@@ -121,7 +123,6 @@ require (
 	github.com/go-openapi/jsonpointer v0.20.2 // indirect
 	github.com/go-openapi/jsonreference v0.20.4 // indirect
 	github.com/go-openapi/swag v0.22.9 // indirect
-	github.com/go-ping/ping v1.2.0
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
