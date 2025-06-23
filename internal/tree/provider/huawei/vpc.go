@@ -13,6 +13,7 @@ import (
 // VPC管理相关方法
 // ListVPCs, GetVPC, CreateVPC, DeleteVPC, GetZonesByVpc, getSubnetsByVpc 及相关辅助函数
 
+// ListVPCs 获取指定region下的VPC列表，支持分页。
 func (h *HuaweiProviderImpl) ListVPCs(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceVpc, error) {
 	if region == "" {
 		return nil, fmt.Errorf("region cannot be empty")
@@ -159,7 +160,7 @@ func (h *HuaweiProviderImpl) GetZonesByVpc(ctx context.Context, region string, v
 	return zones, nil
 }
 
-// 获取指定VPC下的子网列表（真实实现）
+// getSubnetsByVpc 获取指定VPC下的子网列表。
 func (h *HuaweiProviderImpl) getSubnetsByVpc(ctx context.Context, region string, vpcId string) ([]*model.ResourceSubnet, error) {
 	if region == "" || vpcId == "" {
 		return nil, fmt.Errorf("region and vpcId cannot be empty")

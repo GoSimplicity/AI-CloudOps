@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// ListDisks
+// ListDisks 获取指定region下的云硬盘列表，支持分页。
 func (h *HuaweiProviderImpl) ListDisks(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceDisk, error) {
 	if region == "" {
 		return nil, fmt.Errorf("region cannot be empty")

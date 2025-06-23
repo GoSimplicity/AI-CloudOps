@@ -48,6 +48,7 @@ func (h *HuaweiProviderImpl) ListSecurityGroups(ctx context.Context, region stri
 	return result, nil
 }
 
+// GetSecurityGroup 获取指定region下的安全组详情。
 func (h *HuaweiProviderImpl) GetSecurityGroup(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error) {
 	if region == "" || securityGroupID == "" {
 		return nil, fmt.Errorf("region and securityGroupID cannot be empty")
@@ -70,6 +71,7 @@ func (h *HuaweiProviderImpl) GetSecurityGroup(ctx context.Context, region string
 	return h.convertToResourceSecurityGroupFromDetail(sg, region), nil
 }
 
+// CreateSecurityGroup 创建安全组。
 func (h *HuaweiProviderImpl) CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) error {
 	if region == "" {
 		return fmt.Errorf("region cannot be empty")

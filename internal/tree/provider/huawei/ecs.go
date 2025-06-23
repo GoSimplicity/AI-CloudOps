@@ -48,6 +48,7 @@ func (h *HuaweiProviderImpl) ListInstances(ctx context.Context, region string, p
 	return result, int64(resp.Total), nil
 }
 
+// GetInstance 获取指定region下的ECS实例详情。
 func (h *HuaweiProviderImpl) GetInstance(ctx context.Context, region string, instanceID string) (*model.ResourceEcs, error) {
 	if region == "" || instanceID == "" {
 		return nil, fmt.Errorf("region and instanceID cannot be empty")
@@ -70,6 +71,7 @@ func (h *HuaweiProviderImpl) GetInstance(ctx context.Context, region string, ins
 	return h.convertToResourceEcsFromInstanceDetail(instance), nil
 }
 
+// CreateInstance 创建ECS实例，支持指定配置和计费类型。
 func (h *HuaweiProviderImpl) CreateInstance(ctx context.Context, region string, config *model.CreateEcsResourceReq) error {
 	if region == "" {
 		return fmt.Errorf("region cannot be empty")
@@ -111,6 +113,7 @@ func (h *HuaweiProviderImpl) CreateInstance(ctx context.Context, region string, 
 	return nil
 }
 
+// DeleteInstance 删除指定region下的ECS实例。
 func (h *HuaweiProviderImpl) DeleteInstance(ctx context.Context, region string, instanceID string) error {
 	if region == "" || instanceID == "" {
 		return fmt.Errorf("region and instanceID cannot be empty")
@@ -129,6 +132,7 @@ func (h *HuaweiProviderImpl) DeleteInstance(ctx context.Context, region string, 
 	return nil
 }
 
+// StartInstance 启动指定region下的ECS实例。
 func (h *HuaweiProviderImpl) StartInstance(ctx context.Context, region string, instanceID string) error {
 	if region == "" || instanceID == "" {
 		return fmt.Errorf("region and instanceID cannot be empty")
@@ -147,6 +151,7 @@ func (h *HuaweiProviderImpl) StartInstance(ctx context.Context, region string, i
 	return nil
 }
 
+// StopInstance 停止指定region下的ECS实例。
 func (h *HuaweiProviderImpl) StopInstance(ctx context.Context, region string, instanceID string) error {
 	if region == "" || instanceID == "" {
 		return fmt.Errorf("region and instanceID cannot be empty")
@@ -165,6 +170,7 @@ func (h *HuaweiProviderImpl) StopInstance(ctx context.Context, region string, in
 	return nil
 }
 
+// RestartInstance 重启指定region下的ECS实例。
 func (h *HuaweiProviderImpl) RestartInstance(ctx context.Context, region string, instanceID string) error {
 	if region == "" || instanceID == "" {
 		return fmt.Errorf("region and instanceID cannot be empty")
@@ -183,7 +189,7 @@ func (h *HuaweiProviderImpl) RestartInstance(ctx context.Context, region string,
 	return nil
 }
 
-// 安全获取计费类型，若传入为空则返回默认配置
+// getInstanceChargeType 安全获取计费类型，若传入为空则返回默认配置。
 func (h *HuaweiProviderImpl) getInstanceChargeType(chargeType interface{}) string {
 	if chargeType != nil {
 		if ct, ok := chargeType.(string); ok && ct != "" {

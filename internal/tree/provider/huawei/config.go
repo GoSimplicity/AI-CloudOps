@@ -13,58 +13,107 @@ import (
 // HuaweiCloudConfig 华为云配置
 // 该配置结构体用于管理华为云提供商的动态配置信息
 // 支持区域自动发现、端点配置、默认参数设置等功能
+//
+// 字段说明：
+//
+//	Regions   - 区域配置映射，key为regionId，value为区域详细配置
+//	Defaults  - 默认参数配置，影响所有API调用的全局行为
+//	Endpoints - 各服务端点模板及自定义端点
+//	Discovery - 区域自动发现与探测相关配置
 type HuaweiCloudConfig struct {
-	Regions   map[string]HuaweiRegionConfig `json:"regions"`
-	Defaults  HuaweiDefaultConfig           `json:"defaults"`
-	Endpoints HuaweiEndpointConfig          `json:"endpoints"`
-	Discovery HuaweiDiscoveryConfig         `json:"discovery"`
+	Regions   map[string]HuaweiRegionConfig `json:"regions"`   // 区域ID到区域配置的映射
+	Defaults  HuaweiDefaultConfig           `json:"defaults"`  // 默认参数配置
+	Endpoints HuaweiEndpointConfig          `json:"endpoints"` // 服务端点配置
+	Discovery HuaweiDiscoveryConfig         `json:"discovery"` // 区域发现相关配置
 }
 
+// HuaweiRegionConfig 区域详细配置
+//
+//	RegionID     - 区域ID（如 cn-north-4）
+//	LocalName    - 区域本地化名称（如 华北-北京四）
+//	CityName     - 城市名
+//	Enabled      - 是否启用该区域
+//	ZonePrefix   - 可用区前缀（如 cn-north-4a）
+//	IsAccessible - 探测到该区域是否可访问
+//	LastChecked  - 上次探测时间
+//	Metadata     - 其他扩展元数据
 type HuaweiRegionConfig struct {
-	RegionID     string                 `json:"region_id"`
-	LocalName    string                 `json:"local_name"`
-	CityName     string                 `json:"city_name"`
-	Enabled      bool                   `json:"enabled"`
-	ZonePrefix   string                 `json:"zone_prefix"`
-	IsAccessible bool                   `json:"is_accessible"`
-	LastChecked  *time.Time             `json:"last_checked,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	RegionID     string                 `json:"region_id"`              // 区域ID
+	LocalName    string                 `json:"local_name"`             // 区域本地化名称
+	CityName     string                 `json:"city_name"`              // 城市名
+	Enabled      bool                   `json:"enabled"`                // 是否启用
+	ZonePrefix   string                 `json:"zone_prefix"`            // 可用区前缀
+	IsAccessible bool                   `json:"is_accessible"`          // 是否可访问
+	LastChecked  *time.Time             `json:"last_checked,omitempty"` // 上次探测时间
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`     // 扩展元数据
 }
 
+// HuaweiDefaultConfig 默认参数配置
+//
+//	InstanceChargeType - 实例计费类型（如 PostPaid/PrePaid/Spot），默认 PostPaid
+//	ForceDelete        - 删除资源时是否强制，默认 false
+//	ForceStop          - 停止实例时是否强制，默认 false
+//	PageSize           - 分页大小，默认 50，范围 1-1000
+//	MaxRetries         - 最大重试次数，默认 3，范围 0-10
+//	TimeoutSeconds     - API超时时间（秒），默认 300，范围 1-3600
+//	ConcurrentLimit    - 并发请求上限，默认 10
 type HuaweiDefaultConfig struct {
-	InstanceChargeType string `json:"instance_charge_type"`
-	ForceDelete        bool   `json:"force_delete"`
-	ForceStop          bool   `json:"force_stop"`
-	PageSize           int    `json:"page_size"`
-	MaxRetries         int    `json:"max_retries"`
-	TimeoutSeconds     int    `json:"timeout_seconds"`
-	ConcurrentLimit    int    `json:"concurrent_limit"`
+	InstanceChargeType string `json:"instance_charge_type"` // 实例计费类型
+	ForceDelete        bool   `json:"force_delete"`         // 是否强制删除
+	ForceStop          bool   `json:"force_stop"`           // 是否强制停止
+	PageSize           int    `json:"page_size"`            // 分页大小
+	MaxRetries         int    `json:"max_retries"`          // 最大重试次数
+	TimeoutSeconds     int    `json:"timeout_seconds"`      // API超时时间（秒）
+	ConcurrentLimit    int    `json:"concurrent_limit"`     // 并发请求上限
 }
 
+// HuaweiEndpointConfig 服务端点配置
+//
+//	ECSTemplate         - ECS服务端点模板（如 ecs.%s.myhuaweicloud.com）
+//	VPCTemplate         - VPC服务端点模板
+//	EVSTemplate         - EVS服务端点模板
+//	IAMTemplate         - IAM服务端点模板
+//	CustomEndpoints     - 自定义服务端点（service->endpoint）
+//	GlobalEndpoint      - 全局端点后缀
+//	InternationalSuffix - 国际站端点后缀
 type HuaweiEndpointConfig struct {
-	ECSTemplate         string            `json:"ecs_template"`
-	VPCTemplate         string            `json:"vpc_template"`
-	EVSTemplate         string            `json:"evs_template"`
-	IAMTemplate         string            `json:"iam_template"`
-	CustomEndpoints     map[string]string `json:"custom_endpoints,omitempty"`
-	GlobalEndpoint      string            `json:"global_endpoint"`
-	InternationalSuffix string            `json:"international_suffix"`
+	ECSTemplate         string            `json:"ecs_template"`               // ECS服务端点模板
+	VPCTemplate         string            `json:"vpc_template"`               // VPC服务端点模板
+	EVSTemplate         string            `json:"evs_template"`               // EVS服务端点模板
+	IAMTemplate         string            `json:"iam_template"`               // IAM服务端点模板
+	CustomEndpoints     map[string]string `json:"custom_endpoints,omitempty"` // 自定义端点
+	GlobalEndpoint      string            `json:"global_endpoint"`            // 全局端点后缀
+	InternationalSuffix string            `json:"international_suffix"`       // 国际站端点后缀
 }
 
+// HuaweiDiscoveryConfig 区域自动发现与探测相关配置
+//
+//	EnableAutoDiscovery - 是否启用自动发现，默认 true
+//	CacheTimeout        - 区域缓存有效期，默认 6h
+//	ProbeTimeout        - 区域探测超时时间，默认 5s
+//	MaxConcurrent       - 区域探测最大并发数，默认 20
+//	RetryAttempts       - 区域探测重试次数，默认 2
+//	RetryDelay          - 探测重试间隔，默认 1s
 type HuaweiDiscoveryConfig struct {
-	EnableAutoDiscovery bool          `json:"enable_auto_discovery"`
-	CacheTimeout        time.Duration `json:"cache_timeout"`
-	ProbeTimeout        time.Duration `json:"probe_timeout"`
-	MaxConcurrent       int           `json:"max_concurrent"`
-	RetryAttempts       int           `json:"retry_attempts"`
-	RetryDelay          time.Duration `json:"retry_delay"`
+	EnableAutoDiscovery bool          `json:"enable_auto_discovery"` // 是否启用自动发现
+	CacheTimeout        time.Duration `json:"cache_timeout"`         // 区域缓存有效期
+	ProbeTimeout        time.Duration `json:"probe_timeout"`         // 区域探测超时时间
+	MaxConcurrent       int           `json:"max_concurrent"`        // 区域探测最大并发数
+	RetryAttempts       int           `json:"retry_attempts"`        // 探测重试次数
+	RetryDelay          time.Duration `json:"retry_delay"`           // 探测重试间隔
 }
 
+// HuaweiRegionInfo 区域探测结果信息
+//
+//	RegionID     - 区域ID
+//	LocalName    - 区域本地化名称
+//	IsAccessible - 是否可访问
+//	LastChecked  - 上次探测时间
 type HuaweiRegionInfo struct {
-	RegionID     string    `json:"region_id"`
-	LocalName    string    `json:"local_name"`
-	IsAccessible bool      `json:"is_accessible"`
-	LastChecked  time.Time `json:"last_checked"`
+	RegionID     string    `json:"region_id"`     // 区域ID
+	LocalName    string    `json:"local_name"`    // 区域本地化名称
+	IsAccessible bool      `json:"is_accessible"` // 是否可访问
+	LastChecked  time.Time `json:"last_checked"`  // 上次探测时间
 }
 
 // getDefaultHuaweiConfig 获取默认华为云配置（完全动态）

@@ -11,8 +11,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/pkg/huawei"
 )
 
-// Provider主结构体、接口、初始化、配置相关方法
-
+// HuaweiProviderImpl 是华为云资源管理的核心Provider实现，负责ECS、VPC、磁盘、安全组等资源的统一管理和服务聚合。
 type HuaweiProviderImpl struct {
 	logger               *zap.Logger
 	sdk                  *huawei.SDK
@@ -26,6 +25,7 @@ type HuaweiProviderImpl struct {
 	discoveredRegions    map[string]*HuaweiRegionInfo // 动态发现的区域信息
 }
 
+// NewHuaweiProvider 创建一个未初始化的华为云Provider实例（需后续调用InitializeProvider注入AK/SK）。
 func NewHuaweiProvider(logger *zap.Logger) *HuaweiProviderImpl {
 	return &HuaweiProviderImpl{
 		logger:            logger,
@@ -34,7 +34,7 @@ func NewHuaweiProvider(logger *zap.Logger) *HuaweiProviderImpl {
 	}
 }
 
-// 初始化华为云提供商
+// InitializeProvider 初始化Provider，注入AK/SK并完成SDK和各服务的初始化。
 func (h *HuaweiProviderImpl) InitializeProvider(accessKey, secretKey string) error {
 	if accessKey == "" || secretKey == "" {
 		return fmt.Errorf("华为云访问密钥不能为空")

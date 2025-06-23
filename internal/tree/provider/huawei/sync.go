@@ -10,6 +10,7 @@ import (
 // 资源同步相关方法
 // SyncResources, syncEcsInstances, syncVpcResources, syncSecurityGroupResources, syncDiskResources 及相关辅助函数
 
+// SyncResources 并发同步指定region下的ECS、VPC、安全组和磁盘资源。
 func (h *HuaweiProviderImpl) SyncResources(ctx context.Context, region string) error {
 	if region == "" {
 		return fmt.Errorf("region cannot be empty")
