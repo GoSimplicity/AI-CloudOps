@@ -80,10 +80,10 @@ func (h *HuaweiProviderImpl) SyncRegionsWithCredentials(ctx context.Context, acc
 	}
 
 	h.sdk = tempSDK
-	h.ecsService = tempEcsService
-	h.vpcService = huawei.NewVpcService(tempSDK)
-	h.diskService = huawei.NewDiskService(tempSDK)
-	h.securityGroupService = huawei.NewSecurityGroupService(tempSDK)
+	h.EcsService = tempEcsService
+	h.VpcService = huawei.NewVpcService(tempSDK)
+	h.DiskService = huawei.NewDiskService(tempSDK)
+	h.SecurityGroupService = huawei.NewSecurityGroupService(tempSDK)
 
 	h.cachedRegions = regions
 	h.regionsCacheTime = time.Now()
@@ -188,13 +188,13 @@ func (h *HuaweiProviderImpl) discoverRegionsFromAPI() ([]*model.RegionResp, erro
 }
 
 func (h *HuaweiProviderImpl) probeRegion(regionID string) bool {
-	if h.ecsService == nil {
+	if h.EcsService == nil {
 		h.logger.Debug("区域探测失败：SDK未初始化", zap.String("regionId", regionID))
 		return false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := h.ecsService.ListInstances(ctx, &huawei.ListInstancesRequest{
+	_, err := h.EcsService.ListInstances(ctx, &huawei.ListInstancesRequest{
 		Region: regionID,
 		Page:   1,
 		Size:   1,

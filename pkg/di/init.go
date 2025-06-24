@@ -48,6 +48,9 @@ func InitTables(db *gorm.DB) error {
 		&model.ResourceEcs{},
 		&model.ResourceElb{},
 		&model.ResourceRds{},
+		&model.CloudAccount{},           // 云账户信息
+		&model.CloudAccountSyncStatus{}, // 云账户同步状态
+		&model.CloudAccountAuditLog{},   // 云账户审计日志
 
 		// k8s
 		&model.K8sCluster{},

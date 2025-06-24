@@ -43,7 +43,7 @@ func (h *HuaweiProviderImpl) ListRegionZones(ctx context.Context, region string)
 	if region == "" {
 		return nil, fmt.Errorf("region cannot be empty")
 	}
-	if h.ecsService == nil {
+	if h.EcsService == nil {
 		return nil, fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
@@ -71,7 +71,7 @@ func (h *HuaweiProviderImpl) ListRegionInstanceTypes(ctx context.Context, region
 	if region == "" {
 		return nil, fmt.Errorf("region cannot be empty")
 	}
-	if h.ecsService == nil {
+	if h.EcsService == nil {
 		return nil, fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
@@ -101,7 +101,7 @@ func (h *HuaweiProviderImpl) ListRegionImages(ctx context.Context, region string
 	if region == "" {
 		return nil, fmt.Errorf("region cannot be empty")
 	}
-	if h.ecsService == nil {
+	if h.EcsService == nil {
 		return nil, fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 

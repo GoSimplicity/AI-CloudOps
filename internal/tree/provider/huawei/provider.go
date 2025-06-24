@@ -15,22 +15,39 @@ import (
 type HuaweiProviderImpl struct {
 	logger               *zap.Logger
 	sdk                  *huawei.SDK
-	ecsService           *huawei.EcsService
-	vpcService           *huawei.VpcService
-	diskService          *huawei.DiskService
-	securityGroupService *huawei.SecurityGroupService
+	EcsService           *huawei.EcsService
+	VpcService           *huawei.VpcService
+	DiskService          *huawei.DiskService
+	SecurityGroupService *huawei.SecurityGroupService
 	config               *HuaweiCloudConfig
 	cachedRegions        []*model.RegionResp          // 缓存的区域列表
 	regionsCacheTime     time.Time                    // 区域缓存时间
 	discoveredRegions    map[string]*HuaweiRegionInfo // 动态发现的区域信息
 }
 
-// NewHuaweiProvider 创建一个未初始化的华为云Provider实例（需后续调用InitializeProvider注入AK/SK）。
-func NewHuaweiProvider(logger *zap.Logger) *HuaweiProviderImpl {
+// NewHuaweiProvider 创建一个基于账号信息的华为云Provider实例
+func NewHuaweiProvider(logger *zap.Logger, account *model.CloudAccount) *HuaweiProviderImpl {
+	if account == nil {
+		logger.Error("CloudAccount 不能为空")
+		return nil
+	}
+	if account.AccessKey == "" || account.EncryptedSecret == "" {
+		logger.Error("AccessKey 和 SecretKey 不能为空")
+		return nil
+	}
+	// 这里假设 EncryptedSecret 已经是明文 SecretKey，实际可根据需要解密
+	// 如果需要解密，可在外部先解密后传入
+
+	sdk := huawei.NewSDK(logger, account.AccessKey, account.EncryptedSecret)
 	return &HuaweiProviderImpl{
-		logger:            logger,
-		config:            getDefaultHuaweiConfig(),
-		discoveredRegions: make(map[string]*HuaweiRegionInfo),
+		logger:               logger,
+		sdk:                  sdk,
+		EcsService:           huawei.NewEcsService(sdk),
+		VpcService:           huawei.NewVpcService(sdk),
+		DiskService:          huawei.NewDiskService(sdk),
+		SecurityGroupService: huawei.NewSecurityGroupService(sdk),
+		config:               getDefaultHuaweiConfig(),
+		discoveredRegions:    make(map[string]*HuaweiRegionInfo),
 	}
 }
 
@@ -43,10 +60,10 @@ func (h *HuaweiProviderImpl) InitializeProvider(accessKey, secretKey string) err
 	sdk := huawei.NewSDK(h.logger, accessKey, secretKey)
 	// 初始化各个服务
 	h.sdk = sdk
-	h.ecsService = huawei.NewEcsService(sdk)
-	h.vpcService = huawei.NewVpcService(sdk)
-	h.diskService = huawei.NewDiskService(sdk)
-	h.securityGroupService = huawei.NewSecurityGroupService(sdk)
+	h.EcsService = huawei.NewEcsService(sdk)
+	h.VpcService = huawei.NewVpcService(sdk)
+	h.DiskService = huawei.NewDiskService(sdk)
+	h.SecurityGroupService = huawei.NewSecurityGroupService(sdk)
 	h.logger.Info("华为云提供商初始化成功")
 	return nil
 }

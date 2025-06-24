@@ -55,10 +55,10 @@ type TreeEcsService interface {
 type treeEcsService struct {
 	providerFactory *provider.ProviderFactory
 	logger          *zap.Logger
-	dao             dao.TreeEcsDAO
+	dao             dao.TreeCloudDAO
 }
 
-func NewTreeEcsService(logger *zap.Logger, dao dao.TreeEcsDAO, providerFactory *provider.ProviderFactory) TreeEcsService {
+func NewTreeEcsService(logger *zap.Logger, dao dao.TreeCloudDAO, providerFactory *provider.ProviderFactory) TreeEcsService {
 	return &treeEcsService{
 		logger:          logger,
 		dao:             dao,
@@ -76,9 +76,19 @@ func (t *treeEcsService) CreateEcsResource(ctx context.Context, req *model.Creat
 
 	// 判断是否是云资源
 	if req.Provider != model.CloudProviderLocal {
-		provider, err := t.providerFactory.GetProvider(req.Provider)
+		account, err := t.dao.GetCloudAccount(ctx, req.AccountId)
 		if err != nil {
-			t.logger.Error("获取云提供商失败", zap.Error(err))
+			t.logger.Error("获取云账号失败", zap.Error(err))
+			return err
+		}
+		secretKey, err := t.dao.GetDecryptedSecretKey(ctx, req.AccountId)
+		if err != nil {
+			t.logger.Error("解密SecretKey失败", zap.Error(err))
+			return err
+		}
+		provider, err := t.providerFactory.CreateProvider(account, secretKey)
+		if err != nil {
+			t.logger.Error("创建云Provider失败", zap.Error(err))
 			return err
 		}
 
@@ -105,9 +115,19 @@ func (t *treeEcsService) CreateEcsResource(ctx context.Context, req *model.Creat
 // DeleteEcs 删除ECS实例
 func (t *treeEcsService) DeleteEcs(ctx context.Context, req *model.DeleteEcsReq) error {
 	if req.Provider != model.CloudProviderLocal {
-		provider, err := t.providerFactory.GetProvider(req.Provider)
+		account, err := t.dao.GetCloudAccount(ctx, req.AccountId)
 		if err != nil {
-			t.logger.Error("获取云提供商失败", zap.Error(err))
+			t.logger.Error("获取云账号失败", zap.Error(err))
+			return err
+		}
+		secretKey, err := t.dao.GetDecryptedSecretKey(ctx, req.AccountId)
+		if err != nil {
+			t.logger.Error("解密SecretKey失败", zap.Error(err))
+			return err
+		}
+		provider, err := t.providerFactory.CreateProvider(account, secretKey)
+		if err != nil {
+			t.logger.Error("创建云Provider失败", zap.Error(err))
 			return err
 		}
 
@@ -191,9 +211,19 @@ func (t *treeEcsService) StopEcs(ctx context.Context, req *model.StopEcsReq) err
 // UpdateEcs 更新ECS实例
 func (t *treeEcsService) UpdateEcs(ctx context.Context, req *model.UpdateEcsReq) error {
 	if req.Provider != model.CloudProviderLocal {
-		provider, err := t.providerFactory.GetProvider(req.Provider)
+		account, err := t.dao.GetCloudAccount(ctx, req.AccountId)
 		if err != nil {
-			t.logger.Error("获取云提供商失败", zap.Error(err))
+			t.logger.Error("获取云账号失败", zap.Error(err))
+			return err
+		}
+		secretKey, err := t.dao.GetDecryptedSecretKey(ctx, req.AccountId)
+		if err != nil {
+			t.logger.Error("解密SecretKey失败", zap.Error(err))
+			return err
+		}
+		provider, err := t.providerFactory.CreateProvider(account, secretKey)
+		if err != nil {
+			t.logger.Error("创建云Provider失败", zap.Error(err))
 			return err
 		}
 

@@ -28,7 +28,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -48,18 +47,20 @@ type AliyunProviderImpl struct {
 	securityGroupService *aliyun.SecurityGroupService
 }
 
-func NewAliyunProvider(logger *zap.Logger) *AliyunProviderImpl {
-	accessKeyId := os.Getenv("ALIYUN_ACCESS_KEY_ID")
-	accessKeySecret := os.Getenv("ALIYUN_ACCESS_KEY_SECRET")
-
-	// 检查必要的环境变量
-	if accessKeyId == "" || accessKeySecret == "" {
-		logger.Error("ALIYUN_ACCESS_KEY_ID and ALIYUN_ACCESS_KEY_SECRET environment variables are required")
+// NewAliyunProvider 创建一个基于账号信息的阿里云Provider实例
+func NewAliyunProvider(logger *zap.Logger, account *model.CloudAccount) *AliyunProviderImpl {
+	if account == nil {
+		logger.Error("CloudAccount 不能为空")
 		return nil
 	}
+	if account.AccessKey == "" || account.EncryptedSecret == "" {
+		logger.Error("AccessKey 和 SecretKey 不能为空")
+		return nil
+	}
+	// 这里假设 EncryptedSecret 已经是明文 SecretKey，实际可根据需要解密
+	// 如果需要解密，可在外部先解密后传入
 
-	sdk := aliyun.NewSDK(logger, accessKeyId, accessKeySecret)
-
+	sdk := aliyun.NewSDK(logger, account.AccessKey, account.EncryptedSecret)
 	return &AliyunProviderImpl{
 		logger:               logger,
 		sdk:                  sdk,
