@@ -27,6 +27,7 @@ package model
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"strings"
 	"time"
 
@@ -56,8 +57,27 @@ type ListResp[T any] struct {
 type StringList []string
 
 func (m *StringList) Scan(val interface{}) error {
-	s := val.([]uint8)
-	ss := strings.Split(string(s), "|")
+	if val == nil {
+		*m = StringList{}
+		return nil
+	}
+
+	var str string
+	switch v := val.(type) {
+	case []uint8:
+		str = string(v)
+	case string:
+		str = v
+	default:
+		return fmt.Errorf("无法扫描 %T 到 StringList", val)
+	}
+
+	if str == "" {
+		*m = StringList{}
+		return nil
+	}
+
+	ss := strings.Split(str, "|")
 	*m = ss
 	return nil
 }

@@ -112,6 +112,7 @@ type GetEcsDetailReq struct {
 
 // CreateEcsResourceReq ECS创建参数
 type CreateEcsResourceReq struct {
+	AccountId          int           `json:"accountId"`                             // 云账号ID
 	Provider           CloudProvider `json:"provider" binding:"required"`           // 云提供商
 	Region             string        `json:"region"`                                // 区域
 	ZoneId             string        `json:"zoneId"`                                // 可用区ID
@@ -148,6 +149,7 @@ type CreateEcsResourceReq struct {
 
 // UpdateEcsReq ECS更新请求（新增）
 type UpdateEcsReq struct {
+	AccountId        int           `json:"accountId"`        // 云账号ID
 	ID               int           `json:"id"`               // 内部ID（从URL参数获取）
 	Provider         CloudProvider `json:"provider"`         // 云提供商
 	Region           string        `json:"region"`           // 区域
@@ -168,6 +170,7 @@ type UpdateEcsReq struct {
 
 // DeleteEcsReq ECS删除请求
 type DeleteEcsReq struct {
+	AccountId  int           `json:"accountId"`  // 云账号ID
 	ID         int           `json:"id"`         // 内部ID（从URL参数获取）
 	Provider   CloudProvider `json:"provider"`   // 云提供商
 	Region     string        `json:"region"`     // 区域

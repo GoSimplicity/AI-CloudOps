@@ -22,7 +22,7 @@ func (h *HuaweiProviderImpl) ListDisks(ctx context.Context, region string, pageN
 	}
 
 	// 检查SDK服务是否已初始化
-	if h.diskService == nil {
+	if h.DiskService == nil {
 		return nil, fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
@@ -32,7 +32,7 @@ func (h *HuaweiProviderImpl) ListDisks(ctx context.Context, region string, pageN
 		Size:   pageSize,
 	}
 
-	resp, err := h.diskService.ListDisks(ctx, req)
+	resp, err := h.DiskService.ListDisks(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to list disks", zap.Error(err), zap.String("region", region))
 		return nil, fmt.Errorf("list disks failed: %w", err)
@@ -57,11 +57,11 @@ func (h *HuaweiProviderImpl) GetDisk(ctx context.Context, region string, diskID 
 	}
 
 	// 检查SDK服务是否已初始化
-	if h.diskService == nil {
+	if h.DiskService == nil {
 		return nil, fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	disk, err := h.diskService.GetDisk(ctx, region, diskID)
+	disk, err := h.DiskService.GetDisk(ctx, region, diskID)
 	if err != nil {
 		h.logger.Error("failed to get disk detail", zap.Error(err), zap.String("diskID", diskID))
 		return nil, fmt.Errorf("get disk detail failed: %w", err)
@@ -84,7 +84,7 @@ func (h *HuaweiProviderImpl) CreateDisk(ctx context.Context, region string, conf
 	}
 
 	// 检查SDK服务是否已初始化
-	if h.diskService == nil {
+	if h.DiskService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
@@ -97,7 +97,7 @@ func (h *HuaweiProviderImpl) CreateDisk(ctx context.Context, region string, conf
 		Description:  config.Description,
 	}
 
-	_, err := h.diskService.CreateDisk(ctx, req)
+	_, err := h.DiskService.CreateDisk(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to create disk", zap.Error(err), zap.String("region", region))
 		return fmt.Errorf("create disk failed: %w", err)
@@ -113,11 +113,11 @@ func (h *HuaweiProviderImpl) DeleteDisk(ctx context.Context, region string, disk
 	}
 
 	// 检查SDK服务是否已初始化
-	if h.diskService == nil {
+	if h.DiskService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	err := h.diskService.DeleteDisk(ctx, region, diskID)
+	err := h.DiskService.DeleteDisk(ctx, region, diskID)
 	if err != nil {
 		h.logger.Error("failed to delete disk", zap.Error(err), zap.String("diskID", diskID))
 		return fmt.Errorf("delete disk failed: %w", err)
@@ -133,11 +133,11 @@ func (h *HuaweiProviderImpl) AttachDisk(ctx context.Context, region string, disk
 	}
 
 	// 检查SDK服务是否已初始化
-	if h.diskService == nil {
+	if h.DiskService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	err := h.diskService.AttachDisk(ctx, region, diskID, instanceID)
+	err := h.DiskService.AttachDisk(ctx, region, diskID, instanceID)
 	if err != nil {
 		h.logger.Error("failed to attach disk", zap.Error(err), zap.String("diskID", diskID), zap.String("instanceID", instanceID))
 		return fmt.Errorf("attach disk failed: %w", err)
@@ -153,11 +153,11 @@ func (h *HuaweiProviderImpl) DetachDisk(ctx context.Context, region string, disk
 	}
 
 	// 检查SDK服务是否已初始化
-	if h.diskService == nil {
+	if h.DiskService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	err := h.diskService.DetachDisk(ctx, region, diskID, instanceID)
+	err := h.DiskService.DetachDisk(ctx, region, diskID, instanceID)
 	if err != nil {
 		h.logger.Error("failed to detach disk", zap.Error(err), zap.String("diskID", diskID), zap.String("instanceID", instanceID))
 		return fmt.Errorf("detach disk failed: %w", err)

@@ -30,28 +30,33 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	huawei "github.com/GoSimplicity/AI-CloudOps/internal/tree/provider/huawei"
+	"go.uber.org/zap"
 )
 
+// ProviderFactory 支持动态创建多云多账户 Provider 实例
+// 推荐由 service 层先解密 SecretKey 后传入
 type ProviderFactory struct {
-	providers map[model.CloudProvider]Provider
+	logger *zap.Logger
 }
 
-func NewProviderFactory(
-	aliyun *AliyunProviderImpl,
-	huaweiProvider *huawei.HuaweiProviderImpl,
-) *ProviderFactory {
-	return &ProviderFactory{
-		providers: map[model.CloudProvider]Provider{
-			model.CloudProviderAliyun: aliyun,
-			model.CloudProviderHuawei: huaweiProvider,
-		},
-	}
+func NewProviderFactory(logger *zap.Logger) *ProviderFactory {
+	return &ProviderFactory{logger: logger}
 }
 
-func (f *ProviderFactory) GetProvider(providerType model.CloudProvider) (Provider, error) {
-	provider, ok := f.providers[providerType]
-	if !ok {
-		return nil, fmt.Errorf("不支持的云提供商: %s", providerType)
+// CreateProvider 根据 CloudAccount 和解密后的 SecretKey 动态创建 Provider 实例
+func (f *ProviderFactory) CreateProvider(account *model.CloudAccount, decryptedSecret string) (Provider, error) {
+	if account == nil {
+		return nil, fmt.Errorf("CloudAccount 不能为空")
 	}
-	return provider, nil
+	acc := *account // 拷贝，避免外部副作用
+	acc.EncryptedSecret = decryptedSecret
+
+	switch acc.Provider {
+	case model.CloudProviderAliyun:
+		return NewAliyunProvider(f.logger, &acc), nil
+	case model.CloudProviderHuawei:
+		return huawei.NewHuaweiProvider(f.logger, &acc), nil
+	default:
+		return nil, fmt.Errorf("不支持的云提供商: %s", acc.Provider)
+	}
 }
