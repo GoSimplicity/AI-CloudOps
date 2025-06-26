@@ -32,7 +32,6 @@ import (
 	api8 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	dao4 "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/provider"
-	provider2 "github.com/GoSimplicity/AI-CloudOps/internal/tree/provider/huawei"
 	service6 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -167,7 +166,8 @@ func ProvideCmd() *Cmd {
 	treeNodeService := service6.NewTreeNodeService(logger, treeNodeDAO, userDAO)
 	treeNodeHandler := api8.NewTreeNodeHandler(treeNodeService)
 	treeEcsDAO := dao4.NewTreeEcsDAO(db)
-	providerFactory := provider.NewProviderFactory(logger)
+	aliyunProviderImpl := provider.NewAliyunProvider(logger)
+	providerFactory := provider.NewProviderFactory(aliyunProviderImpl)
 	treeCloudDAO := dao4.NewTreeCloudDAO(logger, db)
 	treeEcsService := service6.NewTreeEcsService(logger, treeEcsDAO, providerFactory, treeCloudDAO)
 	treeEcsHandler := api8.NewTreeEcsHandler(treeEcsService)
@@ -223,7 +223,7 @@ var UtilSet = wire.NewSet(utils.NewJWTHandler)
 
 var JobSet = wire.NewSet(job.NewTimedScheduler, job.NewTimedTask, job.NewCreateK8sClusterTask, job.NewUpdateK8sClusterTask, job.NewRefreshK8sClusterTask, job.NewRoutes)
 
-var ProviderSet = wire.NewSet(provider.NewAliyunProvider, provider2.NewHuaweiProvider, provider.NewProviderFactory)
+var ProviderSet = wire.NewSet(provider.NewAliyunProvider, provider.NewProviderFactory)
 
 var CronSet = wire.NewSet(cron.NewCronManager)
 

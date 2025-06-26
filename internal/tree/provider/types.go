@@ -34,14 +34,15 @@ import (
 type Provider interface {
 	// 基础服务
 	SyncResources(ctx context.Context, region string) error
+
+	// 资源选项查询
 	ListRegions(ctx context.Context) ([]*model.RegionResp, error)
-	GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*model.ZoneResp, error)
-	ListRegionOptions(ctx context.Context) ([]*model.ListEcsResourceOptionsResp, error)
 	ListRegionZones(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error)
 	ListRegionInstanceTypes(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error)
 	ListRegionImages(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error)
 	ListRegionSystemDiskCategories(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error)
 	ListRegionDataDiskCategories(ctx context.Context, region string) ([]*model.ListEcsResourceOptionsResp, error)
+	ListRegionOptions(ctx context.Context) ([]*model.ListEcsResourceOptionsResp, error)
 
 	// ECS实例管理
 	ListInstances(ctx context.Context, region string, page, size int) ([]*model.ResourceEcs, int64, error)
@@ -53,21 +54,21 @@ type Provider interface {
 	RestartInstance(ctx context.Context, region string, instanceID string) error
 
 	// VPC网络管理
-	ListVPCs(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceVpc, error)
+	ListVPCs(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceVpc, int64, error)
 	GetVPC(ctx context.Context, region string, vpcID string) (*model.ResourceVpc, error)
-	CreateVPC(ctx context.Context, region string, config *model.CreateVpcResourceReq) error
+	CreateVPC(ctx context.Context, region string, config *model.CreateVpcResourceReq) (*model.ResourceVpc, error)
 	DeleteVPC(ctx context.Context, region string, vpcID string) error
 
 	// 安全组管理
-	ListSecurityGroups(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceSecurityGroup, error)
+	ListSecurityGroups(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceSecurityGroup, int64, error)
 	GetSecurityGroup(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error)
-	CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) error
+	CreateSecurityGroup(ctx context.Context, region string, config *model.CreateSecurityGroupReq) (*model.ResourceSecurityGroup, error)
 	DeleteSecurityGroup(ctx context.Context, region string, securityGroupID string) error
 
 	// 磁盘管理
-	ListDisks(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceDisk, error)
+	ListDisks(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceDisk, int64, error)
 	GetDisk(ctx context.Context, region string, diskID string) (*model.ResourceDisk, error)
-	CreateDisk(ctx context.Context, region string, config *model.CreateDiskReq) error
+	CreateDisk(ctx context.Context, region string, config *model.CreateDiskReq) (*model.ResourceDisk, error)
 	DeleteDisk(ctx context.Context, region string, diskID string) error
 	AttachDisk(ctx context.Context, region string, diskID, instanceID string) error
 	DetachDisk(ctx context.Context, region string, diskID, instanceID string) error

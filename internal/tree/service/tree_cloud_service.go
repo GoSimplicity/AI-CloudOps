@@ -251,7 +251,7 @@ func (t *treeCloudService) SyncCloudResources(ctx context.Context, req *model.Sy
 		)
 		switch account.Provider {
 		case model.CloudProviderAliyun:
-			aliyunProvider = provider.NewAliyunProvider(t.logger, account)
+			aliyunProvider = provider.NewAliyunProvider(t.logger)
 			if aliyunProvider == nil {
 				t.logger.Error("阿里云Provider初始化失败", zap.Int("accountId", account.ID))
 				continue
@@ -350,7 +350,7 @@ func (t *treeCloudService) SyncCloudAccountResources(ctx context.Context, req *m
 	)
 	switch account.Provider {
 	case model.CloudProviderAliyun:
-		aliyunProvider = provider.NewAliyunProvider(t.logger, account)
+		aliyunProvider = provider.NewAliyunProvider(t.logger)
 		if aliyunProvider == nil {
 			t.logger.Error("阿里云Provider初始化失败", zap.Int("accountId", account.ID))
 			return fmt.Errorf("阿里云Provider初始化失败")

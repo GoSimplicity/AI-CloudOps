@@ -42,27 +42,29 @@ func NewSecurityGroupService(sdk *SDK) *SecurityGroupService {
 	return &SecurityGroupService{sdk: sdk}
 }
 
+// CreateSecurityGroupRequest 创建安全组请求参数
 type CreateSecurityGroupRequest struct {
-	Region             string
-	SecurityGroupName  string
-	Description        string
-	VpcId              string
-	SecurityGroupType  string
-	ResourceGroupId    string
-	Tags               map[string]string
-	SecurityGroupRules []*model.SecurityGroupRule
+	Region             string                      // 地域
+	SecurityGroupName  string                      // 安全组名称
+	Description        string                      // 描述
+	VpcId              string                      // VPC ID
+	SecurityGroupType  string                      // 安全组类型
+	ResourceGroupId    string                      // 资源组ID
+	Tags               map[string]string           // 标签
+	SecurityGroupRules []*model.SecurityGroupRule  // 安全组规则
 }
 
-type CreateSecurityGroupResponseBody struct {
-	SecurityGroupId string
+// CreateSecurityGroupResponse 创建安全组响应
+type CreateSecurityGroupResponse struct {
+	SecurityGroupId string // 安全组ID
 }
 
 // CreateSecurityGroup 创建安全组
-func (s *SecurityGroupService) CreateSecurityGroup(ctx context.Context, req *CreateSecurityGroupRequest) (*CreateSecurityGroupResponseBody, error) {
+func (s *SecurityGroupService) CreateSecurityGroup(ctx context.Context, req *CreateSecurityGroupRequest) (*CreateSecurityGroupResponse, error) {
 	client, err := s.sdk.CreateEcsClient(req.Region)
 	if err != nil {
 		s.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, err
+		return nil, HandleError(err)
 	}
 
 	request := &ecs.CreateSecurityGroupRequest{
@@ -90,7 +92,7 @@ func (s *SecurityGroupService) CreateSecurityGroup(ctx context.Context, req *Cre
 	response, err := client.CreateSecurityGroup(request)
 	if err != nil {
 		s.sdk.logger.Error("创建安全组失败", zap.Error(err))
-		return nil, err
+		return nil, HandleError(err)
 	}
 
 	securityGroupId := tea.StringValue(response.Body.SecurityGroupId)
@@ -108,141 +110,150 @@ func (s *SecurityGroupService) CreateSecurityGroup(ctx context.Context, req *Cre
 				Description:     tea.String(rule.Description),
 			}
 
-			_, err := client.AuthorizeSecurityGroup(authRequest)
-			if err != nil {
+			if _, err := client.AuthorizeSecurityGroup(authRequest); err != nil {
 				s.sdk.logger.Error("添加安全组规则失败", zap.Error(err), zap.Any("rule", rule))
-				return nil, err
+				return nil, HandleError(err)
 			}
 		}
 		s.sdk.logger.Info("添加安全组规则成功", zap.Int("ruleCount", len(req.SecurityGroupRules)))
 	}
 
-	return &CreateSecurityGroupResponseBody{
+	return &CreateSecurityGroupResponse{
 		SecurityGroupId: securityGroupId,
 	}, nil
 }
 
+// DeleteSecurityGroupRequest 删除安全组请求参数
+type DeleteSecurityGroupRequest struct {
+	Region         string // 地域
+	SecurityGroupId string // 安全组ID
+}
+
+// DeleteSecurityGroupResponse 删除安全组响应
+type DeleteSecurityGroupResponse struct {
+	Success bool // 是否成功
+}
+
 // DeleteSecurityGroup 删除安全组
-func (s *SecurityGroupService) DeleteSecurityGroup(ctx context.Context, region string, securityGroupID string) error {
-	client, err := s.sdk.CreateEcsClient(region)
+func (s *SecurityGroupService) DeleteSecurityGroup(ctx context.Context, req *DeleteSecurityGroupRequest) (*DeleteSecurityGroupResponse, error) {
+	client, err := s.sdk.CreateEcsClient(req.Region)
 	if err != nil {
 		s.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return err
+		return nil, HandleError(err)
 	}
 
 	request := &ecs.DeleteSecurityGroupRequest{
-		RegionId:        tea.String(region),
-		SecurityGroupId: tea.String(securityGroupID),
+		RegionId:        tea.String(req.Region),
+		SecurityGroupId: tea.String(req.SecurityGroupId),
 	}
 
-	s.sdk.logger.Info("开始删除安全组", zap.String("region", region), zap.String("securityGroupID", securityGroupID))
-	_, err = client.DeleteSecurityGroup(request)
-	if err != nil {
+	s.sdk.logger.Info("开始删除安全组", zap.String("region", req.Region), zap.String("securityGroupID", req.SecurityGroupId))
+	if _, err = client.DeleteSecurityGroup(request); err != nil {
 		s.sdk.logger.Error("删除安全组失败", zap.Error(err))
-		return err
+		return nil, HandleError(err)
 	}
 
-	s.sdk.logger.Info("删除安全组成功", zap.String("securityGroupID", securityGroupID))
-	return nil
+	s.sdk.logger.Info("删除安全组成功", zap.String("securityGroupID", req.SecurityGroupId))
+	return &DeleteSecurityGroupResponse{Success: true}, nil
+}
+
+// GetSecurityGroupDetailRequest 获取安全组详情请求参数
+type GetSecurityGroupDetailRequest struct {
+	Region         string // 地域
+	SecurityGroupId string // 安全组ID
+}
+
+// GetSecurityGroupDetailResponse 获取安全组详情响应
+type GetSecurityGroupDetailResponse struct {
+	SecurityGroup *ecs.DescribeSecurityGroupAttributeResponseBody // 安全组详情
 }
 
 // GetSecurityGroupDetail 获取安全组详情
-func (s *SecurityGroupService) GetSecurityGroupDetail(ctx context.Context, region string, securityGroupID string) (*ecs.DescribeSecurityGroupAttributeResponseBody, error) {
-	client, err := s.sdk.CreateEcsClient(region)
+func (s *SecurityGroupService) GetSecurityGroupDetail(ctx context.Context, req *GetSecurityGroupDetailRequest) (*GetSecurityGroupDetailResponse, error) {
+	client, err := s.sdk.CreateEcsClient(req.Region)
 	if err != nil {
 		s.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, err
+		return nil, HandleError(err)
 	}
 
 	request := &ecs.DescribeSecurityGroupAttributeRequest{
-		RegionId:        tea.String(region),
-		SecurityGroupId: tea.String(securityGroupID),
+		RegionId:        tea.String(req.Region),
+		SecurityGroupId: tea.String(req.SecurityGroupId),
 	}
 
-	s.sdk.logger.Info("开始获取安全组详情", zap.String("region", region), zap.String("securityGroupID", securityGroupID))
+	s.sdk.logger.Info("开始获取安全组详情", zap.String("region", req.Region), zap.String("securityGroupID", req.SecurityGroupId))
 	response, err := client.DescribeSecurityGroupAttribute(request)
 	if err != nil {
 		s.sdk.logger.Error("获取安全组详情失败", zap.Error(err))
-		return nil, err
+		return nil, HandleError(err)
 	}
 
-	return response.Body, nil
+	return &GetSecurityGroupDetailResponse{SecurityGroup: response.Body}, nil
 }
 
 // ListSecurityGroupsRequest 查询安全组列表请求参数
 type ListSecurityGroupsRequest struct {
-	Region     string
-	PageNumber int
-	PageSize   int
+	Region     string // 地域
+	PageNumber int    // 页码
+	PageSize   int    // 每页大小
 }
 
-// ListSecurityGroupsResponseBody 查询安全组列表响应
-type ListSecurityGroupsResponseBody struct {
-	SecurityGroups []*ecs.DescribeSecurityGroupsResponseBodySecurityGroupsSecurityGroup
-	Total          int64
+// ListSecurityGroupsResponse 查询安全组列表响应
+type ListSecurityGroupsResponse struct {
+	SecurityGroups []*ecs.DescribeSecurityGroupsResponseBodySecurityGroupsSecurityGroup // 安全组列表
+	Total          int64                                                               // 总数
 }
 
 // ListSecurityGroups 查询安全组列表（支持分页获取全部资源）
-func (s *SecurityGroupService) ListSecurityGroups(ctx context.Context, req *ListSecurityGroupsRequest) (*ListSecurityGroupsResponseBody, error) {
-	var allSecurityGroups []*ecs.DescribeSecurityGroupsResponseBodySecurityGroupsSecurityGroup
-	var totalCount int64 = 0
-	page := 1
+func (s *SecurityGroupService) ListSecurityGroups(ctx context.Context, req *ListSecurityGroupsRequest) (*ListSecurityGroupsResponse, error) {
+	client, err := s.sdk.CreateEcsClient(req.Region)
+	if err != nil {
+		s.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
+		return nil, HandleError(err)
+	}
+
+	pageNumber := req.PageNumber
+	if pageNumber <= 0 {
+		pageNumber = 1
+	}
+
 	pageSize := req.PageSize
 	if pageSize <= 0 {
 		pageSize = 100
 	}
 
-	for {
-		client, err := s.sdk.CreateEcsClient(req.Region)
-		if err != nil {
-			return nil, err
-		}
+	request := &ecs.DescribeSecurityGroupsRequest{
+		RegionId:   tea.String(req.Region),
+		PageNumber: tea.Int32(int32(pageNumber)),
+		PageSize:   tea.Int32(int32(pageSize)),
+	}
 
-		request := &ecs.DescribeSecurityGroupsRequest{
-			RegionId:   tea.String(req.Region),
-			PageNumber: tea.Int32(int32(page)),
-			PageSize:   tea.Int32(int32(pageSize)),
-		}
+	s.sdk.logger.Info("查询安全组列表", 
+		zap.String("region", req.Region),
+		zap.Int("page", pageNumber),
+		zap.Int("size", pageSize))
 
-		response, err := client.DescribeSecurityGroups(request)
-		if err != nil {
-			return nil, err
-		}
+	response, err := client.DescribeSecurityGroups(request)
+	if err != nil {
+		s.sdk.logger.Error("查询安全组列表失败", zap.Error(err))
+		return nil, HandleError(err)
+	}
 
-		if response.Body == nil || response.Body.SecurityGroups == nil || response.Body.SecurityGroups.SecurityGroup == nil {
-			break
-		}
+	var securityGroups []*ecs.DescribeSecurityGroupsResponseBodySecurityGroupsSecurityGroup
+	var totalCount int64
 
-		securityGroups := response.Body.SecurityGroups.SecurityGroup
-		if len(securityGroups) == 0 {
-			break
-		}
-
-		allSecurityGroups = append(allSecurityGroups, securityGroups...)
+	if response.Body != nil && response.Body.SecurityGroups != nil && response.Body.SecurityGroups.SecurityGroup != nil {
+		securityGroups = response.Body.SecurityGroups.SecurityGroup
 		totalCount = int64(tea.Int32Value(response.Body.TotalCount))
-
-		if len(securityGroups) < pageSize {
-			break
-		}
-
-		page++
 	}
 
-	startIdx := (req.PageNumber - 1) * req.PageSize
-	endIdx := req.PageNumber * req.PageSize
-	if startIdx >= len(allSecurityGroups) {
-		return &ListSecurityGroupsResponseBody{
-			SecurityGroups: []*ecs.DescribeSecurityGroupsResponseBodySecurityGroupsSecurityGroup{},
-			Total:          totalCount,
-		}, nil
-	}
+	s.sdk.logger.Info("查询安全组列表成功", 
+		zap.String("region", req.Region), 
+		zap.Int64("total", totalCount),
+		zap.Int("count", len(securityGroups)))
 
-	if endIdx > len(allSecurityGroups) {
-		endIdx = len(allSecurityGroups)
-	}
-
-	return &ListSecurityGroupsResponseBody{
-		SecurityGroups: allSecurityGroups[startIdx:endIdx],
+	return &ListSecurityGroupsResponse{
+		SecurityGroups: securityGroups,
 		Total:          totalCount,
 	}, nil
 }

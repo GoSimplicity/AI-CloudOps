@@ -83,7 +83,7 @@ func (t *treeEcsService) CreateEcsResource(ctx context.Context, req *model.Creat
 			t.logger.Error("获取云账号失败", zap.Error(err))
 			return err
 		}
-		provider, err := t.providerFactory.CreateProvider(account, account.EncryptedSecret)
+		provider, err := t.providerFactory.GetProvider(account.Provider)
 		if err != nil {
 			t.logger.Error("创建云Provider失败", zap.Error(err))
 			return err
@@ -117,7 +117,7 @@ func (t *treeEcsService) DeleteEcs(ctx context.Context, req *model.DeleteEcsReq)
 			t.logger.Error("获取云账号失败", zap.Error(err))
 			return err
 		}
-		provider, err := t.providerFactory.CreateProvider(account, account.EncryptedSecret)
+		provider, err := t.providerFactory.GetProvider(account.Provider)
 		if err != nil {
 			t.logger.Error("创建云Provider失败", zap.Error(err))
 			return err
@@ -305,7 +305,7 @@ func (t *treeEcsService) UpdateEcs(ctx context.Context, req *model.UpdateEcsReq)
 			t.logger.Error("获取云账号失败", zap.Error(err))
 			return err
 		}
-		provider, err := t.providerFactory.CreateProvider(account, account.EncryptedSecret)
+		provider, err := t.providerFactory.GetProvider(account.Provider)
 		if err != nil {
 			t.logger.Error("创建云Provider失败", zap.Error(err))
 			return err
@@ -402,10 +402,10 @@ func validateCreateEcsResourceReq(req *model.CreateEcsResourceReq) error {
 func parseInstanceType(instanceType string) (int, int) {
 	// 这里是简化的解析逻辑，实际应该根据不同云厂商的实例类型规格进行解析
 	// 例如: ecs.t5-lc1m1.small -> 1核1GB, ecs.t5-lc1m2.large -> 1核2GB
-	
+
 	// 默认值
 	cpu, memory := 1, 1
-	
+
 	// 简单的规格映射示例
 	switch instanceType {
 	case "ecs.t5-lc1m1.small", "t2.micro":
@@ -425,6 +425,6 @@ func parseInstanceType(instanceType string) (int, int) {
 		// 这里可以根据实际需求实现更复杂的解析逻辑
 		cpu, memory = 2, 4 // 默认规格
 	}
-	
+
 	return cpu, memory
 }

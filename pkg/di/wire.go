@@ -53,7 +53,6 @@ import (
 	treeHandler "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeProvider "github.com/GoSimplicity/AI-CloudOps/internal/tree/provider"
-	huaweiProvider "github.com/GoSimplicity/AI-CloudOps/internal/tree/provider/huawei"
 	treeService "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	userHandler "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -217,7 +216,6 @@ var JobSet = wire.NewSet(
 
 var ProviderSet = wire.NewSet(
 	treeProvider.NewAliyunProvider,
-	huaweiProvider.NewHuaweiProvider,
 	treeProvider.NewProviderFactory,
 )
 
