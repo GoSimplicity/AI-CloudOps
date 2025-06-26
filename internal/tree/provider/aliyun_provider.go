@@ -60,7 +60,7 @@ func NewAliyunProvider(logger *zap.Logger, account *model.CloudAccount) *AliyunP
 	// 这里假设 EncryptedSecret 已经是明文 SecretKey，实际可根据需要解密
 	// 如果需要解密，可在外部先解密后传入
 
-	sdk := aliyun.NewSDK(logger, account.AccessKey, account.EncryptedSecret)
+	sdk := aliyun.NewSDKWithLogger(account.AccessKey, account.EncryptedSecret, logger)
 	return &AliyunProviderImpl{
 		logger:               logger,
 		sdk:                  sdk,
@@ -289,12 +289,12 @@ func (a *AliyunProviderImpl) RestartInstance(ctx context.Context, region string,
 }
 
 // VPC网络管理
-func (a *AliyunProviderImpl) ListVPCs(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceVpc, error) {
+func (a *AliyunProviderImpl) ListVPCs(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceVpc, int64, error) {
 	if region == "" {
-		return nil, fmt.Errorf("region cannot be empty")
+		return nil, 0, fmt.Errorf("region cannot be empty")
 	}
 	if pageNumber <= 0 || pageSize <= 0 {
-		return nil, fmt.Errorf("pageNumber and pageSize must be positive integers")
+		return nil, 0, fmt.Errorf("pageNumber and pageSize must be positive integers")
 	}
 
 	req := &aliyun.ListVpcsRequest{
@@ -306,11 +306,11 @@ func (a *AliyunProviderImpl) ListVPCs(ctx context.Context, region string, pageNu
 	resp, err := a.vpcService.ListVpcs(ctx, req)
 	if err != nil {
 		a.logger.Error("failed to list VPCs", zap.Error(err), zap.String("region", region))
-		return nil, fmt.Errorf("list VPCs failed: %w", err)
+		return nil, 0, fmt.Errorf("list VPCs failed: %w", err)
 	}
 
 	if resp == nil || len(resp.Vpcs) == 0 {
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	result := make([]*model.ResourceVpc, 0, len(resp.Vpcs))
@@ -321,7 +321,7 @@ func (a *AliyunProviderImpl) ListVPCs(ctx context.Context, region string, pageNu
 		result = append(result, a.convertToResourceVpcFromListVpc(vpcData, region))
 	}
 
-	return result, nil
+	return result, resp.Total, nil
 }
 
 func (a *AliyunProviderImpl) GetVPC(ctx context.Context, region string, vpcID string) (*model.ResourceVpc, error) {
@@ -384,12 +384,12 @@ func (a *AliyunProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID
 }
 
 // 安全组管理
-func (a *AliyunProviderImpl) ListSecurityGroups(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceSecurityGroup, error) {
+func (a *AliyunProviderImpl) ListSecurityGroups(ctx context.Context, region string, pageNumber, pageSize int) ([]*model.ResourceSecurityGroup, int64, error) {
 	if region == "" {
-		return nil, fmt.Errorf("region cannot be empty")
+		return nil, 0, fmt.Errorf("region cannot be empty")
 	}
 	if pageNumber <= 0 || pageSize <= 0 {
-		return nil, fmt.Errorf("pageNumber and pageSize must be positive integers")
+		return nil, 0, fmt.Errorf("pageNumber and pageSize must be positive integers")
 	}
 
 	req := &aliyun.ListSecurityGroupsRequest{
@@ -401,11 +401,11 @@ func (a *AliyunProviderImpl) ListSecurityGroups(ctx context.Context, region stri
 	resp, err := a.securityGroupService.ListSecurityGroups(ctx, req)
 	if err != nil {
 		a.logger.Error("failed to list security groups", zap.Error(err), zap.String("region", region))
-		return nil, fmt.Errorf("list security groups failed: %w", err)
+		return nil, 0, fmt.Errorf("list security groups failed: %w", err)
 	}
 
 	if resp == nil || len(resp.SecurityGroups) == 0 {
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	result := make([]*model.ResourceSecurityGroup, 0, len(resp.SecurityGroups))
@@ -416,7 +416,7 @@ func (a *AliyunProviderImpl) ListSecurityGroups(ctx context.Context, region stri
 		result = append(result, a.convertToResourceSecurityGroupFromList(sg, region))
 	}
 
-	return result, nil
+	return result, resp.Total, nil
 }
 
 func (a *AliyunProviderImpl) GetSecurityGroup(ctx context.Context, region string, securityGroupID string) (*model.ResourceSecurityGroup, error) {

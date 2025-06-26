@@ -32,7 +32,6 @@ import (
 
 	"github.com/alibabacloud-go/tea/tea"
 	vpc "github.com/alibabacloud-go/vpc-20160428/v2/client"
-	"go.uber.org/zap"
 )
 
 type VpcService struct {
@@ -62,7 +61,6 @@ type CreateVpcResponseBody struct {
 func (v *VpcService) CreateVPC(ctx context.Context, req *CreateVpcRequest) (*CreateVpcResponseBody, error) {
 	client, err := v.sdk.CreateVpcClient(req.Region)
 	if err != nil {
-		v.sdk.logger.Error("创建VPC客户端失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -74,20 +72,16 @@ func (v *VpcService) CreateVPC(ctx context.Context, req *CreateVpcRequest) (*Cre
 		Description: tea.String(req.Description),
 	}
 
-	v.sdk.logger.Info("开始创建VPC", zap.String("region", req.Region), zap.Any("request", req))
 	vpcResponse, err := client.CreateVpc(vpcRequest)
 	if err != nil {
-		v.sdk.logger.Error("创建VPC失败", zap.Error(err))
 		return nil, err
 	}
 
 	vpcId := tea.StringValue(vpcResponse.Body.VpcId)
-	v.sdk.logger.Info("创建VPC成功", zap.String("vpcID", vpcId))
 
 	// 等待VPC可用
 	err = v.waitForVpcAvailable(client, req.Region, vpcId)
 	if err != nil {
-		v.sdk.logger.Error("等待VPC可用失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -101,15 +95,12 @@ func (v *VpcService) CreateVPC(ctx context.Context, req *CreateVpcRequest) (*Cre
 		Description: tea.String(req.Description),
 	}
 
-	v.sdk.logger.Info("开始创建交换机", zap.String("vpcID", vpcId), zap.String("vSwitchName", req.VSwitchName))
 	vSwitchResponse, err := client.CreateVSwitch(vSwitchRequest)
 	if err != nil {
-		v.sdk.logger.Error("创建交换机失败", zap.Error(err))
 		return nil, err
 	}
 
 	vSwitchId := tea.StringValue(vSwitchResponse.Body.VSwitchId)
-	v.sdk.logger.Info("创建交换机成功", zap.String("vSwitchID", vSwitchId))
 
 	return &CreateVpcResponseBody{
 		VpcId:     vpcId,
@@ -144,7 +135,6 @@ func (v *VpcService) waitForVpcAvailable(client *vpc.Client, region string, vpcI
 func (v *VpcService) DeleteVPC(ctx context.Context, region string, vpcID string) error {
 	client, err := v.sdk.CreateVpcClient(region)
 	if err != nil {
-		v.sdk.logger.Error("创建VPC客户端失败", zap.Error(err))
 		return err
 	}
 
@@ -154,10 +144,8 @@ func (v *VpcService) DeleteVPC(ctx context.Context, region string, vpcID string)
 		VpcId:    tea.String(vpcID),
 	}
 
-	v.sdk.logger.Info("查询VPC下的交换机", zap.String("region", region), zap.String("vpcID", vpcID))
 	vSwitchResponse, err := client.DescribeVSwitches(vSwitchRequest)
 	if err != nil {
-		v.sdk.logger.Error("查询交换机失败", zap.Error(err))
 		return err
 	}
 
@@ -168,10 +156,8 @@ func (v *VpcService) DeleteVPC(ctx context.Context, region string, vpcID string)
 			VSwitchId: tea.String(vSwitchId),
 		}
 
-		v.sdk.logger.Info("删除交换机", zap.String("vSwitchID", vSwitchId))
 		_, err = client.DeleteVSwitch(deleteVSwitchRequest)
 		if err != nil {
-			v.sdk.logger.Error("删除交换机失败", zap.Error(err))
 			return fmt.Errorf("删除交换机(%s)失败: %w", vSwitchId, err)
 		}
 
@@ -183,14 +169,11 @@ func (v *VpcService) DeleteVPC(ctx context.Context, region string, vpcID string)
 		VpcId: tea.String(vpcID),
 	}
 
-	v.sdk.logger.Info("开始删除VPC", zap.String("region", region), zap.String("vpcID", vpcID))
 	_, err = client.DeleteVpc(request)
 	if err != nil {
-		v.sdk.logger.Error("删除VPC失败", zap.Error(err))
 		return err
 	}
 
-	v.sdk.logger.Info("删除VPC成功", zap.String("vpcID", vpcID))
 	return nil
 }
 
@@ -207,29 +190,68 @@ type ListVpcsResponseBody struct {
 	Total int64
 }
 
-// ListVpcs 查询VPC列表
+// ListVpcs 查询VPC列表（支持分页获取全部资源）
 func (v *VpcService) ListVpcs(ctx context.Context, req *ListVpcsRequest) (*ListVpcsResponseBody, error) {
-	client, err := v.sdk.CreateVpcClient(req.Region)
-	if err != nil {
-		v.sdk.logger.Error("创建VPC客户端失败", zap.Error(err))
-		return nil, err
+	var allVpcs []*vpc.DescribeVpcsResponseBodyVpcsVpc
+	var totalCount int64 = 0
+	page := 1
+	pageSize := req.Size
+	if pageSize <= 0 {
+		pageSize = 100
 	}
 
-	request := &vpc.DescribeVpcsRequest{
-		RegionId:   tea.String(req.Region),
-		PageNumber: tea.Int32(int32(req.Page)),
-		PageSize:   tea.Int32(int32(req.Size)),
+	for {
+		client, err := v.sdk.CreateVpcClient(req.Region)
+		if err != nil {
+			return nil, err
+		}
+
+		request := &vpc.DescribeVpcsRequest{
+			RegionId:   tea.String(req.Region),
+			PageNumber: tea.Int32(int32(page)),
+			PageSize:   tea.Int32(int32(pageSize)),
+		}
+
+		response, err := client.DescribeVpcs(request)
+		if err != nil {
+			return nil, err
+		}
+
+		if response.Body == nil || response.Body.Vpcs == nil || response.Body.Vpcs.Vpc == nil {
+			break
+		}
+
+		vpcs := response.Body.Vpcs.Vpc
+		if len(vpcs) == 0 {
+			break
+		}
+
+		allVpcs = append(allVpcs, vpcs...)
+		totalCount = int64(tea.Int32Value(response.Body.TotalCount))
+
+		if len(vpcs) < pageSize {
+			break
+		}
+
+		page++
 	}
 
-	response, err := client.DescribeVpcs(request)
-	if err != nil {
-		v.sdk.logger.Error("查询VPC列表失败", zap.Error(err))
-		return nil, err
+	startIdx := (req.Page - 1) * req.Size
+	endIdx := req.Page * req.Size
+	if startIdx >= len(allVpcs) {
+		return &ListVpcsResponseBody{
+			Vpcs:  []*vpc.DescribeVpcsResponseBodyVpcsVpc{},
+			Total: totalCount,
+		}, nil
+	}
+
+	if endIdx > len(allVpcs) {
+		endIdx = len(allVpcs)
 	}
 
 	return &ListVpcsResponseBody{
-		Vpcs:  response.Body.Vpcs.Vpc,
-		Total: int64(tea.Int32Value(response.Body.TotalCount)),
+		Vpcs:  allVpcs[startIdx:endIdx],
+		Total: totalCount,
 	}, nil
 }
 
@@ -237,7 +259,6 @@ func (v *VpcService) ListVpcs(ctx context.Context, req *ListVpcsRequest) (*ListV
 func (v *VpcService) GetVpcDetail(ctx context.Context, region string, vpcID string) (*vpc.DescribeVpcAttributeResponseBody, error) {
 	client, err := v.sdk.CreateVpcClient(region)
 	if err != nil {
-		v.sdk.logger.Error("创建VPC客户端失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -248,7 +269,6 @@ func (v *VpcService) GetVpcDetail(ctx context.Context, region string, vpcID stri
 
 	response, err := client.DescribeVpcAttribute(request)
 	if err != nil {
-		v.sdk.logger.Error("获取VPC详情失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -259,7 +279,6 @@ func (v *VpcService) GetVpcDetail(ctx context.Context, region string, vpcID stri
 func (v *VpcService) GetZonesByVpc(ctx context.Context, region string, vpcId string) ([]*vpc.DescribeZonesResponseBodyZonesZone, []*vpc.DescribeVSwitchesResponseBodyVSwitchesVSwitch, error) {
 	client, err := v.sdk.CreateVpcClient(region)
 	if err != nil {
-		v.sdk.logger.Error("创建VPC客户端失败", zap.Error(err))
 		return nil, nil, err
 	}
 
@@ -293,12 +312,10 @@ func (v *VpcService) GetZonesByVpc(ctx context.Context, region string, vpcId str
 	<-ch2
 
 	if zonesErr != nil {
-		v.sdk.logger.Error("查询可用区列表失败", zap.Error(zonesErr))
 		return nil, nil, zonesErr
 	}
 
 	if vSwitchErr != nil {
-		v.sdk.logger.Error("查询交换机列表失败", zap.Error(vSwitchErr))
 		return nil, nil, vSwitchErr
 	}
 

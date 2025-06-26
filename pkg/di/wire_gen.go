@@ -32,6 +32,7 @@ import (
 	api8 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	dao4 "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/provider"
+	provider2 "github.com/GoSimplicity/AI-CloudOps/internal/tree/provider/huawei"
 	service6 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -167,23 +168,23 @@ func ProvideCmd() *Cmd {
 	treeNodeHandler := api8.NewTreeNodeHandler(treeNodeService)
 	treeEcsDAO := dao4.NewTreeEcsDAO(db)
 	providerFactory := provider.NewProviderFactory(logger)
-	cryptoManager := InitCryptoManager(logger)
-	treeCloudDAO := dao4.NewTreeCloudDAO(logger, db, cryptoManager)
-	treeEcsService := service6.NewTreeEcsService(logger, treeCloudDAO, providerFactory)
+	treeCloudDAO := dao4.NewTreeCloudDAO(logger, db)
+	treeEcsService := service6.NewTreeEcsService(logger, treeEcsDAO, providerFactory, treeCloudDAO)
 	treeEcsHandler := api8.NewTreeEcsHandler(treeEcsService)
 	treeVpcDAO := dao4.NewTreeVpcDAO(logger, db)
 	treeVpcService := service6.NewTreeVpcService(logger, treeVpcDAO, providerFactory)
 	treeVpcHandler := api8.NewTreeVpcHandler(treeVpcService)
 	treeSecurityGroupService := service6.NewTreeSecurityGroupService(providerFactory, logger)
 	treeSecurityGroupHandler := api8.NewTreeSecurityGroupHandler(treeSecurityGroupService)
+	treeSecurityGroupDAO := dao4.NewTreeSecurityGroupDAO(db)
+	treeCloudService := service6.NewTreeCloudService(logger, treeCloudDAO, providerFactory, treeVpcDAO, treeSecurityGroupDAO, treeEcsDAO)
+	treeCloudHandler := api8.NewTreeCloudHandler(treeCloudService)
 	treeRdsDAO := dao4.NewTreeRdsDAO(db)
 	treeRdsService := service6.NewTreeRdsService(logger, treeRdsDAO)
 	treeRdsHandler := api8.NewTreeRdsHandler(treeRdsService)
 	treeElbDAO := dao4.NewTreeElbDAO(db)
 	treeElbService := service6.NewTreeElbService(logger, treeElbDAO)
 	treeElbHandler := api8.NewTreeElbHandler(treeElbService)
-	treeCloudService := service6.NewTreeCloudService(logger, treeCloudDAO, cryptoManager, providerFactory)
-	treeCloudHandler := api8.NewTreeCloudHandler(treeCloudService, logger)
 	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, processHandler, templateHandler, instanceHandler, statisticsHandler, categoryGroupHandler, aiHandler, treeNodeHandler, treeEcsHandler, treeVpcHandler, treeSecurityGroupHandler, treeCloudHandler, treeRdsHandler, treeElbHandler)
 	createK8sClusterTask := job.NewCreateK8sClusterTask(logger, k8sClient, clusterDAO)
 	updateK8sClusterTask := job.NewUpdateK8sClusterTask(logger, k8sClient, clusterDAO)
@@ -222,7 +223,7 @@ var UtilSet = wire.NewSet(utils.NewJWTHandler)
 
 var JobSet = wire.NewSet(job.NewTimedScheduler, job.NewTimedTask, job.NewCreateK8sClusterTask, job.NewUpdateK8sClusterTask, job.NewRefreshK8sClusterTask, job.NewRoutes)
 
-var ProviderSet = wire.NewSet(provider.NewProviderFactory)
+var ProviderSet = wire.NewSet(provider.NewAliyunProvider, provider2.NewHuaweiProvider, provider.NewProviderFactory)
 
 var CronSet = wire.NewSet(cron.NewCronManager)
 
@@ -236,8 +237,7 @@ var Injector = wire.NewSet(
 	InitAsynqClient,
 	InitAsynqServer,
 	InitScheduler,
-	InitAgent,
-	InitCryptoManager, wire.Struct(new(Cmd), "*"),
+	InitAgent, wire.Struct(new(Cmd), "*"),
 )
 
 var CacheSet = wire.NewSet(cache.NewMonitorCache, cache.NewAlertConfigCache, cache.NewRuleConfigCache, cache.NewRecordConfig, cache.NewPromConfigCache)

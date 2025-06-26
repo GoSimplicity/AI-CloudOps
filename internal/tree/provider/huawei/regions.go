@@ -45,7 +45,7 @@ func (h *HuaweiProviderImpl) RefreshRegions(ctx context.Context) error {
 }
 
 func (h *HuaweiProviderImpl) SyncRegionsWithCredentials(ctx context.Context, accessKey, secretKey string) error {
-	tempSDK := huawei.NewSDK(h.logger, accessKey, secretKey)
+	tempSDK := huawei.NewSDK(accessKey, secretKey)
 	tempEcsService := huawei.NewEcsService(tempSDK)
 
 	h.logger.Info("开始使用新凭证同步华为云区域")
@@ -55,7 +55,7 @@ func (h *HuaweiProviderImpl) SyncRegionsWithCredentials(ctx context.Context, acc
 
 	for _, regionInfo := range knownRegions {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		_, err := tempEcsService.ListInstances(ctx, &huawei.ListInstancesRequest{
+		_, _, err := tempEcsService.ListInstances(ctx, &huawei.ListInstancesRequest{
 			Region: regionInfo.RegionID,
 			Page:   1,
 			Size:   1,
@@ -194,7 +194,7 @@ func (h *HuaweiProviderImpl) probeRegion(regionID string) bool {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := h.EcsService.ListInstances(ctx, &huawei.ListInstancesRequest{
+	_, _, err := h.EcsService.ListInstances(ctx, &huawei.ListInstancesRequest{
 		Region: regionID,
 		Page:   1,
 		Size:   1,

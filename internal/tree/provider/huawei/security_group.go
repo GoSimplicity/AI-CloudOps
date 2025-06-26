@@ -30,7 +30,7 @@ func (h *HuaweiProviderImpl) ListSecurityGroups(ctx context.Context, region stri
 		PageSize:   pageSize,
 	}
 
-	resp, err := h.SecurityGroupService.ListSecurityGroups(ctx, req)
+	resp, _, err := h.SecurityGroupService.ListSecurityGroups(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to list security groups", zap.Error(err), zap.String("region", region))
 		return nil, fmt.Errorf("list security groups failed: %w", err)

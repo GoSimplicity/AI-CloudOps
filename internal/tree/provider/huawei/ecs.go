@@ -30,7 +30,7 @@ func (h *HuaweiProviderImpl) ListInstances(ctx context.Context, region string, p
 		Size:   size,
 	}
 
-	resp, err := h.EcsService.ListInstances(ctx, req)
+	resp, _, err := h.EcsService.ListInstances(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to list instances", zap.Error(err), zap.String("region", region))
 		return nil, 0, fmt.Errorf("list instances failed: %w", err)

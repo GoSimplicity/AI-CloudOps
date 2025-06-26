@@ -117,6 +117,10 @@ type UpdateCloudAccountReq struct {
 	Description string        `json:"description" validate:"max=500"`
 }
 
+type DeleteCloudAccountReq struct {
+	ID int `json:"id"`
+}
+
 // GetCloudAccountReq 获取云账号详情请求
 type GetCloudAccountReq struct {
 	ID int `json:"id" uri:"id" binding:"required"`
@@ -124,9 +128,7 @@ type GetCloudAccountReq struct {
 
 // ListCloudAccountsReq 获取云账号列表请求
 type ListCloudAccountsReq struct {
-	Page     int           `json:"page" form:"page"`
-	PageSize int           `json:"pageSize" form:"pageSize"`
-	Name     string        `json:"name" form:"name"`
+	ListReq
 	Provider CloudProvider `json:"provider" form:"provider"`
 	Enabled  bool          `json:"enabled" form:"enabled"`
 }
@@ -194,10 +196,17 @@ type SyncCloudResourcesReq struct {
 
 // SyncCloudAccountResourcesReq 同步指定云账号资源请求
 type SyncCloudAccountResourcesReq struct {
-	AccountID    int      `json:"accountId"`    // 云账号ID
+	ID           int      `json:"id"`           // 云账号ID
 	ResourceType string   `json:"resourceType"` // 资源类型
 	Regions      []string `json:"regions"`      // 区域列表
 	Force        bool     `json:"force"`        // 是否强制同步
+}
+
+// GetCloudAccountStatisticsReq 获取云账号统计信息请求
+type GetCloudAccountStatisticsReq struct {
+	ListReq
+	Provider CloudProvider `json:"provider"`
+	Enabled  bool          `json:"enabled"`
 }
 
 // CloudAccountStatistics 云账号统计信息

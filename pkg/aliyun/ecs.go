@@ -230,29 +230,68 @@ type ListInstancesResponseBody struct {
 	Total     int64
 }
 
-// ListInstances 查询ECS实例列表
+// ListInstances 查询ECS实例列表（支持分页获取全部资源）
 func (e *EcsService) ListInstances(ctx context.Context, req *ListInstancesRequest) (*ListInstancesResponseBody, error) {
-	client, err := e.sdk.CreateEcsClient(req.Region)
-	if err != nil {
-		e.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, err
+	var allInstances []*ecs.DescribeInstancesResponseBodyInstancesInstance
+	var totalCount int64 = 0
+	page := 1
+	pageSize := req.Size
+	if pageSize <= 0 {
+		pageSize = 100
 	}
 
-	request := &ecs.DescribeInstancesRequest{
-		RegionId:   tea.String(req.Region),
-		PageSize:   tea.Int32(int32(req.Size)),
-		PageNumber: tea.Int32(int32(req.Page)),
+	for {
+		client, err := e.sdk.CreateEcsClient(req.Region)
+		if err != nil {
+			return nil, err
+		}
+
+		request := &ecs.DescribeInstancesRequest{
+			RegionId:   tea.String(req.Region),
+			PageNumber: tea.Int32(int32(page)),
+			PageSize:   tea.Int32(int32(pageSize)),
+		}
+
+		response, err := client.DescribeInstances(request)
+		if err != nil {
+			return nil, err
+		}
+
+		if response.Body == nil || response.Body.Instances == nil || response.Body.Instances.Instance == nil {
+			break
+		}
+
+		instances := response.Body.Instances.Instance
+		if len(instances) == 0 {
+			break
+		}
+
+		allInstances = append(allInstances, instances...)
+		totalCount = int64(tea.Int32Value(response.Body.TotalCount))
+
+		if len(instances) < pageSize {
+			break
+		}
+
+		page++
 	}
 
-	response, err := client.DescribeInstances(request)
-	if err != nil {
-		e.sdk.logger.Error("查询ECS实例列表失败", zap.Error(err))
-		return nil, err
+	startIdx := (req.Page - 1) * req.Size
+	endIdx := req.Page * req.Size
+	if startIdx >= len(allInstances) {
+		return &ListInstancesResponseBody{
+			Instances: []*ecs.DescribeInstancesResponseBodyInstancesInstance{},
+			Total:     totalCount,
+		}, nil
+	}
+
+	if endIdx > len(allInstances) {
+		endIdx = len(allInstances)
 	}
 
 	return &ListInstancesResponseBody{
-		Instances: response.Body.Instances.Instance,
-		Total:     int64(tea.Int32Value(response.Body.TotalCount)),
+		Instances: allInstances[startIdx:endIdx],
+		Total:     totalCount,
 	}, nil
 }
 

@@ -38,7 +38,7 @@ func NewHuaweiProvider(logger *zap.Logger, account *model.CloudAccount) *HuaweiP
 	// 这里假设 EncryptedSecret 已经是明文 SecretKey，实际可根据需要解密
 	// 如果需要解密，可在外部先解密后传入
 
-	sdk := huawei.NewSDK(logger, account.AccessKey, account.EncryptedSecret)
+	sdk := huawei.NewSDK(account.AccessKey, account.EncryptedSecret)
 	return &HuaweiProviderImpl{
 		logger:               logger,
 		sdk:                  sdk,
@@ -57,7 +57,7 @@ func (h *HuaweiProviderImpl) InitializeProvider(accessKey, secretKey string) err
 		return fmt.Errorf("华为云访问密钥不能为空")
 	}
 	// 创建SDK实例
-	sdk := huawei.NewSDK(h.logger, accessKey, secretKey)
+	sdk := huawei.NewSDK(accessKey, secretKey)
 	// 初始化各个服务
 	h.sdk = sdk
 	h.EcsService = huawei.NewEcsService(sdk)

@@ -179,7 +179,7 @@ type DiskStatistics struct {
 
 // DiskOperation 磁盘操作记录
 type DiskOperation struct {
-	ID         uint       `json:"id" gorm:"primaryKey"`
+	Model
 	DiskId     string     `json:"disk_id" gorm:"column:disk_id;size:64;index"`
 	Operation  string     `json:"operation" gorm:"column:operation;size:32"` // create, attach, detach, resize, delete
 	Status     string     `json:"status" gorm:"column:status;size:32"`       // pending, running, success, failed
@@ -190,6 +190,4 @@ type DiskOperation struct {
 	EndTime    *time.Time `json:"end_time" gorm:"column:end_time"`
 	Duration   int        `json:"duration" gorm:"column:duration"` // 耗时(秒)
 	Operator   string     `json:"operator" gorm:"column:operator;size:64"`
-	CreatedAt  time.Time  `json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
 }

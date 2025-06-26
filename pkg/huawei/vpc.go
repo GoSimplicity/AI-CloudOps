@@ -32,7 +32,6 @@ import (
 
 	vpc "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/vpc/v3"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/vpc/v3/model"
-	"go.uber.org/zap"
 )
 
 type VpcService struct {
@@ -61,7 +60,6 @@ type CreateVpcResponseBody struct {
 func (v *VpcService) CreateVPC(ctx context.Context, req *CreateVpcRequest) (*CreateVpcResponseBody, error) {
 	client, err := v.sdk.CreateVpcClient(req.Region, v.sdk.accessKey)
 	if err != nil {
-		v.sdk.logger.Error("创建VPC客户端失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -74,10 +72,8 @@ func (v *VpcService) CreateVPC(ctx context.Context, req *CreateVpcRequest) (*Cre
 			},
 		},
 	}
-	v.sdk.logger.Info("开始创建VPC", zap.String("region", req.Region), zap.Any("request", req))
 	_, err = client.CreateVpc(vpcReq)
 	if err != nil {
-		v.sdk.logger.Error("创建VPC失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -86,7 +82,6 @@ func (v *VpcService) CreateVPC(ctx context.Context, req *CreateVpcRequest) (*Cre
 	listReq := &model.ListVpcsRequest{}
 	listResp, err := client.ListVpcs(listReq)
 	if err != nil {
-		v.sdk.logger.Error("查询VPC列表失败", zap.Error(err))
 		return nil, err
 	}
 	for _, v := range *listResp.Vpcs {
@@ -96,10 +91,8 @@ func (v *VpcService) CreateVPC(ctx context.Context, req *CreateVpcRequest) (*Cre
 		}
 	}
 	if vpcId == "" {
-		v.sdk.logger.Error("未找到刚刚创建的VPC", zap.String("name", req.VpcName), zap.String("cidr", req.CidrBlock))
 		return nil, fmt.Errorf("未找到刚刚创建的VPC: %s", req.VpcName)
 	}
-	v.sdk.logger.Info("创建VPC成功", zap.String("vpcID", vpcId))
 
 	// 创建子网
 	subnetReq := &model.CreateClouddcnSubnetRequest{
@@ -116,7 +109,6 @@ func (v *VpcService) CreateVPC(ctx context.Context, req *CreateVpcRequest) (*Cre
 	}
 	subnetResp, err := client.CreateClouddcnSubnet(subnetReq)
 	if err != nil {
-		v.sdk.logger.Error("创建子网失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -125,10 +117,8 @@ func (v *VpcService) CreateVPC(ctx context.Context, req *CreateVpcRequest) (*Cre
 		subnetId = subnetResp.ClouddcnSubnet.Id
 	}
 	if subnetId == "" {
-		v.sdk.logger.Error("未获取到子网ID")
 		return nil, fmt.Errorf("未获取到子网ID")
 	}
-	v.sdk.logger.Info("创建子网成功", zap.String("subnetID", subnetId))
 
 	return &CreateVpcResponseBody{
 		VpcId:    vpcId,
@@ -160,15 +150,11 @@ func (v *VpcService) waitForVpcAvailable(client *vpc.VpcClient, region string, v
 func (v *VpcService) DeleteVPC(ctx context.Context, region string, vpcID string) error {
 	client, err := v.sdk.CreateVpcClient(region, v.sdk.accessKey)
 	if err != nil {
-		v.sdk.logger.Error("创建VPC客户端失败", zap.Error(err))
 		return err
 	}
 
-	v.sdk.logger.Info("开始删除VPC", zap.String("region", region), zap.String("vpcID", vpcID))
-
 	// 1. 先列出并删除所有子网
 	if err := v.deleteSubnets(client, vpcID); err != nil {
-		v.sdk.logger.Error("删除子网失败", zap.Error(err))
 		return err
 	}
 
@@ -179,11 +165,9 @@ func (v *VpcService) DeleteVPC(ctx context.Context, region string, vpcID string)
 
 	_, err = client.DeleteVpc(deleteReq)
 	if err != nil {
-		v.sdk.logger.Error("删除VPC失败", zap.Error(err))
 		return err
 	}
 
-	v.sdk.logger.Info("VPC删除成功", zap.String("vpcID", vpcID))
 	return nil
 }
 
@@ -199,7 +183,6 @@ func (v *VpcService) deleteSubnets(client *vpc.VpcClient, vpcID string) error {
 	}
 
 	if response.ClouddcnSubnets == nil || len(*response.ClouddcnSubnets) == 0 {
-		v.sdk.logger.Info("VPC下没有子网需要删除", zap.String("vpcID", vpcID))
 		return nil
 	}
 
@@ -207,7 +190,6 @@ func (v *VpcService) deleteSubnets(client *vpc.VpcClient, vpcID string) error {
 	for _, subnet := range *response.ClouddcnSubnets {
 		subnetID := subnet.Id
 
-		v.sdk.logger.Info("删除子网", zap.String("subnetID", subnetID))
 		deleteSubnetReq := &model.DeleteClouddcnSubnetRequest{
 			ClouddcnSubnetId: subnetID,
 		}
@@ -216,8 +198,6 @@ func (v *VpcService) deleteSubnets(client *vpc.VpcClient, vpcID string) error {
 		if err != nil {
 			return fmt.Errorf("删除子网 %s 失败: %w", subnetID, err)
 		}
-
-		v.sdk.logger.Info("子网删除成功", zap.String("subnetID", subnetID))
 	}
 
 	return nil
@@ -230,38 +210,57 @@ type ListVpcsRequest struct {
 }
 
 type ListVpcsResponseBody struct {
-	Vpcs  []model.Vpc
-	Total int32
+	Vpcs []model.Vpc
 }
 
-func (v *VpcService) ListVpcs(ctx context.Context, req *ListVpcsRequest) (*ListVpcsResponseBody, error) {
+func (v *VpcService) ListVpcs(ctx context.Context, req *ListVpcsRequest) (*ListVpcsResponseBody, int64, error) {
+	var allVpcs []model.Vpc
+	var totalCount int64 = 0
+	
 	client, err := v.sdk.CreateVpcClient(req.Region, v.sdk.accessKey)
 	if err != nil {
-		v.sdk.logger.Error("创建VPC客户端失败", zap.Error(err))
-		return nil, err
+		return nil, 0, err
 	}
 
 	limit := int32(req.Size)
+	if limit <= 0 {
+		limit = 100
+	}
+
 	request := &model.ListVpcsRequest{
 		Limit: &limit,
 	}
 
 	response, err := client.ListVpcs(request)
 	if err != nil {
-		v.sdk.logger.Error("查询VPC列表失败", zap.Error(err))
-		return nil, err
+		return nil, 0, err
+	}
+
+	if response.Vpcs != nil {
+		allVpcs = *response.Vpcs
+		totalCount = int64(len(allVpcs))
+	}
+
+	startIdx := (req.Page - 1) * req.Size
+	endIdx := req.Page * req.Size
+	if startIdx >= len(allVpcs) {
+		return &ListVpcsResponseBody{
+			Vpcs: []model.Vpc{},
+		}, totalCount, nil
+	}
+
+	if endIdx > len(allVpcs) {
+		endIdx = len(allVpcs)
 	}
 
 	return &ListVpcsResponseBody{
-		Vpcs:  *response.Vpcs,
-		Total: 0,
-	}, nil
+		Vpcs: allVpcs[startIdx:endIdx],
+	}, totalCount, nil
 }
 
 func (v *VpcService) GetVpcDetail(ctx context.Context, region string, vpcID string) (*model.Vpc, error) {
 	client, err := v.sdk.CreateVpcClient(region, v.sdk.accessKey)
 	if err != nil {
-		v.sdk.logger.Error("创建VPC客户端失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -271,7 +270,6 @@ func (v *VpcService) GetVpcDetail(ctx context.Context, region string, vpcID stri
 
 	response, err := client.ShowVpc(request)
 	if err != nil {
-		v.sdk.logger.Error("获取VPC详情失败", zap.Error(err))
 		return nil, err
 	}
 

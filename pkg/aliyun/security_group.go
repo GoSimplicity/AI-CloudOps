@@ -182,29 +182,67 @@ type ListSecurityGroupsResponseBody struct {
 	Total          int64
 }
 
-// ListSecurityGroups 查询安全组列表
+// ListSecurityGroups 查询安全组列表（支持分页获取全部资源）
 func (s *SecurityGroupService) ListSecurityGroups(ctx context.Context, req *ListSecurityGroupsRequest) (*ListSecurityGroupsResponseBody, error) {
-	client, err := s.sdk.CreateEcsClient(req.Region)
-	if err != nil {
-		s.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, err
+	var allSecurityGroups []*ecs.DescribeSecurityGroupsResponseBodySecurityGroupsSecurityGroup
+	var totalCount int64 = 0
+	page := 1
+	pageSize := req.PageSize
+	if pageSize <= 0 {
+		pageSize = 100
 	}
 
-	request := &ecs.DescribeSecurityGroupsRequest{
-		RegionId:   tea.String(req.Region),
-		PageNumber: tea.Int32(int32(req.PageNumber)),
-		PageSize:   tea.Int32(int32(req.PageSize)),
+	for {
+		client, err := s.sdk.CreateEcsClient(req.Region)
+		if err != nil {
+			return nil, err
+		}
+
+		request := &ecs.DescribeSecurityGroupsRequest{
+			RegionId:   tea.String(req.Region),
+			PageNumber: tea.Int32(int32(page)),
+			PageSize:   tea.Int32(int32(pageSize)),
+		}
+
+		response, err := client.DescribeSecurityGroups(request)
+		if err != nil {
+			return nil, err
+		}
+
+		if response.Body == nil || response.Body.SecurityGroups == nil || response.Body.SecurityGroups.SecurityGroup == nil {
+			break
+		}
+
+		securityGroups := response.Body.SecurityGroups.SecurityGroup
+		if len(securityGroups) == 0 {
+			break
+		}
+
+		allSecurityGroups = append(allSecurityGroups, securityGroups...)
+		totalCount = int64(tea.Int32Value(response.Body.TotalCount))
+
+		if len(securityGroups) < pageSize {
+			break
+		}
+
+		page++
 	}
 
-	s.sdk.logger.Info("开始获取安全组列表", zap.String("region", req.Region), zap.Int("pageNumber", req.PageNumber), zap.Int("pageSize", req.PageSize))
-	response, err := client.DescribeSecurityGroups(request)
-	if err != nil {
-		s.sdk.logger.Error("获取安全组列表失败", zap.Error(err))
-		return nil, err
+	startIdx := (req.PageNumber - 1) * req.PageSize
+	endIdx := req.PageNumber * req.PageSize
+	if startIdx >= len(allSecurityGroups) {
+		return &ListSecurityGroupsResponseBody{
+			SecurityGroups: []*ecs.DescribeSecurityGroupsResponseBodySecurityGroupsSecurityGroup{},
+			Total:          totalCount,
+		}, nil
+	}
+
+	if endIdx > len(allSecurityGroups) {
+		endIdx = len(allSecurityGroups)
 	}
 
 	return &ListSecurityGroupsResponseBody{
-		SecurityGroups: response.Body.SecurityGroups.SecurityGroup,
-		Total:          int64(tea.Int32Value(response.Body.TotalCount)),
+		SecurityGroups: allSecurityGroups[startIdx:endIdx],
+		Total:          totalCount,
 	}, nil
 }

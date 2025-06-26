@@ -184,33 +184,68 @@ type ListDisksResponseBody struct {
 	Total int64
 }
 
-// ListDisks 查询磁盘列表
+// ListDisks 查询磁盘列表（支持分页获取全部资源）
 func (d *DiskService) ListDisks(ctx context.Context, req *ListDisksRequest) (*ListDisksResponseBody, error) {
-	client, err := d.sdk.CreateEcsClient(req.Region)
-	if err != nil {
-		d.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, err
+	var allDisks []*ecs.DescribeDisksResponseBodyDisksDisk
+	var totalCount int64 = 0
+	page := 1
+	pageSize := req.Size
+	if pageSize <= 0 {
+		pageSize = 100
 	}
 
-	request := &ecs.DescribeDisksRequest{
-		RegionId:   tea.String(req.Region),
-		PageSize:   tea.Int32(int32(req.Size)),
-		PageNumber: tea.Int32(int32(req.Page)),
+	for {
+		client, err := d.sdk.CreateEcsClient(req.Region)
+		if err != nil {
+			return nil, err
+		}
+
+		request := &ecs.DescribeDisksRequest{
+			RegionId:   tea.String(req.Region),
+			PageNumber: tea.Int32(int32(page)),
+			PageSize:   tea.Int32(int32(pageSize)),
+		}
+
+		response, err := client.DescribeDisks(request)
+		if err != nil {
+			return nil, err
+		}
+
+		if response.Body == nil || response.Body.Disks == nil || response.Body.Disks.Disk == nil {
+			break
+		}
+
+		disks := response.Body.Disks.Disk
+		if len(disks) == 0 {
+			break
+		}
+
+		allDisks = append(allDisks, disks...)
+		totalCount = int64(tea.Int32Value(response.Body.TotalCount))
+
+		if len(disks) < pageSize {
+			break
+		}
+
+		page++
 	}
 
-	d.sdk.logger.Info("开始查询磁盘列表", zap.String("region", req.Region))
-	response, err := client.DescribeDisks(request)
-	if err != nil {
-		d.sdk.logger.Error("查询磁盘列表失败", zap.Error(err))
-		return nil, err
+	startIdx := (req.Page - 1) * req.Size
+	endIdx := req.Page * req.Size
+	if startIdx >= len(allDisks) {
+		return &ListDisksResponseBody{
+			Disks: []*ecs.DescribeDisksResponseBodyDisksDisk{},
+			Total: totalCount,
+		}, nil
 	}
 
-	total := int64(tea.Int32Value(response.Body.TotalCount))
-	d.sdk.logger.Info("查询磁盘列表成功", zap.Int64("total", total))
+	if endIdx > len(allDisks) {
+		endIdx = len(allDisks)
+	}
 
 	return &ListDisksResponseBody{
-		Disks: response.Body.Disks.Disk,
-		Total: total,
+		Disks: allDisks[startIdx:endIdx],
+		Total: totalCount,
 	}, nil
 }
 

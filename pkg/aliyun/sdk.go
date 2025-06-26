@@ -35,16 +35,25 @@ import (
 )
 
 type SDK struct {
-	logger          *zap.Logger
 	accessKeyId     string
 	accessKeySecret string
+	logger          *zap.Logger
 }
 
-func NewSDK(logger *zap.Logger, accessKeyId, accessKeySecret string) *SDK {
+func NewSDK(accessKeyId, accessKeySecret string) *SDK {
+	logger, _ := zap.NewProduction()
 	return &SDK{
-		logger:          logger,
 		accessKeyId:     accessKeyId,
 		accessKeySecret: accessKeySecret,
+		logger:          logger,
+	}
+}
+
+func NewSDKWithLogger(accessKeyId, accessKeySecret string, logger *zap.Logger) *SDK {
+	return &SDK{
+		accessKeyId:     accessKeyId,
+		accessKeySecret: accessKeySecret,
+		logger:          logger,
 	}
 }
 

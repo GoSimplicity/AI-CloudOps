@@ -236,7 +236,6 @@ var Injector = wire.NewSet(
 	InitAsynqServer,
 	InitScheduler,
 	InitAgent,
-	InitCryptoManager,
 	wire.Struct(new(Cmd), "*"),
 )
 

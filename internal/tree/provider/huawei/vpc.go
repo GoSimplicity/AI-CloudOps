@@ -32,7 +32,7 @@ func (h *HuaweiProviderImpl) ListVPCs(ctx context.Context, region string, pageNu
 		Size:   pageSize,
 	}
 
-	resp, err := h.VpcService.ListVpcs(ctx, req)
+	resp, _, err := h.VpcService.ListVpcs(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to list VPCs", zap.Error(err), zap.String("region", region))
 		return nil, fmt.Errorf("list VPCs failed: %w", err)

@@ -26,8 +26,6 @@
 package huawei
 
 import (
-	"go.uber.org/zap"
-
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	ecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
 	ecsregion "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/region"
@@ -35,21 +33,32 @@ import (
 	evsregion "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/evs/v2/region"
 	vpc "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/vpc/v3"
 	vpcregion "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/vpc/v3/region"
+	"go.uber.org/zap"
 )
 
 // SDK 华为云SDK客户端
 type SDK struct {
-	logger    *zap.Logger
 	accessKey string
 	secretKey string
+	logger    *zap.Logger
 }
 
 // NewSDK 创建华为云SDK客户端
-func NewSDK(logger *zap.Logger, accessKey, secretKey string) *SDK {
+func NewSDK(accessKey, secretKey string) *SDK {
+	logger, _ := zap.NewProduction()
 	return &SDK{
-		logger:    logger,
 		accessKey: accessKey,
 		secretKey: secretKey,
+		logger:    logger,
+	}
+}
+
+// NewSDKWithLogger 创建带有自定义logger的华为云SDK客户端
+func NewSDKWithLogger(accessKey, secretKey string, logger *zap.Logger) *SDK {
+	return &SDK{
+		accessKey: accessKey,
+		secretKey: secretKey,
+		logger:    logger,
 	}
 }
 
