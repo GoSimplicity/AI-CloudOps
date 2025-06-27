@@ -9,6 +9,7 @@ require (
 	github.com/alibabacloud-go/darabonba-openapi v0.2.1
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.7
 	github.com/alibabacloud-go/ecs-20140526/v2 v2.1.3
+	github.com/alibabacloud-go/slb-20140515/v3 v3.3.17
 	github.com/alibabacloud-go/tea v1.3.8
 	github.com/alibabacloud-go/vpc-20160428/v2 v2.0.117
 	github.com/casbin/casbin/v2 v2.93.0

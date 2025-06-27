@@ -30,6 +30,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 	evsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/evs/v2/model"
 	vpcmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/vpc/v3/model"
@@ -40,7 +41,8 @@ func TestNewHuaweiProvider(t *testing.T) {
 	logger := zap.NewNop()
 
 	// 测试创建华为云Provider
-	provider := NewHuaweiProvider(logger)
+	account := &model.CloudAccount{AccessKey: "mock-ak", EncryptedSecret: "mock-sk"}
+	provider := NewHuaweiProvider(logger, account)
 
 	// 验证provider不为nil且正确初始化
 	if provider == nil {

@@ -42,17 +42,26 @@ func NewTreeCloudHandler(cloudService service.TreeCloudService) *TreeCloudHandle
 	}
 }
 
-// RegisterRoutes 注册路由
 func (h *TreeCloudHandler) RegisterRouters(r gin.IRouter) {
 	cloudGroup := r.Group("/api/tree/cloud")
 	{
-		cloudGroup.POST("/accounts/create", h.CreateCloudAccount)
-		cloudGroup.GET("/accounts/list", h.ListCloudAccounts)
-		cloudGroup.GET("/accounts/detail/:id", h.DetailCloudAccount)
-		cloudGroup.PUT("/accounts/update/:id", h.UpdateCloudAccount)
-		cloudGroup.DELETE("/accounts/delete/:id", h.DeleteCloudAccount)
-		cloudGroup.POST("/accounts/test/:id", h.TestCloudAccount)
+		// 云账号管理
+		accounts := cloudGroup.Group("/accounts")
+		{
+			accounts.POST("/create", h.CreateCloudAccount)
+			accounts.GET("/list", h.ListCloudAccounts)
+			accounts.GET("/detail/:id", h.DetailCloudAccount)
+			accounts.PUT("/update/:id", h.UpdateCloudAccount)
+			accounts.DELETE("/delete/:id", h.DeleteCloudAccount)
+			accounts.POST("/test/:id", h.TestCloudAccount)
+		}
+
+		// 云资源同步
 		cloudGroup.POST("/sync", h.SyncCloudResources)
+		cloudGroup.POST("/sync/:id", h.SyncCloudAccountResources)
+
+		// 云账号统计
+		cloudGroup.GET("/statistics", h.GetCloudAccountStatistics)
 	}
 }
 
@@ -71,37 +80,40 @@ func (h *TreeCloudHandler) UpdateCloudAccount(ctx *gin.Context) {
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "账号ID格式错误")
+		utils.BadRequestError(ctx, "账号ID格式错误")
 		return
 	}
 
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.cloudService.UpdateCloudAccount(ctx, req.ID, &req)
+		return nil, h.cloudService.UpdateCloudAccount(ctx, &req)
 	})
 }
 
 // DeleteCloudAccount 删除云账号
 func (h *TreeCloudHandler) DeleteCloudAccount(ctx *gin.Context) {
+	var req model.DeleteCloudAccountReq
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "账号ID格式错误")
+		utils.BadRequestError(ctx, "账号ID格式错误")
 		return
 	}
 
+	req.ID = id
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.cloudService.DeleteCloudAccount(ctx, id)
 	})
 }
 
-// GetCloudAccount 获取云账号详情
+// DetailCloudAccount 获取云账号详情
 func (h *TreeCloudHandler) DetailCloudAccount(ctx *gin.Context) {
 	var req model.GetCloudAccountReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "账号ID格式错误")
+		utils.BadRequestError(ctx, "账号ID格式错误")
 		return
 	}
 
@@ -127,22 +139,47 @@ func (h *TreeCloudHandler) TestCloudAccount(ctx *gin.Context) {
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "账号ID格式错误")
+		utils.BadRequestError(ctx, "账号ID格式错误")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, h.cloudService.TestCloudAccount(ctx, req.ID)
+	})
+}
+
+// SyncCloudResources 同步所有云资源
+func (h *TreeCloudHandler) SyncCloudResources(ctx *gin.Context) {
+	var req model.SyncCloudReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.cloudService.SyncCloudResources(ctx, &req)
+	})
+}
+
+// SyncCloudAccountResources 同步指定云账号的资源
+func (h *TreeCloudHandler) SyncCloudAccountResources(ctx *gin.Context) {
+	var req model.SyncCloudAccountResourcesReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.BadRequestError(ctx, "账号ID格式错误")
 		return
 	}
 
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.cloudService.TestCloudAccount(ctx, req.ID)
+		return nil, h.cloudService.SyncCloudAccountResources(ctx, &req)
 	})
 }
 
-// SyncCloudResources 同步云资源
-func (h *TreeCloudHandler) SyncCloudResources(ctx *gin.Context) {
-	var req model.SyncCloudReq
-
+// GetCloudAccountStatistics 获取云账号统计信息
+func (h *TreeCloudHandler) GetCloudAccountStatistics(ctx *gin.Context) {
+	var req model.GetCloudAccountStatisticsReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.cloudService.SyncCloudResources(ctx, &req)
+		return h.cloudService.GetCloudAccountStatistics(ctx, &req)
 	})
 }

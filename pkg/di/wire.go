@@ -216,7 +216,6 @@ var JobSet = wire.NewSet(
 
 var ProviderSet = wire.NewSet(
 	treeProvider.NewAliyunProvider,
-	treeProvider.NewHuaweiProvider,
 	treeProvider.NewProviderFactory,
 )
 

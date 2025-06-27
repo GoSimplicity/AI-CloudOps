@@ -20,7 +20,7 @@ func (h *HuaweiProviderImpl) ListInstances(ctx context.Context, region string, p
 		return nil, 0, fmt.Errorf("page and size must be positive integers")
 	}
 
-	if h.ecsService == nil {
+	if h.EcsService == nil {
 		return nil, 0, fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
@@ -30,7 +30,7 @@ func (h *HuaweiProviderImpl) ListInstances(ctx context.Context, region string, p
 		Size:   size,
 	}
 
-	resp, err := h.ecsService.ListInstances(ctx, req)
+	resp, _, err := h.EcsService.ListInstances(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to list instances", zap.Error(err), zap.String("region", region))
 		return nil, 0, fmt.Errorf("list instances failed: %w", err)
@@ -54,11 +54,11 @@ func (h *HuaweiProviderImpl) GetInstance(ctx context.Context, region string, ins
 		return nil, fmt.Errorf("region and instanceID cannot be empty")
 	}
 
-	if h.ecsService == nil {
+	if h.EcsService == nil {
 		return nil, fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	instance, err := h.ecsService.GetInstanceDetail(ctx, region, instanceID)
+	instance, err := h.EcsService.GetInstanceDetail(ctx, region, instanceID)
 	if err != nil {
 		h.logger.Error("failed to get instance detail", zap.Error(err), zap.String("instanceID", instanceID))
 		return nil, fmt.Errorf("get instance detail failed: %w", err)
@@ -80,7 +80,7 @@ func (h *HuaweiProviderImpl) CreateInstance(ctx context.Context, region string, 
 		return fmt.Errorf("config cannot be nil")
 	}
 
-	if h.ecsService == nil {
+	if h.EcsService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
@@ -104,7 +104,7 @@ func (h *HuaweiProviderImpl) CreateInstance(ctx context.Context, region string, 
 		DataDiskSize:       config.DataDiskSize,
 	}
 
-	_, err := h.ecsService.CreateInstance(ctx, req)
+	_, err := h.EcsService.CreateInstance(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to create instance", zap.Error(err), zap.String("region", region))
 		return fmt.Errorf("create instance failed: %w", err)
@@ -119,11 +119,11 @@ func (h *HuaweiProviderImpl) DeleteInstance(ctx context.Context, region string, 
 		return fmt.Errorf("region and instanceID cannot be empty")
 	}
 
-	if h.ecsService == nil {
+	if h.EcsService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	err := h.ecsService.DeleteInstance(ctx, region, instanceID, h.config.Defaults.ForceDelete)
+	err := h.EcsService.DeleteInstance(ctx, region, instanceID, h.config.Defaults.ForceDelete)
 	if err != nil {
 		h.logger.Error("failed to delete instance", zap.Error(err), zap.String("instanceID", instanceID))
 		return fmt.Errorf("delete instance failed: %w", err)
@@ -138,11 +138,11 @@ func (h *HuaweiProviderImpl) StartInstance(ctx context.Context, region string, i
 		return fmt.Errorf("region and instanceID cannot be empty")
 	}
 
-	if h.ecsService == nil {
+	if h.EcsService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	err := h.ecsService.StartInstance(ctx, region, instanceID)
+	err := h.EcsService.StartInstance(ctx, region, instanceID)
 	if err != nil {
 		h.logger.Error("failed to start instance", zap.Error(err), zap.String("instanceID", instanceID))
 		return fmt.Errorf("start instance failed: %w", err)
@@ -157,11 +157,11 @@ func (h *HuaweiProviderImpl) StopInstance(ctx context.Context, region string, in
 		return fmt.Errorf("region and instanceID cannot be empty")
 	}
 
-	if h.ecsService == nil {
+	if h.EcsService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	err := h.ecsService.StopInstance(ctx, region, instanceID, h.config.Defaults.ForceStop)
+	err := h.EcsService.StopInstance(ctx, region, instanceID, h.config.Defaults.ForceStop)
 	if err != nil {
 		h.logger.Error("failed to stop instance", zap.Error(err), zap.String("instanceID", instanceID))
 		return fmt.Errorf("stop instance failed: %w", err)
@@ -176,11 +176,11 @@ func (h *HuaweiProviderImpl) RestartInstance(ctx context.Context, region string,
 		return fmt.Errorf("region and instanceID cannot be empty")
 	}
 
-	if h.ecsService == nil {
+	if h.EcsService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	err := h.ecsService.RestartInstance(ctx, region, instanceID)
+	err := h.EcsService.RestartInstance(ctx, region, instanceID)
 	if err != nil {
 		h.logger.Error("failed to restart instance", zap.Error(err), zap.String("instanceID", instanceID))
 		return fmt.Errorf("restart instance failed: %w", err)

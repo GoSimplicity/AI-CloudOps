@@ -5,38 +5,38 @@ import { requestClient } from '#/api/request';
 /**
  * 获取用户信息
  */
-type changePasswordReq = {
-  username: string;
-  password: string;
-  newPassword: string;
-  confirmPassword: string;
-}
-
-type RegisterParams = {
-  username: string;
-  password: string;
-  confirmPassword: string;
-  mobile: string;
-  fei_shu_user_id: string;
-  real_name: string;
-  email: string;
-  desc: string;
-  home_path: string
-};
-
-type updateUserInfoReq = {
+export interface ChangePasswordReq {
   user_id: number;
-  real_name: string;
-  desc: string;
-  mobile: string; 
-  fei_shu_user_id: string;
-  account_type: number;
-  email: string;
-  home_path: string;
-  enable: 0 | 1;
+  username: string;
+  password: string;
+  new_password: string;
+  confirm_password: string;
 }
 
-type WriteOffReq = {
+export interface UserSignUpReq {
+  username: string;
+  password: string;
+  mobile: string;
+  real_name: string;
+  fei_shu_user_id?: string;
+  desc?: string;
+  account_type: 1 | 2; // 1普通用户 2服务账号
+  home_path?: string;
+  enable?: 1 | 2; // 1正常 2冻结
+}
+
+export interface UpdateProfileReq {
+  id: number;
+  real_name: string;
+  desc?: string;
+  mobile: string;
+  fei_shu_user_id?: string;
+  account_type: 1 | 2;
+  home_path: string;
+  enable?: 1 | 2;
+}
+
+export interface WriteOffReq {
   username: string;
   password: string;
 }
@@ -55,12 +55,11 @@ export const getUserList = (data: ListReq) => {
   return requestClient.get('/user/list', { params: data });
 };
 
-
-export async function registerApi(data: RegisterParams) {
+export async function registerApi(data: UserSignUpReq) {
   return requestClient.post('/user/signup', data);
 }
 
-export async function changePassword(data: changePasswordReq) {
+export async function changePassword(data: ChangePasswordReq) {
   return requestClient.post('/user/change_password', data);
 }
 
@@ -68,7 +67,7 @@ export async function deleteUser(id: number) {
   return requestClient.delete(`/user/${id}`);
 }
 
-export async function updateUserInfo(data: updateUserInfoReq) {
+export async function updateUserInfo(data: UpdateProfileReq) {
   return requestClient.post('/user/profile/update', data);
 }
 

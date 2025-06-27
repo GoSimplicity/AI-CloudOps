@@ -83,7 +83,8 @@ func (us *userService) SignUp(ctx context.Context, user *model.UserSignUpReq) er
 		Mobile:       user.Mobile,
 		FeiShuUserId: user.FeiShuUserId,
 		AccountType:  user.AccountType,
-		Enable:       1,
+		HomePath:     user.HomePath,
+		Enable:       user.Enable,
 	}); err != nil {
 		return err
 	}

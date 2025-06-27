@@ -29,7 +29,6 @@ import (
 	"context"
 
 	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
-	"go.uber.org/zap"
 )
 
 type EcsService struct {
@@ -68,7 +67,6 @@ type CreateInstanceResponseBody struct {
 func (e *EcsService) CreateInstance(ctx context.Context, req *CreateInstanceRequest) (*CreateInstanceResponseBody, error) {
 	client, err := e.sdk.CreateEcsClient(req.Region, e.sdk.accessKey)
 	if err != nil {
-		e.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -174,10 +172,8 @@ func (e *EcsService) CreateInstance(ctx context.Context, req *CreateInstanceRequ
 		},
 	}
 
-	e.sdk.logger.Info("开始创建ECS实例", zap.String("region", req.Region), zap.Any("request", req))
 	response, err := client.CreatePostPaidServers(request)
 	if err != nil {
-		e.sdk.logger.Error("创建ECS实例失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -185,8 +181,6 @@ func (e *EcsService) CreateInstance(ctx context.Context, req *CreateInstanceRequ
 	if response.ServerIds != nil {
 		instanceIds = *response.ServerIds
 	}
-
-	e.sdk.logger.Info("创建ECS实例成功", zap.Strings("instanceIds", instanceIds))
 
 	return &CreateInstanceResponseBody{
 		InstanceIds: instanceIds,
@@ -197,7 +191,6 @@ func (e *EcsService) CreateInstance(ctx context.Context, req *CreateInstanceRequ
 func (e *EcsService) StartInstance(ctx context.Context, region string, instanceID string) error {
 	client, err := e.sdk.CreateEcsClient(region, e.sdk.accessKey)
 	if err != nil {
-		e.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
 		return err
 	}
 
@@ -213,14 +206,11 @@ func (e *EcsService) StartInstance(ctx context.Context, region string, instanceI
 		},
 	}
 
-	e.sdk.logger.Info("开始启动ECS实例", zap.String("region", region), zap.String("instanceID", instanceID))
 	_, err = client.BatchStartServers(request)
 	if err != nil {
-		e.sdk.logger.Error("启动ECS实例失败", zap.Error(err))
 		return err
 	}
 
-	e.sdk.logger.Info("启动ECS实例成功", zap.String("instanceID", instanceID))
 	return nil
 }
 
@@ -228,7 +218,6 @@ func (e *EcsService) StartInstance(ctx context.Context, region string, instanceI
 func (e *EcsService) StopInstance(ctx context.Context, region string, instanceID string, forceStop bool) error {
 	client, err := e.sdk.CreateEcsClient(region, e.sdk.accessKey)
 	if err != nil {
-		e.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
 		return err
 	}
 
@@ -254,14 +243,11 @@ func (e *EcsService) StopInstance(ctx context.Context, region string, instanceID
 		},
 	}
 
-	e.sdk.logger.Info("开始停止ECS实例", zap.String("region", region), zap.String("instanceID", instanceID))
 	_, err = client.BatchStopServers(request)
 	if err != nil {
-		e.sdk.logger.Error("停止ECS实例失败", zap.Error(err))
 		return err
 	}
 
-	e.sdk.logger.Info("停止ECS实例成功", zap.String("instanceID", instanceID))
 	return nil
 }
 
@@ -269,7 +255,6 @@ func (e *EcsService) StopInstance(ctx context.Context, region string, instanceID
 func (e *EcsService) RestartInstance(ctx context.Context, region string, instanceID string) error {
 	client, err := e.sdk.CreateEcsClient(region, e.sdk.accessKey)
 	if err != nil {
-		e.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
 		return err
 	}
 
@@ -285,14 +270,11 @@ func (e *EcsService) RestartInstance(ctx context.Context, region string, instanc
 		},
 	}
 
-	e.sdk.logger.Info("开始重启ECS实例", zap.String("region", region), zap.String("instanceID", instanceID))
 	_, err = client.BatchRebootServers(request)
 	if err != nil {
-		e.sdk.logger.Error("重启ECS实例失败", zap.Error(err))
 		return err
 	}
 
-	e.sdk.logger.Info("重启ECS实例成功", zap.String("instanceID", instanceID))
 	return nil
 }
 
@@ -300,7 +282,6 @@ func (e *EcsService) RestartInstance(ctx context.Context, region string, instanc
 func (e *EcsService) DeleteInstance(ctx context.Context, region string, instanceID string, force bool) error {
 	client, err := e.sdk.CreateEcsClient(region, e.sdk.accessKey)
 	if err != nil {
-		e.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
 		return err
 	}
 
@@ -314,14 +295,11 @@ func (e *EcsService) DeleteInstance(ctx context.Context, region string, instance
 		},
 	}
 
-	e.sdk.logger.Info("开始删除ECS实例", zap.String("region", region), zap.String("instanceID", instanceID))
 	_, err = client.DeleteServers(request)
 	if err != nil {
-		e.sdk.logger.Error("删除ECS实例失败", zap.Error(err))
 		return err
 	}
 
-	e.sdk.logger.Info("删除ECS实例成功", zap.String("instanceID", instanceID))
 	return nil
 }
 
@@ -338,49 +316,72 @@ type ListInstancesResponseBody struct {
 	Total     int32
 }
 
-// ListInstances 查询ECS实例列表
-func (e *EcsService) ListInstances(ctx context.Context, req *ListInstancesRequest) (*ListInstancesResponseBody, error) {
-	client, err := e.sdk.CreateEcsClient(req.Region, e.sdk.accessKey)
-	if err != nil {
-		e.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
-		return nil, err
+// ListInstances 查询ECS实例列表（支持分页获取全部资源）
+func (e *EcsService) ListInstances(ctx context.Context, req *ListInstancesRequest) (*ListInstancesResponseBody, int64, error) {
+	var allInstances []ecsmodel.ServerDetail
+	var totalCount int64 = 0
+	offset := int32(0)
+	pageSize := req.Size
+	if pageSize <= 0 {
+		pageSize = 100
+	}
+	limit := int32(pageSize)
+
+	for {
+		client, err := e.sdk.CreateEcsClient(req.Region, e.sdk.accessKey)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		request := &ecsmodel.ListServersDetailsRequest{
+			Limit:  &limit,
+			Offset: &offset,
+		}
+
+		response, err := client.ListServersDetails(request)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		if response.Servers == nil || len(*response.Servers) == 0 {
+			break
+		}
+
+		instances := *response.Servers
+		allInstances = append(allInstances, instances...)
+
+		if response.Count != nil {
+			totalCount = int64(*response.Count)
+		}
+
+		if len(instances) < pageSize {
+			break
+		}
+
+		offset += limit
 	}
 
-	limit := int32(req.Size)
-	request := &ecsmodel.ListServersDetailsRequest{
-		Limit: &limit,
+	startIdx := (req.Page - 1) * req.Size
+	endIdx := req.Page * req.Size
+	if startIdx >= len(allInstances) {
+		return &ListInstancesResponseBody{
+			Instances: []ecsmodel.ServerDetail{},
+		}, totalCount, nil
 	}
 
-	e.sdk.logger.Info("开始查询ECS实例列表", zap.String("region", req.Region))
-	response, err := client.ListServersDetails(request)
-	if err != nil {
-		e.sdk.logger.Error("查询ECS实例列表失败", zap.Error(err))
-		return nil, err
+	if endIdx > len(allInstances) {
+		endIdx = len(allInstances)
 	}
-
-	var total int32
-	var instances []ecsmodel.ServerDetail
-	if response.Servers != nil {
-		instances = *response.Servers
-		total = int32(len(instances))
-	}
-	if response.Count != nil {
-		total = *response.Count
-	}
-
-	e.sdk.logger.Info("查询ECS实例列表成功", zap.Int32("total", total))
 
 	return &ListInstancesResponseBody{
-		Instances: instances,
-		Total:     total,
-	}, nil
+		Instances: allInstances[startIdx:endIdx],
+	}, totalCount, nil
 }
 
 // GetInstanceDetail 获取ECS实例详情
 func (e *EcsService) GetInstanceDetail(ctx context.Context, region string, instanceID string) (*ecsmodel.ServerDetail, error) {
 	client, err := e.sdk.CreateEcsClient(region, e.sdk.accessKey)
 	if err != nil {
-		e.sdk.logger.Error("创建ECS客户端失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -388,10 +389,8 @@ func (e *EcsService) GetInstanceDetail(ctx context.Context, region string, insta
 		ServerId: instanceID,
 	}
 
-	e.sdk.logger.Info("开始获取ECS实例详情", zap.String("region", region), zap.String("instanceID", instanceID))
 	response, err := client.ShowServer(request)
 	if err != nil {
-		e.sdk.logger.Error("获取ECS实例详情失败", zap.Error(err))
 		return nil, err
 	}
 

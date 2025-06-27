@@ -29,21 +29,16 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	huawei "github.com/GoSimplicity/AI-CloudOps/internal/tree/provider/huawei"
 )
 
 type ProviderFactory struct {
 	providers map[model.CloudProvider]Provider
 }
 
-func NewProviderFactory(
-	aliyun *AliyunProviderImpl,
-	huaweiProvider *huawei.HuaweiProviderImpl,
-) *ProviderFactory {
+func NewProviderFactory(aliyun *AliyunProviderImpl) *ProviderFactory {
 	return &ProviderFactory{
 		providers: map[model.CloudProvider]Provider{
 			model.CloudProviderAliyun: aliyun,
-			model.CloudProviderHuawei: huaweiProvider,
 		},
 	}
 }

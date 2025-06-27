@@ -20,7 +20,7 @@ func (h *HuaweiProviderImpl) ListSecurityGroups(ctx context.Context, region stri
 		return nil, fmt.Errorf("pageNumber and pageSize must be positive integers")
 	}
 
-	if h.securityGroupService == nil {
+	if h.SecurityGroupService == nil {
 		return nil, fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
@@ -30,7 +30,7 @@ func (h *HuaweiProviderImpl) ListSecurityGroups(ctx context.Context, region stri
 		PageSize:   pageSize,
 	}
 
-	resp, err := h.securityGroupService.ListSecurityGroups(ctx, req)
+	resp, _, err := h.SecurityGroupService.ListSecurityGroups(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to list security groups", zap.Error(err), zap.String("region", region))
 		return nil, fmt.Errorf("list security groups failed: %w", err)
@@ -54,11 +54,11 @@ func (h *HuaweiProviderImpl) GetSecurityGroup(ctx context.Context, region string
 		return nil, fmt.Errorf("region and securityGroupID cannot be empty")
 	}
 
-	if h.securityGroupService == nil {
+	if h.SecurityGroupService == nil {
 		return nil, fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	sg, err := h.securityGroupService.GetSecurityGroupDetail(ctx, region, securityGroupID)
+	sg, err := h.SecurityGroupService.GetSecurityGroupDetail(ctx, region, securityGroupID)
 	if err != nil {
 		h.logger.Error("failed to get security group detail", zap.Error(err), zap.String("securityGroupID", securityGroupID))
 		return nil, fmt.Errorf("get security group detail failed: %w", err)
@@ -80,7 +80,7 @@ func (h *HuaweiProviderImpl) CreateSecurityGroup(ctx context.Context, region str
 		return fmt.Errorf("config cannot be nil")
 	}
 
-	if h.securityGroupService == nil {
+	if h.SecurityGroupService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
@@ -94,7 +94,7 @@ func (h *HuaweiProviderImpl) CreateSecurityGroup(ctx context.Context, region str
 		Tags:              config.Tags,
 	}
 
-	_, err := h.securityGroupService.CreateSecurityGroup(ctx, req)
+	_, err := h.SecurityGroupService.CreateSecurityGroup(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to create security group", zap.Error(err), zap.String("region", region))
 		return fmt.Errorf("create security group failed: %w", err)
@@ -108,11 +108,11 @@ func (h *HuaweiProviderImpl) DeleteSecurityGroup(ctx context.Context, region str
 		return fmt.Errorf("region and securityGroupID cannot be empty")
 	}
 
-	if h.securityGroupService == nil {
+	if h.SecurityGroupService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	err := h.securityGroupService.DeleteSecurityGroup(ctx, region, securityGroupID)
+	err := h.SecurityGroupService.DeleteSecurityGroup(ctx, region, securityGroupID)
 	if err != nil {
 		h.logger.Error("failed to delete security group", zap.Error(err), zap.String("securityGroupID", securityGroupID))
 		return fmt.Errorf("delete security group failed: %w", err)

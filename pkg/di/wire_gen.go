@@ -43,7 +43,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	"github.com/hibiken/asynq"
-	huawei "github.com/GoSimplicity/AI-CloudOps/internal/tree/provider/huawei"
 )
 
 import (
@@ -160,19 +159,25 @@ func ProvideCmd() *Cmd {
 	statisticsHandler := api6.NewStatisticsHandler(statisticsService)
 	categoryGroupService := service4.NewCategoryGroupService(categoryDAO, userDAO, logger)
 	categoryGroupHandler := api6.NewCategoryGroupHandler(categoryGroupService)
-	aliyunProviderImpl := provider.NewAliyunProvider(logger)
-	huaweiProviderImpl := huawei.NewHuaweiProvider(logger)
-	providerFactory := provider.NewProviderFactory(aliyunProviderImpl, huaweiProviderImpl)
+	agent := InitAgent()
+	aiService := service5.NewAIService(logger, agent)
+	aiHandler := api7.NewAIHandler(aiService)
+	treeNodeDAO := dao4.NewTreeNodeDAO(logger, db)
+	treeNodeService := service6.NewTreeNodeService(logger, treeNodeDAO, userDAO)
+	treeNodeHandler := api8.NewTreeNodeHandler(treeNodeService)
 	treeEcsDAO := dao4.NewTreeEcsDAO(db)
-	treeEcsService := service6.NewTreeEcsService(logger, treeEcsDAO, providerFactory)
+	aliyunProviderImpl := provider.NewAliyunProvider(logger)
+	providerFactory := provider.NewProviderFactory(aliyunProviderImpl)
+	treeCloudDAO := dao4.NewTreeCloudDAO(logger, db)
+	treeEcsService := service6.NewTreeEcsService(logger, treeEcsDAO, providerFactory, treeCloudDAO)
 	treeEcsHandler := api8.NewTreeEcsHandler(treeEcsService)
 	treeVpcDAO := dao4.NewTreeVpcDAO(logger, db)
 	treeVpcService := service6.NewTreeVpcService(logger, treeVpcDAO, providerFactory)
 	treeVpcHandler := api8.NewTreeVpcHandler(treeVpcService)
 	treeSecurityGroupService := service6.NewTreeSecurityGroupService(providerFactory, logger)
 	treeSecurityGroupHandler := api8.NewTreeSecurityGroupHandler(treeSecurityGroupService)
-	treeCloudDAO := dao4.NewTreeCloudDAO(db)
-	treeCloudService := service6.NewTreeCloudService(logger, treeCloudDAO)
+	treeSecurityGroupDAO := dao4.NewTreeSecurityGroupDAO(db)
+	treeCloudService := service6.NewTreeCloudService(logger, treeCloudDAO, providerFactory, treeVpcDAO, treeSecurityGroupDAO, treeEcsDAO)
 	treeCloudHandler := api8.NewTreeCloudHandler(treeCloudService)
 	treeRdsDAO := dao4.NewTreeRdsDAO(db)
 	treeRdsService := service6.NewTreeRdsService(logger, treeRdsDAO)
@@ -180,12 +185,6 @@ func ProvideCmd() *Cmd {
 	treeElbDAO := dao4.NewTreeElbDAO(db)
 	treeElbService := service6.NewTreeElbService(logger, treeElbDAO)
 	treeElbHandler := api8.NewTreeElbHandler(treeElbService)
-	treeNodeDAO := dao4.NewTreeNodeDAO(logger, db)
-	treeNodeService := service6.NewTreeNodeService(logger, treeNodeDAO, userDAO)
-	treeNodeHandler := api8.NewTreeNodeHandler(treeNodeService)
-	agent := InitAgent()
-	aiService := service5.NewAIService(logger, agent)
-	aiHandler := api7.NewAIHandler(aiService)
 	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, configYamlHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, processHandler, templateHandler, instanceHandler, statisticsHandler, categoryGroupHandler, aiHandler, treeNodeHandler, treeEcsHandler, treeVpcHandler, treeSecurityGroupHandler, treeCloudHandler, treeRdsHandler, treeElbHandler)
 	createK8sClusterTask := job.NewCreateK8sClusterTask(logger, k8sClient, clusterDAO)
 	updateK8sClusterTask := job.NewUpdateK8sClusterTask(logger, k8sClient, clusterDAO)
@@ -224,7 +223,7 @@ var UtilSet = wire.NewSet(utils.NewJWTHandler)
 
 var JobSet = wire.NewSet(job.NewTimedScheduler, job.NewTimedTask, job.NewCreateK8sClusterTask, job.NewUpdateK8sClusterTask, job.NewRefreshK8sClusterTask, job.NewRoutes)
 
-var ProviderSet = wire.NewSet(provider.NewAliyunProvider, huawei.NewHuaweiProvider, provider.NewProviderFactory)
+var ProviderSet = wire.NewSet(provider.NewAliyunProvider, provider.NewProviderFactory)
 
 var CronSet = wire.NewSet(cron.NewCronManager)
 

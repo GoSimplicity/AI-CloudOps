@@ -27,6 +27,7 @@ package dao
 
 import (
 	"context"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"gorm.io/gorm"
@@ -36,23 +37,23 @@ type TreeRdsDAO interface {
 	// 基础CRUD操作
 	ListRdsResources(ctx context.Context, req *model.ListRdsResourcesReq) (model.ListResp[*model.ResourceRds], error)
 	GetRdsResourceById(ctx context.Context, id int) (*model.ResourceRds, error)
-	CreateRdsResource(ctx context.Context, params *model.CreateRdsResourceReq) error
-	UpdateRdsResource(ctx context.Context, id int, req *model.UpdateRdsReq) error
+	CreateRdsResource(ctx context.Context, resource *model.ResourceRds) error
+	UpdateRdsResource(ctx context.Context, resource *model.ResourceRds) error
 	DeleteRdsResource(ctx context.Context, id int) error
 
 	// RDS实例状态操作
-	StartRdsInstance(ctx context.Context, id int, req *model.StartRdsReq) error
-	StopRdsInstance(ctx context.Context, id int, req *model.StopRdsReq) error
-	RestartRdsInstance(ctx context.Context, id int, req *model.RestartRdsReq) error
+	StartRdsInstance(ctx context.Context, instanceId string) error
+	StopRdsInstance(ctx context.Context, instanceId string) error
+	RestartRdsInstance(ctx context.Context, instanceId string) error
 
 	// RDS实例管理操作
-	ResizeRdsInstance(ctx context.Context, id int, req *model.ResizeRdsReq) error
-	ResetRdsPassword(ctx context.Context, id int, req *model.ResetRdsPasswordReq) error
-	RenewRdsInstance(ctx context.Context, id int, req *model.RenewRdsReq) error
+	ResizeRdsInstance(ctx context.Context, instanceId string, dbInstanceClass string, allocatedStorage int) error
+	ResetRdsPassword(ctx context.Context, instanceId string, username string, password string) error
+	RenewRdsInstance(ctx context.Context, instanceId string, period int, periodUnit string) error
 
 	// RDS备份恢复操作
-	BackupRdsInstance(ctx context.Context, id int, req *model.BackupRdsReq) error
-	RestoreRdsInstance(ctx context.Context, id int, req *model.RestoreRdsReq) error
+	BackupRdsInstance(ctx context.Context, instanceId string, backupName string) error
+	RestoreRdsInstance(ctx context.Context, instanceId string, backupId string, restoreTime string) error
 
 	// 辅助查询方法
 	GetRdsInstanceStatus(ctx context.Context, id int) (string, error)
@@ -74,92 +75,210 @@ func NewTreeRdsDAO(db *gorm.DB) TreeRdsDAO {
 	}
 }
 
-// BackupRdsInstance implements TreeRdsDAO.
-func (t *treeRdsDAO) BackupRdsInstance(ctx context.Context, id int, req *model.BackupRdsReq) error {
-	panic("unimplemented")
+// BackupRdsInstance 备份RDS实例
+func (t *treeRdsDAO) BackupRdsInstance(ctx context.Context, instanceId string, backupName string) error {
+	// 备份操作通常不改变实例状态，只是创建备份任务
+	updates := map[string]any{
+		"updated_at": time.Now(),
+	}
+
+	return t.db.WithContext(ctx).Model(&model.ResourceRds{}).Where("instance_id = ?", instanceId).Updates(updates).Error
 }
 
-// BatchUpdateRdsStatus implements TreeRdsDAO.
+// BatchUpdateRdsStatus 批量更新RDS状态
 func (t *treeRdsDAO) BatchUpdateRdsStatus(ctx context.Context, ids []int, status string) error {
-	panic("unimplemented")
+	if len(ids) == 0 {
+		return nil
+	}
+
+	updates := map[string]any{
+		"status":     status,
+		"updated_at": time.Now(),
+	}
+
+	return t.db.WithContext(ctx).Model(&model.ResourceRds{}).Where("id IN ?", ids).Updates(updates).Error
 }
 
-// CheckRdsInstanceExists implements TreeRdsDAO.
+// CheckRdsInstanceExists 检查RDS实例是否存在
 func (t *treeRdsDAO) CheckRdsInstanceExists(ctx context.Context, id int) (bool, error) {
-	panic("unimplemented")
+	var count int64
+	if err := t.db.WithContext(ctx).Model(&model.ResourceRds{}).Where("id = ?", id).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
-// CreateRdsResource implements TreeRdsDAO.
-func (t *treeRdsDAO) CreateRdsResource(ctx context.Context, params *model.CreateRdsResourceReq) error {
-	panic("unimplemented")
+// CreateRdsResource 创建RDS资源
+func (t *treeRdsDAO) CreateRdsResource(ctx context.Context, resource *model.ResourceRds) error {
+	return t.db.WithContext(ctx).Create(resource).Error
 }
 
-// DeleteRdsResource implements TreeRdsDAO.
+// DeleteRdsResource 删除RDS资源
 func (t *treeRdsDAO) DeleteRdsResource(ctx context.Context, id int) error {
-	panic("unimplemented")
+	return t.db.WithContext(ctx).Where("id = ?", id).Delete(&model.ResourceRds{}).Error
 }
 
-// GetRdsInstanceStatus implements TreeRdsDAO.
+// GetRdsInstanceStatus 获取RDS实例状态
 func (t *treeRdsDAO) GetRdsInstanceStatus(ctx context.Context, id int) (string, error) {
-	panic("unimplemented")
+	var status string
+	if err := t.db.WithContext(ctx).Model(&model.ResourceRds{}).Select("status").Where("id = ?", id).Scan(&status).Error; err != nil {
+		return "", err
+	}
+	return status, nil
 }
 
-// GetRdsInstancesByStatus implements TreeRdsDAO.
+// GetRdsInstancesByStatus 根据状态获取RDS实例列表
 func (t *treeRdsDAO) GetRdsInstancesByStatus(ctx context.Context, status string) ([]*model.ResourceRds, error) {
-	panic("unimplemented")
+	var instances []*model.ResourceRds
+	if err := t.db.WithContext(ctx).Where("status = ?", status).Find(&instances).Error; err != nil {
+		return nil, err
+	}
+	return instances, nil
 }
 
-// GetRdsResourceById implements TreeRdsDAO.
+// GetRdsResourceById 根据ID获取RDS资源
 func (t *treeRdsDAO) GetRdsResourceById(ctx context.Context, id int) (*model.ResourceRds, error) {
-	panic("unimplemented")
+	var resource model.ResourceRds
+	if err := t.db.WithContext(ctx).Where("id = ?", id).First(&resource).Error; err != nil {
+		return nil, err
+	}
+	return &resource, nil
 }
 
-// ListRdsResources implements TreeRdsDAO.
+// ListRdsResources 获取RDS资源列表
 func (t *treeRdsDAO) ListRdsResources(ctx context.Context, req *model.ListRdsResourcesReq) (model.ListResp[*model.ResourceRds], error) {
-	panic("unimplemented")
+	var resources []*model.ResourceRds
+	var total int64
+
+	db := t.db.WithContext(ctx).Model(&model.ResourceRds{})
+
+	// 构建查询条件
+	if req.Provider != "" {
+		db = db.Where("provider = ?", req.Provider)
+	}
+	if req.Region != "" {
+		db = db.Where("region_id = ?", req.Region)
+	}
+	if req.ZoneId != "" {
+		db = db.Where("zone_id = ?", req.ZoneId)
+	}
+	if req.Status != "" {
+		db = db.Where("status = ?", req.Status)
+	}
+	if req.Engine != "" {
+		db = db.Where("engine = ?", req.Engine)
+	}
+	if req.TreeNodeId > 0 {
+		db = db.Where("tree_node_id = ?", req.TreeNodeId)
+	}
+	if req.InstanceName != "" {
+		db = db.Where("instance_name LIKE ?", "%"+req.InstanceName+"%")
+	}
+	if req.Environment != "" {
+		db = db.Where("env = ?", req.Environment)
+	}
+
+	// 计算总数
+	if err := db.Count(&total).Error; err != nil {
+		return model.ListResp[*model.ResourceRds]{}, err
+	}
+
+	// 分页
+	if req.PageSize > 0 && req.PageNumber > 0 {
+		offset := (req.PageNumber - 1) * req.PageSize
+		db = db.Offset(offset).Limit(req.PageSize)
+	}
+
+	// 排序
+	db = db.Order("created_at DESC")
+
+	if err := db.Find(&resources).Error; err != nil {
+		return model.ListResp[*model.ResourceRds]{}, err
+	}
+
+	return model.ListResp[*model.ResourceRds]{
+		Items: resources,
+		Total: total,
+	}, nil
 }
 
-// RenewRdsInstance implements TreeRdsDAO.
-func (t *treeRdsDAO) RenewRdsInstance(ctx context.Context, id int, req *model.RenewRdsReq) error {
-	panic("unimplemented")
+// RenewRdsInstance 续费RDS实例
+func (t *treeRdsDAO) RenewRdsInstance(ctx context.Context, instanceId string, period int, periodUnit string) error {
+	// 续费操作通常不会改变实例状态，只是更新更新时间
+	updates := map[string]any{
+		"updated_at": time.Now(),
+	}
+
+	return t.db.WithContext(ctx).Model(&model.ResourceRds{}).Where("instance_id = ?", instanceId).Updates(updates).Error
 }
 
-// ResetRdsPassword implements TreeRdsDAO.
-func (t *treeRdsDAO) ResetRdsPassword(ctx context.Context, id int, req *model.ResetRdsPasswordReq) error {
-	panic("unimplemented")
+// ResetRdsPassword 重置RDS实例密码
+func (t *treeRdsDAO) ResetRdsPassword(ctx context.Context, instanceId string, username string, password string) error {
+	// 更新状态为修改中
+	updates := map[string]any{
+		"status":     "Modifying",
+		"updated_at": time.Now(),
+	}
+
+	return t.db.WithContext(ctx).Model(&model.ResourceRds{}).Where("instance_id = ?", instanceId).Updates(updates).Error
 }
 
-// ResizeRdsInstance implements TreeRdsDAO.
-func (t *treeRdsDAO) ResizeRdsInstance(ctx context.Context, id int, req *model.ResizeRdsReq) error {
-	panic("unimplemented")
+// ResizeRdsInstance 调整RDS实例规格
+func (t *treeRdsDAO) ResizeRdsInstance(ctx context.Context, instanceId string, dbInstanceClass string, allocatedStorage int) error {
+	updates := map[string]any{
+		"db_instance_class": dbInstanceClass,
+		"status":            "Modifying",
+		"updated_at":        time.Now(),
+	}
+
+	if allocatedStorage > 0 {
+		updates["allocated_storage"] = allocatedStorage
+	}
+
+	return t.db.WithContext(ctx).Model(&model.ResourceRds{}).Where("instance_id = ?", instanceId).Updates(updates).Error
 }
 
-// RestartRdsInstance implements TreeRdsDAO.
-func (t *treeRdsDAO) RestartRdsInstance(ctx context.Context, id int, req *model.RestartRdsReq) error {
-	panic("unimplemented")
+// RestartRdsInstance 重启RDS实例
+func (t *treeRdsDAO) RestartRdsInstance(ctx context.Context, instanceId string) error {
+	return t.UpdateRdsInstanceStatusByInstanceId(ctx, instanceId, "Restarting")
 }
 
-// RestoreRdsInstance implements TreeRdsDAO.
-func (t *treeRdsDAO) RestoreRdsInstance(ctx context.Context, id int, req *model.RestoreRdsReq) error {
-	panic("unimplemented")
+// RestoreRdsInstance 恢复RDS实例
+func (t *treeRdsDAO) RestoreRdsInstance(ctx context.Context, instanceId string, backupId string, restoreTime string) error {
+	return t.UpdateRdsInstanceStatusByInstanceId(ctx, instanceId, "Restoring")
 }
 
-// StartRdsInstance implements TreeRdsDAO.
-func (t *treeRdsDAO) StartRdsInstance(ctx context.Context, id int, req *model.StartRdsReq) error {
-	panic("unimplemented")
+// StartRdsInstance 启动RDS实例
+func (t *treeRdsDAO) StartRdsInstance(ctx context.Context, instanceId string) error {
+	return t.UpdateRdsInstanceStatusByInstanceId(ctx, instanceId, "Starting")
 }
 
-// StopRdsInstance implements TreeRdsDAO.
-func (t *treeRdsDAO) StopRdsInstance(ctx context.Context, id int, req *model.StopRdsReq) error {
-	panic("unimplemented")
+// StopRdsInstance 停止RDS实例
+func (t *treeRdsDAO) StopRdsInstance(ctx context.Context, instanceId string) error {
+	return t.UpdateRdsInstanceStatusByInstanceId(ctx, instanceId, "Stopping")
 }
 
-// UpdateRdsInstanceStatus implements TreeRdsDAO.
+// UpdateRdsInstanceStatus 更新RDS实例状态
 func (t *treeRdsDAO) UpdateRdsInstanceStatus(ctx context.Context, id int, status string) error {
-	panic("unimplemented")
+	updates := map[string]any{
+		"status":     status,
+		"updated_at": time.Now(),
+	}
+
+	return t.db.WithContext(ctx).Model(&model.ResourceRds{}).Where("id = ?", id).Updates(updates).Error
 }
 
-// UpdateRdsResource implements TreeRdsDAO.
-func (t *treeRdsDAO) UpdateRdsResource(ctx context.Context, id int, req *model.UpdateRdsReq) error {
-	panic("unimplemented")
+// UpdateRdsInstanceStatusByInstanceId 根据实例ID更新RDS实例状态
+func (t *treeRdsDAO) UpdateRdsInstanceStatusByInstanceId(ctx context.Context, instanceId string, status string) error {
+	updates := map[string]any{
+		"status":     status,
+		"updated_at": time.Now(),
+	}
+
+	return t.db.WithContext(ctx).Model(&model.ResourceRds{}).Where("instance_id = ?", instanceId).Updates(updates).Error
+}
+
+// UpdateRdsResource 更新RDS资源
+func (t *treeRdsDAO) UpdateRdsResource(ctx context.Context, resource *model.ResourceRds) error {
+	return t.db.WithContext(ctx).Save(resource).Error
 }

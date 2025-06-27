@@ -22,7 +22,7 @@ func (h *HuaweiProviderImpl) ListVPCs(ctx context.Context, region string, pageNu
 		return nil, fmt.Errorf("pageNumber and pageSize must be positive integers")
 	}
 
-	if h.vpcService == nil {
+	if h.VpcService == nil {
 		return nil, fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
@@ -32,7 +32,7 @@ func (h *HuaweiProviderImpl) ListVPCs(ctx context.Context, region string, pageNu
 		Size:   pageSize,
 	}
 
-	resp, err := h.vpcService.ListVpcs(ctx, req)
+	resp, _, err := h.VpcService.ListVpcs(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to list VPCs", zap.Error(err), zap.String("region", region))
 		return nil, fmt.Errorf("list VPCs failed: %w", err)
@@ -55,11 +55,11 @@ func (h *HuaweiProviderImpl) GetVPC(ctx context.Context, region string, vpcID st
 		return nil, fmt.Errorf("region and vpcID cannot be empty")
 	}
 
-	if h.vpcService == nil {
+	if h.VpcService == nil {
 		return nil, fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	vpcDetail, err := h.vpcService.GetVpcDetail(ctx, region, vpcID)
+	vpcDetail, err := h.VpcService.GetVpcDetail(ctx, region, vpcID)
 	if err != nil {
 		h.logger.Error("failed to get VPC detail", zap.Error(err), zap.String("vpcID", vpcID))
 		return nil, fmt.Errorf("get VPC detail failed: %w", err)
@@ -80,7 +80,7 @@ func (h *HuaweiProviderImpl) CreateVPC(ctx context.Context, region string, confi
 		return fmt.Errorf("config cannot be nil")
 	}
 
-	if h.vpcService == nil {
+	if h.VpcService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
@@ -94,7 +94,7 @@ func (h *HuaweiProviderImpl) CreateVPC(ctx context.Context, region string, confi
 		SubnetCidrBlock: config.VSwitchCidrBlock, // 华为云使用SubnetCidrBlock
 	}
 
-	_, err := h.vpcService.CreateVPC(ctx, req)
+	_, err := h.VpcService.CreateVPC(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to create VPC", zap.Error(err), zap.String("region", region))
 		return fmt.Errorf("create VPC failed: %w", err)
@@ -108,11 +108,11 @@ func (h *HuaweiProviderImpl) DeleteVPC(ctx context.Context, region string, vpcID
 		return fmt.Errorf("region and vpcID cannot be empty")
 	}
 
-	if h.vpcService == nil {
+	if h.VpcService == nil {
 		return fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 
-	err := h.vpcService.DeleteVPC(ctx, region, vpcID)
+	err := h.VpcService.DeleteVPC(ctx, region, vpcID)
 	if err != nil {
 		h.logger.Error("failed to delete VPC", zap.Error(err), zap.String("vpcID", vpcID))
 		return fmt.Errorf("delete VPC failed: %w", err)
@@ -126,11 +126,11 @@ func (h *HuaweiProviderImpl) GetZonesByVpc(ctx context.Context, region string, v
 	if region == "" || vpcId == "" {
 		return nil, fmt.Errorf("region and vpcId cannot be empty")
 	}
-	if h.vpcService == nil {
+	if h.VpcService == nil {
 		return nil, fmt.Errorf("华为云SDK未初始化，请先调用InitializeProvider")
 	}
 	h.logger.Debug("开始获取VPC可用区", zap.String("region", region), zap.String("vpcId", vpcId))
-	vpcDetail, err := h.vpcService.GetVpcDetail(ctx, region, vpcId)
+	vpcDetail, err := h.VpcService.GetVpcDetail(ctx, region, vpcId)
 	if err != nil {
 		h.logger.Error("获取VPC详情失败", zap.Error(err), zap.String("vpcId", vpcId))
 		return nil, fmt.Errorf("获取VPC详情失败: %w", err)
@@ -207,7 +207,7 @@ func (h *HuaweiProviderImpl) getSubnetsByVpc(ctx context.Context, region string,
 	}
 
 	// 兜底：通过 VPC 详情 CloudResources 获取子网类型
-	vpcDetail, err := h.vpcService.GetVpcDetail(ctx, region, vpcId)
+	vpcDetail, err := h.VpcService.GetVpcDetail(ctx, region, vpcId)
 	if err != nil {
 		return nil, err
 	}
