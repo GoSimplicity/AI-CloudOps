@@ -50,6 +50,7 @@ func (h *ApiHandler) RegisterRouters(server *gin.Engine) {
 	apiGroup.PUT("/update/:id", h.UpdateAPI)
 	apiGroup.DELETE("/delete/:id", h.DeleteAPI)
 	apiGroup.GET("/detail/:id", h.DetailAPI)
+	apiGroup.GET("/statistics", h.GetApiStatistics)
 }
 
 // ListApis 获取API列表
@@ -118,5 +119,12 @@ func (a *ApiHandler) DetailAPI(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return a.svc.GetApiById(ctx, id)
+	})
+}
+
+// GetApiStatistics 获取API统计
+func (a *ApiHandler) GetApiStatistics(ctx *gin.Context) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return a.svc.GetApiStatistics(ctx)
 	})
 }

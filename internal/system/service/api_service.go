@@ -40,6 +40,7 @@ type ApiService interface {
 	UpdateApi(ctx context.Context, req *model.UpdateApiRequest) error
 	DeleteApi(ctx context.Context, id int) error
 	ListApis(ctx context.Context, req *model.ListApisRequest) (model.ListResp[*model.Api], error)
+	GetApiStatistics(ctx context.Context) (*model.ApiStatistics, error)
 }
 
 type apiService struct {
@@ -101,7 +102,7 @@ func (a *apiService) ListApis(ctx context.Context, req *model.ListApisRequest) (
 		return model.ListResp[*model.Api]{}, errors.New("分页参数无效")
 	}
 
-	apis, total, err := a.dao.ListApis(ctx, req.Page, req.Size, req.Search)
+	apis, total, err := a.dao.ListApis(ctx, req.Page, req.Size, req.Search, req.IsPublic, req.Method)
 	if err != nil {
 		a.l.Error("获取API列表失败", zap.Error(err))
 		return model.ListResp[*model.Api]{}, err
@@ -138,4 +139,14 @@ func (a *apiService) buildUpdateApi(req *model.UpdateApiRequest) *model.Api {
 		Category:    int8(req.Category),
 		IsPublic:    int8(req.IsPublic),
 	}
+}
+
+func (a *apiService) GetApiStatistics(ctx context.Context) (*model.ApiStatistics, error) {
+	statistics, err := a.dao.GetApiStatistics(ctx)
+	if err != nil {
+		a.l.Error("获取API统计失败", zap.Error(err))
+		return nil, err
+	}
+
+	return statistics, nil
 }

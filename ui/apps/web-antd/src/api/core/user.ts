@@ -29,10 +29,12 @@ export interface UpdateProfileReq {
   id: number;
   real_name: string;
   desc?: string;
+  avatar?: string;
   mobile: string;
+  email?: string;
   fei_shu_user_id?: string;
   account_type: 1 | 2;
-  home_path: string;
+  home_path?: string;
   enable?: 1 | 2;
 }
 
@@ -41,17 +43,19 @@ export interface WriteOffReq {
   password: string;
 }
 
-export interface ListReq {
+export interface GetUserListReq {
   page: number;
   size: number;
   search: string;
+  enable?: number;
+  account_type?: number;
 }
 
 export async function getUserInfoApi() {
   return requestClient.get<UserInfo>('/user/profile');
 }
 
-export const getUserList = (data: ListReq) => {
+export const getUserList = (data: GetUserListReq) => {
   return requestClient.get('/user/list', { params: data });
 };
 
@@ -77,4 +81,8 @@ export async function getUserDetailApi(id: number) {
 
 export async function writeOffAccount(data: WriteOffReq) {
   return requestClient.post('/user/write_off', data);
+}
+
+export async function getUserStatistics() {
+  return requestClient.get('/user/statistics');
 }

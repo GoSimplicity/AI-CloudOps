@@ -66,6 +66,7 @@ func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
 		userGroup.POST("/write_off", u.WriteOff)
 		userGroup.POST("/profile/update", u.UpdateProfile)
 		userGroup.DELETE("/:id", u.DeleteUser)
+		userGroup.GET("/statistics", u.GetUserStatistics)
 	}
 }
 
@@ -175,7 +176,7 @@ func (u *UserHandler) GetPermCode(ctx *gin.Context) {
 
 // GetUserList 获取用户列表
 func (u *UserHandler) GetUserList(ctx *gin.Context) {
-	var req model.ListReq
+	var req model.GetUserListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return u.service.GetUserList(ctx, &req)
@@ -243,5 +244,12 @@ func (u *UserHandler) GetUserDetail(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return u.service.GetUserDetail(ctx, req.ID)
+	})
+}
+
+// GetUserStatistics 获取用户统计
+func (u *UserHandler) GetUserStatistics(ctx *gin.Context) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return u.service.GetUserStatistics(ctx)
 	})
 }

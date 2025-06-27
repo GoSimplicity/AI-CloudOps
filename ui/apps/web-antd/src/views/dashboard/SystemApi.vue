@@ -1,447 +1,388 @@
 <template>
-  <div class="api-management-container">
-    <!-- 顶部卡片 -->
-    <div class="dashboard-card">
-      <div class="card-title">
-        <Icon icon="material-symbols:api" class="title-icon" />
-        <h2>API管理</h2>
-      </div>
-
-      <!-- 查询和操作 -->
-      <div class="custom-toolbar">
-        <!-- 查询功能 -->
-        <div class="search-filters">
-          <a-input
-            v-model:value="searchText" 
-            placeholder="请输入API名称"
-            class="search-input"
-          >
-            <template #prefix>
-              <Icon icon="ri:search-line" />
-            </template>
-          </a-input>
-          <a-button type="primary" @click="handleSearch" class="search-button">
-            <template #icon><Icon icon="ri:search-line" /></template>
-            搜索
-          </a-button>
-        </div>
-        <!-- 操作按钮 -->
-        <div class="action-buttons">
-          <a-button type="primary" @click="handleAdd" class="add-button">
-            <template #icon><Icon icon="material-symbols:add" /></template>
-            新增API
-          </a-button>
-        </div>
+  <div class="api-management">
+    <!-- 页面头部 -->
+    <div class="page-header">
+      <h1>API管理</h1>
+      <div class="header-actions">
+        <a-button @click="handleRefresh">
+          <Icon icon="material-symbols:refresh" />
+          刷新
+        </a-button>
+        <a-button type="primary" @click="handleAdd">
+          <Icon icon="material-symbols:add" />
+          新建API
+        </a-button>
       </div>
     </div>
 
-    <!-- API列表表格 -->
-    <div class="table-container">
-      <a-table 
-        :columns="columns" 
-        :data-source="apiList" 
-        row-key="id" 
-        :loading="loading"
-        :pagination="{
-          current: pagination.current,
-          pageSize: pagination.pageSize,
-          total: pagination.total,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          showTotal: (total: number) => `共 ${total} 条记录`,
-          onChange: handlePageChange,
-          onShowSizeChange: handleSizeChange
-        }"
-        class="api-table"
-      >
-        <!-- 操作列 -->
-        <template #action="{ record }">
-          <a-space>
-            <a-tooltip title="查看详情">
-              <a-button type="link" @click="handleView(record)" class="action-button view-button">
-                <template #icon><Icon icon="clarity:details-line" /></template>
-              </a-button>
-            </a-tooltip>
-            <a-tooltip title="编辑API">
-              <a-button type="link" @click="handleEdit(record)" class="action-button edit-button">
-                <template #icon><Icon icon="clarity:note-edit-line" /></template>
-              </a-button>
-            </a-tooltip>
-            <a-popconfirm
-              title="确定要删除这个API吗?"
-              ok-text="确定"
-              cancel-text="取消"
-              placement="left"
-              @confirm="handleDelete(record)"
-            >
-              <a-tooltip title="删除API">
-                <a-button type="link" danger class="action-button delete-button">
-                  <template #icon><Icon icon="ant-design:delete-outlined" /></template>
-                </a-button>
-              </a-tooltip>
-            </a-popconfirm>
-          </a-space>
-        </template>
+    <!-- 统计卡片 -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number">{{ paginationConfig.total }}</div>
+        <div class="stat-label">总API数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ apiStatistics.public_count || 0 }}</div>
+        <div class="stat-label">公开API</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ apiStatistics.private_count || 0 }}</div>
+        <div class="stat-label">私有API</div>
+      </div>
+    </div>
 
-        <!-- 请求方法列 -->
-        <template #method="{ record }">
-          <a-tag :color="getMethodColor(record.method)" class="method-tag">
-            {{ getMethodName(record.method) }}
-          </a-tag>
-        </template>
-
-        <!-- 公开状态列 -->
-        <template #isPublic="{ record }">
-          <a-switch
-            :checked="record.is_public === 1"
-            @change="(checked: boolean) => handlePublicChange(record, checked ? 1 : 0)"
-            class="public-switch"
-          />
-        </template>
+    <!-- 搜索筛选区域 -->
+    <div class="search-section">
+      <div class="search-left">
+        <a-input
+          v-model:value="searchParams.search"
+          placeholder="搜索API名称或路径"
+          allowClear
+          @pressEnter="handleSearch"
+          class="search-input"
+        >
+          <template #prefix>
+            <Icon icon="material-symbols:search" />
+          </template>
+        </a-input>
         
-        <!-- 路径列 -->
-        <template #path="{ record }">
-          <div class="api-path">{{ record.path }}</div>
+        <a-select
+          v-model:value="searchParams.method"
+          placeholder="请求方法"
+          allowClear
+          class="method-select"
+        >
+          <a-select-option :value="1">GET</a-select-option>
+          <a-select-option :value="2">POST</a-select-option>
+          <a-select-option :value="3">PUT</a-select-option>
+          <a-select-option :value="4">DELETE</a-select-option>
+        </a-select>
+
+        <a-select
+          v-model:value="searchParams.is_public"
+          placeholder="访问权限"
+          allowClear
+          class="access-select"
+        >
+          <a-select-option :value="1">公开</a-select-option>
+          <a-select-option :value="2">私有</a-select-option>
+        </a-select>
+      </div>
+      
+      <div class="search-right">
+        <a-button type="primary" @click="handleSearch">搜索</a-button>
+        <a-button @click="handleReset">重置</a-button>
+      </div>
+    </div>
+
+    <!-- API表格 -->
+    <div class="table-container">
+      <a-table
+        :columns="tableColumns"
+        :data-source="apiList"
+        :pagination="paginationConfig"
+        :loading="loading"
+        row-key="id"
+        size="middle"
+        @change="handleTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'api'">
+            <div class="api-info">
+              <div class="api-method">
+                <a-tag :color="getMethodColor(record.method)" class="method-tag">
+                  {{ getMethodName(record.method) }}
+                </a-tag>
+              </div>
+              <div>
+                <div class="api-name">{{ record.name }}</div>
+                <div class="api-path">{{ record.path }}</div>
+              </div>
+            </div>
+          </template>
+          
+          <template v-if="column.key === 'version'">
+            <a-tag v-if="record.version" color="blue">{{ record.version }}</a-tag>
+            <span v-else class="no-version">-</span>
+          </template>
+          
+          <template v-if="column.key === 'access'">
+            <a-switch 
+              :checked="record.is_public === 1" 
+              @change="(checked: boolean) => handleAccessChange(record, checked ? 1 : 2)"
+              size="small"
+            />
+          </template>
+          
+          <template v-if="column.key === 'category'">
+            <span v-if="record.category">{{ record.category }}</span>
+            <span v-else class="no-category">-</span>
+          </template>
+          
+          <template v-if="column.key === 'created_at'">
+            {{ formatTime(record.created_at) }}
+          </template>
+          
+          <template v-if="column.key === 'actions'">
+            <div class="action-buttons">
+              <a-button type="text" size="small" @click="handleView(record)">查看</a-button>
+              <a-button type="text" size="small" @click="handleEdit(record)">编辑</a-button>
+              <a-popconfirm title="确定要删除吗？" @confirm="handleDelete(record)">
+                <a-button type="text" size="small" danger>删除</a-button>
+              </a-popconfirm>
+            </div>
+          </template>
         </template>
       </a-table>
     </div>
 
-    <!-- 新增/编辑对话框 -->
-    <a-modal
-      v-model:visible="modalVisible"
-      :title="modalTitle"
-      @cancel="handleModalCancel"
-      :footer="null"
-      class="custom-modal api-modal"
-      :maskClosable="false"
-      :destroyOnClose="true"
-      :width="700"
-    >
-      <div class="modal-content">
-        <div class="modal-header-icon">
-          <div class="icon-wrapper" :class="{ 'edit-icon': modalTitle === '编辑API', 'view-icon': modalTitle === '查看API详情' }">
-            <Icon :icon="getModalIcon()" />
-          </div>
-          <div class="header-text">{{ getModalHeaderText() }}</div>
-        </div>
-        
-        <a-form :model="formData" layout="vertical" class="api-form">
-          <div class="form-grid">
-            <div class="form-section basic-info">
-              <div class="section-header">
-                <Icon icon="mdi:information-outline" class="section-icon" />
-                <span>基本信息</span>
-              </div>
-              
-              <div class="section-content">
-                <a-form-item label="API名称" required class="form-item">
-                  <a-input 
-                    v-model:value="formData.name" 
-                    placeholder="请输入API名称" 
-                    class="custom-input"
-                    :disabled="isViewMode"
-                  />
-                </a-form-item>
-                
-                <a-form-item label="API路径" required class="form-item">
-                  <a-input 
-                    v-model:value="formData.path" 
-                    placeholder="请输入API路径，例如: /api/users" 
-                    class="custom-input"
-                    :disabled="isViewMode"
-                  >
-                    <template #prefix>
-                      <Icon icon="mdi:link-variant" class="input-icon" />
-                    </template>
-                  </a-input>
-                </a-form-item>
-                
-                <a-form-item label="API描述" class="form-item">
-                  <a-textarea 
-                    v-model:value="formData.description" 
-                    placeholder="请输入API描述" 
-                    :rows="3"
-                    class="custom-textarea"
-                    :disabled="isViewMode"
-                  />
-                </a-form-item>
-              </div>
+    <!-- 查看API详情 -->
+    <a-modal v-model:open="viewModalVisible" title="API详情" width="700px" :footer="null">
+      <div v-if="viewApiData" class="api-detail">
+        <div class="detail-section">
+          <h3>基本信息</h3>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <label>API名称</label>
+              <span>{{ viewApiData.name }}</span>
             </div>
-            
-            <div class="form-section request-info">
-              <div class="section-header">
-                <Icon icon="mdi:code-json" class="section-icon" />
-                <span>请求配置</span>
-              </div>
-              
-              <div class="section-content">
-                <a-form-item label="请求方法" required class="form-item">
-                  <!-- 修改为下拉框形式 -->
-                  <a-select
-                    v-model:value="formData.method"
-                    placeholder="请选择请求方法"
-                    class="method-select"
-                    :disabled="isViewMode"
-                  >
-                    <a-select-option v-for="method in methodOptions" :key="method.value" :value="method.value">
-                      <div class="method-option-content">
-                        <a-tag :color="getMethodColor(method.value)" class="method-badge">
-                          {{ method.label }}
-                        </a-tag>
-                        <span class="method-description">{{ method.description }}</span>
-                      </div>
-                    </a-select-option>
-                  </a-select>
-                </a-form-item>
-                
-                <div class="form-row">
-                  <a-form-item label="API版本" class="form-item">
-                    <a-input 
-                      v-model:value="formData.version" 
-                      placeholder="例如: v1, v2.0" 
-                      class="custom-input"
-                      :disabled="isViewMode"
-                    >
-                      <template #prefix>
-                        <Icon icon="mdi:tag-outline" class="input-icon" />
-                      </template>
-                    </a-input>
-                  </a-form-item>
-                  
-                  <a-form-item label="API分类" class="form-item">
-                    <a-input-number 
-                      v-model:value="formData.category" 
-                      placeholder="分类ID" 
-                      class="category-input"
-                      :min="0"
-                      :disabled="isViewMode"
-                    />
-                  </a-form-item>
-                </div>
-                
-                <a-form-item label="访问权限" class="public-switch-form-item">
-                  <div class="switch-container">
-                    <a-switch 
-                      v-model:checked="formData.is_public" 
-                      :checkedValue="1" 
-                      :unCheckedValue="0"
-                      class="public-switch"
-                      :disabled="isViewMode"
-                    />
-                    <span class="switch-label">{{ formData.is_public === 1 ? '公开接口' : '私有接口' }}</span>
-                    <div class="switch-hint">
-                      {{ formData.is_public === 1 ? '所有用户均可访问' : '需要授权才能访问' }}
-                    </div>
-                  </div>
-                </a-form-item>
-              </div>
+            <div class="detail-item">
+              <label>API路径</label>
+              <span class="api-path-detail">{{ viewApiData.path }}</span>
+            </div>
+            <div class="detail-item">
+              <label>请求方法</label>
+              <a-tag :color="getMethodColor(viewApiData.method)">
+                {{ getMethodName(viewApiData.method) }}
+              </a-tag>
+            </div>
+            <div class="detail-item">
+              <label>API版本</label>
+              <span>{{ viewApiData.version || '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <label>访问权限</label>
+              <a-tag :color="viewApiData.is_public === 1 ? 'green' : 'orange'">
+                {{ viewApiData.is_public === 1 ? '公开' : '私有' }}
+              </a-tag>
+            </div>
+            <div class="detail-item">
+              <label>API分类</label>
+              <span>{{ viewApiData.category || '-' }}</span>
+            </div>
+            <div class="detail-item" v-if="viewApiData.description">
+              <label>API描述</label>
+              <span>{{ viewApiData.description }}</span>
+            </div>
+            <div class="detail-item">
+              <label>创建时间</label>
+              <span>{{ formatTime(viewApiData.created_at) }}</span>
             </div>
           </div>
-          
-          <div class="api-preview" v-if="formData.path && formData.method">
-            <div class="preview-title">
-              <Icon icon="mdi:eye-outline" class="preview-icon" />
-              接口预览
-            </div>
-            <div class="preview-content">
-              <div class="preview-method">
-                <a-tag :color="getMethodColor(formData.method)" class="preview-method-tag">
-                  {{ getMethodName(formData.method) }}
-                </a-tag>
-              </div>
-              <div class="preview-path">{{ formData.path }}</div>
-              <div class="preview-access">
-                <a-tag :color="formData.is_public === 1 ? '#52c41a' : '#faad14'" class="access-tag">
-                  {{ formData.is_public === 1 ? '公开' : '私有' }}
-                </a-tag>
-              </div>
-            </div>
-          </div>
-        </a-form>
-        
-        <div class="modal-footer">
-          <a-button @click="handleModalCancel" class="cancel-button">
-            {{ isViewMode ? '关闭' : '取消' }}
-          </a-button>
-          <a-button v-if="!isViewMode" type="primary" @click="handleModalOk" class="submit-button">
-            <Icon icon="mdi:content-save" class="button-icon" />
-            保存
-          </a-button>
         </div>
       </div>
+    </a-modal>
+
+    <!-- 编辑API -->
+    <a-modal
+      v-model:open="modalVisible"
+      :title="modalTitle"
+      width="800px"
+      @ok="handleSubmit"
+      :confirm-loading="submitLoading"
+    >
+      <a-form ref="formRef" :model="formData" :rules="formRules" layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="API名称" name="name">
+              <a-input v-model:value="formData.name" placeholder="请输入API名称" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="API路径" name="path">
+              <a-input v-model:value="formData.path" placeholder="例如: /api/users" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="请求方法" name="method">
+              <a-select v-model:value="formData.method" placeholder="请选择请求方法">
+                <a-select-option :value="1">GET</a-select-option>
+                <a-select-option :value="2">POST</a-select-option>
+                <a-select-option :value="3">PUT</a-select-option>
+                <a-select-option :value="4">DELETE</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="API版本" name="version">
+              <a-input v-model:value="formData.version" placeholder="例如: v1.0" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="API分类" name="category">
+              <a-input-number 
+                v-model:value="formData.category" 
+                placeholder="分类ID" 
+                :min="0"
+                style="width: 100%"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="访问权限" name="is_public">
+              <a-select v-model:value="formData.is_public">
+                <a-select-option :value="1">公开</a-select-option>
+                <a-select-option :value="2">私有</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-form-item label="API描述" name="description">
+          <a-textarea v-model:value="formData.description" :rows="3" placeholder="请输入API描述信息" />
+        </a-form-item>
+
+        <div class="api-preview" v-if="formData.path && formData.method">
+          <div class="preview-title">
+            <Icon icon="material-symbols:preview" />
+            接口预览
+          </div>
+          <div class="preview-content">
+            <a-tag :color="getMethodColor(formData.method)" class="preview-method-tag">
+              {{ getMethodName(formData.method) }}
+            </a-tag>
+            <span class="preview-path">{{ formData.path }}</span>
+            <a-tag :color="formData.is_public === 1 ? 'green' : 'orange'" class="preview-access-tag">
+              {{ formData.is_public === 1 ? '公开' : '私有' }}
+            </a-tag>
+          </div>
+        </div>
+      </a-form>
     </a-modal>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, reactive, ref, computed } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { message } from 'ant-design-vue';
-import { listApisApi, createApiApi, updateApiApi, deleteApiApi, getApiDetailApi } from '#/api/core/api';
-import type { UpdateApiReq, CreateApiReq } from '#/api/core/api';
 import { Icon } from '@iconify/vue';
+import type { FormInstance } from 'ant-design-vue';
 
-// 表格加载状态
-const loading = ref(false);
+import { 
+  listApisApi, 
+  createApiApi, 
+  updateApiApi, 
+  deleteApiApi,
+  getApiDetailApi,
+  getApiStatisticsApi,
+  type CreateApiReq,
+  type UpdateApiReq
+} from '#/api/core/api';
 
-// 搜索文本
-const searchText = ref('');
+interface ApiInfo {
+  id: number;
+  name: string;
+  path: string;
+  method: number;
+  description?: string;
+  version?: string;
+  category?: number;
+  is_public: number;
+  created_at?: any;
+}
 
-// API列表数据
-const apiList = ref<any[]>([]);
+// 表单引用
+const formRef = ref<FormInstance>();
 
-// 分页配置
-const pagination = reactive({
-  current: 1,
-  pageSize: 10,
-  total: 0
-});
-
-// 请求方法选项
-const methodOptions = [
-  { label: 'GET', value: 1, icon: 'mdi:arrow-down-box', description: '查询数据' },
-  { label: 'POST', value: 2, icon: 'mdi:plus-box', description: '创建数据' },
-  { label: 'PUT', value: 3, icon: 'mdi:pencil-box', description: '更新数据' },
-  { label: 'DELETE', value: 4, icon: 'mdi:delete-box', description: '删除数据' }
+// 表格列配置
+const tableColumns = [
+  { title: 'API信息', key: 'api', width: 300, fixed: 'left' },
+  { title: 'API描述', key: 'description', dataIndex: 'description', ellipsis: true },
+  { title: '版本', key: 'version', width: 100, align: 'center' },
+  { title: '分类', key: 'category', width: 100, align: 'center' },
+  { title: '访问权限', key: 'access', width: 100, align: 'center' },
+  { title: '创建时间', key: 'created_at', width: 120 },
+  { title: '操作', key: 'actions', width: 160, fixed: 'right' }
 ];
 
-// 对话框相关
+// 状态管理
+const loading = ref(false);
+const submitLoading = ref(false);
 const modalVisible = ref(false);
-const modalTitle = ref('新增API');
-const formData = reactive<CreateApiReq>({
+const viewModalVisible = ref(false);
+const modalTitle = ref('');
+
+// 数据
+const apiList = ref<ApiInfo[]>([]);
+const viewApiData = ref<ApiInfo | null>(null);
+const apiStatistics = ref<any>({
+  public_count: 0,
+  private_count: 0
+});
+
+// 搜索参数
+const searchParams = reactive({
+  search: '',
+  method: undefined as number | undefined,
+  is_public: undefined as number | undefined
+});
+
+// 分页配置
+const paginationConfig = reactive({
+  current: 1,
+  pageSize: 20,
+  total: 0,
+  showSizeChanger: true,
+  showQuickJumper: true,
+  pageSizeOptions: ['10', '20', '50', '100'],
+  showTotal: (total: number, range: [number, number]) => 
+    `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
+});
+
+// 表单数据初始化
+const initFormData = () => ({
   name: '',
   path: '',
   method: 1,
   description: '',
   version: '',
-  category: undefined,
-  is_public: 0
+  category: undefined as number | undefined,
+  is_public: 2, // 默认为私有（禁用状态为2）
+  id: 0
 });
 
-// 是否为查看模式
-const isViewMode = computed(() => modalTitle.value === '查看API详情');
+const formData = reactive(initFormData());
 
-// 获取对话框图标
-const getModalIcon = () => {
-  if (modalTitle.value === '新增API') return 'mdi:api-plus';
-  if (modalTitle.value === '编辑API') return 'mdi:api-edit';
-  return 'mdi:eye-outline'; // 查看详情
+// 表单验证规则
+const formRules = {
+  name: [{ required: true, message: '请输入API名称', trigger: 'blur' }],
+  path: [{ required: true, message: '请输入API路径', trigger: 'blur' }],
+  method: [{ required: true, message: '请选择请求方法', trigger: 'change' }]
 };
 
-// 获取对话框标题文本
-const getModalHeaderText = () => {
-  if (modalTitle.value === '新增API') return '创建新接口';
-  if (modalTitle.value === '编辑API') return '编辑接口信息';
-  return '查看接口详情';
+// 工具函数
+const formatTime = (timestamp: any) => {
+  if (!timestamp) return '-';
+  return new Date(typeof timestamp === 'number' ? timestamp * 1000 : timestamp)
+    .toLocaleDateString('zh-CN');
 };
 
-// 获取API列表
-const fetchApiList = async () => {
-  loading.value = true;
-  try {
-    const res = await listApisApi({
-      page: pagination.current,
-      size: pagination.pageSize,
-      search: searchText.value.trim()
-    });
-    apiList.value = res.items;
-    pagination.total = res.total;
-  } catch (error: any) {
-    message.error(error.message || '获取API列表失败');
-  }
-  loading.value = false;
-};
-
-// 处理页码变化
-const handlePageChange = (page: number, pageSize: number) => {
-  pagination.current = page;
-  pagination.pageSize = pageSize;
-  fetchApiList();
-};
-
-// 处理每页条数变化
-const handleSizeChange = (current: number, size: number) => {
-  pagination.current = current;
-  pagination.pageSize = size;
-  fetchApiList();
-};
-
-// 获取API详情
-const fetchApiDetail = async (id: number) => {
-  loading.value = true;
-  try {
-    const res = await getApiDetailApi(id);
-    return res;
-  } catch (error: any) {
-    message.error(error.message || '获取API详情失败');
-    return null;
-  } finally {
-    loading.value = false;
-  }
-};
-
-// 表格列配置
-const columns = [
-  {
-    title: 'API名称',
-    dataIndex: 'name',
-    key: 'name',
-    width: 180
-  },
-  {
-    title: 'API路径', 
-    dataIndex: 'path',
-    key: 'path',
-    ellipsis: true,
-    slots: { customRender: 'path' }
-  },
-  {
-    title: '请求方法',
-    dataIndex: 'method',
-    key: 'method', 
-    slots: { customRender: 'method' },
-    width: 100
-  },
-  {
-    title: 'API描述',
-    dataIndex: 'description',
-    key: 'description',
-    ellipsis: true,
-  },
-  {
-    title: 'API版本',
-    dataIndex: 'version',
-    key: 'version',
-    width: 100
-  },
-  {
-    title: '是否公开',
-    dataIndex: 'is_public',
-    key: 'is_public',
-    slots: { customRender: 'isPublic' },
-    width: 100,
-    align: 'center'
-  },
-  {
-    title: '操作',
-    key: 'action',
-    slots: { customRender: 'action' },
-    width: 160,
-    fixed: 'right'
-  },
-];
-
-// 获取请求方法名称
 const getMethodName = (method: number) => {
   const methodMap: Record<number, string> = {
     1: 'GET',
-    2: 'POST', 
+    2: 'POST',
     3: 'PUT',
     4: 'DELETE'
   };
   return methodMap[method] || '未知';
 };
 
-// 获取请求方法颜色
 const getMethodColor = (method: number) => {
   const colorMap: Record<number, string> = {
     1: '#1890ff', // 蓝色 - GET
@@ -452,639 +393,555 @@ const getMethodColor = (method: number) => {
   return colorMap[method] || '#d9d9d9';
 };
 
-// 处理搜索
+// API 调用
+const fetchApiList = async () => {
+  loading.value = true;
+  try {
+    const params: any = {
+      page: paginationConfig.current,
+      size: paginationConfig.pageSize,
+      search: searchParams.search || ''
+    };
+
+    if (searchParams.method) {
+      params.method = searchParams.method;
+    }
+
+    if (searchParams.is_public === 1 || searchParams.is_public === 2) {
+      params.is_public = searchParams.is_public;
+    }
+
+    const response = await listApisApi(params);
+    
+    apiList.value = response.items || [];
+    paginationConfig.total = response.total || 0;
+    
+  } catch (error: any) {
+    message.error(error.message || '获取API列表失败');
+    apiList.value = [];
+    paginationConfig.total = 0;
+  } finally {
+    loading.value = false;
+  }
+};
+
+const fetchApiStatistics = async () => {
+  try {
+    const response = await getApiStatisticsApi();
+    apiStatistics.value = response;
+  } catch (error: any) {
+    console.error('获取统计数据失败:', error);
+    // 不显示错误信息，因为这是后台请求
+  }
+};
+
+// 事件处理
 const handleSearch = () => {
-  pagination.current = 1;
+  paginationConfig.current = 1;
   fetchApiList();
 };
 
-// 处理新增
+const handleReset = () => {
+  searchParams.search = '';
+  searchParams.method = undefined;
+  searchParams.is_public = undefined;
+  paginationConfig.current = 1;
+  fetchApiList();
+};
+
+const handleRefresh = async () => {
+  await Promise.all([
+    fetchApiList(),
+    fetchApiStatistics()
+  ]);
+};
+
+const handleTableChange = (pagination: any) => {
+  paginationConfig.current = pagination.current;
+  paginationConfig.pageSize = pagination.pageSize;
+  fetchApiList();
+};
+
 const handleAdd = () => {
-  modalTitle.value = '新增API';
-  Object.assign(formData, {
-    name: '',
-    path: '',
-    method: 1,
-    description: '',
-    version: '',
-    category: undefined,
-    is_public: 0
-  });
+  modalTitle.value = '新建API';
+  Object.assign(formData, initFormData());
   modalVisible.value = true;
 };
 
-// 处理查看详情
-const handleView = async (record: any) => {
-  modalTitle.value = '查看API详情';
+const handleEdit = async (api: ApiInfo) => {
   try {
-    const apiDetail = await fetchApiDetail(record.id);
-    if (apiDetail) {
-      Object.assign(formData, apiDetail);
-    } else {
-      Object.assign(formData, record);
-    }
+    modalTitle.value = '编辑API';
+    const response = await getApiDetailApi(api.id);
+    Object.assign(formData, {
+      id: response.id,
+      name: response.name,
+      path: response.path,
+      method: response.method,
+      description: response.description || '',
+      version: response.version || '',
+      category: response.category,
+      is_public: response.is_public
+    });
     modalVisible.value = true;
   } catch (error: any) {
     message.error(error.message || '获取API详情失败');
   }
 };
 
-// 处理编辑
-const handleEdit = async (record: any) => {
-  modalTitle.value = '编辑API';
+const handleView = async (api: ApiInfo) => {
   try {
-    const apiDetail = await fetchApiDetail(record.id);
-    if (apiDetail) {
-      Object.assign(formData, apiDetail);
-    } else {
-      Object.assign(formData, record);
-    }
-    modalVisible.value = true;
+    const response = await getApiDetailApi(api.id);
+    viewApiData.value = response;
+    viewModalVisible.value = true;
   } catch (error: any) {
     message.error(error.message || '获取API详情失败');
   }
 };
 
-// 处理删除
-const handleDelete = async (record: any) => {
+const handleDelete = async (api: ApiInfo) => {
   try {
-    await deleteApiApi(record.id);
+    await deleteApiApi(api.id);
     message.success('删除成功');
-    fetchApiList();
+    if (apiList.value.length === 1 && paginationConfig.current > 1) {
+      paginationConfig.current--;
+    }
+    await Promise.all([
+      fetchApiList(),
+      fetchApiStatistics()
+    ]);
   } catch (error: any) {
     message.error(error.message || '删除失败');
   }
 };
 
-// 处理公开状态切换
-const handlePublicChange = async (record: any, isPublic: number) => {
+const handleAccessChange = async (api: ApiInfo, newAccess: number) => {
+  const originalAccess = api.is_public;
+  
   try {
-    await updateApiApi({
-      ...record,
-      is_public: isPublic,
-    });
-    message.success('更新成功');
-    fetchApiList();
+    // 乐观更新
+    api.is_public = newAccess;
+    
+    const updateData: UpdateApiReq = {
+      id: api.id,
+      name: api.name,
+      path: api.path,
+      method: api.method,
+      description: api.description || '',
+      version: api.version || '',
+      category: api.category,
+      is_public: newAccess as 1 | 2
+    };
+    
+    await updateApiApi(updateData);
+    message.success('访问权限更新成功');
+    
+    // 重新获取统计数据
+    await fetchApiStatistics();
   } catch (error: any) {
-    message.error(error.message || '更新失败');
+    // 发生错误时，恢复原来的状态
+    api.is_public = originalAccess;
+    message.error(error.message || '访问权限更新失败');
   }
 };
 
-// 处理对话框确认
-const handleModalOk = async () => {
+const handleSubmit = async () => {
   try {
-    if (modalTitle.value === '新增API') {
-      await createApiApi(formData);
-      message.success('新增API成功');
+    await formRef.value?.validate();
+    submitLoading.value = true;
+    
+    if (modalTitle.value === '新建API') {
+      const createData: CreateApiReq = {
+        name: formData.name,
+        path: formData.path,
+        method: formData.method,
+        description: formData.description,
+        version: formData.version,
+        category: formData.category,
+        is_public: formData.is_public as 1 | 2
+      };
+      
+      await createApiApi(createData);
+      message.success('创建成功');
     } else {
-      await updateApiApi(formData as UpdateApiReq);
-      message.success('编辑API成功');
+      const updateData: UpdateApiReq = {
+        id: formData.id,
+        name: formData.name,
+        path: formData.path,
+        method: formData.method,
+        description: formData.description,
+        version: formData.version,
+        category: formData.category,
+        is_public: formData.is_public as 1 | 2
+      };
+      await updateApiApi(updateData);
+      message.success('更新成功');
     }
+    
     modalVisible.value = false;
-    fetchApiList();
+    await Promise.all([
+      fetchApiList(),
+      fetchApiStatistics()
+    ]);
   } catch (error: any) {
-    message.error(error.message || `${modalTitle.value}失败`);
+    if (!error.errorFields) {
+      message.error(error.message || '操作失败');
+    }
+  } finally {
+    submitLoading.value = false;
   }
 };
 
-// 处理对话框取消
-const handleModalCancel = () => {
-  modalVisible.value = false;
-};
-
-// 页面加载时获取数据
+// 初始化
 onMounted(() => {
   fetchApiList();
+  fetchApiStatistics();
 });
 </script>
 
 <style scoped>
-/* 整体容器样式 */
-.api-management-container {
+/* 继承用户页面的样式风格 */
+.api-management {
   padding: 20px;
-  background-color: #f0f2f5;
+  background: #f5f5f5;
   min-height: 100vh;
-  font-family: 'Roboto', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
-/* 顶部卡片样式 */
-.dashboard-card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 20px;
-  margin-bottom: 20px;
-  transition: all 0.3s;
-}
-
-.card-title {
-  display: flex;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.title-icon {
-  font-size: 28px;
-  margin-right: 10px;
-  color: #1890ff;
-}
-
-.card-title h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 500;
-  color: #1e293b;
-}
-
-/* 工具栏样式 */
-.custom-toolbar {
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
+  margin-bottom: 20px;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #d9d9d9;
 }
 
-.search-filters {
+.page-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.header-actions {
   display: flex;
-  align-items: center;
   gap: 12px;
 }
 
-.search-input {
-  width: 280px;
-  border-radius: 6px;
-  transition: all 0.3s;
-}
-
-.search-input:hover, 
-.search-input:focus {
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
-}
-
-.search-button {
-  border-radius: 6px;
+.header-actions .ant-btn {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.add-button {
-  border-radius: 6px;
-  background: linear-gradient(90deg, #1890ff, #36cfc9);
-  border: none;
-  box-shadow: 0 2px 6px rgba(24, 144, 255, 0.3);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.3s;
-}
-
-.add-button:hover {
-  background: linear-gradient(90deg, #40a9ff, #5cdbd3);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4);
-}
-
-/* 表格容器样式 */
-.table-container {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 20px;
-  overflow: hidden;
-}
-
-.api-table {
-  width: 100%;
-}
-
-/* API路径样式 */
-.api-path {
-  font-family: 'Roboto Mono', 'Courier New', monospace;
-  color: #595959;
-  background-color: #f5f5f5;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 请求方法标签样式 */
-.method-tag {
-  border-radius: 4px;
-  padding: 2px 8px;
-  font-size: 12px;
-  font-weight: 500;
-  font-family: 'Roboto Mono', monospace;
-  letter-spacing: 0.5px;
-  border: none;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-/* 操作按钮样式 */
-.action-button {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s;
-}
-
-.action-button:hover {
-  background-color: #f0f0f0;
-  transform: translateY(-1px);
-}
-
-.edit-button {
-  color: #1890ff;
-}
-
-.delete-button {
-  color: #f5222d;
-}
-
-/* 开关样式 */
-:deep(.public-switch) {
-  background-color: rgba(0, 0, 0, 0.25);
-}
-
-:deep(.public-switch.ant-switch-checked) {
-  background: linear-gradient(90deg, #1890ff, #36cfc9);
-}
-
-/* API模态框基础样式 */
-:deep(.api-modal .ant-modal-content) {
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
-:deep(.api-modal .ant-modal-header) {
-  background: #fff;
-  padding: 20px 24px 0;
-  border-bottom: none;
-}
-
-:deep(.api-modal .ant-modal-title) {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-:deep(.api-modal .ant-modal-body) {
-  padding: 0;
-}
-
-:deep(.api-modal .ant-modal-footer) {
-  border-top: 1px solid #f0f0f0;
-  padding: 16px 24px;
-}
-
-.modal-content {
-  padding: 20px 24px 24px;
-}
-
-.modal-header-icon {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 30px;
-}
-
-.icon-wrapper {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #1890ff, #36cfc9);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.25);
-}
-
-.icon-wrapper svg {
-  font-size: 32px;
-  color: white;
-}
-
-.edit-icon {
-  background: linear-gradient(135deg, #52c41a, #13c2c2);
-}
-
-.header-text {
-  font-size: 16px;
-  color: #1e293b;
-  font-weight: 500;
-}
-
-/* API表单样式 */
-.api-form {
-  margin-top: 0;
-}
-
-.form-grid {
+.stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
-.form-section {
-  background-color: #fff;
+.stat-card {
+  background: white;
+  padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-  border: 1px solid #f0f0f0;
+  text-align: center;
+  border: 1px solid #d9d9d9;
+}
+
+.stat-number {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1890ff;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #8c8c8c;
+}
+
+.search-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #d9d9d9;
+}
+
+.search-left {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  align-items: flex-end;
+}
+
+.search-input {
+  flex: 1;
+  max-width: 300px;
+}
+
+.method-select,
+.access-select {
+  width: 140px;
+}
+
+.search-right {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.table-container {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #d9d9d9;
   overflow: hidden;
 }
 
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  background-color: #f9f9f9;
-  border-bottom: 1px solid #f0f0f0;
+.table-container :deep(.ant-table-thead > tr > th) {
+  background: #fafafa;
+  font-weight: 600;
+  color: #262626;
+  border-bottom: 1px solid #e8e8e8;
 }
 
-.section-icon {
-  color: #1890ff;
-  font-size: 18px;
+.table-container :deep(.ant-table-tbody > tr:hover > td) {
+  background: #f5f5f5;
 }
 
-.section-content {
-  padding: 16px;
-}
-
-.form-item {
-  margin-bottom: 16px;
-}
-
-.form-item:last-child {
-  margin-bottom: 0;
-}
-
-.form-row {
-  display: flex;
-  gap: 16px;
-}
-
-.form-row .form-item {
-  flex: 1;
-}
-
-:deep(.custom-input) {
-  border-radius: 6px;
-  transition: all 0.3s;
-  height: 38px;
-}
-
-:deep(.input-icon) {
-  color: #8c8c8c;
-  margin-right: 8px;
-}
-
-:deep(.custom-input:hover) {
-  border-color: #40a9ff;
-}
-
-:deep(.custom-input:focus) {
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
-}
-
-:deep(.custom-textarea) {
-  border-radius: 6px;
-  transition: all 0.3s;
-}
-
-:deep(.custom-textarea:hover) {
-  border-color: #40a9ff;
-}
-
-:deep(.custom-textarea:focus) {
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
-}
-
-/* 方法选择下拉框样式 */
-:deep(.method-select .ant-select-selector) {
-  border-radius: 6px;
-  transition: all 0.3s;
-  height: 38px !important;
-  padding: 0 11px !important;
-}
-
-:deep(.method-select .ant-select-selection-item) {
-  line-height: 36px !important;
-}
-
-:deep(.method-select:hover .ant-select-selector) {
-  border-color: #40a9ff !important;
-}
-
-:deep(.method-select.ant-select-focused .ant-select-selector) {
-  border-color: #1890ff !important;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2) !important;
-}
-
-/* 方法选项内容样式 */
-.method-option-content {
+.api-info {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.api-method {
+  flex-shrink: 0;
+}
+
+.method-tag {
+  font-family: 'Roboto Mono', monospace;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: none;
+}
+
+.api-name {
+  font-weight: 600;
+  color: #262626;
+  margin-bottom: 2px;
+}
+
+.api-path {
+  font-size: 12px;
+  color: #8c8c8c;
+  font-family: 'Roboto Mono', monospace;
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.api-path-detail {
+  font-family: 'Roboto Mono', monospace;
+  background: #f5f5f5;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #595959;
+}
+
+.no-version,
+.no-category {
+  color: #bfbfbf;
+  font-style: italic;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.api-detail {
   padding: 8px 0;
 }
 
-.method-badge {
-  min-width: 60px;
-  text-align: center;
-  font-weight: bold;
+.detail-section {
+  margin-bottom: 24px;
+}
+
+.detail-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #262626;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.detail-item {
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 6px;
+  border: 1px solid #e8e8e8;
+}
+
+.detail-item label {
+  display: block;
   font-size: 12px;
-  border: none;
+  color: #8c8c8c;
+  font-weight: 600;
+  margin-bottom: 4px;
 }
 
-.method-description {
-  color: #595959;
+.detail-item span {
   font-size: 14px;
+  color: #262626;
 }
 
-/* 分类输入框样式 */
-:deep(.category-input) {
-  width: 100%;
+.api-preview {
+  margin-top: 24px;
+  padding: 16px;
+  background: #fafafa;
+  border: 1px dashed #d9d9d9;
   border-radius: 6px;
 }
 
-:deep(.category-input .ant-input-number-handler-wrap) {
-  border-radius: 0 6px 6px 0;
-}
-
-/* 开关容器样式 */
-.switch-container {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.switch-label {
-  font-weight: 500;
-  color: #1e293b;
-}
-
-.switch-hint {
-  font-size: 12px;
-  color: #8c8c8c;
-  margin-left: auto;
-}
-
-/* API预览区域 */
-.api-preview {
-  margin-top: 24px;
-  background-color: #fafafa;
-  border-radius: 8px;
-  border: 1px dashed #d9d9d9;
-  overflow: hidden;
-}
-
 .preview-title {
-  padding: 12px 16px;
-  font-weight: 500;
-  color: #1e293b;
-  border-bottom: 1px solid #f0f0f0;
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.preview-icon {
-  color: #1890ff;
-  font-size: 18px;
+  font-weight: 600;
+  color: #262626;
+  margin-bottom: 12px;
 }
 
 .preview-content {
-  padding: 16px;
   display: flex;
   align-items: center;
+  gap: 12px;
   font-family: 'Roboto Mono', monospace;
-  background-color: #f5f5f5;
-}
-
-.preview-method {
-  margin-right: 12px;
 }
 
 .preview-method-tag {
-  padding: 4px 12px;
-  font-size: 14px;
-  font-weight: bold;
+  font-weight: 600;
   border: none;
 }
 
 .preview-path {
   flex: 1;
   font-size: 14px;
-  color: #1e293b;
-  word-break: break-all;
+  color: #262626;
+  background: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #e8e8e8;
 }
 
-.preview-access {
-  margin-left: 12px;
-}
-
-.access-tag {
-  padding: 2px 8px;
+.preview-access-tag {
   font-size: 12px;
 }
 
-/* 模态框页脚 */
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.cancel-button {
-  border-radius: 6px;
-  border: 1px solid #d9d9d9;
-  background-color: white;
-  color: #595959;
-  padding: 0 16px;
-  height: 38px;
-  transition: all 0.3s;
-}
-
-.cancel-button:hover {
+.table-container :deep(.ant-btn-text) {
   color: #1890ff;
-  border-color: #1890ff;
 }
 
-.submit-button {
-  border-radius: 6px;
-  border: none;
-  background: linear-gradient(90deg, #1890ff, #36cfc9);
-  color: white;
-  padding: 0 16px;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  box-shadow: 0 2px 6px rgba(24, 144, 255, 0.25);
-  transition: all 0.3s;
+.table-container :deep(.ant-btn-text:hover) {
+  color: #40a9ff;
+  background: #f0f9ff;
 }
 
-.submit-button:hover {
-  background: linear-gradient(90deg, #40a9ff, #5cdbd3);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.35);
+.table-container :deep(.ant-btn-text.ant-btn-dangerous) {
+  color: #ff4d4f;
 }
 
-.button-icon {
-  font-size: 16px;
+.table-container :deep(.ant-btn-text.ant-btn-dangerous:hover) {
+  color: #ff7875;
+  background: #fff2f0;
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .custom-toolbar {
+@media (max-width: 1200px) {
+  .search-section {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 16px;
   }
   
-  .search-filters {
-    width: 100%;
-    margin-bottom: 12px;
+  .search-left {
+    flex-direction: column;
+    gap: 12px;
   }
   
   .search-input {
+    max-width: none;
+  }
+  
+  .method-select,
+  .access-select {
     width: 100%;
   }
   
-  .form-grid {
+  .search-right {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 768px) {
+  .api-management {
+    padding: 12px;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .stats-grid {
     grid-template-columns: 1fr;
   }
   
-  .form-row {
+  .search-right {
     flex-direction: column;
+    gap: 8px;
+  }
+  
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .api-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
   
   .preview-content {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
-  }
-  
-  .preview-method {
-    margin-right: 0;
-  }
-  
-  .preview-access {
-    margin-left: 0;
   }
 }
 </style>
