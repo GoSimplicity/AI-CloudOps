@@ -45,11 +45,12 @@ type UserService interface {
 	GetProfile(ctx context.Context, uid int) (*model.User, error)
 	GetPermCode(ctx context.Context, uid int) ([]string, error)
 	GetUserDetail(ctx context.Context, uid int) (*model.User, error)
-	GetUserList(ctx context.Context, req *model.ListReq) (model.ListResp[*model.User], error)
+	GetUserList(ctx context.Context, req *model.GetUserListReq) (model.ListResp[*model.User], error)
 	ChangePassword(ctx context.Context, req *model.ChangePasswordReq) error
 	WriteOff(ctx context.Context, username, password string) error
 	UpdateProfile(ctx context.Context, user *model.UpdateProfileReq) error
 	DeleteUser(ctx context.Context, uid int) error
+	GetUserStatistics(ctx context.Context) (*model.UserStatistics, error)
 }
 
 type userService struct {
@@ -125,8 +126,8 @@ func (us *userService) GetPermCode(ctx context.Context, uid int) ([]string, erro
 }
 
 // GetUserList 获取用户列表
-func (us *userService) GetUserList(ctx context.Context, req *model.ListReq) (model.ListResp[*model.User], error) {
-	users, count, err := us.dao.GetAllUsers(ctx, req.Page, req.Size, req.Search)
+func (us *userService) GetUserList(ctx context.Context, req *model.GetUserListReq) (model.ListResp[*model.User], error) {
+	users, count, err := us.dao.GetAllUsers(ctx, req.Page, req.Size, req.Search, req.Enable, req.AccountType)
 	if err != nil {
 		return model.ListResp[*model.User]{}, err
 	}
@@ -178,6 +179,8 @@ func (us *userService) UpdateProfile(ctx context.Context, req *model.UpdateProfi
 	user.AccountType = req.AccountType
 	user.HomePath = req.HomePath
 	user.Enable = req.Enable
+	user.Email = req.Email
+	user.Avatar = req.Avatar
 
 	return us.dao.UpdateProfile(ctx, user)
 }
@@ -211,8 +214,19 @@ func (us *userService) DeleteUser(ctx context.Context, uid int) error {
 func (us *userService) GetUserDetail(ctx context.Context, uid int) (*model.User, error) {
 	user, err := us.dao.GetUserByID(ctx, uid)
 	if err != nil {
+		us.l.Error("获取用户详情失败", zap.Int("uid", uid), zap.Error(err))
 		return nil, err
 	}
 
 	return user, nil
+}
+
+func (us *userService) GetUserStatistics(ctx context.Context) (*model.UserStatistics, error) {
+	statistics, err := us.dao.GetUserStatistics(ctx)
+	if err != nil {
+		us.l.Error("获取用户统计失败", zap.Error(err))
+		return nil, err
+	}
+
+	return statistics, nil
 }

@@ -38,7 +38,7 @@ type UserDAO interface {
 	CreateUser(ctx context.Context, user *model.User) error
 	GetUserByUsername(ctx context.Context, username string) (*model.User, error)
 	GetUserByUsernames(ctx context.Context, usernames []string) ([]*model.User, error)
-	GetAllUsers(ctx context.Context, page, size int, search string) ([]*model.User, int64, error)
+	GetAllUsers(ctx context.Context, page, size int, search string, enable int8, accountType int8) ([]*model.User, int64, error)
 	GetUserByID(ctx context.Context, id int) (*model.User, error)
 	GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, error)
 	GetUserByStrIDs(ctx context.Context, ids []string) ([]*model.User, error)
@@ -47,6 +47,7 @@ type UserDAO interface {
 	WriteOff(ctx context.Context, username, password string) error
 	UpdateProfile(ctx context.Context, user *model.User) error
 	DeleteUser(ctx context.Context, uid int) error
+	GetUserStatistics(ctx context.Context) (*model.UserStatistics, error)
 }
 
 type userDAO struct {
@@ -125,13 +126,21 @@ func (u *userDAO) GetUserByUsername(ctx context.Context, username string) (*mode
 }
 
 // GetAllUsers 获取所有用户
-func (u *userDAO) GetAllUsers(ctx context.Context, page, size int, search string) ([]*model.User, int64, error) {
+func (u *userDAO) GetAllUsers(ctx context.Context, page, size int, search string, enable int8, accountType int8) ([]*model.User, int64, error) {
 	var users []*model.User
 	var count int64
 
 	query := u.db.WithContext(ctx).Model(&model.User{})
 	if search != "" {
 		query = query.Where("username LIKE ? OR real_name LIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	if enable != 0 {
+		query = query.Where("enable = ?", enable)
+	}
+
+	if accountType != 0 {
+		query = query.Where("account_type = ?", accountType)
 	}
 
 	if err := query.Count(&count).Error; err != nil {
@@ -259,6 +268,8 @@ func (u *userDAO) UpdateProfile(ctx context.Context, user *model.User) error {
 			"mobile":          user.Mobile,
 			"fei_shu_user_id": user.FeiShuUserId,
 			"account_type":    user.AccountType,
+			"email":           user.Email,
+			"avatar":          user.Avatar,
 			"home_path":       user.HomePath,
 			"enable":          user.Enable,
 		}
@@ -365,4 +376,22 @@ func (u *userDAO) GetUserByStrIDs(ctx context.Context, ids []string) ([]*model.U
 	}
 
 	return users, nil
+}
+
+func (u *userDAO) GetUserStatistics(ctx context.Context) (*model.UserStatistics, error) {
+	var statistics model.UserStatistics
+
+	// 获取管理员总数
+	if err := u.db.WithContext(ctx).Model(&model.User{}).Count(&statistics.AdminCount).Error; err != nil {
+		u.l.Error("获取管理员总数失败", zap.Error(err))
+		return nil, err
+	}
+	
+	// 获取活跃用户数量
+	if err := u.db.WithContext(ctx).Model(&model.User{}).Where("enable = ?", 1).Count(&statistics.ActiveUserCount).Error; err != nil {
+		u.l.Error("获取活跃用户数量失败", zap.Error(err))
+		return nil, err
+	}
+	
+	return &statistics, nil
 }
