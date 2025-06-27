@@ -1,8 +1,5 @@
 package provider
 
-// 资源对象转换相关方法
-// convertToResourceEcsFromListInstance, convertToResourceEcsFromInstanceDetail, convertToResourceVpcFromListVpc, convertToResourceVpcFromDetail, convertToResourceSecurityGroupFromList, convertToResourceSecurityGroupFromDetail, convertToResourceDiskFromList, convertToResourceDiskFromDetail 等
-
 import (
 	"fmt"
 	"strconv"
@@ -241,6 +238,10 @@ func (h *HuaweiProviderImpl) convertToResourceSecurityGroupFromDetail(sg *vpcv3m
 }
 
 func (h *HuaweiProviderImpl) convertToResourceDiskFromList(disk evsmode.VolumeDetail, region string) *model.ResourceDisk {
+	if disk.Id == "" {
+		return nil
+	}
+
 	// 提取标签信息
 	var tags []string
 	if disk.Tags != nil {
@@ -251,14 +252,14 @@ func (h *HuaweiProviderImpl) convertToResourceDiskFromList(disk evsmode.VolumeDe
 
 	// 提取挂载的实例ID
 	var instanceID string
-	if disk.Attachments != nil && len(disk.Attachments) > 0 {
+	if disk.Attachments != nil {
 		// 获取第一个挂载的实例ID
 		instanceID = disk.Attachments[0].ServerId
 	}
 
 	return &model.ResourceDisk{
 		InstanceName: disk.Name,
-		InstanceId:   disk.Id,
+		InstanceID:   instanceID,
 		Provider:     model.CloudProviderHuawei,
 		RegionId:     region,
 		ZoneId:       disk.AvailabilityZone,
@@ -271,7 +272,6 @@ func (h *HuaweiProviderImpl) convertToResourceDiskFromList(disk evsmode.VolumeDe
 		DiskName:     disk.Name,
 		Size:         int(disk.Size),
 		Category:     disk.VolumeType,
-		InstanceID:   instanceID,
 	}
 }
 

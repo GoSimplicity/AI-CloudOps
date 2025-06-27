@@ -37,7 +37,6 @@ import (
 )
 
 type TreeEcsService interface {
-	// 资源管理
 	ListEcsResources(ctx context.Context, req *model.ListEcsResourcesReq) (model.ListResp[*model.ResourceEcs], error)
 	GetEcsDetail(ctx context.Context, req *model.GetEcsDetailReq) (*model.ResourceEcs, error)
 	CreateEcsResource(ctx context.Context, req *model.CreateEcsResourceReq) error
