@@ -75,7 +75,7 @@
                   <span>启用</span>
                 </div>
               </a-select-option>
-              <a-select-option :value="0">
+              <a-select-option :value="2">
                 <div class="status-option">
                   <div class="status-dot inactive"></div>
                   <span>禁用</span>
@@ -140,7 +140,7 @@
               <a-switch 
                 v-model:checked="user.enable" 
                 :checked-value="1" 
-                :unchecked-value="0"
+                :unchecked-value="2"
                 @change="handleStatusChange(user)"
                 size="small"
               />
@@ -161,6 +161,10 @@
             <a-tag v-if="isAdminUser(user)" color="red" class="admin-tag">
               <Icon icon="material-symbols:admin-panel-settings" />
               管理员
+            </a-tag>
+            <a-tag v-if="user.account_type === 2" color="orange" class="service-tag">
+              <Icon icon="material-symbols:smart-toy-outline" />
+              服务账号
             </a-tag>
             <a-tag :color="user.enable === 1 ? 'green' : 'default'" class="status-tag">
               {{ user.enable === 1 ? '已启用' : '已禁用' }}
@@ -221,7 +225,7 @@
           class="user-table"
           size="middle"
         >
-          <template #bodyCell="{ column, record, text }">
+          <template #bodyCell="{ column, record }">
             <!-- 用户名称列 -->
             <template v-if="column.key === 'name'">
               <div class="name-cell">
@@ -252,7 +256,11 @@
             
             <!-- 用户类型列 -->
             <template v-if="column.key === 'type'">
-              <a-tag v-if="isAdminUser(record)" color="orange">
+              <a-tag v-if="record.account_type === 2" color="orange">
+                <Icon icon="material-symbols:smart-toy-outline" />
+                服务账号
+              </a-tag>
+              <a-tag v-else-if="isAdminUser(record)" color="red">
                 <Icon icon="material-symbols:admin-panel-settings" />
                 管理员
               </a-tag>
@@ -267,7 +275,7 @@
               <a-switch 
                 v-model:checked="record.enable" 
                 :checked-value="1" 
-                :unchecked-value="0"
+                :unchecked-value="2"
                 @change="handleStatusChange(record)"
                 size="small"
               />
@@ -400,11 +408,11 @@
               </div>
             </div>
             <div class="info-item">
-              <label>用户类型</label>
+              <label>账号类型</label>
               <div class="info-value">
-                <a-tag v-if="isAdminUser(viewUserData)" color="orange">
-                  <Icon icon="material-symbols:admin-panel-settings" />
-                  管理员用户
+                <a-tag v-if="viewUserData.account_type === 2" color="orange">
+                  <Icon icon="material-symbols:smart-toy-outline" />
+                  服务账号
                 </a-tag>
                 <a-tag v-else color="blue">
                   <Icon icon="material-symbols:person-outline" />
@@ -731,22 +739,42 @@
                 :rows="3"
               />
             </a-form-item>
-            <a-form-item label="用户状态" name="enable">
-              <a-radio-group v-model:value="formData.enable" class="status-radio">
-                <a-radio :value="1">
-                  <div class="radio-option">
-                    <div class="status-dot active"></div>
-                    <span>启用</span>
-                  </div>
-                </a-radio>
-                <a-radio :value="0">
-                  <div class="radio-option">
-                    <div class="status-dot inactive"></div>
-                    <span>禁用</span>
-                  </div>
-                </a-radio>
-              </a-radio-group>
-            </a-form-item>
+            
+            <div class="form-grid">
+              <a-form-item label="账号类型" name="account_type">
+                <a-radio-group v-model:value="formData.account_type" class="account-type-radio">
+                  <a-radio :value="1">
+                    <div class="radio-option">
+                      <Icon icon="material-symbols:person-outline" class="radio-icon" />
+                      <span>普通用户</span>
+                    </div>
+                  </a-radio>
+                  <a-radio :value="2">
+                    <div class="radio-option">
+                      <Icon icon="material-symbols:smart-toy-outline" class="radio-icon" />
+                      <span>服务账号</span>
+                    </div>
+                  </a-radio>
+                </a-radio-group>
+              </a-form-item>
+              
+              <a-form-item label="用户状态" name="enable">
+                <a-radio-group v-model:value="formData.enable" class="status-radio">
+                  <a-radio :value="1">
+                    <div class="radio-option">
+                      <div class="status-dot active"></div>
+                      <span>启用</span>
+                    </div>
+                  </a-radio>
+                  <a-radio :value="2">
+                    <div class="radio-option">
+                      <div class="status-dot inactive"></div>
+                      <span>禁用</span>
+                    </div>
+                  </a-radio>
+                </a-radio-group>
+              </a-form-item>
+            </div>
           </div>
         </a-form>
       </div>
@@ -899,7 +927,7 @@
                   size="small"
                   @click="handleAssignRole(role)"
                   class="assign-btn"
-                  :disabled="role.status === 0"
+                  :disabled="role.status !== 1"
                 >
                   <Icon icon="material-symbols:add-circle-outline" />
                   分配
@@ -929,10 +957,15 @@ import {
   deleteUser, 
   changePassword,
   getUserDetailApi,
+  type UserSignUpReq,
+  type UpdateProfileReq,
+  type ChangePasswordReq
+} from '#/api/core/user';
+import { 
   assignRolesToUserApi,
   revokeRolesFromUserApi,
   getUserRolesApi
-} from '#/api';
+} from '#/api/core/system';
 import { listRolesApi } from '#/api/core/system';
 
 // 表单引用
@@ -1043,8 +1076,8 @@ const initFormData = () => ({
   fei_shu_user_id: '',
   home_path: '',
   desc: '',
-  enable: 1,
-  account_type: 1,
+  enable: 1, // 默认启用
+  account_type: 1, // 默认普通用户
   password: '',
   confirmPassword: ''
 });
@@ -1064,6 +1097,8 @@ const passwordData = reactive({
 const formRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   real_name: [{ required: true, message: '请输入真实姓名', trigger: 'blur' }],
+  mobile: [{ required: true, message: '请输入手机号码', trigger: 'blur' }],
+  account_type: [{ required: true, message: '请选择账号类型', trigger: 'change' }],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, message: '密码长度至少6位', trigger: 'blur' }
@@ -1071,7 +1106,7 @@ const formRules = {
   confirmPassword: [
     { required: true, message: '请确认密码', trigger: 'blur' },
     {
-      validator: (rule: any, value: string) => {
+      validator: (_rule: any, value: string) => {
         if (value && value !== formData.password) {
           return Promise.reject('两次输入的密码不一致');
         }
@@ -1093,7 +1128,7 @@ const passwordRules = {
   confirmPassword: [
     { required: true, message: '请确认新密码', trigger: 'blur' },
     {
-      validator: (rule: any, value: string) => {
+      validator: (_rule: any, value: string) => {
         if (value && value !== passwordData.newPassword) {
           return Promise.reject('两次输入的密码不一致');
         }
@@ -1366,19 +1401,21 @@ const handleDelete = async (user: any) => {
 const handleStatusChange = async (user: any) => {
   const originalStatus = user.enable;
   try {
-    const enableValue = user.enable ? 1 : 0;
+    // 确保传递的是正确的数值
+    const enableValue = user.enable === 1 ? 1 : 2;
     
-    await updateUserInfo({
-      user_id: user.id,
-      real_name: user.real_name,
-      mobile: user.mobile,
-      email: user.email,
+    const updateData: UpdateProfileReq = {
+      id: user.id,
+      real_name: user.real_name || '',
+      mobile: user.mobile || '',
       fei_shu_user_id: user.fei_shu_user_id,
-      home_path: user.home_path,
-      desc: user.desc,
       account_type: user.account_type || 1,
-      enable: enableValue 
-    });
+      home_path: user.home_path || '',
+      desc: user.desc,
+      enable: enableValue
+    };
+    
+    await updateUserInfo(updateData);
     message.success('状态更新成功');
   } catch (error: any) {
     message.error(error.message || '状态更新失败');
@@ -1392,30 +1429,33 @@ const handleSubmit = async () => {
     submitLoading.value = true;
     
     if (modalTitle.value === '新建用户') {
-      await registerApi({
+      const signUpData: UserSignUpReq = {
         username: formData.username,
         password: formData.password,
-        confirmPassword: formData.confirmPassword,
-        real_name: formData.real_name,
         mobile: formData.mobile,
-        email: formData.email,
+        real_name: formData.real_name,
         fei_shu_user_id: formData.fei_shu_user_id,
+        desc: formData.desc,
+        account_type: formData.account_type,
         home_path: formData.home_path,
-        desc: formData.desc
-      });
+        enable: formData.enable
+      };
+      
+      await registerApi(signUpData);
       message.success('创建成功');
     } else {
-      await updateUserInfo({
-        user_id: formData.id,
+      const updateData: UpdateProfileReq = {
+        id: formData.id,
         real_name: formData.real_name,
         mobile: formData.mobile,
-        email: formData.email,
         fei_shu_user_id: formData.fei_shu_user_id,
+        account_type: formData.account_type,
         home_path: formData.home_path,
         desc: formData.desc,
-        account_type: formData.account_type || 1,
         enable: formData.enable
-      });
+      };
+      
+      await updateUserInfo(updateData);
       message.success('更新成功');
     }
     
@@ -1436,12 +1476,15 @@ const handlePasswordSubmit = async () => {
     await passwordFormRef.value?.validate();
     passwordLoading.value = true;
     
-    await changePassword({
+    const passwordChangeData: ChangePasswordReq = {
+      user_id: currentUser.value.id,
       username: passwordData.username,
       password: passwordData.password,
-      newPassword: passwordData.newPassword,
-      confirmPassword: passwordData.confirmPassword
-    });
+      new_password: passwordData.newPassword,
+      confirm_password: passwordData.confirmPassword
+    };
+    
+    await changePassword(passwordChangeData);
     
     message.success('密码修改成功');
     passwordModalVisible.value = false;
@@ -1876,7 +1919,7 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.admin-tag, .status-tag {
+.admin-tag, .service-tag, .status-tag {
   border-radius: 4px;
   font-size: 12px;
   display: inline-flex;
@@ -2250,6 +2293,10 @@ onMounted(() => {
   justify-content: center;
   color: white;
   font-size: 18px;
+}
+
+.role-stats {
+  background: linear-gradient(135deg, #722ed1, #9c5ddb);
 }
 
 .api-stats {
@@ -2662,7 +2709,7 @@ onMounted(() => {
   gap: 16px;
 }
 
-.status-radio {
+.account-type-radio, .status-radio {
   display: flex;
   gap: 24px;
 }
@@ -2673,6 +2720,11 @@ onMounted(() => {
   gap: 8px;
   min-height: 22px;
   font-size: 14px;
+}
+
+.radio-icon {
+  font-size: 16px;
+  color: currentColor;
 }
 
 /* 密码模态框样式 */
@@ -2909,6 +2961,11 @@ onMounted(() => {
   .view-toggle :deep(.ant-radio-button-wrapper) {
     flex: 1;
     text-align: center;
+  }
+  
+  .account-type-radio, .status-radio {
+    flex-direction: column;
+    gap: 12px;
   }
 }
 

@@ -29,7 +29,7 @@ package model
 type User struct {
 	Model
 	Username     string `json:"username" gorm:"type:varchar(100);uniqueIndex:idx_username_del;not null;comment:用户登录名"` // 用户登录名，唯一且非空
-	Password     string `json:"password" gorm:"type:varchar(255);not null;comment:用户登录密码"`                             // 用户登录密码，非空，JSON序列化时忽略
+	Password     string `json:"-" gorm:"type:varchar(255);not null;comment:用户登录密码"`                                    // 用户登录密码，非空，JSON序列化时忽略
 	RealName     string `json:"real_name" gorm:"type:varchar(100);comment:用户真实姓名"`                                     // 用户真实姓名
 	Domain       string `json:"domain" gorm:"type:varchar(100);default:'default';comment:用户域"`                         // 用户域，默认default
 	Desc         string `json:"desc" gorm:"type:text;comment:用户描述"`                                                    // 用户描述，支持较长文本
@@ -41,18 +41,23 @@ type User struct {
 	Apis         []*Api `json:"apis" gorm:"many2many:user_apis;comment:关联接口"`                                          // 多对多关联接口
 }
 
+// UserLoginReq 用户登录请求
 type UserLoginReq struct {
 	Username string `json:"username" binding:"required"` // 用户名
 	Password string `json:"password" binding:"required"` // 密码
 }
+
+// UserSignUpReq 用户注册请求
 type UserSignUpReq struct {
-	Username     string `json:"username" binding:"required"`     // 用户名
-	Password     string `json:"password" binding:"required"`     // 密码
-	Mobile       string `json:"mobile" binding:"required"`       // 手机号
-	RealName     string `json:"realName" binding:"required"`     // 真实姓名
-	Desc         string `json:"desc"`                            // 用户描述
-	FeiShuUserId string `json:"feiShuUserId"`                    // 飞书用户ID
-	AccountType  int8   `json:"accountType" binding:"oneof=1 2"` // 账号类型 1普通用户 2服务账号
+	Username     string `json:"username" binding:"required"`                      // 用户名
+	Password     string `json:"password" binding:"required,min=6"`                // 密码，至少6位
+	Mobile       string `json:"mobile" binding:"required"`                        // 手机号
+	RealName     string `json:"real_name" binding:"required"`                     // 真实姓名
+	Desc         string `json:"desc"`                                             // 用户描述
+	FeiShuUserId string `json:"fei_shu_user_id"`                                  // 飞书用户ID
+	AccountType  int8   `json:"account_type" binding:"required,oneof=1 2"`        // 账号类型 1普通用户 2服务账号
+	HomePath     string `json:"home_path" binding:"omitempty" default:"/"`        // 默认首页
+	Enable       int8   `json:"enable" binding:"omitempty,oneof=1 2" default:"1"` // 用户状态 1正常 2冻结
 }
 
 // TokenRequest 刷新令牌请求
@@ -63,21 +68,23 @@ type TokenRequest struct {
 	Ssid         string `json:"ssid" binding:"required"`         // 会话ID
 }
 
+// ProfileReq 获取用户信息请求
 type ProfileReq struct {
 	ID int `json:"id" binding:"required"` // 用户ID
 }
 
+// GetPermCodeReq 获取权限码请求
 type GetPermCodeReq struct {
 	ID int `json:"id" binding:"required"` // 用户ID
 }
 
 // ChangePasswordReq 修改密码请求
 type ChangePasswordReq struct {
-	UserID          int    `json:"user_id" binding:"required"`         // 用户ID
-	Username        string `json:"username" binding:"required"`        // 用户名
-	Password        string `json:"password" binding:"required"`        // 原密码
-	NewPassword     string `json:"newPassword" binding:"required"`     // 新密码
-	ConfirmPassword string `json:"confirmPassword" binding:"required"` // 确认密码
+	UserID          int    `json:"user_id" binding:"required"`                              // 用户ID
+	Username        string `json:"username" binding:"required"`                             // 用户名
+	Password        string `json:"password" binding:"required"`                             // 原密码
+	NewPassword     string `json:"new_password" binding:"required,min=6"`                   // 新密码，至少6位
+	ConfirmPassword string `json:"confirm_password" binding:"required,eqfield=NewPassword"` // 确认密码，必须与新密码相同
 }
 
 // WriteOffReq 注销账号请求
@@ -88,14 +95,14 @@ type WriteOffReq struct {
 
 // UpdateProfileReq 更新用户信息请求
 type UpdateProfileReq struct {
-	ID           int    `json:"id" binding:"required"`                     // 用户ID
-	RealName     string `json:"real_name" binding:"required"`              // 真实姓名
-	Desc         string `json:"desc"`                                      // 描述
-	Mobile       string `json:"mobile" binding:"required"`                 // 手机号
-	FeiShuUserId string `json:"fei_shu_user_id"`                           // 飞书用户ID
-	AccountType  int8   `json:"account_type" binding:"required,oneof=1 2"` // 账号类型
-	HomePath     string `json:"home_path" binding:"required"`              // 默认首页
-	Enable       int8   `json:"enable" default:"1"`                        // 用户状态
+	ID           int    `json:"id" binding:"required"`                            // 用户ID
+	RealName     string `json:"real_name" binding:"required"`                     // 真实姓名
+	Desc         string `json:"desc"`                                             // 描述
+	Mobile       string `json:"mobile" binding:"required"`                        // 手机号
+	FeiShuUserId string `json:"fei_shu_user_id"`                                  // 飞书用户ID
+	AccountType  int8   `json:"account_type" binding:"required,oneof=1 2"`        // 账号类型
+	HomePath     string `json:"home_path" binding:"required"`                     // 默认首页
+	Enable       int8   `json:"enable" binding:"omitempty,oneof=1 2" default:"1"` // 用户状态
 }
 
 // DeleteUserReq 删除用户请求
@@ -105,5 +112,5 @@ type DeleteUserReq struct {
 
 // GetUserDetailReq 获取用户详情请求
 type GetUserDetailReq struct {
-	ID int `json:"id"` // 用户ID
+	ID int `uri:"id" binding:"required"`
 }
