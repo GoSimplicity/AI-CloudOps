@@ -100,8 +100,8 @@ type ChangePasswordReq struct {
 // GetUserListReq 获取用户列表请求
 type GetUserListReq struct {
 	ListReq
-	Enable      int8 `json:"enable" form:"enable" binding:"omitempty,oneof=1 2" default:"1"`             // 用户状态 1正常 2冻结
-	AccountType int8 `json:"account_type" form:"account_type" binding:"omitempty,oneof=1 2" default:"1"` // 账号类型 1普通用户 2服务账号
+	Enable      int8 `json:"enable" form:"enable" default:"1"`             // 用户状态 1正常 2冻结
+	AccountType int8 `json:"account_type" form:"account_type" default:"1"` // 账号类型 1普通用户 2服务账号
 }
 
 // WriteOffReq 注销账号请求

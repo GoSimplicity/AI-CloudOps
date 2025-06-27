@@ -40,7 +40,8 @@ type ApiDAO interface {
 	GetApiById(ctx context.Context, id int) (*model.Api, error)
 	UpdateApi(ctx context.Context, api *model.Api) error
 	DeleteApi(ctx context.Context, id int) error
-	ListApis(ctx context.Context, page, size int, search string) ([]*model.Api, int64, error)
+	ListApis(ctx context.Context, page, size int, search string, isPublic int, method int) ([]*model.Api, int64, error)
+	GetApiStatistics(ctx context.Context) (*model.ApiStatistics, error)
 }
 
 type apiDAO struct {
@@ -209,7 +210,7 @@ func (a *apiDAO) DeleteApi(ctx context.Context, id int) error {
 }
 
 // ListApis 分页获取API列表
-func (a *apiDAO) ListApis(ctx context.Context, page, size int, search string) ([]*model.Api, int64, error) {
+func (a *apiDAO) ListApis(ctx context.Context, page, size int, search string, isPublic int, method int) ([]*model.Api, int64, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -220,6 +221,14 @@ func (a *apiDAO) ListApis(ctx context.Context, page, size int, search string) ([
 	query := a.db.WithContext(ctx).Model(&model.Api{})
 	if search != "" {
 		query = query.Where("name LIKE ? OR path LIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	if isPublic != 0 {
+		query = query.Where("is_public = ?", isPublic)
+	}
+
+	if method != 0 {
+		query = query.Where("method = ?", method)
 	}
 
 	var apis []*model.Api
@@ -237,4 +246,18 @@ func (a *apiDAO) ListApis(ctx context.Context, page, size int, search string) ([
 	}
 
 	return apis, total, nil
+}
+
+func (a *apiDAO) GetApiStatistics(ctx context.Context) (*model.ApiStatistics, error) {
+	var statistics model.ApiStatistics
+
+	if err := a.db.WithContext(ctx).Model(&model.Api{}).Where("is_public = ?", 1).Count(&statistics.PublicCount).Error; err != nil {
+		return nil, fmt.Errorf("获取公开API数量失败: %v", err)
+	}
+
+	if err := a.db.WithContext(ctx).Model(&model.Api{}).Where("is_public = ?", 2).Count(&statistics.PrivateCount).Error; err != nil {
+		return nil, fmt.Errorf("获取私有API数量失败: %v", err)
+	}
+
+	return &statistics, nil
 }

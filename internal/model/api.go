@@ -44,7 +44,7 @@ type CreateApiRequest struct {
 	Description string `json:"description"`                   // API描述
 	Version     string `json:"version"`                       // API版本
 	Category    int    `json:"category"`                      // API分类
-	IsPublic    int    `json:"is_public" binding:"oneof=0 1"` // 是否公开
+	IsPublic    int    `json:"is_public" binding:"oneof=1 2"` // 是否公开
 }
 
 type UpdateApiRequest struct {
@@ -55,7 +55,7 @@ type UpdateApiRequest struct {
 	Description string `json:"description"`                   // API描述
 	Version     string `json:"version"`                       // API版本
 	Category    int    `json:"category"`                      // API分类
-	IsPublic    int    `json:"is_public" binding:"oneof=0 1"` // 是否公开
+	IsPublic    int    `json:"is_public" binding:"oneof=1 2"` // 是否公开
 }
 
 type DeleteApiRequest struct {
@@ -68,4 +68,11 @@ type GetApiRequest struct {
 
 type ListApisRequest struct {
 	ListReq
+	IsPublic int `json:"is_public" form:"is_public"` // 是否公开
+	Method   int `json:"method" form:"method"`       // 请求方法
+}
+
+type ApiStatistics struct {
+	PublicCount  int64 `json:"public_count"`  // 公开API数量
+	PrivateCount int64 `json:"private_count"` // 私有API数量
 }
