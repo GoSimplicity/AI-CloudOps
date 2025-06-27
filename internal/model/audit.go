@@ -81,12 +81,10 @@ type CreateAuditLogRequest struct {
 type ListAuditLogsRequest struct {
 	ListReq
 	OperationType string `json:"operation_type" form:"operation_type"`
-	UserID        int    `json:"user_id" form:"user_id"`
 	TargetType    string `json:"target_type" form:"target_type"`
 	StatusCode    int    `json:"status_code" form:"status_code"`
 	StartTime     int64  `json:"start_time" form:"start_time"`
 	EndTime       int64  `json:"end_time" form:"end_time"`
-	TraceID       string `json:"trace_id" form:"trace_id"`
 }
 
 type GetAuditLogDetailRequest struct {

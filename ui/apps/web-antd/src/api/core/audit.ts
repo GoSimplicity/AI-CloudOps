@@ -50,12 +50,10 @@ export interface ListAuditLogsRequest {
   size: number;
   search?: string;
   operation_type?: string;
-  user_id?: number;
   target_type?: string;
   status_code?: number;
   start_time?: number;
   end_time?: number;
-  trace_id?: string;
 }
 
 // 审计日志搜索请求
