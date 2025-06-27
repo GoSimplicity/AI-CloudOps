@@ -579,7 +579,7 @@ import {
   type DetailFormDesignReq,
   type PublishFormDesignReq,
   type CloneFormDesignReq,
-} from '#/api/core/workorder';
+} from '#/api/core/workorder_form_design';
 import type { Category } from '#/api/core/workorder_category'
 import { listCategory } from '#/api/core/workorder_category'
 
