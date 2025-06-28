@@ -72,10 +72,11 @@ type UserSignUpReq struct {
 
 // TokenRequest 刷新令牌请求
 type TokenRequest struct {
-	RefreshToken string `json:"refreshToken" binding:"required"` // 刷新令牌
-	UserID       int    `json:"user_id" binding:"required"`      // 用户ID
-	Username     string `json:"username" binding:"required"`     // 用户名
-	Ssid         string `json:"ssid" binding:"required"`         // 会话ID
+	RefreshToken string `json:"refreshToken" binding:"required"`           // 刷新令牌
+	UserID       int    `json:"user_id" binding:"required"`                // 用户ID
+	Username     string `json:"username" binding:"required"`               // 用户名
+	Ssid         string `json:"ssid" binding:"required"`                   // 会话ID
+	AccountType  int8   `json:"account_type" binding:"required,oneof=1 2"` // 账号类型 1普通用户 2服务账号
 }
 
 // ProfileReq 获取用户信息请求

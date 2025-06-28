@@ -162,9 +162,9 @@ func BadRequest(c *gin.Context, code int, data interface{}, message string) {
 }
 
 // Forbidden 无权限的返回，使用HTTP 403状态码
-func Forbidden(c *gin.Context, code int, data interface{}, message string) {
+func Forbidden(c *gin.Context, data interface{}, message string) {
 	c.JSON(http.StatusForbidden, ApiResponse{
-		Code:    code,
+		Code:    http.StatusForbidden,
 		Data:    data,
 		Message: message,
 		Type:    "",
@@ -208,7 +208,7 @@ func UnauthorizedErrorWithDetails(c *gin.Context, data interface{}, message stri
 
 // ForbiddenError 无权限的失败返回
 func ForbiddenError(c *gin.Context, message string) {
-	Forbidden(c, StatusError, map[string]interface{}{}, message)
+	Forbidden(c, map[string]interface{}{}, message)
 }
 
 // InternalServerErrorWithDetails 带详细数据和消息的服务器内部错误返回

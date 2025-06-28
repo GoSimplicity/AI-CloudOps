@@ -11,6 +11,7 @@ export namespace AuthApi {
   export interface RefreshTokenParams {
     refreshToken: string;
   }
+  
   /** 登录接口返回值 */
   export interface LoginResult {
     accessToken: string;

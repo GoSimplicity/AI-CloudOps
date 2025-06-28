@@ -35,15 +35,31 @@ import (
 
 // 预定义跳过权限校验的路径
 var skipAuthPaths = map[string]bool{
-	"/api/user/login":                                   true,
-	"/api/user/logout":                                  true,
-	"/api/user/refresh_token":                           true,
-	"/api/user/signup":                                  true,
-	"/api/not_auth/getTreeNodeBindIps":                  true,
-	"/api/monitor/prometheus_configs/prometheus":        true,
-	"/api/monitor/prometheus_configs/prometheus_alert":  true,
-	"/api/monitor/prometheus_configs/prometheus_record": true,
-	"/api/monitor/prometheus_configs/alertManager":      true,
+	"/api/user/login":         true,
+	"/api/user/logout":        true,
+	"/api/user/refresh_token": true,
+	"/api/user/signup":        true,
+	"/api/user/profile":       true,
+	"/api/user/codes":         true,
+}
+
+// 预定义静态资源和WebSocket路径前缀
+var skipPrefixes = []string{
+	"/api/ai/chat/ws",
+	"/assets",
+	"/_app.config.js",
+	"/jse/",
+	"/favicon.ico",
+	"/js/",
+	"/css/",
+}
+
+// HTTP方法映射
+var methodMapping = map[string]int8{
+	"GET":    1,
+	"POST":   2,
+	"PUT":    3,
+	"DELETE": 4,
 }
 
 type AuthMiddleware struct {
@@ -56,35 +72,117 @@ func NewAuthMiddleware(roleService service.RoleService) *AuthMiddleware {
 	}
 }
 
+// 检查路径是否以指定前缀开头
+func hasPrefix(path string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// 检查API路径是否匹配通配符路径
+func matchWildcardPath(apiPath, requestPath string, methodCode int8, apiMethod int8) bool {
+	if apiMethod != methodCode {
+		return false
+	}
+
+	// 完全匹配
+	if apiPath == requestPath {
+		return true
+	}
+
+	// 不包含通配符，无需进一步检查
+	if !strings.Contains(apiPath, "*") {
+		return false
+	}
+
+	// 处理末尾是*的情况，如/api/user/*
+	if strings.HasSuffix(apiPath, "*") {
+		prefix := strings.TrimSuffix(apiPath, "*")
+		return strings.HasPrefix(requestPath, prefix)
+	}
+
+	// 处理开头是*的情况，如*/logs
+	if strings.HasPrefix(apiPath, "*") {
+		suffix := strings.TrimPrefix(apiPath, "*")
+		return strings.HasSuffix(requestPath, suffix)
+	}
+
+	// 处理中间带*的情况，如/api/*/logs
+	if strings.Count(apiPath, "*") == 1 {
+		parts := strings.Split(apiPath, "*")
+		return strings.HasPrefix(requestPath, parts[0]) && strings.HasSuffix(requestPath, parts[1])
+	}
+
+	return false
+}
+
 func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
-		
+
 		// 快速检查是否需要跳过权限校验
 		if skipAuthPaths[path] {
 			c.Next()
 			return
 		}
-		
+
 		// 跳过静态资源和WebSocket路径
-		if path == "/" ||
-			strings.HasPrefix(path, "/api/ai/chat/ws") ||
-			strings.HasPrefix(path, "/assets") ||
-			strings.HasPrefix(path, "/_app.config.js") ||
-			strings.HasPrefix(path, "/jse/") ||
-			strings.HasPrefix(path, "/favicon.ico") ||
-			strings.HasPrefix(path, "/js/") ||
-			strings.HasPrefix(path, "/css/") {
+		if path == "/" || hasPrefix(path, skipPrefixes) {
 			c.Next()
 			return
 		}
-		
+
 		user := c.MustGet("user").(utils.UserClaims)
+		// 管理员直接放行
 		if user.Username == "admin" {
 			c.Next()
 			return
 		}
-		// TODO: 实现权限校验
-		c.Next()
+
+		// 服务账号直接放行
+		if user.AccountType == 2 {
+			c.Next()
+			return
+		}
+
+		// 获取HTTP方法代码
+		method := c.Request.Method
+		methodCode, exists := methodMapping[method]
+		if !exists {
+			utils.ErrorWithMessage(c, "不支持的HTTP方法")
+			c.Abort()
+			return
+		}
+
+		// 获取用户角色
+		roles, err := am.roleService.GetUserRoles(c, user.Uid)
+		if err != nil {
+			utils.ErrorWithMessage(c, "获取用户角色失败")
+			c.Abort()
+			return
+		}
+
+		// 检查用户是否有权限访问当前API
+		for _, role := range roles.Items {
+			// 跳过禁用的角色
+			if role.Status != 1 {
+				continue
+			}
+
+			// 检查角色是否有权限访问当前API
+			for _, api := range role.Apis {
+				if matchWildcardPath(api.Path, path, methodCode, api.Method) {
+					c.Next()
+					return
+				}
+			}
+		}
+
+		// 没有找到匹配的权限
+		utils.ForbiddenError(c, "无权限访问该接口")
+		c.Abort()
 	}
 }

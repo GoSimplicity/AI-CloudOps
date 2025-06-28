@@ -40,12 +40,12 @@ import (
 )
 
 type Handler interface {
-	SetLoginToken(ctx *gin.Context, uid int, username string) (string, string, error)
-	SetJWTToken(ctx *gin.Context, uid int, username string, ssid string) (string, error)
+	SetLoginToken(ctx *gin.Context, uid int, username string, accountType int8) (string, string, error)
+	SetJWTToken(ctx *gin.Context, uid int, username string, ssid string, accountType int8) (string, error)
 	ExtractToken(ctx *gin.Context) string
 	CheckSession(ctx *gin.Context, ssid string) error
 	ClearToken(ctx *gin.Context) error
-	setRefreshToken(ctx *gin.Context, uid int, username string, ssid string) (string, error)
+	setRefreshToken(ctx *gin.Context, uid int, username string, ssid string, accountType int8) (string, error)
 }
 
 type UserClaims struct {
@@ -55,13 +55,15 @@ type UserClaims struct {
 	Ssid        string
 	UserAgent   string
 	ContentType string
+	AccountType int8
 }
 
 type RefreshClaims struct {
 	jwt.RegisteredClaims
-	Uid      int
-	Username string
-	Ssid     string
+	Uid         int
+	Username    string
+	Ssid        string
+	AccountType int8
 }
 
 type handler struct {
@@ -89,14 +91,14 @@ func NewJWTHandler(c redis.Cmdable) Handler {
 }
 
 // SetLoginToken 设置长短Token
-func (h *handler) SetLoginToken(ctx *gin.Context, uid int, username string) (string, string, error) {
+func (h *handler) SetLoginToken(ctx *gin.Context, uid int, username string, accountType int8) (string, string, error) {
 	ssid := uuid.New().String()
-	refreshToken, err := h.setRefreshToken(ctx, uid, username, ssid)
+	refreshToken, err := h.setRefreshToken(ctx, uid, username, ssid, accountType)
 	if err != nil {
 		return "", "", err
 	}
 
-	jwtToken, err := h.SetJWTToken(ctx, uid, username, ssid)
+	jwtToken, err := h.SetJWTToken(ctx, uid, username, ssid, accountType)
 
 	if err != nil {
 		return "", "", err
@@ -106,7 +108,7 @@ func (h *handler) SetLoginToken(ctx *gin.Context, uid int, username string) (str
 }
 
 // SetJWTToken 设置短Token
-func (h *handler) SetJWTToken(ctx *gin.Context, uid int, username string, ssid string) (string, error) {
+func (h *handler) SetJWTToken(ctx *gin.Context, uid int, username string, ssid string, accountType int8) (string, error) {
 	// 从配置文件中获取JWT的过期时间
 	expirationMinutes := viper.GetInt64("jwt.expiration")
 
@@ -122,6 +124,7 @@ func (h *handler) SetJWTToken(ctx *gin.Context, uid int, username string, ssid s
 		Ssid:        ssid,
 		UserAgent:   ctx.GetHeader("User-Agent"),
 		ContentType: ctx.GetHeader("Content-Type"),
+		AccountType: accountType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * time.Duration(expirationMinutes))),
 			Issuer:    h.issuer,
@@ -139,11 +142,12 @@ func (h *handler) SetJWTToken(ctx *gin.Context, uid int, username string, ssid s
 }
 
 // setRefreshToken 设置长Token
-func (h *handler) setRefreshToken(_ *gin.Context, uid int, username string, ssid string) (string, error) {
+func (h *handler) setRefreshToken(_ *gin.Context, uid int, username string, ssid string, accountType int8) (string, error) {
 	rc := RefreshClaims{
-		Uid:      uid,
-		Username: username,
-		Ssid:     ssid,
+		Uid:         uid,
+		Username:    username,
+		Ssid:        ssid,
+		AccountType: accountType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			// 设置刷新时间为一周
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(h.rcExpiration)),
