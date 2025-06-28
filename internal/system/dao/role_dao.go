@@ -363,7 +363,9 @@ func (r *roleDAO) GetRoleUsers(ctx context.Context, roleID int) ([]*model.User, 
 // GetUserRoles 获取用户的角色列表
 func (r *roleDAO) GetUserRoles(ctx context.Context, userID int) ([]*model.Role, error) {
 	var roles []*model.Role
-	if err := r.db.WithContext(ctx).Table("roles").
+	if err := r.db.WithContext(ctx).
+		Preload("Apis").
+		Table("roles").
 		Joins("JOIN user_roles ON roles.id = user_roles.role_id").
 		Where("user_roles.user_id = ? AND roles.status = 1", userID).
 		Find(&roles).Error; err != nil {

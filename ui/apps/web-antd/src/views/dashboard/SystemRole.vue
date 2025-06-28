@@ -471,8 +471,6 @@ import {
   getRoleApisApi,
   type Role,
   type ListRolesReq,
-  type CreateRoleReq,
-  type UpdateRoleReq
 } from '#/api/core/system';
 
 import { listApisApi } from '#/api/core/api';
