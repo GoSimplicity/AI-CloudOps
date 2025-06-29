@@ -53,6 +53,7 @@ func (h *FormDesignHandler) RegisterRouters(server *gin.Engine) {
 		formDesignGroup.POST("/publish/:id", h.PublishFormDesign)
 		formDesignGroup.POST("/clone/:id", h.CloneFormDesign)
 		formDesignGroup.GET("/preview/:id", h.PreviewFormDesign)
+		formDesignGroup.GET("/statistics", h.GetFormStatistics)
 	}
 }
 
@@ -161,5 +162,11 @@ func (h *FormDesignHandler) PreviewFormDesign(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.PreviewFormDesign(ctx, req.ID, user.Uid)
+	})
+}
+
+func (h *FormDesignHandler) GetFormStatistics(ctx *gin.Context) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetFormStatistics(ctx)
 	})
 }

@@ -27,7 +27,7 @@ const routes: RouteRecordRaw[] = [
         path: '/form_management',
         component: () => import('#/views/workorder/FormManagement.vue'),
         meta: {
-          icon: 'lucide:pencil',
+          icon: 'lucide:file-text',
           title: '表单管理',
         },
       },
@@ -54,8 +54,17 @@ const routes: RouteRecordRaw[] = [
         path: '/instance',
         component: () => import('#/views/workorder/Instance.vue'),
         meta: {
-          icon: 'lucide:file-text',
+          icon: 'lucide:ticket',
           title: '工单实例',
+        },
+      },
+      {
+        name: '通知配置',
+        path: '/notification',
+        component: () => import('#/views/workorder/Notification.vue'),
+        meta: {
+          icon: 'lucide:bell',
+          title: '通知配置',
         },
       },
       {

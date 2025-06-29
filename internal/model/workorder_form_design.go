@@ -143,3 +143,10 @@ type CloneFormDesignReq struct {
 type PreviewFormDesignReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
+
+// FormStatistics 表单设计统计信息
+type FormStatistics struct {
+	Draft     int64 `json:"draft"`     // 草稿表单数
+	Published int64 `json:"published"` // 已发布表单数
+	Disabled  int64 `json:"disabled"`  // 已禁用表单数
+}

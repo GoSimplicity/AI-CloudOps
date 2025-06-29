@@ -255,7 +255,7 @@
             </a-button>
           </a-space>
         </div>
-        <pre class="json-content">{{ JSON.stringify(formConfig, null, 2) }}</pre>
+        <pre class="json-content">{{ JSON.stringify(formConfig.fields, null, 2) }}</pre>
       </div>
     </a-modal>
   </div>
@@ -293,6 +293,7 @@ interface FormField {
   rules?: any[];
   disabled?: boolean;
   hidden?: boolean;
+  sort_order?: number;
 }
 
 interface FormConfig {
@@ -364,7 +365,10 @@ const addFieldType = (type: FormField['type']) => {
     options: needsOptions(type) ? [
       { label: '选项1', value: 'option1' },
       { label: '选项2', value: 'option2' }
-    ] : undefined
+    ] : undefined,
+    sort_order: fieldNumber,
+    disabled: false,
+    hidden: false
   };
   
   formConfig.fields.push(field);
@@ -416,8 +420,19 @@ const moveField = (index: number, direction: number) => {
     const temp = formConfig.fields[index];
     formConfig.fields[index] = formConfig.fields[newIndex]!;
     formConfig.fields[newIndex] = temp!;
+    
+    // 更新移动后的字段顺序
+    updateSortOrders();
+    
     message.success('字段位置已调整');
   }
+};
+
+// 更新所有字段的排序顺序
+const updateSortOrders = () => {
+  formConfig.fields.forEach((field, index) => {
+    field.sort_order = index + 1;
+  });
 };
 
 // 切换预览模式
@@ -494,7 +509,7 @@ const toggleJsonViewer = () => {
 // 复制JSON配置
 const copyJson = async () => {
   try {
-    await navigator.clipboard.writeText(JSON.stringify(formConfig, null, 2));
+    await navigator.clipboard.writeText(JSON.stringify(formConfig.fields, null, 2));
     message.success('配置已复制到剪贴板');
   } catch (error) {
     message.error('复制失败，请手动复制');
@@ -503,15 +518,15 @@ const copyJson = async () => {
 
 // 导出配置
 const exportConfig = () => {
-  const dataStr = JSON.stringify(formConfig, null, 2);
+  const dataStr = JSON.stringify(formConfig.fields, null, 2);
   const dataBlob = new Blob([dataStr], { type: 'application/json' });
   const url = URL.createObjectURL(dataBlob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `form-config-${Date.now()}.json`;
+  link.download = `form-fields-${Date.now()}.json`;
   link.click();
   URL.revokeObjectURL(url);
-  message.success('配置导出成功');
+  message.success('字段配置导出成功');
 };
 
 // 导入配置
@@ -519,15 +534,19 @@ const importConfig = (file: File) => {
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const config = JSON.parse(e.target?.result as string);
-      if (config.fields && Array.isArray(config.fields)) {
-        Object.assign(formConfig, config);
-        message.success('配置导入成功');
+      const fields = JSON.parse(e.target?.result as string);
+      if (Array.isArray(fields)) {
+        formConfig.fields = fields;
+        message.success('字段配置导入成功');
+      } else if (fields.fields && Array.isArray(fields.fields)) {
+        // 兼容旧格式
+        formConfig.fields = fields.fields;
+        message.success('字段配置导入成功');
       } else {
-        message.error('配置文件格式不正确');
+        message.error('字段配置文件格式不正确');
       }
     } catch (error) {
-      message.error('配置文件解析失败');
+      message.error('字段配置文件解析失败');
     }
   };
   reader.readAsText(file);
