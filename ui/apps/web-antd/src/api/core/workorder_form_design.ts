@@ -1,6 +1,6 @@
 import { requestClient } from '#/api/request';
 import type { Category } from '#/api/core/workorder_category';
-// 表单设计相关类型
+
 export interface ListFormDesignReq {
   page: number;
   size: number;
@@ -20,6 +20,10 @@ export interface PublishFormDesignReq {
 export interface CloneFormDesignReq {
   id: number;
   name: string;
+}
+
+export interface PreviewFormDesignReq {
+  id: number;
 }
 
 export interface FormFieldOption {
@@ -47,7 +51,10 @@ export interface FormField {
   options?: FormFieldOption[];
   validation?: FormFieldValidation;
   props?: Record<string, any>;
-  sort_order?: number;
+  sort_order: number;
+  disabled: boolean;
+  hidden: boolean;
+  description?: string;
 }
 
 export interface FormSchema {
@@ -56,12 +63,29 @@ export interface FormSchema {
   style?: string;
 }
 
-export interface FormDesignReq {
-  id?: number;
+export interface CreateFormDesignReq {
   name: string;
   description: string;
   schema: FormSchema;
   category_id?: number;
+  user_id?: number;
+  user_name?: string;
+  status?: number;
+  version?: number;
+}
+
+export interface UpdateFormDesignReq {
+  id: number;
+  name: string;
+  description: string;
+  schema: FormSchema;
+  category_id?: number;
+  status?: number;
+  version?: number;
+}
+
+export interface DeleteFormDesignReq {
+  id: number;
 }
 
 export interface FormDesignResp {
@@ -69,20 +93,6 @@ export interface FormDesignResp {
   name: string;
   description: string;
   schema: FormSchema;
-  version: number;
-  status: number;
-  category_id?: number;
-  category?: Category;
-  creator_id: number;
-  creator_name: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface FormDesignItem {
-  id: number;
-  name: string;
-  description: string;
   version: number;
   status: number;
   category_id?: number;
@@ -104,15 +114,15 @@ export interface ValidateFormDesignResp {
 }
 
 // 表单设计相关接口
-export async function createFormDesign(data: FormDesignReq) {
+export async function createFormDesign(data: CreateFormDesignReq) {
   return requestClient.post('/workorder/form-design/create', data);
 }
 
-export async function updateFormDesign(data: FormDesignReq) {
+export async function updateFormDesign(data: UpdateFormDesignReq) {
   return requestClient.put(`/workorder/form-design/update/${data.id}`, data);
 }
 
-export async function deleteFormDesign(data: DetailFormDesignReq) {
+export async function deleteFormDesign(data: DeleteFormDesignReq) {
   return requestClient.delete(`/workorder/form-design/delete/${data.id}`);
 }
 
@@ -132,6 +142,6 @@ export async function cloneFormDesign(data: CloneFormDesignReq) {
   return requestClient.post(`/workorder/form-design/clone/${data.id}`, data);
 }
 
-export async function previewFormDesign(data: DetailFormDesignReq) {
+export async function previewFormDesign(data: PreviewFormDesignReq) {
   return requestClient.get(`/workorder/form-design/preview/${data.id}`);
 }

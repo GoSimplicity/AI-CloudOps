@@ -16,8 +16,8 @@
     <!-- 核心指标卡片 -->
     <div class="statistics-cards">
       <a-row :gutter="[16, 16]">
-        <a-col :span="6">
-          <a-card class="stat-card" :bordered="false">
+        <a-col :span="6" :xs="24" :sm="12" :md="6">
+          <a-card class="stat-card" :bordered="false" hoverable>
             <div class="stat-header">
               <span class="stat-title">AI 预测准确率</span>
               <a-tag color="success">同比上升{{ accuracyIncrease }}%</a-tag>
@@ -31,8 +31,8 @@
             </div>
           </a-card>
         </a-col>
-        <a-col :span="6">
-          <a-card class="stat-card" :bordered="false">
+        <a-col :span="6" :xs="24" :sm="12" :md="6">
+          <a-card class="stat-card" :bordered="false" hoverable>
             <div class="stat-header">
               <span class="stat-title">云资源使用率</span>
               <a-tag :color="getResourceTagColor">{{ resourceStatus }}</a-tag>
@@ -46,8 +46,8 @@
             </div>
           </a-card>
         </a-col>
-        <a-col :span="6">
-          <a-card class="stat-card" :bordered="false">
+        <a-col :span="6" :xs="24" :sm="12" :md="6">
+          <a-card class="stat-card" :bordered="false" hoverable>
             <div class="stat-header">
               <span class="stat-title">系统健康度</span>
               <a-tag :color="healthStatus.color">{{ healthStatus.text }}</a-tag>
@@ -58,8 +58,8 @@
             </div>
           </a-card>
         </a-col>
-        <a-col :span="6">
-          <a-card class="stat-card" :bordered="false">
+        <a-col :span="6" :xs="24" :sm="12" :md="6">
+          <a-card class="stat-card" :bordered="false" hoverable>
             <div class="stat-header">
               <span class="stat-title">智能告警处理</span>
               <a-tag :color="alertStatus.color">{{ alertStatus.text }}</a-tag>
@@ -76,8 +76,8 @@
     <!-- 运维概览 -->
     <div class="overview-section">
       <a-row :gutter="[16, 16]">
-        <a-col :span="16">
-          <a-card title="AI 智能运维分析" :bordered="false">
+        <a-col :span="16" :xs="24" :md="16">
+          <a-card title="AI 智能运维分析" :bordered="false" hoverable>
             <template #extra>
               <a-space>
                 <a-radio-group
@@ -92,11 +92,11 @@
                 </a-radio-group>
               </a-space>
             </template>
-            <div ref="analysisChart" style="height: 300px"></div>
+            <div ref="analysisChart" style="height: 300px; width: 100%"></div>
           </a-card>
         </a-col>
-        <a-col :span="8">
-          <a-card title="实时监控动态" :bordered="false" class="monitor-card">
+        <a-col :span="8" :xs="24" :md="8">
+          <a-card title="实时监控动态" :bordered="false" class="monitor-card" hoverable>
             <a-list size="small" class="monitor-list">
               <a-list-item class="monitor-item monitor-item-warning">
                 <div class="monitor-content">
@@ -733,6 +733,7 @@ onMounted(() => {
   padding: 24px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
 }
 
 .title {
@@ -757,6 +758,7 @@ onMounted(() => {
   );
   background-size: 1800% 1800%;
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   animation: rainbow 18s ease infinite;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
@@ -767,11 +769,9 @@ onMounted(() => {
   0% {
     background-position: 0% 82%;
   }
-
   50% {
     background-position: 100% 19%;
   }
-
   100% {
     background-position: 0% 82%;
   }
@@ -791,6 +791,12 @@ onMounted(() => {
 .stat-card {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
 }
 
 .stat-header {
@@ -815,6 +821,7 @@ onMounted(() => {
   font-size: 28px;
   font-weight: bold;
   color: var(--ant-primary-color);
+  transition: color 0.3s ease;
 }
 
 .overview-section {
@@ -835,11 +842,25 @@ onMounted(() => {
   background: rgba(255, 77, 79, 0.1);
   border-radius: 4px;
   margin: 10px 0;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.7;
+  }
 }
 
 :deep(.ant-card) {
   border: none;
   color: var(--ant-text-color);
+  transition: all 0.3s ease;
 }
 
 :deep(.ant-card-head) {
@@ -849,5 +870,19 @@ onMounted(() => {
 
 :deep(.ant-timeline-item-content) {
   color: var(--ant-text-color);
+}
+
+@media (max-width: 768px) {
+  .welcome-header {
+    padding: 16px;
+  }
+  
+  .title {
+    font-size: 28px;
+  }
+  
+  .subtitle {
+    font-size: 16px;
+  }
 }
 </style>

@@ -25,9 +25,7 @@
 
 package model
 
-import (
-	"time"
-)
+import "gorm.io/datatypes"
 
 // FormField 表单字段定义
 type FormField struct {
@@ -38,10 +36,13 @@ type FormField struct {
 	Required     bool                   `json:"required"`                 // 是否必填
 	Placeholder  string                 `json:"placeholder"`              // 占位符
 	DefaultValue interface{}            `json:"default_value"`            // 默认值
-	Options      []FormFieldOption      `json:"options"`                  // 选项列表
-	Validation   FormFieldValidation    `json:"validation"`               // 验证规则
-	Props        map[string]interface{} `json:"props"`                    // 其他属性
+	Options      []FormFieldOption      `json:"options,omitempty"`        // 选项列表
+	Validation   FormFieldValidation    `json:"validation,omitempty"`     // 验证规则
+	Props        map[string]interface{} `json:"props,omitempty"`          // 其他属性
 	SortOrder    int                    `json:"sort_order"`               // 排序
+	Disabled     bool                   `json:"disabled"`                 // 是否禁用
+	Hidden       bool                   `json:"hidden"`                   // 是否隐藏
+	Description  string                 `json:"description,omitempty"`    // 字段描述
 }
 
 // FormFieldOption 表单字段选项
@@ -70,15 +71,16 @@ type FormSchema struct {
 // FormDesign 表单设计实体
 type FormDesign struct {
 	Model
-	Name        string    `json:"name" gorm:"column:name;not null;comment:表单名称"`
-	Description string    `json:"description" gorm:"column:description;comment:表单描述"`
-	Schema      string    `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
-	Version     int       `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
-	Status      int8      `json:"status" gorm:"column:status;not null;default:0;comment:状态：0-草稿，1-已发布，2-已禁用"`
-	CategoryID  *int      `json:"category_id" gorm:"column:category_id;comment:分类ID"`
-	CreatorID   int       `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	CreatorName string    `json:"creator_name" gorm:"-"`
-	Category    *Category `json:"category" gorm:"foreignKey:CategoryID"`
+	Name        string         `json:"name" gorm:"column:name;not null;comment:表单名称"`
+	Description string         `json:"description" gorm:"column:description;comment:表单描述"`
+	Schema      datatypes.JSON `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
+	Version     int            `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
+	Status      int8           `json:"status" gorm:"column:status;not null;default:0;comment:状态：1-草稿，2-已发布，3-已禁用"`
+	CategoryID  *int           `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID   int            `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	CreatorName string         `json:"creator_name" gorm:"-"`
+	Category    *Category      `json:"category" gorm:"foreignKey:CategoryID"`
+	SchemaObj   FormSchema     `json:"-" gorm:"-"` // 用于临时存储解析后的Schema对象
 }
 
 // TableName 表名
@@ -92,6 +94,10 @@ type CreateFormDesignReq struct {
 	Description string     `json:"description" binding:"omitempty,max=500"`
 	Schema      FormSchema `json:"schema" binding:"required"`
 	CategoryID  *int       `json:"category_id"`
+	UserID      int        `json:"user_id"`
+	UserName    string     `json:"user_name"`
+	Status      int8       `json:"status" binding:"omitempty,oneof=1 2 3"`
+	Version     int        `json:"version" binding:"omitempty,min=1"`
 }
 
 // UpdateFormDesignReq 更新表单设计请求
@@ -101,6 +107,8 @@ type UpdateFormDesignReq struct {
 	Description string     `json:"description" binding:"omitempty,max=500"`
 	Schema      FormSchema `json:"schema" binding:"required"`
 	CategoryID  *int       `json:"category_id"`
+	Status      int8       `json:"status" binding:"omitempty,oneof=1 2 3"`
+	Version     int        `json:"version" binding:"omitempty,min=1"`
 }
 
 // DeleteFormDesignReq 删除表单设计请求
@@ -134,47 +142,4 @@ type CloneFormDesignReq struct {
 // PreviewFormDesignReq 预览表单设计请求
 type PreviewFormDesignReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
-}
-
-// PreviewFormDesignResp 预览表单设计响应
-type PreviewFormDesignResp struct {
-	ID     int        `json:"id"`
-	Schema FormSchema `json:"schema"`
-}
-
-// FormDesignResp 表单设计响应
-type FormDesignResp struct {
-	ID          int        `json:"id"`
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	Schema      FormSchema `json:"schema"`
-	Version     int        `json:"version"`
-	Status      int8       `json:"status"`
-	CategoryID  *int       `json:"category_id"`
-	Category    *Category  `json:"category"`
-	CreatorID   int        `json:"creator_id"`
-	CreatorName string     `json:"creator_name"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-}
-
-// ValidateFormDesignResp 表单验证结果响应
-type ValidateFormDesignResp struct {
-	IsValid bool     `json:"is_valid"`
-	Errors  []string `json:"errors,omitempty"`
-}
-
-// FormDesignItem 表单设计列表项（用于列表展示）
-type FormDesignItem struct {
-	ID          int       `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Version     int       `json:"version"`
-	Status      int8      `json:"status"`
-	CategoryID  *int      `json:"category_id"`
-	Category    *Category `json:"category"`
-	CreatorID   int       `json:"creator_id"`
-	CreatorName string    `json:"creator_name"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
 }
