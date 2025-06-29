@@ -163,6 +163,10 @@
               <label>邮箱</label>
               <span>{{ viewUserData.email || '-' }}</span>
             </div>
+            <div class="detail-item">
+              <label>飞书ID</label>
+              <span>{{ viewUserData.fei_shu_user_id || '-' }}</span>
+            </div>
             <div class="detail-item avatar-detail">
               <label>头像</label>
               <div class="detail-avatar">
@@ -275,7 +279,15 @@
             </a-form-item>
           </a-col>
         </a-row>
-
+        
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="飞书ID" name="fei_shu_user_id">
+              <a-input v-model:value="formData.fei_shu_user_id" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        
         <a-row :gutter="16" v-if="modalTitle === '新建用户'">
           <a-col :span="12">
             <a-form-item label="密码" name="password">
@@ -810,15 +822,22 @@ const handleSubmit = async () => {
         desc: formData.desc,
         account_type: formData.account_type as 1 | 2,
         enable: formData.enable as 1 | 2,
-        home_path: formData.home_path
+        home_path: formData.home_path,
+        fei_shu_user_id: formData.fei_shu_user_id || ''
       };
       
+      // 添加可选字段
       if (formData.email) {
         (signUpData as any).email = formData.email;
       }
       
       if (formData.avatar) {
         (signUpData as any).avatar = formData.avatar;
+      }
+      
+      // 修复：添加飞书ID字段
+      if (formData.fei_shu_user_id) {
+        (signUpData as any).fei_shu_user_id = formData.fei_shu_user_id;
       }
       
       await registerApi(signUpData);

@@ -508,9 +508,14 @@ func (s *instanceService) buildInstanceFromRequest(ctx context.Context, req *mod
 	var formData model.JSONMap
 
 	if process.FormDesign != nil {
-		// 将表单设计的schema解析为表单数据
+		// 将表单设计的schema转换为JSON字符串，再解析为表单数据
+		schemaBytes, err := json.Marshal(process.FormDesign.Schema)
+		if err != nil {
+			return nil, fmt.Errorf("序列化表单设计schema失败: %w", err)
+		}
+		
 		var schema map[string]interface{}
-		if err := json.Unmarshal([]byte(process.FormDesign.Schema), &schema); err != nil {
+		if err := json.Unmarshal(schemaBytes, &schema); err != nil {
 			return nil, fmt.Errorf("解析表单设计schema失败: %w", err)
 		}
 		formData = schema

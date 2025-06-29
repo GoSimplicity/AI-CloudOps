@@ -395,21 +395,12 @@ func (d *auditDAO) buildListQuery(ctx context.Context, req *model.ListAuditLogsR
 		query = query.Where("created_at <= ?", time.Unix(req.EndTime, 0))
 	}
 
-	// 精确匹配字段
-	if req.UserID > 0 {
-		query = query.Where("user_id = ?", req.UserID)
-	}
-
 	if req.OperationType != "" {
 		query = query.Where("operation_type = ?", req.OperationType)
 	}
 
 	if req.StatusCode > 0 {
 		query = query.Where("status_code = ?", req.StatusCode)
-	}
-
-	if req.TraceID != "" {
-		query = query.Where("trace_id = ?", req.TraceID)
 	}
 
 	if req.TargetType != "" {

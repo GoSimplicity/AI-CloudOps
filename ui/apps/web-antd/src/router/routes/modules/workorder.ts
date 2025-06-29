@@ -23,6 +23,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        name: '表单管理',
+        path: '/form_management',
+        component: () => import('#/views/workorder/FormManagement.vue'),
+        meta: {
+          icon: 'lucide:pencil',
+          title: '表单管理',
+        },
+      },
+      {
         name: '分类管理',
         path: '/category',
         component: () => import('#/views/workorder/Category.vue'),

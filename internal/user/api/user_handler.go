@@ -96,7 +96,7 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 			}
 		}
 
-		accessToken, refreshToken, err := u.ijwt.SetLoginToken(ctx, user.ID, user.Username)
+		accessToken, refreshToken, err := u.ijwt.SetLoginToken(ctx, user.ID, user.Username, user.AccountType)
 		if err != nil {
 			return nil, fmt.Errorf("生成令牌失败: %w", err)
 		}
@@ -156,9 +156,10 @@ func (u *UserHandler) RefreshToken(ctx *gin.Context) {
 	req.UserID = rc.Uid
 	req.Username = rc.Username
 	req.Ssid = rc.Ssid
+	req.AccountType = rc.AccountType
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return u.ijwt.SetJWTToken(ctx, req.UserID, req.Username, req.Ssid)
+		return u.ijwt.SetJWTToken(ctx, req.UserID, req.Username, req.Ssid, req.AccountType)
 	})
 }
 
