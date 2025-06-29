@@ -91,6 +91,7 @@ type FormDesignService interface {
 	ListFormDesign(ctx context.Context, req *model.ListFormDesignReq) (model.ListResp[*model.FormDesign], error)
 	PreviewFormDesign(ctx context.Context, id int, userID int) (*model.FormDesign, error)
 	CheckFormDesignNameExists(ctx context.Context, name string, excludeID ...int) (bool, error)
+	GetFormStatistics(ctx context.Context) (*model.FormStatistics, error)
 }
 
 type formDesignService struct {
@@ -164,14 +165,6 @@ func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq 
 
 // UpdateFormDesign 更新表单设计
 func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq *model.UpdateFormDesignReq) error {
-	if formDesignReq == nil {
-		return fmt.Errorf("更新表单设计请求不能为空")
-	}
-
-	if formDesignReq.ID <= 0 {
-		return fmt.Errorf("表单设计ID无效")
-	}
-
 	// 验证名称
 	if err := f.validateName(formDesignReq.Name); err != nil {
 		return err
@@ -216,6 +209,8 @@ func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq 
 		Description: strings.TrimSpace(formDesignReq.Description),
 		Schema:      schemaJSON,
 		CategoryID:  formDesignReq.CategoryID,
+		Status:      formDesignReq.Status,
+		Version:     formDesignReq.Version,
 	}
 
 	// 更新表单设计
@@ -460,6 +455,16 @@ func (f *formDesignService) CheckFormDesignNameExists(ctx context.Context, name 
 	}
 
 	return exists, nil
+}
+
+func (f *formDesignService) GetFormStatistics(ctx context.Context) (*model.FormStatistics, error) {
+	statistics, err := f.dao.GetFormStatistics(ctx)
+	if err != nil {
+		f.l.Error("获取表单设计统计信息失败", zap.Error(err))
+		return nil, err
+	}
+
+	return statistics, nil
 }
 
 // validateName 验证名称

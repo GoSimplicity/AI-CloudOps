@@ -52,6 +52,7 @@ type FormDesignDAO interface {
 	GetFormDesignsByIDs(ctx context.Context, ids []int) ([]model.FormDesign, error)
 	UpdateFormDesignStatus(ctx context.Context, id int, status int8) error
 	CheckFormDesignNameExists(ctx context.Context, name string, excludeID ...int) (bool, error)
+	GetFormStatistics(ctx context.Context) (*model.FormStatistics, error)
 }
 
 type formDesignDAO struct {
@@ -330,22 +331,51 @@ func (f *formDesignDAO) CheckFormDesignNameExists(ctx context.Context, name stri
 	return count > 0, nil
 }
 
-// 辅助方法
+func (f *formDesignDAO) GetFormStatistics(ctx context.Context) (*model.FormStatistics, error) {
+	var statistics model.FormStatistics
+
+	type StatusCount struct {
+		Status int8
+		Count  int64
+	}
+
+	var results []StatusCount
+	err := f.db.WithContext(ctx).Model(&model.FormDesign{}).
+		Select("status, count(*) as count").
+		Where("status IN ?", []int8{1, 2, 3}).
+		Group("status").
+		Find(&results).Error
+
+	if err != nil {
+		f.logger.Error("获取表单统计数据失败", zap.Error(err))
+		return nil, fmt.Errorf("获取表单统计数据失败: %w", err)
+	}
+
+	for _, result := range results {
+		switch result.Status {
+		case 1:
+			statistics.Draft = result.Count
+		case 2:
+			statistics.Published = result.Count
+		case 3:
+			statistics.Disabled = result.Count
+		}
+	}
+
+	return &statistics, nil
+}
 
 // buildListQuery 构建列表查询条件
 func (f *formDesignDAO) buildListQuery(db *gorm.DB, req *model.ListFormDesignReq) *gorm.DB {
-	// 搜索条件
 	if req.Search != "" {
 		searchPattern := "%" + strings.TrimSpace(req.Search) + "%"
 		db = db.Where("name LIKE ? OR description LIKE ?", searchPattern, searchPattern)
 	}
 
-	// 状态过滤 - 修正逻辑，1-3是有效状态
 	if req.Status != nil {
 		db = db.Where("status = ?", *req.Status)
 	}
 
-	// 分类过滤 - 修正逻辑，允许查询没有分类的表单
 	if req.CategoryID != nil {
 		if *req.CategoryID == 0 {
 			// 查询没有分类的表单

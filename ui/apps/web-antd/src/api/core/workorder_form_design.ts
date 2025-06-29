@@ -113,6 +113,12 @@ export interface ValidateFormDesignResp {
   errors?: string[];
 }
 
+export interface FormStatisticsResp {
+  draft: number;
+  published: number;
+  disabled: number;
+}
+
 // 表单设计相关接口
 export async function createFormDesign(data: CreateFormDesignReq) {
   return requestClient.post('/workorder/form-design/create', data);
@@ -144,4 +150,8 @@ export async function cloneFormDesign(data: CloneFormDesignReq) {
 
 export async function previewFormDesign(data: PreviewFormDesignReq) {
   return requestClient.get(`/workorder/form-design/preview/${data.id}`);
+}
+
+export async function getFormStatistics() {
+  return requestClient.get('/workorder/form-design/statistics');
 }
