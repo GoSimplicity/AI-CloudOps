@@ -27,9 +27,7 @@ package main
 
 import (
 	"context"
-	"embed"
 	"fmt"
-	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -53,9 +51,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
-// 开发模式下注释此行，生产模式下取消注释
-// //go:embed ui/apps/web-antd/dist/*
-var embeddedFiles embed.FS
 
 func main() {
 	if err := Init(); err != nil {
@@ -83,93 +78,12 @@ func Init() error {
 	// 设置请求头打印路由
 	cmd.Server.GET("/headers", printHeaders)
 
-	// 判断是否为生产模式（通过检查嵌入文件是否可用）
-	isProductionMode := true
-	_, err := embeddedFiles.ReadFile("ui/apps/web-antd/dist/index.html")
-	if err != nil {
-		isProductionMode = false
-		log.Println("运行在开发模式，仅提供API服务")
-	} else {
-		log.Println("运行在生产模式，提供完整前后端服务")
-	}
-
-	// 只在生产模式下挂载静态文件
-	if isProductionMode {
-		// 挂载静态文件
-		assetsFS, _ := fs.Sub(embeddedFiles, "ui/apps/web-antd/dist/assets")
-		cmd.Server.StaticFS("/assets", http.FS(assetsFS))
-
-		// 直接返回 index.html
-		cmd.Server.GET("/", func(c *gin.Context) {
-			index, err := embeddedFiles.ReadFile("ui/apps/web-antd/dist/index.html")
-			if err != nil {
-				c.String(http.StatusInternalServerError, "Internal Server Error")
-				return
-			}
-			c.Data(http.StatusOK, "text/html; charset=utf-8", index)
+	cmd.Server.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "AI-CloudOps API 服务运行中",
+			"status":  "running",
 		})
-
-		// 处理 favicon.ico 请求
-		cmd.Server.GET("/favicon.ico", func(c *gin.Context) {
-			favicon, err := embeddedFiles.ReadFile("ui/apps/web-antd/dist/favicon.ico")
-			if err != nil {
-				c.Status(http.StatusNoContent)
-				return
-			}
-			c.Data(http.StatusOK, "image/x-icon", favicon)
-		})
-
-		// 处理 _app.config.js 请求
-		cmd.Server.GET("/_app.config.js", func(c *gin.Context) {
-			config, err := embeddedFiles.ReadFile("ui/apps/web-antd/dist/_app.config.js")
-			if err != nil {
-				c.Status(http.StatusNotFound)
-				return
-			}
-			c.Data(http.StatusOK, "application/javascript", config)
-		})
-
-		// 处理 jse 目录下的文件请求
-		cmd.Server.GET("/jse/:filename", func(c *gin.Context) {
-			filename := c.Param("filename")
-			file, err := embeddedFiles.ReadFile("ui/apps/web-antd/dist/jse/" + filename)
-			if err != nil {
-				c.Status(http.StatusNotFound)
-				return
-			}
-			c.Data(http.StatusOK, "application/javascript", file)
-		})
-
-		// 处理 css 目录下的文件请求
-		cmd.Server.GET("/css/:filename", func(c *gin.Context) {
-			filename := c.Param("filename")
-			file, err := embeddedFiles.ReadFile("ui/apps/web-antd/dist/css/" + filename)
-			if err != nil {
-				c.Status(http.StatusNotFound)
-				return
-			}
-			c.Data(http.StatusOK, "text/css", file)
-		})
-
-		// 处理 js 目录下的文件请求
-		cmd.Server.GET("/js/:filename", func(c *gin.Context) {
-			filename := c.Param("filename")
-			file, err := embeddedFiles.ReadFile("ui/apps/web-antd/dist/js/" + filename)
-			if err != nil {
-				c.Status(http.StatusNotFound)
-				return
-			}
-			c.Data(http.StatusOK, "application/javascript", file)
-		})
-	} else {
-		// 开发模式下，提供一个简单的首页
-		cmd.Server.GET("/", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"message": "AI-CloudOps API 服务运行中 (开发模式)",
-				"status":  "running",
-			})
-		})
-	}
+	})
 
 	// 判断是否需要mock
 	if viper.GetString("mock.enabled") == "true" {
@@ -210,7 +124,7 @@ func Init() error {
 
 	// 在goroutine中启动服务器
 	go func() {
-		showBootInfo(viper.GetString("server.port"), isProductionMode)
+		showBootInfo(viper.GetString("server.port"))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("服务器启动失败: %v", err)
 		}
@@ -292,21 +206,14 @@ func InitMock() error {
 	return nil
 }
 
-func showBootInfo(port string, isProductionMode bool) {
-	// 获取本机所有 IP 地址
+func showBootInfo(port string) {
 	ips, err := utils.GetLocalIPs()
 	if err != nil {
 		log.Printf("获取本机 IP 失败: %v", err)
 		return
 	}
 
-	// 打印启动信息
-	modeText := "生产模式"
-	if !isProductionMode {
-		modeText = "开发模式 (仅API)"
-	}
-
-	color.Green("AI-CloudOps 启动成功 (%s)", modeText)
+	color.Green("AI-CloudOps API 服务启动成功")
 	fmt.Printf("%s  ", color.GreenString("➜"))
 	fmt.Printf("%s    ", color.New(color.Bold).Sprint("Local:"))
 	fmt.Printf("%s\n", color.MagentaString("http://localhost:%s/", port))

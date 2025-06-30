@@ -46,12 +46,6 @@ var skipAuthPaths = map[string]bool{
 // 预定义静态资源和WebSocket路径前缀
 var skipPrefixes = []string{
 	"/api/ai/chat/ws",
-	"/assets",
-	"/_app.config.js",
-	"/jse/",
-	"/favicon.ico",
-	"/js/",
-	"/css/",
 }
 
 // HTTP方法映射

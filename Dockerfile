@@ -1,8 +1,16 @@
-FROM golang:1.22.1-alpine
+FROM golang:1.23.1-alpine AS builder
 ENV GOPROXY=https://goproxy.cn,direct
 ENV TZ=Asia/Shanghai
-RUN apk update --no-cache && apk add --no-cache tzdata
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime &&  echo $TZ >/etc/timezone
-RUN go install github.com/cortesi/modd/cmd/modd@latest
-WORKDIR /go
-CMD ["modd"]
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main main.go
+
+FROM alpine:latest
+ENV TZ=Asia/Shanghai
+RUN apk --no-cache add ca-certificates tzdata
+WORKDIR /root/
+COPY --from=builder /app/main .
+EXPOSE 8889
+CMD ["./main"]
