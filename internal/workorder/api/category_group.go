@@ -50,7 +50,7 @@ func (h *CategoryGroupHandler) RegisterRouters(server *gin.Engine) {
 		categoryGroup.DELETE("/delete/:id", h.DeleteCategory)
 		categoryGroup.GET("/list", h.ListCategory)
 		categoryGroup.GET("/detail/:id", h.DetailCategory)
-		categoryGroup.GET("/tree", h.GetCategoryTree)
+		categoryGroup.GET("/statistics", h.GetCategoryStatistics)
 	}
 }
 
@@ -59,37 +59,41 @@ func (h *CategoryGroupHandler) CreateCategory(ctx *gin.Context) {
 
 	user := ctx.MustGet("user").(utils.UserClaims)
 
+	req.UserID = user.Uid
+	req.UserName = user.Username
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.CreateCategory(ctx, &req, user.Uid, user.Username)
+		return nil, h.service.CreateCategory(ctx, &req)
 	})
 }
 
 func (h *CategoryGroupHandler) UpdateCategory(ctx *gin.Context) {
+	var req model.UpdateCategoryReq
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
-	var req model.UpdateCategoryReq
 	req.ID = id
 
-	user := ctx.MustGet("user").(utils.UserClaims)
-
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.UpdateCategory(ctx, &req, user.Uid)
+		return nil, h.service.UpdateCategory(ctx, &req)
 	})
 }
 
 func (h *CategoryGroupHandler) DeleteCategory(ctx *gin.Context) {
+	var req model.DeleteCategoryReq
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	req.ID = id
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.service.DeleteCategory(ctx, id, user.Uid)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.DeleteCategory(ctx, req.ID)
 	})
 }
 
@@ -111,8 +115,8 @@ func (h *CategoryGroupHandler) DetailCategory(ctx *gin.Context) {
 	})
 }
 
-func (h *CategoryGroupHandler) GetCategoryTree(ctx *gin.Context) {
+func (h *CategoryGroupHandler) GetCategoryStatistics(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetCategoryTree(ctx)
+		return h.service.GetCategoryStatistics(ctx)
 	})
 }

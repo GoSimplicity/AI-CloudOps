@@ -87,5 +87,7 @@ func InitTables(db *gorm.DB) error {
 		&model.UserPerformance{},
 		&model.CategoryPerformance{},
 		&model.TemplatePerformance{},
+		&model.Notification{},
+		&model.NotificationLog{},
 	)
 }

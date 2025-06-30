@@ -63,7 +63,7 @@ type InstanceDAO interface {
 	GetInstanceWithRelations(ctx context.Context, id int) (*model.Instance, error)
 	ListInstance(ctx context.Context, req *model.ListInstanceReq) (*model.ListResp[model.Instance], error)
 	BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8) error
-	GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (*model.ListResp[model.Instance], error)
+	GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) ([]*model.Instance, int64, error)
 	GetOverdueInstances(ctx context.Context) ([]model.Instance, error)
 	TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error
 }
@@ -318,16 +318,16 @@ func (d *instanceDAO) GetInstanceByTemplateID(ctx context.Context, templateID in
 }
 
 // GetMyInstances 获取我的工单
-func (d *instanceDAO) GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (*model.ListResp[model.Instance], error) {
+func (d *instanceDAO) GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) ([]*model.Instance, int64, error) {
 	if userID <= 0 {
-		return nil, errors.New("参数无效")
+		return nil, 0, errors.New("参数无效")
 	}
 
 	if err := d.validateMyInstanceRequest(req); err != nil {
-		return nil, fmt.Errorf("请求参数验证失败: %w", err)
+		return nil, 0, fmt.Errorf("请求参数验证失败: %w", err)
 	}
 
-	var instances []model.Instance
+	var instances []*model.Instance
 	var total int64
 
 	db := d.db.WithContext(ctx).Model(&model.Instance{})
@@ -348,7 +348,7 @@ func (d *instanceDAO) GetMyInstances(ctx context.Context, userID int, req *model
 	// 获取总数
 	if err := db.Count(&total).Error; err != nil {
 		d.logger.Error("获取我的工单总数失败", zap.Error(err), zap.Int("userID", userID))
-		return nil, fmt.Errorf("获取我的工单总数失败: %w", err)
+		return nil, 0, fmt.Errorf("获取我的工单总数失败: %w", err)
 	}
 
 	// 分页查询
@@ -363,15 +363,10 @@ func (d *instanceDAO) GetMyInstances(ctx context.Context, userID int, req *model
 
 	if err != nil {
 		d.logger.Error("获取我的工单列表失败", zap.Error(err), zap.Int("userID", userID))
-		return nil, fmt.Errorf("获取我的工单列表失败: %w", err)
+		return nil, 0, fmt.Errorf("获取我的工单列表失败: %w", err)
 	}
 
-	result := &model.ListResp[model.Instance]{
-		Items: instances,
-		Total: total,
-	}
-
-	return result, nil
+	return instances, total, nil
 }
 
 // GetOverdueInstances 获取超时工单
