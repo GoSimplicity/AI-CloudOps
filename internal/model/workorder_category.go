@@ -25,8 +25,6 @@
 
 package model
 
-import "time"
-
 // Category 分类实体
 type Category struct {
 	Model
@@ -34,13 +32,10 @@ type Category struct {
 	ParentID    *int   `json:"parent_id" gorm:"column:parent_id;comment:父分类ID"`
 	Icon        string `json:"icon" gorm:"column:icon;comment:图标"`
 	SortOrder   int    `json:"sort_order" gorm:"column:sort_order;default:0;comment:排序顺序"`
-	Status      int8   `json:"status" gorm:"column:status;not null;default:1;comment:状态：0-禁用，1-启用"`
+	Status      int8   `json:"status" gorm:"column:status;not null;default:1;comment:状态：1-启用，2-禁用"`
 	Description string `json:"description" gorm:"column:description;comment:分类描述"`
 	CreatorID   int    `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
 	CreatorName string `json:"creator_name" gorm:"-"`
-
-	Children []Category `json:"children" gorm:"-"`
-	Parent   *Category  `json:"parent,omitempty" gorm:"foreignKey:ParentID"`
 }
 
 func (Category) TableName() string {
@@ -54,17 +49,20 @@ type CreateCategoryReq struct {
 	Icon        string `json:"icon"`
 	SortOrder   int    `json:"sort_order"`
 	Description string `json:"description" binding:"omitempty,max=500"`
+	UserID      int    `json:"user_id" binding:"required"`
+	UserName    string `json:"user_name" binding:"required"`
+	Status      int8   `json:"status" binding:"required,oneof=1 2"` // 状态，必填，0-禁用，1-启用
 }
 
 // UpdateCategoryReq 更新分类请求结构
 type UpdateCategoryReq struct {
-	ID          int    `json:"id" binding:"required"`                   // 分类ID，必填
+	ID          int    `json:"id" form:"id" binding:"required"`         // 分类ID，必填
 	Name        string `json:"name" binding:"required,min=1,max=100"`   // 分类名称，必填，长度1-100
 	ParentID    *int   `json:"parent_id"`                               // 父分类ID，可选
 	Icon        string `json:"icon"`                                    // 图标，可选
 	SortOrder   int    `json:"sort_order"`                              // 排序顺序，可选
 	Description string `json:"description" binding:"omitempty,max=500"` // 分类描述，最大500字符
-	Status      *int8  `json:"status" binding:"required,oneof=0 1"`     // 状态，必填，0-禁用，1-启用
+	Status      *int8  `json:"status" binding:"required,oneof=1 2"`     // 状态，必填，0-禁用，1-启用
 }
 
 type DeleteCategoryReq struct {
@@ -85,23 +83,7 @@ type TreeCategoryReq struct {
 	Status *int8 `json:"status" form:"status"`
 }
 
-// BatchUpdateStatusReq 批量更新状态请求
-type BatchUpdateStatusReq struct {
-	IDs    []int `json:"ids" binding:"required"`
-	Status int8  `json:"status" binding:"required,oneof=0 1"`
-}
-
-// 分类响应结构
-type CategoryResp struct {
-	ID          int            `json:"id"`
-	Name        string         `json:"name"`
-	ParentID    *int           `json:"parent_id"`
-	Icon        string         `json:"icon"`
-	SortOrder   int            `json:"sort_order"`
-	Status      int8           `json:"status"`
-	Description string         `json:"description"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	CreatorName string         `json:"creator_name"`
-	Children    []CategoryResp `json:"children,omitempty"`
+type CategoryStatistics struct {
+	EnabledCount  int64 `json:"enabled_count"`
+	DisabledCount int64 `json:"disabled_count"`
 }

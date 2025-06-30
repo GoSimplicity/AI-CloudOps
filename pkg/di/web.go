@@ -80,6 +80,7 @@ func InitGinServer(
 	treeCloudHdl *resourceApi.TreeCloudHandler,
 	treeRdsHdl *resourceApi.TreeRdsHandler,
 	treeElbHdl *resourceApi.TreeElbHandler,
+	notificationHdl *workorderApi.NotificationHandler,
 ) *gin.Engine {
 	server := gin.Default()
 	server.Use(m...)
@@ -122,5 +123,6 @@ func InitGinServer(
 	treeCloudHdl.RegisterRouters(server)
 	treeRdsHdl.RegisterRouters(server)
 	treeElbHdl.RegisterRouters(server)
+	notificationHdl.RegisterRouters(server)
 	return server
 }

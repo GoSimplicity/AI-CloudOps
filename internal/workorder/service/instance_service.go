@@ -313,21 +313,21 @@ func (s *instanceService) GetMyInstances(ctx context.Context, userID int, req *m
 	// 标准化分页参数
 	s.normalizePagination(&req.Page, &req.Size)
 
-	result, err := s.dao.GetMyInstances(ctx, userID, req)
+	result, total, err := s.dao.GetMyInstances(ctx, userID, req)
 	if err != nil {
 		s.logger.Error("获取我的工单失败", zap.Error(err), zap.Int("userID", userID))
 		return nil, fmt.Errorf("获取我的工单失败: %w", err)
 	}
 
 	// 转换响应
-	respItems := make([]model.InstanceResp, 0, len(result.Items))
-	for _, item := range result.Items {
-		respItems = append(respItems, *s.convertToInstanceResp(&item))
+	respItems := make([]model.InstanceResp, 0, len(result))
+	for _, item := range result {
+		respItems = append(respItems, *s.convertToInstanceResp(item))
 	}
 
 	return &model.ListResp[model.InstanceResp]{
 		Items: respItems,
-		Total: result.Total,
+		Total: total,
 	}, nil
 }
 
@@ -392,7 +392,7 @@ func (s *instanceService) TransferInstance(ctx context.Context, instanceID int, 
 		StepName:     "转交",
 		Action:       "transfer",
 		OperatorID:   fromUserID,
-		OperatorName: "", 
+		OperatorName: "",
 		Comment:      comment,
 		FromUserID:   fromUserID,
 		ToUserID:     toUserID,
@@ -513,7 +513,7 @@ func (s *instanceService) buildInstanceFromRequest(ctx context.Context, req *mod
 		if err != nil {
 			return nil, fmt.Errorf("序列化表单设计schema失败: %w", err)
 		}
-		
+
 		var schema map[string]interface{}
 		if err := json.Unmarshal(schemaBytes, &schema); err != nil {
 			return nil, fmt.Errorf("解析表单设计schema失败: %w", err)
@@ -531,9 +531,9 @@ func (s *instanceService) buildInstanceFromRequest(ctx context.Context, req *mod
 	}
 
 	// 处理标签
-	var tags model.StringSlice
+	var tags model.StringList
 	if len(req.Tags) > 0 {
-		tags = model.StringSlice(req.Tags)
+		tags = model.StringList(req.Tags)
 	}
 
 	// 确定初始步骤和状态
@@ -657,7 +657,7 @@ func (s *instanceService) updateInstanceFields(instance *model.Instance, req *mo
 		instance.DueDate = req.DueDate
 	}
 	if len(req.Tags) > 0 {
-		instance.Tags = model.StringSlice(req.Tags)
+		instance.Tags = model.StringList(req.Tags)
 	}
 }
 

@@ -7,29 +7,12 @@ export interface Category {
   parent_id?: number | null;
   icon: string;
   sort_order: number;
-  status: number;
+  status: number | 1 | 2;
   description: string;
   creator_id?: number;
   creator_name?: string;
   created_at?: string;
   updated_at?: string;
-  children?: Category[];
-  parent?: Category | null;
-}
-
-// 分类响应结构
-export interface CategoryResp {
-  id: number;
-  name: string;
-  parent_id?: number | null;
-  icon: string;
-  sort_order: number;
-  status: number;
-  description: string;
-  created_at: string;
-  updated_at: string;
-  creator_name: string;
-  children?: CategoryResp[];
 }
 
 // 创建分类请求结构
@@ -39,6 +22,7 @@ export interface CreateCategoryReq {
   icon: string;
   sort_order: number;
   description: string;
+  status?: number | 1 | 2;
 }
 
 // 更新分类请求结构
@@ -49,7 +33,7 @@ export interface UpdateCategoryReq {
   icon: string;
   sort_order: number;
   description: string;
-  status: number;
+  status: number | 1 | 2;
 }
 
 // 删除分类请求结构
@@ -61,26 +45,14 @@ export interface DeleteCategoryReq {
 export interface ListCategoryReq {
   page: number;
   size: number;
-  status?: number;
+  search?: string;
+  status?: number | 1 | 2;
 }
 
 // 详情请求结构
 export interface DetailCategoryReq {
   id: number;
 }
-
-// 分类树请求结构
-export interface TreeCategoryReq {
-  status?: number;
-}
-
-// 批量更新状态请求结构
-export interface BatchUpdateStatusReq {
-  ids: number[];
-  status: number;
-}
-
-// 分类相关API接口
 
 // 创建分类
 export async function createCategory(data: CreateCategoryReq) {
@@ -107,7 +79,7 @@ export async function detailCategory(data: DetailCategoryReq) {
   return requestClient.get(`/workorder/category/detail/${data.id}`);
 }
 
-// 获取分类树
-export async function getCategoryTree(data?: TreeCategoryReq) {
-  return requestClient.get('/workorder/category/tree', { params: data });
+// 获取分类统计
+export async function getCategoryStatistics() {
+  return requestClient.get('/workorder/category/statistics');
 }

@@ -27,7 +27,7 @@ package model
 
 import "time"
 
-// InstanceAttachment 工单附件实体（DAO层）
+// InstanceAttachment 工单附件实体
 type InstanceAttachment struct {
 	Model
 	InstanceID   int    `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`

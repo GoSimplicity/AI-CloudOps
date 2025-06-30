@@ -27,6 +27,7 @@ package model
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -56,6 +57,7 @@ type ListResp[T any] struct {
 
 type StringList []string
 
+// Scan 从数据库值转换为 StringList
 func (m *StringList) Scan(val interface{}) error {
 	if val == nil {
 		*m = StringList{}
@@ -64,7 +66,7 @@ func (m *StringList) Scan(val interface{}) error {
 
 	var str string
 	switch v := val.(type) {
-	case []uint8:
+	case []byte:
 		str = string(v)
 	case string:
 		str = v
@@ -77,12 +79,26 @@ func (m *StringList) Scan(val interface{}) error {
 		return nil
 	}
 
-	ss := strings.Split(str, "|")
-	*m = ss
+	*m = strings.Split(str, "|")
 	return nil
 }
 
+// Value 将 StringList 转换为数据库值
 func (m StringList) Value() (driver.Value, error) {
-	str := strings.Join(m, "|")
-	return str, nil
+	return strings.Join(m, "|"), nil
+}
+
+// MarshalJSON 将 StringList 序列化为 JSON
+func (m StringList) MarshalJSON() ([]byte, error) {
+	return json.Marshal([]string(m))
+}
+
+// UnmarshalJSON 将 JSON 反序列化为 StringList
+func (m *StringList) UnmarshalJSON(data []byte) error {
+	var ss []string
+	if err := json.Unmarshal(data, &ss); err != nil {
+		return err
+	}
+	*m = StringList(ss)
+	return nil
 }

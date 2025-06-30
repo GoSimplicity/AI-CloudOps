@@ -29,7 +29,6 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -84,78 +83,26 @@ func (m *JSONMap) Scan(value interface{}) error {
 	return json.Unmarshal(data, m)
 }
 
-// StringSlice 自定义字符串切片类型，用于处理数组到逗号分隔字符串的转换
-type StringSlice []string
-
-// Value 实现driver.Valuer接口，存储到数据库时转为逗号分隔的字符串
-func (s StringSlice) Value() (driver.Value, error) {
-	if len(s) == 0 {
-		return "", nil
-	}
-	return strings.Join(s, ","), nil
-}
-
-// Scan 实现sql.Scanner接口，从数据库读取时转为字符串切片
-func (s *StringSlice) Scan(value interface{}) error {
-	if value == nil {
-		*s = nil
-		return nil
-	}
-
-	var str string
-	switch v := value.(type) {
-	case []byte:
-		str = string(v)
-	case string:
-		str = v
-	default:
-		return fmt.Errorf("无法扫描 %T 到 StringSlice", value)
-	}
-
-	if str == "" {
-		*s = StringSlice{}
-		return nil
-	}
-
-	*s = strings.Split(str, ",")
-	return nil
-}
-
-// MarshalJSON 实现json.Marshaler接口
-func (s StringSlice) MarshalJSON() ([]byte, error) {
-	return json.Marshal([]string(s))
-}
-
-// UnmarshalJSON 实现json.Unmarshaler接口
-func (s *StringSlice) UnmarshalJSON(data []byte) error {
-	var slice []string
-	if err := json.Unmarshal(data, &slice); err != nil {
-		return err
-	}
-	*s = StringSlice(slice)
-	return nil
-}
-
 // Instance 工单实例
 type Instance struct {
 	Model
-	Title        string      `json:"title" gorm:"column:title;not null;comment:工单标题"`
-	TemplateID   *int        `json:"template_id" gorm:"column:template_id;comment:模板ID"`
-	ProcessID    int         `json:"process_id" gorm:"column:process_id;not null;comment:流程ID"`
-	FormData     JSONMap     `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
-	CurrentStep  string      `json:"current_step" gorm:"column:current_step;not null;comment:当前步骤"`
-	Status       int8        `json:"status" gorm:"column:status;not null;comment:状态"`
-	Priority     int8        `json:"priority" gorm:"column:priority;default:1;comment:优先级"`
-	CategoryID   *int        `json:"category_id" gorm:"column:category_id;comment:分类ID"`
-	CreatorID    int         `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	Description  string      `json:"description" gorm:"column:description;comment:描述"`
-	CreatorName  string      `json:"creator_name" gorm:"-"`
-	AssigneeID   *int        `json:"assignee_id" gorm:"column:assignee_id;comment:当前处理人ID"`
-	AssigneeName string      `json:"assignee_name" gorm:"-"`
-	CompletedAt  *time.Time  `json:"completed_at" gorm:"column:completed_at;comment:完成时间"`
-	DueDate      *time.Time  `json:"due_date" gorm:"column:due_date;comment:截止时间"`
-	Tags         StringSlice `json:"tags" gorm:"column:tags;comment:标签"`
-	ProcessData  JSONMap     `json:"process_data" gorm:"column:process_data;type:json;comment:流程数据"`
+	Title        string     `json:"title" gorm:"column:title;not null;comment:工单标题"`
+	TemplateID   *int       `json:"template_id" gorm:"column:template_id;comment:模板ID"`
+	ProcessID    int        `json:"process_id" gorm:"column:process_id;not null;comment:流程ID"`
+	FormData     JSONMap    `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
+	CurrentStep  string     `json:"current_step" gorm:"column:current_step;not null;comment:当前步骤"`
+	Status       int8       `json:"status" gorm:"column:status;not null;comment:状态"`
+	Priority     int8       `json:"priority" gorm:"column:priority;default:1;comment:优先级"`
+	CategoryID   *int       `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID    int        `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	Description  string     `json:"description" gorm:"column:description;comment:描述"`
+	CreatorName  string     `json:"creator_name" gorm:"-"`
+	AssigneeID   *int       `json:"assignee_id" gorm:"column:assignee_id;comment:当前处理人ID"`
+	AssigneeName string     `json:"assignee_name" gorm:"-"`
+	CompletedAt  *time.Time `json:"completed_at" gorm:"column:completed_at;comment:完成时间"`
+	DueDate      *time.Time `json:"due_date" gorm:"column:due_date;comment:截止时间"`
+	Tags         StringList `json:"tags" gorm:"column:tags;comment:标签"`
+	ProcessData  JSONMap    `json:"process_data" gorm:"column:process_data;type:json;comment:流程数据"`
 
 	// 关联数据
 	Template *Template `json:"template,omitempty" gorm:"foreignKey:TemplateID"`
