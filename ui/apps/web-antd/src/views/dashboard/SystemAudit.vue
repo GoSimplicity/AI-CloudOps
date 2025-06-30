@@ -142,7 +142,7 @@
           
           <template v-if="column.key === 'user'">
             <div class="user-info">
-              <div class="user-id">用户 {{ record.user_id }}</div>
+              <div class="user-id">{{ getUserDisplayName(record) }}</div>
               <div class="trace-id">{{ record.trace_id }}</div>
             </div>
           </template>
@@ -199,8 +199,8 @@
               <span>{{ viewLogData.id }}</span>
             </div>
             <div class="detail-item">
-              <label>用户ID</label>
-              <span>{{ viewLogData.user_id }}</span>
+              <label>用户</label>
+              <span>{{ viewLogData.user_info?.real_name || viewLogData.user_info?.username || `用户 ${viewLogData.user_id}` }}</span>
             </div>
             <div class="detail-item">
               <label>Trace ID</label>
@@ -382,6 +382,18 @@ import {
   type AdvancedSearchOptions
 } from '#/api/core/audit';
 
+import { getUserDetailApi } from '#/api/core/user';
+
+// 扩展审计日志类型，包含用户信息
+interface AuditLogWithUser extends AuditLog {
+  user_info?: {
+    id: number;
+    username: string;
+    real_name?: string;
+    avatar?: string;
+  };
+}
+
 // 表格列配置
 const tableColumns = [
   { title: '时间', key: 'time', width: 150 },
@@ -400,8 +412,8 @@ const viewModalVisible = ref(false);
 const advancedSearchVisible = ref(false);
 
 // 数据
-const auditLogList = ref<AuditLog[]>([]);
-const viewLogData = ref<AuditLog | null>(null);
+const auditLogList = ref<AuditLogWithUser[]>([]);
+const viewLogData = ref<AuditLogWithUser | null>(null);
 const auditStatistics = ref<AuditStatistics>({
   total_count: 0,
   today_count: 0,
@@ -415,6 +427,9 @@ const auditStatistics = ref<AuditStatistics>({
 const auditTypes = ref<AuditTypeInfo[]>([]);
 
 const selectedRowKeys = ref<number[]>([]);
+
+// 用户信息缓存
+const userInfoCache = ref<Map<number, any>>(new Map());
 
 // 时间选择器
 const startTime = ref<Dayjs>();
@@ -477,6 +492,35 @@ const formatJSON = (obj: any) => {
   } catch {
     return String(obj);
   }
+};
+
+// 获取用户信息
+const getUserInfo = async (userId: number) => {
+  // 检查缓存
+  if (userInfoCache.value.has(userId)) {
+    return userInfoCache.value.get(userId);
+  }
+
+  try {
+    const userInfo = await getUserDetailApi(userId);
+    // 缓存用户信息
+    userInfoCache.value.set(userId, userInfo);
+    return userInfo;
+  } catch (error) {
+    console.error('获取用户信息失败:', error);
+    return null;
+  }
+};
+
+// 获取用户显示名称
+const getUserDisplayName = (log: AuditLogWithUser) => {
+  if (log.user_info?.real_name) {
+    return log.user_info.real_name;
+  }
+  if (log.user_info?.username) {
+    return log.user_info.username;
+  }
+  return `用户 ${log.user_id}`;
 };
 
 const getOperationColor = (operation: string) => {
@@ -543,7 +587,20 @@ const fetchAuditLogs = async () => {
 
     const response = await listAuditLogsApi(params);
     
-    auditLogList.value = response.items || [];
+    const logs = response.items || [];
+    
+    // 获取用户信息
+    const logsWithUserInfo = await Promise.all(
+      logs.map(async (log: AuditLog) => {
+        const userInfo = await getUserInfo(log.user_id);
+        return {
+          ...log,
+          user_info: userInfo
+        } as AuditLogWithUser;
+      })
+    );
+    
+    auditLogList.value = logsWithUserInfo;
     paginationConfig.total = response.total || 0;
     
   } catch (error: any) {
@@ -578,7 +635,16 @@ const fetchAuditTypes = async () => {
 const fetchLogDetail = async (id: number) => {
   try {
     const response = await getAuditLogDetailApi(id);
-    viewLogData.value = response;
+    const log = response as AuditLog;
+    
+    // 获取用户信息
+    const userInfo = await getUserInfo(log.user_id);
+    const logWithUserInfo = {
+      ...log,
+      user_info: userInfo
+    } as AuditLogWithUser;
+    
+    viewLogData.value = logWithUserInfo;
     viewModalVisible.value = true;
   } catch (error: any) {
     console.error('获取日志详情失败:', error);
@@ -618,7 +684,20 @@ const performAdvancedSearch = async () => {
 
     const response = await searchAuditLogsApi(params);
     
-    auditLogList.value = response.items || [];
+    const logs = response.items || [];
+    
+    // 获取用户信息
+    const logsWithUserInfo = await Promise.all(
+      logs.map(async (log: AuditLog) => {
+        const userInfo = await getUserInfo(log.user_id);
+        return {
+          ...log,
+          user_info: userInfo
+        } as AuditLogWithUser;
+      })
+    );
+    
+    auditLogList.value = logsWithUserInfo;
     paginationConfig.total = response.total || 0;
     
   } catch (error: any) {
@@ -684,11 +763,11 @@ const handleTableChange = (pagination: any) => {
   fetchAuditLogs();
 };
 
-const handleView = (log: AuditLog) => {
+const handleView = (log: AuditLogWithUser) => {
   fetchLogDetail(log.id);
 };
 
-const handleDelete = async (log: AuditLog) => {
+const handleDelete = async (log: AuditLogWithUser) => {
   try {
     await deleteAuditLogApi(log.id);
     message.success('删除成功');
