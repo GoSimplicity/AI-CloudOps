@@ -18,6 +18,7 @@ AI 驱动的云原生运维平台
   - [项目结构](#项目结构)
   - [许可证](#许可证)
   - [联系方式](#联系方式)
+  - [Star History](#star-history)
   - [致谢](#致谢)
 
 ## 项目介绍
@@ -60,9 +61,12 @@ AI+CloudOps 是一个面向企业的 AI 驱动云原生运维管理平台，旨�
 ### 克隆项目
 
 ```bash
-# 克隆项目
+# 克隆后端项目
 git clone https://github.com/GoSimplicity/AI-CloudOps.git
 cd AI-CloudOps
+
+# 克隆前端项目
+git clone https://github.com/GoSimplicity/AI-CloudOps-web.git
 ```
 
 ### 开发模式
@@ -70,40 +74,58 @@ cd AI-CloudOps
 1. **启动依赖服务**：
 
 ```bash
-# 启动所需的中间件(MySQL, Redis等)
+# 在 AI-CloudOps 目录下启动所需的中间件(MySQL, Redis等)
 docker-compose -f docker-compose-env.yaml up -d
+
+# 复制环境变量配置文件（如果需要）
+cp env.example .env
+# 根据您的环境修改 .env 文件中的配置
 ```
 
-2. **前端开发模式**：
+2. **启动前端开发服务**：
 
 ```bash
-# 进入前端目录
-cd ui
+# 进入前端项目目录
+cd AI-CloudOps-web
+
 # 安装依赖
 pnpm install
-# 启动开发服务器
-pnpm dev
+
+# 启动前端开发服务器
+pnpm run dev
 ```
 
-3. **后端开发模式**：
+前端服务默认启动在 `http://localhost:3000`
+
+3. **启动后端开发服务**：
 
 ```bash
-# 在项目根目录
+# 回到后端项目目录
+cd ../AI-CloudOps
+
+# 安装 Go 依赖
 go mod tidy
+
 # 运行后端服务
 go run main.go
 ```
 
-4. **MCP SSE 启动**
+后端服务默认启动在 `http://localhost:8000`
+
+4. **启动 MCP SSE 服务**：
 
 ```bash
+# 在 AI-CloudOps 目录下
 go run cmd/mcp/mcp.go
 ```
 
-5. **AIOps 服务启动**
+5. **启动 AIOps 服务**：
 
 ```bash
+# 在 AI-CloudOps 目录下
 cd python
+
+# 安装依赖
 pip install -r requirements.txt
 
 # 训练流量预测模型
@@ -121,35 +143,50 @@ bash scripts/start.sh
 1. **构建前端**：
 
 ```bash
-# 进入前端目录
-cd ui
+# 进入前端项目目录
+cd AI-CloudOps-web
+
 # 安装依赖
 pnpm install
+
 # 构建前端静态文件
-pnpm build
+pnpm run build
 ```
 
-2. **启动应用**：
+2. **部署前端静态文件**：
+
+将构建生成的 `dist/` 目录中的文件部署到您的静态资源服务器，或者：
+
+- 使用 Nginx 提供静态文件服务
+- 部署到 CDN
+- 使用 Vercel、Netlify 等平台进行自动部署
+
+3. **启动后端生产服务**：
 
 ```bash
-# 返回项目根目录
-cd ..
-# 启动整合了前端的后端应用(前端静态文件已嵌入)
-# 默认为开发模式，如需启动生产模式请取消代码下述注释
-# // //go:embed ui/apps/web-antd/dist/*
-go run main.go
+# 回到后端项目目录
+cd ../AI-CloudOps
+
+# 构建后端应用
+go build -o bin/ai-cloudops main.go
+
+# 启动后端服务
+./bin/ai-cloudops
 ```
 
-3. **使用 Docker Compose 启动完整应用**：
+4. **使用 Docker Compose 启动完整应用**：
 
 ```bash
 # 启动依赖服务
 docker-compose -f docker-compose-env.yaml up -d
+
 # 启动应用服务
 docker-compose up -d
 ```
 
 ## 项目结构
+
+### 后端项目结构 (AI-CloudOps)
 
 ```text
 AI-CloudOps/
@@ -176,8 +213,27 @@ AI-CloudOps/
 ├── README.md             # 项目说明文档
 ├── terraform/            # 基础设施即代码
 ├── test/                 # 测试文件
-├── tmp/                  # 临时文件
-└── ui/                   # 前端项目目录(AI-CloudOps-web)
+└── tmp/                  # 临时文件
+```
+
+### 前端项目结构 (AI-CloudOps-web)
+
+```text
+AI-CloudOps-web/
+│
+├── .vscode/              # VSCode 配置
+├── apps/                 # 应用程序目录
+│   └── web-antd/         # 基于 Ant Design 的 Web 应用
+├── internal/             # 内部模块
+├── packages/             # 共享包
+├── scripts/              # 构建和部署脚本
+├── .env                  # 环境变量配置
+├── package.json          # 项目依赖和脚本
+├── pnpm-lock.yaml        # pnpm 依赖锁定文件
+├── pnpm-workspace.yaml   # pnpm 工作区配置
+├── turbo.json            # Turbo 构建配置
+├── vite.config.ts        # Vite 配置文件
+└── README.md             # 前端项目说明文档
 ```
 
 ## 许可证
@@ -193,7 +249,7 @@ AI-CloudOps/
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=GoSimplicity/AI-CloudOps&type=Date)](https://www.star-history.com/#GoSimplicity/AI-CloudOps&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=GoSimplicity/AI-CloudOps&type=Date)](https://star-history.com/#GoSimplicity/AI-CloudOps&Date)
 
 ## 致谢
 
