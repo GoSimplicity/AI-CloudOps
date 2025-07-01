@@ -82,7 +82,7 @@ var optionFieldTypes = map[string]bool{
 var fieldNameRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 type FormDesignService interface {
-	CreateFormDesign(ctx context.Context, formDesignReq *model.CreateFormDesignReq, creatorID int, creatorName string) error
+	CreateFormDesign(ctx context.Context, formDesignReq *model.CreateFormDesignReq) error
 	UpdateFormDesign(ctx context.Context, formDesignReq *model.UpdateFormDesignReq) error
 	DeleteFormDesign(ctx context.Context, id int) error
 	PublishFormDesign(ctx context.Context, id int) error
@@ -95,21 +95,23 @@ type FormDesignService interface {
 }
 
 type formDesignService struct {
-	dao     dao.FormDesignDAO
-	userDao userDao.UserDAO
-	l       *zap.Logger
+	dao         dao.FormDesignDAO
+	userDao     userDao.UserDAO
+	categoryDao dao.CategoryDAO
+	l           *zap.Logger
 }
 
-func NewFormDesignService(dao dao.FormDesignDAO, userDao userDao.UserDAO, l *zap.Logger) FormDesignService {
+func NewFormDesignService(dao dao.FormDesignDAO, userDao userDao.UserDAO, categoryDao dao.CategoryDAO, l *zap.Logger) FormDesignService {
 	return &formDesignService{
-		dao:     dao,
-		userDao: userDao,
-		l:       l,
+		dao:         dao,
+		userDao:     userDao,
+		categoryDao: categoryDao,
+		l:           l,
 	}
 }
 
 // CreateFormDesign 创建表单设计
-func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq *model.CreateFormDesignReq, creatorID int, creatorName string) error {
+func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq *model.CreateFormDesignReq) error {
 	if formDesignReq == nil {
 		return fmt.Errorf("表单设计请求不能为空")
 	}
@@ -150,7 +152,8 @@ func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq 
 		Version:     1,
 		Status:      FormDesignStatusDraft,
 		CategoryID:  formDesignReq.CategoryID,
-		CreatorID:   creatorID,
+		CreatorID:   formDesignReq.UserID,
+		CreatorName: formDesignReq.UserName,
 	}
 
 	// 创建表单设计
@@ -370,15 +373,34 @@ func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListF
 		return model.ListResp[*model.FormDesign]{}, err
 	}
 
-	// 收集创建者ID
-	creatorIDs := make([]int, 0, len(formDesigns))
-	creatorIDSet := make(map[int]bool)
+	if len(formDesigns) == 0 {
+		return model.ListResp[*model.FormDesign]{
+			Items: formDesigns,
+			Total: total,
+		}, nil
+	}
 
+	// 使用map去重收集创建者ID
+	creatorIDSet := make(map[int]bool, len(formDesigns))
+	categoryIDs := make([]int, 0, len(formDesigns))
+	
+	// 一次遍历同时收集创建者ID和分类ID
 	for _, formDesign := range formDesigns {
-		if formDesign != nil && !creatorIDSet[formDesign.CreatorID] {
-			creatorIDs = append(creatorIDs, formDesign.CreatorID)
-			creatorIDSet[formDesign.CreatorID] = true
+		if formDesign != nil {
+			if !creatorIDSet[formDesign.CreatorID] {
+				creatorIDSet[formDesign.CreatorID] = true
+			}
+			
+			if formDesign.CategoryID != nil {
+				categoryIDs = append(categoryIDs, *formDesign.CategoryID)
+			}
 		}
+	}
+	
+	// 转换创建者ID为切片
+	creatorIDs := make([]int, 0, len(creatorIDSet))
+	for id := range creatorIDSet {
+		creatorIDs = append(creatorIDs, id)
 	}
 
 	// 批量获取用户信息
@@ -394,13 +416,34 @@ func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListF
 		}
 	}
 
-	// 设置创建者名称
+	// 批量获取分类信息
+	categoryMap := make(map[int]string)
+	if len(categoryIDs) > 0 {
+		categories, err := f.categoryDao.GetCategoryByIDs(ctx, categoryIDs)
+		if err != nil {
+			f.l.Error("获取分类信息失败", zap.Error(err))
+			return model.ListResp[*model.FormDesign]{}, err
+		}
+		for _, category := range categories {
+			categoryMap[category.ID] = category.Name
+		}
+	}
+
+	// 设置创建者名称和分类名称
 	for _, formDesign := range formDesigns {
 		if formDesign != nil {
 			if username, exists := userMap[formDesign.CreatorID]; exists {
 				formDesign.CreatorName = username
 			} else {
 				formDesign.CreatorName = "未知用户"
+			}
+
+			if formDesign.CategoryID != nil {
+				if categoryName, exists := categoryMap[*formDesign.CategoryID]; exists {
+					formDesign.CategoryName = categoryName
+				} else {
+					formDesign.CategoryName = "未知分类"
+				}
 			}
 		}
 	}

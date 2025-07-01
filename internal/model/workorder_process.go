@@ -25,9 +25,32 @@
 
 package model
 
-import "time"
+import "gorm.io/datatypes"
 
-// ==================== 流程定义相关 ====================
+// 流程状态常量
+const (
+	ProcessStatusDraft     int8 = 1 // 草稿
+	ProcessStatusPublished int8 = 2 // 已发布
+	ProcessStatusDisabled  int8 = 3 // 已禁用
+)
+
+// 步骤类型常量
+const (
+	StepTypeStart    = "start"    // 开始节点
+	StepTypeApproval = "approval" // 审批节点
+	StepTypeEnd      = "end"      // 结束节点
+	StepTypeTask     = "task"     // 任务节点
+	StepTypeDecision = "decision" // 决策节点
+)
+
+// 操作类型常量
+const (
+	ActionApprove  = "approve"  // 同意
+	ActionReject   = "reject"   // 拒绝
+	ActionTransfer = "transfer" // 转交
+	ActionRevoke   = "revoke"   // 撤回
+	ActionCancel   = "cancel"   // 取消
+)
 
 // ProcessStep 流程步骤定义
 type ProcessStep struct {
@@ -84,17 +107,17 @@ type ProcessVariable struct {
 // Process 流程实体
 type Process struct {
 	Model
-	Name         string      `json:"name" gorm:"column:name;not null;comment:流程名称"`
-	Description  string      `json:"description" gorm:"column:description;comment:流程描述"`
-	FormDesignID int         `json:"form_design_id" gorm:"column:form_design_id;not null;comment:关联的表单设计ID"`
-	Definition   string      `json:"definition" gorm:"column:definition;type:json;not null;comment:流程定义JSON"`
-	Version      int         `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
-	Status       int8        `json:"status" gorm:"column:status;not null;default:0;comment:状态：0-草稿，1-已发布，2-已禁用"`
-	CategoryID   *int        `json:"category_id" gorm:"column:category_id;comment:分类ID"`
-	CreatorID    int         `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	CreatorName  string      `json:"creator_name" gorm:"-"`
-	FormDesign   *FormDesign `json:"form_design" gorm:"foreignKey:FormDesignID"`
-	Category     *Category   `json:"category" gorm:"foreignKey:CategoryID"`
+	Name         string         `json:"name" gorm:"column:name;not null;comment:流程名称"`
+	Description  string         `json:"description" gorm:"column:description;comment:流程描述"`
+	FormDesignID int            `json:"form_design_id" gorm:"column:form_design_id;not null;comment:关联的表单设计ID"`
+	Definition   datatypes.JSON `json:"definition" gorm:"column:definition;type:json;not null;comment:流程定义JSON"`
+	Version      string         `json:"version" gorm:"column:version;not null;comment:版本号"`
+	Status       int8           `json:"status" gorm:"column:status;not null;default:1;comment:状态：1-草稿，2-已发布，3-已禁用"`
+	CategoryID   *int           `json:"category_id" gorm:"column:category_id;comment:分类ID"`
+	CreatorID    int            `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	CreatorName  string         `json:"creator_name" gorm:"-"`
+	FormDesign   *FormDesign    `json:"form_design" gorm:"foreignKey:FormDesignID"`
+	Category     *Category      `json:"category" gorm:"foreignKey:CategoryID"`
 }
 
 // TableName 指定流程表名
@@ -102,7 +125,6 @@ func (Process) TableName() string {
 	return "workorder_process"
 }
 
-// 流程请求结构
 // CreateProcessReq 创建流程请求
 type CreateProcessReq struct {
 	Name         string            `json:"name" binding:"required,min=1,max=100"`
@@ -110,6 +132,9 @@ type CreateProcessReq struct {
 	FormDesignID int               `json:"form_design_id" binding:"required"`
 	Definition   ProcessDefinition `json:"definition" binding:"required"`
 	CategoryID   *int              `json:"category_id"`
+	CreatorID    int               `json:"creator_id" binding:"required"`
+	CreatorName  string            `json:"creator_name" binding:"required"`
+	Version      string            `json:"version" binding:"required"`
 }
 
 // UpdateProcessReq 更新流程请求
@@ -120,6 +145,8 @@ type UpdateProcessReq struct {
 	FormDesignID int               `json:"form_design_id" binding:"required"`
 	Definition   ProcessDefinition `json:"definition" binding:"required"`
 	CategoryID   *int              `json:"category_id"`
+	Version      string            `json:"version" binding:"required"`
+	Status       int8              `json:"status" binding:"required"`
 }
 
 // DeleteProcessReq 删除流程请求
@@ -132,6 +159,7 @@ type DetailProcessReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
 
+// GetProcessWithRelationsReq 获取流程及关联信息请求
 type GetProcessWithRelationsReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
@@ -155,49 +183,7 @@ type CloneProcessReq struct {
 	Name string `json:"name" binding:"required,min=1,max=100"`
 }
 
-// 流程响应结构
-// ProcessResp 流程详情响应
-type ProcessResp struct {
-	ID           int               `json:"id"`
-	Name         string            `json:"name"`
-	Description  string            `json:"description"`
-	FormDesignID int               `json:"form_design_id"`
-	FormDesign   *FormDesign       `json:"form_design"`
-	Definition   ProcessDefinition `json:"definition"`
-	Version      int               `json:"version"`
-	Status       int8              `json:"status"`
-	CategoryID   *int              `json:"category_id"`
-	Category     *Category         `json:"category"`
-	CreatorID    int               `json:"creator_id"`
-	CreatorName  string            `json:"creator_name"`
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
-}
-
-// ValidateProcessReq 请求
+// ValidateProcessReq 验证流程请求
 type ValidateProcessReq struct {
 	ID int `json:"id" binding:"required"`
-}
-
-// ValidateProcessResp 流程验证响应
-type ValidateProcessResp struct {
-	IsValid bool     `json:"is_valid"`
-	Errors  []string `json:"errors,omitempty"`
-}
-
-// ProcessItem 流程列表项（用于列表展示）
-type ProcessItem struct {
-	ID           int         `json:"id"`
-	Name         string      `json:"name"`
-	Description  string      `json:"description"`
-	FormDesignID int         `json:"form_design_id"`
-	FormDesign   *FormDesign `json:"form_design"`
-	Version      int         `json:"version"`
-	Status       int8        `json:"status"`
-	CategoryID   *int        `json:"category_id"`
-	Category     *Category   `json:"category"`
-	CreatorID    int         `json:"creator_id"`
-	CreatorName  string      `json:"creator_name"`
-	CreatedAt    time.Time   `json:"created_at"`
-	UpdatedAt    time.Time   `json:"updated_at"`
 }

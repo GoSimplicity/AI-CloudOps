@@ -31,7 +31,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userdao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -64,17 +63,14 @@ const (
 )
 
 type InstanceService interface {
-	// 基础CRUD操作
-	CreateInstance(ctx context.Context, req *model.CreateInstanceReq, creatorID int, creatorName string) (*model.InstanceResp, error)
+	CreateInstance(ctx context.Context, req *model.CreateInstanceReq, creatorID int, creatorName string) (*model.Instance, error)
 	UpdateInstance(ctx context.Context, req *model.UpdateInstanceReq, operatorID int) error
 	DeleteInstance(ctx context.Context, id int, operatorID int) error
-	GetInstance(ctx context.Context, id int) (*model.InstanceResp, error)
-	ListInstance(ctx context.Context, req *model.ListInstanceReq) (*model.ListResp[model.InstanceResp], error)
+	GetInstance(ctx context.Context, id int) (*model.Instance, error)
+	ListInstance(ctx context.Context, req *model.ListInstanceReq) (model.ListResp[*model.Instance], error)
 	BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8, operatorID int) error
-
-	// 业务功能
-	GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (*model.ListResp[model.InstanceResp], error)
-	GetOverdueInstances(ctx context.Context) ([]model.InstanceResp, error)
+	GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (model.ListResp[*model.Instance], error)
+	GetOverdueInstances(ctx context.Context) ([]model.Instance, error)
 	TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error
 }
 
@@ -103,7 +99,7 @@ func NewInstanceService(
 }
 
 // CreateInstance 创建工单实例
-func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateInstanceReq, creatorID int, creatorName string) (*model.InstanceResp, error) {
+func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateInstanceReq, creatorID int, creatorName string) (*model.Instance, error) {
 	if err := s.validateCreateRequest(req); err != nil {
 		return nil, fmt.Errorf("参数验证失败: %w", err)
 	}
@@ -140,7 +136,7 @@ func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateI
 		zap.String("title", instance.Title),
 		zap.Int("creatorID", creatorID))
 
-	return s.convertToInstanceResp(instance), nil
+	return instance, nil
 }
 
 // UpdateInstance 更新工单实例
@@ -222,7 +218,7 @@ func (s *instanceService) DeleteInstance(ctx context.Context, id int, operatorID
 }
 
 // GetInstance 获取工单实例详情
-func (s *instanceService) GetInstance(ctx context.Context, id int) (*model.InstanceResp, error) {
+func (s *instanceService) GetInstance(ctx context.Context, id int) (*model.Instance, error) {
 	if id <= 0 {
 		return nil, ErrInvalidRequest
 	}
@@ -235,11 +231,11 @@ func (s *instanceService) GetInstance(ctx context.Context, id int) (*model.Insta
 		return nil, fmt.Errorf("获取工单实例失败: %w", err)
 	}
 
-	return s.convertToInstanceResp(instance), nil
+	return instance, nil
 }
 
 // ListInstance 获取工单实例列表
-func (s *instanceService) ListInstance(ctx context.Context, req *model.ListInstanceReq) (*model.ListResp[model.InstanceResp], error) {
+func (s *instanceService) ListInstance(ctx context.Context, req *model.ListInstanceReq) (model.ListResp[*model.Instance], error) {
 	if req == nil {
 		req = &model.ListInstanceReq{}
 	}
@@ -247,21 +243,15 @@ func (s *instanceService) ListInstance(ctx context.Context, req *model.ListInsta
 	// 标准化分页参数
 	s.normalizePagination(&req.Page, &req.Size)
 
-	result, err := s.dao.ListInstance(ctx, req)
+	result, total, err := s.dao.ListInstance(ctx, req)
 	if err != nil {
 		s.logger.Error("获取工单实例列表失败", zap.Error(err))
-		return nil, fmt.Errorf("获取工单实例列表失败: %w", err)
+		return model.ListResp[*model.Instance]{}, fmt.Errorf("获取工单实例列表失败: %w", err)
 	}
 
-	// 转换响应
-	respItems := make([]model.InstanceResp, 0, len(result.Items))
-	for _, item := range result.Items {
-		respItems = append(respItems, *s.convertToInstanceResp(&item))
-	}
-
-	return &model.ListResp[model.InstanceResp]{
-		Items: respItems,
-		Total: result.Total,
+	return model.ListResp[*model.Instance]{
+		Items: result,
+		Total: total,
 	}, nil
 }
 
@@ -301,9 +291,9 @@ func (s *instanceService) BatchUpdateInstanceStatus(ctx context.Context, ids []i
 }
 
 // GetMyInstances 获取我的工单
-func (s *instanceService) GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (*model.ListResp[model.InstanceResp], error) {
+func (s *instanceService) GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (model.ListResp[*model.Instance], error) {
 	if userID <= 0 {
-		return nil, ErrInvalidRequest
+		return model.ListResp[*model.Instance]{}, ErrInvalidRequest
 	}
 
 	if req == nil {
@@ -316,35 +306,24 @@ func (s *instanceService) GetMyInstances(ctx context.Context, userID int, req *m
 	result, total, err := s.dao.GetMyInstances(ctx, userID, req)
 	if err != nil {
 		s.logger.Error("获取我的工单失败", zap.Error(err), zap.Int("userID", userID))
-		return nil, fmt.Errorf("获取我的工单失败: %w", err)
+		return model.ListResp[*model.Instance]{}, fmt.Errorf("获取我的工单失败: %w", err)
 	}
 
-	// 转换响应
-	respItems := make([]model.InstanceResp, 0, len(result))
-	for _, item := range result {
-		respItems = append(respItems, *s.convertToInstanceResp(item))
-	}
-
-	return &model.ListResp[model.InstanceResp]{
-		Items: respItems,
+	return model.ListResp[*model.Instance]{
+		Items: result,
 		Total: total,
 	}, nil
 }
 
 // GetOverdueInstances 获取超时工单
-func (s *instanceService) GetOverdueInstances(ctx context.Context) ([]model.InstanceResp, error) {
+func (s *instanceService) GetOverdueInstances(ctx context.Context) ([]model.Instance, error) {
 	instances, err := s.dao.GetOverdueInstances(ctx)
 	if err != nil {
 		s.logger.Error("获取超时工单失败", zap.Error(err))
 		return nil, fmt.Errorf("获取超时工单失败: %w", err)
 	}
 
-	respInstances := make([]model.InstanceResp, 0, len(instances))
-	for _, instance := range instances {
-		respInstances = append(respInstances, *s.convertToInstanceResp(&instance))
-	}
-
-	return respInstances, nil
+	return instances, nil
 }
 
 // TransferInstance 转移工单
@@ -522,7 +501,7 @@ func (s *instanceService) buildInstanceFromRequest(ctx context.Context, req *mod
 	}
 
 	var processData model.JSONMap
-	if process.Definition != "" {
+	if process.Definition != nil {
 		var definition map[string]interface{}
 		if err := json.Unmarshal([]byte(process.Definition), &definition); err != nil {
 			return nil, fmt.Errorf("解析流程定义失败: %w", err)
@@ -537,7 +516,7 @@ func (s *instanceService) buildInstanceFromRequest(ctx context.Context, req *mod
 	}
 
 	// 确定初始步骤和状态
-	initialStep, initialStatus := s.determineInitialStepAndStatus(process.Definition)
+	initialStep, initialStatus := s.determineInitialStepAndStatus(process.Definition.String())
 
 	// 构建实例对象
 	instance := &model.Instance{
@@ -659,55 +638,4 @@ func (s *instanceService) updateInstanceFields(instance *model.Instance, req *mo
 	if len(req.Tags) > 0 {
 		instance.Tags = model.StringList(req.Tags)
 	}
-}
-
-// convertToInstanceResp 转换实例为响应格式
-func (s *instanceService) convertToInstanceResp(instance *model.Instance) *model.InstanceResp {
-	if instance == nil {
-		return nil
-	}
-
-	// 解析表单数据
-	var formData map[string]interface{}
-	if instance.FormData != nil {
-		formData = map[string]interface{}(instance.FormData)
-	}
-
-	// 解析标签
-	var tags []string
-	if instance.Tags != nil {
-		tags = []string(instance.Tags)
-	}
-
-	resp := &model.InstanceResp{
-		ID:           instance.ID,
-		Title:        instance.Title,
-		TemplateID:   instance.TemplateID,
-		ProcessID:    instance.ProcessID,
-		FormData:     formData,
-		CurrentStep:  instance.CurrentStep,
-		Status:       instance.Status,
-		Priority:     instance.Priority,
-		CategoryID:   instance.CategoryID,
-		CreatorID:    instance.CreatorID,
-		CreatorName:  instance.CreatorName,
-		Description:  instance.Description,
-		AssigneeID:   instance.AssigneeID,
-		AssigneeName: instance.AssigneeName,
-		CompletedAt:  instance.CompletedAt,
-		DueDate:      instance.DueDate,
-		Tags:         tags,
-		CreatedAt:    instance.CreatedAt,
-		UpdatedAt:    instance.UpdatedAt,
-	}
-
-	// 判断是否超时
-	if instance.DueDate != nil && instance.DueDate.Before(time.Now()) &&
-		instance.Status != model.InstanceStatusCompleted &&
-		instance.Status != model.InstanceStatusCancelled &&
-		instance.Status != model.InstanceStatusRejected {
-		resp.IsOverdue = true
-	}
-
-	return resp
 }

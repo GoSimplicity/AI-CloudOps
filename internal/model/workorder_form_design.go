@@ -80,7 +80,8 @@ type FormDesign struct {
 	CreatorID   int            `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
 	CreatorName string         `json:"creator_name" gorm:"-"`
 	Category    *Category      `json:"category" gorm:"foreignKey:CategoryID"`
-	SchemaObj   FormSchema     `json:"-" gorm:"-"` // 用于临时存储解析后的Schema对象
+
+	CategoryName string `json:"category_name" gorm:"-"`
 }
 
 // TableName 表名

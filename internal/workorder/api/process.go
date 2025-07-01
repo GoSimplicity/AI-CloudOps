@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -55,7 +53,6 @@ func (h *ProcessHandler) RegisterRouters(server *gin.Engine) {
 		processGroup.GET("/relations/:id", h.GetProcessWithRelations)
 		processGroup.POST("/publish/:id", h.PublishProcess)
 		processGroup.POST("/clone/:id", h.CloneProcess)
-		processGroup.GET("/validate/:id", h.ValidateProcess)
 	}
 }
 
@@ -65,8 +62,11 @@ func (h *ProcessHandler) CreateProcess(ctx *gin.Context) {
 
 	user := ctx.MustGet("user").(utils.UserClaims)
 
+	req.CreatorID = user.Uid
+	req.CreatorName = user.Username
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CreateProcess(ctx, &req, user.Uid, user.Username)
+		return nil, h.service.CreateProcess(ctx, &req)
 	})
 }
 
@@ -106,34 +106,7 @@ func (h *ProcessHandler) DeleteProcess(ctx *gin.Context) {
 func (h *ProcessHandler) ListProcess(ctx *gin.Context) {
 	var req model.ListProcessReq
 
-	if pageStr := ctx.Query("page"); pageStr != "" {
-		if page, err := strconv.Atoi(pageStr); err == nil {
-			req.Page = page
-		}
-	}
-	if sizeStr := ctx.Query("size"); sizeStr != "" {
-		if size, err := strconv.Atoi(sizeStr); err == nil {
-			req.Size = size
-		}
-	}
-
-	// 从查询参数中获取其他过滤条件
-	if name := ctx.Query("search"); name != "" {
-		req.Search = name
-	}
-	if categoryIDStr := ctx.Query("categoryID"); categoryIDStr != "" {
-		if categoryID, err := strconv.Atoi(categoryIDStr); err == nil {
-			req.CategoryID = &categoryID
-		}
-	}
-	if statusStr := ctx.Query("status"); statusStr != "" {
-		if status, err := strconv.Atoi(statusStr); err == nil {
-			statusInt8 := int8(status)
-			req.Status = &statusInt8
-		}
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ListProcess(ctx, &req)
 	})
 }
@@ -149,10 +122,8 @@ func (h *ProcessHandler) DetailProcess(ctx *gin.Context) {
 
 	req.ID = id
 
-	user := ctx.MustGet("user").(utils.UserClaims)
-
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.DetailProcess(ctx, req.ID, user.Uid)
+		return h.service.DetailProcess(ctx, req.ID)
 	})
 }
 
@@ -203,23 +174,5 @@ func (h *ProcessHandler) CloneProcess(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.CloneProcess(ctx, &req, user.Uid)
-	})
-}
-
-// ValidateProcess 验证流程
-func (h *ProcessHandler) ValidateProcess(ctx *gin.Context) {
-	var req model.ValidateProcessReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		return
-	}
-
-	req.ID = id
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.ValidateProcess(ctx, req.ID, user.Uid)
 	})
 }

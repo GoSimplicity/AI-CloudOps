@@ -1,0 +1,27 @@
+# permissions for end users to edit predicthpas.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: hpa-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: predicthpa-editor-role
+rules:
+- apiGroups:
+  - hpa.aiops.com
+  resources:
+  - predicthpas
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - hpa.aiops.com
+  resources:
+  - predicthpas/status
+  verbs:
+  - get

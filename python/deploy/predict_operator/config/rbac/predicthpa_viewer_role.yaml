@@ -1,0 +1,23 @@
+# permissions for end users to view predicthpas.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: hpa-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: predicthpa-viewer-role
+rules:
+- apiGroups:
+  - hpa.aiops.com
+  resources:
+  - predicthpas
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - hpa.aiops.com
+  resources:
+  - predicthpas/status
+  verbs:
+  - get

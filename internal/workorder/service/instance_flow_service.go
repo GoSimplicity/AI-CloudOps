@@ -90,7 +90,7 @@ func (s *instanceFlowService) ProcessInstanceFlow(ctx context.Context, req *mode
 		return fmt.Errorf("获取流程定义失败: %w", err)
 	}
 
-	processDef, err := s.parseProcessDefinition(process.Definition)
+	processDef, err := s.parseProcessDefinition(process.Definition.String())
 	if err != nil {
 		return fmt.Errorf("解析流程定义失败: %w", err)
 	}
@@ -156,7 +156,7 @@ func (s *instanceFlowService) GetProcessDefinition(ctx context.Context, processI
 		return nil, fmt.Errorf("获取流程定义失败: %w", err)
 	}
 
-	processDef, err := s.parseProcessDefinition(process.Definition)
+	processDef, err := s.parseProcessDefinition(process.Definition.String())
 	if err != nil {
 		return nil, fmt.Errorf("解析流程定义失败: %w", err)
 	}

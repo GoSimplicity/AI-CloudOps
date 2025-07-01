@@ -66,7 +66,7 @@ func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
 	req.UserName = user.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CreateFormDesign(ctx, &req, user.Uid, user.Username)
+		return nil, h.service.CreateFormDesign(ctx, &req)
 	})
 }
 
