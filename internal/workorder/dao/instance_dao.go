@@ -54,14 +54,13 @@ const (
 )
 
 type InstanceDAO interface {
-	// 实例CRUD
 	CreateInstance(ctx context.Context, instance *model.Instance) error
 	UpdateInstance(ctx context.Context, instance *model.Instance) error
 	DeleteInstance(ctx context.Context, id int) error
 	GetInstance(ctx context.Context, id int) (*model.Instance, error)
 	GetInstanceByTemplateID(ctx context.Context, templateID int) ([]model.Instance, error)
 	GetInstanceWithRelations(ctx context.Context, id int) (*model.Instance, error)
-	ListInstance(ctx context.Context, req *model.ListInstanceReq) (*model.ListResp[model.Instance], error)
+	ListInstance(ctx context.Context, req *model.ListInstanceReq) ([]*model.Instance, int64, error)
 	BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8) error
 	GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) ([]*model.Instance, int64, error)
 	GetOverdueInstances(ctx context.Context) ([]model.Instance, error)
@@ -230,12 +229,12 @@ func (d *instanceDAO) GetInstanceWithRelations(ctx context.Context, id int) (*mo
 }
 
 // ListInstance 获取工单实例列表
-func (d *instanceDAO) ListInstance(ctx context.Context, req *model.ListInstanceReq) (*model.ListResp[model.Instance], error) {
+func (d *instanceDAO) ListInstance(ctx context.Context, req *model.ListInstanceReq) ([]*model.Instance, int64, error) {
 	if err := d.validateListRequest(req); err != nil {
-		return nil, fmt.Errorf("请求参数验证失败: %w", err)
+		return nil, 0, fmt.Errorf("请求参数验证失败: %w", err)
 	}
 
-	var instances []model.Instance
+	var instances []*model.Instance
 	var total int64
 
 	db := d.db.WithContext(ctx).Model(&model.Instance{})
@@ -244,7 +243,7 @@ func (d *instanceDAO) ListInstance(ctx context.Context, req *model.ListInstanceR
 	// 获取总数
 	if err := db.Count(&total).Error; err != nil {
 		d.logger.Error("获取工单实例总数失败", zap.Error(err))
-		return nil, fmt.Errorf("获取工单实例总数失败: %w", err)
+		return nil, 0, fmt.Errorf("获取工单实例总数失败: %w", err)
 	}
 
 	// 分页查询
@@ -259,21 +258,10 @@ func (d *instanceDAO) ListInstance(ctx context.Context, req *model.ListInstanceR
 
 	if err != nil {
 		d.logger.Error("获取工单实例列表失败", zap.Error(err))
-		return nil, fmt.Errorf("获取工单实例列表失败: %w", err)
+		return nil, 0, fmt.Errorf("获取工单实例列表失败: %w", err)
 	}
 
-	result := &model.ListResp[model.Instance]{
-		Items: instances,
-		Total: total,
-	}
-
-	d.logger.Info("获取工单实例列表成功",
-		zap.Int("count", len(instances)),
-		zap.Int64("total", total),
-		zap.Int("page", req.Page),
-		zap.Int("size", req.Size))
-
-	return result, nil
+	return instances, total, nil
 }
 
 // BatchUpdateInstanceStatus 批量更新工单状态

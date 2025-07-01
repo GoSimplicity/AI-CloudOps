@@ -28,15 +28,15 @@ package model
 // User 用户模型
 type User struct {
 	Model
-	Username     string `json:"username" gorm:"type:varchar(100);uniqueIndex:idx_username_del;not null;comment:用户登录名"` // 用户登录名，唯一且非空
+	Username     string `json:"username" gorm:"type:varchar(100);not null;comment:用户登录名"` // 用户登录名，唯一且非空
 	Password     string `json:"-" gorm:"type:varchar(255);not null;comment:用户登录密码"`                                    // 用户登录密码，非空，JSON序列化时忽略
 	RealName     string `json:"real_name" gorm:"type:varchar(100);comment:用户真实姓名"`                                     // 用户真实姓名
 	Domain       string `json:"domain" gorm:"type:varchar(100);default:'default';comment:用户域"`                         // 用户域，默认default
 	Desc         string `json:"desc" gorm:"type:text;comment:用户描述"`                                                    // 用户描述，支持较长文本
 	Avatar       string `json:"avatar" gorm:"type:varchar(255);comment:用户头像"`                                          // 用户头像
-	Mobile       string `json:"mobile" gorm:"type:varchar(20);uniqueIndex:idx_mobile_del;comment:手机号"`                 // 手机号，添加唯一索引
-	Email        string `json:"email" gorm:"type:varchar(100);uniqueIndex:idx_email_del;comment:邮箱"`                   // 邮箱，添加唯一索引
-	FeiShuUserId string `json:"fei_shu_user_id" gorm:"type:varchar(50);uniqueIndex:idx_feishu_del;comment:飞书用户ID"`     // 飞书用户ID，添加唯一索引
+	Mobile       string `json:"mobile" gorm:"type:varchar(20);comment:手机号"`                 // 手机号，添加唯一索引
+	Email        string `json:"email" gorm:"type:varchar(100);comment:邮箱"`                   // 邮箱，添加唯一索引
+	FeiShuUserId string `json:"fei_shu_user_id" gorm:"type:varchar(50);comment:飞书用户ID"`     // 飞书用户ID，添加唯一索引
 	AccountType  int8   `json:"account_type" gorm:"default:1;comment:账号类型 1普通用户 2服务账号" binding:"omitempty,oneof=1 2"`  // 账号类型，使用int8节省空间
 	HomePath     string `json:"home_path" gorm:"type:varchar(255);default:'/';comment:登录后的默认首页"`                       // 登录后的默认首页，添加默认值
 	Enable       int8   `json:"enable" gorm:"default:1;comment:用户状态 1正常 2冻结" binding:"omitempty,oneof=1 2"`            // 用户状态，使用int8节省空间

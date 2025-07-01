@@ -42,6 +42,7 @@ type CategoryDAO interface {
 	DeleteCategory(ctx context.Context, id int) error
 	ListCategory(ctx context.Context, req model.ListCategoryReq) ([]*model.Category, int64, error)
 	GetCategory(ctx context.Context, id int) (*model.Category, error)
+	GetCategoryByIDs(ctx context.Context, ids []int) ([]*model.Category, error)
 	GetAllCategories(ctx context.Context) ([]*model.Category, error)
 	GetCategoriesByIDs(ctx context.Context, ids []int) ([]*model.Category, error)
 	CheckCategoryExists(ctx context.Context, id int) (bool, error)
@@ -237,6 +238,27 @@ func (dao *categoryDAO) GetCategoriesByIDs(ctx context.Context, ids []int) ([]*m
 
 	dao.logger.Debug("根据ID列表获取分类成功",
 		zap.Int("count", len(categories)))
+	return categories, nil
+}
+
+// GetCategoryByIDs 根据ID列表获取分类
+func (dao *categoryDAO) GetCategoryByIDs(ctx context.Context, ids []int) ([]*model.Category, error) {
+	if len(ids) == 0 {
+		return []*model.Category{}, nil
+	}
+
+	var categories []*model.Category
+
+	if err := dao.db.WithContext(ctx).
+		Where("id IN ?", ids).
+		Order("sort_order ASC, id ASC").
+		Find(&categories).Error; err != nil {
+		dao.logger.Error("根据ID列表获取分类失败",
+			zap.Error(err),
+			zap.Ints("ids", ids))
+		return nil, fmt.Errorf("获取分类信息失败，请稍后重试，错误信息：%w", err)
+	}
+
 	return categories, nil
 }
 
