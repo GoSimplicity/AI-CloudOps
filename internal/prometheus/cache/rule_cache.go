@@ -93,7 +93,7 @@ func (r *ruleConfigCache) GetPrometheusAlertRuleConfigYamlByIp(ip string) string
 // GenerateAlertRuleConfigYaml 生成告警规则配置
 func (r *ruleConfigCache) GenerateAlertRuleConfigYaml(ctx context.Context) error {
 	// 获取支持告警配置的所有采集池
-	pools, err := r.scrapePoolDao.GetMonitorScrapePoolSupportedAlert(ctx)
+	pools, _, err := r.scrapePoolDao.GetMonitorScrapePoolSupportedAlert(ctx)
 	if err != nil {
 		r.l.Error("[监控模块] 获取支持告警的采集池失败", zap.Error(err))
 		return err

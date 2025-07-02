@@ -26,8 +26,6 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -53,17 +51,15 @@ func (a *AlertPoolHandler) RegisterRouters(server *gin.Engine) {
 	alertManagerPools := monitorGroup.Group("/alertManager_pools")
 	{
 		alertManagerPools.GET("/list", a.GetMonitorAlertManagerPoolList)
-		alertManagerPools.GET("/all", a.GetMonitorAlertManagerPoolAll)
 		alertManagerPools.POST("/create", a.CreateMonitorAlertManagerPool)
-		alertManagerPools.POST("/update", a.UpdateMonitorAlertManagerPool)
-		alertManagerPools.DELETE("/:id", a.DeleteMonitorAlertManagerPool)
-		alertManagerPools.GET("/total", a.GetMonitorAlertManagerPoolTotal)
+		alertManagerPools.PUT("/update/:id", a.UpdateMonitorAlertManagerPool)
+		alertManagerPools.DELETE("/delete/:id", a.DeleteMonitorAlertManagerPool)
 	}
 }
 
 // GetMonitorAlertManagerPoolList 获取 AlertManager 集群池列表
 func (a *AlertPoolHandler) GetMonitorAlertManagerPoolList(ctx *gin.Context) {
-	var req model.ListReq
+	var req model.GetMonitorAlertManagerPoolListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return a.alertPoolService.GetMonitorAlertManagerPoolList(ctx, &req)
@@ -72,9 +68,9 @@ func (a *AlertPoolHandler) GetMonitorAlertManagerPoolList(ctx *gin.Context) {
 
 // CreateMonitorAlertManagerPool 创建新的 AlertManager 集群池
 func (a *AlertPoolHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
-	var req model.MonitorAlertManagerPool
+	var req model.CreateMonitorAlertManagerPoolReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(utils.UserClaims)
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -84,10 +80,7 @@ func (a *AlertPoolHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
 
 // UpdateMonitorAlertManagerPool 更新现有的 AlertManager 集群池
 func (a *AlertPoolHandler) UpdateMonitorAlertManagerPool(ctx *gin.Context) {
-	var req model.MonitorAlertManagerPool
-
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
-	req.UserID = uc.Uid
+	var req model.UpdateMonitorAlertManagerPoolReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, a.alertPoolService.UpdateMonitorAlertManagerPool(ctx, &req)
@@ -96,7 +89,7 @@ func (a *AlertPoolHandler) UpdateMonitorAlertManagerPool(ctx *gin.Context) {
 
 // DeleteMonitorAlertManagerPool 删除指定的 AlertManager 集群池
 func (a *AlertPoolHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
-	var req model.DeleteMonitorAlertManagerPoolRequest
+	var req model.DeleteMonitorAlertManagerPoolReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -108,19 +101,5 @@ func (a *AlertPoolHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, a.alertPoolService.DeleteMonitorAlertManagerPool(ctx, req.ID)
-	})
-}
-
-// GetMonitorAlertManagerPoolTotal 获取 AlertManager 集群池总数
-func (a *AlertPoolHandler) GetMonitorAlertManagerPoolTotal(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return a.alertPoolService.GetMonitorAlertManagerPoolTotal(ctx)
-	})
-}
-
-// GetMonitorAlertManagerPoolAll 获取所有 AlertManager 集群池
-func (a *AlertPoolHandler) GetMonitorAlertManagerPoolAll(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return a.alertPoolService.GetMonitorAlertManagerPoolAll(ctx)
 	})
 }

@@ -37,7 +37,7 @@ import (
 )
 
 type ScrapeJobDAO interface {
-	GetMonitorScrapeJobList(ctx context.Context, offset, limit int) ([]*model.MonitorScrapeJob, error)
+	GetMonitorScrapeJobList(ctx context.Context, req *model.GetMonitorScrapeJobListReq) ([]*model.MonitorScrapeJob, int64, error)
 	CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
 	GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId int) ([]*model.MonitorScrapeJob, error)
 	UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
@@ -64,22 +64,37 @@ func NewScrapeJobDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO) Scrape
 }
 
 // GetMonitorScrapeJobList 获取监控采集作业列表
-func (s *scrapeJobDAO) GetMonitorScrapeJobList(ctx context.Context, offset, limit int) ([]*model.MonitorScrapeJob, error) {
-	if offset < 0 {
-		return nil, fmt.Errorf("offset不能为负数")
-	}
-	if limit <= 0 {
-		return nil, fmt.Errorf("limit必须大于0")
-	}
-
+func (s *scrapeJobDAO) GetMonitorScrapeJobList(ctx context.Context, req *model.GetMonitorScrapeJobListReq) ([]*model.MonitorScrapeJob, int64, error) {
 	var jobs []*model.MonitorScrapeJob
+	var total int64
 
-	if err := s.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&jobs).Error; err != nil {
-		s.l.Error("获取监控采集作业列表失败", zap.Error(err))
-		return nil, err
+	query := s.db.WithContext(ctx).Model(&model.MonitorScrapeJob{})
+
+	offset := (req.Page - 1) * req.Size
+	limit := req.Size
+	if req.Search != "" {
+		query = query.Where("name LIKE ?", "%"+req.Search+"%")
 	}
 
-	return jobs, nil
+	if req.PoolID > 0 {
+		query = query.Where("pool_id = ?", req.PoolID)
+	}
+
+	if req.Enable != nil {
+		query = query.Where("enable = ?", *req.Enable)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		s.l.Error("计算监控采集作业总数失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	if err := query.Offset(offset).Limit(limit).Find(&jobs).Error; err != nil {
+		s.l.Error("获取监控采集作业列表失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	return jobs, total, nil
 }
 
 // CreateMonitorScrapeJob 创建监控采集作业

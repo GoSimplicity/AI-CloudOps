@@ -56,9 +56,7 @@ func (r *RecordRuleHandler) RegisterRouters(server *gin.Engine) {
 		recordRules.POST("/create", r.CreateMonitorRecordRule)
 		recordRules.POST("/update", r.UpdateMonitorRecordRule)
 		recordRules.DELETE("/:id", r.DeleteMonitorRecordRule)
-		recordRules.DELETE("/", r.BatchDeleteMonitorRecordRule)
-		recordRules.POST("/:id/enable", r.EnableSwitchMonitorRecordRule)
-		recordRules.POST("/enable", r.BatchEnableSwitchMonitorRecordRule)
+		recordRules.POST("/enable/:id", r.EnableSwitchMonitorRecordRule)
 	}
 }
 
@@ -117,15 +115,6 @@ func (r *RecordRuleHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
 	})
 }
 
-// BatchDeleteMonitorRecordRule 批量删除预聚合规则
-func (r *RecordRuleHandler) BatchDeleteMonitorRecordRule(ctx *gin.Context) {
-	var req model.BatchRequest
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, r.alertRecordService.BatchDeleteMonitorRecordRule(ctx, req.IDs)
-	})
-}
-
 // EnableSwitchMonitorRecordRule 切换预聚合规则的启用状态
 func (r *RecordRuleHandler) EnableSwitchMonitorRecordRule(ctx *gin.Context) {
 	var req model.EnableSwitchMonitorRecordRuleRequest
@@ -140,14 +129,5 @@ func (r *RecordRuleHandler) EnableSwitchMonitorRecordRule(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, r.alertRecordService.EnableSwitchMonitorRecordRule(ctx, req.ID)
-	})
-}
-
-// BatchEnableSwitchMonitorRecordRule 批量切换预聚合规则的启用状态
-func (r *RecordRuleHandler) BatchEnableSwitchMonitorRecordRule(ctx *gin.Context) {
-	var req model.BatchRequest
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, r.alertRecordService.BatchEnableSwitchMonitorRecordRule(ctx, req.IDs)
 	})
 }

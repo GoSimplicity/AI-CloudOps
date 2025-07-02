@@ -44,8 +44,8 @@ type Model struct {
 
 // ListReq 列表请求
 type ListReq struct {
-	Page   int    `json:"page" form:"page" binding:"required,min=1"`
-	Size   int    `json:"size" form:"size" binding:"required,min=10,max=100"`
+	Page   int    `json:"page" form:"page" binding:"omitempty,min=1"`
+	Size   int    `json:"size" form:"size" binding:"omitempty,min=10,max=100"`
 	Search string `json:"search" form:"search" binding:"omitempty"`
 }
 

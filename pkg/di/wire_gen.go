@@ -131,7 +131,7 @@ func ProvideCmd() *Cmd {
 	scrapePoolService := scrape2.NewPrometheusPoolService(scrapePoolDAO, monitorCache, logger, userDAO, scrapeJobDAO)
 	scrapePoolHandler := api5.NewScrapePoolHandler(logger, scrapePoolService)
 	scrapeJobService := scrape2.NewPrometheusScrapeService(scrapeJobDAO, monitorCache, logger, userDAO)
-	scrapeJobHandler := api5.NewScrapeJobHandler(logger, scrapeJobService)
+	scrapeJobHandler := api5.NewScrapeJobHandler(scrapeJobService)
 	alertManagerSendService := alert2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, monitorCache, logger, userDAO)
 	sendGroupHandler := api5.NewSendGroupHandler(logger, alertManagerSendService)
 	auditHandler := api2.NewAuditHandler(auditService, logger)

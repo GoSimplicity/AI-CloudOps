@@ -18,6 +18,7 @@ type AppService interface {
 	GetAppList(ctx context.Context, req *model.GetK8sAppListRequest) ([]model.K8sApp, error)
 	GetPodListByDeploy(ctx context.Context, id int64) ([]model.Resource, error)
 }
+
 type appService struct {
 	dao         admin.ClusterDAO
 	appdao      user.AppDAO

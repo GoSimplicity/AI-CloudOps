@@ -91,7 +91,7 @@ func (r *recordConfigCache) GetPrometheusRecordRuleConfigYamlByIp(ip string) str
 // GenerateRecordRuleConfigYaml 生成并更新所有Prometheus的预聚合规则配置YAML
 func (r *recordConfigCache) GenerateRecordRuleConfigYaml(ctx context.Context) error {
 	// 获取支持预聚合配置的所有采集池
-	pools, err := r.scrapePoolDao.GetMonitorScrapePoolSupportedRecord(ctx)
+	pools, _, err := r.scrapePoolDao.GetMonitorScrapePoolSupportedRecord(ctx)
 	if err != nil {
 		r.l.Error("[监控模块] 获取支持预聚合的采集池失败", zap.Error(err))
 		return err

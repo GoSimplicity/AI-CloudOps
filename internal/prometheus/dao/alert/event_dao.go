@@ -42,7 +42,7 @@ import (
 type AlertManagerEventDAO interface {
 	GetMonitorAlertEventById(ctx context.Context, id int) (*model.MonitorAlertEvent, error)
 	SearchMonitorAlertEventByName(ctx context.Context, name string) ([]*model.MonitorAlertEvent, int64, error)
-	GetMonitorAlertEventList(ctx context.Context, offset, limit int) ([]*model.MonitorAlertEvent, int64, error)
+	GetMonitorAlertEventList(ctx context.Context, req *model.GetMonitorAlertEventListReq) ([]*model.MonitorAlertEvent, int64, error)
 	EventAlertClaim(ctx context.Context, event *model.MonitorAlertEvent) error
 	GetAlertEventByID(ctx context.Context, id int) (*model.MonitorAlertEvent, error)
 	UpdateAlertEvent(ctx context.Context, alertEvent *model.MonitorAlertEvent) error
@@ -118,20 +118,18 @@ func (a *alertManagerEventDAO) SearchMonitorAlertEventByName(ctx context.Context
 }
 
 // GetMonitorAlertEventList 获取告警事件列表
-func (a *alertManagerEventDAO) GetMonitorAlertEventList(ctx context.Context, offset, limit int) ([]*model.MonitorAlertEvent, int64, error) {
-	if offset < 0 {
-		return nil, 0, fmt.Errorf("offset不能为负数")
-	}
-	if limit <= 0 {
-		return nil, 0, fmt.Errorf("limit必须大于0")
-	}
-
+func (a *alertManagerEventDAO) GetMonitorAlertEventList(ctx context.Context, req *model.GetMonitorAlertEventListReq) ([]*model.MonitorAlertEvent, int64, error) {
 	var alertEvents []*model.MonitorAlertEvent
 	var total int64
+
+	// 计算分页参数
+	offset := (req.Page - 1) * req.Size
+	limit := req.Size
 
 	// 先获取总数
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertEvent{}).
+		Where("status = ?", req.Status).
 		Count(&total).Error; err != nil {
 		a.l.Error("获取 MonitorAlertEvent 总数失败", zap.Error(err))
 		return nil, 0, err

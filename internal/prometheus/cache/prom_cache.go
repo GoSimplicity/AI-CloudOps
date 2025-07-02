@@ -91,7 +91,7 @@ func (p *promConfigCache) GetPrometheusMainConfigByIP(ip string) string {
 
 // GeneratePrometheusMainConfig 生成Prometheus主配置
 func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) error {
-	pools, err := p.scrapePoolDao.GetAllMonitorScrapePool(ctx)
+	pools, _, err := p.scrapePoolDao.GetAllMonitorScrapePool(ctx)
 	if err != nil {
 		p.l.Error("获取采集池失败", zap.Error(err))
 		return err
@@ -240,7 +240,7 @@ func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePo
 	}
 
 	// 启用告警，配置 Alertmanager
-	if pool.SupportAlert {
+	if pool.SupportAlert == 1 {
 		alertConfig := &pc.AlertmanagerConfig{
 			APIVersion: "v2",
 			ServiceDiscoveryConfigs: []discovery.Config{ // 服务发现配置
@@ -263,7 +263,7 @@ func (p *promConfigCache) CreateBasePrometheusConfig(pool *model.MonitorScrapePo
 	}
 
 	// 启用预聚合，添加规则文件
-	if pool.SupportRecord {
+	if pool.SupportRecord == 1 {
 		config.RuleFiles = append(config.RuleFiles, pool.RecordFilePath)
 	}
 

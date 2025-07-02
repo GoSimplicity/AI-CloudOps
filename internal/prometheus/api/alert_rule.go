@@ -57,10 +57,7 @@ func (a *AlertRuleHandler) RegisterRouters(server *gin.Engine) {
 		alertRules.POST("/create", a.CreateMonitorAlertRule)
 		alertRules.POST("/update/:id", a.UpdateMonitorAlertRule)
 		alertRules.POST("/enable/:id", a.EnableSwitchMonitorAlertRule)
-		alertRules.POST("/batch_enable", a.BatchEnableSwitchMonitorAlertRule)
 		alertRules.DELETE("/delete/:id", a.DeleteMonitorAlertRule)
-		alertRules.DELETE("/batch_delete", a.BatchDeleteMonitorAlertRule)
-		alertRules.GET("/total", a.GetMonitorAlertRuleTotal)
 	}
 }
 
@@ -95,7 +92,7 @@ func (a *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
 
 // EnableSwitchMonitorAlertRule 切换告警规则的启用状态
 func (a *AlertRuleHandler) EnableSwitchMonitorAlertRule(ctx *gin.Context) {
-	var req model.IdRequest
+	var req model.EnableSwitchMonitorAlertRuleReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -107,15 +104,6 @@ func (a *AlertRuleHandler) EnableSwitchMonitorAlertRule(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, a.alertRuleService.EnableSwitchMonitorAlertRule(ctx, req.ID)
-	})
-}
-
-// BatchEnableSwitchMonitorAlertRule 批量切换告警规则的启用状态
-func (a *AlertRuleHandler) BatchEnableSwitchMonitorAlertRule(ctx *gin.Context) {
-	var req model.BatchRequest
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.alertRuleService.BatchEnableSwitchMonitorAlertRule(ctx, req.IDs)
 	})
 }
 
@@ -133,15 +121,6 @@ func (a *AlertRuleHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, a.alertRuleService.DeleteMonitorAlertRule(ctx, req.ID)
-	})
-}
-
-// BatchDeleteMonitorAlertRule 批量删除告警规则
-func (a *AlertRuleHandler) BatchDeleteMonitorAlertRule(ctx *gin.Context) {
-	var req model.BatchRequest
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.alertRuleService.BatchDeleteMonitorAlertRule(ctx, req.IDs)
 	})
 }
 
@@ -170,14 +149,4 @@ func (a *AlertRuleHandler) PromqlExprCheck(ctx *gin.Context) {
 	}
 
 	utils.Success(ctx)
-}
-
-// GetMonitorAlertRuleTotal 获取监控告警规则总数
-func (a *AlertRuleHandler) GetMonitorAlertRuleTotal(ctx *gin.Context) {
-	total, err := a.alertRuleService.GetMonitorAlertRuleTotal(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-	utils.SuccessWithData(ctx, total)
 }

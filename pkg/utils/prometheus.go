@@ -397,8 +397,8 @@ type promHashPayload struct {
 	ScrapeInterval        int      `json:"scrape_interval"`
 	ScrapeTimeout         int      `json:"scrape_timeout"`
 	RemoteTimeoutSeconds  int      `json:"remote_timeout_seconds"`
-	SupportAlert          bool     `json:"support_alert"`
-	SupportRecord         bool     `json:"support_record"`
+	SupportAlert          int8     `json:"support_alert"`
+	SupportRecord         int8     `json:"support_record"`
 	ExternalLabels        []string `json:"external_labels"`
 	RemoteWriteUrl        string   `json:"remote_write_url"`
 	RemoteReadUrl         string   `json:"remote_read_url"`
