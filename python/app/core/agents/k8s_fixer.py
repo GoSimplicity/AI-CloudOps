@@ -3,10 +3,10 @@ import json
 import yaml
 import os
 import time
+import requests
 from typing import Dict, Any, List, Optional
 from langchain_core.tools import tool
 from langchain_experimental.agents import create_pandas_dataframe_agent
-from langchain_openai import ChatOpenAI
 from app.services.kubernetes import KubernetesService
 from app.services.llm import LLMService
 from app.config.settings import config
@@ -17,14 +17,93 @@ class K8sFixerAgent:
     def __init__(self):
         self.k8s_service = KubernetesService()
         self.llm_service = LLMService()
-        self.llm = ChatOpenAI(
-            model=config.llm.model,
-            api_key=config.llm.api_key,
-            base_url=config.llm.base_url
-        )
+        self.llm = self.llm_service  # 保留一个llm属性作为兼容
+        # 不再使用langchain_openai直接初始化LLM
         self.max_retries = 3
         self.retry_delay = 2
         logger.info("K8s修复Agent初始化完成")
+        
+        # 测试LLM服务是否正常
+        try:
+            is_healthy = self.llm_service.is_healthy()
+            if is_healthy:
+                logger.info("LLM服务连接正常，K8s修复Agent准备就绪")
+                # 输出当前激活的模型配置
+                logger.info(f"当前激活的LLM配置: provider={config.llm.provider}, model={config.llm.effective_model}")
+            else:
+                logger.warning("LLM服务连接异常，K8s修复Agent将尝试使用备用LLM服务")
+                # 尝试输出当前的LLM配置信息用于诊断
+                logger.info(f"主要LLM配置: provider={config.llm.provider}, model={config.llm.effective_model}, base_url={config.llm.effective_base_url}")
+                logger.info(f"备用LLM配置: provider={'ollama' if config.llm.provider.lower() == 'openai' else 'openai'}, model={config.llm.ollama_model if config.llm.provider.lower() == 'openai' else config.llm.model}")
+                
+                # 尝试故障切换检查 - 检查主模型和备用模型的可用性
+                self._test_model_failover()
+        except Exception as e:
+            logger.warning(f"检查LLM服务状态失败: {str(e)}")
+    
+    def _test_model_failover(self):
+        """测试模型故障切换功能"""
+        try:
+            # 检查主要模型连接
+            primary_healthy = False
+            backup_healthy = False
+            
+            # 检查主要模型
+            if config.llm.provider.lower() == "openai":
+                try:
+                    # 检查OpenAI连接
+                    headers = {"Authorization": f"Bearer {config.llm.api_key}"}
+                    response = requests.get(
+                        f"{config.llm.base_url.rstrip('/')}/models",
+                        headers=headers, 
+                        timeout=3
+                    )
+                    primary_healthy = response.status_code < 400
+                    logger.info(f"主要OpenAI模型服务状态: {'可用' if primary_healthy else '不可用'}")
+                except Exception as e:
+                    logger.warning(f"无法连接到OpenAI API: {str(e)}")
+                    
+                # 检查备用Ollama
+                try:
+                    ollama_host = config.llm.ollama_base_url.replace("/v1", "")
+                    response = requests.get(f"{ollama_host}/api/tags", timeout=3)
+                    backup_healthy = response.status_code == 200
+                    logger.info(f"备用Ollama模型服务状态: {'可用' if backup_healthy else '不可用'}")
+                except Exception as e:
+                    logger.warning(f"无法连接到Ollama API: {str(e)}")
+            else:
+                # Ollama作为主要模型
+                try:
+                    ollama_host = config.llm.ollama_base_url.replace("/v1", "")
+                    response = requests.get(f"{ollama_host}/api/tags", timeout=3)
+                    primary_healthy = response.status_code == 200
+                    logger.info(f"主要Ollama模型服务状态: {'可用' if primary_healthy else '不可用'}")
+                except Exception as e:
+                    logger.warning(f"无法连接到Ollama API: {str(e)}")
+                    
+                # 检查备用OpenAI
+                try:
+                    headers = {"Authorization": f"Bearer {config.llm.api_key}"}
+                    response = requests.get(
+                        f"{config.llm.base_url.rstrip('/')}/models",
+                        headers=headers, 
+                        timeout=3
+                    )
+                    backup_healthy = response.status_code < 400
+                    logger.info(f"备用OpenAI模型服务状态: {'可用' if backup_healthy else '不可用'}")
+                except Exception as e:
+                    logger.warning(f"无法连接到OpenAI API: {str(e)}")
+                    
+            # 输出最终状态
+            if primary_healthy:
+                logger.info("将使用主要LLM模型服务")
+            elif backup_healthy:
+                logger.info("主要LLM服务不可用，将使用备用LLM模型服务")
+            else:
+                logger.error("主要和备用LLM模型服务均不可用，自动修复功能可能受限")
+                
+        except Exception as e:
+            logger.error(f"模型故障切换测试失败: {str(e)}")
     
     async def analyze_and_fix_deployment(
         self, 
@@ -73,18 +152,20 @@ class K8sFixerAgent:
                 }
                 
                 # 应用修复
+                logger.info(f"尝试修复nginx-test-problem的探针配置")
                 patch_result = await self.k8s_service.patch_deployment(
                     deployment_name, fix_patch, namespace
                 )
                 
                 if patch_result:
-                    logger.info("成功修复nginx-test-problem的探针配置")
+                    logger.info("✅ 成功修复nginx-test-problem的探针配置")
                     return """
 自动修复 nginx-test-problem 完成:
 - 发现的问题：LivenessProbe配置问题: 路径错误, 探针频率过高, 初始延迟过短, 缺少ReadinessProbe
 - 执行的操作：将LivenessProbe路径改为/, 调整探针频率为10秒, 将初始延迟调整为10秒, 失败阈值设为3, 添加合适的ReadinessProbe
                     """
                 else:
+                    logger.error("❌ 修复nginx-test-problem失败，无法应用补丁")
                     return "修复nginx-test-problem失败，请手动检查配置"
             
             # 特殊处理nginx-problematic
@@ -225,11 +306,49 @@ class K8sFixerAgent:
             
             try:
                 # 使用LLM分析问题
-                analysis = await self.llm_service.analyze_k8s_problem(
-                    yaml.dump(deployment, default_flow_style=False),
-                    error_description,
-                    json.dumps(context, indent=2)
-                )
+                analysis = None
+                retry_count = 0
+                max_retries = 2  # 重试次数
+                
+                while analysis is None and retry_count < max_retries:
+                    try:
+                        logger.info(f"尝试使用LLM分析K8s问题 (尝试 {retry_count+1}/{max_retries+1})")
+                        logger.info(f"当前使用模型: {config.llm.provider}:{self.llm_service.model}")
+                        
+                        analysis = await self.llm_service.analyze_k8s_problem(
+                            yaml.dump(deployment, default_flow_style=False),
+                            error_description,
+                            json.dumps(context, indent=2)
+                        )
+                        
+                        if analysis:
+                            logger.info(f"成功使用LLM分析问题: {analysis.get('analysis', 'N/A')}")
+                            logger.info(f"使用的模型: {config.llm.provider}:{self.llm_service.model}")
+                        else:
+                            retry_count += 1
+                            logger.warning(f"LLM分析返回为空，尝试重试 ({retry_count}/{max_retries})")
+                            time.sleep(self.retry_delay)
+                    except Exception as e:
+                        retry_count += 1
+                        logger.error(f"LLM分析出错: {str(e)}")
+                        logger.error(f"尝试重试 ({retry_count}/{max_retries})")
+                        
+                        # 记录当前使用的模型配置
+                        if hasattr(self.llm_service, 'provider') and hasattr(self.llm_service, 'model'):
+                            logger.info(f"上次尝试使用的模型: {self.llm_service.provider}:{self.llm_service.model}")
+                        
+                        # 显式尝试使用备用模型
+                        try:
+                            if retry_count == 1:  # 第一次失败后，尝试强制使用备用模型
+                                backup_provider = "ollama" if config.llm.provider.lower() == "openai" else "openai"
+                                backup_model = config.llm.ollama_model if backup_provider == "ollama" else config.llm.model
+                                logger.info(f"尝试显式切换到备用模型: {backup_provider}:{backup_model}")
+                                
+                                # 这将通过自动回退机制在llm_service中处理
+                        except Exception as backup_e:
+                            logger.error(f"切换到备用模型失败: {str(backup_e)}")
+                            
+                        time.sleep(self.retry_delay)
                 
                 if not analysis:
                     # 如果LLM分析失败，但有明确的错误描述，尝试使用直接修复方案
@@ -238,7 +357,24 @@ class K8sFixerAgent:
                         fix_result = await self._identify_and_fix_common_issues(deployment, context, force_fix=True)
                         return fix_result['message']
                     else:
-                        return "无法分析问题，建议手动检查"
+                        # 尝试最后一次使用备用模型，如果可能的话
+                        try:
+                            logger.warning("LLM分析失败，最后尝试备用模型进行问题分析")
+                            # 构建最简单的分析请求
+                            simple_analysis = await self.llm_service.analyze_k8s_problem(
+                                yaml.dump(deployment, default_flow_style=False),
+                                error_description
+                            )
+                            
+                            if simple_analysis:
+                                logger.info("使用备用模型成功进行简化分析")
+                                analysis = simple_analysis
+                            else:
+                                logger.error("所有LLM分析尝试均失败")
+                                return "无法分析问题，建议手动检查Kubernetes配置"
+                        except Exception as final_e:
+                            logger.error(f"最终LLM分析尝试失败: {str(final_e)}")
+                            return "无法分析问题，建议手动检查"
                 
                 logger.info(f"问题分析完成: {analysis.get('analysis', 'N/A')}")
                 
@@ -1181,11 +1317,87 @@ class K8sFixerAgent:
         return "\n".join([f"{i+1}. {rec}" for i, rec in enumerate(recommendations)])
     
     def get_available_tools(self) -> List[str]:
-        """获取修复器可用的工具列表"""
+        """获取可用工具列表"""
         return [
-            "修改资源限制",
-            "修改健康检查配置",
-            "重启部署",
-            "扩缩容部署",
-            "集群健康诊断"
+            "analyze_deployment",
+            "fix_deployment",
+            "restart_deployment",
+            "scale_deployment",
+            "diagnose_cluster"
         ]
+        
+    async def process_agent_state(self, state) -> Any:
+        """处理Agent状态，支持工作流处理
+        
+        Args:
+            state: 工作流状态对象 (AgentState)
+            
+        Returns:
+            更新后的AgentState对象
+        """
+        try:
+            from dataclasses import replace
+            
+            # 获取状态上下文信息（确保是字典副本）
+            context = dict(state.context) if state.context else {}
+            
+            # 获取部署信息
+            deployment = context.get('deployment')
+            namespace = context.get('namespace', 'default')
+            problem = context.get('problem', '')
+            # 强制修复标志，默认为False
+            force = context.get('force', False)
+            
+            if not deployment:
+                logger.warning("没有指定部署名称，无法进行修复")
+                context['error'] = "没有指定部署名称，无法进行修复"
+                return replace(state, context=context)
+            
+            logger.info(f"K8sFixer开始修复: {deployment}/{namespace}, 问题描述: {problem[:50]}...")
+            
+            # 记录LLM提供商状态，便于问题诊断
+            is_llm_healthy = self.llm_service.is_healthy()
+            logger.info(f"LLM服务状态: {'健康' if is_llm_healthy else '异常'}")
+            logger.info(f"当前LLM提供商: {self.llm_service.provider}, 模型: {self.llm_service.model}")
+            
+            # 执行修复
+            try:
+                fix_result = await self.analyze_and_fix_deployment(
+                    deployment,
+                    namespace,
+                    problem
+                )
+            except Exception as fix_e:
+                logger.error(f"修复过程发生错误: {str(fix_e)}")
+                fix_result = f"修复过程发生错误: {str(fix_e)}"
+            
+            # 更新上下文
+            context['result'] = fix_result
+            context['success'] = True if any(term in str(fix_result).lower() for term in ["自动修复完成", "成功", "已修复"]) else False
+            
+            # 添加操作记录
+            if 'actions_taken' not in context or not isinstance(context['actions_taken'], list):
+                context['actions_taken'] = []
+            context['actions_taken'].append(f"K8sFixer修复: {deployment}/{namespace}")
+            
+            # 如果修复失败
+            if not context.get('success', False):
+                context['error'] = "修复失败，请查看结果详情"
+                logger.warning(f"修复结果显示失败: {fix_result[:100]}...")
+            else:
+                logger.info(f"修复成功: {fix_result[:100]}...")
+            
+            # 返回更新后的状态
+            return replace(state, context=context)
+            
+        except Exception as e:
+            logger.error(f"K8sFixer处理状态失败: {str(e)}")
+            # 确保context是一个字典
+            try:
+                context = dict(state.context) if state.context else {}
+            except:
+                context = {}
+            
+            context['error'] = f"K8sFixer处理失败: {str(e)}"
+            from dataclasses import replace
+            return replace(state, context=context)

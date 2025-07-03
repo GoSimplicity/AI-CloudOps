@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Tuple, Optional
 import pandas as pd
 import numpy as np
@@ -88,16 +88,13 @@ class TimeUtils:
         """验证时间范围"""
         if start_time >= end_time:
             return False
-        
         time_diff = (end_time - start_time).total_seconds() / 60
         if time_diff > max_range_minutes:
             return False
-        
         # 检查是否是未来时间
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if start_time > now or end_time > now:
             return False
-        
         return True
     
     @staticmethod

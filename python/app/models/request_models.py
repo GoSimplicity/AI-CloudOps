@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field, validator
 from app.config.settings import config
@@ -23,11 +23,13 @@ class RCARequest(BaseModel):
         
         # 如果没有提供时间范围，使用默认值
         if not self.start_time or not self.end_time:
+            tz = timezone.utc
+            now = datetime.now(tz)
             if self.time_range_minutes:
-                self.end_time = datetime.utcnow()
+                self.end_time = now
                 self.start_time = self.end_time - timedelta(minutes=self.time_range_minutes)
             else:
-                self.end_time = datetime.utcnow()
+                self.end_time = now
                 self.start_time = self.end_time - timedelta(minutes=config.rca.default_time_range)
         
         # 如果没有提供指标，使用默认指标

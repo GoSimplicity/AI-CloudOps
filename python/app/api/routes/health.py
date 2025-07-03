@@ -8,6 +8,7 @@ from app.services.kubernetes import KubernetesService
 from app.services.llm import LLMService
 from app.services.notification import NotificationService
 from app.core.prediction.predictor import PredictionService
+from app.models.response_models import APIResponse
 
 logger = logging.getLogger("aiops.health")
 
@@ -42,16 +43,19 @@ def health_check():
             "system": system_status
         }
         
-        status_code = 200 if is_healthy else 503
-        return jsonify(health_data), status_code
+        return jsonify(APIResponse(
+            code=0,
+            message="健康检查完成",
+            data=health_data
+        ).dict())
         
     except Exception as e:
         logger.error(f"健康检查失败: {str(e)}")
-        return jsonify({
-            "status": "error",
-            "timestamp": datetime.utcnow().isoformat(),
-            "error": str(e)
-        }), 500
+        return jsonify(APIResponse(
+            code=500,
+            message=f"健康检查失败: {str(e)}",
+            data={"timestamp": datetime.utcnow().isoformat()}
+        ).dict()), 500
 
 @health_bp.route('/health/components', methods=['GET'])
 def components_health():
@@ -126,17 +130,22 @@ def components_health():
                 "error": str(e)
             }
         
-        return jsonify({
-            "timestamp": datetime.utcnow().isoformat(),
-            "components": components_detail
-        })
+        return jsonify(APIResponse(
+            code=0,
+            message="组件健康检查完成",
+            data={
+                "timestamp": datetime.utcnow().isoformat(),
+                "components": components_detail
+            }
+        ).dict())
         
     except Exception as e:
         logger.error(f"组件健康检查失败: {str(e)}")
-        return jsonify({
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }), 500
+        return jsonify(APIResponse(
+            code=500,
+            message=f"组件健康检查失败: {str(e)}",
+            data={"timestamp": datetime.utcnow().isoformat()}
+        ).dict()), 500
 
 @health_bp.route('/health/metrics', methods=['GET'])
 def health_metrics():
@@ -181,14 +190,19 @@ def health_metrics():
             "uptime": time.time() - start_time
         }
         
-        return jsonify(metrics)
+        return jsonify(APIResponse(
+            code=0,
+            message="健康指标获取成功",
+            data=metrics
+        ).dict())
         
     except Exception as e:
         logger.error(f"获取健康指标失败: {str(e)}")
-        return jsonify({
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }), 500
+        return jsonify(APIResponse(
+            code=500,
+            message=f"获取健康指标失败: {str(e)}",
+            data={"timestamp": datetime.datetime.utcnow().isoformat()}
+        ).dict()), 500
 
 @health_bp.route('/health/ready', methods=['GET'])
 def readiness_probe():
@@ -202,43 +216,61 @@ def readiness_probe():
         ready = all(components_status.get(comp, False) for comp in required_components)
         
         if ready:
-            return jsonify({
-                "status": "ready",
-                "timestamp": datetime.utcnow().isoformat()
-            }), 200
+            return jsonify(APIResponse(
+                code=0,
+                message="服务就绪",
+                data={
+                    "status": "ready",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            ).dict())
         else:
-            return jsonify({
-                "status": "not ready",
-                "timestamp": datetime.utcnow().isoformat(),
-                "components": components_status
-            }), 503
+            return jsonify(APIResponse(
+                code=503,
+                message="服务未就绪",
+                data={
+                    "status": "not ready",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "components": components_status
+                }
+            ).dict()), 503
             
     except Exception as e:
         logger.error(f"就绪性检查失败: {str(e)}")
-        return jsonify({
-            "status": "error",
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }), 500
+        return jsonify(APIResponse(
+            code=500,
+            message=f"就绪性检查失败: {str(e)}",
+            data={
+                "status": "error",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        ).dict()), 500
 
 @health_bp.route('/health/live', methods=['GET'])
 def liveness_probe():
     """存活性探针"""
     try:
         # 简单的存活性检查
-        return jsonify({
-            "status": "alive",
-            "timestamp": datetime.utcnow().isoformat(),
-            "uptime": time.time() - start_time
-        }), 200
+        return jsonify(APIResponse(
+            code=0,
+            message="服务存活",
+            data={
+                "status": "alive",
+                "timestamp": datetime.utcnow().isoformat(),
+                "uptime": time.time() - start_time
+            }
+        ).dict())
         
     except Exception as e:
         logger.error(f"存活性检查失败: {str(e)}")
-        return jsonify({
-            "status": "error",
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }), 500
+        return jsonify(APIResponse(
+            code=500,
+            message=f"存活性检查失败: {str(e)}",
+            data={
+                "status": "error",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        ).dict()), 500
 
 def check_components_health():
     """检查各组件健康状态"""
@@ -282,21 +314,17 @@ def check_components_health():
     return components_status
 
 def get_system_status():
-    """获取系统状态"""
-    try:
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        memory = psutil.virtual_memory()
-        
-        return {
-            "cpu_usage": cpu_percent,
-            "memory_usage": memory.percent,
-            "memory_available": memory.available,
-            "load_average": psutil.getloadavg() if hasattr(psutil, 'getloadavg') else None
-        }
-    except Exception as e:
-        logger.warning(f"获取系统状态失败: {str(e)}")
-        return {
-            "cpu_usage": 0,
-            "memory_usage": 0,
-            "error": str(e)
-        }
+    """获取系统资源状态"""
+    cpu_percent = psutil.cpu_percent(interval=1)
+    memory = psutil.virtual_memory()
+    disk = psutil.disk_usage('/')
+    
+    system_status = {
+        "cpu_usage_percent": cpu_percent,
+        "memory_usage_percent": memory.percent,
+        "disk_usage_percent": (disk.used / disk.total) * 100,
+        "memory_available_mb": memory.available / (1024 * 1024),
+        "disk_free_gb": disk.free / (1024 * 1024 * 1024)
+    }
+    
+    return system_status

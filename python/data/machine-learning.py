@@ -21,460 +21,420 @@ import matplotlib.pyplot as plt
 os.makedirs('data/models', exist_ok=True)
 
 # 配置
-MODEL_PATH = 'data/models/time_qps_auto_scaling_model.pkl'
-SCALER_PATH = 'data/models/time_qps_auto_scaling_scaler.pkl'
-METADATA_PATH = 'data/models/time_qps_auto_scaling_model_metadata.json'
+MODEL_PATH = 'models/time_qps_auto_scaling_model.pkl'
+SCALER_PATH = 'models/time_qps_auto_scaling_scaler.pkl'
+METADATA_PATH = 'models/time_qps_auto_scaling_model_metadata.json'
 CSV_PATH = 'data.csv'
 
-def generate_synthetic_data():
-    """生成更贴近真实场景的合成数据用于训练模型"""
-    print("正在生成企业级合成训练数据...")
+def load_real_data():
+    """加载真实数据"""
+    print("正在加载真实数据...")
     
-    # 创建时间序列
-    start_date = datetime(2023, 1, 1)
-    end_date = datetime(2023, 12, 31)
-    dates = [start_date + timedelta(hours=i) for i in range(0, 24*365, 1)]
-    
-    # 创建DataFrame
-    df = pd.DataFrame({
-        'timestamp': dates
-    })
-    
-    # 提取时间特征
-    df['hour'] = df['timestamp'].dt.hour
-    df['day_of_week'] = df['timestamp'].dt.dayofweek  # 0是周一，6是周日
-    df['month'] = df['timestamp'].dt.month
-    df['day'] = df['timestamp'].dt.day
-    df['is_weekend'] = df['day_of_week'].isin([5, 6]).astype(int)
-    df['is_business_hour'] = ((df['hour'] >= 9) & (df['hour'] <= 17) & 
-                              (df['is_weekend'] == 0)).astype(int)
-    df['is_holiday'] = 0  # 默认不是假期
-    
-    # 添加主要节假日 (简化版，实际系统应该使用完整的假期数据)
-    holidays = [
-        # 元旦
-        (1, 1), (1, 2), (1, 3),
-        # 春节 (2023年简化版)
-        (1, 21), (1, 22), (1, 23), (1, 24), (1, 25), (1, 26), (1, 27),
-        # 劳动节
-        (5, 1), (5, 2), (5, 3),
-        # 国庆节
-        (10, 1), (10, 2), (10, 3), (10, 4), (10, 5), (10, 6), (10, 7)
-    ]
-    
-    for month, day in holidays:
-        holiday_mask = (df['month'] == month) & (df['day'] == day)
-        df.loc[holiday_mask, 'is_holiday'] = 1
-    
-    # 创建周期性特征
-    df['sin_time'] = np.sin(2 * np.pi * df['hour'] / 24)
-    df['cos_time'] = np.cos(2 * np.pi * df['hour'] / 24)
-    df['sin_day'] = np.sin(2 * np.pi * df['day_of_week'] / 7)
-    df['cos_day'] = np.cos(2 * np.pi * df['day_of_week'] / 7)
-    
-    # 模拟真实企业的QPS模式
-    # 1. 基础负载 - 总是存在的低水平流量
-    base_load = 20 + np.random.normal(0, 5, size=len(df))
-    
-    # 2. 日间模式 - 工作时间的流量峰值
-    # 早晨上升，中午小幅下降，下午再次上升，晚上下降
-    hour_factors = {
-        0: 0.1, 1: 0.05, 2: 0.05, 3: 0.05, 4: 0.05, 5: 0.1,
-        6: 0.2, 7: 0.4, 8: 0.6, 9: 0.8, 10: 0.9, 11: 0.85,
-        12: 0.7, 13: 0.8, 14: 0.9, 15: 0.95, 16: 1.0, 17: 0.9,
-        18: 0.7, 19: 0.5, 20: 0.4, 21: 0.3, 22: 0.2, 23: 0.1
-    }
-    
-    daily_pattern = df['hour'].map(hour_factors).values * 100
-    
-    # 3. 周间模式 - 工作日比周末流量高
-    weekday_factors = {
-        0: 1.0,  # 周一
-        1: 1.1,  # 周二
-        2: 1.2,  # 周三
-        3: 1.15, # 周四
-        4: 0.9,  # 周五
-        5: 0.6,  # 周六
-        6: 0.5   # 周日
-    }
-    
-    weekly_pattern = df['day_of_week'].map(weekday_factors).values * 80
-    
-    # 4. 月度模式 - 某些月份可能有业务高峰
-    monthly_factors = {
-        1: 0.7,   # 元月
-        2: 0.6,   # 二月
-        3: 0.8,   # 三月
-        4: 0.9,   # 四月
-        5: 1.0,   # 五月
-        6: 1.1,   # 六月
-        7: 1.0,   # 七月
-        8: 0.9,   # 八月
-        9: 1.1,   # 九月
-        10: 1.2,  # 十月
-        11: 1.3,  # 十一月（双十一）
-        12: 1.4   # 十二月（年终）
-    }
-    
-    monthly_pattern = df['month'].map(monthly_factors).values * 30
-    
-    # 5. 特殊事件 - 模拟促销活动、发布等突发流量
-    special_events = []
-    # 添加10个随机特殊事件
-    for _ in range(10):
-        event_day = np.random.randint(0, 364)
-        event_duration = np.random.randint(4, 24)  # 持续4-24小时
-        event_intensity = np.random.uniform(1.5, 3.0)  # 流量放大1.5-3倍
-        special_events.append((event_day, event_duration, event_intensity))
-    
-    # 初始化特殊事件影响
-    special_event_impact = np.zeros(len(df))
-    
-    for event_day, duration, intensity in special_events:
-        start_idx = event_day * 24
-        for i in range(duration):
-            if start_idx + i < len(special_event_impact):
-                # 模拟事件期间流量逐渐上升再下降的模式
-                if i < duration / 2:
-                    factor = i / (duration / 2) * intensity
-                else:
-                    factor = (duration - i) / (duration / 2) * intensity
-                special_event_impact[start_idx + i] = factor * 100
-    
-    # 6. 节假日影响 - 某些业务在节假日流量下降，有些则上升
-    holiday_impact = df['is_holiday'] * np.random.choice([-50, 100], size=len(df), p=[0.3, 0.7])
-    
-    # 7. 随机波动 - 模拟不可预测的流量变化
-    noise = np.random.normal(0, 15, size=len(df))
-    
-    # 8. 长期趋势 - 业务逐渐增长
-    days_since_start = (df['timestamp'] - df['timestamp'].min()).dt.days
-    trend = days_since_start / 365 * 50  # 一年增长50 QPS
-    
-    # 组合所有因素
-    df['QPS'] = (base_load + daily_pattern + weekly_pattern + monthly_pattern + 
-                special_event_impact + holiday_impact + noise + trend)
-    df['QPS'] = df['QPS'].clip(lower=5)  # 确保QPS至少为5
-    
-    # 实例数模拟 - 基于现实的弹性伸缩策略
-    # 基本规则:
-    # 1. 基础实例数: 每100 QPS需要1个实例
-    # 2. 最小实例数: 2个（保证高可用）
-    # 3. 考虑时间因素（高峰期提前扩容）
-    # 4. 添加业务规则和一些人为决策因素
-    
-    # 基本实例数计算
-    df['base_instances'] = 2 + (df['QPS'] / 100).astype(int)
-    
-    # 高峰期提前扩容（早9点到下午5点额外增加实例）
-    df['instances'] = df['base_instances'].copy()
-    peak_hours_mask = (df['hour'] >= 8) & (df['hour'] <= 18) & (df['is_weekend'] == 0)
-    df.loc[peak_hours_mask, 'instances'] = df.loc[peak_hours_mask, 'base_instances'] + 1
-    
-    # 特殊事件期间可能会额外增加实例
-    for event_day, duration, intensity in special_events:
-        start_idx = event_day * 24
-        for i in range(duration):
-            if start_idx + i < len(df):
-                # 根据事件强度增加实例
-                df.iloc[start_idx + i, df.columns.get_loc('instances')] += int(intensity)
-    
-    # 节假日调整
-    df.loc[df['is_holiday'] == 1, 'instances'] = df.loc[df['is_holiday'] == 1, 'instances'].apply(
-        lambda x: max(2, x - 1) if np.random.random() < 0.7 else x + 1
-    )
-    
-    # 深夜时间减少实例（但保持至少2个实例）
-    night_hours_mask = (df['hour'] >= 0) & (df['hour'] <= 5)
-    df.loc[night_hours_mask, 'instances'] = df.loc[night_hours_mask, 'instances'].apply(
-        lambda x: max(2, x - 1)
-    )
-    
-    # 周末可能减少实例数（但仍保持最小实例数）
-    weekend_mask = df['is_weekend'] == 1
-    df.loc[weekend_mask, 'instances'] = df.loc[weekend_mask, 'instances'].apply(
-        lambda x: max(2, int(x * 0.8)) if np.random.random() < 0.7 else x
-    )
-    
-    # 确保实例数在合理范围内
-    df['instances'] = df['instances'].clip(lower=1, upper=20)
-    
-    # 保存数据
-    df.to_csv(CSV_PATH, index=False)
-    print(f"生成了 {len(df)} 条训练数据并保存到 {CSV_PATH}")
-    
-    # 绘制数据可视化
     try:
-        plt.figure(figsize=(15, 10))
-        
-        # 绘制一周的QPS曲线
-        week_data = df[df['timestamp'] < df['timestamp'].min() + pd.Timedelta(days=7)]
-        plt.subplot(2, 1, 1)
-        plt.plot(week_data['timestamp'], week_data['QPS'], 'b-')
-        plt.title('一周内的QPS变化')
-        plt.xlabel('时间')
-        plt.ylabel('QPS')
-        plt.grid(True)
-        
-        # 绘制QPS和实例数的关系
-        plt.subplot(2, 1, 2)
-        plt.scatter(df['QPS'], df['instances'], alpha=0.5)
-        plt.title('QPS与实例数关系')
-        plt.xlabel('QPS')
-        plt.ylabel('实例数')
-        plt.grid(True)
-        
-        plt.tight_layout()
-        plt.savefig('data/models/qps_instances_visualization.png')
-        plt.close()
-        print("已生成数据可视化图表保存到 data/models/qps_instances_visualization.png")
+        # 尝试加载CSV文件
+        if os.path.exists(CSV_PATH):
+            df = pd.read_csv(CSV_PATH)
+            
+            # 确保时间戳列存在
+            if 'timestamp' not in df.columns:
+                print(f"错误: 数据集缺少timestamp列")
+                return None
+                
+            # 确保QPS和实例数列存在
+            if 'QPS' not in df.columns or 'instances' not in df.columns:
+                print(f"错误: 数据集缺少QPS或instances列")
+                return None
+                
+            # 将时间戳转换为datetime格式
+            if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
+                try:
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+                except:
+                    print("警告: 无法解析时间戳字段，尝试使用默认格式...")
+            
+            # 检查数据是否有空值
+            if df['QPS'].isnull().any() or df['instances'].isnull().any():
+                print("警告: 数据包含空值，正在清理...")
+                df = df.dropna(subset=['QPS', 'instances'])
+            
+            # 基本数据验证
+            if len(df) < 100:
+                print(f"警告: 数据量较少 ({len(df)} 条)，可能导致模型性能不佳")
+            
+            # 检查并处理异常值
+            qps_mean = df['QPS'].mean()
+            qps_std = df['QPS'].std()
+            outlier_mask = (df['QPS'] > qps_mean + 5 * qps_std) | (df['QPS'] < 0)
+            if outlier_mask.any():
+                print(f"警告: 检测到 {outlier_mask.sum()} 个QPS异常值，将被限制在合理范围内")
+                df.loc[df['QPS'] < 0, 'QPS'] = 0
+                df.loc[df['QPS'] > qps_mean + 5 * qps_std, 'QPS'] = qps_mean + 5 * qps_std
+            
+            # 确保实例数是正整数
+            if (df['instances'] < 1).any():
+                print("警告: 发现实例数小于1，将设置为最小值1")
+                df.loc[df['instances'] < 1, 'instances'] = 1
+                
+            # 将实例数转为整数
+            df['instances'] = df['instances'].round().astype(int)
+            
+            print(f"成功加载了 {len(df)} 条数据")
+            return df
+        else:
+            print(f"错误: 数据文件 {CSV_PATH} 不存在")
+            return None
     except Exception as e:
-        print(f"生成可视化图表失败: {str(e)}")
-    
-    return df
-
-def load_or_generate_data():
-    """加载数据或生成合成数据"""
-    if os.path.exists(CSV_PATH):
-        print(f"加载现有数据: {CSV_PATH}")
-        df = pd.read_csv(CSV_PATH)
-        if 'timestamp' in df.columns:
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-        return df
-    else:
-        return generate_synthetic_data()
+        print(f"加载数据时出错: {str(e)}")
+        return None
 
 def extract_features(df):
-    """提取特征，使用更多的特征以提高预测准确性"""
-    print("提取特征...")
+    """从数据集提取训练特征"""
+    if df is None or len(df) == 0:
+        print("错误: 无法从空数据集提取特征")
+        return None, None
     
-    # 基础特征
-    features = df[['QPS', 'sin_time', 'cos_time', 'sin_day', 'cos_day', 
-                  'is_business_hour', 'is_weekend', 'is_holiday']].copy()
-    
-    # 添加一小时前的QPS作为特征（如果可用）
-    df['QPS_1h_ago'] = df['QPS'].shift(1).fillna(df['QPS'])
-    features['QPS_1h_ago'] = df['QPS_1h_ago']
-    
-    # 添加一天前同一时间的QPS作为特征
-    df['QPS_1d_ago'] = df['QPS'].shift(24).fillna(df['QPS'])
-    features['QPS_1d_ago'] = df['QPS_1d_ago']
-    
-    # 添加一周前同一时间的QPS作为特征
-    df['QPS_1w_ago'] = df['QPS'].shift(24*7).fillna(df['QPS'])
-    features['QPS_1w_ago'] = df['QPS_1w_ago']
-    
-    # 计算近期QPS变化率
-    df['QPS_change'] = (df['QPS'] - df['QPS_1h_ago']) / (df['QPS_1h_ago'] + 1) # 避免除零
-    features['QPS_change'] = df['QPS_change']
-    
-    # 计算最近6小时的平均QPS
-    df['QPS_avg_6h'] = df['QPS'].rolling(6).mean().fillna(df['QPS'])
-    features['QPS_avg_6h'] = df['QPS_avg_6h']
-    
-    # 目标变量
-    target = df['instances'].copy()
-    
-    return features, target
+    try:
+        print("正在提取特征...")
+        
+        # 提取时间特征
+        df['hour'] = df['timestamp'].dt.hour
+        df['day_of_week'] = df['timestamp'].dt.dayofweek  # 0是周一，6是周日
+        df['month'] = df['timestamp'].dt.month
+        df['day'] = df['timestamp'].dt.day
+        df['is_weekend'] = df['day_of_week'].isin([5, 6]).astype(int)
+        df['is_business_hour'] = ((df['hour'] >= 9) & (df['hour'] <= 17) & 
+                                (df['is_weekend'] == 0)).astype(int)
+        
+        # 创建周期性特征
+        df['sin_time'] = np.sin(2 * np.pi * df['hour'] / 24)
+        df['cos_time'] = np.cos(2 * np.pi * df['hour'] / 24)
+        df['sin_day'] = np.sin(2 * np.pi * df['day_of_week'] / 7)
+        df['cos_day'] = np.cos(2 * np.pi * df['day_of_week'] / 7)
+        
+        # 为每个时间点添加历史QPS数据
+        df = df.sort_values('timestamp')
+        
+        # 添加滞后特征（前一小时，前一天，前一周）
+        # 注意: 实际使用时，确保数据已按时间排序
+        df['QPS_1h_ago'] = df['QPS'].shift(1)  # 假设数据点间隔为1小时
+        df['QPS_1d_ago'] = df['QPS'].shift(24)  # 24小时前
+        df['QPS_1w_ago'] = df['QPS'].shift(24*7)  # 一周前
+        
+        # 计算变化率
+        df['QPS_change'] = df['QPS'].pct_change().fillna(0)
+        
+        # 计算移动平均
+        df['QPS_avg_6h'] = df['QPS'].rolling(window=6).mean().fillna(df['QPS'])
+        
+        # 删除包含NaN的行
+        df = df.dropna()
+        
+        # 选择特征和目标变量
+        features = df[[
+            'QPS', 'sin_time', 'cos_time', 'sin_day', 'cos_day', 
+            'is_business_hour', 'is_weekend', 'QPS_1h_ago', 
+            'QPS_1d_ago', 'QPS_1w_ago', 'QPS_change', 'QPS_avg_6h'
+        ]]
+        
+        target = df['instances']
+        
+        print(f"提取了 {len(features)} 条训练数据，包含 {len(features.columns)} 个特征")
+        return features, target
+    except Exception as e:
+        print(f"提取特征时出错: {str(e)}")
+        return None, None
 
 def train_model():
-    """训练模型，测试多种算法并选择最佳模型"""
+    """训练和评估预测模型"""
     print("开始训练模型...")
     
-    # 加载数据
-    df = load_or_generate_data()
+    # 加载真实数据
+    df = load_real_data()
+    if df is None:
+        print("错误: 无法加载数据，模型训练终止")
+        return False
     
     # 提取特征
     features, target = extract_features(df)
+    if features is None or target is None:
+        print("错误: 特征提取失败，模型训练终止")
+        return False
     
     # 划分训练集和测试集
     X_train, X_test, y_train, y_test = train_test_split(
         features, target, test_size=0.2, random_state=42
     )
     
-    # 特征标准化
+    print(f"训练集: {X_train.shape[0]} 样本, 测试集: {X_test.shape[0]} 样本")
+    
+    # 标准化特征
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
-    print("训练数据形状:", X_train.shape)
-    print("特征列:", features.columns.tolist())
-    
-    # 选择算法并训练
+    # 定义模型列表
     models = {
-        'Ridge回归': Ridge(alpha=1.0),
-        '随机森林': RandomForestRegressor(n_estimators=100, random_state=42),
-        '梯度提升树': GradientBoostingRegressor(n_estimators=100, 
-                                        learning_rate=0.1, 
-                                        max_depth=5, 
-                                        random_state=42)
+        "Ridge回归": Ridge(),
+        "随机森林回归": RandomForestRegressor(random_state=42),
+        "梯度提升回归": GradientBoostingRegressor(random_state=42)
+    }
+    
+    # 定义参数网格
+    param_grids = {
+        "Ridge回归": {
+            'alpha': [0.1, 1.0, 10.0]
+        },
+        "随机森林回归": {
+            'n_estimators': [50, 100],
+            'max_depth': [None, 10, 20],
+            'min_samples_split': [2, 5]
+        },
+        "梯度提升回归": {
+            'n_estimators': [50, 100],
+            'learning_rate': [0.01, 0.1],
+            'max_depth': [3, 5]
+        }
     }
     
     best_model = None
-    best_score = float('inf')
-    best_model_name = ""
-    results = {}
+    best_score = float('-inf')
+    best_name = None
     
+    # 模型训练与评估
     for name, model in models.items():
         print(f"\n训练模型: {name}")
-        model.fit(X_train_scaled, y_train)
         
-        # 评估
+        # 网格搜索最佳参数
+        grid_search = GridSearchCV(
+            model, param_grids[name], cv=5, 
+            scoring='neg_mean_squared_error', n_jobs=-1
+        )
+        grid_search.fit(X_train_scaled, y_train)
+        
+        # 获取最佳模型
+        best_params = grid_search.best_params_
+        model = grid_search.best_estimator_
+        print(f"最佳参数: {best_params}")
+        
+        # 在测试集上评估
         y_pred = model.predict(X_test_scaled)
+        
+        # 计算性能指标
         mse = mean_squared_error(y_test, y_pred)
         rmse = np.sqrt(mse)
         mae = mean_absolute_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
         
-        # 计算精确匹配率(实例数是整数，我们需要检查舍入后的预测有多少是精确匹配的)
-        y_pred_rounded = np.round(y_pred)
-        exact_matches = np.sum(y_pred_rounded == y_test) / len(y_test)
-        off_by_one = np.sum(np.abs(y_pred_rounded - y_test) <= 1) / len(y_test)
+        print(f"性能指标:")
+        print(f"  MSE: {mse:.4f}")
+        print(f"  RMSE: {rmse:.4f}")
+        print(f"  MAE: {mae:.4f}")
+        print(f"  R²: {r2:.4f}")
         
-        results[name] = {
-            'mse': mse,
-            'rmse': rmse,
-            'mae': mae,
-            'r2': r2,
-            'exact_match': exact_matches,
-            'off_by_one': off_by_one
+        # 更新最佳模型
+        if r2 > best_score:
+            best_model = model
+            best_score = r2
+            best_name = name
+    
+    if best_model is not None:
+        print(f"\n选择最佳模型: {best_name} (R² = {best_score:.4f})")
+        
+        # 保存模型和标准化器
+        joblib.dump(best_model, MODEL_PATH)
+        joblib.dump(scaler, SCALER_PATH)
+        print(f"模型已保存到 {MODEL_PATH}")
+        print(f"标准化器已保存到 {SCALER_PATH}")
+        
+        # 保存模型元数据
+        model_metadata = {
+            "version": "2.0",
+            "created_at": datetime.now().isoformat(),
+            "features": list(features.columns),
+            "target": "instances",
+            "algorithm": best_name,
+            "performance": {
+                "r2": best_score,
+                "rmse": rmse,
+                "mae": mae
+            },
+            "parameters": str(best_model.get_params()),
+            "data_stats": {
+                "n_samples": len(df),
+                "mean_qps": float(df['QPS'].mean()),
+                "std_qps": float(df['QPS'].std()),
+                "min_qps": float(df['QPS'].min()),
+                "max_qps": float(df['QPS'].max()),
+                "mean_instances": float(df['instances'].mean()),
+                "min_instances": int(df['instances'].min()),
+                "max_instances": int(df['instances'].max())
+            }
         }
         
-        print(f"  均方误差(MSE): {mse:.4f}")
-        print(f"  均方根误差(RMSE): {rmse:.4f}")
-        print(f"  平均绝对误差(MAE): {mae:.4f}")
-        print(f"  决定系数(R²): {r2:.4f}")
-        print(f"  精确匹配率: {exact_matches:.2%}")
-        print(f"  误差≤1的比例: {off_by_one:.2%}")
+        with open(METADATA_PATH, 'w') as f:
+            json.dump(model_metadata, f, indent=2)
+        print(f"模型元数据已保存到 {METADATA_PATH}")
         
-        # 特征重要性（如果模型支持）
-        if hasattr(model, 'feature_importances_'):
-            importances = model.feature_importances_
-            indices = np.argsort(importances)[::-1]
-            print("  特征重要性:")
-            for i in range(min(10, len(features.columns))):
-                idx = indices[i]
-                print(f"    {features.columns[idx]}: {importances[idx]:.4f}")
+        # 可视化实际值与预测值的对比
+        y_pred_train = best_model.predict(X_train_scaled)
+        y_pred_test = best_model.predict(X_test_scaled)
         
-        if mse < best_score:
-            best_score = mse
-            best_model = model
-            best_model_name = name
-    
-    print(f"\n最佳模型: {best_model_name}")
-    
-    # 保存最佳模型
-    joblib.dump(best_model, MODEL_PATH)
-    print(f"模型已保存到 {MODEL_PATH}")
-    
-    # 保存标准化器
-    joblib.dump(scaler, SCALER_PATH)
-    print(f"标准化器已保存到 {SCALER_PATH}")
-    
-    # 保存模型元数据
-    metadata = {
-        "version": "2.0",
-        "created_at": datetime.now().isoformat(),
-        "algorithm": best_model_name,
-        "features": features.columns.tolist(),
-        "mse": float(best_score),
-        "rmse": float(np.sqrt(best_score)),
-        "mae": float(results[best_model_name]['mae']),
-        "r2": float(results[best_model_name]['r2']),
-        "exact_match": float(results[best_model_name]['exact_match']),
-        "off_by_one": float(results[best_model_name]['off_by_one']),
-        "samples": len(df),
-        "description": "基于QPS和时间特征的企业级自动扩缩容预测模型"
-    }
-    
-    with open(METADATA_PATH, 'w') as f:
-        json.dump(metadata, f, indent=2)
-    
-    print(f"模型元数据已保存到 {METADATA_PATH}")
-    
-    # 绘制预测结果散点图
-    try:
-        plt.figure(figsize=(10, 6))
-        plt.scatter(y_test, y_pred, alpha=0.5)
+        plt.figure(figsize=(15, 10))
+        
+        # 训练集上的实际值与预测值对比
+        plt.subplot(2, 2, 1)
+        plt.scatter(y_train, y_pred_train, alpha=0.5)
+        plt.plot([y_train.min(), y_train.max()], [y_train.min(), y_train.max()], 'r--')
+        plt.xlabel('实际实例数')
+        plt.ylabel('预测实例数')
+        plt.title('训练集: 实际值 vs 预测值')
+        
+        # 测试集上的实际值与预测值对比
+        plt.subplot(2, 2, 2)
+        plt.scatter(y_test, y_pred_test, alpha=0.5)
         plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
         plt.xlabel('实际实例数')
         plt.ylabel('预测实例数')
-        plt.title(f'实例数预测结果 ({best_model_name})')
+        plt.title('测试集: 实际值 vs 预测值')
+        
+        # QPS与实例数的关系
+        plt.subplot(2, 2, 3)
+        plt.scatter(df['QPS'], df['instances'], alpha=0.5)
+        plt.xlabel('QPS')
+        plt.ylabel('实例数')
+        plt.title('QPS与实例数关系')
         plt.grid(True)
+        
+        # 误差分布
+        plt.subplot(2, 2, 4)
+        errors = y_test - y_pred_test
+        plt.hist(errors, bins=20)
+        plt.xlabel('预测误差')
+        plt.ylabel('频率')
+        plt.title('预测误差分布')
+        
+        plt.tight_layout()
         plt.savefig('data/models/prediction_results.png')
-        plt.close()
-        print("已生成预测结果可视化图表保存到 data/models/prediction_results.png")
-    except Exception as e:
-        print(f"生成预测结果可视化失败: {str(e)}")
-    
-    return best_model, scaler, best_score
+        print("模型评估结果已保存为图像")
+        
+        # 额外创建QPS和实例数的可视化
+        plt.figure(figsize=(12, 6))
+        
+        # 选择一部分时间段的数据进行可视化
+        time_series_df = df.sort_values('timestamp').reset_index(drop=True)
+        sample_size = min(1000, len(time_series_df))
+        sample_df = time_series_df.iloc[:sample_size]
+        
+        plt.plot(sample_df.index, sample_df['QPS'], 'b-', label='QPS')
+        plt.plot(sample_df.index, sample_df['instances'] * 10, 'r-', label='实例数 x 10')
+        plt.xlabel('时间索引')
+        plt.ylabel('值')
+        plt.title('QPS与实例数随时间的变化')
+        plt.legend()
+        plt.grid(True)
+        
+        plt.savefig('data/models/qps_instances_visualization.png')
+        print("QPS与实例数可视化已保存")
+        
+        return True
+    else:
+        print("错误: 未能找到合适的模型")
+        return False
 
 def test_model(model, scaler):
-    """测试模型在各种场景下的表现"""
-    print("\n测试模型...")
+    """测试模型在不同场景下的表现"""
+    if model is None or scaler is None:
+        print("错误: 模型或标准化器未提供")
+        return
     
-    # 创建测试样例，模拟各种企业场景
+    print("\n模型场景测试:")
+    
+    # 测试场景
     test_cases = [
-        {"QPS": 50, "hour": 10, "is_weekend": 0, "desc": "工作日上午，低负载"},
-        {"QPS": 150, "hour": 13, "is_weekend": 0, "desc": "工作日中午，中等负载"},
-        {"QPS": 300, "hour": 16, "is_weekend": 0, "desc": "工作日下午高峰，高负载"},
-        {"QPS": 30, "hour": 2, "is_weekend": 0, "desc": "工作日深夜，极低负载"},
-        {"QPS": 250, "hour": 20, "is_weekend": 0, "desc": "工作日晚上，高负载"},
-        {"QPS": 180, "hour": 15, "is_weekend": 1, "desc": "周末下午，中等负载"},
-        {"QPS": 400, "hour": 14, "is_weekend": 0, "is_holiday": 1, "desc": "节假日，超高负载"}
+        {"name": "低QPS场景", "qps": 5.0, "hour": 12, "day_of_week": 2, "is_weekend": 0},
+        {"name": "中等QPS场景", "qps": 50.0, "hour": 14, "day_of_week": 3, "is_weekend": 0},
+        {"name": "高QPS场景", "qps": 500.0, "hour": 10, "day_of_week": 4, "is_weekend": 0},
+        {"name": "工作时间峰值", "qps": 300.0, "hour": 11, "day_of_week": 1, "is_weekend": 0},
+        {"name": "夜间低流量", "qps": 20.0, "hour": 2, "day_of_week": 2, "is_weekend": 0},
+        {"name": "周末场景", "qps": 100.0, "hour": 15, "day_of_week": 6, "is_weekend": 1},
+        {"name": "零流量场景", "qps": 0.0, "hour": 3, "day_of_week": 2, "is_weekend": 0}
     ]
     
     for case in test_cases:
-        qps = case["QPS"]
-        hour = case["hour"]
-        is_weekend = case.get("is_weekend", 0)
-        is_holiday = case.get("is_holiday", 0)
-        is_business_hour = 1 if 9 <= hour <= 17 and not is_weekend else 0
+        test_prediction(model, scaler, case)
+    
+def test_prediction(model, scaler, case):
+    """测试单个预测场景"""
+    # 创建特征字典
+    features_dict = {
+        "QPS": [case["qps"]],
+        "sin_time": [np.sin(2 * np.pi * case["hour"] / 24)],
+        "cos_time": [np.cos(2 * np.pi * case["hour"] / 24)],
+        "sin_day": [np.sin(2 * np.pi * case["day_of_week"] / 7)],
+        "cos_day": [np.cos(2 * np.pi * case["day_of_week"] / 7)],
+        "is_business_hour": [1 if 9 <= case["hour"] <= 17 and case["is_weekend"] == 0 else 0],
+        "is_weekend": [case["is_weekend"]]
+    }
+    
+    # 添加历史QPS特征（模拟值）
+    features_dict["QPS_1h_ago"] = [case["qps"] * 0.9]
+    features_dict["QPS_1d_ago"] = [case["qps"] * 1.1]
+    features_dict["QPS_1w_ago"] = [case["qps"] * 1.0]
+    features_dict["QPS_change"] = [0.1]
+    features_dict["QPS_avg_6h"] = [case["qps"] * 0.95]
+    
+    # 构建特征向量
+    features_df = pd.DataFrame(features_dict)
+    
+    # 标准化特征
+    try:
+        features_scaled = scaler.transform(features_df)
+    except:
+        # 如果特征列不匹配，可能需要调整
+        print(f"警告: 特征不匹配，尝试调整...")
+        # 获取标准化器的特征列表
+        scaler_features = getattr(scaler, "feature_names_in_", None)
+        if scaler_features is None:
+            print("错误: 无法确定标准化器的特征列")
+            return
+            
+        # 根据标准化器要求的特征调整
+        adjusted_features = {}
+        for i, feature in enumerate(scaler_features):
+            if feature in features_dict:
+                adjusted_features[feature] = features_dict[feature]
+            else:
+                print(f"警告: 缺少特征 '{feature}'，使用0.0代替")
+                adjusted_features[feature] = [0.0]
         
-        # 计算周期性特征
-        sin_time = np.sin(2 * np.pi * hour / 24)
-        cos_time = np.cos(2 * np.pi * hour / 24)
-        
-        # 一天中的时间（假设是周三）
-        day_of_week = 2 if not is_weekend else 6
-        sin_day = np.sin(2 * np.pi * day_of_week / 7)
-        cos_day = np.cos(2 * np.pi * day_of_week / 7)
-        
-        # 创建特征向量
-        features_dict = {
-            "QPS": [qps],
-            "sin_time": [sin_time],
-            "cos_time": [cos_time],
-            "sin_day": [sin_day],
-            "cos_day": [cos_day],
-            "is_business_hour": [is_business_hour],
-            "is_weekend": [is_weekend],
-            "is_holiday": [is_holiday],
-            "QPS_1h_ago": [qps * 0.9],  # 假设前一小时的QPS略低
-            "QPS_1d_ago": [qps * 1.1],  # 假设昨天同一时间的QPS略高
-            "QPS_1w_ago": [qps * 0.95],  # 假设上周同一时间的QPS略低
-            "QPS_change": [0.1],  # 假设QPS在增长
-            "QPS_avg_6h": [qps * 0.95]  # 假设6小时平均QPS略低
-        }
-        
-        features = pd.DataFrame(features_dict)
-        
-        # 标准化特征
-        features_scaled = scaler.transform(features)
-        
-        # 预测
+        features_df = pd.DataFrame(adjusted_features)
+        features_scaled = scaler.transform(features_df)
+    
+    # 执行预测
+    try:
         prediction = model.predict(features_scaled)[0]
-        instances = int(np.clip(np.round(prediction), 1, 20))
         
-        print(f"{case['desc']}: QPS={qps}, 预测实例数={instances}, 原始预测值={prediction:.2f}")
+        # 限制实例数范围并四舍五入（实例数应为整数）
+        instances = max(1, int(round(prediction)))
+        
+        print(f"{case['name']}: QPS={case['qps']:.1f}, 预测实例数={instances}")
+    except Exception as e:
+        print(f"预测失败: {str(e)}")
+    
 
-if __name__ == "__main__":
-    print("=" * 50)
-    print("企业级自动扩缩容预测模型训练")
-    print("=" * 50)
+if __name__ == '__main__':
+    # 训练模型
+    success = train_model()
     
-    model, scaler, score = train_model()
-    test_model(model, scaler)
-    
-    print("\n训练完成!")
-    print("=" * 50)
+    if success:
+        # 加载已训练的模型和标准化器
+        try:
+            model = joblib.load(MODEL_PATH)
+            scaler = joblib.load(SCALER_PATH)
+            
+            # 测试模型
+            test_model(model, scaler)
+        except Exception as e:
+            print(f"加载模型失败: {str(e)}")
+    else:
+        print("模型训练失败，无法执行测试")

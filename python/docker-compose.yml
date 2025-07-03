@@ -12,12 +12,21 @@ services:
       - PROMETHEUS_HOST=prometheus:9090
       - DEBUG=false
       - LOG_LEVEL=INFO
-      - LLM_BASE_URL=http://ollama:11434/v1
+      # LLM 配置
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_MODEL=${LLM_MODEL:-Qwen/Qwen2.5-14B-Instruct}
+      - LLM_API_KEY=${LLM_API_KEY:-sk-xrykvuqngkhbsmdtmvhzsupjafandfyhcdbcqojlyvrftttq}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.siliconflow.cn/v1}
+      # Ollama备用配置
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b}
+      - OLLAMA_BASE_URL=http://ollama:11434/v1
+      # Kubernetes配置
       - K8S_IN_CLUSTER=false
       - NOTIFICATION_ENABLED=true
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./deploy/kubernetes:/app/deploy/kubernetes
     depends_on:
       - prometheus
       - ollama
@@ -72,6 +81,12 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    # 预拉取常用模型
+    command: >
+      sh -c "ollama serve &
+             sleep 10 &&
+             ollama pull qwen2.5:3b &&
+             wait"
 
   grafana:
     image: grafana/grafana:10.1.0

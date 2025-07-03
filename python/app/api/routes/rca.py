@@ -6,6 +6,7 @@ from app.core.rca.analyzer import RCAAnalyzer
 from app.models.request_models import RCARequest
 from app.utils.validators import validate_time_range, validate_metric_list
 from app.config.settings import config
+from app.models.response_models import APIResponse
 
 logger = logging.getLogger("aiops.rca")
 
@@ -26,22 +27,24 @@ def root_cause_analysis():
             rca_request = RCARequest(**data)
         except Exception as e:
             logger.warning(f"RCA请求参数错误: {str(e)}")
-            return jsonify({"error": f"请求参数错误: {str(e)}"}), 400
+            return jsonify(APIResponse(code=400, message=f"请求参数错误: {str(e)}", data={}).dict()), 400
         
         # 验证时间范围
         if not validate_time_range(rca_request.start_time, rca_request.end_time):
-            return jsonify({"error": "无效的时间范围"}), 400
+            return jsonify(APIResponse(code=400, message="无效的时间范围", data={}).dict()), 400
         
         # 检查时间范围限制
         time_diff = (rca_request.end_time - rca_request.start_time).total_seconds() / 60
         if time_diff > config.rca.max_time_range:
-            return jsonify({
-                "error": f"时间范围超过最大限制 {config.rca.max_time_range} 分钟，当前: {time_diff:.1f} 分钟"
-            }), 400
+            return jsonify(APIResponse(
+                code=400, 
+                message=f"时间范围超过最大限制 {config.rca.max_time_range} 分钟，当前: {time_diff:.1f} 分钟", 
+                data={}
+            ).dict()), 400
         
         # 验证指标列表
         if rca_request.metrics and not validate_metric_list(rca_request.metrics):
-            return jsonify({"error": "指标名称格式错误"}), 400
+            return jsonify(APIResponse(code=400, message="指标名称格式错误", data={}).dict()), 400
         
         logger.info(f"执行根因分析: {rca_request.start_time} - {rca_request.end_time}, 指标数: {len(rca_request.metrics)}")
         
@@ -64,14 +67,14 @@ def root_cause_analysis():
             anomaly_count = len(result.get('anomalies', {}))
             candidate_count = len(result.get('root_cause_candidates', []))
             logger.info(f"根因分析完成: 异常指标={anomaly_count}, 根因候选={candidate_count}")
+            return jsonify(APIResponse(code=0, message="根因分析完成", data=result).dict())
         else:
             logger.error(f"根因分析失败: {result['error']}")
-        
-        return jsonify(result)
+            return jsonify(APIResponse(code=500, message=f"根因分析失败: {result['error']}", data={}).dict()), 500
         
     except Exception as e:
         logger.error(f"根因分析请求失败: {str(e)}")
-        return jsonify({"error": f"处理请求失败: {str(e)}"}), 500
+        return jsonify(APIResponse(code=500, message=f"处理请求失败: {str(e)}", data={}).dict()), 500
 
 @rca_bp.route('/rca/incident', methods=['POST'])
 def analyze_incident():
@@ -87,10 +90,10 @@ def analyze_incident():
         
         # 验证必要参数
         if not affected_services:
-            return jsonify({"error": "必须指定受影响的服务"}), 400
+            return jsonify(APIResponse(code=400, message="必须指定受影响的服务", data={}).dict()), 400
         
         if not symptoms:
-            return jsonify({"error": "必须描述症状"}), 400
+            return jsonify(APIResponse(code=400, message="必须描述症状", data={}).dict()), 400
         
         # 解析时间
         try:
@@ -104,7 +107,7 @@ def analyze_incident():
             else:
                 end_time = datetime.utcnow()
         except ValueError as e:
-            return jsonify({"error": f"时间格式错误: {str(e)}"}), 400
+            return jsonify(APIResponse(code=400, message=f"时间格式错误: {str(e)}", data={}).dict()), 400
         
         logger.info(f"分析特定事件: 服务={affected_services}, 症状={symptoms}")
         
@@ -120,11 +123,11 @@ def analyze_incident():
         finally:
             loop.close()
         
-        return jsonify(result)
+        return jsonify(APIResponse(code=0, message="事件分析完成", data=result).dict())
         
     except Exception as e:
         logger.error(f"事件分析失败: {str(e)}")
-        return jsonify({"error": f"事件分析失败: {str(e)}"}), 500
+        return jsonify(APIResponse(code=500, message=f"事件分析失败: {str(e)}", data={}).dict()), 500
 
 @rca_bp.route('/rca/metrics', methods=['GET'])
 def get_available_metrics():
@@ -181,11 +184,11 @@ def get_available_metrics():
             logger.warning(f"获取Prometheus指标失败: {str(e)}")
             metrics_info["prometheus_error"] = str(e)
         
-        return jsonify(metrics_info)
+        return jsonify(APIResponse(code=0, message="获取指标列表成功", data=metrics_info).dict())
         
     except Exception as e:
         logger.error(f"获取指标列表失败: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify(APIResponse(code=500, message=f"获取指标列表失败: {str(e)}", data={}).dict()), 500
 
 @rca_bp.route('/rca/health', methods=['GET'])
 def rca_health():
@@ -214,18 +217,15 @@ def rca_health():
             }
         }
         
-        # 如果Prometheus不健康，服务仍可用但功能受限
-        status_code = 200 if prometheus_healthy else 200  # 保持200，因为服务仍可用
-        
-        return jsonify(health_status), status_code
+        return jsonify(APIResponse(code=0, message="健康检查完成", data=health_status).dict())
         
     except Exception as e:
         logger.error(f"RCA健康检查失败: {str(e)}")
-        return jsonify({
-            "status": "error",
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
-        }), 500
+        return jsonify(APIResponse(
+            code=500, 
+            message=f"健康检查失败: {str(e)}", 
+            data={"timestamp": datetime.utcnow().isoformat()}
+        ).dict()), 500
 
 @rca_bp.route('/rca/config', methods=['GET'])
 def get_rca_config():
@@ -250,11 +250,11 @@ def get_rca_config():
             }
         }
         
-        return jsonify(rca_config)
+        return jsonify(APIResponse(code=0, message="获取配置成功", data=rca_config).dict())
         
     except Exception as e:
-        logger.error(f"获取RCA配置失败: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"获取配置失败: {str(e)}")
+        return jsonify(APIResponse(code=500, message=f"获取配置失败: {str(e)}", data={}).dict()), 500
 
 @rca_bp.route('/rca/config', methods=['PUT'])
 def update_rca_config():

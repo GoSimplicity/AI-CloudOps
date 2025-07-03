@@ -11,6 +11,7 @@ WORKDIR /app
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.main:app
+ENV PIP_DEFAULT_TIMEOUT=100
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
@@ -18,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     g++ \
     curl \
     procps \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制依赖文件
@@ -32,6 +34,10 @@ RUN mkdir -p data/models data/sample logs
 
 # 复制应用代码
 COPY . .
+
+# 配置ollama（可选，如果需要本地部署）
+# 如果使用外部ollama服务，可以注释掉下面的步骤
+# RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # 创建非root用户
 RUN useradd --create-home --shell /bin/bash aiops && \
