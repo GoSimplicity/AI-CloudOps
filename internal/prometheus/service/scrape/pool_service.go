@@ -39,12 +39,13 @@ import (
 )
 
 type ScrapePoolService interface {
-	GetMonitorScrapePoolList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorScrapePool, error)
-	CreateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error
-	UpdateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error
-	DeleteMonitorScrapePool(ctx context.Context, id int) error
+	GetMonitorScrapePoolList(ctx context.Context, req *model.GetMonitorScrapePoolListReq) (model.ListResp[*model.MonitorScrapePool], error)
+	CreateMonitorScrapePool(ctx context.Context, req *model.CreateMonitorScrapePoolReq) error
+	UpdateMonitorScrapePool(ctx context.Context, req *model.UpdateMonitorScrapePoolReq) error
+	DeleteMonitorScrapePool(ctx context.Context, req *model.DeleteMonitorScrapePoolReq) error
 	GetMonitorScrapePoolTotal(ctx context.Context) (int, error)
-	GetMonitorScrapePoolAll(ctx context.Context) ([]*model.MonitorScrapePool, error)
+	GetMonitorScrapePoolAll(ctx context.Context) (model.ListResp[*model.MonitorScrapePool], error)
+	GetMonitorScrapePoolById(ctx context.Context, id int) (*model.MonitorScrapePool, error)
 }
 
 type scrapePoolService struct {
@@ -66,45 +67,66 @@ func NewPrometheusPoolService(dao scrapeJobDao.ScrapePoolDAO, cache cache.Monito
 }
 
 // GetMonitorScrapePoolList 获取抓取池列表
-func (s *scrapePoolService) GetMonitorScrapePoolList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorScrapePool, error) {
-	if listReq.Search != "" {
-		pools, err := s.dao.SearchMonitorScrapePoolsByName(ctx, listReq.Search)
-		if err != nil {
-			s.l.Error("搜索抓取池列表失败", zap.String("search", listReq.Search), zap.Error(err))
-			return nil, err
-		}
-		return pools, nil
-	}
+func (s *scrapePoolService) GetMonitorScrapePoolList(ctx context.Context, req *model.GetMonitorScrapePoolListReq) (model.ListResp[*model.MonitorScrapePool], error) {
+	var pools []*model.MonitorScrapePool
+	var count int64
+	var err error
 
-	// 分页处理
-	offset := (listReq.Page - 1) * listReq.Size
-	limit := listReq.Size
-
-	pools, err := s.dao.GetMonitorScrapePoolList(ctx, offset, limit)
+	pools, count, err = s.dao.GetMonitorScrapePoolList(ctx, req)
 	if err != nil {
 		s.l.Error("获取抓取池列表失败", zap.Error(err))
+		return model.ListResp[*model.MonitorScrapePool]{}, err
+	}
+
+	// 填充创建用户信息
+	for _, pool := range pools {
+		if pool.UserID > 0 {
+			user, err := s.userDao.GetUserByID(ctx, pool.UserID)
+			if err != nil {
+				s.l.Error("获取创建用户名失败", zap.Int("userId", pool.UserID), zap.Error(err))
+				continue
+			}
+			if user != nil {
+				if user.RealName == "" {
+					pool.CreateUserName = user.Username
+				} else {
+					pool.CreateUserName = user.RealName
+				}
+			}
+		}
+	}
+
+	return model.ListResp[*model.MonitorScrapePool]{
+		Items: pools,
+		Total: count,
+	}, nil
+}
+
+// GetMonitorScrapePoolById 根据ID获取抓取池
+func (s *scrapePoolService) GetMonitorScrapePoolById(ctx context.Context, id int) (*model.MonitorScrapePool, error) {
+	if id <= 0 {
+		return nil, errors.New("无效的抓取池ID")
+	}
+
+	pool, err := s.dao.GetMonitorScrapePoolById(ctx, id)
+	if err != nil {
+		s.l.Error("获取抓取池详情失败", zap.Int("id", id), zap.Error(err))
 		return nil, err
 	}
 
-	for _, pool := range pools {
-		user, err := s.userDao.GetUserByID(ctx, pool.UserID)
-		if err != nil {
-			s.l.Error("获取创建用户名失败", zap.Error(err))
-		}
-		if user.RealName == "" {
-			pool.CreateUserName = user.Username
-		} else {
-			pool.CreateUserName = user.RealName
-		}
-	}
-
-	return pools, nil
+	return pool, nil
 }
 
 // CreateMonitorScrapePool 创建抓取池
-func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error {
+func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, req *model.CreateMonitorScrapePoolReq) error {
+	if req.Name == "" {
+		return errors.New("抓取池名称不能为空")
+	}
+
 	// 检查抓取池是否已存在
-	exists, err := s.dao.CheckMonitorScrapePoolExists(ctx, monitorScrapePool)
+	exists, err := s.dao.CheckMonitorScrapePoolExists(ctx, &model.MonitorScrapePool{
+		Name: req.Name,
+	})
 	if err != nil {
 		s.l.Error("创建抓取池失败：检查抓取池是否存在时出错", zap.Error(err))
 		return err
@@ -113,20 +135,38 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, monitor
 		return errors.New("抓取池已存在")
 	}
 
-	pools, err := s.dao.GetAllMonitorScrapePool(ctx)
+	pools, _, err := s.dao.GetAllMonitorScrapePool(ctx)
 	if err != nil {
 		s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
 		return err
 	}
 
+	pool := &model.MonitorScrapePool{
+		Name:                  req.Name,
+		PrometheusInstances:   req.PrometheusInstances,
+		AlertManagerInstances: req.AlertManagerInstances,
+		UserID:                req.UserID,
+		ScrapeInterval:        req.ScrapeInterval,
+		ScrapeTimeout:         req.ScrapeTimeout,
+		RemoteTimeoutSeconds:  req.RemoteTimeoutSeconds,
+		SupportAlert:          req.SupportAlert,
+		SupportRecord:         req.SupportRecord,
+		ExternalLabels:        req.ExternalLabels,
+		RemoteWriteUrl:        req.RemoteWriteUrl,
+		RemoteReadUrl:         req.RemoteReadUrl,
+		AlertManagerUrl:       req.AlertManagerUrl,
+		RuleFilePath:          req.RuleFilePath,
+		RecordFilePath:        req.RecordFilePath,
+	}
+
 	// 检查新的抓取池 IP 是否已存在
-	if err := utils.CheckPoolIpExists(pools, monitorScrapePool); err != nil {
+	if err := utils.CheckPoolIpExists(pools, pool); err != nil {
 		s.l.Error("检查抓取池 IP 是否存在失败", zap.Error(err))
 		return err
 	}
 
 	// 创建抓取池
-	if err := s.dao.CreateMonitorScrapePool(ctx, monitorScrapePool); err != nil {
+	if err := s.dao.CreateMonitorScrapePool(ctx, pool); err != nil {
 		s.l.Error("创建抓取池失败", zap.Error(err))
 		return err
 	}
@@ -135,22 +175,28 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, monitor
 }
 
 // UpdateMonitorScrapePool 更新抓取池
-func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, monitorScrapePool *model.MonitorScrapePool) error {
+func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, req *model.UpdateMonitorScrapePoolReq) error {
 	// 检查 ID 是否有效
-	if monitorScrapePool.ID <= 0 {
+	if req.ID <= 0 {
 		return errors.New("无效的抓取池ID")
 	}
 
 	// 先获取原有的抓取池信息
-	oldPool, err := s.dao.GetMonitorScrapePoolById(ctx, monitorScrapePool.ID)
+	oldPool, err := s.dao.GetMonitorScrapePoolById(ctx, req.ID)
 	if err != nil {
-		s.l.Error("更新抓取池失败：获取原有抓取池信息出错", zap.Error(err))
+		s.l.Error("更新抓取池失败：获取原有抓取池信息出错", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
 
+	if oldPool == nil {
+		return errors.New("抓取池不存在")
+	}
+
 	// 如果名称发生变化,需要检查新名称是否已存在
-	if oldPool.Name != monitorScrapePool.Name {
-		exists, err := s.dao.CheckMonitorScrapePoolExists(ctx, monitorScrapePool)
+	if oldPool.Name != req.Name {
+		exists, err := s.dao.CheckMonitorScrapePoolExists(ctx, &model.MonitorScrapePool{
+			Name: req.Name,
+		})
 		if err != nil {
 			s.l.Error("更新抓取池失败：检查抓取池是否存在时出错", zap.Error(err))
 			return err
@@ -161,20 +207,39 @@ func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, monitor
 		}
 	}
 
-	pools, err := s.dao.GetAllMonitorScrapePool(ctx)
+	pools, _, err := s.dao.GetAllMonitorScrapePool(ctx)
 	if err != nil {
 		s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
 		return err
 	}
 
+	pool := &model.MonitorScrapePool{
+		Model:                 model.Model{ID: req.ID},
+		Name:                  req.Name,
+		PrometheusInstances:   req.PrometheusInstances,
+		AlertManagerInstances: req.AlertManagerInstances,
+		UserID:                req.UserID,
+		ScrapeInterval:        req.ScrapeInterval,
+		ScrapeTimeout:         req.ScrapeTimeout,
+		RemoteTimeoutSeconds:  req.RemoteTimeoutSeconds,
+		SupportAlert:          req.SupportAlert,
+		SupportRecord:         req.SupportRecord,
+		ExternalLabels:        req.ExternalLabels,
+		RemoteWriteUrl:        req.RemoteWriteUrl,
+		RemoteReadUrl:         req.RemoteReadUrl,
+		AlertManagerUrl:       req.AlertManagerUrl,
+		RuleFilePath:          req.RuleFilePath,
+		RecordFilePath:        req.RecordFilePath,
+	}
+
 	// 检查新的抓取池 IP 是否已被其他池使用
-	if err := utils.CheckPoolIpExists(pools, monitorScrapePool); err != nil {
+	if err := utils.CheckPoolIpExists(pools, pool); err != nil {
 		s.l.Error("检查抓取池 IP 是否存在失败", zap.Error(err))
 		return err
 	}
 
 	// 更新抓取池
-	if err := s.dao.UpdateMonitorScrapePool(ctx, monitorScrapePool); err != nil {
+	if err := s.dao.UpdateMonitorScrapePool(ctx, req); err != nil {
 		s.l.Error("更新抓取池失败", zap.Error(err))
 		return err
 	}
@@ -183,22 +248,26 @@ func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, monitor
 }
 
 // DeleteMonitorScrapePool 删除抓取池
-func (s *scrapePoolService) DeleteMonitorScrapePool(ctx context.Context, id int) error {
-	if id <= 0 {
+func (s *scrapePoolService) DeleteMonitorScrapePool(ctx context.Context, req *model.DeleteMonitorScrapePoolReq) error {
+	if req.ID <= 0 {
 		return errors.New("无效的抓取池ID")
 	}
 
 	// 检查抓取池是否存在
-	_, err := s.dao.GetMonitorScrapePoolById(ctx, id)
+	pool, err := s.dao.GetMonitorScrapePoolById(ctx, req.ID)
 	if err != nil {
-		s.l.Error("删除抓取池失败：获取抓取池信息出错", zap.Error(err))
+		s.l.Error("删除抓取池失败：获取抓取池信息出错", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
 
+	if pool == nil {
+		return errors.New("抓取池不存在")
+	}
+
 	// 检查抓取池是否有相关的抓取作业
-	jobs, err := s.jobDao.GetMonitorScrapeJobsByPoolId(ctx, id)
+	jobs, err := s.jobDao.GetMonitorScrapeJobsByPoolId(ctx, req.ID)
 	if err != nil {
-		s.l.Error("删除抓取池失败：获取抓取作业时出错", zap.Error(err))
+		s.l.Error("删除抓取池失败：获取抓取作业时出错", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
 
@@ -207,8 +276,8 @@ func (s *scrapePoolService) DeleteMonitorScrapePool(ctx context.Context, id int)
 	}
 
 	// 删除抓取池
-	if err := s.dao.DeleteMonitorScrapePool(ctx, id); err != nil {
-		s.l.Error("删除抓取池失败", zap.Error(err))
+	if err := s.dao.DeleteMonitorScrapePool(ctx, req.ID); err != nil {
+		s.l.Error("删除抓取池失败", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
 
@@ -217,10 +286,41 @@ func (s *scrapePoolService) DeleteMonitorScrapePool(ctx context.Context, id int)
 
 // GetMonitorScrapePoolTotal 获取监控采集池总数
 func (s *scrapePoolService) GetMonitorScrapePoolTotal(ctx context.Context) (int, error) {
-	return s.dao.GetMonitorScrapePoolTotal(ctx)
+	total, err := s.dao.GetMonitorScrapePoolTotal(ctx)
+	if err != nil {
+		s.l.Error("获取监控采集池总数失败", zap.Error(err))
+	}
+	return total, err
 }
 
 // GetMonitorScrapePoolAll 获取所有监控采集池
-func (s *scrapePoolService) GetMonitorScrapePoolAll(ctx context.Context) ([]*model.MonitorScrapePool, error) {
-	return s.dao.GetAllMonitorScrapePool(ctx)
+func (s *scrapePoolService) GetMonitorScrapePoolAll(ctx context.Context) (model.ListResp[*model.MonitorScrapePool], error) {
+	pools, count, err := s.dao.GetAllMonitorScrapePool(ctx)
+	if err != nil {
+		s.l.Error("获取所有监控采集池失败", zap.Error(err))
+		return model.ListResp[*model.MonitorScrapePool]{}, err
+	}
+
+	// 填充创建用户信息
+	for _, pool := range pools {
+		if pool.UserID > 0 {
+			user, err := s.userDao.GetUserByID(ctx, pool.UserID)
+			if err != nil {
+				s.l.Error("获取创建用户名失败", zap.Int("userId", pool.UserID), zap.Error(err))
+				continue
+			}
+			if user != nil {
+				if user.RealName == "" {
+					pool.CreateUserName = user.Username
+				} else {
+					pool.CreateUserName = user.RealName
+				}
+			}
+		}
+	}
+
+	return model.ListResp[*model.MonitorScrapePool]{
+		Items: pools,
+		Total: count,
+	}, nil
 }

@@ -2,10 +2,10 @@ import logging
 from typing import Dict, Any, List, Optional
 from langchain_core.messages import HumanMessage, BaseMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 from typing_extensions import Literal
 from app.config.settings import config
+from app.services.llm import LLMService
 from app.models.data_models import AgentState
 
 logger = logging.getLogger("aiops.supervisor")
@@ -16,12 +16,8 @@ class RouteResponse(BaseModel):
 
 class SupervisorAgent:
     def __init__(self):
-        self.llm = ChatOpenAI(
-            model=config.llm.model,
-            api_key=config.llm.api_key,
-            base_url=config.llm.base_url,
-            temperature=config.llm.temperature
-        )
+        # 使用我们自己的LLM服务
+        self.llm_service = LLMService()
         self.members = ["Researcher", "Coder", "K8sFixer", "Notifier"]
         self._setup_prompt()
         logger.info("Supervisor Agent初始化完成")
@@ -50,10 +46,7 @@ class SupervisorAgent:
 
 请根据当前对话内容和问题状态，决定下一个行动者。"""
 
-        self.prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            MessagesPlaceholder(variable_name="messages"),
-            ("system", """
+        self.prompt_template = system_prompt + """
 基于上面的对话历史，决定下一步行动：
 - 如果问题需要更多信息，选择 Researcher
 - 如果需要代码分析，选择 Coder
@@ -61,10 +54,9 @@ class SupervisorAgent:
 - 如果需要通知或人工介入，选择 Notifier
 - 如果问题已解决，选择 FINISH
 
-从以下选项中选择: {options}
+从以下选项中选择: ["Researcher", "Coder", "K8sFixer", "Notifier", "FINISH"]
 同时简要说明选择理由。
-            """)
-        ]).partial(options=str(["Researcher", "Coder", "K8sFixer", "Notifier", "FINISH"]))
+"""
     
     async def route_next_action(self, state: AgentState) -> Dict[str, Any]:
         """决定下一个执行的Agent"""
@@ -77,27 +69,79 @@ class SupervisorAgent:
                     "reasoning": "达到最大迭代次数限制"
                 }
             
-            # 构建消息历史
-            messages = []
+            # 构建消息历史文本
+            message_history = ""
             for msg in state.messages[-10:]:  # 只保留最近10条消息
                 if isinstance(msg, dict):
-                    content = msg.get('content', str(msg))
                     role = msg.get('role', 'user')
-                    messages.append(HumanMessage(content=content))
+                    content = msg.get('content', str(msg))
+                    message_history += f"\n{role}: {content}\n"
                 elif isinstance(msg, BaseMessage):
-                    messages.append(msg)
+                    message_history += f"\n{msg.type}: {msg.content}\n"
                 else:
-                    messages.append(HumanMessage(content=str(msg)))
+                    message_history += f"\nuser: {str(msg)}\n"
             
-            # 调用LLM进行路由决策
-            chain = self.prompt | self.llm.with_structured_output(RouteResponse)
-            response = chain.invoke({"messages": messages})
+            # 构建完整提示词
+            full_prompt = f"{self.prompt_template}\n\n对话历史:\n{message_history}"
             
-            logger.info(f"Supervisor决策: {response.next}, 理由: {response.reasoning}")
+            # 调用LLM服务进行路由决策
+            messages = [{"role": "user", "content": full_prompt}]
+            response_text = await self.llm_service.generate_response(messages)
+            
+            if not response_text:
+                logger.error("LLM响应为空")
+                return {
+                    "next": "FINISH",
+                    "reasoning": "LLM服务未返回有效响应"
+                }
+            
+            # 解析响应，提取next和reasoning
+            next_agent = None
+            reasoning = None
+            
+            # 尝试找出决策结果
+            response_text = response_text.strip()
+            
+            # 如果返回的是JSON格式
+            if response_text.startswith("{") and response_text.endswith("}"):
+                try:
+                    import json
+                    parsed = json.loads(response_text)
+                    next_agent = parsed.get("next")
+                    reasoning = parsed.get("reasoning")
+                except:
+                    pass
+            
+            # 如果不是JSON或JSON解析失败，尝试直接从文本中提取
+            if not next_agent:
+                for member in self.members + ["FINISH"]:
+                    if f"next: {member}" in response_text or f'"next": "{member}"' in response_text or f"选择 {member}" in response_text or f"选择: {member}" in response_text:
+                        next_agent = member
+                        break
+                    elif member in response_text:
+                        # 如果直接找到了成员名，检查上下文是否表明选择了它
+                        surrounding = response_text.split(member)[0][-20:] + response_text.split(member)[1][:20]
+                        if "选择" in surrounding or "next" in surrounding:
+                            next_agent = member
+                            break
+            
+            # 提取推理
+            if not reasoning and "理由" in response_text:
+                reasoning_parts = response_text.split("理由")
+                if len(reasoning_parts) > 1:
+                    reasoning = reasoning_parts[1].strip(": ").strip()
+            
+            # 如果无法确定，默认为FINISH
+            if not next_agent:
+                logger.warning(f"无法从响应中确定下一个Agent: {response_text}")
+                next_agent = "FINISH"
+                reasoning = "无法确定下一步行动"
+            
+            logger.info(f"Supervisor决策: {next_agent}, 理由: {reasoning}")
             
             return {
-                "next": response.next,
-                "reasoning": response.reasoning or "",
+                "next": next_agent,
+                "reasoning": reasoning or "",
                 "iteration_count": state.iteration_count + 1
             }
             
@@ -124,20 +168,29 @@ class SupervisorAgent:
 
 以JSON格式返回分析结果。"""
             
-            messages = [HumanMessage(content=analysis_prompt.format(problem=problem_description))]
+            messages = [{"role": "user", "content": analysis_prompt.format(problem=problem_description)}]
             
-            response = await self.llm.ainvoke(messages)
+            response = await self.llm_service.generate_response(messages)
             
             try:
                 import json
-                analysis = json.loads(response.content)
+                analysis = json.loads(response)
                 return analysis
             except json.JSONDecodeError:
+                # 尝试从响应中提取JSON
+                if "```json" in response:
+                    json_part = response.split("```json")[1].split("```")[0]
+                    try:
+                        analysis = json.loads(json_part)
+                        return analysis
+                    except:
+                        pass
+                        
                 return {
                     "problem_type": "unknown",
                     "components": ["kubernetes"],
                     "severity": "medium",
-                    "suggested_approach": response.content,
+                    "suggested_approach": response,
                     "required_agents": ["K8sFixer"]
                 }
                 
@@ -197,9 +250,49 @@ class SupervisorAgent:
                     actions_taken.append(f"{agent}: {action}")
         
         return {
-            "total_iterations": state.iteration_count,
-            "agents_used": list(agents_used),
-            "actions_taken": actions_taken,
-            "final_state": state.current_step,
-            "context": state.context
+            'agents_used': list(agents_used),
+            'actions_taken': actions_taken,
+            'iterations': state.iteration_count,
+            'final_step': state.current_step
         }
+    
+    async def process_agent_state(self, state: AgentState) -> AgentState:
+        """处理状态并生成工作流总结
+        
+        Args:
+            state: 当前Agent状态
+            
+        Returns:
+            更新后的状态
+        """
+        try:
+            from dataclasses import replace
+            
+            # 获取工作流总结
+            summary = self.get_workflow_summary(state)
+            
+            # 获取当前上下文
+            context = dict(state.context)
+            
+            # 添加总结信息
+            context['summary'] = f"工作流完成，共使用了 {len(summary['agents_used'])} 个智能体，执行了 {state.iteration_count} 次迭代。"
+            context['workflow_summary'] = summary
+            context['workflow_completed'] = True
+            
+            # 根据是否存在错误来设置成功状态
+            if 'error' not in context:
+                context['success'] = True
+                
+            # 生成最终总结
+            final_status = "成功" if context.get('success', False) else "失败"
+            context['result'] = f"自动修复工作流已{final_status}完成"
+            
+            # 返回更新后的状态
+            return replace(state, context=context)
+            
+        except Exception as e:
+            logger.error(f"生成工作流总结失败: {str(e)}")
+            # 获取当前上下文
+            context = dict(state.context)
+            context['error'] = f"生成工作流总结失败: {str(e)}"
+            return replace(state, context=context)

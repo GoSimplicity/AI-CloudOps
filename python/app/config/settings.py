@@ -17,16 +17,42 @@ class PrometheusConfig:
 
 @dataclass
 class LLMConfig:
-    model: str = os.getenv("LLM_MODEL", "qwen2.5:3b")
-    api_key: str = os.getenv("LLM_API_KEY", "ollama")
-    base_url: str = os.getenv("LLM_BASE_URL", "http://127.0.0.1:11434/v1")
+    provider: str = os.getenv("LLM_PROVIDER", "openai")  # 'openai' 或 'ollama'
+    model: str = os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct")
+    api_key: str = os.getenv("LLM_API_KEY", "sk-xrykvuqngkhbsmdtmvhzsupjafandfyhcdbcqojlyvrftttq")
+    base_url: str = os.getenv("LLM_BASE_URL", "https://api.siliconflow.cn/v1")
     temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
     max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+    
+    # Ollama 配置
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+    ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
+    
+    @property
+    def effective_model(self) -> str:
+        """根据提供商返回有效的模型名称"""
+        if self.provider.lower() == "ollama":
+            return self.ollama_model
+        return self.model
+    
+    @property
+    def effective_base_url(self) -> str:
+        """根据提供商返回有效的基础URL"""
+        if self.provider.lower() == "ollama":
+            return self.ollama_base_url
+        return self.base_url
+    
+    @property
+    def effective_api_key(self) -> str:
+        """根据提供商返回有效的API密钥"""
+        if self.provider.lower() == "ollama":
+            return "ollama"
+        return self.api_key
 
 @dataclass
 class K8sConfig:
     in_cluster: bool = os.getenv("K8S_IN_CLUSTER", "false").lower() == "true"
-    config_path: Optional[str] = os.getenv("K8S_CONFIG_PATH")
+    config_path: Optional[str] = os.getenv("K8S_CONFIG_PATH") or os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "deploy/kubernetes/config")
     namespace: str = os.getenv("K8S_NAMESPACE", "default")
 
 @dataclass

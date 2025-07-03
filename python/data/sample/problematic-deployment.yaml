@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-problematic
+  namespace: default
+  labels:
+    app: nginx-problematic
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx-problematic
+  template:
+    metadata:
+      labels:
+        app: nginx-problematic
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.21.6
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: "512Mi" # 内存请求过高
+              cpu: "500m" # CPU请求过高
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /health # 错误的健康检查路径，Nginx默认没有此路径
+              port: 80
+            initialDelaySeconds: 2
+            periodSeconds: 3 # 探针频率太高
+            failureThreshold: 1 # 失败阈值太低

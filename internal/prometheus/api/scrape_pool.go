@@ -53,46 +53,45 @@ func (s *ScrapePoolHandler) RegisterRouters(server *gin.Engine) {
 	scrapePools := monitorGroup.Group("/scrape_pools")
 	{
 		scrapePools.GET("/list", s.GetMonitorScrapePoolList)
-		scrapePools.GET("/all", s.GetMonitorScrapePoolAll)
 		scrapePools.POST("/create", s.CreateMonitorScrapePool)
-		scrapePools.POST("/update", s.UpdateMonitorScrapePool)
+		scrapePools.PUT("/update/:id", s.UpdateMonitorScrapePool)
 		scrapePools.DELETE("/:id", s.DeleteMonitorScrapePool)
 	}
 }
 
 // GetMonitorScrapePoolList 获取监控采集池列表
 func (s *ScrapePoolHandler) GetMonitorScrapePoolList(ctx *gin.Context) {
-	var listReq model.ListReq
+	var req model.GetMonitorScrapePoolListReq
 
-	utils.HandleRequest(ctx, &listReq, func() (interface{}, error) {
-		return s.scrapePoolService.GetMonitorScrapePoolList(ctx, &listReq)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.scrapePoolService.GetMonitorScrapePoolList(ctx, &req)
 	})
 }
 
 // CreateMonitorScrapePool 创建监控采集池
 func (s *ScrapePoolHandler) CreateMonitorScrapePool(ctx *gin.Context) {
-	var monitorScrapePool model.MonitorScrapePool
+	var req model.CreateMonitorScrapePoolReq
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
-	monitorScrapePool.UserID = uc.Uid
+	req.UserID = uc.Uid
 
-	utils.HandleRequest(ctx, &monitorScrapePool, func() (interface{}, error) {
-		return nil, s.scrapePoolService.CreateMonitorScrapePool(ctx, &monitorScrapePool)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, s.scrapePoolService.CreateMonitorScrapePool(ctx, &req)
 	})
 }
 
 // UpdateMonitorScrapePool 更新监控采集池
 func (s *ScrapePoolHandler) UpdateMonitorScrapePool(ctx *gin.Context) {
-	var monitorScrapePool model.MonitorScrapePool
+	var req model.UpdateMonitorScrapePoolReq
 
-	utils.HandleRequest(ctx, &monitorScrapePool, func() (interface{}, error) {
-		return nil, s.scrapePoolService.UpdateMonitorScrapePool(ctx, &monitorScrapePool)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, s.scrapePoolService.UpdateMonitorScrapePool(ctx, &req)
 	})
 }
 
 // DeleteMonitorScrapePool 删除监控采集池
 func (s *ScrapePoolHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
-	var req model.DeleteMonitorScrapePoolRequest
+	var req model.DeleteMonitorScrapePoolReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -103,13 +102,6 @@ func (s *ScrapePoolHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, s.scrapePoolService.DeleteMonitorScrapePool(ctx, req.ID)
-	})
-}
-
-// GetMonitorScrapePoolAll 获取所有监控采集池
-func (s *ScrapePoolHandler) GetMonitorScrapePoolAll(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return s.scrapePoolService.GetMonitorScrapePoolAll(ctx)
+		return nil, s.scrapePoolService.DeleteMonitorScrapePool(ctx, &req)
 	})
 }

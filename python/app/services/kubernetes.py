@@ -1,6 +1,8 @@
 import logging
 import json
 import yaml
+import os
+import time
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from kubernetes import client, config as k8s_config
@@ -11,26 +13,102 @@ logger = logging.getLogger("aiops.kubernetes")
 
 class KubernetesService:
     def __init__(self):
-        self._load_config()
-        self.apps_v1 = client.AppsV1Api()
-        self.core_v1 = client.CoreV1Api()
-        logger.info("Kubernetes服务初始化完成")
+        self.apps_v1 = None
+        self.core_v1 = None
+        self.initialized = False
+        self.last_init_attempt = 0
+        self._init_retry_interval = 60  # 60秒后重试初始化
+        self._try_init()
+        
+    def _try_init(self):
+        """尝试初始化Kubernetes客户端"""
+        try:
+            if time.time() - self.last_init_attempt < self._init_retry_interval:
+                return  # 避免频繁重试
+                
+            self.last_init_attempt = time.time()
+            self._load_config()
+            self.apps_v1 = client.AppsV1Api()
+            self.core_v1 = client.CoreV1Api()
+            
+            # 测试连接
+            try:
+                api = client.VersionApi()
+                version = api.get_code()
+                logger.info(f"Kubernetes连接成功: {version.git_version}")
+                
+                # 尝试列出命名空间，再次确认连接
+                namespaces = self.core_v1.list_namespace(limit=1)
+                logger.info(f"成功获取命名空间列表，确认连接正常")
+                
+                self.initialized = True
+                logger.info("Kubernetes服务初始化完成")
+            except Exception as e:
+                self.initialized = False
+                logger.error(f"Kubernetes连接测试失败: {str(e)}")
+                raise
+                
+        except Exception as e:
+            self.initialized = False
+            logger.error(f"Kubernetes初始化失败: {str(e)}")
     
     def _load_config(self):
         """加载Kubernetes配置"""
         try:
+            config_file = config.k8s.config_path
+            logger.info(f"尝试加载K8s配置: in_cluster={config.k8s.in_cluster}, config_path={config_file}")
+            
+            # 检查配置文件是否存在
+            if not config.k8s.in_cluster and config_file:
+                # 检查文件是否存在
+                if not os.path.exists(config_file):
+                    logger.error(f"K8s配置文件不存在: {config_file}")
+                    # 尝试查找其他可能的位置
+                    alternate_paths = [
+                        os.path.join(os.getcwd(), "deploy/kubernetes/config"),
+                        os.path.join(os.getcwd(), "config"),
+                        os.path.expanduser("~/.kube/config")
+                    ]
+                    
+                    for path in alternate_paths:
+                        if os.path.exists(path):
+                            logger.info(f"找到替代配置文件: {path}")
+                            config_file = path
+                            break
+                    else:
+                        logger.info("尝试从默认位置加载配置")
+                        try:
+                            k8s_config.load_kube_config()
+                            logger.info("成功从默认位置加载K8s配置")
+                            return
+                        except Exception as e:
+                            logger.error(f"从默认位置加载K8s配置失败: {str(e)}")
+                            raise
+            
             if config.k8s.in_cluster:
                 k8s_config.load_incluster_config()
                 logger.info("使用集群内K8s配置")
             else:
-                k8s_config.load_kube_config(config_file=config.k8s.config_path)
-                logger.info("使用本地K8s配置")
+                k8s_config.load_kube_config(config_file=config_file)
+                logger.info(f"使用本地K8s配置文件: {config_file}")
+            
         except Exception as e:
             logger.error(f"无法加载K8s配置: {str(e)}")
             raise
     
+    def _ensure_initialized(self):
+        """确保Kubernetes客户端已初始化"""
+        if not self.initialized:
+            self._try_init()
+            
+        return self.initialized
+    
     async def get_deployment(self, name: str, namespace: str = None) -> Optional[Dict]:
         """获取Deployment信息"""
+        if not self._ensure_initialized():
+            logger.warning("Kubernetes未初始化，无法获取Deployment信息")
+            return None
+            
         try:
             namespace = namespace or config.k8s.namespace
             deployment = self.apps_v1.read_namespaced_deployment(
@@ -61,6 +139,10 @@ class KubernetesService:
         namespace: str = None
     ) -> bool:
         """更新Deployment"""
+        if not self._ensure_initialized():
+            logger.warning("Kubernetes未初始化，无法更新Deployment")
+            return False
+            
         try:
             namespace = namespace or config.k8s.namespace
             
@@ -84,6 +166,10 @@ class KubernetesService:
     
     async def get_pods(self, namespace: str = None, label_selector: str = None) -> List[Dict]:
         """获取Pod列表"""
+        if not self._ensure_initialized():
+            logger.warning("Kubernetes未初始化，无法获取Pod列表")
+            return []
+            
         try:
             namespace = namespace or config.k8s.namespace
             pods = self.core_v1.list_namespaced_pod(
@@ -118,6 +204,10 @@ class KubernetesService:
         limit: int = 100
     ) -> List[Dict]:
         """获取事件列表"""
+        if not self._ensure_initialized():
+            logger.warning("Kubernetes未初始化，无法获取事件列表")
+            return []
+            
         try:
             namespace = namespace or config.k8s.namespace
             events = self.core_v1.list_namespaced_event(
@@ -148,6 +238,10 @@ class KubernetesService:
     
     async def restart_deployment(self, name: str, namespace: str = None) -> bool:
         """重启Deployment"""
+        if not self._ensure_initialized():
+            logger.warning("Kubernetes未初始化，无法重启Deployment")
+            return False
+            
         try:
             namespace = namespace or config.k8s.namespace
             
@@ -177,6 +271,10 @@ class KubernetesService:
     
     async def scale_deployment(self, name: str, replicas: int, namespace: str = None) -> bool:
         """扩缩容Deployment"""
+        if not self._ensure_initialized():
+            logger.warning("Kubernetes未初始化，无法扩缩容Deployment")
+            return False
+            
         try:
             namespace = namespace or config.k8s.namespace
             
@@ -197,17 +295,31 @@ class KubernetesService:
             return False
     
     def is_healthy(self) -> bool:
-        """检查Kubernetes连接健康状态"""
+        """检查Kubernetes连接是否健康"""
+        if not self.initialized:
+            logger.warning("Kubernetes未初始化")
+            return False
+            
         try:
-            self.core_v1.get_api_versions()
-            logger.debug("Kubernetes连接健康")
+            # 尝试获取API版本
+            api = client.VersionApi()
+            version = api.get_code()
+            
+            # 尝试列出命名空间
+            namespaces = self.core_v1.list_namespace(limit=1)
+            
             return True
         except Exception as e:
-            logger.error(f"Kubernetes连接异常: {str(e)}")
+            logger.error(f"Kubernetes健康检查失败: {str(e)}")
+            self.initialized = False
             return False
     
     async def get_deployment_status(self, name: str, namespace: str = None) -> Optional[Dict[str, Any]]:
         """获取Deployment状态详情"""
+        if not self._ensure_initialized():
+            logger.warning("Kubernetes未初始化，无法获取Deployment状态")
+            return None
+            
         try:
             deployment = await self.get_deployment(name, namespace)
             if not deployment:

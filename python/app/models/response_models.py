@@ -1,6 +1,14 @@
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Generic, TypeVar, Union
 from pydantic import BaseModel
+
+T = TypeVar('T')
+
+class APIResponse(BaseModel, Generic[T]):
+    """统一API响应格式"""
+    code: int = 0
+    message: str = ""
+    data: Optional[T] = None
 
 class AnomalyInfo(BaseModel):
     count: int
@@ -34,6 +42,7 @@ class PredictionResponse(BaseModel):
     timestamp: str
     confidence: Optional[float] = None
     model_version: Optional[str] = None
+    prediction_type: Optional[str] = None
     features: Optional[Dict[str, float]] = None
 
 class AutoFixResponse(BaseModel):

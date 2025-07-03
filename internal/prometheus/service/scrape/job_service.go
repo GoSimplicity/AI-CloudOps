@@ -37,9 +37,9 @@ import (
 )
 
 type ScrapeJobService interface {
-	GetMonitorScrapeJobList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorScrapeJob, error)
-	CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
-	UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
+	GetMonitorScrapeJobList(ctx context.Context, req *model.GetMonitorScrapeJobListReq) (model.ListResp[*model.MonitorScrapeJob], error)
+	CreateMonitorScrapeJob(ctx context.Context, req *model.CreateMonitorScrapeJobReq) error
+	UpdateMonitorScrapeJob(ctx context.Context, req *model.UpdateMonitorScrapeJobReq) error
 	DeleteMonitorScrapeJob(ctx context.Context, id int) error
 	GetMonitorScrapeJobTotal(ctx context.Context) (int, error)
 }
@@ -61,42 +61,55 @@ func NewPrometheusScrapeService(dao scrapeJobDao.ScrapeJobDAO, cache cache.Monit
 }
 
 // GetMonitorScrapeJobList 获取监控采集 Job 列表
-func (s *scrapeJobService) GetMonitorScrapeJobList(ctx context.Context, listReq *model.ListReq) ([]*model.MonitorScrapeJob, error) {
+func (s *scrapeJobService) GetMonitorScrapeJobList(ctx context.Context, req *model.GetMonitorScrapeJobListReq) (model.ListResp[*model.MonitorScrapeJob], error) {
 	var (
-		jobs []*model.MonitorScrapeJob
-		err  error
+		jobs  []*model.MonitorScrapeJob
+		total int64
+		err   error
 	)
 
-	// 搜索处理
-	if listReq.Search != "" {
-		jobs, err = s.dao.SearchMonitorScrapeJobsByName(ctx, listReq.Search)
-		if err != nil {
-			s.l.Error("搜索抓取作业列表失败", zap.String("search", listReq.Search), zap.Error(err))
-			return nil, err
-		}
-	} else {
-		// 分页处理
-		offset := (listReq.Page - 1) * listReq.Size
-		limit := listReq.Size
-
-		jobs, err = s.dao.GetMonitorScrapeJobList(ctx, offset, limit)
-		if err != nil {
-			s.l.Error("获取抓取作业列表失败", zap.Error(err))
-			return nil, err
-		}
+	jobs, total, err = s.dao.GetMonitorScrapeJobList(ctx, req)
+	if err != nil {
+		s.l.Error("获取抓取作业列表失败", zap.Error(err))
+		return model.ListResp[*model.MonitorScrapeJob]{}, err
 	}
 
 	// 填充用户信息
 	if err := s.buildUserInfo(ctx, jobs); err != nil {
 		s.l.Error("填充用户信息失败", zap.Error(err))
-		return nil, err
+		return model.ListResp[*model.MonitorScrapeJob]{}, err
 	}
 
-	return jobs, nil
+	return model.ListResp[*model.MonitorScrapeJob]{
+		Items: jobs,
+		Total: total,
+	}, nil
 }
 
 // CreateMonitorScrapeJob 创建监控采集 Job
-func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
+func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, req *model.CreateMonitorScrapeJobReq) error {
+	monitorScrapeJob := &model.MonitorScrapeJob{
+		Name:                     req.Name,
+		PoolID:                   req.PoolID,
+		UserID:                   req.UserID,
+		Enable:                   req.Enable,
+		ServiceDiscoveryType:     req.ServiceDiscoveryType,
+		MetricsPath:              req.MetricsPath,
+		Scheme:                   req.Scheme,
+		ScrapeInterval:           req.ScrapeInterval,
+		ScrapeTimeout:            req.ScrapeTimeout,
+		RefreshInterval:          req.RefreshInterval,
+		Port:                     req.Port,
+		IpAddress:                req.IpAddress,
+		KubeConfigFilePath:       req.KubeConfigFilePath,
+		TlsCaFilePath:            req.TlsCaFilePath,
+		TlsCaContent:             req.TlsCaContent,
+		BearerToken:              req.BearerToken,
+		BearerTokenFile:          req.BearerTokenFile,
+		KubernetesSdRole:         req.KubernetesSdRole,
+		RelabelConfigsYamlString: req.RelabelConfigsYamlString,
+	}
+
 	// 检查抓取作业是否已存在
 	exists, err := s.dao.CheckMonitorScrapeJobExists(ctx, monitorScrapeJob.Name)
 	if err != nil {
@@ -129,7 +142,29 @@ func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, monitorSc
 }
 
 // UpdateMonitorScrapeJob 更新监控采集 Job
-func (s *scrapeJobService) UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
+func (s *scrapeJobService) UpdateMonitorScrapeJob(ctx context.Context, req *model.UpdateMonitorScrapeJobReq) error {
+	monitorScrapeJob := &model.MonitorScrapeJob{
+		Model:                    model.Model{ID: req.ID},
+		Name:                     req.Name,
+		Enable:                   req.Enable,
+		ServiceDiscoveryType:     req.ServiceDiscoveryType,
+		MetricsPath:              req.MetricsPath,
+		Scheme:                   req.Scheme,
+		ScrapeInterval:           req.ScrapeInterval,
+		ScrapeTimeout:            req.ScrapeTimeout,
+		PoolID:                   req.PoolID,
+		RelabelConfigsYamlString: req.RelabelConfigsYamlString,
+		RefreshInterval:          req.RefreshInterval,
+		Port:                     req.Port,
+		IpAddress:                req.IpAddress,
+		KubeConfigFilePath:       req.KubeConfigFilePath,
+		TlsCaFilePath:            req.TlsCaFilePath,
+		TlsCaContent:             req.TlsCaContent,
+		BearerToken:              req.BearerToken,
+		BearerTokenFile:          req.BearerTokenFile,
+		KubernetesSdRole:         req.KubernetesSdRole,
+	}
+
 	// 检查 ID 是否有效
 	if monitorScrapeJob.ID <= 0 {
 		return errors.New("无效的抓取作业ID")

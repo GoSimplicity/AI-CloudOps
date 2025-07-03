@@ -11,7 +11,6 @@ class NotifierAgent:
         self.notification_service = NotificationService()
         logger.info("Notifier Agent初始化完成")
     
-    @tool
     async def send_human_help_request(self, problem_description: str, urgency: str = "medium") -> str:
         """发送人工帮助请求"""
         try:
@@ -58,7 +57,6 @@ class NotifierAgent:
             logger.error(f"发送人工帮助请求异常: {str(e)}")
             return f"❌ 发送人工帮助请求异常: {str(e)}"
     
-    @tool
     async def send_incident_alert(
         self, 
         incident_summary: str, 
@@ -264,6 +262,17 @@ class NotifierAgent:
     async def check_notification_health(self) -> Dict[str, Any]:
         """检查通知服务健康状态"""
         try:
+            # 确保数据可序列化的函数
+            def ensure_serializable(obj):
+                if isinstance(obj, dict):
+                    return {k: ensure_serializable(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [ensure_serializable(item) for item in obj]
+                elif hasattr(obj, 'isoformat'):  # datetime对象
+                    return obj.isoformat()
+                else:
+                    return obj
+            
             is_healthy = self.notification_service.is_healthy()
             
             health_info = {
@@ -273,7 +282,7 @@ class NotifierAgent:
                 "service_type": "feishu"
             }
             
-            return health_info
+            return ensure_serializable(health_info)
             
         except Exception as e:
             logger.error(f"检查通知服务健康状态失败: {str(e)}")
@@ -283,8 +292,8 @@ class NotifierAgent:
             }
     
     def get_available_tools(self) -> List[str]:
-        """获取可用的通知工具"""
-        tools = [
+        """获取可用工具列表"""
+        return [
             "send_human_help_request",
             "send_incident_alert",
             "send_resolution_notification",
@@ -292,9 +301,62 @@ class NotifierAgent:
             "send_maintenance_notification"
         ]
         
-        if self.notification_service.enabled:
-            tools.append("notifications_enabled")
-        else:
-            tools.append("notifications_disabled")
+    async def process_agent_state(self, state) -> Any:
+        """处理Agent状态，支持工作流处理
         
-        return tools
+        Args:
+            state: 工作流状态
+            
+        Returns:
+            更新后的状态
+        """
+        try:
+            from dataclasses import replace
+            
+            # 获取状态上下文信息
+            context = dict(state.context)
+            
+            # 获取是否需要发送通知
+            problem = context.get('problem', '')
+            result = context.get('result', '')
+            success = context.get('success', False)
+            actions_taken = context.get('actions_taken', [])
+            
+            # 确定是否需要发送通知
+            if config.notification.enabled:
+                logger.info("发送自动修复结果通知")
+                
+                # 根据修复结果发送不同类型的通知
+                if success:
+                    # 发送修复成功通知
+                    notification_result = await self.send_resolution_notification(
+                        problem, 
+                        result, 
+                        actions_taken
+                    )
+                else:
+                    # 发送人工帮助请求
+                    notification_result = await self.send_human_help_request(
+                        f"自动修复失败，需要人工介入:\n问题: {problem}\n错误: {context.get('error', '未知错误')}",
+                        "high"
+                    )
+                
+                # 添加通知结果到上下文
+                context['notification_result'] = notification_result
+                
+                # 添加操作记录
+                actions = context.get('actions_taken', [])
+                actions.append(f"Notifier发送{'成功' if success else '失败'}通知")
+                context['actions_taken'] = actions
+            else:
+                logger.info("通知功能已禁用，跳过发送")
+                context['notification_result'] = "通知功能已禁用，未发送通知"
+            
+            return replace(state, context=context)
+            
+        except Exception as e:
+            logger.error(f"Notifier处理状态失败: {str(e)}")
+            context = dict(state.context)
+            context['error'] = f"Notifier处理失败: {str(e)}"
+            from dataclasses import replace
+            return replace(state, context=context)

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-problematic
+  labels:
+    app: test-problematic
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-problematic
+  template:
+    metadata:
+      labels:
+        app: test-problematic
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.19
+        ports:
+        - containerPort: 80
+        # 存在问题的探针配置
+        livenessProbe:
+          httpGet:
+            path: /nonexistent
+            port: 80
+          initialDelaySeconds: 1
+          periodSeconds: 2
+          failureThreshold: 1
+        # 资源请求过高
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
