@@ -26,7 +26,7 @@ class LLMConfig:
 @dataclass
 class K8sConfig:
     in_cluster: bool = os.getenv("K8S_IN_CLUSTER", "false").lower() == "true"
-    config_path: Optional[str] = os.getenv("K8S_CONFIG_PATH")
+    config_path: Optional[str] = os.getenv("K8S_CONFIG_PATH") or os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "deploy/kubernetes/config")
     namespace: str = os.getenv("K8S_NAMESPACE", "default")
 
 @dataclass

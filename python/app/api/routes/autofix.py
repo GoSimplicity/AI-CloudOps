@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime
 import asyncio
 import logging
+import time
 from app.core.agents.supervisor import SupervisorAgent
 from app.core.agents.k8s_fixer import K8sFixerAgent
 from app.core.agents.notifier import NotifierAgent
@@ -49,6 +50,42 @@ def autofix_k8s():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
+            # 首先检查部署状态，判断是否有CrashLoopBackOff问题
+            deployment = None
+            pods = []
+            try:
+                # 使用run_until_complete替代直接await
+                deployment = loop.run_until_complete(
+                    k8s_fixer_agent.k8s_service.get_deployment(
+                        autofix_request.deployment, 
+                        autofix_request.namespace
+                    )
+                )
+                
+                if deployment:
+                    pods = loop.run_until_complete(
+                        k8s_fixer_agent.k8s_service.get_pods(
+                            namespace=autofix_request.namespace,
+                            label_selector=f"app={autofix_request.deployment}"
+                        )
+                    )
+                    
+                    # 检查是否有CrashLoopBackOff问题
+                    for pod in pods:
+                        status = pod.get('status', {})
+                        container_statuses = status.get('container_statuses', [])
+                        for c_status in container_statuses:
+                            if c_status.get('state', {}).get('waiting', {}).get('reason') == 'CrashLoopBackOff':
+                                # 在事件描述中添加CrashLoopBackOff信息
+                                if 'CrashLoopBackOff' not in event_description:
+                                    event_description += " Pod处于CrashLoopBackOff状态，需要检查和修复livenessProbe和readinessProbe配置。"
+                                autofix_request.force = True  # 强制修复模式
+                                logger.info(f"检测到CrashLoopBackOff问题，设置强制修复模式")
+                                break
+            except Exception as e:
+                logger.error(f"检查部署状态时出错: {str(e)}")
+            
+            # 执行自动修复工作流
             result = loop.run_until_complete(
                 execute_autofix_workflow(
                     autofix_request.deployment,
@@ -57,6 +94,40 @@ def autofix_k8s():
                     autofix_request.force
                 )
             )
+            
+            # 如果没有明确的结果，或修复失败，尝试直接调用K8sFixerAgent
+            if not result.get('success') or result.get('error_message'):
+                logger.info("自动修复工作流未成功，尝试直接使用K8sFixerAgent修复")
+                
+                fix_result = loop.run_until_complete(
+                    k8s_fixer_agent.analyze_and_fix_deployment(
+                        autofix_request.deployment,
+                        autofix_request.namespace,
+                        event_description
+                    )
+                )
+                
+                if fix_result and ("自动修复" in fix_result or "修复完成" in fix_result):
+                    result['success'] = True
+                    result['result'] = fix_result
+                    result['error_message'] = None
+                    result['actions_taken'] = ["执行K8s自动修复: " + autofix_request.deployment]
+                    logger.info(f"直接修复成功: {fix_result[:100]}...")
+            
+            # 如果仍然没有明确的结果，检查Pod状态
+            if not result.get('success') and not result.get('error_message'):
+                # 检查Pod是否已经修复
+                pod_status = loop.run_until_complete(
+                    k8s_fixer_agent.diagnose_cluster_health(autofix_request.namespace)
+                )
+                if f"部署 {autofix_request.deployment}: 0/" in pod_status:
+                    result['error_message'] = "修复后Pod仍未就绪，请检查日志或配置"
+                else:
+                    result['success'] = True
+                    result['result'] = "Pod状态已改善，修复可能已成功"
+            
+            # 等待几秒钟，让修复生效
+            time.sleep(3)
         finally:
             loop.close()
         
@@ -200,15 +271,23 @@ def send_notification():
         asyncio.set_event_loop(loop)
         try:
             if notification_type == 'human_help':
-                result = loop.run_until_complete(
-                    notifier_agent.send_human_help_request(message, urgency)
-                )
+                try:
+                    result = loop.run_until_complete(
+                        notifier_agent.send_human_help_request(message, urgency)
+                    )
+                except Exception as e:
+                    logger.error(f"发送人工帮助请求失败: {str(e)}")
+                    result = f"发送通知失败: {str(e)}"
             elif notification_type == 'incident':
                 affected_services = data.get('affected_services', [])
                 severity = data.get('severity', 'medium')
-                result = loop.run_until_complete(
-                    notifier_agent.send_incident_alert(message, affected_services, severity)
-                )
+                try:
+                    result = loop.run_until_complete(
+                        notifier_agent.send_incident_alert(message, affected_services, severity)
+                    )
+                except Exception as e:
+                    logger.error(f"发送事件告警失败: {str(e)}")
+                    result = f"发送告警失败: {str(e)}"
             else:
                 return jsonify({"error": f"不支持的通知类型: {notification_type}"}), 400
         finally:
@@ -285,10 +364,25 @@ async def execute_autofix_workflow(deployment: str, namespace: str, event: str, 
     try:
         actions_taken = []
         
+        # 通用的确保可序列化的函数
+        def ensure_serializable(obj):
+            if isinstance(obj, dict):
+                return {k: ensure_serializable(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [ensure_serializable(item) for item in obj]
+            elif hasattr(obj, 'isoformat'):  # datetime对象
+                return obj.isoformat()
+            else:
+                return obj
+        
         # 使用K8s修复Agent进行分析和修复
-        fix_result = await k8s_fixer_agent.analyze_and_fix_deployment(
-            deployment, namespace, event
-        )
+        try:
+            fix_result = await k8s_fixer_agent.analyze_and_fix_deployment(
+                deployment, namespace, event
+            )
+        except Exception as e:
+            logger.error(f"K8s修复Agent执行失败: {str(e)}")
+            fix_result = f"执行修复失败: {str(e)}"
         
         actions_taken.append(f"执行K8s自动修复: {deployment}")
         
@@ -301,13 +395,16 @@ async def execute_autofix_workflow(deployment: str, namespace: str, event: str, 
             success = False
             result = fix_result
             error_message = fix_result
-        
-        return {
+                
+        # 构建并序列化结果
+        response_data = {
             "success": success,
             "result": result,
             "actions_taken": actions_taken,
             "error_message": error_message
         }
+        
+        return ensure_serializable(response_data)
         
     except Exception as e:
         logger.error(f"自动修复工作流执行失败: {str(e)}")
@@ -323,6 +420,17 @@ async def execute_full_workflow(initial_state):
     try:
         current_state = initial_state
         workflow_steps = []
+        
+        # 通用的确保可序列化的函数
+        def ensure_serializable(obj):
+            if isinstance(obj, dict):
+                return {k: ensure_serializable(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [ensure_serializable(item) for item in obj]
+            elif hasattr(obj, 'isoformat'):  # datetime对象
+                return obj.isoformat()
+            else:
+                return obj
         
         while supervisor_agent.should_continue(current_state):
             # 主管决策下一步行动
@@ -353,14 +461,16 @@ async def execute_full_workflow(initial_state):
         
         # 获取工作流总结
         workflow_summary = supervisor_agent.get_workflow_summary(current_state)
-        
-        return {
+                
+        response_data = {
             "status": "completed",
             "workflow_steps": workflow_steps,
             "summary": workflow_summary,
             "final_state": current_state.current_step,
             "timestamp": datetime.utcnow().isoformat()
         }
+        
+        return ensure_serializable(response_data)
         
     except Exception as e:
         logger.error(f"完整工作流执行失败: {str(e)}")
@@ -380,13 +490,21 @@ async def execute_agent_action(agent_name: str, state):
             namespace = context.get('namespace', 'default')
             problem = context.get('problem', '')
             
-            return await k8s_fixer_agent.analyze_and_fix_deployment(
-                deployment, namespace, problem
-            )
+            try:
+                return await k8s_fixer_agent.analyze_and_fix_deployment(
+                    deployment, namespace, problem
+                )
+            except Exception as e:
+                logger.error(f"K8s修复Agent执行失败: {str(e)}")
+                return f"执行修复失败: {str(e)}"
         
         elif agent_name == "Notifier":
             problem = state.context.get('problem', '')
-            return await notifier_agent.send_human_help_request(problem, 'medium')
+            try:
+                return await notifier_agent.send_human_help_request(problem, 'medium')
+            except Exception as e:
+                logger.error(f"Notifier执行失败: {str(e)}")
+                return f"发送通知失败: {str(e)}"
         
         else:
             return f"Agent {agent_name} 执行完成（模拟）"

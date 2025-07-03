@@ -19,22 +19,26 @@ class ModelLoader:
     def load_models(self) -> bool:
         """加载预测模型和标准化器"""
         try:
+            # 获取模型文件的绝对路径
+            model_path = os.path.abspath(config.prediction.model_path)
+            scaler_path = os.path.abspath(config.prediction.scaler_path)
+            
             # 检查模型文件是否存在
-            if not os.path.exists(config.prediction.model_path):
-                logger.error(f"模型文件不存在: {config.prediction.model_path}")
+            if not os.path.exists(model_path):
+                logger.error(f"模型文件不存在: {model_path}")
                 return False
             
-            if not os.path.exists(config.prediction.scaler_path):
-                logger.error(f"标准化器文件不存在: {config.prediction.scaler_path}")
+            if not os.path.exists(scaler_path):
+                logger.error(f"标准化器文件不存在: {scaler_path}")
                 return False
             
             # 加载模型
-            self.model = joblib.load(config.prediction.model_path)
-            logger.info(f"成功加载预测模型: {config.prediction.model_path}")
+            self.model = joblib.load(model_path)
+            logger.info(f"成功加载预测模型: {model_path}")
             
             # 加载标准化器
-            self.scaler = joblib.load(config.prediction.scaler_path)
-            logger.info(f"成功加载数据标准化器: {config.prediction.scaler_path}")
+            self.scaler = joblib.load(scaler_path)
+            logger.info(f"成功加载数据标准化器: {scaler_path}")
             
             # 加载模型元数据
             self._load_model_metadata()
@@ -51,6 +55,8 @@ class ModelLoader:
         """加载模型元数据"""
         try:
             metadata_path = config.prediction.model_path.replace('.pkl', '_metadata.json')
+            metadata_path = os.path.abspath(metadata_path)
+            
             if os.path.exists(metadata_path):
                 import json
                 with open(metadata_path, 'r') as f:
@@ -89,12 +95,36 @@ class ModelLoader:
             return False
         
         try:
-            # 创建测试数据
-            test_features = pd.DataFrame({
+            # 获取模型所需的特征列表
+            model_features = self.model_metadata.get('features', [])
+            
+            # 创建测试数据 - 包含模型训练时使用的所有特征
+            test_features_dict = {
                 "QPS": [10.0],
                 "sin_time": [0.5],
                 "cos_time": [0.8]
-            })
+            }
+            
+            # 为新版本模型添加额外特征
+            extra_features = {
+                "sin_day": [0.7],
+                "cos_day": [0.7],
+                "is_business_hour": [1],
+                "is_weekend": [0],
+                "is_holiday": [0],
+                "QPS_1h_ago": [9.0],
+                "QPS_1d_ago": [11.0],
+                "QPS_1w_ago": [10.5],
+                "QPS_change": [0.1],
+                "QPS_avg_6h": [9.8]
+            }
+            
+            # 根据模型所需特征添加额外特征
+            for feature in model_features:
+                if feature not in test_features_dict and feature in extra_features:
+                    test_features_dict[feature] = extra_features[feature]
+            
+            test_features = pd.DataFrame(test_features_dict)
             
             # 测试标准化
             scaled_features = self.scaler.transform(test_features)

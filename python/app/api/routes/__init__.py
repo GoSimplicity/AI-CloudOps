@@ -12,8 +12,8 @@ def register_routes(app):
     """注册所有路由"""
     
     # 创建API蓝图
-    # api_v1 = Blueprint('api_v1', __name__, url_prefix='/api/v1')
-    api_v1 = Blueprint('api_v1', __name__)
+    api_v1 = Blueprint('api_v1', __name__, url_prefix='/api/v1')
+    # api_v1 = Blueprint('api_v1', __name__)
     
     # 注册子蓝图
     api_v1.register_blueprint(health_bp)

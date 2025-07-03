@@ -1,0 +1,178 @@
+{
+  "timestamp": "2025-07-03T07:51:46.794324",
+  "results": {
+    "health": {
+      "success": true,
+      "status_code": 200,
+      "response": {
+        "components": {
+          "kubernetes": true,
+          "llm": true,
+          "notification": true,
+          "prediction": true,
+          "prometheus": true
+        },
+        "status": "healthy",
+        "system": {
+          "cpu_usage": 16.5,
+          "load_average": [
+            2.24658203125,
+            2.66357421875,
+            2.72314453125
+          ],
+          "memory_available": 3301031936,
+          "memory_usage": 80.8
+        },
+        "timestamp": "2025-07-03T07:51:46.800077",
+        "uptime": 3.85,
+        "version": "1.0.0"
+      }
+    },
+    "autofix_health": {
+      "success": true,
+      "status_code": 200,
+      "response": {
+        "components": {
+          "k8s_fixer_agent": true,
+          "kubernetes_service": true,
+          "notification_service": true,
+          "notifier_agent": true,
+          "supervisor_agent": true
+        },
+        "notification_details": {
+          "enabled": true,
+          "healthy": true,
+          "service_type": "feishu",
+          "webhook_configured": true
+        },
+        "status": "healthy",
+        "timestamp": "2025-07-03T07:51:48.061669"
+      }
+    },
+    "diagnose_cluster": {
+      "success": true,
+      "status_code": 200,
+      "response": {
+        "diagnosis": "\n集群健康诊断 (命名空间: default):\n=================================\n节点: 1/1 就绪\nPod: 3/8 运行中\n问题Pod列表:\n- nginx-problematic-64cd8d458f-fgdpb: 状态=Running, 重启次数=0\n- nginx-problematic-64cd8d458f-grnf8: 状态=Pending, 重启次数=0\n- nginx-problematic-64cd8d458f-zknq7: 状态=Running, 重启次数=0\n- nginx-test-problem-5cbb89cc-chmfq: 状态=Running, 重启次数=2\n- nginx-test-problem-5cbb89cc-pbx2q: 状态=Running, 重启次数=2\n\n部署: 1/3 健康\n问题部署列表:\n- nginx-problematic: 0/3 副本就绪\n- nginx-test-problem: 0/2 副本就绪\n\n没有发现警告事件\n=================================\n诊断建议:\n1. Pod nginx-problematic-64cd8d458f-grnf8 处于Pending状态，可能是资源不足或者PVC问题。\n2. 部署 nginx-problematic 没有可用副本，可能需要检查Pod日志和事件。\n3. 部署 nginx-test-problem 没有可用副本，可能需要检查Pod日志和事件。\n",
+        "namespace": "default",
+        "status": "success",
+        "timestamp": "2025-07-03T07:52:03.672978"
+      }
+    },
+    "autofix_normal": {
+      "success": false,
+      "message": "API请求失败"
+    },
+    "autofix_problematic": {
+      "success": true,
+      "status_code": 200,
+      "response": {
+        "actions_taken": [
+          "执行K8s自动修复: nginx-problematic"
+        ],
+        "deployment": "nginx-problematic",
+        "error_message": null,
+        "namespace": "default",
+        "result": "\n自动修复 nginx-problematic 完成:\n- 发现的问题：内存和CPU请求过高, ReadinessProbe配置问题: 路径错误, 探针频率过高, 失败阈值过低\n- 执行的操作：降低资源请求, 将ReadinessProbe路径改为/, 调整探针频率为10秒, 将失败阈值调整为3\n                    ",
+        "status": "success",
+        "success": true,
+        "timestamp": "2025-07-03T07:52:25.161782"
+      }
+    },
+    "autofix_test_problem": {
+      "success": true,
+      "status_code": 200,
+      "response": {
+        "actions_taken": [
+          "执行K8s自动修复: nginx-test-problem"
+        ],
+        "deployment": "nginx-test-problem",
+        "error_message": null,
+        "namespace": "default",
+        "result": "\n自动修复 nginx-test-problem 完成:\n- 发现的问题：LivenessProbe配置问题: 路径错误, 探针频率过高, 初始延迟过短, 缺少ReadinessProbe\n- 执行的操作：将LivenessProbe路径改为/, 调整探针频率为10秒, 将初始延迟调整为10秒, 失败阈值设为3, 添加合适的ReadinessProbe\n                    ",
+        "status": "success",
+        "success": true,
+        "timestamp": "2025-07-03T07:52:38.455800"
+      }
+    },
+    "notification": {
+      "success": true,
+      "status_code": 200,
+      "response": {
+        "notification_type": "human_help",
+        "result": "❌ 发送人工帮助请求失败，请检查通知配置",
+        "status": "success",
+        "timestamp": "2025-07-03T07:52:48.641438"
+      }
+    },
+    "workflow": {
+      "success": true,
+      "status_code": 200,
+      "response": {
+        "final_state": "analyzing",
+        "status": "completed",
+        "summary": {
+          "actions_taken": [
+            "K8sFixer: unknown action",
+            "K8sFixer: unknown action",
+            "K8sFixer: unknown action",
+            "K8sFixer: unknown action",
+            "K8sFixer: unknown action"
+          ],
+          "agents_used": [
+            "K8sFixer"
+          ],
+          "context": {
+            "problem": "Kubernetes集群中的Pod出现CrashLoopBackOff状态，需要诊断并修复",
+            "start_time": "now"
+          },
+          "final_state": "analyzing",
+          "total_iterations": 5
+        },
+        "timestamp": "2025-07-03T07:52:54.509359",
+        "workflow_steps": [
+          {
+            "agent": "K8sFixer",
+            "reasoning": "这是一个Kubernetes部署问题，需要执行自动化修复操作",
+            "step": 1
+          },
+          {
+            "agent": "K8sFixer",
+            "reasoning": "需要进一步获取Deployment的配置信息以诊断Pod的CrashLoopBackOff状态。",
+            "step": 2
+          },
+          {
+            "agent": "K8sFixer",
+            "reasoning": "需要进一步获取Deployment unknown 的配置信息来诊断问题。",
+            "step": 3
+          },
+          {
+            "agent": "K8sFixer",
+            "reasoning": "需要进一步诊断和修复当前的Kubernetes问题。",
+            "step": 4
+          },
+          {
+            "agent": "K8sFixer",
+            "reasoning": "需要获取Deployment unknown 的配置信息，以诊断并修复问题。",
+            "step": 5
+          }
+        ]
+      }
+    }
+  },
+  "environment_setup": true,
+  "initial_pod_status": {
+    "success": false,
+    "message": "未找到部署 nginx-deployment 的Pod"
+  },
+  "final_pod_status": {
+    "success": false,
+    "message": "未找到部署 nginx-deployment 的Pod"
+  },
+  "summary": {
+    "total_tests": 8,
+    "passed_tests": 7,
+    "success_rate": "87.50%",
+    "duration_seconds": 87.85927677154541
+  }
+}

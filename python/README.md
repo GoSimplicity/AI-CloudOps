@@ -228,3 +228,171 @@ pytest --cov=app tests/
 ## 📄 许可证
 
 本项目采用 MIT 许可证 - 详见 LICENSE 文件
+
+## K8s 故障自动修复模块
+
+K8s 故障自动修复模块是一个用于自动诊断和修复 Kubernetes 集群中常见问题的子系统。该模块可以检测和修复以下常见问题：
+
+- Pod 健康检查（readinessProbe 和 livenessProbe）配置不当
+- 资源请求和限制设置不合理
+- 探针路径和探针频率配置错误
+- CrashLoopBackOff 故障的分析和修复
+- 集群中部署的其他常见错误
+
+### 架构
+
+自动修复模块由以下组件组成：
+
+1. **K8sFixerAgent**: 核心修复逻辑，负责分析和修复 Kubernetes 相关问题
+2. **SupervisorAgent**: 工作流协调器，管理修复过程中的决策链和修复步骤
+3. **NotifierAgent**: 在关键修复事件中发送通知
+4. **KubernetesService**: K8s API 的抽象层，提供集群操作功能
+
+### 使用方法
+
+#### 自动修复 API
+
+```bash
+# 修复特定部署
+curl -X POST http://localhost:8080/api/v1/autofix \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deployment": "nginx-problematic",
+    "namespace": "default",
+    "event": "Pod启动失败，原因是readinessProbe探针路径(/health)不存在，探针频率过高，且资源请求过高",
+    "force": true
+  }'
+```
+
+#### 诊断集群健康状态
+
+```bash
+# 诊断特定命名空间
+curl -X POST http://localhost:8080/api/v1/autofix/diagnose \
+  -H "Content-Type: application/json" \
+  -d '{
+    "namespace": "default"
+  }'
+```
+
+### 典型使用场景
+
+1. **自动修复健康检查问题**：
+
+   - 检测并修复错误的探针路径
+   - 调整不合理的探针频率和失败阈值
+   - 添加缺失的 readinessProbe 或修复 livenessProbe
+
+2. **资源优化**：
+
+   - 识别并修复资源请求过高的配置
+   - 平衡 CPU 和内存限制与请求
+
+3. **多因素问题修复**：
+   - 处理由多个因素引起的 CrashLoopBackOff 问题
+   - 组合应用多项修复
+
+### 样例修复流程
+
+1. 发现 Pod 无法启动，处于 CrashLoopBackOff 状态
+2. 调用自动修复 API
+3. 系统分析 Pod 状态、事件和配置
+4. 识别出 livenessProbe 配置不当：路径错误、频率过高
+5. 自动应用修复配置
+6. 验证 Pod 状态恢复正常
+
+### 配置和调试
+
+K8s 自动修复模块需要正确配置以下项：
+
+- Kubernetes 配置文件路径: `K8S_CONFIG_PATH`环境变量
+- 集群连接方式: `K8S_IN_CLUSTER`环境变量
+
+#### API 端点
+
+自动修复模块提供以下 API 端点：
+
+- `POST /api/v1/autofix`: 自动修复指定的 deployment
+
+  ```json
+  {
+    "deployment": "nginx-deployment",
+    "namespace": "default",
+    "event": "Pod启动失败，原因是健康检查配置不当",
+    "force": true
+  }
+  ```
+
+- `GET /api/v1/autofix/health`: 检查自动修复服务健康状态
+
+- `POST /api/v1/autofix/diagnose`: 诊断集群健康状态
+
+  ```json
+  {
+    "namespace": "default"
+  }
+  ```
+
+- `POST /api/v1/autofix/workflow`: 执行完整的自动修复工作流
+
+  ```json
+  {
+    "problem_description": "Kubernetes集群中的nginx-deployment出现了Pod无法启动的问题"
+  }
+  ```
+
+- `POST /api/v1/autofix/notify`: 发送通知
+  ```json
+  {
+    "type": "human_help",
+    "message": "需要人工协助处理Kubernetes集群中的问题",
+    "urgency": "medium"
+  }
+  ```
+
+### 测试
+
+项目包含一个测试脚本`tests/test-autofix.py`，可以用于测试自动修复功能。测试脚本会检查健康状态、执行诊断、尝试修复正常和异常部署，并验证结果。
+
+#### 前提条件
+
+1. 有一个可用的 Kubernetes 集群
+2. 集群中已部署示例应用（正常的 nginx-deployment 和有问题的 nginx-problematic）
+3. K8s 配置文件位于`deploy/kubernetes/config`
+
+#### 运行测试
+
+```bash
+# 设置环境变量
+export KUBECONFIG=deploy/kubernetes/config
+export PYTHONPATH=$(pwd)
+
+# 启动应用
+python app/main.py
+
+# 在另一个终端运行测试
+python tests/test-autofix.py
+```
+
+### 常见问题排查
+
+#### 无法连接到 Kubernetes
+
+确保：
+
+- K8s 配置文件正确且包含访问权限
+- 设置了正确的环境变量：`KUBECONFIG`和`K8S_CONFIG_PATH`
+
+#### 修复不生效
+
+可能的原因：
+
+- 集群资源不足，无法满足新 Pod 的请求
+- 权限问题，无法修改 deployment
+- 网络问题，无法访问 K8s API 服务器
+
+可以尝试减小资源请求：
+
+```bash
+kubectl patch deployment <problematic-deployment> -p '{"spec":{"template":{"spec":{"containers":[{"name":"<container-name>","resources":{"requests":{"memory":"32Mi","cpu":"50m"},"limits":{"memory":"64Mi","cpu":"100m"}},"readinessProbe":{"httpGet":{"path":"/"},"periodSeconds":10,"failureThreshold":3}}]}}}}'
+```

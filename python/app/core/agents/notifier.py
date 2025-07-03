@@ -11,7 +11,6 @@ class NotifierAgent:
         self.notification_service = NotificationService()
         logger.info("Notifier Agent初始化完成")
     
-    @tool
     async def send_human_help_request(self, problem_description: str, urgency: str = "medium") -> str:
         """发送人工帮助请求"""
         try:
@@ -58,7 +57,6 @@ class NotifierAgent:
             logger.error(f"发送人工帮助请求异常: {str(e)}")
             return f"❌ 发送人工帮助请求异常: {str(e)}"
     
-    @tool
     async def send_incident_alert(
         self, 
         incident_summary: str, 
@@ -264,6 +262,17 @@ class NotifierAgent:
     async def check_notification_health(self) -> Dict[str, Any]:
         """检查通知服务健康状态"""
         try:
+            # 确保数据可序列化的函数
+            def ensure_serializable(obj):
+                if isinstance(obj, dict):
+                    return {k: ensure_serializable(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [ensure_serializable(item) for item in obj]
+                elif hasattr(obj, 'isoformat'):  # datetime对象
+                    return obj.isoformat()
+                else:
+                    return obj
+            
             is_healthy = self.notification_service.is_healthy()
             
             health_info = {
@@ -273,7 +282,7 @@ class NotifierAgent:
                 "service_type": "feishu"
             }
             
-            return health_info
+            return ensure_serializable(health_info)
             
         except Exception as e:
             logger.error(f"检查通知服务健康状态失败: {str(e)}")
