@@ -43,10 +43,8 @@ type AlertManagerRecordDAO interface {
 	GetMonitorRecordRuleById(ctx context.Context, id int) (*model.MonitorRecordRule, error)
 	UpdateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error
 	DeleteMonitorRecordRule(ctx context.Context, ruleID int) error
-	EnableSwitchMonitorRecordRule(ctx context.Context, ruleID int) error
 	CheckMonitorRecordRuleExists(ctx context.Context, recordRule *model.MonitorRecordRule) (bool, error)
 	CheckMonitorRecordRuleNameExists(ctx context.Context, recordRule *model.MonitorRecordRule) (bool, error)
-	GetMonitorRecordRuleTotal(ctx context.Context) (int, error)
 }
 
 type alertManagerRecordDAO struct {
@@ -232,41 +230,6 @@ func (a *alertManagerRecordDAO) DeleteMonitorRecordRule(ctx context.Context, rul
 	return nil
 }
 
-// EnableSwitchMonitorRecordRule 切换 MonitorRecordRule 状态
-func (a *alertManagerRecordDAO) EnableSwitchMonitorRecordRule(ctx context.Context, ruleID int) error {
-	if ruleID <= 0 {
-		a.l.Error("EnableSwitchMonitorRecordRule 失败: 无效的 ruleID", zap.Int("ruleID", ruleID))
-		return fmt.Errorf("无效的 ruleID: %d", ruleID)
-	}
-
-	// 获取当前规则的状态
-	var rule model.MonitorRecordRule
-
-	if err := a.db.WithContext(ctx).
-		Model(&model.MonitorRecordRule{}).
-		Where("id = ?", ruleID).
-		First(&rule).Error; err != nil {
-		a.l.Error("查询 MonitorRecordRule 失败", zap.Error(err), zap.Int("ruleID", ruleID))
-		return err
-	}
-
-	// 切换状态
-	newEnable := !rule.Enable
-
-	// 更新状态
-	if err := a.db.WithContext(ctx).
-		Model(&model.MonitorRecordRule{}).
-		Where("id = ?", ruleID).
-		Updates(map[string]interface{}{
-			"enable": newEnable,
-		}).Error; err != nil {
-		a.l.Error("更新 MonitorRecordRule 状态失败", zap.Error(err), zap.Int("ruleID", ruleID))
-		return err
-	}
-
-	return nil
-}
-
 // CheckMonitorRecordRuleExists 检查 MonitorRecordRule 是否存在
 func (a *alertManagerRecordDAO) CheckMonitorRecordRuleExists(ctx context.Context, recordRule *model.MonitorRecordRule) (bool, error) {
 	var count int64
@@ -295,16 +258,4 @@ func (a *alertManagerRecordDAO) CheckMonitorRecordRuleNameExists(ctx context.Con
 	}
 
 	return count > 0, nil
-}
-
-// GetMonitorRecordRuleTotal 获取监控告警事件总数
-func (a *alertManagerRecordDAO) GetMonitorRecordRuleTotal(ctx context.Context) (int, error) {
-	var count int64
-
-	if err := a.db.WithContext(ctx).Model(&model.MonitorRecordRule{}).Count(&count).Error; err != nil {
-		a.l.Error("获取监控告警事件总数失败", zap.Error(err))
-		return 0, err
-	}
-
-	return int(count), nil
 }

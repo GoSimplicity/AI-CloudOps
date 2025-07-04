@@ -126,18 +126,51 @@ func (a *alertManagerEventDAO) GetMonitorAlertEventList(ctx context.Context, req
 	offset := (req.Page - 1) * req.Size
 	limit := req.Size
 
+	// 构建查询条件
+	query := a.db.WithContext(ctx).Model(&model.MonitorAlertEvent{})
+
+	// 添加搜索条件
+	if req.Search != "" {
+		query = query.Where("alert_name LIKE ?", "%"+req.Search+"%")
+	}
+
+	// 添加状态过滤条件
+	if req.Status != "" {
+		query = query.Where("status = ?", req.Status)
+	}
+
+	// 添加规则ID过滤条件
+	if req.RuleID != nil && *req.RuleID > 0 {
+		query = query.Where("rule_id = ?", *req.RuleID)
+	}
+
+	// 添加发送组ID过滤条件
+	if req.SendGroupID != nil && *req.SendGroupID > 0 {
+		query = query.Where("send_group_id = ?", *req.SendGroupID)
+	}
+
+	// 添加告警名称过滤条件
+	if req.AlertName != "" {
+		query = query.Where("alert_name LIKE ?", "%"+req.AlertName+"%")
+	}
+
+	// 添加时间范围过滤条件
+	if req.StartTime != "" && req.EndTime != "" {
+		query = query.Where("created_at BETWEEN ? AND ?", req.StartTime, req.EndTime)
+	} else if req.StartTime != "" {
+		query = query.Where("created_at >= ?", req.StartTime)
+	} else if req.EndTime != "" {
+		query = query.Where("created_at <= ?", req.EndTime)
+	}
+
 	// 先获取总数
-	if err := a.db.WithContext(ctx).
-		Model(&model.MonitorAlertEvent{}).
-		Where("status = ?", req.Status).
-		Count(&total).Error; err != nil {
+	if err := query.Count(&total).Error; err != nil {
 		a.l.Error("获取 MonitorAlertEvent 总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	// 获取分页数据
-	if err := a.db.WithContext(ctx).
-		Order("created_at DESC").
+	if err := query.Order("created_at DESC").
 		Offset(offset).
 		Limit(limit).
 		Find(&alertEvents).Error; err != nil {

@@ -44,7 +44,7 @@ type AlertManagerSendDAO interface {
 	GetMonitorSendGroupList(ctx context.Context, offset, limit int) ([]*model.MonitorSendGroup, int64, error)
 	GetMonitorSendGroupById(ctx context.Context, id int) (*model.MonitorSendGroup, error)
 	CreateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error
-	UpdateMonitorSendGroup(ctx context.Context, tx *gorm.DB, monitorSendGroup *model.MonitorSendGroup) error
+	UpdateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error
 	DeleteMonitorSendGroup(ctx context.Context, id int) error
 	CheckMonitorSendGroupExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error)
 	CheckMonitorSendGroupNameExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error)
@@ -270,8 +270,8 @@ func (a *alertManagerSendDAO) Transaction(ctx context.Context, fn func(tx *gorm.
 }
 
 // UpdateMonitorSendGroup 更新 MonitorSendGroup
-func (a *alertManagerSendDAO) UpdateMonitorSendGroup(ctx context.Context, tx *gorm.DB, monitorSendGroup *model.MonitorSendGroup) error {
-	return tx.WithContext(ctx).Model(monitorSendGroup).Updates(map[string]interface{}{
+func (a *alertManagerSendDAO) UpdateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error {
+	return a.db.WithContext(ctx).Model(monitorSendGroup).Updates(map[string]interface{}{
 		"name":                    monitorSendGroup.Name,
 		"name_zh":                 monitorSendGroup.NameZh,
 		"enable":                  monitorSendGroup.Enable,

@@ -38,20 +38,19 @@ import (
 
 type AlertManagerOnDutyDAO interface {
 	GetAllMonitorOnDutyGroup(ctx context.Context) ([]*model.MonitorOnDutyGroup, error)
-	GetMonitorOnDutyList(ctx context.Context, offset, limit int) ([]*model.MonitorOnDutyGroup, error)
-	CreateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error
+	GetMonitorOnDutyList(ctx context.Context, req *model.GetMonitorOnDutyGroupListReq) ([]*model.MonitorOnDutyGroup, int64, error)
+	CreateMonitorOnDutyGroup(ctx context.Context, req *model.MonitorOnDutyGroup) error
 	GetMonitorOnDutyGroupById(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error)
-	UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error
+	UpdateMonitorOnDutyGroup(ctx context.Context, req *model.MonitorOnDutyGroup) error
 	DeleteMonitorOnDutyGroup(ctx context.Context, id int) error
 	SearchMonitorOnDutyGroupByName(ctx context.Context, name string) ([]*model.MonitorOnDutyGroup, error)
-	CreateMonitorOnDutyGroupChange(ctx context.Context, monitorOnDutyGroupChange *model.MonitorOnDutyChange) error
+	CreateMonitorOnDutyGroupChange(ctx context.Context, req *model.MonitorOnDutyChange) error
 	GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyChange, error)
 	CheckMonitorOnDutyGroupExists(ctx context.Context, onDutyGroup *model.MonitorOnDutyGroup) (bool, error)
 	GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyHistory, error)
 	CreateMonitorOnDutyHistory(ctx context.Context, monitorOnDutyHistory *model.MonitorOnDutyHistory) error
 	GetMonitorOnDutyHistoryByGroupIdAndDay(ctx context.Context, groupID int, day string) (*model.MonitorOnDutyHistory, error)
 	ExistsMonitorOnDutyHistory(ctx context.Context, groupID int, day string) (bool, error)
-	GetMonitorOnDutyTotal(ctx context.Context) (int, error)
 }
 
 type alertManagerOnDutyDAO struct {
@@ -317,27 +316,34 @@ func (a *alertManagerOnDutyDAO) ExistsMonitorOnDutyHistory(ctx context.Context, 
 }
 
 // GetMonitorOnDutyList 获取值班组列表
-func (a *alertManagerOnDutyDAO) GetMonitorOnDutyList(ctx context.Context, offset int, limit int) ([]*model.MonitorOnDutyGroup, error) {
-	if offset < 0 {
-		return nil, fmt.Errorf("offset不能小于0")
+func (a *alertManagerOnDutyDAO) GetMonitorOnDutyList(ctx context.Context, req *model.GetMonitorOnDutyGroupListReq) ([]*model.MonitorOnDutyGroup, int64, error) {
+	if req.Page < 0 {
+		req.Page = 1
 	}
 
-	if limit <= 0 {
-		return nil, fmt.Errorf("limit必须大于0")
+	if req.Size <= 0 {
+		req.Size = 10
 	}
+
+	offset := (req.Page - 1) * req.Size
 
 	var groups []*model.MonitorOnDutyGroup
-
+	var count int64
 	if err := a.db.WithContext(ctx).
 		Preload("Members").
 		Offset(offset).
-		Limit(limit).
+		Limit(req.Size).
 		Find(&groups).Error; err != nil {
 		a.l.Error("获取值班组列表失败", zap.Error(err))
-		return nil, fmt.Errorf("获取值班组列表失败: %w", err)
+		return nil, 0, fmt.Errorf("获取值班组列表失败: %w", err)
 	}
 
-	return groups, nil
+	if err := a.db.WithContext(ctx).Model(&model.MonitorOnDutyGroup{}).Count(&count).Error; err != nil {
+		a.l.Error("获取值班组列表总数失败", zap.Error(err))
+		return nil, 0, fmt.Errorf("获取值班组列表总数失败: %w", err)
+	}
+
+	return groups, count, nil
 }
 
 // GetMonitorOnDutyTotal 获取监控告警事件总数

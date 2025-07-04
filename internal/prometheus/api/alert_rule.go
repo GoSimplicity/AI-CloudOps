@@ -32,18 +32,15 @@ import (
 	alertService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type AlertRuleHandler struct {
-	alertRuleService alertService.AlertManagerRuleService
-	l                *zap.Logger
+	svc alertService.AlertManagerRuleService
 }
 
-func NewAlertRuleHandler(l *zap.Logger, alertRuleService alertService.AlertManagerRuleService) *AlertRuleHandler {
+func NewAlertRuleHandler(svc alertService.AlertManagerRuleService) *AlertRuleHandler {
 	return &AlertRuleHandler{
-		l:                l,
-		alertRuleService: alertRuleService,
+		svc: svc,
 	}
 }
 
@@ -53,29 +50,30 @@ func (a *AlertRuleHandler) RegisterRouters(server *gin.Engine) {
 	alertRules := monitorGroup.Group("/alert_rules")
 	{
 		alertRules.GET("/list", a.GetMonitorAlertRuleList)
+		alertRules.GET("/detail/:id", a.GetMonitorAlertRule)
 		alertRules.POST("/promql_check", a.PromqlExprCheck)
 		alertRules.POST("/create", a.CreateMonitorAlertRule)
-		alertRules.POST("/update/:id", a.UpdateMonitorAlertRule)
-		alertRules.POST("/enable/:id", a.EnableSwitchMonitorAlertRule)
+		alertRules.PUT("/update/:id", a.UpdateMonitorAlertRule)
 		alertRules.DELETE("/delete/:id", a.DeleteMonitorAlertRule)
 	}
 }
 
 // CreateMonitorAlertRule 创建新的告警规则
 func (a *AlertRuleHandler) CreateMonitorAlertRule(ctx *gin.Context) {
-	var alertRule model.MonitorAlertRule
+	var req model.CreateMonitorAlertRuleReq
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
-	alertRule.UserID = uc.Uid
+	req.UserID = uc.Uid
+	req.CreatorName = uc.Username
 
-	utils.HandleRequest(ctx, &alertRule, func() (interface{}, error) {
-		return nil, a.alertRuleService.CreateMonitorAlertRule(ctx, &alertRule)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, a.svc.CreateMonitorAlertRule(ctx, &req)
 	})
 }
 
 // UpdateMonitorAlertRule 更新现有的告警规则
 func (a *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
-	var req model.MonitorAlertRule
+	var req model.UpdateMonitorAlertRuleReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -86,24 +84,7 @@ func (a *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.alertRuleService.UpdateMonitorAlertRule(ctx, &req)
-	})
-}
-
-// EnableSwitchMonitorAlertRule 切换告警规则的启用状态
-func (a *AlertRuleHandler) EnableSwitchMonitorAlertRule(ctx *gin.Context) {
-	var req model.EnableSwitchMonitorAlertRuleReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-
-	req.ID = id
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.alertRuleService.EnableSwitchMonitorAlertRule(ctx, req.ID)
+		return nil, a.svc.UpdateMonitorAlertRule(ctx, &req)
 	})
 }
 
@@ -120,33 +101,40 @@ func (a *AlertRuleHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.alertRuleService.DeleteMonitorAlertRule(ctx, req.ID)
+		return nil, a.svc.DeleteMonitorAlertRule(ctx, &req)
 	})
 }
 
 // GetMonitorAlertRuleList 获取告警规则列表
 func (a *AlertRuleHandler) GetMonitorAlertRuleList(ctx *gin.Context) {
-	var listReq model.ListReq
+	var req model.GetMonitorAlertRuleListReq
 
-	utils.HandleRequest(ctx, &listReq, func() (interface{}, error) {
-		return a.alertRuleService.GetMonitorAlertRuleList(ctx, &listReq)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return a.svc.GetMonitorAlertRuleList(ctx, &req)
 	})
 }
 
 // PromqlExprCheck 检查 PromQL 表达式的合法性
 func (a *AlertRuleHandler) PromqlExprCheck(ctx *gin.Context) {
-	var promql model.PromqlExprCheckReq
+	var promql model.PromqlAlertRuleExprCheckReq
 
-	if err := ctx.ShouldBindJSON(&promql); err != nil {
-		utils.ErrorWithDetails(ctx, err, "参数错误")
+	utils.HandleRequest(ctx, &promql, func() (interface{}, error) {
+		return a.svc.PromqlExprCheck(ctx, &promql)
+	})
+}
+
+func (a *AlertRuleHandler) GetMonitorAlertRule(ctx *gin.Context) {
+	var req model.GetMonitorAlertRuleReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	exist, err := a.alertRuleService.PromqlExprCheck(ctx, promql.PromqlExpr)
-	if !exist || err != nil {
-		utils.ErrorWithMessage(ctx, "PromQL 表达式不合法")
-		return
-	}
+	req.ID = id
 
-	utils.Success(ctx)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return a.svc.GetMonitorAlertRule(ctx, &req)
+	})
 }
