@@ -31,18 +31,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type AlertEventHandler struct {
-	alertEventService alertEventService.AlertManagerEventService
-	l                 *zap.Logger
+	svc alertEventService.AlertManagerEventService
 }
 
-func NewAlertEventHandler(l *zap.Logger, alertEventService alertEventService.AlertManagerEventService) *AlertEventHandler {
+func NewAlertEventHandler(svc alertEventService.AlertManagerEventService) *AlertEventHandler {
 	return &AlertEventHandler{
-		l:                 l,
-		alertEventService: alertEventService,
+		svc: svc,
 	}
 }
 
@@ -63,7 +60,7 @@ func (a *AlertEventHandler) GetMonitorAlertEventList(ctx *gin.Context) {
 	var req model.GetMonitorAlertEventListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return a.alertEventService.GetMonitorAlertEventList(ctx, &req)
+		return a.svc.GetMonitorAlertEventList(ctx, &req)
 	})
 }
 
@@ -82,7 +79,7 @@ func (a *AlertEventHandler) EventAlertSilence(ctx *gin.Context) {
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.alertEventService.EventAlertSilence(ctx, &req)
+		return nil, a.svc.EventAlertSilence(ctx, &req)
 	})
 }
 
@@ -101,7 +98,7 @@ func (a *AlertEventHandler) EventAlertClaim(ctx *gin.Context) {
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.alertEventService.EventAlertClaim(ctx, &req)
+		return nil, a.svc.EventAlertClaim(ctx, &req)
 	})
 }
 
@@ -120,6 +117,6 @@ func (a *AlertEventHandler) EventAlertUnSilence(ctx *gin.Context) {
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.alertEventService.EventAlertUnSilence(ctx, &req)
+		return nil, a.svc.EventAlertUnSilence(ctx, &req)
 	})
 }

@@ -29,12 +29,9 @@ import (
 	"context"
 	"errors"
 
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -43,61 +40,36 @@ type AlertManagerPoolService interface {
 	GetMonitorAlertManagerPoolList(ctx context.Context, req *model.GetMonitorAlertManagerPoolListReq) (model.ListResp[*model.MonitorAlertManagerPool], error)
 	CreateMonitorAlertManagerPool(ctx context.Context, req *model.CreateMonitorAlertManagerPoolReq) error
 	UpdateMonitorAlertManagerPool(ctx context.Context, req *model.UpdateMonitorAlertManagerPoolReq) error
-	DeleteMonitorAlertManagerPool(ctx context.Context, id int) error
+	DeleteMonitorAlertManagerPool(ctx context.Context, req *model.DeleteMonitorAlertManagerPoolReq) error
+	GetMonitorAlertManagerPool(ctx context.Context, req *model.GetMonitorAlertManagerPoolReq) (*model.MonitorAlertManagerPool, error)
 }
 
 type alertManagerPoolService struct {
 	dao     alert.AlertManagerPoolDAO
 	sendDao alert.AlertManagerSendDAO
 	cache   cache.MonitorCache
-	userDao userDao.UserDAO
 	l       *zap.Logger
 }
 
-func NewAlertManagerPoolService(dao alert.AlertManagerPoolDAO, sendDao alert.AlertManagerSendDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO) AlertManagerPoolService {
+func NewAlertManagerPoolService(
+	dao alert.AlertManagerPoolDAO,
+	sendDao alert.AlertManagerSendDAO,
+	cache cache.MonitorCache,
+	l *zap.Logger,
+) AlertManagerPoolService {
 	return &alertManagerPoolService{
 		dao:     dao,
 		sendDao: sendDao,
-		userDao: userDao,
 		l:       l,
 		cache:   cache,
 	}
 }
 
 func (a *alertManagerPoolService) GetMonitorAlertManagerPoolList(ctx context.Context, req *model.GetMonitorAlertManagerPoolListReq) (model.ListResp[*model.MonitorAlertManagerPool], error) {
-	var pools []*model.MonitorAlertManagerPool
-
-	if req.Search != "" {
-		pools, count, err := a.dao.SearchMonitorAlertManagerPoolByName(ctx, req.Search)
-		if err != nil {
-			a.l.Error("搜索告警事件失败", zap.String("search", req.Search), zap.Error(err))
-			return model.ListResp[*model.MonitorAlertManagerPool]{}, err
-		}
-		return model.ListResp[*model.MonitorAlertManagerPool]{
-			Items: pools,
-			Total: count,
-		}, nil
-	}
-
-	offset := (req.Page - 1) * req.Size
-	limit := req.Size
-
-	pools, count, err := a.dao.GetMonitorAlertManagerPoolList(ctx, offset, limit)
+	pools, count, err := a.dao.GetMonitorAlertManagerPoolList(ctx, req)
 	if err != nil {
 		a.l.Error("获取告警事件列表失败", zap.Error(err))
 		return model.ListResp[*model.MonitorAlertManagerPool]{}, err
-	}
-
-	for _, pool := range pools {
-		user, err := a.userDao.GetUserByID(ctx, pool.UserID)
-		if err != nil {
-			a.l.Error("获取创建用户名失败", zap.Error(err))
-		}
-		if user.RealName == "" {
-			pool.CreateUserName = user.Username
-		} else {
-			pool.CreateUserName = user.RealName
-		}
 	}
 
 	return model.ListResp[*model.MonitorAlertManagerPool]{
@@ -117,6 +89,7 @@ func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Cont
 		RepeatInterval:        req.RepeatInterval,
 		GroupBy:               req.GroupBy,
 		Receiver:              req.Receiver,
+		CreatorName:           req.CreatorName,
 	}
 
 	// 检查 AlertManager Pool 是否已存在
@@ -130,7 +103,7 @@ func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Cont
 	}
 
 	// 检查 AlertManager IP 是否已存在
-	if err := a.checkAlertIpExists(ctx, pool); err != nil {
+	if err := a.dao.CheckAlertIpExists(ctx, pool); err != nil {
 		a.l.Error("创建 AlertManager 集群池失败：检查 AlertManager IP 是否存在时出错", zap.Error(err))
 		return err
 	}
@@ -156,6 +129,7 @@ func (a *alertManagerPoolService) UpdateMonitorAlertManagerPool(ctx context.Cont
 		a.l.Error("更新 AlertManager 集群池失败：获取原有告警池信息出错", zap.Error(err))
 		return err
 	}
+
 	pool := &model.MonitorAlertManagerPool{
 		Model:                 model.Model{ID: req.ID},
 		Name:                  req.Name,
@@ -182,7 +156,7 @@ func (a *alertManagerPoolService) UpdateMonitorAlertManagerPool(ctx context.Cont
 	}
 
 	// 检查 AlertManager IP 是否已被其他池使用
-	if err := a.checkAlertIpExists(ctx, pool); err != nil {
+	if err := a.dao.CheckAlertIpExists(ctx, pool); err != nil {
 		a.l.Error("更新 AlertManager 集群池失败：检查 AlertManager IP 是否存在时出错", zap.Error(err))
 		return err
 	}
@@ -196,14 +170,12 @@ func (a *alertManagerPoolService) UpdateMonitorAlertManagerPool(ctx context.Cont
 	return nil
 }
 
-func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Context, id int) error {
-	// 检查 ID 是否有效
-	if id <= 0 {
+func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Context, req *model.DeleteMonitorAlertManagerPoolReq) error {
+	if req.ID <= 0 {
 		return errors.New("无效的告警池ID")
 	}
 
-	// 检查 AlertManager 集群池是否有关联的发送组
-	sendGroups, _, err := a.sendDao.GetMonitorSendGroupByPoolId(ctx, id)
+	sendGroups, _, err := a.sendDao.GetMonitorSendGroupByPoolId(ctx, req.ID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		a.l.Error("删除 AlertManager 集群池失败：获取关联发送组时出错", zap.Error(err))
 		return err
@@ -213,8 +185,10 @@ func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Cont
 		return errors.New("AlertManager 集群池存在关联发送组，无法删除")
 	}
 
-	// 删除 AlertManager 集群池
-	if err := a.dao.DeleteMonitorAlertManagerPool(ctx, id); err != nil {
+	if err := a.dao.DeleteMonitorAlertManagerPool(ctx, req.ID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
 		a.l.Error("删除 AlertManager 集群池失败", zap.Error(err))
 		return err
 	}
@@ -222,12 +196,13 @@ func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Cont
 	return nil
 }
 
-func (a *alertManagerPoolService) checkAlertIpExists(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error {
-	pools, _, err := a.dao.GetAllAlertManagerPools(ctx)
+// GetMonitorAlertManagerPool 获取 AlertManager 实例池
+func (a *alertManagerPoolService) GetMonitorAlertManagerPool(ctx context.Context, req *model.GetMonitorAlertManagerPoolReq) (*model.MonitorAlertManagerPool, error) {
+	pool, err := a.dao.GetAlertPoolByID(ctx, req.ID)
 	if err != nil {
-		a.l.Error("检查 AlertManager Pool 是否存在失败", zap.Error(err))
-		return err
+		a.l.Error("获取 AlertManager 实例池失败", zap.Error(err))
+		return nil, err
 	}
 
-	return pkg.CheckAlertIpExists(monitorAlertManagerPool, pools)
+	return pool, nil
 }

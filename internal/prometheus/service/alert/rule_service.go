@@ -28,107 +28,121 @@ package alert
 import (
 	"context"
 	"errors"
-	"fmt"
-
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	"github.com/prometheus/prometheus/promql/parser"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type AlertManagerRuleService interface {
-	GetMonitorAlertRuleList(ctx context.Context, listReq *model.ListReq) (model.ListResp[*model.MonitorAlertRule], error)
-	PromqlExprCheck(ctx context.Context, expr string) (bool, error)
-	CreateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error
-	UpdateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error
-	EnableSwitchMonitorAlertRule(ctx context.Context, id int) error
-	BatchEnableSwitchMonitorAlertRule(ctx context.Context, ids []int) error
-	DeleteMonitorAlertRule(ctx context.Context, id int) error
-	BatchDeleteMonitorAlertRule(ctx context.Context, ids []int) error
-	GetMonitorAlertRuleTotal(ctx context.Context) (int, error)
+	GetMonitorAlertRuleList(ctx context.Context, req *model.GetMonitorAlertRuleListReq) (model.ListResp[*model.MonitorAlertRule], error)
+	CreateMonitorAlertRule(ctx context.Context, req *model.CreateMonitorAlertRuleReq) error
+	UpdateMonitorAlertRule(ctx context.Context, req *model.UpdateMonitorAlertRuleReq) error
+	DeleteMonitorAlertRule(ctx context.Context, req *model.DeleteMonitorAlertRuleRequest) error
+	PromqlExprCheck(ctx context.Context, req *model.PromqlAlertRuleExprCheckReq) (bool, error)
+	GetMonitorAlertRule(ctx context.Context, req *model.GetMonitorAlertRuleReq) (*model.MonitorAlertRule, error)
 }
 
 type alertManagerRuleService struct {
-	dao     alert.AlertManagerRuleDAO
-	cache   cache.MonitorCache
-	userDao userDao.UserDAO
-	l       *zap.Logger
+	logger       *zap.Logger
+	ruleDAO      alert.AlertManagerRuleDAO
+	poolDAO      alert.AlertManagerPoolDAO
+	sendGroupDAO alert.AlertManagerSendDAO
 }
 
-func NewAlertManagerRuleService(dao alert.AlertManagerRuleDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO) AlertManagerRuleService {
+func NewAlertManagerRuleService(
+	logger *zap.Logger,
+	ruleDAO alert.AlertManagerRuleDAO,
+	poolDAO alert.AlertManagerPoolDAO,
+	sendGroupDAO alert.AlertManagerSendDAO,
+) AlertManagerRuleService {
 	return &alertManagerRuleService{
-		dao:     dao,
-		userDao: userDao,
-		l:       l,
-		cache:   cache,
+		logger:       logger,
+		ruleDAO:      ruleDAO,
+		poolDAO:      poolDAO,
+		sendGroupDAO: sendGroupDAO,
 	}
 }
 
 // GetMonitorAlertRuleList 获取告警规则列表
-func (a *alertManagerRuleService) GetMonitorAlertRuleList(ctx context.Context, listReq *model.ListReq) (model.ListResp[*model.MonitorAlertRule], error) {
-	if listReq.Search != "" {
-		rules, total, err := a.dao.SearchMonitorAlertRuleByName(ctx, listReq.Search)
-		if err != nil {
-			a.l.Error("搜索告警规则失败", zap.String("search", listReq.Search), zap.Error(err))
-			return model.ListResp[*model.MonitorAlertRule]{}, err
-		}
-		return model.ListResp[*model.MonitorAlertRule]{
-			Total: total,
-			Items: rules,
-		}, nil
-	}
-
-	offset := (listReq.Page - 1) * listReq.Size
-	limit := listReq.Size
-
-	rules, total, err := a.dao.GetMonitorAlertRuleList(ctx, offset, limit)
+func (s *alertManagerRuleService) GetMonitorAlertRuleList(ctx context.Context, req *model.GetMonitorAlertRuleListReq) (model.ListResp[*model.MonitorAlertRule], error) {
+	rules, count, err := s.ruleDAO.GetMonitorAlertRuleList(ctx, req)
 	if err != nil {
-		a.l.Error("获取告警规则列表失败", zap.Error(err))
+		s.logger.Error("获取告警规则列表失败", zap.Error(err))
 		return model.ListResp[*model.MonitorAlertRule]{}, err
 	}
 
-	for _, rule := range rules {
-		user, err := a.userDao.GetUserByID(ctx, rule.UserID)
-		if err != nil {
-			a.l.Error("获取创建用户名失败", zap.Error(err))
+	// 补充额外信息
+	for i := range rules {
+		// 获取发送组名称
+		sendGroup, err := s.sendGroupDAO.GetMonitorSendGroupById(ctx, rules[i].SendGroupID)
+		if err == nil && sendGroup != nil {
+			rules[i].SendGroupName = sendGroup.NameZh
 		}
-		if user.RealName == "" {
-			rule.CreateUserName = user.Username
-		} else {
-			rule.CreateUserName = user.RealName
+
+		// 获取Prometheus实例池名称
+		pool, err := s.poolDAO.GetAlertPoolByID(ctx, rules[i].PoolID)
+		if err == nil && pool != nil {
+			rules[i].PoolName = pool.Name
 		}
 	}
 
 	return model.ListResp[*model.MonitorAlertRule]{
-		Total: total,
 		Items: rules,
+		Total: count,
 	}, nil
 }
 
-// PromqlExprCheck 检查 PromQL 表达式是否有效
-func (a *alertManagerRuleService) PromqlExprCheck(_ context.Context, expr string) (bool, error) {
-	return pkg.PromqlExprCheck(expr)
-}
-
 // CreateMonitorAlertRule 创建告警规则
-func (a *alertManagerRuleService) CreateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error {
-	// 检查告警规则是否已存在
-	exists, err := a.dao.CheckMonitorAlertRuleNameExists(ctx, monitorAlertRule)
+func (s *alertManagerRuleService) CreateMonitorAlertRule(ctx context.Context, req *model.CreateMonitorAlertRuleReq) error {
+	// 验证PromQL表达式
+	_, err := s.PromqlExprCheck(ctx, &model.PromqlAlertRuleExprCheckReq{
+		PromqlExpr: req.Expr,
+	})
+
 	if err != nil {
-		a.l.Error("创建告警规则失败：检查告警规则是否存在时出错", zap.Error(err))
+		return errors.New("PromQL表达式语法错误: " + err.Error())
+	}
+
+	// 检查Pool是否存在
+	_, err = s.poolDAO.GetAlertPoolByID(ctx, req.PoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("指定的Prometheus实例池不存在")
+		}
 		return err
 	}
 
-	if exists {
-		return errors.New("告警规则已存在")
+	// 检查SendGroup是否存在
+	_, err = s.sendGroupDAO.GetMonitorSendGroupById(ctx, req.SendGroupID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("指定的发送组不存在")
+		}
+		return err
 	}
 
 	// 创建告警规则
-	if err := a.dao.CreateMonitorAlertRule(ctx, monitorAlertRule); err != nil {
-		a.l.Error("创建告警规则失败", zap.Error(err))
+	rule := &model.MonitorAlertRule{
+		Name:        req.Name,
+		UserID:      req.UserID,
+		PoolID:      req.PoolID,
+		SendGroupID: req.SendGroupID,
+		IpAddress:   req.IpAddress,
+		Enable:      req.Enable,
+		Expr:        req.Expr,
+		Severity:    req.Severity,
+		GrafanaLink: req.GrafanaLink,
+		ForTime:     req.ForTime,
+		Labels:      req.Labels,
+		Annotations: req.Annotations,
+	}
+
+	err = s.ruleDAO.CreateMonitorAlertRule(ctx, rule)
+	if err != nil {
+		s.logger.Error("创建告警规则失败", zap.Error(err))
 		return err
 	}
 
@@ -136,46 +150,46 @@ func (a *alertManagerRuleService) CreateMonitorAlertRule(ctx context.Context, mo
 }
 
 // UpdateMonitorAlertRule 更新告警规则
-func (a *alertManagerRuleService) UpdateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error {
-	// 检查告警规则是否已存在
-	exists, err := a.dao.CheckMonitorAlertRuleExists(ctx, monitorAlertRule)
+func (s *alertManagerRuleService) UpdateMonitorAlertRule(ctx context.Context, req *model.UpdateMonitorAlertRuleReq) error {
+	// 验证PromQL表达式
+	_, err := s.PromqlExprCheck(ctx, &model.PromqlAlertRuleExprCheckReq{
+		PromqlExpr: req.Expr,
+	})
 	if err != nil {
-		a.l.Error("更新告警规则失败：检查告警规则是否存在时出错", zap.Error(err))
 		return err
 	}
 
-	if !exists {
-		return errors.New("告警规则不存在")
-	}
-
-	// 更新告警规则
-	if err := a.dao.UpdateMonitorAlertRule(ctx, monitorAlertRule); err != nil {
-		a.l.Error("更新告警规则失败", zap.Error(err))
+	// 检查规则是否存在
+	_, err = s.ruleDAO.GetMonitorAlertRuleById(ctx, req.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("告警规则不存在")
+		}
 		return err
 	}
 
-	if ok, err := pkg.PromqlExprCheck(monitorAlertRule.Expr); err != nil || !ok {
-		return errors.New("PromQL 表达式无效")
-	}
-
-	return nil
-}
-
-// EnableSwitchMonitorAlertRule 切换告警规则状态
-func (a *alertManagerRuleService) EnableSwitchMonitorAlertRule(ctx context.Context, id int) error {
-	if err := a.dao.EnableSwitchMonitorAlertRule(ctx, id); err != nil {
-		a.l.Error("切换告警规则状态失败", zap.Error(err))
+	// 检查Pool是否存在
+	_, err = s.poolDAO.GetAlertPoolByID(ctx, req.PoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("指定的Prometheus实例池不存在")
+		}
 		return err
 	}
 
-	return nil
-}
+	// 检查SendGroup是否存在
+	_, err = s.sendGroupDAO.GetMonitorSendGroupById(ctx, req.SendGroupID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("指定的发送组不存在")
+		}
+		return err
+	}
 
-// BatchEnableSwitchMonitorAlertRule 批量切换告警规则状态
-func (a *alertManagerRuleService) BatchEnableSwitchMonitorAlertRule(ctx context.Context, ids []int) error {
-	// 批量切换告警规则状态
-	if err := a.dao.BatchEnableSwitchMonitorAlertRule(ctx, ids); err != nil {
-		a.l.Error("批量切换告警规则状态失败", zap.Error(err))
+	// 更新规则
+	err = s.ruleDAO.UpdateMonitorAlertRule(ctx, req)
+	if err != nil {
+		s.logger.Error("更新告警规则失败", zap.Error(err))
 		return err
 	}
 
@@ -183,30 +197,49 @@ func (a *alertManagerRuleService) BatchEnableSwitchMonitorAlertRule(ctx context.
 }
 
 // DeleteMonitorAlertRule 删除告警规则
-func (a *alertManagerRuleService) DeleteMonitorAlertRule(ctx context.Context, id int) error {
-	// 删除告警规则
-	if err := a.dao.DeleteMonitorAlertRule(ctx, id); err != nil {
-		a.l.Error("删除告警规则失败", zap.Error(err))
+func (s *alertManagerRuleService) DeleteMonitorAlertRule(ctx context.Context, req *model.DeleteMonitorAlertRuleRequest) error {
+	// 检查规则是否存在
+	_, err := s.ruleDAO.GetMonitorAlertRuleById(ctx, req.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("告警规则不存在")
+		}
+		return err
+	}
+
+	// 删除规则
+	err = s.ruleDAO.DeleteMonitorAlertRule(ctx, req.ID)
+	if err != nil {
+		s.logger.Error("删除告警规则失败", zap.Error(err))
 		return err
 	}
 
 	return nil
 }
 
-// BatchDeleteMonitorAlertRule 批量删除告警规则
-func (a *alertManagerRuleService) BatchDeleteMonitorAlertRule(ctx context.Context, ids []int) error {
-	for _, id := range ids {
-		if err := a.DeleteMonitorAlertRule(ctx, id); err != nil {
-			// 记录错误但继续删除其他规则
-			a.l.Error("批量删除告警规则失败", zap.Int("id", id), zap.Error(err))
-			return fmt.Errorf("删除告警规则 ID %d 失败: %v", id, err)
-		}
+// PromqlExprCheck 检查PromQL表达式是否有效
+func (s *alertManagerRuleService) PromqlExprCheck(ctx context.Context, req *model.PromqlAlertRuleExprCheckReq) (bool, error) {
+	if req.PromqlExpr == "" {
+		return false, errors.New("PromQL表达式不能为空")
 	}
 
-	return nil
+	// 尝试解析表达式
+	_, err := parser.ParseExpr(req.PromqlExpr)
+	if err != nil {
+		s.logger.Error("PromQL表达式语法错误", zap.Error(err), zap.String("expr", req.PromqlExpr))
+		return false, errors.New("PromQL表达式语法错误: " + err.Error())
+	}
+
+	return true, nil
 }
 
-// GetMonitorAlertRuleTotal 获取监控告警规则总数
-func (a *alertManagerRuleService) GetMonitorAlertRuleTotal(ctx context.Context) (int, error) {
-	return a.dao.GetMonitorAlertRuleTotal(ctx)
+// GetMonitorAlertRuleById 根据ID获取告警规则
+func (s *alertManagerRuleService) GetMonitorAlertRule(ctx context.Context, req *model.GetMonitorAlertRuleReq) (*model.MonitorAlertRule, error) {
+	rule, err := s.ruleDAO.GetMonitorAlertRuleById(ctx, req.ID)
+	if err != nil {
+		s.logger.Error("根据ID获取告警规则失败", zap.Int("id", req.ID), zap.Error(err))
+		return nil, err
+	}
+
+	return rule, nil
 }

@@ -34,61 +34,45 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/prometheus/prometheus/promql/parser"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type AlertManagerRecordService interface {
-	GetMonitorRecordRuleList(ctx context.Context, listReq *model.ListReq) (model.ListResp[*model.MonitorRecordRule], error)
-	CreateMonitorRecordRule(ctx context.Context, monitorRecordRule *model.MonitorRecordRule) error
-	UpdateMonitorRecordRule(ctx context.Context, monitorRecordRule *model.MonitorRecordRule) error
-	DeleteMonitorRecordRule(ctx context.Context, id int) error
-	BatchDeleteMonitorRecordRule(ctx context.Context, ids []int) error
-	EnableSwitchMonitorRecordRule(ctx context.Context, id int) error
-	BatchEnableSwitchMonitorRecordRule(ctx context.Context, ids []int) error
-	GetMonitorRecordRuleTotal(ctx context.Context) (int, error)
+	GetMonitorRecordRuleList(ctx context.Context, req *model.GetMonitorRecordRuleListReq) (model.ListResp[*model.MonitorRecordRule], error)
+	CreateMonitorRecordRule(ctx context.Context, req *model.CreateMonitorRecordRuleReq) error
+	UpdateMonitorRecordRule(ctx context.Context, req *model.UpdateMonitorRecordRuleReq) error
+	DeleteMonitorRecordRule(ctx context.Context, req *model.DeleteMonitorRecordRuleReq) error
+	GetMonitorRecordRule(ctx context.Context, req *model.GetMonitorRecordRuleReq) (*model.MonitorRecordRule, error)
 }
 
 type alertManagerRecordService struct {
 	dao     alert.AlertManagerRecordDAO
 	poolDao scrape.ScrapePoolDAO
 	cache   cache.MonitorCache
-	userDao userDao.UserDAO
 	l       *zap.Logger
 }
 
-func NewAlertManagerRecordService(dao alert.AlertManagerRecordDAO, poolDao scrape.ScrapePoolDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO) AlertManagerRecordService {
+func NewAlertManagerRecordService(dao alert.AlertManagerRecordDAO, poolDao scrape.ScrapePoolDAO, cache cache.MonitorCache, l *zap.Logger) AlertManagerRecordService {
 	return &alertManagerRecordService{
 		dao:     dao,
 		poolDao: poolDao,
-		userDao: userDao,
 		l:       l,
 		cache:   cache,
 	}
 }
 
-func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context, listReq *model.ListReq) (model.ListResp[*model.MonitorRecordRule], error) {
-	if listReq.Search != "" {
-		rules, count, err := a.dao.SearchMonitorRecordRuleByName(ctx, listReq.Search)
+func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context, req *model.GetMonitorRecordRuleListReq) (model.ListResp[*model.MonitorRecordRule], error) {
+	if req.Search != "" {
+		rules, count, err := a.dao.SearchMonitorRecordRuleByName(ctx, req.Search)
 		if err != nil {
-			a.l.Error("搜索记录规则失败", zap.String("search", listReq.Search), zap.Error(err))
+			a.l.Error("搜索记录规则失败", zap.String("search", req.Search), zap.Error(err))
 			return model.ListResp[*model.MonitorRecordRule]{}, err
 		}
-		
+
 		// 为每条规则添加用户名和池名称
 		for _, rule := range rules {
-			user, err := a.userDao.GetUserByID(ctx, rule.UserID)
-			if err != nil {
-				a.l.Error("获取创建用户名失败", zap.Error(err))
-			} else {
-				if user.RealName == "" {
-					rule.CreateUserName = user.Username
-				} else {
-					rule.CreateUserName = user.RealName
-				}
-			}
-
 			pool, err := a.poolDao.GetMonitorScrapePoolById(ctx, rule.PoolID)
 			if err != nil {
 				a.l.Error("获取Prometheus实例池失败", zap.Error(err))
@@ -96,15 +80,15 @@ func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context
 				rule.PoolName = pool.Name
 			}
 		}
-		
+
 		return model.ListResp[*model.MonitorRecordRule]{
 			Total: count,
 			Items: rules,
 		}, nil
 	}
 
-	offset := (listReq.Page - 1) * listReq.Size
-	limit := listReq.Size
+	offset := (req.Page - 1) * req.Size
+	limit := req.Size
 
 	rules, count, err := a.dao.GetMonitorRecordRuleList(ctx, offset, limit)
 	if err != nil {
@@ -114,17 +98,6 @@ func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context
 
 	// 为每条规则添加用户名和池名称
 	for _, rule := range rules {
-		user, err := a.userDao.GetUserByID(ctx, rule.UserID)
-		if err != nil {
-			a.l.Error("获取创建用户名失败", zap.Error(err))
-		} else {
-			if user.RealName == "" {
-				rule.CreateUserName = user.Username
-			} else {
-				rule.CreateUserName = user.RealName
-			}
-		}
-
 		pool, err := a.poolDao.GetMonitorScrapePoolById(ctx, rule.PoolID)
 		if err != nil {
 			a.l.Error("获取Prometheus实例池失败", zap.Error(err))
@@ -139,8 +112,15 @@ func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context
 	}, nil
 }
 
-func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context, monitorRecordRule *model.MonitorRecordRule) error {
+func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context, req *model.CreateMonitorRecordRuleReq) error {
 	// 检查记录规则是否已存在
+	monitorRecordRule := &model.MonitorRecordRule{
+		Name:   req.Name,
+		PoolID: req.PoolID,
+		Expr:   req.Expr,
+		UserID: req.UserID,
+	}
+
 	exists, err := a.dao.CheckMonitorRecordRuleNameExists(ctx, monitorRecordRule)
 	if err != nil {
 		a.l.Error("创建记录规则失败：检查记录规则是否存在时出错", zap.Error(err))
@@ -152,8 +132,8 @@ func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context,
 	}
 
 	// 如果存在表达式，则检查 PromQL 语法是否合法
-	if monitorRecordRule.Expr != "" {
-		if _, err := parser.ParseExpr(monitorRecordRule.Expr); err != nil {
+	if req.Expr != "" {
+		if _, err := parser.ParseExpr(req.Expr); err != nil {
 			a.l.Error("创建记录规则失败：PromQL 语法错误", zap.Error(err))
 			return fmt.Errorf("PromQL 语法错误: %v", err)
 		}
@@ -168,15 +148,22 @@ func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context,
 	return nil
 }
 
-func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context, monitorRecordRule *model.MonitorRecordRule) error {
+func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context, req *model.UpdateMonitorRecordRuleReq) error {
 	// 检查记录规则是否已存在
-	rule, err := a.dao.GetMonitorRecordRuleById(ctx, monitorRecordRule.ID)
+	rule, err := a.dao.GetMonitorRecordRuleById(ctx, req.ID)
 	if err != nil {
 		a.l.Error("更新记录规则失败：获取记录规则时出错", zap.Error(err))
 		return err
 	}
 
-	if rule.Name != monitorRecordRule.Name {
+	monitorRecordRule := &model.MonitorRecordRule{
+		Name:   req.Name,
+		PoolID: req.PoolID,
+		Expr:   req.Expr,
+	}
+	monitorRecordRule.ID = req.ID
+
+	if rule.Name != req.Name {
 		exists, err := a.dao.CheckMonitorRecordRuleNameExists(ctx, monitorRecordRule)
 		if err != nil {
 			a.l.Error("更新记录规则失败：检查记录规则名称是否存在时出错", zap.Error(err))
@@ -189,8 +176,8 @@ func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context,
 	}
 
 	// 如果存在表达式，则检查 PromQL 语法是否合法
-	if monitorRecordRule.Expr != "" {
-		if _, err := parser.ParseExpr(monitorRecordRule.Expr); err != nil {
+	if req.Expr != "" {
+		if _, err := parser.ParseExpr(req.Expr); err != nil {
 			a.l.Error("更新记录规则失败：PromQL 语法错误", zap.Error(err))
 			return fmt.Errorf("PromQL 语法错误: %v", err)
 		}
@@ -205,20 +192,21 @@ func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context,
 	return nil
 }
 
-func (a *alertManagerRecordService) DeleteMonitorRecordRule(ctx context.Context, id int) error {
+// DeleteMonitorRecordRule 删除记录规则
+func (a *alertManagerRecordService) DeleteMonitorRecordRule(ctx context.Context, req *model.DeleteMonitorRecordRuleReq) error {
 	// 检查记录规则是否存在
-	rule, err := a.dao.GetMonitorRecordRuleById(ctx, id)
+	_, err := a.dao.GetMonitorRecordRuleById(ctx, req.ID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			a.l.Error("删除记录规则失败：记录规则不存在", zap.Int("id", req.ID))
+			return fmt.Errorf("记录规则不存在")
+		}
 		a.l.Error("删除记录规则失败：获取记录规则时出错", zap.Error(err))
 		return err
 	}
 
-	if rule == nil {
-		return errors.New("记录规则不存在")
-	}
-
 	// 删除记录规则
-	if err := a.dao.DeleteMonitorRecordRule(ctx, id); err != nil {
+	if err := a.dao.DeleteMonitorRecordRule(ctx, req.ID); err != nil {
 		a.l.Error("删除记录规则失败", zap.Error(err))
 		return err
 	}
@@ -226,37 +214,13 @@ func (a *alertManagerRecordService) DeleteMonitorRecordRule(ctx context.Context,
 	return nil
 }
 
-func (a *alertManagerRecordService) BatchDeleteMonitorRecordRule(ctx context.Context, ids []int) error {
-	for _, id := range ids {
-		if err := a.DeleteMonitorRecordRule(ctx, id); err != nil {
-			// 记录错误但继续删除其他规则
-			a.l.Error("批量删除记录规则失败", zap.Int("id", id), zap.Error(err))
-			return fmt.Errorf("删除记录规则 ID %d 失败: %v", id, err)
-		}
+// GetMonitorRecordRule 获取记录规则
+func (a *alertManagerRecordService) GetMonitorRecordRule(ctx context.Context, req *model.GetMonitorRecordRuleReq) (*model.MonitorRecordRule, error) {
+	rule, err := a.dao.GetMonitorRecordRuleById(ctx, req.ID)
+	if err != nil {
+		a.l.Error("获取记录规则失败", zap.Error(err))
+		return nil, err
 	}
 
-	return nil
-}
-
-func (a *alertManagerRecordService) EnableSwitchMonitorRecordRule(ctx context.Context, id int) error {
-	if err := a.dao.EnableSwitchMonitorRecordRule(ctx, id); err != nil {
-		a.l.Error("切换记录规则状态失败", zap.Error(err))
-		return err
-	}
-	return nil
-}
-
-func (a *alertManagerRecordService) BatchEnableSwitchMonitorRecordRule(ctx context.Context, ids []int) error {
-	for _, id := range ids {
-		if err := a.EnableSwitchMonitorRecordRule(ctx, id); err != nil {
-			a.l.Error("批量切换记录规则状态失败", zap.Int("id", id), zap.Error(err))
-			return fmt.Errorf("切换记录规则 ID %d 状态失败: %v", id, err)
-		}
-	}
-	return nil
-}
-
-// GetMonitorRecordRuleTotal 获取监控告警事件总数
-func (a *alertManagerRecordService) GetMonitorRecordRuleTotal(ctx context.Context) (int, error) {
-	return a.dao.GetMonitorRecordRuleTotal(ctx)
+	return rule, nil
 }

@@ -221,9 +221,9 @@ func PromqlExprCheck(expr string) (bool, error) {
 	return true, nil
 }
 
-func BuildMatchers(alertEvent *model.MonitorAlertEvent, l *zap.Logger, useName bool) ([]*labels.Matcher, error) {
+func BuildMatchers(alertEvent *model.MonitorAlertEvent, l *zap.Logger, useName int8) ([]*labels.Matcher, error) {
 	var matchers []*labels.Matcher
-	if useName {
+	if useName == 1 {
 		// 如果 useName 为 true，仅使用 alertname 匹配器
 		alertName, exists := alertEvent.LabelsMap["alertname"]
 		if !exists {

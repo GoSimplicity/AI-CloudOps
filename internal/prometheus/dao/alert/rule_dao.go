@@ -39,10 +39,10 @@ import (
 type AlertManagerRuleDAO interface {
 	GetMonitorAlertRuleByPoolId(ctx context.Context, poolId int) ([]*model.MonitorAlertRule, int64, error)
 	SearchMonitorAlertRuleByName(ctx context.Context, name string) ([]*model.MonitorAlertRule, int64, error)
-	GetMonitorAlertRuleList(ctx context.Context, offset, limit int) ([]*model.MonitorAlertRule, int64, error)
+	GetMonitorAlertRuleList(ctx context.Context, req *model.GetMonitorAlertRuleListReq) ([]*model.MonitorAlertRule, int64, error)
 	CreateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error
 	GetMonitorAlertRuleById(ctx context.Context, id int) (*model.MonitorAlertRule, error)
-	UpdateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error
+	UpdateMonitorAlertRule(ctx context.Context, req *model.UpdateMonitorAlertRuleReq) error
 	EnableSwitchMonitorAlertRule(ctx context.Context, ruleID int) error
 	BatchEnableSwitchMonitorAlertRule(ctx context.Context, ruleIDs []int) error
 	DeleteMonitorAlertRule(ctx context.Context, ruleID int) error
@@ -124,20 +124,41 @@ func (a *alertManagerRuleDAO) SearchMonitorAlertRuleByName(ctx context.Context, 
 }
 
 // GetMonitorAlertRuleList 获取所有 MonitorAlertRule
-func (a *alertManagerRuleDAO) GetMonitorAlertRuleList(ctx context.Context, offset, limit int) ([]*model.MonitorAlertRule, int64, error) {
+func (a *alertManagerRuleDAO) GetMonitorAlertRuleList(ctx context.Context, req *model.GetMonitorAlertRuleListReq) ([]*model.MonitorAlertRule, int64, error) {
 	var alertRules []*model.MonitorAlertRule
 	var count int64
 
+	query := a.db.WithContext(ctx).Model(&model.MonitorAlertRule{})
+
+	// 添加筛选条件
+	if req.Search != "" {
+		query = query.Where("name LIKE ?", "%"+req.Search+"%")
+	}
+
+	if req.Enable != nil {
+		query = query.Where("enable = ?", *req.Enable)
+	}
+
+	if req.Severity != "" {
+		query = query.Where("severity = ?", req.Severity)
+	}
+
+	if req.PoolID != nil {
+		query = query.Where("pool_id = ?", *req.PoolID)
+	}
+
+	if req.SendGroupID != nil {
+		query = query.Where("send_group_id = ?", *req.SendGroupID)
+	}
+
 	// 先获取总数
-	if err := a.db.WithContext(ctx).
-		Model(&model.MonitorAlertRule{}).
-		Count(&count).Error; err != nil {
+	if err := query.Count(&count).Error; err != nil {
 		a.l.Error("获取 MonitorAlertRule 总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	// 获取数据列表
-	if err := a.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&alertRules).Error; err != nil {
+	if err := query.Offset((req.Page - 1) * req.Size).Limit(req.Size).Find(&alertRules).Error; err != nil {
 		a.l.Error("获取所有 MonitorAlertRule 失败", zap.Error(err))
 		return nil, 0, err
 	}
@@ -173,29 +194,29 @@ func (a *alertManagerRuleDAO) GetMonitorAlertRuleById(ctx context.Context, id in
 }
 
 // UpdateMonitorAlertRule 更新 MonitorAlertRule
-func (a *alertManagerRuleDAO) UpdateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error {
-	if monitorAlertRule.ID <= 0 {
-		a.l.Error("UpdateMonitorAlertRule 失败: ID 为 0", zap.Any("alertRule", monitorAlertRule))
-		return fmt.Errorf("monitorAlertRule 的 ID 必须设置且非零")
+func (a *alertManagerRuleDAO) UpdateMonitorAlertRule(ctx context.Context, req *model.UpdateMonitorAlertRuleReq) error {
+	if req.ID <= 0 {
+		a.l.Error("UpdateMonitorAlertRule 失败: ID 为 0", zap.Any("req", req))
+		return fmt.Errorf("MonitorAlertRule 的 ID 必须设置且非零")
 	}
 
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertRule{}).
-		Where("id = ?", monitorAlertRule.ID).
+		Where("id = ?", req.ID).
 		Updates(map[string]interface{}{
-			"name":          monitorAlertRule.Name,
-			"pool_id":       monitorAlertRule.PoolID,
-			"send_group_id": monitorAlertRule.SendGroupID,
-			"ip_address":    monitorAlertRule.IpAddress,
-			"enable":        monitorAlertRule.Enable,
-			"expr":          monitorAlertRule.Expr,
-			"severity":      monitorAlertRule.Severity,
-			"grafana_link":  monitorAlertRule.GrafanaLink,
-			"for_time":      monitorAlertRule.ForTime,
-			"labels":        monitorAlertRule.Labels,
-			"annotations":   monitorAlertRule.Annotations,
+			"name":          req.Name,
+			"pool_id":       req.PoolID,
+			"send_group_id": req.SendGroupID,
+			"ip_address":    req.IpAddress,
+			"enable":        req.Enable,
+			"expr":          req.Expr,
+			"severity":      req.Severity,
+			"grafana_link":  req.GrafanaLink,
+			"for_time":      req.ForTime,
+			"labels":        req.Labels,
+			"annotations":   req.Annotations,
 		}).Error; err != nil {
-		a.l.Error("更新 MonitorAlertRule 失败", zap.Error(err), zap.Int("id", monitorAlertRule.ID))
+		a.l.Error("更新 MonitorAlertRule 失败", zap.Error(err), zap.Int("id", req.ID))
 		return err
 	}
 
@@ -209,11 +230,26 @@ func (a *alertManagerRuleDAO) EnableSwitchMonitorAlertRule(ctx context.Context, 
 		return fmt.Errorf("无效的 ruleID: %d", ruleID)
 	}
 
+	// 先获取当前状态
+	var rule model.MonitorAlertRule
+	if err := a.db.WithContext(ctx).Select("enable").Where("id = ?", ruleID).First(&rule).Error; err != nil {
+		a.l.Error("获取告警规则状态失败", zap.Error(err), zap.Int("ruleID", ruleID))
+		return err
+	}
+
+	// 切换状态
+	var newStatus int8
+	if rule.Enable == 1 {
+		newStatus = 2 // 禁用
+	} else {
+		newStatus = 1 // 启用
+	}
+
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertRule{}).
 		Where("id = ?", ruleID).
-		Update("enable", gorm.Expr("NOT enable")).Error; err != nil {
-		a.l.Error("更新 MonitorAlertRule 状态失败", zap.Error(err), zap.Int("ruleID", ruleID))
+		Update("enable", newStatus).Error; err != nil {
+		a.l.Error("切换告警规则状态失败", zap.Error(err), zap.Int("ruleID", ruleID))
 		return err
 	}
 
@@ -223,16 +259,51 @@ func (a *alertManagerRuleDAO) EnableSwitchMonitorAlertRule(ctx context.Context, 
 // BatchEnableSwitchMonitorAlertRule 批量切换 MonitorAlertRule 状态
 func (a *alertManagerRuleDAO) BatchEnableSwitchMonitorAlertRule(ctx context.Context, ruleIDs []int) error {
 	if len(ruleIDs) == 0 {
-		a.l.Error("BatchEnableSwitchMonitorAlertRule 失败: ruleIDs 为空")
-		return fmt.Errorf("ruleIDs 不能为空")
+		return nil
 	}
 
+	// 查询当前记录状态
+	var rules []*model.MonitorAlertRule
 	if err := a.db.WithContext(ctx).
-		Model(&model.MonitorAlertRule{}).
+		Select("id", "enable").
 		Where("id IN ?", ruleIDs).
-		Update("enable", gorm.Expr("NOT enable")).Error; err != nil {
-		a.l.Error("批量更新 MonitorAlertRule 状态失败", zap.Error(err), zap.Ints("ruleIDs", ruleIDs))
+		Find(&rules).Error; err != nil {
+		a.l.Error("获取告警规则状态失败", zap.Error(err))
 		return err
+	}
+
+	// 根据当前状态分组
+	enableIDs := make([]int, 0)
+	disableIDs := make([]int, 0)
+
+	for _, rule := range rules {
+		if rule.Enable == 1 {
+			disableIDs = append(disableIDs, rule.ID) // 当前启用的，改为禁用
+		} else {
+			enableIDs = append(enableIDs, rule.ID) // 当前禁用的，改为启用
+		}
+	}
+
+	// 批量更新启用状态
+	if len(enableIDs) > 0 {
+		if err := a.db.WithContext(ctx).
+			Model(&model.MonitorAlertRule{}).
+			Where("id IN ?", enableIDs).
+			Update("enable", 1).Error; err != nil {
+			a.l.Error("批量启用告警规则失败", zap.Error(err))
+			return err
+		}
+	}
+
+	// 批量更新禁用状态
+	if len(disableIDs) > 0 {
+		if err := a.db.WithContext(ctx).
+			Model(&model.MonitorAlertRule{}).
+			Where("id IN ?", disableIDs).
+			Update("enable", 2).Error; err != nil {
+			a.l.Error("批量禁用告警规则失败", zap.Error(err))
+			return err
+		}
 	}
 
 	return nil
@@ -245,95 +316,79 @@ func (a *alertManagerRuleDAO) DeleteMonitorAlertRule(ctx context.Context, ruleID
 		return fmt.Errorf("无效的 ruleID: %d", ruleID)
 	}
 
-	result := a.db.WithContext(ctx).
+	if err := a.db.WithContext(ctx).
 		Where("id = ?", ruleID).
-		Delete(&model.MonitorAlertRule{})
-
-	if err := result.Error; err != nil {
-		a.l.Error("删除 MonitorAlertRule 失败", zap.Error(err), zap.Int("ruleID", ruleID))
-		return fmt.Errorf("删除 ID 为 %d 的 MonitorAlertRule 失败: %w", ruleID, err)
-	}
-
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("未找到 ID 为 %d 的 MonitorAlertRule", ruleID)
+		Delete(&model.MonitorAlertRule{}).Error; err != nil {
+		a.l.Error("删除告警规则失败", zap.Error(err), zap.Int("ruleID", ruleID))
+		return err
 	}
 
 	return nil
 }
 
-// GetAssociatedResourcesBySendGroupId 通过 sendGroupId 获取关联的 MonitorAlertRule
+// GetAssociatedResourcesBySendGroupId 获取与发送组关联的告警规则
 func (a *alertManagerRuleDAO) GetAssociatedResourcesBySendGroupId(ctx context.Context, sendGroupId int) ([]*model.MonitorAlertRule, int64, error) {
 	if sendGroupId <= 0 {
 		a.l.Error("GetAssociatedResourcesBySendGroupId 失败: 无效的 sendGroupId", zap.Int("sendGroupId", sendGroupId))
 		return nil, 0, fmt.Errorf("无效的 sendGroupId: %d", sendGroupId)
 	}
 
-	var alertRules []*model.MonitorAlertRule
+	var rules []*model.MonitorAlertRule
 	var count int64
 
-	// 先获取总数
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertRule{}).
 		Where("send_group_id = ?", sendGroupId).
 		Count(&count).Error; err != nil {
-		a.l.Error("获取关联资源总数失败", zap.Error(err), zap.Int("sendGroupId", sendGroupId))
+		a.l.Error("获取关联告警规则总数失败", zap.Error(err), zap.Int("sendGroupId", sendGroupId))
 		return nil, 0, err
 	}
 
-	// 获取数据列表
 	if err := a.db.WithContext(ctx).
 		Where("send_group_id = ?", sendGroupId).
-		Find(&alertRules).Error; err != nil {
-		a.l.Error("获取关联资源失败", zap.Error(err), zap.Int("sendGroupId", sendGroupId))
+		Find(&rules).Error; err != nil {
+		a.l.Error("获取关联告警规则失败", zap.Error(err), zap.Int("sendGroupId", sendGroupId))
 		return nil, 0, err
 	}
 
-	return alertRules, count, nil
+	return rules, count, nil
 }
 
 // CheckMonitorAlertRuleExists 检查 MonitorAlertRule 是否存在
 func (a *alertManagerRuleDAO) CheckMonitorAlertRuleExists(ctx context.Context, alertRule *model.MonitorAlertRule) (bool, error) {
-	if alertRule.ID <= 0 {
-		a.l.Error("CheckMonitorAlertRuleExists 失败: 无效的 ID", zap.Int("id", alertRule.ID))
-		return false, fmt.Errorf("无效的 ID: %d", alertRule.ID)
-	}
-
 	var count int64
-
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertRule{}).
-		Where("id = ?", alertRule.ID).
+		Where("name = ? AND pool_id = ? AND id != ?", alertRule.Name, alertRule.PoolID, alertRule.ID).
 		Count(&count).Error; err != nil {
-		a.l.Error("检查 MonitorAlertRule 是否存在失败", zap.Error(err))
+		a.l.Error("检查告警规则是否存在失败", zap.Error(err))
 		return false, err
 	}
-
 	return count > 0, nil
 }
 
 // CheckMonitorAlertRuleNameExists 检查 MonitorAlertRule 名称是否存在
 func (a *alertManagerRuleDAO) CheckMonitorAlertRuleNameExists(ctx context.Context, alertRule *model.MonitorAlertRule) (bool, error) {
 	var count int64
-
 	if err := a.db.WithContext(ctx).
 		Model(&model.MonitorAlertRule{}).
 		Where("name = ?", alertRule.Name).
+		Where("id != ?", alertRule.ID).
 		Count(&count).Error; err != nil {
-		a.l.Error("检查 MonitorAlertRule 名称是否存在失败", zap.Error(err))
+		a.l.Error("检查告警规则名称是否存在失败", zap.Error(err))
 		return false, err
 	}
-
 	return count > 0, nil
 }
 
-// GetMonitorAlertRuleTotal 获取监控告警事件总数
+// GetMonitorAlertRuleTotal 获取 MonitorAlertRule 总数
 func (a *alertManagerRuleDAO) GetMonitorAlertRuleTotal(ctx context.Context) (int, error) {
 	var count int64
-
-	if err := a.db.WithContext(ctx).Model(&model.MonitorAlertRule{}).Count(&count).Error; err != nil {
-		a.l.Error("获取监控告警事件总数失败", zap.Error(err))
+	if err := a.db.WithContext(ctx).
+		Model(&model.MonitorAlertRule{}).
+		Count(&count).Error; err != nil {
+		a.l.Error("获取告警规则总数失败", zap.Error(err))
 		return 0, err
 	}
-
 	return int(count), nil
 }

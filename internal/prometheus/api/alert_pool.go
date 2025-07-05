@@ -30,30 +30,28 @@ import (
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type AlertPoolHandler struct {
-	alertPoolService alertEventService.AlertManagerPoolService
-	l                *zap.Logger
+	svc alertEventService.AlertManagerPoolService
 }
 
-func NewAlertPoolHandler(l *zap.Logger, alertPoolService alertEventService.AlertManagerPoolService) *AlertPoolHandler {
+func NewAlertPoolHandler(svc alertEventService.AlertManagerPoolService) *AlertPoolHandler {
 	return &AlertPoolHandler{
-		l:                l,
-		alertPoolService: alertPoolService,
+		svc: svc,
 	}
 }
 
 func (a *AlertPoolHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
 
-	alertManagerPools := monitorGroup.Group("/alertManager_pools")
+	alertManagerPools := monitorGroup.Group("/alert_manager_pools")
 	{
 		alertManagerPools.GET("/list", a.GetMonitorAlertManagerPoolList)
 		alertManagerPools.POST("/create", a.CreateMonitorAlertManagerPool)
 		alertManagerPools.PUT("/update/:id", a.UpdateMonitorAlertManagerPool)
 		alertManagerPools.DELETE("/delete/:id", a.DeleteMonitorAlertManagerPool)
+		alertManagerPools.GET("/detail/:id", a.GetMonitorAlertManagerPool)
 	}
 }
 
@@ -62,7 +60,7 @@ func (a *AlertPoolHandler) GetMonitorAlertManagerPoolList(ctx *gin.Context) {
 	var req model.GetMonitorAlertManagerPoolListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return a.alertPoolService.GetMonitorAlertManagerPoolList(ctx, &req)
+		return a.svc.GetMonitorAlertManagerPoolList(ctx, &req)
 	})
 }
 
@@ -74,7 +72,7 @@ func (a *AlertPoolHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.alertPoolService.CreateMonitorAlertManagerPool(ctx, &req)
+		return nil, a.svc.CreateMonitorAlertManagerPool(ctx, &req)
 	})
 }
 
@@ -83,7 +81,7 @@ func (a *AlertPoolHandler) UpdateMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.UpdateMonitorAlertManagerPoolReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.alertPoolService.UpdateMonitorAlertManagerPool(ctx, &req)
+		return nil, a.svc.UpdateMonitorAlertManagerPool(ctx, &req)
 	})
 }
 
@@ -100,6 +98,22 @@ func (a *AlertPoolHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.alertPoolService.DeleteMonitorAlertManagerPool(ctx, req.ID)
+		return nil, a.svc.DeleteMonitorAlertManagerPool(ctx, &req)
+	})
+}
+
+func (a *AlertPoolHandler) GetMonitorAlertManagerPool(ctx *gin.Context) {
+	var req model.GetMonitorAlertManagerPoolReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return a.svc.GetMonitorAlertManagerPool(ctx, &req)
 	})
 }

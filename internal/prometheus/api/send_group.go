@@ -53,50 +53,57 @@ func (s *SendGroupHandler) RegisterRouters(server *gin.Engine) {
 	sendGroups := monitorGroup.Group("/send_groups")
 	{
 		sendGroups.GET("/list", s.GetMonitorSendGroupList)
-		sendGroups.GET("/:id", s.GetMonitorSendGroup)
+		sendGroups.GET("/detail/:id", s.GetMonitorSendGroup)
 		sendGroups.POST("/create", s.CreateMonitorSendGroup)
-		sendGroups.POST("/update", s.UpdateMonitorSendGroup)
-		sendGroups.DELETE("/:id", s.DeleteMonitorSendGroup)
-		sendGroups.GET("/all", s.GetMonitorSendGroupAll)
+		sendGroups.PUT("/update/:id", s.UpdateMonitorSendGroup)
+		sendGroups.DELETE("/delete/:id", s.DeleteMonitorSendGroup)
 	}
 }
 
 // GetMonitorSendGroupList 获取发送组列表
 func (s *SendGroupHandler) GetMonitorSendGroupList(ctx *gin.Context) {
-	var listReq model.ListReq
+	var req model.GetMonitorSendGroupListReq
 
-	utils.HandleRequest(ctx, &listReq, func() (interface{}, error) {
-		return s.alertSendService.GetMonitorSendGroupList(ctx, &listReq)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.alertSendService.GetMonitorSendGroupList(ctx, &req)
 	})
 }
 
 // CreateMonitorSendGroup 创建新的发送组
 func (s *SendGroupHandler) CreateMonitorSendGroup(ctx *gin.Context) {
-	var sendGroup model.MonitorSendGroup
+	var req model.CreateMonitorSendGroupReq
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
-	sendGroup.UserID = uc.Uid
+	req.UserID = uc.Uid
 
-	utils.HandleRequest(ctx, &sendGroup, func() (interface{}, error) {
-		return nil, s.alertSendService.CreateMonitorSendGroup(ctx, &sendGroup)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, s.alertSendService.CreateMonitorSendGroup(ctx, &req)
 	})
 }
 
 // UpdateMonitorSendGroup 更新现有的发送组
 func (s *SendGroupHandler) UpdateMonitorSendGroup(ctx *gin.Context) {
-	var sendGroup model.MonitorSendGroup
+	var req model.UpdateMonitorSendGroupReq
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
-	sendGroup.UserID = uc.Uid
 
-	utils.HandleRequest(ctx, &sendGroup, func() (interface{}, error) {
-		return nil, s.alertSendService.UpdateMonitorSendGroup(ctx, &sendGroup)
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	req.ID = id
+	req.UserID = uc.Uid
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, s.alertSendService.UpdateMonitorSendGroup(ctx, &req)
 	})
 }
 
 // DeleteMonitorSendGroup 删除指定的发送组
 func (s *SendGroupHandler) DeleteMonitorSendGroup(ctx *gin.Context) {
-	var req model.DeleteMonitorSendGroupRequest
+	var req model.DeleteMonitorSendGroupReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -107,12 +114,12 @@ func (s *SendGroupHandler) DeleteMonitorSendGroup(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, s.alertSendService.DeleteMonitorSendGroup(ctx, req.ID)
+		return nil, s.alertSendService.DeleteMonitorSendGroup(ctx, &req)
 	})
 }
 
 func (s *SendGroupHandler) GetMonitorSendGroup(ctx *gin.Context) {
-	var req model.GetMonitorSendGroupRequest
+	var req model.GetMonitorSendGroupReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -123,13 +130,6 @@ func (s *SendGroupHandler) GetMonitorSendGroup(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return s.alertSendService.GetMonitorSendGroup(ctx, req.ID)
-	})
-}
-
-// GetMonitorSendGroupAll 获取所有发送组
-func (s *SendGroupHandler) GetMonitorSendGroupAll(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return s.alertSendService.GetMonitorSendGroupAll(ctx)
+		return s.alertSendService.GetMonitorSendGroup(ctx, &req)
 	})
 }
