@@ -43,10 +43,11 @@ import (
 	promHandler "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	alertDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	configDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
 	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
 	alertService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
+	configService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/config"
 	scrapeJobService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape"
-	yamlService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/yaml"
 	authHandler "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
 	authDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	authService "github.com/GoSimplicity/AI-CloudOps/internal/system/service"
@@ -93,7 +94,7 @@ var HandlerSet = wire.NewSet(
 	k8sHandler.NewK8sYamlTemplateHandler,
 	aiHandler.NewAIHandler,
 	promHandler.NewAlertPoolHandler,
-	promHandler.NewConfigYamlHandler,
+	promHandler.NewMonitorConfigHandler,
 	promHandler.NewOnDutyGroupHandler,
 	promHandler.NewRecordRuleHandler,
 	promHandler.NewAlertRuleHandler,
@@ -145,7 +146,7 @@ var ServiceSet = wire.NewSet(
 	alertService.NewAlertManagerSendService,
 	scrapeJobService.NewPrometheusScrapeService,
 	scrapeJobService.NewPrometheusPoolService,
-	yamlService.NewPrometheusConfigService,
+	configService.NewMonitorConfigService,
 	notAuthService.NewNotAuthService,
 	workorderService.NewFormDesignService,
 	workorderService.NewInstanceService,
@@ -175,6 +176,7 @@ var DaoSet = wire.NewSet(
 	alertDao.NewAlertManagerSendDAO,
 	scrapeJobDao.NewScrapeJobDAO,
 	scrapeJobDao.NewScrapePoolDAO,
+	configDao.NewMonitorConfigDAO,
 	userDao.NewUserDAO,
 	authDao.NewRoleDAO,
 	authDao.NewApiDAO,

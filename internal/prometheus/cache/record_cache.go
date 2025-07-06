@@ -27,8 +27,7 @@ package cache
 
 import (
 	"context"
-	"fmt"
-	"os"
+	"strings"
 	"sync"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -37,7 +36,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	pm "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/rulefmt"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -52,7 +50,6 @@ type recordConfigCache struct {
 	mu             sync.RWMutex
 	l              *zap.Logger
 	RecordRuleMap  map[string]string
-	localYamlDir   string
 	scrapePoolDao  scrapePoolDao.ScrapePoolDAO
 	alertRecordDao alertRecordDao.AlertManagerRecordDAO
 	recordHashes   map[string]string
@@ -72,7 +69,6 @@ type RecordGroups struct {
 func NewRecordConfig(l *zap.Logger, scrapePoolDao scrapePoolDao.ScrapePoolDAO, alertRecordDao alertRecordDao.AlertManagerRecordDAO) RecordConfigCache {
 	return &recordConfigCache{
 		l:              l,
-		localYamlDir:   viper.GetString("prometheus.local_yaml_dir"),
 		mu:             sync.RWMutex{},
 		RecordRuleMap:  make(map[string]string),
 		scrapePoolDao:  scrapePoolDao,
@@ -135,8 +131,19 @@ func (r *recordConfigCache) GenerateRecordRuleConfigYaml(ctx context.Context) er
 		}
 	}
 
-	// 清理被修改池子的旧IP
-	utils.CleanupOldIPs(tempConfigMap, updatedPools, validIPs)
+	// 清理无效的IP，只清理内存中的配置
+	for ip := range tempConfigMap {
+		if _, ok := validIPs[ip]; !ok {
+			// 检查该IP是否属于被修改的池子
+			for poolName := range updatedPools {
+				if strings.Contains(ip, poolName) {
+					delete(tempConfigMap, ip)
+					r.l.Debug("删除无效IP配置", zap.String("ip", ip), zap.String("pool", poolName))
+					break
+				}
+			}
+		}
+	}
 
 	// 原子性更新配置和哈希
 	r.mu.Lock()
@@ -213,38 +220,18 @@ func (r *recordConfigCache) GeneratePrometheusRecordRuleConfigYamlOnePool(ctx co
 			r.l.Error("[监控模块] 序列化预聚合规则YAML失败",
 				zap.Error(err),
 				zap.String("池子", pool.Name),
-
 				zap.String("IP", ip))
 			success = false
 			break
 		}
 
-		// 创建Pool专属目录
-		dir := fmt.Sprintf("%s/%s", r.localYamlDir, pool.Name)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			r.l.Error("[监控模块] 创建目录失败",
-				zap.Error(err),
-				zap.String("目录路径", dir))
-			success = false
-			break
-		}
-
-		// 生成文件路径并写入
-		fileName := fmt.Sprintf("%s/prometheus_record_%s_%s.yml", dir, pool.Name, ip)
-		if err := utils.AtomicWriteFile(fileName, yamlData); err != nil {
-			r.l.Error("[监控模块] 写入预聚合规则文件失败",
-				zap.Error(err),
-				zap.String("文件路径", fileName))
-			success = false
-			break
-		}
+		// 不再写入本地文件，只保存到内存
 
 		ruleMap[ip] = string(yamlData)
 	}
 
 	if !success {
-		// 失败时删除可能已写入的临时文件
-		utils.CleanupFailedPool(r.localYamlDir, pool, len(pool.PrometheusInstances))
+		// 生成失败，返回nil
 		return nil
 	}
 

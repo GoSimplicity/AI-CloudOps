@@ -26,85 +26,98 @@
 package api
 
 import (
-	"net/http"
-
-	yamlService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/yaml"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	configService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/config"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 )
 
-type ConfigYamlHandler struct {
-	yamlService yamlService.ConfigYamlService
-	l           *zap.Logger
+type MonitorConfigHandler struct {
+	svc configService.MonitorConfigService
 }
 
-func NewConfigYamlHandler(l *zap.Logger, yamlService yamlService.ConfigYamlService) *ConfigYamlHandler {
-	return &ConfigYamlHandler{
-		l:           l,
-		yamlService: yamlService,
+func NewMonitorConfigHandler(svc configService.MonitorConfigService) *MonitorConfigHandler {
+	return &MonitorConfigHandler{
+		svc: svc,
 	}
 }
 
-func (c *ConfigYamlHandler) RegisterRouters(server *gin.Engine) {
+func (h *MonitorConfigHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
 
-	prometheusConfigs := monitorGroup.Group("/prometheus_configs")
+	configs := monitorGroup.Group("/configs")
 	{
-		prometheusConfigs.GET("/prometheus", c.GetMonitorPrometheusYaml)
-		prometheusConfigs.GET("/prometheus_alert", c.GetMonitorPrometheusAlertRuleYaml)
-		prometheusConfigs.GET("/prometheus_record", c.GetMonitorPrometheusRecordYaml)
-		prometheusConfigs.GET("/alertManager", c.GetMonitorAlertManagerYaml)
+		configs.GET("/list", h.GetMonitorConfigList)
+		configs.GET("/detail/:id", h.GetMonitorConfig)
+		configs.POST("/create", h.CreateMonitorConfig)
+		configs.PUT("/update/:id", h.UpdateMonitorConfig)
+		configs.DELETE("/delete/:id", h.DeleteMonitorConfig)
 	}
 }
 
-// GetMonitorPrometheusYaml 获取单个 Prometheus 配置文件
-func (c *ConfigYamlHandler) GetMonitorPrometheusYaml(ctx *gin.Context) {
-	ip := ctx.Query("ip")
+// GetMonitorConfigList 获取监控配置列表
+func (h *MonitorConfigHandler) GetMonitorConfigList(ctx *gin.Context) {
+	var req model.GetMonitorConfigListReq
 
-	yaml := c.yamlService.GetMonitorPrometheusYaml(ctx, ip)
-	if yaml == "" {
-		utils.ErrorWithMessage(ctx, "获取 Prometheus 配置文件失败")
-		return
-	}
-
-	ctx.String(http.StatusOK, yaml)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.svc.GetMonitorConfigList(ctx, &req)
+	})
 }
 
-// GetMonitorPrometheusAlertRuleYaml 获取单个 Prometheus 告警配置规则文件
-func (c *ConfigYamlHandler) GetMonitorPrometheusAlertRuleYaml(ctx *gin.Context) {
-	ip := ctx.Query("ip")
+// GetMonitorConfig 获取监控配置
+func (h *MonitorConfigHandler) GetMonitorConfig(ctx *gin.Context) {
+	var req model.GetMonitorConfigReq
 
-	yaml := c.yamlService.GetMonitorPrometheusAlertRuleYaml(ctx, ip)
-	if yaml == "" {
-		utils.ErrorWithMessage(ctx, "获取 Prometheus 告警配置文件失败")
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	ctx.String(http.StatusOK, yaml)
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.svc.GetMonitorConfigByID(ctx, &req)
+	})
 }
 
-// GetMonitorPrometheusRecordYaml 获取单个 Prometheus 记录配置文件
-func (c *ConfigYamlHandler) GetMonitorPrometheusRecordYaml(ctx *gin.Context) {
-	ip := ctx.Query("ip")
+func (h *MonitorConfigHandler) CreateMonitorConfig(ctx *gin.Context) {
+	var req model.CreateMonitorConfigReq
 
-	yaml := c.yamlService.GetMonitorPrometheusRecordYaml(ctx, ip)
-	if yaml == "" {
-		utils.ErrorWithMessage(ctx, "获取 Prometheus 记录配置文件失败")
-		return
-	}
-	ctx.String(http.StatusOK, yaml)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.svc.CreateMonitorConfig(ctx, &req)
+	})
 }
 
-// GetMonitorAlertManagerYaml 获取单个 AlertManager 配置文件
-func (c *ConfigYamlHandler) GetMonitorAlertManagerYaml(ctx *gin.Context) {
-	ip := ctx.Query("ip")
+func (h *MonitorConfigHandler) UpdateMonitorConfig(ctx *gin.Context) {
+	var req model.UpdateMonitorConfigReq
 
-	yaml := c.yamlService.GetMonitorAlertManagerYaml(ctx, ip)
-	if yaml == "" {
-		utils.ErrorWithMessage(ctx, "获取 AlertManager 配置文件失败")
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	ctx.String(http.StatusOK, yaml)
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.svc.UpdateMonitorConfig(ctx, &req)
+	})
+}
+
+func (h *MonitorConfigHandler) DeleteMonitorConfig(ctx *gin.Context) {
+	var req model.DeleteMonitorConfigReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.svc.DeleteMonitorConfig(ctx, &req)
+	})
 }

@@ -14,14 +14,13 @@ redis:
   password: "v6SxhWHyZC7S"
 mysql:
   # addr: "root:root@tcp(mysql:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
-  addr: "root:root@tcp(localhost:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
+  addr: "root:root@tcp(localhost:33069)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
 tree:
   check_status_cron: "@every 300s"
 k8s:
   refresh_cron: "@every 300s"
 prometheus:
   refresh_cron: "@every 15s"
-  local_yaml_dir: ./local_yaml
   enable_alert: 0 # 1 开启告警 0 关闭告警
   enable_record: 0 # 1 开启记录 0 关闭记录
   alert_webhook_addr: "http://localhost:8889/api/v1/alerts/receive"

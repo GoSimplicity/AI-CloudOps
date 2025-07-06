@@ -59,7 +59,8 @@ func InitGinServer(
 	alertEventHdl *prometheusApi.AlertEventHandler,
 	alertPoolHdl *prometheusApi.AlertPoolHandler,
 	alertRuleHdl *prometheusApi.AlertRuleHandler,
-	configYamlHdl *prometheusApi.ConfigYamlHandler,
+
+	monitorConfigHdl *prometheusApi.MonitorConfigHandler,
 	onDutyGroupHdl *prometheusApi.OnDutyGroupHandler,
 	recordRuleHdl *prometheusApi.RecordRuleHandler,
 	scrapePoolHdl *prometheusApi.ScrapePoolHandler,
@@ -92,7 +93,7 @@ func InitGinServer(
 	alertEventHdl.RegisterRouters(server)
 	alertPoolHdl.RegisterRouters(server)
 	alertRuleHdl.RegisterRouters(server)
-	configYamlHdl.RegisterRouters(server)
+	monitorConfigHdl.RegisterRouters(server)
 	onDutyGroupHdl.RegisterRouters(server)
 	recordRuleHdl.RegisterRouters(server)
 	scrapePoolHdl.RegisterRouters(server)
