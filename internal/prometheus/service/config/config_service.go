@@ -36,6 +36,9 @@ import (
 type MonitorConfigService interface {
 	GetMonitorConfigList(ctx context.Context, req *model.GetMonitorConfigListReq) (model.ListResp[*model.MonitorConfig], error)
 	GetMonitorConfigByID(ctx context.Context, req *model.GetMonitorConfigReq) (*model.MonitorConfig, error)
+	CreateMonitorConfig(ctx context.Context, req *model.CreateMonitorConfigReq) error
+	UpdateMonitorConfig(ctx context.Context, req *model.UpdateMonitorConfigReq) error
+	DeleteMonitorConfig(ctx context.Context, req *model.DeleteMonitorConfigReq) error
 }
 
 type monitorConfigService struct {
@@ -57,6 +60,7 @@ func (s *monitorConfigService) GetMonitorConfigList(ctx context.Context, req *mo
 		s.l.Error("获取监控配置列表失败", zap.Error(err))
 		return model.ListResp[*model.MonitorConfig]{}, err
 	}
+
 	return model.ListResp[*model.MonitorConfig]{
 		Items: list,
 		Total: total,
@@ -72,4 +76,53 @@ func (s *monitorConfigService) GetMonitorConfigByID(ctx context.Context, req *mo
 	}
 
 	return config, nil
+}
+
+func (s *monitorConfigService) CreateMonitorConfig(ctx context.Context, req *model.CreateMonitorConfigReq) error {
+	config := &model.MonitorConfig{
+		Name:          req.Name,
+		PoolID:        req.PoolID,
+		InstanceIP:    req.InstanceIP,
+		ConfigType:    req.ConfigType,
+		ConfigContent: req.ConfigContent,
+		Status:        req.Status,
+	}
+
+	err := s.configDao.CreateMonitorConfig(ctx, config)
+	if err != nil {
+		s.l.Error("创建监控配置失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (s *monitorConfigService) UpdateMonitorConfig(ctx context.Context, req *model.UpdateMonitorConfigReq) error {
+	config := &model.MonitorConfig{
+		Model:         model.Model{ID: req.ID},
+		Name:          req.Name,
+		PoolID:        req.PoolID,
+		InstanceIP:    req.InstanceIP,
+		ConfigType:    req.ConfigType,
+		ConfigContent: req.ConfigContent,
+		Status:        req.Status,
+	}
+
+	err := s.configDao.UpdateMonitorConfig(ctx, config)
+	if err != nil {
+		s.l.Error("更新监控配置失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func (s *monitorConfigService) DeleteMonitorConfig(ctx context.Context, req *model.DeleteMonitorConfigReq) error {
+	err := s.configDao.DeleteMonitorConfig(ctx, req.ID)
+	if err != nil {
+		s.l.Error("删除监控配置失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }

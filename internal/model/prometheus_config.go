@@ -31,6 +31,7 @@ const (
 	ConfigTypeAlertManager int8 = 2 // AlertManager 主配置
 	ConfigTypeAlertRule    int8 = 3 // 告警规则配置
 	ConfigTypeRecordRule   int8 = 4 // 预聚合规则配置
+	ConfigTypeWebhookFile  int8 = 5 // webhook file
 )
 
 // 配置状态常量
@@ -69,7 +70,7 @@ type GetMonitorConfigReq struct {
 // GetMonitorConfigByInstanceReq 通过实例获取监控配置请求
 type GetMonitorConfigByInstanceReq struct {
 	InstanceIP string `json:"instance_ip" form:"instance_ip" binding:"required"`
-	ConfigType int8   `json:"config_type" form:"config_type" binding:"required,oneof=1 2 3 4"`
+	ConfigType int8   `json:"config_type" form:"config_type" binding:"required,oneof=1 2 3 4 5"`
 }
 
 // CreateMonitorConfigReq 创建监控配置请求
@@ -77,7 +78,7 @@ type CreateMonitorConfigReq struct {
 	Name          string `json:"name" binding:"required,min=1,max=100"`
 	PoolID        int    `json:"pool_id" binding:"required"`
 	InstanceIP    string `json:"instance_ip" binding:"required"`
-	ConfigType    int8   `json:"config_type" binding:"required,oneof=1 2 3 4"`
+	ConfigType    int8   `json:"config_type" binding:"required,oneof=1 2 3 4 5"`
 	ConfigContent string `json:"config_content" binding:"required"`
 	Status        int8   `json:"status" binding:"omitempty,oneof=1 2"`
 }
@@ -86,7 +87,10 @@ type CreateMonitorConfigReq struct {
 type UpdateMonitorConfigReq struct {
 	ID            int    `json:"id" binding:"required"`
 	Name          string `json:"name" binding:"required,min=1,max=100"`
-	ConfigContent string `json:"config_content" binding:"required"`
+	PoolID        int    `json:"pool_id" binding:"omitempty"`
+	InstanceIP    string `json:"instance_ip" binding:"omitempty"`
+	ConfigType    int8   `json:"config_type" binding:"omitempty,oneof=1 2 3 4 5"`
+	ConfigContent string `json:"config_content" binding:"omitempty"`
 	Status        int8   `json:"status" binding:"omitempty,oneof=1 2"`
 }
 

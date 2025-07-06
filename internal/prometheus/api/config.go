@@ -50,6 +50,9 @@ func (h *MonitorConfigHandler) RegisterRouters(server *gin.Engine) {
 	{
 		configs.GET("/list", h.GetMonitorConfigList)
 		configs.GET("/detail/:id", h.GetMonitorConfig)
+		configs.POST("/create", h.CreateMonitorConfig)
+		configs.PUT("/update/:id", h.UpdateMonitorConfig)
+		configs.DELETE("/delete/:id", h.DeleteMonitorConfig)
 	}
 }
 
@@ -76,5 +79,45 @@ func (h *MonitorConfigHandler) GetMonitorConfig(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetMonitorConfigByID(ctx, &req)
+	})
+}
+
+func (h *MonitorConfigHandler) CreateMonitorConfig(ctx *gin.Context) {
+	var req model.CreateMonitorConfigReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.svc.CreateMonitorConfig(ctx, &req)
+	})
+}
+
+func (h *MonitorConfigHandler) UpdateMonitorConfig(ctx *gin.Context) {
+	var req model.UpdateMonitorConfigReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.svc.UpdateMonitorConfig(ctx, &req)
+	})
+}
+
+func (h *MonitorConfigHandler) DeleteMonitorConfig(ctx *gin.Context) {
+	var req model.DeleteMonitorConfigReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.svc.DeleteMonitorConfig(ctx, &req)
 	})
 }
