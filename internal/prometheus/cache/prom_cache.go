@@ -27,14 +27,18 @@ package cache
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
-	"os"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"gopkg.in/yaml.v3"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	configDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
 	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
 	pcc "github.com/prometheus/common/config"
 	pm "github.com/prometheus/common/model"
@@ -50,6 +54,12 @@ import (
 
 const hashTmpKey = "__tmp_hash"
 
+// calculateConfigHash 计算配置内容的哈希值
+func calculateConfigHash(content string) string {
+	hash := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(hash[:])
+}
+
 type PromConfigCache interface {
 	GetPrometheusMainConfigByIP(ip string) string
 	GeneratePrometheusMainConfig(ctx context.Context) error
@@ -62,20 +72,26 @@ type promConfigCache struct {
 	PrometheusMainConfigMap map[string]string
 	mu                      sync.RWMutex
 	l                       *zap.Logger
-	localYamlDir            string
 	scrapePoolDao           scrapeJobDao.ScrapePoolDAO
 	scrapeJobDao            scrapeJobDao.ScrapeJobDAO
+	configDao               configDao.MonitorConfigDAO
 	httpSdAPI               string
 	poolHashes              map[string]string
+	// 添加缓存统计信息
+	cacheStats struct {
+		hits   int64
+		misses int64
+		mu     sync.RWMutex
+	}
 }
 
-func NewPromConfigCache(l *zap.Logger, scrapePoolDao scrapeJobDao.ScrapePoolDAO, scrapeJobDao scrapeJobDao.ScrapeJobDAO) PromConfigCache {
+func NewPromConfigCache(l *zap.Logger, scrapePoolDao scrapeJobDao.ScrapePoolDAO, scrapeJobDao scrapeJobDao.ScrapeJobDAO, configDao configDao.MonitorConfigDAO) PromConfigCache {
 	return &promConfigCache{
 		PrometheusMainConfigMap: make(map[string]string),
-		localYamlDir:            viper.GetString("prometheus.local_yaml_dir"),
 		httpSdAPI:               viper.GetString("prometheus.httpSdAPI"),
 		scrapePoolDao:           scrapePoolDao,
 		scrapeJobDao:            scrapeJobDao,
+		configDao:               configDao,
 		l:                       l,
 		mu:                      sync.RWMutex{},
 		poolHashes:              make(map[string]string),
@@ -84,17 +100,65 @@ func NewPromConfigCache(l *zap.Logger, scrapePoolDao scrapeJobDao.ScrapePoolDAO,
 
 // GetPrometheusMainConfigByIP 根据IP地址获取Prometheus主配置
 func (p *promConfigCache) GetPrometheusMainConfigByIP(ip string) string {
+	if ip == "" {
+		p.l.Warn("获取配置时IP为空")
+		p.recordCacheMiss()
+		return ""
+	}
+
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.PrometheusMainConfigMap[ip]
+
+	config, exists := p.PrometheusMainConfigMap[ip]
+	if exists {
+		p.recordCacheHit()
+		p.l.Debug("缓存命中", zap.String("ip", ip))
+	} else {
+		p.recordCacheMiss()
+		p.l.Debug("缓存未命中", zap.String("ip", ip))
+	}
+
+	return config
+}
+
+// recordCacheHit 记录缓存命中
+func (p *promConfigCache) recordCacheHit() {
+	p.cacheStats.mu.Lock()
+	defer p.cacheStats.mu.Unlock()
+	p.cacheStats.hits++
+}
+
+// recordCacheMiss 记录缓存未命中
+func (p *promConfigCache) recordCacheMiss() {
+	p.cacheStats.mu.Lock()
+	defer p.cacheStats.mu.Unlock()
+	p.cacheStats.misses++
+}
+
+// GetCacheStats 获取缓存统计信息
+func (p *promConfigCache) GetCacheStats() (hits, misses int64) {
+	p.cacheStats.mu.RLock()
+	defer p.cacheStats.mu.RUnlock()
+	return p.cacheStats.hits, p.cacheStats.misses
 }
 
 // GeneratePrometheusMainConfig 生成Prometheus主配置
 func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) error {
+	p.l.Info("开始生成Prometheus主配置")
+	startTime := time.Now()
+	defer func() {
+		p.l.Info("Prometheus主配置生成完成", zap.Duration("耗时", time.Since(startTime)))
+	}()
+
 	pools, _, err := p.scrapePoolDao.GetAllMonitorScrapePool(ctx)
 	if err != nil {
 		p.l.Error("获取采集池失败", zap.Error(err))
-		return err
+		return fmt.Errorf("获取采集池失败: %w", err)
+	}
+
+	if len(pools) == 0 {
+		p.l.Warn("未找到任何采集池")
+		return nil
 	}
 
 	p.mu.RLock()
@@ -104,6 +168,8 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 
 	validIPs := make(map[string]struct{})
 	updatedPools := make(map[string]struct{}) // 记录需要清理旧IP的池子
+
+	p.l.Info("开始处理采集池", zap.Int("池数量", len(pools)))
 
 	for _, pool := range pools {
 		currentHash := utils.CalculatePromHash(pool)
@@ -146,19 +212,7 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 				break
 			}
 
-			dir := fmt.Sprintf("%s/%s", p.localYamlDir, pool.Name)
-			if err := os.MkdirAll(dir, 0755); err != nil {
-				p.l.Error("创建目录失败", zap.String("路径", dir), zap.Error(err))
-				success = false
-				break
-			}
-
-			filePath := fmt.Sprintf("%s/prometheus_pool_%s_%d.yaml", dir, pool.Name, idx)
-			if err := utils.AtomicWriteFile(filePath, yamlData); err != nil { // 使用原子写入
-				p.l.Error("写入配置文件失败", zap.String("路径", filePath), zap.Error(err))
-				success = false
-				break
-			}
+			// 不再写入本地文件，只保存到内存和数据库
 
 			instanceConfigs[ip] = string(yamlData) // 暂存到内存
 		}
@@ -168,16 +222,33 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 			for ip, cfg := range instanceConfigs {
 				tempConfigMap[ip] = cfg
 				validIPs[ip] = struct{}{}
+
+				// 保存配置到数据库
+				if err := p.saveConfigToDatabase(ctx, pool, ip, cfg); err != nil {
+					p.l.Error("保存配置到数据库失败",
+						zap.String("池子", pool.Name),
+						zap.String("IP", ip),
+						zap.Error(err))
+					// 不中断流程，只记录错误
+				}
 			}
 			tempPoolHashes[pool.Name] = currentHash
-		} else {
-			// 失败时删除可能已写入的临时文件
-			utils.CleanupFailedPool(p.localYamlDir, pool, len(pool.PrometheusInstances))
 		}
 	}
 
-	// 清理被修改池子的旧IP
-	utils.CleanupOldIPs(tempConfigMap, updatedPools, validIPs)
+	// 清理无效的IP，只清理内存中的配置
+	for ip := range tempConfigMap {
+		if _, ok := validIPs[ip]; !ok {
+			// 检查该IP是否属于被修改的池子
+			for poolName := range updatedPools {
+				if strings.Contains(ip, poolName) {
+					delete(tempConfigMap, ip)
+					p.l.Debug("删除无效IP配置", zap.String("ip", ip), zap.String("pool", poolName))
+					break
+				}
+			}
+		}
+	}
 
 	// 原子性更新全局配置
 	p.mu.Lock()
@@ -186,6 +257,44 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 	p.mu.Unlock()
 
 	return nil
+}
+
+// saveConfigToDatabase 保存配置到数据库
+func (p *promConfigCache) saveConfigToDatabase(ctx context.Context, pool *model.MonitorScrapePool, instanceIP, configContent string) error {
+	configHash := calculateConfigHash(configContent)
+	configName := fmt.Sprintf("prometheus-%s-%s", pool.Name, instanceIP)
+
+	// 检查是否已存在相同的配置
+	existingConfig, err := p.configDao.GetMonitorConfigByInstance(ctx, instanceIP, model.ConfigTypePrometheus)
+	if err != nil {
+		// 如果不存在，创建新配置
+		newConfig := &model.MonitorConfig{
+			Name:              configName,
+			PoolID:            pool.ID,
+			InstanceIP:        instanceIP,
+			ConfigType:        model.ConfigTypePrometheus,
+			ConfigContent:     configContent,
+			ConfigHash:        configHash,
+			Status:            model.ConfigStatusActive,
+			LastGeneratedTime: time.Now().Unix(),
+		}
+
+		return p.configDao.CreateMonitorConfig(ctx, newConfig)
+	}
+
+	// 如果配置内容没有变化，不需要更新
+	if existingConfig.ConfigHash == configHash {
+		return nil
+	}
+
+	// 更新现有配置
+	existingConfig.Name = configName
+	existingConfig.ConfigContent = configContent
+	existingConfig.ConfigHash = configHash
+	existingConfig.Status = model.ConfigStatusActive
+	existingConfig.LastGeneratedTime = time.Now().Unix()
+
+	return p.configDao.UpdateMonitorConfig(ctx, existingConfig)
 }
 
 // CreateBasePrometheusConfig 创建基础Prometheus配置

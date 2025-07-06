@@ -27,12 +27,15 @@ package cache
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
-	"os"
 	"sync"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertPoolDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	configDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	altconfig "github.com/prometheus/alertmanager/config"
 	al "github.com/prometheus/alertmanager/pkg/labels"
@@ -43,6 +46,12 @@ import (
 )
 
 const alertSendGroupKey = "alert_send_group"
+
+// calculateAlertConfigHash 计算AlertManager配置内容的哈希值
+func calculateAlertConfigHash(content string) string {
+	hash := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(hash[:])
+}
 
 type AlertConfigCache interface {
 	GetAlertManagerMainConfigYamlByIP(ip string) string
@@ -55,22 +64,22 @@ type alertConfigCache struct {
 	AlertManagerMainConfigMap map[string]string
 	l                         *zap.Logger
 	mu                        sync.RWMutex
-	localYamlDir              string
 	alertWebhookAddr          string
 	alertPoolDao              alertPoolDao.AlertManagerPoolDAO
 	alertSendDao              alertPoolDao.AlertManagerSendDAO
+	configDao                 configDao.MonitorConfigDAO
 	poolHashes                map[string]string
 }
 
-func NewAlertConfigCache(l *zap.Logger, alertPoolDao alertPoolDao.AlertManagerPoolDAO, alertSendDao alertPoolDao.AlertManagerSendDAO) AlertConfigCache {
+func NewAlertConfigCache(l *zap.Logger, alertPoolDao alertPoolDao.AlertManagerPoolDAO, alertSendDao alertPoolDao.AlertManagerSendDAO, configDao configDao.MonitorConfigDAO) AlertConfigCache {
 	return &alertConfigCache{
 		AlertManagerMainConfigMap: make(map[string]string),
 		l:                         l,
-		localYamlDir:              viper.GetString("prometheus.local_yaml_dir"),
 		alertWebhookAddr:          viper.GetString("prometheus.alert_webhook_addr"),
 		mu:                        sync.RWMutex{},
 		alertPoolDao:              alertPoolDao,
 		alertSendDao:              alertSendDao,
+		configDao:                 configDao,
 		poolHashes:                make(map[string]string),
 	}
 }
@@ -139,32 +148,20 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) e
 		}
 
 		success := true
-		// 为每个实例生成配置
-		for idx, ip := range pool.AlertManagerInstances {
-			// 写入文件到Pool专属目录
-			dir := fmt.Sprintf("%s/%s", a.localYamlDir, pool.Name)
-			if err := os.MkdirAll(dir, 0755); err != nil {
-				a.l.Error("[监控模块]创建目录失败",
-					zap.Error(err),
-					zap.String("目录路径", dir),
-				)
-				success = false
-				break
-			}
-
-			// 生成文件路径并写入
-			filePath := fmt.Sprintf("%s/alertmanager_pool_%s_%d.yaml", dir, pool.Name, idx)
-			if err := utils.AtomicWriteFile(filePath, yamlData); err != nil {
-				a.l.Error("[监控模块]写入AlertManager配置文件失败",
-					zap.Error(err),
-					zap.String("文件路径", filePath),
-				)
-				success = false
-				break
-			}
+		// 为每个实例生成配置，不再写入本地文件
+		for _, ip := range pool.AlertManagerInstances {
 
 			tempConfigMap[ip] = string(yamlData)
 			validIPs[ip] = struct{}{}
+
+			// 保存配置到数据库
+			if err := a.saveAlertConfigToDatabase(ctx, pool, ip, string(yamlData)); err != nil {
+				a.l.Error("保存AlertManager配置到数据库失败",
+					zap.String("池子", pool.Name),
+					zap.String("IP", ip),
+					zap.Error(err))
+				// 不中断流程，只记录错误
+			}
 		}
 
 		if success {
@@ -189,6 +186,44 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfig(ctx context.Context) e
 	a.mu.Unlock()
 
 	return nil
+}
+
+// saveAlertConfigToDatabase 保存AlertManager配置到数据库
+func (a *alertConfigCache) saveAlertConfigToDatabase(ctx context.Context, pool *model.MonitorAlertManagerPool, instanceIP, configContent string) error {
+	configHash := calculateAlertConfigHash(configContent)
+	configName := fmt.Sprintf("alertmanager-%s-%s", pool.Name, instanceIP)
+
+	// 检查是否已存在相同的配置
+	existingConfig, err := a.configDao.GetMonitorConfigByInstance(ctx, instanceIP, model.ConfigTypeAlertManager)
+	if err != nil {
+		// 如果不存在，创建新配置
+		newConfig := &model.MonitorConfig{
+			Name:              configName,
+			PoolID:            pool.ID,
+			InstanceIP:        instanceIP,
+			ConfigType:        model.ConfigTypeAlertManager,
+			ConfigContent:     configContent,
+			ConfigHash:        configHash,
+			Status:            model.ConfigStatusActive,
+			LastGeneratedTime: time.Now().Unix(),
+		}
+
+		return a.configDao.CreateMonitorConfig(ctx, newConfig)
+	}
+
+	// 如果配置内容没有变化，不需要更新
+	if existingConfig.ConfigHash == configHash {
+		return nil
+	}
+
+	// 更新现有配置
+	existingConfig.Name = configName
+	existingConfig.ConfigContent = configContent
+	existingConfig.ConfigHash = configHash
+	existingConfig.Status = model.ConfigStatusActive
+	existingConfig.LastGeneratedTime = time.Now().Unix()
+
+	return a.configDao.UpdateMonitorConfig(ctx, existingConfig)
 }
 
 // GenerateAlertManagerMainConfigOnePool 生成单个AlertManager池的主配置
@@ -298,37 +333,7 @@ func (a *alertConfigCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Co
 			RepeatInterval: &repeatInterval,
 		}
 
-		// 处理 Webhook URL 文件
-		if err := os.MkdirAll(a.localYamlDir, 0755); err != nil {
-			a.l.Error("[监控模块]创建目录失败",
-				zap.Error(err),
-				zap.String("目录", a.localYamlDir),
-			)
-			continue
-		}
-
-		webHookURL := fmt.Sprintf("%s?%s=%d",
-			a.alertWebhookAddr,
-			alertSendGroupKey,
-			sendGroup.ID,
-		)
-
-		urlFilePath := fmt.Sprintf("%s/webhook_%d_%d.txt",
-			a.localYamlDir,
-			pool.ID,
-			sendGroup.ID,
-		)
-
-		if err := os.WriteFile(urlFilePath, []byte(webHookURL), 0644); err != nil {
-			a.l.Error("[监控模块]写入Webhook URL失败",
-				zap.Error(err),
-				zap.String("文件路径", urlFilePath),
-				zap.String("发送组", sendGroup.Name),
-			)
-			continue
-		}
-
-		// 创建 Receiver
+		// 简化webhook配置以避免兼容性问题
 		receiver := altconfig.Receiver{
 			Name: sendGroup.Name,
 			WebhookConfigs: []*altconfig.WebhookConfig{
@@ -336,7 +341,6 @@ func (a *alertConfigCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Co
 					NotifierConfig: altconfig.NotifierConfig{
 						VSendResolved: sendGroup.SendResolved == 1,
 					},
-					URLFile: urlFilePath,
 				},
 			},
 		}
