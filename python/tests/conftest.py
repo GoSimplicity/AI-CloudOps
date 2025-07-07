@@ -2,6 +2,8 @@ import pytest
 import asyncio
 import os
 import sys
+import tempfile
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 # 添加项目路径到sys.path
@@ -91,6 +93,39 @@ def sample_autofix_request():
         "namespace": "default",
         "event": "Pod启动失败"
     }
+
+@pytest.fixture
+def temp_knowledge_base():
+    """创建临时知识库目录"""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # 通过补丁替换知识库路径
+        with patch('app.config.settings.config.rag.knowledge_base_path', temp_dir):
+            yield temp_dir
+
+@pytest.fixture
+def sample_document():
+    """示例知识库文档"""
+    return """
+# AIOps平台说明文档
+
+## 简介
+
+AIOps平台是一个智能运维系统，提供根因分析、自动修复和负载预测功能。
+
+## 核心功能
+
+1. 智能根因分析
+2. Kubernetes自动修复
+3. 基于机器学习的负载预测
+
+## 系统架构
+
+AIOps平台采用微服务架构，包括API网关、核心业务逻辑和服务层。
+
+## 联系方式
+
+如有问题请联系开发团队：support@example.com
+"""
 
 @pytest.fixture
 def event_loop():

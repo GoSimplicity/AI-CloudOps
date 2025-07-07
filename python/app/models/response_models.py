@@ -67,5 +67,6 @@ class AssistantResponse(BaseModel):
     answer: str
     source_documents: Optional[List[Dict[str, Any]]] = None
     relevance_score: Optional[float] = None
+    recall_rate: Optional[float] = None  # 文档召回率
     follow_up_questions: Optional[List[str]] = None
     session_id: Optional[str] = None

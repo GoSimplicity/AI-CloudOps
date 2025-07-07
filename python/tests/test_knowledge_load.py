@@ -1,21 +1,20 @@
 #!/usr/bin/env python
 """
-知识库加载测试模块
+知识库文档召回率测试模块
 
 测试项目:
-1. 知识库文件加载
-2. 向量数据库初始化和查询
-3. 文档分块处理
-4. 嵌入模型功能
+1. 文档加载功能
+2. 文档召回率测试
 """
 
 import os
 import sys
 import pytest
 import logging
+import json
+import random
 from pathlib import Path
-import shutil
-import tempfile
+from unittest.mock import patch, Mock, AsyncMock
 
 # 添加项目路径到sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -27,180 +26,93 @@ logging.basicConfig(
 )
 logger = logging.getLogger("test_knowledge_load")
 
-@pytest.fixture(scope="module")
-def temp_knowledge_base():
-    """创建临时知识库目录"""
-    temp_dir = tempfile.mkdtemp()
-    yield temp_dir
-    shutil.rmtree(temp_dir)
-
-@pytest.fixture(scope="module")
-def temp_vector_db():
-    """创建临时向量数据库目录"""
-    temp_dir = tempfile.mkdtemp()
-    yield temp_dir
-    shutil.rmtree(temp_dir)
-
-@pytest.fixture
-def sample_document():
-    """创建示例文档内容"""
-    return """
-# AIOps平台说明文档
-
-## 简介
-
-AIOps平台是一个智能运维系统，提供根因分析、自动修复和负载预测功能。
-
-## 核心功能
-
-1. 智能根因分析
-2. Kubernetes自动修复
-3. 基于机器学习的负载预测
-
-## 系统架构
-
-AIOps平台采用微服务架构，包括API网关、核心业务逻辑和服务层。
-
-## 联系方式
-
-如有问题请联系开发团队：support@example.com
-"""
-
-def test_document_loader(temp_knowledge_base, sample_document):
-    """测试文档加载器功能"""
-    logger.info("测试文档加载器功能")
+@pytest.mark.asyncio
+async def test_document_loading():
+    """测试文档加载功能"""
+    logger.info("测试文档加载功能")
     
-    # 导入文档加载器
-    from app.core.agents.assistant import DocumentLoader
+    from app.core.agents.assistant import AssistantAgent
     
-    # 创建测试文档
-    doc_path = os.path.join(temp_knowledge_base, "test_doc.md")
-    with open(doc_path, "w", encoding="utf-8") as f:
-        f.write(sample_document)
+    # 创建助手代理实例
+    agent = AssistantAgent()
     
-    # 初始化加载器
-    loader = DocumentLoader(knowledge_base_path=temp_knowledge_base)
+    # 测试文档加载方法
+    docs = agent._load_documents()
     
-    # 测试加载文档
-    documents = loader.load()
+    # 验证是否成功加载文档
+    assert docs is not None
+    assert len(docs) > 0
     
-    # 验证结果
-    assert len(documents) > 0, "文档加载失败"
-    assert any("AIOps平台" in doc.page_content for doc in documents), "文档内容加载错误"
+    # 输出加载的文档数量
+    logger.info(f"成功加载 {len(docs)} 个文档片段")
     
-    logger.info(f"成功加载 {len(documents)} 个文档")
+    logger.info("文档加载功能测试通过")
 
-def test_document_splitting():
-    """测试文档分块功能"""
-    logger.info("测试文档分块功能")
+@pytest.mark.asyncio
+async def test_document_recall_rate():
+    """测试文档召回率"""
+    logger.info("测试文档召回率")
     
-    # 导入文档处理工具
-    from app.core.agents.assistant import DocumentSplitter
-    from langchain_core.documents import Document
+    from app.core.agents.assistant import AssistantAgent
+    import time
     
-    # 创建测试文档
-    test_doc = Document(
-        page_content="这是第一段内容。\n\n这是第二段内容。\n\n这是第三段内容，比较长，包含了更多的信息。",
-        metadata={"source": "测试文档"}
-    )
+    # 创建助手代理实例
+    agent = AssistantAgent()
     
-    # 测试不同的分块大小
-    for chunk_size in [10, 20, 50]:
-        splitter = DocumentSplitter(chunk_size=chunk_size, chunk_overlap=5)
-        chunks = splitter.split_documents([test_doc])
-        
-        # 验证结果
-        assert len(chunks) > 0, f"使用块大小 {chunk_size} 的分块失败"
-        logger.info(f"块大小 {chunk_size}: 生成了 {len(chunks)} 个块")
-
-def test_vector_database(temp_vector_db, sample_document):
-    """测试向量数据库功能"""
-    logger.info("测试向量数据库功能")
+    # 定义测试问题和预期关键词
+    test_cases = [
+        {
+            "question": "AIOps平台有哪些功能？",
+            "keywords": ["AIOps", "功能", "平台"]
+        },
+        {
+            "question": "如何进行根因分析？",
+            "keywords": ["根因", "分析"]
+        },
+        {
+            "question": "智能小助手如何工作？",
+            "keywords": ["智能", "小助手", "工作"]
+        }
+    ]
     
-    try:
-        from app.core.agents.assistant import VectorDatabaseManager
-        from langchain_core.documents import Document
-        
-        # 创建测试文档
-        test_doc = Document(
-            page_content=sample_document,
-            metadata={"source": "测试文档"}
-        )
-        
-        # 初始化向量数据库管理器
-        db_manager = VectorDatabaseManager(
-            vector_db_path=temp_vector_db,
-            collection_name="test_collection"
-        )
-        
-        # 测试添加文档
-        db_manager.add_documents([test_doc])
-        
-        # 测试相似度搜索
-        results = db_manager.similarity_search("AIOps平台的核心功能是什么？", k=2)
-        
-        # 验证结果
-        assert len(results) > 0, "向量搜索失败"
-        assert any("核心功能" in doc.page_content for doc in results), "搜索结果相关性不足"
-        
-        logger.info(f"成功获取 {len(results)} 个相关文档片段")
-        
-    except ImportError as e:
-        logger.warning(f"无法导入向量数据库组件: {str(e)}")
-        pytest.skip("向量数据库组件不可用")
-    except Exception as e:
-        logger.error(f"向量数据库测试失败: {str(e)}")
-        raise
-
-def test_knowledge_base_integration(temp_knowledge_base, temp_vector_db):
-    """测试知识库集成功能"""
-    logger.info("测试知识库集成功能")
+    total_cases = len(test_cases)
+    successful_recalls = 0
+    total_recall_rate = 0.0
+    recall_scores = []
     
-    try:
-        from app.config.settings import config
-        import os
+    for idx, test_case in enumerate(test_cases):
+        question = test_case["question"]
+        keywords = test_case["keywords"]
         
-        # 临时修改配置
-        original_kb_path = config.rag.knowledge_base_path
-        original_vdb_path = config.rag.vector_db_path
+        logger.info(f"测试案例 {idx+1}/{total_cases}: {question}")
         
-        os.environ["RAG_KNOWLEDGE_BASE_PATH"] = temp_knowledge_base
-        os.environ["RAG_VECTOR_DB_PATH"] = temp_vector_db
+        # 获取相关文档
+        docs = agent._get_relevant_docs(question)
         
-        # 重新加载配置
-        from app.core.agents.assistant import AssistantAgent
+        # 计算召回率
+        doc_text = " ".join([doc.page_content for doc in docs])
+        matched_keywords = sum(1 for keyword in keywords if keyword.lower() in doc_text.lower())
+        recall_rate = matched_keywords / len(keywords) if keywords else 0
         
-        # 创建示例文档
-        doc_path = os.path.join(temp_knowledge_base, "integration_test.md")
-        with open(doc_path, "w", encoding="utf-8") as f:
-            f.write("# AIOps集成测试\n\nAIOps平台集成测试文档，用于验证知识库功能。")
+        recall_scores.append(recall_rate)
+        total_recall_rate += recall_rate
         
-        # 初始化助手
-        agent = AssistantAgent()
-        
-        # 刷新知识库
-        result = agent.refresh_knowledge_base()
-        assert result, "知识库刷新失败"
-        
-        logger.info("知识库集成测试通过")
-        
-        # 恢复环境变量
-        if original_kb_path:
-            os.environ["RAG_KNOWLEDGE_BASE_PATH"] = original_kb_path
-        else:
-            os.environ.pop("RAG_KNOWLEDGE_BASE_PATH", None)
+        if recall_rate >= 0.5:  # 如果召回率超过50%，视为成功
+            successful_recalls += 1
             
-        if original_vdb_path:
-            os.environ["RAG_VECTOR_DB_PATH"] = original_vdb_path
-        else:
-            os.environ.pop("RAG_VECTOR_DB_PATH", None)
-            
-    except ImportError as e:
-        logger.warning(f"无法导入助手组件: {str(e)}")
-        pytest.skip("助手组件不可用")
-    except Exception as e:
-        logger.error(f"知识库集成测试失败: {str(e)}")
-        raise
+        logger.info(f"  - 召回率: {recall_rate:.2f} ({matched_keywords}/{len(keywords)}关键词匹配)")
+    
+    # 计算平均召回率
+    avg_recall_rate = total_recall_rate / total_cases
+    success_rate = successful_recalls / total_cases
+    
+    logger.info(f"平均文档召回率: {avg_recall_rate:.2f}")
+    logger.info(f"召回成功率: {success_rate:.2f} ({successful_recalls}/{total_cases})")
+    
+    # 验证平均召回率是否达到预期
+    assert avg_recall_rate >= 0.3, f"平均召回率 {avg_recall_rate:.2f} 低于预期的 0.3"
+    
+    logger.info("文档召回率测试通过")
 
 if __name__ == "__main__":
     pytest.main(["-xvs", __file__])

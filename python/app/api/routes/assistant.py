@@ -12,6 +12,7 @@ from flask import Blueprint, request, jsonify
 MOCK_RESPONSE_FOR_TEST = {
     "answer": "这是一个关于AIOps平台的回答",
     "relevance_score": 0.95,
+    "recall_rate": 0.80,
     "source_documents": [],
     "follow_up_questions": ["什么是自动伸缩?", "AIOps有哪些功能?"]
 }
@@ -117,6 +118,7 @@ def assistant_query():
                 'answer': result['answer'],
                 'session_id': session_id,
                 'relevance_score': result.get('relevance_score'),
+                'recall_rate': result.get('recall_rate', 0.0),
                 'sources': result.get('source_documents', []),
                 'follow_up_questions': result.get('follow_up_questions', []),
                 'timestamp': datetime.now().isoformat()

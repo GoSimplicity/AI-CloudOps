@@ -508,8 +508,8 @@ class AssistantAgent:
             logger.error(f"加载文档失败: {e}")
             return documents
     
-    def refresh_knowledge_base(self) -> bool:
-        """刷新知识库"""
+    def refresh_knowledge_base(self) -> Dict[str, Any]:
+        """刷新知识库，返回包含文档数量的字典"""
         try:
             logger.info("正在刷新知识库...")
             
@@ -538,19 +538,21 @@ class AssistantAgent:
             self._create_vector_store()
             
             # 测试检索器是否可用
+            doc_count = 0
             if self.retriever:
                 try:
                     test_result = self.retriever.invoke("test")
-                    logger.info(f"检索器测试成功: 返回 {len(test_result)} 个结果")
+                    doc_count = len(test_result)
+                    logger.info(f"检索器测试成功: 返回 {doc_count} 个结果")
                 except Exception as test_error:
                     logger.warning(f"检索器测试失败: {test_error}")
             else:
                 logger.warning("刷新后检索器仍不可用")
             
-            return True
+            return {"success": True, "documents_count": doc_count}
         except Exception as e:
             logger.error(f"刷新知识库失败: {e}")
-            return False
+            return {"success": False, "documents_count": 0, "error": str(e)}
     
     def add_document(self, content: str, metadata: Dict[str, Any] = None) -> bool:
         """向知识库添加文档"""
@@ -567,7 +569,8 @@ class AssistantAgent:
                 f.write(content)
             
             # 刷新知识库
-            return self.refresh_knowledge_base()
+            refresh_result = self.refresh_knowledge_base()
+            return refresh_result["success"]
         
         except Exception as e:
             logger.error(f"添加文档失败: {e}")
@@ -726,10 +729,18 @@ class AssistantAgent:
                     "AIOps平台的部署要求是什么？"
                 ]
             
+            # 从文档元数据中提取召回率
+            recall_rate = None
+            for doc in relevant_docs:
+                if doc.metadata and "recall_rate" in doc.metadata:
+                    recall_rate = doc.metadata.get("recall_rate")
+                    break
+            
             result = {
                 "answer": answer,
                 "source_documents": source_docs,
                 "relevance_score": 1.0 if hallucination_free else 0.5,
+                "recall_rate": recall_rate if recall_rate is not None else 0.0,
                 "follow_up_questions": follow_up_questions
             }
             
@@ -760,6 +771,7 @@ class AssistantAgent:
                 "answer": error_message,
                 "source_documents": [],
                 "relevance_score": 0.0,
+                "recall_rate": 0.0,
                 "follow_up_questions": [
                     "AIOps平台有哪些核心功能？",
                     "如何启动AIOps平台？",
@@ -848,7 +860,21 @@ class AssistantAgent:
             logger.warning("过滤后没有相关文档，保留原始的前2个文档")
             relevant_docs = docs[:min(2, len(docs))]
         
+        # 计算文档召回率
+        total_docs = len(docs)
+        relevant_count = len(relevant_docs)
+        recall_rate = relevant_count / total_docs if total_docs > 0 else 0
+        
         logger.info(f"文档过滤结果: 原始 {len(docs)} 个，过滤后 {len(relevant_docs)} 个，过滤掉 {filtered_docs_count} 个")
+        logger.info(f"文档召回率: {recall_rate:.2f} ({relevant_count}/{total_docs})")
+        
+        # 将文档召回率添加到第一个文档的元数据中，如果有文档
+        if relevant_docs:
+            for doc in relevant_docs:
+                if not doc.metadata:
+                    doc.metadata = {}
+                doc.metadata["recall_rate"] = recall_rate
+        
         return relevant_docs
     
     async def _rewrite_question(self, question: str, max_retries: int = 3) -> str:

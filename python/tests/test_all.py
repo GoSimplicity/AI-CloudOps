@@ -31,10 +31,12 @@ def run_all_tests():
     
     # 定义测试模块顺序
     test_modules = [
+        "test_health.py",
         "test_rca.py",
         "test_prediction.py",
         "test_autofix.py",
-        "test_assistant.py"
+        "test_assistant.py",
+        "test_knowledge_load.py"
     ]
     
     # 收集结果
