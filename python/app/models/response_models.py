@@ -61,3 +61,11 @@ class HealthResponse(BaseModel):
     timestamp: str
     version: Optional[str] = None
     uptime: Optional[float] = None
+
+class AssistantResponse(BaseModel):
+    """智能小助手响应模型"""
+    answer: str
+    source_documents: Optional[List[Dict[str, Any]]] = None
+    relevance_score: Optional[float] = None
+    follow_up_questions: Optional[List[str]] = None
+    session_id: Optional[str] = None

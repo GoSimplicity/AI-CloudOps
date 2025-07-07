@@ -95,12 +95,44 @@ class TavilyConfig:
     max_results: int = int(os.getenv("TAVILY_MAX_RESULTS", "5"))
 
 @dataclass
+class RAGConfig:
+    """RAG智能小助手配置"""
+    # 向量数据库配置
+    vector_db_path: str = os.getenv("RAG_VECTOR_DB_PATH", "data/vector_db")
+    collection_name: str = os.getenv("RAG_COLLECTION_NAME", "aiops-assistant")
+
+    # 文档配置
+    knowledge_base_path: str = os.getenv("RAG_KNOWLEDGE_BASE_PATH", "data/knowledge_base")
+    chunk_size: int = int(os.getenv("RAG_CHUNK_SIZE", "1000"))
+    chunk_overlap: int = int(os.getenv("RAG_CHUNK_OVERLAP", "200"))
+
+    # 检索配置
+    top_k: int = int(os.getenv("RAG_TOP_K", "4"))
+    similarity_threshold: float = float(os.getenv("RAG_SIMILARITY_THRESHOLD", "0.7"))
+
+    # 嵌入模型配置
+    openai_embedding_model: str = os.getenv("RAG_OPENAI_EMBEDDING_MODEL", "BAAI/bge-m3")
+    ollama_embedding_model: str = os.getenv("RAG_OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+
+    # 生成配置
+    max_context_length: int = int(os.getenv("RAG_MAX_CONTEXT_LENGTH", "4000"))
+    temperature: float = float(os.getenv("RAG_TEMPERATURE", "0.1"))
+
+    @property
+    def effective_embedding_model(self) -> str:
+        """根据LLM提供商返回有效的嵌入模型"""
+        llm_provider = os.getenv("LLM_PROVIDER", "openai").lower()
+        if llm_provider == "ollama":
+            return self.ollama_embedding_model
+        return self.openai_embedding_model
+
+@dataclass
 class AppConfig:
     debug: bool = os.getenv("DEBUG", "false").lower() == "true"
     host: str = os.getenv("HOST", "0.0.0.0")
     port: int = int(os.getenv("PORT", "8080"))
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
-    
+
     prometheus: PrometheusConfig = field(default_factory=PrometheusConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     k8s: K8sConfig = field(default_factory=K8sConfig)
@@ -108,6 +140,7 @@ class AppConfig:
     prediction: PredictionConfig = field(default_factory=PredictionConfig)
     notification: NotificationConfig = field(default_factory=NotificationConfig)
     tavily: TavilyConfig = field(default_factory=TavilyConfig)
+    rag: RAGConfig = field(default_factory=RAGConfig)
 
 # 全局配置实例
 config = AppConfig()

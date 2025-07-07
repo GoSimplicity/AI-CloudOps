@@ -52,12 +52,13 @@ coverage
 .turbo
 .temp
 dev-dist
+vector_db
 .stylelintcache
 yarn.lock
 package-lock.json
 .VSCodeCounter
 **/backend-mock/data
-
+time_qps_auto_scaling_model_metadata.json
 # local env files
 .env.local
 .env.*.local
