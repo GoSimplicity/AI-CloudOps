@@ -15,7 +15,8 @@ from typing import List, Dict, Any, Optional, Union, Tuple
 from pathlib import Path
 import hashlib
 
-from langchain_community.vectorstores import Chroma
+# 从langchain_chroma导入Chroma，替代langchain_community中的版本
+from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_ollama import OllamaEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
@@ -23,7 +24,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
-from langchain_core.output_parsers import StrOutputParser
+from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
@@ -179,8 +180,14 @@ class AssistantAgent:
         """初始化语言模型"""
         try:
             if self.llm_provider == 'openai':
+                # 使用deepseek-ai/DeepSeek-R1-Distill-Qwen-14B作为推理模型
+                inference_model = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
+                # 使用Qwen/Qwen3-14B作为对话模型
+                chat_model = config.llm.model
+                
+                # 根据任务不同使用不同的模型
                 self.llm = ChatOpenAI(
-                    model=config.llm.model,
+                    model=chat_model,
                     api_key=config.llm.api_key,
                     base_url=config.llm.base_url,
                     temperature=config.rag.temperature,
@@ -202,9 +209,8 @@ class AssistantAgent:
             except Exception as test_error:
                 logger.warning(f"LLM测试失败: {test_error}")
             
-            # 初始化结构化输出的LLM
-            self.structured_llm_docs = self.llm.with_structured_output(GradeDocuments)
-            self.structured_llm_hall = self.llm.with_structured_output(GradeHallucinations)
+            # 初始化结构化输出的LLM - 使用JsonOutputParser替代structured_output
+            self.json_parser = JsonOutputParser()
             
         except Exception as e:
             logger.error(f"初始化语言模型失败: {e}，尝试备用方法...")
@@ -238,9 +244,8 @@ class AssistantAgent:
                     raise ValueError("无法初始化任何可用的语言模型")
                     return
             
-            # 初始化结构化输出的LLM
-            self.structured_llm_docs = self.llm.with_structured_output(GradeDocuments)
-            self.structured_llm_hall = self.llm.with_structured_output(GradeHallucinations)
+            # 初始化JSON解析器
+            self.json_parser = JsonOutputParser()
             
     # 此方法已移除，不再使用模拟LLM
         
@@ -396,6 +401,22 @@ class AssistantAgent:
             use_in_memory: 是否使用内存模式（适用于测试环境）
         """
         try:
+            # 确保向量数据库目录存在且具有写入权限
+            os.makedirs(self.vector_db_path, exist_ok=True)
+            
+            # 检查写入权限
+            if not os.access(self.vector_db_path, os.W_OK):
+                try:
+                    # 尝试修复权限
+                    import stat
+                    os.chmod(self.vector_db_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+                    logger.info(f"已修复向量数据库目录权限: {self.vector_db_path}")
+                except Exception as perm_error:
+                    logger.warning(f"无法修复向量数据库目录权限: {perm_error}")
+                    # 使用内存模式作为备用方案
+                    logger.info("由于权限问题，切换到内存模式")
+                    use_in_memory = True
+            
             # 加载知识库文档
             documents = self._load_documents()
             if not documents:
@@ -419,12 +440,23 @@ class AssistantAgent:
                 )
             else:
                 # 持久化模式 - 将向量存储到磁盘
-                db = Chroma.from_documents(
-                    documents=splits,
-                    embedding=self.embedding,
-                    persist_directory=self.vector_db_path,
-                    collection_name=self.collection_name
-                )
+                try:
+                    db = Chroma.from_documents(
+                        documents=splits,
+                        embedding=self.embedding,
+                        persist_directory=self.vector_db_path,
+                        collection_name=self.collection_name
+                    )
+                except Exception as db_error:
+                    if "readonly database" in str(db_error).lower():
+                        logger.warning("数据库为只读状态，切换到内存模式")
+                        db = Chroma.from_documents(
+                            documents=splits,
+                            embedding=self.embedding,
+                            collection_name=self.collection_name
+                        )
+                    else:
+                        raise
             
             # 创建检索器
             self.retriever = db.as_retriever(
@@ -490,10 +522,13 @@ class AssistantAgent:
             logger.error(f"加载文档失败: {e}")
             return documents
     
-    def refresh_knowledge_base(self) -> Dict[str, Any]:
+    async def refresh_knowledge_base(self) -> Dict[str, Any]:
         """刷新知识库，返回包含文档数量的字典"""
         try:
             logger.info("正在刷新知识库...")
+            
+            # 清理缓存以确保新添加的文档能被检索到
+            self.response_cache = {}
             
             # 检查是否在测试环境中运行
             in_test_environment = 'pytest' in sys.modules
@@ -504,15 +539,29 @@ class AssistantAgent:
                 os.makedirs(kb_path, exist_ok=True)
                 logger.info(f"创建知识库目录: {kb_path}")
             
-            # 如果在测试环境中，直接使用内存模式
-            if in_test_environment:
-                logger.info("测试环境下使用内存模式刷新知识库")
+            # 检查向量数据库目录权限
+            use_in_memory = in_test_environment
+            
+            db_path = Path(self.vector_db_path)
+            if not db_path.exists():
+                try:
+                    os.makedirs(db_path, exist_ok=True)
+                except Exception as e:
+                    logger.warning(f"创建向量数据库目录失败: {e}，将使用内存模式")
+                    use_in_memory = True
+            
+            # 检查写入权限
+            if not use_in_memory and not os.access(str(db_path), os.W_OK):
+                logger.warning(f"向量数据库目录没有写入权限: {db_path}，将使用内存模式")
+                use_in_memory = True
+            
+            # 如果使用内存模式
+            if use_in_memory:
+                logger.info("使用内存模式刷新知识库")
                 self._create_vector_store(use_in_memory=True)
             else:
                 # 正常环境 - 清理现有文件并创建新数据库
-                # 检查向量数据库路径
-                db_path = Path(self.vector_db_path)
-                if db_path.exists():
+                try:
                     # 清理现有的向量数据库文件
                     import shutil
                     try:
@@ -524,9 +573,12 @@ class AssistantAgent:
                         logger.info("已清理现有向量数据库文件")
                     except Exception as clean_error:
                         logger.warning(f"清理向量数据库文件失败: {clean_error}")
-                
-                # 创建新的向量数据库
-                self._create_vector_store(use_in_memory=False)
+                    
+                    # 创建新的向量数据库
+                    self._create_vector_store(use_in_memory=False)
+                except Exception as store_error:
+                    logger.warning(f"创建向量数据库失败: {store_error}，尝试使用内存模式")
+                    self._create_vector_store(use_in_memory=True)
             
             # 测试检索器是否可用
             doc_count = 0
@@ -540,9 +592,25 @@ class AssistantAgent:
             else:
                 logger.warning("刷新后检索器仍不可用")
             
+            # 保存更新的空缓存
+            self._save_cache()
+            logger.info("已清理响应缓存")
+            
             return {"success": True, "documents_count": doc_count}
         except Exception as e:
             logger.error(f"刷新知识库失败: {e}")
+            # 最后尝试使用内存模式
+            try:
+                logger.info("尝试使用内存模式作为最后的备用方案")
+                self._create_vector_store(use_in_memory=True)
+                if self.retriever:
+                    test_result = self.retriever.invoke("test")
+                    doc_count = len(test_result)
+                    logger.info(f"内存模式检索器测试成功: 返回 {doc_count} 个结果")
+                    return {"success": True, "documents_count": doc_count}
+            except:
+                pass
+            
             return {"success": False, "documents_count": 0, "error": str(e)}
     
     def add_document(self, content: str, metadata: Dict[str, Any] = None) -> bool:
@@ -559,9 +627,12 @@ class AssistantAgent:
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(content)
             
-            # 刷新知识库
-            refresh_result = self.refresh_knowledge_base()
-            return refresh_result["success"]
+            # 清理缓存以确保新添加的文档能被检索到
+            self.response_cache = {}
+            logger.info("已清理响应缓存以支持新添加的文档")
+            
+            # 刷新知识库操作移至API层异步执行，这里仅返回成功
+            return True
         
         except Exception as e:
             logger.error(f"添加文档失败: {e}")
@@ -631,7 +702,7 @@ class AssistantAgent:
                     docs.append(web_doc)
             
             # 2. 评估文档相关性
-            relevant_docs = self._filter_relevant_docs(question, docs)
+            relevant_docs = await self._filter_relevant_docs(question, docs)
             
             # 3. 如果没有相关文档，尝试重写问题
             if not relevant_docs:
@@ -639,8 +710,8 @@ class AssistantAgent:
                 try:
                     rewritten_question = await self._rewrite_question(question)
                     if rewritten_question and rewritten_question != question:
-                        docs = self._get_relevant_docs(rewritten_question)
-                        relevant_docs = self._filter_relevant_docs(rewritten_question, docs)
+                                            docs = self._get_relevant_docs(rewritten_question)
+                    relevant_docs = await self._filter_relevant_docs(rewritten_question, docs)
                 except Exception as rewrite_error:
                     logger.error(f"重写问题时出错: {rewrite_error}")
             
@@ -811,18 +882,18 @@ class AssistantAgent:
 6. 对于人员负责或维护服务的问题，只要文档中提到了相关人员的信息，就应评为相关
 
 您的评估应更严格，目标是过滤掉不相关的文档，提高检索质量。
-给出二进制分数"yes"或"no"，以指示文档是否与问题相关。"""
+以JSON格式输出，键为"binary_score"，值为"yes"或"no"，表示文档是否与问题相关。"""
 
         grade_prompt = ChatPromptTemplate.from_messages([
             ("system", system),
-            ("human", "文档内容: \n\n {document} \n\n 用户问题: {question}\n\n此文档与问题相关吗？只回答'yes'或'no'"),
+            ("human", "文档内容: \n\n {document} \n\n 用户问题: {question}\n\n此文档与问题相关吗？请用JSON格式回答，例如：{\"binary_score\": \"yes\"} 或 {\"binary_score\": \"no\"}"),
         ])
         
         relevant_docs = []
         filtered_docs_count = 0
         
         # 创建检索评分链
-        retrieval_grader = grade_prompt | self.structured_llm_docs
+        retrieval_grader = grade_prompt | self.llm | self.json_parser
         
         for idx, doc in enumerate(docs):
             try:
@@ -835,7 +906,7 @@ class AssistantAgent:
                     "document": doc_content
                 })
                 
-                if result and result.binary_score.lower() == "yes":
+                if result and isinstance(result, dict) and result.get("binary_score", "").lower() == "yes":
                     relevant_docs.append(doc)
                 else:
                     filtered_docs_count += 1
@@ -1007,15 +1078,15 @@ class AssistantAgent:
 如果生成的回答包含任何文档中没有明确提及的重要信息或事实，请评为'no'。
 特别是对于人员负责或维护服务的陈述，必须在文档中有明确支持才能评为'yes'。
 对于联系方式类的简单事实性问题，如果回答准确反映了文档中的信息，应评为'yes'。
-请给出二进制评分:'yes'表示回答符合文档中的事实，'no'表示回答包含了文档中没有的内容。"""
+以JSON格式输出，键为"binary_score"，值为"yes"或"no"，表示回答是否符合文档中的事实。"""
 
             hallucination_prompt = ChatPromptTemplate.from_messages([
                 ("system", system),
-                ("human", "文档内容: \n\n {documents} \n\n 生成的回答: {generation} \n\n 用户问题: {question}"),
+                ("human", "文档内容: \n\n {documents} \n\n 生成的回答: {generation} \n\n 用户问题: {question}\n\n请用JSON格式回答，例如：{\"binary_score\": \"yes\"} 或 {\"binary_score\": \"no\"}"),
             ])
                 
             # 创建幻觉评分链
-            hallucination_grader = hallucination_prompt | self.structured_llm_hall
+            hallucination_grader = hallucination_prompt | self.llm | self.json_parser
                 
             result = hallucination_grader.invoke({
                 "documents": doc_content,
@@ -1023,8 +1094,8 @@ class AssistantAgent:
                 "question": question
             })
                 
-            if result and hasattr(result, 'binary_score'):
-                return result.binary_score == "yes"
+            if result and isinstance(result, dict) and "binary_score" in result:
+                return result["binary_score"] == "yes"
             return default == "yes"
         except Exception as e:
             logger.error(f"幻觉评分失败: {e}")

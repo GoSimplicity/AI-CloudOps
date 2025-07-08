@@ -5,7 +5,6 @@
 
 import os
 import sys
-import json
 import asyncio
 import requests
 import logging
@@ -205,6 +204,31 @@ def test_add_document(content, metadata=None):
         logger.error(f"发生未知错误: {str(e)}")
         return False, None
 
+def test_clear_cache():
+    """测试清除缓存端点"""
+    url = f"{API_BASE_URL}/api/v1/assistant/clear-cache"
+    
+    try:
+        logger.info("发送清除缓存请求")
+        response = requests.post(url, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            logger.info(f"状态码: {response.status_code}")
+            logger.info(f"结果: {result}")
+            return True, result
+        else:
+            logger.error(f"API调用失败，状态码: {response.status_code}")
+            logger.error(f"错误信息: {response.text}")
+            return False, None
+    
+    except requests.exceptions.RequestException as e:
+        logger.error(f"请求异常: {str(e)}")
+        return False, None
+    except Exception as e:
+        logger.error(f"发生未知错误: {str(e)}")
+        return False, None
+
 async def main():
     """主函数"""
     try:
@@ -232,6 +256,10 @@ async def main():
         # 测试流程
         logger.info("开始测试智能小助手API")
         
+        # 首先清除缓存
+        logger.info("\n--- 初始步骤: 清除缓存 ---")
+        test_clear_cache()
+        
         # 第1步：测试查询 - 预期失败或返回通用回答
         logger.info("\n--- 步骤1: 测试初始查询 ---")
         success, _ = test_assistant_query("AIOps云运维专家系统是什么？")
@@ -249,14 +277,34 @@ async def main():
         if not refresh_success:
             logger.error("知识库刷新失败，跳过后续测试")
             return
+            
+        # 再次清除缓存
+        logger.info("再次清除缓存...")
+        test_clear_cache()
+        
+        # 添加等待时间确保向量数据库完全初始化
+        logger.info("等待向量数据库初始化...")
+        await asyncio.sleep(2)  # 等待2秒让向量数据库初始化完成
         
         # 第4步：再次测试查询 - 预期成功
         logger.info("\n--- 步骤4: 测试添加文档后的查询 ---")
-        test_assistant_query("AIOps云运维专家系统是什么？")
+        success4, result4 = test_assistant_query("AIOps云运维专家系统是什么？")
+        
+        # 输出更详细的调试信息
+        if success4 and "提供的文档中没有这些信息" in result4["data"]["answer"]:
+            logger.warning("仍然无法检索到相关信息，尝试清除缓存并重新发送查询...")
+            # 再次刷新知识库
+            refresh_success, _ = test_refresh_knowledge_base()
+            await asyncio.sleep(2)  # 再等待2秒
+            success4, result4 = test_assistant_query("AIOps云运维专家系统是什么？")
         
         # 第5步：测试联系方式查询
         logger.info("\n--- 步骤5: 测试联系方式查询 ---")
-        test_assistant_query("技术支持的联系方式是什么？")
+        success5, result5 = test_assistant_query("技术支持的联系方式是什么？")
+        
+        # 输出更详细的调试信息
+        if success5 and "提供的文档中没有这些信息" in result5["data"]["answer"]:
+            logger.warning("联系方式查询仍然无法检索到相关信息...")
         
         # 第6步：创建会话测试
         logger.info("\n--- 步骤6: 测试创建会话 ---")

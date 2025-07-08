@@ -53,14 +53,13 @@ def init_websocket(app):
 def safe_async_run(coroutine):
     """安全地运行异步函数，处理不同环境下的运行方式"""
     try:
-        # 检查当前是否在事件循环中
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # 在有事件循环的环境中，尝试等待协程
+        # 创建新的事件循环，避免在没有事件循环的线程中执行异步代码
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
             return loop.run_until_complete(coroutine)
-        else:
-            # 没有事件循环，使用asyncio.run
-            return asyncio.run(coroutine)
+        finally:
+            loop.close()
     except Exception as e:
         logger.error(f"执行异步函数失败: {str(e)}")
         raise e
@@ -177,7 +176,17 @@ def refresh_knowledge_base():
             }), 500
         
         try:
+            # 强制清理缓存
+            agent.response_cache = {}
+            logger.info("API层强制清理了响应缓存")
+            
+            # 刷新知识库
             result = safe_async_run(agent.refresh_knowledge_base())
+            
+            # 为确保向量数据库完全初始化，添加小延迟
+            import time
+            time.sleep(1)  # 等待1秒钟
+            
         except Exception as e:
             logger.error(f"刷新知识库失败: {str(e)}")
             return jsonify({
@@ -199,5 +208,118 @@ def refresh_knowledge_base():
         return jsonify({
             'code': 500,
             'message': f'刷新知识库时出错: {str(e)}',
+            'data': {}
+        }), 500
+
+
+@assistant_bp.route('/add-document', methods=['POST'])
+def add_document():
+    """添加文档到知识库 - 同步包装异步函数"""
+    try:
+        data = request.json
+        content = data.get('content', '')
+        metadata = data.get('metadata', {})
+        
+        if not content:
+            return jsonify({
+                'code': 400,
+                'message': '文档内容不能为空',
+                'data': {}
+            }), 400
+        
+        agent = get_assistant_agent()
+        if not agent:
+            return jsonify({
+                'code': 500,
+                'message': '智能小助手服务未正确初始化',
+                'data': {}
+            }), 500
+        
+        # 添加文档到知识库
+        success = agent.add_document(content, metadata)
+        
+        if success:
+            # 刷新知识库
+            try:
+                # 强制清理缓存
+                agent.response_cache = {}
+                logger.info("API层强制清理了响应缓存")
+                
+                # 刷新知识库
+                result = safe_async_run(agent.refresh_knowledge_base())
+                
+                # 为确保向量数据库完全初始化，添加小延迟
+                import time
+                time.sleep(1)  # 等待1秒钟
+                
+                documents_count = result.get('documents_count', 0)
+            except Exception as e:
+                logger.error(f"添加文档后刷新知识库失败: {str(e)}")
+                documents_count = 0
+            
+            return jsonify({
+                'code': 0,
+                'message': '文档添加成功',
+                'data': {
+                    'success': True,
+                    'documents_count': documents_count,
+                    'timestamp': datetime.now().isoformat()
+                }
+            })
+        else:
+            return jsonify({
+                'code': 500,
+                'message': '文档添加失败',
+                'data': {
+                    'success': False
+                }
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"添加文档失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': f'添加文档时出错: {str(e)}',
+            'data': {}
+        }), 500
+
+
+@assistant_bp.route('/clear-cache', methods=['POST'])
+def clear_cache():
+    """清除智能小助手的缓存"""
+    try:
+        agent = get_assistant_agent()
+        if not agent:
+            return jsonify({
+                'code': 500,
+                'message': '智能小助手服务未正确初始化',
+                'data': {}
+            }), 500
+        
+        # 清空缓存
+        old_cache_size = len(agent.response_cache)
+        agent.response_cache = {}
+        logger.info(f"已清空响应缓存，原有 {old_cache_size} 条缓存项")
+        
+        # 保存空缓存
+        try:
+            agent._save_cache()
+            logger.info("已保存空缓存文件")
+        except Exception as cache_error:
+            logger.warning(f"保存空缓存失败: {str(cache_error)}")
+        
+        return jsonify({
+            'code': 0,
+            'message': '缓存清除成功',
+            'data': {
+                'cleared_items': old_cache_size,
+                'timestamp': datetime.now().isoformat()
+            }
+        })
+    except Exception as e:
+        logger.error(f"清除缓存失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': f'清除缓存时出错: {str(e)}',
             'data': {}
         }), 500

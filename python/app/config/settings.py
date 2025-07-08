@@ -18,8 +18,8 @@ class PrometheusConfig:
 @dataclass
 class LLMConfig:
     provider: str = os.getenv("LLM_PROVIDER", "openai")  # 'openai' 或 'ollama'
-    model: str = os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct")
-    api_key: str = os.getenv("LLM_API_KEY", "sk-xrykvuqngkhbsmdtmvhzsupjafandfyhcdbcqojlyvrftttq")
+    model: str = os.getenv("LLM_MODEL", "Qwen/Qwen3-14B")
+    api_key: str = os.getenv("LLM_API_KEY", "sk-hvuixwkcnqhysztanareppqqlcwnmeusqwemoclcfzvohdfo")
     base_url: str = os.getenv("LLM_BASE_URL", "https://api.siliconflow.cn/v1")
     temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
     max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "2048"))
@@ -111,7 +111,7 @@ class RAGConfig:
     similarity_threshold: float = float(os.getenv("RAG_SIMILARITY_THRESHOLD", "0.7"))
 
     # 嵌入模型配置
-    openai_embedding_model: str = os.getenv("RAG_OPENAI_EMBEDDING_MODEL", "BAAI/bge-m3")
+    openai_embedding_model: str = os.getenv("RAG_OPENAI_EMBEDDING_MODEL", "Pro/BAAI/bge-m3")
     ollama_embedding_model: str = os.getenv("RAG_OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
 
     # 生成配置
