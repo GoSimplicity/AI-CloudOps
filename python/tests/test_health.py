@@ -49,27 +49,31 @@ def test_health_endpoint(client):
     
     logger.info("健康检查API端点测试通过")
 
-def test_prometheus_health(mock_prometheus_service):
+def test_prometheus_health(prometheus_service):
     """测试Prometheus健康状态"""
     logger.info("测试Prometheus健康状态")
     
-    assert mock_prometheus_service.is_healthy() == True
+    assert prometheus_service.is_healthy() == True
     
     logger.info("Prometheus健康状态测试通过")
 
-def test_kubernetes_health(mock_k8s_service):
+def test_kubernetes_health(k8s_service):
     """测试Kubernetes健康状态"""
     logger.info("测试Kubernetes健康状态")
     
-    assert mock_k8s_service.is_healthy() == True
+    assert k8s_service.is_healthy() == True
     
     logger.info("Kubernetes健康状态测试通过")
 
-def test_llm_health(mock_llm_service):
+@pytest.mark.skipif(
+    os.environ.get("SKIP_LLM_TESTS", "false").lower() == "true",
+    reason="LLM API测试被环境变量禁用"
+)
+def test_llm_health(llm_service):
     """测试LLM服务健康状态"""
     logger.info("测试LLM服务健康状态")
     
-    assert mock_llm_service.is_healthy() == True
+    assert llm_service.is_healthy() == True
     
     logger.info("LLM服务健康状态测试通过")
 

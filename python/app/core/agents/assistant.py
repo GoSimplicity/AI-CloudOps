@@ -3,6 +3,7 @@
 """
 
 import os
+import sys
 import uuid
 import logging
 import re
@@ -157,7 +158,7 @@ class AssistantAgent:
                 except Exception as e2:
                     logger.error(f"备用嵌入方法也失败: {e2}")
                     # 创建一个简单的嵌入模型，返回随机向量
-                    self._create_dummy_embeddings()
+                    raise ValueError("无法初始化任何可用的嵌入模型")
                     return
             else:
                 # 如果Ollama失败，尝试OpenAI
@@ -170,22 +171,9 @@ class AssistantAgent:
                 except Exception as e2:
                     logger.error(f"备用嵌入方法也失败: {e2}")
                     # 创建一个简单的嵌入模型，返回随机向量
-                    self._create_dummy_embeddings()
+                    raise ValueError("无法初始化任何可用的嵌入模型")
                     return
     
-    def _create_dummy_embeddings(self):
-        """创建一个简单的嵌入模型，用于演示目的"""
-        import numpy as np
-        
-        class DummyEmbeddings:
-            def embed_query(self, text):
-                return np.random.rand(384).tolist()  # 384维的随机向量
-                
-            def embed_documents(self, documents):
-                return [np.random.rand(384).tolist() for _ in documents]
-        
-        logger.warning("使用演示用的随机嵌入模型")
-        self.embedding = DummyEmbeddings()
     
     def _init_llm(self) -> None:
         """初始化语言模型"""
@@ -233,7 +221,7 @@ class AssistantAgent:
                     )
                 except Exception as e2:
                     logger.error(f"备用语言模型也失败: {e2}")
-                    self._create_dummy_llm()
+                    raise ValueError("无法初始化任何可用的语言模型")
                     return
             else:
                 # 如果Ollama失败，尝试OpenAI
@@ -247,33 +235,14 @@ class AssistantAgent:
                     )
                 except Exception as e2:
                     logger.error(f"备用语言模型也失败: {e2}")
-                    self._create_dummy_llm()
+                    raise ValueError("无法初始化任何可用的语言模型")
                     return
             
             # 初始化结构化输出的LLM
             self.structured_llm_docs = self.llm.with_structured_output(GradeDocuments)
             self.structured_llm_hall = self.llm.with_structured_output(GradeHallucinations)
             
-    def _create_dummy_llm(self):
-        """创建一个简单的模拟LLM，用于演示目的"""
-        from langchain.llms.fake import FakeListLLM
-        from langchain.schema.output import Generation
-        from langchain_core.language_models.chat_models import SimpleChatModel
-        
-        class DummyChatModel(SimpleChatModel):
-            def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-                return Generation(text="这是一个模拟回答，因为LLM服务不可用。请检查API密钥和网络连接。")
-                
-            @property
-            def _llm_type(self):
-                return "dummy"
-        
-        logger.warning("使用演示用的模拟LLM")
-        self.llm = DummyChatModel()
-        
-        # 创建基本的结构化输出
-        self.structured_llm_docs = self.llm
-        self.structured_llm_hall = self.llm
+    # 此方法已移除，不再使用模拟LLM
         
     def _generate_cache_key(self, question: str, session_id: str = None) -> str:
         """生成缓存键"""
@@ -420,8 +389,12 @@ class AssistantAgent:
             logger.error(f"初始化检索器失败: {e}")
             raise RuntimeError(f"无法初始化检索器: {e}")
     
-    def _create_vector_store(self) -> None:
-        """创建向量数据库"""
+    def _create_vector_store(self, use_in_memory: bool = False) -> None:
+        """创建向量数据库
+        
+        参数:
+            use_in_memory: 是否使用内存模式（适用于测试环境）
+        """
         try:
             # 加载知识库文档
             documents = self._load_documents()
@@ -436,13 +409,22 @@ class AssistantAgent:
             )
             splits = text_splitter.split_documents(documents)
             
-            # 创建向量存储
-            db = Chroma.from_documents(
-                documents=splits,
-                embedding=self.embedding,
-                persist_directory=self.vector_db_path,
-                collection_name=self.collection_name
-            )
+            # 根据模式创建不同的向量存储
+            if use_in_memory:
+                # 内存模式 - 不持久化到磁盘
+                db = Chroma.from_documents(
+                    documents=splits,
+                    embedding=self.embedding,
+                    collection_name=self.collection_name
+                )
+            else:
+                # 持久化模式 - 将向量存储到磁盘
+                db = Chroma.from_documents(
+                    documents=splits,
+                    embedding=self.embedding,
+                    persist_directory=self.vector_db_path,
+                    collection_name=self.collection_name
+                )
             
             # 创建检索器
             self.retriever = db.as_retriever(
@@ -513,29 +495,38 @@ class AssistantAgent:
         try:
             logger.info("正在刷新知识库...")
             
+            # 检查是否在测试环境中运行
+            in_test_environment = 'pytest' in sys.modules
+            
             # 检查知识库路径
             kb_path = Path(self.knowledge_base_path)
             if not kb_path.exists():
                 os.makedirs(kb_path, exist_ok=True)
                 logger.info(f"创建知识库目录: {kb_path}")
             
-            # 检查向量数据库路径
-            db_path = Path(self.vector_db_path)
-            if db_path.exists():
-                # 清理现有的向量数据库文件
-                import shutil
-                try:
-                    for item in db_path.glob("*"):
-                        if item.is_file():
-                            item.unlink()
-                        elif item.is_dir() and item.name != "cache":  # 保留缓存目录
-                            shutil.rmtree(item)
-                    logger.info("已清理现有向量数据库文件")
-                except Exception as clean_error:
-                    logger.warning(f"清理向量数据库文件失败: {clean_error}")
-            
-            # 创建新的向量数据库
-            self._create_vector_store()
+            # 如果在测试环境中，直接使用内存模式
+            if in_test_environment:
+                logger.info("测试环境下使用内存模式刷新知识库")
+                self._create_vector_store(use_in_memory=True)
+            else:
+                # 正常环境 - 清理现有文件并创建新数据库
+                # 检查向量数据库路径
+                db_path = Path(self.vector_db_path)
+                if db_path.exists():
+                    # 清理现有的向量数据库文件
+                    import shutil
+                    try:
+                        for item in db_path.glob("*"):
+                            if item.is_file():
+                                item.unlink()
+                            elif item.is_dir() and item.name != "cache":  # 保留缓存目录
+                                shutil.rmtree(item)
+                        logger.info("已清理现有向量数据库文件")
+                    except Exception as clean_error:
+                        logger.warning(f"清理向量数据库文件失败: {clean_error}")
+                
+                # 创建新的向量数据库
+                self._create_vector_store(use_in_memory=False)
             
             # 测试检索器是否可用
             doc_count = 0

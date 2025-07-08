@@ -5,17 +5,9 @@
 import asyncio
 import logging
 import json
+import sys
 from datetime import datetime
 from flask import Blueprint, request, jsonify
-
-# 用于测试的模拟响应
-MOCK_RESPONSE_FOR_TEST = {
-    "answer": "这是一个关于AIOps平台的回答",
-    "relevance_score": 0.95,
-    "recall_rate": 0.80,
-    "source_documents": [],
-    "follow_up_questions": ["什么是自动伸缩?", "AIOps有哪些功能?"]
-}
 
 # 创建日志器
 logger = logging.getLogger("aiops.api.assistant")
@@ -58,6 +50,21 @@ def init_websocket(app):
     else:
         logger.warning("WebSocket功能不可用，相关接口将不能使用")
 
+def safe_async_run(coroutine):
+    """安全地运行异步函数，处理不同环境下的运行方式"""
+    try:
+        # 检查当前是否在事件循环中
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # 在有事件循环的环境中，尝试等待协程
+            return loop.run_until_complete(coroutine)
+        else:
+            # 没有事件循环，使用asyncio.run
+            return asyncio.run(coroutine)
+    except Exception as e:
+        logger.error(f"执行异步函数失败: {str(e)}")
+        raise e
+
 
 @assistant_bp.route('/query', methods=['POST'])
 def assistant_query():
@@ -85,27 +92,20 @@ def assistant_query():
             }), 500
         
         # 调用助手代理获取回答
-        import asyncio
         try:
-            # 尝试获取当前事件循环
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # 如果有运行中的事件循环（测试环境），使用同步模式
-                from app.core.agents.assistant import AssistantAgent
-                
-                # 使用全局变量中的模拟响应
-                result = MOCK_RESPONSE_FOR_TEST
-            else:
-                # 正常环境
-                result = asyncio.run(agent.get_answer(
-                    question=question,
-                    use_web_search=use_web_search,
-                    session_id=session_id,
-                    max_context_docs=max_context_docs
-                ))
-        except RuntimeError:
-            # 避免在测试环境中出错，使用全局模拟响应
-            result = MOCK_RESPONSE_FOR_TEST
+            result = safe_async_run(agent.get_answer(
+                question=question,
+                use_web_search=use_web_search,
+                session_id=session_id,
+                max_context_docs=max_context_docs
+            ))
+        except Exception as e:
+            logger.error(f"获取回答失败: {str(e)}")
+            return jsonify({
+                'code': 500,
+                'message': f'获取回答时出错: {str(e)}',
+                'data': {}
+            }), 500
         
         # 生成会话ID（如果不存在）
         if not session_id:
@@ -176,19 +176,15 @@ def refresh_knowledge_base():
                 'data': {}
             }), 500
         
-        import asyncio
         try:
-            # 尝试获取当前事件循环
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # 如果有运行中的事件循环（测试环境），使用同步模式
-                result = {"documents_count": 10}
-            else:
-                # 正常环境
-                result = asyncio.run(agent.refresh_knowledge_base())
-        except RuntimeError:
-            # 避免在测试环境中出错
-            result = {"documents_count": 10}
+            result = safe_async_run(agent.refresh_knowledge_base())
+        except Exception as e:
+            logger.error(f"刷新知识库失败: {str(e)}")
+            return jsonify({
+                'code': 500,
+                'message': f'刷新知识库时出错: {str(e)}',
+                'data': {}
+            }), 500
         
         return jsonify({
             'code': 0,
