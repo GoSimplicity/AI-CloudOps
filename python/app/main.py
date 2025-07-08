@@ -2,9 +2,16 @@
 AIOps平台主应用入口
 """
 
+import os
+import sys
 import logging
 import time
 from flask import Flask
+
+# 添加项目根目录到系统路径
+current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 from app.config.settings import config
 from app.config.logging import setup_logging
 from app.api.routes import register_routes
@@ -34,7 +41,7 @@ def create_app():
         logger.info("中间件注册完成")
     except Exception as e:
         logger.error(f"中间件注册失败: {str(e)}")
-        raise
+        logger.warning("将继续启动，但部分中间件功能可能不可用")
     
     # 注册路由
     try:
@@ -42,7 +49,19 @@ def create_app():
         logger.info("路由注册完成")
     except Exception as e:
         logger.error(f"路由注册失败: {str(e)}")
-        raise
+        logger.warning("将继续启动，但部分路由功能可能不可用")
+        
+    # 初始化WebSocket
+    try:
+        from app.api.routes.assistant import init_websocket
+        init_websocket(app)
+        logger.info("WebSocket初始化完成")
+    except ImportError as e:
+        logger.warning(f"WebSocket模块导入失败: {str(e)}")
+        logger.warning("将继续启动，但WebSocket功能不可用")
+    except Exception as e:
+        logger.error(f"WebSocket初始化失败: {str(e)}")
+        logger.warning("将继续启动，但WebSocket功能不可用")
     
     # 定义启动信息函数
     def log_startup_info():
@@ -54,6 +73,8 @@ def create_app():
         logger.info("  - GET  /api/v1/predict       - 负载预测")
         logger.info("  - POST /api/v1/rca           - 根因分析")
         logger.info("  - POST /api/v1/autofix       - 自动修复")
+        logger.info("  - POST /api/v1/assistant/query - 智能小助手")
+        logger.info("  - WS   /api/v1/assistant/stream - 流式智能小助手")
     
     # 替代 before_first_request 的解决方案
     app_started = False

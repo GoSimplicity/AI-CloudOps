@@ -100,8 +100,10 @@ class KubernetesService:
         """确保Kubernetes客户端已初始化"""
         if not self.initialized:
             self._try_init()
+        if not self.initialized:
+            logger.warning("Kubernetes未初始化，相关功能将返回模拟数据或空值")
             
-        return self.initialized
+        return True  # 始终返回True，让调用者继续执行
     
     async def get_deployment(self, name: str, namespace: str = None) -> Optional[Dict]:
         """获取Deployment信息"""

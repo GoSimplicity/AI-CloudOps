@@ -1,5 +1,6 @@
 Flask
 Flask-CORS
+Flask-Sock>=0.6.0
 requests>=2.31.0
 pandas>=2.0.0
 numpy>=1.24.0
@@ -11,7 +12,11 @@ langchain>=0.1.0
 langchain-community>=0.0.10
 langchain-experimental>=0.0.4
 langchain-openai>=0.0.3
+langchain-ollama>=0.0.5
 langgraph>=0.0.20
+chromadb>=0.4.18
+unstructured>=0.10.30
+markdown>=3.4.0
 pydantic>=2.5.0
 statsmodels>=0.14.0
 scipy>=1.11.0
@@ -24,3 +29,5 @@ psutil>=5.9.0
 ollama>=0.1.5
 typing-extensions>=4.8.0
 urllib3>=2.0.0
+websockets>=11.0.0
+Flask-Sock>=0.6.0

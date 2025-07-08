@@ -3,10 +3,12 @@
 [![Python Version](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-enabled-blue.svg)](Dockerfile)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-green.svg)](https://fastapi.tiangolo.com/)
+[![LangChain](https://img.shields.io/badge/LangChain-0.1.0-orange.svg)](https://langchain.com/)
 
 ## 📖 项目简介
 
-AI-CloudOps AI 模块是一个基于人工智能的智能运维系统，专注于 Kubernetes 环境的根因分析和自动化修复。系统集成了多种 AI 技术，包括异常检测、相关性分析、大语言模型和多 Agent 协作，为运维团队提供智能化的问题诊断和解决方案。
+AI-CloudOps AI 模块是一个基于人工智能的智能运维系统，专注于 Kubernetes 环境的根因分析和自动化修复。系统集成了多种 AI 技术，包括异常检测、相关性分析、大语言模型和多 Agent 协作，为运维团队提供智能化的问题诊断和解决方案。该系统通过 RAG（检索增强生成）技术提供智能问答功能，结合多 Agent 协作实现自动化运维。
 
 ## ✨ 核心功能
 
@@ -37,13 +39,21 @@ AI-CloudOps AI 模块是一个基于人工智能的智能运维系统，专注�
 - **分级告警**: 根据严重程度发送不同级别的通知
 - **人工干预**: 自动识别需要人工介入的场景
 
+### 🧠 智能助手
+
+- **基于 RAG 的知识检索**: 从知识库中检索相关内容回答问题
+- **上下文感知**: 支持会话记忆和多轮对话
+- **网络搜索增强**: 可连接互联网获取最新信息
+- **文档处理**: 支持多种格式（Markdown、PDF、CSV 等）
+- **反幻觉机制**: 通过验证减少虚假信息生成
+
 ## 🏗 系统架构
 
 ```bash
 ┌─────────────────────────────────────────────────────────────┐
 │ API Gateway │
 ├─────────────────────────────────────────────────────────────┤
-│ Health API │ Predict API │ RCA API │ AutoFix API │
+│ Health API │ Predict API │ RCA API │ AutoFix API │ Assistant API │
 ├─────────────────────────────────────────────────────────────┤
 │ Core Business Logic │
 │ ┌─────────────┐ ┌─────────────┐ ┌─────────────────────────┐ │
@@ -52,10 +62,10 @@ AI-CloudOps AI 模块是一个基于人工智能的智能运维系统，专注�
 │ └─────────────┘ └─────────────┘ └─────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────┤
 │ Service Layer │
-│ Prometheus │ Kubernetes │ LLM │ Notification │
+│ Prometheus │ Kubernetes │ LLM │ Notification │ Vector Store │
 ├─────────────────────────────────────────────────────────────┤
 │ Infrastructure │
-│ Prometheus │ Grafana │ Ollama │ Redis │
+│ Prometheus │ Grafana │ Ollama │ Redis │ Chroma DB │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -66,44 +76,127 @@ AI-CloudOps AI 模块是一个基于人工智能的智能运维系统，专注�
 - Python 3.11+
 - Docker & Docker Compose
 - Kubernetes 集群（可选）
+- 大语言模型服务（Ollama 本地服务或 OpenAI API）
 - 至少 4GB RAM
 
 ### 1. 克隆项目
 
 ```bash
 git clone <repository-url>
-cd aiops-platform
+cd AI-CloudOps-backend/python
 ```
 
 ### 2. 配置环境变量
 
 ```bash
-cp .env.example .env
-# 编辑 .env 文件，配置相关参数
+cp env.example env.production
+# 编辑 env.production 文件，配置相关参数
 ```
 
-### 3. 使用 Docker Compose 启动
+主要配置项包括：
+
+- LLM 提供商和 API 密钥（支持 OpenAI 和 Ollama）
+- Prometheus 连接信息
+- Kubernetes 配置
+- 通知服务（飞书）
+- 智能助手知识库路径
+
+### 3. 本地开发环境
 
 ```bash
-# 启动所有服务
-docker-compose up -d
+# 创建虚拟环境
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# 或
+venv\Scripts\activate  # Windows
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 启动开发服务器
+python app/main.py
+```
+
+### 4. 使用 Docker Compose 启动
+
+```bash
+# 构建并启动所有服务
+docker-compose up -d --build
 
 # 查看服务状态
 docker-compose ps
 
 # 查看日志
-docker-compose logs -f aiops-platform
+docker-compose logs -f aiops-backend
 ```
 
-### 4. 验证服务
+### 5. 验证服务
 
 ```bash
 # 健康检查
 curl http://localhost:8080/api/v1/health
 
 # 查看API文档
-curl http://localhost:8080/
+curl http://localhost:8080/docs
 ```
+
+## 📚 典型使用场景
+
+### 场景一：Kubernetes Pod 无法启动问题自动修复
+
+当集群中的 Pod 频繁重启或无法正常启动时，系统可以：
+
+1. 自动分析 Pod 事件和日志
+2. 识别关键问题（如探针配置错误、资源限制问题）
+3. 生成修复方案并自动应用
+4. 验证修复结果并通知运维人员
+
+示例命令：
+
+```bash
+curl -X POST http://localhost:8080/api/v1/autofix \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deployment": "nginx-deployment",
+    "namespace": "default",
+    "event": "Pod启动失败，CrashLoopBackOff状态",
+    "force": true
+  }'
+```
+
+### 场景二：使用智能助手进行知识查询
+
+运维人员可以通过智能助手查询特定问题或最佳实践：
+
+1. 创建新的会话
+2. 提交关于 K8s 集群优化的问题
+3. 系统从知识库中检索相关文档并生成回答
+4. 支持多轮对话和后续问题
+
+示例命令：
+
+```bash
+# 创建会话
+curl -X POST http://localhost:8080/api/v1/assistant/session
+
+# 查询问题
+curl -X POST http://localhost:8080/api/v1/assistant/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "如何优化Kubernetes中的资源配额设置?",
+    "session_id": "session-123",
+    "use_web_search": true
+  }'
+```
+
+### 场景三：负载预测与自动扩缩容
+
+系统可以基于历史数据预测未来负载并提前调整资源：
+
+1. 分析历史 QPS 和资源使用趋势
+2. 预测未来时间窗口的需求
+3. 根据预测结果自动调整副本数
+4. 通过 Kubernetes HPA 控制器实现自动扩缩容
 
 ## 📋 API 文档
 
@@ -149,23 +242,26 @@ POST /api/v1/autofix
 }
 ```
 
-## 🛠 开发指南
-
-### 本地开发环境
+### 智能助手
 
 ```bash
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或
-venv\Scripts\activate  # Windows
+# 创建新会话
+POST /api/v1/assistant/session
 
-# 安装依赖
-pip install -r requirements.txt
+# 查询问题
+POST /api/v1/assistant/query
+{
+  "question": "如何分析Kubernetes集群中的资源使用情况?",
+  "use_web_search": true,
+  "session_id": "session-123",
+  "max_context_docs": 4
+}
 
-# 启动开发服务器
-python app/main.py
+# 刷新知识库
+POST /api/v1/assistant/refresh
 ```
+
+## 🛠 开发指南
 
 ### 项目结构
 
@@ -173,51 +269,134 @@ python app/main.py
 python/
 ├── app/                    # 应用核心代码
 │   ├── api/               # API路由和中间件
+│   │   ├── middleware/    # 中间件（CORS, 错误处理等）
+│   │   └── routes/        # API路由模块
 │   ├── config/            # 配置管理
 │   ├── core/              # 核心业务逻辑
+│   │   ├── agents/        # 多Agent系统实现
+│   │   ├── prediction/    # 负载预测模块
+│   │   └── rca/           # 根因分析模块
 │   ├── models/            # 数据模型
 │   ├── services/          # 外部服务集成
 │   ├── utils/             # 工具函数
 │   └── main.py            # 应用入口
 ├── data/                  # 数据文件
+│   ├── knowledge_base/    # 智能助手知识库
+│   ├── models/            # 机器学习模型
+│   └── sample/            # 样例数据
 ├── deploy/                # 部署配置
+│   ├── kubernetes/        # K8s部署配置
+│   └── prometheus/        # Prometheus配置
+├── docs/                  # 文档
 ├── tests/                 # 测试代码
 ├── scripts/               # 脚本文件
 └── docker-compose.yml     # Docker编排文件
 ```
 
+### 扩展知识库
+
+要向智能助手添加新知识：
+
+1. 将文档（Markdown、PDF 等）添加到 `data/knowledge_base/` 目录
+2. 刷新知识库：
+   ```bash
+   curl -X POST http://localhost:8080/api/v1/assistant/refresh
+   ```
+
+### 添加新 Agent
+
+1. 在 `app/core/agents/` 目录下创建新的 Agent 类
+2. 实现必要的接口方法
+3. 在 SupervisorAgent 中注册新 Agent
+
 ### 运行测试
 
 ```bash
 # 运行所有测试
-pytest
+python tests/run_tests.py
 
 # 运行特定测试
-pytest tests/test_rca.py
+pytest tests/test_health.py
+pytest tests/test_assistant.py
+
+# 跳过依赖LLM的测试（当LLM服务不可用时）
+SKIP_LLM_TESTS=true pytest tests/
 
 # 生成覆盖率报告
 pytest --cov=app tests/
+```
+
+### 生产环境部署
+
+生产环境部署推荐使用：
+
+```bash
+# 使用生产环境配置
+cp env.example env.production
+# 编辑配置文件...
+
+# 启动生产服务
+./scripts/start_production.sh
 ```
 
 ## 🔧 配置说明
 
 ### 主要配置项
 
-| 配置项                   | 说明                | 默认值         |
-| ------------------------ | ------------------- | -------------- |
-| PROMETHEUS_HOST          | Prometheus 服务地址 | 127.0.0.1:9090 |
-| LLM_MODEL                | 使用的 LLM 模型     | qwen2.5:3b     |
-| RCA_ANOMALY_THRESHOLD    | 异常检测阈值        | 0.65           |
-| PREDICTION_MAX_INSTANCES | 最大实例数          | 20             |
-| NOTIFICATION_ENABLED     | 是否启用通知        | true           |
+| 配置项                   | 说明                | 默认值              |
+| ------------------------ | ------------------- | ------------------- |
+| PROMETHEUS_HOST          | Prometheus 服务地址 | 127.0.0.1:9090      |
+| LLM_PROVIDER             | LLM 提供商          | openai              |
+| LLM_MODEL                | 使用的 LLM 模型     | qwen2.5:3b          |
+| LLM_API_KEY              | API 密钥            | sk-xxx              |
+| RCA_ANOMALY_THRESHOLD    | 异常检测阈值        | 0.65                |
+| PREDICTION_MAX_INSTANCES | 最大实例数          | 20                  |
+| NOTIFICATION_ENABLED     | 是否启用通知        | true                |
+| RAG_VECTOR_DB_PATH       | 向量数据库路径      | data/vector_db      |
+| RAG_KNOWLEDGE_BASE_PATH  | 知识库路径          | data/knowledge_base |
 
 ### LLM 模型配置
 
-支持的模型：
+系统支持多种 LLM 配置方式：
 
-- Ollama 本地模型（推荐）
-- OpenAI GPT 系列
-- 其他兼容 OpenAI API 的模型
+1. **Ollama 本地模型（推荐开发环境）**：
+
+   - 设置 `LLM_PROVIDER=ollama`
+   - 配置 `OLLAMA_MODEL` 和 `OLLAMA_BASE_URL`
+
+2. **OpenAI 兼容 API**：
+
+   - 设置 `LLM_PROVIDER=openai`
+   - 配置 `LLM_MODEL`、`LLM_API_KEY` 和 `LLM_BASE_URL`
+
+3. **自动故障切换**：
+   - 系统会在主要提供商不可用时自动切换到备用提供商
+
+## 📋 贡献指南
+
+我们欢迎社区贡献，无论是报告问题、提交功能请求还是直接提交代码。
+
+### 提交问题或建议
+
+1. 确保您的问题未被报告过
+2. 使用清晰的标题和详细描述
+3. 包括复现步骤、预期行为和实际行为
+4. 附上相关日志和截图
+
+### 代码贡献流程
+
+1. Fork 项目仓库
+2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 开启 Pull Request
+
+### 编码规范
+
+- 遵循 PEP 8 风格指南
+- 为新功能编写单元测试
+- 保持代码简洁明了
+- 添加适当的文档注释
 
 ## 📞 联系我们
 
@@ -374,6 +553,20 @@ python app/main.py
 python tests/test-autofix.py
 ```
 
+## 🔄 更新日志
+
+### v1.0.0 (2025-07-8)
+
+- 初始版本发布
+- 实现核心功能：智能根因分析、多 Agent 自动修复、负载预测
+- 添加智能助手模块
+
+### v1.1.0 (计划中)
+
+- 增强智能助手功能，支持更多文档格式
+- 改进多 Agent 协作机制
+- 添加自动化测试覆盖
+
 ### 常见问题排查
 
 #### 无法连接到 Kubernetes
@@ -382,6 +575,14 @@ python tests/test-autofix.py
 
 - K8s 配置文件正确且包含访问权限
 - 设置了正确的环境变量：`KUBECONFIG`和`K8S_CONFIG_PATH`
+
+#### LLM 服务连接失败
+
+检查：
+
+- 网络连接是否正常
+- API 密钥是否正确
+- 尝试切换到备用模型提供商
 
 #### 修复不生效
 
