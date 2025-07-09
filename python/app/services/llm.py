@@ -2,25 +2,36 @@ import logging
 import json
 import os
 import re
-import sys
-import requests
 from typing import Dict, Any, List, Optional, Union, Tuple
 from openai import OpenAI
 import ollama
+
 from app.config.settings import config
+from app.constants import (
+    LLM_TIMEOUT_SECONDS, LLM_MAX_RETRIES, OPENAI_TEST_MAX_TOKENS,
+    LLM_CONFIDENCE_THRESHOLD, LLM_TEMPERATURE_MIN, LLM_TEMPERATURE_MAX
+)
+from app.utils.error_handlers import (
+    ErrorHandler, ServiceError, ValidationError, ExternalServiceError,
+    retry_on_exception, validate_field_type, validate_field_range
+)
 
 logger = logging.getLogger("aiops.llm")
 
 class LLMService:
+    """LLM 服务管理类，支持 OpenAI 和 Ollama 提供商"""
+    
     def __init__(self):
         """
         初始化LLM服务，支持OpenAI和Ollama
         系统会优先使用外部模型(OpenAI)，如果不可用则自动回退到本地模型(Ollama)
         """
+        self.error_handler = ErrorHandler(logger)
+        
         # 清理提供商字符串，移除可能的注释
         self.provider = config.llm.provider.split('#')[0].strip() if config.llm.provider else "openai"
         self.model = config.llm.effective_model
-        self.temperature = config.llm.temperature
+        self.temperature = self._validate_temperature(config.llm.temperature)
         self.max_tokens = config.llm.max_tokens
         
         # 初始化备用提供商和模型
@@ -60,7 +71,42 @@ class LLMService:
             except Exception as e:
                 logger.warning(f"备用OpenAI初始化失败: {str(e)}")
         else:
-            raise ValueError(f"不支持的LLM提供商: {self.provider}")
+            raise ValidationError(f"不支持的LLM提供商: {self.provider}")
+    
+    def _validate_temperature(self, temperature: float) -> float:
+        """验证温度参数"""
+        if not (LLM_TEMPERATURE_MIN <= temperature <= LLM_TEMPERATURE_MAX):
+            logger.warning(f"温度参数 {temperature} 超出范围 [{LLM_TEMPERATURE_MIN}, {LLM_TEMPERATURE_MAX}]，使用默认值")
+            return 0.7
+        return temperature
+    
+    def _validate_generate_params(
+        self, 
+        messages: List[Dict[str, str]], 
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """验证生成参数"""
+        if not messages:
+            raise ValidationError("消息列表不能为空")
+        
+        for i, msg in enumerate(messages):
+            if not isinstance(msg, dict) or 'role' not in msg or 'content' not in msg:
+                raise ValidationError(f"消息 {i} 格式无效，需要包含 role 和 content")
+        
+        effective_temp = temperature or self.temperature
+        effective_max_tokens = max_tokens or self.max_tokens
+        
+        # 验证温度范围
+        if temperature is not None:
+            validate_field_range({'temperature': temperature}, 'temperature', 
+                               LLM_TEMPERATURE_MIN, LLM_TEMPERATURE_MAX)
+        
+        return {
+            'messages': messages,
+            'temperature': effective_temp,
+            'max_tokens': effective_max_tokens
+        }
     
     async def generate_response(
         self, 
@@ -73,75 +119,72 @@ class LLMService:
     ) -> Union[str, Dict[str, Any]]:
         """生成LLM响应，支持多种模型和格式"""
         try:
+            # 验证参数
+            params = self._validate_generate_params(messages, temperature, max_tokens)
+            
+            # 添加系统提示
             if system_prompt:
-                messages = [{"role": "system", "content": system_prompt}] + messages
+                params['messages'] = [{"role": "system", "content": system_prompt}] + params['messages']
             
-            effective_temp = temperature or self.temperature
-            effective_max_tokens = max_tokens or self.max_tokens
+            logger.debug(f"LLM请求: {len(params['messages'])} 条消息, 模型: {self.model}")
             
-            logger.debug(f"LLM请求: {len(messages)} 条消息, 模型: {self.model}")
-            
-            # 根据提供商选择不同的调用方式
-            if self.provider.lower() == "openai":
-                try:
-                    return await self._call_openai_api(
-                        messages, 
-                        response_format, 
-                        effective_temp,
-                        effective_max_tokens,
-                        stream
-                    )
-                except Exception as e:
-                    logger.error(f"OpenAI API调用失败，尝试使用备用Ollama模型: {str(e)}")
-                    return await self._call_ollama_api(
-                        messages, 
-                        effective_temp,
-                        effective_max_tokens,
-                        stream
-                    )
-            elif self.provider.lower() == "ollama":
-                try:
-                    return await self._call_ollama_api(
-                        messages, 
-                        effective_temp,
-                        effective_max_tokens,
-                        stream
-                    )
-                except Exception as e:
-                    logger.error(f"Ollama API调用失败，尝试使用备用OpenAI模型: {str(e)}")
-                    return await self._call_openai_api(
-                        messages, 
-                        response_format, 
-                        effective_temp,
-                        effective_max_tokens,
-                        stream
-                    )
-            else:
-                raise ValueError(f"不支持的LLM提供商: {self.provider}")
+            # 执行生成，带自动回退
+            return await self._execute_generation_with_fallback(
+                params['messages'], 
+                response_format, 
+                params['temperature'],
+                params['max_tokens'],
+                stream
+            )
                 
+        except (ValidationError, ServiceError):
+            raise
         except Exception as e:
-            logger.error(f"LLM生成响应失败: {str(e)}")
-            # 尝试使用备用方式生成响应
+            error_msg, _ = self.error_handler.log_and_return_error(e, "LLM响应生成")
+            raise ServiceError(error_msg, "LLMService", "generate_response")
+    
+    @retry_on_exception(max_retries=LLM_MAX_RETRIES, delay=1.0, exceptions=(ExternalServiceError,))
+    async def _execute_generation_with_fallback(
+        self, 
+        messages: List[Dict[str, str]], 
+        response_format: Optional[Dict[str, str]], 
+        temperature: float,
+        max_tokens: int,
+        stream: bool = False
+    ) -> Union[str, Dict[str, Any]]:
+        """执行生成，支持提供商自动回退"""
+        
+        # 尝试主要提供商
+        try:
+            if self.provider.lower() == "openai":
+                return await self._call_openai_api(
+                    messages, response_format, temperature, max_tokens, stream
+                )
+            elif self.provider.lower() == "ollama":
+                return await self._call_ollama_api(
+                    messages, temperature, max_tokens, stream
+                )
+        except Exception as e:
+            logger.warning(f"{self.provider} API调用失败，尝试备用提供商: {str(e)}")
+            
+            # 尝试备用提供商
             try:
-                if self.provider.lower() == "openai":
-                    logger.info("尝试使用备用Ollama模型生成响应")
-                    result = await self._call_ollama_api(messages, effective_temp, effective_max_tokens)
-                    return result
-                elif self.provider.lower() == "ollama":
-                    logger.info("尝试使用备用OpenAI模型生成响应")
-                    result = await self._call_openai_api(
-                        messages, 
-                        response_format, 
-                        effective_temp,
-                        effective_max_tokens
+                if self.backup_provider.lower() == "ollama":
+                    return await self._call_ollama_api(
+                        messages, temperature, max_tokens, stream
                     )
-                    return result
-                else:
-                    logger.error("无法生成LLM响应")
-                    return None
+                elif self.backup_provider.lower() == "openai":
+                    return await self._call_openai_api(
+                        messages, response_format, temperature, max_tokens, stream
+                    )
             except Exception as backup_error:
-                logger.error(f"备用模型生成响应失败: {str(backup_error)}")
-                return None
+                logger.error(f"备用提供商 {self.backup_provider} 也失败: {str(backup_error)}")
+                raise ExternalServiceError(
+                    f"所有LLM提供商均不可用: 主要({str(e)}), 备用({str(backup_error)})",
+                    "LLM"
+                )
+        
+        raise ServiceError("未知的LLM提供商配置", "LLMService")
     
     async def _call_openai_api(
         self, 

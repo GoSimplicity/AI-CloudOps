@@ -32,7 +32,7 @@ echo "获取到会话ID: $SESSION_ID"
 echo -e "\n3. 测试查询"
 curl -s -X POST \
   -H "Content-Type: application/json" \
-  -d "{\"question\":\"什么是AIOps?\",\"session_id\":\"$SESSION_ID\"}" \
+  -d "{\"question\":\"AI-CloudOps平台是什么?\",\"session_id\":\"$SESSION_ID\"}" \
   ${API_URL}/query | python -m json.tool
 
 echo -e "\n4. 测试刷新知识库"
