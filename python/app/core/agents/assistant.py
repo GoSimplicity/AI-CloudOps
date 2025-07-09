@@ -1,1478 +1,1607 @@
-"""
-智能小助手模块 - 基于RAG的知识检索与问答
-"""
-
 import os
-import sys
 import uuid
 import logging
 import re
 import time
 import json
 import asyncio
-from datetime import datetime
-from typing import List, Dict, Any, Optional, Union, Tuple
-from pathlib import Path
+from asyncio import CancelledError
 import hashlib
+import shutil
+from datetime import datetime
+from typing import List, Dict, Any, Optional, Tuple
+from pathlib import Path
+from dataclasses import dataclass
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
-# 从langchain_chroma导入Chroma，替代langchain_community中的版本
+from app.constants import EMBEDDING_BATCH_SIZE
+
+# 核心依赖
 from langchain_chroma import Chroma
-from langchain_openai import OpenAIEmbeddings
-from langchain_ollama import OllamaEmbeddings
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain.text_splitter import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.pydantic_v1 import BaseModel, Field
-from langchain_openai import ChatOpenAI
-from langchain_ollama import ChatOllama
-from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.embeddings import Embeddings
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.outputs import ChatGeneration, ChatResult
 
+# 高级加载器
 try:
     from langchain_community.document_loaders import (
-        TextLoader, 
-        PyPDFLoader,
-        DirectoryLoader,
-        UnstructuredMarkdownLoader,
-        CSVLoader,
-        JSONLoader,
-        BSHTMLLoader
+        TextLoader, PyPDFLoader, DirectoryLoader,
+        UnstructuredMarkdownLoader, CSVLoader, JSONLoader, BSHTMLLoader
     )
-    # 尝试导入网络搜索工具
-    try:
-        from langchain_community.utilities import TavilySearchAPIWrapper
-        WEB_SEARCH_AVAILABLE = True
-    except ImportError:
-        WEB_SEARCH_AVAILABLE = False
-        logger = logging.getLogger("aiops.assistant")
-        logger.warning("网络搜索功能不可用")
-        
+    from langchain_community.utilities import TavilySearchAPIWrapper
     ADVANCED_LOADERS_AVAILABLE = True
+    WEB_SEARCH_AVAILABLE = True
 except ImportError:
     ADVANCED_LOADERS_AVAILABLE = False
     WEB_SEARCH_AVAILABLE = False
-    logger = logging.getLogger("aiops.assistant")
-    logger.warning("高级文档加载器不可用，将使用基础实现")
+
+import numpy as np
+from chromadb.config import Settings
 
 from app.config.settings import config
 
 logger = logging.getLogger("aiops.assistant")
 
+# ==================== 工具函数 ====================
+
+def is_test_environment() -> bool:
+    """检查是否在测试环境中运行"""
+    import sys
+    return 'pytest' in sys.modules
+
+# ==================== 任务管理器 ====================
+
+class TaskManager:
+    """管理异步任务，确保它们能够正确完成或取消"""
+
+    def __init__(self):
+        self._tasks = set()
+        self._lock = threading.Lock()
+        self._shutdown = False
+
+    def create_task(self, coro, description="未命名任务"):
+        """创建并管理异步任务"""
+        if self._shutdown:
+            logger.debug(f"任务管理器已关闭，忽略任务: {description}")
+            return None
+
+        async def wrapped_coro():
+            try:
+                await coro
+                logger.debug(f"异步任务 '{description}' 完成")
+            except CancelledError:
+                logger.debug(f"异步任务 '{description}' 被取消")
+            except Exception as e:
+                logger.error(f"异步任务 '{description}' 执行失败: {e}")
+            finally:
+                with self._lock:
+                    if task in self._tasks:
+                        self._tasks.remove(task)
+
+        task = asyncio.create_task(wrapped_coro())
+
+        with self._lock:
+            self._tasks.add(task)
+
+        return task
+
+    async def shutdown(self, timeout=5.0):
+        """关闭任务管理器，等待或取消所有任务"""
+        self._shutdown = True
+
+        with self._lock:
+            tasks = self._tasks.copy()
+
+        if not tasks:
+            return
+
+        logger.debug(f"等待 {len(tasks)} 个任务完成...")
+
+        try:
+            # 等待所有任务完成，设置超时
+            await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=timeout
+            )
+            logger.debug("所有任务已完成")
+        except asyncio.TimeoutError:
+            logger.warning(f"等待任务完成超时，强制取消 {len(tasks)} 个任务")
+            # 取消所有未完成的任务
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+
+            # 再等待一小段时间让取消操作完成
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True),
+                    timeout=1.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning("部分任务取消操作超时")
+
+        with self._lock:
+            self._tasks.clear()
+
+# 全局任务管理器
+_task_manager = None
+
+def get_task_manager():
+    """获取全局任务管理器"""
+    global _task_manager
+    if _task_manager is None:
+        _task_manager = TaskManager()
+    return _task_manager
+
+def create_safe_task(coro, description="未命名任务"):
+    """创建一个安全的异步任务"""
+    manager = get_task_manager()
+    return manager.create_task(coro, description)
+
+# ==================== 数据类和模型定义 ====================
+
+@dataclass
+class DocumentMetadata:
+    """文档元数据"""
+    source: str
+    filename: str
+    filetype: str
+    modified_time: float
+    is_web_result: bool = False
+    relevance_score: float = 0.0
+    recall_rate: float = 0.0
+
+@dataclass
+class CacheEntry:
+    """缓存条目"""
+    timestamp: float
+    data: Dict[str, Any]
+
+    def is_expired(self, expiry_seconds: int) -> bool:
+        return time.time() - self.timestamp > expiry_seconds
+
+@dataclass
+class SessionData:
+    """会话数据"""
+    session_id: str
+    created_at: str
+    history: List[Dict[str, Any]]
+    metadata: Dict[str, Any]
+
 class GradeDocuments(BaseModel):
-    """评价检索到的文档是否与用户问题相关的二元评分"""
+    """文档相关性评估模型"""
     binary_score: str = Field(description="文档是否与问题相关，'yes'或'no'")
 
 class GradeHallucinations(BaseModel):
-    """评估生成回答中是否存在幻觉的二元评分"""
+    """幻觉检测模型"""
     binary_score: str = Field(description="回答是否基于事实，'yes'或'no'")
-    
+
+# ==================== 备用实现类 ====================
+
+class FallbackEmbeddings(Embeddings):
+    """备用嵌入实现，使用简单的哈希和随机生成"""
+
+    def __init__(self, dimensions: int = 384):
+        self.dimensions = dimensions
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return [self.embed_query(text) for text in texts]
+
+    def embed_query(self, text: str) -> List[float]:
+        # 使用文本哈希生成确定性向量
+        text_hash = hash(text) % (2**32)
+        np.random.seed(text_hash)
+        return list(np.random.rand(self.dimensions))
+
+class FallbackChatModel(BaseChatModel):
+    """备用聊天模型，提供基础响应"""
+
+    @property
+    def _llm_type(self) -> str:
+        return "fallback_chat_model"
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        last_message = messages[-1].content if messages else "无输入"
+        response = f"我是备用助手。您的问题是：'{last_message}'。由于主要模型暂时不可用，功能受限。请稍后重试。"
+        message = AIMessage(content=response)
+        generation = ChatGeneration(message=message)
+        return ChatResult(generations=[generation])
+
+# ==================== 向量存储管理器 ====================
+
+class VectorStoreManager:
+    """向量存储管理器，负责向量数据库的创建、维护和查询"""
+
+    def __init__(self, vector_db_path: str, collection_name: str, embedding_model):
+        self.vector_db_path = vector_db_path
+        self.collection_name = collection_name
+        self.embedding_model = embedding_model
+        self.db = None
+        self.retriever = None
+        self._lock = threading.Lock()
+
+        # 确保目录存在
+        os.makedirs(vector_db_path, exist_ok=True)
+
+    def _get_client_settings(self, persistent: bool = True) -> Settings:
+        """获取ChromaDB客户端设置"""
+        return Settings(
+            anonymized_telemetry=False,
+            allow_reset=True,
+            is_persistent=persistent,
+            chroma_db_impl="duckdb+parquet" if not persistent else None
+        )
+
+    def _cleanup_temp_files(self):
+        """清理临时文件，避免数据库锁定问题"""
+        temp_files = [
+            os.path.join(self.vector_db_path, ".lock"),
+            os.path.join(self.vector_db_path, ".uuid"),
+            os.path.join(self.vector_db_path, "chroma.sqlite3-shm"),
+            os.path.join(self.vector_db_path, "chroma.sqlite3-wal")
+        ]
+
+        for file_path in temp_files:
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    logger.debug(f"清理临时文件: {file_path}")
+            except Exception as e:
+                logger.warning(f"清理临时文件失败 {file_path}: {e}")
+
+    def load_existing_db(self) -> bool:
+        """加载现有数据库"""
+        db_file = os.path.join(self.vector_db_path, "chroma.sqlite3")
+
+        if not os.path.exists(db_file):
+            return False
+
+        try:
+            with self._lock:
+                logger.info(f"加载现有向量数据库: {db_file}")
+                self.db = Chroma(
+                    persist_directory=self.vector_db_path,
+                    embedding_function=self.embedding_model,
+                    collection_name=self.collection_name,
+                    client_settings=self._get_client_settings(persistent=True)
+                )
+
+                self.retriever = self.db.as_retriever(
+                    search_kwargs={"k": config.rag.top_k}
+                )
+
+                # 测试数据库
+                test_results = self.retriever.invoke("测试查询")
+                logger.info(f"数据库加载成功，测试查询返回 {len(test_results)} 个结果")
+                return True
+
+        except Exception as e:
+            logger.error(f"加载现有数据库失败: {e}")
+            self._backup_corrupted_db(db_file)
+            return False
+
+    def _backup_corrupted_db(self, db_file: str):
+        """备份损坏的数据库"""
+        try:
+            backup_dir = os.path.join(self.vector_db_path, f"backup_corrupt_{int(time.time())}")
+            os.makedirs(backup_dir, exist_ok=True)
+            shutil.copy2(db_file, backup_dir)
+            os.remove(db_file)
+            logger.info(f"已备份并删除损坏的数据库文件: {backup_dir}")
+        except Exception as e:
+            logger.error(f"备份损坏数据库失败: {e}")
+
+    def create_vector_store(self, documents: List[Document], use_memory: bool = False) -> bool:
+        """创建向量存储"""
+        if not documents:
+            logger.warning("没有文档可供创建向量存储")
+            documents = [Document(
+                page_content="这是一个系统自动创建的示例文档。请添加更多文档到知识库中。",
+                metadata={"source": "system", "filename": "example.txt", "filetype": "text"}
+            )]
+
+        # 文档分割
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=config.rag.chunk_size,
+            chunk_overlap=config.rag.chunk_overlap,
+            separators=["\n\n", "\n", "。", "！", "？", ".", "!", "?", " ", ""]
+        )
+
+        splits = text_splitter.split_documents(documents)
+        logger.info(f"文档分割完成: {len(splits)} 个块")
+
+        try:
+            with self._lock:
+                self._cleanup_temp_files()
+
+                if use_memory:
+                    logger.info("使用内存模式创建向量存储")
+                    client_settings = self._get_client_settings(persistent=False)
+                else:
+                    logger.info("使用持久化模式创建向量存储")
+                    client_settings = self._get_client_settings(persistent=True)
+
+                # 处理批量大小限制，将文档分批处理
+                batch_size = EMBEDDING_BATCH_SIZE
+                total_docs = len(splits)
+                all_success = True
+
+                if total_docs > batch_size:
+                    logger.info(f"文档量较大({total_docs}个)，使用分批处理方式")
+
+                    # 创建初始空集合
+                    self.db = Chroma(
+                        embedding_function=self.embedding_model,
+                        persist_directory=None if use_memory else self.vector_db_path,
+                        collection_name=self.collection_name,
+                        client_settings=client_settings
+                    )
+
+                    # 分批添加文档，每批使用更小的批量来防止API限制
+                    for i in range(0, total_docs, batch_size):
+                        batch = splits[i:i+batch_size]
+                        logger.info(f"处理批次 {i//batch_size + 1}/{(total_docs+batch_size-1)//batch_size}，{len(batch)}个文档")
+
+                        try:
+                            # 对于大批量，进一步拆分为更小的子批次
+                            max_api_batch = 50  # 安全设置，低于API的最大限制64
+                            for j in range(0, len(batch), max_api_batch):
+                                sub_batch = batch[j:j+max_api_batch]
+                                if j > 0:
+                                    logger.debug(f"  - 子批次 {j//max_api_batch + 1}/{(len(batch)+max_api_batch-1)//max_api_batch}, {len(sub_batch)}个文档")
+                                self.db.add_documents(sub_batch)
+                        except Exception as e:
+                            logger.error(f"添加文档批次失败: {e}")
+                            all_success = False
+                            break
+                else:
+                    # 数量较少，直接创建
+                    self.db = Chroma.from_documents(
+                        documents=splits,
+                        embedding=self.embedding_model,
+                        persist_directory=None if use_memory else self.vector_db_path,
+                        collection_name=self.collection_name,
+                        client_settings=client_settings
+                    )
+
+                if all_success:
+                    self.retriever = self.db.as_retriever(
+                        search_kwargs={"k": config.rag.top_k}
+                    )
+
+                    # 测试创建的数据库
+                    test_results = self.retriever.invoke("测试查询")
+                    logger.info(f"向量存储创建成功，包含 {len(splits)} 个文档块")
+                    return True
+                return False
+
+        except Exception as e:
+            logger.error(f"创建向量存储失败: {e}")
+            if not use_memory:
+                logger.info("尝试回退到内存模式")
+                return self.create_vector_store(documents, use_memory=True)
+            return False
+
+    def get_retriever(self):
+        """获取检索器"""
+        return self.retriever
+
+    def search_documents(self, query: str, max_retries: int = 3) -> List[Document]:
+        """搜索文档"""
+        if not self.retriever:
+            logger.warning("检索器未初始化")
+            return []
+
+        for attempt in range(max_retries):
+            try:
+                docs = self.retriever.invoke(query)
+                if docs:
+                    logger.debug(f"搜索到 {len(docs)} 个文档")
+                    return docs
+                else:
+                    logger.warning(f"搜索返回空结果 (尝试 {attempt+1}/{max_retries})")
+
+            except Exception as e:
+                logger.error(f"文档搜索失败 (尝试 {attempt+1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+
+        return []
+
+# ==================== 缓存管理器 ====================
+
+class CacheManager:
+    """缓存管理器，负责响应缓存的管理"""
+
+    def __init__(self, cache_dir: str, expiry_seconds: int = 3600):
+        self.cache_dir = cache_dir
+        self.expiry_seconds = expiry_seconds
+        self.cache: Dict[str, CacheEntry] = {}
+        self.cache_file = os.path.join(cache_dir, "response_cache.json")
+        self._lock = threading.Lock()
+        self._shutdown = False
+
+        os.makedirs(cache_dir, exist_ok=True)
+        self._load_cache()
+
+    def _generate_cache_key(self, question: str, session_id: str = None, history: List = None) -> str:
+        """生成缓存键"""
+        cache_input = question
+
+        if session_id and history:
+            # 使用最近的对话历史生成缓存键
+            recent_history = history[-3:] if len(history) >= 3 else history
+            if recent_history:
+                history_str = json.dumps([
+                    {"role": h["role"], "content": h["content"][:50]}
+                    for h in recent_history
+                ], ensure_ascii=False)
+                cache_input = f"{question}|{history_str}"
+
+        return hashlib.sha256(cache_input.encode('utf-8')).hexdigest()
+
+    def _load_cache(self):
+        """加载缓存文件"""
+        try:
+            if os.path.exists(self.cache_file):
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+
+                # 过滤过期缓存
+                valid_cache = {}
+                for k, v in cache_data.items():
+                    entry = CacheEntry(timestamp=v["timestamp"], data=v["data"])
+                    if not entry.is_expired(self.expiry_seconds):
+                        valid_cache[k] = entry
+
+                self.cache = valid_cache
+                logger.info(f"加载了 {len(self.cache)} 条有效缓存")
+        except Exception as e:
+            logger.warning(f"加载缓存失败: {e}")
+            self.cache = {}
+
+    def _save_cache_sync(self):
+        """同步保存缓存到文件"""
+        if self._shutdown:
+            return
+
+        try:
+            with self._lock:
+                # 清理过期缓存
+                valid_cache = {
+                    k: {"timestamp": v.timestamp, "data": v.data}
+                    for k, v in self.cache.items()
+                    if not v.is_expired(self.expiry_seconds)
+                }
+
+                with open(self.cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(valid_cache, f, ensure_ascii=False, indent=2)
+
+                self.cache = {
+                    k: CacheEntry(timestamp=v["timestamp"], data=v["data"])
+                    for k, v in valid_cache.items()
+                }
+
+                logger.debug(f"保存了 {len(valid_cache)} 条缓存")
+        except Exception as e:
+            logger.warning(f"保存缓存失败: {e}")
+
+    def get(self, question: str, session_id: str = None, history: List = None) -> Optional[Dict[str, Any]]:
+        """获取缓存"""
+        cache_key = self._generate_cache_key(question, session_id, history)
+
+        if cache_key in self.cache:
+            entry = self.cache[cache_key]
+            if not entry.is_expired(self.expiry_seconds):
+                logger.debug(f"缓存命中: {cache_key[:8]}...")
+                return entry.data
+            else:
+                # 删除过期缓存
+                del self.cache[cache_key]
+
+        return None
+
+    def set(self, question: str, response_data: Dict[str, Any], session_id: str = None, history: List = None):
+        """设置缓存"""
+        if self._shutdown:
+            return
+
+        cache_key = self._generate_cache_key(question, session_id, history)
+        entry = CacheEntry(timestamp=time.time(), data=response_data)
+
+        with self._lock:
+            self.cache[cache_key] = entry
+
+    async def save_async(self):
+        """异步保存缓存"""
+        if self._shutdown:
+            return
+
+        try:
+            # 在线程池中执行同步保存操作
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._save_cache_sync)
+        except Exception as e:
+            logger.error(f"异步保存缓存失败: {e}")
+
+    def shutdown(self):
+        """关闭缓存管理器"""
+        self._shutdown = True
+        # 执行最后一次同步保存
+        try:
+            self._save_cache_sync()
+        except Exception as e:
+            logger.warning(f"关闭时保存缓存失败: {e}")
+
+# ==================== 文档加载器 ====================
+
+class DocumentLoader:
+    """文档加载器，负责加载各种格式的文档"""
+
+    def __init__(self, knowledge_base_path: str):
+        self.knowledge_base_path = Path(knowledge_base_path)
+        self.executor = ThreadPoolExecutor(max_workers=4)
+
+        # 支持的文件扩展名
+        self.supported_extensions = {
+            '.txt': self._load_text_file,
+            '.md': self._load_markdown_file,
+            '.markdown': self._load_markdown_file,
+        }
+
+        # 如果高级加载器可用，添加更多支持
+        if ADVANCED_LOADERS_AVAILABLE:
+            self.supported_extensions.update({
+                '.pdf': self._load_pdf_file,
+                '.html': self._load_html_file,
+                '.htm': self._load_html_file,
+                '.csv': self._load_csv_file,
+                '.json': self._load_json_file,
+            })
+
+    def load_documents(self) -> List[Document]:
+        """加载所有支持的文档"""
+        if not self.knowledge_base_path.exists():
+            logger.warning(f"知识库路径不存在: {self.knowledge_base_path}")
+            self.knowledge_base_path.mkdir(parents=True, exist_ok=True)
+            return []
+
+        documents = []
+        all_files = list(self.knowledge_base_path.rglob("*"))
+        supported_files = [
+            f for f in all_files
+            if f.is_file() and f.suffix.lower() in self.supported_extensions
+        ]
+
+        # 按修改时间排序
+        supported_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+        logger.info(f"发现 {len(supported_files)} 个支持的文件")
+
+        # 并行加载文件
+        for file_path in supported_files:
+            try:
+                loader_func = self.supported_extensions[file_path.suffix.lower()]
+                file_docs = loader_func(file_path)
+                documents.extend(file_docs)
+                logger.debug(f"加载文件: {file_path.name}, 生成 {len(file_docs)} 个文档")
+            except Exception as e:
+                logger.error(f"加载文件失败 {file_path}: {e}")
+
+        logger.info(f"总共加载 {len(documents)} 个文档")
+        return documents
+
+    def _load_text_file(self, file_path: Path) -> List[Document]:
+        """加载文本文件"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+
+            if not content:
+                return []
+
+            return [Document(
+                page_content=content,
+                metadata={
+                    "source": str(file_path),
+                    "filename": file_path.name,
+                    "filetype": "text",
+                    "modified_time": file_path.stat().st_mtime
+                }
+            )]
+        except Exception as e:
+            logger.error(f"加载文本文件失败 {file_path}: {e}")
+            return []
+
+    def _load_markdown_file(self, file_path: Path) -> List[Document]:
+        """加载Markdown文件，使用标题分割"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+
+            if not content:
+                return []
+
+            # 尝试使用Markdown标题分割
+            try:
+                headers_to_split_on = [
+                    ("#", "Header 1"),
+                    ("##", "Header 2"),
+                    ("###", "Header 3"),
+                ]
+
+                markdown_splitter = MarkdownHeaderTextSplitter(
+                    headers_to_split_on=headers_to_split_on
+                )
+                md_docs = markdown_splitter.split_text(content)
+
+                # 添加元数据
+                for doc in md_docs:
+                    doc.metadata.update({
+                        "source": str(file_path),
+                        "filename": file_path.name,
+                        "filetype": "markdown",
+                        "modified_time": file_path.stat().st_mtime
+                    })
+
+                return md_docs
+
+            except Exception:
+                # 如果分割失败，作为单个文档处理
+                return [Document(
+                    page_content=content,
+                    metadata={
+                        "source": str(file_path),
+                        "filename": file_path.name,
+                        "filetype": "markdown",
+                        "modified_time": file_path.stat().st_mtime
+                    }
+                )]
+
+        except Exception as e:
+            logger.error(f"加载Markdown文件失败 {file_path}: {e}")
+            return []
+
+    def _load_pdf_file(self, file_path: Path) -> List[Document]:
+        """加载PDF文件"""
+        if not ADVANCED_LOADERS_AVAILABLE:
+            return []
+
+        try:
+            loader = PyPDFLoader(str(file_path))
+            pdf_docs = loader.load()
+
+            for doc in pdf_docs:
+                doc.metadata.update({
+                    "filename": file_path.name,
+                    "filetype": "pdf",
+                    "modified_time": file_path.stat().st_mtime
+                })
+
+            return pdf_docs
+
+        except Exception as e:
+            logger.error(f"加载PDF文件失败 {file_path}: {e}")
+            return []
+
+    def _load_html_file(self, file_path: Path) -> List[Document]:
+        """加载HTML文件"""
+        if not ADVANCED_LOADERS_AVAILABLE:
+            return []
+
+        try:
+            loader = BSHTMLLoader(str(file_path))
+            html_docs = loader.load()
+
+            for doc in html_docs:
+                doc.metadata.update({
+                    "filename": file_path.name,
+                    "filetype": "html",
+                    "modified_time": file_path.stat().st_mtime
+                })
+
+            return html_docs
+
+        except Exception as e:
+            logger.error(f"加载HTML文件失败 {file_path}: {e}")
+            return []
+
+    def _load_csv_file(self, file_path: Path) -> List[Document]:
+        """加载CSV文件"""
+        if not ADVANCED_LOADERS_AVAILABLE:
+            return []
+
+        try:
+            loader = CSVLoader(str(file_path))
+            csv_docs = loader.load()
+
+            for doc in csv_docs:
+                doc.metadata.update({
+                    "filename": file_path.name,
+                    "filetype": "csv",
+                    "modified_time": file_path.stat().st_mtime
+                })
+
+            return csv_docs
+
+        except Exception as e:
+            logger.error(f"加载CSV文件失败 {file_path}: {e}")
+            return []
+
+    def _load_json_file(self, file_path: Path) -> List[Document]:
+        """加载JSON文件"""
+        if not ADVANCED_LOADERS_AVAILABLE:
+            return []
+
+        try:
+            loader = JSONLoader(str(file_path), jq_schema='.', text_content=False)
+            json_docs = loader.load()
+
+            for doc in json_docs:
+                doc.metadata.update({
+                    "filename": file_path.name,
+                    "filetype": "json",
+                    "modified_time": file_path.stat().st_mtime
+                })
+
+            return json_docs
+
+        except Exception as e:
+            logger.error(f"加载JSON文件失败 {file_path}: {e}")
+            return []
+
+# ==================== 主要的智能助手类 ====================
 
 class AssistantAgent:
-    """智能小助手代理，基于RAG实现知识库检索与问答"""
-    
+    """智能小助手代理 - 优化版"""
+
     def __init__(self):
         """初始化助手代理"""
         self.llm_provider = config.llm.provider.lower()
-        
-        # 使用绝对路径
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-        self.vector_db_path = os.path.join(base_dir, config.rag.vector_db_path)
+
+        # 路径设置
+        base_dir = Path(__file__).parent.parent.parent.parent
+        self.vector_db_path = base_dir / config.rag.vector_db_path
+        self.knowledge_base_path = base_dir / config.rag.knowledge_base_path
         self.collection_name = config.rag.collection_name
-        self.knowledge_base_path = os.path.join(base_dir, config.rag.knowledge_base_path)
-        
-        logger.info(f"向量数据库路径: {self.vector_db_path}")
-        logger.info(f"知识库路径: {self.knowledge_base_path}")
-        
-        self.retriever = None
-        self.llm = None
-        self.structured_llm_docs = None
-        self.structured_llm_hall = None
-        self.embedding = None
-        
-        # 缓存设置
-        self.cache_dir = os.path.join(self.vector_db_path, "cache")
-        self.response_cache = {}
-        self.cache_expiry = 3600  # 缓存过期时间(秒)
-        os.makedirs(self.cache_dir, exist_ok=True)
-        
-        # 会话管理
-        self.sessions = {}  # session_id -> 会话数据
-        
-        # 初始化向量存储路径
-        os.makedirs(self.vector_db_path, exist_ok=True)
-        os.makedirs(self.knowledge_base_path, exist_ok=True)
-        
+
+        # 创建必要目录
+        self.vector_db_path.mkdir(parents=True, exist_ok=True)
+        self.knowledge_base_path.mkdir(parents=True, exist_ok=True)
+
         # 初始化组件
-        self._init_embedding()
-        self._init_llm()
-        self._init_retriever()
-        self._init_web_search()
-        
-        # 加载缓存
-        self._load_cache()
-        
-        logger.info(f"智能小助手初始化完成，使用LLM提供商: {self.llm_provider}")
-        
-    def _init_embedding(self) -> None:
-        """初始化嵌入模型"""
-        # 检查环境变量和配置
-        if not config.llm.api_key:
-            logger.warning("API密钥未设置，请检查环境变量")
-        
-        # 最多尝试3次
+        self.embedding = None
+        self.llm = None
+        self.task_llm = None
+        self.web_search = None
+
+        # 管理器
+        self.vector_store_manager = None
+        self.cache_manager = CacheManager(str(self.vector_db_path / "cache"))
+        self.document_loader = DocumentLoader(str(self.knowledge_base_path))
+
+        # 缓存存储
+        self.response_cache = {}
+
+        # 会话管理
+        self.sessions: Dict[str, SessionData] = {}
+        self._session_lock = threading.Lock()
+
+        # 线程池
+        self.executor = ThreadPoolExecutor(max_workers=4)
+
+        # 关闭标志
+        self._shutdown = False
+
+        # 初始化所有组件
+        self._initialize_components()
+
+        logger.info(f"智能小助手初始化完成，提供商: {self.llm_provider}")
+
+    def _save_cache(self):
+        """保存响应缓存到文件"""
+        try:
+            if hasattr(self, 'cache_manager') and not self._shutdown:
+                self.cache_manager._save_cache_sync()
+                logger.debug("响应缓存已保存")
+        except Exception as e:
+            logger.warning(f"保存缓存失败: {e}")
+
+    def _initialize_components(self):
+        """初始化所有组件"""
+        try:
+            # 1. 初始化嵌入模型
+            self._init_embedding()
+
+            # 2. 初始化语言模型
+            self._init_llm()
+
+            # 3. 初始化向量存储
+            self._init_vector_store()
+
+            # 4. 初始化网络搜索
+            self._init_web_search()
+
+        except Exception as e:
+            logger.error(f"组件初始化失败: {e}")
+            raise
+
+    def _init_embedding(self):
+        """初始化嵌入模型，带有重试和回退机制"""
         max_retries = 3
+
         for attempt in range(max_retries):
             try:
                 if self.llm_provider == 'openai':
-                    logger.info(f"尝试初始化OpenAI嵌入模型 (尝试 {attempt+1}/{max_retries})")
-                    
-                    # 添加超时设置，防止长时间阻塞
-                    timeout_kwargs = {"timeout": 10}
-                    
+                    logger.info(f"初始化OpenAI嵌入模型 (尝试 {attempt+1})")
                     self.embedding = OpenAIEmbeddings(
                         model=config.rag.openai_embedding_model,
                         api_key=config.llm.api_key,
                         base_url=config.llm.base_url,
-                        **timeout_kwargs
+                        timeout=10,
+                        max_retries=2
                     )
                 else:
-                    logger.info(f"尝试初始化Ollama嵌入模型 (尝试 {attempt+1}/{max_retries})")
+                    logger.info(f"初始化Ollama嵌入模型 (尝试 {attempt+1})")
                     self.embedding = OllamaEmbeddings(
                         model=config.rag.ollama_embedding_model,
-                        base_url=config.llm.ollama_base_url
+                        base_url=config.llm.ollama_base_url,
+                        timeout=10
                     )
-                    
-                # 测试嵌入模型
-                test_embedding = self.embedding.embed_query("测试嵌入功能")
+
+                # 测试嵌入
+                test_embedding = self.embedding.embed_query("测试")
                 if test_embedding and len(test_embedding) > 0:
-                    logger.info(f"嵌入模型测试成功: 维度={len(test_embedding)}")
-                    return  # 成功初始化，直接返回
-                else:
-                    logger.warning("嵌入模型测试结果异常，将尝试备用方法")
-                    continue
-                    
+                    logger.info(f"嵌入模型初始化成功，维度: {len(test_embedding)}")
+                    return
+
             except Exception as e:
-                logger.error(f"嵌入模型初始化尝试 {attempt+1}/{max_retries} 失败: {e}")
-                # 如果不是最后一次尝试，则切换提供商并重试
+                logger.error(f"嵌入模型初始化失败 (尝试 {attempt+1}): {e}")
                 if attempt < max_retries - 1:
+                    # 切换提供商重试
                     self.llm_provider = 'ollama' if self.llm_provider == 'openai' else 'openai'
-                    logger.info(f"切换到 {self.llm_provider} 提供商并重试")
-                    # 短暂延迟后重试
-                    import time
                     time.sleep(1)
-        
-        # 如果所有尝试都失败，创建一个简单的备用嵌入模型
-        logger.critical("无法初始化任何嵌入模型，使用备用简单嵌入")
-        
-        # 创建一个简单的备用嵌入实现
-        from langchain_core.embeddings import Embeddings
-        import numpy as np
-        
-        class FallbackEmbeddings(Embeddings):
-            """备用嵌入实现，返回简单的随机向量，仅用于应急"""
-            
-            def embed_documents(self, texts):
-                return [self.embed_query(text) for text in texts]
-                
-            def embed_query(self, text):
-                # 使用文本长度和内容生成确定性向量
-                np.random.seed(hash(text) % 2**32)
-                return list(np.random.rand(384))  # 使用384维向量
-        
+
+        # 使用备用嵌入
+        logger.warning("使用备用嵌入模型")
         self.embedding = FallbackEmbeddings()
-        logger.warning("使用备用嵌入实现，搜索精度将受到影响")
-    
-    
-    def _init_llm(self) -> None:
+
+    def _init_llm(self):
         """初始化语言模型"""
-        # 最多尝试3次
         max_retries = 3
+
         for attempt in range(max_retries):
             try:
                 if self.llm_provider == 'openai':
-                    # 对话模型
-                    chat_model = config.llm.model
-                    logger.info(f"尝试初始化OpenAI语言模型 {chat_model} (尝试 {attempt+1}/{max_retries})")
-                    
-                    # 添加更多容错参数
+                    logger.info(f"初始化OpenAI语言模型 (尝试 {attempt+1})")
+
+                    # 主聊天模型
                     self.llm = ChatOpenAI(
-                        model=chat_model,
+                        model=config.llm.model,
                         api_key=config.llm.api_key,
                         base_url=config.llm.base_url,
                         temperature=config.rag.temperature,
                         timeout=30,
-                        max_retries=2,  # API级别的重试
-                        request_timeout=30  # 请求超时
+                        max_retries=2
+                    )
+
+                    # 任务模型
+                    task_model = getattr(config.llm, 'task_model', config.llm.model)
+                    self.task_llm = ChatOpenAI(
+                        model=task_model,
+                        api_key=config.llm.api_key,
+                        base_url=config.llm.base_url,
+                        temperature=0.1,
+                        timeout=15,
+                        max_retries=2
                     )
                 else:
-                    logger.info(f"尝试初始化Ollama语言模型 {config.llm.ollama_model} (尝试 {attempt+1}/{max_retries})")
+                    logger.info(f"初始化Ollama语言模型 (尝试 {attempt+1})")
                     self.llm = ChatOllama(
                         model=config.llm.ollama_model,
                         base_url=config.llm.ollama_base_url,
                         temperature=config.rag.temperature,
                         timeout=30
                     )
-                
-                # 测试LLM
-                logger.info("测试语言模型...")
-                test_response = self.llm.invoke("返回'测试成功'两个字")
-                test_content = test_response.content if hasattr(test_response, 'content') else str(test_response)
-                
-                if test_content and len(test_content) > 0:
-                    logger.info(f"LLM测试成功: {test_content[:20]}...")
-                    
-                    # 初始化JSON解析器
-                    self.json_parser = JsonOutputParser()
-                    return  # 成功初始化，直接返回
-                else:
-                    logger.warning("LLM测试结果异常，将尝试备用方法")
-                
+                    self.task_llm = self.llm
+
+                # 测试模型
+                test_response = self.llm.invoke("返回'OK'")
+                if test_response and test_response.content:
+                    logger.info("语言模型初始化成功")
+                    return
+
             except Exception as e:
-                logger.error(f"语言模型初始化尝试 {attempt+1}/{max_retries} 失败: {e}")
-                
-                # 如果不是最后一次尝试，则切换提供商并重试
+                logger.error(f"语言模型初始化失败 (尝试 {attempt+1}): {e}")
                 if attempt < max_retries - 1:
                     self.llm_provider = 'ollama' if self.llm_provider == 'openai' else 'openai'
-                    logger.info(f"切换到 {self.llm_provider} 提供商并重试")
-                    # 短暂延迟后重试
-                    import time
                     time.sleep(1)
-            
-        # 所有尝试都失败，使用备用模型策略
-        logger.critical("所有语言模型初始化尝试均失败，使用备用策略")
-        
-        # 创建一个简单的备用语言模型
-        from langchain_core.language_models.chat_models import BaseChatModel
-        from langchain_core.outputs import ChatGeneration, ChatResult
-        from langchain_core.messages import AIMessage
-        
-        class FallbackChatModel(BaseChatModel):
-            """备用聊天模型，返回预定义的回复"""
-            
-            @property
-            def _llm_type(self) -> str:
-                """返回模型类型"""
-                return "fallback_chat_model"
-            
-            def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-                # 创建一个简单的回复
-                message = messages[-1].content if messages else "无输入"
-                response = f"我是备用助手模型。您的问题是：'{message}'。由于语言模型暂时不可用，我只能提供有限的帮助。请稍后再试或联系系统管理员。"
-                message = AIMessage(content=response)
-                generation = ChatGeneration(message=message)
-                return ChatResult(generations=[generation])
-        
+
+        # 使用备用模型
+        logger.warning("使用备用语言模型")
         self.llm = FallbackChatModel()
-        self.json_parser = JsonOutputParser()
-        logger.warning("使用备用语言模型，功能将受到限制")
-            
-    # 此方法已移除，不再使用模拟LLM
-        
-    def _generate_cache_key(self, question: str, session_id: str = None) -> str:
-        """生成缓存键"""
-        # 组合问题和会话ID (如果有)
-        cache_input = question
-        if session_id and session_id in self.sessions:
-            # 获取最近的3条历史记录用于缓存键计算
-            history = self.sessions[session_id]["history"][-3:] if self.sessions[session_id]["history"] else []
-            if history:
-                history_str = json.dumps([{
-                    "role": h["role"],
-                    "content": h["content"][:50]  # 只使用前50个字符减小缓存键大小
-                } for h in history], ensure_ascii=False)
-                cache_input = f"{question}|{history_str}"
-        
-        # 使用SHA256哈希作为缓存键
-        return hashlib.sha256(cache_input.encode('utf-8')).hexdigest()
-    
-    def _load_cache(self) -> None:
-        """加载缓存文件"""
-        cache_file = os.path.join(self.cache_dir, "response_cache.json")
-        try:
-            if os.path.exists(cache_file):
-                with open(cache_file, 'r', encoding='utf-8') as f:
-                    cache_data = json.load(f)
-                    # 过滤过期缓存
-                    now = time.time()
-                    self.response_cache = {
-                        k: v for k, v in cache_data.items() 
-                        if now - v.get("timestamp", 0) < self.cache_expiry
-                    }
-                logger.info(f"已加载 {len(self.response_cache)} 条有效缓存")
-        except Exception as e:
-            logger.warning(f"加载缓存失败: {e}")
-            self.response_cache = {}
-    
-    def _save_cache(self) -> None:
-        """保存缓存到文件"""
-        cache_file = os.path.join(self.cache_dir, "response_cache.json")
-        try:
-            # 过滤过期缓存
-            now = time.time()
-            valid_cache = {
-                k: v for k, v in self.response_cache.items() 
-                if now - v.get("timestamp", 0) < self.cache_expiry
-            }
-            
-            with open(cache_file, 'w', encoding='utf-8') as f:
-                json.dump(valid_cache, f, ensure_ascii=False)
-            
-            logger.info(f"已保存 {len(valid_cache)} 条缓存")
-        except Exception as e:
-            logger.warning(f"保存缓存失败: {e}")
-            
-    def create_session(self) -> str:
-        """创建新会话"""
-        session_id = str(uuid.uuid4())
-        self.sessions[session_id] = {
-            "created_at": datetime.now().isoformat(),
-            "history": [],
-            "metadata": {}
-        }
-        return session_id
-    
-    def get_session(self, session_id: str) -> Dict:
-        """获取会话信息"""
-        if session_id not in self.sessions:
-            return None
-        return self.sessions[session_id]
-    
-    def add_message_to_history(self, session_id: str, role: str, content: str) -> str:
-        """添加消息到会话历史"""
-        if session_id not in self.sessions:
-            session_id = self.create_session()
-            
-        self.sessions[session_id]["history"].append({
-            "role": role,
-            "content": content,
-            "timestamp": datetime.now().isoformat()
-        })
-        
-        # 限制历史记录长度
-        max_history = 20
-        if len(self.sessions[session_id]["history"]) > max_history:
-            self.sessions[session_id]["history"] = self.sessions[session_id]["history"][-max_history:]
-        
-        return session_id
-        
-    def clear_session_history(self, session_id: str) -> bool:
-        """清除会话历史"""
-        if session_id in self.sessions:
-            self.sessions[session_id]["history"] = []
-            return True
-        return False
-        
-    async def search_web(self, query: str, max_results: int = None) -> List[Dict]:
-        """从网络搜索相关信息"""
-        if not hasattr(self, 'web_search') or self.web_search is None:
-            logger.warning("网络搜索功能未启用")
-            return []
-            
-        try:
-            max_results = max_results or config.tavily.max_results
-            results = self.web_search.results(query, max_results=max_results)
-            return results
-        except Exception as e:
-            logger.error(f"网络搜索失败: {e}")
-            return []
-    
-    def _init_web_search(self) -> None:
-        """初始化网络搜索工具"""
-        self.web_search = None
-        if 'WEB_SEARCH_AVAILABLE' in globals() and WEB_SEARCH_AVAILABLE and config.tavily.api_key:
+        self.task_llm = self.llm
+
+    def _init_vector_store(self):
+        """初始化向量存储"""
+        self.vector_store_manager = VectorStoreManager(
+            str(self.vector_db_path),
+            self.collection_name,
+            self.embedding
+        )
+
+        # 尝试加载现有数据库
+        if not self.vector_store_manager.load_existing_db():
+            # 如果没有现有数据库，创建新的
+            logger.info("创建新的向量数据库")
+            documents = self.document_loader.load_documents()
+
+            # 检查是否在测试环境
+            use_memory = is_test_environment()
+            success = self.vector_store_manager.create_vector_store(documents, use_memory)
+
+            if not success:
+                logger.error("向量存储初始化失败")
+                raise RuntimeError("无法初始化向量存储")
+
+        logger.info("向量存储初始化完成")
+
+    def _init_web_search(self):
+        """初始化网络搜索"""
+        if WEB_SEARCH_AVAILABLE and config.tavily.api_key and config.tavily.api_key.strip() != "":
             try:
                 self.web_search = TavilySearchAPIWrapper(
                     api_key=config.tavily.api_key,
                     max_results=config.tavily.max_results
                 )
-                logger.info("网络搜索工具初始化成功")
+                # 验证API密钥是否有效
+                test_result = self.web_search.results("test", max_results=1)
+                if test_result:
+                    logger.info("网络搜索工具初始化成功")
+                else:
+                    logger.warning("网络搜索初始化测试未返回结果，可能API密钥无效")
+                    self.web_search = None
             except Exception as e:
-                logger.warning(f"初始化网络搜索工具失败: {e}")
+                logger.warning(f"网络搜索工具初始化失败: {e}")
+                self.web_search = None
         else:
-            logger.info("网络搜索功能未启用")
-    
-    def _init_retriever(self) -> None:
-        """初始化检索器"""
-        try:
-            # 检查是否已存在向量数据库
-            if os.path.exists(os.path.join(self.vector_db_path, "chroma.sqlite3")):
-                logger.info("检测到现有向量数据库，正在加载...")
-                db = Chroma(
-                    persist_directory=self.vector_db_path,
-                    embedding_function=self.embedding,
-                    collection_name=self.collection_name
-                )
-                self.retriever = db.as_retriever(
-                    search_kwargs={"k": config.rag.top_k}
-                )
-                logger.info("向量数据库加载完成")
+            self.web_search = None
+            if not WEB_SEARCH_AVAILABLE:
+                logger.info("网络搜索功能不可用：缺少必要的库")
+            elif not config.tavily.api_key or config.tavily.api_key.strip() == "":
+                logger.info("网络搜索功能未启用：未配置Tavily API密钥")
             else:
-                logger.info("未检测到向量数据库，正在扫描知识库文档...")
-                self._create_vector_store()
-        except Exception as e:
-            logger.error(f"初始化检索器失败: {e}")
-            raise RuntimeError(f"无法初始化检索器: {e}")
-    
-    def _create_vector_store(self, use_in_memory: bool = False) -> None:
-        """创建向量数据库
-        
-        参数:
-            use_in_memory: 是否使用内存模式（适用于测试环境）
-        """
-        try:
-            # 确保向量数据库目录存在且具有写入权限
-            os.makedirs(self.vector_db_path, exist_ok=True)
-            
-            # 检查写入权限
-            if not os.access(self.vector_db_path, os.W_OK):
-                try:
-                    # 尝试修复权限
-                    import stat
-                    os.chmod(self.vector_db_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
-                    logger.info(f"已修复向量数据库目录权限: {self.vector_db_path}")
-                except Exception as perm_error:
-                    logger.warning(f"无法修复向量数据库目录权限: {perm_error}")
-                    # 使用内存模式作为备用方案
-                    logger.info("由于权限问题，切换到内存模式")
-                    use_in_memory = True
-            
-            # 加载知识库文档
-            documents = self._load_documents()
-            if not documents:
-                logger.warning("没有找到知识库文档，无法创建向量数据库")
-                return
-            
-            # 分割文档
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=config.rag.chunk_size,
-                chunk_overlap=config.rag.chunk_overlap
-            )
-            splits = text_splitter.split_documents(documents)
-            
-            # 根据模式创建不同的向量存储
-            if use_in_memory:
-                # 内存模式 - 不持久化到磁盘
-                db = Chroma.from_documents(
-                    documents=splits,
-                    embedding=self.embedding,
-                    collection_name=self.collection_name
-                )
-            else:
-                # 持久化模式 - 将向量存储到磁盘
-                try:
-                    db = Chroma.from_documents(
-                        documents=splits,
-                        embedding=self.embedding,
-                        persist_directory=self.vector_db_path,
-                        collection_name=self.collection_name
-                    )
-                except Exception as db_error:
-                    if "readonly database" in str(db_error).lower():
-                        logger.warning("数据库为只读状态，切换到内存模式")
-                        db = Chroma.from_documents(
-                            documents=splits,
-                            embedding=self.embedding,
-                            collection_name=self.collection_name
-                        )
-                    else:
-                        raise
-            
-            # 创建检索器
-            self.retriever = db.as_retriever(
-                search_kwargs={"k": config.rag.top_k}
-            )
-            
-            logger.info(f"向量数据库创建完成，包含 {len(splits)} 个文档块")
-        
-        except Exception as e:
-            logger.error(f"创建向量数据库失败: {e}")
-            raise RuntimeError(f"无法创建向量数据库: {e}")
-    
-    def _load_documents(self) -> List[Document]:
-        """加载知识库文档"""
-        documents = []
-        
-        # 检查知识库目录是否存在
-        kb_path = Path(self.knowledge_base_path)
-        if not kb_path.exists():
-            logger.warning(f"知识库路径 {kb_path} 不存在")
-            os.makedirs(kb_path, exist_ok=True)
-            logger.info(f"已创建知识库目录: {kb_path}")
-            return documents
-            
-        # 获取所有文件并按修改时间排序，优先处理新文件
-        all_files = list(kb_path.glob("**/*"))
-        all_files = [f for f in all_files if f.is_file()]
-        # 按修改时间排序
-        all_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-        
-        logger.info(f"知识库目录下的文件: {len(all_files)}个")
-        
-        try:
-            # 1. 加载TXT文件
-            txt_files = [f for f in all_files if f.suffix.lower() == '.txt']
-            logger.info(f"找到的TXT文件: {len(txt_files)}个")
-            for file_path in txt_files:
-                try:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                        # 检查文件内容是否为空
-                        if not content.strip():
-                            logger.warning(f"跳过空文件: {file_path}")
-                            continue
-                        
-                        documents.append(Document(
-                            page_content=content,
-                            metadata={
-                                "source": str(file_path),
-                                "filename": file_path.name,
-                                "filetype": "text",
-                                "modified_time": os.path.getmtime(file_path)
-                            }
-                        ))
-                        logger.info(f"成功加载TXT文件: {file_path}")
-                except Exception as file_error:
-                    logger.error(f"加载文件 {file_path} 失败: {file_error}")
-            
-            # 2. 加载MD文件 - 使用Markdown分割器优化分块
-            md_files = [f for f in all_files if f.suffix.lower() in ['.md', '.markdown']]
-            logger.info(f"找到的MD文件: {len(md_files)}个")
-            
-            # 使用Markdown特定的分割器
-            headers_to_split_on = [
-                ("#", "Header 1"),
-                ("##", "Header 2"),
-                ("###", "Header 3"),
-            ]
-            
-            for file_path in md_files:
-                try:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                        # 检查文件内容是否为空
-                        if not content.strip():
-                            logger.warning(f"跳过空文件: {file_path}")
-                            continue
-                        
-                        # 尝试使用Markdown标题分割文本
-                        try:
-                            markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
-                            md_docs = markdown_splitter.split_text(content)
-                            
-                            # 添加元数据
-                            for doc in md_docs:
-                                doc.metadata.update({
-                                    "source": str(file_path),
-                                    "filename": file_path.name,
-                                    "filetype": "markdown",
-                                    "modified_time": os.path.getmtime(file_path)
-                                })
-                            
-                            documents.extend(md_docs)
-                            logger.info(f"成功使用Markdown标题分割文件: {file_path}, 生成了{len(md_docs)}个文档块")
-                        except Exception as split_error:
-                            # 如果分割失败，作为单个文档加载
-                            logger.warning(f"Markdown分割失败，以整个文件加载: {file_path}, 错误: {split_error}")
-                            documents.append(Document(
-                                page_content=content,
-                                metadata={
-                                    "source": str(file_path),
-                                    "filename": file_path.name,
-                                    "filetype": "markdown",
-                                    "modified_time": os.path.getmtime(file_path)
-                                }
-                            ))
-                except Exception as file_error:
-                    logger.error(f"加载文件 {file_path} 失败: {file_error}")
-            
-            # 3. 使用可能的高级加载器处理其他文件
-            if 'ADVANCED_LOADERS_AVAILABLE' in globals() and ADVANCED_LOADERS_AVAILABLE:
-                try:
-                    # 尝试加载PDF文件
-                    pdf_files = [f for f in all_files if f.suffix.lower() == '.pdf']
-                    if pdf_files:
-                        logger.info(f"找到的PDF文件: {len(pdf_files)}个")
-                        for pdf_file in pdf_files:
-                            try:
-                                loader = PyPDFLoader(str(pdf_file))
-                                pdf_docs = loader.load()
-                                
-                                # 添加元数据
-                                for doc in pdf_docs:
-                                    doc.metadata.update({
-                                        "filename": pdf_file.name,
-                                        "filetype": "pdf",
-                                        "modified_time": os.path.getmtime(pdf_file)
-                                    })
-                                    
-                                documents.extend(pdf_docs)
-                                logger.info(f"成功加载PDF文件: {pdf_file}, 生成了{len(pdf_docs)}个文档块")
-                            except Exception as e:
-                                logger.error(f"加载PDF文件失败: {pdf_file}, 错误: {e}")
-                    
-                    # 尝试加载HTML文件
-                    html_files = [f for f in all_files if f.suffix.lower() in ['.html', '.htm']]
-                    if html_files:
-                        logger.info(f"找到的HTML文件: {len(html_files)}个")
-                        for html_file in html_files:
-                            try:
-                                loader = BSHTMLLoader(str(html_file))
-                                html_docs = loader.load()
-                                
-                                # 添加元数据
-                                for doc in html_docs:
-                                    doc.metadata.update({
-                                        "filename": html_file.name,
-                                        "filetype": "html",
-                                        "modified_time": os.path.getmtime(html_file)
-                                    })
-                                    
-                                documents.extend(html_docs)
-                                logger.info(f"成功加载HTML文件: {html_file}, 生成了{len(html_docs)}个文档块")
-                            except Exception as e:
-                                logger.error(f"加载HTML文件失败: {html_file}, 错误: {e}")
-                except Exception as e:
-                    logger.warning(f"尝试使用高级加载器时出错: {e}")
-            
-            logger.info(f"成功加载 {len(documents)} 个文档")
-            return documents
-            
-        except Exception as e:
-            logger.error(f"加载文档失败: {e}")
-            return documents
-    
+                logger.info("网络搜索功能未启用：未知原因")
+
+    # ==================== 会话管理 ====================
+
+    def create_session(self) -> str:
+        """创建新会话"""
+        session_id = str(uuid.uuid4())
+        session_data = SessionData(
+            session_id=session_id,
+            created_at=datetime.now().isoformat(),
+            history=[],
+            metadata={}
+        )
+
+        with self._session_lock:
+            self.sessions[session_id] = session_data
+
+        return session_id
+
+    def get_session(self, session_id: str) -> Optional[SessionData]:
+        """获取会话数据"""
+        return self.sessions.get(session_id)
+
+    def add_message_to_history(self, session_id: str, role: str, content: str) -> str:
+        """添加消息到会话历史"""
+        if session_id not in self.sessions:
+            session_id = self.create_session()
+
+        with self._session_lock:
+            session = self.sessions[session_id]
+            session.history.append({
+                "role": role,
+                "content": content,
+                "timestamp": datetime.now().isoformat()
+            })
+
+            # 限制历史长度
+            max_history = 20
+            if len(session.history) > max_history:
+                session.history = session.history[-max_history:]
+
+        return session_id
+
+    def clear_session_history(self, session_id: str) -> bool:
+        """清空会话历史"""
+        if session_id in self.sessions:
+            with self._session_lock:
+                self.sessions[session_id].history = []
+            return True
+        return False
+
+    # ==================== 知识库管理 ====================
+
     async def refresh_knowledge_base(self) -> Dict[str, Any]:
-        """刷新知识库，返回包含文档数量的字典"""
+        """刷新知识库"""
         try:
-            logger.info("正在刷新知识库...")
-            
-            # 清理缓存以确保新添加的文档能被检索到
-            self.response_cache = {}
-            
-            # 检查是否在测试环境中运行
-            in_test_environment = 'pytest' in sys.modules
-            
-            # 确保知识库路径存在
-            kb_path = Path(self.knowledge_base_path)
-            if not kb_path.exists():
-                os.makedirs(kb_path, exist_ok=True)
-                logger.info(f"创建知识库目录: {kb_path}")
-                # 创建一个简单的测试文档，确保知识库不为空
-                test_doc_path = kb_path / "welcome.md"
-                if not test_doc_path.exists():
-                    with open(test_doc_path, "w", encoding="utf-8") as f:
-                        f.write("# 欢迎使用AIOps智能小助手\n\n这是一个自动创建的初始文档，您可以添加更多文档到知识库中。")
-                    logger.info("已创建欢迎文档")
-            
-            # 检查向量数据库目录
-            db_path = Path(self.vector_db_path)
-            
-            # 检查向量数据库目录权限和状态
-            use_in_memory = in_test_environment
-            if not db_path.exists():
-                try:
-                    os.makedirs(db_path, exist_ok=True)
-                except Exception as e:
-                    logger.warning(f"创建向量数据库目录失败: {e}，将使用内存模式")
-                    use_in_memory = True
-            
-            # 检查写入权限
-            if not use_in_memory and not os.access(str(db_path), os.W_OK):
-                logger.warning(f"向量数据库目录没有写入权限: {db_path}，将使用内存模式")
-                use_in_memory = True
-            
-            # 准备刷新向量库
-            success = False
-            doc_count = 0
-            error_msg = None
-            
-            # 最多尝试3次
-            max_attempts = 3
-            for attempt in range(max_attempts):
-                try:
-                    # 如果使用内存模式
-                    if use_in_memory:
-                        logger.info(f"使用内存模式刷新知识库 (尝试 {attempt+1}/{max_attempts})")
-                        self._create_vector_store(use_in_memory=True)
-                    else:
-                        # 正常环境 - 清理现有文件并创建新数据库
-                        logger.info(f"使用持久化模式刷新知识库 (尝试 {attempt+1}/{max_attempts})")
-                        # 先创建备份目录
-                        backup_dir = os.path.join(self.vector_db_path, f"backup_{int(time.time())}")
-                        try:
-                            os.makedirs(backup_dir, exist_ok=True)
-                            logger.info(f"已创建备份目录: {backup_dir}")
-                            
-                            # 备份重要文件
-                            import shutil
-                            for item in db_path.glob("*"):
-                                if item.is_file() and item.name not in ["chroma.sqlite3-shm", "chroma.sqlite3-wal"]:
-                                    shutil.copy2(item, backup_dir)
-                                    logger.info(f"已备份文件: {item.name}")
-                            
-                            # 清理现有的向量数据库文件
-                            for item in db_path.glob("*"):
-                                if item.is_file():
-                                    # 临时文件保留，避免冲突
-                                    if item.name in ["chroma.sqlite3-shm", "chroma.sqlite3-wal"]:
-                                        continue
-                                    item.unlink()
-                                elif item.is_dir() and item.name not in ["cache", "backup_*"]:  # 保留缓存和备份目录
-                                    shutil.rmtree(item)
-                            logger.info("已清理现有向量数据库文件")
-                            
-                            # 创建新的向量数据库
-                            self._create_vector_store(use_in_memory=False)
-                            
-                        except Exception as clean_error:
-                            logger.warning(f"清理或创建向量数据库失败: {clean_error}，尝试使用内存模式")
-                            self._create_vector_store(use_in_memory=True)
-                    
-                    # 测试检索器是否可用
-                    if self.retriever:
-                        try:
-                            test_result = self.retriever.invoke("测试查询")
-                            doc_count = len(test_result)
-                            logger.info(f"检索器测试成功: 返回 {doc_count} 个结果")
-                            success = True
-                            break  # 成功，跳出尝试循环
-                        except Exception as test_error:
-                            logger.warning(f"检索器测试失败 (尝试 {attempt+1}/{max_attempts}): {test_error}")
-                            error_msg = str(test_error)
-                            if attempt < max_attempts - 1:
-                                logger.info(f"等待1秒后重试...")
-                                await asyncio.sleep(1)
-                    else:
-                        logger.warning(f"检索器未初始化 (尝试 {attempt+1}/{max_attempts})")
-                        if attempt < max_attempts - 1:
-                            logger.info(f"尝试重新初始化...")
-                            try:
-                                self._init_retriever()
-                            except:
-                                pass
-                
-                except Exception as e:
-                    logger.error(f"刷新知识库尝试 {attempt+1}/{max_attempts} 失败: {e}")
-                    error_msg = str(e)
-                    if attempt < max_attempts - 1:
-                        logger.info(f"等待1秒后重试...")
-                        await asyncio.sleep(1)
-            
-            # 保存更新的空缓存
-            self._save_cache()
-            logger.info("已清理响应缓存")
-            
+            logger.info("开始刷新知识库...")
+
+            # 清理缓存
+            self.cache_manager = CacheManager(str(self.vector_db_path / "cache"))
+
+            # 加载文档
+            documents = await asyncio.get_event_loop().run_in_executor(
+                self.executor, self.document_loader.load_documents
+            )
+
+            # 重新创建向量存储
+            use_memory = is_test_environment()
+            success = await asyncio.get_event_loop().run_in_executor(
+                self.executor,
+                self.vector_store_manager.create_vector_store,
+                documents,
+                use_memory
+            )
+
             if success:
+                doc_count = len(documents)
+                logger.info(f"知识库刷新成功，包含 {doc_count} 个文档")
                 return {"success": True, "documents_count": doc_count}
             else:
-                return {"success": False, "documents_count": 0, "error": error_msg or "未知错误"}
-                
+                return {"success": False, "documents_count": 0, "error": "向量存储创建失败"}
+
         except Exception as e:
             logger.error(f"刷新知识库失败: {e}")
             return {"success": False, "documents_count": 0, "error": str(e)}
-    
+
     def add_document(self, content: str, metadata: Dict[str, Any] = None) -> bool:
-        """向知识库添加文档"""
+        """添加文档到知识库"""
         try:
             if not content.strip():
                 return False
-            
-            # 生成唯一文件名
+
+            # 生成文件名
             doc_id = str(uuid.uuid4())
-            file_path = os.path.join(self.knowledge_base_path, f"{doc_id}.txt")
-            
+            filename = metadata.get('filename', f"{doc_id}.txt") if metadata else f"{doc_id}.txt"
+            file_path = self.knowledge_base_path / filename
+
             # 写入文件
-            with open(file_path, "w", encoding="utf-8") as f:
+            with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            
-            # 清理缓存以确保新添加的文档能被检索到
-            self.response_cache = {}
-            logger.info("已清理响应缓存以支持新添加的文档")
-            
-            # 刷新知识库操作移至API层异步执行，这里仅返回成功
+
+            # 清理缓存
+            self.cache_manager = CacheManager(str(self.vector_db_path / "cache"))
+
+            logger.info(f"文档已添加: {filename}")
             return True
-        
+
         except Exception as e:
             logger.error(f"添加文档失败: {e}")
             return False
-    
-    async def get_answer(self, question: str, session_id: str = None, 
-                     use_web_search: bool = False, max_context_docs: int = 4,
-                     max_retries: int = 3) -> Dict[str, Any]:
-        """获取问题的回答
-        
-        参数:
-            question: 用户问题
-            session_id: 会话ID，用于保持对话上下文
-            use_web_search: 是否使用网络搜索增强回答
-            max_context_docs: 最大上下文文档数量
-            max_retries: 最大重试次数
-        """
+
+    # ==================== 网络搜索 ====================
+
+    async def search_web(self, query: str, max_results: int = None) -> List[Dict]:
+        """网络搜索"""
+        if not self.web_search:
+            return []
+
         try:
+            max_results = max_results or config.tavily.max_results
+            results = await asyncio.get_event_loop().run_in_executor(
+                self.executor,
+                self.web_search.results,
+                query,
+                max_results
+            )
+            return results
+        except Exception as e:
+            logger.error(f"网络搜索失败: {e}")
+            return []
+
+    async def _safe_web_search(self, query: str, max_results: int = None) -> Tuple[List[Dict], str]:
+        """安全的网络搜索，返回结果和可能的错误信息"""
+        if not self.web_search:
+            return [], "网络搜索功能未启用"
+
+        try:
+            max_results = max_results or config.tavily.max_results
+            results = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    self.executor,
+                    self.web_search.results,
+                    query,
+                    max_results
+                ),
+                timeout=10.0  # 设置合理的超时时间
+            )
+
+            if not results:
+                return [], "未找到相关的网络搜索结果"
+
+            logger.info(f"网络搜索返回 {len(results)} 个结果")
+            return results, None
+
+        except asyncio.TimeoutError:
+            logger.error("网络搜索操作超时")
+            return [], "网络搜索操作超时，请稍后重试"
+        except Exception as e:
+            logger.error(f"网络搜索失败: {e}")
+            return [], f"网络搜索过程中出现错误: {str(e)[:100]}"
+
+    # ==================== 核心问答逻辑 ====================
+
+    async def get_answer(
+        self,
+        question: str,
+        session_id: str = None,
+        use_web_search: bool = False,
+        max_context_docs: int = 4
+    ) -> Dict[str, Any]:
+        """获取问题答案 - 核心方法"""
+
+        try:
+            # 获取会话历史
+            session = self.get_session(session_id) if session_id else None
+            history = session.history if session else []
+
             # 检查缓存
-            if session_id is None:
-                cache_key = self._generate_cache_key(question)
-            else:
-                cache_key = self._generate_cache_key(question, session_id)
-                
-            # 尝试从缓存获取
-            if cache_key in self.response_cache:
-                cache_data = self.response_cache[cache_key]
-                # 检查缓存是否过期
-                if time.time() - cache_data.get("timestamp", 0) < self.cache_expiry:
-                    logger.info(f"从缓存中获取回答: {cache_key[:8]}...")
-                    # 添加到会话历史(如果有)
-                    if session_id:
-                        self.add_message_to_history(session_id, "user", question)
-                        self.add_message_to_history(session_id, "assistant", cache_data["data"]["answer"])
-                    return cache_data["data"]
-            
-            # 添加到会话历史
+            cached_response = self.cache_manager.get(question, session_id, history)
+            if cached_response:
+                # 添加到会话历史
+                if session_id:
+                    self.add_message_to_history(session_id, "user", question)
+                    self.add_message_to_history(session_id, "assistant", cached_response["answer"])
+                return cached_response
+
+            # 添加用户消息到历史
             if session_id:
                 self.add_message_to_history(session_id, "user", question)
-            
-            # 如果启用了网络搜索
+
+            # 网络搜索（如果启用）
             web_results = []
-            if use_web_search and hasattr(self, 'web_search') and self.web_search:
-                logger.info(f"为问题 '{question}' 执行网络搜索")
-                web_results = await self.search_web(question)
-                if web_results:
-                    logger.info(f"网络搜索返回了 {len(web_results)} 个结果")
-            
-            # 1. 检索相关文档
-            docs = self._get_relevant_docs(question)
-            
+            web_search_error = None
+            if use_web_search:
+                web_results, web_search_error = await self._safe_web_search(question)
+                if web_search_error:
+                    logger.warning(f"网络搜索失败: {web_search_error}")
+                elif web_results:
+                    logger.info(f"网络搜索返回 {len(web_results)} 个结果")
+                else:
+                    logger.warning("网络搜索未返回任何结果")
+
+            # 检索相关文档
+            relevant_docs = await self._retrieve_relevant_docs(question, max_context_docs)
+
             # 合并网络搜索结果
             if web_results:
-                for result in web_results:
-                    content = f"标题: {result.get('title', '未知标题')}\n"
-                    content += f"来源: {result.get('url', '未知来源')}\n"
-                    content += f"内容:\n{result.get('content', '无内容')}"
-                    
-                    web_doc = Document(
-                        page_content=content,
-                        metadata={
-                            "source": result.get('url', '网络搜索'),
-                            "title": result.get('title', '网络搜索结果'),
-                            "is_web_result": True
-                        }
-                    )
-                    docs.append(web_doc)
-            
-            # 2. 评估文档相关性
-            relevant_docs = await self._filter_relevant_docs(question, docs)
-            
-            # 3. 如果没有相关文档，尝试重写问题
+                web_docs = self._convert_web_results_to_docs(web_results)
+                relevant_docs.extend(web_docs)
+
+            # 如果没有相关文档，尝试重写问题
             if not relevant_docs:
-                logger.info("没有找到相关文档，尝试重写问题...")
-                try:
-                    rewritten_question = await self._rewrite_question(question)
-                    if rewritten_question and rewritten_question != question:
-                                            docs = self._get_relevant_docs(rewritten_question)
-                    relevant_docs = await self._filter_relevant_docs(rewritten_question, docs)
-                except Exception as rewrite_error:
-                    logger.error(f"重写问题时出错: {rewrite_error}")
-            
-            # 限制上下文文档数量
-            if relevant_docs and len(relevant_docs) > max_context_docs:
-                logger.info(f"限制文档数量从 {len(relevant_docs)} 到 {max_context_docs}")
-                relevant_docs = relevant_docs[:max_context_docs]
-            
-            # 使用会话历史增强上下文
-            context_with_history = ""
-            if session_id and session_id in self.sessions:
-                history = self.sessions[session_id]["history"]
-                if history and len(history) >= 2:  # 至少有一轮对话
-                    # 选择最近的2-3轮对话
-                    recent_history = history[-min(6, len(history)):]
-                    context_with_history = "以下是之前的对话历史:\n"
-                    for h in recent_history:
-                        role = "用户" if h["role"] == "user" else "助手"
-                        context_with_history += f"{role}: {h['content']}\n"
-                    context_with_history += "\n"
-            
-            # 4. 生成回答
+                rewritten_question = await self._rewrite_question(question)
+                if rewritten_question != question:
+                    relevant_docs = await self._retrieve_relevant_docs(rewritten_question, max_context_docs)
+
+            # 生成回答
             if relevant_docs:
-                try:
-                    answer = await self._generate_from_docs(
-                        question, 
-                        relevant_docs,
-                        context_with_history=context_with_history if context_with_history else None
-                    )
-                except Exception as generate_error:
-                    logger.error(f"生成回答时出错: {generate_error}")
-                    answer = "抱歉，生成回答时出现了错误。请稍后再试。"
+                context_with_history = self._build_context_with_history(session)
+                answer = await self._generate_answer(question, relevant_docs, context_with_history)
             else:
-                # 返回通用回答
-                possible_answers = [
-                    "抱歉，我无法在知识库中找到与您问题相关的信息。",
-                    "我在知识库中没有找到相关内容，请尝试其他问题。",
-                    "您的问题超出了我的知识范围，我无法提供准确答案。"
-                ]
-                import random
-                answer = random.choice(possible_answers)
-            
-            # 5. 评估回答是否存在幻觉
-            hallucination_free = False
-            if relevant_docs:
-                try:
-                    hallucination_free = await self._check_hallucination(
-                        question, answer, relevant_docs
-                    )
-                except Exception as hall_error:
-                    logger.error(f"检查回答幻觉时出错: {hall_error}")
-            
-            # 6. 格式化源文档
-            source_docs = []
-            for doc in relevant_docs:
-                metadata = doc.metadata.copy() if doc.metadata else {}
-                # 检查是否为网络搜索结果
-                is_web_result = metadata.get("is_web_result", False)
-                
-                source_docs.append({
-                    "content": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
-                    "source": metadata.get("source", "未知来源"),
-                    "is_web_result": is_web_result,
-                    "metadata": metadata
-                })
-            
-            # 7. 生成后续问题
-            follow_up_questions = []
-            try:
-                follow_up_questions = await self._generate_follow_up_questions(question, answer)
-            except Exception as follow_up_error:
-                logger.error(f"生成后续问题时出错: {follow_up_error}")
-                # 提供一些默认的后续问题
-                follow_up_questions = [
-                    "AIOps平台有哪些核心功能？",
-                    "如何启动AIOps平台？",
-                    "AIOps平台的部署要求是什么？"
-                ]
-            
-            # 从文档元数据中提取召回率
-            recall_rate = None
-            for doc in relevant_docs:
-                if doc.metadata and "recall_rate" in doc.metadata:
-                    recall_rate = doc.metadata.get("recall_rate")
-                    break
-            
+                answer = self._generate_fallback_answer(use_web_search, web_search_error)
+
+            # 检查幻觉
+            hallucination_free = await self._check_hallucination(question, answer, relevant_docs) if relevant_docs else False
+
+            # 生成后续问题
+            follow_up_questions = await self._generate_follow_up_questions(question, answer)
+
+            # 格式化源文档
+            source_docs = self._format_source_documents(relevant_docs)
+
+            # 构建响应
             result = {
                 "answer": answer,
                 "source_documents": source_docs,
                 "relevance_score": 1.0 if hallucination_free else 0.5,
-                "recall_rate": recall_rate if recall_rate is not None else 0.0,
+                "recall_rate": len(relevant_docs) / max_context_docs if relevant_docs else 0.0,
                 "follow_up_questions": follow_up_questions
             }
-            
-            # 添加到会话历史
+
+            # 添加助手回复到历史
             if session_id:
                 self.add_message_to_history(session_id, "assistant", answer)
-                
-            # 添加到缓存
-            self.response_cache[cache_key] = {
-                "timestamp": time.time(),
-                "data": result
-            }
-            
-            # 异步保存缓存
-            asyncio.create_task(self._async_save_cache())
-                
+
+            # 缓存结果
+            self.cache_manager.set(question, result, session_id, history)
+
+            # 创建异步保存任务，但不等待它完成
+            if not self._shutdown:
+                create_safe_task(
+                    self.cache_manager.save_async(),
+                    description=f"保存缓存: {session_id if session_id else '无会话'}"
+                )
+
             return result
-        
+
         except Exception as e:
             logger.error(f"获取回答失败: {e}")
-            error_message = "抱歉，处理您的问题时出现了错误。请检查API密钥和网络连接后重试。"
-            
-            # 添加到会话历史(如果有)
+            error_answer = "抱歉，处理您的问题时出现了错误，请稍后重试。"
+
             if session_id:
-                self.add_message_to_history(session_id, "assistant", error_message)
-                
+                self.add_message_to_history(session_id, "assistant", error_answer)
+
             return {
-                "answer": error_message,
+                "answer": error_answer,
                 "source_documents": [],
                 "relevance_score": 0.0,
                 "recall_rate": 0.0,
-                "follow_up_questions": [
-                    "AIOps平台有哪些核心功能？",
-                    "如何启动AIOps平台？",
-                    "AIOps平台的部署要求是什么？"
-                ]
+                "follow_up_questions": ["AIOps平台有哪些核心功能？", "如何部署AIOps系统？"]
             }
-            
-    async def _async_save_cache(self):
-        """异步保存缓存，避免阻塞主线程"""
+
+    async def _retrieve_relevant_docs(self, question: str, max_docs: int) -> List[Document]:
+        """检索相关文档"""
         try:
-            self._save_cache()
+            # 检索文档
+            docs = await asyncio.get_event_loop().run_in_executor(
+                self.executor,
+                self.vector_store_manager.search_documents,
+                question
+            )
+
+            if not docs:
+                return []
+
+            # 过滤相关文档
+            relevant_docs = await self._filter_relevant_docs(question, docs[:max_docs])
+
+            return relevant_docs
+
         except Exception as e:
-            logger.error(f"异步保存缓存失败: {e}")
-    
-    def _get_relevant_docs(self, question: str, max_retries: int = 3) -> List[Document]:
-        """从检索器获取相关文档"""
-        for attempt in range(max_retries):
-            try:
-                if not self.retriever:
-                    logger.warning("检索器未初始化，尝试重新初始化...")
-                    try:
-                        self._init_retriever()
-                        if not self.retriever:
-                            logger.error("无法初始化检索器")
-                            return []
-                    except Exception as init_error:
-                        logger.error(f"重新初始化检索器失败: {init_error}")
-                        return []
-                
-                # 尝试检索文档
-                docs = self.retriever.invoke(question)
-                
-                # 验证结果
-                if docs and isinstance(docs, list) and len(docs) > 0:
-                    logger.info(f"成功检索到 {len(docs)} 个文档")
-                    return docs
-                else:
-                    logger.warning(f"检索器返回了空或无效结果 (尝试 {attempt+1}/{max_retries})")
-                    # 如果是最后一次尝试，返回空列表
-                    if attempt == max_retries - 1:
-                        return []
-                    # 否则短暂延迟后重试
-                    time.sleep(1)
-                    
-            except Exception as e:
-                logger.error(f"检索尝试 {attempt+1}/{max_retries} 失败: {e}")
-                # 如果是最后一次尝试，返回空列表
-                if attempt == max_retries - 1:
-                    logger.error("所有检索尝试都失败")
-                    return []
-                # 否则短暂延迟后重试
-                time.sleep(1)
-        
-        # 如果执行到这里，说明所有尝试都失败了
-        return []
-    
-    async def _filter_relevant_docs(self, question: str, docs: List[Document]) -> List[Document]:
-        """过滤不相关的文档"""
-        if not docs:
+            logger.error(f"检索文档失败: {e}")
             return []
-            
-        # 对于少量文档，直接全部返回
-        if len(docs) <= 2:
+
+    async def _filter_relevant_docs(self, question: str, docs: List[Document]) -> List[Document]:
+        """过滤相关文档"""
+        if not docs or len(docs) <= 2:
             return docs
-        
-        # 对于较多文档，进行相关性过滤
+
         try:
-            # 初始化评分器
-            if not hasattr(self, 'structured_llm_docs') or self.structured_llm_docs is None:
-                # 使用更低的温度增强评分稳定性
-                docs_llm = ChatOpenAI(
-                    model=config.llm.model,
-                    temperature=0.1,  # 低温度，减少随机性
-                    api_key=config.llm.api_key,
-                    base_url=config.llm.base_url,
-                ) if self.llm_provider == "openai" else self.llm
-                
-                # 创建结构化输出链
-                self.structured_llm_docs = docs_llm
-            
-            # 准备系统提示和用户提示
-            # 对每个文档进行评分
             relevant_docs = []
-            scores = []  # 存储评分结果
-            
-            # 更宽松的相关性评分标准，提高召回率
+
             for doc in docs:
-                is_relevant, score = await self._evaluate_doc_relevance(
-                    self.structured_llm_docs, question, doc.page_content, doc
-                )
-                
+                is_relevant, score = await self._evaluate_doc_relevance(question, doc)
+
                 if is_relevant:
+                    doc.metadata = doc.metadata or {}
                     doc.metadata["relevance_score"] = score
                     relevant_docs.append(doc)
-                    scores.append(score)
-                # 即使评为不相关，如果是少量文档场景，也考虑纳入
-                elif len(docs) <= 4:
-                    doc.metadata["relevance_score"] = 0.4  # 给定一个较低的相关性分数
-                    relevant_docs.append(doc)
-                    scores.append(0.4)
-            
-            # 如果没有找到任何相关文档，则返回原始的top k文档
-            if not relevant_docs and docs:
-                logger.warning("没有找到相关文档，直接返回前 %d 个原始文档", min(3, len(docs)))
-                return docs[:min(3, len(docs))]
-                
-            # 根据相关性评分排序
-            if scores:
-                sorted_pairs = sorted(zip(relevant_docs, scores), key=lambda x: x[1], reverse=True)
-                relevant_docs = [doc for doc, _ in sorted_pairs]
-            
-            avg_score = sum(scores) / len(scores) if scores else 0
-            logger.info(f"文档过滤完成: 保留 {len(relevant_docs)}/{len(docs)} 个文档，平均相关性: {avg_score:.2f}")
-            
-            # 记录召回率
-            recall_rate = len(relevant_docs) / len(docs) if docs else 0
-            for doc in relevant_docs:
-                doc.metadata["recall_rate"] = recall_rate
-                
+
+            # 如果没有相关文档，返回前几个
+            if not relevant_docs:
+                return docs[:3]
+
+            # 按相关性排序
+            relevant_docs.sort(
+                key=lambda x: x.metadata.get("relevance_score", 0),
+                reverse=True
+            )
+
             return relevant_docs
-            
-        except Exception as e:
-            logger.error(f"文档相关性评估失败: {str(e)}")
-            # 如果评估失败，返回原始文档列表，但限制数量
-            return docs[:min(4, len(docs))]
-    
-    async def _evaluate_doc_relevance(self, grader, question, doc_content, doc) -> Tuple[bool, float]:
-        """评估文档与问题的相关性"""
-        try:
-            # 限制文档内容长度，避免超过上下文限制
-            max_doc_len = 2000
-            if len(doc_content) > max_doc_len:
-                doc_content = doc_content[:max_doc_len] + "..."
-                
-            # 创建提示
-            system_prompt = """您是一名文档相关性评估专家，负责判断文档与问题的相关程度。
-请根据以下标准评估文档相关性：
-1. 完全相关: 文档直接回答问题或包含问题答案的所有要素
-2. 部分相关: 文档包含部分相关信息，能间接帮助回答问题
-3. 稍微相关: 文档提及相关概念，但不直接解答问题
-4. 不相关: 文档内容与问题完全无关
 
-请使用宽松的评价标准，宁可错误地将文档判为相关，也不要错过有用信息。
-仅输出二元判断，回答"yes"或"no"。"""
-
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=f"问题: {question}\n\n文档: {doc_content}\n\n这个文档与问题相关吗？请只回答'yes'或'no'。")
-            ]
-            
-            # 调用LLM评估
-            max_retries = 2
-            for attempt in range(max_retries):
-                try:
-                    response = await asyncio.wait_for(
-                        asyncio.create_task(grader.ainvoke(messages)), 
-                        timeout=10
-                    )
-                    result = response.content.lower().strip()
-                    
-                    # 解析结果
-                    is_relevant = "yes" in result or "relevant" in result
-                    
-                    # 计算相关性分数 (0.7-1.0为相关，更倾向于保留文档)
-                    if is_relevant:
-                        # 根据回答内容粗略评估相关程度
-                        if "highly" in result or "完全" in result or "非常" in result:
-                            score = 1.0
-                        elif "部分" in result or "somewhat" in result:
-                            score = 0.85
-                        else:
-                            score = 0.75
-                    else:
-                        score = 0.3
-                        
-                    return is_relevant, score
-                    
-                except Exception as e:
-                    if attempt < max_retries - 1:
-                        logger.warning(f"评估文档相关性尝试 {attempt+1} 失败: {e}，重试中...")
-                        await asyncio.sleep(1)
-                    else:
-                        logger.error(f"评估文档相关性失败: {e}")
-                        # 评估失败时，默认认为文档相关
-                        return True, 0.7
         except Exception as e:
-            logger.error(f"评估文档相关性时出现异常: {e}")
-            # 出错时默认相关
-            return True, 0.7
-    
-    async def _rewrite_question(self, question: str, max_retries: int = 3) -> str:
-        """重写问题以提高检索质量"""
+            logger.error(f"过滤文档失败: {e}")
+            return docs[:3]
+
+    async def _evaluate_doc_relevance(self, question: str, doc: Document) -> Tuple[bool, float]:
+        """评估文档相关性"""
         try:
-            # 如果问题很短或者已经很清晰，直接返回原问题
+            # 简单的关键词匹配
+            question_words = set(question.lower().split())
+            doc_words = set(doc.page_content.lower().split())
+
+            # 计算重叠度
+            overlap = len(question_words & doc_words)
+            total = len(question_words | doc_words)
+            similarity = overlap / total if total > 0 else 0
+
+            # 基于相似度判断相关性
+            is_relevant = similarity > 0.1
+            score = min(similarity * 2, 1.0)  # 归一化到[0,1]
+
+            return is_relevant, score
+
+        except Exception as e:
+            logger.error(f"评估文档相关性失败: {e}")
+            return True, 0.5  # 默认相关
+
+    def _convert_web_results_to_docs(self, web_results: List[Dict]) -> List[Document]:
+        """将网络搜索结果转换为文档"""
+        if not web_results:
+            return []
+
+        docs = []
+        try:
+            for result in web_results:
+                if not isinstance(result, dict):
+                    logger.warning(f"跳过无效的网络搜索结果格式: {type(result)}")
+                    continue
+
+                title = result.get('title', '未知标题')
+                url = result.get('url', '未知来源')
+                content = result.get('content', '无内容')
+
+                # 限制内容长度，避免过长文档
+                max_content_length = 1000
+                if len(content) > max_content_length:
+                    content = content[:max_content_length] + "...(内容已截断)"
+
+                formatted_content = f"标题: {title}\n"
+                formatted_content += f"来源: {url}\n"
+                formatted_content += f"内容: {content}"
+
+                doc = Document(
+                    page_content=formatted_content,
+                    metadata={
+                        "source": url,
+                        "title": title,
+                        "is_web_result": True,
+                        "filetype": "web",
+                        "modified_time": time.time()
+                    }
+                )
+                docs.append(doc)
+
+            logger.debug(f"成功转换 {len(docs)} 个网络搜索结果为文档")
+            return docs
+
+        except Exception as e:
+            logger.error(f"转换网络搜索结果失败: {e}")
+            return docs  # 返回已处理的文档
+
+    def _build_context_with_history(self, session: Optional[SessionData]) -> Optional[str]:
+        """构建包含历史的上下文"""
+        if not session or not session.history:
+            return None
+
+        # 获取最近的对话
+        recent_history = session.history[-6:]  # 最近3轮对话
+        if len(recent_history) < 2:
+            return None
+
+        context = "以下是之前的对话历史:\n"
+        for msg in recent_history:
+            role = "用户" if msg["role"] == "user" else "助手"
+            context += f"{role}: {msg['content']}\n"
+
+        return context + "\n"
+
+    async def _rewrite_question(self, question: str) -> str:
+        """重写问题以提高检索效果"""
+        try:
             if len(question) < 10:
                 return question
-                
-            system_prompt = """您是一位问题重写专家。您的任务是将用户的原始问题重写为更清晰、更具体、更易于检索相关文档的形式，同时保持问题的原始意图。不要添加新的问题或改变问题的范围。"""
-            
+
+            system_prompt = """重写用户问题，使其更适合搜索。保持问题本意，只返回重写后的问题。"""
+
             messages = [
                 SystemMessage(content=system_prompt),
-                HumanMessage(content=f"原始问题: {question}\n\n请重写这个问题，使其更清晰、更容易搜索到相关答案。只需返回重写后的问题，不要包含任何解释。")
+                HumanMessage(content=f"问题: {question}")
             ]
-            
-            # 调用LLM重写问题
-            for attempt in range(max_retries):
-                try:
-                    response = await asyncio.wait_for(
-                        asyncio.create_task(self.llm.ainvoke(messages)),
-                        timeout=10
-                    )
-                    
-                    rewritten_question = response.content.strip()
-                    
-                    # 验证重写的问题不是空的且不完全相同
-                    if rewritten_question and rewritten_question != question:
-                        logger.info(f"问题重写: '{question}' -> '{rewritten_question}'")
-                        return rewritten_question
-                    else:
-                        return question
-                        
-                except Exception as e:
-                    if attempt < max_retries - 1:
-                        logger.warning(f"重写问题尝试 {attempt+1} 失败: {e}，重试中...")
-                        await asyncio.sleep(1)
-                    else:
-                        logger.error(f"重写问题失败: {e}")
-                        return question
-        
+
+            response = await asyncio.wait_for(
+                self.task_llm.ainvoke(messages),
+                timeout=5
+            )
+
+            rewritten = response.content.strip()
+            return rewritten if rewritten != question else question
+
         except Exception as e:
-            logger.error(f"重写问题时出现异常: {e}")
+            logger.warning(f"重写问题失败: {e}")
             return question
-    
-    async def _generate_from_docs(
-        self, 
-        question: str, 
-        docs: List[Document], 
-        max_retries: int = 3,
-        prevent_hallucinations: bool = False,
-        context_with_history: str = None
-    ) -> str:
-        """基于检索到的文档生成回答
-        
-        参数:
-            question: 用户问题
-            docs: 相关文档列表
-            max_retries: 最大重试次数
-            prevent_hallucinations: 是否开启防幻觉检查
-            context_with_history: 对话历史上下文
-        """
-        if not docs:
-            return "抱歉，我无法在知识库中找到与您问题相关的信息。"
-            
-        # 格式化文档内容作为上下文
-        docs_content = ""
-        for i, doc in enumerate(docs):
-            # 提取元数据中的来源
-            source = doc.metadata.get("source", "未知来源") if doc.metadata else "未知来源"
-            # 添加文档内容，每个文档由分隔线和来源标记
-            docs_content += f"\n\n文档 [{i+1}] (来源: {source}):\n{doc.page_content}"
-            
-        # 限制上下文长度，避免超出模型限制
-        max_context_length = config.rag.max_context_length or 4000
-        if len(docs_content) > max_context_length:
-            docs_content = docs_content[:max_context_length] + "...(内容已截断)"
-            
-        # 构建系统提示
-        system_prompt = """您是一个专业的AI助手。请仔细阅读以下文档内容，然后回答用户的问题。
-        
-遵循以下规则:
-1. 回答必须基于提供的文档内容，不要编造信息
-2. 如果文档内容不足以完全回答问题，请明确说明，不要猜测
-3. 回答要简洁、清晰，直接解决用户问题
-4. 使用专业、友好的语气，但不要过于口语化
-5. 不要在回答中提及"根据文档"、"根据提供的信息"等词语
-6. 禁止直接复制大段文档内容，请用自己的话组织回答
 
-回答语言必须与用户问题的语言保持一致。"""
-
-        # 添加历史上下文（如果有）
-        user_prompt = f"{context_with_history}\n\n" if context_with_history else ""
-        user_prompt += f"问题: {question}\n\n以下是相关文档内容:\n{docs_content}\n\n请基于以上文档内容回答问题。"
-        
-        # 构建消息列表
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt)
-        ]
-        
-        # 尝试生成回答，最多重试max_retries次
-        for attempt in range(max_retries):
-            try:
-                # 设置超时，避免无限等待
-                response = await asyncio.wait_for(
-                    asyncio.create_task(self.llm.ainvoke(messages)),
-                    timeout=30  # 30秒超时
-                )
-                
-                answer = response.content.strip()
-                
-                # 如果启用了防幻觉检查
-                if prevent_hallucinations:
-                    is_factual = await self._check_hallucination(question, answer, docs)
-                    if not is_factual:
-                        # 如果检测到幻觉，添加警告并重试
-                        if attempt < max_retries - 1:
-                            logger.warning(f"检测到回答存在幻觉，尝试重新生成 (尝试 {attempt+1}/{max_retries})")
-                            # 添加更严格的提示
-                            messages = [
-                                SystemMessage(content=system_prompt + "\n\n请特别注意：只能基于文档中明确提供的信息回答，不要添加任何未在文档中明确提及的信息。"),
-                                HumanMessage(content=user_prompt)
-                            ]
-                            continue
-                
-                return answer
-                
-            except Exception as e:
-                logger.error(f"生成回答时出错 (尝试 {attempt+1}/{max_retries}): {e}")
-                if attempt < max_retries - 1:
-                    # 短暂延迟后重试
-                    await asyncio.sleep(1)
-                else:
-                    # 所有重试失败后，返回错误信息
-                    return "抱歉，在处理您的问题时遇到了技术问题。请稍后再试。"
-        
-        # 如果执行到这里，说明所有尝试都失败了
-        return "抱歉，我无法生成对您问题的回答。请尝试用不同方式提问。"
-    
-    def _format_docs(self, docs: List[Document]) -> str:
-        """将文档格式化为字符串"""
-        if not docs:
-            return ""
-            
-        formatted = ""
-        for i, doc in enumerate(docs):
-            source = doc.metadata.get("source", "未知来源") if doc.metadata else "未知来源"
-            formatted += f"\n\n文档[{i+1}] (来源: {source}):\n{doc.page_content}"
-            
-        return formatted
-    
-    async def _check_hallucination(
-        self, 
-        question: str, 
-        answer: str, 
+    async def _generate_answer(
+        self,
+        question: str,
         docs: List[Document],
-        default: str = "yes"
-    ) -> bool:
-        """检查回答是否存在幻觉（是否基于事实）
-        
-        返回:
-            bool: 如果回答基于事实返回True，存在幻觉返回False
-        """
+        context_with_history: Optional[str] = None
+    ) -> str:
+        """生成回答"""
         try:
-            # 对于较短的问答，可能不需要严格检查
-            if len(answer) < 30:
-                return True
-                
-            # 准备文档内容
+            # 构建文档内容
             docs_content = ""
             for i, doc in enumerate(docs):
-                docs_content += f"\n\n文档[{i+1}]:\n{doc.page_content[:1000]}"
-                
-            # 限制文档长度
-            if len(docs_content) > 4000:
-                docs_content = docs_content[:4000] + "...(内容已截断)"
-                
-            # 创建提示
-            system_prompt = """您是一名真实性检查专家。您的任务是严格评估AI回答是否完全基于提供的文档内容。
+                source = doc.metadata.get("source", "未知") if doc.metadata else "未知"
+                filename = doc.metadata.get("filename", "未知文件") if doc.metadata else "未知文件"
 
-请按照以下标准进行评估:
-1. 严格检查: 回答中的每一个事实或断言都必须在文档中明确或合理推断出
-2. 允许合理组织: 回答可以重组文档中的信息，但不能添加新信息
-3. 允许概括和简化: 可以对复杂信息进行简化，但不能改变信息的本质
-4. 禁止知识混合: 不允许将文档中没有的外部知识混入回答
+                # 更详细的文档标识
+                docs_content += f"\n\n文档[{i+1}] (文件: {filename}, 来源: {source}):\n{doc.page_content}"
 
-评估结果只需回答'yes'或'no'。yes表示回答完全基于文档，无幻觉；no表示存在幻觉内容。"""
-            
+            # 限制长度
+            max_length = getattr(config.rag, 'max_context_length', 4000)
+            if len(docs_content) > max_length:
+                docs_content = docs_content[:max_length] + "...(内容已截断)"
+
+            # 构建提示
+            system_prompt = """您是专业的AI助手。请基于提供的文档内容回答用户问题。
+
+规则:
+1. 仅基于文档内容回答，不要编造信息
+2. 回答要简洁清晰，直接解决问题
+3. 如果文档信息不足，明确说明
+4. 使用专业友好的语气
+5. 语言与用户问题保持一致"""
+
+            user_prompt = f"{context_with_history}\n\n" if context_with_history else ""
+            user_prompt += f"问题: {question}\n\n文档内容:\n{docs_content}\n\n请回答问题："
+
             messages = [
                 SystemMessage(content=system_prompt),
-                HumanMessage(content=f"问题: {question}\n\n文档内容: {docs_content}\n\nAI回答: {answer}\n\n这个回答是否完全基于文档内容，不存在幻觉？请只回答'yes'或'no'。")
+                HumanMessage(content=user_prompt)
             ]
-            
-            # 初始化评分器
-            if not hasattr(self, 'structured_llm_hall') or self.structured_llm_hall is None:
-                # 使用更低的温度增强稳定性
-                hall_llm = ChatOpenAI(
-                    model=config.llm.model,
-                    temperature=0.1,
-                    api_key=config.llm.api_key,
-                    base_url=config.llm.base_url,
-                ) if self.llm_provider == "openai" else self.llm
-                
-                self.structured_llm_hall = hall_llm
-            
-            # 调用LLM
-            try:
-                response = await asyncio.wait_for(
-                    asyncio.create_task(self.structured_llm_hall.ainvoke(messages)),
-                    timeout=15
-                )
-                
-                result = response.content.strip().lower()
-                
-                # 解析结果
-                factual = "yes" in result and "no" not in result
-                logger.info(f"幻觉检查结果: {'无幻觉' if factual else '存在幻觉'}")
-                return factual
-                
-            except Exception as e:
-                logger.error(f"幻觉检查失败: {e}")
-                # 出错时假设回答基于事实
-                return default == "yes"
-                
-        except Exception as e:
-            logger.error(f"幻觉检查过程中出现异常: {e}")
-            return default == "yes"
-    
-    async def _generate_follow_up_questions(
-        self, 
-        question: str, 
-        answer: str, 
-        max_questions: int = 3
-    ) -> List[str]:
-        """生成后续问题建议"""
-        try:
-            # 创建提示
-            system_prompt = """您是一个AI助手，负责生成相关的后续问题，帮助用户继续探索相关内容。
 
-后续问题应该:
-1. 与原问题和回答的主题直接相关
-2. 鼓励用户进一步探索相关领域
-3. 涵盖不同但相关的角度
-4. 简短明了，易于理解
-5. 表述自然且流畅
-
-请生成3个后续问题，每个问题应该是完整的句子并以问号结尾。
-直接返回问题列表，无需其他格式或解释。"""
-            
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=f"原始问题: {question}\n\n回答: {answer}\n\n请生成{max_questions}个后续问题。")
-            ]
-            
-            # 调用LLM
             response = await asyncio.wait_for(
-                asyncio.create_task(self.llm.ainvoke(messages)),
-                timeout=10
+                self.llm.ainvoke(messages),
+                timeout=30
             )
-            
-            # 解析回答，提取问题列表
-            content = response.content.strip()
-            
-            # 提取问题
+
+            return response.content.strip()
+
+        except Exception as e:
+            logger.error(f"生成回答失败: {e}")
+            return "抱歉，生成回答时遇到问题，请稍后重试。"
+
+    def _generate_fallback_answer(self, web_search_attempted: bool = False, web_search_error: str = None) -> str:
+        """生成备用回答"""
+        if web_search_attempted and web_search_error:
+            return f"抱歉，我无法回答这个问题。我尝试了网络搜索，但出现了问题：{web_search_error}。请尝试重新表述您的问题，或询问关于AIOps平台的其他问题。"
+        elif web_search_attempted:
+            return "抱歉，我无法回答这个问题。我尝试了网络搜索，但没有找到相关信息。请尝试重新表述您的问题，或询问关于AIOps平台的问题，我会更好地帮助您。"
+        else:
+            return "抱歉，我找不到与您问题相关的信息。请尝试重新表述您的问题，或询问关于AIOps平台的核心功能、部署方式或使用方法等问题。"
+
+    async def _check_hallucination(self, question: str, answer: str, docs: List[Document]) -> bool:
+        """检查回答是否存在幻觉"""
+        try:
+            if len(answer) < 80 or not docs:
+                return True
+
+            # 简单检查 - 基于关键词匹配
+            answer_words = set(answer.lower().split())
+            doc_words = set()
+
+            for doc in docs:
+                doc_words.update(doc.page_content.lower().split())
+
+            # 计算回答中有多少词汇来自文档
+            common_words = answer_words & doc_words
+            coverage = len(common_words) / len(answer_words) if answer_words else 0
+
+            # 如果覆盖率较高，认为没有幻觉
+            return coverage > 0.3
+
+        except Exception as e:
+            logger.error(f"幻觉检查失败: {e}")
+            return True  # 默认通过
+
+    async def _generate_follow_up_questions(self, question: str, answer: str) -> List[str]:
+        """生成后续问题"""
+        default_questions = [
+            "AIOps平台有哪些核心功能？",
+            "如何部署和配置AIOps系统？",
+            "AIOps如何帮助解决运维问题？"
+        ]
+
+        try:
+            if len(answer) < 100:
+                return default_questions[:3]
+
+            system_prompt = """生成3个与当前话题相关的后续问题，每行一个，以问号结尾。"""
+
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=f"原问题: {question}\n回答: {answer[:300]}")
+            ]
+
+            response = await asyncio.wait_for(
+                self.task_llm.ainvoke(messages),
+                timeout=5
+            )
+
+            # 解析问题
             questions = []
-            for line in content.split("\n"):
-                line = line.strip()
-                # 删除前面的数字、点和空格
-                line = re.sub(r"^\d+[\.\)、]\s*", "", line)
-                
+            for line in response.content.strip().split("\n"):
+                line = re.sub(r"^\d+[\.\)、]\s*", "", line.strip())
                 if line and (line.endswith("?") or line.endswith("？")):
                     questions.append(line)
-                elif len(line) > 10:  # 如果是较长的行，可能是问题但忘了加问号
+                elif len(line) > 10:
                     questions.append(line + "?")
-                    
-            # 如果没有解析到足够的问题，提供默认问题
-            if len(questions) < max_questions:
-                default_questions = [
-                    "AIOps平台有哪些核心功能?",
-                    "如何部署和配置AIOps系统?",
-                    "AIOps如何帮助解决常见的运维问题?"
-                ]
-                while len(questions) < max_questions and default_questions:
-                    questions.append(default_questions.pop(0))
-                    
-            return questions[:max_questions]
-            
+
+            return questions[:3] if len(questions) >= 2 else default_questions[:3]
+
         except Exception as e:
             logger.error(f"生成后续问题失败: {e}")
-            # 返回默认问题
-            return [
-                "AIOps平台有哪些核心功能?",
-                "如何部署和配置AIOps系统?",
-                "AIOps如何帮助解决常见的运维问题?"
-            ]
+            return default_questions[:3]
+
+    def _format_source_documents(self, docs: List[Document]) -> List[Dict[str, Any]]:
+        """格式化源文档"""
+        source_docs = []
+
+        for doc in docs:
+            metadata = doc.metadata or {}
+            content = doc.page_content
+
+            # 截断长内容
+            if len(content) > 200:
+                content = content[:200] + "..."
+
+            source_docs.append({
+                "content": content,
+                "source": metadata.get("source", "未知来源"),
+                "is_web_result": metadata.get("is_web_result", False),
+                "metadata": metadata
+            })
+
+        return source_docs
+
+    async def shutdown(self):
+        """优雅关闭助手代理"""
+        if self._shutdown:
+            return
+
+        logger.info("开始关闭智能助手...")
+        self._shutdown = True
+
+        try:
+            # 1. 关闭缓存管理器
+            if hasattr(self, 'cache_manager'):
+                self.cache_manager.shutdown()
+
+            # 2. 关闭线程池
+            if hasattr(self, 'executor') and self.executor:
+                self.executor.shutdown(wait=True)
+
+            # 3. 关闭任务管理器
+            task_manager = get_task_manager()
+            await task_manager.shutdown()
+
+            logger.info("智能助手已成功关闭")
+
+        except Exception as e:
+            logger.warning(f"关闭智能助手时出现警告: {e}")
+
+    def __del__(self):
+        """清理资源"""
+        if not self._shutdown:
+            try:
+                # 标记为关闭状态
+                self._shutdown = True
+
+                # 关闭缓存管理器
+                if hasattr(self, 'cache_manager'):
+                    try:
+                        self.cache_manager.shutdown()
+                    except Exception as e:
+                        logger.warning(f"对象销毁时关闭缓存管理器失败: {e}")
+
+                # 关闭线程池
+                if hasattr(self, 'executor') and self.executor:
+                    try:
+                        self.executor.shutdown(wait=False)
+                    except Exception as e:
+                        logger.warning(f"对象销毁时关闭线程池失败: {e}")
+
+            except Exception as e:
+                logger.warning(f"AssistantAgent清理资源时出错: {e}")

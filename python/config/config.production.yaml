@@ -14,6 +14,7 @@ prometheus:
 llm:
   provider: openai
   model: Qwen/Qwen3-14B
+  task_model: Qwen/Qwen3-14B-Instruct
   temperature: 0.3
   max_tokens: 4096
   # 备用Ollama模型配置

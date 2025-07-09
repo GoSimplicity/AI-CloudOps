@@ -14,6 +14,7 @@ prometheus:
 llm:
   provider: openai # 可选值: openai, ollama - 设置主要的LLM提供商
   model: Qwen/Qwen3-14B # 使用OpenAI提供商时的模型名称
+  task_model: Qwen/Qwen2.5-14B-Instruct
   temperature: 0.7
   max_tokens: 2048
   # 备用Ollama模型配置
@@ -75,3 +76,9 @@ rag:
   ollama_embedding_model: nomic-embed-text
   max_context_length: 4000
   temperature: 0.1
+  # 缓存设置
+  cache_expiry: 3600 # 缓存过期时间(秒)
+  # 文档处理设置
+  max_docs_per_query: 8 # 每次查询最多处理的文档数
+  use_enhanced_retrieval: true # 是否使用增强检索
+  use_document_compressor: true # 是否使用文档压缩

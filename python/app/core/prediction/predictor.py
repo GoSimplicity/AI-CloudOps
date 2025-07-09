@@ -3,20 +3,31 @@ import datetime
 import numpy as np
 import pandas as pd
 from typing import Optional, Dict, Any, List
+
 from app.core.prediction.model_loader import ModelLoader
 from app.services.prometheus import PrometheusService
 from app.utils.time_utils import TimeUtils
 from app.config.settings import config
-import sys
+from app.constants import (
+    LOW_QPS_THRESHOLD, QPS_CONFIDENCE_THRESHOLDS, HOUR_FACTORS, DAY_FACTORS,
+    MAX_PREDICTION_HOURS, DEFAULT_PREDICTION_HOURS, PREDICTION_VARIATION_FACTOR
+)
+from app.utils.error_handlers import (
+    ErrorHandler, ServiceError, ValidationError,
+    validate_field_range, validate_field_type
+)
 
 logger = logging.getLogger("aiops.predictor")
 
 class PredictionService:
+    """负载预测服务，基于机器学习模型预测实例需求"""
+    
     def __init__(self):
         self.prometheus = PrometheusService()
         self.model_loader = ModelLoader()
         self.model_loaded = False
         self.scaler_loaded = False
+        self.error_handler = ErrorHandler(logger)
         self._initialize()
     
     def _initialize(self):
@@ -59,8 +70,6 @@ class PredictionService:
                 current_qps = 0
             
             # QPS为0或极低值时直接返回最小实例数
-            LOW_QPS_THRESHOLD = 5.0  # 根据实际业务场景调整
-            
             if current_qps == 0 or current_qps < LOW_QPS_THRESHOLD:
                 logger.info(f"当前QPS({current_qps})低于阈值{LOW_QPS_THRESHOLD}，返回最小实例数: {config.prediction.min_instances}")
                 return {
@@ -420,28 +429,11 @@ class PredictionService:
     
     def _get_hour_factor(self, hour: int) -> float:
         """根据小时获取QPS乘数"""
-        # 日间模式: 早晨上升，中午小幅下降，下午再次上升，晚上下降
-        hour_factors = {
-            0: 0.3, 1: 0.2, 2: 0.15, 3: 0.1, 4: 0.1, 5: 0.2,
-            6: 0.4, 7: 0.6, 8: 0.8, 9: 0.9, 10: 1.0, 11: 0.95,
-            12: 0.9, 13: 0.95, 14: 1.0, 15: 1.0, 16: 0.95, 17: 0.9,
-            18: 0.8, 19: 0.7, 20: 0.6, 21: 0.5, 22: 0.4, 23: 0.3
-        }
-        return hour_factors.get(hour, 0.5)  # 默认为0.5
+        return HOUR_FACTORS.get(hour, 0.5)  # 默认为0.5
     
     def _get_day_factor(self, day_of_week: int) -> float:
         """根据星期几获取QPS乘数"""
-        # 周间模式: 工作日比周末流量高
-        day_factors = {
-            0: 0.95,  # 周一
-            1: 1.0,   # 周二
-            2: 1.05,  # 周三
-            3: 1.05,  # 周四
-            4: 0.95,  # 周五
-            5: 0.7,   # 周六
-            6: 0.6    # 周日
-        }
-        return day_factors.get(day_of_week, 1.0)  # 默认为1.0
+        return DAY_FACTORS.get(day_of_week, 1.0)  # 默认为1.0
     
     def is_healthy(self) -> bool:
         """检查预测服务健康状态"""

@@ -3,8 +3,12 @@
 """
 
 from .prometheus import PrometheusService
-from .kubernetes import KubernetesService
 from .llm import LLMService
 from .notification import NotificationService
 
-__all__ = ["PrometheusService", "KubernetesService", "LLMService", "NotificationService"]
+try:
+    from .kubernetes import KubernetesService
+    __all__ = ["PrometheusService", "KubernetesService", "LLMService", "NotificationService"]
+except ImportError:
+    KubernetesService = None
+    __all__ = ["PrometheusService", "LLMService", "NotificationService"]
