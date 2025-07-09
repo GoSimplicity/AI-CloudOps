@@ -12,6 +12,7 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.main:app
 ENV PIP_DEFAULT_TIMEOUT=100
+ENV ENV=production
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
@@ -30,14 +31,13 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # 创建必要的目录
-RUN mkdir -p data/models data/sample logs
+RUN mkdir -p data/models data/sample logs config
 
 # 复制应用代码
 COPY . .
 
-# 配置ollama（可选，如果需要本地部署）
-# 如果使用外部ollama服务，可以注释掉下面的步骤
-# RUN curl -fsSL https://ollama.com/install.sh | sh
+# 确保配置目录有正确的权限
+RUN chown -R root:root config && chmod -R 755 config
 
 # 创建非root用户
 RUN useradd --create-home --shell /bin/bash aiops && \

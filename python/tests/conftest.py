@@ -3,9 +3,41 @@ import asyncio
 import os
 import sys
 import tempfile
+import yaml
 from pathlib import Path
 # 添加项目路径到sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_config():
+    """设置测试配置文件"""
+    # 设置环境为测试环境
+    os.environ['ENV'] = 'test'
+    
+    # 创建测试配置文件
+    config_dir = Path(__file__).parent.parent / "config"
+    config_dir.mkdir(exist_ok=True)
+    
+    test_config_path = config_dir / "config.test.yaml"
+    if not test_config_path.exists():
+        # 基于默认配置创建测试配置
+        default_config_path = config_dir / "config.yaml"
+        if default_config_path.exists():
+            with open(default_config_path, 'r', encoding='utf-8') as f:
+                config_data = yaml.safe_load(f)
+                
+            # 修改配置适应测试环境
+            config_data['app']['debug'] = True
+            config_data['app']['log_level'] = 'WARNING'
+            config_data['testing'] = {'skip_llm_tests': True}  # 默认跳过LLM测试
+            
+            with open(test_config_path, 'w', encoding='utf-8') as f:
+                yaml.dump(config_data, f, allow_unicode=True)
+    
+    yield
+    
+    # 清理环境变量
+    os.environ.pop('ENV', None)
 
 @pytest.fixture
 def app():
@@ -14,7 +46,7 @@ def app():
     
     app = create_app()
     app.config['TESTING'] = True
-    app.config['DEBUG'] = False
+    app.config['DEBUG'] = True
     
     return app
 
@@ -103,16 +135,23 @@ def event_loop():
     yield loop
     loop.close()
 
-@pytest.fixture(autouse=True)
-def setup_test_environment():
-    """设置测试环境"""
-    # 设置测试环境变量
-    os.environ['DEBUG'] = 'true'
-    os.environ['TESTING'] = 'true'
-    os.environ['LOG_LEVEL'] = 'WARNING'  # 减少测试时的日志输出
+@pytest.fixture
+def mock_env_vars():
+    """模拟环境变量"""
+    old_vars = {}
     
-    yield
+    def _set_vars(**kwargs):
+        for key, value in kwargs.items():
+            old_vars[key] = os.environ.get(key)
+            os.environ[key] = value
+            
+        return old_vars
     
-    # 清理环境变量
-    for key in ['DEBUG', 'TESTING', 'LOG_LEVEL']:
-        os.environ.pop(key, None)
+    yield _set_vars
+    
+    # 恢复原始环境变量
+    for key, value in old_vars.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value

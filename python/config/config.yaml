@@ -1,0 +1,77 @@
+# 应用基础配置
+app:
+  debug: false
+  host: 0.0.0.0
+  port: 8080
+  log_level: INFO
+
+# Prometheus配置
+prometheus:
+  host: 127.0.0.1:9090
+  timeout: 30
+
+# LLM模型配置
+llm:
+  provider: openai # 可选值: openai, ollama - 设置主要的LLM提供商
+  model: Qwen/Qwen3-14B # 使用OpenAI提供商时的模型名称
+  temperature: 0.7
+  max_tokens: 2048
+  # 备用Ollama模型配置
+  ollama_model: qwen2.5:3b # Ollama本地模型名称
+  ollama_base_url: http://127.0.0.1:11434/v1 # Ollama API基础URL
+
+# 测试配置
+testing:
+  skip_llm_tests: false # 设置为true可跳过依赖LLM的测试
+
+# Kubernetes配置
+kubernetes:
+  in_cluster: false
+  config_path: ./deploy/kubernetes/config
+  namespace: default
+
+# 根因分析配置
+rca:
+  default_time_range: 30
+  max_time_range: 1440
+  anomaly_threshold: 0.65
+  correlation_threshold: 0.7
+  default_metrics:
+    - container_cpu_usage_seconds_total
+    - container_memory_working_set_bytes
+    - kube_pod_container_status_restarts_total
+    - kube_pod_status_phase
+    - node_cpu_seconds_total
+    - node_memory_MemFree_bytes
+    - kubelet_http_requests_duration_seconds_count
+    - kubelet_http_requests_duration_seconds_sum
+
+# 预测配置
+prediction:
+  model_path: data/models/time_qps_auto_scaling_model.pkl
+  scaler_path: data/models/time_qps_auto_scaling_scaler.pkl
+  max_instances: 20
+  min_instances: 1
+  prometheus_query: 'rate(nginx_ingress_controller_nginx_process_requests_total{service="ingress-nginx-controller-metrics"}[10m])'
+
+# 通知配置
+notification:
+  enabled: true
+
+# Tavily搜索配置
+tavily:
+  max_results: 5
+
+# 小助手配置
+rag:
+  vector_db_path: data/vector_db
+  collection_name: aiops-assistant
+  knowledge_base_path: data/knowledge_base
+  chunk_size: 1000
+  chunk_overlap: 200
+  top_k: 4
+  similarity_threshold: 0.7
+  openai_embedding_model: Pro/BAAI/bge-m3
+  ollama_embedding_model: nomic-embed-text
+  max_context_length: 4000
+  temperature: 0.1

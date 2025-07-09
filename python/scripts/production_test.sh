@@ -14,6 +14,9 @@ LOG_DIR="$ROOT_DIR/logs"
 REPORT_DIR="$ROOT_DIR/docs"
 LOG_FILE="$LOG_DIR/production_test_$TIMESTAMP.log"
 
+# 导入配置读取工具
+source "$SCRIPT_DIR/config_reader.sh"
+
 # 确保日志目录存在
 mkdir -p $LOG_DIR
 mkdir -p $REPORT_DIR
@@ -46,10 +49,21 @@ confirm_test_environment() {
     exit 1
   }
   
+  # 确保配置文件存在
+  if [[ ! -f "$ROOT_DIR/config/config.production.yaml" ]]; then
+    log "错误: 找不到生产环境配置文件 (config/config.production.yaml)"
+    exit 1
+  fi
+  
+  # 设置生产环境配置文件路径
+  export CONFIG_FILE="$ROOT_DIR/config/config.production.yaml"
+  
+  # 读取配置
+  read_config
+  
   # 检查是否能访问 Prometheus
-  PROMETHEUS_HOST=$(grep -E "^PROMETHEUS_HOST=" "$ROOT_DIR/env.example" | cut -d= -f2 | tr -d '"')
   if [[ -z "$PROMETHEUS_HOST" ]]; then
-    log "警告: 无法从环境变量文件获取Prometheus主机地址"
+    log "警告: 无法从配置文件获取Prometheus主机地址"
   else
     log "测试Prometheus连接 ($PROMETHEUS_HOST)..."
     curl -s -o /dev/null "http://$PROMETHEUS_HOST/api/v1/status/config" || {
@@ -69,15 +83,48 @@ confirm_test_environment() {
 setup_test_env() {
   log "设置生产测试环境变量..."
   
-  # 基于env.example创建测试专用的环境变量
-  export TESTING=true
-  export SKIP_LLM_TESTS=false  # 在生产环境中测试LLM功能
-  export LOG_LEVEL=INFO
+  # 设置测试环境
+  export ENV=test
   
-  # 确保使用真实服务而非mock
-  export USE_REAL_SERVICES=true
+  # 创建测试配置文件，基于生产环境配置
+  mkdir -p "$ROOT_DIR/config"
+  if [[ ! -f "$ROOT_DIR/config/config.test.yaml" ]]; then
+    cp "$ROOT_DIR/config/config.production.yaml" "$ROOT_DIR/config/config.test.yaml"
+    
+    # 修改测试配置
+    # 使用Python和PyYAML修改配置文件
+    python3 -c "
+import yaml
+import os
+
+test_config_file = '$ROOT_DIR/config/config.test.yaml'
+with open(test_config_file, 'r') as f:
+    config = yaml.safe_load(f)
+
+# 设置测试特定配置
+if 'testing' not in config:
+    config['testing'] = {}
+config['testing']['skip_llm_tests'] = False
+
+# 确保真实服务
+config['app']['debug'] = True
+config['app']['log_level'] = 'INFO'
+
+with open(test_config_file, 'w') as f:
+    yaml.dump(config, f)
+"
+    
+    log "已创建测试配置文件: config/config.test.yaml"
+  fi
+  
+  # 设置测试环境配置文件并读取
+  export CONFIG_FILE="$ROOT_DIR/config/config.test.yaml"
+  read_config
   
   log "环境变量设置完成"
+  log "应用主机: $APP_HOST"
+  log "应用端口: $APP_PORT"
+  log "Prometheus主机: $PROMETHEUS_HOST"
 }
 
 # 运行单元测试

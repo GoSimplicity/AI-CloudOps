@@ -9,23 +9,19 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - PROMETHEUS_HOST=prometheus:9090
-      - DEBUG=false
-      - LOG_LEVEL=INFO
-      # LLM 配置
-      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
-      - LLM_MODEL=${LLM_MODEL:-Qwen/Qwen2.5-14B-Instruct}
+      # 设置环境类型
+      - ENV=${ENV:-production}
+      # 仅保留敏感配置
       - LLM_API_KEY=${LLM_API_KEY:-sk-xrykvuqngkhbsmdtmvhzsupjafandfyhcdbcqojlyvrftttq}
       - LLM_BASE_URL=${LLM_BASE_URL:-https://api.siliconflow.cn/v1}
-      # Ollama备用配置
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b}
-      - OLLAMA_BASE_URL=http://ollama:11434/v1
-      # Kubernetes配置
-      - K8S_IN_CLUSTER=false
-      - NOTIFICATION_ENABLED=true
+      # 仅用于通知的webhook
+      - FEISHU_WEBHOOK=${FEISHU_WEBHOOK:-}
+      # Tavily API密钥
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./config:/app/config
       - ./deploy/kubernetes:/app/deploy/kubernetes
     depends_on:
       - prometheus

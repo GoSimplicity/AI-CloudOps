@@ -54,6 +54,7 @@ create_directories() {
     mkdir -p data/models
     mkdir -p data/sample
     mkdir -p logs
+    mkdir -p config
     mkdir -p deploy/kubernetes
     mkdir -p deploy/grafana/dashboards
     mkdir -p deploy/grafana/datasources
@@ -61,14 +62,255 @@ create_directories() {
     echo "✅ 目录创建完成"
 }
 
-# 复制环境变量文件
-setup_env() {
-    echo "⚙️  设置环境变量..."
+# 设置配置文件
+setup_config() {
+    echo "⚙️  设置配置文件..."
+    
+    # 环境变量文件 (仅包含敏感数据)
     if [ ! -f .env ]; then
-        cp .env.example .env
-        echo "✅ 已创建.env文件，请根据需要修改配置"
+        cp env.example .env
+        echo "✅ 已创建 .env 文件，请根据需要修改API密钥和敏感数据"
     else
-        echo "⚠️  .env文件已存在，跳过创建"
+        echo "⚠️  .env 文件已存在，跳过创建"
+    fi
+    
+    # 创建开发环境YAML配置
+    if [ ! -f config/config.yaml ]; then
+        cat > config/config.yaml << 'EOF'
+# ==============================================
+# AIOps平台配置文件
+# ==============================================
+
+# 应用基础配置
+app:
+  debug: true
+  host: 0.0.0.0
+  port: 8080
+  log_level: INFO
+
+# Prometheus配置
+prometheus:
+  host: 127.0.0.1:9090
+  timeout: 30
+
+# LLM模型配置
+llm:
+  provider: openai  # 可选值: openai, ollama - 设置主要的LLM提供商
+  model: Qwen/Qwen3-14B
+  temperature: 0.7
+  max_tokens: 2048
+  # 备用Ollama模型配置
+  ollama_model: qwen2.5:3b
+  ollama_base_url: http://127.0.0.1:11434/v1
+
+# 测试配置
+testing:
+  skip_llm_tests: false
+
+# Kubernetes配置
+kubernetes:
+  in_cluster: false
+  config_path: ./deploy/kubernetes/config
+  namespace: default
+
+# 根因分析配置
+rca:
+  default_time_range: 30
+  max_time_range: 1440
+  anomaly_threshold: 0.65
+  correlation_threshold: 0.7
+  default_metrics:
+    - container_cpu_usage_seconds_total
+    - container_memory_working_set_bytes
+    - kube_pod_container_status_restarts_total
+    - kube_pod_status_phase
+    - node_cpu_seconds_total
+    - node_memory_MemFree_bytes
+    - kubelet_http_requests_duration_seconds_count
+    - kubelet_http_requests_duration_seconds_sum
+
+# 预测配置
+prediction:
+  model_path: data/models/time_qps_auto_scaling_model.pkl
+  scaler_path: data/models/time_qps_auto_scaling_scaler.pkl
+  max_instances: 20
+  min_instances: 1
+  prometheus_query: 'rate(nginx_ingress_controller_nginx_process_requests_total{service="ingress-nginx-controller-metrics"}[10m])'
+
+# 通知配置
+notification:
+  enabled: true
+
+# Tavily搜索配置
+tavily:
+  max_results: 5
+
+# 小助手配置
+rag:
+  vector_db_path: data/vector_db
+  collection_name: aiops-assistant
+  knowledge_base_path: data/knowledge_base
+  chunk_size: 1000
+  chunk_overlap: 200
+  top_k: 4
+  similarity_threshold: 0.7
+  openai_embedding_model: Pro/BAAI/bge-m3
+  ollama_embedding_model: nomic-embed-text
+  max_context_length: 4000
+  temperature: 0.1
+EOF
+        echo "✅ 已创建开发环境配置文件 config/config.yaml"
+    else
+        echo "⚠️  config/config.yaml 文件已存在，跳过创建"
+    fi
+    
+    # 创建生产环境YAML配置
+    if [ ! -f config/config.production.yaml ]; then
+        cat > config/config.production.yaml << 'EOF'
+# ==============================================
+# AIOps平台生产环境配置文件
+# ==============================================
+
+# 应用基础配置
+app:
+  debug: false
+  host: 0.0.0.0
+  port: 8080
+  log_level: INFO
+
+# Prometheus配置
+prometheus:
+  host: prometheus-server:9090
+  timeout: 30
+
+# LLM模型配置
+llm:
+  provider: openai
+  model: Qwen/Qwen3-14B
+  temperature: 0.3
+  max_tokens: 4096
+  # 备用Ollama模型配置
+  ollama_model: qwen2.5:3b
+  ollama_base_url: http://ollama-service:11434/v1
+
+# 测试配置
+testing:
+  skip_llm_tests: false
+
+# Kubernetes配置
+kubernetes:
+  in_cluster: true
+  namespace: default
+
+# 根因分析配置
+rca:
+  default_time_range: 30
+  max_time_range: 1440
+  anomaly_threshold: 0.7
+  correlation_threshold: 0.75
+  default_metrics:
+    - container_cpu_usage_seconds_total
+    - container_memory_working_set_bytes
+    - kube_pod_container_status_restarts_total
+    - kube_pod_status_phase
+    - node_cpu_seconds_total
+    - node_memory_MemFree_bytes
+    - kubelet_http_requests_duration_seconds_count
+    - kubelet_http_requests_duration_seconds_sum
+
+# 预测配置
+prediction:
+  model_path: /app/data/models/time_qps_auto_scaling_model.pkl
+  scaler_path: /app/data/models/time_qps_auto_scaling_scaler.pkl
+  max_instances: 20
+  min_instances: 1
+  prometheus_query: 'rate(nginx_ingress_controller_nginx_process_requests_total{service="ingress-nginx-controller-metrics"}[10m])'
+
+# 通知配置
+notification:
+  enabled: true
+
+# Tavily搜索配置
+tavily:
+  max_results: 5
+
+# 小助手配置
+rag:
+  vector_db_path: /app/data/vector_db
+  collection_name: aiops-assistant-prod
+  knowledge_base_path: /app/data/knowledge_base
+  chunk_size: 1000
+  chunk_overlap: 200
+  top_k: 5
+  similarity_threshold: 0.75
+  openai_embedding_model: Pro/BAAI/bge-m3
+  ollama_embedding_model: nomic-embed-text
+  max_context_length: 6000
+  temperature: 0.1
+EOF
+        echo "✅ 已创建生产环境配置文件 config/config.production.yaml"
+    else
+        echo "⚠️  config/config.production.yaml 文件已存在，跳过创建"
+    fi
+    
+    # 创建配置说明文件
+    if [ ! -f config/README.md ]; then
+        cat > config/README.md << 'EOF'
+# AIOps 平台配置指南
+
+## 配置文件说明
+
+AIOps 平台使用两种配置机制：YAML 配置文件和环境变量。这种方式分离了普通配置和敏感数据，提高了系统的安全性和可维护性。
+
+### 配置优先级
+
+系统加载配置的优先级顺序为：
+
+1. 环境变量（最高优先级）
+2. 环境特定 YAML 配置文件（如`config.production.yaml`）
+3. 默认 YAML 配置文件（`config.yaml`）
+4. 代码中的默认值（最低优先级）
+
+### 配置文件
+
+- `config.yaml`：默认配置文件，包含开发环境的所有非敏感配置
+- `config.production.yaml`：生产环境配置文件，包含生产环境的非敏感配置
+- 可以根据需要创建其他环境配置文件，如`config.test.yaml`、`config.staging.yaml`等
+
+### 环境变量文件
+
+- `env.example`：示例环境变量文件，仅包含敏感数据和 API 密钥
+- `env.production`：生产环境的环境变量文件，包含生产环境的敏感数据和 API 密钥
+
+## 使用方法
+
+### 切换环境
+
+通过设置`ENV`环境变量来切换不同环境的配置：
+
+```bash
+# 开发环境（默认）
+export ENV=development
+
+# 生产环境
+export ENV=production
+
+# 测试环境
+export ENV=test
+```
+
+### 增加新的配置项
+
+1. 在相应的 YAML 配置文件中添加新的配置项
+2. 在`app/config/settings.py`中更新相应的配置类
+
+### 配置敏感数据
+
+敏感数据（如 API 密钥、密码等）应始终通过环境变量或`.env`文件配置，而不是直接写入 YAML 配置文件。
+EOF
+        echo "✅ 已创建配置说明文件 config/README.md"
+    else
+        echo "⚠️  config/README.md 文件已存在，跳过创建"
     fi
 }
 
@@ -193,6 +435,7 @@ import flask
 import pandas
 import numpy
 import sklearn
+import yaml
 import requests
 print('✅ 主要Python包导入成功')
 "
@@ -235,16 +478,6 @@ setup_kubernetes() {
         echo "已创建示例配置文件，请根据实际情况修改："
         echo "  - deploy/kubernetes/config.example"
     fi
-    
-    # 更新.env文件中的K8s配置路径
-    if [ -f ".env" ]; then
-        if grep -q "K8S_CONFIG_PATH" .env; then
-            sed -i.bak 's|K8S_CONFIG_PATH=.*|K8S_CONFIG_PATH=./deploy/kubernetes/config|g' .env
-        else
-            echo "K8S_CONFIG_PATH=./deploy/kubernetes/config" >> .env
-        fi
-        echo "✅ 已更新.env文件中的Kubernetes配置路径"
-    fi
 }
 
 # 显示下一步操作
@@ -253,22 +486,27 @@ show_next_steps() {
     echo "🎉 AIOps平台环境设置完成！"
     echo ""
     echo "下一步操作："
-    echo "1. 编辑 .env 文件配置参数"
+    echo "1. 配置文件："
+    echo "   - 编辑 config/config.yaml 文件配置应用参数"
+    echo "   - 编辑 .env 文件配置API密钥和敏感数据"
     echo "2. 确保Kubernetes配置正确（如果使用K8s功能）"
     echo "   - 检查 deploy/kubernetes/config 文件"
     echo "3. 启动服务："
     echo "   # 使用Docker Compose（推荐）"
     echo "   docker-compose up -d"
     echo ""
-    echo "   # 或本地开发"
-    echo "   python app/main.py"
+    echo "   # 或本地开发模式"
+    echo "   ENV=development ./scripts/start.sh"
     echo ""
-    echo "3. 访问服务："
+    echo "   # 或生产环境"
+    echo "   ENV=production ./scripts/start_production.sh"
+    echo ""
+    echo "4. 访问服务："
     echo "   - AIOps API: http://localhost:8080"
     echo "   - Prometheus: http://localhost:9090"
     echo "   - Grafana: http://localhost:3000 (admin/admin123)"
     echo ""
-    echo "4. 健康检查："
+    echo "5. 健康检查："
     echo "   curl http://localhost:8080/api/v1/health"
     echo ""
 }
@@ -281,7 +519,7 @@ main() {
     check_python
     check_docker
     create_directories
-    setup_env
+    setup_config
     install_python_deps
     create_sample_configs
     setup_kubernetes
