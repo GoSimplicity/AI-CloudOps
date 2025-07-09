@@ -12,6 +12,13 @@ require (
 	github.com/alibabacloud-go/slb-20140515/v3 v3.3.17
 	github.com/alibabacloud-go/tea v1.3.8
 	github.com/alibabacloud-go/vpc-20160428/v2 v2.0.117
+	github.com/aws/aws-sdk-go-v2 v1.36.5
+	github.com/aws/aws-sdk-go-v2/config v1.29.17
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.70
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.230.0
+	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.46.0
+	github.com/aws/aws-sdk-go-v2/service/sts v1.34.0
+	github.com/aws/smithy-go v1.22.4
 	github.com/casbin/casbin/v2 v2.93.0
 	github.com/casbin/gorm-adapter/v3 v3.28.0
 	github.com/cloudwego/eino v0.3.27
@@ -79,7 +86,7 @@ require (
 	github.com/perimeterx/marshmallow v1.1.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
-	github.com/sirupsen/logrus v1.9.3
+	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
 	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
@@ -95,6 +102,14 @@ require (
 	github.com/alecthomas/units v0.0.0-20240626203959-61d1e3462e30 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/aws/aws-sdk-go v1.54.19 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.32 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.36 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.36 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.17 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.25.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.3 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.13.2 // indirect

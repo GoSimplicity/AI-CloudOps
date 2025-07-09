@@ -26,11 +26,18 @@
 package di
 
 import (
+	"fmt"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"gorm.io/gorm"
 )
 
 func InitTables(db *gorm.DB) error {
+	// 检查数据库连接是否为nil
+	if db == nil {
+		return fmt.Errorf("数据库连接为空，跳过表初始化")
+	}
+
 	return db.AutoMigrate(
 		// auth
 		&model.User{},

@@ -221,7 +221,7 @@ var JobSet = wire.NewSet(
 
 var ProviderSet = wire.NewSet(
 	treeProvider.NewAliyunProvider,
-	treeProvider.NewProviderFactory,
+	treeProvider.NewProviderFactoryWithAliyun,
 )
 
 var CronSet = wire.NewSet(
