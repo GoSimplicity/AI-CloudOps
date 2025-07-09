@@ -65,6 +65,7 @@ class PrometheusConfig:
 class LLMConfig:
     provider: str = (get_env_or_config("LLM_PROVIDER", "llm.provider", "openai")).split('#')[0].strip()
     model: str = get_env_or_config("LLM_MODEL", "llm.model", "Qwen/Qwen3-14B")
+    task_model: str = get_env_or_config("LLM_TASK_MODEL", "llm.task_model", "Qwen/Qwen2.5-14B-Instruct")
     api_key: str = get_env_or_config("LLM_API_KEY", "llm.api_key", "sk-xxx")
     base_url: str = get_env_or_config("LLM_BASE_URL", "llm.base_url", "https://api.siliconflow.cn/v1")
     temperature: float = get_env_or_config("LLM_TEMPERATURE", "llm.temperature", 0.7, float)
