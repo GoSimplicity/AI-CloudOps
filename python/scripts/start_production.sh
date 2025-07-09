@@ -12,6 +12,9 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_DIR="$ROOT_DIR/logs"
 LOG_FILE="$LOG_DIR/production_$TIMESTAMP.log"
 
+# 导入配置读取工具
+source "$SCRIPT_DIR/config_reader.sh"
+
 # 确保日志目录存在
 mkdir -p $LOG_DIR
 
@@ -37,6 +40,12 @@ check_environment() {
     exit 1
   fi
   
+  # 确保YAML配置文件存在
+  if [[ ! -f "$ROOT_DIR/config/config.production.yaml" ]]; then
+    log "错误: 找不到生产环境YAML配置文件 (config/config.production.yaml)"
+    exit 1
+  fi
+  
   # 检查是否填写了必要的API密钥
   grep -q "your-api-key-here" "$ROOT_DIR/env.production" && {
     log "错误: 生产环境配置中包含默认API密钥，请先更新env.production文件"
@@ -44,10 +53,10 @@ check_environment() {
   }
   
   # 检查Kubernetes配置
-  if [[ ! -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]] && \
-     grep -q "K8S_IN_CLUSTER=true" "$ROOT_DIR/env.production"; then
+  if [[ -n "$(grep -q "kubernetes:" "$ROOT_DIR/config/config.production.yaml" && grep -q "in_cluster: true" "$ROOT_DIR/config/config.production.yaml")" ]] && \
+     [[ ! -f "/var/run/secrets/kubernetes.io/serviceaccount/token" ]]; then
     log "警告: 配置了使用K8s集群内配置，但没有检测到ServiceAccount令牌"
-    log "建议: 如果不在K8s集群中运行，请将K8S_IN_CLUSTER设置为false并提供配置文件路径"
+    log "建议: 如果不在K8s集群中运行，请将kubernetes.in_cluster设置为false并提供配置文件路径"
   fi
   
   log "环境配置检查完成"
@@ -57,13 +66,21 @@ check_environment() {
 prepare_environment() {
   log "准备生产环境..."
   
+  # 设置环境变量
+  export ENV=production
+  export CONFIG_FILE="$ROOT_DIR/config/config.production.yaml"
+  log "已设置环境变量: ENV=production"
+  
   # 复制生产环境配置
   cp "$ROOT_DIR/env.production" "$ROOT_DIR/.env"
-  log "已加载生产环境配置"
+  log "已加载生产环境配置（敏感数据）"
   
   # 确保数据目录存在
   mkdir -p "$ROOT_DIR/data/vector_db"
   mkdir -p "$ROOT_DIR/data/models"
+  
+  # 读取配置文件
+  read_config "$CONFIG_FILE"
   
   log "环境准备完成"
 }
@@ -72,18 +89,19 @@ prepare_environment() {
 run_prechecks() {
   log "运行服务预检查..."
   
-  # 测试Prometheus连接
-  PROMETHEUS_HOST=$(grep -E "^PROMETHEUS_HOST=" "$ROOT_DIR/env.production" | cut -d= -f2 | tr -d '"')
+  # 使用配置中的Prometheus主机
+  log "测试Prometheus连接 ($PROMETHEUS_HOST)..."
   if [[ -n "$PROMETHEUS_HOST" ]]; then
-    log "测试Prometheus连接 ($PROMETHEUS_HOST)..."
     curl -s -o /dev/null "http://$PROMETHEUS_HOST/api/v1/status/config" || {
       log "警告: 无法连接到Prometheus服务"
     }
   fi
   
+  # 从YAML获取模型路径
+  MODEL_PATH=$(grep -A 6 "prediction:" "$ROOT_DIR/config/config.production.yaml" | grep "model_path:" | awk -F': ' '{print $2}')
+  
   # 检查模型文件
-  MODEL_PATH=$(grep -E "^PREDICTION_MODEL_PATH=" "$ROOT_DIR/env.production" | cut -d= -f2 | tr -d '"')
-  if [[ -n "$MODEL_PATH" ]] && [[ ! -f "$MODEL_PATH" ]]; then
+  if [[ -n "$MODEL_PATH" ]] && [[ ! -f "$ROOT_DIR/$MODEL_PATH" ]]; then
     log "警告: 预测模型文件不存在: $MODEL_PATH"
     log "预测功能可能无法正常工作"
   fi
@@ -95,11 +113,11 @@ run_prechecks() {
 refresh_knowledge_base() {
   log "刷新RAG知识库..."
   
-  # 调用知识库刷新API
+  # 调用知识库刷新API，使用配置文件中的主机和端口
   python3 -c "
 import requests
 try:
-    response = requests.post('http://localhost:8080/api/v1/assistant/refresh')
+    response = requests.post('http://${APP_HOST}:${APP_PORT}/api/v1/assistant/refresh')
     print(f'知识库刷新状态: {response.status_code}')
 except Exception as e:
     print(f'知识库刷新失败: {str(e)}')
@@ -115,6 +133,9 @@ start_application() {
   cd "$ROOT_DIR"
   
   # 使用生产环境配置
+  export ENV=production
+  
+  # 加载敏感环境变量
   export $(grep -v '^#' "$ROOT_DIR/.env" | xargs)
   
   # 启动应用
@@ -123,6 +144,7 @@ start_application() {
   
   echo $PID > "$ROOT_DIR/.pid"
   log "应用已启动 (PID: $PID)"
+  log "应用地址: http://${APP_HOST}:${APP_PORT}"
   log "日志文件: $LOG_FILE"
   
   # 等待应用启动

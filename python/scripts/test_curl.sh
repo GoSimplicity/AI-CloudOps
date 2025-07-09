@@ -3,10 +3,22 @@
 # 简单的curl测试脚本，用于测试AI小助手API
 # 作者: AI-CloudOps 团队
 
-API_URL="http://localhost:8080/api/v1/assistant"
-BASE_URL="http://localhost:8080/api/v1"
+# 获取脚本所在目录的绝对路径
+SCRIPT_DIR=$(cd $(dirname $0) && pwd)
+ROOT_DIR=$(cd $SCRIPT_DIR/.. && pwd)
+
+# 导入配置读取工具
+source "$SCRIPT_DIR/config_reader.sh"
+
+# 读取配置
+read_config
+
+# 设置API基础URL，从配置文件读取
+API_URL="http://${APP_HOST}:${APP_PORT}/api/v1/assistant"
+BASE_URL="http://${APP_HOST}:${APP_PORT}/api/v1"
 
 echo "===== 测试AI小助手API ====="
+echo "使用配置: APP_HOST=${APP_HOST}, APP_PORT=${APP_PORT}"
 
 echo -e "\n1. 测试健康检查接口"
 curl -s ${BASE_URL}/health | python -m json.tool

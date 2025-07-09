@@ -86,20 +86,40 @@ git clone <repository-url>
 cd AI-CloudOps-backend/python
 ```
 
-### 2. 配置环境变量
+### 2. 配置环境变量和配置文件
 
 ```bash
+# 复制环境变量示例文件
 cp env.example env.production
 # 编辑 env.production 文件，配置相关参数
 ```
 
-主要配置项包括：
+系统采用双层配置机制：
 
-- LLM 提供商和 API 密钥（支持 OpenAI 和 Ollama）
-- Prometheus 连接信息
-- Kubernetes 配置
-- 通知服务（飞书）
-- 智能助手知识库路径
+- **环境变量**：只存储敏感信息（API 密钥、Webhook 等）和环境选择
+- **YAML 配置文件**：存储其他所有配置项，分为开发环境和生产环境两个配置文件
+
+环境变量配置：
+
+```
+# 环境配置
+ENV=production  # 设置使用的配置文件：development或production
+
+# 敏感信息 - API密钥
+LLM_API_KEY=sk-xxx  # LLM API密钥
+LLM_BASE_URL=https://api.url  # API基础URL
+
+# 通知配置
+FEISHU_WEBHOOK=https://webhook.url
+
+# Tavily搜索API密钥
+TAVILY_API_KEY=key-xxx
+```
+
+配置文件位置：
+
+- 开发环境：`config/config.yaml`
+- 生产环境：`config/config.production.yaml`
 
 ### 3. 本地开发环境
 
@@ -597,3 +617,43 @@ python tests/test-autofix.py
 ```bash
 kubectl patch deployment <problematic-deployment> -p '{"spec":{"template":{"spec":{"containers":[{"name":"<container-name>","resources":{"requests":{"memory":"32Mi","cpu":"50m"},"limits":{"memory":"64Mi","cpu":"100m"}},"readinessProbe":{"httpGet":{"path":"/"},"periodSeconds":10,"failureThreshold":3}}]}}}}'
 ```
+
+## 配置管理
+
+AIOps 平台使用两种配置机制：
+
+1. **YAML 配置文件** - 存放在 `config/` 目录下，包含所有非敏感配置
+
+   - `config.yaml` - 默认配置（开发环境）
+   - `config.production.yaml` - 生产环境配置
+   - 可根据需要创建其他环境配置文件，如 `config.test.yaml`
+
+2. **环境变量** - 存放在 `.env` 或环境变量中，仅包含敏感数据（API 密钥、密码等）
+   - `env.example` - 示例环境变量文件（模板）
+   - `env.production` - 生产环境敏感数据
+
+### 配置优先级
+
+系统加载配置的优先级顺序为：
+
+1. 环境变量（最高优先级）
+2. 环境特定 YAML 配置文件（如 `config.production.yaml`）
+3. 默认 YAML 配置文件（`config.yaml`）
+4. 代码中的默认值（最低优先级）
+
+### 使用方法
+
+通过设置 `ENV` 环境变量来指定使用的配置：
+
+```bash
+# 开发环境（默认）
+ENV=development ./scripts/start.sh
+
+# 生产环境
+ENV=production ./scripts/start.sh
+
+# 或使用生产专用脚本
+./scripts/start_production.sh
+```
+
+详细配置说明请参考 [配置指南](config/README.md)。

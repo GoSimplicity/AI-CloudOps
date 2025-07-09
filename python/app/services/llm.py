@@ -17,7 +17,8 @@ class LLMService:
         初始化LLM服务，支持OpenAI和Ollama
         系统会优先使用外部模型(OpenAI)，如果不可用则自动回退到本地模型(Ollama)
         """
-        self.provider = config.llm.provider
+        # 清理提供商字符串，移除可能的注释
+        self.provider = config.llm.provider.split('#')[0].strip() if config.llm.provider else "openai"
         self.model = config.llm.effective_model
         self.temperature = config.llm.temperature
         self.max_tokens = config.llm.max_tokens

@@ -116,136 +116,155 @@ class AssistantAgent:
     def _init_embedding(self) -> None:
         """初始化嵌入模型"""
         # 检查环境变量和配置
-        if not config.llm.api_key or config.llm.api_key.startswith("sk-") is False:
-            logger.warning("API密钥未正确设置，请检查环境变量")
+        if not config.llm.api_key:
+            logger.warning("API密钥未设置，请检查环境变量")
         
-        try:
-            if self.llm_provider == 'openai':
-                logger.info("使用OpenAI嵌入模型")
-                self.embedding = OpenAIEmbeddings(
-                    model=config.rag.openai_embedding_model,
-                    api_key=config.llm.api_key,
-                    base_url=config.llm.base_url
-                )
-            else:
-                logger.info("使用Ollama嵌入模型")
-                self.embedding = OllamaEmbeddings(
-                    model=config.rag.ollama_embedding_model,
-                    base_url=config.llm.ollama_base_url
-                )
-                
-            # 测试嵌入模型
+        # 最多尝试3次
+        max_retries = 3
+        for attempt in range(max_retries):
             try:
-                # 简单测试嵌入功能
-                test_embedding = self.embedding.embed_query("测试嵌入功能")
-                if test_embedding and len(test_embedding) > 0:
-                    logger.info(f"嵌入模型测试成功: 维度={len(test_embedding)}")
+                if self.llm_provider == 'openai':
+                    logger.info(f"尝试初始化OpenAI嵌入模型 (尝试 {attempt+1}/{max_retries})")
+                    
+                    # 添加超时设置，防止长时间阻塞
+                    timeout_kwargs = {"timeout": 10}
+                    
+                    self.embedding = OpenAIEmbeddings(
+                        model=config.rag.openai_embedding_model,
+                        api_key=config.llm.api_key,
+                        base_url=config.llm.base_url,
+                        **timeout_kwargs
+                    )
                 else:
-                    logger.warning("嵌入模型测试结果异常")
-            except Exception as test_error:
-                logger.warning(f"嵌入模型测试失败: {test_error}")
-                
-        except Exception as e:
-            logger.error(f"初始化嵌入模型失败: {e}，尝试备用方法...")
-            
-            # 尝试备用方法
-            if self.llm_provider == 'openai':
-                # 如果OpenAI失败，尝试Ollama
-                try:
+                    logger.info(f"尝试初始化Ollama嵌入模型 (尝试 {attempt+1}/{max_retries})")
                     self.embedding = OllamaEmbeddings(
                         model=config.rag.ollama_embedding_model,
                         base_url=config.llm.ollama_base_url
                     )
-                except Exception as e2:
-                    logger.error(f"备用嵌入方法也失败: {e2}")
-                    # 创建一个简单的嵌入模型，返回随机向量
-                    raise ValueError("无法初始化任何可用的嵌入模型")
-                    return
-            else:
-                # 如果Ollama失败，尝试OpenAI
-                try:
-                    self.embedding = OpenAIEmbeddings(
-                        model=config.rag.openai_embedding_model,
-                        api_key=config.llm.api_key,
-                        base_url=config.llm.base_url
-                    )
-                except Exception as e2:
-                    logger.error(f"备用嵌入方法也失败: {e2}")
-                    # 创建一个简单的嵌入模型，返回随机向量
-                    raise ValueError("无法初始化任何可用的嵌入模型")
-                    return
+                    
+                # 测试嵌入模型
+                test_embedding = self.embedding.embed_query("测试嵌入功能")
+                if test_embedding and len(test_embedding) > 0:
+                    logger.info(f"嵌入模型测试成功: 维度={len(test_embedding)}")
+                    return  # 成功初始化，直接返回
+                else:
+                    logger.warning("嵌入模型测试结果异常，将尝试备用方法")
+                    continue
+                    
+            except Exception as e:
+                logger.error(f"嵌入模型初始化尝试 {attempt+1}/{max_retries} 失败: {e}")
+                # 如果不是最后一次尝试，则切换提供商并重试
+                if attempt < max_retries - 1:
+                    self.llm_provider = 'ollama' if self.llm_provider == 'openai' else 'openai'
+                    logger.info(f"切换到 {self.llm_provider} 提供商并重试")
+                    # 短暂延迟后重试
+                    import time
+                    time.sleep(1)
+        
+        # 如果所有尝试都失败，创建一个简单的备用嵌入模型
+        logger.critical("无法初始化任何嵌入模型，使用备用简单嵌入")
+        
+        # 创建一个简单的备用嵌入实现
+        from langchain_core.embeddings import Embeddings
+        import numpy as np
+        
+        class FallbackEmbeddings(Embeddings):
+            """备用嵌入实现，返回简单的随机向量，仅用于应急"""
+            
+            def embed_documents(self, texts):
+                return [self.embed_query(text) for text in texts]
+                
+            def embed_query(self, text):
+                # 使用文本长度和内容生成确定性向量
+                np.random.seed(hash(text) % 2**32)
+                return list(np.random.rand(384))  # 使用384维向量
+        
+        self.embedding = FallbackEmbeddings()
+        logger.warning("使用备用嵌入实现，搜索精度将受到影响")
     
     
     def _init_llm(self) -> None:
         """初始化语言模型"""
-        try:
-            if self.llm_provider == 'openai':
-                # 使用deepseek-ai/DeepSeek-R1-Distill-Qwen-14B作为推理模型
-                inference_model = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
-                # 使用Qwen/Qwen3-14B作为对话模型
-                chat_model = config.llm.model
-                
-                # 根据任务不同使用不同的模型
-                self.llm = ChatOpenAI(
-                    model=chat_model,
-                    api_key=config.llm.api_key,
-                    base_url=config.llm.base_url,
-                    temperature=config.rag.temperature,
-                    timeout=30
-                )
-            else:
-                self.llm = ChatOllama(
-                    model=config.llm.ollama_model,
-                    base_url=config.llm.ollama_base_url,
-                    temperature=config.rag.temperature,
-                    timeout=30
-                )
-                
-            # 测试LLM
+        # 最多尝试3次
+        max_retries = 3
+        for attempt in range(max_retries):
             try:
-                test_response = self.llm.invoke("测试")
-                if test_response:
-                    logger.info("LLM测试成功")
-            except Exception as test_error:
-                logger.warning(f"LLM测试失败: {test_error}")
-            
-            # 初始化结构化输出的LLM - 使用JsonOutputParser替代structured_output
-            self.json_parser = JsonOutputParser()
-            
-        except Exception as e:
-            logger.error(f"初始化语言模型失败: {e}，尝试备用方法...")
-            
-            # 尝试备用方法
-            if self.llm_provider == 'openai':
-                # 如果OpenAI失败，尝试Ollama
-                try:
+                if self.llm_provider == 'openai':
+                    # 对话模型
+                    chat_model = config.llm.model
+                    logger.info(f"尝试初始化OpenAI语言模型 {chat_model} (尝试 {attempt+1}/{max_retries})")
+                    
+                    # 添加更多容错参数
+                    self.llm = ChatOpenAI(
+                        model=chat_model,
+                        api_key=config.llm.api_key,
+                        base_url=config.llm.base_url,
+                        temperature=config.rag.temperature,
+                        timeout=30,
+                        max_retries=2,  # API级别的重试
+                        request_timeout=30  # 请求超时
+                    )
+                else:
+                    logger.info(f"尝试初始化Ollama语言模型 {config.llm.ollama_model} (尝试 {attempt+1}/{max_retries})")
                     self.llm = ChatOllama(
                         model=config.llm.ollama_model,
                         base_url=config.llm.ollama_base_url,
                         temperature=config.rag.temperature,
                         timeout=30
                     )
-                except Exception as e2:
-                    logger.error(f"备用语言模型也失败: {e2}")
-                    raise ValueError("无法初始化任何可用的语言模型")
-                    return
-            else:
-                # 如果Ollama失败，尝试OpenAI
-                try:
-                    self.llm = ChatOpenAI(
-                        model=config.llm.model,
-                        api_key=config.llm.api_key,
-                        base_url=config.llm.base_url,
-                        temperature=config.rag.temperature,
-                        timeout=30
-                    )
-                except Exception as e2:
-                    logger.error(f"备用语言模型也失败: {e2}")
-                    raise ValueError("无法初始化任何可用的语言模型")
-                    return
+                
+                # 测试LLM
+                logger.info("测试语言模型...")
+                test_response = self.llm.invoke("返回'测试成功'两个字")
+                test_content = test_response.content if hasattr(test_response, 'content') else str(test_response)
+                
+                if test_content and len(test_content) > 0:
+                    logger.info(f"LLM测试成功: {test_content[:20]}...")
+                    
+                    # 初始化JSON解析器
+                    self.json_parser = JsonOutputParser()
+                    return  # 成功初始化，直接返回
+                else:
+                    logger.warning("LLM测试结果异常，将尝试备用方法")
+                
+            except Exception as e:
+                logger.error(f"语言模型初始化尝试 {attempt+1}/{max_retries} 失败: {e}")
+                
+                # 如果不是最后一次尝试，则切换提供商并重试
+                if attempt < max_retries - 1:
+                    self.llm_provider = 'ollama' if self.llm_provider == 'openai' else 'openai'
+                    logger.info(f"切换到 {self.llm_provider} 提供商并重试")
+                    # 短暂延迟后重试
+                    import time
+                    time.sleep(1)
             
-            # 初始化JSON解析器
-            self.json_parser = JsonOutputParser()
+        # 所有尝试都失败，使用备用模型策略
+        logger.critical("所有语言模型初始化尝试均失败，使用备用策略")
+        
+        # 创建一个简单的备用语言模型
+        from langchain_core.language_models.chat_models import BaseChatModel
+        from langchain_core.outputs import ChatGeneration, ChatResult
+        from langchain_core.messages import AIMessage
+        
+        class FallbackChatModel(BaseChatModel):
+            """备用聊天模型，返回预定义的回复"""
+            
+            @property
+            def _llm_type(self) -> str:
+                """返回模型类型"""
+                return "fallback_chat_model"
+            
+            def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+                # 创建一个简单的回复
+                message = messages[-1].content if messages else "无输入"
+                response = f"我是备用助手模型。您的问题是：'{message}'。由于语言模型暂时不可用，我只能提供有限的帮助。请稍后再试或联系系统管理员。"
+                message = AIMessage(content=response)
+                generation = ChatGeneration(message=message)
+                return ChatResult(generations=[generation])
+        
+        self.llm = FallbackChatModel()
+        self.json_parser = JsonOutputParser()
+        logger.warning("使用备用语言模型，功能将受到限制")
             
     # 此方法已移除，不再使用模拟LLM
         
@@ -477,43 +496,143 @@ class AssistantAgent:
         kb_path = Path(self.knowledge_base_path)
         if not kb_path.exists():
             logger.warning(f"知识库路径 {kb_path} 不存在")
+            os.makedirs(kb_path, exist_ok=True)
+            logger.info(f"已创建知识库目录: {kb_path}")
             return documents
             
+        # 获取所有文件并按修改时间排序，优先处理新文件
         all_files = list(kb_path.glob("**/*"))
-        logger.info(f"知识库目录下的文件: {[str(f) for f in all_files]}")
+        all_files = [f for f in all_files if f.is_file()]
+        # 按修改时间排序
+        all_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+        
+        logger.info(f"知识库目录下的文件: {len(all_files)}个")
         
         try:
-            logger.info("使用基础文档加载实现")
-            
-            # 加载TXT文件
-            txt_files = list(kb_path.glob("**/*.txt"))
+            # 1. 加载TXT文件
+            txt_files = [f for f in all_files if f.suffix.lower() == '.txt']
             logger.info(f"找到的TXT文件: {len(txt_files)}个")
             for file_path in txt_files:
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
                         content = f.read()
+                        # 检查文件内容是否为空
+                        if not content.strip():
+                            logger.warning(f"跳过空文件: {file_path}")
+                            continue
+                        
                         documents.append(Document(
                             page_content=content,
-                            metadata={"source": str(file_path)}
+                            metadata={
+                                "source": str(file_path),
+                                "filename": file_path.name,
+                                "filetype": "text",
+                                "modified_time": os.path.getmtime(file_path)
+                            }
                         ))
                         logger.info(f"成功加载TXT文件: {file_path}")
                 except Exception as file_error:
                     logger.error(f"加载文件 {file_path} 失败: {file_error}")
             
-            # 加载MD文件
-            md_files = list(kb_path.glob("**/*.md"))
+            # 2. 加载MD文件 - 使用Markdown分割器优化分块
+            md_files = [f for f in all_files if f.suffix.lower() in ['.md', '.markdown']]
             logger.info(f"找到的MD文件: {len(md_files)}个")
+            
+            # 使用Markdown特定的分割器
+            headers_to_split_on = [
+                ("#", "Header 1"),
+                ("##", "Header 2"),
+                ("###", "Header 3"),
+            ]
+            
             for file_path in md_files:
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
                         content = f.read()
-                        documents.append(Document(
-                            page_content=content,
-                            metadata={"source": str(file_path)}
-                        ))
-                        logger.info(f"成功加载MD文件: {file_path}")
+                        # 检查文件内容是否为空
+                        if not content.strip():
+                            logger.warning(f"跳过空文件: {file_path}")
+                            continue
+                        
+                        # 尝试使用Markdown标题分割文本
+                        try:
+                            markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+                            md_docs = markdown_splitter.split_text(content)
+                            
+                            # 添加元数据
+                            for doc in md_docs:
+                                doc.metadata.update({
+                                    "source": str(file_path),
+                                    "filename": file_path.name,
+                                    "filetype": "markdown",
+                                    "modified_time": os.path.getmtime(file_path)
+                                })
+                            
+                            documents.extend(md_docs)
+                            logger.info(f"成功使用Markdown标题分割文件: {file_path}, 生成了{len(md_docs)}个文档块")
+                        except Exception as split_error:
+                            # 如果分割失败，作为单个文档加载
+                            logger.warning(f"Markdown分割失败，以整个文件加载: {file_path}, 错误: {split_error}")
+                            documents.append(Document(
+                                page_content=content,
+                                metadata={
+                                    "source": str(file_path),
+                                    "filename": file_path.name,
+                                    "filetype": "markdown",
+                                    "modified_time": os.path.getmtime(file_path)
+                                }
+                            ))
                 except Exception as file_error:
                     logger.error(f"加载文件 {file_path} 失败: {file_error}")
+            
+            # 3. 使用可能的高级加载器处理其他文件
+            if 'ADVANCED_LOADERS_AVAILABLE' in globals() and ADVANCED_LOADERS_AVAILABLE:
+                try:
+                    # 尝试加载PDF文件
+                    pdf_files = [f for f in all_files if f.suffix.lower() == '.pdf']
+                    if pdf_files:
+                        logger.info(f"找到的PDF文件: {len(pdf_files)}个")
+                        for pdf_file in pdf_files:
+                            try:
+                                loader = PyPDFLoader(str(pdf_file))
+                                pdf_docs = loader.load()
+                                
+                                # 添加元数据
+                                for doc in pdf_docs:
+                                    doc.metadata.update({
+                                        "filename": pdf_file.name,
+                                        "filetype": "pdf",
+                                        "modified_time": os.path.getmtime(pdf_file)
+                                    })
+                                    
+                                documents.extend(pdf_docs)
+                                logger.info(f"成功加载PDF文件: {pdf_file}, 生成了{len(pdf_docs)}个文档块")
+                            except Exception as e:
+                                logger.error(f"加载PDF文件失败: {pdf_file}, 错误: {e}")
+                    
+                    # 尝试加载HTML文件
+                    html_files = [f for f in all_files if f.suffix.lower() in ['.html', '.htm']]
+                    if html_files:
+                        logger.info(f"找到的HTML文件: {len(html_files)}个")
+                        for html_file in html_files:
+                            try:
+                                loader = BSHTMLLoader(str(html_file))
+                                html_docs = loader.load()
+                                
+                                # 添加元数据
+                                for doc in html_docs:
+                                    doc.metadata.update({
+                                        "filename": html_file.name,
+                                        "filetype": "html",
+                                        "modified_time": os.path.getmtime(html_file)
+                                    })
+                                    
+                                documents.extend(html_docs)
+                                logger.info(f"成功加载HTML文件: {html_file}, 生成了{len(html_docs)}个文档块")
+                            except Exception as e:
+                                logger.error(f"加载HTML文件失败: {html_file}, 错误: {e}")
+                except Exception as e:
+                    logger.warning(f"尝试使用高级加载器时出错: {e}")
             
             logger.info(f"成功加载 {len(documents)} 个文档")
             return documents
@@ -533,16 +652,23 @@ class AssistantAgent:
             # 检查是否在测试环境中运行
             in_test_environment = 'pytest' in sys.modules
             
-            # 检查知识库路径
+            # 确保知识库路径存在
             kb_path = Path(self.knowledge_base_path)
             if not kb_path.exists():
                 os.makedirs(kb_path, exist_ok=True)
                 logger.info(f"创建知识库目录: {kb_path}")
+                # 创建一个简单的测试文档，确保知识库不为空
+                test_doc_path = kb_path / "welcome.md"
+                if not test_doc_path.exists():
+                    with open(test_doc_path, "w", encoding="utf-8") as f:
+                        f.write("# 欢迎使用AIOps智能小助手\n\n这是一个自动创建的初始文档，您可以添加更多文档到知识库中。")
+                    logger.info("已创建欢迎文档")
             
-            # 检查向量数据库目录权限
-            use_in_memory = in_test_environment
-            
+            # 检查向量数据库目录
             db_path = Path(self.vector_db_path)
+            
+            # 检查向量数据库目录权限和状态
+            use_in_memory = in_test_environment
             if not db_path.exists():
                 try:
                     os.makedirs(db_path, exist_ok=True)
@@ -555,62 +681,94 @@ class AssistantAgent:
                 logger.warning(f"向量数据库目录没有写入权限: {db_path}，将使用内存模式")
                 use_in_memory = True
             
-            # 如果使用内存模式
-            if use_in_memory:
-                logger.info("使用内存模式刷新知识库")
-                self._create_vector_store(use_in_memory=True)
-            else:
-                # 正常环境 - 清理现有文件并创建新数据库
-                try:
-                    # 清理现有的向量数据库文件
-                    import shutil
-                    try:
-                        for item in db_path.glob("*"):
-                            if item.is_file():
-                                item.unlink()
-                            elif item.is_dir() and item.name != "cache":  # 保留缓存目录
-                                shutil.rmtree(item)
-                        logger.info("已清理现有向量数据库文件")
-                    except Exception as clean_error:
-                        logger.warning(f"清理向量数据库文件失败: {clean_error}")
-                    
-                    # 创建新的向量数据库
-                    self._create_vector_store(use_in_memory=False)
-                except Exception as store_error:
-                    logger.warning(f"创建向量数据库失败: {store_error}，尝试使用内存模式")
-                    self._create_vector_store(use_in_memory=True)
-            
-            # 测试检索器是否可用
+            # 准备刷新向量库
+            success = False
             doc_count = 0
-            if self.retriever:
+            error_msg = None
+            
+            # 最多尝试3次
+            max_attempts = 3
+            for attempt in range(max_attempts):
                 try:
-                    test_result = self.retriever.invoke("test")
-                    doc_count = len(test_result)
-                    logger.info(f"检索器测试成功: 返回 {doc_count} 个结果")
-                except Exception as test_error:
-                    logger.warning(f"检索器测试失败: {test_error}")
-            else:
-                logger.warning("刷新后检索器仍不可用")
+                    # 如果使用内存模式
+                    if use_in_memory:
+                        logger.info(f"使用内存模式刷新知识库 (尝试 {attempt+1}/{max_attempts})")
+                        self._create_vector_store(use_in_memory=True)
+                    else:
+                        # 正常环境 - 清理现有文件并创建新数据库
+                        logger.info(f"使用持久化模式刷新知识库 (尝试 {attempt+1}/{max_attempts})")
+                        # 先创建备份目录
+                        backup_dir = os.path.join(self.vector_db_path, f"backup_{int(time.time())}")
+                        try:
+                            os.makedirs(backup_dir, exist_ok=True)
+                            logger.info(f"已创建备份目录: {backup_dir}")
+                            
+                            # 备份重要文件
+                            import shutil
+                            for item in db_path.glob("*"):
+                                if item.is_file() and item.name not in ["chroma.sqlite3-shm", "chroma.sqlite3-wal"]:
+                                    shutil.copy2(item, backup_dir)
+                                    logger.info(f"已备份文件: {item.name}")
+                            
+                            # 清理现有的向量数据库文件
+                            for item in db_path.glob("*"):
+                                if item.is_file():
+                                    # 临时文件保留，避免冲突
+                                    if item.name in ["chroma.sqlite3-shm", "chroma.sqlite3-wal"]:
+                                        continue
+                                    item.unlink()
+                                elif item.is_dir() and item.name not in ["cache", "backup_*"]:  # 保留缓存和备份目录
+                                    shutil.rmtree(item)
+                            logger.info("已清理现有向量数据库文件")
+                            
+                            # 创建新的向量数据库
+                            self._create_vector_store(use_in_memory=False)
+                            
+                        except Exception as clean_error:
+                            logger.warning(f"清理或创建向量数据库失败: {clean_error}，尝试使用内存模式")
+                            self._create_vector_store(use_in_memory=True)
+                    
+                    # 测试检索器是否可用
+                    if self.retriever:
+                        try:
+                            test_result = self.retriever.invoke("测试查询")
+                            doc_count = len(test_result)
+                            logger.info(f"检索器测试成功: 返回 {doc_count} 个结果")
+                            success = True
+                            break  # 成功，跳出尝试循环
+                        except Exception as test_error:
+                            logger.warning(f"检索器测试失败 (尝试 {attempt+1}/{max_attempts}): {test_error}")
+                            error_msg = str(test_error)
+                            if attempt < max_attempts - 1:
+                                logger.info(f"等待1秒后重试...")
+                                await asyncio.sleep(1)
+                    else:
+                        logger.warning(f"检索器未初始化 (尝试 {attempt+1}/{max_attempts})")
+                        if attempt < max_attempts - 1:
+                            logger.info(f"尝试重新初始化...")
+                            try:
+                                self._init_retriever()
+                            except:
+                                pass
+                
+                except Exception as e:
+                    logger.error(f"刷新知识库尝试 {attempt+1}/{max_attempts} 失败: {e}")
+                    error_msg = str(e)
+                    if attempt < max_attempts - 1:
+                        logger.info(f"等待1秒后重试...")
+                        await asyncio.sleep(1)
             
             # 保存更新的空缓存
             self._save_cache()
             logger.info("已清理响应缓存")
             
-            return {"success": True, "documents_count": doc_count}
+            if success:
+                return {"success": True, "documents_count": doc_count}
+            else:
+                return {"success": False, "documents_count": 0, "error": error_msg or "未知错误"}
+                
         except Exception as e:
             logger.error(f"刷新知识库失败: {e}")
-            # 最后尝试使用内存模式
-            try:
-                logger.info("尝试使用内存模式作为最后的备用方案")
-                self._create_vector_store(use_in_memory=True)
-                if self.retriever:
-                    test_result = self.retriever.invoke("test")
-                    doc_count = len(test_result)
-                    logger.info(f"内存模式检索器测试成功: 返回 {doc_count} 个结果")
-                    return {"success": True, "documents_count": doc_count}
-            except:
-                pass
-            
             return {"success": False, "documents_count": 0, "error": str(e)}
     
     def add_document(self, content: str, metadata: Dict[str, Any] = None) -> bool:
@@ -853,120 +1011,219 @@ class AssistantAgent:
         for attempt in range(max_retries):
             try:
                 if not self.retriever:
-                    logger.warning("检索器未初始化")
-                    return []
+                    logger.warning("检索器未初始化，尝试重新初始化...")
+                    try:
+                        self._init_retriever()
+                        if not self.retriever:
+                            logger.error("无法初始化检索器")
+                            return []
+                    except Exception as init_error:
+                        logger.error(f"重新初始化检索器失败: {init_error}")
+                        return []
                 
+                # 尝试检索文档
                 docs = self.retriever.invoke(question)
-                return docs
+                
+                # 验证结果
+                if docs and isinstance(docs, list) and len(docs) > 0:
+                    logger.info(f"成功检索到 {len(docs)} 个文档")
+                    return docs
+                else:
+                    logger.warning(f"检索器返回了空或无效结果 (尝试 {attempt+1}/{max_retries})")
+                    # 如果是最后一次尝试，返回空列表
+                    if attempt == max_retries - 1:
+                        return []
+                    # 否则短暂延迟后重试
+                    time.sleep(1)
+                    
             except Exception as e:
                 logger.error(f"检索尝试 {attempt+1}/{max_retries} 失败: {e}")
+                # 如果是最后一次尝试，返回空列表
                 if attempt == max_retries - 1:
-                    logger.error("无法检索文档")
+                    logger.error("所有检索尝试都失败")
                     return []
+                # 否则短暂延迟后重试
+                time.sleep(1)
+        
+        # 如果执行到这里，说明所有尝试都失败了
         return []
     
     async def _filter_relevant_docs(self, question: str, docs: List[Document]) -> List[Document]:
-        """过滤与问题相关的文档，提高检索准确率"""
+        """过滤不相关的文档"""
         if not docs:
             return []
-        
-        # 提高相关度评估的精确提示模板
-        system = """您是一名文档相关性评估专家，负责评估检索到的文档与用户问题的相关性。
-        
-评估标准:
-1. 文档必须包含与问题直接相关的信息，而不仅仅是同一主题
-2. 如果文档只是泛泛地涉及主题但不能回答具体问题，则视为不相关
-3. 如果文档包含用户问题所需的关键信息，则视为相关
-4. 如果文档部分相关，但提供了有价值的背景信息，可以视为相关
-5. 对于询问联系方式的问题，如果文档中包含该人的联系方式信息，应评为"yes"
-6. 对于人员负责或维护服务的问题，只要文档中提到了相关人员的信息，就应评为相关
-
-您的评估应更严格，目标是过滤掉不相关的文档，提高检索质量。
-以JSON格式输出，键为"binary_score"，值为"yes"或"no"，表示文档是否与问题相关。"""
-
-        grade_prompt = ChatPromptTemplate.from_messages([
-            ("system", system),
-            ("human", "文档内容: \n\n {document} \n\n 用户问题: {question}\n\n此文档与问题相关吗？请用JSON格式回答，例如：{\"binary_score\": \"yes\"} 或 {\"binary_score\": \"no\"}"),
-        ])
-        
-        relevant_docs = []
-        filtered_docs_count = 0
-        
-        # 创建检索评分链
-        retrieval_grader = grade_prompt | self.llm | self.json_parser
-        
-        for idx, doc in enumerate(docs):
-            try:
-                # 截取文档内容，避免过长
-                doc_content = doc.page_content[:2500] if len(doc.page_content) > 2500 else doc.page_content
-                
-                # 评估文档相关性
-                result = retrieval_grader.invoke({
-                    "question": question, 
-                    "document": doc_content
-                })
-                
-                if result and isinstance(result, dict) and result.get("binary_score", "").lower() == "yes":
-                    relevant_docs.append(doc)
-                else:
-                    filtered_docs_count += 1
-                    logger.debug(f"过滤掉不相关文档: {doc.metadata.get('source', '未知')}")
             
-            except Exception as e:
-                logger.error(f"评估文档相关性时出错 (文档 {idx+1}/{len(docs)}): {e}")
-                # 出错时默认保留文档
-                relevant_docs.append(doc)
+        # 对于少量文档，直接全部返回
+        if len(docs) <= 2:
+            return docs
         
-        # 如果过滤后没有相关文档，但原来有文档，则保留原始的前2个文档
-        if not relevant_docs and docs:
-            logger.warning("过滤后没有相关文档，保留原始的前2个文档")
-            relevant_docs = docs[:min(2, len(docs))]
-        
-        # 计算文档召回率
-        total_docs = len(docs)
-        relevant_count = len(relevant_docs)
-        recall_rate = relevant_count / total_docs if total_docs > 0 else 0
-        
-        logger.info(f"文档过滤结果: 原始 {len(docs)} 个，过滤后 {len(relevant_docs)} 个，过滤掉 {filtered_docs_count} 个")
-        logger.info(f"文档召回率: {recall_rate:.2f} ({relevant_count}/{total_docs})")
-        
-        # 将文档召回率添加到第一个文档的元数据中，如果有文档
-        if relevant_docs:
+        # 对于较多文档，进行相关性过滤
+        try:
+            # 初始化评分器
+            if not hasattr(self, 'structured_llm_docs') or self.structured_llm_docs is None:
+                # 使用更低的温度增强评分稳定性
+                docs_llm = ChatOpenAI(
+                    model=config.llm.model,
+                    temperature=0.1,  # 低温度，减少随机性
+                    api_key=config.llm.api_key,
+                    base_url=config.llm.base_url,
+                ) if self.llm_provider == "openai" else self.llm
+                
+                # 创建结构化输出链
+                self.structured_llm_docs = docs_llm
+            
+            # 准备系统提示和用户提示
+            # 对每个文档进行评分
+            relevant_docs = []
+            scores = []  # 存储评分结果
+            
+            # 更宽松的相关性评分标准，提高召回率
+            for doc in docs:
+                is_relevant, score = await self._evaluate_doc_relevance(
+                    self.structured_llm_docs, question, doc.page_content, doc
+                )
+                
+                if is_relevant:
+                    doc.metadata["relevance_score"] = score
+                    relevant_docs.append(doc)
+                    scores.append(score)
+                # 即使评为不相关，如果是少量文档场景，也考虑纳入
+                elif len(docs) <= 4:
+                    doc.metadata["relevance_score"] = 0.4  # 给定一个较低的相关性分数
+                    relevant_docs.append(doc)
+                    scores.append(0.4)
+            
+            # 如果没有找到任何相关文档，则返回原始的top k文档
+            if not relevant_docs and docs:
+                logger.warning("没有找到相关文档，直接返回前 %d 个原始文档", min(3, len(docs)))
+                return docs[:min(3, len(docs))]
+                
+            # 根据相关性评分排序
+            if scores:
+                sorted_pairs = sorted(zip(relevant_docs, scores), key=lambda x: x[1], reverse=True)
+                relevant_docs = [doc for doc, _ in sorted_pairs]
+            
+            avg_score = sum(scores) / len(scores) if scores else 0
+            logger.info(f"文档过滤完成: 保留 {len(relevant_docs)}/{len(docs)} 个文档，平均相关性: {avg_score:.2f}")
+            
+            # 记录召回率
+            recall_rate = len(relevant_docs) / len(docs) if docs else 0
             for doc in relevant_docs:
-                if not doc.metadata:
-                    doc.metadata = {}
                 doc.metadata["recall_rate"] = recall_rate
-        
-        return relevant_docs
+                
+            return relevant_docs
+            
+        except Exception as e:
+            logger.error(f"文档相关性评估失败: {str(e)}")
+            # 如果评估失败，返回原始文档列表，但限制数量
+            return docs[:min(4, len(docs))]
+    
+    async def _evaluate_doc_relevance(self, grader, question, doc_content, doc) -> Tuple[bool, float]:
+        """评估文档与问题的相关性"""
+        try:
+            # 限制文档内容长度，避免超过上下文限制
+            max_doc_len = 2000
+            if len(doc_content) > max_doc_len:
+                doc_content = doc_content[:max_doc_len] + "..."
+                
+            # 创建提示
+            system_prompt = """您是一名文档相关性评估专家，负责判断文档与问题的相关程度。
+请根据以下标准评估文档相关性：
+1. 完全相关: 文档直接回答问题或包含问题答案的所有要素
+2. 部分相关: 文档包含部分相关信息，能间接帮助回答问题
+3. 稍微相关: 文档提及相关概念，但不直接解答问题
+4. 不相关: 文档内容与问题完全无关
+
+请使用宽松的评价标准，宁可错误地将文档判为相关，也不要错过有用信息。
+仅输出二元判断，回答"yes"或"no"。"""
+
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=f"问题: {question}\n\n文档: {doc_content}\n\n这个文档与问题相关吗？请只回答'yes'或'no'。")
+            ]
+            
+            # 调用LLM评估
+            max_retries = 2
+            for attempt in range(max_retries):
+                try:
+                    response = await asyncio.wait_for(
+                        asyncio.create_task(grader.ainvoke(messages)), 
+                        timeout=10
+                    )
+                    result = response.content.lower().strip()
+                    
+                    # 解析结果
+                    is_relevant = "yes" in result or "relevant" in result
+                    
+                    # 计算相关性分数 (0.7-1.0为相关，更倾向于保留文档)
+                    if is_relevant:
+                        # 根据回答内容粗略评估相关程度
+                        if "highly" in result or "完全" in result or "非常" in result:
+                            score = 1.0
+                        elif "部分" in result or "somewhat" in result:
+                            score = 0.85
+                        else:
+                            score = 0.75
+                    else:
+                        score = 0.3
+                        
+                    return is_relevant, score
+                    
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"评估文档相关性尝试 {attempt+1} 失败: {e}，重试中...")
+                        await asyncio.sleep(1)
+                    else:
+                        logger.error(f"评估文档相关性失败: {e}")
+                        # 评估失败时，默认认为文档相关
+                        return True, 0.7
+        except Exception as e:
+            logger.error(f"评估文档相关性时出现异常: {e}")
+            # 出错时默认相关
+            return True, 0.7
     
     async def _rewrite_question(self, question: str, max_retries: int = 3) -> str:
-        """重写问题以提高检索效果"""
-        # 对于某些类型的问题，可以选择不重写
-        if "联系方式" in question.lower():
-            return question  # 保持原始问题
+        """重写问题以提高检索质量"""
+        try:
+            # 如果问题很短或者已经很清晰，直接返回原问题
+            if len(question) < 10:
+                return question
+                
+            system_prompt = """您是一位问题重写专家。您的任务是将用户的原始问题重写为更清晰、更具体、更易于检索相关文档的形式，同时保持问题的原始意图。不要添加新的问题或改变问题的范围。"""
             
-        # 提示模板
-        system = """您有一个问题重写器，可将输入问题转换为针对vectorstore检索进行了优化的更好版本。
-查看输入并尝试推断底层语义意图/含义，使用用户语言回复。
-对于询问联系方式的问题，保持原始形式或仅进行细微调整以匹配可能的格式。
-对于查询"谁负责/维护的服务最多"这类问题，请重写为查询具体的人员-服务分配关系。"""
-
-        re_write_prompt = ChatPromptTemplate.from_messages([
-            ("system", system),
-            ("human", "Here is the initial question: \n\n {question} \n Formulate an improved question."),
-        ])
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=f"原始问题: {question}\n\n请重写这个问题，使其更清晰、更容易搜索到相关答案。只需返回重写后的问题，不要包含任何解释。")
+            ]
+            
+            # 调用LLM重写问题
+            for attempt in range(max_retries):
+                try:
+                    response = await asyncio.wait_for(
+                        asyncio.create_task(self.llm.ainvoke(messages)),
+                        timeout=10
+                    )
+                    
+                    rewritten_question = response.content.strip()
+                    
+                    # 验证重写的问题不是空的且不完全相同
+                    if rewritten_question and rewritten_question != question:
+                        logger.info(f"问题重写: '{question}' -> '{rewritten_question}'")
+                        return rewritten_question
+                    else:
+                        return question
+                        
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"重写问题尝试 {attempt+1} 失败: {e}，重试中...")
+                        await asyncio.sleep(1)
+                    else:
+                        logger.error(f"重写问题失败: {e}")
+                        return question
         
-        for attempt in range(max_retries):
-            try:
-                # 创建问题重写链
-                question_rewriter = re_write_prompt | self.llm | StrOutputParser()
-                return question_rewriter.invoke({"question": question})
-            except Exception as e:
-                logger.error(f"问题重写尝试 {attempt+1}/{max_retries} 失败: {e}")
-                if attempt == max_retries - 1:
-                    return question  # 返回原始问题
-        
-        return question
+        except Exception as e:
+            logger.error(f"重写问题时出现异常: {e}")
+            return question
     
     async def _generate_from_docs(
         self, 
@@ -976,87 +1233,104 @@ class AssistantAgent:
         prevent_hallucinations: bool = False,
         context_with_history: str = None
     ) -> str:
-        """基于文档生成回答
+        """基于检索到的文档生成回答
         
         参数:
             question: 用户问题
             docs: 相关文档列表
             max_retries: 最大重试次数
-            prevent_hallucinations: 是否启用额外的防幻觉机制
+            prevent_hallucinations: 是否开启防幻觉检查
             context_with_history: 对话历史上下文
         """
-        # 没有相关文档，直接返回"我不知道"
         if not docs:
-            return "我不知道，因为没有找到相关文档。"
+            return "抱歉，我无法在知识库中找到与您问题相关的信息。"
             
-        # 格式化文档内容
-        formatted_docs = self._format_docs(docs)
+        # 格式化文档内容作为上下文
+        docs_content = ""
+        for i, doc in enumerate(docs):
+            # 提取元数据中的来源
+            source = doc.metadata.get("source", "未知来源") if doc.metadata else "未知来源"
+            # 添加文档内容，每个文档由分隔线和来源标记
+            docs_content += f"\n\n文档 [{i+1}] (来源: {source}):\n{doc.page_content}"
             
-        # 尝试直接匹配简单的联系方式问题
-        if "联系方式" in question.lower():
-            # 在文档中查找联系方式
-            matches = re.findall(r"联系方式：(\d+)", formatted_docs)
-            if matches:
-                # 尝试找出是谁的联系方式
-                person_match = re.search(r"([\w]+).*?联系方式", question)
-                if person_match:
-                    person = person_match.group(1)
-                    person_contact = re.search(fr"{person}.*?联系方式：(\d+)", formatted_docs)
-                    if person_contact:
-                        return f"{person}的联系方式是：{person_contact.group(1)}"
-                return f"找到的联系方式是：{matches[0]}"
+        # 限制上下文长度，避免超出模型限制
+        max_context_length = config.rag.max_context_length or 4000
+        if len(docs_content) > max_context_length:
+            docs_content = docs_content[:max_context_length] + "...(内容已截断)"
+            
+        # 构建系统提示
+        system_prompt = """您是一个专业的AI助手。请仔细阅读以下文档内容，然后回答用户的问题。
         
-        # 准备系统提示
-        system_prompt = """你是一个专业的助手，负责基于给定的文档回答用户问题。
+遵循以下规则:
+1. 回答必须基于提供的文档内容，不要编造信息
+2. 如果文档内容不足以完全回答问题，请明确说明，不要猜测
+3. 回答要简洁、清晰，直接解决用户问题
+4. 使用专业、友好的语气，但不要过于口语化
+5. 不要在回答中提及"根据文档"、"根据提供的信息"等词语
+6. 禁止直接复制大段文档内容，请用自己的话组织回答
 
-使用提供的文档中明确存在的信息来回答用户问题。
-如果是询问联系方式或简单事实的问题，请直接提供答案，无需详细解释。
-如果文档中没有包含回答问题所需的信息，请明确回答"我不知道"或"提供的文档中没有这些信息"。
-"""
+回答语言必须与用户问题的语言保持一致。"""
 
-        # 根据条件增强系统提示
-        if prevent_hallucinations:
-            system_prompt += """
-绝对不要编造信息。你的回答必须100%基于提供的文档。
-对于每个信息点，必须确认它明确存在于文档中。
-当用户提问的内容不在文档中时，请明确指出"这个信息不在提供的文档中"。
-"""
-
-        # 准备人类提示
-        human_template = "文档信息:\n\n{context}\n\n"
+        # 添加历史上下文（如果有）
+        user_prompt = f"{context_with_history}\n\n" if context_with_history else ""
+        user_prompt += f"问题: {question}\n\n以下是相关文档内容:\n{docs_content}\n\n请基于以上文档内容回答问题。"
         
-        # 添加对话历史上下文(如果有)
-        if context_with_history:
-            human_template += f"{context_with_history}\n"
-            
-        human_template += "用户问题: {question}"
-            
-        # 构建提示模板
-        custom_prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            ("human", human_template)
-        ])
-            
-        # 创建改进的RAG链
-        rag_chain = custom_prompt | self.llm | StrOutputParser()
-            
+        # 构建消息列表
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ]
+        
+        # 尝试生成回答，最多重试max_retries次
         for attempt in range(max_retries):
             try:
-                response = rag_chain.invoke({
-                    "context": formatted_docs, 
-                    "question": question
-                })
-                return response
-            except Exception as e:
-                logger.error(f"生成尝试 {attempt+1}/{max_retries} 失败: {e}")
-                if attempt == max_retries - 1:
-                    return "抱歉，我无法基于提供的信息回答您的问题。"
+                # 设置超时，避免无限等待
+                response = await asyncio.wait_for(
+                    asyncio.create_task(self.llm.ainvoke(messages)),
+                    timeout=30  # 30秒超时
+                )
                 
-        return "抱歉，我无法基于提供的信息回答您的问题。"
+                answer = response.content.strip()
+                
+                # 如果启用了防幻觉检查
+                if prevent_hallucinations:
+                    is_factual = await self._check_hallucination(question, answer, docs)
+                    if not is_factual:
+                        # 如果检测到幻觉，添加警告并重试
+                        if attempt < max_retries - 1:
+                            logger.warning(f"检测到回答存在幻觉，尝试重新生成 (尝试 {attempt+1}/{max_retries})")
+                            # 添加更严格的提示
+                            messages = [
+                                SystemMessage(content=system_prompt + "\n\n请特别注意：只能基于文档中明确提供的信息回答，不要添加任何未在文档中明确提及的信息。"),
+                                HumanMessage(content=user_prompt)
+                            ]
+                            continue
+                
+                return answer
+                
+            except Exception as e:
+                logger.error(f"生成回答时出错 (尝试 {attempt+1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    # 短暂延迟后重试
+                    await asyncio.sleep(1)
+                else:
+                    # 所有重试失败后，返回错误信息
+                    return "抱歉，在处理您的问题时遇到了技术问题。请稍后再试。"
+        
+        # 如果执行到这里，说明所有尝试都失败了
+        return "抱歉，我无法生成对您问题的回答。请尝试用不同方式提问。"
     
     def _format_docs(self, docs: List[Document]) -> str:
-        """格式化文档内容"""
-        return "\n\n".join(doc.page_content for doc in docs)
+        """将文档格式化为字符串"""
+        if not docs:
+            return ""
+            
+        formatted = ""
+        for i, doc in enumerate(docs):
+            source = doc.metadata.get("source", "未知来源") if doc.metadata else "未知来源"
+            formatted += f"\n\n文档[{i+1}] (来源: {source}):\n{doc.page_content}"
+            
+        return formatted
     
     async def _check_hallucination(
         self, 
@@ -1065,40 +1339,74 @@ class AssistantAgent:
         docs: List[Document],
         default: str = "yes"
     ) -> bool:
-        """检查回答是否存在幻觉"""
-        if not docs:
-            return False  # 如果没有文档，则肯定是幻觉
-            
-        # 格式化文档内容为字符串
-        doc_content = "\n".join(d.page_content for d in docs)
-            
+        """检查回答是否存在幻觉（是否基于事实）
+        
+        返回:
+            bool: 如果回答基于事实返回True，存在幻觉返回False
+        """
         try:
-            # 改进的幻觉评估提示模板
-            system = """您是一名评分员，负责评估生成的回答是否基于提供的文档。
-如果生成的回答包含任何文档中没有明确提及的重要信息或事实，请评为'no'。
-特别是对于人员负责或维护服务的陈述，必须在文档中有明确支持才能评为'yes'。
-对于联系方式类的简单事实性问题，如果回答准确反映了文档中的信息，应评为'yes'。
-以JSON格式输出，键为"binary_score"，值为"yes"或"no"，表示回答是否符合文档中的事实。"""
+            # 对于较短的问答，可能不需要严格检查
+            if len(answer) < 30:
+                return True
+                
+            # 准备文档内容
+            docs_content = ""
+            for i, doc in enumerate(docs):
+                docs_content += f"\n\n文档[{i+1}]:\n{doc.page_content[:1000]}"
+                
+            # 限制文档长度
+            if len(docs_content) > 4000:
+                docs_content = docs_content[:4000] + "...(内容已截断)"
+                
+            # 创建提示
+            system_prompt = """您是一名真实性检查专家。您的任务是严格评估AI回答是否完全基于提供的文档内容。
 
-            hallucination_prompt = ChatPromptTemplate.from_messages([
-                ("system", system),
-                ("human", "文档内容: \n\n {documents} \n\n 生成的回答: {generation} \n\n 用户问题: {question}\n\n请用JSON格式回答，例如：{\"binary_score\": \"yes\"} 或 {\"binary_score\": \"no\"}"),
-            ])
+请按照以下标准进行评估:
+1. 严格检查: 回答中的每一个事实或断言都必须在文档中明确或合理推断出
+2. 允许合理组织: 回答可以重组文档中的信息，但不能添加新信息
+3. 允许概括和简化: 可以对复杂信息进行简化，但不能改变信息的本质
+4. 禁止知识混合: 不允许将文档中没有的外部知识混入回答
+
+评估结果只需回答'yes'或'no'。yes表示回答完全基于文档，无幻觉；no表示存在幻觉内容。"""
+            
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=f"问题: {question}\n\n文档内容: {docs_content}\n\nAI回答: {answer}\n\n这个回答是否完全基于文档内容，不存在幻觉？请只回答'yes'或'no'。")
+            ]
+            
+            # 初始化评分器
+            if not hasattr(self, 'structured_llm_hall') or self.structured_llm_hall is None:
+                # 使用更低的温度增强稳定性
+                hall_llm = ChatOpenAI(
+                    model=config.llm.model,
+                    temperature=0.1,
+                    api_key=config.llm.api_key,
+                    base_url=config.llm.base_url,
+                ) if self.llm_provider == "openai" else self.llm
                 
-            # 创建幻觉评分链
-            hallucination_grader = hallucination_prompt | self.llm | self.json_parser
+                self.structured_llm_hall = hall_llm
+            
+            # 调用LLM
+            try:
+                response = await asyncio.wait_for(
+                    asyncio.create_task(self.structured_llm_hall.ainvoke(messages)),
+                    timeout=15
+                )
                 
-            result = hallucination_grader.invoke({
-                "documents": doc_content,
-                "generation": answer,
-                "question": question
-            })
+                result = response.content.strip().lower()
                 
-            if result and isinstance(result, dict) and "binary_score" in result:
-                return result["binary_score"] == "yes"
-            return default == "yes"
+                # 解析结果
+                factual = "yes" in result and "no" not in result
+                logger.info(f"幻觉检查结果: {'无幻觉' if factual else '存在幻觉'}")
+                return factual
+                
+            except Exception as e:
+                logger.error(f"幻觉检查失败: {e}")
+                # 出错时假设回答基于事实
+                return default == "yes"
+                
         except Exception as e:
-            logger.error(f"幻觉评分失败: {e}")
+            logger.error(f"幻觉检查过程中出现异常: {e}")
             return default == "yes"
     
     async def _generate_follow_up_questions(
@@ -1109,29 +1417,62 @@ class AssistantAgent:
     ) -> List[str]:
         """生成后续问题建议"""
         try:
-            # 提示模板
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", f"""基于用户的原始问题和提供的回答，生成 {max_questions} 个相关的后续问题。
-这些问题应该是用户可能接下来想问的，并且与原始话题紧密相关。
-直接返回问题列表，每行一个问题，不要有编号或其他标记。"""),
-                ("human", "原始问题: {question}\n\n回答: {answer}\n\n生成 {max_questions} 个后续问题:"),
-            ])
+            # 创建提示
+            system_prompt = """您是一个AI助手，负责生成相关的后续问题，帮助用户继续探索相关内容。
+
+后续问题应该:
+1. 与原问题和回答的主题直接相关
+2. 鼓励用户进一步探索相关领域
+3. 涵盖不同但相关的角度
+4. 简短明了，易于理解
+5. 表述自然且流畅
+
+请生成3个后续问题，每个问题应该是完整的句子并以问号结尾。
+直接返回问题列表，无需其他格式或解释。"""
             
-            # 创建生成链
-            chain = prompt | self.llm | StrOutputParser()
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=f"原始问题: {question}\n\n回答: {answer}\n\n请生成{max_questions}个后续问题。")
+            ]
             
-            result = chain.invoke({
-                "question": question,
-                "answer": answer,
-                "max_questions": max_questions
-            })
+            # 调用LLM
+            response = await asyncio.wait_for(
+                asyncio.create_task(self.llm.ainvoke(messages)),
+                timeout=10
+            )
             
-            # 处理结果，分割成列表
-            questions = [q.strip() for q in result.split('\n') if q.strip()]
+            # 解析回答，提取问题列表
+            content = response.content.strip()
             
-            # 限制数量
+            # 提取问题
+            questions = []
+            for line in content.split("\n"):
+                line = line.strip()
+                # 删除前面的数字、点和空格
+                line = re.sub(r"^\d+[\.\)、]\s*", "", line)
+                
+                if line and (line.endswith("?") or line.endswith("？")):
+                    questions.append(line)
+                elif len(line) > 10:  # 如果是较长的行，可能是问题但忘了加问号
+                    questions.append(line + "?")
+                    
+            # 如果没有解析到足够的问题，提供默认问题
+            if len(questions) < max_questions:
+                default_questions = [
+                    "AIOps平台有哪些核心功能?",
+                    "如何部署和配置AIOps系统?",
+                    "AIOps如何帮助解决常见的运维问题?"
+                ]
+                while len(questions) < max_questions and default_questions:
+                    questions.append(default_questions.pop(0))
+                    
             return questions[:max_questions]
             
         except Exception as e:
             logger.error(f"生成后续问题失败: {e}")
-            return []
+            # 返回默认问题
+            return [
+                "AIOps平台有哪些核心功能?",
+                "如何部署和配置AIOps系统?",
+                "AIOps如何帮助解决常见的运维问题?"
+            ]
