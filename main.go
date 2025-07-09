@@ -71,12 +71,54 @@ func Init() error {
 	// 初始化 Web 服务器和其他组件
 	cmd := di.ProvideCmd()
 
+	// 检查数据库状态
+	db := di.InitDB()
+	if db != nil {
+		if err := di.CheckDBHealth(db); err != nil {
+			log.Printf("数据库健康检查失败: %v", err)
+			log.Printf("程序将以降级模式运行")
+		} else {
+			log.Printf("数据库健康检查通过")
+		}
+	} else {
+		log.Printf("数据库连接为空，程序将以降级模式运行")
+	}
+
 	// 设置中间件
 	cmd.Server.Use(cors.Default())
 	cmd.Server.Use(gzip.Gzip(gzip.BestCompression))
 
 	// 设置请求头打印路由
 	cmd.Server.GET("/headers", printHeaders)
+
+	// 添加健康检查端点
+	cmd.Server.GET("/health", func(c *gin.Context) {
+		health := gin.H{
+			"status":    "ok",
+			"timestamp": time.Now().Unix(),
+		}
+
+		// 检查数据库状态
+		if db != nil {
+			if err := di.CheckDBHealth(db); err != nil {
+				health["database"] = gin.H{
+					"status": "error",
+					"error":  err.Error(),
+				}
+			} else {
+				health["database"] = gin.H{
+					"status": "ok",
+				}
+			}
+		} else {
+			health["database"] = gin.H{
+				"status": "unavailable",
+				"error":  "数据库连接为空",
+			}
+		}
+
+		c.JSON(http.StatusOK, health)
+	})
 
 	cmd.Server.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -85,31 +127,38 @@ func Init() error {
 		})
 	})
 
-	// 判断是否需要mock
-	if viper.GetString("mock.enabled") == "true" {
+	// 判断是否需要mock（只有在数据库可用时才执行）
+	if viper.GetString("mock.enabled") == "true" && di.IsDBAvailable(db) {
 		if err := InitMock(); err != nil {
-			return fmt.Errorf("初始化Mock数据失败: %v", err)
+			log.Printf("初始化Mock数据失败: %v", err)
+			// 不返回错误，让程序继续运行
 		}
+	} else if viper.GetString("mock.enabled") == "true" {
+		log.Printf("数据库不可用，跳过Mock数据初始化")
 	}
 
-	// 启动定时任务和worker
-	go func() {
-		if err := cmd.Scheduler.RegisterTimedTasks(); err != nil {
-			log.Fatalf("注册定时任务失败: %v", err)
-		}
+	// 启动定时任务和worker（只有在数据库可用时才启动）
+	if di.IsDBAvailable(db) {
+		go func() {
+			if err := cmd.Scheduler.RegisterTimedTasks(); err != nil {
+				log.Printf("注册定时任务失败: %v", err)
+			} else {
+				if err := cmd.Scheduler.Run(); err != nil {
+					log.Printf("启动定时任务失败: %v", err)
+				}
+			}
+		}()
 
-		if err := cmd.Scheduler.Run(); err != nil {
-			log.Fatalf("启动定时任务失败: %v", err)
-		}
-	}()
-
-	// 启动异步任务服务器
-	go func() {
-		mux := cmd.Routes.RegisterHandlers()
-		if err := cmd.Asynq.Run(mux); err != nil {
-			log.Fatalf("启动异步任务服务器失败: %v", err)
-		}
-	}()
+		// 启动异步任务服务器
+		go func() {
+			mux := cmd.Routes.RegisterHandlers()
+			if err := cmd.Asynq.Run(mux); err != nil {
+				log.Printf("启动异步任务服务器失败: %v", err)
+			}
+		}()
+	} else {
+		log.Printf("数据库不可用，跳过定时任务和异步任务的启动")
+	}
 
 	// 创建HTTP服务器
 	srv := &http.Server{
@@ -135,10 +184,14 @@ func Init() error {
 	log.Println("正在关闭服务器...")
 
 	// 先停止定时任务
-	cmd.Scheduler.Stop()
+	if cmd.Scheduler != nil {
+		cmd.Scheduler.Stop()
+	}
 
 	// 关闭异步任务服务器
-	cmd.Asynq.Shutdown()
+	if cmd.Asynq != nil {
+		cmd.Asynq.Shutdown()
+	}
 
 	// 设置关闭超时时间为30秒
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -170,39 +223,71 @@ func printHeaders(c *gin.Context) {
 
 func InitMock() error {
 	addr := viper.GetString("mysql.addr")
-	db, err := gorm.Open(mysql.Open(addr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
-	})
+
+	// 添加重试机制
+	maxRetries := 3
+	retryDelay := time.Second * 1
+
+	var db *gorm.DB
+	var err error
+
+	log.Printf("Mock模式: 正在连接数据库: %s", addr)
+
+	// 重试连接数据库
+	for i := 0; i < maxRetries; i++ {
+		db, err = gorm.Open(mysql.Open(addr), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Info),
+		})
+
+		if err == nil {
+			log.Printf("Mock模式: 数据库连接成功")
+			break
+		}
+
+		log.Printf("Mock模式: 数据库连接失败 (尝试 %d/%d): %v", i+1, maxRetries, err)
+
+		if i < maxRetries-1 {
+			time.Sleep(retryDelay)
+		}
+	}
+
 	if err != nil {
-		return fmt.Errorf("连接数据库失败: %v", err)
+		log.Printf("Mock模式: 数据库连接失败，跳过Mock数据初始化: %v", err)
+		return nil // 不返回错误，让程序继续运行
 	}
 
 	adapter, err := gormadapter.NewAdapterByDB(db)
 	if err != nil {
-		return fmt.Errorf("创建适配器失败: %v", err)
+		log.Printf("Mock模式: 创建适配器失败: %v", err)
+		return nil // 不返回错误，让程序继续运行
 	}
 
 	enforcer, err := casbin.NewEnforcer("config/model.conf", adapter)
 	if err != nil {
-		return fmt.Errorf("创建enforcer失败: %v", err)
+		log.Printf("Mock模式: 创建enforcer失败: %v", err)
+		return nil // 不返回错误，让程序继续运行
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		return fmt.Errorf("获取sql.DB失败: %v", err)
+		log.Printf("Mock模式: 获取sql.DB失败: %v", err)
+		return nil // 不返回错误，让程序继续运行
 	}
 	defer sqlDB.Close()
 
 	am := mock.NewApiMock(db)
 	if err := am.InitApi(); err != nil {
-		return fmt.Errorf("初始化API失败: %v", err)
+		log.Printf("Mock模式: 初始化API失败: %v", err)
+		return nil // 不返回错误，让程序继续运行
 	}
 
 	um := mock.NewUserMock(db, enforcer)
 	if err := um.CreateUserAdmin(); err != nil {
-		return fmt.Errorf("创建管理员用户失败: %v", err)
+		log.Printf("Mock模式: 创建管理员用户失败: %v", err)
+		return nil // 不返回错误，让程序继续运行
 	}
 
+	log.Printf("Mock模式: 数据初始化完成")
 	return nil
 }
 
