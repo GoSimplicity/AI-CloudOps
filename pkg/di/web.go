@@ -59,7 +59,6 @@ func InitGinServer(
 	alertEventHdl *prometheusApi.AlertEventHandler,
 	alertPoolHdl *prometheusApi.AlertPoolHandler,
 	alertRuleHdl *prometheusApi.AlertRuleHandler,
-
 	monitorConfigHdl *prometheusApi.MonitorConfigHandler,
 	onDutyGroupHdl *prometheusApi.OnDutyGroupHandler,
 	recordRuleHdl *prometheusApi.RecordRuleHandler,

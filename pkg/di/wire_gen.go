@@ -169,7 +169,7 @@ func ProvideCmd() *Cmd {
 	treeNodeHandler := api8.NewTreeNodeHandler(treeNodeService)
 	treeEcsDAO := dao4.NewTreeEcsDAO(db)
 	aliyunProviderImpl := provider.NewAliyunProvider(logger)
-	providerFactory := provider.NewProviderFactory(aliyunProviderImpl)
+	providerFactory := provider.NewProviderFactoryWithAliyun(aliyunProviderImpl)
 	treeCloudDAO := dao4.NewTreeCloudDAO(logger, db)
 	treeEcsService := service6.NewTreeEcsService(logger, treeEcsDAO, providerFactory, treeCloudDAO)
 	treeEcsHandler := api8.NewTreeEcsHandler(treeEcsService)
@@ -228,7 +228,7 @@ var UtilSet = wire.NewSet(utils.NewJWTHandler)
 
 var JobSet = wire.NewSet(job.NewTimedScheduler, job.NewTimedTask, job.NewCreateK8sClusterTask, job.NewUpdateK8sClusterTask, job.NewRefreshK8sClusterTask, job.NewRoutes)
 
-var ProviderSet = wire.NewSet(provider.NewAliyunProvider, provider.NewProviderFactory)
+var ProviderSet = wire.NewSet(provider.NewAliyunProvider, provider.NewProviderFactoryWithAliyun)
 
 var CronSet = wire.NewSet(cron.NewCronManager)
 
