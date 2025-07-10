@@ -238,7 +238,6 @@ var Injector = wire.NewSet(
 	InitLogger,
 	InitRedis,
 	InitDB,
-	InitCasbin,
 	InitAsynqClient,
 	InitAsynqServer,
 	InitScheduler,
