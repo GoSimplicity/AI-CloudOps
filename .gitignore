@@ -59,6 +59,18 @@ package-lock.json
 .VSCodeCounter
 **/backend-mock/data
 time_qps_auto_scaling_model_metadata.json
+# 模型文件
+*.pkl
+*.model
+*.h5
+*.pb
+*.onnx
+*.pt
+*.pth
+
+# 设计文档
+doc/license_system_design.md
+
 # local env files
 .env.local
 .env.*.local
