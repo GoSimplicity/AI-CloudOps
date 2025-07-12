@@ -55,6 +55,18 @@ func (k *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 		configMaps.POST("/update", k.UpdateConfigMap)               // 更新指定 Name 的 ConfigMap
 		configMaps.DELETE("/delete/:id", k.DeleteConfigMaps)        // 删除 ConfigMap
 		configMaps.DELETE("/batch_delete", k.BatchDeleteConfigMaps) // 批量删除 ConfigMap
+		
+		// 版本管理
+		configMaps.POST("/versions/create", k.CreateConfigMapVersion)         // 创建 ConfigMap 版本
+		configMaps.GET("/:id/versions", k.GetConfigMapVersions)               // 获取 ConfigMap 版本列表
+		configMaps.GET("/:id/versions/detail", k.GetConfigMapVersion)         // 获取特定版本的 ConfigMap
+		configMaps.DELETE("/:id/versions/delete", k.DeleteConfigMapVersion)   // 删除 ConfigMap 版本
+		
+		// 热更新
+		configMaps.POST("/hot_reload", k.HotReloadConfigMap)                  // 热重载 ConfigMap
+		
+		// 回滚
+		configMaps.POST("/rollback", k.RollbackConfigMap)                     // 回滚 ConfigMap
 	}
 }
 
@@ -141,5 +153,130 @@ func (k *K8sConfigMapHandler) DeleteConfigMaps(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, k.configmapService.DeleteConfigMap(ctx, id, namespace, configMapName)
+	})
+}
+
+// CreateConfigMapVersion 创建 ConfigMap 版本
+func (k *K8sConfigMapHandler) CreateConfigMapVersion(ctx *gin.Context) {
+	var req model.K8sConfigMapVersionRequest
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.configmapService.CreateConfigMapVersion(ctx, &req)
+	})
+}
+
+// GetConfigMapVersions 获取 ConfigMap 版本列表
+func (k *K8sConfigMapHandler) GetConfigMapVersions(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		k.l.Error("获取参数 ID 失败", zap.Error(err))
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace := ctx.Query("namespace")
+	if namespace == "" {
+		k.l.Error("缺少必需的 namespace 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
+		return
+	}
+
+	configMapName := ctx.Query("configmap_name")
+	if configMapName == "" {
+		k.l.Error("缺少必需的 configmap_name 参数")
+		utils.BadRequestError(ctx, "缺少 'configmap_name' 参数")
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return k.configmapService.GetConfigMapVersions(ctx, id, namespace, configMapName)
+	})
+}
+
+// GetConfigMapVersion 获取特定版本的 ConfigMap
+func (k *K8sConfigMapHandler) GetConfigMapVersion(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		k.l.Error("获取参数 ID 失败", zap.Error(err))
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace := ctx.Query("namespace")
+	if namespace == "" {
+		k.l.Error("缺少必需的 namespace 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
+		return
+	}
+
+	configMapName := ctx.Query("configmap_name")
+	if configMapName == "" {
+		k.l.Error("缺少必需的 configmap_name 参数")
+		utils.BadRequestError(ctx, "缺少 'configmap_name' 参数")
+		return
+	}
+
+	version := ctx.Query("version")
+	if version == "" {
+		k.l.Error("缺少必需的 version 参数")
+		utils.BadRequestError(ctx, "缺少 'version' 参数")
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return k.configmapService.GetConfigMapVersion(ctx, id, namespace, configMapName, version)
+	})
+}
+
+// DeleteConfigMapVersion 删除 ConfigMap 版本
+func (k *K8sConfigMapHandler) DeleteConfigMapVersion(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		k.l.Error("获取参数 ID 失败", zap.Error(err))
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace := ctx.Query("namespace")
+	if namespace == "" {
+		k.l.Error("缺少必需的 namespace 参数")
+		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
+		return
+	}
+
+	configMapName := ctx.Query("configmap_name")
+	if configMapName == "" {
+		k.l.Error("缺少必需的 configmap_name 参数")
+		utils.BadRequestError(ctx, "缺少 'configmap_name' 参数")
+		return
+	}
+
+	version := ctx.Query("version")
+	if version == "" {
+		k.l.Error("缺少必需的 version 参数")
+		utils.BadRequestError(ctx, "缺少 'version' 参数")
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, k.configmapService.DeleteConfigMapVersion(ctx, id, namespace, configMapName, version)
+	})
+}
+
+// HotReloadConfigMap 热重载 ConfigMap
+func (k *K8sConfigMapHandler) HotReloadConfigMap(ctx *gin.Context) {
+	var req model.K8sConfigMapHotReloadRequest
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.configmapService.HotReloadConfigMap(ctx, &req)
+	})
+}
+
+// RollbackConfigMap 回滚 ConfigMap
+func (k *K8sConfigMapHandler) RollbackConfigMap(ctx *gin.Context) {
+	var req model.K8sConfigMapRollbackRequest
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.configmapService.RollbackConfigMap(ctx, &req)
 	})
 }

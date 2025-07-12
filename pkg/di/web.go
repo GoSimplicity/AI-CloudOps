@@ -55,6 +55,12 @@ func InitGinServer(
 	k8sTaintHdl *k8sApi.K8sTaintHandler,
 	k8sYamlTaskHdl *k8sApi.K8sYamlTaskHandler,
 	k8sYamlTemplateHdl *k8sApi.K8sYamlTemplateHandler,
+	k8sResourceQuotaHdl *k8sApi.K8sResourceQuotaHandler,
+	k8sLimitRangeHdl *k8sApi.K8sLimitRangeHandler,
+	k8sLabelHdl *k8sApi.K8sLabelHandler,
+	k8sNodeAffinityHdl *k8sApi.K8sNodeAffinityHandler,
+	k8sPodAffinityHdl *k8sApi.K8sPodAffinityHandler,
+	k8sAffinityVisualizationHdl *k8sApi.K8sAffinityVisualizationHandler,
 	k8sAppHdl *k8sApi.K8sAppHandler,
 	alertEventHdl *prometheusApi.AlertEventHandler,
 	alertPoolHdl *prometheusApi.AlertPoolHandler,
@@ -109,6 +115,12 @@ func InitGinServer(
 	k8sTaintHdl.RegisterRouters(server)
 	k8sYamlTaskHdl.RegisterRouters(server)
 	k8sYamlTemplateHdl.RegisterRouters(server)
+	k8sResourceQuotaHdl.RegisterRouters(server)
+	k8sLimitRangeHdl.RegisterRouters(server)
+	k8sLabelHdl.RegisterRouters(server)
+	k8sNodeAffinityHdl.RegisterRouters(server)
+	k8sPodAffinityHdl.RegisterRouters(server)
+	k8sAffinityVisualizationHdl.RegisterRouters(server)
 	formDesignHdl.RegisterRouters(server)
 	processHdl.RegisterRouters(server)
 	templateHdl.RegisterRouters(server)
