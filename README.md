@@ -244,7 +244,7 @@ AI-CloudOps-web/
 
 如果有任何问题或建议，欢迎通过以下方式联系我：
 
-- Email: [wzijian62@gmail.com](mailto:wzijian62@gmail.com)
+- Email: [bamboocloudops@gmail.com](mailto:bamboocloudops@gmail.com)
 - 微信：GoSimplicity（加我后可邀请进微信群交流）
 
 ## Star History
