@@ -69,8 +69,7 @@ type InstanceService interface {
 	GetInstance(ctx context.Context, id int) (*model.Instance, error)
 	ListInstance(ctx context.Context, req *model.ListInstanceReq) (model.ListResp[*model.Instance], error)
 	BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8, operatorID int) error
-	GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (model.ListResp[*model.Instance], error)
-	GetOverdueInstances(ctx context.Context) ([]model.Instance, error)
+	GetMyInstances(ctx context.Context, req *model.MyInstanceReq, userID int) (model.ListResp[*model.Instance], error)
 	TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error
 }
 
@@ -291,7 +290,7 @@ func (s *instanceService) BatchUpdateInstanceStatus(ctx context.Context, ids []i
 }
 
 // GetMyInstances 获取我的工单
-func (s *instanceService) GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) (model.ListResp[*model.Instance], error) {
+func (s *instanceService) GetMyInstances(ctx context.Context, req *model.MyInstanceReq, userID int) (model.ListResp[*model.Instance], error) {
 	if userID <= 0 {
 		return model.ListResp[*model.Instance]{}, ErrInvalidRequest
 	}
@@ -313,17 +312,6 @@ func (s *instanceService) GetMyInstances(ctx context.Context, userID int, req *m
 		Items: result,
 		Total: total,
 	}, nil
-}
-
-// GetOverdueInstances 获取超时工单
-func (s *instanceService) GetOverdueInstances(ctx context.Context) ([]model.Instance, error) {
-	instances, err := s.dao.GetOverdueInstances(ctx)
-	if err != nil {
-		s.logger.Error("获取超时工单失败", zap.Error(err))
-		return nil, fmt.Errorf("获取超时工单失败: %w", err)
-	}
-
-	return instances, nil
 }
 
 // TransferInstance 转移工单

@@ -63,7 +63,6 @@ type InstanceDAO interface {
 	ListInstance(ctx context.Context, req *model.ListInstanceReq) ([]*model.Instance, int64, error)
 	BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8) error
 	GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) ([]*model.Instance, int64, error)
-	GetOverdueInstances(ctx context.Context) ([]model.Instance, error)
 	TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error
 }
 
@@ -357,26 +356,6 @@ func (d *instanceDAO) GetMyInstances(ctx context.Context, userID int, req *model
 	return instances, total, nil
 }
 
-// GetOverdueInstances 获取超时工单
-func (d *instanceDAO) GetOverdueInstances(ctx context.Context) ([]model.Instance, error) {
-	var instances []model.Instance
-
-	err := d.db.WithContext(ctx).
-		Where("due_date < ? AND status NOT IN ?", time.Now(),
-			[]int8{model.InstanceStatusCompleted, model.InstanceStatusCancelled, model.InstanceStatusRejected}).
-		Preload("Template").
-		Preload("Process").
-		Preload("Category").
-		Find(&instances).Error
-
-	if err != nil {
-		d.logger.Error("获取超时工单失败", zap.Error(err))
-		return nil, fmt.Errorf("获取超时工单失败: %w", err)
-	}
-
-	return instances, nil
-}
-
 // TransferInstance 转移工单
 func (d *instanceDAO) TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error {
 	if instanceID <= 0 || fromUserID <= 0 || toUserID <= 0 {
@@ -514,11 +493,6 @@ func (d *instanceDAO) deleteRelatedData(tx *gorm.DB, instanceID int) error {
 	// 删除相关的评论
 	if err := tx.Where("instance_id = ?", instanceID).Delete(&model.InstanceComment{}).Error; err != nil {
 		return fmt.Errorf("删除工单评论失败: %w", err)
-	}
-
-	// 删除相关的附件记录
-	if err := tx.Where("instance_id = ?", instanceID).Delete(&model.InstanceAttachment{}).Error; err != nil {
-		return fmt.Errorf("删除工单附件记录失败: %w", err)
 	}
 
 	return nil

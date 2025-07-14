@@ -1,4 +1,0 @@
-## Append samples of your project ##
-resources:
-- hpa_v1_predicthpa.yaml
-# +kubebuilder:scaffold:manifestskustomizesamples

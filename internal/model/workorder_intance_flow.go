@@ -27,9 +27,7 @@ package model
 
 import "time"
 
-// ==================== 工单流转记录相关 ====================
-
-// InstanceFlow 工单流转记录实体（DAO层）
+// InstanceFlow 工单流转记录实体
 type InstanceFlow struct {
 	Model
 	InstanceID   int     `json:"instance_id" gorm:"index;column:instance_id;not null;comment:工单实例ID"`
@@ -48,12 +46,10 @@ type InstanceFlow struct {
 	ToUserName   string  `json:"to_user_name" gorm:"-"`
 }
 
-// TableName 指定工单流转记录表名
 func (InstanceFlow) TableName() string {
 	return "workorder_instance_flow"
 }
 
-// InstanceFlowResp 工单流转记录响应结构
 type InstanceFlowResp struct {
 	ID           int                    `json:"id"`
 	InstanceID   int                    `json:"instance_id"`
@@ -71,7 +67,6 @@ type InstanceFlowResp struct {
 	UpdatedAt    time.Time              `json:"updated_at"`
 }
 
-// ToResp 将DAO实体转换为响应结构
 func (i *InstanceFlow) ToResp() *InstanceFlowResp {
 	return &InstanceFlowResp{
 		ID:           i.ID,
@@ -89,4 +84,21 @@ func (i *InstanceFlow) ToResp() *InstanceFlowResp {
 		CreatedAt:    i.CreatedAt,
 		UpdatedAt:    i.UpdatedAt,
 	}
+}
+
+type GetInstanceFlowsReq struct {
+	ID int `json:"id" form:"id" binding:"required"`
+}
+
+type GetProcessDefinitionReq struct {
+	ID int `json:"id" form:"id" binding:"required"`
+}
+
+type InstanceActionReq struct {
+	InstanceID int                    `json:"instance_id" binding:"required"`
+	Action     string                 `json:"action" binding:"required,oneof=approve reject transfer revoke cancel"`
+	Comment    string                 `json:"comment" binding:"omitempty,max=1000"`
+	FormData   map[string]interface{} `json:"form_data"`
+	AssigneeID *int                   `json:"assignee_id" binding:"omitempty,min=1"`
+	StepID     string                 `json:"step_id" binding:"required"`
 }

@@ -90,10 +90,6 @@ func (c *clusterService) GetClusterByID(ctx context.Context, id int) (*model.K8s
 
 // CreateCluster 创建一个新的 Kubernetes 集群
 func (c *clusterService) CreateCluster(ctx context.Context, cluster *model.K8sCluster) (err error) {
-	if cluster == nil {
-		return fmt.Errorf("集群参数不能为空")
-	}
-
 	// 检查集群是否存在
 	existingCluster, err := c.dao.GetClusterByName(ctx, cluster.Name)
 	if err != nil && err != gorm.ErrRecordNotFound {

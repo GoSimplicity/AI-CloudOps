@@ -304,7 +304,7 @@ func (s *instanceFlowService) convertToFlowResp(flow *model.InstanceFlow) *model
 }
 
 // handleApproveAction 处理审批操作
-func (s *instanceFlowService) handleApproveAction(ctx context.Context, instance *model.Instance, processDef *model.ProcessDefinition, flow *model.InstanceFlow, req *model.InstanceActionReq) error {
+func (s *instanceFlowService) handleApproveAction(ctx context.Context, instance *model.Instance, processDef *model.ProcessDefinition, flow *model.InstanceFlow, _ *model.InstanceActionReq) error {
 	// 查找当前步骤
 	var currentStep *model.ProcessStep
 	for i, step := range processDef.Steps {
@@ -378,14 +378,14 @@ func (s *instanceFlowService) handleApproveAction(ctx context.Context, instance 
 }
 
 // handleRejectAction 处理拒绝操作
-func (s *instanceFlowService) handleRejectAction(ctx context.Context, instance *model.Instance, flow *model.InstanceFlow) error {
+func (s *instanceFlowService) handleRejectAction(_ context.Context, instance *model.Instance, flow *model.InstanceFlow) error {
 	instance.Status = model.InstanceStatusRejected
 	flow.ToStepID = instance.CurrentStep
 	return nil
 }
 
 // handleCancelAction 处理取消操作
-func (s *instanceFlowService) handleCancelAction(ctx context.Context, instance *model.Instance, flow *model.InstanceFlow) error {
+func (s *instanceFlowService) handleCancelAction(_ context.Context, instance *model.Instance, flow *model.InstanceFlow) error {
 	instance.Status = model.InstanceStatusCancelled
 	flow.ToStepID = instance.CurrentStep
 	return nil
@@ -411,7 +411,7 @@ func (s *instanceFlowService) handleTransferAction(ctx context.Context, instance
 }
 
 // handleRevokeAction 处理撤销操作
-func (s *instanceFlowService) handleRevokeAction(ctx context.Context, instance *model.Instance, flow *model.InstanceFlow) error {
+func (s *instanceFlowService) handleRevokeAction(_ context.Context, instance *model.Instance, flow *model.InstanceFlow) error {
 	instance.Status = model.InstanceStatusDraft
 	instance.AssigneeID = nil
 	instance.AssigneeName = ""

@@ -142,10 +142,37 @@ func (s *statisticsService) GetUserStats(ctx context.Context, req *model.StatsRe
 		return nil, fmt.Errorf("获取用户统计失败: %w", err)
 	}
 
-	// 补充用户信息
-	for i := range users {
-		if user, err := s.userDAO.GetUserByID(ctx, users[i].UserID); err == nil {
-			users[i].UserName = user.Username
+	// 批量补充用户信息，避免N+1查询问题
+	if len(users) > 0 {
+		// 收集所有用户ID
+		userIDs := make([]int, 0, len(users))
+		userIDSet := make(map[int]bool)
+		for _, userStat := range users {
+			if !userIDSet[userStat.UserID] {
+				userIDs = append(userIDs, userStat.UserID)
+				userIDSet[userStat.UserID] = true
+			}
+		}
+
+		// 批量获取用户信息
+		if len(userIDs) > 0 {
+			userList, err := s.userDAO.GetUserByIDs(ctx, userIDs)
+			if err != nil {
+				s.logger.Warn("批量获取用户信息失败", zap.Error(err))
+			} else {
+				// 构建用户ID到用户名的映射
+				userMap := make(map[int]string)
+				for _, user := range userList {
+					userMap[user.ID] = user.Username
+				}
+
+				// 填充用户名
+				for i := range users {
+					if userName, exists := userMap[users[i].UserID]; exists {
+						users[i].UserName = userName
+					}
+				}
+			}
 		}
 	}
 

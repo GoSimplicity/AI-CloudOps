@@ -27,7 +27,6 @@ package service
 
 import (
 	"context"
-	"errors"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
@@ -69,12 +68,6 @@ func NewTreeEcsService(logger *zap.Logger, dao dao.TreeEcsDAO, providerFactory *
 
 // CreateEcsResource 创建ECS实例
 func (t *treeEcsService) CreateEcsResource(ctx context.Context, req *model.CreateEcsResourceReq) error {
-	// 验证req参数是否合法
-	if err := validateCreateEcsResourceReq(req); err != nil {
-		t.logger.Error("创建ECS实例参数验证失败", zap.Error(err))
-		return err
-	}
-
 	// 判断是否是云资源
 	if req.Provider != model.CloudProviderLocal {
 		account, err := t.cloudDao.GetCloudAccount(ctx, req.AccountId)
@@ -93,6 +86,8 @@ func (t *treeEcsService) CreateEcsResource(ctx context.Context, req *model.Creat
 			t.logger.Error("创建ECS实例失败", zap.Error(err))
 			return err
 		}
+	} else {
+		req.InstanceType = "ecs-local"
 	}
 
 	// 加密密码
@@ -369,39 +364,8 @@ func convertUpdateEcsReqToResourceEcs(req *model.UpdateEcsReq) *model.ResourceEc
 	}
 }
 
-func validateCreateEcsResourceReq(req *model.CreateEcsResourceReq) error {
-	if req.Provider == "" {
-		return errors.New("云提供商不能为空")
-	}
-
-	if req.InstanceType == "" {
-		return errors.New("实例类型不能为空")
-	}
-
-	if req.Hostname == "" {
-		return errors.New("主机名不能为空")
-	}
-
-	if req.AuthMode == "password" && req.Password == "" {
-		return errors.New("密码不能为空")
-	}
-
-	if req.AuthMode == "key" && req.Key == "" {
-		return errors.New("密钥不能为空")
-	}
-
-	if req.OsType == "" {
-		return errors.New("操作系统类型不能为空")
-	}
-
-	return nil
-}
-
 // parseInstanceType 解析实例类型，返回CPU核数和内存大小(GB)
 func parseInstanceType(instanceType string) (int, int) {
-	// 这里是简化的解析逻辑，实际应该根据不同云厂商的实例类型规格进行解析
-	// 例如: ecs.t5-lc1m1.small -> 1核1GB, ecs.t5-lc1m2.large -> 1核2GB
-
 	// 默认值
 	cpu, memory := 1, 1
 

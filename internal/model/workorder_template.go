@@ -27,7 +27,7 @@ package model
 
 // TemplateDefaultValues 模板默认值结构
 type TemplateDefaultValues struct {
-	Fields    map[string]interface{} `json:"fields"`    // 表单字段默认值
+	Fields    map[string]any `json:"fields"`    // 表单字段默认值
 	Approvers []int                  `json:"approvers"` // 默认审批人
 	Priority  int8                   `json:"priority"`  // 默认优先级
 	DueHours  *int                   `json:"due_hours"` // 默认处理时限(小时)
@@ -87,8 +87,7 @@ type UpdateTemplateReq struct {
 // ListTemplateReq 模板列表请求
 type ListTemplateReq struct {
 	ListReq
-	Name       *string `json:"name" form:"name"`                                   // 模板名称
-	CategoryID *int    `json:"category_id" form:"category_id"`                     // 分类ID
-	ProcessID  *int    `json:"process_id" form:"process_id"`                       // 流程ID
-	Status     *int8   `json:"status" form:"status" binding:"omitempty,oneof=0 1"` // 状态过滤
+	CategoryID *int  `json:"category_id" form:"category_id"`
+	ProcessID  *int  `json:"process_id" form:"process_id"`
+	Status     *int8 `json:"status" form:"status" binding:"omitempty,oneof=0 1"`
 }

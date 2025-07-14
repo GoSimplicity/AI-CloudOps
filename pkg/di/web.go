@@ -76,6 +76,8 @@ func InitGinServer(
 	processHdl *workorderApi.ProcessHandler,
 	templateHdl *workorderApi.TemplateHandler,
 	instanceHdl *workorderApi.InstanceHandler,
+	instanceFlowHdl *workorderApi.InstanceFlowHandler,
+	instanceCommentHdl *workorderApi.InstanceCommentHandler,
 	statisticsHdl *workorderApi.StatisticsHandler,
 	categoryHdl *workorderApi.CategoryGroupHandler,
 	aiHdl *aiHandler.AIHandler,
@@ -125,6 +127,8 @@ func InitGinServer(
 	processHdl.RegisterRouters(server)
 	templateHdl.RegisterRouters(server)
 	instanceHdl.RegisterRouters(server)
+	instanceFlowHdl.RegisterRouters(server)
+	instanceCommentHdl.RegisterRouters(server)
 	statisticsHdl.RegisterRouters(server)
 	categoryHdl.RegisterRouters(server)
 	aiHdl.RegisterRouters(server)

@@ -237,19 +237,19 @@ func parseTimeRFC3339(timeStr string) (time.Time, error) {
 	if err == nil {
 		return t, nil
 	}
-	
+
 	// 再尝试带时区的格式
 	t, err = time.Parse("2006-01-02T15:04:05Z07:00", timeStr)
 	if err == nil {
 		return t, nil
 	}
-	
+
 	// 再尝试不带时区的格式
 	t, err = time.Parse("2006-01-02T15:04:05", timeStr)
 	if err == nil {
 		return t, nil
 	}
-	
+
 	// 最后尝试只有日期的格式
 	return time.Parse("2006-01-02", timeStr)
 }
