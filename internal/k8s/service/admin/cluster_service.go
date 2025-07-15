@@ -27,15 +27,13 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
-	"github.com/hibiken/asynq"
 	"gorm.io/gorm"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/job"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 
 	"go.uber.org/zap"
@@ -52,18 +50,18 @@ type ClusterService interface {
 }
 
 type clusterService struct {
-	dao         admin.ClusterDAO
-	client      client.K8sClient
-	asynqClient *asynq.Client
-	l           *zap.Logger
+	dao           admin.ClusterDAO
+	client        client.K8sClient
+	clusterMgr    manager.ClusterManager
+	l             *zap.Logger
 }
 
-func NewClusterService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger, asynqClient *asynq.Client) ClusterService {
+func NewClusterService(dao admin.ClusterDAO, client client.K8sClient, clusterMgr manager.ClusterManager, l *zap.Logger) ClusterService {
 	return &clusterService{
-		dao:         dao,
-		client:      client,
-		asynqClient: asynqClient,
-		l:           l,
+		dao:        dao,
+		client:     client,
+		clusterMgr: clusterMgr,
+		l:          l,
 	}
 }
 
@@ -110,20 +108,10 @@ func (c *clusterService) CreateCluster(ctx context.Context, cluster *model.K8sCl
 		return fmt.Errorf("创建集群记录失败: %w", err)
 	}
 
-	// 放入异步任务队列
-	payload := job.CreateK8sClusterPayload{
-		Cluster: cluster,
-	}
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		c.l.Error("CreateCluster: 序列化任务载荷失败", zap.Error(err))
-		return fmt.Errorf("序列化任务载荷失败: %w", err)
-	}
-
-	task := asynq.NewTask(job.DeferCreateK8sCluster, jsonPayload)
-	if _, err := c.asynqClient.Enqueue(task); err != nil {
-		c.l.Error("CreateCluster: 放入异步任务队列失败", zap.Error(err))
-		return fmt.Errorf("放入异步任务队列失败: %w", err)
+	// 使用集群管理器创建集群
+	if err := c.clusterMgr.CreateCluster(ctx, cluster); err != nil {
+		c.l.Error("CreateCluster: 创建集群失败", zap.Error(err))
+		return fmt.Errorf("创建集群失败: %w", err)
 	}
 
 	c.l.Info("CreateCluster: 成功创建 Kubernetes 集群", zap.Int("clusterID", cluster.ID))
@@ -153,20 +141,10 @@ func (c *clusterService) UpdateCluster(ctx context.Context, cluster *model.K8sCl
 		return fmt.Errorf("更新集群失败: %w", err)
 	}
 
-	// 放入异步任务队列
-	payload := job.UpdateK8sClusterPayload{
-		Cluster: cluster,
-	}
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		c.l.Error("UpdateCluster: 序列化任务载荷失败", zap.Error(err))
-		return fmt.Errorf("序列化任务载荷失败: %w", err)
-	}
-
-	task := asynq.NewTask(job.DeferUpdateK8sCluster, jsonPayload)
-	if _, err := c.asynqClient.Enqueue(task); err != nil {
-		c.l.Error("UpdateCluster: 放入异步任务队列失败", zap.Error(err))
-		return fmt.Errorf("放入异步任务队列失败: %w", err)
+	// 使用集群管理器更新集群
+	if err := c.clusterMgr.UpdateCluster(ctx, cluster); err != nil {
+		c.l.Error("UpdateCluster: 更新集群客户端失败", zap.Error(err))
+		return fmt.Errorf("更新集群客户端失败: %w", err)
 	}
 
 	c.l.Info("UpdateCluster: 成功更新 Kubernetes 集群", zap.Int("clusterID", cluster.ID))
@@ -231,23 +209,13 @@ func (c *clusterService) RefreshClusterStatus(ctx context.Context, id int) error
 		return fmt.Errorf("集群不存在，ID: %d", id)
 	}
 
-	// 放入异步任务队列
-	payload := job.RefreshK8sClusterPayload{
-		ClusterID: id,
-	}
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		c.l.Error("RefreshClusterStatus: 序列化任务载荷失败", zap.Error(err))
-		return fmt.Errorf("序列化任务载荷失败: %w", err)
+	// 使用集群管理器刷新集群状态
+	if err := c.clusterMgr.RefreshCluster(ctx, id); err != nil {
+		c.l.Error("RefreshClusterStatus: 刷新集群状态失败", zap.Error(err))
+		return fmt.Errorf("刷新集群状态失败: %w", err)
 	}
 
-	task := asynq.NewTask(job.DeferRefreshK8sCluster, jsonPayload)
-	if _, err := c.asynqClient.Enqueue(task); err != nil {
-		c.l.Error("RefreshClusterStatus: 放入异步任务队列失败", zap.Error(err))
-		return fmt.Errorf("放入异步任务队列失败: %w", err)
-	}
-
-	c.l.Info("RefreshClusterStatus: 成功提交刷新集群状态任务", zap.Int("clusterID", id))
+	c.l.Info("RefreshClusterStatus: 成功刷新集群状态", zap.Int("clusterID", id))
 	return nil
 }
 

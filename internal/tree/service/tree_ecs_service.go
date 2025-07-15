@@ -30,7 +30,8 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/provider"
+
+	// "github.com/GoSimplicity/AI-CloudOps/internal/tree/provider" // 云资源提供商，仅支持本地资源时暂不需要
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
 )
@@ -44,51 +45,57 @@ type TreeEcsService interface {
 	StartEcs(ctx context.Context, req *model.StartEcsReq) error
 	StopEcs(ctx context.Context, req *model.StopEcsReq) error
 	RestartEcs(ctx context.Context, req *model.RestartEcsReq) error
-	ResizeEcs(ctx context.Context, req *model.ResizeEcsReq) error
-	ResetEcsPassword(ctx context.Context, req *model.ResetEcsPasswordReq) error
-	RenewEcs(ctx context.Context, req *model.RenewEcsReq) error
-	ListEcsResourceOptions(ctx context.Context, req *model.ListEcsResourceOptionsReq) (model.ListResp[*model.ListEcsResourceOptionsResp], error)
+	// ResizeEcs(ctx context.Context, req *model.ResizeEcsReq) error
+	// ResetEcsPassword(ctx context.Context, req *model.ResetEcsPasswordReq) error
+	// RenewEcs(ctx context.Context, req *model.RenewEcsReq) error
+	// ListEcsResourceOptions(ctx context.Context, req *model.ListEcsResourceOptionsReq) (model.ListResp[*model.ListEcsResourceOptionsResp], error)
 }
 
 type treeEcsService struct {
-	providerFactory *provider.ProviderFactory
-	logger          *zap.Logger
-	dao             dao.TreeEcsDAO
-	cloudDao        dao.TreeCloudDAO
+	// providerFactory *provider.ProviderFactory
+	logger *zap.Logger
+	dao    dao.TreeEcsDAO
+	// cloudDao dao.TreeCloudDAO
 }
 
-func NewTreeEcsService(logger *zap.Logger, dao dao.TreeEcsDAO, providerFactory *provider.ProviderFactory, cloudDao dao.TreeCloudDAO) TreeEcsService {
+func NewTreeEcsService(logger *zap.Logger, dao dao.TreeEcsDAO) TreeEcsService {
 	return &treeEcsService{
-		logger:          logger,
-		dao:             dao,
-		cloudDao:        cloudDao,
-		providerFactory: providerFactory,
+		logger: logger,
+		dao:    dao,
+		// providerFactory: providerFactory,
+		// cloudDao:        cloudDao,
 	}
 }
 
 // CreateEcsResource 创建ECS实例
 func (t *treeEcsService) CreateEcsResource(ctx context.Context, req *model.CreateEcsResourceReq) error {
-	// 判断是否是云资源
-	if req.Provider != model.CloudProviderLocal {
-		account, err := t.cloudDao.GetCloudAccount(ctx, req.AccountId)
-		if err != nil {
-			t.logger.Error("获取云账号失败", zap.Error(err))
-			return err
-		}
-		provider, err := t.providerFactory.GetProvider(account.Provider)
-		if err != nil {
-			t.logger.Error("创建云Provider失败", zap.Error(err))
-			return err
-		}
+	/*
+		// 判断是否是云资源
+		if req.Provider != model.CloudProviderLocal {
+			account, err := t.cloudDao.GetCloudAccount(ctx, req.AccountId)
+			if err != nil {
+				t.logger.Error("获取云账号失败", zap.Error(err))
+				return err
+			}
+			provider, err := t.providerFactory.GetProvider(account.Provider)
+			if err != nil {
+				t.logger.Error("创建云Provider失败", zap.Error(err))
+				return err
+			}
 
-		err = provider.CreateInstance(ctx, req.Region, req)
-		if err != nil {
-			t.logger.Error("创建ECS实例失败", zap.Error(err))
-			return err
+			err = provider.CreateInstance(ctx, req.Region, req)
+			if err != nil {
+				t.logger.Error("创建ECS实例失败", zap.Error(err))
+				return err
+			}
+		} else {
+			req.InstanceType = "ecs-local"
 		}
-	} else {
-		req.InstanceType = "ecs-local"
-	}
+	*/
+
+	// 强制设置为本地资源
+	req.Provider = model.CloudProviderLocal
+	req.InstanceType = "ecs-local"
 
 	// 加密密码
 	req.Password = utils.Base64EncryptWithMagic(req.Password)
@@ -105,24 +112,27 @@ func (t *treeEcsService) CreateEcsResource(ctx context.Context, req *model.Creat
 
 // DeleteEcs 删除ECS实例
 func (t *treeEcsService) DeleteEcs(ctx context.Context, req *model.DeleteEcsReq) error {
-	if req.Provider != model.CloudProviderLocal {
-		account, err := t.cloudDao.GetCloudAccount(ctx, req.AccountId)
-		if err != nil {
-			t.logger.Error("获取云账号失败", zap.Error(err))
-			return err
-		}
-		provider, err := t.providerFactory.GetProvider(account.Provider)
-		if err != nil {
-			t.logger.Error("创建云Provider失败", zap.Error(err))
-			return err
-		}
+	// 仅支持本地资源，注释云资源逻辑
+	/*
+		if req.Provider != model.CloudProviderLocal {
+			account, err := t.cloudDao.GetCloudAccount(ctx, req.AccountId)
+			if err != nil {
+				t.logger.Error("获取云账号失败", zap.Error(err))
+				return err
+			}
+			provider, err := t.providerFactory.GetProvider(account.Provider)
+			if err != nil {
+				t.logger.Error("创建云Provider失败", zap.Error(err))
+				return err
+			}
 
-		err = provider.DeleteInstance(ctx, req.Region, req.InstanceId)
-		if err != nil {
-			t.logger.Error("删除ECS实例失败", zap.Error(err))
-			return err
+			err = provider.DeleteInstance(ctx, req.Region, req.InstanceId)
+			if err != nil {
+				t.logger.Error("删除ECS实例失败", zap.Error(err))
+				return err
+			}
 		}
-	}
+	*/
 
 	// 删除本地ECS实例
 	err := t.dao.DeleteEcsResource(ctx, req.ID)
@@ -159,7 +169,8 @@ func (t *treeEcsService) ListEcsResources(ctx context.Context, req *model.ListEc
 	}, nil
 }
 
-// ListEcsResourceOptions 获取ECS实例选项
+// ListEcsResourceOptions 获取ECS实例选项 - 云资源特有功能，仅支持本地资源时暂不提供
+/*
 func (t *treeEcsService) ListEcsResourceOptions(ctx context.Context, req *model.ListEcsResourceOptionsReq) (model.ListResp[*model.ListEcsResourceOptionsResp], error) {
 	options, total, err := t.dao.GetEcsResourceOptions(ctx, req)
 	if err != nil {
@@ -172,8 +183,10 @@ func (t *treeEcsService) ListEcsResourceOptions(ctx context.Context, req *model.
 		Total: total,
 	}, nil
 }
+*/
 
-// RenewEcs 续费ECS实例
+// RenewEcs 续费ECS实例 - 云资源特有功能，仅支持本地资源时暂不提供
+/*
 func (t *treeEcsService) RenewEcs(ctx context.Context, req *model.RenewEcsReq) error {
 	// 获取ECS实例信息
 	resource, err := t.dao.GetEcsResourceById(ctx, req.ID)
@@ -190,8 +203,10 @@ func (t *treeEcsService) RenewEcs(ctx context.Context, req *model.RenewEcsReq) e
 
 	return nil
 }
+*/
 
-// ResetEcsPassword 重置ECS实例密码
+// ResetEcsPassword 重置ECS实例密码 - 云资源特有功能，仅支持本地资源时暂不提供
+/*
 func (t *treeEcsService) ResetEcsPassword(ctx context.Context, req *model.ResetEcsPasswordReq) error {
 	// 获取ECS实例信息
 	resource, err := t.dao.GetEcsResourceById(ctx, req.ID)
@@ -211,8 +226,10 @@ func (t *treeEcsService) ResetEcsPassword(ctx context.Context, req *model.ResetE
 
 	return nil
 }
+*/
 
-// ResizeEcs 调整ECS实例规格
+// ResizeEcs 调整ECS实例规格 - 云资源特有功能，仅支持本地资源时暂不提供
+/*
 func (t *treeEcsService) ResizeEcs(ctx context.Context, req *model.ResizeEcsReq) error {
 	// 获取ECS实例信息
 	resource, err := t.dao.GetEcsResourceById(ctx, req.ID)
@@ -236,6 +253,7 @@ func (t *treeEcsService) ResizeEcs(ctx context.Context, req *model.ResizeEcsReq)
 
 	return nil
 }
+*/
 
 // RestartEcs 重启ECS实例
 func (t *treeEcsService) RestartEcs(ctx context.Context, req *model.RestartEcsReq) error {
@@ -293,24 +311,27 @@ func (t *treeEcsService) StopEcs(ctx context.Context, req *model.StopEcsReq) err
 
 // UpdateEcs 更新ECS实例
 func (t *treeEcsService) UpdateEcs(ctx context.Context, req *model.UpdateEcsReq) error {
-	if req.Provider != model.CloudProviderLocal {
-		account, err := t.cloudDao.GetCloudAccount(ctx, req.AccountId)
-		if err != nil {
-			t.logger.Error("获取云账号失败", zap.Error(err))
-			return err
-		}
-		provider, err := t.providerFactory.GetProvider(account.Provider)
-		if err != nil {
-			t.logger.Error("创建云Provider失败", zap.Error(err))
-			return err
-		}
+	// 仅支持本地资源，注释云资源逻辑
+	/*
+		if req.Provider != model.CloudProviderLocal {
+			account, err := t.cloudDao.GetCloudAccount(ctx, req.AccountId)
+			if err != nil {
+				t.logger.Error("获取云账号失败", zap.Error(err))
+				return err
+			}
+			provider, err := t.providerFactory.GetProvider(account.Provider)
+			if err != nil {
+				t.logger.Error("创建云Provider失败", zap.Error(err))
+				return err
+			}
 
-		err = provider.StopInstance(ctx, req.Region, req.InstanceId)
-		if err != nil {
-			t.logger.Error("停止ECS实例失败", zap.Error(err))
-			return err
+			err = provider.StopInstance(ctx, req.Region, req.InstanceId)
+			if err != nil {
+				t.logger.Error("停止ECS实例失败", zap.Error(err))
+				return err
+			}
 		}
-	}
+	*/
 
 	// 更新本地ECS实例
 	err := t.dao.UpdateEcsResource(ctx, convertUpdateEcsReqToResourceEcs(req))
@@ -362,32 +383,4 @@ func convertUpdateEcsReqToResourceEcs(req *model.UpdateEcsReq) *model.ResourceEc
 		AuthMode:         req.AuthMode,
 		Key:              req.Key,
 	}
-}
-
-// parseInstanceType 解析实例类型，返回CPU核数和内存大小(GB)
-func parseInstanceType(instanceType string) (int, int) {
-	// 默认值
-	cpu, memory := 1, 1
-
-	// 简单的规格映射示例
-	switch instanceType {
-	case "ecs.t5-lc1m1.small", "t2.micro":
-		cpu, memory = 1, 1
-	case "ecs.t5-lc1m2.small", "t2.small":
-		cpu, memory = 1, 2
-	case "ecs.t5-lc2m4.large", "t2.medium":
-		cpu, memory = 2, 4
-	case "ecs.c5.large", "t2.large":
-		cpu, memory = 2, 4
-	case "ecs.c5.xlarge", "t2.xlarge":
-		cpu, memory = 4, 8
-	case "ecs.c5.2xlarge", "t2.2xlarge":
-		cpu, memory = 8, 16
-	default:
-		// 尝试从实例类型字符串中提取规格信息
-		// 这里可以根据实际需求实现更复杂的解析逻辑
-		cpu, memory = 2, 4 // 默认规格
-	}
-
-	return cpu, memory
 }

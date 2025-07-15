@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -65,7 +66,7 @@ type TreeNodeService interface {
 	MoveNode(ctx context.Context, nodeId, newParentId int) error
 
 	// 资源绑定接口
-	GetNodeResources(ctx context.Context, nodeId int) (model.ListResp[*model.TreeNodeResource], error)
+	GetNodeResources(ctx context.Context, nodeId int) (model.ListResp[*model.ResourceItems], error)
 	BindResource(ctx context.Context, req *model.BindResourceReq) error
 	UnbindResource(ctx context.Context, req *model.UnbindResourceReq) error
 
@@ -79,12 +80,14 @@ type treeService struct {
 	logger  *zap.Logger
 	dao     dao.TreeNodeDAO
 	userDao userDao.UserDAO
+	ecsDao  dao.TreeEcsDAO
 }
 
-func NewTreeNodeService(logger *zap.Logger, dao dao.TreeNodeDAO, userDao userDao.UserDAO) TreeNodeService {
+func NewTreeNodeService(logger *zap.Logger, dao dao.TreeNodeDAO, ecsDao dao.TreeEcsDAO, userDao userDao.UserDAO) TreeNodeService {
 	return &treeService{
 		logger:  logger,
 		dao:     dao,
+		ecsDao:  ecsDao,
 		userDao: userDao,
 	}
 }
@@ -499,19 +502,42 @@ func (t *treeService) UpdateNodeStatus(ctx context.Context, req *model.UpdateNod
 }
 
 // GetNodeResources 获取节点资源列表
-func (t *treeService) GetNodeResources(ctx context.Context, nodeId int) (model.ListResp[*model.TreeNodeResource], error) {
+func (t *treeService) GetNodeResources(ctx context.Context, nodeId int) (model.ListResp[*model.ResourceItems], error) {
 	if err := validateID(nodeId); err != nil {
-		return model.ListResp[*model.TreeNodeResource]{}, err
+		return model.ListResp[*model.ResourceItems]{}, err
 	}
 
 	resources, err := t.dao.GetNodeResources(ctx, nodeId)
 	if err != nil {
 		t.logger.Error("获取节点资源失败", zap.Int("nodeId", nodeId), zap.Error(err))
-		return model.ListResp[*model.TreeNodeResource]{}, err
+		return model.ListResp[*model.ResourceItems]{}, err
 	}
 
-	return model.ListResp[*model.TreeNodeResource]{
-		Items: resources,
+	// 根据不同的资源类型，查询不同的资源基本信息
+	var items []*model.ResourceItems
+	for _, resource := range resources {
+		if resource.ResourceType == "ecs" || resource.ResourceType == "local" {
+			resourceID, err := strconv.Atoi(resource.ResourceID)
+			if err != nil {
+				t.logger.Error("获取ECS资源失败", zap.String("resourceID", resource.ResourceID), zap.Error(err))
+				continue
+			}
+			ecs, err := t.ecsDao.GetEcsResourceById(ctx, resourceID)
+			if err != nil {
+				t.logger.Error("获取ECS资源失败", zap.String("resourceID", resource.ResourceID), zap.Error(err))
+				continue
+			}
+			items = append(items, &model.ResourceItems{
+				ResourceName: ecs.InstanceName,
+				ResourceType: string(ecs.Provider),
+				Status:       ecs.Status,
+				CreatedAt:    ecs.CreatedAt,
+			})
+		}
+	}
+
+	return model.ListResp[*model.ResourceItems]{
+		Items: items,
 		Total: int64(len(resources)),
 	}, nil
 }

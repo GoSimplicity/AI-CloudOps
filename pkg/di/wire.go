@@ -31,11 +31,11 @@ import (
 	aiHandler "github.com/GoSimplicity/AI-CloudOps/internal/ai/api"
 	aiService "github.com/GoSimplicity/AI-CloudOps/internal/ai/service"
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
-	"github.com/GoSimplicity/AI-CloudOps/internal/job"
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	k8sAppDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	k8sAdminService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
 	k8sAppService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/user"
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
@@ -48,6 +48,7 @@ import (
 	alertService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
 	configService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/config"
 	scrapeJobService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape"
+	"github.com/GoSimplicity/AI-CloudOps/internal/startup"
 	authHandler "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
 	authDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	authService "github.com/GoSimplicity/AI-CloudOps/internal/system/service"
@@ -65,14 +66,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
-	"github.com/hibiken/asynq"
 )
 
 type Cmd struct {
 	Server    *gin.Engine
-	Routes    *job.Routes
-	Asynq     *asynq.Server
-	Scheduler *job.TimedScheduler
+	Bootstrap startup.ApplicationBootstrap
 }
 
 var HandlerSet = wire.NewSet(
@@ -97,7 +95,6 @@ var HandlerSet = wire.NewSet(
 	k8sHandler.NewK8sLabelHandler,
 	k8sHandler.NewK8sNodeAffinityHandler,
 	k8sHandler.NewK8sPodAffinityHandler,
-	k8sHandler.NewK8sTaintTolerationHandler,
 	k8sHandler.NewK8sAffinityVisualizationHandler,
 	aiHandler.NewAIHandler,
 	promHandler.NewAlertPoolHandler,
@@ -143,7 +140,6 @@ var ServiceSet = wire.NewSet(
 	k8sAdminService.NewLabelService,
 	k8sAdminService.NewNodeAffinityService,
 	k8sAdminService.NewPodAffinityService,
-	k8sAdminService.NewTaintTolerationService,
 	k8sAdminService.NewAffinityVisualizationService,
 	k8sAppService.NewAppService,
 	k8sAppService.NewInstanceService,
@@ -225,12 +221,8 @@ var UtilSet = wire.NewSet(
 )
 
 var JobSet = wire.NewSet(
-	job.NewTimedScheduler,
-	job.NewTimedTask,
-	job.NewCreateK8sClusterTask,
-	job.NewUpdateK8sClusterTask,
-	job.NewRefreshK8sClusterTask,
-	job.NewRoutes,
+	manager.NewClusterManager,
+	startup.NewApplicationBootstrap,
 )
 
 var ProviderSet = wire.NewSet(
@@ -248,9 +240,6 @@ var Injector = wire.NewSet(
 	InitLogger,
 	InitRedis,
 	InitDB,
-	InitAsynqClient,
-	InitAsynqServer,
-	InitScheduler,
 	InitAgent,
 	wire.Struct(new(Cmd), "*"),
 )
@@ -277,7 +266,6 @@ func ProvideCmd() *Cmd {
 		JobSet,
 		CacheSet,
 		ClientSet,
-		CronSet,
 		ProviderSet,
 	)
 	return &Cmd{}

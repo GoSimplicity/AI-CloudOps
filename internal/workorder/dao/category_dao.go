@@ -437,7 +437,8 @@ func (dao *categoryDAO) buildListQuery(ctx context.Context, req model.ListCatego
 
 	// 名称搜索
 	if req.Search != "" {
-		db = db.Where("name LIKE ?", "%"+strings.TrimSpace(req.Search)+"%")
+		searchPattern := "%" + sanitizeSearchInput(req.Search) + "%"
+		db = db.Where("name LIKE ?", searchPattern)
 	}
 
 	// 状态过滤

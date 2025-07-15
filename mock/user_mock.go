@@ -29,7 +29,6 @@ import (
 	"log"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/casbin/casbin/v2"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -42,13 +41,11 @@ const (
 
 type UserMock struct {
 	db *gorm.DB
-	ce *casbin.Enforcer
 }
 
-func NewUserMock(db *gorm.DB, ce *casbin.Enforcer) *UserMock {
+func NewUserMock(db *gorm.DB) *UserMock {
 	return &UserMock{
 		db: db,
-		ce: ce,
 	}
 }
 

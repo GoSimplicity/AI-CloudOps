@@ -23,34 +23,41 @@
  *
  */
 
-package job
+package dao
 
-import "github.com/hibiken/asynq"
+import (
+	"strings"
+)
 
-type Routes struct {
-	CreateK8sCluster  *CreateK8sClusterTask
-	UpdateK8sCluster  *UpdateK8sClusterTask
-	RefreshK8sCluster *RefreshK8sClusterTask
-	TimedTask         *TimedTask
+// sanitizeSearchInput 清理搜索输入，防止LIKE查询的特殊字符问题
+func sanitizeSearchInput(input string) string {
+	input = strings.ReplaceAll(input, "%", "\\%")
+	input = strings.ReplaceAll(input, "_", "\\_")
+	input = strings.ReplaceAll(input, "\\", "\\\\")
+	return strings.TrimSpace(input)
 }
 
-func NewRoutes(createK8sCluster *CreateK8sClusterTask, updateK8sCluster *UpdateK8sClusterTask, timedTask *TimedTask, refreshK8sCluster *RefreshK8sClusterTask) *Routes {
-	return &Routes{
-		CreateK8sCluster:  createK8sCluster,
-		UpdateK8sCluster:  updateK8sCluster,
-		RefreshK8sCluster: refreshK8sCluster,
-		TimedTask:         timedTask,
+// ValidatePagination 验证分页参数
+func ValidatePagination(page, size int) (int, int) {
+	if page <= 0 {
+		page = 1
 	}
+	if size <= 0 {
+		size = 10
+	}
+	if size > 100 {
+		size = 100
+	}
+	return page, size
 }
 
-func (r *Routes) RegisterHandlers() *asynq.ServeMux {
-	mux := asynq.NewServeMux()
-
-	// 注册任务
-	mux.HandleFunc(DeferCreateK8sCluster, r.CreateK8sCluster.ProcessTask)
-	mux.HandleFunc(DeferUpdateK8sCluster, r.UpdateK8sCluster.ProcessTask)
-	mux.HandleFunc(DeferTimedTask, r.TimedTask.ProcessTask)
-	mux.HandleFunc(DeferRefreshK8sCluster, r.RefreshK8sCluster.ProcessTask)
-
-	return mux
+// IsDuplicateKeyError 检查是否为重复键错误
+func IsDuplicateKeyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "duplicate entry") ||
+		strings.Contains(errStr, "duplicate key") ||
+		strings.Contains(errStr, "unique constraint")
 }

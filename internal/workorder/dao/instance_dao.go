@@ -553,7 +553,9 @@ func (d *instanceDAO) buildInstanceListQuery(db *gorm.DB, req *model.ListInstanc
 	// 标签过滤
 	if len(req.Tags) > 0 {
 		for _, tag := range req.Tags {
-			db = db.Where("tags LIKE ?", "%"+tag+"%")
+			// 使用JSON_CONTAINS进行更精确的标签匹配
+			sanitizedTag := sanitizeSearchInput(tag)
+			db = db.Where("JSON_CONTAINS(tags, JSON_QUOTE(?))", sanitizedTag)
 		}
 	}
 

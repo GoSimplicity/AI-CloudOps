@@ -38,8 +38,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/mock"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/di"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-	"github.com/casbin/casbin/v2"
-	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/fatih/color"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/gzip"
@@ -82,6 +80,17 @@ func Init() error {
 		}
 	} else {
 		log.Printf("数据库连接为空，程序将以降级模式运行")
+	}
+
+	// 初始化 K8s 集群客户端
+	if di.IsDBAvailable(db) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := cmd.Bootstrap.InitializeK8sClients(ctx); err != nil {
+			log.Printf("K8s集群客户端初始化失败: %v", err)
+		} else {
+			log.Printf("K8s集群客户端初始化成功")
+		}
+		cancel()
 	}
 
 	// 设置中间件
@@ -139,25 +148,9 @@ func Init() error {
 
 	// 启动定时任务和worker（只有在数据库可用时才启动）
 	if di.IsDBAvailable(db) {
-		go func() {
-			if err := cmd.Scheduler.RegisterTimedTasks(); err != nil {
-				log.Printf("注册定时任务失败: %v", err)
-			} else {
-				if err := cmd.Scheduler.Run(); err != nil {
-					log.Printf("启动定时任务失败: %v", err)
-				}
-			}
-		}()
-
-		// 启动异步任务服务器
-		go func() {
-			mux := cmd.Routes.RegisterHandlers()
-			if err := cmd.Asynq.Run(mux); err != nil {
-				log.Printf("启动异步任务服务器失败: %v", err)
-			}
-		}()
+		log.Printf("数据库可用，系统启动完成")
 	} else {
-		log.Printf("数据库不可用，跳过定时任务和异步任务的启动")
+		log.Printf("数据库不可用，系统以降级模式运行")
 	}
 
 	// 创建HTTP服务器
@@ -182,16 +175,6 @@ func Init() error {
 	// 等待中断信号
 	<-quit
 	log.Println("正在关闭服务器...")
-
-	// 先停止定时任务
-	if cmd.Scheduler != nil {
-		cmd.Scheduler.Stop()
-	}
-
-	// 关闭异步任务服务器
-	if cmd.Asynq != nil {
-		cmd.Asynq.Shutdown()
-	}
 
 	// 设置关闭超时时间为30秒
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -256,18 +239,6 @@ func InitMock() error {
 		return nil // 不返回错误，让程序继续运行
 	}
 
-	adapter, err := gormadapter.NewAdapterByDB(db)
-	if err != nil {
-		log.Printf("Mock模式: 创建适配器失败: %v", err)
-		return nil // 不返回错误，让程序继续运行
-	}
-
-	enforcer, err := casbin.NewEnforcer("config/model.conf", adapter)
-	if err != nil {
-		log.Printf("Mock模式: 创建enforcer失败: %v", err)
-		return nil // 不返回错误，让程序继续运行
-	}
-
 	sqlDB, err := db.DB()
 	if err != nil {
 		log.Printf("Mock模式: 获取sql.DB失败: %v", err)
@@ -281,7 +252,7 @@ func InitMock() error {
 		return nil // 不返回错误，让程序继续运行
 	}
 
-	um := mock.NewUserMock(db, enforcer)
+	um := mock.NewUserMock(db)
 	if err := um.CreateUserAdmin(); err != nil {
 		log.Printf("Mock模式: 创建管理员用户失败: %v", err)
 		return nil // 不返回错误，让程序继续运行

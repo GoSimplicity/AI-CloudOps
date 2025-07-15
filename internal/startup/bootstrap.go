@@ -23,9 +23,43 @@
  *
  */
 
-package job
+package startup
 
-const DeferCreateK8sCluster = "defer_create_k8s_cluster"
-const DeferUpdateK8sCluster = "defer_update_k8s_cluster"
-const DeferTimedTask = "timed:task"
-const DeferRefreshK8sCluster = "defer_refresh_k8s_cluster"
+import (
+	"context"
+	"time"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
+	"go.uber.org/zap"
+)
+
+type ApplicationBootstrap interface {
+	InitializeK8sClients(ctx context.Context) error
+}
+
+type applicationBootstrap struct {
+	clusterMgr manager.ClusterManager
+	logger     *zap.Logger
+}
+
+func NewApplicationBootstrap(clusterMgr manager.ClusterManager, logger *zap.Logger) ApplicationBootstrap {
+	return &applicationBootstrap{
+		clusterMgr: clusterMgr,
+		logger:     logger,
+	}
+}
+
+func (ab *applicationBootstrap) InitializeK8sClients(ctx context.Context) error {
+	ab.logger.Info("开始初始化K8s集群客户端")
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	if err := ab.clusterMgr.InitializeAllClusters(ctx); err != nil {
+		ab.logger.Error("初始化K8s集群客户端失败", zap.Error(err))
+		return err
+	}
+
+	ab.logger.Info("成功初始化K8s集群客户端")
+	return nil
+}

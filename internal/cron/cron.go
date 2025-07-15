@@ -35,13 +35,13 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -56,20 +56,22 @@ type CronManager interface {
 }
 
 type cronManager struct {
-	logger    *zap.Logger
-	onDutyDao alert.AlertManagerOnDutyDAO
-	k8sDao    admin.ClusterDAO
-	k8sClient client.K8sClient
-	ecsDao    dao.TreeEcsDAO
+	logger     *zap.Logger
+	onDutyDao  alert.AlertManagerOnDutyDAO
+	k8sDao     admin.ClusterDAO
+	k8sClient  client.K8sClient
+	clusterMgr manager.ClusterManager
+	ecsDao     dao.TreeEcsDAO
 }
 
-func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, k8sDao admin.ClusterDAO, k8sClient client.K8sClient, ecsDao dao.TreeEcsDAO) CronManager {
+func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, k8sDao admin.ClusterDAO, k8sClient client.K8sClient, clusterMgr manager.ClusterManager, ecsDao dao.TreeEcsDAO) CronManager {
 	return &cronManager{
-		logger:    logger,
-		onDutyDao: onDutyDao,
-		k8sDao:    k8sDao,
-		k8sClient: k8sClient,
-		ecsDao:    ecsDao,
+		logger:     logger,
+		onDutyDao:  onDutyDao,
+		k8sDao:     k8sDao,
+		k8sClient:  k8sClient,
+		clusterMgr: clusterMgr,
+		ecsDao:     ecsDao,
 	}
 }
 
@@ -282,29 +284,14 @@ func (cm *cronManager) StartCheckK8sStatusManager(ctx context.Context) error {
 
 // checkClusterStatus 检查单个集群状态
 func (cm *cronManager) checkClusterStatus(ctx context.Context, cluster *model.K8sCluster) error {
-	// 获取k8s客户端
-	clientset, err := cm.k8sClient.GetKubeClient(cluster.ID)
-	if err != nil {
-		cm.k8sClient.RefreshClients(ctx)
-		cm.logger.Warn("获取k8s客户端失败",
+	// 使用集群管理器检查集群状态
+	if err := cm.clusterMgr.CheckClusterStatus(ctx, cluster.ID); err != nil {
+		cm.logger.Warn("集群连接检查失败",
 			zap.Error(err),
 			zap.String("cluster", cluster.Name))
 		cluster.Status = "ERROR"
 	} else {
-		// 设置超时上下文
-		ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-
-		// 尝试访问API Server
-		_, err = clientset.CoreV1().Nodes().List(ctxWithTimeout, metav1.ListOptions{})
-		if err != nil {
-			cm.logger.Error("访问k8s集群失败",
-				zap.Error(err),
-				zap.String("cluster", cluster.Name))
-			cluster.Status = "ERROR"
-		} else {
-			cluster.Status = "RUNNING"
-		}
+		cluster.Status = "RUNNING"
 	}
 
 	// 更新集群状态
