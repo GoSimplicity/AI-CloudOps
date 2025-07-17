@@ -58,3 +58,13 @@ type InstanceCommentResp struct {
 	UpdatedAt   time.Time             `json:"updated_at"`
 	Children    []InstanceCommentResp `json:"children,omitempty"`
 }
+
+type InstanceCommentReq struct {
+	InstanceID int    `json:"instance_id" binding:"required"`
+	Content    string `json:"content" binding:"required,max=1000"`
+	ParentID   *int   `json:"parent_id"`
+}
+
+type GetInstanceCommentsReq struct {
+	ID int `json:"id" form:"id" binding:"required"`
+}

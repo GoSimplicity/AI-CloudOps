@@ -147,7 +147,6 @@ type DetailInstanceReq struct {
 
 type ListInstanceReq struct {
 	ListReq
-	Title      string     `json:"title" form:"title"`
 	Status     *int8      `json:"status" form:"status"`
 	Priority   *int8      `json:"priority" form:"priority"`
 	CategoryID *int       `json:"category_id" form:"category_id"`
@@ -164,7 +163,6 @@ type ListInstanceReq struct {
 type MyInstanceReq struct {
 	ListReq
 	Type       string     `json:"type" form:"type" binding:"omitempty,oneof=created assigned all"`
-	Title      string     `json:"title" form:"title"`
 	Status     *int8      `json:"status" form:"status"`
 	Priority   *int8      `json:"priority" form:"priority"`
 	CategoryID *int       `json:"category_id" form:"category_id"`
@@ -174,21 +172,7 @@ type MyInstanceReq struct {
 }
 
 type TransferInstanceReq struct {
+	InstanceID int    `json:"instance_id" binding:"required"`
 	AssigneeID int    `json:"assignee_id" binding:"required"`
 	Comment    string `json:"comment"`
-}
-
-type InstanceActionReq struct {
-	InstanceID int                    `json:"instance_id" binding:"required"`                                        // 工单ID
-	Action     string                 `json:"action" binding:"required,oneof=approve reject transfer revoke cancel"` // 操作
-	Comment    string                 `json:"comment" binding:"omitempty,max=1000"`                                  // 备注
-	FormData   map[string]interface{} `json:"form_data"`                                                             // 表单数据
-	AssigneeID *int                   `json:"assignee_id" binding:"omitempty,min=1"`                                 // 转移给谁
-	StepID     string                 `json:"step_id" binding:"required"`                                            // 当前步骤
-}
-
-type InstanceCommentReq struct {
-	InstanceID int    `json:"instance_id" binding:"required"`
-	Content    string `json:"content" binding:"required,max=1000"`
-	ParentID   *int   `json:"parent_id"`
 }

@@ -35,12 +35,22 @@ type ProviderFactory struct {
 	providers map[model.CloudProvider]Provider
 }
 
-func NewProviderFactory(aliyun *AliyunProviderImpl) *ProviderFactory {
+// NewProviderFactoryWithAliyun 为依赖注入系统创建一个包含阿里云提供商的工厂
+func NewProviderFactoryWithAliyun(aliyun *AliyunProviderImpl) *ProviderFactory {
+	factory := NewProviderFactory()
+	factory.RegisterProvider(model.CloudProviderAliyun, aliyun)
+	return factory
+}
+
+func NewProviderFactory() *ProviderFactory {
 	return &ProviderFactory{
-		providers: map[model.CloudProvider]Provider{
-			model.CloudProviderAliyun: aliyun,
-		},
+		providers: make(map[model.CloudProvider]Provider),
 	}
+}
+
+// RegisterProvider 注册云提供商
+func (f *ProviderFactory) RegisterProvider(providerType model.CloudProvider, provider Provider) {
+	f.providers[providerType] = provider
 }
 
 func (f *ProviderFactory) GetProvider(providerType model.CloudProvider) (Provider, error) {

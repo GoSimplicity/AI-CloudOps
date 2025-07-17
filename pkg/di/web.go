@@ -26,7 +26,6 @@
 package di
 
 import (
-	aiHandler "github.com/GoSimplicity/AI-CloudOps/internal/ai/api"
 	k8sApi "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	prometheusApi "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
@@ -55,11 +54,16 @@ func InitGinServer(
 	k8sTaintHdl *k8sApi.K8sTaintHandler,
 	k8sYamlTaskHdl *k8sApi.K8sYamlTaskHandler,
 	k8sYamlTemplateHdl *k8sApi.K8sYamlTemplateHandler,
+	k8sResourceQuotaHdl *k8sApi.K8sResourceQuotaHandler,
+	k8sLimitRangeHdl *k8sApi.K8sLimitRangeHandler,
+	k8sLabelHdl *k8sApi.K8sLabelHandler,
+	k8sNodeAffinityHdl *k8sApi.K8sNodeAffinityHandler,
+	k8sPodAffinityHdl *k8sApi.K8sPodAffinityHandler,
+	k8sAffinityVisualizationHdl *k8sApi.K8sAffinityVisualizationHandler,
 	k8sAppHdl *k8sApi.K8sAppHandler,
 	alertEventHdl *prometheusApi.AlertEventHandler,
 	alertPoolHdl *prometheusApi.AlertPoolHandler,
 	alertRuleHdl *prometheusApi.AlertRuleHandler,
-
 	monitorConfigHdl *prometheusApi.MonitorConfigHandler,
 	onDutyGroupHdl *prometheusApi.OnDutyGroupHandler,
 	recordRuleHdl *prometheusApi.RecordRuleHandler,
@@ -71,9 +75,10 @@ func InitGinServer(
 	processHdl *workorderApi.ProcessHandler,
 	templateHdl *workorderApi.TemplateHandler,
 	instanceHdl *workorderApi.InstanceHandler,
+	instanceFlowHdl *workorderApi.InstanceFlowHandler,
+	instanceCommentHdl *workorderApi.InstanceCommentHandler,
 	statisticsHdl *workorderApi.StatisticsHandler,
 	categoryHdl *workorderApi.CategoryGroupHandler,
-	aiHdl *aiHandler.AIHandler,
 	treeNodeHdl *resourceApi.TreeNodeHandler,
 	treeEcsHdl *resourceApi.TreeEcsHandler,
 	treeVpcHdl *resourceApi.TreeVpcHandler,
@@ -110,13 +115,20 @@ func InitGinServer(
 	k8sTaintHdl.RegisterRouters(server)
 	k8sYamlTaskHdl.RegisterRouters(server)
 	k8sYamlTemplateHdl.RegisterRouters(server)
+	k8sResourceQuotaHdl.RegisterRouters(server)
+	k8sLimitRangeHdl.RegisterRouters(server)
+	k8sLabelHdl.RegisterRouters(server)
+	k8sNodeAffinityHdl.RegisterRouters(server)
+	k8sPodAffinityHdl.RegisterRouters(server)
+	k8sAffinityVisualizationHdl.RegisterRouters(server)
 	formDesignHdl.RegisterRouters(server)
 	processHdl.RegisterRouters(server)
 	templateHdl.RegisterRouters(server)
 	instanceHdl.RegisterRouters(server)
+	instanceFlowHdl.RegisterRouters(server)
+	instanceCommentHdl.RegisterRouters(server)
 	statisticsHdl.RegisterRouters(server)
 	categoryHdl.RegisterRouters(server)
-	aiHdl.RegisterRouters(server)
 	treeNodeHdl.RegisterRouters(server)
 	treeEcsHdl.RegisterRouters(server)
 	treeVpcHdl.RegisterRouters(server)

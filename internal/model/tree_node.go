@@ -74,6 +74,13 @@ type TreeNodeResource struct {
 	ResourceType string `gorm:"type:varchar(50);not null;comment:资源类型，可选：ecs,elb,rds,local"`
 }
 
+type ResourceItems struct {
+	ResourceName string    `json:"resource_name"`
+	ResourceType string    `json:"resource_type"`
+	Status       string    `json:"status"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 // ==================== 请求结构体 ====================
 
 // GetTreeListReq 获取树节点列表请求

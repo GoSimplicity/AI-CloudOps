@@ -8,9 +8,21 @@
   <component name="Go" enabled="true" />
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
+      <excludeFolder url="file://$MODULE_DIR$/.idea/inspectionProfiles" />
       <excludeFolder url="file://$MODULE_DIR$/aiops/venv" />
+      <excludeFolder url="file://$MODULE_DIR$/data/mysql" />
+      <excludeFolder url="file://$MODULE_DIR$/data/redis" />
+      <excludeFolder url="file://$MODULE_DIR$/dify/volumes/app" />
+      <excludeFolder url="file://$MODULE_DIR$/dify/volumes/certbot" />
+      <excludeFolder url="file://$MODULE_DIR$/dify/volumes/db" />
+      <excludeFolder url="file://$MODULE_DIR$/dify/volumes/plugin_daemon" />
+      <excludeFolder url="file://$MODULE_DIR$/dify/volumes/redis" />
+      <excludeFolder url="file://$MODULE_DIR$/dify/volumes/weaviate" />
+      <excludeFolder url="file://$MODULE_DIR$/logs" />
+      <excludeFolder url="file://$MODULE_DIR$/python/.idea" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="Python 3.12 (CloudOps) interpreter library" level="application" />
   </component>
 </module>

@@ -29,7 +29,7 @@ import (
 	"net/http"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/di"
-	viper_di "github.com/GoSimplicity/AI-CloudOps/pkg/di"
+	viperdi "github.com/GoSimplicity/AI-CloudOps/pkg/di"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -41,7 +41,7 @@ func main() {
 
 func Init() {
 	// 初始化配置
-	viper_di.InitWebHookViper()
+	viperdi.InitWebHookViper()
 	sp := viper.GetString("webhook.port")
 	cmd := di.InitWebServer()
 	cmd.Server.GET("/headers", printHeaders)

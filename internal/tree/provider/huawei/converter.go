@@ -103,9 +103,10 @@ func (h *HuaweiProviderImpl) convertToResourceEcsFromListInstance(instance ecsmo
 		}
 	}
 	return &model.ResourceEcs{
-		InstanceName:       instance.Name,
-		InstanceId:         instance.Id,
-		Provider:           model.CloudProviderHuawei,
+		InstanceName: instance.Name,
+		InstanceId:   instance.Id,
+		Provider: model.
+			CloudProviderHuawei,
 		RegionId:           regionId,
 		ZoneId:             instance.OSEXTAZavailabilityZone,
 		VpcId:              vpcId,

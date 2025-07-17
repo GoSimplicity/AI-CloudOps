@@ -2,7 +2,6 @@ package dao
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -87,7 +86,7 @@ func (n *notificationDAO) ListNotification(ctx context.Context, req *model.ListN
 
 	// 添加查询条件
 	if req.Channel != nil {
-		db = db.Where("channels LIKE ?", fmt.Sprintf("%%\"%s\"%%", *req.Channel))
+		db = db.Where("JSON_CONTAINS(channels, JSON_QUOTE(?))", *req.Channel)
 	}
 	if req.Status != nil {
 		db = db.Where("status = ?", *req.Status)
@@ -97,7 +96,8 @@ func (n *notificationDAO) ListNotification(ctx context.Context, req *model.ListN
 	}
 	// 关键词搜索，如果ListReq中有Keyword字段
 	if req.Search != "" {
-		db = db.Where("message_template LIKE ?", "%"+req.Search+"%")
+		searchPattern := "%" + sanitizeSearchInput(req.Search) + "%"
+		db = db.Where("message_template LIKE ?", searchPattern)
 	}
 
 	// 获取总数

@@ -51,6 +51,15 @@ func NewHuaweiProvider(logger *zap.Logger, account *model.CloudAccount) *HuaweiP
 	}
 }
 
+// NewHuaweiProviderImpl 创建一个基本的华为云Provider实例用于依赖注入
+func NewHuaweiProviderImpl(logger *zap.Logger) *HuaweiProviderImpl {
+	return &HuaweiProviderImpl{
+		logger:            logger,
+		config:            getDefaultHuaweiConfig(),
+		discoveredRegions: make(map[string]*HuaweiRegionInfo),
+	}
+}
+
 // InitializeProvider 初始化Provider，注入AK/SK并完成SDK和各服务的初始化。
 func (h *HuaweiProviderImpl) InitializeProvider(accessKey, secretKey string) error {
 	if accessKey == "" || secretKey == "" {

@@ -141,7 +141,7 @@ type CreateEcsResourceReq struct {
 	Tags               StringList    `json:"tags"`                                   // 资源标签
 	OsType             string        `json:"os_type"`                                // 操作系统类型
 	ImageName          string        `json:"image_name"`                             // 镜像名称
-	AuthMode           string        `json:"auth_mode" binding:"oneof=password key"` // 认证方式
+	AuthMode           string        `json:"auth_mode"` // 认证方式
 	Key                string        `json:"key"`                                    // 密钥内容
 	IpAddr             string        `json:"ip_addr"`                                // IP地址
 	Port               int           `json:"port"`                                   // SSH端口号

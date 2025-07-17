@@ -27,6 +27,7 @@ package dao
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -82,20 +83,55 @@ func NewTreeEcsDAO(db *gorm.DB) TreeEcsDAO {
 
 // CreateEcsResource 创建ECS资源
 func (t *treeEcsDAO) CreateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
-	if err := t.db.WithContext(ctx).Create(resource).Error; err != nil {
-		return err
+	if resource.Provider == model.CloudProviderLocal {
+		resource.InstanceId = fmt.Sprintf("%d", resource.ID)
 	}
 
-	return nil
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 创建ECS资源
+		if err := tx.Create(resource).Error; err != nil {
+			return err
+		}
+
+		// 如果指定了节点ID，则创建关联关系
+		if resource.TreeNodeID > 0 {
+			// 创建节点资源关联
+			nodeResource := &model.TreeNodeResource{
+				TreeNodeID:   resource.TreeNodeID,
+				ResourceID:   resource.InstanceId,
+				ResourceType: string(resource.Provider),
+			}
+
+			if err := tx.Create(nodeResource).Error; err != nil {
+				return fmt.Errorf("创建节点资源关联失败: %w", err)
+			}
+		}
+
+		return nil
+	})
 }
 
 // DeleteEcsResource 删除ECS资源
 func (t *treeEcsDAO) DeleteEcsResource(ctx context.Context, id int) error {
-	if err := t.db.WithContext(ctx).Where("id = ?", id).Delete(&model.ResourceEcs{}).Error; err != nil {
-		return err
-	}
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 先查询资源信息，获取实例ID
+		var resource model.ResourceEcs
+		if err := tx.Where("id = ?", id).First(&resource).Error; err != nil {
+			return fmt.Errorf("查询资源信息失败: %w", err)
+		}
 
-	return nil
+		// 删除节点资源关联关系
+		if err := tx.Where("resource_id = ? AND resource_type = ?", resource.InstanceId, string(resource.Provider)).Delete(&model.TreeNodeResource{}).Error; err != nil {
+			return fmt.Errorf("删除资源关联关系失败: %w", err)
+		}
+
+		// 删除ECS资源
+		if err := tx.Where("id = ?", id).Delete(&model.ResourceEcs{}).Error; err != nil {
+			return fmt.Errorf("删除资源失败: %w", err)
+		}
+
+		return nil
+	})
 }
 
 // GetEcsResourceById 根据ID获取ECS资源
@@ -243,17 +279,17 @@ func (t *treeEcsDAO) GetEcsResourceOptions(ctx context.Context, req *model.ListE
 
 	for _, resource := range resources {
 		options = append(options, &model.ListEcsResourceOptionsResp{
-			Value:              resource.InstanceId,
-			Label:              resource.InstanceName,
-			InstanceType:       resource.InstanceType,
-			Region:            resource.RegionId,
-			Zone:              resource.ZoneId,
-			ImageId:           resource.ImageId,
-			OSName:            resource.OSName,
-			OSType:            resource.OsType,
-			Cpu:               resource.Cpu,
-			Memory:            resource.Memory,
-			Valid:             resource.Status == "RUNNING",
+			Value:        resource.InstanceId,
+			Label:        resource.InstanceName,
+			InstanceType: resource.InstanceType,
+			Region:       resource.RegionId,
+			Zone:         resource.ZoneId,
+			ImageId:      resource.ImageId,
+			OSName:       resource.OSName,
+			OSType:       resource.OsType,
+			Cpu:          resource.Cpu,
+			Memory:       resource.Memory,
+			Valid:        resource.Status == "RUNNING",
 		})
 	}
 
@@ -296,9 +332,9 @@ func (t *treeEcsDAO) GetEcsResourcesByStatus(ctx context.Context, status string)
 // UpdateEcsConfiguration 更新ECS配置信息
 func (t *treeEcsDAO) UpdateEcsConfiguration(ctx context.Context, instanceId string, cpu int, memory int, diskSize int) error {
 	updates := map[string]any{
-		"cpu":  cpu,
-		"memory": memory,
-		"disk": diskSize,
+		"cpu":        cpu,
+		"memory":     memory,
+		"disk":       diskSize,
 		"updated_at": time.Now(),
 	}
 
@@ -308,7 +344,7 @@ func (t *treeEcsDAO) UpdateEcsConfiguration(ctx context.Context, instanceId stri
 // UpdateEcsPassword 更新ECS密码
 func (t *treeEcsDAO) UpdateEcsPassword(ctx context.Context, instanceId string, passwordHash string) error {
 	updates := map[string]any{
-		"password": passwordHash,
+		"password":   passwordHash,
 		"updated_at": time.Now(),
 	}
 
@@ -319,26 +355,61 @@ func (t *treeEcsDAO) UpdateEcsPassword(ctx context.Context, instanceId string, p
 func (t *treeEcsDAO) UpdateEcsRenewalInfo(ctx context.Context, instanceId string, expireTime string, renewalDuration int) error {
 	updates := map[string]any{
 		"auto_release_time": expireTime,
-		"updated_at": time.Now(),
+		"updated_at":        time.Now(),
 	}
 
 	return t.db.WithContext(ctx).Model(&model.ResourceEcs{}).Where("instance_id = ?", instanceId).Updates(updates).Error
 }
 
-// UpdateEcsResource implements TreeEcsDAO.
+// UpdateEcsResource 更新ECS资源信息
 func (t *treeEcsDAO) UpdateEcsResource(ctx context.Context, resource *model.ResourceEcs) error {
-	if err := t.db.WithContext(ctx).Model(&model.ResourceEcs{}).Where("id = ?", resource.ID).Updates(resource).Error; err != nil {
-		return err
+	if resource.Provider == model.CloudProviderLocal {
+		resource.InstanceId = fmt.Sprintf("%d", resource.ID)
 	}
+	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 更新ECS资源基本信息
+		if err := tx.Model(&model.ResourceEcs{}).Where("id = ?", resource.ID).Updates(resource).Error; err != nil {
+			return fmt.Errorf("更新ECS资源信息失败: %w", err)
+		}
 
-	return nil
+		// 如果指定了节点ID，则更新关联关系
+		if resource.TreeNodeID > 0 {
+			// 先查询是否已存在关联
+			var count int64
+			if err := tx.Model(&model.TreeNodeResource{}).
+				Where("resource_id = ? AND resource_type = ?", resource.InstanceId, string(resource.Provider)).
+				Count(&count).Error; err != nil {
+				return fmt.Errorf("查询资源关联关系失败: %w", err)
+			}
+
+			if count == 0 {
+				// 不存在则创建新关联
+				nodeResource := &model.TreeNodeResource{
+					TreeNodeID:   resource.TreeNodeID,
+					ResourceID:   resource.InstanceId,
+					ResourceType: string(resource.Provider),
+				}
+				if err := tx.Create(nodeResource).Error; err != nil {
+					return fmt.Errorf("创建节点资源关联失败: %w", err)
+				}
+			} else {
+				// 存在则更新关联
+				if err := tx.Model(&model.TreeNodeResource{}).
+					Where("resource_id = ? AND resource_type = ?", resource.InstanceId, string(resource.Provider)).
+					Update("tree_node_id", resource.TreeNodeID).Error; err != nil {
+					return fmt.Errorf("更新节点资源关联失败: %w", err)
+				}
+			}
+		}
+
+		return nil
+	})
 }
 
 // UpdateEcsStatus 更新ECS状态
 func (t *treeEcsDAO) UpdateEcsStatus(ctx context.Context, instanceId string, status string) error {
 	updates := map[string]any{
 		"status": status,
-		"updated_at": time.Now(),
 	}
 
 	return t.db.WithContext(ctx).Model(&model.ResourceEcs{}).Where("instance_id = ?", instanceId).Updates(updates).Error
@@ -353,9 +424,9 @@ func (t *treeEcsDAO) SyncEcsResources(ctx context.Context, resources []*model.Re
 	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, resource := range resources {
 			var existingResource model.ResourceEcs
-			err := tx.Where("instance_id = ? AND provider = ? AND region_id = ?", 
+			err := tx.Where("instance_id = ? AND provider = ? AND region_id = ?",
 				resource.InstanceId, resource.Provider, resource.RegionId).First(&existingResource).Error
-			
+
 			if err == gorm.ErrRecordNotFound {
 				if err := tx.Create(resource).Error; err != nil {
 					return err

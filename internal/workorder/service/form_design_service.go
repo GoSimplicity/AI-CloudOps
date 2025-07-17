@@ -383,20 +383,20 @@ func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListF
 	// 使用map去重收集创建者ID
 	creatorIDSet := make(map[int]bool, len(formDesigns))
 	categoryIDs := make([]int, 0, len(formDesigns))
-	
+
 	// 一次遍历同时收集创建者ID和分类ID
 	for _, formDesign := range formDesigns {
 		if formDesign != nil {
 			if !creatorIDSet[formDesign.CreatorID] {
 				creatorIDSet[formDesign.CreatorID] = true
 			}
-			
+
 			if formDesign.CategoryID != nil {
 				categoryIDs = append(categoryIDs, *formDesign.CategoryID)
 			}
 		}
 	}
-	
+
 	// 转换创建者ID为切片
 	creatorIDs := make([]int, 0, len(creatorIDSet))
 	for id := range creatorIDSet {

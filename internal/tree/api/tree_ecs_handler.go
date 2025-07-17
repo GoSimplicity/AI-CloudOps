@@ -46,7 +46,7 @@ func (h *TreeEcsHandler) RegisterRouters(server *gin.Engine) {
 	ecsGroup := server.Group("/api/tree/ecs")
 	{
 		ecsGroup.GET("/list", h.ListEcsResources)
-		ecsGroup.GET("/instance_options", h.ListInstanceOptions)
+		// ecsGroup.GET("/instance_options", h.ListInstanceOptions) // 云资源特有功能，仅支持本地资源
 		ecsGroup.GET("/detail/:id", h.GetEcsDetail)
 		ecsGroup.POST("/create", h.CreateEcsResource)
 		ecsGroup.PUT("/update/:id", h.UpdateEcs)
@@ -54,9 +54,9 @@ func (h *TreeEcsHandler) RegisterRouters(server *gin.Engine) {
 		ecsGroup.POST("/start/:id", h.StartEcs)
 		ecsGroup.POST("/stop/:id", h.StopEcs)
 		ecsGroup.POST("/restart/:id", h.RestartEcs)
-		ecsGroup.POST("/resize/:id", h.ResizeEcs)
-		ecsGroup.POST("/reset_password/:id", h.ResetEcsPassword)
-		ecsGroup.POST("/renew/:id", h.RenewEcs)
+		// ecsGroup.POST("/resize/:id", h.ResizeEcs) // 云资源特有功能，仅支持本地资源
+		// ecsGroup.POST("/reset_password/:id", h.ResetEcsPassword) // 云资源特有功能，仅支持本地资源
+		// ecsGroup.POST("/renew/:id", h.RenewEcs) // 云资源特有功能，仅支持本地资源
 	}
 }
 
@@ -69,7 +69,8 @@ func (h *TreeEcsHandler) ListEcsResources(ctx *gin.Context) {
 	})
 }
 
-// ListInstanceOptions 获取ECS实例规格列表
+// ListInstanceOptions 获取ECS实例规格列表 - 云资源特有功能，仅支持本地资源时暂不提供
+/*
 func (h *TreeEcsHandler) ListInstanceOptions(ctx *gin.Context) {
 	var req model.ListEcsResourceOptionsReq
 
@@ -77,6 +78,7 @@ func (h *TreeEcsHandler) ListInstanceOptions(ctx *gin.Context) {
 		return h.ecsService.ListEcsResourceOptions(ctx, &req)
 	})
 }
+*/
 
 // GetEcsDetail 获取ECS实例详情
 func (h *TreeEcsHandler) GetEcsDetail(ctx *gin.Context) {
@@ -189,7 +191,8 @@ func (h *TreeEcsHandler) UpdateEcs(ctx *gin.Context) {
 	})
 }
 
-// ResizeEcs 调整ECS实例规格
+// ResizeEcs 调整ECS实例规格 - 云资源特有功能，仅支持本地资源时暂不提供
+/*
 func (h *TreeEcsHandler) ResizeEcs(ctx *gin.Context) {
 	var req model.ResizeEcsReq
 
@@ -205,8 +208,10 @@ func (h *TreeEcsHandler) ResizeEcs(ctx *gin.Context) {
 		return nil, h.ecsService.ResizeEcs(ctx, &req)
 	})
 }
+*/
 
-// ResetEcsPassword 重置ECS实例密码
+// ResetEcsPassword 重置ECS实例密码 - 云资源特有功能，仅支持本地资源时暂不提供
+/*
 func (h *TreeEcsHandler) ResetEcsPassword(ctx *gin.Context) {
 	var req model.ResetEcsPasswordReq
 
@@ -222,8 +227,10 @@ func (h *TreeEcsHandler) ResetEcsPassword(ctx *gin.Context) {
 		return nil, h.ecsService.ResetEcsPassword(ctx, &req)
 	})
 }
+*/
 
-// RenewEcs 续费ECS实例
+// RenewEcs 续费ECS实例 - 云资源特有功能，仅支持本地资源时暂不提供
+/*
 func (h *TreeEcsHandler) RenewEcs(ctx *gin.Context) {
 	var req model.RenewEcsReq
 
@@ -239,3 +246,4 @@ func (h *TreeEcsHandler) RenewEcs(ctx *gin.Context) {
 		return nil, h.ecsService.RenewEcs(ctx, &req)
 	})
 }
+*/

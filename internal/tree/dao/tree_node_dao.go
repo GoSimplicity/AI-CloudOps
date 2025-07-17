@@ -778,30 +778,13 @@ func (t *treeNodeDAO) GetNodeResources(ctx context.Context, nodeId int) ([]*mode
 	}
 
 	// 获取节点资源关系
-	var nodeResources []model.TreeNodeResource
-	if err := t.getDB(ctx).Where("tree_node_id = ?", nodeId).Find(&nodeResources).Error; err != nil {
+	var nodeResources []*model.TreeNodeResource
+	if err := t.db.WithContext(ctx).Where("tree_node_id = ?", nodeId).Find(&nodeResources).Error; err != nil {
 		t.logger.Error("获取节点资源关系失败", zap.Int("nodeId", nodeId), zap.Error(err))
 		return nil, fmt.Errorf("获取节点资源关系失败: %w", err)
 	}
 
-	if len(nodeResources) == 0 {
-		return []*model.TreeNodeResource{}, nil
-	}
-
-	// 收集所有资源ID
-	resourceIDs := make([]string, len(nodeResources))
-	for i, nr := range nodeResources {
-		resourceIDs[i] = nr.ResourceID
-	}
-
-	// 查询资源基本信息
-	var resources []*model.TreeNodeResource
-	if err := t.getDB(ctx).Where("id IN ?", resourceIDs).Find(&resources).Error; err != nil {
-		t.logger.Error("获取资源基本信息失败", zap.Strings("resourceIDs", resourceIDs), zap.Error(err))
-		return nil, fmt.Errorf("获取资源基本信息失败: %w", err)
-	}
-
-	return resources, nil
+	return nodeResources, nil
 }
 
 // BindResource 绑定资源到节点

@@ -29,7 +29,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -44,22 +43,17 @@ type TemplateService interface {
 	DeleteTemplate(ctx context.Context, id int, userID int) error
 	ListTemplate(ctx context.Context, req *model.ListTemplateReq) (*model.ListResp[*model.Template], error)
 	DetailTemplate(ctx context.Context, id int, userID int) (*model.Template, error)
-	EnableTemplate(ctx context.Context, id int, userID int) error
-	DisableTemplate(ctx context.Context, id int, userID int) error
 	CloneTemplate(ctx context.Context, req *model.CloneTemplateReq, creatorID int) (*model.Template, error)
 }
 
 type templateService struct {
-	dao             dao.TemplateDAO
-	userDao         userDao.UserDAO
-	processDao      dao.ProcessDAO
-	categoryDao     dao.CategoryDAO
-	instanceDao     dao.InstanceDAO
-	l               *zap.Logger
-	mu              sync.RWMutex            // 读写锁，用于保护缓存
-	templateCache   map[int]*model.Template // 模板缓存
-	cacheExpiration time.Duration           // 缓存过期时间
-	validators      []TemplateValidator     // 模板验证器列表
+	dao         dao.TemplateDAO
+	userDao     userDao.UserDAO
+	processDao  dao.ProcessDAO
+	categoryDao dao.CategoryDAO
+	instanceDao dao.InstanceDAO
+	l           *zap.Logger
+	validators  []TemplateValidator // 模板验证器列表
 }
 
 type TemplateValidator interface {
@@ -68,15 +62,13 @@ type TemplateValidator interface {
 
 func NewTemplateService(dao dao.TemplateDAO, userDao userDao.UserDAO, processDao dao.ProcessDAO, categoryDao dao.CategoryDAO, instanceDao dao.InstanceDAO, l *zap.Logger) TemplateService {
 	ts := &templateService{
-		dao:             dao,
-		userDao:         userDao,
-		processDao:      processDao,
-		categoryDao:     categoryDao,
-		instanceDao:     instanceDao,
-		l:               l,
-		templateCache:   make(map[int]*model.Template),
-		cacheExpiration: 5 * time.Minute,
-		validators:      make([]TemplateValidator, 0),
+		dao:         dao,
+		userDao:     userDao,
+		processDao:  processDao,
+		categoryDao: categoryDao,
+		instanceDao: instanceDao,
+		l:           l,
+		validators:  make([]TemplateValidator, 0),
 	}
 
 	// 注册默认验证器
@@ -192,7 +184,7 @@ func (t *templateService) UpdateTemplate(ctx context.Context, req *model.UpdateT
 	}
 
 	// 获取现有模板
-	existingTemplate, err := t.getTemplateFromCacheOrDB(ctx, req.ID)
+	existingTemplate, err := t.dao.GetTemplate(ctx, req.ID)
 	if err != nil {
 		return fmt.Errorf("获取模板失败: %w", err)
 	}
@@ -275,9 +267,6 @@ func (t *templateService) UpdateTemplate(ctx context.Context, req *model.UpdateT
 		return fmt.Errorf("更新模板失败: %w", err)
 	}
 
-	// 清除缓存
-	t.invalidateCache(req.ID)
-
 	t.l.Info("更新模板成功",
 		zap.Int("id", req.ID),
 		zap.String("name", req.Name))
@@ -292,7 +281,7 @@ func (t *templateService) DeleteTemplate(ctx context.Context, id int, userID int
 	}
 
 	// 获取模板信息用于日志记录
-	template, err := t.getTemplateFromCacheOrDB(ctx, id)
+	template, err := t.dao.GetTemplate(ctx, id)
 	if err != nil {
 		return fmt.Errorf("获取模板失败: %w", err)
 	}
@@ -329,9 +318,6 @@ func (t *templateService) DeleteTemplate(ctx context.Context, id int, userID int
 			zap.String("name", template.Name))
 		return fmt.Errorf("删除模板失败: %w", err)
 	}
-
-	// 清除缓存
-	t.invalidateCache(id)
 
 	t.l.Info("删除模板成功",
 		zap.Int("id", id),
@@ -385,8 +371,8 @@ func (t *templateService) DetailTemplate(ctx context.Context, id int, userID int
 		return nil, fmt.Errorf("模板ID无效")
 	}
 
-	// 从缓存或数据库获取
-	template, err := t.getTemplateFromCacheOrDB(ctx, id)
+	// 从数据库获取
+	template, err := t.dao.GetTemplate(ctx, id)
 	if err != nil {
 		t.l.Error("获取模板详情失败",
 			zap.Error(err),
@@ -423,16 +409,6 @@ func (t *templateService) DetailTemplate(ctx context.Context, id int, userID int
 	return template, nil
 }
 
-// EnableTemplate 启用模板
-func (t *templateService) EnableTemplate(ctx context.Context, id int, userID int) error {
-	return t.updateTemplateStatus(ctx, id, 1, userID, "启用")
-}
-
-// DisableTemplate 禁用模板
-func (t *templateService) DisableTemplate(ctx context.Context, id int, userID int) error {
-	return t.updateTemplateStatus(ctx, id, 0, userID, "禁用")
-}
-
 // CloneTemplate 克隆模板
 func (t *templateService) CloneTemplate(ctx context.Context, req *model.CloneTemplateReq, creatorID int) (*model.Template, error) {
 	// 参数验证
@@ -445,7 +421,7 @@ func (t *templateService) CloneTemplate(ctx context.Context, req *model.CloneTem
 	}
 
 	// 获取原模板
-	originalTemplate, err := t.getTemplateFromCacheOrDB(ctx, req.ID)
+	originalTemplate, err := t.dao.GetTemplate(ctx, req.ID)
 	if err != nil {
 		t.l.Error("获取原模板失败",
 			zap.Error(err),
@@ -502,55 +478,6 @@ func (t *templateService) CloneTemplate(ctx context.Context, req *model.CloneTem
 	return newTemplate, nil
 }
 
-// 辅助方法
-
-// updateTemplateStatus 更新模板状态的通用方法
-func (t *templateService) updateTemplateStatus(ctx context.Context, id int, status int8, userID int, action string) error {
-	if id <= 0 {
-		return fmt.Errorf("模板ID无效")
-	}
-
-	// 检查模板是否存在
-	template, err := t.getTemplateFromCacheOrDB(ctx, id)
-	if err != nil {
-		t.l.Error(fmt.Sprintf("%s模板失败：获取模板失败", action),
-			zap.Error(err),
-			zap.Int("templateID", id))
-		return fmt.Errorf("模板不存在")
-	}
-
-	// 检查操作权限
-	if !t.hasPermissionToModify(template, userID) {
-		t.l.Warn(fmt.Sprintf("用户权限不足，无法%s模板", action),
-			zap.Int("templateID", id),
-			zap.Int("userID", userID))
-		return fmt.Errorf("没有权限%s此模板", action)
-	}
-
-	// 检查当前状态
-	if template.Status == status {
-		t.l.Info(fmt.Sprintf("模板已%s，无需操作", action),
-			zap.Int("templateID", id))
-		return nil
-	}
-
-	// 更新状态
-	if err := t.dao.UpdateTemplateStatus(ctx, id, status); err != nil {
-		t.l.Error(fmt.Sprintf("%s模板失败", action),
-			zap.Error(err),
-			zap.Int("templateID", id))
-		return fmt.Errorf("%s模板失败: %w", action, err)
-	}
-
-	// 清除缓存
-	t.invalidateCache(id)
-
-	t.l.Info(fmt.Sprintf("模板%s成功", action),
-		zap.Int("templateID", id))
-
-	return nil
-}
-
 // checkTemplateNameExists 检查模板名称是否存在
 func (t *templateService) checkTemplateNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
 	if name == "" {
@@ -590,43 +517,6 @@ func (t *templateService) serializeDefaultValues(defaultValues model.TemplateDef
 	}
 
 	return string(data), nil
-}
-
-// getTemplateFromCacheOrDB 从缓存或数据库获取模板
-func (t *templateService) getTemplateFromCacheOrDB(ctx context.Context, id int) (*model.Template, error) {
-	// 先从缓存获取
-	t.mu.RLock()
-	if cachedTemplate, ok := t.templateCache[id]; ok {
-		t.mu.RUnlock()
-		return cachedTemplate, nil
-	}
-	t.mu.RUnlock()
-
-	// 从数据库获取
-	template, err := t.dao.GetTemplate(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	// 存入缓存
-	t.mu.Lock()
-	t.templateCache[id] = template
-	t.mu.Unlock()
-
-	// 设置缓存过期清理
-	go func() {
-		time.Sleep(t.cacheExpiration)
-		t.invalidateCache(id)
-	}()
-
-	return template, nil
-}
-
-// invalidateCache 清除缓存
-func (t *templateService) invalidateCache(id int) {
-	t.mu.Lock()
-	delete(t.templateCache, id)
-	t.mu.Unlock()
 }
 
 // enrichTemplateListWithCreators 批量获取创建者信息
@@ -669,7 +559,7 @@ func (t *templateService) enrichTemplateListWithCreators(ctx context.Context, te
 }
 
 // hasPermissionToModify 检查是否有权限修改模板
-func (t *templateService) hasPermissionToModify(template *model.Template, userID int) bool {
+func (t *templateService) hasPermissionToModify(_ *model.Template, userID int) bool {
 	return userID == 1
 }
 

@@ -291,11 +291,6 @@ func (t *templateDAO) buildListQuery(db *gorm.DB, req *model.ListTemplateReq) *g
 		db = db.Where("name LIKE ? OR description LIKE ?", searchTerm, searchTerm)
 	}
 
-	// 按名称筛选
-	if req.Name != nil && strings.TrimSpace(*req.Name) != "" {
-		db = db.Where("name LIKE ?", "%"+strings.TrimSpace(*req.Name)+"%")
-	}
-
 	// 状态筛选
 	if req.Status != nil {
 		db = db.Where("status = ?", *req.Status)
