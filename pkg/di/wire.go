@@ -28,8 +28,6 @@
 package di
 
 import (
-	aiHandler "github.com/GoSimplicity/AI-CloudOps/internal/ai/api"
-	aiService "github.com/GoSimplicity/AI-CloudOps/internal/ai/service"
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
@@ -96,7 +94,6 @@ var HandlerSet = wire.NewSet(
 	k8sHandler.NewK8sNodeAffinityHandler,
 	k8sHandler.NewK8sPodAffinityHandler,
 	k8sHandler.NewK8sAffinityVisualizationHandler,
-	aiHandler.NewAIHandler,
 	promHandler.NewAlertPoolHandler,
 	promHandler.NewMonitorConfigHandler,
 	promHandler.NewOnDutyGroupHandler,
@@ -149,7 +146,6 @@ var ServiceSet = wire.NewSet(
 	authService.NewApiService,
 	authService.NewRoleService,
 	authService.NewAuditService,
-	aiService.NewAIService,
 	alertService.NewAlertManagerEventService,
 	alertService.NewAlertManagerOnDutyService,
 	alertService.NewAlertManagerPoolService,
@@ -240,7 +236,6 @@ var Injector = wire.NewSet(
 	InitLogger,
 	InitRedis,
 	InitDB,
-	InitAgent,
 	wire.Struct(new(Cmd), "*"),
 )
 

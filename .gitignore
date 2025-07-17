@@ -99,3 +99,4 @@ venv
 *.sln
 *.sw?
 .history
+config/config.yaml

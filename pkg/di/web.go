@@ -26,7 +26,6 @@
 package di
 
 import (
-	aiHandler "github.com/GoSimplicity/AI-CloudOps/internal/ai/api"
 	k8sApi "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	prometheusApi "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
@@ -80,7 +79,6 @@ func InitGinServer(
 	instanceCommentHdl *workorderApi.InstanceCommentHandler,
 	statisticsHdl *workorderApi.StatisticsHandler,
 	categoryHdl *workorderApi.CategoryGroupHandler,
-	aiHdl *aiHandler.AIHandler,
 	treeNodeHdl *resourceApi.TreeNodeHandler,
 	treeEcsHdl *resourceApi.TreeEcsHandler,
 	treeVpcHdl *resourceApi.TreeVpcHandler,
@@ -131,7 +129,6 @@ func InitGinServer(
 	instanceCommentHdl.RegisterRouters(server)
 	statisticsHdl.RegisterRouters(server)
 	categoryHdl.RegisterRouters(server)
-	aiHdl.RegisterRouters(server)
 	treeNodeHdl.RegisterRouters(server)
 	treeEcsHdl.RegisterRouters(server)
 	treeVpcHdl.RegisterRouters(server)
