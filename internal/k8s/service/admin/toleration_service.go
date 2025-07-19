@@ -32,6 +32,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -40,51 +41,117 @@ import (
 	"golang.org/x/sync/errgroup"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 )
 
+// TolerationService Kubernetes容忍度管理服务接口
+// 提供Kubernetes容忍度的完整管理功能，包括：
+// - 基本的增删改查操作，支持Pod、Deployment、StatefulSet、DaemonSet等资源类型
+// - 容忍度配置验证和节点兼容性分析
+// - 容忍度时间参数配置和验证
+// - 批量操作支持，提高多资源管理效率
+// - 容忍度模板管理，支持配置复用
 type TolerationService interface {
+	// AddTolerations 为指定的K8s资源添加容忍度配置
+	// 支持为Pod、Deployment、StatefulSet、DaemonSet等资源添加新的容忍度，不会覆盖现有配置
 	AddTolerations(ctx context.Context, req *model.K8sTaintTolerationRequest) (*model.K8sTaintTolerationResponse, error)
+	
+	// UpdateTolerations 更新指定K8s资源的容忍度配置
+	// 完全替换现有的容忍度配置，而不是增量更新
 	UpdateTolerations(ctx context.Context, req *model.K8sTaintTolerationRequest) (*model.K8sTaintTolerationResponse, error)
+	
+	// DeleteTolerations 从指定K8s资源中删除特定的容忍度配置
+	// 根据请求中的容忍度列表，精确匹配并删除对应的配置项
 	DeleteTolerations(ctx context.Context, req *model.K8sTaintTolerationRequest) error
+	
+	// ValidateTolerations 验证容忍度配置的有效性和节点兼容性
+	// 检查容忍度配置是否符合K8s规范，并分析与集群节点的兼容性
 	ValidateTolerations(ctx context.Context, req *model.K8sTaintTolerationValidationRequest) (*model.K8sTaintTolerationValidationResponse, error)
+	
+	// ListTolerations 获取指定K8s资源的当前容忍度配置列表
+	// 查询并返回目标资源当前配置的所有容忍度信息
 	ListTolerations(ctx context.Context, req *model.K8sTaintTolerationRequest) (*model.K8sTaintTolerationResponse, error)
+	
+	// ConfigTolerationTime 配置容忍度的时间参数
+	// 设置容忍度的超时时间、默认时间和条件化超时配置，支持全局和资源级别的配置
 	ConfigTolerationTime(ctx context.Context, req *model.K8sTolerationTimeRequest) (*model.K8sTolerationTimeResponse, error)
+	
+	// ValidateTolerationTime 验证容忍度时间配置的有效性
+	// 检查时间配置参数是否合理，包括最大值、最小值和条件化超时的有效性
 	ValidateTolerationTime(ctx context.Context, req *model.K8sTolerationTimeRequest) (*model.K8sTolerationTimeResponse, error)
+	
+	// BatchUpdateTolerations 批量更新多个资源的容忍度配置
+	// 同时对指定命名空间下的所有同类型资源进行容忍度更新，支持并发处理提高效率
 	BatchUpdateTolerations(ctx context.Context, req *model.K8sTaintTolerationRequest) (*model.K8sTaintTolerationResponse, error)
+	
+	// CreateTolerationTemplate 创建容忍度模板
+	// 保存常用的容忍度配置为模板，方便后续快速应用到多个资源
 	CreateTolerationTemplate(ctx context.Context, req *model.K8sTolerationConfigRequest) (*model.K8sTolerationTemplate, error)
+	
+	// GetTolerationTemplate 根据名称获取容忍度模板
+	// 查询并返回指定名称的容忍度模板配置信息
 	GetTolerationTemplate(ctx context.Context, req *model.K8sTolerationConfigRequest) (*model.K8sTolerationTemplate, error)
+	
+	// DeleteTolerationTemplate 根据名称删除容忍度模板
+	// 永久删除指定名称的容忍度模板，不影响已经应用了该模板的资源
 	DeleteTolerationTemplate(ctx context.Context, req *model.K8sTolerationConfigRequest) error
-	ManageTaintEffects(ctx context.Context, req *model.K8sTaintEffectManagementRequest) (*model.K8sTaintEffectManagementResponse, error)
-	TransitionTaintEffect(ctx context.Context, req *model.K8sTaintEffectManagementRequest) (*model.K8sTaintEffectManagementResponse, error)
-	ValidateTaintEffects(ctx context.Context, req *model.K8sTaintEffectManagementRequest) (*model.K8sTaintEffectManagementResponse, error)
-	GetTaintEffectStatus(ctx context.Context, req *model.K8sTaintEffectManagementRequest) (*model.K8sTaintEffectManagementResponse, error)
-	BatchManageTaintEffects(ctx context.Context, req *model.K8sTaintEffectManagementRequest) (*model.K8sTaintEffectManagementResponse, error)
 }
 
+// tolerationService 容忍度管理服务的具体实现
+// 实现了TolerationService接口的所有方法，提供完整的Kubernetes容忍度管理功能
 type tolerationService struct {
-	dao    admin.ClusterDAO
-	client client.K8sClient
-	logger *zap.Logger
+	dao    admin.ClusterDAO    // 集群数据访问对象，用于集群相关的数据库操作
+	client client.K8sClient   // Kubernetes客户端接口，提供与K8s集群的连接能力
+	logger *zap.Logger        // 结构化日志记录器，用于记录服务操作日志
+	config *config.K8sConfig  // K8s配置对象，包含污点和容忍度的默认配置参数
 }
 
+// NewTolerationService 创建新的容忍度管理服务实例
+// 初始化所有必要的依赖项并返回服务接口实现
+// 参数:
+//   - dao: 集群数据访问对象，用于数据库操作
+//   - client: K8s客户端接口，用于与Kubernetes集群通信
+//   - logger: 日志记录器，用于记录服务操作和错误信息
+// 返回: TolerationService接口实现
 func NewTolerationService(dao admin.ClusterDAO, client client.K8sClient, logger *zap.Logger) TolerationService {
 	return &tolerationService{
 		dao:    dao,
 		client: client,
 		logger: logger,
+		config: config.GetK8sConfig(), // 获取全局K8s配置，包含污点默认值等配置
 	}
 }
 
+// ===============================
+// 容忍度管理服务的核心业务方法实现
+// ===============================
+
+// AddTolerations 为指定的K8s资源添加容忍度配置
+// 这是一个增量操作，新的容忍度配置将添加到现有配置中，不会覆盖原有配置
+// 支持Pod、Deployment、StatefulSet、DaemonSet等主要工作负载资源类型
+// 
+// 实现逻辑:
+// 1. 获取目标集群的Kubernetes客户端连接
+// 2. 根据资源类型调用对应的添加方法
+// 3. 检查并去重，避免添加重复的容忍度配置
+// 4. 查找与新容忍度配置兼容的节点列表
+// 5. 返回操作结果和兼容节点信息
+//
+// 参数:
+//   - ctx: 上下文对象，用于控制请求生命周期和取消操作
+//   - req: 包含集群ID、资源信息和要添加的容忍度配置的请求对象
+// 返回:
+//   - *model.K8sTaintTolerationResponse: 包含操作结果和兼容节点信息的响应对象
+//   - error: 操作过程中发生的错误信息
 func (t *tolerationService) AddTolerations(ctx context.Context, req *model.K8sTaintTolerationRequest) (*model.K8sTaintTolerationResponse, error) {
+	// 根据集群ID获取对应的Kubernetes客户端实例
 	kubeClient, err := pkg.GetKubeClient(req.ClusterID, t.client, t.logger)
 	if err != nil {
 		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
 	}
 
+	// 构建响应对象，包含请求的基本信息和当前时间戳
 	response := &model.K8sTaintTolerationResponse{
 		ResourceType:      req.ResourceType,
 		ResourceName:      req.ResourceName,
@@ -93,6 +160,7 @@ func (t *tolerationService) AddTolerations(ctx context.Context, req *model.K8sTa
 		CreationTimestamp: time.Now(),
 	}
 
+	// 根据不同的资源类型执行相应的添加操作
 	switch req.ResourceType {
 	case "Pod":
 		err = t.addPodTolerations(ctx, kubeClient, req)
@@ -110,8 +178,10 @@ func (t *tolerationService) AddTolerations(ctx context.Context, req *model.K8sTa
 		return nil, err
 	}
 
+	// 查找与新容忍度配置兼容的集群节点，用于调度分析
 	response.CompatibleNodes, err = t.findCompatibleNodes(ctx, kubeClient, req.Tolerations)
 	if err != nil {
+		// 兼容节点查找失败不应该阻止主要操作，只记录警告日志
 		t.logger.Warn("查找兼容节点失败", zap.Error(err))
 	}
 
@@ -413,187 +483,7 @@ func (t *tolerationService) DeleteTolerationTemplate(ctx context.Context, req *m
 	return nil
 }
 
-func (t *tolerationService) ManageTaintEffects(ctx context.Context, req *model.K8sTaintEffectManagementRequest) (*model.K8sTaintEffectManagementResponse, error) {
-	kubeClient, err := pkg.GetKubeClient(req.ClusterID, t.client, t.logger)
-	if err != nil {
-		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
-	}
-
-	response := &model.K8sTaintEffectManagementResponse{
-		OperationTime: time.Now(),
-		Status:        "processing",
-	}
-
-	if req.BatchOperation {
-		return t.batchManageTaintEffects(ctx, kubeClient, req)
-	}
-
-	node, err := kubeClient.CoreV1().Nodes().Get(ctx, req.NodeName, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("获取节点失败: %w", err)
-	}
-
-	response.NodeName = req.NodeName
-
-	oldTaints := make([]corev1.Taint, len(node.Spec.Taints))
-	copy(oldTaints, node.Spec.Taints)
-
-	affectedPods, err := t.getAffectedPods(ctx, kubeClient, req.NodeName, req.TaintEffectConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	response.AffectedPods = affectedPods
-
-	newTaints := t.manageTaints(oldTaints, req.TaintEffectConfig)
-	node.Spec.Taints = newTaints
-
-	_, err = kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("更新节点污点失败: %w", err)
-	}
-
-	response.EffectChanges = t.buildEffectChanges(oldTaints, newTaints)
-
-	if req.TaintEffectConfig.NoExecuteConfig.Enabled {
-		evictionSummary, err := t.handleNoExecuteEviction(ctx, kubeClient, req)
-		if err != nil {
-			response.Warnings = append(response.Warnings, fmt.Sprintf("处理NoExecute驱逐失败: %v", err))
-		} else {
-			response.EvictionSummary = *evictionSummary
-		}
-	}
-
-	response.Status = "completed"
-	return response, nil
-}
-
-func (t *tolerationService) TransitionTaintEffect(ctx context.Context, req *model.K8sTaintEffectManagementRequest) (*model.K8sTaintEffectManagementResponse, error) {
-	kubeClient, err := pkg.GetKubeClient(req.ClusterID, t.client, t.logger)
-	if err != nil {
-		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
-	}
-
-	response := &model.K8sTaintEffectManagementResponse{
-		NodeName:      req.NodeName,
-		OperationTime: time.Now(),
-		Status:        "processing",
-	}
-
-	node, err := kubeClient.CoreV1().Nodes().Get(ctx, req.NodeName, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("获取节点失败: %w", err)
-	}
-
-	oldTaints := make([]corev1.Taint, len(node.Spec.Taints))
-	copy(oldTaints, node.Spec.Taints)
-
-	newTaints := t.applyEffectTransitions(oldTaints, req.TaintEffectConfig.EffectTransition)
-
-	if req.TaintEffectConfig.EffectTransition.TransitionDelay != nil {
-		time.Sleep(time.Duration(*req.TaintEffectConfig.EffectTransition.TransitionDelay) * time.Second)
-	}
-
-	node.Spec.Taints = newTaints
-
-	_, err = kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("更新节点污点失败: %w", err)
-	}
-
-	response.EffectChanges = t.buildEffectChanges(oldTaints, newTaints)
-	response.Status = "completed"
-
-	return response, nil
-}
-
-func (t *tolerationService) ValidateTaintEffects(ctx context.Context, req *model.K8sTaintEffectManagementRequest) (*model.K8sTaintEffectManagementResponse, error) {
-	kubeClient, err := pkg.GetKubeClient(req.ClusterID, t.client, t.logger)
-	if err != nil {
-		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
-	}
-
-	response := &model.K8sTaintEffectManagementResponse{
-		NodeName:      req.NodeName,
-		OperationTime: time.Now(),
-		Status:        "validated",
-	}
-
-	warnings := t.validateTaintEffectConfig(req.TaintEffectConfig)
-	response.Warnings = warnings
-
-	affectedPods, err := t.getAffectedPods(ctx, kubeClient, req.NodeName, req.TaintEffectConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	response.AffectedPods = affectedPods
-
-	response.EvictionSummary = model.EvictionSummary{
-		TotalPods:        len(affectedPods),
-		PendingEvictions: len(affectedPods),
-	}
-
-	if len(warnings) > 0 {
-		response.Status = "validation_warnings"
-	}
-
-	return response, nil
-}
-
-func (t *tolerationService) GetTaintEffectStatus(ctx context.Context, req *model.K8sTaintEffectManagementRequest) (*model.K8sTaintEffectManagementResponse, error) {
-	kubeClient, err := pkg.GetKubeClient(req.ClusterID, t.client, t.logger)
-	if err != nil {
-		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
-	}
-
-	response := &model.K8sTaintEffectManagementResponse{
-		NodeName:      req.NodeName,
-		OperationTime: time.Now(),
-		Status:        "active",
-	}
-
-	node, err := kubeClient.CoreV1().Nodes().Get(ctx, req.NodeName, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("获取节点失败: %w", err)
-	}
-
-	response.EffectChanges = t.analyzeCurrentTaintEffects(node.Spec.Taints)
-
-	pods, err := kubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{
-		FieldSelector: "spec.nodeName=" + req.NodeName,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("获取节点上的Pod失败: %w", err)
-	}
-
-	var affectedPods []model.PodEvictionInfo
-	for _, pod := range pods.Items {
-		if t.isPodAffectedByTaints(pod, node.Spec.Taints) {
-			affectedPods = append(affectedPods, model.PodEvictionInfo{
-				PodName:   pod.Name,
-				Namespace: pod.Namespace,
-				Status:    string(pod.Status.Phase),
-			})
-		}
-	}
-
-	response.AffectedPods = affectedPods
-	response.EvictionSummary = model.EvictionSummary{
-		TotalPods: len(affectedPods),
-	}
-
-	return response, nil
-}
-
-func (t *tolerationService) BatchManageTaintEffects(ctx context.Context, req *model.K8sTaintEffectManagementRequest) (*model.K8sTaintEffectManagementResponse, error) {
-	kubeClient, err := pkg.GetKubeClient(req.ClusterID, t.client, t.logger)
-	if err != nil {
-		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
-	}
-
-	return t.batchManageTaintEffects(ctx, kubeClient, req)
-}
+// Helper methods for toleration operations
 
 func (t *tolerationService) addPodTolerations(ctx context.Context, kubeClient kubernetes.Interface, req *model.K8sTaintTolerationRequest) error {
 	pod, err := kubeClient.CoreV1().Pods(req.Namespace).Get(ctx, req.ResourceName, metav1.GetOptions{})
@@ -1286,7 +1176,7 @@ func (t *tolerationService) calculateTolerationTime(config model.TolerationTimeC
 
 	baseTime := config.DefaultTolerationTime
 	if baseTime == nil {
-		defaultTime := int64(300)
+		defaultTime := t.config.TaintDefaults.DefaultTolerationTime
 		baseTime = &defaultTime
 	}
 
@@ -1477,345 +1367,4 @@ func (t *tolerationService) applyTemplateToDaemonSet(daemonSet *appsv1.DaemonSet
 		})
 	}
 	daemonSet.Spec.Template.Spec.Tolerations = newTolerations
-}
-
-func (t *tolerationService) getAffectedPods(ctx context.Context, kubeClient kubernetes.Interface, nodeName string, config model.K8sTaintEffectConfig) ([]model.PodEvictionInfo, error) {
-	pods, err := kubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{
-		FieldSelector: "spec.nodeName=" + nodeName,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("获取节点上的Pod失败: %w", err)
-	}
-
-	var affectedPods []model.PodEvictionInfo
-	for _, pod := range pods.Items {
-		if t.isPodAffectedByTaintConfig(pod, config) {
-			evictionInfo := model.PodEvictionInfo{
-				PodName:        pod.Name,
-				Namespace:      pod.Namespace,
-				EvictionReason: t.getEvictionReason(pod, config),
-				Status:         string(pod.Status.Phase),
-			}
-			affectedPods = append(affectedPods, evictionInfo)
-		}
-	}
-
-	return affectedPods, nil
-}
-
-func (t *tolerationService) isPodAffectedByTaintConfig(pod corev1.Pod, config model.K8sTaintEffectConfig) bool {
-	if config.NoExecuteConfig.Enabled {
-		return true
-	}
-
-	if config.NoScheduleConfig.Enabled {
-		for _, exceptionPod := range config.NoScheduleConfig.ExceptionPods {
-			if pod.Name == exceptionPod {
-				return false
-			}
-		}
-		return true
-	}
-
-	return false
-}
-
-func (t *tolerationService) isPodAffectedByTaints(pod corev1.Pod, taints []corev1.Taint) bool {
-	for _, taint := range taints {
-		if taint.Effect == corev1.TaintEffectNoExecute {
-			tolerationFound := false
-			for _, toleration := range pod.Spec.Tolerations {
-				if toleration.Key == taint.Key && string(toleration.Effect) == string(taint.Effect) {
-					tolerationFound = true
-					break
-				}
-			}
-			if !tolerationFound {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (t *tolerationService) getEvictionReason(pod corev1.Pod, config model.K8sTaintEffectConfig) string {
-	if config.NoExecuteConfig.Enabled {
-		return "NoExecute污点效果"
-	}
-	if config.NoScheduleConfig.Enabled {
-		return "NoSchedule污点效果"
-	}
-	return "未知原因"
-}
-
-func (t *tolerationService) manageTaints(oldTaints []corev1.Taint, config model.K8sTaintEffectConfig) []corev1.Taint {
-	var newTaints []corev1.Taint
-
-	for _, taint := range oldTaints {
-		modifiedTaint := taint
-
-		if config.NoScheduleConfig.Enabled && taint.Effect == corev1.TaintEffectNoSchedule {
-			continue
-		}
-
-		if config.PreferNoScheduleConfig.Enabled && taint.Effect == corev1.TaintEffectPreferNoSchedule {
-			continue
-		}
-
-		if config.NoExecuteConfig.Enabled && taint.Effect == corev1.TaintEffectNoExecute {
-			continue
-		}
-
-		newTaints = append(newTaints, modifiedTaint)
-	}
-
-	if config.NoScheduleConfig.Enabled {
-		newTaints = append(newTaints, corev1.Taint{
-			Key:    "node.kubernetes.io/no-schedule",
-			Value:  "true",
-			Effect: corev1.TaintEffectNoSchedule,
-		})
-	}
-
-	if config.PreferNoScheduleConfig.Enabled {
-		newTaints = append(newTaints, corev1.Taint{
-			Key:    "node.kubernetes.io/prefer-no-schedule",
-			Value:  "true",
-			Effect: corev1.TaintEffectPreferNoSchedule,
-		})
-	}
-
-	if config.NoExecuteConfig.Enabled {
-		newTaints = append(newTaints, corev1.Taint{
-			Key:    "node.kubernetes.io/no-execute",
-			Value:  "true",
-			Effect: corev1.TaintEffectNoExecute,
-		})
-	}
-
-	return newTaints
-}
-
-func (t *tolerationService) buildEffectChanges(oldTaints, newTaints []corev1.Taint) []model.EffectChange {
-	var changes []model.EffectChange
-	oldTaintMap := make(map[string]corev1.Taint)
-	newTaintMap := make(map[string]corev1.Taint)
-
-	for _, taint := range oldTaints {
-		oldTaintMap[taint.Key] = taint
-	}
-
-	for _, taint := range newTaints {
-		newTaintMap[taint.Key] = taint
-	}
-
-	for key, oldTaint := range oldTaintMap {
-		if newTaint, exists := newTaintMap[key]; exists {
-			if oldTaint.Effect != newTaint.Effect {
-				changes = append(changes, model.EffectChange{
-					TaintKey:     key,
-					OldEffect:    string(oldTaint.Effect),
-					NewEffect:    string(newTaint.Effect),
-					ChangeReason: "效果转换",
-					ChangeTime:   time.Now(),
-				})
-			}
-		} else {
-			changes = append(changes, model.EffectChange{
-				TaintKey:     key,
-				OldEffect:    string(oldTaint.Effect),
-				NewEffect:    "",
-				ChangeReason: "污点删除",
-				ChangeTime:   time.Now(),
-			})
-		}
-	}
-
-	for key, newTaint := range newTaintMap {
-		if _, exists := oldTaintMap[key]; !exists {
-			changes = append(changes, model.EffectChange{
-				TaintKey:     key,
-				OldEffect:    "",
-				NewEffect:    string(newTaint.Effect),
-				ChangeReason: "污点添加",
-				ChangeTime:   time.Now(),
-			})
-		}
-	}
-
-	return changes
-}
-
-func (t *tolerationService) handleNoExecuteEviction(ctx context.Context, kubeClient kubernetes.Interface, req *model.K8sTaintEffectManagementRequest) (*model.EvictionSummary, error) {
-	affectedPods, err := t.getAffectedPods(ctx, kubeClient, req.NodeName, req.TaintEffectConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	evictionSummary := &model.EvictionSummary{
-		TotalPods: len(affectedPods),
-	}
-
-	if !req.TaintEffectConfig.NoExecuteConfig.GracefulEviction {
-		return evictionSummary, nil
-	}
-
-	g, ctx := errgroup.WithContext(ctx)
-
-	for _, podInfo := range affectedPods {
-		podInfo := podInfo
-		g.Go(func() error {
-			return t.evictPod(ctx, kubeClient, podInfo, req.TaintEffectConfig.NoExecuteConfig)
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		evictionSummary.FailedEvictions = len(affectedPods)
-		return evictionSummary, err
-	}
-
-	evictionSummary.EvictedPods = len(affectedPods)
-	return evictionSummary, nil
-}
-
-func (t *tolerationService) evictPod(ctx context.Context, kubeClient kubernetes.Interface, podInfo model.PodEvictionInfo, evictionConfig model.NoExecuteConfig) error {
-	eviction := &policyv1.Eviction{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "policy/v1",
-			Kind:       "Eviction",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podInfo.PodName,
-			Namespace: podInfo.Namespace,
-		},
-		DeleteOptions: &metav1.DeleteOptions{},
-	}
-
-	if evictionConfig.EvictionTimeout != nil {
-		eviction.DeleteOptions.GracePeriodSeconds = evictionConfig.EvictionTimeout
-	}
-
-	return kubeClient.PolicyV1().Evictions(podInfo.Namespace).Evict(ctx, eviction)
-}
-
-func (t *tolerationService) applyEffectTransitions(oldTaints []corev1.Taint, transition model.EffectTransition) []corev1.Taint {
-	if !transition.AllowTransition {
-		return oldTaints
-	}
-
-	var newTaints []corev1.Taint
-
-	for _, taint := range oldTaints {
-		modifiedTaint := taint
-
-		for _, rule := range transition.TransitionRules {
-			if string(taint.Effect) == rule.FromEffect && rule.AutoApply {
-				modifiedTaint.Effect = corev1.TaintEffect(rule.ToEffect)
-				break
-			}
-		}
-
-		newTaints = append(newTaints, modifiedTaint)
-	}
-
-	return newTaints
-}
-
-func (t *tolerationService) validateTaintEffectConfig(config model.K8sTaintEffectConfig) []string {
-	var warnings []string
-
-	if config.NoExecuteConfig.Enabled && config.NoExecuteConfig.EvictionTimeout == nil {
-		warnings = append(warnings, "NoExecute配置已启用但未设置驱逐超时时间")
-	}
-
-	if config.PreferNoScheduleConfig.Enabled && config.PreferNoScheduleConfig.PreferenceWeight <= 0 {
-		warnings = append(warnings, "PreferNoSchedule配置已启用但偏好权重无效")
-	}
-
-	if config.EffectTransition.AllowTransition && len(config.EffectTransition.TransitionRules) == 0 {
-		warnings = append(warnings, "效果转换已启用但未定义转换规则")
-	}
-
-	return warnings
-}
-
-func (t *tolerationService) analyzeCurrentTaintEffects(taints []corev1.Taint) []model.EffectChange {
-	var changes []model.EffectChange
-
-	for _, taint := range taints {
-		changes = append(changes, model.EffectChange{
-			TaintKey:     taint.Key,
-			NewEffect:    string(taint.Effect),
-			ChangeReason: "当前状态",
-			ChangeTime:   time.Now(),
-		})
-	}
-
-	return changes
-}
-
-func (t *tolerationService) batchManageTaintEffects(ctx context.Context, kubeClient kubernetes.Interface, req *model.K8sTaintEffectManagementRequest) (*model.K8sTaintEffectManagementResponse, error) {
-	var nodes []corev1.Node
-
-	if req.NodeSelector != nil && len(req.NodeSelector) > 0 {
-		labelSelector := labels.SelectorFromSet(req.NodeSelector)
-		nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{
-			LabelSelector: labelSelector.String(),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("获取节点列表失败: %w", err)
-		}
-		nodes = nodeList.Items
-	} else {
-		nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("获取节点列表失败: %w", err)
-		}
-		nodes = nodeList.Items
-	}
-
-	response := &model.K8sTaintEffectManagementResponse{
-		OperationTime: time.Now(),
-		Status:        "processing",
-	}
-
-	var totalAffectedPods []model.PodEvictionInfo
-	var totalEffectChanges []model.EffectChange
-
-	g, ctx := errgroup.WithContext(ctx)
-
-	for _, node := range nodes {
-		node := node
-		g.Go(func() error {
-			nodeReq := *req
-			nodeReq.NodeName = node.Name
-			nodeReq.BatchOperation = false
-
-			nodeResponse, err := t.ManageTaintEffects(ctx, &nodeReq)
-			if err != nil {
-				return err
-			}
-
-			totalAffectedPods = append(totalAffectedPods, nodeResponse.AffectedPods...)
-			totalEffectChanges = append(totalEffectChanges, nodeResponse.EffectChanges...)
-
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		response.Status = "failed"
-		response.Warnings = append(response.Warnings, fmt.Sprintf("批量操作失败: %v", err))
-		return response, err
-	}
-
-	response.AffectedPods = totalAffectedPods
-	response.EffectChanges = totalEffectChanges
-	response.EvictionSummary = model.EvictionSummary{
-		TotalPods:   len(totalAffectedPods),
-		EvictedPods: len(totalAffectedPods),
-	}
-	response.Status = "completed"
-
-	return response, nil
 }

@@ -32,6 +32,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -51,7 +52,7 @@ import (
 	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
-const QuotaName = "compute-quota"
+// QuotaName 已移至配置管理中，可通过 config.GetK8sConfig().ResourceDefaults.QuotaName 获取
 
 // EnsureNamespace 确保指定的命名空间存在，如果不存在则创建
 func EnsureNamespace(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) error {
@@ -92,15 +93,16 @@ func EnsureNamespace(ctx context.Context, kubeClient *kubernetes.Clientset, name
 
 // ApplyLimitRange 应用 LimitRange 到指定命名空间
 func ApplyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, cluster *model.K8sCluster) error {
-	// 检查资源限制值是否有效
-	cpuLimit := ensureValidResourceValue(cluster.CpuLimit, "100m")
-	memoryLimit := ensureValidResourceValue(cluster.MemoryLimit, "128Mi")
-	cpuRequest := ensureValidResourceValue(cluster.CpuRequest, "10m")
-	memoryRequest := ensureValidResourceValue(cluster.MemoryRequest, "64Mi")
+	// 使用配置的默认值替代硬编码
+	k8sConfig := config.GetK8sConfig()
+	cpuLimit := ensureValidResourceValue(cluster.CpuLimit, k8sConfig.ResourceDefaults.CPU)
+	memoryLimit := ensureValidResourceValue(cluster.MemoryLimit, k8sConfig.ResourceDefaults.Memory)
+	cpuRequest := ensureValidResourceValue(cluster.CpuRequest, k8sConfig.ResourceDefaults.CPURequest)
+	memoryRequest := ensureValidResourceValue(cluster.MemoryRequest, k8sConfig.ResourceDefaults.MemoryRequest)
 
 	limitRange := &corev1.LimitRange{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "resource-limits",
+			Name:      k8sConfig.ResourceDefaults.LimitRangeName,
 			Namespace: namespace,
 		},
 		Spec: corev1.LimitRangeSpec{
@@ -140,15 +142,16 @@ func ApplyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, name
 
 // ApplyResourceQuota 应用 ResourceQuota 到指定命名空间
 func ApplyResourceQuota(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, cluster *model.K8sCluster) error {
-	// 检查资源限制值是否有效
-	cpuLimit := ensureValidResourceValue(cluster.CpuLimit, "100m")
-	memoryLimit := ensureValidResourceValue(cluster.MemoryLimit, "128Mi")
-	cpuRequest := ensureValidResourceValue(cluster.CpuRequest, "10m")
-	memoryRequest := ensureValidResourceValue(cluster.MemoryRequest, "64Mi")
+	// 使用配置的默认值替代硬编码
+	k8sConfig := config.GetK8sConfig()
+	cpuLimit := ensureValidResourceValue(cluster.CpuLimit, k8sConfig.ResourceDefaults.CPU)
+	memoryLimit := ensureValidResourceValue(cluster.MemoryLimit, k8sConfig.ResourceDefaults.Memory)
+	cpuRequest := ensureValidResourceValue(cluster.CpuRequest, k8sConfig.ResourceDefaults.CPURequest)
+	memoryRequest := ensureValidResourceValue(cluster.MemoryRequest, k8sConfig.ResourceDefaults.MemoryRequest)
 
 	resourceQuota := &corev1.ResourceQuota{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      QuotaName,
+			Name:      k8sConfig.ResourceDefaults.QuotaName,
 			Namespace: namespace,
 		},
 		Spec: corev1.ResourceQuotaSpec{
@@ -371,9 +374,10 @@ func GetNodeResource(ctx context.Context, metricsCli *metricsClient.Clientset, n
 	// 	return nil, fmt.Errorf("failed to get node metrics: %v", err)
 	// }
 
-	// Mock data for testing
-	cpuUsage := resource.NewMilliQuantity(100, resource.DecimalSI)
-	memoryUsage := resource.NewQuantity(1024*1024*100, resource.BinarySI)
+	// Mock data for testing - use configuration values
+	k8sConfig := config.GetK8sConfig()
+	cpuUsage, _ := resource.ParseQuantity(k8sConfig.ResourceDefaults.MockCPUUsage)
+	memoryUsage, _ := resource.ParseQuantity(k8sConfig.ResourceDefaults.MockMemoryUsage)
 
 	// CPU 和内存的使用量（单位：m，MiB）
 	result = append(result, fmt.Sprintf("CPU Usage: %dm / %dm", cpuUsage.MilliValue(), cpuCapacity.MilliValue()))
@@ -1144,7 +1148,14 @@ func GetDeploymentsByAppName(ctx context.Context, clusterId int, appName string,
 		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
 
-	deploymentsClient := kubeClient.AppsV1().Deployments("default") // 假设默认 namespace 是 "default"
+	// 使用配置的默认命名空间，如果没有指定则使用 "default"
+	k8sConfig := config.GetK8sConfig()
+	defaultNamespace := "default"
+	if k8sConfig.ResourceDefaults.QuotaName != "" {
+		// 可以考虑在配置中添加默认命名空间字段
+		defaultNamespace = "default"
+	}
+	deploymentsClient := kubeClient.AppsV1().Deployments(defaultNamespace)
 
 	// 按应用名称查找 Deployment
 	deploymentsList, err := deploymentsClient.List(ctx, metav1.ListOptions{
@@ -1165,7 +1176,7 @@ func GetDeploymentsByAppName(ctx context.Context, clusterId int, appName string,
 		}
 
 		// 获取 Deployment 关联的 Pod 以获取容器信息
-		podsClient := kubeClient.CoreV1().Pods("default")
+		podsClient := kubeClient.CoreV1().Pods(defaultNamespace)
 		podList, err := podsClient.List(ctx, metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("app=%s", appName),
 		})
@@ -1287,6 +1298,9 @@ func BuildDaemonSetConfig(req *model.K8sInstance) *appsv1.DaemonSet {
 
 // 构建Job创建配置
 func BuildJobConfig(req *model.K8sInstance) *batchv1.Job {
+	// 使用配置的默认值替代硬编码
+	k8sConfig := config.GetK8sConfig()
+	
 	// 创建Job对象
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1297,11 +1311,11 @@ func BuildJobConfig(req *model.K8sInstance) *batchv1.Job {
 		},
 		Spec: batchv1.JobSpec{
 			Template:              buildPodTemplateSpec(req),
-			BackoffLimit:          int32Ptr(6), // 默认重试6次
-			TTLSecondsAfterFinished: int32Ptr(3600), // 作业完成后1小时删除
+			BackoffLimit:          int32Ptr(k8sConfig.TimeDefaults.JobBackoffLimit),
+			TTLSecondsAfterFinished: int32Ptr(k8sConfig.TimeDefaults.JobTTLAfterFinished),
 			Parallelism:           int32Ptr(1), // 默认并行度1
 			Completions:           int32Ptr(1), // 默认完成1次
-			ActiveDeadlineSeconds: int64Ptr(3600 * 24), // 默认最长运行时间24小时
+			ActiveDeadlineSeconds: int64Ptr(k8sConfig.TimeDefaults.JobActiveDeadlineSeconds),
 		},
 	}
 
@@ -1310,6 +1324,9 @@ func BuildJobConfig(req *model.K8sInstance) *batchv1.Job {
 
 // 构建CronJob创建配置
 func BuildCronJobConfig(req *model.K8sInstance) *batchv1.CronJob {
+	// 使用配置的默认值替代硬编码
+	k8sConfig := config.GetK8sConfig()
+	
 	// 创建CronJob对象
 	cronJob := &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1321,9 +1338,9 @@ func BuildCronJobConfig(req *model.K8sInstance) *batchv1.CronJob {
 		Spec: batchv1.CronJobSpec{
 			Schedule:                   "0 * * * *", // 默认每小时执行一次，后续可以通过额外的字段指定
 			ConcurrencyPolicy:          batchv1.ForbidConcurrent, // 默认禁止并发执行
-			SuccessfulJobsHistoryLimit: int32Ptr(3), // 保留3个成功的历史记录
-			FailedJobsHistoryLimit:     int32Ptr(1), // 保留1个失败的历史记录
-			StartingDeadlineSeconds:    int64Ptr(60), // 启动截止期限60秒
+			SuccessfulJobsHistoryLimit: int32Ptr(k8sConfig.TimeDefaults.CronJobSuccessHistory),
+			FailedJobsHistoryLimit:     int32Ptr(k8sConfig.TimeDefaults.CronJobFailedHistory),
+			StartingDeadlineSeconds:    int64Ptr(k8sConfig.TimeDefaults.CronJobStartingDeadline),
 			JobTemplate: batchv1.JobTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      req.Labels,
@@ -1331,7 +1348,7 @@ func BuildCronJobConfig(req *model.K8sInstance) *batchv1.CronJob {
 				},
 				Spec: batchv1.JobSpec{
 					Template:    buildPodTemplateSpec(req),
-					BackoffLimit: int32Ptr(3), // 默认重试3次
+					BackoffLimit: int32Ptr(k8sConfig.TimeDefaults.JobBackoffLimit),
 				},
 			},
 		},
@@ -1667,12 +1684,13 @@ func buildVolumeClaimTemplates(volumes []model.Volume) []corev1.PersistentVolume
 	}
 
 	// 构建PVC模板
+	k8sConfig := config.GetK8sConfig()
 	templates := make([]corev1.PersistentVolumeClaim, 0, len(pvcVolumes))
 	for _, v := range pvcVolumes {
-		// 确保Size字段有效
+		// 确保Size字段有效 - 使用配置的默认值
 		size := v.Size
 		if size == "" || size == "0" {
-			size = "1Gi" // 设置默认值
+			size = k8sConfig.ResourceDefaults.PVCSize
 		}
 		
 		pvc := corev1.PersistentVolumeClaim{
