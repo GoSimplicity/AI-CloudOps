@@ -61,6 +61,9 @@ func InitGinServer(
 	k8sNodeAffinityHdl *k8sApi.K8sNodeAffinityHandler,
 	k8sPodAffinityHdl *k8sApi.K8sPodAffinityHandler,
 	k8sAffinityVisualizationHdl *k8sApi.K8sAffinityVisualizationHandler,
+	k8sRBACHdl *k8sApi.K8sRBACHandler,
+	k8sServiceAccountHdl *k8sApi.K8sServiceAccountHandler,
+	k8sTolerationHdl *k8sApi.K8sTolerationHandler,
 	k8sAppHdl *k8sApi.K8sAppHandler,
 	alertEventHdl *prometheusApi.AlertEventHandler,
 	alertPoolHdl *prometheusApi.AlertPoolHandler,
@@ -121,6 +124,9 @@ func InitGinServer(
 	k8sNodeAffinityHdl.RegisterRouters(server)
 	k8sPodAffinityHdl.RegisterRouters(server)
 	k8sAffinityVisualizationHdl.RegisterRouters(server)
+	k8sRBACHdl.RegisterRouters(server)
+	k8sServiceAccountHdl.RegisterRouters(server)
+	k8sTolerationHdl.RegisterRouters(server)
 	formDesignHdl.RegisterRouters(server)
 	processHdl.RegisterRouters(server)
 	templateHdl.RegisterRouters(server)
