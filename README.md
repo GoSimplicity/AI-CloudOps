@@ -81,7 +81,6 @@ docker-compose -f docker-compose-env.yaml up -d
 
 # 复制并配置环境变量
 cp env.example .env
-# 根据实际情况修改 .env 文件
 ```
 
 **步骤二：启动前端服务**
