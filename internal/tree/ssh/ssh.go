@@ -11,15 +11,14 @@ import (
 )
 
 type EcsSSH struct {
-	IP       string      // IP地址
-	Port     int         // 端口号
-	Username string      // 用户名
-	Mode     string      // 认证方式[password:密码，key:秘钥认证]
-	Password string      // 密码
-	Key      string      // 认证私钥
-	Client   *ssh.Client // ssh客户端
-	UserID   int         // 用户ID
-	// console
+	IP         string               // IP地址
+	Port       int                  // 端口号
+	Username   string               // 用户名
+	Mode       string               // 认证方式[password:密码，key:秘钥认证]
+	Password   string               // 密码
+	Key        string               // 认证私钥
+	Client     *ssh.Client          // ssh客户端
+	UserID     int                  // 用户ID
 	Sessions   map[int]*ssh.Session // ssh会话对象
 	Channel    ssh.Channel          // ssh通信管道
 	LastResult string               // 最近一次执行命令的结果
