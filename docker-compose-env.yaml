@@ -56,6 +56,7 @@ services:
     depends_on:
       - redis
 
+
 networks:
   cloudOps_net:
     name: cloudOps_net
