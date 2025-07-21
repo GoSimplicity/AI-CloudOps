@@ -17,6 +17,9 @@ on:
 
 jobs:
   build-and-push:
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-24.04
     # 仅在 push 或 PR 合并时运行
     if: |
