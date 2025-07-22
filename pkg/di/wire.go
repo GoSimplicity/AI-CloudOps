@@ -54,6 +54,7 @@ import (
 	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeProvider "github.com/GoSimplicity/AI-CloudOps/internal/tree/provider"
 	treeService "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
 	userHandler "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	userService "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
@@ -118,6 +119,7 @@ var HandlerSet = wire.NewSet(
 	treeHandler.NewTreeNodeHandler,
 	treeHandler.NewTreeCloudHandler,
 	treeHandler.NewTreeEcsHandler,
+	treeHandler.NewTreeLocalHandler,
 	treeHandler.NewTreeVpcHandler,
 	treeHandler.NewTreeSecurityGroupHandler,
 	treeHandler.NewTreeRdsHandler,
@@ -174,6 +176,7 @@ var ServiceSet = wire.NewSet(
 	treeService.NewTreeNodeService,
 	treeService.NewTreeCloudService,
 	treeService.NewTreeEcsService,
+	treeService.NewTreeLocalService,
 	treeService.NewTreeVpcService,
 	treeService.NewTreeElbService,
 	treeService.NewTreeRdsService,
@@ -212,10 +215,15 @@ var DaoSet = wire.NewSet(
 	treeDao.NewTreeNodeDAO,
 	treeDao.NewTreeCloudDAO,
 	treeDao.NewTreeEcsDAO,
+	treeDao.NewTreeLocalDAO,
 	treeDao.NewTreeVpcDAO,
 	treeDao.NewTreeElbDAO,
 	treeDao.NewTreeRdsDAO,
 	treeDao.NewTreeSecurityGroupDAO,
+)
+
+var SSHSet = wire.NewSet(
+	ssh.NewSSH,
 )
 
 var UtilSet = wire.NewSet(
@@ -263,6 +271,7 @@ func ProvideCmd() *Cmd {
 		HandlerSet,
 		ServiceSet,
 		DaoSet,
+		SSHSet,
 		UtilSet,
 		JobSet,
 		CacheSet,

@@ -1,3 +1,6 @@
+generate:
+	go generate ./...
+
 docker-build:
 	docker build -t Bamboo/gomodd:v1.22.1 .
 

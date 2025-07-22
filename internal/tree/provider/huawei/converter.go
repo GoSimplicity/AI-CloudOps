@@ -239,10 +239,6 @@ func (h *HuaweiProviderImpl) convertToResourceSecurityGroupFromDetail(sg *vpcv3m
 }
 
 func (h *HuaweiProviderImpl) convertToResourceDiskFromList(disk evsmode.VolumeDetail, region string) *model.ResourceDisk {
-	if disk.Id == "" {
-		return nil
-	}
-
 	// 提取标签信息
 	var tags []string
 	if disk.Tags != nil {
@@ -253,7 +249,7 @@ func (h *HuaweiProviderImpl) convertToResourceDiskFromList(disk evsmode.VolumeDe
 
 	// 提取挂载的实例ID
 	var instanceID string
-	if disk.Attachments != nil {
+	if disk.Attachments != nil && len(disk.Attachments) > 0 {
 		// 获取第一个挂载的实例ID
 		instanceID = disk.Attachments[0].ServerId
 	}

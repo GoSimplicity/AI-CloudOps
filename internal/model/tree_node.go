@@ -68,20 +68,18 @@ type TreeNodeMember struct {
 
 // TreeNodeResource 节点资源关联表
 type TreeNodeResource struct {
-	ID           int    `gorm:"primaryKey;autoIncrement"`
-	TreeNodeID   int    `gorm:"index:idx_node_resource;not null;comment:节点ID"`
-	ResourceID   string `gorm:"index:idx_node_resource;not null;comment:资源ID"`
-	ResourceType string `gorm:"type:varchar(50);not null;comment:资源类型，可选：ecs,elb,rds,local"`
+	Model
+	TreeNodeID   int           `gorm:"index:idx_node_resource;not null;comment:节点ID"`
+	ResourceID   string        `gorm:"index:idx_node_resource;not null;comment:资源ID"`
+	ResourceType CloudProvider `gorm:"type:varchar(50);not null;comment:资源类型，可选：ecs,elb,rds,local"`
 }
 
 type ResourceItems struct {
-	ResourceName string    `json:"resource_name"`
-	ResourceType string    `json:"resource_type"`
-	Status       string    `json:"status"`
-	CreatedAt    time.Time `json:"created_at"`
+	ResourceName string        `json:"resource_name"`
+	ResourceType CloudProvider `json:"resource_type"`
+	Status       string        `json:"status"`
+	CreatedAt    time.Time     `json:"created_at"`
 }
-
-// ==================== 请求结构体 ====================
 
 // GetTreeListReq 获取树节点列表请求
 type GetTreeListReq struct {
@@ -176,16 +174,16 @@ type GetNodeResourcesReq struct {
 
 // BindResourceReq 绑定资源请求
 type BindResourceReq struct {
-	NodeID       int      `json:"nodeId" binding:"required"`
-	ResourceType string   `json:"resourceType" binding:"omitempty,oneof=ecs elb rds local"`
-	ResourceIDs  []string `json:"resourceIds" binding:"required,min=1"`
+	NodeID       int           `json:"nodeId" binding:"required"`
+	ResourceType CloudProvider `json:"resourceType" binding:"omitempty,oneof=ecs elb rds local"`
+	ResourceIDs  []string      `json:"resourceIds" binding:"required,min=1"`
 }
 
 // UnbindResourceReq 解绑资源请求
 type UnbindResourceReq struct {
-	NodeID       int    `json:"nodeId" binding:"required"`
-	ResourceID   string `json:"resourceId" binding:"required"`
-	ResourceType string `json:"resourceType" binding:"required"`
+	NodeID       int           `json:"nodeId" binding:"required"`
+	ResourceID   string        `json:"resourceId" binding:"required"`
+	ResourceType CloudProvider `json:"resourceType" binding:"required"`
 }
 
 // CheckNodePermissionReq 检查节点权限请求
@@ -271,12 +269,12 @@ type TreeStatisticsResp struct {
 
 // TreeNodeResourceResp 节点资源响应
 type TreeNodeResourceResp struct {
-	ID                 int    `json:"id"`                 // 关联ID
-	ResourceID         string `json:"resourceId"`         // 资源ID
-	ResourceType       string `json:"resourceType"`       // 资源类型
-	ResourceName       string `json:"resourceName"`       // 资源名称
-	ResourceStatus     string `json:"resourceStatus"`     // 资源状态
-	ResourceCreateTime string `json:"resourceCreateTime"` // 资源创建时间
-	ResourceUpdateTime string `json:"resourceUpdateTime"` // 资源更新时间
-	ResourceDeleteTime string `json:"resourceDeleteTime"` // 资源删除时间
+	ID                 int           `json:"id"`                 // 关联ID
+	ResourceID         string        `json:"resourceId"`         // 资源ID
+	ResourceType       CloudProvider `json:"resourceType"`       // 资源类型
+	ResourceName       string        `json:"resourceName"`       // 资源名称
+	ResourceStatus     string        `json:"resourceStatus"`     // 资源状态
+	ResourceCreateTime string        `json:"resourceCreateTime"` // 资源创建时间
+	ResourceUpdateTime string        `json:"resourceUpdateTime"` // 资源更新时间
+	ResourceDeleteTime string        `json:"resourceDeleteTime"` // 资源删除时间
 }

@@ -27,8 +27,11 @@ package dao
 
 import (
 	"context"
+	"errors"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"strconv"
 )
 
 type TreeLocalDAO interface {
@@ -37,44 +40,63 @@ type TreeLocalDAO interface {
 	Delete(ctx context.Context, id int) error
 	GetByID(ctx context.Context, id int) (*model.TreeLocal, error)
 	GetList(ctx context.Context, req *model.GetTreeLocalListReq) ([]*model.TreeLocal, int64, error)
-	UpdateStatus(ctx context.Context, id int, status string) error
-	UpdateTreeNodes(ctx context.Context, id int, treeNodeIDs []string) error
 	GetByIP(ctx context.Context, ip string) (*model.TreeLocal, error)
-	BatchDelete(ctx context.Context, ids []int) error
+	BindTreeNodes(ctx context.Context, localID int, treeNodeIds []int) error
+	UnBindTreeNodes(ctx context.Context, localID int, treeNodeIds []int) error
 }
 
 type treeLocalDAO struct {
-	db *gorm.DB
+	logger *zap.Logger
+	db     *gorm.DB
 }
 
-func NewTreeLocalDAO(db *gorm.DB) TreeLocalDAO {
+func NewTreeLocalDAO(db *gorm.DB, logger *zap.Logger) TreeLocalDAO {
 	return &treeLocalDAO{
-		db: db,
+		logger: logger,
+		db:     db,
 	}
 }
 
 // Create 创建本地主机
 func (d *treeLocalDAO) Create(ctx context.Context, local *model.TreeLocal) error {
-	return d.db.WithContext(ctx).Create(local).Error
+	if err := d.db.WithContext(ctx).Create(local).Error; err != nil {
+		d.logger.Error("创建本地主机失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 // Update 更新本地主机
 func (d *treeLocalDAO) Update(ctx context.Context, local *model.TreeLocal) error {
-	return d.db.WithContext(ctx).Model(local).Updates(local).Error
+	if err := d.db.WithContext(ctx).Model(local).Updates(local).Error; err != nil {
+		d.logger.Error("更新本地主机失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 // Delete 删除本地主机
 func (d *treeLocalDAO) Delete(ctx context.Context, id int) error {
-	return d.db.WithContext(ctx).Delete(&model.TreeLocal{}, id).Error
+	if err := d.db.WithContext(ctx).Delete(&model.TreeLocal{}, id).Error; err != nil {
+		d.logger.Error("删除本地主机失败", zap.Error(err), zap.Int("id", id))
+		return err
+	}
+
+	return nil
 }
 
 // GetByID 根据ID获取本地主机详情
 func (d *treeLocalDAO) GetByID(ctx context.Context, id int) (*model.TreeLocal, error) {
 	var local model.TreeLocal
-	err := d.db.WithContext(ctx).Preload("EcsTreeNodes").First(&local, id).Error
+
+	err := d.db.WithContext(ctx).Where("id = ?", id).First(&local).Error
 	if err != nil {
+		d.logger.Error("根据ID获取本地主机详情失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
+
 	return &local, nil
 }
 
@@ -89,9 +111,11 @@ func (d *treeLocalDAO) GetList(ctx context.Context, req *model.GetTreeLocalListR
 	if req.Status != "" {
 		query = query.Where("status = ?", req.Status)
 	}
-	if req.Env != "" {
-		query = query.Where("environment = ?", req.Env)
+
+	if req.Environment != "" {
+		query = query.Where("environment = ?", req.Environment)
 	}
+
 	if req.Search != "" {
 		query = query.Where("name LIKE ?",
 			"%"+req.Search+"%")
@@ -100,47 +124,107 @@ func (d *treeLocalDAO) GetList(ctx context.Context, req *model.GetTreeLocalListR
 	// 计算总数
 	err := query.Count(&total).Error
 	if err != nil {
+		d.logger.Error("获取本地主机总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	// 分页查询
 	offset := (req.Page - 1) * req.Size
-	err = query.Preload("EcsTreeNodes").
+	err = query.
 		Order("created_at DESC").
 		Limit(req.Size).
 		Offset(offset).
 		Find(&locals).Error
 	if err != nil {
+		d.logger.Error("获取本地主机列表失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	return locals, total, nil
 }
 
-// UpdateStatus 更新状态
-func (d *treeLocalDAO) UpdateStatus(ctx context.Context, id int, status string) error {
-	return d.db.WithContext(ctx).Model(&model.TreeLocal{}).
-		Where("id = ?", id).
-		Update("status", status).Error
-}
-
-// UpdateTreeNodes 更新关联的服务树节点
-func (d *treeLocalDAO) UpdateTreeNodes(ctx context.Context, id int, treeNodeIDs []string) error {
-	return d.db.WithContext(ctx).Model(model.TreeLocal{}).Where("id = ?", id).
-		Update("tree_node_ids", treeNodeIDs).Error
-}
-
 // GetByIP 根据IP地址获取主机
 func (d *treeLocalDAO) GetByIP(ctx context.Context, ip string) (*model.TreeLocal, error) {
 	var local model.TreeLocal
+
 	err := d.db.WithContext(ctx).Where("ip_addr = ?", ip).First(&local).Error
 	if err != nil {
+		d.logger.Error("根据IP地址获取本地主机失败", zap.Error(err), zap.String("ip", ip))
 		return nil, err
 	}
+
 	return &local, nil
 }
 
-// BatchDelete 批量删除
-func (d *treeLocalDAO) BatchDelete(ctx context.Context, ids []int) error {
-	return d.db.WithContext(ctx).Delete(&model.TreeLocal{}, ids).Error
+// BindTreeNodes 绑定树节点
+func (d *treeLocalDAO) BindTreeNodes(ctx context.Context, localID int, treeNodeIds []int) error {
+	var resource []*model.TreeNodeResource
+
+	for _, id := range treeNodeIds {
+		// 先检查是否已经绑定,不允许重复绑定
+		var existingResource model.TreeNodeResource
+		err := d.db.WithContext(ctx).Where(
+			"tree_node_id = ? AND resource_id = ? AND resource_type = ?",
+			id, strconv.Itoa(localID), model.CloudProviderLocal,
+		).First(&existingResource).Error
+
+		if err == nil {
+			// 如果找到了记录，说明已经绑定过了
+			d.logger.Warn("树节点已经绑定，跳过",
+				zap.Int("treeNodeId", id),
+				zap.Int("localID", localID))
+			continue
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			// 如果是其他错误（非记录不存在），返回错误
+			d.logger.Error("检查绑定状态失败", zap.Error(err),
+				zap.Int("treeNodeId", id),
+				zap.Int("localID", localID))
+			return err
+		}
+
+		// 如果记录不存在，添加到待创建列表
+		resource = append(resource, &model.TreeNodeResource{
+			TreeNodeID:   id,
+			ResourceID:   strconv.Itoa(localID),
+			ResourceType: model.CloudProviderLocal,
+		})
+	}
+
+	// 如果没有需要创建的资源，直接返回
+	if len(resource) == 0 {
+		d.logger.Info("所有树节点都已绑定，无需创建新绑定")
+		return nil
+	}
+
+	if err := d.db.WithContext(ctx).Create(&resource).Error; err != nil {
+		d.logger.Error("绑定树节点失败", zap.Error(err), zap.Int("localID", localID), zap.Ints("treeNodeIds", treeNodeIds))
+		return err
+	}
+
+	return nil
+}
+
+// UnBindTreeNodes 解绑树节点
+func (d *treeLocalDAO) UnBindTreeNodes(ctx context.Context, localID int, treeNodeIds []int) error {
+	if len(treeNodeIds) == 0 {
+		d.logger.Info("没有需要解绑的树节点")
+		return nil
+	}
+
+	result := d.db.WithContext(ctx).
+		Where("resource_id = ? AND tree_node_id IN (?) AND resource_type = ?",
+			strconv.Itoa(localID), treeNodeIds, model.CloudProviderLocal).
+		Delete(&model.TreeNodeResource{})
+
+	if result.Error != nil {
+		d.logger.Error("解绑树节点失败", zap.Error(result.Error), zap.Int("localID", localID), zap.Ints("treeNodeIds", treeNodeIds))
+		return result.Error
+	}
+
+	d.logger.Info("解绑树节点成功",
+		zap.Int("localID", localID),
+		zap.Ints("treeNodeIds", treeNodeIds),
+		zap.Int64("deletedCount", result.RowsAffected))
+
+	return nil
 }

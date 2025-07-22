@@ -61,14 +61,7 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 			path == "/api/monitor/prometheus_configs/prometheus_alert" ||
 			path == "/api/monitor/prometheus_configs/prometheus_record" ||
 			path == "/api/monitor/prometheus_configs/alertManager" ||
-			path == "/" ||
-			strings.HasPrefix(path, "/api/ai/chat/ws") ||
-			strings.HasPrefix(path, "/assets") ||
-			strings.HasPrefix(path, "/_app.config.js") ||
-			strings.HasPrefix(path, "/jse/") ||
-			strings.HasPrefix(path, "/favicon.ico") ||
-			strings.HasPrefix(path, "/js/") ||
-			strings.HasPrefix(path, "/css/") {
+			path == "/" {
 			ctx.Next()
 			return
 		}
@@ -77,7 +70,7 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 		var tokenStr string
 
 		// 如果是/api/tree/ecs/console开头的路径，从查询参数获取token
-		if strings.HasPrefix(path, "/api/tree/ecs/console") {
+		if strings.HasPrefix(path, "/api/tree/local/terminal") {
 			tokenStr = ctx.Query("token")
 		} else {
 			// 从请求中提取token

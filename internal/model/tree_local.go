@@ -25,36 +25,51 @@
 
 package model
 
+type AuthMode string
+
+const (
+	AuthModePassword AuthMode = "password"
+	AuthModeKey      AuthMode = "key"
+)
+
+type Status string
+
+const (
+	StatusRunning    Status = "RUNNING"
+	StatusStopped    Status = "STOPPED"
+	StatusStarting   Status = "STARTING"
+	StatusStopping   Status = "STOPPING"
+	StatusRestarting Status = "RESTARTING"
+	StatusDeleting   Status = "DELETING"
+	StatusError      Status = "ERROR"
+)
+
 type TreeLocal struct {
 	Model
-	Name         string      `json:"name" gorm:"type:varchar(100);comment:资源名称"`
-	Status       string      `json:"status" gorm:"type:varchar(50);comment:资源状态;default:RUNNING;enum:RUNNING,STOPPED,STARTING,STOPPING,RESTARTING,DELETING,ERROR"`
-	Environment  string      `json:"environment" gorm:"type:varchar(50);comment:环境标识,如dev,prod"`
-	Description  string      `json:"description" gorm:"type:text;comment:资源描述"`
-	Tags         StringList  `json:"tags" gorm:"type:varchar(500);comment:资源标签集合"`
-	Cpu          int         `json:"cpu" gorm:"comment:CPU核数"`
-	Memory       int         `json:"memory" gorm:"comment:内存大小,单位GiB"`
-	Disk         int         `json:"disk" gorm:"comment:系统盘大小,单位GiB"`
-	IpAddr       string      `json:"ip_addr" gorm:"type:varchar(45);comment:主IP地址"`
-	Port         int         `json:"port" gorm:"comment:端口号;default:22"`
-	HostName     string      `json:"hostname" gorm:"comment:主机名"`
-	Username     string      `json:"username" gorm:"type:varchar(100);comment:用户名;default:root"`
-	Password     string      `json:"-" gorm:"type:varchar(500);comment:密码,加密存储"`
-	Key          string      `json:"key" gorm:"type:text;comment:密钥"`
-	AuthMode     string      `json:"auth_mode" gorm:"type:varchar(20);comment:认证方式;default:password"`
-	OsType       string      `json:"os_type" gorm:"type:varchar(50);comment:操作系统类型,如win,linux"`
-	OSName       string      `json:"os_name" gorm:"type:varchar(100);comment:操作系统名称"`
-	ImageName    string      `json:"image_name" gorm:"type:varchar(100);comment:镜像名称"`
-	StartTime    string      `json:"start_time" gorm:"type:varchar(30);comment:最近启动时间"`
-	TreeNodeIDs  StringList  `json:"tree_node_ids" gorm:"type:varchar(500);comment:关联服务树节点ID集合"`
-	EcsTreeNodes []*TreeNode `json:"ecs_tree_nodes" gorm:"many2many:resource_ecs_tree_nodes;comment:关联服务树节点"`
+	Name        string     `json:"name" gorm:"type:varchar(100);comment:资源名称"`
+	Status      Status     `json:"status" gorm:"type:varchar(50);comment:资源状态;default:RUNNING;enum:RUNNING,STOPPED,STARTING,STOPPING,RESTARTING,DELETING,ERROR"`
+	Environment string     `json:"environment" gorm:"type:varchar(50);comment:环境标识,如dev,prod"`
+	Description string     `json:"description" gorm:"type:text;comment:资源描述"`
+	Tags        StringList `json:"tags" gorm:"type:varchar(500);comment:资源标签集合"`
+	Cpu         int        `json:"cpu" gorm:"comment:CPU核数"`
+	Memory      int        `json:"memory" gorm:"comment:内存大小,单位GiB"`
+	Disk        int        `json:"disk" gorm:"comment:系统盘大小,单位GiB"`
+	IpAddr      string     `json:"ip_addr" gorm:"type:varchar(45);comment:主IP地址"`
+	Port        int        `json:"port" gorm:"comment:端口号;default:22"`
+	Username    string     `json:"username" gorm:"type:varchar(100);comment:用户名;default:root"`
+	Password    string     `json:"-" gorm:"type:varchar(500);comment:密码,加密存储"`
+	Key         string     `json:"key" gorm:"type:text;comment:密钥"`
+	AuthMode    AuthMode   `json:"auth_mode" gorm:"type:varchar(20);comment:认证方式;default:password"`
+	OsType      string     `json:"os_type" gorm:"type:varchar(50);comment:操作系统类型,如win,linux"`
+	OSName      string     `json:"os_name" gorm:"type:varchar(100);comment:操作系统名称"`
+	ImageName   string     `json:"image_name" gorm:"type:varchar(100);comment:镜像名称"`
 }
 
 // GetTreeLocalListReq 获取本地树资源列表请求
 type GetTreeLocalListReq struct {
 	ListReq
-	Status string `json:"status" form:"status"`
-	Env    string `json:"env" form:"env"`
+	Status      string `json:"status" form:"status"`
+	Environment string `json:"environment" form:"env"`
 }
 
 // GetTreeLocalDetailReq 获取本地树资源详情请求
@@ -70,15 +85,13 @@ type CreateTreeLocalReq struct {
 	Tags        StringList `json:"tags"`
 	IpAddr      string     `json:"ip_addr" binding:"required"`
 	Port        int        `json:"port"`
-	HostName    string     `json:"hostname"`
 	Username    string     `json:"username"`
 	Password    string     `json:"password"`
 	OsType      string     `json:"os_type"`
 	OSName      string     `json:"os_name"`
 	ImageName   string     `json:"image_name"`
 	Key         string     `json:"key"`
-	AuthMode    string     `json:"auth_mode"`
-	TreeNodeIDs StringList `json:"tree_node_ids"`
+	AuthMode    AuthMode   `json:"auth_mode"`
 }
 
 // UpdateTreeLocalReq 更新本地树资源请求
@@ -93,12 +106,10 @@ type UpdateTreeLocalReq struct {
 	OsType      string     `json:"os_type"`
 	OSName      string     `json:"os_name"`
 	ImageName   string     `json:"image_name"`
-	HostName    string     `json:"hostname"`
 	Username    string     `json:"username"`
 	Password    string     `json:"password"`
 	Key         string     `json:"key"`
-	AuthMode    string     `json:"auth_mode"`
-	TreeNodeIDs StringList `json:"tree_node_ids"`
+	AuthMode    AuthMode   `json:"auth_mode"`
 }
 
 // DeleteTreeLocalReq 删除本地树资源请求
@@ -110,4 +121,14 @@ type DeleteTreeLocalReq struct {
 type ConnectTerminalReq struct {
 	ID  int `json:"id" form:"id"`
 	Uid int `json:"uid"`
+}
+
+type BindLocalResourceReq struct {
+	ID          int   `json:"id" form:"id"`
+	TreeNodeIDs []int `json:"tree_node_ids" form:"tree_node_ids"`
+}
+
+type UnBindLocalResourceReq struct {
+	ID          int   `json:"id" form:"id"`
+	TreeNodeIDs []int `json:"tree_node_ids" form:"tree_node_ids"`
 }

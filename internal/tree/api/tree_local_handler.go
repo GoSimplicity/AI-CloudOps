@@ -31,20 +31,17 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type TreeLocalHandler struct {
 	service service.TreeLocalService
 	ssh     ssh.EcsSSH
-	logger  *zap.Logger
 }
 
-func NewTreeLocalHandler(service service.TreeLocalService, ssh ssh.EcsSSH, logger *zap.Logger) *TreeLocalHandler {
+func NewTreeLocalHandler(service service.TreeLocalService, ssh ssh.EcsSSH) *TreeLocalHandler {
 	return &TreeLocalHandler{
 		service: service,
 		ssh:     ssh,
-		logger:  logger,
 	}
 }
 
@@ -57,6 +54,8 @@ func (h *TreeLocalHandler) RegisterRouters(server *gin.Engine) {
 		localGroup.PUT("/update/:id", h.UpdateTreeLocal)
 		localGroup.DELETE("/delete/:id", h.DeleteTreeLocal)
 		localGroup.GET("/terminal/:id", h.ConnectTerminal)
+		localGroup.POST("/bind/:id", h.BindTreeLocal)
+		localGroup.DELETE("/unbind/:id", h.UnbindTreeLocal)
 	}
 }
 
@@ -73,6 +72,7 @@ func (h *TreeLocalHandler) GetTreeLocalDetail(ctx *gin.Context) {
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "invalid param id")
 		return
 	}
 
@@ -136,49 +136,70 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 
 	req.ID = id
 
-	ld, err := h.service.GetTreeLocalDetail(ctx, &req)
+	ld, err := h.service.GetTreeLocalForConnection(ctx, &req)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "获取主机信息失败: "+err.Error())
 		return
 	}
 
 	// 升级 websocket 连接
 	ws, err := utils.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
-		h.logger.Error("升级 websocket 失败", zap.Error(err))
 		utils.ErrorWithMessage(ctx, "升级 websocket 连接失败: "+err.Error())
 		return
 	}
 	defer func() {
 		err := ws.Close()
 		if err != nil {
-			h.logger.Error("关闭 websocket 连接失败", zap.Error(err))
+			utils.ErrorWithMessage(ctx, "关闭 websocket 连接失败: "+err.Error())
 			return
 		}
-		if h.ssh.Sessions != nil {
-			for _, session := range h.ssh.Sessions {
-				err := session.Close()
-				if err != nil {
-					h.logger.Error("关闭 ssh 会话失败", zap.Error(err))
-					return
-				}
-			}
-		}
-		if h.ssh.Client != nil {
-			err := h.ssh.Client.Close()
-			if err != nil {
-				h.logger.Error("关闭 ssh 客户端失败", zap.Error(err))
-				return
-			}
+		err = h.ssh.Close()
+		if err != nil {
+			utils.ErrorWithMessage(ctx, "关闭 ssh 连接失败: "+err.Error())
+			return
 		}
 	}()
 
-	err = h.ssh.Connect(ld.IpAddr, ld.Port, ld.Username, ld.Password, ld.Key, ld.AuthMode, uc.Uid)
+	err = h.ssh.Connect(ld.IpAddr, ld.Port, ld.Username, ld.Password, ld.Key, string(ld.AuthMode), uc.Uid)
 	if err != nil {
-		h.logger.Error("连接主机失败", zap.Error(err))
 		utils.ErrorWithMessage(ctx, "连接ECS实例失败: "+err.Error())
 		return
 	}
 
 	// 进行 web-ssh 命令通信
 	h.ssh.Web2SSH(ws)
+}
+
+func (h *TreeLocalHandler) BindTreeLocal(ctx *gin.Context) {
+	var req model.BindLocalResourceReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.BindTreeLocal(ctx, &req)
+	})
+
+}
+
+func (h *TreeLocalHandler) UnbindTreeLocal(ctx *gin.Context) {
+	var req model.UnBindLocalResourceReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.UnBindLocalResource(ctx, &req)
+	})
 }

@@ -54,7 +54,7 @@ type TreeNodeDAO interface {
 	DeleteNode(ctx context.Context, id int) error
 
 	GetNodeResources(ctx context.Context, nodeId int) ([]*model.TreeNodeResource, error)
-	BindResource(ctx context.Context, nodeId int, resourceType string, resourceIds []string) error
+	BindResource(ctx context.Context, nodeId int, resourceType model.CloudProvider, resourceIds []string) error
 	UnbindResource(ctx context.Context, nodeId int, resourceType string, resourceId string) error
 
 	GetNodeMembers(ctx context.Context, nodeId int, userId int, memberType string) ([]*model.User, error)
@@ -788,7 +788,7 @@ func (t *treeNodeDAO) GetNodeResources(ctx context.Context, nodeId int) ([]*mode
 }
 
 // BindResource 绑定资源到节点
-func (t *treeNodeDAO) BindResource(ctx context.Context, nodeId int, resourceType string, resourceIds []string) error {
+func (t *treeNodeDAO) BindResource(ctx context.Context, nodeId int, resourceType model.CloudProvider, resourceIds []string) error {
 	// 检查节点是否存在
 	if err := t.checkNodeExists(ctx, nodeId); err != nil {
 		return err
@@ -803,7 +803,7 @@ func (t *treeNodeDAO) BindResource(ctx context.Context, nodeId int, resourceType
 			nodeId, resourceType, resourceIds).Find(&existingBindings).Error; err != nil {
 			t.logger.Error("查询现有资源绑定失败",
 				zap.Int("nodeId", nodeId),
-				zap.String("resourceType", resourceType),
+				zap.String("resourceType", string(resourceType)),
 				zap.Error(err))
 			return fmt.Errorf("查询现有资源绑定失败: %w", err)
 		}
@@ -826,7 +826,7 @@ func (t *treeNodeDAO) BindResource(ctx context.Context, nodeId int, resourceType
 				t.logger.Debug("资源已存在绑定关系",
 					zap.Int("nodeId", nodeId),
 					zap.String("resourceId", resourceId),
-					zap.String("resourceType", resourceType))
+					zap.String("resourceType", string(resourceType)))
 				continue
 			}
 
@@ -842,7 +842,7 @@ func (t *treeNodeDAO) BindResource(ctx context.Context, nodeId int, resourceType
 			if err := db.Create(&newBindings).Error; err != nil {
 				t.logger.Error("批量创建资源绑定关系失败",
 					zap.Int("nodeId", nodeId),
-					zap.String("resourceType", resourceType),
+					zap.String("resourceType", string(resourceType)),
 					zap.Int("count", len(newBindings)),
 					zap.Error(err))
 				return fmt.Errorf("批量创建资源绑定关系失败: %w", err)
