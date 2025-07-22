@@ -69,7 +69,7 @@ type TreeLocal struct {
 type GetTreeLocalListReq struct {
 	ListReq
 	Status      string `json:"status" form:"status"`
-	Environment string `json:"environment" form:"env"`
+	Environment string `json:"environment" form:"environment"`
 }
 
 // GetTreeLocalDetailReq 获取本地树资源详情请求

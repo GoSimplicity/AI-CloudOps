@@ -55,7 +55,7 @@ func (h *TreeLocalHandler) RegisterRouters(server *gin.Engine) {
 		localGroup.DELETE("/delete/:id", h.DeleteTreeLocal)
 		localGroup.GET("/terminal/:id", h.ConnectTerminal)
 		localGroup.POST("/bind/:id", h.BindTreeLocal)
-		localGroup.DELETE("/unbind/:id", h.UnbindTreeLocal)
+		localGroup.POST("/unbind/:id", h.UnbindTreeLocal)
 	}
 }
 
