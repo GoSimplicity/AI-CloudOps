@@ -529,7 +529,7 @@ func (t *treeService) GetNodeResources(ctx context.Context, nodeId int) (model.L
 			}
 			items = append(items, &model.ResourceItems{
 				ResourceName: ecs.InstanceName,
-				ResourceType: string(ecs.Provider),
+				ResourceType: ecs.Provider,
 				Status:       ecs.Status,
 				CreatedAt:    ecs.CreatedAt,
 			})
@@ -569,7 +569,7 @@ func (t *treeService) UnbindResource(ctx context.Context, req *model.UnbindResou
 		return err
 	}
 
-	if strings.TrimSpace(req.ResourceType) == "" {
+	if strings.TrimSpace(string(req.ResourceType)) == "" {
 		return errors.New("资源类型不能为空")
 	}
 
@@ -579,10 +579,10 @@ func (t *treeService) UnbindResource(ctx context.Context, req *model.UnbindResou
 
 	t.logger.Info("解绑资源",
 		zap.Int("nodeId", req.NodeID),
-		zap.String("resourceType", req.ResourceType),
+		zap.String("resourceType", string(req.ResourceType)),
 		zap.String("resourceId", req.ResourceID))
 
-	return t.dao.UnbindResource(ctx, req.NodeID, req.ResourceType, req.ResourceID)
+	return t.dao.UnbindResource(ctx, req.NodeID, string(req.ResourceType), req.ResourceID)
 }
 
 // convertToTreeNodeListResp 将数据模型转换为响应模型

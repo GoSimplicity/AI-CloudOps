@@ -31,15 +31,15 @@
 
 ## 📸 项目演示 (Screenshots)
 
-|             登录页              |               首页               |
-| :-----------------------------: | :------------------------------: |
-|     ![登录页](image/1.png)      |       ![首页](image/2.png)       |
-|           **服务树**            |           **节点管理**           |
-|     ![服务树](image/3.png)      |     ![节点管理](image/4.png)     |
-|       **Kubernetes 管理**       |       **Prometheus 告警**        |
-| ![Kubernetes 管理](image/5.png) | ![Prometheus 告警](image/10.png) |
-|          **工单系统**           |           **用户管理**           |
-|    ![工单系统](image/12.png)    |    ![用户管理](image/13.png)     |
+|              登录页              |             API 管理             |
+| :------------------------------: | :------------------------------: |
+|      ![登录页](image/1.png)      |     ![API管理](image/2.png)      |
+|           **表单设计**           |           **流程管理**           |
+|     ![表单设计](image/3.png)     |     ![流程管理](image/4.png)     |
+|        **服务树节点概览**        |           **根因分析**           |
+|  ![服务树节点概览](image/5.png)  |    ![根因分析](image/10.png)     |
+|       **k8s 故障自动修复**       |       **k8s 故障自动修复**       |
+| ![k8s故障自动修复](image/12.png) | ![k8s故障自动修复](image/13.png) |
 
 ## 🚀 快速开始 (Quick Start)
 
@@ -95,6 +95,7 @@ pnpm install
 # 启动开发服务器
 pnpm run dev
 ```
+
 > 默认访问地址: `http://localhost:3000`
 
 **步骤三：启动后端服务**
@@ -109,6 +110,7 @@ go mod tidy
 # 启动后端主服务
 go run main.go
 ```
+
 > 默认服务地址: `http://localhost:8000`
 
 **步骤四：启动 AIOps 服务 (可选)**
@@ -142,6 +144,7 @@ cd AI-CloudOps-web
 pnpm install
 pnpm run build
 ```
+
 构建产物位于 `dist/` 目录，请将其部署到 Nginx 或其他 Web 服务器。
 
 **步骤二：构建并运行后端服务**

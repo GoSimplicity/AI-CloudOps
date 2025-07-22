@@ -22,7 +22,7 @@ go.work
 go.work.sum
 bin
 volumes
-
+tmp/
 storage
 data/mysql
 data/redis

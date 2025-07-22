@@ -99,7 +99,7 @@ func (t *treeEcsDAO) CreateEcsResource(ctx context.Context, resource *model.Reso
 			nodeResource := &model.TreeNodeResource{
 				TreeNodeID:   resource.TreeNodeID,
 				ResourceID:   resource.InstanceId,
-				ResourceType: string(resource.Provider),
+				ResourceType: resource.Provider,
 			}
 
 			if err := tx.Create(nodeResource).Error; err != nil {
@@ -387,7 +387,7 @@ func (t *treeEcsDAO) UpdateEcsResource(ctx context.Context, resource *model.Reso
 				nodeResource := &model.TreeNodeResource{
 					TreeNodeID:   resource.TreeNodeID,
 					ResourceID:   resource.InstanceId,
-					ResourceType: string(resource.Provider),
+					ResourceType: resource.Provider,
 				}
 				if err := tx.Create(nodeResource).Error; err != nil {
 					return fmt.Errorf("创建节点资源关联失败: %w", err)

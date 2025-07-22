@@ -26,134 +26,17 @@
 package utils
 
 import (
-	"bytes"
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"encoding/base64"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
-	"math"
 	"net"
 	"os/exec"
 	"reflect"
 	"runtime"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
-
-func ConvertToIntList(stringList []string) ([]int, error) {
-	intList := make([]int, 0, len(stringList))
-	for _, idStr := range stringList {
-		id, err := strconv.Atoi(strings.TrimSpace(idStr)) // 去除空白并转换为整数
-		if err != nil {
-			return nil, fmt.Errorf("无法解析 leafNodeId: '%s' 为整数", idStr)
-		}
-		intList = append(intList, id)
-	}
-
-	return intList, nil
-}
-
-// IsType 判断两个值是否是相同类型
-func IsType(value1, value2 interface{}) bool {
-	return reflect.TypeOf(value1) == reflect.TypeOf(value2)
-}
-
-// GetDefaultValue 返回值的默认值（零值）
-func GetDefaultValue(value interface{}) interface{} {
-	v := reflect.ValueOf(value)
-	if !v.IsValid() {
-		return nil
-	}
-
-	// 创建零值的副本并返回
-	return reflect.Zero(v.Type()).Interface()
-}
-
-// GetMax 返回两个数值中的最大值，支持 int, float64 等常见类型
-func GetMax(value1, value2 interface{}) (interface{}, error) {
-	switch v1 := value1.(type) {
-	case int:
-		v2, ok := value2.(int)
-		if !ok {
-			return nil, errors.New("类型不匹配")
-		}
-		if v1 > v2 {
-			return v1, nil
-		}
-		return v2, nil
-	case float64:
-		v2, ok := value2.(float64)
-		if !ok {
-			return nil, errors.New("类型不匹配")
-		}
-		return math.Max(v1, v2), nil
-	default:
-		return nil, errors.New("不支持的类型")
-	}
-}
-
-// GetMin 返回两个数值中的最小值，支持 int, float64 等常见类型
-func GetMin(value1, value2 interface{}) (interface{}, error) {
-	switch v1 := value1.(type) {
-	case int:
-		v2, ok := value2.(int)
-		if !ok {
-			return nil, errors.New("类型不匹配")
-		}
-		if v1 < v2 {
-			return v1, nil
-		}
-		return v2, nil
-	case float64:
-		v2, ok := value2.(float64)
-		if !ok {
-			return nil, errors.New("类型不匹配")
-		}
-		return math.Min(v1, v2), nil
-	default:
-		return nil, errors.New("不支持的类型")
-	}
-}
-
-// ToUpperCase 将字符串转换为大写
-func ToUpperCase(str string) string {
-	return strings.ToUpper(str)
-}
-
-// ToLowerCase 将字符串转换为小写
-func ToLowerCase(str string) string {
-	return strings.ToLower(str)
-}
-
-// TrimSpaces 去掉字符串的前后空格
-func TrimSpaces(str string) string {
-	return strings.TrimSpace(str)
-}
-
-// IsSameDay 判断两个日期是否为同一天
-func IsSameDay(t1, t2 time.Time) bool {
-	y1, m1, d1 := t1.Date()
-	y2, m2, d2 := t2.Date()
-	return y1 == y2 && m1 == m2 && d1 == d2
-}
-
-// DaysBetween 计算两个日期之间的天数
-func DaysBetween(t1, t2 time.Time) int {
-	days := t2.Sub(t1).Hours() / 24
-	return int(math.Abs(days))
-}
-
-// IsValidEmail 简单检查一个字符串是否是有效的电子邮件格式
-func IsValidEmail(email string) bool {
-	return strings.Contains(email, "@") && strings.Contains(email, ".")
-}
 
 // MapToStringSlice 将 map 转换为 []string，要求偶数个元素，key和值依次排列
 func MapToStringSlice(inputMap map[string]string) ([]string, error) {
@@ -220,59 +103,6 @@ func Ping(ipAddr string) bool {
 	return true
 }
 
-// AesEncrypt AES加密
-func AesEncrypt(data []byte, key []byte) ([]byte, error) {
-	// 创建加密实例
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-
-	// 填充数据
-	blockSize := block.BlockSize()
-	padding := blockSize - len(data)%blockSize
-	padText := bytes.Repeat([]byte{byte(padding)}, padding)
-	data = append(data, padText...)
-
-	// 加密
-	encrypted := make([]byte, len(data))
-	mode := cipher.NewCBCEncrypter(block, key[:blockSize])
-	mode.CryptBlocks(encrypted, data)
-
-	return encrypted, nil
-}
-
-// AesDecrypt AES解密
-func AesDecrypt(encrypted []byte, key []byte) ([]byte, error) {
-	// 创建解密实例
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-
-	// 解密
-	blockSize := block.BlockSize()
-	mode := cipher.NewCBCDecrypter(block, key[:blockSize])
-	decrypted := make([]byte, len(encrypted))
-	mode.CryptBlocks(decrypted, encrypted)
-
-	// 去除填充
-	padding := int(decrypted[len(decrypted)-1])
-	decrypted = decrypted[:len(decrypted)-padding]
-
-	return decrypted, nil
-}
-
-// Base64Encode 将字节数组转换为 base64 编码的字符串
-func Base64Encode(data []byte) string {
-	return base64.StdEncoding.EncodeToString(data)
-}
-
-// Base64Decode 将 base64 编码的字符串转换为字节数组
-func Base64Decode(encoded string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(encoded)
-}
-
 func GetLocalIPs() ([]string, error) {
 	var ips []string
 	interfaces, err := net.Interfaces()
@@ -322,30 +152,18 @@ func buildTextResult(text string) *mcp.CallToolResult {
 	}
 }
 
-// TextResult 将任意类型转换为 mcp.CallToolResult
-func TextResult[T any](item T) (*mcp.CallToolResult, error) {
-	switch v := any(item).(type) {
-	case []byte:
-		return buildTextResult(string(v)), nil
-	case string:
-		return buildTextResult(v), nil
-	case []string:
-		// 优化：预分配容量
-		contents := make([]mcp.Content, 0, len(v))
-		for _, s := range v {
-			contents = append(contents, &mcp.TextContent{
-				Type: "text",
-				Text: s,
-			})
-		}
-		return &mcp.CallToolResult{Content: contents}, nil
-	case *mcp.CallToolResult:
-		return v, nil
-	default:
-		bytes, err := json.Marshal(item)
-		if err != nil {
-			return nil, fmt.Errorf("无法将项目序列化为JSON: %v", err)
-		}
-		return buildTextResult(string(bytes)), nil
+// ValidateUniqueResource 验证是否存在相同的资源
+func ValidateUniqueResource[T any](ctx context.Context, getResourceFunc func(context.Context, interface{}) (T, error), newResource T, id interface{}) error {
+	// 获取已存在的资源
+	existingResource, err := getResourceFunc(ctx, id)
+	if err != nil {
+		return fmt.Errorf("获取资源失败: %w", err)
 	}
+
+	// 使用比较两个资源是否相同
+	if reflect.DeepEqual(existingResource, newResource) {
+		return fmt.Errorf("资源已存在")
+	}
+
+	return nil
 }
