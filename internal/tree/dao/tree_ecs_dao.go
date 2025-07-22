@@ -54,6 +54,7 @@ type TreeEcsDAO interface {
 	GetEcsResourcesByProvider(ctx context.Context, provider string) ([]*model.ResourceEcs, error)
 	GetEcsResourcesByRegion(ctx context.Context, region string) ([]*model.ResourceEcs, error)
 	GetEcsResourcesByStatus(ctx context.Context, status string) ([]*model.ResourceEcs, error)
+	BatchGetByIDs(ctx context.Context, ids []int) ([]*model.ResourceEcs, error)
 
 	// 批量操作
 	BatchUpdateEcsStatus(ctx context.Context, instanceIds []string, status string) error
@@ -184,6 +185,20 @@ func (t *treeEcsDAO) ListEcsResources(ctx context.Context, req *model.ListEcsRes
 	}
 
 	return resources, total, nil
+}
+
+func (t *treeEcsDAO) BatchGetByIDs(ctx context.Context, ids []int) ([]*model.ResourceEcs, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	var resources []*model.ResourceEcs
+
+	if err := t.db.WithContext(ctx).Where("id IN ?", ids).Find(&resources).Error; err != nil {
+		return nil, err
+	}
+
+	return resources, nil
 }
 
 // BatchDeleteEcsResources 批量删除ECS资源

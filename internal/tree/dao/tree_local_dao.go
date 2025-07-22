@@ -43,6 +43,7 @@ type TreeLocalDAO interface {
 	GetByIP(ctx context.Context, ip string) (*model.TreeLocal, error)
 	BindTreeNodes(ctx context.Context, localID int, treeNodeIds []int) error
 	UnBindTreeNodes(ctx context.Context, localID int, treeNodeIds []int) error
+	BatchGetByIDs(ctx context.Context, ids []int) ([]*model.TreeLocal, error)
 }
 
 type treeLocalDAO struct {
@@ -154,6 +155,21 @@ func (d *treeLocalDAO) GetByIP(ctx context.Context, ip string) (*model.TreeLocal
 	}
 
 	return &local, nil
+}
+
+func (d *treeLocalDAO) BatchGetByIDs(ctx context.Context, ids []int) ([]*model.TreeLocal, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	var locals []*model.TreeLocal
+
+	if err := d.db.WithContext(ctx).Where("id IN (?)", ids).Find(&locals).Error; err != nil {
+		d.logger.Error("批量获取本地主机失败", zap.Error(err), zap.Ints("ids", ids))
+		return nil, err
+	}
+
+	return locals, nil
 }
 
 // BindTreeNodes 绑定树节点

@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"strconv"
 	"strings"
 	"sync"
@@ -77,18 +78,20 @@ type TreeNodeService interface {
 }
 
 type treeService struct {
-	logger  *zap.Logger
-	dao     dao.TreeNodeDAO
-	userDao userDao.UserDAO
-	ecsDao  dao.TreeEcsDAO
+	logger   *zap.Logger
+	dao      dao.TreeNodeDAO
+	userDao  userDao.UserDAO
+	ecsDao   dao.TreeEcsDAO
+	localDao dao.TreeLocalDAO
 }
 
-func NewTreeNodeService(logger *zap.Logger, dao dao.TreeNodeDAO, ecsDao dao.TreeEcsDAO, userDao userDao.UserDAO) TreeNodeService {
+func NewTreeNodeService(logger *zap.Logger, dao dao.TreeNodeDAO, ecsDao dao.TreeEcsDAO, userDao userDao.UserDAO, localDao dao.TreeLocalDAO) TreeNodeService {
 	return &treeService{
-		logger:  logger,
-		dao:     dao,
-		ecsDao:  ecsDao,
-		userDao: userDao,
+		logger:   logger,
+		dao:      dao,
+		ecsDao:   ecsDao,
+		userDao:  userDao,
+		localDao: localDao,
 	}
 }
 
@@ -513,32 +516,145 @@ func (t *treeService) GetNodeResources(ctx context.Context, nodeId int) (model.L
 		return model.ListResp[*model.ResourceItems]{}, err
 	}
 
-	// 根据不同的资源类型，查询不同的资源基本信息
-	var items []*model.ResourceItems
-	for _, resource := range resources {
-		if resource.ResourceType == "ecs" || resource.ResourceType == "local" {
-			resourceID, err := strconv.Atoi(resource.ResourceID)
+	items := make([]*model.ResourceItems, 0, len(resources))
+
+	// 如果没有资源，直接返回空列表
+	if len(resources) == 0 {
+		return model.ListResp[*model.ResourceItems]{
+			Items: items,
+			Total: 0,
+		}, nil
+	}
+
+	// 收集所有需要查询的 ID，便于后续批量/并发查询
+	ecsIDs := make([]int, 0)
+	localIDs := make([]int, 0)
+
+	// 先扫一遍，把 ID 转成 int 并分类
+	for _, r := range resources {
+		switch string(r.ResourceType) {
+		case "ecs":
+			id, err := strconv.Atoi(r.ResourceID)
 			if err != nil {
-				t.logger.Error("获取ECS资源失败", zap.String("resourceID", resource.ResourceID), zap.Error(err))
+				t.logger.Warn("ECS ResourceID 转换失败", zap.String("resourceID", r.ResourceID), zap.Error(err))
 				continue
 			}
-			ecs, err := t.ecsDao.GetEcsResourceById(ctx, resourceID)
+			ecsIDs = append(ecsIDs, id)
+		case "local":
+			id, err := strconv.Atoi(r.ResourceID)
 			if err != nil {
-				t.logger.Error("获取ECS资源失败", zap.String("resourceID", resource.ResourceID), zap.Error(err))
+				t.logger.Warn("本地主机 ResourceID 转换失败", zap.String("resourceID", r.ResourceID), zap.Error(err))
 				continue
 			}
-			items = append(items, &model.ResourceItems{
-				ResourceName: ecs.InstanceName,
-				ResourceType: ecs.Provider,
-				Status:       ecs.Status,
-				CreatedAt:    ecs.CreatedAt,
-			})
+			localIDs = append(localIDs, id)
+		default:
+			t.logger.Warn("未知的资源类型", zap.String("resourceType", string(r.ResourceType)))
+		}
+	}
+
+	// 并发查询
+	var (
+		ecsList   []*model.ResourceEcs
+		localList []*model.TreeLocal
+		eg        errgroup.Group
+	)
+
+	// 只有在有ECS ID时才查询
+	if len(ecsIDs) > 0 {
+		eg.Go(func() error {
+			var err error
+			ecsList, err = t.ecsDao.BatchGetByIDs(ctx, ecsIDs)
+			if err != nil {
+				t.logger.Error("批量获取 ECS 资源失败", zap.Ints("ids", ecsIDs), zap.Error(err))
+				return fmt.Errorf("批量获取ECS资源失败: %w", err)
+			}
+			return nil
+		})
+	}
+
+	// 只有在有本地主机ID时才查询
+	if len(localIDs) > 0 {
+		eg.Go(func() error {
+			var err error
+			localList, err = t.localDao.BatchGetByIDs(ctx, localIDs)
+			if err != nil {
+				t.logger.Error("批量获取本地主机资源失败", zap.Ints("ids", localIDs), zap.Error(err))
+				return fmt.Errorf("批量获取本地主机资源失败: %w", err)
+			}
+			return nil
+		})
+	}
+
+	// 等待全部完成
+	if err := eg.Wait(); err != nil {
+		t.logger.Error("并发查询资源失败", zap.Error(err))
+		// 即使查询失败，也返回已找到的资源，不中断主流程
+	}
+
+	// 构建查询结果的映射
+	ecsMap := make(map[int]*model.ResourceEcs)
+	for _, ecs := range ecsList {
+		ecsMap[ecs.ID] = ecs
+	}
+
+	localMap := make(map[int]*model.TreeLocal)
+	for _, local := range localList {
+		localMap[local.ID] = local
+	}
+
+	// 再次遍历，把查到的数据按顺序塞到结果
+	for _, r := range resources {
+		switch string(r.ResourceType) {
+		case "ecs":
+			id, err := strconv.Atoi(r.ResourceID)
+			if err != nil {
+				continue // 已经记录过错误，跳过
+			}
+			if ecs, ok := ecsMap[id]; ok {
+				items = append(items, &model.ResourceItems{
+					ResourceName: ecs.InstanceName,
+					ResourceType: ecs.Provider,
+					Status:       ecs.Status,
+					CreatedAt:    ecs.CreatedAt,
+				})
+			} else {
+				// 资源不存在，记录日志但继续处理
+				t.logger.Warn("ECS资源不存在", zap.Int("resourceID", id))
+				items = append(items, &model.ResourceItems{
+					ResourceName: "未知ECS",
+					ResourceType: "ecs",
+					Status:       "unknown",
+					CreatedAt:    r.CreatedAt,
+				})
+			}
+		case "local":
+			id, err := strconv.Atoi(r.ResourceID)
+			if err != nil {
+				continue // 已经记录过错误，跳过
+			}
+			if local, ok := localMap[id]; ok {
+				items = append(items, &model.ResourceItems{
+					ResourceName: local.Name,
+					ResourceType: model.CloudProviderLocal,
+					Status:       string(local.Status),
+					CreatedAt:    local.CreatedAt,
+				})
+			} else {
+				// 资源不存在，记录日志但继续处理
+				t.logger.Warn("本地主机资源不存在", zap.Int("resourceID", id))
+				items = append(items, &model.ResourceItems{
+					ResourceName: "未知主机",
+					ResourceType: "local",
+					Status:       "unknown",
+					CreatedAt:    r.CreatedAt,
+				})
+			}
 		}
 	}
 
 	return model.ListResp[*model.ResourceItems]{
 		Items: items,
-		Total: int64(len(resources)),
+		Total: int64(len(items)),
 	}, nil
 }
 
