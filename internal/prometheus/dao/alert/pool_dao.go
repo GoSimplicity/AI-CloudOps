@@ -28,53 +28,33 @@ package alert
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 type AlertManagerPoolDAO interface {
-	GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, int64, error)
 	GetMonitorAlertManagerPoolList(ctx context.Context, req *model.GetMonitorAlertManagerPoolListReq) ([]*model.MonitorAlertManagerPool, int64, error)
 	CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	DeleteMonitorAlertManagerPool(ctx context.Context, id int) error
-	GetMonitorAlertManagerPoolTotal(ctx context.Context) (int, error)
-	SearchMonitorAlertManagerPoolByName(ctx context.Context, name string) ([]*model.MonitorAlertManagerPool, int64, error)
 	GetAlertPoolByID(ctx context.Context, poolID int) (*model.MonitorAlertManagerPool, error)
 	CheckMonitorAlertManagerPoolExists(ctx context.Context, alertManagerPool *model.MonitorAlertManagerPool) (bool, error)
 	CheckAlertIpExists(ctx context.Context, req *model.MonitorAlertManagerPool) error
 }
 
 type alertManagerPoolDAO struct {
-	db      *gorm.DB
-	l       *zap.Logger
-	userDAO userDao.UserDAO
+	db *gorm.DB
+	l  *zap.Logger
 }
 
-func NewAlertManagerPoolDAO(db *gorm.DB, l *zap.Logger, userDAO userDao.UserDAO) AlertManagerPoolDAO {
+func NewAlertManagerPoolDAO(db *gorm.DB, l *zap.Logger) AlertManagerPoolDAO {
 	return &alertManagerPoolDAO{
-		db:      db,
-		l:       l,
-		userDAO: userDAO,
+		db: db,
+		l:  l,
 	}
-}
-
-// GetAllAlertManagerPools 获取所有 AlertManagerPool
-func (a *alertManagerPoolDAO) GetAllAlertManagerPools(ctx context.Context) ([]*model.MonitorAlertManagerPool, int64, error) {
-	var pools []*model.MonitorAlertManagerPool
-	var count int64
-
-	if err := a.db.WithContext(ctx).Find(&pools).Count(&count).Error; err != nil {
-		a.l.Error("获取所有 MonitorAlertManagerPool 失败", zap.Error(err))
-		return nil, 0, err
-	}
-
-	return pools, count, nil
 }
 
 // CreateMonitorAlertManagerPool 创建 AlertManagerPool
@@ -142,33 +122,6 @@ func (a *alertManagerPoolDAO) DeleteMonitorAlertManagerPool(ctx context.Context,
 	}
 
 	return nil
-}
-
-// SearchMonitorAlertManagerPoolByName 通过名称搜索 AlertManagerPool
-func (a *alertManagerPoolDAO) SearchMonitorAlertManagerPoolByName(ctx context.Context, name string) ([]*model.MonitorAlertManagerPool, int64, error) {
-	if name == "" {
-		return nil, 0, fmt.Errorf("搜索名称不能为空")
-	}
-
-	var pools []*model.MonitorAlertManagerPool
-	var count int64
-
-	if err := a.db.WithContext(ctx).
-		Model(&model.MonitorAlertManagerPool{}).
-		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
-		Count(&count).Error; err != nil {
-		a.l.Error("获取搜索结果总数失败", zap.Error(err))
-		return nil, 0, err
-	}
-
-	if err := a.db.WithContext(ctx).
-		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
-		Find(&pools).Error; err != nil {
-		a.l.Error("通过名称搜索 MonitorAlertManagerPool 失败", zap.Error(err))
-		return nil, 0, err
-	}
-
-	return pools, count, nil
 }
 
 // GetAlertPoolByID 通过 ID 获取 AlertManagerPool
@@ -246,18 +199,6 @@ func (a *alertManagerPoolDAO) GetMonitorAlertManagerPoolList(ctx context.Context
 	}
 
 	return pools, count, nil
-}
-
-// GetMonitorAlertManagerPoolTotal 获取 AlertManager 集群池总数
-func (a *alertManagerPoolDAO) GetMonitorAlertManagerPoolTotal(ctx context.Context) (int, error) {
-	var count int64
-
-	if err := a.db.WithContext(ctx).Model(&model.MonitorAlertManagerPool{}).Count(&count).Error; err != nil {
-		a.l.Error("获取 MonitorAlertManagerPool 总数失败", zap.Error(err))
-		return 0, err
-	}
-
-	return int(count), nil
 }
 
 func (a *alertManagerPoolDAO) CheckAlertIpExists(ctx context.Context, req *model.MonitorAlertManagerPool) error {

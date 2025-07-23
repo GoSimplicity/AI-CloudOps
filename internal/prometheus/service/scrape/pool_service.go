@@ -115,12 +115,31 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, req *mo
 		return errors.New("抓取池已存在")
 	}
 
-	pools, _, err := s.dao.GetAllMonitorScrapePool(ctx)
-	if err != nil {
-		s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
-		return err
+	// 分批获取所有现有抓取池
+	var allPools []*model.MonitorScrapePool
+	page := 1
+	batchSize := 100
+	for {
+		pools, count, err := s.dao.GetMonitorScrapePoolList(ctx, &model.GetMonitorScrapePoolListReq{
+			ListReq: model.ListReq{
+				Page: page,
+				Size: batchSize,
+			},
+		})
+		if err != nil {
+			s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
+			return err
+		}
+		
+		allPools = append(allPools, pools...)
+		
+		if int64(len(allPools)) >= count || len(pools) == 0 {
+			break
+		}
+		page++
 	}
 
+	// 构建新的抓取池对象
 	pool := &model.MonitorScrapePool{
 		Name:                  req.Name,
 		PrometheusInstances:   req.PrometheusInstances,
@@ -140,10 +159,15 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, req *mo
 		CreateUserName:        req.CreateUserName,
 	}
 
-	// 检查新的抓取池 IP 是否已存在
-	if err := utils.CheckPoolIpExists(pools, pool); err != nil {
+	// 检查新的抓取池 IP 是否已被其他池使用
+	if err := utils.CheckPoolIpExists(allPools, pool); err != nil {
 		s.l.Error("检查抓取池 IP 是否存在失败", zap.Error(err))
 		return err
+	}
+
+	// 检查配置有效性
+	if pool.ScrapeInterval <= 0 || pool.ScrapeTimeout <= 0 || pool.ScrapeTimeout > pool.ScrapeInterval {
+		return errors.New("采集间隔和采集超时时间不能小于等于0，且采集超时时间不能大于采集间隔")
 	}
 
 	// 创建抓取池
@@ -188,10 +212,29 @@ func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, req *mo
 		}
 	}
 
-	pools, _, err := s.dao.GetAllMonitorScrapePool(ctx)
-	if err != nil {
-		s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
-		return err
+	// 批次获取所有抓取池，每批100条
+	var allPools []*model.MonitorScrapePool
+	page := 1
+	batchSize := 100
+	for {
+		pools, total, err := s.dao.GetMonitorScrapePoolList(ctx, &model.GetMonitorScrapePoolListReq{
+			ListReq: model.ListReq{
+				Page: page,
+				Size: batchSize,
+			},
+		})
+		if err != nil {
+			s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
+			return err
+		}
+		
+		allPools = append(allPools, pools...)
+		
+		if int64(len(allPools)) >= total || len(pools) == 0 {
+			break
+		}
+		
+		page++
 	}
 
 	pool := &model.MonitorScrapePool{
@@ -214,7 +257,7 @@ func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, req *mo
 	}
 
 	// 检查新的抓取池 IP 是否已被其他池使用
-	if err := utils.CheckPoolIpExists(pools, pool); err != nil {
+	if err := utils.CheckPoolIpExists(allPools, pool); err != nil {
 		s.l.Error("检查抓取池 IP 是否存在失败", zap.Error(err))
 		return err
 	}

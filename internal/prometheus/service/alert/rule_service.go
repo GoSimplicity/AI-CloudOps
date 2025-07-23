@@ -126,18 +126,19 @@ func (s *alertManagerRuleService) CreateMonitorAlertRule(ctx context.Context, re
 
 	// 创建告警规则
 	rule := &model.MonitorAlertRule{
-		Name:        req.Name,
-		UserID:      req.UserID,
-		PoolID:      req.PoolID,
-		SendGroupID: req.SendGroupID,
-		IpAddress:   req.IpAddress,
-		Enable:      req.Enable,
-		Expr:        req.Expr,
-		Severity:    req.Severity,
-		GrafanaLink: req.GrafanaLink,
-		ForTime:     req.ForTime,
-		Labels:      req.Labels,
-		Annotations: req.Annotations,
+		Name:           req.Name,
+		UserID:         req.UserID,
+		PoolID:         req.PoolID,
+		SendGroupID:    req.SendGroupID,
+		IpAddress:      req.IpAddress,
+		Enable:         req.Enable,
+		Expr:           req.Expr,
+		Severity:       req.Severity,
+		GrafanaLink:    req.GrafanaLink,
+		ForTime:        req.ForTime,
+		Labels:         req.Labels,
+		Annotations:    req.Annotations,
+		CreateUserName: req.CreateUserName,
 	}
 
 	err = s.ruleDAO.CreateMonitorAlertRule(ctx, rule)

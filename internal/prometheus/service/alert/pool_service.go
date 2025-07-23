@@ -30,7 +30,6 @@ import (
 	"errors"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -47,21 +46,18 @@ type AlertManagerPoolService interface {
 type alertManagerPoolService struct {
 	dao     alert.AlertManagerPoolDAO
 	sendDao alert.AlertManagerSendDAO
-	cache   cache.MonitorCache
 	l       *zap.Logger
 }
 
 func NewAlertManagerPoolService(
 	dao alert.AlertManagerPoolDAO,
 	sendDao alert.AlertManagerSendDAO,
-	cache cache.MonitorCache,
 	l *zap.Logger,
 ) AlertManagerPoolService {
 	return &alertManagerPoolService{
 		dao:     dao,
 		sendDao: sendDao,
 		l:       l,
-		cache:   cache,
 	}
 }
 
@@ -89,7 +85,7 @@ func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Cont
 		RepeatInterval:        req.RepeatInterval,
 		GroupBy:               req.GroupBy,
 		Receiver:              req.Receiver,
-		CreatorName:           req.CreatorName,
+		CreateUserName:        req.CreateUserName,
 	}
 
 	// 检查 AlertManager Pool 是否已存在

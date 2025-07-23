@@ -30,7 +30,6 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -47,16 +46,14 @@ type ScrapeJobDAO interface {
 }
 
 type scrapeJobDAO struct {
-	db      *gorm.DB
-	l       *zap.Logger
-	userDao userDao.UserDAO
+	db *gorm.DB
+	l  *zap.Logger
 }
 
-func NewScrapeJobDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO) ScrapeJobDAO {
+func NewScrapeJobDAO(db *gorm.DB, l *zap.Logger) ScrapeJobDAO {
 	return &scrapeJobDAO{
-		db:      db,
-		l:       l,
-		userDao: userDao,
+		db: db,
+		l:  l,
 	}
 }
 
