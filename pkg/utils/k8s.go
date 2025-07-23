@@ -188,14 +188,14 @@ func ensureValidResourceValue(value string, defaultValue string) string {
 		log.Printf("资源值为空，使用默认值: %s", defaultValue)
 		return defaultValue
 	}
-	
+
 	// 尝试解析资源值，验证其有效性
 	_, err := resource.ParseQuantity(value)
 	if err != nil {
 		log.Printf("资源值 '%s' 无效，使用默认值: %s, 错误: %v", value, defaultValue, err)
 		return defaultValue
 	}
-	
+
 	return value
 }
 
@@ -523,6 +523,10 @@ func BuildK8sNode(ctx context.Context, id int, node corev1.Node, kubeClient *kub
 // BuildK8sPods BuildK8sNodes 构建 K8sNode 列表
 func BuildK8sPods(pods *corev1.PodList) []*model.K8sPod {
 	var k8sPods []*model.K8sPod
+
+	if pods == nil {
+		return k8sPods
+	}
 
 	for _, pod := range pods.Items {
 		k8sPod := &model.K8sPod{
@@ -1208,7 +1212,6 @@ func GetDeploymentsByAppName(ctx context.Context, clusterId int, appName string,
 	return instances, nil
 }
 
-
 /*
 	下面是k8s_app部分的工具函数
 */
@@ -1288,7 +1291,7 @@ func BuildDaemonSetConfig(req *model.K8sInstance) *appsv1.DaemonSet {
 			},
 			Template:             buildPodTemplateSpec(req),
 			UpdateStrategy:       buildDaemonSetUpdateStrategy(req.Strategy),
-			MinReadySeconds:      0, // 默认值
+			MinReadySeconds:      0,            // 默认值
 			RevisionHistoryLimit: int32Ptr(10), // 默认保留10个历史版本
 		},
 	}
@@ -1300,7 +1303,7 @@ func BuildDaemonSetConfig(req *model.K8sInstance) *appsv1.DaemonSet {
 func BuildJobConfig(req *model.K8sInstance) *batchv1.Job {
 	// 使用配置的默认值替代硬编码
 	k8sConfig := config.GetK8sConfig()
-	
+
 	// 创建Job对象
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1310,12 +1313,12 @@ func BuildJobConfig(req *model.K8sInstance) *batchv1.Job {
 			Annotations: req.Annotations,
 		},
 		Spec: batchv1.JobSpec{
-			Template:              buildPodTemplateSpec(req),
-			BackoffLimit:          int32Ptr(k8sConfig.TimeDefaults.JobBackoffLimit),
+			Template:                buildPodTemplateSpec(req),
+			BackoffLimit:            int32Ptr(k8sConfig.TimeDefaults.JobBackoffLimit),
 			TTLSecondsAfterFinished: int32Ptr(k8sConfig.TimeDefaults.JobTTLAfterFinished),
-			Parallelism:           int32Ptr(1), // 默认并行度1
-			Completions:           int32Ptr(1), // 默认完成1次
-			ActiveDeadlineSeconds: int64Ptr(k8sConfig.TimeDefaults.JobActiveDeadlineSeconds),
+			Parallelism:             int32Ptr(1), // 默认并行度1
+			Completions:             int32Ptr(1), // 默认完成1次
+			ActiveDeadlineSeconds:   int64Ptr(k8sConfig.TimeDefaults.JobActiveDeadlineSeconds),
 		},
 	}
 
@@ -1326,7 +1329,7 @@ func BuildJobConfig(req *model.K8sInstance) *batchv1.Job {
 func BuildCronJobConfig(req *model.K8sInstance) *batchv1.CronJob {
 	// 使用配置的默认值替代硬编码
 	k8sConfig := config.GetK8sConfig()
-	
+
 	// 创建CronJob对象
 	cronJob := &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1336,7 +1339,7 @@ func BuildCronJobConfig(req *model.K8sInstance) *batchv1.CronJob {
 			Annotations: req.Annotations,
 		},
 		Spec: batchv1.CronJobSpec{
-			Schedule:                   "0 * * * *", // 默认每小时执行一次，后续可以通过额外的字段指定
+			Schedule:                   "0 * * * *",              // 默认每小时执行一次，后续可以通过额外的字段指定
 			ConcurrencyPolicy:          batchv1.ForbidConcurrent, // 默认禁止并发执行
 			SuccessfulJobsHistoryLimit: int32Ptr(k8sConfig.TimeDefaults.CronJobSuccessHistory),
 			FailedJobsHistoryLimit:     int32Ptr(k8sConfig.TimeDefaults.CronJobFailedHistory),
@@ -1347,7 +1350,7 @@ func BuildCronJobConfig(req *model.K8sInstance) *batchv1.CronJob {
 					Annotations: req.Annotations,
 				},
 				Spec: batchv1.JobSpec{
-					Template:    buildPodTemplateSpec(req),
+					Template:     buildPodTemplateSpec(req),
 					BackoffLimit: int32Ptr(k8sConfig.TimeDefaults.JobBackoffLimit),
 				},
 			},
@@ -1366,7 +1369,7 @@ func buildPodTemplateSpec(req *model.K8sInstance) corev1.PodTemplateSpec {
 			Annotations: req.Annotations,
 		},
 		Spec: corev1.PodSpec{
-			Containers:    []corev1.Container{
+			Containers: []corev1.Container{
 				buildContainer(req),
 			},
 			NodeSelector:  req.NodeSelector,
@@ -1384,7 +1387,7 @@ func buildPodTemplateSpec(req *model.K8sInstance) corev1.PodTemplateSpec {
 func buildContainer(req *model.K8sInstance) corev1.Container {
 	// 解析CPU和内存资源限制及请求
 	resources := corev1.ResourceRequirements{}
-	
+
 	if req.ContainerCore.CPU != "" || req.ContainerCore.Memory != "" {
 		resources.Limits = corev1.ResourceList{}
 		if req.ContainerCore.CPU != "" && req.ContainerCore.CPU != "0" {
@@ -1394,7 +1397,7 @@ func buildContainer(req *model.K8sInstance) corev1.Container {
 			resources.Limits[corev1.ResourceMemory] = resource.MustParse(req.ContainerCore.Memory)
 		}
 	}
-	
+
 	if req.ContainerCore.CPURequest != "" || req.ContainerCore.MemRequest != "" {
 		resources.Requests = corev1.ResourceList{}
 		if req.ContainerCore.CPURequest != "" && req.ContainerCore.CPURequest != "0" {
@@ -1502,7 +1505,7 @@ func buildAffinity(affinity *model.Affinity) *corev1.Affinity {
 func buildNodeSelector(rules []model.AffinityRule) *corev1.NodeSelector {
 	// 简化的实现，实际中可能需要更复杂的逻辑
 	nodeSelectorTerms := []corev1.NodeSelectorTerm{}
-	
+
 	for _, rule := range rules {
 		// 根据AffinityRule构建表达式
 		var operator corev1.NodeSelectorOperator
@@ -1522,7 +1525,7 @@ func buildNodeSelector(rules []model.AffinityRule) *corev1.NodeSelector {
 		default:
 			operator = corev1.NodeSelectorOpIn
 		}
-		
+
 		term := corev1.NodeSelectorTerm{
 			MatchExpressions: []corev1.NodeSelectorRequirement{
 				{
@@ -1534,7 +1537,7 @@ func buildNodeSelector(rules []model.AffinityRule) *corev1.NodeSelector {
 		}
 		nodeSelectorTerms = append(nodeSelectorTerms, term)
 	}
-	
+
 	return &corev1.NodeSelector{
 		NodeSelectorTerms: nodeSelectorTerms,
 	}
@@ -1543,7 +1546,7 @@ func buildNodeSelector(rules []model.AffinityRule) *corev1.NodeSelector {
 // 构建Pod亲和性条款
 func buildPodAffinityTerms(rules []model.AffinityRule) []corev1.PodAffinityTerm {
 	terms := []corev1.PodAffinityTerm{}
-	
+
 	for _, rule := range rules {
 		// 根据AffinityRule构建表达式
 		var operator metav1.LabelSelectorOperator
@@ -1557,9 +1560,9 @@ func buildPodAffinityTerms(rules []model.AffinityRule) []corev1.PodAffinityTerm 
 		case "DoesNotExist":
 			operator = metav1.LabelSelectorOpDoesNotExist
 		default:
-			operator = metav1.LabelSelectorOpIn 
+			operator = metav1.LabelSelectorOpIn
 		}
-		
+
 		term := corev1.PodAffinityTerm{
 			LabelSelector: &metav1.LabelSelector{
 				MatchExpressions: []metav1.LabelSelectorRequirement{
@@ -1573,7 +1576,7 @@ func buildPodAffinityTerms(rules []model.AffinityRule) []corev1.PodAffinityTerm 
 		}
 		terms = append(terms, term)
 	}
-	
+
 	return terms
 }
 
@@ -1692,7 +1695,7 @@ func buildVolumeClaimTemplates(volumes []model.Volume) []corev1.PersistentVolume
 		if size == "" || size == "0" {
 			size = k8sConfig.ResourceDefaults.PVCSize
 		}
-		
+
 		pvc := corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: v.Name,
@@ -1717,7 +1720,7 @@ func buildVolumeClaimTemplates(volumes []model.Volume) []corev1.PersistentVolume
 // 构建Deployment更新策略
 func buildDeploymentStrategy(strategy string) appsv1.DeploymentStrategy {
 	deploymentStrategy := appsv1.DeploymentStrategy{}
-	
+
 	switch strategy {
 	case "RollingUpdate":
 		deploymentStrategy.Type = appsv1.RollingUpdateDeploymentStrategyType
@@ -1735,14 +1738,14 @@ func buildDeploymentStrategy(strategy string) appsv1.DeploymentStrategy {
 			MaxSurge:       &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
 		}
 	}
-	
+
 	return deploymentStrategy
 }
 
 // 构建StatefulSet更新策略
 func buildStatefulSetUpdateStrategy(strategy string) appsv1.StatefulSetUpdateStrategy {
 	updateStrategy := appsv1.StatefulSetUpdateStrategy{}
-	
+
 	switch strategy {
 	case "RollingUpdate":
 		updateStrategy.Type = appsv1.RollingUpdateStatefulSetStrategyType
@@ -1758,14 +1761,14 @@ func buildStatefulSetUpdateStrategy(strategy string) appsv1.StatefulSetUpdateStr
 			Partition: int32Ptr(0),
 		}
 	}
-	
+
 	return updateStrategy
 }
 
 // 构建DaemonSet更新策略
 func buildDaemonSetUpdateStrategy(strategy string) appsv1.DaemonSetUpdateStrategy {
 	updateStrategy := appsv1.DaemonSetUpdateStrategy{}
-	
+
 	switch strategy {
 	case "RollingUpdate":
 		updateStrategy.Type = appsv1.RollingUpdateDaemonSetStrategyType
@@ -1781,7 +1784,7 @@ func buildDaemonSetUpdateStrategy(strategy string) appsv1.DaemonSetUpdateStrateg
 			MaxUnavailable: &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
 		}
 	}
-	
+
 	return updateStrategy
 }
 
@@ -1794,4 +1797,3 @@ func int32Ptr(i int32) *int32 {
 func int64Ptr(i int64) *int64 {
 	return &i
 }
-
