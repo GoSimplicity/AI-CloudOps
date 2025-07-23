@@ -612,12 +612,17 @@ func BuildK8sContainers(containers []corev1.Container) []model.K8sPodContainer {
 // buildProbeIfNeeded 构建探针（LivenessProbe 或 ReadinessProbe）
 func buildProbeIfNeeded(probe *corev1.Probe, result **model.K8sProbe) {
 	if probe != nil {
-		*result = &model.K8sProbe{
-			HTTPGet: &model.K8sHTTPGetAction{
+		var httpGet *model.K8sHTTPGetAction
+		if probe.HTTPGet != nil {
+			httpGet = &model.K8sHTTPGetAction{
 				Path:   probe.HTTPGet.Path,
 				Port:   probe.HTTPGet.Port.IntValue(),
 				Scheme: string(probe.HTTPGet.Scheme),
-			},
+			}
+		}
+
+		*result = &model.K8sProbe{
+			HTTPGet:             httpGet,
 			InitialDelaySeconds: int(probe.InitialDelaySeconds),
 			PeriodSeconds:       int(probe.PeriodSeconds),
 			TimeoutSeconds:      int(probe.TimeoutSeconds),
