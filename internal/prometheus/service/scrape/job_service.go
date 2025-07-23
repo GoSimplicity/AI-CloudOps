@@ -41,7 +41,7 @@ type ScrapeJobService interface {
 	CreateMonitorScrapeJob(ctx context.Context, req *model.CreateMonitorScrapeJobReq) error
 	UpdateMonitorScrapeJob(ctx context.Context, req *model.UpdateMonitorScrapeJobReq) error
 	DeleteMonitorScrapeJob(ctx context.Context, id int) error
-	GetMonitorScrapeJobTotal(ctx context.Context) (int, error)
+	GetMonitorScrapeJobDetail(ctx context.Context, req *model.GetMonitorScrapeJobDetailReq) (*model.MonitorScrapeJob, error)
 }
 
 type scrapeJobService struct {
@@ -62,21 +62,9 @@ func NewPrometheusScrapeService(dao scrapeJobDao.ScrapeJobDAO, cache cache.Monit
 
 // GetMonitorScrapeJobList 获取监控采集 Job 列表
 func (s *scrapeJobService) GetMonitorScrapeJobList(ctx context.Context, req *model.GetMonitorScrapeJobListReq) (model.ListResp[*model.MonitorScrapeJob], error) {
-	var (
-		jobs  []*model.MonitorScrapeJob
-		total int64
-		err   error
-	)
-
-	jobs, total, err = s.dao.GetMonitorScrapeJobList(ctx, req)
+	jobs, total, err := s.dao.GetMonitorScrapeJobList(ctx, req)
 	if err != nil {
 		s.l.Error("获取抓取作业列表失败", zap.Error(err))
-		return model.ListResp[*model.MonitorScrapeJob]{}, err
-	}
-
-	// 填充用户信息
-	if err := s.buildUserInfo(ctx, jobs); err != nil {
-		s.l.Error("填充用户信息失败", zap.Error(err))
 		return model.ListResp[*model.MonitorScrapeJob]{}, err
 	}
 
@@ -108,6 +96,7 @@ func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, req *mode
 		BearerTokenFile:          req.BearerTokenFile,
 		KubernetesSdRole:         req.KubernetesSdRole,
 		RelabelConfigsYamlString: req.RelabelConfigsYamlString,
+		CreateUserName:           req.CreateUserName,
 	}
 
 	// 检查抓取作业是否已存在
@@ -215,51 +204,12 @@ func (s *scrapeJobService) DeleteMonitorScrapeJob(ctx context.Context, id int) e
 
 	return nil
 }
-
-// buildUserInfo 构建用户信息
-func (s *scrapeJobService) buildUserInfo(ctx context.Context, jobs []*model.MonitorScrapeJob) error {
-	if len(jobs) == 0 {
-		return nil
-	}
-
-	// 收集唯一用户ID
-	userIDs := make([]int, 0, len(jobs))
-	seen := make(map[int]bool)
-	for _, job := range jobs {
-		if !seen[job.UserID] {
-			userIDs = append(userIDs, job.UserID)
-			seen[job.UserID] = true
-		}
-	}
-
-	// 批量获取用户信息
-	users, err := s.userDao.GetUserByIDs(ctx, userIDs)
+func (s *scrapeJobService) GetMonitorScrapeJobDetail(ctx context.Context, req *model.GetMonitorScrapeJobDetailReq) (*model.MonitorScrapeJob, error) {
+	job, err := s.dao.GetMonitorScrapeJobById(ctx, req.ID)
 	if err != nil {
-		s.l.Error("批量获取用户信息失败", zap.Error(err))
+		s.l.Error("获取抓取作业详情失败", zap.Error(err))
+		return nil, err
 	}
 
-	// 构建用户映射
-	userMap := make(map[int]string, len(users))
-	for _, user := range users {
-		if user.RealName != "" {
-			userMap[user.ID] = user.RealName
-		} else {
-			userMap[user.ID] = user.Username
-		}
-	}
-
-	// 填充用户名
-	for _, job := range jobs {
-		job.CreateUserName = userMap[job.UserID]
-		if job.CreateUserName == "" {
-			job.CreateUserName = "未知用户"
-		}
-	}
-
-	return nil
-}
-
-// GetMonitorScrapeJobTotal 获取监控采集作业总数
-func (s *scrapeJobService) GetMonitorScrapeJobTotal(ctx context.Context) (int, error) {
-	return s.dao.GetMonitorScrapeJobTotal(ctx)
+	return job, nil
 }

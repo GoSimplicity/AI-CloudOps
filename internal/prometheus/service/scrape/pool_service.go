@@ -76,24 +76,6 @@ func (s *scrapePoolService) GetMonitorScrapePoolList(ctx context.Context, req *m
 		return model.ListResp[*model.MonitorScrapePool]{}, err
 	}
 
-	// 填充创建用户信息
-	for _, pool := range pools {
-		if pool.UserID > 0 {
-			user, err := s.userDao.GetUserByID(ctx, pool.UserID)
-			if err != nil {
-				s.l.Error("获取创建用户名失败", zap.Int("userId", pool.UserID), zap.Error(err))
-				continue
-			}
-			if user != nil {
-				if user.RealName == "" {
-					pool.CreateUserName = user.Username
-				} else {
-					pool.CreateUserName = user.RealName
-				}
-			}
-		}
-	}
-
 	return model.ListResp[*model.MonitorScrapePool]{
 		Items: pools,
 		Total: count,
