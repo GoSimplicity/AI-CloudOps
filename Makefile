@@ -2,7 +2,7 @@ generate:
 	go generate ./...
 
 docker-build:
-	docker build -t Bamboo/gomodd:v1.22.1 .
+	docker build -t Bamboo/gomodd:v1.23.1 .
 
 docker-start-env:
 	docker-compose -f docker-compose-env.yaml up -d

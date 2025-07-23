@@ -27,10 +27,11 @@ package config
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"os"
 	"strconv"
 	"sync"
+
+	"gopkg.in/yaml.v3"
 )
 
 // K8sConfig K8s相关配置

@@ -10,7 +10,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main main.go
 FROM alpine:latest
 ENV TZ=Asia/Shanghai
 RUN apk --no-cache add ca-certificates tzdata
-WORKDIR /root/
+WORKDIR /app
 COPY --from=builder /app/main .
 EXPOSE 8889
 CMD ["./main"]

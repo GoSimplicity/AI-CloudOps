@@ -28,10 +28,11 @@ package dao
 import (
 	"context"
 	"errors"
+	"strconv"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"strconv"
 )
 
 type TreeLocalDAO interface {
@@ -149,7 +150,7 @@ func (d *treeLocalDAO) GetByIP(ctx context.Context, ip string) (*model.TreeLocal
 	var local model.TreeLocal
 
 	err := d.db.WithContext(ctx).Where("ip_addr = ?", ip).First(&local).Error
-	if err != nil {
+	if err != nil && err != gorm.ErrRecordNotFound {
 		d.logger.Error("根据IP地址获取本地主机失败", zap.Error(err), zap.String("ip", ip))
 		return nil, err
 	}

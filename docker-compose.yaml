@@ -20,7 +20,7 @@ services:
 
   cloudOps:
     # 使用项目根目录下的 Dockerfile 自行构建镜像
-    image: Bamboo/gomodd:v1.22.1
+    image: Bamboo/gomodd:v1.23.1
     container_name: cloudOps
     environment:
       # 时区上海
