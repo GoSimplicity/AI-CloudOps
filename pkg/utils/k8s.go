@@ -52,8 +52,6 @@ import (
 	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
-// QuotaName 已移至配置管理中，可通过 config.GetK8sConfig().ResourceDefaults.QuotaName 获取
-
 // EnsureNamespace 确保指定的命名空间存在，如果不存在则创建
 func EnsureNamespace(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) error {
 	// 检查命名空间参数是否为空
