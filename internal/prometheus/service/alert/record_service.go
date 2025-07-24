@@ -31,7 +31,6 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
 	"github.com/prometheus/prometheus/promql/parser"
@@ -50,16 +49,14 @@ type AlertManagerRecordService interface {
 type alertManagerRecordService struct {
 	dao     alert.AlertManagerRecordDAO
 	poolDao scrape.ScrapePoolDAO
-	cache   cache.MonitorCache
 	l       *zap.Logger
 }
 
-func NewAlertManagerRecordService(dao alert.AlertManagerRecordDAO, poolDao scrape.ScrapePoolDAO, cache cache.MonitorCache, l *zap.Logger) AlertManagerRecordService {
+func NewAlertManagerRecordService(dao alert.AlertManagerRecordDAO, poolDao scrape.ScrapePoolDAO, l *zap.Logger) AlertManagerRecordService {
 	return &alertManagerRecordService{
 		dao:     dao,
 		poolDao: poolDao,
 		l:       l,
-		cache:   cache,
 	}
 }
 
@@ -70,13 +67,15 @@ func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context
 		return model.ListResp[*model.MonitorRecordRule]{}, err
 	}
 
-	// 为每条规则添加用户名和池名称
+	// 为每条规则添加池名称
 	for _, rule := range rules {
-		pool, err := a.poolDao.GetMonitorScrapePoolById(ctx, rule.PoolID)
-		if err != nil {
-			a.l.Error("获取Prometheus实例池失败", zap.Error(err))
-		} else {
-			rule.PoolName = pool.Name
+		if rule.PoolID > 0 {
+			pool, err := a.poolDao.GetMonitorScrapePoolById(ctx, rule.PoolID)
+			if err != nil {
+				a.l.Error("获取Prometheus实例池失败", zap.Error(err), zap.Int("poolID", rule.PoolID))
+			} else {
+				rule.PoolName = pool.Name
+			}
 		}
 	}
 
@@ -87,6 +86,14 @@ func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context
 }
 
 func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context, req *model.CreateMonitorRecordRuleReq) error {
+	if req.Name == "" {
+		return errors.New("记录规则名称不能为空")
+	}
+
+	if req.PoolID <= 0 {
+		return errors.New("无效的实例池ID")
+	}
+
 	// 检查记录规则是否已存在
 	monitorRecordRule := &model.MonitorRecordRule{
 		Name:           req.Name,
@@ -117,6 +124,8 @@ func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context,
 			a.l.Error("创建记录规则失败：PromQL 语法错误", zap.Error(err))
 			return fmt.Errorf("PromQL 语法错误: %v", err)
 		}
+	} else {
+		return errors.New("表达式不能为空")
 	}
 
 	// 创建记录规则
@@ -129,9 +138,24 @@ func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context,
 }
 
 func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context, req *model.UpdateMonitorRecordRuleReq) error {
+	if req.ID <= 0 {
+		return errors.New("无效的记录规则ID")
+	}
+
+	if req.Name == "" {
+		return errors.New("记录规则名称不能为空")
+	}
+
+	if req.PoolID <= 0 {
+		return errors.New("无效的实例池ID")
+	}
+
 	// 检查记录规则是否已存在
 	rule, err := a.dao.GetMonitorRecordRuleById(ctx, req.ID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("记录规则不存在，ID: %d", req.ID)
+		}
 		a.l.Error("更新记录规则失败：获取记录规则时出错", zap.Error(err))
 		return err
 	}
@@ -166,6 +190,8 @@ func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context,
 			a.l.Error("更新记录规则失败：PromQL 语法错误", zap.Error(err))
 			return fmt.Errorf("PromQL 语法错误: %v", err)
 		}
+	} else {
+		return errors.New("表达式不能为空")
 	}
 
 	// 更新记录规则
@@ -179,6 +205,10 @@ func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context,
 
 // DeleteMonitorRecordRule 删除记录规则
 func (a *alertManagerRecordService) DeleteMonitorRecordRule(ctx context.Context, req *model.DeleteMonitorRecordRuleReq) error {
+	if req.ID <= 0 {
+		return errors.New("无效的记录规则ID")
+	}
+
 	// 检查记录规则是否存在
 	_, err := a.dao.GetMonitorRecordRuleById(ctx, req.ID)
 	if err != nil {
@@ -201,10 +231,27 @@ func (a *alertManagerRecordService) DeleteMonitorRecordRule(ctx context.Context,
 
 // GetMonitorRecordRule 获取记录规则
 func (a *alertManagerRecordService) GetMonitorRecordRule(ctx context.Context, req *model.GetMonitorRecordRuleReq) (*model.MonitorRecordRule, error) {
+	if req.ID <= 0 {
+		return nil, errors.New("无效的记录规则ID")
+	}
+
 	rule, err := a.dao.GetMonitorRecordRuleById(ctx, req.ID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("记录规则不存在，ID: %d", req.ID)
+		}
 		a.l.Error("获取记录规则失败", zap.Error(err))
 		return nil, err
+	}
+
+	// 获取池名称
+	if rule.PoolID > 0 {
+		pool, err := a.poolDao.GetMonitorScrapePoolById(ctx, rule.PoolID)
+		if err != nil {
+			a.l.Error("获取Prometheus实例池失败", zap.Error(err), zap.Int("poolID", rule.PoolID))
+		} else {
+			rule.PoolName = pool.Name
+		}
 	}
 
 	return rule, nil

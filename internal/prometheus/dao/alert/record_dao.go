@@ -78,8 +78,8 @@ func (a *alertManagerRecordDAO) GetMonitorRecordRuleByPoolId(ctx context.Context
 	}
 
 	if err := a.db.WithContext(ctx).
-		Where("enable = ?", true).
 		Where("pool_id = ?", poolId).
+		Where("enable = ?", 1).
 		Find(&recordRules).Error; err != nil {
 		a.l.Error("获取 MonitorRecordRule 失败", zap.Error(err), zap.Int("poolId", poolId))
 		return nil, 0, err
@@ -154,9 +154,6 @@ func (a *alertManagerRecordDAO) GetMonitorRecordRuleById(ctx context.Context, id
 	var recordRule model.MonitorRecordRule
 
 	if err := a.db.WithContext(ctx).Where("id = ?", id).First(&recordRule).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("未找到 ID 为 %d 的 MonitorRecordRule", id)
-		}
 		a.l.Error("获取 MonitorRecordRule 失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
@@ -204,10 +201,16 @@ func (a *alertManagerRecordDAO) DeleteMonitorRecordRule(ctx context.Context, rul
 func (a *alertManagerRecordDAO) CheckMonitorRecordRuleNameExists(ctx context.Context, recordRule *model.MonitorRecordRule) (bool, error) {
 	var count int64
 
-	if err := a.db.WithContext(ctx).
+	query := a.db.WithContext(ctx).
 		Model(&model.MonitorRecordRule{}).
-		Where("name = ?", recordRule.Name).
-		Count(&count).Error; err != nil {
+		Where("name = ?", recordRule.Name)
+
+	// 如果是更新操作，需要排除自身
+	if recordRule.ID > 0 {
+		query = query.Where("id != ?", recordRule.ID)
+	}
+
+	if err := query.Count(&count).Error; err != nil {
 		a.l.Error("检查 MonitorRecordRule 名称是否存在失败", zap.Error(err))
 		return false, err
 	}
