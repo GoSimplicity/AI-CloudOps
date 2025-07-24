@@ -185,7 +185,7 @@ func (a *alertManagerEventService) EventAlertClaim(ctx context.Context, req *mod
 	}
 
 	// 获取发送组信息
-	sendGroup, err := a.sendDao.GetMonitorSendGroupById(ctx, event.SendGroupID)
+	sendGroup, err := a.sendDao.GetMonitorSendGroupByID(ctx, event.SendGroupID)
 	if err != nil {
 		a.l.Error("认领告警事件失败: 获取发送组失败", zap.Error(err))
 		return fmt.Errorf("获取发送组失败: %v", err)

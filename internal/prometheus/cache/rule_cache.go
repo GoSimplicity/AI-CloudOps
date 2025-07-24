@@ -158,7 +158,7 @@ func (r *ruleConfigCache) GenerateAlertRuleConfigYaml(ctx context.Context) error
 
 // GeneratePrometheusAlertRuleConfigYamlOnePool 为单个采集池生成告警规则配置
 func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
-	rules, _, err := r.alertRuleDao.GetMonitorAlertRuleByPoolId(ctx, pool.ID)
+	rules, _, err := r.alertRuleDao.GetMonitorAlertRuleByPoolID(ctx, pool.ID)
 	if err != nil {
 		r.l.Error("[监控模块] 根据采集池ID获取告警规则失败",
 			zap.Error(err),

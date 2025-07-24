@@ -64,33 +64,7 @@ func NewAlertManagerRecordService(dao alert.AlertManagerRecordDAO, poolDao scrap
 }
 
 func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context, req *model.GetMonitorRecordRuleListReq) (model.ListResp[*model.MonitorRecordRule], error) {
-	if req.Search != "" {
-		rules, count, err := a.dao.SearchMonitorRecordRuleByName(ctx, req.Search)
-		if err != nil {
-			a.l.Error("搜索记录规则失败", zap.String("search", req.Search), zap.Error(err))
-			return model.ListResp[*model.MonitorRecordRule]{}, err
-		}
-
-		// 为每条规则添加用户名和池名称
-		for _, rule := range rules {
-			pool, err := a.poolDao.GetMonitorScrapePoolById(ctx, rule.PoolID)
-			if err != nil {
-				a.l.Error("获取Prometheus实例池失败", zap.Error(err))
-			} else {
-				rule.PoolName = pool.Name
-			}
-		}
-
-		return model.ListResp[*model.MonitorRecordRule]{
-			Total: count,
-			Items: rules,
-		}, nil
-	}
-
-	offset := (req.Page - 1) * req.Size
-	limit := req.Size
-
-	rules, count, err := a.dao.GetMonitorRecordRuleList(ctx, offset, limit)
+	rules, count, err := a.dao.GetMonitorRecordRuleList(ctx, req)
 	if err != nil {
 		a.l.Error("获取记录规则列表失败", zap.Error(err))
 		return model.ListResp[*model.MonitorRecordRule]{}, err
@@ -115,10 +89,16 @@ func (a *alertManagerRecordService) GetMonitorRecordRuleList(ctx context.Context
 func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context, req *model.CreateMonitorRecordRuleReq) error {
 	// 检查记录规则是否已存在
 	monitorRecordRule := &model.MonitorRecordRule{
-		Name:   req.Name,
-		PoolID: req.PoolID,
-		Expr:   req.Expr,
-		UserID: req.UserID,
+		Name:           req.Name,
+		PoolID:         req.PoolID,
+		Expr:           req.Expr,
+		UserID:         req.UserID,
+		CreateUserName: req.CreateUserName,
+		IpAddress:      req.IpAddress,
+		Enable:         req.Enable,
+		ForTime:        req.ForTime,
+		Labels:         req.Labels,
+		Annotations:    req.Annotations,
 	}
 
 	exists, err := a.dao.CheckMonitorRecordRuleNameExists(ctx, monitorRecordRule)
@@ -157,11 +137,16 @@ func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context,
 	}
 
 	monitorRecordRule := &model.MonitorRecordRule{
-		Name:   req.Name,
-		PoolID: req.PoolID,
-		Expr:   req.Expr,
+		Model:       model.Model{ID: req.ID},
+		Name:        req.Name,
+		PoolID:      req.PoolID,
+		Expr:        req.Expr,
+		IpAddress:   req.IpAddress,
+		Enable:      req.Enable,
+		ForTime:     req.ForTime,
+		Labels:      req.Labels,
+		Annotations: req.Annotations,
 	}
-	monitorRecordRule.ID = req.ID
 
 	if rule.Name != req.Name {
 		exists, err := a.dao.CheckMonitorRecordRuleNameExists(ctx, monitorRecordRule)

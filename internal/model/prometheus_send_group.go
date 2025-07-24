@@ -43,12 +43,10 @@ type MonitorSendGroup struct {
 	FirstUpgradeUsers      []*User    `json:"monitor_send_group_first_upgrade_users" gorm:"many2many:monitor_send_group_first_upgrade_users;comment:第一级升级人列表"`
 	UpgradeMinutes         int        `json:"upgrade_minutes" gorm:"default:30;comment:告警升级等待时间(分钟)"`
 	SecondUpgradeUsers     []*User    `json:"second_upgrade_users" gorm:"many2many:monitor_send_group_second_upgrade_users;comment:第二级升级人列表"`
+	CreateUserName         string     `json:"create_user_name" gorm:"type:varchar(50);comment:创建该发送组的用户名称"`
 	StaticReceiveUserNames []string   `json:"static_receive_user_names" gorm:"-"`
 	FirstUserNames         []string   `json:"first_user_names" gorm:"-"`
 	SecondUserNames        []string   `json:"second_user_names" gorm:"-"`
-	PoolName               string     `json:"pool_name" gorm:"-"`
-	OnDutyGroupName        string     `json:"on_duty_group_name" gorm:"-"`
-	CreateUserName         string     `json:"create_user_name" gorm:"-"`
 }
 
 type DeleteMonitorSendGroupReq struct {
@@ -61,7 +59,7 @@ type GetMonitorSendGroupReq struct {
 
 type GetMonitorSendGroupListReq struct {
 	ListReq
-	PoolID        int   `json:"pool_id" form:"pool_id"`
+	PoolID        *int  `json:"pool_id" form:"pool_id"`
 	Enable        *int8 `json:"enable" form:"enable"`
 	OnDutyGroupID *int  `json:"on_duty_group_id" form:"on_duty_group_id"`
 }
@@ -82,6 +80,7 @@ type CreateMonitorSendGroupReq struct {
 	FirstUpgradeUsers   []*User    `json:"monitor_send_group_first_upgrade_users"`
 	UpgradeMinutes      int        `json:"upgrade_minutes"`
 	SecondUpgradeUsers  []*User    `json:"second_upgrade_users"`
+	CreateUserName      string     `json:"create_user_name"`
 }
 
 type UpdateMonitorSendGroupReq struct {
@@ -89,7 +88,6 @@ type UpdateMonitorSendGroupReq struct {
 	Name                string     `json:"name" binding:"required,min=1,max=50"`
 	NameZh              string     `json:"name_zh" binding:"required,min=1,max=50"`
 	Enable              int8       `json:"enable" `
-	UserID              int        `json:"user_id"`
 	PoolID              int        `json:"pool_id"`
 	OnDutyGroupID       int        `json:"on_duty_group_id"`
 	StaticReceiveUsers  []*User    `json:"static_receive_users"`

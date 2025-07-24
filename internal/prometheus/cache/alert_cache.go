@@ -321,7 +321,7 @@ func (a *alertConfigCache) GenerateAlertManagerMainConfigOnePool(pool *model.Mon
 
 // GenerateAlertManagerRouteConfigOnePool 生成单个AlertManager池的routes和receivers配置
 func (a *alertConfigCache) GenerateAlertManagerRouteConfigOnePool(ctx context.Context, pool *model.MonitorAlertManagerPool) ([]*altconfig.Route, []altconfig.Receiver) {
-	sendGroups, _, err := a.alertSendDao.GetMonitorSendGroupByPoolId(ctx, pool.ID)
+	sendGroups, _, err := a.alertSendDao.GetMonitorSendGroupByPoolID(ctx, pool.ID)
 	if err != nil {
 		a.l.Error("[监控模块]根据AlertManager池ID查找所有发送组错误",
 			zap.Error(err),

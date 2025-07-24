@@ -171,7 +171,7 @@ func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Cont
 		return errors.New("无效的告警池ID")
 	}
 
-	sendGroups, _, err := a.sendDao.GetMonitorSendGroupByPoolId(ctx, req.ID)
+	sendGroups, _, err := a.sendDao.GetMonitorSendGroupByPoolID(ctx, req.ID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		a.l.Error("删除 AlertManager 集群池失败：获取关联发送组时出错", zap.Error(err))
 		return err

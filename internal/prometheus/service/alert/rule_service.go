@@ -77,7 +77,7 @@ func (s *alertManagerRuleService) GetMonitorAlertRuleList(ctx context.Context, r
 	// 补充额外信息
 	for i := range rules {
 		// 获取发送组名称
-		sendGroup, err := s.sendGroupDAO.GetMonitorSendGroupById(ctx, rules[i].SendGroupID)
+		sendGroup, err := s.sendGroupDAO.GetMonitorSendGroupByID(ctx, rules[i].SendGroupID)
 		if err == nil && sendGroup != nil {
 			rules[i].SendGroupName = sendGroup.NameZh
 		}
@@ -116,7 +116,7 @@ func (s *alertManagerRuleService) CreateMonitorAlertRule(ctx context.Context, re
 	}
 
 	// 检查SendGroup是否存在
-	_, err = s.sendGroupDAO.GetMonitorSendGroupById(ctx, req.SendGroupID)
+	_, err = s.sendGroupDAO.GetMonitorSendGroupByID(ctx, req.SendGroupID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("指定的发送组不存在")
@@ -161,7 +161,7 @@ func (s *alertManagerRuleService) UpdateMonitorAlertRule(ctx context.Context, re
 	}
 
 	// 检查规则是否存在
-	_, err = s.ruleDAO.GetMonitorAlertRuleById(ctx, req.ID)
+	_, err = s.ruleDAO.GetMonitorAlertRuleByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("告警规则不存在")
@@ -179,7 +179,7 @@ func (s *alertManagerRuleService) UpdateMonitorAlertRule(ctx context.Context, re
 	}
 
 	// 检查SendGroup是否存在
-	_, err = s.sendGroupDAO.GetMonitorSendGroupById(ctx, req.SendGroupID)
+	_, err = s.sendGroupDAO.GetMonitorSendGroupByID(ctx, req.SendGroupID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("指定的发送组不存在")
@@ -200,7 +200,7 @@ func (s *alertManagerRuleService) UpdateMonitorAlertRule(ctx context.Context, re
 // DeleteMonitorAlertRule 删除告警规则
 func (s *alertManagerRuleService) DeleteMonitorAlertRule(ctx context.Context, req *model.DeleteMonitorAlertRuleRequest) error {
 	// 检查规则是否存在
-	_, err := s.ruleDAO.GetMonitorAlertRuleById(ctx, req.ID)
+	_, err := s.ruleDAO.GetMonitorAlertRuleByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("告警规则不存在")
@@ -236,7 +236,7 @@ func (s *alertManagerRuleService) PromqlExprCheck(ctx context.Context, req *mode
 
 // GetMonitorAlertRuleById 根据ID获取告警规则
 func (s *alertManagerRuleService) GetMonitorAlertRule(ctx context.Context, req *model.GetMonitorAlertRuleReq) (*model.MonitorAlertRule, error) {
-	rule, err := s.ruleDAO.GetMonitorAlertRuleById(ctx, req.ID)
+	rule, err := s.ruleDAO.GetMonitorAlertRuleByID(ctx, req.ID)
 	if err != nil {
 		s.logger.Error("根据ID获取告警规则失败", zap.Int("id", req.ID), zap.Error(err))
 		return nil, err

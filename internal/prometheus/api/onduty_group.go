@@ -78,7 +78,7 @@ func (o *OnDutyGroupHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	req.UserID = uc.Uid
-	req.CreatorName = uc.Username
+	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, o.alertOnDutyService.CreateMonitorOnDutyGroup(ctx, &req)
@@ -91,7 +91,7 @@ func (o *OnDutyGroupHandler) CreateMonitorOnDutyGroupChange(ctx *gin.Context) {
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	req.UserID = uc.Uid
-	req.CreatorName = uc.Username
+	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, o.alertOnDutyService.CreateMonitorOnDutyGroupChange(ctx, &req)

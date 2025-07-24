@@ -331,7 +331,7 @@ func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *
 	yesterdayStr := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 
 	// 获取昨天的值班历史记录
-	yesterdayHistory, err := cm.onDutyDao.GetMonitorOnDutyHistoryByGroupIdAndDay(ctx, group.ID, yesterdayStr)
+	yesterdayHistory, err := cm.onDutyDao.GetMonitorOnDutyHistoryByGroupIDAndDay(ctx, group.ID, yesterdayStr)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		cm.logger.Error("获取昨天的值班历史记录失败", zap.Error(err), zap.String("group", group.Name))
 		return err
@@ -386,7 +386,7 @@ func (cm *cronManager) isShiftNeeded(ctx context.Context, group *model.MonitorOn
 	yesterdayStr := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 
 	// 获取最近 shiftDays 天的值班历史记录
-	histories, err := cm.onDutyDao.GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx, group.ID, startDate, yesterdayStr)
+	histories, err := cm.onDutyDao.GetMonitorOnDutyHistoryByGroupIDAndTimeRange(ctx, group.ID, startDate, yesterdayStr)
 	if err != nil {
 		return false, err
 	}

@@ -28,7 +28,6 @@ package alert
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -39,17 +38,16 @@ import (
 type AlertManagerOnDutyDAO interface {
 	GetAllMonitorOnDutyGroup(ctx context.Context) ([]*model.MonitorOnDutyGroup, error)
 	GetMonitorOnDutyList(ctx context.Context, req *model.GetMonitorOnDutyGroupListReq) ([]*model.MonitorOnDutyGroup, int64, error)
-	CreateMonitorOnDutyGroup(ctx context.Context, req *model.MonitorOnDutyGroup) error
-	GetMonitorOnDutyGroupById(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error)
-	UpdateMonitorOnDutyGroup(ctx context.Context, req *model.MonitorOnDutyGroup) error
+	CreateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error
+	GetMonitorOnDutyGroupByID(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error)
+	UpdateMonitorOnDutyGroup(ctx context.Context, monitorOnDutyGroup *model.MonitorOnDutyGroup) error
 	DeleteMonitorOnDutyGroup(ctx context.Context, id int) error
-	SearchMonitorOnDutyGroupByName(ctx context.Context, name string) ([]*model.MonitorOnDutyGroup, error)
-	CreateMonitorOnDutyGroupChange(ctx context.Context, req *model.MonitorOnDutyChange) error
+	CreateMonitorOnDutyGroupChange(ctx context.Context, monitorOnDutyChange *model.MonitorOnDutyChange) error
 	GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyChange, error)
 	CheckMonitorOnDutyGroupExists(ctx context.Context, onDutyGroup *model.MonitorOnDutyGroup) (bool, error)
-	GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyHistory, error)
+	GetMonitorOnDutyHistoryByGroupIDAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyHistory, error)
 	CreateMonitorOnDutyHistory(ctx context.Context, monitorOnDutyHistory *model.MonitorOnDutyHistory) error
-	GetMonitorOnDutyHistoryByGroupIdAndDay(ctx context.Context, groupID int, day string) (*model.MonitorOnDutyHistory, error)
+	GetMonitorOnDutyHistoryByGroupIDAndDay(ctx context.Context, groupID int, day string) (*model.MonitorOnDutyHistory, error)
 	ExistsMonitorOnDutyHistory(ctx context.Context, groupID int, day string) (bool, error)
 }
 
@@ -91,8 +89,8 @@ func (a *alertManagerOnDutyDAO) CreateMonitorOnDutyGroup(ctx context.Context, mo
 	return nil
 }
 
-// GetMonitorOnDutyGroupById 根据ID获取值班组信息
-func (a *alertManagerOnDutyDAO) GetMonitorOnDutyGroupById(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error) {
+// GetMonitorOnDutyGroupByID 根据ID获取值班组信息
+func (a *alertManagerOnDutyDAO) GetMonitorOnDutyGroupByID(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error) {
 	if id <= 0 {
 		return nil, fmt.Errorf("无效的值班组ID: %d", id)
 	}
@@ -169,25 +167,6 @@ func (a *alertManagerOnDutyDAO) DeleteMonitorOnDutyGroup(ctx context.Context, id
 	return nil
 }
 
-// SearchMonitorOnDutyGroupByName 根据名称搜索值班组
-func (a *alertManagerOnDutyDAO) SearchMonitorOnDutyGroupByName(ctx context.Context, name string) ([]*model.MonitorOnDutyGroup, error) {
-	if name == "" {
-		return nil, fmt.Errorf("搜索名称不能为空")
-	}
-
-	var groups []*model.MonitorOnDutyGroup
-
-	if err := a.db.WithContext(ctx).
-		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
-		Preload("Members").
-		Find(&groups).Error; err != nil {
-		a.l.Error("搜索值班组失败", zap.Error(err), zap.String("name", name))
-		return nil, fmt.Errorf("搜索值班组失败: %w", err)
-	}
-
-	return groups, nil
-}
-
 // CreateMonitorOnDutyGroupChange 创建值班组变更记录
 func (a *alertManagerOnDutyDAO) CreateMonitorOnDutyGroupChange(ctx context.Context, monitorOnDutyGroupChange *model.MonitorOnDutyChange) error {
 	if err := a.db.WithContext(ctx).Create(monitorOnDutyGroupChange).Error; err != nil {
@@ -235,8 +214,8 @@ func (a *alertManagerOnDutyDAO) CheckMonitorOnDutyGroupExists(ctx context.Contex
 	return count > 0, nil
 }
 
-// GetMonitorOnDutyHistoryByGroupIdAndTimeRange 获取指定时间范围内的值班历史记录
-func (a *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryByGroupIdAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyHistory, error) {
+// GetMonitorOnDutyHistoryByGroupIDAndTimeRange 获取指定时间范围内的值班历史记录
+func (a *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryByGroupIDAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyHistory, error) {
 	if groupID <= 0 {
 		return nil, fmt.Errorf("无效的值班组ID: %d", groupID)
 	}
@@ -267,8 +246,8 @@ func (a *alertManagerOnDutyDAO) CreateMonitorOnDutyHistory(ctx context.Context, 
 	return nil
 }
 
-// GetMonitorOnDutyHistoryByGroupIdAndDay 获取指定日期的值班历史记录
-func (a *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryByGroupIdAndDay(ctx context.Context, groupID int, day string) (*model.MonitorOnDutyHistory, error) {
+// GetMonitorOnDutyHistoryByGroupIDAndDay 获取指定日期的值班历史记录
+func (a *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryByGroupIDAndDay(ctx context.Context, groupID int, day string) (*model.MonitorOnDutyHistory, error) {
 	if groupID <= 0 {
 		return nil, fmt.Errorf("无效的值班组ID: %d", groupID)
 	}

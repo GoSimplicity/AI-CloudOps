@@ -53,7 +53,6 @@ type AlertManagerOnDutyService interface {
 	DeleteMonitorOnDutyGroup(ctx context.Context, req *model.DeleteMonitorOnDutyGroupReq) error
 	GetMonitorOnDutyGroup(ctx context.Context, req *model.GetMonitorOnDutyGroupReq) (*model.MonitorOnDutyGroup, error)
 	GetMonitorOnDutyGroupFuturePlan(ctx context.Context, req *model.GetMonitorOnDutyGroupFuturePlanReq) (model.OnDutyPlanResp, error)
-	GetAllMonitorOnDutyGroup(ctx context.Context) ([]*model.MonitorOnDutyGroup, error)
 }
 
 type alertManagerOnDutyService struct {
@@ -76,23 +75,10 @@ func NewAlertManagerOnDutyService(dao alert.AlertManagerOnDutyDAO, sendDao alert
 
 // GetMonitorOnDutyGroupList 获取值班组列表
 func (a *alertManagerOnDutyService) GetMonitorOnDutyGroupList(ctx context.Context, req *model.GetMonitorOnDutyGroupListReq) (model.ListResp[*model.MonitorOnDutyGroup], error) {
-	var groups []*model.MonitorOnDutyGroup
-	var err error
-	var total int64
-
-	if req.Search != "" {
-		groups, err = a.dao.SearchMonitorOnDutyGroupByName(ctx, req.Search)
-		if err != nil {
-			a.l.Error("搜索值班组失败", zap.String("search", req.Search), zap.Error(err))
-			return model.ListResp[*model.MonitorOnDutyGroup]{}, err
-		}
-		total = int64(len(groups))
-	} else {
-		groups, total, err = a.dao.GetMonitorOnDutyList(ctx, req)
-		if err != nil {
-			a.l.Error("获取值班组列表失败", zap.Error(err))
-			return model.ListResp[*model.MonitorOnDutyGroup]{}, err
-		}
+	groups, total, err := a.dao.GetMonitorOnDutyList(ctx, req)
+	if err != nil {
+		a.l.Error("获取值班组列表失败", zap.Error(err))
+		return model.ListResp[*model.MonitorOnDutyGroup]{}, err
 	}
 
 	return model.ListResp[*model.MonitorOnDutyGroup]{
@@ -136,11 +122,11 @@ func (a *alertManagerOnDutyService) CreateMonitorOnDutyGroup(ctx context.Context
 
 // CreateMonitorOnDutyGroupChange 创建值班组变更
 func (a *alertManagerOnDutyService) CreateMonitorOnDutyGroupChange(ctx context.Context, req *model.CreateMonitorOnDutyGroupChangeReq) error {
-	if req.OnDutyGroupID == 0 {
+	if req.OnDutyGroupID <= 0 {
 		return ErrGroupIDEmpty
 	}
 
-	if _, err := a.dao.GetMonitorOnDutyGroupById(ctx, req.OnDutyGroupID); err != nil {
+	if _, err := a.dao.GetMonitorOnDutyGroupByID(ctx, req.OnDutyGroupID); err != nil {
 		a.l.Error("获取值班组失败", zap.Error(err))
 		return err
 	}
@@ -161,16 +147,14 @@ func (a *alertManagerOnDutyService) CreateMonitorOnDutyGroupChange(ctx context.C
 
 // UpdateMonitorOnDutyGroup 更新值班组
 func (a *alertManagerOnDutyService) UpdateMonitorOnDutyGroup(ctx context.Context, req *model.UpdateMonitorOnDutyGroupReq) error {
-	// 检查值班组ID是否有效
 	if req.ID <= 0 {
-		return errors.New("无效的值班组ID")
+		return ErrGroupIDEmpty
 	}
 
-	// 检查值班组是否存在
-	oldGroup, err := a.dao.GetMonitorOnDutyGroupById(ctx, req.ID)
+	oldGroup, err := a.dao.GetMonitorOnDutyGroupByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("值班组不存在")
+			return ErrGroupNotFound
 		}
 		a.l.Error("获取值班组失败", zap.Error(err))
 		return err
@@ -186,11 +170,10 @@ func (a *alertManagerOnDutyService) UpdateMonitorOnDutyGroup(ctx context.Context
 			return err
 		}
 		if exists {
-			return errors.New("值班组名称已存在")
+			return ErrGroupExists
 		}
 	}
 
-	// 获取并验证用户信息
 	users, err := a.userDao.GetUserByIDs(ctx, req.MemberIDs)
 	if err != nil {
 		a.l.Error("获取用户信息失败", zap.Error(err))
@@ -222,7 +205,7 @@ func (a *alertManagerOnDutyService) DeleteMonitorOnDutyGroup(ctx context.Context
 	}
 
 	// 检查是否有关联的发送组
-	sendGroups, count, err := a.sendDao.GetMonitorSendGroupByOnDutyGroupId(ctx, req.ID)
+	sendGroups, count, err := a.sendDao.GetMonitorSendGroupByOnDutyGroupID(ctx, req.ID)
 	if err != nil {
 		a.l.Error("检查值班组关联的发送组失败", zap.Error(err))
 		return err
@@ -244,7 +227,7 @@ func (a *alertManagerOnDutyService) DeleteMonitorOnDutyGroup(ctx context.Context
 
 // GetMonitorOnDutyGroup 获取值班组
 func (a *alertManagerOnDutyService) GetMonitorOnDutyGroup(ctx context.Context, req *model.GetMonitorOnDutyGroupReq) (*model.MonitorOnDutyGroup, error) {
-	group, err := a.dao.GetMonitorOnDutyGroupById(ctx, req.ID)
+	group, err := a.dao.GetMonitorOnDutyGroupByID(ctx, req.ID)
 	if err != nil {
 		a.l.Error("获取值班组失败", zap.Int("id", req.ID), zap.Error(err))
 		return nil, err
@@ -281,7 +264,7 @@ func (a *alertManagerOnDutyService) GetMonitorOnDutyGroupFuturePlan(ctx context.
 	}
 
 	// 根据ID获取值班组信息
-	group, err := a.dao.GetMonitorOnDutyGroupById(ctx, req.ID)
+	group, err := a.dao.GetMonitorOnDutyGroupByID(ctx, req.ID)
 	if err != nil {
 		a.l.Error("获取值班组失败", zap.Int("id", req.ID), zap.Error(err))
 		return model.OnDutyPlanResp{}, err
@@ -444,7 +427,7 @@ func CalculateOnDutyUser(ctx context.Context, l *zap.Logger, dao alert.AlertMana
 
 func GetCurrentUserIndex(ctx context.Context, l *zap.Logger, dao alert.AlertManagerOnDutyDAO, group *model.MonitorOnDutyGroup, todayStr string) int {
 	// 尝试从历史记录中获取今天的值班人
-	todayHistory, err := dao.GetMonitorOnDutyHistoryByGroupIdAndDay(ctx, group.ID, todayStr)
+	todayHistory, err := dao.GetMonitorOnDutyHistoryByGroupIDAndDay(ctx, group.ID, todayStr)
 	if err == nil && todayHistory != nil && todayHistory.OnDutyUserID > 0 {
 		for index, member := range group.Members {
 			if member.ID == todayHistory.OnDutyUserID {
@@ -458,9 +441,4 @@ func GetCurrentUserIndex(ctx context.Context, l *zap.Logger, dao alert.AlertMana
 
 	// 如果没有历史记录，默认第一个成员为当前值班人
 	return 0
-}
-
-// GetAllMonitorOnDutyGroup 获取所有值班组
-func (a *alertManagerOnDutyService) GetAllMonitorOnDutyGroup(ctx context.Context) ([]*model.MonitorOnDutyGroup, error) {
-	return a.dao.GetAllMonitorOnDutyGroup(ctx)
 }

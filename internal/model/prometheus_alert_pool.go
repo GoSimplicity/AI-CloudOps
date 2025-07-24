@@ -74,7 +74,6 @@ type DeleteMonitorAlertManagerPoolReq struct {
 // GetMonitorAlertManagerPoolListReq 获取 AlertManager 实例池列表请求
 type GetMonitorAlertManagerPoolListReq struct {
 	ListReq
-	PoolID int `json:"pool_id" form:"pool_id" binding:"omitempty"`
 }
 
 // GetMonitorAlertManagerPoolReq 获取 AlertManager 实例池请求

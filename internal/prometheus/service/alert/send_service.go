@@ -32,7 +32,6 @@ import (
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
@@ -51,41 +50,24 @@ type AlertManagerSendService interface {
 type alertManagerSendService struct {
 	dao     alert.AlertManagerSendDAO
 	ruleDao alert.AlertManagerRuleDAO
-	cache   cache.MonitorCache
 	userDao userDao.UserDAO
 	l       *zap.Logger
 }
 
-func NewAlertManagerSendService(dao alert.AlertManagerSendDAO, ruleDao alert.AlertManagerRuleDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO) AlertManagerSendService {
+func NewAlertManagerSendService(dao alert.AlertManagerSendDAO, ruleDao alert.AlertManagerRuleDAO, l *zap.Logger, userDao userDao.UserDAO) AlertManagerSendService {
 	return &alertManagerSendService{
 		dao:     dao,
 		ruleDao: ruleDao,
 		userDao: userDao,
 		l:       l,
-		cache:   cache,
 	}
 }
 
 // GetMonitorSendGroupList 获取发送组列表
 func (a *alertManagerSendService) GetMonitorSendGroupList(ctx context.Context, req *model.GetMonitorSendGroupListReq) (model.ListResp[*model.MonitorSendGroup], error) {
-	if req.Search != "" {
-		groups, total, err := a.dao.SearchMonitorSendGroupByName(ctx, req.Search)
-		if err != nil {
-			a.l.Error("搜索发送组失败", zap.String("search", req.Search), zap.Error(err))
-			return model.ListResp[*model.MonitorSendGroup]{}, err
-		}
-		return model.ListResp[*model.MonitorSendGroup]{
-			Total: total,
-			Items: groups,
-		}, nil
-	}
-
-	offset := (req.Page - 1) * req.Size
-	limit := req.Size
-
-	groups, total, err := a.dao.GetMonitorSendGroupList(ctx, offset, limit)
+	groups, total, err := a.dao.GetMonitorSendGroupList(ctx, req)
 	if err != nil {
-		a.l.Error("获取发送组列表失败", zap.Error(err))
+		a.l.Error("搜索发送组失败", zap.String("search", req.Search), zap.Error(err))
 		return model.ListResp[*model.MonitorSendGroup]{}, err
 	}
 
@@ -113,6 +95,7 @@ func (a *alertManagerSendService) CreateMonitorSendGroup(ctx context.Context, re
 		FirstUpgradeUsers:   req.FirstUpgradeUsers,
 		UpgradeMinutes:      req.UpgradeMinutes,
 		SecondUpgradeUsers:  req.SecondUpgradeUsers,
+		CreateUserName:      req.CreateUserName,
 	}
 
 	// 检查发送组是否已存在
@@ -144,7 +127,6 @@ func (a *alertManagerSendService) UpdateMonitorSendGroup(ctx context.Context, re
 		Name:                req.Name,
 		NameZh:              req.NameZh,
 		Enable:              req.Enable,
-		UserID:              req.UserID,
 		PoolID:              req.PoolID,
 		OnDutyGroupID:       req.OnDutyGroupID,
 		StaticReceiveUsers:  req.StaticReceiveUsers,
@@ -250,7 +232,7 @@ func (a *alertManagerSendService) UpdateMonitorSendGroup(ctx context.Context, re
 // DeleteMonitorSendGroup 删除发送组
 func (a *alertManagerSendService) DeleteMonitorSendGroup(ctx context.Context, req *model.DeleteMonitorSendGroupReq) error {
 	// 检查发送组是否有关联的资源
-	_, total, err := a.ruleDao.GetAssociatedResourcesBySendGroupId(ctx, req.ID)
+	_, total, err := a.ruleDao.GetAssociatedResourcesBySendGroupID(ctx, req.ID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		a.l.Error("删除发送组失败：获取关联资源时出错", zap.Error(err))
 		return err
@@ -271,7 +253,7 @@ func (a *alertManagerSendService) DeleteMonitorSendGroup(ctx context.Context, re
 
 // GetMonitorSendGroup 获取发送组详情
 func (a *alertManagerSendService) GetMonitorSendGroup(ctx context.Context, req *model.GetMonitorSendGroupReq) (*model.MonitorSendGroup, error) {
-	return a.dao.GetMonitorSendGroupById(ctx, req.ID)
+	return a.dao.GetMonitorSendGroupByID(ctx, req.ID)
 }
 
 // GetMonitorSendGroupAll 获取所有发送组
