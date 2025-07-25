@@ -27,6 +27,7 @@ package alert
 
 import (
 	"context"
+	"errors"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -48,11 +49,6 @@ type AlertManagerOnDutyDAO interface {
 	GetMonitorOnDutyHistoryByGroupIDAndDay(ctx context.Context, groupID int, day string) (*model.MonitorOnDutyHistory, error)
 	ExistsMonitorOnDutyHistory(ctx context.Context, groupID int, day string) (bool, error)
 	GetMonitorOnDutyHistoryList(ctx context.Context, req *model.GetMonitorOnDutyHistoryReq) ([]*model.MonitorOnDutyHistory, int64, error)
-	CreateMonitorOnDutyPlan(ctx context.Context, plan *model.MonitorOnDutyPlan) error
-	GetMonitorOnDutyPlansByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyPlan, error)
-	UpdateMonitorOnDutyPlan(ctx context.Context, plan *model.MonitorOnDutyPlan) error
-	DeleteMonitorOnDutyPlan(ctx context.Context, id int) error
-	GetMonitorOnDutyGroupFuturePlan(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyPlan, error)
 }
 
 type alertManagerOnDutyDAO struct {
@@ -184,12 +180,6 @@ func (d *alertManagerOnDutyDAO) DeleteMonitorOnDutyGroup(ctx context.Context, id
 			return err
 		}
 
-		// 删除相关的值班计划
-		if err := tx.Where("on_duty_group_id = ?", id).Delete(&model.MonitorOnDutyPlan{}).Error; err != nil {
-			d.l.Error("删除值班计划失败", zap.Int("group_id", id), zap.Error(err))
-			return err
-		}
-
 		// 删除相关的值班历史记录
 		if err := tx.Where("on_duty_group_id = ?", id).Delete(&model.MonitorOnDutyHistory{}).Error; err != nil {
 			d.l.Error("删除值班历史记录失败", zap.Int("group_id", id), zap.Error(err))
@@ -261,6 +251,24 @@ func (d *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryByGroupIDAndTimeRange(ctx
 }
 
 func (d *alertManagerOnDutyDAO) CreateMonitorOnDutyHistory(ctx context.Context, history *model.MonitorOnDutyHistory) error {
+	// 先检查是否已存在相同日期和组的记录
+	exists, err := d.ExistsMonitorOnDutyHistory(ctx, history.OnDutyGroupID, history.DateString)
+	if err != nil {
+		return err
+	}
+
+	// 如果已存在，则更新而不是创建
+	if exists {
+		return d.db.WithContext(ctx).
+			Model(&model.MonitorOnDutyHistory{}).
+			Where("on_duty_group_id = ? AND date_string = ?", history.OnDutyGroupID, history.DateString).
+			Updates(map[string]interface{}{
+				"on_duty_user_id": history.OnDutyUserID,
+				"origin_user_id":  history.OriginUserID,
+			}).Error
+	}
+
+	// 不存在则创建新记录
 	if err := d.db.WithContext(ctx).Create(history).Error; err != nil {
 		d.l.Error("创建值班历史记录失败", zap.Error(err))
 		return err
@@ -276,7 +284,7 @@ func (d *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryByGroupIDAndDay(ctx conte
 		First(&history).Error
 
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
 		d.l.Error("获取值班历史记录失败", zap.Int("group_id", groupID), zap.String("day", day), zap.Error(err))
@@ -301,9 +309,25 @@ func (d *alertManagerOnDutyDAO) ExistsMonitorOnDutyHistory(ctx context.Context, 
 }
 
 func (d *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryList(ctx context.Context, req *model.GetMonitorOnDutyHistoryReq) ([]*model.MonitorOnDutyHistory, int64, error) {
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.Size <= 0 {
+		req.Size = 10
+	}
+
 	query := d.db.WithContext(ctx).Model(&model.MonitorOnDutyHistory{}).
-		Where("on_duty_group_id = ? AND date_string BETWEEN ? AND ?",
-			req.OnDutyGroupID, req.StartDate, req.EndDate)
+		Where("on_duty_group_id = ?", req.OnDutyGroupID)
+
+	// 如果有指定起始和终止时间，则添加时间范围条件
+	if req.StartDate != "" && req.EndDate != "" {
+		query = query.Where("date_string BETWEEN ? AND ?", req.StartDate, req.EndDate)
+	}
+
+	// 处理搜索条件
+	if req.Search != "" {
+		query = query.Where("date_string LIKE ?", "%"+req.Search+"%")
+	}
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
@@ -312,68 +336,14 @@ func (d *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryList(ctx context.Context,
 	}
 
 	var histories []*model.MonitorOnDutyHistory
+
+	offset := (req.Page - 1) * req.Size
+	query = query.Offset(offset).Limit(req.Size)
+
 	if err := query.Order("date_string DESC").Find(&histories).Error; err != nil {
 		d.l.Error("获取值班历史列表失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	return histories, total, nil
-}
-
-func (d *alertManagerOnDutyDAO) CreateMonitorOnDutyPlan(ctx context.Context, plan *model.MonitorOnDutyPlan) error {
-	if err := d.db.WithContext(ctx).Create(plan).Error; err != nil {
-		d.l.Error("创建值班计划失败", zap.Error(err))
-		return err
-	}
-
-	return nil
-}
-
-func (d *alertManagerOnDutyDAO) GetMonitorOnDutyPlansByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyPlan, error) {
-	var plans []*model.MonitorOnDutyPlan
-	err := d.db.WithContext(ctx).
-		Where("on_duty_group_id = ? AND date BETWEEN ? AND ?", groupID, startTime, endTime).
-		Order("date ASC").
-		Find(&plans).Error
-
-	if err != nil {
-		d.l.Error("获取值班计划失败", zap.Int("group_id", groupID), zap.Error(err))
-		return nil, err
-	}
-
-	return plans, nil
-}
-
-func (d *alertManagerOnDutyDAO) GetMonitorOnDutyGroupFuturePlan(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyPlan, error) {
-	var plans []*model.MonitorOnDutyPlan
-	err := d.db.WithContext(ctx).
-		Where("on_duty_group_id = ? AND date BETWEEN ? AND ? AND status = ?",
-			groupID, startTime, endTime, 3). // status=3 表示未开始的计划
-		Order("date ASC").
-		Find(&plans).Error
-
-	if err != nil {
-		d.l.Error("获取未来值班计划失败", zap.Int("group_id", groupID), zap.Error(err))
-		return nil, err
-	}
-
-	return plans, nil
-}
-
-func (d *alertManagerOnDutyDAO) UpdateMonitorOnDutyPlan(ctx context.Context, plan *model.MonitorOnDutyPlan) error {
-	if err := d.db.WithContext(ctx).Model(plan).Updates(plan).Error; err != nil {
-		d.l.Error("更新值班计划失败", zap.Error(err))
-		return err
-	}
-
-	return nil
-}
-
-func (d *alertManagerOnDutyDAO) DeleteMonitorOnDutyPlan(ctx context.Context, id int) error {
-	if err := d.db.WithContext(ctx).Delete(&model.MonitorOnDutyPlan{}, id).Error; err != nil {
-		d.l.Error("删除值班计划失败", zap.Error(err))
-		return err
-	}
-
-	return nil
 }

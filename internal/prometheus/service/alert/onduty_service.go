@@ -46,6 +46,7 @@ var (
 	ErrInvalidTimeRange  = errors.New("时间范围无效")
 	ErrInvalidShiftDays  = errors.New("轮班天数无效")
 	ErrMembersNotFound   = errors.New("部分成员不存在")
+	ErrTimeRangeTooLong  = errors.New("查询时间范围不能超过一年")
 )
 
 type AlertManagerOnDutyService interface {
@@ -253,6 +254,11 @@ func (s *alertManagerOnDutyService) GetMonitorOnDutyGroupFuturePlan(ctx context.
 		return nil, err
 	}
 
+	// 检查时间范围是否超过一年
+	if endTime.Sub(startTime) > 365*24*time.Hour {
+		return nil, ErrTimeRangeTooLong
+	}
+
 	// 获取值班组信息
 	group, err := s.dao.GetMonitorOnDutyGroupByID(ctx, req.ID)
 	if err != nil {
@@ -330,6 +336,18 @@ func (s *alertManagerOnDutyService) generateDutyPlan(ctx context.Context, group 
 		changeMap[change.Date] = change
 	}
 
+	// 获取指定时间范围内的值班历史记录
+	historyRecords, err := s.dao.GetMonitorOnDutyHistoryByGroupIDAndTimeRange(ctx, group.ID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+	if err != nil {
+		s.l.Error("获取值班历史记录失败", zap.Error(err), zap.Int("groupID", group.ID))
+	}
+
+	// 将历史记录转换为以日期为键的映射
+	historyMap := make(map[string]*model.MonitorOnDutyHistory)
+	for _, history := range historyRecords {
+		historyMap[history.DateString] = history
+	}
+
 	var result []*model.MonitorOnDutyOne
 	today := time.Now().Format("2006-01-02")
 
@@ -344,6 +362,32 @@ func (s *alertManagerOnDutyService) generateDutyPlan(ctx context.Context, group 
 			if change.OriginUserID > 0 {
 				if originUser := s.findUserByID(group.Users, change.OriginUserID); originUser != nil {
 					dutyOne.OriginUser = originUser.RealName
+				}
+			}
+		} else if history, exists := historyMap[dateStr]; exists {
+			// 如果存在历史记录，使用历史记录中的值班人员
+			dutyUser := s.findUserByID(group.Users, history.OnDutyUserID)
+			if dutyUser == nil {
+				// 如果在当前组成员中找不到，直接从数据库查询
+				dutyUser, err = s.userDao.GetUserByID(ctx, history.OnDutyUserID)
+				if err != nil {
+					s.l.Error("获取值班用户失败", zap.Error(err), zap.Int("userID", history.OnDutyUserID))
+				}
+			}
+			dutyOne.User = dutyUser
+
+			if history.OriginUserID > 0 {
+				originUser := s.findUserByID(group.Users, history.OriginUserID)
+				if originUser != nil {
+					dutyOne.OriginUser = originUser.RealName
+				} else {
+					// 如果找不到原始用户，尝试从所有用户中查找
+					user, err := s.userDao.GetUserByID(ctx, history.OriginUserID)
+					if err == nil && user != nil {
+						dutyOne.OriginUser = user.RealName
+					} else {
+						dutyOne.OriginUser = "未知用户"
+					}
 				}
 			}
 		} else {
@@ -416,6 +460,12 @@ func (s *alertManagerOnDutyService) findUserByID(users []*model.User, id int) *m
 		if user.ID == id {
 			return user
 		}
+	}
+
+	// 如果在当前用户列表中找不到，从数据库查询
+	user, err := s.userDao.GetUserByID(context.Background(), id)
+	if err == nil && user != nil {
+		return user
 	}
 	return nil
 }

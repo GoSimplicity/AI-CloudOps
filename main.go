@@ -85,12 +85,12 @@ func Init() error {
 	// 初始化 K8s 集群客户端
 	if di.IsDBAvailable(db) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		if err := cmd.Bootstrap.InitializeK8sClients(ctx); err != nil {
 			log.Printf("K8s集群客户端初始化失败: %v", err)
 		} else {
 			log.Printf("K8s集群客户端初始化成功")
 		}
-		cancel()
 	}
 
 	// 设置中间件
@@ -137,17 +137,24 @@ func Init() error {
 	})
 
 	// 判断是否需要mock（只有在数据库可用时才执行）
-	if viper.GetString("mock.enabled") == "true" && di.IsDBAvailable(db) {
+	if viper.GetBool("mock.enabled") && di.IsDBAvailable(db) {
 		if err := InitMock(); err != nil {
 			log.Printf("初始化Mock数据失败: %v", err)
 			// 不返回错误，让程序继续运行
 		}
-	} else if viper.GetString("mock.enabled") == "true" {
+	} else if viper.GetBool("mock.enabled") {
 		log.Printf("数据库不可用，跳过Mock数据初始化")
 	}
 
 	// 启动定时任务和worker（只有在数据库可用时才启动）
 	if di.IsDBAvailable(db) {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := cmd.Cron.StartOnDutyHistoryManager(ctx); err != nil {
+				log.Printf("启动值班历史记录管理器失败: %v", err)
+			}
+		}()
 		log.Printf("数据库可用，系统启动完成")
 	} else {
 		log.Printf("数据库不可用，系统以降级模式运行")
@@ -161,7 +168,7 @@ func Init() error {
 
 	// 创建系统信号接收器
 	quit := make(chan os.Signal, 1)
-	// 监听 SIGINT 和 SIGTERM 信号
+	// 监听 SIGINT、SIGTERM 和 SIGQUIT 信号
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	// 在goroutine中启动服务器
@@ -235,27 +242,23 @@ func InitMock() error {
 	}
 
 	if err != nil {
-		log.Printf("Mock模式: 数据库连接失败，跳过Mock数据初始化: %v", err)
-		return nil // 不返回错误，让程序继续运行
+		return fmt.Errorf("数据库连接失败: %v", err)
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		log.Printf("Mock模式: 获取sql.DB失败: %v", err)
-		return nil // 不返回错误，让程序继续运行
+		return fmt.Errorf("获取sql.DB失败: %v", err)
 	}
 	defer sqlDB.Close()
 
 	am := mock.NewApiMock(db)
 	if err := am.InitApi(); err != nil {
-		log.Printf("Mock模式: 初始化API失败: %v", err)
-		return nil // 不返回错误，让程序继续运行
+		return fmt.Errorf("初始化API失败: %v", err)
 	}
 
 	um := mock.NewUserMock(db)
 	if err := um.CreateUserAdmin(); err != nil {
-		log.Printf("Mock模式: 创建管理员用户失败: %v", err)
-		return nil // 不返回错误，让程序继续运行
+		return fmt.Errorf("创建管理员用户失败: %v", err)
 	}
 
 	log.Printf("Mock模式: 数据初始化完成")

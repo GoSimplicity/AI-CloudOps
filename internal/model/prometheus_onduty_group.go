@@ -44,25 +44,6 @@ func (m *MonitorOnDutyGroup) TableName() string {
 	return "cl_monitor_on_duty_groups"
 }
 
-// MonitorOnDutyPlan 值班计划表
-type MonitorOnDutyPlan struct {
-	Model
-	OnDutyGroupID  int    `json:"on_duty_group_id" gorm:"index:idx_group_date_deleted_at;comment:值班组ID"`
-	Date           string `json:"date" gorm:"type:varchar(10);not null;comment:值班日期"`
-	OnDutyUserID   int    `json:"on_duty_user_id" gorm:"index;comment:值班人员ID"`
-	IsAdjusted     bool   `json:"is_adjusted" gorm:"type:tinyint(1);not null;default:0;comment:是否为调整后的值班安排"`
-	OriginalUserID int    `json:"original_user_id" gorm:"index;comment:原计划值班人员ID，仅当is_adjusted为true时有值"`
-	Status         int    `json:"status" gorm:"type:int;not null;default:1;comment:计划状态 1-生效中 2-已过期 3-未开始"`
-	CreateUserID   int    `json:"create_user_id" gorm:"index;comment:创建者ID"`
-	CreateUserName string `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
-	UpdateUserID   int    `json:"update_user_id" gorm:"comment:更新者ID"`
-	Remark         string `json:"remark" gorm:"type:varchar(255);comment:备注信息"`
-}
-
-func (m *MonitorOnDutyPlan) TableName() string {
-	return "cl_monitor_on_duty_plans"
-}
-
 // MonitorOnDutyChange 值班换班记录
 type MonitorOnDutyChange struct {
 	Model
@@ -82,11 +63,10 @@ func (m *MonitorOnDutyChange) TableName() string {
 // MonitorOnDutyHistory 值班历史记录
 type MonitorOnDutyHistory struct {
 	Model
-	OnDutyGroupID  int    `json:"on_duty_group_id" gorm:"index:idx_group_date_deleted_at;comment:值班组ID"`
-	DateString     string `json:"date_string" gorm:"type:varchar(10);not null;comment:值班日期"`
-	OnDutyUserID   int    `json:"on_duty_user_id" gorm:"index;comment:当天值班人员ID"`
-	OriginUserID   int    `json:"origin_user_id" gorm:"index;comment:原计划值班人员ID"`
-	CreateUserName string `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
+	OnDutyGroupID int    `json:"on_duty_group_id" gorm:"index:idx_group_date_deleted_at;comment:值班组ID"`
+	DateString    string `json:"date_string" gorm:"type:varchar(10);not null;comment:值班日期"`
+	OnDutyUserID  int    `json:"on_duty_user_id" gorm:"index;comment:当天值班人员ID"`
+	OriginUserID  int    `json:"origin_user_id" gorm:"index;comment:原计划值班人员ID"`
 }
 
 func (m *MonitorOnDutyHistory) TableName() string {
@@ -103,7 +83,6 @@ type MonitorOnDutyOne struct {
 // GetMonitorOnDutyGroupListReq 获取值班组列表请求
 type GetMonitorOnDutyGroupListReq struct {
 	ListReq
-	PoolID int   `json:"pool_id" form:"pool_id" binding:"omitempty"`
 	Enable *int8 `json:"enable" form:"enable" binding:"omitempty"`
 }
 
@@ -169,7 +148,8 @@ type GetMonitorOnDutyGroupFuturePlanReq struct {
 
 // GetMonitorOnDutyHistoryReq 获取值班历史记录请求
 type GetMonitorOnDutyHistoryReq struct {
+	ListReq
 	OnDutyGroupID int    `json:"on_duty_group_id" binding:"required"`
-	StartDate     string `json:"start_date" binding:"required"`
-	EndDate       string `json:"end_date" binding:"required"`
+	StartDate     string `json:"start_date"`
+	EndDate       string `json:"end_date"`
 }
