@@ -32,17 +32,14 @@ import (
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type SendGroupHandler struct {
 	alertSendService alertEventService.AlertManagerSendService
-	l                *zap.Logger
 }
 
-func NewSendGroupHandler(l *zap.Logger, alertSendService alertEventService.AlertManagerSendService) *SendGroupHandler {
+func NewSendGroupHandler(alertSendService alertEventService.AlertManagerSendService) *SendGroupHandler {
 	return &SendGroupHandler{
-		l:                l,
 		alertSendService: alertSendService,
 	}
 }
@@ -75,6 +72,7 @@ func (s *SendGroupHandler) CreateMonitorSendGroup(ctx *gin.Context) {
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	req.UserID = uc.Uid
+	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, s.alertSendService.CreateMonitorSendGroup(ctx, &req)
@@ -85,8 +83,6 @@ func (s *SendGroupHandler) CreateMonitorSendGroup(ctx *gin.Context) {
 func (s *SendGroupHandler) UpdateMonitorSendGroup(ctx *gin.Context) {
 	var req model.UpdateMonitorSendGroupReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
-
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "参数错误")
@@ -94,7 +90,6 @@ func (s *SendGroupHandler) UpdateMonitorSendGroup(ctx *gin.Context) {
 	}
 
 	req.ID = id
-	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, s.alertSendService.UpdateMonitorSendGroup(ctx, &req)

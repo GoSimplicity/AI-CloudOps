@@ -36,7 +36,7 @@ type MonitorAlertManagerPool struct {
 	RepeatInterval        string     `json:"repeat_interval" gorm:"size:50;default:'4h';not null;comment:重复告警间隔"`
 	GroupBy               StringList `json:"group_by" gorm:"type:text;not null;comment:告警分组标签列表"`
 	Receiver              string     `json:"receiver" gorm:"size:100;not null;comment:默认接收者"`
-	CreatorName           string     `json:"creator_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
+	CreateUserName        string     `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
 }
 
 // CreateMonitorAlertManagerPoolReq 创建 AlertManager 实例池请求
@@ -50,7 +50,7 @@ type CreateMonitorAlertManagerPoolReq struct {
 	RepeatInterval        string     `json:"repeat_interval"`
 	GroupBy               StringList `json:"group_by"`
 	Receiver              string     `json:"receiver" binding:"required"`
-	CreatorName           string     `json:"creator_name" binding:"required"`
+	CreateUserName        string     `json:"create_user_name" binding:"required"`
 }
 
 // UpdateMonitorAlertManagerPoolReq 更新 AlertManager 实例池请求
@@ -74,7 +74,6 @@ type DeleteMonitorAlertManagerPoolReq struct {
 // GetMonitorAlertManagerPoolListReq 获取 AlertManager 实例池列表请求
 type GetMonitorAlertManagerPoolListReq struct {
 	ListReq
-	PoolID int `json:"pool_id" form:"pool_id" binding:"omitempty"`
 }
 
 // GetMonitorAlertManagerPoolReq 获取 AlertManager 实例池请求

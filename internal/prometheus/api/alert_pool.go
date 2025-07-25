@@ -70,6 +70,7 @@ func (a *AlertPoolHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
 
 	uc := ctx.MustGet("user").(utils.UserClaims)
 	req.UserID = uc.Uid
+	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, a.svc.CreateMonitorAlertManagerPool(ctx, &req)

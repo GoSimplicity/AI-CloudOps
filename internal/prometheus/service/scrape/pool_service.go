@@ -43,9 +43,7 @@ type ScrapePoolService interface {
 	CreateMonitorScrapePool(ctx context.Context, req *model.CreateMonitorScrapePoolReq) error
 	UpdateMonitorScrapePool(ctx context.Context, req *model.UpdateMonitorScrapePoolReq) error
 	DeleteMonitorScrapePool(ctx context.Context, req *model.DeleteMonitorScrapePoolReq) error
-	GetMonitorScrapePoolTotal(ctx context.Context) (int, error)
-	GetMonitorScrapePoolAll(ctx context.Context) (model.ListResp[*model.MonitorScrapePool], error)
-	GetMonitorScrapePoolById(ctx context.Context, id int) (*model.MonitorScrapePool, error)
+	GetMonitorScrapePoolDetail(ctx context.Context, req *model.GetMonitorScrapePoolDetailReq) (*model.MonitorScrapePool, error)
 }
 
 type scrapePoolService struct {
@@ -78,39 +76,21 @@ func (s *scrapePoolService) GetMonitorScrapePoolList(ctx context.Context, req *m
 		return model.ListResp[*model.MonitorScrapePool]{}, err
 	}
 
-	// 填充创建用户信息
-	for _, pool := range pools {
-		if pool.UserID > 0 {
-			user, err := s.userDao.GetUserByID(ctx, pool.UserID)
-			if err != nil {
-				s.l.Error("获取创建用户名失败", zap.Int("userId", pool.UserID), zap.Error(err))
-				continue
-			}
-			if user != nil {
-				if user.RealName == "" {
-					pool.CreateUserName = user.Username
-				} else {
-					pool.CreateUserName = user.RealName
-				}
-			}
-		}
-	}
-
 	return model.ListResp[*model.MonitorScrapePool]{
 		Items: pools,
 		Total: count,
 	}, nil
 }
 
-// GetMonitorScrapePoolById 根据ID获取抓取池
-func (s *scrapePoolService) GetMonitorScrapePoolById(ctx context.Context, id int) (*model.MonitorScrapePool, error) {
-	if id <= 0 {
+// GetMonitorScrapePoolDetail 根据ID获取抓取池详情
+func (s *scrapePoolService) GetMonitorScrapePoolDetail(ctx context.Context, req *model.GetMonitorScrapePoolDetailReq) (*model.MonitorScrapePool, error) {
+	if req.ID <= 0 {
 		return nil, errors.New("无效的抓取池ID")
 	}
 
-	pool, err := s.dao.GetMonitorScrapePoolById(ctx, id)
+	pool, err := s.dao.GetMonitorScrapePoolById(ctx, req.ID)
 	if err != nil {
-		s.l.Error("获取抓取池详情失败", zap.Int("id", id), zap.Error(err))
+		s.l.Error("获取抓取池详情失败", zap.Int("id", req.ID), zap.Error(err))
 		return nil, err
 	}
 
@@ -135,12 +115,31 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, req *mo
 		return errors.New("抓取池已存在")
 	}
 
-	pools, _, err := s.dao.GetAllMonitorScrapePool(ctx)
-	if err != nil {
-		s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
-		return err
+	// 分批获取所有现有抓取池
+	var allPools []*model.MonitorScrapePool
+	page := 1
+	batchSize := 100
+	for {
+		pools, count, err := s.dao.GetMonitorScrapePoolList(ctx, &model.GetMonitorScrapePoolListReq{
+			ListReq: model.ListReq{
+				Page: page,
+				Size: batchSize,
+			},
+		})
+		if err != nil {
+			s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
+			return err
+		}
+		
+		allPools = append(allPools, pools...)
+		
+		if int64(len(allPools)) >= count || len(pools) == 0 {
+			break
+		}
+		page++
 	}
 
+	// 构建新的抓取池对象
 	pool := &model.MonitorScrapePool{
 		Name:                  req.Name,
 		PrometheusInstances:   req.PrometheusInstances,
@@ -157,12 +156,18 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, req *mo
 		AlertManagerUrl:       req.AlertManagerUrl,
 		RuleFilePath:          req.RuleFilePath,
 		RecordFilePath:        req.RecordFilePath,
+		CreateUserName:        req.CreateUserName,
 	}
 
-	// 检查新的抓取池 IP 是否已存在
-	if err := utils.CheckPoolIpExists(pools, pool); err != nil {
+	// 检查新的抓取池 IP 是否已被其他池使用
+	if err := utils.CheckPoolIpExists(allPools, pool); err != nil {
 		s.l.Error("检查抓取池 IP 是否存在失败", zap.Error(err))
 		return err
+	}
+
+	// 检查配置有效性
+	if pool.ScrapeInterval <= 0 || pool.ScrapeTimeout <= 0 || pool.ScrapeTimeout > pool.ScrapeInterval {
+		return errors.New("采集间隔和采集超时时间不能小于等于0，且采集超时时间不能大于采集间隔")
 	}
 
 	// 创建抓取池
@@ -207,10 +212,29 @@ func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, req *mo
 		}
 	}
 
-	pools, _, err := s.dao.GetAllMonitorScrapePool(ctx)
-	if err != nil {
-		s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
-		return err
+	// 批次获取所有抓取池，每批100条
+	var allPools []*model.MonitorScrapePool
+	page := 1
+	batchSize := 100
+	for {
+		pools, total, err := s.dao.GetMonitorScrapePoolList(ctx, &model.GetMonitorScrapePoolListReq{
+			ListReq: model.ListReq{
+				Page: page,
+				Size: batchSize,
+			},
+		})
+		if err != nil {
+			s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
+			return err
+		}
+		
+		allPools = append(allPools, pools...)
+		
+		if int64(len(allPools)) >= total || len(pools) == 0 {
+			break
+		}
+		
+		page++
 	}
 
 	pool := &model.MonitorScrapePool{
@@ -233,7 +257,7 @@ func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, req *mo
 	}
 
 	// 检查新的抓取池 IP 是否已被其他池使用
-	if err := utils.CheckPoolIpExists(pools, pool); err != nil {
+	if err := utils.CheckPoolIpExists(allPools, pool); err != nil {
 		s.l.Error("检查抓取池 IP 是否存在失败", zap.Error(err))
 		return err
 	}
@@ -282,45 +306,4 @@ func (s *scrapePoolService) DeleteMonitorScrapePool(ctx context.Context, req *mo
 	}
 
 	return nil
-}
-
-// GetMonitorScrapePoolTotal 获取监控采集池总数
-func (s *scrapePoolService) GetMonitorScrapePoolTotal(ctx context.Context) (int, error) {
-	total, err := s.dao.GetMonitorScrapePoolTotal(ctx)
-	if err != nil {
-		s.l.Error("获取监控采集池总数失败", zap.Error(err))
-	}
-	return total, err
-}
-
-// GetMonitorScrapePoolAll 获取所有监控采集池
-func (s *scrapePoolService) GetMonitorScrapePoolAll(ctx context.Context) (model.ListResp[*model.MonitorScrapePool], error) {
-	pools, count, err := s.dao.GetAllMonitorScrapePool(ctx)
-	if err != nil {
-		s.l.Error("获取所有监控采集池失败", zap.Error(err))
-		return model.ListResp[*model.MonitorScrapePool]{}, err
-	}
-
-	// 填充创建用户信息
-	for _, pool := range pools {
-		if pool.UserID > 0 {
-			user, err := s.userDao.GetUserByID(ctx, pool.UserID)
-			if err != nil {
-				s.l.Error("获取创建用户名失败", zap.Int("userId", pool.UserID), zap.Error(err))
-				continue
-			}
-			if user != nil {
-				if user.RealName == "" {
-					pool.CreateUserName = user.Username
-				} else {
-					pool.CreateUserName = user.RealName
-				}
-			}
-		}
-	}
-
-	return model.ListResp[*model.MonitorScrapePool]{
-		Items: pools,
-		Total: count,
-	}, nil
 }

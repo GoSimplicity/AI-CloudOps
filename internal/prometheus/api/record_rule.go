@@ -72,7 +72,7 @@ func (r *RecordRuleHandler) CreateMonitorRecordRule(ctx *gin.Context) {
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	req.UserID = uc.Uid
-	req.CreatorName = uc.Username
+	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, r.alertRecordService.CreateMonitorRecordRule(ctx, &req)

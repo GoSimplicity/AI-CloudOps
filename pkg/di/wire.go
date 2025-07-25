@@ -70,6 +70,7 @@ import (
 type Cmd struct {
 	Server    *gin.Engine
 	Bootstrap startup.ApplicationBootstrap
+	Cron      cron.CronManager
 }
 
 var HandlerSet = wire.NewSet(
@@ -250,6 +251,7 @@ var Injector = wire.NewSet(
 	InitLogger,
 	InitRedis,
 	InitDB,
+	CronSet,
 	wire.Struct(new(Cmd), "*"),
 )
 

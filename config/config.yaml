@@ -10,7 +10,8 @@ jwt:
   expiration: 3600
 redis:
   # addr: "redis:6379"
-  addr: "localhost:36379"
+#  addr: "localhost:36379"
+  addr: "localhost:6379"
   password: "v6SxhWHyZC7S"
 mysql:
   # addr: "root:root@tcp(mysql:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
@@ -18,6 +19,7 @@ mysql:
   addr: "root:root@tcp(localhost:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
 tree:
   check_status_cron: "@every 300s"
+  password_encryption_key: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"
 k8s:
   refresh_cron: "@every 300s"
 prometheus:

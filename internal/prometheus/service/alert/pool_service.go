@@ -30,7 +30,6 @@ import (
 	"errors"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -47,21 +46,18 @@ type AlertManagerPoolService interface {
 type alertManagerPoolService struct {
 	dao     alert.AlertManagerPoolDAO
 	sendDao alert.AlertManagerSendDAO
-	cache   cache.MonitorCache
 	l       *zap.Logger
 }
 
 func NewAlertManagerPoolService(
 	dao alert.AlertManagerPoolDAO,
 	sendDao alert.AlertManagerSendDAO,
-	cache cache.MonitorCache,
 	l *zap.Logger,
 ) AlertManagerPoolService {
 	return &alertManagerPoolService{
 		dao:     dao,
 		sendDao: sendDao,
 		l:       l,
-		cache:   cache,
 	}
 }
 
@@ -89,7 +85,7 @@ func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Cont
 		RepeatInterval:        req.RepeatInterval,
 		GroupBy:               req.GroupBy,
 		Receiver:              req.Receiver,
-		CreatorName:           req.CreatorName,
+		CreateUserName:        req.CreateUserName,
 	}
 
 	// 检查 AlertManager Pool 是否已存在
@@ -175,7 +171,7 @@ func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Cont
 		return errors.New("无效的告警池ID")
 	}
 
-	sendGroups, _, err := a.sendDao.GetMonitorSendGroupByPoolId(ctx, req.ID)
+	sendGroups, _, err := a.sendDao.GetMonitorSendGroupByPoolID(ctx, req.ID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		a.l.Error("删除 AlertManager 集群池失败：获取关联发送组时出错", zap.Error(err))
 		return err

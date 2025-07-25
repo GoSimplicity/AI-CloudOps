@@ -55,7 +55,8 @@ func (s *ScrapePoolHandler) RegisterRouters(server *gin.Engine) {
 		scrapePools.GET("/list", s.GetMonitorScrapePoolList)
 		scrapePools.POST("/create", s.CreateMonitorScrapePool)
 		scrapePools.PUT("/update/:id", s.UpdateMonitorScrapePool)
-		scrapePools.DELETE("/:id", s.DeleteMonitorScrapePool)
+		scrapePools.DELETE("/delete/:id", s.DeleteMonitorScrapePool)
+		scrapePools.GET("/detail/:id", s.GetMonitorScrapePoolDetail)
 	}
 }
 
@@ -74,6 +75,7 @@ func (s *ScrapePoolHandler) CreateMonitorScrapePool(ctx *gin.Context) {
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	req.UserID = uc.Uid
+	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, s.scrapePoolService.CreateMonitorScrapePool(ctx, &req)
@@ -103,5 +105,21 @@ func (s *ScrapePoolHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, s.scrapePoolService.DeleteMonitorScrapePool(ctx, &req)
+	})
+}
+
+func (s *ScrapePoolHandler) GetMonitorScrapePoolDetail(ctx *gin.Context) {
+	var req model.GetMonitorScrapePoolDetailReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.scrapePoolService.GetMonitorScrapePoolDetail(ctx, &req)
 	})
 }

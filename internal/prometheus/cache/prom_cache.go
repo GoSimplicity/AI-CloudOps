@@ -150,17 +150,6 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 		p.l.Info("Prometheus主配置生成完成", zap.Duration("耗时", time.Since(startTime)))
 	}()
 
-	pools, _, err := p.scrapePoolDao.GetAllMonitorScrapePool(ctx)
-	if err != nil {
-		p.l.Error("获取采集池失败", zap.Error(err))
-		return fmt.Errorf("获取采集池失败: %w", err)
-	}
-
-	if len(pools) == 0 {
-		p.l.Warn("未找到任何采集池")
-		return nil
-	}
-
 	p.mu.RLock()
 	tempConfigMap := utils.CopyMap(p.PrometheusMainConfigMap)
 	tempPoolHashes := utils.CopyMap(p.poolHashes)
@@ -169,71 +158,99 @@ func (p *promConfigCache) GeneratePrometheusMainConfig(ctx context.Context) erro
 	validIPs := make(map[string]struct{})
 	updatedPools := make(map[string]struct{}) // 记录需要清理旧IP的池子
 
-	p.l.Info("开始处理采集池", zap.Int("池数量", len(pools)))
-
-	for _, pool := range pools {
-		currentHash := utils.CalculatePromHash(pool)
-		if cachedHash, ok := tempPoolHashes[pool.Name]; ok && cachedHash == currentHash {
-			for _, ip := range pool.PrometheusInstances {
-				validIPs[ip] = struct{}{}
-			}
-			continue
-		}
-
-		// 标记该池子需要清理旧IP
-		updatedPools[pool.Name] = struct{}{}
-
-		baseConfig, err := p.CreateBasePrometheusConfig(pool)
+	page := 1
+	batchSize := 100
+	processedCount := 0
+	
+	for {
+		pools, total, err := p.scrapePoolDao.GetMonitorScrapePoolList(ctx, &model.GetMonitorScrapePoolListReq{
+			ListReq: model.ListReq{
+				Page: page,
+				Size: batchSize,
+			},
+		})
 		if err != nil {
-			p.l.Error("创建基础配置失败", zap.String("池子", pool.Name), zap.Error(err))
-			continue
+			p.l.Error("获取采集池失败", zap.Error(err), zap.Int("page", page))
+			return fmt.Errorf("获取采集池失败: %w", err)
 		}
 
-		scrapeConfigs := p.GenerateScrapeConfigs(ctx, pool)
-		if len(scrapeConfigs) == 0 {
-			p.l.Info("未生成采集配置", zap.String("池子", pool.Name))
-			continue
-		}
-		baseConfig.ScrapeConfigs = scrapeConfigs
-
-		instanceConfigs := make(map[string]string) // 暂存实例配置
-		success := true
-
-		for idx, ip := range pool.PrometheusInstances {
-			configCopy := baseConfig
-			if len(pool.PrometheusInstances) > 1 {
-				configCopy.ScrapeConfigs = p.ApplyHashMod(scrapeConfigs, len(pool.PrometheusInstances), idx)
-			}
-
-			yamlData, err := yaml.Marshal(configCopy)
-			if err != nil {
-				p.l.Error("配置序列化失败", zap.String("池子", pool.Name), zap.Error(err))
-				success = false
-				break
-			}
-
-			// 不再写入本地文件，只保存到内存和数据库
-
-			instanceConfigs[ip] = string(yamlData) // 暂存到内存
+		if len(pools) == 0 {
+			p.l.Info("当前批次未找到采集池", zap.Int("page", page))
+			break
 		}
 
-		if success {
-			// 原子性更新该池子的所有实例
-			for ip, cfg := range instanceConfigs {
-				tempConfigMap[ip] = cfg
-				validIPs[ip] = struct{}{}
+		p.l.Info("开始处理采集池批次", zap.Int("批次", page), zap.Int("数量", len(pools)))
 
-				// 保存配置到数据库
-				if err := p.saveConfigToDatabase(ctx, pool, ip, cfg); err != nil {
-					p.l.Error("保存配置到数据库失败",
-						zap.String("池子", pool.Name),
-						zap.String("IP", ip),
-						zap.Error(err))
-					// 不中断流程，只记录错误
+		for _, pool := range pools {
+			currentHash := utils.CalculatePromHash(pool)
+			if cachedHash, ok := tempPoolHashes[pool.Name]; ok && cachedHash == currentHash {
+				for _, ip := range pool.PrometheusInstances {
+					validIPs[ip] = struct{}{}
 				}
+				continue
 			}
-			tempPoolHashes[pool.Name] = currentHash
+
+			// 标记该池子需要清理旧IP
+			updatedPools[pool.Name] = struct{}{}
+
+			baseConfig, err := p.CreateBasePrometheusConfig(pool)
+			if err != nil {
+				p.l.Error("创建基础配置失败", zap.String("池子", pool.Name), zap.Error(err))
+				continue
+			}
+
+			scrapeConfigs := p.GenerateScrapeConfigs(ctx, pool)
+			if len(scrapeConfigs) == 0 {
+				p.l.Info("未生成采集配置", zap.String("池子", pool.Name))
+				continue
+			}
+			baseConfig.ScrapeConfigs = scrapeConfigs
+
+			instanceConfigs := make(map[string]string) // 暂存实例配置
+			success := true
+
+			for idx, ip := range pool.PrometheusInstances {
+				configCopy := baseConfig
+				if len(pool.PrometheusInstances) > 1 {
+					configCopy.ScrapeConfigs = p.ApplyHashMod(scrapeConfigs, len(pool.PrometheusInstances), idx)
+				}
+
+				yamlData, err := yaml.Marshal(configCopy)
+				if err != nil {
+					p.l.Error("配置序列化失败", zap.String("池子", pool.Name), zap.Error(err))
+					success = false
+					break
+				}
+
+				// 不再写入本地文件，只保存到内存和数据库
+
+				instanceConfigs[ip] = string(yamlData) // 暂存到内存
+			}
+
+			if success {
+				// 原子性更新该池子的所有实例
+				for ip, cfg := range instanceConfigs {
+					tempConfigMap[ip] = cfg
+					validIPs[ip] = struct{}{}
+
+					// 保存配置到数据库
+					if err := p.saveConfigToDatabase(ctx, pool, ip, cfg); err != nil {
+						p.l.Error("保存配置到数据库失败",
+							zap.String("池子", pool.Name),
+							zap.String("IP", ip),
+							zap.Error(err))
+						// 不中断流程，只记录错误
+					}
+				}
+				tempPoolHashes[pool.Name] = currentHash
+			}
 		}
+
+		processedCount += len(pools)
+		if processedCount >= int(total) {
+			break
+		}
+		page++
 	}
 
 	// 清理无效的IP，只清理内存中的配置

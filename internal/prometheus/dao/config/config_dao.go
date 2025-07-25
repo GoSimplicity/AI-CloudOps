@@ -133,13 +133,7 @@ func (d *monitorConfigDAO) CreateMonitorConfig(ctx context.Context, config *mode
 
 // UpdateMonitorConfig 更新监控配置
 func (d *monitorConfigDAO) UpdateMonitorConfig(ctx context.Context, config *model.MonitorConfig) error {
-	if err := d.db.WithContext(ctx).Model(&model.MonitorConfig{}).Where("id = ?", config.ID).Updates(map[string]interface{}{
-		"name":                config.Name,
-		"config_content":      config.ConfigContent,
-		"config_hash":         config.ConfigHash,
-		"status":              config.Status,
-		"last_generated_time": config.LastGeneratedTime,
-	}).Error; err != nil {
+	if err := d.db.WithContext(ctx).Model(&model.MonitorConfig{}).Where("id = ?", config.ID).Updates(config).Error; err != nil {
 		d.l.Error("更新监控配置失败", zap.Int("id", config.ID), zap.Error(err))
 		return err
 	}

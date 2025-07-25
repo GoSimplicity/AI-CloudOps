@@ -29,10 +29,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
@@ -51,41 +49,24 @@ type AlertManagerSendService interface {
 type alertManagerSendService struct {
 	dao     alert.AlertManagerSendDAO
 	ruleDao alert.AlertManagerRuleDAO
-	cache   cache.MonitorCache
 	userDao userDao.UserDAO
 	l       *zap.Logger
 }
 
-func NewAlertManagerSendService(dao alert.AlertManagerSendDAO, ruleDao alert.AlertManagerRuleDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO) AlertManagerSendService {
+func NewAlertManagerSendService(dao alert.AlertManagerSendDAO, ruleDao alert.AlertManagerRuleDAO, l *zap.Logger, userDao userDao.UserDAO) AlertManagerSendService {
 	return &alertManagerSendService{
 		dao:     dao,
 		ruleDao: ruleDao,
 		userDao: userDao,
 		l:       l,
-		cache:   cache,
 	}
 }
 
 // GetMonitorSendGroupList 获取发送组列表
 func (a *alertManagerSendService) GetMonitorSendGroupList(ctx context.Context, req *model.GetMonitorSendGroupListReq) (model.ListResp[*model.MonitorSendGroup], error) {
-	if req.Search != "" {
-		groups, total, err := a.dao.SearchMonitorSendGroupByName(ctx, req.Search)
-		if err != nil {
-			a.l.Error("搜索发送组失败", zap.String("search", req.Search), zap.Error(err))
-			return model.ListResp[*model.MonitorSendGroup]{}, err
-		}
-		return model.ListResp[*model.MonitorSendGroup]{
-			Total: total,
-			Items: groups,
-		}, nil
-	}
-
-	offset := (req.Page - 1) * req.Size
-	limit := req.Size
-
-	groups, total, err := a.dao.GetMonitorSendGroupList(ctx, offset, limit)
+	groups, total, err := a.dao.GetMonitorSendGroupList(ctx, req)
 	if err != nil {
-		a.l.Error("获取发送组列表失败", zap.Error(err))
+		a.l.Error("搜索发送组失败", zap.String("search", req.Search), zap.Error(err))
 		return model.ListResp[*model.MonitorSendGroup]{}, err
 	}
 
@@ -113,6 +94,7 @@ func (a *alertManagerSendService) CreateMonitorSendGroup(ctx context.Context, re
 		FirstUpgradeUsers:   req.FirstUpgradeUsers,
 		UpgradeMinutes:      req.UpgradeMinutes,
 		SecondUpgradeUsers:  req.SecondUpgradeUsers,
+		CreateUserName:      req.CreateUserName,
 	}
 
 	// 检查发送组是否已存在
@@ -144,7 +126,6 @@ func (a *alertManagerSendService) UpdateMonitorSendGroup(ctx context.Context, re
 		Name:                req.Name,
 		NameZh:              req.NameZh,
 		Enable:              req.Enable,
-		UserID:              req.UserID,
 		PoolID:              req.PoolID,
 		OnDutyGroupID:       req.OnDutyGroupID,
 		StaticReceiveUsers:  req.StaticReceiveUsers,
@@ -169,74 +150,16 @@ func (a *alertManagerSendService) UpdateMonitorSendGroup(ctx context.Context, re
 		return fmt.Errorf("发送组不存在或已被删除")
 	}
 
-	// 合并并去重用户名
-	usernameSet := make(map[string]struct{})
-	addToSet := func(names []string) {
-		for _, name := range names {
-			if trimmed := strings.TrimSpace(name); trimmed != "" {
-				usernameSet[trimmed] = struct{}{}
-			}
-		}
+	// 检查名称是否已被其他发送组使用
+	exists, err = a.dao.CheckMonitorSendGroupNameExists(ctx, monitorSendGroup)
+	if err != nil {
+		a.l.Error("更新发送组失败：检查发送组名称是否存在时出错", zap.Error(err))
+		return err
 	}
 
-	addToSet(monitorSendGroup.StaticReceiveUserNames)
-	addToSet(monitorSendGroup.FirstUserNames)
-	addToSet(monitorSendGroup.SecondUserNames)
-
-	usernames := make([]string, 0, len(usernameSet))
-	for name := range usernameSet {
-		usernames = append(usernames, name)
+	if exists {
+		return errors.New("发送组名称已被使用")
 	}
-
-	// 批量获取用户
-	userMap := make(map[string]*model.User)
-	if len(usernames) > 0 {
-		users, err := a.userDao.GetUserByUsernames(ctx, usernames)
-		if err != nil {
-			a.l.Error("批量获取用户失败",
-				zap.Strings("usernames", usernames),
-				zap.Error(err))
-			return fmt.Errorf("用户数据获取失败")
-		}
-		for _, u := range users {
-			userMap[u.Username] = u
-		}
-
-		// 检查无效用户名
-		var missingUsers []string
-		checkMissing := func(names []string) {
-			for _, name := range names {
-				if name == "" {
-					continue
-				}
-				if _, ok := userMap[name]; !ok {
-					missingUsers = append(missingUsers, name)
-				}
-			}
-		}
-
-		checkMissing(monitorSendGroup.StaticReceiveUserNames)
-		checkMissing(monitorSendGroup.FirstUserNames)
-		checkMissing(monitorSendGroup.SecondUserNames)
-		if len(missingUsers) > 0 {
-			return fmt.Errorf("以下用户不存在: %s", strings.Join(missingUsers, ", "))
-		}
-	}
-
-	// 按输入顺序映射用户
-	mapUsers := func(names []string) []*model.User {
-		result := make([]*model.User, 0, len(names))
-		for _, name := range names {
-			if user := userMap[name]; user != nil {
-				result = append(result, user)
-			}
-		}
-		return result
-	}
-
-	monitorSendGroup.StaticReceiveUsers = mapUsers(monitorSendGroup.StaticReceiveUserNames)
-	monitorSendGroup.FirstUpgradeUsers = mapUsers(monitorSendGroup.FirstUserNames)
-	monitorSendGroup.SecondUpgradeUsers = mapUsers(monitorSendGroup.SecondUserNames)
 
 	// 更新发送组
 	if err := a.dao.UpdateMonitorSendGroup(ctx, monitorSendGroup); err != nil {
@@ -250,7 +173,7 @@ func (a *alertManagerSendService) UpdateMonitorSendGroup(ctx context.Context, re
 // DeleteMonitorSendGroup 删除发送组
 func (a *alertManagerSendService) DeleteMonitorSendGroup(ctx context.Context, req *model.DeleteMonitorSendGroupReq) error {
 	// 检查发送组是否有关联的资源
-	_, total, err := a.ruleDao.GetAssociatedResourcesBySendGroupId(ctx, req.ID)
+	_, total, err := a.ruleDao.GetAssociatedResourcesBySendGroupID(ctx, req.ID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		a.l.Error("删除发送组失败：获取关联资源时出错", zap.Error(err))
 		return err
@@ -271,7 +194,35 @@ func (a *alertManagerSendService) DeleteMonitorSendGroup(ctx context.Context, re
 
 // GetMonitorSendGroup 获取发送组详情
 func (a *alertManagerSendService) GetMonitorSendGroup(ctx context.Context, req *model.GetMonitorSendGroupReq) (*model.MonitorSendGroup, error) {
-	return a.dao.GetMonitorSendGroupById(ctx, req.ID)
+	group, err := a.dao.GetMonitorSendGroupByID(ctx, req.ID)
+	if err != nil {
+		a.l.Error("获取发送组详情失败", zap.Int("id", req.ID), zap.Error(err))
+		return nil, err
+	}
+
+	// 处理用户名列表
+	if group.StaticReceiveUsers != nil {
+		group.StaticReceiveUserNames = make([]string, 0, len(group.StaticReceiveUsers))
+		for _, user := range group.StaticReceiveUsers {
+			group.StaticReceiveUserNames = append(group.StaticReceiveUserNames, user.Username)
+		}
+	}
+
+	if group.FirstUpgradeUsers != nil {
+		group.FirstUserNames = make([]string, 0, len(group.FirstUpgradeUsers))
+		for _, user := range group.FirstUpgradeUsers {
+			group.FirstUserNames = append(group.FirstUserNames, user.Username)
+		}
+	}
+
+	if group.SecondUpgradeUsers != nil {
+		group.SecondUserNames = make([]string, 0, len(group.SecondUpgradeUsers))
+		for _, user := range group.SecondUpgradeUsers {
+			group.SecondUserNames = append(group.SecondUserNames, user.Username)
+		}
+	}
+
+	return group, nil
 }
 
 // GetMonitorSendGroupAll 获取所有发送组

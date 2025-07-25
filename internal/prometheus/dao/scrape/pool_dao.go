@@ -36,7 +36,6 @@ import (
 )
 
 type ScrapePoolDAO interface {
-	GetAllMonitorScrapePool(ctx context.Context) ([]*model.MonitorScrapePool, int64, error)
 	GetMonitorScrapePoolList(ctx context.Context, req *model.GetMonitorScrapePoolListReq) ([]*model.MonitorScrapePool, int64, error)
 	CreateMonitorScrapePool(ctx context.Context, pool *model.MonitorScrapePool) error
 	GetMonitorScrapePoolById(ctx context.Context, id int) (*model.MonitorScrapePool, error)
@@ -45,7 +44,6 @@ type ScrapePoolDAO interface {
 	GetMonitorScrapePoolSupportedAlert(ctx context.Context) ([]*model.MonitorScrapePool, int64, error)
 	GetMonitorScrapePoolSupportedRecord(ctx context.Context) ([]*model.MonitorScrapePool, int64, error)
 	CheckMonitorScrapePoolExists(ctx context.Context, scrapePool *model.MonitorScrapePool) (bool, error)
-	GetMonitorScrapePoolTotal(ctx context.Context) (int, error)
 }
 
 type scrapePoolDAO struct {
@@ -60,24 +58,6 @@ func NewScrapePoolDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO) Scrap
 		l:       l,
 		userDao: userDao,
 	}
-}
-
-// GetAllMonitorScrapePool 获取所有监控采集池
-func (s *scrapePoolDAO) GetAllMonitorScrapePool(ctx context.Context) ([]*model.MonitorScrapePool, int64, error) {
-	var pools []*model.MonitorScrapePool
-	var count int64
-
-	if err := s.db.WithContext(ctx).Model(&model.MonitorScrapePool{}).Count(&count).Error; err != nil {
-		s.l.Error("获取 MonitorScrapePool 总数失败", zap.Error(err))
-		return nil, 0, err
-	}
-
-	if err := s.db.WithContext(ctx).Find(&pools).Error; err != nil {
-		s.l.Error("获取所有 MonitorScrapePool 记录失败", zap.Error(err))
-		return nil, 0, err
-	}
-
-	return pools, count, nil
 }
 
 // GetMonitorScrapePoolList 获取监控采集池列表
@@ -275,16 +255,4 @@ func (s *scrapePoolDAO) CheckMonitorScrapePoolExists(ctx context.Context, scrape
 	}
 
 	return count > 0, nil
-}
-
-// GetMonitorScrapePoolTotal 获取监控采集池总数
-func (s *scrapePoolDAO) GetMonitorScrapePoolTotal(ctx context.Context) (int, error) {
-	var count int64
-
-	if err := s.db.WithContext(ctx).Model(&model.MonitorScrapePool{}).Count(&count).Error; err != nil {
-		s.l.Error("获取监控采集池总数失败", zap.Error(err))
-		return 0, err
-	}
-
-	return int(count), nil
 }

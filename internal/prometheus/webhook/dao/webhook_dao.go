@@ -70,7 +70,7 @@ func (wd *webhookDao) GetOnDutyGroupById(ctx context.Context, id int) (*model.Mo
 	var onDutyGroup model.MonitorOnDutyGroup
 
 	// 执行查询
-	if err := wd.db.WithContext(ctx).Where("id = ?", id).Preload("Members").First(&onDutyGroup).Error; err != nil {
+	if err := wd.db.WithContext(ctx).Where("id = ?", id).Preload("Users").First(&onDutyGroup).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			wd.l.Warn("MonitorOnDutyGroup 未找到", zap.Int("id", id))
 			return nil, nil
@@ -240,7 +240,14 @@ func (wd *webhookDao) FillTodayOnDutyUser(ctx context.Context, onDutyGroup *mode
 
 	// 设置今天的值班用户
 	if user.ID > 0 {
-		onDutyGroup.TodayDutyUser = user
+		// 转换为 MonitorOnDutyUser 类型
+		onDutyUser := &model.User{
+			Model:        model.Model{ID: user.ID},
+			RealName:     user.RealName,
+			Username:     user.Username,
+			FeiShuUserId: user.FeiShuUserId,
+		}
+		onDutyGroup.TodayDutyUser = onDutyUser
 	} else {
 		wd.l.Warn("获取到的用户 ID 不合法，分配默认值班用户",
 			zap.Int("onDutyUserID", history.OnDutyUserID),
@@ -278,14 +285,14 @@ func (wd *webhookDao) getUserByID(ctx context.Context, userID int) (*model.User,
 
 // assignDefaultDutyUser 为值班组分配默认的值班用户（成员列表中的第一个成员）
 func (wd *webhookDao) assignDefaultDutyUser(_ context.Context, onDutyGroup *model.MonitorOnDutyGroup, dateStr string) (*model.MonitorOnDutyGroup, error) {
-	if len(onDutyGroup.Members) == 0 {
-		wd.l.Warn("onDutyGroup.Members 为空，无法分配 TodayDutyUser",
+	if len(onDutyGroup.Users) == 0 {
+		wd.l.Warn("onDutyGroup.Users 为空，无法分配 TodayDutyUser",
 			zap.Int("onDutyGroupId", onDutyGroup.ID),
 		)
 		return nil, fmt.Errorf("onDutyGroup ID %d 的成员列表为空，无法分配 TodayDutyUser", onDutyGroup.ID)
 	}
 
-	onDutyGroup.TodayDutyUser = onDutyGroup.Members[0]
+	onDutyGroup.TodayDutyUser = onDutyGroup.Users[0]
 	wd.l.Info("分配默认值班用户",
 		zap.String("dateString", dateStr),
 		zap.Int("onDutyGroupId", onDutyGroup.ID),
@@ -315,7 +322,7 @@ func (wd *webhookDao) GetMonitorOnDutyGroupList(ctx context.Context) ([]*model.M
 	var onDutyGroups []*model.MonitorOnDutyGroup
 
 	if err := wd.db.WithContext(ctx).
-		Preload("Members").
+		Preload("Users").
 		Find(&onDutyGroups).Error; err != nil {
 		wd.l.Error("获取值班组列表失败",
 			zap.Error(err),

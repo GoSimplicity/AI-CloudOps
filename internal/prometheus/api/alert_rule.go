@@ -26,11 +26,10 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -64,7 +63,7 @@ func (a *AlertRuleHandler) CreateMonitorAlertRule(ctx *gin.Context) {
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	req.UserID = uc.Uid
-	req.CreatorName = uc.Username
+	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, a.svc.CreateMonitorAlertRule(ctx, &req)

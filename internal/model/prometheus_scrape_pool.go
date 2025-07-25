@@ -43,7 +43,7 @@ type MonitorScrapePool struct {
 	AlertManagerUrl       string     `json:"alert_manager_url" gorm:"size:512;comment:AlertManager地址"`
 	RuleFilePath          string     `json:"rule_file_path" gorm:"size:512;comment:告警规则文件路径"`
 	RecordFilePath        string     `json:"record_file_path" gorm:"size:512;comment:记录规则文件路径"`
-	CreateUserName        string     `json:"create_user_name" gorm:"-"`
+	CreateUserName        string     `json:"create_user_name" gorm:"type:varchar(50);comment:创建人名称"`
 }
 
 type GetMonitorScrapePoolListReq struct {
@@ -68,6 +68,7 @@ type CreateMonitorScrapePoolReq struct {
 	AlertManagerUrl       string     `json:"alert_manager_url" gorm:"size:512;comment:AlertManager地址"`
 	RuleFilePath          string     `json:"rule_file_path" gorm:"size:512;comment:告警规则文件路径"`
 	RecordFilePath        string     `json:"record_file_path" gorm:"size:512;comment:记录规则文件路径"`
+	CreateUserName        string     `json:"create_user_name" gorm:"type:varchar(50);comment:创建人名称"`
 }
 
 type UpdateMonitorScrapePoolReq struct {
@@ -90,5 +91,9 @@ type UpdateMonitorScrapePoolReq struct {
 }
 
 type DeleteMonitorScrapePoolReq struct {
+	ID int `json:"id" form:"id" binding:"required"`
+}
+
+type GetMonitorScrapePoolDetailReq struct { 
 	ID int `json:"id" form:"id" binding:"required"`
 }

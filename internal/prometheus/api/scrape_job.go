@@ -50,6 +50,7 @@ func (s *ScrapeJobHandler) RegisterRouters(server *gin.Engine) {
 	scrapeJobs := monitorGroup.Group("/scrape_jobs")
 	{
 		scrapeJobs.GET("/list", s.GetMonitorScrapeJobList)
+		scrapeJobs.GET("/detail/:id", s.GetMonitorScrapeJobDetail)
 		scrapeJobs.POST("/create", s.CreateMonitorScrapeJob)
 		scrapeJobs.PUT("/update/:id", s.UpdateMonitorScrapeJob)
 		scrapeJobs.DELETE("/delete/:id", s.DeleteMonitorScrapeJob)
@@ -71,6 +72,7 @@ func (s *ScrapeJobHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
 	req.UserID = uc.Uid
+	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, s.scrapeJobService.CreateMonitorScrapeJob(ctx, &req)
@@ -100,5 +102,22 @@ func (s *ScrapeJobHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, s.scrapeJobService.DeleteMonitorScrapeJob(ctx, req.ID)
+	})
+}
+
+// GetMonitorScrapeJobDetail 获取监控采集 Job 详情
+func (s *ScrapeJobHandler) GetMonitorScrapeJobDetail(ctx *gin.Context) {
+	var req model.GetMonitorScrapeJobDetailReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.scrapeJobService.GetMonitorScrapeJobDetail(ctx, &req)
 	})
 }

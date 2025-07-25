@@ -26,23 +26,18 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type OnDutyGroupHandler struct {
 	alertOnDutyService alertEventService.AlertManagerOnDutyService
-	l                  *zap.Logger
 }
 
-func NewOnDutyGroupHandler(l *zap.Logger, alertOnDutyService alertEventService.AlertManagerOnDutyService) *OnDutyGroupHandler {
+func NewOnDutyGroupHandler(alertOnDutyService alertEventService.AlertManagerOnDutyService) *OnDutyGroupHandler {
 	return &OnDutyGroupHandler{
-		l:                  l,
 		alertOnDutyService: alertOnDutyService,
 	}
 }
@@ -60,6 +55,7 @@ func (o *OnDutyGroupHandler) RegisterRouters(server *gin.Engine) {
 		onDutyGroups.DELETE("/delete/:id", o.DeleteMonitorOnDutyGroup)
 		onDutyGroups.GET("/detail/:id", o.GetMonitorOnDutyGroup)
 		onDutyGroups.GET("/future_plan/:id", o.GetMonitorOnDutyGroupFuturePlan)
+		onDutyGroups.GET("/history/:id", o.GetMonitorOnDutyHistory)
 	}
 }
 
@@ -76,9 +72,9 @@ func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupList(ctx *gin.Context) {
 func (o *OnDutyGroupHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
 	var req model.CreateMonitorOnDutyGroupReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(utils.UserClaims)
 	req.UserID = uc.Uid
-	req.CreatorName = uc.Username
+	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, o.alertOnDutyService.CreateMonitorOnDutyGroup(ctx, &req)
@@ -89,9 +85,9 @@ func (o *OnDutyGroupHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
 func (o *OnDutyGroupHandler) CreateMonitorOnDutyGroupChange(ctx *gin.Context) {
 	var req model.CreateMonitorOnDutyGroupChangeReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(utils.UserClaims)
 	req.UserID = uc.Uid
-	req.CreatorName = uc.Username
+	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, o.alertOnDutyService.CreateMonitorOnDutyGroupChange(ctx, &req)
@@ -163,5 +159,21 @@ func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupFuturePlan(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return o.alertOnDutyService.GetMonitorOnDutyGroupFuturePlan(ctx, &req)
+	})
+}
+
+func (o *OnDutyGroupHandler) GetMonitorOnDutyHistory(ctx *gin.Context) {
+	var req model.GetMonitorOnDutyHistoryReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	req.OnDutyGroupID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return o.alertOnDutyService.GetMonitorOnDutyHistory(ctx, &req)
 	})
 }

@@ -28,10 +28,8 @@ package scrape
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -42,24 +40,20 @@ type ScrapeJobDAO interface {
 	GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId int) ([]*model.MonitorScrapeJob, error)
 	UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
 	DeleteMonitorScrapeJob(ctx context.Context, jobId int) error
-	SearchMonitorScrapeJobsByName(ctx context.Context, name string) ([]*model.MonitorScrapeJob, error)
 	GetMonitorScrapeJobById(ctx context.Context, id int) (*model.MonitorScrapeJob, error)
 	CheckMonitorScrapeJobExists(ctx context.Context, name string) (bool, error)
 	CheckMonitorInstanceExists(ctx context.Context, poolID int) (bool, error)
-	GetMonitorScrapeJobTotal(ctx context.Context) (int, error)
 }
 
 type scrapeJobDAO struct {
-	db      *gorm.DB
-	l       *zap.Logger
-	userDao userDao.UserDAO
+	db *gorm.DB
+	l  *zap.Logger
 }
 
-func NewScrapeJobDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO) ScrapeJobDAO {
+func NewScrapeJobDAO(db *gorm.DB, l *zap.Logger) ScrapeJobDAO {
 	return &scrapeJobDAO{
-		db:      db,
-		l:       l,
-		userDao: userDao,
+		db: db,
+		l:  l,
 	}
 }
 
@@ -137,27 +131,7 @@ func (s *scrapeJobDAO) UpdateMonitorScrapeJob(ctx context.Context, monitorScrape
 	if err := s.db.WithContext(ctx).
 		Model(&model.MonitorScrapeJob{}).
 		Where("id = ?", monitorScrapeJob.ID).
-		Updates(map[string]interface{}{
-			"name":                        monitorScrapeJob.Name,
-			"enable":                      monitorScrapeJob.Enable,
-			"service_discovery_type":      monitorScrapeJob.ServiceDiscoveryType,
-			"metrics_path":                monitorScrapeJob.MetricsPath,
-			"scheme":                      monitorScrapeJob.Scheme,
-			"scrape_interval":             monitorScrapeJob.ScrapeInterval,
-			"scrape_timeout":              monitorScrapeJob.ScrapeTimeout,
-			"pool_id":                     monitorScrapeJob.PoolID,
-			"relabel_configs_yaml_string": monitorScrapeJob.RelabelConfigsYamlString,
-			"refresh_interval":            monitorScrapeJob.RefreshInterval,
-			"port":                        monitorScrapeJob.Port,
-			"ip_address":                  monitorScrapeJob.IpAddress,
-			"kube_config_file_path":       monitorScrapeJob.KubeConfigFilePath,
-			"tls_ca_file_path":            monitorScrapeJob.TlsCaFilePath,
-			"tls_ca_content":              monitorScrapeJob.TlsCaContent,
-			"bearer_token":                monitorScrapeJob.BearerToken,
-			"bearer_token_file":           monitorScrapeJob.BearerTokenFile,
-			"kubernetes_sd_role":          monitorScrapeJob.KubernetesSdRole,
-			"updated_at":                  monitorScrapeJob.UpdatedAt,
-		}).Error; err != nil {
+		Updates(monitorScrapeJob).Error; err != nil {
 		s.l.Error("更新 MonitorScrapeJob 失败", zap.Error(err), zap.Int("id", monitorScrapeJob.ID))
 		return err
 	}
@@ -186,24 +160,6 @@ func (s *scrapeJobDAO) DeleteMonitorScrapeJob(ctx context.Context, jobId int) er
 	}
 
 	return nil
-}
-
-// SearchMonitorScrapeJobsByName 通过名称搜索监控采集作业
-func (s *scrapeJobDAO) SearchMonitorScrapeJobsByName(ctx context.Context, name string) ([]*model.MonitorScrapeJob, error) {
-	if name == "" {
-		return nil, fmt.Errorf("搜索名称不能为空")
-	}
-
-	var jobs []*model.MonitorScrapeJob
-
-	if err := s.db.WithContext(ctx).
-		Where("LOWER(name) LIKE ?", "%"+strings.ToLower(name)+"%").
-		Find(&jobs).Error; err != nil {
-		s.l.Error("通过名称搜索 MonitorScrapeJob 失败", zap.Error(err))
-		return nil, err
-	}
-
-	return jobs, nil
 }
 
 // CheckMonitorScrapeJobExists 检查监控采集作业是否存在
@@ -264,16 +220,4 @@ func (s *scrapeJobDAO) CheckMonitorInstanceExists(ctx context.Context, poolID in
 	}
 
 	return count > 0, nil
-}
-
-// GetMonitorScrapeJobTotal 获取监控采集作业总数
-func (s *scrapeJobDAO) GetMonitorScrapeJobTotal(ctx context.Context) (int, error) {
-	var count int64
-
-	if err := s.db.WithContext(ctx).Model(&model.MonitorScrapeJob{}).Count(&count).Error; err != nil {
-		s.l.Error("获取监控采集作业总数失败", zap.Error(err))
-		return 0, err
-	}
-
-	return int(count), nil
 }

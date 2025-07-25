@@ -123,11 +123,11 @@ func ProvideCmd() *Cmd {
 	k8sAppHandler := api4.NewK8sAppHandler(logger, instanceService, appService, projectService, cronjobService)
 	alertManagerEventDAO := alert.NewAlertManagerEventDAO(db, logger, userDAO)
 	scrapePoolDAO := scrape.NewScrapePoolDAO(db, logger, userDAO)
-	scrapeJobDAO := scrape.NewScrapeJobDAO(db, logger, userDAO)
+	scrapeJobDAO := scrape.NewScrapeJobDAO(db, logger)
 	monitorConfigDAO := config.NewMonitorConfigDAO(logger, db)
 	promConfigCache := cache.NewPromConfigCache(logger, scrapePoolDAO, scrapeJobDAO, monitorConfigDAO)
-	alertManagerPoolDAO := alert.NewAlertManagerPoolDAO(db, logger, userDAO)
-	alertManagerSendDAO := alert.NewAlertManagerSendDAO(db, logger, userDAO)
+	alertManagerPoolDAO := alert.NewAlertManagerPoolDAO(db, logger)
+	alertManagerSendDAO := alert.NewAlertManagerSendDAO(db, logger)
 	alertConfigCache := cache.NewAlertConfigCache(logger, alertManagerPoolDAO, alertManagerSendDAO, monitorConfigDAO)
 	alertManagerRuleDAO := alert.NewAlertManagerRuleDAO(db, logger, userDAO)
 	ruleConfigCache := cache.NewRuleConfigCache(logger, scrapePoolDAO, alertManagerRuleDAO)
@@ -136,7 +136,7 @@ func ProvideCmd() *Cmd {
 	monitorCache := cache.NewMonitorCache(promConfigCache, alertConfigCache, ruleConfigCache, recordConfigCache, logger)
 	alertManagerEventService := alert2.NewAlertManagerEventService(alertManagerEventDAO, monitorCache, logger, userDAO, alertManagerSendDAO)
 	alertEventHandler := api5.NewAlertEventHandler(alertManagerEventService)
-	alertManagerPoolService := alert2.NewAlertManagerPoolService(alertManagerPoolDAO, alertManagerSendDAO, monitorCache, logger)
+	alertManagerPoolService := alert2.NewAlertManagerPoolService(alertManagerPoolDAO, alertManagerSendDAO, logger)
 	alertPoolHandler := api5.NewAlertPoolHandler(alertManagerPoolService)
 	alertManagerRuleService := alert2.NewAlertManagerRuleService(logger, alertManagerRuleDAO, alertManagerPoolDAO, alertManagerSendDAO)
 	alertRuleHandler := api5.NewAlertRuleHandler(alertManagerRuleService)
@@ -144,15 +144,15 @@ func ProvideCmd() *Cmd {
 	monitorConfigHandler := api5.NewMonitorConfigHandler(monitorConfigService)
 	alertManagerOnDutyDAO := alert.NewAlertManagerOnDutyDAO(db, logger, userDAO)
 	alertManagerOnDutyService := alert2.NewAlertManagerOnDutyService(alertManagerOnDutyDAO, alertManagerSendDAO, monitorCache, logger, userDAO)
-	onDutyGroupHandler := api5.NewOnDutyGroupHandler(logger, alertManagerOnDutyService)
-	alertManagerRecordService := alert2.NewAlertManagerRecordService(alertManagerRecordDAO, scrapePoolDAO, monitorCache, logger)
+	onDutyGroupHandler := api5.NewOnDutyGroupHandler(alertManagerOnDutyService)
+	alertManagerRecordService := alert2.NewAlertManagerRecordService(alertManagerRecordDAO, scrapePoolDAO, logger)
 	recordRuleHandler := api5.NewRecordRuleHandler(alertManagerRecordService)
 	scrapePoolService := scrape2.NewPrometheusPoolService(scrapePoolDAO, monitorCache, logger, userDAO, scrapeJobDAO)
 	scrapePoolHandler := api5.NewScrapePoolHandler(logger, scrapePoolService)
 	scrapeJobService := scrape2.NewPrometheusScrapeService(scrapeJobDAO, monitorCache, logger, userDAO)
 	scrapeJobHandler := api5.NewScrapeJobHandler(scrapeJobService)
-	alertManagerSendService := alert2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, monitorCache, logger, userDAO)
-	sendGroupHandler := api5.NewSendGroupHandler(logger, alertManagerSendService)
+	alertManagerSendService := alert2.NewAlertManagerSendService(alertManagerSendDAO, alertManagerRuleDAO, logger, userDAO)
+	sendGroupHandler := api5.NewSendGroupHandler(alertManagerSendService)
 	auditHandler := api2.NewAuditHandler(auditService, logger)
 	formDesignDAO := dao3.NewFormDesignDAO(db, logger)
 	categoryDAO := dao3.NewCategoryDAO(db, logger)
@@ -210,9 +210,11 @@ func ProvideCmd() *Cmd {
 	notificationHandler := api6.NewNotificationHandler(notificationService)
 	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sResourceQuotaHandler, k8sLimitRangeHandler, k8sLabelHandler, k8sNodeAffinityHandler, k8sPodAffinityHandler, k8sAffinityVisualizationHandler, k8sRBACHandler, k8sServiceAccountHandler, k8sTolerationHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, processHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, statisticsHandler, categoryGroupHandler, treeNodeHandler, treeLocalHandler, treeEcsHandler, treeVpcHandler, treeSecurityGroupHandler, treeCloudHandler, treeRdsHandler, treeElbHandler, notificationHandler)
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
+	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, treeEcsDAO)
 	cmd := &Cmd{
 		Server:    engine,
 		Bootstrap: applicationBootstrap,
+		Cron:      cronManager,
 	}
 	return cmd
 }
@@ -222,6 +224,7 @@ func ProvideCmd() *Cmd {
 type Cmd struct {
 	Server    *gin.Engine
 	Bootstrap startup.ApplicationBootstrap
+	Cron      cron.CronManager
 }
 
 var HandlerSet = wire.NewSet(api2.NewRoleHandler, api2.NewApiHandler, api2.NewAuditHandler, api.NewUserHandler, api3.NewNotAuthHandler, api4.NewK8sPodHandler, api4.NewK8sAppHandler, api4.NewK8sNodeHandler, api4.NewK8sConfigMapHandler, api4.NewK8sClusterHandler, api4.NewK8sDeploymentHandler, api4.NewK8sNamespaceHandler, api4.NewK8sSvcHandler, api4.NewK8sTaintHandler, api4.NewK8sYamlTaskHandler, api4.NewK8sYamlTemplateHandler, api4.NewK8sResourceQuotaHandler, api4.NewK8sLimitRangeHandler, api4.NewK8sLabelHandler, api4.NewK8sNodeAffinityHandler, api4.NewK8sPodAffinityHandler, api4.NewK8sAffinityVisualizationHandler, api4.NewK8sRBACHandler, api4.NewK8sServiceAccountHandler, api4.NewK8sTolerationHandler, api5.NewAlertPoolHandler, api5.NewMonitorConfigHandler, api5.NewOnDutyGroupHandler, api5.NewRecordRuleHandler, api5.NewAlertRuleHandler, api5.NewSendGroupHandler, api5.NewScrapeJobHandler, api5.NewScrapePoolHandler, api5.NewAlertEventHandler, api6.NewFormDesignHandler, api6.NewInstanceHandler, api6.NewInstanceFlowHandler, api6.NewInstanceCommentHandler, api6.NewTemplateHandler, api6.NewProcessHandler, api6.NewStatisticsHandler, api6.NewCategoryGroupHandler, api6.NewNotificationHandler, api7.NewTreeNodeHandler, api7.NewTreeCloudHandler, api7.NewTreeEcsHandler, api7.NewTreeLocalHandler, api7.NewTreeVpcHandler, api7.NewTreeSecurityGroupHandler, api7.NewTreeRdsHandler, api7.NewTreeElbHandler)
@@ -245,7 +248,8 @@ var Injector = wire.NewSet(
 	InitGinServer,
 	InitLogger,
 	InitRedis,
-	InitDB, wire.Struct(new(Cmd), "*"),
+	InitDB,
+	CronSet, wire.Struct(new(Cmd), "*"),
 )
 
 var CacheSet = wire.NewSet(cache.NewMonitorCache, cache.NewAlertConfigCache, cache.NewRuleConfigCache, cache.NewRecordConfig, cache.NewPromConfigCache)
