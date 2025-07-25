@@ -46,7 +46,7 @@ import (
 )
 
 var (
-	ErrNoMembers = errors.New("值班组没有成员")
+	ErrNoUsers = errors.New("值班组没有成员")
 )
 
 type CronManager interface {
@@ -121,7 +121,7 @@ func (cm *cronManager) fillOnDutyHistory(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	for _, group := range allGroups {
-		if len(group.Members) == 0 {
+		if len(group.Users) == 0 {
 			cm.logger.Warn("跳过无成员的值班组", zap.String("group", group.Name))
 			continue
 		}
@@ -331,8 +331,8 @@ func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *
 	if group == nil {
 		return errors.New("group cannot be nil")
 	}
-	if len(group.Members) == 0 {
-		return ErrNoMembers
+	if len(group.Users) == 0 {
+		return ErrNoUsers
 	}
 
 	todayStr := time.Now().Format("2006-01-02")
@@ -360,7 +360,7 @@ func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *
 	var onDutyUserID int
 	if yesterdayHistory == nil {
 		// 如果昨天没有记录，默认取成员列表的第一个用户
-		onDutyUserID = group.Members[0].ID
+		onDutyUserID = group.Users[0].ID
 	} else {
 		// 计算是否需要轮换值班人
 		shiftNeeded, err := cm.isShiftNeeded(ctx, group, yesterdayHistory)
@@ -370,8 +370,8 @@ func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *
 		}
 		if shiftNeeded {
 			// 获取下一个值班人的索引
-			nextUserIndex := (cm.getMemberIndex(group, yesterdayHistory.OnDutyUserID) + 1) % len(group.Members)
-			onDutyUserID = group.Members[nextUserIndex].ID
+			nextUserIndex := (cm.getMemberIndex(group, yesterdayHistory.OnDutyUserID) + 1) % len(group.Users)
+			onDutyUserID = group.Users[nextUserIndex].ID
 		} else {
 			// 继续昨天的值班人
 			onDutyUserID = yesterdayHistory.OnDutyUserID
@@ -425,11 +425,11 @@ func (cm *cronManager) isShiftNeeded(ctx context.Context, group *model.MonitorOn
 
 // getMemberIndex 获取成员在成员列表中的索引
 func (cm *cronManager) getMemberIndex(group *model.MonitorOnDutyGroup, userID int) int {
-	if group == nil || len(group.Members) == 0 {
+	if group == nil || len(group.Users) == 0 {
 		return 0
 	}
 
-	for index, member := range group.Members {
+	for index, member := range group.Users {
 		if member.ID == userID {
 			return index
 		}

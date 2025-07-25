@@ -78,6 +78,7 @@ func InitTables(db *gorm.DB) error {
 		&model.MonitorRecordRule{},
 		&model.MonitorOnDutyHistory{},
 		&model.MonitorOnDutyGroup{},
+		&model.MonitorOnDutyPlan{},
 		&model.MonitorSendGroup{},
 		&model.MonitorOnDutyChange{},
 		&model.MonitorAlertEvent{},

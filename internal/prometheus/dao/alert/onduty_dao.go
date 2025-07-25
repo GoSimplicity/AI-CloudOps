@@ -52,6 +52,7 @@ type AlertManagerOnDutyDAO interface {
 	GetMonitorOnDutyPlansByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyPlan, error)
 	UpdateMonitorOnDutyPlan(ctx context.Context, plan *model.MonitorOnDutyPlan) error
 	DeleteMonitorOnDutyPlan(ctx context.Context, id int) error
+	GetMonitorOnDutyGroupFuturePlan(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyPlan, error)
 }
 
 type alertManagerOnDutyDAO struct {
@@ -67,8 +68,8 @@ func NewAlertManagerOnDutyDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDA
 		userDao: userDao,
 	}
 }
-
 func (d *alertManagerOnDutyDAO) GetMonitorOnDutyList(ctx context.Context, req *model.GetMonitorOnDutyGroupListReq) ([]*model.MonitorOnDutyGroup, int64, error) {
+	// 设置默认分页参数
 	if req.Page <= 0 {
 		req.Page = 1
 	}
@@ -76,25 +77,32 @@ func (d *alertManagerOnDutyDAO) GetMonitorOnDutyList(ctx context.Context, req *m
 		req.Size = 10
 	}
 
+	// 构建查询
 	query := d.db.WithContext(ctx).Model(&model.MonitorOnDutyGroup{})
 
+	// 应用过滤条件
 	if req.Enable != nil {
 		query = query.Where("enable = ?", *req.Enable)
 	}
+	if req.Search != "" {
+		query = query.Where("name LIKE ?", "%"+req.Search+"%")
+	}
 
+	// 获取总数
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		d.l.Error("获取值班组总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
-	var groups []*model.MonitorOnDutyGroup
+	// 计算分页偏移量
 	offset := (req.Page - 1) * req.Size
 
-	if err := query.Preload("Members").
-		Order("id DESC").
+	var groups []*model.MonitorOnDutyGroup
+	if err := query.Order("id DESC").
 		Offset(offset).
 		Limit(req.Size).
+		Preload("Users").
 		Find(&groups).Error; err != nil {
 		d.l.Error("获取值班组列表失败", zap.Error(err))
 		return nil, 0, err
@@ -104,27 +112,34 @@ func (d *alertManagerOnDutyDAO) GetMonitorOnDutyList(ctx context.Context, req *m
 }
 
 func (d *alertManagerOnDutyDAO) CreateMonitorOnDutyGroup(ctx context.Context, group *model.MonitorOnDutyGroup) error {
-	if err := d.db.WithContext(ctx).Create(group).Error; err != nil {
-		d.l.Error("创建值班组失败", zap.Error(err))
-		return err
-	}
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 创建值班组
+		if err := tx.Create(group).Error; err != nil {
+			d.l.Error("创建值班组失败", zap.Error(err))
+			return err
+		}
 
-	if err := d.db.WithContext(ctx).Model(group).Association("Members").Replace(group.Members); err != nil {
-		d.l.Error("创建值班组成员失败", zap.Error(err))
-		return err
-	}
+		// 处理值班组成员关联
+		if len(group.Users) > 0 {
+			if err := tx.Model(group).Association("Users").Replace(group.Users); err != nil {
+				d.l.Error("创建值班组成员关联失败", zap.Error(err))
+				return err
+			}
+		}
 
-	return nil
+		return nil
+	})
 }
 
 func (d *alertManagerOnDutyDAO) GetMonitorOnDutyGroupByID(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error) {
 	var group model.MonitorOnDutyGroup
 	err := d.db.WithContext(ctx).
-		Preload("Members").
-		Preload("DutyPlans").
-		First(&group, id).Error
+		Preload("Users").
+		Where("id = ?", id).
+		First(&group).Error
 
 	if err != nil {
+		d.l.Error("获取值班组失败", zap.Int("id", id), zap.Error(err))
 		return nil, err
 	}
 
@@ -134,14 +149,19 @@ func (d *alertManagerOnDutyDAO) GetMonitorOnDutyGroupByID(ctx context.Context, i
 func (d *alertManagerOnDutyDAO) UpdateMonitorOnDutyGroup(ctx context.Context, group *model.MonitorOnDutyGroup) error {
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 更新基本信息
-		if err := tx.Model(group).Updates(group).Error; err != nil {
+		if err := tx.Model(group).Updates(map[string]interface{}{
+			"name":        group.Name,
+			"shift_days":  group.ShiftDays,
+			"enable":      group.Enable,
+			"description": group.Description,
+		}).Error; err != nil {
 			d.l.Error("更新值班组失败", zap.Error(err))
 			return err
 		}
 
-		// 更新成员关联
-		if err := tx.Model(group).Association("Members").Replace(group.Members); err != nil {
-			d.l.Error("更新值班组成员失败", zap.Error(err))
+		// 更新多对多关系
+		if err := tx.Model(group).Association("Users").Replace(group.Users); err != nil {
+			d.l.Error("更新值班组成员关联失败", zap.Error(err))
 			return err
 		}
 
@@ -151,24 +171,34 @@ func (d *alertManagerOnDutyDAO) UpdateMonitorOnDutyGroup(ctx context.Context, gr
 
 func (d *alertManagerOnDutyDAO) DeleteMonitorOnDutyGroup(ctx context.Context, id int) error {
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 清除成员关联
-		group := &model.MonitorOnDutyGroup{Model: model.Model{ID: id}}
-		if err := tx.Model(group).Association("Members").Clear(); err != nil {
+		// 获取值班组
+		var group model.MonitorOnDutyGroup
+		if err := tx.First(&group, id).Error; err != nil {
+			d.l.Error("获取要删除的值班组失败", zap.Int("id", id), zap.Error(err))
+			return err
+		}
+
+		// 清除多对多关联
+		if err := tx.Model(&group).Association("Users").Clear(); err != nil {
+			d.l.Error("清除值班组成员关联失败", zap.Int("id", id), zap.Error(err))
 			return err
 		}
 
 		// 删除相关的值班计划
 		if err := tx.Where("on_duty_group_id = ?", id).Delete(&model.MonitorOnDutyPlan{}).Error; err != nil {
+			d.l.Error("删除值班计划失败", zap.Int("group_id", id), zap.Error(err))
 			return err
 		}
 
 		// 删除相关的值班历史记录
 		if err := tx.Where("on_duty_group_id = ?", id).Delete(&model.MonitorOnDutyHistory{}).Error; err != nil {
+			d.l.Error("删除值班历史记录失败", zap.Int("group_id", id), zap.Error(err))
 			return err
 		}
 
 		// 删除相关的换班记录
 		if err := tx.Where("on_duty_group_id = ?", id).Delete(&model.MonitorOnDutyChange{}).Error; err != nil {
+			d.l.Error("删除换班记录失败", zap.Int("group_id", id), zap.Error(err))
 			return err
 		}
 
@@ -193,6 +223,11 @@ func (d *alertManagerOnDutyDAO) GetMonitorOnDutyChangesByGroupAndTimeRange(ctx c
 		Order("date ASC").
 		Find(&changes).Error
 
+	if err != nil {
+		d.l.Error("获取换班记录失败", zap.Int("group_id", groupID), zap.Error(err))
+		return nil, err
+	}
+
 	return changes, err
 }
 
@@ -202,6 +237,10 @@ func (d *alertManagerOnDutyDAO) CheckMonitorOnDutyGroupExists(ctx context.Contex
 		Model(&model.MonitorOnDutyGroup{}).
 		Where("name = ?", group.Name).
 		Count(&count).Error
+
+	if err != nil {
+		d.l.Error("检查值班组是否存在失败", zap.String("name", group.Name), zap.Error(err))
+	}
 
 	return count > 0, err
 }
@@ -213,7 +252,12 @@ func (d *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryByGroupIDAndTimeRange(ctx
 		Order("date_string ASC").
 		Find(&histories).Error
 
-	return histories, err
+	if err != nil {
+		d.l.Error("获取值班历史记录失败", zap.Int("group_id", groupID), zap.Error(err))
+		return nil, err
+	}
+
+	return histories, nil
 }
 
 func (d *alertManagerOnDutyDAO) CreateMonitorOnDutyHistory(ctx context.Context, history *model.MonitorOnDutyHistory) error {
@@ -235,6 +279,7 @@ func (d *alertManagerOnDutyDAO) GetMonitorOnDutyHistoryByGroupIDAndDay(ctx conte
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
+		d.l.Error("获取值班历史记录失败", zap.Int("group_id", groupID), zap.String("day", day), zap.Error(err))
 		return nil, err
 	}
 
@@ -247,6 +292,10 @@ func (d *alertManagerOnDutyDAO) ExistsMonitorOnDutyHistory(ctx context.Context, 
 		Model(&model.MonitorOnDutyHistory{}).
 		Where("on_duty_group_id = ? AND date_string = ?", groupID, day).
 		Count(&count).Error
+
+	if err != nil {
+		d.l.Error("检查值班历史记录是否存在失败", zap.Int("group_id", groupID), zap.String("day", day), zap.Error(err))
+	}
 
 	return count > 0, err
 }
@@ -287,7 +336,28 @@ func (d *alertManagerOnDutyDAO) GetMonitorOnDutyPlansByGroupAndTimeRange(ctx con
 		Order("date ASC").
 		Find(&plans).Error
 
-	return plans, err
+	if err != nil {
+		d.l.Error("获取值班计划失败", zap.Int("group_id", groupID), zap.Error(err))
+		return nil, err
+	}
+
+	return plans, nil
+}
+
+func (d *alertManagerOnDutyDAO) GetMonitorOnDutyGroupFuturePlan(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyPlan, error) {
+	var plans []*model.MonitorOnDutyPlan
+	err := d.db.WithContext(ctx).
+		Where("on_duty_group_id = ? AND date BETWEEN ? AND ? AND status = ?",
+			groupID, startTime, endTime, 3). // status=3 表示未开始的计划
+		Order("date ASC").
+		Find(&plans).Error
+
+	if err != nil {
+		d.l.Error("获取未来值班计划失败", zap.Int("group_id", groupID), zap.Error(err))
+		return nil, err
+	}
+
+	return plans, nil
 }
 
 func (d *alertManagerOnDutyDAO) UpdateMonitorOnDutyPlan(ctx context.Context, plan *model.MonitorOnDutyPlan) error {

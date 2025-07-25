@@ -241,8 +241,8 @@ func (wd *webhookDao) FillTodayOnDutyUser(ctx context.Context, onDutyGroup *mode
 	// 设置今天的值班用户
 	if user.ID > 0 {
 		// 转换为 MonitorOnDutyUser 类型
-		onDutyUser := &model.MonitorOnDutyUser{
-			ID:           user.ID,
+		onDutyUser := &model.User{
+			Model:        model.Model{ID: user.ID},
 			RealName:     user.RealName,
 			Username:     user.Username,
 			FeiShuUserId: user.FeiShuUserId,

@@ -28,16 +28,20 @@ package model
 // MonitorOnDutyGroup 值班组的配置
 type MonitorOnDutyGroup struct {
 	Model
-	Name                      string               `json:"name" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:值班组名称"`
-	UserID                    int                  `json:"user_id" gorm:"index;comment:创建该值班组的用户ID"`
-	ShiftDays                 int                  `json:"shift_days" gorm:"type:int;not null;default:7;comment:轮班周期，以天为单位"`
-	YesterdayNormalDutyUserID int                  `json:"yesterday_normal_duty_user_id" gorm:"comment:昨天的正常排班值班人ID，由cron任务设置"`
-	CreateUserName            string               `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
-	Members                   []*MonitorOnDutyUser `json:"members" gorm:"many2many:monitor_on_duty_users;comment:值班组成员列表，多对多关系"`
-	TodayDutyUser             *MonitorOnDutyUser   `json:"today_duty_user" gorm:"-"`
-	DutyPlans                 []*MonitorOnDutyPlan `json:"duty_plans" gorm:"foreignKey:OnDutyGroupID;references:ID;comment:值班计划列表"`
-	Enable                    int8                 `json:"enable" gorm:"type:tinyint(1);not null;default:1;comment:是否启用 1-启用 0-禁用"`
-	Description               string               `json:"description" gorm:"type:varchar(255);comment:值班组描述"`
+	Name                      string  `json:"name" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:值班组名称"`
+	UserID                    int     `json:"user_id" gorm:"index;comment:创建该值班组的用户ID"`
+	ShiftDays                 int     `json:"shift_days" gorm:"type:int;not null;default:7;comment:轮班周期，以天为单位"`
+	YesterdayNormalDutyUserID int     `json:"yesterday_normal_duty_user_id" gorm:"comment:昨天的正常排班值班人ID，由cron任务设置"`
+	CreateUserName            string  `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
+	Users                     []*User `json:"users" gorm:"many2many:cl_monitor_on_duty_group_users;comment:值班组成员列表，多对多关系"`
+	DutyPlans                 []*User `json:"duty_plans" gorm:"-;comment:值班计划列表"`
+	Enable                    int8    `json:"enable" gorm:"type:tinyint(1);not null;default:1;comment:是否启用 1-启用 2-禁用"`
+	Description               string  `json:"description" gorm:"type:varchar(255);comment:值班组描述"`
+	TodayDutyUser             *User   `json:"today_duty_user" gorm:"-;comment:今日值班人"`
+}
+
+func (m *MonitorOnDutyGroup) TableName() string {
+	return "cl_monitor_on_duty_groups"
 }
 
 // MonitorOnDutyPlan 值班计划表
@@ -52,8 +56,11 @@ type MonitorOnDutyPlan struct {
 	CreateUserID   int    `json:"create_user_id" gorm:"index;comment:创建者ID"`
 	CreateUserName string `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
 	UpdateUserID   int    `json:"update_user_id" gorm:"comment:更新者ID"`
-	UpdateUserName string `json:"update_user_name" gorm:"type:varchar(100);comment:更新者名称"`
 	Remark         string `json:"remark" gorm:"type:varchar(255);comment:备注信息"`
+}
+
+func (m *MonitorOnDutyPlan) TableName() string {
+	return "cl_monitor_on_duty_plans"
 }
 
 // MonitorOnDutyChange 值班换班记录
@@ -68,6 +75,10 @@ type MonitorOnDutyChange struct {
 	Reason         string `json:"reason" gorm:"type:varchar(255);comment:换班原因"`
 }
 
+func (m *MonitorOnDutyChange) TableName() string {
+	return "cl_monitor_on_duty_changes"
+}
+
 // MonitorOnDutyHistory 值班历史记录
 type MonitorOnDutyHistory struct {
 	Model
@@ -78,18 +89,15 @@ type MonitorOnDutyHistory struct {
 	CreateUserName string `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
 }
 
-// MonitorOnDutyOne 单日值班信息
-type MonitorOnDutyOne struct {
-	Date       string             `json:"date"`        // 值班日期
-	User       *MonitorOnDutyUser `json:"user"`        // 值班人信息
-	OriginUser string             `json:"origin_user"` // 原始值班人姓名
+func (m *MonitorOnDutyHistory) TableName() string {
+	return "cl_monitor_on_duty_histories"
 }
 
-type MonitorOnDutyUser struct {
-	ID           int    `json:"id" gorm:"index;comment:用户ID"`
-	RealName     string `json:"real_name" gorm:"type:varchar(100);not null;comment:用户真实姓名"`
-	Username     string `json:"username" gorm:"type:varchar(100);not null;comment:用户名"`
-	FeiShuUserId string `json:"fei_shu_user_id" gorm:"type:varchar(100);comment:飞书用户ID"`
+// MonitorOnDutyOne 单日值班信息
+type MonitorOnDutyOne struct {
+	Date       string `json:"date"`        // 值班日期
+	User       *User  `json:"user"`        // 值班人信息
+	OriginUser string `json:"origin_user"` // 原始值班人姓名
 }
 
 // GetMonitorOnDutyGroupListReq 获取值班组列表请求
@@ -103,7 +111,7 @@ type GetMonitorOnDutyGroupListReq struct {
 type CreateMonitorOnDutyGroupReq struct {
 	Name           string `json:"name" binding:"required,min=1,max=50"`
 	UserID         int    `json:"user_id" binding:"required"`
-	MemberIDs      []int  `json:"member_ids" binding:"required,min=1"`
+	UserIDs        []int  `json:"user_ids" binding:"required,min=1"`
 	ShiftDays      int    `json:"shift_days" binding:"required,min=1"`
 	CreateUserName string `json:"create_user_name"`
 	Description    string `json:"description"`
@@ -134,34 +142,34 @@ type CreateMonitorOnDutyPlanReq struct {
 
 // UpdateMonitorOnDutyGroupReq 更新值班组信息请求
 type UpdateMonitorOnDutyGroupReq struct {
-	ID          int    `json:"id" binding:"required" form:"id"`
+	ID          int    `json:"id" form:"id" binding:"required"`
 	Name        string `json:"name" binding:"required,min=1,max=50"`
 	ShiftDays   int    `json:"shift_days" binding:"required,min=1"`
-	MemberIDs   []int  `json:"member_ids" binding:"required,min=1"`
+	UserIDs     []int  `json:"user_ids" binding:"required,min=1"`
 	Description string `json:"description"`
-	Enable      *int8  `json:"enable"`
+	Enable      *int8  `json:"enable" binding:"omitempty,oneof=1 2"`
 }
 
 // DeleteMonitorOnDutyGroupReq 删除值班组请求
 type DeleteMonitorOnDutyGroupReq struct {
-	ID int `json:"id" binding:"required" form:"id"`
+	ID int `json:"id" binding:"required"`
 }
 
 // GetMonitorOnDutyGroupReq 获取指定值班组信息请求
 type GetMonitorOnDutyGroupReq struct {
-	ID int `json:"id" binding:"required" form:"id"`
+	ID int `json:"id" binding:"required"`
 }
 
 // GetMonitorOnDutyGroupFuturePlanReq 获取值班组未来计划请求
 type GetMonitorOnDutyGroupFuturePlanReq struct {
-	ID        int    `json:"id" binding:"required" form:"id"`
-	StartTime string `json:"start_time" binding:"required" form:"start_time"`
-	EndTime   string `json:"end_time" binding:"required" form:"end_time"`
+	ID        int    `json:"id" form:"id" binding:"required"`
+	StartTime string `json:"start_time" form:"start_time" binding:"required"`
+	EndTime   string `json:"end_time" form:"end_time" binding:"required"`
 }
 
 // GetMonitorOnDutyHistoryReq 获取值班历史记录请求
 type GetMonitorOnDutyHistoryReq struct {
-	OnDutyGroupID int    `json:"on_duty_group_id" form:"on_duty_group_id" binding:"required"`
-	StartDate     string `json:"start_date" form:"start_date" binding:"required"`
-	EndDate       string `json:"end_date" form:"end_date" binding:"required"`
+	OnDutyGroupID int    `json:"on_duty_group_id" binding:"required"`
+	StartDate     string `json:"start_date" binding:"required"`
+	EndDate       string `json:"end_date" binding:"required"`
 }
