@@ -240,7 +240,14 @@ func (wd *webhookDao) FillTodayOnDutyUser(ctx context.Context, onDutyGroup *mode
 
 	// 设置今天的值班用户
 	if user.ID > 0 {
-		onDutyGroup.TodayDutyUser = user
+		// 转换为 MonitorOnDutyUser 类型
+		onDutyUser := &model.MonitorOnDutyUser{
+			ID:           user.ID,
+			RealName:     user.RealName,
+			Username:     user.Username,
+			FeiShuUserId: user.FeiShuUserId,
+		}
+		onDutyGroup.TodayDutyUser = onDutyUser
 	} else {
 		wd.l.Warn("获取到的用户 ID 不合法，分配默认值班用户",
 			zap.Int("onDutyUserID", history.OnDutyUserID),

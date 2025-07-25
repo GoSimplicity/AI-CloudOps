@@ -90,17 +90,37 @@ func (cm *cronManager) StartOnDutyHistoryManager(ctx context.Context) error {
 
 // fillOnDutyHistory 填充所有值班组的历史记录
 func (cm *cronManager) fillOnDutyHistory(ctx context.Context) {
-	// 获取所有的值班组
-	groups, err := cm.onDutyDao.GetAllMonitorOnDutyGroup(ctx)
-	if err != nil {
-		cm.logger.Error("获取值班组失败", zap.Error(err))
-		return
+	const batchSize = 100
+	page := 1
+	var allGroups []*model.MonitorOnDutyGroup
+
+	// 分批获取所有值班组
+	for {
+		groups, total, err := cm.onDutyDao.GetMonitorOnDutyList(ctx, &model.GetMonitorOnDutyGroupListReq{
+			ListReq: model.ListReq{
+				Page: page,
+				Size: batchSize,
+			},
+		})
+		if err != nil {
+			cm.logger.Error("获取值班组失败", zap.Error(err), zap.Int("page", page))
+			return
+		}
+
+		allGroups = append(allGroups, groups...)
+
+		// 如果已经获取了所有数据，则退出循环
+		if int64(len(allGroups)) >= total || len(groups) == 0 {
+			break
+		}
+
+		page++
 	}
 
-	errChan := make(chan error, len(groups))
+	errChan := make(chan error, len(allGroups))
 	var wg sync.WaitGroup
 
-	for _, group := range groups {
+	for _, group := range allGroups {
 		if len(group.Members) == 0 {
 			cm.logger.Warn("跳过无成员的值班组", zap.String("group", group.Name))
 			continue

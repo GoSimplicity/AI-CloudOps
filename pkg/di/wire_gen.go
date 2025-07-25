@@ -144,7 +144,7 @@ func ProvideCmd() *Cmd {
 	monitorConfigHandler := api5.NewMonitorConfigHandler(monitorConfigService)
 	alertManagerOnDutyDAO := alert.NewAlertManagerOnDutyDAO(db, logger, userDAO)
 	alertManagerOnDutyService := alert2.NewAlertManagerOnDutyService(alertManagerOnDutyDAO, alertManagerSendDAO, monitorCache, logger, userDAO)
-	onDutyGroupHandler := api5.NewOnDutyGroupHandler(logger, alertManagerOnDutyService)
+	onDutyGroupHandler := api5.NewOnDutyGroupHandler(alertManagerOnDutyService)
 	alertManagerRecordService := alert2.NewAlertManagerRecordService(alertManagerRecordDAO, scrapePoolDAO, logger)
 	recordRuleHandler := api5.NewRecordRuleHandler(alertManagerRecordService)
 	scrapePoolService := scrape2.NewPrometheusPoolService(scrapePoolDAO, monitorCache, logger, userDAO, scrapeJobDAO)
