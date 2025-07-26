@@ -39,6 +39,10 @@ type K8sApp struct {
 	ContainerCore `json:"containerCore"` // 容器核心配置
 }
 
+func (app *K8sApp) TableName() string {
+	return "cl_k8s_apps"
+}
+
 // CreateK8sAppRequest 创建 Kubernetes 应用的请求
 type CreateK8sAppRequest struct {
 	Name          string                 `json:"name" binding:"required,min=1,max=200"` // 应用名称

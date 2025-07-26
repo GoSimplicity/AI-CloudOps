@@ -32,6 +32,7 @@ type MonitorRecordRule struct {
 	UserID         int        `json:"user_id" gorm:"index;not null;comment:创建该记录规则的用户ID"`
 	PoolID         int        `json:"pool_id" gorm:"index;not null;comment:关联的Prometheus实例池ID"`
 	IpAddress      string     `json:"ip_address" gorm:"size:255;comment:IP地址"`
+	Port           int        `json:"port" gorm:"not null;comment:端口"`
 	Enable         int8       `json:"enable" gorm:"type:tinyint(1);default:1;not null;comment:是否启用记录规则 1:启用 2:禁用"`
 	ForTime        string     `json:"for_time" gorm:"size:50;default:'5m';not null;comment:持续时间"`
 	Expr           string     `json:"expr" gorm:"type:text;not null;comment:记录规则表达式"`
@@ -39,6 +40,10 @@ type MonitorRecordRule struct {
 	Annotations    StringList `json:"annotations" gorm:"type:text;comment:注解(key=value)"`
 	CreateUserName string     `json:"create_user_name" gorm:"type:varchar(100);comment:创建人"`
 	PoolName       string     `json:"pool_name" gorm:"-"`
+}
+
+func (m *MonitorRecordRule) TableName() string {
+	return "cl_monitor_record_rules"
 }
 
 // GetMonitorRecordRuleListReq 获取预聚合规则列表请求
@@ -54,6 +59,7 @@ type CreateMonitorRecordRuleReq struct {
 	UserID         int        `json:"user_id"`
 	PoolID         int        `json:"pool_id" binding:"required"`
 	IpAddress      string     `json:"ip_address"`
+	Port           int        `json:"port"`
 	Enable         int8       `json:"enable"`
 	ForTime        string     `json:"for_time"`
 	Expr           string     `json:"expr" binding:"required"`
@@ -68,6 +74,7 @@ type UpdateMonitorRecordRuleReq struct {
 	Name        string     `json:"name" binding:"required,min=1,max=50"`
 	PoolID      int        `json:"pool_id" binding:"required"`
 	IpAddress   string     `json:"ip_address"`
+	Port        int        `json:"port"`
 	Enable      int8       `json:"enable"`
 	ForTime     string     `json:"for_time"`
 	Expr        string     `json:"expr" binding:"required"`

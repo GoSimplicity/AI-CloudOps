@@ -122,7 +122,7 @@ type Process struct {
 
 // TableName 指定流程表名
 func (Process) TableName() string {
-	return "workorder_process"
+	return "cl_workorder_process"
 }
 
 // CreateProcessReq 创建流程请求

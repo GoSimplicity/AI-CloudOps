@@ -115,8 +115,6 @@ type PriorityDistribution struct {
 	Percentage float64 `json:"percentage"` // 百分比
 }
 
-// ==================== 数据库实体 ====================
-
 // WorkOrderStatistics 工单统计表
 type WorkOrderStatistics struct {
 	Model
@@ -131,7 +129,7 @@ type WorkOrderStatistics struct {
 }
 
 func (WorkOrderStatistics) TableName() string {
-	return "workorder_statistics"
+	return "cl_workorder_statistics"
 }
 
 // UserPerformance 用户绩效表
@@ -149,7 +147,7 @@ type UserPerformance struct {
 }
 
 func (UserPerformance) TableName() string {
-	return "workorder_user_performance"
+	return "cl_workorder_user_performance"
 }
 
 // CategoryPerformance 分类绩效表
@@ -165,7 +163,7 @@ type CategoryPerformance struct {
 }
 
 func (CategoryPerformance) TableName() string {
-	return "workorder_category_performance"
+	return "cl_workorder_category_performance"
 }
 
 // TemplatePerformance 模板绩效表
@@ -181,5 +179,5 @@ type TemplatePerformance struct {
 }
 
 func (TemplatePerformance) TableName() string {
-	return "workorder_template_performance"
+	return "cl_workorder_template_performance"
 }

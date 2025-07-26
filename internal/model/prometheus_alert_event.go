@@ -49,6 +49,10 @@ type MonitorAlertEvent struct {
 	AnnotationsMap map[string]string `json:"annotations_map" gorm:"-"`
 }
 
+func (m *MonitorAlertEvent) TableName() string {
+	return "cl_monitor_alert_events"
+}
+
 // GetMonitorAlertEventListReq 获取告警事件列表请求
 type GetMonitorAlertEventListReq struct {
 	ListReq
@@ -58,7 +62,7 @@ type GetMonitorAlertEventListReq struct {
 	StartTime   string `json:"start_time" form:"start_time" binding:"omitempty"`
 	EndTime     string `json:"end_time" form:"end_time" binding:"omitempty"`
 	AlertName   string `json:"alert_name" form:"alert_name" binding:"omitempty"`
-} 
+}
 
 type EventAlertSilenceReq struct {
 	ID      int    `json:"id" binding:"required"`

@@ -75,10 +75,12 @@ type ResourceEcs struct {
 	AutoReleaseTime   string     `json:"auto_release_time" gorm:"type:varchar(30);comment:自动释放时间"`
 
 	// 关联关系
-	EcsTreeNodes []*TreeNode `json:"ecs_tree_nodes" gorm:"many2many:resource_ecs_tree_nodes;comment:关联服务树节点"`
+	EcsTreeNodes []*TreeNode `json:"ecs_tree_nodes" gorm:"many2many:cl_ecs_tree_nodes;comment:关联服务树节点"`
 }
 
-// =============== 请求模型 ===============
+func (r *ResourceEcs) TableName() string {
+	return "cl_tree_ecs"
+}
 
 // ListEcsResourcesReq 定义ECS资源列表查询参数
 type ListEcsResourcesReq struct {
@@ -112,39 +114,39 @@ type GetEcsDetailReq struct {
 
 // CreateEcsResourceReq 定义ECS创建请求参数
 type CreateEcsResourceReq struct {
-	AccountId          int           `json:"account_id"`                             // 云账号ID
-	Provider           CloudProvider `json:"provider" binding:"required"`            // 云提供商
-	Region             string        `json:"region"`                                 // 区域
-	ZoneId             string        `json:"zone_id"`                                // 可用区ID
-	InstanceType       string        `json:"instance_type"`                          // 实例类型
-	ImageId            string        `json:"image_id"`                               // 镜像ID
-	VSwitchId          string        `json:"v_switch_id"`                            // 交换机ID
-	SecurityGroupIds   []string      `json:"security_group_ids"`                     // 安全组ID列表
-	Amount             int           `json:"amount"`                                 // 创建数量
-	Hostname           string        `json:"hostname" binding:"required"`            // 主机名
-	Password           string        `json:"password" binding:"required"`            // 密码
-	InstanceName       string        `json:"instance_name"`                          // 实例名称
-	TreeNodeId         int           `json:"tree_node_id"`                           // 服务树节点ID
-	Description        string        `json:"description"`                            // 描述
-	SystemDiskCategory string        `json:"system_disk_category"`                   // 系统盘类型
-	AutoRenewPeriod    int           `json:"auto_renew_period"`                      // 自动续费周期
-	PeriodUnit         string        `json:"period_unit"`                            // 购买时长单位(Month/Year)
-	Period             int           `json:"period"`                                 // 购买时长
-	AutoRenew          bool          `json:"auto_renew"`                             // 是否自动续费
-	InstanceChargeType string        `json:"instance_charge_type"`                   // 付费类型
-	SpotStrategy       string        `json:"spot_strategy"`                          // 竞价策略
-	SpotDuration       int           `json:"spot_duration"`                          // 竞价时长
-	SystemDiskSize     int           `json:"system_disk_size"`                       // 系统盘大小
-	DataDiskSize       int           `json:"data_disk_size"`                         // 数据盘大小
-	DataDiskCategory   string        `json:"data_disk_category"`                     // 数据盘类型
-	DryRun             bool          `json:"dry_run"`                                // 是否仅预览不创建
-	Tags               StringList    `json:"tags"`                                   // 资源标签
-	OsType             string        `json:"os_type"`                                // 操作系统类型
-	ImageName          string        `json:"image_name"`                             // 镜像名称
-	AuthMode           string        `json:"auth_mode"` // 认证方式
-	Key                string        `json:"key"`                                    // 密钥内容
-	IpAddr             string        `json:"ip_addr"`                                // IP地址
-	Port               int           `json:"port"`                                   // SSH端口号
+	AccountId          int           `json:"account_id"`                  // 云账号ID
+	Provider           CloudProvider `json:"provider" binding:"required"` // 云提供商
+	Region             string        `json:"region"`                      // 区域
+	ZoneId             string        `json:"zone_id"`                     // 可用区ID
+	InstanceType       string        `json:"instance_type"`               // 实例类型
+	ImageId            string        `json:"image_id"`                    // 镜像ID
+	VSwitchId          string        `json:"v_switch_id"`                 // 交换机ID
+	SecurityGroupIds   []string      `json:"security_group_ids"`          // 安全组ID列表
+	Amount             int           `json:"amount"`                      // 创建数量
+	Hostname           string        `json:"hostname" binding:"required"` // 主机名
+	Password           string        `json:"password" binding:"required"` // 密码
+	InstanceName       string        `json:"instance_name"`               // 实例名称
+	TreeNodeId         int           `json:"tree_node_id"`                // 服务树节点ID
+	Description        string        `json:"description"`                 // 描述
+	SystemDiskCategory string        `json:"system_disk_category"`        // 系统盘类型
+	AutoRenewPeriod    int           `json:"auto_renew_period"`           // 自动续费周期
+	PeriodUnit         string        `json:"period_unit"`                 // 购买时长单位(Month/Year)
+	Period             int           `json:"period"`                      // 购买时长
+	AutoRenew          bool          `json:"auto_renew"`                  // 是否自动续费
+	InstanceChargeType string        `json:"instance_charge_type"`        // 付费类型
+	SpotStrategy       string        `json:"spot_strategy"`               // 竞价策略
+	SpotDuration       int           `json:"spot_duration"`               // 竞价时长
+	SystemDiskSize     int           `json:"system_disk_size"`            // 系统盘大小
+	DataDiskSize       int           `json:"data_disk_size"`              // 数据盘大小
+	DataDiskCategory   string        `json:"data_disk_category"`          // 数据盘类型
+	DryRun             bool          `json:"dry_run"`                     // 是否仅预览不创建
+	Tags               StringList    `json:"tags"`                        // 资源标签
+	OsType             string        `json:"os_type"`                     // 操作系统类型
+	ImageName          string        `json:"image_name"`                  // 镜像名称
+	AuthMode           string        `json:"auth_mode"`                   // 认证方式
+	Key                string        `json:"key"`                         // 密钥内容
+	IpAddr             string        `json:"ip_addr"`                     // IP地址
+	Port               int           `json:"port"`                        // SSH端口号
 }
 
 // UpdateEcsReq 定义ECS更新请求参数
@@ -252,21 +254,21 @@ type ResourceECSDetailResp struct {
 
 // ListEcsResourceOptionsResp 定义实例选项列表响应
 type ListEcsResourceOptionsResp struct {
-	Value              string `json:"value"`               // 选项值
-	Label              string `json:"label"`               // 选项标签
-	DataDiskCategory   string `json:"data_disk_category"`  // 数据盘类型
+	Value              string `json:"value"`                // 选项值
+	Label              string `json:"label"`                // 选项标签
+	DataDiskCategory   string `json:"data_disk_category"`   // 数据盘类型
 	SystemDiskCategory string `json:"system_disk_category"` // 系统盘类型
-	InstanceType       string `json:"instance_type"`       // 实例类型
-	Region             string `json:"region"`              // 区域
-	Zone               string `json:"zone"`                // 可用区
-	PayType            string `json:"pay_type"`            // 付费类型
-	Valid              bool   `json:"valid"`               // 是否有效
-	ImageId            string `json:"image_id"`            // 镜像ID
-	OSName             string `json:"os_name"`             // 操作系统名称
-	OSType             string `json:"os_type"`             // 操作系统类型
-	Architecture       string `json:"architecture"`        // 架构
-	Cpu                int    `json:"cpu"`                 // CPU核数
-	Memory             int    `json:"memory"`              // 内存大小
+	InstanceType       string `json:"instance_type"`        // 实例类型
+	Region             string `json:"region"`               // 区域
+	Zone               string `json:"zone"`                 // 可用区
+	PayType            string `json:"pay_type"`             // 付费类型
+	Valid              bool   `json:"valid"`                // 是否有效
+	ImageId            string `json:"image_id"`             // 镜像ID
+	OSName             string `json:"os_name"`              // 操作系统名称
+	OSType             string `json:"os_type"`              // 操作系统类型
+	Architecture       string `json:"architecture"`         // 架构
+	Cpu                int    `json:"cpu"`                  // CPU核数
+	Memory             int    `json:"memory"`               // 内存大小
 }
 
 // ListRegionsReq 定义区域列表请求参数
@@ -316,10 +318,10 @@ type InstanceTypeResp struct {
 
 // ImageResp 定义镜像响应
 type ImageResp struct {
-	ImageId     string `json:"image_id"`     // 镜像ID
-	ImageName   string `json:"image_name"`   // 镜像名称
-	OSType      string `json:"os_type"`      // 操作系统类型
-	Description string `json:"description"`  // 描述
+	ImageId     string `json:"image_id"`    // 镜像ID
+	ImageName   string `json:"image_name"`  // 镜像名称
+	OSType      string `json:"os_type"`     // 操作系统类型
+	Description string `json:"description"` // 描述
 }
 
 // SecurityGroupResp 定义安全组响应

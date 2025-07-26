@@ -111,7 +111,7 @@ type Instance struct {
 }
 
 func (Instance) TableName() string {
-	return "workorder_instance"
+	return "cl_workorder_instance"
 }
 
 // 工单实例请求结构

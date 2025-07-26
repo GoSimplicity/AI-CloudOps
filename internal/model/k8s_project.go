@@ -36,6 +36,10 @@ type K8sProject struct {
 	K8sApps    []K8sApp `json:"k8s_apps,omitempty" gorm:"foreignKey:K8sProjectID;comment:关联的 Kubernetes 应用"` // 关联的 Kubernetes 应用
 }
 
+func (*K8sProject) TableName() string {
+	return "cl_k8s_projects"
+}
+
 // CreateK8sProjectRequest 创建 Kubernetes 项目的请求
 type CreateK8sProjectRequest struct {
 	Name       string `json:"name" binding:"required,min=1,max=200"`    // 项目名称

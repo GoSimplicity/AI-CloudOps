@@ -50,6 +50,10 @@ type K8sCluster struct {
 	ActionTimeoutSeconds int        `json:"action_timeout_seconds,omitempty" gorm:"comment:操作超时时间（秒）"`               // 操作超时时间（秒）
 }
 
+func (k8sCluster *K8sCluster) TableName() string {
+	return "cl_k8s_clusters"
+}
+
 // ClusterNamespaces 表示一个集群及其命名空间列表
 type ClusterNamespaces struct {
 	ClusterName string      `json:"cluster_name"` // 集群名称

@@ -56,7 +56,7 @@ type CloudAccount struct {
 
 // TableName 指定表名
 func (CloudAccount) TableName() string {
-	return "cloud_accounts"
+	return "cl_cloud_accounts"
 }
 
 // CloudAccountSyncStatus 云账户同步状态
@@ -73,7 +73,7 @@ type CloudAccountSyncStatus struct {
 
 // TableName 指定表名
 func (CloudAccountSyncStatus) TableName() string {
-	return "cloud_account_sync_status"
+	return "cl_cloud_account_sync_status"
 }
 
 // CloudAccountAuditLog 云账户审计日志
@@ -89,7 +89,7 @@ type CloudAccountAuditLog struct {
 
 // TableName 指定表名
 func (CloudAccountAuditLog) TableName() string {
-	return "cloud_account_audit_logs"
+	return "cl_cloud_account_audit_logs"
 }
 
 // CreateCloudAccountReq 创建云账号请求

@@ -75,12 +75,11 @@ type ResourceRds struct {
 	TreeNodeID    int       `json:"tree_node_id" gorm:"comment:关联的服务树节点ID"`
 
 	// 多对多关系
-	RdsTreeNodes []*TreeNode `json:"rds_tree_nodes" gorm:"many2many:resource_rds_tree_nodes;comment:关联服务树节点"`
+	RdsTreeNodes []*TreeNode `json:"rds_tree_nodes" gorm:"many2many:cl_rds_tree_nodes;comment:关联服务树节点"`
 }
 
-// TableName 指定表名
-func (ResourceRds) TableName() string {
-	return "resource_rds"
+func (r *ResourceRds) TableName() string {
+	return "cl_tree_rds"
 }
 
 // ====================== 请求结构体定义 ======================

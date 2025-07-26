@@ -51,7 +51,7 @@ type AuditLog struct {
 
 // TableName 指定表名，支持分表
 func (AuditLog) TableName() string {
-	return "audit_logs"
+	return "cl_system_audit_logs"
 }
 
 // AuditLogBatch 批量写入的审计日志

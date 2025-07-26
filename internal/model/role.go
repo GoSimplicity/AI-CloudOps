@@ -32,8 +32,12 @@ type Role struct {
 	Description string  `json:"description" gorm:"type:varchar(500);comment:角色描述"`                              // 角色描述
 	Status      int8    `json:"status" gorm:"type:tinyint(1);default:1;comment:状态 0禁用 1启用" binding:"oneof=0 1"` // 角色状态
 	IsSystem    int8    `json:"is_system" gorm:"type:tinyint(1);default:0;comment:是否系统角色 0否 1是"`                // 是否系统角色，系统角色不可删除
-	Apis        []*Api  `json:"apis" gorm:"many2many:role_apis;comment:关联API"`                                  // 多对多关联API
-	Users       []*User `json:"users" gorm:"many2many:user_roles;comment:关联用户"`                                 // 多对多关联用户
+	Apis        []*Api  `json:"apis" gorm:"many2many:cl_role_apis;comment:关联API"`                               // 多对多关联API
+	Users       []*User `json:"users" gorm:"many2many:cl_user_roles;comment:关联用户"`                              // 多对多关联用户
+}
+
+func (r *Role) TableName() string {
+	return "cl_system_roles"
 }
 
 // RoleApi 角色API权限关联表
@@ -43,11 +47,19 @@ type RoleApi struct {
 	ApiID  int `json:"api_id" gorm:"not null;index;comment:API ID"`
 }
 
+func (r *RoleApi) TableName() string {
+	return "cl_system_role_apis"
+}
+
 // UserRole 用户角色关联表
 type UserRole struct {
 	ID     int `json:"id" gorm:"primaryKey;autoIncrement;comment:主键ID"`
 	UserID int `json:"user_id" gorm:"not null;index;comment:用户ID"`
 	RoleID int `json:"role_id" gorm:"not null;index;comment:角色ID"`
+}
+
+func (r *UserRole) TableName() string {
+	return "cl_system_user_roles"
 }
 
 // CreateRoleRequest 创建角色请求结构体

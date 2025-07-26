@@ -16,7 +16,7 @@ redis:
 mysql:
   # addr: "root:root@tcp(mysql:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
   # addr: "root:root@tcp(localhost:33069)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
-  addr: "root:root@tcp(localhost:3306)/cloudOps?charset=utf8mb4&parseTime=True&loc=Local"
+  addr: "root:root@tcp(localhost:3306)/CloudOps?charset=utf8mb4&parseTime=True&loc=Local"
 tree:
   check_status_cron: "@every 300s"
   password_encryption_key: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"

@@ -43,18 +43,18 @@ type MonitorCache interface {
 }
 
 type monitorCache struct {
-	PrometheusMainConfig   PromConfigCache
-	AlertManagerMainConfig AlertConfigCache
-	AlertRuleConfig        RuleConfigCache
-	AlertRecordConfig      RecordConfigCache
+	PrometheusMainConfig   PrometheusConfigCache
+	AlertManagerMainConfig AlertManagerConfigCache
+	AlertRuleConfig        AlertRuleConfigCache
+	AlertRecordConfig      RecordRuleConfigCache
 	l                      *zap.Logger
 }
 
 func NewMonitorCache(
-	promConfig PromConfigCache,
-	alertManagerConfig AlertConfigCache,
-	alertRuleConfig RuleConfigCache,
-	alertRecordConfig RecordConfigCache,
+	promConfig PrometheusConfigCache,
+	alertManagerConfig AlertManagerConfigCache,
+	alertRuleConfig AlertRuleConfigCache,
+	alertRecordConfig RecordRuleConfigCache,
 	l *zap.Logger,
 ) MonitorCache {
 	return &monitorCache{
@@ -71,38 +71,36 @@ func (mc *monitorCache) MonitorCacheManager(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, DefaultTaskTimeout)
 	defer cancel()
 
-	// 使用errgroup管理并发任务
 	g, ctx := errgroup.WithContext(ctx)
 
-	// 定义任务列表
-	tasks := []struct {
+	// 任务定义与执行优化
+	type taskDef struct {
 		name string
 		fn   func(context.Context) error
-	}{
-		{"Prometheus主配置", mc.PrometheusMainConfig.GeneratePrometheusMainConfig},
-		{"AlertManager主配置", mc.AlertManagerMainConfig.GenerateAlertManagerMainConfig},
-		{"告警规则配置", mc.AlertRuleConfig.GenerateAlertRuleConfigYaml},
-		{"预聚合规则配置", mc.AlertRecordConfig.GenerateRecordRuleConfigYaml},
+	}
+	tasks := []taskDef{
+		{"Prometheus主配置", mc.PrometheusMainConfig.GenerateMainConfig},
+		{"AlertManager主配置", mc.AlertManagerMainConfig.GenerateMainConfig},
+		{"告警规则配置", mc.AlertRuleConfig.GenerateMainConfig},
+		{"预聚合规则配置", mc.AlertRecordConfig.GenerateMainConfig},
 	}
 
-	// 启动所有任务
-	for _, task := range tasks {
-		task := task // 避免闭包捕获问题
+	for i := range tasks {
+		task := tasks[i] // 避免闭包变量问题
 		g.Go(func() error {
 			return mc.executeTask(ctx, task.name, task.fn)
 		})
 	}
 
-	// 等待所有任务完成
 	if err := g.Wait(); err != nil {
 		mc.l.Error("监控缓存更新失败",
-			zap.String("error", err.Error()),
+			zap.Error(err),
 			zap.Duration("timeout", DefaultTaskTimeout),
 		)
 		return fmt.Errorf("监控缓存更新失败: %w", err)
 	}
 
-	mc.l.Info("监控缓存配置更新成功完成")
+	mc.l.Info("监控缓存配置全部更新成功")
 	return nil
 }
 
@@ -114,11 +112,7 @@ func (mc *monitorCache) executeTask(ctx context.Context, taskName string, taskFn
 		zap.Time("start_time", startTime),
 	)
 
-	taskCtx, cancel := context.WithTimeout(ctx, DefaultTaskTimeout)
-	defer cancel()
-
-	// 执行任务
-	if err := taskFn(taskCtx); err != nil {
+	if err := taskFn(ctx); err != nil {
 		mc.l.Error("配置任务执行失败",
 			zap.String("task", taskName),
 			zap.Error(err),

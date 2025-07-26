@@ -65,6 +65,10 @@ type TreeLocal struct {
 	ImageName   string     `json:"image_name" gorm:"type:varchar(100);comment:镜像名称"`
 }
 
+func (t *TreeLocal) TableName() string {
+	return "cl_tree_locals"
+}
+
 // GetTreeLocalListReq 获取本地树资源列表请求
 type GetTreeLocalListReq struct {
 	ListReq

@@ -84,9 +84,8 @@ type FormDesign struct {
 	CategoryName string `json:"category_name" gorm:"-"`
 }
 
-// TableName 表名
 func (FormDesign) TableName() string {
-	return "workorder_form_design"
+	return "cl_	workorder_form_design"
 }
 
 // CreateFormDesignReq 创建表单设计请求

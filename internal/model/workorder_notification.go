@@ -71,7 +71,7 @@ type Notification struct {
 
 // TableName 指定通知配置表名
 func (Notification) TableName() string {
-	return "workorder_notification"
+	return "cl_workorder_notification"
 }
 
 // NotificationLog 通知发送记录
@@ -89,7 +89,7 @@ type NotificationLog struct {
 
 // TableName 指定通知发送记录表名
 func (NotificationLog) TableName() string {
-	return "workorder_notification_log"
+	return "cl_workorder_notification_log"
 }
 
 // CreateNotificationReq 创建通知配置请求
