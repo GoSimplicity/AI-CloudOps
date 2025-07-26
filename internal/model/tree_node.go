@@ -32,15 +32,15 @@ import (
 // TreeNode 服务树节点结构
 type TreeNode struct {
 	Model
-	Name        string           `json:"name" gorm:"type:varchar(50);not null;comment:节点名称"`                                // 节点名称
-	ParentID    int              `json:"parentId" gorm:"index;comment:父节点ID;default:0"`                                     // 父节点ID
-	Level       int              `json:"level" gorm:"comment:节点层级,默认在第1层;default:1"`                                        // 节点层级
-	Description string           `json:"description" gorm:"type:text;comment:节点描述"`                                         // 节点描述
-	CreatorID   int              `json:"creatorId" gorm:"comment:创建者ID;default:0"`                                          // 创建者ID
-	Status      string           `json:"status" gorm:"type:varchar(20);default:active;comment:节点状态"`                        // 节点状态：active, inactive, deleted
-	Admins      []TreeNodeAdmin  `json:"admins" gorm:"many2many:tree_node_admin;joinForeignKey:ID;joinReferences:UserID"`   // 管理员多对多关系
-	Members     []TreeNodeMember `json:"members" gorm:"many2many:tree_node_member;joinForeignKey:ID;joinReferences:UserID"` // 成员多对多关系
-	IsLeaf      bool             `json:"isLeaf" gorm:"comment:是否为叶子节点;default:false"`                                       // 是否为叶子节点
+	Name        string           `json:"name" gorm:"type:varchar(50);not null;comment:节点名称"`                                   // 节点名称
+	ParentID    int              `json:"parentId" gorm:"index;comment:父节点ID;default:0"`                                        // 父节点ID
+	Level       int              `json:"level" gorm:"comment:节点层级,默认在第1层;default:1"`                                           // 节点层级
+	Description string           `json:"description" gorm:"type:text;comment:节点描述"`                                            // 节点描述
+	CreatorID   int              `json:"creatorId" gorm:"comment:创建者ID;default:0"`                                             // 创建者ID
+	Status      string           `json:"status" gorm:"type:varchar(20);default:active;comment:节点状态"`                           // 节点状态：active, inactive, deleted
+	Admins      []TreeNodeAdmin  `json:"admins" gorm:"many2many:cl_tree_node_admin;joinForeignKey:ID;joinReferences:UserID"`   // 管理员多对多关系
+	Members     []TreeNodeMember `json:"members" gorm:"many2many:cl_tree_node_member;joinForeignKey:ID;joinReferences:UserID"` // 成员多对多关系
+	IsLeaf      bool             `json:"isLeaf" gorm:"comment:是否为叶子节点;default:false"`                                          // 是否为叶子节点
 
 	// 非数据库字段
 	ChildCount    int         `json:"childCount" gorm:"-"`    // 子节点数量
@@ -52,11 +52,19 @@ type TreeNode struct {
 	Children      []*TreeNode `json:"children" gorm:"-"`    // 子节点列表
 }
 
+func (t *TreeNode) TableName() string {
+	return "cl_tree_nodes"
+}
+
 // TreeNodeAdmin 节点管理员关联表
 type TreeNodeAdmin struct {
 	ID         int `gorm:"primaryKey;autoIncrement"`
 	TreeNodeID int `gorm:"index:idx_node_admin,unique;not null;comment:节点ID"`
 	UserID     int `gorm:"index:idx_node_admin,unique;not null;comment:用户ID"`
+}
+
+func (t *TreeNodeAdmin) TableName() string {
+	return "cl_tree_node_admins"
 }
 
 // TreeNodeMember 节点成员关联表
@@ -66,12 +74,20 @@ type TreeNodeMember struct {
 	UserID     int `gorm:"index:idx_node_member,unique;not null;comment:用户ID"`
 }
 
+func (t *TreeNodeMember) TableName() string {
+	return "cl_tree_node_members"
+}
+
 // TreeNodeResource 节点资源关联表
 type TreeNodeResource struct {
 	Model
 	TreeNodeID   int           `gorm:"index:idx_node_resource;not null;comment:节点ID"`
 	ResourceID   string        `gorm:"index:idx_node_resource;not null;comment:资源ID"`
 	ResourceType CloudProvider `gorm:"type:varchar(50);not null;comment:资源类型，可选：ecs,elb,rds,local"`
+}
+
+func (t *TreeNodeResource) TableName() string {
+	return "cl_tree_node_resources"
 }
 
 type ResourceItems struct {

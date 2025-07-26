@@ -125,15 +125,16 @@ func ProvideCmd() *Cmd {
 	scrapePoolDAO := scrape.NewScrapePoolDAO(db, logger, userDAO)
 	scrapeJobDAO := scrape.NewScrapeJobDAO(db, logger)
 	monitorConfigDAO := config.NewMonitorConfigDAO(logger, db)
-	promConfigCache := cache.NewPromConfigCache(logger, scrapePoolDAO, scrapeJobDAO, monitorConfigDAO)
+	batchConfigManager := cache.NewBatchConfigManager(monitorConfigDAO, logger)
+	prometheusConfigCache := cache.NewPrometheusConfigCache(logger, scrapePoolDAO, scrapeJobDAO, monitorConfigDAO, batchConfigManager)
 	alertManagerPoolDAO := alert.NewAlertManagerPoolDAO(db, logger)
 	alertManagerSendDAO := alert.NewAlertManagerSendDAO(db, logger)
-	alertConfigCache := cache.NewAlertConfigCache(logger, alertManagerPoolDAO, alertManagerSendDAO, monitorConfigDAO)
+	alertManagerConfigCache := cache.NewAlertManagerConfigCache(logger, alertManagerPoolDAO, alertManagerSendDAO, monitorConfigDAO, batchConfigManager)
 	alertManagerRuleDAO := alert.NewAlertManagerRuleDAO(db, logger, userDAO)
-	ruleConfigCache := cache.NewRuleConfigCache(logger, scrapePoolDAO, alertManagerRuleDAO)
+	alertRuleConfigCache := cache.NewAlertRuleConfigCache(logger, scrapePoolDAO, alertManagerRuleDAO, monitorConfigDAO, batchConfigManager)
 	alertManagerRecordDAO := alert.NewAlertManagerRecordDAO(db, logger, userDAO)
-	recordConfigCache := cache.NewRecordConfig(logger, scrapePoolDAO, alertManagerRecordDAO)
-	monitorCache := cache.NewMonitorCache(promConfigCache, alertConfigCache, ruleConfigCache, recordConfigCache, logger)
+	recordRuleConfigCache := cache.NewRecordRuleConfigCache(logger, scrapePoolDAO, alertManagerRecordDAO, monitorConfigDAO, batchConfigManager)
+	monitorCache := cache.NewMonitorCache(prometheusConfigCache, alertManagerConfigCache, alertRuleConfigCache, recordRuleConfigCache, logger)
 	alertManagerEventService := alert2.NewAlertManagerEventService(alertManagerEventDAO, monitorCache, logger, userDAO, alertManagerSendDAO)
 	alertEventHandler := api5.NewAlertEventHandler(alertManagerEventService)
 	alertManagerPoolService := alert2.NewAlertManagerPoolService(alertManagerPoolDAO, alertManagerSendDAO, logger)
@@ -210,7 +211,7 @@ func ProvideCmd() *Cmd {
 	notificationHandler := api6.NewNotificationHandler(notificationService)
 	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sResourceQuotaHandler, k8sLimitRangeHandler, k8sLabelHandler, k8sNodeAffinityHandler, k8sPodAffinityHandler, k8sAffinityVisualizationHandler, k8sRBACHandler, k8sServiceAccountHandler, k8sTolerationHandler, k8sAppHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, processHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, statisticsHandler, categoryGroupHandler, treeNodeHandler, treeLocalHandler, treeEcsHandler, treeVpcHandler, treeSecurityGroupHandler, treeCloudHandler, treeRdsHandler, treeElbHandler, notificationHandler)
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
-	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, treeEcsDAO)
+	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, treeEcsDAO, monitorCache)
 	cmd := &Cmd{
 		Server:    engine,
 		Bootstrap: applicationBootstrap,
@@ -252,6 +253,6 @@ var Injector = wire.NewSet(
 	CronSet, wire.Struct(new(Cmd), "*"),
 )
 
-var CacheSet = wire.NewSet(cache.NewMonitorCache, cache.NewAlertConfigCache, cache.NewRuleConfigCache, cache.NewRecordConfig, cache.NewPromConfigCache)
+var CacheSet = wire.NewSet(cache.NewMonitorCache, cache.NewAlertManagerConfigCache, cache.NewAlertRuleConfigCache, cache.NewRecordRuleConfigCache, cache.NewPrometheusConfigCache, cache.NewBatchConfigManager)
 
 var ClientSet = wire.NewSet(client.NewK8sClient)

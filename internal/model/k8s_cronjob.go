@@ -44,6 +44,10 @@ type K8sCronjob struct {
 	Args         StringList `json:"args,omitempty" gorm:"comment:启动参数，空格分隔"`                              // 启动参数
 }
 
+func (k *K8sCronjob) TableName() string {
+	return "cl_k8s_cronjobs"
+}
+
 // CreateK8sCronjobRequest 创建 CronJob 的请求
 type CreateK8sCronjobRequest struct {
 	Name         string     `json:"name" binding:"required,min=1,max=200"` // 定时任务名称

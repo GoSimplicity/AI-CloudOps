@@ -42,6 +42,10 @@ type K8sPod struct {
 	Containers  []K8sPodContainer `json:"containers" gorm:"-"`                                                            // Pod 内的容器信息，前端使用
 }
 
+func (k *K8sPod) TableName() string {
+	return "cl_k8s_pods"
+}
+
 // K8sPodContainer Pod 中单个容器的模型
 type K8sPodContainer struct {
 	Name            string               `json:"name" binding:"required,min=1,max=200" gorm:"size:200;comment:容器名称"`        // 容器名称

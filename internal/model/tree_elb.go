@@ -61,7 +61,11 @@ type ResourceElb struct {
 	BackendServers     StringList `json:"backendServers" gorm:"type:varchar(1000);comment:后端服务器列表"`
 
 	// 多对多关系
-	ElbTreeNodes []*TreeNode `json:"elbTreeNodes" gorm:"many2many:resource_elb_tree_nodes;comment:关联服务树节点"`
+	ElbTreeNodes []*TreeNode `json:"elbTreeNodes" gorm:"many2many:cl_elb_tree_nodes;comment:关联服务树节点"`
+}
+
+func (r *ResourceElb) TableName() string {
+	return "cl_tree_elb"
 }
 
 // ListElbResourcesReq ELB资源列表查询参数

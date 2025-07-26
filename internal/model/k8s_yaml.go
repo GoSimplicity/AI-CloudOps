@@ -37,6 +37,10 @@ type K8sYamlTask struct {
 	ApplyResult string     `json:"apply_result,omitempty" gorm:"comment:apply 后的返回数据"`              // apply 结果
 }
 
+func (r *K8sYamlTask) TableName() string {
+	return "cl_k8s_yaml_task"
+}
+
 // K8sYamlTemplate Kubernetes YAML 模板的配置
 type K8sYamlTemplate struct {
 	Model
@@ -44,4 +48,8 @@ type K8sYamlTemplate struct {
 	UserID    int    `json:"user_id" gorm:"comment:创建者用户ID"`                                    // 创建者用户ID
 	Content   string `json:"content,omitempty" gorm:"type:text;comment:yaml 模板内容"`              // YAML 模板内容
 	ClusterId int    `json:"cluster_id,omitempty" gorm:"comment:对应集群id"`
+}
+
+func (r *K8sYamlTemplate) TableName() string {
+	return "cl_k8s_yaml_template"
 }

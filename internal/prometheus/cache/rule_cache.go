@@ -27,159 +27,178 @@ package cache
 
 import (
 	"context"
-	"strings"
-
+	"fmt"
 	"sync"
-
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-	"gopkg.in/yaml.v3"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertRuleDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	configDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
 	scrapePoolDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	pm "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
 
-type RuleConfigCache interface {
-	GetPrometheusAlertRuleConfigYamlByIp(ip string) string
-	GenerateAlertRuleConfigYaml(ctx context.Context) error
-	GeneratePrometheusAlertRuleConfigYamlOnePool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string
+type AlertRuleConfigCache interface {
+	GetConfigByIP(ip string) string
+	GenerateMainConfig(ctx context.Context) error
+	GenerateConfigForPool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string
 }
 
-type ruleConfigCache struct {
-	AlertRuleMap  map[string]string
+type alertRuleConfigCache struct {
+	configMap     map[string]string
 	mu            sync.RWMutex
-	l             *zap.Logger
-	scrapePoolDao scrapePoolDao.ScrapePoolDAO
-	alertRuleDao  alertRuleDao.AlertManagerRuleDAO
+	logger        *zap.Logger
+	scrapePoolDAO scrapePoolDao.ScrapePoolDAO
+	alertRuleDAO  alertRuleDao.AlertManagerRuleDAO
 	ruleHashes    map[string]string
+	configDAO     configDao.MonitorConfigDAO
+	batchManager  *BatchConfigManager
 }
 
-// RuleGroup 构造Prometheus Rule 规则的结构体
 type RuleGroup struct {
 	Name  string         `yaml:"name"`
 	Rules []rulefmt.Rule `yaml:"rules"`
 }
 
-// RuleGroups 生成Prometheus rule yaml
 type RuleGroups struct {
 	Groups []RuleGroup `yaml:"groups"`
 }
 
-func NewRuleConfigCache(l *zap.Logger, scrapePoolDao scrapePoolDao.ScrapePoolDAO, alertRuleDao alertRuleDao.AlertManagerRuleDAO) RuleConfigCache {
-	return &ruleConfigCache{
-		l:             l,
-		AlertRuleMap:  make(map[string]string),
+func NewAlertRuleConfigCache(
+	logger *zap.Logger,
+	scrapePoolDAO scrapePoolDao.ScrapePoolDAO,
+	alertRuleDAO alertRuleDao.AlertManagerRuleDAO,
+	configDAO configDao.MonitorConfigDAO,
+	batchManager *BatchConfigManager,
+) AlertRuleConfigCache {
+	return &alertRuleConfigCache{
+		logger:        logger,
+		configMap:     make(map[string]string),
 		mu:            sync.RWMutex{},
-		scrapePoolDao: scrapePoolDao,
-		alertRuleDao:  alertRuleDao,
+		scrapePoolDAO: scrapePoolDAO,
+		alertRuleDAO:  alertRuleDAO,
 		ruleHashes:    make(map[string]string),
+		configDAO:     configDAO,
+		batchManager:  batchManager,
 	}
 }
 
-// GetPrometheusAlertRuleConfigYamlByIp 根据IP地址获取告警规则配置
-func (r *ruleConfigCache) GetPrometheusAlertRuleConfigYamlByIp(ip string) string {
+// GetConfigByIP 根据IP地址获取告警规则配置
+func (r *alertRuleConfigCache) GetConfigByIP(ip string) string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.AlertRuleMap[ip]
+	return r.configMap[ip]
 }
 
-// GenerateAlertRuleConfigYaml 生成告警规则配置
-func (r *ruleConfigCache) GenerateAlertRuleConfigYaml(ctx context.Context) error {
+// GenerateMainConfig 生成告警规则配置并入库
+func (r *alertRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
+	startTime := time.Now()
+	r.logger.Info(LogModuleMonitor + "开始生成告警规则配置")
+
 	// 获取支持告警配置的所有采集池
-	pools, _, err := r.scrapePoolDao.GetMonitorScrapePoolSupportedAlert(ctx)
+	pools, _, err := r.scrapePoolDAO.GetMonitorScrapePoolSupportedAlert(ctx)
 	if err != nil {
-		r.l.Error("[监控模块] 获取支持告警的采集池失败", zap.Error(err))
+		r.logger.Error(LogModuleMonitor+"获取支持告警的采集池失败", zap.Error(err))
 		return err
 	}
 
 	if len(pools) == 0 {
-
-		r.l.Info("[监控模块] 没有找到支持告警的采集池")
+		r.logger.Info(LogModuleMonitor + "没有找到支持告警的采集池")
 		return nil
 	}
 
-	r.mu.RLock()
-	// 创建当前配置的副本作为临时配置
-	tempConfigMap := utils.CopyMap(r.AlertRuleMap)
-	tempPoolHashes := utils.CopyMap(r.ruleHashes)
-	r.mu.RUnlock()
+	// 直接加写锁，所有操作同步进行
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	validIPs := make(map[string]struct{})     // 记录当前所有有效的实例IP
-	updatedPools := make(map[string]struct{}) // 记录需要清理旧IP的池子
+	tempConfigMap := utils.CopyMap(r.configMap)
+	tempPoolHashes := utils.CopyMap(r.ruleHashes)
+
+	validIPs := make(map[string]struct{})
+	processedCount := 0
+	allConfigsToSave := make(map[string]ConfigData)
 
 	for _, pool := range pools {
+		if err := validateInstanceIPs(pool.PrometheusInstances); err != nil {
+			r.logger.Error(LogModuleMonitor+"Prometheus实例IP验证失败",
+				zap.String("pool_name", pool.Name),
+				zap.Error(err))
+			continue
+		}
+
 		currentHash := utils.CalculatePromHash(pool)
 		if cachedHash, ok := tempPoolHashes[pool.Name]; ok && cachedHash == currentHash {
-			// 哈希未变化，记录有效IP并跳过
 			for _, ip := range pool.PrometheusInstances {
 				validIPs[ip] = struct{}{}
 			}
 			continue
 		}
 
-		// 标记该池子需要清理旧IP
-		updatedPools[pool.Name] = struct{}{}
-
-		oneMap := r.GeneratePrometheusAlertRuleConfigYamlOnePool(ctx, pool)
+		oneMap := r.GenerateConfigForPool(ctx, pool)
 		if oneMap != nil {
-			for ip, out := range oneMap {
-				tempConfigMap[ip] = out
+			for ip, yamlContent := range oneMap {
+				configName := fmt.Sprintf(ConfigNameAlertRule, pool.ID, ip)
+				tempConfigMap[ip] = yamlContent
 				validIPs[ip] = struct{}{}
+
+				// 准备批量保存的配置数据
+				allConfigsToSave[ip] = ConfigData{
+					Name:       configName,
+					PoolID:     pool.ID,
+					ConfigType: model.ConfigTypeAlertRule,
+					Content:    yamlContent,
+				}
 			}
 			tempPoolHashes[pool.Name] = currentHash
 		}
+		processedCount++
 	}
 
-	// 清理无效的IP，只清理内存中的配置
-	for ip := range tempConfigMap {
-		if _, ok := validIPs[ip]; !ok {
-			// 检查该IP是否属于被修改的池子
-			for poolName := range updatedPools {
-				if strings.Contains(ip, poolName) {
-					delete(tempConfigMap, ip)
-					r.l.Debug("删除无效IP配置", zap.String("ip", ip), zap.String("pool", poolName))
-					break
-				}
-			}
+	// 批量保存所有配置到数据库
+	if len(allConfigsToSave) > 0 {
+		if err := batchSaveConfigsToDatabase(ctx, r.batchManager, allConfigsToSave); err != nil {
+			r.logger.Error(LogModuleMonitor+"批量保存告警规则配置失败", zap.Error(err))
+			// 不返回错误，继续执行后续逻辑
 		}
 	}
 
-	// 原子性更新配置和哈希
-	r.mu.Lock()
-	r.AlertRuleMap = tempConfigMap
-	r.ruleHashes = tempPoolHashes
-	r.mu.Unlock()
+	// 清理无效的IP配置
+	cleanupInvalidIPs(tempConfigMap, validIPs, r.logger)
 
+	r.configMap = tempConfigMap
+	r.ruleHashes = tempPoolHashes
+
+	logBatchOperation(r.logger, "生成告警规则配置", processedCount, len(pools), startTime)
 	return nil
 }
 
-// GeneratePrometheusAlertRuleConfigYamlOnePool 为单个采集池生成告警规则配置
-func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
-	rules, _, err := r.alertRuleDao.GetMonitorAlertRuleByPoolID(ctx, pool.ID)
+// GenerateConfigForPool 为单个采集池生成告警规则配置
+func (r *alertRuleConfigCache) GenerateConfigForPool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
+	poolStartTime := time.Now()
+
+	rules, _, err := r.alertRuleDAO.GetMonitorAlertRuleByPoolID(ctx, pool.ID)
 	if err != nil {
-		r.l.Error("[监控模块] 根据采集池ID获取告警规则失败",
-			zap.Error(err),
-			zap.String("池子", pool.Name),
-		)
+		logCacheOperation(r.logger, "获取告警规则", pool.Name, poolStartTime, err)
 		return nil
 	}
+
 	if len(rules) == 0 {
+		r.logger.Info(LogModuleMonitor+"没有找到告警规则", zap.String("pool_name", pool.Name))
 		return nil
 	}
 
 	var ruleGroups RuleGroups
 
-	// 构建规则组
 	for _, rule := range rules {
 		ft, err := pm.ParseDuration(rule.ForTime)
 		if err != nil {
-			r.l.Warn("[监控模块] 解析告警规则持续时间失败，使用默认值",
+			r.logger.Warn(LogModuleMonitor+"解析告警规则持续时间失败，使用默认值",
 				zap.Error(err),
-				zap.String("规则", rule.Name),
-			)
+				zap.String("rule_name", rule.Name))
 			ft, _ = pm.ParseDuration("5s")
 		}
 
@@ -192,8 +211,7 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 		}
 
 		ruleGroup := RuleGroup{
-			Name: rule.Name,
-
+			Name:  rule.Name,
 			Rules: []rulefmt.Rule{oneRule},
 		}
 		ruleGroups.Groups = append(ruleGroups.Groups, ruleGroup)
@@ -201,44 +219,45 @@ func (r *ruleConfigCache) GeneratePrometheusAlertRuleConfigYamlOnePool(ctx conte
 
 	numInstances := len(pool.PrometheusInstances)
 	if numInstances == 0 {
-		r.l.Warn("[监控模块] 采集池中没有Prometheus实例", zap.String("池子", pool.Name))
+		r.logger.Warn(LogModuleMonitor+"采集池中没有Prometheus实例", zap.String("pool_name", pool.Name))
 		return nil
 	}
 
 	ruleMap := make(map[string]string)
 	success := true
 
-	// 分片逻辑，将规则分配给不同的Prometheus实例
 	for i, ip := range pool.PrometheusInstances {
 		var myRuleGroups RuleGroups
 
 		for j, group := range ruleGroups.Groups {
-			if j%numInstances == i { // 按顺序平均分片
+			if numInstances > 0 && j%numInstances == i {
 				myRuleGroups.Groups = append(myRuleGroups.Groups, group)
 			}
 		}
 
-		// 序列化规则组为YAML
+		// 检查分配到该IP的规则组是否为空，如果为空则跳过
+		if len(myRuleGroups.Groups) == 0 {
+			continue
+		}
+
 		yamlData, err := yaml.Marshal(&myRuleGroups)
 		if err != nil {
-			r.l.Error("[监控模块] 序列化告警规则YAML失败",
+			r.logger.Error(LogModuleMonitor+"序列化告警规则YAML失败",
 				zap.Error(err),
-				zap.String("池子", pool.Name),
-				zap.String("IP", ip),
-			)
+				zap.String("pool_name", pool.Name),
+				zap.String("instance_ip", ip))
 			success = false
 			break
 		}
-
-		// 不再写入本地文件，只保存到内存
 
 		ruleMap[ip] = string(yamlData)
 	}
 
 	if !success {
-		// 生成失败，返回nil
+		logCacheOperation(r.logger, "生成告警规则配置", pool.Name, poolStartTime, fmt.Errorf("序列化失败"))
 		return nil
 	}
 
+	logCacheOperation(r.logger, "生成告警规则配置", pool.Name, poolStartTime, nil)
 	return ruleMap
 }

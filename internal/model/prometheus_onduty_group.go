@@ -88,7 +88,7 @@ type GetMonitorOnDutyGroupListReq struct {
 // CreateMonitorOnDutyGroupReq 创建值班组请求
 type CreateMonitorOnDutyGroupReq struct {
 	Name           string `json:"name" binding:"required,min=1,max=50"`
-	UserID         int    `json:"user_id" binding:"required"`
+	UserID         int    `json:"user_id" form:"user_id" binding:"required"`
 	UserIDs        []int  `json:"user_ids" binding:"required,min=1"`
 	ShiftDays      int    `json:"shift_days" binding:"required,min=1"`
 	CreateUserName string `json:"create_user_name"`

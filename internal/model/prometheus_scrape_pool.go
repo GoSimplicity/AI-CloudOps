@@ -46,6 +46,10 @@ type MonitorScrapePool struct {
 	CreateUserName        string     `json:"create_user_name" gorm:"type:varchar(50);comment:创建人名称"`
 }
 
+func (m *MonitorScrapePool) TableName() string {
+	return "cl_monitor_scrape_pools"
+}
+
 type GetMonitorScrapePoolListReq struct {
 	ListReq
 	SupportAlert  *int8 `json:"support_alert" form:"support_alert" binding:"omitempty"`
@@ -94,6 +98,6 @@ type DeleteMonitorScrapePoolReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
 
-type GetMonitorScrapePoolDetailReq struct { 
+type GetMonitorScrapePoolDetailReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }

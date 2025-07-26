@@ -139,10 +139,10 @@ func (d *auditDAO) efficientPaginationQuery(ctx context.Context, req *model.List
 		Order("created_at DESC, id DESC")
 
 	return d.db.WithContext(ctx).
-		Table("audit_logs").
-		Select("audit_logs.*").
-		Joins("JOIN (?) AS sub ON audit_logs.id = sub.id", subQuery).
-		Order("audit_logs.created_at DESC, audit_logs.id DESC").
+		Table("cl_system_audit_logs").
+		Select("cl_system_audit_logs.*").
+		Joins("JOIN (?) AS sub ON cl_system_audit_logs.id = sub.id", subQuery).
+		Order("cl_system_audit_logs.created_at DESC, cl_system_audit_logs.id DESC").
 		Find(logs).Error
 }
 
@@ -193,14 +193,14 @@ func (d *auditDAO) GetAuditStatistics(ctx context.Context) (*model.AuditStatisti
 
 	today := time.Now().Truncate(24 * time.Hour)
 
-	// 优化：使用子查询一次性获取多个统计值
+	// 使用子查询一次性获取多个统计值
 	err := d.db.WithContext(ctx).Raw(`
 		  SELECT 
 			  COUNT(*) as total_count,
 			  COUNT(CASE WHEN created_at >= ? THEN 1 END) as today_count,
 			  COUNT(CASE WHEN status_code >= 400 OR error_msg != '' THEN 1 END) as error_count,
 			  AVG(duration) as avg_duration
-		  FROM audit_logs
+		  FROM cl_system_audit_logs
 	  `, today).Scan(&basicStats).Error
 
 	if err != nil {

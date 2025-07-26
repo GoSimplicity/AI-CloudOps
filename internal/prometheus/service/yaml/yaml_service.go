@@ -39,13 +39,18 @@ type ConfigYamlService interface {
 }
 
 type configYamlService struct {
-	promCache   alertCache.PromConfigCache
-	alertCache  alertCache.AlertConfigCache
-	ruleCache   alertCache.RuleConfigCache
-	recordCache alertCache.RecordConfigCache
+	promCache   alertCache.PrometheusConfigCache
+	alertCache  alertCache.AlertManagerConfigCache
+	ruleCache   alertCache.AlertRuleConfigCache
+	recordCache alertCache.RecordRuleConfigCache
 }
 
-func NewPrometheusConfigService(promCache alertCache.PromConfigCache, alertCache alertCache.AlertConfigCache, ruleCache alertCache.RuleConfigCache, recordCache alertCache.RecordConfigCache) ConfigYamlService {
+func NewPrometheusConfigService(
+	promCache alertCache.PrometheusConfigCache,
+	alertCache alertCache.AlertManagerConfigCache,
+	ruleCache alertCache.AlertRuleConfigCache,
+	recordCache alertCache.RecordRuleConfigCache,
+) ConfigYamlService {
 	return &configYamlService{
 		promCache:   promCache,
 		alertCache:  alertCache,
@@ -55,17 +60,17 @@ func NewPrometheusConfigService(promCache alertCache.PromConfigCache, alertCache
 }
 
 func (c *configYamlService) GetMonitorPrometheusYaml(ctx context.Context, ip string) string {
-	return c.promCache.GetPrometheusMainConfigByIP(ip)
+	return c.promCache.GetConfigByIP(ip)
 }
 
 func (c *configYamlService) GetMonitorAlertManagerYaml(ctx context.Context, ip string) string {
-	return c.alertCache.GetAlertManagerMainConfigYamlByIP(ip)
+	return c.alertCache.GetConfigByIP(ip)
 }
 
 func (c *configYamlService) GetMonitorPrometheusAlertRuleYaml(ctx context.Context, ip string) string {
-	return c.ruleCache.GetPrometheusAlertRuleConfigYamlByIp(ip)
+	return c.ruleCache.GetConfigByIP(ip)
 }
 
 func (c *configYamlService) GetMonitorPrometheusRecordYaml(ctx context.Context, ip string) string {
-	return c.recordCache.GetPrometheusRecordRuleConfigYamlByIp(ip)
+	return c.recordCache.GetConfigByIP(ip)
 }

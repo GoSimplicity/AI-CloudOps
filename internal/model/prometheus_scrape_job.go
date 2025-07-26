@@ -50,6 +50,10 @@ type MonitorScrapeJob struct {
 	CreateUserName           string `json:"create_user_name" gorm:"type:varchar(50);comment:创建用户名称"`
 }
 
+func (m *MonitorScrapeJob) TableName() string {
+	return "cl_monitor_scrape_jobs"
+}
+
 type DeleteMonitorScrapeJobReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }

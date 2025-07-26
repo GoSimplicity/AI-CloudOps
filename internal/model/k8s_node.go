@@ -67,6 +67,10 @@ type K8sNode struct {
 	UpdatedAt         time.Time            `json:"updated_at" gorm:"comment:更新时间"`                                        // 更新时间
 }
 
+func (K8sNode) TableName() string {
+	return "cl_k8s_nodes"
+}
+
 // LabelK8sNodesRequest 定义为节点添加标签的请求结构
 type LabelK8sNodesRequest struct {
 	*K8sClusterNodesRequest

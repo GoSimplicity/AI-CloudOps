@@ -28,9 +28,9 @@ package model
 // TemplateDefaultValues 模板默认值结构
 type TemplateDefaultValues struct {
 	Fields    map[string]any `json:"fields"`    // 表单字段默认值
-	Approvers []int                  `json:"approvers"` // 默认审批人
-	Priority  int8                   `json:"priority"`  // 默认优先级
-	DueHours  *int                   `json:"due_hours"` // 默认处理时限(小时)
+	Approvers []int          `json:"approvers"` // 默认审批人
+	Priority  int8           `json:"priority"`  // 默认优先级
+	DueHours  *int           `json:"due_hours"` // 默认处理时限(小时)
 }
 
 // Template 模板实体
@@ -52,7 +52,7 @@ type Template struct {
 
 // TableName 指定模板表名
 func (Template) TableName() string {
-	return "workorder_template"
+	return "cl_workorder_template"
 }
 
 // CreateTemplateReq 创建模板请求

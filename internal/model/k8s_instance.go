@@ -27,14 +27,14 @@ package model
 
 type K8sInstance struct {
 	Model
-	Name          string `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:实例名称"` // 实例名称
-	UserID        int    `json:"user_id" gorm:"comment:创建者用户ID"`                                     // 创建者用户ID
-	ClusterID     int    `json:"cluster_id" gorm:"comment:所属集群ID"`                                   // 所属集群ID
+	Name          string                                 `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:实例名称"` // 实例名称
+	UserID        int                                    `json:"user_id" gorm:"comment:创建者用户ID"`                                     // 创建者用户ID
+	ClusterID     int                                    `json:"cluster_id" gorm:"comment:所属集群ID"`                                   // 所属集群ID
 	ContainerCore `json:"containerCore" gorm:"embedded"` // 容器配置
-	Image         string `json:"image,omitempty" gorm:"comment:镜像"`                        // 镜像
-	Replicas      int    `json:"replicas,omitempty" gorm:"default:1;comment:副本数量"`         // 副本数量
-	K8sAppID      int    `json:"k8s_app_id" gorm:"index;comment:关联的 Kubernetes 应用ID"`      // 关联的 Kubernetes 应用ID，修正字段名称为k8s_app_id
-	Namespace     string `json:"namespace,omitempty" gorm:"index;comment:Kubernetes 命名空间"` // 命名空间
+	Image         string                                 `json:"image,omitempty" gorm:"comment:镜像"`                        // 镜像
+	Replicas      int                                    `json:"replicas,omitempty" gorm:"default:1;comment:副本数量"`         // 副本数量
+	K8sAppID      int                                    `json:"k8s_app_id" gorm:"index;comment:关联的 Kubernetes 应用ID"`      // 关联的 Kubernetes 应用ID，修正字段名称为k8s_app_id
+	Namespace     string                                 `json:"namespace,omitempty" gorm:"index;comment:Kubernetes 命名空间"` // 命名空间
 
 	Type              string            `json:"type,omitempty" gorm:"default:Deployment;comment:实例类型"`        // 实例类型(Deployment/StatefulSet/DaemonSet)
 	Status            string            `json:"status,omitempty" gorm:"-"`                                    // 运行状态(运行时查询，不存储)
@@ -60,6 +60,10 @@ type K8sInstance struct {
 	AppName       string `json:"app_name,omitempty" gorm:"-"`        // 应用名称(关联查询)
 }
 
+func (i K8sInstance) TableName() string {
+	return "cl_k8s_instances"
+}
+
 type Probe struct {
 	Type                string   `json:"type"`                            // 探针类型(http/tcp/exec)
 	Path                string   `json:"path,omitempty"`                  // HTTP路径
@@ -79,7 +83,7 @@ type Volume struct {
 	SubPath    string `json:"sub_path,omitempty"`    // 子路径
 	ReadOnly   bool   `json:"read_only,omitempty"`   // 是否只读
 	SourceName string `json:"source_name,omitempty"` // 源资源名称(如ConfigMap名称)
-	Size       string `json:"size,omitempty"`       // 存储大小
+	Size       string `json:"size,omitempty"`        // 存储大小
 }
 
 type Affinity struct {

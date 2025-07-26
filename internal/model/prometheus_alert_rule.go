@@ -46,6 +46,10 @@ type MonitorAlertRule struct {
 	SendGroupName string `json:"send_group_name" gorm:"-"`
 }
 
+func (m *MonitorAlertRule) TableName() string {
+	return "cl_monitor_alert_rules"
+}
+
 // GetMonitorAlertRuleListReq 获取告警规则列表的请求
 type GetMonitorAlertRuleListReq struct {
 	ListReq

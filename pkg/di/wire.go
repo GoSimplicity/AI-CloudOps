@@ -257,10 +257,11 @@ var Injector = wire.NewSet(
 
 var CacheSet = wire.NewSet(
 	cache.NewMonitorCache,
-	cache.NewAlertConfigCache,
-	cache.NewRuleConfigCache,
-	cache.NewRecordConfig,
-	cache.NewPromConfigCache,
+	cache.NewAlertManagerConfigCache,
+	cache.NewAlertRuleConfigCache,
+	cache.NewRecordRuleConfigCache,
+	cache.NewPrometheusConfigCache,
+	cache.NewBatchConfigManager,
 )
 
 var ClientSet = wire.NewSet(

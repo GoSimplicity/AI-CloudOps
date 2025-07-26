@@ -53,6 +53,10 @@ type MonitorConfig struct {
 	LastGeneratedTime int64  `json:"last_generated_time" gorm:"not null;comment:最后生成时间(Unix时间戳)"`
 }
 
+func (m *MonitorConfig) TableName() string {
+	return "cl_monitor_configs"
+}
+
 // GetMonitorConfigListReq 获取监控配置列表请求
 type GetMonitorConfigListReq struct {
 	ListReq

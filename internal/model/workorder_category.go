@@ -39,7 +39,7 @@ type Category struct {
 }
 
 func (Category) TableName() string {
-	return "workorder_category"
+	return "cl_workorder_category"
 }
 
 // 分类请求结构

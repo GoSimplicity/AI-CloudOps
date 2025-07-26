@@ -39,6 +39,10 @@ type MonitorAlertManagerPool struct {
 	CreateUserName        string     `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
 }
 
+func (m *MonitorAlertManagerPool) TableName() string {
+	return "cl_monitor_alert_manager_pools"
+}
+
 // CreateMonitorAlertManagerPoolReq 创建 AlertManager 实例池请求
 type CreateMonitorAlertManagerPoolReq struct {
 	Name                  string     `json:"name" binding:"required,min=1,max=50"`

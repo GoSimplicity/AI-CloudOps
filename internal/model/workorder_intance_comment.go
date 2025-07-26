@@ -41,7 +41,7 @@ type InstanceComment struct {
 
 // TableName 指定工单评论表名
 func (InstanceComment) TableName() string {
-	return "workorder_instance_comment"
+	return "cl_workorder_instance_comment"
 }
 
 // InstanceCommentResp 工单评论响应结构
