@@ -49,6 +49,14 @@ var (
 	ErrNoUsers = errors.New("值班组没有成员")
 )
 
+// 常量定义
+const (
+	OnDutyBatchSize     = 100
+	HostCheckBatchSize  = 100
+	K8sMaxConcurrency   = 5
+	OnDutyCheckInterval = 10 * time.Second
+)
+
 type CronManager interface {
 	StartOnDutyHistoryManager(ctx context.Context) error
 	StartCheckHostStatusManager(ctx context.Context) error
@@ -77,8 +85,7 @@ func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, k
 
 // StartOnDutyHistoryManager 启动值班历史记录填充任务
 func (cm *cronManager) StartOnDutyHistoryManager(ctx context.Context) error {
-	// 每隔 5 分钟执行一次 fillOnDutyHistory，直到 ctx.Done
-	go wait.UntilWithContext(ctx, cm.fillOnDutyHistory, 10*time.Second)
+	go wait.UntilWithContext(ctx, cm.fillOnDutyHistory, OnDutyCheckInterval)
 	<-ctx.Done()
 	cm.logger.Info("值班历史记录填充任务已停止")
 	return nil
@@ -86,54 +93,74 @@ func (cm *cronManager) StartOnDutyHistoryManager(ctx context.Context) error {
 
 // fillOnDutyHistory 填充所有值班组的历史记录
 func (cm *cronManager) fillOnDutyHistory(ctx context.Context) {
-	const batchSize = 100
+	allGroups, err := cm.fetchAllEnabledGroups(ctx)
+	if err != nil {
+		cm.logger.Error("获取启用的值班组失败", zap.Error(err))
+		return
+	}
+
+	if len(allGroups) == 0 {
+		cm.logger.Debug("没有找到需要处理的值班组")
+		return
+	}
+
+	cm.processGroupsInParallel(ctx, allGroups)
+}
+
+// fetchAllEnabledGroups 获取所有启用的值班组
+func (cm *cronManager) fetchAllEnabledGroups(ctx context.Context) ([]*model.MonitorOnDutyGroup, error) {
+	var allGroups []*model.MonitorOnDutyGroup
 	page := 1
 	enable := int8(1)
-	var allGroups []*model.MonitorOnDutyGroup
 
-	// 分批获取所有值班组
 	for {
 		groups, total, err := cm.onDutyDao.GetMonitorOnDutyList(ctx, &model.GetMonitorOnDutyGroupListReq{
 			ListReq: model.ListReq{
 				Page: page,
-				Size: batchSize,
+				Size: OnDutyBatchSize,
 			},
-			Enable: &enable, // 只获取启用的值班组
+			Enable: &enable,
 		})
 		if err != nil {
-			cm.logger.Error("获取值班组失败", zap.Error(err), zap.Int("page", page))
-			return
+			return nil, fmt.Errorf("获取值班组失败 page=%d: %w", page, err)
 		}
 
-		allGroups = append(allGroups, groups...)
+		// 过滤有效的值班组
+		validGroups := cm.filterValidGroups(groups)
+		allGroups = append(allGroups, validGroups...)
 
-		// 如果已经获取了所有数据，则退出循环
 		if int64(len(allGroups)) >= total || len(groups) == 0 {
 			break
 		}
-
 		page++
 	}
 
-	if len(allGroups) == 0 {
-		cm.logger.Info("没有找到需要处理的值班组")
-		return
-	}
+	return allGroups, nil
+}
 
-	errChan := make(chan error, len(allGroups))
-	var wg sync.WaitGroup
-
-	for _, group := range allGroups {
+// filterValidGroups 过滤有效的值班组
+func (cm *cronManager) filterValidGroups(groups []*model.MonitorOnDutyGroup) []*model.MonitorOnDutyGroup {
+	var validGroups []*model.MonitorOnDutyGroup
+	for _, group := range groups {
 		if group.Enable == 2 {
 			cm.logger.Debug("跳过未启用的值班组", zap.String("group", group.Name))
 			continue
 		}
-
 		if len(group.Users) == 0 {
 			cm.logger.Warn("跳过无成员的值班组", zap.String("group", group.Name), zap.Int("id", group.ID))
 			continue
 		}
+		validGroups = append(validGroups, group)
+	}
+	return validGroups
+}
 
+// processGroupsInParallel 并行处理值班组
+func (cm *cronManager) processGroupsInParallel(ctx context.Context, groups []*model.MonitorOnDutyGroup) {
+	errChan := make(chan error, len(groups))
+	var wg sync.WaitGroup
+
+	for _, group := range groups {
 		wg.Add(1)
 		go func(g *model.MonitorOnDutyGroup) {
 			defer wg.Done()
@@ -143,11 +170,14 @@ func (cm *cronManager) fillOnDutyHistory(ctx context.Context) {
 		}(group)
 	}
 
-	// 等待所有goroutine完成
 	wg.Wait()
 	close(errChan)
 
-	// 收集错误
+	cm.logProcessResults(errChan, len(groups))
+}
+
+// logProcessResults 记录处理结果
+func (cm *cronManager) logProcessResults(errChan <-chan error, totalGroups int) {
 	errCount := 0
 	for err := range errChan {
 		errCount++
@@ -155,9 +185,11 @@ func (cm *cronManager) fillOnDutyHistory(ctx context.Context) {
 	}
 
 	if errCount > 0 {
-		cm.logger.Warn("值班历史记录填充任务完成，但有错误", zap.Int("errorCount", errCount), zap.Int("totalGroups", len(allGroups)))
+		cm.logger.Warn("值班历史记录填充任务完成，但有错误",
+			zap.Int("errorCount", errCount),
+			zap.Int("totalGroups", totalGroups))
 	} else {
-		cm.logger.Info("值班历史记录填充任务成功完成", zap.Int("totalGroups", len(allGroups)))
+		cm.logger.Info("值班历史记录填充任务成功完成", zap.Int("totalGroups", totalGroups))
 	}
 }
 

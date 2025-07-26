@@ -34,7 +34,6 @@ type MonitorOnDutyGroup struct {
 	YesterdayNormalDutyUserID int     `json:"yesterday_normal_duty_user_id" gorm:"comment:昨天的正常排班值班人ID，由cron任务设置"`
 	CreateUserName            string  `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
 	Users                     []*User `json:"users" gorm:"many2many:cl_monitor_on_duty_group_users;comment:值班组成员列表，多对多关系"`
-	DutyPlans                 []*User `json:"duty_plans" gorm:"-;comment:值班计划列表"`
 	Enable                    int8    `json:"enable" gorm:"type:tinyint(1);not null;default:1;comment:是否启用 1-启用 2-禁用"`
 	Description               string  `json:"description" gorm:"type:varchar(255);comment:值班组描述"`
 	TodayDutyUser             *User   `json:"today_duty_user" gorm:"-;comment:今日值班人"`

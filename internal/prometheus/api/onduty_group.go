@@ -27,16 +27,16 @@ package api
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
 type OnDutyGroupHandler struct {
-	alertOnDutyService alertEventService.AlertManagerOnDutyService
+	alertOnDutyService alert.AlertManagerOnDutyService
 }
 
-func NewOnDutyGroupHandler(alertOnDutyService alertEventService.AlertManagerOnDutyService) *OnDutyGroupHandler {
+func NewOnDutyGroupHandler(alertOnDutyService alert.AlertManagerOnDutyService) *OnDutyGroupHandler {
 	return &OnDutyGroupHandler{
 		alertOnDutyService: alertOnDutyService,
 	}
