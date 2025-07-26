@@ -38,6 +38,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// 业务错误定义
 var (
 	ErrGroupExists       = errors.New("值班组已存在")
 	ErrGroupIDEmpty      = errors.New("值班组ID为空")
@@ -47,6 +48,13 @@ var (
 	ErrInvalidShiftDays  = errors.New("轮班天数无效")
 	ErrMembersNotFound   = errors.New("部分成员不存在")
 	ErrTimeRangeTooLong  = errors.New("查询时间范围不能超过一年")
+)
+
+// 常量定义
+const (
+	MaxTimeRangeDays = 365
+	DefaultPageSize  = 10
+	DateFormat       = "2006-01-02"
 )
 
 type AlertManagerOnDutyService interface {
@@ -60,57 +68,64 @@ type AlertManagerOnDutyService interface {
 	GetMonitorOnDutyHistory(ctx context.Context, req *model.GetMonitorOnDutyHistoryReq) (model.ListResp[*model.MonitorOnDutyHistory], error)
 }
 
-type alertManagerOnDutyService struct {
+type onDutyService struct {
 	dao     alert.AlertManagerOnDutyDAO
 	sendDao alert.AlertManagerSendDAO
 	cache   cache.MonitorCache
 	userDao userDao.UserDAO
-	l       *zap.Logger
+	logger  *zap.Logger
 }
 
 func NewAlertManagerOnDutyService(dao alert.AlertManagerOnDutyDAO, sendDao alert.AlertManagerSendDAO, cache cache.MonitorCache, l *zap.Logger, userDao userDao.UserDAO) AlertManagerOnDutyService {
-	return &alertManagerOnDutyService{
+	return &onDutyService{
 		dao:     dao,
 		userDao: userDao,
 		sendDao: sendDao,
-		l:       l,
+		logger:  l,
 		cache:   cache,
 	}
 }
 
-func (s *alertManagerOnDutyService) GetMonitorOnDutyGroupList(ctx context.Context, req *model.GetMonitorOnDutyGroupListReq) (model.ListResp[*model.MonitorOnDutyGroup], error) {
-	// 从数据库获取值班组列表
+// 值班组管理
+
+func (s *onDutyService) GetMonitorOnDutyGroupList(ctx context.Context, req *model.GetMonitorOnDutyGroupListReq) (model.ListResp[*model.MonitorOnDutyGroup], error) {
 	groups, total, err := s.dao.GetMonitorOnDutyList(ctx, req)
 	if err != nil {
-		s.l.Error("获取值班组列表失败", zap.Error(err))
+		s.logger.Error("获取值班组列表失败", zap.Error(err))
 		return model.ListResp[*model.MonitorOnDutyGroup]{}, err
 	}
 
-	// 返回值班组列表和总数
+	// 为每个值班组填充今日值班人信息
+	for _, group := range groups {
+		if len(group.Users) > 0 {
+			group.TodayDutyUser = s.getTodayDutyUser(ctx, group)
+		}
+	}
+
 	return model.ListResp[*model.MonitorOnDutyGroup]{
 		Items: groups,
 		Total: total,
 	}, nil
 }
 
-func (s *alertManagerOnDutyService) CreateMonitorOnDutyGroup(ctx context.Context, req *model.CreateMonitorOnDutyGroupReq) error {
+func (s *onDutyService) CreateMonitorOnDutyGroup(ctx context.Context, req *model.CreateMonitorOnDutyGroupReq) error {
+	// 参数验证
+	if err := s.validateCreateGroupRequest(req); err != nil {
+		return err
+	}
+
 	// 检查值班组名称是否已存在
 	if exists, err := s.dao.CheckMonitorOnDutyGroupExists(ctx, &model.MonitorOnDutyGroup{Name: req.Name}); err != nil {
-		s.l.Error("检查值班组是否存在失败", zap.Error(err))
+		s.logger.Error("检查值班组是否存在失败", zap.Error(err))
 		return err
 	} else if exists {
 		return ErrGroupExists
 	}
 
-	// 验证轮班天数是否有效
-	if req.ShiftDays <= 0 {
-		return ErrInvalidShiftDays
-	}
-
 	// 获取并验证所有成员是否存在
 	users, err := s.userDao.GetUserByIDs(ctx, req.UserIDs)
 	if err != nil {
-		s.l.Error("获取成员信息失败", zap.Error(err))
+		s.logger.Error("获取成员信息失败", zap.Error(err))
 		return err
 	}
 	if len(users) != len(req.UserIDs) {
@@ -118,78 +133,63 @@ func (s *alertManagerOnDutyService) CreateMonitorOnDutyGroup(ctx context.Context
 	}
 
 	// 创建值班组对象
-	group := &model.MonitorOnDutyGroup{
-		Name:           req.Name,
-		UserID:         req.UserID,
-		ShiftDays:      req.ShiftDays,
-		CreateUserName: req.CreateUserName,
-		Description:    req.Description,
-		Users:          s.convertUsersToOnDutyUsers(users),
-	}
+	group := s.buildGroupFromRequest(req, users)
 
 	// 保存值班组到数据库
 	if err := s.dao.CreateMonitorOnDutyGroup(ctx, group); err != nil {
-		s.l.Error("创建值班组失败", zap.Error(err))
+		s.logger.Error("创建值班组失败", zap.Error(err))
 		return err
 	}
 
 	return nil
 }
 
-func (s *alertManagerOnDutyService) CreateMonitorOnDutyGroupChange(ctx context.Context, req *model.CreateMonitorOnDutyGroupChangeReq) error {
+func (s *onDutyService) CreateMonitorOnDutyGroupChange(ctx context.Context, req *model.CreateMonitorOnDutyGroupChangeReq) error {
 	// 验证值班组是否存在
 	if _, err := s.dao.GetMonitorOnDutyGroupByID(ctx, req.OnDutyGroupID); err != nil {
-		s.l.Error("值班组不存在", zap.Int("groupID", req.OnDutyGroupID), zap.Error(err))
+		s.logger.Error("值班组不存在", zap.Int("groupID", req.OnDutyGroupID), zap.Error(err))
 		return ErrGroupNotFound
 	}
 
 	// 创建值班变更记录
-	change := &model.MonitorOnDutyChange{
-		OnDutyGroupID:  req.OnDutyGroupID,
-		UserID:         req.UserID,
-		Date:           req.Date,
-		OriginUserID:   req.OriginUserID,
-		OnDutyUserID:   req.OnDutyUserID,
-		CreateUserName: req.CreateUserName,
-		Reason:         req.Reason,
-	}
+	change := s.buildChangeFromRequest(req)
 
 	// 保存值班变更记录到数据库
 	if err := s.dao.CreateMonitorOnDutyGroupChange(ctx, change); err != nil {
-		s.l.Error("创建值班变更失败", zap.Error(err))
+		s.logger.Error("创建值班变更失败", zap.Error(err))
 		return err
 	}
 
 	return nil
 }
 
-func (s *alertManagerOnDutyService) UpdateMonitorOnDutyGroup(ctx context.Context, req *model.UpdateMonitorOnDutyGroupReq) error {
+func (s *onDutyService) UpdateMonitorOnDutyGroup(ctx context.Context, req *model.UpdateMonitorOnDutyGroupReq) error {
+	// 参数验证
+	if err := s.validateUpdateGroupRequest(req); err != nil {
+		return err
+	}
+
 	// 获取要更新的值班组
 	group, err := s.dao.GetMonitorOnDutyGroupByID(ctx, req.ID)
 	if err != nil {
-		s.l.Error("获取值班组失败", zap.Int("id", req.ID), zap.Error(err))
+		s.logger.Error("获取值班组失败", zap.Int("id", req.ID), zap.Error(err))
 		return ErrGroupNotFound
 	}
 
 	// 如果名称变更，检查新名称是否已存在
 	if group.Name != req.Name {
 		if exists, err := s.dao.CheckMonitorOnDutyGroupExists(ctx, &model.MonitorOnDutyGroup{Name: req.Name}); err != nil {
-			s.l.Error("检查值班组名称是否存在失败", zap.Error(err))
+			s.logger.Error("检查值班组名称是否存在失败", zap.Error(err))
 			return err
 		} else if exists {
 			return ErrGroupExists
 		}
 	}
 
-	// 验证轮班天数是否有效
-	if req.ShiftDays <= 0 {
-		return ErrInvalidShiftDays
-	}
-
 	// 获取并验证所有成员是否存在
 	users, err := s.userDao.GetUserByIDs(ctx, req.UserIDs)
 	if err != nil {
-		s.l.Error("获取成员信息失败", zap.Error(err))
+		s.logger.Error("获取成员信息失败", zap.Error(err))
 		return err
 	}
 	if len(users) != len(req.UserIDs) {
@@ -197,28 +197,22 @@ func (s *alertManagerOnDutyService) UpdateMonitorOnDutyGroup(ctx context.Context
 	}
 
 	// 更新值班组信息
-	group.Name = req.Name
-	group.ShiftDays = req.ShiftDays
-	group.Description = req.Description
-	group.Users = s.convertUsersToOnDutyUsers(users)
-	if req.Enable != nil {
-		group.Enable = *req.Enable
-	}
+	s.updateGroupFromRequest(group, req, users)
 
 	// 保存更新后的值班组到数据库
 	if err := s.dao.UpdateMonitorOnDutyGroup(ctx, group); err != nil {
-		s.l.Error("更新值班组失败", zap.Error(err))
+		s.logger.Error("更新值班组失败", zap.Error(err))
 		return err
 	}
 
 	return nil
 }
 
-func (s *alertManagerOnDutyService) DeleteMonitorOnDutyGroup(ctx context.Context, req *model.DeleteMonitorOnDutyGroupReq) error {
+func (s *onDutyService) DeleteMonitorOnDutyGroup(ctx context.Context, req *model.DeleteMonitorOnDutyGroupReq) error {
 	// 检查值班组是否关联了发送组，如果有关联则不允许删除
 	_, count, err := s.sendDao.GetMonitorSendGroupByOnDutyGroupID(ctx, req.ID)
 	if err != nil {
-		s.l.Error("检查关联发送组失败", zap.Error(err))
+		s.logger.Error("检查关联发送组失败", zap.Error(err))
 		return err
 	}
 	if count > 0 {
@@ -227,18 +221,18 @@ func (s *alertManagerOnDutyService) DeleteMonitorOnDutyGroup(ctx context.Context
 
 	// 删除值班组
 	if err := s.dao.DeleteMonitorOnDutyGroup(ctx, req.ID); err != nil {
-		s.l.Error("删除值班组失败", zap.Int("id", req.ID), zap.Error(err))
+		s.logger.Error("删除值班组失败", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
 
 	return nil
 }
 
-func (s *alertManagerOnDutyService) GetMonitorOnDutyGroup(ctx context.Context, req *model.GetMonitorOnDutyGroupReq) (*model.MonitorOnDutyGroup, error) {
+func (s *onDutyService) GetMonitorOnDutyGroup(ctx context.Context, req *model.GetMonitorOnDutyGroupReq) (*model.MonitorOnDutyGroup, error) {
 	// 获取指定ID的值班组
 	group, err := s.dao.GetMonitorOnDutyGroupByID(ctx, req.ID)
 	if err != nil {
-		s.l.Error("获取值班组失败", zap.Int("id", req.ID), zap.Error(err))
+		s.logger.Error("获取值班组失败", zap.Int("id", req.ID), zap.Error(err))
 		return nil, ErrGroupNotFound
 	}
 
@@ -247,29 +241,26 @@ func (s *alertManagerOnDutyService) GetMonitorOnDutyGroup(ctx context.Context, r
 	return group, nil
 }
 
-func (s *alertManagerOnDutyService) GetMonitorOnDutyGroupFuturePlan(ctx context.Context, req *model.GetMonitorOnDutyGroupFuturePlanReq) ([]*model.MonitorOnDutyOne, error) {
+// 值班计划和历史
+
+func (s *onDutyService) GetMonitorOnDutyGroupFuturePlan(ctx context.Context, req *model.GetMonitorOnDutyGroupFuturePlanReq) ([]*model.MonitorOnDutyOne, error) {
 	// 解析并验证时间范围
-	startTime, endTime, err := s.parseTimeRange(req.StartTime, req.EndTime)
+	startTime, endTime, err := s.parseAndValidateTimeRange(req.StartTime, req.EndTime)
 	if err != nil {
 		return nil, err
-	}
-
-	// 检查时间范围是否超过一年
-	if endTime.Sub(startTime) > 365*24*time.Hour {
-		return nil, ErrTimeRangeTooLong
 	}
 
 	// 获取值班组信息
 	group, err := s.dao.GetMonitorOnDutyGroupByID(ctx, req.ID)
 	if err != nil {
-		s.l.Error("获取值班组失败", zap.Int("id", req.ID), zap.Error(err))
+		s.logger.Error("获取值班组失败", zap.Int("id", req.ID), zap.Error(err))
 		return nil, ErrGroupNotFound
 	}
 
 	// 获取指定时间范围内的值班变更记录
 	changes, err := s.dao.GetMonitorOnDutyChangesByGroupAndTimeRange(ctx, req.ID, req.StartTime, req.EndTime)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		s.l.Error("获取值班变更失败", zap.Error(err))
+		s.logger.Error("获取值班变更失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -277,11 +268,11 @@ func (s *alertManagerOnDutyService) GetMonitorOnDutyGroupFuturePlan(ctx context.
 	return s.generateDutyPlan(ctx, group, startTime, endTime, changes), nil
 }
 
-func (s *alertManagerOnDutyService) GetMonitorOnDutyHistory(ctx context.Context, req *model.GetMonitorOnDutyHistoryReq) (model.ListResp[*model.MonitorOnDutyHistory], error) {
+func (s *onDutyService) GetMonitorOnDutyHistory(ctx context.Context, req *model.GetMonitorOnDutyHistoryReq) (model.ListResp[*model.MonitorOnDutyHistory], error) {
 	// 获取值班历史记录
 	histories, total, err := s.dao.GetMonitorOnDutyHistoryList(ctx, req)
 	if err != nil {
-		s.l.Error("获取值班历史失败", zap.Error(err))
+		s.logger.Error("获取值班历史失败", zap.Error(err))
 		return model.ListResp[*model.MonitorOnDutyHistory]{}, err
 	}
 
@@ -294,8 +285,60 @@ func (s *alertManagerOnDutyService) GetMonitorOnDutyHistory(ctx context.Context,
 
 // 私有辅助方法
 
-// convertUsersToOnDutyUsers 将用户对象转换为值班用户对象
-func (s *alertManagerOnDutyService) convertUsersToOnDutyUsers(users []*model.User) []*model.User {
+func (s *onDutyService) validateCreateGroupRequest(req *model.CreateMonitorOnDutyGroupReq) error {
+	if req.ShiftDays <= 0 {
+		return ErrInvalidShiftDays
+	}
+	if len(req.UserIDs) == 0 {
+		return ErrMembersNotFound
+	}
+	return nil
+}
+
+func (s *onDutyService) validateUpdateGroupRequest(req *model.UpdateMonitorOnDutyGroupReq) error {
+	if req.ShiftDays <= 0 {
+		return ErrInvalidShiftDays
+	}
+	if len(req.UserIDs) == 0 {
+		return ErrMembersNotFound
+	}
+	return nil
+}
+
+func (s *onDutyService) buildGroupFromRequest(req *model.CreateMonitorOnDutyGroupReq, users []*model.User) *model.MonitorOnDutyGroup {
+	return &model.MonitorOnDutyGroup{
+		Name:           req.Name,
+		UserID:         req.UserID,
+		ShiftDays:      req.ShiftDays,
+		CreateUserName: req.CreateUserName,
+		Description:    req.Description,
+		Users:          s.convertUsersToOnDutyUsers(users),
+	}
+}
+
+func (s *onDutyService) buildChangeFromRequest(req *model.CreateMonitorOnDutyGroupChangeReq) *model.MonitorOnDutyChange {
+	return &model.MonitorOnDutyChange{
+		OnDutyGroupID:  req.OnDutyGroupID,
+		UserID:         req.UserID,
+		Date:           req.Date,
+		OriginUserID:   req.OriginUserID,
+		OnDutyUserID:   req.OnDutyUserID,
+		CreateUserName: req.CreateUserName,
+		Reason:         req.Reason,
+	}
+}
+
+func (s *onDutyService) updateGroupFromRequest(group *model.MonitorOnDutyGroup, req *model.UpdateMonitorOnDutyGroupReq, users []*model.User) {
+	group.Name = req.Name
+	group.ShiftDays = req.ShiftDays
+	group.Description = req.Description
+	group.Users = s.convertUsersToOnDutyUsers(users)
+	if req.Enable != nil {
+		group.Enable = *req.Enable
+	}
+}
+
+func (s *onDutyService) convertUsersToOnDutyUsers(users []*model.User) []*model.User {
 	onDutyUsers := make([]*model.User, len(users))
 	for i, user := range users {
 		onDutyUsers[i] = &model.User{
@@ -308,55 +351,43 @@ func (s *alertManagerOnDutyService) convertUsersToOnDutyUsers(users []*model.Use
 	return onDutyUsers
 }
 
-// parseTimeRange 解析并验证时间范围字符串
-func (s *alertManagerOnDutyService) parseTimeRange(startStr, endStr string) (time.Time, time.Time, error) {
-	start, err := time.Parse("2006-01-02", startStr)
+func (s *onDutyService) parseAndValidateTimeRange(startStr, endStr string) (time.Time, time.Time, error) {
+	start, err := time.Parse(DateFormat, startStr)
 	if err != nil {
 		return time.Time{}, time.Time{}, ErrInvalidTimeRange
 	}
 
-	end, err := time.Parse("2006-01-02", endStr)
+	end, err := time.Parse(DateFormat, endStr)
 	if err != nil {
 		return time.Time{}, time.Time{}, ErrInvalidTimeRange
 	}
 
-	// 确保结束时间不早于开始时间
 	if end.Before(start) {
 		return time.Time{}, time.Time{}, ErrInvalidTimeRange
+	}
+
+	if end.Sub(start) > MaxTimeRangeDays*24*time.Hour {
+		return time.Time{}, time.Time{}, ErrTimeRangeTooLong
 	}
 
 	return start, end, nil
 }
 
-// generateDutyPlan 生成指定时间范围内的值班计划
-func (s *alertManagerOnDutyService) generateDutyPlan(ctx context.Context, group *model.MonitorOnDutyGroup, start, end time.Time, changes []*model.MonitorOnDutyChange) []*model.MonitorOnDutyOne {
-	// 将值班变更记录转换为以日期为键的映射，便于快速查找
-	changeMap := make(map[string]*model.MonitorOnDutyChange)
-	for _, change := range changes {
-		changeMap[change.Date] = change
-	}
-
-	// 获取指定时间范围内的值班历史记录
-	historyRecords, err := s.dao.GetMonitorOnDutyHistoryByGroupIDAndTimeRange(ctx, group.ID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+func (s *onDutyService) generateDutyPlan(ctx context.Context, group *model.MonitorOnDutyGroup, start, end time.Time, changes []*model.MonitorOnDutyChange) []*model.MonitorOnDutyOne {
+	changeMap := s.buildChangeMap(changes)
+	historyRecords, err := s.dao.GetMonitorOnDutyHistoryByGroupIDAndTimeRange(ctx, group.ID, start.Format(DateFormat), end.Format(DateFormat))
 	if err != nil {
-		s.l.Error("获取值班历史记录失败", zap.Error(err), zap.Int("groupID", group.ID))
+		s.logger.Error("获取值班历史记录失败", zap.Error(err), zap.Int("groupID", group.ID))
 	}
 
-	// 将历史记录转换为以日期为键的映射
-	historyMap := make(map[string]*model.MonitorOnDutyHistory)
-	for _, history := range historyRecords {
-		historyMap[history.DateString] = history
-	}
-
+	historyMap := s.buildHistoryMap(historyRecords)
 	var result []*model.MonitorOnDutyOne
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().Format(DateFormat)
 
-	// 遍历时间范围内的每一天，生成值班计划
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-		dateStr := d.Format("2006-01-02")
+		dateStr := d.Format(DateFormat)
 		dutyOne := &model.MonitorOnDutyOne{Date: dateStr}
 
-		// 如果存在值班变更记录，使用变更后的值班人员
 		if change, exists := changeMap[dateStr]; exists {
 			dutyOne.User = s.findUserByID(group.Users, change.OnDutyUserID)
 			if change.OriginUserID > 0 {
@@ -365,13 +396,11 @@ func (s *alertManagerOnDutyService) generateDutyPlan(ctx context.Context, group 
 				}
 			}
 		} else if history, exists := historyMap[dateStr]; exists {
-			// 如果存在历史记录，使用历史记录中的值班人员
 			dutyUser := s.findUserByID(group.Users, history.OnDutyUserID)
 			if dutyUser == nil {
-				// 如果在当前组成员中找不到，直接从数据库查询
 				dutyUser, err = s.userDao.GetUserByID(ctx, history.OnDutyUserID)
 				if err != nil {
-					s.l.Error("获取值班用户失败", zap.Error(err), zap.Int("userID", history.OnDutyUserID))
+					s.logger.Error("获取值班用户失败", zap.Error(err), zap.Int("userID", history.OnDutyUserID))
 				}
 			}
 			dutyOne.User = dutyUser
@@ -381,7 +410,6 @@ func (s *alertManagerOnDutyService) generateDutyPlan(ctx context.Context, group 
 				if originUser != nil {
 					dutyOne.OriginUser = originUser.RealName
 				} else {
-					// 如果找不到原始用户，尝试从所有用户中查找
 					user, err := s.userDao.GetUserByID(ctx, history.OriginUserID)
 					if err == nil && user != nil {
 						dutyOne.OriginUser = user.RealName
@@ -391,7 +419,6 @@ func (s *alertManagerOnDutyService) generateDutyPlan(ctx context.Context, group 
 				}
 			}
 		} else {
-			// 否则根据轮班规则计算值班人员
 			dutyOne.User = s.calculateDutyUser(ctx, group, dateStr, today)
 		}
 
@@ -401,31 +428,38 @@ func (s *alertManagerOnDutyService) generateDutyPlan(ctx context.Context, group 
 	return result
 }
 
-// calculateDutyUser 根据轮班规则计算指定日期的值班人员
-func (s *alertManagerOnDutyService) calculateDutyUser(ctx context.Context, group *model.MonitorOnDutyGroup, dateStr, todayStr string) *model.User {
-	// 验证参数有效性
+func (s *onDutyService) buildChangeMap(changes []*model.MonitorOnDutyChange) map[string]*model.MonitorOnDutyChange {
+	changeMap := make(map[string]*model.MonitorOnDutyChange)
+	for _, change := range changes {
+		changeMap[change.Date] = change
+	}
+	return changeMap
+}
+
+func (s *onDutyService) buildHistoryMap(histories []*model.MonitorOnDutyHistory) map[string]*model.MonitorOnDutyHistory {
+	historyMap := make(map[string]*model.MonitorOnDutyHistory)
+	for _, history := range histories {
+		historyMap[history.DateString] = history
+	}
+	return historyMap
+}
+
+func (s *onDutyService) calculateDutyUser(ctx context.Context, group *model.MonitorOnDutyGroup, dateStr, todayStr string) *model.User {
 	if group.ShiftDays <= 0 || len(group.Users) == 0 {
 		return nil
 	}
 
-	// 计算目标日期与今天的天数差
-	targetDate, _ := time.Parse("2006-01-02", dateStr)
-	today, _ := time.Parse("2006-01-02", todayStr)
+	targetDate, _ := time.Parse(DateFormat, dateStr)
+	today, _ := time.Parse(DateFormat, todayStr)
 	daysDiff := int(targetDate.Sub(today).Hours()) / 24
 
-	// 获取今天值班人员在组内的索引
 	currentIndex := s.getCurrentUserIndex(ctx, group, todayStr)
-
-	// 计算轮班周期总天数
 	totalDays := len(group.Users) * group.ShiftDays
-
-	// 计算目标日期的轮班索引
 	shiftIndex := (currentIndex*group.ShiftDays + daysDiff) % totalDays
 	if shiftIndex < 0 {
 		shiftIndex += totalDays
 	}
 
-	// 根据轮班索引确定值班人员
 	userIndex := shiftIndex / group.ShiftDays
 	if userIndex >= 0 && userIndex < len(group.Users) {
 		return group.Users[userIndex]
@@ -434,9 +468,7 @@ func (s *alertManagerOnDutyService) calculateDutyUser(ctx context.Context, group
 	return nil
 }
 
-// getCurrentUserIndex 获取今天值班人员在组内的索引
-func (s *alertManagerOnDutyService) getCurrentUserIndex(ctx context.Context, group *model.MonitorOnDutyGroup, todayStr string) int {
-	// 尝试从历史记录中获取今天的值班人员
+func (s *onDutyService) getCurrentUserIndex(ctx context.Context, group *model.MonitorOnDutyGroup, todayStr string) int {
 	if history, err := s.dao.GetMonitorOnDutyHistoryByGroupIDAndDay(ctx, group.ID, todayStr); err == nil && history != nil {
 		for i, user := range group.Users {
 			if user.ID == history.OnDutyUserID {
@@ -444,25 +476,52 @@ func (s *alertManagerOnDutyService) getCurrentUserIndex(ctx context.Context, gro
 			}
 		}
 	}
-	// 如果没有历史记录，默认从第一个成员开始
 	return 0
 }
 
-// getTodayDutyUser 获取今天的值班人员
-func (s *alertManagerOnDutyService) getTodayDutyUser(ctx context.Context, group *model.MonitorOnDutyGroup) *model.User {
-	today := time.Now().Format("2006-01-02")
+func (s *onDutyService) getTodayDutyUser(ctx context.Context, group *model.MonitorOnDutyGroup) *model.User {
+	today := time.Now().Format(DateFormat)
+	
+	// 首先尝试从历史记录中获取今日值班人
+	if history, err := s.dao.GetMonitorOnDutyHistoryByGroupIDAndDay(ctx, group.ID, today); err == nil && history != nil {
+		// 从值班组成员中查找
+		for _, user := range group.Users {
+			if user.ID == history.OnDutyUserID {
+				return user
+			}
+		}
+		// 如果在当前成员中找不到，从数据库查询
+		if user, err := s.userDao.GetUserByID(ctx, history.OnDutyUserID); err == nil && user != nil {
+			return user
+		}
+	}
+	
+	// 检查今日是否有换班记录
+	if changes, err := s.dao.GetMonitorOnDutyChangesByGroupAndTimeRange(ctx, group.ID, today, today); err == nil && len(changes) > 0 {
+		// 取最新的换班记录
+		latestChange := changes[len(changes)-1]
+		for _, user := range group.Users {
+			if user.ID == latestChange.OnDutyUserID {
+				return user
+			}
+		}
+		// 如果在当前成员中找不到，从数据库查询
+		if user, err := s.userDao.GetUserByID(ctx, latestChange.OnDutyUserID); err == nil && user != nil {
+			return user
+		}
+	}
+	
+	// 如果没有历史记录和换班记录，根据轮班规则计算
 	return s.calculateDutyUser(ctx, group, today, today)
 }
 
-// findUserByID 根据ID在用户列表中查找用户
-func (s *alertManagerOnDutyService) findUserByID(users []*model.User, id int) *model.User {
+func (s *onDutyService) findUserByID(users []*model.User, id int) *model.User {
 	for _, user := range users {
 		if user.ID == id {
 			return user
 		}
 	}
 
-	// 如果在当前用户列表中找不到，从数据库查询
 	user, err := s.userDao.GetUserByID(context.Background(), id)
 	if err == nil && user != nil {
 		return user
