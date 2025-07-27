@@ -132,13 +132,42 @@ func run() error {
 		log.Printf("数据库不可用，跳过Mock数据初始化")
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// 启动定时任务
 	if di.IsDBAvailable(db) {
 		go func() {
-			_ = cmd.Cron.StartOnDutyHistoryManager(context.Background())
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("StartOnDutyHistoryManager panic: %v", r)
+				}
+			}()
+			_ = cmd.Cron.StartOnDutyHistoryManager(ctx)
 		}()
 		go func() {
-			_ = cmd.Cron.StartPrometheusConfigRefreshManager(context.Background())
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("StartPrometheusConfigRefreshManager panic: %v", r)
+				}
+			}()
+			_ = cmd.Cron.StartPrometheusConfigRefreshManager(ctx)
+		}()
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("StartCheckHostStatusManager panic: %v", r)
+				}
+			}()
+			_ = cmd.Cron.StartCheckHostStatusManager(ctx)
+		}()
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("StartCheckK8sStatusManager panic: %v", r)
+				}
+			}()
+			_ = cmd.Cron.StartCheckK8sStatusManager(ctx)
 		}()
 		log.Printf("系统启动完成")
 	} else {
@@ -164,8 +193,10 @@ func run() error {
 	<-quit
 	log.Println("正在关闭服务器...")
 
-	shutdownCtx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
+	cancel()
+
+	shutdownCtx, shutdownCancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer shutdownCancel()
 	_ = srv.Shutdown(shutdownCtx)
 	time.Sleep(2 * time.Second)
 	log.Println("服务器已关闭")
