@@ -212,7 +212,7 @@ func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *
 	}
 
 	// 检查今天是否有换班记录
-	changes, err := cm.onDutyDao.GetMonitorOnDutyChangesByGroupAndTimeRange(ctx, group.ID, todayStr, todayStr)
+	changes, _, err := cm.onDutyDao.GetMonitorOnDutyChangesByGroupAndTimeRange(ctx, group.ID, todayStr, todayStr)
 	if err != nil {
 		cm.logger.Error("获取换班记录失败", zap.Error(err), zap.String("group", group.Name), zap.Int("groupID", group.ID))
 		return err

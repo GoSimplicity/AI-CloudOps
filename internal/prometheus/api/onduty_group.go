@@ -51,6 +51,7 @@ func (o *OnDutyGroupHandler) RegisterRouters(server *gin.Engine) {
 		onDutyGroups.GET("/list", o.GetMonitorOnDutyGroupList)
 		onDutyGroups.POST("/create", o.CreateMonitorOnDutyGroup)
 		onDutyGroups.POST("/changes", o.CreateMonitorOnDutyGroupChange)
+		onDutyGroups.GET("/changes/:id", o.GetMonitorOnDutyGroupChangeList)
 		onDutyGroups.PUT("/update/:id", o.UpdateMonitorOnDutyGroup)
 		onDutyGroups.DELETE("/delete/:id", o.DeleteMonitorOnDutyGroup)
 		onDutyGroups.GET("/detail/:id", o.GetMonitorOnDutyGroup)
@@ -175,5 +176,21 @@ func (o *OnDutyGroupHandler) GetMonitorOnDutyHistory(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return o.alertOnDutyService.GetMonitorOnDutyHistory(ctx, &req)
+	})
+}
+
+func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupChangeList(ctx *gin.Context) {
+	var req model.GetMonitorOnDutyGroupChangeListReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
+	req.OnDutyGroupID = id
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return o.alertOnDutyService.GetMonitorOnDutyGroupChangeList(ctx, &req)
 	})
 }
