@@ -16,6 +16,4 @@ WORKDIR /app
 COPY --from=builder /app/main .
 RUN chmod +x ./main
 EXPOSE 8889
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8889/health || exit 1
 CMD ["./main"]
