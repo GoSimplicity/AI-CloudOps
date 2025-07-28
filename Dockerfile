@@ -13,8 +13,11 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     
 FROM alpine:latest
 ENV TZ=Asia/Shanghai
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata wget curl && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo $TZ > /etc/timezone
 WORKDIR /app
 COPY --from=builder /app/main .
+RUN chmod +x ./main
 EXPOSE 8889
 CMD ["./main"]

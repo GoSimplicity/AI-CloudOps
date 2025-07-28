@@ -152,3 +152,9 @@ type GetMonitorOnDutyHistoryReq struct {
 	StartDate     string `json:"start_date"`
 	EndDate       string `json:"end_date"`
 }
+
+// GetMonitorOnDutyGroupChangeListReq 获取值班组换班记录列表请求
+type GetMonitorOnDutyGroupChangeListReq struct {
+	ListReq
+	OnDutyGroupID int    `json:"on_duty_group_id" form:"on_duty_group_id" binding:"required"`
+}

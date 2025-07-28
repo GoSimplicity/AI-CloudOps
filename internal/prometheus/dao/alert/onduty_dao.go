@@ -47,7 +47,7 @@ type AlertManagerOnDutyDAO interface {
 
 	// 换班记录管理
 	CreateMonitorOnDutyGroupChange(ctx context.Context, change *model.MonitorOnDutyChange) error
-	GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyChange, error)
+	GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyChange, int64, error)
 
 	// 值班历史管理
 	CreateMonitorOnDutyHistory(ctx context.Context, history *model.MonitorOnDutyHistory) error
@@ -55,6 +55,7 @@ type AlertManagerOnDutyDAO interface {
 	GetMonitorOnDutyHistoryByGroupIDAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyHistory, error)
 	GetMonitorOnDutyHistoryList(ctx context.Context, req *model.GetMonitorOnDutyHistoryReq) ([]*model.MonitorOnDutyHistory, int64, error)
 	ExistsMonitorOnDutyHistory(ctx context.Context, groupID int, day string) (bool, error)
+	GetMonitorOnDutyGroupChangeList(ctx context.Context, req *model.GetMonitorOnDutyGroupChangeListReq) ([]*model.MonitorOnDutyChange, int64, error)
 }
 
 type onDutyDAO struct {
@@ -211,19 +212,24 @@ func (d *onDutyDAO) CreateMonitorOnDutyGroupChange(ctx context.Context, change *
 	return nil
 }
 
-func (d *onDutyDAO) GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyChange, error) {
+func (d *onDutyDAO) GetMonitorOnDutyChangesByGroupAndTimeRange(ctx context.Context, groupID int, startTime, endTime string) ([]*model.MonitorOnDutyChange, int64, error) {
 	var changes []*model.MonitorOnDutyChange
-	err := d.db.WithContext(ctx).
-		Where("on_duty_group_id = ? AND date BETWEEN ? AND ?", groupID, startTime, endTime).
-		Order("date ASC").
-		Find(&changes).Error
+	query := d.db.WithContext(ctx).
+		Model(&model.MonitorOnDutyChange{}).
+		Where("on_duty_group_id = ? AND date BETWEEN ? AND ?", groupID, startTime, endTime)
 
-	if err != nil {
-		d.logger.Error("获取换班记录失败", zap.Int("group_id", groupID), zap.Error(err))
-		return nil, err
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		d.logger.Error("获取换班记录总数失败", zap.Int("group_id", groupID), zap.Error(err))
+		return nil, 0, err
 	}
 
-	return changes, err
+	if err := query.Order("date ASC").Find(&changes).Error; err != nil {
+		d.logger.Error("获取换班记录失败", zap.Int("group_id", groupID), zap.Error(err))
+		return nil, 0, err
+	}
+
+	return changes, total, nil
 }
 
 // 值班历史管理方法
@@ -318,6 +324,26 @@ func (d *onDutyDAO) GetMonitorOnDutyHistoryList(ctx context.Context, req *model.
 	}
 
 	return histories, total, nil
+}
+
+func (d *onDutyDAO) GetMonitorOnDutyGroupChangeList(ctx context.Context, req *model.GetMonitorOnDutyGroupChangeListReq) ([]*model.MonitorOnDutyChange, int64, error) {
+	query := d.db.WithContext(ctx).Model(&model.MonitorOnDutyChange{}).
+		Where("on_duty_group_id = ?", req.OnDutyGroupID)
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		d.logger.Error("获取换班记录总数失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	var changes []*model.MonitorOnDutyChange
+	offset := d.calculateOffset(req.Page, req.Size)
+	if err := query.Offset(offset).Limit(req.Size).Order("date DESC").Find(&changes).Error; err != nil {
+		d.logger.Error("获取换班记录列表失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	return changes, total, nil
 }
 
 // 私有辅助方法
