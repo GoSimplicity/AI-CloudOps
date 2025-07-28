@@ -14,15 +14,12 @@ services:
       - ./data/mysql/data:/var/lib/mysql:rw
       - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     command:
-      [
-        "--default-authentication-plugin=mysql_native_password",
-        "--character-set-server=utf8mb4",
-        "--collation-server=utf8mb4_general_ci",
-        "--explicit_defaults_for_timestamp=true",
-        "--lower_case_table_names=1",
-        "--max_connections=1000"
-      ]
-    privileged: true
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --explicit_defaults_for_timestamp=true
+      - --lower_case_table_names=1
+      - --max_connections=1000
     restart: always
     networks:
       - cloudops_net
@@ -42,7 +39,10 @@ services:
       TZ: Asia/Shanghai
     volumes:
       - ./data/redis/data:/data:rw
-    command: ["redis-server", "--requirepass", "v6SxhWHyZC7S"]
+    command:
+      - redis-server
+      - --requirepass
+      - v6SxhWHyZC7S
     restart: always
     networks:
       - cloudops_net
@@ -56,8 +56,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: cloudops-backend:v0.0.1  
-    container_name: cloudops-backend 
+    image: cloudops-backend:v0.0.1
+    container_name: cloudops-backend
     environment:
       TZ: Asia/Shanghai
       GOPROXY: https://goproxy.cn,direct
@@ -68,7 +68,6 @@ services:
     volumes:
       - ./config:/app/config:ro
       - ./logs:/app/logs
-    privileged: true
     restart: always
     networks:
       - cloudops_net
@@ -78,13 +77,12 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8889/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8889/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # 前端服务
   cloudops-web:
     image: cloudops-web:v0.0.1
     container_name: cloudops-web
@@ -93,36 +91,18 @@ services:
     restart: always
     networks:
       - cloudops_net
+    depends_on:
+      cloudops-backend:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8889/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
 
-  nginx-gateway:
-    image: nginx:1.21.5
-    container_name: nginx-gateway
-    restart: always
-    privileged: true
-    environment:
-      - TZ=Asia/Shanghai
-    ports:
-      - "8888:80"
-    volumes:
-      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro  
-      - ./data/nginx/log:/var/log/nginx
-    networks:
-      - cloudops_net
-    depends_on:
-      cloudops-backend:
-        condition: service_healthy
-      cloudops-web:
-        condition: service_healthy
-
 networks:
   cloudops_net:
-    name: cloudops_net 
     driver: bridge
     ipam:
       config:

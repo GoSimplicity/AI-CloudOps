@@ -84,38 +84,6 @@ func run() error {
 	cmd.Server.Use(cors.Default())
 	cmd.Server.Use(gzip.Gzip(gzip.BestCompression))
 
-	// 路由
-	cmd.Server.GET("/headers", func(c *gin.Context) {
-		headers := make(map[string]string)
-		for k, v := range c.Request.Header {
-			if len(v) > 0 {
-				headers[k] = v[0]
-			}
-		}
-		c.JSON(http.StatusOK, headers)
-	})
-
-	cmd.Server.GET("/health", func(c *gin.Context) {
-		status := "ok"
-		dbStatus := "ok"
-		dbErr := ""
-		if db == nil {
-			dbStatus = "unavailable"
-			dbErr = "数据库连接为空"
-		} else if err := di.CheckDBHealth(db); err != nil {
-			dbStatus = "error"
-			dbErr = err.Error()
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"status":    status,
-			"timestamp": time.Now().Unix(),
-			"database": gin.H{
-				"status": dbStatus,
-				"error":  dbErr,
-			},
-		})
-	})
-
 	cmd.Server.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "AI-CloudOps API 服务运行中",
