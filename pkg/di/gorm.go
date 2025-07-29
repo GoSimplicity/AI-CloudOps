@@ -57,14 +57,6 @@ func InitDB() *gorm.DB {
 	return db
 }
 
-func InitDBWithFallback() (*gorm.DB, error) {
-	db := InitDB()
-	if db == nil {
-		return nil, fmt.Errorf("数据库连接失败")
-	}
-	return db, nil
-}
-
 func CheckDBHealth(db *gorm.DB) error {
 	if db == nil {
 		return fmt.Errorf("数据库连接为空")

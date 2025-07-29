@@ -77,7 +77,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8889/"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://localhost:8889/ && ping -c 5 mysql"
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
