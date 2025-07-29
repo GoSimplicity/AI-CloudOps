@@ -78,12 +78,18 @@ func hasPrefix(path string, prefixes []string) bool {
 
 // 检查API路径是否匹配通配符路径
 func matchWildcardPath(apiPath, requestPath string, methodCode int8, apiMethod int8) bool {
+	// 如果API方法不匹配请求方法，则不匹配
 	if apiMethod != methodCode {
 		return false
 	}
 
 	// 完全匹配
 	if apiPath == requestPath {
+		return true
+	}
+
+	// 全局通配符 /* 匹配所有路径
+	if apiPath == "/*" {
 		return true
 	}
 
