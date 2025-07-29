@@ -28,6 +28,7 @@ package di
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/spf13/viper"
 	"gorm.io/driver/mysql"
@@ -72,8 +73,21 @@ func CheckDBHealth(db *gorm.DB) error {
 	if err != nil {
 		return fmt.Errorf("获取数据库连接失败: %v", err)
 	}
-	if err := sqlDB.Ping(); err != nil {
-		return fmt.Errorf("数据库ping失败: %v", err)
+
+	var pingErr error
+	for i := 0; i < 3; i++ {
+		pingErr = sqlDB.Ping()
+		if pingErr == nil {
+			return nil
+		}
+		if i < 2 { // 只在前两次失败后等待
+			log.Printf("数据库ping失败，5秒后重试: %v", pingErr)
+			time.Sleep(10 * time.Second)
+		}
+	}
+
+	if pingErr != nil {
+		return fmt.Errorf("数据库ping失败: %v", pingErr)
 	}
 	return nil
 }
