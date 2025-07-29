@@ -917,12 +917,12 @@ func (t *treeNodeDAO) GetNodeMembers(ctx context.Context, nodeId int, userId int
 	switch memberType {
 	case "admin":
 		// 查询管理员
-		query = query.Joins("JOIN tree_node_admins ON tree_node_admins.user_id = users.id").
-			Where("tree_node_admins.tree_node_id = ?", nodeId)
+		query = query.Joins("JOIN cl_tree_node_admins ON cl_tree_node_admins.user_id = users.id").
+			Where("cl_tree_node_admins.tree_node_id = ?", nodeId)
 	case "member":
 		// 查询普通成员
-		query = query.Joins("JOIN tree_node_members ON tree_node_members.user_id = users.id").
-			Where("tree_node_members.tree_node_id = ?", nodeId)
+		query = query.Joins("JOIN cl_tree_node_members ON cl_tree_node_members.user_id = users.id").
+			Where("cl_tree_node_members.tree_node_id = ?", nodeId)
 	case "all", "":
 		// 查询所有成员（管理员和普通成员）
 		subQuery1 := db.Model(&model.TreeNodeAdmin{}).Select("user_id").Where("tree_node_id = ?", nodeId)
@@ -1063,22 +1063,22 @@ func (t *treeNodeDAO) GetUserNodes(ctx context.Context, userId int, role string)
 	switch role {
 	case "admin":
 		// 查询用户作为管理员的节点
-		query = query.Joins("JOIN tree_node_admins ON tree_node_admins.tree_node_id = tree_nodes.id").
-			Where("tree_node_admins.user_id = ?", userId)
+		query = query.Joins("JOIN cl_tree_node_admins ON cl_tree_node_admins.tree_node_id = cl_tree_nodes.id").
+			Where("cl_tree_node_admins.user_id = ?", userId)
 	case "member":
 		// 查询用户作为成员的节点
-		query = query.Joins("JOIN tree_node_members ON tree_node_members.tree_node_id = tree_nodes.id").
-			Where("tree_node_members.user_id = ?", userId)
+		query = query.Joins("JOIN cl_tree_node_members ON cl_tree_node_members.tree_node_id = cl_tree_nodes.id").
+			Where("cl_tree_node_members.user_id = ?", userId)
 	case "all", "":
 		// 查询用户相关的所有节点
 		subQuery1 := db.Model(&model.TreeNodeAdmin{}).Select("tree_node_id").Where("user_id = ?", userId)
 		subQuery2 := db.Model(&model.TreeNodeMember{}).Select("tree_node_id").Where("user_id = ?", userId)
-		query = query.Where("tree_nodes.id IN (?) OR tree_nodes.id IN (?)", subQuery1, subQuery2)
+		query = query.Where("cl_tree_nodes.id IN (?) OR cl_tree_nodes.id IN (?)", subQuery1, subQuery2)
 	default:
 		return nil, errors.New("无效的角色类型，必须是 admin、member 或 all")
 	}
 
-	if err := query.Order("tree_nodes.level ASC, tree_nodes.name ASC").Find(&nodes).Error; err != nil {
+	if err := query.Order("cl_tree_nodes.level ASC, cl_tree_nodes.name ASC").Find(&nodes).Error; err != nil {
 		t.logger.Error("获取用户节点失败", zap.Int("userId", userId), zap.String("role", role), zap.Error(err))
 		return nil, fmt.Errorf("获取用户节点失败: %w", err)
 	}

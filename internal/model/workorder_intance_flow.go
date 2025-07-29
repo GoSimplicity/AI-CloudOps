@@ -47,7 +47,7 @@ type InstanceFlow struct {
 }
 
 func (InstanceFlow) TableName() string {
-	return "cl_workorder_instance_flow"
+	return "cl_workorder_instance_flows"
 }
 
 type InstanceFlowResp struct {

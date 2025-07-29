@@ -298,9 +298,9 @@ func (r *roleDAO) RevokeApisFromRole(ctx context.Context, roleID int, apiIds []i
 // GetRoleApis 获取角色的API权限列表
 func (r *roleDAO) GetRoleApis(ctx context.Context, roleID int) ([]*model.Api, error) {
 	var apis []*model.Api
-	if err := r.db.WithContext(ctx).Table("apis").
-		Joins("JOIN role_apis ON apis.id = role_apis.api_id").
-		Where("role_apis.role_id = ?", roleID).
+	if err := r.db.WithContext(ctx).Model(&model.Api{}).
+		Joins("JOIN cl_system_role_apis ON cl_system_apis.id = cl_system_role_apis.api_id").
+		Where("cl_system_role_apis.role_id = ?", roleID).
 		Find(&apis).Error; err != nil {
 		return nil, err
 	}
@@ -350,9 +350,9 @@ func (r *roleDAO) RevokeRolesFromUser(ctx context.Context, userID int, roleIds [
 // GetRoleUsers 获取角色下的用户列表
 func (r *roleDAO) GetRoleUsers(ctx context.Context, roleID int) ([]*model.User, error) {
 	var users []*model.User
-	if err := r.db.WithContext(ctx).Table("users").
-		Joins("JOIN user_roles ON users.id = user_roles.user_id").
-		Where("user_roles.role_id = ?", roleID).
+	if err := r.db.WithContext(ctx).Model(&model.User{}).
+		Joins("JOIN cl_system_user_roles ON cl_system_users.id = cl_system_user_roles.user_id").
+		Where("cl_system_user_roles.role_id = ?", roleID).
 		Find(&users).Error; err != nil {
 		return nil, err
 	}
@@ -365,9 +365,9 @@ func (r *roleDAO) GetUserRoles(ctx context.Context, userID int) ([]*model.Role, 
 	var roles []*model.Role
 	if err := r.db.WithContext(ctx).
 		Preload("Apis").
-		Table("roles").
-		Joins("JOIN user_roles ON roles.id = user_roles.role_id").
-		Where("user_roles.user_id = ? AND roles.status = 1", userID).
+		Model(&model.Role{}).
+		Joins("JOIN cl_system_user_roles ON cl_system_roles.id = cl_system_user_roles.role_id").
+		Where("cl_system_user_roles.user_id = ? AND cl_system_roles.status = 1", userID).
 		Find(&roles).Error; err != nil {
 		return nil, err
 	}
@@ -382,11 +382,11 @@ func (r *roleDAO) CheckUserPermission(ctx context.Context, userID int, method, p
 	// 通过用户角色查询是否有对应的API权限
 	query := `
 		 SELECT COUNT(DISTINCT a.id) 
-		 FROM apis a
-		 JOIN role_apis ra ON a.id = ra.api_id
-		 JOIN user_roles ur ON ra.role_id = ur.role_id
-		 JOIN roles r ON ur.role_id = r.id
-		 WHERE ur.user_id = ? 
+		 FROM cl_system_apis a
+		 JOIN cl_system_role_apis ra ON a.id = ra.api_id
+		 JOIN cl_system_user_roles ur ON ra.role_id = ur.role_id
+		 JOIN cl_system_roles r ON ur.role_id = r.id
+		 WHERE cl_system_user_roles.user_id = ? 
 		 AND r.status = 1 
 		 AND a.method = ? 
 		 AND a.path = ?
@@ -405,10 +405,10 @@ func (r *roleDAO) GetUserPermissions(ctx context.Context, userID int) ([]*model.
 
 	query := `
 		 SELECT DISTINCT a.*
-		 FROM apis a
-		 JOIN role_apis ra ON a.id = ra.api_id
-		 JOIN user_roles ur ON ra.role_id = ur.role_id
-		 JOIN roles r ON ur.role_id = r.id
+		 FROM cl_system_apis a
+		 JOIN cl_system_role_apis ra ON a.id = ra.api_id
+		 JOIN cl_system_user_roles ur ON ra.role_id = ur.role_id
+		 JOIN cl_system_roles r ON ur.role_id = r.id
 		 WHERE ur.user_id = ? AND r.status = 1
 		 ORDER BY a.created_at DESC
 	 `

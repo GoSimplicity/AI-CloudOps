@@ -52,7 +52,7 @@ type Template struct {
 
 // TableName 指定模板表名
 func (Template) TableName() string {
-	return "cl_workorder_template"
+	return "cl_workorder_templates"
 }
 
 // CreateTemplateReq 创建模板请求
