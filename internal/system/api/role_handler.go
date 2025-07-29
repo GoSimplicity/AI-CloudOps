@@ -46,10 +46,10 @@ func (r *RoleHandler) RegisterRouters(server *gin.Engine) {
 	roleGroup := server.Group("/api/role")
 	{
 		// 角色管理
-		roleGroup.POST("/list", r.ListRoles)
+		roleGroup.GET("/list", r.ListRoles)
 		roleGroup.POST("/create", r.CreateRole)
-		roleGroup.POST("/update", r.UpdateRole)
-		roleGroup.POST("/delete", r.DeleteRole)
+		roleGroup.PUT("/update/:id", r.UpdateRole)
+		roleGroup.DELETE("/delete/:id", r.DeleteRole)
 		roleGroup.GET("/detail/:id", r.GetRoleDetail)
 
 		// 角色权限管理

@@ -73,12 +73,12 @@ type CreateRoleRequest struct {
 
 // UpdateRoleRequest 更新角色请求结构体
 type UpdateRoleRequest struct {
-	ID          int    `json:"id" binding:"required,gt=0"`     // 角色ID
-	Name        string `json:"name" binding:"required,max=50"` // 角色名称
-	Code        string `json:"code" binding:"required,max=50"` // 角色编码
-	Description string `json:"description" binding:"max=500"`  // 角色描述
-	Status      int    `json:"status" binding:"oneof=0 1"`     // 状态
-	ApiIds      []int  `json:"api_ids"`                        // 关联的API ID列表
+	ID          int    `json:"id" form:"id" binding:"required,gt=0"` // 角色ID
+	Name        string `json:"name" binding:"required,max=50"`       // 角色名称
+	Code        string `json:"code" binding:"required,max=50"`       // 角色编码
+	Description string `json:"description" binding:"max=500"`        // 角色描述
+	Status      int    `json:"status" binding:"oneof=0 1"`           // 状态
+	ApiIds      []int  `json:"api_ids"`                              // 关联的API ID列表
 }
 
 // GetRoleRequest 获取角色请求结构体
@@ -120,7 +120,7 @@ type CheckUserPermissionRequest struct {
 
 type ListRolesRequest struct {
 	ListReq
-	Status *int `json:"status" binding:"omitempty,oneof=0 1"` // 状态筛选，可选
+	Status *int `json:"status" form:"status" binding:"omitempty,oneof=0 1"` // 状态筛选，可选
 }
 
 // AssignRoleRequest 分配角色请求结构体
@@ -147,5 +147,5 @@ type RevokeRoleApiRequest struct {
 
 // DeleteRoleRequest 删除角色请求结构体
 type DeleteRoleRequest struct {
-	ID int `json:"id" ` // 角色ID
+	ID int `json:"id" form:"id" binding:"required,gt=0"` // 角色ID
 }
