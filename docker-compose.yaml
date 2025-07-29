@@ -25,9 +25,10 @@ services:
       - cloudops_net
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
   redis:
     image: redis:6.2.5
@@ -45,6 +46,11 @@ services:
     restart: always
     networks:
       - cloudops_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   cloudops-backend:
     build:
@@ -69,7 +75,13 @@ services:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8889/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   cloudops-web:
     image: cloudops-web:v0.0.1
@@ -82,7 +94,8 @@ services:
     networks:
       - cloudops_net
     depends_on:
-      - cloudops-backend
+      cloudops-backend:
+        condition: service_healthy
 
   nginx:
     image: nginx:1.25
@@ -96,6 +109,7 @@ services:
       - cloudops-backend
     networks:
       - cloudops_net
+    restart: always
 
 networks:
   cloudops_net:
