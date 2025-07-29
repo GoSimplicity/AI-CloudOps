@@ -66,7 +66,6 @@ services:
     ports:
       - "8889:8889"
     volumes:
-      - ./config:/app/config:ro
       - ./logs:/app/logs
     restart: always
     networks:
@@ -86,6 +85,56 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  cloudops-aiops:
+    image: cloudops-aiops:v0.0.1
+    container_name: cloudops-aiops
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+    restart: always
+    networks:
+      - cloudops_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  prometheus:
+    image: prom/prometheus:v2.28.1
+    container_name: prometheus
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./data/prometheus/data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=15d'
+    restart: always
+    user: root
+    ports:
+      - "9090:9090"
+    networks:
+      - cloudops_net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   cloudops-web:
     image: cloudops-web:v0.0.1
@@ -111,6 +160,7 @@ services:
     depends_on:
       - cloudops-web
       - cloudops-backend
+      - cloudops-aiops
     networks:
       - cloudops_net
     restart: always
