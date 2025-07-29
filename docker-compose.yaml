@@ -67,6 +67,7 @@ services:
       - "8889:8889"
     volumes:
       - ./logs:/app/logs
+      - ./config:/app/config:ro
     restart: always
     networks:
       - cloudops_net
