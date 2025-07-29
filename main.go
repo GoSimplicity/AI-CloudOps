@@ -142,7 +142,6 @@ func run() error {
 		log.Printf("降级模式运行")
 	}
 
-	// 启动HTTP服务
 	srv := &http.Server{
 		Addr:    ":" + viper.GetString("server.port"),
 		Handler: cmd.Server,
