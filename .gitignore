@@ -100,3 +100,4 @@ venv
 *.sw?
 .history
 config/config.yaml
+data/prometheus
