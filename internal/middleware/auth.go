@@ -135,7 +135,25 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 			return
 		}
 
-		user := c.MustGet("user").(utils.UserClaims)
+		// 兼容nginx代理后端，部分请求头丢失导致 user 取不到
+		userVal, exists := c.Get("user")
+		if !exists {
+			// 兼容未登录时直接放行登录、注册等接口
+			if skipAuthPaths[path] {
+				c.Next()
+				return
+			}
+			utils.ForbiddenError(c, "未登录或登录已过期")
+			c.Abort()
+			return
+		}
+		user, ok := userVal.(utils.UserClaims)
+		if !ok {
+			utils.ForbiddenError(c, "用户信息异常")
+			c.Abort()
+			return
+		}
+
 		// 管理员直接放行
 		if user.Username == "admin" {
 			c.Next()

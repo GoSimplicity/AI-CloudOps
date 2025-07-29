@@ -386,12 +386,12 @@ func (u *userDAO) GetUserStatistics(ctx context.Context) (*model.UserStatistics,
 		u.l.Error("获取管理员总数失败", zap.Error(err))
 		return nil, err
 	}
-	
+
 	// 获取活跃用户数量
 	if err := u.db.WithContext(ctx).Model(&model.User{}).Where("enable = ?", 1).Count(&statistics.ActiveUserCount).Error; err != nil {
 		u.l.Error("获取活跃用户数量失败", zap.Error(err))
 		return nil, err
 	}
-	
+
 	return &statistics, nil
 }

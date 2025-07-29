@@ -175,18 +175,20 @@ func initMock() error {
 	addr := viper.GetString("mysql.addr")
 	var db *gorm.DB
 	var err error
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 5; i++ {
 		db, err = gorm.Open(mysql.Open(addr), &gorm.Config{
 			Logger: logger.Default.LogMode(logger.Info),
 		})
 		if err == nil {
 			break
 		}
-		time.Sleep(time.Second)
+		time.Sleep(5 * time.Second)
 	}
+
 	if err != nil {
 		return fmt.Errorf("数据库连接失败: %v", err)
 	}
+
 	sqlDB, err := db.DB()
 	if err != nil {
 		return fmt.Errorf("获取sql.DB失败: %v", err)

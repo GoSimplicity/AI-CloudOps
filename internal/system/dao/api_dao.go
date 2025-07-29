@@ -190,7 +190,7 @@ func (a *apiDAO) DeleteApi(ctx context.Context, id int) error {
 
 	// 检查API是否被角色使用
 	var count int64
-	if err := a.db.WithContext(ctx).Table("role_apis").Where("api_id = ?", id).Count(&count).Error; err != nil {
+	if err := a.db.WithContext(ctx).Table("cl_system_role_apis").Where("api_id = ?", id).Count(&count).Error; err != nil {
 		return fmt.Errorf("检查API使用情况失败: %v", err)
 	}
 	if count > 0 {
