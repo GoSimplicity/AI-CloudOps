@@ -270,7 +270,7 @@ func (d *statisticsDAO) GetTemplateStats(ctx context.Context, req *model.StatsRe
 		var categoryName string
 		d.db.WithContext(ctx).Model(&model.TemplatePerformance{}).
 			Where("template_id = ?", templates[i].TemplateID).
-			Joins("LEFT JOIN workorder_categories c ON workorder_template_performance.category_id = c.id").
+			Joins("LEFT JOIN cl_workorder_categories c ON cl_workorder_template_performances.category_id = c.id").
 			Select("COALESCE(c.name, '未分类')").
 			Limit(1).
 			Scan(&categoryName)

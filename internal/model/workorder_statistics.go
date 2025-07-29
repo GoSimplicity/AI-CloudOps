@@ -27,8 +27,6 @@ package model
 
 import "time"
 
-// ==================== 统计请求结构 ====================
-
 // StatsReq 统一的统计请求
 type StatsReq struct {
 	StartDate  *time.Time `json:"start_date" form:"start_date"`
@@ -41,8 +39,6 @@ type StatsReq struct {
 	Top        int        `json:"top" form:"top" binding:"omitempty,min=5,max=50" default:"10"`                            // 排行榜数量
 	SortBy     string     `json:"sort_by" form:"sort_by" binding:"omitempty,oneof=count completion_rate avg_process_time"` // 排序字段
 }
-
-// ==================== 统计响应结构 ====================
 
 // OverviewStats 概览统计
 type OverviewStats struct {
@@ -147,7 +143,7 @@ type UserPerformance struct {
 }
 
 func (UserPerformance) TableName() string {
-	return "cl_workorder_user_performance"
+	return "cl_workorder_user_performances"
 }
 
 // CategoryPerformance 分类绩效表
@@ -163,7 +159,7 @@ type CategoryPerformance struct {
 }
 
 func (CategoryPerformance) TableName() string {
-	return "cl_workorder_category_performance"
+	return "cl_workorder_category_performances"
 }
 
 // TemplatePerformance 模板绩效表
@@ -179,5 +175,5 @@ type TemplatePerformance struct {
 }
 
 func (TemplatePerformance) TableName() string {
-	return "cl_workorder_template_performance"
+	return "cl_workorder_template_performances"
 }

@@ -85,7 +85,7 @@ type FormDesign struct {
 }
 
 func (FormDesign) TableName() string {
-	return "cl_	workorder_form_design"
+	return "cl_workorder_form_designs"
 }
 
 // CreateFormDesignReq 创建表单设计请求

@@ -5,11 +5,11 @@ services:
     environment:
       TZ: Asia/Shanghai
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: cloudOps
+      MYSQL_DATABASE: CloudOps
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_general_ci
     ports:
-      - "33069:3306"
+      - "3306:3306"
     volumes:
       - ./data/mysql/data:/var/lib/mysql:rw
       - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -24,11 +24,10 @@ services:
     networks:
       - cloudops_net
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
 
   redis:
     image: redis:6.2.5
@@ -46,11 +45,6 @@ services:
     restart: always
     networks:
       - cloudops_net
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
 
   cloudops-backend:
     build:
@@ -75,31 +69,33 @@ services:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8889/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+        condition: service_started
 
   cloudops-web:
     image: cloudops-web:v0.0.1
     container_name: cloudops-web
     environment:
       TZ: Asia/Shanghai
+    expose:
+      - "80" # 只在内部网络暴露
     restart: always
     networks:
       - cloudops_net
     depends_on:
-      cloudops-backend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8889/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
+      - cloudops-backend
+
+  nginx:
+    image: nginx:1.25
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - cloudops-web
+      - cloudops-backend
+    networks:
+      - cloudops_net
 
 networks:
   cloudops_net:
