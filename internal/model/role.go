@@ -32,8 +32,8 @@ type Role struct {
 	Description string  `json:"description" gorm:"type:varchar(500);comment:角色描述"`                              // 角色描述
 	Status      int8    `json:"status" gorm:"type:tinyint(1);default:1;comment:状态 0禁用 1启用" binding:"oneof=0 1"` // 角色状态
 	IsSystem    int8    `json:"is_system" gorm:"type:tinyint(1);default:0;comment:是否系统角色 0否 1是"`                // 是否系统角色，系统角色不可删除
-	Apis        []*Api  `json:"apis" gorm:"many2many:cl_role_apis;comment:关联API"`                               // 多对多关联API
-	Users       []*User `json:"users" gorm:"many2many:cl_user_roles;comment:关联用户"`                              // 多对多关联用户
+	Apis        []*Api  `json:"apis" gorm:"many2many:cl_system_role_apis;comment:关联API"`                        // 多对多关联API
+	Users       []*User `json:"users" gorm:"many2many:cl_system_user_roles;comment:关联用户"`                       // 多对多关联用户
 }
 
 func (r *Role) TableName() string {
