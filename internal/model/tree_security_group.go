@@ -57,7 +57,7 @@ type ResourceSecurityGroup struct {
 	SecurityGroupRules []*SecurityGroupRule `json:"security_group_rules,omitempty" gorm:"foreignKey:SecurityGroupID;references:ID;comment:安全组规则"`
 
 	// 多对多关系
-	SecurityGroupTreeNodes []*TreeNode `json:"security_group_tree_nodes" gorm:"many2many:resource_security_group_tree_nodes;comment:关联服务树节点"`
+	SecurityGroupTreeNodes []*TreeNode `json:"security_group_tree_nodes" gorm:"many2many:cl_resource_security_group_tree_nodes;comment:关联服务树节点"`
 }
 
 // SecurityGroupRule 安全组规则

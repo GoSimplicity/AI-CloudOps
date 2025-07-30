@@ -219,7 +219,7 @@ func (t *treeNodeDAO) batchLoadNodeExtraInfo(ctx context.Context, nodes []*model
 			Name string `gorm:"column:name"`
 		}
 
-		if err := t.getDB(ctx).Table("tree_nodes").
+		if err := t.getDB(ctx).Table("cl_tree_nodes").
 			Select("id, name").
 			Where("id IN ?", parentIds).
 			Scan(&parents).Error; err != nil {
