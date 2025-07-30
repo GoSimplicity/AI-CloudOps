@@ -61,7 +61,7 @@ type CreateTemplateReq struct {
 	Description   string                `json:"description" binding:"max=500"`
 	ProcessID     int                   `json:"process_id" binding:"required,min=1"`
 	DefaultValues TemplateDefaultValues `json:"default_values"`
-	Icon          string                `json:"icon" binding:"omitempty,url"`
+	Icon          string                `json:"icon" binding:"omitempty"`
 	CategoryID    *int                  `json:"category_id" binding:"omitempty,min=1"`
 	SortOrder     int                   `json:"sort_order" binding:"min=0"`
 }
@@ -78,7 +78,7 @@ type UpdateTemplateReq struct {
 	Description   string                `json:"description" binding:"max=500"`
 	ProcessID     int                   `json:"process_id" binding:"required,min=1"`
 	DefaultValues TemplateDefaultValues `json:"default_values"`
-	Icon          string                `json:"icon" binding:"omitempty,url"`
+	Icon          string                `json:"icon" binding:"omitempty"`
 	CategoryID    *int                  `json:"category_id" binding:"omitempty,min=1"`
 	SortOrder     int                   `json:"sort_order" binding:"min=0"`
 	Status        int8                  `json:"status" binding:"omitempty,oneof=0 1"`

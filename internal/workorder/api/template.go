@@ -50,7 +50,6 @@ func (h *TemplateHandler) RegisterRouters(server *gin.Engine) {
 		templateGroup.DELETE("/delete/:id", h.DeleteTemplate)
 		templateGroup.GET("/list", h.ListTemplate)
 		templateGroup.GET("/detail/:id", h.DetailTemplate)
-		templateGroup.POST("/clone/:id", h.CloneTemplate)
 	}
 }
 
@@ -118,23 +117,5 @@ func (h *TemplateHandler) DetailTemplate(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.DetailTemplate(ctx, id, user.Uid)
-	})
-}
-
-// CloneTemplate 克隆模板
-func (h *TemplateHandler) CloneTemplate(ctx *gin.Context) {
-	var req model.CloneTemplateReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的模板ID")
-		return
-	}
-
-	req.ID = id
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return h.service.CloneTemplate(ctx, &req, user.Uid)
 	})
 }
