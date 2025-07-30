@@ -219,7 +219,7 @@ func (t *treeNodeDAO) batchLoadNodeExtraInfo(ctx context.Context, nodes []*model
 			Name string `gorm:"column:name"`
 		}
 
-		if err := t.getDB(ctx).Table("tree_nodes").
+		if err := t.getDB(ctx).Table("cl_tree_nodes").
 			Select("id, name").
 			Where("id IN ?", parentIds).
 			Scan(&parents).Error; err != nil {
@@ -917,24 +917,24 @@ func (t *treeNodeDAO) GetNodeMembers(ctx context.Context, nodeId int, userId int
 	switch memberType {
 	case "admin":
 		// 查询管理员
-		query = query.Joins("JOIN cl_tree_node_admins ON cl_tree_node_admins.user_id = users.id").
+		query = query.Joins("JOIN cl_tree_node_admins ON cl_tree_node_admins.user_id = cl_system_users.id").
 			Where("cl_tree_node_admins.tree_node_id = ?", nodeId)
 	case "member":
 		// 查询普通成员
-		query = query.Joins("JOIN cl_tree_node_members ON cl_tree_node_members.user_id = users.id").
+		query = query.Joins("JOIN cl_tree_node_members ON cl_tree_node_members.user_id = cl_system_users.id").
 			Where("cl_tree_node_members.tree_node_id = ?", nodeId)
 	case "all", "":
 		// 查询所有成员（管理员和普通成员）
 		subQuery1 := db.Model(&model.TreeNodeAdmin{}).Select("user_id").Where("tree_node_id = ?", nodeId)
 		subQuery2 := db.Model(&model.TreeNodeMember{}).Select("user_id").Where("tree_node_id = ?", nodeId)
-		query = query.Where("users.id IN (?) OR users.id IN (?)", subQuery1, subQuery2)
+		query = query.Where("cl_system_users.id IN (?) OR cl_system_users.id IN (?)", subQuery1, subQuery2)
 	default:
 		return nil, errors.New("无效的成员类型，必须是 admin、member 或 all")
 	}
 
 	// 如果指定了用户ID，则进一步过滤
 	if userId > 0 {
-		query = query.Where("users.id = ?", userId)
+		query = query.Where("cl_system_users.id = ?", userId)
 	}
 
 	if err := query.Find(&users).Error; err != nil {

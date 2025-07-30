@@ -29,7 +29,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
@@ -43,7 +42,6 @@ type TemplateService interface {
 	DeleteTemplate(ctx context.Context, id int, userID int) error
 	ListTemplate(ctx context.Context, req *model.ListTemplateReq) (*model.ListResp[*model.Template], error)
 	DetailTemplate(ctx context.Context, id int, userID int) (*model.Template, error)
-	CloneTemplate(ctx context.Context, req *model.CloneTemplateReq, creatorID int) (*model.Template, error)
 }
 
 type templateService struct {
@@ -407,75 +405,6 @@ func (t *templateService) DetailTemplate(ctx context.Context, id int, userID int
 		zap.String("name", template.Name))
 
 	return template, nil
-}
-
-// CloneTemplate 克隆模板
-func (t *templateService) CloneTemplate(ctx context.Context, req *model.CloneTemplateReq, creatorID int) (*model.Template, error) {
-	// 参数验证
-	if req == nil || req.ID <= 0 {
-		return nil, fmt.Errorf("克隆模板请求无效")
-	}
-
-	if creatorID <= 0 {
-		return nil, fmt.Errorf("创建者ID无效")
-	}
-
-	// 获取原模板
-	originalTemplate, err := t.dao.GetTemplate(ctx, req.ID)
-	if err != nil {
-		t.l.Error("获取原模板失败",
-			zap.Error(err),
-			zap.Int("templateID", req.ID))
-		return nil, fmt.Errorf("获取原模板失败: %w", err)
-	}
-
-	// 生成新名称
-	newName := req.Name
-
-	// 检查新名称是否已存在
-	exists, err := t.checkTemplateNameExists(ctx, newName, req.ID)
-	if err != nil {
-		t.l.Error("检查模板名称失败",
-			zap.Error(err),
-			zap.String("name", newName))
-		return nil, fmt.Errorf("检查模板名称失败: %w", err)
-	}
-
-	if exists {
-		// 如果名称已存在，添加时间戳
-		newName = fmt.Sprintf("%s - 副本 (%s)", newName,
-			time.Now().Format("20060102150405"))
-	}
-
-	// 创建新模板（复制原模板的数据）
-	newTemplate := &model.Template{
-		Name:          newName,
-		Description:   originalTemplate.Description,
-		ProcessID:     originalTemplate.ProcessID,
-		DefaultValues: originalTemplate.DefaultValues,
-		Icon:          originalTemplate.Icon,
-		Status:        originalTemplate.Status,
-		SortOrder:     originalTemplate.SortOrder,
-		CategoryID:    originalTemplate.CategoryID,
-		CreatorID:     creatorID,
-	}
-
-	// 保存新模板到数据库
-	if err := t.dao.CreateTemplate(ctx, newTemplate); err != nil {
-		t.l.Error("保存克隆模板失败",
-			zap.Error(err),
-			zap.Int("originalID", req.ID),
-			zap.String("newName", newName))
-		return nil, fmt.Errorf("保存克隆模板失败: %w", err)
-	}
-
-	t.l.Info("克隆模板成功",
-		zap.Int("originalID", req.ID),
-		zap.Int("newID", newTemplate.ID),
-		zap.String("originalName", originalTemplate.Name),
-		zap.String("newName", newName))
-
-	return newTemplate, nil
 }
 
 // checkTemplateNameExists 检查模板名称是否存在
