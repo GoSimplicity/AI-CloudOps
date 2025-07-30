@@ -26,6 +26,7 @@ services:
     restart: always
     volumes:
       - ./logs:/app/logs
+      - ./deploy/kubernetes/config:/app/deploy/kubernetes/config
 
   cloudops-backend:
     container_name: cloudops-backend
