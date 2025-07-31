@@ -151,7 +151,18 @@ func (d *workorderInstanceDAO) GetInstanceByID(ctx context.Context, id int) (*mo
 
 	var instance model.WorkorderInstance
 
-	err := d.db.WithContext(ctx).Where("id = ?", id).First(&instance).Error
+	err := d.db.WithContext(ctx).
+		Where("id = ?", id).
+		Preload("Comments", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at DESC")
+		}).
+		Preload("FlowLogs", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at DESC")
+		}).
+		Preload("Timeline", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at DESC")
+		}).
+		First(&instance).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			d.logger.Warn("工单实例不存在", zap.Int("id", id))

@@ -34,58 +34,51 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	userdao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	"go.uber.org/zap"
 )
 
 type InstanceFlowService interface {
-	// 流程操作
-	ProcessInstanceFlow(ctx context.Context, req *model.InstanceActionReq, operatorID int, operatorName string) error
-	GetInstanceFlows(ctx context.Context, instanceID int) ([]model.InstanceFlowResp, error)
-	GetProcessDefinition(ctx context.Context, processID int) (*model.ProcessDefinition, error)
+	CreateInstanceFlow(ctx context.Context, req *model.CreateWorkorderInstanceFlowReq) error
+	ListInstanceFlows(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) (model.ListResp[*model.WorkorderInstanceFlow], error)
+	DetailInstanceFlow(ctx context.Context, id int) (*model.WorkorderInstanceFlow, error)
 }
 
 type instanceFlowService struct {
 	dao         dao.InstanceFlowDAO
 	processDao  dao.ProcessDAO
-	instanceDao dao.InstanceDAO
-	userDao     userdao.UserDAO
+	instanceDao dao.InstanceFlowDAO
 	logger      *zap.Logger
 }
 
-func NewInstanceFlowService(dao dao.InstanceFlowDAO, processDao dao.ProcessDAO, instanceDao dao.InstanceDAO, userDao userdao.UserDAO, logger *zap.Logger) InstanceFlowService {
+func NewInstanceFlowService(dao dao.InstanceFlowDAO, processDao dao.ProcessDAO, instanceDao dao.InstanceFlowDAO, logger *zap.Logger) InstanceFlowService {
 	return &instanceFlowService{
 		dao:         dao,
 		processDao:  processDao,
 		instanceDao: instanceDao,
-		userDao:     userDao,
 		logger:      logger,
 	}
 }
 
 // ProcessInstanceFlow 处理工单流程
-func (s *instanceFlowService) ProcessInstanceFlow(ctx context.Context, req *model.InstanceActionReq, operatorID int, operatorName string) error {
+func (s *instanceFlowService) CreateInstanceFlow(ctx context.Context, req *model.CreateWorkorderInstanceFlowReq) error {
 	if err := s.validateActionRequest(req); err != nil {
 		return fmt.Errorf("参数验证失败: %w", err)
 	}
 
 	// 获取工单实例
-	instance, err := s.instanceDao.GetInstance(ctx, req.InstanceID)
+	instance, err := s.instanceDao.GetInstanceFlows(ctx, req.InstanceID)
 	if err != nil {
-		if errors.Is(err, dao.ErrInstanceNotFound) {
-			return ErrInstanceNotFound
-		}
 		return fmt.Errorf("获取工单实例失败: %w", err)
 	}
 
 	// 验证操作权限
-	if err := s.validateOperationPermission(instance, operatorID, req.Action); err != nil {
+	if err := s.validateOperationPermission(instance, req.OperatorID, req.Action); err != nil {
 		return err
 	}
 
 	// 获取流程定义
-	process, err := s.processDao.GetProcess(ctx, instance.ProcessID)
+	process, err := s.processDao.GetProcessByID(ctx, instance.ProcessID)
 	if err != nil {
 		return fmt.Errorf("获取流程定义失败: %w", err)
 	}
@@ -162,6 +155,21 @@ func (s *instanceFlowService) GetProcessDefinition(ctx context.Context, processI
 	}
 
 	return processDef, nil
+}
+
+// DetailInstanceFlow 获取工单流转记录详情
+func (s *instanceFlowService) DetailInstanceFlow(ctx context.Context, id int) (*model.InstanceFlowResp, error) {
+	if id <= 0 {
+		return nil, ErrInvalidRequest
+	}
+	flow, err := s.dao.GetInstanceFlowByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, dao.ErrInstanceFlowNotFound) {
+			return nil, ErrInstanceNotFound
+		}
+		return nil, fmt.Errorf("获取工单流转记录失败: %w", err)
+	}
+	return s.convertToFlowResp(flow), nil
 }
 
 // 辅助方法

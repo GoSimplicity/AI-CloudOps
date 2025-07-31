@@ -27,12 +27,28 @@ package model
 
 import "time"
 
+// 时间线动作类型常量
+const (
+	TimelineActionCreate   = "create"   // 创建工单
+	TimelineActionSubmit   = "submit"   // 提交工单
+	TimelineActionApprove  = "approve"  // 审批通过
+	TimelineActionReject   = "reject"   // 审批拒绝
+	TimelineActionTransfer = "transfer" // 转交
+	TimelineActionAssign   = "assign"   // 指派
+	TimelineActionRevoke   = "revoke"   // 撤回
+	TimelineActionCancel   = "cancel"   // 取消
+	TimelineActionReturn   = "return"   // 退回
+	TimelineActionComplete = "complete" // 完成
+	TimelineActionComment  = "comment"  // 添加评论
+	TimelineActionUpdate   = "update"   // 更新工单
+)
+
 // WorkorderInstanceTimeline 工单实例时间线
 type WorkorderInstanceTimeline struct {
 	Model
-	InstanceID   int    `json:"instance_id" gorm:"column:instance_id;not null;index;comment:工单实例ID"`
-	Action       string `json:"action" gorm:"column:action;type:varchar(50);not null;comment:动作类型"`
-	OperatorID   int    `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	InstanceID   int    `json:"instance_id" gorm:"column:instance_id;not null;index:idx_instance_id;index:idx_instance_time,priority:1;index:idx_instance_action,priority:1;comment:工单实例ID"`
+	Action       string `json:"action" gorm:"column:action;type:varchar(50);not null;index:idx_action;index:idx_instance_action,priority:2;comment:动作类型"`
+	OperatorID   int    `json:"operator_id" gorm:"column:operator_id;not null;index:idx_operator_id;index:idx_operator_time,priority:1;comment:操作人ID"`
 	OperatorName string `json:"operator_name" gorm:"column:operator_name;type:varchar(100);comment:操作人名称"`
 	Comment      string `json:"comment" gorm:"column:comment;type:varchar(2000);comment:备注/评论"`
 }
@@ -44,7 +60,7 @@ func (WorkorderInstanceTimeline) TableName() string {
 // CreateWorkorderInstanceTimelineReq 创建工单实例时间线请求
 type CreateWorkorderInstanceTimelineReq struct {
 	InstanceID   int    `json:"instance_id" binding:"required,min=1"`
-	Action       string `json:"action" binding:"required,min=1,max=50"`
+	Action       string `json:"action" binding:"required,oneof=create submit approve reject transfer assign revoke cancel return complete comment update"`
 	OperatorID   int    `json:"operator_id" binding:"required,min=1"`
 	OperatorName string `json:"operator_name" binding:"required,min=1,max=100"`
 	Comment      string `json:"comment" binding:"omitempty,max=2000"`
@@ -70,7 +86,7 @@ type DetailWorkorderInstanceTimelineReq struct {
 type ListWorkorderInstanceTimelineReq struct {
 	ListReq
 	InstanceID *int       `json:"instance_id" form:"instance_id" binding:"omitempty,min=1"`
-	Action     *string    `json:"action" form:"action" binding:"omitempty,min=1,max=50"`
+	Action     *string    `json:"action" form:"action" binding:"omitempty,oneof=create submit approve reject transfer assign revoke cancel return complete comment update"`
 	OperatorID *int       `json:"operator_id" form:"operator_id" binding:"omitempty,min=1"`
 	StartDate  *time.Time `json:"start_date" form:"start_date" binding:"omitempty"`
 	EndDate    *time.Time `json:"end_date" form:"end_date" binding:"omitempty"`

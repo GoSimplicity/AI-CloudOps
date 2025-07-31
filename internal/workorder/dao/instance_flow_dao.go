@@ -42,9 +42,8 @@ var (
 )
 
 type InstanceFlowDAO interface {
-	CreateInstanceFlow(ctx context.Context, flow *model.InstanceFlow) error
-	GetInstanceFlows(ctx context.Context, instanceID int) ([]model.InstanceFlow, error)
-	BatchCreateInstanceFlows(ctx context.Context, flows []model.InstanceFlow) error
+	CreateInstanceFlow(ctx context.Context, flow *model.WorkorderInstanceFlow) error
+	GetInstanceFlows(ctx context.Context, instanceID int) ([]model.WorkorderInstanceFlow, error)
 }
 
 type instanceFlowDAO struct {
@@ -60,7 +59,7 @@ func NewInstanceFlowDAO(db *gorm.DB, logger *zap.Logger) InstanceFlowDAO {
 }
 
 // CreateInstanceFlow 创建工单流程记录
-func (d *instanceFlowDAO) CreateInstanceFlow(ctx context.Context, flow *model.InstanceFlow) error {
+func (d *instanceFlowDAO) CreateInstanceFlow(ctx context.Context, flow *model.WorkorderInstanceFlow) error {
 	if flow == nil {
 		return ErrFlowNilPointer
 	}
@@ -79,12 +78,12 @@ func (d *instanceFlowDAO) CreateInstanceFlow(ctx context.Context, flow *model.In
 }
 
 // GetInstanceFlows 获取工单流程记录
-func (d *instanceFlowDAO) GetInstanceFlows(ctx context.Context, instanceID int) ([]model.InstanceFlow, error) {
+func (d *instanceFlowDAO) GetInstanceFlows(ctx context.Context, instanceID int) ([]model.WorkorderInstanceFlow, error) {
 	if instanceID <= 0 {
 		return nil, ErrInstanceInvalidID
 	}
 
-	var flows []model.InstanceFlow
+	var flows []model.WorkorderInstanceFlow
 	err := d.db.WithContext(ctx).
 		Where("instance_id = ?", instanceID).
 		Order("created_at ASC").
@@ -98,30 +97,8 @@ func (d *instanceFlowDAO) GetInstanceFlows(ctx context.Context, instanceID int) 
 	return flows, nil
 }
 
-// BatchCreateInstanceFlows 批量创建工单流程记录
-func (d *instanceFlowDAO) BatchCreateInstanceFlows(ctx context.Context, flows []model.InstanceFlow) error {
-	if len(flows) == 0 {
-		return nil
-	}
-
-	// 验证流程记录
-	for i, flow := range flows {
-		if err := d.validateFlow(&flow); err != nil {
-			return fmt.Errorf("第%d个流程记录验证失败: %w", i+1, err)
-		}
-	}
-
-	if err := d.db.WithContext(ctx).CreateInBatches(flows, DefaultBatchSize).Error; err != nil {
-		d.logger.Error("批量创建工单流程记录失败", zap.Error(err), zap.Int("count", len(flows)))
-		return fmt.Errorf("批量创建工单流程记录失败: %w", err)
-	}
-
-	d.logger.Info("批量创建工单流程记录成功", zap.Int("count", len(flows)))
-	return nil
-}
-
 // validateFlow 验证流程记录数据
-func (d *instanceFlowDAO) validateFlow(flow *model.InstanceFlow) error {
+func (d *instanceFlowDAO) validateFlow(flow *model.WorkorderInstanceFlow) error {
 	if flow.InstanceID <= 0 {
 		return fmt.Errorf("工单ID无效")
 	}

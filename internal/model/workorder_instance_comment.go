@@ -42,8 +42,8 @@ const (
 type WorkorderInstanceComment struct {
 	Model
 	InstanceID int                        `json:"instance_id" gorm:"not null;index;comment:工单实例ID"`
-	UserID     int                        `json:"user_id" gorm:"not null;index;comment:评论用户ID"`
-	UserName   string                     `json:"user_name" gorm:"type:varchar(200);not null;comment:评论用户名称"`
+	OperatorID   int                        `json:"operator_id" gorm:"not null;index;comment:操作人ID"`
+	OperatorName string                     `json:"operator_name" gorm:"type:varchar(200);not null;comment:操作人名称"`
 	Content    string                     `json:"content" gorm:"type:text;not null;comment:评论内容"`
 	ParentID   *int                       `json:"parent_id,omitempty" gorm:"index;comment:父评论ID"`
 	Type       string                     `json:"type" gorm:"type:varchar(20);not null;default:'normal';comment:评论类型"`
@@ -60,8 +60,8 @@ func (WorkorderInstanceComment) TableName() string {
 // CreateWorkorderInstanceCommentReq 创建工单实例评论请求
 type CreateWorkorderInstanceCommentReq struct {
 	InstanceID int    `json:"instance_id" binding:"required,min=1"`
-	UserID     int    `json:"user_id" binding:"required,min=1"`
-	UserName   string `json:"user_name" binding:"required,min=1,max=200"`
+	OperatorID   int    `json:"operator_id" binding:"required,min=1"`
+	OperatorName string `json:"operator_name" binding:"required,min=1,max=200"`
 	Content    string `json:"content" binding:"required,min=1,max=2000"`
 	ParentID   *int   `json:"parent_id" binding:"omitempty,min=1"`
 	Type       string `json:"type" binding:"omitempty,oneof=normal system"`

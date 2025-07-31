@@ -60,6 +60,11 @@ type WorkorderInstance struct {
 	Tags           StringList `json:"tags" gorm:"column:tags;comment:标签"`
 	DueDate        *time.Time `json:"due_date" gorm:"index;comment:截止时间"`
 	CompletedAt    *time.Time `json:"completed_at" gorm:"comment:完成时间"`
+
+	// 关联查询字段
+	Comments []WorkorderInstanceComment  `json:"comments,omitempty" gorm:"foreignKey:InstanceID;references:ID"`
+	FlowLogs []WorkorderInstanceFlow     `json:"flow_logs,omitempty" gorm:"foreignKey:InstanceID;references:ID"`
+	Timeline []WorkorderInstanceTimeline `json:"timeline,omitempty" gorm:"foreignKey:InstanceID;references:ID"`
 }
 
 func (WorkorderInstance) TableName() string {

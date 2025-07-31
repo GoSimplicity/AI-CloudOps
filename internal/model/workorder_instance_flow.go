@@ -49,15 +49,16 @@ const (
 // WorkorderInstanceFlow 工单流转记录
 type WorkorderInstanceFlow struct {
 	Model
-	InstanceID int     `json:"instance_id" gorm:"not null;index;comment:工单实例ID"`
-	StepID     string  `json:"step_id" gorm:"type:varchar(64);not null;comment:步骤ID"`
-	StepName   string  `json:"step_name" gorm:"type:varchar(128);not null;comment:步骤名称"`
-	Action     string  `json:"action" gorm:"type:varchar(32);not null;comment:操作动作"`
-	OperatorID int     `json:"operator_id" gorm:"not null;index;comment:操作人ID"`
-	AssigneeID *int    `json:"assignee_id" gorm:"index;comment:处理人ID"`
-	Comment    string  `json:"comment" gorm:"type:varchar(1000);comment:处理意见"`
-	Result     string  `json:"result" gorm:"type:varchar(16);not null;default:'success';comment:处理结果"`
-	FormData   JSONMap `json:"form_data" gorm:"type:json;comment:表单数据"`
+	InstanceID   int     `json:"instance_id" gorm:"not null;index;comment:工单实例ID"`
+	StepID       string  `json:"step_id" gorm:"type:varchar(64);not null;comment:步骤ID"`
+	StepName     string  `json:"step_name" gorm:"type:varchar(128);not null;comment:步骤名称"`
+	Action       string  `json:"action" gorm:"type:varchar(32);not null;comment:操作动作"`
+	OperatorID   int     `json:"operator_id" gorm:"not null;index;comment:操作人ID"`
+	OperatorName string  `json:"operator_name" gorm:"type:varchar(128);not null;comment:操作人名称"`
+	AssigneeID   *int    `json:"assignee_id" gorm:"index;comment:处理人ID"`
+	Comment      string  `json:"comment" gorm:"type:varchar(1000);comment:处理意见"`
+	Result       string  `json:"result" gorm:"type:varchar(16);not null;default:'success';comment:处理结果"`
+	FormData     JSONMap `json:"form_data" gorm:"type:json;comment:表单数据"`
 }
 
 func (WorkorderInstanceFlow) TableName() string {
@@ -66,15 +67,16 @@ func (WorkorderInstanceFlow) TableName() string {
 
 // CreateWorkorderInstanceFlowReq 创建工单流转记录请求
 type CreateWorkorderInstanceFlowReq struct {
-	InstanceID int     `json:"instance_id" binding:"required,min=1"`
-	StepID     string  `json:"step_id" binding:"required,min=1,max=64"`
-	StepName   string  `json:"step_name" binding:"required,min=1,max=128"`
-	Action     string  `json:"action" binding:"required,min=1,max=32"`
-	OperatorID int     `json:"operator_id" binding:"required,min=1"`
-	AssigneeID *int    `json:"assignee_id" binding:"omitempty,min=1"`
-	Comment    string  `json:"comment" binding:"omitempty,max=1000"`
-	Result     string  `json:"result" binding:"omitempty,oneof=success failed pending"`
-	FormData   JSONMap `json:"form_data" binding:"omitempty"`
+	InstanceID   int     `json:"instance_id" binding:"required,min=1"`
+	StepID       string  `json:"step_id" binding:"required,min=1,max=64"`
+	StepName     string  `json:"step_name" binding:"required,min=1,max=128"`
+	Action       string  `json:"action" binding:"required,oneof=create submit approve reject transfer assign revoke cancel return complete"`
+	OperatorID   int     `json:"operator_id" binding:"required,min=1"`
+	OperatorName string  `json:"operator_name" binding:"required,min=1,max=128"`
+	AssigneeID   *int    `json:"assignee_id" binding:"omitempty,min=1"`
+	Comment      string  `json:"comment" binding:"omitempty,max=1000"`
+	Result       string  `json:"result" binding:"omitempty,oneof=success failed pending"`
+	FormData     JSONMap `json:"form_data" binding:"omitempty"`
 }
 
 // ListWorkorderInstanceFlowReq 工单流转记录列表请求
@@ -82,7 +84,7 @@ type ListWorkorderInstanceFlowReq struct {
 	ListReq
 	InstanceID *int    `json:"instance_id" form:"instance_id" binding:"omitempty,min=1"`
 	StepID     *string `json:"step_id" form:"step_id" binding:"omitempty,min=1,max=64"`
-	Action     *string `json:"action" form:"action" binding:"omitempty,min=1,max=32"`
+	Action     *string `json:"action" form:"action" binding:"omitempty,oneof=create submit approve reject transfer assign revoke cancel return complete"`
 	OperatorID *int    `json:"operator_id" form:"operator_id" binding:"omitempty,min=1"`
 	Result     *string `json:"result" form:"result" binding:"omitempty,oneof=success failed pending"`
 }
