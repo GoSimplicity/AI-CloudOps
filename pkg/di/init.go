@@ -91,10 +91,6 @@ func InitTables(db *gorm.DB) error {
 		&model.InstanceFlow{},
 		&model.InstanceComment{},
 		&model.Category{},
-		&model.WorkOrderStatistics{},
-		&model.UserPerformance{},
-		&model.CategoryPerformance{},
-		&model.TemplatePerformance{},
 		&model.Notification{},
 		&model.NotificationLog{},
 	)

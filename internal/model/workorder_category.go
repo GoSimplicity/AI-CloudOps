@@ -25,65 +25,109 @@
 
 package model
 
-// Category 分类实体
-type Category struct {
+// 分类状态常量
+const (
+	CategoryStatusDisabled int8 = 0 // 禁用
+	CategoryStatusEnabled  int8 = 1 // 启用
+)
+
+// WorkorderCategory 工单分类实体
+type WorkorderCategory struct {
 	Model
-	Name        string `json:"name" gorm:"column:name;not null;comment:分类名称"`
-	ParentID    *int   `json:"parent_id" gorm:"column:parent_id;comment:父分类ID"`
-	Icon        string `json:"icon" gorm:"column:icon;comment:图标"`
-	SortOrder   int    `json:"sort_order" gorm:"column:sort_order;default:0;comment:排序顺序"`
-	Status      int8   `json:"status" gorm:"column:status;not null;default:1;comment:状态：1-启用，2-禁用"`
-	Description string `json:"description" gorm:"column:description;comment:分类描述"`
-	CreatorID   int    `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
+	Name        string `json:"name" gorm:"column:name;type:varchar(100);not null;index;comment:分类名称"`
+	ParentID    *int   `json:"parent_id" gorm:"column:parent_id;index;comment:父分类ID"`
+	Icon        string `json:"icon" gorm:"column:icon;type:varchar(255);comment:分类图标"`
+	SortOrder   int    `json:"sort_order" gorm:"column:sort_order;not null;default:0;index;comment:排序顺序"`
+	Status      int8   `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：0-禁用，1-启用"`
+	Description string `json:"description" gorm:"column:description;type:varchar(500);comment:分类描述"`
+	CreatorID   int    `json:"creator_id" gorm:"column:creator_id;not null;index;comment:创建人ID"`
 	CreatorName string `json:"creator_name" gorm:"-"`
+
+	// 关联信息（不存储到数据库）
+	Children      []WorkorderCategory `json:"children,omitempty" gorm:"-"`
+	InstanceCount int64               `json:"instance_count,omitempty" gorm:"-"`
 }
 
-func (Category) TableName() string {
-	return "cl_workorder_categories"
+// TableName 指定工单分类表名
+func (WorkorderCategory) TableName() string {
+	return "cl_workorder_category"
 }
 
-// 分类请求结构
-type CreateCategoryReq struct {
+// CreateWorkorderCategoryReq 创建工单分类请求
+type CreateWorkorderCategoryReq struct {
 	Name        string `json:"name" binding:"required,min=1,max=100"`
-	ParentID    *int   `json:"parent_id"`
-	Icon        string `json:"icon"`
-	SortOrder   int    `json:"sort_order"`
+	ParentID    *int   `json:"parent_id" binding:"omitempty,min=1"`
+	Icon        string `json:"icon" binding:"omitempty,max=255"`
+	SortOrder   int    `json:"sort_order" binding:"omitempty,min=0"`
 	Description string `json:"description" binding:"omitempty,max=500"`
-	UserID      int    `json:"user_id" binding:"required"`
-	UserName    string `json:"user_name" binding:"required"`
-	Status      int8   `json:"status" binding:"required,oneof=1 2"` // 状态，必填，0-禁用，1-启用
+	Status      int8   `json:"status" binding:"omitempty,oneof=0 1"`
 }
 
-// UpdateCategoryReq 更新分类请求结构
-type UpdateCategoryReq struct {
-	ID          int    `json:"id" form:"id" binding:"required"`         // 分类ID，必填
-	Name        string `json:"name" binding:"required,min=1,max=100"`   // 分类名称，必填，长度1-100
-	ParentID    *int   `json:"parent_id"`                               // 父分类ID，可选
-	Icon        string `json:"icon"`                                    // 图标，可选
-	SortOrder   int    `json:"sort_order"`                              // 排序顺序，可选
-	Description string `json:"description" binding:"omitempty,max=500"` // 分类描述，最大500字符
-	Status      *int8  `json:"status" binding:"required,oneof=1 2"`     // 状态，必填，0-禁用，1-启用
+// UpdateWorkorderCategoryReq 更新工单分类请求
+type UpdateWorkorderCategoryReq struct {
+	ID          int    `json:"id" binding:"required,min=1"`
+	Name        string `json:"name" binding:"required,min=1,max=100"`
+	ParentID    *int   `json:"parent_id" binding:"omitempty,min=1"`
+	Icon        string `json:"icon" binding:"omitempty,max=255"`
+	SortOrder   int    `json:"sort_order" binding:"omitempty,min=0"`
+	Description string `json:"description" binding:"omitempty,max=500"`
+	Status      int8   `json:"status" binding:"required,oneof=0 1"`
 }
 
-type DeleteCategoryReq struct {
-	ID int `json:"id" form:"id" binding:"required"`
+// DeleteWorkorderCategoryReq 删除工单分类请求
+type DeleteWorkorderCategoryReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
 
-type ListCategoryReq struct {
+// DetailWorkorderCategoryReq 获取工单分类详情请求
+type DetailWorkorderCategoryReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
+}
+
+// ListWorkorderCategoryReq 工单分类列表请求
+type ListWorkorderCategoryReq struct {
 	ListReq
-	Status *int8 `json:"status" form:"status"`
+	Status   *int8 `json:"status" form:"status" binding:"omitempty,oneof=0 1"`
+	ParentID *int  `json:"parent_id" form:"parent_id" binding:"omitempty,min=1"`
 }
 
-type DetailCategoryReq struct {
-	ID int `json:"id" uri:"id" binding:"required"`
+// TreeWorkorderCategoryReq 获取工单分类树请求
+type TreeWorkorderCategoryReq struct {
+	Status *int8 `json:"status" form:"status" binding:"omitempty,oneof=0 1"`
 }
 
-// TreeCategoryReq 获取分类树请求
-type TreeCategoryReq struct {
-	Status *int8 `json:"status" form:"status"`
+// MoveWorkorderCategoryReq 移动工单分类请求
+type MoveWorkorderCategoryReq struct {
+	ID       int  `json:"id" binding:"required,min=1"`
+	ParentID *int `json:"parent_id" binding:"omitempty,min=1"`
 }
 
-type CategoryStatistics struct {
-	EnabledCount  int64 `json:"enabled_count"`
-	DisabledCount int64 `json:"disabled_count"`
+// SortWorkorderCategoryReq 排序工单分类请求
+type SortWorkorderCategoryReq struct {
+	Items []CategorySortItem `json:"items" binding:"required,min=1"`
+}
+
+// CategorySortItem 分类排序项
+type CategorySortItem struct {
+	ID        int `json:"id" binding:"required,min=1"`
+	SortOrder int `json:"sort_order" binding:"required,min=0"`
+}
+
+// BatchUpdateCategoryStatusReq 批量更新分类状态请求
+type BatchUpdateCategoryStatusReq struct {
+	IDs    []int `json:"ids" binding:"required,min=1,dive,min=1"`
+	Status int8  `json:"status" binding:"required,oneof=0 1"`
+}
+
+// WorkorderCategoryTree 工单分类树节点
+type WorkorderCategoryTree struct {
+	ID            int                     `json:"id"`
+	Name          string                  `json:"name"`
+	ParentID      *int                    `json:"parent_id"`
+	Icon          string                  `json:"icon"`
+	SortOrder     int                     `json:"sort_order"`
+	Status        int8                    `json:"status"`
+	Description   string                  `json:"description"`
+	InstanceCount int64                   `json:"instance_count"`
+	Children      []WorkorderCategoryTree `json:"children,omitempty"`
 }
