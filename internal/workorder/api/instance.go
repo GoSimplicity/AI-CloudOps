@@ -50,24 +50,25 @@ func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 		instanceGroup.DELETE("/delete/:id", h.DeleteInstance)
 		instanceGroup.GET("/list", h.ListInstance)
 		instanceGroup.GET("/detail/:id", h.DetailInstance)
-		instanceGroup.POST("/transfer/:id", h.TransferInstance)
-		instanceGroup.GET("/my", h.GetMyInstances)
 	}
 }
 
 // CreateInstance 创建工单实例
 func (h *InstanceHandler) CreateInstance(ctx *gin.Context) {
-	var req model.CreateInstanceReq
+	var req model.CreateWorkorderInstanceReq
 	user := ctx.MustGet("user").(utils.UserClaims)
 
+	req.CreateUserID = user.Uid
+	req.CreateUserName = user.Username
+
 	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return h.service.CreateInstance(ctx, &req, user.Uid, user.Username)
+		return h.service.CreateInstance(ctx, &req)
 	})
 }
 
 // UpdateInstance 更新工单实例
 func (h *InstanceHandler) UpdateInstance(ctx *gin.Context) {
-	var req model.UpdateInstanceReq
+	var req model.UpdateWorkorderInstanceReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -76,16 +77,14 @@ func (h *InstanceHandler) UpdateInstance(ctx *gin.Context) {
 
 	req.ID = id
 
-	user := ctx.MustGet("user").(utils.UserClaims)
-
 	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.service.UpdateInstance(ctx, &req, user.Uid)
+		return nil, h.service.UpdateInstance(ctx, &req)
 	})
 }
 
 // DeleteInstance 删除工单实例
 func (h *InstanceHandler) DeleteInstance(ctx *gin.Context) {
-	var req model.DeleteInstanceReq
+	var req model.DeleteWorkorderInstanceReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -94,16 +93,14 @@ func (h *InstanceHandler) DeleteInstance(ctx *gin.Context) {
 
 	req.ID = id
 
-	user := ctx.MustGet("user").(utils.UserClaims)
-
 	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.service.DeleteInstance(ctx, req.ID, user.Uid)
+		return nil, h.service.DeleteInstance(ctx, req.ID)
 	})
 }
 
 // DetailInstance 获取工单实例详情
 func (h *InstanceHandler) DetailInstance(ctx *gin.Context) {
-	var req model.DetailInstanceReq
+	var req model.DetailWorkorderInstanceReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -119,38 +116,9 @@ func (h *InstanceHandler) DetailInstance(ctx *gin.Context) {
 
 // ListInstance 获取工单实例列表
 func (h *InstanceHandler) ListInstance(ctx *gin.Context) {
-	var req model.ListInstanceReq
+	var req model.ListWorkorderInstanceReq
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
 		return h.service.ListInstance(ctx, &req)
-	})
-}
-
-// GetMyInstances 获取我的工单
-func (h *InstanceHandler) GetMyInstances(ctx *gin.Context) {
-	var req model.MyInstanceReq
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return h.service.GetMyInstances(ctx, &req, user.Uid)
-	})
-}
-
-// TransferInstance 转移工单
-func (h *InstanceHandler) TransferInstance(ctx *gin.Context) {
-	var req model.TransferInstanceReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		return
-	}
-
-	req.InstanceID = id
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.service.TransferInstance(ctx, req.InstanceID, user.Uid, req.AssigneeID, req.Comment)
 	})
 }

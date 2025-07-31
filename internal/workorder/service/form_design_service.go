@@ -47,16 +47,16 @@ type FormDesignService interface {
 }
 
 type formDesignService struct {
-	dao         dao.FormDesignDAO
-	categoryDao dao.CategoryDAO
-	l           *zap.Logger
+	dao         dao.WorkorderFormDesignDAO
+	categoryDao dao.WorkorderCategoryDAO
+	logger      *zap.Logger
 }
 
-func NewFormDesignService(dao dao.FormDesignDAO, categoryDao dao.CategoryDAO, l *zap.Logger) FormDesignService {
+func NewFormDesignService(dao dao.WorkorderFormDesignDAO, categoryDao dao.WorkorderCategoryDAO, logger *zap.Logger) FormDesignService {
 	return &formDesignService{
 		dao:         dao,
 		categoryDao: categoryDao,
-		l:           l,
+		logger:      logger,
 	}
 }
 
@@ -65,17 +65,17 @@ func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq 
 	// 检查名称唯一性
 	exists, err := f.dao.CheckFormDesignNameExists(ctx, formDesignReq.Name)
 	if err != nil {
-		f.l.Error("检查表单设计名称是否存在失败", zap.Error(err), zap.String("name", formDesignReq.Name))
+		f.logger.Error("检查表单设计名称是否存在失败", zap.Error(err), zap.String("name", formDesignReq.Name))
 		return fmt.Errorf("检查表单设计名称失败: %w", err)
 	}
 	if exists {
-		f.l.Warn("表单设计名称已存在", zap.String("name", formDesignReq.Name))
+		f.logger.Warn("表单设计名称已存在", zap.String("name", formDesignReq.Name))
 		return dao.ErrFormDesignNameExists
 	}
 
 	// 验证表单结构
 	if formDesignReq.Schema.Fields == nil || len(formDesignReq.Schema.Fields) == 0 {
-		f.l.Error("表单结构不能为空")
+		f.logger.Error("表单结构不能为空")
 		return errors.New("表单结构不能为空")
 	}
 
@@ -90,7 +90,7 @@ func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq 
 
 	schemaJSON, err := json.Marshal(formDesignReq.Schema)
 	if err != nil {
-		f.l.Error("表单结构序列化失败", zap.Error(err))
+		f.logger.Error("表单结构序列化失败", zap.Error(err))
 		return fmt.Errorf("表单结构序列化失败: %w", err)
 	}
 
@@ -109,7 +109,7 @@ func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq 
 
 	// 创建表单设计
 	if err := f.dao.CreateFormDesign(ctx, formDesign); err != nil {
-		f.l.Error("创建表单设计失败", zap.Error(err), zap.String("name", formDesignReq.Name))
+		f.logger.Error("创建表单设计失败", zap.Error(err), zap.String("name", formDesignReq.Name))
 		return err
 	}
 
@@ -121,7 +121,7 @@ func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq 
 	// 检查表单设计是否存在
 	existingFormDesign, err := f.dao.GetFormDesign(ctx, formDesignReq.ID)
 	if err != nil {
-		f.l.Error("获取表单设计失败", zap.Error(err), zap.Int("id", formDesignReq.ID))
+		f.logger.Error("获取表单设计失败", zap.Error(err), zap.Int("id", formDesignReq.ID))
 		return err
 	}
 
@@ -129,18 +129,18 @@ func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq 
 	if formDesignReq.Name != existingFormDesign.Name {
 		exists, err := f.dao.CheckFormDesignNameExists(ctx, formDesignReq.Name, formDesignReq.ID)
 		if err != nil {
-			f.l.Error("检查表单设计名称是否存在失败", zap.Error(err), zap.String("name", formDesignReq.Name))
+			f.logger.Error("检查表单设计名称是否存在失败", zap.Error(err), zap.String("name", formDesignReq.Name))
 			return fmt.Errorf("检查表单设计名称失败: %w", err)
 		}
 		if exists {
-			f.l.Warn("表单设计名称已存在", zap.String("name", formDesignReq.Name))
+			f.logger.Warn("表单设计名称已存在", zap.String("name", formDesignReq.Name))
 			return dao.ErrFormDesignNameExists
 		}
 	}
 
 	// 验证表单结构
 	if formDesignReq.Schema.Fields == nil || len(formDesignReq.Schema.Fields) == 0 {
-		f.l.Error("表单结构不能为空")
+		f.logger.Error("表单结构不能为空")
 		return errors.New("表单结构不能为空")
 	}
 
@@ -155,7 +155,7 @@ func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq 
 
 	schemaJSON, err := json.Marshal(formDesignReq.Schema)
 	if err != nil {
-		f.l.Error("表单结构序列化失败", zap.Error(err))
+		f.logger.Error("表单结构序列化失败", zap.Error(err))
 		return fmt.Errorf("表单结构序列化失败: %w", err)
 	}
 
@@ -173,7 +173,7 @@ func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq 
 
 	// 更新表单设计
 	if err := f.dao.UpdateFormDesign(ctx, formDesign); err != nil {
-		f.l.Error("更新表单设计失败", zap.Error(err), zap.Int("id", formDesignReq.ID))
+		f.logger.Error("更新表单设计失败", zap.Error(err), zap.Int("id", formDesignReq.ID))
 		return err
 	}
 
@@ -189,13 +189,13 @@ func (f *formDesignService) DeleteFormDesign(ctx context.Context, id int) error 
 	// 检查表单设计是否存在
 	_, err := f.dao.GetFormDesign(ctx, id)
 	if err != nil {
-		f.l.Error("获取表单设计失败", zap.Error(err), zap.Int("id", id))
+		f.logger.Error("获取表单设计失败", zap.Error(err), zap.Int("id", id))
 		return err
 	}
 
 	// 删除表单设计
 	if err := f.dao.DeleteFormDesign(ctx, id); err != nil {
-		f.l.Error("删除表单设计失败", zap.Error(err), zap.Int("id", id))
+		f.logger.Error("删除表单设计失败", zap.Error(err), zap.Int("id", id))
 		return err
 	}
 
@@ -211,7 +211,7 @@ func (f *formDesignService) GetFormDesign(ctx context.Context, id int) (*model.W
 	// 获取表单设计
 	formDesign, err := f.dao.GetFormDesign(ctx, id)
 	if err != nil {
-		f.l.Error("获取表单设计失败", zap.Error(err), zap.Int("id", id))
+		f.logger.Error("获取表单设计失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
 
@@ -223,7 +223,7 @@ func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListW
 	// 获取表单设计列表
 	formDesigns, total, err := f.dao.ListFormDesign(ctx, req)
 	if err != nil {
-		f.l.Error("获取表单设计列表失败", zap.Error(err))
+		f.logger.Error("获取表单设计列表失败", zap.Error(err))
 		return model.ListResp[*model.WorkorderFormDesign]{}, err
 	}
 
