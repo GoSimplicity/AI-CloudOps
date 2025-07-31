@@ -51,7 +51,7 @@ func (h *InstanceCommentHandler) RegisterRouters(server *gin.Engine) {
 }
 
 func (h *InstanceCommentHandler) CommentInstance(ctx *gin.Context) {
-	var req model.InstanceCommentReq
+	var req model.CreateWorkorderInstanceCommentReq
 
 	user := ctx.MustGet("user").(utils.UserClaims)
 	id, err := utils.GetParamID(ctx)
@@ -67,7 +67,7 @@ func (h *InstanceCommentHandler) CommentInstance(ctx *gin.Context) {
 }
 
 func (h *InstanceCommentHandler) GetInstanceComments(ctx *gin.Context) {
-	var req model.GetInstanceCommentsReq
+	var req model.DetailWorkorderInstanceCommentReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

@@ -38,12 +38,15 @@ import (
 
 // 错误定义
 var (
-	ErrFlowNilPointer = errors.New("流程记录对象为空")
+	ErrFlowNilPointer       = errors.New("流程记录对象为空")
+	ErrInstanceFlowNotFound = errors.New("工单流程记录不存在")
 )
 
 type InstanceFlowDAO interface {
 	CreateInstanceFlow(ctx context.Context, flow *model.WorkorderInstanceFlow) error
 	GetInstanceFlows(ctx context.Context, instanceID int) ([]model.WorkorderInstanceFlow, error)
+	GetInstanceFlowByID(ctx context.Context, id int) (*model.WorkorderInstanceFlow, error)
+	ListInstanceFlows(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) ([]model.WorkorderInstanceFlow, int64, error)
 }
 
 type instanceFlowDAO struct {
@@ -80,7 +83,7 @@ func (d *instanceFlowDAO) CreateInstanceFlow(ctx context.Context, flow *model.Wo
 // GetInstanceFlows 获取工单流程记录
 func (d *instanceFlowDAO) GetInstanceFlows(ctx context.Context, instanceID int) ([]model.WorkorderInstanceFlow, error) {
 	if instanceID <= 0 {
-		return nil, ErrInstanceInvalidID
+		return nil, errors.New("工单实例ID无效")
 	}
 
 	var flows []model.WorkorderInstanceFlow
@@ -95,6 +98,73 @@ func (d *instanceFlowDAO) GetInstanceFlows(ctx context.Context, instanceID int) 
 	}
 
 	return flows, nil
+}
+
+// GetInstanceFlowByID 根据ID获取工单流程记录
+func (d *instanceFlowDAO) GetInstanceFlowByID(ctx context.Context, id int) (*model.WorkorderInstanceFlow, error) {
+	if id <= 0 {
+		return nil, errors.New("工单实例ID无效")
+	}
+
+	var flow model.WorkorderInstanceFlow
+	err := d.db.WithContext(ctx).Where("id = ?", id).First(&flow).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrInstanceFlowNotFound
+		}
+		d.logger.Error("根据ID获取工单流程记录失败", zap.Error(err), zap.Int("id", id))
+		return nil, fmt.Errorf("根据ID获取工单流程记录失败: %w", err)
+	}
+
+	return &flow, nil
+}
+
+// ListInstanceFlows 分页获取工单流程记录列表
+func (d *instanceFlowDAO) ListInstanceFlows(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) ([]model.WorkorderInstanceFlow, int64, error) {
+	if req == nil {
+		return nil, 0, fmt.Errorf("请求参数为空")
+	}
+
+	query := d.db.WithContext(ctx).Model(&model.WorkorderInstanceFlow{})
+
+	// 添加过滤条件
+	if req.InstanceID != nil {
+		query = query.Where("instance_id = ?", *req.InstanceID)
+	}
+	if req.StepID != nil {
+		query = query.Where("step_id = ?", *req.StepID)
+	}
+	if req.Action != nil {
+		query = query.Where("action = ?", *req.Action)
+	}
+	if req.OperatorID != nil {
+		query = query.Where("operator_id = ?", *req.OperatorID)
+	}
+	if req.Result != nil {
+		query = query.Where("result = ?", *req.Result)
+	}
+
+	// 获取总数
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		d.logger.Error("获取工单流程记录总数失败", zap.Error(err))
+		return nil, 0, fmt.Errorf("获取工单流程记录总数失败: %w", err)
+	}
+
+	// 分页查询
+	var flows []model.WorkorderInstanceFlow
+	offset := (req.Page - 1) * req.Size
+	err := query.Order("created_at DESC").
+		Offset(offset).
+		Limit(req.Size).
+		Find(&flows).Error
+
+	if err != nil {
+		d.logger.Error("分页获取工单流程记录失败", zap.Error(err))
+		return nil, 0, fmt.Errorf("分页获取工单流程记录失败: %w", err)
+	}
+
+	return flows, total, nil
 }
 
 // validateFlow 验证流程记录数据

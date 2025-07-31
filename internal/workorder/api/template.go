@@ -55,7 +55,7 @@ func (h *TemplateHandler) RegisterRouters(server *gin.Engine) {
 
 // CreateTemplate 创建模板
 func (h *TemplateHandler) CreateTemplate(ctx *gin.Context) {
-	var req model.CreateTemplateReq
+	var req model.CreateWorkorderTemplateReq
 	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
@@ -65,7 +65,7 @@ func (h *TemplateHandler) CreateTemplate(ctx *gin.Context) {
 
 // UpdateTemplate 更新模板
 func (h *TemplateHandler) UpdateTemplate(ctx *gin.Context) {
-	var req model.UpdateTemplateReq
+	var req model.UpdateWorkorderTemplateReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -98,7 +98,7 @@ func (h *TemplateHandler) DeleteTemplate(ctx *gin.Context) {
 
 // ListTemplate 获取模板列表
 func (h *TemplateHandler) ListTemplate(ctx *gin.Context) {
-	var req model.ListTemplateReq
+	var req model.ListWorkorderTemplateReq
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
 		return h.service.ListTemplate(ctx, &req)
