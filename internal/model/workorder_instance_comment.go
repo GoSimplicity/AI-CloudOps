@@ -29,54 +29,54 @@ import "time"
 
 // 评论类型常量
 const (
-	CommentTypeNormal  = "normal"  // 普通评论
-	CommentTypeSystem  = "system"  // 系统评论
-	CommentTypePrivate = "private" // 私有评论
-	CommentTypePublic  = "public"  // 公开评论
+	CommentTypeNormal   = "normal"   // 普通评论
+	CommentTypeSystem   = "system"   // 系统评论
+	CommentTypePrivate  = "private"  // 私有评论
+	CommentTypePublic   = "public"   // 公开评论
 	CommentTypeInternal = "internal" // 内部评论
 )
 
 // 评论状态常量
 const (
 	CommentStatusNormal  int8 = 1 // 正常
-	CommentStatusDeleted int8 = 0 // 已删除
-	CommentStatusHidden  int8 = 2 // 已隐藏
+	CommentStatusDeleted int8 = 2 // 已删除
+	CommentStatusHidden  int8 = 3 // 已隐藏
 )
 
 // WorkorderInstanceComment 工单实例评论实体
 type WorkorderInstanceComment struct {
 	Model
-	InstanceID     int    `json:"instance_id" gorm:"column:instance_id;not null;index;comment:工单实例ID"`
-	UserID         int    `json:"user_id" gorm:"column:user_id;not null;index;comment:评论用户ID"`
-	UserName       string `json:"user_name" gorm:"-"`
-	UserAvatar     string `json:"user_avatar" gorm:"-"`
-	Content        string `json:"content" gorm:"column:content;type:text;not null;comment:评论内容"`
-	ContentHTML    string `json:"content_html" gorm:"column:content_html;type:text;comment:评论HTML内容"`
-	ParentID       *int   `json:"parent_id" gorm:"column:parent_id;index;comment:父评论ID"`
-	RootID         *int   `json:"root_id" gorm:"column:root_id;index;comment:根评论ID"`
-	ReplyToUserID  *int   `json:"reply_to_user_id" gorm:"column:reply_to_user_id;index;comment:回复目标用户ID"`
-	ReplyToUserName string `json:"reply_to_user_name" gorm:"-"`
-	Type           string `json:"type" gorm:"column:type;type:varchar(20);not null;default:'normal';index;comment:评论类型"`
-	Status         int8   `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-正常，0-已删除，2-已隐藏"`
-	IsSystem       bool   `json:"is_system" gorm:"column:is_system;not null;default:false;index;comment:是否系统评论"`
-	IsPrivate      bool   `json:"is_private" gorm:"column:is_private;not null;default:false;comment:是否私有评论"`
-	IsEdited       bool   `json:"is_edited" gorm:"column:is_edited;not null;default:false;comment:是否已编辑"`
-	EditedAt       *time.Time `json:"edited_at" gorm:"column:edited_at;comment:编辑时间"`
-	LikeCount      int    `json:"like_count" gorm:"column:like_count;not null;default:0;comment:点赞数"`
-	ReplyCount     int    `json:"reply_count" gorm:"column:reply_count;not null;default:0;comment:回复数"`
-	AttachmentCount int   `json:"attachment_count" gorm:"column:attachment_count;not null;default:0;comment:附件数量"`
-	Mentions       StringList `json:"mentions" gorm:"column:mentions;comment:提及的用户"`
-	Tags           StringList `json:"tags" gorm:"column:tags;comment:标签"`
-	ClientIP       string `json:"client_ip" gorm:"column:client_ip;type:varchar(50);comment:客户端IP"`
-	UserAgent      string `json:"user_agent" gorm:"column:user_agent;type:varchar(500);comment:用户代理"`
-	ExtendedData   JSONMap `json:"extended_data" gorm:"column:extended_data;type:json;comment:扩展数据"`
+	InstanceID      int        `json:"instance_id" gorm:"column:instance_id;not null;index;comment:工单实例ID"`
+	UserID          int        `json:"user_id" gorm:"column:user_id;not null;index;comment:评论用户ID"`
+	UserName        string     `json:"user_name" gorm:"-"`
+	UserAvatar      string     `json:"user_avatar" gorm:"-"`
+	Content         string     `json:"content" gorm:"column:content;type:text;not null;comment:评论内容"`
+	ContentHTML     string     `json:"content_html" gorm:"column:content_html;type:text;comment:评论HTML内容"`
+	ParentID        *int       `json:"parent_id" gorm:"column:parent_id;index;comment:父评论ID"`
+	RootID          *int       `json:"root_id" gorm:"column:root_id;index;comment:根评论ID"`
+	ReplyToUserID   *int       `json:"reply_to_user_id" gorm:"column:reply_to_user_id;index;comment:回复目标用户ID"`
+	ReplyToUserName string     `json:"reply_to_user_name" gorm:"-"`
+	Type            string     `json:"type" gorm:"column:type;type:varchar(20);not null;default:'normal';index;comment:评论类型"`
+	Status          int8       `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-正常，2-已删除，3-已隐藏"`
+	IsSystem        bool       `json:"is_system" gorm:"column:is_system;not null;default:false;index;comment:是否系统评论"`
+	IsPrivate       bool       `json:"is_private" gorm:"column:is_private;not null;default:false;comment:是否私有评论"`
+	IsEdited        bool       `json:"is_edited" gorm:"column:is_edited;not null;default:false;comment:是否已编辑"`
+	EditedAt        *time.Time `json:"edited_at" gorm:"column:edited_at;comment:编辑时间"`
+	LikeCount       int        `json:"like_count" gorm:"column:like_count;not null;default:0;comment:点赞数"`
+	ReplyCount      int        `json:"reply_count" gorm:"column:reply_count;not null;default:0;comment:回复数"`
+	AttachmentCount int        `json:"attachment_count" gorm:"column:attachment_count;not null;default:0;comment:附件数量"`
+	Mentions        StringList `json:"mentions" gorm:"column:mentions;comment:提及的用户"`
+	Tags            StringList `json:"tags" gorm:"column:tags;comment:标签"`
+	ClientIP        string     `json:"client_ip" gorm:"column:client_ip;type:varchar(50);comment:客户端IP"`
+	UserAgent       string     `json:"user_agent" gorm:"column:user_agent;type:varchar(500);comment:用户代理"`
+	ExtendedData    JSONMap    `json:"extended_data" gorm:"column:extended_data;type:json;comment:扩展数据"`
 
 	// 关联信息（不存储到数据库）
-	InstanceTitle  string                      `json:"instance_title,omitempty" gorm:"-"`
-	Children       []WorkorderInstanceComment  `json:"children,omitempty" gorm:"-"`
-	IsLiked        bool                        `json:"is_liked,omitempty" gorm:"-"`        // 当前用户是否点赞
-	CanEdit        bool                        `json:"can_edit,omitempty" gorm:"-"`        // 是否可编辑
-	CanDelete      bool                        `json:"can_delete,omitempty" gorm:"-"`      // 是否可删除
+	InstanceTitle string                     `json:"instance_title,omitempty" gorm:"-"`
+	Children      []WorkorderInstanceComment `json:"children,omitempty" gorm:"-"`
+	IsLiked       bool                       `json:"is_liked,omitempty" gorm:"-"`   // 当前用户是否点赞
+	CanEdit       bool                       `json:"can_edit,omitempty" gorm:"-"`   // 是否可编辑
+	CanDelete     bool                       `json:"can_delete,omitempty" gorm:"-"` // 是否可删除
 }
 
 // TableName 指定工单实例评论表名
@@ -155,16 +155,16 @@ type DetailWorkorderInstanceCommentReq struct {
 // ListWorkorderInstanceCommentReq 工单实例评论列表请求
 type ListWorkorderInstanceCommentReq struct {
 	ListReq
-	InstanceID    *int    `json:"instance_id" form:"instance_id" binding:"omitempty,min=1"`
-	UserID        *int    `json:"user_id" form:"user_id" binding:"omitempty,min=1"`
-	ParentID      *int    `json:"parent_id" form:"parent_id" binding:"omitempty,min=1"`
-	RootID        *int    `json:"root_id" form:"root_id" binding:"omitempty,min=1"`
-	Type          *string `json:"type" form:"type" binding:"omitempty,oneof=normal system private public internal"`
-	Status        *int8   `json:"status" form:"status" binding:"omitempty,oneof=1 0 2"`
-	IsSystem      *bool   `json:"is_system" form:"is_system"`
-	IsPrivate     *bool   `json:"is_private" form:"is_private"`
-	StartDate     *time.Time `json:"start_date" form:"start_date"`
-	EndDate       *time.Time `json:"end_date" form:"end_date"`
+	InstanceID *int       `json:"instance_id" form:"instance_id" binding:"omitempty,min=1"`
+	UserID     *int       `json:"user_id" form:"user_id" binding:"omitempty,min=1"`
+	ParentID   *int       `json:"parent_id" form:"parent_id" binding:"omitempty,min=1"`
+	RootID     *int       `json:"root_id" form:"root_id" binding:"omitempty,min=1"`
+	Type       *string    `json:"type" form:"type" binding:"omitempty,oneof=normal system private public internal"`
+	Status     *int8      `json:"status" form:"status" binding:"omitempty,oneof=1 2 3"`
+	IsSystem   *bool      `json:"is_system" form:"is_system"`
+	IsPrivate  *bool      `json:"is_private" form:"is_private"`
+	StartDate  *time.Time `json:"start_date" form:"start_date"`
+	EndDate    *time.Time `json:"end_date" form:"end_date"`
 }
 
 // GetWorkorderInstanceCommentsReq 获取工单实例评论请求
@@ -228,17 +228,17 @@ type SearchWorkorderInstanceCommentReq struct {
 
 // WorkorderInstanceCommentStatistics 工单实例评论统计
 type WorkorderInstanceCommentStatistics struct {
-	TotalCount      int64 `json:"total_count"`      // 总评论数
-	NormalCount     int64 `json:"normal_count"`     // 普通评论数
-	SystemCount     int64 `json:"system_count"`     // 系统评论数
-	PrivateCount    int64 `json:"private_count"`    // 私有评论数
-	PublicCount     int64 `json:"public_count"`     // 公开评论数
-	DeletedCount    int64 `json:"deleted_count"`    // 已删除评论数
-	HiddenCount     int64 `json:"hidden_count"`     // 已隐藏评论数
-	TotalLikes      int64 `json:"total_likes"`      // 总点赞数
-	TotalReplies    int64 `json:"total_replies"`    // 总回复数
+	TotalCount       int64 `json:"total_count"`        // 总评论数
+	NormalCount      int64 `json:"normal_count"`       // 普通评论数
+	SystemCount      int64 `json:"system_count"`       // 系统评论数
+	PrivateCount     int64 `json:"private_count"`      // 私有评论数
+	PublicCount      int64 `json:"public_count"`       // 公开评论数
+	DeletedCount     int64 `json:"deleted_count"`      // 已删除评论数
+	HiddenCount      int64 `json:"hidden_count"`       // 已隐藏评论数
+	TotalLikes       int64 `json:"total_likes"`        // 总点赞数
+	TotalReplies     int64 `json:"total_replies"`      // 总回复数
 	AvgCommentLength int64 `json:"avg_comment_length"` // 平均评论长度
-	ActiveUsers     int64 `json:"active_users"`     // 活跃评论用户数
+	ActiveUsers      int64 `json:"active_users"`       // 活跃评论用户数
 }
 
 // WorkorderInstanceCommentActivity 工单实例评论活动
@@ -251,13 +251,13 @@ type WorkorderInstanceCommentActivity struct {
 
 // WorkorderInstanceCommentUserStats 工单实例评论用户统计
 type WorkorderInstanceCommentUserStats struct {
-	UserID       int     `json:"user_id"`       // 用户ID
-	UserName     string  `json:"user_name"`     // 用户名称
-	CommentCount int64   `json:"comment_count"` // 评论数量
-	LikeCount    int64   `json:"like_count"`    // 获得点赞数
-	ReplyCount   int64   `json:"reply_count"`   // 回复数量
-	AvgLength    float64 `json:"avg_length"`    // 平均评论长度
-	LastComment  *time.Time `json:"last_comment"` // 最后评论时间
+	UserID       int        `json:"user_id"`       // 用户ID
+	UserName     string     `json:"user_name"`     // 用户名称
+	CommentCount int64      `json:"comment_count"` // 评论数量
+	LikeCount    int64      `json:"like_count"`    // 获得点赞数
+	ReplyCount   int64      `json:"reply_count"`   // 回复数量
+	AvgLength    float64    `json:"avg_length"`    // 平均评论长度
+	LastComment  *time.Time `json:"last_comment"`  // 最后评论时间
 }
 
 // WorkorderInstanceCommentLike 工单实例评论点赞关联表

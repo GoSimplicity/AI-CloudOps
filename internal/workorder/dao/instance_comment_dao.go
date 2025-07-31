@@ -41,27 +41,27 @@ var (
 	ErrCommentNilPointer = errors.New("评论对象为空")
 )
 
-type InstanceCommentDAO interface {
+type WorkorderInstanceCommentDAO interface {
 	// 评论方法
-	CreateInstanceComment(ctx context.Context, comment *model.InstanceComment) error
-	GetInstanceComments(ctx context.Context, instanceID int) ([]model.InstanceComment, error)
-	GetInstanceCommentsTree(ctx context.Context, instanceID int) ([]model.InstanceComment, error)
+	CreateInstanceComment(ctx context.Context, comment *model.WorkorderInstanceComment) error
+	GetInstanceComments(ctx context.Context, instanceID int) ([]model.WorkorderInstanceComment, error)
+	GetInstanceCommentsTree(ctx context.Context, instanceID int) ([]model.WorkorderInstanceComment, error)
 }
 
-type instanceCommentDAO struct {
+type workorderInstanceCommentDAO struct {
 	db     *gorm.DB
 	logger *zap.Logger
 }
 
-func NewInstanceCommentDAO(db *gorm.DB, logger *zap.Logger) InstanceCommentDAO {
-	return &instanceCommentDAO{
+func NewWorkorderInstanceCommentDAO(db *gorm.DB, logger *zap.Logger) WorkorderInstanceCommentDAO {
+	return &workorderInstanceCommentDAO{
 		db:     db,
 		logger: logger,
 	}
 }
 
 // CreateInstanceComment 创建工单评论
-func (d *instanceCommentDAO) CreateInstanceComment(ctx context.Context, comment *model.InstanceComment) error {
+func (d *workorderInstanceCommentDAO) CreateInstanceComment(ctx context.Context, comment *model.WorkorderInstanceComment) error {
 	if comment == nil {
 		return ErrCommentNilPointer
 	}
@@ -80,12 +80,12 @@ func (d *instanceCommentDAO) CreateInstanceComment(ctx context.Context, comment 
 }
 
 // GetInstanceComments 获取工单评论
-func (d *instanceCommentDAO) GetInstanceComments(ctx context.Context, instanceID int) ([]model.InstanceComment, error) {
+func (d *workorderInstanceCommentDAO) GetInstanceComments(ctx context.Context, instanceID int) ([]model.WorkorderInstanceComment, error) {
 	if instanceID <= 0 {
 		return nil, ErrInstanceInvalidID
 	}
 
-	var comments []model.InstanceComment
+	var comments []model.WorkorderInstanceComment
 	err := d.db.WithContext(ctx).
 		Where("instance_id = ?", instanceID).
 		Order("created_at ASC").
@@ -100,7 +100,7 @@ func (d *instanceCommentDAO) GetInstanceComments(ctx context.Context, instanceID
 }
 
 // GetInstanceCommentsTree 获取工单评论树结构
-func (d *instanceCommentDAO) GetInstanceCommentsTree(ctx context.Context, instanceID int) ([]model.InstanceComment, error) {
+func (d *workorderInstanceCommentDAO) GetInstanceCommentsTree(ctx context.Context, instanceID int) ([]model.WorkorderInstanceComment, error) {
 	comments, err := d.GetInstanceComments(ctx, instanceID)
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func (d *instanceCommentDAO) GetInstanceCommentsTree(ctx context.Context, instan
 }
 
 // validateComment 验证评论数据
-func (d *instanceCommentDAO) validateComment(comment *model.InstanceComment) error {
+func (d *workorderInstanceCommentDAO) validateComment(comment *model.WorkorderInstanceComment) error {
 	if comment.InstanceID <= 0 {
 		return fmt.Errorf("工单ID无效")
 	}
@@ -125,7 +125,7 @@ func (d *instanceCommentDAO) validateComment(comment *model.InstanceComment) err
 }
 
 // buildCommentTree 构建评论树结构
-func (d *instanceCommentDAO) buildCommentTree(comments []model.InstanceComment) []model.InstanceComment {
+func (d *workorderInstanceCommentDAO) buildCommentTree(comments []model.WorkorderInstanceComment) []model.WorkorderInstanceComment {
 	// 简化实现，实际应根据parent_id构建树结构
 	return comments
 }

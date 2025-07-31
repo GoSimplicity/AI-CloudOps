@@ -53,33 +53,34 @@ const (
 	MaxPageSize      = 1000
 )
 
-type InstanceDAO interface {
-	CreateInstance(ctx context.Context, instance *model.Instance) error
-	UpdateInstance(ctx context.Context, instance *model.Instance) error
+type WorkorderInstanceDAO interface {
+	CreateInstance(ctx context.Context, instance *model.WorkorderInstance) error
+	UpdateInstance(ctx context.Context, instance *model.WorkorderInstance) error
 	DeleteInstance(ctx context.Context, id int) error
-	GetInstance(ctx context.Context, id int) (*model.Instance, error)
-	GetInstanceByTemplateID(ctx context.Context, templateID int) ([]model.Instance, error)
-	GetInstanceWithRelations(ctx context.Context, id int) (*model.Instance, error)
-	ListInstance(ctx context.Context, req *model.ListInstanceReq) ([]*model.Instance, int64, error)
+	GetInstance(ctx context.Context, id int) (*model.WorkorderInstance, error)
+	GetInstanceByTemplateID(ctx context.Context, templateID int) ([]model.WorkorderInstance, error)
+	GetInstanceWithRelations(ctx context.Context, id int) (*model.WorkorderInstance, error)
+	GetInstanceByProcessID(ctx context.Context, processID int) ([]model.WorkorderInstance, error)
+	ListInstance(ctx context.Context, req *model.ListWorkorderInstanceReq) ([]*model.WorkorderInstance, int64, error)
 	BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8) error
-	GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) ([]*model.Instance, int64, error)
+	GetMyInstances(ctx context.Context, userID int, req *model.MyWorkorderInstanceReq) ([]*model.WorkorderInstance, int64, error)
 	TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error
 }
 
-type instanceDAO struct {
+type workorderInstanceDAO struct {
 	db     *gorm.DB
 	logger *zap.Logger
 }
 
-func NewInstanceDAO(db *gorm.DB, logger *zap.Logger) InstanceDAO {
-	return &instanceDAO{
+func NewWorkorderInstanceDAO(db *gorm.DB, logger *zap.Logger) WorkorderInstanceDAO {
+	return &workorderInstanceDAO{
 		db:     db,
 		logger: logger,
 	}
 }
 
 // CreateInstance 创建工单实例
-func (d *instanceDAO) CreateInstance(ctx context.Context, instance *model.Instance) error {
+func (d *workorderInstanceDAO) CreateInstance(ctx context.Context, instance *model.WorkorderInstance) error {
 	if instance == nil {
 		return ErrInstanceNilPointer
 	}
@@ -106,7 +107,7 @@ func (d *instanceDAO) CreateInstance(ctx context.Context, instance *model.Instan
 }
 
 // UpdateInstance 更新工单实例
-func (d *instanceDAO) UpdateInstance(ctx context.Context, instance *model.Instance) error {
+func (d *workorderInstanceDAO) UpdateInstance(ctx context.Context, instance *model.WorkorderInstance) error {
 	if instance == nil {
 		return ErrInstanceNilPointer
 	}
@@ -143,7 +144,7 @@ func (d *instanceDAO) UpdateInstance(ctx context.Context, instance *model.Instan
 }
 
 // DeleteInstance 删除工单实例
-func (d *instanceDAO) DeleteInstance(ctx context.Context, id int) error {
+func (d *workorderInstanceDAO) DeleteInstance(ctx context.Context, id int) error {
 	if id <= 0 {
 		return ErrInstanceInvalidID
 	}
@@ -182,12 +183,12 @@ func (d *instanceDAO) DeleteInstance(ctx context.Context, id int) error {
 }
 
 // GetInstance 获取工单实例详情
-func (d *instanceDAO) GetInstance(ctx context.Context, id int) (*model.Instance, error) {
+func (d *workorderInstanceDAO) GetInstance(ctx context.Context, id int) (*model.WorkorderInstance, error) {
 	if id <= 0 {
 		return nil, ErrInstanceInvalidID
 	}
 
-	var instance model.Instance
+	var instance model.WorkorderInstance
 	err := d.db.WithContext(ctx).First(&instance, id).Error
 
 	if err != nil {
@@ -203,12 +204,12 @@ func (d *instanceDAO) GetInstance(ctx context.Context, id int) (*model.Instance,
 }
 
 // GetInstanceWithRelations 获取工单实例及其关联数据
-func (d *instanceDAO) GetInstanceWithRelations(ctx context.Context, id int) (*model.Instance, error) {
+func (d *workorderInstanceDAO) GetInstanceWithRelations(ctx context.Context, id int) (*model.WorkorderInstance, error) {
 	if id <= 0 {
 		return nil, ErrInstanceInvalidID
 	}
 
-	var instance model.Instance
+	var instance model.WorkorderInstance
 	err := d.db.WithContext(ctx).
 		Preload("Template").
 		Preload("Process").
@@ -227,16 +228,25 @@ func (d *instanceDAO) GetInstanceWithRelations(ctx context.Context, id int) (*mo
 	return &instance, nil
 }
 
+func (d *workorderInstanceDAO) GetInstanceByProcessID(ctx context.Context, processID int) ([]model.WorkorderInstance, error) {
+	var instances []model.WorkorderInstance
+	err := d.db.WithContext(ctx).Where("process_id = ?", processID).Find(&instances).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("获取工单实例失败: %w", err)
+	}
+	return instances, nil
+}
+
 // ListInstance 获取工单实例列表
-func (d *instanceDAO) ListInstance(ctx context.Context, req *model.ListInstanceReq) ([]*model.Instance, int64, error) {
+func (d *workorderInstanceDAO) ListInstance(ctx context.Context, req *model.ListWorkorderInstanceReq) ([]*model.WorkorderInstance, int64, error) {
 	if err := d.validateListRequest(req); err != nil {
 		return nil, 0, fmt.Errorf("请求参数验证失败: %w", err)
 	}
 
-	var instances []*model.Instance
+	var instances []*model.WorkorderInstance
 	var total int64
 
-	db := d.db.WithContext(ctx).Model(&model.Instance{})
+	db := d.db.WithContext(ctx).Model(&model.WorkorderInstance{})
 	db = d.buildInstanceListQuery(db, req)
 
 	// 获取总数
@@ -264,7 +274,7 @@ func (d *instanceDAO) ListInstance(ctx context.Context, req *model.ListInstanceR
 }
 
 // BatchUpdateInstanceStatus 批量更新工单状态
-func (d *instanceDAO) BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8) error {
+func (d *workorderInstanceDAO) BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8) error {
 	if len(ids) == 0 {
 		return errors.New("参数无效")
 	}
@@ -277,7 +287,7 @@ func (d *instanceDAO) BatchUpdateInstanceStatus(ctx context.Context, ids []int, 
 	}
 
 	result := d.db.WithContext(ctx).
-		Model(&model.Instance{}).
+		Model(&model.WorkorderInstance{}).
 		Where("id IN ?", ids).
 		Updates(map[string]interface{}{
 			"status":     status,
@@ -294,8 +304,8 @@ func (d *instanceDAO) BatchUpdateInstanceStatus(ctx context.Context, ids []int, 
 }
 
 // GetInstanceByTemplateID 获取关联工单
-func (d *instanceDAO) GetInstanceByTemplateID(ctx context.Context, templateID int) ([]model.Instance, error) {
-	var instances []model.Instance
+func (d *workorderInstanceDAO) GetInstanceByTemplateID(ctx context.Context, templateID int) ([]model.WorkorderInstance, error) {
+	var instances []model.WorkorderInstance
 	err := d.db.WithContext(ctx).Where("template_id = ?", templateID).Find(&instances).Error
 	if err != nil {
 		d.logger.Error("获取关联工单失败", zap.Error(err), zap.Int("templateID", templateID))
@@ -305,7 +315,7 @@ func (d *instanceDAO) GetInstanceByTemplateID(ctx context.Context, templateID in
 }
 
 // GetMyInstances 获取我的工单
-func (d *instanceDAO) GetMyInstances(ctx context.Context, userID int, req *model.MyInstanceReq) ([]*model.Instance, int64, error) {
+func (d *workorderInstanceDAO) GetMyInstances(ctx context.Context, userID int, req *model.MyWorkorderInstanceReq) ([]*model.WorkorderInstance, int64, error) {
 	if userID <= 0 {
 		return nil, 0, errors.New("参数无效")
 	}
@@ -314,10 +324,10 @@ func (d *instanceDAO) GetMyInstances(ctx context.Context, userID int, req *model
 		return nil, 0, fmt.Errorf("请求参数验证失败: %w", err)
 	}
 
-	var instances []*model.Instance
+	var instances []*model.WorkorderInstance
 	var total int64
 
-	db := d.db.WithContext(ctx).Model(&model.Instance{})
+	db := d.db.WithContext(ctx).Model(&model.WorkorderInstance{})
 
 	// 根据类型过滤
 	switch req.Type {
@@ -357,7 +367,7 @@ func (d *instanceDAO) GetMyInstances(ctx context.Context, userID int, req *model
 }
 
 // TransferInstance 转移工单
-func (d *instanceDAO) TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error {
+func (d *workorderInstanceDAO) TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error {
 	if instanceID <= 0 || fromUserID <= 0 || toUserID <= 0 {
 		return errors.New("参数无效")
 	}
@@ -368,7 +378,7 @@ func (d *instanceDAO) TransferInstance(ctx context.Context, instanceID int, from
 
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 验证工单是否存在且属于fromUser
-		var instance model.Instance
+		var instance model.WorkorderInstance
 		if err := tx.Where("id = ? AND assignee_id = ?", instanceID, fromUserID).First(&instance).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return fmt.Errorf("工单不存在或不属于当前用户")
@@ -412,7 +422,7 @@ func (d *instanceDAO) TransferInstance(ctx context.Context, instanceID int, from
 // 私有辅助方法
 
 // validateInstance 验证工单实例数据
-func (d *instanceDAO) validateInstance(instance *model.Instance) error {
+func (d *workorderInstanceDAO) validateInstance(instance *model.WorkorderInstance) error {
 	if strings.TrimSpace(instance.Title) == "" {
 		return fmt.Errorf("工单标题不能为空")
 	}
@@ -429,7 +439,7 @@ func (d *instanceDAO) validateInstance(instance *model.Instance) error {
 }
 
 // validateListRequest 验证列表请求参数
-func (d *instanceDAO) validateListRequest(req *model.ListInstanceReq) error {
+func (d *workorderInstanceDAO) validateListRequest(req *model.ListWorkorderInstanceReq) error {
 	if req.Page <= 0 {
 		req.Page = 1
 	}
@@ -443,7 +453,7 @@ func (d *instanceDAO) validateListRequest(req *model.ListInstanceReq) error {
 }
 
 // validateMyInstanceRequest 验证我的工单请求参数
-func (d *instanceDAO) validateMyInstanceRequest(req *model.MyInstanceReq) error {
+func (d *workorderInstanceDAO) validateMyInstanceRequest(req *model.MyWorkorderInstanceReq) error {
 	if req.Page <= 0 {
 		req.Page = 1
 	}
@@ -457,7 +467,7 @@ func (d *instanceDAO) validateMyInstanceRequest(req *model.MyInstanceReq) error 
 }
 
 // buildUpdateData 构建更新数据
-func (d *instanceDAO) buildUpdateData(instance *model.Instance) map[string]interface{} {
+func (d *workorderInstanceDAO) buildUpdateData(instance *model.WorkorderInstance) map[string]interface{} {
 	updateData := map[string]interface{}{
 		"updated_at": time.Now(),
 	}
@@ -484,7 +494,7 @@ func (d *instanceDAO) buildUpdateData(instance *model.Instance) map[string]inter
 }
 
 // deleteRelatedData 删除相关数据
-func (d *instanceDAO) deleteRelatedData(tx *gorm.DB, instanceID int) error {
+func (d *workorderInstanceDAO) deleteRelatedData(tx *gorm.DB, instanceID int) error {
 	// 删除相关的流转记录
 	if err := tx.Where("instance_id = ?", instanceID).Delete(&model.InstanceFlow{}).Error; err != nil {
 		return fmt.Errorf("删除工单流转记录失败: %w", err)
@@ -499,7 +509,7 @@ func (d *instanceDAO) deleteRelatedData(tx *gorm.DB, instanceID int) error {
 }
 
 // buildInstanceListQuery 构建工单列表查询条件
-func (d *instanceDAO) buildInstanceListQuery(db *gorm.DB, req *model.ListInstanceReq) *gorm.DB {
+func (d *workorderInstanceDAO) buildInstanceListQuery(db *gorm.DB, req *model.ListWorkorderInstanceReq) *gorm.DB {
 	// 搜索条件
 	if req.Search != "" {
 		searchPattern := "%" + strings.TrimSpace(req.Search) + "%"
@@ -574,7 +584,7 @@ func (d *instanceDAO) buildInstanceListQuery(db *gorm.DB, req *model.ListInstanc
 }
 
 // buildMyInstanceQuery 构建我的工单查询条件
-func (d *instanceDAO) buildMyInstanceQuery(db *gorm.DB, req *model.MyInstanceReq) *gorm.DB {
+func (d *workorderInstanceDAO) buildMyInstanceQuery(db *gorm.DB, req *model.MyWorkorderInstanceReq) *gorm.DB {
 	// 搜索条件
 	if req.Search != "" {
 		searchPattern := "%" + strings.TrimSpace(req.Search) + "%"
@@ -614,7 +624,7 @@ func (d *instanceDAO) buildMyInstanceQuery(db *gorm.DB, req *model.MyInstanceReq
 }
 
 // normalizeTimeFields 处理零值时间字段
-func (d *instanceDAO) normalizeTimeFields(instance *model.Instance) {
+func (d *workorderInstanceDAO) normalizeTimeFields(instance *model.WorkorderInstance) {
 	if instance.CompletedAt != nil && instance.CompletedAt.IsZero() {
 		instance.CompletedAt = nil
 	}
@@ -624,7 +634,7 @@ func (d *instanceDAO) normalizeTimeFields(instance *model.Instance) {
 }
 
 // isDuplicateKeyError 判断是否为重复键错误
-func (d *instanceDAO) isDuplicateKeyError(err error) bool {
+func (d *workorderInstanceDAO) isDuplicateKeyError(err error) bool {
 	if err == nil {
 		return false
 	}

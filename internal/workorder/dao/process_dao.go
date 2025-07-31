@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -13,23 +12,18 @@ import (
 )
 
 var (
-	ErrProcessNotFound      = fmt.Errorf("流程不存在")
-	ErrProcessNameExists    = fmt.Errorf("流程名称已存在")
-	ErrProcessCannotPublish = fmt.Errorf("流程状态不是草稿，无法发布")
-	ErrProcessInvalidID     = fmt.Errorf("流程ID无效")
-	ErrProcessNilPointer    = fmt.Errorf("流程对象为空")
-	ErrProcessInUse         = fmt.Errorf("流程正在使用中，无法删除")
+	ErrProcessNotFound   = fmt.Errorf("流程不存在")
+	ErrProcessNameExists = fmt.Errorf("流程名称已存在")
+	ErrProcessInvalidID  = fmt.Errorf("流程ID无效")
+	ErrProcessInUse      = fmt.Errorf("流程正在使用中，无法删除")
 )
 
 type ProcessDAO interface {
-	CreateProcess(ctx context.Context, process *model.Process) error
-	UpdateProcess(ctx context.Context, process *model.Process) error
+	CreateProcess(ctx context.Context, process *model.WorkorderProcess) error
+	UpdateProcess(ctx context.Context, process *model.WorkorderProcess) error
 	DeleteProcess(ctx context.Context, id int) error
-	ListProcess(ctx context.Context, req *model.ListProcessReq) ([]*model.Process, int64, error)
-	GetProcess(ctx context.Context, id int) (*model.Process, error)
-	GetProcessWithRelations(ctx context.Context, id int) (*model.Process, error)
-	PublishProcess(ctx context.Context, id int) error
-	CloneProcess(ctx context.Context, id int, name string, creatorID int) (*model.Process, error)
+	ListProcess(ctx context.Context, req *model.ListWorkorderProcessReq) ([]*model.WorkorderProcess, int64, error)
+	GetProcessByID(ctx context.Context, id int) (*model.WorkorderProcess, error)
 	CheckProcessNameExists(ctx context.Context, name string, excludeID ...int) (bool, error)
 	ValidateProcessDefinition(ctx context.Context, definition *model.ProcessDefinition) error
 }
@@ -47,91 +41,55 @@ func NewProcessDAO(db *gorm.DB, logger *zap.Logger) ProcessDAO {
 }
 
 // CreateProcess 创建流程
-func (d *processDAO) CreateProcess(ctx context.Context, process *model.Process) error {
-	// 验证关联的表单设计是否存在
-	if process.FormDesignID <= 0 {
-		return fmt.Errorf("表单设计ID无效")
+func (d *processDAO) CreateProcess(ctx context.Context, process *model.WorkorderProcess) error {
+	if process.Name == "" {
+		return fmt.Errorf("流程名称不能为空")
 	}
-
-	var count int64
-	err := d.db.WithContext(ctx).
-		Model(&model.FormDesign{}).
-		Where("id = ?", process.FormDesignID).
-		Count(&count).Error
-
+	// 检查名称唯一性
+	exists, err := d.CheckProcessNameExists(ctx, process.Name)
 	if err != nil {
-		d.logger.Error("验证表单设计存在性失败", zap.Error(err), zap.Int("formDesignID", process.FormDesignID))
-		return fmt.Errorf("验证表单设计存在性失败: %w", err)
+		return err
 	}
-
-	if count == 0 {
-		d.logger.Warn("关联的表单设计不存在", zap.Int("formDesignID", process.FormDesignID))
-		return ErrFormDesignNotFound
+	if exists {
+		return ErrProcessNameExists
 	}
-
 	if err := d.db.WithContext(ctx).Create(process).Error; err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") ||
-			strings.Contains(err.Error(), "Duplicate entry") ||
-			err == gorm.ErrDuplicatedKey {
-			d.logger.Warn("流程名称已存在", zap.String("name", process.Name))
-			return ErrProcessNameExists
-		}
 		d.logger.Error("创建流程失败", zap.Error(err), zap.String("name", process.Name))
 		return fmt.Errorf("创建流程失败: %w", err)
 	}
-
 	return nil
 }
 
 // UpdateProcess 更新流程
-func (d *processDAO) UpdateProcess(ctx context.Context, process *model.Process) error {
-	if process.ID == 0 {
+func (d *processDAO) UpdateProcess(ctx context.Context, process *model.WorkorderProcess) error {
+	if process.ID <= 0 {
 		return ErrProcessInvalidID
 	}
-
-	// 验证关联的表单设计是否存在
-	if process.FormDesignID <= 0 {
-		return fmt.Errorf("表单设计ID无效")
-	}
-
-	var count int64
-	err := d.db.WithContext(ctx).
-		Model(&model.FormDesign{}).
-		Where("id = ?", process.FormDesignID).
-		Count(&count).Error
-
+	// 检查名称唯一性（排除自己）
+	exists, err := d.CheckProcessNameExists(ctx, process.Name, process.ID)
 	if err != nil {
-		d.logger.Error("验证表单设计存在性失败", zap.Error(err), zap.Int("formDesignID", process.FormDesignID))
-		return fmt.Errorf("验证表单设计存在性失败: %w", err)
+		return err
 	}
-
-	if count == 0 {
-		d.logger.Warn("关联的表单设计不存在", zap.Int("formDesignID", process.FormDesignID))
-		return ErrFormDesignNotFound
+	if exists {
+		return ErrProcessNameExists
 	}
-
 	updateData := map[string]interface{}{
 		"name":           process.Name,
 		"description":    process.Description,
 		"form_design_id": process.FormDesignID,
 		"definition":     process.Definition,
-		"version":        process.Version,
 		"status":         process.Status,
 		"category_id":    process.CategoryID,
+		"tags":           process.Tags,
+		"is_default":     process.IsDefault,
 	}
 
 	result := d.db.WithContext(ctx).
-		Model(&model.Process{}).
+		Model(&model.WorkorderProcess{}).
 		Where("id = ?", process.ID).
 		Updates(updateData)
 
 	if result.Error != nil {
-		if strings.Contains(result.Error.Error(), "UNIQUE constraint failed") ||
-			strings.Contains(result.Error.Error(), "Duplicate entry") ||
-			result.Error == gorm.ErrDuplicatedKey {
-			d.logger.Warn("流程名称已存在", zap.String("name", process.Name), zap.Int("id", process.ID))
-			return ErrProcessNameExists
-		}
 		d.logger.Error("更新流程失败", zap.Error(result.Error), zap.Int("id", process.ID))
 		return fmt.Errorf("更新流程失败: %w", result.Error)
 	}
@@ -150,11 +108,10 @@ func (d *processDAO) DeleteProcess(ctx context.Context, id int) error {
 		return ErrProcessInvalidID
 	}
 
-	// 使用事务确保数据一致性
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 检查流程是否正在使用中
 		var instanceCount int64
-		if err := tx.Model(&model.Instance{}).Where("process_id = ?", id).Count(&instanceCount).Error; err != nil {
+
+		if err := tx.Model(&model.WorkorderInstance{}).Where("process_id = ?", id).Count(&instanceCount).Error; err != nil {
 			return fmt.Errorf("检查流程使用情况失败: %w", err)
 		}
 
@@ -162,9 +119,8 @@ func (d *processDAO) DeleteProcess(ctx context.Context, id int) error {
 			return ErrProcessInUse
 		}
 
-		// 检查是否有模板在使用此流程
 		var templateCount int64
-		if err := tx.Model(&model.Template{}).Where("process_id = ?", id).Count(&templateCount).Error; err != nil {
+		if err := tx.Model(&model.WorkorderTemplate{}).Where("process_id = ?", id).Count(&templateCount).Error; err != nil {
 			return fmt.Errorf("检查模板使用情况失败: %w", err)
 		}
 
@@ -172,8 +128,7 @@ func (d *processDAO) DeleteProcess(ctx context.Context, id int) error {
 			return ErrProcessInUse
 		}
 
-		// 删除流程
-		result := tx.Delete(&model.Process{}, id)
+		result := tx.Delete(&model.WorkorderProcess{}, id)
 		if result.Error != nil {
 			return fmt.Errorf("删除流程失败: %w", result.Error)
 		}
@@ -193,15 +148,19 @@ func (d *processDAO) DeleteProcess(ctx context.Context, id int) error {
 	return nil
 }
 
-// GetProcess 获取流程详情
-func (d *processDAO) GetProcess(ctx context.Context, id int) (*model.Process, error) {
+// GetProcessByID 获取流程详情
+func (d *processDAO) GetProcessByID(ctx context.Context, id int) (*model.WorkorderProcess, error) {
 	if id <= 0 {
 		return nil, ErrProcessInvalidID
 	}
 
-	var process model.Process
+	var process model.WorkorderProcess
 
-	err := d.db.WithContext(ctx).Preload("FormDesign").First(&process, id).Error
+	err := d.db.WithContext(ctx).
+		Preload("WorkorderFormDesign").
+		Preload("WorkorderCategory").
+		Where("id = ?", id).
+		First(&process).Error
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -215,45 +174,28 @@ func (d *processDAO) GetProcess(ctx context.Context, id int) (*model.Process, er
 	return &process, nil
 }
 
-// GetProcessWithRelations 获取流程及其关联数据
-func (d *processDAO) GetProcessWithRelations(ctx context.Context, id int) (*model.Process, error) {
-	if id <= 0 {
-		return nil, ErrProcessInvalidID
-	}
-
-	var process model.Process
-	err := d.db.WithContext(ctx).
-		Preload("FormDesign").
-		Preload("Category").
-		First(&process, id).Error
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			d.logger.Warn("流程不存在", zap.Int("id", id))
-			return nil, ErrProcessNotFound
-		}
-		d.logger.Error("获取流程及关联数据失败", zap.Error(err), zap.Int("id", id))
-		return nil, fmt.Errorf("获取流程及关联数据失败: %w", err)
-	}
-
-	return &process, nil
-}
-
 // ListProcess 获取流程列表
-func (d *processDAO) ListProcess(ctx context.Context, req *model.ListProcessReq) ([]*model.Process, int64, error) {
-	var processes []*model.Process
+func (d *processDAO) ListProcess(ctx context.Context, req *model.ListWorkorderProcessReq) ([]*model.WorkorderProcess, int64, error) {
+	var processes []*model.WorkorderProcess
 	var total int64
 
-	db := d.db.WithContext(ctx).Model(&model.Process{})
+	if req.Page <= 0 {
+		req.Page = 1
+	}
 
-	// 构建查询条件 - 内联构建避免辅助函数
+	if req.Size <= 0 {
+		req.Size = 10
+	}
+
+	if req.Size > 100 {
+		req.Size = 100
+	}
+
+	db := d.db.WithContext(ctx).Model(&model.WorkorderProcess{})
+
 	if req.Search != "" {
 		searchPattern := "%" + strings.TrimSpace(req.Search) + "%"
 		db = db.Where("name LIKE ?", searchPattern)
-	}
-
-	if req.Status != nil {
-		db = db.Where("status = ?", *req.Status)
 	}
 
 	if req.CategoryID != nil {
@@ -264,6 +206,14 @@ func (d *processDAO) ListProcess(ctx context.Context, req *model.ListProcessReq)
 		db = db.Where("form_design_id = ?", *req.FormDesignID)
 	}
 
+	if req.Status != nil {
+		db = db.Where("status = ?", *req.Status)
+	}
+
+	if req.IsDefault != nil {
+		db = db.Where("is_default = ?", *req.IsDefault)
+	}
+
 	// 计算总数
 	err := db.Count(&total).Error
 	if err != nil {
@@ -271,9 +221,8 @@ func (d *processDAO) ListProcess(ctx context.Context, req *model.ListProcessReq)
 		return nil, 0, fmt.Errorf("获取流程列表总数失败: %w", err)
 	}
 
-	// 分页查询
 	offset := (req.Page - 1) * req.Size
-	err = db.Preload("FormDesign").
+	err = db.Preload("WorkorderFormDesign").
 		Preload("Category").
 		Order("created_at DESC").
 		Offset(offset).
@@ -288,88 +237,15 @@ func (d *processDAO) ListProcess(ctx context.Context, req *model.ListProcessReq)
 	return processes, total, nil
 }
 
-// PublishProcess 发布流程
-func (d *processDAO) PublishProcess(ctx context.Context, id int) error {
-	if id <= 0 {
-		return ErrProcessInvalidID
-	}
-
-	result := d.db.WithContext(ctx).
-		Model(&model.Process{}).
-		Where("id = ? AND status = ?", id, model.ProcessStatusDraft).
-		Updates(map[string]interface{}{
-			"status":     model.ProcessStatusPublished,
-			"updated_at": time.Now(),
-		})
-
-	if result.Error != nil {
-		d.logger.Error("发布流程失败", zap.Error(result.Error), zap.Int("id", id))
-		return fmt.Errorf("发布流程失败: %w", result.Error)
-	}
-
-	if result.RowsAffected == 0 {
-		d.logger.Warn("流程不存在或状态不是草稿", zap.Int("id", id))
-		return ErrProcessCannotPublish
-	}
-
-	return nil
-}
-
-// CloneProcess 克隆流程
-func (d *processDAO) CloneProcess(ctx context.Context, id int, name string, creatorID int) (*model.Process, error) {
-	if id <= 0 {
-		return nil, ErrProcessInvalidID
-	}
-
-	// 使用事务确保数据一致性
-	var clonedProcess *model.Process
-	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 获取原始流程
-		var originalProcess model.Process
-		if err := tx.Where("id = ?", id).First(&originalProcess).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrProcessNotFound
-			}
-			return fmt.Errorf("获取原始流程失败: %w", err)
-		}
-
-		// 创建克隆对象
-		clonedProcess = &model.Process{
-			Name:         name,
-			Description:  originalProcess.Description,
-			FormDesignID: originalProcess.FormDesignID,
-			Definition:   originalProcess.Definition,
-			Version:      originalProcess.Version,
-			Status:       model.ProcessStatusDraft,
-			CategoryID:   originalProcess.CategoryID,
-			CreatorID:    creatorID,
-		}
-
-		// 创建克隆记录
-		if err := tx.Create(clonedProcess).Error; err != nil {
-			if strings.Contains(err.Error(), "UNIQUE constraint failed") ||
-				strings.Contains(err.Error(), "Duplicate entry") ||
-				err == gorm.ErrDuplicatedKey {
-				return ErrProcessNameExists
-			}
-			return fmt.Errorf("创建克隆流程失败: %w", err)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		d.logger.Error("克隆流程失败", zap.Error(err), zap.Int("originalID", id), zap.String("newName", name))
-		return nil, err
-	}
-
-	return clonedProcess, nil
-}
-
 // CheckProcessNameExists 检查流程名称是否存在
 func (d *processDAO) CheckProcessNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
+	if name == "" {
+		return false, fmt.Errorf("流程名称不能为空")
+	}
+
 	var count int64
-	db := d.db.WithContext(ctx).Model(&model.Process{}).Where("name = ?", name)
+
+	db := d.db.WithContext(ctx).Model(&model.WorkorderProcess{}).Where("name = ?", name)
 
 	if len(excludeID) > 0 && excludeID[0] > 0 {
 		db = db.Where("id != ?", excludeID[0])
@@ -386,53 +262,71 @@ func (d *processDAO) CheckProcessNameExists(ctx context.Context, name string, ex
 // ValidateProcessDefinition 验证流程定义
 func (d *processDAO) ValidateProcessDefinition(ctx context.Context, definition *model.ProcessDefinition) error {
 	if len(definition.Steps) == 0 {
-		return fmt.Errorf("流程必须包含至少一个步骤")
+		return fmt.Errorf("流程定义必须包含至少一个步骤")
 	}
 
-	// 验证步骤
-	stepIDs := make(map[string]bool)
-	hasStartNode := false
-	hasEndNode := false
+	if len(definition.Connections) == 0 {
+		return fmt.Errorf("流程定义必须包含至少一条连接")
+	}
 
-	for _, step := range definition.Steps {
+	stepIDSet := make(map[string]struct{})
+	startCount := 0
+	endCount := 0
+
+	for i, step := range definition.Steps {
 		if step.ID == "" {
-			return fmt.Errorf("步骤ID不能为空")
+			return fmt.Errorf("第%d个步骤ID不能为空", i+1)
 		}
+
+		if step.Type == "" {
+			return fmt.Errorf("第%d个步骤类型不能为空", i+1)
+		}
+
 		if step.Name == "" {
-			return fmt.Errorf("步骤名称不能为空")
+			return fmt.Errorf("第%d个步骤名称不能为空", i+1)
 		}
-		if stepIDs[step.ID] {
+
+		if _, exists := stepIDSet[step.ID]; exists {
 			return fmt.Errorf("步骤ID重复: %s", step.ID)
 		}
-		stepIDs[step.ID] = true
 
-		// 检查是否有开始和结束节点
+		stepIDSet[step.ID] = struct{}{}
 		switch step.Type {
-		case model.StepTypeStart:
-			hasStartNode = true
-		case model.StepTypeEnd:
-			hasEndNode = true
+		case model.ProcessStepTypeStart:
+			startCount++
+		case model.ProcessStepTypeEnd:
+			endCount++
 		}
 	}
 
-	// 确保有开始和结束节点
-	if !hasStartNode {
-		return fmt.Errorf("流程必须包含一个开始节点")
-	}
-	if !hasEndNode {
-		return fmt.Errorf("流程必须包含一个结束节点")
+	if startCount == 0 {
+		return fmt.Errorf("流程必须包含一个开始步骤")
 	}
 
-	// 验证连接
-	for _, conn := range definition.Connections {
-		if conn.From == "" || conn.To == "" {
-			return fmt.Errorf("连接的起始和目标步骤ID不能为空")
+	if startCount > 1 {
+		return fmt.Errorf("流程只能有一个开始步骤")
+	}
+
+	if endCount == 0 {
+		return fmt.Errorf("流程必须包含至少一个结束步骤")
+	}
+
+	// 校验连线
+	for i, conn := range definition.Connections {
+		if conn.From == "" {
+			return fmt.Errorf("第%d条连接的来源步骤ID不能为空", i+1)
 		}
-		if !stepIDs[conn.From] {
-			return fmt.Errorf("连接的起始步骤不存在: %s", conn.From)
+
+		if conn.To == "" {
+			return fmt.Errorf("第%d条连接的目标步骤ID不能为空", i+1)
 		}
-		if !stepIDs[conn.To] {
-			return fmt.Errorf("连接的目标步骤不存在: %s", conn.To)
+
+		if _, ok := stepIDSet[conn.From]; !ok {
+			return fmt.Errorf("第%d条连接的来源步骤ID不存在: %s", i+1, conn.From)
+		}
+
+		if _, ok := stepIDSet[conn.To]; !ok {
+			return fmt.Errorf("第%d条连接的目标步骤ID不存在: %s", i+1, conn.To)
 		}
 	}
 

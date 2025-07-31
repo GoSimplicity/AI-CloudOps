@@ -50,17 +50,16 @@ func (h *CategoryGroupHandler) RegisterRouters(server *gin.Engine) {
 		categoryGroup.DELETE("/delete/:id", h.DeleteCategory)
 		categoryGroup.GET("/list", h.ListCategory)
 		categoryGroup.GET("/detail/:id", h.DetailCategory)
-		categoryGroup.GET("/statistics", h.GetCategoryStatistics)
 	}
 }
 
 func (h *CategoryGroupHandler) CreateCategory(ctx *gin.Context) {
-	var req model.CreateCategoryReq
+	var req model.CreateWorkorderCategoryReq
 
 	user := ctx.MustGet("user").(utils.UserClaims)
 
-	req.UserID = user.Uid
-	req.UserName = user.Username
+	req.CreateUserID = user.Uid
+	req.CreateUserName = user.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateCategory(ctx, &req)
@@ -68,7 +67,7 @@ func (h *CategoryGroupHandler) CreateCategory(ctx *gin.Context) {
 }
 
 func (h *CategoryGroupHandler) UpdateCategory(ctx *gin.Context) {
-	var req model.UpdateCategoryReq
+	var req model.UpdateWorkorderCategoryReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -83,7 +82,7 @@ func (h *CategoryGroupHandler) UpdateCategory(ctx *gin.Context) {
 }
 
 func (h *CategoryGroupHandler) DeleteCategory(ctx *gin.Context) {
-	var req model.DeleteCategoryReq
+	var req model.DeleteWorkorderCategoryReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -98,25 +97,23 @@ func (h *CategoryGroupHandler) DeleteCategory(ctx *gin.Context) {
 }
 
 func (h *CategoryGroupHandler) ListCategory(ctx *gin.Context) {
-	var req model.ListCategoryReq
+	var req model.ListWorkorderCategoryReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ListCategory(ctx, req)
 	})
 }
 
 func (h *CategoryGroupHandler) DetailCategory(ctx *gin.Context) {
+	var req model.DetailWorkorderCategoryReq
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetCategory(ctx, id)
-	})
-}
+	req.ID = id
 
-func (h *CategoryGroupHandler) GetCategoryStatistics(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetCategoryStatistics(ctx)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.service.GetCategory(ctx, req.ID)
 	})
 }

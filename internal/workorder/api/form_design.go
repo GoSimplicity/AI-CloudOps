@@ -50,20 +50,16 @@ func (h *FormDesignHandler) RegisterRouters(server *gin.Engine) {
 		formDesignGroup.DELETE("/delete/:id", h.DeleteFormDesign)
 		formDesignGroup.GET("/list", h.ListFormDesign)
 		formDesignGroup.GET("/detail/:id", h.DetailFormDesign)
-		formDesignGroup.POST("/publish/:id", h.PublishFormDesign)
-		formDesignGroup.POST("/clone/:id", h.CloneFormDesign)
-		formDesignGroup.GET("/preview/:id", h.PreviewFormDesign)
-		formDesignGroup.GET("/statistics", h.GetFormStatistics)
 	}
 }
 
 func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
-	var req model.CreateFormDesignReq
+	var req model.CreateWorkorderFormDesignReq
 
 	user := ctx.MustGet("user").(utils.UserClaims)
 
-	req.UserID = user.Uid
-	req.UserName = user.Username
+	req.CreateUserID = user.Uid
+	req.CreateUserName = user.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateFormDesign(ctx, &req)
@@ -71,7 +67,7 @@ func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
 }
 
 func (h *FormDesignHandler) UpdateFormDesign(ctx *gin.Context) {
-	var req model.UpdateFormDesignReq
+	var req model.UpdateWorkorderFormDesignReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -85,7 +81,7 @@ func (h *FormDesignHandler) UpdateFormDesign(ctx *gin.Context) {
 }
 
 func (h *FormDesignHandler) DeleteFormDesign(ctx *gin.Context) {
-	var req model.DeleteFormDesignReq
+	var req model.DeleteWorkorderFormDesignReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -99,14 +95,14 @@ func (h *FormDesignHandler) DeleteFormDesign(ctx *gin.Context) {
 }
 
 func (h *FormDesignHandler) ListFormDesign(ctx *gin.Context) {
-	var req model.ListFormDesignReq
+	var req model.ListWorkorderFormDesignReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ListFormDesign(ctx, &req)
 	})
 }
 
 func (h *FormDesignHandler) DetailFormDesign(ctx *gin.Context) {
-	var req model.DetailFormDesignReq
+	var req model.DetailWorkorderFormDesignReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -115,58 +111,6 @@ func (h *FormDesignHandler) DetailFormDesign(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.DetailFormDesign(ctx, req.ID)
-	})
-}
-
-func (h *FormDesignHandler) PublishFormDesign(ctx *gin.Context) {
-	var req model.PublishFormDesignReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		return
-	}
-	req.ID = id
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.PublishFormDesign(ctx, req.ID)
-	})
-}
-
-func (h *FormDesignHandler) CloneFormDesign(ctx *gin.Context) {
-	var req model.CloneFormDesignReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		return
-	}
-	req.ID = id
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.CloneFormDesign(ctx, req.ID, req.Name, user.Uid)
-	})
-}
-
-func (h *FormDesignHandler) PreviewFormDesign(ctx *gin.Context) {
-	var req model.PreviewFormDesignReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		return
-	}
-	req.ID = id
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.PreviewFormDesign(ctx, req.ID, user.Uid)
-	})
-}
-
-func (h *FormDesignHandler) GetFormStatistics(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetFormStatistics(ctx)
+		return h.service.GetFormDesign(ctx, req.ID)
 	})
 }
