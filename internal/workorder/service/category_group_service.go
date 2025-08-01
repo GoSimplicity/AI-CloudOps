@@ -44,12 +44,12 @@ type CategoryGroupService interface {
 }
 
 type categoryGroupService struct {
-	categoryDAO dao.CategoryDAO
+	categoryDAO dao.WorkorderCategoryDAO
 	userDAO     userdao.UserDAO
 	logger      *zap.Logger
 }
 
-func NewCategoryGroupService(categoryDAO dao.CategoryDAO, userDAO userdao.UserDAO, logger *zap.Logger) CategoryGroupService {
+func NewCategoryGroupService(categoryDAO dao.WorkorderCategoryDAO, userDAO userdao.UserDAO, logger *zap.Logger) CategoryGroupService {
 	return &categoryGroupService{
 		categoryDAO: categoryDAO,
 		userDAO:     userDAO,

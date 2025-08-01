@@ -37,122 +37,115 @@ import (
 )
 
 type InstanceCommentService interface {
-	// 评论功能
-	CommentInstance(ctx context.Context, req *model.InstanceCommentReq, creatorID int, creatorName string) error
-	GetInstanceComments(ctx context.Context, instanceID int) ([]model.InstanceCommentResp, error)
+	// 添加评论
+	CommentInstance(ctx context.Context, req *model.CreateWorkorderInstanceCommentReq, creatorID int, creatorName string) error
+	// 获取评论树
+	GetInstanceComments(ctx context.Context, instanceID int) ([]model.WorkorderInstanceComment, error)
 }
 
 type instanceCommentService struct {
-	dao         dao.InstanceCommentDAO
-	instanceDao dao.InstanceDAO
+	dao         dao.WorkorderInstanceCommentDAO
+	instanceDao dao.WorkorderInstanceDAO
 	logger      *zap.Logger
 }
 
-func NewInstanceCommentService(dao dao.InstanceCommentDAO, instanceDao dao.InstanceDAO, logger *zap.Logger) InstanceCommentService {
+func NewInstanceCommentService(commentDAO dao.WorkorderInstanceCommentDAO, instanceDao dao.WorkorderInstanceDAO, logger *zap.Logger) InstanceCommentService {
 	return &instanceCommentService{
-		dao:         dao,
+		dao:         commentDAO,
 		instanceDao: instanceDao,
 		logger:      logger,
 	}
 }
 
 // CommentInstance 添加工单评论
-func (s *instanceCommentService) CommentInstance(ctx context.Context, req *model.InstanceCommentReq, creatorID int, creatorName string) error {
+func (s *instanceCommentService) CommentInstance(ctx context.Context, req *model.CreateWorkorderInstanceCommentReq, creatorID int, creatorName string) error {
+	// 参数校验
 	if err := s.validateCommentRequest(req); err != nil {
 		return fmt.Errorf("参数验证失败: %w", err)
 	}
 
-	// 验证工单是否存在
-	if _, err := s.instanceDao.GetInstance(ctx, req.InstanceID); err != nil {
+	// 校验工单实例是否存在
+	_, err := s.instanceDao.GetInstanceByID(ctx, req.InstanceID)
+	if err != nil {
 		if errors.Is(err, dao.ErrInstanceNotFound) {
+			s.logger.Warn("工单实例不存在", zap.Int("instanceID", req.InstanceID))
 			return ErrInstanceNotFound
 		}
+		s.logger.Error("获取工单实例失败", zap.Error(err), zap.Int("instanceID", req.InstanceID))
 		return fmt.Errorf("获取工单实例失败: %w", err)
 	}
 
-	comment := &model.InstanceComment{
-		InstanceID:  req.InstanceID,
-		Content:     strings.TrimSpace(req.Content),
-		UserID:      creatorID,
-		CreatorName: creatorName,
-		ParentID:    req.ParentID,
-		IsSystem:    false,
+	comment := &model.WorkorderInstanceComment{
+		InstanceID:     req.InstanceID,
+		Content:        strings.TrimSpace(req.Content),
+		CreateUserID:   creatorID,
+		CreateUserName: creatorName,
+		ParentID:       req.ParentID,
+		IsSystem:       false,
 	}
 
 	if err := s.dao.CreateInstanceComment(ctx, comment); err != nil {
-		s.logger.Error("创建工单评论失败", zap.Error(err))
+		s.logger.Error("创建工单评论失败", zap.Error(err), zap.Int("instanceID", req.InstanceID))
 		return fmt.Errorf("创建工单评论失败: %w", err)
 	}
 
 	s.logger.Info("创建工单评论成功",
 		zap.Int("instanceID", req.InstanceID),
-		zap.Int("creatorID", creatorID))
+		zap.Int("creatorID", creatorID),
+		zap.Intp("parentID", req.ParentID),
+	)
 
 	return nil
 }
 
-// GetInstanceComments 获取工单评论
-func (s *instanceCommentService) GetInstanceComments(ctx context.Context, instanceID int) ([]model.InstanceCommentResp, error) {
+// GetInstanceComments 获取工单评论树
+func (s *instanceCommentService) GetInstanceComments(ctx context.Context, instanceID int) ([]model.WorkorderInstanceComment, error) {
 	if instanceID <= 0 {
+		s.logger.Warn("获取工单评论失败，工单ID无效", zap.Int("instanceID", instanceID))
 		return nil, ErrInvalidRequest
 	}
 
 	comments, err := s.dao.GetInstanceComments(ctx, instanceID)
 	if err != nil {
+		s.logger.Error("获取工单评论失败", zap.Error(err), zap.Int("instanceID", instanceID))
 		return nil, fmt.Errorf("获取工单评论失败: %w", err)
 	}
 
 	// 构建评论树
-	return s.buildCommentTree(comments, nil), nil
+	return buildCommentTree(comments, nil), nil
 }
 
-// buildCommentTree 构建评论树
-func (s *instanceCommentService) buildCommentTree(comments []model.InstanceComment, parentID *int) []model.InstanceCommentResp {
-	tree := make([]model.InstanceCommentResp, 0)
-
-	for _, comment := range comments {
-		// 检查是否为当前层级的评论
+// buildCommentTree 构建评论树结构
+func buildCommentTree(comments []model.WorkorderInstanceComment, parentID *int) []model.WorkorderInstanceComment {
+	var tree []model.WorkorderInstanceComment
+	for i := range comments {
+		comment := &comments[i]
 		if (parentID == nil && comment.ParentID == nil) ||
 			(parentID != nil && comment.ParentID != nil && *parentID == *comment.ParentID) {
 
-			children := s.buildCommentTree(comments, &comment.ID)
-
-			respComment := model.InstanceCommentResp{
-				ID:          comment.ID,
-				InstanceID:  comment.InstanceID,
-				Content:     comment.Content,
-				UserID:      comment.UserID,
-				CreatorName: comment.CreatorName,
-				ParentID:    comment.ParentID,
-				IsSystem:    comment.IsSystem,
-				CreatedAt:   comment.CreatedAt,
-				Children:    children,
-			}
-
-			tree = append(tree, respComment)
+			children := buildCommentTree(comments, &comment.ID)
+			c := *comment
+			c.Children = children
+			tree = append(tree, c)
 		}
 	}
-
 	return tree
 }
 
 // validateCommentRequest 验证评论请求
-func (s *instanceCommentService) validateCommentRequest(req *model.InstanceCommentReq) error {
+func (s *instanceCommentService) validateCommentRequest(req *model.CreateWorkorderInstanceCommentReq) error {
 	if req == nil {
 		return ErrInvalidRequest
 	}
-
 	if req.InstanceID <= 0 {
 		return fmt.Errorf("工单ID无效")
 	}
-
-	if strings.TrimSpace(req.Content) == "" {
+	content := strings.TrimSpace(req.Content)
+	if content == "" {
 		return fmt.Errorf("评论内容不能为空")
 	}
-
-	if len(strings.TrimSpace(req.Content)) > MaxCommentLength {
-		return fmt.Errorf("评论内容超过最大长度限制(%d)", MaxCommentLength)
+	if len(content) > 2000 {
+		return fmt.Errorf("评论内容超过最大长度限制(%d)", 2000)
 	}
-
 	return nil
 }

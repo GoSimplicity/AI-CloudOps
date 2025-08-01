@@ -50,8 +50,6 @@ func (h *NotificationHandler) RegisterRouters(server *gin.Engine) {
 		notificationGroup.DELETE("/delete/:id", h.DeleteNotification)
 		notificationGroup.GET("/list", h.ListNotification)
 		notificationGroup.GET("/detail/:id", h.DetailNotification)
-		notificationGroup.PUT("/status/:id", h.UpdateStatus)
-		notificationGroup.GET("/statistics", h.GetStatistics)
 		notificationGroup.GET("/logs", h.GetSendLogs)
 		notificationGroup.POST("/test/send", h.TestSendNotification)
 		notificationGroup.POST("/duplicate", h.DuplicateNotification)
@@ -59,7 +57,7 @@ func (h *NotificationHandler) RegisterRouters(server *gin.Engine) {
 }
 
 func (h *NotificationHandler) CreateNotification(ctx *gin.Context) {
-	var req model.CreateNotificationReq
+	var req model.CreateWorkorderNotificationReq
 
 	user := ctx.MustGet("user").(utils.UserClaims)
 	req.UserID = user.Uid
@@ -71,7 +69,7 @@ func (h *NotificationHandler) CreateNotification(ctx *gin.Context) {
 }
 
 func (h *NotificationHandler) UpdateNotification(ctx *gin.Context) {
-	var req model.UpdateNotificationReq
+	var req model.UpdateWorkorderNotificationReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -87,7 +85,7 @@ func (h *NotificationHandler) UpdateNotification(ctx *gin.Context) {
 }
 
 func (h *NotificationHandler) DeleteNotification(ctx *gin.Context) {
-	var req model.DeleteNotificationReq
+	var req model.DeleteWorkorderNotificationReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -103,7 +101,7 @@ func (h *NotificationHandler) DeleteNotification(ctx *gin.Context) {
 }
 
 func (h *NotificationHandler) ListNotification(ctx *gin.Context) {
-	var req model.ListNotificationReq
+	var req model.ListWorkorderNotificationReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ListNotification(ctx, &req)
@@ -111,7 +109,7 @@ func (h *NotificationHandler) ListNotification(ctx *gin.Context) {
 }
 
 func (h *NotificationHandler) DetailNotification(ctx *gin.Context) {
-	var req model.DetailNotificationReq
+	var req model.DetailWorkorderNotificationReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -125,29 +123,8 @@ func (h *NotificationHandler) DetailNotification(ctx *gin.Context) {
 	})
 }
 
-func (h *NotificationHandler) UpdateStatus(ctx *gin.Context) {
-	var req model.UpdateStatusReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
-		return
-	}
-	req.ID = id
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.UpdateStatus(ctx, &req)
-	})
-}
-
-func (h *NotificationHandler) GetStatistics(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetStatistics(ctx)
-	})
-}
-
 func (h *NotificationHandler) GetSendLogs(ctx *gin.Context) {
-	var req model.ListSendLogReq
+	var req model.ListWorkorderNotificationLogReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetSendLogs(ctx, &req)
@@ -155,7 +132,7 @@ func (h *NotificationHandler) GetSendLogs(ctx *gin.Context) {
 }
 
 func (h *NotificationHandler) TestSendNotification(ctx *gin.Context) {
-	var req model.TestSendNotificationReq
+	var req model.TestSendWorkorderNotificationReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.TestSendNotification(ctx, &req)
@@ -163,7 +140,7 @@ func (h *NotificationHandler) TestSendNotification(ctx *gin.Context) {
 }
 
 func (h *NotificationHandler) DuplicateNotification(ctx *gin.Context) {
-	var req model.DuplicateNotificationReq
+	var req model.DuplicateWorkorderNotificationReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.DuplicateNotification(ctx, &req)

@@ -25,47 +25,238 @@ type notificationDAO struct {
 
 // AddSendLog implements NotificationDAO.
 func (n *notificationDAO) AddSendLog(ctx context.Context, log *model.WorkorderNotificationLog) error {
-	panic("unimplemented")
+	return n.db.WithContext(ctx).Create(log).Error
 }
 
 // CreateNotification implements NotificationDAO.
 func (n *notificationDAO) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
-	panic("unimplemented")
+	notification := &model.WorkorderNotification{
+		Name:             req.Name,
+		Description:      req.Description,
+		ProcessID:        req.ProcessID,
+		TemplateID:       req.TemplateID,
+		CategoryID:       req.CategoryID,
+		EventTypes:       req.EventTypes,
+		TriggerType:      req.TriggerType,
+		TriggerCondition: req.TriggerCondition,
+		Channels:         req.Channels,
+		RecipientTypes:   req.RecipientTypes,
+		RecipientUsers:   req.RecipientUsers,
+		RecipientRoles:   req.RecipientRoles,
+		RecipientDepts:   req.RecipientDepts,
+		MessageTemplate:  req.MessageTemplate,
+		SubjectTemplate:  req.SubjectTemplate,
+		ScheduledTime:    req.ScheduledTime,
+		RepeatInterval:   req.RepeatInterval,
+		MaxRetries:       req.MaxRetries,
+		RetryInterval:    req.RetryInterval,
+		Status:           req.Status,
+		Priority:         req.Priority,
+		CreatorID:        req.UserID,
+		IsDefault:        req.IsDefault,
+		Settings:         req.Settings,
+	}
+	return n.db.WithContext(ctx).Create(notification).Error
 }
 
 // DeleteNotification implements NotificationDAO.
 func (n *notificationDAO) DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error {
-	panic("unimplemented")
+	return n.db.WithContext(ctx).Delete(&model.WorkorderNotification{}, req.ID).Error
 }
 
 // DetailNotification implements NotificationDAO.
 func (n *notificationDAO) DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error) {
-	panic("unimplemented")
+	var notification model.WorkorderNotification
+	err := n.db.WithContext(ctx).First(&notification, req.ID).Error
+	return &notification, err
 }
 
 // GetNotificationByID implements NotificationDAO.
 func (n *notificationDAO) GetNotificationByID(ctx context.Context, id int) (*model.WorkorderNotification, error) {
-	panic("unimplemented")
+	var notification model.WorkorderNotification
+	err := n.db.WithContext(ctx).First(&notification, id).Error
+	return &notification, err
 }
 
 // GetSendLogs implements NotificationDAO.
 func (n *notificationDAO) GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (model.ListResp[*model.WorkorderNotificationLog], error) {
-	panic("unimplemented")
+	var logs []*model.WorkorderNotificationLog
+	var total int64
+
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.PageSize <= 0 {
+		req.PageSize = 10
+	}
+
+	db := n.db.WithContext(ctx).Model(&model.WorkorderNotificationLog{})
+
+	if req.NotificationID != nil {
+		db = db.Where("notification_id = ?", *req.NotificationID)
+	}
+	if req.InstanceID != nil {
+		db = db.Where("instance_id = ?", *req.InstanceID)
+	}
+	if req.EventType != "" {
+		db = db.Where("event_type = ?", req.EventType)
+	}
+	if req.Channel != "" {
+		db = db.Where("channel = ?", req.Channel)
+	}
+	if req.RecipientType != "" {
+		db = db.Where("recipient_type = ?", req.RecipientType)
+	}
+	if req.RecipientID != "" {
+		db = db.Where("recipient_id = ?", req.RecipientID)
+	}
+	if req.Status != nil {
+		db = db.Where("status = ?", *req.Status)
+	}
+
+	err := db.Count(&total).Error
+	if err != nil {
+		return model.ListResp[*model.WorkorderNotificationLog]{}, err
+	}
+
+	offset := (req.Page - 1) * req.PageSize
+	err = db.Order("id DESC").Offset(offset).Limit(req.PageSize).Find(&logs).Error
+
+	return model.ListResp[*model.WorkorderNotificationLog]{
+		Items: logs,
+		Total: total,
+	}, err
 }
 
 // IncrementSentCount implements NotificationDAO.
 func (n *notificationDAO) IncrementSentCount(ctx context.Context, id int) error {
-	panic("unimplemented")
+	return n.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
+		Where("id = ?", id).
+		Update("updated_at", "NOW()").Error
 }
 
 // ListNotification implements NotificationDAO.
 func (n *notificationDAO) ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (model.ListResp[*model.WorkorderNotification], error) {
-	panic("unimplemented")
+	var notifications []*model.WorkorderNotification
+	var total int64
+
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.PageSize <= 0 {
+		req.PageSize = 10
+	}
+
+	db := n.db.WithContext(ctx).Model(&model.WorkorderNotification{})
+
+	if req.Name != "" {
+		db = db.Where("name LIKE ?", "%"+req.Name+"%")
+	}
+	if req.ProcessID != nil {
+		db = db.Where("process_id = ?", *req.ProcessID)
+	}
+	if req.TemplateID != nil {
+		db = db.Where("template_id = ?", *req.TemplateID)
+	}
+	if req.CategoryID != nil {
+		db = db.Where("category_id = ?", *req.CategoryID)
+	}
+	if req.Status != nil {
+		db = db.Where("status = ?", *req.Status)
+	}
+	if req.IsDefault != nil {
+		db = db.Where("is_default = ?", *req.IsDefault)
+	}
+
+	err := db.Count(&total).Error
+	if err != nil {
+		return model.ListResp[*model.WorkorderNotification]{}, err
+	}
+
+	offset := (req.Page - 1) * req.PageSize
+	err = db.Order("id DESC").Offset(offset).Limit(req.PageSize).Find(&notifications).Error
+
+	return model.ListResp[*model.WorkorderNotification]{
+		Items: notifications,
+		Total: total,
+	}, err
 }
 
 // UpdateNotification implements NotificationDAO.
 func (n *notificationDAO) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
-	panic("unimplemented")
+	updateData := map[string]interface{}{}
+
+	if req.Name != "" {
+		updateData["name"] = req.Name
+	}
+	if req.Description != "" {
+		updateData["description"] = req.Description
+	}
+	if req.ProcessID != nil {
+		updateData["process_id"] = req.ProcessID
+	}
+	if req.TemplateID != nil {
+		updateData["template_id"] = req.TemplateID
+	}
+	if req.CategoryID != nil {
+		updateData["category_id"] = req.CategoryID
+	}
+	if req.EventTypes != nil {
+		updateData["event_types"] = req.EventTypes
+	}
+	if req.TriggerType != "" {
+		updateData["trigger_type"] = req.TriggerType
+	}
+	if req.TriggerCondition != nil {
+		updateData["trigger_condition"] = req.TriggerCondition
+	}
+	if req.Channels != nil {
+		updateData["channels"] = req.Channels
+	}
+	if req.RecipientTypes != nil {
+		updateData["recipient_types"] = req.RecipientTypes
+	}
+	if req.RecipientUsers != nil {
+		updateData["recipient_users"] = req.RecipientUsers
+	}
+	if req.RecipientRoles != nil {
+		updateData["recipient_roles"] = req.RecipientRoles
+	}
+	if req.RecipientDepts != nil {
+		updateData["recipient_depts"] = req.RecipientDepts
+	}
+	if req.MessageTemplate != "" {
+		updateData["message_template"] = req.MessageTemplate
+	}
+	if req.SubjectTemplate != "" {
+		updateData["subject_template"] = req.SubjectTemplate
+	}
+	if req.ScheduledTime != nil {
+		updateData["scheduled_time"] = req.ScheduledTime
+	}
+	if req.RepeatInterval != nil {
+		updateData["repeat_interval"] = req.RepeatInterval
+	}
+	if req.MaxRetries > 0 {
+		updateData["max_retries"] = req.MaxRetries
+	}
+	if req.RetryInterval > 0 {
+		updateData["retry_interval"] = req.RetryInterval
+	}
+	if req.Status != 0 {
+		updateData["status"] = req.Status
+	}
+	if req.Priority != 0 {
+		updateData["priority"] = req.Priority
+	}
+	updateData["is_default"] = req.IsDefault
+	if req.Settings != nil {
+		updateData["settings"] = req.Settings
+	}
+
+	return n.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
+		Where("id = ?", req.ID).
+		Updates(updateData).Error
 }
 
 func NewNotificationDAO(db *gorm.DB) NotificationDAO {

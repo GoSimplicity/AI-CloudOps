@@ -46,17 +46,17 @@ type WorkorderProcessService interface {
 
 type workorderProcessService struct {
 	dao           dao.ProcessDAO
-	formDesignDao dao.FormDesignDAO
-	categoryDao   dao.CategoryDAO
-	instanceDao   dao.InstanceDAO
+	formDesignDao dao.WorkorderFormDesignDAO
+	categoryDao   dao.WorkorderCategoryDAO
+	instanceDao   dao.WorkorderInstanceDAO
 	logger        *zap.Logger
 }
 
 func NewWorkorderProcessService(
 	processDao dao.ProcessDAO,
-	formDesignDao dao.FormDesignDAO,
-	categoryDao dao.CategoryDAO,
-	instanceDao dao.InstanceDAO,
+	formDesignDao dao.WorkorderFormDesignDAO,
+	categoryDao dao.WorkorderCategoryDAO,
+	instanceDao dao.WorkorderInstanceDAO,
 	logger *zap.Logger,
 ) WorkorderProcessService {
 	return &workorderProcessService{
@@ -249,14 +249,28 @@ func (p *workorderProcessService) DeleteWorkorderProcess(ctx context.Context, id
 		return fmt.Errorf("已发布的流程不能删除")
 	}
 
-	instances, err := p.instanceDao.GetInstanceByProcessID(ctx, id)
-	if err != nil {
-		p.logger.Error("获取流程实例失败", zap.Error(err))
-		return fmt.Errorf("获取流程实例失败: %w", err)
-	}
-
-	if len(instances) > 0 {
-		return fmt.Errorf("流程有正在运行的实例，不能删除")
+	page := 1
+	size := 100
+	for {
+		instances, total, err := p.instanceDao.ListInstance(ctx, &model.ListWorkorderInstanceReq{
+			ProcessID: &id,
+			ListReq: model.ListReq{
+				Page: page,
+				Size: size,
+			},
+		})
+		if err != nil {
+			p.logger.Error("获取流程实例失败", zap.Error(err))
+			return fmt.Errorf("获取流程实例失败: %w", err)
+		}
+		if len(instances) > 0 {
+			return fmt.Errorf("流程有正在运行的实例，不能删除")
+		}
+		// 如果本次返回数量小于size，说明已经没有更多数据
+		if total <= int64(page*size) {
+			break
+		}
+		page++
 	}
 
 	// 执行删除

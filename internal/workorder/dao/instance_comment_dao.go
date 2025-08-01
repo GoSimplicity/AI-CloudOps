@@ -115,7 +115,7 @@ func (d *workorderInstanceCommentDAO) validateComment(comment *model.WorkorderIn
 	if comment.InstanceID <= 0 {
 		return fmt.Errorf("工单ID无效")
 	}
-	if comment.OperatorID <= 0 {
+	if comment.CreateUserID <= 0 {
 		return fmt.Errorf("用户ID无效")
 	}
 	if strings.TrimSpace(comment.Content) == "" {

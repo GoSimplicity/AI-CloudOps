@@ -33,6 +33,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -44,11 +45,11 @@ var (
 )
 
 type TemplateDAO interface {
-	CreateTemplate(ctx context.Context, template *model.Template) error
-	UpdateTemplate(ctx context.Context, template *model.Template) error
+	CreateTemplate(ctx context.Context, template *model.WorkorderTemplate) error
+	UpdateTemplate(ctx context.Context, template *model.WorkorderTemplate) error
 	DeleteTemplate(ctx context.Context, id int) error
-	GetTemplate(ctx context.Context, id int) (*model.Template, error)
-	ListTemplate(ctx context.Context, req *model.ListTemplateReq) (*model.ListResp[*model.Template], error)
+	GetTemplate(ctx context.Context, id int) (*model.WorkorderTemplate, error)
+	ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) (*model.ListResp[*model.WorkorderTemplate], error)
 	UpdateTemplateStatus(ctx context.Context, id int, status int8) error
 	IsTemplateNameExists(ctx context.Context, name string, excludeID int) (bool, error)
 }
@@ -66,14 +67,14 @@ func NewTemplateDAO(db *gorm.DB, logger *zap.Logger) TemplateDAO {
 }
 
 // CreateTemplate 创建模板
-func (t *templateDAO) CreateTemplate(ctx context.Context, template *model.Template) error {
+func (t *templateDAO) CreateTemplate(ctx context.Context, template *model.WorkorderTemplate) error {
 	if template == nil {
 		return fmt.Errorf("模板不能为空")
 	}
 
 	// 设置默认值
-	if template.DefaultValues == "" {
-		template.DefaultValues = "{}"
+	if len(template.DefaultValues) == 0 {
+		template.DefaultValues = datatypes.JSON([]byte("{}"))
 	}
 
 	if err := t.db.WithContext(ctx).Create(template).Error; err != nil {
@@ -88,14 +89,14 @@ func (t *templateDAO) CreateTemplate(ctx context.Context, template *model.Templa
 }
 
 // UpdateTemplate 更新模板
-func (t *templateDAO) UpdateTemplate(ctx context.Context, template *model.Template) error {
+func (t *templateDAO) UpdateTemplate(ctx context.Context, template *model.WorkorderTemplate) error {
 	if template == nil || template.ID <= 0 {
 		return ErrInvalidID
 	}
 
 	// 设置默认值
-	if template.DefaultValues == "" {
-		template.DefaultValues = "{}"
+	if len(template.DefaultValues) == 0 {
+		template.DefaultValues = datatypes.JSON([]byte("{}"))
 	}
 
 	// 明确指定要更新的字段
@@ -104,13 +105,11 @@ func (t *templateDAO) UpdateTemplate(ctx context.Context, template *model.Templa
 		"description":    template.Description,
 		"process_id":     template.ProcessID,
 		"default_values": template.DefaultValues,
-		"icon":           template.Icon,
 		"status":         template.Status,
-		"sort_order":     template.SortOrder,
 		"category_id":    template.CategoryID,
 	}
 
-	result := t.db.WithContext(ctx).Model(&model.Template{}).
+	result := t.db.WithContext(ctx).Model(&model.WorkorderTemplate{}).
 		Where("id = ?", template.ID).
 		Updates(updates)
 
@@ -135,7 +134,7 @@ func (t *templateDAO) DeleteTemplate(ctx context.Context, id int) error {
 		return ErrInvalidID
 	}
 
-	result := t.db.WithContext(ctx).Delete(&model.Template{}, id)
+	result := t.db.WithContext(ctx).Delete(&model.WorkorderTemplate{}, id)
 	if result.Error != nil {
 		t.logger.Error("删除模板失败", zap.Error(result.Error), zap.Int("id", id))
 		return fmt.Errorf("删除模板失败: %w", result.Error)
@@ -149,12 +148,12 @@ func (t *templateDAO) DeleteTemplate(ctx context.Context, id int) error {
 }
 
 // GetTemplate 获取单个模板
-func (t *templateDAO) GetTemplate(ctx context.Context, id int) (*model.Template, error) {
+func (t *templateDAO) GetTemplate(ctx context.Context, id int) (*model.WorkorderTemplate, error) {
 	if id <= 0 {
 		return nil, ErrInvalidID
 	}
 
-	var template model.Template
+	var template model.WorkorderTemplate
 	err := t.db.WithContext(ctx).
 		Preload("Process").
 		Preload("Category").
@@ -169,15 +168,15 @@ func (t *templateDAO) GetTemplate(ctx context.Context, id int) (*model.Template,
 	}
 
 	// 确保默认值不为空
-	if template.DefaultValues == "" {
-		template.DefaultValues = "{}"
+	if len(template.DefaultValues) == 0 {
+		template.DefaultValues = datatypes.JSON([]byte("{}"))
 	}
 
 	return &template, nil
 }
 
 // ListTemplate 列表查询模板
-func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListTemplateReq) (*model.ListResp[*model.Template], error) {
+func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) (*model.ListResp[*model.WorkorderTemplate], error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求参数不能为空")
 	}
@@ -193,10 +192,10 @@ func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListTemplateR
 		req.Size = 100
 	}
 
-	var templates []*model.Template
+	var templates []*model.WorkorderTemplate
 	var total int64
 
-	db := t.db.WithContext(ctx).Model(&model.Template{})
+	db := t.db.WithContext(ctx).Model(&model.WorkorderTemplate{})
 
 	// 构建查询条件
 	db = t.buildListQuery(db, req)
@@ -223,12 +222,12 @@ func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListTemplateR
 
 	// 确保所有模板的默认值不为空
 	for _, template := range templates {
-		if template.DefaultValues == "" {
-			template.DefaultValues = "{}"
+		if len(template.DefaultValues) == 0 {
+			template.DefaultValues = datatypes.JSON([]byte("{}"))
 		}
 	}
 
-	return &model.ListResp[*model.Template]{
+	return &model.ListResp[*model.WorkorderTemplate]{
 		Items: templates,
 		Total: total,
 	}, nil
@@ -244,7 +243,7 @@ func (t *templateDAO) UpdateTemplateStatus(ctx context.Context, id int, status i
 		return ErrInvalidStatus
 	}
 
-	result := t.db.WithContext(ctx).Model(&model.Template{}).
+	result := t.db.WithContext(ctx).Model(&model.WorkorderTemplate{}).
 		Where("id = ?", id).
 		Update("status", status)
 
@@ -268,7 +267,7 @@ func (t *templateDAO) IsTemplateNameExists(ctx context.Context, name string, exc
 	}
 
 	var count int64
-	query := t.db.WithContext(ctx).Model(&model.Template{}).Where("name = ?", name)
+	query := t.db.WithContext(ctx).Model(&model.WorkorderTemplate{}).Where("name = ?", name)
 
 	if excludeID > 0 {
 		query = query.Where("id != ?", excludeID)
@@ -284,7 +283,7 @@ func (t *templateDAO) IsTemplateNameExists(ctx context.Context, name string, exc
 }
 
 // buildListQuery 构建列表查询条件
-func (t *templateDAO) buildListQuery(db *gorm.DB, req *model.ListTemplateReq) *gorm.DB {
+func (t *templateDAO) buildListQuery(db *gorm.DB, req *model.ListWorkorderTemplateReq) *gorm.DB {
 	// 通用搜索
 	if req.Search != "" {
 		searchTerm := "%" + strings.TrimSpace(req.Search) + "%"
@@ -324,4 +323,17 @@ func (t *templateDAO) isDuplicateKeyError(err error) bool {
 // isValidStatus 验证状态值是否有效
 func (t *templateDAO) isValidStatus(status int8) bool {
 	return status == 0 || status == 1
+}
+
+// fieldExistsInTemplate 用于判断字段是否在 WorkorderTemplate 结构体中
+func fieldExistsInTemplate(field string) bool {
+	// 这里可以根据 model.WorkorderTemplate 的定义做静态判断
+	// 由于 Go 语言静态类型，通常不会动态判断字段是否存在
+	// 这里直接返回 true，或者根据你的结构体实际情况调整
+	switch field {
+	case "Icon", "SortOrder":
+		return true
+	default:
+		return false
+	}
 }

@@ -13,16 +13,14 @@ import (
 )
 
 type NotificationService interface {
-	CreateNotification(ctx context.Context, req *model.CreateNotificationReq) error
-	UpdateNotification(ctx context.Context, req *model.UpdateNotificationReq) error
-	DeleteNotification(ctx context.Context, req *model.DeleteNotificationReq) error
-	ListNotification(ctx context.Context, req *model.ListNotificationReq) (model.ListResp[*model.Notification], error)
-	DetailNotification(ctx context.Context, req *model.DetailNotificationReq) (*model.Notification, error)
-	UpdateStatus(ctx context.Context, req *model.UpdateStatusReq) error
-	GetStatistics(ctx context.Context) (*model.NotificationStats, error)
-	GetSendLogs(ctx context.Context, req *model.ListSendLogReq) (model.ListResp[*model.NotificationLog], error)
-	TestSendNotification(ctx context.Context, req *model.TestSendNotificationReq) error
-	DuplicateNotification(ctx context.Context, req *model.DuplicateNotificationReq) error
+	CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error
+	UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error
+	DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error
+	ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (model.ListResp[*model.WorkorderNotification], error)
+	DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error)
+	GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (model.ListResp[*model.WorkorderNotificationLog], error)
+	TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error
+	DuplicateNotification(ctx context.Context, req *model.DuplicateWorkorderNotificationReq) error
 }
 
 type notificationService struct {
@@ -38,23 +36,13 @@ func NewNotificationService(dao dao.NotificationDAO, logger *zap.Logger) Notific
 }
 
 // CreateNotification 创建通知配置
-func (n *notificationService) CreateNotification(ctx context.Context, req *model.CreateNotificationReq) error {
-	// 校验触发类型和定时时间的一致性
-	if req.TriggerType == model.NotificationTriggerScheduled && req.ScheduledTime == nil {
-		return errors.New("定时发送必须设置定时时间")
-	}
-
-	if req.TriggerType != model.NotificationTriggerScheduled && req.ScheduledTime != nil {
-		req.ScheduledTime = nil // 非定时发送，清空定时时间
-	}
-
+func (n *notificationService) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
 	return n.dao.CreateNotification(ctx, req)
 }
 
 // UpdateNotification 更新通知配置
-func (n *notificationService) UpdateNotification(ctx context.Context, req *model.UpdateNotificationReq) error {
-	// 校验通知是否存在
-	notification, err := n.dao.GetNotificationByID(ctx, req.ID)
+func (n *notificationService) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
+	_, err := n.dao.GetNotificationByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("通知配置不存在")
@@ -62,26 +50,11 @@ func (n *notificationService) UpdateNotification(ctx context.Context, req *model
 		return fmt.Errorf("查询通知配置失败: %w", err)
 	}
 
-	// 校验触发类型和定时时间的一致性
-	if req.TriggerType == model.NotificationTriggerScheduled && req.ScheduledTime == nil {
-		return errors.New("定时发送必须设置定时时间")
-	}
-
-	if req.TriggerType != model.NotificationTriggerScheduled && req.ScheduledTime != nil {
-		req.ScheduledTime = nil // 非定时发送，清空定时时间
-	}
-
-	// 保持一致性：状态应该从请求中获取，如果请求没有指定，则使用现有状态
-	if req.Status != model.NotificationStatusEnabled && req.Status != model.NotificationStatusDisabled {
-		req.Status = notification.Status
-	}
-
 	return n.dao.UpdateNotification(ctx, req)
 }
 
 // DeleteNotification 删除通知配置
-func (n *notificationService) DeleteNotification(ctx context.Context, req *model.DeleteNotificationReq) error {
-	// 校验通知是否存在
+func (n *notificationService) DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error {
 	_, err := n.dao.GetNotificationByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -94,42 +67,23 @@ func (n *notificationService) DeleteNotification(ctx context.Context, req *model
 }
 
 // ListNotification 获取通知配置列表
-func (n *notificationService) ListNotification(ctx context.Context, req *model.ListNotificationReq) (model.ListResp[*model.Notification], error) {
+func (n *notificationService) ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (model.ListResp[*model.WorkorderNotification], error) {
 	return n.dao.ListNotification(ctx, req)
 }
 
 // DetailNotification 获取通知配置详情
-func (n *notificationService) DetailNotification(ctx context.Context, req *model.DetailNotificationReq) (*model.Notification, error) {
+func (n *notificationService) DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error) {
 	return n.dao.DetailNotification(ctx, req)
 }
 
-// UpdateStatus 更新通知配置状态
-func (n *notificationService) UpdateStatus(ctx context.Context, req *model.UpdateStatusReq) error {
-	// 校验通知是否存在
-	_, err := n.dao.GetNotificationByID(ctx, req.ID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("通知配置不存在")
-		}
-		return fmt.Errorf("查询通知配置失败: %w", err)
-	}
-
-	return n.dao.UpdateStatus(ctx, req)
-}
-
-// GetStatistics 获取通知统计信息
-func (n *notificationService) GetStatistics(ctx context.Context) (*model.NotificationStats, error) {
-	return n.dao.GetStatistics(ctx)
-}
 
 // GetSendLogs 获取发送日志
-func (n *notificationService) GetSendLogs(ctx context.Context, req *model.ListSendLogReq) (model.ListResp[*model.NotificationLog], error) {
+func (n *notificationService) GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (model.ListResp[*model.WorkorderNotificationLog], error) {
 	return n.dao.GetSendLogs(ctx, req)
 }
 
 // TestSendNotification 测试发送通知
-func (n *notificationService) TestSendNotification(ctx context.Context, req *model.TestSendNotificationReq) error {
-	// 获取通知配置
+func (n *notificationService) TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error {
 	notification, err := n.dao.GetNotificationByID(ctx, req.NotificationID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -138,12 +92,10 @@ func (n *notificationService) TestSendNotification(ctx context.Context, req *mod
 		return fmt.Errorf("查询通知配置失败: %w", err)
 	}
 
-	// 判断通知是否启用
-	if notification.Status != model.NotificationStatusEnabled {
+	if notification.Status != 1 {
 		return errors.New("通知配置已禁用，无法发送")
 	}
 
-	// 从上下文获取用户ID
 	var senderID int
 	if uid := ctx.Value("user_id"); uid != nil {
 		if id, ok := uid.(int); ok {
@@ -151,48 +103,43 @@ func (n *notificationService) TestSendNotification(ctx context.Context, req *mod
 		}
 	}
 
-	// 循环发送各个渠道的通知
 	for _, channel := range notification.Channels {
-		for _, recipient := range notification.Recipients {
-			// 创建发送日志
-			log := &model.NotificationLog{
-				NotificationID: notification.ID,
-				Channel:        channel,
-				Recipient:      recipient,
-				Content:        notification.MessageTemplate,
-				SenderID:       senderID,
-			}
+		log := &model.WorkorderNotificationLog{
+			NotificationID: notification.ID,
+			EventType:      "test",
+			Channel:        channel,
+			RecipientType:  "test",
+			RecipientID:    "test_user",
+			RecipientName:  "测试用户",
+			RecipientAddr:  req.Recipient,
+			Subject:        "测试通知",
+			Content:        notification.MessageTemplate,
+			Status:         1,
+			SendAt:         time.Now(),
+			SenderID:       senderID,
+		}
 
-			// 实际发送通知
-			err := n.sendNotification(channel, recipient, notification.MessageTemplate)
-			if err != nil {
-				// 发送失败，记录错误
-				log.Status = "failed"
-				log.Error = err.Error()
-				n.logger.Error("发送通知失败",
-					zap.String("channel", channel),
-					zap.String("recipient", recipient),
-					zap.Error(err))
-			} else {
-				// 发送成功
-				log.Status = "success"
-			}
+		err := n.sendNotification(channel, req.Recipient, notification.MessageTemplate)
+		if err != nil {
+			log.Status = 2
+			log.ErrorMessage = err.Error()
+			n.logger.Error("发送通知失败",
+				zap.String("channel", channel),
+				zap.String("recipient", req.Recipient),
+				zap.Error(err))
+		}
 
-			// 记录发送日志
-			if err := n.dao.AddSendLog(ctx, log); err != nil {
-				n.logger.Error("记录发送日志失败", zap.Error(err))
-			}
+		if err := n.dao.AddSendLog(ctx, log); err != nil {
+			n.logger.Error("记录发送日志失败", zap.Error(err))
 		}
 	}
 
-	// 更新发送次数和最后发送时间
 	return n.dao.IncrementSentCount(ctx, notification.ID)
 }
 
 // DuplicateNotification 复制通知配置
-func (n *notificationService) DuplicateNotification(ctx context.Context, req *model.DuplicateNotificationReq) error {
-	// 获取源通知配置
-	source, err := n.dao.GetNotificationByID(ctx, req.SourceID)
+func (n *notificationService) DuplicateNotification(ctx context.Context, req *model.DuplicateWorkorderNotificationReq) error {
+	source, err := n.dao.GetNotificationByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("源通知配置不存在")
@@ -200,36 +147,46 @@ func (n *notificationService) DuplicateNotification(ctx context.Context, req *mo
 		return fmt.Errorf("查询源通知配置失败: %w", err)
 	}
 
-	// 创建新的通知配置
-	newReq := &model.CreateNotificationReq{
-		FormID:          source.FormID,
-		Channels:        []string(source.Channels),
-		Recipients:      []string(source.Recipients),
-		MessageTemplate: source.MessageTemplate,
-		TriggerType:     source.TriggerType,
-		FormUrl:         source.FormUrl,
+	newReq := &model.CreateWorkorderNotificationReq{
+		Name:             source.Name + "_副本",
+		Description:      source.Description,
+		ProcessID:        source.ProcessID,
+		TemplateID:       source.TemplateID,
+		CategoryID:       source.CategoryID,
+		EventTypes:       source.EventTypes,
+		TriggerType:      source.TriggerType,
+		TriggerCondition: source.TriggerCondition,
+		Channels:         source.Channels,
+		RecipientTypes:   source.RecipientTypes,
+		RecipientUsers:   source.RecipientUsers,
+		RecipientRoles:   source.RecipientRoles,
+		RecipientDepts:   source.RecipientDepts,
+		MessageTemplate:  source.MessageTemplate,
+		SubjectTemplate:  source.SubjectTemplate,
+		ScheduledTime:    source.ScheduledTime,
+		RepeatInterval:   source.RepeatInterval,
+		MaxRetries:       source.MaxRetries,
+		RetryInterval:    source.RetryInterval,
+		Status:           source.Status,
+		Priority:         source.Priority,
+		IsDefault:        false,
+		Settings:         source.Settings,
+		UserID:           source.CreatorID,
 	}
 
-	// 如果是定时发送，复制定时时间
-	if source.TriggerType == model.NotificationTriggerScheduled && source.ScheduledTime != nil {
-		scheduledTime := *source.ScheduledTime
-		newReq.ScheduledTime = &scheduledTime
-	}
-
-	// 创建新通知配置
 	return n.dao.CreateNotification(ctx, newReq)
 }
 
 // sendNotification 根据不同的通道发送通知
 func (n *notificationService) sendNotification(channel, recipient, content string) error {
 	switch channel {
-	case model.NotificationChannelFeishu:
+	case "feishu":
 		return n.sendFeishuNotification(recipient, content)
-	case model.NotificationChannelEmail:
+	case "email":
 		return n.sendEmailNotification(recipient, content)
-	case model.NotificationChannelDingtalk:
+	case "dingtalk":
 		return n.sendDingtalkNotification(recipient, content)
-	case model.NotificationChannelWechat:
+	case "wechat":
 		return n.sendWechatNotification(recipient, content)
 	default:
 		return fmt.Errorf("不支持的通知渠道: %s", channel)
