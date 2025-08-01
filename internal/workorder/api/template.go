@@ -54,6 +54,17 @@ func (h *TemplateHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // CreateTemplate 创建模板
+// @Summary 创建工单模板
+// @Description 创建新的工单模板
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param request body model.CreateWorkorderTemplateReq true "创建模板请求参数"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/template/create [post]
 func (h *TemplateHandler) CreateTemplate(ctx *gin.Context) {
 	var req model.CreateWorkorderTemplateReq
 	user := ctx.MustGet("user").(utils.UserClaims)
@@ -64,6 +75,18 @@ func (h *TemplateHandler) CreateTemplate(ctx *gin.Context) {
 }
 
 // UpdateTemplate 更新模板
+// @Summary 更新工单模板
+// @Description 更新指定的工单模板信息
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "模板ID"
+// @Param request body model.UpdateWorkorderTemplateReq true "更新模板请求参数"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/template/update/{id} [put]
 func (h *TemplateHandler) UpdateTemplate(ctx *gin.Context) {
 	var req model.UpdateWorkorderTemplateReq
 
@@ -82,6 +105,17 @@ func (h *TemplateHandler) UpdateTemplate(ctx *gin.Context) {
 }
 
 // DeleteTemplate 删除模板
+// @Summary 删除工单模板
+// @Description 删除指定的工单模板
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "模板ID"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/template/delete/{id} [delete]
 func (h *TemplateHandler) DeleteTemplate(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -97,6 +131,19 @@ func (h *TemplateHandler) DeleteTemplate(ctx *gin.Context) {
 }
 
 // ListTemplate 获取模板列表
+// @Summary 获取工单模板列表
+// @Description 分页获取工单模板列表
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param size query int false "每页数量" default(10)
+// @Param keyword query string false "搜索关键词"
+// @Success 200 {object} utils.ApiResponse{data=[]model.WorkorderTemplate} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/template/list [get]
 func (h *TemplateHandler) ListTemplate(ctx *gin.Context) {
 	var req model.ListWorkorderTemplateReq
 
@@ -106,6 +153,17 @@ func (h *TemplateHandler) ListTemplate(ctx *gin.Context) {
 }
 
 // DetailTemplate 获取模板详情
+// @Summary 获取工单模板详情
+// @Description 根据ID获取工单模板的详细信息
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "模板ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/template/detail/{id} [get]
 func (h *TemplateHandler) DetailTemplate(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

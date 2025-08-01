@@ -57,6 +57,18 @@ func (h *InstanceCommentHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // CreateInstanceComment 创建工单评论
+// @Summary 创建工单评论
+// @Description 为指定工单实例创建新的评论
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param request body model.CreateWorkorderInstanceCommentReq true "创建评论请求参数"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/comment/create [post]
+// CreateInstanceComment 创建工单评论
 func (h *InstanceCommentHandler) CreateInstanceComment(ctx *gin.Context) {
 	var req model.CreateWorkorderInstanceCommentReq
 	user := ctx.MustGet("user").(utils.UserClaims)
@@ -69,6 +81,19 @@ func (h *InstanceCommentHandler) CreateInstanceComment(ctx *gin.Context) {
 	})
 }
 
+// UpdateInstanceComment 更新工单评论
+// @Summary 更新工单评论
+// @Description 更新指定的工单评论内容
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "评论 ID"
+// @Param request body model.UpdateWorkorderInstanceCommentReq true "更新评论请求参数"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/comment/update/{id} [put]
 // UpdateInstanceComment 更新工单评论
 func (h *InstanceCommentHandler) UpdateInstanceComment(ctx *gin.Context) {
 	var req model.UpdateWorkorderInstanceCommentReq
@@ -87,6 +112,18 @@ func (h *InstanceCommentHandler) UpdateInstanceComment(ctx *gin.Context) {
 }
 
 // DeleteInstanceComment 删除工单评论
+// @Summary 删除工单评论
+// @Description 删除指定的工单评论
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "评论 ID"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/comment/delete/{id} [delete]
+// DeleteInstanceComment 删除工单评论
 func (h *InstanceCommentHandler) DeleteInstanceComment(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -101,6 +138,18 @@ func (h *InstanceCommentHandler) DeleteInstanceComment(ctx *gin.Context) {
 }
 
 // GetInstanceComment 获取工单评论详情
+// @Summary 获取工单评论详情
+// @Description 获取指定工单评论的详细信息
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "评论 ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/comment/detail/{id} [get]
+// GetInstanceComment 获取工单评论详情
 func (h *InstanceCommentHandler) GetInstanceComment(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -113,6 +162,20 @@ func (h *InstanceCommentHandler) GetInstanceComment(ctx *gin.Context) {
 }
 
 // ListInstanceComments 获取工单评论列表
+// @Summary 获取工单评论列表
+// @Description 分页获取工单评论列表
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param page query int false "页码"
+// @Param size query int false "每页数量"
+// @Param instanceId query int false "工单实例ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/comment/list [get]
+// ListInstanceComments 获取工单评论列表
 func (h *InstanceCommentHandler) ListInstanceComments(ctx *gin.Context) {
 	var req model.ListWorkorderInstanceCommentReq
 
@@ -121,6 +184,18 @@ func (h *InstanceCommentHandler) ListInstanceComments(ctx *gin.Context) {
 	})
 }
 
+// GetInstanceCommentsTree 获取工单评论树结构
+// @Summary 获取工单评论树结构
+// @Description 获取指定工单实例的评论树结构，包含父子关系
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param instanceId path int true "工单实例ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/comment/tree/{instanceId} [get]
 // GetInstanceCommentsTree 获取工单评论树结构
 func (h *InstanceCommentHandler) GetInstanceCommentsTree(ctx *gin.Context) {
 	instanceIdStr := ctx.Param("instanceId")

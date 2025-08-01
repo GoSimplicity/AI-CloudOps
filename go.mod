@@ -42,6 +42,9 @@ require (
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
+	github.com/swaggo/files v1.0.1
+	github.com/swaggo/gin-swagger v1.6.0
+	github.com/swaggo/swag v1.16.6
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.38.0
 	golang.org/x/sync v0.14.0
@@ -81,6 +84,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.2.2 // indirect
+	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/alecthomas/units v0.0.0-20240626203959-61d1e3462e30 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/aws/aws-sdk-go v1.54.19 // indirect
@@ -117,6 +121,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.20.2 // indirect
 	github.com/go-openapi/jsonreference v0.20.4 // indirect
+	github.com/go-openapi/spec v0.20.14 // indirect
 	github.com/go-openapi/swag v0.22.9 // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect

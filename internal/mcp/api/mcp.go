@@ -82,7 +82,17 @@ func (m *McpHandler) RegisterRouters(server *gin.Engine) {
 	mcpGroup.POST("/blacklists/remove", m.RemoveToolFromBlacklist)
 }
 
-// 工具相关接口实现
+// GetTools 获取工具列表
+// @Summary 获取工具列表
+// @Description 获取所有可用的MCP工具列表
+// @Tags MCP-Tool
+// @Accept json
+// @Produce json
+// @Param request body model.GetToolsReq true "获取工具列表请求"
+// @Success 200 {object} utils.ApiResponse{data=[]model.Tool} "成功获取工具列表"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/mcps/tools [get]
 func (m *McpHandler) GetTools(ctx *gin.Context) {
 	var req model.GetToolsReq
 
@@ -91,6 +101,17 @@ func (m *McpHandler) GetTools(ctx *gin.Context) {
 	})
 }
 
+// GetTool 获取指定工具
+// @Summary 获取指定工具
+// @Description 根据工具名称获取工具详情
+// @Tags MCP-Tool
+// @Accept json
+// @Produce json
+// @Param name path string true "工具名称"
+// @Success 200 {object} utils.ApiResponse "成功获取工具详情"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/mcps/tools/{name} [get]
 func (m *McpHandler) GetTool(ctx *gin.Context) {
 	var req model.GetToolReq
 	req.Name = ctx.Param("name")
@@ -100,6 +121,17 @@ func (m *McpHandler) GetTool(ctx *gin.Context) {
 	})
 }
 
+// CreateTool 创建工具
+// @Summary 创建工具
+// @Description 创建新的MCP工具
+// @Tags MCP-Tool
+// @Accept json
+// @Produce json
+// @Param request body model.CreateToolReq true "创建工具请求"
+// @Success 200 {object} utils.ApiResponse "成功创建工具"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/mcps/tools [post]
 func (m *McpHandler) CreateTool(ctx *gin.Context) {
 	var req model.CreateToolReq
 
@@ -133,7 +165,17 @@ func (m *McpHandler) CallTool(ctx *gin.Context) {
 	})
 }
 
-// MCP配置相关接口实现
+// GetMCPConfigs 获取MCP配置列表
+// @Summary 获取MCP配置列表
+// @Description 获取所有MCP服务配置列表
+// @Tags MCP-Config
+// @Accept json
+// @Produce json
+// @Param request body model.GetMCPConfigsReq true "获取MCP配置列表请求"
+// @Success 200 {object} utils.ApiResponse{data=[]model.MCPConfig} "成功获取MCP配置列表"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/mcps/configs [get]
 func (m *McpHandler) GetMCPConfigs(ctx *gin.Context) {
 	var req model.GetMCPConfigsReq
 
@@ -157,6 +199,17 @@ func (m *McpHandler) GetMCPConfigByID(ctx *gin.Context) {
 	})
 }
 
+// CreateMCPConfig 创建MCP配置
+// @Summary 创建MCP配置
+// @Description 创建新的MCP服务配置
+// @Tags MCP-Config
+// @Accept json
+// @Produce json
+// @Param request body model.CreateMCPConfigReq true "创建MCP配置请求"
+// @Success 200 {object} utils.ApiResponse "成功创建MCP配置"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/mcps/configs [post]
 func (m *McpHandler) CreateMCPConfig(ctx *gin.Context) {
 	var req model.CreateMCPConfigReq
 

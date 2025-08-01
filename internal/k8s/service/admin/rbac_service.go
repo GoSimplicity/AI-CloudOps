@@ -172,9 +172,12 @@ type rbacService struct {
 }
 
 // NewRBACService 创建新的RBAC服务实例
-// @param logger 日志记录器
-// @param k8sClient Kubernetes客户端
-// @return RBACService RBAC服务接口实例
+// 参数:
+//
+//	logger: 日志记录器
+//	k8sClient: Kubernetes客户端
+//
+// 返回: RBACService RBAC服务接口实例
 func NewRBACService(logger *zap.Logger, k8sClient client.K8sClient) RBACService {
 	return &rbacService{
 		logger:    logger,

@@ -71,6 +71,18 @@ func (k *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetConfigMapListByNamespace 根据命名空间获取 ConfigMap 列表
+// @Summary 获取ConfigMap列表
+// @Description 根据指定的集群ID和命名空间查询所有的ConfigMap资源
+// @Tags 配置管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse{data=[]interface{}} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/configmaps/{id} [get]
+// @Security BearerAuth
 func (k *K8sConfigMapHandler) GetConfigMapListByNamespace(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -90,6 +102,17 @@ func (k *K8sConfigMapHandler) GetConfigMapListByNamespace(ctx *gin.Context) {
 }
 
 // UpdateConfigMap 更新指定 Name 的 ConfigMap
+// @Summary 更新ConfigMap配置
+// @Description 修改指定ConfigMap的数据内容，支持键值对的增删改查
+// @Tags 配置管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sConfigMapRequest true "ConfigMap 更新信息"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/configmaps/update [post]
+// @Security BearerAuth
 func (k *K8sConfigMapHandler) UpdateConfigMap(ctx *gin.Context) {
 	var req model.K8sConfigMapRequest
 
@@ -99,6 +122,19 @@ func (k *K8sConfigMapHandler) UpdateConfigMap(ctx *gin.Context) {
 }
 
 // GetConfigMapYaml 获取 ConfigMap 的 YAML 配置
+// @Summary 获取ConfigMap的YAML配置
+// @Description 以YAML格式返回指定ConfigMap的完整配置信息
+// @Tags 配置管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param configmap_name query string true "ConfigMap 名称"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse{data=string} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/configmaps/{id}/yaml [get]
+// @Security BearerAuth
 func (k *K8sConfigMapHandler) GetConfigMapYaml(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -124,6 +160,17 @@ func (k *K8sConfigMapHandler) GetConfigMapYaml(ctx *gin.Context) {
 }
 
 // BatchDeleteConfigMaps 批量删除 ConfigMap
+// @Summary 批量删除ConfigMap
+// @Description 同时删除指定命名空间下的多个ConfigMap资源
+// @Tags 配置管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sConfigMapRequest true "批量删除请求"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/configmaps/batch_delete [delete]
+// @Security BearerAuth
 func (k *K8sConfigMapHandler) BatchDeleteConfigMaps(ctx *gin.Context) {
 	var req model.K8sConfigMapRequest
 
@@ -132,6 +179,20 @@ func (k *K8sConfigMapHandler) BatchDeleteConfigMaps(ctx *gin.Context) {
 	})
 }
 
+// DeleteConfigMaps 删除 ConfigMap
+// @Summary 删除单个ConfigMap
+// @Description 删除指定命名空间下的单个ConfigMap资源
+// @Tags 配置管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param configmap_name query string true "ConfigMap 名称"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/configmaps/delete/{id} [delete]
+// @Security BearerAuth
 func (k *K8sConfigMapHandler) DeleteConfigMaps(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -157,6 +218,17 @@ func (k *K8sConfigMapHandler) DeleteConfigMaps(ctx *gin.Context) {
 }
 
 // CreateConfigMapVersion 创建 ConfigMap 版本
+// @Summary 创建ConfigMap版本快照
+// @Description 为指定的ConfigMap创建一个版本快照，用于配置的历史管理和回滚
+// @Tags 配置管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sConfigMapVersionRequest true "版本创建请求"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/configmaps/versions/create [post]
+// @Security BearerAuth
 func (k *K8sConfigMapHandler) CreateConfigMapVersion(ctx *gin.Context) {
 	var req model.K8sConfigMapVersionRequest
 
@@ -166,6 +238,19 @@ func (k *K8sConfigMapHandler) CreateConfigMapVersion(ctx *gin.Context) {
 }
 
 // GetConfigMapVersions 获取 ConfigMap 版本列表
+// @Summary 获取ConfigMap版本历史
+// @Description 获取指定ConfigMap的所有历史版本记录，包括创建时间和版本说明
+// @Tags 配置管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param namespace query string true "命名空间名称"
+// @Param configmap_name query string true "ConfigMap 名称"
+// @Success 200 {object} utils.ApiResponse{data=[]interface{}} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/configmaps/{id}/versions [get]
+// @Security BearerAuth
 func (k *K8sConfigMapHandler) GetConfigMapVersions(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -194,6 +279,20 @@ func (k *K8sConfigMapHandler) GetConfigMapVersions(ctx *gin.Context) {
 }
 
 // GetConfigMapVersion 获取特定版本的 ConfigMap
+// @Summary 获取ConfigMap特定版本
+// @Description 获取指定版本号的ConfigMap详细配置信息和内容
+// @Tags 配置管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param namespace query string true "命名空间名称"
+// @Param configmap_name query string true "ConfigMap 名称"
+// @Param version query string true "版本号"
+// @Success 200 {object} utils.ApiResponse{data=interface{}} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/configmaps/{id}/versions/detail [get]
+// @Security BearerAuth
 func (k *K8sConfigMapHandler) GetConfigMapVersion(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -229,6 +328,20 @@ func (k *K8sConfigMapHandler) GetConfigMapVersion(ctx *gin.Context) {
 }
 
 // DeleteConfigMapVersion 删除 ConfigMap 版本
+// @Summary 删除ConfigMap版本
+// @Description 删除指定版本的ConfigMap历史记录（不影响当前活跃版本）
+// @Tags 配置管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param namespace query string true "命名空间名称"
+// @Param configmap_name query string true "ConfigMap 名称"
+// @Param version query string true "版本号"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/configmaps/{id}/versions/delete [delete]
+// @Security BearerAuth
 func (k *K8sConfigMapHandler) DeleteConfigMapVersion(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -264,6 +377,17 @@ func (k *K8sConfigMapHandler) DeleteConfigMapVersion(ctx *gin.Context) {
 }
 
 // HotReloadConfigMap 热重载 ConfigMap
+// @Summary 热重载ConfigMap配置
+// @Description 对使用指定ConfigMap的Pod进行热重载，使更新后的配置立即生效
+// @Tags 配置管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sConfigMapHotReloadRequest true "热重载请求"
+// @Success 200 {object} utils.ApiResponse{data=interface{}} "重载成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/configmaps/hot_reload [post]
+// @Security BearerAuth
 func (k *K8sConfigMapHandler) HotReloadConfigMap(ctx *gin.Context) {
 	var req model.K8sConfigMapHotReloadRequest
 
@@ -273,6 +397,17 @@ func (k *K8sConfigMapHandler) HotReloadConfigMap(ctx *gin.Context) {
 }
 
 // RollbackConfigMap 回滚 ConfigMap
+// @Summary 回滚 ConfigMap到指定版本
+// @Description 将ConfigMap配置回滚到指定的历史版本，用于快速恢复配置
+// @Tags 配置管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sConfigMapRollbackRequest true "回滚请求"
+// @Success 200 {object} utils.ApiResponse "回滚成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/configmaps/rollback [post]
+// @Security BearerAuth
 func (k *K8sConfigMapHandler) RollbackConfigMap(ctx *gin.Context) {
 	var req model.K8sConfigMapRollbackRequest
 

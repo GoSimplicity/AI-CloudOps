@@ -61,6 +61,17 @@ func (k *K8sPVHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetPVs 获取 PV 列表
+// @Summary 获取PV列表
+// @Description 获取指定集群中所有的持久卷(PV)资源列表
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Success 200 {object} utils.ApiResponse{data=[]interface{}} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvs/{id} [get]
+// @Security BearerAuth
 func (k *K8sPVHandler) GetPVs(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -75,6 +86,17 @@ func (k *K8sPVHandler) GetPVs(ctx *gin.Context) {
 }
 
 // CreatePV 创建 PV
+// @Summary 创建PV
+// @Description 在指定集群中创建新的持久卷(PV)资源
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sPVRequest true "PV创建信息"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvs/create [post]
+// @Security BearerAuth
 func (k *K8sPVHandler) CreatePV(ctx *gin.Context) {
 	var req model.K8sPVRequest
 
@@ -84,6 +106,17 @@ func (k *K8sPVHandler) CreatePV(ctx *gin.Context) {
 }
 
 // BatchDeletePV 批量删除 PV
+// @Summary 批量删除PV
+// @Description 同时删除多个持久卷(PV)资源
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sPVRequest true "批量删除请求"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvs/batch_delete [delete]
+// @Security BearerAuth
 func (k *K8sPVHandler) BatchDeletePV(ctx *gin.Context) {
 	var req model.K8sPVRequest
 
@@ -93,6 +126,18 @@ func (k *K8sPVHandler) BatchDeletePV(ctx *gin.Context) {
 }
 
 // GetPVYaml 获取 PV 的 YAML 配置
+// @Summary 获取PV的YAML配置
+// @Description 以YAML格式返回指定PV的完整配置信息
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param pv_name query string true "PV名称"
+// @Success 200 {object} utils.ApiResponse{data=string} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvs/{id}/yaml [get]
+// @Security BearerAuth
 func (k *K8sPVHandler) GetPVYaml(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -114,6 +159,18 @@ func (k *K8sPVHandler) GetPVYaml(ctx *gin.Context) {
 }
 
 // DeletePV 删除指定的 PV
+// @Summary 删除单个PV
+// @Description 删除指定的持久卷(PV)资源
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param pv_name query string true "PV名称"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvs/delete/{id} [delete]
+// @Security BearerAuth
 func (k *K8sPVHandler) DeletePV(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -135,6 +192,18 @@ func (k *K8sPVHandler) DeletePV(ctx *gin.Context) {
 }
 
 // GetPVStatus 获取 PV 状态
+// @Summary 获取PV状态
+// @Description 获取指定PV的详细状态信息，包括绑定状态、容量等
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param pv_name query string true "PV名称"
+// @Success 200 {object} utils.ApiResponse{data=interface{}} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvs/{id}/status [get]
+// @Security BearerAuth
 func (k *K8sPVHandler) GetPVStatus(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -156,6 +225,18 @@ func (k *K8sPVHandler) GetPVStatus(ctx *gin.Context) {
 }
 
 // GetPVCapacity 获取 PV 容量信息
+// @Summary 获取PV容量信息
+// @Description 获取指定PV的容量详细信息和使用情况
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param pv_name query string true "PV名称"
+// @Success 200 {object} utils.ApiResponse{data=interface{}} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvs/{id}/capacity [get]
+// @Security BearerAuth
 func (k *K8sPVHandler) GetPVCapacity(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

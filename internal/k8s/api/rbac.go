@@ -43,9 +43,6 @@ type K8sRBACHandler struct {
 }
 
 // NewK8sRBACHandler 创建新的RBAC API处理器实例
-// @param logger 日志记录器
-// @param rbacService RBAC服务实例
-// @return *K8sRBACHandler RBAC API处理器实例
 func NewK8sRBACHandler(logger *zap.Logger, rbacService admin.RBACService) *K8sRBACHandler {
 	return &K8sRBACHandler{
 		logger:      logger,
@@ -54,7 +51,6 @@ func NewK8sRBACHandler(logger *zap.Logger, rbacService admin.RBACService) *K8sRB
 }
 
 // RegisterRouters 注册RBAC相关的路由
-// @param router Gin路由引擎实例
 func (h *K8sRBACHandler) RegisterRouters(router *gin.Engine) {
 	// 创建API分组
 	k8sGroup := router.Group("/api/k8s")
@@ -126,14 +122,14 @@ func (h *K8sRBACHandler) RegisterRouters(router *gin.Engine) {
 // GetRolesByNamespace 获取指定命名空间的所有Role
 // @Summary 获取Role列表
 // @Description 根据集群ID和命名空间获取所有Role资源
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
-// @Success 200 {object} utils.Response{data=[]model.K8sRole} "成功返回Role列表"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse{data=[]model.K8sRole} "成功返回Role列表"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/roles/{cluster_id}/{namespace} [get]
 func (h *K8sRBACHandler) GetRolesByNamespace(c *gin.Context) {
 	// 解析路径参数
@@ -164,16 +160,16 @@ func (h *K8sRBACHandler) GetRolesByNamespace(c *gin.Context) {
 // GetRole 获取指定Role详情
 // @Summary 获取Role详情
 // @Description 根据集群ID、命名空间和Role名称获取Role详细信息
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
 // @Param name path string true "Role名称"
-// @Success 200 {object} utils.Response{data=model.K8sRole} "成功返回Role详情"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 404 {object} utils.Response "Role未找到"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功返回Role详情"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 404 {object} utils.ApiResponse "Role未找到"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/roles/{cluster_id}/{namespace}/{name} [get]
 func (h *K8sRBACHandler) GetRole(c *gin.Context) {
 	// 解析路径参数
@@ -205,13 +201,13 @@ func (h *K8sRBACHandler) GetRole(c *gin.Context) {
 // CreateRole 创建Role
 // @Summary 创建Role
 // @Description 在指定集群和命名空间中创建新的Role
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param request body model.CreateK8sRoleRequest true "创建Role请求参数"
-// @Success 200 {object} utils.Response "成功创建Role"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功创建Role"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/roles/{cluster_id}/{namespace} [post]
 func (h *K8sRBACHandler) CreateRole(c *gin.Context) {
 	// 解析路径参数
@@ -254,13 +250,13 @@ func (h *K8sRBACHandler) CreateRole(c *gin.Context) {
 // UpdateRole 更新Role
 // @Summary 更新Role
 // @Description 更新指定Role的配置信息
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param request body model.UpdateK8sRoleRequest true "更新Role请求参数"
-// @Success 200 {object} utils.Response "成功更新Role"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功更新Role"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/roles/{cluster_id}/{namespace}/{name} [put]
 func (h *K8sRBACHandler) UpdateRole(c *gin.Context) {
 	// 解析路径参数
@@ -305,15 +301,15 @@ func (h *K8sRBACHandler) UpdateRole(c *gin.Context) {
 // DeleteRole 删除Role
 // @Summary 删除Role
 // @Description 删除指定的Role资源
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
 // @Param name path string true "Role名称"
-// @Success 200 {object} utils.Response "成功删除Role"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功删除Role"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/roles/{cluster_id}/{namespace}/{name} [delete]
 func (h *K8sRBACHandler) DeleteRole(c *gin.Context) {
 	// 解析路径参数
@@ -353,13 +349,13 @@ func (h *K8sRBACHandler) DeleteRole(c *gin.Context) {
 // GetClusterRoles 获取集群所有ClusterRole
 // @Summary 获取ClusterRole列表
 // @Description 根据集群ID获取所有ClusterRole资源
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
-// @Success 200 {object} utils.Response{data=[]model.K8sClusterRole} "成功返回ClusterRole列表"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse{data=[]model.K8sClusterRole} "成功返回ClusterRole列表"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/cluster-roles/{cluster_id} [get]
 func (h *K8sRBACHandler) GetClusterRoles(c *gin.Context) {
 	// 解析路径参数
@@ -384,15 +380,15 @@ func (h *K8sRBACHandler) GetClusterRoles(c *gin.Context) {
 // GetClusterRole 获取指定ClusterRole详情
 // @Summary 获取ClusterRole详情
 // @Description 根据集群ID和ClusterRole名称获取ClusterRole详细信息
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param name path string true "ClusterRole名称"
-// @Success 200 {object} utils.Response{data=model.K8sClusterRole} "成功返回ClusterRole详情"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 404 {object} utils.Response "ClusterRole未找到"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功返回ClusterRole详情"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 404 {object} utils.ApiResponse "ClusterRole未找到"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/cluster-roles/{cluster_id}/{name} [get]
 func (h *K8sRBACHandler) GetClusterRole(c *gin.Context) {
 	// 解析路径参数
@@ -423,13 +419,13 @@ func (h *K8sRBACHandler) GetClusterRole(c *gin.Context) {
 // CreateClusterRole 创建ClusterRole
 // @Summary 创建ClusterRole
 // @Description 在指定集群中创建新的ClusterRole
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param request body model.CreateClusterRoleRequest true "创建ClusterRole请求参数"
-// @Success 200 {object} utils.Response "成功创建ClusterRole"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功创建ClusterRole"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/cluster-roles/{cluster_id} [post]
 func (h *K8sRBACHandler) CreateClusterRole(c *gin.Context) {
 	// 解析路径参数
@@ -465,13 +461,13 @@ func (h *K8sRBACHandler) CreateClusterRole(c *gin.Context) {
 // UpdateClusterRole 更新ClusterRole
 // @Summary 更新ClusterRole
 // @Description 更新指定ClusterRole的配置信息
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param request body model.UpdateClusterRoleRequest true "更新ClusterRole请求参数"
-// @Success 200 {object} utils.Response "成功更新ClusterRole"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功更新ClusterRole"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/cluster-roles/{cluster_id}/{name} [put]
 func (h *K8sRBACHandler) UpdateClusterRole(c *gin.Context) {
 	// 解析路径参数
@@ -514,14 +510,14 @@ func (h *K8sRBACHandler) UpdateClusterRole(c *gin.Context) {
 // DeleteClusterRole 删除ClusterRole
 // @Summary 删除ClusterRole
 // @Description 删除指定的ClusterRole资源
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param name path string true "ClusterRole名称"
-// @Success 200 {object} utils.Response "成功删除ClusterRole"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功删除ClusterRole"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/cluster-roles/{cluster_id}/{name} [delete]
 func (h *K8sRBACHandler) DeleteClusterRole(c *gin.Context) {
 	// 解析路径参数
@@ -559,14 +555,14 @@ func (h *K8sRBACHandler) DeleteClusterRole(c *gin.Context) {
 // GetRoleBindingsByNamespace 获取指定命名空间的所有RoleBinding
 // @Summary 获取RoleBinding列表
 // @Description 根据集群ID和命名空间获取所有RoleBinding资源
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
-// @Success 200 {object} utils.Response{data=[]model.K8sRoleBinding} "成功返回RoleBinding列表"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse{data=[]model.K8sRoleBinding} "成功返回RoleBinding列表"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/role-bindings/{cluster_id}/{namespace} [get]
 func (h *K8sRBACHandler) GetRoleBindingsByNamespace(c *gin.Context) {
 	// 解析路径参数
@@ -597,16 +593,16 @@ func (h *K8sRBACHandler) GetRoleBindingsByNamespace(c *gin.Context) {
 // GetRoleBinding 获取指定RoleBinding详情
 // @Summary 获取RoleBinding详情
 // @Description 根据集群ID、命名空间和RoleBinding名称获取RoleBinding详细信息
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
 // @Param name path string true "RoleBinding名称"
-// @Success 200 {object} utils.Response{data=model.K8sRoleBinding} "成功返回RoleBinding详情"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 404 {object} utils.Response "RoleBinding未找到"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功返回RoleBinding详情"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 404 {object} utils.ApiResponse "RoleBinding未找到"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/role-bindings/{cluster_id}/{namespace}/{name} [get]
 func (h *K8sRBACHandler) GetRoleBinding(c *gin.Context) {
 	// 解析路径参数
@@ -638,15 +634,15 @@ func (h *K8sRBACHandler) GetRoleBinding(c *gin.Context) {
 // CreateRoleBinding 创建RoleBinding
 // @Summary 创建RoleBinding
 // @Description 在指定集群和命名空间中创建新的RoleBinding
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
 // @Param request body model.CreateRoleBindingRequest true "创建RoleBinding请求参数"
-// @Success 200 {object} utils.Response "成功创建RoleBinding"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功创建RoleBinding"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/role-bindings/{cluster_id}/{namespace} [post]
 func (h *K8sRBACHandler) CreateRoleBinding(c *gin.Context) {
 	// 解析路径参数
@@ -689,16 +685,16 @@ func (h *K8sRBACHandler) CreateRoleBinding(c *gin.Context) {
 // UpdateRoleBinding 更新RoleBinding
 // @Summary 更新RoleBinding
 // @Description 更新指定RoleBinding的配置信息
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
 // @Param name path string true "RoleBinding名称"
 // @Param request body model.UpdateRoleBindingRequest true "更新RoleBinding请求参数"
-// @Success 200 {object} utils.Response "成功更新RoleBinding"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功更新RoleBinding"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/role-bindings/{cluster_id}/{namespace}/{name} [put]
 func (h *K8sRBACHandler) UpdateRoleBinding(c *gin.Context) {
 	// 解析路径参数
@@ -743,15 +739,15 @@ func (h *K8sRBACHandler) UpdateRoleBinding(c *gin.Context) {
 // DeleteRoleBinding 删除RoleBinding
 // @Summary 删除RoleBinding
 // @Description 删除指定的RoleBinding资源
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
 // @Param name path string true "RoleBinding名称"
-// @Success 200 {object} utils.Response "成功删除RoleBinding"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功删除RoleBinding"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/role-bindings/{cluster_id}/{namespace}/{name} [delete]
 func (h *K8sRBACHandler) DeleteRoleBinding(c *gin.Context) {
 	// 解析路径参数
@@ -791,13 +787,13 @@ func (h *K8sRBACHandler) DeleteRoleBinding(c *gin.Context) {
 // GetClusterRoleBindings 获取集群所有ClusterRoleBinding
 // @Summary 获取ClusterRoleBinding列表
 // @Description 根据集群ID获取所有ClusterRoleBinding资源
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
-// @Success 200 {object} utils.Response{data=[]model.K8sClusterRoleBinding} "成功返回ClusterRoleBinding列表"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse{data=[]model.K8sClusterRoleBinding} "成功返回ClusterRoleBinding列表"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/cluster-role-bindings/{cluster_id} [get]
 func (h *K8sRBACHandler) GetClusterRoleBindings(c *gin.Context) {
 	// 解析路径参数
@@ -822,15 +818,15 @@ func (h *K8sRBACHandler) GetClusterRoleBindings(c *gin.Context) {
 // GetClusterRoleBinding 获取指定ClusterRoleBinding详情
 // @Summary 获取ClusterRoleBinding详情
 // @Description 根据集群ID和ClusterRoleBinding名称获取ClusterRoleBinding详细信息
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param name path string true "ClusterRoleBinding名称"
-// @Success 200 {object} utils.Response{data=model.K8sClusterRoleBinding} "成功返回ClusterRoleBinding详情"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 404 {object} utils.Response "ClusterRoleBinding未找到"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功返回ClusterRoleBinding详情"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 404 {object} utils.ApiResponse "ClusterRoleBinding未找到"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/cluster-role-bindings/{cluster_id}/{name} [get]
 func (h *K8sRBACHandler) GetClusterRoleBinding(c *gin.Context) {
 	// 解析路径参数
@@ -861,14 +857,14 @@ func (h *K8sRBACHandler) GetClusterRoleBinding(c *gin.Context) {
 // CreateClusterRoleBinding 创建ClusterRoleBinding
 // @Summary 创建ClusterRoleBinding
 // @Description 在指定集群中创建新的ClusterRoleBinding
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param request body model.CreateClusterRoleBindingRequest true "创建ClusterRoleBinding请求参数"
-// @Success 200 {object} utils.Response "成功创建ClusterRoleBinding"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功创建ClusterRoleBinding"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/cluster-role-bindings/{cluster_id} [post]
 func (h *K8sRBACHandler) CreateClusterRoleBinding(c *gin.Context) {
 	// 解析路径参数
@@ -904,15 +900,15 @@ func (h *K8sRBACHandler) CreateClusterRoleBinding(c *gin.Context) {
 // UpdateClusterRoleBinding 更新ClusterRoleBinding
 // @Summary 更新ClusterRoleBinding
 // @Description 更新指定ClusterRoleBinding的配置信息
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param name path string true "ClusterRoleBinding名称"
 // @Param request body model.UpdateClusterRoleBindingRequest true "更新ClusterRoleBinding请求参数"
-// @Success 200 {object} utils.Response "成功更新ClusterRoleBinding"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功更新ClusterRoleBinding"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/cluster-role-bindings/{cluster_id}/{name} [put]
 func (h *K8sRBACHandler) UpdateClusterRoleBinding(c *gin.Context) {
 	// 解析路径参数
@@ -955,14 +951,14 @@ func (h *K8sRBACHandler) UpdateClusterRoleBinding(c *gin.Context) {
 // DeleteClusterRoleBinding 删除ClusterRoleBinding
 // @Summary 删除ClusterRoleBinding
 // @Description 删除指定的ClusterRoleBinding资源
-// @Tags RBAC
+// @Tags RBAC权限管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param name path string true "ClusterRoleBinding名称"
-// @Success 200 {object} utils.Response "成功删除ClusterRoleBinding"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功删除ClusterRoleBinding"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/rbac/cluster-role-bindings/{cluster_id}/{name} [delete]
 func (h *K8sRBACHandler) DeleteClusterRoleBinding(c *gin.Context) {
 	// 解析路径参数

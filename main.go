@@ -35,6 +35,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/GoSimplicity/AI-CloudOps/docs"
 	"github.com/GoSimplicity/AI-CloudOps/mock"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/di"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -44,10 +45,32 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+// @title           AI-CloudOps API
+// @version         1.0
+// @description     AI-CloudOps云原生运维平台API文档
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   Bamboo Team
+// @contact.url    https://github.com/GoSimplicity/AI-CloudOps
+// @contact.email  support@example.com
+
+// @license.name  MIT
+// @license.url   https://opensource.org/licenses/MIT
+
+// @host      localhost:8889
+// @BasePath  /
+
+// @securityDefinitions.apikey  BearerAuth
+// @in                          header
+// @name                        Authorization
+// @description					Bearer Token认证
 
 func main() {
 	if err := run(); err != nil {
@@ -90,6 +113,9 @@ func run() error {
 			"status":  "running",
 		})
 	})
+
+	// 注册Swagger文档路由
+	cmd.Server.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// mock数据
 	if viper.GetBool("mock.enabled") && di.IsDBAvailable(db) {

@@ -62,6 +62,18 @@ func (k *K8sPVCHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetPVCsByNamespace 根据命名空间获取 PVC 列表
+// @Summary 获取PVC列表
+// @Description 根据指定的集群ID和命名空间查询所有的持久卷声明(PVC)资源
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse{data=[]interface{}} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvcs/{id} [get]
+// @Security BearerAuth
 func (k *K8sPVCHandler) GetPVCsByNamespace(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -83,6 +95,17 @@ func (k *K8sPVCHandler) GetPVCsByNamespace(ctx *gin.Context) {
 }
 
 // CreatePVC 创建 PVC
+// @Summary 创建PVC
+// @Description 在指定集群的命名空间中创建新的持久卷声明(PVC)资源
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sPVCRequest true "PVC创建信息"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvcs/create [post]
+// @Security BearerAuth
 func (k *K8sPVCHandler) CreatePVC(ctx *gin.Context) {
 	var req model.K8sPVCRequest
 
@@ -92,6 +115,17 @@ func (k *K8sPVCHandler) CreatePVC(ctx *gin.Context) {
 }
 
 // BatchDeletePVC 批量删除 PVC
+// @Summary 批量删除PVC
+// @Description 同时删除指定命名空间下的多个PVC资源
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sPVCRequest true "批量删除请求"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvcs/batch_delete [delete]
+// @Security BearerAuth
 func (k *K8sPVCHandler) BatchDeletePVC(ctx *gin.Context) {
 	var req model.K8sPVCRequest
 
@@ -101,6 +135,19 @@ func (k *K8sPVCHandler) BatchDeletePVC(ctx *gin.Context) {
 }
 
 // GetPVCYaml 获取 PVC 的 YAML 配置
+// @Summary 获取PVC的YAML配置
+// @Description 以YAML格式返回指定PVC的完整配置信息
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param pvc_name query string true "PVC名称"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse{data=string} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvcs/{id}/yaml [get]
+// @Security BearerAuth
 func (k *K8sPVCHandler) GetPVCYaml(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -129,6 +176,19 @@ func (k *K8sPVCHandler) GetPVCYaml(ctx *gin.Context) {
 }
 
 // DeletePVC 删除指定的 PVC
+// @Summary 删除单个PVC
+// @Description 删除指定命名空间下的单个PVC资源
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param pvc_name query string true "PVC名称"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvcs/delete/{id} [delete]
+// @Security BearerAuth
 func (k *K8sPVCHandler) DeletePVC(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -157,6 +217,19 @@ func (k *K8sPVCHandler) DeletePVC(ctx *gin.Context) {
 }
 
 // GetPVCStatus 获取 PVC 状态
+// @Summary 获取PVC状态
+// @Description 获取指定PVC的详细状态信息，包括绑定状态、容量等
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param pvc_name query string true "PVC名称"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse{data=interface{}} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvcs/{id}/status [get]
+// @Security BearerAuth
 func (k *K8sPVCHandler) GetPVCStatus(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -185,6 +258,19 @@ func (k *K8sPVCHandler) GetPVCStatus(ctx *gin.Context) {
 }
 
 // GetPVCBinding 获取 PVC 绑定状态
+// @Summary 获取PVC绑定状态
+// @Description 获取PVC与PV的绑定关系和状态信息
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param pvc_name query string true "PVC名称"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse{data=interface{}} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvcs/{id}/binding [get]
+// @Security BearerAuth
 func (k *K8sPVCHandler) GetPVCBinding(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -213,6 +299,19 @@ func (k *K8sPVCHandler) GetPVCBinding(ctx *gin.Context) {
 }
 
 // GetPVCCapacityRequest 获取 PVC 容量请求
+// @Summary 获取PVC容量请求
+// @Description 获取PVC的容量请求和使用情况的详细信息
+// @Tags 存储卷管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param pvc_name query string true "PVC名称"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse{data=interface{}} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/pvcs/{id}/capacity [get]
+// @Security BearerAuth
 func (k *K8sPVCHandler) GetPVCCapacityRequest(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

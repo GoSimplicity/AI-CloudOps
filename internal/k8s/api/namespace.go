@@ -61,6 +61,15 @@ func (k *K8sNamespaceHandler) RegisterRouters(router *gin.Engine) {
 }
 
 // GetClusterNamespacesForCascade 获取级联选择的命名空间列表
+// @Summary 获取级联选择的命名空间列表
+// @Description 获取所有集群的命名空间列表，用于级联选择器展示
+// @Tags 命名空间管理
+// @Accept json
+// @Produce json
+// @Success 200 {object} utils.ApiResponse{data=[]model.ClusterNamespaces} "获取成功"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/namespaces/list [get]
+// @Security BearerAuth
 func (k *K8sNamespaceHandler) GetClusterNamespacesForCascade(ctx *gin.Context) {
 	namespaces, err := k.namespaceService.GetClusterNamespacesList(ctx)
 	if err != nil {
@@ -73,6 +82,17 @@ func (k *K8sNamespaceHandler) GetClusterNamespacesForCascade(ctx *gin.Context) {
 }
 
 // GetClusterNamespacesForSelect 获取用于选择的命名空间列表
+// @Summary 获取指定集群的命名空间列表
+// @Description 根据集群ID获取该集群下的所有命名空间列表，用于选择器展示
+// @Tags 命名空间管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Success 200 {object} utils.ApiResponse{data=[]model.Namespace} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/namespaces/select/{id} [get]
+// @Security BearerAuth
 func (k *K8sNamespaceHandler) GetClusterNamespacesForSelect(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -90,6 +110,17 @@ func (k *K8sNamespaceHandler) GetClusterNamespacesForSelect(ctx *gin.Context) {
 }
 
 // CreateNamespace 创建新的命名空间
+// @Summary 创建新的命名空间
+// @Description 在指定的Kubernetes集群中创建新的命名空间
+// @Tags 命名空间管理
+// @Accept json
+// @Produce json
+// @Param request body model.CreateNamespaceRequest true "创建命名空间请求"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/namespaces/create [post]
+// @Security BearerAuth
 func (k *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
 	var req model.CreateNamespaceRequest
 
@@ -99,6 +130,18 @@ func (k *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
 }
 
 // DeleteNamespace 删除指定的命名空间
+// @Summary 删除指定的命名空间
+// @Description 从指定的Kubernetes集群中删除命名空间
+// @Tags 命名空间管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param name query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/namespaces/delete/{id} [delete]
+// @Security BearerAuth
 func (k *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -118,6 +161,18 @@ func (k *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
 }
 
 // GetNamespaceDetails 获取指定命名空间的详情
+// @Summary 获取命名空间详情
+// @Description 获取指定集群中某个命名空间的详细信息
+// @Tags 命名空间管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param name query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/namespaces/{id} [get]
+// @Security BearerAuth
 func (k *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -137,6 +192,17 @@ func (k *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 }
 
 // UpdateNamespace 更新指定命名空间
+// @Summary 更新命名空间
+// @Description 更新指定集群中某个命名空间的标签和注解
+// @Tags 命名空间管理
+// @Accept json
+// @Produce json
+// @Param request body model.UpdateNamespaceRequest true "更新命名空间请求"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/namespaces/update [post]
+// @Security BearerAuth
 func (k *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
 	var req model.UpdateNamespaceRequest
 
@@ -146,6 +212,18 @@ func (k *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
 }
 
 // GetNamespaceResources 获取指定命名空间中的资源
+// @Summary 获取命名空间资源
+// @Description 获取指定集群中某个命名空间下的所有资源列表
+// @Tags 命名空间管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param name query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse{data=[]model.Resource} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/namespaces/{id}/resources [get]
+// @Security BearerAuth
 func (k *K8sNamespaceHandler) GetNamespaceResources(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -165,6 +243,18 @@ func (k *K8sNamespaceHandler) GetNamespaceResources(ctx *gin.Context) {
 }
 
 // GetNamespaceEvents 获取指定命名空间中的事件
+// @Summary 获取命名空间事件
+// @Description 获取指定集群中某个命名空间下的所有事件列表
+// @Tags 命名空间管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param name query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse{data=[]model.Event} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/namespaces/{id}/events [get]
+// @Security BearerAuth
 func (k *K8sNamespaceHandler) GetNamespaceEvents(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

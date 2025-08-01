@@ -62,6 +62,17 @@ func (k *K8sEndpointHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetEndpointsByNamespace 根据命名空间获取 Endpoint 列表
+// @Summary 获取 Endpoint 列表
+// @Description 根据集群ID和命名空间获取Endpoint资源列表
+// @Tags Kubernetes-Endpoint
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse{data=[]model.K8sEndpointStatus} "成功获取Endpoint列表"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/endpoints/{id} [get]
 func (k *K8sEndpointHandler) GetEndpointsByNamespace(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -83,6 +94,16 @@ func (k *K8sEndpointHandler) GetEndpointsByNamespace(ctx *gin.Context) {
 }
 
 // CreateEndpoint 创建 Endpoint
+// @Summary 创建 Endpoint
+// @Description 在指定命名空间中创建新的Endpoint资源
+// @Tags Kubernetes-Endpoint
+// @Accept json
+// @Produce json
+// @Param request body model.K8sEndpointRequest true "Endpoint创建请求"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/endpoints/create [post]
 func (k *K8sEndpointHandler) CreateEndpoint(ctx *gin.Context) {
 	var req model.K8sEndpointRequest
 
@@ -92,6 +113,16 @@ func (k *K8sEndpointHandler) CreateEndpoint(ctx *gin.Context) {
 }
 
 // BatchDeleteEndpoint 批量删除 Endpoint
+// @Summary 批量删除 Endpoint
+// @Description 批量删除指定命名空间中的多个Endpoint资源
+// @Tags Kubernetes-Endpoint
+// @Accept json
+// @Produce json
+// @Param request body model.K8sEndpointRequest true "批量删除请求"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/endpoints/batch_delete [delete]
 func (k *K8sEndpointHandler) BatchDeleteEndpoint(ctx *gin.Context) {
 	var req model.K8sEndpointRequest
 
@@ -101,6 +132,18 @@ func (k *K8sEndpointHandler) BatchDeleteEndpoint(ctx *gin.Context) {
 }
 
 // GetEndpointYaml 获取 Endpoint 的 YAML 配置
+// @Summary 获取 Endpoint YAML
+// @Description 获取指定Endpoint的YAML配置文件
+// @Tags Kubernetes-Endpoint
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param endpoint_name query string true "Endpoint名称"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse{data=string} "成功获取YAML配置"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/endpoints/{id}/yaml [get]
 func (k *K8sEndpointHandler) GetEndpointYaml(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -129,6 +172,18 @@ func (k *K8sEndpointHandler) GetEndpointYaml(ctx *gin.Context) {
 }
 
 // DeleteEndpoint 删除指定的 Endpoint
+// @Summary 删除 Endpoint
+// @Description 删除指定命名空间中的Endpoint资源
+// @Tags Kubernetes-Endpoint
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param endpoint_name query string true "Endpoint名称"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/endpoints/delete/{id} [delete]
 func (k *K8sEndpointHandler) DeleteEndpoint(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -157,6 +212,18 @@ func (k *K8sEndpointHandler) DeleteEndpoint(ctx *gin.Context) {
 }
 
 // GetEndpointStatus 获取 Endpoint 状态
+// @Summary 获取 Endpoint 状态
+// @Description 获取指定Endpoint的状态信息
+// @Tags Kubernetes-Endpoint
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param endpoint_name query string true "Endpoint名称"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse "成功获取状态"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/endpoints/{id}/status [get]
 func (k *K8sEndpointHandler) GetEndpointStatus(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -185,6 +252,18 @@ func (k *K8sEndpointHandler) GetEndpointStatus(ctx *gin.Context) {
 }
 
 // CheckEndpointHealth 检查 Endpoint 健康状态
+// @Summary 检查 Endpoint 健康状态
+// @Description 检查指定Endpoint的健康状态和可用性
+// @Tags Kubernetes-Endpoint
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param endpoint_name query string true "Endpoint名称"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse{data=interface{}} "成功获取健康状态"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/endpoints/{id}/health [get]
 func (k *K8sEndpointHandler) CheckEndpointHealth(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -213,6 +292,18 @@ func (k *K8sEndpointHandler) CheckEndpointHealth(ctx *gin.Context) {
 }
 
 // GetEndpointService 获取 Endpoint 关联的 Service
+// @Summary 获取关联的 Service
+// @Description 获取指定Endpoint关联的Service信息
+// @Tags Kubernetes-Endpoint
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param endpoint_name query string true "Endpoint名称"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse{data=interface{}} "成功获取关联Service"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/endpoints/{id}/service [get]
 func (k *K8sEndpointHandler) GetEndpointService(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

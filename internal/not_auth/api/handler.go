@@ -48,6 +48,17 @@ func (n *NotAuthHandler) RegisterRouters(server *gin.Engine) {
 	notAuthGroup.GET("/getBindIps", n.GetBindIps)
 }
 
+// GetBindIps 获取绑定IP地址
+// @Summary 获取绑定IP地址
+// @Description 根据IP地址获取Prometheus服务发现配置
+// @Tags 非认证接口
+// @Accept json
+// @Produce json
+// @Param ipAddress query string true "IP地址"
+// @Success 200 {object} interface{} "成功返回服务发现配置"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/not_auth/getBindIps [get]
 func (n *NotAuthHandler) GetBindIps(ctx *gin.Context) {
 	ipAddress := ctx.Query("ipAddress")
 	if ipAddress == "" {

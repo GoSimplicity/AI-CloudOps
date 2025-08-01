@@ -54,6 +54,18 @@ func (h *InstanceTimeLineHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // CreateInstanceTimeLine 创建工单时间线记录
+// @Summary 创建工单时间线记录
+// @Description 为指定工单实例创建新的时间线记录
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param request body model.CreateWorkorderInstanceTimelineReq true "创建时间线记录请求参数"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/timeline/create [post]
+// CreateInstanceTimeLine 创建工单时间线记录
 func (h *InstanceTimeLineHandler) CreateInstanceTimeLine(ctx *gin.Context) {
 	var req model.CreateWorkorderInstanceTimelineReq
 	user := ctx.MustGet("user").(utils.UserClaims)
@@ -63,6 +75,19 @@ func (h *InstanceTimeLineHandler) CreateInstanceTimeLine(ctx *gin.Context) {
 	})
 }
 
+// UpdateInstanceTimeLine 更新工单时间线记录
+// @Summary 更新工单时间线记录
+// @Description 更新指定的工单时间线记录信息
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "时间线记录ID"
+// @Param request body model.UpdateWorkorderInstanceTimelineReq true "更新时间线记录请求参数"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/timeline/update/{id} [put]
 // UpdateInstanceTimeLine 更新工单时间线记录
 func (h *InstanceTimeLineHandler) UpdateInstanceTimeLine(ctx *gin.Context) {
 	var req model.UpdateWorkorderInstanceTimelineReq
@@ -82,6 +107,18 @@ func (h *InstanceTimeLineHandler) UpdateInstanceTimeLine(ctx *gin.Context) {
 }
 
 // DeleteInstanceTimeLine 删除工单时间线记录
+// @Summary 删除工单时间线记录
+// @Description 删除指定的工单时间线记录
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "时间线记录ID"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/timeline/delete/{id} [delete]
+// DeleteInstanceTimeLine 删除工单时间线记录
 func (h *InstanceTimeLineHandler) DeleteInstanceTimeLine(ctx *gin.Context) {
 	var req model.DeleteWorkorderInstanceTimelineReq
 
@@ -100,6 +137,18 @@ func (h *InstanceTimeLineHandler) DeleteInstanceTimeLine(ctx *gin.Context) {
 }
 
 // DetailInstanceTimeLine 获取工单时间线记录详情
+// @Summary 获取工单时间线记录详情
+// @Description 获取指定工单时间线记录的详细信息
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "时间线记录ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/timeline/detail/{id} [get]
+// DetailInstanceTimeLine 获取工单时间线记录详情
 func (h *InstanceTimeLineHandler) DetailInstanceTimeLine(ctx *gin.Context) {
 	var req model.DetailWorkorderInstanceTimelineReq
 
@@ -115,6 +164,20 @@ func (h *InstanceTimeLineHandler) DetailInstanceTimeLine(ctx *gin.Context) {
 	})
 }
 
+// ListInstanceTimeLine 获取工单时间线记录列表
+// @Summary 获取工单时间线记录列表
+// @Description 分页获取工单时间线记录列表
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param page query int false "页码"
+// @Param size query int false "每页数量"
+// @Param instanceId query int false "工单实例ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/timeline/list [get]
 // ListInstanceTimeLine 获取工单时间线记录列表
 func (h *InstanceTimeLineHandler) ListInstanceTimeLine(ctx *gin.Context) {
 	var req model.ListWorkorderInstanceTimelineReq

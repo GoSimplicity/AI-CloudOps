@@ -50,11 +50,11 @@ func (k *K8sIngressHandler) RegisterRouters(server *gin.Engine) {
 
 	ingresses := k8sGroup.Group("/ingresses")
 	{
-		ingresses.GET("/:id", k.GetIngressesByNamespace)          // 根据命名空间获取 Ingress 列表
-		ingresses.POST("/create", k.CreateIngress)               // 创建 Ingress
-		ingresses.POST("/update", k.UpdateIngress)               // 更新 Ingress
-		ingresses.DELETE("/delete/:id", k.DeleteIngress)         // 删除指定 Ingress
-		ingresses.DELETE("/batch_delete", k.BatchDeleteIngress)  // 批量删除 Ingress
+		ingresses.GET("/:id", k.GetIngressesByNamespace)        // 根据命名空间获取 Ingress 列表
+		ingresses.POST("/create", k.CreateIngress)              // 创建 Ingress
+		ingresses.POST("/update", k.UpdateIngress)              // 更新 Ingress
+		ingresses.DELETE("/delete/:id", k.DeleteIngress)        // 删除指定 Ingress
+		ingresses.DELETE("/batch_delete", k.BatchDeleteIngress) // 批量删除 Ingress
 		ingresses.GET("/:id/yaml", k.GetIngressYaml)            // 获取 Ingress YAML 配置
 		ingresses.GET("/:id/status", k.GetIngressStatus)        // 获取 Ingress 状态
 		ingresses.GET("/:id/rules", k.GetIngressRules)          // 获取 Ingress 规则
@@ -63,7 +63,6 @@ func (k *K8sIngressHandler) RegisterRouters(server *gin.Engine) {
 	}
 }
 
-// GetIngressesByNamespace 根据命名空间获取 Ingress 列表
 func (k *K8sIngressHandler) GetIngressesByNamespace(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -84,7 +83,6 @@ func (k *K8sIngressHandler) GetIngressesByNamespace(ctx *gin.Context) {
 	})
 }
 
-// CreateIngress 创建 Ingress
 func (k *K8sIngressHandler) CreateIngress(ctx *gin.Context) {
 	var req model.K8sIngressRequest
 
@@ -93,7 +91,6 @@ func (k *K8sIngressHandler) CreateIngress(ctx *gin.Context) {
 	})
 }
 
-// UpdateIngress 更新 Ingress
 func (k *K8sIngressHandler) UpdateIngress(ctx *gin.Context) {
 	var req model.K8sIngressRequest
 
@@ -102,7 +99,6 @@ func (k *K8sIngressHandler) UpdateIngress(ctx *gin.Context) {
 	})
 }
 
-// BatchDeleteIngress 批量删除 Ingress
 func (k *K8sIngressHandler) BatchDeleteIngress(ctx *gin.Context) {
 	var req model.K8sIngressRequest
 
@@ -111,7 +107,6 @@ func (k *K8sIngressHandler) BatchDeleteIngress(ctx *gin.Context) {
 	})
 }
 
-// GetIngressYaml 获取 Ingress 的 YAML 配置
 func (k *K8sIngressHandler) GetIngressYaml(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -139,7 +134,6 @@ func (k *K8sIngressHandler) GetIngressYaml(ctx *gin.Context) {
 	})
 }
 
-// DeleteIngress 删除指定的 Ingress
 func (k *K8sIngressHandler) DeleteIngress(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -167,7 +161,6 @@ func (k *K8sIngressHandler) DeleteIngress(ctx *gin.Context) {
 	})
 }
 
-// GetIngressStatus 获取 Ingress 状态
 func (k *K8sIngressHandler) GetIngressStatus(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -195,7 +188,6 @@ func (k *K8sIngressHandler) GetIngressStatus(ctx *gin.Context) {
 	})
 }
 
-// GetIngressRules 获取 Ingress 规则
 func (k *K8sIngressHandler) GetIngressRules(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -223,7 +215,6 @@ func (k *K8sIngressHandler) GetIngressRules(ctx *gin.Context) {
 	})
 }
 
-// GetIngressTLS 获取 Ingress TLS 配置
 func (k *K8sIngressHandler) GetIngressTLS(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -251,7 +242,6 @@ func (k *K8sIngressHandler) GetIngressTLS(ctx *gin.Context) {
 	})
 }
 
-// GetIngressEndpoints 获取 Ingress 后端端点
 func (k *K8sIngressHandler) GetIngressEndpoints(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

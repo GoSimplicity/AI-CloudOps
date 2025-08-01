@@ -43,9 +43,6 @@ type K8sServiceAccountHandler struct {
 }
 
 // NewK8sServiceAccountHandler 创建新的ServiceAccount API处理器实例
-// @param logger 日志记录器
-// @param serviceAccountService ServiceAccount服务实例
-// @return *K8sServiceAccountHandler ServiceAccount API处理器实例
 func NewK8sServiceAccountHandler(logger *zap.Logger, serviceAccountService admin.ServiceAccountService) *K8sServiceAccountHandler {
 	return &K8sServiceAccountHandler{
 		logger:                logger,
@@ -54,7 +51,6 @@ func NewK8sServiceAccountHandler(logger *zap.Logger, serviceAccountService admin
 }
 
 // RegisterRouters 注册ServiceAccount相关的路由
-// @param router Gin路由引擎实例
 func (h *K8sServiceAccountHandler) RegisterRouters(router *gin.Engine) {
 	// 创建API分组
 	k8sGroup := router.Group("/api/k8s")
@@ -102,15 +98,16 @@ func (h *K8sServiceAccountHandler) RegisterRouters(router *gin.Engine) {
 // GetServiceAccountsByNamespace 获取指定命名空间的所有ServiceAccount
 // @Summary 获取ServiceAccount列表
 // @Description 根据集群ID和命名空间获取所有ServiceAccount资源
-// @Tags ServiceAccount
+// @Tags 服务账户管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
-// @Success 200 {object} utils.Response{data=[]model.K8sServiceAccount} "成功返回ServiceAccount列表"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse{data=[]model.K8sServiceAccount} "成功返回ServiceAccount列表"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/service-accounts/{cluster_id}/{namespace} [get]
+// @Security BearerAuth
 func (h *K8sServiceAccountHandler) GetServiceAccountsByNamespace(c *gin.Context) {
 	// 解析路径参数
 	clusterID, err := strconv.Atoi(c.Param("cluster_id"))
@@ -140,17 +137,18 @@ func (h *K8sServiceAccountHandler) GetServiceAccountsByNamespace(c *gin.Context)
 // GetServiceAccount 获取指定ServiceAccount详情
 // @Summary 获取ServiceAccount详情
 // @Description 根据集群ID、命名空间和ServiceAccount名称获取ServiceAccount详细信息
-// @Tags ServiceAccount
+// @Tags 服务账户管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
 // @Param name path string true "ServiceAccount名称"
-// @Success 200 {object} utils.Response{data=model.K8sServiceAccount} "成功返回ServiceAccount详情"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 404 {object} utils.Response "ServiceAccount未找到"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功返回ServiceAccount详情"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 404 {object} utils.ApiResponse "ServiceAccount未找到"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/service-accounts/{cluster_id}/{namespace}/{name} [get]
+// @Security BearerAuth
 func (h *K8sServiceAccountHandler) GetServiceAccount(c *gin.Context) {
 	// 解析路径参数
 	clusterID, err := strconv.Atoi(c.Param("cluster_id"))
@@ -181,14 +179,17 @@ func (h *K8sServiceAccountHandler) GetServiceAccount(c *gin.Context) {
 // CreateServiceAccount 创建ServiceAccount
 // @Summary 创建ServiceAccount
 // @Description 在指定集群和命名空间中创建新的ServiceAccount
-// @Tags ServiceAccount
+// @Tags 服务账户管理
 // @Accept json
 // @Produce json
+// @Param cluster_id path int true "集群ID"
+// @Param namespace path string true "命名空间名称"
 // @Param request body model.CreateServiceAccountRequest true "创建ServiceAccount请求参数"
-// @Success 200 {object} utils.Response "成功创建ServiceAccount"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功创建ServiceAccount"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/service-accounts/{cluster_id}/{namespace} [post]
+// @Security BearerAuth
 func (h *K8sServiceAccountHandler) CreateServiceAccount(c *gin.Context) {
 	// 解析路径参数
 	clusterID, err := strconv.Atoi(c.Param("cluster_id"))
@@ -230,14 +231,18 @@ func (h *K8sServiceAccountHandler) CreateServiceAccount(c *gin.Context) {
 // UpdateServiceAccount 更新ServiceAccount
 // @Summary 更新ServiceAccount
 // @Description 更新指定ServiceAccount的配置信息
-// @Tags ServiceAccount
+// @Tags 服务账户管理
 // @Accept json
 // @Produce json
+// @Param cluster_id path int true "集群ID"
+// @Param namespace path string true "命名空间名称"
+// @Param name path string true "ServiceAccount名称"
 // @Param request body model.UpdateServiceAccountRequest true "更新ServiceAccount请求参数"
-// @Success 200 {object} utils.Response "成功更新ServiceAccount"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功更新ServiceAccount"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/service-accounts/{cluster_id}/{namespace}/{name} [put]
+// @Security BearerAuth
 func (h *K8sServiceAccountHandler) UpdateServiceAccount(c *gin.Context) {
 	// 解析路径参数
 	clusterID, err := strconv.Atoi(c.Param("cluster_id"))
@@ -281,16 +286,17 @@ func (h *K8sServiceAccountHandler) UpdateServiceAccount(c *gin.Context) {
 // DeleteServiceAccount 删除ServiceAccount
 // @Summary 删除ServiceAccount
 // @Description 删除指定的ServiceAccount资源
-// @Tags ServiceAccount
+// @Tags 服务账户管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
 // @Param name path string true "ServiceAccount名称"
-// @Success 200 {object} utils.Response "成功删除ServiceAccount"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功删除ServiceAccount"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/service-accounts/{cluster_id}/{namespace}/{name} [delete]
+// @Security BearerAuth
 func (h *K8sServiceAccountHandler) DeleteServiceAccount(c *gin.Context) {
 	// 解析路径参数
 	clusterID, err := strconv.Atoi(c.Param("cluster_id"))
@@ -329,14 +335,18 @@ func (h *K8sServiceAccountHandler) DeleteServiceAccount(c *gin.Context) {
 // CreateServiceAccountToken 创建ServiceAccount Token
 // @Summary 创建ServiceAccount Token
 // @Description 为指定的ServiceAccount创建访问令牌
-// @Tags ServiceAccount
+// @Tags 服务账户管理
 // @Accept json
 // @Produce json
+// @Param cluster_id path int true "集群ID"
+// @Param namespace path string true "命名空间名称"
+// @Param service_account_name path string true "ServiceAccount名称"
 // @Param request body model.ServiceAccountTokenRequest true "创建Token请求参数"
-// @Success 200 {object} utils.Response{data=model.ServiceAccountToken} "成功创建Token"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功创建Token"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/service-accounts/tokens/{cluster_id}/{namespace}/{service_account_name} [post]
+// @Security BearerAuth
 func (h *K8sServiceAccountHandler) CreateServiceAccountToken(c *gin.Context) {
 	// 解析路径参数
 	clusterID, err := strconv.Atoi(c.Param("cluster_id"))
@@ -383,16 +393,17 @@ func (h *K8sServiceAccountHandler) CreateServiceAccountToken(c *gin.Context) {
 // GetServiceAccountPermissions 获取ServiceAccount权限信息
 // @Summary 获取ServiceAccount权限信息
 // @Description 获取指定ServiceAccount的所有权限绑定信息，包括Role和ClusterRole
-// @Tags ServiceAccount
+// @Tags 服务账户管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
 // @Param name path string true "ServiceAccount名称"
-// @Success 200 {object} utils.Response{data=model.ServiceAccountPermissions} "成功返回权限信息"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功返回权限信息"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/service-accounts/permissions/{cluster_id}/{namespace}/{name} [get]
+// @Security BearerAuth
 func (h *K8sServiceAccountHandler) GetServiceAccountPermissions(c *gin.Context) {
 	// 解析路径参数
 	clusterID, err := strconv.Atoi(c.Param("cluster_id"))
@@ -423,14 +434,17 @@ func (h *K8sServiceAccountHandler) GetServiceAccountPermissions(c *gin.Context) 
 // BindRoleToServiceAccount 绑定Role到ServiceAccount
 // @Summary 绑定Role到ServiceAccount
 // @Description 通过创建RoleBinding将Role权限绑定到ServiceAccount
-// @Tags ServiceAccount
+// @Tags 服务账户管理
 // @Accept json
 // @Produce json
+// @Param cluster_id path int true "集群ID"
+// @Param namespace path string true "命名空间名称"
 // @Param request body model.BindRoleToServiceAccountRequest true "绑定Role请求参数"
-// @Success 200 {object} utils.Response "成功绑定Role"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功绑定Role"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/service-accounts/permissions/{cluster_id}/{namespace}/bind-role [post]
+// @Security BearerAuth
 func (h *K8sServiceAccountHandler) BindRoleToServiceAccount(c *gin.Context) {
 	// 解析路径参数
 	clusterID, err := strconv.Atoi(c.Param("cluster_id"))
@@ -472,14 +486,17 @@ func (h *K8sServiceAccountHandler) BindRoleToServiceAccount(c *gin.Context) {
 // BindClusterRoleToServiceAccount 绑定ClusterRole到ServiceAccount
 // @Summary 绑定ClusterRole到ServiceAccount
 // @Description 通过创建ClusterRoleBinding将ClusterRole权限绑定到ServiceAccount
-// @Tags ServiceAccount
+// @Tags 服务账户管理
 // @Accept json
 // @Produce json
+// @Param cluster_id path int true "集群ID"
+// @Param namespace path string true "命名空间名称"
 // @Param request body model.BindClusterRoleToServiceAccountRequest true "绑定ClusterRole请求参数"
-// @Success 200 {object} utils.Response "成功绑定ClusterRole"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功绑定ClusterRole"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/service-accounts/permissions/{cluster_id}/{namespace}/bind-cluster-role [post]
+// @Security BearerAuth
 func (h *K8sServiceAccountHandler) BindClusterRoleToServiceAccount(c *gin.Context) {
 	// 解析路径参数
 	clusterID, err := strconv.Atoi(c.Param("cluster_id"))
@@ -521,16 +538,17 @@ func (h *K8sServiceAccountHandler) BindClusterRoleToServiceAccount(c *gin.Contex
 // UnbindRoleFromServiceAccount 解绑Role从ServiceAccount
 // @Summary 解绑Role从ServiceAccount
 // @Description 通过删除RoleBinding解除Role权限绑定
-// @Tags ServiceAccount
+// @Tags 服务账户管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间名称"
 // @Param role_binding_name path string true "RoleBinding名称"
-// @Success 200 {object} utils.Response "成功解绑Role"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功解绑Role"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/service-accounts/permissions/{cluster_id}/{namespace}/unbind-role/{role_binding_name} [delete]
+// @Security BearerAuth
 func (h *K8sServiceAccountHandler) UnbindRoleFromServiceAccount(c *gin.Context) {
 	// 解析路径参数
 	clusterID, err := strconv.Atoi(c.Param("cluster_id"))
@@ -567,15 +585,16 @@ func (h *K8sServiceAccountHandler) UnbindRoleFromServiceAccount(c *gin.Context) 
 // UnbindClusterRoleFromServiceAccount 解绑ClusterRole从ServiceAccount
 // @Summary 解绑ClusterRole从ServiceAccount
 // @Description 通过删除ClusterRoleBinding解除ClusterRole权限绑定
-// @Tags ServiceAccount
+// @Tags 服务账户管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param cluster_role_binding_name path string true "ClusterRoleBinding名称"
-// @Success 200 {object} utils.Response "成功解绑ClusterRole"
-// @Failure 400 {object} utils.Response "请求参数错误"
-// @Failure 500 {object} utils.Response "服务器内部错误"
+// @Success 200 {object} utils.ApiResponse "成功解绑ClusterRole"
+// @Failure 400 {object} utils.ApiResponse "请求参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/service-accounts/permissions/{cluster_id}/unbind-cluster-role/{cluster_role_binding_name} [delete]
+// @Security BearerAuth
 func (h *K8sServiceAccountHandler) UnbindClusterRoleFromServiceAccount(c *gin.Context) {
 	// 解析路径参数
 	clusterID, err := strconv.Atoi(c.Param("cluster_id"))

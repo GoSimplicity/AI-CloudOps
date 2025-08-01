@@ -71,6 +71,18 @@ func (h *TreeNodeHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetTreeList 获取树节点列表
+// @Summary 获取树节点列表
+// @Description 获取完整的树结构节点列表
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param keyword query string false "搜索关键词"
+// @Param node_type query string false "节点类型"
+// @Success 200 {object} utils.ApiResponse{data=[]model.TreeNode} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/list [get]
 func (h *TreeNodeHandler) GetTreeList(ctx *gin.Context) {
 	var req model.GetTreeListReq
 
@@ -80,6 +92,17 @@ func (h *TreeNodeHandler) GetTreeList(ctx *gin.Context) {
 }
 
 // GetNodeDetail 获取节点详情
+// @Summary 获取节点详情
+// @Description 根据节点ID获取节点的详细信息
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param id path int true "节点ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/detail/{id} [get]
 func (h *TreeNodeHandler) GetNodeDetail(ctx *gin.Context) {
 	var req model.GetNodeDetailReq
 	id, err := utils.GetParamID(ctx)
@@ -95,6 +118,17 @@ func (h *TreeNodeHandler) GetNodeDetail(ctx *gin.Context) {
 }
 
 // GetChildNodes 获取子节点列表
+// @Summary 获取子节点列表
+// @Description 根据父节点ID获取其所有子节点列表
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param id path int true "父节点ID"
+// @Success 200 {object} utils.ApiResponse{data=[]model.TreeNode} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/children/{id} [get]
 func (h *TreeNodeHandler) GetChildNodes(ctx *gin.Context) {
 	var req model.GetChildNodesReq
 
@@ -111,6 +145,15 @@ func (h *TreeNodeHandler) GetChildNodes(ctx *gin.Context) {
 }
 
 // GetTreeStatistics 获取树统计信息
+// @Summary 获取树统计信息
+// @Description 获取资源树的统计数据，包括节点数量等信息
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/statistics [get]
 func (h *TreeNodeHandler) GetTreeStatistics(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetTreeStatistics(ctx)
@@ -118,6 +161,17 @@ func (h *TreeNodeHandler) GetTreeStatistics(ctx *gin.Context) {
 }
 
 // CreateNode 创建节点
+// @Summary 创建节点
+// @Description 创建新的树节点
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param request body model.CreateNodeReq true "创建节点请求参数"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/create [post]
 func (h *TreeNodeHandler) CreateNode(ctx *gin.Context) {
 	var req model.CreateNodeReq
 
@@ -130,6 +184,18 @@ func (h *TreeNodeHandler) CreateNode(ctx *gin.Context) {
 }
 
 // UpdateNode 更新节点
+// @Summary 更新节点
+// @Description 更新指定节点的信息
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param id path int true "节点ID"
+// @Param request body model.UpdateNodeReq true "更新节点请求参数"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/update/{id} [put]
 func (h *TreeNodeHandler) UpdateNode(ctx *gin.Context) {
 	var req model.UpdateNodeReq
 
@@ -146,6 +212,18 @@ func (h *TreeNodeHandler) UpdateNode(ctx *gin.Context) {
 }
 
 // UpdateNodeStatus 更新节点状态
+// @Summary 更新节点状态
+// @Description 更新指定节点的状态信息
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param id path int true "节点ID"
+// @Param request body model.UpdateNodeStatusReq true "更新节点状态请求参数"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/status/{id} [put]
 func (h *TreeNodeHandler) UpdateNodeStatus(ctx *gin.Context) {
 	var req model.UpdateNodeStatusReq
 
@@ -163,6 +241,17 @@ func (h *TreeNodeHandler) UpdateNodeStatus(ctx *gin.Context) {
 }
 
 // DeleteNode 删除节点
+// @Summary 删除节点
+// @Description 删除指定的树节点
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param id path int true "节点ID"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/delete/{id} [delete]
 func (h *TreeNodeHandler) DeleteNode(ctx *gin.Context) {
 	var req model.DeleteNodeReq
 
@@ -179,6 +268,18 @@ func (h *TreeNodeHandler) DeleteNode(ctx *gin.Context) {
 }
 
 // MoveNode 移动节点
+// @Summary 移动节点
+// @Description 将节点移动到新的父节点下
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param id path int true "节点ID"
+// @Param request body model.MoveNodeReq true "移动节点请求参数"
+// @Success 200 {object} utils.ApiResponse "移动成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/move/{id} [put]
 func (h *TreeNodeHandler) MoveNode(ctx *gin.Context) {
 	var req model.MoveNodeReq
 
@@ -195,6 +296,18 @@ func (h *TreeNodeHandler) MoveNode(ctx *gin.Context) {
 }
 
 // GetNodeMembers 获取节点成员
+// @Summary 获取节点成员
+// @Description 获取指定节点的成员列表
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param id path int true "节点ID"
+// @Param type query string false "成员类型"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/members/{id} [get]
 func (h *TreeNodeHandler) GetNodeMembers(ctx *gin.Context) {
 	var req model.GetNodeMembersReq
 
@@ -211,6 +324,17 @@ func (h *TreeNodeHandler) GetNodeMembers(ctx *gin.Context) {
 }
 
 // AddNodeMember 添加节点成员
+// @Summary 添加节点成员
+// @Description 向指定节点添加成员
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param request body model.AddNodeMemberReq true "添加节点成员请求参数"
+// @Success 200 {object} utils.ApiResponse "添加成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/member/add [post]
 func (h *TreeNodeHandler) AddNodeMember(ctx *gin.Context) {
 	var req model.AddNodeMemberReq
 
@@ -220,6 +344,18 @@ func (h *TreeNodeHandler) AddNodeMember(ctx *gin.Context) {
 }
 
 // RemoveNodeMember 移除节点成员
+// @Summary 移除节点成员
+// @Description 从指定节点移除成员
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param id path int true "节点ID"
+// @Param request body model.RemoveNodeMemberReq true "移除节点成员请求参数"
+// @Success 200 {object} utils.ApiResponse "移除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/member/remove/{id} [delete]
 func (h *TreeNodeHandler) RemoveNodeMember(ctx *gin.Context) {
 	var req model.RemoveNodeMemberReq
 
@@ -237,6 +373,17 @@ func (h *TreeNodeHandler) RemoveNodeMember(ctx *gin.Context) {
 }
 
 // GetNodeResources 获取节点资源
+// @Summary 获取节点资源
+// @Description 获取指定节点绑定的资源列表
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param id path int true "节点ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/resources/{id} [get]
 func (h *TreeNodeHandler) GetNodeResources(ctx *gin.Context) {
 	var req model.GetNodeResourcesReq
 
@@ -254,6 +401,17 @@ func (h *TreeNodeHandler) GetNodeResources(ctx *gin.Context) {
 }
 
 // BindResource 绑定资源
+// @Summary 绑定资源
+// @Description 将资源绑定到指定节点
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param request body model.BindResourceReq true "绑定资源请求参数"
+// @Success 200 {object} utils.ApiResponse "绑定成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/resource/bind [post]
 func (h *TreeNodeHandler) BindResource(ctx *gin.Context) {
 	var req model.BindResourceReq
 
@@ -263,6 +421,17 @@ func (h *TreeNodeHandler) BindResource(ctx *gin.Context) {
 }
 
 // UnbindResource 解绑资源
+// @Summary 解绑资源
+// @Description 将资源从节点解绑
+// @Tags 资源树管理
+// @Accept json
+// @Produce json
+// @Param request body model.UnbindResourceReq true "解绑资源请求参数"
+// @Success 200 {object} utils.ApiResponse "解绑成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/node/resource/unbind [delete]
 func (h *TreeNodeHandler) UnbindResource(ctx *gin.Context) {
 	var req model.UnbindResourceReq
 
