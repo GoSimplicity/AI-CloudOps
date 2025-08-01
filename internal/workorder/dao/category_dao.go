@@ -115,15 +115,8 @@ func (dao *workorderCategoryDAO) ListCategory(ctx context.Context, req model.Lis
 	var categories []*model.WorkorderCategory
 	var total int64
 
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-	if req.Size <= 0 {
-		req.Size = 10
-	}
-	if req.Size > 100 {
-		req.Size = 100
-	}
+	// 验证分页参数
+	req.Page, req.Size = ValidatePagination(req.Page, req.Size)
 
 	query := dao.db.WithContext(ctx).Model(&model.WorkorderCategory{})
 

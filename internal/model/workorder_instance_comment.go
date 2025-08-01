@@ -41,15 +41,15 @@ const (
 // WorkorderInstanceComment 工单实例评论实体
 type WorkorderInstanceComment struct {
 	Model
-	InstanceID     int                        `json:"instance_id" gorm:"not null;index;comment:工单实例ID"`
-	CreateUserID   int                        `json:"create_user_id" gorm:"not null;index;comment:创建人ID"`
-	CreateUserName string                     `json:"create_user_name" gorm:"type:varchar(200);not null;comment:创建人名称"`
-	Content        string                     `json:"content" gorm:"type:text;not null;comment:评论内容"`
-	ParentID       *int                       `json:"parent_id,omitempty" gorm:"index;comment:父评论ID"`
-	Type           string                     `json:"type" gorm:"type:varchar(20);not null;default:'normal';comment:评论类型"`
-	Status         int8                       `json:"status" gorm:"not null;default:1;index;comment:状态：1-正常，2-已删除，3-已隐藏"`
-	IsSystem       bool                       `json:"is_system" gorm:"not null;default:false;comment:是否系统评论"`
-	Children       []WorkorderInstanceComment `json:"children,omitempty" gorm:"-"`
+	InstanceID   int                        `json:"instance_id" gorm:"column:instance_id;not null;index;comment:工单实例ID"`
+	OperatorID   int                        `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName string                     `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
+	Content      string                     `json:"content" gorm:"column:content;type:text;not null;comment:评论内容"`
+	ParentID     *int                       `json:"parent_id,omitempty" gorm:"column:parent_id;index;comment:父评论ID"`
+	Type         string                     `json:"type" gorm:"column:type;type:varchar(20);not null;default:'normal';comment:评论类型"`
+	Status       int8                       `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-正常，2-已删除，3-已隐藏"`
+	IsSystem     bool                       `json:"is_system" gorm:"column:is_system;not null;default:false;comment:是否系统评论"`
+	Children     []WorkorderInstanceComment `json:"children,omitempty" gorm:"-"`
 }
 
 // TableName 指定工单实例评论表名
@@ -59,14 +59,14 @@ func (WorkorderInstanceComment) TableName() string {
 
 // CreateWorkorderInstanceCommentReq 创建工单实例评论请求
 type CreateWorkorderInstanceCommentReq struct {
-	InstanceID     int    `json:"instance_id" binding:"required,min=1"`
-	CreateUserID   int    `json:"create_user_id" binding:"required,min=1"`
-	CreateUserName string `json:"create_user_name" binding:"required,min=1,max=200"`
-	Content        string `json:"content" binding:"required,min=1,max=2000"`
-	ParentID       *int   `json:"parent_id" binding:"omitempty,min=1"`
-	Type           string `json:"type" binding:"omitempty,oneof=normal system"`
-	Status         int8   `json:"status" binding:"omitempty,oneof=1 2 3"`
-	IsSystem       bool   `json:"is_system" binding:"omitempty"`
+	InstanceID   int    `json:"instance_id" binding:"required,min=1"`
+	OperatorID   int    `json:"operator_id" binding:"required,min=1"`
+	OperatorName string `json:"operator_name" binding:"required,min=1,max=100"`
+	Content      string `json:"content" binding:"required,min=1,max=2000"`
+	ParentID     *int   `json:"parent_id" binding:"omitempty,min=1"`
+	Type         string `json:"type" binding:"omitempty,oneof=normal system"`
+	Status       int8   `json:"status" binding:"omitempty,oneof=1 2 3"`
+	IsSystem     bool   `json:"is_system" binding:"omitempty"`
 }
 
 // UpdateWorkorderInstanceCommentReq 更新工单实例评论请求

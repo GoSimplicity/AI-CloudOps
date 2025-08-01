@@ -58,8 +58,8 @@ func (h *WorkorderProcessHandler) CreateWorkorderProcess(ctx *gin.Context) {
 	var req model.CreateWorkorderProcessReq
 
 	user := ctx.MustGet("user").(utils.UserClaims)
-	req.CreateUserID = user.Uid
-	req.CreateUserName = user.Username
+	req.OperatorID = user.Uid
+	req.OperatorName = user.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateWorkorderProcess(ctx, &req)

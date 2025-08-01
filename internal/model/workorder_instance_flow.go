@@ -49,16 +49,16 @@ const (
 // WorkorderInstanceFlow 工单流转记录
 type WorkorderInstanceFlow struct {
 	Model
-	InstanceID   int     `json:"instance_id" gorm:"not null;index;comment:工单实例ID"`
-	StepID       string  `json:"step_id" gorm:"type:varchar(64);not null;comment:步骤ID"`
-	StepName     string  `json:"step_name" gorm:"type:varchar(128);not null;comment:步骤名称"`
-	Action       string  `json:"action" gorm:"type:varchar(32);not null;comment:操作动作"`
-	OperatorID   int     `json:"operator_id" gorm:"not null;index;comment:操作人ID"`
-	OperatorName string  `json:"operator_name" gorm:"type:varchar(128);not null;comment:操作人名称"`
-	AssigneeID   *int    `json:"assignee_id" gorm:"index;comment:处理人ID"`
-	Comment      string  `json:"comment" gorm:"type:varchar(1000);comment:处理意见"`
-	Result       string  `json:"result" gorm:"type:varchar(16);not null;default:'success';comment:处理结果"`
-	FormData     JSONMap `json:"form_data" gorm:"type:json;comment:表单数据"`
+	InstanceID     int     `json:"instance_id" gorm:"column:instance_id;not null;index;comment:工单实例ID"`
+	StepID         string  `json:"step_id" gorm:"column:step_id;type:varchar(64);not null;comment:步骤ID"`
+	StepName       string  `json:"step_name" gorm:"column:step_name;type:varchar(128);not null;comment:步骤名称"`
+	Action         string  `json:"action" gorm:"column:action;type:varchar(32);not null;comment:操作动作"`
+	OperatorID   int     `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName string  `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
+	AssigneeID     *int    `json:"assignee_id" gorm:"column:assignee_id;index;comment:处理人ID"`
+	Comment        string  `json:"comment" gorm:"column:comment;type:varchar(1000);comment:处理意见"`
+	Result         string  `json:"result" gorm:"column:result;type:varchar(16);not null;default:'success';comment:处理结果"`
+	FormData       JSONMap `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
 }
 
 func (WorkorderInstanceFlow) TableName() string {
@@ -72,7 +72,7 @@ type CreateWorkorderInstanceFlowReq struct {
 	StepName     string  `json:"step_name" binding:"required,min=1,max=128"`
 	Action       string  `json:"action" binding:"required,oneof=create submit approve reject transfer assign revoke cancel return complete"`
 	OperatorID   int     `json:"operator_id" binding:"required,min=1"`
-	OperatorName string  `json:"operator_name" binding:"required,min=1,max=128"`
+	OperatorName string  `json:"operator_name" binding:"required,min=1,max=100"`
 	AssigneeID   *int    `json:"assignee_id" binding:"omitempty,min=1"`
 	Comment      string  `json:"comment" binding:"omitempty,max=1000"`
 	Result       string  `json:"result" binding:"omitempty,oneof=success failed pending"`

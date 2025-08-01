@@ -43,17 +43,17 @@ func NewInstanceTimeLineHandler(service service.WorkorderInstanceTimeLineService
 }
 
 func (h *InstanceTimeLineHandler) RegisterRouters(server *gin.Engine) {
-	instanceGroup := server.Group("/api/workorder/instance")
+	timelineGroup := server.Group("/api/workorder/instance/timeline")
 	{
-		instanceGroup.POST("/create", h.CreateInstanceTimeLine)
-		instanceGroup.PUT("/update/:id", h.UpdateInstanceTimeLine)
-		instanceGroup.DELETE("/delete/:id", h.DeleteInstanceTimeLine)
-		instanceGroup.GET("/list", h.ListInstanceTimeLine)
-		instanceGroup.GET("/detail/:id", h.DetailInstanceTimeLine)
+		timelineGroup.POST("/create", h.CreateInstanceTimeLine)
+		timelineGroup.PUT("/update/:id", h.UpdateInstanceTimeLine)
+		timelineGroup.DELETE("/delete/:id", h.DeleteInstanceTimeLine)
+		timelineGroup.GET("/list", h.ListInstanceTimeLine)
+		timelineGroup.GET("/detail/:id", h.DetailInstanceTimeLine)
 	}
 }
 
-// CreateInstance 创建工单实例
+// CreateInstanceTimeLine 创建工单时间线记录
 func (h *InstanceTimeLineHandler) CreateInstanceTimeLine(ctx *gin.Context) {
 	var req model.CreateWorkorderInstanceTimelineReq
 	user := ctx.MustGet("user").(utils.UserClaims)
@@ -63,7 +63,7 @@ func (h *InstanceTimeLineHandler) CreateInstanceTimeLine(ctx *gin.Context) {
 	})
 }
 
-// UpdateInstance 更新工单实例
+// UpdateInstanceTimeLine 更新工单时间线记录
 func (h *InstanceTimeLineHandler) UpdateInstanceTimeLine(ctx *gin.Context) {
 	var req model.UpdateWorkorderInstanceTimelineReq
 
@@ -81,7 +81,7 @@ func (h *InstanceTimeLineHandler) UpdateInstanceTimeLine(ctx *gin.Context) {
 	})
 }
 
-// DeleteInstance 删除工单实例
+// DeleteInstanceTimeLine 删除工单时间线记录
 func (h *InstanceTimeLineHandler) DeleteInstanceTimeLine(ctx *gin.Context) {
 	var req model.DeleteWorkorderInstanceTimelineReq
 
@@ -99,7 +99,7 @@ func (h *InstanceTimeLineHandler) DeleteInstanceTimeLine(ctx *gin.Context) {
 	})
 }
 
-// DetailInstance 获取工单实例详情
+// DetailInstanceTimeLine 获取工单时间线记录详情
 func (h *InstanceTimeLineHandler) DetailInstanceTimeLine(ctx *gin.Context) {
 	var req model.DetailWorkorderInstanceTimelineReq
 
@@ -115,7 +115,7 @@ func (h *InstanceTimeLineHandler) DetailInstanceTimeLine(ctx *gin.Context) {
 	})
 }
 
-// ListInstance 获取工单实例列表
+// ListInstanceTimeLine 获取工单时间线记录列表
 func (h *InstanceTimeLineHandler) ListInstanceTimeLine(ctx *gin.Context) {
 	var req model.ListWorkorderInstanceTimelineReq
 

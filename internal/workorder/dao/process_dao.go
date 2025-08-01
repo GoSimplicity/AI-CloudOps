@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -73,7 +72,7 @@ func (d *processDAO) UpdateProcess(ctx context.Context, process *model.Workorder
 	if exists {
 		return ErrProcessNameExists
 	}
-	updateData := map[string]interface{}{
+	updateData := map[string]any{
 		"name":           process.Name,
 		"description":    process.Description,
 		"form_design_id": process.FormDesignID,
@@ -179,23 +178,13 @@ func (d *processDAO) ListProcess(ctx context.Context, req *model.ListWorkorderPr
 	var processes []*model.WorkorderProcess
 	var total int64
 
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-
-	if req.Size <= 0 {
-		req.Size = 10
-	}
-
-	if req.Size > 100 {
-		req.Size = 100
-	}
+	req.Page, req.Size = ValidatePagination(req.Page, req.Size)
 
 	db := d.db.WithContext(ctx).Model(&model.WorkorderProcess{})
 
 	if req.Search != "" {
-		searchPattern := "%" + strings.TrimSpace(req.Search) + "%"
-		db = db.Where("name LIKE ?", searchPattern)
+		searchTerm := sanitizeSearchInput(req.Search)
+		db = db.Where("name LIKE ?", "%"+searchTerm+"%")
 	}
 
 	if req.CategoryID != nil {

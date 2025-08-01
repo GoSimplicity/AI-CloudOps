@@ -44,16 +44,16 @@ var (
 
 type InstanceFlowService interface {
 	CreateInstanceFlow(ctx context.Context, req *model.CreateWorkorderInstanceFlowReq) error
-	ListInstanceFlows(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) (model.ListResp[*model.WorkorderInstanceFlow], error)
+	ListInstanceFlows(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) (*model.ListResp[*model.WorkorderInstanceFlow], error)
 	DetailInstanceFlow(ctx context.Context, id int) (*model.WorkorderInstanceFlow, error)
 }
 
 type instanceFlowService struct {
-	dao    dao.InstanceFlowDAO
+	dao    dao.WorkorderInstanceFlowDAO
 	logger *zap.Logger
 }
 
-func NewInstanceFlowService(dao dao.InstanceFlowDAO, logger *zap.Logger) InstanceFlowService {
+func NewInstanceFlowService(dao dao.WorkorderInstanceFlowDAO, logger *zap.Logger) InstanceFlowService {
 	return &instanceFlowService{
 		dao:    dao,
 		logger: logger,
@@ -68,16 +68,16 @@ func (s *instanceFlowService) CreateInstanceFlow(ctx context.Context, req *model
 
 	// 创建流程记录
 	flow := &model.WorkorderInstanceFlow{
-		InstanceID:   req.InstanceID,
-		StepID:       req.StepID,
-		StepName:     req.StepName,
-		Action:       req.Action,
+		InstanceID:     req.InstanceID,
+		StepID:         req.StepID,
+		StepName:       req.StepName,
+		Action:         req.Action,
 		OperatorID:   req.OperatorID,
 		OperatorName: req.OperatorName,
-		AssigneeID:   req.AssigneeID,
-		Comment:      req.Comment,
-		Result:       req.Result,
-		FormData:     req.FormData,
+		AssigneeID:     req.AssigneeID,
+		Comment:        req.Comment,
+		Result:         req.Result,
+		FormData:       req.FormData,
 	}
 
 	// 设置默认结果
@@ -86,7 +86,7 @@ func (s *instanceFlowService) CreateInstanceFlow(ctx context.Context, req *model
 	}
 
 	// 保存流程记录
-	if err := s.dao.CreateInstanceFlow(ctx, flow); err != nil {
+	if err := s.dao.Create(ctx, flow); err != nil {
 		s.logger.Error("创建流程记录失败", zap.Error(err))
 		return fmt.Errorf("创建流程记录失败: %w", err)
 	}
@@ -100,9 +100,9 @@ func (s *instanceFlowService) CreateInstanceFlow(ctx context.Context, req *model
 }
 
 // ListInstanceFlows 分页获取工单流程记录列表
-func (s *instanceFlowService) ListInstanceFlows(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) (model.ListResp[*model.WorkorderInstanceFlow], error) {
+func (s *instanceFlowService) ListInstanceFlows(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) (*model.ListResp[*model.WorkorderInstanceFlow], error) {
 	if req == nil {
-		return model.ListResp[*model.WorkorderInstanceFlow]{}, dao.ErrInstanceInvalidID
+		return nil, dao.ErrInstanceInvalidID
 	}
 
 	// 设置默认分页参数
@@ -113,9 +113,9 @@ func (s *instanceFlowService) ListInstanceFlows(ctx context.Context, req *model.
 		req.Size = 10
 	}
 
-	flows, total, err := s.dao.ListInstanceFlows(ctx, req)
+	flows, total, err := s.dao.List(ctx, req)
 	if err != nil {
-		return model.ListResp[*model.WorkorderInstanceFlow]{}, fmt.Errorf("获取工单流程记录列表失败: %w", err)
+		return nil, fmt.Errorf("获取工单流程记录列表失败: %w", err)
 	}
 
 	// 转换为指针切片
@@ -124,7 +124,7 @@ func (s *instanceFlowService) ListInstanceFlows(ctx context.Context, req *model.
 		flowPtrs[i] = &flows[i]
 	}
 
-	return model.ListResp[*model.WorkorderInstanceFlow]{
+	return &model.ListResp[*model.WorkorderInstanceFlow]{
 		Items: flowPtrs,
 		Total: total,
 	}, nil
@@ -136,7 +136,7 @@ func (s *instanceFlowService) DetailInstanceFlow(ctx context.Context, id int) (*
 		return nil, dao.ErrInstanceInvalidID
 	}
 
-	flow, err := s.dao.GetInstanceFlowByID(ctx, id)
+	flow, err := s.dao.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, dao.ErrInstanceFlowNotFound) {
 			return nil, ErrInstanceNotFound

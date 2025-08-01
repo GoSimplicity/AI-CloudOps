@@ -33,7 +33,6 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
-	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -49,7 +48,7 @@ type TemplateDAO interface {
 	UpdateTemplate(ctx context.Context, template *model.WorkorderTemplate) error
 	DeleteTemplate(ctx context.Context, id int) error
 	GetTemplate(ctx context.Context, id int) (*model.WorkorderTemplate, error)
-	ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) (*model.ListResp[*model.WorkorderTemplate], error)
+	ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) ([]*model.WorkorderTemplate, int64, error)
 	UpdateTemplateStatus(ctx context.Context, id int, status int8) error
 	IsTemplateNameExists(ctx context.Context, name string, excludeID int) (bool, error)
 }
@@ -74,7 +73,7 @@ func (t *templateDAO) CreateTemplate(ctx context.Context, template *model.Workor
 
 	// 设置默认值
 	if len(template.DefaultValues) == 0 {
-		template.DefaultValues = datatypes.JSON([]byte("{}"))
+		template.DefaultValues = model.JSONMap{}
 	}
 
 	if err := t.db.WithContext(ctx).Create(template).Error; err != nil {
@@ -96,11 +95,11 @@ func (t *templateDAO) UpdateTemplate(ctx context.Context, template *model.Workor
 
 	// 设置默认值
 	if len(template.DefaultValues) == 0 {
-		template.DefaultValues = datatypes.JSON([]byte("{}"))
+		template.DefaultValues = model.JSONMap{}
 	}
 
 	// 明确指定要更新的字段
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"name":           template.Name,
 		"description":    template.Description,
 		"process_id":     template.ProcessID,
@@ -169,28 +168,20 @@ func (t *templateDAO) GetTemplate(ctx context.Context, id int) (*model.Workorder
 
 	// 确保默认值不为空
 	if len(template.DefaultValues) == 0 {
-		template.DefaultValues = datatypes.JSON([]byte("{}"))
+		template.DefaultValues = model.JSONMap{}
 	}
 
 	return &template, nil
 }
 
 // ListTemplate 列表查询模板
-func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) (*model.ListResp[*model.WorkorderTemplate], error) {
+func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) ([]*model.WorkorderTemplate, int64, error) {
 	if req == nil {
-		return nil, fmt.Errorf("请求参数不能为空")
+		return nil, 0, fmt.Errorf("请求参数不能为空")
 	}
 
-	// 设置默认分页参数
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-	if req.Size <= 0 {
-		req.Size = 10
-	}
-	if req.Size > 100 { // 限制最大页面大小
-		req.Size = 100
-	}
+	// 验证分页参数
+	req.Page, req.Size = ValidatePagination(req.Page, req.Size)
 
 	var templates []*model.WorkorderTemplate
 	var total int64
@@ -203,7 +194,7 @@ func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorder
 	// 获取总数
 	if err := db.Count(&total).Error; err != nil {
 		t.logger.Error("获取模板总数失败", zap.Error(err))
-		return nil, fmt.Errorf("获取模板总数失败: %w", err)
+		return nil, 0, fmt.Errorf("获取模板总数失败: %w", err)
 	}
 
 	// 分页查询
@@ -212,25 +203,22 @@ func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorder
 		Preload("Category").
 		Offset(offset).
 		Limit(req.Size).
-		Order("sort_order ASC, created_at DESC").
+		Order("created_at DESC").
 		Find(&templates).Error
 
 	if err != nil {
 		t.logger.Error("查询模板列表失败", zap.Error(err))
-		return nil, fmt.Errorf("查询模板列表失败: %w", err)
+		return nil, 0, fmt.Errorf("查询模板列表失败: %w", err)
 	}
 
 	// 确保所有模板的默认值不为空
 	for _, template := range templates {
 		if len(template.DefaultValues) == 0 {
-			template.DefaultValues = datatypes.JSON([]byte("{}"))
+			template.DefaultValues = model.JSONMap{}
 		}
 	}
 
-	return &model.ListResp[*model.WorkorderTemplate]{
-		Items: templates,
-		Total: total,
-	}, nil
+	return templates, total, nil
 }
 
 // UpdateTemplateStatus 更新模板状态
@@ -322,18 +310,5 @@ func (t *templateDAO) isDuplicateKeyError(err error) bool {
 
 // isValidStatus 验证状态值是否有效
 func (t *templateDAO) isValidStatus(status int8) bool {
-	return status == 0 || status == 1
-}
-
-// fieldExistsInTemplate 用于判断字段是否在 WorkorderTemplate 结构体中
-func fieldExistsInTemplate(field string) bool {
-	// 这里可以根据 model.WorkorderTemplate 的定义做静态判断
-	// 由于 Go 语言静态类型，通常不会动态判断字段是否存在
-	// 这里直接返回 true，或者根据你的结构体实际情况调整
-	switch field {
-	case "Icon", "SortOrder":
-		return true
-	default:
-		return false
-	}
+	return status == model.TemplateStatusEnabled || status == model.TemplateStatusDisabled
 }

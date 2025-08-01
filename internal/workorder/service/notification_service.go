@@ -16,9 +16,9 @@ type NotificationService interface {
 	CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error
 	UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error
 	DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error
-	ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (model.ListResp[*model.WorkorderNotification], error)
+	ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (*model.ListResp[*model.WorkorderNotification], error)
 	DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error)
-	GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (model.ListResp[*model.WorkorderNotificationLog], error)
+	GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error)
 	TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error
 	DuplicateNotification(ctx context.Context, req *model.DuplicateWorkorderNotificationReq) error
 }
@@ -67,8 +67,13 @@ func (n *notificationService) DeleteNotification(ctx context.Context, req *model
 }
 
 // ListNotification 获取通知配置列表
-func (n *notificationService) ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (model.ListResp[*model.WorkorderNotification], error) {
-	return n.dao.ListNotification(ctx, req)
+func (n *notificationService) ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (*model.ListResp[*model.WorkorderNotification], error) {
+	result, err := n.dao.ListNotification(ctx, req)
+	if err != nil {
+		n.logger.Error("获取通知配置列表失败", zap.Error(err))
+		return nil, fmt.Errorf("获取通知配置列表失败: %w", err)
+	}
+	return result, nil
 }
 
 // DetailNotification 获取通知配置详情
@@ -76,10 +81,14 @@ func (n *notificationService) DetailNotification(ctx context.Context, req *model
 	return n.dao.DetailNotification(ctx, req)
 }
 
-
 // GetSendLogs 获取发送日志
-func (n *notificationService) GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (model.ListResp[*model.WorkorderNotificationLog], error) {
-	return n.dao.GetSendLogs(ctx, req)
+func (n *notificationService) GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error) {
+	result, err := n.dao.GetSendLogs(ctx, req)
+	if err != nil {
+		n.logger.Error("获取发送日志失败", zap.Error(err))
+		return nil, fmt.Errorf("获取发送日志失败: %w", err)
+	}
+	return result, nil
 }
 
 // TestSendNotification 测试发送通知
@@ -171,7 +180,7 @@ func (n *notificationService) DuplicateNotification(ctx context.Context, req *mo
 		Priority:         source.Priority,
 		IsDefault:        false,
 		Settings:         source.Settings,
-		UserID:           source.CreatorID,
+		UserID:           source.OperatorID,
 	}
 
 	return n.dao.CreateNotification(ctx, newReq)

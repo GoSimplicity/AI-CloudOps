@@ -39,7 +39,7 @@ type CategoryGroupService interface {
 	CreateCategory(ctx context.Context, req *model.CreateWorkorderCategoryReq) error
 	UpdateCategory(ctx context.Context, req *model.UpdateWorkorderCategoryReq) error
 	DeleteCategory(ctx context.Context, id int) error
-	ListCategory(ctx context.Context, req model.ListWorkorderCategoryReq) (model.ListResp[*model.WorkorderCategory], error)
+	ListCategory(ctx context.Context, req model.ListWorkorderCategoryReq) (*model.ListResp[*model.WorkorderCategory], error)
 	GetCategory(ctx context.Context, id int) (*model.WorkorderCategory, error)
 }
 
@@ -63,8 +63,8 @@ func (s *categoryGroupService) CreateCategory(ctx context.Context, req *model.Cr
 		Name:           req.Name,
 		Description:    req.Description,
 		Status:         req.Status,
-		CreateUserID:   req.CreateUserID,
-		CreateUserName: req.CreateUserName,
+		OperatorID:     req.OperatorID,
+		OperatorName:   req.OperatorName,
 	}
 
 	err := s.categoryDAO.CreateCategory(ctx, category)
@@ -132,14 +132,14 @@ func (s *categoryGroupService) DeleteCategory(ctx context.Context, id int) error
 }
 
 // ListCategory 列出分类的实现
-func (s *categoryGroupService) ListCategory(ctx context.Context, req model.ListWorkorderCategoryReq) (model.ListResp[*model.WorkorderCategory], error) {
+func (s *categoryGroupService) ListCategory(ctx context.Context, req model.ListWorkorderCategoryReq) (*model.ListResp[*model.WorkorderCategory], error) {
 	categories, total, err := s.categoryDAO.ListCategory(ctx, req)
 	if err != nil {
 		s.logger.Error("列出分类失败", zap.Error(err))
-		return model.ListResp[*model.WorkorderCategory]{}, fmt.Errorf("列出分类失败: %w", err)
+		return nil, fmt.Errorf("列出分类失败: %w", err)
 	}
 
-	return model.ListResp[*model.WorkorderCategory]{
+	return &model.ListResp[*model.WorkorderCategory]{
 		Total: total,
 		Items: categories,
 	}, nil

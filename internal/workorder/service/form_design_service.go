@@ -43,7 +43,7 @@ type FormDesignService interface {
 	UpdateFormDesign(ctx context.Context, formDesignReq *model.UpdateWorkorderFormDesignReq) error
 	DeleteFormDesign(ctx context.Context, id int) error
 	GetFormDesign(ctx context.Context, id int) (*model.WorkorderFormDesign, error)
-	ListFormDesign(ctx context.Context, req *model.ListWorkorderFormDesignReq) (model.ListResp[*model.WorkorderFormDesign], error)
+	ListFormDesign(ctx context.Context, req *model.ListWorkorderFormDesignReq) (*model.ListResp[*model.WorkorderFormDesign], error)
 }
 
 type formDesignService struct {
@@ -74,7 +74,7 @@ func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq 
 	}
 
 	// 验证表单结构
-	if formDesignReq.Schema.Fields == nil || len(formDesignReq.Schema.Fields) == 0 {
+	if len(formDesignReq.Schema.Fields) == 0 {
 		f.logger.Error("表单结构不能为空")
 		return errors.New("表单结构不能为空")
 	}
@@ -94,15 +94,23 @@ func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq 
 		return fmt.Errorf("表单结构序列化失败: %w", err)
 	}
 
+	// 转换为JSONMap
+	var schemaMap model.JSONMap
+	err = json.Unmarshal(schemaJSON, &schemaMap)
+	if err != nil {
+		f.logger.Error("转换表单结构为JSONMap失败", zap.Error(err))
+		return fmt.Errorf("转换表单结构失败: %w", err)
+	}
+
 	// 构建表单设计实体
 	formDesign := &model.WorkorderFormDesign{
 		Name:           formDesignReq.Name,
 		Description:    formDesignReq.Description,
-		Schema:         schemaJSON,
+		Schema:         schemaMap,
 		Status:         formDesignReq.Status,
 		CategoryID:     formDesignReq.CategoryID,
-		CreateUserID:   formDesignReq.CreateUserID,
-		CreateUserName: formDesignReq.CreateUserName,
+		OperatorID:     formDesignReq.OperatorID,
+		OperatorName:   formDesignReq.OperatorName,
 		Tags:           formDesignReq.Tags,
 		IsTemplate:     formDesignReq.IsTemplate,
 	}
@@ -139,7 +147,7 @@ func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq 
 	}
 
 	// 验证表单结构
-	if formDesignReq.Schema.Fields == nil || len(formDesignReq.Schema.Fields) == 0 {
+	if len(formDesignReq.Schema.Fields) == 0 {
 		f.logger.Error("表单结构不能为空")
 		return errors.New("表单结构不能为空")
 	}
@@ -159,12 +167,20 @@ func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq 
 		return fmt.Errorf("表单结构序列化失败: %w", err)
 	}
 
+	// 转换为JSONMap
+	var updateSchemaMap model.JSONMap
+	err = json.Unmarshal(schemaJSON, &updateSchemaMap)
+	if err != nil {
+		f.logger.Error("转换更新表单结构为JSONMap失败", zap.Error(err))
+		return fmt.Errorf("转换更新表单结构失败: %w", err)
+	}
+
 	// 构建更新数据
 	formDesign := &model.WorkorderFormDesign{
 		Model:       model.Model{ID: formDesignReq.ID},
 		Name:        formDesignReq.Name,
 		Description: formDesignReq.Description,
-		Schema:      schemaJSON,
+		Schema:      updateSchemaMap,
 		CategoryID:  formDesignReq.CategoryID,
 		Status:      formDesignReq.Status,
 		Tags:        formDesignReq.Tags,
@@ -219,15 +235,15 @@ func (f *formDesignService) GetFormDesign(ctx context.Context, id int) (*model.W
 }
 
 // ListFormDesign 获取表单设计列表
-func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListWorkorderFormDesignReq) (model.ListResp[*model.WorkorderFormDesign], error) {
+func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListWorkorderFormDesignReq) (*model.ListResp[*model.WorkorderFormDesign], error) {
 	// 获取表单设计列表
 	formDesigns, total, err := f.dao.ListFormDesign(ctx, req)
 	if err != nil {
 		f.logger.Error("获取表单设计列表失败", zap.Error(err))
-		return model.ListResp[*model.WorkorderFormDesign]{}, err
+		return nil, err
 	}
 
-	return model.ListResp[*model.WorkorderFormDesign]{
+	return &model.ListResp[*model.WorkorderFormDesign]{
 		Items: formDesigns,
 		Total: total,
 	}, nil

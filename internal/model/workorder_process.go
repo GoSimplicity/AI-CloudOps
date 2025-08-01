@@ -25,7 +25,6 @@
 
 package model
 
-import "gorm.io/datatypes"
 
 // 流程状态常量
 const (
@@ -48,11 +47,11 @@ type WorkorderProcess struct {
 	Name           string         `json:"name" gorm:"column:name;type:varchar(200);not null;index;comment:流程名称"`
 	Description    string         `json:"description" gorm:"column:description;type:varchar(1000);comment:流程描述"`
 	FormDesignID   int            `json:"form_design_id" gorm:"column:form_design_id;not null;index;comment:关联表单设计ID"`
-	Definition     datatypes.JSON `json:"definition" gorm:"column:definition;type:json;not null;comment:流程定义JSON"`
+	Definition     JSONMap `json:"definition" gorm:"column:definition;type:json;not null;comment:流程JSON定义"`
 	Status         int8           `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-草稿，2-已发布，3-已归档"`
 	CategoryID     *int           `json:"category_id" gorm:"column:category_id;index;comment:分类ID"`
-	CreateUserID   int            `json:"create_user_id" gorm:"column:create_user_id;not null;index;comment:创建人ID"`
-	CreateUserName string         `json:"create_user_name" gorm:"column:create_user_name;type:varchar(100);not null;index;comment:创建人名称"`
+	OperatorID   int            `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName string         `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;index;comment:操作人名称"`
 	Tags           StringList     `json:"tags" gorm:"column:tags;comment:标签"`
 	IsDefault      int8           `json:"is_default" gorm:"column:is_default;not null;default:2;comment:是否为默认流程：1-是，2-否"`
 }
@@ -93,8 +92,8 @@ type CreateWorkorderProcessReq struct {
 	Definition     ProcessDefinition `json:"definition" binding:"required"`
 	Status         int8              `json:"status" binding:"required,oneof=1 2 3"`
 	CategoryID     *int              `json:"category_id" binding:"omitempty,min=1"`
-	CreateUserID   int               `json:"create_user_id" binding:"required,min=1"`
-	CreateUserName string            `json:"create_user_name" binding:"required,min=1,max=100"`
+	OperatorID   int               `json:"operator_id" binding:"required,min=1"`
+	OperatorName string            `json:"operator_name" binding:"required,min=1,max=100"`
 	Tags           StringList        `json:"tags" binding:"omitempty"`
 	IsDefault      int8              `json:"is_default" binding:"required,oneof=1 2"`
 }

@@ -40,7 +40,7 @@ type WorkorderProcessService interface {
 	CreateWorkorderProcess(ctx context.Context, req *model.CreateWorkorderProcessReq) error
 	UpdateWorkorderProcess(ctx context.Context, req *model.UpdateWorkorderProcessReq) error
 	DeleteWorkorderProcess(ctx context.Context, id int) error
-	ListWorkorderProcess(ctx context.Context, req *model.ListWorkorderProcessReq) (model.ListResp[*model.WorkorderProcess], error)
+	ListWorkorderProcess(ctx context.Context, req *model.ListWorkorderProcessReq) (*model.ListResp[*model.WorkorderProcess], error)
 	DetailWorkorderProcess(ctx context.Context, id int) (*model.WorkorderProcess, error)
 }
 
@@ -106,8 +106,8 @@ func (p *workorderProcessService) CreateWorkorderProcess(ctx context.Context, re
 		FormDesignID:   req.FormDesignID,
 		Status:         req.Status,
 		CategoryID:     req.CategoryID,
-		CreateUserID:   req.CreateUserID,
-		CreateUserName: req.CreateUserName,
+		OperatorID:   req.OperatorID,
+		OperatorName: req.OperatorName,
 		Tags:           req.Tags,
 		IsDefault:      req.IsDefault,
 	}
@@ -126,7 +126,14 @@ func (p *workorderProcessService) CreateWorkorderProcess(ctx context.Context, re
 			p.logger.Error("序列化流程定义失败", zap.Error(err))
 			return fmt.Errorf("序列化流程定义失败: %w", err)
 		}
-		process.Definition = definitionJSON
+		// 转换为JSONMap
+		var definitionMap model.JSONMap
+		err = json.Unmarshal(definitionJSON, &definitionMap)
+		if err != nil {
+			p.logger.Error("转换流程定义为JSONMap失败", zap.Error(err))
+			return fmt.Errorf("转换流程定义失败: %w", err)
+		}
+		process.Definition = definitionMap
 	}
 
 	// 创建流程
@@ -134,7 +141,7 @@ func (p *workorderProcessService) CreateWorkorderProcess(ctx context.Context, re
 		p.logger.Error("创建流程失败",
 			zap.Error(err),
 			zap.String("name", req.Name),
-			zap.Int("createUserID", req.CreateUserID))
+			zap.Int("createUserID", req.OperatorID))
 		return fmt.Errorf("创建流程失败: %w", err)
 	}
 
@@ -219,7 +226,14 @@ func (p *workorderProcessService) UpdateWorkorderProcess(ctx context.Context, re
 			p.logger.Error("序列化流程定义失败", zap.Error(err))
 			return fmt.Errorf("序列化流程定义失败: %w", err)
 		}
-		process.Definition = definitionJSON
+		// 转换为JSONMap
+		var definitionMap model.JSONMap
+		err = json.Unmarshal(definitionJSON, &definitionMap)
+		if err != nil {
+			p.logger.Error("转换流程定义为JSONMap失败", zap.Error(err))
+			return fmt.Errorf("转换流程定义失败: %w", err)
+		}
+		process.Definition = definitionMap
 	}
 
 	// 更新流程
@@ -286,14 +300,14 @@ func (p *workorderProcessService) DeleteWorkorderProcess(ctx context.Context, id
 }
 
 // ListWorkorderProcess 获取流程列表
-func (p *workorderProcessService) ListWorkorderProcess(ctx context.Context, req *model.ListWorkorderProcessReq) (model.ListResp[*model.WorkorderProcess], error) {
+func (p *workorderProcessService) ListWorkorderProcess(ctx context.Context, req *model.ListWorkorderProcessReq) (*model.ListResp[*model.WorkorderProcess], error) {
 	processes, total, err := p.dao.ListProcess(ctx, req)
 	if err != nil {
 		p.logger.Error("获取流程列表失败", zap.Error(err))
-		return model.ListResp[*model.WorkorderProcess]{}, fmt.Errorf("获取流程列表失败: %w", err)
+		return nil, fmt.Errorf("获取流程列表失败: %w", err)
 	}
 
-	result := model.ListResp[*model.WorkorderProcess]{
+	result := &model.ListResp[*model.WorkorderProcess]{
 		Items: processes,
 		Total: total,
 	}

@@ -28,6 +28,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
@@ -44,7 +45,11 @@ type InstanceService interface {
 	UpdateInstance(ctx context.Context, req *model.UpdateWorkorderInstanceReq) error
 	DeleteInstance(ctx context.Context, id int) error
 	GetInstance(ctx context.Context, id int) (*model.WorkorderInstance, error)
-	ListInstance(ctx context.Context, req *model.ListWorkorderInstanceReq) (model.ListResp[*model.WorkorderInstance], error)
+	ListInstance(ctx context.Context, req *model.ListWorkorderInstanceReq) (*model.ListResp[*model.WorkorderInstance], error)
+	SubmitInstance(ctx context.Context, id int, operatorID int, operatorName string) error
+	AssignInstance(ctx context.Context, id int, assigneeID int, operatorID int, operatorName string) error
+	ApproveInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error
+	RejectInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error
 }
 
 type instanceService struct {
@@ -81,15 +86,22 @@ func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateW
 		return nil, err
 	}
 
+	// 生成工单编号
+	serialNumber, err := s.dao.GenerateSerialNumber(ctx)
+	if err != nil {
+		s.logger.Error("生成工单编号失败", zap.Error(err))
+		return nil, err
+	}
+
 	instance := &model.WorkorderInstance{
 		Title:          req.Title,
-		SerialNumber:   req.SerialNumber,
+		SerialNumber:   serialNumber,
 		ProcessID:      req.ProcessID,
 		FormData:       req.FormData,
 		Status:         req.Status,
 		Priority:       req.Priority,
-		CreateUserID:   req.CreateUserID,
-		CreateUserName: req.CreateUserName,
+		OperatorID:     req.OperatorID,
+		OperatorName:   req.OperatorName,
 		AssigneeID:     req.AssigneeID,
 		Description:    req.Description,
 		Tags:           req.Tags,
@@ -174,15 +186,49 @@ func (s *instanceService) GetInstance(ctx context.Context, id int) (*model.Worko
 }
 
 // ListInstance 获取工单实例列表
-func (s *instanceService) ListInstance(ctx context.Context, req *model.ListWorkorderInstanceReq) (model.ListResp[*model.WorkorderInstance], error) {
+func (s *instanceService) ListInstance(ctx context.Context, req *model.ListWorkorderInstanceReq) (*model.ListResp[*model.WorkorderInstance], error) {
 	result, total, err := s.dao.ListInstance(ctx, req)
 	if err != nil {
 		s.logger.Error("获取工单实例列表失败", zap.Error(err))
-		return model.ListResp[*model.WorkorderInstance]{}, err
+		return nil, err
 	}
 
-	return model.ListResp[*model.WorkorderInstance]{
+	return &model.ListResp[*model.WorkorderInstance]{
 		Items: result,
 		Total: total,
 	}, nil
+}
+
+// SubmitInstance 提交工单
+func (s *instanceService) SubmitInstance(ctx context.Context, id int, operatorID int, operatorName string) error {
+	return s.dao.UpdateInstanceStatus(ctx, id, model.InstanceStatusPending)
+}
+
+// AssignInstance 指派工单
+func (s *instanceService) AssignInstance(ctx context.Context, id int, assigneeID int, operatorID int, operatorName string) error {
+	if err := s.dao.UpdateInstanceAssignee(ctx, id, &assigneeID); err != nil {
+		return err
+	}
+	return s.dao.UpdateInstanceStatus(ctx, id, model.InstanceStatusProcessing)
+}
+
+// ApproveInstance 审批通过工单
+func (s *instanceService) ApproveInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
+	now := time.Now()
+	if err := s.dao.UpdateInstanceStatus(ctx, id, model.InstanceStatusCompleted); err != nil {
+		return err
+	}
+	
+	// 更新完成时间
+	instance, err := s.dao.GetInstanceByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	instance.CompletedAt = &now
+	return s.dao.UpdateInstance(ctx, instance)
+}
+
+// RejectInstance 拒绝工单
+func (s *instanceService) RejectInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
+	return s.dao.UpdateInstanceStatus(ctx, id, model.InstanceStatusRejected)
 }

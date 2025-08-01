@@ -25,7 +25,6 @@
 
 package model
 
-import "gorm.io/datatypes"
 
 const (
 	FormDesignStatusDraft     int8 = 1 // 草稿
@@ -50,11 +49,11 @@ type WorkorderFormDesign struct {
 	Model
 	Name           string         `json:"name" gorm:"column:name;type:varchar(200);not null;index;comment:表单名称"`
 	Description    string         `json:"description" gorm:"column:description;type:varchar(1000);comment:表单描述"`
-	Schema         datatypes.JSON `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
+	Schema         JSONMap `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
 	Status         int8           `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-草稿，2-已发布，3-已归档"`
 	CategoryID     *int           `json:"category_id" gorm:"column:category_id;index;comment:分类ID"`
-	CreateUserID   int            `json:"create_user_id" gorm:"column:create_user_id;not null;index;comment:创建人ID"`
-	CreateUserName string         `json:"create_user_name" gorm:"column:create_user_name;type:varchar(100);not null;index;comment:创建人名称"`
+	OperatorID     int            `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName   string         `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;index;comment:操作人名称"`
 	Tags           StringList     `json:"tags" gorm:"column:tags;comment:标签"`
 	IsTemplate     int8           `json:"is_template" gorm:"column:is_template;not null;default:1;comment:是否为模板：1-是，2-否"`
 }
@@ -72,7 +71,7 @@ type FormField struct {
 	Name        string      `json:"name" binding:"required"`  // 字段名称
 	Required    bool        `json:"required"`                 // 是否必填
 	Placeholder string      `json:"placeholder"`              // 占位符
-	Default     interface{} `json:"default"`                  // 默认值
+	Default     any         `json:"default"`                  // 默认值
 	Options     []string    `json:"options,omitempty"`        // 选项（如下拉、单选等）
 }
 
@@ -88,8 +87,8 @@ type CreateWorkorderFormDesignReq struct {
 	Schema         FormSchema `json:"schema" binding:"required"`
 	Status         int8       `json:"status" binding:"required,oneof=1 2 3"`
 	CategoryID     *int       `json:"category_id" binding:"omitempty,min=1"`
-	CreateUserID   int        `json:"create_user_id" binding:"required,min=1"`
-	CreateUserName string     `json:"create_user_name" binding:"required,min=1,max=100"`
+	OperatorID     int        `json:"operator_id" binding:"required,min=1"`
+	OperatorName   string     `json:"operator_name" binding:"required,min=1,max=100"`
 	Tags           StringList `json:"tags" binding:"omitempty"`
 	IsTemplate     int8       `json:"is_template" binding:"required,oneof=1 2"`
 }

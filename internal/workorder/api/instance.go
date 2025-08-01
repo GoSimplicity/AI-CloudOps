@@ -50,6 +50,10 @@ func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 		instanceGroup.DELETE("/delete/:id", h.DeleteInstance)
 		instanceGroup.GET("/list", h.ListInstance)
 		instanceGroup.GET("/detail/:id", h.DetailInstance)
+		instanceGroup.POST("/submit/:id", h.SubmitInstance)
+		instanceGroup.POST("/assign/:id", h.AssignInstance)
+		instanceGroup.POST("/approve/:id", h.ApproveInstance)
+		instanceGroup.POST("/reject/:id", h.RejectInstance)
 	}
 }
 
@@ -58,8 +62,8 @@ func (h *InstanceHandler) CreateInstance(ctx *gin.Context) {
 	var req model.CreateWorkorderInstanceReq
 	user := ctx.MustGet("user").(utils.UserClaims)
 
-	req.CreateUserID = user.Uid
-	req.CreateUserName = user.Username
+	req.OperatorID = user.Uid
+	req.OperatorName = user.Username
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
 		return h.service.CreateInstance(ctx, &req)
@@ -72,6 +76,7 @@ func (h *InstanceHandler) UpdateInstance(ctx *gin.Context) {
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
@@ -84,33 +89,27 @@ func (h *InstanceHandler) UpdateInstance(ctx *gin.Context) {
 
 // DeleteInstance 删除工单实例
 func (h *InstanceHandler) DeleteInstance(ctx *gin.Context) {
-	var req model.DeleteWorkorderInstanceReq
-
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
-	req.ID = id
-
-	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.service.DeleteInstance(ctx, req.ID)
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return nil, h.service.DeleteInstance(ctx, id)
 	})
 }
 
 // DetailInstance 获取工单实例详情
 func (h *InstanceHandler) DetailInstance(ctx *gin.Context) {
-	var req model.DetailWorkorderInstanceReq
-
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
-	req.ID = id
-
-	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return h.service.GetInstance(ctx, req.ID)
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return h.service.GetInstance(ctx, id)
 	})
 }
 
@@ -120,5 +119,92 @@ func (h *InstanceHandler) ListInstance(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
 		return h.service.ListInstance(ctx, &req)
+	})
+}
+
+// SubmitInstance 提交工单
+func (h *InstanceHandler) SubmitInstance(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		return
+	}
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return nil, h.service.SubmitInstance(ctx, id, user.Uid, user.Username)
+	})
+}
+
+// AssignInstance 指派工单
+func (h *InstanceHandler) AssignInstance(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		return
+	}
+
+	var req struct {
+		AssigneeID int `json:"assignee_id" binding:"required,min=1"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		utils.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return nil, h.service.AssignInstance(ctx, id, req.AssigneeID, user.Uid, user.Username)
+	})
+}
+
+// ApproveInstance 审批通过工单
+func (h *InstanceHandler) ApproveInstance(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		return
+	}
+
+	var req struct {
+		Comment string `json:"comment"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		utils.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return nil, h.service.ApproveInstance(ctx, id, user.Uid, user.Username, req.Comment)
+	})
+}
+
+// RejectInstance 拒绝工单
+func (h *InstanceHandler) RejectInstance(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		return
+	}
+
+	var req struct {
+		Comment string `json:"comment" binding:"required"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		utils.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return nil, h.service.RejectInstance(ctx, id, user.Uid, user.Username, req.Comment)
 	})
 }

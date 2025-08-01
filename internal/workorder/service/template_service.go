@@ -27,7 +27,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -123,8 +122,8 @@ func (t *templateService) CreateTemplate(ctx context.Context, req *model.CreateW
 		DefaultValues:  req.DefaultValues,
 		Status:         1, // 默认启用
 		CategoryID:     req.CategoryID,
-		CreateUserID:   creatorID,
-		CreateUserName: creatorName,
+		OperatorID:   creatorID,
+		OperatorName: creatorName,
 	}
 	// 执行验证器
 	for _, validator := range t.validators {
@@ -192,8 +191,8 @@ func (t *templateService) UpdateTemplate(ctx context.Context, req *model.UpdateW
 		DefaultValues:  req.DefaultValues,
 		Status:         req.Status,
 		CategoryID:     req.CategoryID,
-		CreateUserID:   existingTemplate.CreateUserID,
-		CreateUserName: existingTemplate.CreateUserName,
+		OperatorID:   existingTemplate.OperatorID,
+		OperatorName: existingTemplate.OperatorName,
 	}
 	// 执行验证器
 	for _, validator := range t.validators {
@@ -256,22 +255,29 @@ func (t *templateService) ListTemplate(ctx context.Context, req *model.ListWorko
 	t.l.Debug("查询模板列表",
 		zap.Int("page", req.Page),
 		zap.Int("size", req.Size),
-		zap.Any("filters", map[string]interface{}{
+		zap.Any("filters", map[string]any{
 			"name":       req.Search,
 			"categoryID": req.CategoryID,
 			"processID":  req.ProcessID,
 			"status":     req.Status,
 		}),
 	)
-	result, err := t.dao.ListTemplate(ctx, req)
+	templates, total, err := t.dao.ListTemplate(ctx, req)
 	if err != nil {
 		t.l.Error("获取模板列表失败", zap.Error(err))
 		return nil, fmt.Errorf("获取模板列表失败: %w", err)
 	}
+
 	// 批量获取创建者信息
-	if err := t.enrichTemplateListWithCreators(ctx, result.Items); err != nil {
+	if err := t.enrichTemplateListWithCreators(ctx, templates); err != nil {
 		t.l.Warn("获取创建者信息失败", zap.Error(err))
 	}
+
+	result := &model.ListResp[*model.WorkorderTemplate]{
+		Items: templates,
+		Total: total,
+	}
+
 	t.l.Info("获取模板列表成功", zap.Int("count", len(result.Items)), zap.Int64("total", result.Total))
 	return result, nil
 }
@@ -287,20 +293,14 @@ func (t *templateService) DetailTemplate(ctx context.Context, id int, userID int
 		return nil, fmt.Errorf("获取模板详情失败: %w", err)
 	}
 	// 获取创建者信息
-	if template.CreateUserID > 0 && template.CreateUserName == "" {
-		if user, err := t.userDao.GetUserByID(ctx, template.CreateUserID); err != nil {
-			t.l.Warn("获取创建者信息失败", zap.Error(err), zap.Int("creatorID", template.CreateUserID))
+	if template.OperatorID > 0 && template.OperatorName == "" {
+		if user, err := t.userDao.GetUserByID(ctx, template.OperatorID); err != nil {
+			t.l.Warn("获取创建者信息失败", zap.Error(err), zap.Int("creatorID", template.OperatorID))
 		} else {
-			template.CreateUserName = user.Username
+			template.OperatorName = user.Username
 		}
 	}
-	// 解析默认值以便前端使用
-	if template.DefaultValues != nil && len(template.DefaultValues) > 0 {
-		var defaultValues model.JSONMap
-		if err := json.Unmarshal([]byte(template.DefaultValues), &defaultValues); err != nil {
-			t.l.Warn("解析模板默认值失败", zap.Error(err), zap.Int("id", id))
-		}
-	}
+	// DefaultValues已经是JSONMap类型，无需解析
 	t.l.Debug("获取模板详情成功", zap.Int("id", id), zap.String("name", template.Name))
 	return template, nil
 }
@@ -335,10 +335,10 @@ func (t *templateService) enrichTemplateListWithCreators(ctx context.Context, te
 	creatorIDs := make([]int, 0)
 	creatorIDMap := make(map[int]struct{})
 	for _, template := range templates {
-		if template.CreateUserID > 0 {
-			if _, ok := creatorIDMap[template.CreateUserID]; !ok {
-				creatorIDs = append(creatorIDs, template.CreateUserID)
-				creatorIDMap[template.CreateUserID] = struct{}{}
+		if template.OperatorID > 0 {
+			if _, ok := creatorIDMap[template.OperatorID]; !ok {
+				creatorIDs = append(creatorIDs, template.OperatorID)
+				creatorIDMap[template.OperatorID] = struct{}{}
 			}
 		}
 	}
@@ -354,8 +354,8 @@ func (t *templateService) enrichTemplateListWithCreators(ctx context.Context, te
 		userMap[user.ID] = user.Username
 	}
 	for i := range templates {
-		if name, ok := userMap[templates[i].CreateUserID]; ok {
-			templates[i].CreateUserName = name
+		if name, ok := userMap[templates[i].OperatorID]; ok {
+			templates[i].OperatorName = name
 		}
 	}
 	return nil
@@ -367,7 +367,7 @@ func (t *templateService) hasPermissionToModify(template *model.WorkorderTemplat
 	if template == nil {
 		return false
 	}
-	return userID == 1 || userID == template.CreateUserID
+	return userID == 1 || userID == template.OperatorID
 }
 
 // validateProcessExists 验证流程是否存在
@@ -416,14 +416,11 @@ func (v *defaultTemplateValidator) Validate(ctx context.Context, template *model
 	if template.Status < 0 || template.Status > 1 {
 		return errors.New("模板状态无效")
 	}
-	// 验证默认值格式
-	if template.DefaultValues != nil && len(template.DefaultValues) > 0 {
-		var defaultValues model.JSONMap
-		if err := json.Unmarshal([]byte(template.DefaultValues), &defaultValues); err != nil {
-			return fmt.Errorf("默认值格式错误: %w", err)
-		}
+	// 验证默认值格式（DefaultValues已经是JSONMap类型）
+	if len(template.DefaultValues) > 0 {
+		// 直接使用template.DefaultValues，无需反序列化
 		// 验证优先级
-		if val, ok := defaultValues["priority"]; ok && val != nil {
+		if val, ok := template.DefaultValues["priority"]; ok && val != nil {
 			priority, ok := val.(float64)
 			if !ok {
 				return errors.New("默认优先级值类型无效")
@@ -433,7 +430,7 @@ func (v *defaultTemplateValidator) Validate(ctx context.Context, template *model
 			}
 		}
 		// 验证截止时间
-		if val, ok := defaultValues["due_hours"]; ok && val != nil {
+		if val, ok := template.DefaultValues["due_hours"]; ok && val != nil {
 			dueHours, ok := val.(float64)
 			if !ok {
 				return errors.New("默认截止时间类型无效")

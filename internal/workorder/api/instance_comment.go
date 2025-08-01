@@ -26,6 +26,8 @@
 package api
 
 import (
+	"strconv"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -45,29 +47,31 @@ func NewInstanceCommentHandler(commentService service.InstanceCommentService) *I
 func (h *InstanceCommentHandler) RegisterRouters(server *gin.Engine) {
 	commentGroup := server.Group("/api/workorder/instance/comment")
 	{
-		commentGroup.POST("/:id", h.CommentInstance)
-		commentGroup.GET("/:id", h.GetInstanceComments)
+		commentGroup.POST("/create", h.CreateInstanceComment)
+		commentGroup.PUT("/update/:id", h.UpdateInstanceComment)
+		commentGroup.DELETE("/delete/:id", h.DeleteInstanceComment)
+		commentGroup.GET("/detail/:id", h.GetInstanceComment)
+		commentGroup.GET("/list", h.ListInstanceComments)
+		commentGroup.GET("/tree/:instanceId", h.GetInstanceCommentsTree)
 	}
 }
 
-func (h *InstanceCommentHandler) CommentInstance(ctx *gin.Context) {
+// CreateInstanceComment 创建工单评论
+func (h *InstanceCommentHandler) CreateInstanceComment(ctx *gin.Context) {
 	var req model.CreateWorkorderInstanceCommentReq
-
 	user := ctx.MustGet("user").(utils.UserClaims)
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		return
-	}
 
-	req.InstanceID = id
+	req.OperatorID = user.Uid
+	req.OperatorName = user.Username
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.commentService.CommentInstance(ctx, &req, user.Uid, user.Username)
+		return nil, h.commentService.CreateInstanceComment(ctx, &req)
 	})
 }
 
-func (h *InstanceCommentHandler) GetInstanceComments(ctx *gin.Context) {
-	var req model.DetailWorkorderInstanceCommentReq
+// UpdateInstanceComment 更新工单评论
+func (h *InstanceCommentHandler) UpdateInstanceComment(ctx *gin.Context) {
+	var req model.UpdateWorkorderInstanceCommentReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -75,8 +79,58 @@ func (h *InstanceCommentHandler) GetInstanceComments(ctx *gin.Context) {
 	}
 
 	req.ID = id
+	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return h.commentService.GetInstanceComments(ctx, req.ID)
+		return nil, h.commentService.UpdateInstanceComment(ctx, &req, user.Uid)
+	})
+}
+
+// DeleteInstanceComment 删除工单评论
+func (h *InstanceCommentHandler) DeleteInstanceComment(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		return
+	}
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return nil, h.commentService.DeleteInstanceComment(ctx, id, user.Uid)
+	})
+}
+
+// GetInstanceComment 获取工单评论详情
+func (h *InstanceCommentHandler) GetInstanceComment(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return h.commentService.GetInstanceComment(ctx, id)
+	})
+}
+
+// ListInstanceComments 获取工单评论列表
+func (h *InstanceCommentHandler) ListInstanceComments(ctx *gin.Context) {
+	var req model.ListWorkorderInstanceCommentReq
+
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return h.commentService.ListInstanceComments(ctx, &req)
+	})
+}
+
+// GetInstanceCommentsTree 获取工单评论树结构
+func (h *InstanceCommentHandler) GetInstanceCommentsTree(ctx *gin.Context) {
+	instanceIdStr := ctx.Param("instanceId")
+	instanceId, err := strconv.Atoi(instanceIdStr)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "实例ID格式无效")
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return h.commentService.GetInstanceCommentsTree(ctx, instanceId)
 	})
 }

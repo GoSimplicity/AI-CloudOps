@@ -29,7 +29,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -42,11 +41,11 @@ var (
 	ErrInstanceFlowNotFound = errors.New("工单流程记录不存在")
 )
 
-type InstanceFlowDAO interface {
-	CreateInstanceFlow(ctx context.Context, flow *model.WorkorderInstanceFlow) error
-	GetInstanceFlows(ctx context.Context, instanceID int) ([]model.WorkorderInstanceFlow, error)
-	GetInstanceFlowByID(ctx context.Context, id int) (*model.WorkorderInstanceFlow, error)
-	ListInstanceFlows(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) ([]model.WorkorderInstanceFlow, int64, error)
+type WorkorderInstanceFlowDAO interface {
+	Create(ctx context.Context, flow *model.WorkorderInstanceFlow) error
+	GetByInstanceID(ctx context.Context, instanceID int) ([]model.WorkorderInstanceFlow, error)
+	GetByID(ctx context.Context, id int) (*model.WorkorderInstanceFlow, error)
+	List(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) ([]model.WorkorderInstanceFlow, int64, error)
 }
 
 type instanceFlowDAO struct {
@@ -54,15 +53,15 @@ type instanceFlowDAO struct {
 	logger *zap.Logger
 }
 
-func NewInstanceFlowDAO(db *gorm.DB, logger *zap.Logger) InstanceFlowDAO {
+func NewInstanceFlowDAO(db *gorm.DB, logger *zap.Logger) WorkorderInstanceFlowDAO {
 	return &instanceFlowDAO{
 		db:     db,
 		logger: logger,
 	}
 }
 
-// CreateInstanceFlow 创建工单流程记录
-func (d *instanceFlowDAO) CreateInstanceFlow(ctx context.Context, flow *model.WorkorderInstanceFlow) error {
+// Create 创建工单流程记录
+func (d *instanceFlowDAO) Create(ctx context.Context, flow *model.WorkorderInstanceFlow) error {
 	if flow == nil {
 		return ErrFlowNilPointer
 	}
@@ -80,8 +79,8 @@ func (d *instanceFlowDAO) CreateInstanceFlow(ctx context.Context, flow *model.Wo
 	return nil
 }
 
-// GetInstanceFlows 获取工单流程记录
-func (d *instanceFlowDAO) GetInstanceFlows(ctx context.Context, instanceID int) ([]model.WorkorderInstanceFlow, error) {
+// GetByInstanceID 获取工单流程记录
+func (d *instanceFlowDAO) GetByInstanceID(ctx context.Context, instanceID int) ([]model.WorkorderInstanceFlow, error) {
 	if instanceID <= 0 {
 		return nil, errors.New("工单实例ID无效")
 	}
@@ -100,8 +99,8 @@ func (d *instanceFlowDAO) GetInstanceFlows(ctx context.Context, instanceID int) 
 	return flows, nil
 }
 
-// GetInstanceFlowByID 根据ID获取工单流程记录
-func (d *instanceFlowDAO) GetInstanceFlowByID(ctx context.Context, id int) (*model.WorkorderInstanceFlow, error) {
+// GetByID 根据ID获取工单流程记录
+func (d *instanceFlowDAO) GetByID(ctx context.Context, id int) (*model.WorkorderInstanceFlow, error) {
 	if id <= 0 {
 		return nil, errors.New("工单实例ID无效")
 	}
@@ -119,8 +118,8 @@ func (d *instanceFlowDAO) GetInstanceFlowByID(ctx context.Context, id int) (*mod
 	return &flow, nil
 }
 
-// ListInstanceFlows 分页获取工单流程记录列表
-func (d *instanceFlowDAO) ListInstanceFlows(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) ([]model.WorkorderInstanceFlow, int64, error) {
+// List 分页获取工单流程记录列表
+func (d *instanceFlowDAO) List(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) ([]model.WorkorderInstanceFlow, int64, error) {
 	if req == nil {
 		return nil, 0, fmt.Errorf("请求参数为空")
 	}
@@ -172,7 +171,7 @@ func (d *instanceFlowDAO) validateFlow(flow *model.WorkorderInstanceFlow) error 
 	if flow.InstanceID <= 0 {
 		return fmt.Errorf("工单ID无效")
 	}
-	if strings.TrimSpace(flow.StepID) == "" {
+	if flow.StepID == "" {
 		return fmt.Errorf("步骤ID不能为空")
 	}
 	if flow.OperatorID <= 0 {

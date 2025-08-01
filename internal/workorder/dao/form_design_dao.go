@@ -28,7 +28,6 @@ package dao
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -73,7 +72,7 @@ func (f *workorderFormDesignDAO) CreateFormDesign(ctx context.Context, formDesig
 
 // UpdateFormDesign 更新表单设计
 func (f *workorderFormDesignDAO) UpdateFormDesign(ctx context.Context, formDesign *model.WorkorderFormDesign) error {
-	updateData := map[string]interface{}{
+	updateData := map[string]any{
 		"name":        formDesign.Name,
 		"description": formDesign.Description,
 		"schema":      formDesign.Schema,
@@ -170,7 +169,7 @@ func (f *workorderFormDesignDAO) ListFormDesign(ctx context.Context, req *model.
 
 // CheckFormDesignNameExists 检查表单设计名称是否存在
 func (f *workorderFormDesignDAO) CheckFormDesignNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
-	if strings.TrimSpace(name) == "" {
+	if name == "" {
 		return false, fmt.Errorf("表单设计名称不能为空")
 	}
 
@@ -192,8 +191,8 @@ func (f *workorderFormDesignDAO) CheckFormDesignNameExists(ctx context.Context, 
 // buildListQuery 构建列表查询条件
 func (f *workorderFormDesignDAO) buildListQuery(db *gorm.DB, req *model.ListWorkorderFormDesignReq) *gorm.DB {
 	if req.Search != "" {
-		searchPattern := "%" + strings.TrimSpace(req.Search) + "%"
-		db = db.Where("name LIKE ? OR description LIKE ?", searchPattern, searchPattern)
+		searchTerm := sanitizeSearchInput(req.Search)
+		db = db.Where("name LIKE ? OR description LIKE ?", "%"+searchTerm+"%", "%"+searchTerm+"%")
 	}
 
 	if req.Status != nil {

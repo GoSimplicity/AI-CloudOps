@@ -33,11 +33,11 @@ const (
 // WorkorderCategory 工单分类实体
 type WorkorderCategory struct {
 	Model
-	Name           string `json:"name" gorm:"column:name;type:varchar(100);not null;index;comment:分类名称"`
-	Status         int8   `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-启用，2-禁用"`
-	Description    string `json:"description" gorm:"column:description;type:varchar(500);comment:分类描述"`
-	CreateUserID   int    `json:"create_user_id" gorm:"column:create_user_id;not null;index;comment:创建人ID"`
-	CreateUserName string `json:"create_user_name" gorm:"column:create_user_name;type:varchar(100);not null;index;comment:创建人名称"`
+	Name         string `json:"name" gorm:"column:name;type:varchar(100);not null;index;comment:分类名称"`
+	Status       int8   `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-启用，2-禁用"`
+	Description  string `json:"description" gorm:"column:description;type:varchar(500);comment:分类描述"`
+	OperatorID     int    `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName   string `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;index;comment:操作人名称"`
 }
 
 // TableName 指定工单分类表名
@@ -50,8 +50,8 @@ type CreateWorkorderCategoryReq struct {
 	Name           string `json:"name" binding:"required,min=1,max=100"`
 	Status         int8   `json:"status" binding:"required,oneof=1 2"`
 	Description    string `json:"description" binding:"omitempty,max=500"`
-	CreateUserID   int    `json:"create_user_id" binding:"required,min=1"`
-	CreateUserName string `json:"create_user_name" binding:"required,min=1,max=100"`
+	OperatorID     int    `json:"operator_id" binding:"required,min=1"`
+	OperatorName   string `json:"operator_name" binding:"required,min=1,max=100"`
 }
 
 // UpdateWorkorderCategoryReq 更新工单分类请求
