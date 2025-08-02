@@ -190,7 +190,7 @@ func (d *workorderInstanceDAO) ListInstance(ctx context.Context, req *model.List
 		d.logger.Error("获取工单实例列表失败: 请求参数为空")
 		return nil, 0, fmt.Errorf("请求参数为空")
 	}
-	
+
 	// 验证分页参数
 	req.Page, req.Size = ValidatePagination(req.Page, req.Size)
 
@@ -246,7 +246,7 @@ func (d *workorderInstanceDAO) GetInstanceBySerialNumber(ctx context.Context, se
 		Preload("FlowLogs").
 		Preload("Timeline").
 		First(&instance).Error
-	
+
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			d.logger.Warn("工单实例不存在", zap.String("serial_number", serialNumber))
@@ -263,18 +263,18 @@ func (d *workorderInstanceDAO) GetInstanceBySerialNumber(ctx context.Context, se
 func (d *workorderInstanceDAO) GenerateSerialNumber(ctx context.Context) (string, error) {
 	now := time.Now()
 	prefix := "WO" + now.Format("20060102")
-	
+
 	var count int64
 	err := d.db.WithContext(ctx).
 		Model(&model.WorkorderInstance{}).
 		Where("serial_number LIKE ?", prefix+"%").
 		Count(&count).Error
-	
+
 	if err != nil {
 		d.logger.Error("生成工单编号失败", zap.Error(err))
 		return "", fmt.Errorf("生成工单编号失败: %w", err)
 	}
-	
+
 	serialNumber := fmt.Sprintf("%s%04d", prefix, count+1)
 	return serialNumber, nil
 }

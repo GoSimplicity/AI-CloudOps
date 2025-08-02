@@ -25467,7 +25467,7 @@ const docTemplate = `{
                     "description": "默认值"
                 },
                 "id": {
-                    "description": "字段唯一标识",
+                    "description": "字段唯一标识（系统自动生成）",
                     "type": "string"
                 },
                 "label": {
@@ -25491,7 +25491,7 @@ const docTemplate = `{
                 },
                 "required": {
                     "description": "是否必填",
-                    "type": "boolean"
+                    "type": "integer"
                 },
                 "type": {
                     "description": "字段类型",
@@ -37323,7 +37323,7 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
-	Host:             "localhost:8080",
+	Host:             "localhost:8889",
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "AI-CloudOps API",

@@ -42,6 +42,7 @@ type WorkorderCategoryDAO interface {
 	ListCategory(ctx context.Context, req model.ListWorkorderCategoryReq) ([]*model.WorkorderCategory, int64, error)
 	ListCategoryByIDs(ctx context.Context, ids []int) ([]*model.WorkorderCategory, error)
 	GetCategory(ctx context.Context, id int) (*model.WorkorderCategory, error)
+	GetCategoryByName(ctx context.Context, name string) (*model.WorkorderCategory, error)
 }
 
 type workorderCategoryDAO struct {
@@ -172,6 +173,16 @@ func (dao *workorderCategoryDAO) GetCategory(ctx context.Context, id int) (*mode
 			zap.Error(err),
 			zap.Int("id", id))
 		return nil, fmt.Errorf("获取分类详情失败，请稍后重试，错误信息：%w", err)
+	}
+
+	return &category, nil
+}
+
+func (dao *workorderCategoryDAO) GetCategoryByName(ctx context.Context, name string) (*model.WorkorderCategory, error) {
+	var category model.WorkorderCategory
+
+	if err := dao.db.WithContext(ctx).Where("name = ?", name).First(&category).Error; err != nil {
+		return nil, err
 	}
 
 	return &category, nil

@@ -138,10 +138,6 @@ type DetailWorkorderNotificationReq struct {
 	ID int `json:"id" binding:"required"`
 }
 
-// DuplicateWorkorderNotificationReq 复制工单通知配置
-type DuplicateWorkorderNotificationReq struct {
-	ID int `json:"id" binding:"required"`
-}
 
 // 工单通知发送记录
 type WorkorderNotificationLog struct {

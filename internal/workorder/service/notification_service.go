@@ -20,7 +20,6 @@ type NotificationService interface {
 	DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error)
 	GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error)
 	TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error
-	DuplicateNotification(ctx context.Context, req *model.DuplicateWorkorderNotificationReq) error
 }
 
 type notificationService struct {
@@ -146,45 +145,6 @@ func (n *notificationService) TestSendNotification(ctx context.Context, req *mod
 	return n.dao.IncrementSentCount(ctx, notification.ID)
 }
 
-// DuplicateNotification 复制通知配置
-func (n *notificationService) DuplicateNotification(ctx context.Context, req *model.DuplicateWorkorderNotificationReq) error {
-	source, err := n.dao.GetNotificationByID(ctx, req.ID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("源通知配置不存在")
-		}
-		return fmt.Errorf("查询源通知配置失败: %w", err)
-	}
-
-	newReq := &model.CreateWorkorderNotificationReq{
-		Name:             source.Name + "_副本",
-		Description:      source.Description,
-		ProcessID:        source.ProcessID,
-		TemplateID:       source.TemplateID,
-		CategoryID:       source.CategoryID,
-		EventTypes:       source.EventTypes,
-		TriggerType:      source.TriggerType,
-		TriggerCondition: source.TriggerCondition,
-		Channels:         source.Channels,
-		RecipientTypes:   source.RecipientTypes,
-		RecipientUsers:   source.RecipientUsers,
-		RecipientRoles:   source.RecipientRoles,
-		RecipientDepts:   source.RecipientDepts,
-		MessageTemplate:  source.MessageTemplate,
-		SubjectTemplate:  source.SubjectTemplate,
-		ScheduledTime:    source.ScheduledTime,
-		RepeatInterval:   source.RepeatInterval,
-		MaxRetries:       source.MaxRetries,
-		RetryInterval:    source.RetryInterval,
-		Status:           source.Status,
-		Priority:         source.Priority,
-		IsDefault:        false,
-		Settings:         source.Settings,
-		UserID:           source.OperatorID,
-	}
-
-	return n.dao.CreateNotification(ctx, newReq)
-}
 
 // sendNotification 根据不同的通道发送通知
 func (n *notificationService) sendNotification(channel, recipient, content string) error {

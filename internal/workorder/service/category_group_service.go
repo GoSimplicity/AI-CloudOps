@@ -59,15 +59,27 @@ func NewCategoryGroupService(categoryDAO dao.WorkorderCategoryDAO, userDAO userd
 
 // CreateCategory 创建分类的实现
 func (s *categoryGroupService) CreateCategory(ctx context.Context, req *model.CreateWorkorderCategoryReq) error {
-	category := &model.WorkorderCategory{
-		Name:           req.Name,
-		Description:    req.Description,
-		Status:         req.Status,
-		OperatorID:     req.OperatorID,
-		OperatorName:   req.OperatorName,
+	// 检查分类是否存在
+	existingCategory, err := s.categoryDAO.GetCategoryByName(ctx, req.Name)
+	if err != nil {
+		s.logger.Error("创建分类失败：获取分类信息失败", zap.Error(err), zap.String("name", req.Name))
+		return fmt.Errorf("获取分类信息失败 (name: %s): %w", req.Name, err)
+	}
+	
+	if existingCategory != nil {
+		s.logger.Warn("创建分类失败：分类已存在", zap.String("name", req.Name))
+		return fmt.Errorf("分类已存在: %s", req.Name)
 	}
 
-	err := s.categoryDAO.CreateCategory(ctx, category)
+	category := &model.WorkorderCategory{
+		Name:         req.Name,
+		Description:  req.Description,
+		Status:       req.Status,
+		OperatorID:   req.OperatorID,
+		OperatorName: req.OperatorName,
+	}
+
+	err = s.categoryDAO.CreateCategory(ctx, category)
 	if err != nil {
 		s.logger.Error("创建分类失败", zap.Error(err), zap.String("name", req.Name))
 		return fmt.Errorf("创建分类 '%s' 失败: %w", req.Name, err)

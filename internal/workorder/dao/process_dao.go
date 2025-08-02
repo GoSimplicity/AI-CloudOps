@@ -155,11 +155,7 @@ func (d *processDAO) GetProcessByID(ctx context.Context, id int) (*model.Workord
 
 	var process model.WorkorderProcess
 
-	err := d.db.WithContext(ctx).
-		Preload("WorkorderFormDesign").
-		Preload("WorkorderCategory").
-		Where("id = ?", id).
-		First(&process).Error
+	err := d.db.WithContext(ctx).Preload("Category").Preload("FormDesign").Where("id = ?", id).First(&process).Error
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -211,8 +207,7 @@ func (d *processDAO) ListProcess(ctx context.Context, req *model.ListWorkorderPr
 	}
 
 	offset := (req.Page - 1) * req.Size
-	err = db.Preload("WorkorderFormDesign").
-		Preload("Category").
+	err = db.Preload("Category").
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(req.Size).

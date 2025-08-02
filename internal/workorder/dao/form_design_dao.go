@@ -44,6 +44,7 @@ type WorkorderFormDesignDAO interface {
 	UpdateFormDesign(ctx context.Context, formDesign *model.WorkorderFormDesign) error
 	DeleteFormDesign(ctx context.Context, id int) error
 	GetFormDesign(ctx context.Context, id int) (*model.WorkorderFormDesign, error)
+	GetFormDesignByName(ctx context.Context, name string) (*model.WorkorderFormDesign, error)
 	ListFormDesign(ctx context.Context, req *model.ListWorkorderFormDesignReq) ([]*model.WorkorderFormDesign, int64, error)
 	CheckFormDesignNameExists(ctx context.Context, name string, excludeID ...int) (bool, error)
 }
@@ -119,9 +120,7 @@ func (f *workorderFormDesignDAO) DeleteFormDesign(ctx context.Context, id int) e
 func (f *workorderFormDesignDAO) GetFormDesign(ctx context.Context, id int) (*model.WorkorderFormDesign, error) {
 	var formDesign model.WorkorderFormDesign
 
-	err := f.db.WithContext(ctx).
-		Preload("Category").
-		First(&formDesign, id).Error
+	err := f.db.WithContext(ctx).Preload("Category").Where("id = ?", id).First(&formDesign).Error
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -130,6 +129,22 @@ func (f *workorderFormDesignDAO) GetFormDesign(ctx context.Context, id int) (*mo
 		}
 		f.logger.Error("获取表单设计失败", zap.Error(err), zap.Int("id", id))
 		return nil, fmt.Errorf("获取表单设计失败: %w", err)
+	}
+
+	return &formDesign, nil
+}
+
+func (f *workorderFormDesignDAO) GetFormDesignByName(ctx context.Context, name string) (*model.WorkorderFormDesign, error) {
+	var formDesign model.WorkorderFormDesign
+
+	err := f.db.WithContext(ctx).Where("name = ?", name).First(&formDesign).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			f.logger.Warn("表单设计不存在", zap.String("name", name))
+			return nil, ErrFormDesignNotFound
+		}
+		f.logger.Error("获取表单设计失败", zap.Error(err), zap.String("name", name))
+		return nil, err
 	}
 
 	return &formDesign, nil
@@ -153,8 +168,8 @@ func (f *workorderFormDesignDAO) ListFormDesign(ctx context.Context, req *model.
 
 	// 分页查询
 	offset := (req.Page - 1) * req.Size
-	err := db.Preload("Category").
-		Order("created_at DESC").
+	err := db.Order("created_at DESC").
+		Preload("Category").
 		Offset(offset).
 		Limit(req.Size).
 		Find(&formDesigns).Error
@@ -200,11 +215,11 @@ func (f *workorderFormDesignDAO) buildListQuery(db *gorm.DB, req *model.ListWork
 	}
 
 	if req.CategoryID != nil {
-		if *req.CategoryID == 0 {
-			db = db.Where("category_id IS NULL")
-		} else {
-			db = db.Where("category_id = ?", *req.CategoryID)
-		}
+		db = db.Where("category_id = ?", *req.CategoryID)
+	}
+
+	if req.IsTemplate != nil {
+		db = db.Where("is_template = ?", *req.IsTemplate)
 	}
 
 	return db

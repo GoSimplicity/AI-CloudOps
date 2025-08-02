@@ -235,6 +235,9 @@ func showBootInfo(port string) {
 	fmt.Printf("%s  ", color.GreenString("➜"))
 	fmt.Printf("%s    ", color.New(color.Bold).Sprint("Local:"))
 	fmt.Printf("%s\n", color.MagentaString("http://localhost:%s/", port))
+	fmt.Printf("%s  ", color.GreenString("➜"))
+	fmt.Printf("%s  ", color.New(color.Bold).Sprint("Swagger:"))
+	fmt.Printf("%s\n", color.MagentaString("http://localhost:%s/swagger/index.html", port))
 	for _, ip := range ips {
 		fmt.Printf("%s  ", color.GreenString("➜"))
 		fmt.Printf("%s  ", color.New(color.Bold).Sprint("Network:"))

@@ -60,7 +60,7 @@ generate_docs() {
     if [ -f "docs/swagger.json" ]; then
         local file_size=$(du -h docs/swagger.json | cut -f1)
         log_success "文档生成成功！文件大小: $file_size"
-        log_info "访问地址: http://localhost:8080/swagger/index.html"
+        log_info "访问地址: http://localhost:8889/swagger/index.html"
     else
         log_error "文档生成失败！"
         exit 1
@@ -135,7 +135,7 @@ serve_docs() {
         return 1
     fi
     
-    local swagger_url="http://localhost:8080/swagger/index.html"
+    local swagger_url="http://localhost:8889/swagger/index.html"
     log_info "Swagger UI 地址: $swagger_url"
     
     # 根据操作系统打开浏览器

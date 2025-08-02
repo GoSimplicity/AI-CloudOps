@@ -25,7 +25,6 @@
 
 package model
 
-
 const (
 	FormDesignStatusDraft     int8 = 1 // 草稿
 	FormDesignStatusPublished int8 = 2 // 已发布
@@ -47,15 +46,16 @@ const (
 // WorkorderFormDesign 工单表单设计实体
 type WorkorderFormDesign struct {
 	Model
-	Name           string         `json:"name" gorm:"column:name;type:varchar(200);not null;index;comment:表单名称"`
-	Description    string         `json:"description" gorm:"column:description;type:varchar(1000);comment:表单描述"`
-	Schema         JSONMap `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
-	Status         int8           `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-草稿，2-已发布，3-已归档"`
-	CategoryID     *int           `json:"category_id" gorm:"column:category_id;index;comment:分类ID"`
-	OperatorID     int            `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
-	OperatorName   string         `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;index;comment:操作人名称"`
-	Tags           StringList     `json:"tags" gorm:"column:tags;comment:标签"`
-	IsTemplate     int8           `json:"is_template" gorm:"column:is_template;not null;default:1;comment:是否为模板：1-是，2-否"`
+	Name         string             `json:"name" gorm:"column:name;type:varchar(200);not null;index;comment:表单名称"`
+	Description  string             `json:"description" gorm:"column:description;type:varchar(1000);comment:表单描述"`
+	Schema       JSONMap            `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
+	Status       int8               `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-草稿，2-已发布，3-已归档"`
+	CategoryID   *int               `json:"category_id" gorm:"column:category_id;index;comment:分类ID"`
+	OperatorID   int                `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName string             `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;index;comment:操作人名称"`
+	Tags         StringList         `json:"tags" gorm:"column:tags;comment:标签"`
+	IsTemplate   int8               `json:"is_template" gorm:"column:is_template;not null;default:1;comment:是否为模板：1-是，2-否"`
+	Category     *WorkorderCategory `json:"category" gorm:"foreignKey:CategoryID;references:ID"`
 }
 
 // TableName 指定工单表单设计表名
@@ -65,14 +65,14 @@ func (WorkorderFormDesign) TableName() string {
 
 // FormField 表单字段定义
 type FormField struct {
-	ID          string      `json:"id"`                       // 字段唯一标识
-	Type        string      `json:"type" binding:"required"`  // 字段类型
-	Label       string      `json:"label" binding:"required"` // 字段标签
-	Name        string      `json:"name" binding:"required"`  // 字段名称
-	Required    bool        `json:"required"`                 // 是否必填
-	Placeholder string      `json:"placeholder"`              // 占位符
-	Default     any         `json:"default"`                  // 默认值
-	Options     []string    `json:"options,omitempty"`        // 选项（如下拉、单选等）
+	ID          string   `json:"id"`                       // 字段唯一标识（系统自动生成）
+	Name        string   `json:"name" binding:"required"`  // 字段名称
+	Type        string   `json:"type" binding:"required"`  // 字段类型
+	Label       string   `json:"label" binding:"required"` // 字段标签
+	Required    int8     `json:"required"`                 // 是否必填
+	Placeholder string   `json:"placeholder"`              // 占位符
+	Default     any      `json:"default"`                  // 默认值
+	Options     []string `json:"options,omitempty"`        // 选项（如下拉、单选等）
 }
 
 // FormSchema 表单结构定义
@@ -82,15 +82,15 @@ type FormSchema struct {
 
 // CreateWorkorderFormDesignReq 创建工单表单设计请求
 type CreateWorkorderFormDesignReq struct {
-	Name           string     `json:"name" binding:"required,min=1,max=200"`
-	Description    string     `json:"description" binding:"omitempty,max=1000"`
-	Schema         FormSchema `json:"schema" binding:"required"`
-	Status         int8       `json:"status" binding:"required,oneof=1 2 3"`
-	CategoryID     *int       `json:"category_id" binding:"omitempty,min=1"`
-	OperatorID     int        `json:"operator_id" binding:"required,min=1"`
-	OperatorName   string     `json:"operator_name" binding:"required,min=1,max=100"`
-	Tags           StringList `json:"tags" binding:"omitempty"`
-	IsTemplate     int8       `json:"is_template" binding:"required,oneof=1 2"`
+	Name         string     `json:"name" binding:"required,min=1,max=200"`
+	Description  string     `json:"description" binding:"omitempty,max=1000"`
+	Schema       FormSchema `json:"schema" binding:"required"`
+	Status       int8       `json:"status" binding:"required,oneof=1 2 3"`
+	CategoryID   *int       `json:"category_id" binding:"omitempty,min=1"`
+	OperatorID   int        `json:"operator_id" binding:"required,min=1"`
+	OperatorName string     `json:"operator_name" binding:"required,min=1,max=100"`
+	Tags         StringList `json:"tags" binding:"omitempty"`
+	IsTemplate   int8       `json:"is_template" binding:"required,oneof=1 2"`
 }
 
 // UpdateWorkorderFormDesignReq 更新工单表单设计请求
@@ -118,8 +118,7 @@ type DetailWorkorderFormDesignReq struct {
 // ListWorkorderFormDesignReq 获取工单表单设计列表请求
 type ListWorkorderFormDesignReq struct {
 	ListReq
-	CategoryID *int       `json:"category_id" binding:"omitempty,min=1"`
-	Status     *int8      `json:"status" binding:"omitempty,oneof=1 2 3"`
-	IsTemplate *int8      `json:"is_template" binding:"omitempty,oneof=1 2"`
-	Tags       StringList `json:"tags" binding:"omitempty"`
+	CategoryID *int  `json:"category_id" form:"category_id" binding:"omitempty,min=1"`
+	Status     *int8 `json:"status" form:"status" binding:"omitempty,oneof=1 2 3"`
+	IsTemplate *int8 `json:"is_template" form:"is_template" binding:"omitempty,oneof=1 2"`
 }

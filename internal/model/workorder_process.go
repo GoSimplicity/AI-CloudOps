@@ -25,7 +25,6 @@
 
 package model
 
-
 // 流程状态常量
 const (
 	ProcessStatusDraft     int8 = 1 // 草稿
@@ -41,19 +40,36 @@ const (
 	ProcessStepTypeEnd      = "end"      // 结束
 )
 
+// 可执行动作常量
+const (
+	ActionStart    = "start"    // 开始动作
+	ActionApprove  = "approve"  // 审批动作
+	ActionReject   = "reject"   // 驳回动作
+	ActionComplete = "complete" // 完成动作
+	ActionNotify   = "notify"   // 通知动作
+)
+
+// 受理人类型常量
+const (
+	AssigneeTypeUser  = "user"   // 用户类型
+	AssigneeTypeGroup = "system" // 系统类型
+)
+
 // WorkorderProcess 工单流程实体
 type WorkorderProcess struct {
 	Model
-	Name           string         `json:"name" gorm:"column:name;type:varchar(200);not null;index;comment:流程名称"`
-	Description    string         `json:"description" gorm:"column:description;type:varchar(1000);comment:流程描述"`
-	FormDesignID   int            `json:"form_design_id" gorm:"column:form_design_id;not null;index;comment:关联表单设计ID"`
-	Definition     JSONMap `json:"definition" gorm:"column:definition;type:json;not null;comment:流程JSON定义"`
-	Status         int8           `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-草稿，2-已发布，3-已归档"`
-	CategoryID     *int           `json:"category_id" gorm:"column:category_id;index;comment:分类ID"`
-	OperatorID   int            `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
-	OperatorName string         `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;index;comment:操作人名称"`
-	Tags           StringList     `json:"tags" gorm:"column:tags;comment:标签"`
-	IsDefault      int8           `json:"is_default" gorm:"column:is_default;not null;default:2;comment:是否为默认流程：1-是，2-否"`
+	Name         string               `json:"name" gorm:"column:name;type:varchar(200);not null;index;comment:流程名称"`
+	Description  string               `json:"description" gorm:"column:description;type:varchar(1000);comment:流程描述"`
+	FormDesignID int                  `json:"form_design_id" gorm:"column:form_design_id;not null;index;comment:关联表单设计ID"`
+	Definition   JSONMap              `json:"definition" gorm:"column:definition;type:json;not null;comment:流程JSON定义"`
+	Status       int8                 `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-草稿，2-已发布，3-已归档"`
+	CategoryID   *int                 `json:"category_id" gorm:"column:category_id;index;comment:分类ID"`
+	OperatorID   int                  `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName string               `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;index;comment:操作人名称"`
+	Tags         StringList           `json:"tags" gorm:"column:tags;comment:标签"`
+	IsDefault    int8                 `json:"is_default" gorm:"column:is_default;not null;default:2;comment:是否为默认流程：1-是，2-否"`
+	Category     *WorkorderCategory   `json:"category" gorm:"foreignKey:CategoryID;references:ID;comment:分类"`
+	FormDesign   *WorkorderFormDesign `json:"form_design" gorm:"foreignKey:FormDesignID;references:ID;comment:关联表单设计"`
 }
 
 // TableName 指定工单流程表名
@@ -86,16 +102,16 @@ type ProcessDefinition struct {
 
 // CreateWorkorderProcessReq 创建工单流程请求
 type CreateWorkorderProcessReq struct {
-	Name           string            `json:"name" binding:"required,min=1,max=200"`
-	Description    string            `json:"description" binding:"omitempty,max=1000"`
-	FormDesignID   int               `json:"form_design_id" binding:"required,min=1"`
-	Definition     ProcessDefinition `json:"definition" binding:"required"`
-	Status         int8              `json:"status" binding:"required,oneof=1 2 3"`
-	CategoryID     *int              `json:"category_id" binding:"omitempty,min=1"`
+	Name         string            `json:"name" binding:"required,min=1,max=200"`
+	Description  string            `json:"description" binding:"omitempty,max=1000"`
+	FormDesignID int               `json:"form_design_id" binding:"required,min=1"`
+	Definition   ProcessDefinition `json:"definition" binding:"required"`
+	Status       int8              `json:"status" binding:"required,oneof=1 2 3"`
+	CategoryID   *int              `json:"category_id" binding:"omitempty,min=1"`
 	OperatorID   int               `json:"operator_id" binding:"required,min=1"`
 	OperatorName string            `json:"operator_name" binding:"required,min=1,max=100"`
-	Tags           StringList        `json:"tags" binding:"omitempty"`
-	IsDefault      int8              `json:"is_default" binding:"required,oneof=1 2"`
+	Tags         StringList        `json:"tags" binding:"omitempty"`
+	IsDefault    int8              `json:"is_default" binding:"required,oneof=1 2"`
 }
 
 // UpdateWorkorderProcessReq 更新工单流程请求
@@ -124,8 +140,8 @@ type DetailWorkorderProcessReq struct {
 // ListWorkorderProcessReq 工单流程列表请求
 type ListWorkorderProcessReq struct {
 	ListReq
-	CategoryID   *int  `json:"category_id" binding:"omitempty,min=1"`
-	FormDesignID *int  `json:"form_design_id" binding:"omitempty,min=1"`
-	Status       *int8 `json:"status" binding:"omitempty,oneof=1 2 3"`
-	IsDefault    *int8 `json:"is_default" binding:"omitempty,oneof=1 2"`
+	CategoryID   *int  `json:"category_id" form:"category_id" binding:"omitempty,min=1"`
+	FormDesignID *int  `json:"form_design_id" form:"form_design_id" binding:"omitempty,min=1"`
+	Status       *int8 `json:"status" form:"status" binding:"omitempty,oneof=1 2 3"`
+	IsDefault    *int8 `json:"is_default" form:"is_default" binding:"omitempty,oneof=1 2"`
 }

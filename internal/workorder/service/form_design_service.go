@@ -30,6 +30,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -79,6 +80,9 @@ func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq 
 		return errors.New("表单结构不能为空")
 	}
 
+	// 为表单字段自动生成ID
+	f.generateFieldIDs(&formDesignReq.Schema)
+
 	// 校验标签
 	if len(formDesignReq.Tags) > 0 {
 		for _, tag := range formDesignReq.Tags {
@@ -104,15 +108,15 @@ func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq 
 
 	// 构建表单设计实体
 	formDesign := &model.WorkorderFormDesign{
-		Name:           formDesignReq.Name,
-		Description:    formDesignReq.Description,
-		Schema:         schemaMap,
-		Status:         formDesignReq.Status,
-		CategoryID:     formDesignReq.CategoryID,
-		OperatorID:     formDesignReq.OperatorID,
-		OperatorName:   formDesignReq.OperatorName,
-		Tags:           formDesignReq.Tags,
-		IsTemplate:     formDesignReq.IsTemplate,
+		Name:         formDesignReq.Name,
+		Description:  formDesignReq.Description,
+		Schema:       schemaMap,
+		Status:       formDesignReq.Status,
+		CategoryID:   formDesignReq.CategoryID,
+		OperatorID:   formDesignReq.OperatorID,
+		OperatorName: formDesignReq.OperatorName,
+		Tags:         formDesignReq.Tags,
+		IsTemplate:   formDesignReq.IsTemplate,
 	}
 
 	// 创建表单设计
@@ -126,24 +130,19 @@ func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq 
 
 // UpdateFormDesign 更新表单设计
 func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq *model.UpdateWorkorderFormDesignReq) error {
-	// 检查表单设计是否存在
-	existingFormDesign, err := f.dao.GetFormDesign(ctx, formDesignReq.ID)
+	existingFormDesign, err := f.dao.GetFormDesignByName(ctx, formDesignReq.Name)
 	if err != nil {
-		f.logger.Error("获取表单设计失败", zap.Error(err), zap.Int("id", formDesignReq.ID))
-		return err
+		if errors.Is(err, dao.ErrFormDesignNotFound) {
+			// 表单设计未找到，继续处理
+		} else {
+			f.logger.Error("获取表单设计失败", zap.Error(err), zap.String("name", formDesignReq.Name))
+			return fmt.Errorf("获取表单设计失败: %w", err)
+		}
 	}
 
-	// 检查名称唯一性
-	if formDesignReq.Name != existingFormDesign.Name {
-		exists, err := f.dao.CheckFormDesignNameExists(ctx, formDesignReq.Name, formDesignReq.ID)
-		if err != nil {
-			f.logger.Error("检查表单设计名称是否存在失败", zap.Error(err), zap.String("name", formDesignReq.Name))
-			return fmt.Errorf("检查表单设计名称失败: %w", err)
-		}
-		if exists {
-			f.logger.Warn("表单设计名称已存在", zap.String("name", formDesignReq.Name))
-			return dao.ErrFormDesignNameExists
-		}
+	if existingFormDesign != nil && existingFormDesign.ID != formDesignReq.ID {
+		f.logger.Warn("表单设计名称已存在", zap.String("name", formDesignReq.Name))
+		return dao.ErrFormDesignNameExists
 	}
 
 	// 验证表单结构
@@ -151,6 +150,9 @@ func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq 
 		f.logger.Error("表单结构不能为空")
 		return errors.New("表单结构不能为空")
 	}
+
+	// 为表单字段自动生成ID
+	f.generateFieldIDs(&formDesignReq.Schema)
 
 	// 校验标签
 	if len(formDesignReq.Tags) > 0 {
@@ -168,11 +170,11 @@ func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq 
 	}
 
 	// 转换为JSONMap
-	var updateSchemaMap model.JSONMap
-	err = json.Unmarshal(schemaJSON, &updateSchemaMap)
+	var schemaMap model.JSONMap
+	err = json.Unmarshal(schemaJSON, &schemaMap)
 	if err != nil {
-		f.logger.Error("转换更新表单结构为JSONMap失败", zap.Error(err))
-		return fmt.Errorf("转换更新表单结构失败: %w", err)
+		f.logger.Error("转换表单结构为JSONMap失败", zap.Error(err))
+		return fmt.Errorf("转换表单结构失败: %w", err)
 	}
 
 	// 构建更新数据
@@ -180,7 +182,7 @@ func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq 
 		Model:       model.Model{ID: formDesignReq.ID},
 		Name:        formDesignReq.Name,
 		Description: formDesignReq.Description,
-		Schema:      updateSchemaMap,
+		Schema:      schemaMap,
 		CategoryID:  formDesignReq.CategoryID,
 		Status:      formDesignReq.Status,
 		Tags:        formDesignReq.Tags,
@@ -248,3 +250,12 @@ func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListW
 		Total: total,
 	}, nil
 }
+
+// generateFieldIDs 智能生成表单字段ID，保持顺序一致性
+func (f *formDesignService) generateFieldIDs(schema *model.FormSchema) {
+	// 为每个字段分配连续的ID
+	for i := range schema.Fields {
+		schema.Fields[i].ID = strconv.Itoa(i + 1)
+	}
+}
+

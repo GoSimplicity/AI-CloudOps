@@ -52,7 +52,6 @@ func (h *NotificationHandler) RegisterRouters(server *gin.Engine) {
 		notificationGroup.GET("/detail/:id", h.DetailNotification)
 		notificationGroup.GET("/logs", h.GetSendLogs)
 		notificationGroup.POST("/test/send", h.TestSendNotification)
-		notificationGroup.POST("/duplicate", h.DuplicateNotification)
 	}
 }
 
@@ -228,22 +227,3 @@ func (h *NotificationHandler) TestSendNotification(ctx *gin.Context) {
 	})
 }
 
-// DuplicateNotification 复制通知配置
-// @Summary 复制工单通知配置
-// @Description 复制指定的工单通知配置
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param request body model.DuplicateWorkorderNotificationReq true "复制通知配置请求参数"
-// @Success 200 {object} utils.ApiResponse "复制成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/notification/duplicate [post]
-func (h *NotificationHandler) DuplicateNotification(ctx *gin.Context) {
-	var req model.DuplicateWorkorderNotificationReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.DuplicateNotification(ctx, &req)
-	})
-}

@@ -332,7 +332,7 @@ func (s *containerExecService) CreateTerminalSession(ctx context.Context, contai
 	}
 
 	// 构建WebSocket URL
-	websocketURL := fmt.Sprintf("ws://localhost:8080/api/k8s/containers/%s/exec/ws?session=%s&tty=%t",
+	websocketURL := fmt.Sprintf("ws://localhost:8889/api/k8s/containers/%s/exec/ws?session=%s&tty=%t",
 		containerId, sessionId, req.TTY)
 
 	response := &model.K8sContainerTerminalResponse{

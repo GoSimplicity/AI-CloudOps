@@ -147,6 +147,7 @@ func (h *FormDesignHandler) DeleteFormDesign(ctx *gin.Context) {
 // @Router /api/workorder/form-design/list [get]
 func (h *FormDesignHandler) ListFormDesign(ctx *gin.Context) {
 	var req model.ListWorkorderFormDesignReq
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ListFormDesign(ctx, &req)
 	})
