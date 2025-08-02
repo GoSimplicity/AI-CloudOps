@@ -130,17 +130,14 @@ func (d *instanceFlowDAO) List(ctx context.Context, req *model.ListWorkorderInst
 	if req.InstanceID != nil {
 		query = query.Where("instance_id = ?", *req.InstanceID)
 	}
-	if req.StepID != nil {
-		query = query.Where("step_id = ?", *req.StepID)
-	}
 	if req.Action != nil {
 		query = query.Where("action = ?", *req.Action)
 	}
 	if req.OperatorID != nil {
 		query = query.Where("operator_id = ?", *req.OperatorID)
 	}
-	if req.Result != nil {
-		query = query.Where("result = ?", *req.Result)
+	if req.IsSystemAction != nil {
+		query = query.Where("is_system_action = ?", *req.IsSystemAction)
 	}
 
 	// 获取总数
@@ -171,8 +168,8 @@ func (d *instanceFlowDAO) validateFlow(flow *model.WorkorderInstanceFlow) error 
 	if flow.InstanceID <= 0 {
 		return fmt.Errorf("工单ID无效")
 	}
-	if flow.StepID == "" {
-		return fmt.Errorf("步骤ID不能为空")
+	if flow.Action == "" {
+		return fmt.Errorf("操作动作不能为空")
 	}
 	if flow.OperatorID <= 0 {
 		return fmt.Errorf("操作人ID无效")

@@ -33,10 +33,10 @@ import (
 )
 
 type TemplateHandler struct {
-	service service.TemplateService
+	service service.WorkorderTemplateService
 }
 
-func NewTemplateHandler(service service.TemplateService) *TemplateHandler {
+func NewTemplateHandler(service service.WorkorderTemplateService) *TemplateHandler {
 	return &TemplateHandler{
 		service: service,
 	}

@@ -20511,12 +20511,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object",
-                            "properties": {
-                                "comment": {
-                                    "type": "string"
-                                }
-                            }
+                            "$ref": "#/definitions/model.ApproveWorkorderInstanceReq"
                         }
                     }
                 ],
@@ -20574,12 +20569,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object",
-                            "properties": {
-                                "assignee_id": {
-                                    "type": "integer"
-                                }
-                            }
+                            "$ref": "#/definitions/model.AssignWorkorderInstanceReq"
                         }
                     }
                 ],
@@ -21070,57 +21060,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/workorder/instance/flow/create": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "为指定工单实例创建新的流转记录",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单管理"
-                ],
-                "summary": "创建工单流转记录",
-                "parameters": [
-                    {
-                        "description": "创建流转记录请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.CreateWorkorderInstanceFlowReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "创建成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/workorder/instance/flow/detail/{id}": {
             "get": {
                 "security": [
@@ -21345,12 +21284,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object",
-                            "properties": {
-                                "comment": {
-                                    "type": "string"
-                                }
-                            }
+                            "$ref": "#/definitions/model.RejectWorkorderInstanceReq"
                         }
                     }
                 ],
@@ -21401,6 +21335,15 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "提交工单请求参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.SubmitWorkorderInstanceReq"
+                        }
                     }
                 ],
                 "responses": {
@@ -22936,6 +22879,22 @@ const docTemplate = `{
                 }
             }
         },
+        "model.ApproveWorkorderInstanceReq": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "comment": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "id": {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            }
+        },
         "model.ArchiveAuditLogsRequest": {
             "type": "object",
             "required": [
@@ -22986,6 +22945,23 @@ const docTemplate = `{
                 "user_id": {
                     "description": "用户ID",
                     "type": "integer"
+                }
+            }
+        },
+        "model.AssignWorkorderInstanceReq": {
+            "type": "object",
+            "required": [
+                "assignee_id",
+                "id"
+            ],
+            "properties": {
+                "assignee_id": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "id": {
+                    "type": "integer",
+                    "minimum": 1
                 }
             }
         },
@@ -24857,7 +24833,11 @@ const docTemplate = `{
                     "minimum": 1
                 },
                 "is_system": {
-                    "type": "boolean"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "operator_id": {
                     "type": "integer",
@@ -24886,76 +24866,6 @@ const docTemplate = `{
                         "normal",
                         "system"
                     ]
-                }
-            }
-        },
-        "model.CreateWorkorderInstanceFlowReq": {
-            "type": "object",
-            "required": [
-                "action",
-                "instance_id",
-                "operator_id",
-                "operator_name",
-                "step_id",
-                "step_name"
-            ],
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": [
-                        "create",
-                        "submit",
-                        "approve",
-                        "reject",
-                        "transfer",
-                        "assign",
-                        "revoke",
-                        "cancel",
-                        "return",
-                        "complete"
-                    ]
-                },
-                "assignee_id": {
-                    "type": "integer",
-                    "minimum": 1
-                },
-                "comment": {
-                    "type": "string",
-                    "maxLength": 1000
-                },
-                "form_data": {
-                    "$ref": "#/definitions/model.JSONMap"
-                },
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1
-                },
-                "operator_id": {
-                    "type": "integer",
-                    "minimum": 1
-                },
-                "operator_name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 1
-                },
-                "result": {
-                    "type": "string",
-                    "enum": [
-                        "success",
-                        "failed",
-                        "pending"
-                    ]
-                },
-                "step_id": {
-                    "type": "string",
-                    "maxLength": 64,
-                    "minLength": 1
-                },
-                "step_name": {
-                    "type": "string",
-                    "maxLength": 128,
-                    "minLength": 1
                 }
             }
         },
@@ -25046,15 +24956,20 @@ const docTemplate = `{
                         "submit",
                         "approve",
                         "reject",
-                        "transfer",
                         "assign",
-                        "revoke",
                         "cancel",
-                        "return",
                         "complete",
+                        "return",
                         "comment",
-                        "update"
+                        "update",
+                        "view",
+                        "attach",
+                        "notify",
+                        "remind"
                     ]
+                },
+                "action_detail": {
+                    "type": "string"
                 },
                 "comment": {
                     "type": "string",
@@ -25072,6 +24987,10 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100,
                     "minLength": 1
+                },
+                "related_id": {
+                    "type": "integer",
+                    "minimum": 1
                 }
             }
         },
@@ -25105,7 +25024,11 @@ const docTemplate = `{
                     }
                 },
                 "is_default": {
-                    "type": "boolean"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "max_retries": {
                     "type": "integer"
@@ -28262,6 +28185,24 @@ const docTemplate = `{
                 }
             }
         },
+        "model.RejectWorkorderInstanceReq": {
+            "type": "object",
+            "required": [
+                "comment",
+                "id"
+            ],
+            "properties": {
+                "comment": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 1
+                },
+                "id": {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            }
+        },
         "model.RemoveNodeMemberReq": {
             "type": "object",
             "required": [
@@ -28477,6 +28418,18 @@ const docTemplate = `{
                 "namespace": {
                     "description": "ServiceAccount 所在的命名空间",
                     "type": "string"
+                }
+            }
+        },
+        "model.SubmitWorkorderInstanceReq": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "minimum": 1
                 }
             }
         },
@@ -30140,7 +30093,11 @@ const docTemplate = `{
                     "minimum": 1
                 },
                 "is_system": {
-                    "type": "boolean"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "status": {
                     "type": "integer",
@@ -30217,6 +30174,9 @@ const docTemplate = `{
                 "id"
             ],
             "properties": {
+                "action_detail": {
+                    "type": "string"
+                },
                 "comment": {
                     "type": "string",
                     "maxLength": 2000
@@ -30255,7 +30215,11 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "is_default": {
-                    "type": "boolean"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "max_retries": {
                     "type": "integer"
@@ -30814,7 +30778,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "is_system": {
-                    "type": "boolean"
+                    "type": "integer"
                 },
                 "operator_id": {
                     "type": "integer"
@@ -30842,9 +30806,6 @@ const docTemplate = `{
                 "action": {
                     "type": "string"
                 },
-                "assignee_id": {
-                    "type": "integer"
-                },
                 "comment": {
                     "type": "string"
                 },
@@ -30854,13 +30815,16 @@ const docTemplate = `{
                 "deleted_at": {
                     "type": "integer"
                 },
-                "form_data": {
-                    "$ref": "#/definitions/model.JSONMap"
+                "from_status": {
+                    "type": "integer"
                 },
                 "id": {
                     "type": "integer"
                 },
                 "instance_id": {
+                    "type": "integer"
+                },
+                "is_system_action": {
                     "type": "integer"
                 },
                 "operator_id": {
@@ -30869,14 +30833,8 @@ const docTemplate = `{
                 "operator_name": {
                     "type": "string"
                 },
-                "result": {
-                    "type": "string"
-                },
-                "step_id": {
-                    "type": "string"
-                },
-                "step_name": {
-                    "type": "string"
+                "to_status": {
+                    "type": "integer"
                 },
                 "updated_at": {
                     "type": "string"
@@ -30889,6 +30847,9 @@ const docTemplate = `{
                 "action": {
                     "type": "string"
                 },
+                "action_detail": {
+                    "type": "string"
+                },
                 "comment": {
                     "type": "string"
                 },
@@ -30909,6 +30870,9 @@ const docTemplate = `{
                 },
                 "operator_name": {
                     "type": "string"
+                },
+                "related_id": {
+                    "type": "integer"
                 },
                 "updated_at": {
                     "type": "string"

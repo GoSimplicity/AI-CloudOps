@@ -46,7 +46,7 @@ type WorkorderProcessService interface {
 }
 
 type workorderProcessService struct {
-	dao           dao.ProcessDAO
+	dao           dao.WorkorderProcessDAO
 	formDesignDao dao.WorkorderFormDesignDAO
 	categoryDao   dao.WorkorderCategoryDAO
 	instanceDao   dao.WorkorderInstanceDAO
@@ -54,7 +54,7 @@ type workorderProcessService struct {
 }
 
 func NewWorkorderProcessService(
-	processDao dao.ProcessDAO,
+	processDao dao.WorkorderProcessDAO,
 	formDesignDao dao.WorkorderFormDesignDAO,
 	categoryDao dao.WorkorderCategoryDAO,
 	instanceDao dao.WorkorderInstanceDAO,

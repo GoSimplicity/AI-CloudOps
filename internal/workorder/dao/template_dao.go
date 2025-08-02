@@ -43,7 +43,7 @@ var (
 	ErrInvalidID          = errors.New("无效的ID")
 )
 
-type TemplateDAO interface {
+type WorkorderTemplateDAO interface {
 	CreateTemplate(ctx context.Context, template *model.WorkorderTemplate) error
 	UpdateTemplate(ctx context.Context, template *model.WorkorderTemplate) error
 	DeleteTemplate(ctx context.Context, id int) error
@@ -58,7 +58,7 @@ type templateDAO struct {
 	logger *zap.Logger
 }
 
-func NewTemplateDAO(db *gorm.DB, logger *zap.Logger) TemplateDAO {
+func NewTemplateDAO(db *gorm.DB, logger *zap.Logger) WorkorderTemplateDAO {
 	return &templateDAO{
 		db:     db,
 		logger: logger,

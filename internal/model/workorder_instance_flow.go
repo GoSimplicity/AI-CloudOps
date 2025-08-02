@@ -25,40 +25,28 @@
 
 package model
 
-// 工单流转动作类型常量
+// 工单状态流转动作类型常量 - 仅包含状态变更相关操作
 const (
-	FlowActionCreate   = "create"   // 创建
-	FlowActionSubmit   = "submit"   // 提交
+	FlowActionSubmit   = "submit"   // 提交工单
 	FlowActionApprove  = "approve"  // 审批通过
 	FlowActionReject   = "reject"   // 审批拒绝
-	FlowActionTransfer = "transfer" // 转交
-	FlowActionAssign   = "assign"   // 指派
-	FlowActionRevoke   = "revoke"   // 撤回
-	FlowActionCancel   = "cancel"   // 取消
-	FlowActionReturn   = "return"   // 退回
-	FlowActionComplete = "complete" // 完成
+	FlowActionAssign   = "assign"   // 指派处理人
+	FlowActionCancel   = "cancel"   // 取消工单
+	FlowActionComplete = "complete" // 完成工单
+	FlowActionReturn   = "return"   // 退回工单
 )
 
-// 工单流转结果常量
-const (
-	FlowResultSuccess = "success" // 成功
-	FlowResultFailed  = "failed"  // 失败
-	FlowResultPending = "pending" // 待处理
-)
-
-// WorkorderInstanceFlow 工单流转记录
+// WorkorderInstanceFlow 工单状态流转记录 - 专注于状态变更的业务流程
 type WorkorderInstanceFlow struct {
 	Model
-	InstanceID   int     `json:"instance_id" gorm:"column:instance_id;not null;index;comment:工单实例ID"`
-	StepID       string  `json:"step_id" gorm:"column:step_id;type:varchar(64);not null;comment:步骤ID"`
-	StepName     string  `json:"step_name" gorm:"column:step_name;type:varchar(128);not null;comment:步骤名称"`
-	Action       string  `json:"action" gorm:"column:action;type:varchar(32);not null;comment:操作动作"`
-	OperatorID   int     `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
-	OperatorName string  `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
-	AssigneeID   *int    `json:"assignee_id" gorm:"column:assignee_id;index;comment:处理人ID"`
-	Comment      string  `json:"comment" gorm:"column:comment;type:varchar(1000);comment:处理意见"`
-	Result       string  `json:"result" gorm:"column:result;type:varchar(16);not null;default:'success';comment:处理结果"`
-	FormData     JSONMap `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
+	InstanceID     int     `json:"instance_id" gorm:"column:instance_id;not null;index;comment:工单实例ID"`
+	Action         string  `json:"action" gorm:"column:action;type:varchar(32);not null;comment:流转动作"`
+	OperatorID     int     `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName   string  `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
+	FromStatus     int8    `json:"from_status" gorm:"column:from_status;not null;comment:变更前状态"`
+	ToStatus       int8    `json:"to_status" gorm:"column:to_status;not null;comment:变更后状态"`
+	Comment        string  `json:"comment" gorm:"column:comment;type:varchar(1000);comment:审批意见或处理说明"`
+	IsSystemAction int8    `json:"is_system_action" gorm:"column:is_system_action;not null;default:2;comment:是否为系统自动操作：1-是，2-否"`
 }
 
 func (WorkorderInstanceFlow) TableName() string {
@@ -67,26 +55,23 @@ func (WorkorderInstanceFlow) TableName() string {
 
 // CreateWorkorderInstanceFlowReq 创建工单流转记录请求
 type CreateWorkorderInstanceFlowReq struct {
-	InstanceID   int     `json:"instance_id" binding:"required,min=1"`
-	StepID       string  `json:"step_id" binding:"required,min=1,max=64"`
-	StepName     string  `json:"step_name" binding:"required,min=1,max=128"`
-	Action       string  `json:"action" binding:"required"`
-	OperatorID   int     `json:"operator_id" binding:"required,min=1"`
-	OperatorName string  `json:"operator_name" binding:"required,min=1,max=100"`
-	AssigneeID   *int    `json:"assignee_id" binding:"omitempty,min=1"`
-	Comment      string  `json:"comment" binding:"omitempty,max=1000"`
-	Result       string  `json:"result" binding:"omitempty,oneof=success failed pending"`
-	FormData     JSONMap `json:"form_data" binding:"omitempty"`
+	InstanceID     int    `json:"instance_id" binding:"required,min=1"`
+	Action         string `json:"action" binding:"required,oneof=submit approve reject assign cancel complete return"`
+	OperatorID     int    `json:"operator_id" binding:"required,min=1"`
+	OperatorName   string `json:"operator_name" binding:"required,min=1,max=100"`
+	FromStatus     int8   `json:"from_status" binding:"required,min=1,max=6"`
+	ToStatus       int8   `json:"to_status" binding:"required,min=1,max=6"`
+	Comment        string `json:"comment" binding:"omitempty,max=1000"`
+	IsSystemAction int8   `json:"is_system_action" binding:"omitempty,oneof=1 2"`
 }
 
 // ListWorkorderInstanceFlowReq 工单流转记录列表请求
 type ListWorkorderInstanceFlowReq struct {
 	ListReq
-	InstanceID *int    `json:"instance_id" form:"instance_id" binding:"omitempty,min=1"`
-	StepID     *string `json:"step_id" form:"step_id" binding:"omitempty,min=1,max=64"`
-	Action     *string `json:"action" form:"action" binding:"omitempty"`
-	OperatorID *int    `json:"operator_id" form:"operator_id" binding:"omitempty,min=1"`
-	Result     *string `json:"result" form:"result" binding:"omitempty"`
+	InstanceID     *int    `json:"instance_id" form:"instance_id" binding:"omitempty,min=1"`
+	Action         *string `json:"action" form:"action" binding:"omitempty,oneof=submit approve reject assign cancel complete return"`
+	OperatorID     *int    `json:"operator_id" form:"operator_id" binding:"omitempty,min=1"`
+	IsSystemAction *int8   `json:"is_system_action" form:"is_system_action" binding:"omitempty,oneof=1 2"`
 }
 
 // DetailWorkorderInstanceFlowReq 获取工单流转记录详情请求

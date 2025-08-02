@@ -45,10 +45,10 @@ type WorkorderInstanceComment struct {
 	OperatorID   int                        `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
 	OperatorName string                     `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
 	Content      string                     `json:"content" gorm:"column:content;type:text;not null;comment:评论内容"`
-	ParentID     *int                       `json:"parent_id,omitempty" gorm:"column:parent_id;index;comment:父评论ID"`
+	ParentID     *int                       `json:"parent_id,omitempty" gorm:"column:parent_id;index;comment:父评论ID,如果没有父评论，则不传"`
 	Type         string                     `json:"type" gorm:"column:type;type:varchar(20);not null;default:'normal';comment:评论类型"`
 	Status       int8                       `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-正常，2-已删除，3-已隐藏"`
-	IsSystem     bool                       `json:"is_system" gorm:"column:is_system;not null;default:false;comment:是否系统评论"`
+	IsSystem     int8                       `json:"is_system" gorm:"column:is_system;not null;default:2;comment:是否系统评论：1-是，2-否"`
 	Children     []WorkorderInstanceComment `json:"children,omitempty" gorm:"-"`
 }
 
@@ -66,7 +66,7 @@ type CreateWorkorderInstanceCommentReq struct {
 	ParentID     *int   `json:"parent_id" binding:"omitempty,min=1"`
 	Type         string `json:"type" binding:"omitempty,oneof=normal system"`
 	Status       int8   `json:"status" binding:"omitempty,oneof=1 2 3"`
-	IsSystem     bool   `json:"is_system" binding:"omitempty"`
+	IsSystem     int8   `json:"is_system" binding:"omitempty,oneof=1 2"`
 }
 
 // UpdateWorkorderInstanceCommentReq 更新工单实例评论请求
@@ -74,7 +74,7 @@ type UpdateWorkorderInstanceCommentReq struct {
 	ID       int    `json:"id" binding:"required,min=1"`
 	Content  string `json:"content" binding:"required,min=1,max=2000"`
 	Status   int8   `json:"status" binding:"omitempty,oneof=1 2 3"`
-	IsSystem bool   `json:"is_system" binding:"omitempty"`
+	IsSystem int8   `json:"is_system" binding:"omitempty,oneof=1 2"`
 }
 
 // DeleteWorkorderInstanceCommentReq 删除工单实例评论请求

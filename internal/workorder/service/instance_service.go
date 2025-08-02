@@ -53,23 +53,29 @@ type InstanceService interface {
 }
 
 type instanceService struct {
-	dao        dao.WorkorderInstanceDAO
-	commentDao dao.WorkorderInstanceCommentDAO
-	processDao dao.ProcessDAO
-	logger     *zap.Logger
+	dao         dao.WorkorderInstanceDAO
+	flowDao     dao.WorkorderInstanceFlowDAO
+	timelineDao dao.WorkorderInstanceTimelineDAO
+	commentDao  dao.WorkorderInstanceCommentDAO
+	processDao  dao.WorkorderProcessDAO
+	logger      *zap.Logger
 }
 
 func NewInstanceService(
 	dao dao.WorkorderInstanceDAO,
+	flowDao dao.WorkorderInstanceFlowDAO,
+	timelineDao dao.WorkorderInstanceTimelineDAO,
 	commentDao dao.WorkorderInstanceCommentDAO,
-	processDao dao.ProcessDAO,
+	processDao dao.WorkorderProcessDAO,
 	logger *zap.Logger,
 ) InstanceService {
 	return &instanceService{
-		dao:        dao,
-		commentDao: commentDao,
-		processDao: processDao,
-		logger:     logger,
+		dao:         dao,
+		flowDao:     flowDao,
+		timelineDao: timelineDao,
+		commentDao:  commentDao,
+		processDao:  processDao,
+		logger:      logger,
 	}
 }
 
@@ -126,6 +132,12 @@ func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateW
 		s.logger.Error("创建工单实例失败", zap.Error(err))
 		return fmt.Errorf("创建工单实例失败: %w", err)
 	}
+
+	// 创建初始流转记录
+	s.createFlowRecord(ctx, instance.ID, model.FlowActionSubmit, req.OperatorID, req.OperatorName, 0, req.Status, "", 1)
+
+	// 创建时间线记录
+	s.createTimelineRecord(ctx, instance.ID, model.TimelineActionCreate, req.OperatorID, req.OperatorName, "工单创建")
 
 	return nil
 }
@@ -225,31 +237,69 @@ func (s *instanceService) ListInstance(ctx context.Context, req *model.ListWorko
 
 // SubmitInstance 提交工单
 func (s *instanceService) SubmitInstance(ctx context.Context, id int, operatorID int, operatorName string) error {
-	return s.dao.UpdateInstanceStatus(ctx, id, model.InstanceStatusPending)
+	instance, err := s.dao.GetInstanceByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	fromStatus := instance.Status
+	toStatus := model.InstanceStatusPending
+
+	// 更新状态
+	if err := s.dao.UpdateInstanceStatus(ctx, id, toStatus); err != nil {
+		return err
+	}
+
+	// 创建流转记录
+	s.createFlowRecord(ctx, id, model.FlowActionSubmit, operatorID, operatorName, fromStatus, toStatus, "", 2)
+
+	// 创建时间线记录
+	s.createTimelineRecord(ctx, id, model.TimelineActionSubmit, operatorID, operatorName, "工单提交")
+
+	return nil
 }
 
 // AssignInstance 指派工单
 func (s *instanceService) AssignInstance(ctx context.Context, id int, assigneeID int, operatorID int, operatorName string) error {
+	instance, err := s.dao.GetInstanceByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	fromStatus := instance.Status
+	toStatus := model.InstanceStatusProcessing
+
+	// 更新指派人和状态
 	if err := s.dao.UpdateInstanceAssignee(ctx, id, &assigneeID); err != nil {
 		return err
 	}
-	return s.dao.UpdateInstanceStatus(ctx, id, model.InstanceStatusProcessing)
+	if err := s.dao.UpdateInstanceStatus(ctx, id, toStatus); err != nil {
+		return err
+	}
+
+	// 创建流转记录
+	s.createFlowRecord(ctx, id, model.FlowActionAssign, operatorID, operatorName, fromStatus, toStatus, "", 2)
+
+	// 创建时间线记录
+	s.createTimelineRecord(ctx, id, model.TimelineActionAssign, operatorID, operatorName, fmt.Sprintf("工单指派给用户ID: %d", assigneeID))
+
+	return nil
 }
 
 // ApproveInstance 审批通过工单
 func (s *instanceService) ApproveInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
-	now := time.Now()
-	
-	// 更新工单状态为已完成
-	if err := s.dao.UpdateInstanceStatus(ctx, id, model.InstanceStatusCompleted); err != nil {
-		s.logger.Error("更新工单状态失败", zap.Error(err), zap.Int("instanceID", id))
+	instance, err := s.dao.GetInstanceByID(ctx, id)
+	if err != nil {
 		return err
 	}
 
-	// 更新完成时间
-	instance, err := s.dao.GetInstanceByID(ctx, id)
-	if err != nil {
-		s.logger.Error("获取工单实例失败", zap.Error(err), zap.Int("instanceID", id))
+	fromStatus := instance.Status
+	toStatus := model.InstanceStatusCompleted
+	now := time.Now()
+
+	// 更新状态和完成时间
+	if err := s.dao.UpdateInstanceStatus(ctx, id, toStatus); err != nil {
+		s.logger.Error("更新工单状态失败", zap.Error(err), zap.Int("instanceID", id))
 		return err
 	}
 
@@ -258,6 +308,12 @@ func (s *instanceService) ApproveInstance(ctx context.Context, id int, operatorI
 		s.logger.Error("更新工单完成时间失败", zap.Error(err), zap.Int("instanceID", id))
 		return err
 	}
+
+	// 创建流转记录
+	s.createFlowRecord(ctx, id, model.FlowActionApprove, operatorID, operatorName, fromStatus, toStatus, comment, 2)
+
+	// 创建时间线记录
+	s.createTimelineRecord(ctx, id, model.TimelineActionApprove, operatorID, operatorName, fmt.Sprintf("工单审批通过: %s", comment))
 
 	// 如果有审批意见，则添加系统评论
 	if comment != "" {
@@ -268,12 +324,11 @@ func (s *instanceService) ApproveInstance(ctx context.Context, id int, operatorI
 			Content:      fmt.Sprintf("审批通过：%s", comment),
 			Type:         model.CommentTypeSystem,
 			Status:       model.CommentStatusNormal,
-			IsSystem:     true,
+			IsSystem:     1,
 		}
-		
+
 		if err := s.commentDao.CreateInstanceComment(ctx, commentEntity); err != nil {
 			s.logger.Error("创建审批评论失败", zap.Error(err), zap.Int("instanceID", id))
-			// 评论创建失败不影响主流程，只记录日志
 		}
 	}
 
@@ -282,11 +337,25 @@ func (s *instanceService) ApproveInstance(ctx context.Context, id int, operatorI
 
 // RejectInstance 拒绝工单
 func (s *instanceService) RejectInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
+	instance, err := s.dao.GetInstanceByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	fromStatus := instance.Status
+	toStatus := model.InstanceStatusRejected
+
 	// 更新工单状态为已拒绝
-	if err := s.dao.UpdateInstanceStatus(ctx, id, model.InstanceStatusRejected); err != nil {
+	if err := s.dao.UpdateInstanceStatus(ctx, id, toStatus); err != nil {
 		s.logger.Error("更新工单状态失败", zap.Error(err), zap.Int("instanceID", id))
 		return err
 	}
+
+	// 创建流转记录
+	s.createFlowRecord(ctx, id, model.FlowActionReject, operatorID, operatorName, fromStatus, toStatus, comment, 2)
+
+	// 创建时间线记录
+	s.createTimelineRecord(ctx, id, model.TimelineActionReject, operatorID, operatorName, fmt.Sprintf("工单审批拒绝: %s", comment))
 
 	// 添加拒绝原因的系统评论
 	if comment != "" {
@@ -297,14 +366,48 @@ func (s *instanceService) RejectInstance(ctx context.Context, id int, operatorID
 			Content:      fmt.Sprintf("审批拒绝：%s", comment),
 			Type:         model.CommentTypeSystem,
 			Status:       model.CommentStatusNormal,
-			IsSystem:     true,
+			IsSystem:     1,
 		}
-		
+
 		if err := s.commentDao.CreateInstanceComment(ctx, commentEntity); err != nil {
 			s.logger.Error("创建拒绝评论失败", zap.Error(err), zap.Int("instanceID", id))
-			// 评论创建失败不影响主流程，只记录日志
 		}
 	}
 
 	return nil
+}
+
+// 私有方法：创建流转记录
+func (s *instanceService) createFlowRecord(ctx context.Context, instanceID int, action string, operatorID int, operatorName string, fromStatus, toStatus int8, comment string, isSystem int8) {
+	flow := &model.WorkorderInstanceFlow{
+		InstanceID:     instanceID,
+		Action:         action,
+		OperatorID:     operatorID,
+		OperatorName:   operatorName,
+		FromStatus:     fromStatus,
+		ToStatus:       toStatus,
+		Comment:        comment,
+		IsSystemAction: isSystem,
+	}
+
+	if err := s.flowDao.Create(ctx, flow); err != nil {
+		s.logger.Error("创建流转记录失败", zap.Error(err), zap.Int("instanceID", instanceID))
+	}
+}
+
+// 私有方法：创建时间线记录
+func (s *instanceService) createTimelineRecord(ctx context.Context, instanceID int, action string, operatorID int, operatorName string, comment string) {
+	timeline := &model.WorkorderInstanceTimeline{
+		InstanceID:   instanceID,
+		Action:       action,
+		OperatorID:   operatorID,
+		OperatorName: operatorName,
+		ActionDetail: "", // 简单操作不需要详细信息
+		Comment:      comment,
+		RelatedID:    nil, // 无关联记录
+	}
+
+	if err := s.timelineDao.Create(ctx, timeline); err != nil {
+		s.logger.Error("创建时间线记录失败", zap.Error(err), zap.Int("instanceID", instanceID))
+	}
 }

@@ -120,7 +120,7 @@ func (s *instanceCommentService) UpdateInstanceComment(ctx context.Context, req 
 	}
 
 	// 只允许创建者修改自己的评论（系统评论除外）
-	if !existingComment.IsSystem && existingComment.OperatorID != userID {
+	if existingComment.IsSystem != 1 && existingComment.OperatorID != userID {
 		return fmt.Errorf("只能修改自己的评论")
 	}
 
@@ -150,7 +150,7 @@ func (s *instanceCommentService) DeleteInstanceComment(ctx context.Context, id i
 	}
 
 	// 只允许创建者删除自己的评论（系统评论除外）
-	if !comment.IsSystem && comment.OperatorID != userID {
+	if comment.IsSystem != 1 && comment.OperatorID != userID {
 		return fmt.Errorf("只能删除自己的评论")
 	}
 

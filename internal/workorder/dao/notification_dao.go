@@ -35,7 +35,7 @@ import (
 	"gorm.io/gorm"
 )
 
-type NotificationDAO interface {
+type WorkorderNotificationDAO interface {
 	CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error
 	UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error
 	DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error
@@ -52,7 +52,7 @@ type notificationDAO struct {
 	logger *zap.Logger
 }
 
-func NewNotificationDAO(db *gorm.DB, logger *zap.Logger) NotificationDAO {
+func NewNotificationDAO(db *gorm.DB, logger *zap.Logger) WorkorderNotificationDAO {
 	return &notificationDAO{
 		db:     db,
 		logger: logger,

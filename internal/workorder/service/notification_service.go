@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-type NotificationService interface {
+type WorkorderNotificationService interface {
 	CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error
 	UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error
 	DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error
@@ -22,25 +22,25 @@ type NotificationService interface {
 	TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error
 }
 
-type notificationService struct {
-	dao    dao.NotificationDAO
+type workorderNotificationService struct {
+	dao    dao.WorkorderNotificationDAO
 	logger *zap.Logger
 }
 
-func NewNotificationService(dao dao.NotificationDAO, logger *zap.Logger) NotificationService {
-	return &notificationService{
+func NewWorkorderNotificationService(dao dao.WorkorderNotificationDAO, logger *zap.Logger) WorkorderNotificationService {
+	return &workorderNotificationService{
 		logger: logger,
 		dao:    dao,
 	}
 }
 
 // CreateNotification 创建通知配置
-func (n *notificationService) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
+func (n *workorderNotificationService) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
 	return n.dao.CreateNotification(ctx, req)
 }
 
 // UpdateNotification 更新通知配置
-func (n *notificationService) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
+func (n *workorderNotificationService) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
 	_, err := n.dao.GetNotificationByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -53,7 +53,7 @@ func (n *notificationService) UpdateNotification(ctx context.Context, req *model
 }
 
 // DeleteNotification 删除通知配置
-func (n *notificationService) DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error {
+func (n *workorderNotificationService) DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error {
 	_, err := n.dao.GetNotificationByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -66,7 +66,7 @@ func (n *notificationService) DeleteNotification(ctx context.Context, req *model
 }
 
 // ListNotification 获取通知配置列表
-func (n *notificationService) ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (*model.ListResp[*model.WorkorderNotification], error) {
+func (n *workorderNotificationService) ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (*model.ListResp[*model.WorkorderNotification], error) {
 	result, err := n.dao.ListNotification(ctx, req)
 	if err != nil {
 		n.logger.Error("获取通知配置列表失败", zap.Error(err))
@@ -76,12 +76,12 @@ func (n *notificationService) ListNotification(ctx context.Context, req *model.L
 }
 
 // DetailNotification 获取通知配置详情
-func (n *notificationService) DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error) {
+func (n *workorderNotificationService) DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error) {
 	return n.dao.DetailNotification(ctx, req)
 }
 
 // GetSendLogs 获取发送日志
-func (n *notificationService) GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error) {
+func (n *workorderNotificationService) GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error) {
 	result, err := n.dao.GetSendLogs(ctx, req)
 	if err != nil {
 		n.logger.Error("获取发送日志失败", zap.Error(err))
@@ -91,7 +91,7 @@ func (n *notificationService) GetSendLogs(ctx context.Context, req *model.ListWo
 }
 
 // TestSendNotification 测试发送通知
-func (n *notificationService) TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error {
+func (n *workorderNotificationService) TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error {
 	notification, err := n.dao.GetNotificationByID(ctx, req.NotificationID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -147,7 +147,7 @@ func (n *notificationService) TestSendNotification(ctx context.Context, req *mod
 
 
 // sendNotification 根据不同的通道发送通知
-func (n *notificationService) sendNotification(channel, recipient, content string) error {
+func (n *workorderNotificationService) sendNotification(channel, recipient, content string) error {
 	switch channel {
 	case "feishu":
 		return n.sendFeishuNotification(recipient, content)
@@ -163,7 +163,7 @@ func (n *notificationService) sendNotification(channel, recipient, content strin
 }
 
 // sendFeishuNotification 发送飞书通知
-func (n *notificationService) sendFeishuNotification(recipient, content string) error {
+func (n *workorderNotificationService) sendFeishuNotification(recipient, content string) error {
 	n.logger.Info("发送飞书通知",
 		zap.String("recipient", recipient),
 		zap.String("content", content))
@@ -173,7 +173,7 @@ func (n *notificationService) sendFeishuNotification(recipient, content string) 
 }
 
 // sendEmailNotification 发送邮件通知
-func (n *notificationService) sendEmailNotification(recipient, content string) error {
+func (n *workorderNotificationService) sendEmailNotification(recipient, content string) error {
 	n.logger.Info("发送邮件通知",
 		zap.String("recipient", recipient),
 		zap.String("content", content))
@@ -183,7 +183,7 @@ func (n *notificationService) sendEmailNotification(recipient, content string) e
 }
 
 // sendDingtalkNotification 发送钉钉通知
-func (n *notificationService) sendDingtalkNotification(recipient, content string) error {
+func (n *workorderNotificationService) sendDingtalkNotification(recipient, content string) error {
 	n.logger.Info("发送钉钉通知",
 		zap.String("recipient", recipient),
 		zap.String("content", content))
@@ -193,7 +193,7 @@ func (n *notificationService) sendDingtalkNotification(recipient, content string
 }
 
 // sendWechatNotification 发送企业微信通知
-func (n *notificationService) sendWechatNotification(recipient, content string) error {
+func (n *workorderNotificationService) sendWechatNotification(recipient, content string) error {
 	n.logger.Info("发送企业微信通知",
 		zap.String("recipient", recipient),
 		zap.String("content", content))

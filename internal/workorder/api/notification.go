@@ -33,10 +33,10 @@ import (
 )
 
 type NotificationHandler struct {
-	service service.NotificationService
+	service service.WorkorderNotificationService
 }
 
-func NewNotificationHandler(service service.NotificationService) *NotificationHandler {
+func NewNotificationHandler(service service.WorkorderNotificationService) *NotificationHandler {
 	return &NotificationHandler{
 		service: service,
 	}

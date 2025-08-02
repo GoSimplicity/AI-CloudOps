@@ -36,7 +36,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type TemplateService interface {
+type WorkorderTemplateService interface {
 	CreateTemplate(ctx context.Context, req *model.CreateWorkorderTemplateReq, creatorID int, creatorName string) error
 	UpdateTemplate(ctx context.Context, req *model.UpdateWorkorderTemplateReq, userID int) error
 	DeleteTemplate(ctx context.Context, id int, userID int) error
@@ -44,10 +44,10 @@ type TemplateService interface {
 	DetailTemplate(ctx context.Context, id int, userID int) (*model.WorkorderTemplate, error)
 }
 
-type templateService struct {
-	dao         dao.TemplateDAO
+type workorderTemplateService struct {
+	dao         dao.WorkorderTemplateDAO
 	userDao     userDao.UserDAO
-	processDao  dao.ProcessDAO
+	processDao  dao.WorkorderProcessDAO
 	categoryDao dao.WorkorderCategoryDAO
 	instanceDao dao.WorkorderInstanceDAO
 	l           *zap.Logger
@@ -58,15 +58,15 @@ type TemplateValidator interface {
 	Validate(ctx context.Context, template *model.WorkorderTemplate) error
 }
 
-func NewTemplateService(
-	dao dao.TemplateDAO,
+func NewWorkorderTemplateService(
+	dao dao.WorkorderTemplateDAO,
 	userDao userDao.UserDAO,
-	processDao dao.ProcessDAO,
+	processDao dao.WorkorderProcessDAO,
 	categoryDao dao.WorkorderCategoryDAO,
 	instanceDao dao.WorkorderInstanceDAO,
 	l *zap.Logger,
-) TemplateService {
-	ts := &templateService{
+) WorkorderTemplateService {
+	ts := &workorderTemplateService{
 		dao:         dao,
 		userDao:     userDao,
 		processDao:  processDao,
@@ -80,12 +80,12 @@ func NewTemplateService(
 }
 
 // RegisterValidator 注册模板验证器
-func (t *templateService) RegisterValidator(validator TemplateValidator) {
+func (t *workorderTemplateService) RegisterValidator(validator TemplateValidator) {
 	t.validators = append(t.validators, validator)
 }
 
 // CreateTemplate 创建模板
-func (t *templateService) CreateTemplate(ctx context.Context, req *model.CreateWorkorderTemplateReq, creatorID int, creatorName string) error {
+func (t *workorderTemplateService) CreateTemplate(ctx context.Context, req *model.CreateWorkorderTemplateReq, creatorID int, creatorName string) error {
 	if req == nil {
 		return errors.New("创建模板请求不能为空")
 	}
@@ -142,7 +142,7 @@ func (t *templateService) CreateTemplate(ctx context.Context, req *model.CreateW
 }
 
 // UpdateTemplate 更新模板
-func (t *templateService) UpdateTemplate(ctx context.Context, req *model.UpdateWorkorderTemplateReq, userID int) error {
+func (t *workorderTemplateService) UpdateTemplate(ctx context.Context, req *model.UpdateWorkorderTemplateReq, userID int) error {
 	if req == nil {
 		return errors.New("更新模板请求不能为空")
 	}
@@ -211,7 +211,7 @@ func (t *templateService) UpdateTemplate(ctx context.Context, req *model.UpdateW
 }
 
 // DeleteTemplate 删除模板
-func (t *templateService) DeleteTemplate(ctx context.Context, id int, userID int) error {
+func (t *workorderTemplateService) DeleteTemplate(ctx context.Context, id int, userID int) error {
 	if id <= 0 {
 		return errors.New("模板ID无效")
 	}
@@ -247,7 +247,7 @@ func (t *templateService) DeleteTemplate(ctx context.Context, id int, userID int
 }
 
 // ListTemplate 获取模板列表
-func (t *templateService) ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) (*model.ListResp[*model.WorkorderTemplate], error) {
+func (t *workorderTemplateService) ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) (*model.ListResp[*model.WorkorderTemplate], error) {
 	if req == nil {
 		req = &model.ListWorkorderTemplateReq{}
 	}
@@ -283,7 +283,7 @@ func (t *templateService) ListTemplate(ctx context.Context, req *model.ListWorko
 }
 
 // DetailTemplate 获取模板详情
-func (t *templateService) DetailTemplate(ctx context.Context, id int, userID int) (*model.WorkorderTemplate, error) {
+func (t *workorderTemplateService) DetailTemplate(ctx context.Context, id int, userID int) (*model.WorkorderTemplate, error) {
 	if id <= 0 {
 		return nil, errors.New("模板ID无效")
 	}
@@ -306,7 +306,7 @@ func (t *templateService) DetailTemplate(ctx context.Context, id int, userID int
 }
 
 // checkTemplateNameExists 检查模板名称是否存在
-func (t *templateService) checkTemplateNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
+func (t *workorderTemplateService) checkTemplateNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
 	if name == "" {
 		return false, errors.New("模板名称不能为空")
 	}
@@ -318,7 +318,7 @@ func (t *templateService) checkTemplateNameExists(ctx context.Context, name stri
 }
 
 // setDefaultPagination 设置默认分页参数
-func (t *templateService) setDefaultPagination(req *model.ListWorkorderTemplateReq) {
+func (t *workorderTemplateService) setDefaultPagination(req *model.ListWorkorderTemplateReq) {
 	if req.Page <= 0 {
 		req.Page = 1
 	}
@@ -331,7 +331,7 @@ func (t *templateService) setDefaultPagination(req *model.ListWorkorderTemplateR
 }
 
 // enrichTemplateListWithCreators 批量获取创建者信息
-func (t *templateService) enrichTemplateListWithCreators(ctx context.Context, templates []*model.WorkorderTemplate) error {
+func (t *workorderTemplateService) enrichTemplateListWithCreators(ctx context.Context, templates []*model.WorkorderTemplate) error {
 	creatorIDs := make([]int, 0)
 	creatorIDMap := make(map[int]struct{})
 	for _, template := range templates {
@@ -362,7 +362,7 @@ func (t *templateService) enrichTemplateListWithCreators(ctx context.Context, te
 }
 
 // hasPermissionToModify 检查是否有权限修改模板
-func (t *templateService) hasPermissionToModify(template *model.WorkorderTemplate, userID int) bool {
+func (t *workorderTemplateService) hasPermissionToModify(template *model.WorkorderTemplate, userID int) bool {
 	// 优化：允许创建者本人或超级管理员（如ID=1）修改
 	if template == nil {
 		return false
@@ -371,7 +371,7 @@ func (t *templateService) hasPermissionToModify(template *model.WorkorderTemplat
 }
 
 // validateProcessExists 验证流程是否存在
-func (t *templateService) validateProcessExists(ctx context.Context, processID int) error {
+func (t *workorderTemplateService) validateProcessExists(ctx context.Context, processID int) error {
 	if processID <= 0 {
 		return errors.New("流程ID无效")
 	}
@@ -384,7 +384,7 @@ func (t *templateService) validateProcessExists(ctx context.Context, processID i
 }
 
 // validateCategoryExists 验证分类是否存在
-func (t *templateService) validateCategoryExists(ctx context.Context, categoryID int) error {
+func (t *workorderTemplateService) validateCategoryExists(ctx context.Context, categoryID int) error {
 	if categoryID <= 0 {
 		return errors.New("分类ID无效")
 	}

@@ -17,7 +17,7 @@ var (
 	ErrProcessInUse      = fmt.Errorf("流程正在使用中，无法删除")
 )
 
-type ProcessDAO interface {
+type WorkorderProcessDAO interface {
 	CreateProcess(ctx context.Context, process *model.WorkorderProcess) error
 	UpdateProcess(ctx context.Context, process *model.WorkorderProcess) error
 	DeleteProcess(ctx context.Context, id int) error
@@ -32,7 +32,7 @@ type processDAO struct {
 	logger *zap.Logger
 }
 
-func NewProcessDAO(db *gorm.DB, logger *zap.Logger) ProcessDAO {
+func NewProcessDAO(db *gorm.DB, logger *zap.Logger) WorkorderProcessDAO {
 	return &processDAO{
 		db:     db,
 		logger: logger,

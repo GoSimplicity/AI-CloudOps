@@ -29,7 +29,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
@@ -39,7 +38,6 @@ import (
 // 错误定义
 var (
 	ErrInstanceNotFound = errors.New("工单实例不存在")
-	ErrInvalidAction    = errors.New("无效的操作类型")
 )
 
 type InstanceFlowService interface {
@@ -105,74 +103,4 @@ func (s *instanceFlowService) DetailInstanceFlow(ctx context.Context, id int) (*
 	}
 
 	return flow, nil
-}
-
-// 辅助方法
-
-// validateCreateRequest 验证创建请求
-func (s *instanceFlowService) validateCreateRequest(req *model.CreateWorkorderInstanceFlowReq) error {
-	if req == nil {
-		return dao.ErrFlowNilPointer
-	}
-
-	if req.InstanceID <= 0 {
-		return fmt.Errorf("工单ID无效")
-	}
-
-	if strings.TrimSpace(req.StepID) == "" {
-		return fmt.Errorf("步骤ID不能为空")
-	}
-
-	if strings.TrimSpace(req.StepName) == "" {
-		return fmt.Errorf("步骤名称不能为空")
-	}
-
-	if strings.TrimSpace(req.Action) == "" {
-		return fmt.Errorf("操作动作不能为空")
-	}
-
-	if req.OperatorID <= 0 {
-		return fmt.Errorf("操作人ID无效")
-	}
-
-	if strings.TrimSpace(req.OperatorName) == "" {
-		return fmt.Errorf("操作人名称不能为空")
-	}
-
-	// 验证操作动作是否有效
-	validActions := []string{
-		model.FlowActionCreate, model.FlowActionSubmit, model.FlowActionApprove,
-		model.FlowActionReject, model.FlowActionTransfer, model.FlowActionAssign,
-		model.FlowActionRevoke, model.FlowActionCancel, model.FlowActionReturn,
-		model.FlowActionComplete,
-	}
-
-	actionValid := false
-	for _, action := range validActions {
-		if req.Action == action {
-			actionValid = true
-			break
-		}
-	}
-
-	if !actionValid {
-		return ErrInvalidAction
-	}
-
-	// 如果指定了结果，验证结果是否有效
-	if req.Result != "" {
-		validResults := []string{model.FlowResultSuccess, model.FlowResultFailed, model.FlowResultPending}
-		resultValid := false
-		for _, result := range validResults {
-			if req.Result == result {
-				resultValid = true
-				break
-			}
-		}
-		if !resultValid {
-			return fmt.Errorf("无效的处理结果")
-		}
-	}
-
-	return nil
 }

@@ -52,7 +52,7 @@ type WorkorderNotification struct {
 	Status           int8       `json:"status" gorm:"column:status;not null;default:1;index;comment:状态"`
 	Priority         int8       `json:"priority" gorm:"column:priority;not null;default:2;comment:优先级"`
 	OperatorID       int        `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
-	IsDefault        bool       `json:"is_default" gorm:"column:is_default;not null;default:false;comment:是否默认配置"`
+	IsDefault        int8       `json:"is_default" gorm:"column:is_default;not null;default:2;comment:是否默认配置：1-是，2-否"`
 	Settings         JSONMap    `json:"settings" gorm:"column:settings;type:json;comment:通知设置"`
 }
 
@@ -83,7 +83,7 @@ type CreateWorkorderNotificationReq struct {
 	RetryInterval    int        `json:"retry_interval"`
 	Status           int8       `json:"status"`
 	Priority         int8       `json:"priority"`
-	IsDefault        bool       `json:"is_default"`
+	IsDefault        int8       `json:"is_default" binding:"omitempty,oneof=1 2"`
 	Settings         JSONMap    `json:"settings"`
 	UserID           int        `json:"-"` // 由中间件注入
 }
@@ -112,7 +112,7 @@ type UpdateWorkorderNotificationReq struct {
 	RetryInterval    int        `json:"retry_interval"`
 	Status           int8       `json:"status"`
 	Priority         int8       `json:"priority"`
-	IsDefault        bool       `json:"is_default"`
+	IsDefault        int8       `json:"is_default" binding:"omitempty,oneof=1 2"`
 	Settings         JSONMap    `json:"settings"`
 }
 
@@ -130,7 +130,7 @@ type ListWorkorderNotificationReq struct {
 	TemplateID  *int   `json:"template_id" form:"template_id"`
 	CategoryID  *int   `json:"category_id" form:"category_id"`
 	Status      *int8  `json:"status" form:"status"`
-	IsDefault   *bool  `json:"is_default" form:"is_default"`
+	IsDefault   *int8  `json:"is_default" form:"is_default" binding:"omitempty,oneof=1 2"`
 }
 
 // DetailWorkorderNotificationReq 工单通知配置详情

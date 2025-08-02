@@ -27,49 +27,56 @@ package model
 
 import "time"
 
-// 时间线动作类型常量
+// 时间线操作类型常量 - 包含所有操作记录
 const (
-	TimelineActionCreate   = "create"   // 创建工单
-	TimelineActionSubmit   = "submit"   // 提交工单
-	TimelineActionApprove  = "approve"  // 审批通过
-	TimelineActionReject   = "reject"   // 审批拒绝
-	TimelineActionTransfer = "transfer" // 转交
-	TimelineActionAssign   = "assign"   // 指派
-	TimelineActionRevoke   = "revoke"   // 撤回
-	TimelineActionCancel   = "cancel"   // 取消
-	TimelineActionReturn   = "return"   // 退回
-	TimelineActionComplete = "complete" // 完成
-	TimelineActionComment  = "comment"  // 添加评论
-	TimelineActionUpdate   = "update"   // 更新工单
+	TimelineActionCreate     = "create"      // 创建工单
+	TimelineActionSubmit     = "submit"      // 提交工单
+	TimelineActionApprove    = "approve"     // 审批通过
+	TimelineActionReject     = "reject"      // 审批拒绝
+	TimelineActionAssign     = "assign"      // 指派处理人
+	TimelineActionCancel     = "cancel"      // 取消工单
+	TimelineActionComplete   = "complete"    // 完成工单
+	TimelineActionReturn     = "return"      // 退回工单
+	TimelineActionComment    = "comment"     // 添加评论
+	TimelineActionUpdate     = "update"      // 更新工单信息
+	TimelineActionView       = "view"        // 查看工单
+	TimelineActionAttach     = "attach"      // 添加附件
+	TimelineActionNotify     = "notify"      // 发送通知
+	TimelineActionRemind     = "remind"      // 催办提醒
 )
 
-// WorkorderInstanceTimeline 工单实例时间线
+// WorkorderInstanceTimeline 工单操作时间线 - 记录所有操作历史和审计日志
 type WorkorderInstanceTimeline struct {
 	Model
 	InstanceID   int    `json:"instance_id" gorm:"column:instance_id;not null;index:idx_instance_id;index:idx_instance_time,priority:1;index:idx_instance_action,priority:1;comment:工单实例ID"`
-	Action       string `json:"action" gorm:"column:action;type:varchar(50);not null;index:idx_action;index:idx_instance_action,priority:2;comment:动作类型"`
+	Action       string `json:"action" gorm:"column:action;type:varchar(50);not null;index:idx_action;index:idx_instance_action,priority:2;comment:操作类型"`
 	OperatorID   int    `json:"operator_id" gorm:"column:operator_id;not null;index:idx_operator_id;index:idx_operator_time,priority:1;comment:操作人ID"`
 	OperatorName string `json:"operator_name" gorm:"column:operator_name;type:varchar(100);comment:操作人名称"`
-	Comment      string `json:"comment" gorm:"column:comment;type:varchar(2000);comment:备注/评论"`
+	ActionDetail string `json:"action_detail" gorm:"column:action_detail;type:text;comment:操作详情（JSON格式）"`
+	Comment      string `json:"comment" gorm:"column:comment;type:varchar(2000);comment:操作备注或说明"`
+	RelatedID    *int   `json:"related_id" gorm:"column:related_id;index;comment:关联记录ID（如评论ID、附件ID等）"`
 }
 
 func (WorkorderInstanceTimeline) TableName() string {
 	return "cl_workorder_instance_timeline"
 }
 
-// CreateWorkorderInstanceTimelineReq 创建工单实例时间线请求
+// CreateWorkorderInstanceTimelineReq 创建工单操作时间线请求
 type CreateWorkorderInstanceTimelineReq struct {
 	InstanceID   int    `json:"instance_id" binding:"required,min=1"`
-	Action       string `json:"action" binding:"required,oneof=create submit approve reject transfer assign revoke cancel return complete comment update"`
+	Action       string `json:"action" binding:"required,oneof=create submit approve reject assign cancel complete return comment update view attach notify remind"`
 	OperatorID   int    `json:"operator_id" binding:"required,min=1"`
 	OperatorName string `json:"operator_name" binding:"required,min=1,max=100"`
+	ActionDetail string `json:"action_detail" binding:"omitempty"`
 	Comment      string `json:"comment" binding:"omitempty,max=2000"`
+	RelatedID    *int   `json:"related_id" binding:"omitempty,min=1"`
 }
 
-// UpdateWorkorderInstanceTimelineReq 更新工单实例时间线请求
+// UpdateWorkorderInstanceTimelineReq 更新工单操作时间线请求
 type UpdateWorkorderInstanceTimelineReq struct {
-	ID      int    `json:"id" binding:"required,min=1"`
-	Comment string `json:"comment" binding:"omitempty,max=2000"`
+	ID           int    `json:"id" binding:"required,min=1"`
+	ActionDetail string `json:"action_detail" binding:"omitempty"`
+	Comment      string `json:"comment" binding:"omitempty,max=2000"`
 }
 
 // DeleteWorkorderInstanceTimelineReq 删除工单实例时间线请求
@@ -82,11 +89,11 @@ type DetailWorkorderInstanceTimelineReq struct {
 	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
 
-// ListWorkorderInstanceTimelineReq 工单实例时间线列表请求
+// ListWorkorderInstanceTimelineReq 工单操作时间线列表请求
 type ListWorkorderInstanceTimelineReq struct {
 	ListReq
 	InstanceID *int       `json:"instance_id" form:"instance_id" binding:"omitempty,min=1"`
-	Action     *string    `json:"action" form:"action" binding:"omitempty,oneof=create submit approve reject transfer assign revoke cancel return complete comment update"`
+	Action     *string    `json:"action" form:"action" binding:"omitempty,oneof=create submit approve reject assign cancel complete return comment update view attach notify remind"`
 	OperatorID *int       `json:"operator_id" form:"operator_id" binding:"omitempty,min=1"`
 	StartDate  *time.Time `json:"start_date" form:"start_date" binding:"omitempty"`
 	EndDate    *time.Time `json:"end_date" form:"end_date" binding:"omitempty"`
