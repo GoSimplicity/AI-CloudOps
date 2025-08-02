@@ -91,5 +91,8 @@ func InitTables(db *gorm.DB) error {
 		&model.WorkorderProcess{},
 		&model.WorkorderTemplate{},
 		&model.WorkorderCategory{},
+		&model.WorkorderNotification{},
+		&model.WorkorderNotificationLog{},
+		&model.WorkorderInstanceTimeline{},
 	)
 }

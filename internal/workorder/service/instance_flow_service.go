@@ -43,7 +43,6 @@ var (
 )
 
 type InstanceFlowService interface {
-	CreateInstanceFlow(ctx context.Context, req *model.CreateWorkorderInstanceFlowReq) error
 	ListInstanceFlows(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) (*model.ListResp[*model.WorkorderInstanceFlow], error)
 	DetailInstanceFlow(ctx context.Context, id int) (*model.WorkorderInstanceFlow, error)
 }
@@ -58,45 +57,6 @@ func NewInstanceFlowService(dao dao.WorkorderInstanceFlowDAO, logger *zap.Logger
 		dao:    dao,
 		logger: logger,
 	}
-}
-
-// CreateInstanceFlow 创建工单流程记录
-func (s *instanceFlowService) CreateInstanceFlow(ctx context.Context, req *model.CreateWorkorderInstanceFlowReq) error {
-	if err := s.validateCreateRequest(req); err != nil {
-		return fmt.Errorf("参数验证失败: %w", err)
-	}
-
-	// 创建流程记录
-	flow := &model.WorkorderInstanceFlow{
-		InstanceID:     req.InstanceID,
-		StepID:         req.StepID,
-		StepName:       req.StepName,
-		Action:         req.Action,
-		OperatorID:   req.OperatorID,
-		OperatorName: req.OperatorName,
-		AssigneeID:     req.AssigneeID,
-		Comment:        req.Comment,
-		Result:         req.Result,
-		FormData:       req.FormData,
-	}
-
-	// 设置默认结果
-	if flow.Result == "" {
-		flow.Result = model.FlowResultSuccess
-	}
-
-	// 保存流程记录
-	if err := s.dao.Create(ctx, flow); err != nil {
-		s.logger.Error("创建流程记录失败", zap.Error(err))
-		return fmt.Errorf("创建流程记录失败: %w", err)
-	}
-
-	s.logger.Info("工单流程记录创建成功",
-		zap.Int("instanceID", req.InstanceID),
-		zap.String("action", req.Action),
-		zap.Int("operatorID", req.OperatorID))
-
-	return nil
 }
 
 // ListInstanceFlows 分页获取工单流程记录列表

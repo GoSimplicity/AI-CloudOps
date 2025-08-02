@@ -77,7 +77,7 @@ func (h *InstanceHandler) CreateInstance(ctx *gin.Context) {
 	req.OperatorName = user.Username
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return h.service.CreateInstance(ctx, &req)
+		return nil, h.service.CreateInstance(ctx, &req)
 	})
 }
 
@@ -188,22 +188,26 @@ func (h *InstanceHandler) ListInstance(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "工单实例ID"
+// @Param request body model.SubmitWorkorderInstanceReq true "提交工单请求参数"
 // @Success 200 {object} utils.ApiResponse "提交成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
 // @Router /api/workorder/instance/submit/{id} [post]
 func (h *InstanceHandler) SubmitInstance(ctx *gin.Context) {
+	var req model.SubmitWorkorderInstanceReq
+	
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
+	req.ID = id
 	user := ctx.MustGet("user").(utils.UserClaims)
 
-	utils.HandleRequest(ctx, nil, func() (any, error) {
-		return nil, h.service.SubmitInstance(ctx, id, user.Uid, user.Username)
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return nil, h.service.SubmitInstance(ctx, req.ID, user.Uid, user.Username)
 	})
 }
 
@@ -214,32 +218,26 @@ func (h *InstanceHandler) SubmitInstance(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "工单实例ID"
-// @Param request body object{assignee_id=int} true "指派请求参数"
+// @Param request body model.AssignWorkorderInstanceReq true "指派请求参数"
 // @Success 200 {object} utils.ApiResponse "指派成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
 // @Router /api/workorder/instance/assign/{id} [post]
 func (h *InstanceHandler) AssignInstance(ctx *gin.Context) {
+	var req model.AssignWorkorderInstanceReq
+	
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
-	var req struct {
-		AssigneeID int `json:"assignee_id" binding:"required,min=1"`
-	}
-
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
-		return
-	}
-
+	req.ID = id
 	user := ctx.MustGet("user").(utils.UserClaims)
 
-	utils.HandleRequest(ctx, nil, func() (any, error) {
-		return nil, h.service.AssignInstance(ctx, id, req.AssigneeID, user.Uid, user.Username)
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return nil, h.service.AssignInstance(ctx, req.ID, req.AssigneeID, user.Uid, user.Username)
 	})
 }
 
@@ -250,32 +248,26 @@ func (h *InstanceHandler) AssignInstance(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "工单实例ID"
-// @Param request body object{comment=string} true "审批意见"
+// @Param request body model.ApproveWorkorderInstanceReq true "审批意见"
 // @Success 200 {object} utils.ApiResponse "审批成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
 // @Router /api/workorder/instance/approve/{id} [post]
 func (h *InstanceHandler) ApproveInstance(ctx *gin.Context) {
+	var req model.ApproveWorkorderInstanceReq
+	
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
-	var req struct {
-		Comment string `json:"comment"`
-	}
-
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
-		return
-	}
-
+	req.ID = id
 	user := ctx.MustGet("user").(utils.UserClaims)
 
-	utils.HandleRequest(ctx, nil, func() (any, error) {
-		return nil, h.service.ApproveInstance(ctx, id, user.Uid, user.Username, req.Comment)
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return nil, h.service.ApproveInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
 	})
 }
 
@@ -286,31 +278,25 @@ func (h *InstanceHandler) ApproveInstance(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "工单实例ID"
-// @Param request body object{comment=string} true "拒绝原因"
+// @Param request body model.RejectWorkorderInstanceReq true "拒绝原因"
 // @Success 200 {object} utils.ApiResponse "拒绝成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
 // @Router /api/workorder/instance/reject/{id} [post]
 func (h *InstanceHandler) RejectInstance(ctx *gin.Context) {
+	var req model.RejectWorkorderInstanceReq
+	
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
-	var req struct {
-		Comment string `json:"comment" binding:"required"`
-	}
-
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
-		return
-	}
-
+	req.ID = id
 	user := ctx.MustGet("user").(utils.UserClaims)
 
-	utils.HandleRequest(ctx, nil, func() (any, error) {
-		return nil, h.service.RejectInstance(ctx, id, user.Uid, user.Username, req.Comment)
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return nil, h.service.RejectInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
 	})
 }

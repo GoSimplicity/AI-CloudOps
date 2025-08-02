@@ -49,12 +49,11 @@ type WorkorderInstanceDAO interface {
 	UpdateInstance(ctx context.Context, instance *model.WorkorderInstance) error
 	DeleteInstance(ctx context.Context, id int) error
 	GetInstanceByID(ctx context.Context, id int) (*model.WorkorderInstance, error)
-	GetInstanceBySerialNumber(ctx context.Context, serialNumber string) (*model.WorkorderInstance, error)
+	GetInstanceByTitle(ctx context.Context, title string) (*model.WorkorderInstance, error)
 	ListInstance(ctx context.Context, req *model.ListWorkorderInstanceReq) ([]*model.WorkorderInstance, int64, error)
 	GenerateSerialNumber(ctx context.Context) (string, error)
 	UpdateInstanceStatus(ctx context.Context, id int, status int8) error
 	UpdateInstanceAssignee(ctx context.Context, id int, assigneeID *int) error
-	ListInstanceByAssignee(ctx context.Context, assigneeID int, req *model.ListWorkorderInstanceReq) ([]*model.WorkorderInstance, int64, error)
 }
 
 type workorderInstanceDAO struct {
@@ -181,6 +180,26 @@ func (d *workorderInstanceDAO) GetInstanceByID(ctx context.Context, id int) (*mo
 	return &instance, nil
 }
 
+// GetInstanceByTitle 根据工单标题获取工单实例
+func (d *workorderInstanceDAO) GetInstanceByTitle(ctx context.Context, title string) (*model.WorkorderInstance, error) {
+	var instance model.WorkorderInstance
+
+	err := d.db.WithContext(ctx).
+		Where("title = ?", title).
+		First(&instance).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			d.logger.Warn("工单实例不存在", zap.String("title", title))
+			return nil, ErrInstanceNotFound
+		}
+		d.logger.Error("获取工单实例失败", zap.Error(err), zap.String("title", title))
+		return nil, fmt.Errorf("获取工单实例失败: %w", err)
+	}
+
+	return &instance, nil
+}
+
 // ListInstance 获取工单实例列表
 func (d *workorderInstanceDAO) ListInstance(ctx context.Context, req *model.ListWorkorderInstanceReq) ([]*model.WorkorderInstance, int64, error) {
 	var instances []*model.WorkorderInstance
@@ -232,33 +251,6 @@ func (d *workorderInstanceDAO) ListInstance(ctx context.Context, req *model.List
 	return instances, total, nil
 }
 
-// GetInstanceBySerialNumber 根据工单编号获取工单实例
-func (d *workorderInstanceDAO) GetInstanceBySerialNumber(ctx context.Context, serialNumber string) (*model.WorkorderInstance, error) {
-	if serialNumber == "" {
-		d.logger.Error("获取工单实例失败: 工单编号为空")
-		return nil, fmt.Errorf("工单编号不能为空")
-	}
-
-	var instance model.WorkorderInstance
-	err := d.db.WithContext(ctx).
-		Where("serial_number = ?", serialNumber).
-		Preload("Comments").
-		Preload("FlowLogs").
-		Preload("Timeline").
-		First(&instance).Error
-
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			d.logger.Warn("工单实例不存在", zap.String("serial_number", serialNumber))
-			return nil, ErrInstanceNotFound
-		}
-		d.logger.Error("获取工单实例失败", zap.Error(err), zap.String("serial_number", serialNumber))
-		return nil, fmt.Errorf("获取工单实例失败: %w", err)
-	}
-
-	return &instance, nil
-}
-
 // GenerateSerialNumber 生成工单编号
 func (d *workorderInstanceDAO) GenerateSerialNumber(ctx context.Context) (string, error) {
 	now := time.Now()
@@ -290,7 +282,6 @@ func (d *workorderInstanceDAO) UpdateInstanceStatus(ctx context.Context, id int,
 		Where("id = ?", id).
 		Updates(map[string]any{
 			"status":     status,
-			"updated_at": time.Now(),
 		})
 
 	if result.Error != nil {
@@ -316,7 +307,6 @@ func (d *workorderInstanceDAO) UpdateInstanceAssignee(ctx context.Context, id in
 		Where("id = ?", id).
 		Updates(map[string]any{
 			"assignee_id": assigneeID,
-			"updated_at":  time.Now(),
 		})
 
 	if result.Error != nil {
@@ -329,60 +319,4 @@ func (d *workorderInstanceDAO) UpdateInstanceAssignee(ctx context.Context, id in
 	}
 
 	return nil
-}
-
-// ListInstanceByAssignee 根据处理人获取工单列表
-func (d *workorderInstanceDAO) ListInstanceByAssignee(ctx context.Context, assigneeID int, req *model.ListWorkorderInstanceReq) ([]*model.WorkorderInstance, int64, error) {
-	var instances []*model.WorkorderInstance
-	var total int64
-
-	if assigneeID <= 0 {
-		return nil, 0, fmt.Errorf("处理人ID无效")
-	}
-
-	if req == nil {
-		req = &model.ListWorkorderInstanceReq{
-			ListReq: model.ListReq{Page: 1, Size: 10},
-		}
-	}
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-	if req.Size <= 0 {
-		req.Size = 10
-	}
-
-	db := d.db.WithContext(ctx).Model(&model.WorkorderInstance{}).Where("assignee_id = ?", assigneeID)
-
-	// 动态条件
-	if req.Status != nil {
-		db = db.Where("status = ?", *req.Status)
-	}
-	if req.Priority != nil {
-		db = db.Where("priority = ?", *req.Priority)
-	}
-	if req.ProcessID != nil {
-		db = db.Where("process_id = ?", *req.ProcessID)
-	}
-	if req.Search != "" {
-		search := sanitizeSearchInput(req.Search)
-		db = db.Where("title LIKE ? OR description LIKE ?", "%"+search+"%", "%"+search+"%")
-	}
-
-	if err := db.Count(&total).Error; err != nil {
-		d.logger.Error("获取处理人工单总数失败", zap.Error(err), zap.Int("assignee_id", assigneeID))
-		return nil, 0, fmt.Errorf("获取处理人工单总数失败: %w", err)
-	}
-
-	offset := (req.Page - 1) * req.Size
-	err := db.Order("created_at DESC").
-		Offset(offset).
-		Limit(req.Size).
-		Find(&instances).Error
-	if err != nil {
-		d.logger.Error("获取处理人工单列表失败", zap.Error(err), zap.Int("assignee_id", assigneeID))
-		return nil, 0, fmt.Errorf("获取处理人工单列表失败: %w", err)
-	}
-
-	return instances, total, nil
 }

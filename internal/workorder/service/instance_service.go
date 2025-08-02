@@ -41,7 +41,7 @@ var (
 )
 
 type InstanceService interface {
-	CreateInstance(ctx context.Context, req *model.CreateWorkorderInstanceReq) (*model.WorkorderInstance, error)
+	CreateInstance(ctx context.Context, req *model.CreateWorkorderInstanceReq) error
 	UpdateInstance(ctx context.Context, req *model.UpdateWorkorderInstanceReq) error
 	DeleteInstance(ctx context.Context, id int) error
 	GetInstance(ctx context.Context, id int) (*model.WorkorderInstance, error)
@@ -54,66 +54,80 @@ type InstanceService interface {
 
 type instanceService struct {
 	dao        dao.WorkorderInstanceDAO
+	commentDao dao.WorkorderInstanceCommentDAO
 	processDao dao.ProcessDAO
 	logger     *zap.Logger
 }
 
 func NewInstanceService(
 	dao dao.WorkorderInstanceDAO,
+	commentDao dao.WorkorderInstanceCommentDAO,
 	processDao dao.ProcessDAO,
 	logger *zap.Logger,
 ) InstanceService {
 	return &instanceService{
 		dao:        dao,
+		commentDao: commentDao,
 		processDao: processDao,
 		logger:     logger,
 	}
 }
 
 // CreateInstance 创建工单实例
-func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateWorkorderInstanceReq) (*model.WorkorderInstance, error) {
+func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateWorkorderInstanceReq) error {
 	if req.Status < model.InstanceStatusDraft || req.Status > model.InstanceStatusCancelled {
-		return nil, ErrInvalidStatus
+		return fmt.Errorf("工单状态无效")
 	}
 	if req.Priority < model.PriorityLow || req.Priority > model.PriorityHigh {
-		return nil, fmt.Errorf("优先级无效")
+		return fmt.Errorf("优先级无效")
+	}
+
+	// 确保实例名称唯一
+	if _, err := s.dao.GetInstanceByTitle(ctx, req.Title); err != nil {
+		if err != dao.ErrInstanceNotFound {
+			s.logger.Error("获取工单实例失败", zap.Error(err), zap.String("title", req.Title))
+			return err
+		}
+	} else {
+		return fmt.Errorf("工单实例名称已存在")
 	}
 
 	// 验证流程是否存在
-	_, err := s.processDao.GetProcessByID(ctx, req.ProcessID)
-	if err != nil && err != dao.ErrProcessNotFound {
-		s.logger.Error("获取流程定义失败", zap.Error(err), zap.Int("processID", req.ProcessID))
-		return nil, err
+	if _, err := s.processDao.GetProcessByID(ctx, req.ProcessID); err != nil {
+		if err != dao.ErrProcessNotFound {
+			s.logger.Error("获取流程定义失败", zap.Error(err), zap.Int("processID", req.ProcessID))
+			return err
+		}
 	}
 
 	// 生成工单编号
 	serialNumber, err := s.dao.GenerateSerialNumber(ctx)
 	if err != nil {
 		s.logger.Error("生成工单编号失败", zap.Error(err))
-		return nil, err
+		return err
 	}
 
 	instance := &model.WorkorderInstance{
-		Title:          req.Title,
-		SerialNumber:   serialNumber,
-		ProcessID:      req.ProcessID,
-		FormData:       req.FormData,
-		Status:         req.Status,
-		Priority:       req.Priority,
-		OperatorID:     req.OperatorID,
-		OperatorName:   req.OperatorName,
-		AssigneeID:     req.AssigneeID,
-		Description:    req.Description,
-		Tags:           req.Tags,
-		DueDate:        req.DueDate,
+		Title:        req.Title,
+		SerialNumber: serialNumber,
+		ProcessID:    req.ProcessID,
+		FormData:     req.FormData,
+		Status:       req.Status,
+		Priority:     req.Priority,
+		OperatorID:   req.OperatorID,
+		OperatorName: req.OperatorName,
+		AssigneeID:   req.AssigneeID,
+		Description:  req.Description,
+		Tags:         req.Tags,
+		DueDate:      req.DueDate,
 	}
 
 	if err := s.dao.CreateInstance(ctx, instance); err != nil {
 		s.logger.Error("创建工单实例失败", zap.Error(err))
-		return nil, fmt.Errorf("创建工单实例失败: %w", err)
+		return fmt.Errorf("创建工单实例失败: %w", err)
 	}
 
-	return instance, nil
+	return nil
 }
 
 // UpdateInstance 更新工单实例
@@ -127,6 +141,16 @@ func (s *instanceService) UpdateInstance(ctx context.Context, req *model.UpdateW
 	// 只有草稿和待处理状态可以更新
 	if ins.Status != model.InstanceStatusDraft && ins.Status != model.InstanceStatusPending {
 		return fmt.Errorf("当前状态的工单不允许修改")
+	}
+
+	// 确保实例名称唯一 (排除当前实例)
+	if instance, err := s.dao.GetInstanceByTitle(ctx, req.Title); err != nil {
+		if err != dao.ErrInstanceNotFound {
+			s.logger.Error("获取工单实例失败", zap.Error(err), zap.String("title", req.Title))
+			return err
+		}
+	} else if instance.ID != req.ID {
+		return fmt.Errorf("工单实例名称已存在")
 	}
 
 	instance := &model.WorkorderInstance{
@@ -215,20 +239,72 @@ func (s *instanceService) AssignInstance(ctx context.Context, id int, assigneeID
 // ApproveInstance 审批通过工单
 func (s *instanceService) ApproveInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
 	now := time.Now()
+	
+	// 更新工单状态为已完成
 	if err := s.dao.UpdateInstanceStatus(ctx, id, model.InstanceStatusCompleted); err != nil {
+		s.logger.Error("更新工单状态失败", zap.Error(err), zap.Int("instanceID", id))
 		return err
 	}
-	
+
 	// 更新完成时间
 	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
+		s.logger.Error("获取工单实例失败", zap.Error(err), zap.Int("instanceID", id))
 		return err
 	}
+
 	instance.CompletedAt = &now
-	return s.dao.UpdateInstance(ctx, instance)
+	if err := s.dao.UpdateInstance(ctx, instance); err != nil {
+		s.logger.Error("更新工单完成时间失败", zap.Error(err), zap.Int("instanceID", id))
+		return err
+	}
+
+	// 如果有审批意见，则添加系统评论
+	if comment != "" {
+		commentEntity := &model.WorkorderInstanceComment{
+			InstanceID:   id,
+			OperatorID:   operatorID,
+			OperatorName: operatorName,
+			Content:      fmt.Sprintf("审批通过：%s", comment),
+			Type:         model.CommentTypeSystem,
+			Status:       model.CommentStatusNormal,
+			IsSystem:     true,
+		}
+		
+		if err := s.commentDao.CreateInstanceComment(ctx, commentEntity); err != nil {
+			s.logger.Error("创建审批评论失败", zap.Error(err), zap.Int("instanceID", id))
+			// 评论创建失败不影响主流程，只记录日志
+		}
+	}
+
+	return nil
 }
 
 // RejectInstance 拒绝工单
 func (s *instanceService) RejectInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
-	return s.dao.UpdateInstanceStatus(ctx, id, model.InstanceStatusRejected)
+	// 更新工单状态为已拒绝
+	if err := s.dao.UpdateInstanceStatus(ctx, id, model.InstanceStatusRejected); err != nil {
+		s.logger.Error("更新工单状态失败", zap.Error(err), zap.Int("instanceID", id))
+		return err
+	}
+
+	// 添加拒绝原因的系统评论
+	if comment != "" {
+		commentEntity := &model.WorkorderInstanceComment{
+			InstanceID:   id,
+			OperatorID:   operatorID,
+			OperatorName: operatorName,
+			Content:      fmt.Sprintf("审批拒绝：%s", comment),
+			Type:         model.CommentTypeSystem,
+			Status:       model.CommentStatusNormal,
+			IsSystem:     true,
+		}
+		
+		if err := s.commentDao.CreateInstanceComment(ctx, commentEntity); err != nil {
+			s.logger.Error("创建拒绝评论失败", zap.Error(err), zap.Int("instanceID", id))
+			// 评论创建失败不影响主流程，只记录日志
+		}
+	}
+
+	return nil
 }

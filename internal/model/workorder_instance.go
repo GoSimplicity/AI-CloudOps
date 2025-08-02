@@ -74,7 +74,6 @@ func (WorkorderInstance) TableName() string {
 // 创建工单实例请求
 type CreateWorkorderInstanceReq struct {
 	Title          string     `json:"title" binding:"required,min=1,max=200"`
-	SerialNumber   string     `json:"serial_number" binding:"required,min=1,max=50"`
 	ProcessID      int        `json:"process_id" binding:"required,min=1"`
 	FormData       JSONMap    `json:"form_data" binding:"required"`
 	Status         int8       `json:"status" binding:"required,oneof=1 2 3 4 5 6"`
@@ -117,4 +116,27 @@ type ListWorkorderInstanceReq struct {
 	Status    *int8 `json:"status" form:"status" binding:"omitempty,oneof=1 2 3 4 5 6"`
 	Priority  *int8 `json:"priority" form:"priority" binding:"omitempty,oneof=1 2 3"`
 	ProcessID *int  `json:"process_id" form:"process_id" binding:"omitempty,min=1"`
+}
+
+// 提交工单请求
+type SubmitWorkorderInstanceReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
+}
+
+// 指派工单请求
+type AssignWorkorderInstanceReq struct {
+	ID         int `json:"id" form:"id" binding:"required,min=1"`
+	AssigneeID int `json:"assignee_id" binding:"required,min=1"`
+}
+
+// 审批通过工单请求
+type ApproveWorkorderInstanceReq struct {
+	ID      int    `json:"id" form:"id" binding:"required,min=1"`
+	Comment string `json:"comment" binding:"omitempty,max=500"`
+}
+
+// 拒绝工单请求
+type RejectWorkorderInstanceReq struct {
+	ID      int    `json:"id" form:"id" binding:"required,min=1"`
+	Comment string `json:"comment" binding:"required,min=1,max=500"`
 }

@@ -45,35 +45,9 @@ func NewInstanceFlowHandler(flowService service.InstanceFlowService) *InstanceFl
 func (h *InstanceFlowHandler) RegisterRouters(server *gin.Engine) {
 	flowGroup := server.Group("/api/workorder/instance/flow")
 	{
-		flowGroup.POST("/create", h.CreateInstanceFlow)
 		flowGroup.GET("/list", h.ListInstanceFlows)
 		flowGroup.GET("/detail/:id", h.DetailInstanceFlow)
 	}
-}
-
-// CreateInstanceFlow 创建工单流转记录
-// @Summary 创建工单流转记录
-// @Description 为指定工单实例创建新的流转记录
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param request body model.CreateWorkorderInstanceFlowReq true "创建流转记录请求参数"
-// @Success 200 {object} utils.ApiResponse "创建成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/instance/flow/create [post]
-// 创建工单流转记录
-func (h *InstanceFlowHandler) CreateInstanceFlow(ctx *gin.Context) {
-	var req model.CreateWorkorderInstanceFlowReq
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-	req.OperatorID = user.Uid
-	req.OperatorName = user.Username
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.flowService.CreateInstanceFlow(ctx, &req)
-	})
 }
 
 // ListInstanceFlows 获取工单流转记录列表

@@ -21899,57 +21899,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/workorder/notification/duplicate": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "复制指定的工单通知配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单管理"
-                ],
-                "summary": "复制工单通知配置",
-                "parameters": [
-                    {
-                        "description": "复制通知配置请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.DuplicateWorkorderNotificationReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "复制成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/workorder/notification/list": {
             "get": {
                 "security": [
@@ -25018,7 +24967,6 @@ const docTemplate = `{
                 "operator_name",
                 "priority",
                 "process_id",
-                "serial_number",
                 "status",
                 "title"
             ],
@@ -25057,11 +25005,6 @@ const docTemplate = `{
                 "process_id": {
                     "type": "integer",
                     "minimum": 1
-                },
-                "serial_number": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 1
                 },
                 "status": {
                     "type": "integer",
@@ -25352,17 +25295,6 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
-                }
-            }
-        },
-        "model.DuplicateWorkorderNotificationReq": {
-            "type": "object",
-            "required": [
-                "id"
-            ],
-            "properties": {
-                "id": {
-                    "type": "integer"
                 }
             }
         },
@@ -30729,6 +30661,56 @@ const docTemplate = `{
                 }
             }
         },
+        "model.WorkorderFormDesign": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "$ref": "#/definitions/model.WorkorderCategory"
+                },
+                "category_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_template": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "operator_id": {
+                    "type": "integer"
+                },
+                "operator_name": {
+                    "type": "string"
+                },
+                "schema": {
+                    "$ref": "#/definitions/model.JSONMap"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "model.WorkorderInstance": {
             "type": "object",
             "properties": {
@@ -30936,6 +30918,9 @@ const docTemplate = `{
         "model.WorkorderProcess": {
             "type": "object",
             "properties": {
+                "category": {
+                    "$ref": "#/definitions/model.WorkorderCategory"
+                },
                 "category_id": {
                     "type": "integer"
                 },
@@ -30950,6 +30935,9 @@ const docTemplate = `{
                 },
                 "description": {
                     "type": "string"
+                },
+                "form_design": {
+                    "$ref": "#/definitions/model.WorkorderFormDesign"
                 },
                 "form_design_id": {
                     "type": "integer"
