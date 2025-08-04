@@ -29,20 +29,20 @@ import "time"
 
 // 时间线操作类型常量 - 包含所有操作记录
 const (
-	TimelineActionCreate     = "create"      // 创建工单
-	TimelineActionSubmit     = "submit"      // 提交工单
-	TimelineActionApprove    = "approve"     // 审批通过
-	TimelineActionReject     = "reject"      // 审批拒绝
-	TimelineActionAssign     = "assign"      // 指派处理人
-	TimelineActionCancel     = "cancel"      // 取消工单
-	TimelineActionComplete   = "complete"    // 完成工单
-	TimelineActionReturn     = "return"      // 退回工单
-	TimelineActionComment    = "comment"     // 添加评论
-	TimelineActionUpdate     = "update"      // 更新工单信息
-	TimelineActionView       = "view"        // 查看工单
-	TimelineActionAttach     = "attach"      // 添加附件
-	TimelineActionNotify     = "notify"      // 发送通知
-	TimelineActionRemind     = "remind"      // 催办提醒
+	TimelineActionCreate   = "create"   // 创建工单
+	TimelineActionSubmit   = "submit"   // 提交工单
+	TimelineActionApprove  = "approve"  // 审批通过
+	TimelineActionReject   = "reject"   // 审批拒绝
+	TimelineActionAssign   = "assign"   // 指派处理人
+	TimelineActionCancel   = "cancel"   // 取消工单
+	TimelineActionComplete = "complete" // 完成工单
+	TimelineActionReturn   = "return"   // 退回工单
+	TimelineActionComment  = "comment"  // 添加评论
+	TimelineActionUpdate   = "update"   // 更新工单信息
+	TimelineActionView     = "view"     // 查看工单
+	TimelineActionAttach   = "attach"   // 添加附件
+	TimelineActionNotify   = "notify"   // 发送通知
+	TimelineActionRemind   = "remind"   // 催办提醒
 )
 
 // WorkorderInstanceTimeline 工单操作时间线 - 记录所有操作历史和审计日志
@@ -94,7 +94,6 @@ type ListWorkorderInstanceTimelineReq struct {
 	ListReq
 	InstanceID *int       `json:"instance_id" form:"instance_id" binding:"omitempty,min=1"`
 	Action     *string    `json:"action" form:"action" binding:"omitempty,oneof=create submit approve reject assign cancel complete return comment update view attach notify remind"`
-	OperatorID *int       `json:"operator_id" form:"operator_id" binding:"omitempty,min=1"`
 	StartDate  *time.Time `json:"start_date" form:"start_date" binding:"omitempty"`
 	EndDate    *time.Time `json:"end_date" form:"end_date" binding:"omitempty"`
 }

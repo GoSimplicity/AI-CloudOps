@@ -31,246 +31,177 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	"go.uber.org/zap"
 )
 
 type WorkorderTemplateService interface {
-	CreateTemplate(ctx context.Context, req *model.CreateWorkorderTemplateReq, creatorID int, creatorName string) error
-	UpdateTemplate(ctx context.Context, req *model.UpdateWorkorderTemplateReq, userID int) error
-	DeleteTemplate(ctx context.Context, id int, userID int) error
+	CreateTemplate(ctx context.Context, req *model.CreateWorkorderTemplateReq) error
+	UpdateTemplate(ctx context.Context, req *model.UpdateWorkorderTemplateReq) error
+	DeleteTemplate(ctx context.Context, req *model.DeleteWorkorderTemplateReq) error
 	ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) (*model.ListResp[*model.WorkorderTemplate], error)
-	DetailTemplate(ctx context.Context, id int, userID int) (*model.WorkorderTemplate, error)
+	DetailTemplate(ctx context.Context, req *model.DetailWorkorderTemplateReq) (*model.WorkorderTemplate, error)
 }
 
 type workorderTemplateService struct {
 	dao         dao.WorkorderTemplateDAO
-	userDao     userDao.UserDAO
 	processDao  dao.WorkorderProcessDAO
 	categoryDao dao.WorkorderCategoryDAO
 	instanceDao dao.WorkorderInstanceDAO
 	l           *zap.Logger
-	validators  []TemplateValidator // 模板验证器列表
-}
-
-type TemplateValidator interface {
-	Validate(ctx context.Context, template *model.WorkorderTemplate) error
 }
 
 func NewWorkorderTemplateService(
 	dao dao.WorkorderTemplateDAO,
-	userDao userDao.UserDAO,
 	processDao dao.WorkorderProcessDAO,
 	categoryDao dao.WorkorderCategoryDAO,
 	instanceDao dao.WorkorderInstanceDAO,
 	l *zap.Logger,
 ) WorkorderTemplateService {
-	ts := &workorderTemplateService{
+	return &workorderTemplateService{
 		dao:         dao,
-		userDao:     userDao,
 		processDao:  processDao,
 		categoryDao: categoryDao,
 		instanceDao: instanceDao,
 		l:           l,
-		validators:  make([]TemplateValidator, 0),
 	}
-	ts.RegisterValidator(&defaultTemplateValidator{})
-	return ts
-}
-
-// RegisterValidator 注册模板验证器
-func (t *workorderTemplateService) RegisterValidator(validator TemplateValidator) {
-	t.validators = append(t.validators, validator)
 }
 
 // CreateTemplate 创建模板
-func (t *workorderTemplateService) CreateTemplate(ctx context.Context, req *model.CreateWorkorderTemplateReq, creatorID int, creatorName string) error {
-	if req == nil {
-		return errors.New("创建模板请求不能为空")
-	}
-	if creatorID <= 0 {
-		return errors.New("创建者ID无效")
-	}
-	if creatorName == "" {
-		return errors.New("创建者名称不能为空")
-	}
-	// 检查模板名称是否已存在
+func (t *workorderTemplateService) CreateTemplate(ctx context.Context, req *model.CreateWorkorderTemplateReq) error {
 	exists, err := t.checkTemplateNameExists(ctx, req.Name)
 	if err != nil {
-		t.l.Error("检查模板名称失败", zap.Error(err), zap.String("name", req.Name), zap.Int("creatorID", creatorID))
+		t.l.Error("检查模板名称失败", zap.Error(err), zap.String("name", req.Name), zap.Int("creatorID", req.OperatorID))
 		return fmt.Errorf("检查模板名称失败: %w", err)
 	}
 	if exists {
 		return fmt.Errorf("模板名称已存在: %s", req.Name)
 	}
-	// 验证流程是否存在
+
 	if err := t.validateProcessExists(ctx, req.ProcessID); err != nil {
 		return err
 	}
-	// 验证分类是否存在
+
 	if req.CategoryID != nil && *req.CategoryID > 0 {
 		if err := t.validateCategoryExists(ctx, *req.CategoryID); err != nil {
 			return err
 		}
 	}
-	// 构建模板对象
+
 	template := &model.WorkorderTemplate{
-		Name:           req.Name,
-		Description:    req.Description,
-		ProcessID:      req.ProcessID,
-		DefaultValues:  req.DefaultValues,
-		Status:         1, // 默认启用
-		CategoryID:     req.CategoryID,
-		OperatorID:   creatorID,
-		OperatorName: creatorName,
+		Name:          req.Name,
+		Description:   req.Description,
+		ProcessID:     req.ProcessID,
+		FormDesignID:  req.FormDesignID,
+		DefaultValues: req.DefaultValues,
+		Status:        1,
+		CategoryID:    req.CategoryID,
+		OperatorID:    req.OperatorID,
+		OperatorName:  req.OperatorName,
+		Tags:          req.Tags,
 	}
-	// 执行验证器
-	for _, validator := range t.validators {
-		if err := validator.Validate(ctx, template); err != nil {
-			t.l.Error("模板验证失败", zap.Error(err), zap.String("validator", fmt.Sprintf("%T", validator)))
-			return fmt.Errorf("模板验证失败: %w", err)
-		}
-	}
-	// 创建模板
+
 	if err := t.dao.CreateTemplate(ctx, template); err != nil {
-		t.l.Error("创建模板失败", zap.Error(err), zap.String("name", req.Name), zap.Int("creatorID", creatorID))
+		t.l.Error("创建模板失败", zap.Error(err), zap.String("name", req.Name), zap.Int("creatorID", req.OperatorID))
 		return fmt.Errorf("创建模板失败: %w", err)
 	}
-	t.l.Info("创建模板成功", zap.Int("id", template.ID), zap.String("name", req.Name), zap.Int("creatorID", creatorID))
+
 	return nil
 }
 
 // UpdateTemplate 更新模板
-func (t *workorderTemplateService) UpdateTemplate(ctx context.Context, req *model.UpdateWorkorderTemplateReq, userID int) error {
-	if req == nil {
-		return errors.New("更新模板请求不能为空")
-	}
+func (t *workorderTemplateService) UpdateTemplate(ctx context.Context, req *model.UpdateWorkorderTemplateReq) error {
 	if req.ID <= 0 {
 		return errors.New("模板ID无效")
 	}
-	// 获取现有模板
+
 	existingTemplate, err := t.dao.GetTemplate(ctx, req.ID)
 	if err != nil {
 		return fmt.Errorf("获取模板失败: %w", err)
 	}
-	// 检查操作权限
-	if !t.hasPermissionToModify(existingTemplate, userID) {
-		t.l.Warn("用户权限不足，无法修改模板", zap.Int("templateID", req.ID), zap.Int("userID", userID))
-		return errors.New("没有权限修改此模板")
-	}
-	// 检查模板名称是否与其他模板重复
+
 	if req.Name != existingTemplate.Name {
 		exists, err := t.dao.IsTemplateNameExists(ctx, req.Name, req.ID)
 		if err != nil {
 			t.l.Error("检查模板名称失败", zap.Error(err), zap.String("name", req.Name))
 			return fmt.Errorf("检查模板名称失败: %w", err)
 		}
+
 		if exists {
 			return fmt.Errorf("模板名称已存在: %s", req.Name)
 		}
 	}
-	// 验证流程是否存在
+
 	if req.ProcessID != existingTemplate.ProcessID {
 		if err := t.validateProcessExists(ctx, req.ProcessID); err != nil {
 			return err
 		}
 	}
-	// 验证分类是否存在
+
 	if req.CategoryID != nil && *req.CategoryID > 0 {
 		if err := t.validateCategoryExists(ctx, *req.CategoryID); err != nil {
 			return err
 		}
 	}
-	// 构建更新的模板对象
+
 	template := &model.WorkorderTemplate{
-		Model:          model.Model{ID: req.ID},
-		Name:           req.Name,
-		Description:    req.Description,
-		ProcessID:      req.ProcessID,
-		DefaultValues:  req.DefaultValues,
-		Status:         req.Status,
-		CategoryID:     req.CategoryID,
-		OperatorID:   existingTemplate.OperatorID,
-		OperatorName: existingTemplate.OperatorName,
+		Model:         model.Model{ID: req.ID},
+		Name:          req.Name,
+		Description:   req.Description,
+		ProcessID:     req.ProcessID,
+		FormDesignID:  req.FormDesignID,
+		DefaultValues: req.DefaultValues,
+		Status:        req.Status,
+		CategoryID:    req.CategoryID,
+		Tags:          req.Tags,
 	}
-	// 执行验证器
-	for _, validator := range t.validators {
-		if err := validator.Validate(ctx, template); err != nil {
-			t.l.Error("模板验证失败", zap.Error(err), zap.String("validator", fmt.Sprintf("%T", validator)))
-			return fmt.Errorf("模板验证失败: %w", err)
-		}
-	}
-	// 更新模板
+
 	if err := t.dao.UpdateTemplate(ctx, template); err != nil {
 		t.l.Error("更新模板失败", zap.Error(err), zap.Int("id", req.ID))
 		return fmt.Errorf("更新模板失败: %w", err)
 	}
-	t.l.Info("更新模板成功", zap.Int("id", req.ID), zap.String("name", req.Name))
+
 	return nil
 }
 
 // DeleteTemplate 删除模板
-func (t *workorderTemplateService) DeleteTemplate(ctx context.Context, id int, userID int) error {
-	if id <= 0 {
+func (t *workorderTemplateService) DeleteTemplate(ctx context.Context, req *model.DeleteWorkorderTemplateReq) error {
+	if req.ID <= 0 {
 		return errors.New("模板ID无效")
 	}
-	// 获取模板信息用于日志记录
-	template, err := t.dao.GetTemplate(ctx, id)
+
+	template, err := t.dao.GetTemplate(ctx, req.ID)
 	if err != nil {
 		return fmt.Errorf("获取模板失败: %w", err)
 	}
-	// 检查操作权限
-	if !t.hasPermissionToModify(template, userID) {
-		t.l.Warn("用户权限不足，无法删除模板", zap.Int("templateID", id), zap.Int("userID", userID))
-		return errors.New("没有权限删除此模板")
-	}
-	// 检查是否有关联的工单
+
 	instances, _, err := t.instanceDao.ListInstance(ctx, &model.ListWorkorderInstanceReq{
 		ProcessID: &template.ProcessID,
 	})
 	if err != nil {
-		t.l.Error("获取关联工单失败", zap.Error(err), zap.Int("templateID", id))
+		t.l.Error("获取关联工单失败", zap.Error(err), zap.Int("templateID", req.ID))
 		return fmt.Errorf("获取关联工单失败: %w", err)
 	}
+
 	if len(instances) > 0 {
-		t.l.Warn("模板有关联的工单，无法删除", zap.Int("templateID", id), zap.Int("instanceCount", len(instances)))
+		t.l.Warn("模板有关联的工单，无法删除", zap.Int("templateID", req.ID), zap.Int("instanceCount", len(instances)))
 		return errors.New("模板有关联的工单，无法删除")
 	}
-	// 执行删除
-	if err := t.dao.DeleteTemplate(ctx, id); err != nil {
-		t.l.Error("删除模板失败", zap.Error(err), zap.Int("id", id), zap.String("name", template.Name))
+
+	if err := t.dao.DeleteTemplate(ctx, req.ID); err != nil {
+		t.l.Error("删除模板失败", zap.Error(err), zap.Int("id", req.ID), zap.String("name", template.Name))
 		return fmt.Errorf("删除模板失败: %w", err)
 	}
-	t.l.Info("删除模板成功", zap.Int("id", id), zap.String("name", template.Name))
+
 	return nil
 }
 
 // ListTemplate 获取模板列表
 func (t *workorderTemplateService) ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) (*model.ListResp[*model.WorkorderTemplate], error) {
-	if req == nil {
-		req = &model.ListWorkorderTemplateReq{}
-	}
-	t.setDefaultPagination(req)
-	t.l.Debug("查询模板列表",
-		zap.Int("page", req.Page),
-		zap.Int("size", req.Size),
-		zap.Any("filters", map[string]any{
-			"name":       req.Search,
-			"categoryID": req.CategoryID,
-			"processID":  req.ProcessID,
-			"status":     req.Status,
-		}),
-	)
 	templates, total, err := t.dao.ListTemplate(ctx, req)
 	if err != nil {
 		t.l.Error("获取模板列表失败", zap.Error(err))
 		return nil, fmt.Errorf("获取模板列表失败: %w", err)
-	}
-
-	// 批量获取创建者信息
-	if err := t.enrichTemplateListWithCreators(ctx, templates); err != nil {
-		t.l.Warn("获取创建者信息失败", zap.Error(err))
 	}
 
 	result := &model.ListResp[*model.WorkorderTemplate]{
@@ -278,30 +209,21 @@ func (t *workorderTemplateService) ListTemplate(ctx context.Context, req *model.
 		Total: total,
 	}
 
-	t.l.Info("获取模板列表成功", zap.Int("count", len(result.Items)), zap.Int64("total", result.Total))
 	return result, nil
 }
 
 // DetailTemplate 获取模板详情
-func (t *workorderTemplateService) DetailTemplate(ctx context.Context, id int, userID int) (*model.WorkorderTemplate, error) {
-	if id <= 0 {
+func (t *workorderTemplateService) DetailTemplate(ctx context.Context, req *model.DetailWorkorderTemplateReq) (*model.WorkorderTemplate, error) {
+	if req.ID <= 0 {
 		return nil, errors.New("模板ID无效")
 	}
-	template, err := t.dao.GetTemplate(ctx, id)
+
+	template, err := t.dao.GetTemplate(ctx, req.ID)
 	if err != nil {
-		t.l.Error("获取模板详情失败", zap.Error(err), zap.Int("id", id), zap.Int("userID", userID))
+		t.l.Error("获取模板详情失败", zap.Error(err), zap.Int("id", req.ID))
 		return nil, fmt.Errorf("获取模板详情失败: %w", err)
 	}
-	// 获取创建者信息
-	if template.OperatorID > 0 && template.OperatorName == "" {
-		if user, err := t.userDao.GetUserByID(ctx, template.OperatorID); err != nil {
-			t.l.Warn("获取创建者信息失败", zap.Error(err), zap.Int("creatorID", template.OperatorID))
-		} else {
-			template.OperatorName = user.Username
-		}
-	}
-	// DefaultValues已经是JSONMap类型，无需解析
-	t.l.Debug("获取模板详情成功", zap.Int("id", id), zap.String("name", template.Name))
+
 	return template, nil
 }
 
@@ -310,64 +232,14 @@ func (t *workorderTemplateService) checkTemplateNameExists(ctx context.Context, 
 	if name == "" {
 		return false, errors.New("模板名称不能为空")
 	}
+
 	var id int
+
 	if len(excludeID) > 0 {
 		id = excludeID[0]
 	}
+
 	return t.dao.IsTemplateNameExists(ctx, name, id)
-}
-
-// setDefaultPagination 设置默认分页参数
-func (t *workorderTemplateService) setDefaultPagination(req *model.ListWorkorderTemplateReq) {
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-	if req.Size <= 0 {
-		req.Size = 10
-	}
-	if req.Size > 100 {
-		req.Size = 100
-	}
-}
-
-// enrichTemplateListWithCreators 批量获取创建者信息
-func (t *workorderTemplateService) enrichTemplateListWithCreators(ctx context.Context, templates []*model.WorkorderTemplate) error {
-	creatorIDs := make([]int, 0)
-	creatorIDMap := make(map[int]struct{})
-	for _, template := range templates {
-		if template.OperatorID > 0 {
-			if _, ok := creatorIDMap[template.OperatorID]; !ok {
-				creatorIDs = append(creatorIDs, template.OperatorID)
-				creatorIDMap[template.OperatorID] = struct{}{}
-			}
-		}
-	}
-	if len(creatorIDs) == 0 {
-		return nil
-	}
-	users, err := t.userDao.GetUserByIDs(ctx, creatorIDs)
-	if err != nil {
-		return err
-	}
-	userMap := make(map[int]string)
-	for _, user := range users {
-		userMap[user.ID] = user.Username
-	}
-	for i := range templates {
-		if name, ok := userMap[templates[i].OperatorID]; ok {
-			templates[i].OperatorName = name
-		}
-	}
-	return nil
-}
-
-// hasPermissionToModify 检查是否有权限修改模板
-func (t *workorderTemplateService) hasPermissionToModify(template *model.WorkorderTemplate, userID int) bool {
-	// 优化：允许创建者本人或超级管理员（如ID=1）修改
-	if template == nil {
-		return false
-	}
-	return userID == 1 || userID == template.OperatorID
 }
 
 // validateProcessExists 验证流程是否存在
@@ -375,11 +247,13 @@ func (t *workorderTemplateService) validateProcessExists(ctx context.Context, pr
 	if processID <= 0 {
 		return errors.New("流程ID无效")
 	}
+
 	_, err := t.processDao.GetProcessByID(ctx, processID)
 	if err != nil {
 		t.l.Error("验证流程发生错误", zap.Error(err))
 		return errors.New("关联的流程不存在或无效")
 	}
+
 	return nil
 }
 
@@ -388,57 +262,12 @@ func (t *workorderTemplateService) validateCategoryExists(ctx context.Context, c
 	if categoryID <= 0 {
 		return errors.New("分类ID无效")
 	}
+
 	_, err := t.categoryDao.GetCategory(ctx, categoryID)
 	if err != nil {
 		t.l.Error("验证分类发生错误", zap.Error(err))
 		return errors.New("关联的分类不存在或无效")
 	}
-	return nil
-}
 
-// defaultTemplateValidator 默认模板验证器
-type defaultTemplateValidator struct{}
-
-// Validate 实现验证逻辑
-func (v *defaultTemplateValidator) Validate(ctx context.Context, template *model.WorkorderTemplate) error {
-	if template == nil {
-		return errors.New("模板不能为空")
-	}
-	if template.Name == "" {
-		return errors.New("模板名称不能为空")
-	}
-	if len(template.Name) > 100 {
-		return errors.New("模板名称长度不能超过100个字符")
-	}
-	if template.ProcessID <= 0 {
-		return errors.New("模板必须关联一个有效的流程")
-	}
-	if template.Status < 0 || template.Status > 1 {
-		return errors.New("模板状态无效")
-	}
-	// 验证默认值格式（DefaultValues已经是JSONMap类型）
-	if len(template.DefaultValues) > 0 {
-		// 直接使用template.DefaultValues，无需反序列化
-		// 验证优先级
-		if val, ok := template.DefaultValues["priority"]; ok && val != nil {
-			priority, ok := val.(float64)
-			if !ok {
-				return errors.New("默认优先级值类型无效")
-			}
-			if priority < 0 || priority > 3 {
-				return errors.New("默认优先级值无效，必须在0-3之间")
-			}
-		}
-		// 验证截止时间
-		if val, ok := template.DefaultValues["due_hours"]; ok && val != nil {
-			dueHours, ok := val.(float64)
-			if !ok {
-				return errors.New("默认截止时间类型无效")
-			}
-			if dueHours <= 0 {
-				return errors.New("默认截止时间必须大于0")
-			}
-		}
-	}
 	return nil
 }

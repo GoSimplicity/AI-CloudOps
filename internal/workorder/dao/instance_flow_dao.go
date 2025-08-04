@@ -133,9 +133,6 @@ func (d *instanceFlowDAO) List(ctx context.Context, req *model.ListWorkorderInst
 	if req.Action != nil {
 		query = query.Where("action = ?", *req.Action)
 	}
-	if req.OperatorID != nil {
-		query = query.Where("operator_id = ?", *req.OperatorID)
-	}
 	if req.IsSystemAction != nil {
 		query = query.Where("is_system_action = ?", *req.IsSystemAction)
 	}

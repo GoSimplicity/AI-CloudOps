@@ -164,7 +164,7 @@ func ProvideCmd() *Cmd {
 	workorderProcessService := service4.NewWorkorderProcessService(workorderProcessDAO, workorderFormDesignDAO, workorderCategoryDAO, workorderInstanceDAO, logger)
 	workorderProcessHandler := api6.NewWorkorderProcessHandler(workorderProcessService)
 	workorderTemplateDAO := dao3.NewTemplateDAO(db, logger)
-	workorderTemplateService := service4.NewWorkorderTemplateService(workorderTemplateDAO, userDAO, workorderProcessDAO, workorderCategoryDAO, workorderInstanceDAO, logger)
+	workorderTemplateService := service4.NewWorkorderTemplateService(workorderTemplateDAO, workorderProcessDAO, workorderCategoryDAO, workorderInstanceDAO, logger)
 	templateHandler := api6.NewTemplateHandler(workorderTemplateService)
 	workorderInstanceFlowDAO := dao3.NewInstanceFlowDAO(db, logger)
 	workorderInstanceTimelineDAO := dao3.NewInstanceTimeLineDAO(db, logger)

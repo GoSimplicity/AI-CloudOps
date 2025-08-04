@@ -126,9 +126,6 @@ func (i *instanceTimeLineDAO) List(ctx context.Context, req *model.ListWorkorder
 	if req.Action != nil {
 		db = db.Where("action = ?", *req.Action)
 	}
-	if req.OperatorID != nil {
-		db = db.Where("operator_id = ?", *req.OperatorID)
-	}
 	if req.StartDate != nil {
 		db = db.Where("created_at >= ?", *req.StartDate)
 	}
@@ -242,9 +239,6 @@ func (i *instanceTimeLineDAO) ListInstanceTimeLine(ctx context.Context, req *mod
 	}
 	if req.Action != nil {
 		db = db.Where("action = ?", *req.Action)
-	}
-	if req.OperatorID != nil {
-		db = db.Where("operator_id = ?", *req.OperatorID)
 	}
 	if req.StartDate != nil {
 		db = db.Where("created_at >= ?", *req.StartDate)

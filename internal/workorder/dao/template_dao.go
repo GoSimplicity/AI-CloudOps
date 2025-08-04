@@ -67,10 +67,6 @@ func NewTemplateDAO(db *gorm.DB, logger *zap.Logger) WorkorderTemplateDAO {
 
 // CreateTemplate 创建模板
 func (t *templateDAO) CreateTemplate(ctx context.Context, template *model.WorkorderTemplate) error {
-	if template == nil {
-		return fmt.Errorf("模板不能为空")
-	}
-
 	// 设置默认值
 	if len(template.DefaultValues) == 0 {
 		template.DefaultValues = model.JSONMap{}
@@ -89,7 +85,7 @@ func (t *templateDAO) CreateTemplate(ctx context.Context, template *model.Workor
 
 // UpdateTemplate 更新模板
 func (t *templateDAO) UpdateTemplate(ctx context.Context, template *model.WorkorderTemplate) error {
-	if template == nil || template.ID <= 0 {
+	if template.ID <= 0 {
 		return ErrInvalidID
 	}
 
@@ -127,13 +123,13 @@ func (t *templateDAO) UpdateTemplate(ctx context.Context, template *model.Workor
 	return nil
 }
 
-// DeleteTemplate 删除模板（软删除）
+// DeleteTemplate 删除模板
 func (t *templateDAO) DeleteTemplate(ctx context.Context, id int) error {
 	if id <= 0 {
 		return ErrInvalidID
 	}
 
-	result := t.db.WithContext(ctx).Delete(&model.WorkorderTemplate{}, id)
+	result := t.db.WithContext(ctx).Where("id = ?", id).Delete(&model.WorkorderTemplate{})
 	if result.Error != nil {
 		t.logger.Error("删除模板失败", zap.Error(result.Error), zap.Int("id", id))
 		return fmt.Errorf("删除模板失败: %w", result.Error)
@@ -154,9 +150,11 @@ func (t *templateDAO) GetTemplate(ctx context.Context, id int) (*model.Workorder
 
 	var template model.WorkorderTemplate
 	err := t.db.WithContext(ctx).
+		Where("id = ?", id).
 		Preload("Process").
 		Preload("Category").
-		First(&template, id).Error
+		Preload("FormDesign").
+		First(&template).Error
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -199,9 +197,7 @@ func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorder
 
 	// 分页查询
 	offset := (req.Page - 1) * req.Size
-	err := db.Preload("Process").
-		Preload("Category").
-		Offset(offset).
+	err := db.Offset(offset).
 		Limit(req.Size).
 		Order("created_at DESC").
 		Find(&templates).Error
@@ -291,6 +287,11 @@ func (t *templateDAO) buildListQuery(db *gorm.DB, req *model.ListWorkorderTempla
 	// 流程筛选
 	if req.ProcessID != nil && *req.ProcessID > 0 {
 		db = db.Where("process_id = ?", *req.ProcessID)
+	}
+
+	// 表单设计筛选
+	if req.FormDesignID != nil && *req.FormDesignID > 0 {
+		db = db.Where("form_design_id = ?", *req.FormDesignID)
 	}
 
 	return db

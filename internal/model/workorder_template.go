@@ -25,7 +25,6 @@
 
 package model
 
-
 // 模板状态常量
 const (
 	TemplateStatusEnabled  int8 = 1 // 启用
@@ -42,16 +41,19 @@ const (
 // WorkorderTemplate 工单模板实体
 type WorkorderTemplate struct {
 	Model
-	Name           string         `json:"name" gorm:"column:name;type:varchar(200);not null;index;comment:模板名称"`
-	Description    string         `json:"description" gorm:"column:description;type:varchar(1000);comment:模板描述"`
-	ProcessID      int            `json:"process_id" gorm:"column:process_id;not null;index;comment:关联的流程ID"`
-	FormDesignID   int            `json:"form_design_id" gorm:"column:form_design_id;not null;index;comment:关联的表单设计ID"`
-	DefaultValues  JSONMap `json:"default_values" gorm:"column:default_values;type:json;comment:默认值JSON"`
-	Status         int8           `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-启用，2-禁用"`
-	CategoryID     *int           `json:"category_id" gorm:"column:category_id;index;comment:分类ID"`
-	OperatorID   int            `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
-	OperatorName string         `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
-	Tags           StringList     `json:"tags" gorm:"column:tags;comment:标签"`
+	Name          string               `json:"name" gorm:"column:name;type:varchar(200);not null;index;comment:模板名称"`
+	Description   string               `json:"description" gorm:"column:description;type:varchar(1000);comment:模板描述"`
+	ProcessID     int                  `json:"process_id" gorm:"column:process_id;not null;index;comment:关联的流程ID"`
+	FormDesignID  int                  `json:"form_design_id" gorm:"column:form_design_id;not null;index;comment:关联的表单设计ID"`
+	DefaultValues JSONMap              `json:"default_values" gorm:"column:default_values;type:json;comment:默认值JSON"`
+	Status        int8                 `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-启用，2-禁用"`
+	CategoryID    *int                 `json:"category_id" gorm:"column:category_id;index;comment:分类ID"`
+	OperatorID    int                  `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName  string               `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
+	Tags          StringList           `json:"tags" gorm:"column:tags;comment:标签"`
+	Process       *WorkorderProcess    `json:"process" gorm:"foreignKey:ProcessID;references:ID"`
+	Category      *WorkorderCategory   `json:"category" gorm:"foreignKey:CategoryID;references:ID"`
+	FormDesign    *WorkorderFormDesign `json:"form_design" gorm:"foreignKey:FormDesignID;references:ID"`
 }
 
 func (WorkorderTemplate) TableName() string {
@@ -60,29 +62,29 @@ func (WorkorderTemplate) TableName() string {
 
 // CreateWorkorderTemplateReq 创建工单模板请求
 type CreateWorkorderTemplateReq struct {
-	Name           string         `json:"name" binding:"required,min=1,max=200"`
-	Description    string         `json:"description" binding:"omitempty,max=1000"`
-	ProcessID      int            `json:"process_id" binding:"required,min=1"`
-	FormDesignID   int            `json:"form_design_id" binding:"required,min=1"`
-	DefaultValues  JSONMap `json:"default_values" binding:"omitempty"`
-	Status         int8           `json:"status" binding:"required,oneof=1 2"`
-	CategoryID     *int           `json:"category_id" binding:"omitempty,min=1"`
-	OperatorID   int            `json:"operator_id" binding:"required,min=1"`
-	OperatorName string         `json:"operator_name" binding:"required,min=1,max=100"`
-	Tags           StringList     `json:"tags" binding:"omitempty"`
+	Name          string     `json:"name" binding:"required,min=1,max=200"`
+	Description   string     `json:"description" binding:"omitempty,max=1000"`
+	ProcessID     int        `json:"process_id" binding:"required,min=1"`
+	FormDesignID  int        `json:"form_design_id" binding:"required,min=1"`
+	DefaultValues JSONMap    `json:"default_values" binding:"omitempty"`
+	Status        int8       `json:"status" binding:"required,oneof=1 2"`
+	CategoryID    *int       `json:"category_id" binding:"omitempty,min=1"`
+	OperatorID    int        `json:"operator_id" form:"operator_id" binding:"required,min=1"`
+	OperatorName  string     `json:"operator_name" form:"operator_name" binding:"required,min=1,max=100"`
+	Tags          StringList `json:"tags" binding:"omitempty"`
 }
 
 // UpdateWorkorderTemplateReq 更新工单模板请求
 type UpdateWorkorderTemplateReq struct {
-	ID            int            `json:"id" binding:"required,min=1"`
-	Name          string         `json:"name" binding:"required,min=1,max=200"`
-	Description   string         `json:"description" binding:"omitempty,max=1000"`
-	ProcessID     int            `json:"process_id" binding:"required,min=1"`
-	FormDesignID  int            `json:"form_design_id" binding:"required,min=1"`
-	DefaultValues JSONMap `json:"default_values" binding:"omitempty"`
-	Status        int8           `json:"status" binding:"required,oneof=1 2"`
-	CategoryID    *int           `json:"category_id" binding:"omitempty,min=1"`
-	Tags          StringList     `json:"tags" binding:"omitempty"`
+	ID            int        `json:"id" binding:"required,min=1"`
+	Name          string     `json:"name" binding:"required,min=1,max=200"`
+	Description   string     `json:"description" binding:"omitempty,max=1000"`
+	ProcessID     int        `json:"process_id" binding:"required,min=1"`
+	FormDesignID  int        `json:"form_design_id" binding:"required,min=1"`
+	DefaultValues JSONMap    `json:"default_values" binding:"omitempty"`
+	Status        int8       `json:"status" binding:"omitempty,oneof=1 2"`
+	CategoryID    *int       `json:"category_id" binding:"omitempty,min=1"`
+	Tags          StringList `json:"tags" binding:"omitempty"`
 }
 
 // DeleteWorkorderTemplateReq 删除工单模板请求

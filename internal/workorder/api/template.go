@@ -67,10 +67,13 @@ func (h *TemplateHandler) RegisterRouters(server *gin.Engine) {
 // @Router /api/workorder/template/create [post]
 func (h *TemplateHandler) CreateTemplate(ctx *gin.Context) {
 	var req model.CreateWorkorderTemplateReq
+
 	user := ctx.MustGet("user").(utils.UserClaims)
+	req.OperatorID = user.Uid
+	req.OperatorName = user.Username
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.service.CreateTemplate(ctx, &req, user.Uid, user.Username)
+		return nil, h.service.CreateTemplate(ctx, &req)
 	})
 }
 
@@ -97,10 +100,9 @@ func (h *TemplateHandler) UpdateTemplate(ctx *gin.Context) {
 	}
 
 	req.ID = id
-	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.service.UpdateTemplate(ctx, &req, user.Uid)
+		return nil, h.service.UpdateTemplate(ctx, &req)
 	})
 }
 
@@ -117,16 +119,17 @@ func (h *TemplateHandler) UpdateTemplate(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/workorder/template/delete/{id} [delete]
 func (h *TemplateHandler) DeleteTemplate(ctx *gin.Context) {
+	var req model.DeleteWorkorderTemplateReq
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的模板ID")
 		return
 	}
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	req.ID = id
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.service.DeleteTemplate(ctx, id, user.Uid)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.DeleteTemplate(ctx, &req)
 	})
 }
 
@@ -165,15 +168,17 @@ func (h *TemplateHandler) ListTemplate(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/workorder/template/detail/{id} [get]
 func (h *TemplateHandler) DetailTemplate(ctx *gin.Context) {
+	var req model.DetailWorkorderTemplateReq
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的模板ID")
 		return
 	}
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	req.ID = id
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.DetailTemplate(ctx, id, user.Uid)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.service.DetailTemplate(ctx, &req)
 	})
 }

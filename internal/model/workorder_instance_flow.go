@@ -39,14 +39,14 @@ const (
 // WorkorderInstanceFlow 工单状态流转记录 - 专注于状态变更的业务流程
 type WorkorderInstanceFlow struct {
 	Model
-	InstanceID     int     `json:"instance_id" gorm:"column:instance_id;not null;index;comment:工单实例ID"`
-	Action         string  `json:"action" gorm:"column:action;type:varchar(32);not null;comment:流转动作"`
-	OperatorID     int     `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
-	OperatorName   string  `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
-	FromStatus     int8    `json:"from_status" gorm:"column:from_status;not null;comment:变更前状态"`
-	ToStatus       int8    `json:"to_status" gorm:"column:to_status;not null;comment:变更后状态"`
-	Comment        string  `json:"comment" gorm:"column:comment;type:varchar(1000);comment:审批意见或处理说明"`
-	IsSystemAction int8    `json:"is_system_action" gorm:"column:is_system_action;not null;default:2;comment:是否为系统自动操作：1-是，2-否"`
+	InstanceID     int    `json:"instance_id" gorm:"column:instance_id;not null;index;comment:工单实例ID"`
+	Action         string `json:"action" gorm:"column:action;type:varchar(32);not null;comment:流转动作"`
+	OperatorID     int    `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName   string `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
+	FromStatus     int8   `json:"from_status" gorm:"column:from_status;not null;comment:变更前状态"`
+	ToStatus       int8   `json:"to_status" gorm:"column:to_status;not null;comment:变更后状态"`
+	Comment        string `json:"comment" gorm:"column:comment;type:varchar(1000);comment:审批意见或处理说明"`
+	IsSystemAction int8   `json:"is_system_action" gorm:"column:is_system_action;not null;default:2;comment:是否为系统自动操作：1-是，2-否"`
 }
 
 func (WorkorderInstanceFlow) TableName() string {
@@ -70,7 +70,6 @@ type ListWorkorderInstanceFlowReq struct {
 	ListReq
 	InstanceID     *int    `json:"instance_id" form:"instance_id" binding:"omitempty,min=1"`
 	Action         *string `json:"action" form:"action" binding:"omitempty,oneof=submit approve reject assign cancel complete return"`
-	OperatorID     *int    `json:"operator_id" form:"operator_id" binding:"omitempty,min=1"`
 	IsSystemAction *int8   `json:"is_system_action" form:"is_system_action" binding:"omitempty,oneof=1 2"`
 }
 
