@@ -49,8 +49,6 @@ func InitTables(db *gorm.DB) error {
 
 		// tree
 		&model.TreeNode{},
-		&model.TreeNodeAdmin{},
-		&model.TreeNodeMember{},
 		&model.TreeNodeResource{},
 		&model.TreeLocal{},
 		&model.ResourceEcs{},

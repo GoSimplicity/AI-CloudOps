@@ -49,7 +49,6 @@ func (h *TreeNodeHandler) RegisterRouters(server *gin.Engine) {
 		treeGroup.GET("/list", h.GetTreeList)
 		treeGroup.GET("/detail/:id", h.GetNodeDetail)
 		treeGroup.GET("/children/:id", h.GetChildNodes)
-		treeGroup.GET("/statistics", h.GetTreeStatistics)
 
 		// 节点管理接口
 		treeGroup.POST("/create", h.CreateNode)
@@ -66,13 +65,13 @@ func (h *TreeNodeHandler) RegisterRouters(server *gin.Engine) {
 		// 资源绑定接口
 		treeGroup.GET("/resources/:id", h.GetNodeResources)
 		treeGroup.POST("/resource/bind", h.BindResource)
-		treeGroup.DELETE("/resource/unbind", h.UnbindResource)
+		treeGroup.POST("/resource/unbind", h.UnbindResource)
 	}
 }
 
 // GetTreeList 获取树节点列表
 func (h *TreeNodeHandler) GetTreeList(ctx *gin.Context) {
-	var req model.GetTreeListReq
+	var req model.GetTreeNodeListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetTreeList(ctx, &req)
@@ -81,7 +80,7 @@ func (h *TreeNodeHandler) GetTreeList(ctx *gin.Context) {
 
 // GetNodeDetail 获取节点详情
 func (h *TreeNodeHandler) GetNodeDetail(ctx *gin.Context) {
-	var req model.GetNodeDetailReq
+	var req model.GetTreeNodeDetailReq
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的节点ID")
@@ -96,7 +95,7 @@ func (h *TreeNodeHandler) GetNodeDetail(ctx *gin.Context) {
 
 // GetChildNodes 获取子节点列表
 func (h *TreeNodeHandler) GetChildNodes(ctx *gin.Context) {
-	var req model.GetChildNodesReq
+	var req model.GetTreeNodeChildNodesReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -110,16 +109,9 @@ func (h *TreeNodeHandler) GetChildNodes(ctx *gin.Context) {
 	})
 }
 
-// GetTreeStatistics 获取树统计信息
-func (h *TreeNodeHandler) GetTreeStatistics(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetTreeStatistics(ctx)
-	})
-}
-
 // CreateNode 创建节点
 func (h *TreeNodeHandler) CreateNode(ctx *gin.Context) {
-	var req model.CreateNodeReq
+	var req model.CreateTreeNodeReq
 
 	user := ctx.MustGet("user").(utils.UserClaims)
 	req.CreatorID = user.Uid
@@ -131,7 +123,7 @@ func (h *TreeNodeHandler) CreateNode(ctx *gin.Context) {
 
 // UpdateNode 更新节点
 func (h *TreeNodeHandler) UpdateNode(ctx *gin.Context) {
-	var req model.UpdateNodeReq
+	var req model.UpdateTreeNodeReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -147,7 +139,7 @@ func (h *TreeNodeHandler) UpdateNode(ctx *gin.Context) {
 
 // UpdateNodeStatus 更新节点状态
 func (h *TreeNodeHandler) UpdateNodeStatus(ctx *gin.Context) {
-	var req model.UpdateNodeStatusReq
+	var req model.UpdateTreeNodeStatusReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -164,7 +156,7 @@ func (h *TreeNodeHandler) UpdateNodeStatus(ctx *gin.Context) {
 
 // DeleteNode 删除节点
 func (h *TreeNodeHandler) DeleteNode(ctx *gin.Context) {
-	var req model.DeleteNodeReq
+	var req model.DeleteTreeNodeReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -180,7 +172,7 @@ func (h *TreeNodeHandler) DeleteNode(ctx *gin.Context) {
 
 // MoveNode 移动节点
 func (h *TreeNodeHandler) MoveNode(ctx *gin.Context) {
-	var req model.MoveNodeReq
+	var req model.MoveTreeNodeReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -196,7 +188,7 @@ func (h *TreeNodeHandler) MoveNode(ctx *gin.Context) {
 
 // GetNodeMembers 获取节点成员
 func (h *TreeNodeHandler) GetNodeMembers(ctx *gin.Context) {
-	var req model.GetNodeMembersReq
+	var req model.GetTreeNodeMembersReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -212,7 +204,7 @@ func (h *TreeNodeHandler) GetNodeMembers(ctx *gin.Context) {
 
 // AddNodeMember 添加节点成员
 func (h *TreeNodeHandler) AddNodeMember(ctx *gin.Context) {
-	var req model.AddNodeMemberReq
+	var req model.AddTreeNodeMemberReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.AddNodeMember(ctx, &req)
@@ -221,7 +213,7 @@ func (h *TreeNodeHandler) AddNodeMember(ctx *gin.Context) {
 
 // RemoveNodeMember 移除节点成员
 func (h *TreeNodeHandler) RemoveNodeMember(ctx *gin.Context) {
-	var req model.RemoveNodeMemberReq
+	var req model.RemoveTreeNodeMemberReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -238,7 +230,7 @@ func (h *TreeNodeHandler) RemoveNodeMember(ctx *gin.Context) {
 
 // GetNodeResources 获取节点资源
 func (h *TreeNodeHandler) GetNodeResources(ctx *gin.Context) {
-	var req model.GetNodeResourcesReq
+	var req model.GetTreeNodeResourcesReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -255,7 +247,7 @@ func (h *TreeNodeHandler) GetNodeResources(ctx *gin.Context) {
 
 // BindResource 绑定资源
 func (h *TreeNodeHandler) BindResource(ctx *gin.Context) {
-	var req model.BindResourceReq
+	var req model.BindTreeNodeResourceReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.BindResource(ctx, &req)
@@ -264,7 +256,7 @@ func (h *TreeNodeHandler) BindResource(ctx *gin.Context) {
 
 // UnbindResource 解绑资源
 func (h *TreeNodeHandler) UnbindResource(ctx *gin.Context) {
-	var req model.UnbindResourceReq
+	var req model.UnbindTreeNodeResourceReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UnbindResource(ctx, &req)
