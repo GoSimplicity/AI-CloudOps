@@ -28,9 +28,10 @@ package admin
 import (
 	"context"
 	"fmt"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strings"
 	"sync"
+
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
@@ -313,10 +314,10 @@ func (i *ingressService) GetIngressEndpoints(ctx context.Context, id int, namesp
 	}
 
 	endpoints := map[string]interface{}{
-		"ingress_name":   ingressName,
-		"namespace":      namespace,
+		"ingress_name":     ingressName,
+		"namespace":        namespace,
 		"backend_services": make([]map[string]interface{}, 0),
-		"load_balancer":   ingress.Status.LoadBalancer,
+		"load_balancer":    ingress.Status.LoadBalancer,
 	}
 
 	backendServices := make([]map[string]interface{}, 0)
@@ -394,9 +395,9 @@ func (i *ingressService) GetIngressEndpoints(ctx context.Context, id int, namesp
 
 	endpoints["summary"] = map[string]interface{}{
 		"total_backend_services": len(backendServices),
-		"unique_services":       len(uniqueServices),
-		"total_endpoints":       totalEndpoints,
-		"hosts":                 strings.Join(func() []string {
+		"unique_services":        len(uniqueServices),
+		"total_endpoints":        totalEndpoints,
+		"hosts": strings.Join(func() []string {
 			var hosts []string
 			for _, rule := range ingress.Spec.Rules {
 				if rule.Host != "" {

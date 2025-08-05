@@ -57,6 +57,19 @@ func (h *MonitorConfigHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetMonitorConfigList 获取监控配置列表
+// @Summary 获取监控配置列表
+// @Description 获取所有监控配置的分页列表
+// @Tags 监控配置
+// @Accept json
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param size query int false "每页数量" default(10)
+// @Param keyword query string false "搜索关键词"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/configs/list [get]
+// @Security BearerAuth
 func (h *MonitorConfigHandler) GetMonitorConfigList(ctx *gin.Context) {
 	var req model.GetMonitorConfigListReq
 
@@ -66,6 +79,17 @@ func (h *MonitorConfigHandler) GetMonitorConfigList(ctx *gin.Context) {
 }
 
 // GetMonitorConfig 获取监控配置
+// @Summary 获取监控配置详情
+// @Description 根据ID获取指定监控配置的详细信息
+// @Tags 监控配置
+// @Accept json
+// @Produce json
+// @Param id path int true "监控配置ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/configs/detail/{id} [get]
+// @Security BearerAuth
 func (h *MonitorConfigHandler) GetMonitorConfig(ctx *gin.Context) {
 	var req model.GetMonitorConfigReq
 
@@ -82,6 +106,18 @@ func (h *MonitorConfigHandler) GetMonitorConfig(ctx *gin.Context) {
 	})
 }
 
+// CreateMonitorConfig 创建监控配置
+// @Summary 创建监控配置
+// @Description 创建新的监控配置
+// @Tags 监控配置
+// @Accept json
+// @Produce json
+// @Param request body model.CreateMonitorConfigReq true "创建监控配置请求参数"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/configs/create [post]
+// @Security BearerAuth
 func (h *MonitorConfigHandler) CreateMonitorConfig(ctx *gin.Context) {
 	var req model.CreateMonitorConfigReq
 
@@ -90,6 +126,19 @@ func (h *MonitorConfigHandler) CreateMonitorConfig(ctx *gin.Context) {
 	})
 }
 
+// UpdateMonitorConfig 更新监控配置
+// @Summary 更新监控配置
+// @Description 更新指定的监控配置
+// @Tags 监控配置
+// @Accept json
+// @Produce json
+// @Param id path int true "监控配置ID"
+// @Param request body model.UpdateMonitorConfigReq true "更新监控配置请求参数"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/configs/update/{id} [put]
+// @Security BearerAuth
 func (h *MonitorConfigHandler) UpdateMonitorConfig(ctx *gin.Context) {
 	var req model.UpdateMonitorConfigReq
 
@@ -106,6 +155,18 @@ func (h *MonitorConfigHandler) UpdateMonitorConfig(ctx *gin.Context) {
 	})
 }
 
+// DeleteMonitorConfig 删除监控配置
+// @Summary 删除监控配置
+// @Description 删除指定ID的监控配置
+// @Tags 监控配置
+// @Accept json
+// @Produce json
+// @Param id path int true "监控配置ID"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/configs/delete/{id} [delete]
+// @Security BearerAuth
 func (h *MonitorConfigHandler) DeleteMonitorConfig(ctx *gin.Context) {
 	var req model.DeleteMonitorConfigReq
 

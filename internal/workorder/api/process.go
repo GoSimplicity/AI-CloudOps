@@ -32,147 +32,148 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type ProcessHandler struct {
-	service service.ProcessService
+type WorkorderProcessHandler struct {
+	service service.WorkorderProcessService
 }
 
-func NewProcessHandler(service service.ProcessService) *ProcessHandler {
-	return &ProcessHandler{
+func NewWorkorderProcessHandler(service service.WorkorderProcessService) *WorkorderProcessHandler {
+	return &WorkorderProcessHandler{
 		service: service,
 	}
 }
 
-func (h *ProcessHandler) RegisterRouters(server *gin.Engine) {
+func (h *WorkorderProcessHandler) RegisterRouters(server *gin.Engine) {
 	processGroup := server.Group("/api/workorder/process")
 	{
-		processGroup.POST("/create", h.CreateProcess)
-		processGroup.PUT("/update/:id", h.UpdateProcess)
-		processGroup.DELETE("/delete/:id", h.DeleteProcess)
-		processGroup.GET("/list", h.ListProcess)
-		processGroup.GET("/detail/:id", h.DetailProcess)
-		processGroup.GET("/relations/:id", h.GetProcessWithRelations)
-		processGroup.POST("/publish/:id", h.PublishProcess)
-		processGroup.POST("/clone/:id", h.CloneProcess)
+		processGroup.POST("/create", h.CreateWorkorderProcess)
+		processGroup.PUT("/update/:id", h.UpdateWorkorderProcess)
+		processGroup.DELETE("/delete/:id", h.DeleteWorkorderProcess)
+		processGroup.GET("/list", h.ListWorkorderProcess)
+		processGroup.GET("/detail/:id", h.DetailWorkorderProcess)
 	}
 }
 
-// CreateProcess 创建流程
-func (h *ProcessHandler) CreateProcess(ctx *gin.Context) {
-	var req model.CreateProcessReq
+// CreateWorkorderProcess 创建工单流程
+// @Summary 创建工单流程
+// @Description 创建新的工单流程配置
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param request body model.CreateWorkorderProcessReq true "创建工单流程请求参数"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/process/create [post]
+func (h *WorkorderProcessHandler) CreateWorkorderProcess(ctx *gin.Context) {
+	var req model.CreateWorkorderProcessReq
 
 	user := ctx.MustGet("user").(utils.UserClaims)
-
-	req.CreatorID = user.Uid
-	req.CreatorName = user.Username
+	req.OperatorID = user.Uid
+	req.OperatorName = user.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CreateProcess(ctx, &req)
+		return nil, h.service.CreateWorkorderProcess(ctx, &req)
 	})
 }
 
-// UpdateProcess 更新流程
-func (h *ProcessHandler) UpdateProcess(ctx *gin.Context) {
-	var req model.UpdateProcessReq
+// UpdateWorkorderProcess 更新工单流程
+// @Summary 更新工单流程
+// @Description 更新指定的工单流程配置
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单流程ID"
+// @Param request body model.UpdateWorkorderProcessReq true "更新工单流程请求参数"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/process/update/{id} [put]
+func (h *WorkorderProcessHandler) UpdateWorkorderProcess(ctx *gin.Context) {
+	var req model.UpdateWorkorderProcessReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		return
 	}
-
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.UpdateProcess(ctx, &req)
+		return nil, h.service.UpdateWorkorderProcess(ctx, &req)
 	})
 }
 
-// DeleteProcess 删除流程
-func (h *ProcessHandler) DeleteProcess(ctx *gin.Context) {
-	var req model.DeleteProcessReq
+// DeleteWorkorderProcess 删除工单流程
+// @Summary 删除工单流程
+// @Description 删除指定的工单流程
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单流程ID"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/process/delete/{id} [delete]
+func (h *WorkorderProcessHandler) DeleteWorkorderProcess(ctx *gin.Context) {
+	var req model.DeleteWorkorderProcessReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		return
 	}
-
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.DeleteProcess(ctx, req.ID)
+		return nil, h.service.DeleteWorkorderProcess(ctx, req.ID)
 	})
 }
 
-// ListProcess 获取流程列表
-func (h *ProcessHandler) ListProcess(ctx *gin.Context) {
-	var req model.ListProcessReq
+// ListWorkorderProcess 获取工单流程列表
+// @Summary 获取工单流程列表
+// @Description 分页获取工单流程列表
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param size query int false "每页数量" default(10)
+// @Param keyword query string false "搜索关键词"
+// @Success 200 {object} utils.ApiResponse{data=[]model.WorkorderProcess} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/process/list [get]
+func (h *WorkorderProcessHandler) ListWorkorderProcess(ctx *gin.Context) {
+	var req model.ListWorkorderProcessReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.ListProcess(ctx, &req)
+		return h.service.ListWorkorderProcess(ctx, &req)
 	})
 }
 
-// DetailProcess 获取流程详情
-func (h *ProcessHandler) DetailProcess(ctx *gin.Context) {
-	var req model.DetailProcessReq
+// DetailWorkorderProcess 获取工单流程详情
+// @Summary 获取工单流程详情
+// @Description 根据ID获取工单流程的详细信息
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单流程ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/process/detail/{id} [get]
+func (h *WorkorderProcessHandler) DetailWorkorderProcess(ctx *gin.Context) {
+	var req model.DetailWorkorderProcessReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		return
 	}
-
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.DetailProcess(ctx, req.ID)
-	})
-}
-
-// GetProcessWithRelations 获取流程关联信息
-func (h *ProcessHandler) GetProcessWithRelations(ctx *gin.Context) {
-	var req model.GetProcessWithRelationsReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		return
-	}
-
-	req.ID = id
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.GetProcessWithRelations(ctx, req.ID)
-	})
-}
-
-// PublishProcess 发布流程
-func (h *ProcessHandler) PublishProcess(ctx *gin.Context) {
-	var req model.PublishProcessReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		return
-	}
-
-	req.ID = id
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.PublishProcess(ctx, req.ID)
-	})
-}
-
-// CloneProcess 克隆流程
-func (h *ProcessHandler) CloneProcess(ctx *gin.Context) {
-	var req model.CloneProcessReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		return
-	}
-
-	req.ID = id
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.CloneProcess(ctx, &req, user.Uid)
+		return h.service.DetailWorkorderProcess(ctx, req.ID)
 	})
 }

@@ -25,128 +25,100 @@
 
 package model
 
-import "gorm.io/datatypes"
+const (
+	FormDesignStatusDraft     int8 = 1 // 草稿
+	FormDesignStatusPublished int8 = 2 // 已发布
+	FormDesignStatusArchived  int8 = 3 // 已归档
+)
+
+const (
+	FormFieldTypeText     = "text"     // 文本输入
+	FormFieldTypeNumber   = "number"   // 数字输入
+	FormFieldTypePassword = "password" // 密码输入
+	FormFieldTypeTextarea = "textarea" // 多行文本
+	FormFieldTypeSelect   = "select"   // 下拉选择
+	FormFieldTypeRadio    = "radio"    // 单选框
+	FormFieldTypeCheckbox = "checkbox" // 复选框
+	FormFieldTypeDate     = "date"     // 日期选择
+	FormFieldTypeSwitch   = "switch"   // 开关
+)
+
+// WorkorderFormDesign 工单表单设计实体
+type WorkorderFormDesign struct {
+	Model
+	Name         string             `json:"name" gorm:"column:name;type:varchar(200);not null;index;comment:表单名称"`
+	Description  string             `json:"description" gorm:"column:description;type:varchar(1000);comment:表单描述"`
+	Schema       JSONMap            `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
+	Status       int8               `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-草稿，2-已发布，3-已归档"`
+	CategoryID   *int               `json:"category_id" gorm:"column:category_id;index;comment:分类ID"`
+	OperatorID   int                `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName string             `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;index;comment:操作人名称"`
+	Tags         StringList         `json:"tags" gorm:"column:tags;comment:标签"`
+	IsTemplate   int8               `json:"is_template" gorm:"column:is_template;not null;default:1;comment:是否为模板：1-是，2-否"`
+	Category     *WorkorderCategory `json:"category" gorm:"foreignKey:CategoryID;references:ID"`
+}
+
+// TableName 指定工单表单设计表名
+func (WorkorderFormDesign) TableName() string {
+	return "cl_workorder_form_design"
+}
 
 // FormField 表单字段定义
 type FormField struct {
-	ID           string                 `json:"id"`                       // 字段唯一标识
-	Type         string                 `json:"type" binding:"required"`  // 字段类型
-	Label        string                 `json:"label" binding:"required"` // 字段标签
-	Name         string                 `json:"name" binding:"required"`  // 字段名称
-	Required     bool                   `json:"required"`                 // 是否必填
-	Placeholder  string                 `json:"placeholder"`              // 占位符
-	DefaultValue interface{}            `json:"default_value"`            // 默认值
-	Options      []FormFieldOption      `json:"options,omitempty"`        // 选项列表
-	Validation   FormFieldValidation    `json:"validation,omitempty"`     // 验证规则
-	Props        map[string]interface{} `json:"props,omitempty"`          // 其他属性
-	SortOrder    int                    `json:"sort_order"`               // 排序
-	Disabled     bool                   `json:"disabled"`                 // 是否禁用
-	Hidden       bool                   `json:"hidden"`                   // 是否隐藏
-	Description  string                 `json:"description,omitempty"`    // 字段描述
-}
-
-// FormFieldOption 表单字段选项
-type FormFieldOption struct {
-	Label string      `json:"label"` // 选项标签
-	Value interface{} `json:"value"` // 选项值
-}
-
-// FormFieldValidation 表单字段验证规则
-type FormFieldValidation struct {
-	MinLength *int   `json:"min_length"` // 最小长度
-	MaxLength *int   `json:"max_length"` // 最大长度
-	Min       *int   `json:"min"`        // 最小值
-	Max       *int   `json:"max"`        // 最大值
-	Pattern   string `json:"pattern"`    // 正则表达式
-	Message   string `json:"message"`    // 验证错误信息
+	ID          string   `json:"id"`                       // 字段唯一标识（系统自动生成）
+	Name        string   `json:"name" binding:"required"`  // 字段名称
+	Type        string   `json:"type" binding:"required"`  // 字段类型
+	Label       string   `json:"label" binding:"required"` // 字段标签
+	Required    int8     `json:"required"`                 // 是否必填
+	Placeholder string   `json:"placeholder"`              // 占位符
+	Default     any      `json:"default"`                  // 默认值
+	Options     []string `json:"options,omitempty"`        // 选项（如下拉、单选等）
 }
 
 // FormSchema 表单结构定义
 type FormSchema struct {
 	Fields []FormField `json:"fields" binding:"required"` // 字段列表
-	Layout string      `json:"layout"`                    // 布局类型
-	Style  string      `json:"style"`                     // 样式配置
 }
 
-// FormDesign 表单设计实体
-type FormDesign struct {
-	Model
-	Name        string         `json:"name" gorm:"column:name;not null;comment:表单名称"`
-	Description string         `json:"description" gorm:"column:description;comment:表单描述"`
-	Schema      datatypes.JSON `json:"schema" gorm:"column:schema;type:json;not null;comment:表单JSON结构"`
-	Version     int            `json:"version" gorm:"column:version;not null;default:1;comment:版本号"`
-	Status      int8           `json:"status" gorm:"column:status;not null;default:0;comment:状态：1-草稿，2-已发布，3-已禁用"`
-	CategoryID  *int           `json:"category_id" gorm:"column:category_id;comment:分类ID"`
-	CreatorID   int            `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	CreatorName string         `json:"creator_name" gorm:"-"`
-	Category    *Category      `json:"category" gorm:"foreignKey:CategoryID"`
-
-	CategoryName string `json:"category_name" gorm:"-"`
+// CreateWorkorderFormDesignReq 创建工单表单设计请求
+type CreateWorkorderFormDesignReq struct {
+	Name         string     `json:"name" binding:"required,min=1,max=200"`
+	Description  string     `json:"description" binding:"omitempty,max=1000"`
+	Schema       FormSchema `json:"schema" binding:"required"`
+	Status       int8       `json:"status" binding:"required,oneof=1 2 3"`
+	CategoryID   *int       `json:"category_id" binding:"omitempty,min=1"`
+	OperatorID   int        `json:"operator_id" binding:"required,min=1"`
+	OperatorName string     `json:"operator_name" binding:"required,min=1,max=100"`
+	Tags         StringList `json:"tags" binding:"omitempty"`
+	IsTemplate   int8       `json:"is_template" binding:"required,oneof=1 2"`
 }
 
-func (FormDesign) TableName() string {
-	return "cl_workorder_form_designs"
-}
-
-// CreateFormDesignReq 创建表单设计请求
-type CreateFormDesignReq struct {
-	Name        string     `json:"name" binding:"required,min=1,max=100"`
-	Description string     `json:"description" binding:"omitempty,max=500"`
+// UpdateWorkorderFormDesignReq 更新工单表单设计请求
+type UpdateWorkorderFormDesignReq struct {
+	ID          int        `json:"id" binding:"required,min=1"`
+	Name        string     `json:"name" binding:"required,min=1,max=200"`
+	Description string     `json:"description" binding:"omitempty,max=1000"`
 	Schema      FormSchema `json:"schema" binding:"required"`
-	CategoryID  *int       `json:"category_id"`
-	UserID      int        `json:"user_id"`
-	UserName    string     `json:"user_name"`
-	Status      int8       `json:"status" binding:"omitempty,oneof=1 2 3"`
-	Version     int        `json:"version" binding:"omitempty,min=1"`
+	Status      int8       `json:"status" binding:"required,oneof=1 2 3"`
+	CategoryID  *int       `json:"category_id" binding:"omitempty,min=1"`
+	Tags        StringList `json:"tags" binding:"omitempty"`
+	IsTemplate  int8       `json:"is_template" binding:"required,oneof=1 2"`
 }
 
-// UpdateFormDesignReq 更新表单设计请求
-type UpdateFormDesignReq struct {
-	ID          int        `json:"id" binding:"required"`
-	Name        string     `json:"name" binding:"required,min=1,max=100"`
-	Description string     `json:"description" binding:"omitempty,max=500"`
-	Schema      FormSchema `json:"schema" binding:"required"`
-	CategoryID  *int       `json:"category_id"`
-	Status      int8       `json:"status" binding:"omitempty,oneof=1 2 3"`
-	Version     int        `json:"version" binding:"omitempty,min=1"`
+// DeleteWorkorderFormDesignReq 删除工单表单设计请求
+type DeleteWorkorderFormDesignReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
 
-// DeleteFormDesignReq 删除表单设计请求
-type DeleteFormDesignReq struct {
-	ID int `json:"id" form:"id" binding:"required"`
+// DetailWorkorderFormDesignReq 获取工单表单设计详情请求
+type DetailWorkorderFormDesignReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
 
-// DetailFormDesignReq 获取表单设计详情请求
-type DetailFormDesignReq struct {
-	ID int `json:"id" form:"id" binding:"required"`
-}
-
-// ListFormDesignReq 表单设计列表请求
-type ListFormDesignReq struct {
+// ListWorkorderFormDesignReq 获取工单表单设计列表请求
+type ListWorkorderFormDesignReq struct {
 	ListReq
-	CategoryID *int  `json:"category_id" form:"category_id"` // 按分类筛选
-	Status     *int8 `json:"status" form:"status"`           // 按状态筛选
-}
-
-// PublishFormDesignReq 发布表单设计请求
-type PublishFormDesignReq struct {
-	ID int `json:"id" form:"id" binding:"required"`
-}
-
-// CloneFormDesignReq 克隆表单设计请求
-type CloneFormDesignReq struct {
-	ID   int    `json:"id" form:"id" binding:"required"`
-	Name string `json:"name" form:"name" binding:"required,min=1,max=100"`
-}
-
-// PreviewFormDesignReq 预览表单设计请求
-type PreviewFormDesignReq struct {
-	ID int `json:"id" form:"id" binding:"required"`
-}
-
-// FormStatistics 表单设计统计信息
-type FormStatistics struct {
-	Draft     int64 `json:"draft"`     // 草稿表单数
-	Published int64 `json:"published"` // 已发布表单数
-	Disabled  int64 `json:"disabled"`  // 已禁用表单数
+	CategoryID *int  `json:"category_id" form:"category_id" binding:"omitempty,min=1"`
+	Status     *int8 `json:"status" form:"status" binding:"omitempty,oneof=1 2 3"`
+	IsTemplate *int8 `json:"is_template" form:"is_template" binding:"omitempty,oneof=1 2"`
 }

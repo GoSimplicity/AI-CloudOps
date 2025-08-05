@@ -58,6 +58,19 @@ func (s *ScrapeJobHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetMonitorScrapeJobList 获取监控采集 Job 列表
+// @Summary 获取采集任务列表
+// @Description 获取所有监控采集任务的分页列表
+// @Tags 采集管理
+// @Accept json
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param size query int false "每页数量" default(10)
+// @Param keyword query string false "搜索关键词"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/scrape_jobs/list [get]
+// @Security BearerAuth
 func (s *ScrapeJobHandler) GetMonitorScrapeJobList(ctx *gin.Context) {
 	var req model.GetMonitorScrapeJobListReq
 
@@ -67,6 +80,17 @@ func (s *ScrapeJobHandler) GetMonitorScrapeJobList(ctx *gin.Context) {
 }
 
 // CreateMonitorScrapeJob 创建监控采集 Job
+// @Summary 创建采集任务
+// @Description 创建新的监控采集任务配置
+// @Tags 采集管理
+// @Accept json
+// @Produce json
+// @Param request body model.CreateMonitorScrapeJobReq true "创建采集任务请求参数"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/scrape_jobs/create [post]
+// @Security BearerAuth
 func (s *ScrapeJobHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
 	var req model.CreateMonitorScrapeJobReq
 
@@ -80,6 +104,18 @@ func (s *ScrapeJobHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
 }
 
 // UpdateMonitorScrapeJob 更新监控采集 Job
+// @Summary 更新采集任务
+// @Description 更新指定的监控采集任务配置
+// @Tags 采集管理
+// @Accept json
+// @Produce json
+// @Param id path int true "采集任务ID"
+// @Param request body model.UpdateMonitorScrapeJobReq true "更新采集任务请求参数"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/scrape_jobs/update/{id} [put]
+// @Security BearerAuth
 func (s *ScrapeJobHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
 	var req model.UpdateMonitorScrapeJobReq
 
@@ -89,6 +125,17 @@ func (s *ScrapeJobHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
 }
 
 // DeleteMonitorScrapeJob 删除监控采集 Job
+// @Summary 删除采集任务
+// @Description 删除指定ID的监控采集任务
+// @Tags 采集管理
+// @Accept json
+// @Produce json
+// @Param id path int true "采集任务ID"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/scrape_jobs/delete/{id} [delete]
+// @Security BearerAuth
 func (s *ScrapeJobHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
 	var req model.DeleteMonitorScrapeJobReq
 
@@ -106,6 +153,17 @@ func (s *ScrapeJobHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
 }
 
 // GetMonitorScrapeJobDetail 获取监控采集 Job 详情
+// @Summary 获取采集任务详情
+// @Description 根据ID获取指定监控采集任务的详细信息
+// @Tags 采集管理
+// @Accept json
+// @Produce json
+// @Param id path int true "采集任务ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/scrape_jobs/detail/{id} [get]
+// @Security BearerAuth
 func (s *ScrapeJobHandler) GetMonitorScrapeJobDetail(ctx *gin.Context) {
 	var req model.GetMonitorScrapeJobDetailReq
 

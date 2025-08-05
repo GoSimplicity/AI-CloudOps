@@ -82,18 +82,15 @@ func InitTables(db *gorm.DB) error {
 		&model.MonitorConfig{}, // 监控配置表
 
 		// 工单系统
-		&model.FormDesign{},
-		&model.Process{},
-		&model.Template{},
-		&model.Instance{},
-		&model.InstanceFlow{},
-		&model.InstanceComment{},
-		&model.Category{},
-		&model.WorkOrderStatistics{},
-		&model.UserPerformance{},
-		&model.CategoryPerformance{},
-		&model.TemplatePerformance{},
-		&model.Notification{},
-		&model.NotificationLog{},
+		&model.WorkorderFormDesign{},
+		&model.WorkorderInstance{},
+		&model.WorkorderInstanceFlow{},
+		&model.WorkorderInstanceComment{},
+		&model.WorkorderProcess{},
+		&model.WorkorderTemplate{},
+		&model.WorkorderCategory{},
+		&model.WorkorderNotification{},
+		&model.WorkorderNotificationLog{},
+		&model.WorkorderInstanceTimeline{},
 	)
 }

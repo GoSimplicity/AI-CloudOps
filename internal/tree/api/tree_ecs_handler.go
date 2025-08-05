@@ -61,6 +61,21 @@ func (h *TreeEcsHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // ListEcsResources 获取ECS实例列表
+// @Summary 获取ECS实例列表
+// @Description 分页获取ECS实例列表，支持按条件筛选
+// @Tags ECS管理
+// @Accept json
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param size query int false "每页数量" default(10)
+// @Param region query string false "地域"
+// @Param status query string false "实例状态"
+// @Param keyword query string false "搜索关键词"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/ecs/list [get]
 func (h *TreeEcsHandler) ListEcsResources(ctx *gin.Context) {
 	var req model.ListEcsResourcesReq
 
@@ -81,6 +96,17 @@ func (h *TreeEcsHandler) ListInstanceOptions(ctx *gin.Context) {
 */
 
 // GetEcsDetail 获取ECS实例详情
+// @Summary 获取ECS实例详情
+// @Description 根据ID获取ECS实例的详细信息
+// @Tags ECS管理
+// @Accept json
+// @Produce json
+// @Param id path int true "实例ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/ecs/detail/{id} [get]
 func (h *TreeEcsHandler) GetEcsDetail(ctx *gin.Context) {
 	var req model.GetEcsDetailReq
 
@@ -98,6 +124,17 @@ func (h *TreeEcsHandler) GetEcsDetail(ctx *gin.Context) {
 }
 
 // CreateEcsResource 创建ECS实例
+// @Summary 创建ECS实例
+// @Description 创建新的ECS实例
+// @Tags ECS管理
+// @Accept json
+// @Produce json
+// @Param request body model.CreateEcsResourceReq true "创建ECS实例请求参数"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/ecs/create [post]
 func (h *TreeEcsHandler) CreateEcsResource(ctx *gin.Context) {
 	var req model.CreateEcsResourceReq
 
@@ -107,6 +144,17 @@ func (h *TreeEcsHandler) CreateEcsResource(ctx *gin.Context) {
 }
 
 // DeleteEcs 删除ECS实例
+// @Summary 删除ECS实例
+// @Description 删除指定的ECS实例
+// @Tags ECS管理
+// @Accept json
+// @Produce json
+// @Param id path int true "实例ID"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/ecs/delete/{id} [delete]
 func (h *TreeEcsHandler) DeleteEcs(ctx *gin.Context) {
 	var req model.DeleteEcsReq
 
@@ -124,6 +172,17 @@ func (h *TreeEcsHandler) DeleteEcs(ctx *gin.Context) {
 }
 
 // StartEcs 启动ECS实例
+// @Summary 启动ECS实例
+// @Description 启动指定的ECS实例
+// @Tags ECS管理
+// @Accept json
+// @Produce json
+// @Param id path int true "实例ID"
+// @Success 200 {object} utils.ApiResponse "启动成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/ecs/start/{id} [post]
 func (h *TreeEcsHandler) StartEcs(ctx *gin.Context) {
 	var req model.StartEcsReq
 
@@ -141,6 +200,17 @@ func (h *TreeEcsHandler) StartEcs(ctx *gin.Context) {
 }
 
 // StopEcs 停止ECS实例
+// @Summary 停止ECS实例
+// @Description 停止指定的ECS实例
+// @Tags ECS管理
+// @Accept json
+// @Produce json
+// @Param id path int true "实例ID"
+// @Success 200 {object} utils.ApiResponse "停止成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/ecs/stop/{id} [post]
 func (h *TreeEcsHandler) StopEcs(ctx *gin.Context) {
 	var req model.StopEcsReq
 
@@ -158,6 +228,17 @@ func (h *TreeEcsHandler) StopEcs(ctx *gin.Context) {
 }
 
 // RestartEcs 重启ECS实例
+// @Summary 重启ECS实例
+// @Description 重启指定的ECS实例
+// @Tags ECS管理
+// @Accept json
+// @Produce json
+// @Param id path int true "实例ID"
+// @Success 200 {object} utils.ApiResponse "重启成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/ecs/restart/{id} [post]
 func (h *TreeEcsHandler) RestartEcs(ctx *gin.Context) {
 	var req model.RestartEcsReq
 
@@ -175,6 +256,18 @@ func (h *TreeEcsHandler) RestartEcs(ctx *gin.Context) {
 }
 
 // UpdateEcs 更新ECS实例
+// @Summary 更新ECS实例
+// @Description 更新指定ECS实例的配置信息
+// @Tags ECS管理
+// @Accept json
+// @Produce json
+// @Param id path int true "实例ID"
+// @Param request body model.UpdateEcsReq true "更新ECS实例请求参数"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/ecs/update/{id} [put]
 func (h *TreeEcsHandler) UpdateEcs(ctx *gin.Context) {
 	var req model.UpdateEcsReq
 

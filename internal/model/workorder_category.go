@@ -25,65 +25,55 @@
 
 package model
 
-// Category 分类实体
-type Category struct {
+const (
+	CategoryStatusEnabled  int8 = 1 // 启用
+	CategoryStatusDisabled int8 = 2 // 禁用
+)
+
+// WorkorderCategory 工单分类实体
+type WorkorderCategory struct {
 	Model
-	Name        string `json:"name" gorm:"column:name;not null;comment:分类名称"`
-	ParentID    *int   `json:"parent_id" gorm:"column:parent_id;comment:父分类ID"`
-	Icon        string `json:"icon" gorm:"column:icon;comment:图标"`
-	SortOrder   int    `json:"sort_order" gorm:"column:sort_order;default:0;comment:排序顺序"`
-	Status      int8   `json:"status" gorm:"column:status;not null;default:1;comment:状态：1-启用，2-禁用"`
-	Description string `json:"description" gorm:"column:description;comment:分类描述"`
-	CreatorID   int    `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	CreatorName string `json:"creator_name" gorm:"-"`
+	Name         string `json:"name" gorm:"column:name;type:varchar(100);not null;index;comment:分类名称"`
+	Status       int8   `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-启用，2-禁用"`
+	Description  string `json:"description" gorm:"column:description;type:varchar(500);comment:分类描述"`
+	OperatorID     int    `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName   string `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;index;comment:操作人名称"`
 }
 
-func (Category) TableName() string {
-	return "cl_workorder_categories"
+// TableName 指定工单分类表名
+func (WorkorderCategory) TableName() string {
+	return "cl_workorder_category"
 }
 
-// 分类请求结构
-type CreateCategoryReq struct {
+// CreateWorkorderCategoryReq 创建工单分类请求
+type CreateWorkorderCategoryReq struct {
+	Name           string `json:"name" binding:"required,min=1,max=100"`
+	Status         int8   `json:"status" binding:"required,oneof=1 2"`
+	Description    string `json:"description" binding:"omitempty,max=500"`
+	OperatorID     int    `json:"operator_id" binding:"required,min=1"`
+	OperatorName   string `json:"operator_name" binding:"required,min=1,max=100"`
+}
+
+// UpdateWorkorderCategoryReq 更新工单分类请求
+type UpdateWorkorderCategoryReq struct {
+	ID          int    `json:"id" binding:"required,min=1"`
 	Name        string `json:"name" binding:"required,min=1,max=100"`
-	ParentID    *int   `json:"parent_id"`
-	Icon        string `json:"icon"`
-	SortOrder   int    `json:"sort_order"`
 	Description string `json:"description" binding:"omitempty,max=500"`
-	UserID      int    `json:"user_id" binding:"required"`
-	UserName    string `json:"user_name" binding:"required"`
-	Status      int8   `json:"status" binding:"required,oneof=1 2"` // 状态，必填，0-禁用，1-启用
+	Status      int8   `json:"status" binding:"required,oneof=1 2"`
 }
 
-// UpdateCategoryReq 更新分类请求结构
-type UpdateCategoryReq struct {
-	ID          int    `json:"id" form:"id" binding:"required"`         // 分类ID，必填
-	Name        string `json:"name" binding:"required,min=1,max=100"`   // 分类名称，必填，长度1-100
-	ParentID    *int   `json:"parent_id"`                               // 父分类ID，可选
-	Icon        string `json:"icon"`                                    // 图标，可选
-	SortOrder   int    `json:"sort_order"`                              // 排序顺序，可选
-	Description string `json:"description" binding:"omitempty,max=500"` // 分类描述，最大500字符
-	Status      *int8  `json:"status" binding:"required,oneof=1 2"`     // 状态，必填，0-禁用，1-启用
+// DeleteWorkorderCategoryReq 删除工单分类请求
+type DeleteWorkorderCategoryReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
 
-type DeleteCategoryReq struct {
-	ID int `json:"id" form:"id" binding:"required"`
+// DetailWorkorderCategoryReq 获取工单分类详情请求
+type DetailWorkorderCategoryReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
 
-type ListCategoryReq struct {
+// ListWorkorderCategoryReq 工单分类列表请求
+type ListWorkorderCategoryReq struct {
 	ListReq
-	Status *int8 `json:"status" form:"status"`
-}
-
-type DetailCategoryReq struct {
-	ID int `json:"id" uri:"id" binding:"required"`
-}
-
-// TreeCategoryReq 获取分类树请求
-type TreeCategoryReq struct {
-	Status *int8 `json:"status" form:"status"`
-}
-
-type CategoryStatistics struct {
-	EnabledCount  int64 `json:"enabled_count"`
-	DisabledCount int64 `json:"disabled_count"`
+	Status *int8 `json:"status" form:"status" binding:"omitempty,oneof=1 2"`
 }

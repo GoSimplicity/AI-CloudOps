@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -47,30 +45,49 @@ func NewInstanceFlowHandler(flowService service.InstanceFlowService) *InstanceFl
 func (h *InstanceFlowHandler) RegisterRouters(server *gin.Engine) {
 	flowGroup := server.Group("/api/workorder/instance/flow")
 	{
-		flowGroup.POST("/action/:id", h.ProcessInstanceFlow)
-		flowGroup.GET("/:id", h.GetInstanceFlows)
-		flowGroup.GET("/process/:pid/definition", h.GetProcessDefinition)
+		flowGroup.GET("/list", h.ListInstanceFlows)
+		flowGroup.GET("/detail/:id", h.DetailInstanceFlow)
 	}
 }
 
-func (h *InstanceFlowHandler) ProcessInstanceFlow(ctx *gin.Context) {
-	var req model.InstanceActionReq
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		return
-	}
-
-	req.InstanceID = id
+// ListInstanceFlows 获取工单流转记录列表
+// @Summary 获取工单流转记录列表
+// @Description 分页获取工单流转记录列表
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param page query int false "页码"
+// @Param size query int false "每页数量"
+// @Param instanceId query int false "工单实例ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/flow/list [get]
+// 获取工单流转记录列表
+func (h *InstanceFlowHandler) ListInstanceFlows(ctx *gin.Context) {
+	var req model.ListWorkorderInstanceFlowReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.flowService.ProcessInstanceFlow(ctx, &req, user.Uid, user.Username)
+		return h.flowService.ListInstanceFlows(ctx, &req)
 	})
 }
 
-func (h *InstanceFlowHandler) GetInstanceFlows(ctx *gin.Context) {
-	var req model.GetInstanceFlowsReq
+// DetailInstanceFlow 获取工单流转记录详情
+// @Summary 获取工单流转记录详情
+// @Description 获取指定工单流转记录的详细信息
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "流转记录ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/flow/detail/{id} [get]
+// 获取工单流转记录详情
+func (h *InstanceFlowHandler) DetailInstanceFlow(ctx *gin.Context) {
+	var req model.DetailWorkorderInstanceFlowReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -80,23 +97,6 @@ func (h *InstanceFlowHandler) GetInstanceFlows(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.flowService.GetInstanceFlows(ctx, req.ID)
-	})
-}
-
-func (h *InstanceFlowHandler) GetProcessDefinition(ctx *gin.Context) {
-	var req model.GetProcessDefinitionReq
-
-	processIDStr := ctx.Param("pid")
-	processID, err := strconv.Atoi(processIDStr)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的流程ID")
-		return
-	}
-
-	req.ID = processID
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.flowService.GetProcessDefinition(ctx, req.ID)
+		return h.flowService.DetailInstanceFlow(ctx, req.ID)
 	})
 }

@@ -139,10 +139,13 @@ type serviceAccountService struct {
 }
 
 // NewServiceAccountService 创建新的ServiceAccount服务实例
-// @param logger 日志记录器
-// @param k8sClient Kubernetes客户端
-// @param clusterDao 集群数据访问对象
-// @return ServiceAccountService ServiceAccount服务接口实例
+// 参数:
+//
+//	logger: 日志记录器
+//	k8sClient: Kubernetes客户端
+//	clusterDao: 集群数据访问对象
+//
+// 返回: ServiceAccountService ServiceAccount服务接口实例
 func NewServiceAccountService(logger *zap.Logger, k8sClient client.K8sClient, clusterDao admin.ClusterDAO) ServiceAccountService {
 	return &serviceAccountService{
 		logger:     logger,
@@ -817,10 +820,11 @@ func (s *serviceAccountService) convertMapToStringList(m map[string]string) mode
 }
 
 // isServiceAccountInSubjects 检查ServiceAccount是否在主体列表中
-// @param subjects 主体列表
-// @param serviceAccountName ServiceAccount名称
-// @param namespace 命名空间
-// @return bool 是否包含指定的ServiceAccount
+// 参数:
+//   - subjects: 主体列表
+//   - serviceAccountName: ServiceAccount名称
+//   - namespace: 命名空间
+// 返回: bool 是否包含指定的ServiceAccount
 func (s *serviceAccountService) isServiceAccountInSubjects(subjects []rbacv1.Subject, serviceAccountName, namespace string) bool {
 	for _, subject := range subjects {
 		if subject.Kind == "ServiceAccount" &&

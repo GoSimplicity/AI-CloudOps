@@ -63,6 +63,18 @@ func (k *K8sStatefulSetHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetStatefulSetsByNamespace 根据命名空间获取 StatefulSet 列表
+// @Summary 获取StatefulSet列表
+// @Description 根据指定的集群ID和命名空间查询所有的有状态应用(StatefulSet)资源
+// @Tags 有状态应用管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse{data=[]interface{}} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/statefulsets/{id} [get]
+// @Security BearerAuth
 func (k *K8sStatefulSetHandler) GetStatefulSetsByNamespace(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -82,6 +94,17 @@ func (k *K8sStatefulSetHandler) GetStatefulSetsByNamespace(ctx *gin.Context) {
 }
 
 // CreateStatefulSet 创建 StatefulSet
+// @Summary 创建StatefulSet
+// @Description 在指定集群的命名空间中创建新的有状态应用(StatefulSet)资源
+// @Tags 有状态应用管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sStatefulSetRequest true "StatefulSet创建信息"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/statefulsets/create [post]
+// @Security BearerAuth
 func (k *K8sStatefulSetHandler) CreateStatefulSet(ctx *gin.Context) {
 	var req model.K8sStatefulSetRequest
 
@@ -91,6 +114,17 @@ func (k *K8sStatefulSetHandler) CreateStatefulSet(ctx *gin.Context) {
 }
 
 // UpdateStatefulSet 更新指定的 StatefulSet
+// @Summary 更新StatefulSet
+// @Description 修改指定StatefulSet的配置和参数信息
+// @Tags 有状态应用管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sStatefulSetRequest true "StatefulSet更新信息"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/statefulsets/update [post]
+// @Security BearerAuth
 func (k *K8sStatefulSetHandler) UpdateStatefulSet(ctx *gin.Context) {
 	var req model.K8sStatefulSetRequest
 
@@ -100,6 +134,17 @@ func (k *K8sStatefulSetHandler) UpdateStatefulSet(ctx *gin.Context) {
 }
 
 // BatchDeleteStatefulSet 批量删除 StatefulSet
+// @Summary 批量删除StatefulSet
+// @Description 同时删除指定命名空间下的多个StatefulSet资源
+// @Tags 有状态应用管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sStatefulSetRequest true "批量删除请求"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/statefulsets/batch_delete [delete]
+// @Security BearerAuth
 func (k *K8sStatefulSetHandler) BatchDeleteStatefulSet(ctx *gin.Context) {
 	var req model.K8sStatefulSetRequest
 
@@ -109,6 +154,19 @@ func (k *K8sStatefulSetHandler) BatchDeleteStatefulSet(ctx *gin.Context) {
 }
 
 // GetStatefulSetYaml 获取 StatefulSet 的 YAML 配置
+// @Summary 获取StatefulSet的YAML配置
+// @Description 以YAML格式返回指定StatefulSet的完整配置信息
+// @Tags 有状态应用管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param statefulset_name query string true "StatefulSet名称"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse{data=string} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/statefulsets/{id}/yaml [get]
+// @Security BearerAuth
 func (k *K8sStatefulSetHandler) GetStatefulSetYaml(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -134,6 +192,19 @@ func (k *K8sStatefulSetHandler) GetStatefulSetYaml(ctx *gin.Context) {
 }
 
 // DeleteStatefulSet 删除指定的 StatefulSet
+// @Summary 删除单个StatefulSet
+// @Description 删除指定命名空间下的单个StatefulSet资源
+// @Tags 有状态应用管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param statefulset_name query string true "StatefulSet名称"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/statefulsets/delete/{id} [delete]
+// @Security BearerAuth
 func (k *K8sStatefulSetHandler) DeleteStatefulSet(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -159,6 +230,19 @@ func (k *K8sStatefulSetHandler) DeleteStatefulSet(ctx *gin.Context) {
 }
 
 // RestartStatefulSet 重启 StatefulSet
+// @Summary 重启StatefulSet
+// @Description 对指定的StatefulSet执行重启操作，重新创建Pod实例
+// @Tags 有状态应用管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param statefulset_name query string true "StatefulSet名称"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse "重启成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/statefulsets/restart/{id} [post]
+// @Security BearerAuth
 func (k *K8sStatefulSetHandler) RestartStatefulSet(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -184,6 +268,17 @@ func (k *K8sStatefulSetHandler) RestartStatefulSet(ctx *gin.Context) {
 }
 
 // ScaleStatefulSet 扩缩容 StatefulSet
+// @Summary 扩缩容StatefulSet
+// @Description 调整StatefulSet的副本数量，实现应用的扩容或缩容
+// @Tags 有状态应用管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sStatefulSetScaleRequest true "扩缩容请求"
+// @Success 200 {object} utils.ApiResponse "扩缩容成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/statefulsets/scale [post]
+// @Security BearerAuth
 func (k *K8sStatefulSetHandler) ScaleStatefulSet(ctx *gin.Context) {
 	var req model.K8sStatefulSetScaleRequest
 
@@ -193,6 +288,19 @@ func (k *K8sStatefulSetHandler) ScaleStatefulSet(ctx *gin.Context) {
 }
 
 // GetStatefulSetStatus 获取 StatefulSet 状态
+// @Summary 获取StatefulSet状态
+// @Description 获取指定StatefulSet的详细状态信息，包括副本数、就绪状态等
+// @Tags 有状态应用管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param statefulset_name query string true "StatefulSet名称"
+// @Param namespace query string true "命名空间名称"
+// @Success 200 {object} utils.ApiResponse{data=interface{}} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/statefulsets/{id}/status [get]
+// @Security BearerAuth
 func (k *K8sStatefulSetHandler) GetStatefulSetStatus(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

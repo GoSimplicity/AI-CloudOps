@@ -66,6 +66,17 @@ func (h *TreeCloudHandler) RegisterRouters(r gin.IRouter) {
 }
 
 // CreateCloudAccount 创建云账号
+// @Summary 创建云账号
+// @Description 创建新的云账号配置
+// @Tags 云资源管理
+// @Accept json
+// @Produce json
+// @Param request body model.CreateCloudAccountReq true "创建云账号请求参数"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/cloud/accounts/create [post]
 func (h *TreeCloudHandler) CreateCloudAccount(ctx *gin.Context) {
 	var req model.CreateCloudAccountReq
 
@@ -75,6 +86,18 @@ func (h *TreeCloudHandler) CreateCloudAccount(ctx *gin.Context) {
 }
 
 // UpdateCloudAccount 更新云账号
+// @Summary 更新云账号
+// @Description 更新指定云账号的配置信息
+// @Tags 云资源管理
+// @Accept json
+// @Produce json
+// @Param id path int true "云账号ID"
+// @Param request body model.UpdateCloudAccountReq true "更新云账号请求参数"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/cloud/accounts/update/{id} [put]
 func (h *TreeCloudHandler) UpdateCloudAccount(ctx *gin.Context) {
 	var req model.UpdateCloudAccountReq
 
@@ -92,6 +115,17 @@ func (h *TreeCloudHandler) UpdateCloudAccount(ctx *gin.Context) {
 }
 
 // DeleteCloudAccount 删除云账号
+// @Summary 删除云账号
+// @Description 删除指定的云账号
+// @Tags 云资源管理
+// @Accept json
+// @Produce json
+// @Param id path int true "云账号ID"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/cloud/accounts/delete/{id} [delete]
 func (h *TreeCloudHandler) DeleteCloudAccount(ctx *gin.Context) {
 	var req model.DeleteCloudAccountReq
 
@@ -108,6 +142,17 @@ func (h *TreeCloudHandler) DeleteCloudAccount(ctx *gin.Context) {
 }
 
 // DetailCloudAccount 获取云账号详情
+// @Summary 获取云账号详情
+// @Description 根据ID获取云账号的详细信息
+// @Tags 云资源管理
+// @Accept json
+// @Produce json
+// @Param id path int true "云账号ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/cloud/accounts/detail/{id} [get]
 func (h *TreeCloudHandler) DetailCloudAccount(ctx *gin.Context) {
 	var req model.GetCloudAccountReq
 
@@ -125,6 +170,19 @@ func (h *TreeCloudHandler) DetailCloudAccount(ctx *gin.Context) {
 }
 
 // ListCloudAccounts 获取云账号列表
+// @Summary 获取云账号列表
+// @Description 分页获取云账号列表
+// @Tags 云资源管理
+// @Accept json
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param size query int false "每页数量" default(10)
+// @Param keyword query string false "搜索关键词"
+// @Success 200 {object} utils.ApiResponse{data=[]model.CloudAccount} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/cloud/accounts/list [get]
 func (h *TreeCloudHandler) ListCloudAccounts(ctx *gin.Context) {
 	var req model.ListCloudAccountsReq
 
@@ -134,6 +192,17 @@ func (h *TreeCloudHandler) ListCloudAccounts(ctx *gin.Context) {
 }
 
 // TestCloudAccount 测试云账号连接
+// @Summary 测试云账号连接
+// @Description 测试指定云账号的连接性
+// @Tags 云资源管理
+// @Accept json
+// @Produce json
+// @Param id path int true "云账号ID"
+// @Success 200 {object} utils.ApiResponse "测试成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/cloud/accounts/test/{id} [post]
 func (h *TreeCloudHandler) TestCloudAccount(ctx *gin.Context) {
 	var req model.TestCloudAccountReq
 
@@ -151,6 +220,17 @@ func (h *TreeCloudHandler) TestCloudAccount(ctx *gin.Context) {
 }
 
 // SyncCloudResources 同步所有云资源
+// @Summary 同步所有云资源
+// @Description 同步所有云账号的资源信息
+// @Tags 云资源管理
+// @Accept json
+// @Produce json
+// @Param request body model.SyncCloudReq true "同步请求参数"
+// @Success 200 {object} utils.ApiResponse "同步成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/cloud/sync [post]
 func (h *TreeCloudHandler) SyncCloudResources(ctx *gin.Context) {
 	var req model.SyncCloudReq
 
@@ -160,6 +240,18 @@ func (h *TreeCloudHandler) SyncCloudResources(ctx *gin.Context) {
 }
 
 // SyncCloudAccountResources 同步指定云账号的资源
+// @Summary 同步指定云账号的资源
+// @Description 同步指定云账号的资源信息
+// @Tags 云资源管理
+// @Accept json
+// @Produce json
+// @Param id path int true "云账号ID"
+// @Param request body model.SyncCloudAccountResourcesReq true "同步请求参数"
+// @Success 200 {object} utils.ApiResponse "同步成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/cloud/sync/{id} [post]
 func (h *TreeCloudHandler) SyncCloudAccountResources(ctx *gin.Context) {
 	var req model.SyncCloudAccountResourcesReq
 
@@ -177,6 +269,15 @@ func (h *TreeCloudHandler) SyncCloudAccountResources(ctx *gin.Context) {
 }
 
 // GetCloudAccountStatistics 获取云账号统计信息
+// @Summary 获取云账号统计信息
+// @Description 获取云账号相关的统计数据
+// @Tags 云资源管理
+// @Accept json
+// @Produce json
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/tree/cloud/statistics [get]
 func (h *TreeCloudHandler) GetCloudAccountStatistics(ctx *gin.Context) {
 	var req model.GetCloudAccountStatisticsReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {

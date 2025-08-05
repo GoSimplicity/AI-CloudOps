@@ -1,6 +1,77 @@
 generate:
 	go generate ./...
 
+# 生成 Swagger API 文档
+swagger:
+	@echo "正在生成API文档..."
+	@swag init --output ./docs --parseDependency --parseInternal --exclude ./internal/*/service --dir ./ --generalInfo main.go
+	@echo "API文档已生成到 docs/ 目录"
+	@echo "访问地址: http://localhost:8889/swagger/index.html"
+
+# 兼容旧的命令名
+openai: swagger
+
+# 检查 Swagger 注解完整性
+swagger-check:
+	@echo "检查 Swagger 注解..."
+	@echo "正在统计 API 函数..."
+	@total_funcs=$$(grep -c "func.*Handler.*[Gg]et\|[Pp]ost\|[Pp]ut\|[Dd]elete" internal/*/api/*.go); \
+	 swagger_funcs=$$(grep -c "@Summary" internal/*/api/*.go); \
+	 echo "总 API 函数数量: $$total_funcs"; \
+	 echo "包含 Swagger 注解的函数: $$swagger_funcs"; \
+	 if [ $$swagger_funcs -lt $$total_funcs ]; then \
+	     echo "⚠️  发现 $$(( $$total_funcs - $$swagger_funcs )) 个函数缺少 Swagger 注解"; \
+	     echo "缺少注解的文件:"; \
+	     grep -L "@Summary" internal/*/api/*.go || true; \
+	 else \
+	     echo "✅ 所有 API 函数都包含 Swagger 注解"; \
+	 fi
+
+# 启动本地服务器并打开 Swagger UI
+swagger-serve:
+	@echo "启动服务器..."
+	@if pgrep -f "AI-CloudOps" > /dev/null; then \
+		echo "服务器已在运行"; \
+	else \
+		echo "请先启动服务器: make dev 或 go run main.go"; \
+	fi
+	@echo "Swagger UI 访问地址: http://localhost:8889/swagger/index.html"
+	@if command -v open > /dev/null; then \
+		open http://localhost:8889/swagger/index.html; \
+	elif command -v xdg-open > /dev/null; then \
+		xdg-open http://localhost:8889/swagger/index.html; \
+	fi
+
+# 验证生成的 API 文档
+swagger-validate:
+	@echo "验证 Swagger 文档..."
+	@if [ -f "docs/swagger.json" ]; then \
+		echo "✅ swagger.json 文件存在"; \
+		echo "文件大小: $$(du -h docs/swagger.json | cut -f1)"; \
+	else \
+		echo "❌ swagger.json 文件不存在，请先运行 make swagger"; \
+		exit 1; \
+	fi
+	@if [ -f "docs/swagger.yaml" ]; then \
+		echo "✅ swagger.yaml 文件存在"; \
+		echo "文件大小: $$(du -h docs/swagger.yaml | cut -f1)"; \
+	else \
+		echo "❌ swagger.yaml 文件不存在，请先运行 make swagger"; \
+		exit 1; \
+	fi
+	@api_count=$$(grep -c '"paths"' docs/swagger.json 2>/dev/null || echo "0"); \
+	 echo "API 路径数量: $$api_count"
+
+# 清理生成的文档
+swagger-clean:
+	@echo "清理 Swagger 文档..."
+	@rm -f docs/docs.go docs/swagger.json docs/swagger.yaml
+	@echo "✅ 文档已清理"
+
+# 完整的 Swagger 工作流
+swagger-all: swagger-clean swagger swagger-validate swagger-check
+	@echo "🎉 Swagger 文档生成完成！"
+
 docker-build:
 	docker build -t Bamboo/gomodd:v1.23.1 .
 

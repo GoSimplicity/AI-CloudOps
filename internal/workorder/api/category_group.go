@@ -50,25 +50,49 @@ func (h *CategoryGroupHandler) RegisterRouters(server *gin.Engine) {
 		categoryGroup.DELETE("/delete/:id", h.DeleteCategory)
 		categoryGroup.GET("/list", h.ListCategory)
 		categoryGroup.GET("/detail/:id", h.DetailCategory)
-		categoryGroup.GET("/statistics", h.GetCategoryStatistics)
 	}
 }
 
+// CreateCategory 创建工单分类
+// @Summary 创建工单分类
+// @Description 创建新的工单分类
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param request body model.CreateWorkorderCategoryReq true "创建分类请求参数"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/category/create [post]
 func (h *CategoryGroupHandler) CreateCategory(ctx *gin.Context) {
-	var req model.CreateCategoryReq
+	var req model.CreateWorkorderCategoryReq
 
 	user := ctx.MustGet("user").(utils.UserClaims)
 
-	req.UserID = user.Uid
-	req.UserName = user.Username
+	req.OperatorID = user.Uid
+	req.OperatorName = user.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateCategory(ctx, &req)
 	})
 }
 
+// UpdateCategory 更新工单分类
+// @Summary 更新工单分类
+// @Description 更新指定的工单分类信息
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "分类ID"
+// @Param request body model.UpdateWorkorderCategoryReq true "更新分类请求参数"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/category/update/{id} [put]
 func (h *CategoryGroupHandler) UpdateCategory(ctx *gin.Context) {
-	var req model.UpdateCategoryReq
+	var req model.UpdateWorkorderCategoryReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -82,8 +106,20 @@ func (h *CategoryGroupHandler) UpdateCategory(ctx *gin.Context) {
 	})
 }
 
+// DeleteCategory 删除工单分类
+// @Summary 删除工单分类
+// @Description 删除指定的工单分类
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "分类ID"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/category/delete/{id} [delete]
 func (h *CategoryGroupHandler) DeleteCategory(ctx *gin.Context) {
-	var req model.DeleteCategoryReq
+	var req model.DeleteWorkorderCategoryReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -97,26 +133,50 @@ func (h *CategoryGroupHandler) DeleteCategory(ctx *gin.Context) {
 	})
 }
 
+// ListCategory 获取工单分类列表
+// @Summary 获取工单分类列表
+// @Description 分页获取工单分类列表
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param size query int false "每页数量" default(10)
+// @Param keyword query string false "搜索关键词"
+// @Success 200 {object} utils.ApiResponse{data=[]model.WorkorderCategory} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/category/list [get]
 func (h *CategoryGroupHandler) ListCategory(ctx *gin.Context) {
-	var req model.ListCategoryReq
+	var req model.ListWorkorderCategoryReq
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ListCategory(ctx, req)
 	})
 }
 
+// DetailCategory 获取工单分类详情
+// @Summary 获取工单分类详情
+// @Description 根据ID获取工单分类的详细信息
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "分类ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/category/detail/{id} [get]
 func (h *CategoryGroupHandler) DetailCategory(ctx *gin.Context) {
+	var req model.DetailWorkorderCategoryReq
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetCategory(ctx, id)
-	})
-}
+	req.ID = id
 
-func (h *CategoryGroupHandler) GetCategoryStatistics(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.service.GetCategoryStatistics(ctx)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.service.GetCategory(ctx, req.ID)
 	})
 }

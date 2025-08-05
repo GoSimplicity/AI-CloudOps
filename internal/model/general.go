@@ -102,3 +102,34 @@ func (m *StringList) UnmarshalJSON(data []byte) error {
 	*m = StringList(ss)
 	return nil
 }
+
+// JSONMap 自定义JSON类型，用于处理map[string]interface{}
+type JSONMap map[string]interface{}
+
+// Value 实现driver.Valuer接口，将JSONMap转为JSON字符串存储到数据库
+func (m JSONMap) Value() (driver.Value, error) {
+	if m == nil {
+		return nil, nil
+	}
+	return json.Marshal(m)
+}
+
+// Scan 实现sql.Scanner接口，从数据库读取JSON字符串并转为JSONMap
+func (m *JSONMap) Scan(value interface{}) error {
+	if value == nil {
+		*m = nil
+		return nil
+	}
+
+	var data []byte
+	switch v := value.(type) {
+	case []byte:
+		data = v
+	case string:
+		data = []byte(v)
+	default:
+		return fmt.Errorf("无法扫描 %T 到 JSONMap", value)
+	}
+
+	return json.Unmarshal(data, m)
+}

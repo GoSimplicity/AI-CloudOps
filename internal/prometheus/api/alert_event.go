@@ -56,6 +56,20 @@ func (a *AlertEventHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetMonitorAlertEventList 获取告警事件列表
+// @Summary 获取告警事件列表
+// @Description 获取监控告警事件列表，支持分页和条件查询
+// @Tags 告警事件管理
+// @Accept json
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(10)
+// @Param status query string false "告警状态"
+// @Param severity query string false "告警级别"
+// @Success 200 {object} utils.ApiResponse "成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/alert_events/list [get]
+// @Security BearerAuth
 func (a *AlertEventHandler) GetMonitorAlertEventList(ctx *gin.Context) {
 	var req model.GetMonitorAlertEventListReq
 
@@ -65,6 +79,18 @@ func (a *AlertEventHandler) GetMonitorAlertEventList(ctx *gin.Context) {
 }
 
 // EventAlertSilence 将指定告警事件设置为静默状态
+// @Summary 告警事件静默
+// @Description 将指定的告警事件设置为静默状态，静默期间不会发送通知
+// @Tags 告警事件管理
+// @Accept json
+// @Produce json
+// @Param id path int true "告警事件ID"
+// @Param data body model.EventAlertSilenceReq true "静默配置"
+// @Success 200 {object} utils.ApiResponse "成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/alert_events/silence/{id} [post]
+// @Security BearerAuth
 func (a *AlertEventHandler) EventAlertSilence(ctx *gin.Context) {
 	var req model.EventAlertSilenceReq
 
@@ -84,6 +110,18 @@ func (a *AlertEventHandler) EventAlertSilence(ctx *gin.Context) {
 }
 
 // EventAlertClaim 认领指定的告警事件
+// @Summary 认领告警事件
+// @Description 认领指定的告警事件，表示该告警由当前用户处理
+// @Tags 告警事件管理
+// @Accept json
+// @Produce json
+// @Param id path int true "告警事件ID"
+// @Param data body model.EventAlertClaimReq true "认领信息"
+// @Success 200 {object} utils.ApiResponse "成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/alert_events/claim/{id} [post]
+// @Security BearerAuth
 func (a *AlertEventHandler) EventAlertClaim(ctx *gin.Context) {
 	var req model.EventAlertClaimReq
 
@@ -103,6 +141,18 @@ func (a *AlertEventHandler) EventAlertClaim(ctx *gin.Context) {
 }
 
 // EventAlertUnSilence 取消指定告警事件的静默状态
+// @Summary 取消告警事件静默
+// @Description 取消指定告警事件的静默状态，恢复告警通知
+// @Tags 告警事件管理
+// @Accept json
+// @Produce json
+// @Param id path int true "告警事件ID"
+// @Param data body model.EventAlertUnSilenceReq true "取消静默信息"
+// @Success 200 {object} utils.ApiResponse "成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/monitor/alert_events/unsilence/{id} [post]
+// @Security BearerAuth
 func (a *AlertEventHandler) EventAlertUnSilence(ctx *gin.Context) {
 	var req model.EventAlertUnSilenceReq
 

@@ -1,228 +1,345 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package dao
 
 import (
 	"context"
-	"time"
+	"errors"
+	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
-type NotificationDAO interface {
-	CreateNotification(ctx context.Context, req *model.CreateNotificationReq) error
-	UpdateNotification(ctx context.Context, req *model.UpdateNotificationReq) error
-	DeleteNotification(ctx context.Context, req *model.DeleteNotificationReq) error
-	ListNotification(ctx context.Context, req *model.ListNotificationReq) (model.ListResp[*model.Notification], error)
-	DetailNotification(ctx context.Context, req *model.DetailNotificationReq) (*model.Notification, error)
-	UpdateStatus(ctx context.Context, req *model.UpdateStatusReq) error
-	GetStatistics(ctx context.Context) (*model.NotificationStats, error)
-	GetNotificationByID(ctx context.Context, id int) (*model.Notification, error)
-	AddSendLog(ctx context.Context, log *model.NotificationLog) error
-	GetSendLogs(ctx context.Context, req *model.ListSendLogReq) (model.ListResp[*model.NotificationLog], error)
+type WorkorderNotificationDAO interface {
+	CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error
+	UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error
+	DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error
+	ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (*model.ListResp[*model.WorkorderNotification], error)
+	DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error)
+	GetNotificationByID(ctx context.Context, id int) (*model.WorkorderNotification, error)
+	AddSendLog(ctx context.Context, log *model.WorkorderNotificationLog) error
+	GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error)
 	IncrementSentCount(ctx context.Context, id int) error
 }
 
 type notificationDAO struct {
-	db *gorm.DB
+	db     *gorm.DB
+	logger *zap.Logger
 }
 
-func NewNotificationDAO(db *gorm.DB) NotificationDAO {
-	return &notificationDAO{db: db}
+func NewNotificationDAO(db *gorm.DB, logger *zap.Logger) WorkorderNotificationDAO {
+	return &notificationDAO{
+		db:     db,
+		logger: logger,
+	}
 }
 
 // CreateNotification 创建通知配置
-func (n *notificationDAO) CreateNotification(ctx context.Context, req *model.CreateNotificationReq) error {
-	notification := &model.Notification{
-		FormID:          req.FormID,
-		Channels:        model.StringList(req.Channels),
-		Recipients:      model.StringList(req.Recipients),
-		MessageTemplate: req.MessageTemplate,
-		TriggerType:     req.TriggerType,
-		ScheduledTime:   req.ScheduledTime,
-		Status:          model.NotificationStatusEnabled,
-		CreatorID:       req.UserID,
-		FormUrl:         req.FormUrl,
+func (n *notificationDAO) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
+	notification := &model.WorkorderNotification{
+		Name:             req.Name,
+		Description:      req.Description,
+		ProcessID:        req.ProcessID,
+		TemplateID:       req.TemplateID,
+		CategoryID:       req.CategoryID,
+		EventTypes:       req.EventTypes,
+		TriggerType:      req.TriggerType,
+		TriggerCondition: req.TriggerCondition,
+		Channels:         req.Channels,
+		RecipientTypes:   req.RecipientTypes,
+		RecipientUsers:   req.RecipientUsers,
+		RecipientRoles:   req.RecipientRoles,
+		RecipientDepts:   req.RecipientDepts,
+		MessageTemplate:  req.MessageTemplate,
+		SubjectTemplate:  req.SubjectTemplate,
+		ScheduledTime:    req.ScheduledTime,
+		RepeatInterval:   req.RepeatInterval,
+		MaxRetries:       req.MaxRetries,
+		RetryInterval:    req.RetryInterval,
+		Status:           req.Status,
+		Priority:         req.Priority,
+		OperatorID:       req.UserID,
+		IsDefault:        req.IsDefault,
+		Settings:         req.Settings,
 	}
 
-	return n.db.WithContext(ctx).Create(notification).Error
+	if err := n.db.WithContext(ctx).Create(notification).Error; err != nil {
+		n.logger.Error("创建通知配置失败", zap.Error(err), zap.String("name", req.Name))
+		return fmt.Errorf("创建通知配置失败: %w", err)
+	}
+
+	return nil
 }
 
 // UpdateNotification 更新通知配置
-func (n *notificationDAO) UpdateNotification(ctx context.Context, req *model.UpdateNotificationReq) error {
-	notification := &model.Notification{
-		Model: model.Model{
-			ID: req.ID,
-		},
-		FormID:          req.FormID,
-		Channels:        model.StringList(req.Channels),
-		Recipients:      model.StringList(req.Recipients),
-		MessageTemplate: req.MessageTemplate,
-		TriggerType:     req.TriggerType,
-		ScheduledTime:   req.ScheduledTime,
-		FormUrl:         req.FormUrl,
+func (n *notificationDAO) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
+	updateData := map[string]any{}
+
+	if req.Name != "" {
+		updateData["name"] = req.Name
+	}
+	if req.Description != "" {
+		updateData["description"] = req.Description
+	}
+	if req.ProcessID != nil {
+		updateData["process_id"] = req.ProcessID
+	}
+	if req.TemplateID != nil {
+		updateData["template_id"] = req.TemplateID
+	}
+	if req.CategoryID != nil {
+		updateData["category_id"] = req.CategoryID
+	}
+	if req.EventTypes != nil {
+		updateData["event_types"] = req.EventTypes
+	}
+	if req.TriggerType != "" {
+		updateData["trigger_type"] = req.TriggerType
+	}
+	if req.TriggerCondition != nil {
+		updateData["trigger_condition"] = req.TriggerCondition
+	}
+	if req.Channels != nil {
+		updateData["channels"] = req.Channels
+	}
+	if req.RecipientTypes != nil {
+		updateData["recipient_types"] = req.RecipientTypes
+	}
+	if req.RecipientUsers != nil {
+		updateData["recipient_users"] = req.RecipientUsers
+	}
+	if req.RecipientRoles != nil {
+		updateData["recipient_roles"] = req.RecipientRoles
+	}
+	if req.RecipientDepts != nil {
+		updateData["recipient_depts"] = req.RecipientDepts
+	}
+	if req.MessageTemplate != "" {
+		updateData["message_template"] = req.MessageTemplate
+	}
+	if req.SubjectTemplate != "" {
+		updateData["subject_template"] = req.SubjectTemplate
+	}
+	if req.ScheduledTime != nil {
+		updateData["scheduled_time"] = req.ScheduledTime
+	}
+	if req.RepeatInterval != nil {
+		updateData["repeat_interval"] = req.RepeatInterval
+	}
+	if req.MaxRetries > 0 {
+		updateData["max_retries"] = req.MaxRetries
+	}
+	if req.RetryInterval > 0 {
+		updateData["retry_interval"] = req.RetryInterval
+	}
+	if req.Status != 0 {
+		updateData["status"] = req.Status
+	}
+	if req.Priority != 0 {
+		updateData["priority"] = req.Priority
+	}
+	updateData["is_default"] = req.IsDefault
+	if req.Settings != nil {
+		updateData["settings"] = req.Settings
 	}
 
-	// 如果提供了状态参数，则更新状态
-	if req.Status == model.NotificationStatusEnabled || req.Status == model.NotificationStatusDisabled {
-		notification.Status = req.Status
+	result := n.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
+		Where("id = ?", req.ID).
+		Updates(updateData)
+
+	if result.Error != nil {
+		n.logger.Error("更新通知配置失败", zap.Error(result.Error), zap.Int("id", req.ID))
+		return fmt.Errorf("更新通知配置失败: %w", result.Error)
 	}
 
-	return n.db.WithContext(ctx).Model(&model.Notification{}).Where("id = ?", req.ID).
-		Updates(notification).Error
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("通知配置不存在")
+	}
+
+	return nil
 }
 
 // DeleteNotification 删除通知配置
-func (n *notificationDAO) DeleteNotification(ctx context.Context, req *model.DeleteNotificationReq) error {
-	return n.db.WithContext(ctx).Delete(&model.Notification{}, req.ID).Error
+func (n *notificationDAO) DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error {
+	result := n.db.WithContext(ctx).Delete(&model.WorkorderNotification{}, req.ID)
+	if result.Error != nil {
+		n.logger.Error("删除通知配置失败", zap.Error(result.Error), zap.Int("id", req.ID))
+		return fmt.Errorf("删除通知配置失败: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("通知配置不存在")
+	}
+
+	return nil
 }
 
 // ListNotification 获取通知配置列表
-func (n *notificationDAO) ListNotification(ctx context.Context, req *model.ListNotificationReq) (model.ListResp[*model.Notification], error) {
-	var result model.ListResp[*model.Notification]
+func (n *notificationDAO) ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (*model.ListResp[*model.WorkorderNotification], error) {
+	var notifications []*model.WorkorderNotification
 	var total int64
-	var notifications []*model.Notification
 
-	db := n.db.WithContext(ctx).Model(&model.Notification{})
+	req.Page, req.PageSize = ValidatePagination(req.Page, req.PageSize)
 
-	// 添加查询条件
-	if req.Channel != nil {
-		db = db.Where("JSON_CONTAINS(channels, JSON_QUOTE(?))", *req.Channel)
+	db := n.db.WithContext(ctx).Model(&model.WorkorderNotification{})
+
+	if req.Name != "" {
+		searchTerm := sanitizeSearchInput(req.Name)
+		db = db.Where("name LIKE ?", "%"+searchTerm+"%")
+	}
+	if req.ProcessID != nil {
+		db = db.Where("process_id = ?", *req.ProcessID)
+	}
+	if req.TemplateID != nil {
+		db = db.Where("template_id = ?", *req.TemplateID)
+	}
+	if req.CategoryID != nil {
+		db = db.Where("category_id = ?", *req.CategoryID)
 	}
 	if req.Status != nil {
 		db = db.Where("status = ?", *req.Status)
 	}
-	if req.FormID != nil {
-		db = db.Where("form_id = ?", *req.FormID)
-	}
-	// 关键词搜索，如果ListReq中有Keyword字段
-	if req.Search != "" {
-		searchPattern := "%" + sanitizeSearchInput(req.Search) + "%"
-		db = db.Where("message_template LIKE ?", searchPattern)
+	if req.IsDefault != nil {
+		db = db.Where("is_default = ?", *req.IsDefault)
 	}
 
-	// 获取总数
 	if err := db.Count(&total).Error; err != nil {
-		return result, err
+		n.logger.Error("获取通知配置总数失败", zap.Error(err))
+		return nil, fmt.Errorf("获取通知配置总数失败: %w", err)
 	}
 
-	// 分页查询
-	offset := (req.Page - 1) * req.Size
-	if err := db.Order("id DESC").Offset(int(offset)).Limit(int(req.Size)).Find(&notifications).Error; err != nil {
-		return result, err
+	offset := (req.Page - 1) * req.PageSize
+	err := db.Order("id DESC").Offset(offset).Limit(req.PageSize).Find(&notifications).Error
+	if err != nil {
+		n.logger.Error("获取通知配置列表失败", zap.Error(err))
+		return nil, fmt.Errorf("获取通知配置列表失败: %w", err)
 	}
 
-	// 设置返回结果
-	result.Total = total
-	result.Items = notifications
-	return result, nil
+	return &model.ListResp[*model.WorkorderNotification]{
+		Items: notifications,
+		Total: total,
+	}, nil
 }
 
 // DetailNotification 获取通知配置详情
-func (n *notificationDAO) DetailNotification(ctx context.Context, req *model.DetailNotificationReq) (*model.Notification, error) {
-	var notification model.Notification
-	err := n.db.WithContext(ctx).Where("id = ?", req.ID).First(&notification).Error
+func (n *notificationDAO) DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error) {
+	var notification model.WorkorderNotification
+	err := n.db.WithContext(ctx).First(&notification, req.ID).Error
 	if err != nil {
-		return nil, err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("通知配置不存在")
+		}
+		n.logger.Error("获取通知配置详情失败", zap.Error(err), zap.Int("id", req.ID))
+		return nil, fmt.Errorf("获取通知配置详情失败: %w", err)
 	}
 	return &notification, nil
 }
 
 // GetNotificationByID 根据ID获取通知配置
-func (n *notificationDAO) GetNotificationByID(ctx context.Context, id int) (*model.Notification, error) {
-	var notification model.Notification
-	err := n.db.WithContext(ctx).Where("id = ?", id).First(&notification).Error
+func (n *notificationDAO) GetNotificationByID(ctx context.Context, id int) (*model.WorkorderNotification, error) {
+	var notification model.WorkorderNotification
+	err := n.db.WithContext(ctx).First(&notification, id).Error
 	if err != nil {
-		return nil, err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("通知配置不存在")
+		}
+		n.logger.Error("根据ID获取通知配置失败", zap.Error(err), zap.Int("id", id))
+		return nil, fmt.Errorf("根据ID获取通知配置失败: %w", err)
 	}
 	return &notification, nil
 }
 
-// UpdateStatus 更新通知配置状态
-func (n *notificationDAO) UpdateStatus(ctx context.Context, req *model.UpdateStatusReq) error {
-	return n.db.WithContext(ctx).Model(&model.Notification{}).
-		Where("id = ?", req.ID).
-		Update("status", req.Status).Error
-}
-
-// GetStatistics 获取通知统计信息
-func (n *notificationDAO) GetStatistics(ctx context.Context) (*model.NotificationStats, error) {
-	var stats model.NotificationStats
-	var enabled, disabled, todaySent int64
-
-	// 获取启用状态的通知数量
-	if err := n.db.WithContext(ctx).Model(&model.Notification{}).
-		Where("status = ?", model.NotificationStatusEnabled).
-		Count(&enabled).Error; err != nil {
-		return nil, err
-	}
-	stats.Enabled = int(enabled)
-
-	// 获取禁用状态的通知数量
-	if err := n.db.WithContext(ctx).Model(&model.Notification{}).
-		Where("status = ?", model.NotificationStatusDisabled).
-		Count(&disabled).Error; err != nil {
-		return nil, err
-	}
-	stats.Disabled = int(disabled)
-
-	// 获取今日发送数量
-	today := time.Now().Format("2006-01-02")
-	if err := n.db.WithContext(ctx).Model(&model.NotificationLog{}).
-		Where("DATE(created_at) = ?", today).
-		Count(&todaySent).Error; err != nil {
-		return nil, err
-	}
-	stats.TodaySent = int(todaySent)
-
-	return &stats, nil
-}
-
 // AddSendLog 添加发送日志
-func (n *notificationDAO) AddSendLog(ctx context.Context, log *model.NotificationLog) error {
-	return n.db.WithContext(ctx).Create(log).Error
+func (n *notificationDAO) AddSendLog(ctx context.Context, log *model.WorkorderNotificationLog) error {
+	if err := n.db.WithContext(ctx).Create(log).Error; err != nil {
+		n.logger.Error("添加发送日志失败", zap.Error(err))
+		return fmt.Errorf("添加发送日志失败: %w", err)
+	}
+	return nil
 }
 
-// GetSendLogs 获取发送日志
-func (n *notificationDAO) GetSendLogs(ctx context.Context, req *model.ListSendLogReq) (model.ListResp[*model.NotificationLog], error) {
-	var result model.ListResp[*model.NotificationLog]
+// GetSendLogs 获取发送日志列表
+func (n *notificationDAO) GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error) {
+	var logs []*model.WorkorderNotificationLog
 	var total int64
-	var logs []*model.NotificationLog
 
-	db := n.db.WithContext(ctx).Model(&model.NotificationLog{}).
-		Where("notification_id = ?", req.NotificationID)
+	req.Page, req.PageSize = ValidatePagination(req.Page, req.PageSize)
 
-	// 添加查询条件
-	if req.Channel != nil {
-		db = db.Where("channel = ?", *req.Channel)
+	db := n.db.WithContext(ctx).Model(&model.WorkorderNotificationLog{})
+
+	if req.NotificationID != nil {
+		db = db.Where("notification_id = ?", *req.NotificationID)
+	}
+	if req.InstanceID != nil {
+		db = db.Where("instance_id = ?", *req.InstanceID)
+	}
+	if req.EventType != "" {
+		db = db.Where("event_type = ?", req.EventType)
+	}
+	if req.Channel != "" {
+		db = db.Where("channel = ?", req.Channel)
+	}
+	if req.RecipientType != "" {
+		db = db.Where("recipient_type = ?", req.RecipientType)
+	}
+	if req.RecipientID != "" {
+		db = db.Where("recipient_id = ?", req.RecipientID)
 	}
 	if req.Status != nil {
 		db = db.Where("status = ?", *req.Status)
 	}
 
-	// 获取总数
 	if err := db.Count(&total).Error; err != nil {
-		return result, err
+		n.logger.Error("获取发送日志总数失败", zap.Error(err))
+		return nil, fmt.Errorf("获取发送日志总数失败: %w", err)
 	}
 
-	// 分页查询
-	offset := (req.Page - 1) * req.Size
-	if err := db.Order("id DESC").Offset(int(offset)).Limit(int(req.Size)).Find(&logs).Error; err != nil {
-		return result, err
+	offset := (req.Page - 1) * req.PageSize
+	err := db.Order("id DESC").Offset(offset).Limit(req.PageSize).Find(&logs).Error
+	if err != nil {
+		n.logger.Error("获取发送日志列表失败", zap.Error(err))
+		return nil, fmt.Errorf("获取发送日志列表失败: %w", err)
 	}
 
-	result.Total = total
-	result.Items = logs
-
-	return result, nil
+	return &model.ListResp[*model.WorkorderNotificationLog]{
+		Items: logs,
+		Total: total,
+	}, nil
 }
 
-// IncrementSentCount 增加发送次数并更新最后发送时间
+// IncrementSentCount 增加发送计数
 func (n *notificationDAO) IncrementSentCount(ctx context.Context, id int) error {
-	now := time.Now()
-	return n.db.WithContext(ctx).Model(&model.Notification{}).
+	err := n.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
 		Where("id = ?", id).
-		Updates(map[string]interface{}{
-			"sent_count": gorm.Expr("sent_count + 1"),
-			"last_sent":  now,
-		}).Error
+		Update("updated_at", "NOW()").Error
+	if err != nil {
+		n.logger.Error("更新发送计数失败", zap.Error(err), zap.Int("id", id))
+		return fmt.Errorf("更新发送计数失败: %w", err)
+	}
+	return nil
 }

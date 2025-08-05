@@ -62,6 +62,18 @@ func (k *K8sDaemonSetHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetDaemonSetsByNamespace 根据命名空间获取 DaemonSet 列表
+// @Summary 根据命名空间获取 DaemonSet 列表
+// @Description 根据指定的集群ID和命名空间获取 DaemonSet 列表
+// @Tags DaemonSet管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse{data=[]object} "成功获取DaemonSet列表"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/daemonsets/{id} [get]
+// @Security BearerAuth
 func (k *K8sDaemonSetHandler) GetDaemonSetsByNamespace(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -81,6 +93,17 @@ func (k *K8sDaemonSetHandler) GetDaemonSetsByNamespace(ctx *gin.Context) {
 }
 
 // CreateDaemonSet 创建 DaemonSet
+// @Summary 创建 DaemonSet
+// @Description 创建新的 Kubernetes DaemonSet 资源
+// @Tags DaemonSet管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sDaemonSetRequest true "DaemonSet 创建信息"
+// @Success 200 {object} utils.ApiResponse "成功创建DaemonSet"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/daemonsets/create [post]
+// @Security BearerAuth
 func (k *K8sDaemonSetHandler) CreateDaemonSet(ctx *gin.Context) {
 	var req model.K8sDaemonSetRequest
 
@@ -90,6 +113,17 @@ func (k *K8sDaemonSetHandler) CreateDaemonSet(ctx *gin.Context) {
 }
 
 // UpdateDaemonSet 更新指定的 DaemonSet
+// @Summary 更新 DaemonSet
+// @Description 更新指定的 Kubernetes DaemonSet 资源配置
+// @Tags DaemonSet管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sDaemonSetRequest true "DaemonSet 更新信息"
+// @Success 200 {object} utils.ApiResponse "成功更新DaemonSet"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/daemonsets/update [post]
+// @Security BearerAuth
 func (k *K8sDaemonSetHandler) UpdateDaemonSet(ctx *gin.Context) {
 	var req model.K8sDaemonSetRequest
 
@@ -99,6 +133,17 @@ func (k *K8sDaemonSetHandler) UpdateDaemonSet(ctx *gin.Context) {
 }
 
 // BatchDeleteDaemonSet 批量删除 DaemonSet
+// @Summary 批量删除 DaemonSet
+// @Description 批量删除指定命名空间下的多个 DaemonSet
+// @Tags DaemonSet管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sDaemonSetRequest true "批量删除请求"
+// @Success 200 {object} utils.ApiResponse "成功批量删除DaemonSet"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/daemonsets/batch_delete [delete]
+// @Security BearerAuth
 func (k *K8sDaemonSetHandler) BatchDeleteDaemonSet(ctx *gin.Context) {
 	var req model.K8sDaemonSetRequest
 
@@ -108,6 +153,19 @@ func (k *K8sDaemonSetHandler) BatchDeleteDaemonSet(ctx *gin.Context) {
 }
 
 // GetDaemonSetYaml 获取 DaemonSet 的 YAML 配置
+// @Summary 获取 DaemonSet YAML 配置
+// @Description 获取指定 DaemonSet 的 YAML 格式配置文件
+// @Tags DaemonSet管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param daemonset_name query string true "DaemonSet 名称"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse{data=string} "成功获取DaemonSet YAML配置"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/daemonsets/{id}/yaml [get]
+// @Security BearerAuth
 func (k *K8sDaemonSetHandler) GetDaemonSetYaml(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -133,6 +191,19 @@ func (k *K8sDaemonSetHandler) GetDaemonSetYaml(ctx *gin.Context) {
 }
 
 // DeleteDaemonSet 删除指定的 DaemonSet
+// @Summary 删除 DaemonSet
+// @Description 删除指定名称的 DaemonSet 资源
+// @Tags DaemonSet管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param daemonset_name query string true "DaemonSet 名称"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse "成功删除DaemonSet"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/daemonsets/delete/{id} [delete]
+// @Security BearerAuth
 func (k *K8sDaemonSetHandler) DeleteDaemonSet(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -158,6 +229,19 @@ func (k *K8sDaemonSetHandler) DeleteDaemonSet(ctx *gin.Context) {
 }
 
 // RestartDaemonSet 重启 DaemonSet
+// @Summary 重启 DaemonSet
+// @Description 重启指定的 DaemonSet，触发 Pod 重新创建
+// @Tags DaemonSet管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param daemonset_name query string true "DaemonSet 名称"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse "成功重启DaemonSet"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/daemonsets/restart/{id} [post]
+// @Security BearerAuth
 func (k *K8sDaemonSetHandler) RestartDaemonSet(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -183,6 +267,19 @@ func (k *K8sDaemonSetHandler) RestartDaemonSet(ctx *gin.Context) {
 }
 
 // GetDaemonSetStatus 获取 DaemonSet 状态
+// @Summary 获取 DaemonSet 状态
+// @Description 获取指定 DaemonSet 的运行状态和节点分布情况
+// @Tags DaemonSet管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param daemonset_name query string true "DaemonSet 名称"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse{data=object} "成功获取DaemonSet状态"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/daemonsets/{id}/status [get]
+// @Security BearerAuth
 func (k *K8sDaemonSetHandler) GetDaemonSetStatus(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

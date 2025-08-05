@@ -27,603 +27,387 @@ package service
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	userdao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	"go.uber.org/zap"
 )
 
-// 错误定义
 var (
-	ErrInvalidRequest        = errors.New("请求参数无效")
-	ErrInstanceNotFound      = errors.New("工单实例不存在")
-	ErrProcessNotFound       = errors.New("流程定义不存在")
-	ErrUnauthorized          = errors.New("无权限执行此操作")
-	ErrInvalidStatus         = errors.New("工单状态无效")
-	ErrInvalidAction         = errors.New("操作类型无效")
-	ErrUserNotFound          = errors.New("用户不存在")
-	ErrInstanceStatusChanged = errors.New("工单状态已变更，无法操作")
-	ErrProcessDefinition     = errors.New("流程定义解析失败")
-)
-
-// 常量定义
-const (
-	DefaultPageSize      = 20
-	MaxPageSize          = 100
-	MaxTitleLength       = 200
-	MaxDescriptionLength = 2000
-	MaxCommentLength     = 1000
-	MaxFileNameLength    = 255
-	MaxFileSize          = 100 * 1024 * 1024 // 100MB
+	ErrInvalidRequest = fmt.Errorf("请求参数无效")
+	ErrInvalidStatus  = fmt.Errorf("工单状态无效")
 )
 
 type InstanceService interface {
-	CreateInstance(ctx context.Context, req *model.CreateInstanceReq, creatorID int, creatorName string) (*model.Instance, error)
-	UpdateInstance(ctx context.Context, req *model.UpdateInstanceReq, operatorID int) error
-	DeleteInstance(ctx context.Context, id int, operatorID int) error
-	GetInstance(ctx context.Context, id int) (*model.Instance, error)
-	ListInstance(ctx context.Context, req *model.ListInstanceReq) (model.ListResp[*model.Instance], error)
-	BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8, operatorID int) error
-	GetMyInstances(ctx context.Context, req *model.MyInstanceReq, userID int) (model.ListResp[*model.Instance], error)
-	TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error
+	CreateInstance(ctx context.Context, req *model.CreateWorkorderInstanceReq) error
+	UpdateInstance(ctx context.Context, req *model.UpdateWorkorderInstanceReq) error
+	DeleteInstance(ctx context.Context, id int) error
+	GetInstance(ctx context.Context, id int) (*model.WorkorderInstance, error)
+	ListInstance(ctx context.Context, req *model.ListWorkorderInstanceReq) (*model.ListResp[*model.WorkorderInstance], error)
+	SubmitInstance(ctx context.Context, id int, operatorID int, operatorName string) error
+	AssignInstance(ctx context.Context, id int, assigneeID int, operatorID int, operatorName string) error
+	ApproveInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error
+	RejectInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error
 }
 
 type instanceService struct {
-	dao        dao.InstanceDAO
-	processDao dao.ProcessDAO
-	flowDao    dao.InstanceFlowDAO
-	userDao    userdao.UserDAO
-	logger     *zap.Logger
+	dao         dao.WorkorderInstanceDAO
+	flowDao     dao.WorkorderInstanceFlowDAO
+	timelineDao dao.WorkorderInstanceTimelineDAO
+	commentDao  dao.WorkorderInstanceCommentDAO
+	processDao  dao.WorkorderProcessDAO
+	logger      *zap.Logger
 }
 
 func NewInstanceService(
-	dao dao.InstanceDAO,
-	processDao dao.ProcessDAO,
-	flowDao dao.InstanceFlowDAO,
-	userDao userdao.UserDAO,
+	dao dao.WorkorderInstanceDAO,
+	flowDao dao.WorkorderInstanceFlowDAO,
+	timelineDao dao.WorkorderInstanceTimelineDAO,
+	commentDao dao.WorkorderInstanceCommentDAO,
+	processDao dao.WorkorderProcessDAO,
 	logger *zap.Logger,
 ) InstanceService {
 	return &instanceService{
-		dao:        dao,
-		userDao:    userDao,
-		processDao: processDao,
-		flowDao:    flowDao,
-		logger:     logger,
+		dao:         dao,
+		flowDao:     flowDao,
+		timelineDao: timelineDao,
+		commentDao:  commentDao,
+		processDao:  processDao,
+		logger:      logger,
 	}
 }
 
 // CreateInstance 创建工单实例
-func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateInstanceReq, creatorID int, creatorName string) (*model.Instance, error) {
-	if err := s.validateCreateRequest(req); err != nil {
-		return nil, fmt.Errorf("参数验证失败: %w", err)
+func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateWorkorderInstanceReq) error {
+	if req.Status < model.InstanceStatusDraft || req.Status > model.InstanceStatusCancelled {
+		return fmt.Errorf("工单状态无效")
+	}
+	if req.Priority < model.PriorityLow || req.Priority > model.PriorityHigh {
+		return fmt.Errorf("优先级无效")
 	}
 
-	// 验证流程是否存在并取出表单数据
-	process, err := s.processDao.GetProcess(ctx, req.ProcessID)
-	if err != nil {
-		if errors.Is(err, dao.ErrProcessNotFound) {
-			return nil, ErrProcessNotFound
+	// 确保实例名称唯一
+	if _, err := s.dao.GetInstanceByTitle(ctx, req.Title); err != nil {
+		if err != dao.ErrInstanceNotFound {
+			s.logger.Error("获取工单实例失败", zap.Error(err), zap.String("title", req.Title))
+			return err
 		}
-		s.logger.Error("获取流程定义失败", zap.Error(err), zap.Int("processID", req.ProcessID))
-		return nil, fmt.Errorf("获取流程定义失败: %w", err)
+	} else {
+		return fmt.Errorf("工单实例名称已存在")
 	}
 
-	// 创建工单实例
-	instance, err := s.buildInstanceFromRequest(ctx, req, creatorID, creatorName, process)
-	if err != nil {
-		return nil, fmt.Errorf("构建工单实例失败: %w", err)
-	}
-
-	// 保存工单实例
-	if err := s.dao.CreateInstance(ctx, instance); err != nil {
-		s.logger.Error("创建工单实例失败", zap.Error(err))
-		return nil, fmt.Errorf("创建工单实例失败: %w", err)
-	}
-
-	// 创建初始流程记录
-	if err := s.createInitialFlow(ctx, instance, creatorID, creatorName); err != nil {
-		s.logger.Warn("创建初始流程记录失败", zap.Error(err), zap.Int("instanceID", instance.ID))
-	}
-
-	s.logger.Info("创建工单实例成功",
-		zap.Int("instanceID", instance.ID),
-		zap.String("title", instance.Title),
-		zap.Int("creatorID", creatorID))
-
-	return instance, nil
-}
-
-// UpdateInstance 更新工单实例
-func (s *instanceService) UpdateInstance(ctx context.Context, req *model.UpdateInstanceReq, operatorID int) error {
-	if err := s.validateUpdateRequest(req); err != nil {
-		return fmt.Errorf("参数验证失败: %w", err)
-	}
-
-	// 获取当前实例
-	instance, err := s.dao.GetInstance(ctx, req.ID)
-	if err != nil {
-		if errors.Is(err, dao.ErrInstanceNotFound) {
-			return ErrInstanceNotFound
+	// 验证流程是否存在
+	if _, err := s.processDao.GetProcessByID(ctx, req.ProcessID); err != nil {
+		if err != dao.ErrProcessNotFound {
+			s.logger.Error("获取流程定义失败", zap.Error(err), zap.Int("processID", req.ProcessID))
+			return err
 		}
-		return fmt.Errorf("获取工单实例失败: %w", err)
 	}
 
-	// 验证操作权限
-	if err := s.validateUpdatePermission(instance, operatorID); err != nil {
+	// 生成工单编号
+	serialNumber, err := s.dao.GenerateSerialNumber(ctx)
+	if err != nil {
+		s.logger.Error("生成工单编号失败", zap.Error(err))
 		return err
 	}
 
-	// 只有草稿状态和待处理状态可以更新基本信息
-	if !s.isEditableStatus(instance.Status) {
+	instance := &model.WorkorderInstance{
+		Title:        req.Title,
+		SerialNumber: serialNumber,
+		ProcessID:    req.ProcessID,
+		FormData:     req.FormData,
+		Status:       req.Status,
+		Priority:     req.Priority,
+		OperatorID:   req.OperatorID,
+		OperatorName: req.OperatorName,
+		AssigneeID:   req.AssigneeID,
+		Description:  req.Description,
+		Tags:         req.Tags,
+		DueDate:      req.DueDate,
+	}
+
+	if err := s.dao.CreateInstance(ctx, instance); err != nil {
+		s.logger.Error("创建工单实例失败", zap.Error(err))
+		return fmt.Errorf("创建工单实例失败: %w", err)
+	}
+
+	// 创建初始流转记录
+	s.createFlowRecord(ctx, instance.ID, model.FlowActionSubmit, req.OperatorID, req.OperatorName, 0, req.Status, "", 1)
+
+	// 创建时间线记录
+	s.createTimelineRecord(ctx, instance.ID, model.TimelineActionCreate, req.OperatorID, req.OperatorName, "工单创建")
+
+	return nil
+}
+
+// UpdateInstance 更新工单实例
+func (s *instanceService) UpdateInstance(ctx context.Context, req *model.UpdateWorkorderInstanceReq) error {
+	ins, err := s.dao.GetInstanceByID(ctx, req.ID)
+	if err != nil {
+		s.logger.Error("获取工单实例失败", zap.Error(err), zap.Int("instanceID", req.ID))
+		return err
+	}
+
+	// 只有草稿和待处理状态可以更新
+	if ins.Status != model.InstanceStatusDraft && ins.Status != model.InstanceStatusPending {
 		return fmt.Errorf("当前状态的工单不允许修改")
 	}
 
-	// 更新实例字段
-	s.updateInstanceFields(instance, req)
-
-	// 保存更新
-	if err := s.dao.UpdateInstance(ctx, instance); err != nil {
-		s.logger.Error("更新工单实例失败", zap.Error(err), zap.Int("instanceID", req.ID))
-		return fmt.Errorf("更新工单实例失败: %w", err)
+	// 确保实例名称唯一 (排除当前实例)
+	if instance, err := s.dao.GetInstanceByTitle(ctx, req.Title); err != nil {
+		if err != dao.ErrInstanceNotFound {
+			s.logger.Error("获取工单实例失败", zap.Error(err), zap.String("title", req.Title))
+			return err
+		}
+	} else if instance.ID != req.ID {
+		return fmt.Errorf("工单实例名称已存在")
 	}
 
-	s.logger.Info("更新工单实例成功",
-		zap.Int("instanceID", req.ID),
-		zap.Int("operatorID", operatorID))
+	instance := &model.WorkorderInstance{
+		Model:       model.Model{ID: req.ID},
+		Title:       req.Title,
+		Description: req.Description,
+		Priority:    req.Priority,
+		Tags:        req.Tags,
+		DueDate:     req.DueDate,
+		Status:      req.Status,
+		AssigneeID:  req.AssigneeID,
+		FormData:    req.FormData,
+		CompletedAt: req.CompletedAt,
+	}
+
+	if err := s.dao.UpdateInstance(ctx, instance); err != nil {
+		s.logger.Error("更新工单实例失败", zap.Error(err), zap.Int("instanceID", req.ID))
+		return err
+	}
 
 	return nil
 }
 
 // DeleteInstance 删除工单实例
-func (s *instanceService) DeleteInstance(ctx context.Context, id int, operatorID int) error {
+func (s *instanceService) DeleteInstance(ctx context.Context, id int) error {
 	if id <= 0 {
 		return ErrInvalidRequest
 	}
 
-	// 检查工单状态和权限
-	instance, err := s.dao.GetInstance(ctx, id)
+	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, dao.ErrInstanceNotFound) {
-			return ErrInstanceNotFound
-		}
-		return fmt.Errorf("获取工单实例失败: %w", err)
-	}
-
-	// 验证删除权限
-	if err := s.validateDeletePermission(instance, operatorID); err != nil {
+		s.logger.Error("获取工单实例失败", zap.Error(err), zap.Int("instanceID", id))
 		return err
 	}
 
-	// 只有草稿状态可以删除
 	if instance.Status != model.InstanceStatusDraft {
-		return fmt.Errorf("只有草稿状态的工单可以删除")
+		return ErrInvalidStatus
 	}
 
 	if err := s.dao.DeleteInstance(ctx, id); err != nil {
 		s.logger.Error("删除工单实例失败", zap.Error(err), zap.Int("instanceID", id))
-		return fmt.Errorf("删除工单实例失败: %w", err)
+		return err
 	}
-
-	s.logger.Info("删除工单实例成功",
-		zap.Int("instanceID", id),
-		zap.Int("operatorID", operatorID))
 
 	return nil
 }
 
 // GetInstance 获取工单实例详情
-func (s *instanceService) GetInstance(ctx context.Context, id int) (*model.Instance, error) {
-	if id <= 0 {
-		return nil, ErrInvalidRequest
-	}
-
-	instance, err := s.dao.GetInstanceWithRelations(ctx, id)
+func (s *instanceService) GetInstance(ctx context.Context, id int) (*model.WorkorderInstance, error) {
+	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, dao.ErrInstanceNotFound) {
-			return nil, ErrInstanceNotFound
-		}
-		return nil, fmt.Errorf("获取工单实例失败: %w", err)
+		s.logger.Error("获取工单实例失败", zap.Error(err), zap.Int("instanceID", id))
+		return nil, err
 	}
 
 	return instance, nil
 }
 
 // ListInstance 获取工单实例列表
-func (s *instanceService) ListInstance(ctx context.Context, req *model.ListInstanceReq) (model.ListResp[*model.Instance], error) {
-	if req == nil {
-		req = &model.ListInstanceReq{}
-	}
-
-	// 标准化分页参数
-	s.normalizePagination(&req.Page, &req.Size)
-
+func (s *instanceService) ListInstance(ctx context.Context, req *model.ListWorkorderInstanceReq) (*model.ListResp[*model.WorkorderInstance], error) {
 	result, total, err := s.dao.ListInstance(ctx, req)
 	if err != nil {
 		s.logger.Error("获取工单实例列表失败", zap.Error(err))
-		return model.ListResp[*model.Instance]{}, fmt.Errorf("获取工单实例列表失败: %w", err)
+		return nil, err
 	}
 
-	return model.ListResp[*model.Instance]{
+	return &model.ListResp[*model.WorkorderInstance]{
 		Items: result,
 		Total: total,
 	}, nil
 }
 
-// BatchUpdateInstanceStatus 批量更新工单状态
-func (s *instanceService) BatchUpdateInstanceStatus(ctx context.Context, ids []int, status int8, operatorID int) error {
-	if len(ids) == 0 || operatorID <= 0 {
-		return ErrInvalidRequest
+// SubmitInstance 提交工单
+func (s *instanceService) SubmitInstance(ctx context.Context, id int, operatorID int, operatorName string) error {
+	instance, err := s.dao.GetInstanceByID(ctx, id)
+	if err != nil {
+		return err
 	}
 
-	// 验证状态值
-	if !s.isValidStatus(status) {
-		return fmt.Errorf("无效的状态值: %d", status)
+	fromStatus := instance.Status
+	toStatus := model.InstanceStatusPending
+
+	// 更新状态
+	if err := s.dao.UpdateInstanceStatus(ctx, id, toStatus); err != nil {
+		return err
 	}
 
-	// 验证ID有效性
-	for _, id := range ids {
-		if id <= 0 {
-			return ErrInvalidRequest
-		}
-	}
+	// 创建流转记录
+	s.createFlowRecord(ctx, id, model.FlowActionSubmit, operatorID, operatorName, fromStatus, toStatus, "", 2)
 
-	if err := s.dao.BatchUpdateInstanceStatus(ctx, ids, status); err != nil {
-		s.logger.Error("批量更新工单状态失败",
-			zap.Error(err),
-			zap.Ints("ids", ids),
-			zap.Int8("status", status),
-			zap.Int("operatorID", operatorID))
-		return fmt.Errorf("批量更新工单状态失败: %w", err)
-	}
-
-	s.logger.Info("批量更新工单状态成功",
-		zap.Ints("ids", ids),
-		zap.Int8("status", status),
-		zap.Int("operatorID", operatorID))
+	// 创建时间线记录
+	s.createTimelineRecord(ctx, id, model.TimelineActionSubmit, operatorID, operatorName, "工单提交")
 
 	return nil
 }
 
-// GetMyInstances 获取我的工单
-func (s *instanceService) GetMyInstances(ctx context.Context, req *model.MyInstanceReq, userID int) (model.ListResp[*model.Instance], error) {
-	if userID <= 0 {
-		return model.ListResp[*model.Instance]{}, ErrInvalidRequest
-	}
-
-	if req == nil {
-		req = &model.MyInstanceReq{}
-	}
-
-	// 标准化分页参数
-	s.normalizePagination(&req.Page, &req.Size)
-
-	result, total, err := s.dao.GetMyInstances(ctx, userID, req)
+// AssignInstance 指派工单
+func (s *instanceService) AssignInstance(ctx context.Context, id int, assigneeID int, operatorID int, operatorName string) error {
+	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
-		s.logger.Error("获取我的工单失败", zap.Error(err), zap.Int("userID", userID))
-		return model.ListResp[*model.Instance]{}, fmt.Errorf("获取我的工单失败: %w", err)
+		return err
 	}
 
-	return model.ListResp[*model.Instance]{
-		Items: result,
-		Total: total,
-	}, nil
+	fromStatus := instance.Status
+	toStatus := model.InstanceStatusProcessing
+
+	// 更新指派人和状态
+	if err := s.dao.UpdateInstanceAssignee(ctx, id, &assigneeID); err != nil {
+		return err
+	}
+	if err := s.dao.UpdateInstanceStatus(ctx, id, toStatus); err != nil {
+		return err
+	}
+
+	// 创建流转记录
+	s.createFlowRecord(ctx, id, model.FlowActionAssign, operatorID, operatorName, fromStatus, toStatus, "", 2)
+
+	// 创建时间线记录
+	s.createTimelineRecord(ctx, id, model.TimelineActionAssign, operatorID, operatorName, fmt.Sprintf("工单指派给用户ID: %d", assigneeID))
+
+	return nil
 }
 
-// TransferInstance 转移工单
-func (s *instanceService) TransferInstance(ctx context.Context, instanceID int, fromUserID int, toUserID int, comment string) error {
-	if instanceID <= 0 || fromUserID <= 0 || toUserID <= 0 {
-		return ErrInvalidRequest
-	}
-
-	if fromUserID == toUserID {
-		return fmt.Errorf("转移目标用户不能是当前用户")
-	}
-
-	// 检查工单是否存在
-	instance, err := s.dao.GetInstance(ctx, instanceID)
+// ApproveInstance 审批通过工单
+func (s *instanceService) ApproveInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
+	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, dao.ErrInstanceNotFound) {
-			return ErrInstanceNotFound
+		return err
+	}
+
+	fromStatus := instance.Status
+	toStatus := model.InstanceStatusCompleted
+	now := time.Now()
+
+	// 更新状态和完成时间
+	if err := s.dao.UpdateInstanceStatus(ctx, id, toStatus); err != nil {
+		s.logger.Error("更新工单状态失败", zap.Error(err), zap.Int("instanceID", id))
+		return err
+	}
+
+	instance.CompletedAt = &now
+	if err := s.dao.UpdateInstance(ctx, instance); err != nil {
+		s.logger.Error("更新工单完成时间失败", zap.Error(err), zap.Int("instanceID", id))
+		return err
+	}
+
+	// 创建流转记录
+	s.createFlowRecord(ctx, id, model.FlowActionApprove, operatorID, operatorName, fromStatus, toStatus, comment, 2)
+
+	// 创建时间线记录
+	s.createTimelineRecord(ctx, id, model.TimelineActionApprove, operatorID, operatorName, fmt.Sprintf("工单审批通过: %s", comment))
+
+	// 如果有审批意见，则添加系统评论
+	if comment != "" {
+		commentEntity := &model.WorkorderInstanceComment{
+			InstanceID:   id,
+			OperatorID:   operatorID,
+			OperatorName: operatorName,
+			Content:      fmt.Sprintf("审批通过：%s", comment),
+			Type:         model.CommentTypeSystem,
+			Status:       model.CommentStatusNormal,
+			IsSystem:     1,
 		}
-		return fmt.Errorf("获取工单实例失败: %w", err)
+
+		if err := s.commentDao.CreateInstanceComment(ctx, commentEntity); err != nil {
+			s.logger.Error("创建审批评论失败", zap.Error(err), zap.Int("instanceID", id))
+		}
 	}
 
-	// 验证转移权限
-	if instance.AssigneeID == nil || *instance.AssigneeID != fromUserID {
-		return ErrUnauthorized
-	}
+	return nil
+}
 
-	// 验证目标用户是否存在
-	toUser, err := s.userDao.GetUserByID(ctx, toUserID)
+// RejectInstance 拒绝工单
+func (s *instanceService) RejectInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
+	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
-		return ErrUserNotFound
+		return err
 	}
 
-	if err := s.dao.TransferInstance(ctx, instanceID, fromUserID, toUserID, comment); err != nil {
-		s.logger.Error("转移工单失败", zap.Error(err),
-			zap.Int("instanceID", instanceID),
-			zap.Int("fromUserID", fromUserID),
-			zap.Int("toUserID", toUserID))
-		return fmt.Errorf("转移工单失败: %w", err)
+	fromStatus := instance.Status
+	toStatus := model.InstanceStatusRejected
+
+	// 更新工单状态为已拒绝
+	if err := s.dao.UpdateInstanceStatus(ctx, id, toStatus); err != nil {
+		s.logger.Error("更新工单状态失败", zap.Error(err), zap.Int("instanceID", id))
+		return err
 	}
 
-	// 记录工单流转
-	flow := &model.InstanceFlow{
+	// 创建流转记录
+	s.createFlowRecord(ctx, id, model.FlowActionReject, operatorID, operatorName, fromStatus, toStatus, comment, 2)
+
+	// 创建时间线记录
+	s.createTimelineRecord(ctx, id, model.TimelineActionReject, operatorID, operatorName, fmt.Sprintf("工单审批拒绝: %s", comment))
+
+	// 添加拒绝原因的系统评论
+	if comment != "" {
+		commentEntity := &model.WorkorderInstanceComment{
+			InstanceID:   id,
+			OperatorID:   operatorID,
+			OperatorName: operatorName,
+			Content:      fmt.Sprintf("审批拒绝：%s", comment),
+			Type:         model.CommentTypeSystem,
+			Status:       model.CommentStatusNormal,
+			IsSystem:     1,
+		}
+
+		if err := s.commentDao.CreateInstanceComment(ctx, commentEntity); err != nil {
+			s.logger.Error("创建拒绝评论失败", zap.Error(err), zap.Int("instanceID", id))
+		}
+	}
+
+	return nil
+}
+
+// 私有方法：创建流转记录
+func (s *instanceService) createFlowRecord(ctx context.Context, instanceID int, action string, operatorID int, operatorName string, fromStatus, toStatus int8, comment string, isSystem int8) {
+	flow := &model.WorkorderInstanceFlow{
+		InstanceID:     instanceID,
+		Action:         action,
+		OperatorID:     operatorID,
+		OperatorName:   operatorName,
+		FromStatus:     fromStatus,
+		ToStatus:       toStatus,
+		Comment:        comment,
+		IsSystemAction: isSystem,
+	}
+
+	if err := s.flowDao.Create(ctx, flow); err != nil {
+		s.logger.Error("创建流转记录失败", zap.Error(err), zap.Int("instanceID", instanceID))
+	}
+}
+
+// 私有方法：创建时间线记录
+func (s *instanceService) createTimelineRecord(ctx context.Context, instanceID int, action string, operatorID int, operatorName string, comment string) {
+	timeline := &model.WorkorderInstanceTimeline{
 		InstanceID:   instanceID,
-		StepID:       instance.CurrentStep,
-		StepName:     "转交",
-		Action:       "transfer",
-		OperatorID:   fromUserID,
-		OperatorName: "",
+		Action:       action,
+		OperatorID:   operatorID,
+		OperatorName: operatorName,
+		ActionDetail: "", // 简单操作不需要详细信息
 		Comment:      comment,
-		FromUserID:   fromUserID,
-		ToUserID:     toUserID,
-		ToUserName:   toUser.Username,
+		RelatedID:    nil, // 无关联记录
 	}
 
-	if err := s.flowDao.CreateInstanceFlow(ctx, flow); err != nil {
-		s.logger.Warn("记录工单转交流程失败", zap.Error(err), zap.Int("instanceID", instanceID))
-	}
-
-	s.logger.Info("转移工单成功",
-		zap.Int("instanceID", instanceID),
-		zap.Int("fromUserID", fromUserID),
-		zap.Int("toUserID", toUserID))
-
-	return nil
-}
-
-// 私有辅助方法
-
-// validateCreateRequest 验证创建请求
-func (s *instanceService) validateCreateRequest(req *model.CreateInstanceReq) error {
-	if req == nil {
-		return ErrInvalidRequest
-	}
-	if strings.TrimSpace(req.Title) == "" {
-		return fmt.Errorf("工单标题不能为空")
-	}
-	if len(req.Title) > MaxTitleLength {
-		return fmt.Errorf("工单标题长度不能超过%d个字符", MaxTitleLength)
-	}
-	if req.ProcessID <= 0 {
-		return fmt.Errorf("流程ID不能为空")
-	}
-	if len(req.Description) > MaxDescriptionLength {
-		return fmt.Errorf("工单描述长度不能超过%d个字符", MaxDescriptionLength)
-	}
-	return nil
-}
-
-// validateUpdateRequest 验证更新请求
-func (s *instanceService) validateUpdateRequest(req *model.UpdateInstanceReq) error {
-	if req == nil || req.ID <= 0 {
-		return ErrInvalidRequest
-	}
-	if req.Title != "" && len(req.Title) > MaxTitleLength {
-		return fmt.Errorf("工单标题长度不能超过%d个字符", MaxTitleLength)
-	}
-	if len(req.Description) > MaxDescriptionLength {
-		return fmt.Errorf("工单描述长度不能超过%d个字符", MaxDescriptionLength)
-	}
-	return nil
-}
-
-// validateUpdatePermission 验证更新权限
-func (s *instanceService) validateUpdatePermission(instance *model.Instance, operatorID int) error {
-	// 只有创建人或当前处理人可以更新
-	if instance.CreatorID != operatorID {
-		if instance.AssigneeID == nil || *instance.AssigneeID != operatorID {
-			return ErrUnauthorized
-		}
-	}
-	return nil
-}
-
-// validateDeletePermission 验证删除权限
-func (s *instanceService) validateDeletePermission(instance *model.Instance, operatorID int) error {
-	// 只有创建人可以删除
-	if instance.CreatorID != operatorID {
-		return ErrUnauthorized
-	}
-	return nil
-}
-
-// isEditableStatus 判断状态是否可编辑
-func (s *instanceService) isEditableStatus(status int8) bool {
-	return status == model.InstanceStatusDraft || status == model.InstanceStatusPending
-}
-
-// isValidStatus 验证状态值是否有效
-func (s *instanceService) isValidStatus(status int8) bool {
-	validStatuses := []int8{
-		model.InstanceStatusDraft,
-		model.InstanceStatusPending,
-		model.InstanceStatusProcessing,
-		model.InstanceStatusCompleted,
-		model.InstanceStatusCancelled,
-		model.InstanceStatusRejected,
-	}
-	for _, validStatus := range validStatuses {
-		if status == validStatus {
-			return true
-		}
-	}
-	return false
-}
-
-// normalizePagination 标准化分页参数
-func (s *instanceService) normalizePagination(page, size *int) {
-	if *page <= 0 {
-		*page = 1
-	}
-	if *size <= 0 {
-		*size = DefaultPageSize
-	}
-	if *size > MaxPageSize {
-		*size = MaxPageSize
-	}
-}
-
-// buildInstanceFromRequest 从请求构建工单实例
-func (s *instanceService) buildInstanceFromRequest(ctx context.Context, req *model.CreateInstanceReq, creatorID int, creatorName string, process *model.Process) (*model.Instance, error) {
-	var formData model.JSONMap
-
-	if process.FormDesign != nil {
-		// 将表单设计的schema转换为JSON字符串，再解析为表单数据
-		schemaBytes, err := json.Marshal(process.FormDesign.Schema)
-		if err != nil {
-			return nil, fmt.Errorf("序列化表单设计schema失败: %w", err)
-		}
-
-		var schema map[string]interface{}
-		if err := json.Unmarshal(schemaBytes, &schema); err != nil {
-			return nil, fmt.Errorf("解析表单设计schema失败: %w", err)
-		}
-		formData = schema
-	}
-
-	var processData model.JSONMap
-	if process.Definition != nil {
-		var definition map[string]interface{}
-		if err := json.Unmarshal([]byte(process.Definition), &definition); err != nil {
-			return nil, fmt.Errorf("解析流程定义失败: %w", err)
-		}
-		processData = definition
-	}
-
-	// 处理标签
-	var tags model.StringList
-	if len(req.Tags) > 0 {
-		tags = model.StringList(req.Tags)
-	}
-
-	// 确定初始步骤和状态
-	initialStep, initialStatus := s.determineInitialStepAndStatus(process.Definition.String())
-
-	// 构建实例对象
-	instance := &model.Instance{
-		Title:       strings.TrimSpace(req.Title),
-		TemplateID:  req.TemplateID,
-		ProcessID:   req.ProcessID,
-		FormData:    formData,
-		Status:      initialStatus,
-		Priority:    req.Priority,
-		ProcessData: processData,
-		CategoryID:  req.CategoryID,
-		CreatorID:   creatorID,
-		CreatorName: creatorName,
-		Description: strings.TrimSpace(req.Description),
-		DueDate:     req.DueDate,
-		Tags:        tags,
-	}
-
-	// 设置初始步骤和处理人
-	if initialStep != nil {
-		instance.CurrentStep = initialStep.ID
-		s.assignInitialHandler(ctx, instance, req.AssigneeID, initialStep)
-	}
-
-	return instance, nil
-}
-
-// determineInitialStepAndStatus 确定初始步骤和状态
-func (s *instanceService) determineInitialStepAndStatus(processDefStr string) (*model.ProcessStep, int8) {
-	if processDefStr == "" {
-		return nil, model.InstanceStatusDraft
-	}
-
-	var processDef model.ProcessDefinition
-	if err := json.Unmarshal([]byte(processDefStr), &processDef); err != nil {
-		s.logger.Error("解析流程定义失败", zap.Error(err))
-		return nil, model.InstanceStatusDraft
-	}
-
-	var initialStep *model.ProcessStep
-	var initialStatus int8 = model.InstanceStatusDraft
-
-	// 查找开始步骤
-	for i, step := range processDef.Steps {
-		if step.Type == "start" {
-			initialStep = &processDef.Steps[i]
-			break
-		}
-	}
-
-	if initialStep == nil && len(processDef.Steps) > 0 {
-		// 如果没有明确的开始步骤，使用第一个步骤
-		initialStep = &processDef.Steps[0]
-	}
-
-	return initialStep, initialStatus
-}
-
-// assignInitialHandler 分配初始处理人
-func (s *instanceService) assignInitialHandler(ctx context.Context, instance *model.Instance, assigneeID *int, initialStep *model.ProcessStep) {
-	if assigneeID != nil && *assigneeID > 0 {
-		instance.AssigneeID = assigneeID
-		if user, err := s.userDao.GetUserByID(ctx, *assigneeID); err == nil {
-			instance.AssigneeName = user.Username
-		} else {
-			instance.AssigneeName = "未知"
-			s.logger.Warn("获取指定处理人信息失败", zap.Error(err), zap.Int("assigneeID", *assigneeID))
-		}
-	} else if initialStep != nil && len(initialStep.Users) > 0 {
-		// 使用步骤定义中的第一个用户
-		instance.AssigneeID = &initialStep.Users[0]
-		if user, err := s.userDao.GetUserByID(ctx, initialStep.Users[0]); err == nil {
-			instance.AssigneeName = user.Username
-		} else {
-			instance.AssigneeName = "未知"
-			s.logger.Warn("获取步骤处理人信息失败", zap.Error(err), zap.Int("assigneeID", initialStep.Users[0]))
-		}
-	}
-}
-
-// createInitialFlow 创建初始流程记录
-func (s *instanceService) createInitialFlow(ctx context.Context, instance *model.Instance, creatorID int, creatorName string) error {
-	if instance.CurrentStep == "" {
-		return nil
-	}
-
-	flow := &model.InstanceFlow{
-		InstanceID:   instance.ID,
-		StepID:       instance.CurrentStep,
-		StepName:     "开始",
-		Action:       "create",
-		OperatorID:   creatorID,
-		OperatorName: creatorName,
-		Comment:      "工单创建",
-		FromStepID:   "",
-		ToStepID:     instance.CurrentStep,
-	}
-
-	return s.flowDao.CreateInstanceFlow(ctx, flow)
-}
-
-// updateInstanceFields 更新实例字段
-func (s *instanceService) updateInstanceFields(instance *model.Instance, req *model.UpdateInstanceReq) {
-	if req.Title != "" {
-		instance.Title = strings.TrimSpace(req.Title)
-	}
-	if req.Description != "" {
-		instance.Description = strings.TrimSpace(req.Description)
-	}
-	if req.Priority != 0 {
-		instance.Priority = req.Priority
-	}
-	if req.CategoryID != nil {
-		instance.CategoryID = req.CategoryID
-	}
-	if req.DueDate != nil {
-		instance.DueDate = req.DueDate
-	}
-	if len(req.Tags) > 0 {
-		instance.Tags = model.StringList(req.Tags)
+	if err := s.timelineDao.Create(ctx, timeline); err != nil {
+		s.logger.Error("创建时间线记录失败", zap.Error(err), zap.Int("instanceID", instanceID))
 	}
 }

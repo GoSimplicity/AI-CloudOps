@@ -50,107 +50,253 @@ func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 		instanceGroup.DELETE("/delete/:id", h.DeleteInstance)
 		instanceGroup.GET("/list", h.ListInstance)
 		instanceGroup.GET("/detail/:id", h.DetailInstance)
-		instanceGroup.POST("/transfer/:id", h.TransferInstance)
-		instanceGroup.GET("/my", h.GetMyInstances)
+		instanceGroup.POST("/submit/:id", h.SubmitInstance)
+		instanceGroup.POST("/assign/:id", h.AssignInstance)
+		instanceGroup.POST("/approve/:id", h.ApproveInstance)
+		instanceGroup.POST("/reject/:id", h.RejectInstance)
 	}
 }
 
 // CreateInstance 创建工单实例
+// @Summary 创建工单实例
+// @Description 创建新的工单实例
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param request body model.CreateWorkorderInstanceReq true "创建工单实例请求参数"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/create [post]
 func (h *InstanceHandler) CreateInstance(ctx *gin.Context) {
-	var req model.CreateInstanceReq
+	var req model.CreateWorkorderInstanceReq
 	user := ctx.MustGet("user").(utils.UserClaims)
 
+	req.OperatorID = user.Uid
+	req.OperatorName = user.Username
+
 	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return h.service.CreateInstance(ctx, &req, user.Uid, user.Username)
+		return nil, h.service.CreateInstance(ctx, &req)
 	})
 }
 
 // UpdateInstance 更新工单实例
+// @Summary 更新工单实例
+// @Description 更新指定工单实例的信息
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单实例ID"
+// @Param request body model.UpdateWorkorderInstanceReq true "更新工单实例请求参数"
+// @Success 200 {object} utils.ApiResponse "更新成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/update/{id} [put]
 func (h *InstanceHandler) UpdateInstance(ctx *gin.Context) {
-	var req model.UpdateInstanceReq
+	var req model.UpdateWorkorderInstanceReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
 	req.ID = id
 
-	user := ctx.MustGet("user").(utils.UserClaims)
-
 	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.service.UpdateInstance(ctx, &req, user.Uid)
+		return nil, h.service.UpdateInstance(ctx, &req)
 	})
 }
 
 // DeleteInstance 删除工单实例
+// @Summary 删除工单实例
+// @Description 删除指定的工单实例
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单实例ID"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/delete/{id} [delete]
 func (h *InstanceHandler) DeleteInstance(ctx *gin.Context) {
-	var req model.DeleteInstanceReq
-
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
-	req.ID = id
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.service.DeleteInstance(ctx, req.ID, user.Uid)
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return nil, h.service.DeleteInstance(ctx, id)
 	})
 }
 
 // DetailInstance 获取工单实例详情
+// @Summary 获取工单实例详情
+// @Description 根据ID获取工单实例的详细信息
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单实例ID"
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/detail/{id} [get]
 func (h *InstanceHandler) DetailInstance(ctx *gin.Context) {
-	var req model.DetailInstanceReq
-
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
-	req.ID = id
-
-	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return h.service.GetInstance(ctx, req.ID)
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return h.service.GetInstance(ctx, id)
 	})
 }
 
 // ListInstance 获取工单实例列表
+// @Summary 获取工单实例列表
+// @Description 分页获取工单实例列表
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param size query int false "每页数量" default(10)
+// @Param status query string false "工单状态"
+// @Param keyword query string false "搜索关键词"
+// @Success 200 {object} utils.ApiResponse{data=[]model.WorkorderInstance} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/list [get]
 func (h *InstanceHandler) ListInstance(ctx *gin.Context) {
-	var req model.ListInstanceReq
+	var req model.ListWorkorderInstanceReq
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
 		return h.service.ListInstance(ctx, &req)
 	})
 }
 
-// GetMyInstances 获取我的工单
-func (h *InstanceHandler) GetMyInstances(ctx *gin.Context) {
-	var req model.MyInstanceReq
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return h.service.GetMyInstances(ctx, &req, user.Uid)
-	})
-}
-
-// TransferInstance 转移工单
-func (h *InstanceHandler) TransferInstance(ctx *gin.Context) {
-	var req model.TransferInstanceReq
-
+// SubmitInstance 提交工单
+// @Summary 提交工单
+// @Description 将工单实例提交审批
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单实例ID"
+// @Param request body model.SubmitWorkorderInstanceReq true "提交工单请求参数"
+// @Success 200 {object} utils.ApiResponse "提交成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/submit/{id} [post]
+func (h *InstanceHandler) SubmitInstance(ctx *gin.Context) {
+	var req model.SubmitWorkorderInstanceReq
+	
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
-	req.InstanceID = id
-
+	req.ID = id
 	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.service.TransferInstance(ctx, req.InstanceID, user.Uid, req.AssigneeID, req.Comment)
+		return nil, h.service.SubmitInstance(ctx, req.ID, user.Uid, user.Username)
+	})
+}
+
+// AssignInstance 指派工单
+// @Summary 指派工单
+// @Description 将工单实例指派给指定处理人
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单实例ID"
+// @Param request body model.AssignWorkorderInstanceReq true "指派请求参数"
+// @Success 200 {object} utils.ApiResponse "指派成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/assign/{id} [post]
+func (h *InstanceHandler) AssignInstance(ctx *gin.Context) {
+	var req model.AssignWorkorderInstanceReq
+	
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		return
+	}
+
+	req.ID = id
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return nil, h.service.AssignInstance(ctx, req.ID, req.AssigneeID, user.Uid, user.Username)
+	})
+}
+
+// ApproveInstance 审批通过工单
+// @Summary 审批通过工单
+// @Description 审批通过指定的工单实例
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单实例ID"
+// @Param request body model.ApproveWorkorderInstanceReq true "审批意见"
+// @Success 200 {object} utils.ApiResponse "审批成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/approve/{id} [post]
+func (h *InstanceHandler) ApproveInstance(ctx *gin.Context) {
+	var req model.ApproveWorkorderInstanceReq
+	
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		return
+	}
+
+	req.ID = id
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return nil, h.service.ApproveInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
+	})
+}
+
+// RejectInstance 拒绝工单
+// @Summary 拒绝工单
+// @Description 拒绝指定的工单实例
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单实例ID"
+// @Param request body model.RejectWorkorderInstanceReq true "拒绝原因"
+// @Success 200 {object} utils.ApiResponse "拒绝成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/reject/{id} [post]
+func (h *InstanceHandler) RejectInstance(ctx *gin.Context) {
+	var req model.RejectWorkorderInstanceReq
+	
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		return
+	}
+
+	req.ID = id
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return nil, h.service.RejectInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
 	})
 }

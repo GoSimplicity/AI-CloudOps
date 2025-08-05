@@ -61,6 +61,18 @@ func (k *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetDeployListByNamespace 根据命名空间获取部署列表
+// @Summary 根据命名空间获取部署列表
+// @Description 根据指定的命名空间获取K8s集群中的Deployment列表
+// @Tags 部署管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse{data=[]object} "成功获取部署列表"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/k8s/deployments/{id} [get]
 func (k *K8sDeploymentHandler) GetDeployListByNamespace(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -79,7 +91,18 @@ func (k *K8sDeploymentHandler) GetDeployListByNamespace(ctx *gin.Context) {
 	})
 }
 
-// UpdateDeployment 更新指定 Name 的部署
+// UpdateDeployment 更新部署
+// @Summary 更新部署
+// @Description 更新指定的Deployment资源配置
+// @Tags 部署管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sDeploymentRequest true "部署更新请求"
+// @Success 200 {object} utils.ApiResponse "成功更新部署"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/k8s/deployments/update [post]
 func (k *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 	var req model.K8sDeploymentRequest
 
@@ -88,7 +111,18 @@ func (k *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 	})
 }
 
-// BatchDeleteDeployment 删除指定 Name 的部署
+// BatchDeleteDeployment 批量删除部署
+// @Summary 批量删除部署
+// @Description 批量删除指定命名空间中的多个Deployment
+// @Tags 部署管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sDeploymentRequest true "批量删除请求"
+// @Success 200 {object} utils.ApiResponse "成功批量删除部署"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/k8s/deployments/batch_delete [delete]
 func (k *K8sDeploymentHandler) BatchDeleteDeployment(ctx *gin.Context) {
 	var req model.K8sDeploymentRequest
 
@@ -98,6 +132,17 @@ func (k *K8sDeploymentHandler) BatchDeleteDeployment(ctx *gin.Context) {
 }
 
 // BatchRestartDeployments 批量重启部署
+// @Summary 批量重启部署
+// @Description 批量重启指定的多个Deployment
+// @Tags 部署管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sDeploymentRequest true "批量重启请求"
+// @Success 200 {object} utils.ApiResponse "成功批量重启部署"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/k8s/deployments/batch_restart [post]
 func (k *K8sDeploymentHandler) BatchRestartDeployments(ctx *gin.Context) {
 	var req model.K8sDeploymentRequest
 
@@ -106,7 +151,20 @@ func (k *K8sDeploymentHandler) BatchRestartDeployments(ctx *gin.Context) {
 	})
 }
 
-// GetDeployYaml 获取部署的 YAML 配置
+// GetDeployYaml 获取部署的YAML配置
+// @Summary 获取部署的YAML配置
+// @Description 获取指定Deployment的完整YAML配置文件
+// @Tags 部署管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param deployment_name query string true "部署名称"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse{data=string} "成功获取YAML配置"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/k8s/deployments/{id}/yaml [get]
 func (k *K8sDeploymentHandler) GetDeployYaml(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -131,6 +189,20 @@ func (k *K8sDeploymentHandler) GetDeployYaml(ctx *gin.Context) {
 	})
 }
 
+// DeleteDeployment 删除部署
+// @Summary 删除部署
+// @Description 删除指定命名空间中的单个Deployment
+// @Tags 部署管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param deployment_name query string true "部署名称"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse "成功删除部署"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/k8s/deployments/delete/{id} [delete]
 func (k *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -155,6 +227,20 @@ func (k *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
 	})
 }
 
+// RestartDeployment 重启部署
+// @Summary 重启部署
+// @Description 重启指定命名空间中的单个Deployment
+// @Tags 部署管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Param deployment_name query string true "部署名称"
+// @Param namespace query string true "命名空间"
+// @Success 200 {object} utils.ApiResponse "成功重启部署"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/k8s/deployments/restart/{id} [post]
 func (k *K8sDeploymentHandler) RestartDeployment(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

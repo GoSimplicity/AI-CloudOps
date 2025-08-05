@@ -25,154 +25,118 @@
 
 package model
 
-import (
-	"database/sql/driver"
-	"encoding/json"
-	"fmt"
-	"time"
-)
+import "time"
 
-// 工单状态常量
+// 工单状态
 const (
-	InstanceStatusDraft      int8 = 0 // 草稿
-	InstanceStatusProcessing int8 = 1 // 处理中
-	InstanceStatusCompleted  int8 = 2 // 已完成
-	InstanceStatusCancelled  int8 = 3 // 已取消
-	InstanceStatusRejected   int8 = 4 // 已拒绝
-	InstanceStatusPending    int8 = 5 // 待处理
-	InstanceStatusOverdue    int8 = 6 // 已超时
+	InstanceStatusDraft      int8 = 1 // 草稿
+	InstanceStatusPending    int8 = 2 // 待处理
+	InstanceStatusProcessing int8 = 3 // 处理中
+	InstanceStatusCompleted  int8 = 4 // 已完成
+	InstanceStatusRejected   int8 = 5 // 已拒绝
+	InstanceStatusCancelled  int8 = 6 // 已取消
 )
 
-// 优先级常量
+// 工单优先级
 const (
-	PriorityLow      int8 = 0 // 低
-	PriorityNormal   int8 = 1 // 普通
-	PriorityHigh     int8 = 2 // 高
-	PriorityUrgent   int8 = 3 // 紧急
-	PriorityCritical int8 = 4 // 严重
+	PriorityLow    int8 = 1 // 低
+	PriorityNormal int8 = 2 // 普通
+	PriorityHigh   int8 = 3 // 高
 )
 
-// JSONMap 自定义JSON类型，用于处理map[string]interface{}
-type JSONMap map[string]interface{}
-
-// Value 实现driver.Valuer接口，将JSONMap转为JSON字符串存储到数据库
-func (m JSONMap) Value() (driver.Value, error) {
-	if m == nil {
-		return nil, nil
-	}
-	return json.Marshal(m)
-}
-
-// Scan 实现sql.Scanner接口，从数据库读取JSON字符串并转为JSONMap
-func (m *JSONMap) Scan(value interface{}) error {
-	if value == nil {
-		*m = nil
-		return nil
-	}
-
-	var data []byte
-	switch v := value.(type) {
-	case []byte:
-		data = v
-	case string:
-		data = []byte(v)
-	default:
-		return fmt.Errorf("无法扫描 %T 到 JSONMap", value)
-	}
-
-	return json.Unmarshal(data, m)
-}
-
-// Instance 工单实例
-type Instance struct {
+// WorkorderInstance 工单实例
+type WorkorderInstance struct {
 	Model
-	Title        string     `json:"title" gorm:"column:title;not null;comment:工单标题"`
-	TemplateID   *int       `json:"template_id" gorm:"column:template_id;comment:模板ID"`
-	ProcessID    int        `json:"process_id" gorm:"column:process_id;not null;comment:流程ID"`
-	FormData     JSONMap    `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
-	CurrentStep  string     `json:"current_step" gorm:"column:current_step;not null;comment:当前步骤"`
-	Status       int8       `json:"status" gorm:"column:status;not null;comment:状态"`
-	Priority     int8       `json:"priority" gorm:"column:priority;default:1;comment:优先级"`
-	CategoryID   *int       `json:"category_id" gorm:"column:category_id;comment:分类ID"`
-	CreatorID    int        `json:"creator_id" gorm:"column:creator_id;not null;comment:创建人ID"`
-	Description  string     `json:"description" gorm:"column:description;comment:描述"`
-	CreatorName  string     `json:"creator_name" gorm:"-"`
-	AssigneeID   *int       `json:"assignee_id" gorm:"column:assignee_id;comment:当前处理人ID"`
-	AssigneeName string     `json:"assignee_name" gorm:"-"`
-	CompletedAt  *time.Time `json:"completed_at" gorm:"column:completed_at;comment:完成时间"`
-	DueDate      *time.Time `json:"due_date" gorm:"column:due_date;comment:截止时间"`
-	Tags         StringList `json:"tags" gorm:"column:tags;comment:标签"`
-	ProcessData  JSONMap    `json:"process_data" gorm:"column:process_data;type:json;comment:流程数据"`
+	Title          string     `json:"title" gorm:"column:title;type:varchar(200);not null;index;comment:工单标题"`
+	SerialNumber   string     `json:"serial_number" gorm:"column:serial_number;type:varchar(50);not null;uniqueIndex;comment:工单编号"`
+	ProcessID      int        `json:"process_id" gorm:"column:process_id;not null;index;comment:流程ID"`
+	FormData       JSONMap    `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
+	Status         int8       `json:"status" gorm:"column:status;not null;default:1;index;comment:状态"`
+	Priority       int8       `json:"priority" gorm:"column:priority;not null;default:2;index;comment:优先级"`  
+	OperatorID     int        `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName   string     `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
+	AssigneeID     *int       `json:"assignee_id" gorm:"column:assignee_id;index;comment:当前处理人ID"`
+	Description    string     `json:"description" gorm:"column:description;type:text;comment:详细描述"`
+	Tags           StringList `json:"tags" gorm:"column:tags;comment:标签"`
+	DueDate        *time.Time `json:"due_date" gorm:"column:due_date;index;comment:截止时间"`
+	CompletedAt    *time.Time `json:"completed_at" gorm:"column:completed_at;comment:完成时间"`
 
-	// 关联数据
-	Template *Template `json:"template,omitempty" gorm:"foreignKey:TemplateID"`
-	Process  *Process  `json:"process,omitempty" gorm:"foreignKey:ProcessID"`
-	Category *Category `json:"category,omitempty" gorm:"foreignKey:CategoryID"`
+	// 关联查询字段
+	Comments []WorkorderInstanceComment  `json:"comments,omitempty" gorm:"foreignKey:InstanceID;references:ID"`
+	FlowLogs []WorkorderInstanceFlow     `json:"flow_logs,omitempty" gorm:"foreignKey:InstanceID;references:ID"`
+	Timeline []WorkorderInstanceTimeline `json:"timeline,omitempty" gorm:"foreignKey:InstanceID;references:ID"`
 }
 
-func (Instance) TableName() string {
-	return "cl_workorder_instances"
+func (WorkorderInstance) TableName() string {
+	return "cl_workorder_instance"
 }
 
-// 工单实例请求结构
-type CreateInstanceReq struct {
-	Title       string     `json:"title" binding:"required,min=1,max=200"`       // 工单标题
-	TemplateID  *int       `json:"template_id"`                                  // 模板ID
-	ProcessID   int        `json:"process_id" binding:"required"`                // 流程ID
-	Description string     `json:"description" binding:"omitempty,max=1000"`     // 描述
-	Priority    int8       `json:"priority" binding:"omitempty,oneof=0 1 2 3 4"` // 优先级
-	CategoryID  *int       `json:"category_id"`                                  // 分类ID
-	DueDate     *time.Time `json:"due_date"`                                     // 截止时间
-	Tags        []string   `json:"tags"`                                         // 标签
-	AssigneeID  *int       `json:"assignee_id"`                                  // 处理人ID
+// 创建工单实例请求
+type CreateWorkorderInstanceReq struct {
+	Title          string     `json:"title" binding:"required,min=1,max=200"`
+	ProcessID      int        `json:"process_id" binding:"required,min=1"`
+	FormData       JSONMap    `json:"form_data" binding:"required"`
+	Status         int8       `json:"status" binding:"required,oneof=1 2 3 4 5 6"`
+	Priority       int8       `json:"priority" binding:"required,oneof=1 2 3"`
+	OperatorID     int        `json:"operator_id" binding:"required,min=1"`
+	OperatorName   string     `json:"operator_name" binding:"required,min=1,max=100"`
+	AssigneeID     *int       `json:"assignee_id" binding:"omitempty,min=1"`
+	Description    string     `json:"description" binding:"omitempty,max=2000"`
+	Tags           StringList `json:"tags" binding:"omitempty"`
+	DueDate        *time.Time `json:"due_date" binding:"omitempty"`
 }
 
-type UpdateInstanceReq struct {
-	ID          int        `json:"id" form:"id" binding:"required"`
-	Title       string     `json:"title" form:"title" binding:"required,min=1,max=200"`
-	Description string     `json:"description" form:"description" binding:"omitempty,max=1000"`
-	Priority    int8       `json:"priority" form:"priority" binding:"omitempty,oneof=0 1 2 3 4"`
-	CategoryID  *int       `json:"category_id" form:"category_id"`
-	DueDate     *time.Time `json:"due_date" form:"due_date"`
-	Tags        []string   `json:"tags" form:"tags"`
+// 更新工单实例请求
+type UpdateWorkorderInstanceReq struct {
+	ID          int        `json:"id" binding:"required,min=1"`
+	Title       string     `json:"title" binding:"omitempty,min=1,max=200"`
+	Description string     `json:"description" binding:"omitempty,max=2000"`
+	Priority    int8       `json:"priority" binding:"omitempty,oneof=1 2 3"`
+	Tags        StringList `json:"tags" binding:"omitempty"`
+	DueDate     *time.Time `json:"due_date" binding:"omitempty"`
+	Status      int8       `json:"status" binding:"omitempty,oneof=1 2 3 4 5 6"`
+	AssigneeID  *int       `json:"assignee_id" binding:"omitempty,min=1"`
+	FormData    JSONMap    `json:"form_data" binding:"omitempty"`
+	CompletedAt *time.Time `json:"completed_at" binding:"omitempty"`
 }
 
-type DeleteInstanceReq struct {
-	ID int `json:"id" form:"id" binding:"required"`
+// 删除工单实例请求
+type DeleteWorkorderInstanceReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
 
-type DetailInstanceReq struct {
-	ID int `json:"id" form:"id" binding:"required"`
+// 工单实例详情请求
+type DetailWorkorderInstanceReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
 
-type ListInstanceReq struct {
+// 工单实例列表请求
+type ListWorkorderInstanceReq struct {
 	ListReq
-	Status     *int8      `json:"status" form:"status"`
-	Priority   *int8      `json:"priority" form:"priority"`
-	CategoryID *int       `json:"category_id" form:"category_id"`
-	CreatorID  *int       `json:"creator_id" form:"creator_id"`
-	AssigneeID *int       `json:"assignee_id" form:"assignee_id"`
-	ProcessID  *int       `json:"process_id" form:"process_id"`
-	TemplateID *int       `json:"template_id" form:"template_id"`
-	StartDate  *time.Time `json:"start_date" form:"start_date"`
-	EndDate    *time.Time `json:"end_date" form:"end_date"`
-	Tags       []string   `json:"tags" form:"tags"`
-	Overdue    *bool      `json:"overdue" form:"overdue"`
+	Status    *int8 `json:"status" form:"status" binding:"omitempty,oneof=1 2 3 4 5 6"`
+	Priority  *int8 `json:"priority" form:"priority" binding:"omitempty,oneof=1 2 3"`
+	ProcessID *int  `json:"process_id" form:"process_id" binding:"omitempty,min=1"`
 }
 
-type MyInstanceReq struct {
-	ListReq
-	Type       string     `json:"type" form:"type" binding:"omitempty,oneof=created assigned all"`
-	Status     *int8      `json:"status" form:"status"`
-	Priority   *int8      `json:"priority" form:"priority"`
-	CategoryID *int       `json:"category_id" form:"category_id"`
-	ProcessID  *int       `json:"process_id" form:"process_id"`
-	StartDate  *time.Time `json:"start_date" form:"start_date"`
-	EndDate    *time.Time `json:"end_date" form:"end_date"`
+// 提交工单请求
+type SubmitWorkorderInstanceReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
 
-type TransferInstanceReq struct {
-	InstanceID int    `json:"instance_id" binding:"required"`
-	AssigneeID int    `json:"assignee_id" binding:"required"`
-	Comment    string `json:"comment"`
+// 指派工单请求
+type AssignWorkorderInstanceReq struct {
+	ID         int `json:"id" form:"id" binding:"required,min=1"`
+	AssigneeID int `json:"assignee_id" binding:"required,min=1"`
+}
+
+// 审批通过工单请求
+type ApproveWorkorderInstanceReq struct {
+	ID      int    `json:"id" form:"id" binding:"required,min=1"`
+	Comment string `json:"comment" binding:"omitempty,max=500"`
+}
+
+// 拒绝工单请求
+type RejectWorkorderInstanceReq struct {
+	ID      int    `json:"id" form:"id" binding:"required,min=1"`
+	Comment string `json:"comment" binding:"required,min=1,max=500"`
 }

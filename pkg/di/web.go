@@ -75,13 +75,13 @@ func InitGinServer(
 	sendGroupHdl *prometheusApi.SendGroupHandler,
 	auditHdl *systemApi.AuditHandler,
 	formDesignHdl *workorderApi.FormDesignHandler,
-	processHdl *workorderApi.ProcessHandler,
+	processHdl *workorderApi.WorkorderProcessHandler,
 	templateHdl *workorderApi.TemplateHandler,
 	instanceHdl *workorderApi.InstanceHandler,
 	instanceFlowHdl *workorderApi.InstanceFlowHandler,
 	instanceCommentHdl *workorderApi.InstanceCommentHandler,
-	statisticsHdl *workorderApi.StatisticsHandler,
 	categoryHdl *workorderApi.CategoryGroupHandler,
+	instanceTimeLineHdl *workorderApi.InstanceTimeLineHandler,
 	treeNodeHdl *resourceApi.TreeNodeHandler,
 	treeLocalHdl *resourceApi.TreeLocalHandler,
 	treeEcsHdl *resourceApi.TreeEcsHandler,
@@ -134,7 +134,7 @@ func InitGinServer(
 	instanceHdl.RegisterRouters(server)
 	instanceFlowHdl.RegisterRouters(server)
 	instanceCommentHdl.RegisterRouters(server)
-	statisticsHdl.RegisterRouters(server)
+	instanceTimeLineHdl.RegisterRouters(server)
 	categoryHdl.RegisterRouters(server)
 	treeNodeHdl.RegisterRouters(server)
 	treeLocalHdl.RegisterRouters(server)

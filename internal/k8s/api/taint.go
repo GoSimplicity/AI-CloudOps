@@ -59,6 +59,17 @@ func (k *K8sTaintHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // AddTaintsNodes 为节点添加 Taint
+// @Summary 为节点添加污点
+// @Description 为指定的Kubernetes节点添加或更新污点配置
+// @Tags 污点管理
+// @Accept json
+// @Produce json
+// @Param request body model.TaintK8sNodesRequest true "添加污点请求参数"
+// @Success 200 {object} utils.ApiResponse "添加成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/taints/add [post]
+// @Security BearerAuth
 func (k *K8sTaintHandler) AddTaintsNodes(ctx *gin.Context) {
 	var req model.TaintK8sNodesRequest
 
@@ -68,6 +79,17 @@ func (k *K8sTaintHandler) AddTaintsNodes(ctx *gin.Context) {
 }
 
 // ScheduleEnableSwitchNodes 启用或切换节点调度
+// @Summary 启用或禁用节点调度
+// @Description 批量启用或禁用Kubernetes节点的调度功能
+// @Tags 污点管理
+// @Accept json
+// @Produce json
+// @Param request body model.ScheduleK8sNodesRequest true "节点调度切换请求参数"
+// @Success 200 {object} utils.ApiResponse "操作成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/taints/enable_switch [post]
+// @Security BearerAuth
 func (k *K8sTaintHandler) ScheduleEnableSwitchNodes(ctx *gin.Context) {
 	var req model.ScheduleK8sNodesRequest
 
@@ -77,6 +99,17 @@ func (k *K8sTaintHandler) ScheduleEnableSwitchNodes(ctx *gin.Context) {
 }
 
 // TaintYamlCheck 检查节点 Taint 的 YAML 配置
+// @Summary 检查污点YAML配置
+// @Description 验证节点污点的YAML配置是否正确
+// @Tags 污点管理
+// @Accept json
+// @Produce json
+// @Param request body model.TaintK8sNodesRequest true "污点YAML检查请求参数"
+// @Success 200 {object} utils.ApiResponse "检查成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/taints/taint_check [post]
+// @Security BearerAuth
 func (k *K8sTaintHandler) TaintYamlCheck(ctx *gin.Context) {
 	var req model.TaintK8sNodesRequest
 
@@ -86,6 +119,17 @@ func (k *K8sTaintHandler) TaintYamlCheck(ctx *gin.Context) {
 }
 
 // DeleteTaintsNodes 删除节点 Taint
+// @Summary 删除节点污点
+// @Description 删除指定Kubernetes节点的污点配置
+// @Tags 污点管理
+// @Accept json
+// @Produce json
+// @Param request body model.TaintK8sNodesRequest true "删除污点请求参数"
+// @Success 200 {object} utils.ApiResponse "删除成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/taints/delete [delete]
+// @Security BearerAuth
 func (k *K8sTaintHandler) DeleteTaintsNodes(ctx *gin.Context) {
 	var req model.TaintK8sNodesRequest
 
@@ -95,6 +139,17 @@ func (k *K8sTaintHandler) DeleteTaintsNodes(ctx *gin.Context) {
 }
 
 // DrainPods 清空节点上的 Pods
+// @Summary 清空节点Pod
+// @Description 驱逐指定Kubernetes节点上的所有Pod，为节点维护做准备
+// @Tags 污点管理
+// @Accept json
+// @Produce json
+// @Param request body model.K8sClusterNodesRequest true "清空Pod请求参数"
+// @Success 200 {object} utils.ApiResponse "清空成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/taints/drain [post]
+// @Security BearerAuth
 func (k *K8sTaintHandler) DrainPods(ctx *gin.Context) {
 	var req model.K8sClusterNodesRequest
 

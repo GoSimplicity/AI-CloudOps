@@ -58,6 +58,17 @@ func (k *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetNodeList 获取节点列表
+// @Summary 获取集群节点列表
+// @Description 根据集群ID获取指定K8s集群中的所有节点列表
+// @Tags 节点管理
+// @Accept json
+// @Produce json
+// @Param id path int true "集群ID"
+// @Success 200 {object} utils.ApiResponse{data=[]model.K8sNode} "成功获取节点列表"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/nodes/list/{id} [get]
+// @Security BearerAuth
 func (k *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
 	clusterID, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -71,6 +82,18 @@ func (k *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
 }
 
 // GetNodeDetail 获取指定名称的节点详情
+// @Summary 获取节点详细信息
+// @Description 根据节点名称获取指定节点的详细信息，包括状态、资源使用情况等
+// @Tags 节点管理
+// @Accept json
+// @Produce json
+// @Param name path string true "节点名称"
+// @Param id query int true "集群ID"
+// @Success 200 {object} utils.ApiResponse "成功获取节点详情"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/nodes/{name} [get]
+// @Security BearerAuth
 func (k *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
 	name, err := utils.GetParamName(ctx)
 	if err != nil {
@@ -90,6 +113,17 @@ func (k *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
 }
 
 // AddLabelNodes 为节点添加标签
+// @Summary 为节点添加标签
+// @Description 为指定的K8s节点添加标签，支持批量操作
+// @Tags 节点管理
+// @Accept json
+// @Produce json
+// @Param request body model.LabelK8sNodesRequest true "添加标签请求参数"
+// @Success 200 {object} utils.ApiResponse "成功添加标签"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/nodes/labels/add [post]
+// @Security BearerAuth
 func (k *K8sNodeHandler) AddLabelNodes(ctx *gin.Context) {
 	var req model.LabelK8sNodesRequest
 
@@ -99,6 +133,17 @@ func (k *K8sNodeHandler) AddLabelNodes(ctx *gin.Context) {
 }
 
 // DeleteLabelNodes 删除节点标签
+// @Summary 删除节点标签
+// @Description 删除指定K8s节点的标签，支持批量操作
+// @Tags 节点管理
+// @Accept json
+// @Produce json
+// @Param request body model.LabelK8sNodesRequest true "删除标签请求参数"
+// @Success 200 {object} utils.ApiResponse "成功删除标签"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Router /api/k8s/nodes/labels/delete [delete]
+// @Security BearerAuth
 func (k *K8sNodeHandler) DeleteLabelNodes(ctx *gin.Context) {
 	var req model.LabelK8sNodesRequest
 

@@ -43,13 +43,7 @@ type AliyunProviderImpl struct {
 }
 
 func NewAliyunProvider(logger *zap.Logger) *AliyunProviderImpl {
-	accessKey := os.Getenv("ALIYUN_ACCESS_KEY")
-	secretKey := os.Getenv("ALIYUN_SECRET_KEY")
-	if accessKey == "" || secretKey == "" {
-		logger.Error("ALIYUN_ACCESS_KEY or ALIYUN_SECRET_KEY is not set")
-		return nil
-	}
-	sdk := aliyun.NewSDK(accessKey, secretKey)
+	sdk := aliyun.NewSDK(os.Getenv("ALIYUN_ACCESS_KEY"), os.Getenv("ALIYUN_SECRET_KEY"))
 	return &AliyunProviderImpl{
 		logger:               logger,
 		sdk:                  sdk,

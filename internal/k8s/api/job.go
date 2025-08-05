@@ -61,7 +61,6 @@ func (k *K8sJobHandler) RegisterRouters(server *gin.Engine) {
 	}
 }
 
-// GetJobsByNamespace 根据命名空间获取 Job 列表
 func (k *K8sJobHandler) GetJobsByNamespace(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -80,7 +79,6 @@ func (k *K8sJobHandler) GetJobsByNamespace(ctx *gin.Context) {
 	})
 }
 
-// CreateJob 创建 Job
 func (k *K8sJobHandler) CreateJob(ctx *gin.Context) {
 	var req model.K8sJobRequest
 
@@ -89,7 +87,6 @@ func (k *K8sJobHandler) CreateJob(ctx *gin.Context) {
 	})
 }
 
-// BatchDeleteJob 批量删除 Job
 func (k *K8sJobHandler) BatchDeleteJob(ctx *gin.Context) {
 	var req model.K8sJobRequest
 
@@ -98,7 +95,6 @@ func (k *K8sJobHandler) BatchDeleteJob(ctx *gin.Context) {
 	})
 }
 
-// GetJobYaml 获取 Job 的 YAML 配置
 func (k *K8sJobHandler) GetJobYaml(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -123,7 +119,6 @@ func (k *K8sJobHandler) GetJobYaml(ctx *gin.Context) {
 	})
 }
 
-// DeleteJob 删除指定的 Job
 func (k *K8sJobHandler) DeleteJob(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -148,7 +143,6 @@ func (k *K8sJobHandler) DeleteJob(ctx *gin.Context) {
 	})
 }
 
-// GetJobStatus 获取 Job 状态
 func (k *K8sJobHandler) GetJobStatus(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -173,7 +167,6 @@ func (k *K8sJobHandler) GetJobStatus(ctx *gin.Context) {
 	})
 }
 
-// GetJobHistory 获取 Job 执行历史
 func (k *K8sJobHandler) GetJobHistory(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -192,7 +185,6 @@ func (k *K8sJobHandler) GetJobHistory(ctx *gin.Context) {
 	})
 }
 
-// GetJobPods 获取 Job 关联的 Pod 列表
 func (k *K8sJobHandler) GetJobPods(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
