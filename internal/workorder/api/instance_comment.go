@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -52,7 +50,7 @@ func (h *InstanceCommentHandler) RegisterRouters(server *gin.Engine) {
 		commentGroup.DELETE("/delete/:id", h.DeleteInstanceComment)
 		commentGroup.GET("/detail/:id", h.GetInstanceComment)
 		commentGroup.GET("/list", h.ListInstanceComments)
-		commentGroup.GET("/tree/:instanceId", h.GetInstanceCommentsTree)
+		commentGroup.GET("/tree/:id", h.GetInstanceCommentsTree)
 	}
 }
 
@@ -198,14 +196,16 @@ func (h *InstanceCommentHandler) ListInstanceComments(ctx *gin.Context) {
 // @Router /api/workorder/instance/comment/tree/{instanceId} [get]
 // GetInstanceCommentsTree 获取工单评论树结构
 func (h *InstanceCommentHandler) GetInstanceCommentsTree(ctx *gin.Context) {
-	instanceIdStr := ctx.Param("instanceId")
-	instanceId, err := strconv.Atoi(instanceIdStr)
+	var req model.GetInstanceCommentsTreeReq
+
+	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "实例ID格式无效")
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (any, error) {
-		return h.commentService.GetInstanceCommentsTree(ctx, instanceId)
+	req.ID = id
+
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return h.commentService.GetInstanceCommentsTree(ctx, req.ID)
 	})
 }

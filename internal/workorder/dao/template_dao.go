@@ -198,6 +198,9 @@ func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorder
 	// 分页查询
 	offset := (req.Page - 1) * req.Size
 	err := db.Offset(offset).
+		Preload("Process").
+		Preload("Category").
+		Preload("FormDesign").
 		Limit(req.Size).
 		Order("created_at DESC").
 		Find(&templates).Error

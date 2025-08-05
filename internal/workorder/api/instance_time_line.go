@@ -46,8 +46,6 @@ func (h *InstanceTimeLineHandler) RegisterRouters(server *gin.Engine) {
 	timelineGroup := server.Group("/api/workorder/instance/timeline")
 	{
 		timelineGroup.POST("/create", h.CreateInstanceTimeLine)
-		timelineGroup.PUT("/update/:id", h.UpdateInstanceTimeLine)
-		timelineGroup.DELETE("/delete/:id", h.DeleteInstanceTimeLine)
 		timelineGroup.GET("/list", h.ListInstanceTimeLine)
 		timelineGroup.GET("/detail/:id", h.DetailInstanceTimeLine)
 	}
@@ -72,67 +70,6 @@ func (h *InstanceTimeLineHandler) CreateInstanceTimeLine(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
 		return h.service.CreateInstanceTimeLine(ctx, &req, user.Uid, user.Username)
-	})
-}
-
-// UpdateInstanceTimeLine 更新工单时间线记录
-// @Summary 更新工单时间线记录
-// @Description 更新指定的工单时间线记录信息
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param id path int true "时间线记录ID"
-// @Param request body model.UpdateWorkorderInstanceTimelineReq true "更新时间线记录请求参数"
-// @Success 200 {object} utils.ApiResponse "更新成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/instance/timeline/update/{id} [put]
-// UpdateInstanceTimeLine 更新工单时间线记录
-func (h *InstanceTimeLineHandler) UpdateInstanceTimeLine(ctx *gin.Context) {
-	var req model.UpdateWorkorderInstanceTimelineReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		return
-	}
-
-	req.ID = id
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.service.UpdateInstanceTimeLine(ctx, &req, user.Uid)
-	})
-}
-
-// DeleteInstanceTimeLine 删除工单时间线记录
-// @Summary 删除工单时间线记录
-// @Description 删除指定的工单时间线记录
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param id path int true "时间线记录ID"
-// @Success 200 {object} utils.ApiResponse "删除成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/instance/timeline/delete/{id} [delete]
-// DeleteInstanceTimeLine 删除工单时间线记录
-func (h *InstanceTimeLineHandler) DeleteInstanceTimeLine(ctx *gin.Context) {
-	var req model.DeleteWorkorderInstanceTimelineReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		return
-	}
-
-	req.ID = id
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	utils.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.service.DeleteInstanceTimeLine(ctx, req.ID, user.Uid)
 	})
 }
 

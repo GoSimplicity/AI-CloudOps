@@ -29,50 +29,66 @@ import (
 	"context"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	"go.uber.org/zap"
 )
 
 type WorkorderInstanceTimeLineService interface {
 	CreateInstanceTimeLine(ctx context.Context, req *model.CreateWorkorderInstanceTimelineReq, creatorID int, creatorName string) (*model.WorkorderInstanceTimeline, error)
-	UpdateInstanceTimeLine(ctx context.Context, req *model.UpdateWorkorderInstanceTimelineReq, operatorID int) error
-	DeleteInstanceTimeLine(ctx context.Context, id int, operatorID int) error
 	GetInstanceTimeLine(ctx context.Context, id int) (*model.WorkorderInstanceTimeline, error)
 	ListInstanceTimeLine(ctx context.Context, req *model.ListWorkorderInstanceTimelineReq) (*model.ListResp[*model.WorkorderInstanceTimeline], error)
 }
 
 type instanceTimeLineService struct {
 	logger *zap.Logger
+	dao    dao.WorkorderInstanceTimelineDAO
 }
 
 func NewWorkorderInstanceTimeLineService(
 	logger *zap.Logger,
+	dao dao.WorkorderInstanceTimelineDAO,
 ) WorkorderInstanceTimeLineService {
 	return &instanceTimeLineService{
 		logger: logger,
+		dao:    dao,
 	}
 }
 
 // CreateInstanceTimeLine implements WorkorderInstanceTimeLineService.
 func (i *instanceTimeLineService) CreateInstanceTimeLine(ctx context.Context, req *model.CreateWorkorderInstanceTimelineReq, creatorID int, creatorName string) (*model.WorkorderInstanceTimeline, error) {
-	panic("unimplemented")
-}
+	timeline := &model.WorkorderInstanceTimeline{
+		InstanceID:   req.InstanceID,
+		Action:       req.Action,
+		Comment:      req.Comment,
+		OperatorID:   creatorID,
+		OperatorName: creatorName,
+	}
 
-// DeleteInstanceTimeLine implements WorkorderInstanceTimeLineService.
-func (i *instanceTimeLineService) DeleteInstanceTimeLine(ctx context.Context, id int, operatorID int) error {
-	panic("unimplemented")
+	if err := i.dao.Create(ctx, timeline); err != nil {
+		i.logger.Error("创建时间线记录失败", zap.Error(err))
+		return nil, err
+	}
+
+	return timeline, nil
 }
 
 // GetInstanceTimeLine implements WorkorderInstanceTimeLineService.
 func (i *instanceTimeLineService) GetInstanceTimeLine(ctx context.Context, id int) (*model.WorkorderInstanceTimeline, error) {
-	panic("unimplemented")
+	timeline, err := i.dao.GetByID(ctx, id)
+	if err != nil {
+		i.logger.Error("获取时间线记录失败", zap.Error(err), zap.Int("id", id))
+		return nil, err
+	}
+	return timeline, nil
 }
 
 // ListInstanceTimeLine implements WorkorderInstanceTimeLineService.
 func (i *instanceTimeLineService) ListInstanceTimeLine(ctx context.Context, req *model.ListWorkorderInstanceTimelineReq) (*model.ListResp[*model.WorkorderInstanceTimeline], error) {
-	panic("unimplemented")
-}
+	timelines, total, err := i.dao.List(ctx, req)
+	if err != nil {
+		i.logger.Error("获取时间线记录列表失败", zap.Error(err))
+		return nil, err
+	}
 
-// UpdateInstanceTimeLine implements WorkorderInstanceTimeLineService.
-func (i *instanceTimeLineService) UpdateInstanceTimeLine(ctx context.Context, req *model.UpdateWorkorderInstanceTimelineReq, operatorID int) error {
-	panic("unimplemented")
+	return &model.ListResp[*model.WorkorderInstanceTimeline]{Total: total, Items: timelines}, nil
 }

@@ -94,3 +94,8 @@ type ListWorkorderInstanceCommentReq struct {
 	Type       *string `json:"type" form:"type" binding:"omitempty,oneof=normal system"`
 	Status     *int8   `json:"status" form:"status" binding:"omitempty,oneof=1 2 3"`
 }
+
+// GetInstanceCommentsTreeReq 获取工单实例评论树请求
+type GetInstanceCommentsTreeReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
+}

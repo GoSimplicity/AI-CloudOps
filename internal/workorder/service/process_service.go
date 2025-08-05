@@ -30,7 +30,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
@@ -113,9 +112,6 @@ func (p *workorderProcessService) CreateWorkorderProcess(ctx context.Context, re
 		IsDefault:    req.IsDefault,
 	}
 
-	// 自动生成流程步骤ID
-	p.generateStepIDs(&req.Definition)
-
 	// 处理流程定义
 	if len(req.Definition.Steps) > 0 || len(req.Definition.Connections) > 0 {
 		// 执行验证
@@ -165,14 +161,6 @@ func (p *workorderProcessService) UpdateWorkorderProcess(ctx context.Context, re
 		return fmt.Errorf("获取流程失败: %w", err)
 	}
 
-	// 检查流程状态，已发布的流程需要特殊处理
-	if existingProcess.Status == model.ProcessStatusPublished && req.Status != model.ProcessStatusDraft {
-		p.logger.Warn("尝试更新已发布的流程",
-			zap.Int("id", req.ID),
-			zap.String("name", existingProcess.Name))
-		return fmt.Errorf("已发布的流程只能取消发布，不能进行其他更新")
-	}
-
 	// 检查流程名称是否已存在
 	if req.Name != "" && req.Name != existingProcess.Name {
 		exists, err := p.dao.CheckProcessNameExists(ctx, req.Name, req.ID)
@@ -216,9 +204,6 @@ func (p *workorderProcessService) UpdateWorkorderProcess(ctx context.Context, re
 		Tags:         req.Tags,
 		IsDefault:    req.IsDefault,
 	}
-
-	// 自动生成流程步骤ID
-	p.generateStepIDs(&req.Definition)
 
 	// 处理流程定义
 	if len(req.Definition.Steps) > 0 || len(req.Definition.Connections) > 0 {
@@ -339,40 +324,3 @@ func (p *workorderProcessService) DetailWorkorderProcess(ctx context.Context, id
 
 	return process, nil
 }
-
-// generateStepIDs 智能生成流程步骤ID，保持顺序一致性
-func (p *workorderProcessService) generateStepIDs(definition *model.ProcessDefinition) {
-	// 创建名称到新ID的映射，用于更新连接
-	nameToID := make(map[string]string)
-	
-	// 为每个步骤分配连续的ID
-	for i := range definition.Steps {
-		oldID := definition.Steps[i].ID
-		newID := strconv.Itoa(i + 1)
-		definition.Steps[i].ID = newID
-		
-		// 如果步骤有名称，记录名称到新ID的映射
-		if definition.Steps[i].Name != "" {
-			nameToID[definition.Steps[i].Name] = newID
-		}
-		
-		// 如果步骤有旧ID，也记录旧ID到新ID的映射
-		if oldID != "" {
-			nameToID[oldID] = newID
-		}
-	}
-	
-	// 更新连接中的步骤引用，支持按名称或旧ID查找
-	for i := range definition.Connections {
-		// 更新from字段
-		if newID, exists := nameToID[definition.Connections[i].From]; exists {
-			definition.Connections[i].From = newID
-		}
-		
-		// 更新to字段
-		if newID, exists := nameToID[definition.Connections[i].To]; exists {
-			definition.Connections[i].To = newID
-		}
-	}
-}
-
