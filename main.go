@@ -150,14 +150,6 @@ func run() error {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Printf("StartCheckHostStatusManager panic: %v", r)
-				}
-			}()
-			_ = cmd.Cron.StartCheckHostStatusManager(ctx)
-		}()
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
 					log.Printf("StartCheckK8sStatusManager panic: %v", r)
 				}
 			}()

@@ -28,7 +28,6 @@ package service
 import (
 	"context"
 	"errors"
-	"strconv"
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -53,40 +52,34 @@ type TreeNodeService interface {
 	// 树结构相关接口
 	GetTreeList(ctx context.Context, req *model.GetTreeNodeListReq) (model.ListResp[*model.TreeNode], error)
 	GetNodeDetail(ctx context.Context, id int) (*model.TreeNode, error)
-	GetChildNodes(ctx context.Context, parentId int) ([]*model.TreeNode, error)
-	GetTreeStatistics(ctx context.Context) (*model.TreeNodeStatisticsResp, error)
 
 	// 节点管理接口
 	CreateNode(ctx context.Context, req *model.CreateTreeNodeReq) error
 	UpdateNode(ctx context.Context, req *model.UpdateTreeNodeReq) error
-	UpdateNodeStatus(ctx context.Context, req *model.UpdateTreeNodeStatusReq) error
 	DeleteNode(ctx context.Context, id int) error
 	MoveNode(ctx context.Context, nodeId, newParentId int) error
 
 	// 资源绑定接口
-	GetNodeResources(ctx context.Context, nodeId int) (model.ListResp[*model.ResourceItems], error)
 	BindResource(ctx context.Context, req *model.BindTreeNodeResourceReq) error
 	UnbindResource(ctx context.Context, req *model.UnbindTreeNodeResourceReq) error
 
 	// 成员管理接口
-	GetNodeMembers(ctx context.Context, nodeId int, memberType string) ([]*model.User, error)
+	GetNodeMembers(ctx context.Context, nodeId int, memberType string) (model.ListResp[*model.User], error)
 	AddNodeMember(ctx context.Context, req *model.AddTreeNodeMemberReq) error
 	RemoveNodeMember(ctx context.Context, req *model.RemoveTreeNodeMemberReq) error
 }
 
 type treeService struct {
-	logger   *zap.Logger
-	dao      dao.TreeNodeDAO
-	userDao  userDao.UserDAO
-	localDao dao.TreeLocalDAO
+	logger  *zap.Logger
+	dao     dao.TreeNodeDAO
+	userDao userDao.UserDAO
 }
 
-func NewTreeNodeService(logger *zap.Logger, dao dao.TreeNodeDAO, userDao userDao.UserDAO, localDao dao.TreeLocalDAO) TreeNodeService {
+func NewTreeNodeService(logger *zap.Logger, dao dao.TreeNodeDAO, userDao userDao.UserDAO) TreeNodeService {
 	return &treeService{
-		logger:   logger,
-		dao:      dao,
-		userDao:  userDao,
-		localDao: localDao,
+		logger:  logger,
+		dao:     dao,
+		userDao: userDao,
 	}
 }
 
@@ -96,7 +89,7 @@ func (t *treeService) GetTreeList(ctx context.Context, req *model.GetTreeNodeLis
 		return model.ListResp[*model.TreeNode]{}, errors.New("层级不能为负数")
 	}
 
-	t.logger.Debug("获取树节点列表", zap.Int("level", req.Level), zap.String("status", req.Status))
+	t.logger.Debug("获取树节点列表", zap.Int("level", req.Level), zap.Int("status", int(req.Status)))
 
 	trees, total, err := t.dao.GetTreeList(ctx, req)
 	if err != nil {
@@ -121,47 +114,23 @@ func (t *treeService) GetNodeDetail(ctx context.Context, id int) (*model.TreeNod
 	return node, nil
 }
 
-// GetChildNodes 获取子节点列表
-func (t *treeService) GetChildNodes(ctx context.Context, parentId int) ([]*model.TreeNode, error) {
-	if parentId < 0 {
-		return nil, errors.New("父节点ID不能为负数")
-	}
-
-	children, err := t.dao.GetChildNodes(ctx, parentId)
-	if err != nil {
-		t.logger.Error("获取子节点列表失败", zap.Int("parentId", parentId), zap.Error(err))
-		return nil, err
-	}
-
-	return children, nil
-}
-
-// GetTreeStatistics 获取树统计信息
-func (t *treeService) GetTreeStatistics(ctx context.Context) (*model.TreeNodeStatisticsResp, error) {
-	stats, err := t.dao.GetTreeStatistics(ctx)
-	if err != nil {
-		t.logger.Error("获取树统计信息失败", zap.Error(err))
-		return nil, err
-	}
-
-	return stats, nil
-}
-
 // CreateNode 创建节点
 func (t *treeService) CreateNode(ctx context.Context, req *model.CreateTreeNodeReq) error {
-	// 设置默认值
-	if req.Status == "" {
-		req.Status = DefaultStatus
+	// 设置默认状态
+	status := model.ACTIVE
+	if req.Status != 0 {
+		status = req.Status
 	}
 
 	// 创建节点实体
 	node := &model.TreeNode{
-		Name:        strings.TrimSpace(req.Name),
-		Description: strings.TrimSpace(req.Description),
-		ParentID:    req.ParentID,
-		Status:      req.Status,
-		CreatorID:   req.CreatorID,
-		IsLeaf:      req.IsLeaf,
+		Name:           strings.TrimSpace(req.Name),
+		Description:    strings.TrimSpace(req.Description),
+		ParentID:       req.ParentID,
+		Status:         status,
+		IsLeaf:         req.IsLeaf,
+		CreateUserID:   req.CreateUserID,
+		CreateUserName: req.CreateUserName,
 	}
 
 	return t.dao.CreateNode(ctx, node)
@@ -170,8 +139,9 @@ func (t *treeService) CreateNode(ctx context.Context, req *model.CreateTreeNodeR
 // UpdateNode 更新节点
 func (t *treeService) UpdateNode(ctx context.Context, req *model.UpdateTreeNodeReq) error {
 	// 设置默认状态
-	if req.Status == "" {
-		req.Status = NodeStatusActive
+	status := model.ACTIVE
+	if req.Status != 0 {
+		status = req.Status
 	}
 
 	// 创建更新实体
@@ -179,8 +149,9 @@ func (t *treeService) UpdateNode(ctx context.Context, req *model.UpdateTreeNodeR
 		Model:       model.Model{ID: req.ID},
 		Name:        strings.TrimSpace(req.Name),
 		Description: strings.TrimSpace(req.Description),
-		Status:      req.Status,
+		Status:      status,
 		ParentID:    req.ParentID,
+		IsLeaf:      req.IsLeaf,
 	}
 
 	return t.dao.UpdateNode(ctx, node)
@@ -222,9 +193,9 @@ func (t *treeService) MoveNode(ctx context.Context, nodeId, newParentId int) err
 }
 
 // GetNodeMembers 获取节点成员列表
-func (t *treeService) GetNodeMembers(ctx context.Context, nodeId int, memberType string) ([]*model.User, error) {
+func (t *treeService) GetNodeMembers(ctx context.Context, nodeId int, memberType string) (model.ListResp[*model.User], error) {
 	if memberType != "" && memberType != NodeAdminRole && memberType != NodeMemberRole && memberType != "all" {
-		return nil, errors.New("成员类型只能是admin、member或all")
+		return model.ListResp[*model.User]{}, errors.New("成员类型只能是admin、member或all")
 	}
 
 	t.logger.Debug("获取节点成员", zap.Int("nodeId", nodeId), zap.String("memberType", memberType))
@@ -232,81 +203,41 @@ func (t *treeService) GetNodeMembers(ctx context.Context, nodeId int, memberType
 	users, err := t.dao.GetNodeMembers(ctx, nodeId, memberType)
 	if err != nil {
 		t.logger.Error("获取节点成员失败", zap.Int("nodeId", nodeId), zap.String("memberType", memberType), zap.Error(err))
-		return nil, err
+		return model.ListResp[*model.User]{}, err
 	}
 
-	return users, nil
+	return model.ListResp[*model.User]{
+		Items: users,
+		Total: int64(len(users)),
+	}, nil
 }
 
 // AddNodeMember 添加节点成员
 func (t *treeService) AddNodeMember(ctx context.Context, req *model.AddTreeNodeMemberReq) error {
-	if req.MemberType != NodeAdminRole && req.MemberType != NodeMemberRole {
+	if req.MemberType != model.AdminRole && req.MemberType != model.MemberRole {
 		return errors.New("成员类型只能是admin或member")
 	}
 
 	t.logger.Info("添加节点成员",
 		zap.Int("nodeId", req.NodeID),
 		zap.Int("userId", req.UserID),
-		zap.String("type", req.MemberType))
+		zap.Int8("type", int8(req.MemberType)))
 
 	return t.dao.AddNodeMember(ctx, req.NodeID, req.UserID, req.MemberType)
 }
 
 // RemoveNodeMember 移除节点成员
 func (t *treeService) RemoveNodeMember(ctx context.Context, req *model.RemoveTreeNodeMemberReq) error {
-	if req.MemberType != NodeAdminRole && req.MemberType != NodeMemberRole {
+	if req.MemberType != model.AdminRole && req.MemberType != model.MemberRole {
 		return errors.New("成员类型只能是admin或member")
 	}
 
 	t.logger.Info("移除节点成员",
 		zap.Int("nodeId", req.NodeID),
 		zap.Int("userId", req.UserID),
-		zap.String("type", req.MemberType))
+		zap.Int8("type", int8(req.MemberType)))
 
 	return t.dao.RemoveNodeMember(ctx, req.NodeID, req.UserID, req.MemberType)
-}
-
-// UpdateNodeStatus 更新节点状态
-func (t *treeService) UpdateNodeStatus(ctx context.Context, req *model.UpdateTreeNodeStatusReq) error {
-	return t.dao.UpdateNodeStatus(ctx, req.ID, req.Status)
-}
-
-// GetNodeResources 获取节点资源列表
-func (t *treeService) GetNodeResources(ctx context.Context, nodeId int) (model.ListResp[*model.ResourceItems], error) {
-	resources, err := t.dao.GetNodeResources(ctx, nodeId)
-	if err != nil {
-		t.logger.Error("获取节点资源失败", zap.Int("nodeId", nodeId), zap.Error(err))
-		return model.ListResp[*model.ResourceItems]{}, err
-	}
-
-	items := make([]*model.ResourceItems, 0, len(resources))
-
-	// 获取资源信息
-	for _, r := range resources {
-		id, err := strconv.Atoi(r.ResourceID)
-		if err != nil {
-			t.logger.Error("获取资源ID失败", zap.String("resourceId", r.ResourceID), zap.Error(err))
-			return model.ListResp[*model.ResourceItems]{}, err
-		}
-		resource, err := t.localDao.GetByID(ctx, id)
-		if err != nil {
-			t.logger.Error("获取资源信息失败", zap.String("resourceId", r.ResourceID), zap.Error(err))
-			return model.ListResp[*model.ResourceItems]{}, err
-		}
-		items = append(items, &model.ResourceItems{
-			ResourceID:   r.ResourceID,
-			ResourceName: resource.Name,
-			ResourceType: r.ResourceType,
-			Status:       string(resource.Status),
-			CreatedAt:    resource.CreatedAt,
-			UpdatedAt:    resource.UpdatedAt,
-		})
-	}
-
-	return model.ListResp[*model.ResourceItems]{
-		Items: items,
-		Total: int64(len(items)),
-	}, nil
 }
 
 // BindResource 绑定资源到节点
@@ -315,27 +246,18 @@ func (t *treeService) BindResource(ctx context.Context, req *model.BindTreeNodeR
 		return errors.New("资源ID列表不能为空")
 	}
 
-	if req.ResourceType == "" {
-		return errors.New("资源类型不能为空")
-	}
-
-	return t.dao.BindResource(ctx, req.NodeID, req.ResourceType, req.ResourceIDs)
+	return t.dao.BindResource(ctx, req.NodeID, req.ResourceIDs)
 }
 
 // UnbindResource 解绑资源
 func (t *treeService) UnbindResource(ctx context.Context, req *model.UnbindTreeNodeResourceReq) error {
-	if strings.TrimSpace(string(req.ResourceType)) == "" {
-		return errors.New("资源类型不能为空")
-	}
-
-	if strings.TrimSpace(req.ResourceID) == "" {
-		return errors.New("资源ID不能为空")
+	if req.ResourceID <= 0 {
+		return errors.New("资源ID不能为空或小于等于0")
 	}
 
 	t.logger.Info("解绑资源",
 		zap.Int("nodeId", req.NodeID),
-		zap.String("resourceType", string(req.ResourceType)),
-		zap.String("resourceId", req.ResourceID))
+		zap.Int("resourceId", req.ResourceID))
 
-	return t.dao.UnbindResource(ctx, req.NodeID, string(req.ResourceType), req.ResourceID)
+	return t.dao.UnbindResource(ctx, req.NodeID, req.ResourceID)
 }

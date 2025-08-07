@@ -29,7 +29,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -39,8 +38,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -64,7 +61,7 @@ const (
 
 type CronManager interface {
 	StartOnDutyHistoryManager(ctx context.Context) error
-	StartCheckHostStatusManager(ctx context.Context) error
+	// StartCheckHostStatusManager(ctx context.Context) error
 	StartCheckK8sStatusManager(ctx context.Context) error
 	StartPrometheusConfigRefreshManager(ctx context.Context) error
 }
@@ -76,17 +73,15 @@ type cronManager struct {
 	k8sClient       client.K8sClient
 	promConfigCache cache.MonitorCache
 	clusterMgr      manager.ClusterManager
-	ecsDao          dao.TreeEcsDAO
 }
 
-func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, k8sDao admin.ClusterDAO, k8sClient client.K8sClient, clusterMgr manager.ClusterManager, ecsDao dao.TreeEcsDAO, promConfigCache cache.MonitorCache) CronManager {
+func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, k8sDao admin.ClusterDAO, k8sClient client.K8sClient, clusterMgr manager.ClusterManager, promConfigCache cache.MonitorCache) CronManager {
 	return &cronManager{
 		logger:          logger,
 		onDutyDao:       onDutyDao,
 		k8sDao:          k8sDao,
 		k8sClient:       k8sClient,
 		clusterMgr:      clusterMgr,
-		ecsDao:          ecsDao,
 		promConfigCache: promConfigCache,
 	}
 }
@@ -490,156 +485,156 @@ func (cm *cronManager) getMemberIndex(group *model.MonitorOnDutyGroup, userID in
 	return 0
 }
 
-// StartCheckHostStatusManager 定期检查ecs主机状态
-func (cm *cronManager) StartCheckHostStatusManager(ctx context.Context) error {
-	cm.logger.Info("启动主机状态检查任务")
+// // StartCheckHostStatusManager 定期检查ecs主机状态
+// func (cm *cronManager) StartCheckHostStatusManager(ctx context.Context) error {
+// 	cm.logger.Info("启动主机状态检查任务")
 
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				cm.logger.Error("主机状态检查任务发生 panic，正在重启", zap.Any("panic", r))
-				// 重启任务
-				time.Sleep(RetryDelay)
-				go cm.StartCheckHostStatusManager(ctx)
-			}
-		}()
+// 	go func() {
+// 		defer func() {
+// 			if r := recover(); r != nil {
+// 				cm.logger.Error("主机状态检查任务发生 panic，正在重启", zap.Any("panic", r))
+// 				// 重启任务
+// 				time.Sleep(RetryDelay)
+// 				go cm.StartCheckHostStatusManager(ctx)
+// 			}
+// 		}()
 
-		wait.UntilWithContext(ctx, func(ctx context.Context) {
-			defer func() {
-				if r := recover(); r != nil {
-					cm.logger.Error("主机状态检查任务执行时发生 panic", zap.Any("panic", r))
-				}
-			}()
+// 		wait.UntilWithContext(ctx, func(ctx context.Context) {
+// 			defer func() {
+// 				if r := recover(); r != nil {
+// 					cm.logger.Error("主机状态检查任务执行时发生 panic", zap.Any("panic", r))
+// 				}
+// 			}()
 
-			// 添加重试机制
-			var lastErr error
-			for attempt := 1; attempt <= MaxRetries; attempt++ {
-				if err := cm.checkHostStatusWithRetry(ctx); err != nil {
-					lastErr = err
-					if attempt < MaxRetries {
-						cm.logger.Warn("主机状态检查任务执行失败，准备重试",
-							zap.Int("attempt", attempt),
-							zap.Int("maxRetries", MaxRetries),
-							zap.Error(err))
-						time.Sleep(RetryDelay)
-						continue
-					}
-				} else {
-					if attempt > 1 {
-						cm.logger.Info("主机状态检查任务重试成功",
-							zap.Int("attempt", attempt))
-					}
-					return
-				}
-			}
+// 			// 添加重试机制
+// 			var lastErr error
+// 			for attempt := 1; attempt <= MaxRetries; attempt++ {
+// 				if err := cm.checkHostStatusWithRetry(ctx); err != nil {
+// 					lastErr = err
+// 					if attempt < MaxRetries {
+// 						cm.logger.Warn("主机状态检查任务执行失败，准备重试",
+// 							zap.Int("attempt", attempt),
+// 							zap.Int("maxRetries", MaxRetries),
+// 							zap.Error(err))
+// 						time.Sleep(RetryDelay)
+// 						continue
+// 					}
+// 				} else {
+// 					if attempt > 1 {
+// 						cm.logger.Info("主机状态检查任务重试成功",
+// 							zap.Int("attempt", attempt))
+// 					}
+// 					return
+// 				}
+// 			}
 
-			if lastErr != nil {
-				cm.logger.Error("主机状态检查任务重试失败，已达到最大重试次数",
-					zap.Int("maxRetries", MaxRetries),
-					zap.Error(lastErr))
-			}
-		}, HostCheckInterval)
-	}()
+// 			if lastErr != nil {
+// 				cm.logger.Error("主机状态检查任务重试失败，已达到最大重试次数",
+// 					zap.Int("maxRetries", MaxRetries),
+// 					zap.Error(lastErr))
+// 			}
+// 		}, HostCheckInterval)
+// 	}()
 
-	<-ctx.Done()
-	cm.logger.Info("主机状态检查任务已停止")
-	return nil
-}
+// 	<-ctx.Done()
+// 	cm.logger.Info("主机状态检查任务已停止")
+// 	return nil
+// }
 
-// checkHostStatusWithRetry 带重试机制的主机状态检查
-func (cm *cronManager) checkHostStatusWithRetry(ctx context.Context) error {
-	cm.logger.Info("开始检查ecs主机状态")
+// // checkHostStatusWithRetry 带重试机制的主机状态检查
+// func (cm *cronManager) checkHostStatusWithRetry(ctx context.Context) error {
+// 	cm.logger.Info("开始检查ecs主机状态")
 
-	const batchSize = HostCheckBatchSize
-	offset := 0
+// 	const batchSize = HostCheckBatchSize
+// 	offset := 0
 
-	for {
-		select {
-		case <-ctx.Done():
-			cm.logger.Info("主机状态检查任务被取消", zap.Int("processed", offset))
-			return ctx.Err()
-		default:
-		}
+// 	for {
+// 		select {
+// 		case <-ctx.Done():
+// 			cm.logger.Info("主机状态检查任务被取消", zap.Int("processed", offset))
+// 			return ctx.Err()
+// 		default:
+// 		}
 
-		ecss, _, err := cm.ecsDao.ListEcsResources(ctx, &model.ListEcsResourcesReq{
-			ListReq: model.ListReq{
-				Page: offset/batchSize + 1,
-				Size: batchSize,
-			},
-		})
-		if err != nil {
-			cm.logger.Error("获取ecs主机失败", zap.Error(err), zap.Int("offset", offset))
-			return fmt.Errorf("获取ecs主机失败: %w", err)
-		}
+// 		ecss, _, err := cm.ecsDao.ListEcsResources(ctx, &model.ListEcsResourcesReq{
+// 			ListReq: model.ListReq{
+// 				Page: offset/batchSize + 1,
+// 				Size: batchSize,
+// 			},
+// 		})
+// 		if err != nil {
+// 			cm.logger.Error("获取ecs主机失败", zap.Error(err), zap.Int("offset", offset))
+// 			return fmt.Errorf("获取ecs主机失败: %w", err)
+// 		}
 
-		if len(ecss) == 0 {
-			break
-		}
+// 		if len(ecss) == 0 {
+// 			break
+// 		}
 
-		var wg sync.WaitGroup
-		errChan := make(chan error, len(ecss))
+// 		var wg sync.WaitGroup
+// 		errChan := make(chan error, len(ecss))
 
-		for _, ecs := range ecss {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
+// 		for _, ecs := range ecss {
+// 			select {
+// 			case <-ctx.Done():
+// 				return ctx.Err()
+// 			default:
+// 			}
 
-			wg.Add(1)
-			go func(ecs *model.ResourceEcs) {
-				defer wg.Done()
-				defer func() {
-					if r := recover(); r != nil {
-						cm.logger.Error("检查主机状态时发生 panic",
-							zap.Any("panic", r),
-							zap.String("hostname", ecs.HostName))
-						errChan <- fmt.Errorf("检查主机状态时发生 panic: %v", r)
-					}
-				}()
+// 			wg.Add(1)
+// 			go func(ecs *model.ResourceEcs) {
+// 				defer wg.Done()
+// 				defer func() {
+// 					if r := recover(); r != nil {
+// 						cm.logger.Error("检查主机状态时发生 panic",
+// 							zap.Any("panic", r),
+// 							zap.String("hostname", ecs.HostName))
+// 						errChan <- fmt.Errorf("检查主机状态时发生 panic: %v", r)
+// 					}
+// 				}()
 
-				if ecs.IpAddr == "" {
-					cm.logger.Warn("目标ecs没有绑定公网ip",
-						zap.String("hostname", ecs.HostName),
-						zap.Int("id", ecs.ID))
-					return
-				}
+// 				if ecs.IpAddr == "" {
+// 					cm.logger.Warn("目标ecs没有绑定公网ip",
+// 						zap.String("hostname", ecs.HostName),
+// 						zap.Int("id", ecs.ID))
+// 					return
+// 				}
 
-				status := "RUNNING"
-				if !utils.Ping(ecs.IpAddr) {
-					cm.logger.Debug("ping请求失败",
-						zap.String("ip", ecs.IpAddr),
-						zap.String("hostname", ecs.HostName))
-					status = "ERROR"
-				}
+// 				status := "RUNNING"
+// 				if !utils.Ping(ecs.IpAddr) {
+// 					cm.logger.Debug("ping请求失败",
+// 						zap.String("ip", ecs.IpAddr),
+// 						zap.String("hostname", ecs.HostName))
+// 					status = "ERROR"
+// 				}
 
-				if err := cm.ecsDao.UpdateEcsStatus(ctx, strconv.Itoa(ecs.ID), status); err != nil {
-					cm.logger.Error("更新主机状态失败",
-						zap.Error(err),
-						zap.String("hostname", ecs.HostName),
-						zap.String("status", status))
-					errChan <- err
-				}
-			}(ecs)
-		}
+// 				if err := cm.ecsDao.UpdateEcsStatus(ctx, strconv.Itoa(ecs.ID), status); err != nil {
+// 					cm.logger.Error("更新主机状态失败",
+// 						zap.Error(err),
+// 						zap.String("hostname", ecs.HostName),
+// 						zap.String("status", status))
+// 					errChan <- err
+// 				}
+// 			}(ecs)
+// 		}
 
-		wg.Wait()
-		close(errChan)
+// 		wg.Wait()
+// 		close(errChan)
 
-		for err := range errChan {
-			cm.logger.Error("处理主机状态时发生错误", zap.Error(err), zap.Int("batch_offset", offset))
-		}
+// 		for err := range errChan {
+// 			cm.logger.Error("处理主机状态时发生错误", zap.Error(err), zap.Int("batch_offset", offset))
+// 		}
 
-		offset += len(ecss)
+// 		offset += len(ecss)
 
-		if len(ecss) < batchSize {
-			break
-		}
-	}
+// 		if len(ecss) < batchSize {
+// 			break
+// 		}
+// 	}
 
-	cm.logger.Info("完成ecs主机状态检查", zap.Int("total_processed", offset))
-	return nil
-}
+// 	cm.logger.Info("完成ecs主机状态检查", zap.Int("total_processed", offset))
+// 	return nil
+// }
 
 // StartCheckK8sStatusManager 启动k8s状态检查任务
 func (cm *cronManager) StartCheckK8sStatusManager(ctx context.Context) error {

@@ -49,14 +49,7 @@ func InitTables(db *gorm.DB) error {
 
 		// tree
 		&model.TreeNode{},
-		&model.TreeNodeResource{},
-		&model.TreeLocal{},
-		&model.ResourceEcs{},
-		&model.ResourceElb{},
-		&model.ResourceRds{},
-		&model.CloudAccount{},           // 云账户信息
-		&model.CloudAccountSyncStatus{}, // 云账户同步状态
-		&model.CloudAccountAuditLog{},   // 云账户审计日志
+		&model.TreeLocalResource{},
 
 		// k8s
 		&model.K8sCluster{},

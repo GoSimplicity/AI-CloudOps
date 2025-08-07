@@ -60,7 +60,7 @@ func (h *TreeLocalHandler) RegisterRouters(server *gin.Engine) {
 }
 
 func (h *TreeLocalHandler) GetTreeLocalList(ctx *gin.Context) {
-	var req model.GetTreeLocalListReq
+	var req model.GetTreeLocalResourceListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetTreeLocalList(ctx, &req)
@@ -68,7 +68,7 @@ func (h *TreeLocalHandler) GetTreeLocalList(ctx *gin.Context) {
 }
 
 func (h *TreeLocalHandler) GetTreeLocalDetail(ctx *gin.Context) {
-	var req model.GetTreeLocalDetailReq
+	var req model.GetTreeLocalResourceDetailReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -84,7 +84,12 @@ func (h *TreeLocalHandler) GetTreeLocalDetail(ctx *gin.Context) {
 }
 
 func (h *TreeLocalHandler) CreateTreeLocal(ctx *gin.Context) {
-	var req model.CreateTreeLocalReq
+	var req model.CreateTreeLocalResourceReq
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	req.CreateUserID = user.Uid
+	req.CreateUserName = user.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateTreeLocal(ctx, &req)
@@ -92,7 +97,7 @@ func (h *TreeLocalHandler) CreateTreeLocal(ctx *gin.Context) {
 }
 
 func (h *TreeLocalHandler) UpdateTreeLocal(ctx *gin.Context) {
-	var req model.UpdateTreeLocalReq
+	var req model.UpdateTreeLocalResourceReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -108,7 +113,7 @@ func (h *TreeLocalHandler) UpdateTreeLocal(ctx *gin.Context) {
 }
 
 func (h *TreeLocalHandler) DeleteTreeLocal(ctx *gin.Context) {
-	var req model.DeleteTreeLocalReq
+	var req model.DeleteTreeLocalResourceReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -124,7 +129,7 @@ func (h *TreeLocalHandler) DeleteTreeLocal(ctx *gin.Context) {
 }
 
 func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
-	var req model.GetTreeLocalDetailReq
+	var req model.GetTreeLocalResourceDetailReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -148,6 +153,7 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 		utils.ErrorWithMessage(ctx, "升级 websocket 连接失败: "+err.Error())
 		return
 	}
+
 	defer func() {
 		err := ws.Close()
 		if err != nil {
@@ -161,7 +167,7 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 		}
 	}()
 
-	err = h.ssh.Connect(ld.IpAddr, ld.Port, ld.Username, ld.Password, ld.Key, string(ld.AuthMode), uc.Uid)
+	err = h.ssh.Connect(ld.IpAddr, ld.Port, ld.Username, ld.Password, ld.Key, int8(ld.AuthMode), uc.Uid)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "连接ECS实例失败: "+err.Error())
 		return
@@ -172,7 +178,7 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 }
 
 func (h *TreeLocalHandler) BindTreeLocal(ctx *gin.Context) {
-	var req model.BindLocalResourceReq
+	var req model.BindTreeLocalResourceReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -189,7 +195,7 @@ func (h *TreeLocalHandler) BindTreeLocal(ctx *gin.Context) {
 }
 
 func (h *TreeLocalHandler) UnbindTreeLocal(ctx *gin.Context) {
-	var req model.UnBindLocalResourceReq
+	var req model.UnBindTreeLocalResourceReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
