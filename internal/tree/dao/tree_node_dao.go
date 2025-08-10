@@ -348,7 +348,7 @@ func (t *treeNodeDAO) DeleteNode(ctx context.Context, id int) error {
 		}
 
 		// 清理资源关联
-		if err := tx.Exec("DELETE FROM cl_tree_node_local WHERE id = ?", id).Error; err != nil {
+		if err := tx.Exec("DELETE FROM cl_tree_node_local WHERE tree_node_id = ?", id).Error; err != nil {
 			t.logger.Error("清理资源关联失败", zap.Int("id", id), zap.Error(err))
 			return err
 		}

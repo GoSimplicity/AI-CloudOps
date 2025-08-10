@@ -26,6 +26,7 @@
 package api
 
 import (
+	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -245,7 +246,7 @@ func (h *TreeNodeHandler) GetNodeMembers(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.GetNodeMembers(ctx, req.ID, string(req.Type))
+		return h.service.GetNodeMembers(ctx, req.ID, fmt.Sprint(req.Type))
 	})
 }
 

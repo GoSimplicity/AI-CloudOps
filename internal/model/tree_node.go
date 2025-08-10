@@ -42,17 +42,17 @@ const (
 // TreeNode 服务树节点结构
 type TreeNode struct {
 	Model
-	Name               string               `json:"name" gorm:"type:varchar(50);not null;comment:节点名称"`                                   // 节点名称
-	ParentID           int                  `json:"parent_id" gorm:"index;comment:父节点ID;default:0"`                                       // 父节点ID
-	Level              int                  `json:"level" gorm:"comment:节点层级,默认在第1层;default:1"`                                           // 节点层级
-	Description        string               `json:"description" gorm:"type:text;comment:节点描述"`                                            // 节点描述
-	CreateUserID       int                  `json:"create_user_id" gorm:"comment:创建者ID;default:0"`                                        // 创建者ID
-	CreateUserName     string               `json:"create_user_name" gorm:"type:varchar(100);comment:创建者姓名"`                              // 创建者姓名
-	Status             TreeNodeStatus       `json:"status" gorm:"default:1;comment:节点状态, 1:活跃 2:非活跃"`                                     // 节点状态
+	Name               string               `json:"name" gorm:"type:varchar(50);not null;comment:节点名称"`      // 节点名称
+	ParentID           int                  `json:"parent_id" gorm:"index;comment:父节点ID;default:0"`          // 父节点ID
+	Level              int                  `json:"level" gorm:"comment:节点层级,默认在第1层;default:1"`              // 节点层级
+	Description        string               `json:"description" gorm:"type:text;comment:节点描述"`               // 节点描述
+	CreateUserID       int                  `json:"create_user_id" gorm:"comment:创建者ID;default:0"`           // 创建者ID
+	CreateUserName     string               `json:"create_user_name" gorm:"type:varchar(100);comment:创建者姓名"` // 创建者姓名
+	Status             TreeNodeStatus       `json:"status" gorm:"default:1;comment:节点状态, 1:活跃 2:非活跃"`        // 节点状态
 	AdminUsers         []User               `json:"admins" gorm:"many2many:cl_tree_node_admin;joinForeignKey:ID;joinReferences:UserID"`   // 管理员多对多关系
 	MemberUsers        []User               `json:"members" gorm:"many2many:cl_tree_node_member;joinForeignKey:ID;joinReferences:UserID"` // 成员多对多关系
-	IsLeaf             int8                 `json:"is_leaf" gorm:"comment:是否为叶子节点1:是 2:不是;default:2"`                                     // 是否为叶子节点
-	Children           []*TreeNode          `json:"children" gorm:"-"`                                                                    // 子节点列表
+	IsLeaf             int8                 `json:"is_leaf" gorm:"comment:是否为叶子节点1:是 2:不是;default:2"`        // 是否为叶子节点
+	Children           []*TreeNode          `json:"children" gorm:"-"`                                       // 子节点列表
 	TreeLocalResources []*TreeLocalResource `json:"tree_local_resources" gorm:"many2many:cl_tree_node_local;"`
 }
 
