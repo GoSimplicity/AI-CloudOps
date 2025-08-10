@@ -119,7 +119,7 @@ func (h *TreeNodeHandler) GetNodeDetail(ctx *gin.Context) {
 // @Tags 资源树管理
 // @Accept json
 // @Produce json
-// @Param request body model.CreateNodeReq true "创建节点请求参数"
+// @Param request body model.CreateTreeNodeReq true "创建节点请求参数"
 // @Success 200 {object} utils.ApiResponse "创建成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
@@ -145,7 +145,7 @@ func (h *TreeNodeHandler) CreateNode(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "节点ID"
-// @Param request body model.UpdateNodeReq true "更新节点请求参数"
+// @Param request body model.UpdateTreeNodeReq true "更新节点请求参数"
 // @Success 200 {object} utils.ApiResponse "更新成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
@@ -200,7 +200,7 @@ func (h *TreeNodeHandler) DeleteNode(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "节点ID"
-// @Param request body model.MoveNodeReq true "移动节点请求参数"
+// @Param request body model.MoveTreeNodeReq true "移动节点请求参数"
 // @Success 200 {object} utils.ApiResponse "移动成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
@@ -255,7 +255,7 @@ func (h *TreeNodeHandler) GetNodeMembers(ctx *gin.Context) {
 // @Tags 资源树管理
 // @Accept json
 // @Produce json
-// @Param request body model.AddNodeMemberReq true "添加节点成员请求参数"
+// @Param request body model.AddTreeNodeMemberReq true "添加节点成员请求参数"
 // @Success 200 {object} utils.ApiResponse "添加成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
@@ -276,7 +276,7 @@ func (h *TreeNodeHandler) AddNodeMember(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "节点ID"
-// @Param request body model.RemoveNodeMemberReq true "移除节点成员请求参数"
+// @Param request body model.RemoveTreeNodeMemberReq true "移除节点成员请求参数"
 // @Success 200 {object} utils.ApiResponse "移除成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
@@ -304,7 +304,7 @@ func (h *TreeNodeHandler) RemoveNodeMember(ctx *gin.Context) {
 // @Tags 资源树管理
 // @Accept json
 // @Produce json
-// @Param request body model.BindResourceReq true "绑定资源请求参数"
+// @Param request body model.BindTreeNodeResourceReq true "绑定资源请求参数"
 // @Success 200 {object} utils.ApiResponse "绑定成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
@@ -324,7 +324,7 @@ func (h *TreeNodeHandler) BindResource(ctx *gin.Context) {
 // @Tags 资源树管理
 // @Accept json
 // @Produce json
-// @Param request body model.UnbindResourceReq true "解绑资源请求参数"
+// @Param request body model.UnbindTreeNodeResourceReq true "解绑资源请求参数"
 // @Success 200 {object} utils.ApiResponse "解绑成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
