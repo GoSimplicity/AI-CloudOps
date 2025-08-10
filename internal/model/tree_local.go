@@ -47,7 +47,7 @@ const (
 type TreeLocalResource struct {
 	Model
 	Name           string         `json:"name" gorm:"type:varchar(100);comment:资源名称"`
-	Status         ResourceStatus `json:"status" gorm:"type:varchar(50);comment:资源状态;default:1"`
+	Status         ResourceStatus `json:"status" gorm:"type:tinyint(1);comment:资源状态;default:1"`
 	Environment    string         `json:"environment" gorm:"type:varchar(50);comment:环境标识,如dev,prod"`
 	Description    string         `json:"description" gorm:"type:text;comment:资源描述"`
 	Tags           StringList     `json:"tags" gorm:"type:varchar(500);comment:资源标签集合"`

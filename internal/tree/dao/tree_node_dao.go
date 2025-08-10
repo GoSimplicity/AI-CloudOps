@@ -336,13 +336,13 @@ func (t *treeNodeDAO) DeleteNode(ctx context.Context, id int) error {
 
 	return t.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 清理管理员关联
-		if err := tx.Exec("DELETE FROM cl_tree_node_admin WHERE id = ?", id).Error; err != nil {
+		if err := tx.Exec("DELETE FROM cl_tree_node_admin WHERE tree_node_id = ?", id).Error; err != nil {
 			t.logger.Error("清理管理员关联失败", zap.Int("id", id), zap.Error(err))
 			return err
 		}
 
 		// 清理成员关联
-		if err := tx.Exec("DELETE FROM cl_tree_node_member WHERE id = ?", id).Error; err != nil {
+		if err := tx.Exec("DELETE FROM cl_tree_node_member WHERE tree_node_id = ?", id).Error; err != nil {
 			t.logger.Error("清理成员关联失败", zap.Int("id", id), zap.Error(err))
 			return err
 		}
@@ -537,7 +537,7 @@ func (t *treeNodeDAO) AddNodeMember(ctx context.Context, nodeId int, userId int,
 	case model.AdminRole:
 		// 检查是否已存在
 		var count int64
-		if err := db.Table("cl_tree_node_admin").Where("id = ? AND user_id = ?", nodeId, userId).Count(&count).Error; err != nil {
+		if err := db.Table("cl_tree_node_admin").Where("tree_node_id = ? AND user_id = ?", nodeId, userId).Count(&count).Error; err != nil {
 			return err
 		}
 		if count > 0 {
@@ -552,7 +552,7 @@ func (t *treeNodeDAO) AddNodeMember(ctx context.Context, nodeId int, userId int,
 	case model.MemberRole:
 		// 检查是否已存在
 		var count int64
-		if err := db.Table("cl_tree_node_member").Where("id = ? AND user_id = ?", nodeId, userId).Count(&count).Error; err != nil {
+		if err := db.Table("cl_tree_node_member").Where("tree_node_id = ? AND user_id = ?", nodeId, userId).Count(&count).Error; err != nil {
 			return err
 		}
 		if count > 0 {
