@@ -38,7 +38,7 @@ type MonitorScrapeJob struct {
 	Model
 	Name                     string               `json:"name" binding:"required,min=1,max=50" gorm:"size:100;comment:采集任务名称"`
 	UserID                   int                  `json:"user_id" gorm:"index;not null;comment:任务关联的用户ID"`
-	Enable                   int8                 `json:"enable" gorm:"type:tinyint(1);default:2;not null;comment:是否启用采集任务: 1-启用, 2-禁用"`
+	Enable                   int8                 `json:"enable" gorm:"type:tinyint(1);default:2;not null;index;comment:是否启用采集任务: 1-启用, 2-禁用"`
 	ServiceDiscoveryType     ServiceDiscoveryType `json:"service_discovery_type" gorm:"type:tinyint(1);not null;default:1;comment:服务发现类型(1-k8s, 2-http, 3-static)"`
 	MetricsPath              string               `json:"metrics_path" gorm:"size:255;not null;default:'/metrics';comment:监控采集的路径"`
 	Scheme                   string               `json:"scheme" gorm:"size:10;not null;default:'http';comment:监控采集的协议方案(http/https)"`

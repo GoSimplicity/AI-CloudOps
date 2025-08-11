@@ -60,8 +60,8 @@ func (m *MonitorAlertRule) TableName() string {
 // GetMonitorAlertRuleListReq 获取告警规则列表的请求
 type GetMonitorAlertRuleListReq struct {
 	ListReq
-	Enable   *int8              `json:"enable" form:"enable" binding:"omitempty"`
-	Severity *AlertRuleSeverity `json:"severity" form:"severity" binding:"omitempty"`
+	Enable   *int8              `json:"enable" form:"enable" binding:"omitempty,oneof=1 2"`
+	Severity *AlertRuleSeverity `json:"severity" form:"severity" binding:"omitempty,oneof=1 2 3"`
 }
 
 // CreateMonitorAlertRuleReq 创建告警规则请求
@@ -88,9 +88,9 @@ type UpdateMonitorAlertRuleReq struct {
 	PoolID      int               `json:"pool_id" binding:"required"`
 	SendGroupID int               `json:"send_group_id" binding:"required"`
 	IpAddress   string            `json:"ip_address"`
-	Enable      int8              `json:"enable"`
+	Enable      int8              `json:"enable" binding:"omitempty,oneof=1 2"`
 	Expr        string            `json:"expr" binding:"required"`
-	Severity    AlertRuleSeverity `json:"severity" binding:"omitempty"`
+	Severity    AlertRuleSeverity `json:"severity" binding:"omitempty,oneof=1 2 3"`
 	GrafanaLink string            `json:"grafana_link"`
 	ForTime     string            `json:"for_time" binding:"required"`
 	Labels      StringList        `json:"labels"`
@@ -109,5 +109,10 @@ type PromqlAlertRuleExprCheckReq struct {
 
 // GetMonitorAlertRuleReq 获取告警规则请求
 type GetMonitorAlertRuleReq struct {
+	ID int `json:"id" form:"id" binding:"required"`
+}
+
+// EnableSwitchMonitorAlertRuleReq 启用/禁用监控告警规则请求
+type EnableSwitchMonitorAlertRuleReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }

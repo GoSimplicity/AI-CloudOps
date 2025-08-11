@@ -47,7 +47,7 @@ func (m *MonitorRecordRule) TableName() string {
 type GetMonitorRecordRuleListReq struct {
 	ListReq
 	PoolID *int  `json:"pool_id" form:"pool_id" binding:"omitempty"`
-	Enable *int8 `json:"enable" form:"enable" binding:"omitempty"`
+	Enable *int8 `json:"enable" form:"enable" binding:"omitempty,oneof=1 2"`
 }
 
 // CreateMonitorRecordRuleReq 创建记录规则请求
@@ -68,7 +68,7 @@ type UpdateMonitorRecordRuleReq struct {
 	Name      string     `json:"name" binding:"required,min=1,max=50"`
 	PoolID    int        `json:"pool_id" binding:"required"`
 	IpAddress string     `json:"ip_address"`
-	Enable    int8       `json:"enable"`
+	Enable    int8       `json:"enable" binding:"omitempty,oneof=1 2"`
 	Expr      string     `json:"expr" binding:"required"`
 	Labels    StringList `json:"labels"`
 }
