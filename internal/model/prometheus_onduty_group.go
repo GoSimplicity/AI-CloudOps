@@ -82,7 +82,7 @@ type MonitorOnDutyOne struct {
 // GetMonitorOnDutyGroupListReq 获取值班组列表请求
 type GetMonitorOnDutyGroupListReq struct {
 	ListReq
-	Enable *int8 `json:"enable" form:"enable" binding:"omitempty"`
+	Enable *int8 `json:"enable" form:"enable" binding:"omitempty,oneof=1 2"`
 }
 
 // CreateMonitorOnDutyGroupReq 创建值班组请求
@@ -104,18 +104,6 @@ type CreateMonitorOnDutyGroupChangeReq struct {
 	UserID         int    `json:"user_id" binding:"required"`
 	CreateUserName string `json:"create_user_name"`
 	Reason         string `json:"reason" binding:"max=255"`
-}
-
-// CreateMonitorOnDutyPlanReq 创建值班计划请求
-type CreateMonitorOnDutyPlanReq struct {
-	OnDutyGroupID  int    `json:"on_duty_group_id" binding:"required"`
-	Date           string `json:"date" binding:"required"`
-	OnDutyUserID   int    `json:"on_duty_user_id" binding:"required"`
-	IsAdjusted     bool   `json:"is_adjusted"`
-	OriginalUserID int    `json:"original_user_id"`
-	CreateUserID   int    `json:"create_user_id" binding:"required"`
-	CreateUserName string `json:"create_user_name"`
-	Remark         string `json:"remark" binding:"max=255"`
 }
 
 // UpdateMonitorOnDutyGroupReq 更新值班组信息请求

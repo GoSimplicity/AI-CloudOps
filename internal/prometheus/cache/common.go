@@ -46,6 +46,27 @@ const (
 	ConfigNamePrometheus   = "prometheus_scrape_pool_%d_%s.yaml"
 	ConfigNameAlertRule    = "prometheus_alert_rule_%d_%s.yaml"
 	ConfigNameRecordRule   = "prometheus_record_rule_%d_%s.yaml"
+
+	// Redis Key 前缀
+	redisPrefix = "aiops:monitor:config"
+
+	// 各配置在 Redis 中的 Key 模板（面向实例IP）
+	redisKeyPrometheusMainFmt   = redisPrefix + ":prometheus:main:%s"
+	redisKeyAlertManagerMainFmt = redisPrefix + ":alertmanager:main:%s"
+	redisKeyAlertRuleFmt        = redisPrefix + ":prometheus:alert_rule:%s"
+	redisKeyRecordRuleFmt       = redisPrefix + ":prometheus:record_rule:%s"
+
+	// 各池对应的实例集合，用于清理失效IP
+	redisSetPrometheusMainPoolIPsFmt   = redisPrefix + ":prometheus:main:pool:%d:ips"
+	redisSetAlertManagerMainPoolIPsFmt = redisPrefix + ":alertmanager:main:pool:%d:ips"
+	redisSetAlertRulePoolIPsFmt        = redisPrefix + ":prometheus:alert_rule:pool:%d:ips"
+	redisSetRecordRulePoolIPsFmt       = redisPrefix + ":prometheus:record_rule:pool:%d:ips"
+
+	// 各池的哈希缓存Key（用于跳变检测）
+	redisHashPrometheusPoolFmt   = redisPrefix + ":hash:prometheus:%s"
+	redisHashAlertManagerPoolFmt = redisPrefix + ":hash:alertmanager:%s"
+	redisHashAlertRulePoolFmt    = redisPrefix + ":hash:alert_rule:%s"
+	redisHashRecordRulePoolFmt   = redisPrefix + ":hash:record_rule:%s"
 )
 
 // calculateConfigHash 计算配置内容的哈希值
@@ -123,4 +144,54 @@ func cleanupInvalidIPs(configMap map[string]string, validIPs map[string]struct{}
 			logger.Debug(LogModuleMonitor+"删除无效IP配置", zap.String("ip", ip))
 		}
 	}
+}
+
+// 以下为 Redis Key 构造的辅助函数，统一管理，避免各处硬编码
+
+func buildRedisKeyPrometheusMain(ip string) string {
+	return fmt.Sprintf(redisKeyPrometheusMainFmt, ip)
+}
+
+func buildRedisKeyAlertManagerMain(ip string) string {
+	return fmt.Sprintf(redisKeyAlertManagerMainFmt, ip)
+}
+
+func buildRedisKeyAlertRule(ip string) string {
+	return fmt.Sprintf(redisKeyAlertRuleFmt, ip)
+}
+
+func buildRedisKeyRecordRule(ip string) string {
+	return fmt.Sprintf(redisKeyRecordRuleFmt, ip)
+}
+
+func buildRedisSetKeyPrometheusMainPoolIPs(poolID int) string {
+	return fmt.Sprintf(redisSetPrometheusMainPoolIPsFmt, poolID)
+}
+
+func buildRedisSetKeyAlertManagerMainPoolIPs(poolID int) string {
+	return fmt.Sprintf(redisSetAlertManagerMainPoolIPsFmt, poolID)
+}
+
+func buildRedisSetKeyAlertRulePoolIPs(poolID int) string {
+	return fmt.Sprintf(redisSetAlertRulePoolIPsFmt, poolID)
+}
+
+func buildRedisSetKeyRecordRulePoolIPs(poolID int) string {
+	return fmt.Sprintf(redisSetRecordRulePoolIPsFmt, poolID)
+}
+
+func buildRedisHashKeyPrometheus(poolName string) string {
+	return fmt.Sprintf(redisHashPrometheusPoolFmt, poolName)
+}
+
+func buildRedisHashKeyAlertManager(poolName string) string {
+	return fmt.Sprintf(redisHashAlertManagerPoolFmt, poolName)
+}
+
+func buildRedisHashKeyAlertRule(poolName string) string {
+	return fmt.Sprintf(redisHashAlertRulePoolFmt, poolName)
+}
+
+func buildRedisHashKeyRecordRule(poolName string) string {
+	return fmt.Sprintf(redisHashRecordRulePoolFmt, poolName)
 }

@@ -30,6 +30,7 @@ import (
 	"errors"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -46,6 +47,7 @@ type AlertManagerPoolService interface {
 type alertManagerPoolService struct {
 	dao     alert.AlertManagerPoolDAO
 	sendDao alert.AlertManagerSendDAO
+	cache   cache.MonitorCache
 	l       *zap.Logger
 }
 
@@ -53,10 +55,12 @@ func NewAlertManagerPoolService(
 	dao alert.AlertManagerPoolDAO,
 	sendDao alert.AlertManagerSendDAO,
 	l *zap.Logger,
+	cache cache.MonitorCache,
 ) AlertManagerPoolService {
 	return &alertManagerPoolService{
 		dao:     dao,
 		sendDao: sendDao,
+		cache:   cache,
 		l:       l,
 	}
 }
@@ -109,6 +113,13 @@ func (a *alertManagerPoolService) CreateMonitorAlertManagerPool(ctx context.Cont
 		a.l.Error("创建 AlertManager 集群池失败", zap.Error(err))
 		return err
 	}
+
+	// 同步刷新缓存（异步）
+	go func() {
+		if err := a.cache.MonitorCacheManager(context.Background()); err != nil {
+			a.l.Error("创建 AlertManager 集群池后刷新缓存失败", zap.Error(err))
+		}
+	}()
 
 	return nil
 }
@@ -163,6 +174,12 @@ func (a *alertManagerPoolService) UpdateMonitorAlertManagerPool(ctx context.Cont
 		return err
 	}
 
+	go func() {
+		if err := a.cache.MonitorCacheManager(context.Background()); err != nil {
+			a.l.Error("更新 AlertManager 集群池后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -188,6 +205,12 @@ func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Cont
 		a.l.Error("删除 AlertManager 集群池失败", zap.Error(err))
 		return err
 	}
+
+	go func() {
+		if err := a.cache.MonitorCacheManager(context.Background()); err != nil {
+			a.l.Error("删除 AlertManager 集群池后刷新缓存失败", zap.Error(err))
+		}
+	}()
 
 	return nil
 }

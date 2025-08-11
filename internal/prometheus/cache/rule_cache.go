@@ -38,6 +38,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	pm "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/rulefmt"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -49,12 +50,12 @@ type AlertRuleConfigCache interface {
 }
 
 type alertRuleConfigCache struct {
-	configMap     map[string]string
+	// Redis 替代本地缓存
+	redis         redis.Cmdable
 	mu            sync.RWMutex
 	logger        *zap.Logger
 	scrapePoolDAO scrapePoolDao.ScrapePoolDAO
 	alertRuleDAO  alertRuleDao.AlertManagerRuleDAO
-	ruleHashes    map[string]string
 	configDAO     configDao.MonitorConfigDAO
 	batchManager  *BatchConfigManager
 }
@@ -74,14 +75,14 @@ func NewAlertRuleConfigCache(
 	alertRuleDAO alertRuleDao.AlertManagerRuleDAO,
 	configDAO configDao.MonitorConfigDAO,
 	batchManager *BatchConfigManager,
+	redisClient redis.Cmdable,
 ) AlertRuleConfigCache {
 	return &alertRuleConfigCache{
 		logger:        logger,
-		configMap:     make(map[string]string),
+		redis:         redisClient,
 		mu:            sync.RWMutex{},
 		scrapePoolDAO: scrapePoolDAO,
 		alertRuleDAO:  alertRuleDAO,
-		ruleHashes:    make(map[string]string),
 		configDAO:     configDAO,
 		batchManager:  batchManager,
 	}
@@ -89,9 +90,18 @@ func NewAlertRuleConfigCache(
 
 // GetConfigByIP 根据IP地址获取告警规则配置
 func (r *alertRuleConfigCache) GetConfigByIP(ip string) string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.configMap[ip]
+	if ip == "" {
+		r.logger.Warn(LogModuleMonitor + "获取配置时IP为空")
+		return ""
+	}
+	ctx := context.Background()
+	val, err := r.redis.Get(ctx, buildRedisKeyAlertRule(ip)).Result()
+	if err != nil {
+		r.logger.Debug(LogModuleMonitor+"缓存未命中", zap.String("ip", ip), zap.Error(err))
+		return ""
+	}
+	r.logger.Debug(LogModuleMonitor+"缓存命中", zap.String("ip", ip))
+	return val
 }
 
 // GenerateMainConfig 生成告警规则配置并入库
@@ -111,13 +121,6 @@ func (r *alertRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 		return nil
 	}
 
-	// 直接加写锁，所有操作同步进行
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	tempConfigMap := utils.CopyMap(r.configMap)
-	tempPoolHashes := utils.CopyMap(r.ruleHashes)
-
 	validIPs := make(map[string]struct{})
 	processedCount := 0
 	allConfigsToSave := make(map[string]ConfigData)
@@ -131,7 +134,9 @@ func (r *alertRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 		}
 
 		currentHash := utils.CalculatePromHash(pool)
-		if cachedHash, ok := tempPoolHashes[pool.Name]; ok && cachedHash == currentHash {
+		hashKey := buildRedisHashKeyAlertRule(pool.Name)
+		cachedHash, _ := r.redis.Get(ctx, hashKey).Result()
+		if cachedHash == currentHash {
 			for _, ip := range pool.PrometheusInstances {
 				validIPs[ip] = struct{}{}
 			}
@@ -140,20 +145,39 @@ func (r *alertRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 
 		oneMap := r.GenerateConfigForPool(ctx, pool)
 		if oneMap != nil {
+			// Redis 旧集合
+			setKey := buildRedisSetKeyAlertRulePoolIPs(pool.ID)
+			oldIPs, _ := r.redis.SMembers(ctx, setKey).Result()
+			oldIPSet := map[string]struct{}{}
+			for _, old := range oldIPs {
+				oldIPSet[old] = struct{}{}
+			}
+
 			for ip, yamlContent := range oneMap {
 				configName := fmt.Sprintf(ConfigNameAlertRule, pool.ID, ip)
-				tempConfigMap[ip] = yamlContent
 				validIPs[ip] = struct{}{}
 
-				// 准备批量保存的配置数据
 				allConfigsToSave[ip] = ConfigData{
 					Name:       configName,
 					PoolID:     pool.ID,
 					ConfigType: model.ConfigTypeAlertRule,
 					Content:    yamlContent,
 				}
+				// 写 Redis
+				if err := r.redis.Set(ctx, buildRedisKeyAlertRule(ip), yamlContent, 0).Err(); err != nil {
+					r.logger.Error(LogModuleMonitor+"写入Redis失败", zap.String("pool_name", pool.Name), zap.String("ip", ip), zap.Error(err))
+					continue
+				}
+				_ = r.redis.SAdd(ctx, setKey, ip).Err()
+				delete(oldIPSet, ip)
 			}
-			tempPoolHashes[pool.Name] = currentHash
+
+			for staleIP := range oldIPSet {
+				_ = r.redis.Del(ctx, buildRedisKeyAlertRule(staleIP)).Err()
+				_ = r.redis.SRem(ctx, setKey, staleIP).Err()
+				r.logger.Debug(LogModuleMonitor+"删除无效IP配置", zap.String("ip", staleIP))
+			}
+			_ = r.redis.Set(ctx, hashKey, currentHash, 0).Err()
 		}
 		processedCount++
 	}
@@ -166,11 +190,7 @@ func (r *alertRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 		}
 	}
 
-	// 清理无效的IP配置
-	cleanupInvalidIPs(tempConfigMap, validIPs, r.logger)
-
-	r.configMap = tempConfigMap
-	r.ruleHashes = tempPoolHashes
+	// 不再维护本地缓存
 
 	logBatchOperation(r.logger, "生成告警规则配置", processedCount, len(pools), startTime)
 	return nil

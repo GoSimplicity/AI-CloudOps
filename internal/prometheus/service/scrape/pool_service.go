@@ -175,6 +175,12 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, req *mo
 		return err
 	}
 
+	go func() {
+		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
+			s.l.Error("创建抓取池后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -266,6 +272,12 @@ func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, req *mo
 		return err
 	}
 
+	go func() {
+		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
+			s.l.Error("更新抓取池后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -302,6 +314,12 @@ func (s *scrapePoolService) DeleteMonitorScrapePool(ctx context.Context, req *mo
 		s.l.Error("删除抓取池失败", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
+
+	go func() {
+		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
+			s.l.Error("删除抓取池后刷新缓存失败", zap.Error(err))
+		}
+	}()
 
 	return nil
 }

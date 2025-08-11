@@ -30,6 +30,7 @@ import (
 	"errors"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/prometheus/prometheus/promql/parser"
 	"go.uber.org/zap"
@@ -50,6 +51,7 @@ type alertManagerRuleService struct {
 	ruleDAO      alert.AlertManagerRuleDAO
 	poolDAO      alert.AlertManagerPoolDAO
 	sendGroupDAO alert.AlertManagerSendDAO
+	cache        cache.MonitorCache
 }
 
 func NewAlertManagerRuleService(
@@ -57,12 +59,14 @@ func NewAlertManagerRuleService(
 	ruleDAO alert.AlertManagerRuleDAO,
 	poolDAO alert.AlertManagerPoolDAO,
 	sendGroupDAO alert.AlertManagerSendDAO,
+	cache cache.MonitorCache,
 ) AlertManagerRuleService {
 	return &alertManagerRuleService{
 		logger:       logger,
 		ruleDAO:      ruleDAO,
 		poolDAO:      poolDAO,
 		sendGroupDAO: sendGroupDAO,
+		cache:        cache,
 	}
 }
 
@@ -147,6 +151,12 @@ func (s *alertManagerRuleService) CreateMonitorAlertRule(ctx context.Context, re
 		return err
 	}
 
+	go func() {
+		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
+			s.logger.Error("创建告警规则后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -194,6 +204,12 @@ func (s *alertManagerRuleService) UpdateMonitorAlertRule(ctx context.Context, re
 		return err
 	}
 
+	go func() {
+		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
+			s.logger.Error("更新告警规则后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -214,6 +230,12 @@ func (s *alertManagerRuleService) DeleteMonitorAlertRule(ctx context.Context, re
 		s.logger.Error("删除告警规则失败", zap.Error(err))
 		return err
 	}
+
+	go func() {
+		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
+			s.logger.Error("删除告警规则后刷新缓存失败", zap.Error(err))
+		}
+	}()
 
 	return nil
 }

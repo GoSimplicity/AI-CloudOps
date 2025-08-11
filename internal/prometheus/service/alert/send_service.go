@@ -31,6 +31,7 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
@@ -50,14 +51,16 @@ type alertManagerSendService struct {
 	dao     alert.AlertManagerSendDAO
 	ruleDao alert.AlertManagerRuleDAO
 	userDao userDao.UserDAO
+	cache   cache.MonitorCache
 	l       *zap.Logger
 }
 
-func NewAlertManagerSendService(dao alert.AlertManagerSendDAO, ruleDao alert.AlertManagerRuleDAO, l *zap.Logger, userDao userDao.UserDAO) AlertManagerSendService {
+func NewAlertManagerSendService(dao alert.AlertManagerSendDAO, ruleDao alert.AlertManagerRuleDAO, l *zap.Logger, userDao userDao.UserDAO, cache cache.MonitorCache) AlertManagerSendService {
 	return &alertManagerSendService{
 		dao:     dao,
 		ruleDao: ruleDao,
 		userDao: userDao,
+		cache:   cache,
 		l:       l,
 	}
 }
@@ -114,6 +117,12 @@ func (a *alertManagerSendService) CreateMonitorSendGroup(ctx context.Context, re
 		return err
 	}
 
+	go func() {
+		if err := a.cache.MonitorCacheManager(context.Background()); err != nil {
+			a.l.Error("创建发送组后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -167,6 +176,12 @@ func (a *alertManagerSendService) UpdateMonitorSendGroup(ctx context.Context, re
 		return fmt.Errorf("更新失败，请稍后重试")
 	}
 
+	go func() {
+		if err := a.cache.MonitorCacheManager(context.Background()); err != nil {
+			a.l.Error("更新发送组后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -188,6 +203,12 @@ func (a *alertManagerSendService) DeleteMonitorSendGroup(ctx context.Context, re
 		a.l.Error("删除发送组失败", zap.Error(err))
 		return err
 	}
+
+	go func() {
+		if err := a.cache.MonitorCacheManager(context.Background()); err != nil {
+			a.l.Error("删除发送组后刷新缓存失败", zap.Error(err))
+		}
+	}()
 
 	return nil
 }

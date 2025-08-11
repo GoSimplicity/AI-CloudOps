@@ -31,6 +31,7 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
 	"github.com/prometheus/prometheus/promql/parser"
@@ -49,13 +50,15 @@ type AlertManagerRecordService interface {
 type alertManagerRecordService struct {
 	dao     alert.AlertManagerRecordDAO
 	poolDao scrape.ScrapePoolDAO
+	cache   cache.MonitorCache
 	l       *zap.Logger
 }
 
-func NewAlertManagerRecordService(dao alert.AlertManagerRecordDAO, poolDao scrape.ScrapePoolDAO, l *zap.Logger) AlertManagerRecordService {
+func NewAlertManagerRecordService(dao alert.AlertManagerRecordDAO, poolDao scrape.ScrapePoolDAO, l *zap.Logger, cache cache.MonitorCache) AlertManagerRecordService {
 	return &alertManagerRecordService{
 		dao:     dao,
 		poolDao: poolDao,
+		cache:   cache,
 		l:       l,
 	}
 }
@@ -132,6 +135,12 @@ func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context,
 		return err
 	}
 
+	go func() {
+		if err := a.cache.MonitorCacheManager(context.Background()); err != nil {
+			a.l.Error("创建记录规则后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -196,6 +205,12 @@ func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context,
 		return err
 	}
 
+	go func() {
+		if err := a.cache.MonitorCacheManager(context.Background()); err != nil {
+			a.l.Error("更新记录规则后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -221,6 +236,12 @@ func (a *alertManagerRecordService) DeleteMonitorRecordRule(ctx context.Context,
 		a.l.Error("删除记录规则失败", zap.Error(err))
 		return err
 	}
+
+	go func() {
+		if err := a.cache.MonitorCacheManager(context.Background()); err != nil {
+			a.l.Error("删除记录规则后刷新缓存失败", zap.Error(err))
+		}
+	}()
 
 	return nil
 }

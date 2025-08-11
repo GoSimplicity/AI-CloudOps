@@ -40,6 +40,7 @@ import (
 	altconfig "github.com/prometheus/alertmanager/config"
 	al "github.com/prometheus/alertmanager/pkg/labels"
 	pm "github.com/prometheus/common/model"
+	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -57,43 +58,54 @@ type AlertManagerConfigCache interface {
 
 // alertManagerConfigCache AlertManager配置缓存实现
 type alertManagerConfigCache struct {
+	// 不再对外依赖本地 map
 	configMap        map[string]string
+	redis            redis.Cmdable
 	logger           *zap.Logger
 	mu               sync.RWMutex
 	alertWebhookAddr string
 	alertPoolDAO     alertPoolDao.AlertManagerPoolDAO
 	alertSendDAO     alertPoolDao.AlertManagerSendDAO
 	configDAO        configDao.MonitorConfigDAO
-	poolHashes       map[string]string
 	batchManager     *BatchConfigManager
 }
 
-// NewAlertManagerConfigCache 创建AlertManager配置缓存实例
 func NewAlertManagerConfigCache(
 	logger *zap.Logger,
 	alertPoolDAO alertPoolDao.AlertManagerPoolDAO,
 	alertSendDAO alertPoolDao.AlertManagerSendDAO,
 	configDAO configDao.MonitorConfigDAO,
 	batchManager *BatchConfigManager,
+	redisClient redis.Cmdable,
 ) AlertManagerConfigCache {
 	return &alertManagerConfigCache{
 		configMap:        make(map[string]string),
 		logger:           logger,
+		redis:            redisClient,
 		alertWebhookAddr: viper.GetString("prometheus.alert_webhook_addr"),
 		mu:               sync.RWMutex{},
 		alertPoolDAO:     alertPoolDAO,
 		alertSendDAO:     alertSendDAO,
 		configDAO:        configDAO,
-		poolHashes:       make(map[string]string),
 		batchManager:     batchManager,
 	}
 }
 
 // GetConfigByIP 根据IP地址获取AlertManager的主配置内容
 func (a *alertManagerConfigCache) GetConfigByIP(ip string) string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.configMap[ip]
+	if ip == "" {
+		a.logger.Warn(LogModuleMonitor + "获取配置时IP为空")
+		return ""
+	}
+	ctx := context.Background()
+	key := buildRedisKeyAlertManagerMain(ip)
+	val, err := a.redis.Get(ctx, key).Result()
+	if err != nil {
+		a.logger.Debug(LogModuleMonitor+"缓存未命中", zap.String("ip", ip), zap.Error(err))
+		return ""
+	}
+	a.logger.Debug(LogModuleMonitor+"缓存命中", zap.String("ip", ip))
+	return val
 }
 
 // GenerateMainConfig 生成所有AlertManager主配置文件
@@ -143,11 +155,6 @@ func (a *alertManagerConfigCache) GenerateMainConfig(ctx context.Context) error 
 
 // processPoolBatch 处理一批AlertManager池
 func (a *alertManagerConfigCache) processPoolBatch(ctx context.Context, pools []*model.MonitorAlertManagerPool) error {
-	a.mu.RLock()
-	tempConfigMap := utils.CopyMap(a.configMap)
-	tempPoolHashes := utils.CopyMap(a.poolHashes)
-	a.mu.RUnlock()
-
 	validIPs := make(map[string]struct{})
 	allConfigsToSave := make(map[string]ConfigData)
 
@@ -160,7 +167,9 @@ func (a *alertManagerConfigCache) processPoolBatch(ctx context.Context, pools []
 		}
 
 		currentHash := utils.CalculateAlertHash(pool)
-		if cachedHash, ok := tempPoolHashes[pool.Name]; ok && cachedHash == currentHash {
+		hashKey := buildRedisHashKeyAlertManager(pool.Name)
+		cachedHash, _ := a.redis.Get(ctx, hashKey).Result()
+		if cachedHash == currentHash {
 			for _, ip := range pool.AlertManagerInstances {
 				validIPs[ip] = struct{}{}
 			}
@@ -208,21 +217,45 @@ func (a *alertManagerConfigCache) processPoolBatch(ctx context.Context, pools []
 			continue
 		}
 
+		// Redis 旧集合
+		setKey := buildRedisSetKeyAlertManagerMainPoolIPs(pool.ID)
+		oldIPs, _ := a.redis.SMembers(ctx, setKey).Result()
+		oldIPSet := map[string]struct{}{}
+		for _, old := range oldIPs {
+			oldIPSet[old] = struct{}{}
+		}
+
 		for _, ip := range pool.AlertManagerInstances {
 			configName := fmt.Sprintf(ConfigNameAlertManager, pool.ID, ip)
-			tempConfigMap[ip] = string(yamlData)
 			validIPs[ip] = struct{}{}
 
-			// 准备批量保存的配置数据
+			// 入库（批量）
 			allConfigsToSave[ip] = ConfigData{
 				Name:       configName,
 				PoolID:     pool.ID,
 				ConfigType: model.ConfigTypeAlertManager,
 				Content:    string(yamlData),
 			}
+
+			// 写 Redis
+			key := buildRedisKeyAlertManagerMain(ip)
+			if err := a.redis.Set(ctx, key, string(yamlData), 0).Err(); err != nil {
+				a.logger.Error(LogModuleMonitor+"写入Redis失败", zap.String("pool_name", pool.Name), zap.String("ip", ip), zap.Error(err))
+				continue
+			}
+			_ = a.redis.SAdd(ctx, setKey, ip).Err()
+			delete(oldIPSet, ip)
 		}
 
-		tempPoolHashes[pool.Name] = currentHash
+		// 清理失效
+		for staleIP := range oldIPSet {
+			_ = a.redis.Del(ctx, buildRedisKeyAlertManagerMain(staleIP)).Err()
+			_ = a.redis.SRem(ctx, setKey, staleIP).Err()
+			a.logger.Debug(LogModuleMonitor+"删除无效IP配置", zap.String("ip", staleIP))
+		}
+
+		// 更新池哈希
+		_ = a.redis.Set(ctx, hashKey, currentHash, 0).Err()
 	}
 
 	// 批量保存所有配置到数据库
@@ -233,13 +266,7 @@ func (a *alertManagerConfigCache) processPoolBatch(ctx context.Context, pools []
 		}
 	}
 
-	// 清理无效的IP配置
-	cleanupInvalidIPs(tempConfigMap, validIPs, a.logger)
-
-	a.mu.Lock()
-	a.configMap = tempConfigMap
-	a.poolHashes = tempPoolHashes
-	a.mu.Unlock()
+	// 不再维护本地缓存
 
 	return nil
 }

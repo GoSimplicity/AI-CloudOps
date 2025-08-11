@@ -128,6 +128,12 @@ func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, req *mode
 		return err
 	}
 
+	go func() {
+		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
+			s.l.Error("创建抓取作业后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -186,6 +192,12 @@ func (s *scrapeJobService) UpdateMonitorScrapeJob(ctx context.Context, req *mode
 		return err
 	}
 
+	go func() {
+		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
+			s.l.Error("更新抓取作业后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -203,6 +215,12 @@ func (s *scrapeJobService) DeleteMonitorScrapeJob(ctx context.Context, id int) e
 		s.l.Error("删除抓取作业失败", zap.Error(err))
 		return err
 	}
+
+	go func() {
+		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
+			s.l.Error("删除抓取作业后刷新缓存失败", zap.Error(err))
+		}
+	}()
 
 	return nil
 }

@@ -83,14 +83,6 @@ func (d *monitorConfigDAO) GetMonitorConfigList(ctx context.Context, req *model.
 		db = db.Where("name LIKE ?", "%"+req.Search+"%")
 	}
 
-	if req.PoolID != nil {
-		db = db.Where("pool_id = ?", *req.PoolID)
-	}
-
-	if req.InstanceIP != "" {
-		db = db.Where("instance_ip = ?", req.InstanceIP)
-	}
-
 	if req.ConfigType != nil {
 		db = db.Where("config_type = ?", *req.ConfigType)
 	}
@@ -213,15 +205,15 @@ func (d *monitorConfigDAO) BatchCreateMonitorConfigs(ctx context.Context, config
 
 		batch := configs[i:end]
 		if err := d.db.WithContext(ctx).CreateInBatches(batch, batchSize).Error; err != nil {
-			d.l.Error("批量创建监控配置失败", 
-				zap.Int("batch_start", i), 
-				zap.Int("batch_size", len(batch)), 
+			d.l.Error("批量创建监控配置失败",
+				zap.Int("batch_start", i),
+				zap.Int("batch_size", len(batch)),
 				zap.Error(err))
 			return err
 		}
 
-		d.l.Debug("批量创建监控配置成功", 
-			zap.Int("batch_start", i), 
+		d.l.Debug("批量创建监控配置成功",
+			zap.Int("batch_start", i),
 			zap.Int("batch_size", len(batch)))
 	}
 
@@ -265,38 +257,38 @@ func (d *monitorConfigDAO) BatchUpsertMonitorConfigs(ctx context.Context, config
 			}
 
 			batch := configs[i:end]
-			
+
 			// 使用ON DUPLICATE KEY UPDATE语法进行批量upsert
 			if err := tx.Clauses(
-				// 在冲突时更新指定字段
-				// 这里假设unique key是 instance_ip + config_type
+			// 在冲突时更新指定字段
+			// 这里假设unique key是 instance_ip + config_type
 			).CreateInBatches(batch, batchSize).Error; err != nil {
 				// 如果批量upsert失败，回退到逐个处理
 				for _, config := range batch {
 					var existing model.MonitorConfig
 					err := tx.Where("instance_ip = ? AND config_type = ?", config.InstanceIP, config.ConfigType).First(&existing).Error
-					
+
 					if errors.Is(err, gorm.ErrRecordNotFound) {
 						// 记录不存在，创建新记录
 						if err := tx.Create(config).Error; err != nil {
-							d.l.Error("创建监控配置失败", 
-								zap.String("instance_ip", config.InstanceIP), 
-								zap.Int8("config_type", config.ConfigType), 
+							d.l.Error("创建监控配置失败",
+								zap.String("instance_ip", config.InstanceIP),
+								zap.Int8("config_type", config.ConfigType),
 								zap.Error(err))
 							return err
 						}
 					} else if err != nil {
-						d.l.Error("查询监控配置失败", 
-							zap.String("instance_ip", config.InstanceIP), 
-							zap.Int8("config_type", config.ConfigType), 
+						d.l.Error("查询监控配置失败",
+							zap.String("instance_ip", config.InstanceIP),
+							zap.Int8("config_type", config.ConfigType),
 							zap.Error(err))
 						return err
 					} else {
 						// 记录存在，更新记录
 						config.ID = existing.ID
 						if err := tx.Model(&existing).Updates(config).Error; err != nil {
-							d.l.Error("更新监控配置失败", 
-								zap.Int("id", existing.ID), 
+							d.l.Error("更新监控配置失败",
+								zap.Int("id", existing.ID),
 								zap.Error(err))
 							return err
 						}
@@ -304,8 +296,8 @@ func (d *monitorConfigDAO) BatchUpsertMonitorConfigs(ctx context.Context, config
 				}
 			}
 
-			d.l.Debug("批量upsert监控配置成功", 
-				zap.Int("batch_start", i), 
+			d.l.Debug("批量upsert监控配置成功",
+				zap.Int("batch_start", i),
 				zap.Int("batch_size", len(batch)))
 		}
 		return nil
@@ -324,9 +316,9 @@ func (d *monitorConfigDAO) GetMonitorConfigsByInstances(ctx context.Context, ins
 		Find(&configs).Error
 
 	if err != nil {
-		d.l.Error("批量获取监控配置失败", 
-			zap.Strings("instance_ips", instanceIPs), 
-			zap.Int8("config_type", configType), 
+		d.l.Error("批量获取监控配置失败",
+			zap.Strings("instance_ips", instanceIPs),
+			zap.Int8("config_type", configType),
 			zap.Error(err))
 		return nil, err
 	}
