@@ -153,7 +153,7 @@ func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 		if ruleErr == nil && len(rules) > 0 {
 			var ruleParts []string
 			for _, rule := range rules {
-				ruleParts = append(ruleParts, rule.Name, rule.Expr, rule.ForTime)
+				ruleParts = append(ruleParts, rule.Name, rule.Expr)
 			}
 			ruleHash = strings.Join(ruleParts, "|")
 		}

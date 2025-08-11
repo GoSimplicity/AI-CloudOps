@@ -40,7 +40,7 @@ type AlertManagerRuleService interface {
 	GetMonitorAlertRuleList(ctx context.Context, req *model.GetMonitorAlertRuleListReq) (model.ListResp[*model.MonitorAlertRule], error)
 	CreateMonitorAlertRule(ctx context.Context, req *model.CreateMonitorAlertRuleReq) error
 	UpdateMonitorAlertRule(ctx context.Context, req *model.UpdateMonitorAlertRuleReq) error
-	DeleteMonitorAlertRule(ctx context.Context, req *model.DeleteMonitorAlertRuleRequest) error
+	DeleteMonitorAlertRule(ctx context.Context, req *model.DeleteMonitorAlertRuleReq) error
 	PromqlExprCheck(ctx context.Context, req *model.PromqlAlertRuleExprCheckReq) (bool, error)
 	GetMonitorAlertRule(ctx context.Context, req *model.GetMonitorAlertRuleReq) (*model.MonitorAlertRule, error)
 }
@@ -198,7 +198,7 @@ func (s *alertManagerRuleService) UpdateMonitorAlertRule(ctx context.Context, re
 }
 
 // DeleteMonitorAlertRule 删除告警规则
-func (s *alertManagerRuleService) DeleteMonitorAlertRule(ctx context.Context, req *model.DeleteMonitorAlertRuleRequest) error {
+func (s *alertManagerRuleService) DeleteMonitorAlertRule(ctx context.Context, req *model.DeleteMonitorAlertRuleReq) error {
 	// 检查规则是否存在
 	_, err := s.ruleDAO.GetMonitorAlertRuleByID(ctx, req.ID)
 	if err != nil {

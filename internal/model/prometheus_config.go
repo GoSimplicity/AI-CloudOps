@@ -62,7 +62,7 @@ type GetMonitorConfigListReq struct {
 	ListReq
 	PoolID     *int   `json:"pool_id" form:"pool_id" binding:"omitempty"`
 	InstanceIP string `json:"instance_ip" form:"instance_ip" binding:"omitempty"`
-	ConfigType *int8  `json:"config_type" form:"config_type" binding:"omitempty,oneof=1 2 3 4"`
+	ConfigType *int8  `json:"config_type" form:"config_type" binding:"omitempty,oneof=1 2 3 4 5"`
 	Status     *int8  `json:"status" form:"status" binding:"omitempty,oneof=1 2"`
 }
 

@@ -72,7 +72,7 @@ func InitTables(db *gorm.DB) error {
 		&model.MonitorSendGroup{},
 		&model.MonitorOnDutyChange{},
 		&model.MonitorAlertEvent{},
-		&model.MonitorConfig{}, // 监控配置表
+		&model.MonitorConfig{},
 
 		// 工单系统
 		&model.WorkorderFormDesign{},

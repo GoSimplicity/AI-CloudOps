@@ -33,8 +33,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	configDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -65,95 +63,6 @@ func validateYAMLConfig(content string) error {
 	return nil
 }
 
-// saveConfigToDatabase 统一的配置入库逻辑（保留用于向后兼容）
-func saveConfigToDatabase(
-	ctx context.Context,
-	configDAO configDao.MonitorConfigDAO,
-	logger *zap.Logger,
-	poolID int,
-	instanceIP string,
-	configType int8,
-	configName string,
-	configContent string,
-) error {
-	// 验证YAML格式
-	if err := validateYAMLConfig(configContent); err != nil {
-		logger.Error(LogModuleMonitor+"配置YAML格式验证失败",
-			zap.String("instance_ip", instanceIP),
-			zap.Int8("config_type", configType),
-			zap.Error(err))
-		return err
-	}
-
-	configHash := calculateConfigHash(configContent)
-	now := time.Now().Unix()
-
-	// 查询是否已存在配置
-	existingConfig, err := configDAO.GetMonitorConfigByInstance(ctx, instanceIP, configType)
-	if err != nil && !strings.Contains(err.Error(), "未找到对应的监控配置") {
-		logger.Error(LogModuleMonitor+"查询监控配置失败",
-			zap.String("instance_ip", instanceIP),
-			zap.Int8("config_type", configType),
-			zap.Error(err))
-		return err
-	}
-
-	if existingConfig != nil {
-		// 配置内容未变化则跳过更新
-		if existingConfig.ConfigHash == configHash {
-			logger.Debug(LogModuleMonitor+"配置内容未变化，跳过更新",
-				zap.String("instance_ip", instanceIP),
-				zap.Int8("config_type", configType))
-			return nil
-		}
-
-		// 更新现有配置
-		existingConfig.Name = configName
-		existingConfig.ConfigContent = configContent
-		existingConfig.ConfigHash = configHash
-		existingConfig.Status = model.ConfigStatusActive
-		existingConfig.LastGeneratedTime = now
-
-		if err := configDAO.UpdateMonitorConfig(ctx, existingConfig); err != nil {
-			logger.Error(LogModuleMonitor+"更新监控配置失败",
-				zap.String("instance_ip", instanceIP),
-				zap.Int8("config_type", configType),
-				zap.Error(err))
-			return err
-		}
-
-		logger.Debug(LogModuleMonitor+"更新监控配置成功",
-			zap.String("instance_ip", instanceIP),
-			zap.Int8("config_type", configType))
-	} else {
-		// 创建新配置
-		newConfig := &model.MonitorConfig{
-			Name:              configName,
-			PoolID:            poolID,
-			InstanceIP:        instanceIP,
-			ConfigType:        configType,
-			ConfigContent:     configContent,
-			ConfigHash:        configHash,
-			Status:            model.ConfigStatusActive,
-			LastGeneratedTime: now,
-		}
-
-		if err := configDAO.CreateMonitorConfig(ctx, newConfig); err != nil {
-			logger.Error(LogModuleMonitor+"创建监控配置失败",
-				zap.String("instance_ip", instanceIP),
-				zap.Int8("config_type", configType),
-				zap.Error(err))
-			return err
-		}
-
-		logger.Debug(LogModuleMonitor+"创建监控配置成功",
-			zap.String("instance_ip", instanceIP),
-			zap.Int8("config_type", configType))
-	}
-
-	return nil
-}
-
 // batchSaveConfigsToDatabase 批量保存配置到数据库的优化版本
 func batchSaveConfigsToDatabase(
 	ctx context.Context,
@@ -165,22 +74,6 @@ func batchSaveConfigsToDatabase(
 	}
 
 	return batchManager.BatchSaveConfigs(ctx, configMap)
-}
-
-// prepareConfigBatch 准备配置批次数据
-func prepareConfigBatch(poolID int, instanceIPs []string, configType int8, configName, configContent string) map[string]ConfigData {
-	configMap := make(map[string]ConfigData)
-
-	for _, ip := range instanceIPs {
-		configMap[ip] = ConfigData{
-			Name:       configName,
-			PoolID:     poolID,
-			ConfigType: configType,
-			Content:    configContent,
-		}
-	}
-
-	return configMap
 }
 
 // logCacheOperation 统一的缓存操作日志记录

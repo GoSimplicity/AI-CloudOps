@@ -28,8 +28,8 @@ package model
 // MonitorSendGroup 发送组的配置
 type MonitorSendGroup struct {
 	Model
-	Name                   string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;comment:发送组英文名称"`
-	NameZh                 string     `json:"name_zh" binding:"required,min=1,max=50" gorm:"size:100;comment:发送组中文名称"`
+	Name                   string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:发送组英文名称"`
+	NameZh                 string     `json:"name_zh" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:发送组中文名称"`
 	Enable                 int8       `json:"enable" gorm:"type:tinyint(1);default:1;not null;comment:是否启用发送组 1:启用 2:禁用"`
 	UserID                 int        `json:"user_id" gorm:"index;not null;comment:创建该发送组的用户ID"`
 	PoolID                 int        `json:"pool_id" gorm:"index;not null;comment:关联的AlertManager实例ID"`
@@ -41,9 +41,9 @@ type MonitorSendGroup struct {
 	NeedUpgrade            int8       `json:"need_upgrade" gorm:"type:tinyint(1);default:0;not null;comment:是否需要告警升级 1:需要 2:不需要"`
 	UpgradeMinutes         int        `json:"upgrade_minutes" gorm:"default:30;comment:告警升级等待时间(分钟)"`
 	StaticReceiveUsers     []*User    `json:"static_receive_users" gorm:"many2many:cl_monitor_send_group_static_receive_users;comment:静态配置的接收人列表"`
-	FirstUpgradeUsers      []*User    `json:"monitor_send_group_first_upgrade_users" gorm:"many2many:cl_monitor_send_group_first_upgrade_users;comment:第一级升级人列表"`
+	FirstUpgradeUsers      []*User    `json:"first_upgrade_users" gorm:"many2many:cl_monitor_send_group_first_upgrade_users;comment:第一级升级人列表"`
 	SecondUpgradeUsers     []*User    `json:"second_upgrade_users" gorm:"many2many:cl_monitor_send_group_second_upgrade_users;comment:第二级升级人列表"`
-	CreateUserName         string     `json:"create_user_name" gorm:"type:varchar(50);comment:创建该发送组的用户名称"`
+	CreateUserName         string     `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建该发送组的用户名称"`
 	StaticReceiveUserNames []string   `json:"static_receive_user_names" gorm:"-"`
 	FirstUserNames         []string   `json:"first_user_names" gorm:"-"`
 	SecondUserNames        []string   `json:"second_user_names" gorm:"-"`
@@ -53,54 +53,59 @@ func (m *MonitorSendGroup) TableName() string {
 	return "cl_monitor_send_groups"
 }
 
+// CreateMonitorSendGroupReq 创建发送组请求
 type CreateMonitorSendGroupReq struct {
 	Name                string     `json:"name" binding:"required,min=1,max=50"`
 	NameZh              string     `json:"name_zh" binding:"required,min=1,max=50"`
-	Enable              int8       `json:"enable" `
-	UserID              int        `json:"user_id"`
-	PoolID              int        `json:"pool_id"`
+	Enable              int8       `json:"enable" binding:"omitempty,oneof=1 2"`
+	UserID              int        `json:"user_id" binding:"required"`
+	PoolID              int        `json:"pool_id" binding:"required"`
 	OnDutyGroupID       int        `json:"on_duty_group_id"`
 	StaticReceiveUsers  []*User    `json:"static_receive_users"`
-	FeiShuQunRobotToken string     `json:"fei_shu_qun_robot_token"`
-	RepeatInterval      string     `json:"repeat_interval"`
-	SendResolved        int8       `json:"send_resolved"`
+	FeiShuQunRobotToken string     `json:"fei_shu_qun_robot_token" binding:"max=255"`
+	RepeatInterval      string     `json:"repeat_interval" binding:"max=50"`
+	SendResolved        int8       `json:"send_resolved" binding:"omitempty,oneof=1 2"`
 	NotifyMethods       StringList `json:"notify_methods"`
-	NeedUpgrade         int8       `json:"need_upgrade"`
-	FirstUpgradeUsers   []*User    `json:"monitor_send_group_first_upgrade_users"`
-	UpgradeMinutes      int        `json:"upgrade_minutes"`
+	NeedUpgrade         int8       `json:"need_upgrade" binding:"omitempty,oneof=1 2"`
+	FirstUpgradeUsers   []*User    `json:"first_upgrade_users"`
+	UpgradeMinutes      int        `json:"upgrade_minutes" binding:"min=0"`
 	SecondUpgradeUsers  []*User    `json:"second_upgrade_users"`
 	CreateUserName      string     `json:"create_user_name"`
 }
 
+// UpdateMonitorSendGroupReq 更新发送组请求
 type UpdateMonitorSendGroupReq struct {
 	ID                  int        `json:"id" form:"id" binding:"required"`
 	Name                string     `json:"name" binding:"required,min=1,max=50"`
 	NameZh              string     `json:"name_zh" binding:"required,min=1,max=50"`
-	Enable              int8       `json:"enable" `
-	PoolID              int        `json:"pool_id"`
+	Enable              int8       `json:"enable" binding:"omitempty,oneof=1 2"`
+	PoolID              int        `json:"pool_id" binding:"required"`
 	OnDutyGroupID       int        `json:"on_duty_group_id"`
 	StaticReceiveUsers  []*User    `json:"static_receive_users"`
-	FeiShuQunRobotToken string     `json:"fei_shu_qun_robot_token"`
-	RepeatInterval      string     `json:"repeat_interval"`
-	SendResolved        int8       `json:"send_resolved"`
+	FeiShuQunRobotToken string     `json:"fei_shu_qun_robot_token" binding:"max=255"`
+	RepeatInterval      string     `json:"repeat_interval" binding:"max=50"`
+	SendResolved        int8       `json:"send_resolved" binding:"omitempty,oneof=1 2"`
 	NotifyMethods       StringList `json:"notify_methods"`
-	NeedUpgrade         int8       `json:"need_upgrade"`
-	FirstUpgradeUsers   []*User    `json:"monitor_send_group_first_upgrade_users"`
-	UpgradeMinutes      int        `json:"upgrade_minutes"`
+	NeedUpgrade         int8       `json:"need_upgrade" binding:"omitempty,oneof=1 2"`
+	FirstUpgradeUsers   []*User    `json:"first_upgrade_users"`
+	UpgradeMinutes      int        `json:"upgrade_minutes" binding:"min=0"`
 	SecondUpgradeUsers  []*User    `json:"second_upgrade_users"`
 }
 
+// DeleteMonitorSendGroupReq 删除发送组请求
 type DeleteMonitorSendGroupReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
 
+// GetMonitorSendGroupReq 获取发送组请求
 type GetMonitorSendGroupReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
 
+// GetMonitorSendGroupListReq 获取发送组列表请求
 type GetMonitorSendGroupListReq struct {
 	ListReq
 	PoolID        *int  `json:"pool_id" form:"pool_id"`
-	Enable        *int8 `json:"enable" form:"enable"`
+	Enable        *int8 `json:"enable" form:"enable" binding:"omitempty,oneof=1 2"`
 	OnDutyGroupID *int  `json:"on_duty_group_id" form:"on_duty_group_id"`
 }

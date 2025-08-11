@@ -102,11 +102,8 @@ func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context,
 		UserID:         req.UserID,
 		CreateUserName: req.CreateUserName,
 		IpAddress:      req.IpAddress,
-		Port:           req.Port,
 		Enable:         req.Enable,
-		ForTime:        req.ForTime,
 		Labels:         req.Labels,
-		Annotations:    req.Annotations,
 	}
 
 	exists, err := a.dao.CheckMonitorRecordRuleNameExists(ctx, monitorRecordRule)
@@ -162,16 +159,13 @@ func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context,
 	}
 
 	monitorRecordRule := &model.MonitorRecordRule{
-		Model:       model.Model{ID: req.ID},
-		Name:        req.Name,
-		PoolID:      req.PoolID,
-		Expr:        req.Expr,
-		IpAddress:   req.IpAddress,
-		Port:        req.Port,
-		Enable:      req.Enable,
-		ForTime:     req.ForTime,
-		Labels:      req.Labels,
-		Annotations: req.Annotations,
+		Model:     model.Model{ID: req.ID},
+		Name:      req.Name,
+		PoolID:    req.PoolID,
+		Expr:      req.Expr,
+		IpAddress: req.IpAddress,
+		Enable:    req.Enable,
+		Labels:    req.Labels,
 	}
 
 	if rule.Name != req.Name {

@@ -281,7 +281,7 @@ func (p *prometheusConfigCache) CreateBaseConfig(pool *model.MonitorScrapePool) 
 		ScrapeTimeout:  utils.GenPromDuration(int(pool.ScrapeTimeout)),
 	}
 
-	externalLabels := utils.ParseExternalLabels(pool.ExternalLabels)
+	externalLabels := utils.ParseExternalLabels(pool.Tags)
 	if len(externalLabels) > 0 {
 		config.GlobalConfig.ExternalLabels = labels.FromStrings(externalLabels...)
 	}
@@ -372,19 +372,21 @@ func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool 
 		}
 
 		switch job.ServiceDiscoveryType {
-		case "http":
+		case model.ServiceDiscoveryTypeHttp:
 			if p.httpSdAPI == "" {
 				p.logger.Error(LogModuleMonitor+"HTTP SD API地址为空", zap.String("job_name", job.Name))
 				continue
 			}
-			sdURL := fmt.Sprintf("%s?port=%d&ipAddress=%s", p.httpSdAPI, job.Port, job.IpAddress)
+			// 将树节点ID拼接为逗号分隔的字符串，避免使用错误的格式化
+			sdURL := fmt.Sprintf("%s?port=%d&tree_node_ids=%s", p.httpSdAPI, job.Port, stringSliceToString(job.TreeNodeIDs))
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				&http.SDConfig{
 					URL:             sdURL,
 					RefreshInterval: utils.GenPromDuration(job.RefreshInterval),
 				},
 			}
-		case "k8s":
+		case model.ServiceDiscoveryTypeK8s:
+			// 采集目标的 HTTPClient 配置（用于实际抓取）
 			sc.HTTPClientConfig = pcc.HTTPClientConfig{
 				BearerTokenFile: job.BearerTokenFile,
 				TLSConfig: pcc.TLSConfig{
@@ -392,15 +394,37 @@ func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool 
 					InsecureSkipVerify: true,
 				},
 			}
+			// Kubernetes 服务发现到 APIServer 的 HTTPClient 配置（用于发现）
+			sdHTTPClient := pcc.DefaultHTTPClientConfig
+			if job.BearerTokenFile != "" {
+				sdHTTPClient.BearerTokenFile = job.BearerTokenFile
+			}
+			if job.TlsCaFilePath != "" {
+				sdHTTPClient.TLSConfig.CAFile = job.TlsCaFilePath
+			}
+			sdHTTPClient.TLSConfig.InsecureSkipVerify = true
+
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				&kubernetes.SDConfig{
 					Role:             kubernetes.Role(job.KubernetesSdRole),
 					KubeConfig:       job.KubeConfigFilePath,
-					HTTPClientConfig: pcc.DefaultHTTPClientConfig,
+					HTTPClientConfig: sdHTTPClient,
+				},
+			}
+		case model.ServiceDiscoveryTypeStatic:
+			sc.ServiceDiscoveryConfigs = discovery.Configs{
+				discovery.StaticConfig{
+					{
+						Targets: []pm.LabelSet{
+							{
+								pm.AddressLabel: pm.LabelValue(job.IpAddress),
+							},
+						},
+					},
 				},
 			}
 		default:
-			p.logger.Warn(LogModuleMonitor+"未知的服务发现类型", zap.String("type", job.ServiceDiscoveryType), zap.String("job_name", job.Name))
+			p.logger.Warn(LogModuleMonitor+"未知的服务发现类型", zap.Int8("type", int8(job.ServiceDiscoveryType)), zap.String("job_name", job.Name))
 			continue
 		}
 

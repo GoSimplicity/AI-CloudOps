@@ -28,17 +28,14 @@ package model
 // MonitorRecordRule 记录规则的配置
 type MonitorRecordRule struct {
 	Model
-	Name           string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;comment:记录规则名称"`
+	Name           string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:记录规则名称"`
 	UserID         int        `json:"user_id" gorm:"index;not null;comment:创建该记录规则的用户ID"`
 	PoolID         int        `json:"pool_id" gorm:"index;not null;comment:关联的Prometheus实例池ID"`
 	IpAddress      string     `json:"ip_address" gorm:"size:255;comment:IP地址"`
-	Port           int        `json:"port" gorm:"not null;comment:端口"`
-	Enable         int8       `json:"enable" gorm:"type:tinyint(1);default:1;not null;comment:是否启用记录规则 1:启用 2:禁用"`
-	ForTime        string     `json:"for_time" gorm:"size:50;default:'5m';not null;comment:持续时间"`
+	Enable         int8       `json:"enable" gorm:"type:tinyint(1);default:1;not null;comment:是否启用记录规则(1:启用,2:禁用)"`
 	Expr           string     `json:"expr" gorm:"type:text;not null;comment:记录规则表达式"`
 	Labels         StringList `json:"labels" gorm:"type:text;comment:标签组(key=value)"`
-	Annotations    StringList `json:"annotations" gorm:"type:text;comment:注解(key=value)"`
-	CreateUserName string     `json:"create_user_name" gorm:"type:varchar(100);comment:创建人"`
+	CreateUserName string     `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
 	PoolName       string     `json:"pool_name" gorm:"-"`
 }
 
@@ -46,52 +43,52 @@ func (m *MonitorRecordRule) TableName() string {
 	return "cl_monitor_record_rules"
 }
 
-// GetMonitorRecordRuleListReq 获取预聚合规则列表请求
+// GetMonitorRecordRuleListReq 获取记录规则列表的请求
 type GetMonitorRecordRuleListReq struct {
 	ListReq
 	PoolID *int  `json:"pool_id" form:"pool_id" binding:"omitempty"`
 	Enable *int8 `json:"enable" form:"enable" binding:"omitempty"`
 }
 
-// CreateMonitorRecordRuleReq 创建新的预聚合规则请求
+// CreateMonitorRecordRuleReq 创建记录规则请求
 type CreateMonitorRecordRuleReq struct {
 	Name           string     `json:"name" binding:"required,min=1,max=50"`
 	UserID         int        `json:"user_id"`
 	PoolID         int        `json:"pool_id" binding:"required"`
 	IpAddress      string     `json:"ip_address"`
-	Port           int        `json:"port"`
 	Enable         int8       `json:"enable"`
-	ForTime        string     `json:"for_time"`
 	Expr           string     `json:"expr" binding:"required"`
 	Labels         StringList `json:"labels"`
-	Annotations    StringList `json:"annotations"`
 	CreateUserName string     `json:"create_user_name"`
 }
 
-// UpdateMonitorRecordRuleReq 更新预聚合规则请求
+// UpdateMonitorRecordRuleReq 更新记录规则请求
 type UpdateMonitorRecordRuleReq struct {
-	ID          int        `json:"id" binding:"required"`
-	Name        string     `json:"name" binding:"required,min=1,max=50"`
-	PoolID      int        `json:"pool_id" binding:"required"`
-	IpAddress   string     `json:"ip_address"`
-	Port        int        `json:"port"`
-	Enable      int8       `json:"enable"`
-	ForTime     string     `json:"for_time"`
-	Expr        string     `json:"expr" binding:"required"`
-	Labels      StringList `json:"labels"`
-	Annotations StringList `json:"annotations"`
+	ID        int        `json:"id" form:"id" binding:"required"`
+	Name      string     `json:"name" binding:"required,min=1,max=50"`
+	PoolID    int        `json:"pool_id" binding:"required"`
+	IpAddress string     `json:"ip_address"`
+	Enable    int8       `json:"enable"`
+	Expr      string     `json:"expr" binding:"required"`
+	Labels    StringList `json:"labels"`
 }
 
-// DeleteMonitorRecordRuleReq 删除预聚合规则请求
+// DeleteMonitorRecordRuleReq 删除记录规则请求
 type DeleteMonitorRecordRuleReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
 
-// EnableSwitchMonitorRecordRuleReq 切换预聚合规则启用状态请求
-type EnableSwitchMonitorRecordRuleReq struct {
+// PromqlRecordRuleExprCheckReq PromQL表达式检查请求
+type PromqlRecordRuleExprCheckReq struct {
+	PromqlExpr string `json:"promql_expr" binding:"required"`
+}
+
+// GetMonitorRecordRuleReq 获取记录规则请求
+type GetMonitorRecordRuleReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
 
-type GetMonitorRecordRuleReq struct {
+// EnableSwitchMonitorRecordRuleReq 启用/禁用监控记录规则请求
+type EnableSwitchMonitorRecordRuleReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }

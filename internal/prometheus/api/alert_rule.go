@@ -123,7 +123,7 @@ func (a *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
 // @Router /api/monitor/alert_rules/delete/{id} [delete]
 // @Security BearerAuth
 func (a *AlertRuleHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
-	var req model.DeleteMonitorAlertRuleRequest
+	var req model.DeleteMonitorAlertRuleReq
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

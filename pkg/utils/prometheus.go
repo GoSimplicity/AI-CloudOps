@@ -55,7 +55,6 @@ import (
 
 func CheckPoolIpExists(pools []*model.MonitorScrapePool, req *model.MonitorScrapePool) error {
 	var ipPrometheus []string
-	var ipAlertManager []string
 
 	for _, pool := range pools {
 		if pool.ID == req.ID {
@@ -63,18 +62,11 @@ func CheckPoolIpExists(pools []*model.MonitorScrapePool, req *model.MonitorScrap
 		}
 
 		ipPrometheus = append(ipPrometheus, pool.PrometheusInstances...)
-		ipAlertManager = append(ipAlertManager, pool.AlertManagerInstances...)
 	}
 
 	for _, ip := range req.PrometheusInstances {
 		if slices.Contains(ipPrometheus, ip) {
 			return fmt.Errorf("PrometheusInstances %v 已存在", ip)
-		}
-	}
-
-	for _, ip := range req.AlertManagerInstances {
-		if slices.Contains(ipAlertManager, ip) {
-			return fmt.Errorf("AlertManagerInstances %v 已存在", ip)
 		}
 	}
 
@@ -406,27 +398,27 @@ type promHashPayload struct {
 	RecordFilePath        string   `json:"record_file_path"`
 }
 
-// CalculateHash 计算哈希值
+// CalculateHash 计算哈希值（不修改入参数据）
 func CalculatePromHash(pool *model.MonitorScrapePool) string {
-	// 排序列表字段确保顺序不影响哈希
-	sort.Strings(pool.PrometheusInstances)
-	sort.Strings(pool.AlertManagerInstances)
-	sort.Strings(pool.ExternalLabels)
+	// 使用副本进行排序，避免修改入参
+	instancesCopy := append([]string(nil), pool.PrometheusInstances...)
+	labelsCopy := append([]string(nil), pool.Tags...)
+	sort.Strings(instancesCopy)
+	sort.Strings(labelsCopy)
 
 	payload := promHashPayload{
-		Name:                  pool.Name,
-		PrometheusInstances:   pool.PrometheusInstances,
-		AlertManagerInstances: pool.AlertManagerInstances,
-		ScrapeInterval:        pool.ScrapeInterval,
-		ScrapeTimeout:         pool.ScrapeTimeout,
-		RemoteTimeoutSeconds:  pool.RemoteTimeoutSeconds,
-		SupportAlert:          pool.SupportAlert,
-		SupportRecord:         pool.SupportRecord,
-		ExternalLabels:        pool.ExternalLabels,
-		RemoteWriteUrl:        pool.RemoteWriteUrl,
-		RemoteReadUrl:         pool.RemoteReadUrl,
-		AlertManagerUrl:       pool.AlertManagerUrl,
-		RecordFilePath:        pool.RecordFilePath,
+		Name:                 pool.Name,
+		PrometheusInstances:  instancesCopy,
+		ScrapeInterval:       pool.ScrapeInterval,
+		ScrapeTimeout:        pool.ScrapeTimeout,
+		RemoteTimeoutSeconds: pool.RemoteTimeoutSeconds,
+		SupportAlert:         pool.SupportAlert,
+		SupportRecord:        pool.SupportRecord,
+		ExternalLabels:       labelsCopy,
+		RemoteWriteUrl:       pool.RemoteWriteUrl,
+		RemoteReadUrl:        pool.RemoteReadUrl,
+		AlertManagerUrl:      pool.AlertManagerUrl,
+		RecordFilePath:       pool.RecordFilePath,
 	}
 
 	// 稳定序列化
@@ -450,18 +442,20 @@ type alertHashPayload struct {
 }
 
 func CalculateAlertHash(pool *model.MonitorAlertManagerPool) string {
-	// 排序列表字段确保顺序不影响哈希
-	sort.Strings(pool.AlertManagerInstances)
-	sort.Strings(pool.GroupBy)
+	// 使用副本进行排序，避免修改入参
+	instancesCopy := append([]string(nil), pool.AlertManagerInstances...)
+	groupByCopy := append([]string(nil), pool.GroupBy...)
+	sort.Strings(instancesCopy)
+	sort.Strings(groupByCopy)
 
 	payload := alertHashPayload{
 		Name:                  pool.Name,
-		AlertManagerInstances: pool.AlertManagerInstances,
+		AlertManagerInstances: instancesCopy,
 		ResolveTimeout:        pool.ResolveTimeout,
 		GroupWait:             pool.GroupWait,
 		GroupInterval:         pool.GroupInterval,
 		RepeatInterval:        pool.RepeatInterval,
-		GroupBy:               pool.GroupBy,
+		GroupBy:               groupByCopy,
 		Receiver:              pool.Receiver,
 	}
 

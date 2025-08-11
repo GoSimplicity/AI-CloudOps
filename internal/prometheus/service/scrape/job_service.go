@@ -97,6 +97,7 @@ func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, req *mode
 		KubernetesSdRole:         req.KubernetesSdRole,
 		RelabelConfigsYamlString: req.RelabelConfigsYamlString,
 		CreateUserName:           req.CreateUserName,
+		Tags:                     req.Tags,
 	}
 
 	// 检查抓取作业是否已存在
@@ -152,6 +153,7 @@ func (s *scrapeJobService) UpdateMonitorScrapeJob(ctx context.Context, req *mode
 		BearerToken:              req.BearerToken,
 		BearerTokenFile:          req.BearerTokenFile,
 		KubernetesSdRole:         req.KubernetesSdRole,
+		Tags:                     req.Tags,
 	}
 
 	// 检查 ID 是否有效

@@ -130,9 +130,9 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, req *mo
 			s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
 			return err
 		}
-		
+
 		allPools = append(allPools, pools...)
-		
+
 		if int64(len(allPools)) >= count || len(pools) == 0 {
 			break
 		}
@@ -141,22 +141,21 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, req *mo
 
 	// 构建新的抓取池对象
 	pool := &model.MonitorScrapePool{
-		Name:                  req.Name,
-		PrometheusInstances:   req.PrometheusInstances,
-		AlertManagerInstances: req.AlertManagerInstances,
-		UserID:                req.UserID,
-		ScrapeInterval:        req.ScrapeInterval,
-		ScrapeTimeout:         req.ScrapeTimeout,
-		RemoteTimeoutSeconds:  req.RemoteTimeoutSeconds,
-		SupportAlert:          req.SupportAlert,
-		SupportRecord:         req.SupportRecord,
-		ExternalLabels:        req.ExternalLabels,
-		RemoteWriteUrl:        req.RemoteWriteUrl,
-		RemoteReadUrl:         req.RemoteReadUrl,
-		AlertManagerUrl:       req.AlertManagerUrl,
-		RuleFilePath:          req.RuleFilePath,
-		RecordFilePath:        req.RecordFilePath,
-		CreateUserName:        req.CreateUserName,
+		Name:                 req.Name,
+		PrometheusInstances:  req.PrometheusInstances,
+		UserID:               req.UserID,
+		ScrapeInterval:       req.ScrapeInterval,
+		ScrapeTimeout:        req.ScrapeTimeout,
+		RemoteTimeoutSeconds: req.RemoteTimeoutSeconds,
+		SupportAlert:         req.SupportAlert,
+		SupportRecord:        req.SupportRecord,
+		Tags:                 req.Tags,
+		RemoteWriteUrl:       req.RemoteWriteUrl,
+		RemoteReadUrl:        req.RemoteReadUrl,
+		AlertManagerUrl:      req.AlertManagerUrl,
+		RuleFilePath:         req.RuleFilePath,
+		RecordFilePath:       req.RecordFilePath,
+		CreateUserName:       req.CreateUserName,
 	}
 
 	// 检查新的抓取池 IP 是否已被其他池使用
@@ -227,33 +226,32 @@ func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, req *mo
 			s.l.Error("检查抓取池 IP 是否存在失败：获取抓取池时出错", zap.Error(err))
 			return err
 		}
-		
+
 		allPools = append(allPools, pools...)
-		
+
 		if int64(len(allPools)) >= total || len(pools) == 0 {
 			break
 		}
-		
+
 		page++
 	}
 
 	pool := &model.MonitorScrapePool{
-		Model:                 model.Model{ID: req.ID},
-		Name:                  req.Name,
-		PrometheusInstances:   req.PrometheusInstances,
-		AlertManagerInstances: req.AlertManagerInstances,
-		UserID:                req.UserID,
-		ScrapeInterval:        req.ScrapeInterval,
-		ScrapeTimeout:         req.ScrapeTimeout,
-		RemoteTimeoutSeconds:  req.RemoteTimeoutSeconds,
-		SupportAlert:          req.SupportAlert,
-		SupportRecord:         req.SupportRecord,
-		ExternalLabels:        req.ExternalLabels,
-		RemoteWriteUrl:        req.RemoteWriteUrl,
-		RemoteReadUrl:         req.RemoteReadUrl,
-		AlertManagerUrl:       req.AlertManagerUrl,
-		RuleFilePath:          req.RuleFilePath,
-		RecordFilePath:        req.RecordFilePath,
+		Model:                model.Model{ID: req.ID},
+		Name:                 req.Name,
+		PrometheusInstances:  req.PrometheusInstances,
+		UserID:               req.UserID,
+		ScrapeInterval:       req.ScrapeInterval,
+		ScrapeTimeout:        req.ScrapeTimeout,
+		RemoteTimeoutSeconds: req.RemoteTimeoutSeconds,
+		SupportAlert:         req.SupportAlert,
+		SupportRecord:        req.SupportRecord,
+		Tags:                 req.Tags,
+		RemoteWriteUrl:       req.RemoteWriteUrl,
+		RemoteReadUrl:        req.RemoteReadUrl,
+		AlertManagerUrl:      req.AlertManagerUrl,
+		RuleFilePath:         req.RuleFilePath,
+		RecordFilePath:       req.RecordFilePath,
 	}
 
 	// 检查新的抓取池 IP 是否已被其他池使用
