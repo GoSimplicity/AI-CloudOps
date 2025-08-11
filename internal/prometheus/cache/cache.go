@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -78,11 +79,22 @@ func (mc *monitorCache) MonitorCacheManager(ctx context.Context) error {
 		name string
 		fn   func(context.Context) error
 	}
-	tasks := []taskDef{
-		{"Prometheus主配置", mc.PrometheusMainConfig.GenerateMainConfig},
-		{"AlertManager主配置", mc.AlertManagerMainConfig.GenerateMainConfig},
-		{"告警规则配置", mc.AlertRuleConfig.GenerateMainConfig},
-		{"预聚合规则配置", mc.AlertRecordConfig.GenerateMainConfig},
+	enableAlert := viper.GetInt("prometheus.enable_alert") == 1
+	enableRecord := viper.GetInt("prometheus.enable_record") == 1
+
+	tasks := make([]taskDef, 0, 4)
+	// 主配置（Prometheus、AlertManager）始终可执行，因为其生成与开关无关
+	tasks = append(tasks, taskDef{"Prometheus主配置", mc.PrometheusMainConfig.GenerateMainConfig})
+	tasks = append(tasks, taskDef{"AlertManager主配置", mc.AlertManagerMainConfig.GenerateMainConfig})
+	if enableAlert {
+		tasks = append(tasks, taskDef{"告警规则配置", mc.AlertRuleConfig.GenerateMainConfig})
+	} else {
+		mc.l.Info("跳过告警规则配置生成：prometheus.enable_alert=0")
+	}
+	if enableRecord {
+		tasks = append(tasks, taskDef{"预聚合规则配置", mc.AlertRecordConfig.GenerateMainConfig})
+	} else {
+		mc.l.Info("跳过预聚合规则配置生成：prometheus.enable_record=0")
 	}
 
 	for i := range tasks {

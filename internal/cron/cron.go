@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +39,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -48,15 +50,16 @@ var (
 )
 
 const (
-	OnDutyBatchSize                 = 100
-	HostCheckBatchSize              = 100
-	K8sMaxConcurrency               = 5
-	OnDutyCheckInterval             = 10 * time.Second
-	PrometheusConfigRefreshInterval = 10 * time.Second
-	HostCheckInterval               = 30 * time.Second
-	K8sCheckInterval                = 60 * time.Second
-	MaxRetries                      = 3
-	RetryDelay                      = 5 * time.Second
+	OnDutyBatchSize     = 100
+	HostCheckBatchSize  = 100
+	K8sMaxConcurrency   = 5
+	OnDutyCheckInterval = 10 * time.Second
+	// Prometheus 刷新默认间隔，支持通过配置覆盖
+	DefaultPrometheusConfigRefreshInterval = 15 * time.Second
+	HostCheckInterval                      = 30 * time.Second
+	K8sCheckInterval                       = 60 * time.Second
+	MaxRetries                             = 3
+	RetryDelay                             = 5 * time.Second
 )
 
 type CronManager interface {
@@ -827,10 +830,45 @@ func (cm *cronManager) StartPrometheusConfigRefreshManager(ctx context.Context) 
 					zap.Int("maxRetries", MaxRetries),
 					zap.Error(lastErr))
 			}
-		}, PrometheusConfigRefreshInterval)
+		}, cm.getPrometheusRefreshInterval())
 	}()
 
 	<-ctx.Done()
 	cm.logger.Info("Prometheus配置定时刷新任务已停止")
 	return nil
+}
+
+// getPrometheusRefreshInterval 从配置读取刷新间隔，支持两种格式：
+// 1) "@every 15s"（与常见的 cron 语法一致，仅支持 @every 前缀）
+// 2) "15s"（直接 time.ParseDuration 支持的时长表示）
+// 解析失败时回退到 DefaultPrometheusConfigRefreshInterval。
+func (cm *cronManager) getPrometheusRefreshInterval() time.Duration {
+	spec := strings.TrimSpace(viper.GetString("prometheus.refresh_cron"))
+	if spec == "" {
+		return DefaultPrometheusConfigRefreshInterval
+	}
+
+	// 支持 @every 前缀
+	if strings.HasPrefix(spec, "@every") {
+		durStr := strings.TrimSpace(strings.TrimPrefix(spec, "@every"))
+		if d, err := time.ParseDuration(durStr); err == nil && d > 0 {
+			cm.logger.Info("使用配置的 Prometheus 刷新间隔(@every)", zap.String("spec", spec), zap.Duration("interval", d))
+			return d
+		}
+		cm.logger.Warn("解析 @every 刷新间隔失败，使用默认值",
+			zap.String("spec", spec),
+			zap.Duration("default", DefaultPrometheusConfigRefreshInterval))
+		return DefaultPrometheusConfigRefreshInterval
+	}
+
+	// 尝试直接解析 duration
+	if d, err := time.ParseDuration(spec); err == nil && d > 0 {
+		cm.logger.Info("使用配置的 Prometheus 刷新间隔(duration)", zap.String("spec", spec), zap.Duration("interval", d))
+		return d
+	}
+
+	cm.logger.Warn("刷新间隔配置无法解析，使用默认值",
+		zap.String("spec", spec),
+		zap.Duration("default", DefaultPrometheusConfigRefreshInterval))
+	return DefaultPrometheusConfigRefreshInterval
 }
