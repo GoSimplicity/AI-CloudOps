@@ -28,7 +28,6 @@ package cache
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -363,6 +362,15 @@ func (a *alertManagerConfigCache) GenerateRouteConfigForPool(ctx context.Context
 	var routes []*altconfig.Route
 	var receivers []altconfig.Receiver
 
+	// 为每个发送组生成 webhook file 配置
+	err = a.generateWebhookFilesForSendGroups(ctx, pool, sendGroups)
+	if err != nil {
+		a.logger.Error(LogModuleMonitor+"生成webhook file配置失败",
+			zap.Error(err),
+			zap.String("pool_name", pool.Name))
+		// 继续执行，不返回错误
+	}
+
 	for _, sendGroup := range sendGroups {
 		repeatInterval, err := pm.ParseDuration(sendGroup.RepeatInterval)
 		if err != nil {
@@ -387,12 +395,8 @@ func (a *alertManagerConfigCache) GenerateRouteConfigForPool(ctx context.Context
 			RepeatInterval: &repeatInterval,
 		}
 
-		// 构建webhook URL
-		webhookURL := &url.URL{
-			Scheme: "http",
-			Host:   a.alertWebhookAddr,
-			Path:   "/webhook",
-		}
+		// 使用 webhook file 路径而不是直接 URL
+		webhookFileName := fmt.Sprintf("/data/alertmanager/webhook_%s_%d.yml", pool.Name, sendGroup.ID)
 
 		receiver := altconfig.Receiver{
 			Name: sendGroup.Name,
@@ -401,9 +405,7 @@ func (a *alertManagerConfigCache) GenerateRouteConfigForPool(ctx context.Context
 					NotifierConfig: altconfig.NotifierConfig{
 						VSendResolved: sendGroup.SendResolved == 1,
 					},
-					URL: &altconfig.SecretURL{
-						URL: webhookURL,
-					},
+					URLFile: webhookFileName,
 				},
 			},
 		}
@@ -433,4 +435,85 @@ func mergeReceivers(a, b []altconfig.Receiver) []altconfig.Receiver {
 
 func stringSliceToString(slice model.StringList) string {
 	return strings.Join(slice, ",")
+}
+
+// generateWebhookFilesForSendGroups 为发送组生成 webhook file 配置
+func (a *alertManagerConfigCache) generateWebhookFilesForSendGroups(ctx context.Context, pool *model.MonitorAlertManagerPool, sendGroups []*model.MonitorSendGroup) error {
+	webhookConfigsToSave := make(map[string]ConfigData)
+
+	for _, sendGroup := range sendGroups {
+		// 生成 webhook file 内容（仅包含 URL 字符串）
+		webhookURL := a.generateWebhookFileContent(sendGroup)
+
+		// 为每个 AlertManager 实例生成 webhook file 配置
+		for _, ip := range pool.AlertManagerInstances {
+			configName := fmt.Sprintf("webhook_%s_%d_%s", pool.Name, sendGroup.ID, ip)
+			configKey := fmt.Sprintf("%s_%d", ip, sendGroup.ID)
+
+			// 保存到待批量处理的配置映射中
+			webhookConfigsToSave[configKey] = ConfigData{
+				Name:       configName,
+				PoolID:     pool.ID,
+				ConfigType: model.ConfigTypeWebhookFile,
+				Content:    webhookURL,
+			}
+
+			// 同时保存到 Redis 以供实时查询
+			redisKey := buildRedisKeyWebhookFile(ip, sendGroup.ID)
+			if err := a.redis.Set(ctx, redisKey, webhookURL, 0).Err(); err != nil {
+				a.logger.Error(LogModuleMonitor+"保存webhook配置到Redis失败",
+					zap.Error(err),
+					zap.String("ip", ip),
+					zap.Int("send_group_id", sendGroup.ID))
+			}
+		}
+	}
+
+	// 批量保存 webhook 配置到数据库
+	if len(webhookConfigsToSave) > 0 {
+		if err := batchSaveConfigsToDatabase(ctx, a.batchManager, webhookConfigsToSave); err != nil {
+			a.logger.Error(LogModuleMonitor+"批量保存webhook配置失败", zap.Error(err))
+			return err
+		}
+	}
+
+	return nil
+}
+
+// buildWebhookURL 构建 webhook 接收 URL，兼容配置中填写 host:port 或完整 URL 的场景，并统一追加 send_group_id
+func (a *alertManagerConfigCache) buildWebhookURL(sendGroupID int) string {
+	base := strings.TrimSpace(a.alertWebhookAddr)
+	if base == "" {
+		// 兜底：使用本地端口，避免生成空 URL
+		return fmt.Sprintf("http://localhost:%s/api/v1/alerts/receive?send_group_id=%d", viper.GetString("server.port"), sendGroupID)
+	}
+
+	hasScheme := strings.HasPrefix(base, "http://") || strings.HasPrefix(base, "https://")
+	// 如果是完整 URL，则在其后附加路径/参数；若已包含路径则只追加参数
+	if hasScheme {
+		u := strings.TrimRight(base, "/")
+		// 判断是否已包含目标路径
+		if strings.Contains(u, "/api/v1/alerts/receive") {
+			sep := "?"
+			if strings.Contains(u, "?") {
+				sep = "&"
+			}
+			return fmt.Sprintf("%s%ssend_group_id=%d", u, sep, sendGroupID)
+		}
+		return fmt.Sprintf("%s/api/v1/alerts/receive?send_group_id=%d", u, sendGroupID)
+	}
+
+	// 否则视为 host:port
+	return fmt.Sprintf("http://%s/api/v1/alerts/receive?send_group_id=%d", base, sendGroupID)
+}
+
+// generateWebhookFileContent 生成 webhook file 的内容（仅为 URL 字符串）
+func (a *alertManagerConfigCache) generateWebhookFileContent(sendGroup *model.MonitorSendGroup) string {
+	// 始终拼接 send_group_id，确保后端可识别发送组
+	return a.buildWebhookURL(sendGroup.ID)
+}
+
+// buildRedisKeyWebhookFile 构建 webhook file 的 Redis key
+func buildRedisKeyWebhookFile(ip string, sendGroupID int) string {
+	return fmt.Sprintf("monitor:webhook_file:%s:%d", ip, sendGroupID)
 }
