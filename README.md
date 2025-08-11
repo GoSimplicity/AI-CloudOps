@@ -235,6 +235,8 @@ AI-CloudOps-aiops/
 
 - **Email**: [bamboocloudops@gmail.com](mailto:bamboocloudops@gmail.com)
 - **微信 (WeChat)**: `GoSimplicity` (添加时请备注 "AI-CloudOps"，我会邀请您加入交流群)
+- ![image](https://github.com/user-attachments/assets/ed618095-586a-451a-8a1e-819c7a80ff04)
+
 
 ## 🌟 Star History
 
