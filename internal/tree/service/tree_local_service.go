@@ -64,6 +64,13 @@ func NewTreeLocalService(logger *zap.Logger, dao dao.TreeLocalDAO) TreeLocalServ
 
 // GetTreeLocalList 获取本地主机列表
 func (t *treeLocalService) GetTreeLocalList(ctx context.Context, req *model.GetTreeLocalResourceListReq) (model.ListResp[*model.TreeLocalResource], error) {
+	// 兜底分页参数，避免offset为负或size为0
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.Size <= 0 {
+		req.Size = 10
+	}
 	locals, total, err := t.dao.GetList(ctx, req)
 	if err != nil {
 		t.logger.Error("获取本地主机列表失败", zap.Error(err))

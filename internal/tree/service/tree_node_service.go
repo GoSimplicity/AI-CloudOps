@@ -52,6 +52,8 @@ type TreeNodeService interface {
 	// 树结构相关接口
 	GetTreeList(ctx context.Context, req *model.GetTreeNodeListReq) (model.ListResp[*model.TreeNode], error)
 	GetNodeDetail(ctx context.Context, id int) (*model.TreeNode, error)
+	GetChildNodes(ctx context.Context, parentID int) ([]*model.TreeNode, error)
+	GetTreeStatistics(ctx context.Context) (*model.TreeNodeStatisticsResp, error)
 
 	// 节点管理接口
 	CreateNode(ctx context.Context, req *model.CreateTreeNodeReq) error
@@ -112,6 +114,19 @@ func (t *treeService) GetNodeDetail(ctx context.Context, id int) (*model.TreeNod
 	}
 
 	return node, nil
+}
+
+// GetChildNodes 获取直接子节点
+func (t *treeService) GetChildNodes(ctx context.Context, parentID int) ([]*model.TreeNode, error) {
+	if parentID < 0 {
+		return nil, errors.New("父节点ID无效")
+	}
+	return t.dao.GetChildNodes(ctx, parentID)
+}
+
+// GetTreeStatistics 获取服务树统计信息
+func (t *treeService) GetTreeStatistics(ctx context.Context) (*model.TreeNodeStatisticsResp, error) {
+	return t.dao.GetTreeStatistics(ctx)
 }
 
 // CreateNode 创建节点

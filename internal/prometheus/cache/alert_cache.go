@@ -63,6 +63,7 @@ type alertManagerConfigCache struct {
 	logger           *zap.Logger
 	mu               sync.RWMutex
 	alertWebhookAddr string
+	webhookFileDir   string
 	alertPoolDAO     alertPoolDao.AlertManagerPoolDAO
 	alertSendDAO     alertPoolDao.AlertManagerSendDAO
 	configDAO        configDao.MonitorConfigDAO
@@ -82,6 +83,7 @@ func NewAlertManagerConfigCache(
 		logger:           logger,
 		redis:            redisClient,
 		alertWebhookAddr: viper.GetString("prometheus.alert_webhook_addr"),
+		webhookFileDir:   viper.GetString("prometheus.alert_webhook_file_dir"),
 		mu:               sync.RWMutex{},
 		alertPoolDAO:     alertPoolDAO,
 		alertSendDAO:     alertSendDAO,
@@ -395,8 +397,8 @@ func (a *alertManagerConfigCache) GenerateRouteConfigForPool(ctx context.Context
 			RepeatInterval: &repeatInterval,
 		}
 
-		// 使用 webhook file 路径而不是直接 URL
-		webhookFileName := fmt.Sprintf("/data/alertmanager/webhook_%s_%d.yml", pool.Name, sendGroup.ID)
+		// 使用 webhook file 路径
+		webhookFileName := fmt.Sprintf("%s/webhook_%s_%d.yml", a.webhookFileDir, pool.Name, sendGroup.ID)
 
 		receiver := altconfig.Receiver{
 			Name: sendGroup.Name,

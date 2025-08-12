@@ -398,7 +398,7 @@ func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool 
 				p.logger.Error(LogModuleMonitor+"HTTP SD API地址为空", zap.String("job_name", job.Name))
 				continue
 			}
-			// 将树节点ID拼接为逗号分隔的字符串，避免使用错误的格式化
+			// HTTP SD: 传递端口与树节点ID集合
 			sdURL := fmt.Sprintf("%s?port=%d&tree_node_ids=%s", p.httpSdAPI, job.Port, stringSliceToString(job.TreeNodeIDs))
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				&http.SDConfig{

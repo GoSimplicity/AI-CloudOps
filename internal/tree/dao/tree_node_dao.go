@@ -39,6 +39,8 @@ type TreeNodeDAO interface {
 	// 基础查询方法
 	GetTreeList(ctx context.Context, req *model.GetTreeNodeListReq) ([]*model.TreeNode, int64, error)
 	GetNode(ctx context.Context, id int) (*model.TreeNode, error)
+	GetChildNodes(ctx context.Context, parentID int) ([]*model.TreeNode, error)
+	GetTreeStatistics(ctx context.Context) (*model.TreeNodeStatisticsResp, error)
 
 	// 节点管理方法
 	CreateNode(ctx context.Context, node *model.TreeNode) error
@@ -80,6 +82,10 @@ func (t *treeNodeDAO) GetTreeList(ctx context.Context, req *model.GetTreeNodeLis
 	}
 	if req.Status != 0 {
 		query = query.Where("status = ?", req.Status)
+	}
+	if strings.TrimSpace(req.Search) != "" {
+		like := "%" + strings.TrimSpace(req.Search) + "%"
+		query = query.Where("name LIKE ? OR description LIKE ?", like, like)
 	}
 
 	// 获取总数
@@ -150,6 +156,62 @@ func (t *treeNodeDAO) GetNode(ctx context.Context, id int) (*model.TreeNode, err
 	return &node, nil
 }
 
+// GetChildNodes 获取直接子节点列表
+func (t *treeNodeDAO) GetChildNodes(ctx context.Context, parentID int) ([]*model.TreeNode, error) {
+	var nodes []*model.TreeNode
+	if err := t.db.WithContext(ctx).
+		Where("parent_id = ?", parentID).
+		Order("name ASC").
+		Find(&nodes).Error; err != nil {
+		t.logger.Error("获取子节点失败", zap.Int("parentID", parentID), zap.Error(err))
+		return nil, err
+	}
+	return nodes, nil
+}
+
+// GetTreeStatistics 获取服务树统计数据
+func (t *treeNodeDAO) GetTreeStatistics(ctx context.Context) (*model.TreeNodeStatisticsResp, error) {
+	var stats model.TreeNodeStatisticsResp
+
+	// 节点总数
+	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Count((*int64)(&[]int64{0}[0])).Error; err != nil {
+		t.logger.Error("统计节点总数失败", zap.Error(err))
+	}
+	// 为了避免使用中间变量，这里分别统计并赋值
+	var c int64
+	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Count(&c).Error; err == nil {
+		stats.TotalNodes = int(c)
+	}
+
+	// 活跃/非活跃
+	c = 0
+	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("status = ?", model.ACTIVE).Count(&c).Error; err == nil {
+		stats.ActiveNodes = int(c)
+	}
+	c = 0
+	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("status = ?", model.INACTIVE).Count(&c).Error; err == nil {
+		stats.InactiveNodes = int(c)
+	}
+
+	// 资源总数
+	c = 0
+	if err := t.db.WithContext(ctx).Model(&model.TreeLocalResource{}).Count(&c).Error; err == nil {
+		stats.TotalResources = int(c)
+	}
+
+	// 管理员与成员总数（关联关系条目数）
+	c = 0
+	if err := t.db.WithContext(ctx).Table("cl_tree_node_admin").Count(&c).Error; err == nil {
+		stats.TotalAdmins = int(c)
+	}
+	c = 0
+	if err := t.db.WithContext(ctx).Table("cl_tree_node_member").Count(&c).Error; err == nil {
+		stats.TotalMembers = int(c)
+	}
+
+	return &stats, nil
+}
+
 // CreateNode 创建节点
 func (t *treeNodeDAO) CreateNode(ctx context.Context, node *model.TreeNode) error {
 	if node == nil {
@@ -196,6 +258,11 @@ func (t *treeNodeDAO) CreateNode(ctx context.Context, node *model.TreeNode) erro
 	// 设置默认状态
 	if node.Status == 0 {
 		node.Status = model.ACTIVE
+	}
+
+	// 新创建的节点默认是叶子节点
+	if node.IsLeaf == 0 {
+		node.IsLeaf = model.IsLeafYes
 	}
 
 	// 创建节点
@@ -246,6 +313,20 @@ func (t *treeNodeDAO) UpdateNode(ctx context.Context, node *model.TreeNode) erro
 			// 防止循环依赖
 			if node.ParentID == node.ID {
 				return errors.New("不能将节点移动到自己下")
+			}
+
+			// 防止将节点移动到其子孙节点下：沿新父节点向上回溯，若遇到自身则非法
+			cur := node.ParentID
+			for cur != 0 {
+				if cur == node.ID {
+					return errors.New("不能将节点移动到其子孙节点下")
+				}
+				var pID int
+				if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).
+					Select("parent_id").Where("id = ?", cur).Scan(&pID).Error; err != nil {
+					return err
+				}
+				cur = pID
 			}
 		}
 
@@ -299,9 +380,9 @@ func (t *treeNodeDAO) UpdateNode(ctx context.Context, node *model.TreeNode) erro
 		if existingNode.ParentID != 0 {
 			var remainingChildren int64
 			if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("parent_id = ?", existingNode.ParentID).Count(&remainingChildren).Error; err == nil {
-				isLeaf := int8(2) // 默认不是叶子节点
+				isLeaf := model.IsLeafNo // 默认不是叶子节点
 				if remainingChildren == 0 {
-					isLeaf = 1 // 是叶子节点
+					isLeaf = model.IsLeafYes // 是叶子节点
 				}
 				t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("id = ?", existingNode.ParentID).Update("is_leaf", isLeaf)
 			}
@@ -309,7 +390,7 @@ func (t *treeNodeDAO) UpdateNode(ctx context.Context, node *model.TreeNode) erro
 
 		// 更新新父节点的叶子状态
 		if node.ParentID != 0 {
-			t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("id = ?", node.ParentID).Update("is_leaf", 2)
+			t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("id = ?", node.ParentID).Update("is_leaf", model.IsLeafNo)
 		}
 	}
 
@@ -367,9 +448,9 @@ func (t *treeNodeDAO) DeleteNode(ctx context.Context, id int) error {
 				return err
 			}
 
-			isLeaf := int8(2) // 默认不是叶子节点
+			isLeaf := model.IsLeafNo // 默认不是叶子节点
 			if remainingChildren == 0 {
-				isLeaf = 1 // 是叶子节点
+				isLeaf = model.IsLeafYes // 是叶子节点
 			}
 			if err := tx.Model(&model.TreeNode{}).Where("id = ?", node.ParentID).Update("is_leaf", isLeaf).Error; err != nil {
 				t.logger.Error("更新父节点叶子状态失败", zap.Int("parentId", node.ParentID), zap.Error(err))

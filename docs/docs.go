@@ -16729,7 +16729,7 @@ const docTemplate = `{
         },
         "/api/not_auth/getBindIps": {
             "get": {
-                "description": "根据IP地址获取Prometheus服务发现配置",
+                "description": "根据端口与服务树节点ID获取Prometheus HTTP服务发现配置",
                 "consumes": [
                     "application/json"
                 ],
@@ -16742,9 +16742,16 @@ const docTemplate = `{
                 "summary": "获取绑定IP地址",
                 "parameters": [
                     {
+                        "type": "integer",
+                        "description": "端口",
+                        "name": "port",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
                         "type": "string",
-                        "description": "IP地址",
-                        "name": "ipAddress",
+                        "description": "逗号分隔的树节点ID",
+                        "name": "tree_node_ids",
                         "in": "query",
                         "required": true
                     }
@@ -18031,6 +18038,46 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/tree/node/children/{id}": {
+            "get": {
+                "tags": [
+                    "资源树管理"
+                ],
+                "summary": "获取直接子节点列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "父节点ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.TreeNode"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/api/tree/node/create": {
             "post": {
                 "security": [
@@ -18201,14 +18248,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "搜索关键词",
+                        "description": "搜索关键词（匹配名称/描述）",
                         "name": "keyword",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "节点类型",
-                        "name": "node_type",
                         "in": "query"
                     }
                 ],
@@ -18385,8 +18426,8 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "string",
-                        "description": "成员类型",
+                        "type": "integer",
+                        "description": "成员类型(1:admin,2:member,省略/其他:all)",
                         "name": "type",
                         "in": "query"
                     }
@@ -18568,6 +18609,34 @@ const docTemplate = `{
                         "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/tree/node/statistics": {
+            "get": {
+                "tags": [
+                    "资源树管理"
+                ],
+                "summary": "获取服务树统计信息",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.TreeNodeStatisticsResp"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -22035,6 +22104,19 @@ const docTemplate = `{
                 }
             }
         },
+        "model.AlertRuleSeverity": {
+            "type": "integer",
+            "enum": [
+                1,
+                2,
+                3
+            ],
+            "x-enum-varnames": [
+                "AlertRuleSeverityInfo",
+                "AlertRuleSeverityWarning",
+                "AlertRuleSeverityCritical"
+            ]
+        },
         "model.Api": {
             "type": "object",
             "properties": {
@@ -22973,12 +23055,15 @@ const docTemplate = `{
             "properties": {
                 "alert_manager_instances": {
                     "type": "array",
+                    "minItems": 1,
                     "items": {
                         "type": "string"
                     }
                 },
                 "create_user_name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
                 },
                 "group_by": {
                     "type": "array",
@@ -22998,7 +23083,9 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "receiver": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
                 },
                 "repeat_interval": {
                     "type": "string"
@@ -23018,8 +23105,7 @@ const docTemplate = `{
                 "for_time",
                 "name",
                 "pool_id",
-                "send_group_id",
-                "severity"
+                "send_group_id"
             ],
             "properties": {
                 "annotations": {
@@ -23064,7 +23150,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "severity": {
-                    "type": "string"
+                    "$ref": "#/definitions/model.AlertRuleSeverity"
                 },
                 "user_id": {
                     "type": "integer"
@@ -23140,7 +23226,8 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "reason": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "user_id": {
                     "type": "integer"
@@ -23160,7 +23247,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "name": {
                     "type": "string",
@@ -23191,12 +23279,6 @@ const docTemplate = `{
                 "pool_id"
             ],
             "properties": {
-                "annotations": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
                 "create_user_name": {
                     "type": "string"
                 },
@@ -23204,9 +23286,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "expr": {
-                    "type": "string"
-                },
-                "for_time": {
                     "type": "string"
                 },
                 "ip_address": {
@@ -23224,9 +23303,6 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "pool_id": {
-                    "type": "integer"
-                },
-                "port": {
                     "type": "integer"
                 },
                 "user_id": {
@@ -23293,13 +23369,25 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "service_discovery_type": {
-                    "type": "string"
+                    "$ref": "#/definitions/model.ServiceDiscoveryType"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "tls_ca_content": {
                     "type": "string"
                 },
                 "tls_ca_file_path": {
                     "type": "string"
+                },
+                "tree_node_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "user_id": {
                     "type": "integer"
@@ -23312,23 +23400,11 @@ const docTemplate = `{
                 "name"
             ],
             "properties": {
-                "alert_manager_instances": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
                 "alert_manager_url": {
                     "type": "string"
                 },
                 "create_user_name": {
                     "type": "string"
-                },
-                "external_labels": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
                 },
                 "name": {
                     "type": "string",
@@ -23368,6 +23444,12 @@ const docTemplate = `{
                 "support_record": {
                     "type": "integer"
                 },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "user_id": {
                     "type": "integer"
                 }
@@ -23377,19 +23459,26 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "name",
-                "name_zh"
+                "name_zh",
+                "pool_id",
+                "user_id"
             ],
             "properties": {
                 "create_user_name": {
                     "type": "string"
                 },
                 "enable": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "fei_shu_qun_robot_token": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
-                "monitor_send_group_first_upgrade_users": {
+                "first_upgrade_users": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/model.User"
@@ -23406,7 +23495,11 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "need_upgrade": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "notify_methods": {
                     "type": "array",
@@ -23421,7 +23514,8 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "repeat_interval": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 50
                 },
                 "second_upgrade_users": {
                     "type": "array",
@@ -23430,7 +23524,11 @@ const docTemplate = `{
                     }
                 },
                 "send_resolved": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "static_receive_users": {
                     "type": "array",
@@ -23439,7 +23537,8 @@ const docTemplate = `{
                     }
                 },
                 "upgrade_minutes": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 },
                 "user_id": {
                     "type": "integer"
@@ -24312,6 +24411,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "id",
+                "time",
                 "user_id"
             ],
             "properties": {
@@ -24323,7 +24423,11 @@ const docTemplate = `{
                 },
                 "use_name": {
                     "description": "是否启用名称静默",
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "user_id": {
                     "type": "integer"
@@ -27478,6 +27582,19 @@ const docTemplate = `{
                 }
             }
         },
+        "model.ServiceDiscoveryType": {
+            "type": "integer",
+            "enum": [
+                1,
+                2,
+                3
+            ],
+            "x-enum-varnames": [
+                "ServiceDiscoveryTypeK8s",
+                "ServiceDiscoveryTypeHttp",
+                "ServiceDiscoveryTypeStatic"
+            ]
+        },
         "model.Subject": {
             "type": "object",
             "required": [
@@ -27885,6 +28002,35 @@ const docTemplate = `{
                 "MemberRole"
             ]
         },
+        "model.TreeNodeStatisticsResp": {
+            "type": "object",
+            "properties": {
+                "active_nodes": {
+                    "description": "活跃节点数",
+                    "type": "integer"
+                },
+                "inactive_nodes": {
+                    "description": "非活跃节点数",
+                    "type": "integer"
+                },
+                "total_admins": {
+                    "description": "管理员总数",
+                    "type": "integer"
+                },
+                "total_members": {
+                    "description": "成员总数",
+                    "type": "integer"
+                },
+                "total_nodes": {
+                    "description": "节点总数",
+                    "type": "integer"
+                },
+                "total_resources": {
+                    "description": "资源总数",
+                    "type": "integer"
+                }
+            }
+        },
         "model.TreeNodeStatus": {
             "type": "integer",
             "enum": [
@@ -28254,6 +28400,7 @@ const docTemplate = `{
             "properties": {
                 "alert_manager_instances": {
                     "type": "array",
+                    "minItems": 1,
                     "items": {
                         "type": "string"
                     }
@@ -28279,7 +28426,9 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "receiver": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
                 },
                 "repeat_interval": {
                     "type": "string"
@@ -28297,8 +28446,7 @@ const docTemplate = `{
                 "id",
                 "name",
                 "pool_id",
-                "send_group_id",
-                "severity"
+                "send_group_id"
             ],
             "properties": {
                 "annotations": {
@@ -28308,7 +28456,11 @@ const docTemplate = `{
                     }
                 },
                 "enable": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "expr": {
                     "type": "string"
@@ -28343,7 +28495,16 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "severity": {
-                    "type": "string"
+                    "enum": [
+                        1,
+                        2,
+                        3
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.AlertRuleSeverity"
+                        }
+                    ]
                 }
             }
         },
@@ -28400,7 +28561,8 @@ const docTemplate = `{
             ],
             "properties": {
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "enable": {
                     "type": "integer",
@@ -28439,19 +28601,14 @@ const docTemplate = `{
                 "pool_id"
             ],
             "properties": {
-                "annotations": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
                 "enable": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "expr": {
-                    "type": "string"
-                },
-                "for_time": {
                     "type": "string"
                 },
                 "id": {
@@ -28472,9 +28629,6 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "pool_id": {
-                    "type": "integer"
-                },
-                "port": {
                     "type": "integer"
                 }
             }
@@ -28537,13 +28691,25 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "service_discovery_type": {
-                    "type": "string"
+                    "$ref": "#/definitions/model.ServiceDiscoveryType"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "tls_ca_content": {
                     "type": "string"
                 },
                 "tls_ca_file_path": {
                     "type": "string"
+                },
+                "tree_node_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -28554,20 +28720,8 @@ const docTemplate = `{
                 "name"
             ],
             "properties": {
-                "alert_manager_instances": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
                 "alert_manager_url": {
                     "type": "string"
-                },
-                "external_labels": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
                 },
                 "id": {
                     "type": "integer"
@@ -28610,6 +28764,12 @@ const docTemplate = `{
                 "support_record": {
                     "type": "integer"
                 },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "user_id": {
                     "type": "integer"
                 }
@@ -28620,23 +28780,29 @@ const docTemplate = `{
             "required": [
                 "id",
                 "name",
-                "name_zh"
+                "name_zh",
+                "pool_id"
             ],
             "properties": {
                 "enable": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "fei_shu_qun_robot_token": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
-                "id": {
-                    "type": "integer"
-                },
-                "monitor_send_group_first_upgrade_users": {
+                "first_upgrade_users": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/model.User"
                     }
+                },
+                "id": {
+                    "type": "integer"
                 },
                 "name": {
                     "type": "string",
@@ -28649,7 +28815,11 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "need_upgrade": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "notify_methods": {
                     "type": "array",
@@ -28664,7 +28834,8 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "repeat_interval": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 50
                 },
                 "second_upgrade_users": {
                     "type": "array",
@@ -28673,7 +28844,11 @@ const docTemplate = `{
                     }
                 },
                 "send_resolved": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "static_receive_users": {
                     "type": "array",
@@ -28682,7 +28857,8 @@ const docTemplate = `{
                     }
                 },
                 "upgrade_minutes": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 }
             }
         },

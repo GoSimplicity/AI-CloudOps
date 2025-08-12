@@ -39,6 +39,12 @@ const (
 	MemberRole
 )
 
+// 叶子节点标识常量，提升可读性，避免魔法数字
+const (
+	IsLeafYes int8 = 1 // 是叶子节点
+	IsLeafNo  int8 = 2 // 不是叶子节点
+)
+
 // TreeNode 服务树节点结构
 type TreeNode struct {
 	Model
@@ -64,6 +70,7 @@ func (t *TreeNode) TableName() string {
 type GetTreeNodeListReq struct {
 	Level  int            `json:"level" form:"level" binding:"omitempty,min=1"`
 	Status TreeNodeStatus `json:"status" form:"status" binding:"omitempty,oneof=1 2"`
+	Search string         `json:"search" form:"search" binding:"omitempty"`
 }
 
 // GetTreeNodeDetailReq 获取节点详情请求

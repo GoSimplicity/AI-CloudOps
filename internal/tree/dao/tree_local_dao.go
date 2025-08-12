@@ -162,7 +162,7 @@ func (d *treeLocalDAO) BatchGetByIDs(ctx context.Context, ids []int) ([]*model.T
 
 	var locals []*model.TreeLocalResource
 
-	if err := d.db.WithContext(ctx).Where("id IN (?)", ids).Find(&locals).Error; err != nil {
+	if err := d.db.WithContext(ctx).Where("id IN ?", ids).Find(&locals).Error; err != nil {
 		d.logger.Error("批量获取本地主机失败", zap.Error(err), zap.Ints("ids", ids))
 		return nil, err
 	}

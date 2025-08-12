@@ -26,8 +26,6 @@
 package api
 
 import (
-	"fmt"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -50,6 +48,8 @@ func (h *TreeNodeHandler) RegisterRouters(server *gin.Engine) {
 		// 树结构相关接口
 		treeGroup.GET("/list", h.GetTreeList)
 		treeGroup.GET("/detail/:id", h.GetNodeDetail)
+		treeGroup.GET("/children/:id", h.GetChildNodes)
+		treeGroup.GET("/statistics", h.GetTreeStatistics)
 
 		// 节点管理接口
 		treeGroup.POST("/create", h.CreateNode)
@@ -68,14 +68,41 @@ func (h *TreeNodeHandler) RegisterRouters(server *gin.Engine) {
 	}
 }
 
+// GetChildNodes 获取直接子节点列表
+// @Summary 获取直接子节点列表
+// @Tags 资源树管理
+// @Param id path int true "父节点ID"
+// @Success 200 {object} utils.ApiResponse{data=[]model.TreeNode}
+// @Router /api/tree/node/children/{id} [get]
+func (h *TreeNodeHandler) GetChildNodes(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的父节点ID")
+		return
+	}
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetChildNodes(ctx, id)
+	})
+}
+
+// GetTreeStatistics 获取服务树统计信息
+// @Summary 获取服务树统计信息
+// @Tags 资源树管理
+// @Success 200 {object} utils.ApiResponse{data=model.TreeNodeStatisticsResp}
+// @Router /api/tree/node/statistics [get]
+func (h *TreeNodeHandler) GetTreeStatistics(ctx *gin.Context) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetTreeStatistics(ctx)
+	})
+}
+
 // GetTreeList 获取树节点列表
 // @Summary 获取树节点列表
 // @Description 获取完整的树结构节点列表
 // @Tags 资源树管理
 // @Accept json
 // @Produce json
-// @Param keyword query string false "搜索关键词"
-// @Param node_type query string false "节点类型"
+// @Param keyword query string false "搜索关键词（匹配名称/描述）"
 // @Success 200 {object} utils.ApiResponse{data=[]model.TreeNode} "获取成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
@@ -230,7 +257,7 @@ func (h *TreeNodeHandler) MoveNode(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "节点ID"
-// @Param type query string false "成员类型"
+// @Param type query int false "成员类型(1:admin,2:member,省略/其他:all)"
 // @Success 200 {object} utils.ApiResponse "获取成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
@@ -247,7 +274,17 @@ func (h *TreeNodeHandler) GetNodeMembers(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.GetNodeMembers(ctx, req.ID, fmt.Sprint(req.Type))
+		// 将数值型的成员类型映射为服务层使用的语义化字符串
+		memberType := "all"
+		switch req.Type {
+		case model.AdminRole:
+			memberType = "admin"
+		case model.MemberRole:
+			memberType = "member"
+		default:
+			memberType = "all"
+		}
+		return h.service.GetNodeMembers(ctx, req.ID, memberType)
 	})
 }
 
