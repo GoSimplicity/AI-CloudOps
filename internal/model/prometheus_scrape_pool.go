@@ -28,22 +28,21 @@ package model
 // MonitorScrapePool 采集池的配置
 type MonitorScrapePool struct {
 	Model
-	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:pool池名称"`
-	UserID                int        `json:"user_id" gorm:"index;not null;comment:所属用户ID"`
-	ScrapeInterval        int        `json:"scrape_interval" gorm:"default:30;type:smallint;not null;comment:采集间隔(秒)"`
-	ScrapeTimeout         int        `json:"scrape_timeout" gorm:"default:10;type:smallint;not null;comment:采集超时(秒)"`
-	RemoteTimeoutSeconds  int        `json:"remote_timeout_seconds" gorm:"default:5;type:smallint;not null;comment:远程写入超时(秒)"`
-	SupportAlert          int8       `json:"support_alert" gorm:"type:tinyint(1);default:2;not null;comment:告警支持(1:启用,2:禁用)"`
-	SupportRecord         int8       `json:"support_record" gorm:"type:tinyint(1);default:2;not null;comment:预聚合支持(1:启用,2:禁用)"`
-	PrometheusInstances   StringList `json:"prometheus_instances" gorm:"type:text;comment:Prometheus实例ID列表"`
-	AlertManagerInstances StringList `json:"alert_manager_instances" gorm:"type:text;comment:AlertManager实例ID列表"`
-	ExternalLabels        StringList `json:"external_labels" gorm:"type:text;comment:外部标签（格式：[key1=val1,key2=val2]）"`
-	RemoteWriteUrl        string     `json:"remote_write_url" gorm:"size:512;comment:远程写入地址"`
-	RemoteReadUrl         string     `json:"remote_read_url" gorm:"size:512;comment:远程读取地址"`
-	AlertManagerUrl       string     `json:"alert_manager_url" gorm:"size:512;comment:AlertManager地址"`
-	RuleFilePath          string     `json:"rule_file_path" gorm:"size:512;comment:告警规则文件路径"`
-	RecordFilePath        string     `json:"record_file_path" gorm:"size:512;comment:记录规则文件路径"`
-	CreateUserName        string     `json:"create_user_name" gorm:"type:varchar(50);comment:创建人名称"`
+	Name                 string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:pool池名称"`
+	UserID               int        `json:"user_id" gorm:"index;not null;comment:所属用户ID"`
+	ScrapeInterval       int        `json:"scrape_interval" gorm:"default:30;type:smallint;not null;comment:采集间隔(秒)"`
+	ScrapeTimeout        int        `json:"scrape_timeout" gorm:"default:10;type:smallint;not null;comment:采集超时(秒)"`
+	RemoteTimeoutSeconds int        `json:"remote_timeout_seconds" gorm:"default:5;type:smallint;not null;comment:远程写入超时(秒)"`
+	SupportAlert         int8       `json:"support_alert" gorm:"type:tinyint(1);default:2;not null;comment:告警支持(1:启用,2:禁用)"`
+	SupportRecord        int8       `json:"support_record" gorm:"type:tinyint(1);default:2;not null;comment:预聚合支持(1:启用,2:禁用)"`
+	PrometheusInstances  StringList `json:"prometheus_instances" gorm:"type:text;comment:Prometheus实例ID列表"`
+	Tags                 StringList `json:"tags" gorm:"type:text;comment:标签"`
+	RemoteWriteUrl       string     `json:"remote_write_url" gorm:"size:512;comment:远程写入地址"`
+	RemoteReadUrl        string     `json:"remote_read_url" gorm:"size:512;comment:远程读取地址"`
+	AlertManagerUrl      string     `json:"alert_manager_url" gorm:"size:512;comment:AlertManager地址"`
+	RuleFilePath         string     `json:"rule_file_path" gorm:"size:512;comment:告警规则文件路径"`
+	RecordFilePath       string     `json:"record_file_path" gorm:"size:512;comment:记录规则文件路径"`
+	CreateUserName       string     `json:"create_user_name" gorm:"type:varchar(50);comment:创建人名称"`
 }
 
 func (m *MonitorScrapePool) TableName() string {
@@ -57,41 +56,39 @@ type GetMonitorScrapePoolListReq struct {
 }
 
 type CreateMonitorScrapePoolReq struct {
-	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:pool池名称"`
-	UserID                int        `json:"user_id" gorm:"index;not null;comment:所属用户ID"`
-	ScrapeInterval        int        `json:"scrape_interval" gorm:"default:30;type:smallint;not null;comment:采集间隔(秒)"`
-	ScrapeTimeout         int        `json:"scrape_timeout" gorm:"default:10;type:smallint;not null;comment:采集超时(秒)"`
-	RemoteTimeoutSeconds  int        `json:"remote_timeout_seconds" gorm:"default:5;type:smallint;not null;comment:远程写入超时(秒)"`
-	SupportAlert          int8       `json:"support_alert" gorm:"type:tinyint(1);default:2;not null;comment:告警支持(1:启用,2:禁用)"`
-	SupportRecord         int8       `json:"support_record" gorm:"type:tinyint(1);default:2;not null;comment:预聚合支持(1:启用,2:禁用)"`
-	PrometheusInstances   StringList `json:"prometheus_instances" gorm:"type:text;comment:Prometheus实例ID列表"`
-	AlertManagerInstances StringList `json:"alert_manager_instances" gorm:"type:text;comment:AlertManager实例ID列表"`
-	ExternalLabels        StringList `json:"external_labels" gorm:"type:text;comment:外部标签（格式：[key1=val1,key2=val2]）"`
-	RemoteWriteUrl        string     `json:"remote_write_url" gorm:"size:512;comment:远程写入地址"`
-	RemoteReadUrl         string     `json:"remote_read_url" gorm:"size:512;comment:远程读取地址"`
-	AlertManagerUrl       string     `json:"alert_manager_url" gorm:"size:512;comment:AlertManager地址"`
-	RuleFilePath          string     `json:"rule_file_path" gorm:"size:512;comment:告警规则文件路径"`
-	RecordFilePath        string     `json:"record_file_path" gorm:"size:512;comment:记录规则文件路径"`
-	CreateUserName        string     `json:"create_user_name" gorm:"type:varchar(50);comment:创建人名称"`
+	Name                 string     `json:"name" binding:"required,min=1,max=50"`
+	UserID               int        `json:"user_id"`
+	ScrapeInterval       int        `json:"scrape_interval"`
+	ScrapeTimeout        int        `json:"scrape_timeout"`
+	RemoteTimeoutSeconds int        `json:"remote_timeout_seconds"`
+	SupportAlert         int8       `json:"support_alert"`
+	SupportRecord        int8       `json:"support_record"`
+	PrometheusInstances  StringList `json:"prometheus_instances"`
+	Tags                 StringList `json:"tags"`
+	RemoteWriteUrl       string     `json:"remote_write_url"`
+	RemoteReadUrl        string     `json:"remote_read_url"`
+	AlertManagerUrl      string     `json:"alert_manager_url"`
+	RuleFilePath         string     `json:"rule_file_path"`
+	RecordFilePath       string     `json:"record_file_path"`
+	CreateUserName       string     `json:"create_user_name"`
 }
 
 type UpdateMonitorScrapePoolReq struct {
-	ID                    int        `json:"id" form:"id" binding:"required"`
-	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:pool池名称"`
-	UserID                int        `json:"user_id" gorm:"index;not null;comment:所属用户ID"`
-	ScrapeInterval        int        `json:"scrape_interval" gorm:"default:30;type:smallint;not null;comment:采集间隔(秒)"`
-	ScrapeTimeout         int        `json:"scrape_timeout" gorm:"default:10;type:smallint;not null;comment:采集超时(秒)"`
-	RemoteTimeoutSeconds  int        `json:"remote_timeout_seconds" gorm:"default:5;type:smallint;not null;comment:远程写入超时(秒)"`
-	SupportAlert          int8       `json:"support_alert" gorm:"type:tinyint(1);default:2;not null;comment:告警支持(1:启用,2:禁用)"`
-	SupportRecord         int8       `json:"support_record" gorm:"type:tinyint(1);default:2;not null;comment:预聚合支持(1:启用,2:禁用)"`
-	PrometheusInstances   StringList `json:"prometheus_instances" gorm:"type:text;comment:Prometheus实例ID列表"`
-	AlertManagerInstances StringList `json:"alert_manager_instances" gorm:"type:text;comment:AlertManager实例ID列表"`
-	ExternalLabels        StringList `json:"external_labels" gorm:"type:text;comment:外部标签（格式：[key1=val1,key2=val2]）"`
-	RemoteWriteUrl        string     `json:"remote_write_url" gorm:"size:512;comment:远程写入地址"`
-	RemoteReadUrl         string     `json:"remote_read_url" gorm:"size:512;comment:远程读取地址"`
-	AlertManagerUrl       string     `json:"alert_manager_url" gorm:"size:512;comment:AlertManager地址"`
-	RuleFilePath          string     `json:"rule_file_path" gorm:"size:512;comment:告警规则文件路径"`
-	RecordFilePath        string     `json:"record_file_path" gorm:"size:512;comment:记录规则文件路径"`
+	ID                   int        `json:"id" form:"id" binding:"required"`
+	Name                 string     `json:"name" binding:"required,min=1,max=50"`
+	UserID               int        `json:"user_id"`
+	ScrapeInterval       int        `json:"scrape_interval"`
+	ScrapeTimeout        int        `json:"scrape_timeout"`
+	RemoteTimeoutSeconds int        `json:"remote_timeout_seconds"`
+	SupportAlert         int8       `json:"support_alert"`
+	SupportRecord        int8       `json:"support_record"`
+	PrometheusInstances  StringList `json:"prometheus_instances"`
+	Tags                 StringList `json:"tags"`
+	RemoteWriteUrl       string     `json:"remote_write_url"`
+	RemoteReadUrl        string     `json:"remote_read_url"`
+	AlertManagerUrl      string     `json:"alert_manager_url"`
+	RuleFilePath         string     `json:"rule_file_path"`
+	RecordFilePath       string     `json:"record_file_path"`
 }
 
 type DeleteMonitorScrapePoolReq struct {

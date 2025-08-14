@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -39,14 +40,14 @@ import (
 )
 
 type TreeLocalService interface {
-	GetTreeLocalList(ctx context.Context, req *model.GetTreeLocalListReq) (model.ListResp[*model.TreeLocal], error)
-	GetTreeLocalDetail(ctx context.Context, req *model.GetTreeLocalDetailReq) (*model.TreeLocal, error)
-	GetTreeLocalForConnection(ctx context.Context, req *model.GetTreeLocalDetailReq) (*model.TreeLocal, error)
-	CreateTreeLocal(ctx context.Context, req *model.CreateTreeLocalReq) error
-	UpdateTreeLocal(ctx context.Context, req *model.UpdateTreeLocalReq) error
-	DeleteTreeLocal(ctx context.Context, req *model.DeleteTreeLocalReq) error
-	BindTreeLocal(ctx context.Context, req *model.BindLocalResourceReq) error
-	UnBindLocalResource(ctx context.Context, req *model.UnBindLocalResourceReq) error
+	GetTreeLocalList(ctx context.Context, req *model.GetTreeLocalResourceListReq) (model.ListResp[*model.TreeLocalResource], error)
+	GetTreeLocalDetail(ctx context.Context, req *model.GetTreeLocalResourceDetailReq) (*model.TreeLocalResource, error)
+	GetTreeLocalForConnection(ctx context.Context, req *model.GetTreeLocalResourceDetailReq) (*model.TreeLocalResource, error)
+	CreateTreeLocal(ctx context.Context, req *model.CreateTreeLocalResourceReq) error
+	UpdateTreeLocal(ctx context.Context, req *model.UpdateTreeLocalResourceReq) error
+	DeleteTreeLocal(ctx context.Context, req *model.DeleteTreeLocalResourceReq) error
+	BindTreeLocal(ctx context.Context, req *model.BindTreeLocalResourceReq) error
+	UnBindLocalResource(ctx context.Context, req *model.UnBindTreeLocalResourceReq) error
 }
 
 type treeLocalService struct {
@@ -62,21 +63,28 @@ func NewTreeLocalService(logger *zap.Logger, dao dao.TreeLocalDAO) TreeLocalServ
 }
 
 // GetTreeLocalList 获取本地主机列表
-func (t *treeLocalService) GetTreeLocalList(ctx context.Context, req *model.GetTreeLocalListReq) (model.ListResp[*model.TreeLocal], error) {
+func (t *treeLocalService) GetTreeLocalList(ctx context.Context, req *model.GetTreeLocalResourceListReq) (model.ListResp[*model.TreeLocalResource], error) {
+	// 兜底分页参数，避免offset为负或size为0
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.Size <= 0 {
+		req.Size = 10
+	}
 	locals, total, err := t.dao.GetList(ctx, req)
 	if err != nil {
 		t.logger.Error("获取本地主机列表失败", zap.Error(err))
-		return model.ListResp[*model.TreeLocal]{}, err
+		return model.ListResp[*model.TreeLocalResource]{}, err
 	}
 
-	return model.ListResp[*model.TreeLocal]{
+	return model.ListResp[*model.TreeLocalResource]{
 		Items: locals,
 		Total: total,
 	}, nil
 }
 
 // GetTreeLocalDetail 获取本地主机详情
-func (t *treeLocalService) GetTreeLocalDetail(ctx context.Context, req *model.GetTreeLocalDetailReq) (*model.TreeLocal, error) {
+func (t *treeLocalService) GetTreeLocalDetail(ctx context.Context, req *model.GetTreeLocalResourceDetailReq) (*model.TreeLocalResource, error) {
 	if req.ID <= 0 {
 		return nil, errors.New("无效的主机ID")
 	}
@@ -94,7 +102,7 @@ func (t *treeLocalService) GetTreeLocalDetail(ctx context.Context, req *model.Ge
 }
 
 // GetTreeLocalForConnection 获取用于连接的本地主机详情(包含解密后的密码)
-func (t *treeLocalService) GetTreeLocalForConnection(ctx context.Context, req *model.GetTreeLocalDetailReq) (*model.TreeLocal, error) {
+func (t *treeLocalService) GetTreeLocalForConnection(ctx context.Context, req *model.GetTreeLocalResourceDetailReq) (*model.TreeLocalResource, error) {
 	if req.ID <= 0 {
 		return nil, errors.New("无效的主机ID")
 	}
@@ -120,7 +128,8 @@ func (t *treeLocalService) GetTreeLocalForConnection(ctx context.Context, req *m
 
 	return local, nil
 }
-func (t *treeLocalService) CreateTreeLocal(ctx context.Context, req *model.CreateTreeLocalReq) error {
+
+func (t *treeLocalService) CreateTreeLocal(ctx context.Context, req *model.CreateTreeLocalResourceReq) error {
 	// 检查IP地址是否已存在
 	existing, err := t.dao.GetByIP(ctx, req.IpAddr)
 	if err == nil && existing != nil {
@@ -128,20 +137,22 @@ func (t *treeLocalService) CreateTreeLocal(ctx context.Context, req *model.Creat
 	}
 
 	// 创建本地主机对象
-	local := &model.TreeLocal{
-		Name:        req.Name,
-		Status:      model.StatusStarting,
-		Environment: req.Environment,
-		Description: req.Description,
-		Tags:        req.Tags,
-		IpAddr:      req.IpAddr,
-		Port:        req.Port,
-		Username:    req.Username,
-		Key:         req.Key,
-		AuthMode:    req.AuthMode,
-		OsType:      req.OsType,
-		OSName:      req.OSName,
-		ImageName:   req.ImageName,
+	local := &model.TreeLocalResource{
+		Name:           req.Name,
+		Status:         model.STARTING,
+		Environment:    req.Environment,
+		Description:    req.Description,
+		Tags:           req.Tags,
+		IpAddr:         req.IpAddr,
+		Port:           req.Port,
+		Username:       req.Username,
+		CreateUserID:   req.CreateUserID,
+		CreateUserName: req.CreateUserName,
+		Key:            req.Key,
+		AuthMode:       req.AuthMode,
+		OsType:         req.OsType,
+		OSName:         req.OSName,
+		ImageName:      req.ImageName,
 	}
 
 	// 设置默认值
@@ -171,7 +182,7 @@ func (t *treeLocalService) CreateTreeLocal(ctx context.Context, req *model.Creat
 	return nil
 }
 
-func (t *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.UpdateTreeLocalReq) error {
+func (t *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.UpdateTreeLocalResourceReq) error {
 	if req.ID <= 0 {
 		return errors.New("无效的主机ID")
 	}
@@ -194,7 +205,7 @@ func (t *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.Updat
 		}
 	}
 
-	local := model.TreeLocal{
+	local := model.TreeLocalResource{
 		Model: model.Model{
 			ID: req.ID,
 		},
@@ -202,7 +213,7 @@ func (t *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.Updat
 		Environment: req.Environment,
 		Description: req.Description,
 		Tags:        req.Tags,
-		Status:      model.StatusStarting,
+		Status:      model.STARTING,
 		IpAddr:      req.IpAddr,
 		Port:        req.Port,
 		OsType:      req.OsType,
@@ -240,7 +251,7 @@ func (t *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.Updat
 }
 
 // DeleteTreeLocal 删除本地主机
-func (t *treeLocalService) DeleteTreeLocal(ctx context.Context, req *model.DeleteTreeLocalReq) error {
+func (t *treeLocalService) DeleteTreeLocal(ctx context.Context, req *model.DeleteTreeLocalResourceReq) error {
 	if req.ID <= 0 {
 		return errors.New("无效的主机ID")
 	}
@@ -256,7 +267,7 @@ func (t *treeLocalService) DeleteTreeLocal(ctx context.Context, req *model.Delet
 	return nil
 }
 
-func (t *treeLocalService) BindTreeLocal(ctx context.Context, req *model.BindLocalResourceReq) error {
+func (t *treeLocalService) BindTreeLocal(ctx context.Context, req *model.BindTreeLocalResourceReq) error {
 	if req.ID <= 0 {
 		return errors.New("无效的主机ID")
 	}
@@ -269,7 +280,7 @@ func (t *treeLocalService) BindTreeLocal(ctx context.Context, req *model.BindLoc
 	return nil
 }
 
-func (t *treeLocalService) UnBindLocalResource(ctx context.Context, req *model.UnBindLocalResourceReq) error {
+func (t *treeLocalService) UnBindLocalResource(ctx context.Context, req *model.UnBindTreeLocalResourceReq) error {
 	if req.ID <= 0 {
 		return errors.New("无效的主机ID")
 	}

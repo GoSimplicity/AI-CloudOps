@@ -45,6 +45,7 @@ import (
 	"github.com/prometheus/prometheus/discovery/kubernetes"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
+	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -60,14 +61,14 @@ type PrometheusConfigCache interface {
 }
 
 type prometheusConfigCache struct {
-	configMap     map[string]string
+	// 不再使用本地 map 作为缓存，改用 Redis
+	redis         redis.Cmdable
 	mu            sync.RWMutex
 	logger        *zap.Logger
 	scrapePoolDAO scrapeJobDao.ScrapePoolDAO
 	scrapeJobDAO  scrapeJobDao.ScrapeJobDAO
 	configDAO     configDao.MonitorConfigDAO
 	httpSdAPI     string
-	poolHashes    map[string]string
 	batchManager  *BatchConfigManager
 	cacheStats    struct {
 		hits   int64
@@ -82,16 +83,16 @@ func NewPrometheusConfigCache(
 	scrapeJobDAO scrapeJobDao.ScrapeJobDAO,
 	configDAO configDao.MonitorConfigDAO,
 	batchManager *BatchConfigManager,
+	redisClient redis.Cmdable,
 ) PrometheusConfigCache {
 	return &prometheusConfigCache{
-		configMap:     make(map[string]string),
+		redis:         redisClient,
 		httpSdAPI:     viper.GetString("prometheus.httpSdAPI"),
 		scrapePoolDAO: scrapePoolDAO,
 		scrapeJobDAO:  scrapeJobDAO,
 		configDAO:     configDAO,
 		logger:        logger,
 		mu:            sync.RWMutex{},
-		poolHashes:    make(map[string]string),
 		batchManager:  batchManager,
 	}
 }
@@ -104,19 +105,18 @@ func (p *prometheusConfigCache) GetConfigByIP(ip string) string {
 		return ""
 	}
 
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	config, exists := p.configMap[ip]
-	if exists {
-		p.recordCacheHit()
-		p.logger.Debug(LogModuleMonitor+"缓存命中", zap.String("ip", ip))
-	} else {
+	// 从 Redis 读取配置
+	ctx := context.Background()
+	key := buildRedisKeyPrometheusMain(ip)
+	val, err := p.redis.Get(ctx, key).Result()
+	if err != nil {
 		p.recordCacheMiss()
-		p.logger.Debug(LogModuleMonitor+"缓存未命中", zap.String("ip", ip))
+		p.logger.Debug(LogModuleMonitor+"缓存未命中", zap.String("ip", ip), zap.Error(err))
+		return ""
 	}
-
-	return config
+	p.recordCacheHit()
+	p.logger.Debug(LogModuleMonitor+"缓存命中", zap.String("ip", ip))
+	return val
 }
 
 // recordCacheHit 记录缓存命中
@@ -144,11 +144,6 @@ func (p *prometheusConfigCache) GetCacheStats() (hits, misses int64) {
 func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 	startTime := time.Now()
 	p.logger.Info(LogModuleMonitor + "开始生成Prometheus主配置")
-
-	p.mu.RLock()
-	tempConfigMap := utils.CopyMap(p.configMap)
-	tempPoolHashes := utils.CopyMap(p.poolHashes)
-	p.mu.RUnlock()
 
 	validIPs := make(map[string]struct{})
 	processedCount := 0
@@ -185,7 +180,10 @@ func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 			}
 
 			currentHash := utils.CalculatePromHash(pool)
-			if cachedHash, ok := tempPoolHashes[pool.Name]; ok && cachedHash == currentHash {
+			// 从 Redis 读取池哈希，判断是否需要更新
+			hashKey := buildRedisHashKeyPrometheus(pool.Name)
+			cachedHash, _ := p.redis.Get(ctx, hashKey).Result()
+			if cachedHash == currentHash {
 				for _, ip := range pool.PrometheusInstances {
 					validIPs[ip] = struct{}{}
 				}
@@ -225,20 +223,49 @@ func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 			}
 
 			if success {
+				// 清理上一次该池的实例集合中已不存在的IP
+				setKey := buildRedisSetKeyPrometheusMainPoolIPs(pool.ID)
+				oldIPs, _ := p.redis.SMembers(ctx, setKey).Result()
+				oldIPSet := map[string]struct{}{}
+				for _, old := range oldIPs {
+					oldIPSet[old] = struct{}{}
+				}
+
+				// 写入新的配置到 Redis，并更新集合
 				for ip, cfg := range instanceConfigs {
 					configName := fmt.Sprintf(ConfigNamePrometheus, pool.ID, ip)
-					tempConfigMap[ip] = cfg
 					validIPs[ip] = struct{}{}
 
-					// 准备批量保存的配置数据
+					// 保存到数据库（批量）
 					allConfigsToSave[ip] = ConfigData{
 						Name:       configName,
 						PoolID:     pool.ID,
 						ConfigType: model.ConfigTypePrometheus,
 						Content:    cfg,
 					}
+
+					// 保存到 Redis
+					key := buildRedisKeyPrometheusMain(ip)
+					if err := p.redis.Set(ctx, key, cfg, 0).Err(); err != nil {
+						p.logger.Error(LogModuleMonitor+"写入Redis失败", zap.String("pool_name", pool.Name), zap.String("ip", ip), zap.Error(err))
+						continue
+					}
+					// 更新池IP集合
+					_ = p.redis.SAdd(ctx, setKey, ip).Err()
+					// 从旧集合标记中移除，剩余的是待删除
+					delete(oldIPSet, ip)
 				}
-				tempPoolHashes[pool.Name] = currentHash
+
+				// 删除已失效IP对应的 Redis 键并从集合移除
+				for staleIP := range oldIPSet {
+					key := buildRedisKeyPrometheusMain(staleIP)
+					_ = p.redis.Del(ctx, key).Err()
+					_ = p.redis.SRem(ctx, setKey, staleIP).Err()
+					p.logger.Debug(LogModuleMonitor+"删除无效IP配置", zap.String("ip", staleIP))
+				}
+
+				// 更新池哈希
+				_ = p.redis.Set(ctx, hashKey, currentHash, 0).Err()
 			}
 		}
 
@@ -257,13 +284,7 @@ func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 		}
 	}
 
-	// 清理无效的IP配置
-	cleanupInvalidIPs(tempConfigMap, validIPs, p.logger)
-
-	p.mu.Lock()
-	p.configMap = tempConfigMap
-	p.poolHashes = tempPoolHashes
-	p.mu.Unlock()
+	// 不再维护本地内存缓存，无需清理本地 map
 
 	logBatchOperation(p.logger, "生成Prometheus主配置", processedCount, processedCount, startTime)
 	return nil
@@ -281,7 +302,7 @@ func (p *prometheusConfigCache) CreateBaseConfig(pool *model.MonitorScrapePool) 
 		ScrapeTimeout:  utils.GenPromDuration(int(pool.ScrapeTimeout)),
 	}
 
-	externalLabels := utils.ParseExternalLabels(pool.ExternalLabels)
+	externalLabels := utils.ParseExternalLabels(pool.Tags)
 	if len(externalLabels) > 0 {
 		config.GlobalConfig.ExternalLabels = labels.FromStrings(externalLabels...)
 	}
@@ -372,19 +393,21 @@ func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool 
 		}
 
 		switch job.ServiceDiscoveryType {
-		case "http":
+		case model.ServiceDiscoveryTypeHttp:
 			if p.httpSdAPI == "" {
 				p.logger.Error(LogModuleMonitor+"HTTP SD API地址为空", zap.String("job_name", job.Name))
 				continue
 			}
-			sdURL := fmt.Sprintf("%s?port=%d&ipAddress=%s", p.httpSdAPI, job.Port, job.IpAddress)
+			// HTTP SD: 传递端口与树节点ID集合
+			sdURL := fmt.Sprintf("%s?port=%d&tree_node_ids=%s", p.httpSdAPI, job.Port, stringSliceToString(job.TreeNodeIDs))
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				&http.SDConfig{
 					URL:             sdURL,
 					RefreshInterval: utils.GenPromDuration(job.RefreshInterval),
 				},
 			}
-		case "k8s":
+		case model.ServiceDiscoveryTypeK8s:
+			// 采集目标的 HTTPClient 配置（用于实际抓取）
 			sc.HTTPClientConfig = pcc.HTTPClientConfig{
 				BearerTokenFile: job.BearerTokenFile,
 				TLSConfig: pcc.TLSConfig{
@@ -392,15 +415,37 @@ func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool 
 					InsecureSkipVerify: true,
 				},
 			}
+			// Kubernetes 服务发现到 APIServer 的 HTTPClient 配置（用于发现）
+			sdHTTPClient := pcc.DefaultHTTPClientConfig
+			if job.BearerTokenFile != "" {
+				sdHTTPClient.BearerTokenFile = job.BearerTokenFile
+			}
+			if job.TlsCaFilePath != "" {
+				sdHTTPClient.TLSConfig.CAFile = job.TlsCaFilePath
+			}
+			sdHTTPClient.TLSConfig.InsecureSkipVerify = true
+
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				&kubernetes.SDConfig{
 					Role:             kubernetes.Role(job.KubernetesSdRole),
 					KubeConfig:       job.KubeConfigFilePath,
-					HTTPClientConfig: pcc.DefaultHTTPClientConfig,
+					HTTPClientConfig: sdHTTPClient,
+				},
+			}
+		case model.ServiceDiscoveryTypeStatic:
+			sc.ServiceDiscoveryConfigs = discovery.Configs{
+				discovery.StaticConfig{
+					{
+						Targets: []pm.LabelSet{
+							{
+								pm.AddressLabel: pm.LabelValue(job.IpAddress),
+							},
+						},
+					},
 				},
 			}
 		default:
-			p.logger.Warn(LogModuleMonitor+"未知的服务发现类型", zap.String("type", job.ServiceDiscoveryType), zap.String("job_name", job.Name))
+			p.logger.Warn(LogModuleMonitor+"未知的服务发现类型", zap.Int8("type", int8(job.ServiceDiscoveryType)), zap.String("job_name", job.Name))
 			continue
 		}
 

@@ -12,7 +12,7 @@ import (
 )
 
 type EcsSSH interface {
-	Connect(ip string, port int, username string, password string, key string, mode string, userID int) error
+	Connect(ip string, port int, username string, password string, key string, mode int8, userID int) error
 	AddPublicKeyToRemoteHost(publicKey string) error
 	Run(command string) (string, error)
 	Close() error
@@ -23,7 +23,7 @@ type ecsSSH struct {
 	IP         string               // 服务器IP地址
 	Port       int                  // SSH端口号，默认22
 	Username   string               // SSH用户名
-	Mode       string               // 认证方式：password(密码认证) 或 key(私钥认证)
+	Mode       int8                 // 认证方式：1:密码,2:密钥
 	Password   string               // 密码（当Mode为password时使用）
 	Key        string               // SSH私钥内容（当Mode为key时使用）
 	Client     *ssh.Client          // SSH客户端连接
@@ -44,7 +44,7 @@ func NewSSH(logger *zap.Logger) EcsSSH {
 }
 
 // Connect 建立SSH连接
-func (s *ecsSSH) Connect(ip string, port int, username string, password string, key string, mode string, userID int) error {
+func (s *ecsSSH) Connect(ip string, port int, username string, password string, key string, mode int8, userID int) error {
 	// 参数验证
 	if ip == "" {
 		return fmt.Errorf("IP地址不能为空")
@@ -52,13 +52,13 @@ func (s *ecsSSH) Connect(ip string, port int, username string, password string, 
 	if username == "" {
 		return fmt.Errorf("用户名不能为空")
 	}
-	if mode != "password" && mode != "key" {
+	if mode != 1 && mode != 2 {
 		return fmt.Errorf("认证方式必须是 'password' 或 'key'")
 	}
-	if mode == "password" && password == "" {
+	if mode == 1 && password == "" {
 		return fmt.Errorf("密码认证模式下密码不能为空")
 	}
-	if mode == "key" && key == "" {
+	if mode == 2 && key == "" {
 		return fmt.Errorf("私钥认证模式下私钥不能为空")
 	}
 
@@ -96,7 +96,7 @@ func (s *ecsSSH) Connect(ip string, port int, username string, password string, 
 
 	// 根据认证方式配置认证方法
 	var auth ssh.AuthMethod
-	if mode == "key" {
+	if mode == 2 {
 		// 解析私钥
 		signer, err := ssh.ParsePrivateKey([]byte(key))
 		if err != nil {

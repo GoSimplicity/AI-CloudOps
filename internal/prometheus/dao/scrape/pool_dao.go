@@ -146,21 +146,20 @@ func (s *scrapePoolDAO) UpdateMonitorScrapePool(ctx context.Context, req *model.
 		Model(&model.MonitorScrapePool{}).
 		Where("id = ?", req.ID).
 		Updates(map[string]interface{}{
-			"name":                    req.Name,
-			"prometheus_instances":    req.PrometheusInstances,
-			"alert_manager_instances": req.AlertManagerInstances,
-			"scrape_interval":         req.ScrapeInterval,
-			"scrape_timeout":          req.ScrapeTimeout,
-			"remote_timeout_seconds":  req.RemoteTimeoutSeconds,
-			"support_alert":           req.SupportAlert,
-			"support_record":          req.SupportRecord,
-			"external_labels":         req.ExternalLabels,
-			"remote_write_url":        req.RemoteWriteUrl,
-			"remote_read_url":         req.RemoteReadUrl,
-			"alert_manager_url":       req.AlertManagerUrl,
-			"rule_file_path":          req.RuleFilePath,
-			"record_file_path":        req.RecordFilePath,
-			"user_id":                 req.UserID,
+			"name":                   req.Name,
+			"prometheus_instances":   req.PrometheusInstances,
+			"scrape_interval":        req.ScrapeInterval,
+			"scrape_timeout":         req.ScrapeTimeout,
+			"remote_timeout_seconds": req.RemoteTimeoutSeconds,
+			"support_alert":          req.SupportAlert,
+			"support_record":         req.SupportRecord,
+			"tags":                   req.Tags,
+			"remote_write_url":       req.RemoteWriteUrl,
+			"remote_read_url":        req.RemoteReadUrl,
+			"alert_manager_url":      req.AlertManagerUrl,
+			"rule_file_path":         req.RuleFilePath,
+			"record_file_path":       req.RecordFilePath,
+			"user_id":                req.UserID,
 		}).Error; err != nil {
 		s.l.Error("更新 MonitorScrapePool 失败", zap.Error(err), zap.Int("id", req.ID))
 		return err
@@ -199,14 +198,14 @@ func (s *scrapePoolDAO) GetMonitorScrapePoolSupportedAlert(ctx context.Context) 
 
 	if err := s.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
-		Where("support_alert = ?", true).
+		Where("support_alert = ?", 1).
 		Count(&count).Error; err != nil {
 		s.l.Error("获取支持警报的 MonitorScrapePool 总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	if err := s.db.WithContext(ctx).
-		Where("support_alert = ?", true).
+		Where("support_alert = ?", 1).
 		Find(&pools).Error; err != nil {
 		s.l.Error("获取支持警报的 MonitorScrapePool 失败", zap.Error(err))
 		return nil, 0, err
@@ -222,14 +221,14 @@ func (s *scrapePoolDAO) GetMonitorScrapePoolSupportedRecord(ctx context.Context)
 
 	if err := s.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
-		Where("support_record = ?", true).
+		Where("support_record = ?", 1).
 		Count(&count).Error; err != nil {
 		s.l.Error("获取支持记录规则的 MonitorScrapePool 总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	if err := s.db.WithContext(ctx).
-		Where("support_record = ?", true).
+		Where("support_record = ?", 1).
 		Find(&pools).Error; err != nil {
 		s.l.Error("获取支持记录规则的 MonitorScrapePool 失败", zap.Error(err))
 		return nil, 0, err

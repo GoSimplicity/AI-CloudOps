@@ -135,23 +135,8 @@ func (a *alertManagerEventDAO) GetMonitorAlertEventList(ctx context.Context, req
 	}
 
 	// 添加状态过滤条件
-	if req.Status != "" {
+	if req.Status != 0 {
 		query = query.Where("status = ?", req.Status)
-	}
-
-	// 添加规则ID过滤条件
-	if req.RuleID != nil && *req.RuleID > 0 {
-		query = query.Where("rule_id = ?", *req.RuleID)
-	}
-
-	// 添加发送组ID过滤条件
-	if req.SendGroupID != nil && *req.SendGroupID > 0 {
-		query = query.Where("send_group_id = ?", *req.SendGroupID)
-	}
-
-	// 添加告警名称过滤条件
-	if req.AlertName != "" {
-		query = query.Where("alert_name LIKE ?", "%"+req.AlertName+"%")
 	}
 
 	// 添加时间范围过滤条件

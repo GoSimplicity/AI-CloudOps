@@ -26,6 +26,9 @@
 package di
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 )
@@ -36,6 +39,11 @@ func InitRedis() redis.Cmdable {
 		Addr:     viper.GetString("redis.addr"),
 		Password: viper.GetString("redis.password"),
 	})
+
+	// 测试连接
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		panic(fmt.Sprintf("Redis 连接失败，请检查密码和主机地址:redis.addr:%v,redis.password:%v,err:%v", viper.GetString("redis.addr"), viper.GetString("redis.password"), err))
+	}
 
 	return client
 }

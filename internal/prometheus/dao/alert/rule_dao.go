@@ -107,16 +107,8 @@ func (a *alertManagerRuleDAO) GetMonitorAlertRuleList(ctx context.Context, req *
 		query = query.Where("enable = ?", *req.Enable)
 	}
 
-	if req.Severity != "" {
+	if req.Severity != nil {
 		query = query.Where("severity = ?", req.Severity)
-	}
-
-	if req.PoolID != nil {
-		query = query.Where("pool_id = ?", *req.PoolID)
-	}
-
-	if req.SendGroupID != nil {
-		query = query.Where("send_group_id = ?", *req.SendGroupID)
 	}
 
 	// 先获取总数

@@ -60,10 +60,8 @@ func (m *MonitorConfig) TableName() string {
 // GetMonitorConfigListReq 获取监控配置列表请求
 type GetMonitorConfigListReq struct {
 	ListReq
-	PoolID     *int   `json:"pool_id" form:"pool_id" binding:"omitempty"`
-	InstanceIP string `json:"instance_ip" form:"instance_ip" binding:"omitempty"`
-	ConfigType *int8  `json:"config_type" form:"config_type" binding:"omitempty,oneof=1 2 3 4"`
-	Status     *int8  `json:"status" form:"status" binding:"omitempty,oneof=1 2"`
+	ConfigType *int8 `json:"config_type" form:"config_type" binding:"omitempty,oneof=1 2 3 4 5"`
+	Status     *int8 `json:"status" form:"status" binding:"omitempty,oneof=1 2"`
 }
 
 // GetMonitorConfigReq 获取单个监控配置请求

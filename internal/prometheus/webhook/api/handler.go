@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/dao"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
@@ -198,7 +199,7 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 	}
 
 	// 更新告警事件的静默状态和silenceID
-	event.Status = "silenced"
+	event.Status = model.MonitorAlertEventStatusSilenced
 	event.SilenceID = silenceResp.SilenceID
 	if err := w.dao.UpdateMonitorAlertEvent(ctx, event); err != nil {
 		w.l.Error("更新告警事件状态失败", zap.Error(err))
@@ -233,7 +234,7 @@ func (w *WebHookHandler) MonitorAlertUnSilence(ctx *gin.Context) {
 		return
 	}
 
-	if event.Status != "silenced" {
+	if event.Status != model.MonitorAlertEventStatusSilenced {
 		utils.ErrorWithMessage(ctx, "该告警未处于静默状态")
 		return
 	}
@@ -257,7 +258,7 @@ func (w *WebHookHandler) MonitorAlertUnSilence(ctx *gin.Context) {
 	}
 
 	// 更新告警事件状态
-	event.Status = "firing"
+	event.Status = model.MonitorAlertEventStatusFiring
 	event.SilenceID = ""
 	if err := w.dao.UpdateMonitorAlertEvent(ctx, event); err != nil {
 		w.l.Error("更新告警事件状态失败", zap.Error(err))

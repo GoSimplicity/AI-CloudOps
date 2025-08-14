@@ -25,16 +25,17 @@
 
 package model
 
+// MonitorAlertManagerPool AlertManager实例池
 type MonitorAlertManagerPool struct {
 	Model
-	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:AlertManager实例名称"`
+	Name                  string     `json:"name" binding:"required,min=1,max=50" gorm:"size:100;not null;comment:AlertManager实例池名称"`
 	AlertManagerInstances StringList `json:"alert_manager_instances" gorm:"type:text;not null;comment:AlertManager实例列表"`
 	UserID                int        `json:"user_id" gorm:"index;not null;comment:所属用户ID"`
 	ResolveTimeout        string     `json:"resolve_timeout" gorm:"size:50;default:'5m';not null;comment:告警恢复超时时间"`
 	GroupWait             string     `json:"group_wait" gorm:"size:50;default:'30s';not null;comment:首次告警等待时间"`
 	GroupInterval         string     `json:"group_interval" gorm:"size:50;default:'5m';not null;comment:告警分组间隔时间"`
 	RepeatInterval        string     `json:"repeat_interval" gorm:"size:50;default:'4h';not null;comment:重复告警间隔"`
-	GroupBy               StringList `json:"group_by" gorm:"type:text;not null;comment:告警分组标签列表"`
+	GroupBy               StringList `json:"group_by" gorm:"type:text;comment:告警分组标签列表"`
 	Receiver              string     `json:"receiver" gorm:"size:100;not null;comment:默认接收者"`
 	CreateUserName        string     `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
 }
@@ -43,44 +44,44 @@ func (m *MonitorAlertManagerPool) TableName() string {
 	return "cl_monitor_alert_manager_pools"
 }
 
-// CreateMonitorAlertManagerPoolReq 创建 AlertManager 实例池请求
+// CreateMonitorAlertManagerPoolReq 创建AlertManager实例池请求
 type CreateMonitorAlertManagerPoolReq struct {
 	Name                  string     `json:"name" binding:"required,min=1,max=50"`
-	AlertManagerInstances StringList `json:"alert_manager_instances" binding:"required"`
+	AlertManagerInstances StringList `json:"alert_manager_instances" binding:"required,min=1"`
 	UserID                int        `json:"user_id" binding:"required"`
-	ResolveTimeout        string     `json:"resolve_timeout"`
-	GroupWait             string     `json:"group_wait"`
-	GroupInterval         string     `json:"group_interval"`
-	RepeatInterval        string     `json:"repeat_interval"`
-	GroupBy               StringList `json:"group_by"`
-	Receiver              string     `json:"receiver" binding:"required"`
-	CreateUserName        string     `json:"create_user_name" binding:"required"`
+	ResolveTimeout        string     `json:"resolve_timeout" binding:"omitempty"`
+	GroupWait             string     `json:"group_wait" binding:"omitempty"`
+	GroupInterval         string     `json:"group_interval" binding:"omitempty"`
+	RepeatInterval        string     `json:"repeat_interval" binding:"omitempty"`
+	GroupBy               StringList `json:"group_by" binding:"omitempty"`
+	Receiver              string     `json:"receiver" binding:"required,min=1,max=100"`
+	CreateUserName        string     `json:"create_user_name" binding:"required,min=1,max=100"`
 }
 
-// UpdateMonitorAlertManagerPoolReq 更新 AlertManager 实例池请求
+// UpdateMonitorAlertManagerPoolReq 更新AlertManager实例池请求
 type UpdateMonitorAlertManagerPoolReq struct {
 	ID                    int        `json:"id" binding:"required"`
 	Name                  string     `json:"name" binding:"required,min=1,max=50"`
-	AlertManagerInstances StringList `json:"alert_manager_instances" binding:"required"`
-	ResolveTimeout        string     `json:"resolve_timeout"`
-	GroupWait             string     `json:"group_wait"`
-	GroupInterval         string     `json:"group_interval"`
-	RepeatInterval        string     `json:"repeat_interval"`
-	GroupBy               StringList `json:"group_by"`
-	Receiver              string     `json:"receiver" binding:"required"`
+	AlertManagerInstances StringList `json:"alert_manager_instances" binding:"required,min=1"`
+	ResolveTimeout        string     `json:"resolve_timeout" binding:"omitempty"`
+	GroupWait             string     `json:"group_wait" binding:"omitempty"`
+	GroupInterval         string     `json:"group_interval" binding:"omitempty"`
+	RepeatInterval        string     `json:"repeat_interval" binding:"omitempty"`
+	GroupBy               StringList `json:"group_by" binding:"omitempty"`
+	Receiver              string     `json:"receiver" binding:"required,min=1,max=100"`
 }
 
-// DeleteMonitorAlertManagerPoolReq 删除 AlertManager 实例池请求
+// DeleteMonitorAlertManagerPoolReq 删除AlertManager实例池请求
 type DeleteMonitorAlertManagerPoolReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }
 
-// GetMonitorAlertManagerPoolListReq 获取 AlertManager 实例池列表请求
+// GetMonitorAlertManagerPoolListReq 获取AlertManager实例池列表请求
 type GetMonitorAlertManagerPoolListReq struct {
 	ListReq
 }
 
-// GetMonitorAlertManagerPoolReq 获取 AlertManager 实例池请求
+// GetMonitorAlertManagerPoolReq 获取AlertManager实例池详情请求
 type GetMonitorAlertManagerPoolReq struct {
 	ID int `json:"id" form:"id" binding:"required"`
 }

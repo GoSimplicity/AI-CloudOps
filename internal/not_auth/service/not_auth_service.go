@@ -28,18 +28,21 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"go.uber.org/zap"
 )
 
 type NotAuthService interface {
-	BuildPrometheusServiceDiscovery(ctx context.Context, ipAddress string) ([]*targetgroup.Group, error)
+	BuildPrometheusServiceDiscovery(ctx context.Context, port int, treeNodeIDs []int) ([]*targetgroup.Group, error)
 }
 
 type notAuthService struct {
-	l *zap.Logger
+	l       *zap.Logger
+	treeDao treeDao.TreeNodeDAO
 }
 
 func NewNotAuthService(l *zap.Logger) NotAuthService {
@@ -48,24 +51,72 @@ func NewNotAuthService(l *zap.Logger) NotAuthService {
 	}
 }
 
-// BuildPrometheusServiceDiscovery 构建 Prometheus 服务发现的目标组
-func (n *notAuthService) BuildPrometheusServiceDiscovery(ctx context.Context, ipAddress string) ([]*targetgroup.Group, error) {
-	if ipAddress == "" {
-		n.l.Warn("IP 地址为空")
-		return nil, fmt.Errorf("IP 地址不能为空")
+// BuildPrometheusServiceDiscovery 构建 Prometheus HTTP SD 目标组
+func (n *notAuthService) BuildPrometheusServiceDiscovery(ctx context.Context, port int, treeNodeIDs []int) ([]*targetgroup.Group, error) {
+	if port <= 0 || port > 65535 {
+		return nil, fmt.Errorf("端口无效")
+	}
+	if len(treeNodeIDs) == 0 {
+		return nil, fmt.Errorf("tree_node_ids 不能为空")
+	}
+	if n.treeDao == nil {
+		return nil, fmt.Errorf("内部配置缺失: TreeNodeDAO 未初始化")
 	}
 
-	// 创建目标组
+	// 收集所有绑定资源
+	targetsSet := make(map[string]struct{})
+	var orderedAddrs []string
+
+	for _, nodeID := range treeNodeIDs {
+		node, err := n.treeDao.GetNode(ctx, nodeID)
+		if err != nil {
+			return nil, err
+		}
+		for _, res := range node.TreeLocalResources {
+			if res.IpAddr == "" {
+				continue
+			}
+			addr := fmt.Sprintf("%s:%d", res.IpAddr, port)
+			if _, ok := targetsSet[addr]; ok {
+				continue
+			}
+			targetsSet[addr] = struct{}{}
+			orderedAddrs = append(orderedAddrs, addr)
+		}
+	}
+
+	// 生成目标组（保持顺序稳定）
+	var targets []model.LabelSet
+	for _, addr := range orderedAddrs {
+		targets = append(targets, model.LabelSet{
+			model.AddressLabel: model.LabelValue(addr),
+		})
+	}
+
+	if len(targets) == 0 {
+		// 返回空切片，Prometheus 会忽略
+		return []*targetgroup.Group{}, nil
+	}
+
 	tg := &targetgroup.Group{
-		Targets: []model.LabelSet{
-			{
-				model.AddressLabel: model.LabelValue(ipAddress),
-			},
-		},
+		Targets: targets,
 		Labels: model.LabelSet{
-			"instance": model.LabelValue(ipAddress),
+			"instance":      model.LabelValue("ai-cloudops-tree"),
+			"tree_node_ids": model.LabelValue(strings.Join(intSliceToStrings(treeNodeIDs), ",")),
 		},
 	}
 
 	return []*targetgroup.Group{tg}, nil
+}
+
+// intSliceToStrings 将 int 切片安全转换为字符串切片
+func intSliceToStrings(nums []int) []string {
+	if len(nums) == 0 {
+		return []string{}
+	}
+	ss := make([]string, 0, len(nums))
+	for _, n := range nums {
+		ss = append(ss, fmt.Sprintf("%d", n))
+	}
+	return ss
 }

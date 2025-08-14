@@ -84,12 +84,6 @@ func InitGinServer(
 	instanceTimeLineHdl *workorderApi.InstanceTimeLineHandler,
 	treeNodeHdl *resourceApi.TreeNodeHandler,
 	treeLocalHdl *resourceApi.TreeLocalHandler,
-	treeEcsHdl *resourceApi.TreeEcsHandler,
-	treeVpcHdl *resourceApi.TreeVpcHandler,
-	treeSecurityGroupHdl *resourceApi.TreeSecurityGroupHandler,
-	treeCloudHdl *resourceApi.TreeCloudHandler,
-	treeRdsHdl *resourceApi.TreeRdsHandler,
-	treeElbHdl *resourceApi.TreeElbHandler,
 	notificationHdl *workorderApi.NotificationHandler,
 ) *gin.Engine {
 	server := gin.Default()
@@ -138,12 +132,6 @@ func InitGinServer(
 	categoryHdl.RegisterRouters(server)
 	treeNodeHdl.RegisterRouters(server)
 	treeLocalHdl.RegisterRouters(server)
-	treeEcsHdl.RegisterRouters(server)
-	treeVpcHdl.RegisterRouters(server)
-	treeSecurityGroupHdl.RegisterRouters(server)
-	treeCloudHdl.RegisterRouters(server)
-	treeRdsHdl.RegisterRouters(server)
-	treeElbHdl.RegisterRouters(server)
 	notificationHdl.RegisterRouters(server)
 	return server
 }

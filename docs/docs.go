@@ -7266,7 +7266,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/github_com_GoSimplicity_AI-CloudOps_internal_model.Resource"
+                                                "$ref": "#/definitions/model.Resource"
                                             }
                                         }
                                     }
@@ -16729,7 +16729,7 @@ const docTemplate = `{
         },
         "/api/not_auth/getBindIps": {
             "get": {
-                "description": "根据IP地址获取Prometheus服务发现配置",
+                "description": "根据端口与服务树节点ID获取Prometheus HTTP服务发现配置",
                 "consumes": [
                     "application/json"
                 ],
@@ -16742,9 +16742,16 @@ const docTemplate = `{
                 "summary": "获取绑定IP地址",
                 "parameters": [
                     {
+                        "type": "integer",
+                        "description": "端口",
+                        "name": "port",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
                         "type": "string",
-                        "description": "IP地址",
-                        "name": "ipAddress",
+                        "description": "逗号分隔的树节点ID",
+                        "name": "tree_node_ids",
                         "in": "query",
                         "required": true
                     }
@@ -17578,14 +17585,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/tree/cloud/accounts/create": {
+        "/api/tree/local/bind/{id}": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "创建新的云账号配置",
+                "description": "将本地资源绑定到指定节点",
                 "consumes": [
                     "application/json"
                 ],
@@ -17593,17 +17600,75 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "云资源管理"
+                    "本地资源树管理"
                 ],
-                "summary": "创建云账号",
+                "summary": "绑定本地资源",
                 "parameters": [
                     {
-                        "description": "创建云账号请求参数",
+                        "type": "integer",
+                        "description": "资源ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "绑定本地资源请求参数",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.CreateCloudAccountReq"
+                            "$ref": "#/definitions/model.BindTreeLocalResourceReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "绑定成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/tree/local/create": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "创建新的本地资源",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "本地资源树管理"
+                ],
+                "summary": "创建本地资源",
+                "parameters": [
+                    {
+                        "description": "创建本地资源请求参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.CreateTreeLocalResourceReq"
                         }
                     }
                 ],
@@ -17629,14 +17694,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/tree/cloud/accounts/delete/{id}": {
+        "/api/tree/local/delete/{id}": {
             "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "删除指定的云账号",
+                "description": "根据ID删除本地资源",
                 "consumes": [
                     "application/json"
                 ],
@@ -17644,13 +17709,13 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "云资源管理"
+                    "本地资源树管理"
                 ],
-                "summary": "删除云账号",
+                "summary": "删除本地资源",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "云账号ID",
+                        "description": "资源ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -17678,14 +17743,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/tree/cloud/accounts/detail/{id}": {
+        "/api/tree/local/detail/{id}": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "根据ID获取云账号的详细信息",
+                "description": "根据ID获取本地资源的详细信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -17693,13 +17758,13 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "云资源管理"
+                    "本地资源树管理"
                 ],
-                "summary": "获取云账号详情",
+                "summary": "获取本地资源详情",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "云账号ID",
+                        "description": "资源ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -17709,7 +17774,19 @@ const docTemplate = `{
                     "200": {
                         "description": "获取成功",
                         "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.TreeLocalResource"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -17727,14 +17804,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/tree/cloud/accounts/list": {
+        "/api/tree/local/list": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "分页获取云账号列表",
+                "description": "获取完整的树结构节点列表",
                 "consumes": [
                     "application/json"
                 ],
@@ -17742,28 +17819,20 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "云资源管理"
+                    "本地资源树管理"
                 ],
-                "summary": "获取云账号列表",
+                "summary": "获取树节点列表",
                 "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 10,
-                        "description": "每页数量",
-                        "name": "size",
-                        "in": "query"
-                    },
                     {
                         "type": "string",
                         "description": "搜索关键词",
                         "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "节点类型",
+                        "name": "node_type",
                         "in": "query"
                     }
                 ],
@@ -17781,7 +17850,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/model.CloudAccount"
+                                                "$ref": "#/definitions/model.TreeLocalResource"
                                             }
                                         }
                                     }
@@ -17804,14 +17873,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/tree/cloud/accounts/test/{id}": {
-            "post": {
+        "/api/tree/local/terminal/{id}": {
+            "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "测试指定云账号的连接性",
+                "description": "通过WebSocket连接到指定本地资源的终端",
                 "consumes": [
                     "application/json"
                 ],
@@ -17819,21 +17888,79 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "云资源管理"
+                    "本地资源树管理"
                 ],
-                "summary": "测试云账号连接",
+                "summary": "连接终端",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "云账号ID",
+                        "description": "资源ID",
                         "name": "id",
                         "in": "path",
                         "required": true
                     }
                 ],
                 "responses": {
+                    "101": {
+                        "description": "WebSocket连接成功",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/tree/local/unbind/{id}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "将本地资源从节点解绑",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "本地资源树管理"
+                ],
+                "summary": "解绑本地资源",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "资源ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "解绑本地资源请求参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.UnBindTreeLocalResourceReq"
+                        }
+                    }
+                ],
+                "responses": {
                     "200": {
-                        "description": "测试成功",
+                        "description": "解绑成功",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -17853,14 +17980,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/tree/cloud/accounts/update/{id}": {
+        "/api/tree/local/update/{id}": {
             "put": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "更新指定云账号的配置信息",
+                "description": "根据ID更新本地资源信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -17868,595 +17995,24 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "云资源管理"
+                    "本地资源树管理"
                 ],
-                "summary": "更新云账号",
+                "summary": "更新本地资源",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "云账号ID",
+                        "description": "资源ID",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "更新云账号请求参数",
+                        "description": "更新本地资源请求参数",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.UpdateCloudAccountReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "更新成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/tree/cloud/statistics": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取云账号相关的统计数据",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "云资源管理"
-                ],
-                "summary": "获取云账号统计信息",
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/tree/cloud/sync": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "同步所有云账号的资源信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "云资源管理"
-                ],
-                "summary": "同步所有云资源",
-                "parameters": [
-                    {
-                        "description": "同步请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.SyncCloudReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "同步成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/tree/cloud/sync/{id}": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "同步指定云账号的资源信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "云资源管理"
-                ],
-                "summary": "同步指定云账号的资源",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "云账号ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "同步请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.SyncCloudAccountResourcesReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "同步成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/tree/ecs/create": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "创建新的ECS实例",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ECS管理"
-                ],
-                "summary": "创建ECS实例",
-                "parameters": [
-                    {
-                        "description": "创建ECS实例请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.CreateEcsResourceReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "创建成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/tree/ecs/delete/{id}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "删除指定的ECS实例",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ECS管理"
-                ],
-                "summary": "删除ECS实例",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "实例ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/tree/ecs/detail/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "根据ID获取ECS实例的详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ECS管理"
-                ],
-                "summary": "获取ECS实例详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "实例ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/tree/ecs/list": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "分页获取ECS实例列表，支持按条件筛选",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ECS管理"
-                ],
-                "summary": "获取ECS实例列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 10,
-                        "description": "每页数量",
-                        "name": "size",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "地域",
-                        "name": "region",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "实例状态",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "搜索关键词",
-                        "name": "keyword",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/tree/ecs/restart/{id}": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "重启指定的ECS实例",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ECS管理"
-                ],
-                "summary": "重启ECS实例",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "实例ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "重启成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/tree/ecs/start/{id}": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "启动指定的ECS实例",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ECS管理"
-                ],
-                "summary": "启动ECS实例",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "实例ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "启动成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/tree/ecs/stop/{id}": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "停止指定的ECS实例",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ECS管理"
-                ],
-                "summary": "停止ECS实例",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "实例ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "停止成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/tree/ecs/update/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "更新指定ECS实例的配置信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ECS管理"
-                ],
-                "summary": "更新ECS实例",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "实例ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "更新ECS实例请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.UpdateEcsReq"
+                            "$ref": "#/definitions/model.UpdateTreeLocalResourceReq"
                         }
                     }
                 ],
@@ -18484,22 +18040,10 @@ const docTemplate = `{
         },
         "/api/tree/node/children/{id}": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "根据父节点ID获取其所有子节点列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
                 "tags": [
                     "资源树管理"
                 ],
-                "summary": "获取子节点列表",
+                "summary": "获取直接子节点列表",
                 "parameters": [
                     {
                         "type": "integer",
@@ -18511,7 +18055,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "OK",
                         "schema": {
                             "allOf": [
                                 {
@@ -18529,18 +18073,6 @@ const docTemplate = `{
                                     }
                                 }
                             ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
                         }
                     }
                 }
@@ -18571,7 +18103,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.CreateNodeReq"
+                            "$ref": "#/definitions/model.CreateTreeNodeReq"
                         }
                     }
                 ],
@@ -18716,14 +18248,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "搜索关键词",
+                        "description": "搜索关键词（匹配名称/描述）",
                         "name": "keyword",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "节点类型",
-                        "name": "node_type",
                         "in": "query"
                     }
                 ],
@@ -18789,7 +18315,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.AddNodeMemberReq"
+                            "$ref": "#/definitions/model.AddTreeNodeMemberReq"
                         }
                     }
                 ],
@@ -18847,7 +18373,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.RemoveNodeMemberReq"
+                            "$ref": "#/definitions/model.RemoveTreeNodeMemberReq"
                         }
                     }
                 ],
@@ -18900,8 +18426,8 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "string",
-                        "description": "成员类型",
+                        "type": "integer",
+                        "description": "成员类型(1:admin,2:member,省略/其他:all)",
                         "name": "type",
                         "in": "query"
                     }
@@ -18960,7 +18486,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.MoveNodeReq"
+                            "$ref": "#/definitions/model.MoveTreeNodeReq"
                         }
                     }
                 ],
@@ -19011,7 +18537,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.BindResourceReq"
+                            "$ref": "#/definitions/model.BindTreeNodeResourceReq"
                         }
                     }
                 ],
@@ -19062,7 +18588,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.UnbindResourceReq"
+                            "$ref": "#/definitions/model.UnbindTreeNodeResourceReq"
                         }
                     }
                 ],
@@ -19088,142 +18614,29 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/tree/node/resources/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取指定节点绑定的资源列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "资源树管理"
-                ],
-                "summary": "获取节点资源",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "节点ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/tree/node/statistics": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取资源树的统计数据，包括节点数量等信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
                 "tags": [
                     "资源树管理"
                 ],
-                "summary": "获取树统计信息",
+                "summary": "获取服务树统计信息",
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/tree/node/status/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "更新指定节点的状态信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "资源树管理"
-                ],
-                "summary": "更新节点状态",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "节点ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "更新节点状态请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.UpdateNodeStatusReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "更新成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.TreeNodeStatisticsResp"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -19261,7 +18674,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.UpdateNodeReq"
+                            "$ref": "#/definitions/model.UpdateTreeNodeReq"
                         }
                     }
                 ],
@@ -21419,55 +20832,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/workorder/instance/timeline/delete/{id}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "删除指定的工单时间线记录",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单管理"
-                ],
-                "summary": "删除工单时间线记录",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "时间线记录ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/workorder/instance/timeline/detail/{id}": {
             "get": {
                 "security": [
@@ -21558,64 +20922,6 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/workorder/instance/timeline/update/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "更新指定的工单时间线记录信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "工单管理"
-                ],
-                "summary": "更新工单时间线记录",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "时间线记录ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "更新时间线记录请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.UpdateWorkorderInstanceTimelineReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "更新成功",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -22641,31 +21947,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "github_com_GoSimplicity_AI-CloudOps_internal_model.Resource": {
-            "type": "object",
-            "properties": {
-                "creation_time": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "资源名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "所属命名空间",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "资源状态，例如 Running, Pending",
-                    "type": "string"
-                },
-                "type": {
-                    "description": "资源类型，例如 Pod, Service, Deployment",
-                    "type": "string"
-                }
-            }
-        },
         "intstr.IntOrString": {
             "type": "object",
             "properties": {
@@ -22746,25 +22027,29 @@ const docTemplate = `{
                 "ConditionUnknown"
             ]
         },
-        "model.AddNodeMemberReq": {
+        "model.AddTreeNodeMemberReq": {
             "type": "object",
             "required": [
-                "memberType",
-                "nodeId",
-                "userId"
+                "member_type",
+                "node_id",
+                "user_id"
             ],
             "properties": {
-                "memberType": {
-                    "type": "string",
+                "member_type": {
                     "enum": [
-                        "admin",
-                        "member"
+                        1,
+                        2
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.TreeNodeMemberType"
+                        }
                     ]
                 },
-                "nodeId": {
+                "node_id": {
                     "type": "integer"
                 },
-                "userId": {
+                "user_id": {
                     "type": "integer"
                 }
             }
@@ -22818,6 +22103,19 @@ const docTemplate = `{
                     "type": "integer"
                 }
             }
+        },
+        "model.AlertRuleSeverity": {
+            "type": "integer",
+            "enum": [
+                1,
+                2,
+                3
+            ],
+            "x-enum-varnames": [
+                "AlertRuleSeverityInfo",
+                "AlertRuleSeverityWarning",
+                "AlertRuleSeverityCritical"
+            ]
         },
         "model.Api": {
             "type": "object",
@@ -23044,6 +22342,17 @@ const docTemplate = `{
                 }
             }
         },
+        "model.AuthMode": {
+            "type": "integer",
+            "enum": [
+                1,
+                2
+            ],
+            "x-enum-varnames": [
+                "AuthModePassword",
+                "AuthModeKey"
+            ]
+        },
         "model.BatchDeleteK8sCronjobRequest": {
             "type": "object",
             "required": [
@@ -23151,38 +22460,6 @@ const docTemplate = `{
                 }
             }
         },
-        "model.BindResourceReq": {
-            "type": "object",
-            "required": [
-                "nodeId",
-                "resourceIds"
-            ],
-            "properties": {
-                "nodeId": {
-                    "type": "integer"
-                },
-                "resourceIds": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "resourceType": {
-                    "enum": [
-                        "ecs",
-                        "elb",
-                        "rds",
-                        "local"
-                    ],
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.CloudProvider"
-                        }
-                    ]
-                }
-            }
-        },
         "model.BindRoleToServiceAccountRequest": {
             "type": "object",
             "required": [
@@ -23211,6 +22488,39 @@ const docTemplate = `{
                 "service_account_name": {
                     "description": "ServiceAccount 名称",
                     "type": "string"
+                }
+            }
+        },
+        "model.BindTreeLocalResourceReq": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "tree_node_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "model.BindTreeNodeResourceReq": {
+            "type": "object",
+            "required": [
+                "node_id",
+                "resource_ids"
+            ],
+            "properties": {
+                "node_id": {
+                    "type": "integer"
+                },
+                "resource_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },
@@ -23265,74 +22575,6 @@ const docTemplate = `{
                     "type": "integer"
                 }
             }
-        },
-        "model.CloudAccount": {
-            "type": "object",
-            "properties": {
-                "accessKey": {
-                    "type": "string"
-                },
-                "accountId": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "deleted_at": {
-                    "type": "integer"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "encryptedSecret": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "isEnabled": {
-                    "type": "boolean"
-                },
-                "lastSyncTime": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "provider": {
-                    "$ref": "#/definitions/model.CloudProvider"
-                },
-                "regions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.CloudProvider": {
-            "type": "string",
-            "enum": [
-                "aliyun",
-                "local",
-                "huawei",
-                "aws"
-            ],
-            "x-enum-comments": {
-                "CloudProviderAWS": "AWS",
-                "CloudProviderAliyun": "阿里云",
-                "CloudProviderHuawei": "华为云",
-                "CloudProviderLocal": "本地环境"
-            },
-            "x-enum-varnames": [
-                "CloudProviderAliyun",
-                "CloudProviderLocal",
-                "CloudProviderHuawei",
-                "CloudProviderAWS"
-            ]
         },
         "model.ClusterNamespaces": {
             "type": "object",
@@ -23515,49 +22757,6 @@ const docTemplate = `{
                 }
             }
         },
-        "model.CreateCloudAccountReq": {
-            "type": "object",
-            "required": [
-                "accessKey",
-                "accountId",
-                "name",
-                "provider",
-                "secretKey"
-            ],
-            "properties": {
-                "accessKey": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "accountId": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "description": {
-                    "type": "string",
-                    "maxLength": 500
-                },
-                "isEnabled": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "provider": {
-                    "$ref": "#/definitions/model.CloudProvider"
-                },
-                "regions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "secretKey": {
-                    "type": "string"
-                }
-            }
-        },
         "model.CreateClusterRoleBindingRequest": {
             "type": "object",
             "required": [
@@ -23642,158 +22841,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/model.PolicyRule"
                     }
-                }
-            }
-        },
-        "model.CreateEcsResourceReq": {
-            "type": "object",
-            "required": [
-                "hostname",
-                "password",
-                "provider"
-            ],
-            "properties": {
-                "account_id": {
-                    "description": "云账号ID",
-                    "type": "integer"
-                },
-                "amount": {
-                    "description": "创建数量",
-                    "type": "integer"
-                },
-                "auth_mode": {
-                    "description": "认证方式",
-                    "type": "string"
-                },
-                "auto_renew": {
-                    "description": "是否自动续费",
-                    "type": "boolean"
-                },
-                "auto_renew_period": {
-                    "description": "自动续费周期",
-                    "type": "integer"
-                },
-                "data_disk_category": {
-                    "description": "数据盘类型",
-                    "type": "string"
-                },
-                "data_disk_size": {
-                    "description": "数据盘大小",
-                    "type": "integer"
-                },
-                "description": {
-                    "description": "描述",
-                    "type": "string"
-                },
-                "dry_run": {
-                    "description": "是否仅预览不创建",
-                    "type": "boolean"
-                },
-                "hostname": {
-                    "description": "主机名",
-                    "type": "string"
-                },
-                "image_id": {
-                    "description": "镜像ID",
-                    "type": "string"
-                },
-                "image_name": {
-                    "description": "镜像名称",
-                    "type": "string"
-                },
-                "instance_charge_type": {
-                    "description": "付费类型",
-                    "type": "string"
-                },
-                "instance_name": {
-                    "description": "实例名称",
-                    "type": "string"
-                },
-                "instance_type": {
-                    "description": "实例类型",
-                    "type": "string"
-                },
-                "ip_addr": {
-                    "description": "IP地址",
-                    "type": "string"
-                },
-                "key": {
-                    "description": "密钥内容",
-                    "type": "string"
-                },
-                "os_type": {
-                    "description": "操作系统类型",
-                    "type": "string"
-                },
-                "password": {
-                    "description": "密码",
-                    "type": "string"
-                },
-                "period": {
-                    "description": "购买时长",
-                    "type": "integer"
-                },
-                "period_unit": {
-                    "description": "购买时长单位(Month/Year)",
-                    "type": "string"
-                },
-                "port": {
-                    "description": "SSH端口号",
-                    "type": "integer"
-                },
-                "provider": {
-                    "description": "云提供商",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.CloudProvider"
-                        }
-                    ]
-                },
-                "region": {
-                    "description": "区域",
-                    "type": "string"
-                },
-                "security_group_ids": {
-                    "description": "安全组ID列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "spot_duration": {
-                    "description": "竞价时长",
-                    "type": "integer"
-                },
-                "spot_strategy": {
-                    "description": "竞价策略",
-                    "type": "string"
-                },
-                "system_disk_category": {
-                    "description": "系统盘类型",
-                    "type": "string"
-                },
-                "system_disk_size": {
-                    "description": "系统盘大小",
-                    "type": "integer"
-                },
-                "tags": {
-                    "description": "资源标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "tree_node_id": {
-                    "description": "服务树节点ID",
-                    "type": "integer"
-                },
-                "v_switch_id": {
-                    "description": "交换机ID",
-                    "type": "string"
-                },
-                "zone_id": {
-                    "description": "可用区ID",
-                    "type": "string"
                 }
             }
         },
@@ -24008,12 +23055,15 @@ const docTemplate = `{
             "properties": {
                 "alert_manager_instances": {
                     "type": "array",
+                    "minItems": 1,
                     "items": {
                         "type": "string"
                     }
                 },
                 "create_user_name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
                 },
                 "group_by": {
                     "type": "array",
@@ -24033,7 +23083,9 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "receiver": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
                 },
                 "repeat_interval": {
                     "type": "string"
@@ -24053,8 +23105,7 @@ const docTemplate = `{
                 "for_time",
                 "name",
                 "pool_id",
-                "send_group_id",
-                "severity"
+                "send_group_id"
             ],
             "properties": {
                 "annotations": {
@@ -24099,7 +23150,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "severity": {
-                    "type": "string"
+                    "$ref": "#/definitions/model.AlertRuleSeverity"
                 },
                 "user_id": {
                     "type": "integer"
@@ -24175,7 +23226,8 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "reason": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "user_id": {
                     "type": "integer"
@@ -24195,7 +23247,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "name": {
                     "type": "string",
@@ -24226,12 +23279,6 @@ const docTemplate = `{
                 "pool_id"
             ],
             "properties": {
-                "annotations": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
                 "create_user_name": {
                     "type": "string"
                 },
@@ -24239,9 +23286,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "expr": {
-                    "type": "string"
-                },
-                "for_time": {
                     "type": "string"
                 },
                 "ip_address": {
@@ -24259,9 +23303,6 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "pool_id": {
-                    "type": "integer"
-                },
-                "port": {
                     "type": "integer"
                 },
                 "user_id": {
@@ -24328,13 +23369,25 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "service_discovery_type": {
-                    "type": "string"
+                    "$ref": "#/definitions/model.ServiceDiscoveryType"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "tls_ca_content": {
                     "type": "string"
                 },
                 "tls_ca_file_path": {
                     "type": "string"
+                },
+                "tree_node_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "user_id": {
                     "type": "integer"
@@ -24347,23 +23400,11 @@ const docTemplate = `{
                 "name"
             ],
             "properties": {
-                "alert_manager_instances": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
                 "alert_manager_url": {
                     "type": "string"
                 },
                 "create_user_name": {
                     "type": "string"
-                },
-                "external_labels": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
                 },
                 "name": {
                     "type": "string",
@@ -24403,6 +23444,12 @@ const docTemplate = `{
                 "support_record": {
                     "type": "integer"
                 },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "user_id": {
                     "type": "integer"
                 }
@@ -24412,19 +23459,26 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "name",
-                "name_zh"
+                "name_zh",
+                "pool_id",
+                "user_id"
             ],
             "properties": {
                 "create_user_name": {
                     "type": "string"
                 },
                 "enable": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "fei_shu_qun_robot_token": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
-                "monitor_send_group_first_upgrade_users": {
+                "first_upgrade_users": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/model.User"
@@ -24441,7 +23495,11 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "need_upgrade": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "notify_methods": {
                     "type": "array",
@@ -24456,7 +23514,8 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "repeat_interval": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 50
                 },
                 "second_upgrade_users": {
                     "type": "array",
@@ -24465,7 +23524,11 @@ const docTemplate = `{
                     }
                 },
                 "send_resolved": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "static_receive_users": {
                     "type": "array",
@@ -24474,7 +23537,8 @@ const docTemplate = `{
                     }
                 },
                 "upgrade_minutes": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 },
                 "user_id": {
                     "type": "integer"
@@ -24507,39 +23571,6 @@ const docTemplate = `{
                 },
                 "namespace": {
                     "type": "string"
-                }
-            }
-        },
-        "model.CreateNodeReq": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "creatorId": {
-                    "type": "integer"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "isLeaf": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 1
-                },
-                "parentId": {
-                    "description": "父节点ID，0表示根节点",
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "active",
-                        "inactive"
-                    ]
                 }
             }
         },
@@ -24714,6 +23745,109 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/model.ToolParameters"
+                        }
+                    ]
+                }
+            }
+        },
+        "model.CreateTreeLocalResourceReq": {
+            "type": "object",
+            "required": [
+                "ip_addr",
+                "name"
+            ],
+            "properties": {
+                "auth_mode": {
+                    "$ref": "#/definitions/model.AuthMode"
+                },
+                "create_user_id": {
+                    "type": "integer"
+                },
+                "create_user_name": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "environment": {
+                    "type": "string"
+                },
+                "image_name": {
+                    "type": "string"
+                },
+                "ip_addr": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "os_name": {
+                    "type": "string"
+                },
+                "os_type": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.CreateTreeNodeReq": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "creator_id": {
+                    "description": "创建者ID",
+                    "type": "integer"
+                },
+                "creator_name": {
+                    "description": "创建者姓名",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "is_leaf": {
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 1
+                },
+                "parent_id": {
+                    "description": "父节点ID，0表示根节点",
+                    "type": "integer"
+                },
+                "status": {
+                    "enum": [
+                        1,
+                        2
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.TreeNodeStatus"
                         }
                     ]
                 }
@@ -25277,6 +24411,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "id",
+                "time",
                 "user_id"
             ],
             "properties": {
@@ -25288,7 +24423,11 @@ const docTemplate = `{
                 },
                 "use_name": {
                     "description": "是否启用名称静默",
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "user_id": {
                     "type": "integer"
@@ -27888,16 +27027,18 @@ const docTemplate = `{
                 }
             }
         },
-        "model.MoveNodeReq": {
+        "model.MoveTreeNodeReq": {
             "type": "object",
             "required": [
-                "id"
+                "id",
+                "new_parent_id"
             ],
             "properties": {
                 "id": {
                     "type": "integer"
                 },
-                "newParentId": {
+                "new_parent_id": {
+                    "description": "新父节点ID，必填",
                     "type": "integer"
                 }
             }
@@ -28203,28 +27344,78 @@ const docTemplate = `{
                 }
             }
         },
-        "model.RemoveNodeMemberReq": {
+        "model.RemoveTreeNodeMemberReq": {
             "type": "object",
             "required": [
-                "memberType",
-                "nodeId",
-                "userId"
+                "member_type",
+                "node_id",
+                "user_id"
             ],
             "properties": {
-                "memberType": {
-                    "type": "string",
+                "member_type": {
                     "enum": [
-                        "admin",
-                        "member"
+                        1,
+                        2
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.TreeNodeMemberType"
+                        }
                     ]
                 },
-                "nodeId": {
+                "node_id": {
                     "type": "integer"
                 },
-                "userId": {
+                "user_id": {
                     "type": "integer"
                 }
             }
+        },
+        "model.Resource": {
+            "type": "object",
+            "properties": {
+                "creation_time": {
+                    "description": "创建时间",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "资源名称",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "所属命名空间",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "资源状态，例如 Running, Pending",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "资源类型，例如 Pod, Service, Deployment",
+                    "type": "string"
+                }
+            }
+        },
+        "model.ResourceStatus": {
+            "type": "integer",
+            "enum": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+            ],
+            "x-enum-varnames": [
+                "RUNNING",
+                "STOPPED",
+                "STARTING",
+                "STOPPING",
+                "RESTARTING",
+                "DELETING",
+                "ERROR"
+            ]
         },
         "model.RevokeRoleApiRequest": {
             "type": "object",
@@ -28391,6 +27582,19 @@ const docTemplate = `{
                 }
             }
         },
+        "model.ServiceDiscoveryType": {
+            "type": "integer",
+            "enum": [
+                1,
+                2,
+                3
+            ],
+            "x-enum-varnames": [
+                "ServiceDiscoveryTypeK8s",
+                "ServiceDiscoveryTypeHttp",
+                "ServiceDiscoveryTypeStatic"
+            ]
+        },
         "model.Subject": {
             "type": "object",
             "required": [
@@ -28430,57 +27634,6 @@ const docTemplate = `{
                 "id": {
                     "type": "integer",
                     "minimum": 1
-                }
-            }
-        },
-        "model.SyncCloudAccountResourcesReq": {
-            "type": "object",
-            "properties": {
-                "force": {
-                    "description": "是否强制同步",
-                    "type": "boolean"
-                },
-                "id": {
-                    "description": "云账号ID",
-                    "type": "integer"
-                },
-                "regions": {
-                    "description": "区域列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "resourceType": {
-                    "description": "资源类型",
-                    "type": "string"
-                }
-            }
-        },
-        "model.SyncCloudReq": {
-            "type": "object",
-            "properties": {
-                "accountIds": {
-                    "description": "要同步的账号ID列表，为空则同步所有启用的账号",
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "force": {
-                    "description": "是否强制重新同步",
-                    "type": "boolean"
-                },
-                "regions": {
-                    "description": "要同步的区域列表，为空则同步所有区域",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "resourceType": {
-                    "description": "资源类型：ecs,vpc,sg等，为空则同步所有类型",
-                    "type": "string"
                 }
             }
         },
@@ -28678,26 +27831,95 @@ const docTemplate = `{
                 }
             }
         },
-        "model.TreeNode": {
+        "model.TreeLocalResource": {
             "type": "object",
             "properties": {
-                "adminUsers": {
-                    "description": "管理员用户名列表",
+                "auth_mode": {
+                    "$ref": "#/definitions/model.AuthMode"
+                },
+                "cpu": {
+                    "type": "integer"
+                },
+                "create_user_id": {
+                    "type": "integer"
+                },
+                "create_user_name": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "disk": {
+                    "type": "integer"
+                },
+                "environment": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "image_name": {
+                    "type": "string"
+                },
+                "ip_addr": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "memory": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "os_name": {
+                    "type": "string"
+                },
+                "os_type": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/model.ResourceStatus"
+                },
+                "tags": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
+                "tree_nodes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.TreeNode"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.TreeNode": {
+            "type": "object",
+            "properties": {
                 "admins": {
                     "description": "管理员多对多关系",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/model.TreeNodeAdmin"
+                        "$ref": "#/definitions/model.User"
                     }
-                },
-                "childCount": {
-                    "description": "非数据库字段",
-                    "type": "integer"
                 },
                 "children": {
                     "description": "子节点列表",
@@ -28706,14 +27928,15 @@ const docTemplate = `{
                         "$ref": "#/definitions/model.TreeNode"
                     }
                 },
-                "created_at": {
-                    "type": "string"
-                },
-                "creatorId": {
+                "create_user_id": {
                     "description": "创建者ID",
                     "type": "integer"
                 },
-                "creatorName": {
+                "create_user_name": {
+                    "description": "创建者姓名",
+                    "type": "string"
+                },
+                "created_at": {
                     "type": "string"
                 },
                 "deleted_at": {
@@ -28726,97 +27949,125 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
-                "isLeaf": {
+                "is_leaf": {
                     "description": "是否为叶子节点",
-                    "type": "boolean"
+                    "type": "integer"
                 },
                 "level": {
                     "description": "节点层级",
                     "type": "integer"
                 },
-                "memberUsers": {
-                    "description": "成员用户名列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
                 "members": {
                     "description": "成员多对多关系",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/model.TreeNodeMember"
+                        "$ref": "#/definitions/model.User"
                     }
                 },
                 "name": {
                     "description": "节点名称",
                     "type": "string"
                 },
-                "parentId": {
+                "parent_id": {
                     "description": "父节点ID",
                     "type": "integer"
                 },
-                "parentName": {
-                    "description": "父节点名称",
-                    "type": "string"
-                },
-                "resourceCount": {
-                    "description": "关联资源数量",
-                    "type": "integer"
-                },
                 "status": {
-                    "description": "节点状态：active, inactive, deleted",
-                    "type": "string"
+                    "description": "节点状态",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.TreeNodeStatus"
+                        }
+                    ]
+                },
+                "tree_local_resources": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.TreeLocalResource"
+                    }
                 },
                 "updated_at": {
                     "type": "string"
                 }
             }
         },
-        "model.TreeNodeAdmin": {
+        "model.TreeNodeMemberType": {
+            "type": "integer",
+            "enum": [
+                1,
+                2
+            ],
+            "x-enum-varnames": [
+                "AdminRole",
+                "MemberRole"
+            ]
+        },
+        "model.TreeNodeStatisticsResp": {
+            "type": "object",
+            "properties": {
+                "active_nodes": {
+                    "description": "活跃节点数",
+                    "type": "integer"
+                },
+                "inactive_nodes": {
+                    "description": "非活跃节点数",
+                    "type": "integer"
+                },
+                "total_admins": {
+                    "description": "管理员总数",
+                    "type": "integer"
+                },
+                "total_members": {
+                    "description": "成员总数",
+                    "type": "integer"
+                },
+                "total_nodes": {
+                    "description": "节点总数",
+                    "type": "integer"
+                },
+                "total_resources": {
+                    "description": "资源总数",
+                    "type": "integer"
+                }
+            }
+        },
+        "model.TreeNodeStatus": {
+            "type": "integer",
+            "enum": [
+                1,
+                2
+            ],
+            "x-enum-varnames": [
+                "ACTIVE",
+                "INACTIVE"
+            ]
+        },
+        "model.UnBindTreeLocalResourceReq": {
             "type": "object",
             "properties": {
                 "id": {
                     "type": "integer"
                 },
-                "treeNodeID": {
-                    "type": "integer"
-                },
-                "userID": {
-                    "type": "integer"
+                "tree_node_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },
-        "model.TreeNodeMember": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "treeNodeID": {
-                    "type": "integer"
-                },
-                "userID": {
-                    "type": "integer"
-                }
-            }
-        },
-        "model.UnbindResourceReq": {
+        "model.UnbindTreeNodeResourceReq": {
             "type": "object",
             "required": [
-                "nodeId",
-                "resourceId",
-                "resourceType"
+                "node_id",
+                "resource_id"
             ],
             "properties": {
-                "nodeId": {
+                "node_id": {
                     "type": "integer"
                 },
-                "resourceId": {
-                    "type": "string"
-                },
-                "resourceType": {
-                    "$ref": "#/definitions/model.CloudProvider"
+                "resource_id": {
+                    "type": "integer"
                 }
             }
         },
@@ -28863,45 +28114,6 @@ const docTemplate = `{
                 },
                 "version": {
                     "description": "API版本",
-                    "type": "string"
-                }
-            }
-        },
-        "model.UpdateCloudAccountReq": {
-            "type": "object",
-            "properties": {
-                "accessKey": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "accountId": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "description": {
-                    "type": "string",
-                    "maxLength": 500
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "isEnabled": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "provider": {
-                    "$ref": "#/definitions/model.CloudProvider"
-                },
-                "regions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "secretKey": {
                     "type": "string"
                 }
             }
@@ -28990,89 +28202,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/model.PolicyRule"
                     }
-                }
-            }
-        },
-        "model.UpdateEcsReq": {
-            "type": "object",
-            "properties": {
-                "account_id": {
-                    "description": "云账号ID",
-                    "type": "integer"
-                },
-                "auth_mode": {
-                    "description": "认证方式",
-                    "type": "string"
-                },
-                "description": {
-                    "description": "描述",
-                    "type": "string"
-                },
-                "environment": {
-                    "description": "环境标识",
-                    "type": "string"
-                },
-                "hostname": {
-                    "description": "主机名",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "内部ID",
-                    "type": "integer"
-                },
-                "instance_id": {
-                    "description": "实例ID",
-                    "type": "string"
-                },
-                "instance_name": {
-                    "description": "实例名称",
-                    "type": "string"
-                },
-                "ip_addr": {
-                    "description": "IP地址",
-                    "type": "string"
-                },
-                "key": {
-                    "description": "密钥内容",
-                    "type": "string"
-                },
-                "password": {
-                    "description": "密码",
-                    "type": "string"
-                },
-                "port": {
-                    "description": "SSH端口号",
-                    "type": "integer"
-                },
-                "provider": {
-                    "description": "云提供商",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.CloudProvider"
-                        }
-                    ]
-                },
-                "region": {
-                    "description": "区域",
-                    "type": "string"
-                },
-                "security_group_ids": {
-                    "description": "安全组ID列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "tags": {
-                    "description": "资源标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "tree_node_id": {
-                    "description": "服务树节点ID",
-                    "type": "integer"
                 }
             }
         },
@@ -29271,6 +28400,7 @@ const docTemplate = `{
             "properties": {
                 "alert_manager_instances": {
                     "type": "array",
+                    "minItems": 1,
                     "items": {
                         "type": "string"
                     }
@@ -29296,7 +28426,9 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "receiver": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
                 },
                 "repeat_interval": {
                     "type": "string"
@@ -29314,8 +28446,7 @@ const docTemplate = `{
                 "id",
                 "name",
                 "pool_id",
-                "send_group_id",
-                "severity"
+                "send_group_id"
             ],
             "properties": {
                 "annotations": {
@@ -29325,7 +28456,11 @@ const docTemplate = `{
                     }
                 },
                 "enable": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "expr": {
                     "type": "string"
@@ -29360,7 +28495,16 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "severity": {
-                    "type": "string"
+                    "enum": [
+                        1,
+                        2,
+                        3
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.AlertRuleSeverity"
+                        }
+                    ]
                 }
             }
         },
@@ -29417,7 +28561,8 @@ const docTemplate = `{
             ],
             "properties": {
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "enable": {
                     "type": "integer",
@@ -29456,19 +28601,14 @@ const docTemplate = `{
                 "pool_id"
             ],
             "properties": {
-                "annotations": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
                 "enable": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "expr": {
-                    "type": "string"
-                },
-                "for_time": {
                     "type": "string"
                 },
                 "id": {
@@ -29489,9 +28629,6 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "pool_id": {
-                    "type": "integer"
-                },
-                "port": {
                     "type": "integer"
                 }
             }
@@ -29554,13 +28691,25 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "service_discovery_type": {
-                    "type": "string"
+                    "$ref": "#/definitions/model.ServiceDiscoveryType"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "tls_ca_content": {
                     "type": "string"
                 },
                 "tls_ca_file_path": {
                     "type": "string"
+                },
+                "tree_node_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -29571,20 +28720,8 @@ const docTemplate = `{
                 "name"
             ],
             "properties": {
-                "alert_manager_instances": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
                 "alert_manager_url": {
                     "type": "string"
-                },
-                "external_labels": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
                 },
                 "id": {
                     "type": "integer"
@@ -29627,6 +28764,12 @@ const docTemplate = `{
                 "support_record": {
                     "type": "integer"
                 },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "user_id": {
                     "type": "integer"
                 }
@@ -29637,23 +28780,29 @@ const docTemplate = `{
             "required": [
                 "id",
                 "name",
-                "name_zh"
+                "name_zh",
+                "pool_id"
             ],
             "properties": {
                 "enable": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "fei_shu_qun_robot_token": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
-                "id": {
-                    "type": "integer"
-                },
-                "monitor_send_group_first_upgrade_users": {
+                "first_upgrade_users": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/model.User"
                     }
+                },
+                "id": {
+                    "type": "integer"
                 },
                 "name": {
                     "type": "string",
@@ -29666,7 +28815,11 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "need_upgrade": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "notify_methods": {
                     "type": "array",
@@ -29681,7 +28834,8 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "repeat_interval": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 50
                 },
                 "second_upgrade_users": {
                     "type": "array",
@@ -29690,7 +28844,11 @@ const docTemplate = `{
                     }
                 },
                 "send_resolved": {
-                    "type": "integer"
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
                 },
                 "static_receive_users": {
                     "type": "array",
@@ -29699,7 +28857,8 @@ const docTemplate = `{
                     }
                 },
                 "upgrade_minutes": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 }
             }
         },
@@ -29729,55 +28888,6 @@ const docTemplate = `{
                 },
                 "namespace": {
                     "type": "string"
-                }
-            }
-        },
-        "model.UpdateNodeReq": {
-            "type": "object",
-            "required": [
-                "id",
-                "name"
-            ],
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 1
-                },
-                "parentId": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "active",
-                        "inactive"
-                    ]
-                }
-            }
-        },
-        "model.UpdateNodeStatusReq": {
-            "type": "object",
-            "required": [
-                "id",
-                "status"
-            ],
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "active",
-                        "inactive"
-                    ]
                 }
             }
         },
@@ -29993,6 +29103,97 @@ const docTemplate = `{
                 }
             }
         },
+        "model.UpdateTreeLocalResourceReq": {
+            "type": "object",
+            "properties": {
+                "auth_mode": {
+                    "$ref": "#/definitions/model.AuthMode"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "environment": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "image_name": {
+                    "type": "string"
+                },
+                "ip_addr": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "os_name": {
+                    "type": "string"
+                },
+                "os_type": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.UpdateTreeNodeReq": {
+            "type": "object",
+            "required": [
+                "id",
+                "name"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_leaf": {
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2
+                    ]
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 1
+                },
+                "parent_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "enum": [
+                        1,
+                        2
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.TreeNodeStatus"
+                        }
+                    ]
+                }
+            }
+        },
         "model.UpdateWorkorderCategoryReq": {
             "type": "object",
             "required": [
@@ -30168,25 +29369,6 @@ const docTemplate = `{
                 }
             }
         },
-        "model.UpdateWorkorderInstanceTimelineReq": {
-            "type": "object",
-            "required": [
-                "id"
-            ],
-            "properties": {
-                "action_detail": {
-                    "type": "string"
-                },
-                "comment": {
-                    "type": "string",
-                    "maxLength": 2000
-                },
-                "id": {
-                    "type": "integer",
-                    "minimum": 1
-                }
-            }
-        },
         "model.UpdateWorkorderNotificationReq": {
             "type": "object",
             "required": [
@@ -30353,8 +29535,7 @@ const docTemplate = `{
                 "form_design_id",
                 "id",
                 "name",
-                "process_id",
-                "status"
+                "process_id"
             ],
             "properties": {
                 "category_id": {
@@ -30938,6 +30119,9 @@ const docTemplate = `{
         "model.WorkorderTemplate": {
             "type": "object",
             "properties": {
+                "category": {
+                    "$ref": "#/definitions/model.WorkorderCategory"
+                },
                 "category_id": {
                     "type": "integer"
                 },
@@ -30953,6 +30137,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "form_design": {
+                    "$ref": "#/definitions/model.WorkorderFormDesign"
+                },
                 "form_design_id": {
                     "type": "integer"
                 },
@@ -30967,6 +30154,9 @@ const docTemplate = `{
                 },
                 "operator_name": {
                     "type": "string"
+                },
+                "process": {
+                    "$ref": "#/definitions/model.WorkorderProcess"
                 },
                 "process_id": {
                     "type": "integer"

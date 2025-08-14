@@ -162,7 +162,7 @@ func (a *alertManagerEventService) EventAlertSilence(ctx context.Context, req *m
 	}
 
 	// 标记为已静默
-	alertEvent.Status = "已屏蔽"
+	alertEvent.Status = model.MonitorAlertEventStatusSilenced
 	alertEvent.SilenceID = silenceID
 
 	// 更新告警事件状态
@@ -200,7 +200,7 @@ func (a *alertManagerEventService) EventAlertClaim(ctx context.Context, req *mod
 
 	// 标记为已认领
 	event.RenLingUserID = int(user.ID)
-	event.Status = "已认领"
+	event.Status = model.MonitorAlertEventStatusClaimed
 
 	// 更新数据库
 	if err := a.dao.EventAlertClaim(ctx, event); err != nil {
@@ -273,7 +273,7 @@ func (a *alertManagerEventService) EventAlertUnSilence(ctx context.Context, req 
 
 	// 标记为已取消静默
 	alertEvent.SilenceID = ""
-	alertEvent.Status = "未屏蔽"
+	alertEvent.Status = model.MonitorAlertEventStatusFiring
 
 	// 更新告警事件状态
 	if err := a.dao.UpdateAlertEvent(ctx, alertEvent); err != nil {
@@ -336,7 +336,7 @@ func (a *alertManagerEventService) processSingleSilence(ctx context.Context, eve
 	}
 
 	// 标记为已静默
-	alertEvent.Status = "已屏蔽"
+	alertEvent.Status = model.MonitorAlertEventStatusSilenced
 	alertEvent.SilenceID = silenceID
 
 	// 更新告警事件状态

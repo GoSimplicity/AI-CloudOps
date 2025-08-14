@@ -119,6 +119,14 @@ func (s *ScrapeJobHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
 func (s *ScrapeJobHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
 	var req model.UpdateMonitorScrapeJobReq
 
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "参数错误")
+		return
+	}
+
+	req.ID = id
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, s.scrapeJobService.UpdateMonitorScrapeJob(ctx, &req)
 	})

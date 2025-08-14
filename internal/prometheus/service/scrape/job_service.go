@@ -97,6 +97,7 @@ func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, req *mode
 		KubernetesSdRole:         req.KubernetesSdRole,
 		RelabelConfigsYamlString: req.RelabelConfigsYamlString,
 		CreateUserName:           req.CreateUserName,
+		Tags:                     req.Tags,
 	}
 
 	// 检查抓取作业是否已存在
@@ -127,6 +128,12 @@ func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, req *mode
 		return err
 	}
 
+	go func() {
+		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
+			s.l.Error("创建抓取作业后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -152,6 +159,7 @@ func (s *scrapeJobService) UpdateMonitorScrapeJob(ctx context.Context, req *mode
 		BearerToken:              req.BearerToken,
 		BearerTokenFile:          req.BearerTokenFile,
 		KubernetesSdRole:         req.KubernetesSdRole,
+		Tags:                     req.Tags,
 	}
 
 	// 检查 ID 是否有效
@@ -184,6 +192,12 @@ func (s *scrapeJobService) UpdateMonitorScrapeJob(ctx context.Context, req *mode
 		return err
 	}
 
+	go func() {
+		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
+			s.l.Error("更新抓取作业后刷新缓存失败", zap.Error(err))
+		}
+	}()
+
 	return nil
 }
 
@@ -201,6 +215,12 @@ func (s *scrapeJobService) DeleteMonitorScrapeJob(ctx context.Context, id int) e
 		s.l.Error("删除抓取作业失败", zap.Error(err))
 		return err
 	}
+
+	go func() {
+		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
+			s.l.Error("删除抓取作业后刷新缓存失败", zap.Error(err))
+		}
+	}()
 
 	return nil
 }

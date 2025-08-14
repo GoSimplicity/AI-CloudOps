@@ -60,6 +60,7 @@ var skipAuditPaths = map[string]bool{
 	"/api/user/logout":                                  true,
 	"/api/user/refresh_token":                           true,
 	"/api/user/signup":                                  true,
+	"/api/not_auth/getBindIps":                          true,
 	"/api/not_auth/getTreeNodeBindIps":                  true,
 	"/api/monitor/prometheus_configs/prometheus":        true,
 	"/api/monitor/prometheus_configs/prometheus_alert":  true,

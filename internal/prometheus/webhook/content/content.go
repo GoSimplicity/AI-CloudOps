@@ -29,11 +29,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-	"github.com/spf13/viper"
 	"net/http"
 	"strings"
 	"time"
+
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/spf13/viper"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/constant"
@@ -149,7 +150,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	msgUpgrade := `**🎛️ 升级状态：**\n未升级`
 
 	// 判断是否需要升级告警
-	if event.Status != "renlinged" && alert.Status == string(constant.AlertStatusFiring) && sendGroup.FirstUpgradeUsers != nil && len(sendGroup.FirstUpgradeUsers) > 0 {
+	if event.Status != model.MonitorAlertEventStatusClaimed && alert.Status == string(constant.AlertStatusFiring) && sendGroup.FirstUpgradeUsers != nil && len(sendGroup.FirstUpgradeUsers) > 0 {
 		upgradeMinutes := sendGroup.UpgradeMinutes
 		if upgradeMinutes == 0 {
 			upgradeMinutes = viper.GetInt("webhook.default_upgrade_minutes")
@@ -173,7 +174,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 				onDutyGroupUrl,
 				upgradeUserAtIds.String(),
 			)
-			event.Status = "upgraded"
+			event.Status = model.MonitorAlertEventStatusUpgraded
 			if err := wc.dao.UpdateMonitorAlertEvent(ctx, event); err != nil {
 				return fmt.Errorf("更新告警事件状态失败: %w", err)
 			}

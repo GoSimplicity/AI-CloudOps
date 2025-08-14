@@ -48,7 +48,7 @@ type MonitorOnDutyChange struct {
 	Model
 	OnDutyGroupID  int    `json:"on_duty_group_id" gorm:"index:idx_group_date_deleted_at;comment:值班组ID"`
 	UserID         int    `json:"user_id" gorm:"index;comment:创建者ID"`
-	Date           string `json:"date" gorm:"type:varchar(10);not null;comment:换班日期"`
+	Date           string `json:"date" gorm:"type:varchar(10);not null;index:idx_group_date_deleted_at;comment:换班日期"`
 	OriginUserID   int    `json:"origin_user_id" gorm:"index;comment:原值班人ID"`
 	OnDutyUserID   int    `json:"on_duty_user_id" gorm:"index;comment:新值班人ID"`
 	CreateUserName string `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者名称"`
@@ -63,7 +63,7 @@ func (m *MonitorOnDutyChange) TableName() string {
 type MonitorOnDutyHistory struct {
 	Model
 	OnDutyGroupID int    `json:"on_duty_group_id" gorm:"index:idx_group_date_deleted_at;comment:值班组ID"`
-	DateString    string `json:"date_string" gorm:"type:varchar(10);not null;comment:值班日期"`
+	DateString    string `json:"date_string" gorm:"type:varchar(10);not null;index:idx_group_date_deleted_at;comment:值班日期"`
 	OnDutyUserID  int    `json:"on_duty_user_id" gorm:"index;comment:当天值班人员ID"`
 	OriginUserID  int    `json:"origin_user_id" gorm:"index;comment:原计划值班人员ID"`
 }
@@ -82,7 +82,7 @@ type MonitorOnDutyOne struct {
 // GetMonitorOnDutyGroupListReq 获取值班组列表请求
 type GetMonitorOnDutyGroupListReq struct {
 	ListReq
-	Enable *int8 `json:"enable" form:"enable" binding:"omitempty"`
+	Enable *int8 `json:"enable" form:"enable" binding:"omitempty,oneof=1 2"`
 }
 
 // CreateMonitorOnDutyGroupReq 创建值班组请求
@@ -92,7 +92,7 @@ type CreateMonitorOnDutyGroupReq struct {
 	UserIDs        []int  `json:"user_ids" binding:"required,min=1"`
 	ShiftDays      int    `json:"shift_days" binding:"required,min=1"`
 	CreateUserName string `json:"create_user_name"`
-	Description    string `json:"description"`
+	Description    string `json:"description" binding:"max=255"`
 }
 
 // CreateMonitorOnDutyGroupChangeReq 创建值班组换班记录请求
@@ -103,19 +103,7 @@ type CreateMonitorOnDutyGroupChangeReq struct {
 	OnDutyUserID   int    `json:"on_duty_user_id" binding:"required"`
 	UserID         int    `json:"user_id" binding:"required"`
 	CreateUserName string `json:"create_user_name"`
-	Reason         string `json:"reason"`
-}
-
-// CreateMonitorOnDutyPlanReq 创建值班计划请求
-type CreateMonitorOnDutyPlanReq struct {
-	OnDutyGroupID  int    `json:"on_duty_group_id" binding:"required"`
-	Date           string `json:"date" binding:"required"`
-	OnDutyUserID   int    `json:"on_duty_user_id" binding:"required"`
-	IsAdjusted     bool   `json:"is_adjusted"`
-	OriginalUserID int    `json:"original_user_id"`
-	CreateUserID   int    `json:"create_user_id" binding:"required"`
-	CreateUserName string `json:"create_user_name"`
-	Remark         string `json:"remark"`
+	Reason         string `json:"reason" binding:"max=255"`
 }
 
 // UpdateMonitorOnDutyGroupReq 更新值班组信息请求
@@ -124,7 +112,7 @@ type UpdateMonitorOnDutyGroupReq struct {
 	Name        string `json:"name" binding:"required,min=1,max=50"`
 	ShiftDays   int    `json:"shift_days" binding:"required,min=1"`
 	UserIDs     []int  `json:"user_ids" binding:"required,min=1"`
-	Description string `json:"description"`
+	Description string `json:"description" binding:"max=255"`
 	Enable      *int8  `json:"enable" binding:"omitempty,oneof=1 2"`
 }
 
@@ -148,13 +136,13 @@ type GetMonitorOnDutyGroupFuturePlanReq struct {
 // GetMonitorOnDutyHistoryReq 获取值班历史记录请求
 type GetMonitorOnDutyHistoryReq struct {
 	ListReq
-	OnDutyGroupID int    `json:"on_duty_group_id" binding:"required"`
-	StartDate     string `json:"start_date"`
-	EndDate       string `json:"end_date"`
+	OnDutyGroupID int    `json:"on_duty_group_id" form:"on_duty_group_id" binding:"required"`
+	StartDate     string `json:"start_date" form:"start_date"`
+	EndDate       string `json:"end_date" form:"end_date"`
 }
 
 // GetMonitorOnDutyGroupChangeListReq 获取值班组换班记录列表请求
 type GetMonitorOnDutyGroupChangeListReq struct {
 	ListReq
-	OnDutyGroupID int    `json:"on_duty_group_id" form:"on_duty_group_id" binding:"required"`
+	OnDutyGroupID int `json:"on_duty_group_id" form:"on_duty_group_id" binding:"required"`
 }

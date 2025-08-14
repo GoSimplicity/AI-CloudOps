@@ -169,9 +169,19 @@ func (wc *webhookConsumer) HandleAlert(ctx context.Context, alert template.Alert
 		upgradeNeed = true
 	}
 
-	status := alert.Status
+	// 确定告警事件状态
+	var status model.MonitorAlertEventStatus
 	if upgradeNeed {
-		status = "upgraded"
+		status = model.MonitorAlertEventStatusUpgraded
+	} else {
+		switch alert.Status {
+		case "firing":
+			status = model.MonitorAlertEventStatusFiring
+		case "resolved":
+			status = model.MonitorAlertEventStatusResolved
+		default:
+			status = model.MonitorAlertEventStatusFiring
+		}
 	}
 
 	// 构造标签

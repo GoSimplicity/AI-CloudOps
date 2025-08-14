@@ -52,7 +52,6 @@ import (
 	authService "github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	treeHandler "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	treeProvider "github.com/GoSimplicity/AI-CloudOps/internal/tree/provider"
 	treeService "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
 	userHandler "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
@@ -118,13 +117,7 @@ var HandlerSet = wire.NewSet(
 	workorderHandler.NewCategoryGroupHandler,
 	workorderHandler.NewNotificationHandler,
 	treeHandler.NewTreeNodeHandler,
-	treeHandler.NewTreeCloudHandler,
-	treeHandler.NewTreeEcsHandler,
 	treeHandler.NewTreeLocalHandler,
-	treeHandler.NewTreeVpcHandler,
-	treeHandler.NewTreeSecurityGroupHandler,
-	treeHandler.NewTreeRdsHandler,
-	treeHandler.NewTreeElbHandler,
 )
 
 var ServiceSet = wire.NewSet(
@@ -175,13 +168,7 @@ var ServiceSet = wire.NewSet(
 	workorderService.NewCategoryGroupService,
 	workorderService.NewWorkorderNotificationService,
 	treeService.NewTreeNodeService,
-	treeService.NewTreeCloudService,
-	treeService.NewTreeEcsService,
 	treeService.NewTreeLocalService,
-	treeService.NewTreeVpcService,
-	treeService.NewTreeElbService,
-	treeService.NewTreeRdsService,
-	treeService.NewTreeSecurityGroupService,
 )
 
 var DaoSet = wire.NewSet(
@@ -214,13 +201,7 @@ var DaoSet = wire.NewSet(
 	workorderDao.NewInstanceTimeLineDAO,
 	workorderDao.NewNotificationDAO,
 	treeDao.NewTreeNodeDAO,
-	treeDao.NewTreeCloudDAO,
-	treeDao.NewTreeEcsDAO,
 	treeDao.NewTreeLocalDAO,
-	treeDao.NewTreeVpcDAO,
-	treeDao.NewTreeElbDAO,
-	treeDao.NewTreeRdsDAO,
-	treeDao.NewTreeSecurityGroupDAO,
 )
 
 var SSHSet = wire.NewSet(
@@ -234,11 +215,6 @@ var UtilSet = wire.NewSet(
 var JobSet = wire.NewSet(
 	manager.NewClusterManager,
 	startup.NewApplicationBootstrap,
-)
-
-var ProviderSet = wire.NewSet(
-	treeProvider.NewAliyunProvider,
-	treeProvider.NewProviderFactoryWithAliyun,
 )
 
 var CronSet = wire.NewSet(
@@ -279,7 +255,6 @@ func ProvideCmd() *Cmd {
 		JobSet,
 		CacheSet,
 		ClientSet,
-		ProviderSet,
 	)
 	return &Cmd{}
 }

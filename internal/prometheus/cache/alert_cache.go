@@ -28,7 +28,6 @@ package cache
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -40,6 +39,7 @@ import (
 	altconfig "github.com/prometheus/alertmanager/config"
 	al "github.com/prometheus/alertmanager/pkg/labels"
 	pm "github.com/prometheus/common/model"
+	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -57,43 +57,56 @@ type AlertManagerConfigCache interface {
 
 // alertManagerConfigCache AlertManager配置缓存实现
 type alertManagerConfigCache struct {
+	// 不再对外依赖本地 map
 	configMap        map[string]string
+	redis            redis.Cmdable
 	logger           *zap.Logger
 	mu               sync.RWMutex
 	alertWebhookAddr string
+	webhookFileDir   string
 	alertPoolDAO     alertPoolDao.AlertManagerPoolDAO
 	alertSendDAO     alertPoolDao.AlertManagerSendDAO
 	configDAO        configDao.MonitorConfigDAO
-	poolHashes       map[string]string
 	batchManager     *BatchConfigManager
 }
 
-// NewAlertManagerConfigCache 创建AlertManager配置缓存实例
 func NewAlertManagerConfigCache(
 	logger *zap.Logger,
 	alertPoolDAO alertPoolDao.AlertManagerPoolDAO,
 	alertSendDAO alertPoolDao.AlertManagerSendDAO,
 	configDAO configDao.MonitorConfigDAO,
 	batchManager *BatchConfigManager,
+	redisClient redis.Cmdable,
 ) AlertManagerConfigCache {
 	return &alertManagerConfigCache{
 		configMap:        make(map[string]string),
 		logger:           logger,
+		redis:            redisClient,
 		alertWebhookAddr: viper.GetString("prometheus.alert_webhook_addr"),
+		webhookFileDir:   viper.GetString("prometheus.alert_webhook_file_dir"),
 		mu:               sync.RWMutex{},
 		alertPoolDAO:     alertPoolDAO,
 		alertSendDAO:     alertSendDAO,
 		configDAO:        configDAO,
-		poolHashes:       make(map[string]string),
 		batchManager:     batchManager,
 	}
 }
 
 // GetConfigByIP 根据IP地址获取AlertManager的主配置内容
 func (a *alertManagerConfigCache) GetConfigByIP(ip string) string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.configMap[ip]
+	if ip == "" {
+		a.logger.Warn(LogModuleMonitor + "获取配置时IP为空")
+		return ""
+	}
+	ctx := context.Background()
+	key := buildRedisKeyAlertManagerMain(ip)
+	val, err := a.redis.Get(ctx, key).Result()
+	if err != nil {
+		a.logger.Debug(LogModuleMonitor+"缓存未命中", zap.String("ip", ip), zap.Error(err))
+		return ""
+	}
+	a.logger.Debug(LogModuleMonitor+"缓存命中", zap.String("ip", ip))
+	return val
 }
 
 // GenerateMainConfig 生成所有AlertManager主配置文件
@@ -143,11 +156,6 @@ func (a *alertManagerConfigCache) GenerateMainConfig(ctx context.Context) error 
 
 // processPoolBatch 处理一批AlertManager池
 func (a *alertManagerConfigCache) processPoolBatch(ctx context.Context, pools []*model.MonitorAlertManagerPool) error {
-	a.mu.RLock()
-	tempConfigMap := utils.CopyMap(a.configMap)
-	tempPoolHashes := utils.CopyMap(a.poolHashes)
-	a.mu.RUnlock()
-
 	validIPs := make(map[string]struct{})
 	allConfigsToSave := make(map[string]ConfigData)
 
@@ -160,7 +168,9 @@ func (a *alertManagerConfigCache) processPoolBatch(ctx context.Context, pools []
 		}
 
 		currentHash := utils.CalculateAlertHash(pool)
-		if cachedHash, ok := tempPoolHashes[pool.Name]; ok && cachedHash == currentHash {
+		hashKey := buildRedisHashKeyAlertManager(pool.Name)
+		cachedHash, _ := a.redis.Get(ctx, hashKey).Result()
+		if cachedHash == currentHash {
 			for _, ip := range pool.AlertManagerInstances {
 				validIPs[ip] = struct{}{}
 			}
@@ -208,21 +218,45 @@ func (a *alertManagerConfigCache) processPoolBatch(ctx context.Context, pools []
 			continue
 		}
 
+		// Redis 旧集合
+		setKey := buildRedisSetKeyAlertManagerMainPoolIPs(pool.ID)
+		oldIPs, _ := a.redis.SMembers(ctx, setKey).Result()
+		oldIPSet := map[string]struct{}{}
+		for _, old := range oldIPs {
+			oldIPSet[old] = struct{}{}
+		}
+
 		for _, ip := range pool.AlertManagerInstances {
 			configName := fmt.Sprintf(ConfigNameAlertManager, pool.ID, ip)
-			tempConfigMap[ip] = string(yamlData)
 			validIPs[ip] = struct{}{}
 
-			// 准备批量保存的配置数据
+			// 入库（批量）
 			allConfigsToSave[ip] = ConfigData{
 				Name:       configName,
 				PoolID:     pool.ID,
 				ConfigType: model.ConfigTypeAlertManager,
 				Content:    string(yamlData),
 			}
+
+			// 写 Redis
+			key := buildRedisKeyAlertManagerMain(ip)
+			if err := a.redis.Set(ctx, key, string(yamlData), 0).Err(); err != nil {
+				a.logger.Error(LogModuleMonitor+"写入Redis失败", zap.String("pool_name", pool.Name), zap.String("ip", ip), zap.Error(err))
+				continue
+			}
+			_ = a.redis.SAdd(ctx, setKey, ip).Err()
+			delete(oldIPSet, ip)
 		}
 
-		tempPoolHashes[pool.Name] = currentHash
+		// 清理失效
+		for staleIP := range oldIPSet {
+			_ = a.redis.Del(ctx, buildRedisKeyAlertManagerMain(staleIP)).Err()
+			_ = a.redis.SRem(ctx, setKey, staleIP).Err()
+			a.logger.Debug(LogModuleMonitor+"删除无效IP配置", zap.String("ip", staleIP))
+		}
+
+		// 更新池哈希
+		_ = a.redis.Set(ctx, hashKey, currentHash, 0).Err()
 	}
 
 	// 批量保存所有配置到数据库
@@ -233,13 +267,7 @@ func (a *alertManagerConfigCache) processPoolBatch(ctx context.Context, pools []
 		}
 	}
 
-	// 清理无效的IP配置
-	cleanupInvalidIPs(tempConfigMap, validIPs, a.logger)
-
-	a.mu.Lock()
-	a.configMap = tempConfigMap
-	a.poolHashes = tempPoolHashes
-	a.mu.Unlock()
+	// 不再维护本地缓存
 
 	return nil
 }
@@ -336,6 +364,15 @@ func (a *alertManagerConfigCache) GenerateRouteConfigForPool(ctx context.Context
 	var routes []*altconfig.Route
 	var receivers []altconfig.Receiver
 
+	// 为每个发送组生成 webhook file 配置
+	err = a.generateWebhookFilesForSendGroups(ctx, pool, sendGroups)
+	if err != nil {
+		a.logger.Error(LogModuleMonitor+"生成webhook file配置失败",
+			zap.Error(err),
+			zap.String("pool_name", pool.Name))
+		// 继续执行，不返回错误
+	}
+
 	for _, sendGroup := range sendGroups {
 		repeatInterval, err := pm.ParseDuration(sendGroup.RepeatInterval)
 		if err != nil {
@@ -360,12 +397,8 @@ func (a *alertManagerConfigCache) GenerateRouteConfigForPool(ctx context.Context
 			RepeatInterval: &repeatInterval,
 		}
 
-		// 构建webhook URL
-		webhookURL := &url.URL{
-			Scheme: "http",
-			Host:   a.alertWebhookAddr,
-			Path:   "/webhook",
-		}
+		// 使用 webhook file 路径
+		webhookFileName := fmt.Sprintf("%s/webhook_%s_%d.yml", a.webhookFileDir, pool.Name, sendGroup.ID)
 
 		receiver := altconfig.Receiver{
 			Name: sendGroup.Name,
@@ -374,9 +407,7 @@ func (a *alertManagerConfigCache) GenerateRouteConfigForPool(ctx context.Context
 					NotifierConfig: altconfig.NotifierConfig{
 						VSendResolved: sendGroup.SendResolved == 1,
 					},
-					URL: &altconfig.SecretURL{
-						URL: webhookURL,
-					},
+					URLFile: webhookFileName,
 				},
 			},
 		}
@@ -406,4 +437,85 @@ func mergeReceivers(a, b []altconfig.Receiver) []altconfig.Receiver {
 
 func stringSliceToString(slice model.StringList) string {
 	return strings.Join(slice, ",")
+}
+
+// generateWebhookFilesForSendGroups 为发送组生成 webhook file 配置
+func (a *alertManagerConfigCache) generateWebhookFilesForSendGroups(ctx context.Context, pool *model.MonitorAlertManagerPool, sendGroups []*model.MonitorSendGroup) error {
+	webhookConfigsToSave := make(map[string]ConfigData)
+
+	for _, sendGroup := range sendGroups {
+		// 生成 webhook file 内容（仅包含 URL 字符串）
+		webhookURL := a.generateWebhookFileContent(sendGroup)
+
+		// 为每个 AlertManager 实例生成 webhook file 配置
+		for _, ip := range pool.AlertManagerInstances {
+			configName := fmt.Sprintf("webhook_%s_%d_%s", pool.Name, sendGroup.ID, ip)
+			configKey := fmt.Sprintf("%s_%d", ip, sendGroup.ID)
+
+			// 保存到待批量处理的配置映射中
+			webhookConfigsToSave[configKey] = ConfigData{
+				Name:       configName,
+				PoolID:     pool.ID,
+				ConfigType: model.ConfigTypeWebhookFile,
+				Content:    webhookURL,
+			}
+
+			// 同时保存到 Redis 以供实时查询
+			redisKey := buildRedisKeyWebhookFile(ip, sendGroup.ID)
+			if err := a.redis.Set(ctx, redisKey, webhookURL, 0).Err(); err != nil {
+				a.logger.Error(LogModuleMonitor+"保存webhook配置到Redis失败",
+					zap.Error(err),
+					zap.String("ip", ip),
+					zap.Int("send_group_id", sendGroup.ID))
+			}
+		}
+	}
+
+	// 批量保存 webhook 配置到数据库
+	if len(webhookConfigsToSave) > 0 {
+		if err := batchSaveConfigsToDatabase(ctx, a.batchManager, webhookConfigsToSave); err != nil {
+			a.logger.Error(LogModuleMonitor+"批量保存webhook配置失败", zap.Error(err))
+			return err
+		}
+	}
+
+	return nil
+}
+
+// buildWebhookURL 构建 webhook 接收 URL，兼容配置中填写 host:port 或完整 URL 的场景，并统一追加 send_group_id
+func (a *alertManagerConfigCache) buildWebhookURL(sendGroupID int) string {
+	base := strings.TrimSpace(a.alertWebhookAddr)
+	if base == "" {
+		// 兜底：使用本地端口，避免生成空 URL
+		return fmt.Sprintf("http://localhost:%s/api/v1/alerts/receive?send_group_id=%d", viper.GetString("server.port"), sendGroupID)
+	}
+
+	hasScheme := strings.HasPrefix(base, "http://") || strings.HasPrefix(base, "https://")
+	// 如果是完整 URL，则在其后附加路径/参数；若已包含路径则只追加参数
+	if hasScheme {
+		u := strings.TrimRight(base, "/")
+		// 判断是否已包含目标路径
+		if strings.Contains(u, "/api/v1/alerts/receive") {
+			sep := "?"
+			if strings.Contains(u, "?") {
+				sep = "&"
+			}
+			return fmt.Sprintf("%s%ssend_group_id=%d", u, sep, sendGroupID)
+		}
+		return fmt.Sprintf("%s/api/v1/alerts/receive?send_group_id=%d", u, sendGroupID)
+	}
+
+	// 否则视为 host:port
+	return fmt.Sprintf("http://%s/api/v1/alerts/receive?send_group_id=%d", base, sendGroupID)
+}
+
+// generateWebhookFileContent 生成 webhook file 的内容（仅为 URL 字符串）
+func (a *alertManagerConfigCache) generateWebhookFileContent(sendGroup *model.MonitorSendGroup) string {
+	// 始终拼接 send_group_id，确保后端可识别发送组
+	return a.buildWebhookURL(sendGroup.ID)
+}
+
+// buildRedisKeyWebhookFile 构建 webhook file 的 Redis key
+func buildRedisKeyWebhookFile(ip string, sendGroupID int) string {
+	return fmt.Sprintf("monitor:webhook_file:%s:%d", ip, sendGroupID)
 }
