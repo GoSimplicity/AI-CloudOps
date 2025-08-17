@@ -23,7 +23,7 @@
  *
  */
 
-package admin
+package service
 
 import (
 	"context"

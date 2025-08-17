@@ -54,16 +54,6 @@ func InitGinServer(
 	k8sTaintHdl *k8sApi.K8sTaintHandler,
 	k8sYamlTaskHdl *k8sApi.K8sYamlTaskHandler,
 	k8sYamlTemplateHdl *k8sApi.K8sYamlTemplateHandler,
-	k8sResourceQuotaHdl *k8sApi.K8sResourceQuotaHandler,
-	k8sLimitRangeHdl *k8sApi.K8sLimitRangeHandler,
-	k8sLabelHdl *k8sApi.K8sLabelHandler,
-	k8sNodeAffinityHdl *k8sApi.K8sNodeAffinityHandler,
-	k8sPodAffinityHdl *k8sApi.K8sPodAffinityHandler,
-	k8sAffinityVisualizationHdl *k8sApi.K8sAffinityVisualizationHandler,
-	k8sRBACHdl *k8sApi.K8sRBACHandler,
-	k8sServiceAccountHdl *k8sApi.K8sServiceAccountHandler,
-	k8sTolerationHdl *k8sApi.K8sTolerationHandler,
-	k8sAppHdl *k8sApi.K8sAppHandler,
 	alertEventHdl *prometheusApi.AlertEventHandler,
 	alertPoolHdl *prometheusApi.AlertPoolHandler,
 	alertRuleHdl *prometheusApi.AlertRuleHandler,
@@ -103,7 +93,6 @@ func InitGinServer(
 	scrapeJobHdl.RegisterRouters(server)
 	sendGroupHdl.RegisterRouters(server)
 	k8sClusterHdl.RegisterRouters(server)
-	k8sAppHdl.RegisterRouters(server)
 	k8sConfigMapHdl.RegisterRouters(server)
 	k8sDeploymentHdl.RegisterRouters(server)
 	k8sNamespaceHdl.RegisterRouters(server)
@@ -113,15 +102,6 @@ func InitGinServer(
 	k8sTaintHdl.RegisterRouters(server)
 	k8sYamlTaskHdl.RegisterRouters(server)
 	k8sYamlTemplateHdl.RegisterRouters(server)
-	k8sResourceQuotaHdl.RegisterRouters(server)
-	k8sLimitRangeHdl.RegisterRouters(server)
-	k8sLabelHdl.RegisterRouters(server)
-	k8sNodeAffinityHdl.RegisterRouters(server)
-	k8sPodAffinityHdl.RegisterRouters(server)
-	k8sAffinityVisualizationHdl.RegisterRouters(server)
-	k8sRBACHdl.RegisterRouters(server)
-	k8sServiceAccountHdl.RegisterRouters(server)
-	k8sTolerationHdl.RegisterRouters(server)
 	formDesignHdl.RegisterRouters(server)
 	processHdl.RegisterRouters(server)
 	templateHdl.RegisterRouters(server)

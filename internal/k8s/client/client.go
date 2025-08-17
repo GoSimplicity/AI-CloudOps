@@ -31,7 +31,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/openkruise/kruise-api/client/clientset/versioned"
 	"go.uber.org/zap"
@@ -109,10 +109,10 @@ type k8sClient struct {
 	ClusterNamespaces map[string][]string
 	LastProbeErrors   map[int]string
 	logger            *zap.Logger
-	dao               admin.ClusterDAO
+	dao               dao.ClusterDAO
 }
 
-func NewK8sClient(logger *zap.Logger, dao admin.ClusterDAO) K8sClient {
+func NewK8sClient(logger *zap.Logger, dao dao.ClusterDAO) K8sClient {
 	return &k8sClient{
 		KubeClients:       make(map[int]*kubernetes.Clientset),
 		KruiseClients:     make(map[int]*versioned.Clientset),

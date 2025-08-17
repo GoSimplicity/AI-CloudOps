@@ -31,7 +31,8 @@ import (
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+
 	k8sAppDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	k8sAdminService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
@@ -79,7 +80,6 @@ var HandlerSet = wire.NewSet(
 	userHandler.NewUserHandler,
 	notAuthHandler.NewNotAuthHandler,
 	k8sHandler.NewK8sPodHandler,
-	k8sHandler.NewK8sAppHandler,
 	k8sHandler.NewK8sNodeHandler,
 	k8sHandler.NewK8sConfigMapHandler,
 	k8sHandler.NewK8sClusterHandler,
@@ -89,15 +89,6 @@ var HandlerSet = wire.NewSet(
 	k8sHandler.NewK8sTaintHandler,
 	k8sHandler.NewK8sYamlTaskHandler,
 	k8sHandler.NewK8sYamlTemplateHandler,
-	k8sHandler.NewK8sResourceQuotaHandler,
-	k8sHandler.NewK8sLimitRangeHandler,
-	k8sHandler.NewK8sLabelHandler,
-	k8sHandler.NewK8sNodeAffinityHandler,
-	k8sHandler.NewK8sPodAffinityHandler,
-	k8sHandler.NewK8sAffinityVisualizationHandler,
-	k8sHandler.NewK8sRBACHandler,
-	k8sHandler.NewK8sServiceAccountHandler,
-	k8sHandler.NewK8sTolerationHandler,
 	promHandler.NewAlertPoolHandler,
 	promHandler.NewMonitorConfigHandler,
 	promHandler.NewOnDutyGroupHandler,
@@ -131,16 +122,6 @@ var ServiceSet = wire.NewSet(
 	k8sAdminService.NewTaintService,
 	k8sAdminService.NewYamlTaskService,
 	k8sAdminService.NewYamlTemplateService,
-	k8sAdminService.NewResourceQuotaService,
-	k8sAdminService.NewLimitRangeService,
-	k8sAdminService.NewLabelService,
-	k8sAdminService.NewNodeAffinityService,
-	k8sAdminService.NewPodAffinityService,
-	k8sAdminService.NewAffinityVisualizationService,
-	k8sAdminService.NewRBACService,
-	k8sAdminService.NewServiceAccountService,
-	k8sAdminService.NewTolerationService,
-	k8sAppService.NewAppService,
 	k8sAppService.NewInstanceService,
 	k8sAppService.NewCronjobService,
 	k8sAppService.NewProjectService,
@@ -188,7 +169,6 @@ var DaoSet = wire.NewSet(
 	k8sDao.NewClusterDAO,
 	k8sDao.NewYamlTemplateDAO,
 	k8sDao.NewYamlTaskDAO,
-	k8sAppDao.NewAppDAO,
 	k8sAppDao.NewProjectDAO,
 	k8sAppDao.NewCornJobDAO,
 	workorderDao.NewWorkorderFormDesignDAO,

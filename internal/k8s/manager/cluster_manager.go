@@ -32,7 +32,7 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
@@ -51,11 +51,11 @@ type ClusterManager interface {
 
 type clusterManager struct {
 	client client.K8sClient
-	dao    admin.ClusterDAO
+	dao    dao.ClusterDAO
 	logger *zap.Logger
 }
 
-func NewClusterManager(logger *zap.Logger, client client.K8sClient, dao admin.ClusterDAO) ClusterManager {
+func NewClusterManager(logger *zap.Logger, client client.K8sClient, dao dao.ClusterDAO) ClusterManager {
 	return &clusterManager{
 		client: client,
 		dao:    dao,

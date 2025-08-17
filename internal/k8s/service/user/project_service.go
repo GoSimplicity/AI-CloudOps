@@ -43,20 +43,18 @@ type ProjectService interface {
 	UpdateProject(ctx context.Context, req *model.UpdateK8sProjectRequest) error
 }
 type projectService struct {
-	client      client.K8sClient
-	l           *zap.Logger
-	dao         admin.ClusterDAO
-	projectdao  user.ProjectDAO
-	appdao      user.AppDAO
+	client     client.K8sClient
+	l          *zap.Logger
+	dao        admin.ClusterDAO
+	projectdao user.ProjectDAO
 }
 
-func NewProjectService(dao admin.ClusterDAO, projectdao user.ProjectDAO, appdao user.AppDAO, client client.K8sClient, l *zap.Logger) ProjectService {
+func NewProjectService(dao admin.ClusterDAO, projectdao user.ProjectDAO, client client.K8sClient, l *zap.Logger) ProjectService {
 	return &projectService{
-		dao:         dao,
-		appdao:      appdao,
-		projectdao:  projectdao,
-		client:      client,
-		l:           l,
+		dao:        dao,
+		projectdao: projectdao,
+		client:     client,
+		l:          l,
 	}
 }
 

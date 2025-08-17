@@ -23,7 +23,7 @@
  *
  */
 
-package admin
+package service
 
 import (
 	"context"
@@ -34,7 +34,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -56,12 +56,12 @@ type TaintService interface {
 }
 
 type taintService struct {
-	dao    dao.ClusterDAO
+	dao    admin.ClusterDAO
 	client client.K8sClient
 	l      *zap.Logger
 }
 
-func NewTaintService(dao dao.ClusterDAO, client client.K8sClient, l *zap.Logger) TaintService {
+func NewTaintService(dao admin.ClusterDAO, client client.K8sClient, l *zap.Logger) TaintService {
 	return &taintService{
 		dao:    dao,
 		client: client,

@@ -23,16 +23,15 @@
  *
  */
 
-package admin
+package service
 
 import (
 	"context"
 	"fmt"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strings"
 
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -64,14 +63,14 @@ type YamlTaskService interface {
 }
 
 type yamlTaskService struct {
-	yamlTaskDao     dao.YamlTaskDAO
-	clusterDao      dao.ClusterDAO
-	yamlTemplateDao dao.YamlTemplateDAO
+	yamlTaskDao     admin.YamlTaskDAO
+	clusterDao      admin.ClusterDAO
+	yamlTemplateDao admin.YamlTemplateDAO
 	client          client.K8sClient
 	l               *zap.Logger
 }
 
-func NewYamlTaskService(yamlTaskDao dao.YamlTaskDAO, clusterDao dao.ClusterDAO, yamlTemplateDao dao.YamlTemplateDAO, client client.K8sClient, l *zap.Logger) YamlTaskService {
+func NewYamlTaskService(yamlTaskDao admin.YamlTaskDAO, clusterDao admin.ClusterDAO, yamlTemplateDao admin.YamlTemplateDAO, client client.K8sClient, l *zap.Logger) YamlTaskService {
 	return &yamlTaskService{
 		yamlTaskDao:     yamlTaskDao,
 		clusterDao:      clusterDao,
