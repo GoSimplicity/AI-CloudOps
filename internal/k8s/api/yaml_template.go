@@ -26,10 +26,11 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"strconv"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
@@ -38,10 +39,10 @@ import (
 
 type K8sYamlTemplateHandler struct {
 	l                   *zap.Logger
-	yamlTemplateService admin.YamlTemplateService
+	yamlTemplateService service.YamlTemplateService
 }
 
-func NewK8sYamlTemplateHandler(l *zap.Logger, yamlTemplateService admin.YamlTemplateService) *K8sYamlTemplateHandler {
+func NewK8sYamlTemplateHandler(l *zap.Logger, yamlTemplateService service.YamlTemplateService) *K8sYamlTemplateHandler {
 	return &K8sYamlTemplateHandler{
 		l:                   l,
 		yamlTemplateService: yamlTemplateService,

@@ -31,7 +31,7 @@ import (
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -59,13 +59,13 @@ type YamlTemplateService interface {
 }
 
 type yamlTemplateService struct {
-	yamlTemplateDao admin.YamlTemplateDAO
-	yamlTaskDao     admin.YamlTaskDAO
+	yamlTemplateDao dao.YamlTemplateDAO
+	yamlTaskDao     dao.YamlTaskDAO
 	client          client.K8sClient
 	l               *zap.Logger
 }
 
-func NewYamlTemplateService(yamlTemplateDao admin.YamlTemplateDAO, yamlTaskDao admin.YamlTaskDAO, client client.K8sClient, l *zap.Logger) YamlTemplateService {
+func NewYamlTemplateService(yamlTemplateDao dao.YamlTemplateDAO, yamlTaskDao dao.YamlTaskDAO, client client.K8sClient, l *zap.Logger) YamlTemplateService {
 	return &yamlTemplateService{
 		yamlTemplateDao: yamlTemplateDao,
 		yamlTaskDao:     yamlTaskDao,

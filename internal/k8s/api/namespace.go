@@ -26,7 +26,7 @@
 package api
 
 import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
@@ -35,10 +35,10 @@ import (
 
 type K8sNamespaceHandler struct {
 	logger           *zap.Logger
-	namespaceService admin.NamespaceService
+	namespaceService service.NamespaceService
 }
 
-func NewK8sNamespaceHandler(logger *zap.Logger, namespaceService admin.NamespaceService) *K8sNamespaceHandler {
+func NewK8sNamespaceHandler(logger *zap.Logger, namespaceService service.NamespaceService) *K8sNamespaceHandler {
 	return &K8sNamespaceHandler{
 		logger:           logger,
 		namespaceService: namespaceService,

@@ -26,7 +26,7 @@
 package api
 
 import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -36,10 +36,10 @@ import (
 
 type K8sYamlTaskHandler struct {
 	l               *zap.Logger
-	yamlTaskService admin.YamlTaskService
+	yamlTaskService service.YamlTaskService
 }
 
-func NewK8sYamlTaskHandler(l *zap.Logger, yamlTaskService admin.YamlTaskService) *K8sYamlTaskHandler {
+func NewK8sYamlTaskHandler(l *zap.Logger, yamlTaskService service.YamlTaskService) *K8sYamlTaskHandler {
 	return &K8sYamlTaskHandler{
 		l:               l,
 		yamlTaskService: yamlTaskService,

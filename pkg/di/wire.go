@@ -32,11 +32,8 @@ import (
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
-
-	k8sAppDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
-	k8sAdminService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
-	k8sAppService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/user"
+	k8sService "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	notAuthService "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	promHandler "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
@@ -81,7 +78,6 @@ var HandlerSet = wire.NewSet(
 	notAuthHandler.NewNotAuthHandler,
 	k8sHandler.NewK8sPodHandler,
 	k8sHandler.NewK8sNodeHandler,
-	k8sHandler.NewK8sConfigMapHandler,
 	k8sHandler.NewK8sClusterHandler,
 	k8sHandler.NewK8sDeploymentHandler,
 	k8sHandler.NewK8sNamespaceHandler,
@@ -112,19 +108,15 @@ var HandlerSet = wire.NewSet(
 )
 
 var ServiceSet = wire.NewSet(
-	k8sAdminService.NewClusterService,
-	k8sAdminService.NewConfigMapService,
-	k8sAdminService.NewDeploymentService,
-	k8sAdminService.NewNamespaceService,
-	k8sAdminService.NewPodService,
-	k8sAdminService.NewSvcService,
-	k8sAdminService.NewNodeService,
-	k8sAdminService.NewTaintService,
-	k8sAdminService.NewYamlTaskService,
-	k8sAdminService.NewYamlTemplateService,
-	k8sAppService.NewInstanceService,
-	k8sAppService.NewCronjobService,
-	k8sAppService.NewProjectService,
+	k8sService.NewClusterService,
+	k8sService.NewDeploymentService,
+	k8sService.NewNamespaceService,
+	k8sService.NewPodService,
+	k8sService.NewSvcService,
+	k8sService.NewNodeService,
+	k8sService.NewTaintService,
+	k8sService.NewYamlTaskService,
+	k8sService.NewYamlTemplateService,
 	userService.NewUserService,
 	authService.NewApiService,
 	authService.NewRoleService,
@@ -167,10 +159,8 @@ var DaoSet = wire.NewSet(
 	authDao.NewApiDAO,
 	authDao.NewAuditDAO,
 	k8sDao.NewClusterDAO,
-	k8sDao.NewYamlTemplateDAO,
 	k8sDao.NewYamlTaskDAO,
-	k8sAppDao.NewProjectDAO,
-	k8sAppDao.NewCornJobDAO,
+	k8sDao.NewYamlTemplateDAO,
 	workorderDao.NewWorkorderFormDesignDAO,
 	workorderDao.NewTemplateDAO,
 	workorderDao.NewWorkorderInstanceDAO,

@@ -26,7 +26,7 @@
 package api
 
 import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
@@ -35,10 +35,10 @@ import (
 
 type K8sDeploymentHandler struct {
 	l                 *zap.Logger
-	deploymentService admin.DeploymentService
+	deploymentService service.DeploymentService
 }
 
-func NewK8sDeploymentHandler(l *zap.Logger, deploymentService admin.DeploymentService) *K8sDeploymentHandler {
+func NewK8sDeploymentHandler(l *zap.Logger, deploymentService service.DeploymentService) *K8sDeploymentHandler {
 	return &K8sDeploymentHandler{
 		l:                 l,
 		deploymentService: deploymentService,

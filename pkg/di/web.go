@@ -45,7 +45,6 @@ func InitGinServer(
 	authRoleHdl *systemApi.RoleHandler,
 	notAuthHdl *notAuthHandler.NotAuthHandler,
 	k8sClusterHdl *k8sApi.K8sClusterHandler,
-	k8sConfigMapHdl *k8sApi.K8sConfigMapHandler,
 	k8sDeploymentHdl *k8sApi.K8sDeploymentHandler,
 	k8sNamespaceHdl *k8sApi.K8sNamespaceHandler,
 	k8sNodeHdl *k8sApi.K8sNodeHandler,
@@ -93,7 +92,6 @@ func InitGinServer(
 	scrapeJobHdl.RegisterRouters(server)
 	sendGroupHdl.RegisterRouters(server)
 	k8sClusterHdl.RegisterRouters(server)
-	k8sConfigMapHdl.RegisterRouters(server)
 	k8sDeploymentHdl.RegisterRouters(server)
 	k8sNamespaceHdl.RegisterRouters(server)
 	k8sNodeHdl.RegisterRouters(server)

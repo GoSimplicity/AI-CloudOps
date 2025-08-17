@@ -11,10 +11,8 @@ import (
 	api4 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	dao3 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
-	user2 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao/user"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/user"
+	service4 "github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	api3 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	service3 "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	api5 "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
@@ -31,14 +29,14 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	api7 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	dao5 "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	service5 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
+	service6 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	service2 "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	api6 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	dao4 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
-	service4 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
+	service5 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
@@ -72,27 +70,25 @@ func ProvideCmd() *Cmd {
 	clusterDAO := dao3.NewClusterDAO(db, logger)
 	k8sClient := client.NewK8sClient(logger, clusterDAO)
 	clusterManager := manager.NewClusterManager(logger, k8sClient, clusterDAO)
-	clusterService := admin.NewClusterService(clusterDAO, k8sClient, clusterManager, logger)
+	clusterService := service4.NewClusterService(clusterDAO, k8sClient, clusterManager, logger)
 	k8sClusterHandler := api4.NewK8sClusterHandler(logger, clusterService)
-	configMapService := admin.NewConfigMapService(clusterDAO, k8sClient, logger)
-	k8sConfigMapHandler := api4.NewK8sConfigMapHandler(logger, configMapService)
-	deploymentService := admin.NewDeploymentService(clusterDAO, k8sClient, logger)
+	deploymentService := service4.NewDeploymentService(clusterDAO, k8sClient, logger)
 	k8sDeploymentHandler := api4.NewK8sDeploymentHandler(logger, deploymentService)
-	namespaceService := admin.NewNamespaceService(clusterDAO, k8sClient, logger)
+	namespaceService := service4.NewNamespaceService(clusterDAO, k8sClient, logger)
 	k8sNamespaceHandler := api4.NewK8sNamespaceHandler(logger, namespaceService)
-	nodeService := admin.NewNodeService(clusterDAO, k8sClient, logger)
+	nodeService := service4.NewNodeService(clusterDAO, k8sClient, logger)
 	k8sNodeHandler := api4.NewK8sNodeHandler(logger, nodeService)
-	podService := admin.NewPodService(clusterDAO, k8sClient, logger)
+	podService := service4.NewPodService(clusterDAO, k8sClient, logger)
 	k8sPodHandler := api4.NewK8sPodHandler(logger, podService)
-	svcService := admin.NewSvcService(clusterDAO, k8sClient, logger)
+	svcService := service4.NewSvcService(clusterDAO, k8sClient, logger)
 	k8sSvcHandler := api4.NewK8sSvcHandler(logger, svcService)
-	taintService := admin.NewTaintService(clusterDAO, k8sClient, logger)
+	taintService := service4.NewTaintService(clusterDAO, k8sClient, logger)
 	k8sTaintHandler := api4.NewK8sTaintHandler(logger, taintService)
 	yamlTaskDAO := dao3.NewYamlTaskDAO(db, logger)
 	yamlTemplateDAO := dao3.NewYamlTemplateDAO(db, logger)
-	yamlTaskService := admin.NewYamlTaskService(yamlTaskDAO, clusterDAO, yamlTemplateDAO, k8sClient, logger)
+	yamlTaskService := service4.NewYamlTaskService(yamlTaskDAO, clusterDAO, yamlTemplateDAO, k8sClient, logger)
 	k8sYamlTaskHandler := api4.NewK8sYamlTaskHandler(logger, yamlTaskService)
-	yamlTemplateService := admin.NewYamlTemplateService(yamlTemplateDAO, yamlTaskDAO, k8sClient, logger)
+	yamlTemplateService := service4.NewYamlTemplateService(yamlTemplateDAO, yamlTaskDAO, k8sClient, logger)
 	k8sYamlTemplateHandler := api4.NewK8sYamlTemplateHandler(logger, yamlTemplateService)
 	alertManagerEventDAO := alert.NewAlertManagerEventDAO(db, logger, userDAO)
 	scrapePoolDAO := scrape.NewScrapePoolDAO(db, logger, userDAO)
@@ -130,39 +126,39 @@ func ProvideCmd() *Cmd {
 	auditHandler := api2.NewAuditHandler(auditService, logger)
 	workorderFormDesignDAO := dao4.NewWorkorderFormDesignDAO(db, logger)
 	workorderCategoryDAO := dao4.NewWorkorderCategoryDAO(db, logger)
-	formDesignService := service4.NewFormDesignService(workorderFormDesignDAO, workorderCategoryDAO, logger)
+	formDesignService := service5.NewFormDesignService(workorderFormDesignDAO, workorderCategoryDAO, logger)
 	formDesignHandler := api6.NewFormDesignHandler(formDesignService)
 	workorderProcessDAO := dao4.NewProcessDAO(db, logger)
 	workorderInstanceDAO := dao4.NewWorkorderInstanceDAO(db, logger)
-	workorderProcessService := service4.NewWorkorderProcessService(workorderProcessDAO, workorderFormDesignDAO, workorderCategoryDAO, workorderInstanceDAO, logger)
+	workorderProcessService := service5.NewWorkorderProcessService(workorderProcessDAO, workorderFormDesignDAO, workorderCategoryDAO, workorderInstanceDAO, logger)
 	workorderProcessHandler := api6.NewWorkorderProcessHandler(workorderProcessService)
 	workorderTemplateDAO := dao4.NewTemplateDAO(db, logger)
-	workorderTemplateService := service4.NewWorkorderTemplateService(workorderTemplateDAO, workorderProcessDAO, workorderCategoryDAO, workorderInstanceDAO, logger)
+	workorderTemplateService := service5.NewWorkorderTemplateService(workorderTemplateDAO, workorderProcessDAO, workorderCategoryDAO, workorderInstanceDAO, logger)
 	templateHandler := api6.NewTemplateHandler(workorderTemplateService)
 	workorderInstanceFlowDAO := dao4.NewInstanceFlowDAO(db, logger)
 	workorderInstanceTimelineDAO := dao4.NewInstanceTimeLineDAO(db, logger)
 	workorderInstanceCommentDAO := dao4.NewWorkorderInstanceCommentDAO(db, logger)
-	instanceService := service4.NewInstanceService(workorderInstanceDAO, workorderInstanceFlowDAO, workorderInstanceTimelineDAO, workorderInstanceCommentDAO, workorderProcessDAO, logger)
+	instanceService := service5.NewInstanceService(workorderInstanceDAO, workorderInstanceFlowDAO, workorderInstanceTimelineDAO, workorderInstanceCommentDAO, workorderProcessDAO, logger)
 	instanceHandler := api6.NewInstanceHandler(instanceService)
-	instanceFlowService := service4.NewInstanceFlowService(workorderInstanceFlowDAO, logger)
+	instanceFlowService := service5.NewInstanceFlowService(workorderInstanceFlowDAO, logger)
 	instanceFlowHandler := api6.NewInstanceFlowHandler(instanceFlowService)
-	instanceCommentService := service4.NewInstanceCommentService(workorderInstanceCommentDAO, workorderInstanceDAO, logger)
+	instanceCommentService := service5.NewInstanceCommentService(workorderInstanceCommentDAO, workorderInstanceDAO, logger)
 	instanceCommentHandler := api6.NewInstanceCommentHandler(instanceCommentService)
-	categoryGroupService := service4.NewCategoryGroupService(workorderCategoryDAO, userDAO, logger)
+	categoryGroupService := service5.NewCategoryGroupService(workorderCategoryDAO, userDAO, logger)
 	categoryGroupHandler := api6.NewCategoryGroupHandler(categoryGroupService)
-	workorderInstanceTimeLineService := service4.NewWorkorderInstanceTimeLineService(logger, workorderInstanceTimelineDAO)
+	workorderInstanceTimeLineService := service5.NewWorkorderInstanceTimeLineService(logger, workorderInstanceTimelineDAO)
 	instanceTimeLineHandler := api6.NewInstanceTimeLineHandler(workorderInstanceTimeLineService)
 	treeNodeDAO := dao5.NewTreeNodeDAO(logger, db)
-	treeNodeService := service5.NewTreeNodeService(logger, treeNodeDAO, userDAO)
+	treeNodeService := service6.NewTreeNodeService(logger, treeNodeDAO, userDAO)
 	treeNodeHandler := api7.NewTreeNodeHandler(treeNodeService)
 	treeLocalDAO := dao5.NewTreeLocalDAO(db, logger)
-	treeLocalService := service5.NewTreeLocalService(logger, treeLocalDAO)
+	treeLocalService := service6.NewTreeLocalService(logger, treeLocalDAO)
 	ecsSSH := ssh.NewSSH(logger)
 	treeLocalHandler := api7.NewTreeLocalHandler(treeLocalService, ecsSSH)
 	workorderNotificationDAO := dao4.NewNotificationDAO(db, logger)
-	workorderNotificationService := service4.NewWorkorderNotificationService(workorderNotificationDAO, logger)
+	workorderNotificationService := service5.NewWorkorderNotificationService(workorderNotificationDAO, logger)
 	notificationHandler := api6.NewNotificationHandler(workorderNotificationService)
-	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, notAuthHandler, k8sClusterHandler, k8sConfigMapHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, notificationHandler)
+	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, notAuthHandler, k8sClusterHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, notificationHandler)
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
 	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache)
 	cmd := &Cmd{
@@ -181,11 +177,11 @@ type Cmd struct {
 	Cron      cron.CronManager
 }
 
-var HandlerSet = wire.NewSet(api2.NewRoleHandler, api2.NewApiHandler, api2.NewAuditHandler, api.NewUserHandler, api3.NewNotAuthHandler, api4.NewK8sPodHandler, api4.NewK8sNodeHandler, api4.NewK8sConfigMapHandler, api4.NewK8sClusterHandler, api4.NewK8sDeploymentHandler, api4.NewK8sNamespaceHandler, api4.NewK8sSvcHandler, api4.NewK8sTaintHandler, api4.NewK8sYamlTaskHandler, api4.NewK8sYamlTemplateHandler, api5.NewAlertPoolHandler, api5.NewMonitorConfigHandler, api5.NewOnDutyGroupHandler, api5.NewRecordRuleHandler, api5.NewAlertRuleHandler, api5.NewSendGroupHandler, api5.NewScrapeJobHandler, api5.NewScrapePoolHandler, api5.NewAlertEventHandler, api6.NewFormDesignHandler, api6.NewInstanceHandler, api6.NewInstanceFlowHandler, api6.NewInstanceCommentHandler, api6.NewInstanceTimeLineHandler, api6.NewTemplateHandler, api6.NewWorkorderProcessHandler, api6.NewCategoryGroupHandler, api6.NewNotificationHandler, api7.NewTreeNodeHandler, api7.NewTreeLocalHandler)
+var HandlerSet = wire.NewSet(api2.NewRoleHandler, api2.NewApiHandler, api2.NewAuditHandler, api.NewUserHandler, api3.NewNotAuthHandler, api4.NewK8sPodHandler, api4.NewK8sNodeHandler, api4.NewK8sClusterHandler, api4.NewK8sDeploymentHandler, api4.NewK8sNamespaceHandler, api4.NewK8sSvcHandler, api4.NewK8sTaintHandler, api4.NewK8sYamlTaskHandler, api4.NewK8sYamlTemplateHandler, api5.NewAlertPoolHandler, api5.NewMonitorConfigHandler, api5.NewOnDutyGroupHandler, api5.NewRecordRuleHandler, api5.NewAlertRuleHandler, api5.NewSendGroupHandler, api5.NewScrapeJobHandler, api5.NewScrapePoolHandler, api5.NewAlertEventHandler, api6.NewFormDesignHandler, api6.NewInstanceHandler, api6.NewInstanceFlowHandler, api6.NewInstanceCommentHandler, api6.NewInstanceTimeLineHandler, api6.NewTemplateHandler, api6.NewWorkorderProcessHandler, api6.NewCategoryGroupHandler, api6.NewNotificationHandler, api7.NewTreeNodeHandler, api7.NewTreeLocalHandler)
 
-var ServiceSet = wire.NewSet(admin.NewClusterService, admin.NewConfigMapService, admin.NewDeploymentService, admin.NewNamespaceService, admin.NewPodService, admin.NewSvcService, admin.NewNodeService, admin.NewTaintService, admin.NewYamlTaskService, admin.NewYamlTemplateService, user.NewInstanceService, user.NewCronjobService, user.NewProjectService, service2.NewUserService, service.NewApiService, service.NewRoleService, service.NewAuditService, alert2.NewAlertManagerEventService, alert2.NewAlertManagerOnDutyService, alert2.NewAlertManagerPoolService, alert2.NewAlertManagerRecordService, alert2.NewAlertManagerRuleService, alert2.NewAlertManagerSendService, scrape2.NewPrometheusScrapeService, scrape2.NewPrometheusPoolService, config2.NewMonitorConfigService, service3.NewNotAuthService, service4.NewFormDesignService, service4.NewInstanceService, service4.NewInstanceFlowService, service4.NewInstanceCommentService, service4.NewWorkorderInstanceTimeLineService, service4.NewWorkorderTemplateService, service4.NewWorkorderProcessService, service4.NewCategoryGroupService, service4.NewWorkorderNotificationService, service5.NewTreeNodeService, service5.NewTreeLocalService)
+var ServiceSet = wire.NewSet(service4.NewClusterService, service4.NewDeploymentService, service4.NewNamespaceService, service4.NewPodService, service4.NewSvcService, service4.NewNodeService, service4.NewTaintService, service4.NewYamlTaskService, service4.NewYamlTemplateService, service2.NewUserService, service.NewApiService, service.NewRoleService, service.NewAuditService, alert2.NewAlertManagerEventService, alert2.NewAlertManagerOnDutyService, alert2.NewAlertManagerPoolService, alert2.NewAlertManagerRecordService, alert2.NewAlertManagerRuleService, alert2.NewAlertManagerSendService, scrape2.NewPrometheusScrapeService, scrape2.NewPrometheusPoolService, config2.NewMonitorConfigService, service3.NewNotAuthService, service5.NewFormDesignService, service5.NewInstanceService, service5.NewInstanceFlowService, service5.NewInstanceCommentService, service5.NewWorkorderInstanceTimeLineService, service5.NewWorkorderTemplateService, service5.NewWorkorderProcessService, service5.NewCategoryGroupService, service5.NewWorkorderNotificationService, service6.NewTreeNodeService, service6.NewTreeLocalService)
 
-var DaoSet = wire.NewSet(alert.NewAlertManagerEventDAO, alert.NewAlertManagerOnDutyDAO, alert.NewAlertManagerPoolDAO, alert.NewAlertManagerRecordDAO, alert.NewAlertManagerRuleDAO, alert.NewAlertManagerSendDAO, scrape.NewScrapeJobDAO, scrape.NewScrapePoolDAO, config.NewMonitorConfigDAO, dao2.NewUserDAO, dao.NewRoleDAO, dao.NewApiDAO, dao.NewAuditDAO, dao3.NewClusterDAO, dao3.NewYamlTemplateDAO, dao3.NewYamlTaskDAO, user2.NewProjectDAO, user2.NewCornJobDAO, dao4.NewWorkorderFormDesignDAO, dao4.NewTemplateDAO, dao4.NewWorkorderInstanceDAO, dao4.NewProcessDAO, dao4.NewWorkorderCategoryDAO, dao4.NewWorkorderInstanceCommentDAO, dao4.NewInstanceFlowDAO, dao4.NewInstanceTimeLineDAO, dao4.NewNotificationDAO, dao5.NewTreeNodeDAO, dao5.NewTreeLocalDAO)
+var DaoSet = wire.NewSet(alert.NewAlertManagerEventDAO, alert.NewAlertManagerOnDutyDAO, alert.NewAlertManagerPoolDAO, alert.NewAlertManagerRecordDAO, alert.NewAlertManagerRuleDAO, alert.NewAlertManagerSendDAO, scrape.NewScrapeJobDAO, scrape.NewScrapePoolDAO, config.NewMonitorConfigDAO, dao2.NewUserDAO, dao.NewRoleDAO, dao.NewApiDAO, dao.NewAuditDAO, dao3.NewClusterDAO, dao3.NewYamlTaskDAO, dao3.NewYamlTemplateDAO, dao4.NewWorkorderFormDesignDAO, dao4.NewTemplateDAO, dao4.NewWorkorderInstanceDAO, dao4.NewProcessDAO, dao4.NewWorkorderCategoryDAO, dao4.NewWorkorderInstanceCommentDAO, dao4.NewInstanceFlowDAO, dao4.NewInstanceTimeLineDAO, dao4.NewNotificationDAO, dao5.NewTreeNodeDAO, dao5.NewTreeLocalDAO)
 
 var SSHSet = wire.NewSet(ssh.NewSSH)
 

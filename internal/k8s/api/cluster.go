@@ -26,7 +26,7 @@
 package api
 
 import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -35,11 +35,11 @@ import (
 )
 
 type K8sClusterHandler struct {
-	clusterService admin.ClusterService
+	clusterService service.ClusterService
 	l              *zap.Logger
 }
 
-func NewK8sClusterHandler(l *zap.Logger, clusterService admin.ClusterService) *K8sClusterHandler {
+func NewK8sClusterHandler(l *zap.Logger, clusterService service.ClusterService) *K8sClusterHandler {
 	return &K8sClusterHandler{
 		l:              l,
 		clusterService: clusterService,
