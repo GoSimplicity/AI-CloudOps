@@ -26,16 +26,16 @@
 package model
 
 type ContainerCore struct {
-	Name       string            `json:"name,omitempty" gorm:"comment:容器名称"` // 容器名称
-	CPU        string            `json:"cpu,omitempty" gorm:"comment:CPU 资源限制"`        // CPU 资源限制(如 "100m", "0.5")
-	Memory     string            `json:"memory,omitempty" gorm:"comment:内存资源限制"`      // 内存资源限制(如 "512Mi", "2Gi")
-	CPURequest string            `json:"cpu_request,omitempty" gorm:"comment:CPU 资源请求"` // CPU 资源请求
-	MemRequest string            `json:"mem_request,omitempty" gorm:"comment:内存资源请求"` // 内存资源请求
+	Name       string            `json:"name,omitempty" gorm:"comment:容器名称"`                      // 容器名称
+	CPU        string            `json:"cpu,omitempty" gorm:"comment:CPU 资源限制"`                   // CPU 资源限制(如 "100m", "0.5")
+	Memory     string            `json:"memory,omitempty" gorm:"comment:内存资源限制"`                  // 内存资源限制(如 "512Mi", "2Gi")
+	CPURequest string            `json:"cpu_request,omitempty" gorm:"comment:CPU 资源请求"`           // CPU 资源请求
+	MemRequest string            `json:"mem_request,omitempty" gorm:"comment:内存资源请求"`             // 内存资源请求
 	Command    []string          `json:"command,omitempty" gorm:"serializer:json;comment:容器启动命令"` // 容器启动命令
 	Args       []string          `json:"args,omitempty" gorm:"serializer:json;comment:容器启动参数"`    // 容器启动参数
-	Envs       map[string]string `json:"envs,omitempty" gorm:"serializer:json;comment:环境变量"`       // 环境变量
-	PullPolicy string            `json:"pull_policy,omitempty" gorm:"comment:镜像拉取策略"` // 镜像拉取策略
-	Volumes    []Volume          `json:"volumes,omitempty" gorm:"serializer:json;comment:挂载卷"`      // 挂载卷
+	Envs       map[string]string `json:"envs,omitempty" gorm:"serializer:json;comment:环境变量"`      // 环境变量
+	PullPolicy string            `json:"pull_policy,omitempty" gorm:"comment:镜像拉取策略"`             // 镜像拉取策略
+	Volumes    []Volume          `json:"volumes,omitempty" gorm:"serializer:json;comment:挂载卷"`    // 挂载卷
 }
 
 type OneEvent struct {
@@ -72,4 +72,14 @@ type KeyValueItem struct {
 
 type BatchDeleteReq struct {
 	IDs []int `json:"ids" binding:"required"`
+}
+
+type Volume struct {
+	Name       string `json:"name"`                  // 卷名称
+	Type       string `json:"type"`                  // 卷类型(ConfigMap, Secret, PVC, EmptyDir等)
+	MountPath  string `json:"mount_path"`            // 挂载路径
+	SubPath    string `json:"sub_path,omitempty"`    // 子路径
+	ReadOnly   bool   `json:"read_only,omitempty"`   // 是否只读
+	SourceName string `json:"source_name,omitempty"` // 源资源名称(如ConfigMap名称)
+	Size       string `json:"size,omitempty"`        // 存储大小
 }

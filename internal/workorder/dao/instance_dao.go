@@ -281,7 +281,7 @@ func (d *workorderInstanceDAO) UpdateInstanceStatus(ctx context.Context, id int,
 		Model(&model.WorkorderInstance{}).
 		Where("id = ?", id).
 		Updates(map[string]any{
-			"status":     status,
+			"status": status,
 		})
 
 	if result.Error != nil {

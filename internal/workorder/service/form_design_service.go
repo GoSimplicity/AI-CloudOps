@@ -258,4 +258,3 @@ func (f *formDesignService) generateFieldIDs(schema *model.FormSchema) {
 		schema.Fields[i].ID = strconv.Itoa(i + 1)
 	}
 }
-

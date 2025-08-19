@@ -26,7 +26,7 @@
 package api
 
 import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
@@ -35,10 +35,10 @@ import (
 
 type K8sNodeHandler struct {
 	logger      *zap.Logger
-	nodeService admin.NodeService
+	nodeService service.NodeService
 }
 
-func NewK8sNodeHandler(logger *zap.Logger, nodeService admin.NodeService) *K8sNodeHandler {
+func NewK8sNodeHandler(logger *zap.Logger, nodeService service.NodeService) *K8sNodeHandler {
 	return &K8sNodeHandler{
 		nodeService: nodeService,
 		logger:      logger,

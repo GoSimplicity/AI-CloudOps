@@ -90,8 +90,8 @@ type ProcessStep struct {
 
 // ProcessConnection 流程连接定义
 type ProcessConnection struct {
-	From    string `json:"from"`     // 来源步骤ID
-	To      string `json:"to"`       // 目标步骤ID
+	From string `json:"from"` // 来源步骤ID
+	To   string `json:"to"`   // 目标步骤ID
 }
 
 // ProcessDefinition 流程定义

@@ -123,21 +123,20 @@ type DeleteWorkorderNotificationReq struct {
 
 // ListWorkorderNotificationReq 工单通知配置列表
 type ListWorkorderNotificationReq struct {
-	Page        int    `json:"page" form:"page"`
-	PageSize    int    `json:"page_size" form:"page_size"`
-	Name        string `json:"name" form:"name"`
-	ProcessID   *int   `json:"process_id" form:"process_id"`
-	TemplateID  *int   `json:"template_id" form:"template_id"`
-	CategoryID  *int   `json:"category_id" form:"category_id"`
-	Status      *int8  `json:"status" form:"status"`
-	IsDefault   *int8  `json:"is_default" form:"is_default" binding:"omitempty,oneof=1 2"`
+	Page       int    `json:"page" form:"page"`
+	PageSize   int    `json:"page_size" form:"page_size"`
+	Name       string `json:"name" form:"name"`
+	ProcessID  *int   `json:"process_id" form:"process_id"`
+	TemplateID *int   `json:"template_id" form:"template_id"`
+	CategoryID *int   `json:"category_id" form:"category_id"`
+	Status     *int8  `json:"status" form:"status"`
+	IsDefault  *int8  `json:"is_default" form:"is_default" binding:"omitempty,oneof=1 2"`
 }
 
 // DetailWorkorderNotificationReq 工单通知配置详情
 type DetailWorkorderNotificationReq struct {
 	ID int `json:"id" binding:"required"`
 }
-
 
 // 工单通知发送记录
 type WorkorderNotificationLog struct {

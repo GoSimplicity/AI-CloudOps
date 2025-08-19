@@ -196,7 +196,7 @@ func (h *InstanceHandler) ListInstance(ctx *gin.Context) {
 // @Router /api/workorder/instance/submit/{id} [post]
 func (h *InstanceHandler) SubmitInstance(ctx *gin.Context) {
 	var req model.SubmitWorkorderInstanceReq
-	
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的工单ID")
@@ -226,7 +226,7 @@ func (h *InstanceHandler) SubmitInstance(ctx *gin.Context) {
 // @Router /api/workorder/instance/assign/{id} [post]
 func (h *InstanceHandler) AssignInstance(ctx *gin.Context) {
 	var req model.AssignWorkorderInstanceReq
-	
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的工单ID")
@@ -256,7 +256,7 @@ func (h *InstanceHandler) AssignInstance(ctx *gin.Context) {
 // @Router /api/workorder/instance/approve/{id} [post]
 func (h *InstanceHandler) ApproveInstance(ctx *gin.Context) {
 	var req model.ApproveWorkorderInstanceReq
-	
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的工单ID")
@@ -286,7 +286,7 @@ func (h *InstanceHandler) ApproveInstance(ctx *gin.Context) {
 // @Router /api/workorder/instance/reject/{id} [post]
 func (h *InstanceHandler) RejectInstance(ctx *gin.Context) {
 	var req model.RejectWorkorderInstanceReq
-	
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的工单ID")

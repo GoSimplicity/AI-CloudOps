@@ -34,3 +34,27 @@ var (
 	ErrorNodeNotFound       = errors.New("node not found")
 	ErrorTaintsKeyDuplicate = errors.New("taints key exist")
 )
+
+// 集群状态常量，统一使用，避免魔法字符串
+const (
+	StatusPending = "PENDING"
+	StatusRunning = "RUNNING"
+	StatusError   = "ERROR"
+)
+
+// K8s 资源默认配置常量
+const (
+	// 默认资源限制
+	DefaultCPULimit      = "1000m"
+	DefaultMemoryLimit   = "1Gi"
+	DefaultCPURequest    = "500m"
+	DefaultMemoryRequest = "512Mi"
+
+	// 默认名称
+	DefaultLimitRangeName = "default-limits"
+	DefaultQuotaName      = "default-quota"
+
+	// 模拟使用量（用于测试和演示）
+	MockCPUUsage    = "300m"
+	MockMemoryUsage = "256Mi"
+)

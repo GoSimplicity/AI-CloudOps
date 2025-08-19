@@ -226,4 +226,3 @@ func (h *NotificationHandler) TestSendNotification(ctx *gin.Context) {
 		return nil, h.service.TestSendNotification(ctx, &req)
 	})
 }
-

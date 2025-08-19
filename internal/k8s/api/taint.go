@@ -26,7 +26,7 @@
 package api
 
 import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service/admin"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
@@ -34,11 +34,11 @@ import (
 )
 
 type K8sTaintHandler struct {
-	taintService admin.TaintService
+	taintService service.TaintService
 	logger       *zap.Logger
 }
 
-func NewK8sTaintHandler(logger *zap.Logger, taintService admin.TaintService) *K8sTaintHandler {
+func NewK8sTaintHandler(logger *zap.Logger, taintService service.TaintService) *K8sTaintHandler {
 	return &K8sTaintHandler{
 		logger:       logger,
 		taintService: taintService,
