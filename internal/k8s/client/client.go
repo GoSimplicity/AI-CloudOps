@@ -58,6 +58,8 @@ type K8sClient interface {
 	GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error)
 	RefreshClients(ctx context.Context) error
 	CheckClusterConnection(clusterID int) error
+	// 检查连通性并回写元信息
+	UpdateClusterMetaFromLive(ctx context.Context, clusterID int) error
 	// 创建资源
 	CreateDeployment(ctx context.Context, namespace string, clusterID int, deployment *appsv1.Deployment) error
 	CreateStatefulSet(ctx context.Context, namespace string, clusterID int, statefulset *appsv1.StatefulSet) error
@@ -465,6 +467,35 @@ func (k *k8sClient) CheckClusterConnection(clusterID int) error {
 
 	k.logger.Debug("集群连接成功", zap.Int("clusterID", clusterID), zap.String("version", version.String()))
 	delete(k.LastProbeErrors, clusterID)
+	return nil
+}
+
+// UpdateClusterMetaFromLive 检查集群并回写版本与APIServer地址
+func (k *k8sClient) UpdateClusterMetaFromLive(ctx context.Context, clusterID int) error {
+	kubeClient, err := k.GetKubeClient(clusterID)
+	if err != nil {
+		return fmt.Errorf("获取集群客户端失败: %w", err)
+	}
+
+	// 版本
+	v, err := kubeClient.Discovery().ServerVersion()
+	if err != nil {
+		return fmt.Errorf("获取集群版本失败: %w", err)
+	}
+
+	// apiserver 地址来自 RestConfigs
+	k.RLock()
+	restCfg := k.RestConfigs[clusterID]
+	k.RUnlock()
+	host := ""
+	if restCfg != nil {
+		host = restCfg.Host
+	}
+
+	// 入库
+	if err := k.dao.UpdateCluster(ctx, &model.K8sCluster{Model: model.Model{ID: clusterID}, Version: v.String(), ApiServerAddr: host}); err != nil {
+		k.logger.Warn("回写集群版本信息失败", zap.Int("ClusterID", clusterID), zap.Error(err))
+	}
 	return nil
 }
 

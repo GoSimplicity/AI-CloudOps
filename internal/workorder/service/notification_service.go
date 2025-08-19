@@ -145,7 +145,6 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 	return n.dao.IncrementSentCount(ctx, notification.ID)
 }
 
-
 // sendNotification 根据不同的通道发送通知
 func (n *workorderNotificationService) sendNotification(channel, recipient, content string) error {
 	switch channel {

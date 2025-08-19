@@ -73,7 +73,7 @@ type Namespace struct {
 
 // CreateNamespaceRequest 创建新的命名空间请求结构体
 type CreateNamespaceRequest struct {
-	ClusterId   int    `json:"cluster_id" binding:"required"`
+	ClusterId   int      `json:"cluster_id" binding:"required"`
 	Name        string   `json:"namespace" binding:"required"`
 	Labels      []string `json:"labels,omitempty"`      // 命名空间标签
 	Annotations []string `json:"annotations,omitempty"` // 命名空间注解
@@ -81,7 +81,7 @@ type CreateNamespaceRequest struct {
 
 // UpdateNamespaceRequest 更新命名空间请求结构体
 type UpdateNamespaceRequest struct {
-	ClusterId   int    `json:"cluster_id" binding:"required"`
+	ClusterId   int      `json:"cluster_id" binding:"required"`
 	Name        string   `json:"namespace" binding:"required"`
 	Labels      []string `json:"labels,omitempty"`      // 命名空间标签
 	Annotations []string `json:"annotations,omitempty"` // 命名空间注解

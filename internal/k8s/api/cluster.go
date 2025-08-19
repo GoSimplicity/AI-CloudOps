@@ -185,7 +185,7 @@ func (k *K8sClusterHandler) BatchDeleteClusters(ctx *gin.Context) {
 	var req model.BatchDeleteReq
 
 	if len(req.IDs) == 0 {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		utils.BadRequestError(ctx, "参数错误")
 		return
 	}
 

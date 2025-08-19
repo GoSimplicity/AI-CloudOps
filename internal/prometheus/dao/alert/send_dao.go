@@ -348,6 +348,7 @@ func (a *alertManagerSendDAO) CheckMonitorSendGroupNameExists(ctx context.Contex
 
 	return count > 0, nil
 }
+
 // UpdateMonitorSendGroup 更新 MonitorSendGroup
 func (a *alertManagerSendDAO) UpdateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error {
 	if monitorSendGroup == nil || monitorSendGroup.ID <= 0 {

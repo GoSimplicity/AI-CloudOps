@@ -65,7 +65,7 @@ func (s *categoryGroupService) CreateCategory(ctx context.Context, req *model.Cr
 		s.logger.Error("创建分类失败：获取分类信息失败", zap.Error(err), zap.String("name", req.Name))
 		return fmt.Errorf("获取分类信息失败 (name: %s): %w", req.Name, err)
 	}
-	
+
 	if existingCategory != nil {
 		s.logger.Warn("创建分类失败：分类已存在", zap.String("name", req.Name))
 		return fmt.Errorf("分类已存在: %s", req.Name)

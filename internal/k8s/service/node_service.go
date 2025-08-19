@@ -86,6 +86,7 @@ func (n *nodeService) ListNodeByClusterName(ctx context.Context, id int) ([]*mod
 
 	// 使用 Worker Pool 模式优化并发性能
 	for i := range nodes.Items {
+		index := i
 		node := nodes.Items[i] // 避免闭包变量问题
 		g.Go(func() error {
 			semaphore <- struct{}{}
@@ -98,7 +99,7 @@ func (n *nodeService) ListNodeByClusterName(ctx context.Context, id int) ([]*mod
 				n.l.Error("构建 K8sNode 失败", zap.Error(err), zap.String("node", node.Name))
 				return nil
 			}
-			k8sNodes[i] = k8sNode
+			k8sNodes[index] = k8sNode
 			return nil
 		})
 	}
@@ -158,7 +159,12 @@ func (n *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.Label
 	// 根据操作类型进行标签处理
 	switch req.ModType {
 	case "add":
-		node.Labels = labelsMap
+		if node.Labels == nil {
+			node.Labels = map[string]string{}
+		}
+		for k, v := range labelsMap {
+			node.Labels[k] = v
+		}
 	case "del":
 		// 删除标签
 		for key := range labelsMap {

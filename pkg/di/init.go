@@ -54,7 +54,6 @@ func InitTables(db *gorm.DB) error {
 		// k8s
 		&model.K8sCluster{},
 		&model.K8sPod{},
-		&model.K8sInstance{},
 		&model.K8sYamlTask{},
 		&model.K8sYamlTemplate{},
 

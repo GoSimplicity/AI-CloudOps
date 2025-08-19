@@ -36,6 +36,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -114,6 +115,8 @@ func (cm *clusterManager) CreateCluster(ctx context.Context, cluster *model.K8sC
 			}
 
 			cm.dao.UpdateClusterStatus(ctx, cluster.ID, "SUCCESS")
+			// 回写集群元信息（版本、APIServer地址），忽略错误
+			_ = cm.client.UpdateClusterMetaFromLive(ctx, cluster.ID)
 			return nil
 		}
 	}
@@ -138,6 +141,9 @@ func (cm *clusterManager) UpdateCluster(ctx context.Context, cluster *model.K8sC
 	if err := cm.client.InitClient(ctx, cluster.ID, restConfig); err != nil {
 		return fmt.Errorf("初始化客户端失败: %w", err)
 	}
+
+	// 回写集群元信息（Version、APIServer）
+	_ = cm.client.UpdateClusterMetaFromLive(ctx, cluster.ID)
 
 	return nil
 }
@@ -294,10 +300,28 @@ func (cm *clusterManager) validateResourceQuantities(cluster *model.K8sCluster) 
 		cluster.MemoryLimit = "1Gi"
 	}
 
-	if cluster.CpuRequest > cluster.CpuLimit {
+	// 解析资源字符串，避免直接按字符串比较
+	cpuReq, err := resource.ParseQuantity(cluster.CpuRequest)
+	if err != nil {
+		return fmt.Errorf("CPU 请求量格式错误: %w", err)
+	}
+	cpuLim, err := resource.ParseQuantity(cluster.CpuLimit)
+	if err != nil {
+		return fmt.Errorf("CPU 限制量格式错误: %w", err)
+	}
+	if cpuReq.Cmp(cpuLim) > 0 {
 		cluster.CpuRequest = cluster.CpuLimit
 	}
-	if cluster.MemoryRequest > cluster.MemoryLimit {
+
+	memReq, err := resource.ParseQuantity(cluster.MemoryRequest)
+	if err != nil {
+		return fmt.Errorf("内存请求量格式错误: %w", err)
+	}
+	memLim, err := resource.ParseQuantity(cluster.MemoryLimit)
+	if err != nil {
+		return fmt.Errorf("内存限制量格式错误: %w", err)
+	}
+	if memReq.Cmp(memLim) > 0 {
 		cluster.MemoryRequest = cluster.MemoryLimit
 	}
 
