@@ -32,7 +32,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/config"
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -80,31 +80,68 @@ func EnsureNamespace(ctx context.Context, kubeClient *kubernetes.Clientset, name
 
 // ApplyLimitRange 应用 LimitRange 到指定命名空间
 func ApplyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, cluster *model.K8sCluster) error {
-	k8sConfig := config.GetK8sConfig()
-	cpuLimit := ensureValidResourceValue(cluster.CpuLimit, k8sConfig.ResourceDefaults.CPU)
-	memoryLimit := ensureValidResourceValue(cluster.MemoryLimit, k8sConfig.ResourceDefaults.Memory)
-	cpuRequest := ensureValidResourceValue(cluster.CpuRequest, k8sConfig.ResourceDefaults.CPURequest)
-	memoryRequest := ensureValidResourceValue(cluster.MemoryRequest, k8sConfig.ResourceDefaults.MemoryRequest)
+	// 检查是否有任何资源限制参数，如果没有则跳过创建
+	if cluster.CpuLimit == "" && cluster.MemoryLimit == "" && cluster.CpuRequest == "" && cluster.MemoryRequest == "" {
+		log.Printf("ApplyLimitRange: 集群未设置资源限制参数，跳过创建 LimitRange")
+		return nil
+	}
+
+	// 构建 LimitRange 项
+	limitRangeItem := corev1.LimitRangeItem{
+		Type: corev1.LimitTypeContainer,
+	}
+
+	// 只添加用户明确设置的默认值
+	if cluster.CpuLimit != "" || cluster.MemoryLimit != "" {
+		limitRangeItem.Default = corev1.ResourceList{}
+		if cluster.CpuLimit != "" {
+			if quantity, err := resource.ParseQuantity(cluster.CpuLimit); err == nil {
+				limitRangeItem.Default[corev1.ResourceCPU] = quantity
+			} else {
+				log.Printf("ApplyLimitRange: CPU 限制量格式错误: %v", err)
+			}
+		}
+		if cluster.MemoryLimit != "" {
+			if quantity, err := resource.ParseQuantity(cluster.MemoryLimit); err == nil {
+				limitRangeItem.Default[corev1.ResourceMemory] = quantity
+			} else {
+				log.Printf("ApplyLimitRange: 内存限制量格式错误: %v", err)
+			}
+		}
+	}
+
+	// 只添加用户明确设置的默认请求值
+	if cluster.CpuRequest != "" || cluster.MemoryRequest != "" {
+		limitRangeItem.DefaultRequest = corev1.ResourceList{}
+		if cluster.CpuRequest != "" {
+			if quantity, err := resource.ParseQuantity(cluster.CpuRequest); err == nil {
+				limitRangeItem.DefaultRequest[corev1.ResourceCPU] = quantity
+			} else {
+				log.Printf("ApplyLimitRange: CPU 请求量格式错误: %v", err)
+			}
+		}
+		if cluster.MemoryRequest != "" {
+			if quantity, err := resource.ParseQuantity(cluster.MemoryRequest); err == nil {
+				limitRangeItem.DefaultRequest[corev1.ResourceMemory] = quantity
+			} else {
+				log.Printf("ApplyLimitRange: 内存请求量格式错误: %v", err)
+			}
+		}
+	}
+
+	// 如果没有设置任何有效的默认值，跳过创建
+	if len(limitRangeItem.Default) == 0 && len(limitRangeItem.DefaultRequest) == 0 {
+		log.Printf("ApplyLimitRange: 没有有效的资源限制参数，跳过创建 LimitRange")
+		return nil
+	}
 
 	limitRange := &corev1.LimitRange{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      k8sConfig.ResourceDefaults.LimitRangeName,
+			Name:      constants.DefaultLimitRangeName,
 			Namespace: namespace,
 		},
 		Spec: corev1.LimitRangeSpec{
-			Limits: []corev1.LimitRangeItem{
-				{
-					Type: corev1.LimitTypeContainer,
-					Default: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse(cpuLimit),
-						corev1.ResourceMemory: resource.MustParse(memoryLimit),
-					},
-					DefaultRequest: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse(cpuRequest),
-						corev1.ResourceMemory: resource.MustParse(memoryRequest),
-					},
-				},
-			},
+			Limits: []corev1.LimitRangeItem{limitRangeItem},
 		},
 	}
 
@@ -115,8 +152,7 @@ func ApplyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, name
 			return nil
 		}
 		log.Printf("ApplyLimitRange: 创建 LimitRange 失败 %s/%s: %v", namespace, limitRange.Name, err)
-		return fmt.Errorf("创建 LimitRange 失败 (namespace: %s, cpuLimit: %s, memoryLimit: %s): %w",
-			namespace, cpuLimit, memoryLimit, err)
+		return fmt.Errorf("创建 LimitRange 失败 (namespace: %s): %w", namespace, err)
 	}
 
 	log.Printf("ApplyLimitRange: LimitRange 创建成功 %s/%s", namespace, limitRange.Name)
@@ -125,24 +161,60 @@ func ApplyLimitRange(ctx context.Context, kubeClient *kubernetes.Clientset, name
 
 // ApplyResourceQuota 应用 ResourceQuota 到指定命名空间
 func ApplyResourceQuota(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, cluster *model.K8sCluster) error {
-	k8sConfig := config.GetK8sConfig()
-	cpuLimit := ensureValidResourceValue(cluster.CpuLimit, k8sConfig.ResourceDefaults.CPU)
-	memoryLimit := ensureValidResourceValue(cluster.MemoryLimit, k8sConfig.ResourceDefaults.Memory)
-	cpuRequest := ensureValidResourceValue(cluster.CpuRequest, k8sConfig.ResourceDefaults.CPURequest)
-	memoryRequest := ensureValidResourceValue(cluster.MemoryRequest, k8sConfig.ResourceDefaults.MemoryRequest)
+	// 检查是否有任何资源限制参数，如果没有则跳过创建
+	if cluster.CpuLimit == "" && cluster.MemoryLimit == "" && cluster.CpuRequest == "" && cluster.MemoryRequest == "" {
+		log.Printf("ApplyResourceQuota: 集群未设置资源限制参数，跳过创建 ResourceQuota")
+		return nil
+	}
+
+	// 构建资源限制，只添加用户明确设置的资源
+	hardLimits := corev1.ResourceList{}
+
+	if cluster.CpuRequest != "" {
+		if quantity, err := resource.ParseQuantity(cluster.CpuRequest); err == nil {
+			hardLimits[corev1.ResourceRequestsCPU] = quantity
+		} else {
+			log.Printf("ApplyResourceQuota: CPU 请求量格式错误: %v", err)
+		}
+	}
+
+	if cluster.MemoryRequest != "" {
+		if quantity, err := resource.ParseQuantity(cluster.MemoryRequest); err == nil {
+			hardLimits[corev1.ResourceRequestsMemory] = quantity
+		} else {
+			log.Printf("ApplyResourceQuota: 内存请求量格式错误: %v", err)
+		}
+	}
+
+	if cluster.CpuLimit != "" {
+		if quantity, err := resource.ParseQuantity(cluster.CpuLimit); err == nil {
+			hardLimits[corev1.ResourceLimitsCPU] = quantity
+		} else {
+			log.Printf("ApplyResourceQuota: CPU 限制量格式错误: %v", err)
+		}
+	}
+
+	if cluster.MemoryLimit != "" {
+		if quantity, err := resource.ParseQuantity(cluster.MemoryLimit); err == nil {
+			hardLimits[corev1.ResourceLimitsMemory] = quantity
+		} else {
+			log.Printf("ApplyResourceQuota: 内存限制量格式错误: %v", err)
+		}
+	}
+
+	// 如果没有有效的资源限制，跳过创建
+	if len(hardLimits) == 0 {
+		log.Printf("ApplyResourceQuota: 没有有效的资源限制参数，跳过创建 ResourceQuota")
+		return nil
+	}
 
 	resourceQuota := &corev1.ResourceQuota{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      k8sConfig.ResourceDefaults.QuotaName,
+			Name:      constants.DefaultQuotaName,
 			Namespace: namespace,
 		},
 		Spec: corev1.ResourceQuotaSpec{
-			Hard: corev1.ResourceList{
-				corev1.ResourceRequestsCPU:    resource.MustParse(cpuRequest),
-				corev1.ResourceRequestsMemory: resource.MustParse(memoryRequest),
-				corev1.ResourceLimitsCPU:      resource.MustParse(cpuLimit),
-				corev1.ResourceLimitsMemory:   resource.MustParse(memoryLimit),
-			},
+			Hard: hardLimits,
 		},
 	}
 
@@ -153,27 +225,11 @@ func ApplyResourceQuota(ctx context.Context, kubeClient *kubernetes.Clientset, n
 			return nil
 		}
 		log.Printf("ApplyResourceQuota: 创建 ResourceQuota 失败 %s/%s: %v", namespace, resourceQuota.Name, err)
-		return fmt.Errorf("创建 ResourceQuota 失败 (namespace: %s, cpuRequest: %s, memoryRequest: %s, cpuLimit: %s, memoryLimit: %s): %w",
-			namespace, cpuRequest, memoryRequest, cpuLimit, memoryLimit, err)
+		return fmt.Errorf("创建 ResourceQuota 失败 (namespace: %s): %w", namespace, err)
 	}
 
 	log.Printf("ApplyResourceQuota: ResourceQuota 创建成功 %s/%s", namespace, resourceQuota.Name)
 	return nil
-}
-
-// ensureValidResourceValue 确保资源值有效，如果无效则返回默认值
-func ensureValidResourceValue(value, defaultValue string) string {
-	if value == "" {
-		log.Printf("资源值为空，使用默认值: %s", defaultValue)
-		return defaultValue
-	}
-
-	if _, err := resource.ParseQuantity(value); err != nil {
-		log.Printf("资源值 '%s' 无效，使用默认值: %s, 错误: %v", value, defaultValue, err)
-		return defaultValue
-	}
-
-	return value
 }
 
 // GetTaintsMapFromTaints 将 taints 转换为键为 "Key:Value:Effect" 的 map
@@ -311,9 +367,8 @@ func GetNodeResource(ctx context.Context, metricsCli *metricsClient.Clientset, n
 	memoryCapacity := node.Status.Capacity[corev1.ResourceMemory]
 	maxPods := node.Status.Allocatable[corev1.ResourcePods]
 
-	k8sConfig := config.GetK8sConfig()
-	cpuUsage, _ := resource.ParseQuantity(k8sConfig.ResourceDefaults.MockCPUUsage)
-	memoryUsage, _ := resource.ParseQuantity(k8sConfig.ResourceDefaults.MockMemoryUsage)
+	cpuUsage, _ := resource.ParseQuantity(constants.MockCPUUsage)
+	memoryUsage, _ := resource.ParseQuantity(constants.MockMemoryUsage)
 
 	return []string{
 		fmt.Sprintf("CPU Request: %dm / %dm", totalCPURequest, cpuCapacity.MilliValue()),
