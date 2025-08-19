@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
@@ -764,9 +765,9 @@ func (cm *cronManager) checkClusterStatus(ctx context.Context, cluster *model.K8
 		cm.logger.Warn("集群连接检查失败",
 			zap.Error(err),
 			zap.String("cluster", cluster.Name))
-		cluster.Status = "ERROR"
+		cluster.Status = constants.StatusError
 	} else {
-		cluster.Status = "RUNNING"
+		cluster.Status = constants.StatusRunning
 	}
 
 	if err := cm.k8sDao.UpdateClusterStatus(ctx, cluster.ID, cluster.Status); err != nil {

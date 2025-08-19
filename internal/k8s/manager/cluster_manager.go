@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -82,7 +83,7 @@ func (cm *clusterManager) CreateCluster(ctx context.Context, cluster *model.K8sC
 	)
 
 	if err := cm.validateResourceQuantities(cluster); err != nil {
-		cm.dao.UpdateClusterStatus(ctx, cluster.ID, "ERROR")
+		cm.dao.UpdateClusterStatus(ctx, cluster.ID, constants.StatusError)
 		cm.logger.Error("资源配额格式验证失败", zap.Error(err))
 		return err
 	}
@@ -90,7 +91,7 @@ func (cm *clusterManager) CreateCluster(ctx context.Context, cluster *model.K8sC
 	for retryCount < maxRetries {
 		select {
 		case <-ctx.Done():
-			cm.dao.UpdateClusterStatus(ctx, cluster.ID, "ERROR")
+			cm.dao.UpdateClusterStatus(ctx, cluster.ID, constants.StatusError)
 			return ctx.Err()
 		default:
 			if err := cm.processClusterConfig(ctx, cluster, retryCount, initTimeout, maxConcurrent); err != nil {
@@ -107,14 +108,14 @@ func (cm *clusterManager) CreateCluster(ctx context.Context, cluster *model.K8sC
 					continue
 				}
 
-				cm.dao.UpdateClusterStatus(ctx, cluster.ID, "ERROR")
+				cm.dao.UpdateClusterStatus(ctx, cluster.ID, constants.StatusError)
 				cm.logger.Error("达到最大重试次数，任务失败",
 					zap.Int("最大重试次数", maxRetries),
 					zap.Error(lastError))
 				return lastError
 			}
 
-			cm.dao.UpdateClusterStatus(ctx, cluster.ID, "SUCCESS")
+			cm.dao.UpdateClusterStatus(ctx, cluster.ID, constants.StatusRunning)
 			// 回写集群元信息（版本、APIServer地址），忽略错误
 			_ = cm.client.UpdateClusterMetaFromLive(ctx, cluster.ID)
 			return nil
@@ -194,7 +195,7 @@ func (cm *clusterManager) RefreshCluster(ctx context.Context, clusterID int) err
 					zap.Int("clusterID", clusterID),
 					zap.Error(err))
 
-				if updateErr := cm.dao.UpdateClusterStatus(ctx, clusterID, "ERROR"); updateErr != nil {
+				if updateErr := cm.dao.UpdateClusterStatus(ctx, clusterID, constants.StatusError); updateErr != nil {
 					cm.logger.Error("更新集群状态失败",
 						zap.Int("clusterID", clusterID),
 						zap.Error(updateErr))
@@ -214,7 +215,7 @@ func (cm *clusterManager) RefreshCluster(ctx context.Context, clusterID int) err
 				return lastError
 			}
 
-			if err := cm.dao.UpdateClusterStatus(ctx, clusterID, "SUCCESS"); err != nil {
+			if err := cm.dao.UpdateClusterStatus(ctx, clusterID, constants.StatusRunning); err != nil {
 				cm.logger.Error("更新集群状态失败",
 					zap.Int("clusterID", clusterID),
 					zap.Error(err))
@@ -288,16 +289,16 @@ func (cm *clusterManager) CheckClusterStatus(ctx context.Context, clusterID int)
 
 func (cm *clusterManager) validateResourceQuantities(cluster *model.K8sCluster) error {
 	if cluster.CpuRequest == "" {
-		cluster.CpuRequest = "500m"
+		cluster.CpuRequest = constants.DefaultCPURequest
 	}
 	if cluster.MemoryRequest == "" {
-		cluster.MemoryRequest = "512Mi"
+		cluster.MemoryRequest = constants.DefaultMemoryRequest
 	}
 	if cluster.CpuLimit == "" {
-		cluster.CpuLimit = "1000m"
+		cluster.CpuLimit = constants.DefaultCPULimit
 	}
 	if cluster.MemoryLimit == "" {
-		cluster.MemoryLimit = "1Gi"
+		cluster.MemoryLimit = constants.DefaultMemoryLimit
 	}
 
 	// 解析资源字符串，避免直接按字符串比较

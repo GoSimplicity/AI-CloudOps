@@ -31,6 +31,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
@@ -100,7 +101,7 @@ func (c *clusterService) CreateCluster(ctx context.Context, cluster *model.K8sCl
 		return fmt.Errorf("集群名称 %s 已存在", cluster.Name)
 	}
 
-	cluster.Status = "PENDING"
+	cluster.Status = constants.StatusPending
 
 	// 创建集群记录
 	if err := c.dao.CreateCluster(ctx, cluster); err != nil {

@@ -370,6 +370,18 @@ func GetNodeResource(ctx context.Context, metricsCli *metricsClient.Clientset, n
 	cpuUsage, _ := resource.ParseQuantity(constants.MockCPUUsage)
 	memoryUsage, _ := resource.ParseQuantity(constants.MockMemoryUsage)
 
+	// 优先尝试 metrics.k8s.io，失败则使用上述回退
+	if metricsCli != nil {
+		if nm, err := metricsCli.MetricsV1beta1().NodeMetricses().Get(ctx, nodeName, metav1.GetOptions{}); err == nil && nm != nil {
+			if q, ok := nm.Usage[corev1.ResourceCPU]; ok && q.MilliValue() > 0 {
+				cpuUsage = q
+			}
+			if q, ok := nm.Usage[corev1.ResourceMemory]; ok && q.Value() > 0 {
+				memoryUsage = q
+			}
+		}
+	}
+
 	return []string{
 		fmt.Sprintf("CPU Request: %dm / %dm", totalCPURequest, cpuCapacity.MilliValue()),
 		fmt.Sprintf("CPU Limit: %dm / %dm", totalCPULimit, cpuCapacity.MilliValue()),
@@ -674,8 +686,8 @@ func GetKubeAndMetricsClient(id int, logger *zap.Logger, client client.K8sClient
 
 	mc, err := client.GetMetricsClient(id)
 	if err != nil {
-		logger.Error("获取 Metrics 客户端失败", zap.Error(err))
-		return nil, nil, fmt.Errorf("获取 Metrics 客户端失败: %w", err)
+		logger.Warn("获取 Metrics 客户端失败，降级为无指标模式", zap.Error(err))
+		return kc, nil, nil
 	}
 	return kc, mc, nil
 }

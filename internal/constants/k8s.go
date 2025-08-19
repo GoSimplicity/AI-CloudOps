@@ -35,6 +35,13 @@ var (
 	ErrorTaintsKeyDuplicate = errors.New("taints key exist")
 )
 
+// 集群状态常量，统一使用，避免魔法字符串
+const (
+	StatusPending = "PENDING"
+	StatusRunning = "RUNNING"
+	StatusError   = "ERROR"
+)
+
 // K8s 资源默认配置常量
 const (
 	// 默认资源限制
