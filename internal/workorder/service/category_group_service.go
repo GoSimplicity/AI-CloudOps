@@ -34,7 +34,7 @@ import (
 	userdao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	"go.uber.org/zap"
-	""gorm.io/gorm""
+	"gorm.io/gorm"
 )
 
 type CategoryGroupService interface {
