@@ -33,7 +33,7 @@ type User struct {
 	RealName     string `json:"real_name" gorm:"type:varchar(100);comment:用户真实姓名"`                                    // 用户真实姓名
 	Domain       string `json:"domain" gorm:"type:varchar(100);default:'default';comment:用户域"`                        // 用户域，默认default
 	Desc         string `json:"desc" gorm:"type:text;comment:用户描述"`                                                   // 用户描述，支持较长文本
-	Avatar       string `json:"avatar" gorm:"type:varchar(255);comment:用户头像"`                                         // 用户头像
+	Avatar       string `json:"avatar" gorm:"type:longblob;comment:用户头像"`                                         // 用户头像
 	Mobile       string `json:"mobile" gorm:"type:varchar(20);comment:手机号"`                                           // 手机号，添加唯一索引
 	Email        string `json:"email" gorm:"type:varchar(100);comment:邮箱"`                                            // 邮箱，添加唯一索引
 	FeiShuUserId string `json:"fei_shu_user_id" gorm:"type:varchar(50);comment:飞书用户ID"`                               // 飞书用户ID，添加唯一索引
