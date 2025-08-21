@@ -28,11 +28,13 @@ package service
 import (
 	"context"
 	"fmt"
-
+    "errors"
+	
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userdao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type CategoryGroupService interface {
@@ -62,8 +64,14 @@ func (s *categoryGroupService) CreateCategory(ctx context.Context, req *model.Cr
 	// 检查分类是否存在
 	existingCategory, err := s.categoryDAO.GetCategoryByName(ctx, req.Name)
 	if err != nil {
-		s.logger.Error("创建分类失败：获取分类信息失败", zap.Error(err), zap.String("name", req.Name))
-		return fmt.Errorf("获取分类信息失败 (name: %s): %w", req.Name, err)
+		// 仅处理非「记录未找到」的错误
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logger.Error("查询分类数据库失败",
+				zap.Error(err),
+				zap.String("category_name", req.Name),
+				zap.Int("operator_id", req.OperatorID))
+			return fmt.Errorf("数据库查询失败: %w", err)
+		}
 	}
 
 	if existingCategory != nil {
