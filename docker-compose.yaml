@@ -1,78 +1,99 @@
 services:
   cloudops-aiops:
     container_name: cloudops-aiops
+    image: crpi-2pkkgf63kx4jzw5d.cn-hangzhou.personal.cr.aliyuncs.com/ai_cloudops/cloudops-aiops:v0.0.2
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./logs:/app/logs
+      - ./deploy/kubernetes/config:/app/deploy/kubernetes/config
+    env_file:
+      - .env
+    networks:
+      - cloudops_net
+    restart: always
     depends_on:
       prometheus:
         condition: service_started
       redis:
-        condition: service_healthy
+        condition: service_started
+
+  cloudops-mcp:
+    container_name: cloudops-mcp
+    image: crpi-2pkkgf63kx4jzw5d.cn-hangzhou.personal.cr.aliyuncs.com/ai_cloudops/cloudops-mcp:v0.0.2
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
     env_file:
       - .env
-    healthcheck:
-      interval: 30s
-      retries: 3
-      start_period: 30s
-      test:
-        - CMD
-        - curl
-        - -f
-        - http://localhost:8080/api/v1/health
-      timeout: 10s
-    image: crpi-2pkkgf63kx4jzw5d.cn-hangzhou.personal.cr.aliyuncs.com/ai_cloudops/cloudops-aiops:v0.0.1
     networks:
       - cloudops_net
-    ports:
-      - 8080:8080
     restart: always
-    volumes:
-      - ./logs:/app/logs
-      - ./deploy/kubernetes/config:/app/deploy/kubernetes/config
+    command:
+      - python
+      - -m
+      - app.mcp.main
+      - --host
+      - 0.0.0.0
+      - --port
+      - "9000"
+    depends_on:
+      cloudops-backend:
+        condition: service_started
+      cloudops-aiops:
+        condition: service_started
 
   cloudops-backend:
     container_name: cloudops-backend
+    image: crpi-2pkkgf63kx4jzw5d.cn-hangzhou.personal.cr.aliyuncs.com/ai_cloudops/cloudops-backend:v0.0.2
+    ports:
+      - "8889:8889"
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+    env_file:
+      - .env
+    environment:
+      - GOPROXY=https://goproxy.cn,direct
+      - TZ=Asia/Shanghai
+    networks:
+      - cloudops_net
+    restart: always
     depends_on:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      GOPROXY: https://goproxy.cn,direct
-      TZ: Asia/Shanghai
-    healthcheck:
-      interval: 10s
-      retries: 3
-      start_period: 10s
-      test:
-        - CMD-SHELL
-        - curl -f http://localhost:8889/ && ping -c 5 mysql
-      timeout: 5s
-    image: crpi-2pkkgf63kx4jzw5d.cn-hangzhou.personal.cr.aliyuncs.com/ai_cloudops/cloudops-backend:v0.0.1
-    networks:
-      - cloudops_net
-    ports:
-      - 8889:8889
-    restart: always
-    volumes:
-      - ./logs:/app/logs
-      - ./config:/app/config:ro
+        condition: service_started
 
   cloudops-web:
     container_name: cloudops-web
-    depends_on:
-      cloudops-backend:
-        condition: service_healthy
-    environment:
-      TZ: Asia/Shanghai
+    image: crpi-2pkkgf63kx4jzw5d.cn-hangzhou.personal.cr.aliyuncs.com/ai_cloudops/cloudops-web:v0.0.2
     expose:
-      - '80'
-    image: crpi-2pkkgf63kx4jzw5d.cn-hangzhou.personal.cr.aliyuncs.com/ai_cloudops/cloudops-web:v0.0.1
+      - "80"
+    environment:
+      - TZ=Asia/Shanghai
     networks:
       - cloudops_net
     restart: always
+    depends_on:
+      cloudops-backend:
+        condition: service_started
 
   mysql:
+    container_name: mysql
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./data/mysql/data:/var/lib/mysql:rw
+      - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=cloudops
+      - MYSQL_CHARSET=utf8mb4
+      - MYSQL_COLLATION=utf8mb4_general_ci
+      - TZ=Asia/Shanghai
     command:
       - --default-authentication-plugin=mysql_native_password
       - --character-set-server=utf8mb4
@@ -80,105 +101,71 @@ services:
       - --explicit_defaults_for_timestamp=true
       - --lower_case_table_names=1
       - --max_connections=1000
-    container_name: mysql
-    environment:
-      MYSQL_CHARSET: utf8mb4
-      MYSQL_COLLATION: utf8mb4_general_ci
-      MYSQL_DATABASE: CloudOps
-      MYSQL_ROOT_PASSWORD: root
-      TZ: Asia/Shanghai
-    healthcheck:
-      interval: 5s
-      retries: 10
-      start_period: 30s
-      test:
-        - CMD
-        - mysqladmin
-        - ping
-        - -h
-        - localhost
-      timeout: 5s
-    image: mysql:8.0
     networks:
       - cloudops_net
-    ports:
-      - 3306:3306
     restart: always
-    volumes:
-      - ./data/mysql/data:/var/lib/mysql:rw
-      - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -proot || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   nginx:
     container_name: nginx
-    depends_on:
-      - cloudops-web
-      - cloudops-backend
-      - cloudops-aiops
     image: nginx:1.25
-    networks:
-      - cloudops_net
     ports:
-      - 80:80
-    restart: always
+      - "80:80"
     volumes:
       - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - cloudops_net
+    restart: always
+    depends_on:
+      cloudops-web:
+        condition: service_started
+      cloudops-backend:
+        condition: service_started
+      cloudops-aiops:
+        condition: service_started
 
   prometheus:
+    container_name: prometheus
+    image: prom/prometheus:v2.28.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./data/prometheus/data:/prometheus
+    environment:
+      - TZ=Asia/Shanghai
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
       - --storage.tsdb.retention.time=15d
-    container_name: prometheus
-    environment:
-      TZ: Asia/Shanghai
-    healthcheck:
-      interval: 30s
-      retries: 3
-      start_period: 20s
-      test:
-        - CMD
-        - wget
-        - --spider
-        - -q
-        - http://localhost:9090/-/healthy
-      timeout: 10s
-    image: prom/prometheus:v2.28.1
     networks:
       - cloudops_net
-    ports:
-      - 9090:9090
     restart: always
     user: root
-    volumes:
-      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./data/prometheus/data:/prometheus
 
   redis:
+    container_name: redis
+    image: redis:6.2.5
+    ports:
+      - "36379:6379"
+    volumes:
+      - ./data/redis/data:/data:rw
+    environment:
+      - TZ=Asia/Shanghai
     command:
       - redis-server
       - --requirepass
       - v6SxhWHyZC7S
-    container_name: redis
-    environment:
-      TZ: Asia/Shanghai
-    healthcheck:
-      interval: 5s
-      retries: 5
-      test:
-        - CMD
-        - redis-cli
-        - ping
-      timeout: 3s
-    image: redis:6.2.5
     networks:
       - cloudops_net
-    ports:
-      - 36379:6379
     restart: always
-    volumes:
-      - ./data/redis/data:/data:rw
-      
+
 networks:
   cloudops_net:
     driver: bridge
