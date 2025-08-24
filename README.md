@@ -1,4 +1,4 @@
-# AI+CloudOps: AI 驱动的云原生运维平台
+![image](https://github.com/user-attachments/assets/b9b5fbdb-3c78-4dfc-bb84-a8833753a600)# AI+CloudOps: AI 驱动的云原生运维平台
 
 <p align="center">
     <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8.svg?style=flat-square&logo=go" alt="Go Version"></a>
@@ -235,7 +235,8 @@ AI-CloudOps-aiops/
 
 - **Email**: [bamboocloudops@gmail.com](mailto:bamboocloudops@gmail.com)
 - **微信 (WeChat)**: `GoSimplicity` (添加时请备注 "AI-CloudOps"，我会邀请您加入交流群)
-- ![image](https://github.com/user-attachments/assets/ed618095-586a-451a-8a1e-819c7a80ff04)
+- ![image](https://github.com/user-attachments/assets/75c84edc-7a12-4ce0-bbce-8ccbbc84a83e)
+
 
 
 ## 🌟 Star History
