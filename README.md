@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/b9b5fbdb-3c78-4dfc-bb84-a8833753a600)# AI+CloudOps: AI 驱动的云原生运维平台
+# AI+CloudOps: AI 驱动的云原生运维平台
 
 <p align="center">
     <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8.svg?style=flat-square&logo=go" alt="Go Version"></a>
