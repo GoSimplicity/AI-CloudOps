@@ -74,6 +74,7 @@ var HandlerSet = wire.NewSet(
 	authHandler.NewRoleHandler,
 	authHandler.NewApiHandler,
 	authHandler.NewAuditHandler,
+	authHandler.NewSystemHandler,
 	userHandler.NewUserHandler,
 	notAuthHandler.NewNotAuthHandler,
 	k8sHandler.NewK8sPodHandler,
@@ -121,6 +122,7 @@ var ServiceSet = wire.NewSet(
 	authService.NewApiService,
 	authService.NewRoleService,
 	authService.NewAuditService,
+	authService.NewSystemService,
 	alertService.NewAlertManagerEventService,
 	alertService.NewAlertManagerOnDutyService,
 	alertService.NewAlertManagerPoolService,
@@ -158,6 +160,7 @@ var DaoSet = wire.NewSet(
 	authDao.NewRoleDAO,
 	authDao.NewApiDAO,
 	authDao.NewAuditDAO,
+
 	k8sDao.NewClusterDAO,
 	k8sDao.NewYamlTaskDAO,
 	k8sDao.NewYamlTemplateDAO,
