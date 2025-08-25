@@ -1,7 +1,7 @@
 services:
   cloudops-aiops:
     container_name: cloudops-aiops
-    image: crpi-2pkkgf63kx4jzw5d.cn-hangzhou.personal.cr.aliyuncs.com/ai_cloudops/cloudops-aiops:v0.0.2
+    image: crpi-2pkkgf63kx4jzw5d.cn-hangzhou.personal.cr.aliyuncs.com/ai_cloudops/cloudops-aiops:v0.0.3
     ports:
       - "8080:8080"
     volumes:
