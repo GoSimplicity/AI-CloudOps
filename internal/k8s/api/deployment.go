@@ -66,28 +66,29 @@ func (k *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 // @Tags 部署管理
 // @Accept json
 // @Produce json
-// @Param id path int true "集群ID"
-// @Param namespace query string true "命名空间"
+// @Param cluster_id path int true "集群ID"
+// @Param namespace query string false "命名空间，为空则获取所有命名空间"
+// @Param label_selector query string false "标签选择器"
+// @Param field_selector query string false "字段选择器"
+// @Param limit query int false "限制结果数量"
 // @Success 200 {object} utils.ApiResponse{data=[]object} "成功获取部署列表"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
-// @Router /api/k8s/deployments/{id} [get]
+// @Router /api/k8s/deployments/{cluster_id} [get]
 func (k *K8sDeploymentHandler) GetDeployListByNamespace(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
+	var req model.K8sGetResourceListRequest
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace := ctx.Query("namespace")
-	if namespace == "" {
-		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
-		return
-	}
-
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.deploymentService.GetDeploymentsByNamespace(ctx, id, namespace)
+		return k.deploymentService.GetDeploymentsByNamespace(ctx, req.ClusterID, req.Namespace)
 	})
 }
 
@@ -117,17 +118,17 @@ func (k *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 // @Tags 部署管理
 // @Accept json
 // @Produce json
-// @Param request body model.K8sDeploymentRequest true "批量删除请求"
+// @Param request body model.DeploymentBatchDeleteRequest true "批量删除请求"
 // @Success 200 {object} utils.ApiResponse "成功批量删除部署"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
 // @Router /api/k8s/deployments/batch_delete [delete]
 func (k *K8sDeploymentHandler) BatchDeleteDeployment(ctx *gin.Context) {
-	var req model.K8sDeploymentRequest
+	var req model.DeploymentBatchDeleteRequest
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.deploymentService.BatchDeleteDeployment(ctx, req.ClusterId, req.Namespace, req.DeploymentNames)
+		return nil, k.deploymentService.BatchDeleteDeployment(ctx, req.ClusterID, req.Namespace, req.DeploymentNames)
 	})
 }
 
@@ -137,14 +138,14 @@ func (k *K8sDeploymentHandler) BatchDeleteDeployment(ctx *gin.Context) {
 // @Tags 部署管理
 // @Accept json
 // @Produce json
-// @Param request body model.K8sDeploymentRequest true "批量重启请求"
+// @Param request body model.DeploymentBatchRestartRequest true "批量重启请求"
 // @Success 200 {object} utils.ApiResponse "成功批量重启部署"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
 // @Router /api/k8s/deployments/batch_restart [post]
 func (k *K8sDeploymentHandler) BatchRestartDeployments(ctx *gin.Context) {
-	var req model.K8sDeploymentRequest
+	var req model.DeploymentBatchRestartRequest
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.deploymentService.BatchRestartDeployments(ctx, &req)
@@ -157,35 +158,27 @@ func (k *K8sDeploymentHandler) BatchRestartDeployments(ctx *gin.Context) {
 // @Tags 部署管理
 // @Accept json
 // @Produce json
-// @Param id path int true "集群ID"
-// @Param deployment_name query string true "部署名称"
+// @Param cluster_id path int true "集群ID"
+// @Param resource_name path string true "部署名称"
 // @Param namespace query string true "命名空间"
 // @Success 200 {object} utils.ApiResponse{data=string} "成功获取YAML配置"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
-// @Router /api/k8s/deployments/{id}/yaml [get]
+// @Router /api/k8s/deployments/{cluster_id}/{resource_name}/yaml [get]
 func (k *K8sDeploymentHandler) GetDeployYaml(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
+	var req model.K8sGetResourceYamlRequest
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	deploymentName := ctx.Query("deployment_name")
-	if deploymentName == "" {
-		utils.BadRequestError(ctx, "缺少 'deployment_name' 参数")
-		return
-	}
-
-	namespace := ctx.Query("namespace")
-	if namespace == "" {
-		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
-		return
-	}
-
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.deploymentService.GetDeploymentYaml(ctx, id, namespace, deploymentName)
+		return k.deploymentService.GetDeploymentYaml(ctx, req.ClusterID, req.Namespace, req.ResourceName)
 	})
 }
 
@@ -195,35 +188,27 @@ func (k *K8sDeploymentHandler) GetDeployYaml(ctx *gin.Context) {
 // @Tags 部署管理
 // @Accept json
 // @Produce json
-// @Param id path int true "集群ID"
-// @Param deployment_name query string true "部署名称"
+// @Param cluster_id path int true "集群ID"
+// @Param resource_name path string true "部署名称"
 // @Param namespace query string true "命名空间"
 // @Success 200 {object} utils.ApiResponse "成功删除部署"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
-// @Router /api/k8s/deployments/delete/{id} [delete]
+// @Router /api/k8s/deployments/{cluster_id}/{resource_name} [delete]
 func (k *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
+	var req model.K8sDeleteResourceRequest
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	deploymentName := ctx.Query("deployment_name")
-	if deploymentName == "" {
-		utils.BadRequestError(ctx, "缺少 'deployment_name' 参数")
-		return
-	}
-
-	namespace := ctx.Query("namespace")
-	if namespace == "" {
-		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
-		return
-	}
-
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, k.deploymentService.DeleteDeployment(ctx, id, namespace, deploymentName)
+		return nil, k.deploymentService.DeleteDeployment(ctx, req.ClusterID, req.Namespace, req.ResourceName)
 	})
 }
 
@@ -233,34 +218,26 @@ func (k *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
 // @Tags 部署管理
 // @Accept json
 // @Produce json
-// @Param id path int true "集群ID"
-// @Param deployment_name query string true "部署名称"
+// @Param cluster_id path int true "集群ID"
+// @Param resource_name path string true "部署名称"
 // @Param namespace query string true "命名空间"
 // @Success 200 {object} utils.ApiResponse "成功重启部署"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
-// @Router /api/k8s/deployments/restart/{id} [post]
+// @Router /api/k8s/deployments/{cluster_id}/{resource_name}/restart [post]
 func (k *K8sDeploymentHandler) RestartDeployment(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
+	var req model.DeploymentRestartRequest
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	deploymentName := ctx.Query("deployment_name")
-	if deploymentName == "" {
-		utils.BadRequestError(ctx, "缺少 'deployment_name' 参数")
-		return
-	}
-
-	namespace := ctx.Query("namespace")
-	if namespace == "" {
-		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
-		return
-	}
-
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, k.deploymentService.RestartDeployment(ctx, id, namespace, deploymentName)
+		return nil, k.deploymentService.RestartDeployment(ctx, req.ClusterID, req.Namespace, req.DeploymentName)
 	})
 }

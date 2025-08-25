@@ -27,6 +27,7 @@ package api
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -63,28 +64,29 @@ func (k *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 // @Tags Pod管理
 // @Accept json
 // @Produce json
-// @Param id path int true "集群ID"
-// @Param namespace query string true "命名空间"
+// @Param cluster_id path int true "集群ID"
+// @Param namespace query string false "命名空间，为空则获取所有命名空间"
+// @Param label_selector query string false "标签选择器"
+// @Param field_selector query string false "字段选择器"
+// @Param limit query int false "限制结果数量"
 // @Success 200 {object} utils.ApiResponse{data=[]object} "成功获取Pod列表"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
-// @Router /api/k8s/pods/{id} [get]
+// @Router /api/k8s/pods/{cluster_id} [get]
 func (k *K8sPodHandler) GetPodListByNamespace(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
+	var req model.K8sGetResourceListRequest
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace := ctx.Query("namespace")
-	if namespace == "" {
-		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
-		return
-	}
-
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.podService.GetPodsByNamespace(ctx, id, namespace)
+		return k.podService.GetPodsByNamespace(ctx, req.ClusterID, req.Namespace)
 	})
 }
 
@@ -103,26 +105,18 @@ func (k *K8sPodHandler) GetPodListByNamespace(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/pods/{id}/{podName}/containers [get]
 func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
+	var req model.PodContainersRequest
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	podName := ctx.Param("podName")
-	if podName == "" {
-		utils.BadRequestError(ctx, "缺少 'podName' 参数")
-		return
-	}
-
-	namespace := ctx.Query("namespace")
-	if namespace == "" {
-		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
-		return
-	}
-
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.podService.GetContainersByPod(ctx, id, namespace, podName)
+		return k.podService.GetContainersByPod(ctx, req.ClusterID, req.Namespace, req.PodName)
 	})
 }
 
@@ -140,20 +134,18 @@ func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/pods/{id}/node [get]
 func (k *K8sPodHandler) GetPodsListByNodeName(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
+	var req model.PodsByNodeRequest
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name := ctx.Query("name")
-	if name == "" {
-		utils.BadRequestError(ctx, "缺少 'name' 参数")
-		return
-	}
-
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.podService.GetPodsByNodeName(ctx, id, name)
+		return k.podService.GetPodsByNodeName(ctx, req.ClusterID, req.NodeName)
 	})
 }
 
@@ -173,32 +165,18 @@ func (k *K8sPodHandler) GetPodsListByNodeName(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/pods/{id}/{podName}/{container}/logs [get]
 func (k *K8sPodHandler) GetContainerLogs(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
+	var req model.PodLogRequest
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	podName := ctx.Param("podName")
-	if podName == "" {
-		utils.BadRequestError(ctx, "缺少 'podName' 参数")
-		return
-	}
-
-	containerName := ctx.Param("container")
-	if containerName == "" {
-		utils.BadRequestError(ctx, "缺少 'container' 参数")
-		return
-	}
-
-	namespace := ctx.Query("namespace")
-	if namespace == "" {
-		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
-		return
-	}
-
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.podService.GetContainerLogs(ctx, id, namespace, podName, containerName)
+		return k.podService.GetContainerLogs(ctx, req.ClusterID, req.Namespace, req.ResourceName, req.Container)
 	})
 }
 
@@ -217,26 +195,18 @@ func (k *K8sPodHandler) GetContainerLogs(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/pods/{id}/{podName}/yaml [get]
 func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
+	var req model.K8sGetResourceYamlRequest
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	podName := ctx.Param("podName")
-	if podName == "" {
-		utils.BadRequestError(ctx, "缺少 'podName' 参数")
-		return
-	}
-
-	namespace := ctx.Query("namespace")
-	if namespace == "" {
-		utils.BadRequestError(ctx, "缺少 'namespace' 参数")
-		return
-	}
-
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.podService.GetPodYaml(ctx, id, namespace, podName)
+		return k.podService.GetPodYaml(ctx, req.ClusterID, req.Namespace, req.ResourceName)
 	})
 }
 
@@ -255,16 +225,17 @@ func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/pods/delete/{id} [delete]
 func (k *K8sPodHandler) DeletePod(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
+	var req model.K8sDeleteResourceRequest
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace := ctx.Query("namespace")
-	podName := ctx.Query("podName")
-
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, k.podService.DeletePod(ctx, id, namespace, podName)
+		return nil, k.podService.DeletePod(ctx, req.ClusterID, req.Namespace, req.ResourceName)
 	})
 }

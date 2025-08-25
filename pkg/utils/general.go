@@ -167,3 +167,41 @@ func ValidateUniqueResource[T any](ctx context.Context, getResourceFunc func(con
 
 	return nil
 }
+
+// GetAge 计算资源创建时间到现在的时间差，返回易读格式
+func GetAge(creationTime time.Time) string {
+	duration := time.Since(creationTime)
+	
+	if duration < time.Minute {
+		return fmt.Sprintf("%ds", int(duration.Seconds()))
+	}
+	
+	if duration < time.Hour {
+		return fmt.Sprintf("%dm", int(duration.Minutes()))
+	}
+	
+	if duration < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(duration.Hours()))
+	}
+	
+	days := int(duration.Hours() / 24)
+	return fmt.Sprintf("%dd", days)
+}
+
+// BusinessError 业务错误结构体
+type BusinessError struct {
+	Code    error
+	Message string
+}
+
+func (e *BusinessError) Error() string {
+	return e.Message
+}
+
+// NewBusinessError 创建业务错误
+func NewBusinessError(code error, message string) error {
+	return &BusinessError{
+		Code:    code,
+		Message: message,
+	}
+}
