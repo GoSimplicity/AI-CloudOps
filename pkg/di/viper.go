@@ -26,15 +26,32 @@
 package di
 
 import (
+	"os"
+
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
 // InitViper 初始化viper配置
 func InitViper() error {
-
-	configFile := pflag.String("config", "config/config.yaml", "配置文件路径")
+	// 支持通过命令行参数 --config 指定任意配置文件
+	configFile := pflag.String("config", "", "配置文件路径")
 	pflag.Parse()
+
+	// 如果未通过命令行指定，则根据环境变量ENV选择默认配置文件
+	if *configFile == "" {
+		env := os.Getenv("ENV")
+		if env == "" {
+			env = "development"
+		}
+		switch env {
+		case "production":
+			*configFile = "config/config.production.yaml"
+		default:
+			*configFile = "config/config.development.yaml"
+		}
+	}
+
 	viper.SetConfigFile(*configFile)
 	err := viper.ReadInConfig()
 	if err != nil {

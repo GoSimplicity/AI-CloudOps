@@ -1,0 +1,29 @@
+server:
+  port: "8889"
+log:
+  dir: "./logs"
+  level: "debug"
+jwt:
+  key1: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"
+  key2: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0z"
+  issuer: "K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx"
+  expiration: 3600
+redis:
+  addr: "localhost:6379"
+  password: "v6SxhWHyZC7S"
+mysql:
+  addr: "root:root@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local"
+tree:
+  check_status_cron: "@every 300s"
+  password_encryption_key: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"
+k8s:
+  refresh_cron: "@every 300s"
+prometheus:
+  refresh_cron: "@every 15s"
+  enable_alert: 0 # 1 开启告警 0 关闭告警
+  enable_record: 0 # 1 开启记录 0 关闭记录
+  alert_webhook_addr: "http://localhost:8889/api/v1/alerts/receive"
+  alert_webhook_file_dir: "/tmp/webhook_files"
+  httpSdAPI: "http://localhost:8888/api/not_auth/getTreeNodeBindIps"
+mock:
+  enabled: true # 是否开启mock
