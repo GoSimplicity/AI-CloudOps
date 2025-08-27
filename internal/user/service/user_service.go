@@ -48,7 +48,7 @@ type UserService interface {
 	GetUserList(ctx context.Context, req *model.GetUserListReq) (model.ListResp[*model.User], error)
 	ChangePassword(ctx context.Context, req *model.ChangePasswordReq) error
 	WriteOff(ctx context.Context, username, password string) error
-	UpdateProfile(ctx context.Context, user *model.UpdateProfileReq) error
+	UpdateProfile(ctx context.Context, req *model.UpdateProfileReq) error
 	DeleteUser(ctx context.Context, uid int) error
 	GetUserStatistics(ctx context.Context) (*model.UserStatistics, error)
 }
@@ -127,7 +127,7 @@ func (us *userService) GetPermCode(ctx context.Context, uid int) ([]string, erro
 
 // GetUserList 获取用户列表
 func (us *userService) GetUserList(ctx context.Context, req *model.GetUserListReq) (model.ListResp[*model.User], error) {
-	users, count, err := us.dao.GetAllUsers(ctx, req.Page, req.Size, req.Search, req.Enable, req.AccountType)
+	users, count, err := us.dao.GetUserList(ctx, req.Page, req.Size, req.Search, req.Enable, req.AccountType)
 	if err != nil {
 		return model.ListResp[*model.User]{}, err
 	}

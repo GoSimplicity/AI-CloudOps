@@ -64,7 +64,7 @@ func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
 		userGroup.GET("/list", u.GetUserList)
 		userGroup.POST("/change_password", u.ChangePassword)
 		userGroup.POST("/write_off", u.WriteOff)
-		userGroup.POST("/profile/update", u.UpdateProfile)
+		userGroup.PUT("/profile/update/:id", u.UpdateProfile)
 		userGroup.DELETE("/:id", u.DeleteUser)
 		userGroup.GET("/statistics", u.GetUserStatistics)
 	}
@@ -312,9 +312,16 @@ func (u *UserHandler) WriteOff(ctx *gin.Context) {
 // @Failure 400 {object} utils.ApiResponse "请求参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
-// @Router /api/user/profile/update [post]
+// @Router /api/user/profile/update/{id} [post]
 func (u *UserHandler) UpdateProfile(ctx *gin.Context) {
 	var req model.UpdateProfileReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "用户ID格式错误")
+		return
+	}
+	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, u.service.UpdateProfile(ctx, &req)

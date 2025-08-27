@@ -37,11 +37,9 @@ import (
 type UserDAO interface {
 	CreateUser(ctx context.Context, user *model.User) error
 	GetUserByUsername(ctx context.Context, username string) (*model.User, error)
-	GetUserByUsernames(ctx context.Context, usernames []string) ([]*model.User, error)
-	GetAllUsers(ctx context.Context, page, size int, search string, enable int8, accountType int8) ([]*model.User, int64, error)
+	GetUserList(ctx context.Context, page, size int, search string, enable int8, accountType int8) ([]*model.User, int64, error)
 	GetUserByID(ctx context.Context, id int) (*model.User, error)
 	GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, error)
-	GetUserByStrIDs(ctx context.Context, ids []string) ([]*model.User, error)
 	GetPermCode(ctx context.Context, uid int) ([]string, error)
 	ChangePassword(ctx context.Context, uid int, password string) error
 	WriteOff(ctx context.Context, username, password string) error
@@ -126,7 +124,7 @@ func (u *userDAO) GetUserByUsername(ctx context.Context, username string) (*mode
 }
 
 // GetAllUsers 获取所有用户
-func (u *userDAO) GetAllUsers(ctx context.Context, page, size int, search string, enable int8, accountType int8) ([]*model.User, int64, error) {
+func (u *userDAO) GetUserList(ctx context.Context, page, size int, search string, enable int8, accountType int8) ([]*model.User, int64, error) {
 	var users []*model.User
 	var count int64
 
@@ -182,23 +180,6 @@ func (u *userDAO) GetPermCode(ctx context.Context, uid int) ([]string, error) {
 
 	// TODO: 实现权限码获取逻辑
 	return []string{}, nil
-}
-
-// GetUserByUsernames 批量获取用户信息
-func (u *userDAO) GetUserByUsernames(ctx context.Context, usernames []string) ([]*model.User, error) {
-	if len(usernames) == 0 {
-		return nil, errors.New("用户名列表不能为空")
-	}
-
-	var users []*model.User
-	if err := u.db.WithContext(ctx).
-		Where("username in (?)", usernames).
-		Find(&users).Error; err != nil {
-		u.l.Error("批量获取用户失败", zap.Strings("usernames", usernames), zap.Error(err))
-		return nil, err
-	}
-
-	return users, nil
 }
 
 // ChangePassword 修改密码
@@ -355,23 +336,6 @@ func (u *userDAO) GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, e
 		Where("id in (?)", ids).
 		Find(&users).Error; err != nil {
 		u.l.Error("批量获取用户失败", zap.Ints("ids", ids), zap.Error(err))
-		return nil, err
-	}
-
-	return users, nil
-}
-
-// GetUserByStrIDs 根据字符串ID列表获取用户
-func (u *userDAO) GetUserByStrIDs(ctx context.Context, ids []string) ([]*model.User, error) {
-	if len(ids) == 0 {
-		return nil, errors.New("用户ID列表不能为空")
-	}
-
-	var users []*model.User
-	if err := u.db.WithContext(ctx).
-		Where("id in (?)", ids).
-		Find(&users).Error; err != nil {
-		u.l.Error("批量获取用户失败", zap.Strings("ids", ids), zap.Error(err))
 		return nil, err
 	}
 
