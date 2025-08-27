@@ -95,7 +95,7 @@ func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateW
 	if req.Status < model.InstanceStatusDraft || req.Status > model.InstanceStatusCancelled {
 		return fmt.Errorf("工单状态无效")
 	}
-	if req.Priority < model.PriorityLow || req.Priority > model.PriorityHigh {
+	if req.Priority < model.PriorityHigh || req.Priority > model.PriorityLow {
 		return fmt.Errorf("优先级无效")
 	}
 
@@ -192,7 +192,7 @@ func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateW
 
 // CreateInstanceFromTemplate 从模板创建工单实例
 func (s *instanceService) CreateInstanceFromTemplate(ctx context.Context, templateID int, req *model.CreateWorkorderInstanceFromTemplateReq) error {
-	if req.Priority < model.PriorityLow || req.Priority > model.PriorityHigh {
+	if req.Priority < model.PriorityHigh || req.Priority > model.PriorityLow {
 		return fmt.Errorf("优先级无效")
 	}
 

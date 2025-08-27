@@ -57,11 +57,14 @@ import (
 	userService "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	workorderHandler "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
+	"github.com/hibiken/asynq"
+	"go.uber.org/zap"
 )
 
 type Cmd struct {
@@ -217,6 +220,30 @@ var ClientSet = wire.NewSet(
 	client.NewK8sClient,
 )
 
+var NotificationSet = wire.NewSet(
+	InitAsynqClient,
+	InitNotificationConfig,
+	InitNotificationManager,
+)
+
+// InitNotificationConfig 初始化通知配置
+func InitNotificationConfig() *notification.NotificationConfig {
+	config, err := notification.LoadNotificationConfig()
+	if err != nil {
+		panic(err)
+	}
+	return config
+}
+
+// InitNotificationManager 初始化通知管理器
+func InitNotificationManager(config *notification.NotificationConfig, asynqClient *asynq.Client, logger *zap.Logger) *notification.Manager {
+	manager, err := notification.NewManager(config, asynqClient, logger)
+	if err != nil {
+		panic(err)
+	}
+	return manager
+}
+
 func ProvideCmd() *Cmd {
 	wire.Build(
 		Injector,
@@ -228,6 +255,7 @@ func ProvideCmd() *Cmd {
 		JobSet,
 		CacheSet,
 		ClientSet,
+		NotificationSet,
 	)
 	return &Cmd{}
 }

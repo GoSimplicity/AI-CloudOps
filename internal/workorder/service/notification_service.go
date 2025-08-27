@@ -8,6 +8,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -20,17 +21,23 @@ type WorkorderNotificationService interface {
 	DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error)
 	GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error)
 	TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error
+	// 新增方法
+	SendWorkorderNotification(ctx context.Context, instanceID int, eventType string, customContent ...string) error
+	SendNotificationByChannels(ctx context.Context, channels []string, recipient, subject, content string) error
+	GetAvailableChannels() *model.ListResp[*model.WorkorderNotificationChannel]
 }
 
 type workorderNotificationService struct {
-	dao    dao.WorkorderNotificationDAO
-	logger *zap.Logger
+	dao             dao.WorkorderNotificationDAO
+	logger          *zap.Logger
+	notificationMgr *notification.Manager
 }
 
-func NewWorkorderNotificationService(dao dao.WorkorderNotificationDAO, logger *zap.Logger) WorkorderNotificationService {
+func NewWorkorderNotificationService(dao dao.WorkorderNotificationDAO, notificationMgr *notification.Manager, logger *zap.Logger) WorkorderNotificationService {
 	return &workorderNotificationService{
-		logger: logger,
-		dao:    dao,
+		logger:          logger,
+		dao:             dao,
+		notificationMgr: notificationMgr,
 	}
 }
 
@@ -92,7 +99,7 @@ func (n *workorderNotificationService) GetSendLogs(ctx context.Context, req *mod
 
 // TestSendNotification 测试发送通知
 func (n *workorderNotificationService) TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error {
-	notification, err := n.dao.GetNotificationByID(ctx, req.NotificationID)
+	notificationConfig, err := n.dao.GetNotificationByID(ctx, req.NotificationID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("通知配置不存在")
@@ -100,7 +107,7 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 		return fmt.Errorf("查询通知配置失败: %w", err)
 	}
 
-	if notification.Status != 1 {
+	if notificationConfig.Status != 1 {
 		return errors.New("通知配置已禁用，无法发送")
 	}
 
@@ -111,30 +118,55 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 		}
 	}
 
-	for _, channel := range notification.Channels {
+	// 使用新的通知管理器发送通知
+	for _, channel := range notificationConfig.Channels {
+		sendRequest := &notification.SendRequest{
+			Subject:       notificationConfig.SubjectTemplate,
+			Content:       notificationConfig.MessageTemplate,
+			Priority:      notificationConfig.Priority,
+			RecipientType: channel,
+			RecipientID:   "test_user",
+			RecipientAddr: req.Recipient,
+			RecipientName: "测试用户",
+			EventType:     "test",
+			Metadata: map[string]interface{}{
+				"notification_id": notificationConfig.ID,
+				"sender_id":       senderID,
+			},
+		}
+
+		// 发送通知
+		response, err := n.notificationMgr.SendNotification(ctx, sendRequest)
+
+		// 记录日志
 		log := &model.WorkorderNotificationLog{
-			NotificationID: notification.ID,
+			NotificationID: notificationConfig.ID,
 			EventType:      "test",
 			Channel:        channel,
 			RecipientType:  "test",
 			RecipientID:    "test_user",
 			RecipientName:  "测试用户",
 			RecipientAddr:  req.Recipient,
-			Subject:        "测试通知",
-			Content:        notification.MessageTemplate,
-			Status:         1,
+			Subject:        notificationConfig.SubjectTemplate,
+			Content:        notificationConfig.MessageTemplate,
+			Status:         2, // 2-发送中
 			SendAt:         time.Now(),
 			SenderID:       senderID,
 		}
 
-		err := n.sendNotification(channel, req.Recipient, notification.MessageTemplate)
 		if err != nil {
-			log.Status = 2
+			log.Status = 4 // 4-发送失败
 			log.ErrorMessage = err.Error()
-			n.logger.Error("发送通知失败",
-				zap.String("channel", channel),
-				zap.String("recipient", req.Recipient),
-				zap.Error(err))
+		} else if response != nil {
+			log.Status = 3 // 3-发送成功
+			if response.ExternalID != "" {
+				log.ResponseData = map[string]interface{}{
+					"external_id": response.ExternalID,
+				}
+			}
+			if response.Cost != nil {
+				log.Cost = response.Cost
+			}
 		}
 
 		if err := n.dao.AddSendLog(ctx, log); err != nil {
@@ -142,61 +174,68 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 		}
 	}
 
-	return n.dao.IncrementSentCount(ctx, notification.ID)
+	return n.dao.IncrementSentCount(ctx, notificationConfig.ID)
 }
 
-// sendNotification 根据不同的通道发送通知
-func (n *workorderNotificationService) sendNotification(channel, recipient, content string) error {
-	switch channel {
-	case "feishu":
-		return n.sendFeishuNotification(recipient, content)
-	case "email":
-		return n.sendEmailNotification(recipient, content)
-	case "dingtalk":
-		return n.sendDingtalkNotification(recipient, content)
-	case "wechat":
-		return n.sendWechatNotification(recipient, content)
-	default:
-		return fmt.Errorf("不支持的通知渠道: %s", channel)
+// SendWorkorderNotification 发送工单通知
+func (n *workorderNotificationService) SendWorkorderNotification(ctx context.Context, instanceID int, eventType string, customContent ...string) error {
+	// 这里可以根据工单ID获取相关的通知配置并发送
+	// 实现逻辑取决于具体的业务需求
+	n.logger.Info("发送工单通知",
+		zap.Int("instance_id", instanceID),
+		zap.String("event_type", eventType))
+	return nil
+}
+
+// SendNotificationByChannels 通过指定渠道发送通知
+func (n *workorderNotificationService) SendNotificationByChannels(ctx context.Context, channels []string, recipient, subject, content string) error {
+	if n.notificationMgr == nil {
+		return errors.New("通知管理器未初始化")
 	}
-}
 
-// sendFeishuNotification 发送飞书通知
-func (n *workorderNotificationService) sendFeishuNotification(recipient, content string) error {
-	n.logger.Info("发送飞书通知",
-		zap.String("recipient", recipient),
-		zap.String("content", content))
-	// 模拟发送延迟
-	time.Sleep(100 * time.Millisecond)
+	for _, channel := range channels {
+		sendRequest := &notification.SendRequest{
+			Subject:       subject,
+			Content:       content,
+			Priority:      2, // 默认中等优先级
+			RecipientType: channel,
+			RecipientAddr: recipient,
+			EventType:     "manual",
+		}
+
+		_, err := n.notificationMgr.SendNotification(ctx, sendRequest)
+		if err != nil {
+			n.logger.Error("发送通知失败",
+				zap.String("channel", channel),
+				zap.String("recipient", recipient),
+				zap.Error(err))
+			return err
+		}
+	}
+
 	return nil
 }
 
-// sendEmailNotification 发送邮件通知
-func (n *workorderNotificationService) sendEmailNotification(recipient, content string) error {
-	n.logger.Info("发送邮件通知",
-		zap.String("recipient", recipient),
-		zap.String("content", content))
-	// 模拟发送延迟
-	time.Sleep(200 * time.Millisecond)
-	return nil
-}
+// GetAvailableChannels 获取可用的通知渠道
+func (n *workorderNotificationService) GetAvailableChannels() *model.ListResp[*model.WorkorderNotificationChannel] {
+	if n.notificationMgr == nil {
+		return &model.ListResp[*model.WorkorderNotificationChannel]{
+			Items: []*model.WorkorderNotificationChannel{},
+			Total: 0,
+		}
+	}
 
-// sendDingtalkNotification 发送钉钉通知
-func (n *workorderNotificationService) sendDingtalkNotification(recipient, content string) error {
-	n.logger.Info("发送钉钉通知",
-		zap.String("recipient", recipient),
-		zap.String("content", content))
-	// 模拟发送延迟
-	time.Sleep(150 * time.Millisecond)
-	return nil
-}
+	availableChannels := n.notificationMgr.GetAvailableChannels()
+	channels := make([]*model.WorkorderNotificationChannel, 0, len(availableChannels))
+	
+	for _, channel := range availableChannels {
+		channels = append(channels, &model.WorkorderNotificationChannel{
+			Channels: model.StringList{channel},
+		})
+	}
 
-// sendWechatNotification 发送企业微信通知
-func (n *workorderNotificationService) sendWechatNotification(recipient, content string) error {
-	n.logger.Info("发送企业微信通知",
-		zap.String("recipient", recipient),
-		zap.String("content", content))
-	// 模拟发送延迟
-	time.Sleep(180 * time.Millisecond)
-	return nil
+	return &model.ListResp[*model.WorkorderNotificationChannel]{
+		Items: channels,
+		Total: int64(len(channels)),
+	}
 }

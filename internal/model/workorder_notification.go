@@ -49,8 +49,8 @@ type WorkorderNotification struct {
 	RepeatInterval   *int       `json:"repeat_interval" gorm:"column:repeat_interval;comment:重复间隔(分钟)"`
 	MaxRetries       int        `json:"max_retries" gorm:"column:max_retries;not null;default:3;comment:最大重试次数"`
 	RetryInterval    int        `json:"retry_interval" gorm:"column:retry_interval;not null;default:5;comment:重试间隔(分钟)"`
-	Status           int8       `json:"status" gorm:"column:status;not null;default:1;index;comment:状态"`
-	Priority         int8       `json:"priority" gorm:"column:priority;not null;default:2;comment:优先级"`
+	Status           int8       `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-启用，2-禁用"`
+	Priority         int8       `json:"priority" gorm:"column:priority;not null;default:2;comment:优先级：1-高，2-中，3-低"`
 	OperatorID       int        `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
 	IsDefault        int8       `json:"is_default" gorm:"column:is_default;not null;default:2;comment:是否默认配置：1-是，2-否"`
 	Settings         JSONMap    `json:"settings" gorm:"column:settings;type:json;comment:通知设置"`
@@ -58,6 +58,10 @@ type WorkorderNotification struct {
 
 func (WorkorderNotification) TableName() string {
 	return "cl_workorder_notification"
+}
+
+type WorkorderNotificationChannel struct {
+	Channels StringList `json:"channels"`
 }
 
 // CreateWorkorderNotificationReq 创建工单通知配置
@@ -151,7 +155,7 @@ type WorkorderNotificationLog struct {
 	RecipientAddr  string     `json:"recipient_addr" gorm:"type:varchar(500);not null;comment:接收人地址"`
 	Subject        string     `json:"subject" gorm:"type:varchar(500);comment:消息主题"`
 	Content        string     `json:"content" gorm:"type:text;not null;comment:发送内容"`
-	Status         int8       `json:"status" gorm:"not null;index;comment:发送状态"`
+	Status         int8       `json:"status" gorm:"not null;index;comment:发送状态：1-待发送，2-发送中，3-发送成功，4-发送失败"`
 	ErrorMessage   string     `json:"error_message" gorm:"type:text;comment:错误信息"`
 	ResponseData   JSONMap    `json:"response_data" gorm:"type:json;comment:响应数据"`
 	SendAt         time.Time  `json:"send_at" gorm:"not null;comment:发送时间"`
@@ -193,8 +197,8 @@ type WorkorderNotificationQueue struct {
 	RecipientAddr  string     `json:"recipient_addr" gorm:"type:varchar(500);not null;comment:接收人地址"`
 	Subject        string     `json:"subject" gorm:"type:varchar(500);comment:消息主题"`
 	Content        string     `json:"content" gorm:"type:text;not null;comment:发送内容"`
-	Priority       int8       `json:"priority" gorm:"not null;default:2;index;comment:优先级"`
-	Status         int8       `json:"status" gorm:"not null;default:1;index;comment:状态"`
+	Priority       int8       `json:"priority" gorm:"not null;default:2;index;comment:优先级：1-高，2-中，3-低"`
+	Status         int8       `json:"status" gorm:"not null;default:1;index;comment:状态：1-待处理，2-处理中，3-处理成功，4-处理失败"`
 	ScheduledAt    time.Time  `json:"scheduled_at" gorm:"not null;index;comment:计划发送时间"`
 	ProcessedAt    *time.Time `json:"processed_at" gorm:"comment:处理时间"`
 	RetryCount     int        `json:"retry_count" gorm:"not null;default:0;comment:重试次数"`
@@ -225,4 +229,12 @@ type ListWorkorderNotificationQueueReq struct {
 	RecipientID    string `json:"recipient_id" form:"recipient_id"`
 	Status         *int8  `json:"status" form:"status"`
 	Priority       *int8  `json:"priority" form:"priority"`
+}
+
+// ManualSendNotificationReq 手动发送通知请求
+type ManualSendNotificationReq struct {
+	Channels  []string `json:"channels" binding:"required"`  // 通知渠道列表
+	Recipient string   `json:"recipient" binding:"required"` // 接收人地址
+	Subject   string   `json:"subject" binding:"required"`   // 通知主题
+	Content   string   `json:"content" binding:"required"`   // 通知内容
 }

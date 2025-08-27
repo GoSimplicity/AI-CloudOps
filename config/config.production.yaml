@@ -22,8 +22,32 @@ prometheus:
   refresh_cron: "@every 15s"
   enable_alert: 0 # 1 开启告警 0 关闭告警
   enable_record: 0 # 1 开启记录 0 关闭记录
-  alert_webhook_addr: "http://cloudops-backend:8889/api/v1/alerts/receive"
+  alert_webhook_addr: "http://localhost:8889/api/v1/alerts/receive"
   alert_webhook_file_dir: "/tmp/webhook_files"
-  httpSdAPI: "http://cloudops-backend:8888/api/not_auth/getTreeNodeBindIps"
+  httpSdAPI: "http://localhost:8888/api/not_auth/getTreeNodeBindIps"
 mock:
   enabled: true # 是否开启mock
+notification:
+  # 邮箱配置
+  email:
+    enabled: true
+    smtp_host: "smtp.qq.com"
+    smtp_port: 587
+    username: "xxx@qq.com"
+    password: "xxx"
+    from_name: "AI-CloudOps"
+    max_retries: 3
+    retry_interval: "5m"
+    timeout: "30s"
+    use_tls: true
+  # 飞书配置
+  feishu:
+    enabled: true
+    app_id: "xxx"
+    app_secret: "xxx"
+    webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/"
+    private_message_api: "https://open.feishu.cn/open-apis/im/v1/messages"
+    tenant_access_token_api: "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+    max_retries: 3
+    retry_interval: "5m"
+    timeout: "10s"

@@ -26,13 +26,16 @@
 package di
 
 import (
+	"fmt"
 	"os"
+	"reflect"
+	"strings"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
-// InitViper 初始化viper配置
+// InitViper 初始化viper配置，支持环境变量优先级：环境变量 > 配置文件 > 默认值
 func InitViper() error {
 	// 支持通过命令行参数 --config 指定任意配置文件
 	configFile := pflag.String("config", "", "配置文件路径")
@@ -52,11 +55,36 @@ func InitViper() error {
 		}
 	}
 
+	// 设置配置文件类型和路径
 	viper.SetConfigFile(*configFile)
-	err := viper.ReadInConfig()
-	if err != nil {
-		return err
+
+	// 启用环境变量支持
+	viper.AutomaticEnv()
+
+	// 将点号替换为下划线以支持嵌套配置的环境变量
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	// 绑定环境变量 (必须在设置默认值和读取配置文件之前)
+	bindEnvVars()
+
+	// 设置默认值
+	setDefaults()
+
+	// 读取配置文件（如果存在）
+	if err := viper.ReadInConfig(); err != nil {
+		// 如果配置文件不存在，只是打印警告，继续使用环境变量和默认值
+		fmt.Printf("Warning: Failed to read config file %s: %v\n", *configFile, err)
+		fmt.Println("Using environment variables and default values only.")
 	}
+
+	// 加载配置到全局变量
+	if err := viper.Unmarshal(GlobalConfig); err != nil {
+		return fmt.Errorf("failed to unmarshal config: %v", err)
+	}
+
+	// 加载外部配置（仅环境变量）
+	loadExternalConfig()
+
 	return nil
 }
 
@@ -64,8 +92,163 @@ func InitWebHookViper() {
 	configFile := pflag.String("config", "config/webhook.yaml", "配置文件路径")
 	pflag.Parse()
 	viper.SetConfigFile(*configFile)
+
+	// 启用环境变量支持
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	// 设置webhook默认值
+	setWebhookDefaults()
+
 	err := viper.ReadInConfig()
 	if err != nil {
-		panic(err)
+		fmt.Printf("Warning: Failed to read webhook config file: %v\n", err)
+		fmt.Println("Using environment variables and default values only.")
 	}
+
+	// 绑定webhook环境变量
+	bindWebhookEnvVars()
+}
+
+// setDefaults 设置所有配置的默认值
+func setDefaults() {
+	// Server defaults
+	viper.SetDefault("server.port", "8889")
+
+	// Log defaults
+	viper.SetDefault("log.dir", "./logs")
+	viper.SetDefault("log.level", "debug")
+
+	// JWT defaults
+	viper.SetDefault("jwt.key1", "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l")
+	viper.SetDefault("jwt.key2", "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0z")
+	viper.SetDefault("jwt.issuer", "K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx")
+	viper.SetDefault("jwt.expiration", 3600)
+
+	// Redis defaults
+	viper.SetDefault("redis.addr", "localhost:6379")
+	viper.SetDefault("redis.password", "")
+
+	// MySQL defaults
+	viper.SetDefault("mysql.addr", "root:root@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local")
+
+	// Tree defaults
+	viper.SetDefault("tree.check_status_cron", "@every 300s")
+	viper.SetDefault("tree.password_encryption_key", "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l")
+
+	// K8s defaults
+	viper.SetDefault("k8s.refresh_cron", "@every 300s")
+
+	// Prometheus defaults
+	viper.SetDefault("prometheus.refresh_cron", "@every 15s")
+	viper.SetDefault("prometheus.enable_alert", 0)
+	viper.SetDefault("prometheus.enable_record", 0)
+	viper.SetDefault("prometheus.alert_webhook_addr", "http://localhost:8889/api/v1/alerts/receive")
+	viper.SetDefault("prometheus.alert_webhook_file_dir", "/tmp/webhook_files")
+	viper.SetDefault("prometheus.httpSdAPI", "http://localhost:8888/api/not_auth/getTreeNodeBindIps")
+
+	// Mock defaults
+	viper.SetDefault("mock.enabled", true)
+
+	// Notification Email defaults
+	viper.SetDefault("notification.email.enabled", false)
+	viper.SetDefault("notification.email.smtp_host", "smtp.gmail.com")
+	viper.SetDefault("notification.email.smtp_port", 587)
+	viper.SetDefault("notification.email.username", "")
+	viper.SetDefault("notification.email.password", "")
+	viper.SetDefault("notification.email.from_name", "AI-CloudOps")
+	viper.SetDefault("notification.email.max_retries", 3)
+	viper.SetDefault("notification.email.retry_interval", "5m")
+	viper.SetDefault("notification.email.timeout", "30s")
+	viper.SetDefault("notification.email.use_tls", true)
+
+	// Notification Feishu defaults
+	viper.SetDefault("notification.feishu.enabled", false)
+	viper.SetDefault("notification.feishu.app_id", "")
+	viper.SetDefault("notification.feishu.app_secret", "")
+	viper.SetDefault("notification.feishu.webhook_url", "https://open.feishu.cn/open-apis/bot/v2/hook/")
+	viper.SetDefault("notification.feishu.private_message_api", "https://open.feishu.cn/open-apis/im/v1/messages")
+	viper.SetDefault("notification.feishu.tenant_access_token_api", "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal")
+	viper.SetDefault("notification.feishu.max_retries", 3)
+	viper.SetDefault("notification.feishu.retry_interval", "5m")
+	viper.SetDefault("notification.feishu.timeout", "10s")
+}
+
+// setWebhookDefaults 设置Webhook默认值
+func setWebhookDefaults() {
+	viper.SetDefault("webhook.port", "8888")
+	viper.SetDefault("webhook.fixed_workers", 10)
+	viper.SetDefault("webhook.front_domain", "http://localhost:3000")
+	viper.SetDefault("webhook.backend_domain", "http://localhost:8889")
+	viper.SetDefault("webhook.default_upgrade_minutes", 60)
+	viper.SetDefault("webhook.alert_manager_api", "http://localhost:9093")
+	viper.SetDefault("webhook.common_map_renew_interval_seconds", 300)
+	viper.SetDefault("webhook.im_feishu.group_message_api", "https://open.feishu.cn/open-apis/im/v1/messages")
+	viper.SetDefault("webhook.im_feishu.request_timeout_seconds", 10)
+	viper.SetDefault("webhook.im_feishu.private_robot_app_id", "")
+	viper.SetDefault("webhook.im_feishu.private_robot_app_secret", "")
+	viper.SetDefault("webhook.im_feishu.tenant_access_token_api", "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal")
+}
+
+// bindEnvVars 绑定环境变量
+func bindEnvVars() {
+	// 使用反射自动绑定所有配置项到环境变量
+	bindStructEnvVars(reflect.TypeOf(Config{}), "")
+}
+
+// bindWebhookEnvVars 绑定Webhook环境变量
+func bindWebhookEnvVars() {
+	bindStructEnvVars(reflect.TypeOf(WebhookConfig{}), "webhook")
+}
+
+// bindStructEnvVars 递归绑定结构体中的环境变量
+func bindStructEnvVars(t reflect.Type, prefix string) {
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+
+		// 获取mapstructure标签作为配置键
+		mapstructureTag := field.Tag.Get("mapstructure")
+		if mapstructureTag == "" {
+			// 如果没有 mapstructure 标签，跳过这个字段
+			continue
+		}
+
+		// 构建完整的配置键
+		var configKey string
+		if prefix == "" {
+			configKey = mapstructureTag
+		} else {
+			configKey = prefix + "." + mapstructureTag
+		}
+
+		// 如果是嵌套结构体，递归处理
+		if field.Type.Kind() == reflect.Struct {
+			bindStructEnvVars(field.Type, configKey)
+		} else {
+			// 对于非结构体字段，绑定环境变量
+			// 获取env标签作为环境变量名
+			envTag := field.Tag.Get("env")
+			if envTag != "" {
+				viper.BindEnv(configKey, envTag)
+			} else {
+				// 如果没有env标签，使用配置键自动生成环境变量名
+				envName := strings.ToUpper(strings.ReplaceAll(configKey, ".", "_"))
+				viper.BindEnv(configKey, envName)
+			}
+		}
+	}
+}
+
+// loadExternalConfig 加载外部配置（仅环境变量）
+func loadExternalConfig() {
+	// LLM配置
+	GlobalExternalConfig.LLM.APIKey = os.Getenv("LLM_API_KEY")
+	GlobalExternalConfig.LLM.BaseURL = os.Getenv("LLM_BASE_URL")
+
+	// 阿里云配置
+	GlobalExternalConfig.Aliyun.AccessKeyID = os.Getenv("ALIYUN_ACCESS_KEY_ID")
+	GlobalExternalConfig.Aliyun.AccessKeySecret = os.Getenv("ALIYUN_ACCESS_KEY_SECRET")
+
+	// Tavily配置
+	GlobalExternalConfig.Tavily.APIKey = os.Getenv("TAVILY_API_KEY")
 }

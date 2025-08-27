@@ -52,6 +52,9 @@ func (h *NotificationHandler) RegisterRouters(server *gin.Engine) {
 		notificationGroup.GET("/detail/:id", h.DetailNotification)
 		notificationGroup.GET("/logs", h.GetSendLogs)
 		notificationGroup.POST("/test/send", h.TestSendNotification)
+		// 新增接口
+		notificationGroup.GET("/channels", h.GetAvailableChannels)
+		notificationGroup.POST("/send", h.SendNotificationManually)
 	}
 }
 
@@ -224,5 +227,41 @@ func (h *NotificationHandler) TestSendNotification(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.TestSendNotification(ctx, &req)
+	})
+}
+
+// GetAvailableChannels 获取可用的通知渠道
+// @Summary 获取可用的通知渠道
+// @Description 获取当前系统中可用的通知渠道列表
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Success 200 {object} utils.ApiResponse "获取成功"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/notification/channels [get]
+func (h *NotificationHandler) GetAvailableChannels(ctx *gin.Context) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetAvailableChannels(), nil
+	})
+}
+
+// SendNotificationManually 手动发送通知
+// @Summary 手动发送通知
+// @Description 通过指定渠道手动发送通知
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param request body model.ManualSendNotificationReq true "手动发送通知请求参数"
+// @Success 200 {object} utils.ApiResponse "发送成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/notification/send [post]
+func (h *NotificationHandler) SendNotificationManually(ctx *gin.Context) {
+	var req model.ManualSendNotificationReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.SendNotificationByChannels(ctx, req.Channels, req.Recipient, req.Subject, req.Content)
 	})
 }
