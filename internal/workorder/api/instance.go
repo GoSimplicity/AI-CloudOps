@@ -46,6 +46,7 @@ func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 	instanceGroup := server.Group("/api/workorder/instance")
 	{
 		instanceGroup.POST("/create", h.CreateInstance)
+		instanceGroup.POST("/create-from-template/:id", h.CreateInstanceFromTemplate)
 		instanceGroup.PUT("/update/:id", h.UpdateInstance)
 		instanceGroup.DELETE("/delete/:id", h.DeleteInstance)
 		instanceGroup.GET("/list", h.ListInstance)
@@ -54,6 +55,8 @@ func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 		instanceGroup.POST("/assign/:id", h.AssignInstance)
 		instanceGroup.POST("/approve/:id", h.ApproveInstance)
 		instanceGroup.POST("/reject/:id", h.RejectInstance)
+		instanceGroup.GET("/actions/:id", h.GetAvailableActions)
+		instanceGroup.GET("/current-step/:id", h.GetCurrentStep)
 	}
 }
 
@@ -78,6 +81,37 @@ func (h *InstanceHandler) CreateInstance(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.CreateInstance(ctx, &req)
+	})
+}
+
+// CreateInstanceFromTemplate 从模板创建工单实例
+// @Summary 从模板创建工单实例
+// @Description 基于工单模板创建新的工单实例
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param templateId path int true "模板ID"
+// @Param request body model.CreateWorkorderInstanceFromTemplateReq true "创建工单实例请求参数"
+// @Success 200 {object} utils.ApiResponse "创建成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/create-from-template/{templateId} [post]
+func (h *InstanceHandler) CreateInstanceFromTemplate(ctx *gin.Context) {
+	var req model.CreateWorkorderInstanceFromTemplateReq
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	templateID, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的模板ID")
+		return
+	}
+
+	req.OperatorID = user.Uid
+	req.OperatorName = user.Username
+
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return nil, h.service.CreateInstanceFromTemplate(ctx, templateID, &req)
 	})
 }
 
@@ -298,5 +332,55 @@ func (h *InstanceHandler) RejectInstance(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.RejectInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
+	})
+}
+
+// GetAvailableActions 获取可执行动作
+// @Summary 获取可执行动作
+// @Description 获取当前工单实例可执行的动作列表
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单实例ID"
+// @Success 200 {object} utils.ApiResponse{data=[]string} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/actions/{id} [get]
+func (h *InstanceHandler) GetAvailableActions(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		return
+	}
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return h.service.GetAvailableActions(ctx, id, user.Uid)
+	})
+}
+
+// GetCurrentStep 获取当前步骤
+// @Summary 获取当前步骤
+// @Description 获取工单实例当前流程步骤信息
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单实例ID"
+// @Success 200 {object} utils.ApiResponse{data=model.ProcessStep} "获取成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/current-step/{id} [get]
+func (h *InstanceHandler) GetCurrentStep(ctx *gin.Context) {
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (any, error) {
+		return h.service.GetCurrentStep(ctx, id)
 	})
 }
