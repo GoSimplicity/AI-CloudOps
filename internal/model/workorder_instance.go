@@ -39,9 +39,9 @@ const (
 
 // 工单优先级
 const (
-	PriorityLow    int8 = 1 // 低
-	PriorityNormal int8 = 2 // 普通
-	PriorityHigh   int8 = 3 // 高
+	PriorityHigh   int8 = 1 // 高
+	PriorityNormal int8 = 2 // 中
+	PriorityLow    int8 = 3 // 低
 )
 
 // WorkorderInstance 工单实例
@@ -53,7 +53,7 @@ type WorkorderInstance struct {
 	CurrentStepID *string    `json:"current_step_id" gorm:"column:current_step_id;type:varchar(50);index;comment:当前步骤ID"`
 	FormData      JSONMap    `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
 	Status        int8       `json:"status" gorm:"column:status;not null;default:1;index;comment:状态"`
-	Priority      int8       `json:"priority" gorm:"column:priority;not null;default:2;index;comment:优先级"`
+	Priority      int8       `json:"priority" gorm:"column:priority;not null;default:2;index;comment:优先级：1-高，2-中，3-低"`
 	OperatorID    int        `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
 	OperatorName  string     `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
 	AssigneeID    *int       `json:"assignee_id" gorm:"column:assignee_id;index;comment:当前处理人ID"`

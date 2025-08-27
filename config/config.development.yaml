@@ -27,3 +27,27 @@ prometheus:
   httpSdAPI: "http://localhost:8888/api/not_auth/getTreeNodeBindIps"
 mock:
   enabled: true # 是否开启mock
+notification:
+  # 邮箱配置
+  email:
+    enabled: true
+    smtp_host: "smtp.qq.com"
+    smtp_port: 587
+    username: "xxx@qq.com"
+    password: "xxx"
+    from_name: "AI-CloudOps"
+    max_retries: 3
+    retry_interval: "5m"
+    timeout: "30s"
+    use_tls: true
+  # 飞书配置
+  feishu:
+    enabled: true
+    app_id: "cli_a784ce0a6e78100e"
+    app_secret: "emBmFYuYmMuRIAsNb57N9gAS0hhmiVrA"
+    webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/"
+    private_message_api: "https://open.feishu.cn/open-apis/im/v1/messages"
+    tenant_access_token_api: "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+    max_retries: 3
+    retry_interval: "5m"
+    timeout: "10s"

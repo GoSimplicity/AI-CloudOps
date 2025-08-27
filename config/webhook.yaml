@@ -10,8 +10,8 @@ webhook:
     group_message_api: "https://open.feishu.cn/open-apis/bot/v2/hook/"  # 群聊消息 API
     private_message_api: "https://open.feishu.cn/open-apis/im/v1/messages"  # 私聊消息 API
     tenant_access_token_api: "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"  # 租户访问令牌 API
-    private_robot_app_id: "cli_a784ce0a6e78100e"  # 私聊机器人 App ID
-    private_robot_app_secret: "emBmFYuYmMuRIAsNb57N9gAS0hhmiVrA"  # 私聊机器人 App Secret
+    private_robot_app_id: "xxx"  # 私聊机器人 App ID
+    private_robot_app_secret: "xxx"  # 私聊机器人 App Secret
     request_timeout_seconds: 10  # 请求超时时间（秒）
   port: "8889"  # HTTP 服务端口
   min_workers: 1  # 最小工作线程数

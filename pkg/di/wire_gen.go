@@ -36,10 +36,13 @@ import (
 	service2 "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	api6 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	dao4 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	service5 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
+	"github.com/hibiken/asynq"
+	"go.uber.org/zap"
 )
 
 import (
@@ -158,7 +161,10 @@ func ProvideCmd() *Cmd {
 	ecsSSH := ssh.NewSSH(logger)
 	treeLocalHandler := api7.NewTreeLocalHandler(treeLocalService, ecsSSH)
 	workorderNotificationDAO := dao4.NewNotificationDAO(db, logger)
-	workorderNotificationService := service5.NewWorkorderNotificationService(workorderNotificationDAO, logger)
+	notificationConfig := InitNotificationConfig()
+	asynqClient := InitAsynqClient()
+	notificationManager := InitNotificationManager(notificationConfig, asynqClient, logger)
+	workorderNotificationService := service5.NewWorkorderNotificationService(workorderNotificationDAO, notificationManager, logger)
 	notificationHandler := api6.NewNotificationHandler(workorderNotificationService)
 	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, systemHandler, notAuthHandler, k8sClusterHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, notificationHandler)
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
@@ -205,3 +211,27 @@ var Injector = wire.NewSet(
 var CacheSet = wire.NewSet(cache.NewMonitorCache, cache.NewAlertManagerConfigCache, cache.NewAlertRuleConfigCache, cache.NewRecordRuleConfigCache, cache.NewPrometheusConfigCache, cache.NewBatchConfigManager)
 
 var ClientSet = wire.NewSet(client.NewK8sClient)
+
+var NotificationSet = wire.NewSet(
+	InitAsynqClient,
+	InitNotificationConfig,
+	InitNotificationManager,
+)
+
+// InitNotificationConfig 初始化通知配置
+func InitNotificationConfig() *notification.NotificationConfig {
+	config3, err := notification.LoadNotificationConfig()
+	if err != nil {
+		panic(err)
+	}
+	return config3
+}
+
+// InitNotificationManager 初始化通知管理器
+func InitNotificationManager(config3 *notification.NotificationConfig, asynqClient *asynq.Client, logger *zap.Logger) *notification.Manager {
+	manager2, err := notification.NewManager(config3, asynqClient, logger)
+	if err != nil {
+		panic(err)
+	}
+	return manager2
+}
