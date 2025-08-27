@@ -6,7 +6,7 @@
 #       - main
 #       - master
 #       - develop
-  
+
 #   pull_request:
 #     types: [closed]
 #     branches:
