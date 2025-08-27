@@ -31,16 +31,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/hibiken/asynq"
 	"go.uber.org/zap"
-)
-
-const (
-	// 任务类型常量
-	TaskTypeSendNotification        = "notification:send"
-	TaskTypeBatchSendNotification   = "notification:batch_send"
-	TaskTypeScheduledNotification   = "notification:scheduled"
-	TaskTypeRetryFailedNotification = "notification:retry_failed"
 )
 
 // Processor 通知任务处理器
@@ -59,10 +52,10 @@ func NewProcessor(manager *Manager, logger *zap.Logger) *Processor {
 
 // RegisterTasks 注册任务处理器
 func (p *Processor) RegisterTasks(mux *asynq.ServeMux) {
-	mux.HandleFunc(TaskTypeSendNotification, p.HandleSendNotification)
-	mux.HandleFunc(TaskTypeBatchSendNotification, p.HandleBatchSendNotification)
-	mux.HandleFunc(TaskTypeScheduledNotification, p.HandleScheduledNotification)
-	mux.HandleFunc(TaskTypeRetryFailedNotification, p.HandleRetryFailedNotification)
+	mux.HandleFunc(model.TaskTypeSendNotification, p.HandleSendNotification)
+	mux.HandleFunc(model.TaskTypeBatchSendNotification, p.HandleBatchSendNotification)
+	mux.HandleFunc(model.TaskTypeScheduledNotification, p.HandleScheduledNotification)
+	mux.HandleFunc(model.TaskTypeRetryFailedNotification, p.HandleRetryFailedNotification)
 }
 
 // HandleSendNotification 处理单个通知发送任务
@@ -259,7 +252,7 @@ func CreateSendNotificationTask(request *SendRequest, metadata map[string]interf
 		return nil, fmt.Errorf("序列化任务载荷失败: %w", err)
 	}
 
-	return asynq.NewTask(TaskTypeSendNotification, data), nil
+	return asynq.NewTask(model.TaskTypeSendNotification, data), nil
 }
 
 // CreateBatchSendNotificationTask 创建批量发送通知任务
@@ -275,7 +268,7 @@ func CreateBatchSendNotificationTask(requests []*SendRequest, metadata map[strin
 		return nil, fmt.Errorf("序列化任务载荷失败: %w", err)
 	}
 
-	return asynq.NewTask(TaskTypeBatchSendNotification, data), nil
+	return asynq.NewTask(model.TaskTypeBatchSendNotification, data), nil
 }
 
 // CreateScheduledNotificationTask 创建定时通知任务
@@ -293,7 +286,7 @@ func CreateScheduledNotificationTask(request *SendRequest, scheduledAt time.Time
 		return nil, fmt.Errorf("序列化任务载荷失败: %w", err)
 	}
 
-	return asynq.NewTask(TaskTypeScheduledNotification, data), nil
+	return asynq.NewTask(model.TaskTypeScheduledNotification, data), nil
 }
 
 // CreateRetryFailedNotificationTask 创建重试失败通知任务
@@ -312,5 +305,5 @@ func CreateRetryFailedNotificationTask(request *SendRequest, originalMessageID s
 		return nil, fmt.Errorf("序列化任务载荷失败: %w", err)
 	}
 
-	return asynq.NewTask(TaskTypeRetryFailedNotification, data), nil
+	return asynq.NewTask(model.TaskTypeRetryFailedNotification, data), nil
 }

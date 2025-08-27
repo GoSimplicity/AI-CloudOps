@@ -31,28 +31,60 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"go.uber.org/zap"
 )
+
+// NotificationConfig 通知配置
+type NotificationConfig interface {
+	GetEmail() EmailConfig
+	GetFeishu() FeishuConfig
+}
+
+// EmailConfig 邮箱配置
+type EmailConfig interface {
+	IsEnabled() bool
+	GetMaxRetries() int
+	GetRetryInterval() time.Duration
+	GetTimeout() time.Duration
+	GetChannelName() string
+	Validate() error
+	GetSMTPHost() string
+	GetSMTPPort() int
+	GetUsername() string
+	GetPassword() string
+	GetFromName() string
+	GetUseTLS() bool
+}
+
+// FeishuConfig 飞书配置
+type FeishuConfig interface {
+	IsEnabled() bool
+	GetMaxRetries() int
+	GetRetryInterval() time.Duration
+	GetTimeout() time.Duration
+	GetChannelName() string
+	Validate() error
+	GetAppID() string
+	GetAppSecret() string
+	GetWebhookURL() string
+	GetPrivateMessageAPI() string
+	GetTenantAccessTokenAPI() string
+}
 
 // Manager 通知管理器
 type Manager struct {
 	channels    map[string]NotificationChannel
 	queueClient *asynq.Client
 	logger      *zap.Logger
-	config      *NotificationConfig
+	config      NotificationConfig
 	mu          sync.RWMutex
 }
 
-// NotificationConfig 通知配置
-type NotificationConfig struct {
-	Email  *EmailConfig  `json:"email" yaml:"email"`
-	Feishu *FeishuConfig `json:"feishu" yaml:"feishu"`
-}
-
-// NewManager 创建通知管理器
-func NewManager(config *NotificationConfig, queueClient *asynq.Client, logger *zap.Logger) (*Manager, error) {
+// NewManager 创建管理器
+func NewManager(config NotificationConfig, queueClient *asynq.Client, logger *zap.Logger) (*Manager, error) {
 	manager := &Manager{
 		channels:    make(map[string]NotificationChannel),
 		queueClient: queueClient,
@@ -60,23 +92,25 @@ func NewManager(config *NotificationConfig, queueClient *asynq.Client, logger *z
 		config:      config,
 	}
 
-	// 初始化邮箱渠道
-	if config.Email != nil && config.Email.IsEnabled() {
-		if err := config.Email.Validate(); err != nil {
+	// 邮箱渠道
+	emailConfig := config.GetEmail()
+	if emailConfig != nil && emailConfig.IsEnabled() {
+		if err := emailConfig.Validate(); err != nil {
 			logger.Warn("邮箱配置验证失败", zap.Error(err))
 		} else {
-			emailChannel := NewEmailChannel(config.Email, logger)
+			emailChannel := NewEmailChannel(emailConfig, logger)
 			manager.channels["email"] = emailChannel
 			logger.Info("邮箱通知渠道已启用")
 		}
 	}
 
-	// 初始化飞书渠道
-	if config.Feishu != nil && config.Feishu.IsEnabled() {
-		if err := config.Feishu.Validate(); err != nil {
+	// 飞书渠道
+	feishuConfig := config.GetFeishu()
+	if feishuConfig != nil && feishuConfig.IsEnabled() {
+		if err := feishuConfig.Validate(); err != nil {
 			logger.Warn("飞书配置验证失败", zap.Error(err))
 		} else {
-			feishuChannel := NewFeishuChannel(config.Feishu, logger)
+			feishuChannel := NewFeishuChannel(feishuConfig, logger)
 			manager.channels["feishu"] = feishuChannel
 			logger.Info("飞书通知渠道已启用")
 		}
@@ -91,7 +125,7 @@ func NewManager(config *NotificationConfig, queueClient *asynq.Client, logger *z
 
 // SendNotification 发送通知
 func (m *Manager) SendNotification(ctx context.Context, request *SendRequest) (*SendResponse, error) {
-	// 生成消息ID
+	// 生成ID
 	if request.MessageID == "" {
 		request.MessageID = uuid.New().String()
 	}
@@ -99,50 +133,110 @@ func (m *Manager) SendNotification(ctx context.Context, request *SendRequest) (*
 	// 获取渠道
 	channel, err := m.getChannel(request.RecipientType)
 	if err != nil {
-		return nil, err
+		return &SendResponse{
+			Success:      false,
+			MessageID:    request.MessageID,
+			Status:       "failed",
+			ErrorMessage: fmt.Sprintf("获取通知渠道失败: %v", err),
+			SendTime:     time.Now(),
+		}, err
 	}
 
-	// 检查渠道是否启用
+	// 检查启用状态
 	if !channel.IsEnabled() {
-		return nil, fmt.Errorf("通知渠道 %s 未启用", channel.GetName())
+		err := fmt.Errorf("通知渠道 %s 未启用", channel.GetName())
+		return &SendResponse{
+			Success:      false,
+			MessageID:    request.MessageID,
+			Status:       "failed",
+			ErrorMessage: err.Error(),
+			SendTime:     time.Now(),
+		}, err
 	}
 
-	// 发送通知
-	response, err := channel.Send(ctx, request)
-	if err != nil {
+	// 添加重试机制
+	maxRetries := channel.GetMaxRetries()
+	retryInterval := channel.GetRetryInterval()
+
+	var lastErr error
+	var response *SendResponse
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			m.logger.Info("重试发送通知",
+				zap.String("channel", channel.GetName()),
+				zap.String("message_id", request.MessageID),
+				zap.Int("attempt", attempt),
+				zap.Duration("retry_interval", retryInterval))
+
+			// 等待重试间隔
+			select {
+			case <-ctx.Done():
+				return &SendResponse{
+					Success:      false,
+					MessageID:    request.MessageID,
+					Status:       "cancelled",
+					ErrorMessage: "context cancelled",
+					SendTime:     time.Now(),
+				}, ctx.Err()
+			case <-time.After(retryInterval):
+				// 继续重试
+			}
+		}
+
+		// 发送
+		response, lastErr = channel.Send(ctx, request)
+		if lastErr == nil {
+			// 发送成功
+			m.logger.Info("通知发送成功",
+				zap.String("channel", channel.GetName()),
+				zap.String("message_id", request.MessageID),
+				zap.String("recipient", request.RecipientAddr),
+				zap.Int("attempts", attempt+1))
+			return response, nil
+		}
+
+		// 记录错误
 		m.logger.Error("发送通知失败",
 			zap.String("channel", channel.GetName()),
 			zap.String("message_id", request.MessageID),
 			zap.String("recipient", request.RecipientAddr),
-			zap.Error(err))
-		return response, err
+			zap.Int("attempt", attempt+1),
+			zap.Error(lastErr))
+
+		// 如果是最后一次尝试，返回错误
+		if attempt == maxRetries {
+			break
+		}
 	}
 
-	m.logger.Info("通知发送成功",
-		zap.String("channel", channel.GetName()),
-		zap.String("message_id", request.MessageID),
-		zap.String("recipient", request.RecipientAddr))
-
-	return response, nil
+	// 所有重试都失败了
+	return &SendResponse{
+		Success:      false,
+		MessageID:    request.MessageID,
+		Status:       "failed",
+		ErrorMessage: fmt.Sprintf("发送失败，已重试 %d 次: %v", maxRetries+1, lastErr),
+		SendTime:     time.Now(),
+	}, lastErr
 }
 
-// SendNotificationAsync 异步发送通知
+// SendNotificationAsync 异步发送
 func (m *Manager) SendNotificationAsync(ctx context.Context, request *SendRequest, delay time.Duration) error {
-	// 生成消息ID
+	// 生成ID
 	if request.MessageID == "" {
 		request.MessageID = uuid.New().String()
 	}
 
-	// 创建异步任务
+	// 创建任务
 	task := asynq.NewTask("notification:send", serializeRequest(request))
 
-	// 设置任务选项
+	// 设置选项
 	opts := []asynq.Option{
 		asynq.ProcessIn(delay),
 		asynq.TaskID(request.MessageID),
 	}
 
-	// 获取渠道配置重试次数
+	// 获取重试次数
 	if channel, err := m.getChannel(request.RecipientType); err == nil {
 		opts = append(opts, asynq.MaxRetry(channel.GetMaxRetries()))
 	}
@@ -164,7 +258,7 @@ func (m *Manager) SendNotificationAsync(ctx context.Context, request *SendReques
 	return nil
 }
 
-// GetAvailableChannels 获取可用的通知渠道
+// GetAvailableChannels 获取可用渠道
 func (m *Manager) GetAvailableChannels() []string {
 	var channels []string
 	for name, channel := range m.channels {
@@ -175,7 +269,7 @@ func (m *Manager) GetAvailableChannels() []string {
 	return channels
 }
 
-// BatchSendNotification 批量发送通知
+// BatchSendNotification 批量发送
 func (m *Manager) BatchSendNotification(ctx context.Context, requests []*SendRequest) ([]*SendResponse, error) {
 	if len(requests) == 0 {
 		return nil, nil
@@ -208,7 +302,7 @@ func (m *Manager) BatchSendNotification(ctx context.Context, requests []*SendReq
 	return responses, nil
 }
 
-// ValidateChannelConfig 验证渠道配置
+// ValidateChannelConfig 验证配置
 func (m *Manager) ValidateChannelConfig(channelName string) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -221,26 +315,28 @@ func (m *Manager) ValidateChannelConfig(channelName string) error {
 	return channel.Validate()
 }
 
-// ReloadChannel 重新加载渠道配置
+// ReloadChannel 重新加载
 func (m *Manager) ReloadChannel(channelName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	switch channelName {
-	case "email":
-		if m.config.Email != nil && m.config.Email.IsEnabled() {
-			if err := m.config.Email.Validate(); err != nil {
+	case model.NotificationChannelEmail:
+		emailConfig := m.config.GetEmail()
+		if emailConfig != nil && emailConfig.IsEnabled() {
+			if err := emailConfig.Validate(); err != nil {
 				return fmt.Errorf("邮箱配置验证失败: %w", err)
 			}
-			m.channels["email"] = NewEmailChannel(m.config.Email, m.logger)
+			m.channels[model.NotificationChannelEmail] = NewEmailChannel(emailConfig, m.logger)
 			m.logger.Info("邮箱通知渠道已重新加载")
 		}
-	case "feishu":
-		if m.config.Feishu != nil && m.config.Feishu.IsEnabled() {
-			if err := m.config.Feishu.Validate(); err != nil {
+	case model.NotificationChannelFeishu:
+		feishuConfig := m.config.GetFeishu()
+		if feishuConfig != nil && feishuConfig.IsEnabled() {
+			if err := feishuConfig.Validate(); err != nil {
 				return fmt.Errorf("飞书配置验证失败: %w", err)
 			}
-			m.channels["feishu"] = NewFeishuChannel(m.config.Feishu, m.logger)
+			m.channels[model.NotificationChannelFeishu] = NewFeishuChannel(feishuConfig, m.logger)
 			m.logger.Info("飞书通知渠道已重新加载")
 		}
 	default:
@@ -250,20 +346,20 @@ func (m *Manager) ReloadChannel(channelName string) error {
 	return nil
 }
 
-// getChannel 根据接收人类型获取对应的通知渠道
+// getChannel 获取渠道
 func (m *Manager) getChannel(recipientType string) (NotificationChannel, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// 根据接收人类型推断渠道
+	// 推断渠道
 	var channelName string
 	switch recipientType {
 	case "email", "user_email":
-		channelName = "email"
+		channelName = model.NotificationChannelEmail
 	case "feishu", "feishu_user", "feishu_group":
-		channelName = "feishu"
+		channelName = model.NotificationChannelFeishu
 	default:
-		// 如果类型不明确，尝试从接收人地址推断
+		// 从地址推断
 		channelName = m.inferChannelFromAddress(recipientType)
 	}
 
@@ -275,23 +371,23 @@ func (m *Manager) getChannel(recipientType string) (NotificationChannel, error) 
 	return channel, nil
 }
 
-// inferChannelFromAddress 从接收人地址推断渠道类型
+// inferChannelFromAddress 推断渠道
 func (m *Manager) inferChannelFromAddress(address string) string {
-	// 邮箱地址
+	// 邮箱
 	if isValidEmail(address) {
-		return "email"
+		return model.NotificationChannelEmail
 	}
 
-	// 飞书用户ID或群组ID
+	// 飞书ID
 	if len(address) > 0 && (address[0] == 'o' || address[0] == 'u') {
-		return "feishu"
+		return model.NotificationChannelFeishu
 	}
 
-	// 默认返回邮箱
-	return "email"
+	// 默认邮箱
+	return model.NotificationChannelEmail
 }
 
-// ProcessNotificationTask 处理通知任务（用于队列消费者）
+// ProcessNotificationTask 处理任务
 func (m *Manager) ProcessNotificationTask(ctx context.Context, task *asynq.Task) error {
 	request, err := deserializeRequest(task.Payload())
 	if err != nil {
@@ -303,7 +399,7 @@ func (m *Manager) ProcessNotificationTask(ctx context.Context, task *asynq.Task)
 	return err
 }
 
-// GetChannelStats 获取渠道统计信息
+// GetChannelStats 获取统计
 func (m *Manager) GetChannelStats() map[string]interface{} {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -319,7 +415,7 @@ func (m *Manager) GetChannelStats() map[string]interface{} {
 	return stats
 }
 
-// Close 关闭管理器
+// Close 关闭
 func (m *Manager) Close() error {
 	if m.queueClient != nil {
 		return m.queueClient.Close()

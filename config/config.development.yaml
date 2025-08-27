@@ -43,8 +43,8 @@ notification:
   # 飞书配置
   feishu:
     enabled: true
-    app_id: "cli_a784ce0a6e78100e"
-    app_secret: "emBmFYuYmMuRIAsNb57N9gAS0hhmiVrA"
+    app_id: "xxx"
+    app_secret: "xxx"
     webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/"
     private_message_api: "https://open.feishu.cn/open-apis/im/v1/messages"
     tenant_access_token_api: "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"

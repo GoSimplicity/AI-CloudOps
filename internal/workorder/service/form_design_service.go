@@ -220,7 +220,7 @@ func (f *formDesignService) DeleteFormDesign(ctx context.Context, id int) error 
 	return nil
 }
 
-// GetFormDesign 获取表单设计详情
+// GetFormDesign 获取表单设计
 func (f *formDesignService) GetFormDesign(ctx context.Context, id int) (*model.WorkorderFormDesign, error) {
 	if id <= 0 {
 		return nil, errors.New("表单设计ID无效")
@@ -251,9 +251,8 @@ func (f *formDesignService) ListFormDesign(ctx context.Context, req *model.ListW
 	}, nil
 }
 
-// generateFieldIDs 智能生成表单字段ID，保持顺序一致性
+// generateFieldIDs 生成字段ID
 func (f *formDesignService) generateFieldIDs(schema *model.FormSchema) {
-	// 为每个字段分配连续的ID
 	for i := range schema.Fields {
 		schema.Fields[i].ID = strconv.Itoa(i + 1)
 	}

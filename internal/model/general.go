@@ -49,7 +49,7 @@ type ListReq struct {
 	Search string `json:"search" form:"search" binding:"omitempty"`
 }
 
-// ListResp 通用列表响应
+// ListResp 列表响应
 type ListResp[T any] struct {
 	Items []T   `json:"items"` // 数据列表
 	Total int64 `json:"total"` // 总数
@@ -57,7 +57,7 @@ type ListResp[T any] struct {
 
 type StringList []string
 
-// Scan 从数据库值转换为 StringList
+// Scan 从数据库转换
 func (m *StringList) Scan(val interface{}) error {
 	if val == nil {
 		*m = StringList{}
@@ -74,26 +74,67 @@ func (m *StringList) Scan(val interface{}) error {
 		return fmt.Errorf("无法扫描 %T 到 StringList", val)
 	}
 
-	if str == "" {
+	if str == "" || str == "[]" {
 		*m = StringList{}
 		return nil
 	}
 
-	*m = strings.Split(str, "|")
+	// 尝试JSON解析
+	var slice []string
+	if err := json.Unmarshal([]byte(str), &slice); err == nil {
+		*m = StringList(slice)
+		return nil
+	}
+
+	// 如果JSON解析失败，尝试向后兼容的分割方式
+	// 清理字符串，移除可能的引号和空格
+	cleanStr := strings.TrimSpace(str)
+	cleanStr = strings.Trim(cleanStr, `"'`)
+
+	if cleanStr == "" {
+		*m = StringList{}
+		return nil
+	}
+
+	// 尝试按逗号分割
+	if strings.Contains(cleanStr, ",") {
+		parts := strings.Split(cleanStr, ",")
+		for i, part := range parts {
+			parts[i] = strings.TrimSpace(strings.Trim(part, `"'`))
+		}
+		*m = StringList(parts)
+		return nil
+	}
+
+	// 尝试按竖线分割（向后兼容）
+	if strings.Contains(cleanStr, "|") {
+		*m = StringList(strings.Split(cleanStr, "|"))
+		return nil
+	}
+
+	// 如果都失败了，将整个字符串作为一个元素
+	*m = StringList{cleanStr}
 	return nil
 }
 
-// Value 将 StringList 转换为数据库值
+// Value 转换为数据库值
 func (m StringList) Value() (driver.Value, error) {
-	return strings.Join(m, "|"), nil
+	if len(m) == 0 {
+		return "[]", nil
+	}
+	data, err := json.Marshal([]string(m))
+	if err != nil {
+		return nil, err
+	}
+	return string(data), nil
 }
 
-// MarshalJSON 将 StringList 序列化为 JSON
+// MarshalJSON 序列化JSON
 func (m StringList) MarshalJSON() ([]byte, error) {
 	return json.Marshal([]string(m))
 }
 
-// UnmarshalJSON 将 JSON 反序列化为 StringList
+// UnmarshalJSON 反序列化JSON
 func (m *StringList) UnmarshalJSON(data []byte) error {
 	var ss []string
 	if err := json.Unmarshal(data, &ss); err != nil {
@@ -103,10 +144,10 @@ func (m *StringList) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// JSONMap 自定义JSON类型，用于处理map[string]interface{}
+// JSONMap JSON类型
 type JSONMap map[string]interface{}
 
-// Value 实现driver.Valuer接口，将JSONMap转为JSON字符串存储到数据库
+// Value 转为JSON存储
 func (m JSONMap) Value() (driver.Value, error) {
 	if m == nil {
 		return nil, nil
@@ -114,7 +155,7 @@ func (m JSONMap) Value() (driver.Value, error) {
 	return json.Marshal(m)
 }
 
-// Scan 实现sql.Scanner接口，从数据库读取JSON字符串并转为JSONMap
+// Scan 从数据库转换JSON
 func (m *JSONMap) Scan(value interface{}) error {
 	if value == nil {
 		*m = nil

@@ -54,7 +54,7 @@ func NewWorkorderInstanceTimeLineService(
 	}
 }
 
-// CreateInstanceTimeLine implements WorkorderInstanceTimeLineService.
+// CreateInstanceTimeLine 创建时间线
 func (i *instanceTimeLineService) CreateInstanceTimeLine(ctx context.Context, req *model.CreateWorkorderInstanceTimelineReq, creatorID int, creatorName string) (*model.WorkorderInstanceTimeline, error) {
 	timeline := &model.WorkorderInstanceTimeline{
 		InstanceID:   req.InstanceID,
@@ -72,7 +72,7 @@ func (i *instanceTimeLineService) CreateInstanceTimeLine(ctx context.Context, re
 	return timeline, nil
 }
 
-// GetInstanceTimeLine implements WorkorderInstanceTimeLineService.
+// GetInstanceTimeLine 获取时间线记录
 func (i *instanceTimeLineService) GetInstanceTimeLine(ctx context.Context, id int) (*model.WorkorderInstanceTimeline, error) {
 	timeline, err := i.dao.GetByID(ctx, id)
 	if err != nil {
@@ -82,7 +82,7 @@ func (i *instanceTimeLineService) GetInstanceTimeLine(ctx context.Context, id in
 	return timeline, nil
 }
 
-// ListInstanceTimeLine implements WorkorderInstanceTimeLineService.
+// ListInstanceTimeLine 获取时间线列表
 func (i *instanceTimeLineService) ListInstanceTimeLine(ctx context.Context, req *model.ListWorkorderInstanceTimelineReq) (*model.ListResp[*model.WorkorderInstanceTimeline], error) {
 	timelines, total, err := i.dao.List(ctx, req)
 	if err != nil {

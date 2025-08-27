@@ -226,17 +226,36 @@ var NotificationSet = wire.NewSet(
 	InitNotificationManager,
 )
 
-// InitNotificationConfig 初始化通知配置
-func InitNotificationConfig() *notification.NotificationConfig {
-	config, err := notification.LoadNotificationConfig()
-	if err != nil {
-		panic(err)
+// NotificationConfigAdapter 通知配置适配器
+type NotificationConfigAdapter struct {
+	config *NotificationConfig
+}
+
+// GetEmail 获取邮箱配置
+func (a *NotificationConfigAdapter) GetEmail() notification.EmailConfig {
+	if a.config.Email == nil {
+		return nil
 	}
-	return config
+	return a.config.Email
+}
+
+// GetFeishu 获取飞书配置
+func (a *NotificationConfigAdapter) GetFeishu() notification.FeishuConfig {
+	if a.config.Feishu == nil {
+		return nil
+	}
+	return a.config.Feishu
+}
+
+// InitNotificationConfig 初始化通知配置
+func InitNotificationConfig() notification.NotificationConfig {
+	return &NotificationConfigAdapter{
+		config: &GlobalConfig.Notification,
+	}
 }
 
 // InitNotificationManager 初始化通知管理器
-func InitNotificationManager(config *notification.NotificationConfig, asynqClient *asynq.Client, logger *zap.Logger) *notification.Manager {
+func InitNotificationManager(config notification.NotificationConfig, asynqClient *asynq.Client, logger *zap.Logger) *notification.Manager {
 	manager, err := notification.NewManager(config, asynqClient, logger)
 	if err != nil {
 		panic(err)

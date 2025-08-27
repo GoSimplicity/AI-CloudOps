@@ -27,9 +27,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
-    "errors"
-	
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userdao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
@@ -59,7 +59,7 @@ func NewCategoryGroupService(categoryDAO dao.WorkorderCategoryDAO, userDAO userd
 	}
 }
 
-// CreateCategory 创建分类的实现
+// CreateCategory 创建分类
 func (s *categoryGroupService) CreateCategory(ctx context.Context, req *model.CreateWorkorderCategoryReq) error {
 	// 检查分类是否存在
 	existingCategory, err := s.categoryDAO.GetCategoryByName(ctx, req.Name)
@@ -96,7 +96,7 @@ func (s *categoryGroupService) CreateCategory(ctx context.Context, req *model.Cr
 	return nil
 }
 
-// UpdateCategory 更新分类的实现
+// UpdateCategory 更新分类
 func (s *categoryGroupService) UpdateCategory(ctx context.Context, req *model.UpdateWorkorderCategoryReq) error {
 	// 检查分类是否存在
 	existingCategory, err := s.categoryDAO.GetCategory(ctx, req.ID)
@@ -128,7 +128,7 @@ func (s *categoryGroupService) UpdateCategory(ctx context.Context, req *model.Up
 	return nil
 }
 
-// DeleteCategory 删除分类的实现
+// DeleteCategory 删除分类
 func (s *categoryGroupService) DeleteCategory(ctx context.Context, id int) error {
 	// 检查分类是否存在
 	existingCategory, err := s.categoryDAO.GetCategory(ctx, id)
@@ -151,7 +151,7 @@ func (s *categoryGroupService) DeleteCategory(ctx context.Context, id int) error
 	return nil
 }
 
-// ListCategory 列出分类的实现
+// ListCategory 获取分类列表
 func (s *categoryGroupService) ListCategory(ctx context.Context, req model.ListWorkorderCategoryReq) (*model.ListResp[*model.WorkorderCategory], error) {
 	categories, total, err := s.categoryDAO.ListCategory(ctx, req)
 	if err != nil {
@@ -165,7 +165,7 @@ func (s *categoryGroupService) ListCategory(ctx context.Context, req model.ListW
 	}, nil
 }
 
-// GetCategory 获取单个分类详情的实现
+// GetCategory 获取分类详情
 func (s *categoryGroupService) GetCategory(ctx context.Context, id int) (*model.WorkorderCategory, error) {
 	category, err := s.categoryDAO.GetCategory(ctx, id)
 	if err != nil {

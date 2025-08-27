@@ -25,6 +25,11 @@
 
 package di
 
+import (
+	"fmt"
+	"time"
+)
+
 // Config 应用配置结构体
 type Config struct {
 	Server       ServerConfig       `mapstructure:"server"`
@@ -98,8 +103,18 @@ type MockConfig struct {
 
 // NotificationConfig 通知配置
 type NotificationConfig struct {
-	Email  EmailConfig  `mapstructure:"email"`
-	Feishu FeishuConfig `mapstructure:"feishu"`
+	Email  *EmailConfig  `mapstructure:"email"`
+	Feishu *FeishuConfig `mapstructure:"feishu"`
+}
+
+// GetEmail 获取邮箱配置
+func (c *NotificationConfig) GetEmail() *EmailConfig {
+	return c.Email
+}
+
+// GetFeishu 获取飞书配置
+func (c *NotificationConfig) GetFeishu() *FeishuConfig {
+	return c.Feishu
 }
 
 // EmailConfig 邮箱配置
@@ -116,6 +131,99 @@ type EmailConfig struct {
 	UseTLS        bool   `mapstructure:"use_tls" env:"NOTIFICATION_EMAIL_USE_TLS" default:"true"`
 }
 
+// IsEnabled 是否启用邮箱通知
+func (c *EmailConfig) IsEnabled() bool {
+	return c.Enabled
+}
+
+// GetMaxRetries 获取最大重试次数
+func (c *EmailConfig) GetMaxRetries() int {
+	if c.MaxRetries <= 0 {
+		return 3
+	}
+	return c.MaxRetries
+}
+
+// GetRetryInterval 获取重试间隔
+func (c *EmailConfig) GetRetryInterval() time.Duration {
+	if c.RetryInterval == "" {
+		return 5 * time.Minute
+	}
+	if d, err := time.ParseDuration(c.RetryInterval); err == nil {
+		return d
+	}
+	return 5 * time.Minute
+}
+
+// GetTimeout 获取超时时间
+func (c *EmailConfig) GetTimeout() time.Duration {
+	if c.Timeout == "" {
+		return 30 * time.Second
+	}
+	if d, err := time.ParseDuration(c.Timeout); err == nil {
+		return d
+	}
+	return 30 * time.Second
+}
+
+// GetChannelName 获取渠道名称
+func (c *EmailConfig) GetChannelName() string {
+	return "email"
+}
+
+// Validate 验证配置
+func (c *EmailConfig) Validate() error {
+	if !c.IsEnabled() {
+		return nil
+	}
+	if c.SMTPHost == "" {
+		return fmt.Errorf("SMTP host is required")
+	}
+	if c.SMTPPort <= 0 || c.SMTPPort > 65535 {
+		return fmt.Errorf("invalid SMTP port: %d", c.SMTPPort)
+	}
+	if c.Username == "" {
+		return fmt.Errorf("username is required")
+	}
+	if c.Password == "" {
+		return fmt.Errorf("password is required")
+	}
+	return nil
+}
+
+// GetSMTPHost 获取SMTP主机
+func (c *EmailConfig) GetSMTPHost() string {
+	return c.SMTPHost
+}
+
+// GetSMTPPort 获取SMTP端口
+func (c *EmailConfig) GetSMTPPort() int {
+	return c.SMTPPort
+}
+
+// GetUsername 获取用户名
+func (c *EmailConfig) GetUsername() string {
+	return c.Username
+}
+
+// GetPassword 获取密码
+func (c *EmailConfig) GetPassword() string {
+	return c.Password
+}
+
+// GetFromName 获取发件人名称
+func (c *EmailConfig) GetFromName() string {
+	if c.FromName == "" {
+		return "AI-CloudOps"
+	}
+	return c.FromName
+}
+
+// GetUseTLS 是否使用TLS
+func (c *EmailConfig) GetUseTLS() bool {
+	return c.UseTLS
+}
+
 // FeishuConfig 飞书配置
 type FeishuConfig struct {
 	Enabled              bool   `mapstructure:"enabled" env:"NOTIFICATION_FEISHU_ENABLED" default:"false"`
@@ -127,6 +235,94 @@ type FeishuConfig struct {
 	MaxRetries           int    `mapstructure:"max_retries" env:"NOTIFICATION_FEISHU_MAX_RETRIES" default:"3"`
 	RetryInterval        string `mapstructure:"retry_interval" env:"NOTIFICATION_FEISHU_RETRY_INTERVAL" default:"5m"`
 	Timeout              string `mapstructure:"timeout" env:"NOTIFICATION_FEISHU_TIMEOUT" default:"10s"`
+}
+
+// IsEnabled 是否启用飞书通知
+func (c *FeishuConfig) IsEnabled() bool {
+	return c.Enabled
+}
+
+// GetMaxRetries 获取最大重试次数
+func (c *FeishuConfig) GetMaxRetries() int {
+	if c.MaxRetries <= 0 {
+		return 3
+	}
+	return c.MaxRetries
+}
+
+// GetRetryInterval 获取重试间隔
+func (c *FeishuConfig) GetRetryInterval() time.Duration {
+	if c.RetryInterval == "" {
+		return 5 * time.Minute
+	}
+	if d, err := time.ParseDuration(c.RetryInterval); err == nil {
+		return d
+	}
+	return 5 * time.Minute
+}
+
+// GetTimeout 获取超时时间
+func (c *FeishuConfig) GetTimeout() time.Duration {
+	if c.Timeout == "" {
+		return 10 * time.Second
+	}
+	if d, err := time.ParseDuration(c.Timeout); err == nil {
+		return d
+	}
+	return 10 * time.Second
+}
+
+// GetChannelName 获取渠道名称
+func (c *FeishuConfig) GetChannelName() string {
+	return "feishu"
+}
+
+// Validate 验证配置
+func (c *FeishuConfig) Validate() error {
+	if !c.IsEnabled() {
+		return nil
+	}
+	if c.AppID == "" {
+		return fmt.Errorf("app_id is required")
+	}
+	if c.AppSecret == "" {
+		return fmt.Errorf("app_secret is required")
+	}
+	if c.WebhookURL == "" {
+		return fmt.Errorf("webhook_url is required")
+	}
+	if c.PrivateMessageAPI == "" {
+		return fmt.Errorf("private_message_api is required")
+	}
+	if c.TenantAccessTokenAPI == "" {
+		return fmt.Errorf("tenant_access_token_api is required")
+	}
+	return nil
+}
+
+// GetAppID 获取应用ID
+func (c *FeishuConfig) GetAppID() string {
+	return c.AppID
+}
+
+// GetAppSecret 获取应用密钥
+func (c *FeishuConfig) GetAppSecret() string {
+	return c.AppSecret
+}
+
+// GetWebhookURL 获取Webhook URL
+func (c *FeishuConfig) GetWebhookURL() string {
+	return c.WebhookURL
+}
+
+// GetPrivateMessageAPI 获取私聊消息API
+func (c *FeishuConfig) GetPrivateMessageAPI() string {
+	return c.PrivateMessageAPI
+}
+
+// GetTenantAccessTokenAPI 获取租户访问令牌API
+func (c *FeishuConfig) GetTenantAccessTokenAPI() string {
+	return c.TenantAccessTokenAPI
 }
 
 // WebhookConfig Webhook配置（用于webhook子系统）

@@ -55,6 +55,9 @@ func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 		instanceGroup.POST("/assign/:id", h.AssignInstance)
 		instanceGroup.POST("/approve/:id", h.ApproveInstance)
 		instanceGroup.POST("/reject/:id", h.RejectInstance)
+		instanceGroup.POST("/cancel/:id", h.CancelInstance)
+		instanceGroup.POST("/complete/:id", h.CompleteInstance)
+		instanceGroup.POST("/return/:id", h.ReturnInstance)
 		instanceGroup.GET("/actions/:id", h.GetAvailableActions)
 		instanceGroup.GET("/current-step/:id", h.GetCurrentStep)
 	}
@@ -335,6 +338,96 @@ func (h *InstanceHandler) RejectInstance(ctx *gin.Context) {
 	})
 }
 
+// CancelInstance 取消工单
+// @Summary 取消工单
+// @Description 取消指定的工单实例
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单实例ID"
+// @Param request body model.CancelWorkorderInstanceReq true "取消原因"
+// @Success 200 {object} utils.ApiResponse "取消成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/cancel/{id} [post]
+func (h *InstanceHandler) CancelInstance(ctx *gin.Context) {
+	var req model.CancelWorkorderInstanceReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		return
+	}
+
+	req.ID = id
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return nil, h.service.CancelInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
+	})
+}
+
+// CompleteInstance 完成工单
+// @Summary 完成工单
+// @Description 完成指定的工单实例
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单实例ID"
+// @Param request body model.CompleteWorkorderInstanceReq true "完成说明"
+// @Success 200 {object} utils.ApiResponse "完成成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/complete/{id} [post]
+func (h *InstanceHandler) CompleteInstance(ctx *gin.Context) {
+	var req model.CompleteWorkorderInstanceReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		return
+	}
+
+	req.ID = id
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return nil, h.service.CompleteInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
+	})
+}
+
+// ReturnInstance 退回工单
+// @Summary 退回工单
+// @Description 退回指定的工单实例
+// @Tags 工单管理
+// @Accept json
+// @Produce json
+// @Param id path int true "工单实例ID"
+// @Param request body model.ReturnWorkorderInstanceReq true "退回原因"
+// @Success 200 {object} utils.ApiResponse "退回成功"
+// @Failure 400 {object} utils.ApiResponse "参数错误"
+// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Security BearerAuth
+// @Router /api/workorder/instance/return/{id} [post]
+func (h *InstanceHandler) ReturnInstance(ctx *gin.Context) {
+	var req model.ReturnWorkorderInstanceReq
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		return
+	}
+
+	req.ID = id
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, &req, func() (any, error) {
+		return nil, h.service.ReturnInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
+	})
+}
+
 // GetAvailableActions 获取可执行动作
 // @Summary 获取可执行动作
 // @Description 获取当前工单实例可执行的动作列表
@@ -348,16 +441,19 @@ func (h *InstanceHandler) RejectInstance(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/workorder/instance/actions/{id} [get]
 func (h *InstanceHandler) GetAvailableActions(ctx *gin.Context) {
+	var req model.GetAvailableActionsReq
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
+	req.ID = id
+
 	user := ctx.MustGet("user").(utils.UserClaims)
 
 	utils.HandleRequest(ctx, nil, func() (any, error) {
-		return h.service.GetAvailableActions(ctx, id, user.Uid)
+		return h.service.GetAvailableActions(ctx, req.ID, user.Uid)
 	})
 }
 
@@ -374,13 +470,16 @@ func (h *InstanceHandler) GetAvailableActions(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/workorder/instance/current-step/{id} [get]
 func (h *InstanceHandler) GetCurrentStep(ctx *gin.Context) {
+	var req model.GetCurrentStepReq
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
+	req.ID = id
+
 	utils.HandleRequest(ctx, nil, func() (any, error) {
-		return h.service.GetCurrentStep(ctx, id)
+		return h.service.GetCurrentStep(ctx, req.ID)
 	})
 }
