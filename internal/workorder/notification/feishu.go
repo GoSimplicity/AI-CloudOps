@@ -302,92 +302,155 @@ func (f *FeishuChannel) ensureAccessToken(ctx context.Context) error {
 
 // buildGroupMessage 构建群组消息
 func (f *FeishuChannel) buildGroupMessage(request *SendRequest) map[string]interface{} {
-	// 获取优先级标识
+	// 获取优先级和状态标识
 	priorityIcon := "🔔"
 	priorityText := "中等"
+	priorityColor := "orange"
+	templateColor := "blue"
+
 	if request.Priority == 1 {
 		priorityIcon = "🔴"
 		priorityText = "高"
+		priorityColor = "red"
+		templateColor = "red"
 	} else if request.Priority == 3 {
 		priorityIcon = "🟢"
 		priorityText = "低"
+		priorityColor = "green"
+		templateColor = "green"
 	}
 
-	// 构建富文本内容
+	// 获取事件类型图标
+	eventIcon := "📋"
+	switch request.EventType {
+	case "工单创建":
+		eventIcon = "📝"
+	case "工单提交":
+		eventIcon = "📤"
+	case "工单指派":
+		eventIcon = "👤"
+	case "工单审批":
+		eventIcon = "✅"
+	case "工单拒绝":
+		eventIcon = "❌"
+	case "工单完成":
+		eventIcon = "🎉"
+	case "工单关闭":
+		eventIcon = "🔒"
+	default:
+		eventIcon = "📋"
+	}
+
+	// 构建卡片标题
+	headerTitle := fmt.Sprintf("%s %s", eventIcon, request.Subject)
+
+	// 构建卡片内容元素
 	elements := []map[string]interface{}{
+		// 基础信息区域
+		{
+			"tag": "div",
+			"fields": []map[string]interface{}{
+				{
+					"is_short": true,
+					"text": map[string]interface{}{
+						"tag": "lark_md",
+						"content": fmt.Sprintf("**📋 工单编号**\n%s", func() string {
+							if request.InstanceID != nil {
+								return fmt.Sprintf("#%d", *request.InstanceID)
+							}
+							return "系统通知"
+						}()),
+					},
+				},
+				{
+					"is_short": true,
+					"text": map[string]interface{}{
+						"tag":     "lark_md",
+						"content": fmt.Sprintf("**%s 优先级**\n<font color='%s'>%s</font>", priorityIcon, priorityColor, priorityText),
+					},
+				},
+			},
+		},
+
+		// 操作信息区域
+		{
+			"tag": "div",
+			"fields": []map[string]interface{}{
+				{
+					"is_short": true,
+					"text": map[string]interface{}{
+						"tag":     "lark_md",
+						"content": fmt.Sprintf("**👤 操作人员**\n%s", request.RecipientName),
+					},
+				},
+				{
+					"is_short": true,
+					"text": map[string]interface{}{
+						"tag":     "lark_md",
+						"content": fmt.Sprintf("**🔄 事件类型**\n%s %s", eventIcon, request.EventType),
+					},
+				},
+			},
+		},
+
+		// 分隔线
+		{
+			"tag": "hr",
+		},
+
+		// 详细内容区域
 		{
 			"tag": "div",
 			"text": map[string]interface{}{
 				"tag":     "lark_md",
-				"content": fmt.Sprintf("%s **工单系统通知**", priorityIcon),
+				"content": fmt.Sprintf("**📄 详细内容**\n%s", request.Content),
 			},
 		},
+
+		// 分隔线
 		{
 			"tag": "hr",
 		},
+
+		// 时间信息
 		{
-			"tag": "div",
-			"fields": []map[string]interface{}{
+			"tag": "note",
+			"elements": []map[string]interface{}{
 				{
-					"is_short": true,
-					"text": map[string]interface{}{
-						"tag":     "lark_md",
-						"content": fmt.Sprintf("**接收人：**\n%s", request.RecipientName),
-					},
-				},
-				{
-					"is_short": true,
-					"text": map[string]interface{}{
-						"tag":     "lark_md",
-						"content": fmt.Sprintf("**优先级：**\n%s", priorityText),
-					},
+					"tag":     "lark_md",
+					"content": fmt.Sprintf("🕐 **发送时间：** %s  |  📱 **AI-CloudOps** 智能运维管理平台", time.Now().Format("2006-01-02 15:04:05")),
 				},
 			},
 		},
 	}
 
-	// 添加工单信息
+	// 如果有工单ID，添加操作按钮
 	if request.InstanceID != nil {
-		elements = append(elements, map[string]interface{}{
-			"tag": "div",
-			"fields": []map[string]interface{}{
+		actionButtons := map[string]interface{}{
+			"tag": "action",
+			"actions": []map[string]interface{}{
 				{
-					"is_short": true,
+					"tag": "button",
 					"text": map[string]interface{}{
-						"tag":     "lark_md",
-						"content": fmt.Sprintf("**工单ID：**\n#%d", *request.InstanceID),
+						"tag":     "plain_text",
+						"content": "查看详情",
 					},
+					"type": "primary",
+					"url":  fmt.Sprintf("#/workorder/instance/detail/%d", *request.InstanceID),
 				},
 				{
-					"is_short": true,
+					"tag": "button",
 					"text": map[string]interface{}{
-						"tag":     "lark_md",
-						"content": fmt.Sprintf("**事件类型：**\n%s", request.EventType),
+						"tag":     "plain_text",
+						"content": "访问系统",
 					},
+					"type": "default",
+					"url":  "#/dashboard",
 				},
 			},
-		})
+		}
+		elements = append(elements, actionButtons)
 	}
-
-	// 添加消息内容
-	elements = append(elements, map[string]interface{}{
-		"tag": "div",
-		"text": map[string]interface{}{
-			"tag":     "lark_md",
-			"content": fmt.Sprintf("**消息内容：**\n%s", request.Content),
-		},
-	})
-
-	// 添加时间戳
-	elements = append(elements, map[string]interface{}{
-		"tag": "note",
-		"elements": []map[string]interface{}{
-			{
-				"tag":     "lark_md",
-				"content": fmt.Sprintf("发送时间：%s", time.Now().Format("2006-01-02 15:04:05")),
-			},
-		},
-	})
 
 	return map[string]interface{}{
 		"msg_type": "interactive",
@@ -395,34 +458,203 @@ func (f *FeishuChannel) buildGroupMessage(request *SendRequest) map[string]inter
 			"elements": elements,
 			"header": map[string]interface{}{
 				"title": map[string]interface{}{
-					"tag":     "lark_md",
-					"content": request.Subject,
+					"tag":     "plain_text",
+					"content": headerTitle,
 				},
-				"template": "blue",
+				"template": templateColor,
+				"ud_icon": map[string]interface{}{
+					"token": "img_v2_041b28e3-5680-48c2-9af2-497ace79333g",
+				},
 			},
 		},
 	}
 }
 
-// buildPrivateMessage 构建私聊消息
+// buildPrivateMessage 构建私聊消息（卡片格式）
 func (f *FeishuChannel) buildPrivateMessage(request *SendRequest) map[string]interface{} {
-	// 构建文本消息
-	content := fmt.Sprintf("🔔 **工单系统通知**\n\n")
-	content += fmt.Sprintf("**接收人：** %s\n", request.RecipientName)
-	content += fmt.Sprintf("**事件类型：** %s\n", request.EventType)
+	// 获取优先级和状态标识
+	priorityIcon := "🔔"
+	priorityText := "中等"
+	priorityColor := "orange"
+	templateColor := "blue"
 
-	if request.InstanceID != nil {
-		content += fmt.Sprintf("**工单ID：** #%d\n", *request.InstanceID)
+	if request.Priority == 1 {
+		priorityIcon = "🔴"
+		priorityText = "高"
+		priorityColor = "red"
+		templateColor = "red"
+	} else if request.Priority == 3 {
+		priorityIcon = "🟢"
+		priorityText = "低"
+		priorityColor = "green"
+		templateColor = "green"
 	}
 
-	content += fmt.Sprintf("\n**消息内容：**\n%s\n", request.Content)
-	content += fmt.Sprintf("\n---\n*发送时间：%s*", time.Now().Format("2006-01-02 15:04:05"))
+	// 获取事件类型图标
+	eventIcon := "📋"
+	switch request.EventType {
+	case "工单创建":
+		eventIcon = "📝"
+	case "工单提交":
+		eventIcon = "📤"
+	case "工单指派":
+		eventIcon = "👤"
+	case "工单审批":
+		eventIcon = "✅"
+	case "工单拒绝":
+		eventIcon = "❌"
+	case "工单完成":
+		eventIcon = "🎉"
+	case "工单关闭":
+		eventIcon = "🔒"
+	default:
+		eventIcon = "📋"
+	}
+
+	// 构建卡片标题
+	headerTitle := fmt.Sprintf("%s %s", eventIcon, request.Subject)
+
+	// 构建卡片内容元素
+	elements := []map[string]interface{}{
+		// 个人通知标识
+		{
+			"tag": "div",
+			"text": map[string]interface{}{
+				"tag":     "lark_md",
+				"content": "💌 **个人专属通知**",
+			},
+		},
+
+		// 分隔线
+		{
+			"tag": "hr",
+		},
+
+		// 基础信息区域
+		{
+			"tag": "div",
+			"fields": []map[string]interface{}{
+				{
+					"is_short": true,
+					"text": map[string]interface{}{
+						"tag": "lark_md",
+						"content": fmt.Sprintf("**📋 工单编号**\n%s", func() string {
+							if request.InstanceID != nil {
+								return fmt.Sprintf("#%d", *request.InstanceID)
+							}
+							return "系统通知"
+						}()),
+					},
+				},
+				{
+					"is_short": true,
+					"text": map[string]interface{}{
+						"tag":     "lark_md",
+						"content": fmt.Sprintf("**%s 优先级**\n<font color='%s'>%s</font>", priorityIcon, priorityColor, priorityText),
+					},
+				},
+			},
+		},
+
+		// 操作信息区域
+		{
+			"tag": "div",
+			"fields": []map[string]interface{}{
+				{
+					"is_short": true,
+					"text": map[string]interface{}{
+						"tag":     "lark_md",
+						"content": fmt.Sprintf("**👤 接收人**\n%s", request.RecipientName),
+					},
+				},
+				{
+					"is_short": true,
+					"text": map[string]interface{}{
+						"tag":     "lark_md",
+						"content": fmt.Sprintf("**🔄 事件类型**\n%s %s", eventIcon, request.EventType),
+					},
+				},
+			},
+		},
+
+		// 分隔线
+		{
+			"tag": "hr",
+		},
+
+		// 详细内容区域
+		{
+			"tag": "div",
+			"text": map[string]interface{}{
+				"tag":     "lark_md",
+				"content": fmt.Sprintf("**📄 详细内容**\n%s", request.Content),
+			},
+		},
+
+		// 分隔线
+		{
+			"tag": "hr",
+		},
+
+		// 时间信息
+		{
+			"tag": "note",
+			"elements": []map[string]interface{}{
+				{
+					"tag":     "lark_md",
+					"content": fmt.Sprintf("🕐 **发送时间：** %s  |  📱 **AI-CloudOps** 智能运维管理平台", time.Now().Format("2006-01-02 15:04:05")),
+				},
+			},
+		},
+	}
+
+	// 如果有工单ID，添加操作按钮
+	if request.InstanceID != nil {
+		actionButtons := map[string]interface{}{
+			"tag": "action",
+			"actions": []map[string]interface{}{
+				{
+					"tag": "button",
+					"text": map[string]interface{}{
+						"tag":     "plain_text",
+						"content": "查看详情",
+					},
+					"type": "primary",
+					"url":  fmt.Sprintf("#/workorder/instance/detail/%d", *request.InstanceID),
+				},
+				{
+					"tag": "button",
+					"text": map[string]interface{}{
+						"tag":     "plain_text",
+						"content": "访问系统",
+					},
+					"type": "default",
+					"url":  "#/dashboard",
+				},
+			},
+		}
+		elements = append(elements, actionButtons)
+	}
 
 	return map[string]interface{}{
 		"receive_id":      request.RecipientAddr,
 		"receive_id_type": "user_id",
-		"msg_type":        "text",
-		"content":         fmt.Sprintf(`{"text":"%s"}`, strings.ReplaceAll(content, "\"", "\\\"")),
+		"msg_type":        "interactive",
+		"content": map[string]interface{}{
+			"card": map[string]interface{}{
+				"elements": elements,
+				"header": map[string]interface{}{
+					"title": map[string]interface{}{
+						"tag":     "plain_text",
+						"content": headerTitle,
+					},
+					"template": templateColor,
+					"ud_icon": map[string]interface{}{
+						"token": "img_v2_041b28e3-5680-48c2-9af2-497ace79333g",
+					},
+				},
+			},
+		},
 	}
 }
 
