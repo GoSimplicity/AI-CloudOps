@@ -52,7 +52,6 @@ func (h *NotificationHandler) RegisterRouters(server *gin.Engine) {
 		notificationGroup.GET("/detail/:id", h.DetailNotification)
 		notificationGroup.GET("/logs", h.GetSendLogs)
 		notificationGroup.POST("/test/send", h.TestSendNotification)
-		// 新增接口
 		notificationGroup.GET("/channels", h.GetAvailableChannels)
 		notificationGroup.POST("/send", h.SendNotificationManually)
 	}

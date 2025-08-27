@@ -96,13 +96,13 @@ type CreateWorkorderFormDesignReq struct {
 // UpdateWorkorderFormDesignReq 更新工单表单设计请求
 type UpdateWorkorderFormDesignReq struct {
 	ID          int        `json:"id" binding:"required,min=1"`
-	Name        string     `json:"name" binding:"required,min=1,max=200"`
+	Name        string     `json:"name" binding:"omitempty,min=1,max=200"`
 	Description string     `json:"description" binding:"omitempty,max=1000"`
-	Schema      FormSchema `json:"schema" binding:"required"`
-	Status      int8       `json:"status" binding:"required,oneof=1 2 3"`
+	Schema      FormSchema `json:"schema" binding:"omitempty"`
+	Status      int8       `json:"status" binding:"omitempty,oneof=1 2 3"`
 	CategoryID  *int       `json:"category_id" binding:"omitempty,min=1"`
 	Tags        StringList `json:"tags" binding:"omitempty"`
-	IsTemplate  int8       `json:"is_template" binding:"required,oneof=1 2"`
+	IsTemplate  int8       `json:"is_template" binding:"omitempty,oneof=1 2"`
 }
 
 // DeleteWorkorderFormDesignReq 删除工单表单设计请求

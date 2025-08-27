@@ -45,24 +45,27 @@ type InstanceCommentService interface {
 }
 
 type instanceCommentService struct {
-	dao         dao.WorkorderInstanceCommentDAO
-	instanceDao dao.WorkorderInstanceDAO
-	logger      *zap.Logger
+	dao                 dao.WorkorderInstanceCommentDAO
+	instanceDao         dao.WorkorderInstanceDAO
+	notificationService WorkorderNotificationService
+	logger              *zap.Logger
 }
 
 func NewInstanceCommentService(
 	dao dao.WorkorderInstanceCommentDAO,
 	instanceDao dao.WorkorderInstanceDAO,
+	notificationService WorkorderNotificationService,
 	logger *zap.Logger,
 ) InstanceCommentService {
 	return &instanceCommentService{
-		dao:         dao,
-		instanceDao: instanceDao,
-		logger:      logger,
+		dao:                 dao,
+		instanceDao:         instanceDao,
+		notificationService: notificationService,
+		logger:              logger,
 	}
 }
 
-// CreateInstanceComment 创建工单评论
+// CreateInstanceComment 创建评论
 func (s *instanceCommentService) CreateInstanceComment(ctx context.Context, req *model.CreateWorkorderInstanceCommentReq) error {
 	// 验证工单是否存在
 	_, err := s.instanceDao.GetInstanceByID(ctx, req.InstanceID)
@@ -106,11 +109,22 @@ func (s *instanceCommentService) CreateInstanceComment(ctx context.Context, req 
 		return fmt.Errorf("创建工单评论失败: %w", err)
 	}
 
+	// 发送评论通知（仅对非系统评论发送通知）
+	if s.notificationService != nil && comment.IsSystem != 1 {
+		go func() {
+			// 异步发送通知，避免阻塞主流程
+			if err := s.notificationService.SendWorkorderNotification(ctx, comment.InstanceID, model.EventTypeInstanceCommented, comment.Content); err != nil {
+				s.logger.Error("发送工单评论通知失败",
+					zap.Error(err),
+					zap.Int("instance_id", comment.InstanceID))
+			}
+		}()
+	}
+
 	return nil
 }
 
-// 只允许创建者修改自己的评论（系统评论除外）
-// 这里应该检查操作人ID，而不是请求ID
+// 只允许创建者修改自己的评论
 func (s *instanceCommentService) UpdateInstanceComment(ctx context.Context, req *model.UpdateWorkorderInstanceCommentReq, userID int) error {
 	// 获取现有评论
 	existingComment, err := s.dao.GetInstanceCommentByID(ctx, req.ID)
@@ -140,7 +154,7 @@ func (s *instanceCommentService) UpdateInstanceComment(ctx context.Context, req 
 	return nil
 }
 
-// DeleteInstanceComment 删除工单评论
+// DeleteInstanceComment 删除评论
 func (s *instanceCommentService) DeleteInstanceComment(ctx context.Context, id int, userID int) error {
 	// 获取评论信息
 	comment, err := s.dao.GetInstanceCommentByID(ctx, id)
@@ -162,7 +176,7 @@ func (s *instanceCommentService) DeleteInstanceComment(ctx context.Context, id i
 	return nil
 }
 
-// GetInstanceComment 获取工单评论详情
+// GetInstanceComment 获取工单评论
 func (s *instanceCommentService) GetInstanceComment(ctx context.Context, id int) (*model.WorkorderInstanceComment, error) {
 	comment, err := s.dao.GetInstanceCommentByID(ctx, id)
 	if err != nil {
@@ -173,7 +187,7 @@ func (s *instanceCommentService) GetInstanceComment(ctx context.Context, id int)
 	return comment, nil
 }
 
-// ListInstanceComments 获取工单评论列表
+// ListInstanceComments 获取评论列表
 func (s *instanceCommentService) ListInstanceComments(ctx context.Context, req *model.ListWorkorderInstanceCommentReq) (*model.ListResp[*model.WorkorderInstanceComment], error) {
 	comments, total, err := s.dao.ListInstanceComments(ctx, req)
 	if err != nil {
@@ -187,7 +201,7 @@ func (s *instanceCommentService) ListInstanceComments(ctx context.Context, req *
 	}, nil
 }
 
-// GetInstanceCommentsTree 获取工单评论树结构
+// GetInstanceCommentsTree 获取评论树
 func (s *instanceCommentService) GetInstanceCommentsTree(ctx context.Context, instanceID int) ([]*model.WorkorderInstanceComment, error) {
 	// 验证工单是否存在
 	_, err := s.instanceDao.GetInstanceByID(ctx, instanceID)

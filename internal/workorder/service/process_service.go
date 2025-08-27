@@ -307,7 +307,7 @@ func (p *workorderProcessService) ListWorkorderProcess(ctx context.Context, req 
 	return result, nil
 }
 
-// DetailWorkorderProcess 获取流程详情
+// DetailWorkorderProcess 获取流程
 func (p *workorderProcessService) DetailWorkorderProcess(ctx context.Context, id int) (*model.WorkorderProcess, error) {
 	if id <= 0 {
 		return nil, errors.New("流程ID无效")

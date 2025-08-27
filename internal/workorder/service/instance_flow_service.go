@@ -57,7 +57,7 @@ func NewInstanceFlowService(dao dao.WorkorderInstanceFlowDAO, logger *zap.Logger
 	}
 }
 
-// ListInstanceFlows 分页获取工单流程记录列表
+// ListInstanceFlows 获取工单流程记录列表
 func (s *instanceFlowService) ListInstanceFlows(ctx context.Context, req *model.ListWorkorderInstanceFlowReq) (*model.ListResp[*model.WorkorderInstanceFlow], error) {
 	if req == nil {
 		return nil, dao.ErrInstanceInvalidID
@@ -88,7 +88,7 @@ func (s *instanceFlowService) ListInstanceFlows(ctx context.Context, req *model.
 	}, nil
 }
 
-// DetailInstanceFlow 获取工单流转记录详情
+// DetailInstanceFlow 获取工单流转记录
 func (s *instanceFlowService) DetailInstanceFlow(ctx context.Context, id int) (*model.WorkorderInstanceFlow, error) {
 	if id <= 0 {
 		return nil, dao.ErrInstanceInvalidID

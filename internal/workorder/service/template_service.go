@@ -212,7 +212,7 @@ func (t *workorderTemplateService) ListTemplate(ctx context.Context, req *model.
 	return result, nil
 }
 
-// DetailTemplate 获取模板详情
+// DetailTemplate 获取模板
 func (t *workorderTemplateService) DetailTemplate(ctx context.Context, req *model.DetailWorkorderTemplateReq) (*model.WorkorderTemplate, error) {
 	if req.ID <= 0 {
 		return nil, errors.New("模板ID无效")
@@ -227,7 +227,7 @@ func (t *workorderTemplateService) DetailTemplate(ctx context.Context, req *mode
 	return template, nil
 }
 
-// checkTemplateNameExists 检查模板名称是否存在
+// checkTemplateNameExists 检查模板名称
 func (t *workorderTemplateService) checkTemplateNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
 	if name == "" {
 		return false, errors.New("模板名称不能为空")
@@ -257,7 +257,7 @@ func (t *workorderTemplateService) validateProcessExists(ctx context.Context, pr
 	return nil
 }
 
-// validateCategoryExists 验证分类是否存在
+// validateCategoryExists 验证分类
 func (t *workorderTemplateService) validateCategoryExists(ctx context.Context, categoryID int) error {
 	if categoryID <= 0 {
 		return errors.New("分类ID无效")

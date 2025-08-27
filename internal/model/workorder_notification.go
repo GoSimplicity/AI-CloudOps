@@ -27,6 +27,105 @@ import (
 	"time"
 )
 
+// 事件类型
+const (
+	EventTypeInstanceCreated   = "instance_created"   // 工单创建
+	EventTypeInstanceSubmitted = "instance_submitted" // 工单提交
+	EventTypeInstanceAssigned  = "instance_assigned"  // 工单指派
+	EventTypeInstanceApproved  = "instance_approved"  // 工单审批通过
+	EventTypeInstanceRejected  = "instance_rejected"  // 工单拒绝
+	EventTypeInstanceCompleted = "instance_completed" // 工单完成
+	EventTypeInstanceCancelled = "instance_cancelled" // 工单取消
+	EventTypeInstanceUpdated   = "instance_updated"   // 工单更新
+	EventTypeInstanceCommented = "instance_commented" // 工单评论
+	EventTypeInstanceDeleted   = "instance_deleted"   // 工单删除
+	EventTypeInstanceReturned  = "instance_returned"  // 工单退回
+)
+
+// 通知状态常量
+const (
+	NotificationStatusPending int8 = 1 // 待发送
+	NotificationStatusSending int8 = 2 // 发送中
+	NotificationStatusSuccess int8 = 3 // 发送成功
+	NotificationStatusFailed  int8 = 4 // 发送失败
+)
+
+// 通知渠道
+const (
+	NotificationChannelEmail   = "email"   // 邮件通知
+	NotificationChannelFeishu  = "feishu"  // 飞书通知
+	NotificationChannelSMS     = "sms"     // 短信通知
+	NotificationChannelWebhook = "webhook" // Webhook通知
+)
+
+// 接收人类型
+const (
+	RecipientTypeCreator  = "creator"  // 工单创建人
+	RecipientTypeAssignee = "assignee" // 工单处理人
+	RecipientTypeUser     = "user"     // 指定用户
+	RecipientTypeRole     = "role"     // 角色用户
+	RecipientTypeDept     = "dept"     // 部门用户
+	RecipientTypeCustom   = "custom"   // 自定义用户
+)
+
+// 通知状态常量
+const (
+	NotificationStatusEnabled  int8 = 1 // 启用
+	NotificationStatusDisabled int8 = 2 // 禁用
+)
+
+// 优先级
+const (
+	NotificationPriorityHigh   int8 = 1 // 高优先级
+	NotificationPriorityMedium int8 = 2 // 中优先级
+	NotificationPriorityLow    int8 = 3 // 低优先级
+)
+
+// 发送状态
+const (
+	NotificationSendStatusPending   int8 = 1 // 待发送
+	NotificationSendStatusSending   int8 = 2 // 发送中
+	NotificationSendStatusSuccess   int8 = 3 // 发送成功
+	NotificationSendStatusFailed    int8 = 4 // 发送失败
+	NotificationSendStatusCancelled int8 = 5 // 已取消
+)
+
+// 队列状态
+const (
+	NotificationQueueStatusPending    int8 = 1 // 待处理
+	NotificationQueueStatusProcessing int8 = 2 // 处理中
+	NotificationQueueStatusSuccess    int8 = 3 // 处理成功
+	NotificationQueueStatusFailed     int8 = 4 // 处理失败
+)
+
+// 触发类型
+const (
+	TriggerTypeImmediate   = "immediate"   // 立即触发
+	TriggerTypeDelayed     = "delayed"     // 延迟触发
+	TriggerTypeScheduled   = "scheduled"   // 定时触发
+	TriggerTypeConditional = "conditional" // 条件触发
+)
+
+// 任务类型
+const (
+	TaskTypeSendNotification        = "notification:send"
+	TaskTypeBatchSendNotification   = "notification:batch_send"
+	TaskTypeScheduledNotification   = "notification:scheduled"
+	TaskTypeRetryFailedNotification = "notification:retry_failed"
+)
+
+// 流程动作
+const (
+	FlowActionUpdate  = "update"  // 更新
+	FlowActionComment = "comment" // 评论
+)
+
+// 默认配置
+const (
+	IsDefaultYes int8 = 1 // 是
+	IsDefaultNo  int8 = 2 // 否
+)
+
 // 工单通知配置
 type WorkorderNotification struct {
 	Model
@@ -64,7 +163,7 @@ type WorkorderNotificationChannel struct {
 	Channels StringList `json:"channels"`
 }
 
-// CreateWorkorderNotificationReq 创建工单通知配置
+// CreateWorkorderNotificationReq 创建通知配置
 type CreateWorkorderNotificationReq struct {
 	Name             string     `json:"name" binding:"required"`
 	Description      string     `json:"description"`
@@ -92,7 +191,7 @@ type CreateWorkorderNotificationReq struct {
 	UserID           int        `json:"-"` // 由中间件注入
 }
 
-// UpdateWorkorderNotificationReq 更新工单通知配置
+// UpdateWorkorderNotificationReq 更新通知配置
 type UpdateWorkorderNotificationReq struct {
 	ID               int        `json:"id" binding:"required"`
 	Name             string     `json:"name"`
@@ -120,12 +219,12 @@ type UpdateWorkorderNotificationReq struct {
 	Settings         JSONMap    `json:"settings"`
 }
 
-// DeleteWorkorderNotificationReq 删除工单通知配置
+// DeleteWorkorderNotificationReq 删除通知配置
 type DeleteWorkorderNotificationReq struct {
 	ID int `json:"id" binding:"required"`
 }
 
-// ListWorkorderNotificationReq 工单通知配置列表
+// ListWorkorderNotificationReq 通知配置列表
 type ListWorkorderNotificationReq struct {
 	Page       int    `json:"page" form:"page"`
 	PageSize   int    `json:"page_size" form:"page_size"`
@@ -137,7 +236,7 @@ type ListWorkorderNotificationReq struct {
 	IsDefault  *int8  `json:"is_default" form:"is_default" binding:"omitempty,oneof=1 2"`
 }
 
-// DetailWorkorderNotificationReq 工单通知配置详情
+// DetailWorkorderNotificationReq 通知配置详情
 type DetailWorkorderNotificationReq struct {
 	ID int `json:"id" binding:"required"`
 }
@@ -214,7 +313,7 @@ func (WorkorderNotificationQueue) TableName() string {
 // TestSendWorkorderNotificationReq 测试发送工单通知
 type TestSendWorkorderNotificationReq struct {
 	NotificationID int    `json:"notification_id" binding:"required"`
-	Recipient      string `json:"recipient" binding:"required"`
+	Recipient      string `json:"recipient"` // 可选，如果不提供则使用默认测试地址
 }
 
 // ListWorkorderNotificationQueueReq 工单通知队列列表
@@ -237,4 +336,103 @@ type ManualSendNotificationReq struct {
 	Recipient string   `json:"recipient" binding:"required"` // 接收人地址
 	Subject   string   `json:"subject" binding:"required"`   // 通知主题
 	Content   string   `json:"content" binding:"required"`   // 通知内容
+}
+
+// 获取事件类型友好名称
+func GetEventTypeName(eventType string) string {
+	switch eventType {
+	case EventTypeInstanceCreated:
+		return "工单创建"
+	case EventTypeInstanceSubmitted:
+		return "工单提交"
+	case EventTypeInstanceAssigned:
+		return "工单指派"
+	case EventTypeInstanceApproved:
+		return "工单审批通过"
+	case EventTypeInstanceRejected:
+		return "工单拒绝"
+	case EventTypeInstanceCompleted:
+		return "工单完成"
+	case EventTypeInstanceCancelled:
+		return "工单取消"
+	case EventTypeInstanceUpdated:
+		return "工单更新"
+	case EventTypeInstanceCommented:
+		return "工单评论"
+	default:
+		return "未知事件"
+	}
+}
+
+// 获取通知渠道友好名称
+func GetNotificationChannelName(channel string) string {
+	switch channel {
+	case NotificationChannelEmail:
+		return "邮件"
+	case NotificationChannelFeishu:
+		return "飞书"
+	case NotificationChannelSMS:
+		return "短信"
+	case NotificationChannelWebhook:
+		return "Webhook"
+	default:
+		return "未知渠道"
+	}
+}
+
+// 获取接收人类型友好名称
+func GetRecipientTypeName(recipientType string) string {
+	switch recipientType {
+	case RecipientTypeCreator:
+		return "工单创建人"
+	case RecipientTypeAssignee:
+		return "工单处理人"
+	case RecipientTypeUser:
+		return "指定用户"
+	case RecipientTypeRole:
+		return "角色用户"
+	case RecipientTypeDept:
+		return "部门用户"
+	case RecipientTypeCustom:
+		return "自定义用户"
+	default:
+		return "未知类型"
+	}
+}
+
+// 支持的事件类型
+func GetAllEventTypes() []string {
+	return []string{
+		EventTypeInstanceCreated,
+		EventTypeInstanceSubmitted,
+		EventTypeInstanceAssigned,
+		EventTypeInstanceApproved,
+		EventTypeInstanceRejected,
+		EventTypeInstanceCompleted,
+		EventTypeInstanceCancelled,
+		EventTypeInstanceUpdated,
+		EventTypeInstanceCommented,
+	}
+}
+
+// 支持的通知渠道
+func GetAllNotificationChannels() []string {
+	return []string{
+		NotificationChannelEmail,
+		NotificationChannelFeishu,
+		NotificationChannelSMS,
+		NotificationChannelWebhook,
+	}
+}
+
+// 支持的接收人类型
+func GetAllRecipientTypes() []string {
+	return []string{
+		RecipientTypeCreator,
+		RecipientTypeAssignee,
+		RecipientTypeUser,
+		RecipientTypeRole,
+		RecipientTypeDept,
+		RecipientTypeCustom,
+	}
 }

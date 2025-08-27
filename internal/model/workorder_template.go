@@ -77,10 +77,10 @@ type CreateWorkorderTemplateReq struct {
 // UpdateWorkorderTemplateReq 更新工单模板请求
 type UpdateWorkorderTemplateReq struct {
 	ID            int        `json:"id" binding:"required,min=1"`
-	Name          string     `json:"name" binding:"required,min=1,max=200"`
+	Name          string     `json:"name" binding:"omitempty,min=1,max=200"`
 	Description   string     `json:"description" binding:"omitempty,max=1000"`
-	ProcessID     int        `json:"process_id" binding:"required,min=1"`
-	FormDesignID  int        `json:"form_design_id" binding:"required,min=1"`
+	ProcessID     int        `json:"process_id" binding:"omitempty,min=1"`
+	FormDesignID  int        `json:"form_design_id" binding:"omitempty,min=1"`
 	DefaultValues JSONMap    `json:"default_values" binding:"omitempty"`
 	Status        int8       `json:"status" binding:"omitempty,oneof=1 2"`
 	CategoryID    *int       `json:"category_id" binding:"omitempty,min=1"`

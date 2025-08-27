@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -45,6 +46,8 @@ type WorkorderNotificationDAO interface {
 	AddSendLog(ctx context.Context, log *model.WorkorderNotificationLog) error
 	GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error)
 	IncrementSentCount(ctx context.Context, id int) error
+	GetActiveNotificationsByEventType(ctx context.Context, eventType string, processID int) ([]*model.WorkorderNotification, error)
+	GetInstanceByID(ctx context.Context, instanceID int) (*model.WorkorderInstance, error)
 }
 
 type notificationDAO struct {
@@ -336,10 +339,46 @@ func (n *notificationDAO) GetSendLogs(ctx context.Context, req *model.ListWorkor
 func (n *notificationDAO) IncrementSentCount(ctx context.Context, id int) error {
 	err := n.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
 		Where("id = ?", id).
-		Update("updated_at", "NOW()").Error
+		Update("updated_at", time.Now()).Error
 	if err != nil {
 		n.logger.Error("更新发送计数失败", zap.Error(err), zap.Int("id", id))
 		return fmt.Errorf("更新发送计数失败: %w", err)
 	}
 	return nil
+}
+// GetActiveNotificationsByEventType 根据事件类型和流程ID获取活跃的通知配置
+func (n *notificationDAO) GetActiveNotificationsByEventType(ctx context.Context, eventType string, processID int) ([]*model.WorkorderNotification, error) {
+	var notifications []*model.WorkorderNotification
+
+	// 构建查询条件
+	db := n.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
+		Where("status = ?", 1) // 1-启用状态
+
+	db = db.Where("(process_id IS NULL OR process_id = ?)", processID)
+	db = db.Where("event_types IS NOT NULL AND event_types != '' AND JSON_VALID(event_types) = 1 AND JSON_CONTAINS(event_types, ?)", fmt.Sprintf(`"%s"`, eventType))
+
+	err := db.Order("priority ASC, id ASC").Find(&notifications).Error
+	if err != nil {
+		n.logger.Error("获取活跃通知配置失败",
+			zap.Error(err),
+			zap.String("event_type", eventType),
+			zap.Int("process_id", processID))
+		return nil, fmt.Errorf("获取活跃通知配置失败: %w", err)
+	}
+
+	return notifications, nil
+}
+
+// GetInstanceByID 根据ID获取工单实例信息
+func (n *notificationDAO) GetInstanceByID(ctx context.Context, instanceID int) (*model.WorkorderInstance, error) {
+	var instance model.WorkorderInstance
+	err := n.db.WithContext(ctx).First(&instance, instanceID).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("工单实例不存在")
+		}
+		n.logger.Error("根据ID获取工单实例失败", zap.Error(err), zap.Int("instance_id", instanceID))
+		return nil, fmt.Errorf("根据ID获取工单实例失败: %w", err)
+	}
+	return &instance, nil
 }

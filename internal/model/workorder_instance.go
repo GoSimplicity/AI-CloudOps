@@ -37,14 +37,26 @@ const (
 	InstanceStatusCancelled  int8 = 6 // 已取消
 )
 
-// 工单优先级
+// 优先级
 const (
 	PriorityHigh   int8 = 1 // 高
 	PriorityNormal int8 = 2 // 中
 	PriorityLow    int8 = 3 // 低
 )
 
-// WorkorderInstance 工单实例
+// 记录类型
+const (
+	FlowRecordTypeUser   int8 = 1 // 用户操作
+	FlowRecordTypeSystem int8 = 2 // 系统操作
+)
+
+// 字段必填
+const (
+	FieldRequiredNo  int8 = 1 // 非必填
+	FieldRequiredYes int8 = 2 // 必填
+)
+
+// WorkorderInstance 工单
 type WorkorderInstance struct {
 	Model
 	Title         string     `json:"title" gorm:"column:title;type:varchar(200);not null;index;comment:工单标题"`
@@ -62,7 +74,7 @@ type WorkorderInstance struct {
 	DueDate       *time.Time `json:"due_date" gorm:"column:due_date;index;comment:截止时间"`
 	CompletedAt   *time.Time `json:"completed_at" gorm:"column:completed_at;comment:完成时间"`
 
-	// 关联查询字段
+	// 关联字段
 	Process  *WorkorderProcess           `json:"process,omitempty" gorm:"foreignKey:ProcessID;references:ID"`
 	Comments []WorkorderInstanceComment  `json:"comments,omitempty" gorm:"foreignKey:InstanceID;references:ID"`
 	FlowLogs []WorkorderInstanceFlow     `json:"flow_logs,omitempty" gorm:"foreignKey:InstanceID;references:ID"`
@@ -73,7 +85,7 @@ func (WorkorderInstance) TableName() string {
 	return "cl_workorder_instance"
 }
 
-// 创建工单实例请求
+// 创建工单请求
 type CreateWorkorderInstanceReq struct {
 	Title        string     `json:"title" binding:"required,min=1,max=200"`
 	ProcessID    int        `json:"process_id" binding:"required,min=1"`
@@ -88,7 +100,7 @@ type CreateWorkorderInstanceReq struct {
 	DueDate      *time.Time `json:"due_date" binding:"omitempty"`
 }
 
-// 更新工单实例请求
+// 更新工单请求
 type UpdateWorkorderInstanceReq struct {
 	ID          int        `json:"id" binding:"required,min=1"`
 	Title       string     `json:"title" binding:"omitempty,min=1,max=200"`
@@ -102,17 +114,17 @@ type UpdateWorkorderInstanceReq struct {
 	CompletedAt *time.Time `json:"completed_at" binding:"omitempty"`
 }
 
-// 删除工单实例请求
+// 删除工单请求
 type DeleteWorkorderInstanceReq struct {
 	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
 
-// 工单实例详情请求
+// 工单详情请求
 type DetailWorkorderInstanceReq struct {
 	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
 
-// 工单实例列表请求
+// 工单列表请求
 type ListWorkorderInstanceReq struct {
 	ListReq
 	Status    *int8 `json:"status" form:"status" binding:"omitempty,oneof=1 2 3 4 5 6"`
@@ -120,30 +132,30 @@ type ListWorkorderInstanceReq struct {
 	ProcessID *int  `json:"process_id" form:"process_id" binding:"omitempty,min=1"`
 }
 
-// 提交工单请求
+// 提交工单
 type SubmitWorkorderInstanceReq struct {
 	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
 
-// 指派工单请求
+// 指派工单
 type AssignWorkorderInstanceReq struct {
 	ID         int `json:"id" form:"id" binding:"required,min=1"`
 	AssigneeID int `json:"assignee_id" binding:"required,min=1"`
 }
 
-// 审批通过工单请求
+// 通过工单
 type ApproveWorkorderInstanceReq struct {
 	ID      int    `json:"id" form:"id" binding:"required,min=1"`
 	Comment string `json:"comment" binding:"omitempty,max=500"`
 }
 
-// 拒绝工单请求
+// 拒绝工单
 type RejectWorkorderInstanceReq struct {
 	ID      int    `json:"id" form:"id" binding:"required,min=1"`
 	Comment string `json:"comment" binding:"required,min=1,max=500"`
 }
 
-// 从模板创建工单实例请求
+// 从模板创建工单
 type CreateWorkorderInstanceFromTemplateReq struct {
 	Title        string     `json:"title" binding:"required,min=1,max=200"`
 	FormData     JSONMap    `json:"form_data" binding:"omitempty"`
@@ -154,4 +166,47 @@ type CreateWorkorderInstanceFromTemplateReq struct {
 	Description  string     `json:"description" binding:"omitempty,max=2000"`
 	Tags         StringList `json:"tags" binding:"omitempty"`
 	DueDate      *time.Time `json:"due_date" binding:"omitempty"`
+}
+
+type CancelWorkorderInstanceReq struct {
+	ID      int    `json:"id" form:"id" binding:"required,min=1"`
+	Comment string `json:"comment" binding:"required,min=1,max=500"`
+}
+
+type CompleteWorkorderInstanceReq struct {
+	ID      int    `json:"id" form:"id" binding:"required,min=1"`
+	Comment string `json:"comment" binding:"required,min=1,max=500"`
+}
+
+type ReturnWorkorderInstanceReq struct {
+	ID      int    `json:"id" form:"id" binding:"required,min=1"`
+	Comment string `json:"comment" binding:"required,min=1,max=500"`
+}
+
+type GetCurrentStepReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
+}
+
+type GetAvailableActionsReq struct {
+	ID int `json:"id" form:"id" binding:"required,min=1"`
+}
+
+// 获取状态名称
+func GetInstanceStatusName(status int8) string {
+	switch status {
+	case InstanceStatusDraft:
+		return "草稿"
+	case InstanceStatusPending:
+		return "待审批"
+	case InstanceStatusProcessing:
+		return "处理中"
+	case InstanceStatusCompleted:
+		return "已完成"
+	case InstanceStatusRejected:
+		return "已拒绝"
+	case InstanceStatusCancelled:
+		return "已取消"
+	default:
+		return "未知状态"
+	}
 }

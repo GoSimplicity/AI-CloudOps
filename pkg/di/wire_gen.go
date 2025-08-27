@@ -143,11 +143,16 @@ func ProvideCmd() *Cmd {
 	workorderInstanceFlowDAO := dao4.NewInstanceFlowDAO(db, logger)
 	workorderInstanceTimelineDAO := dao4.NewInstanceTimeLineDAO(db, logger)
 	workorderInstanceCommentDAO := dao4.NewWorkorderInstanceCommentDAO(db, logger)
-	instanceService := service5.NewInstanceService(workorderInstanceDAO, workorderInstanceFlowDAO, workorderInstanceTimelineDAO, workorderInstanceCommentDAO, workorderProcessDAO, workorderFormDesignDAO, workorderTemplateDAO, logger)
+	workorderNotificationDAO := dao4.NewNotificationDAO(db, logger)
+	notificationConfig := InitNotificationConfig()
+	asynqClient := InitAsynqClient()
+	notificationManager := InitNotificationManager(notificationConfig, asynqClient, logger)
+	workorderNotificationService := service5.NewWorkorderNotificationService(workorderNotificationDAO, notificationManager, logger, workorderInstanceDAO, userDAO)
+	instanceService := service5.NewInstanceService(workorderInstanceDAO, workorderInstanceFlowDAO, workorderInstanceTimelineDAO, workorderInstanceCommentDAO, workorderProcessDAO, workorderFormDesignDAO, workorderTemplateDAO, workorderNotificationService, logger)
 	instanceHandler := api6.NewInstanceHandler(instanceService)
 	instanceFlowService := service5.NewInstanceFlowService(workorderInstanceFlowDAO, logger)
 	instanceFlowHandler := api6.NewInstanceFlowHandler(instanceFlowService)
-	instanceCommentService := service5.NewInstanceCommentService(workorderInstanceCommentDAO, workorderInstanceDAO, logger)
+	instanceCommentService := service5.NewInstanceCommentService(workorderInstanceCommentDAO, workorderInstanceDAO, workorderNotificationService, logger)
 	instanceCommentHandler := api6.NewInstanceCommentHandler(instanceCommentService)
 	categoryGroupService := service5.NewCategoryGroupService(workorderCategoryDAO, userDAO, logger)
 	categoryGroupHandler := api6.NewCategoryGroupHandler(categoryGroupService)
@@ -160,11 +165,6 @@ func ProvideCmd() *Cmd {
 	treeLocalService := service6.NewTreeLocalService(logger, treeLocalDAO)
 	ecsSSH := ssh.NewSSH(logger)
 	treeLocalHandler := api7.NewTreeLocalHandler(treeLocalService, ecsSSH)
-	workorderNotificationDAO := dao4.NewNotificationDAO(db, logger)
-	notificationConfig := InitNotificationConfig()
-	asynqClient := InitAsynqClient()
-	notificationManager := InitNotificationManager(notificationConfig, asynqClient, logger)
-	workorderNotificationService := service5.NewWorkorderNotificationService(workorderNotificationDAO, notificationManager, logger)
 	notificationHandler := api6.NewNotificationHandler(workorderNotificationService)
 	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, systemHandler, notAuthHandler, k8sClusterHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, notificationHandler)
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
@@ -218,17 +218,36 @@ var NotificationSet = wire.NewSet(
 	InitNotificationManager,
 )
 
-// InitNotificationConfig 初始化通知配置
-func InitNotificationConfig() *notification.NotificationConfig {
-	config3, err := notification.LoadNotificationConfig()
-	if err != nil {
-		panic(err)
+// NotificationConfigAdapter 通知配置适配器
+type NotificationConfigAdapter struct {
+	config *NotificationConfig
+}
+
+// GetEmail 获取邮箱配置
+func (a *NotificationConfigAdapter) GetEmail() notification.EmailConfig {
+	if a.config.Email == nil {
+		return nil
 	}
-	return config3
+	return a.config.Email
+}
+
+// GetFeishu 获取飞书配置
+func (a *NotificationConfigAdapter) GetFeishu() notification.FeishuConfig {
+	if a.config.Feishu == nil {
+		return nil
+	}
+	return a.config.Feishu
+}
+
+// InitNotificationConfig 初始化通知配置
+func InitNotificationConfig() notification.NotificationConfig {
+	return &NotificationConfigAdapter{
+		config: &GlobalConfig.Notification,
+	}
 }
 
 // InitNotificationManager 初始化通知管理器
-func InitNotificationManager(config3 *notification.NotificationConfig, asynqClient *asynq.Client, logger *zap.Logger) *notification.Manager {
+func InitNotificationManager(config3 notification.NotificationConfig, asynqClient *asynq.Client, logger *zap.Logger) *notification.Manager {
 	manager2, err := notification.NewManager(config3, asynqClient, logger)
 	if err != nil {
 		panic(err)
