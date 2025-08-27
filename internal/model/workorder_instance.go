@@ -47,21 +47,23 @@ const (
 // WorkorderInstance 工单实例
 type WorkorderInstance struct {
 	Model
-	Title        string     `json:"title" gorm:"column:title;type:varchar(200);not null;index;comment:工单标题"`
-	SerialNumber string     `json:"serial_number" gorm:"column:serial_number;type:varchar(50);not null;uniqueIndex;comment:工单编号"`
-	ProcessID    int        `json:"process_id" gorm:"column:process_id;not null;index;comment:流程ID"`
-	FormData     JSONMap    `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
-	Status       int8       `json:"status" gorm:"column:status;not null;default:1;index;comment:状态"`
-	Priority     int8       `json:"priority" gorm:"column:priority;not null;default:2;index;comment:优先级"`
-	OperatorID   int        `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
-	OperatorName string     `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
-	AssigneeID   *int       `json:"assignee_id" gorm:"column:assignee_id;index;comment:当前处理人ID"`
-	Description  string     `json:"description" gorm:"column:description;type:text;comment:详细描述"`
-	Tags         StringList `json:"tags" gorm:"column:tags;comment:标签"`
-	DueDate      *time.Time `json:"due_date" gorm:"column:due_date;index;comment:截止时间"`
-	CompletedAt  *time.Time `json:"completed_at" gorm:"column:completed_at;comment:完成时间"`
+	Title         string     `json:"title" gorm:"column:title;type:varchar(200);not null;index;comment:工单标题"`
+	SerialNumber  string     `json:"serial_number" gorm:"column:serial_number;type:varchar(50);not null;uniqueIndex;comment:工单编号"`
+	ProcessID     int        `json:"process_id" gorm:"column:process_id;not null;index;comment:流程ID"`
+	CurrentStepID *string    `json:"current_step_id" gorm:"column:current_step_id;type:varchar(50);index;comment:当前步骤ID"`
+	FormData      JSONMap    `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`
+	Status        int8       `json:"status" gorm:"column:status;not null;default:1;index;comment:状态"`
+	Priority      int8       `json:"priority" gorm:"column:priority;not null;default:2;index;comment:优先级"`
+	OperatorID    int        `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	OperatorName  string     `json:"operator_name" gorm:"column:operator_name;type:varchar(100);not null;comment:操作人名称"`
+	AssigneeID    *int       `json:"assignee_id" gorm:"column:assignee_id;index;comment:当前处理人ID"`
+	Description   string     `json:"description" gorm:"column:description;type:text;comment:详细描述"`
+	Tags          StringList `json:"tags" gorm:"column:tags;comment:标签"`
+	DueDate       *time.Time `json:"due_date" gorm:"column:due_date;index;comment:截止时间"`
+	CompletedAt   *time.Time `json:"completed_at" gorm:"column:completed_at;comment:完成时间"`
 
 	// 关联查询字段
+	Process  *WorkorderProcess           `json:"process,omitempty" gorm:"foreignKey:ProcessID;references:ID"`
 	Comments []WorkorderInstanceComment  `json:"comments,omitempty" gorm:"foreignKey:InstanceID;references:ID"`
 	FlowLogs []WorkorderInstanceFlow     `json:"flow_logs,omitempty" gorm:"foreignKey:InstanceID;references:ID"`
 	Timeline []WorkorderInstanceTimeline `json:"timeline,omitempty" gorm:"foreignKey:InstanceID;references:ID"`
@@ -139,4 +141,17 @@ type ApproveWorkorderInstanceReq struct {
 type RejectWorkorderInstanceReq struct {
 	ID      int    `json:"id" form:"id" binding:"required,min=1"`
 	Comment string `json:"comment" binding:"required,min=1,max=500"`
+}
+
+// 从模板创建工单实例请求
+type CreateWorkorderInstanceFromTemplateReq struct {
+	Title        string     `json:"title" binding:"required,min=1,max=200"`
+	FormData     JSONMap    `json:"form_data" binding:"omitempty"`
+	Priority     int8       `json:"priority" binding:"required,oneof=1 2 3"`
+	OperatorID   int        `json:"operator_id" form:"operator_id" binding:"required,min=1"`
+	OperatorName string     `json:"operator_name" form:"operator_name" binding:"required,min=1,max=100"`
+	AssigneeID   *int       `json:"assignee_id" binding:"omitempty,min=1"`
+	Description  string     `json:"description" binding:"omitempty,max=2000"`
+	Tags         StringList `json:"tags" binding:"omitempty"`
+	DueDate      *time.Time `json:"due_date" binding:"omitempty"`
 }

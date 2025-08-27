@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -158,6 +159,9 @@ func (d *workorderInstanceDAO) GetInstanceByID(ctx context.Context, id int) (*mo
 
 	err := d.db.WithContext(ctx).
 		Where("id = ?", id).
+		Preload("Process").
+		Preload("Process.FormDesign").
+		Preload("Process.Category").
 		Preload("Comments", func(db *gorm.DB) *gorm.DB {
 			return db.Order("created_at DESC")
 		}).
@@ -251,23 +255,92 @@ func (d *workorderInstanceDAO) ListInstance(ctx context.Context, req *model.List
 	return instances, total, nil
 }
 
-// GenerateSerialNumber 生成工单编号
+// GenerateSerialNumber 生成工单编号 - 使用数据库事务锁确保并发安全
 func (d *workorderInstanceDAO) GenerateSerialNumber(ctx context.Context) (string, error) {
 	now := time.Now()
 	prefix := "WO" + now.Format("20060102")
 
-	var count int64
-	err := d.db.WithContext(ctx).
-		Model(&model.WorkorderInstance{}).
-		Where("serial_number LIKE ?", prefix+"%").
-		Count(&count).Error
+	var serialNumber string
+	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 使用SELECT FOR UPDATE锁住相关记录，确保并发安全
+		var maxSerialNumber string
+		err := tx.Model(&model.WorkorderInstance{}).
+			Where("serial_number LIKE ?", prefix+"%").
+			Select("MAX(serial_number)").
+			Set("gorm:query_option", "FOR UPDATE").
+			Scan(&maxSerialNumber).Error
+
+		if err != nil {
+			d.logger.Error("查询最大工单编号失败", zap.Error(err))
+			return fmt.Errorf("查询最大工单编号失败: %w", err)
+		}
+
+		var nextNumber int
+		if maxSerialNumber == "" {
+			// 今天还没有工单，从1开始
+			nextNumber = 1
+		} else {
+			// 从最大序列号中提取数字部分并+1
+			if len(maxSerialNumber) >= len(prefix)+4 {
+				numberPart := maxSerialNumber[len(prefix):]
+				if num, parseErr := strconv.Atoi(numberPart); parseErr == nil {
+					nextNumber = num + 1
+				} else {
+					nextNumber = 1
+				}
+			} else {
+				nextNumber = 1
+			}
+		}
+
+		candidateSerial := fmt.Sprintf("%s%04d", prefix, nextNumber)
+
+		// 在事务中再次检查唯一性（包括软删除记录）
+		var count int64
+		err = tx.Unscoped().
+			Model(&model.WorkorderInstance{}).
+			Where("serial_number = ?", candidateSerial).
+			Count(&count).Error
+
+		if err != nil {
+			d.logger.Error("检查序列号唯一性失败", zap.Error(err))
+			return fmt.Errorf("检查序列号唯一性失败: %w", err)
+		}
+
+		if count > 0 {
+			// 序列号已存在，需要递增查找下一个可用的
+			for i := nextNumber + 1; i <= nextNumber+100; i++ { // 最多尝试100个递增序列号
+				candidateSerial = fmt.Sprintf("%s%04d", prefix, i)
+				err = tx.Unscoped().
+					Model(&model.WorkorderInstance{}).
+					Where("serial_number = ?", candidateSerial).
+					Count(&count).Error
+
+				if err != nil {
+					return fmt.Errorf("检查序列号唯一性失败: %w", err)
+				}
+
+				if count == 0 {
+					// 找到可用的序列号
+					break
+				}
+			}
+
+			if count > 0 {
+				return fmt.Errorf("无法找到可用的序列号，已尝试100个递增序列号")
+			}
+		}
+
+		serialNumber = candidateSerial
+		return nil
+	})
 
 	if err != nil {
-		d.logger.Error("生成工单编号失败", zap.Error(err))
-		return "", fmt.Errorf("生成工单编号失败: %w", err)
+		d.logger.Error("生成序列号事务失败", zap.Error(err))
+		return "", err
 	}
 
-	serialNumber := fmt.Sprintf("%s%04d", prefix, count+1)
+	d.logger.Info("成功生成序列号", zap.String("serialNumber", serialNumber))
 	return serialNumber, nil
 }
 

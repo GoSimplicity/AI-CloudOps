@@ -140,7 +140,7 @@ func ProvideCmd() *Cmd {
 	workorderInstanceFlowDAO := dao4.NewInstanceFlowDAO(db, logger)
 	workorderInstanceTimelineDAO := dao4.NewInstanceTimeLineDAO(db, logger)
 	workorderInstanceCommentDAO := dao4.NewWorkorderInstanceCommentDAO(db, logger)
-	instanceService := service5.NewInstanceService(workorderInstanceDAO, workorderInstanceFlowDAO, workorderInstanceTimelineDAO, workorderInstanceCommentDAO, workorderProcessDAO, logger)
+	instanceService := service5.NewInstanceService(workorderInstanceDAO, workorderInstanceFlowDAO, workorderInstanceTimelineDAO, workorderInstanceCommentDAO, workorderProcessDAO, workorderFormDesignDAO, workorderTemplateDAO, logger)
 	instanceHandler := api6.NewInstanceHandler(instanceService)
 	instanceFlowService := service5.NewInstanceFlowService(workorderInstanceFlowDAO, logger)
 	instanceFlowHandler := api6.NewInstanceFlowHandler(instanceFlowService)
