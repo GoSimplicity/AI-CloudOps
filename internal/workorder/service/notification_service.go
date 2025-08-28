@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -105,7 +103,7 @@ func (n *workorderNotificationService) GetSendLogs(ctx context.Context, req *mod
 	return result, nil
 }
 
-// TestSendNotification 测试发送通知
+// TestSendNotification 测试发送指定通知配置
 func (n *workorderNotificationService) TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error {
 	notificationConfig, err := n.dao.GetNotificationByID(ctx, req.NotificationID)
 	if err != nil {
@@ -135,7 +133,7 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 			case model.NotificationChannelEmail:
 				recipientAddr = "xxx@163.com"
 			case model.NotificationChannelFeishu:
-				recipientAddr = "123"
+				recipientAddr = "xxx"
 			case model.NotificationChannelSMS:
 				recipientAddr = "13800138000"
 			case model.NotificationChannelWebhook:
@@ -144,6 +142,9 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 				recipientAddr = "test_recipient"
 			}
 		}
+
+		// 创建模拟的实例ID用于测试
+		testInstanceID := 999999
 
 		sendRequest := &notification.SendRequest{
 			Subject:       notificationConfig.SubjectTemplate,
@@ -154,11 +155,32 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 			RecipientAddr: recipientAddr,
 			RecipientName: "测试用户",
 			EventType:     "test",
+			InstanceID:    &testInstanceID,
+			Templates:     make(map[string]string),
 			Metadata: map[string]interface{}{
 				"notification_id": notificationConfig.ID,
 				"sender_id":       senderID,
 			},
 		}
+
+		// 统一商务化模板变量设置
+		sendRequest.Templates["workorder_id"] = fmt.Sprintf("%d", testInstanceID)
+		sendRequest.Templates["serial_number"] = fmt.Sprintf("WO-%d", testInstanceID)
+		sendRequest.Templates["title"] = "AI-CloudOps 测试工单 - 系统功能验证"
+		sendRequest.Templates["description"] = "这是一个AI-CloudOps智能运维管理平台的系统测试工单，用于验证通知功能的完整性和可靠性。"
+		sendRequest.Templates["operator_name"] = "系统管理员"
+		sendRequest.Templates["assignee_name"] = "运维工程师"
+		sendRequest.Templates["priority_level"] = fmt.Sprintf("%d", int(notificationConfig.Priority))
+		sendRequest.Templates["priority_text"] = notification.FormatPriority(notificationConfig.Priority)
+		sendRequest.Templates["status"] = "测试进行中"
+		sendRequest.Templates["created_time"] = time.Now().Format("2006-01-02 15:04:05")
+		sendRequest.Templates["updated_time"] = time.Now().Format("2006-01-02 15:04:05")
+		sendRequest.Templates["event_type"] = notification.GetEventTypeText("test")
+		sendRequest.Templates["notification_time"] = time.Now().Format("2006-01-02 15:04:05")
+		sendRequest.Templates["company_name"] = "AI-CloudOps"
+		sendRequest.Templates["platform_name"] = "智能运维管理平台"
+		sendRequest.Templates["department"] = "技术运维部"
+		sendRequest.Templates["test_content"] = "本次测试验证了系统通知功能的完整性，包括邮件发送、飞书消息推送等多个渠道的有效性。"
 
 		response, err := n.notificationMgr.SendNotification(ctx, sendRequest)
 
@@ -200,7 +222,7 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 	return n.dao.IncrementSentCount(ctx, notificationConfig.ID)
 }
 
-// SendWorkorderNotification 发送通知
+// SendWorkorderNotification 发送工单相关通知
 func (n *workorderNotificationService) SendWorkorderNotification(ctx context.Context, instanceID int, eventType string, customContent ...string) error {
 	instance, err := n.instanceDAO.GetInstanceByID(ctx, instanceID)
 	if err != nil {
@@ -251,7 +273,7 @@ func (n *workorderNotificationService) SendWorkorderNotification(ctx context.Con
 	return nil
 }
 
-// processNotification 处理单个通知配置
+// processNotification 处理并发送单个通知配置
 func (n *workorderNotificationService) processNotification(ctx context.Context, notification *model.WorkorderNotification,
 	instance *model.WorkorderInstance, eventType string, senderID int, customContent ...string) error {
 
@@ -313,7 +335,7 @@ func (n *workorderNotificationService) processNotification(ctx context.Context, 
 	return nil
 }
 
-// getRecipients 获取通知接收人列表
+// getRecipients 根据配置获取接收人列表
 func (n *workorderNotificationService) getRecipients(ctx context.Context, notification *model.WorkorderNotification,
 	instance *model.WorkorderInstance) ([]RecipientInfo, error) {
 
@@ -374,7 +396,7 @@ func (n *workorderNotificationService) getRecipients(ctx context.Context, notifi
 	return recipients, nil
 }
 
-// sendChannelNotification 发送渠道
+// sendChannelNotification 通过指定渠道发送通知
 func (n *workorderNotificationService) sendChannelNotification(ctx context.Context, notificationConfig *model.WorkorderNotification,
 	instance *model.WorkorderInstance, channel string, recipients []RecipientInfo, eventType string, senderID int, customContent ...string) error {
 
@@ -487,202 +509,127 @@ func (n *workorderNotificationService) sendChannelNotification(ctx context.Conte
 	return nil
 }
 
-// buildMessageContent 构建消息内容
-func (n *workorderNotificationService) buildMessageContent(notification *model.WorkorderNotification,
+// buildMessageContent 根据模板构建消息内容
+func (n *workorderNotificationService) buildMessageContent(notificationConfig *model.WorkorderNotification,
 	instance *model.WorkorderInstance, eventType string, customContent ...string) (string, string) {
 
-	// 添加空值检查，确保所有变量都有值
-	safeString := func(s string) string {
-		if s == "" {
-			return "N/A"
-		}
-		return s
+	// 创建发送请求对象，用于模板渲染
+	sendRequest := &notification.SendRequest{
+		Subject:    notificationConfig.SubjectTemplate,
+		Content:    notificationConfig.MessageTemplate,
+		Priority:   notificationConfig.Priority,
+		EventType:  eventType,
+		InstanceID: &instance.ID,
+		Templates:  make(map[string]string),
+		Metadata:   make(map[string]interface{}),
 	}
 
-	safeInt := func(i int) string {
-		return fmt.Sprintf("%d", i)
-	}
+	// 统一商务化模板变量设置
+	sendRequest.Templates["workorder_id"] = fmt.Sprintf("%d", instance.ID)
+	sendRequest.Templates["serial_number"] = instance.SerialNumber
+	sendRequest.Templates["title"] = instance.Title
+	sendRequest.Templates["description"] = instance.Description
+	sendRequest.Templates["operator_name"] = instance.OperatorName
+	sendRequest.Templates["priority_level"] = fmt.Sprintf("%d", int(instance.Priority))
+	sendRequest.Templates["priority_text"] = notification.FormatPriority(instance.Priority)
+	sendRequest.Templates["status"] = model.GetInstanceStatusName(instance.Status)
+	sendRequest.Templates["created_time"] = instance.CreatedAt.Format("2006-01-02 15:04:05")
+	sendRequest.Templates["event_type"] = notification.GetEventTypeText(eventType)
+	sendRequest.Templates["event_type_text"] = notification.GetEventTypeText(eventType)
+	sendRequest.Templates["notification_time"] = time.Now().Format("2006-01-02 15:04:05")
+	sendRequest.Templates["company_name"] = "AI-CloudOps"
+	sendRequest.Templates["platform_name"] = "智能运维管理平台"
+	sendRequest.Templates["department"] = "技术运维部"
 
 	// 处理处理人名称
-	assigneeName := "未分配"
+	assigneeName := "待分配"
 	if instance.AssigneeID != nil {
 		if user, err := n.userDAO.GetUserByID(context.Background(), *instance.AssigneeID); err == nil && user != nil {
-			assigneeName = safeString(user.RealName)
+			assigneeName = user.RealName
 		}
 	}
-
-	// 基础变量 - 确保所有可能的变量名都被覆盖
-	variables := map[string]string{
-		// 基础变量
-		"instance_id":   safeInt(instance.ID),
-		"serial_number": safeString(instance.SerialNumber),
-		"title":         safeString(instance.Title),
-		"description":   safeString(instance.Description),
-		"operator_name": safeString(instance.OperatorName),
-		"assignee_name": assigneeName,
-		"priority":      safeInt(int(instance.Priority)),
-		"status":        model.GetInstanceStatusName(instance.Status),
-		"event_type":    model.GetEventTypeName(eventType),
-		"created_at":    instance.CreatedAt.Format("2006-01-02 15:04:05"),
-	}
+	sendRequest.Templates["assignee_name"] = assigneeName
 
 	// 如果有更新时间，添加更新时间
 	if !instance.UpdatedAt.IsZero() {
-		variables["updated_at"] = instance.UpdatedAt.Format("2006-01-02 15:04:05")
-		variables["updatedAt"] = instance.UpdatedAt.Format("2006-01-02 15:04:05")
+		sendRequest.Templates["updated_time"] = instance.UpdatedAt.Format("2006-01-02 15:04:05")
+	} else {
+		sendRequest.Templates["updated_time"] = sendRequest.Templates["created_time"]
 	}
 
 	// 如果有自定义内容，添加到变量中
 	if len(customContent) > 0 && customContent[0] != "" {
-		variables["custom_content"] = customContent[0]
-		variables["customContent"] = customContent[0]
-		variables["content"] = customContent[0]
+		sendRequest.Templates["custom_content"] = customContent[0]
 	} else {
-		variables["custom_content"] = ""
-		variables["customContent"] = ""
-		variables["content"] = ""
+		sendRequest.Templates["custom_content"] = ""
 	}
 
-	// 添加调试日志
-	n.logger.Debug("模板变量",
-		zap.Any("variables", variables),
-		zap.String("subject_template", notification.SubjectTemplate),
-		zap.String("message_template", notification.MessageTemplate))
-
-	// 处理主题模板
-	subject := notification.SubjectTemplate
+	// 渲染主题
+	subject := notificationConfig.SubjectTemplate
 	if subject == "" {
-		subject = fmt.Sprintf("工单通知 - %s", variables["title"])
+		subject = fmt.Sprintf("【AI-CloudOps】工单通知 - %s", instance.Title)
 	} else {
-		subject = n.replaceTemplateVariables(subject, variables)
+		renderedSubject, _ := notification.RenderTemplate(subject, sendRequest)
+		subject = renderedSubject
 	}
 
-	// 处理消息模板
-	content := notification.MessageTemplate
+	// 渲染内容
+	content := notificationConfig.MessageTemplate
 	if content == "" {
-		content = fmt.Sprintf(`工单通知
+		content = fmt.Sprintf(`尊敬的用户，您好！
 
-工单编号: %s
-工单标题: %s
-当前状态: %s
-优先级: %s
-操作人: %s
-处理人: %s
-事件类型: %s
-创建时间: %s
+您收到一条来自AI-CloudOps智能运维管理平台的工单通知：
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 工单基本信息
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+工单编号：%s
+工单标题：%s
+当前状态：%s
+优先级别：%s
+操作人员：%s
+处理人员：%s
+事件类型：%s
+创建时间：%s
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 工单详情
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+%s
 
 %s
-`, variables["serial_number"], variables["title"], variables["status"],
-			variables["priority"], variables["operator_name"], variables["assignee_name"],
-			variables["event_type"], variables["created_at"], variables["custom_content"])
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+此消息由AI-CloudOps智能运维管理平台自动发送，请及时处理相关工单。
+如有疑问，请联系技术运维部门。
+
+AI-CloudOps 技术运维部
+发送时间：%s`,
+			instance.SerialNumber,
+			instance.Title,
+			model.GetInstanceStatusName(instance.Status),
+			notification.FormatPriority(instance.Priority),
+			instance.OperatorName,
+			assigneeName,
+			notification.GetEventTypeText(eventType),
+			instance.CreatedAt.Format("2006-01-02 15:04:05"),
+			instance.Description,
+			sendRequest.Templates["custom_content"],
+			time.Now().Format("2006-01-02 15:04:05"))
 	} else {
-		content = n.replaceTemplateVariables(content, variables)
+		renderedContent, _ := notification.RenderTemplate(content, sendRequest)
+		content = renderedContent
 	}
 
-	// 添加调试日志查看替换后的结果
-	n.logger.Debug("模板替换结果",
+	n.logger.Debug("消息内容构建完成",
 		zap.String("subject", subject),
 		zap.String("content", content))
 
 	return subject, content
 }
 
-// replaceTemplateVariables 替换变量
-func (n *workorderNotificationService) replaceTemplateVariables(template string, variables map[string]string) string {
-	if template == "" {
-		return ""
-	}
-
-	result := template
-
-	// 记录替换前的模板
-	n.logger.Debug("开始替换模板变量",
-		zap.String("template", template),
-		zap.Int("variables_count", len(variables)))
-
-	// 支持多种格式的模板变量
-	for key, value := range variables {
-		// 替换 {{变量名}} 格式
-		placeholder1 := fmt.Sprintf("{{%s}}", key)
-		if strings.Contains(result, placeholder1) {
-			result = strings.ReplaceAll(result, placeholder1, value)
-			n.logger.Debug("替换变量",
-				zap.String("placeholder", placeholder1),
-				zap.String("value", value))
-		}
-
-		// 替换 {{ 变量名 }} 格式（带空格）
-		placeholder2 := fmt.Sprintf("{{ %s }}", key)
-		if strings.Contains(result, placeholder2) {
-			result = strings.ReplaceAll(result, placeholder2, value)
-			n.logger.Debug("替换变量",
-				zap.String("placeholder", placeholder2),
-				zap.String("value", value))
-		}
-
-		// 替换 {变量名} 格式
-		placeholder3 := fmt.Sprintf("{%s}", key)
-		if strings.Contains(result, placeholder3) {
-			result = strings.ReplaceAll(result, placeholder3, value)
-			n.logger.Debug("替换变量",
-				zap.String("placeholder", placeholder3),
-				zap.String("value", value))
-		}
-
-		// 替换 { 变量名 } 格式（带空格）
-		placeholder4 := fmt.Sprintf("{ %s }", key)
-		if strings.Contains(result, placeholder4) {
-			result = strings.ReplaceAll(result, placeholder4, value)
-			n.logger.Debug("替换变量",
-				zap.String("placeholder", placeholder4),
-				zap.String("value", value))
-		}
-
-		// 替换 ${变量名} 格式（类似shell变量）
-		placeholder5 := fmt.Sprintf("${%s}", key)
-		if strings.Contains(result, placeholder5) {
-			result = strings.ReplaceAll(result, placeholder5, value)
-			n.logger.Debug("替换变量",
-				zap.String("placeholder", placeholder5),
-				zap.String("value", value))
-		}
-	}
-
-	// 检查是否还有未替换的变量
-	remainingVars := n.findUnreplacedVariables(result)
-	if len(remainingVars) > 0 {
-		n.logger.Warn("存在未替换的模板变量",
-			zap.Strings("remaining_vars", remainingVars),
-			zap.String("template", result))
-	}
-
-	n.logger.Debug("模板变量替换完成",
-		zap.String("result", result))
-
-	return result
-}
-
-// findUnreplacedVariables 查找未替换变量
-func (n *workorderNotificationService) findUnreplacedVariables(template string) []string {
-	var unreplaced []string
-
-	// 使用正则表达式查找所有可能的变量格式
-	patterns := []string{
-		`\{\{[^}]+\}\}`, // {{变量名}}
-		`\{[^}]+\}`,     // {变量名}
-		`\$\{[^}]+\}`,   // ${变量名}
-	}
-
-	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
-		matches := re.FindAllString(template, -1)
-		unreplaced = append(unreplaced, matches...)
-	}
-
-	return unreplaced
-}
-
-// getRecipientAddress 获取接收人地址
+// getRecipientAddress 根据渠道类型获取接收人地址
 func (n *workorderNotificationService) getRecipientAddress(recipient RecipientInfo, channel string) string {
 	userID, err := strconv.Atoi(recipient.ID)
 	if err != nil {
@@ -737,7 +684,7 @@ func (n *workorderNotificationService) getRecipientAddress(recipient RecipientIn
 	}
 }
 
-// getRecipientTypeForChannel 获取类型
+// getRecipientTypeForChannel 获取渠道对应的接收人类型
 func (n *workorderNotificationService) getRecipientTypeForChannel(channel string) string {
 	switch channel {
 	case model.NotificationChannelEmail:
@@ -753,7 +700,7 @@ func (n *workorderNotificationService) getRecipientTypeForChannel(channel string
 	}
 }
 
-// SendNotificationByChannels 发送通知
+// SendNotificationByChannels 通过多个渠道发送通知
 func (n *workorderNotificationService) SendNotificationByChannels(ctx context.Context, channels []string, recipient, subject, content string) error {
 	if n.notificationMgr == nil {
 		return errors.New("通知管理器未初始化")
@@ -782,7 +729,7 @@ func (n *workorderNotificationService) SendNotificationByChannels(ctx context.Co
 	return nil
 }
 
-// GetAvailableChannels 获取可用的通知渠道
+// GetAvailableChannels 获取当前可用的通知渠道列表
 func (n *workorderNotificationService) GetAvailableChannels() *model.ListResp[*model.WorkorderNotificationChannel] {
 	if n.notificationMgr == nil {
 		return &model.ListResp[*model.WorkorderNotificationChannel]{

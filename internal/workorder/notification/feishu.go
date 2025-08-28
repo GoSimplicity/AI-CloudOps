@@ -29,6 +29,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -81,7 +82,7 @@ func (f *FeishuChannel) GetName() string {
 	return model.NotificationChannelFeishu
 }
 
-// Send 发送消息
+// Send 发送飞书消息到指定接收人
 func (f *FeishuChannel) Send(ctx context.Context, request *SendRequest) (*SendResponse, error) {
 	startTime := time.Now()
 
@@ -101,12 +102,12 @@ func (f *FeishuChannel) Send(ctx context.Context, request *SendRequest) (*SendRe
 	}
 }
 
-// isChatID 判断是否为群聊ID
+// isChatID 判断是否为群聊ID格式
 func (f *FeishuChannel) isChatID(recipientAddr string) bool {
 	return chatIDPattern.MatchString(recipientAddr)
 }
 
-// determineRecipientType 确定收件人ID类型
+// determineRecipientType 识别接收人ID类型
 func (f *FeishuChannel) determineRecipientType(recipientAddr string) (string, error) {
 	f.logger.Debug("确定收件人ID类型",
 		zap.String("recipient_addr", recipientAddr),
@@ -132,7 +133,7 @@ func (f *FeishuChannel) determineRecipientType(recipientAddr string) (string, er
 	}
 }
 
-// sendGroupMessage 发送群消息
+// sendGroupMessage 发送群聊消息
 func (f *FeishuChannel) sendGroupMessage(ctx context.Context, request *SendRequest, startTime time.Time) (*SendResponse, error) {
 	webhookURL := f.config.GetWebhookURL() + request.RecipientAddr
 
@@ -143,7 +144,7 @@ func (f *FeishuChannel) sendGroupMessage(ctx context.Context, request *SendReque
 	return f.sendHTTPRequest(ctx, webhookURL, message, request.MessageID, startTime, false)
 }
 
-// sendPrivateMessage 发送私聊
+// sendPrivateMessage 发送私聊消息
 func (f *FeishuChannel) sendPrivateMessage(ctx context.Context, request *SendRequest, startTime time.Time) (*SendResponse, error) {
 	// 获取令牌
 	if err := f.ensureAccessToken(ctx); err != nil {
@@ -194,7 +195,7 @@ func (f *FeishuChannel) sendPrivateMessage(ctx context.Context, request *SendReq
 	return f.sendHTTPRequest(ctx, apiURL, message, request.MessageID, startTime, true)
 }
 
-// sendHTTPRequest 统一的HTTP请求发送方法
+// sendHTTPRequest 发送HTTP请求并处理响应
 func (f *FeishuChannel) sendHTTPRequest(ctx context.Context, url string, message map[string]interface{},
 	messageID string, startTime time.Time, needAuth bool) (*SendResponse, error) {
 
@@ -242,7 +243,7 @@ func (f *FeishuChannel) sendHTTPRequest(ctx context.Context, url string, message
 			zap.Int("status_code", resp.StatusCode),
 			zap.String("response_body", string(body)),
 			zap.String("url", url))
-		return f.createErrorResponse(messageID, errorMsg, fmt.Errorf(errorMsg), startTime), fmt.Errorf(errorMsg)
+		return f.createErrorResponse(messageID, errorMsg, errors.New(errorMsg), startTime), errors.New(errorMsg)
 	}
 
 	// 检查飞书响应码
@@ -254,7 +255,7 @@ func (f *FeishuChannel) sendHTTPRequest(ctx context.Context, url string, message
 			zap.Any("error_detail", response["error"]),
 			zap.String("url", url))
 
-		return f.createErrorResponse(messageID, errorMsg, fmt.Errorf(errorMsg), startTime), fmt.Errorf(errorMsg)
+		return f.createErrorResponse(messageID, errorMsg, errors.New(errorMsg), startTime), errors.New(errorMsg)
 	}
 
 	// 成功响应
@@ -286,7 +287,7 @@ func (f *FeishuChannel) sendHTTPRequest(ctx context.Context, url string, message
 	}, nil
 }
 
-// ensureAccessToken 确保令牌有效
+// ensureAccessToken 获取或刷新飞书访问令牌
 func (f *FeishuChannel) ensureAccessToken(ctx context.Context) error {
 	// 检查令牌是否有效且未过期
 	if f.accessToken != "" && time.Now().Before(f.tokenExpiry) {
@@ -349,54 +350,40 @@ func (f *FeishuChannel) ensureAccessToken(ctx context.Context) error {
 	return fmt.Errorf("invalid token response: missing tenant_access_token")
 }
 
-// getPriorityConfig 获取优先级配置
+// getPriorityConfig 获取优先级对应的显示配置
 func (f *FeishuChannel) getPriorityConfig(priority int) (icon, text, color, templateColor string) {
+	icon = FormatPriorityIcon(int8(priority))
+	text = FormatPriority(int8(priority))
+
 	switch priority {
 	case 1: // 高优先级
-		return "🔴", "高", "red", "red"
+		color, templateColor = "red", "red"
 	case 3: // 低优先级
-		return "🟢", "低", "green", "green"
+		color, templateColor = "green", "green"
 	default: // 中等优先级
-		return "🔔", "中等", "orange", "blue"
+		color, templateColor = "orange", "blue"
 	}
+	return
 }
 
-// getEventIcon 获取事件类型图标
-func (f *FeishuChannel) getEventIcon(eventType string) string {
-	eventIcons := map[string]string{
-		"工单创建": "📝",
-		"工单提交": "📤",
-		"工单指派": "👤",
-		"工单审批": "✅",
-		"工单拒绝": "❌",
-		"工单完成": "🎉",
-		"工单关闭": "🔒",
-	}
-
-	if icon, exists := eventIcons[eventType]; exists {
-		return icon
-	}
-	return "📋" // 默认图标
-}
-
-// buildGroupMessage 构建群消息
+// buildGroupMessage 构建群聊消息内容
 func (f *FeishuChannel) buildGroupMessage(request *SendRequest) map[string]interface{} {
 	// 获取优先级和事件类型配置
-	priorityIcon, priorityText, priorityColor, templateColor := f.getPriorityConfig(int(request.Priority))
-	eventIcon := f.getEventIcon(request.EventType)
+	priorityIcon, priorityText, _, templateColor := f.getPriorityConfig(int(request.Priority))
+	eventText := GetEventTypeText(request.EventType)
 
-	// 构建卡片标题
-	headerTitle := fmt.Sprintf("%s %s", eventIcon, request.Subject)
+	// 构建简洁的卡片标题
+	headerTitle := fmt.Sprintf("⚡ AI-CloudOps | %s", eventText)
 
 	// 构建工单编号显示
-	ticketNumber := "系统通知"
+	workorderNumber := "系统通知"
 	if request.InstanceID != nil {
-		ticketNumber = fmt.Sprintf("#%d", *request.InstanceID)
+		workorderNumber = fmt.Sprintf("WO-%d", *request.InstanceID)
 	}
 
-	// 构建卡片内容元素
+	// 构建简洁商务化卡片内容元素
 	elements := []map[string]interface{}{
-		// 基础信息区域
+		// 核心信息区域 - 紧凑布局
 		{
 			"tag": "div",
 			"fields": []map[string]interface{}{
@@ -404,72 +391,48 @@ func (f *FeishuChannel) buildGroupMessage(request *SendRequest) map[string]inter
 					"is_short": true,
 					"text": map[string]interface{}{
 						"tag":     "lark_md",
-						"content": fmt.Sprintf("**📋 工单编号**\n%s", ticketNumber),
+						"content": fmt.Sprintf("**工单编号**\n`%s`", workorderNumber),
 					},
 				},
 				{
 					"is_short": true,
 					"text": map[string]interface{}{
 						"tag":     "lark_md",
-						"content": fmt.Sprintf("**%s 优先级**\n<font color='%s'>%s</font>", priorityIcon, priorityColor, priorityText),
+						"content": fmt.Sprintf("**优先级**\n%s %s", priorityIcon, priorityText),
+					},
+				},
+				{
+					"is_short": true,
+					"text": map[string]interface{}{
+						"tag":     "lark_md",
+						"content": fmt.Sprintf("**时间**\n%s", time.Now().Format("01-02 15:04")),
 					},
 				},
 			},
 		},
 
-		// 操作信息区域
-		{
-			"tag": "div",
-			"fields": []map[string]interface{}{
-				{
-					"is_short": true,
-					"text": map[string]interface{}{
-						"tag":     "lark_md",
-						"content": fmt.Sprintf("**👤 操作人员**\n%s", request.RecipientName),
-					},
-				},
-				{
-					"is_short": true,
-					"text": map[string]interface{}{
-						"tag":     "lark_md",
-						"content": fmt.Sprintf("**🔄 事件类型**\n%s %s", eventIcon, request.EventType),
-					},
-				},
-			},
-		},
-
-		// 分隔线
-		{
-			"tag": "hr",
-		},
-
-		// 详细内容区域
+		// 通知内容区域 - 简洁呈现
 		{
 			"tag": "div",
 			"text": map[string]interface{}{
 				"tag":     "lark_md",
-				"content": fmt.Sprintf("**📄 详细内容**\n%s", request.Content),
+				"content": fmt.Sprintf("**📋 通知内容**\n\n%s", f.renderContent(request)),
 			},
 		},
 
-		// 分隔线
-		{
-			"tag": "hr",
-		},
-
-		// 时间信息
+		// 系统信息栏 - 简化版
 		{
 			"tag": "note",
 			"elements": []map[string]interface{}{
 				{
-					"tag":     "lark_md",
-					"content": fmt.Sprintf("🕐 **发送时间：** %s  |  📱 **AI-CloudOps** 智能运维管理平台", time.Now().Format("2006-01-02 15:04:05")),
+					"tag":     "plain_text",
+					"content": "AI-CloudOps 智能运维管理平台自动发送 | 技术支持：400-000-0000",
 				},
 			},
 		},
 	}
 
-	// 如果有工单ID，添加操作按钮
+	// 如果有工单ID，添加专业操作按钮
 	if request.InstanceID != nil {
 		actionButtons := map[string]interface{}{
 			"tag": "action",
@@ -478,7 +441,7 @@ func (f *FeishuChannel) buildGroupMessage(request *SendRequest) map[string]inter
 					"tag": "button",
 					"text": map[string]interface{}{
 						"tag":     "plain_text",
-						"content": "查看详情",
+						"content": "立即查看",
 					},
 					"type": "primary",
 					"url":  fmt.Sprintf("#/workorder/instance/detail/%d", *request.InstanceID),
@@ -487,7 +450,7 @@ func (f *FeishuChannel) buildGroupMessage(request *SendRequest) map[string]inter
 					"tag": "button",
 					"text": map[string]interface{}{
 						"tag":     "plain_text",
-						"content": "访问系统",
+						"content": "管理平台",
 					},
 					"type": "default",
 					"url":  "#/dashboard",
@@ -508,6 +471,10 @@ func (f *FeishuChannel) buildGroupMessage(request *SendRequest) map[string]inter
 				},
 				"template": templateColor,
 			},
+			"config": map[string]interface{}{
+				"wide_screen_mode": true,
+				"enable_forward":   true,
+			},
 		},
 	}
 }
@@ -515,40 +482,26 @@ func (f *FeishuChannel) buildGroupMessage(request *SendRequest) map[string]inter
 // buildPrivateMessageContent 构建私聊消息内容
 func (f *FeishuChannel) buildPrivateMessageContent(request *SendRequest, recipientType string) map[string]interface{} {
 	// 记录输入参数
-	f.logger.Debug("构建私聊消息内容",
+	f.logger.Debug("构建商务化私聊消息内容",
 		zap.String("recipient_addr", request.RecipientAddr),
 		zap.String("recipient_type", recipientType))
 
 	// 获取优先级和事件类型配置
-	priorityIcon, priorityText, priorityColor, templateColor := f.getPriorityConfig(int(request.Priority))
-	eventIcon := f.getEventIcon(request.EventType)
+	priorityIcon, priorityText, _, templateColor := f.getPriorityConfig(int(request.Priority))
+	eventText := GetEventTypeText(request.EventType)
 
-	// 构建卡片标题
-	headerTitle := fmt.Sprintf("%s %s", eventIcon, request.Subject)
+	// 构建专业化卡片标题
+	headerTitle := fmt.Sprintf("⚡ AI-CloudOps | %s", eventText)
 
 	// 构建工单编号显示
-	ticketNumber := "系统通知"
+	workorderNumber := "系统通知"
 	if request.InstanceID != nil {
-		ticketNumber = fmt.Sprintf("#%d", *request.InstanceID)
+		workorderNumber = fmt.Sprintf("WO-%d", *request.InstanceID)
 	}
 
-	// 构建卡片内容元素
+	// 构建简洁商务化卡片内容元素
 	elements := []map[string]interface{}{
-		// 个人通知标识
-		{
-			"tag": "div",
-			"text": map[string]interface{}{
-				"tag":     "lark_md",
-				"content": "💌 **个人专属通知**",
-			},
-		},
-
-		// 分隔线
-		{
-			"tag": "hr",
-		},
-
-		// 基础信息区域
+		// 核心信息区域 - 紧凑布局
 		{
 			"tag": "div",
 			"fields": []map[string]interface{}{
@@ -556,72 +509,48 @@ func (f *FeishuChannel) buildPrivateMessageContent(request *SendRequest, recipie
 					"is_short": true,
 					"text": map[string]interface{}{
 						"tag":     "lark_md",
-						"content": fmt.Sprintf("**📋 工单编号**\n%s", ticketNumber),
+						"content": fmt.Sprintf("**工单编号**\n`%s`", workorderNumber),
 					},
 				},
 				{
 					"is_short": true,
 					"text": map[string]interface{}{
 						"tag":     "lark_md",
-						"content": fmt.Sprintf("**%s 优先级**\n<font color='%s'>%s</font>", priorityIcon, priorityColor, priorityText),
+						"content": fmt.Sprintf("**优先级**\n%s %s", priorityIcon, priorityText),
+					},
+				},
+				{
+					"is_short": true,
+					"text": map[string]interface{}{
+						"tag":     "lark_md",
+						"content": fmt.Sprintf("**时间**\n%s", time.Now().Format("01-02 15:04")),
 					},
 				},
 			},
 		},
 
-		// 操作信息区域
-		{
-			"tag": "div",
-			"fields": []map[string]interface{}{
-				{
-					"is_short": true,
-					"text": map[string]interface{}{
-						"tag":     "lark_md",
-						"content": fmt.Sprintf("**👤 接收人**\n%s", request.RecipientName),
-					},
-				},
-				{
-					"is_short": true,
-					"text": map[string]interface{}{
-						"tag":     "lark_md",
-						"content": fmt.Sprintf("**🔄 事件类型**\n%s %s", eventIcon, request.EventType),
-					},
-				},
-			},
-		},
-
-		// 分隔线
-		{
-			"tag": "hr",
-		},
-
-		// 详细内容区域
+		// 通知内容区域 - 简洁呈现
 		{
 			"tag": "div",
 			"text": map[string]interface{}{
 				"tag":     "lark_md",
-				"content": fmt.Sprintf("**📄 详细内容**\n%s", request.Content),
+				"content": fmt.Sprintf("**📋 通知内容**\n\n%s", f.renderContent(request)),
 			},
 		},
 
-		// 分隔线
-		{
-			"tag": "hr",
-		},
-
-		// 时间信息
+		// 系统信息栏 - 简化版
 		{
 			"tag": "note",
 			"elements": []map[string]interface{}{
 				{
-					"tag":     "lark_md",
-					"content": fmt.Sprintf("🕐 **发送时间：** %s  |  📱 **AI-CloudOps** 智能运维管理平台", time.Now().Format("2006-01-02 15:04:05")),
+					"tag":     "plain_text",
+					"content": "AI-CloudOps 智能运维管理平台自动发送 | 技术支持：400-000-0000",
 				},
 			},
 		},
 	}
 
-	// 如果有工单ID，添加操作按钮
+	// 如果有工单ID，添加专业操作按钮
 	if request.InstanceID != nil {
 		actionButtons := map[string]interface{}{
 			"tag": "action",
@@ -630,7 +559,7 @@ func (f *FeishuChannel) buildPrivateMessageContent(request *SendRequest, recipie
 					"tag": "button",
 					"text": map[string]interface{}{
 						"tag":     "plain_text",
-						"content": "查看详情",
+						"content": "立即查看",
 					},
 					"type": "primary",
 					"url":  fmt.Sprintf("#/workorder/instance/detail/%d", *request.InstanceID),
@@ -639,7 +568,7 @@ func (f *FeishuChannel) buildPrivateMessageContent(request *SendRequest, recipie
 					"tag": "button",
 					"text": map[string]interface{}{
 						"tag":     "plain_text",
-						"content": "访问系统",
+						"content": "管理平台",
 					},
 					"type": "default",
 					"url":  "#/dashboard",
@@ -689,7 +618,25 @@ func (f *FeishuChannel) buildPrivateMessageContent(request *SendRequest, recipie
 	return finalMessage
 }
 
-// createErrorResponse 创建错误响应
+// renderContent 渲染消息内容
+func (f *FeishuChannel) renderContent(request *SendRequest) string {
+	// 对内容进行模板渲染
+	renderedContent, err := RenderTemplate(request.Content, request)
+	if err != nil {
+		return request.Content // 渲染失败时使用原始内容
+	}
+	return renderedContent
+}
+
+// getDisplayName 获取用户显示名称
+func (f *FeishuChannel) getDisplayName(name string) string {
+	if name == "" {
+		return "系统用户"
+	}
+	return name
+}
+
+// createErrorResponse 创建错误响应结构
 func (f *FeishuChannel) createErrorResponse(messageID, errorMsg string, err error, startTime time.Time) *SendResponse {
 	return &SendResponse{
 		Success:      false,
@@ -703,12 +650,12 @@ func (f *FeishuChannel) createErrorResponse(messageID, errorMsg string, err erro
 	}
 }
 
-// Validate 验证配置
+// Validate 验证飞书配置有效性
 func (f *FeishuChannel) Validate() error {
 	return f.config.Validate()
 }
 
-// IsEnabled 是否启用
+// IsEnabled 检查通道是否启用
 func (f *FeishuChannel) IsEnabled() bool {
 	return f.config.IsEnabled()
 }
@@ -718,7 +665,7 @@ func (f *FeishuChannel) GetMaxRetries() int {
 	return f.config.GetMaxRetries()
 }
 
-// GetRetryInterval 获取重试间隔
+// GetRetryInterval 获取重试间隔时间
 func (f *FeishuChannel) GetRetryInterval() time.Duration {
 	return f.config.GetRetryInterval()
 }
