@@ -58,24 +58,24 @@ func InitViper() error {
 	// 设置配置文件类型和路径
 	viper.SetConfigFile(*configFile)
 
+	// 设置默认值（最低优先级）
+	setDefaults()
+
 	// 启用环境变量支持
 	viper.AutomaticEnv()
 
 	// 将点号替换为下划线以支持嵌套配置的环境变量
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	// 绑定环境变量 (必须在设置默认值和读取配置文件之前)
-	bindEnvVars()
-
-	// 设置默认值
-	setDefaults()
-
-	// 读取配置文件（如果存在）
+	// 读取配置文件（中等优先级）
 	if err := viper.ReadInConfig(); err != nil {
 		// 如果配置文件不存在，只是打印警告，继续使用环境变量和默认值
 		fmt.Printf("Warning: Failed to read config file %s: %v\n", *configFile, err)
 		fmt.Println("Using environment variables and default values only.")
 	}
+
+	// 绑定环境变量（最高优先级）- 必须在读取配置文件之后
+	bindEnvVars()
 
 	// 加载配置到全局变量
 	if err := viper.Unmarshal(GlobalConfig); err != nil {
@@ -93,20 +93,21 @@ func InitWebHookViper() {
 	pflag.Parse()
 	viper.SetConfigFile(*configFile)
 
+	// 设置webhook默认值（最低优先级）
+	setWebhookDefaults()
+
 	// 启用环境变量支持
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	// 设置webhook默认值
-	setWebhookDefaults()
-
+	// 读取配置文件（中等优先级）
 	err := viper.ReadInConfig()
 	if err != nil {
 		fmt.Printf("Warning: Failed to read webhook config file: %v\n", err)
 		fmt.Println("Using environment variables and default values only.")
 	}
 
-	// 绑定webhook环境变量
+	// 绑定webhook环境变量（最高优先级）
 	bindWebhookEnvVars()
 }
 
@@ -221,9 +222,15 @@ func bindStructEnvVars(t reflect.Type, prefix string) {
 			configKey = prefix + "." + mapstructureTag
 		}
 
+		// 获取实际类型（处理指针类型）
+		actualType := field.Type
+		if actualType.Kind() == reflect.Ptr {
+			actualType = actualType.Elem()
+		}
+
 		// 如果是嵌套结构体，递归处理
-		if field.Type.Kind() == reflect.Struct {
-			bindStructEnvVars(field.Type, configKey)
+		if actualType.Kind() == reflect.Struct {
+			bindStructEnvVars(actualType, configKey)
 		} else {
 			// 对于非结构体字段，绑定环境变量
 			// 获取env标签作为环境变量名
@@ -241,14 +248,9 @@ func bindStructEnvVars(t reflect.Type, prefix string) {
 
 // loadExternalConfig 加载外部配置（仅环境变量）
 func loadExternalConfig() {
-	// LLM配置
 	GlobalExternalConfig.LLM.APIKey = os.Getenv("LLM_API_KEY")
 	GlobalExternalConfig.LLM.BaseURL = os.Getenv("LLM_BASE_URL")
-
-	// 阿里云配置
 	GlobalExternalConfig.Aliyun.AccessKeyID = os.Getenv("ALIYUN_ACCESS_KEY_ID")
 	GlobalExternalConfig.Aliyun.AccessKeySecret = os.Getenv("ALIYUN_ACCESS_KEY_SECRET")
-
-	// Tavily配置
 	GlobalExternalConfig.Tavily.APIKey = os.Getenv("TAVILY_API_KEY")
 }

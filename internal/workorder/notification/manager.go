@@ -74,7 +74,6 @@ type FeishuConfig interface {
 	GetTenantAccessTokenAPI() string
 }
 
-// Manager 通知管理器
 type Manager struct {
 	channels    map[string]NotificationChannel
 	queueClient *asynq.Client
@@ -83,7 +82,6 @@ type Manager struct {
 	mu          sync.RWMutex
 }
 
-// NewManager 创建管理器
 func NewManager(config NotificationConfig, queueClient *asynq.Client, logger *zap.Logger) (*Manager, error) {
 	manager := &Manager{
 		channels:    make(map[string]NotificationChannel),
@@ -123,7 +121,7 @@ func NewManager(config NotificationConfig, queueClient *asynq.Client, logger *za
 	return manager, nil
 }
 
-// SendNotification 发送通知
+// SendNotification 同步发送通知消息
 func (m *Manager) SendNotification(ctx context.Context, request *SendRequest) (*SendResponse, error) {
 	// 生成ID
 	if request.MessageID == "" {
@@ -220,7 +218,7 @@ func (m *Manager) SendNotification(ctx context.Context, request *SendRequest) (*
 	}, lastErr
 }
 
-// SendNotificationAsync 异步发送
+// SendNotificationAsync 异步发送通知消息
 func (m *Manager) SendNotificationAsync(ctx context.Context, request *SendRequest, delay time.Duration) error {
 	// 生成ID
 	if request.MessageID == "" {
@@ -258,7 +256,7 @@ func (m *Manager) SendNotificationAsync(ctx context.Context, request *SendReques
 	return nil
 }
 
-// GetAvailableChannels 获取可用渠道
+// GetAvailableChannels 获取所有可用通知渠道
 func (m *Manager) GetAvailableChannels() []string {
 	var channels []string
 	for name, channel := range m.channels {
@@ -269,7 +267,7 @@ func (m *Manager) GetAvailableChannels() []string {
 	return channels
 }
 
-// BatchSendNotification 批量发送
+// BatchSendNotification 批量发送通知
 func (m *Manager) BatchSendNotification(ctx context.Context, requests []*SendRequest) ([]*SendResponse, error) {
 	if len(requests) == 0 {
 		return nil, nil
@@ -302,7 +300,7 @@ func (m *Manager) BatchSendNotification(ctx context.Context, requests []*SendReq
 	return responses, nil
 }
 
-// ValidateChannelConfig 验证配置
+// ValidateChannelConfig 验证指定渠道配置
 func (m *Manager) ValidateChannelConfig(channelName string) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -315,7 +313,7 @@ func (m *Manager) ValidateChannelConfig(channelName string) error {
 	return channel.Validate()
 }
 
-// ReloadChannel 重新加载
+// ReloadChannel 重新加载指定渠道
 func (m *Manager) ReloadChannel(channelName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -346,7 +344,7 @@ func (m *Manager) ReloadChannel(channelName string) error {
 	return nil
 }
 
-// getChannel 获取渠道
+// getChannel 根据类型获取通知渠道
 func (m *Manager) getChannel(recipientType string) (NotificationChannel, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -371,7 +369,7 @@ func (m *Manager) getChannel(recipientType string) (NotificationChannel, error) 
 	return channel, nil
 }
 
-// inferChannelFromAddress 推断渠道
+// inferChannelFromAddress 从地址格式推断渠道类型
 func (m *Manager) inferChannelFromAddress(address string) string {
 	// 邮箱
 	if isValidEmail(address) {
@@ -387,7 +385,7 @@ func (m *Manager) inferChannelFromAddress(address string) string {
 	return model.NotificationChannelEmail
 }
 
-// ProcessNotificationTask 处理任务
+// ProcessNotificationTask 处理通知队列任务
 func (m *Manager) ProcessNotificationTask(ctx context.Context, task *asynq.Task) error {
 	request, err := deserializeRequest(task.Payload())
 	if err != nil {
@@ -399,7 +397,7 @@ func (m *Manager) ProcessNotificationTask(ctx context.Context, task *asynq.Task)
 	return err
 }
 
-// GetChannelStats 获取统计
+// GetChannelStats 获取渠道统计信息
 func (m *Manager) GetChannelStats() map[string]interface{} {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -415,7 +413,7 @@ func (m *Manager) GetChannelStats() map[string]interface{} {
 	return stats
 }
 
-// Close 关闭
+// Close 关闭管理器资源
 func (m *Manager) Close() error {
 	if m.queueClient != nil {
 		return m.queueClient.Close()

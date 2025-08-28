@@ -225,18 +225,20 @@ type NotificationConfigAdapter struct {
 
 // GetEmail 获取邮箱配置
 func (a *NotificationConfigAdapter) GetEmail() notification.EmailConfig {
-	if a.config.Email == nil {
+	emailConfig := a.config.GetEmail()
+	if emailConfig == nil {
 		return nil
 	}
-	return a.config.Email
+	return emailConfig
 }
 
 // GetFeishu 获取飞书配置
 func (a *NotificationConfigAdapter) GetFeishu() notification.FeishuConfig {
-	if a.config.Feishu == nil {
+	feishuConfig := a.config.GetFeishu()
+	if feishuConfig == nil {
 		return nil
 	}
-	return a.config.Feishu
+	return feishuConfig
 }
 
 // InitNotificationConfig 初始化通知配置

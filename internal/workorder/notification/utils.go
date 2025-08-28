@@ -30,22 +30,23 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
-// serializeRequest 序列化发送请求
+// serializeRequest 将发送请求序列化为JSON
 func serializeRequest(request *SendRequest) []byte {
 	data, _ := json.Marshal(request)
 	return data
 }
 
-// deserializeRequest 反序列化发送请求
+// deserializeRequest 将JSON反序列化为发送请求
 func deserializeRequest(data []byte) (*SendRequest, error) {
 	var request SendRequest
 	err := json.Unmarshal(data, &request)
 	return &request, err
 }
 
-// isValidEmail 验证邮箱地址格式
+// isValidEmail 检查邮箱地址格式是否有效
 func isValidEmail(email string) bool {
 	if email == "" {
 		return false
@@ -57,17 +58,7 @@ func isValidEmail(email string) bool {
 	return re.MatchString(email)
 }
 
-// isValidFeishuID 验证飞书ID格式
-func isValidFeishuID(id string) bool {
-	if id == "" {
-		return false
-	}
-
-	// 飞书用户ID通常以 "ou_" 开头，群组ID以 "oc_" 开头
-	return strings.HasPrefix(id, "ou_") || strings.HasPrefix(id, "oc_") || strings.HasPrefix(id, "cli_")
-}
-
-// FormatPriority 格式化优先级
+// FormatPriority 将优先级数字转为文本表示
 func FormatPriority(priority int8) string {
 	switch priority {
 	case 1:
@@ -81,7 +72,7 @@ func FormatPriority(priority int8) string {
 	}
 }
 
-// FormatPriorityIcon 格式化优先级图标
+// FormatPriorityIcon 获取优先级对应的图标
 func FormatPriorityIcon(priority int8) string {
 	switch priority {
 	case 1:
@@ -95,7 +86,7 @@ func FormatPriorityIcon(priority int8) string {
 	}
 }
 
-// GetEventTypeText 获取事件类型文本
+// GetEventTypeText 获取事件类型的文本描述
 func GetEventTypeText(eventType string) string {
 	eventMap := map[string]string{
 		"created":   "工单创建",
@@ -118,108 +109,151 @@ func GetEventTypeText(eventType string) string {
 	return eventType
 }
 
-// SanitizeContent 清理内容，防止注入
-func SanitizeContent(content string) string {
-	// 移除或转义潜在的危险字符
-	content = strings.ReplaceAll(content, "<script", "&lt;script")
-	content = strings.ReplaceAll(content, "</script>", "&lt;/script&gt;")
-	content = strings.ReplaceAll(content, "javascript:", "")
-	content = strings.ReplaceAll(content, "vbscript:", "")
-	content = strings.ReplaceAll(content, "onload=", "")
-	content = strings.ReplaceAll(content, "onerror=", "")
-
-	return content
-}
-
-// TruncateText 截断文本
-func TruncateText(text string, maxLength int) string {
-	if len(text) <= maxLength {
-		return text
+// GetEventTypeIcon 获取事件类型对应的图标
+func GetEventTypeIcon(eventType string) string {
+	eventIcons := map[string]string{
+		"created":   "📝",
+		"updated":   "🔄",
+		"approved":  "✅",
+		"rejected":  "❌",
+		"completed": "🎉",
+		"closed":    "🔒",
+		"cancelled": "🚫",
+		"assigned":  "👤",
+		"commented": "💬",
+		"escalated": "⚡",
+		"due_soon":  "⏰",
+		"overdue":   "🚨",
+		"test":      "🧪",
 	}
 
-	if maxLength <= 3 {
-		return "..."
+	// 兼容中文事件类型
+	chineseEventIcons := map[string]string{
+		"工单创建": "📝",
+		"工单提交": "📤",
+		"工单指派": "👤",
+		"工单审批": "✅",
+		"工单拒绝": "❌",
+		"工单完成": "🎉",
+		"工单关闭": "🔒",
 	}
 
-	return text[:maxLength-3] + "..."
+	if icon, exists := eventIcons[eventType]; exists {
+		return icon
+	}
+	if icon, exists := chineseEventIcons[eventType]; exists {
+		return icon
+	}
+	return "📋" // 默认图标
 }
 
-// ExtractMentions 提取@提及
-func ExtractMentions(content string) []string {
-	// 匹配 @username 格式
-	re := regexp.MustCompile(`@([a-zA-Z0-9_]+)`)
-	matches := re.FindAllStringSubmatch(content, -1)
-
-	var mentions []string
-	for _, match := range matches {
-		if len(match) > 1 {
-			mentions = append(mentions, match[1])
-		}
+// RenderTemplate 渲染模板内容
+func RenderTemplate(content string, request *SendRequest) (string, error) {
+	if content == "" {
+		return content, nil
 	}
 
-	return mentions
+	// 构建模板变量映射
+	variables := buildTemplateVariables(request)
+
+	// 使用字符串替换方式，支持多种格式的模板变量
+	return replaceTemplateVariables(content, variables), nil
 }
 
-// IsURL 检查是否为URL
-func IsURL(str string) bool {
-	return strings.HasPrefix(str, "http://") || strings.HasPrefix(str, "https://")
-}
+// buildTemplateVariables 构建模板变量映射
+func buildTemplateVariables(request *SendRequest) map[string]string {
+	variables := make(map[string]string)
 
-// GenerateCallbackURL 生成回调URL
-func GenerateCallbackURL(baseURL string, instanceID int, action string) string {
-	if !strings.HasSuffix(baseURL, "/") {
-		baseURL += "/"
-	}
-	return baseURL + "workorder/" + action + "?id=" + string(rune(instanceID))
-}
+	// ===== 核心业务变量 =====
+	variables["subject"] = safeString(request.Subject)
+	variables["content"] = safeString(request.Content)
+	variables["recipient_name"] = safeString(request.RecipientName)
+	variables["recipient_addr"] = safeString(request.RecipientAddr)
 
-// MaskSensitiveData 掩码敏感数据
-func MaskSensitiveData(data string) string {
-	if len(data) <= 4 {
-		return "****"
-	}
-
-	// 保留前2位和后2位
-	return data[:2] + strings.Repeat("*", len(data)-4) + data[len(data)-2:]
-}
-
-// ValidateRecipientFormat 验证接收人格式
-func ValidateRecipientFormat(recipientType, recipientAddr string) error {
-	switch recipientType {
-	case "email", "user_email":
-		if !isValidEmail(recipientAddr) {
-			return fmt.Errorf("invalid email format: %s", recipientAddr)
-		}
-	case "feishu", "feishu_user", "feishu_group":
-		if !isValidFeishuID(recipientAddr) {
-			return fmt.Errorf("invalid feishu ID format: %s", recipientAddr)
-		}
-	}
-	return nil
-}
-
-// BuildNotificationContext 构建通知上下文
-func BuildNotificationContext(request *SendRequest) map[string]interface{} {
-	context := map[string]interface{}{
-		"message_id":     request.MessageID,
-		"recipient_type": request.RecipientType,
-		"recipient_id":   request.RecipientID,
-		"recipient_name": request.RecipientName,
-		"event_type":     request.EventType,
-		"priority":       request.Priority,
-		"priority_text":  FormatPriority(request.Priority),
-		"priority_icon":  FormatPriorityIcon(request.Priority),
-		"event_text":     GetEventTypeText(request.EventType),
-	}
-
+	// ===== 工单业务变量 =====
 	if request.InstanceID != nil {
-		context["instance_id"] = *request.InstanceID
+		variables["workorder_id"] = fmt.Sprintf("%d", *request.InstanceID)
+		variables["serial_number"] = fmt.Sprintf("WO-%d", *request.InstanceID)
+	} else {
+		variables["workorder_id"] = ""
+		variables["serial_number"] = "系统通知"
 	}
 
-	// 合并元数据
-	for key, value := range request.Metadata {
-		context[key] = value
+	// ===== 优先级相关变量 =====
+	variables["priority_level"] = fmt.Sprintf("%d", int(request.Priority))
+	variables["priority_text"] = FormatPriority(request.Priority)
+	variables["priority_icon"] = FormatPriorityIcon(request.Priority)
+
+	// ===== 事件类型变量 =====
+	variables["event_type"] = GetEventTypeText(request.EventType)
+	variables["event_type_text"] = GetEventTypeText(request.EventType)
+	variables["event_type_icon"] = GetEventTypeIcon(request.EventType)
+
+	// ===== 时间相关变量 =====
+	currentTime := time.Now()
+	variables["notification_time"] = currentTime.Format("2006-01-02 15:04:05")
+	variables["notification_date"] = currentTime.Format("2006-01-02")
+	variables["notification_year"] = currentTime.Format("2006")
+	variables["notification_month"] = currentTime.Format("01")
+	variables["notification_day"] = currentTime.Format("02")
+
+	// ===== 企业信息变量 =====
+	variables["company_name"] = "AI-CloudOps"
+	variables["platform_name"] = "智能运维管理平台"
+	variables["department"] = "技术运维部"
+	variables["service_hotline"] = "400-000-0000"
+	variables["copyright"] = "Copyright © 2024 AI-CloudOps. All rights reserved."
+
+	// ===== 从Templates中获取业务变量 =====
+	if request.Templates != nil {
+		for key, value := range request.Templates {
+			variables[key] = value
+		}
 	}
 
-	return context
+	// ===== 从元数据中获取扩展变量 =====
+	if request.Metadata != nil {
+		for key, value := range request.Metadata {
+			if str, ok := value.(string); ok {
+				variables[key] = str
+			} else {
+				variables[key] = fmt.Sprintf("%v", value)
+			}
+		}
+	}
+
+	return variables
+}
+
+// replaceTemplateVariables 在模板中替换变量占位符
+func replaceTemplateVariables(template string, variables map[string]string) string {
+	if template == "" {
+		return ""
+	}
+
+	result := template
+
+	// 支持多种格式的模板变量替换
+	for key, value := range variables {
+		// 替换 ${变量名} 格式（需要最先替换，避免与其他格式冲突）
+		result = strings.ReplaceAll(result, "${"+key+"}", value)
+		// 替换 {{变量名}} 格式
+		result = strings.ReplaceAll(result, "{{"+key+"}}", value)
+		// 替换 {{ 变量名 }} 格式（带空格）
+		result = strings.ReplaceAll(result, "{{ "+key+" }}", value)
+		// 替换 {变量名} 格式
+		result = strings.ReplaceAll(result, "{"+key+"}", value)
+		// 替换 { 变量名 } 格式（带空格）
+		result = strings.ReplaceAll(result, "{ "+key+" }", value)
+	}
+
+	return result
+}
+
+// safeString 安全处理字符串
+func safeString(s string) string {
+	if s == "" {
+		return ""
+	}
+	return s
 }
