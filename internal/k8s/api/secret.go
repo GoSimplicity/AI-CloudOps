@@ -52,12 +52,12 @@ func (h *K8sSecretHandler) RegisterRouters(server *gin.Engine) {
 
 	secrets := k8sGroup.Group("/secrets")
 	{
-		secrets.GET("/list", h.GetSecretList)                           // 获取Secret列表
-		secrets.GET("/:cluster_id/:namespace/:name", h.GetSecret)       // 获取单个Secret详情
-		secrets.POST("/create", h.CreateSecret)                         // 创建Secret
-		secrets.PUT("/update", h.UpdateSecret)                          // 更新Secret
-		secrets.DELETE("/:cluster_id/:namespace/:name", h.DeleteSecret) // 删除Secret
-		secrets.DELETE("/batch", h.BatchDeleteSecrets)                  // 批量删除Secret
+		secrets.GET("/list", h.GetSecretList)                              // 获取Secret列表
+		secrets.GET("/:cluster_id/:namespace/:name", h.GetSecret)          // 获取单个Secret详情
+		secrets.POST("/create", h.CreateSecret)                            // 创建Secret
+		secrets.PUT("/update", h.UpdateSecret)                             // 更新Secret
+		secrets.DELETE("/:cluster_id/:namespace/:name", h.DeleteSecret)    // 删除Secret
+		secrets.DELETE("/batch", h.BatchDeleteSecrets)                     // 批量删除Secret
 		secrets.GET("/:cluster_id/:namespace/:name/yaml", h.GetSecretYAML) // 获取Secret的YAML配置
 	}
 }
@@ -80,8 +80,8 @@ func (h *K8sSecretHandler) RegisterRouters(server *gin.Engine) {
 // @Router /api/k8s/secrets/list [get]
 // @Security BearerAuth
 func (h *K8sSecretHandler) GetSecretList(ctx *gin.Context) {
-	var req model.K8sListRequest
-	
+	var req model.K8sListReq
+
 	// 从查询参数中获取请求参数
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, "参数绑定错误: "+err.Error())
@@ -109,8 +109,8 @@ func (h *K8sSecretHandler) GetSecretList(ctx *gin.Context) {
 // @Router /api/k8s/secrets/{cluster_id}/{namespace}/{name} [get]
 // @Security BearerAuth
 func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
-	var req model.K8sResourceIdentifier
-	
+	var req model.K8sResourceIdentifierReq
+
 	// 从路径参数中获取请求参数
 	clusterIDStr := ctx.Param("cluster_id")
 	clusterID, err := strconv.Atoi(clusterIDStr)
@@ -119,10 +119,10 @@ func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
 		return
 	}
 	req.ClusterID = clusterID
-	
+
 	req.Namespace = ctx.Param("namespace")
 	req.ResourceName = ctx.Param("name")
-	
+
 	// 验证必要参数
 	if req.Namespace == "" || req.ResourceName == "" {
 		utils.BadRequestError(ctx, "命名空间和Secret名称不能为空")
@@ -140,7 +140,7 @@ func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
 // @Tags 密钥管理
 // @Accept json
 // @Produce json
-// @Param request body model.SecretCreateRequest true "Secret创建请求"
+// @Param request body model.SecretCreateReq true "Secret创建请求"
 // @Success 200 {object} utils.ApiResponse "创建成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 409 {object} utils.ApiResponse "Secret已存在"
@@ -148,7 +148,7 @@ func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
 // @Router /api/k8s/secrets/create [post]
 // @Security BearerAuth
 func (h *K8sSecretHandler) CreateSecret(ctx *gin.Context) {
-	var req model.SecretCreateRequest
+	var req model.SecretCreateReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.secretService.CreateSecret(ctx, &req)
@@ -161,7 +161,7 @@ func (h *K8sSecretHandler) CreateSecret(ctx *gin.Context) {
 // @Tags 密钥管理
 // @Accept json
 // @Produce json
-// @Param request body model.SecretUpdateRequest true "Secret更新请求"
+// @Param request body model.SecretUpdateReq true "Secret更新请求"
 // @Success 200 {object} utils.ApiResponse "更新成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 404 {object} utils.ApiResponse "Secret不存在"
@@ -169,7 +169,7 @@ func (h *K8sSecretHandler) CreateSecret(ctx *gin.Context) {
 // @Router /api/k8s/secrets/update [put]
 // @Security BearerAuth
 func (h *K8sSecretHandler) UpdateSecret(ctx *gin.Context) {
-	var req model.SecretUpdateRequest
+	var req model.SecretUpdateReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.secretService.UpdateSecret(ctx, &req)
@@ -192,8 +192,8 @@ func (h *K8sSecretHandler) UpdateSecret(ctx *gin.Context) {
 // @Router /api/k8s/secrets/{cluster_id}/{namespace}/{name} [delete]
 // @Security BearerAuth
 func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
-	var req model.K8sResourceIdentifier
-	
+	var req model.K8sResourceIdentifierReq
+
 	// 从路径参数中获取请求参数
 	clusterIDStr := ctx.Param("cluster_id")
 	clusterID, err := strconv.Atoi(clusterIDStr)
@@ -202,10 +202,10 @@ func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
 		return
 	}
 	req.ClusterID = clusterID
-	
+
 	req.Namespace = ctx.Param("namespace")
 	req.ResourceName = ctx.Param("name")
-	
+
 	// 验证必要参数
 	if req.Namespace == "" || req.ResourceName == "" {
 		utils.BadRequestError(ctx, "命名空间和Secret名称不能为空")
@@ -223,14 +223,14 @@ func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
 // @Tags 密钥管理
 // @Accept json
 // @Produce json
-// @Param request body model.K8sBatchDeleteRequest true "批量删除请求"
+// @Param request body model.K8sBatchDeleteReq true "批量删除请求"
 // @Success 200 {object} utils.ApiResponse "批量删除成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/secrets/batch [delete]
 // @Security BearerAuth
 func (h *K8sSecretHandler) BatchDeleteSecrets(ctx *gin.Context) {
-	var req model.K8sBatchDeleteRequest
+	var req model.K8sBatchDeleteReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.secretService.BatchDeleteSecrets(ctx, &req)
@@ -253,8 +253,8 @@ func (h *K8sSecretHandler) BatchDeleteSecrets(ctx *gin.Context) {
 // @Router /api/k8s/secrets/{cluster_id}/{namespace}/{name}/yaml [get]
 // @Security BearerAuth
 func (h *K8sSecretHandler) GetSecretYAML(ctx *gin.Context) {
-	var req model.K8sResourceIdentifier
-	
+	var req model.K8sResourceIdentifierReq
+
 	// 从路径参数中获取请求参数
 	clusterIDStr := ctx.Param("cluster_id")
 	clusterID, err := strconv.Atoi(clusterIDStr)
@@ -263,10 +263,10 @@ func (h *K8sSecretHandler) GetSecretYAML(ctx *gin.Context) {
 		return
 	}
 	req.ClusterID = clusterID
-	
+
 	req.Namespace = ctx.Param("namespace")
 	req.ResourceName = ctx.Param("name")
-	
+
 	// 验证必要参数
 	if req.Namespace == "" || req.ResourceName == "" {
 		utils.BadRequestError(ctx, "命名空间和Secret名称不能为空")

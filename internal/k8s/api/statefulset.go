@@ -36,13 +36,13 @@ import (
 )
 
 type K8sStatefulSetHandler struct {
-	logger              *zap.Logger
+	logger             *zap.Logger
 	statefulSetService service.StatefulSetService
 }
 
 func NewK8sStatefulSetHandler(logger *zap.Logger, statefulSetService service.StatefulSetService) *K8sStatefulSetHandler {
 	return &K8sStatefulSetHandler{
-		logger:              logger,
+		logger:             logger,
 		statefulSetService: statefulSetService,
 	}
 }
@@ -52,13 +52,13 @@ func (h *K8sStatefulSetHandler) RegisterRouters(server *gin.Engine) {
 
 	statefulSets := k8sGroup.Group("/statefulsets")
 	{
-		statefulSets.GET("/list", h.GetStatefulSetList)                            // 获取StatefulSet列表
-		statefulSets.GET("/:cluster_id/:namespace/:name", h.GetStatefulSet)        // 获取单个StatefulSet详情
-		statefulSets.POST("/create", h.CreateStatefulSet)                          // 创建StatefulSet
-		statefulSets.PUT("/update", h.UpdateStatefulSet)                           // 更新StatefulSet
-		statefulSets.POST("/scale", h.ScaleStatefulSet)                            // 扩缩容StatefulSet
-		statefulSets.DELETE("/:cluster_id/:namespace/:name", h.DeleteStatefulSet)  // 删除StatefulSet
-		statefulSets.DELETE("/batch", h.BatchDeleteStatefulSets)                   // 批量删除StatefulSet
+		statefulSets.GET("/list", h.GetStatefulSetList)                              // 获取StatefulSet列表
+		statefulSets.GET("/:cluster_id/:namespace/:name", h.GetStatefulSet)          // 获取单个StatefulSet详情
+		statefulSets.POST("/create", h.CreateStatefulSet)                            // 创建StatefulSet
+		statefulSets.PUT("/update", h.UpdateStatefulSet)                             // 更新StatefulSet
+		statefulSets.POST("/scale", h.ScaleStatefulSet)                              // 扩缩容StatefulSet
+		statefulSets.DELETE("/:cluster_id/:namespace/:name", h.DeleteStatefulSet)    // 删除StatefulSet
+		statefulSets.DELETE("/batch", h.BatchDeleteStatefulSets)                     // 批量删除StatefulSet
 		statefulSets.GET("/:cluster_id/:namespace/:name/yaml", h.GetStatefulSetYAML) // 获取StatefulSet的YAML配置
 	}
 }
@@ -75,8 +75,8 @@ func (h *K8sStatefulSetHandler) RegisterRouters(server *gin.Engine) {
 // @Router /api/k8s/statefulsets/list [get]
 // @Security BearerAuth
 func (h *K8sStatefulSetHandler) GetStatefulSetList(ctx *gin.Context) {
-	var req model.K8sListRequest
-	
+	var req model.K8sListReq
+
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, "参数绑定错误: "+err.Error())
 		return
@@ -100,8 +100,8 @@ func (h *K8sStatefulSetHandler) GetStatefulSetList(ctx *gin.Context) {
 // @Router /api/k8s/statefulsets/{cluster_id}/{namespace}/{name} [get]
 // @Security BearerAuth
 func (h *K8sStatefulSetHandler) GetStatefulSet(ctx *gin.Context) {
-	var req model.K8sResourceIdentifier
-	
+	var req model.K8sResourceIdentifierReq
+
 	clusterIDStr := ctx.Param("cluster_id")
 	clusterID, err := strconv.Atoi(clusterIDStr)
 	if err != nil {
@@ -123,12 +123,12 @@ func (h *K8sStatefulSetHandler) GetStatefulSet(ctx *gin.Context) {
 // @Tags 工作负载管理
 // @Accept json
 // @Produce json
-// @Param request body model.StatefulSetCreateRequest true "StatefulSet创建请求"
+// @Param request body model.StatefulSetCreateReq true "StatefulSet创建请求"
 // @Success 200 {object} utils.ApiResponse "创建成功"
 // @Router /api/k8s/statefulsets/create [post]
 // @Security BearerAuth
 func (h *K8sStatefulSetHandler) CreateStatefulSet(ctx *gin.Context) {
-	var req model.StatefulSetCreateRequest
+	var req model.StatefulSetCreateReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.statefulSetService.CreateStatefulSet(ctx, &req)
@@ -141,12 +141,12 @@ func (h *K8sStatefulSetHandler) CreateStatefulSet(ctx *gin.Context) {
 // @Tags 工作负载管理
 // @Accept json
 // @Produce json
-// @Param request body model.StatefulSetUpdateRequest true "StatefulSet更新请求"
+// @Param request body model.StatefulSetUpdateReq true "StatefulSet更新请求"
 // @Success 200 {object} utils.ApiResponse "更新成功"
 // @Router /api/k8s/statefulsets/update [put]
 // @Security BearerAuth
 func (h *K8sStatefulSetHandler) UpdateStatefulSet(ctx *gin.Context) {
-	var req model.StatefulSetUpdateRequest
+	var req model.StatefulSetUpdateReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.statefulSetService.UpdateStatefulSet(ctx, &req)
@@ -159,12 +159,12 @@ func (h *K8sStatefulSetHandler) UpdateStatefulSet(ctx *gin.Context) {
 // @Tags 工作负载管理
 // @Accept json
 // @Produce json
-// @Param request body model.StatefulSetScaleRequest true "StatefulSet扩缩容请求"
+// @Param request body model.StatefulSetScaleReq true "StatefulSet扩缩容请求"
 // @Success 200 {object} utils.ApiResponse "扩缩容成功"
 // @Router /api/k8s/statefulsets/scale [post]
 // @Security BearerAuth
 func (h *K8sStatefulSetHandler) ScaleStatefulSet(ctx *gin.Context) {
-	var req model.StatefulSetScaleRequest
+	var req model.StatefulSetScaleReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.statefulSetService.ScaleStatefulSet(ctx, &req)
@@ -184,8 +184,8 @@ func (h *K8sStatefulSetHandler) ScaleStatefulSet(ctx *gin.Context) {
 // @Router /api/k8s/statefulsets/{cluster_id}/{namespace}/{name} [delete]
 // @Security BearerAuth
 func (h *K8sStatefulSetHandler) DeleteStatefulSet(ctx *gin.Context) {
-	var req model.K8sResourceIdentifier
-	
+	var req model.K8sResourceIdentifierReq
+
 	clusterIDStr := ctx.Param("cluster_id")
 	clusterID, err := strconv.Atoi(clusterIDStr)
 	if err != nil {
@@ -207,12 +207,12 @@ func (h *K8sStatefulSetHandler) DeleteStatefulSet(ctx *gin.Context) {
 // @Tags 工作负载管理
 // @Accept json
 // @Produce json
-// @Param request body model.K8sBatchDeleteRequest true "批量删除请求"
+// @Param request body model.K8sBatchDeleteReq true "批量删除请求"
 // @Success 200 {object} utils.ApiResponse "批量删除成功"
 // @Router /api/k8s/statefulsets/batch [delete]
 // @Security BearerAuth
 func (h *K8sStatefulSetHandler) BatchDeleteStatefulSets(ctx *gin.Context) {
-	var req model.K8sBatchDeleteRequest
+	var req model.K8sBatchDeleteReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.statefulSetService.BatchDeleteStatefulSets(ctx, &req)
@@ -232,8 +232,8 @@ func (h *K8sStatefulSetHandler) BatchDeleteStatefulSets(ctx *gin.Context) {
 // @Router /api/k8s/statefulsets/{cluster_id}/{namespace}/{name}/yaml [get]
 // @Security BearerAuth
 func (h *K8sStatefulSetHandler) GetStatefulSetYAML(ctx *gin.Context) {
-	var req model.K8sResourceIdentifier
-	
+	var req model.K8sResourceIdentifierReq
+
 	clusterIDStr := ctx.Param("cluster_id")
 	clusterID, err := strconv.Atoi(clusterIDStr)
 	if err != nil {

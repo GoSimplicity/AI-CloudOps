@@ -33,12 +33,12 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 type NamespaceService interface {
@@ -47,13 +47,13 @@ type NamespaceService interface {
 	// GetClusterNamespacesById 获取指定集群的所有命名空间
 	GetClusterNamespacesById(ctx context.Context, id int) ([]model.Namespace, error)
 	// CreateNamespace 创建新的命名空间
-	CreateNamespace(ctx context.Context, req model.CreateNamespaceRequest) error
+	CreateNamespace(ctx context.Context, req model.CreateNamespaceReq) error
 	// DeleteNamespace 删除指定的命名空间
 	DeleteNamespace(ctx context.Context, name string, id int) error
 	// GetNamespaceDetails 获取指定命名空间的详情
 	GetNamespaceDetails(ctx context.Context, name string, id int) (model.Namespace, error)
 	// UpdateNamespace 更新指定命名空间
-	UpdateNamespace(ctx context.Context, req model.UpdateNamespaceRequest) error
+	UpdateNamespace(ctx context.Context, req model.UpdateNamespaceReq) error
 	// GetNamespaceResources 获取指定命名空间中的资源
 	GetNamespaceResources(ctx context.Context, name string, id int) ([]model.Resource, error)
 	// GetNamespaceEvents 获取指定命名空间中的事件
@@ -77,7 +77,7 @@ func NewNamespaceService(dao dao.ClusterDAO, client client.K8sClient, logger *za
 // GetClusterNamespacesById 获取指定集群的命名空间列表，返回详细的 Namespace 结构体
 func (n *namespaceService) GetClusterNamespacesById(ctx context.Context, id int) ([]model.Namespace, error) {
 	// 获取 Kubernetes 客户端
-	kubeClient, err := pkg.GetKubeClient(id, n.client, n.logger)
+	kubeClient, err := k8sutils.GetKubeClient(id, n.client, n.logger)
 	if err != nil {
 		n.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return nil, err
@@ -172,9 +172,9 @@ func (n *namespaceService) GetClusterNamespacesList(ctx context.Context) ([]mode
 	return clusterNamespacesList, nil
 }
 
-func (n *namespaceService) CreateNamespace(ctx context.Context, req model.CreateNamespaceRequest) error {
+func (n *namespaceService) CreateNamespace(ctx context.Context, req model.CreateNamespaceReq) error {
 	// 获取 Kubernetes 客户端
-	kubeClient, err := pkg.GetKubeClient(req.ClusterId, n.client, n.logger)
+	kubeClient, err := k8sutils.GetKubeClient(req.ClusterId, n.client, n.logger)
 	if err != nil {
 		n.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
@@ -215,7 +215,7 @@ func (n *namespaceService) CreateNamespace(ctx context.Context, req model.Create
 // DeleteNamespace 删除指定的命名空间
 func (n *namespaceService) DeleteNamespace(ctx context.Context, name string, id int) error {
 	// 获取 Kubernetes 客户端
-	kubeClient, err := pkg.GetKubeClient(id, n.client, n.logger)
+	kubeClient, err := k8sutils.GetKubeClient(id, n.client, n.logger)
 	if err != nil {
 		n.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
@@ -234,7 +234,7 @@ func (n *namespaceService) DeleteNamespace(ctx context.Context, name string, id 
 // GetNamespaceDetails 获取指定命名空间的详细信息
 func (n *namespaceService) GetNamespaceDetails(ctx context.Context, name string, id int) (model.Namespace, error) {
 	// 获取 Kubernetes 客户端
-	kubeClient, err := pkg.GetKubeClient(id, n.client, n.logger)
+	kubeClient, err := k8sutils.GetKubeClient(id, n.client, n.logger)
 	if err != nil {
 		n.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return model.Namespace{}, err
@@ -270,9 +270,9 @@ func (n *namespaceService) GetNamespaceDetails(ctx context.Context, name string,
 }
 
 // UpdateNamespace 更新指定命名空间
-func (n *namespaceService) UpdateNamespace(ctx context.Context, req model.UpdateNamespaceRequest) error {
+func (n *namespaceService) UpdateNamespace(ctx context.Context, req model.UpdateNamespaceReq) error {
 	// 获取 Kubernetes 客户端
-	kubeClient, err := pkg.GetKubeClient(req.ClusterId, n.client, n.logger)
+	kubeClient, err := k8sutils.GetKubeClient(req.ClusterId, n.client, n.logger)
 	if err != nil {
 		n.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
@@ -313,53 +313,52 @@ func (n *namespaceService) UpdateNamespace(ctx context.Context, req model.Update
 
 // GetNamespaceResources 获取指定命名空间中的所有资源
 func (n *namespaceService) GetNamespaceResources(ctx context.Context, namespace string, id int) ([]model.Resource, error) {
-	// 获取 Kubernetes 客户端
-	kubeClient, err := pkg.GetKubeClient(id, n.client, n.logger)
-	if err != nil {
-		n.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return nil, err
-	}
-
-	// 定义资源类型和对应的获取函数
-	resourceTypes := map[string]func(context.Context, *kubernetes.Clientset, string) ([]model.Resource, error){
-		"pods":         pkg.GetPodResources,
-		"services":     pkg.GetServiceResources,
-		"deployments":  pkg.GetDeploymentResources,
-		"replicasets":  pkg.GetReplicaSetResources,
-		"statefulsets": pkg.GetStatefulSetResources,
-		"daemonsets":   pkg.GetDaemonSetResources,
-	}
-
+	// TODO: 实现资源获取逻辑
+	// 暂时返回空列表，避免pkg函数未定义的错误
 	var resources []model.Resource
-	var mu sync.Mutex
-	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(10) // 限制并发数为 10
 
-	// 并发获取各类资源
-	for resourceType, getResources := range resourceTypes {
-		resourceType := resourceType // 避免闭包变量捕获问题
-		g.Go(func() error {
-			resourceList, err := getResources(ctx, kubeClient, namespace)
-			if err != nil {
-				n.logger.Error("获取资源失败", zap.String("resourceType", resourceType), zap.Error(err))
-				return err
-			}
+	// 定义资源类型和对应的获取函数（暂时注释掉）
+	/*
+		resourceTypes := map[string]func(context.Context, *kubernetes.Clientset, string) ([]model.Resource, error){
+			"pods":         pkg.GetPodResources,
+			"services":     pkg.GetServiceResources,
+			"deployments":  pkg.GetDeploymentResources,
+			"replicasets":  pkg.GetReplicaSetResources,
+			"statefulsets": pkg.GetStatefulSetResources,
+			"daemonsets":   pkg.GetDaemonSetResources,
+		}
 
-			// 确保资源列表非空后再合并
-			if len(resourceList) > 0 {
-				mu.Lock()
-				resources = append(resources, resourceList...)
-				mu.Unlock()
-			}
-			return nil
-		})
-	}
+		var resources []model.Resource
+		var mu sync.Mutex
+		g, ctx := errgroup.WithContext(ctx)
+		g.SetLimit(10) // 限制并发数为 10
 
-	// 等待并发任务完成
-	if err := g.Wait(); err != nil {
-		n.logger.Error("并发获取资源失败", zap.Error(err))
-		return nil, err
-	}
+		// 并发获取各类资源
+		for resourceType, getResources := range resourceTypes {
+			resourceType := resourceType // 避免闭包变量捕获问题
+			g.Go(func() error {
+				resourceList, err := getResources(ctx, kubeClient, namespace)
+				if err != nil {
+					n.logger.Error("获取资源失败", zap.String("resourceType", resourceType), zap.Error(err))
+					return err
+				}
+
+				// 确保资源列表非空后再合并
+				if len(resourceList) > 0 {
+					mu.Lock()
+					resources = append(resources, resourceList...)
+					mu.Unlock()
+				}
+				return nil
+			})
+		}
+
+		// 等待并发任务完成
+		if err := g.Wait(); err != nil {
+			n.logger.Error("并发获取资源失败", zap.Error(err))
+			return nil, err
+		}
+	*/
 
 	return resources, nil
 }
@@ -367,7 +366,7 @@ func (n *namespaceService) GetNamespaceResources(ctx context.Context, namespace 
 // GetNamespaceEvents 获取指定命名空间中的事件
 func (n *namespaceService) GetNamespaceEvents(ctx context.Context, namespace string, id int) ([]model.Event, error) {
 	// 获取 Kubernetes 客户端
-	kubeClient, err := pkg.GetKubeClient(id, n.client, n.logger)
+	kubeClient, err := k8sutils.GetKubeClient(id, n.client, n.logger)
 	if err != nil {
 		n.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return nil, err

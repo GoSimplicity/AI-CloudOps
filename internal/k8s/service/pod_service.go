@@ -32,6 +32,7 @@ import (
 	"strings"
 	"time"
 
+	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
@@ -46,28 +47,28 @@ import (
 type PodService interface {
 	// 获取Pod列表
 	GetPodsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPod, error)
-	GetPodList(ctx context.Context, req *model.K8sGetResourceListRequest) ([]*model.K8sPodResponse, error)
+	GetPodList(ctx context.Context, req *model.K8sGetResourceListReq) ([]*model.K8sPodResponse, error)
 	GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sPod, error)
-	
+
 	// 获取Pod详情
-	GetPod(ctx context.Context, req *model.K8sGetResourceRequest) (*model.K8sPodResponse, error)
+	GetPod(ctx context.Context, req *model.K8sGetResourceReq) (*model.K8sPodResponse, error)
 	GetPodYaml(ctx context.Context, clusterID int, namespace, podName string) (*corev1.Pod, error)
-	
+
 	// 获取容器相关信息
 	GetContainersByPod(ctx context.Context, clusterID int, namespace string, podName string) ([]*model.K8sPodContainer, error)
 	GetContainerLogs(ctx context.Context, clusterID int, namespace, podName, containerName string) (string, error)
-	GetPodLogs(ctx context.Context, req *model.PodLogRequest) (string, error)
-	
+	GetPodLogs(ctx context.Context, req *model.PodLogReq) (string, error)
+
 	// Pod操作
 	DeletePod(ctx context.Context, clusterId int, namespace, podName string) error
-	DeletePodWithOptions(ctx context.Context, req *model.K8sDeleteResourceRequest) error
-	
+	DeletePodWithOptions(ctx context.Context, req *model.K8sDeleteResourceReq) error
+
 	// 批量操作
-	BatchDeletePods(ctx context.Context, req *model.K8sBatchDeleteRequest) error
-	
+	BatchDeletePods(ctx context.Context, req *model.K8sBatchDeleteReq) error
+
 	// 高级功能
-	ExecInPod(ctx context.Context, req *model.PodExecRequest) error
-	PortForward(ctx context.Context, req *model.PodPortForwardRequest) error
+	ExecInPod(ctx context.Context, req *model.PodExecReq) error
+	PortForward(ctx context.Context, req *model.PodPortForwardReq) error
 }
 
 type podService struct {
@@ -98,7 +99,7 @@ func (p *podService) GetPodsByNamespace(ctx context.Context, clusterID int, name
 		return nil, err
 	}
 
-	return pkg.BuildK8sPods(podList), nil
+	return k8sutils.BuildK8sPods(podList), nil
 }
 
 // GetContainersByPod 获取指定 Pod 中的容器列表
@@ -115,7 +116,7 @@ func (p *podService) GetContainersByPod(ctx context.Context, clusterID int, name
 		return nil, err
 	}
 
-	return pkg.BuildK8sContainersWithPointer(pkg.BuildK8sContainers(pod.Spec.Containers)), nil
+	return k8sutils.BuildK8sContainersWithPointer(k8sutils.BuildK8sContainers(pod.Spec.Containers)), nil
 }
 
 // GetContainerLogs 获取指定容器的日志
@@ -167,13 +168,13 @@ func (p *podService) GetPodsByNodeName(ctx context.Context, id int, name string)
 		return nil, constants.ErrorK8sClientNotReady
 	}
 
-	pods, err := pkg.GetPodsByNodeName(ctx, kubeClient, name)
+	pods, err := k8sutils.GetPodsByNodeName(ctx, kubeClient, name)
 	if err != nil {
 		p.logger.Error("Failed to get Pods by Node", zap.String("NodeName", name), zap.Error(err))
 		return nil, err
 	}
 
-	return pkg.BuildK8sPods(pods), nil
+	return k8sutils.BuildK8sPods(pods), nil
 }
 
 // DeletePod 删除 Pod
@@ -195,7 +196,7 @@ func (p *podService) DeletePod(ctx context.Context, clusterId int, namespace, po
 // ==================== 新增的标准化Service方法 ====================
 
 // GetPodList 获取Pod列表（使用新的请求结构体）
-func (p *podService) GetPodList(ctx context.Context, req *model.K8sGetResourceListRequest) ([]*model.K8sPodResponse, error) {
+func (p *podService) GetPodList(ctx context.Context, req *model.K8sGetResourceListReq) ([]*model.K8sPodResponse, error) {
 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
@@ -205,8 +206,8 @@ func (p *podService) GetPodList(ctx context.Context, req *model.K8sGetResourceLi
 	listOptions := req.ToMetaV1ListOptions()
 	podList, err := kubeClient.CoreV1().Pods(req.Namespace).List(ctx, listOptions)
 	if err != nil {
-		p.logger.Error("获取Pod列表失败", 
-			zap.String("Namespace", req.Namespace), 
+		p.logger.Error("获取Pod列表失败",
+			zap.String("Namespace", req.Namespace),
 			zap.Error(err))
 		return nil, pkg.NewBusinessError(constants.ErrK8sResourceList, "获取Pod列表失败")
 	}
@@ -221,7 +222,7 @@ func (p *podService) GetPodList(ctx context.Context, req *model.K8sGetResourceLi
 }
 
 // GetPod 获取单个Pod详情
-func (p *podService) GetPod(ctx context.Context, req *model.K8sGetResourceRequest) (*model.K8sPodResponse, error) {
+func (p *podService) GetPod(ctx context.Context, req *model.K8sGetResourceReq) (*model.K8sPodResponse, error) {
 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
@@ -230,7 +231,7 @@ func (p *podService) GetPod(ctx context.Context, req *model.K8sGetResourceReques
 
 	pod, err := kubeClient.CoreV1().Pods(req.Namespace).Get(ctx, req.ResourceName, metav1.GetOptions{})
 	if err != nil {
-		p.logger.Error("获取Pod详情失败", 
+		p.logger.Error("获取Pod详情失败",
 			zap.String("Namespace", req.Namespace),
 			zap.String("PodName", req.ResourceName),
 			zap.Error(err))
@@ -241,7 +242,7 @@ func (p *podService) GetPod(ctx context.Context, req *model.K8sGetResourceReques
 }
 
 // GetPodLogs 获取Pod日志（使用新的请求结构体）
-func (p *podService) GetPodLogs(ctx context.Context, req *model.PodLogRequest) (string, error) {
+func (p *podService) GetPodLogs(ctx context.Context, req *model.PodLogReq) (string, error) {
 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
@@ -271,7 +272,7 @@ func (p *podService) GetPodLogs(ctx context.Context, req *model.PodLogRequest) (
 	podLogRequest := kubeClient.CoreV1().Pods(req.Namespace).GetLogs(req.ResourceName, logOptions)
 	podLogs, err := podLogRequest.Stream(ctx)
 	if err != nil {
-		p.logger.Error("获取Pod日志失败", 
+		p.logger.Error("获取Pod日志失败",
 			zap.String("Namespace", req.Namespace),
 			zap.String("PodName", req.ResourceName),
 			zap.String("Container", req.Container),
@@ -290,7 +291,7 @@ func (p *podService) GetPodLogs(ctx context.Context, req *model.PodLogRequest) (
 }
 
 // DeletePodWithOptions 删除Pod（使用新的请求结构体）
-func (p *podService) DeletePodWithOptions(ctx context.Context, req *model.K8sDeleteResourceRequest) error {
+func (p *podService) DeletePodWithOptions(ctx context.Context, req *model.K8sDeleteResourceReq) error {
 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
@@ -310,21 +311,21 @@ func (p *podService) DeletePodWithOptions(ctx context.Context, req *model.K8sDel
 
 	err = kubeClient.CoreV1().Pods(req.Namespace).Delete(ctx, req.ResourceName, deleteOptions)
 	if err != nil {
-		p.logger.Error("删除Pod失败", 
+		p.logger.Error("删除Pod失败",
 			zap.String("Namespace", req.Namespace),
 			zap.String("PodName", req.ResourceName),
 			zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "删除Pod失败")
 	}
 
-	p.logger.Info("成功删除Pod", 
+	p.logger.Info("成功删除Pod",
 		zap.String("Namespace", req.Namespace),
 		zap.String("PodName", req.ResourceName))
 	return nil
 }
 
 // BatchDeletePods 批量删除Pod
-func (p *podService) BatchDeletePods(ctx context.Context, req *model.K8sBatchDeleteRequest) error {
+func (p *podService) BatchDeletePods(ctx context.Context, req *model.K8sBatchDeleteReq) error {
 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
@@ -337,18 +338,18 @@ func (p *podService) BatchDeletePods(ctx context.Context, req *model.K8sBatchDel
 		if err != nil {
 			errorMsg := fmt.Sprintf("删除Pod %s 失败: %v", podName, err)
 			errors = append(errors, errorMsg)
-			p.logger.Error("批量删除Pod中的单个Pod失败", 
+			p.logger.Error("批量删除Pod中的单个Pod失败",
 				zap.String("PodName", podName),
 				zap.Error(err))
 		}
 	}
 
 	if len(errors) > 0 {
-		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, 
+		return pkg.NewBusinessError(constants.ErrK8sResourceDelete,
 			fmt.Sprintf("批量删除失败，详情: %s", strings.Join(errors, "; ")))
 	}
 
-	p.logger.Info("成功批量删除Pod", 
+	p.logger.Info("成功批量删除Pod",
 		zap.String("Namespace", req.Namespace),
 		zap.Int("Count", len(req.ResourceNames)))
 	return nil
@@ -359,7 +360,7 @@ func (p *podService) convertPodToResponse(pod *corev1.Pod) *model.K8sPodResponse
 	// 计算重启次数
 	var totalRestartCount int32
 	containers := make([]model.ContainerInfo, 0, len(pod.Spec.Containers))
-	
+
 	for _, container := range pod.Spec.Containers {
 		containerInfo := model.ContainerInfo{
 			Name:  container.Name,
@@ -374,14 +375,14 @@ func (p *podService) convertPodToResponse(pod *corev1.Pod) *model.K8sPodResponse
 			Env:          container.Env,
 			VolumeMounts: container.VolumeMounts,
 		}
-		
+
 		// 从容器状态获取重启次数和状态
 		for _, containerStatus := range pod.Status.ContainerStatuses {
 			if containerStatus.Name == container.Name {
 				containerInfo.RestartCount = containerStatus.RestartCount
 				containerInfo.Ready = containerStatus.Ready
 				totalRestartCount += containerStatus.RestartCount
-				
+
 				if containerStatus.State.Running != nil {
 					containerInfo.Status = "Running"
 				} else if containerStatus.State.Waiting != nil {
@@ -392,7 +393,7 @@ func (p *podService) convertPodToResponse(pod *corev1.Pod) *model.K8sPodResponse
 				break
 			}
 		}
-		
+
 		containers = append(containers, containerInfo)
 	}
 
@@ -416,13 +417,13 @@ func (p *podService) convertPodToResponse(pod *corev1.Pod) *model.K8sPodResponse
 }
 
 // ExecInPod Pod命令执行（占位实现）
-func (p *podService) ExecInPod(ctx context.Context, req *model.PodExecRequest) error {
+func (p *podService) ExecInPod(ctx context.Context, req *model.PodExecReq) error {
 	// TODO: 实现Pod命令执行功能
 	return pkg.NewBusinessError(constants.ErrNotImplemented, "Pod命令执行功能尚未实现")
 }
 
 // PortForward Pod端口转发（占位实现）
-func (p *podService) PortForward(ctx context.Context, req *model.PodPortForwardRequest) error {
+func (p *podService) PortForward(ctx context.Context, req *model.PodPortForwardReq) error {
 	// TODO: 实现Pod端口转发功能
 	return pkg.NewBusinessError(constants.ErrNotImplemented, "Pod端口转发功能尚未实现")
 }

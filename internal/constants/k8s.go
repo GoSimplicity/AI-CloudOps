@@ -36,9 +36,11 @@ var (
 
 	// 新增的K8s业务错误常量
 	ErrK8sClientInit        = errors.New("k8s client initialization failed")
-	ErrK8sResourceList      = errors.New("k8s resource list failed")  
+	ErrK8sResourceList      = errors.New("k8s resource list failed")
 	ErrK8sResourceGet       = errors.New("k8s resource get failed")
 	ErrK8sResourceDelete    = errors.New("k8s resource delete failed")
+	ErrK8sResourceCreate    = errors.New("k8s resource create failed")
+	ErrK8sResourceUpdate    = errors.New("k8s resource update failed")
 	ErrK8sResourceOperation = errors.New("k8s resource operation failed")
 	ErrInvalidParam         = errors.New("invalid parameter")
 	ErrNotImplemented       = errors.New("feature not implemented")

@@ -54,7 +54,7 @@ func (k *K8sSecretEntity) TableName() string {
 }
 
 // K8sSecretListRequest Secret列表查询请求
-type K8sSecretListRequest struct {
+type K8sSecretListReq struct {
 	ClusterID     int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace     string `json:"namespace" form:"namespace" comment:"命名空间"`                      // 命名空间
 	LabelSelector string `json:"label_selector" form:"label_selector" comment:"标签选择器"`           // 标签选择器
@@ -67,7 +67,7 @@ type K8sSecretListRequest struct {
 }
 
 // K8sSecretCreateRequest 创建Secret请求
-type K8sSecretCreateRequest struct {
+type K8sSecretCreateReq struct {
 	ClusterID   int               `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace   string            `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name        string            `json:"name" binding:"required" comment:"Secret名称"`   // Secret名称，必填
@@ -80,7 +80,7 @@ type K8sSecretCreateRequest struct {
 }
 
 // K8sSecretUpdateRequest 更新Secret请求
-type K8sSecretUpdateRequest struct {
+type K8sSecretUpdateReq struct {
 	ClusterID   int               `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace   string            `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name        string            `json:"name" binding:"required" comment:"Secret名称"`   // Secret名称，必填
@@ -92,7 +92,7 @@ type K8sSecretUpdateRequest struct {
 }
 
 // K8sSecretDeleteRequest 删除Secret请求
-type K8sSecretDeleteRequest struct {
+type K8sSecretDeleteReq struct {
 	ClusterID          int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace          string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name               string `json:"name" binding:"required" comment:"Secret名称"`   // Secret名称，必填
@@ -101,7 +101,7 @@ type K8sSecretDeleteRequest struct {
 }
 
 // K8sSecretBatchDeleteRequest 批量删除Secret请求
-type K8sSecretBatchDeleteRequest struct {
+type K8sSecretBatchDeleteReq struct {
 	ClusterID          int      `json:"cluster_id" binding:"required" comment:"集群ID"`  // 集群ID，必填
 	Namespace          string   `json:"namespace" binding:"required" comment:"命名空间"`   // 命名空间，必填
 	Names              []string `json:"names" binding:"required" comment:"Secret名称列表"` // Secret名称列表，必填
@@ -110,7 +110,7 @@ type K8sSecretBatchDeleteRequest struct {
 }
 
 // K8sSecretDataRequest 获取Secret数据请求
-type K8sSecretDataRequest struct {
+type K8sSecretDataReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name      string `json:"name" binding:"required" comment:"Secret名称"`   // Secret名称，必填
@@ -119,7 +119,7 @@ type K8sSecretDataRequest struct {
 }
 
 // K8sSecretEventRequest 获取Secret事件请求
-type K8sSecretEventRequest struct {
+type K8sSecretEventReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name      string `json:"name" binding:"required" comment:"Secret名称"`   // Secret名称，必填
@@ -127,17 +127,152 @@ type K8sSecretEventRequest struct {
 }
 
 // K8sSecretUsageRequest 获取Secret使用情况请求
-type K8sSecretUsageRequest struct {
+type K8sSecretUsageReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name      string `json:"name" binding:"required" comment:"Secret名称"`   // Secret名称，必填
 }
 
 // K8sSecretBackupRequest 备份Secret请求
-type K8sSecretBackupRequest struct {
+type K8sSecretBackupReq struct {
 	ClusterID   int      `json:"cluster_id" binding:"required" comment:"集群ID"`  // 集群ID，必填
 	Namespace   string   `json:"namespace" binding:"required" comment:"命名空间"`   // 命名空间，必填
 	Names       []string `json:"names" binding:"required" comment:"Secret名称列表"` // Secret名称列表，必填
 	BackupName  string   `json:"backup_name" binding:"required" comment:"备份名称"` // 备份名称，必填
 	Description string   `json:"description" comment:"备份描述"`                    // 备份描述
+}
+
+// ====================== Secret响应实体 ======================
+
+// SecretEntity Secret响应实体
+type SecretEntity struct {
+	Name        string            `json:"name"`        // Secret名称
+	Namespace   string            `json:"namespace"`   // 命名空间
+	UID         string            `json:"uid"`         // Secret UID
+	Labels      map[string]string `json:"labels"`      // 标签
+	Annotations map[string]string `json:"annotations"` // 注解
+	Type        string            `json:"type"`        // Secret类型
+	Data        map[string][]byte `json:"data"`        // 加密数据
+	StringData  map[string]string `json:"string_data"` // 明文数据
+	DataCount   int               `json:"data_count"`  // 数据条目数量
+	Size        string            `json:"size"`        // 数据大小
+	Immutable   bool              `json:"immutable"`   // 是否不可变
+	Age         string            `json:"age"`         // 存在时间
+	CreatedAt   string            `json:"created_at"`  // 创建时间
+}
+
+// SecretListResponse Secret列表响应
+type SecretListResponse struct {
+	Items      []SecretEntity `json:"items"`       // Secret列表
+	TotalCount int            `json:"total_count"` // 总数
+}
+
+// SecretDetailResponse Secret详情响应
+type SecretDetailResponse struct {
+	Secret SecretEntity        `json:"secret"` // Secret信息
+	YAML   string              `json:"yaml"`   // YAML内容
+	Events []SecretEventEntity `json:"events"` // 事件列表
+	Usage  SecretUsageEntity   `json:"usage"`  // 使用情况
+}
+
+// SecretEventEntity Secret事件实体
+type SecretEventEntity struct {
+	Type      string `json:"type"`       // 事件类型
+	Reason    string `json:"reason"`     // 原因
+	Message   string `json:"message"`    // 消息
+	Source    string `json:"source"`     // 来源
+	FirstTime string `json:"first_time"` // 首次时间
+	LastTime  string `json:"last_time"`  // 最后时间
+	Count     int32  `json:"count"`      // 次数
+}
+
+// SecretUsageEntity Secret使用情况实体
+type SecretUsageEntity struct {
+	UsedByPods            []SecretPodUsageEntity            `json:"used_by_pods"`             // 被Pod使用
+	UsedByDeployments     []SecretDeploymentUsageEntity     `json:"used_by_deployments"`      // 被Deployment使用
+	UsedByStatefulSets    []SecretStatefulSetUsageEntity    `json:"used_by_statefulsets"`     // 被StatefulSet使用
+	UsedByDaemonSets      []SecretDaemonSetUsageEntity      `json:"used_by_daemonsets"`       // 被DaemonSet使用
+	UsedByJobs            []SecretJobUsageEntity            `json:"used_by_jobs"`             // 被Job使用
+	UsedByServiceAccounts []SecretServiceAccountUsageEntity `json:"used_by_service_accounts"` // 被ServiceAccount使用
+}
+
+// SecretPodUsageEntity Pod使用Secret实体
+type SecretPodUsageEntity struct {
+	PodName       string   `json:"pod_name"`       // Pod名称
+	Namespace     string   `json:"namespace"`      // 命名空间
+	UsageType     string   `json:"usage_type"`     // 使用类型(volume/env/imagePullSecret)
+	MountPath     string   `json:"mount_path"`     // 挂载路径
+	Keys          []string `json:"keys"`           // 使用的键
+	ContainerName string   `json:"container_name"` // 容器名称
+}
+
+// SecretDeploymentUsageEntity Deployment使用Secret实体
+type SecretDeploymentUsageEntity struct {
+	DeploymentName string   `json:"deployment_name"` // Deployment名称
+	Namespace      string   `json:"namespace"`       // 命名空间
+	UsageType      string   `json:"usage_type"`      // 使用类型
+	MountPath      string   `json:"mount_path"`      // 挂载路径
+	Keys           []string `json:"keys"`            // 使用的键
+	ContainerName  string   `json:"container_name"`  // 容器名称
+}
+
+// SecretStatefulSetUsageEntity StatefulSet使用Secret实体
+type SecretStatefulSetUsageEntity struct {
+	StatefulSetName string   `json:"statefulset_name"` // StatefulSet名称
+	Namespace       string   `json:"namespace"`        // 命名空间
+	UsageType       string   `json:"usage_type"`       // 使用类型
+	MountPath       string   `json:"mount_path"`       // 挂载路径
+	Keys            []string `json:"keys"`             // 使用的键
+	ContainerName   string   `json:"container_name"`   // 容器名称
+}
+
+// SecretDaemonSetUsageEntity DaemonSet使用Secret实体
+type SecretDaemonSetUsageEntity struct {
+	DaemonSetName string   `json:"daemonset_name"` // DaemonSet名称
+	Namespace     string   `json:"namespace"`      // 命名空间
+	UsageType     string   `json:"usage_type"`     // 使用类型
+	MountPath     string   `json:"mount_path"`     // 挂载路径
+	Keys          []string `json:"keys"`           // 使用的键
+	ContainerName string   `json:"container_name"` // 容器名称
+}
+
+// SecretJobUsageEntity Job使用Secret实体
+type SecretJobUsageEntity struct {
+	JobName       string   `json:"job_name"`       // Job名称
+	Namespace     string   `json:"namespace"`      // 命名空间
+	UsageType     string   `json:"usage_type"`     // 使用类型
+	MountPath     string   `json:"mount_path"`     // 挂载路径
+	Keys          []string `json:"keys"`           // 使用的键
+	ContainerName string   `json:"container_name"` // 容器名称
+}
+
+// SecretServiceAccountUsageEntity ServiceAccount使用Secret实体
+type SecretServiceAccountUsageEntity struct {
+	ServiceAccountName string `json:"service_account_name"` // ServiceAccount名称
+	Namespace          string `json:"namespace"`            // 命名空间
+	UsageType          string `json:"usage_type"`           // 使用类型(token/imagePullSecret)
+}
+
+// SecretDataResponse Secret数据响应
+type SecretDataResponse struct {
+	Name       string            `json:"name"`        // Secret名称
+	Namespace  string            `json:"namespace"`   // 命名空间
+	Type       string            `json:"type"`        // Secret类型
+	Data       map[string][]byte `json:"data"`        // 加密数据
+	StringData map[string]string `json:"string_data"` // 解码后的数据(如果请求解码)
+	DataCount  int               `json:"data_count"`  // 数据条目数量
+	Size       string            `json:"size"`        // 数据大小
+}
+
+// SecretBackupResponse Secret备份响应
+type SecretBackupResponse struct {
+	BackupName  string   `json:"backup_name"`  // 备份名称
+	ClusterID   int      `json:"cluster_id"`   // 集群ID
+	Namespace   string   `json:"namespace"`    // 命名空间
+	SecretNames []string `json:"secret_names"` // Secret名称列表
+	BackupPath  string   `json:"backup_path"`  // 备份路径
+	Size        string   `json:"size"`         // 备份大小
+	Status      string   `json:"status"`       // 备份状态
+	Message     string   `json:"message"`      // 备份消息
+	CreatedAt   string   `json:"created_at"`   // 创建时间
 }

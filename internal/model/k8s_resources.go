@@ -157,35 +157,10 @@ type K8sIngress struct {
 	Events            []K8sEvent          `json:"events,omitempty"`
 }
 
-// IngressRule Ingress规则信息
-type IngressRule struct {
-	Host  string        `json:"host"`
-	Paths []IngressPath `json:"paths"`
-}
-
-// IngressPath Ingress路径信息
-type IngressPath struct {
-	Path        string             `json:"path"`
-	PathType    string             `json:"path_type"`
-	ServiceName string             `json:"service_name"`
-	ServicePort IngressServicePort `json:"service_port"`
-}
-
 // IngressServicePort Ingress服务端口信息
 type IngressServicePort struct {
 	Name   string `json:"name,omitempty"`
 	Number int32  `json:"number,omitempty"`
-}
-
-// IngressTLS Ingress TLS信息
-type IngressTLS struct {
-	Hosts      []string `json:"hosts"`
-	SecretName string   `json:"secret_name"`
-}
-
-// IngressLoadBalancer Ingress负载均衡器信息
-type IngressLoadBalancer struct {
-	Ingress []IngressIngress `json:"ingress,omitempty"`
 }
 
 // IngressIngress Ingress入口信息
@@ -363,18 +338,6 @@ type StatefulSetRollingUpdateStrategy struct {
 	MaxUnavailable string `json:"max_unavailable,omitempty" comment:"最大不可用数量"`
 }
 
-// DaemonSetUpdateStrategy DaemonSet更新策略
-type DaemonSetUpdateStrategy struct {
-	Type          string                          `json:"type" comment:"更新策略类型"`
-	RollingUpdate *DaemonSetRollingUpdateStrategy `json:"rolling_update,omitempty" comment:"滚动更新策略"`
-}
-
-// DaemonSetRollingUpdateStrategy DaemonSet滚动更新策略
-type DaemonSetRollingUpdateStrategy struct {
-	MaxUnavailable string `json:"max_unavailable,omitempty" comment:"最大不可用数量"`
-	MaxSurge       string `json:"max_surge,omitempty" comment:"最大超出数量"`
-}
-
 // PersistentVolumeClaimTemplate 持久化存储声明模板
 type PersistentVolumeClaimTemplate struct {
 	Name         string               `json:"name" comment:"PVC名称"`
@@ -407,30 +370,10 @@ type Toleration struct {
 	TolerationSeconds *int64 `json:"toleration_seconds,omitempty" comment:"容忍时间"`
 }
 
-// IngressRuleRequest Ingress规则请求
-type IngressRuleRequest struct {
-	Host  string               `json:"host" comment:"主机名"`
-	Paths []IngressPathRequest `json:"paths" comment:"路径规则"`
-}
-
-// IngressPathRequest Ingress路径请求
-type IngressPathRequest struct {
-	Path        string                    `json:"path" comment:"路径"`
-	PathType    string                    `json:"path_type" comment:"路径类型"`
-	ServiceName string                    `json:"service_name" comment:"后端服务名"`
-	ServicePort IngressServicePortRequest `json:"service_port" comment:"后端服务端口"`
-}
-
 // IngressServicePortRequest Ingress服务端口请求
 type IngressServicePortRequest struct {
 	Name   string `json:"name,omitempty" comment:"端口名"`
 	Number int32  `json:"number,omitempty" comment:"端口号"`
-}
-
-// IngressTLSRequest Ingress TLS请求
-type IngressTLSRequest struct {
-	Hosts      []string `json:"hosts" comment:"TLS主机列表"`
-	SecretName string   `json:"secret_name" comment:"TLS密钥名称"`
 }
 
 // PersistentVolumeSourceRequest PV存储源请求
@@ -492,8 +435,8 @@ type PortForwardPort struct {
 
 // ==================== 通用工具方法 ====================
 
-// ToMetaV1ListOptions 将K8sGetResourceListRequest转换为metav1.ListOptions
-func (r *K8sGetResourceListRequest) ToMetaV1ListOptions() metav1.ListOptions {
+// ToMetaV1ListOptions 将K8sGetResourceListReq转换为metav1.ListOptions
+func (r *K8sGetResourceListReq) ToMetaV1ListOptions() metav1.ListOptions {
 	return metav1.ListOptions{
 		LabelSelector: r.LabelSelector,
 		FieldSelector: r.FieldSelector,
@@ -502,8 +445,8 @@ func (r *K8sGetResourceListRequest) ToMetaV1ListOptions() metav1.ListOptions {
 	}
 }
 
-// ToMetaV1ListOptions 将K8sListRequest转换为metav1.ListOptions
-func (r *K8sListRequest) ToMetaV1ListOptions() metav1.ListOptions {
+// ToMetaV1ListOptions 将K8sListReq转换为metav1.ListOptions
+func (r *K8sListReq) ToMetaV1ListOptions() metav1.ListOptions {
 	return metav1.ListOptions{
 		LabelSelector: r.LabelSelector,
 		FieldSelector: r.FieldSelector,
@@ -514,15 +457,15 @@ func (r *K8sListRequest) ToMetaV1ListOptions() metav1.ListOptions {
 
 // ==================== 通用资源操作请求结构体 ====================
 
-// K8sGetResourceRequest 获取单个k8s资源请求
-type K8sGetResourceRequest struct {
+// K8sGetResourceReq 获取单个k8s资源请求
+type K8sGetResourceReq struct {
 	ClusterID    int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace    string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`
 	ResourceName string `json:"resource_name" form:"resource_name" uri:"resource_name" binding:"required" comment:"资源名称"`
 }
 
-// K8sGetResourceListRequest 获取k8s资源列表请求
-type K8sGetResourceListRequest struct {
+// K8sGetResourceListReq 获取k8s资源列表请求
+type K8sGetResourceListReq struct {
 	ClusterID     int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace     string `json:"namespace" form:"namespace" comment:"命名空间"`
 	LabelSelector string `json:"label_selector" form:"label_selector" comment:"标签选择器"`
@@ -531,8 +474,8 @@ type K8sGetResourceListRequest struct {
 	Continue      string `json:"continue" form:"continue" comment:"分页续订令牌"`
 }
 
-// K8sDeleteResourceRequest 删除k8s资源请求
-type K8sDeleteResourceRequest struct {
+// K8sDeleteResourceReq 删除k8s资源请求
+type K8sDeleteResourceReq struct {
 	ClusterID          int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace          string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`
 	ResourceName       string `json:"resource_name" form:"resource_name" binding:"required" comment:"资源名称"`
@@ -540,27 +483,27 @@ type K8sDeleteResourceRequest struct {
 	Force              bool   `json:"force" form:"force" comment:"是否强制删除"`
 }
 
-// K8sGetResourceYamlRequest 获取k8s资源YAML请求
-type K8sGetResourceYamlRequest struct {
+// K8sGetResourceYamlReq 获取k8s资源YAML请求
+type K8sGetResourceYamlReq struct {
 	ClusterID    int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace    string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`
 	ResourceName string `json:"resource_name" form:"resource_name" uri:"resource_name" binding:"required" comment:"资源名称"`
 }
 
-// K8sBaseRequest K8s资源操作的基础请求结构
-type K8sBaseRequest struct {
+// K8sBaseReq K8s资源操作的基础请求结构
+type K8sBaseReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`
 }
 
-// K8sResourceIdentifier K8s资源标识请求结构
-type K8sResourceIdentifier struct {
-	K8sBaseRequest
+// K8sResourceIdentifierReq K8s资源标识请求结构
+type K8sResourceIdentifierReq struct {
+	K8sBaseReq
 	ResourceName string `json:"resource_name" binding:"required" comment:"资源名称"`
 }
 
-// K8sListRequest K8s资源列表查询请求结构
-type K8sListRequest struct {
+// K8sListReq K8s资源列表查询请求结构
+type K8sListReq struct {
 	ClusterID     int    `json:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace     string `json:"namespace" comment:"命名空间，为空则查询所有"`
 	LabelSelector string `json:"label_selector" comment:"标签选择器"`
@@ -569,32 +512,32 @@ type K8sListRequest struct {
 	Continue      string `json:"continue" comment:"分页续订令牌"`
 }
 
-// K8sBatchDeleteRequest K8s资源批量删除请求结构
-type K8sBatchDeleteRequest struct {
-	K8sBaseRequest
+// K8sBatchDeleteReq K8s资源批量删除请求结构
+type K8sBatchDeleteReq struct {
+	K8sBaseReq
 	ResourceNames []string `json:"resource_names" binding:"required" comment:"资源名称列表"`
 }
 
-// K8sBatchOperationRequest K8s资源批量操作请求结构
-type K8sBatchOperationRequest struct {
-	K8sBaseRequest
+// K8sBatchOperationReq K8s资源批量操作请求结构
+type K8sBatchOperationReq struct {
+	K8sBaseReq
 	ResourceNames []string `json:"resource_names" binding:"required" comment:"资源名称列表"`
 	Operation     string   `json:"operation" binding:"required,oneof=restart scale delete" comment:"操作类型：restart|scale|delete"`
 	Parameters    any      `json:"parameters" comment:"操作参数"`
 }
 
-// K8sYamlApplyRequest K8s YAML应用请求结构
-type K8sYamlApplyRequest struct {
-	K8sBaseRequest
+// K8sYamlApplyReq K8s YAML应用请求结构
+type K8sYamlApplyReq struct {
+	K8sBaseReq
 	YamlContent string `json:"yaml_content" binding:"required" comment:"YAML内容"`
 	DryRun      bool   `json:"dry_run" comment:"是否为试运行"`
 }
 
 // ==================== Service层兼容结构体 ====================
 
-// ConfigMapCreateRequest 创建ConfigMap请求（兼容）
-type ConfigMapCreateRequest struct {
-	K8sBaseRequest
+// ConfigMapCreateReq 创建ConfigMap请求
+type ConfigMapCreateReq struct {
+	K8sBaseReq
 	Name        string            `json:"name" binding:"required" comment:"ConfigMap名称"`
 	Data        map[string]string `json:"data" comment:"字符串数据"`
 	BinaryData  map[string][]byte `json:"binary_data" comment:"二进制数据"`
@@ -602,18 +545,18 @@ type ConfigMapCreateRequest struct {
 	Annotations map[string]string `json:"annotations" comment:"注解"`
 }
 
-// ConfigMapUpdateRequest 更新ConfigMap请求（兼容）
-type ConfigMapUpdateRequest struct {
-	K8sResourceIdentifier
+// ConfigMapUpdateReq 更新ConfigMap请求
+type ConfigMapUpdateReq struct {
+	K8sResourceIdentifierReq
 	Data        map[string]string `json:"data" comment:"字符串数据"`
 	BinaryData  map[string][]byte `json:"binary_data" comment:"二进制数据"`
 	Labels      map[string]string `json:"labels" comment:"标签"`
 	Annotations map[string]string `json:"annotations" comment:"注解"`
 }
 
-// SecretCreateRequest 创建Secret请求（兼容）
-type SecretCreateRequest struct {
-	K8sBaseRequest
+// SecretCreateReq 创建Secret请求
+type SecretCreateReq struct {
+	K8sBaseReq
 	Name        string            `json:"name" binding:"required" comment:"Secret名称"`
 	Type        string            `json:"type" comment:"Secret类型"`
 	Data        map[string][]byte `json:"data" comment:"加密数据"`
@@ -622,30 +565,30 @@ type SecretCreateRequest struct {
 	Annotations map[string]string `json:"annotations" comment:"注解"`
 }
 
-// SecretUpdateRequest 更新Secret请求（兼容）
-type SecretUpdateRequest struct {
-	K8sResourceIdentifier
+// SecretUpdateReq 更新Secret请求
+type SecretUpdateReq struct {
+	K8sResourceIdentifierReq
 	Data        map[string][]byte `json:"data" comment:"加密数据"`
 	StringData  map[string]string `json:"string_data" comment:"明文数据"`
 	Labels      map[string]string `json:"labels" comment:"标签"`
 	Annotations map[string]string `json:"annotations" comment:"注解"`
 }
 
-// DeploymentBatchDeleteRequest 批量删除Deployment请求（兼容）
-type DeploymentBatchDeleteRequest struct {
-	K8sBaseRequest
+// DeploymentBatchDeleteReq 批量删除Deployment请求
+type DeploymentBatchDeleteReq struct {
+	K8sBaseReq
 	DeploymentNames []string `json:"deployment_names" binding:"required" comment:"Deployment名称列表"`
 }
 
-// DeploymentBatchRestartRequest 批量重启Deployment请求（兼容）
-type DeploymentBatchRestartRequest struct {
-	K8sBaseRequest
+// DeploymentBatchRestartReq 批量重启Deployment请求
+type DeploymentBatchRestartReq struct {
+	K8sBaseReq
 	DeploymentNames []string `json:"deployment_names" binding:"required" comment:"Deployment名称列表"`
 }
 
-// StatefulSetCreateRequest 创建StatefulSet请求（兼容）
-type StatefulSetCreateRequest struct {
-	K8sBaseRequest
+// StatefulSetCreateReq 创建StatefulSet请求
+type StatefulSetCreateReq struct {
+	K8sBaseReq
 	Name                 string                          `json:"name" binding:"required" comment:"StatefulSet名称"`
 	Replicas             int32                           `json:"replicas" comment:"副本数量"`
 	ServiceName          string                          `json:"service_name" binding:"required" comment:"服务名称"`
@@ -659,9 +602,9 @@ type StatefulSetCreateRequest struct {
 	UpdateStrategy       StatefulSetUpdateStrategy       `json:"update_strategy" comment:"更新策略"`
 }
 
-// StatefulSetUpdateRequest 更新StatefulSet请求（兼容）
-type StatefulSetUpdateRequest struct {
-	K8sResourceIdentifier
+// StatefulSetUpdateReq 更新StatefulSet请求
+type StatefulSetUpdateReq struct {
+	K8sResourceIdentifierReq
 	Replicas             *int32                          `json:"replicas" comment:"副本数量"`
 	Image                string                          `json:"image" comment:"镜像地址"`
 	Ports                []ContainerPort                 `json:"ports" comment:"容器端口"`
@@ -673,17 +616,17 @@ type StatefulSetUpdateRequest struct {
 	UpdateStrategy       StatefulSetUpdateStrategy       `json:"update_strategy" comment:"更新策略"`
 }
 
-// StatefulSetScaleRequest StatefulSet扩缩容请求（兼容）
-type StatefulSetScaleRequest struct {
-	K8sResourceIdentifier
+// StatefulSetScaleReq StatefulSet扩缩容请求
+type StatefulSetScaleReq struct {
+	K8sResourceIdentifierReq
 	Replicas int32 `json:"replicas" binding:"required,min=0" comment:"副本数量"`
 }
 
 // ==================== Pod专用请求结构体 ====================
 
-// PodLogRequest Pod日志查询请求
-type PodLogRequest struct {
-	K8sResourceIdentifier
+// PodLogReq Pod日志查询请求
+type PodLogReq struct {
+	K8sResourceIdentifierReq
 	Container    string `json:"container" comment:"容器名称"`
 	Follow       bool   `json:"follow" comment:"是否持续跟踪"`
 	Previous     bool   `json:"previous" comment:"是否获取前一个容器的日志"`
@@ -694,9 +637,9 @@ type PodLogRequest struct {
 	LimitBytes   *int64 `json:"limit_bytes" comment:"限制日志字节数"`
 }
 
-// PodExecRequest Pod执行命令请求
-type PodExecRequest struct {
-	K8sResourceIdentifier
+// PodExecReq Pod执行命令请求
+type PodExecReq struct {
+	K8sResourceIdentifierReq
 	Container string   `json:"container" comment:"容器名称"`
 	Command   []string `json:"command" binding:"required" comment:"执行的命令"`
 	Stdin     bool     `json:"stdin" comment:"是否启用标准输入"`
@@ -705,27 +648,27 @@ type PodExecRequest struct {
 	TTY       bool     `json:"tty" comment:"是否分配TTY"`
 }
 
-// PodPortForwardRequest Pod端口转发请求
-type PodPortForwardRequest struct {
-	K8sResourceIdentifier
+// PodPortForwardReq Pod端口转发请求
+type PodPortForwardReq struct {
+	K8sResourceIdentifierReq
 	Ports []PortForwardPort `json:"ports" binding:"required" comment:"端口转发配置"`
 }
 
-// PodContainersRequest 获取Pod容器列表请求
-type PodContainersRequest struct {
+// PodContainersReq 获取Pod容器列表请求
+type PodContainersReq struct {
 	ClusterID int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`
 	PodName   string `json:"pod_name" form:"pod_name" uri:"pod_name" binding:"required" comment:"Pod名称"`
 }
 
-// PodsByNodeRequest 根据节点获取Pod列表请求
-type PodsByNodeRequest struct {
+// PodsByNodeReq 根据节点获取Pod列表请求
+type PodsByNodeReq struct {
 	ClusterID int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	NodeName  string `json:"node_name" form:"node_name" binding:"required" comment:"节点名称"`
 }
 
-// DeploymentRestartRequest 重启Deployment请求
-type DeploymentRestartRequest struct {
+// DeploymentRestartReq 重启Deployment请求
+type DeploymentRestartReq struct {
 	ClusterID      int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace      string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`
 	DeploymentName string `json:"deployment_name" form:"deployment_name" binding:"required" comment:"Deployment名称"`
@@ -774,4 +717,71 @@ type ContainerResources struct {
 	MemoryLimit   string `json:"memory_limit"`
 	CpuUsage      string `json:"cpu_usage,omitempty"`
 	MemoryUsage   string `json:"memory_usage,omitempty"`
+}
+
+// ==================== YAML任务和模板请求结构体 ====================
+
+// YamlTaskCreateReq 创建YAML任务请求
+type YamlTaskCreateReq struct {
+	Name       string     `json:"name" binding:"required,min=1,max=255" comment:"YAML任务名称"`
+	UserID     int        `json:"user_id" comment:"创建者用户ID"`
+	TemplateID int        `json:"template_id" comment:"关联的模板ID"`
+	ClusterId  int        `json:"cluster_id" comment:"集群ID"`
+	Variables  StringList `json:"variables" comment:"yaml变量，格式k=v,k=v"`
+}
+
+// YamlTaskUpdateReq 更新YAML任务请求
+type YamlTaskUpdateReq struct {
+	ID         int        `json:"id" binding:"required" comment:"任务ID"`
+	Name       string     `json:"name" binding:"required,min=1,max=255" comment:"YAML任务名称"`
+	UserID     int        `json:"user_id" comment:"创建者用户ID"`
+	TemplateID int        `json:"template_id" comment:"关联的模板ID"`
+	ClusterId  int        `json:"cluster_id" comment:"集群ID"`
+	Variables  StringList `json:"variables" comment:"yaml变量，格式k=v,k=v"`
+}
+
+// YamlTaskApplyReq 应用YAML任务请求
+type YamlTaskApplyReq struct {
+	ID int `json:"id" binding:"required" comment:"任务ID"`
+}
+
+// YamlTaskDeleteReq 删除YAML任务请求
+type YamlTaskDeleteReq struct {
+	ID int `json:"id" binding:"required" comment:"任务ID"`
+}
+
+// YamlTemplateCreateReq 创建YAML模板请求
+type YamlTemplateCreateReq struct {
+	Name      string `json:"name" binding:"required,min=1,max=50" comment:"模板名称"`
+	UserID    int    `json:"user_id" comment:"创建者用户ID"`
+	Content   string `json:"content" binding:"required" comment:"yaml模板内容"`
+	ClusterId int    `json:"cluster_id" comment:"对应集群ID"`
+}
+
+// YamlTemplateUpdateReq 更新YAML模板请求
+type YamlTemplateUpdateReq struct {
+	ID        int    `json:"id" binding:"required" comment:"模板ID"`
+	Name      string `json:"name" binding:"required,min=1,max=50" comment:"模板名称"`
+	UserID    int    `json:"user_id" comment:"创建者用户ID"`
+	Content   string `json:"content" binding:"required" comment:"yaml模板内容"`
+	ClusterId int    `json:"cluster_id" comment:"对应集群ID"`
+}
+
+// YamlTemplateDeleteReq 删除YAML模板请求
+type YamlTemplateDeleteReq struct {
+	ID        int `json:"id" binding:"required" comment:"模板ID"`
+	ClusterId int `json:"cluster_id" binding:"required" comment:"集群ID"`
+}
+
+// YamlTemplateCheckReq 检查YAML模板请求
+type YamlTemplateCheckReq struct {
+	Name      string `json:"name" binding:"required,min=1,max=50" comment:"模板名称"`
+	Content   string `json:"content" binding:"required" comment:"yaml模板内容"`
+	ClusterId int    `json:"cluster_id" comment:"对应集群ID"`
+}
+
+// YamlTemplateGetReq 获取YAML模板详情请求
+type YamlTemplateGetReq struct {
+	ID        int `json:"id" binding:"required" comment:"模板ID"`
+	ClusterId int `json:"cluster_id" binding:"required" comment:"集群ID"`
 }

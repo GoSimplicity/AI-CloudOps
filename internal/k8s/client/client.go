@@ -49,7 +49,6 @@ import (
 )
 
 type K8sClient interface {
-	// 初始化客户端
 	InitClient(ctx context.Context, clusterID int, kubeConfig *rest.Config) error
 	GetKubeClient(clusterID int) (*kubernetes.Clientset, error)
 	GetKruiseClient(clusterID int) (*versioned.Clientset, error)
@@ -58,45 +57,44 @@ type K8sClient interface {
 	GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error)
 	RefreshClients(ctx context.Context) error
 	CheckClusterConnection(clusterID int) error
-	// 检查连通性并回写元信息
 	UpdateClusterMetaFromLive(ctx context.Context, clusterID int) error
-	// 创建资源
+
 	CreateDeployment(ctx context.Context, namespace string, clusterID int, deployment *appsv1.Deployment) error
 	CreateStatefulSet(ctx context.Context, namespace string, clusterID int, statefulset *appsv1.StatefulSet) error
 	CreateDaemonSet(ctx context.Context, namespace string, clusterID int, daemonset *appsv1.DaemonSet) error
 	CreateJob(ctx context.Context, namespace string, clusterID int, job *batchv1.Job) error
 	CreateCronJob(ctx context.Context, namespace string, clusterID int, cronjob *batchv1.CronJob) error
-	// 删除资源
+
 	DeleteDeployment(ctx context.Context, namespace string, name string, clusterID int) error
 	DeleteStatefulSet(ctx context.Context, namespace string, name string, clusterID int) error
 	DeleteDaemonSet(ctx context.Context, namespace string, name string, clusterID int) error
 	DeleteJob(ctx context.Context, namespace string, name string, clusterID int) error
 	DeleteCronJob(ctx context.Context, namespace string, name string, clusterID int) error
-	// 更新资源
+
 	UpdateDeployment(ctx context.Context, namespace string, clusterID int, deployment *appsv1.Deployment) error
 	UpdateStatefulSet(ctx context.Context, namespace string, clusterID int, statefulset *appsv1.StatefulSet) error
 	UpdateDaemonSet(ctx context.Context, namespace string, clusterID int, daemonset *appsv1.DaemonSet) error
 	UpdateJob(ctx context.Context, namespace string, clusterID int, job *batchv1.Job) error
 	UpdateCronJob(ctx context.Context, namespace string, clusterID int, cronjob *batchv1.CronJob) error
-	// 重启资源
+
 	RestartDeployment(ctx context.Context, namespace string, name string, clusterID int) error
 	RestartStatefulSet(ctx context.Context, namespace string, name string, clusterID int) error
 	RestartDaemonSet(ctx context.Context, namespace string, name string, clusterID int) error
 	RestartJob(ctx context.Context, namespace string, name string, clusterID int) error
 	RestartCronJob(ctx context.Context, namespace string, name string, clusterID int) error
-	// 获取资源
+
 	GetDeployment(ctx context.Context, namespace string, name string, clusterID int) (*appsv1.Deployment, error)
 	GetStatefulSet(ctx context.Context, namespace string, name string, clusterID int) (*appsv1.StatefulSet, error)
 	GetDaemonSet(ctx context.Context, namespace string, name string, clusterID int) (*appsv1.DaemonSet, error)
 	GetJob(ctx context.Context, namespace string, name string, clusterID int) (*batchv1.Job, error)
 	GetCronJob(ctx context.Context, namespace string, name string, clusterID int) (*batchv1.CronJob, error)
-	// 获取资源列表
+
 	GetDeploymentList(ctx context.Context, namespace string, clusterID int) ([]appsv1.Deployment, error)
 	GetStatefulSetList(ctx context.Context, namespace string, clusterID int) ([]appsv1.StatefulSet, error)
 	GetDaemonSetList(ctx context.Context, namespace string, clusterID int) ([]appsv1.DaemonSet, error)
 	GetJobList(ctx context.Context, namespace string, clusterID int) ([]batchv1.Job, error)
 	GetCronJobList(ctx context.Context, namespace string, clusterID int) ([]batchv1.CronJob, error)
-	// 清理资源
+
 	RemoveCluster(clusterID int)
 }
 
@@ -129,7 +127,7 @@ func NewK8sClient(logger *zap.Logger, dao dao.ClusterDAO) K8sClient {
 	}
 }
 
-// InitClient 初始化指定集群 ID 的 Kubernetes 客户端
+// InitClient 初始化Kubernetes客户端
 func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *rest.Config) error {
 	if kubeConfig == nil {
 		return fmt.Errorf("kubeConfig 不能为空")
@@ -138,45 +136,38 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 	k.Lock()
 	defer k.Unlock()
 
-	// 检查客户端是否已经初始化
 	if _, exists := k.KubeClients[clusterID]; exists {
 		k.logger.Debug("客户端已初始化，跳过", zap.Int("ClusterID", clusterID))
 		return nil
 	}
 
-	// 设置超时
 	if kubeConfig.Timeout == 0 {
 		kubeConfig.Timeout = 10 * time.Second
 	}
 
-	// 保存 REST 配置
 	k.RestConfigs[clusterID] = kubeConfig
 
-	// 创建 Kubernetes 原生客户端
 	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
-		k.logger.Error("创建 Kubernetes 客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
-		return fmt.Errorf("创建 Kubernetes 客户端失败: %w", err)
+		k.logger.Error("创建Kubernetes客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+		return fmt.Errorf("创建Kubernetes客户端失败: %w", err)
 	}
 	k.KubeClients[clusterID] = kubeClient
 
-	// 创建 Kruise 客户端（非关键组件，失败不阻塞）
 	kruiseClient, err := versioned.NewForConfig(kubeConfig)
 	if err != nil {
-		k.logger.Warn("创建 Kruise 客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+		k.logger.Warn("创建Kruise客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
 	} else {
 		k.KruiseClients[clusterID] = kruiseClient
 	}
 
-	// 创建 Metrics 客户端（非关键组件，失败不阻塞）
 	metricsClientSet, err := metricsClient.NewForConfig(kubeConfig)
 	if err != nil {
-		k.logger.Warn("创建 Metrics 客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+		k.logger.Warn("创建Metrics客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
 	} else {
 		k.MetricsClients[clusterID] = metricsClientSet
 	}
 
-	// 创建动态客户端
 	dynamicClient, err := dynamic.NewForConfig(kubeConfig)
 	if err != nil {
 		k.logger.Error("创建动态客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
@@ -184,15 +175,13 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 	}
 	k.DynamicClients[clusterID] = dynamicClient
 
-	// 创建 Discovery 客户端
 	discoveryClient, err := discovery2.NewDiscoveryClientForConfig(kubeConfig)
 	if err != nil {
-		k.logger.Error("创建 Discovery 客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
-		return fmt.Errorf("创建 Discovery 客户端失败: %w", err)
+		k.logger.Error("创建Discovery客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
+		return fmt.Errorf("创建Discovery客户端失败: %w", err)
 	}
 	k.DiscoveryClients[clusterID] = discoveryClient
 
-	// 测试连接并获取命名空间
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -213,7 +202,7 @@ func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *r
 	return nil
 }
 
-// getNamespacesDirectly 直接使用 kubeClient 获取命名空间
+// getNamespacesDirectly 获取命名空间列表
 func (k *k8sClient) getNamespacesDirectly(ctx context.Context, kubeClient *kubernetes.Clientset) ([]string, error) {
 	namespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -227,7 +216,7 @@ func (k *k8sClient) getNamespacesDirectly(ctx context.Context, kubeClient *kuber
 	return nsList, nil
 }
 
-// GetKubeClient 获取指定集群 ID 的 Kubernetes 客户端
+// GetKubeClient 获取Kubernetes客户端
 func (k *k8sClient) GetKubeClient(clusterID int) (*kubernetes.Clientset, error) {
 	k.RLock()
 	client, exists := k.KubeClients[clusterID]
@@ -237,7 +226,6 @@ func (k *k8sClient) GetKubeClient(clusterID int) (*kubernetes.Clientset, error) 
 		return client, nil
 	}
 
-	// 尝试初始化客户端
 	return k.initClientFromDB(clusterID)
 }
 
@@ -275,7 +263,7 @@ func (k *k8sClient) initClientFromDB(clusterID int) (*kubernetes.Clientset, erro
 	return client, nil
 }
 
-// GetKruiseClient 获取指定集群 ID 的 Kruise 客户端
+// GetKruiseClient 获取Kruise客户端
 func (k *k8sClient) GetKruiseClient(clusterID int) (*versioned.Clientset, error) {
 	k.RLock()
 	client, exists := k.KruiseClients[clusterID]
@@ -288,7 +276,7 @@ func (k *k8sClient) GetKruiseClient(clusterID int) (*versioned.Clientset, error)
 	return client, nil
 }
 
-// GetMetricsClient 获取指定集群 ID 的 Metrics 客户端
+// GetMetricsClient 获取Metrics客户端
 func (k *k8sClient) GetMetricsClient(clusterID int) (*metricsClient.Clientset, error) {
 	k.RLock()
 	client, exists := k.MetricsClients[clusterID]
@@ -301,7 +289,7 @@ func (k *k8sClient) GetMetricsClient(clusterID int) (*metricsClient.Clientset, e
 	return client, nil
 }
 
-// GetDynamicClient 获取指定集群 ID 的动态客户端
+// GetDynamicClient 获取动态客户端
 func (k *k8sClient) GetDynamicClient(clusterID int) (*dynamic.DynamicClient, error) {
 	k.RLock()
 	client, exists := k.DynamicClients[clusterID]
@@ -314,7 +302,7 @@ func (k *k8sClient) GetDynamicClient(clusterID int) (*dynamic.DynamicClient, err
 	return client, nil
 }
 
-// GetDiscoveryClient 获取指定集群 ID 的 Discovery 客户端
+// GetDiscoveryClient 获取Discovery客户端
 func (k *k8sClient) GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error) {
 	k.RLock()
 	client, exists := k.DiscoveryClients[clusterID]
@@ -327,7 +315,7 @@ func (k *k8sClient) GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClie
 	return client, nil
 }
 
-// RefreshClients 刷新所有集群的客户端
+// RefreshClients 刷新所有客户端
 func (k *k8sClient) RefreshClients(ctx context.Context) error {
 	clusters, err := k.dao.ListAllClusters(ctx)
 	if err != nil {
@@ -365,7 +353,6 @@ func (k *k8sClient) RefreshClients(ctx context.Context) error {
 	wg.Wait()
 	close(errChan)
 
-	// 收集所有错误
 	var errs []error
 	for err := range errChan {
 		errs = append(errs, err)
@@ -378,7 +365,7 @@ func (k *k8sClient) RefreshClients(ctx context.Context) error {
 	return nil
 }
 
-// RemoveCluster 清理指定集群的客户端
+// RemoveCluster 清理集群客户端
 func (k *k8sClient) RemoveCluster(clusterID int) {
 	k.Lock()
 	defer k.Unlock()
@@ -394,7 +381,7 @@ func (k *k8sClient) RemoveCluster(clusterID int) {
 	k.logger.Info("已清理集群客户端", zap.Int("ClusterID", clusterID))
 }
 
-// validateInputs 验证输入参数
+// validateInputs 验证参数
 func (k *k8sClient) validateInputs(namespace, name string, clusterID int) error {
 	if namespace == "" {
 		return fmt.Errorf("namespace 不能为空")
@@ -408,7 +395,7 @@ func (k *k8sClient) validateInputs(namespace, name string, clusterID int) error 
 	return nil
 }
 
-// CreateDeployment 创建 Deployment 资源
+// CreateDeployment 创建Deployment
 func (k *k8sClient) CreateDeployment(ctx context.Context, namespace string, clusterID int, deployment *appsv1.Deployment) error {
 	if deployment == nil {
 		return fmt.Errorf("deployment 不能为空")
@@ -421,14 +408,14 @@ func (k *k8sClient) CreateDeployment(ctx context.Context, namespace string, clus
 
 	_, err = client.AppsV1().Deployments(namespace).Create(ctx, deployment, metav1.CreateOptions{})
 	if err != nil {
-		k.logger.Error("创建 Deployment 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", deployment.Name))
-		return fmt.Errorf("创建 Deployment 失败: %w", err)
+		k.logger.Error("创建Deployment失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", deployment.Name))
+		return fmt.Errorf("创建Deployment失败: %w", err)
 	}
 
 	return nil
 }
 
-// CreateStatefulSet 创建 StatefulSet 资源
+// CreateStatefulSet 创建StatefulSet
 func (k *k8sClient) CreateStatefulSet(ctx context.Context, namespace string, clusterID int, statefulset *appsv1.StatefulSet) error {
 	if statefulset == nil {
 		return fmt.Errorf("statefulset 不能为空")
@@ -441,8 +428,8 @@ func (k *k8sClient) CreateStatefulSet(ctx context.Context, namespace string, clu
 
 	_, err = client.AppsV1().StatefulSets(namespace).Create(ctx, statefulset, metav1.CreateOptions{})
 	if err != nil {
-		k.logger.Error("创建 StatefulSet 失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", statefulset.Name))
-		return fmt.Errorf("创建 StatefulSet 失败: %w", err)
+		k.logger.Error("创建StatefulSet失败", zap.Error(err), zap.String("namespace", namespace), zap.String("name", statefulset.Name))
+		return fmt.Errorf("创建StatefulSet失败: %w", err)
 	}
 
 	return nil
@@ -470,20 +457,18 @@ func (k *k8sClient) CheckClusterConnection(clusterID int) error {
 	return nil
 }
 
-// UpdateClusterMetaFromLive 检查集群并回写版本与APIServer地址
+// UpdateClusterMetaFromLive 更新集群元信息
 func (k *k8sClient) UpdateClusterMetaFromLive(ctx context.Context, clusterID int) error {
 	kubeClient, err := k.GetKubeClient(clusterID)
 	if err != nil {
 		return fmt.Errorf("获取集群客户端失败: %w", err)
 	}
 
-	// 版本
 	v, err := kubeClient.Discovery().ServerVersion()
 	if err != nil {
 		return fmt.Errorf("获取集群版本失败: %w", err)
 	}
 
-	// apiserver 地址来自 RestConfigs
 	k.RLock()
 	restCfg := k.RestConfigs[clusterID]
 	k.RUnlock()
@@ -492,7 +477,6 @@ func (k *k8sClient) UpdateClusterMetaFromLive(ctx context.Context, clusterID int
 		host = restCfg.Host
 	}
 
-	// 入库
 	if err := k.dao.UpdateCluster(ctx, &model.K8sCluster{Model: model.Model{ID: clusterID}, Version: v.String(), ApiServerAddr: host}); err != nil {
 		k.logger.Warn("回写集群版本信息失败", zap.Int("ClusterID", clusterID), zap.Error(err))
 	}

@@ -67,8 +67,8 @@ func InitLogger() *zap.Logger {
 
 	// 创建 Core
 	core := zapcore.NewTee(
-		zapcore.NewCore(zapcore.NewConsoleEncoder(encoderConfig), consoleWriter, zapcore.DebugLevel), // 控制台输出debug及以上级别
-		zapcore.NewCore(zapcore.NewJSONEncoder(encoderConfig), fileWriter, zapcore.WarnLevel),        // 文件记录warn及以上级别
+		zapcore.NewCore(zapcore.NewConsoleEncoder(encoderConfig), consoleWriter, zapcore.WarnLevel), // 控制台输出warn及以上级别
+		zapcore.NewCore(zapcore.NewJSONEncoder(encoderConfig), fileWriter, zapcore.WarnLevel),       // 文件记录warn及以上级别
 	)
 
 	// 创建 logger

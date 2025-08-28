@@ -56,7 +56,7 @@ func (k *K8sDeploymentEntity) TableName() string {
 }
 
 // K8sDeploymentListRequest Deployment列表查询请求
-type K8sDeploymentListRequest struct {
+type K8sDeploymentListReq struct {
 	ClusterID     int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace     string `json:"namespace" form:"namespace" comment:"命名空间"`                      // 命名空间
 	LabelSelector string `json:"label_selector" form:"label_selector" comment:"标签选择器"`           // 标签选择器
@@ -67,7 +67,7 @@ type K8sDeploymentListRequest struct {
 }
 
 // K8sDeploymentCreateRequest 创建Deployment请求
-type K8sDeploymentCreateRequest struct {
+type K8sDeploymentCreateReq struct {
 	ClusterID      int                  `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID，必填
 	Namespace      string               `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间，必填
 	Name           string               `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称，必填
@@ -83,7 +83,7 @@ type K8sDeploymentCreateRequest struct {
 }
 
 // K8sDeploymentUpdateRequest 更新Deployment请求
-type K8sDeploymentUpdateRequest struct {
+type K8sDeploymentUpdateReq struct {
 	ClusterID      int                  `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID，必填
 	Namespace      string               `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间，必填
 	Name           string               `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称，必填
@@ -99,7 +99,7 @@ type K8sDeploymentUpdateRequest struct {
 }
 
 // K8sDeploymentDeleteRequest 删除Deployment请求
-type K8sDeploymentDeleteRequest struct {
+type K8sDeploymentDeleteReq struct {
 	ClusterID          int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID，必填
 	Namespace          string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间，必填
 	Name               string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称，必填
@@ -108,7 +108,7 @@ type K8sDeploymentDeleteRequest struct {
 }
 
 // K8sDeploymentBatchDeleteRequest 批量删除Deployment请求
-type K8sDeploymentBatchDeleteRequest struct {
+type K8sDeploymentBatchDeleteReq struct {
 	ClusterID          int      `json:"cluster_id" binding:"required" comment:"集群ID"`      // 集群ID，必填
 	Namespace          string   `json:"namespace" binding:"required" comment:"命名空间"`       // 命名空间，必填
 	Names              []string `json:"names" binding:"required" comment:"Deployment名称列表"` // Deployment名称列表，必填
@@ -117,7 +117,7 @@ type K8sDeploymentBatchDeleteRequest struct {
 }
 
 // K8sDeploymentScaleRequest Deployment扩缩容请求
-type K8sDeploymentScaleRequest struct {
+type K8sDeploymentScaleReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`     // 集群ID，必填
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`      // 命名空间，必填
 	Name      string `json:"name" binding:"required" comment:"Deployment名称"`   // Deployment名称，必填
@@ -125,21 +125,21 @@ type K8sDeploymentScaleRequest struct {
 }
 
 // K8sDeploymentRestartRequest 重启Deployment请求
-type K8sDeploymentRestartRequest struct {
+type K8sDeploymentRestartReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID，必填
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间，必填
 	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称，必填
 }
 
 // K8sDeploymentBatchRestartRequest 批量重启Deployment请求
-type K8sDeploymentBatchRestartRequest struct {
+type K8sDeploymentBatchRestartReq struct {
 	ClusterID int      `json:"cluster_id" binding:"required" comment:"集群ID"`      // 集群ID，必填
 	Namespace string   `json:"namespace" binding:"required" comment:"命名空间"`       // 命名空间，必填
 	Names     []string `json:"names" binding:"required" comment:"Deployment名称列表"` // Deployment名称列表，必填
 }
 
 // K8sDeploymentRollbackRequest Deployment回滚请求
-type K8sDeploymentRollbackRequest struct {
+type K8sDeploymentRollbackReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID，必填
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间，必填
 	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称，必填
@@ -147,16 +147,131 @@ type K8sDeploymentRollbackRequest struct {
 }
 
 // K8sDeploymentHistoryRequest 获取Deployment历史版本请求
-type K8sDeploymentHistoryRequest struct {
+type K8sDeploymentHistoryReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID，必填
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间，必填
 	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称，必填
 }
 
 // K8sDeploymentEventRequest 获取Deployment事件请求
-type K8sDeploymentEventRequest struct {
+type K8sDeploymentEventReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID，必填
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间，必填
 	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称，必填
 	LimitDays int    `json:"limit_days" comment:"限制天数内的事件"`                  // 限制天数内的事件
+}
+
+// ====================== Deployment响应实体 ======================
+
+// DeploymentEntity Deployment响应实体
+type DeploymentEntity struct {
+	Name                string                      `json:"name"`                 // Deployment名称
+	Namespace           string                      `json:"namespace"`            // 命名空间
+	UID                 string                      `json:"uid"`                  // Deployment UID
+	Labels              map[string]string           `json:"labels"`               // 标签
+	Annotations         map[string]string           `json:"annotations"`          // 注解
+	Replicas            int32                       `json:"replicas"`             // 期望副本数
+	ReadyReplicas       int32                       `json:"ready_replicas"`       // 就绪副本数
+	AvailableReplicas   int32                       `json:"available_replicas"`   // 可用副本数
+	UpdatedReplicas     int32                       `json:"updated_replicas"`     // 更新副本数
+	UnavailableReplicas int32                       `json:"unavailable_replicas"` // 不可用副本数
+	Strategy            DeploymentStrategyEntity    `json:"strategy"`             // 部署策略
+	Conditions          []DeploymentConditionEntity `json:"conditions"`           // 部署条件
+	Selector            map[string]string           `json:"selector"`             // 选择器
+	Images              []string                    `json:"images"`               // 镜像列表
+	Status              string                      `json:"status"`               // 部署状态
+	Age                 string                      `json:"age"`                  // 存在时间
+	CreatedAt           string                      `json:"created_at"`           // 创建时间
+}
+
+// DeploymentStrategyEntity 部署策略实体
+type DeploymentStrategyEntity struct {
+	Type          string                         `json:"type"`           // 策略类型
+	RollingUpdate *DeploymentRollingUpdateEntity `json:"rolling_update"` // 滚动更新配置
+}
+
+// DeploymentRollingUpdateEntity 滚动更新配置
+type DeploymentRollingUpdateEntity struct {
+	MaxUnavailable string `json:"max_unavailable"` // 最大不可用数量
+	MaxSurge       string `json:"max_surge"`       // 最大超出数量
+}
+
+// DeploymentConditionEntity 部署条件
+type DeploymentConditionEntity struct {
+	Type               string `json:"type"`                 // 条件类型
+	Status             string `json:"status"`               // 条件状态
+	LastUpdateTime     string `json:"last_update_time"`     // 最后更新时间
+	LastTransitionTime string `json:"last_transition_time"` // 最后转换时间
+	Reason             string `json:"reason"`               // 原因
+	Message            string `json:"message"`              // 消息
+}
+
+// DeploymentListResponse Deployment列表响应
+type DeploymentListResponse struct {
+	Items      []DeploymentEntity `json:"items"`       // Deployment列表
+	TotalCount int                `json:"total_count"` // 总数
+}
+
+// DeploymentDetailResponse Deployment详情响应
+type DeploymentDetailResponse struct {
+	Deployment  DeploymentEntity          `json:"deployment"`   // Deployment信息
+	YAML        string                    `json:"yaml"`         // YAML内容
+	Events      []DeploymentEventEntity   `json:"events"`       // 事件列表
+	Pods        []PodEntity               `json:"pods"`         // 关联Pod列表
+	ReplicaSets []ReplicaSetEntity        `json:"replica_sets"` // 关联ReplicaSet列表
+	History     []DeploymentHistoryEntity `json:"history"`      // 部署历史
+}
+
+// DeploymentEventEntity Deployment事件实体
+type DeploymentEventEntity struct {
+	Type      string `json:"type"`       // 事件类型
+	Reason    string `json:"reason"`     // 原因
+	Message   string `json:"message"`    // 消息
+	Source    string `json:"source"`     // 来源
+	FirstTime string `json:"first_time"` // 首次时间
+	LastTime  string `json:"last_time"`  // 最后时间
+	Count     int32  `json:"count"`      // 次数
+}
+
+// ReplicaSetEntity ReplicaSet实体
+type ReplicaSetEntity struct {
+	Name              string            `json:"name"`               // ReplicaSet名称
+	Namespace         string            `json:"namespace"`          // 命名空间
+	UID               string            `json:"uid"`                // ReplicaSet UID
+	Labels            map[string]string `json:"labels"`             // 标签
+	Annotations       map[string]string `json:"annotations"`        // 注解
+	Replicas          int32             `json:"replicas"`           // 期望副本数
+	ReadyReplicas     int32             `json:"ready_replicas"`     // 就绪副本数
+	AvailableReplicas int32             `json:"available_replicas"` // 可用副本数
+	Images            []string          `json:"images"`             // 镜像列表
+	Status            string            `json:"status"`             // 状态
+	Age               string            `json:"age"`                // 存在时间
+	CreatedAt         string            `json:"created_at"`         // 创建时间
+}
+
+// DeploymentHistoryEntity 部署历史实体
+type DeploymentHistoryEntity struct {
+	Revision   int64    `json:"revision"`    // 版本号
+	ChangeInfo string   `json:"change_info"` // 变更信息
+	CreatedAt  string   `json:"created_at"`  // 创建时间
+	Images     []string `json:"images"`      // 镜像列表
+	Replicas   int32    `json:"replicas"`    // 副本数
+}
+
+// DeploymentScaleResponse 扩缩容响应
+type DeploymentScaleResponse struct {
+	Name             string `json:"name"`              // Deployment名称
+	Namespace        string `json:"namespace"`         // 命名空间
+	PreviousReplicas int32  `json:"previous_replicas"` // 之前副本数
+	CurrentReplicas  int32  `json:"current_replicas"`  // 当前副本数
+	Status           string `json:"status"`            // 扩缩容状态
+}
+
+// DeploymentRollbackResponse 回滚响应
+type DeploymentRollbackResponse struct {
+	Name             string `json:"name"`              // Deployment名称
+	Namespace        string `json:"namespace"`         // 命名空间
+	PreviousRevision int64  `json:"previous_revision"` // 之前版本
+	CurrentRevision  int64  `json:"current_revision"`  // 当前版本
+	Status           string `json:"status"`            // 回滚状态
 }

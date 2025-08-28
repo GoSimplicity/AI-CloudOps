@@ -29,19 +29,18 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 type K8sYamlTaskHandler struct {
-	l               *zap.Logger
+	logger          *zap.Logger
 	yamlTaskService service.YamlTaskService
 }
 
-func NewK8sYamlTaskHandler(l *zap.Logger, yamlTaskService service.YamlTaskService) *K8sYamlTaskHandler {
+func NewK8sYamlTaskHandler(logger *zap.Logger, yamlTaskService service.YamlTaskService) *K8sYamlTaskHandler {
 	return &K8sYamlTaskHandler{
-		l:               l,
+		logger:          logger,
 		yamlTaskService: yamlTaskService,
 	}
 }
@@ -82,20 +81,28 @@ func (k *K8sYamlTaskHandler) GetYamlTaskList(ctx *gin.Context) {
 // @Tags YAML任务管理
 // @Accept json
 // @Produce json
-// @Param body body model.K8sYamlTask true "YAML 任务信息"
+// @Param body body model.YamlTaskCreateReq true "YAML 任务信息"
 // @Success 200 {object} utils.ApiResponse "创建 YAML 任务成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/yaml_tasks/create [post]
 // @Security BearerAuth
 func (k *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
-	var req model.K8sYamlTask
+	var req model.YamlTaskCreateReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(utils.UserClaims)
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTaskService.CreateYamlTask(ctx, &req)
+		task := &model.K8sYamlTask{
+			Name:       req.Name,
+			UserID:     req.UserID,
+			TemplateID: req.TemplateID,
+			ClusterId:  req.ClusterId,
+			Variables:  req.Variables,
+			Status:     "Pending",
+		}
+		return nil, k.yamlTaskService.CreateYamlTask(ctx, task)
 	})
 }
 
@@ -105,20 +112,28 @@ func (k *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
 // @Tags YAML任务管理
 // @Accept json
 // @Produce json
-// @Param body body model.K8sYamlTask true "YAML 任务更新信息"
+// @Param body body model.YamlTaskUpdateReq true "YAML 任务更新信息"
 // @Success 200 {object} utils.ApiResponse "更新 YAML 任务成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/yaml_tasks/update [post]
 // @Security BearerAuth
 func (k *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
-	var req model.K8sYamlTask
+	var req model.YamlTaskUpdateReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(utils.UserClaims)
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTaskService.UpdateYamlTask(ctx, &req)
+		task := &model.K8sYamlTask{
+			Model:      model.Model{ID: req.ID},
+			Name:       req.Name,
+			UserID:     req.UserID,
+			TemplateID: req.TemplateID,
+			ClusterId:  req.ClusterId,
+			Variables:  req.Variables,
+		}
+		return nil, k.yamlTaskService.UpdateYamlTask(ctx, task)
 	})
 }
 

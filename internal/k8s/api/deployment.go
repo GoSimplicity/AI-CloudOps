@@ -34,13 +34,13 @@ import (
 )
 
 type K8sDeploymentHandler struct {
-	l                 *zap.Logger
+	logger            *zap.Logger
 	deploymentService service.DeploymentService
 }
 
-func NewK8sDeploymentHandler(l *zap.Logger, deploymentService service.DeploymentService) *K8sDeploymentHandler {
+func NewK8sDeploymentHandler(logger *zap.Logger, deploymentService service.DeploymentService) *K8sDeploymentHandler {
 	return &K8sDeploymentHandler{
-		l:                 l,
+		logger:            logger,
 		deploymentService: deploymentService,
 	}
 }
@@ -77,7 +77,7 @@ func (k *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 // @Security BearerAuth
 // @Router /api/k8s/deployments/{cluster_id} [get]
 func (k *K8sDeploymentHandler) GetDeployListByNamespace(ctx *gin.Context) {
-	var req model.K8sGetResourceListRequest
+	var req model.K8sGetResourceListReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -98,14 +98,14 @@ func (k *K8sDeploymentHandler) GetDeployListByNamespace(ctx *gin.Context) {
 // @Tags 部署管理
 // @Accept json
 // @Produce json
-// @Param request body model.K8sDeploymentRequest true "部署更新请求"
+// @Param request body model.K8sDeploymentReq true "部署更新请求"
 // @Success 200 {object} utils.ApiResponse "成功更新部署"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
 // @Router /api/k8s/deployments/update [post]
 func (k *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
-	var req model.K8sDeploymentRequest
+	var req model.K8sDeploymentReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.deploymentService.UpdateDeployment(ctx, &req)
@@ -118,14 +118,14 @@ func (k *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 // @Tags 部署管理
 // @Accept json
 // @Produce json
-// @Param request body model.DeploymentBatchDeleteRequest true "批量删除请求"
+// @Param request body model.DeploymentBatchDeleteReq true "批量删除请求"
 // @Success 200 {object} utils.ApiResponse "成功批量删除部署"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
 // @Router /api/k8s/deployments/batch_delete [delete]
 func (k *K8sDeploymentHandler) BatchDeleteDeployment(ctx *gin.Context) {
-	var req model.DeploymentBatchDeleteRequest
+	var req model.DeploymentBatchDeleteReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.deploymentService.BatchDeleteDeployment(ctx, req.ClusterID, req.Namespace, req.DeploymentNames)
@@ -138,14 +138,14 @@ func (k *K8sDeploymentHandler) BatchDeleteDeployment(ctx *gin.Context) {
 // @Tags 部署管理
 // @Accept json
 // @Produce json
-// @Param request body model.DeploymentBatchRestartRequest true "批量重启请求"
+// @Param request body model.DeploymentBatchRestartReq true "批量重启请求"
 // @Success 200 {object} utils.ApiResponse "成功批量重启部署"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Security BearerAuth
 // @Router /api/k8s/deployments/batch_restart [post]
 func (k *K8sDeploymentHandler) BatchRestartDeployments(ctx *gin.Context) {
-	var req model.DeploymentBatchRestartRequest
+	var req model.DeploymentBatchRestartReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.deploymentService.BatchRestartDeployments(ctx, &req)
@@ -167,7 +167,7 @@ func (k *K8sDeploymentHandler) BatchRestartDeployments(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/deployments/{cluster_id}/{resource_name}/yaml [get]
 func (k *K8sDeploymentHandler) GetDeployYaml(ctx *gin.Context) {
-	var req model.K8sGetResourceYamlRequest
+	var req model.K8sGetResourceYamlReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -197,7 +197,7 @@ func (k *K8sDeploymentHandler) GetDeployYaml(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/deployments/{cluster_id}/{resource_name} [delete]
 func (k *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
-	var req model.K8sDeleteResourceRequest
+	var req model.K8sDeleteResourceReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -227,7 +227,7 @@ func (k *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/deployments/{cluster_id}/{resource_name}/restart [post]
 func (k *K8sDeploymentHandler) RestartDeployment(ctx *gin.Context) {
-	var req model.DeploymentRestartRequest
+	var req model.DeploymentRestartReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return

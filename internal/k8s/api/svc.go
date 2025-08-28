@@ -34,13 +34,13 @@ import (
 )
 
 type K8sSvcHandler struct {
-	l          *zap.Logger
+	logger     *zap.Logger
 	svcService service.SvcService
 }
 
-func NewK8sSvcHandler(l *zap.Logger, svcService service.SvcService) *K8sSvcHandler {
+func NewK8sSvcHandler(logger *zap.Logger, svcService service.SvcService) *K8sSvcHandler {
 	return &K8sSvcHandler{
-		l:          l,
+		logger:     logger,
 		svcService: svcService,
 	}
 }
@@ -134,14 +134,14 @@ func (k *K8sSvcHandler) GetServiceYaml(ctx *gin.Context) {
 // @Tags 服务管理
 // @Accept json
 // @Produce json
-// @Param serviceRequest body model.K8sServiceRequest true "Service更新请求参数"
+// @Param serviceRequest body model.K8sServiceReq true "Service更新请求参数"
 // @Success 200 {object} utils.ApiResponse "更新Service成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/services/update [post]
 // @Security BearerAuth
 func (k *K8sSvcHandler) UpdateService(ctx *gin.Context) {
-	var req model.K8sServiceRequest
+	var req model.K8sServiceReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.svcService.UpdateService(ctx, &req)
@@ -188,14 +188,14 @@ func (k *K8sSvcHandler) DeleteService(ctx *gin.Context) {
 // @Tags 服务管理
 // @Accept json
 // @Produce json
-// @Param serviceRequest body model.K8sServiceRequest true "批量删除Service请求参数"
+// @Param serviceRequest body model.K8sServiceReq true "批量删除Service请求参数"
 // @Success 200 {object} utils.ApiResponse "批量删除Service成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/services/batch_delete [delete]
 // @Security BearerAuth
 func (k *K8sSvcHandler) BatchDeleteServices(ctx *gin.Context) {
-	var req model.K8sServiceRequest
+	var req model.K8sServiceReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.svcService.BatchDeleteService(ctx, req.ClusterId, req.Namespace, req.ServiceNames)

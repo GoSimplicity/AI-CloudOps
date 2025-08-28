@@ -35,6 +35,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -46,21 +47,21 @@ import (
 type DeploymentService interface {
 	// 获取Deployment列表
 	GetDeploymentsByNamespace(ctx context.Context, id int, namespace string) ([]*appsv1.Deployment, error)
-	GetDeploymentList(ctx context.Context, req *model.K8sGetResourceListRequest) ([]*model.K8sDeployment, error)
-	
+	GetDeploymentList(ctx context.Context, req *model.K8sGetResourceListReq) ([]*model.K8sDeployment, error)
+
 	// 获取Deployment详情
-	GetDeployment(ctx context.Context, req *model.K8sGetResourceRequest) (*model.K8sDeployment, error)
+	GetDeployment(ctx context.Context, req *model.K8sGetResourceReq) (*model.K8sDeployment, error)
 	GetDeploymentYaml(ctx context.Context, id int, namespace, deploymentName string) (string, error)
-	
+
 	// Deployment操作
-	UpdateDeployment(ctx context.Context, deployment *model.K8sDeploymentRequest) error
+	UpdateDeployment(ctx context.Context, deployment *model.K8sDeploymentReq) error
 	DeleteDeployment(ctx context.Context, id int, namespace, deploymentName string) error
 	RestartDeployment(ctx context.Context, id int, namespace, deploymentName string) error
-	
+
 	// 批量操作
 	BatchDeleteDeployment(ctx context.Context, id int, namespace string, deploymentNames []string) error
-	BatchDeleteDeployments(ctx context.Context, req *model.DeploymentBatchDeleteRequest) error
-	BatchRestartDeployments(ctx context.Context, req *model.DeploymentBatchRestartRequest) error
+	BatchDeleteDeployments(ctx context.Context, req *model.DeploymentBatchDeleteReq) error
+	BatchRestartDeployments(ctx context.Context, req *model.DeploymentBatchRestartReq) error
 }
 
 type deploymentService struct {
@@ -80,7 +81,7 @@ func NewDeploymentService(dao dao.ClusterDAO, client client.K8sClient, logger *z
 
 // GetDeploymentsByNamespace 获取指定命名空间下的所有 Deployment（保持向后兼容）
 func (d *deploymentService) GetDeploymentsByNamespace(ctx context.Context, id int, namespace string) ([]*appsv1.Deployment, error) {
-	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
+	kubeClient, err := k8sutils.GetKubeClient(id, d.client, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -99,8 +100,8 @@ func (d *deploymentService) GetDeploymentsByNamespace(ctx context.Context, id in
 }
 
 // GetDeploymentList 获取Deployment列表（使用新的请求结构体）
-func (d *deploymentService) GetDeploymentList(ctx context.Context, req *model.K8sGetResourceListRequest) ([]*model.K8sDeployment, error) {
-	kubeClient, err := pkg.GetKubeClient(req.ClusterID, d.client, d.logger)
+func (d *deploymentService) GetDeploymentList(ctx context.Context, req *model.K8sGetResourceListReq) ([]*model.K8sDeployment, error) {
+	kubeClient, err := k8sutils.GetKubeClient(req.ClusterID, d.client, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -121,8 +122,8 @@ func (d *deploymentService) GetDeploymentList(ctx context.Context, req *model.K8
 }
 
 // GetDeployment 获取单个Deployment详情
-func (d *deploymentService) GetDeployment(ctx context.Context, req *model.K8sGetResourceRequest) (*model.K8sDeployment, error) {
-	kubeClient, err := pkg.GetKubeClient(req.ClusterID, d.client, d.logger)
+func (d *deploymentService) GetDeployment(ctx context.Context, req *model.K8sGetResourceReq) (*model.K8sDeployment, error) {
+	kubeClient, err := k8sutils.GetKubeClient(req.ClusterID, d.client, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -136,8 +137,8 @@ func (d *deploymentService) GetDeployment(ctx context.Context, req *model.K8sGet
 }
 
 // UpdateDeployment 更新 Deployment 配置
-func (d *deploymentService) UpdateDeployment(ctx context.Context, deployment *model.K8sDeploymentRequest) error {
-	kubeClient, err := pkg.GetKubeClient(deployment.ClusterId, d.client, d.logger)
+func (d *deploymentService) UpdateDeployment(ctx context.Context, deployment *model.K8sDeploymentReq) error {
+	kubeClient, err := k8sutils.GetKubeClient(deployment.ClusterId, d.client, d.logger)
 	if err != nil {
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -155,7 +156,7 @@ func (d *deploymentService) UpdateDeployment(ctx context.Context, deployment *mo
 
 // GetDeploymentYaml 获取 Deployment 的 YAML 配置
 func (d *deploymentService) GetDeploymentYaml(ctx context.Context, id int, namespace, deploymentName string) (string, error) {
-	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
+	kubeClient, err := k8sutils.GetKubeClient(id, d.client, d.logger)
 	if err != nil {
 		return "", fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -175,7 +176,7 @@ func (d *deploymentService) GetDeploymentYaml(ctx context.Context, id int, names
 
 // BatchDeleteDeployment 批量删除 Deployment（保持向后兼容）
 func (d *deploymentService) BatchDeleteDeployment(ctx context.Context, id int, namespace string, deploymentNames []string) error {
-	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
+	kubeClient, err := k8sutils.GetKubeClient(id, d.client, d.logger)
 	if err != nil {
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -210,7 +211,7 @@ func (d *deploymentService) BatchDeleteDeployment(ctx context.Context, id int, n
 
 // DeleteDeployment 删除指定的 Deployment
 func (d *deploymentService) DeleteDeployment(ctx context.Context, id int, namespace, deploymentName string) error {
-	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
+	kubeClient, err := k8sutils.GetKubeClient(id, d.client, d.logger)
 	if err != nil {
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -224,7 +225,7 @@ func (d *deploymentService) DeleteDeployment(ctx context.Context, id int, namesp
 
 // RestartDeployment 重启指定的 Deployment
 func (d *deploymentService) RestartDeployment(ctx context.Context, id int, namespace, deploymentName string) error {
-	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
+	kubeClient, err := k8sutils.GetKubeClient(id, d.client, d.logger)
 	if err != nil {
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -248,8 +249,8 @@ func (d *deploymentService) RestartDeployment(ctx context.Context, id int, names
 }
 
 // BatchDeleteDeployments 批量删除Deployment（使用新的请求结构体）
-func (d *deploymentService) BatchDeleteDeployments(ctx context.Context, req *model.DeploymentBatchDeleteRequest) error {
-	kubeClient, err := pkg.GetKubeClient(req.ClusterID, d.client, d.logger)
+func (d *deploymentService) BatchDeleteDeployments(ctx context.Context, req *model.DeploymentBatchDeleteReq) error {
+	kubeClient, err := k8sutils.GetKubeClient(req.ClusterID, d.client, d.logger)
 	if err != nil {
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -279,15 +280,15 @@ func (d *deploymentService) BatchDeleteDeployments(ctx context.Context, req *mod
 		return fmt.Errorf("batch delete failed: %v", errorMessages)
 	}
 
-	d.logger.Info("Batch deleted deployments successfully", 
-		zap.String("namespace", req.Namespace), 
+	d.logger.Info("Batch deleted deployments successfully",
+		zap.String("namespace", req.Namespace),
 		zap.Int("count", len(req.DeploymentNames)))
 	return nil
 }
 
 // BatchRestartDeployments 批量重启Deployment（使用新的请求结构体）
-func (d *deploymentService) BatchRestartDeployments(ctx context.Context, req *model.DeploymentBatchRestartRequest) error {
-	kubeClient, err := pkg.GetKubeClient(req.ClusterID, d.client, d.logger)
+func (d *deploymentService) BatchRestartDeployments(ctx context.Context, req *model.DeploymentBatchRestartReq) error {
+	kubeClient, err := k8sutils.GetKubeClient(req.ClusterID, d.client, d.logger)
 	if err != nil {
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -317,8 +318,8 @@ func (d *deploymentService) BatchRestartDeployments(ctx context.Context, req *mo
 		return fmt.Errorf("batch restart failed: %v", errorMessages)
 	}
 
-	d.logger.Info("Batch restarted deployments successfully", 
-		zap.String("namespace", req.Namespace), 
+	d.logger.Info("Batch restarted deployments successfully",
+		zap.String("namespace", req.Namespace),
 		zap.Int("count", len(req.DeploymentNames)))
 	return nil
 }

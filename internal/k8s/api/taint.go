@@ -64,14 +64,14 @@ func (k *K8sTaintHandler) RegisterRouters(server *gin.Engine) {
 // @Tags 污点管理
 // @Accept json
 // @Produce json
-// @Param request body model.TaintK8sNodesRequest true "添加污点请求参数"
+// @Param request body model.TaintK8sNodesReq true "添加污点请求参数"
 // @Success 200 {object} utils.ApiResponse "添加成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/taints/add [post]
 // @Security BearerAuth
 func (k *K8sTaintHandler) AddTaintsNodes(ctx *gin.Context) {
-	var req model.TaintK8sNodesRequest
+	var req model.TaintK8sNodesReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.AddOrUpdateNodeTaint(ctx, &req)
@@ -84,14 +84,14 @@ func (k *K8sTaintHandler) AddTaintsNodes(ctx *gin.Context) {
 // @Tags 污点管理
 // @Accept json
 // @Produce json
-// @Param request body model.ScheduleK8sNodesRequest true "节点调度切换请求参数"
+// @Param request body model.ScheduleK8sNodesReq true "节点调度切换请求参数"
 // @Success 200 {object} utils.ApiResponse "操作成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/taints/enable_switch [post]
 // @Security BearerAuth
 func (k *K8sTaintHandler) ScheduleEnableSwitchNodes(ctx *gin.Context) {
-	var req model.ScheduleK8sNodesRequest
+	var req model.ScheduleK8sNodesReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.BatchEnableSwitchNodes(ctx, &req)
@@ -104,14 +104,14 @@ func (k *K8sTaintHandler) ScheduleEnableSwitchNodes(ctx *gin.Context) {
 // @Tags 污点管理
 // @Accept json
 // @Produce json
-// @Param request body model.TaintK8sNodesRequest true "污点YAML检查请求参数"
+// @Param request body model.TaintK8sNodesReq true "污点YAML检查请求参数"
 // @Success 200 {object} utils.ApiResponse "检查成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/taints/taint_check [post]
 // @Security BearerAuth
 func (k *K8sTaintHandler) TaintYamlCheck(ctx *gin.Context) {
-	var req model.TaintK8sNodesRequest
+	var req model.TaintK8sNodesReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.CheckTaintYaml(ctx, &req)
@@ -124,14 +124,14 @@ func (k *K8sTaintHandler) TaintYamlCheck(ctx *gin.Context) {
 // @Tags 污点管理
 // @Accept json
 // @Produce json
-// @Param request body model.TaintK8sNodesRequest true "删除污点请求参数"
+// @Param request body model.TaintK8sNodesReq true "删除污点请求参数"
 // @Success 200 {object} utils.ApiResponse "删除成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/taints/delete [delete]
 // @Security BearerAuth
 func (k *K8sTaintHandler) DeleteTaintsNodes(ctx *gin.Context) {
-	var req model.TaintK8sNodesRequest
+	var req model.TaintK8sNodesReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.AddOrUpdateNodeTaint(ctx, &req)
@@ -144,14 +144,14 @@ func (k *K8sTaintHandler) DeleteTaintsNodes(ctx *gin.Context) {
 // @Tags 污点管理
 // @Accept json
 // @Produce json
-// @Param request body model.K8sClusterNodesRequest true "清空Pod请求参数"
+// @Param request body model.K8sClusterNodesReq true "清空Pod请求参数"
 // @Success 200 {object} utils.ApiResponse "清空成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/taints/drain [post]
 // @Security BearerAuth
 func (k *K8sTaintHandler) DrainPods(ctx *gin.Context) {
-	var req model.K8sClusterNodesRequest
+	var req model.K8sClusterNodesReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.DrainPods(ctx, &req)

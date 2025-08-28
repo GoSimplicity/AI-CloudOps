@@ -50,32 +50,33 @@ func (k *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 
 	pods := k8sGroup.Group("/pods")
 	{
-		pods.GET("/:id", k.GetPodListByNamespace)                     // 根据命名空间获取 Pods 列表
-		pods.GET("/:id/:podName/containers", k.GetPodContainers)      // 获取指定 Pod 的容器列表
-		pods.GET("/:id/:podName/:container/logs", k.GetContainerLogs) // 获取指定容器的日志
-		pods.GET("/:id/:podName/yaml", k.GetPodYaml)                  // 获取指定 Pod 的 YAML 配置
-		pods.DELETE("/delete/:id", k.DeletePod)                       // 删除指定名称的 Pod
+		pods.GET("/:id", k.GetPodListByNamespace)
+		pods.GET("/:id/node", k.GetPodsListByNodeName)
+		pods.GET("/:id/:podName/containers", k.GetPodContainers)
+		pods.GET("/:id/:podName/:container/logs", k.GetContainerLogs)
+		pods.GET("/:id/:podName/yaml", k.GetPodYaml)
+		pods.DELETE("/delete/:id", k.DeletePod)
 	}
 }
 
-// GetPodListByNamespace 根据命名空间获取Pod列表
-// @Summary 根据命名空间获取Pod列表
-// @Description 根据指定的命名空间获取K8s集群中的Pod列表
+// GetPodListByNamespace 获取Pod列表
+// @Summary 获取Pod列表
+// @Description 根据命名空间获取Pod列表
 // @Tags Pod管理
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
-// @Param namespace query string false "命名空间，为空则获取所有命名空间"
+// @Param namespace query string false "命名空间"
 // @Param label_selector query string false "标签选择器"
 // @Param field_selector query string false "字段选择器"
-// @Param limit query int false "限制结果数量"
-// @Success 200 {object} utils.ApiResponse{data=[]object} "成功获取Pod列表"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
+// @Param limit query int false "限制数量"
+// @Success 200 {object} utils.ApiResponse{data=[]object}
+// @Failure 400 {object} utils.ApiResponse
+// @Failure 500 {object} utils.ApiResponse
 // @Security BearerAuth
 // @Router /api/k8s/pods/{cluster_id} [get]
 func (k *K8sPodHandler) GetPodListByNamespace(ctx *gin.Context) {
-	var req model.K8sGetResourceListRequest
+	var req model.K8sGetResourceListReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -105,7 +106,7 @@ func (k *K8sPodHandler) GetPodListByNamespace(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/pods/{id}/{podName}/containers [get]
 func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
-	var req model.PodContainersRequest
+	var req model.PodContainersReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -134,7 +135,7 @@ func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/pods/{id}/node [get]
 func (k *K8sPodHandler) GetPodsListByNodeName(ctx *gin.Context) {
-	var req model.PodsByNodeRequest
+	var req model.PodsByNodeReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -165,7 +166,7 @@ func (k *K8sPodHandler) GetPodsListByNodeName(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/pods/{id}/{podName}/{container}/logs [get]
 func (k *K8sPodHandler) GetContainerLogs(ctx *gin.Context) {
-	var req model.PodLogRequest
+	var req model.PodLogReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -195,7 +196,7 @@ func (k *K8sPodHandler) GetContainerLogs(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/pods/{id}/{podName}/yaml [get]
 func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
-	var req model.K8sGetResourceYamlRequest
+	var req model.K8sGetResourceYamlReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -225,7 +226,7 @@ func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /api/k8s/pods/delete/{id} [delete]
 func (k *K8sPodHandler) DeletePod(ctx *gin.Context) {
-	var req model.K8sDeleteResourceRequest
+	var req model.K8sDeleteResourceReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return

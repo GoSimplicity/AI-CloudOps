@@ -854,3 +854,57 @@ func GetDaemonSetResources(ctx context.Context, kubeClient *kubernetes.Clientset
 
 	return resources, nil
 }
+
+// BuildK8sNodeResources 构建节点资源信息
+func BuildK8sNodeResources(ctx context.Context, node *corev1.Node) (*model.NodeResources, error) {
+	if node == nil {
+		return nil, fmt.Errorf("节点信息不能为空")
+	}
+
+	nodeResources := &model.NodeResources{
+		NodeName: node.Name,
+		Status:   "Unknown",
+		Ready:    false,
+	}
+
+	// 获取节点状态
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == corev1.NodeReady {
+			if condition.Status == corev1.ConditionTrue {
+				nodeResources.Status = "Ready"
+				nodeResources.Ready = true
+			} else {
+				nodeResources.Status = "NotReady"
+				nodeResources.Ready = false
+			}
+			break
+		}
+	}
+
+	// 获取节点容量资源
+	capacity := node.Status.Capacity
+
+	// CPU资源
+	if cpuCapacity, exists := capacity[corev1.ResourceCPU]; exists {
+		nodeResources.CPU = cpuCapacity.String()
+	}
+
+	// 内存资源
+	if memCapacity, exists := capacity[corev1.ResourceMemory]; exists {
+		memBytes := memCapacity.Value()
+		nodeResources.Memory = fmt.Sprintf("%.2fGi", float64(memBytes)/(1024*1024*1024))
+	}
+
+	// 存储资源
+	if storageCapacity, exists := capacity[corev1.ResourceEphemeralStorage]; exists {
+		storageBytes := storageCapacity.Value()
+		nodeResources.Storage = fmt.Sprintf("%.2fGi", float64(storageBytes)/(1024*1024*1024))
+	}
+
+	// Pod资源
+	if podsCapacity, exists := capacity[corev1.ResourcePods]; exists {
+		nodeResources.Pods = podsCapacity.String()
+	}
+
+	return nodeResources, nil
+}

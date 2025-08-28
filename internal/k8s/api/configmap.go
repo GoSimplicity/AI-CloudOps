@@ -52,12 +52,12 @@ func (h *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 
 	configMaps := k8sGroup.Group("/configmaps")
 	{
-		configMaps.GET("/list", h.GetConfigMapList)                  // 获取ConfigMap列表
-		configMaps.GET("/:cluster_id/:namespace/:name", h.GetConfigMap) // 获取单个ConfigMap详情
-		configMaps.POST("/create", h.CreateConfigMap)                // 创建ConfigMap
-		configMaps.PUT("/update", h.UpdateConfigMap)                 // 更新ConfigMap
-		configMaps.DELETE("/:cluster_id/:namespace/:name", h.DeleteConfigMap) // 删除ConfigMap
-		configMaps.DELETE("/batch", h.BatchDeleteConfigMaps)         // 批量删除ConfigMap
+		configMaps.GET("/list", h.GetConfigMapList)                              // 获取ConfigMap列表
+		configMaps.GET("/:cluster_id/:namespace/:name", h.GetConfigMap)          // 获取单个ConfigMap详情
+		configMaps.POST("/create", h.CreateConfigMap)                            // 创建ConfigMap
+		configMaps.PUT("/update", h.UpdateConfigMap)                             // 更新ConfigMap
+		configMaps.DELETE("/:cluster_id/:namespace/:name", h.DeleteConfigMap)    // 删除ConfigMap
+		configMaps.DELETE("/batch", h.BatchDeleteConfigMaps)                     // 批量删除ConfigMap
 		configMaps.GET("/:cluster_id/:namespace/:name/yaml", h.GetConfigMapYAML) // 获取ConfigMap的YAML配置
 	}
 }
@@ -80,8 +80,8 @@ func (h *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 // @Router /api/k8s/configmaps/list [get]
 // @Security BearerAuth
 func (h *K8sConfigMapHandler) GetConfigMapList(ctx *gin.Context) {
-	var req model.K8sListRequest
-	
+	var req model.K8sListReq
+
 	// 从查询参数中获取请求参数
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, "参数绑定错误: "+err.Error())
@@ -109,8 +109,8 @@ func (h *K8sConfigMapHandler) GetConfigMapList(ctx *gin.Context) {
 // @Router /api/k8s/configmaps/{cluster_id}/{namespace}/{name} [get]
 // @Security BearerAuth
 func (h *K8sConfigMapHandler) GetConfigMap(ctx *gin.Context) {
-	var req model.K8sResourceIdentifier
-	
+	var req model.K8sResourceIdentifierReq
+
 	// 从路径参数中获取请求参数
 	clusterIDStr := ctx.Param("cluster_id")
 	clusterID, err := strconv.Atoi(clusterIDStr)
@@ -119,10 +119,10 @@ func (h *K8sConfigMapHandler) GetConfigMap(ctx *gin.Context) {
 		return
 	}
 	req.ClusterID = clusterID
-	
+
 	req.Namespace = ctx.Param("namespace")
 	req.ResourceName = ctx.Param("name")
-	
+
 	// 验证必要参数
 	if req.Namespace == "" || req.ResourceName == "" {
 		utils.BadRequestError(ctx, "命名空间和ConfigMap名称不能为空")
@@ -140,7 +140,7 @@ func (h *K8sConfigMapHandler) GetConfigMap(ctx *gin.Context) {
 // @Tags 配置管理
 // @Accept json
 // @Produce json
-// @Param request body model.ConfigMapCreateRequest true "ConfigMap创建请求"
+// @Param request body model.ConfigMapCreateReq true "ConfigMap创建请求"
 // @Success 200 {object} utils.ApiResponse "创建成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 409 {object} utils.ApiResponse "ConfigMap已存在"
@@ -148,7 +148,7 @@ func (h *K8sConfigMapHandler) GetConfigMap(ctx *gin.Context) {
 // @Router /api/k8s/configmaps/create [post]
 // @Security BearerAuth
 func (h *K8sConfigMapHandler) CreateConfigMap(ctx *gin.Context) {
-	var req model.ConfigMapCreateRequest
+	var req model.ConfigMapCreateReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.configMapService.CreateConfigMap(ctx, &req)
@@ -161,7 +161,7 @@ func (h *K8sConfigMapHandler) CreateConfigMap(ctx *gin.Context) {
 // @Tags 配置管理
 // @Accept json
 // @Produce json
-// @Param request body model.ConfigMapUpdateRequest true "ConfigMap更新请求"
+// @Param request body model.ConfigMapUpdateReq true "ConfigMap更新请求"
 // @Success 200 {object} utils.ApiResponse "更新成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 404 {object} utils.ApiResponse "ConfigMap不存在"
@@ -169,7 +169,7 @@ func (h *K8sConfigMapHandler) CreateConfigMap(ctx *gin.Context) {
 // @Router /api/k8s/configmaps/update [put]
 // @Security BearerAuth
 func (h *K8sConfigMapHandler) UpdateConfigMap(ctx *gin.Context) {
-	var req model.ConfigMapUpdateRequest
+	var req model.ConfigMapUpdateReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.configMapService.UpdateConfigMap(ctx, &req)
@@ -192,8 +192,8 @@ func (h *K8sConfigMapHandler) UpdateConfigMap(ctx *gin.Context) {
 // @Router /api/k8s/configmaps/{cluster_id}/{namespace}/{name} [delete]
 // @Security BearerAuth
 func (h *K8sConfigMapHandler) DeleteConfigMap(ctx *gin.Context) {
-	var req model.K8sResourceIdentifier
-	
+	var req model.K8sResourceIdentifierReq
+
 	// 从路径参数中获取请求参数
 	clusterIDStr := ctx.Param("cluster_id")
 	clusterID, err := strconv.Atoi(clusterIDStr)
@@ -202,10 +202,10 @@ func (h *K8sConfigMapHandler) DeleteConfigMap(ctx *gin.Context) {
 		return
 	}
 	req.ClusterID = clusterID
-	
+
 	req.Namespace = ctx.Param("namespace")
 	req.ResourceName = ctx.Param("name")
-	
+
 	// 验证必要参数
 	if req.Namespace == "" || req.ResourceName == "" {
 		utils.BadRequestError(ctx, "命名空间和ConfigMap名称不能为空")
@@ -223,14 +223,14 @@ func (h *K8sConfigMapHandler) DeleteConfigMap(ctx *gin.Context) {
 // @Tags 配置管理
 // @Accept json
 // @Produce json
-// @Param request body model.K8sBatchDeleteRequest true "批量删除请求"
+// @Param request body model.K8sBatchDeleteReq true "批量删除请求"
 // @Success 200 {object} utils.ApiResponse "批量删除成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/configmaps/batch [delete]
 // @Security BearerAuth
 func (h *K8sConfigMapHandler) BatchDeleteConfigMaps(ctx *gin.Context) {
-	var req model.K8sBatchDeleteRequest
+	var req model.K8sBatchDeleteReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.configMapService.BatchDeleteConfigMaps(ctx, &req)
@@ -253,8 +253,8 @@ func (h *K8sConfigMapHandler) BatchDeleteConfigMaps(ctx *gin.Context) {
 // @Router /api/k8s/configmaps/{cluster_id}/{namespace}/{name}/yaml [get]
 // @Security BearerAuth
 func (h *K8sConfigMapHandler) GetConfigMapYAML(ctx *gin.Context) {
-	var req model.K8sResourceIdentifier
-	
+	var req model.K8sResourceIdentifierReq
+
 	// 从路径参数中获取请求参数
 	clusterIDStr := ctx.Param("cluster_id")
 	clusterID, err := strconv.Atoi(clusterIDStr)
@@ -263,10 +263,10 @@ func (h *K8sConfigMapHandler) GetConfigMapYAML(ctx *gin.Context) {
 		return
 	}
 	req.ClusterID = clusterID
-	
+
 	req.Namespace = ctx.Param("namespace")
 	req.ResourceName = ctx.Param("name")
-	
+
 	// 验证必要参数
 	if req.Namespace == "" || req.ResourceName == "" {
 		utils.BadRequestError(ctx, "命名空间和ConfigMap名称不能为空")

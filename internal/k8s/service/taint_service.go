@@ -30,8 +30,6 @@ import (
 	"errors"
 	"fmt"
 
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
@@ -46,13 +44,13 @@ import (
 
 type TaintService interface {
 	// CheckTaintYaml 检查 Taint YAML 配置是否合法
-	CheckTaintYaml(ctx context.Context, taint *model.TaintK8sNodesRequest) error
+	CheckTaintYaml(ctx context.Context, taint *model.TaintK8sNodesReq) error
 	// BatchEnableSwitchNodes 批量启用或禁用节点
-	BatchEnableSwitchNodes(ctx context.Context, req *model.ScheduleK8sNodesRequest) error
+	BatchEnableSwitchNodes(ctx context.Context, req *model.ScheduleK8sNodesReq) error
 	// AddOrUpdateNodeTaint 添加或更新节点的 Taint
-	AddOrUpdateNodeTaint(ctx context.Context, taint *model.TaintK8sNodesRequest) error
+	AddOrUpdateNodeTaint(ctx context.Context, taint *model.TaintK8sNodesReq) error
 	// DrainPods 驱逐 Pod
-	DrainPods(ctx context.Context, req *model.K8sClusterNodesRequest) error
+	DrainPods(ctx context.Context, req *model.K8sClusterNodesReq) error
 }
 
 type taintService struct {
@@ -70,7 +68,7 @@ func NewTaintService(dao dao.ClusterDAO, client client.K8sClient, l *zap.Logger)
 }
 
 // CheckTaintYaml 检查 Taint YAML 配置是否合法
-func (t *taintService) CheckTaintYaml(ctx context.Context, req *model.TaintK8sNodesRequest) error {
+func (t *taintService) CheckTaintYaml(ctx context.Context, req *model.TaintK8sNodesReq) error {
 	var taintsToProcess []corev1.Taint
 	if err := yaml.UnmarshalStrict([]byte(req.TaintYaml), &taintsToProcess); err != nil {
 		t.l.Error("解析 Taint YAML 配置失败", zap.Error(err))
@@ -107,8 +105,21 @@ func (t *taintService) CheckTaintYaml(ctx context.Context, req *model.TaintK8sNo
 }
 
 // BatchEnableSwitchNodes 批量启用或禁用节点
-func (t *taintService) BatchEnableSwitchNodes(ctx context.Context, req *model.ScheduleK8sNodesRequest) error {
-	kubeClient, err := pkg.GetKubeClient(req.ClusterId, t.client, t.l)
+func (t *taintService) BatchEnableSwitchNodes(ctx context.Context, req *model.ScheduleK8sNodesReq) error {
+	// TODO: 实现GetKubeClient函数
+	// kubeClient, err := k8sutils.GetKubeClient(req.ClusterId, t.client, t.l)
+	// if err != nil {
+	// 	t.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+	// 	return err
+	// }
+
+	// 临时实现：直接通过client获取
+	cluster, err := t.dao.GetClusterByID(ctx, req.ClusterId)
+	if err != nil {
+		return fmt.Errorf("获取集群信息失败: %w", err)
+	}
+
+	kubeClient, err := t.client.GetKubeClient(cluster.ID)
 	if err != nil {
 		t.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
@@ -133,8 +144,21 @@ func (t *taintService) BatchEnableSwitchNodes(ctx context.Context, req *model.Sc
 }
 
 // AddOrUpdateNodeTaint 更新节点的 Taint
-func (t *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.TaintK8sNodesRequest) error {
-	kubeClient, err := pkg.GetKubeClient(req.ClusterId, t.client, t.l)
+func (t *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.TaintK8sNodesReq) error {
+	// TODO: 实现GetKubeClient函数
+	// kubeClient, err := k8sutils.GetKubeClient(req.ClusterId, t.client, t.l)
+	// if err != nil {
+	// 	t.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+	// 	return err
+	// }
+
+	// 临时实现：直接通过client获取
+	cluster, err := t.dao.GetClusterByID(ctx, req.ClusterId)
+	if err != nil {
+		return fmt.Errorf("获取集群信息失败: %w", err)
+	}
+
+	kubeClient, err := t.client.GetKubeClient(cluster.ID)
 	if err != nil {
 		t.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
@@ -157,9 +181,13 @@ func (t *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.Tain
 	// 根据操作类型添加、删除或更新 taint
 	switch req.ModType {
 	case "add":
-		node.Spec.Taints = pkg.MergeTaints(node.Spec.Taints, taintsToProcess)
+		// TODO: 实现MergeTaints函数
+		// node.Spec.Taints = pkg.MergeTaints(node.Spec.Taints, taintsToProcess)
+		node.Spec.Taints = append(node.Spec.Taints, taintsToProcess...)
 	case "del":
-		node.Spec.Taints = pkg.RemoveTaints(node.Spec.Taints, taintsToProcess)
+		// TODO: 实现RemoveTaints函数
+		// node.Spec.Taints = pkg.RemoveTaints(node.Spec.Taints, taintsToProcess)
+		node.Spec.Taints = removeTaints(node.Spec.Taints, taintsToProcess)
 	default:
 		errMsg := fmt.Sprintf("未知的修改类型: %s", req.ModType)
 		t.l.Error(errMsg)
@@ -177,15 +205,37 @@ func (t *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.Tain
 }
 
 // DrainPods 并发驱逐 Pods
-func (t *taintService) DrainPods(ctx context.Context, req *model.K8sClusterNodesRequest) error {
-	kubeClient, err := pkg.GetKubeClient(req.ClusterId, t.client, t.l)
+func (t *taintService) DrainPods(ctx context.Context, req *model.K8sClusterNodesReq) error {
+	// TODO: 实现GetKubeClient函数
+	// kubeClient, err := k8sutils.GetKubeClient(req.ClusterId, t.client, t.l)
+	// if err != nil {
+	// 	t.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+	// 	return err
+	// }
+
+	// 临时实现：直接通过client获取
+	cluster, err := t.dao.GetClusterByID(ctx, req.ClusterId)
+	if err != nil {
+		return fmt.Errorf("获取集群信息失败: %w", err)
+	}
+
+	kubeClient, err := t.client.GetKubeClient(cluster.ID)
 	if err != nil {
 		t.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
 	}
 
-	// 获取节点上的 Pod 列表
-	pods, err := pkg.GetPodsByNodeName(ctx, kubeClient, req.NodeName)
+	// TODO: 实现GetPodsByNodeName函数
+	// pods, err := pkg.GetPodsByNodeName(ctx, kubeClient, req.NodeName)
+	// if err != nil {
+	// 	t.l.Error("获取 Pod 列表失败", zap.Error(err))
+	// 	return err
+	// }
+
+	// 临时实现：直接获取所有Pod然后过滤
+	pods, err := kubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", req.NodeName),
+	})
 	if err != nil {
 		t.l.Error("获取 Pod 列表失败", zap.Error(err))
 		return err
@@ -234,4 +284,22 @@ func (t *taintService) DrainPods(ctx context.Context, req *model.K8sClusterNodes
 	}
 
 	return nil
+}
+
+// removeTaints 临时实现的移除taints函数
+func removeTaints(existingTaints, taintsToRemove []corev1.Taint) []corev1.Taint {
+	var result []corev1.Taint
+	for _, existing := range existingTaints {
+		shouldKeep := true
+		for _, toRemove := range taintsToRemove {
+			if existing.Key == toRemove.Key {
+				shouldKeep = false
+				break
+			}
+		}
+		if shouldKeep {
+			result = append(result, existing)
+		}
+	}
+	return result
 }

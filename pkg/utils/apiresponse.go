@@ -346,6 +346,19 @@ func GetParamID(ctx *gin.Context) (int, error) {
 	return paramID, nil
 }
 
+// GetCustomParamID 从查询参数中解析自定义字段的 ID，并进行类型转换
+func GetCustomParamID(ctx *gin.Context, paramID string) (int, error) {
+	id := ctx.Param(paramID)
+	if id == "" {
+		return 0, fmt.Errorf("缺少 '%s' 参数", paramID)
+	}
+	paramValue, err := strconv.Atoi(id)
+	if err != nil {
+		return 0, fmt.Errorf("'%s' 非整数", paramID)
+	}
+	return paramValue, nil
+}
+
 func GetStringParam(ctx *gin.Context, key string) (string, error) {
 	value := ctx.Param(key)
 	if value == "" {
@@ -382,11 +395,11 @@ func GetQueryParam[T any](ctx *gin.Context, key string) (T, error) {
 	}
 }
 
-// GetParamName 从查询参数中解析 Name，并进行类型转换
-func GetParamName(ctx *gin.Context) (string, error) {
-	name := ctx.Param("name")
+// GetParamCustomName 从查询参数中解析 Name，并进行类型转换
+func GetParamCustomName(ctx *gin.Context, paramName string) (string, error) {
+	name := ctx.Param(paramName)
 	if name == "" {
-		return "", fmt.Errorf("缺少 'name' 参数")
+		return "", fmt.Errorf("缺少 '%s' 参数", paramName)
 	}
 
 	return name, nil

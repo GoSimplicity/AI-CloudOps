@@ -115,14 +115,14 @@ func (k *K8sNamespaceHandler) GetClusterNamespacesForSelect(ctx *gin.Context) {
 // @Tags 命名空间管理
 // @Accept json
 // @Produce json
-// @Param request body model.CreateNamespaceRequest true "创建命名空间请求"
+// @Param request body model.CreateNamespaceReq true "创建命名空间请求"
 // @Success 200 {object} utils.ApiResponse "创建成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/namespaces/create [post]
 // @Security BearerAuth
 func (k *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
-	var req model.CreateNamespaceRequest
+	var req model.CreateNamespaceReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.namespaceService.CreateNamespace(ctx, req)
@@ -197,14 +197,14 @@ func (k *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 // @Tags 命名空间管理
 // @Accept json
 // @Produce json
-// @Param request body model.UpdateNamespaceRequest true "更新命名空间请求"
+// @Param request body model.UpdateNamespaceReq true "更新命名空间请求"
 // @Success 200 {object} utils.ApiResponse "更新成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/namespaces/update [post]
 // @Security BearerAuth
 func (k *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
-	var req model.UpdateNamespaceRequest
+	var req model.UpdateNamespaceReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.namespaceService.UpdateNamespace(ctx, req)

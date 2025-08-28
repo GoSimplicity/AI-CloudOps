@@ -29,10 +29,9 @@ import (
 	"context"
 	"fmt"
 
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -50,7 +49,7 @@ type SvcService interface {
 	// BatchDeleteService 批量删除 Service
 	BatchDeleteService(ctx context.Context, id int, namespace string, serviceNames []string) error
 	// UpdateService 更新 Service
-	UpdateService(ctx context.Context, serviceResource *model.K8sServiceRequest) error
+	UpdateService(ctx context.Context, serviceResource *model.K8sServiceReq) error
 	// CreateService 创建 Service
 	//CreateService(ctx context.Context, serviceRequest *model.K8sServiceRequest) error
 }
@@ -71,7 +70,7 @@ func NewSvcService(dao dao.ClusterDAO, client client.K8sClient, l *zap.Logger) S
 
 // GetServicesByNamespace 获取指定命名空间中的 Service 列表
 func (s *svcService) GetServicesByNamespace(ctx context.Context, id int, namespace string) ([]*corev1.Service, error) {
-	kubeClient, err := pkg.GetKubeClient(id, s.client, s.l)
+	kubeClient, err := k8sutils.GetKubeClient(id, s.client, s.l)
 	if err != nil {
 		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return nil, err
@@ -93,7 +92,7 @@ func (s *svcService) GetServicesByNamespace(ctx context.Context, id int, namespa
 
 // GetServiceYaml 获取指定 Service 的 YAML 配置
 func (s *svcService) GetServiceYaml(ctx context.Context, id int, namespace, serviceName string) (*corev1.Service, error) {
-	kubeClient, err := pkg.GetKubeClient(id, s.client, s.l)
+	kubeClient, err := k8sutils.GetKubeClient(id, s.client, s.l)
 	if err != nil {
 		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return nil, err
@@ -109,8 +108,8 @@ func (s *svcService) GetServiceYaml(ctx context.Context, id int, namespace, serv
 }
 
 // UpdateService 更新指定的 Service
-func (s *svcService) UpdateService(ctx context.Context, serviceResource *model.K8sServiceRequest) error {
-	kubeClient, err := pkg.GetKubeClient(serviceResource.ClusterId, s.client, s.l)
+func (s *svcService) UpdateService(ctx context.Context, serviceResource *model.K8sServiceReq) error {
+	kubeClient, err := k8sutils.GetKubeClient(serviceResource.ClusterId, s.client, s.l)
 	if err != nil {
 		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
@@ -135,7 +134,7 @@ func (s *svcService) UpdateService(ctx context.Context, serviceResource *model.K
 }
 
 func (s *svcService) DeleteService(ctx context.Context, id int, namespace string, serviceNames string) error {
-	kubeClient, err := pkg.GetKubeClient(id, s.client, s.l)
+	kubeClient, err := k8sutils.GetKubeClient(id, s.client, s.l)
 	if err != nil {
 		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
@@ -146,7 +145,7 @@ func (s *svcService) DeleteService(ctx context.Context, id int, namespace string
 
 // BatchDeleteService 批量删除指定的 Service
 func (s *svcService) BatchDeleteService(ctx context.Context, id int, namespace string, serviceNames []string) error {
-	kubeClient, err := pkg.GetKubeClient(id, s.client, s.l)
+	kubeClient, err := k8sutils.GetKubeClient(id, s.client, s.l)
 	if err != nil {
 		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err

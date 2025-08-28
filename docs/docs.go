@@ -922,69 +922,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/affinity/visualization": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "生成集群中Pod和节点亲和性配置的可视化图表，便于理解调度关系",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "获取亲和性可视化图表",
-                "parameters": [
-                    {
-                        "description": "亲和性可视化请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sAffinityVisualizationRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/k8s/clusters/batch_delete": {
             "delete": {
                 "security": [
@@ -1346,14 +1283,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/configmaps/batch_delete": {
+        "/api/k8s/configmaps/batch": {
             "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "同时删除指定命名空间下的多个ConfigMap资源",
+                "description": "批量删除指定命名空间中的多个ConfigMap",
                 "consumes": [
                     "application/json"
                 ],
@@ -1371,13 +1308,13 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sConfigMapRequest"
+                            "$ref": "#/definitions/model.K8sBatchDeleteReq"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "删除成功",
+                        "description": "批量删除成功",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -1397,77 +1334,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/configmaps/delete/{id}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "删除指定命名空间下的单个ConfigMap资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "配置管理"
-                ],
-                "summary": "删除单个ConfigMap",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ConfigMap 名称",
-                        "name": "configmap_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/configmaps/hot_reload": {
+        "/api/k8s/configmaps/create": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "对使用指定ConfigMap的Pod进行热重载，使更新后的配置立即生效",
+                "description": "在指定集群和命名空间中创建新的ConfigMap",
                 "consumes": [
                     "application/json"
                 ],
@@ -1477,21 +1351,106 @@ const docTemplate = `{
                 "tags": [
                     "配置管理"
                 ],
-                "summary": "热重载ConfigMap配置",
+                "summary": "创建ConfigMap",
                 "parameters": [
                     {
-                        "description": "热重载请求",
+                        "description": "ConfigMap创建请求",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sConfigMapHotReloadRequest"
+                            "$ref": "#/definitions/model.ConfigMapCreateReq"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "重载成功",
+                        "description": "创建成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "ConfigMap已存在",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/configmaps/list": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据集群和命名空间获取ConfigMap列表，支持标签和字段选择器过滤",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "配置管理"
+                ],
+                "summary": "获取ConfigMap列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间，为空时获取所有命名空间",
+                        "name": "namespace",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签选择器",
+                        "name": "label_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "字段选择器",
+                        "name": "field_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "限制结果数量",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "分页续订令牌",
+                        "name": "continue",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
                         "schema": {
                             "allOf": [
                                 {
@@ -1501,62 +1460,14 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object"
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sConfigMap"
+                                            }
                                         }
                                     }
                                 }
                             ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/configmaps/rollback": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "将ConfigMap配置回滚到指定的历史版本，用于快速恢复配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "配置管理"
-                ],
-                "summary": "回滚 ConfigMap到指定版本",
-                "parameters": [
-                    {
-                        "description": "回滚请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sConfigMapRollbackRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "回滚成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
                         }
                     },
                     "400": {
@@ -1575,13 +1486,13 @@ const docTemplate = `{
             }
         },
         "/api/k8s/configmaps/update": {
-            "post": {
+            "put": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "修改指定ConfigMap的数据内容，支持键值对的增删改查",
+                "description": "更新指定的ConfigMap配置数据",
                 "consumes": [
                     "application/json"
                 ],
@@ -1591,15 +1502,15 @@ const docTemplate = `{
                 "tags": [
                     "配置管理"
                 ],
-                "summary": "更新ConfigMap配置",
+                "summary": "更新ConfigMap",
                 "parameters": [
                     {
-                        "description": "ConfigMap 更新信息",
+                        "description": "ConfigMap更新请求",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sConfigMapRequest"
+                            "$ref": "#/definitions/model.ConfigMapUpdateReq"
                         }
                     }
                 ],
@@ -1616,53 +1527,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
                     },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/configmaps/versions/create": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "为指定的ConfigMap创建一个版本快照，用于配置的历史管理和回滚",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "配置管理"
-                ],
-                "summary": "创建ConfigMap版本快照",
-                "parameters": [
-                    {
-                        "description": "版本创建请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sConfigMapVersionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "创建成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
+                    "404": {
+                        "description": "ConfigMap不存在",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -1676,14 +1542,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/configmaps/{id}": {
+        "/api/k8s/configmaps/{cluster_id}/{namespace}/{name}": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "根据指定的集群ID和命名空间查询所有的ConfigMap资源",
+                "description": "根据集群ID、命名空间和名称获取指定ConfigMap的详细信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -1693,20 +1559,27 @@ const docTemplate = `{
                 "tags": [
                     "配置管理"
                 ],
-                "summary": "获取ConfigMap列表",
+                "summary": "获取ConfigMap详情",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间名称",
+                        "description": "命名空间",
                         "name": "namespace",
-                        "in": "query",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "ConfigMap名称",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     }
                 ],
@@ -1722,10 +1595,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object"
-                                            }
+                                            "$ref": "#/definitions/model.K8sConfigMap"
                                         }
                                     }
                                 }
@@ -1738,80 +1608,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
                     },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/configmaps/{id}/versions": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取指定ConfigMap的所有历史版本记录，包括创建时间和版本说明",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "配置管理"
-                ],
-                "summary": "获取ConfigMap版本历史",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ConfigMap 名称",
-                        "name": "configmap_name",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
+                    "404": {
+                        "description": "ConfigMap不存在",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -1823,16 +1621,14 @@ const docTemplate = `{
                         }
                     }
                 }
-            }
-        },
-        "/api/k8s/configmaps/{id}/versions/delete": {
+            },
             "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "删除指定版本的ConfigMap历史记录（不影响当前活跃版本）",
+                "description": "删除指定的ConfigMap资源",
                 "consumes": [
                     "application/json"
                 ],
@@ -1842,34 +1638,27 @@ const docTemplate = `{
                 "tags": [
                     "配置管理"
                 ],
-                "summary": "删除ConfigMap版本",
+                "summary": "删除ConfigMap",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间名称",
+                        "description": "命名空间",
                         "name": "namespace",
-                        "in": "query",
+                        "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "ConfigMap 名称",
-                        "name": "configmap_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "版本号",
-                        "name": "version",
-                        "in": "query",
+                        "description": "ConfigMap名称",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     }
                 ],
@@ -1886,84 +1675,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
                     },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/configmaps/{id}/versions/detail": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取指定版本号的ConfigMap详细配置信息和内容",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "配置管理"
-                ],
-                "summary": "获取ConfigMap特定版本",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ConfigMap 名称",
-                        "name": "configmap_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "版本号",
-                        "name": "version",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
+                    "404": {
+                        "description": "ConfigMap不存在",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -1977,14 +1690,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/configmaps/{id}/yaml": {
+        "/api/k8s/configmaps/{cluster_id}/{namespace}/{name}/yaml": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "以YAML格式返回指定ConfigMap的完整配置信息",
+                "description": "获取指定ConfigMap的完整YAML配置文件",
                 "consumes": [
                     "application/json"
                 ],
@@ -1999,22 +1712,22 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "ConfigMap 名称",
-                        "name": "configmap_name",
-                        "in": "query",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "query",
+                        "description": "ConfigMap名称",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     }
                 ],
@@ -2043,1239 +1756,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
                     },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/exec": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "在指定的Kubernetes容器中执行一次性命令，支持同步和异步执行",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "容器管理"
-                ],
-                "summary": "执行容器命令",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID标识符",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "命令执行请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sContainerExecRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "执行成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/exec/history": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "查询指定容器的命令执行历史记录，支持时间范围和关键词过滤",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "容器管理"
-                ],
-                "summary": "获取容器命令执行历史",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID标识符",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "容器名称",
-                        "name": "container_name",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "结束时间",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "限制数量",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "偏移量",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Pod名称",
-                        "name": "pod_name",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "开始时间",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "执行状态",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "用户ID",
-                        "name": "user_id",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/exec/terminal": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "为指定容器创建一个交互式终端会话，支持TTY模式",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "容器管理"
-                ],
-                "summary": "创建交互式终端会话",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID标识符",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "终端会话创建请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sContainerTerminalRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "创建成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/exec/ws": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "通过WebSocket协议连接到容器终端会话，实现实时交互",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "容器管理"
-                ],
-                "summary": "建立WebSocket终端连接",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID标识符",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "会话ID",
-                        "name": "session",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "是否启用TTY模式",
-                        "name": "tty",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "101": {
-                        "description": "WebSocket 连接成功",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/files": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "浏览容器中指定目录的文件和文件夹，支持递归浏览",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "文件管理"
-                ],
-                "summary": "获取容器文件列表",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID标识符",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "容器名称",
-                        "name": "container_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "文件路径",
-                        "name": "path",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Pod名称",
-                        "name": "pod_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "是否递归",
-                        "name": "recursive",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/files/delete": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "删除容器中指定路径的文件或目录",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "删除文件",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "文件删除请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sContainerFileDeleteRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/files/download": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "从容器中下载指定路径的文件到本地",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/octet-stream"
-                ],
-                "tags": [
-                    "文件管理"
-                ],
-                "summary": "从容器下载文件",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID标识符",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "文件路径",
-                        "name": "path",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "文件下载成功",
-                        "schema": {
-                            "type": "file"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/files/edit": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "修改容器中指定路径文件的内容，支持文本编辑模式",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "文件管理"
-                ],
-                "summary": "在线编辑容器文件",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID标识符",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "文件编辑请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sContainerFileEditRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "编辑成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/files/upload": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "将本地文件上传到容器的指定目录，支持覆盖现有文件",
-                "consumes": [
-                    "multipart/form-data"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "文件管理"
-                ],
-                "summary": "上传文件到容器",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID标识符",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "file",
-                        "description": "要上传的文件",
-                        "name": "file",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "目标路径",
-                        "name": "path",
-                        "in": "formData",
-                        "required": true
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "是否覆盖现有文件",
-                        "name": "overwrite",
-                        "in": "formData"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "上传成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/logs": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取指定容器的日志信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "获取容器日志",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "容器名称",
-                        "name": "container_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "是否跟踪",
-                        "name": "follow",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "日志级别",
-                        "name": "level",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Pod名称",
-                        "name": "pod_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "搜索关键词",
-                        "name": "search",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "开始时间",
-                        "name": "since",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "返回的日志行数",
-                        "name": "tail",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "结束时间",
-                        "name": "until",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/logs/export": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "导出容器日志到文件系统",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/octet-stream"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "导出容器日志",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "日志导出请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sContainerLogsExportRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "导出成功",
-                        "schema": {
-                            "type": "file"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/logs/history": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取容器的日志导出和处理历史记录",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "获取日志历史记录",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/logs/search": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "在容器日志中搜索指定的关键词",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "搜索容器日志",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "容器名称",
-                        "name": "container_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "是否跟踪",
-                        "name": "follow",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "日志级别",
-                        "name": "level",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Pod名称",
-                        "name": "pod_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "搜索关键词",
-                        "name": "search",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "开始时间",
-                        "name": "since",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "返回的日志行数",
-                        "name": "tail",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "结束时间",
-                        "name": "until",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "搜索成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/logs/stream": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "实时流式获取容器日志输出",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "text/plain"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "实时日志流",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "容器名称",
-                        "name": "container_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "是否跟踪",
-                        "name": "follow",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "日志级别",
-                        "name": "level",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Pod名称",
-                        "name": "pod_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "搜索关键词",
-                        "name": "search",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "开始时间",
-                        "name": "since",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "返回的日志行数",
-                        "name": "tail",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "结束时间",
-                        "name": "until",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "日志流连接成功",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/sessions": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取指定容器的所有活跃终端会话信息，包括会话状态和创建时间",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "容器管理"
-                ],
-                "summary": "获取活跃终端会话列表",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID标识符",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/containers/{id}/sessions/{sessionId}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "关闭指定的容器终端会话，释放相关资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "容器管理"
-                ],
-                "summary": "关闭终端会话",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "容器ID标识符",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "会话ID",
-                        "name": "sessionId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "关闭成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
+                    "404": {
+                        "description": "ConfigMap不存在",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -3296,7 +1778,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "批量删除指定命名空间下的多个 DaemonSet",
+                "description": "批量删除指定命名空间中的多个DaemonSet",
                 "consumes": [
                     "application/json"
                 ],
@@ -3306,7 +1788,7 @@ const docTemplate = `{
                 "tags": [
                     "DaemonSet管理"
                 ],
-                "summary": "批量删除 DaemonSet",
+                "summary": "批量删除DaemonSet",
                 "parameters": [
                     {
                         "description": "批量删除请求",
@@ -3314,13 +1796,64 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sDaemonSetRequest"
+                            "$ref": "#/definitions/model.K8sDaemonSetBatchDeleteReq"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "成功批量删除DaemonSet",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/daemonsets/batch_restart": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "批量重启指定的多个DaemonSet",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DaemonSet管理"
+                ],
+                "summary": "批量重启DaemonSet",
+                "parameters": [
+                    {
+                        "description": "批量重启请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sDaemonSetBatchRestartReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功批量重启DaemonSet",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -3347,7 +1880,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "创建新的 Kubernetes DaemonSet 资源",
+                "description": "创建新的DaemonSet资源",
                 "consumes": [
                     "application/json"
                 ],
@@ -3357,15 +1890,15 @@ const docTemplate = `{
                 "tags": [
                     "DaemonSet管理"
                 ],
-                "summary": "创建 DaemonSet",
+                "summary": "创建DaemonSet",
                 "parameters": [
                     {
-                        "description": "DaemonSet 创建信息",
+                        "description": "DaemonSet创建请求",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sDaemonSetRequest"
+                            "$ref": "#/definitions/model.K8sDaemonSetCreateReq"
                         }
                     }
                 ],
@@ -3391,14 +1924,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/daemonsets/delete/{id}": {
+        "/api/k8s/daemonsets/delete": {
             "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "删除指定名称的 DaemonSet 资源",
+                "description": "删除指定的DaemonSet资源",
                 "consumes": [
                     "application/json"
                 ],
@@ -3408,28 +1941,16 @@ const docTemplate = `{
                 "tags": [
                     "DaemonSet管理"
                 ],
-                "summary": "删除 DaemonSet",
+                "summary": "删除DaemonSet",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "DaemonSet 名称",
-                        "name": "daemonset_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
+                        "description": "DaemonSet删除请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sDaemonSetDeleteReq"
+                        }
                     }
                 ],
                 "responses": {
@@ -3454,14 +1975,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/daemonsets/restart/{id}": {
-            "post": {
+        "/api/k8s/daemonsets/list": {
+            "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "重启指定的 DaemonSet，触发 Pod 重新创建",
+                "description": "根据查询条件获取K8s集群中的DaemonSet列表",
                 "consumes": [
                     "application/json"
                 ],
@@ -3471,28 +1992,122 @@ const docTemplate = `{
                 "tags": [
                     "DaemonSet管理"
                 ],
-                "summary": "重启 DaemonSet",
+                "summary": "获取DaemonSet列表",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
+                        "description": "集群ID，必填",
+                        "name": "cluster_id",
+                        "in": "query",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "DaemonSet 名称",
-                        "name": "daemonset_name",
-                        "in": "query",
-                        "required": true
+                        "description": "字段选择器",
+                        "name": "field_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签选择器",
+                        "name": "label_selector",
+                        "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "命名空间",
                         "name": "namespace",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "节点名称过滤",
+                        "name": "node_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页大小",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态过滤",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取DaemonSet列表",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sDaemonSetEntity"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/daemonsets/restart": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "重启指定的DaemonSet资源",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DaemonSet管理"
+                ],
+                "summary": "重启DaemonSet",
+                "parameters": [
+                    {
+                        "description": "DaemonSet重启请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sDaemonSetRestartReq"
+                        }
                     }
                 ],
                 "responses": {
@@ -3518,13 +2133,13 @@ const docTemplate = `{
             }
         },
         "/api/k8s/daemonsets/update": {
-            "post": {
+            "put": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "更新指定的 Kubernetes DaemonSet 资源配置",
+                "description": "更新指定的DaemonSet资源配置",
                 "consumes": [
                     "application/json"
                 ],
@@ -3534,15 +2149,15 @@ const docTemplate = `{
                 "tags": [
                     "DaemonSet管理"
                 ],
-                "summary": "更新 DaemonSet",
+                "summary": "更新DaemonSet",
                 "parameters": [
                     {
-                        "description": "DaemonSet 更新信息",
+                        "description": "DaemonSet更新请求",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sDaemonSetRequest"
+                            "$ref": "#/definitions/model.K8sDaemonSetUpdateReq"
                         }
                     }
                 ],
@@ -3568,14 +2183,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/daemonsets/{id}": {
+        "/api/k8s/daemonsets/{cluster_id}": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "根据指定的集群ID和命名空间获取 DaemonSet 列表",
+                "description": "根据指定的命名空间获取K8s集群中的DaemonSet列表",
                 "consumes": [
                     "application/json"
                 ],
@@ -3585,21 +2200,20 @@ const docTemplate = `{
                 "tags": [
                     "DaemonSet管理"
                 ],
-                "summary": "根据命名空间获取 DaemonSet 列表",
+                "summary": "根据命名空间获取DaemonSet列表",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间",
+                        "description": "命名空间，为空则获取所有命名空间",
                         "name": "namespace",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -3616,7 +2230,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "type": "object"
+                                                "$ref": "#/definitions/model.K8sDaemonSetEntity"
                                             }
                                         }
                                     }
@@ -3639,14 +2253,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/daemonsets/{id}/status": {
+        "/api/k8s/daemonsets/{cluster_id}/{name}": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "获取指定 DaemonSet 的运行状态和节点分布情况",
+                "description": "获取指定DaemonSet的详细信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -3656,20 +2270,20 @@ const docTemplate = `{
                 "tags": [
                     "DaemonSet管理"
                 ],
-                "summary": "获取 DaemonSet 状态",
+                "summary": "获取DaemonSet详情",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "DaemonSet 名称",
-                        "name": "daemonset_name",
-                        "in": "query",
+                        "description": "DaemonSet名称",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     },
                     {
@@ -3682,7 +2296,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "成功获取DaemonSet状态",
+                        "description": "成功获取DaemonSet详情",
                         "schema": {
                             "allOf": [
                                 {
@@ -3692,7 +2306,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object"
+                                            "$ref": "#/definitions/model.K8sDaemonSetEntity"
                                         }
                                     }
                                 }
@@ -3714,14 +2328,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/daemonsets/{id}/yaml": {
+        "/api/k8s/daemonsets/{cluster_id}/{name}/events": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "获取指定 DaemonSet 的 YAML 格式配置文件",
+                "description": "获取指定DaemonSet相关的事件信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -3731,20 +2345,104 @@ const docTemplate = `{
                 "tags": [
                     "DaemonSet管理"
                 ],
-                "summary": "获取 DaemonSet YAML 配置",
+                "summary": "获取DaemonSet事件",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "DaemonSet 名称",
-                        "name": "daemonset_name",
+                        "description": "DaemonSet名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
                         "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "限制天数内的事件",
+                        "name": "limit_days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取事件",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sEvent"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/daemonsets/{cluster_id}/{name}/history": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定DaemonSet的历史版本信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DaemonSet管理"
+                ],
+                "summary": "获取DaemonSet历史版本",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "DaemonSet名称",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     },
                     {
@@ -3757,7 +2455,170 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "成功获取DaemonSet YAML配置",
+                        "description": "成功获取历史版本",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sResourceHistory"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/daemonsets/{cluster_id}/{name}/node-pods": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定DaemonSet在指定节点上运行的Pod列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DaemonSet管理"
+                ],
+                "summary": "获取DaemonSet在指定节点的Pod",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "DaemonSet名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "节点名称",
+                        "name": "node_name",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取Pod列表",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sPod"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/daemonsets/{cluster_id}/{name}/yaml": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定DaemonSet的完整YAML配置文件",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "DaemonSet管理"
+                ],
+                "summary": "获取DaemonSet的YAML配置",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "DaemonSet名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取YAML配置",
                         "schema": {
                             "allOf": [
                                 {
@@ -3814,7 +2675,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sDeploymentRequest"
+                            "$ref": "#/definitions/model.DeploymentBatchDeleteReq"
                         }
                     }
                 ],
@@ -3865,139 +2726,13 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sDeploymentRequest"
+                            "$ref": "#/definitions/model.DeploymentBatchRestartReq"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "成功批量重启部署",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/deployments/delete/{id}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "删除指定命名空间中的单个Deployment",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "部署管理"
-                ],
-                "summary": "删除部署",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "部署名称",
-                        "name": "deployment_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功删除部署",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/deployments/restart/{id}": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "重启指定命名空间中的单个Deployment",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "部署管理"
-                ],
-                "summary": "重启部署",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "部署名称",
-                        "name": "deployment_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功重启部署",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -4042,7 +2777,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sDeploymentRequest"
+                            "$ref": "#/definitions/model.K8sDeploymentReq"
                         }
                     }
                 ],
@@ -4068,7 +2803,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/deployments/{id}": {
+        "/api/k8s/deployments/{cluster_id}": {
             "get": {
                 "security": [
                     {
@@ -4090,16 +2825,33 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间",
+                        "description": "命名空间，为空则获取所有命名空间",
                         "name": "namespace",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签选择器",
+                        "name": "label_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "字段选择器",
+                        "name": "field_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "限制结果数量",
+                        "name": "limit",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -4139,7 +2891,133 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/deployments/{id}/yaml": {
+        "/api/k8s/deployments/{cluster_id}/{resource_name}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "删除指定命名空间中的单个Deployment",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "部署管理"
+                ],
+                "summary": "删除部署",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "部署名称",
+                        "name": "resource_name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功删除部署",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/deployments/{cluster_id}/{resource_name}/restart": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "重启指定命名空间中的单个Deployment",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "部署管理"
+                ],
+                "summary": "重启部署",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "部署名称",
+                        "name": "resource_name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功重启部署",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/deployments/{cluster_id}/{resource_name}/yaml": {
             "get": {
                 "security": [
                     {
@@ -4161,241 +3039,103 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "部署名称",
+                        "name": "resource_name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取YAML配置",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/events/by-deployment": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定Deployment的相关事件列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Event管理"
+                ],
+                "summary": "获取Deployment相关事件",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Deployment名称",
                         "name": "deployment_name",
                         "in": "query",
                         "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "成功获取YAML配置",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "string"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/endpoints/batch_delete": {
-            "delete": {
-                "description": "批量删除指定命名空间中的多个Endpoint资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Endpoint"
-                ],
-                "summary": "批量删除 Endpoint",
-                "parameters": [
-                    {
-                        "description": "批量删除请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sEndpointRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/endpoints/create": {
-            "post": {
-                "description": "在指定命名空间中创建新的Endpoint资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Endpoint"
-                ],
-                "summary": "创建 Endpoint",
-                "parameters": [
-                    {
-                        "description": "Endpoint创建请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sEndpointRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "创建成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/endpoints/delete/{id}": {
-            "delete": {
-                "description": "删除指定命名空间中的Endpoint资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Endpoint"
-                ],
-                "summary": "删除 Endpoint",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Endpoint名称",
-                        "name": "endpoint_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/endpoints/{id}": {
-            "get": {
-                "description": "根据集群ID和命名空间获取Endpoint资源列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Endpoint"
-                ],
-                "summary": "获取 Endpoint 列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功获取Endpoint列表",
+                        "description": "成功获取事件列表",
                         "schema": {
                             "allOf": [
                                 {
@@ -4407,1017 +3147,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/model.K8sEndpointStatus"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/endpoints/{id}/health": {
-            "get": {
-                "description": "检查指定Endpoint的健康状态和可用性",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Endpoint"
-                ],
-                "summary": "检查 Endpoint 健康状态",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Endpoint名称",
-                        "name": "endpoint_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功获取健康状态",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/endpoints/{id}/service": {
-            "get": {
-                "description": "获取指定Endpoint关联的Service信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Endpoint"
-                ],
-                "summary": "获取关联的 Service",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Endpoint名称",
-                        "name": "endpoint_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功获取关联Service",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/endpoints/{id}/status": {
-            "get": {
-                "description": "获取指定Endpoint的状态信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Endpoint"
-                ],
-                "summary": "获取 Endpoint 状态",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Endpoint名称",
-                        "name": "endpoint_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功获取状态",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/endpoints/{id}/yaml": {
-            "get": {
-                "description": "获取指定Endpoint的YAML配置文件",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Endpoint"
-                ],
-                "summary": "获取 Endpoint YAML",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Endpoint名称",
-                        "name": "endpoint_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功获取YAML配置",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "string"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/apps/by-app": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "查询Kubernetes应用列表，支持按项目、集群和命名空间过滤，包含分页功能",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "应用管理"
-                ],
-                "summary": "获取K8s应用列表",
-                "parameters": [
-                    {
-                        "description": "查询条件",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.GetK8sAppListRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/apps/create": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "创建新的Kubernetes应用，自动生成Deployment和Service资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "应用管理"
-                ],
-                "summary": "创建K8s应用",
-                "parameters": [
-                    {
-                        "description": "应用创建信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.CreateK8sAppRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "创建成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/apps/select": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取用于下拉选择的 Kubernetes 应用列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "获取用于选择的应用列表",
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/apps/update/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "更新指定的 Kubernetes 应用信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "更新 Kubernetes 应用",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "应用ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "应用信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.UpdateK8sAppRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "更新成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/apps/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "根据ID获取单个 Kubernetes 应用的详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "获取单个 Kubernetes 应用",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "应用ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "删除指定的 Kubernetes 应用",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "删除 Kubernetes 应用",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "应用ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/apps/{id}/pods": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "根据部署ID获取对应的 Kubernetes Pod 列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "根据部署获取 Pod 列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "部署ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/cronJobs/create": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "创建新的 Kubernetes CronJob",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "创建 CronJob",
-                "parameters": [
-                    {
-                        "description": "CronJob信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.CreateK8sCronjobRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "创建成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/cronJobs/delete": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "批量删除指定的 Kubernetes CronJob",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "批量删除 CronJob",
-                "parameters": [
-                    {
-                        "description": "批量删除请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.BatchDeleteK8sCronjobRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/cronJobs/list": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取 Kubernetes CronJob 列表，支持分页和筛选",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "获取 CronJob 列表",
-                "parameters": [
-                    {
-                        "description": "查询条件",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.GetK8sCronjobListRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/cronJobs/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "根据ID获取单个 Kubernetes CronJob 的详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "获取单个 CronJob",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "CronJob ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "更新指定的 Kubernetes CronJob",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "更新 CronJob",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "CronJob ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "CronJob信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.UpdateK8sCronjobRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "更新成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/cronJobs/{id}/last-pod": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取指定 CronJob 最近执行的 Pod 信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "获取 CronJob 最近的 Pod",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "CronJob ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/instances/by-app": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "根据应用ID和集群信息查询对应的所有Kubernetes实例，支持命名空间过滤",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "实例管理"
-                ],
-                "summary": "根据应用获取K8s实例列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "应用ID",
-                        "name": "app_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object"
+                                                "$ref": "#/definitions/model.K8sEventEntity"
                                             }
                                         }
                                     }
@@ -5440,116 +3170,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/k8sApp/instances/create": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "创建新的Kubernetes工作负载实例，支持Deployment、StatefulSet等类型",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "实例管理"
-                ],
-                "summary": "创建K8s实例",
-                "parameters": [
-                    {
-                        "description": "实例创建信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sInstance"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "创建成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/instances/delete": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "同时删除多个Kubernetes实例，支持跨命名空间和集群的批量操作",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "实例管理"
-                ],
-                "summary": "批量删除K8s实例",
-                "parameters": [
-                    {
-                        "description": "批量删除实例请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.BatchDeleteK8sInstanceReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/instances/instances": {
+        "/api/k8s/events/by-node": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "查询Kubernetes实例列表，支持分页、过滤和排序功能",
+                "description": "获取指定Node的相关事件列表",
                 "consumes": [
                     "application/json"
                 ],
@@ -5557,23 +3185,28 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "实例管理"
+                    "Event管理"
                 ],
-                "summary": "获取K8s实例列表",
+                "summary": "获取Node相关事件",
                 "parameters": [
                     {
-                        "description": "查询条件",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.GetK8sInstanceListReq"
-                        }
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Node名称",
+                        "name": "node_name",
+                        "in": "query",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "成功获取事件列表",
                         "schema": {
                             "allOf": [
                                 {
@@ -5583,7 +3216,10 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object"
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sEventEntity"
+                                            }
                                         }
                                     }
                                 }
@@ -5605,123 +3241,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/k8sApp/instances/restart": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "同时重启多个Kubernetes实例，触发滚动更新以应用最新配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "实例管理"
-                ],
-                "summary": "批量重启K8s实例",
-                "parameters": [
-                    {
-                        "description": "批量重启实例请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.BatchRestartK8sInstanceReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "重启成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/instances/update/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "更新指定Kubernetes实例的配置信息，包括镜像版本、资源限制等",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "实例管理"
-                ],
-                "summary": "更新K8s实例配置",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "实例ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "实例更新信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sInstance"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "更新成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/instances/{id}": {
+        "/api/k8s/events/by-object": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "根据ID和相关参数获取单个Kubernetes实例的详细信息和运行状态",
+                "description": "根据指定的Kubernetes对象获取相关的事件列表",
                 "consumes": [
                     "application/json"
                 ],
@@ -5729,21 +3256,110 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "实例管理"
+                    "Event管理"
                 ],
-                "summary": "获取K8s实例详情",
+                "summary": "根据对象获取相关事件",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "实例ID",
-                        "name": "id",
-                        "in": "path",
+                        "description": "集群ID，必填",
+                        "name": "cluster_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "限制天数内的事件",
+                        "name": "limit_days",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "对象类型，必填",
+                        "name": "object_kind",
+                        "in": "query",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "实例名称",
-                        "name": "name",
+                        "description": "对象名称，必填",
+                        "name": "object_name",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "对象UID，可选",
+                        "name": "object_uid",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取事件列表",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sEventEntity"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/events/by-pod": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定Pod的相关事件列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Event管理"
+                ],
+                "summary": "获取Pod相关事件",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
                         "in": "query",
                         "required": true
                     },
@@ -5755,6 +3371,70 @@ const docTemplate = `{
                         "required": true
                     },
                     {
+                        "type": "string",
+                        "description": "Pod名称",
+                        "name": "pod_name",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取事件列表",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sEventEntity"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/events/by-service": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定Service的相关事件列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Event管理"
+                ],
+                "summary": "获取Service相关事件",
+                "parameters": [
+                    {
                         "type": "integer",
                         "description": "集群ID",
                         "name": "cluster_id",
@@ -5763,67 +3443,239 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "实例类型（deployment、statefulset等）",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Service名称",
+                        "name": "service_name",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取事件列表",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sEventEntity"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/events/cleanup": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "清理指定条件下的旧事件",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Event管理"
+                ],
+                "summary": "清理旧事件",
+                "parameters": [
+                    {
+                        "description": "事件清理请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sEventCleanupReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功清理旧事件",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.K8sEventCleanupResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/events/list": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据查询条件获取K8s集群中的Event列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Event管理"
+                ],
+                "summary": "获取Event列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID，必填",
+                        "name": "cluster_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束时间",
+                        "name": "end_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "事件类型过滤 (Normal/Warning)",
+                        "name": "event_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "字段选择器",
+                        "name": "field_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "相关对象类型",
+                        "name": "involved_object_kind",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "相关对象名称",
+                        "name": "involved_object_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签选择器",
+                        "name": "label_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "限制天数内的事件",
+                        "name": "limit_days",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页大小",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "事件原因过滤",
+                        "name": "reason",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "严重程度过滤",
+                        "name": "severity",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "事件来源过滤",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "开始时间",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "事件类型过滤",
                         "name": "type",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/namespaces/unique": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "查询集群中所有不重复的命名空间名称，用于下拉选择和过滤操作",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "应用管理"
-                ],
-                "summary": "获取集群唯一命名空间列表",
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
+                        "description": "成功获取Event列表",
                         "schema": {
                             "allOf": [
                                 {
@@ -5835,7 +3687,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "type": "string"
+                                                "$ref": "#/definitions/model.K8sEventEntity"
                                             }
                                         }
                                     }
@@ -5858,14 +3710,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/k8sApp/projects/all": {
+        "/api/k8s/events/statistics": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "获取 Kubernetes 项目列表，支持分页和筛选",
+                "description": "获取指定条件下的事件统计信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -5873,613 +3725,22 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "K8s管理"
+                    "Event管理"
                 ],
-                "summary": "获取 Kubernetes 项目列表",
-                "parameters": [
-                    {
-                        "description": "查询条件",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.GetK8sProjectListRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/projects/create": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "创建新的 Kubernetes 项目",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "创建 Kubernetes 项目",
-                "parameters": [
-                    {
-                        "description": "项目信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.CreateK8sProjectRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "创建成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/projects/select": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取用于下拉选择的 Kubernetes 项目列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "获取用于选择的项目列表",
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/projects/update/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "更新指定的 Kubernetes 项目信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "更新 Kubernetes 项目",
+                "summary": "获取事件统计",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "项目ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "项目信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.UpdateK8sProjectRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "更新成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/k8sApp/projects/{id}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "删除指定的 Kubernetes 项目",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "K8s管理"
-                ],
-                "summary": "删除 Kubernetes 项目",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "项目ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "内部服务器错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/labels": {
-            "get": {
-                "description": "获取指定Kubernetes资源的所有标签",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Label"
-                ],
-                "summary": "获取资源标签",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
+                        "description": "集群ID，必填",
                         "name": "cluster_id",
                         "in": "query",
                         "required": true
                     },
                     {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "资源类型",
-                        "name": "resource_type",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "资源名称",
-                        "name": "resource_name",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功获取标签",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object",
-                                            "additionalProperties": {
-                                                "type": "string"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/labels/add": {
-            "post": {
-                "description": "为指定Kubernetes资源添加标签",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Label"
-                ],
-                "summary": "添加资源标签",
-                "parameters": [
-                    {
-                        "description": "标签添加请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sLabelRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功添加标签",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/labels/batch": {
-            "post": {
-                "description": "批量更新多个资源的标签",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Label"
-                ],
-                "summary": "批量更新标签",
-                "parameters": [
-                    {
-                        "description": "批量标签更新请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sLabelBatchRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功批量更新标签",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/model.K8sLabelResponse"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/labels/compliance/check": {
-            "post": {
-                "description": "检查资源标签是否符合定义的策略规则",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Label"
-                ],
-                "summary": "检查标签合规性",
-                "parameters": [
-                    {
-                        "description": "合规性检查请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sLabelComplianceRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功检查合规性",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/model.K8sLabelComplianceResponse"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/labels/delete": {
-            "delete": {
-                "description": "删除指定Kubernetes资源的标签",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Label"
-                ],
-                "summary": "删除资源标签",
-                "parameters": [
-                    {
-                        "description": "标签删除请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sLabelRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功删除标签",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/labels/history": {
-            "post": {
-                "description": "获取资源标签的历史变更记录",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Label"
-                ],
-                "summary": "获取标签历史记录",
-                "parameters": [
-                    {
-                        "description": "标签历史查询请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sLabelHistoryRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功获取历史记录",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/model.K8sLabelHistoryResponse"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/labels/policies": {
-            "get": {
-                "description": "获取指定集群的所有标签管理策略",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Label"
-                ],
-                "summary": "获取标签策略列表",
-                "parameters": [
-                    {
                         "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "query",
-                        "required": true
+                        "description": "统计天数",
+                        "name": "limit_days",
+                        "in": "query"
                     },
                     {
                         "type": "string",
@@ -6490,7 +3751,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "成功获取策略列表",
+                        "description": "成功获取事件统计",
                         "schema": {
                             "allOf": [
                                 {
@@ -6500,10 +3761,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/model.K8sLabelPolicyRequest"
-                                            }
+                                            "$ref": "#/definitions/model.K8sEventStatistics"
                                         }
                                     }
                                 }
@@ -6511,95 +3769,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "description": "更新已存在的标签管理策略",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Label"
-                ],
-                "summary": "更新标签策略",
-                "parameters": [
-                    {
-                        "description": "标签策略更新请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sLabelPolicyRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功更新策略",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "创建新的标签管理策略",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Label"
-                ],
-                "summary": "创建标签策略",
-                "parameters": [
-                    {
-                        "description": "标签策略创建请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sLabelPolicyRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功创建策略",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
+                        "description": "参数错误",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -6613,9 +3783,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/labels/policies/{cluster_id}/{policy_name}": {
+        "/api/k8s/events/timeline": {
             "get": {
-                "description": "获取指定的标签管理策略详情",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定条件下的事件时间线",
                 "consumes": [
                     "application/json"
                 ],
@@ -6623,123 +3798,57 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Kubernetes-Label"
+                    "Event管理"
                 ],
-                "summary": "获取标签策略",
+                "summary": "获取事件时间线",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "集群ID",
+                        "description": "集群ID，必填",
                         "name": "cluster_id",
-                        "in": "path",
+                        "in": "query",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "策略名称",
-                        "name": "policy_name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功获取策略",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "description": "删除指定的标签管理策略",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Label"
-                ],
-                "summary": "删除标签策略",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
+                        "description": "结束时间",
+                        "name": "end_time",
+                        "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "策略名称",
-                        "name": "policy_name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功删除策略",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
+                        "description": "时间粒度",
+                        "name": "granularity",
+                        "in": "query"
                     },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/labels/select": {
-            "post": {
-                "description": "使用标签选择器查询匹配的Kubernetes资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Kubernetes-Label"
-                ],
-                "summary": "根据标签查询资源",
-                "parameters": [
                     {
-                        "description": "标签选择器查询请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sLabelSelectorRequest"
-                        }
+                        "type": "string",
+                        "description": "相关对象类型",
+                        "name": "involved_object_kind",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "相关对象名称",
+                        "name": "involved_object_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "开始时间",
+                        "name": "start_time",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "成功查询资源",
+                        "description": "成功获取事件时间线",
                         "schema": {
                             "allOf": [
                                 {
@@ -6751,7 +3860,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "type": "object"
+                                                "$ref": "#/definitions/model.K8sEventTimelineItem"
                                             }
                                         }
                                     }
@@ -6760,7 +3869,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "请求参数错误",
+                        "description": "参数错误",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -6774,9 +3883,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/labels/update": {
-            "put": {
-                "description": "更新指定Kubernetes资源的标签",
+        "/api/k8s/events/{cluster_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据指定的命名空间获取K8s集群中的Event列表",
                 "consumes": [
                     "application/json"
                 ],
@@ -6784,29 +3898,898 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Kubernetes-Label"
+                    "Event管理"
                 ],
-                "summary": "更新资源标签",
+                "summary": "根据命名空间获取Event列表",
                 "parameters": [
                     {
-                        "description": "标签更新请求",
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间，为空则获取所有命名空间",
+                        "name": "namespace",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取Event列表",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sEventEntity"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/events/{cluster_id}/{name}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定Event的详细信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Event管理"
+                ],
+                "summary": "获取Event详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取Event详情",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.K8sEventEntity"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/ingresses/batch_delete": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "批量删除指定命名空间中的多个Ingress",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Ingress管理"
+                ],
+                "summary": "批量删除Ingress",
+                "parameters": [
+                    {
+                        "description": "批量删除请求",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sLabelRequest"
+                            "$ref": "#/definitions/model.K8sIngressBatchDeleteReq"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "成功更新标签",
+                        "description": "成功批量删除Ingress",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
                     },
                     "400": {
-                        "description": "请求参数错误",
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/ingresses/create": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "创建新的Ingress资源",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Ingress管理"
+                ],
+                "summary": "创建Ingress",
+                "parameters": [
+                    {
+                        "description": "Ingress创建请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sIngressCreateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功创建Ingress",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/ingresses/delete": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "删除指定的Ingress资源",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Ingress管理"
+                ],
+                "summary": "删除Ingress",
+                "parameters": [
+                    {
+                        "description": "Ingress删除请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sIngressDeleteReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功删除Ingress",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/ingresses/list": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据查询条件获取K8s集群中的Ingress列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Ingress管理"
+                ],
+                "summary": "获取Ingress列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID，必填",
+                        "name": "cluster_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "字段选择器",
+                        "name": "field_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "主机名过滤",
+                        "name": "host",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Ingress类名过滤",
+                        "name": "ingress_class_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签选择器",
+                        "name": "label_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页大小",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态过滤",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取Ingress列表",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sIngressEntity"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/ingresses/update": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "更新指定的Ingress资源配置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Ingress管理"
+                ],
+                "summary": "更新Ingress",
+                "parameters": [
+                    {
+                        "description": "Ingress更新请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sIngressUpdateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功更新Ingress",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/ingresses/{cluster_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据指定的命名空间获取K8s集群中的Ingress列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Ingress管理"
+                ],
+                "summary": "根据命名空间获取Ingress列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间，为空则获取所有命名空间",
+                        "name": "namespace",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取Ingress列表",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sIngressEntity"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/ingresses/{cluster_id}/{name}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定Ingress的详细信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Ingress管理"
+                ],
+                "summary": "获取Ingress详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Ingress名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取Ingress详情",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.K8sIngressEntity"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/ingresses/{cluster_id}/{name}/backend-health": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "检查指定Ingress后端服务的健康状态",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Ingress管理"
+                ],
+                "summary": "检查Ingress后端健康状态",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Ingress名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取后端健康状态",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sBackendHealth"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/ingresses/{cluster_id}/{name}/events": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定Ingress相关的事件信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Ingress管理"
+                ],
+                "summary": "获取Ingress事件",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Ingress名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "限制天数内的事件",
+                        "name": "limit_days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取事件",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sEvent"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/ingresses/{cluster_id}/{name}/tls-test": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "测试指定Ingress的TLS证书有效性",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Ingress管理"
+                ],
+                "summary": "测试Ingress TLS证书",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Ingress名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "TLS测试请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sIngressTLSTestReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取TLS测试结果",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.K8sTLSTestResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/ingresses/{cluster_id}/{name}/yaml": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定Ingress的完整YAML配置文件",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Ingress管理"
+                ],
+                "summary": "获取Ingress的YAML配置",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Ingress名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取YAML配置",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -6845,7 +4828,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.CreateNamespaceRequest"
+                            "$ref": "#/definitions/model.CreateNamespaceReq"
                         }
                     }
                 ],
@@ -7065,7 +5048,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.UpdateNamespaceRequest"
+                            "$ref": "#/definitions/model.UpdateNamespaceReq"
                         }
                     }
                 ],
@@ -7289,373 +5272,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/node-affinity": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取指定K8s资源的节点亲和性配置信息，包括必需和偏好的亲和性规则",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "获取节点亲和性配置",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "资源类型（deployment、statefulset等）",
-                        "name": "resource_type",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "资源名称",
-                        "name": "resource_name",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "更新指定K8s资源的节点亲和性规则，支持修改必需和偏好的亲和性配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "更新节点亲和性配置",
-                "parameters": [
-                    {
-                        "description": "节点亲和性更新请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sNodeAffinityRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "更新成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "为指定的K8s资源（Deployment、StatefulSet等）设置节点亲和性规则，控制Pod调度到特定节点",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "设置节点亲和性",
-                "parameters": [
-                    {
-                        "description": "节点亲和性设置请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sNodeAffinityRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "设置成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "删除指定K8s资源的节点亲和性配置，恢复默认调度策略",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "删除节点亲和性配置",
-                "parameters": [
-                    {
-                        "description": "节点亲和性删除请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sNodeAffinityRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/node-affinity/recommendations": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "基于集群节点标签和资源需求，智能推荐合适的节点亲和性配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "获取节点亲和性配置建议",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "资源类型（deployment、statefulset等）",
-                        "name": "resource_type",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/node-affinity/validate": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "验证节点亲和性配置的正确性和语法，检查标签选择器和表达式是否有效",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "验证节点亲和性配置",
-                "parameters": [
-                    {
-                        "description": "节点亲和性验证请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sNodeAffinityValidationRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "验证成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/k8s/nodes/labels/add": {
             "post": {
                 "security": [
@@ -7681,7 +5297,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.LabelK8sNodesRequest"
+                            "$ref": "#/definitions/model.LabelK8sNodesReq"
                         }
                     }
                 ],
@@ -7732,7 +5348,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.LabelK8sNodesRequest"
+                            "$ref": "#/definitions/model.LabelK8sNodesReq"
                         }
                     }
                 ],
@@ -7878,365 +5494,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pod-affinity": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取指定K8s资源的Pod亲和性和反亲和性配置信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "获取Pod亲和性配置",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "资源类型（deployment、statefulset等）",
-                        "name": "resource_type",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "资源名称",
-                        "name": "resource_name",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "更新指定K8s资源的Pod亲和性和反亲和性规则配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "更新Pod亲和性配置",
-                "parameters": [
-                    {
-                        "description": "Pod亲和性更新请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sPodAffinityRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "更新成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "为指定的K8s资源设置Pod亲和性或反亲和性规则，控制Pod间的调度关系",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "设置Pod亲和性规则",
-                "parameters": [
-                    {
-                        "description": "Pod亲和性设置请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sPodAffinityRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "设置成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "删除指定K8s资源的Pod亲和性和反亲和性配置，恢复默认调度策略",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "删除Pod亲和性配置",
-                "parameters": [
-                    {
-                        "description": "Pod亲和性删除请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sPodAffinityRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/pod-affinity/topology-domains": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取集群中可用的拓扑域信息，用于Pod亲和性配置参考",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "获取拓扑域信息",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间（可选）",
-                        "name": "namespace",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/pod-affinity/validate": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "验证Pod亲和性和反亲和性配置的正确性，检查标签选择器和拓扑域设置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "亲和性管理"
-                ],
-                "summary": "验证Pod亲和性配置",
-                "parameters": [
-                    {
-                        "description": "Pod亲和性验证请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sPodAffinityValidationRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "验证成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/k8s/pods/delete/{id}": {
             "delete": {
                 "security": [
@@ -8300,7 +5557,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pods/{id}": {
+        "/api/k8s/pods/{cluster_id}": {
             "get": {
                 "security": [
                     {
@@ -8322,16 +5579,33 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间",
+                        "description": "命名空间，为空则获取所有命名空间",
                         "name": "namespace",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签选择器",
+                        "name": "label_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "字段选择器",
+                        "name": "field_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "限制结果数量",
+                        "name": "limit",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -8684,7 +5958,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "同时删除指定命名空间下的多个PVC资源",
+                "description": "批量删除指定命名空间中的多个PVC",
                 "consumes": [
                     "application/json"
                 ],
@@ -8692,7 +5966,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PVC管理"
                 ],
                 "summary": "批量删除PVC",
                 "parameters": [
@@ -8702,13 +5976,13 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sPVCRequest"
+                            "$ref": "#/definitions/model.K8sPVCBatchDeleteReq"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "删除成功",
+                        "description": "成功批量删除PVC",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -8735,7 +6009,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "在指定集群的命名空间中创建新的持久卷声明(PVC)资源",
+                "description": "创建新的PVC资源",
                 "consumes": [
                     "application/json"
                 ],
@@ -8743,23 +6017,23 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PVC管理"
                 ],
                 "summary": "创建PVC",
                 "parameters": [
                     {
-                        "description": "PVC创建信息",
+                        "description": "PVC创建请求",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sPVCRequest"
+                            "$ref": "#/definitions/model.K8sPVCCreateReq"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "创建成功",
+                        "description": "成功创建PVC",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -8779,14 +6053,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pvcs/delete/{id}": {
+        "/api/k8s/pvcs/delete": {
             "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "删除指定命名空间下的单个PVC资源",
+                "description": "删除指定的PVC资源",
                 "consumes": [
                     "application/json"
                 ],
@@ -8794,35 +6068,23 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PVC管理"
                 ],
-                "summary": "删除单个PVC",
+                "summary": "删除PVC",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "PVC名称",
-                        "name": "pvc_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
+                        "description": "PVC删除请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sPVCDeleteReq"
+                        }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "删除成功",
+                        "description": "成功删除PVC",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -8842,14 +6104,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pvcs/{id}": {
+        "/api/k8s/pvcs/list": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "根据指定的集群ID和命名空间查询所有的持久卷声明(PVC)资源",
+                "description": "根据查询条件获取K8s集群中的PVC列表",
                 "consumes": [
                     "application/json"
                 ],
@@ -8857,28 +6119,69 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PVC管理"
                 ],
                 "summary": "获取PVC列表",
                 "parameters": [
                     {
+                        "type": "string",
+                        "description": "访问模式过滤",
+                        "name": "access_mode",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
+                        "description": "集群ID，必填",
+                        "name": "cluster_id",
+                        "in": "query",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间名称",
+                        "description": "字段选择器",
+                        "name": "field_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签选择器",
+                        "name": "label_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
                         "name": "namespace",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页大小",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态过滤",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "存储类过滤",
+                        "name": "storage_class",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "成功获取PVC列表",
                         "schema": {
                             "allOf": [
                                 {
@@ -8890,7 +6193,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "type": "object"
+                                                "$ref": "#/definitions/model.K8sPVCEntity"
                                             }
                                         }
                                     }
@@ -8913,14 +6216,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pvcs/{id}/binding": {
-            "get": {
+        "/api/k8s/pvcs/update": {
+            "put": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "获取PVC与PV的绑定关系和状态信息",
+                "description": "更新指定的PVC资源配置",
                 "consumes": [
                     "application/json"
                 ],
@@ -8928,35 +6231,78 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PVC管理"
                 ],
-                "summary": "获取PVC绑定状态",
+                "summary": "更新PVC",
+                "parameters": [
+                    {
+                        "description": "PVC更新请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sPVCUpdateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功更新PVC",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/pvcs/{cluster_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据指定的命名空间获取K8s集群中的PVC列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PVC管理"
+                ],
+                "summary": "根据命名空间获取PVC列表",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "PVC名称",
-                        "name": "pvc_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
+                        "description": "命名空间，为空则获取所有命名空间",
                         "name": "namespace",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "成功获取PVC列表",
                         "schema": {
                             "allOf": [
                                 {
@@ -8966,7 +6312,10 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object"
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sPVCEntity"
+                                            }
                                         }
                                     }
                                 }
@@ -8988,14 +6337,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pvcs/{id}/capacity": {
+        "/api/k8s/pvcs/{cluster_id}/{name}": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "获取PVC的容量请求和使用情况的详细信息",
+                "description": "获取指定PVC的详细信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -9003,27 +6352,27 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PVC管理"
                 ],
-                "summary": "获取PVC容量请求",
+                "summary": "获取PVC详情",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "PVC名称",
-                        "name": "pvc_name",
-                        "in": "query",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间名称",
+                        "description": "命名空间",
                         "name": "namespace",
                         "in": "query",
                         "required": true
@@ -9031,7 +6380,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "成功获取PVC详情",
                         "schema": {
                             "allOf": [
                                 {
@@ -9041,7 +6390,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object"
+                                            "$ref": "#/definitions/model.K8sPVCEntity"
                                         }
                                     }
                                 }
@@ -9063,14 +6412,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pvcs/{id}/status": {
+        "/api/k8s/pvcs/{cluster_id}/{name}/events": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "获取指定PVC的详细状态信息，包括绑定状态、容量等",
+                "description": "获取指定PVC相关的事件信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -9078,35 +6427,41 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PVC管理"
                 ],
-                "summary": "获取PVC状态",
+                "summary": "获取PVC事件",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "PVC名称",
-                        "name": "pvc_name",
-                        "in": "query",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间名称",
+                        "description": "命名空间",
                         "name": "namespace",
                         "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "限制天数内的事件",
+                        "name": "limit_days",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "成功获取事件",
                         "schema": {
                             "allOf": [
                                 {
@@ -9116,7 +6471,10 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object"
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sEvent"
+                                            }
                                         }
                                     }
                                 }
@@ -9138,14 +6496,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pvcs/{id}/yaml": {
-            "get": {
+        "/api/k8s/pvcs/{cluster_id}/{name}/expand": {
+            "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "以YAML格式返回指定PVC的完整配置信息",
+                "description": "扩容指定的PVC资源",
                 "consumes": [
                     "application/json"
                 ],
@@ -9153,27 +6511,167 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PVC管理"
+                ],
+                "summary": "扩容PVC",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "PVC名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "PVC扩容请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sPVCExpandReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功扩容PVC",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/pvcs/{cluster_id}/{name}/usage": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定PVC的使用情况信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PVC管理"
+                ],
+                "summary": "获取PVC使用情况",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "PVC名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取使用情况",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.K8sPVCUsageInfo"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/pvcs/{cluster_id}/{name}/yaml": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定PVC的完整YAML配置文件",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PVC管理"
                 ],
                 "summary": "获取PVC的YAML配置",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "PVC名称",
-                        "name": "pvc_name",
-                        "in": "query",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间名称",
+                        "description": "命名空间",
                         "name": "namespace",
                         "in": "query",
                         "required": true
@@ -9181,7 +6679,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "成功获取YAML配置",
                         "schema": {
                             "allOf": [
                                 {
@@ -9220,7 +6718,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "同时删除多个持久卷(PV)资源",
+                "description": "批量删除多个PV资源",
                 "consumes": [
                     "application/json"
                 ],
@@ -9228,7 +6726,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PV管理"
                 ],
                 "summary": "批量删除PV",
                 "parameters": [
@@ -9238,13 +6736,13 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sPVRequest"
+                            "$ref": "#/definitions/model.K8sPVBatchDeleteReq"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "删除成功",
+                        "description": "成功批量删除PV",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -9271,7 +6769,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "在指定集群中创建新的持久卷(PV)资源",
+                "description": "创建新的PV资源",
                 "consumes": [
                     "application/json"
                 ],
@@ -9279,23 +6777,23 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PV管理"
                 ],
                 "summary": "创建PV",
                 "parameters": [
                     {
-                        "description": "PV创建信息",
+                        "description": "PV创建请求",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sPVRequest"
+                            "$ref": "#/definitions/model.K8sPVCreateReq"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "创建成功",
+                        "description": "成功创建PV",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -9315,14 +6813,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pvs/delete/{id}": {
+        "/api/k8s/pvs/delete": {
             "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "删除指定的持久卷(PV)资源",
+                "description": "删除指定的PV资源",
                 "consumes": [
                     "application/json"
                 ],
@@ -9330,28 +6828,23 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PV管理"
                 ],
-                "summary": "删除单个PV",
+                "summary": "删除PV",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "PV名称",
-                        "name": "pv_name",
-                        "in": "query",
-                        "required": true
+                        "description": "PV删除请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sPVDeleteReq"
+                        }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "删除成功",
+                        "description": "成功删除PV",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -9371,14 +6864,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pvs/{id}": {
+        "/api/k8s/pvs/list": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "获取指定集群中所有的持久卷(PV)资源列表",
+                "description": "根据查询条件获取K8s集群中的PV列表",
                 "consumes": [
                     "application/json"
                 ],
@@ -9386,21 +6879,69 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PV管理"
                 ],
                 "summary": "获取PV列表",
                 "parameters": [
                     {
+                        "type": "string",
+                        "description": "访问模式过滤",
+                        "name": "access_mode",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
+                        "description": "集群ID，必填",
+                        "name": "cluster_id",
+                        "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "字段选择器",
+                        "name": "field_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签选择器",
+                        "name": "label_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页大小",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "回收策略过滤",
+                        "name": "reclaim_policy",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态过滤",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "存储类过滤",
+                        "name": "storage_class",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "成功获取PV列表",
                         "schema": {
                             "allOf": [
                                 {
@@ -9412,7 +6953,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "type": "object"
+                                                "$ref": "#/definitions/model.K8sPVEntity"
                                             }
                                         }
                                     }
@@ -9435,14 +6976,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pvs/{id}/capacity": {
-            "get": {
+        "/api/k8s/pvs/update": {
+            "put": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "获取指定PV的容量详细信息和使用情况",
+                "description": "更新指定的PV资源配置",
                 "consumes": [
                     "application/json"
                 ],
@@ -9450,28 +6991,72 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PV管理"
                 ],
-                "summary": "获取PV容量信息",
+                "summary": "更新PV",
+                "parameters": [
+                    {
+                        "description": "PV更新请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sPVUpdateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功更新PV",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/pvs/{cluster_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据指定的集群获取K8s集群中的PV列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PV管理"
+                ],
+                "summary": "根据集群获取PV列表",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "PV名称",
-                        "name": "pv_name",
-                        "in": "query",
                         "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "成功获取PV列表",
                         "schema": {
                             "allOf": [
                                 {
@@ -9481,7 +7066,10 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object"
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sPVEntity"
+                                            }
                                         }
                                     }
                                 }
@@ -9503,14 +7091,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pvs/{id}/status": {
+        "/api/k8s/pvs/{cluster_id}/{name}": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "获取指定PV的详细状态信息，包括绑定状态、容量等",
+                "description": "获取指定PV的详细信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -9518,28 +7106,28 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PV管理"
                 ],
-                "summary": "获取PV状态",
+                "summary": "获取PV详情",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "PV名称",
-                        "name": "pv_name",
-                        "in": "query",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "成功获取PV详情",
                         "schema": {
                             "allOf": [
                                 {
@@ -9549,7 +7137,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object"
+                                            "$ref": "#/definitions/model.K8sPVEntity"
                                         }
                                     }
                                 }
@@ -9571,14 +7159,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/pvs/{id}/yaml": {
+        "/api/k8s/pvs/{cluster_id}/{name}/events": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "以YAML格式返回指定PV的完整配置信息",
+                "description": "获取指定PV相关的事件信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -9586,28 +7174,238 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "存储卷管理"
+                    "PV管理"
+                ],
+                "summary": "获取PV事件",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "PV名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "限制天数内的事件",
+                        "name": "limit_days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取事件",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sEvent"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/pvs/{cluster_id}/{name}/reclaim": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "手动回收指定的PV资源",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PV管理"
+                ],
+                "summary": "回收PV",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "PV名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "PV回收请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.K8sPVReclaimReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功回收PV",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/pvs/{cluster_id}/{name}/usage": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定PV的使用情况信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PV管理"
+                ],
+                "summary": "获取PV使用情况",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "PV名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功获取使用情况",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.K8sPVUsageInfo"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/pvs/{cluster_id}/{name}/yaml": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定PV的完整YAML配置文件",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PV管理"
                 ],
                 "summary": "获取PV的YAML配置",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "PV名称",
-                        "name": "pv_name",
-                        "in": "query",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "成功获取YAML配置",
                         "schema": {
                             "allOf": [
                                 {
@@ -9639,1124 +7437,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/rbac/cluster-role-bindings/{cluster_id}": {
-            "get": {
-                "description": "根据集群ID获取所有ClusterRoleBinding资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "获取ClusterRoleBinding列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功返回ClusterRoleBinding列表",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/model.K8sClusterRoleBinding"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "在指定集群中创建新的ClusterRoleBinding",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "创建ClusterRoleBinding",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "创建ClusterRoleBinding请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.CreateClusterRoleBindingRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功创建ClusterRoleBinding",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/rbac/cluster-role-bindings/{cluster_id}/{name}": {
-            "get": {
-                "description": "根据集群ID和ClusterRoleBinding名称获取ClusterRoleBinding详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "获取ClusterRoleBinding详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ClusterRoleBinding名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功返回ClusterRoleBinding详情",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "ClusterRoleBinding未找到",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "description": "更新指定ClusterRoleBinding的配置信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "更新ClusterRoleBinding",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ClusterRoleBinding名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "更新ClusterRoleBinding请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.UpdateClusterRoleBindingRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功更新ClusterRoleBinding",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "description": "删除指定的ClusterRoleBinding资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "删除ClusterRoleBinding",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ClusterRoleBinding名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功删除ClusterRoleBinding",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/rbac/cluster-roles/{cluster_id}": {
-            "get": {
-                "description": "根据集群ID获取所有ClusterRole资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "获取ClusterRole列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功返回ClusterRole列表",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/model.K8sClusterRole"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "在指定集群中创建新的ClusterRole",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "创建ClusterRole",
-                "parameters": [
-                    {
-                        "description": "创建ClusterRole请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.CreateClusterRoleRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功创建ClusterRole",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/rbac/cluster-roles/{cluster_id}/{name}": {
-            "get": {
-                "description": "根据集群ID和ClusterRole名称获取ClusterRole详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "获取ClusterRole详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ClusterRole名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功返回ClusterRole详情",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "ClusterRole未找到",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "description": "更新指定ClusterRole的配置信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "更新ClusterRole",
-                "parameters": [
-                    {
-                        "description": "更新ClusterRole请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.UpdateClusterRoleRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功更新ClusterRole",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "description": "删除指定的ClusterRole资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "删除ClusterRole",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ClusterRole名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功删除ClusterRole",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/rbac/role-bindings/{cluster_id}/{namespace}": {
-            "get": {
-                "description": "根据集群ID和命名空间获取所有RoleBinding资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "获取RoleBinding列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功返回RoleBinding列表",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/model.K8sRoleBinding"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "在指定集群和命名空间中创建新的RoleBinding",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "创建RoleBinding",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "创建RoleBinding请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.CreateRoleBindingRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功创建RoleBinding",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/rbac/role-bindings/{cluster_id}/{namespace}/{name}": {
-            "get": {
-                "description": "根据集群ID、命名空间和RoleBinding名称获取RoleBinding详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "获取RoleBinding详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "RoleBinding名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功返回RoleBinding详情",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "RoleBinding未找到",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "description": "更新指定RoleBinding的配置信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "更新RoleBinding",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "RoleBinding名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "更新RoleBinding请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.UpdateRoleBindingRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功更新RoleBinding",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "description": "删除指定的RoleBinding资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "删除RoleBinding",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "RoleBinding名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功删除RoleBinding",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/rbac/roles/{cluster_id}/{namespace}": {
-            "get": {
-                "description": "根据集群ID和命名空间获取所有Role资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "获取Role列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功返回Role列表",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/model.K8sRole"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "在指定集群和命名空间中创建新的Role",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "创建Role",
-                "parameters": [
-                    {
-                        "description": "创建Role请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.CreateK8sRoleRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功创建Role",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/rbac/roles/{cluster_id}/{namespace}/{name}": {
-            "get": {
-                "description": "根据集群ID、命名空间和Role名称获取Role详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "获取Role详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Role名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功返回Role详情",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Role未找到",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "description": "更新指定Role的配置信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "更新Role",
-                "parameters": [
-                    {
-                        "description": "更新Role请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.UpdateK8sRoleRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功更新Role",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "description": "删除指定的Role资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "RBAC权限管理"
-                ],
-                "summary": "删除Role",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Role名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功删除Role",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/secrets/batch_delete": {
+        "/api/k8s/secrets/batch": {
             "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "同时删除指定命名空间下的多个Secret资源",
+                "description": "批量删除指定命名空间中的多个Secret",
                 "consumes": [
                     "application/json"
                 ],
@@ -10774,13 +7462,13 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sSecretRequest"
+                            "$ref": "#/definitions/model.K8sBatchDeleteReq"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "删除成功",
+                        "description": "批量删除成功",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -10807,7 +7495,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "在指定集群的命名空间中创建新的Secret资源",
+                "description": "在指定集群和命名空间中创建新的Secret",
                 "consumes": [
                     "application/json"
                 ],
@@ -10820,12 +7508,12 @@ const docTemplate = `{
                 "summary": "创建Secret",
                 "parameters": [
                     {
-                        "description": "Secret创建信息",
+                        "description": "Secret创建请求",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sSecretRequest"
+                            "$ref": "#/definitions/model.SecretCreateReq"
                         }
                     }
                 ],
@@ -10842,53 +7530,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
                     },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/secrets/create_encrypted": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "创建带有加密数据的Secret资源，提供额外的安全保护",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "密钥管理"
-                ],
-                "summary": "创建加密Secret",
-                "parameters": [
-                    {
-                        "description": "加密Secret创建信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sSecretEncryptionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "创建成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
+                    "409": {
+                        "description": "Secret已存在",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -10902,14 +7545,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/secrets/delete/{id}": {
-            "delete": {
+        "/api/k8s/secrets/list": {
+            "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "删除指定命名空间下的单个Secret资源",
+                "description": "根据集群和命名空间获取Secret列表，支持标签和字段选择器过滤",
                 "consumes": [
                     "application/json"
                 ],
@@ -10919,35 +7562,66 @@ const docTemplate = `{
                 "tags": [
                     "密钥管理"
                 ],
-                "summary": "删除单个Secret",
+                "summary": "获取Secret列表",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Secret名称",
-                        "name": "secret_name",
+                        "name": "cluster_id",
                         "in": "query",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间名称",
+                        "description": "命名空间，为空时获取所有命名空间",
                         "name": "namespace",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签选择器",
+                        "name": "label_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "字段选择器",
+                        "name": "field_selector",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "限制结果数量",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "分页续订令牌",
+                        "name": "continue",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "删除成功",
+                        "description": "获取成功",
                         "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/model.K8sSecret"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -10966,13 +7640,13 @@ const docTemplate = `{
             }
         },
         "/api/k8s/secrets/update": {
-            "post": {
+            "put": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "修改指定Secret的数据内容和配置信息",
+                "description": "更新指定的Secret配置数据",
                 "consumes": [
                     "application/json"
                 ],
@@ -10985,12 +7659,12 @@ const docTemplate = `{
                 "summary": "更新Secret",
                 "parameters": [
                     {
-                        "description": "Secret更新信息",
+                        "description": "Secret更新请求",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sSecretRequest"
+                            "$ref": "#/definitions/model.SecretUpdateReq"
                         }
                     }
                 ],
@@ -11007,6 +7681,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
                     },
+                    "404": {
+                        "description": "Secret不存在",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
@@ -11016,14 +7696,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/secrets/{id}": {
+        "/api/k8s/secrets/{cluster_id}/{namespace}/{name}": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "根据指定的集群ID和命名空间查询所有的Secret资源",
+                "description": "根据集群ID、命名空间和名称获取指定Secret的详细信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -11033,104 +7713,33 @@ const docTemplate = `{
                 "tags": [
                     "密钥管理"
                 ],
-                "summary": "获取Secret列表",
+                "summary": "获取Secret详情",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间名称",
+                        "description": "命名空间",
                         "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/secrets/{id}/decrypt": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "解密指定Secret中的加密数据，返回明文内容",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "密钥管理"
-                ],
-                "summary": "解密Secret数据",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Secret名称",
-                        "name": "secret_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "query",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "解密成功",
+                        "description": "获取成功",
                         "schema": {
                             "allOf": [
                                 {
@@ -11140,7 +7749,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object"
+                                            "$ref": "#/definitions/model.K8sSecret"
                                         }
                                     }
                                 }
@@ -11153,6 +7762,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
                     },
+                    "404": {
+                        "description": "Secret不存在",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
@@ -11160,16 +7775,14 @@ const docTemplate = `{
                         }
                     }
                 }
-            }
-        },
-        "/api/k8s/secrets/{id}/status": {
-            "get": {
+            },
+            "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "获取指定Secret的详细状态信息，包括创建时间、类型等",
+                "description": "删除指定的Secret资源",
                 "consumes": [
                     "application/json"
                 ],
@@ -11179,115 +7792,45 @@ const docTemplate = `{
                 "tags": [
                     "密钥管理"
                 ],
-                "summary": "获取Secret状态",
+                "summary": "删除Secret",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Secret名称",
-                        "name": "secret_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/secrets/{id}/types": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取当前集群支持的所有Secret类型列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "密钥管理"
-                ],
-                "summary": "获取支持的Secret类型",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
+                        "name": "name",
                         "in": "path",
                         "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "获取成功",
+                        "description": "删除成功",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
+                            "$ref": "#/definitions/utils.ApiResponse"
                         }
                     },
                     "400": {
                         "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Secret不存在",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -11301,14 +7844,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/secrets/{id}/yaml": {
+        "/api/k8s/secrets/{cluster_id}/{namespace}/{name}/yaml": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "以YAML格式返回指定Secret的完整配置信息",
+                "description": "获取指定Secret的完整YAML配置文件",
                 "consumes": [
                     "application/json"
                 ],
@@ -11323,22 +7866,22 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Secret名称",
-                        "name": "secret_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "query",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     }
                 ],
@@ -11367,720 +7910,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
                     },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/service-accounts/permissions/{cluster_id}/unbind-cluster-role/{cluster_role_binding_name}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "通过删除ClusterRoleBinding解除ClusterRole权限绑定",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务账户管理"
-                ],
-                "summary": "解绑ClusterRole从ServiceAccount",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ClusterRoleBinding名称",
-                        "name": "cluster_role_binding_name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功解绑ClusterRole",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/service-accounts/permissions/{cluster_id}/{namespace}/bind-cluster-role": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "通过创建ClusterRoleBinding将ClusterRole权限绑定到ServiceAccount",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务账户管理"
-                ],
-                "summary": "绑定ClusterRole到ServiceAccount",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "绑定ClusterRole请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.BindClusterRoleToServiceAccountRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功绑定ClusterRole",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/service-accounts/permissions/{cluster_id}/{namespace}/bind-role": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "通过创建RoleBinding将Role权限绑定到ServiceAccount",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务账户管理"
-                ],
-                "summary": "绑定Role到ServiceAccount",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "绑定Role请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.BindRoleToServiceAccountRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功绑定Role",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/service-accounts/permissions/{cluster_id}/{namespace}/unbind-role/{role_binding_name}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "通过删除RoleBinding解除Role权限绑定",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务账户管理"
-                ],
-                "summary": "解绑Role从ServiceAccount",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "RoleBinding名称",
-                        "name": "role_binding_name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功解绑Role",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/service-accounts/permissions/{cluster_id}/{namespace}/{name}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "获取指定ServiceAccount的所有权限绑定信息，包括Role和ClusterRole",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务账户管理"
-                ],
-                "summary": "获取ServiceAccount权限信息",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ServiceAccount名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功返回权限信息",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/service-accounts/tokens/{cluster_id}/{namespace}/{service_account_name}": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "为指定的ServiceAccount创建访问令牌",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务账户管理"
-                ],
-                "summary": "创建ServiceAccount Token",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ServiceAccount名称",
-                        "name": "service_account_name",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "创建Token请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.ServiceAccountTokenRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功创建Token",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/service-accounts/{cluster_id}/{namespace}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "根据集群ID和命名空间获取所有ServiceAccount资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务账户管理"
-                ],
-                "summary": "获取ServiceAccount列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功返回ServiceAccount列表",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/model.K8sServiceAccount"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "在指定集群和命名空间中创建新的ServiceAccount",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务账户管理"
-                ],
-                "summary": "创建ServiceAccount",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "创建ServiceAccount请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.CreateServiceAccountRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功创建ServiceAccount",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/service-accounts/{cluster_id}/{namespace}/{name}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "根据集群ID、命名空间和ServiceAccount名称获取ServiceAccount详细信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务账户管理"
-                ],
-                "summary": "获取ServiceAccount详情",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ServiceAccount名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功返回ServiceAccount详情",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
                     "404": {
-                        "description": "ServiceAccount未找到",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "更新指定ServiceAccount的配置信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务账户管理"
-                ],
-                "summary": "更新ServiceAccount",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ServiceAccount名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "更新ServiceAccount请求参数",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.UpdateServiceAccountRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功更新ServiceAccount",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "删除指定的ServiceAccount资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "服务账户管理"
-                ],
-                "summary": "删除ServiceAccount",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "cluster_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "ServiceAccount名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功删除ServiceAccount",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
+                        "description": "Secret不存在",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -12119,7 +7950,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sServiceRequest"
+                            "$ref": "#/definitions/model.K8sServiceReq"
                         }
                     }
                 ],
@@ -12233,7 +8064,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sServiceRequest"
+                            "$ref": "#/definitions/model.K8sServiceReq"
                         }
                     }
                 ],
@@ -12405,14 +8236,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/k8s/statefulsets/batch_delete": {
+        "/api/k8s/statefulsets/batch": {
             "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "同时删除指定命名空间下的多个StatefulSet资源",
+                "description": "批量删除指定命名空间中的多个StatefulSet",
                 "consumes": [
                     "application/json"
                 ],
@@ -12420,7 +8251,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "有状态应用管理"
+                    "工作负载管理"
                 ],
                 "summary": "批量删除StatefulSet",
                 "parameters": [
@@ -12430,25 +8261,13 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sStatefulSetRequest"
+                            "$ref": "#/definitions/model.K8sBatchDeleteReq"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
+                        "description": "批量删除成功",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -12463,7 +8282,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "在指定集群的命名空间中创建新的有状态应用(StatefulSet)资源",
+                "description": "在指定集群和命名空间中创建新的StatefulSet",
                 "consumes": [
                     "application/json"
                 ],
@@ -12471,17 +8290,17 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "有状态应用管理"
+                    "工作负载管理"
                 ],
                 "summary": "创建StatefulSet",
                 "parameters": [
                     {
-                        "description": "StatefulSet创建信息",
+                        "description": "StatefulSet创建请求",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sStatefulSetRequest"
+                            "$ref": "#/definitions/model.StatefulSetCreateReq"
                         }
                     }
                 ],
@@ -12491,258 +8310,18 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
                     }
                 }
             }
         },
-        "/api/k8s/statefulsets/delete/{id}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "删除指定命名空间下的单个StatefulSet资源",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "有状态应用管理"
-                ],
-                "summary": "删除单个StatefulSet",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "StatefulSet名称",
-                        "name": "statefulset_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "删除成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/statefulsets/restart/{id}": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "对指定的StatefulSet执行重启操作，重新创建Pod实例",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "有状态应用管理"
-                ],
-                "summary": "重启StatefulSet",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "StatefulSet名称",
-                        "name": "statefulset_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "重启成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/statefulsets/scale": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "调整StatefulSet的副本数量，实现应用的扩容或缩容",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "有状态应用管理"
-                ],
-                "summary": "扩缩容StatefulSet",
-                "parameters": [
-                    {
-                        "description": "扩缩容请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sStatefulSetScaleRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "扩缩容成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/statefulsets/update": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "修改指定StatefulSet的配置和参数信息",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "有状态应用管理"
-                ],
-                "summary": "更新StatefulSet",
-                "parameters": [
-                    {
-                        "description": "StatefulSet更新信息",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.K8sStatefulSetRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "更新成功",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/k8s/statefulsets/{id}": {
+        "/api/k8s/statefulsets/list": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "根据指定的集群ID和命名空间查询所有的有状态应用(StatefulSet)资源",
+                "description": "根据集群和命名空间获取StatefulSet列表",
                 "consumes": [
                     "application/json"
                 ],
@@ -12750,23 +8329,22 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "有状态应用管理"
+                    "工作负载管理"
                 ],
                 "summary": "获取StatefulSet列表",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
-                        "in": "path",
+                        "name": "cluster_id",
+                        "in": "query",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间名称",
+                        "description": "命名空间",
                         "name": "namespace",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -12783,37 +8361,25 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "type": "object"
+                                                "$ref": "#/definitions/model.K8sStatefulSet"
                                             }
                                         }
                                     }
                                 }
                             ]
                         }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
                     }
                 }
             }
         },
-        "/api/k8s/statefulsets/{id}/status": {
-            "get": {
+        "/api/k8s/statefulsets/scale": {
+            "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "获取指定StatefulSet的详细状态信息，包括副本数、就绪状态等",
+                "description": "调整StatefulSet的副本数量",
                 "consumes": [
                     "application/json"
                 ],
@@ -12821,29 +8387,107 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "有状态应用管理"
+                    "工作负载管理"
                 ],
-                "summary": "获取StatefulSet状态",
+                "summary": "扩缩容StatefulSet",
+                "parameters": [
+                    {
+                        "description": "StatefulSet扩缩容请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.StatefulSetScaleReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "扩缩容成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/statefulsets/update": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "更新指定的StatefulSet配置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工作负载管理"
+                ],
+                "summary": "更新StatefulSet",
+                "parameters": [
+                    {
+                        "description": "StatefulSet更新请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.StatefulSetUpdateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/statefulsets/{cluster_id}/{namespace}/{name}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据集群ID、命名空间和名称获取指定StatefulSet的详细信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工作负载管理"
+                ],
+                "summary": "获取StatefulSet详情",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "StatefulSet名称",
-                        "name": "statefulset_name",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "命名空间名称",
-                        "name": "namespace",
-                        "in": "query",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     }
                 ],
@@ -12859,36 +8503,22 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object"
+                                            "$ref": "#/definitions/model.K8sStatefulSet"
                                         }
                                     }
                                 }
                             ]
                         }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
                     }
                 }
-            }
-        },
-        "/api/k8s/statefulsets/{id}/yaml": {
-            "get": {
+            },
+            "delete": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "以YAML格式返回指定StatefulSet的完整配置信息",
+                "description": "删除指定的StatefulSet资源",
                 "consumes": [
                     "application/json"
                 ],
@@ -12896,29 +8526,80 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "有状态应用管理"
+                    "工作负载管理"
                 ],
-                "summary": "获取StatefulSet的YAML配置",
+                "summary": "删除StatefulSet",
                 "parameters": [
                     {
                         "type": "integer",
                         "description": "集群ID",
-                        "name": "id",
+                        "name": "cluster_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间",
+                        "name": "namespace",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "StatefulSet名称",
-                        "name": "statefulset_name",
-                        "in": "query",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/k8s/statefulsets/{cluster_id}/{namespace}/{name}/yaml": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取指定StatefulSet的完整YAML配置文件",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工作负载管理"
+                ],
+                "summary": "获取StatefulSet的YAML配置",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "集群ID",
+                        "name": "cluster_id",
+                        "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "命名空间名称",
+                        "description": "命名空间",
                         "name": "namespace",
-                        "in": "query",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "StatefulSet名称",
+                        "name": "name",
+                        "in": "path",
                         "required": true
                     }
                 ],
@@ -12939,18 +8620,6 @@ const docTemplate = `{
                                     }
                                 }
                             ]
-                        }
-                    },
-                    "400": {
-                        "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
                         }
                     }
                 }
@@ -12981,7 +8650,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.TaintK8sNodesRequest"
+                            "$ref": "#/definitions/model.TaintK8sNodesReq"
                         }
                     }
                 ],
@@ -13032,7 +8701,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.TaintK8sNodesRequest"
+                            "$ref": "#/definitions/model.TaintK8sNodesReq"
                         }
                     }
                 ],
@@ -13083,7 +8752,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sClusterNodesRequest"
+                            "$ref": "#/definitions/model.K8sClusterNodesReq"
                         }
                     }
                 ],
@@ -13134,7 +8803,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.ScheduleK8sNodesRequest"
+                            "$ref": "#/definitions/model.ScheduleK8sNodesReq"
                         }
                     }
                 ],
@@ -13185,7 +8854,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.TaintK8sNodesRequest"
+                            "$ref": "#/definitions/model.TaintK8sNodesReq"
                         }
                     }
                 ],
@@ -13285,7 +8954,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sYamlTask"
+                            "$ref": "#/definitions/model.YamlTaskCreateReq"
                         }
                     }
                 ],
@@ -13440,7 +9109,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sYamlTask"
+                            "$ref": "#/definitions/model.YamlTaskUpdateReq"
                         }
                     }
                 ],
@@ -13491,7 +9160,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sYamlTemplate"
+                            "$ref": "#/definitions/model.YamlTemplateCheckReq"
                         }
                     }
                 ],
@@ -13542,7 +9211,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sYamlTemplate"
+                            "$ref": "#/definitions/model.YamlTemplateCreateReq"
                         }
                     }
                 ],
@@ -13713,7 +9382,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/model.K8sYamlTemplate"
+                            "$ref": "#/definitions/model.YamlTemplateUpdateReq"
                         }
                     }
                 ],
@@ -13782,260 +9451,6 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/mcps/configs": {
-            "get": {
-                "description": "获取所有MCP服务配置列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "MCP-Config"
-                ],
-                "summary": "获取MCP配置列表",
-                "parameters": [
-                    {
-                        "description": "获取MCP配置列表请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.GetMCPConfigsReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功获取MCP配置列表",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/model.MCPConfig"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "创建新的MCP服务配置",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "MCP-Config"
-                ],
-                "summary": "创建MCP配置",
-                "parameters": [
-                    {
-                        "description": "创建MCP配置请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.CreateMCPConfigReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功创建MCP配置",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/mcps/tools": {
-            "get": {
-                "description": "获取所有可用的MCP工具列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "MCP-Tool"
-                ],
-                "summary": "获取工具列表",
-                "parameters": [
-                    {
-                        "description": "获取工具列表请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.GetToolsReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功获取工具列表",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/utils.ApiResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/model.Tool"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "创建新的MCP工具",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "MCP-Tool"
-                ],
-                "summary": "创建工具",
-                "parameters": [
-                    {
-                        "description": "创建工具请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/model.CreateToolReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功创建工具",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/mcps/tools/{name}": {
-            "get": {
-                "description": "根据工具名称获取工具详情",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "MCP-Tool"
-                ],
-                "summary": "获取指定工具",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "工具名称",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "成功获取工具详情",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ApiResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -17585,6 +13000,144 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/system/info": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取当前运行平台的系统硬件信息，用于平台欢迎页面展示",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "系统管理"
+                ],
+                "summary": "获取系统信息",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.SystemInfoResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/system/metrics": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取系统的CPU、内存、磁盘、网络等性能指标",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "系统管理"
+                ],
+                "summary": "获取系统性能指标",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.SystemInfoResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/system/refresh": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "立即刷新并更新系统硬件信息到数据库",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "系统管理"
+                ],
+                "summary": "刷新系统信息",
+                "responses": {
+                    "200": {
+                        "description": "刷新成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.SystemInfoResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/tree/local/bind/{id}": {
             "post": {
                 "security": [
@@ -19058,7 +14611,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/user/profile/update": {
+        "/api/user/profile/update/{id}": {
             "post": {
                 "security": [
                     {
@@ -19892,6 +15445,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/workorder/instance/actions/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取当前工单实例可执行的动作列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单管理"
+                ],
+                "summary": "获取可执行动作",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "工单实例ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/workorder/instance/approve/{id}": {
             "post": {
                 "security": [
@@ -19989,6 +15606,64 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "指派成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/workorder/instance/cancel/{id}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "取消指定的工单实例",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单管理"
+                ],
+                "summary": "取消工单",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "工单实例ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "取消原因",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.CancelWorkorderInstanceReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "取消成功",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -20324,6 +15999,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/workorder/instance/complete/{id}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "完成指定的工单实例",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单管理"
+                ],
+                "summary": "完成工单",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "工单实例ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "完成说明",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.CompleteWorkorderInstanceReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "完成成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/workorder/instance/create": {
             "post": {
                 "security": [
@@ -20358,6 +16091,125 @@ const docTemplate = `{
                         "description": "创建成功",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/workorder/instance/create-from-template/{templateId}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "基于工单模板创建新的工单实例",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单管理"
+                ],
+                "summary": "从模板创建工单实例",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "模板ID",
+                        "name": "templateId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "创建工单实例请求参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.CreateWorkorderInstanceFromTemplateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "创建成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/workorder/instance/current-step/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取工单实例当前流程步骤信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单管理"
+                ],
+                "summary": "获取当前步骤",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "工单实例ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/utils.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/model.ProcessStep"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -20723,6 +16575,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/workorder/instance/return/{id}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "退回指定的工单实例",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单管理"
+                ],
+                "summary": "退回工单",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "工单实例ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "退回原因",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.ReturnWorkorderInstanceReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "退回成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/workorder/instance/submit/{id}": {
             "post": {
                 "security": [
@@ -20999,6 +16909,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/workorder/notification/channels": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取当前系统中可用的通知渠道列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单管理"
+                ],
+                "summary": "获取可用的通知渠道",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/workorder/notification/create": {
             "post": {
                 "security": [
@@ -21249,6 +17193,57 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/workorder/notification/send": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "通过指定渠道手动发送通知",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单管理"
+                ],
+                "summary": "手动发送通知",
+                "parameters": [
+                    {
+                        "description": "手动发送通知请求参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.ManualSendNotificationReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "发送成功",
                         "schema": {
                             "$ref": "#/definitions/utils.ApiResponse"
                         }
@@ -21989,31 +17984,6 @@ const docTemplate = `{
                 "ConditionUnknown"
             ]
         },
-        "k8s_io_api_core_v1.EndpointPort": {
-            "type": "object",
-            "properties": {
-                "appProtocol": {
-                    "description": "The application protocol for this port.\nThis is used as a hint for implementations to offer richer behavior for protocols that they understand.\nThis field follows standard Kubernetes label syntax.\nValid values are either:\n\n* Un-prefixed protocol names - reserved for IANA standard service names (as per\nRFC-6335 and https://www.iana.org/assignments/service-names).\n\n* Kubernetes-defined prefixed names:\n  * 'kubernetes.io/h2c' - HTTP/2 prior knowledge over cleartext as described in https://www.rfc-editor.org/rfc/rfc9113.html#name-starting-http-2-with-prior-\n  * 'kubernetes.io/ws'  - WebSocket over cleartext as described in https://www.rfc-editor.org/rfc/rfc6455\n  * 'kubernetes.io/wss' - WebSocket over TLS as described in https://www.rfc-editor.org/rfc/rfc6455\n\n* Other protocols should use implementation-defined prefixed names such as\nmycompany.com/my-custom-protocol.\n+optional",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "The name of this port.  This must match the 'name' field in the\ncorresponding ServicePort.\nMust be a DNS_LABEL.\nOptional only if one port is defined.\n+optional",
-                    "type": "string"
-                },
-                "port": {
-                    "description": "The port number of the endpoint.",
-                    "type": "integer"
-                },
-                "protocol": {
-                    "description": "The IP protocol for this port.\nMust be UDP, TCP, or SCTP.\nDefault is TCP.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.Protocol"
-                        }
-                    ]
-                }
-            }
-        },
         "k8s_io_apimachinery_pkg_apis_meta_v1.ConditionStatus": {
             "type": "string",
             "enum": [
@@ -22050,56 +18020,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "model.Affinity": {
-            "type": "object",
-            "properties": {
-                "node_affinity": {
-                    "description": "节点亲和性",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.AffinityRule"
-                    }
-                },
-                "pod_affinity": {
-                    "description": "Pod亲和性",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.AffinityRule"
-                    }
-                },
-                "pod_anti_affinity": {
-                    "description": "Pod反亲和性",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.AffinityRule"
-                    }
-                }
-            }
-        },
-        "model.AffinityRule": {
-            "type": "object",
-            "properties": {
-                "key": {
-                    "description": "标签键",
-                    "type": "string"
-                },
-                "operator": {
-                    "description": "操作符(In, NotIn, Exists等)",
-                    "type": "string"
-                },
-                "values": {
-                    "description": "标签值列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "weight": {
-                    "description": "权重(1-100)",
                     "type": "integer"
                 }
             }
@@ -22353,36 +18273,6 @@ const docTemplate = `{
                 "AuthModeKey"
             ]
         },
-        "model.BatchDeleteK8sCronjobRequest": {
-            "type": "object",
-            "required": [
-                "cronjob_ids"
-            ],
-            "properties": {
-                "cronjob_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                }
-            }
-        },
-        "model.BatchDeleteK8sInstanceReq": {
-            "type": "object",
-            "required": [
-                "instances"
-            ],
-            "properties": {
-                "instances": {
-                    "description": "实例列表",
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "$ref": "#/definitions/model.K8sInstance"
-                    }
-                }
-            }
-        },
         "model.BatchDeleteReq": {
             "type": "object",
             "required": [
@@ -22410,84 +18300,6 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
-                }
-            }
-        },
-        "model.BatchRestartK8sInstanceReq": {
-            "type": "object",
-            "required": [
-                "instances"
-            ],
-            "properties": {
-                "instances": {
-                    "description": "实例列表",
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "$ref": "#/definitions/model.K8sInstance"
-                    }
-                }
-            }
-        },
-        "model.BindClusterRoleToServiceAccountRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "cluster_role_name",
-                "namespace",
-                "service_account_name"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "cluster_role_binding_name": {
-                    "description": "ClusterRoleBinding 名称，可选",
-                    "type": "string"
-                },
-                "cluster_role_name": {
-                    "description": "ClusterRole 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "service_account_name": {
-                    "description": "ServiceAccount 名称",
-                    "type": "string"
-                }
-            }
-        },
-        "model.BindRoleToServiceAccountRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "namespace",
-                "role_name",
-                "service_account_name"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "role_binding_name": {
-                    "description": "RoleBinding 名称，可选",
-                    "type": "string"
-                },
-                "role_name": {
-                    "description": "Role 名称",
-                    "type": "string"
-                },
-                "service_account_name": {
-                    "description": "ServiceAccount 名称",
-                    "type": "string"
                 }
             }
         },
@@ -22521,6 +18333,24 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
+                }
+            }
+        },
+        "model.CancelWorkorderInstanceReq": {
+            "type": "object",
+            "required": [
+                "comment",
+                "id"
+            ],
+            "properties": {
+                "comment": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 1
+                },
+                "id": {
+                    "type": "integer",
+                    "minimum": 1
                 }
             }
         },
@@ -22596,60 +18426,138 @@ const docTemplate = `{
                 }
             }
         },
-        "model.ContainerCore": {
+        "model.CompleteWorkorderInstanceReq": {
             "type": "object",
+            "required": [
+                "comment",
+                "id"
+            ],
             "properties": {
-                "args": {
-                    "description": "容器启动参数",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                "comment": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 1
                 },
-                "command": {
-                    "description": "容器启动命令",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "cpu": {
-                    "description": "CPU 资源限制(如 \"100m\", \"0.5\")",
-                    "type": "string"
-                },
-                "cpu_request": {
-                    "description": "CPU 资源请求",
-                    "type": "string"
-                },
-                "envs": {
-                    "description": "环境变量",
+                "id": {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            }
+        },
+        "model.ConfigMapCreateReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "name",
+                "namespace"
+            ],
+            "properties": {
+                "annotations": {
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
-                "mem_request": {
-                    "description": "内存资源请求",
+                "binary_data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
                     "type": "string"
                 },
-                "memory": {
-                    "description": "内存资源限制(如 \"512Mi\", \"2Gi\")",
+                "namespace": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.ConfigMapKeySelector": {
+            "type": "object",
+            "properties": {
+                "key": {
                     "type": "string"
                 },
                 "name": {
-                    "description": "容器名称",
                     "type": "string"
-                },
-                "pull_policy": {
-                    "description": "镜像拉取策略",
-                    "type": "string"
-                },
-                "volumes": {
-                    "description": "挂载卷",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.Volume"
+                }
+            }
+        },
+        "model.ConfigMapUpdateReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "namespace",
+                "resource_name"
+            ],
+            "properties": {
+                "annotations": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
                     }
+                },
+                "binary_data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "resource_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.ContainerPort": {
+            "type": "object",
+            "properties": {
+                "container_port": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "protocol": {
+                    "type": "string"
                 }
             }
         },
@@ -22754,292 +18662,6 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "integer"
-                }
-            }
-        },
-        "model.CreateClusterRoleBindingRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "name",
-                "role_ref",
-                "subjects"
-            ],
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "ClusterRoleBinding 名称",
-                    "type": "string"
-                },
-                "role_ref": {
-                    "description": "角色引用",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.RoleRef"
-                        }
-                    ]
-                },
-                "subjects": {
-                    "description": "绑定的主体",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.Subject"
-                    }
-                }
-            }
-        },
-        "model.CreateClusterRoleRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "name",
-                "rules"
-            ],
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "ClusterRole 名称",
-                    "type": "string"
-                },
-                "rules": {
-                    "description": "策略规则",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.PolicyRule"
-                    }
-                }
-            }
-        },
-        "model.CreateK8sAppRequest": {
-            "type": "object",
-            "required": [
-                "cluster",
-                "k8s_project_id",
-                "name",
-                "namespace",
-                "user_id"
-            ],
-            "properties": {
-                "cluster": {
-                    "description": "所属集群名称",
-                    "type": "string"
-                },
-                "containerCore": {
-                    "description": "容器核心配置",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.ContainerCore"
-                        }
-                    ]
-                },
-                "k8s_project_id": {
-                    "description": "关联的 Kubernetes 项目ID",
-                    "type": "integer"
-                },
-                "name": {
-                    "description": "应用名称",
-                    "type": "string",
-                    "maxLength": 200,
-                    "minLength": 1
-                },
-                "namespace": {
-                    "description": "Kubernetes 命名空间",
-                    "type": "string"
-                },
-                "service_type": {
-                    "description": "服务类型",
-                    "type": "string"
-                },
-                "user_id": {
-                    "description": "创建者用户ID",
-                    "type": "integer"
-                }
-            }
-        },
-        "model.CreateK8sCronjobRequest": {
-            "type": "object",
-            "required": [
-                "cluster",
-                "image",
-                "k8s_project_id",
-                "name",
-                "namespace",
-                "schedule",
-                "user_id"
-            ],
-            "properties": {
-                "args": {
-                    "description": "启动参数",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "cluster": {
-                    "description": "所属集群",
-                    "type": "string"
-                },
-                "commands": {
-                    "description": "启动命令组",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "image": {
-                    "description": "镜像",
-                    "type": "string"
-                },
-                "k8s_project_id": {
-                    "description": "关联的 Kubernetes 项目ID",
-                    "type": "integer"
-                },
-                "name": {
-                    "description": "定时任务名称",
-                    "type": "string",
-                    "maxLength": 200,
-                    "minLength": 1
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "schedule": {
-                    "description": "调度表达式",
-                    "type": "string"
-                },
-                "tree_node_id": {
-                    "description": "关联的树节点ID（可选）",
-                    "type": "integer"
-                },
-                "user_id": {
-                    "description": "创建者用户ID",
-                    "type": "integer"
-                }
-            }
-        },
-        "model.CreateK8sProjectRequest": {
-            "type": "object",
-            "required": [
-                "cluster",
-                "name",
-                "name_zh",
-                "user_id"
-            ],
-            "properties": {
-                "cluster": {
-                    "description": "所属集群名称",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "项目名称",
-                    "type": "string",
-                    "maxLength": 200,
-                    "minLength": 1
-                },
-                "name_zh": {
-                    "description": "项目中文名称",
-                    "type": "string",
-                    "maxLength": 500,
-                    "minLength": 1
-                },
-                "tree_node_id": {
-                    "description": "关联的树节点ID（可选）",
-                    "type": "integer"
-                },
-                "user_id": {
-                    "description": "创建者用户ID",
-                    "type": "integer"
-                }
-            }
-        },
-        "model.CreateK8sRoleRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "name",
-                "namespace",
-                "rules"
-            ],
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "Role 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "rules": {
-                    "description": "策略规则",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.PolicyRule"
-                    }
-                }
-            }
-        },
-        "model.CreateMCPConfigReq": {
-            "type": "object",
-            "required": [
-                "url"
-            ],
-            "properties": {
-                "url": {
-                    "description": "MCP服务URL",
-                    "type": "string"
                 }
             }
         },
@@ -23545,7 +19167,7 @@ const docTemplate = `{
                 }
             }
         },
-        "model.CreateNamespaceRequest": {
+        "model.CreateNamespaceReq": {
             "type": "object",
             "required": [
                 "cluster_id",
@@ -23571,59 +19193,6 @@ const docTemplate = `{
                 },
                 "namespace": {
                     "type": "string"
-                }
-            }
-        },
-        "model.CreateRoleBindingRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "name",
-                "namespace",
-                "role_ref",
-                "subjects"
-            ],
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "RoleBinding 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "role_ref": {
-                    "description": "角色引用",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.RoleRef"
-                        }
-                    ]
-                },
-                "subjects": {
-                    "description": "绑定的主体",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.Subject"
-                    }
                 }
             }
         },
@@ -23662,90 +19231,6 @@ const docTemplate = `{
                     "enum": [
                         0,
                         1
-                    ]
-                }
-            }
-        },
-        "model.CreateServiceAccountRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "name",
-                "namespace"
-            ],
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "automount_service_account_token": {
-                    "description": "是否自动挂载服务账户令牌",
-                    "type": "boolean"
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "image_pull_secrets": {
-                    "description": "镜像拉取 Secret",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.LocalObjectReference"
-                    }
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "ServiceAccount 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "secrets": {
-                    "description": "关联的 Secret",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.LocalObjectReference"
-                    }
-                }
-            }
-        },
-        "model.CreateToolReq": {
-            "type": "object",
-            "required": [
-                "description",
-                "name"
-            ],
-            "properties": {
-                "description": {
-                    "description": "工具描述",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "工具元数据",
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "description": "工具名称",
-                    "type": "string"
-                },
-                "parameters": {
-                    "description": "工具参数定义",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.ToolParameters"
-                        }
                     ]
                 }
             }
@@ -24000,6 +19485,59 @@ const docTemplate = `{
                         "normal",
                         "system"
                     ]
+                }
+            }
+        },
+        "model.CreateWorkorderInstanceFromTemplateReq": {
+            "type": "object",
+            "required": [
+                "operator_id",
+                "operator_name",
+                "priority",
+                "title"
+            ],
+            "properties": {
+                "assignee_id": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 2000
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "form_data": {
+                    "$ref": "#/definitions/model.JSONMap"
+                },
+                "operator_id": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "operator_name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                },
+                "priority": {
+                    "type": "integer",
+                    "enum": [
+                        1,
+                        2,
+                        3
+                    ]
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 1
                 }
             }
         },
@@ -24355,6 +19893,105 @@ const docTemplate = `{
                 }
             }
         },
+        "model.DaemonSetRollingUpdateStrategy": {
+            "type": "object",
+            "properties": {
+                "max_surge": {
+                    "description": "最大超出数量",
+                    "type": "integer"
+                },
+                "max_unavailable": {
+                    "description": "最大不可用数量",
+                    "type": "integer"
+                }
+            }
+        },
+        "model.DaemonSetUpdateStrategy": {
+            "type": "object",
+            "properties": {
+                "rolling_update": {
+                    "description": "滚动更新策略",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.DaemonSetRollingUpdateStrategy"
+                        }
+                    ]
+                },
+                "type": {
+                    "description": "更新策略类型",
+                    "type": "string"
+                }
+            }
+        },
+        "model.DeploymentBatchDeleteReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "deployment_names",
+                "namespace"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "deployment_names": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "namespace": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.DeploymentBatchRestartReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "deployment_names",
+                "namespace"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "deployment_names": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "namespace": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.EnvVar": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                },
+                "value_from": {
+                    "$ref": "#/definitions/model.EnvVarSource"
+                }
+            }
+        },
+        "model.EnvVarSource": {
+            "type": "object",
+            "properties": {
+                "config_map_key_ref": {
+                    "$ref": "#/definitions/model.ConfigMapKeySelector"
+                },
+                "secret_key_ref": {
+                    "$ref": "#/definitions/model.SecretKeySelector"
+                }
+            }
+        },
         "model.Event": {
             "type": "object",
             "properties": {
@@ -24449,6 +20086,32 @@ const docTemplate = `{
                 }
             }
         },
+        "model.EventReasonCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "description": "数量",
+                    "type": "integer"
+                },
+                "reason": {
+                    "description": "原因",
+                    "type": "string"
+                }
+            }
+        },
+        "model.EventSourceCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "description": "数量",
+                    "type": "integer"
+                },
+                "source": {
+                    "description": "来源",
+                    "type": "string"
+                }
+            }
+        },
         "model.FormField": {
             "type": "object",
             "required": [
@@ -24508,184 +20171,177 @@ const docTemplate = `{
                 }
             }
         },
-        "model.GetK8sAppListRequest": {
+        "model.IngressBackend": {
             "type": "object",
             "properties": {
-                "cluster_name": {
-                    "description": "集群名称过滤",
+                "service_name": {
+                    "description": "服务名称",
                     "type": "string"
                 },
-                "name": {
-                    "description": "名称过滤（模糊查询）",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间过滤",
-                    "type": "string"
-                },
-                "page": {
-                    "description": "分页页码",
-                    "type": "integer"
-                },
-                "page_size": {
-                    "description": "分页大小",
-                    "type": "integer"
-                },
-                "project_id": {
-                    "description": "项目ID过滤",
+                "service_port": {
+                    "description": "服务端口",
                     "type": "integer"
                 }
             }
         },
-        "model.GetK8sCronjobListRequest": {
-            "type": "object",
-            "properties": {
-                "cluster_name": {
-                    "description": "集群名称过滤",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "名称过滤（模糊查询）",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间过滤",
-                    "type": "string"
-                },
-                "page": {
-                    "description": "分页页码",
-                    "type": "integer"
-                },
-                "page_size": {
-                    "description": "分页大小",
-                    "type": "integer"
-                },
-                "project_id": {
-                    "description": "项目ID过滤",
-                    "type": "integer"
-                }
-            }
-        },
-        "model.GetK8sInstanceListReq": {
+        "model.IngressBackendReq": {
             "type": "object",
             "required": [
-                "cluster_id"
+                "service_name",
+                "service_port"
             ],
             "properties": {
-                "app_id": {
-                    "description": "应用ID过滤",
-                    "type": "integer"
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "name": {
-                    "description": "名称过滤（模糊查询）",
+                "service_name": {
+                    "description": "服务名称",
                     "type": "string"
                 },
-                "namespace": {
-                    "description": "命名空间过滤",
-                    "type": "string"
-                },
-                "page": {
-                    "description": "分页页码",
-                    "type": "integer",
-                    "minimum": 1
-                },
-                "page_size": {
-                    "description": "分页大小",
-                    "type": "integer",
-                    "maximum": 100,
-                    "minimum": 1
-                },
-                "type": {
-                    "description": "实例类型过滤(Deployment/StatefulSet/DaemonSet/Job/CronJob)",
-                    "type": "string"
-                }
-            }
-        },
-        "model.GetK8sProjectListRequest": {
-            "type": "object",
-            "properties": {
-                "cluster_name": {
-                    "description": "集群名称过滤",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "名称过滤（模糊查询）",
-                    "type": "string"
-                },
-                "page": {
-                    "description": "分页页码",
-                    "type": "integer"
-                },
-                "page_size": {
-                    "description": "分页大小",
-                    "type": "integer"
-                },
-                "tree_node_id": {
-                    "description": "树节点ID过滤",
+                "service_port": {
+                    "description": "服务端口",
                     "type": "integer"
                 }
             }
         },
-        "model.GetMCPConfigsReq": {
+        "model.IngressHTTPRule": {
             "type": "object",
             "properties": {
-                "page": {
-                    "type": "integer",
-                    "minimum": 1
-                },
-                "search": {
-                    "type": "string"
-                },
-                "size": {
-                    "type": "integer",
-                    "maximum": 100,
-                    "minimum": 10
-                },
-                "url": {
-                    "description": "MCP服务URL筛选",
-                    "type": "string"
-                }
-            }
-        },
-        "model.GetToolsReq": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "description": "工具描述筛选",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "工具名称筛选",
-                    "type": "string"
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1
-                },
-                "search": {
-                    "type": "string"
-                },
-                "size": {
-                    "type": "integer",
-                    "maximum": 100,
-                    "minimum": 10
-                }
-            }
-        },
-        "model.ItemDef": {
-            "type": "object",
-            "properties": {
-                "enum": {
-                    "description": "枚举值",
+                "paths": {
+                    "description": "路径规则",
                     "type": "array",
-                    "items": {}
+                    "items": {
+                        "$ref": "#/definitions/model.IngressPath"
+                    }
+                }
+            }
+        },
+        "model.IngressLoadBalancer": {
+            "type": "object",
+            "properties": {
+                "hostname": {
+                    "description": "负载均衡器主机名",
+                    "type": "string"
                 },
-                "type": {
-                    "description": "项类型",
+                "ip": {
+                    "description": "负载均衡器IP",
+                    "type": "string"
+                }
+            }
+        },
+        "model.IngressPath": {
+            "type": "object",
+            "properties": {
+                "backend": {
+                    "description": "后端",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.IngressBackend"
+                        }
+                    ]
+                },
+                "path": {
+                    "description": "路径",
+                    "type": "string"
+                },
+                "path_type": {
+                    "description": "路径类型",
+                    "type": "string"
+                }
+            }
+        },
+        "model.IngressPathReq": {
+            "type": "object",
+            "required": [
+                "backend",
+                "path",
+                "path_type"
+            ],
+            "properties": {
+                "backend": {
+                    "description": "后端",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.IngressBackendReq"
+                        }
+                    ]
+                },
+                "path": {
+                    "description": "路径",
+                    "type": "string"
+                },
+                "path_type": {
+                    "description": "路径类型",
+                    "type": "string"
+                }
+            }
+        },
+        "model.IngressRule": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "description": "主机名",
+                    "type": "string"
+                },
+                "http": {
+                    "description": "HTTP规则",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.IngressHTTPRule"
+                        }
+                    ]
+                }
+            }
+        },
+        "model.IngressRuleReq": {
+            "type": "object",
+            "required": [
+                "host",
+                "paths"
+            ],
+            "properties": {
+                "host": {
+                    "description": "主机名",
+                    "type": "string"
+                },
+                "paths": {
+                    "description": "路径规则",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.IngressPathReq"
+                    }
+                }
+            }
+        },
+        "model.IngressTLS": {
+            "type": "object",
+            "properties": {
+                "hosts": {
+                    "description": "主机列表",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "secret_name": {
+                    "description": "Secret名称",
+                    "type": "string"
+                }
+            }
+        },
+        "model.IngressTLSReq": {
+            "type": "object",
+            "required": [
+                "hosts",
+                "secret_name"
+            ],
+            "properties": {
+                "hosts": {
+                    "description": "主机列表",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "secret_name": {
+                    "description": "Secret名称",
                     "type": "string"
                 }
             }
@@ -24694,35 +20350,46 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": true
         },
-        "model.K8sAffinityVisualizationRequest": {
+        "model.K8sBackendHealth": {
+            "type": "object",
+            "properties": {
+                "healthy": {
+                    "description": "是否健康",
+                    "type": "boolean"
+                },
+                "message": {
+                    "description": "状态信息",
+                    "type": "string"
+                },
+                "service_name": {
+                    "description": "服务名称",
+                    "type": "string"
+                },
+                "service_port": {
+                    "description": "服务端口",
+                    "type": "integer"
+                }
+            }
+        },
+        "model.K8sBatchDeleteReq": {
             "type": "object",
             "required": [
-                "cluster_id"
+                "cluster_id",
+                "namespace",
+                "resource_names"
             ],
             "properties": {
                 "cluster_id": {
-                    "description": "集群ID，必填",
                     "type": "integer"
                 },
-                "include_details": {
-                    "description": "是否包含详细信息",
-                    "type": "boolean"
-                },
                 "namespace": {
-                    "description": "命名空间，可选",
                     "type": "string"
                 },
-                "resource_name": {
-                    "description": "资源名称，可选",
-                    "type": "string"
-                },
-                "resource_type": {
-                    "description": "资源类型，可选",
-                    "type": "string"
-                },
-                "visualization_type": {
-                    "description": "可视化类型 (node_affinity, pod_affinity, taint_toleration)",
-                    "type": "string"
+                "resource_names": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -24810,7 +20477,7 @@ const docTemplate = `{
                 }
             }
         },
-        "model.K8sClusterNodesRequest": {
+        "model.K8sClusterNodesReq": {
             "type": "object",
             "required": [
                 "cluster_id",
@@ -24827,447 +20494,105 @@ const docTemplate = `{
                 }
             }
         },
-        "model.K8sClusterRole": {
+        "model.K8sConfigMap": {
             "type": "object",
             "properties": {
+                "age": {
+                    "type": "string"
+                },
                 "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "ClusterRole 名称",
-                    "type": "string"
-                },
-                "rules": {
-                    "description": "策略规则",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.PolicyRule"
-                    }
-                },
-                "uid": {
-                    "description": "唯一标识符",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sClusterRoleBinding": {
-            "type": "object",
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "ClusterRoleBinding 名称",
-                    "type": "string"
-                },
-                "role_ref": {
-                    "description": "角色引用",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.RoleRef"
-                        }
-                    ]
-                },
-                "subjects": {
-                    "description": "绑定的主体",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.Subject"
-                    }
-                },
-                "uid": {
-                    "description": "唯一标识符",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sConfigMapHotReloadRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "configmap_name",
-                "namespace"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "configmap_name": {
-                    "description": "ConfigMap 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "reload_type": {
-                    "description": "重载类型 (pods, deployments, all)",
-                    "type": "string"
-                },
-                "target_selector": {
-                    "description": "目标选择器",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
-                }
-            }
-        },
-        "model.K8sConfigMapRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群id，必填",
-                    "type": "integer"
                 },
-                "config_map": {
-                    "description": "ConfigMap 对象, 可选",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ConfigMap"
-                        }
-                    ]
-                },
-                "config_map_names": {
-                    "description": "ConfigMap 名称，可选， 删除用",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "namespace": {
-                    "description": "命名空间，可选, 删除用",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sConfigMapRollbackRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "configmap_name",
-                "namespace",
-                "target_version"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "configmap_name": {
-                    "description": "ConfigMap 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "target_version": {
-                    "description": "目标版本",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sConfigMapVersionRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "configmap_name",
-                "namespace"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "config_map": {
-                    "description": "ConfigMap 对象",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ConfigMap"
-                        }
-                    ]
-                },
-                "configmap_name": {
-                    "description": "ConfigMap 名称",
-                    "type": "string"
-                },
-                "description": {
-                    "description": "版本描述",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "version": {
-                    "description": "版本号",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sContainerExecRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "command",
-                "container_name",
-                "namespace",
-                "pod_name"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "command": {
-                    "description": "执行的命令",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "container_name": {
-                    "description": "容器名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "pod_name": {
-                    "description": "Pod名称",
-                    "type": "string"
-                },
-                "timeout": {
-                    "description": "执行超时时间（秒）",
-                    "type": "integer"
-                },
-                "working_dir": {
-                    "description": "工作目录",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sContainerFileDeleteRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "container_name",
-                "namespace",
-                "path",
-                "pod_name"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "container_name": {
-                    "description": "容器名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "path": {
-                    "description": "文件路径",
-                    "type": "string"
-                },
-                "pod_name": {
-                    "description": "Pod名称",
-                    "type": "string"
-                },
-                "recursive": {
-                    "description": "是否递归删除",
-                    "type": "boolean"
-                }
-            }
-        },
-        "model.K8sContainerFileEditRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "container_name",
-                "content",
-                "namespace",
-                "path",
-                "pod_name"
-            ],
-            "properties": {
-                "backup": {
-                    "description": "是否备份",
-                    "type": "boolean"
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "container_name": {
-                    "description": "容器名称",
-                    "type": "string"
-                },
-                "content": {
-                    "description": "文件内容",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "path": {
-                    "description": "文件路径",
-                    "type": "string"
-                },
-                "pod_name": {
-                    "description": "Pod名称",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sContainerLogsExportRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "container_name",
-                "namespace",
-                "pod_name"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "container_name": {
-                    "description": "容器名称",
-                    "type": "string"
-                },
-                "end_time": {
-                    "description": "结束时间",
-                    "type": "string"
-                },
-                "filters": {
-                    "description": "过滤条件",
+                "binary_data": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
                 },
-                "format": {
-                    "description": "导出格式：json, csv, txt",
+                "creation_timestamp": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.K8sEvent"
+                    }
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
                     "type": "string"
                 },
                 "namespace": {
-                    "description": "命名空间",
                     "type": "string"
                 },
-                "pod_name": {
-                    "description": "Pod名称",
-                    "type": "string"
-                },
-                "start_time": {
-                    "description": "开始时间",
+                "uid": {
                     "type": "string"
                 }
             }
         },
-        "model.K8sContainerTerminalRequest": {
+        "model.K8sContainerPort": {
             "type": "object",
             "required": [
-                "cluster_id",
-                "container_name",
-                "namespace",
-                "pod_name"
+                "container_port"
             ],
             "properties": {
-                "cluster_id": {
-                    "description": "集群ID",
+                "container_port": {
+                    "description": "容器端口号",
                     "type": "integer"
                 },
-                "container_name": {
-                    "description": "容器名称",
+                "name": {
+                    "description": "端口名称（可选）",
                     "type": "string"
                 },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "pod_name": {
-                    "description": "Pod名称",
-                    "type": "string"
-                },
-                "stdin": {
-                    "description": "是否支持标准输入",
-                    "type": "boolean"
-                },
-                "tty": {
-                    "description": "是否分配TTY",
-                    "type": "boolean"
-                },
-                "working_dir": {
-                    "description": "工作目录",
+                "protocol": {
+                    "description": "协议类型，例如 \"TCP\", \"UDP\"",
                     "type": "string"
                 }
             }
         },
-        "model.K8sDaemonSetRequest": {
+        "model.K8sDaemonSetBatchDeleteReq": {
             "type": "object",
             "required": [
                 "cluster_id",
+                "names",
                 "namespace"
             ],
             "properties": {
                 "cluster_id": {
-                    "description": "集群名称，必填",
+                    "description": "集群ID，必填",
                     "type": "integer"
                 },
-                "daemonset_names": {
-                    "description": "DaemonSet 名称，可选",
+                "force": {
+                    "description": "是否强制删除",
+                    "type": "boolean"
+                },
+                "grace_period_seconds": {
+                    "description": "优雅删除时间",
+                    "type": "integer"
+                },
+                "names": {
+                    "description": "DaemonSet名称列表，必填",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
-                },
-                "daemonset_yaml": {
-                    "description": "DaemonSet 对象, 可选",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.DaemonSet"
-                        }
-                    ]
                 },
                 "namespace": {
                     "description": "命名空间，必填",
@@ -25275,7 +20600,371 @@ const docTemplate = `{
                 }
             }
         },
-        "model.K8sDeploymentRequest": {
+        "model.K8sDaemonSetBatchRestartReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "names",
+                "namespace"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "names": {
+                    "description": "DaemonSet名称列表，必填",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "namespace": {
+                    "description": "命名空间，必填",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sDaemonSetCreateReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "image",
+                "name",
+                "namespace"
+            ],
+            "properties": {
+                "annotations": {
+                    "description": "注解",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "daemonset_yaml": {
+                    "description": "DaemonSet YAML对象",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.DaemonSet"
+                        }
+                    ]
+                },
+                "env": {
+                    "description": "环境变量",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.EnvVar"
+                    }
+                },
+                "image": {
+                    "description": "镜像地址，必填",
+                    "type": "string"
+                },
+                "labels": {
+                    "description": "标签",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "DaemonSet名称，必填",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "命名空间，必填",
+                    "type": "string"
+                },
+                "node_selector": {
+                    "description": "节点选择器",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "ports": {
+                    "description": "容器端口",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.ContainerPort"
+                    }
+                },
+                "resources": {
+                    "description": "资源限制",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.ResourceRequirements"
+                        }
+                    ]
+                },
+                "tolerations": {
+                    "description": "容忍度",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Toleration"
+                    }
+                },
+                "update_strategy": {
+                    "description": "更新策略",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.DaemonSetUpdateStrategy"
+                        }
+                    ]
+                }
+            }
+        },
+        "model.K8sDaemonSetDeleteReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "name",
+                "namespace"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "force": {
+                    "description": "是否强制删除",
+                    "type": "boolean"
+                },
+                "grace_period_seconds": {
+                    "description": "优雅删除时间",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "DaemonSet名称，必填",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "命名空间，必填",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sDaemonSetEntity": {
+            "type": "object",
+            "required": [
+                "name",
+                "namespace"
+            ],
+            "properties": {
+                "age": {
+                    "description": "存在时间，前端计算使用",
+                    "type": "string"
+                },
+                "annotations": {
+                    "description": "注解",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "available_number": {
+                    "description": "可用数量",
+                    "type": "integer"
+                },
+                "cluster_id": {
+                    "description": "所属集群ID",
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "creation_timestamp": {
+                    "description": "Kubernetes创建时间",
+                    "type": "string"
+                },
+                "current_number": {
+                    "description": "当前数量",
+                    "type": "integer"
+                },
+                "deleted_at": {
+                    "type": "integer"
+                },
+                "desired_number": {
+                    "description": "期望数量",
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "images": {
+                    "description": "容器镜像列表",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "labels": {
+                    "description": "标签",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "misscheduled_number": {
+                    "description": "错误调度数量",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "DaemonSet名称",
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 1
+                },
+                "namespace": {
+                    "description": "所属命名空间",
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 1
+                },
+                "ready_number": {
+                    "description": "就绪数量",
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "DaemonSet状态，前端计算使用",
+                    "type": "string"
+                },
+                "uid": {
+                    "description": "DaemonSet UID",
+                    "type": "string"
+                },
+                "update_strategy": {
+                    "description": "更新策略",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_number": {
+                    "description": "更新数量",
+                    "type": "integer"
+                }
+            }
+        },
+        "model.K8sDaemonSetRestartReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "name",
+                "namespace"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "DaemonSet名称，必填",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "命名空间，必填",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sDaemonSetUpdateReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "name",
+                "namespace"
+            ],
+            "properties": {
+                "annotations": {
+                    "description": "注解",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "daemonset_yaml": {
+                    "description": "DaemonSet YAML对象",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.DaemonSet"
+                        }
+                    ]
+                },
+                "env": {
+                    "description": "环境变量",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.EnvVar"
+                    }
+                },
+                "image": {
+                    "description": "镜像地址",
+                    "type": "string"
+                },
+                "labels": {
+                    "description": "标签",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "DaemonSet名称，必填",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "命名空间，必填",
+                    "type": "string"
+                },
+                "node_selector": {
+                    "description": "节点选择器",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "ports": {
+                    "description": "容器端口",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.ContainerPort"
+                    }
+                },
+                "resources": {
+                    "description": "资源限制",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.ResourceRequirements"
+                        }
+                    ]
+                },
+                "tolerations": {
+                    "description": "容忍度",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Toleration"
+                    }
+                },
+                "update_strategy": {
+                    "description": "更新策略",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.DaemonSetUpdateStrategy"
+                        }
+                    ]
+                }
+            }
+        },
+        "model.K8sDeploymentReq": {
             "type": "object",
             "required": [
                 "cluster_id",
@@ -25307,31 +20996,288 @@ const docTemplate = `{
                 }
             }
         },
-        "model.K8sEndpointRequest": {
+        "model.K8sEnvVar": {
             "type": "object",
             "required": [
-                "cluster_id",
-                "namespace"
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "description": "环境变量名称",
+                    "type": "string"
+                },
+                "value": {
+                    "description": "环境变量值",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sEvent": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "creation_timestamp": {
+                    "type": "string"
+                },
+                "first_timestamp": {
+                    "type": "string"
+                },
+                "involved_object": {
+                    "$ref": "#/definitions/v1.ObjectReference"
+                },
+                "last_timestamp": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "source": {
+                    "$ref": "#/definitions/v1.EventSource"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sEventCleanupReq": {
+            "type": "object",
+            "required": [
+                "cluster_id"
             ],
             "properties": {
                 "cluster_id": {
-                    "description": "集群名称，必填",
+                    "description": "集群ID，必填",
                     "type": "integer"
                 },
-                "endpoint_names": {
-                    "description": "Endpoint 名称，可选",
+                "days_to_keep": {
+                    "description": "保留天数，删除指定天数之前的事件",
+                    "type": "integer"
+                },
+                "namespace": {
+                    "description": "命名空间",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sEventCleanupResult": {
+            "type": "object",
+            "properties": {
+                "cleaned_count": {
+                    "description": "清理数量",
+                    "type": "integer"
+                },
+                "error_count": {
+                    "description": "错误数量",
+                    "type": "integer"
+                },
+                "errors": {
+                    "description": "错误列表",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "model.K8sEventEntity": {
+            "type": "object",
+            "properties": {
+                "age": {
+                    "description": "存在时间，前端计算使用",
+                    "type": "string"
                 },
-                "endpoint_yaml": {
-                    "description": "Endpoint 对象, 可选",
+                "cluster_id": {
+                    "description": "所属集群ID",
+                    "type": "integer"
+                },
+                "count": {
+                    "description": "发生次数",
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "creation_timestamp": {
+                    "description": "Kubernetes创建时间",
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "integer"
+                },
+                "first_timestamp": {
+                    "description": "首次发生时间",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "involved_object": {
+                    "description": "相关对象",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/v1.Endpoints"
+                            "$ref": "#/definitions/v1.ObjectReference"
                         }
                     ]
+                },
+                "last_timestamp": {
+                    "description": "最后发生时间",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "事件消息",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "事件名称",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "所属命名空间",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "事件原因",
+                    "type": "string"
+                },
+                "severity": {
+                    "description": "事件严重程度，前端计算使用",
+                    "type": "string"
+                },
+                "source": {
+                    "description": "事件来源",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.EventSource"
+                        }
+                    ]
+                },
+                "type": {
+                    "description": "事件类型",
+                    "type": "string"
+                },
+                "uid": {
+                    "description": "事件UID",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sEventStatistics": {
+            "type": "object",
+            "properties": {
+                "normal_events": {
+                    "description": "正常事件数",
+                    "type": "integer"
+                },
+                "top_reasons": {
+                    "description": "主要原因统计",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.EventReasonCount"
+                    }
+                },
+                "top_sources": {
+                    "description": "主要来源统计",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.EventSourceCount"
+                    }
+                },
+                "total_events": {
+                    "description": "总事件数",
+                    "type": "integer"
+                },
+                "warning_events": {
+                    "description": "警告事件数",
+                    "type": "integer"
+                }
+            }
+        },
+        "model.K8sEventTimelineItem": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "description": "消息",
+                    "type": "string"
+                },
+                "object": {
+                    "description": "对象",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "原因",
+                    "type": "string"
+                },
+                "timestamp": {
+                    "description": "时间戳",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "事件类型",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sHTTPGetAction": {
+            "type": "object",
+            "required": [
+                "path",
+                "port"
+            ],
+            "properties": {
+                "path": {
+                    "description": "探测路径，必填，长度限制为255字符",
+                    "type": "string"
+                },
+                "port": {
+                    "description": "探测端口号，必填",
+                    "type": "integer"
+                },
+                "scheme": {
+                    "description": "协议类型，例如 \"HTTP\", \"HTTPS\"，长度限制为10字符",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sIngressBatchDeleteReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "names",
+                "namespace"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "force": {
+                    "description": "是否强制删除",
+                    "type": "boolean"
+                },
+                "grace_period_seconds": {
+                    "description": "优雅删除时间",
+                    "type": "integer"
+                },
+                "names": {
+                    "description": "Ingress名称列表，必填",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "namespace": {
                     "description": "命名空间，必填",
@@ -25339,472 +21285,236 @@ const docTemplate = `{
                 }
             }
         },
-        "model.K8sEndpointStatus": {
-            "type": "object",
-            "properties": {
-                "addresses": {
-                    "description": "端点地址列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "creation_timestamp": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "healthy_endpoints": {
-                    "description": "健康端点数量",
-                    "type": "integer"
-                },
-                "name": {
-                    "description": "Endpoint 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "ports": {
-                    "description": "端点端口列表",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/k8s_io_api_core_v1.EndpointPort"
-                    }
-                },
-                "service_name": {
-                    "description": "关联的服务名称",
-                    "type": "string"
-                },
-                "subsets": {
-                    "description": "端点子集",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.EndpointSubset"
-                    }
-                },
-                "unhealthy_endpoints": {
-                    "description": "不健康端点数量",
-                    "type": "integer"
-                }
-            }
-        },
-        "model.K8sInstance": {
+        "model.K8sIngressCreateReq": {
             "type": "object",
             "required": [
-                "name"
+                "cluster_id",
+                "name",
+                "namespace",
+                "rules"
             ],
             "properties": {
-                "affinity": {
-                    "description": "亲和性配置",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.Affinity"
-                        }
-                    ]
-                },
                 "annotations": {
-                    "description": "K8s注解",
+                    "description": "注解",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
-                "app_name": {
-                    "description": "应用名称(关联查询)",
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "ingress_class_name": {
+                    "description": "Ingress类名",
                     "type": "string"
                 },
-                "available_replicas": {
-                    "description": "可用副本数(运行时查询)",
+                "ingress_yaml": {
+                    "description": "Ingress YAML对象",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Ingress"
+                        }
+                    ]
+                },
+                "labels": {
+                    "description": "标签",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "Ingress名称，必填",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "命名空间，必填",
+                    "type": "string"
+                },
+                "rules": {
+                    "description": "Ingress规则，必填",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.IngressRuleReq"
+                    }
+                },
+                "tls": {
+                    "description": "TLS配置",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.IngressTLSReq"
+                    }
+                }
+            }
+        },
+        "model.K8sIngressDeleteReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "name",
+                "namespace"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "description": "集群ID，必填",
                     "type": "integer"
+                },
+                "force": {
+                    "description": "是否强制删除",
+                    "type": "boolean"
+                },
+                "grace_period_seconds": {
+                    "description": "优雅删除时间",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "Ingress名称，必填",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "命名空间，必填",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sIngressEntity": {
+            "type": "object",
+            "required": [
+                "name",
+                "namespace"
+            ],
+            "properties": {
+                "age": {
+                    "description": "存在时间，前端计算使用",
+                    "type": "string"
+                },
+                "annotations": {
+                    "description": "注解",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
                 "cluster_id": {
                     "description": "所属集群ID",
                     "type": "integer"
                 },
-                "cluster_name": {
-                    "description": "集群名称(关联查询)",
-                    "type": "string"
-                },
-                "containerCore": {
-                    "description": "容器配置",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.ContainerCore"
-                        }
-                    ]
-                },
                 "created_at": {
                     "type": "string"
                 },
-                "created_by_user": {
-                    "description": "关联信息",
+                "creation_timestamp": {
+                    "description": "Kubernetes创建时间",
                     "type": "string"
                 },
                 "deleted_at": {
                     "type": "integer"
                 },
+                "hosts": {
+                    "description": "主机列表，前端使用",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "id": {
                     "type": "integer"
                 },
-                "image": {
-                    "description": "镜像",
+                "ingress_class_name": {
+                    "description": "Ingress类名",
                     "type": "string"
                 },
-                "k8s_app_id": {
-                    "description": "关联的 Kubernetes 应用ID，修正字段名称为k8s_app_id",
-                    "type": "integer"
-                },
                 "labels": {
-                    "description": "K8s标签",
+                    "description": "标签",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
-                "liveness_probe": {
-                    "description": "健康检查",
+                "load_balancer": {
+                    "description": "负载均衡器信息",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/model.Probe"
+                            "$ref": "#/definitions/model.IngressLoadBalancer"
                         }
                     ]
                 },
                 "name": {
-                    "description": "实例名称",
+                    "description": "Ingress名称",
                     "type": "string",
                     "maxLength": 200,
                     "minLength": 1
                 },
                 "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
+                    "description": "所属命名空间",
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 1
                 },
-                "node_selector": {
-                    "description": "高级配置",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "readiness_probe": {
-                    "description": "就绪探针",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.Probe"
-                        }
-                    ]
-                },
-                "replicas": {
-                    "description": "副本数量",
-                    "type": "integer"
-                },
-                "service_name": {
-                    "description": "关联的服务名称",
-                    "type": "string"
-                },
-                "startup_probe": {
-                    "description": "启动探针",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.Probe"
-                        }
-                    ]
-                },
-                "status": {
-                    "description": "运行状态(运行时查询，不存储)",
-                    "type": "string"
-                },
-                "strategy": {
-                    "description": "部署策略(RollingUpdate/Recreate)",
-                    "type": "string"
-                },
-                "tolerations": {
-                    "description": "容忍配置",
+                "rules": {
+                    "description": "Ingress规则",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/model.Toleration"
+                        "$ref": "#/definitions/model.IngressRule"
                     }
                 },
-                "type": {
-                    "description": "实例类型(Deployment/StatefulSet/DaemonSet)",
+                "status": {
+                    "description": "Ingress状态，前端计算使用",
+                    "type": "string"
+                },
+                "tls": {
+                    "description": "TLS配置",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.IngressTLS"
+                    }
+                },
+                "uid": {
+                    "description": "Ingress UID",
                     "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
-                },
-                "user_id": {
-                    "description": "创建者用户ID",
-                    "type": "integer"
                 }
             }
         },
-        "model.K8sLabelBatchRequest": {
+        "model.K8sIngressTLSTestReq": {
             "type": "object",
             "required": [
                 "cluster_id",
-                "operation",
-                "resource_type"
+                "host",
+                "name",
+                "namespace"
             ],
             "properties": {
                 "cluster_id": {
                     "description": "集群ID，必填",
                     "type": "integer"
                 },
-                "label_selector": {
-                    "description": "标签选择器（用于批量选择）",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
+                "host": {
+                    "description": "测试主机名，必填",
+                    "type": "string"
                 },
-                "labels": {
-                    "description": "标签键值对",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
+                "name": {
+                    "description": "Ingress名称，必填",
+                    "type": "string"
                 },
                 "namespace": {
-                    "description": "命名空间，可选",
-                    "type": "string"
-                },
-                "operation": {
-                    "description": "操作类型 (add, update, delete)",
-                    "type": "string"
-                },
-                "resource_names": {
-                    "description": "资源名称列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "resource_type": {
-                    "description": "资源类型，必填",
+                    "description": "命名空间，必填",
                     "type": "string"
                 }
             }
         },
-        "model.K8sLabelComplianceRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id"
-            ],
-            "properties": {
-                "check_all": {
-                    "description": "是否检查所有资源",
-                    "type": "boolean"
-                },
-                "cluster_id": {
-                    "description": "集群ID，必填",
-                    "type": "integer"
-                },
-                "namespace": {
-                    "description": "命名空间，可选",
-                    "type": "string"
-                },
-                "policy_name": {
-                    "description": "策略名称，可选",
-                    "type": "string"
-                },
-                "resource_type": {
-                    "description": "资源类型，可选",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sLabelComplianceResponse": {
-            "type": "object",
-            "properties": {
-                "check_time": {
-                    "description": "检查时间",
-                    "type": "string"
-                },
-                "compliant": {
-                    "description": "是否合规",
-                    "type": "boolean"
-                },
-                "extra_labels": {
-                    "description": "多余的标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "missing_labels": {
-                    "description": "缺失的标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "policy_name": {
-                    "description": "策略名称",
-                    "type": "string"
-                },
-                "resource_name": {
-                    "description": "资源名称",
-                    "type": "string"
-                },
-                "resource_type": {
-                    "description": "资源类型",
-                    "type": "string"
-                },
-                "violation_reason": {
-                    "description": "违规原因",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sLabelHistoryRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID，必填",
-                    "type": "integer"
-                },
-                "end_time": {
-                    "description": "结束时间",
-                    "type": "string"
-                },
-                "limit": {
-                    "description": "限制数量",
-                    "type": "integer"
-                },
-                "namespace": {
-                    "description": "命名空间，可选",
-                    "type": "string"
-                },
-                "resource_name": {
-                    "description": "资源名称，可选",
-                    "type": "string"
-                },
-                "resource_type": {
-                    "description": "资源类型，可选",
-                    "type": "string"
-                },
-                "start_time": {
-                    "description": "开始时间",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sLabelHistoryResponse": {
-            "type": "object",
-            "properties": {
-                "change_reason": {
-                    "description": "修改原因",
-                    "type": "string"
-                },
-                "change_time": {
-                    "description": "修改时间",
-                    "type": "string"
-                },
-                "changed_by": {
-                    "description": "修改者",
-                    "type": "string"
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "id": {
-                    "description": "记录ID",
-                    "type": "integer"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "new_labels": {
-                    "description": "新标签",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "old_labels": {
-                    "description": "原标签",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "operation": {
-                    "description": "操作类型",
-                    "type": "string"
-                },
-                "resource_name": {
-                    "description": "资源名称",
-                    "type": "string"
-                },
-                "resource_type": {
-                    "description": "资源类型",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sLabelPolicyRequest": {
+        "model.K8sIngressUpdateReq": {
             "type": "object",
             "required": [
                 "cluster_id",
-                "policy_name"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID，必填",
-                    "type": "integer"
-                },
-                "description": {
-                    "description": "策略描述",
-                    "type": "string"
-                },
-                "enabled": {
-                    "description": "是否启用",
-                    "type": "boolean"
-                },
-                "label_rules": {
-                    "description": "标签规则",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.K8sLabelRule"
-                    }
-                },
-                "namespace": {
-                    "description": "命名空间，可选",
-                    "type": "string"
-                },
-                "policy_name": {
-                    "description": "策略名称，必填",
-                    "type": "string"
-                },
-                "policy_type": {
-                    "description": "策略类型 (required, forbidden, preferred)",
-                    "type": "string"
-                },
-                "resource_type": {
-                    "description": "资源类型",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sLabelRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "resource_type"
+                "name",
+                "namespace"
             ],
             "properties": {
                 "annotations": {
-                    "description": "注解键值对",
+                    "description": "注解",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
@@ -25814,179 +21524,45 @@ const docTemplate = `{
                     "description": "集群ID，必填",
                     "type": "integer"
                 },
-                "label_selector": {
-                    "description": "标签选择器",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
+                "ingress_class_name": {
+                    "description": "Ingress类名",
+                    "type": "string"
+                },
+                "ingress_yaml": {
+                    "description": "Ingress YAML对象",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Ingress"
+                        }
+                    ]
                 },
                 "labels": {
-                    "description": "标签键值对",
+                    "description": "标签",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
+                },
+                "name": {
+                    "description": "Ingress名称，必填",
+                    "type": "string"
                 },
                 "namespace": {
-                    "description": "命名空间，可选",
+                    "description": "命名空间，必填",
                     "type": "string"
                 },
-                "operation": {
-                    "description": "操作类型 (add, update, delete)",
-                    "type": "string"
-                },
-                "resource_name": {
-                    "description": "资源名称，可选",
-                    "type": "string"
-                },
-                "resource_names": {
-                    "description": "批量操作的资源名称列表",
+                "rules": {
+                    "description": "Ingress规则",
                     "type": "array",
                     "items": {
-                        "type": "string"
+                        "$ref": "#/definitions/model.IngressRuleReq"
                     }
                 },
-                "resource_type": {
-                    "description": "资源类型，必填",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sLabelResponse": {
-            "type": "object",
-            "properties": {
-                "annotations": {
-                    "description": "注解键值对",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "creation_timestamp": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "labels": {
-                    "description": "标签键值对",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "resource_name": {
-                    "description": "资源名称",
-                    "type": "string"
-                },
-                "resource_type": {
-                    "description": "资源类型",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sLabelRule": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "description": "规则描述",
-                    "type": "string"
-                },
-                "key": {
-                    "description": "标签键",
-                    "type": "string"
-                },
-                "operator": {
-                    "description": "操作符 (In, NotIn, Exists, DoesNotExist)",
-                    "type": "string"
-                },
-                "required": {
-                    "description": "是否必需",
-                    "type": "boolean"
-                },
-                "values": {
-                    "description": "标签值列表",
+                "tls": {
+                    "description": "TLS配置",
                     "type": "array",
                     "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "model.K8sLabelSelector": {
-            "type": "object",
-            "properties": {
-                "match_expressions": {
-                    "description": "匹配表达式",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.K8sLabelSelectorRequirement"
-                    }
-                },
-                "match_labels": {
-                    "description": "匹配标签",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "model.K8sLabelSelectorRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "resource_type"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID，必填",
-                    "type": "integer"
-                },
-                "field_selector": {
-                    "description": "字段选择器",
-                    "type": "string"
-                },
-                "label_selector": {
-                    "description": "标签选择器",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "limit": {
-                    "description": "限制数量",
-                    "type": "integer"
-                },
-                "namespace": {
-                    "description": "命名空间，可选",
-                    "type": "string"
-                },
-                "resource_type": {
-                    "description": "资源类型，必填",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sLabelSelectorRequirement": {
-            "type": "object",
-            "properties": {
-                "key": {
-                    "description": "键",
-                    "type": "string"
-                },
-                "operator": {
-                    "description": "操作符 (In, NotIn, Exists, DoesNotExist)",
-                    "type": "string"
-                },
-                "values": {
-                    "description": "值列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
+                        "$ref": "#/definitions/model.IngressTLSReq"
                     }
                 }
             }
@@ -26150,112 +21726,27 @@ const docTemplate = `{
                 }
             }
         },
-        "model.K8sNodeAffinityRequest": {
+        "model.K8sPVBatchDeleteReq": {
             "type": "object",
             "required": [
                 "cluster_id",
-                "namespace",
-                "resource_name",
-                "resource_type"
+                "names"
             ],
             "properties": {
                 "cluster_id": {
                     "description": "集群ID，必填",
                     "type": "integer"
                 },
-                "namespace": {
-                    "description": "命名空间，必填",
-                    "type": "string"
-                },
-                "node_selector": {
-                    "description": "节点选择器",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "operation": {
-                    "description": "操作类型 (add, update, delete)",
-                    "type": "string"
-                },
-                "preferred_affinity": {
-                    "description": "软亲和性规则",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.K8sPreferredSchedulingTerm"
-                    }
-                },
-                "required_affinity": {
-                    "description": "硬亲和性规则",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.K8sNodeSelectorTerm"
-                    }
-                },
-                "resource_name": {
-                    "description": "资源名称，必填",
-                    "type": "string"
-                },
-                "resource_type": {
-                    "description": "资源类型，必填",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sNodeAffinityValidationRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID，必填",
-                    "type": "integer"
-                },
-                "namespace": {
-                    "description": "命名空间，可选",
-                    "type": "string"
-                },
-                "node_selector": {
-                    "description": "节点选择器",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "preferred_affinity": {
-                    "description": "软亲和性规则",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.K8sPreferredSchedulingTerm"
-                    }
-                },
-                "required_affinity": {
-                    "description": "硬亲和性规则",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.K8sNodeSelectorTerm"
-                    }
-                },
-                "simulate_scheduling": {
-                    "description": "是否模拟调度",
+                "force": {
+                    "description": "是否强制删除",
                     "type": "boolean"
-                }
-            }
-        },
-        "model.K8sNodeSelectorRequirement": {
-            "type": "object",
-            "properties": {
-                "key": {
-                    "description": "键",
-                    "type": "string"
                 },
-                "operator": {
-                    "description": "操作符 (In, NotIn, Exists, DoesNotExist, Gt, Lt)",
-                    "type": "string"
+                "grace_period_seconds": {
+                    "description": "优雅删除时间",
+                    "type": "integer"
                 },
-                "values": {
-                    "description": "值列表",
+                "names": {
+                    "description": "PV名称列表，必填",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -26263,366 +21754,85 @@ const docTemplate = `{
                 }
             }
         },
-        "model.K8sNodeSelectorTerm": {
-            "type": "object",
-            "properties": {
-                "match_expressions": {
-                    "description": "匹配表达式",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.K8sNodeSelectorRequirement"
-                    }
-                },
-                "match_fields": {
-                    "description": "匹配字段",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.K8sNodeSelectorRequirement"
-                    }
-                }
-            }
-        },
-        "model.K8sPVCRequest": {
+        "model.K8sPVCBatchDeleteReq": {
             "type": "object",
             "required": [
                 "cluster_id",
+                "names",
                 "namespace"
             ],
             "properties": {
                 "cluster_id": {
-                    "description": "集群名称，必填",
+                    "description": "集群ID，必填",
                     "type": "integer"
+                },
+                "force": {
+                    "description": "是否强制删除",
+                    "type": "boolean"
+                },
+                "grace_period_seconds": {
+                    "description": "优雅删除时间",
+                    "type": "integer"
+                },
+                "names": {
+                    "description": "PVC名称列表，必填",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "namespace": {
                     "description": "命名空间，必填",
                     "type": "string"
-                },
-                "pvc_names": {
-                    "description": "PVC 名称，可选",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "pvc_yaml": {
-                    "description": "PVC 对象, 可选",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolumeClaim"
-                        }
-                    ]
                 }
             }
         },
-        "model.K8sPVRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群名称，必填",
-                    "type": "integer"
-                },
-                "pv_names": {
-                    "description": "PV 名称，可选",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "pv_yaml": {
-                    "description": "PV 对象, 可选",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolume"
-                        }
-                    ]
-                }
-            }
-        },
-        "model.K8sPodAffinityRequest": {
+        "model.K8sPVCCreateReq": {
             "type": "object",
             "required": [
                 "cluster_id",
+                "name",
                 "namespace",
-                "resource_name",
-                "resource_type"
+                "yaml"
             ],
             "properties": {
+                "annotations": {
+                    "description": "注解",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
                 "cluster_id": {
                     "description": "集群ID，必填",
                     "type": "integer"
+                },
+                "labels": {
+                    "description": "标签",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "PVC名称，必填",
+                    "type": "string"
                 },
                 "namespace": {
                     "description": "命名空间，必填",
                     "type": "string"
                 },
-                "operation": {
-                    "description": "操作类型 (add, update, delete)",
+                "pvc_yaml": {
+                    "description": "PVC YAML配置，兼容性字段",
                     "type": "string"
                 },
-                "pod_affinity": {
-                    "description": "Pod 亲和性",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.K8sPodAffinityTerm"
-                    }
-                },
-                "pod_anti_affinity": {
-                    "description": "Pod 反亲和性",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.K8sPodAffinityTerm"
-                    }
-                },
-                "resource_name": {
-                    "description": "资源名称，必填",
-                    "type": "string"
-                },
-                "resource_type": {
-                    "description": "资源类型，必填",
-                    "type": "string"
-                },
-                "topology_key": {
-                    "description": "拓扑键",
+                "yaml": {
+                    "description": "YAML配置，必填",
                     "type": "string"
                 }
             }
         },
-        "model.K8sPodAffinityTerm": {
-            "type": "object",
-            "properties": {
-                "label_selector": {
-                    "description": "标签选择器",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.K8sLabelSelector"
-                        }
-                    ]
-                },
-                "namespace_selector": {
-                    "description": "命名空间选择器",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.K8sLabelSelector"
-                        }
-                    ]
-                },
-                "namespaces": {
-                    "description": "命名空间列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "topology_key": {
-                    "description": "拓扑键",
-                    "type": "string"
-                },
-                "weight": {
-                    "description": "权重（仅用于软亲和性）",
-                    "type": "integer"
-                }
-            }
-        },
-        "model.K8sPodAffinityTermSpec": {
-            "type": "object",
-            "properties": {
-                "label_selector": {
-                    "description": "标签选择器",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.K8sLabelSelector"
-                        }
-                    ]
-                },
-                "namespace_selector": {
-                    "description": "命名空间选择器",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.K8sLabelSelector"
-                        }
-                    ]
-                },
-                "namespaces": {
-                    "description": "命名空间列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "topology_key": {
-                    "description": "拓扑键",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sPodAffinityValidationRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群ID，必填",
-                    "type": "integer"
-                },
-                "namespace": {
-                    "description": "命名空间，可选",
-                    "type": "string"
-                },
-                "pod_affinity": {
-                    "description": "Pod 亲和性",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.K8sPodAffinityTerm"
-                        }
-                    ]
-                },
-                "pod_anti_affinity": {
-                    "description": "Pod 反亲和性",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.K8sPodAntiAffinityTerm"
-                        }
-                    ]
-                },
-                "simulate_scheduling": {
-                    "description": "是否模拟调度",
-                    "type": "boolean"
-                }
-            }
-        },
-        "model.K8sPodAntiAffinityTerm": {
-            "type": "object",
-            "properties": {
-                "preferred_during_scheduling_ignored_during_execution": {
-                    "description": "软反亲和性",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.K8sWeightedPodAffinityTerm"
-                    }
-                },
-                "required_during_scheduling_ignored_during_execution": {
-                    "description": "硬反亲和性",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.K8sPodAffinityTermSpec"
-                    }
-                }
-            }
-        },
-        "model.K8sPreferredSchedulingTerm": {
-            "type": "object",
-            "properties": {
-                "preference": {
-                    "description": "偏好条件",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.K8sNodeSelectorTerm"
-                        }
-                    ]
-                },
-                "weight": {
-                    "description": "权重 (1-100)",
-                    "type": "integer"
-                }
-            }
-        },
-        "model.K8sRole": {
-            "type": "object",
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "Role 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "rules": {
-                    "description": "策略规则",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.PolicyRule"
-                    }
-                },
-                "uid": {
-                    "description": "唯一标识符",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sRoleBinding": {
-            "type": "object",
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "RoleBinding 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "role_ref": {
-                    "description": "角色引用",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.RoleRef"
-                        }
-                    ]
-                },
-                "subjects": {
-                    "description": "绑定的主体",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.Subject"
-                    }
-                },
-                "uid": {
-                    "description": "唯一标识符",
-                    "type": "string"
-                }
-            }
-        },
-        "model.K8sSecretEncryptionRequest": {
+        "model.K8sPVCDeleteReq": {
             "type": "object",
             "required": [
                 "cluster_id",
@@ -26631,131 +21841,705 @@ const docTemplate = `{
             ],
             "properties": {
                 "cluster_id": {
-                    "description": "集群ID",
+                    "description": "集群ID，必填",
                     "type": "integer"
                 },
-                "data": {
-                    "description": "明文数据",
+                "force": {
+                    "description": "是否强制删除",
+                    "type": "boolean"
+                },
+                "grace_period_seconds": {
+                    "description": "优雅删除时间",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "PVC名称，必填",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "命名空间，必填",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sPVCEntity": {
+            "type": "object",
+            "properties": {
+                "access_modes": {
+                    "description": "访问模式",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "age": {
+                    "description": "存在时间",
+                    "type": "string"
+                },
+                "annotations": {
+                    "description": "注解",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
-                "immutable": {
-                    "description": "是否不可变",
-                    "type": "boolean"
+                "capacity": {
+                    "description": "容量",
+                    "type": "string"
+                },
+                "cluster_id": {
+                    "description": "集群ID",
+                    "type": "integer"
+                },
+                "creation_timestamp": {
+                    "description": "创建时间",
+                    "type": "string"
+                },
+                "labels": {
+                    "description": "标签",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
                 "name": {
-                    "description": "Secret 名称",
+                    "description": "PVC名称",
                     "type": "string"
                 },
                 "namespace": {
                     "description": "命名空间",
                     "type": "string"
                 },
+                "status": {
+                    "description": "状态",
+                    "type": "string"
+                },
+                "storage_class": {
+                    "description": "存储类",
+                    "type": "string"
+                },
+                "uid": {
+                    "description": "UID",
+                    "type": "string"
+                },
+                "volume": {
+                    "description": "绑定的PV",
+                    "type": "string"
+                },
+                "volume_mode": {
+                    "description": "卷模式",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sPVCExpandReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "name",
+                "namespace",
+                "new_size"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "PVC名称，必填",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "命名空间，必填",
+                    "type": "string"
+                },
+                "new_size": {
+                    "description": "新容量，必填",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sPVCUpdateReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "name",
+                "namespace",
+                "yaml"
+            ],
+            "properties": {
+                "annotations": {
+                    "description": "注解",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "labels": {
+                    "description": "标签",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "PVC名称，必填",
+                    "type": "string"
+                },
+                "namespace": {
+                    "description": "命名空间，必填",
+                    "type": "string"
+                },
+                "pvc_yaml": {
+                    "description": "PVC YAML配置，兼容性字段",
+                    "type": "string"
+                },
+                "yaml": {
+                    "description": "YAML配置，必填",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sPVCUsageInfo": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "description": "可用",
+                    "type": "string"
+                },
+                "total": {
+                    "description": "总容量",
+                    "type": "string"
+                },
+                "usage_rate": {
+                    "description": "使用率",
+                    "type": "number"
+                },
+                "used": {
+                    "description": "已使用",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sPVCreateReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "name",
+                "yaml"
+            ],
+            "properties": {
+                "annotations": {
+                    "description": "注解",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "labels": {
+                    "description": "标签",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "PV名称，必填",
+                    "type": "string"
+                },
+                "pv_yaml": {
+                    "description": "PV YAML配置，兼容性字段",
+                    "type": "string"
+                },
+                "yaml": {
+                    "description": "YAML配置，必填",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sPVDeleteReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "name"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "force": {
+                    "description": "是否强制删除",
+                    "type": "boolean"
+                },
+                "grace_period_seconds": {
+                    "description": "优雅删除时间",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "PV名称，必填",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sPVEntity": {
+            "type": "object",
+            "properties": {
+                "access_modes": {
+                    "description": "访问模式",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "age": {
+                    "description": "存在时间",
+                    "type": "string"
+                },
+                "annotations": {
+                    "description": "注解",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "capacity": {
+                    "description": "容量",
+                    "type": "string"
+                },
+                "claim": {
+                    "description": "绑定的PVC",
+                    "type": "string"
+                },
+                "cluster_id": {
+                    "description": "集群ID",
+                    "type": "integer"
+                },
+                "creation_timestamp": {
+                    "description": "创建时间",
+                    "type": "string"
+                },
+                "labels": {
+                    "description": "标签",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "PV名称",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "原因",
+                    "type": "string"
+                },
+                "reclaim_policy": {
+                    "description": "回收策略",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "状态",
+                    "type": "string"
+                },
+                "storage_class": {
+                    "description": "存储类",
+                    "type": "string"
+                },
+                "uid": {
+                    "description": "UID",
+                    "type": "string"
+                },
+                "volume_mode": {
+                    "description": "卷模式",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sPVReclaimReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "name"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "PV名称，必填",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sPVUpdateReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "name",
+                "yaml"
+            ],
+            "properties": {
+                "annotations": {
+                    "description": "注解",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "cluster_id": {
+                    "description": "集群ID，必填",
+                    "type": "integer"
+                },
+                "labels": {
+                    "description": "标签",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "PV名称，必填",
+                    "type": "string"
+                },
+                "pv_yaml": {
+                    "description": "PV YAML配置，兼容性字段",
+                    "type": "string"
+                },
+                "yaml": {
+                    "description": "YAML配置，必填",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sPVUsageInfo": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "description": "可用",
+                    "type": "string"
+                },
+                "total": {
+                    "description": "总容量",
+                    "type": "string"
+                },
+                "usage_rate": {
+                    "description": "使用率",
+                    "type": "number"
+                },
+                "used": {
+                    "description": "已使用",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sPod": {
+            "type": "object",
+            "required": [
+                "name",
+                "namespace"
+            ],
+            "properties": {
+                "annotations": {
+                    "description": "Pod 注解键值对",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "containers": {
+                    "description": "Pod 内的容器信息，前端使用",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.K8sPodContainer"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "labels": {
+                    "description": "Pod 标签键值对",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "Pod 名称",
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 1
+                },
+                "namespace": {
+                    "description": "Pod 所属的命名空间",
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 1
+                },
+                "node_name": {
+                    "description": "Pod 所在节点名称",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Pod 状态，例如 \"Running\", \"Pending\"",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sPodContainer": {
+            "type": "object",
+            "required": [
+                "image",
+                "name"
+            ],
+            "properties": {
+                "args": {
+                    "description": "启动参数",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "command": {
+                    "description": "启动命令组",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "envs": {
+                    "description": "环境变量组",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.K8sEnvVar"
+                    }
+                },
+                "image": {
+                    "description": "容器镜像",
+                    "type": "string"
+                },
+                "image_pull_policy": {
+                    "description": "镜像拉取策略，例如 \"Always\", \"IfNotPresent\", \"Never\"",
+                    "type": "string"
+                },
+                "liveness_probe": {
+                    "description": "存活探测配置",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.K8sProbe"
+                        }
+                    ]
+                },
+                "name": {
+                    "description": "容器名称",
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 1
+                },
+                "ports": {
+                    "description": "容器端口配置",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.K8sContainerPort"
+                    }
+                },
+                "readiness_probe": {
+                    "description": "就绪探测配置",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.K8sProbe"
+                        }
+                    ]
+                },
+                "resources": {
+                    "description": "资源请求与限制",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.ResourceRequirements"
+                        }
+                    ]
+                },
+                "volume_mounts": {
+                    "description": "卷挂载配置",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.K8sVolumeMount"
+                    }
+                }
+            }
+        },
+        "model.K8sProbe": {
+            "type": "object",
+            "properties": {
+                "failure_threshold": {
+                    "description": "探测失败阈值",
+                    "type": "integer"
+                },
+                "http_get": {
+                    "description": "HTTP GET 探测",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.K8sHTTPGetAction"
+                        }
+                    ]
+                },
+                "initial_delay_seconds": {
+                    "description": "TCPSocket 和 Exec 探测也可以根据需要添加",
+                    "type": "integer"
+                },
+                "period_seconds": {
+                    "description": "探测间隔时间",
+                    "type": "integer"
+                },
+                "success_threshold": {
+                    "description": "探测成功阈值",
+                    "type": "integer"
+                },
+                "timeout_seconds": {
+                    "description": "探测超时时间",
+                    "type": "integer"
+                }
+            }
+        },
+        "model.K8sResourceHistory": {
+            "type": "object",
+            "properties": {
+                "annotations": {
+                    "description": "注解",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "change_cause": {
+                    "description": "变更原因",
+                    "type": "string"
+                },
+                "change_time": {
+                    "description": "变更时间",
+                    "type": "string"
+                },
+                "config_changes": {
+                    "description": "配置变更内容",
+                    "type": "string"
+                },
+                "labels": {
+                    "description": "标签",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "namespace": {
+                    "description": "命名空间",
+                    "type": "string"
+                },
+                "resource_name": {
+                    "description": "资源名称",
+                    "type": "string"
+                },
+                "resource_type": {
+                    "description": "资源类型 (deployment, daemonset, statefulset等)",
+                    "type": "string"
+                },
+                "revision": {
+                    "description": "版本号",
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "状态",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sResourceList": {
+            "type": "object",
+            "properties": {
+                "cpu": {
+                    "description": "CPU 数量，例如 \"500m\", \"2\"",
+                    "type": "string"
+                },
+                "memory": {
+                    "description": "内存数量，例如 \"1Gi\", \"512Mi\"",
+                    "type": "string"
+                }
+            }
+        },
+        "model.K8sSecret": {
+            "type": "object",
+            "properties": {
+                "age": {
+                    "type": "string"
+                },
+                "annotations": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "creation_timestamp": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.K8sEvent"
+                    }
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
                 "string_data": {
-                    "description": "字符串数据",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "type": {
-                    "description": "Secret 类型",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretType"
-                        }
-                    ]
-                }
-            }
-        },
-        "model.K8sSecretRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "namespace"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群名称，必填",
-                    "type": "integer"
-                },
-                "namespace": {
-                    "description": "命名空间，必填",
                     "type": "string"
-                },
-                "secret_names": {
-                    "description": "Secret 名称，可选",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "secret_yaml": {
-                    "description": "Secret 对象, 可选",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.Secret"
-                        }
-                    ]
-                }
-            }
-        },
-        "model.K8sServiceAccount": {
-            "type": "object",
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "automount_service_account_token": {
-                    "description": "是否自动挂载服务账户令牌",
-                    "type": "boolean"
-                },
-                "created_at": {
-                    "description": "创建时间",
-                    "type": "string"
-                },
-                "image_pull_secrets": {
-                    "description": "镜像拉取 Secret",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.LocalObjectReference"
-                    }
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "ServiceAccount 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "secrets": {
-                    "description": "关联的 Secret",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.LocalObjectReference"
-                    }
                 },
                 "uid": {
-                    "description": "唯一标识符",
                     "type": "string"
                 }
             }
         },
-        "model.K8sServiceRequest": {
+        "model.K8sServiceReq": {
             "type": "object",
             "required": [
                 "cluster_id"
@@ -26786,79 +22570,119 @@ const docTemplate = `{
                 }
             }
         },
-        "model.K8sStatefulSetRequest": {
+        "model.K8sStatefulSet": {
             "type": "object",
-            "required": [
-                "cluster_id",
-                "namespace"
-            ],
             "properties": {
-                "cluster_id": {
-                    "description": "集群名称，必填",
-                    "type": "integer"
-                },
-                "namespace": {
-                    "description": "命名空间，必填",
+                "age": {
                     "type": "string"
                 },
-                "statefulset_names": {
-                    "description": "StatefulSet 名称，可选",
+                "annotations": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "creation_timestamp": {
+                    "type": "string"
+                },
+                "current_replicas": {
+                    "type": "integer"
+                },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.K8sEvent"
+                    }
+                },
+                "images": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
-                "statefulset_yaml": {
-                    "description": "StatefulSet 对象, 可选",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.StatefulSet"
-                        }
-                    ]
-                }
-            }
-        },
-        "model.K8sStatefulSetScaleRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "namespace",
-                "replicas",
-                "statefulset_name"
-            ],
-            "properties": {
-                "cluster_id": {
-                    "description": "集群名称，必填",
-                    "type": "integer"
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
                 },
                 "namespace": {
-                    "description": "命名空间，必填",
                     "type": "string"
                 },
-                "replicas": {
-                    "description": "副本数量，必填",
+                "ready_replicas": {
                     "type": "integer"
                 },
-                "statefulset_name": {
-                    "description": "StatefulSet 名称，必填",
+                "replicas": {
+                    "type": "integer"
+                },
+                "service_name": {
                     "type": "string"
+                },
+                "uid": {
+                    "type": "string"
+                },
+                "update_strategy": {
+                    "type": "string"
+                },
+                "updated_replicas": {
+                    "type": "integer"
                 }
             }
         },
-        "model.K8sWeightedPodAffinityTerm": {
+        "model.K8sTLSTestResult": {
             "type": "object",
             "properties": {
-                "pod_affinity_term": {
-                    "description": "Pod 亲和性条件",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.K8sPodAffinityTermSpec"
-                        }
-                    ]
+                "error_msg": {
+                    "description": "错误信息",
+                    "type": "string"
                 },
-                "weight": {
-                    "description": "权重 (1-100)",
-                    "type": "integer"
+                "expiry_date": {
+                    "description": "证书过期时间",
+                    "type": "string"
+                },
+                "host": {
+                    "description": "主机名",
+                    "type": "string"
+                },
+                "issuer": {
+                    "description": "证书颁发者",
+                    "type": "string"
+                },
+                "subject": {
+                    "description": "证书主题",
+                    "type": "string"
+                },
+                "valid": {
+                    "description": "证书是否有效",
+                    "type": "boolean"
+                }
+            }
+        },
+        "model.K8sVolumeMount": {
+            "type": "object",
+            "required": [
+                "mount_path",
+                "name"
+            ],
+            "properties": {
+                "mount_path": {
+                    "description": "挂载路径，必填，长度限制为255字符",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "卷名称，必填，长度限制为100字符",
+                    "type": "string"
+                },
+                "read_only": {
+                    "description": "是否只读",
+                    "type": "boolean"
+                },
+                "sub_path": {
+                    "description": "子路径（可选），长度限制为255字符",
+                    "type": "string"
                 }
             }
         },
@@ -26947,7 +22771,7 @@ const docTemplate = `{
                 }
             }
         },
-        "model.LabelK8sNodesRequest": {
+        "model.LabelK8sNodesReq": {
             "type": "object",
             "required": [
                 "cluster_id",
@@ -26981,49 +22805,67 @@ const docTemplate = `{
                 }
             }
         },
-        "model.LocalObjectReference": {
+        "model.LabelSelector": {
             "type": "object",
             "properties": {
-                "name": {
-                    "description": "对象名称",
-                    "type": "string"
+                "match_expressions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.LabelSelectorRequirement"
+                    }
+                },
+                "match_labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 }
             }
         },
-        "model.MCPConfig": {
+        "model.LabelSelectorRequirement": {
             "type": "object",
             "properties": {
-                "blacklist": {
-                    "description": "工具黑名单",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.ToolBlacklist"
-                        }
-                    ]
-                },
-                "created_at": {
+                "key": {
                     "type": "string"
                 },
-                "deleted_at": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "updated_at": {
+                "operator": {
                     "type": "string"
                 },
-                "url": {
-                    "description": "MCP服务URL",
+                "values": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "model.ManualSendNotificationReq": {
+            "type": "object",
+            "required": [
+                "channels",
+                "content",
+                "recipient",
+                "subject"
+            ],
+            "properties": {
+                "channels": {
+                    "description": "通知渠道列表",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "content": {
+                    "description": "通知内容",
                     "type": "string"
                 },
-                "whitelist": {
-                    "description": "工具白名单",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.ToolWhitelist"
-                        }
-                    ]
+                "recipient": {
+                    "description": "接收人地址",
+                    "type": "string"
+                },
+                "subject": {
+                    "description": "通知主题",
+                    "type": "string"
                 }
             }
         },
@@ -27115,86 +22957,28 @@ const docTemplate = `{
                 }
             }
         },
-        "model.PolicyRule": {
+        "model.PersistentVolumeClaimTemplate": {
             "type": "object",
             "properties": {
-                "api_groups": {
-                    "description": "API 组，如 \"\", \"apps\", \"extensions\"",
+                "access_modes": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
-                "non_resource_urls": {
-                    "description": "非资源URL，如 \"/healthz\"",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "resource_names": {
-                    "description": "特定资源名称",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "resources": {
-                    "description": "资源类型，如 pods, services, deployments",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "verbs": {
-                    "description": "允许的操作动词，如 get, list, create, update, delete",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "model.Probe": {
-            "type": "object",
-            "properties": {
-                "command": {
-                    "description": "执行命令",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "failure_threshold": {
-                    "description": "失败阈值",
-                    "type": "integer"
-                },
-                "initial_delay_seconds": {
-                    "description": "初始延迟秒数",
-                    "type": "integer"
-                },
-                "path": {
-                    "description": "HTTP路径",
+                "name": {
                     "type": "string"
                 },
-                "period_seconds": {
-                    "description": "检测周期",
-                    "type": "integer"
+                "resources": {
+                    "$ref": "#/definitions/model.ResourceRequirements"
                 },
-                "port": {
-                    "description": "端口",
-                    "type": "integer"
+                "selector": {
+                    "$ref": "#/definitions/model.LabelSelector"
                 },
-                "success_threshold": {
-                    "description": "成功阈值",
-                    "type": "integer"
+                "size": {
+                    "type": "string"
                 },
-                "timeout_seconds": {
-                    "description": "超时秒数",
-                    "type": "integer"
-                },
-                "type": {
-                    "description": "探针类型(http/tcp/exec)",
+                "storage_class": {
                     "type": "string"
                 }
             }
@@ -27289,43 +23073,6 @@ const docTemplate = `{
                 }
             }
         },
-        "model.PropertyDef": {
-            "type": "object",
-            "properties": {
-                "default": {
-                    "description": "默认值"
-                },
-                "description": {
-                    "description": "属性描述",
-                    "type": "string"
-                },
-                "enum": {
-                    "description": "枚举值",
-                    "type": "array",
-                    "items": {}
-                },
-                "items": {
-                    "description": "数组项定义",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.ItemDef"
-                        }
-                    ]
-                },
-                "maximum": {
-                    "description": "最大值",
-                    "type": "number"
-                },
-                "minimum": {
-                    "description": "最小值",
-                    "type": "number"
-                },
-                "type": {
-                    "description": "属性类型",
-                    "type": "string"
-                }
-            }
-        },
         "model.RejectWorkorderInstanceReq": {
             "type": "object",
             "required": [
@@ -27396,6 +23143,27 @@ const docTemplate = `{
                 }
             }
         },
+        "model.ResourceRequirements": {
+            "type": "object",
+            "properties": {
+                "limits": {
+                    "description": "资源限制",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.K8sResourceList"
+                        }
+                    ]
+                },
+                "requests": {
+                    "description": "资源请求",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.K8sResourceList"
+                        }
+                    ]
+                }
+            }
+        },
         "model.ResourceStatus": {
             "type": "integer",
             "enum": [
@@ -27416,6 +23184,24 @@ const docTemplate = `{
                 "DELETING",
                 "ERROR"
             ]
+        },
+        "model.ReturnWorkorderInstanceReq": {
+            "type": "object",
+            "required": [
+                "comment",
+                "id"
+            ],
+            "properties": {
+                "comment": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 1
+                },
+                "id": {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            }
         },
         "model.RevokeRoleApiRequest": {
             "type": "object",
@@ -27510,33 +23296,7 @@ const docTemplate = `{
                 }
             }
         },
-        "model.RoleRef": {
-            "type": "object",
-            "required": [
-                "api_group",
-                "kind",
-                "name"
-            ],
-            "properties": {
-                "api_group": {
-                    "description": "API 组，通常为 \"rbac.authorization.k8s.io\"",
-                    "type": "string"
-                },
-                "kind": {
-                    "description": "角色类型：Role 或 ClusterRole",
-                    "type": "string",
-                    "enum": [
-                        "Role",
-                        "ClusterRole"
-                    ]
-                },
-                "name": {
-                    "description": "角色名称",
-                    "type": "string"
-                }
-            }
-        },
-        "model.ScheduleK8sNodesRequest": {
+        "model.ScheduleK8sNodesReq": {
             "type": "object",
             "required": [
                 "cluster_id",
@@ -27556,29 +23316,109 @@ const docTemplate = `{
                 }
             }
         },
-        "model.ServiceAccountTokenRequest": {
+        "model.SecretCreateReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "name",
+                "namespace"
+            ],
+            "properties": {
+                "annotations": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "string_data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.SecretKeySelector": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.SecretUpdateReq": {
             "type": "object",
             "required": [
                 "cluster_id",
                 "namespace",
-                "service_account_name"
+                "resource_name"
             ],
             "properties": {
+                "annotations": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
                 "cluster_id": {
-                    "description": "集群ID",
                     "type": "integer"
                 },
-                "expiration_seconds": {
-                    "description": "过期时间（秒）",
-                    "type": "integer"
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
                 "namespace": {
-                    "description": "命名空间",
                     "type": "string"
                 },
-                "service_account_name": {
-                    "description": "ServiceAccount 名称",
+                "resource_name": {
                     "type": "string"
+                },
+                "string_data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -27595,32 +23435,175 @@ const docTemplate = `{
                 "ServiceDiscoveryTypeStatic"
             ]
         },
-        "model.Subject": {
+        "model.StatefulSetCreateReq": {
             "type": "object",
             "required": [
-                "kind",
-                "name"
+                "cluster_id",
+                "image",
+                "name",
+                "namespace",
+                "service_name"
             ],
             "properties": {
-                "api_group": {
-                    "description": "API 组，User和Group为\"rbac.authorization.k8s.io\"，ServiceAccount为\"\"",
+                "annotations": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "env": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.EnvVar"
+                    }
+                },
+                "image": {
                     "type": "string"
                 },
-                "kind": {
-                    "description": "主体类型：User, Group, ServiceAccount",
-                    "type": "string",
-                    "enum": [
-                        "User",
-                        "Group",
-                        "ServiceAccount"
-                    ]
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
                 "name": {
-                    "description": "主体名称",
                     "type": "string"
                 },
                 "namespace": {
-                    "description": "ServiceAccount 所在的命名空间",
+                    "type": "string"
+                },
+                "ports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.ContainerPort"
+                    }
+                },
+                "replicas": {
+                    "type": "integer"
+                },
+                "resources": {
+                    "$ref": "#/definitions/model.ResourceRequirements"
+                },
+                "service_name": {
+                    "type": "string"
+                },
+                "update_strategy": {
+                    "$ref": "#/definitions/model.StatefulSetUpdateStrategy"
+                },
+                "volume_claim_templates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.PersistentVolumeClaimTemplate"
+                    }
+                }
+            }
+        },
+        "model.StatefulSetRollingUpdateStrategy": {
+            "type": "object",
+            "properties": {
+                "max_unavailable": {
+                    "type": "string"
+                },
+                "partition": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.StatefulSetScaleReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "namespace",
+                "replicas",
+                "resource_name"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "replicas": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "resource_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.StatefulSetUpdateReq": {
+            "type": "object",
+            "required": [
+                "cluster_id",
+                "namespace",
+                "resource_name"
+            ],
+            "properties": {
+                "annotations": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "env": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.EnvVar"
+                    }
+                },
+                "image": {
+                    "type": "string"
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "ports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.ContainerPort"
+                    }
+                },
+                "replicas": {
+                    "type": "integer"
+                },
+                "resource_name": {
+                    "type": "string"
+                },
+                "resources": {
+                    "$ref": "#/definitions/model.ResourceRequirements"
+                },
+                "update_strategy": {
+                    "$ref": "#/definitions/model.StatefulSetUpdateStrategy"
+                },
+                "volume_claim_templates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.PersistentVolumeClaimTemplate"
+                    }
+                }
+            }
+        },
+        "model.StatefulSetUpdateStrategy": {
+            "type": "object",
+            "properties": {
+                "rolling_update": {
+                    "$ref": "#/definitions/model.StatefulSetRollingUpdateStrategy"
+                },
+                "type": {
                     "type": "string"
                 }
             }
@@ -27637,7 +23620,124 @@ const docTemplate = `{
                 }
             }
         },
-        "model.TaintK8sNodesRequest": {
+        "model.SystemInfoResponse": {
+            "type": "object",
+            "properties": {
+                "arch": {
+                    "description": "系统架构",
+                    "type": "string"
+                },
+                "cpu_cores": {
+                    "description": "CPU核心数",
+                    "type": "integer"
+                },
+                "cpu_model": {
+                    "description": "CPU型号",
+                    "type": "string"
+                },
+                "cpu_usage": {
+                    "description": "CPU使用率",
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "integer"
+                },
+                "disk_total": {
+                    "description": "总磁盘空间（GB）",
+                    "type": "integer"
+                },
+                "disk_usage": {
+                    "description": "磁盘使用率",
+                    "type": "number"
+                },
+                "disk_usage_formatted": {
+                    "description": "格式化的磁盘使用情况",
+                    "type": "string"
+                },
+                "disk_used": {
+                    "description": "已用磁盘空间（GB）",
+                    "type": "integer"
+                },
+                "hostname": {
+                    "description": "主机名",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "last_update_time": {
+                    "description": "最后更新时间",
+                    "type": "integer"
+                },
+                "load_avg_1": {
+                    "description": "1分钟平均负载",
+                    "type": "number"
+                },
+                "load_avg_15": {
+                    "description": "15分钟平均负载",
+                    "type": "number"
+                },
+                "load_avg_5": {
+                    "description": "5分钟平均负载",
+                    "type": "number"
+                },
+                "memory_total": {
+                    "description": "总内存（MB）",
+                    "type": "integer"
+                },
+                "memory_usage": {
+                    "description": "内存使用率",
+                    "type": "number"
+                },
+                "memory_usage_formatted": {
+                    "description": "格式化的内存使用情况",
+                    "type": "string"
+                },
+                "memory_used": {
+                    "description": "已用内存（MB）",
+                    "type": "integer"
+                },
+                "network_in": {
+                    "description": "网络入流量（MB）",
+                    "type": "integer"
+                },
+                "network_out": {
+                    "description": "网络出流量（MB）",
+                    "type": "integer"
+                },
+                "os": {
+                    "description": "操作系统",
+                    "type": "string"
+                },
+                "os_version": {
+                    "description": "操作系统版本",
+                    "type": "string"
+                },
+                "process_count": {
+                    "description": "进程数",
+                    "type": "integer"
+                },
+                "system_status": {
+                    "description": "系统状态",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "uptime": {
+                    "description": "系统运行时长（秒）",
+                    "type": "integer"
+                },
+                "uptime_formatted": {
+                    "description": "格式化的运行时间",
+                    "type": "string"
+                }
+            }
+        },
+        "model.TaintK8sNodesReq": {
             "type": "object",
             "required": [
                 "cluster_id",
@@ -27665,14 +23765,14 @@ const docTemplate = `{
         "model.TestSendWorkorderNotificationReq": {
             "type": "object",
             "required": [
-                "notification_id",
-                "recipient"
+                "notification_id"
             ],
             "properties": {
                 "notification_id": {
                     "type": "integer"
                 },
                 "recipient": {
+                    "description": "可选，如果不提供则使用默认测试地址",
                     "type": "string"
                 }
             }
@@ -27717,116 +23817,18 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "effect": {
-                    "description": "影响(NoSchedule, PreferNoSchedule, NoExecute)",
                     "type": "string"
                 },
                 "key": {
-                    "description": "键",
                     "type": "string"
                 },
                 "operator": {
-                    "description": "操作符(Equal, Exists)",
                     "type": "string"
+                },
+                "toleration_seconds": {
+                    "type": "integer"
                 },
                 "value": {
-                    "description": "值",
-                    "type": "string"
-                }
-            }
-        },
-        "model.Tool": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "description": "工具描述",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "工具元数据",
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "description": "工具名称",
-                    "type": "string"
-                },
-                "parameters": {
-                    "description": "工具参数定义",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.ToolParameters"
-                        }
-                    ]
-                }
-            }
-        },
-        "model.ToolBlacklist": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "deleted_at": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "tools": {
-                    "description": "黑名单工具列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "model.ToolParameters": {
-            "type": "object",
-            "properties": {
-                "properties": {
-                    "description": "参数属性定义",
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/model.PropertyDef"
-                    }
-                },
-                "required": {
-                    "description": "必需的参数列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "type": {
-                    "description": "参数类型",
-                    "type": "string"
-                }
-            }
-        },
-        "model.ToolWhitelist": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "deleted_at": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "tools": {
-                    "description": "白名单工具列表",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "updated_at": {
                     "type": "string"
                 }
             }
@@ -28115,277 +24117,6 @@ const docTemplate = `{
                 "version": {
                     "description": "API版本",
                     "type": "string"
-                }
-            }
-        },
-        "model.UpdateClusterRoleBindingRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "name",
-                "role_ref",
-                "subjects"
-            ],
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "ClusterRoleBinding 名称",
-                    "type": "string"
-                },
-                "role_ref": {
-                    "description": "角色引用",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.RoleRef"
-                        }
-                    ]
-                },
-                "subjects": {
-                    "description": "绑定的主体",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.Subject"
-                    }
-                }
-            }
-        },
-        "model.UpdateClusterRoleRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "name",
-                "rules"
-            ],
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "ClusterRole 名称",
-                    "type": "string"
-                },
-                "rules": {
-                    "description": "策略规则",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.PolicyRule"
-                    }
-                }
-            }
-        },
-        "model.UpdateK8sAppRequest": {
-            "type": "object",
-            "required": [
-                "cluster",
-                "id",
-                "k8s_project_id",
-                "name",
-                "namespace"
-            ],
-            "properties": {
-                "cluster": {
-                    "description": "所属集群名称",
-                    "type": "string"
-                },
-                "containerCore": {
-                    "description": "容器核心配置",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.ContainerCore"
-                        }
-                    ]
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "k8s_project_id": {
-                    "description": "关联的 Kubernetes 项目ID",
-                    "type": "integer"
-                },
-                "name": {
-                    "description": "应用名称",
-                    "type": "string",
-                    "maxLength": 200,
-                    "minLength": 1
-                },
-                "namespace": {
-                    "description": "Kubernetes 命名空间",
-                    "type": "string"
-                },
-                "service_type": {
-                    "description": "服务类型",
-                    "type": "string"
-                }
-            }
-        },
-        "model.UpdateK8sCronjobRequest": {
-            "type": "object",
-            "required": [
-                "cluster",
-                "id",
-                "image",
-                "k8s_project_id",
-                "name",
-                "namespace",
-                "schedule"
-            ],
-            "properties": {
-                "args": {
-                    "description": "启动参数",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "cluster": {
-                    "description": "所属集群",
-                    "type": "string"
-                },
-                "commands": {
-                    "description": "启动命令组",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "image": {
-                    "description": "镜像",
-                    "type": "string"
-                },
-                "k8s_project_id": {
-                    "description": "关联的 Kubernetes 项目ID",
-                    "type": "integer"
-                },
-                "name": {
-                    "description": "定时任务名称",
-                    "type": "string",
-                    "maxLength": 200,
-                    "minLength": 1
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "schedule": {
-                    "description": "调度表达式",
-                    "type": "string"
-                },
-                "tree_node_id": {
-                    "description": "关联的树节点ID（可选）",
-                    "type": "integer"
-                }
-            }
-        },
-        "model.UpdateK8sProjectRequest": {
-            "type": "object",
-            "required": [
-                "cluster",
-                "id",
-                "name",
-                "name_zh"
-            ],
-            "properties": {
-                "cluster": {
-                    "description": "所属集群名称",
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "description": "项目名称",
-                    "type": "string",
-                    "maxLength": 200,
-                    "minLength": 1
-                },
-                "name_zh": {
-                    "description": "项目中文名称",
-                    "type": "string",
-                    "maxLength": 500,
-                    "minLength": 1
-                },
-                "tree_node_id": {
-                    "description": "关联的树节点ID（可选）",
-                    "type": "integer"
-                }
-            }
-        },
-        "model.UpdateK8sRoleRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "name",
-                "namespace",
-                "rules"
-            ],
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "Role 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "rules": {
-                    "description": "策略规则",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.PolicyRule"
-                    }
                 }
             }
         },
@@ -28862,7 +24593,7 @@ const docTemplate = `{
                 }
             }
         },
-        "model.UpdateNamespaceRequest": {
+        "model.UpdateNamespaceReq": {
             "type": "object",
             "required": [
                 "cluster_id",
@@ -28952,59 +24683,6 @@ const docTemplate = `{
                 }
             }
         },
-        "model.UpdateRoleBindingRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "name",
-                "namespace",
-                "role_ref",
-                "subjects"
-            ],
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "RoleBinding 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "role_ref": {
-                    "description": "角色引用",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/model.RoleRef"
-                        }
-                    ]
-                },
-                "subjects": {
-                    "description": "绑定的主体",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.Subject"
-                    }
-                }
-            }
-        },
         "model.UpdateRoleRequest": {
             "type": "object",
             "required": [
@@ -29046,60 +24724,6 @@ const docTemplate = `{
                         0,
                         1
                     ]
-                }
-            }
-        },
-        "model.UpdateServiceAccountRequest": {
-            "type": "object",
-            "required": [
-                "cluster_id",
-                "name",
-                "namespace"
-            ],
-            "properties": {
-                "annotations": {
-                    "description": "注解",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "automount_service_account_token": {
-                    "description": "是否自动挂载服务账户令牌",
-                    "type": "boolean"
-                },
-                "cluster_id": {
-                    "description": "集群ID",
-                    "type": "integer"
-                },
-                "image_pull_secrets": {
-                    "description": "镜像拉取 Secret",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.LocalObjectReference"
-                    }
-                },
-                "labels": {
-                    "description": "标签",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "ServiceAccount 名称",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "命名空间",
-                    "type": "string"
-                },
-                "secrets": {
-                    "description": "关联的 Secret",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/model.LocalObjectReference"
-                    }
                 }
             }
         },
@@ -29227,11 +24851,7 @@ const docTemplate = `{
         "model.UpdateWorkorderFormDesignReq": {
             "type": "object",
             "required": [
-                "id",
-                "is_template",
-                "name",
-                "schema",
-                "status"
+                "id"
             ],
             "properties": {
                 "category_id": {
@@ -29474,12 +25094,7 @@ const docTemplate = `{
         "model.UpdateWorkorderProcessReq": {
             "type": "object",
             "required": [
-                "definition",
-                "form_design_id",
-                "id",
-                "is_default",
-                "name",
-                "status"
+                "id"
             ],
             "properties": {
                 "category_id": {
@@ -29532,10 +25147,7 @@ const docTemplate = `{
         "model.UpdateWorkorderTemplateReq": {
             "type": "object",
             "required": [
-                "form_design_id",
-                "id",
-                "name",
-                "process_id"
+                "id"
             ],
             "properties": {
                 "category_id": {
@@ -29741,39 +25353,6 @@ const docTemplate = `{
                 }
             }
         },
-        "model.Volume": {
-            "type": "object",
-            "properties": {
-                "mount_path": {
-                    "description": "挂载路径",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "卷名称",
-                    "type": "string"
-                },
-                "read_only": {
-                    "description": "是否只读",
-                    "type": "boolean"
-                },
-                "size": {
-                    "description": "存储大小",
-                    "type": "string"
-                },
-                "source_name": {
-                    "description": "源资源名称(如ConfigMap名称)",
-                    "type": "string"
-                },
-                "sub_path": {
-                    "description": "子路径",
-                    "type": "string"
-                },
-                "type": {
-                    "description": "卷类型(ConfigMap, Secret, PVC, EmptyDir等)",
-                    "type": "string"
-                }
-            }
-        },
         "model.WorkorderCategory": {
             "type": "object",
             "properties": {
@@ -29863,7 +25442,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "comments": {
-                    "description": "关联查询字段",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/model.WorkorderInstanceComment"
@@ -29873,6 +25451,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "created_at": {
+                    "type": "string"
+                },
+                "current_step_id": {
                     "type": "string"
                 },
                 "deleted_at": {
@@ -29904,6 +25485,14 @@ const docTemplate = `{
                 },
                 "priority": {
                     "type": "integer"
+                },
+                "process": {
+                    "description": "关联字段",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/model.WorkorderProcess"
+                        }
+                    ]
                 },
                 "process_id": {
                     "type": "integer"
@@ -30192,6 +25781,136 @@ const docTemplate = `{
                 }
             }
         },
+        "model.YamlTaskCreateReq": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "template_id": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "variables": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "model.YamlTaskUpdateReq": {
+            "type": "object",
+            "required": [
+                "id",
+                "name"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "template_id": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "variables": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "model.YamlTemplateCheckReq": {
+            "type": "object",
+            "required": [
+                "content",
+                "name"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 1
+                }
+            }
+        },
+        "model.YamlTemplateCreateReq": {
+            "type": "object",
+            "required": [
+                "content",
+                "name"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 1
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.YamlTemplateUpdateReq": {
+            "type": "object",
+            "required": [
+                "content",
+                "id",
+                "name"
+            ],
+            "properties": {
+                "cluster_id": {
+                    "type": "integer"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 1
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "resource.Quantity": {
             "type": "object",
             "properties": {
@@ -30378,27 +26097,6 @@ const docTemplate = `{
                 }
             }
         },
-        "v1.AzureFilePersistentVolumeSource": {
-            "type": "object",
-            "properties": {
-                "readOnly": {
-                    "description": "readOnly defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
-                    "type": "boolean"
-                },
-                "secretName": {
-                    "description": "secretName is the name of secret that contains Azure Storage Account Name and Key",
-                    "type": "string"
-                },
-                "secretNamespace": {
-                    "description": "secretNamespace is the namespace of the secret that contains Azure Storage Account Name and Key\ndefault is the same as the Pod\n+optional",
-                    "type": "string"
-                },
-                "shareName": {
-                    "description": "shareName is the azure Share Name",
-                    "type": "string"
-                }
-            }
-        },
         "v1.AzureFileVolumeSource": {
             "type": "object",
             "properties": {
@@ -30412,74 +26110,6 @@ const docTemplate = `{
                 },
                 "shareName": {
                     "description": "shareName is the azure share Name",
-                    "type": "string"
-                }
-            }
-        },
-        "v1.CSIPersistentVolumeSource": {
-            "type": "object",
-            "properties": {
-                "controllerExpandSecretRef": {
-                    "description": "controllerExpandSecretRef is a reference to the secret object containing\nsensitive information to pass to the CSI driver to complete the CSI\nControllerExpandVolume call.\nThis field is optional, and may be empty if no secret is required. If the\nsecret object contains more than one secret, all secrets are passed.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretReference"
-                        }
-                    ]
-                },
-                "controllerPublishSecretRef": {
-                    "description": "controllerPublishSecretRef is a reference to the secret object containing\nsensitive information to pass to the CSI driver to complete the CSI\nControllerPublishVolume and ControllerUnpublishVolume calls.\nThis field is optional, and may be empty if no secret is required. If the\nsecret object contains more than one secret, all secrets are passed.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretReference"
-                        }
-                    ]
-                },
-                "driver": {
-                    "description": "driver is the name of the driver to use for this volume.\nRequired.",
-                    "type": "string"
-                },
-                "fsType": {
-                    "description": "fsType to mount. Must be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\".\n+optional",
-                    "type": "string"
-                },
-                "nodeExpandSecretRef": {
-                    "description": "nodeExpandSecretRef is a reference to the secret object containing\nsensitive information to pass to the CSI driver to complete the CSI\nNodeExpandVolume call.\nThis field is optional, may be omitted if no secret is required. If the\nsecret object contains more than one secret, all secrets are passed.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretReference"
-                        }
-                    ]
-                },
-                "nodePublishSecretRef": {
-                    "description": "nodePublishSecretRef is a reference to the secret object containing\nsensitive information to pass to the CSI driver to complete the CSI\nNodePublishVolume and NodeUnpublishVolume calls.\nThis field is optional, and may be empty if no secret is required. If the\nsecret object contains more than one secret, all secrets are passed.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretReference"
-                        }
-                    ]
-                },
-                "nodeStageSecretRef": {
-                    "description": "nodeStageSecretRef is a reference to the secret object containing sensitive\ninformation to pass to the CSI driver to complete the CSI NodeStageVolume\nand NodeStageVolume and NodeUnstageVolume calls.\nThis field is optional, and may be empty if no secret is required. If the\nsecret object contains more than one secret, all secrets are passed.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretReference"
-                        }
-                    ]
-                },
-                "readOnly": {
-                    "description": "readOnly value to pass to ControllerPublishVolumeRequest.\nDefaults to false (read/write).\n+optional",
-                    "type": "boolean"
-                },
-                "volumeAttributes": {
-                    "description": "volumeAttributes of the volume to publish.\n+optional",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "volumeHandle": {
-                    "description": "volumeHandle is the unique volume name returned by the CSI volume\nplugin’s CreateVolume to refer to the volume on all subsequent calls.\nRequired.",
                     "type": "string"
                 }
             }
@@ -30535,42 +26165,6 @@ const docTemplate = `{
                 }
             }
         },
-        "v1.CephFSPersistentVolumeSource": {
-            "type": "object",
-            "properties": {
-                "monitors": {
-                    "description": "monitors is Required: Monitors is a collection of Ceph monitors\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "path": {
-                    "description": "path is Optional: Used as the mounted root, rather than the full Ceph tree, default is /\n+optional",
-                    "type": "string"
-                },
-                "readOnly": {
-                    "description": "readOnly is Optional: Defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+optional",
-                    "type": "boolean"
-                },
-                "secretFile": {
-                    "description": "secretFile is Optional: SecretFile is the path to key ring for User, default is /etc/ceph/user.secret\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+optional",
-                    "type": "string"
-                },
-                "secretRef": {
-                    "description": "secretRef is Optional: SecretRef is reference to the authentication secret for User, default is empty.\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretReference"
-                        }
-                    ]
-                },
-                "user": {
-                    "description": "user is Optional: User is the rados user name, default is admin\nMore info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it\n+optional",
-                    "type": "string"
-                }
-            }
-        },
         "v1.CephFSVolumeSource": {
             "type": "object",
             "properties": {
@@ -30607,31 +26201,6 @@ const docTemplate = `{
                 }
             }
         },
-        "v1.CinderPersistentVolumeSource": {
-            "type": "object",
-            "properties": {
-                "fsType": {
-                    "description": "fsType Filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nExamples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\nMore info: https://examples.k8s.io/mysql-cinder-pd/README.md\n+optional",
-                    "type": "string"
-                },
-                "readOnly": {
-                    "description": "readOnly is Optional: Defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\nMore info: https://examples.k8s.io/mysql-cinder-pd/README.md\n+optional",
-                    "type": "boolean"
-                },
-                "secretRef": {
-                    "description": "secretRef is Optional: points to a secret object containing parameters used to connect\nto OpenStack.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretReference"
-                        }
-                    ]
-                },
-                "volumeID": {
-                    "description": "volumeID used to identify the volume in cinder.\nMore info: https://examples.k8s.io/mysql-cinder-pd/README.md",
-                    "type": "string"
-                }
-            }
-        },
         "v1.CinderVolumeSource": {
             "type": "object",
             "properties": {
@@ -30656,23 +26225,6 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
-        },
-        "v1.ClaimResourceStatus": {
-            "type": "string",
-            "enum": [
-                "ControllerResizeInProgress",
-                "ControllerResizeInfeasible",
-                "NodeResizePending",
-                "NodeResizeInProgress",
-                "NodeResizeInfeasible"
-            ],
-            "x-enum-varnames": [
-                "PersistentVolumeClaimControllerResizeInProgress",
-                "PersistentVolumeClaimControllerResizeInfeasible",
-                "PersistentVolumeClaimNodeResizePending",
-                "PersistentVolumeClaimNodeResizeInProgress",
-                "PersistentVolumeClaimNodeResizeInfeasible"
-            ]
         },
         "v1.ClientIPConfig": {
             "type": "object",
@@ -30742,48 +26294,6 @@ const docTemplate = `{
                 "type": {
                     "description": "type of condition in CamelCase or in foo.example.com/CamelCase.\n---\nMany .condition.type values are consistent across resources like Available, but because arbitrary conditions can be\nuseful (see .node.status.conditions), the ability to deconflict is important.\nThe regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)\n+required\n+kubebuilder:validation:Required\n+kubebuilder:validation:Pattern=` + "`" + `^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$` + "`" + `\n+kubebuilder:validation:MaxLength=316",
                     "type": "string"
-                }
-            }
-        },
-        "v1.ConfigMap": {
-            "type": "object",
-            "properties": {
-                "apiVersion": {
-                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
-                    "type": "string"
-                },
-                "binaryData": {
-                    "description": "BinaryData contains the binary data.\nEach key must consist of alphanumeric characters, '-', '_' or '.'.\nBinaryData can contain byte sequences that are not in the UTF-8 range.\nThe keys stored in BinaryData must not overlap with the ones in\nthe Data field, this is enforced during validation process.\nUsing this field will require 1.10+ apiserver and\nkubelet.\n+optional",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                            "type": "integer"
-                        }
-                    }
-                },
-                "data": {
-                    "description": "Data contains the configuration data.\nEach key must consist of alphanumeric characters, '-', '_' or '.'.\nValues with non-UTF-8 byte sequences must use the BinaryData field.\nThe keys stored in Data must not overlap with the keys in\nthe BinaryData field, this is enforced during validation process.\n+optional",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "immutable": {
-                    "description": "Immutable, if set to true, ensures that data stored in the ConfigMap cannot\nbe updated (only object metadata can be modified).\nIf not set to true, the field can be modified at any time.\nDefaulted to nil.\n+optional",
-                    "type": "boolean"
-                },
-                "kind": {
-                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ObjectMeta"
-                        }
-                    ]
                 }
             }
         },
@@ -31565,85 +27075,6 @@ const docTemplate = `{
                 }
             }
         },
-        "v1.EndpointAddress": {
-            "type": "object",
-            "properties": {
-                "hostname": {
-                    "description": "The Hostname of this endpoint\n+optional",
-                    "type": "string"
-                },
-                "ip": {
-                    "description": "The IP of this endpoint.\nMay not be loopback (127.0.0.0/8 or ::1), link-local (169.254.0.0/16 or fe80::/10),\nor link-local multicast (224.0.0.0/24 or ff02::/16).",
-                    "type": "string"
-                },
-                "nodeName": {
-                    "description": "Optional: Node hosting this endpoint. This can be used to determine endpoints local to a node.\n+optional",
-                    "type": "string"
-                },
-                "targetRef": {
-                    "description": "Reference to object providing the endpoint.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ObjectReference"
-                        }
-                    ]
-                }
-            }
-        },
-        "v1.EndpointSubset": {
-            "type": "object",
-            "properties": {
-                "addresses": {
-                    "description": "IP addresses which offer the related ports that are marked as ready. These endpoints\nshould be considered safe for load balancers and clients to utilize.\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.EndpointAddress"
-                    }
-                },
-                "notReadyAddresses": {
-                    "description": "IP addresses which offer the related ports but are not currently marked as ready\nbecause they have not yet finished starting, have recently failed a readiness check,\nor have recently failed a liveness check.\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.EndpointAddress"
-                    }
-                },
-                "ports": {
-                    "description": "Port numbers available on the related IP addresses.\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/k8s_io_api_core_v1.EndpointPort"
-                    }
-                }
-            }
-        },
-        "v1.Endpoints": {
-            "type": "object",
-            "properties": {
-                "apiVersion": {
-                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
-                    "type": "string"
-                },
-                "kind": {
-                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ObjectMeta"
-                        }
-                    ]
-                },
-                "subsets": {
-                    "description": "The set of all endpoints is the union of all subsets. Addresses are placed into\nsubsets according to the IPs they share. A single address with multiple ports,\nsome of which are ready and some of which are not (because they come from\ndifferent containers) will result in the address being displayed in different\nsubsets for the different ports. No address will appear in both Addresses and\nNotReadyAddresses in the same subset.\nSets of addresses and ports that comprise a service.\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.EndpointSubset"
-                    }
-                }
-            }
-        },
         "v1.EnvFromSource": {
             "type": "object",
             "properties": {
@@ -31964,38 +27395,6 @@ const docTemplate = `{
         "v1.FieldsV1": {
             "type": "object"
         },
-        "v1.FlexPersistentVolumeSource": {
-            "type": "object",
-            "properties": {
-                "driver": {
-                    "description": "driver is the name of the driver to use for this volume.",
-                    "type": "string"
-                },
-                "fsType": {
-                    "description": "fsType is the Filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\". The default filesystem depends on FlexVolume script.\n+optional",
-                    "type": "string"
-                },
-                "options": {
-                    "description": "options is Optional: this field holds extra command options if any.\n+optional",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "readOnly": {
-                    "description": "readOnly is Optional: defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
-                    "type": "boolean"
-                },
-                "secretRef": {
-                    "description": "secretRef is Optional: SecretRef is reference to the secret object containing\nsensitive information to pass to the plugin scripts. This may be\nempty if no secret object is specified. If the secret object\ncontains more than one secret, all secrets are passed to the plugin\nscripts.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretReference"
-                        }
-                    ]
-                }
-            }
-        },
         "v1.FlexVolumeSource": {
             "type": "object",
             "properties": {
@@ -32092,27 +27491,6 @@ const docTemplate = `{
                 }
             }
         },
-        "v1.GlusterfsPersistentVolumeSource": {
-            "type": "object",
-            "properties": {
-                "endpoints": {
-                    "description": "endpoints is the endpoint name that details Glusterfs topology.\nMore info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod",
-                    "type": "string"
-                },
-                "endpointsNamespace": {
-                    "description": "endpointsNamespace is the namespace that contains Glusterfs endpoint.\nIf this field is empty, the EndpointNamespace defaults to the same namespace as the bound PVC.\nMore info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod\n+optional",
-                    "type": "string"
-                },
-                "path": {
-                    "description": "path is the Glusterfs volume path.\nMore info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod",
-                    "type": "string"
-                },
-                "readOnly": {
-                    "description": "readOnly here will force the Glusterfs volume to be mounted with read-only permissions.\nDefaults to false.\nMore info: https://examples.k8s.io/volumes/glusterfs/README.md#create-a-pod\n+optional",
-                    "type": "boolean"
-                }
-            }
-        },
         "v1.GlusterfsVolumeSource": {
             "type": "object",
             "properties": {
@@ -32176,6 +27554,43 @@ const docTemplate = `{
                 "value": {
                     "description": "The header field value",
                     "type": "string"
+                }
+            }
+        },
+        "v1.HTTPIngressPath": {
+            "type": "object",
+            "properties": {
+                "backend": {
+                    "description": "backend defines the referenced service endpoint to which the traffic\nwill be forwarded to.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.IngressBackend"
+                        }
+                    ]
+                },
+                "path": {
+                    "description": "path is matched against the path of an incoming request. Currently it can\ncontain characters disallowed from the conventional \"path\" part of a URL\nas defined by RFC 3986. Paths must begin with a '/' and must be present\nwhen using PathType with value \"Exact\" or \"Prefix\".\n+optional",
+                    "type": "string"
+                },
+                "pathType": {
+                    "description": "pathType determines the interpretation of the path matching. PathType can\nbe one of the following values:\n* Exact: Matches the URL path exactly.\n* Prefix: Matches based on a URL path prefix split by '/'. Matching is\n  done on a path element by element basis. A path element refers is the\n  list of labels in the path split by the '/' separator. A request is a\n  match for path p if every p is an element-wise prefix of p of the\n  request path. Note that if the last element of the path is a substring\n  of the last element in request path, it is not a match (e.g. /foo/bar\n  matches /foo/bar/baz, but does not match /foo/barbaz).\n* ImplementationSpecific: Interpretation of the Path matching is up to\n  the IngressClass. Implementations can treat this as a separate PathType\n  or treat it identically to Prefix or Exact path types.\nImplementations are required to support all path types.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.PathType"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.HTTPIngressRuleValue": {
+            "type": "object",
+            "properties": {
+                "paths": {
+                    "description": "paths is a collection of paths that map requests to backends.\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.HTTPIngressPath"
+                    }
                 }
             }
         },
@@ -32261,62 +27676,6 @@ const docTemplate = `{
                 "IPFamilyPolicyRequireDualStack"
             ]
         },
-        "v1.ISCSIPersistentVolumeSource": {
-            "type": "object",
-            "properties": {
-                "chapAuthDiscovery": {
-                    "description": "chapAuthDiscovery defines whether support iSCSI Discovery CHAP authentication\n+optional",
-                    "type": "boolean"
-                },
-                "chapAuthSession": {
-                    "description": "chapAuthSession defines whether support iSCSI Session CHAP authentication\n+optional",
-                    "type": "boolean"
-                },
-                "fsType": {
-                    "description": "fsType is the filesystem type of the volume that you want to mount.\nTip: Ensure that the filesystem type is supported by the host operating system.\nExamples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#iscsi\nTODO: how do we prevent errors in the filesystem from compromising the machine\n+optional",
-                    "type": "string"
-                },
-                "initiatorName": {
-                    "description": "initiatorName is the custom iSCSI Initiator Name.\nIf initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface\n\u003ctarget portal\u003e:\u003cvolume name\u003e will be created for the connection.\n+optional",
-                    "type": "string"
-                },
-                "iqn": {
-                    "description": "iqn is Target iSCSI Qualified Name.",
-                    "type": "string"
-                },
-                "iscsiInterface": {
-                    "description": "iscsiInterface is the interface Name that uses an iSCSI transport.\nDefaults to 'default' (tcp).\n+optional\n+default=\"default\"",
-                    "type": "string"
-                },
-                "lun": {
-                    "description": "lun is iSCSI Target Lun number.",
-                    "type": "integer"
-                },
-                "portals": {
-                    "description": "portals is the iSCSI Target Portal List. The Portal is either an IP or ip_addr:port if the port\nis other than default (typically TCP ports 860 and 3260).\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "readOnly": {
-                    "description": "readOnly here will force the ReadOnly setting in VolumeMounts.\nDefaults to false.\n+optional",
-                    "type": "boolean"
-                },
-                "secretRef": {
-                    "description": "secretRef is the CHAP Secret for iSCSI target and initiator authentication\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretReference"
-                        }
-                    ]
-                },
-                "targetPortal": {
-                    "description": "targetPortal is iSCSI Target Portal. The Portal is either an IP or ip_addr:port if the port\nis other than default (typically TCP ports 860 and 3260).",
-                    "type": "string"
-                }
-            }
-        },
         "v1.ISCSIVolumeSource": {
             "type": "object",
             "properties": {
@@ -32386,6 +27745,211 @@ const docTemplate = `{
                 },
                 "reference": {
                     "description": "Required: Image or artifact reference to be used.\nBehaves in the same way as pod.spec.containers[*].image.\nPull secrets will be assembled in the same way as for the container image by looking up node credentials, SA image pull secrets, and pod spec image pull secrets.\nMore info: https://kubernetes.io/docs/concepts/containers/images\nThis field is optional to allow higher level config management to default or override\ncontainer images in workload controllers like Deployments and StatefulSets.\n+optional",
+                    "type": "string"
+                }
+            }
+        },
+        "v1.Ingress": {
+            "type": "object",
+            "properties": {
+                "apiVersion": {
+                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ObjectMeta"
+                        }
+                    ]
+                },
+                "spec": {
+                    "description": "spec is the desired state of the Ingress.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.IngressSpec"
+                        }
+                    ]
+                },
+                "status": {
+                    "description": "status is the current state of the Ingress.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.IngressStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.IngressBackend": {
+            "type": "object",
+            "properties": {
+                "resource": {
+                    "description": "resource is an ObjectRef to another Kubernetes resource in the namespace\nof the Ingress object. If resource is specified, a service.Name and\nservice.Port must not be specified.\nThis is a mutually exclusive setting with \"Service\".\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.TypedLocalObjectReference"
+                        }
+                    ]
+                },
+                "service": {
+                    "description": "service references a service as a backend.\nThis is a mutually exclusive setting with \"Resource\".\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.IngressServiceBackend"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.IngressLoadBalancerIngress": {
+            "type": "object",
+            "properties": {
+                "hostname": {
+                    "description": "hostname is set for load-balancer ingress points that are DNS based.\n+optional",
+                    "type": "string"
+                },
+                "ip": {
+                    "description": "ip is set for load-balancer ingress points that are IP based.\n+optional",
+                    "type": "string"
+                },
+                "ports": {
+                    "description": "ports provides information about the ports exposed by this LoadBalancer.\n+listType=atomic\n+optional",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.IngressPortStatus"
+                    }
+                }
+            }
+        },
+        "v1.IngressLoadBalancerStatus": {
+            "type": "object",
+            "properties": {
+                "ingress": {
+                    "description": "ingress is a list containing ingress points for the load-balancer.\n+optional\n+listType=atomic",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.IngressLoadBalancerIngress"
+                    }
+                }
+            }
+        },
+        "v1.IngressPortStatus": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "description": "error is to record the problem with the service port\nThe format of the error shall comply with the following rules:\n- built-in error values shall be specified in this file and those shall use\n  CamelCase names\n- cloud provider specific error values must have names that comply with the\n  format foo.example.com/CamelCase.\n---\nThe regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)\n+optional\n+kubebuilder:validation:Required\n+kubebuilder:validation:Pattern=` + "`" + `^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$` + "`" + `\n+kubebuilder:validation:MaxLength=316",
+                    "type": "string"
+                },
+                "port": {
+                    "description": "port is the port number of the ingress port.",
+                    "type": "integer"
+                },
+                "protocol": {
+                    "description": "protocol is the protocol of the ingress port.\nThe supported values are: \"TCP\", \"UDP\", \"SCTP\"",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.Protocol"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.IngressRule": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "description": "host is the fully qualified domain name of a network host, as defined by RFC 3986.\nNote the following deviations from the \"host\" part of the\nURI as defined in RFC 3986:\n1. IPs are not allowed. Currently an IngressRuleValue can only apply to\n   the IP in the Spec of the parent Ingress.\n2. The ` + "`" + `:` + "`" + ` delimiter is not respected because ports are not allowed.\n\t  Currently the port of an Ingress is implicitly :80 for http and\n\t  :443 for https.\nBoth these may change in the future.\nIncoming requests are matched against the host before the\nIngressRuleValue. If the host is unspecified, the Ingress routes all\ntraffic based on the specified IngressRuleValue.\n\nhost can be \"precise\" which is a domain name without the terminating dot of\na network host (e.g. \"foo.bar.com\") or \"wildcard\", which is a domain name\nprefixed with a single wildcard label (e.g. \"*.foo.com\").\nThe wildcard character '*' must appear by itself as the first DNS label and\nmatches only a single label. You cannot have a wildcard label by itself (e.g. Host == \"*\").\nRequests will be matched against the Host field in the following way:\n1. If host is precise, the request matches this rule if the http host header is equal to Host.\n2. If host is a wildcard, then the request matches this rule if the http host header\nis to equal to the suffix (removing the first label) of the wildcard rule.\n+optional",
+                    "type": "string"
+                },
+                "http": {
+                    "description": "+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.HTTPIngressRuleValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.IngressServiceBackend": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "name is the referenced service. The service must exist in\nthe same namespace as the Ingress object.",
+                    "type": "string"
+                },
+                "port": {
+                    "description": "port of the referenced service. A port name or port number\nis required for a IngressServiceBackend.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.ServiceBackendPort"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.IngressSpec": {
+            "type": "object",
+            "properties": {
+                "defaultBackend": {
+                    "description": "defaultBackend is the backend that should handle requests that don't\nmatch any rule. If Rules are not specified, DefaultBackend must be specified.\nIf DefaultBackend is not set, the handling of requests that do not match any\nof the rules will be up to the Ingress controller.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.IngressBackend"
+                        }
+                    ]
+                },
+                "ingressClassName": {
+                    "description": "ingressClassName is the name of an IngressClass cluster resource. Ingress\ncontroller implementations use this field to know whether they should be\nserving this Ingress resource, by a transitive connection\n(controller -\u003e IngressClass -\u003e Ingress resource). Although the\n` + "`" + `kubernetes.io/ingress.class` + "`" + ` annotation (simple constant name) was never\nformally defined, it was widely supported by Ingress controllers to create\na direct binding between Ingress controller and Ingress resources. Newly\ncreated Ingress resources should prefer using the field. However, even\nthough the annotation is officially deprecated, for backwards compatibility\nreasons, ingress controllers should still honor that annotation if present.\n+optional",
+                    "type": "string"
+                },
+                "rules": {
+                    "description": "rules is a list of host rules used to configure the Ingress. If unspecified,\nor no rule matches, all traffic is sent to the default backend.\n+listType=atomic\n+optional",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.IngressRule"
+                    }
+                },
+                "tls": {
+                    "description": "tls represents the TLS configuration. Currently the Ingress only supports a\nsingle TLS port, 443. If multiple members of this list specify different hosts,\nthey will be multiplexed on the same port according to the hostname specified\nthrough the SNI TLS extension, if the ingress controller fulfilling the\ningress supports SNI.\n+listType=atomic\n+optional",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/v1.IngressTLS"
+                    }
+                }
+            }
+        },
+        "v1.IngressStatus": {
+            "type": "object",
+            "properties": {
+                "loadBalancer": {
+                    "description": "loadBalancer contains the current status of the load-balancer.\n+optional",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/v1.IngressLoadBalancerStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "v1.IngressTLS": {
+            "type": "object",
+            "properties": {
+                "hosts": {
+                    "description": "hosts is a list of hosts included in the TLS certificate. The values in\nthis list must match the name/s used in the tlsSecret. Defaults to the\nwildcard host setting for the loadbalancer controller fulfilling this\nIngress, if left unspecified.\n+listType=atomic\n+optional",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "secretName": {
+                    "description": "secretName is the name of the secret used to terminate TLS traffic on\nport 443. Field is left optional to allow TLS routing based on SNI\nhostname alone. If the SNI host in a listener conflicts with the \"Host\"\nheader field used by an IngressRule, the SNI host is used for termination\nand value of the \"Host\" header is used for routing.\n+optional",
                     "type": "string"
                 }
             }
@@ -32583,19 +28147,6 @@ const docTemplate = `{
                 }
             }
         },
-        "v1.LocalVolumeSource": {
-            "type": "object",
-            "properties": {
-                "fsType": {
-                    "description": "fsType is the filesystem type to mount.\nIt applies only when the Path is a block device.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\". The default value is to auto-select a filesystem if unspecified.\n+optional",
-                    "type": "string"
-                },
-                "path": {
-                    "description": "path of the full path to the volume on the node.\nIt can be either a directory or block device (disk, partition, ...).",
-                    "type": "string"
-                }
-            }
-        },
         "v1.ManagedFieldsEntry": {
             "type": "object",
             "properties": {
@@ -32647,23 +28198,6 @@ const docTemplate = `{
                 "ManagedFieldsOperationApply",
                 "ManagedFieldsOperationUpdate"
             ]
-        },
-        "v1.ModifyVolumeStatus": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "description": "status is the status of the ControllerModifyVolume operation. It can be in any of following states:\n - Pending\n   Pending indicates that the PersistentVolumeClaim cannot be modified due to unmet requirements, such as\n   the specified VolumeAttributesClass not existing.\n - InProgress\n   InProgress indicates that the volume is being modified.\n - Infeasible\n  Infeasible indicates that the request has been rejected as invalid by the CSI driver. To\n\t  resolve the error, a valid VolumeAttributesClass needs to be specified.\nNote: New statuses can be added in the future. Consumers should check for unknown statuses and fail appropriately.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolumeClaimModifyVolumeStatus"
-                        }
-                    ]
-                },
-                "targetVolumeAttributesClassName": {
-                    "description": "targetVolumeAttributesClassName is the name of the VolumeAttributesClass the PVC currently being reconciled",
-                    "type": "string"
-                }
-            }
         },
         "v1.MountPropagationMode": {
             "type": "string",
@@ -33020,42 +28554,18 @@ const docTemplate = `{
                 }
             }
         },
-        "v1.PersistentVolume": {
-            "type": "object",
-            "properties": {
-                "apiVersion": {
-                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
-                    "type": "string"
-                },
-                "kind": {
-                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ObjectMeta"
-                        }
-                    ]
-                },
-                "spec": {
-                    "description": "spec defines a specification of a persistent volume owned by the cluster.\nProvisioned by an administrator.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistent-volumes\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolumeSpec"
-                        }
-                    ]
-                },
-                "status": {
-                    "description": "status represents the current information/status for the persistent volume.\nPopulated by the system.\nRead-only.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistent-volumes\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolumeStatus"
-                        }
-                    ]
-                }
-            }
+        "v1.PathType": {
+            "type": "string",
+            "enum": [
+                "Exact",
+                "Prefix",
+                "ImplementationSpecific"
+            ],
+            "x-enum-varnames": [
+                "PathTypeExact",
+                "PathTypePrefix",
+                "PathTypeImplementationSpecific"
+            ]
         },
         "v1.PersistentVolumeAccessMode": {
             "type": "string",
@@ -33070,126 +28580,6 @@ const docTemplate = `{
                 "ReadOnlyMany",
                 "ReadWriteMany",
                 "ReadWriteOncePod"
-            ]
-        },
-        "v1.PersistentVolumeClaim": {
-            "type": "object",
-            "properties": {
-                "apiVersion": {
-                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
-                    "type": "string"
-                },
-                "kind": {
-                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ObjectMeta"
-                        }
-                    ]
-                },
-                "spec": {
-                    "description": "spec defines the desired characteristics of a volume requested by a pod author.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolumeClaimSpec"
-                        }
-                    ]
-                },
-                "status": {
-                    "description": "status represents the current information/status of a persistent volume claim.\nRead-only.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolumeClaimStatus"
-                        }
-                    ]
-                }
-            }
-        },
-        "v1.PersistentVolumeClaimCondition": {
-            "type": "object",
-            "properties": {
-                "lastProbeTime": {
-                    "description": "lastProbeTime is the time we probed the condition.\n+optional",
-                    "type": "string"
-                },
-                "lastTransitionTime": {
-                    "description": "lastTransitionTime is the time the condition transitioned from one status to another.\n+optional",
-                    "type": "string"
-                },
-                "message": {
-                    "description": "message is the human-readable message indicating details about last transition.\n+optional",
-                    "type": "string"
-                },
-                "reason": {
-                    "description": "reason is a unique, this should be a short, machine understandable string that gives the reason\nfor condition's last transition. If it reports \"Resizing\" that means the underlying\npersistent volume is being resized.\n+optional",
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/k8s_io_api_core_v1.ConditionStatus"
-                },
-                "type": {
-                    "$ref": "#/definitions/v1.PersistentVolumeClaimConditionType"
-                }
-            }
-        },
-        "v1.PersistentVolumeClaimConditionType": {
-            "type": "string",
-            "enum": [
-                "Resizing",
-                "FileSystemResizePending",
-                "ControllerResizeError",
-                "NodeResizeError",
-                "ModifyVolumeError",
-                "ModifyingVolume"
-            ],
-            "x-enum-varnames": [
-                "PersistentVolumeClaimResizing",
-                "PersistentVolumeClaimFileSystemResizePending",
-                "PersistentVolumeClaimControllerResizeError",
-                "PersistentVolumeClaimNodeResizeError",
-                "PersistentVolumeClaimVolumeModifyVolumeError",
-                "PersistentVolumeClaimVolumeModifyingVolume"
-            ]
-        },
-        "v1.PersistentVolumeClaimModifyVolumeStatus": {
-            "type": "string",
-            "enum": [
-                "Pending",
-                "InProgress",
-                "Infeasible"
-            ],
-            "x-enum-varnames": [
-                "PersistentVolumeClaimModifyVolumePending",
-                "PersistentVolumeClaimModifyVolumeInProgress",
-                "PersistentVolumeClaimModifyVolumeInfeasible"
-            ]
-        },
-        "v1.PersistentVolumeClaimPhase": {
-            "type": "string",
-            "enum": [
-                "Pending",
-                "Bound",
-                "Lost"
-            ],
-            "x-enum-varnames": [
-                "ClaimPending",
-                "ClaimBound",
-                "ClaimLost"
-            ]
-        },
-        "v1.PersistentVolumeClaimRetentionPolicyType": {
-            "type": "string",
-            "enum": [
-                "Retain",
-                "Delete"
-            ],
-            "x-enum-varnames": [
-                "RetainPersistentVolumeClaimRetentionPolicyType",
-                "DeletePersistentVolumeClaimRetentionPolicyType"
             ]
         },
         "v1.PersistentVolumeClaimSpec": {
@@ -33256,68 +28646,6 @@ const docTemplate = `{
                 }
             }
         },
-        "v1.PersistentVolumeClaimStatus": {
-            "type": "object",
-            "properties": {
-                "accessModes": {
-                    "description": "accessModes contains the actual access modes the volume backing the PVC has.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#access-modes-1\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.PersistentVolumeAccessMode"
-                    }
-                },
-                "allocatedResourceStatuses": {
-                    "description": "allocatedResourceStatuses stores status of resource being resized for the given PVC.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nClaimResourceStatus can be in any of following states:\n\t- ControllerResizeInProgress:\n\t\tState set when resize controller starts resizing the volume in control-plane.\n\t- ControllerResizeFailed:\n\t\tState set when resize has failed in resize controller with a terminal error.\n\t- NodeResizePending:\n\t\tState set when resize controller has finished resizing the volume but further resizing of\n\t\tvolume is needed on the node.\n\t- NodeResizeInProgress:\n\t\tState set when kubelet starts resizing the volume.\n\t- NodeResizeFailed:\n\t\tState set when resizing has failed in kubelet with a terminal error. Transient errors don't set\n\t\tNodeResizeFailed.\nFor example: if expanding a PVC for more capacity - this field can be one of the following states:\n\t- pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeFailed\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizePending\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeFailed\"\nWhen this field is not set, it means that no resize operation is in progress for the given PVC.\n\nA controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.\n+featureGate=RecoverVolumeExpansionFailure\n+mapType=granular\n+optional",
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/v1.ClaimResourceStatus"
-                    }
-                },
-                "allocatedResources": {
-                    "description": "allocatedResources tracks the resources allocated to a PVC including its capacity.\nKey names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered\nreserved and hence may not be used.\n\nCapacity reported here may be larger than the actual capacity when a volume expansion operation\nis requested.\nFor storage quota, the larger value from allocatedResources and PVC.spec.resources is used.\nIf allocatedResources is not set, PVC.spec.resources alone is used for quota calculation.\nIf a volume expansion capacity request is lowered, allocatedResources is only\nlowered if there are no expansion operations in progress and if the actual volume capacity\nis equal or lower than the requested capacity.\n\nA controller that receives PVC update with previously unknown resourceName\nshould ignore the update for the purpose it was designed. For example - a controller that\nonly is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid\nresources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.\n+featureGate=RecoverVolumeExpansionFailure\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ResourceList"
-                        }
-                    ]
-                },
-                "capacity": {
-                    "description": "capacity represents the actual resources of the underlying volume.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ResourceList"
-                        }
-                    ]
-                },
-                "conditions": {
-                    "description": "conditions is the current Condition of persistent volume claim. If underlying persistent volume is being\nresized then the Condition will be set to 'Resizing'.\n+optional\n+patchMergeKey=type\n+patchStrategy=merge\n+listType=map\n+listMapKey=type",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.PersistentVolumeClaimCondition"
-                    }
-                },
-                "currentVolumeAttributesClassName": {
-                    "description": "currentVolumeAttributesClassName is the current name of the VolumeAttributesClass the PVC is using.\nWhen unset, there is no VolumeAttributeClass applied to this PersistentVolumeClaim\nThis is a beta field and requires enabling VolumeAttributesClass feature (off by default).\n+featureGate=VolumeAttributesClass\n+optional",
-                    "type": "string"
-                },
-                "modifyVolumeStatus": {
-                    "description": "ModifyVolumeStatus represents the status object of ControllerModifyVolume operation.\nWhen this is unset, there is no ModifyVolume operation being attempted.\nThis is a beta field and requires enabling VolumeAttributesClass feature (off by default).\n+featureGate=VolumeAttributesClass\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ModifyVolumeStatus"
-                        }
-                    ]
-                },
-                "phase": {
-                    "description": "phase represents the current phase of PersistentVolumeClaim.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolumeClaimPhase"
-                        }
-                    ]
-                }
-            }
-        },
         "v1.PersistentVolumeClaimTemplate": {
             "type": "object",
             "properties": {
@@ -33362,304 +28690,6 @@ const docTemplate = `{
                 "PersistentVolumeBlock",
                 "PersistentVolumeFilesystem"
             ]
-        },
-        "v1.PersistentVolumePhase": {
-            "type": "string",
-            "enum": [
-                "Pending",
-                "Available",
-                "Bound",
-                "Released",
-                "Failed"
-            ],
-            "x-enum-varnames": [
-                "VolumePending",
-                "VolumeAvailable",
-                "VolumeBound",
-                "VolumeReleased",
-                "VolumeFailed"
-            ]
-        },
-        "v1.PersistentVolumeReclaimPolicy": {
-            "type": "string",
-            "enum": [
-                "Recycle",
-                "Delete",
-                "Retain"
-            ],
-            "x-enum-varnames": [
-                "PersistentVolumeReclaimRecycle",
-                "PersistentVolumeReclaimDelete",
-                "PersistentVolumeReclaimRetain"
-            ]
-        },
-        "v1.PersistentVolumeSpec": {
-            "type": "object",
-            "properties": {
-                "accessModes": {
-                    "description": "accessModes contains all ways the volume can be mounted.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#access-modes\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.PersistentVolumeAccessMode"
-                    }
-                },
-                "awsElasticBlockStore": {
-                    "description": "awsElasticBlockStore represents an AWS Disk resource that is attached to a\nkubelet's host machine and then exposed to the pod.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.AWSElasticBlockStoreVolumeSource"
-                        }
-                    ]
-                },
-                "azureDisk": {
-                    "description": "azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.AzureDiskVolumeSource"
-                        }
-                    ]
-                },
-                "azureFile": {
-                    "description": "azureFile represents an Azure File Service mount on the host and bind mount to the pod.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.AzureFilePersistentVolumeSource"
-                        }
-                    ]
-                },
-                "capacity": {
-                    "description": "capacity is the description of the persistent volume's resources and capacity.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#capacity\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ResourceList"
-                        }
-                    ]
-                },
-                "cephfs": {
-                    "description": "cephFS represents a Ceph FS mount on the host that shares a pod's lifetime\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.CephFSPersistentVolumeSource"
-                        }
-                    ]
-                },
-                "cinder": {
-                    "description": "cinder represents a cinder volume attached and mounted on kubelets host machine.\nMore info: https://examples.k8s.io/mysql-cinder-pd/README.md\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.CinderPersistentVolumeSource"
-                        }
-                    ]
-                },
-                "claimRef": {
-                    "description": "claimRef is part of a bi-directional binding between PersistentVolume and PersistentVolumeClaim.\nExpected to be non-nil when bound.\nclaim.VolumeName is the authoritative bind between PV and PVC.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#binding\n+optional\n+structType=granular",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ObjectReference"
-                        }
-                    ]
-                },
-                "csi": {
-                    "description": "csi represents storage that is handled by an external CSI driver (Beta feature).\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.CSIPersistentVolumeSource"
-                        }
-                    ]
-                },
-                "fc": {
-                    "description": "fc represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.FCVolumeSource"
-                        }
-                    ]
-                },
-                "flexVolume": {
-                    "description": "flexVolume represents a generic volume resource that is\nprovisioned/attached using an exec based plugin.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.FlexPersistentVolumeSource"
-                        }
-                    ]
-                },
-                "flocker": {
-                    "description": "flocker represents a Flocker volume attached to a kubelet's host machine and exposed to the pod for its usage. This depends on the Flocker control service being running\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.FlockerVolumeSource"
-                        }
-                    ]
-                },
-                "gcePersistentDisk": {
-                    "description": "gcePersistentDisk represents a GCE Disk resource that is attached to a\nkubelet's host machine and then exposed to the pod. Provisioned by an admin.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.GCEPersistentDiskVolumeSource"
-                        }
-                    ]
-                },
-                "glusterfs": {
-                    "description": "glusterfs represents a Glusterfs volume that is attached to a host and\nexposed to the pod. Provisioned by an admin.\nMore info: https://examples.k8s.io/volumes/glusterfs/README.md\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.GlusterfsPersistentVolumeSource"
-                        }
-                    ]
-                },
-                "hostPath": {
-                    "description": "hostPath represents a directory on the host.\nProvisioned by a developer or tester.\nThis is useful for single-node development and testing only!\nOn-host storage is not supported in any way and WILL NOT WORK in a multi-node cluster.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.HostPathVolumeSource"
-                        }
-                    ]
-                },
-                "iscsi": {
-                    "description": "iscsi represents an ISCSI Disk resource that is attached to a\nkubelet's host machine and then exposed to the pod. Provisioned by an admin.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ISCSIPersistentVolumeSource"
-                        }
-                    ]
-                },
-                "local": {
-                    "description": "local represents directly-attached storage with node affinity\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.LocalVolumeSource"
-                        }
-                    ]
-                },
-                "mountOptions": {
-                    "description": "mountOptions is the list of mount options, e.g. [\"ro\", \"soft\"]. Not validated - mount will\nsimply fail if one is invalid.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#mount-options\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "nfs": {
-                    "description": "nfs represents an NFS mount on the host. Provisioned by an admin.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#nfs\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.NFSVolumeSource"
-                        }
-                    ]
-                },
-                "nodeAffinity": {
-                    "description": "nodeAffinity defines constraints that limit what nodes this volume can be accessed from.\nThis field influences the scheduling of pods that use this volume.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.VolumeNodeAffinity"
-                        }
-                    ]
-                },
-                "persistentVolumeReclaimPolicy": {
-                    "description": "persistentVolumeReclaimPolicy defines what happens to a persistent volume when released from its claim.\nValid options are Retain (default for manually created PersistentVolumes), Delete (default\nfor dynamically provisioned PersistentVolumes), and Recycle (deprecated).\nRecycle must be supported by the volume plugin underlying this PersistentVolume.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#reclaiming\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolumeReclaimPolicy"
-                        }
-                    ]
-                },
-                "photonPersistentDisk": {
-                    "description": "photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PhotonPersistentDiskVolumeSource"
-                        }
-                    ]
-                },
-                "portworxVolume": {
-                    "description": "portworxVolume represents a portworx volume attached and mounted on kubelets host machine\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PortworxVolumeSource"
-                        }
-                    ]
-                },
-                "quobyte": {
-                    "description": "quobyte represents a Quobyte mount on the host that shares a pod's lifetime\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.QuobyteVolumeSource"
-                        }
-                    ]
-                },
-                "rbd": {
-                    "description": "rbd represents a Rados Block Device mount on the host that shares a pod's lifetime.\nMore info: https://examples.k8s.io/volumes/rbd/README.md\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.RBDPersistentVolumeSource"
-                        }
-                    ]
-                },
-                "scaleIO": {
-                    "description": "scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ScaleIOPersistentVolumeSource"
-                        }
-                    ]
-                },
-                "storageClassName": {
-                    "description": "storageClassName is the name of StorageClass to which this persistent volume belongs. Empty value\nmeans that this volume does not belong to any StorageClass.\n+optional",
-                    "type": "string"
-                },
-                "storageos": {
-                    "description": "storageOS represents a StorageOS volume that is attached to the kubelet's host machine and mounted into the pod\nMore info: https://examples.k8s.io/volumes/storageos/README.md\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.StorageOSPersistentVolumeSource"
-                        }
-                    ]
-                },
-                "volumeAttributesClassName": {
-                    "description": "Name of VolumeAttributesClass to which this persistent volume belongs. Empty value\nis not allowed. When this field is not set, it indicates that this volume does not belong to any\nVolumeAttributesClass. This field is mutable and can be changed by the CSI driver\nafter a volume has been updated successfully to a new class.\nFor an unbound PersistentVolume, the volumeAttributesClassName will be matched with unbound\nPersistentVolumeClaims during the binding process.\nThis is a beta field and requires enabling VolumeAttributesClass feature (off by default).\n+featureGate=VolumeAttributesClass\n+optional",
-                    "type": "string"
-                },
-                "volumeMode": {
-                    "description": "volumeMode defines if a volume is intended to be used with a formatted filesystem\nor to remain in raw block state. Value of Filesystem is implied when not included in spec.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolumeMode"
-                        }
-                    ]
-                },
-                "vsphereVolume": {
-                    "description": "vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.VsphereVirtualDiskVolumeSource"
-                        }
-                    ]
-                }
-            }
-        },
-        "v1.PersistentVolumeStatus": {
-            "type": "object",
-            "properties": {
-                "lastPhaseTransitionTime": {
-                    "description": "lastPhaseTransitionTime is the time the phase transitioned from one to another\nand automatically resets to current time everytime a volume phase transitions.\n+optional",
-                    "type": "string"
-                },
-                "message": {
-                    "description": "message is a human-readable message indicating details about why the volume is in this state.\n+optional",
-                    "type": "string"
-                },
-                "phase": {
-                    "description": "phase indicates if a volume is available, bound to a claim, or released by a claim.\nMore info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#phase\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolumePhase"
-                        }
-                    ]
-                },
-                "reason": {
-                    "description": "reason is a brief CamelCase string that describes any failure and is meant\nfor machine parsing and tidy display in the CLI.\n+optional",
-                    "type": "string"
-                }
-            }
         },
         "v1.PhotonPersistentDiskVolumeSource": {
             "type": "object",
@@ -33825,17 +28855,6 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "FSGroupChangeOnRootMismatch",
                 "FSGroupChangeAlways"
-            ]
-        },
-        "v1.PodManagementPolicyType": {
-            "type": "string",
-            "enum": [
-                "OrderedReady",
-                "Parallel"
-            ],
-            "x-enum-varnames": [
-                "OrderedReadyPodManagement",
-                "ParallelPodManagement"
             ]
         },
         "v1.PodOS": {
@@ -34432,50 +29451,6 @@ const docTemplate = `{
                 }
             }
         },
-        "v1.RBDPersistentVolumeSource": {
-            "type": "object",
-            "properties": {
-                "fsType": {
-                    "description": "fsType is the filesystem type of the volume that you want to mount.\nTip: Ensure that the filesystem type is supported by the host operating system.\nExamples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\nMore info: https://kubernetes.io/docs/concepts/storage/volumes#rbd\nTODO: how do we prevent errors in the filesystem from compromising the machine\n+optional",
-                    "type": "string"
-                },
-                "image": {
-                    "description": "image is the rados image name.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it",
-                    "type": "string"
-                },
-                "keyring": {
-                    "description": "keyring is the path to key ring for RBDUser.\nDefault is /etc/ceph/keyring.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional\n+default=\"/etc/ceph/keyring\"",
-                    "type": "string"
-                },
-                "monitors": {
-                    "description": "monitors is a collection of Ceph monitors.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "pool": {
-                    "description": "pool is the rados pool name.\nDefault is rbd.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional\n+default=\"rbd\"",
-                    "type": "string"
-                },
-                "readOnly": {
-                    "description": "readOnly here will force the ReadOnly setting in VolumeMounts.\nDefaults to false.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional",
-                    "type": "boolean"
-                },
-                "secretRef": {
-                    "description": "secretRef is name of the authentication secret for RBDUser. If provided\noverrides keyring.\nDefault is nil.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretReference"
-                        }
-                    ]
-                },
-                "user": {
-                    "description": "user is the rados user name.\nDefault is admin.\nMore info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it\n+optional\n+default=\"admin\"",
-                    "type": "string"
-                }
-            }
-        },
         "v1.RBDVolumeSource": {
             "type": "object",
             "properties": {
@@ -34714,23 +29689,6 @@ const docTemplate = `{
                 }
             }
         },
-        "v1.RollingUpdateStatefulSetStrategy": {
-            "type": "object",
-            "properties": {
-                "maxUnavailable": {
-                    "description": "The maximum number of pods that can be unavailable during the update.\nValue can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).\nAbsolute number is calculated from percentage by rounding up. This can not be 0.\nDefaults to 1. This field is alpha-level and is only honored by servers that enable the\nMaxUnavailableStatefulSet feature. The field applies to all pods in the range 0 to\nReplicas-1. That means if there is any unavailable pod in the range 0 to Replicas-1, it\nwill be counted towards MaxUnavailable.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/intstr.IntOrString"
-                        }
-                    ]
-                },
-                "partition": {
-                    "description": "Partition indicates the ordinal at which the StatefulSet should be partitioned\nfor updates. During a rolling update, all pods from ordinal Replicas-1 to\nPartition are updated. All pods from ordinal Partition-1 to 0 remain untouched.\nThis is helpful in being able to do a canary based deployment. The default value is 0.\n+optional",
-                    "type": "integer"
-                }
-            }
-        },
         "v1.SELinuxOptions": {
             "type": "object",
             "properties": {
@@ -34748,55 +29706,6 @@ const docTemplate = `{
                 },
                 "user": {
                     "description": "User is a SELinux user label that applies to the container.\n+optional",
-                    "type": "string"
-                }
-            }
-        },
-        "v1.ScaleIOPersistentVolumeSource": {
-            "type": "object",
-            "properties": {
-                "fsType": {
-                    "description": "fsType is the filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\".\nDefault is \"xfs\"\n+optional\n+default=\"xfs\"",
-                    "type": "string"
-                },
-                "gateway": {
-                    "description": "gateway is the host address of the ScaleIO API Gateway.",
-                    "type": "string"
-                },
-                "protectionDomain": {
-                    "description": "protectionDomain is the name of the ScaleIO Protection Domain for the configured storage.\n+optional",
-                    "type": "string"
-                },
-                "readOnly": {
-                    "description": "readOnly defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
-                    "type": "boolean"
-                },
-                "secretRef": {
-                    "description": "secretRef references to the secret for ScaleIO user and other\nsensitive information. If this is not provided, Login operation will fail.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretReference"
-                        }
-                    ]
-                },
-                "sslEnabled": {
-                    "description": "sslEnabled is the flag to enable/disable SSL communication with Gateway, default false\n+optional",
-                    "type": "boolean"
-                },
-                "storageMode": {
-                    "description": "storageMode indicates whether the storage for a volume should be ThickProvisioned or ThinProvisioned.\nDefault is ThinProvisioned.\n+optional\n+default=\"ThinProvisioned\"",
-                    "type": "string"
-                },
-                "storagePool": {
-                    "description": "storagePool is the ScaleIO Storage Pool associated with the protection domain.\n+optional",
-                    "type": "string"
-                },
-                "system": {
-                    "description": "system is the name of the storage system as configured in ScaleIO.",
-                    "type": "string"
-                },
-                "volumeName": {
-                    "description": "volumeName is the name of a volume already created in the ScaleIO system\nthat is associated with this volume source.",
                     "type": "string"
                 }
             }
@@ -34880,56 +29789,6 @@ const docTemplate = `{
                 "SeccompProfileTypeLocalhost"
             ]
         },
-        "v1.Secret": {
-            "type": "object",
-            "properties": {
-                "apiVersion": {
-                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
-                    "type": "string"
-                },
-                "data": {
-                    "description": "Data contains the secret data. Each key must consist of alphanumeric\ncharacters, '-', '_' or '.'. The serialized form of the secret data is a\nbase64 encoded string, representing the arbitrary (possibly non-string)\ndata value here. Described in https://tools.ietf.org/html/rfc4648#section-4\n+optional",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                            "type": "integer"
-                        }
-                    }
-                },
-                "immutable": {
-                    "description": "Immutable, if set to true, ensures that data stored in the Secret cannot\nbe updated (only object metadata can be modified).\nIf not set to true, the field can be modified at any time.\nDefaulted to nil.\n+optional",
-                    "type": "boolean"
-                },
-                "kind": {
-                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ObjectMeta"
-                        }
-                    ]
-                },
-                "stringData": {
-                    "description": "stringData allows specifying non-binary secret data in string form.\nIt is provided as a write-only input field for convenience.\nAll keys and values are merged into the data field on write, overwriting any existing values.\nThe stringData field is never output when reading from the API.\n+k8s:conversion-gen=false\n+optional",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "type": {
-                    "description": "Used to facilitate programmatic handling of secret data.\nMore info: https://kubernetes.io/docs/concepts/configuration/secret/#secret-types\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.SecretType"
-                        }
-                    ]
-                }
-            }
-        },
         "v1.SecretEnvSource": {
             "type": "object",
             "properties": {
@@ -34979,42 +29838,6 @@ const docTemplate = `{
                     "type": "boolean"
                 }
             }
-        },
-        "v1.SecretReference": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "description": "name is unique within a namespace to reference a secret resource.\n+optional",
-                    "type": "string"
-                },
-                "namespace": {
-                    "description": "namespace defines the space within which the secret name must be unique.\n+optional",
-                    "type": "string"
-                }
-            }
-        },
-        "v1.SecretType": {
-            "type": "string",
-            "enum": [
-                "Opaque",
-                "kubernetes.io/service-account-token",
-                "kubernetes.io/dockercfg",
-                "kubernetes.io/dockerconfigjson",
-                "kubernetes.io/basic-auth",
-                "kubernetes.io/ssh-auth",
-                "kubernetes.io/tls",
-                "bootstrap.kubernetes.io/token"
-            ],
-            "x-enum-varnames": [
-                "SecretTypeOpaque",
-                "SecretTypeServiceAccountToken",
-                "SecretTypeDockercfg",
-                "SecretTypeDockerConfigJson",
-                "SecretTypeBasicAuth",
-                "SecretTypeSSHAuth",
-                "SecretTypeTLS",
-                "SecretTypeBootstrapToken"
-            ]
         },
         "v1.SecretVolumeSource": {
             "type": "object",
@@ -35181,6 +30004,19 @@ const docTemplate = `{
                 "ServiceAffinityClientIP",
                 "ServiceAffinityNone"
             ]
+        },
+        "v1.ServiceBackendPort": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "name is the name of the port on the Service.\nThis is a mutually exclusive setting with \"Number\".\n+optional",
+                    "type": "string"
+                },
+                "number": {
+                    "description": "number is the numerical port number (e.g. 80) on the Service.\nThis is a mutually exclusive setting with \"Name\".\n+optional",
+                    "type": "integer"
+                }
+            }
         },
         "v1.ServiceExternalTrafficPolicy": {
             "type": "string",
@@ -35429,258 +30265,6 @@ const docTemplate = `{
                 }
             }
         },
-        "v1.StatefulSet": {
-            "type": "object",
-            "properties": {
-                "apiVersion": {
-                    "description": "APIVersion defines the versioned schema of this representation of an object.\nServers should convert recognized schemas to the latest internal value, and\nmay reject unrecognized values.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n+optional",
-                    "type": "string"
-                },
-                "kind": {
-                    "description": "Kind is a string value representing the REST resource this object represents.\nServers may infer this from the endpoint the client submits requests to.\nCannot be updated.\nIn CamelCase.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n+optional",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "Standard object's metadata.\nMore info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ObjectMeta"
-                        }
-                    ]
-                },
-                "spec": {
-                    "description": "Spec defines the desired identities of pods in this set.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.StatefulSetSpec"
-                        }
-                    ]
-                },
-                "status": {
-                    "description": "Status is the current status of Pods in this StatefulSet. This data\nmay be out of date by some window of time.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.StatefulSetStatus"
-                        }
-                    ]
-                }
-            }
-        },
-        "v1.StatefulSetCondition": {
-            "type": "object",
-            "properties": {
-                "lastTransitionTime": {
-                    "description": "Last time the condition transitioned from one status to another.\n+optional",
-                    "type": "string"
-                },
-                "message": {
-                    "description": "A human readable message indicating details about the transition.\n+optional",
-                    "type": "string"
-                },
-                "reason": {
-                    "description": "The reason for the condition's last transition.\n+optional",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "Status of the condition, one of True, False, Unknown.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/k8s_io_api_core_v1.ConditionStatus"
-                        }
-                    ]
-                },
-                "type": {
-                    "description": "Type of statefulset condition.",
-                    "type": "string"
-                }
-            }
-        },
-        "v1.StatefulSetOrdinals": {
-            "type": "object",
-            "properties": {
-                "start": {
-                    "description": "start is the number representing the first replica's index. It may be used\nto number replicas from an alternate index (eg: 1-indexed) over the default\n0-indexed names, or to orchestrate progressive movement of replicas from\none StatefulSet to another.\nIf set, replica indices will be in the range:\n  [.spec.ordinals.start, .spec.ordinals.start + .spec.replicas).\nIf unset, defaults to 0. Replica indices will be in the range:\n  [0, .spec.replicas).\n+optional",
-                    "type": "integer"
-                }
-            }
-        },
-        "v1.StatefulSetPersistentVolumeClaimRetentionPolicy": {
-            "type": "object",
-            "properties": {
-                "whenDeleted": {
-                    "description": "WhenDeleted specifies what happens to PVCs created from StatefulSet\nVolumeClaimTemplates when the StatefulSet is deleted. The default policy\nof ` + "`" + `Retain` + "`" + ` causes PVCs to not be affected by StatefulSet deletion. The\n` + "`" + `Delete` + "`" + ` policy causes those PVCs to be deleted.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolumeClaimRetentionPolicyType"
-                        }
-                    ]
-                },
-                "whenScaled": {
-                    "description": "WhenScaled specifies what happens to PVCs created from StatefulSet\nVolumeClaimTemplates when the StatefulSet is scaled down. The default\npolicy of ` + "`" + `Retain` + "`" + ` causes PVCs to not be affected by a scaledown. The\n` + "`" + `Delete` + "`" + ` policy causes the associated PVCs for any excess pods above\nthe replica count to be deleted.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PersistentVolumeClaimRetentionPolicyType"
-                        }
-                    ]
-                }
-            }
-        },
-        "v1.StatefulSetSpec": {
-            "type": "object",
-            "properties": {
-                "minReadySeconds": {
-                    "description": "Minimum number of seconds for which a newly created pod should be ready\nwithout any of its container crashing for it to be considered available.\nDefaults to 0 (pod will be considered available as soon as it is ready)\n+optional",
-                    "type": "integer"
-                },
-                "ordinals": {
-                    "description": "ordinals controls the numbering of replica indices in a StatefulSet. The\ndefault ordinals behavior assigns a \"0\" index to the first replica and\nincrements the index by one for each additional replica requested.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.StatefulSetOrdinals"
-                        }
-                    ]
-                },
-                "persistentVolumeClaimRetentionPolicy": {
-                    "description": "persistentVolumeClaimRetentionPolicy describes the lifecycle of persistent\nvolume claims created from volumeClaimTemplates. By default, all persistent\nvolume claims are created as needed and retained until manually deleted. This\npolicy allows the lifecycle to be altered, for example by deleting persistent\nvolume claims when their stateful set is deleted, or when their pod is scaled\ndown. This requires the StatefulSetAutoDeletePVC feature gate to be enabled,\nwhich is beta.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.StatefulSetPersistentVolumeClaimRetentionPolicy"
-                        }
-                    ]
-                },
-                "podManagementPolicy": {
-                    "description": "podManagementPolicy controls how pods are created during initial scale up,\nwhen replacing pods on nodes, or when scaling down. The default policy is\n` + "`" + `OrderedReady` + "`" + `, where pods are created in increasing order (pod-0, then\npod-1, etc) and the controller will wait until each pod is ready before\ncontinuing. When scaling down, the pods are removed in the opposite order.\nThe alternative policy is ` + "`" + `Parallel` + "`" + ` which will create pods in parallel\nto match the desired scale without waiting, and on scale down will delete\nall pods at once.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PodManagementPolicyType"
-                        }
-                    ]
-                },
-                "replicas": {
-                    "description": "replicas is the desired number of replicas of the given Template.\nThese are replicas in the sense that they are instantiations of the\nsame Template, but individual replicas also have a consistent identity.\nIf unspecified, defaults to 1.\nTODO: Consider a rename of this field.\n+optional",
-                    "type": "integer"
-                },
-                "revisionHistoryLimit": {
-                    "description": "revisionHistoryLimit is the maximum number of revisions that will\nbe maintained in the StatefulSet's revision history. The revision history\nconsists of all revisions not represented by a currently applied\nStatefulSetSpec version. The default value is 10.",
-                    "type": "integer"
-                },
-                "selector": {
-                    "description": "selector is a label query over pods that should match the replica count.\nIt must match the pod template's labels.\nMore info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.LabelSelector"
-                        }
-                    ]
-                },
-                "serviceName": {
-                    "description": "serviceName is the name of the service that governs this StatefulSet.\nThis service must exist before the StatefulSet, and is responsible for\nthe network identity of the set. Pods get DNS/hostnames that follow the\npattern: pod-specific-string.serviceName.default.svc.cluster.local\nwhere \"pod-specific-string\" is managed by the StatefulSet controller.",
-                    "type": "string"
-                },
-                "template": {
-                    "description": "template is the object that describes the pod that will be created if\ninsufficient replicas are detected. Each pod stamped out by the StatefulSet\nwill fulfill this Template, but have a unique identity from the rest\nof the StatefulSet. Each pod will be named with the format\n\u003cstatefulsetname\u003e-\u003cpodindex\u003e. For example, a pod in a StatefulSet named\n\"web\" with index number \"3\" would be named \"web-3\".\nThe only allowed template.spec.restartPolicy value is \"Always\".",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.PodTemplateSpec"
-                        }
-                    ]
-                },
-                "updateStrategy": {
-                    "description": "updateStrategy indicates the StatefulSetUpdateStrategy that will be\nemployed to update Pods in the StatefulSet when a revision is made to\nTemplate.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.StatefulSetUpdateStrategy"
-                        }
-                    ]
-                },
-                "volumeClaimTemplates": {
-                    "description": "volumeClaimTemplates is a list of claims that pods are allowed to reference.\nThe StatefulSet controller is responsible for mapping network identities to\nclaims in a way that maintains the identity of a pod. Every claim in\nthis list must have at least one matching (by name) volumeMount in one\ncontainer in the template. A claim in this list takes precedence over\nany volumes in the template, with the same name.\nTODO: Define the behavior if a claim already exists with the same name.\n+optional\n+listType=atomic",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.PersistentVolumeClaim"
-                    }
-                }
-            }
-        },
-        "v1.StatefulSetStatus": {
-            "type": "object",
-            "properties": {
-                "availableReplicas": {
-                    "description": "Total number of available pods (ready for at least minReadySeconds) targeted by this statefulset.\n+optional",
-                    "type": "integer"
-                },
-                "collisionCount": {
-                    "description": "collisionCount is the count of hash collisions for the StatefulSet. The StatefulSet controller\nuses this field as a collision avoidance mechanism when it needs to create the name for the\nnewest ControllerRevision.\n+optional",
-                    "type": "integer"
-                },
-                "conditions": {
-                    "description": "Represents the latest available observations of a statefulset's current state.\n+optional\n+patchMergeKey=type\n+patchStrategy=merge\n+listType=map\n+listMapKey=type",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/v1.StatefulSetCondition"
-                    }
-                },
-                "currentReplicas": {
-                    "description": "currentReplicas is the number of Pods created by the StatefulSet controller from the StatefulSet version\nindicated by currentRevision.",
-                    "type": "integer"
-                },
-                "currentRevision": {
-                    "description": "currentRevision, if not empty, indicates the version of the StatefulSet used to generate Pods in the\nsequence [0,currentReplicas).",
-                    "type": "string"
-                },
-                "observedGeneration": {
-                    "description": "observedGeneration is the most recent generation observed for this StatefulSet. It corresponds to the\nStatefulSet's generation, which is updated on mutation by the API Server.\n+optional",
-                    "type": "integer"
-                },
-                "readyReplicas": {
-                    "description": "readyReplicas is the number of pods created for this StatefulSet with a Ready Condition.",
-                    "type": "integer"
-                },
-                "replicas": {
-                    "description": "replicas is the number of Pods created by the StatefulSet controller.",
-                    "type": "integer"
-                },
-                "updateRevision": {
-                    "description": "updateRevision, if not empty, indicates the version of the StatefulSet used to generate Pods in the sequence\n[replicas-updatedReplicas,replicas)",
-                    "type": "string"
-                },
-                "updatedReplicas": {
-                    "description": "updatedReplicas is the number of Pods created by the StatefulSet controller from the StatefulSet version\nindicated by updateRevision.",
-                    "type": "integer"
-                }
-            }
-        },
-        "v1.StatefulSetUpdateStrategy": {
-            "type": "object",
-            "properties": {
-                "rollingUpdate": {
-                    "description": "RollingUpdate is used to communicate parameters when Type is RollingUpdateStatefulSetStrategyType.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.RollingUpdateStatefulSetStrategy"
-                        }
-                    ]
-                },
-                "type": {
-                    "description": "Type indicates the type of the StatefulSetUpdateStrategy.\nDefault is RollingUpdate.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.StatefulSetUpdateStrategyType"
-                        }
-                    ]
-                }
-            }
-        },
-        "v1.StatefulSetUpdateStrategyType": {
-            "type": "string",
-            "enum": [
-                "RollingUpdate",
-                "OnDelete"
-            ],
-            "x-enum-varnames": [
-                "RollingUpdateStatefulSetStrategyType",
-                "OnDeleteStatefulSetStrategyType"
-            ]
-        },
         "v1.StorageMedium": {
             "type": "string",
             "enum": [
@@ -35701,35 +30285,6 @@ const docTemplate = `{
                 "StorageMediumHugePages",
                 "StorageMediumHugePagesPrefix"
             ]
-        },
-        "v1.StorageOSPersistentVolumeSource": {
-            "type": "object",
-            "properties": {
-                "fsType": {
-                    "description": "fsType is the filesystem type to mount.\nMust be a filesystem type supported by the host operating system.\nEx. \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified.\n+optional",
-                    "type": "string"
-                },
-                "readOnly": {
-                    "description": "readOnly defaults to false (read/write). ReadOnly here will force\nthe ReadOnly setting in VolumeMounts.\n+optional",
-                    "type": "boolean"
-                },
-                "secretRef": {
-                    "description": "secretRef specifies the secret to use for obtaining the StorageOS API\ncredentials.  If not specified, default values will be attempted.\n+optional",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.ObjectReference"
-                        }
-                    ]
-                },
-                "volumeName": {
-                    "description": "volumeName is the human-readable name of the StorageOS volume.  Volume\nnames are only unique within a namespace.",
-                    "type": "string"
-                },
-                "volumeNamespace": {
-                    "description": "volumeNamespace specifies the scope of the volume within StorageOS.  If no\nnamespace is specified then the Pod's namespace will be used.  This allows the\nKubernetes name scoping to be mirrored within StorageOS for tighter integration.\nSet VolumeName to any name to override the default behaviour.\nSet to \"default\" if you are not using namespaces within StorageOS.\nNamespaces that do not pre-exist within StorageOS will be created.\n+optional",
-                    "type": "string"
-                }
-            }
         },
         "v1.StorageOSVolumeSource": {
             "type": "object",
@@ -36310,19 +30865,6 @@ const docTemplate = `{
                 "subPathExpr": {
                     "description": "Expanded path within the volume from which the container's volume should be mounted.\nBehaves similarly to SubPath but environment variable references $(VAR_NAME) are expanded using the container's environment.\nDefaults to \"\" (volume's root).\nSubPathExpr and SubPath are mutually exclusive.\n+optional",
                     "type": "string"
-                }
-            }
-        },
-        "v1.VolumeNodeAffinity": {
-            "type": "object",
-            "properties": {
-                "required": {
-                    "description": "required specifies hard node constraints that must be met.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/v1.NodeSelector"
-                        }
-                    ]
                 }
             }
         },

@@ -54,6 +54,20 @@ func InitGinServer(
 	k8sTaintHdl *k8sApi.K8sTaintHandler,
 	k8sYamlTaskHdl *k8sApi.K8sYamlTaskHandler,
 	k8sYamlTemplateHdl *k8sApi.K8sYamlTemplateHandler,
+	k8sConfigMapHdl *k8sApi.K8sConfigMapHandler,
+	k8sSecretHdl *k8sApi.K8sSecretHandler,
+	k8sDaemonSetHdl *k8sApi.K8sDaemonSetHandler,
+	k8sEventHdl *k8sApi.K8sEventHandler,
+	k8sPVHdl *k8sApi.K8sPVHandler,
+	k8sPVCHdl *k8sApi.K8sPVCHandler,
+	k8sIngressHdl *k8sApi.K8sIngressHandler,
+	k8sStatefulSetHdl *k8sApi.K8sStatefulSetHandler,
+	k8sServiceAccountHdl *k8sApi.K8sServiceAccountHandler,
+	roleHdl *k8sApi.RoleAPI,
+	clusterRoleHdl *k8sApi.ClusterRoleAPI,
+	roleBindingHdl *k8sApi.RoleBindingAPI,
+	clusterRoleBindingHdl *k8sApi.ClusterRoleBindingAPI,
+	rbacHdl *k8sApi.RBACAPI,
 	alertEventHdl *prometheusApi.AlertEventHandler,
 	alertPoolHdl *prometheusApi.AlertPoolHandler,
 	alertRuleHdl *prometheusApi.AlertRuleHandler,
@@ -102,6 +116,20 @@ func InitGinServer(
 	k8sTaintHdl.RegisterRouters(server)
 	k8sYamlTaskHdl.RegisterRouters(server)
 	k8sYamlTemplateHdl.RegisterRouters(server)
+	k8sConfigMapHdl.RegisterRouters(server)
+	k8sSecretHdl.RegisterRouters(server)
+	k8sDaemonSetHdl.RegisterRouters(server)
+	k8sEventHdl.RegisterRouters(server)
+	k8sPVHdl.RegisterRouters(server)
+	k8sPVCHdl.RegisterRouters(server)
+	k8sIngressHdl.RegisterRouters(server)
+	k8sStatefulSetHdl.RegisterRouters(server)
+	k8sServiceAccountHdl.RegisterRouters(server)
+	roleHdl.RegisterRouters(server)
+	clusterRoleHdl.RegisterRouters(server)
+	roleBindingHdl.RegisterRouters(server)
+	clusterRoleBindingHdl.RegisterRouters(server)
+	rbacHdl.RegisterRouters(server)
 	formDesignHdl.RegisterRouters(server)
 	processHdl.RegisterRouters(server)
 	templateHdl.RegisterRouters(server)

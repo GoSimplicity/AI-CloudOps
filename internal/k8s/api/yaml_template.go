@@ -28,8 +28,6 @@ package api
 import (
 	"strconv"
 
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -38,13 +36,13 @@ import (
 )
 
 type K8sYamlTemplateHandler struct {
-	l                   *zap.Logger
+	logger              *zap.Logger
 	yamlTemplateService service.YamlTemplateService
 }
 
-func NewK8sYamlTemplateHandler(l *zap.Logger, yamlTemplateService service.YamlTemplateService) *K8sYamlTemplateHandler {
+func NewK8sYamlTemplateHandler(logger *zap.Logger, yamlTemplateService service.YamlTemplateService) *K8sYamlTemplateHandler {
 	return &K8sYamlTemplateHandler{
-		l:                   l,
+		logger:              logger,
 		yamlTemplateService: yamlTemplateService,
 	}
 }
@@ -99,20 +97,26 @@ func (k *K8sYamlTemplateHandler) GetYamlTemplateList(ctx *gin.Context) {
 // @Tags YAML模板管理
 // @Accept json
 // @Produce json
-// @Param template body model.K8sYamlTemplate true "YAML模板信息"
+// @Param template body model.YamlTemplateCreateReq true "YAML模板信息"
 // @Success 200 {object} utils.ApiResponse "创建成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/yaml_templates/create [post]
 // @Security BearerAuth
 func (k *K8sYamlTemplateHandler) CreateYamlTemplate(ctx *gin.Context) {
-	var req model.K8sYamlTemplate
+	var req model.YamlTemplateCreateReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(utils.UserClaims)
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTemplateService.CreateYamlTemplate(ctx, &req)
+		template := &model.K8sYamlTemplate{
+			Name:      req.Name,
+			UserID:    req.UserID,
+			Content:   req.Content,
+			ClusterId: req.ClusterId,
+		}
+		return nil, k.yamlTemplateService.CreateYamlTemplate(ctx, template)
 	})
 }
 
@@ -122,20 +126,27 @@ func (k *K8sYamlTemplateHandler) CreateYamlTemplate(ctx *gin.Context) {
 // @Tags YAML模板管理
 // @Accept json
 // @Produce json
-// @Param template body model.K8sYamlTemplate true "YAML模板信息"
+// @Param template body model.YamlTemplateUpdateReq true "YAML模板信息"
 // @Success 200 {object} utils.ApiResponse "更新成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/yaml_templates/update [post]
 // @Security BearerAuth
 func (k *K8sYamlTemplateHandler) UpdateYamlTemplate(ctx *gin.Context) {
-	var req model.K8sYamlTemplate
+	var req model.YamlTemplateUpdateReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(utils.UserClaims)
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTemplateService.UpdateYamlTemplate(ctx, &req)
+		template := &model.K8sYamlTemplate{
+			Model:     model.Model{ID: req.ID},
+			Name:      req.Name,
+			UserID:    req.UserID,
+			Content:   req.Content,
+			ClusterId: req.ClusterId,
+		}
+		return nil, k.yamlTemplateService.UpdateYamlTemplate(ctx, template)
 	})
 }
 
@@ -182,17 +193,22 @@ func (k *K8sYamlTemplateHandler) DeleteYamlTemplate(ctx *gin.Context) {
 // @Tags YAML模板管理
 // @Accept json
 // @Produce json
-// @Param template body model.K8sYamlTemplate true "YAML模板信息"
+// @Param template body model.YamlTemplateCheckReq true "YAML模板信息"
 // @Success 200 {object} utils.ApiResponse "检查成功"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/yaml_templates/check [post]
 // @Security BearerAuth
 func (k *K8sYamlTemplateHandler) CheckYamlTemplate(ctx *gin.Context) {
-	var req model.K8sYamlTemplate
+	var req model.YamlTemplateCheckReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTemplateService.CheckYamlTemplate(ctx, &req)
+		template := &model.K8sYamlTemplate{
+			Name:      req.Name,
+			Content:   req.Content,
+			ClusterId: req.ClusterId,
+		}
+		return nil, k.yamlTemplateService.CheckYamlTemplate(ctx, template)
 	})
 }
 

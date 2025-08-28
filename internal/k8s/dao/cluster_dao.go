@@ -56,7 +56,7 @@ func NewClusterDAO(db *gorm.DB, l *zap.Logger) ClusterDAO {
 	}
 }
 
-// ListAllClusters 查询所有集群
+// ListAllClusters 获取所有集群
 func (c *clusterDAO) ListAllClusters(ctx context.Context) ([]*model.K8sCluster, error) {
 	var clusters []*model.K8sCluster
 
@@ -68,7 +68,7 @@ func (c *clusterDAO) ListAllClusters(ctx context.Context) ([]*model.K8sCluster, 
 	return clusters, nil
 }
 
-// CreateCluster 创建新集群
+// CreateCluster 创建集群
 func (c *clusterDAO) CreateCluster(ctx context.Context, cluster *model.K8sCluster) error {
 	if err := c.db.WithContext(ctx).Create(cluster).Error; err != nil {
 		c.l.Error("CreateCluster 创建集群失败", zap.Error(err))
@@ -78,7 +78,7 @@ func (c *clusterDAO) CreateCluster(ctx context.Context, cluster *model.K8sCluste
 	return nil
 }
 
-// UpdateCluster 更新集群信息
+// UpdateCluster 更新集群
 func (c *clusterDAO) UpdateCluster(ctx context.Context, cluster *model.K8sCluster) error {
 	tx := c.db.WithContext(ctx).Begin()
 
@@ -104,7 +104,7 @@ func (c *clusterDAO) UpdateClusterStatus(ctx context.Context, id int, status str
 	return nil
 }
 
-// DeleteCluster 删除指定集群
+// DeleteCluster 删除集群
 func (c *clusterDAO) DeleteCluster(ctx context.Context, id int) error {
 	if err := c.db.WithContext(ctx).Where("id = ?", id).Delete(&model.K8sCluster{}).Error; err != nil {
 		c.l.Error("DeleteCluster 删除集群失败", zap.Int("id", id), zap.Error(err))
@@ -114,7 +114,7 @@ func (c *clusterDAO) DeleteCluster(ctx context.Context, id int) error {
 	return nil
 }
 
-// GetClusterByID 根据ID查询集群
+// GetClusterByID 根据ID获取集群
 func (c *clusterDAO) GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error) {
 	var cluster model.K8sCluster
 
@@ -126,7 +126,7 @@ func (c *clusterDAO) GetClusterByID(ctx context.Context, id int) (*model.K8sClus
 	return &cluster, nil
 }
 
-// GetClusterByName 根据名称查询集群
+// GetClusterByName 根据名称获取集群
 func (c *clusterDAO) GetClusterByName(ctx context.Context, name string) (*model.K8sCluster, error) {
 	var cluster model.K8sCluster
 

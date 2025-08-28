@@ -43,14 +43,14 @@ import (
 )
 
 type StatefulSetService interface {
-	GetStatefulSetList(ctx context.Context, req *model.K8sListRequest) ([]*model.K8sStatefulSet, error)
-	GetStatefulSet(ctx context.Context, req *model.K8sResourceIdentifier) (*model.K8sStatefulSet, error)
-	CreateStatefulSet(ctx context.Context, req *model.StatefulSetCreateRequest) error
-	UpdateStatefulSet(ctx context.Context, req *model.StatefulSetUpdateRequest) error
-	ScaleStatefulSet(ctx context.Context, req *model.StatefulSetScaleRequest) error
-	DeleteStatefulSet(ctx context.Context, req *model.K8sResourceIdentifier) error
-	BatchDeleteStatefulSets(ctx context.Context, req *model.K8sBatchDeleteRequest) error
-	GetStatefulSetYAML(ctx context.Context, req *model.K8sResourceIdentifier) (string, error)
+	GetStatefulSetList(ctx context.Context, req *model.K8sListReq) ([]*model.K8sStatefulSet, error)
+	GetStatefulSet(ctx context.Context, req *model.K8sResourceIdentifierReq) (*model.K8sStatefulSet, error)
+	CreateStatefulSet(ctx context.Context, req *model.StatefulSetCreateReq) error
+	UpdateStatefulSet(ctx context.Context, req *model.StatefulSetUpdateReq) error
+	ScaleStatefulSet(ctx context.Context, req *model.StatefulSetScaleReq) error
+	DeleteStatefulSet(ctx context.Context, req *model.K8sResourceIdentifierReq) error
+	BatchDeleteStatefulSets(ctx context.Context, req *model.K8sBatchDeleteReq) error
+	GetStatefulSetYAML(ctx context.Context, req *model.K8sResourceIdentifierReq) (string, error)
 }
 
 type statefulSetService struct {
@@ -66,7 +66,7 @@ func NewStatefulSetService(k8sClient client.K8sClient, logger *zap.Logger) State
 }
 
 // GetStatefulSetList 获取StatefulSet列表
-func (s *statefulSetService) GetStatefulSetList(ctx context.Context, req *model.K8sListRequest) ([]*model.K8sStatefulSet, error) {
+func (s *statefulSetService) GetStatefulSetList(ctx context.Context, req *model.K8sListReq) ([]*model.K8sStatefulSet, error) {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -76,7 +76,7 @@ func (s *statefulSetService) GetStatefulSetList(ctx context.Context, req *model.
 	listOptions := req.ToMetaV1ListOptions()
 	statefulSetList, err := clientset.AppsV1().StatefulSets(req.Namespace).List(ctx, listOptions)
 	if err != nil {
-		s.logger.Error("获取StatefulSet列表失败", zap.Error(err), 
+		s.logger.Error("获取StatefulSet列表失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", req.Namespace))
 		return nil, fmt.Errorf("获取StatefulSet列表失败: %w", err)
 	}
@@ -87,8 +87,8 @@ func (s *statefulSetService) GetStatefulSetList(ctx context.Context, req *model.
 		result = append(result, k8sStatefulSet)
 	}
 
-	s.logger.Info("成功获取StatefulSet列表", 
-		zap.Int("cluster_id", req.ClusterID), 
+	s.logger.Info("成功获取StatefulSet列表",
+		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
 		zap.Int("count", len(result)))
 
@@ -96,7 +96,7 @@ func (s *statefulSetService) GetStatefulSetList(ctx context.Context, req *model.
 }
 
 // GetStatefulSet 获取单个StatefulSet详情
-func (s *statefulSetService) GetStatefulSet(ctx context.Context, req *model.K8sResourceIdentifier) (*model.K8sStatefulSet, error) {
+func (s *statefulSetService) GetStatefulSet(ctx context.Context, req *model.K8sResourceIdentifierReq) (*model.K8sStatefulSet, error) {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -120,7 +120,7 @@ func (s *statefulSetService) GetStatefulSet(ctx context.Context, req *model.K8sR
 }
 
 // CreateStatefulSet 创建StatefulSet
-func (s *statefulSetService) CreateStatefulSet(ctx context.Context, req *model.StatefulSetCreateRequest) error {
+func (s *statefulSetService) CreateStatefulSet(ctx context.Context, req *model.StatefulSetCreateReq) error {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -151,7 +151,7 @@ func (s *statefulSetService) CreateStatefulSet(ctx context.Context, req *model.S
 }
 
 // UpdateStatefulSet 更新StatefulSet
-func (s *statefulSetService) UpdateStatefulSet(ctx context.Context, req *model.StatefulSetUpdateRequest) error {
+func (s *statefulSetService) UpdateStatefulSet(ctx context.Context, req *model.StatefulSetUpdateReq) error {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -188,7 +188,7 @@ func (s *statefulSetService) UpdateStatefulSet(ctx context.Context, req *model.S
 }
 
 // ScaleStatefulSet 扩缩容StatefulSet
-func (s *statefulSetService) ScaleStatefulSet(ctx context.Context, req *model.StatefulSetScaleRequest) error {
+func (s *statefulSetService) ScaleStatefulSet(ctx context.Context, req *model.StatefulSetScaleReq) error {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -225,7 +225,7 @@ func (s *statefulSetService) ScaleStatefulSet(ctx context.Context, req *model.St
 }
 
 // DeleteStatefulSet 删除StatefulSet
-func (s *statefulSetService) DeleteStatefulSet(ctx context.Context, req *model.K8sResourceIdentifier) error {
+func (s *statefulSetService) DeleteStatefulSet(ctx context.Context, req *model.K8sResourceIdentifierReq) error {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -253,7 +253,7 @@ func (s *statefulSetService) DeleteStatefulSet(ctx context.Context, req *model.K
 }
 
 // BatchDeleteStatefulSets 批量删除StatefulSet
-func (s *statefulSetService) BatchDeleteStatefulSets(ctx context.Context, req *model.K8sBatchDeleteRequest) error {
+func (s *statefulSetService) BatchDeleteStatefulSets(ctx context.Context, req *model.K8sBatchDeleteReq) error {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -287,7 +287,7 @@ func (s *statefulSetService) BatchDeleteStatefulSets(ctx context.Context, req *m
 }
 
 // GetStatefulSetYAML 获取StatefulSet的YAML配置
-func (s *statefulSetService) GetStatefulSetYAML(ctx context.Context, req *model.K8sResourceIdentifier) (string, error) {
+func (s *statefulSetService) GetStatefulSetYAML(ctx context.Context, req *model.K8sResourceIdentifierReq) (string, error) {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -342,7 +342,7 @@ func (s *statefulSetService) convertToK8sStatefulSet(sts *appsv1.StatefulSet) *m
 }
 
 // buildStatefulSetFromCreateRequest 从创建请求构建StatefulSet对象
-func (s *statefulSetService) buildStatefulSetFromCreateRequest(req *model.StatefulSetCreateRequest) *appsv1.StatefulSet {
+func (s *statefulSetService) buildStatefulSetFromCreateRequest(req *model.StatefulSetCreateReq) *appsv1.StatefulSet {
 	// 构建容器端口
 	ports := make([]corev1.ContainerPort, 0, len(req.Ports))
 	for _, port := range req.Ports {
@@ -413,22 +413,22 @@ func (s *statefulSetService) buildStatefulSetFromCreateRequest(req *model.Statef
 }
 
 // updateStatefulSetFromUpdateRequest 从更新请求更新StatefulSet对象
-func (s *statefulSetService) updateStatefulSetFromUpdateRequest(sts *appsv1.StatefulSet, req *model.StatefulSetUpdateRequest) {
+func (s *statefulSetService) updateStatefulSetFromUpdateRequest(sts *appsv1.StatefulSet, req *model.StatefulSetUpdateReq) {
 	if req.Replicas != nil {
 		sts.Spec.Replicas = req.Replicas
 	}
-	
+
 	if req.Image != "" {
 		for i := range sts.Spec.Template.Spec.Containers {
 			sts.Spec.Template.Spec.Containers[i].Image = req.Image
 		}
 	}
-	
+
 	if req.Labels != nil {
 		sts.Labels = req.Labels
 		sts.Spec.Template.Labels = req.Labels
 	}
-	
+
 	if req.Annotations != nil {
 		sts.Annotations = req.Annotations
 	}

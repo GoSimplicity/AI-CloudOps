@@ -40,13 +40,13 @@ import (
 )
 
 type SecretService interface {
-	GetSecretList(ctx context.Context, req *model.K8sListRequest) ([]*model.K8sSecret, error)
-	GetSecret(ctx context.Context, req *model.K8sResourceIdentifier) (*model.K8sSecret, error)
-	CreateSecret(ctx context.Context, req *model.SecretCreateRequest) error
-	UpdateSecret(ctx context.Context, req *model.SecretUpdateRequest) error
-	DeleteSecret(ctx context.Context, req *model.K8sResourceIdentifier) error
-	BatchDeleteSecrets(ctx context.Context, req *model.K8sBatchDeleteRequest) error
-	GetSecretYAML(ctx context.Context, req *model.K8sResourceIdentifier) (string, error)
+	GetSecretList(ctx context.Context, req *model.K8sListReq) ([]*model.K8sSecret, error)
+	GetSecret(ctx context.Context, req *model.K8sResourceIdentifierReq) (*model.K8sSecret, error)
+	CreateSecret(ctx context.Context, req *model.SecretCreateReq) error
+	UpdateSecret(ctx context.Context, req *model.SecretUpdateReq) error
+	DeleteSecret(ctx context.Context, req *model.K8sResourceIdentifierReq) error
+	BatchDeleteSecrets(ctx context.Context, req *model.K8sBatchDeleteReq) error
+	GetSecretYAML(ctx context.Context, req *model.K8sResourceIdentifierReq) (string, error)
 }
 
 type secretService struct {
@@ -62,7 +62,7 @@ func NewSecretService(k8sClient client.K8sClient, logger *zap.Logger) SecretServ
 }
 
 // GetSecretList 获取Secret列表
-func (s *secretService) GetSecretList(ctx context.Context, req *model.K8sListRequest) ([]*model.K8sSecret, error) {
+func (s *secretService) GetSecretList(ctx context.Context, req *model.K8sListReq) ([]*model.K8sSecret, error) {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -72,7 +72,7 @@ func (s *secretService) GetSecretList(ctx context.Context, req *model.K8sListReq
 	listOptions := req.ToMetaV1ListOptions()
 	secretList, err := clientset.CoreV1().Secrets(req.Namespace).List(ctx, listOptions)
 	if err != nil {
-		s.logger.Error("获取Secret列表失败", zap.Error(err), 
+		s.logger.Error("获取Secret列表失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", req.Namespace))
 		return nil, fmt.Errorf("获取Secret列表失败: %w", err)
 	}
@@ -83,8 +83,8 @@ func (s *secretService) GetSecretList(ctx context.Context, req *model.K8sListReq
 		result = append(result, k8sSecret)
 	}
 
-	s.logger.Info("成功获取Secret列表", 
-		zap.Int("cluster_id", req.ClusterID), 
+	s.logger.Info("成功获取Secret列表",
+		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
 		zap.Int("count", len(result)))
 
@@ -92,7 +92,7 @@ func (s *secretService) GetSecretList(ctx context.Context, req *model.K8sListReq
 }
 
 // GetSecret 获取单个Secret详情
-func (s *secretService) GetSecret(ctx context.Context, req *model.K8sResourceIdentifier) (*model.K8sSecret, error) {
+func (s *secretService) GetSecret(ctx context.Context, req *model.K8sResourceIdentifierReq) (*model.K8sSecret, error) {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -122,7 +122,7 @@ func (s *secretService) GetSecret(ctx context.Context, req *model.K8sResourceIde
 }
 
 // CreateSecret 创建Secret
-func (s *secretService) CreateSecret(ctx context.Context, req *model.SecretCreateRequest) error {
+func (s *secretService) CreateSecret(ctx context.Context, req *model.SecretCreateReq) error {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -168,7 +168,7 @@ func (s *secretService) CreateSecret(ctx context.Context, req *model.SecretCreat
 }
 
 // UpdateSecret 更新Secret
-func (s *secretService) UpdateSecret(ctx context.Context, req *model.SecretUpdateRequest) error {
+func (s *secretService) UpdateSecret(ctx context.Context, req *model.SecretUpdateReq) error {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -216,7 +216,7 @@ func (s *secretService) UpdateSecret(ctx context.Context, req *model.SecretUpdat
 }
 
 // DeleteSecret 删除Secret
-func (s *secretService) DeleteSecret(ctx context.Context, req *model.K8sResourceIdentifier) error {
+func (s *secretService) DeleteSecret(ctx context.Context, req *model.K8sResourceIdentifierReq) error {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -244,7 +244,7 @@ func (s *secretService) DeleteSecret(ctx context.Context, req *model.K8sResource
 }
 
 // BatchDeleteSecrets 批量删除Secret
-func (s *secretService) BatchDeleteSecrets(ctx context.Context, req *model.K8sBatchDeleteRequest) error {
+func (s *secretService) BatchDeleteSecrets(ctx context.Context, req *model.K8sBatchDeleteReq) error {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
@@ -287,7 +287,7 @@ func (s *secretService) BatchDeleteSecrets(ctx context.Context, req *model.K8sBa
 }
 
 // GetSecretYAML 获取Secret的YAML配置
-func (s *secretService) GetSecretYAML(ctx context.Context, req *model.K8sResourceIdentifier) (string, error) {
+func (s *secretService) GetSecretYAML(ctx context.Context, req *model.K8sResourceIdentifierReq) (string, error) {
 	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))

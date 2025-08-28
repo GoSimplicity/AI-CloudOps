@@ -40,8 +40,8 @@ type K8sNodeHandler struct {
 
 func NewK8sNodeHandler(logger *zap.Logger, nodeService service.NodeService) *K8sNodeHandler {
 	return &K8sNodeHandler{
-		nodeService: nodeService,
 		logger:      logger,
+		nodeService: nodeService,
 	}
 }
 
@@ -50,10 +50,12 @@ func (k *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
 
 	nodes := k8sGroup.Group("/nodes")
 	{
-		nodes.GET("/list/:id", k.GetNodeList)              // 获取节点列表
-		nodes.GET("/:name", k.GetNodeDetail)               // 获取指定节点详情
-		nodes.POST("/labels/add", k.AddLabelNodes)         // 添加节点标签
-		nodes.DELETE("/labels/delete", k.DeleteLabelNodes) // 删除节点标签
+		nodes.GET("/list/:id", k.GetNodeList)                              // 获取节点列表
+		nodes.GET("/:node_name", k.GetNodeDetail)                          // 获取指定节点详情
+		nodes.POST("/labels/add", k.AddLabelNodes)                         // 添加节点标签
+		nodes.DELETE("/labels/delete", k.DeleteLabelNodes)                 // 删除节点标签
+		nodes.GET("/:cluster_id/:node_name/resources", k.GetNodeResources) // 获取集群节点资源
+		nodes.GET("/:cluster_id/:node_name/events", k.GetNodeEvents)       // 获取集群节点事件
 	}
 }
 
@@ -95,7 +97,7 @@ func (k *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
 // @Router /api/k8s/nodes/{name} [get]
 // @Security BearerAuth
 func (k *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
-	name, err := utils.GetParamName(ctx)
+	name, err := utils.GetParamCustomName(ctx, "node_name")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -118,14 +120,14 @@ func (k *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
 // @Tags 节点管理
 // @Accept json
 // @Produce json
-// @Param request body model.LabelK8sNodesRequest true "添加标签请求参数"
+// @Param request body model.LabelK8sNodesReq true "添加标签请求参数"
 // @Success 200 {object} utils.ApiResponse "成功添加标签"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/nodes/labels/add [post]
 // @Security BearerAuth
 func (k *K8sNodeHandler) AddLabelNodes(ctx *gin.Context) {
-	var req model.LabelK8sNodesRequest
+	var req model.LabelK8sNodesReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.nodeService.AddOrUpdateNodeLabel(ctx, &req)
@@ -138,16 +140,62 @@ func (k *K8sNodeHandler) AddLabelNodes(ctx *gin.Context) {
 // @Tags 节点管理
 // @Accept json
 // @Produce json
-// @Param request body model.LabelK8sNodesRequest true "删除标签请求参数"
+// @Param request body model.LabelK8sNodesReq true "删除标签请求参数"
 // @Success 200 {object} utils.ApiResponse "成功删除标签"
 // @Failure 400 {object} utils.ApiResponse "参数错误"
 // @Failure 500 {object} utils.ApiResponse "服务器内部错误"
 // @Router /api/k8s/nodes/labels/delete [delete]
 // @Security BearerAuth
 func (k *K8sNodeHandler) DeleteLabelNodes(ctx *gin.Context) {
-	var req model.LabelK8sNodesRequest
+	var req model.LabelK8sNodesReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.nodeService.AddOrUpdateNodeLabel(ctx, &req)
+	})
+}
+
+func (k *K8sNodeHandler) GetNodeResources(ctx *gin.Context) {
+	var req model.NodeResourcesReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "node_name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.NodeName = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.nodeService.GetNodeResources(ctx, req.ClusterID)
+	})
+}
+
+func (k *K8sNodeHandler) GetNodeEvents(ctx *gin.Context) {
+	var req model.NodeEventsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "node_name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.NodeName = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.nodeService.GetNodeEvents(ctx, req.ClusterID, req.NodeName)
 	})
 }

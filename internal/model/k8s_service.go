@@ -65,7 +65,7 @@ type ServiceEndpoint struct {
 }
 
 // K8sServiceListRequest Service列表查询请求
-type K8sServiceListRequest struct {
+type K8sServiceListReq struct {
 	ClusterID     int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace     string `json:"namespace" form:"namespace" comment:"命名空间"`                      // 命名空间
 	LabelSelector string `json:"label_selector" form:"label_selector" comment:"标签选择器"`           // 标签选择器
@@ -77,7 +77,7 @@ type K8sServiceListRequest struct {
 }
 
 // K8sServiceCreateRequest 创建Service请求
-type K8sServiceCreateRequest struct {
+type K8sServiceCreateReq struct {
 	ClusterID   int               `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace   string            `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name        string            `json:"name" binding:"required" comment:"Service名称"`  // Service名称，必填
@@ -90,7 +90,7 @@ type K8sServiceCreateRequest struct {
 }
 
 // K8sServiceUpdateRequest 更新Service请求
-type K8sServiceUpdateRequest struct {
+type K8sServiceUpdateReq struct {
 	ClusterID   int               `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace   string            `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name        string            `json:"name" binding:"required" comment:"Service名称"`  // Service名称，必填
@@ -103,7 +103,7 @@ type K8sServiceUpdateRequest struct {
 }
 
 // K8sServiceDeleteRequest 删除Service请求
-type K8sServiceDeleteRequest struct {
+type K8sServiceDeleteReq struct {
 	ClusterID          int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace          string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name               string `json:"name" binding:"required" comment:"Service名称"`  // Service名称，必填
@@ -112,7 +112,7 @@ type K8sServiceDeleteRequest struct {
 }
 
 // K8sServiceBatchDeleteRequest 批量删除Service请求
-type K8sServiceBatchDeleteRequest struct {
+type K8sServiceBatchDeleteReq struct {
 	ClusterID          int      `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID，必填
 	Namespace          string   `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间，必填
 	Names              []string `json:"names" binding:"required" comment:"Service名称列表"` // Service名称列表，必填
@@ -121,14 +121,14 @@ type K8sServiceBatchDeleteRequest struct {
 }
 
 // K8sServiceEndpointsRequest 获取Service端点请求
-type K8sServiceEndpointsRequest struct {
+type K8sServiceEndpointsReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name      string `json:"name" binding:"required" comment:"Service名称"`  // Service名称，必填
 }
 
 // K8sServiceEventRequest 获取Service事件请求
-type K8sServiceEventRequest struct {
+type K8sServiceEventReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name      string `json:"name" binding:"required" comment:"Service名称"`  // Service名称，必填
@@ -136,7 +136,7 @@ type K8sServiceEventRequest struct {
 }
 
 // K8sServicePortForwardRequest Service端口转发请求
-type K8sServicePortForwardRequest struct {
+type K8sServicePortForwardReq struct {
 	ClusterID int               `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace string            `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name      string            `json:"name" binding:"required" comment:"Service名称"`  // Service名称，必填
@@ -144,9 +144,115 @@ type K8sServicePortForwardRequest struct {
 }
 
 // K8sServiceDNSTestRequest Service DNS解析测试请求
-type K8sServiceDNSTestRequest struct {
+type K8sServiceDNSTestReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
 	Name      string `json:"name" binding:"required" comment:"Service名称"`  // Service名称，必填
 	TestPod   string `json:"test_pod" comment:"测试用Pod名称"`                  // 测试用Pod名称，可选
+}
+
+// ====================== Service响应实体 ======================
+
+// ServiceEntity Service响应实体
+type ServiceEntity struct {
+	Name                     string                  `json:"name"`                        // Service名称
+	Namespace                string                  `json:"namespace"`                   // 命名空间
+	UID                      string                  `json:"uid"`                         // Service UID
+	Labels                   map[string]string       `json:"labels"`                      // 标签
+	Annotations              map[string]string       `json:"annotations"`                 // 注解
+	Type                     string                  `json:"type"`                        // Service类型
+	ClusterIP                string                  `json:"cluster_ip"`                  // 集群内部IP
+	ClusterIPs               []string                `json:"cluster_ips"`                 // 集群IP列表
+	ExternalIPs              []string                `json:"external_ips"`                // 外部IP列表
+	LoadBalancerIP           string                  `json:"load_balancer_ip"`            // 负载均衡器IP
+	LoadBalancerSourceRanges []string                `json:"load_balancer_source_ranges"` // 负载均衡器源IP范围
+	ExternalName             string                  `json:"external_name"`               // 外部名称(ExternalName类型)
+	SessionAffinity          string                  `json:"session_affinity"`            // 会话亲和性
+	Ports                    []ServicePortEntity     `json:"ports"`                       // 端口配置
+	Selector                 map[string]string       `json:"selector"`                    // Pod选择器
+	Endpoints                []ServiceEndpointEntity `json:"endpoints"`                   // 服务端点
+	Status                   string                  `json:"status"`                      // Service状态
+	Age                      string                  `json:"age"`                         // 存在时间
+	CreatedAt                string                  `json:"created_at"`                  // 创建时间
+}
+
+// ServicePortEntity 服务端口实体
+type ServicePortEntity struct {
+	Name        string `json:"name"`         // 端口名称
+	Protocol    string `json:"protocol"`     // 协议
+	Port        int32  `json:"port"`         // 服务端口
+	TargetPort  string `json:"target_port"`  // 目标端口
+	NodePort    int32  `json:"node_port"`    // 节点端口(NodePort类型)
+	AppProtocol string `json:"app_protocol"` // 应用协议
+}
+
+// ServiceEndpointEntity 服务端点实体
+type ServiceEndpointEntity struct {
+	IP          string                           `json:"ip"`          // 端点IP
+	Hostname    string                           `json:"hostname"`    // 主机名
+	NodeName    string                           `json:"node_name"`   // 节点名称
+	Ports       []ServiceEndpointPortEntity      `json:"ports"`       // 端口信息
+	Conditions  []ServiceEndpointConditionEntity `json:"conditions"`  // 端点条件
+	Ready       bool                             `json:"ready"`       // 是否就绪
+	Serving     bool                             `json:"serving"`     // 是否服务中
+	Terminating bool                             `json:"terminating"` // 是否终止中
+}
+
+// ServiceEndpointPortEntity 端点端口信息
+type ServiceEndpointPortEntity struct {
+	Name        string `json:"name"`         // 端口名称
+	Port        int32  `json:"port"`         // 端口号
+	Protocol    string `json:"protocol"`     // 协议
+	AppProtocol string `json:"app_protocol"` // 应用协议
+}
+
+// ServiceEndpointConditionEntity 端点条件
+type ServiceEndpointConditionEntity struct {
+	Type               string `json:"type"`                 // 条件类型
+	Status             string `json:"status"`               // 条件状态
+	LastTransitionTime string `json:"last_transition_time"` // 最后转换时间
+}
+
+// ServiceListResponse Service列表响应
+type ServiceListResponse struct {
+	Items      []ServiceEntity `json:"items"`       // Service列表
+	TotalCount int             `json:"total_count"` // 总数
+}
+
+// ServiceDetailResponse Service详情响应
+type ServiceDetailResponse struct {
+	Service   ServiceEntity           `json:"service"`   // Service信息
+	YAML      string                  `json:"yaml"`      // YAML内容
+	Events    []ServiceEventEntity    `json:"events"`    // 事件列表
+	Endpoints []ServiceEndpointEntity `json:"endpoints"` // 详细端点信息
+	Pods      []PodEntity             `json:"pods"`      // 关联Pod列表
+}
+
+// ServiceEventEntity Service事件实体
+type ServiceEventEntity struct {
+	Type      string `json:"type"`       // 事件类型
+	Reason    string `json:"reason"`     // 原因
+	Message   string `json:"message"`    // 消息
+	Source    string `json:"source"`     // 来源
+	FirstTime string `json:"first_time"` // 首次时间
+	LastTime  string `json:"last_time"`  // 最后时间
+	Count     int32  `json:"count"`      // 次数
+}
+
+// ServicePortForwardResponse 端口转发响应
+type ServicePortForwardResponse struct {
+	LocalPort  int    `json:"local_port"`  // 本地端口
+	RemotePort int    `json:"remote_port"` // 远程端口
+	Status     string `json:"status"`      // 转发状态
+	Message    string `json:"message"`     // 状态消息
+}
+
+// ServiceDNSTestResponse DNS解析测试响应
+type ServiceDNSTestResponse struct {
+	ServiceName string   `json:"service_name"` // Service名称
+	Namespace   string   `json:"namespace"`    // 命名空间
+	DNSNames    []string `json:"dns_names"`    // DNS名称列表
+	ResolvedIPs []string `json:"resolved_ips"` // 解析到的IP列表
+	Status      string   `json:"status"`       // 测试状态
+	Message     string   `json:"message"`      // 测试消息
 }
