@@ -1,0 +1,100 @@
+# 根目录
+root = "."
+
+# 测试目录
+testdata_dir = "testdata"
+
+# 临时目录
+tmp_dir = "tmp"
+
+[build]
+# 构建命令
+pre_cmd = [
+    "echo '🔄 开始构建...'",
+    "echo '📄 自动生成 Swagger 文档（无需手动注释）...'",
+    "make swagger",
+    "echo '✅ Swagger 文档已自动更新'"
+]
+
+# 编译后的二进制文件名
+bin = "tmp/ai-cloudops"
+
+# 编译命令
+cmd = "go build -o ./tmp/ai-cloudops main.go"
+
+# 自定义二进制文件
+full_bin = "APP_ENV=development ./tmp/ai-cloudops"
+
+# 监控的文件扩展名
+include_ext = ["go", "yaml", "yml", "json", "toml"]
+
+# 排除的文件扩展名
+exclude_ext = ["_test.go"]
+
+# 监控的目录
+include_dir = ["cmd", "internal", "pkg", "config"]
+
+# 排除的目录
+exclude_dir = ["tmp", "vendor", "docs", "image", ".git", "node_modules"]
+
+# 监控的文件
+include_file = ["main.go"]
+
+# 排除的文件
+exclude_file = []
+
+# 排除的文件，支持正则
+exclude_regex = ["_test.go$", "docs/.*"]
+
+# 删除构建产物
+exclude_unchanged = false
+
+# 只有在下面的目录发生变化时才重新构建
+follow_symlink = false
+
+# 构建失败后的日志
+log = "build-errors.log"
+
+# 构建参数，会拆分传给编译命令
+args_bin = []
+
+# 延迟毫秒数，防止频繁重新构建
+delay = 1000
+
+# 当出现构建错误时，停止运行旧的二进制文件
+stop_on_root = false
+
+# 发送信号 SIGINT/SIGTERM 后，多少毫秒后强制杀死进程
+send_interrupt = true
+
+# 延迟杀死时间（毫秒）
+kill_delay = "0s"
+
+# 添加额外参数到构建命令
+build_flags = ["-ldflags", "-s -w"]
+
+[color]
+# 自定义每个部分的颜色。如果找不到颜色，使用原始应用程序日志。
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+error = "red"
+
+[log]
+# 显示日志时间
+time = true
+
+# 只显示主要日志（隐藏构建日志）
+main_only = false
+
+[misc]
+# 清理屏幕
+clean_on_exit = false
+
+[screen]
+# 清屏
+clear_on_rebuild = false
+
+# 保持滚动
+keep_scroll = true

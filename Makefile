@@ -1,12 +1,22 @@
 generate:
 	go generate ./...
 
-# 生成 Swagger API 文档
-swagger:
-	@echo "正在生成API文档..."
+# 生成 Swagger API 文档 (传统方式，需要手动注释)
+swagger-manual:
+	@echo "正在生成API文档（传统方式）..."
 	@swag init --output ./docs --parseDependency --parseInternal --exclude ./internal/*/service --dir ./ --generalInfo main.go
 	@echo "API文档已生成到 docs/ 目录"
 	@echo "访问地址: http://localhost:8889/swagger/index.html"
+
+# 自动生成 Swagger API 文档（无需手动注释）
+swagger:
+	@echo "🚀 正在自动生成API文档..."
+	@echo "📁 构建自动生成工具..."
+	@cd tools/swagger-auto-gen && go build -o ../../bin/swagger-auto-gen .
+	@echo "🔍 分析项目结构并生成文档..."
+	@./bin/swagger-auto-gen -root . -output ./docs -v
+	@echo "✅ API文档已自动生成到 docs/ 目录"
+	@echo "🌐 访问地址: http://localhost:8889/swagger/index.html"
 
 # 兼容旧的命令名
 openai: swagger
@@ -71,6 +81,62 @@ swagger-clean:
 # 完整的 Swagger 工作流
 swagger-all: swagger-clean swagger swagger-validate swagger-check
 	@echo "🎉 Swagger 文档生成完成！"
+
+# 安装 Git hooks 自动生成 Swagger 文档
+swagger-setup:
+	@echo "设置 Swagger 自动生成..."
+	@bash scripts/setup-git-hooks.sh
+
+# 启用自动监控模式（开发时使用）
+swagger-watch:
+	@echo "启动 Swagger 文档自动监控..."
+	@if [ ! -f "scripts/swagger-watcher.sh" ]; then \
+		echo "❌ swagger-watcher.sh 脚本不存在，请先运行 make swagger-setup"; \
+		exit 1; \
+	fi
+	@bash scripts/swagger-watcher.sh
+
+# 快速构建（包含 swagger 生成）
+build-with-docs: swagger
+	@echo "构建项目（包含文档）..."
+	@go build -o bin/ai-cloudops main.go
+	@echo "✅ 构建完成，可执行文件: bin/ai-cloudops"
+
+# 开发模式启动（自动生成文档）
+dev-with-docs: swagger
+	@echo "开发模式启动（包含最新文档）..."
+	@go run main.go
+
+# 检查并自动修复 Swagger 注解
+swagger-fix:
+	@echo "检查并修复 Swagger 注解..."
+	@bash scripts/swagger-helper.sh fix
+
+# 安装开发工具
+install-dev-tools:
+	@echo "安装开发工具..."
+	@go install github.com/air-verse/air@latest
+	@go install github.com/swaggo/swag/cmd/swag@latest
+	@echo "✅ 开发工具安装完成"
+
+# 使用 Air 启动开发服务器（支持热重载和自动生成 Swagger）
+dev-air: 
+	@if ! command -v air &> /dev/null; then \
+		echo "❌ air 工具未安装，正在安装..."; \
+		go install github.com/air-verse/air@latest; \
+	fi
+	@echo "🚀 启动开发服务器 (Air + 自动 Swagger 生成)..."
+	@air
+
+# 开发环境完整设置
+dev-setup: swagger-setup install-dev-tools
+	@echo "🎉 开发环境设置完成！"
+	@echo ""
+	@echo "可用命令:"
+	@echo "  make dev-air          # 使用 Air 热重载启动"
+	@echo "  make swagger-watch     # 仅监控 Swagger 文档"
+	@echo "  make swagger           # 手动生成 Swagger 文档"
+	@echo "  go generate            # 使用 Go generate 生成文档"
 
 docker-build:
 	docker build -t Bamboo/gomodd:v1.23.1 .

@@ -103,3 +103,6 @@ config/config.yaml
 data/prometheus
 Prompt1.md
 Prompt2.md
+docs/docs.go
+docs/swagger.json
+docs/swagger.yaml
