@@ -101,3 +101,5 @@ venv
 .history
 config/config.yaml
 data/prometheus
+Prompt1.md
+Prompt2.md
