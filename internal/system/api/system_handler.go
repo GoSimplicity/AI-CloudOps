@@ -27,6 +27,7 @@ package api
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
+	systemutils "github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
@@ -65,7 +66,7 @@ func (h *SystemHandler) GetSystemInfo(ctx *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		return system.ToResponse(), nil
+		return systemutils.ToResponse(system), nil
 	})
 }
 
@@ -85,7 +86,7 @@ func (h *SystemHandler) GetSystemMetrics(ctx *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		return system.ToResponse(), nil
+		return systemutils.ToResponse(system), nil
 	})
 }
 
@@ -105,6 +106,6 @@ func (h *SystemHandler) RefreshSystemInfo(ctx *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		return system.ToResponse(), nil
+		return systemutils.ToResponse(system), nil
 	})
 }

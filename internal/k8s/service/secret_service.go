@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -50,27 +51,23 @@ type SecretService interface {
 }
 
 type secretService struct {
-	k8sClient client.K8sClient
-	logger    *zap.Logger
+	k8sClient     client.K8sClient      // 保持向后兼容
+	secretManager manager.SecretManager // 新的依赖注入
+	logger        *zap.Logger
 }
 
-func NewSecretService(k8sClient client.K8sClient, logger *zap.Logger) SecretService {
+func NewSecretService(k8sClient client.K8sClient, secretManager manager.SecretManager, logger *zap.Logger) SecretService {
 	return &secretService{
-		k8sClient: k8sClient,
-		logger:    logger,
+		k8sClient:     k8sClient,
+		secretManager: secretManager,
+		logger:        logger,
 	}
 }
 
 // GetSecretList 获取Secret列表
 func (s *secretService) GetSecretList(ctx context.Context, req *model.K8sListReq) ([]*model.K8sSecret, error) {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	listOptions := req.ToMetaV1ListOptions()
-	secretList, err := clientset.CoreV1().Secrets(req.Namespace).List(ctx, listOptions)
+	// 使用 SecretManager 获取 Secret 列表
+	secretList, err := s.secretManager.ListSecrets(ctx, req.ClusterID, req.Namespace)
 	if err != nil {
 		s.logger.Error("获取Secret列表失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", req.Namespace))
@@ -93,13 +90,8 @@ func (s *secretService) GetSecretList(ctx context.Context, req *model.K8sListReq
 
 // GetSecret 获取单个Secret详情
 func (s *secretService) GetSecret(ctx context.Context, req *model.K8sResourceIdentifierReq) (*model.K8sSecret, error) {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	secret, err := clientset.CoreV1().Secrets(req.Namespace).Get(ctx, req.ResourceName, metav1.GetOptions{})
+	// 使用 SecretManager 获取 Secret
+	secret, err := s.secretManager.GetSecret(ctx, req.ClusterID, req.Namespace, req.ResourceName)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil, fmt.Errorf("Secret不存在: %s/%s", req.Namespace, req.ResourceName)
@@ -123,12 +115,6 @@ func (s *secretService) GetSecret(ctx context.Context, req *model.K8sResourceIde
 
 // CreateSecret 创建Secret
 func (s *secretService) CreateSecret(ctx context.Context, req *model.SecretCreateReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
 	// 构造Secret对象
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -147,7 +133,8 @@ func (s *secretService) CreateSecret(ctx context.Context, req *model.SecretCreat
 		secret.Type = corev1.SecretTypeOpaque
 	}
 
-	_, err = clientset.CoreV1().Secrets(req.Namespace).Create(ctx, secret, metav1.CreateOptions{})
+	// 使用 SecretManager 创建 Secret
+	_, err := s.secretManager.CreateSecret(ctx, req.ClusterID, secret)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
 			return fmt.Errorf("Secret已存在: %s/%s", req.Namespace, req.Name)
@@ -169,14 +156,8 @@ func (s *secretService) CreateSecret(ctx context.Context, req *model.SecretCreat
 
 // UpdateSecret 更新Secret
 func (s *secretService) UpdateSecret(ctx context.Context, req *model.SecretUpdateReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
 	// 先获取现有的Secret
-	existingSecret, err := clientset.CoreV1().Secrets(req.Namespace).Get(ctx, req.ResourceName, metav1.GetOptions{})
+	existingSecret, err := s.secretManager.GetSecret(ctx, req.ClusterID, req.Namespace, req.ResourceName)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("Secret不存在: %s/%s", req.Namespace, req.ResourceName)
@@ -198,7 +179,8 @@ func (s *secretService) UpdateSecret(ctx context.Context, req *model.SecretUpdat
 		existingSecret.Annotations = req.Annotations
 	}
 
-	_, err = clientset.CoreV1().Secrets(req.Namespace).Update(ctx, existingSecret, metav1.UpdateOptions{})
+	// 使用 SecretManager 更新 Secret
+	_, err = s.secretManager.UpdateSecret(ctx, req.ClusterID, existingSecret)
 	if err != nil {
 		s.logger.Error("更新Secret失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID),
@@ -217,13 +199,8 @@ func (s *secretService) UpdateSecret(ctx context.Context, req *model.SecretUpdat
 
 // DeleteSecret 删除Secret
 func (s *secretService) DeleteSecret(ctx context.Context, req *model.K8sResourceIdentifierReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	err = clientset.CoreV1().Secrets(req.Namespace).Delete(ctx, req.ResourceName, metav1.DeleteOptions{})
+	// 使用 SecretManager 删除 Secret
+	err := s.secretManager.DeleteSecret(ctx, req.ClusterID, req.Namespace, req.ResourceName, metav1.DeleteOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("Secret不存在: %s/%s", req.Namespace, req.ResourceName)
@@ -245,42 +222,19 @@ func (s *secretService) DeleteSecret(ctx context.Context, req *model.K8sResource
 
 // BatchDeleteSecrets 批量删除Secret
 func (s *secretService) BatchDeleteSecrets(ctx context.Context, req *model.K8sBatchDeleteReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
+	// 使用 SecretManager 批量删除 Secret
+	err := s.secretManager.BatchDeleteSecrets(ctx, req.ClusterID, req.Namespace, req.ResourceNames, metav1.DeleteOptions{})
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	var failedDeletes []string
-	successCount := 0
-
-	for _, name := range req.ResourceNames {
-		err = clientset.CoreV1().Secrets(req.Namespace).Delete(ctx, name, metav1.DeleteOptions{})
-		if err != nil {
-			if !errors.IsNotFound(err) {
-				failedDeletes = append(failedDeletes, fmt.Sprintf("%s: %v", name, err))
-				s.logger.Error("删除Secret失败", zap.Error(err),
-					zap.Int("cluster_id", req.ClusterID),
-					zap.String("namespace", req.Namespace),
-					zap.String("name", name))
-			}
-		} else {
-			successCount++
-			s.logger.Info("成功删除Secret",
-				zap.Int("cluster_id", req.ClusterID),
-				zap.String("namespace", req.Namespace),
-				zap.String("name", name))
-		}
-	}
-
-	if len(failedDeletes) > 0 {
-		return fmt.Errorf("部分Secret删除失败: %v", failedDeletes)
+		s.logger.Error("批量删除Secret失败", zap.Error(err),
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.Strings("resource_names", req.ResourceNames))
+		return fmt.Errorf("批量删除Secret失败: %w", err)
 	}
 
 	s.logger.Info("批量删除Secret完成",
 		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
-		zap.Int("success_count", successCount),
 		zap.Int("total_count", len(req.ResourceNames)))
 
 	return nil
@@ -288,13 +242,8 @@ func (s *secretService) BatchDeleteSecrets(ctx context.Context, req *model.K8sBa
 
 // GetSecretYAML 获取Secret的YAML配置
 func (s *secretService) GetSecretYAML(ctx context.Context, req *model.K8sResourceIdentifierReq) (string, error) {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return "", fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	secret, err := clientset.CoreV1().Secrets(req.Namespace).Get(ctx, req.ResourceName, metav1.GetOptions{})
+	// 使用 SecretManager 获取 Secret
+	secret, err := s.secretManager.GetSecret(ctx, req.ClusterID, req.Namespace, req.ResourceName)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return "", fmt.Errorf("Secret不存在: %s/%s", req.Namespace, req.ResourceName)

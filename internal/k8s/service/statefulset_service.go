@@ -31,6 +31,8 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
@@ -54,27 +56,24 @@ type StatefulSetService interface {
 }
 
 type statefulSetService struct {
-	k8sClient client.K8sClient
-	logger    *zap.Logger
+	k8sClient          client.K8sClient           // 保持向后兼容
+	statefulSetManager manager.StatefulSetManager // 新的依赖注入
+	logger             *zap.Logger
 }
 
-func NewStatefulSetService(k8sClient client.K8sClient, logger *zap.Logger) StatefulSetService {
+func NewStatefulSetService(k8sClient client.K8sClient, statefulSetManager manager.StatefulSetManager, logger *zap.Logger) StatefulSetService {
 	return &statefulSetService{
-		k8sClient: k8sClient,
-		logger:    logger,
+		k8sClient:          k8sClient,
+		statefulSetManager: statefulSetManager,
+		logger:             logger,
 	}
 }
 
 // GetStatefulSetList 获取StatefulSet列表
 func (s *statefulSetService) GetStatefulSetList(ctx context.Context, req *model.K8sListReq) ([]*model.K8sStatefulSet, error) {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	listOptions := req.ToMetaV1ListOptions()
-	statefulSetList, err := clientset.AppsV1().StatefulSets(req.Namespace).List(ctx, listOptions)
+	// 使用 StatefulSetManager 获取列表
+	listOptions := utils.ConvertK8sListReqToMetaV1ListOptions(req)
+	statefulSetList, err := s.statefulSetManager.GetStatefulSetList(ctx, req.ClusterID, req.Namespace, listOptions)
 	if err != nil {
 		s.logger.Error("获取StatefulSet列表失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", req.Namespace))

@@ -38,58 +38,30 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 )
 
 type RoleBindingService struct {
-	dao       dao.ClusterDAO
-	k8sClient client.K8sClient
-	logger    *zap.Logger
+	dao         dao.ClusterDAO
+	rbacManager manager.RBACManager
+	logger      *zap.Logger
 }
 
-func NewRoleBindingService(dao dao.ClusterDAO, k8sClient client.K8sClient, logger *zap.Logger) *RoleBindingService {
+func NewRoleBindingService(dao dao.ClusterDAO, rbacManager manager.RBACManager, logger *zap.Logger) *RoleBindingService {
 	return &RoleBindingService{
-		dao:       dao,
-		k8sClient: k8sClient,
-		logger:    logger,
+		dao:         dao,
+		rbacManager: rbacManager,
+		logger:      logger,
 	}
 }
 
 // GetRoleBindingList 获取RoleBinding列表
 func (rbs *RoleBindingService) GetRoleBindingList(ctx context.Context, req *model.RoleBindingListReq) (*model.ListResp[model.RoleBindingInfo], error) {
-	k8sClient, err := rbs.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get k8s client: %w", err)
-	}
-
-	// 构建列表选项
-	listOptions := metav1.ListOptions{}
-
-	// 如果指定了命名空间，则在该命名空间下查询，否则查询所有命名空间
-	var roleBindings *rbacv1.RoleBindingList
-	if req.Namespace != "" {
-		roleBindings, err = k8sClient.RbacV1().RoleBindings(req.Namespace).List(ctx, listOptions)
-	} else {
-		// 获取所有命名空间的RoleBindings
-		namespaces, err := k8sClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to list namespaces: %w", err)
-		}
-
-		allRoleBindings := &rbacv1.RoleBindingList{}
-		for _, ns := range namespaces.Items {
-			nsRoleBindings, err := k8sClient.RbacV1().RoleBindings(ns.Name).List(ctx, listOptions)
-			if err != nil {
-				continue // 跳过无权限的命名空间
-			}
-			allRoleBindings.Items = append(allRoleBindings.Items, nsRoleBindings.Items...)
-		}
-		roleBindings = allRoleBindings
-	}
-
+	// 使用 RBACManager 获取 RoleBinding 列表
+	roleBindings, err := rbs.rbacManager.GetRoleBindingList(ctx, req.ClusterID, req.Namespace, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list role bindings: %w", err)
 	}
@@ -139,12 +111,8 @@ func (rbs *RoleBindingService) GetRoleBindingList(ctx context.Context, req *mode
 
 // GetRoleBindingDetails 获取RoleBinding详情
 func (rbs *RoleBindingService) GetRoleBindingDetails(ctx context.Context, req *model.RoleBindingGetReq) (*model.RoleBindingInfo, error) {
-	k8sClient, err := rbs.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get k8s client: %w", err)
-	}
-
-	roleBinding, err := k8sClient.RbacV1().RoleBindings(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
+	// 使用 RBACManager 获取 RoleBinding 详情
+	roleBinding, err := rbs.rbacManager.GetRoleBinding(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get role binding: %w", err)
 	}
@@ -155,11 +123,7 @@ func (rbs *RoleBindingService) GetRoleBindingDetails(ctx context.Context, req *m
 
 // CreateRoleBinding 创建RoleBinding
 func (rbs *RoleBindingService) CreateRoleBinding(ctx context.Context, req *model.CreateRoleBindingReq) error {
-	k8sClient, err := rbs.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		return fmt.Errorf("failed to get k8s client: %w", err)
-	}
-
+	// 构建 RoleBinding 对象
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
@@ -171,7 +135,8 @@ func (rbs *RoleBindingService) CreateRoleBinding(ctx context.Context, req *model
 		Subjects: k8sutils.ConvertSubjectsToK8s(req.Subjects),
 	}
 
-	_, err = k8sClient.RbacV1().RoleBindings(req.Namespace).Create(ctx, roleBinding, metav1.CreateOptions{})
+	// 使用 RBACManager 创建 RoleBinding
+	err := rbs.rbacManager.CreateRoleBinding(ctx, req.ClusterID, req.Namespace, roleBinding)
 	if err != nil {
 		return fmt.Errorf("failed to create role binding: %w", err)
 	}
@@ -181,15 +146,11 @@ func (rbs *RoleBindingService) CreateRoleBinding(ctx context.Context, req *model
 
 // UpdateRoleBinding 更新RoleBinding
 func (rbs *RoleBindingService) UpdateRoleBinding(ctx context.Context, req *model.UpdateRoleBindingReq) error {
-	k8sClient, err := rbs.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		return fmt.Errorf("failed to get k8s client: %w", err)
-	}
 
 	// 如果名称发生变化，需要删除原来的RoleBinding并创建新的
 	if req.OriginalName != "" && req.OriginalName != req.Name {
 		// 删除原RoleBinding
-		err = k8sClient.RbacV1().RoleBindings(req.Namespace).Delete(ctx, req.OriginalName, metav1.DeleteOptions{})
+		err := rbs.rbacManager.DeleteRoleBinding(ctx, req.ClusterID, req.Namespace, req.OriginalName, metav1.DeleteOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to delete original role binding: %w", err)
 		}
@@ -208,7 +169,7 @@ func (rbs *RoleBindingService) UpdateRoleBinding(ctx context.Context, req *model
 	}
 
 	// 获取现有RoleBinding
-	existingRoleBinding, err := k8sClient.RbacV1().RoleBindings(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
+	existingRoleBinding, err := rbs.rbacManager.GetRoleBinding(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get existing role binding: %w", err)
 	}
@@ -219,7 +180,8 @@ func (rbs *RoleBindingService) UpdateRoleBinding(ctx context.Context, req *model
 	existingRoleBinding.RoleRef = k8sutils.ConvertRoleRefToK8s(req.RoleRef)
 	existingRoleBinding.Subjects = k8sutils.ConvertSubjectsToK8s(req.Subjects)
 
-	_, err = k8sClient.RbacV1().RoleBindings(req.Namespace).Update(ctx, existingRoleBinding, metav1.UpdateOptions{})
+	// 使用 RBACManager 更新 RoleBinding
+	err = rbs.rbacManager.UpdateRoleBinding(ctx, req.ClusterID, req.Namespace, existingRoleBinding)
 	if err != nil {
 		return fmt.Errorf("failed to update role binding: %w", err)
 	}
@@ -229,12 +191,9 @@ func (rbs *RoleBindingService) UpdateRoleBinding(ctx context.Context, req *model
 
 // DeleteRoleBinding 删除RoleBinding
 func (rbs *RoleBindingService) DeleteRoleBinding(ctx context.Context, req *model.DeleteRoleBindingReq) error {
-	k8sClient, err := rbs.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		return fmt.Errorf("failed to get k8s client: %w", err)
-	}
 
-	err = k8sClient.RbacV1().RoleBindings(req.Namespace).Delete(ctx, req.Name, metav1.DeleteOptions{})
+	// 使用 RBACManager 删除 RoleBinding
+	err := rbs.rbacManager.DeleteRoleBinding(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to delete role binding: %w", err)
 	}
@@ -244,16 +203,19 @@ func (rbs *RoleBindingService) DeleteRoleBinding(ctx context.Context, req *model
 
 // BatchDeleteRoleBinding 批量删除RoleBinding
 func (rbs *RoleBindingService) BatchDeleteRoleBinding(ctx context.Context, req *model.BatchDeleteRoleBindingReq) error {
-	k8sClient, err := rbs.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		return fmt.Errorf("failed to get k8s client: %w", err)
+
+	// 批量删除 RoleBinding - 按命名空间分组处理
+	namespaceRoleBindings := make(map[string][]string)
+	for _, binding := range req.Bindings {
+		namespaceRoleBindings[binding.Namespace] = append(namespaceRoleBindings[binding.Namespace], binding.Name)
 	}
 
+	// 使用 RBACManager 分命名空间批量删除 RoleBinding
 	var errors []string
-	for _, binding := range req.Bindings {
-		err := k8sClient.RbacV1().RoleBindings(binding.Namespace).Delete(ctx, binding.Name, metav1.DeleteOptions{})
+	for namespace, roleBindingNames := range namespaceRoleBindings {
+		err := rbs.rbacManager.BatchDeleteRoleBindings(ctx, req.ClusterID, namespace, roleBindingNames)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("failed to delete role binding %s/%s: %v", binding.Namespace, binding.Name, err))
+			errors = append(errors, fmt.Sprintf("failed to delete role bindings in namespace %s: %v", namespace, err))
 		}
 	}
 
@@ -266,12 +228,8 @@ func (rbs *RoleBindingService) BatchDeleteRoleBinding(ctx context.Context, req *
 
 // GetRoleBindingYaml 获取RoleBinding的YAML配置
 func (rbs *RoleBindingService) GetRoleBindingYaml(ctx context.Context, req *model.RoleBindingGetReq) (string, error) {
-	k8sClient, err := rbs.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		return "", fmt.Errorf("failed to get k8s client: %w", err)
-	}
-
-	roleBinding, err := k8sClient.RbacV1().RoleBindings(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
+	// 获取 RoleBinding
+	roleBinding, err := rbs.rbacManager.GetRoleBinding(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		return "", fmt.Errorf("failed to get role binding: %w", err)
 	}
@@ -294,13 +252,9 @@ func (rbs *RoleBindingService) GetRoleBindingYaml(ctx context.Context, req *mode
 
 // UpdateRoleBindingYaml 通过YAML更新RoleBinding
 func (rbs *RoleBindingService) UpdateRoleBindingYaml(ctx context.Context, req *model.RoleBindingYamlReq) error {
-	k8sClient, err := rbs.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		return fmt.Errorf("failed to get k8s client: %w", err)
-	}
 
 	var roleBinding rbacv1.RoleBinding
-	err = yaml.Unmarshal([]byte(req.YamlContent), &roleBinding)
+	err := yaml.Unmarshal([]byte(req.YamlContent), &roleBinding)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal yaml: %w", err)
 	}
@@ -310,7 +264,7 @@ func (rbs *RoleBindingService) UpdateRoleBindingYaml(ctx context.Context, req *m
 	roleBinding.Namespace = req.Namespace
 
 	// 获取现有RoleBinding以保持ResourceVersion
-	existingRoleBinding, err := k8sClient.RbacV1().RoleBindings(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
+	existingRoleBinding, err := rbs.rbacManager.GetRoleBinding(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get existing role binding: %w", err)
 	}
@@ -318,7 +272,8 @@ func (rbs *RoleBindingService) UpdateRoleBindingYaml(ctx context.Context, req *m
 	roleBinding.ResourceVersion = existingRoleBinding.ResourceVersion
 	roleBinding.UID = existingRoleBinding.UID
 
-	_, err = k8sClient.RbacV1().RoleBindings(req.Namespace).Update(ctx, &roleBinding, metav1.UpdateOptions{})
+	// 使用 RBACManager 更新 RoleBinding
+	err = rbs.rbacManager.UpdateRoleBinding(ctx, req.ClusterID, req.Namespace, &roleBinding)
 	if err != nil {
 		return fmt.Errorf("failed to update role binding: %w", err)
 	}

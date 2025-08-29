@@ -215,8 +215,28 @@ var UtilSet = wire.NewSet(
 	ijwt.NewJWTHandler,
 )
 
-var JobSet = wire.NewSet(
+var ManagerSet = wire.NewSet(
 	manager.NewClusterManager,
+	manager.NewDeploymentManager,
+	manager.NewNamespaceManager,
+	manager.NewPodManager,
+	manager.NewServiceManager,
+	manager.NewNodeManager,
+	manager.NewConfigMapManager,
+	manager.NewSecretManager,
+	manager.NewEventManager,
+	manager.NewStatefulSetManager,
+	manager.NewDaemonSetManager,
+	manager.NewIngressManager,        // 网络入口管理器
+	manager.NewPVManager,             // 持久卷管理器
+	manager.NewPVCManager,            // 持久卷声明管理器
+	manager.NewRBACManager,           // RBAC 权限管理器
+	manager.NewServiceAccountManager, // ServiceAccount 管理器
+	manager.NewTaintManager,          // 节点污点管理器
+	manager.NewYamlManager,           // YAML 模板和任务管理器
+)
+
+var JobSet = wire.NewSet(
 	startup.NewApplicationBootstrap,
 )
 
@@ -301,6 +321,7 @@ func ProvideCmd() *Cmd {
 		SSHSet,
 		UtilSet,
 		JobSet,
+		ManagerSet, // 新增：注册所有 Manager
 		CacheSet,
 		ClientSet,
 		NotificationSet,

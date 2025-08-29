@@ -27,14 +27,12 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
-	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -55,28 +53,25 @@ type SvcService interface {
 }
 
 type svcService struct {
-	dao    dao.ClusterDAO
-	client client.K8sClient
-	l      *zap.Logger
+	dao            dao.ClusterDAO
+	client         client.K8sClient       // 保持向后兼容
+	serviceManager manager.ServiceManager // 新的依赖注入
+	l              *zap.Logger
 }
 
 func NewSvcService(dao dao.ClusterDAO, client client.K8sClient, l *zap.Logger) SvcService {
 	return &svcService{
-		dao:    dao,
-		client: client,
-		l:      l,
+		dao:            dao,
+		client:         client,
+		serviceManager: manager.NewServiceManager(client, l),
+		l:              l,
 	}
 }
 
 // GetServicesByNamespace 获取指定命名空间中的 Service 列表
 func (s *svcService) GetServicesByNamespace(ctx context.Context, id int, namespace string) ([]*corev1.Service, error) {
-	kubeClient, err := k8sutils.GetKubeClient(id, s.client, s.l)
-	if err != nil {
-		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return nil, err
-	}
-
-	serviceList, err := kubeClient.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
+	// 使用 ServiceManager 获取 Service 列表
+	serviceList, err := s.serviceManager.ListServices(ctx, id, namespace)
 	if err != nil {
 		s.l.Error("获取 Service 列表失败", zap.Error(err))
 		return nil, err
@@ -92,13 +87,8 @@ func (s *svcService) GetServicesByNamespace(ctx context.Context, id int, namespa
 
 // GetServiceYaml 获取指定 Service 的 YAML 配置
 func (s *svcService) GetServiceYaml(ctx context.Context, id int, namespace, serviceName string) (*corev1.Service, error) {
-	kubeClient, err := k8sutils.GetKubeClient(id, s.client, s.l)
-	if err != nil {
-		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return nil, err
-	}
-
-	service, err := kubeClient.CoreV1().Services(namespace).Get(ctx, serviceName, metav1.GetOptions{})
+	// 使用 ServiceManager 获取 Service 详情
+	service, err := s.serviceManager.GetService(ctx, id, namespace, serviceName)
 	if err != nil {
 		s.l.Error("获取 Service 失败", zap.Error(err))
 		return nil, err
@@ -109,7 +99,7 @@ func (s *svcService) GetServiceYaml(ctx context.Context, id int, namespace, serv
 
 // UpdateService 更新指定的 Service
 func (s *svcService) UpdateService(ctx context.Context, serviceResource *model.K8sServiceReq) error {
-	kubeClient, err := k8sutils.GetKubeClient(serviceResource.ClusterId, s.client, s.l)
+	kubeClient, err := s.client.GetKubeClient(serviceResource.ClusterId)
 	if err != nil {
 		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
 		return err
@@ -134,40 +124,12 @@ func (s *svcService) UpdateService(ctx context.Context, serviceResource *model.K
 }
 
 func (s *svcService) DeleteService(ctx context.Context, id int, namespace string, serviceNames string) error {
-	kubeClient, err := k8sutils.GetKubeClient(id, s.client, s.l)
-	if err != nil {
-		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return err
-	}
-
-	return kubeClient.CoreV1().Services(namespace).Delete(ctx, serviceNames, metav1.DeleteOptions{})
+	// 使用 ServiceManager 删除 Service
+	return s.serviceManager.DeleteService(ctx, id, namespace, serviceNames, metav1.DeleteOptions{})
 }
 
 // BatchDeleteService 批量删除指定的 Service
 func (s *svcService) BatchDeleteService(ctx context.Context, id int, namespace string, serviceNames []string) error {
-	kubeClient, err := k8sutils.GetKubeClient(id, s.client, s.l)
-	if err != nil {
-		s.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return err
-	}
-
-	g, ctx := errgroup.WithContext(ctx)
-	for _, name := range serviceNames {
-		name := name // 避免闭包中使用相同的 name
-		g.Go(func() error {
-			err := kubeClient.CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{})
-			if err != nil {
-				s.l.Error("删除 Service 失败", zap.String("serviceName", name), zap.Error(err))
-				return err
-			}
-			s.l.Info("删除 Service 成功", zap.String("serviceName", name))
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		return fmt.Errorf("在删除 Service 时遇到错误: %v", err)
-	}
-
-	return nil
+	// 使用 ServiceManager 批量删除 Service
+	return s.serviceManager.BatchDeleteServices(ctx, id, namespace, serviceNames, metav1.DeleteOptions{})
 }

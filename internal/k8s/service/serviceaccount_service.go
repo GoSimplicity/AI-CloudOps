@@ -31,8 +31,8 @@ import (
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
@@ -75,36 +75,23 @@ type ServiceAccountService interface {
 }
 
 type serviceAccountService struct {
-	dao    dao.ClusterDAO
-	client client.K8sClient
-	logger *zap.Logger
+	dao     dao.ClusterDAO
+	manager manager.ServiceAccountManager
+	logger  *zap.Logger
 }
 
-func NewServiceAccountService(dao dao.ClusterDAO, client client.K8sClient, logger *zap.Logger) ServiceAccountService {
+func NewServiceAccountService(dao dao.ClusterDAO, manager manager.ServiceAccountManager, logger *zap.Logger) ServiceAccountService {
 	return &serviceAccountService{
-		dao:    dao,
-		client: client,
-		logger: logger,
+		dao:     dao,
+		manager: manager,
+		logger:  logger,
 	}
 }
 
 // GetServiceAccountList 获取ServiceAccount列表
 func (s *serviceAccountService) GetServiceAccountList(ctx context.Context, req *model.ServiceAccountListReq) ([]*model.K8sServiceAccountResponse, error) {
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, utils.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
-
-	listOptions := metav1.ListOptions{}
-	if req.LabelSelector != "" {
-		listOptions.LabelSelector = req.LabelSelector
-	}
-	if req.FieldSelector != "" {
-		listOptions.FieldSelector = req.FieldSelector
-	}
-
-	saList, err := kubeClient.CoreV1().ServiceAccounts(req.Namespace).List(ctx, listOptions)
+	// 使用 ServiceAccountManager 获取 ServiceAccount 列表
+	saList, err := s.manager.GetServiceAccountList(ctx, req.ClusterID, req.Namespace, metav1.ListOptions{})
 	if err != nil {
 		s.logger.Error("获取ServiceAccount列表失败",
 			zap.String("Namespace", req.Namespace),
@@ -143,13 +130,8 @@ func (s *serviceAccountService) GetServiceAccountList(ctx context.Context, req *
 
 // GetServiceAccountDetails 获取ServiceAccount详情
 func (s *serviceAccountService) GetServiceAccountDetails(ctx context.Context, clusterID int, namespace, name string) (*model.K8sServiceAccountResponse, error) {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, fmt.Errorf("无法连接到Kubernetes集群: %w", err)
-	}
-
-	sa, err := kubeClient.CoreV1().ServiceAccounts(namespace).Get(ctx, name, metav1.GetOptions{})
+	// 使用 ServiceAccountManager 获取 ServiceAccount 详情
+	sa, err := s.manager.GetServiceAccount(ctx, clusterID, namespace, name)
 	if err != nil {
 		s.logger.Error("获取ServiceAccount详情失败",
 			zap.String("Namespace", namespace),
@@ -167,17 +149,10 @@ func (s *serviceAccountService) GetServiceAccountDetails(ctx context.Context, cl
 		// 其他字段暂时设为默认值
 	}
 
-	// 获取ServiceAccount的Token（如果有的话）
-	if len(sa.Secrets) > 0 {
-		for _, secretRef := range sa.Secrets {
-			secret, err := kubeClient.CoreV1().Secrets(namespace).Get(ctx, secretRef.Name, metav1.GetOptions{})
-			if err != nil {
-				s.logger.Warn("获取ServiceAccount关联的Secret失败",
-					zap.String("SecretName", secretRef.Name),
-					zap.Error(err))
-				continue
-			}
-
+	// 获取ServiceAccount的关联Secrets
+	secrets, err := s.manager.GetServiceAccountSecrets(ctx, clusterID, namespace, name)
+	if err == nil && len(secrets) > 0 {
+		for _, secret := range secrets {
 			if secret.Type == corev1.SecretTypeServiceAccountToken {
 				if token, exists := secret.Data["token"]; exists {
 					response.Token = string(token)
@@ -195,12 +170,8 @@ func (s *serviceAccountService) GetServiceAccountDetails(ctx context.Context, cl
 
 // CreateServiceAccount 创建ServiceAccount
 func (s *serviceAccountService) CreateServiceAccount(ctx context.Context, req *model.ServiceAccountCreateReq) error {
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return fmt.Errorf("无法连接到Kubernetes集群: %w", err)
-	}
 
+	// 构建 ServiceAccount 对象
 	sa := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
@@ -221,7 +192,8 @@ func (s *serviceAccountService) CreateServiceAccount(ctx context.Context, req *m
 		}
 	}
 
-	_, err = kubeClient.CoreV1().ServiceAccounts(req.Namespace).Create(ctx, sa, metav1.CreateOptions{})
+	// 使用 ServiceAccountManager 创建 ServiceAccount
+	err := s.manager.CreateServiceAccount(ctx, req.ClusterID, req.Namespace, sa)
 	if err != nil {
 		s.logger.Error("创建ServiceAccount失败",
 			zap.String("Namespace", req.Namespace),
@@ -238,14 +210,9 @@ func (s *serviceAccountService) CreateServiceAccount(ctx context.Context, req *m
 
 // UpdateServiceAccount 更新ServiceAccount
 func (s *serviceAccountService) UpdateServiceAccount(ctx context.Context, req *model.ServiceAccountUpdateReq) error {
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return utils.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
 
 	// 先获取现有的ServiceAccount
-	existingSA, err := kubeClient.CoreV1().ServiceAccounts(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
+	existingSA, err := s.manager.GetServiceAccount(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		s.logger.Error("获取ServiceAccount失败",
 			zap.String("Namespace", req.Namespace),
@@ -271,7 +238,8 @@ func (s *serviceAccountService) UpdateServiceAccount(ctx context.Context, req *m
 		existingSA.ImagePullSecrets = nil
 	}
 
-	_, err = kubeClient.CoreV1().ServiceAccounts(req.Namespace).Update(ctx, existingSA, metav1.UpdateOptions{})
+	// 使用 ServiceAccountManager 更新 ServiceAccount
+	err = s.manager.UpdateServiceAccount(ctx, req.ClusterID, req.Namespace, existingSA)
 	if err != nil {
 		s.logger.Error("更新ServiceAccount失败",
 			zap.String("Namespace", req.Namespace),
@@ -288,11 +256,6 @@ func (s *serviceAccountService) UpdateServiceAccount(ctx context.Context, req *m
 
 // DeleteServiceAccount 删除ServiceAccount
 func (s *serviceAccountService) DeleteServiceAccount(ctx context.Context, req *model.ServiceAccountDeleteReq) error {
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return utils.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
 
 	deleteOptions := metav1.DeleteOptions{}
 	if req.GracePeriodSeconds != nil {
@@ -305,7 +268,8 @@ func (s *serviceAccountService) DeleteServiceAccount(ctx context.Context, req *m
 		deleteOptions.GracePeriodSeconds = &zero
 	}
 
-	err = kubeClient.CoreV1().ServiceAccounts(req.Namespace).Delete(ctx, req.Name, deleteOptions)
+	// 使用 ServiceAccountManager 删除 ServiceAccount
+	err := s.manager.DeleteServiceAccount(ctx, req.ClusterID, req.Namespace, req.Name, deleteOptions)
 	if err != nil {
 		s.logger.Error("删除ServiceAccount失败",
 			zap.String("Namespace", req.Namespace),
@@ -322,11 +286,6 @@ func (s *serviceAccountService) DeleteServiceAccount(ctx context.Context, req *m
 
 // BatchDeleteServiceAccount 批量删除ServiceAccount
 func (s *serviceAccountService) BatchDeleteServiceAccount(ctx context.Context, req *model.ServiceAccountBatchDeleteReq) error {
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return utils.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
 
 	var errors []string
 	deleteOptions := metav1.DeleteOptions{}
@@ -339,15 +298,11 @@ func (s *serviceAccountService) BatchDeleteServiceAccount(ctx context.Context, r
 		deleteOptions.GracePeriodSeconds = &zero
 	}
 
-	for _, name := range req.Names {
-		err := kubeClient.CoreV1().ServiceAccounts(req.Namespace).Delete(ctx, name, deleteOptions)
-		if err != nil {
-			errorMsg := fmt.Sprintf("删除ServiceAccount %s 失败: %v", name, err)
-			errors = append(errors, errorMsg)
-			s.logger.Error("批量删除ServiceAccount中的单个ServiceAccount失败",
-				zap.String("Name", name),
-				zap.Error(err))
-		}
+	// 使用 ServiceAccountManager 批量删除 ServiceAccount
+	err := s.manager.BatchDeleteServiceAccounts(ctx, req.ClusterID, req.Namespace, req.Names)
+	if err != nil {
+		s.logger.Error("批量删除ServiceAccount失败", zap.Error(err))
+		return utils.NewBusinessError(constants.ErrK8sResourceDelete, "批量删除ServiceAccount失败")
 	}
 
 	if len(errors) > 0 {
@@ -363,13 +318,9 @@ func (s *serviceAccountService) BatchDeleteServiceAccount(ctx context.Context, r
 
 // GetServiceAccountStatistics 获取ServiceAccount统计信息
 func (s *serviceAccountService) GetServiceAccountStatistics(ctx context.Context, req *model.ServiceAccountStatisticsReq) (*model.ServiceAccountStatisticsResp, error) {
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, utils.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
 
-	saList, err := kubeClient.CoreV1().ServiceAccounts(req.Namespace).List(ctx, metav1.ListOptions{})
+	// 使用 ServiceAccountManager 获取统计信息
+	saList, err := s.manager.GetServiceAccountList(ctx, req.ClusterID, req.Namespace, metav1.ListOptions{})
 	if err != nil {
 		s.logger.Error("获取ServiceAccount列表失败",
 			zap.String("Namespace", req.Namespace),
@@ -399,11 +350,6 @@ func (s *serviceAccountService) GetServiceAccountStatistics(ctx context.Context,
 
 // GetServiceAccountToken 获取ServiceAccount令牌
 func (s *serviceAccountService) GetServiceAccountToken(ctx context.Context, req *model.ServiceAccountTokenReq) (*model.ServiceAccountTokenResp, error) {
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, utils.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
 
 	// 创建TokenRequest
 	tokenRequest := &authv1.TokenRequest{
@@ -416,9 +362,8 @@ func (s *serviceAccountService) GetServiceAccountToken(ctx context.Context, req 
 		tokenRequest.Spec.ExpirationSeconds = req.ExpirationSeconds
 	}
 
-	// 请求Token
-	tokenResponse, err := kubeClient.CoreV1().ServiceAccounts(req.Namespace).CreateToken(
-		ctx, req.Name, tokenRequest, metav1.CreateOptions{})
+	// 使用 ServiceAccountManager 创建Token
+	tokenResponse, err := s.manager.CreateServiceAccountToken(ctx, req.ClusterID, req.Namespace, req.Name, tokenRequest)
 	if err != nil {
 		s.logger.Error("获取ServiceAccount Token失败",
 			zap.String("Namespace", req.Namespace),
@@ -440,13 +385,9 @@ func (s *serviceAccountService) GetServiceAccountToken(ctx context.Context, req 
 
 // GetServiceAccountYaml 获取ServiceAccount YAML
 func (s *serviceAccountService) GetServiceAccountYaml(ctx context.Context, req *model.ServiceAccountYamlReq) (*model.ServiceAccountYamlResp, error) {
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, utils.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
 
-	sa, err := kubeClient.CoreV1().ServiceAccounts(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
+	// 使用 ServiceAccountManager 获取 ServiceAccount
+	sa, err := s.manager.GetServiceAccount(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		s.logger.Error("获取ServiceAccount失败",
 			zap.String("Namespace", req.Namespace),
@@ -472,11 +413,6 @@ func (s *serviceAccountService) GetServiceAccountYaml(ctx context.Context, req *
 
 // UpdateServiceAccountYaml 更新ServiceAccount YAML
 func (s *serviceAccountService) UpdateServiceAccountYaml(ctx context.Context, req *model.ServiceAccountUpdateYamlReq) error {
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return utils.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
 
 	// 解析YAML
 	var sa corev1.ServiceAccount
@@ -494,7 +430,7 @@ func (s *serviceAccountService) UpdateServiceAccountYaml(ctx context.Context, re
 	}
 
 	// 获取现有的ServiceAccount以保留ResourceVersion
-	existingSA, err := kubeClient.CoreV1().ServiceAccounts(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
+	existingSA, err := s.manager.GetServiceAccount(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		s.logger.Error("获取现有ServiceAccount失败",
 			zap.String("Namespace", req.Namespace),
@@ -507,8 +443,8 @@ func (s *serviceAccountService) UpdateServiceAccountYaml(ctx context.Context, re
 	sa.ResourceVersion = existingSA.ResourceVersion
 	sa.UID = existingSA.UID
 
-	// 更新ServiceAccount
-	_, err = kubeClient.CoreV1().ServiceAccounts(req.Namespace).Update(ctx, &sa, metav1.UpdateOptions{})
+	// 使用 ServiceAccountManager 更新ServiceAccount
+	err = s.manager.UpdateServiceAccount(ctx, req.ClusterID, req.Namespace, &sa)
 	if err != nil {
 		s.logger.Error("更新ServiceAccount YAML失败",
 			zap.String("Namespace", req.Namespace),

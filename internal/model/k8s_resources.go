@@ -433,28 +433,6 @@ type PortForwardPort struct {
 	RemotePort int `json:"remote_port" binding:"required" comment:"远程端口"`
 }
 
-// ==================== 通用工具方法 ====================
-
-// ToMetaV1ListOptions 将K8sGetResourceListReq转换为metav1.ListOptions
-func (r *K8sGetResourceListReq) ToMetaV1ListOptions() metav1.ListOptions {
-	return metav1.ListOptions{
-		LabelSelector: r.LabelSelector,
-		FieldSelector: r.FieldSelector,
-		Limit:         r.Limit,
-		Continue:      r.Continue,
-	}
-}
-
-// ToMetaV1ListOptions 将K8sListReq转换为metav1.ListOptions
-func (r *K8sListReq) ToMetaV1ListOptions() metav1.ListOptions {
-	return metav1.ListOptions{
-		LabelSelector: r.LabelSelector,
-		FieldSelector: r.FieldSelector,
-		Limit:         r.Limit,
-		Continue:      r.Continue,
-	}
-}
-
 // ==================== 通用资源操作请求结构体 ====================
 
 // K8sGetResourceReq 获取单个k8s资源请求

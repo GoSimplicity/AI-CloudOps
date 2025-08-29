@@ -33,6 +33,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -64,17 +65,19 @@ type PVCService interface {
 }
 
 type pvcService struct {
-	dao    dao.ClusterDAO
-	client client.K8sClient
-	logger *zap.Logger
+	dao        dao.ClusterDAO     // 保持对DAO的依赖
+	client     client.K8sClient   // 保持向后兼容
+	pvcManager manager.PVCManager // 新的依赖注入
+	logger     *zap.Logger
 }
 
 // NewPVCService 创建新的 PVCService 实例
-func NewPVCService(dao dao.ClusterDAO, client client.K8sClient, logger *zap.Logger) PVCService {
+func NewPVCService(dao dao.ClusterDAO, client client.K8sClient, pvcManager manager.PVCManager, logger *zap.Logger) PVCService {
 	return &pvcService{
-		dao:    dao,
-		client: client,
-		logger: logger,
+		dao:        dao,
+		client:     client,
+		pvcManager: pvcManager,
+		logger:     logger,
 	}
 }
 

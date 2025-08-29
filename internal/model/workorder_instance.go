@@ -190,23 +190,3 @@ type GetCurrentStepReq struct {
 type GetAvailableActionsReq struct {
 	ID int `json:"id" form:"id" binding:"required,min=1"`
 }
-
-// 获取状态名称
-func GetInstanceStatusName(status int8) string {
-	switch status {
-	case InstanceStatusDraft:
-		return "草稿"
-	case InstanceStatusPending:
-		return "待审批"
-	case InstanceStatusProcessing:
-		return "处理中"
-	case InstanceStatusCompleted:
-		return "已完成"
-	case InstanceStatusRejected:
-		return "已拒绝"
-	case InstanceStatusCancelled:
-		return "已取消"
-	default:
-		return "未知状态"
-	}
-}

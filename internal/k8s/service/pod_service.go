@@ -38,6 +38,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -72,30 +73,30 @@ type PodService interface {
 }
 
 type podService struct {
-	dao    dao.ClusterDAO
-	client client.K8sClient
-	logger *zap.Logger
+	dao        dao.ClusterDAO
+	client     client.K8sClient   // 保持向后兼容
+	podManager manager.PodManager // 新的依赖注入
+	logger     *zap.Logger
 }
 
-func NewPodService(dao dao.ClusterDAO, client client.K8sClient, logger *zap.Logger) PodService {
+func NewPodService(dao dao.ClusterDAO, client client.K8sClient, podManager manager.PodManager, logger *zap.Logger) PodService {
 	return &podService{
-		dao:    dao,
-		client: client,
-		logger: logger,
+		dao:        dao,
+		client:     client,     // 保持向后兼容，某些方法可能仍需要
+		podManager: podManager, // 使用新的 manager
+		logger:     logger,
 	}
 }
 
 // GetPodsByNamespace 获取指定命名空间中的 Pod 列表
 func (p *podService) GetPodsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPod, error) {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+	// 使用新的 PodManager
+	podList, err := p.podManager.GetPodList(ctx, clusterID, namespace, metav1.ListOptions{})
 	if err != nil {
-		p.logger.Error("Failed to get Kubernetes client", zap.Error(err))
-		return nil, err
-	}
-
-	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		p.logger.Error("Failed to list Pods", zap.String("Namespace", namespace), zap.Error(err))
+		p.logger.Error("获取 Pod 列表失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.Error(err))
 		return nil, err
 	}
 
@@ -104,15 +105,14 @@ func (p *podService) GetPodsByNamespace(ctx context.Context, clusterID int, name
 
 // GetContainersByPod 获取指定 Pod 中的容器列表
 func (p *podService) GetContainersByPod(ctx context.Context, clusterID int, namespace, podName string) ([]*model.K8sPodContainer, error) {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+	// 使用新的 PodManager
+	pod, err := p.podManager.GetPod(ctx, clusterID, namespace, podName)
 	if err != nil {
-		p.logger.Error("Failed to get Kubernetes client", zap.Error(err))
-		return nil, err
-	}
-
-	pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
-	if err != nil {
-		p.logger.Error("Failed to get Pod", zap.String("PodName", podName), zap.Error(err))
+		p.logger.Error("获取 Pod 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("podName", podName),
+			zap.Error(err))
 		return nil, err
 	}
 
@@ -121,39 +121,32 @@ func (p *podService) GetContainersByPod(ctx context.Context, clusterID int, name
 
 // GetContainerLogs 获取指定容器的日志
 func (p *podService) GetContainerLogs(ctx context.Context, clusterID int, namespace, podName, containerName string) (string, error) {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+	// 使用新的 PodManager
+	logOptions := &corev1.PodLogOptions{Container: containerName}
+	logs, err := p.podManager.GetPodLogs(ctx, clusterID, namespace, podName, logOptions)
 	if err != nil {
-		p.logger.Error("Failed to get Kubernetes client", zap.Error(err))
+		p.logger.Error("获取容器日志失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("podName", podName),
+			zap.String("containerName", containerName),
+			zap.Error(err))
 		return "", err
 	}
 
-	logStream, err := kubeClient.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{Container: containerName}).Stream(ctx)
-	if err != nil {
-		p.logger.Error("Failed to stream Pod logs", zap.String("PodName", podName), zap.String("ContainerName", containerName), zap.Error(err))
-		return "", err
-	}
-	defer logStream.Close()
-
-	var logs strings.Builder
-	if _, err := io.Copy(&logs, logStream); err != nil {
-		p.logger.Error("Failed to read Pod logs", zap.String("PodName", podName), zap.String("ContainerName", containerName), zap.Error(err))
-		return "", err
-	}
-
-	return logs.String(), nil
+	return logs, nil
 }
 
 // GetPodYaml 获取指定 Pod 的 YAML 配置
 func (p *podService) GetPodYaml(ctx context.Context, clusterID int, namespace, podName string) (*corev1.Pod, error) {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+	// 使用新的 PodManager
+	pod, err := p.podManager.GetPod(ctx, clusterID, namespace, podName)
 	if err != nil {
-		p.logger.Error("Failed to get Kubernetes client", zap.Error(err))
-		return nil, err
-	}
-
-	pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
-	if err != nil {
-		p.logger.Error("Failed to get Pod YAML", zap.String("PodName", podName), zap.Error(err))
+		p.logger.Error("获取 Pod YAML 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("podName", podName),
+			zap.Error(err))
 		return nil, err
 	}
 
@@ -161,16 +154,14 @@ func (p *podService) GetPodYaml(ctx context.Context, clusterID int, namespace, p
 }
 
 // GetPodsByNodeName 获取指定节点的 Pod 列表
-func (p *podService) GetPodsByNodeName(ctx context.Context, id int, name string) ([]*model.K8sPod, error) {
-	kubeClient, err := p.client.GetKubeClient(id)
+func (p *podService) GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sPod, error) {
+	// 使用新的 PodManager
+	pods, err := p.podManager.GetPodsByNodeName(ctx, clusterID, nodeName)
 	if err != nil {
-		p.logger.Error("Failed to get Kubernetes client", zap.Error(err))
-		return nil, constants.ErrorK8sClientNotReady
-	}
-
-	pods, err := k8sutils.GetPodsByNodeName(ctx, kubeClient, name)
-	if err != nil {
-		p.logger.Error("Failed to get Pods by Node", zap.String("NodeName", name), zap.Error(err))
+		p.logger.Error("获取节点 Pod 列表失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("nodeName", nodeName),
+			zap.Error(err))
 		return nil, err
 	}
 
@@ -178,15 +169,15 @@ func (p *podService) GetPodsByNodeName(ctx context.Context, id int, name string)
 }
 
 // DeletePod 删除 Pod
-func (p *podService) DeletePod(ctx context.Context, clusterId int, namespace, podName string) error {
-	kubeClient, err := p.client.GetKubeClient(clusterId)
+func (p *podService) DeletePod(ctx context.Context, clusterID int, namespace, podName string) error {
+	// 使用新的 PodManager
+	err := p.podManager.DeletePod(ctx, clusterID, namespace, podName, metav1.DeleteOptions{})
 	if err != nil {
-		p.logger.Error("Failed to get Kubernetes client", zap.Error(err))
-		return err
-	}
-
-	if err := kubeClient.CoreV1().Pods(namespace).Delete(ctx, podName, metav1.DeleteOptions{}); err != nil {
-		p.logger.Error("Failed to delete Pod", zap.String("PodName", podName), zap.Error(err))
+		p.logger.Error("删除 Pod 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("podName", podName),
+			zap.Error(err))
 		return err
 	}
 
@@ -203,7 +194,7 @@ func (p *podService) GetPodList(ctx context.Context, req *model.K8sGetResourceLi
 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
-	listOptions := req.ToMetaV1ListOptions()
+	listOptions := k8sutils.ConvertToMetaV1ListOptions(req)
 	podList, err := kubeClient.CoreV1().Pods(req.Namespace).List(ctx, listOptions)
 	if err != nil {
 		p.logger.Error("获取Pod列表失败",

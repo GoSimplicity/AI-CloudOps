@@ -33,6 +33,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -64,28 +65,25 @@ type IngressService interface {
 }
 
 type ingressService struct {
-	dao    dao.ClusterDAO
-	client client.K8sClient
-	logger *zap.Logger
+	dao            dao.ClusterDAO         // 保持对DAO的依赖
+	client         client.K8sClient       // 保持向后兼容
+	ingressManager manager.IngressManager // 新的依赖注入
+	logger         *zap.Logger
 }
 
 // NewIngressService 创建新的 IngressService 实例
-func NewIngressService(dao dao.ClusterDAO, client client.K8sClient, logger *zap.Logger) IngressService {
+func NewIngressService(dao dao.ClusterDAO, client client.K8sClient, ingressManager manager.IngressManager, logger *zap.Logger) IngressService {
 	return &ingressService{
-		dao:    dao,
-		client: client,
-		logger: logger,
+		dao:            dao,
+		client:         client,
+		ingressManager: ingressManager,
+		logger:         logger,
 	}
 }
 
 // GetIngressList 获取Ingress列表
 func (i *ingressService) GetIngressList(ctx context.Context, req *model.K8sIngressListReq) ([]*model.K8sIngressEntity, error) {
-	kubeClient, err := i.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		i.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
-
+	// 构建查询选项
 	listOptions := metav1.ListOptions{}
 	if req.LabelSelector != "" {
 		listOptions.LabelSelector = req.LabelSelector
@@ -94,7 +92,8 @@ func (i *ingressService) GetIngressList(ctx context.Context, req *model.K8sIngre
 		listOptions.FieldSelector = req.FieldSelector
 	}
 
-	ingresses, err := kubeClient.NetworkingV1().Ingresses(req.Namespace).List(ctx, listOptions)
+	// 使用 IngressManager 获取列表
+	ingresses, err := i.ingressManager.GetIngressList(ctx, req.ClusterID, req.Namespace, listOptions)
 	if err != nil {
 		i.logger.Error("获取Ingress列表失败",
 			zap.String("namespace", req.Namespace),

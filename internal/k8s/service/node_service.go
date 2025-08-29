@@ -33,6 +33,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -54,88 +55,51 @@ type NodeService interface {
 }
 
 type nodeService struct {
-	clusterDao dao.ClusterDAO
-	client     client.K8sClient
-	l          *zap.Logger
+	clusterDao  dao.ClusterDAO      // 保持对DAO的依赖
+	client      client.K8sClient    // 保持向后兼容
+	nodeManager manager.NodeManager // 新的依赖注入
+	l           *zap.Logger
 }
 
-func NewNodeService(clusterDao dao.ClusterDAO, client client.K8sClient, l *zap.Logger) NodeService {
+func NewNodeService(clusterDao dao.ClusterDAO, client client.K8sClient, nodeManager manager.NodeManager, l *zap.Logger) NodeService {
 	return &nodeService{
-		clusterDao: clusterDao,
-		client:     client,
-		l:          l,
+		clusterDao:  clusterDao,
+		client:      client,
+		nodeManager: nodeManager,
+		l:           l,
 	}
 }
 
 // ListNodeByClusterName 获取集群的节点列表
 func (n *nodeService) ListNodeByClusterName(ctx context.Context, id int) ([]*model.K8sNode, error) {
-	// TODO: 实现GetKubeAndMetricsClient函数
-	// kubeClient, metricsClient, err := pkg.GetKubeAndMetricsClient(id, n.l, n.client)
-	// if err != nil {
-	// 	n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-	// 	return nil, err
-	// }
-
-	// 临时实现：直接通过client获取
-	cluster, err := n.clusterDao.GetClusterByID(ctx, id)
+	// 使用 NodeManager 获取节点列表
+	nodeList, err := n.nodeManager.GetNodeList(ctx, id, metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("获取集群信息失败: %w", err)
-	}
-
-	kubeClient, err := n.client.GetKubeClient(cluster.ID)
-	if err != nil {
-		n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return nil, err
-	}
-
-	// TODO: 实现GetNodesByName函数
-	// nodes, err := pkg.GetNodesByName(ctx, kubeClient, "")
-	// if err != nil {
-	// 	n.l.Error("获取节点列表失败", zap.Error(err))
-	// 	return nil, err
-	// }
-
-	// 临时实现：直接获取所有节点
-	nodes, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		n.l.Error("获取节点列表失败", zap.Error(err))
-		return nil, err
+		n.l.Error("获取节点列表失败", zap.Error(err), zap.Int("clusterID", id))
+		return nil, fmt.Errorf("获取节点列表失败: %w", err)
 	}
 
 	const maxConcurrency = 10
 	semaphore := make(chan struct{}, maxConcurrency)
 
 	g, ctx := errgroup.WithContext(ctx)
-	k8sNodes := make([]*model.K8sNode, len(nodes.Items))
+	k8sNodes := make([]*model.K8sNode, len(nodeList.Items))
 
 	// 使用 Worker Pool 模式优化并发性能
-	for i := range nodes.Items {
+	for i := range nodeList.Items {
 		index := i
-		node := nodes.Items[i] // 避免闭包变量问题
+		node := nodeList.Items[i] // 避免闭包变量问题
 		g.Go(func() error {
 			semaphore <- struct{}{}
 			defer func() {
 				<-semaphore
 			}()
 
-			// TODO: 实现BuildK8sNode函数
-			// k8sNode, err := pkg.BuildK8sNode(ctx, id, node, kubeClient, metricsClient)
-			// if err != nil {
-			// 	n.l.Error("构建 K8sNode 失败", zap.Error(err), zap.String("node", node.Name))
-			// 	return nil
-			// }
-
-			// 临时实现：构建基本的K8sNode
-			k8sNode := &model.K8sNode{
-				Name:           node.Name,
-				ClusterID:      id,
-				Status:         getNodeStatus(&node),
-				ScheduleEnable: !node.Spec.Unschedulable,
-				IP:             getNodeIP(&node),
-				Age:            getNodeAge(&node),
-				Labels:         getNodeLabels(&node),
-				Taints:         node.Spec.Taints,
-				Conditions:     node.Status.Conditions,
+			// 使用 NodeManager 构建 K8sNode
+			k8sNode, err := n.nodeManager.BuildK8sNode(ctx, id, node)
+			if err != nil {
+				n.l.Error("构建 K8sNode 失败", zap.Error(err), zap.String("node", node.Name))
+				return err
 			}
 			k8sNodes[index] = k8sNode
 			return nil
@@ -153,52 +117,15 @@ func (n *nodeService) ListNodeByClusterName(ctx context.Context, id int) ([]*mod
 
 // GetNodeDetail 获取指定节点详情
 func (n *nodeService) GetNodeDetail(ctx context.Context, id int, name string) (*model.K8sNode, error) {
-	// TODO: 实现GetKubeAndMetricsClient函数
-	// kubeClient, metricsClient, err := pkg.GetKubeAndMetricsClient(id, n.l, n.client)
-	// if err != nil {
-	// 	n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-	// 	return nil, err
-	// }
-
-	// 临时实现：直接通过client获取
-	cluster, err := n.clusterDao.GetClusterByID(ctx, id)
+	// 使用 NodeManager 获取指定节点
+	node, err := n.nodeManager.GetNode(ctx, id, name)
 	if err != nil {
-		return nil, fmt.Errorf("获取集群信息失败: %w", err)
-	}
-
-	kubeClient, err := n.client.GetKubeClient(cluster.ID)
-	if err != nil {
-		n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return nil, err
-	}
-
-	// TODO: 实现GetNodesByName函数
-	// nodes, err := pkg.GetNodesByName(ctx, kubeClient, name)
-	// if err != nil || len(nodes.Items) == 0 {
-	// 	return nil, constants.ErrorNodeNotFound
-	// }
-
-	// 临时实现：直接获取指定节点
-	node, err := kubeClient.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
+		n.l.Error("获取节点失败", zap.Error(err), zap.Int("clusterID", id), zap.String("nodeName", name))
 		return nil, constants.ErrorNodeNotFound
 	}
 
-	// TODO: 实现BuildK8sNode函数
-	// return pkg.BuildK8sNode(ctx, id, nodes.Items[0], kubeClient, metricsClient)
-
-	// 临时实现：构建基本的K8sNode
-	return &model.K8sNode{
-		Name:           node.Name,
-		ClusterID:      id,
-		Status:         getNodeStatus(node),
-		ScheduleEnable: !node.Spec.Unschedulable,
-		IP:             getNodeIP(node),
-		Age:            getNodeAge(node),
-		Labels:         getNodeLabels(node),
-		Taints:         node.Spec.Taints,
-		Conditions:     node.Status.Conditions,
-	}, nil
+	// 使用 NodeManager 构建 K8sNode
+	return n.nodeManager.BuildK8sNode(ctx, id, *node)
 }
 
 // AddOrUpdateNodeLabel 更新节点标签（添加、删除或更新）

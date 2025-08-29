@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -50,27 +51,23 @@ type ConfigMapService interface {
 }
 
 type configMapService struct {
-	k8sClient client.K8sClient
-	logger    *zap.Logger
+	k8sClient        client.K8sClient         // 保持向后兼容
+	configMapManager manager.ConfigMapManager // 新的依赖注入
+	logger           *zap.Logger
 }
 
-func NewConfigMapService(k8sClient client.K8sClient, logger *zap.Logger) ConfigMapService {
+func NewConfigMapService(k8sClient client.K8sClient, configMapManager manager.ConfigMapManager, logger *zap.Logger) ConfigMapService {
 	return &configMapService{
-		k8sClient: k8sClient,
-		logger:    logger,
+		k8sClient:        k8sClient,
+		configMapManager: configMapManager,
+		logger:           logger,
 	}
 }
 
 // GetConfigMapList 获取ConfigMap列表
 func (s *configMapService) GetConfigMapList(ctx context.Context, req *model.K8sListReq) ([]*model.K8sConfigMap, error) {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	listOptions := req.ToMetaV1ListOptions()
-	configMapList, err := clientset.CoreV1().ConfigMaps(req.Namespace).List(ctx, listOptions)
+	// 使用 ConfigMapManager 获取 ConfigMap 列表
+	configMapList, err := s.configMapManager.ListConfigMaps(ctx, req.ClusterID, req.Namespace)
 	if err != nil {
 		s.logger.Error("获取ConfigMap列表失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", req.Namespace))
@@ -93,13 +90,8 @@ func (s *configMapService) GetConfigMapList(ctx context.Context, req *model.K8sL
 
 // GetConfigMap 获取单个ConfigMap详情
 func (s *configMapService) GetConfigMap(ctx context.Context, req *model.K8sResourceIdentifierReq) (*model.K8sConfigMap, error) {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	configMap, err := clientset.CoreV1().ConfigMaps(req.Namespace).Get(ctx, req.ResourceName, metav1.GetOptions{})
+	// 使用 ConfigMapManager 获取 ConfigMap
+	configMap, err := s.configMapManager.GetConfigMap(ctx, req.ClusterID, req.Namespace, req.ResourceName)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil, fmt.Errorf("ConfigMap不存在: %s/%s", req.Namespace, req.ResourceName)
@@ -123,12 +115,6 @@ func (s *configMapService) GetConfigMap(ctx context.Context, req *model.K8sResou
 
 // CreateConfigMap 创建ConfigMap
 func (s *configMapService) CreateConfigMap(ctx context.Context, req *model.ConfigMapCreateReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
 	// 构造ConfigMap对象
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -141,7 +127,8 @@ func (s *configMapService) CreateConfigMap(ctx context.Context, req *model.Confi
 		BinaryData: req.BinaryData,
 	}
 
-	_, err = clientset.CoreV1().ConfigMaps(req.Namespace).Create(ctx, configMap, metav1.CreateOptions{})
+	// 使用 ConfigMapManager 创建 ConfigMap
+	_, err := s.configMapManager.CreateConfigMap(ctx, req.ClusterID, configMap)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
 			return fmt.Errorf("ConfigMap已存在: %s/%s", req.Namespace, req.Name)
@@ -163,14 +150,8 @@ func (s *configMapService) CreateConfigMap(ctx context.Context, req *model.Confi
 
 // UpdateConfigMap 更新ConfigMap
 func (s *configMapService) UpdateConfigMap(ctx context.Context, req *model.ConfigMapUpdateReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
 	// 先获取现有的ConfigMap
-	existingConfigMap, err := clientset.CoreV1().ConfigMaps(req.Namespace).Get(ctx, req.ResourceName, metav1.GetOptions{})
+	existingConfigMap, err := s.configMapManager.GetConfigMap(ctx, req.ClusterID, req.Namespace, req.ResourceName)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("ConfigMap不存在: %s/%s", req.Namespace, req.ResourceName)
@@ -192,7 +173,8 @@ func (s *configMapService) UpdateConfigMap(ctx context.Context, req *model.Confi
 		existingConfigMap.Annotations = req.Annotations
 	}
 
-	_, err = clientset.CoreV1().ConfigMaps(req.Namespace).Update(ctx, existingConfigMap, metav1.UpdateOptions{})
+	// 使用 ConfigMapManager 更新 ConfigMap
+	_, err = s.configMapManager.UpdateConfigMap(ctx, req.ClusterID, existingConfigMap)
 	if err != nil {
 		s.logger.Error("更新ConfigMap失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID),
@@ -211,13 +193,8 @@ func (s *configMapService) UpdateConfigMap(ctx context.Context, req *model.Confi
 
 // DeleteConfigMap 删除ConfigMap
 func (s *configMapService) DeleteConfigMap(ctx context.Context, req *model.K8sResourceIdentifierReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	err = clientset.CoreV1().ConfigMaps(req.Namespace).Delete(ctx, req.ResourceName, metav1.DeleteOptions{})
+	// 使用 ConfigMapManager 删除 ConfigMap
+	err := s.configMapManager.DeleteConfigMap(ctx, req.ClusterID, req.Namespace, req.ResourceName, metav1.DeleteOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("ConfigMap不存在: %s/%s", req.Namespace, req.ResourceName)
@@ -239,42 +216,19 @@ func (s *configMapService) DeleteConfigMap(ctx context.Context, req *model.K8sRe
 
 // BatchDeleteConfigMaps 批量删除ConfigMap
 func (s *configMapService) BatchDeleteConfigMaps(ctx context.Context, req *model.K8sBatchDeleteReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
+	// 使用 ConfigMapManager 批量删除 ConfigMap
+	err := s.configMapManager.BatchDeleteConfigMaps(ctx, req.ClusterID, req.Namespace, req.ResourceNames, metav1.DeleteOptions{})
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	var failedDeletes []string
-	successCount := 0
-
-	for _, name := range req.ResourceNames {
-		err = clientset.CoreV1().ConfigMaps(req.Namespace).Delete(ctx, name, metav1.DeleteOptions{})
-		if err != nil {
-			if !errors.IsNotFound(err) {
-				failedDeletes = append(failedDeletes, fmt.Sprintf("%s: %v", name, err))
-				s.logger.Error("删除ConfigMap失败", zap.Error(err),
-					zap.Int("cluster_id", req.ClusterID),
-					zap.String("namespace", req.Namespace),
-					zap.String("name", name))
-			}
-		} else {
-			successCount++
-			s.logger.Info("成功删除ConfigMap",
-				zap.Int("cluster_id", req.ClusterID),
-				zap.String("namespace", req.Namespace),
-				zap.String("name", name))
-		}
-	}
-
-	if len(failedDeletes) > 0 {
-		return fmt.Errorf("部分ConfigMap删除失败: %v", failedDeletes)
+		s.logger.Error("批量删除ConfigMap失败", zap.Error(err),
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.Strings("resource_names", req.ResourceNames))
+		return fmt.Errorf("批量删除ConfigMap失败: %w", err)
 	}
 
 	s.logger.Info("批量删除ConfigMap完成",
 		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
-		zap.Int("success_count", successCount),
 		zap.Int("total_count", len(req.ResourceNames)))
 
 	return nil
@@ -282,13 +236,8 @@ func (s *configMapService) BatchDeleteConfigMaps(ctx context.Context, req *model
 
 // GetConfigMapYAML 获取ConfigMap的YAML配置
 func (s *configMapService) GetConfigMapYAML(ctx context.Context, req *model.K8sResourceIdentifierReq) (string, error) {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return "", fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	configMap, err := clientset.CoreV1().ConfigMaps(req.Namespace).Get(ctx, req.ResourceName, metav1.GetOptions{})
+	// 使用 ConfigMapManager 获取 ConfigMap
+	configMap, err := s.configMapManager.GetConfigMap(ctx, req.ClusterID, req.Namespace, req.ResourceName)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return "", fmt.Errorf("ConfigMap不存在: %s/%s", req.Namespace, req.ResourceName)

@@ -37,6 +37,7 @@ import (
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
+	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -557,7 +558,7 @@ func (n *workorderNotificationService) buildMessageContent(notificationConfig *m
 	sendRequest.Templates["operator_name"] = instance.OperatorName
 	sendRequest.Templates["priority_level"] = fmt.Sprintf("%d", int(instance.Priority))
 	sendRequest.Templates["priority_text"] = notification.FormatPriority(instance.Priority)
-	sendRequest.Templates["status"] = model.GetInstanceStatusName(instance.Status)
+	sendRequest.Templates["status"] = utils.GetInstanceStatusName(instance.Status)
 	sendRequest.Templates["created_time"] = instance.CreatedAt.Format("2006-01-02 15:04:05")
 	sendRequest.Templates["event_type"] = notification.GetEventTypeText(eventType)
 	sendRequest.Templates["event_type_text"] = notification.GetEventTypeText(eventType)
@@ -633,7 +634,7 @@ AI-CloudOps 技术运维部
 发送时间：%s`,
 			instance.SerialNumber,
 			instance.Title,
-			model.GetInstanceStatusName(instance.Status),
+			utils.GetInstanceStatusName(instance.Status),
 			notification.FormatPriority(instance.Priority),
 			instance.OperatorName,
 			assigneeName,

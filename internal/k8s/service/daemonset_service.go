@@ -34,6 +34,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -67,28 +68,25 @@ type DaemonSetService interface {
 }
 
 type daemonSetService struct {
-	dao    dao.ClusterDAO
-	client client.K8sClient
-	logger *zap.Logger
+	dao              dao.ClusterDAO           // 保持对DAO的依赖
+	client           client.K8sClient         // 保持向后兼容
+	daemonSetManager manager.DaemonSetManager // 新的依赖注入
+	logger           *zap.Logger
 }
 
 // NewDaemonSetService 创建新的 DaemonSetService 实例
-func NewDaemonSetService(dao dao.ClusterDAO, client client.K8sClient, logger *zap.Logger) DaemonSetService {
+func NewDaemonSetService(dao dao.ClusterDAO, client client.K8sClient, daemonSetManager manager.DaemonSetManager, logger *zap.Logger) DaemonSetService {
 	return &daemonSetService{
-		dao:    dao,
-		client: client,
-		logger: logger,
+		dao:              dao,
+		client:           client,
+		daemonSetManager: daemonSetManager,
+		logger:           logger,
 	}
 }
 
 // GetDaemonSetList 获取DaemonSet列表
 func (d *daemonSetService) GetDaemonSetList(ctx context.Context, req *model.K8sDaemonSetListReq) ([]*model.K8sDaemonSetEntity, error) {
-	kubeClient, err := d.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		d.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
-
+	// 构建查询选项
 	listOptions := metav1.ListOptions{}
 	if req.LabelSelector != "" {
 		listOptions.LabelSelector = req.LabelSelector
@@ -97,7 +95,8 @@ func (d *daemonSetService) GetDaemonSetList(ctx context.Context, req *model.K8sD
 		listOptions.FieldSelector = req.FieldSelector
 	}
 
-	daemonSets, err := kubeClient.AppsV1().DaemonSets(req.Namespace).List(ctx, listOptions)
+	// 使用 DaemonSetManager 获取列表
+	daemonSets, err := d.daemonSetManager.GetDaemonSetList(ctx, req.ClusterID, req.Namespace, listOptions)
 	if err != nil {
 		d.logger.Error("获取DaemonSet列表失败",
 			zap.String("namespace", req.Namespace),

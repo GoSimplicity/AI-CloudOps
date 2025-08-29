@@ -33,20 +33,36 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 
-	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
+
+// ConvertToMetaV1ListOptions 将K8sGetResourceListReq转换为metav1.ListOptions
+func ConvertToMetaV1ListOptions(req *model.K8sGetResourceListReq) metav1.ListOptions {
+	return metav1.ListOptions{
+		LabelSelector: req.LabelSelector,
+		FieldSelector: req.FieldSelector,
+		Limit:         req.Limit,
+		Continue:      req.Continue,
+	}
+}
+
+// ConvertK8sListReqToMetaV1ListOptions 将K8sListReq转换为metav1.ListOptions
+func ConvertK8sListReqToMetaV1ListOptions(req *model.K8sListReq) metav1.ListOptions {
+	return metav1.ListOptions{
+		LabelSelector: req.LabelSelector,
+		FieldSelector: req.FieldSelector,
+		Limit:         req.Limit,
+		Continue:      req.Continue,
+	}
+}
 
 // EnsureNamespace 确保指定的命名空间存在，如果不存在则创建
 func EnsureNamespace(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) error {
@@ -666,46 +682,8 @@ func GetResourceName(kind string) string {
 	}
 }
 
-// GetKubeClient 获取 Kubernetes 客户端
-func GetKubeClient(clusterId int, client client.K8sClient, l *zap.Logger) (*kubernetes.Clientset, error) {
-	kubeClient, err := client.GetKubeClient(clusterId)
-	if err != nil {
-		l.Error("获取 Kubernetes 客户端失败", zap.Int("clusterID", clusterId), zap.Error(err))
-		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
-	}
-	return kubeClient, nil
-}
-
-// GetKubeAndMetricsClient 获取 Kubernetes 客户端和 Metrics 客户端
-func GetKubeAndMetricsClient(id int, logger *zap.Logger, client client.K8sClient) (*kubernetes.Clientset, *metricsClient.Clientset, error) {
-	kc, err := client.GetKubeClient(id)
-	if err != nil {
-		logger.Error("获取 Kubernetes 客户端失败", zap.Error(err))
-		return nil, nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
-	}
-
-	mc, err := client.GetMetricsClient(id)
-	if err != nil {
-		logger.Warn("获取 Metrics 客户端失败，降级为无指标模式", zap.Error(err))
-		return kc, nil, nil
-	}
-	return kc, mc, nil
-}
-
-// GetDynamicClient 获取动态客户端
-func GetDynamicClient(ctx context.Context, id int, clusterDao dao.ClusterDAO, client client.K8sClient) (*dynamic.DynamicClient, error) {
-	cluster, err := clusterDao.GetClusterByID(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("集群不存在: %w", err)
-	}
-
-	dynClient, err := client.GetDynamicClient(cluster.ID)
-	if err != nil {
-		return nil, fmt.Errorf("无法获取动态客户端: %w", err)
-	}
-
-	return dynClient, nil
-}
+// 注意：客户端获取相关函数已移至对应的 Manager 层
+// 这里只保留纯工具函数，不依赖任何客户端实例
 
 // GetPodResources 获取 Pod 资源
 func GetPodResources(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string) ([]model.Resource, error) {

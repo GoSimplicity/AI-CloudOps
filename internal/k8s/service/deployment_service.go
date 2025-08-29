@@ -35,7 +35,8 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
-	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -65,35 +66,33 @@ type DeploymentService interface {
 }
 
 type deploymentService struct {
-	dao    dao.ClusterDAO
-	client client.K8sClient
-	logger *zap.Logger
+	dao               dao.ClusterDAO            // 保持对DAO的依赖
+	client            client.K8sClient          // 保持向后兼容
+	deploymentManager manager.DeploymentManager // 新的依赖注入
+	logger            *zap.Logger
 }
 
 // NewDeploymentService 创建新的 DeploymentService 实例
-func NewDeploymentService(dao dao.ClusterDAO, client client.K8sClient, logger *zap.Logger) DeploymentService {
+func NewDeploymentService(dao dao.ClusterDAO, client client.K8sClient, deploymentManager manager.DeploymentManager, logger *zap.Logger) DeploymentService {
 	return &deploymentService{
-		dao:    dao,
-		client: client,
-		logger: logger,
+		dao:               dao,
+		client:            client,
+		deploymentManager: deploymentManager,
+		logger:            logger,
 	}
 }
 
 // GetDeploymentsByNamespace 获取指定命名空间下的所有 Deployment（保持向后兼容）
 func (d *deploymentService) GetDeploymentsByNamespace(ctx context.Context, id int, namespace string) ([]*appsv1.Deployment, error) {
-	kubeClient, err := k8sutils.GetKubeClient(id, d.client, d.logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
-	}
-
-	deployments, err := kubeClient.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
+	// 使用 DeploymentManager 获取 Deployment 列表
+	deploymentList, err := d.deploymentManager.GetDeploymentList(ctx, id, namespace, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Deployment list: %w", err)
 	}
 
 	var result []*appsv1.Deployment
-	for i := range deployments.Items {
-		result = append(result, &deployments.Items[i])
+	for i := range deploymentList.Items {
+		result = append(result, &deploymentList.Items[i])
 	}
 
 	return result, nil
@@ -101,12 +100,12 @@ func (d *deploymentService) GetDeploymentsByNamespace(ctx context.Context, id in
 
 // GetDeploymentList 获取Deployment列表（使用新的请求结构体）
 func (d *deploymentService) GetDeploymentList(ctx context.Context, req *model.K8sGetResourceListReq) ([]*model.K8sDeployment, error) {
-	kubeClient, err := k8sutils.GetKubeClient(req.ClusterID, d.client, d.logger)
+	kubeClient, err := d.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
 
-	listOptions := req.ToMetaV1ListOptions()
+	listOptions := utils.ConvertToMetaV1ListOptions(req)
 	deploymentList, err := kubeClient.AppsV1().Deployments(req.Namespace).List(ctx, listOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Deployment list: %w", err)
@@ -123,7 +122,7 @@ func (d *deploymentService) GetDeploymentList(ctx context.Context, req *model.K8
 
 // GetDeployment 获取单个Deployment详情
 func (d *deploymentService) GetDeployment(ctx context.Context, req *model.K8sGetResourceReq) (*model.K8sDeployment, error) {
-	kubeClient, err := k8sutils.GetKubeClient(req.ClusterID, d.client, d.logger)
+	kubeClient, err := d.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -138,7 +137,7 @@ func (d *deploymentService) GetDeployment(ctx context.Context, req *model.K8sGet
 
 // UpdateDeployment 更新 Deployment 配置
 func (d *deploymentService) UpdateDeployment(ctx context.Context, deployment *model.K8sDeploymentReq) error {
-	kubeClient, err := k8sutils.GetKubeClient(deployment.ClusterId, d.client, d.logger)
+	kubeClient, err := d.client.GetKubeClient(deployment.ClusterId)
 	if err != nil {
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -156,7 +155,7 @@ func (d *deploymentService) UpdateDeployment(ctx context.Context, deployment *mo
 
 // GetDeploymentYaml 获取 Deployment 的 YAML 配置
 func (d *deploymentService) GetDeploymentYaml(ctx context.Context, id int, namespace, deploymentName string) (string, error) {
-	kubeClient, err := k8sutils.GetKubeClient(id, d.client, d.logger)
+	kubeClient, err := d.client.GetKubeClient(id)
 	if err != nil {
 		return "", fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -176,7 +175,7 @@ func (d *deploymentService) GetDeploymentYaml(ctx context.Context, id int, names
 
 // BatchDeleteDeployment 批量删除 Deployment（保持向后兼容）
 func (d *deploymentService) BatchDeleteDeployment(ctx context.Context, id int, namespace string, deploymentNames []string) error {
-	kubeClient, err := k8sutils.GetKubeClient(id, d.client, d.logger)
+	kubeClient, err := d.client.GetKubeClient(id)
 	if err != nil {
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -211,12 +210,9 @@ func (d *deploymentService) BatchDeleteDeployment(ctx context.Context, id int, n
 
 // DeleteDeployment 删除指定的 Deployment
 func (d *deploymentService) DeleteDeployment(ctx context.Context, id int, namespace, deploymentName string) error {
-	kubeClient, err := k8sutils.GetKubeClient(id, d.client, d.logger)
+	// 使用 DeploymentManager 删除 Deployment
+	err := d.deploymentManager.DeleteDeployment(ctx, id, namespace, deploymentName, metav1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
-	}
-
-	if err := kubeClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("failed to delete Deployment '%s': %w", deploymentName, err)
 	}
 
@@ -225,24 +221,10 @@ func (d *deploymentService) DeleteDeployment(ctx context.Context, id int, namesp
 
 // RestartDeployment 重启指定的 Deployment
 func (d *deploymentService) RestartDeployment(ctx context.Context, id int, namespace, deploymentName string) error {
-	kubeClient, err := k8sutils.GetKubeClient(id, d.client, d.logger)
+	// 使用 DeploymentManager 重启 Deployment
+	err := d.deploymentManager.RestartDeployment(ctx, id, namespace, deploymentName)
 	if err != nil {
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
-	}
-
-	deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to get Deployment '%s': %w", deploymentName, err)
-	}
-
-	if deployment.Spec.Template.Annotations == nil {
-		deployment.Spec.Template.Annotations = make(map[string]string)
-	}
-
-	deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
-
-	if _, err := kubeClient.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("failed to update Deployment '%s': %w", deploymentName, err)
+		return fmt.Errorf("failed to restart Deployment '%s': %w", deploymentName, err)
 	}
 
 	return nil
@@ -250,7 +232,7 @@ func (d *deploymentService) RestartDeployment(ctx context.Context, id int, names
 
 // BatchDeleteDeployments 批量删除Deployment（使用新的请求结构体）
 func (d *deploymentService) BatchDeleteDeployments(ctx context.Context, req *model.DeploymentBatchDeleteReq) error {
-	kubeClient, err := k8sutils.GetKubeClient(req.ClusterID, d.client, d.logger)
+	kubeClient, err := d.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}
@@ -288,7 +270,7 @@ func (d *deploymentService) BatchDeleteDeployments(ctx context.Context, req *mod
 
 // BatchRestartDeployments 批量重启Deployment（使用新的请求结构体）
 func (d *deploymentService) BatchRestartDeployments(ctx context.Context, req *model.DeploymentBatchRestartReq) error {
-	kubeClient, err := k8sutils.GetKubeClient(req.ClusterID, d.client, d.logger)
+	kubeClient, err := d.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		return fmt.Errorf("failed to get Kubernetes client: %w", err)
 	}

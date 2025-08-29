@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
@@ -209,7 +210,7 @@ func (s *systemService) collectUnixSystemInfo(ctx context.Context, systemInfo *m
 	if memInfo, err := s.getMemoryInfo(ctx); err == nil {
 		systemInfo.MemoryTotal = memInfo["total"]
 		systemInfo.MemoryUsed = memInfo["used"]
-		systemInfo.MemoryUsage = systemInfo.GetMemoryUsagePercentage()
+		systemInfo.MemoryUsage = utils.GetMemoryUsagePercentage(systemInfo)
 	}
 
 	// 检查上下文是否已取消
@@ -223,7 +224,7 @@ func (s *systemService) collectUnixSystemInfo(ctx context.Context, systemInfo *m
 	if diskInfo, err := s.getDiskInfo(ctx); err == nil {
 		systemInfo.DiskTotal = diskInfo["total"]
 		systemInfo.DiskUsed = diskInfo["used"]
-		systemInfo.DiskUsage = systemInfo.GetDiskUsagePercentage()
+		systemInfo.DiskUsage = utils.GetDiskUsagePercentage(systemInfo)
 	}
 
 	// 检查上下文是否已取消

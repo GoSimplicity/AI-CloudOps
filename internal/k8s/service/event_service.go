@@ -34,7 +34,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
-	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
@@ -66,37 +66,26 @@ type EventService interface {
 }
 
 type eventService struct {
-	dao    dao.ClusterDAO
-	client client.K8sClient
-	logger *zap.Logger
+	dao          dao.ClusterDAO       // 保持对DAO的依赖
+	client       client.K8sClient     // 保持向后兼容
+	eventManager manager.EventManager // 新的依赖注入
+	logger       *zap.Logger
 }
 
 // NewEventService 创建新的 EventService 实例
-func NewEventService(dao dao.ClusterDAO, client client.K8sClient, logger *zap.Logger) EventService {
+func NewEventService(dao dao.ClusterDAO, client client.K8sClient, eventManager manager.EventManager, logger *zap.Logger) EventService {
 	return &eventService{
-		dao:    dao,
-		client: client,
-		logger: logger,
+		dao:          dao,
+		client:       client,
+		eventManager: eventManager,
+		logger:       logger,
 	}
 }
 
 // GetEventList 获取Event列表
 func (e *eventService) GetEventList(ctx context.Context, req *model.K8sEventListReq) ([]*model.K8sEventEntity, error) {
-	kubeClient, err := k8sutils.GetKubeClient(req.ClusterID, e.client, e.logger)
-	if err != nil {
-		e.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, fmt.Errorf("无法连接到Kubernetes集群: %w", err)
-	}
-
-	listOptions := metav1.ListOptions{}
-	if req.LabelSelector != "" {
-		listOptions.LabelSelector = req.LabelSelector
-	}
-	if req.FieldSelector != "" {
-		listOptions.FieldSelector = req.FieldSelector
-	}
-
-	eventList, err := kubeClient.CoreV1().Events(req.Namespace).List(ctx, listOptions)
+	// 使用 EventManager 获取 Event 列表
+	eventList, err := e.eventManager.ListEvents(ctx, req.ClusterID, req.Namespace)
 	if err != nil {
 		e.logger.Error("获取Event列表失败",
 			zap.String("Namespace", req.Namespace),
@@ -155,13 +144,8 @@ func (e *eventService) GetEventsByNamespace(ctx context.Context, clusterID int, 
 
 // GetEvent 获取单个Event详情
 func (e *eventService) GetEvent(ctx context.Context, clusterID int, namespace, name string) (*model.K8sEventEntity, error) {
-	kubeClient, err := k8sutils.GetKubeClient(clusterID, e.client, e.logger)
-	if err != nil {
-		e.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, fmt.Errorf("无法连接到Kubernetes集群: %w", err)
-	}
-
-	event, err := kubeClient.CoreV1().Events(namespace).Get(ctx, name, metav1.GetOptions{})
+	// 使用 EventManager 获取单个 Event
+	event, err := e.eventManager.GetEvent(ctx, clusterID, namespace, name)
 	if err != nil {
 		e.logger.Error("获取Event详情失败",
 			zap.String("Namespace", namespace),
@@ -240,7 +224,7 @@ func (e *eventService) GetEventsByNode(ctx context.Context, clusterID int, nodeN
 
 // GetEventStatistics 获取事件统计
 func (e *eventService) GetEventStatistics(ctx context.Context, req *model.K8sEventStatisticsReq) (*model.K8sEventStatistics, error) {
-	kubeClient, err := k8sutils.GetKubeClient(req.ClusterID, e.client, e.logger)
+	kubeClient, err := e.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		e.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return nil, fmt.Errorf("无法连接到Kubernetes集群: %w", err)
@@ -304,7 +288,7 @@ func (e *eventService) GetEventStatistics(ctx context.Context, req *model.K8sEve
 
 // GetEventTimeline 获取事件时间线
 func (e *eventService) GetEventTimeline(ctx context.Context, req *model.K8sEventTimelineReq) ([]*model.K8sEventTimelineItem, error) {
-	kubeClient, err := k8sutils.GetKubeClient(req.ClusterID, e.client, e.logger)
+	kubeClient, err := e.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		e.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return nil, fmt.Errorf("无法连接到Kubernetes集群: %w", err)
@@ -344,7 +328,7 @@ func (e *eventService) GetEventTimeline(ctx context.Context, req *model.K8sEvent
 
 // CleanupOldEvents 清理旧事件
 func (e *eventService) CleanupOldEvents(ctx context.Context, req *model.K8sEventCleanupReq) (*model.K8sEventCleanupResult, error) {
-	kubeClient, err := k8sutils.GetKubeClient(req.ClusterID, e.client, e.logger)
+	kubeClient, err := e.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		e.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
