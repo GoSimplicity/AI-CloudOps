@@ -61,8 +61,6 @@ func (k *K8sDaemonSetHandler) RegisterRouters(server *gin.Engine) {
 		daemonSets.POST("/restart", k.RestartDaemonSet)               // 重启DaemonSet
 
 		// 批量操作
-		daemonSets.DELETE("/batch_delete", k.BatchDeleteDaemonSets) // 批量删除DaemonSet
-		daemonSets.POST("/batch_restart", k.BatchRestartDaemonSets) // 批量重启DaemonSet
 
 		// 高级功能
 		daemonSets.GET("/:cluster_id/:name/history", k.GetDaemonSetHistory)    // 获取DaemonSet历史版本
@@ -261,46 +259,6 @@ func (k *K8sDaemonSetHandler) RestartDaemonSet(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.daemonSetService.RestartDaemonSet(ctx, &req)
-	})
-}
-
-// BatchDeleteDaemonSets 批量删除DaemonSet
-// @Summary 批量删除DaemonSet
-// @Description 批量删除指定命名空间中的多个DaemonSet
-// @Tags DaemonSet管理
-// @Accept json
-// @Produce json
-// @Param request body model.K8sDaemonSetBatchDeleteReq true "批量删除请求"
-// @Success 200 {object} utils.ApiResponse "成功批量删除DaemonSet"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/k8s/daemonsets/batch_delete [delete]
-func (k *K8sDaemonSetHandler) BatchDeleteDaemonSets(ctx *gin.Context) {
-	var req model.K8sDaemonSetBatchDeleteReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.daemonSetService.BatchDeleteDaemonSets(ctx, &req)
-	})
-}
-
-// BatchRestartDaemonSets 批量重启DaemonSet
-// @Summary 批量重启DaemonSet
-// @Description 批量重启指定的多个DaemonSet
-// @Tags DaemonSet管理
-// @Accept json
-// @Produce json
-// @Param request body model.K8sDaemonSetBatchRestartReq true "批量重启请求"
-// @Success 200 {object} utils.ApiResponse "成功批量重启DaemonSet"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/k8s/daemonsets/batch_restart [post]
-func (k *K8sDaemonSetHandler) BatchRestartDaemonSets(ctx *gin.Context) {
-	var req model.K8sDaemonSetBatchRestartReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.daemonSetService.BatchRestartDaemonSets(ctx, &req)
 	})
 }
 

@@ -53,7 +53,7 @@ func (k *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.POST("/clusters/create", k.CreateCluster)
 		k8sGroup.POST("/clusters/update", k.UpdateCluster)
 		k8sGroup.DELETE("/clusters/delete/:id", k.DeleteCluster)
-		k8sGroup.DELETE("/clusters/batch_delete", k.BatchDeleteClusters)
+
 		k8sGroup.POST("/clusters/refresh/:id", k.RefreshCluster)
 		k8sGroup.GET("/clusters/health/:id", k.CheckClusterHealth)
 		k8sGroup.GET("/clusters/stats/:id", k.GetClusterStats)
@@ -165,26 +165,6 @@ func (k *K8sClusterHandler) DeleteCluster(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, k.clusterService.DeleteCluster(ctx, id)
-	})
-}
-
-// BatchDeleteClusters 批量删除集群
-// @Summary 批量删除集群
-// @Description 批量删除多个集群
-// @Tags 集群管理
-// @Accept json
-// @Produce json
-// @Param request body model.BatchDeleteReq true "删除请求"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/k8s/clusters/batch_delete [delete]
-// @Security BearerAuth
-func (k *K8sClusterHandler) BatchDeleteClusters(ctx *gin.Context) {
-	var req model.BatchDeleteReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.clusterService.BatchDeleteClusters(ctx, req.IDs)
 	})
 }
 

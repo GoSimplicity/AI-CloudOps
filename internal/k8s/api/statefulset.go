@@ -52,13 +52,13 @@ func (h *K8sStatefulSetHandler) RegisterRouters(server *gin.Engine) {
 
 	statefulSets := k8sGroup.Group("/statefulsets")
 	{
-		statefulSets.GET("/list", h.GetStatefulSetList)                              // 获取StatefulSet列表
-		statefulSets.GET("/:cluster_id/:namespace/:name", h.GetStatefulSet)          // 获取单个StatefulSet详情
-		statefulSets.POST("/create", h.CreateStatefulSet)                            // 创建StatefulSet
-		statefulSets.PUT("/update", h.UpdateStatefulSet)                             // 更新StatefulSet
-		statefulSets.POST("/scale", h.ScaleStatefulSet)                              // 扩缩容StatefulSet
-		statefulSets.DELETE("/:cluster_id/:namespace/:name", h.DeleteStatefulSet)    // 删除StatefulSet
-		statefulSets.DELETE("/batch", h.BatchDeleteStatefulSets)                     // 批量删除StatefulSet
+		statefulSets.GET("/list", h.GetStatefulSetList)                           // 获取StatefulSet列表
+		statefulSets.GET("/:cluster_id/:namespace/:name", h.GetStatefulSet)       // 获取单个StatefulSet详情
+		statefulSets.POST("/create", h.CreateStatefulSet)                         // 创建StatefulSet
+		statefulSets.PUT("/update", h.UpdateStatefulSet)                          // 更新StatefulSet
+		statefulSets.POST("/scale", h.ScaleStatefulSet)                           // 扩缩容StatefulSet
+		statefulSets.DELETE("/:cluster_id/:namespace/:name", h.DeleteStatefulSet) // 删除StatefulSet
+
 		statefulSets.GET("/:cluster_id/:namespace/:name/yaml", h.GetStatefulSetYAML) // 获取StatefulSet的YAML配置
 	}
 }
@@ -198,24 +198,6 @@ func (h *K8sStatefulSetHandler) DeleteStatefulSet(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.statefulSetService.DeleteStatefulSet(ctx, &req)
-	})
-}
-
-// BatchDeleteStatefulSets 批量删除StatefulSet
-// @Summary 批量删除StatefulSet
-// @Description 批量删除指定命名空间中的多个StatefulSet
-// @Tags 工作负载管理
-// @Accept json
-// @Produce json
-// @Param request body model.K8sBatchDeleteReq true "批量删除请求"
-// @Success 200 {object} utils.ApiResponse "批量删除成功"
-// @Router /api/k8s/statefulsets/batch [delete]
-// @Security BearerAuth
-func (h *K8sStatefulSetHandler) BatchDeleteStatefulSets(ctx *gin.Context) {
-	var req model.K8sBatchDeleteReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.statefulSetService.BatchDeleteStatefulSets(ctx, &req)
 	})
 }
 

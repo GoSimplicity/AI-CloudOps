@@ -60,7 +60,6 @@ func (k *K8sPVHandler) RegisterRouters(server *gin.Engine) {
 		pvs.DELETE("/delete", k.DeletePV)               // 删除PV
 
 		// 批量操作
-		pvs.DELETE("/batch_delete", k.BatchDeletePVs) // 批量删除PV
 
 		// 高级功能
 		pvs.GET("/:cluster_id/:name/events", k.GetPVEvents) // 获取PV事件
@@ -232,26 +231,6 @@ func (k *K8sPVHandler) DeletePV(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.pvService.DeletePV(ctx, &req)
-	})
-}
-
-// BatchDeletePVs 批量删除PV
-// @Summary 批量删除PV
-// @Description 批量删除多个PV资源
-// @Tags PV管理
-// @Accept json
-// @Produce json
-// @Param request body model.K8sPVBatchDeleteReq true "批量删除请求"
-// @Success 200 {object} utils.ApiResponse "成功批量删除PV"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/k8s/pvs/batch_delete [delete]
-func (k *K8sPVHandler) BatchDeletePVs(ctx *gin.Context) {
-	var req model.K8sPVBatchDeleteReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.pvService.BatchDeletePVs(ctx, &req)
 	})
 }
 

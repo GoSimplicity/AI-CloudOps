@@ -52,12 +52,12 @@ func (h *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 
 	configMaps := k8sGroup.Group("/configmaps")
 	{
-		configMaps.GET("/list", h.GetConfigMapList)                              // 获取ConfigMap列表
-		configMaps.GET("/:cluster_id/:namespace/:name", h.GetConfigMap)          // 获取单个ConfigMap详情
-		configMaps.POST("/create", h.CreateConfigMap)                            // 创建ConfigMap
-		configMaps.PUT("/update", h.UpdateConfigMap)                             // 更新ConfigMap
-		configMaps.DELETE("/:cluster_id/:namespace/:name", h.DeleteConfigMap)    // 删除ConfigMap
-		configMaps.DELETE("/batch", h.BatchDeleteConfigMaps)                     // 批量删除ConfigMap
+		configMaps.GET("/list", h.GetConfigMapList)                           // 获取ConfigMap列表
+		configMaps.GET("/:cluster_id/:namespace/:name", h.GetConfigMap)       // 获取单个ConfigMap详情
+		configMaps.POST("/create", h.CreateConfigMap)                         // 创建ConfigMap
+		configMaps.PUT("/update", h.UpdateConfigMap)                          // 更新ConfigMap
+		configMaps.DELETE("/:cluster_id/:namespace/:name", h.DeleteConfigMap) // 删除ConfigMap
+
 		configMaps.GET("/:cluster_id/:namespace/:name/yaml", h.GetConfigMapYAML) // 获取ConfigMap的YAML配置
 	}
 }
@@ -214,26 +214,6 @@ func (h *K8sConfigMapHandler) DeleteConfigMap(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.configMapService.DeleteConfigMap(ctx, &req)
-	})
-}
-
-// BatchDeleteConfigMaps 批量删除ConfigMap
-// @Summary 批量删除ConfigMap
-// @Description 批量删除指定命名空间中的多个ConfigMap
-// @Tags 配置管理
-// @Accept json
-// @Produce json
-// @Param request body model.K8sBatchDeleteReq true "批量删除请求"
-// @Success 200 {object} utils.ApiResponse "批量删除成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/configmaps/batch [delete]
-// @Security BearerAuth
-func (h *K8sConfigMapHandler) BatchDeleteConfigMaps(ctx *gin.Context) {
-	var req model.K8sBatchDeleteReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.configMapService.BatchDeleteConfigMaps(ctx, &req)
 	})
 }
 

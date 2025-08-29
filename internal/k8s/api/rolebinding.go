@@ -55,9 +55,9 @@ func (rba *RoleBindingAPI) RegisterRouters(server *gin.Engine) {
 		roleBindings.POST("/create", rba.CreateRoleBinding)                                  // 创建RoleBinding
 		roleBindings.PUT("/update", rba.UpdateRoleBinding)                                   // 更新RoleBinding
 		roleBindings.DELETE("/delete/:cluster_id/:namespace/:name", rba.DeleteRoleBinding)   // 删除RoleBinding
-		roleBindings.POST("/batch-delete", rba.BatchDeleteRoleBinding)                       // 批量删除RoleBinding
-		roleBindings.GET("/yaml/:cluster_id/:namespace/:name", rba.GetRoleBindingYaml)       // 获取RoleBinding YAML
-		roleBindings.PUT("/yaml", rba.UpdateRoleBindingYaml)                                 // 更新RoleBinding YAML
+
+		roleBindings.GET("/yaml/:cluster_id/:namespace/:name", rba.GetRoleBindingYaml) // 获取RoleBinding YAML
+		roleBindings.PUT("/yaml", rba.UpdateRoleBindingYaml)                           // 更新RoleBinding YAML
 	}
 }
 
@@ -72,9 +72,9 @@ func (rba *RoleBindingAPI) RegisterRouters(server *gin.Engine) {
 // @Param keyword query string false "搜索关键字"
 // @Param page query int false "页码，默认1"
 // @Param page_size query int false "每页数量，默认10"
-// @Success 200 {object} apiresponse.ApiResponse{data=model.ListResp[model.ClusterRoleBindingInfo]}
-// @Failure 400 {object} apiresponse.ApiResponse
-// @Failure 500 {object} apiresponse.ApiResponse
+// @Success 200 {object} utils.ApiResponse{data=model.ListResp[model.ClusterRoleBindingInfo]}
+// @Failure 400 {object} utils.ApiResponse
+// @Failure 500 {object} utils.ApiResponse
 // @Router /api/v1/k8s/role-binding/list [get]
 func (rba *RoleBindingAPI) GetRoleBindingList(c *gin.Context) {
 	var req model.RoleBindingListReq
@@ -102,10 +102,10 @@ func (rba *RoleBindingAPI) GetRoleBindingList(c *gin.Context) {
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间"
 // @Param name path string true "RoleBinding名称"
-// @Success 200 {object} apiresponse.ApiResponse{data=model.RoleBindingInfo}
-// @Failure 400 {object} apiresponse.ApiResponse
-// @Failure 404 {object} apiresponse.ApiResponse
-// @Failure 500 {object} apiresponse.ApiResponse
+// @Success 200 {object} utils.ApiResponse{data=model.RoleBindingInfo}
+// @Failure 400 {object} utils.ApiResponse
+// @Failure 404 {object} utils.ApiResponse
+// @Failure 500 {object} utils.ApiResponse
 // @Router /api/v1/k8s/role-binding/details/{cluster_id}/{namespace}/{name} [get]
 func (rba *RoleBindingAPI) GetRoleBindingDetails(c *gin.Context) {
 	var req model.RoleBindingGetReq
@@ -131,9 +131,9 @@ func (rba *RoleBindingAPI) GetRoleBindingDetails(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param rolebinding body model.CreateRoleBindingReq true "RoleBinding创建信息"
-// @Success 200 {object} apiresponse.ApiResponse
-// @Failure 400 {object} apiresponse.ApiResponse
-// @Failure 500 {object} apiresponse.ApiResponse
+// @Success 200 {object} utils.ApiResponse
+// @Failure 400 {object} utils.ApiResponse
+// @Failure 500 {object} utils.ApiResponse
 // @Router /api/v1/k8s/role-binding/create [post]
 func (rba *RoleBindingAPI) CreateRoleBinding(c *gin.Context) {
 	var req model.CreateRoleBindingReq
@@ -159,9 +159,9 @@ func (rba *RoleBindingAPI) CreateRoleBinding(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param rolebinding body model.UpdateRoleBindingReq true "RoleBinding更新信息"
-// @Success 200 {object} apiresponse.ApiResponse
-// @Failure 400 {object} apiresponse.ApiResponse
-// @Failure 500 {object} apiresponse.ApiResponse
+// @Success 200 {object} utils.ApiResponse
+// @Failure 400 {object} utils.ApiResponse
+// @Failure 500 {object} utils.ApiResponse
 // @Router /api/v1/k8s/role-binding/update [put]
 func (rba *RoleBindingAPI) UpdateRoleBinding(c *gin.Context) {
 	var req model.UpdateRoleBindingReq
@@ -189,9 +189,9 @@ func (rba *RoleBindingAPI) UpdateRoleBinding(c *gin.Context) {
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间"
 // @Param name path string true "RoleBinding名称"
-// @Success 200 {object} apiresponse.ApiResponse
-// @Failure 400 {object} apiresponse.ApiResponse
-// @Failure 500 {object} apiresponse.ApiResponse
+// @Success 200 {object} utils.ApiResponse
+// @Failure 400 {object} utils.ApiResponse
+// @Failure 500 {object} utils.ApiResponse
 // @Router /api/v1/k8s/role-binding/delete/{cluster_id}/{namespace}/{name} [delete]
 func (rba *RoleBindingAPI) DeleteRoleBinding(c *gin.Context) {
 	var req model.DeleteRoleBindingReq
@@ -210,34 +210,6 @@ func (rba *RoleBindingAPI) DeleteRoleBinding(c *gin.Context) {
 	utils.Success(c)
 }
 
-// BatchDeleteRoleBinding 批量删除RoleBinding
-// @Summary 批量删除RoleBinding
-// @Description 批量删除指定的多个RoleBinding
-// @Tags RBAC RoleBinding管理
-// @Accept json
-// @Produce json
-// @Param rolebindings body model.BatchDeleteRoleBindingReq true "批量删除RoleBinding信息"
-// @Success 200 {object} apiresponse.ApiResponse
-// @Failure 400 {object} apiresponse.ApiResponse
-// @Failure 500 {object} apiresponse.ApiResponse
-// @Router /api/v1/k8s/role-binding/batch-delete [post]
-func (rba *RoleBindingAPI) BatchDeleteRoleBinding(c *gin.Context) {
-	var req model.BatchDeleteRoleBindingReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
-
-	err := rba.roleBindingService.BatchDeleteRoleBinding(c.Request.Context(), &req)
-	if err != nil {
-		rba.logger.Error("批量删除RoleBinding失败", zap.Error(err))
-		utils.InternalServerError(c, 500, nil, "批量删除RoleBinding失败")
-		return
-	}
-
-	utils.Success(c)
-}
-
 // GetRoleBindingYaml 获取RoleBinding的YAML配置
 // @Summary 获取RoleBinding的YAML配置
 // @Description 获取指定RoleBinding的YAML格式配置
@@ -247,9 +219,9 @@ func (rba *RoleBindingAPI) BatchDeleteRoleBinding(c *gin.Context) {
 // @Param cluster_id path int true "集群ID"
 // @Param namespace path string true "命名空间"
 // @Param name path string true "RoleBinding名称"
-// @Success 200 {object} apiresponse.ApiResponse{data=string}
-// @Failure 400 {object} apiresponse.ApiResponse
-// @Failure 500 {object} apiresponse.ApiResponse
+// @Success 200 {object} utils.ApiResponse{data=string}
+// @Failure 400 {object} utils.ApiResponse
+// @Failure 500 {object} utils.ApiResponse
 // @Router /api/v1/k8s/role-binding/yaml/{cluster_id}/{namespace}/{name} [get]
 func (rba *RoleBindingAPI) GetRoleBindingYaml(c *gin.Context) {
 	var req model.RoleBindingGetReq
@@ -275,9 +247,9 @@ func (rba *RoleBindingAPI) GetRoleBindingYaml(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param yaml body model.RoleBindingYamlReq true "RoleBinding YAML更新信息"
-// @Success 200 {object} apiresponse.ApiResponse
-// @Failure 400 {object} apiresponse.ApiResponse
-// @Failure 500 {object} apiresponse.ApiResponse
+// @Success 200 {object} utils.ApiResponse
+// @Failure 400 {object} utils.ApiResponse
+// @Failure 500 {object} utils.ApiResponse
 // @Router /api/v1/k8s/role-binding/yaml [put]
 func (rba *RoleBindingAPI) UpdateRoleBindingYaml(c *gin.Context) {
 	var req model.RoleBindingYamlReq

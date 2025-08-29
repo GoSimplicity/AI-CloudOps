@@ -60,7 +60,6 @@ func (k *K8sPVCHandler) RegisterRouters(server *gin.Engine) {
 		pvcs.DELETE("/delete", k.DeletePVC)               // 删除PVC
 
 		// 批量操作
-		pvcs.DELETE("/batch_delete", k.BatchDeletePVCs) // 批量删除PVC
 
 		// 高级功能
 		pvcs.GET("/:cluster_id/:name/events", k.GetPVCEvents) // 获取PVC事件
@@ -239,26 +238,6 @@ func (k *K8sPVCHandler) DeletePVC(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.pvcService.DeletePVC(ctx, &req)
-	})
-}
-
-// BatchDeletePVCs 批量删除PVC
-// @Summary 批量删除PVC
-// @Description 批量删除指定命名空间中的多个PVC
-// @Tags PVC管理
-// @Accept json
-// @Produce json
-// @Param request body model.K8sPVCBatchDeleteReq true "批量删除请求"
-// @Success 200 {object} utils.ApiResponse "成功批量删除PVC"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/k8s/pvcs/batch_delete [delete]
-func (k *K8sPVCHandler) BatchDeletePVCs(ctx *gin.Context) {
-	var req model.K8sPVCBatchDeleteReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.pvcService.BatchDeletePVCs(ctx, &req)
 	})
 }
 

@@ -50,12 +50,12 @@ func (k *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 
 	deployments := k8sGroup.Group("/deployments")
 	{
-		deployments.GET("/:id", k.GetDeployListByNamespace)          // 根据命名空间获取部署列表
-		deployments.GET("/:id/yaml", k.GetDeployYaml)                // 获取指定部署的 YAML 配置
-		deployments.POST("/update", k.UpdateDeployment)              // 更新指定 deployment
-		deployments.DELETE("/batch_delete", k.BatchDeleteDeployment) // 批量删除 deployment
+		deployments.GET("/:id", k.GetDeployListByNamespace) // 根据命名空间获取部署列表
+		deployments.GET("/:id/yaml", k.GetDeployYaml)       // 获取指定部署的 YAML 配置
+		deployments.POST("/update", k.UpdateDeployment)     // 更新指定 deployment
+
 		deployments.DELETE("/delete/:id", k.DeleteDeployment)
-		deployments.POST("/batch_restart", k.BatchRestartDeployments) // 批量重启部署
+
 		deployments.POST("/restart/:id", k.RestartDeployment)
 	}
 }
@@ -109,46 +109,6 @@ func (k *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.deploymentService.UpdateDeployment(ctx, &req)
-	})
-}
-
-// BatchDeleteDeployment 批量删除部署
-// @Summary 批量删除部署
-// @Description 批量删除指定命名空间中的多个Deployment
-// @Tags 部署管理
-// @Accept json
-// @Produce json
-// @Param request body model.DeploymentBatchDeleteReq true "批量删除请求"
-// @Success 200 {object} utils.ApiResponse "成功批量删除部署"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/k8s/deployments/batch_delete [delete]
-func (k *K8sDeploymentHandler) BatchDeleteDeployment(ctx *gin.Context) {
-	var req model.DeploymentBatchDeleteReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.deploymentService.BatchDeleteDeployment(ctx, req.ClusterID, req.Namespace, req.DeploymentNames)
-	})
-}
-
-// BatchRestartDeployments 批量重启部署
-// @Summary 批量重启部署
-// @Description 批量重启指定的多个Deployment
-// @Tags 部署管理
-// @Accept json
-// @Produce json
-// @Param request body model.DeploymentBatchRestartReq true "批量重启请求"
-// @Success 200 {object} utils.ApiResponse "成功批量重启部署"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/k8s/deployments/batch_restart [post]
-func (k *K8sDeploymentHandler) BatchRestartDeployments(ctx *gin.Context) {
-	var req model.DeploymentBatchRestartReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.deploymentService.BatchRestartDeployments(ctx, &req)
 	})
 }
 

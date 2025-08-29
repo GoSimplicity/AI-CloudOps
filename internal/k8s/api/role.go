@@ -55,9 +55,9 @@ func (ra *RoleAPI) RegisterRouters(server *gin.Engine) {
 		roles.POST("/create", ra.CreateRole)                                  // 创建Role
 		roles.PUT("/update", ra.UpdateRole)                                   // 更新Role
 		roles.DELETE("/delete/:cluster_id/:namespace/:name", ra.DeleteRole)   // 删除Role
-		roles.POST("/batch-delete", ra.BatchDeleteRole)                       // 批量删除Role
-		roles.GET("/yaml/:cluster_id/:namespace/:name", ra.GetRoleYaml)       // 获取Role YAML
-		roles.PUT("/yaml", ra.UpdateRoleYaml)                                 // 更新Role YAML
+
+		roles.GET("/yaml/:cluster_id/:namespace/:name", ra.GetRoleYaml) // 获取Role YAML
+		roles.PUT("/yaml", ra.UpdateRoleYaml)                           // 更新Role YAML
 	}
 }
 
@@ -99,7 +99,7 @@ func (ra *RoleAPI) GetRoleList(c *gin.Context) {
 // @Param name path string true "Role名称"
 // @Success 200 {object} utils.ApiResponse{data=model.RoleInfo}
 // @Failure 400 {object} utils.ApiResponse
-// @Failure 404 {object} apiresponse.ApiResponse
+// @Failure 404 {object} utils.ApiResponse
 // @Failure 500 {object} utils.ApiResponse
 // @Router /api/v1/k8s/role/details/{cluster_id}/{namespace}/{name} [get]
 func (ra *RoleAPI) GetRoleDetails(c *gin.Context) {
@@ -182,29 +182,6 @@ func (ra *RoleAPI) DeleteRole(c *gin.Context) {
 
 	utils.HandleRequest(c, nil, func() (interface{}, error) {
 		return nil, ra.roleService.DeleteRole(c.Request.Context(), &req)
-	})
-}
-
-// BatchDeleteRole 批量删除Role
-// @Summary 批量删除Role
-// @Description 批量删除指定的多个Role
-// @Tags RBAC Role管理
-// @Accept json
-// @Produce json
-// @Param roles body model.BatchDeleteRoleReq true "批量删除Role信息"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/role/batch-delete [post]
-func (ra *RoleAPI) BatchDeleteRole(c *gin.Context) {
-	var req model.BatchDeleteRoleReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
-
-	utils.HandleRequest(c, nil, func() (interface{}, error) {
-		return nil, ra.roleService.BatchDeleteRole(c.Request.Context(), &req)
 	})
 }
 

@@ -52,16 +52,16 @@ func (h *K8sServiceAccountHandler) RegisterRouters(server *gin.Engine) {
 
 	serviceAccountGroup := k8sGroup.Group("/serviceaccount")
 	{
-		serviceAccountGroup.GET("/list", h.GetServiceAccountList)                // 获取ServiceAccount列表
-		serviceAccountGroup.GET("/details", h.GetServiceAccountDetails)          // 获取ServiceAccount详情
-		serviceAccountGroup.POST("/create", h.CreateServiceAccount)              // 创建ServiceAccount
-		serviceAccountGroup.PUT("/update", h.UpdateServiceAccount)               // 更新ServiceAccount
-		serviceAccountGroup.DELETE("/delete", h.DeleteServiceAccount)            // 删除ServiceAccount
-		serviceAccountGroup.DELETE("/batch-delete", h.BatchDeleteServiceAccount) // 批量删除ServiceAccount
-		serviceAccountGroup.GET("/statistics", h.GetServiceAccountStatistics)    // 获取ServiceAccount统计信息
-		serviceAccountGroup.POST("/token", h.GetServiceAccountToken)             // 获取ServiceAccount令牌
-		serviceAccountGroup.GET("/yaml", h.GetServiceAccountYaml)                // 获取ServiceAccount YAML
-		serviceAccountGroup.PUT("/yaml", h.UpdateServiceAccountYaml)             // 更新ServiceAccount YAML
+		serviceAccountGroup.GET("/list", h.GetServiceAccountList)       // 获取ServiceAccount列表
+		serviceAccountGroup.GET("/details", h.GetServiceAccountDetails) // 获取ServiceAccount详情
+		serviceAccountGroup.POST("/create", h.CreateServiceAccount)     // 创建ServiceAccount
+		serviceAccountGroup.PUT("/update", h.UpdateServiceAccount)      // 更新ServiceAccount
+		serviceAccountGroup.DELETE("/delete", h.DeleteServiceAccount)   // 删除ServiceAccount
+
+		serviceAccountGroup.GET("/statistics", h.GetServiceAccountStatistics) // 获取ServiceAccount统计信息
+		serviceAccountGroup.POST("/token", h.GetServiceAccountToken)          // 获取ServiceAccount令牌
+		serviceAccountGroup.GET("/yaml", h.GetServiceAccountYaml)             // 获取ServiceAccount YAML
+		serviceAccountGroup.PUT("/yaml", h.UpdateServiceAccountYaml)          // 更新ServiceAccount YAML
 	}
 }
 
@@ -198,30 +198,6 @@ func (h *K8sServiceAccountHandler) DeleteServiceAccount(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.serviceAccountService.DeleteServiceAccount(ctx, &req)
-	})
-}
-
-// BatchDeleteServiceAccount 批量删除ServiceAccount
-// @Summary 批量删除ServiceAccount
-// @Description 批量删除多个ServiceAccount
-// @Tags ServiceAccount管理
-// @Accept json
-// @Produce json
-// @Param request body model.ServiceAccountBatchDeleteReq true "批量删除ServiceAccount的请求参数"
-// @Success 200 {object} utils.ApiResponse "成功批量删除ServiceAccount"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/v1/k8s/serviceaccount/batch-delete [delete]
-func (h *K8sServiceAccountHandler) BatchDeleteServiceAccount(ctx *gin.Context) {
-	var req model.ServiceAccountBatchDeleteReq
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.serviceAccountService.BatchDeleteServiceAccount(ctx, &req)
 	})
 }
 

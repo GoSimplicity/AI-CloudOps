@@ -52,12 +52,12 @@ func (h *K8sSecretHandler) RegisterRouters(server *gin.Engine) {
 
 	secrets := k8sGroup.Group("/secrets")
 	{
-		secrets.GET("/list", h.GetSecretList)                              // 获取Secret列表
-		secrets.GET("/:cluster_id/:namespace/:name", h.GetSecret)          // 获取单个Secret详情
-		secrets.POST("/create", h.CreateSecret)                            // 创建Secret
-		secrets.PUT("/update", h.UpdateSecret)                             // 更新Secret
-		secrets.DELETE("/:cluster_id/:namespace/:name", h.DeleteSecret)    // 删除Secret
-		secrets.DELETE("/batch", h.BatchDeleteSecrets)                     // 批量删除Secret
+		secrets.GET("/list", h.GetSecretList)                           // 获取Secret列表
+		secrets.GET("/:cluster_id/:namespace/:name", h.GetSecret)       // 获取单个Secret详情
+		secrets.POST("/create", h.CreateSecret)                         // 创建Secret
+		secrets.PUT("/update", h.UpdateSecret)                          // 更新Secret
+		secrets.DELETE("/:cluster_id/:namespace/:name", h.DeleteSecret) // 删除Secret
+
 		secrets.GET("/:cluster_id/:namespace/:name/yaml", h.GetSecretYAML) // 获取Secret的YAML配置
 	}
 }
@@ -214,26 +214,6 @@ func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.secretService.DeleteSecret(ctx, &req)
-	})
-}
-
-// BatchDeleteSecrets 批量删除Secret
-// @Summary 批量删除Secret
-// @Description 批量删除指定命名空间中的多个Secret
-// @Tags 密钥管理
-// @Accept json
-// @Produce json
-// @Param request body model.K8sBatchDeleteReq true "批量删除请求"
-// @Success 200 {object} utils.ApiResponse "批量删除成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/secrets/batch [delete]
-// @Security BearerAuth
-func (h *K8sSecretHandler) BatchDeleteSecrets(ctx *gin.Context) {
-	var req model.K8sBatchDeleteReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.secretService.BatchDeleteSecrets(ctx, &req)
 	})
 }
 

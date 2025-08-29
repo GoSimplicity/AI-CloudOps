@@ -60,7 +60,6 @@ func (k *K8sIngressHandler) RegisterRouters(server *gin.Engine) {
 		ingresses.DELETE("/delete", k.DeleteIngress)               // 删除Ingress
 
 		// 批量操作
-		ingresses.DELETE("/batch_delete", k.BatchDeleteIngresses) // 批量删除Ingress
 
 		// 高级功能
 		ingresses.GET("/:cluster_id/:name/events", k.GetIngressEvents)                  // 获取Ingress事件
@@ -239,26 +238,6 @@ func (k *K8sIngressHandler) DeleteIngress(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.ingressService.DeleteIngress(ctx, &req)
-	})
-}
-
-// BatchDeleteIngresses 批量删除Ingress
-// @Summary 批量删除Ingress
-// @Description 批量删除指定命名空间中的多个Ingress
-// @Tags Ingress管理
-// @Accept json
-// @Produce json
-// @Param request body model.K8sIngressBatchDeleteReq true "批量删除请求"
-// @Success 200 {object} utils.ApiResponse "成功批量删除Ingress"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/k8s/ingresses/batch_delete [delete]
-func (k *K8sIngressHandler) BatchDeleteIngresses(ctx *gin.Context) {
-	var req model.K8sIngressBatchDeleteReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.ingressService.BatchDeleteIngresses(ctx, &req)
 	})
 }
 

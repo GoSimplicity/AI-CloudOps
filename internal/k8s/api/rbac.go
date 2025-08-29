@@ -66,9 +66,9 @@ func (ra *RBACAPI) RegisterRouters(server *gin.Engine) {
 // @Accept json
 // @Produce json
 // @Param cluster_id path int true "集群ID"
-// @Success 200 {object} apiresponse.ApiResponse{data=model.RBACStatistics}
-// @Failure 400 {object} apiresponse.ApiResponse
-// @Failure 500 {object} apiresponse.ApiResponse
+// @Success 200 {object} utils.ApiResponse{data=model.RBACStatistics}
+// @Failure 400 {object} utils.ApiResponse
+// @Failure 500 {object} utils.ApiResponse
 // @Router /api/v1/k8s/rbac/statistics/{cluster_id} [get]
 func (ra *RBACAPI) GetRBACStatistics(c *gin.Context) {
 	clusterIDStr := c.Param("cluster_id")
@@ -95,9 +95,9 @@ func (ra *RBACAPI) GetRBACStatistics(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param permissions body model.CheckPermissionsReq true "权限检查信息"
-// @Success 200 {object} apiresponse.ApiResponse{data=[]model.PermissionResult}
-// @Failure 400 {object} apiresponse.ApiResponse
-// @Failure 500 {object} apiresponse.ApiResponse
+// @Success 200 {object} utils.ApiResponse{data=[]model.PermissionResult}
+// @Failure 400 {object} utils.ApiResponse
+// @Failure 500 {object} utils.ApiResponse
 // @Router /api/v1/k8s/rbac/check-permissions [post]
 func (ra *RBACAPI) CheckPermissions(c *gin.Context) {
 	var req model.CheckPermissionsReq
@@ -124,9 +124,9 @@ func (ra *RBACAPI) CheckPermissions(c *gin.Context) {
 // @Produce json
 // @Param cluster_id path int true "集群ID"
 // @Param subject body model.Subject true "主体信息"
-// @Success 200 {object} apiresponse.ApiResponse{data=model.SubjectPermissionsResponse}
-// @Failure 400 {object} apiresponse.ApiResponse
-// @Failure 500 {object} apiresponse.ApiResponse
+// @Success 200 {object} utils.ApiResponse{data=model.SubjectPermissionsResponse}
+// @Failure 400 {object} utils.ApiResponse
+// @Failure 500 {object} utils.ApiResponse
 // @Router /api/v1/k8s/rbac/subject-permissions/{cluster_id} [post]
 func (ra *RBACAPI) GetSubjectPermissions(c *gin.Context) {
 	clusterIDStr := c.Param("cluster_id")
@@ -163,8 +163,8 @@ func (ra *RBACAPI) GetSubjectPermissions(c *gin.Context) {
 // @Tags RBAC 统计和权限检查
 // @Accept json
 // @Produce json
-// @Success 200 {object} apiresponse.ApiResponse{data=model.ResourceVerbsResponse}
-// @Failure 500 {object} apiresponse.ApiResponse
+// @Success 200 {object} utils.ApiResponse{data=model.ResourceVerbsResponse}
+// @Failure 500 {object} utils.ApiResponse
 // @Router /api/v1/k8s/rbac/resource-verbs [get]
 func (ra *RBACAPI) GetResourceVerbs(c *gin.Context) {
 	result, err := ra.rbacService.GetResourceVerbs(c.Request.Context())
