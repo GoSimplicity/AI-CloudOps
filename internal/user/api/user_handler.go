@@ -71,16 +71,6 @@ func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
 }
 
 // SignUp 用户注册处理
-// @Summary 用户注册
-// @Description 创建新用户账号
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Param request body model.UserSignUpReq true "用户注册请求参数"
-// @Success 200 {object} utils.ApiResponse "注册成功"
-// @Failure 400 {object} utils.ApiResponse "请求参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/user/signup [post]
 func (u *UserHandler) SignUp(ctx *gin.Context) {
 	var req model.UserSignUpReq
 
@@ -90,17 +80,6 @@ func (u *UserHandler) SignUp(ctx *gin.Context) {
 }
 
 // Login 用户登录处理
-// @Summary 用户登录
-// @Description 用户账号密码登录
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Param request body model.UserLoginReq true "用户登录请求参数"
-// @Success 200 {object} utils.ApiResponse "登录成功"
-// @Failure 400 {object} utils.ApiResponse "请求参数错误"
-// @Failure 401 {object} utils.ApiResponse "用户名或密码错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/user/login [post]
 func (u *UserHandler) Login(ctx *gin.Context) {
 	var req model.UserLoginReq
 
@@ -135,15 +114,6 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 }
 
 // Logout 用户登出处理
-// @Summary 用户登出
-// @Description 退出登录并清除令牌
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Success 200 {object} utils.ApiResponse "登出成功"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/user/logout [post]
 func (u *UserHandler) Logout(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, u.ijwt.ClearToken(ctx)
@@ -151,16 +121,6 @@ func (u *UserHandler) Logout(ctx *gin.Context) {
 }
 
 // Profile 获取用户信息
-// @Summary 获取用户资料
-// @Description 获取当前登录用户的详细信息
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "请求参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/user/profile [get]
 func (u *UserHandler) Profile(ctx *gin.Context) {
 	var req model.ProfileReq
 
@@ -173,17 +133,6 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 }
 
 // RefreshToken 刷新令牌
-// @Summary 刷新访问令牌
-// @Description 使用刷新令牌获取新的访问令牌
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Param request body model.TokenRequest true "刷新令牌请求参数"
-// @Success 200 {object} utils.ApiResponse "刷新成功"
-// @Failure 400 {object} utils.ApiResponse "请求参数错误"
-// @Failure 401 {object} utils.ApiResponse "令牌无效"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/user/refresh_token [post]
 func (u *UserHandler) RefreshToken(ctx *gin.Context) {
 	var req model.TokenRequest
 
@@ -215,16 +164,6 @@ func (u *UserHandler) RefreshToken(ctx *gin.Context) {
 }
 
 // GetPermCode 获取权限码
-// @Summary 获取用户权限码
-// @Description 获取当前用户的权限码列表
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Success 200 {object} utils.ApiResponse{data=[]string} "获取成功"
-// @Failure 400 {object} utils.ApiResponse "请求参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/user/codes [get]
 func (u *UserHandler) GetPermCode(ctx *gin.Context) {
 	var req model.GetPermCodeReq
 
@@ -237,19 +176,6 @@ func (u *UserHandler) GetPermCode(ctx *gin.Context) {
 }
 
 // GetUserList 获取用户列表
-// @Summary 获取用户列表
-// @Description 分页获取系统中的用户列表
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Param page query int false "页码" default(1)
-// @Param size query int false "每页数量" default(10)
-// @Param username query string false "用户名模糊搜索"
-// @Success 200 {object} utils.ApiResponse{data=[]model.User} "获取成功"
-// @Failure 400 {object} utils.ApiResponse "请求参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/user/list [get]
 func (u *UserHandler) GetUserList(ctx *gin.Context) {
 	var req model.GetUserListReq
 
@@ -259,17 +185,6 @@ func (u *UserHandler) GetUserList(ctx *gin.Context) {
 }
 
 // ChangePassword 修改密码
-// @Summary 修改用户密码
-// @Description 修改当前登录用户的密码
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Param request body model.ChangePasswordReq true "修改密码请求参数"
-// @Success 200 {object} utils.ApiResponse "修改成功"
-// @Failure 400 {object} utils.ApiResponse "请求参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/user/change_password [post]
 func (u *UserHandler) ChangePassword(ctx *gin.Context) {
 	var req model.ChangePasswordReq
 
@@ -282,17 +197,6 @@ func (u *UserHandler) ChangePassword(ctx *gin.Context) {
 }
 
 // WriteOff 注销账号
-// @Summary 注销用户账号
-// @Description 永久注销用户账号
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Param request body model.WriteOffReq true "注销账号请求参数"
-// @Success 200 {object} utils.ApiResponse "注销成功"
-// @Failure 400 {object} utils.ApiResponse "请求参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/user/write_off [post]
 func (u *UserHandler) WriteOff(ctx *gin.Context) {
 	var req model.WriteOffReq
 
@@ -302,17 +206,6 @@ func (u *UserHandler) WriteOff(ctx *gin.Context) {
 }
 
 // UpdateProfile 更新用户信息
-// @Summary 更新用户资料
-// @Description 更新用户个人信息
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Param request body model.UpdateProfileReq true "更新用户信息请求参数"
-// @Success 200 {object} utils.ApiResponse "更新成功"
-// @Failure 400 {object} utils.ApiResponse "请求参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/user/profile/update/{id} [post]
 func (u *UserHandler) UpdateProfile(ctx *gin.Context) {
 	var req model.UpdateProfileReq
 
@@ -329,17 +222,6 @@ func (u *UserHandler) UpdateProfile(ctx *gin.Context) {
 }
 
 // DeleteUser 删除用户
-// @Summary 删除用户
-// @Description 根据用户ID删除用户账号
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Param id path int true "用户ID"
-// @Success 200 {object} utils.ApiResponse "删除成功"
-// @Failure 400 {object} utils.ApiResponse "请求参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/user/{id} [delete]
 func (u *UserHandler) DeleteUser(ctx *gin.Context) {
 	var req model.DeleteUserReq
 
@@ -357,17 +239,6 @@ func (u *UserHandler) DeleteUser(ctx *gin.Context) {
 }
 
 // GetUserDetail 获取用户详情
-// @Summary 获取用户详情
-// @Description 根据用户ID获取用户详细信息
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Param id path int true "用户ID"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "请求参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/user/detail/{id} [get]
 func (u *UserHandler) GetUserDetail(ctx *gin.Context) {
 	var req model.GetUserDetailReq
 
@@ -385,15 +256,6 @@ func (u *UserHandler) GetUserDetail(ctx *gin.Context) {
 }
 
 // GetUserStatistics 获取用户统计
-// @Summary 获取用户统计信息
-// @Description 获取系统用户相关的统计数据
-// @Tags 用户管理
-// @Accept json
-// @Produce json
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/user/statistics [get]
 func (u *UserHandler) GetUserStatistics(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return u.service.GetUserStatistics(ctx)

@@ -56,19 +56,6 @@ func (a *AlertPoolHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetMonitorAlertManagerPoolList 获取 AlertManager 集群池列表
-// @Summary 获取AlertManager集群池列表
-// @Description 获取所有AlertManager集群池的分页列表
-// @Tags 告警管理
-// @Accept json
-// @Produce json
-// @Param page query int false "页码" default(1)
-// @Param size query int false "每页数量" default(10)
-// @Param keyword query string false "搜索关键词"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/alert_manager_pools/list [get]
-// @Security BearerAuth
 func (a *AlertPoolHandler) GetMonitorAlertManagerPoolList(ctx *gin.Context) {
 	var req model.GetMonitorAlertManagerPoolListReq
 
@@ -78,17 +65,6 @@ func (a *AlertPoolHandler) GetMonitorAlertManagerPoolList(ctx *gin.Context) {
 }
 
 // CreateMonitorAlertManagerPool 创建新的 AlertManager 集群池
-// @Summary 创建AlertManager集群池
-// @Description 创建新的AlertManager集群池配置
-// @Tags 告警管理
-// @Accept json
-// @Produce json
-// @Param request body model.CreateMonitorAlertManagerPoolReq true "创建请求参数"
-// @Success 200 {object} utils.ApiResponse "创建成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/alert_manager_pools/create [post]
-// @Security BearerAuth
 func (a *AlertPoolHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.CreateMonitorAlertManagerPoolReq
 
@@ -102,18 +78,6 @@ func (a *AlertPoolHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
 }
 
 // UpdateMonitorAlertManagerPool 更新现有的 AlertManager 集群池
-// @Summary 更新AlertManager集群池
-// @Description 更新指定的AlertManager集群池配置
-// @Tags 告警管理
-// @Accept json
-// @Produce json
-// @Param id path int true "集群池ID"
-// @Param request body model.UpdateMonitorAlertManagerPoolReq true "更新请求参数"
-// @Success 200 {object} utils.ApiResponse "更新成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/alert_manager_pools/update/{id} [put]
-// @Security BearerAuth
 func (a *AlertPoolHandler) UpdateMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.UpdateMonitorAlertManagerPoolReq
 
@@ -123,17 +87,6 @@ func (a *AlertPoolHandler) UpdateMonitorAlertManagerPool(ctx *gin.Context) {
 }
 
 // DeleteMonitorAlertManagerPool 删除指定的 AlertManager 集群池
-// @Summary 删除AlertManager集群池
-// @Description 删除指定ID的AlertManager集群池
-// @Tags 告警管理
-// @Accept json
-// @Produce json
-// @Param id path int true "集群池ID"
-// @Success 200 {object} utils.ApiResponse "删除成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/alert_manager_pools/delete/{id} [delete]
-// @Security BearerAuth
 func (a *AlertPoolHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.DeleteMonitorAlertManagerPoolReq
 
@@ -151,17 +104,6 @@ func (a *AlertPoolHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
 }
 
 // GetMonitorAlertManagerPool 获取指定的AlertManager集群池详情
-// @Summary 获取AlertManager集群池详情
-// @Description 根据ID获取指定AlertManager集群池的详细信息
-// @Tags 告警管理
-// @Accept json
-// @Produce json
-// @Param id path int true "集群池ID"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/alert_manager_pools/detail/{id} [get]
-// @Security BearerAuth
 func (a *AlertPoolHandler) GetMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.GetMonitorAlertManagerPoolReq
 

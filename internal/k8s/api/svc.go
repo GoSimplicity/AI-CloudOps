@@ -59,18 +59,6 @@ func (k *K8sSvcHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetServiceListByNamespace 根据命名空间获取 Service 列表
-// @Summary 获取命名空间下的Service列表
-// @Description 根据集群ID和命名空间获取该命名空间下的所有Service资源列表
-// @Tags 服务管理
-// @Accept json
-// @Produce json
-// @Param id path int true "集群ID"
-// @Param namespace query string true "命名空间名称"
-// @Success 200 {object} utils.ApiResponse{data=[]interface{}} "获取Service列表成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/services/{id} [get]
-// @Security BearerAuth
 func (k *K8sSvcHandler) GetServiceListByNamespace(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -90,19 +78,6 @@ func (k *K8sSvcHandler) GetServiceListByNamespace(ctx *gin.Context) {
 }
 
 // GetServiceYaml 获取 Service 的 YAML 配置
-// @Summary 获取Service的YAML配置
-// @Description 根据集群ID、命名空间和Service名称获取指定Service的YAML配置信息
-// @Tags 服务管理
-// @Accept json
-// @Produce json
-// @Param id path int true "集群ID"
-// @Param svcName path string true "Service名称"
-// @Param namespace query string true "命名空间名称"
-// @Success 200 {object} utils.ApiResponse{data=interface{}} "获取Service YAML配置成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/services/{id}/{svcName}/yaml [get]
-// @Security BearerAuth
 func (k *K8sSvcHandler) GetServiceYaml(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -128,17 +103,6 @@ func (k *K8sSvcHandler) GetServiceYaml(ctx *gin.Context) {
 }
 
 // UpdateService 更新指定 Name 的 Service
-// @Summary 更新Service资源
-// @Description 根据提供的Service配置信息更新指定的Service资源
-// @Tags 服务管理
-// @Accept json
-// @Produce json
-// @Param serviceRequest body model.K8sServiceReq true "Service更新请求参数"
-// @Success 200 {object} utils.ApiResponse "更新Service成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/services/update [post]
-// @Security BearerAuth
 func (k *K8sSvcHandler) UpdateService(ctx *gin.Context) {
 	var req model.K8sServiceReq
 
@@ -148,19 +112,6 @@ func (k *K8sSvcHandler) UpdateService(ctx *gin.Context) {
 }
 
 // DeleteService 删除指定 Service
-// @Summary 删除Service资源
-// @Description 根据集群ID、命名空间和Service名称删除指定的Service资源
-// @Tags 服务管理
-// @Accept json
-// @Produce json
-// @Param id path int true "集群ID"
-// @Param namespace query string true "命名空间名称"
-// @Param svcName query string true "Service名称"
-// @Success 200 {object} utils.ApiResponse "删除Service成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/services/delete/{id} [delete]
-// @Security BearerAuth
 func (k *K8sSvcHandler) DeleteService(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

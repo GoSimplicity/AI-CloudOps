@@ -62,20 +62,6 @@ func (ra *RoleAPI) RegisterRouters(server *gin.Engine) {
 }
 
 // GetRoleList 获取Role列表
-// @Summary 获取Role列表
-// @Description 获取指定集群中的Role列表，支持分页和关键字搜索
-// @Tags RBAC Role管理
-// @Accept json
-// @Produce json
-// @Param cluster_id query int true "集群ID"
-// @Param namespace query string false "命名空间"
-// @Param keyword query string false "搜索关键字"
-// @Param page query int false "页码，默认1"
-// @Param page_size query int false "每页数量，默认10"
-// @Success 200 {object} utils.ApiResponse{data=model.ListResp[model.RoleInfo]}
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/role/list [get]
 func (ra *RoleAPI) GetRoleList(c *gin.Context) {
 	var req model.RoleListReq
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -89,19 +75,6 @@ func (ra *RoleAPI) GetRoleList(c *gin.Context) {
 }
 
 // GetRoleDetails 获取Role详情
-// @Summary 获取Role详情
-// @Description 获取指定Role的详细信息
-// @Tags RBAC Role管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace path string true "命名空间"
-// @Param name path string true "Role名称"
-// @Success 200 {object} utils.ApiResponse{data=model.RoleInfo}
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 404 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/role/details/{cluster_id}/{namespace}/{name} [get]
 func (ra *RoleAPI) GetRoleDetails(c *gin.Context) {
 	var req model.RoleGetReq
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -115,16 +88,6 @@ func (ra *RoleAPI) GetRoleDetails(c *gin.Context) {
 }
 
 // CreateRole 创建Role
-// @Summary 创建Role
-// @Description 在指定集群和命名空间中创建新的Role
-// @Tags RBAC Role管理
-// @Accept json
-// @Produce json
-// @Param role body model.CreateRoleReq true "Role创建信息"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/role/create [post]
 func (ra *RoleAPI) CreateRole(c *gin.Context) {
 	var req model.CreateRoleReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -138,16 +101,6 @@ func (ra *RoleAPI) CreateRole(c *gin.Context) {
 }
 
 // UpdateRole 更新Role
-// @Summary 更新Role
-// @Description 更新指定Role的配置信息
-// @Tags RBAC Role管理
-// @Accept json
-// @Produce json
-// @Param role body model.UpdateRoleReq true "Role更新信息"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/role/update [put]
 func (ra *RoleAPI) UpdateRole(c *gin.Context) {
 	var req model.UpdateRoleReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -161,18 +114,6 @@ func (ra *RoleAPI) UpdateRole(c *gin.Context) {
 }
 
 // DeleteRole 删除Role
-// @Summary 删除Role
-// @Description 删除指定的Role
-// @Tags RBAC Role管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace path string true "命名空间"
-// @Param name path string true "Role名称"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/role/delete/{cluster_id}/{namespace}/{name} [delete]
 func (ra *RoleAPI) DeleteRole(c *gin.Context) {
 	var req model.DeleteRoleReq
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -186,18 +127,6 @@ func (ra *RoleAPI) DeleteRole(c *gin.Context) {
 }
 
 // GetRoleYaml 获取Role的YAML配置
-// @Summary 获取Role的YAML配置
-// @Description 获取指定Role的YAML格式配置
-// @Tags RBAC Role管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace path string true "命名空间"
-// @Param name path string true "Role名称"
-// @Success 200 {object} utils.ApiResponse{data=string}
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/role/yaml/{cluster_id}/{namespace}/{name} [get]
 func (ra *RoleAPI) GetRoleYaml(c *gin.Context) {
 	var req model.RoleGetReq
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -211,16 +140,6 @@ func (ra *RoleAPI) GetRoleYaml(c *gin.Context) {
 }
 
 // UpdateRoleYaml 更新Role的YAML配置
-// @Summary 更新Role的YAML配置
-// @Description 通过YAML更新指定Role的配置
-// @Tags RBAC Role管理
-// @Accept json
-// @Produce json
-// @Param yaml body model.RoleYamlReq true "Role YAML更新信息"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/role/yaml [put]
 func (ra *RoleAPI) UpdateRoleYaml(c *gin.Context) {
 	var req model.RoleYamlReq
 	if err := c.ShouldBindJSON(&req); err != nil {

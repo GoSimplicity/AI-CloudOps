@@ -63,22 +63,6 @@ func (h *K8sSecretHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetSecretList 获取Secret列表
-// @Summary 获取Secret列表
-// @Description 根据集群和命名空间获取Secret列表，支持标签和字段选择器过滤
-// @Tags 密钥管理
-// @Accept json
-// @Produce json
-// @Param cluster_id query int true "集群ID"
-// @Param namespace query string false "命名空间，为空时获取所有命名空间"
-// @Param label_selector query string false "标签选择器"
-// @Param field_selector query string false "字段选择器"
-// @Param limit query int false "限制结果数量"
-// @Param continue query string false "分页续订令牌"
-// @Success 200 {object} utils.ApiResponse{data=[]model.K8sSecret} "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/secrets/list [get]
-// @Security BearerAuth
 func (h *K8sSecretHandler) GetSecretList(ctx *gin.Context) {
 	var req model.K8sListReq
 
@@ -94,20 +78,6 @@ func (h *K8sSecretHandler) GetSecretList(ctx *gin.Context) {
 }
 
 // GetSecret 获取单个Secret详情
-// @Summary 获取Secret详情
-// @Description 根据集群ID、命名空间和名称获取指定Secret的详细信息
-// @Tags 密钥管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace path string true "命名空间"
-// @Param name path string true "Secret名称"
-// @Success 200 {object} utils.ApiResponse{data=model.K8sSecret} "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 404 {object} utils.ApiResponse "Secret不存在"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/secrets/{cluster_id}/{namespace}/{name} [get]
-// @Security BearerAuth
 func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
 	var req model.K8sResourceIdentifierReq
 
@@ -135,18 +105,6 @@ func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
 }
 
 // CreateSecret 创建Secret
-// @Summary 创建Secret
-// @Description 在指定集群和命名空间中创建新的Secret
-// @Tags 密钥管理
-// @Accept json
-// @Produce json
-// @Param request body model.SecretCreateReq true "Secret创建请求"
-// @Success 200 {object} utils.ApiResponse "创建成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 409 {object} utils.ApiResponse "Secret已存在"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/secrets/create [post]
-// @Security BearerAuth
 func (h *K8sSecretHandler) CreateSecret(ctx *gin.Context) {
 	var req model.SecretCreateReq
 
@@ -156,18 +114,6 @@ func (h *K8sSecretHandler) CreateSecret(ctx *gin.Context) {
 }
 
 // UpdateSecret 更新Secret
-// @Summary 更新Secret
-// @Description 更新指定的Secret配置数据
-// @Tags 密钥管理
-// @Accept json
-// @Produce json
-// @Param request body model.SecretUpdateReq true "Secret更新请求"
-// @Success 200 {object} utils.ApiResponse "更新成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 404 {object} utils.ApiResponse "Secret不存在"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/secrets/update [put]
-// @Security BearerAuth
 func (h *K8sSecretHandler) UpdateSecret(ctx *gin.Context) {
 	var req model.SecretUpdateReq
 
@@ -177,20 +123,6 @@ func (h *K8sSecretHandler) UpdateSecret(ctx *gin.Context) {
 }
 
 // DeleteSecret 删除Secret
-// @Summary 删除Secret
-// @Description 删除指定的Secret资源
-// @Tags 密钥管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace path string true "命名空间"
-// @Param name path string true "Secret名称"
-// @Success 200 {object} utils.ApiResponse "删除成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 404 {object} utils.ApiResponse "Secret不存在"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/secrets/{cluster_id}/{namespace}/{name} [delete]
-// @Security BearerAuth
 func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
 	var req model.K8sResourceIdentifierReq
 
@@ -218,20 +150,6 @@ func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
 }
 
 // GetSecretYAML 获取Secret的YAML配置
-// @Summary 获取Secret的YAML配置
-// @Description 获取指定Secret的完整YAML配置文件
-// @Tags 密钥管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace path string true "命名空间"
-// @Param name path string true "Secret名称"
-// @Success 200 {object} utils.ApiResponse{data=string} "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 404 {object} utils.ApiResponse "Secret不存在"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/secrets/{cluster_id}/{namespace}/{name}/yaml [get]
-// @Security BearerAuth
 func (h *K8sSecretHandler) GetSecretYAML(ctx *gin.Context) {
 	var req model.K8sResourceIdentifierReq
 

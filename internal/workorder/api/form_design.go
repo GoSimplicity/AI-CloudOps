@@ -54,17 +54,6 @@ func (h *FormDesignHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // CreateFormDesign 创建表单设计
-// @Summary 创建工单表单设计
-// @Description 创建新的工单表单设计配置
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param request body model.CreateWorkorderFormDesignReq true "创建表单设计请求参数"
-// @Success 200 {object} utils.ApiResponse "创建成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/form-design/create [post]
 func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
 	var req model.CreateWorkorderFormDesignReq
 
@@ -79,18 +68,6 @@ func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
 }
 
 // UpdateFormDesign 更新表单设计
-// @Summary 更新工单表单设计
-// @Description 更新指定的工单表单设计配置
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param id path int true "表单设计ID"
-// @Param request body model.UpdateWorkorderFormDesignReq true "更新表单设计请求参数"
-// @Success 200 {object} utils.ApiResponse "更新成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/form-design/update/{id} [put]
 func (h *FormDesignHandler) UpdateFormDesign(ctx *gin.Context) {
 	var req model.UpdateWorkorderFormDesignReq
 
@@ -106,17 +83,6 @@ func (h *FormDesignHandler) UpdateFormDesign(ctx *gin.Context) {
 }
 
 // DeleteFormDesign 删除表单设计
-// @Summary 删除工单表单设计
-// @Description 删除指定的工单表单设计配置
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param id path int true "表单设计ID"
-// @Success 200 {object} utils.ApiResponse "删除成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/form-design/delete/{id} [delete]
 func (h *FormDesignHandler) DeleteFormDesign(ctx *gin.Context) {
 	var req model.DeleteWorkorderFormDesignReq
 
@@ -132,19 +98,6 @@ func (h *FormDesignHandler) DeleteFormDesign(ctx *gin.Context) {
 }
 
 // ListFormDesign 获取表单设计列表
-// @Summary 获取工单表单设计列表
-// @Description 分页获取工单表单设计配置列表
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param page query int false "页码"
-// @Param size query int false "每页数量"
-// @Param name query string false "表单设计名称"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/form-design/list [get]
 func (h *FormDesignHandler) ListFormDesign(ctx *gin.Context) {
 	var req model.ListWorkorderFormDesignReq
 
@@ -154,17 +107,6 @@ func (h *FormDesignHandler) ListFormDesign(ctx *gin.Context) {
 }
 
 // DetailFormDesign 获取表单设计详情
-// @Summary 获取工单表单设计详情
-// @Description 获取指定工单表单设计的详细信息
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param id path int true "表单设计ID"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/form-design/detail/{id} [get]
 func (h *FormDesignHandler) DetailFormDesign(ctx *gin.Context) {
 	var req model.DetailWorkorderFormDesignReq
 

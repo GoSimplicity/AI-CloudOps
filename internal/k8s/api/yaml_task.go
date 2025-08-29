@@ -59,16 +59,6 @@ func (k *K8sYamlTaskHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetYamlTaskList 获取 YAML 任务列表
-// @Summary 获取 YAML 任务列表
-// @Description 获取所有的 YAML 任务列表信息
-// @Tags YAML任务管理
-// @Accept json
-// @Produce json
-// @Success 200 {object} utils.ApiResponse{data=[]model.K8sYamlTask} "获取 YAML 任务列表成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/yaml_tasks/list [get]
-// @Security BearerAuth
 func (k *K8sYamlTaskHandler) GetYamlTaskList(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.yamlTaskService.GetYamlTaskList(ctx)
@@ -76,17 +66,6 @@ func (k *K8sYamlTaskHandler) GetYamlTaskList(ctx *gin.Context) {
 }
 
 // CreateYamlTask 创建新的 YAML 任务
-// @Summary 创建新的 YAML 任务
-// @Description 根据提供的参数创建一个新的 YAML 任务
-// @Tags YAML任务管理
-// @Accept json
-// @Produce json
-// @Param body body model.YamlTaskCreateReq true "YAML 任务信息"
-// @Success 200 {object} utils.ApiResponse "创建 YAML 任务成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/yaml_tasks/create [post]
-// @Security BearerAuth
 func (k *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskCreateReq
 
@@ -107,17 +86,6 @@ func (k *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
 }
 
 // UpdateYamlTask 更新指定 ID 的 YAML 任务
-// @Summary 更新 YAML 任务
-// @Description 根据提供的参数更新指定的 YAML 任务信息
-// @Tags YAML任务管理
-// @Accept json
-// @Produce json
-// @Param body body model.YamlTaskUpdateReq true "YAML 任务更新信息"
-// @Success 200 {object} utils.ApiResponse "更新 YAML 任务成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/yaml_tasks/update [post]
-// @Security BearerAuth
 func (k *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskUpdateReq
 
@@ -138,17 +106,6 @@ func (k *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
 }
 
 // ApplyYamlTask 应用指定 ID 的 YAML 任务
-// @Summary 应用 YAML 任务
-// @Description 根据任务 ID 应用指定的 YAML 任务到 Kubernetes 集群
-// @Tags YAML任务管理
-// @Accept json
-// @Produce json
-// @Param id path int true "YAML 任务 ID"
-// @Success 200 {object} utils.ApiResponse "应用 YAML 任务成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/yaml_tasks/apply/{id} [post]
-// @Security BearerAuth
 func (k *K8sYamlTaskHandler) ApplyYamlTask(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -162,17 +119,6 @@ func (k *K8sYamlTaskHandler) ApplyYamlTask(ctx *gin.Context) {
 }
 
 // DeleteYamlTask 删除指定 ID 的 YAML 任务
-// @Summary 删除 YAML 任务
-// @Description 根据任务 ID 删除指定的 YAML 任务
-// @Tags YAML任务管理
-// @Accept json
-// @Produce json
-// @Param id path int true "YAML 任务 ID"
-// @Success 200 {object} utils.ApiResponse "删除 YAML 任务成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/yaml_tasks/delete/{id} [delete]
-// @Security BearerAuth
 func (k *K8sYamlTaskHandler) DeleteYamlTask(ctx *gin.Context) {
 	id, err := utils.GetParamID(ctx)
 	if err != nil {

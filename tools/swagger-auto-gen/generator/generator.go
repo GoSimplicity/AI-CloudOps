@@ -468,20 +468,39 @@ func (g *SwaggerGenerator) buildTags(doc *SwaggerDoc) {
 // normalizePath 标准化路径
 func (g *SwaggerGenerator) normalizePath(path string) string {
 	// 将Gin路径参数格式转换为Swagger格式
+	// 支持 :param 和 *param 格式
 	re := regexp.MustCompile(`:([a-zA-Z_][a-zA-Z0-9_]*)`)
-	return re.ReplaceAllString(path, "{$1}")
+	path = re.ReplaceAllString(path, "{$1}")
+
+	// 处理通配符参数 *param
+	re2 := regexp.MustCompile(`\*([a-zA-Z_][a-zA-Z0-9_]*)`)
+	path = re2.ReplaceAllString(path, "{$1}")
+
+	return path
 }
 
 // extractPathParams 提取路径参数
 func (g *SwaggerGenerator) extractPathParams(path string) []string {
+	params := make([]string, 0)
+
+	// 提取 :param 格式的参数
 	re := regexp.MustCompile(`:([a-zA-Z_][a-zA-Z0-9_]*)`)
 	matches := re.FindAllStringSubmatch(path, -1)
-	params := make([]string, 0, len(matches))
 	for _, match := range matches {
 		if len(match) > 1 {
 			params = append(params, match[1])
 		}
 	}
+
+	// 提取 *param 格式的参数
+	re2 := regexp.MustCompile(`\*([a-zA-Z_][a-zA-Z0-9_]*)`)
+	matches2 := re2.FindAllStringSubmatch(path, -1)
+	for _, match := range matches2 {
+		if len(match) > 1 {
+			params = append(params, match[1])
+		}
+	}
+
 	return params
 }
 

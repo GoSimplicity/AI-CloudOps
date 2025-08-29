@@ -62,19 +62,6 @@ func (cra *ClusterRoleAPI) RegisterRouters(server *gin.Engine) {
 }
 
 // GetClusterRoleList 获取ClusterRole列表
-// @Summary 获取ClusterRole列表
-// @Description 获取指定集群中的ClusterRole列表，支持分页和关键字搜索
-// @Tags RBAC ClusterRole管理
-// @Accept json
-// @Produce json
-// @Param cluster_id query int true "集群ID"
-// @Param keyword query string false "搜索关键字"
-// @Param page query int false "页码，默认1"
-// @Param page_size query int false "每页数量，默认10"
-// @Success 200 {object} utils.ApiResponse{data=model.ListResp[model.ClusterRoleBindingInfo]}
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role/list [get]
 func (cra *ClusterRoleAPI) GetClusterRoleList(c *gin.Context) {
 	var req model.ClusterRoleListReq
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -93,18 +80,6 @@ func (cra *ClusterRoleAPI) GetClusterRoleList(c *gin.Context) {
 }
 
 // GetClusterRoleDetails 获取ClusterRole详情
-// @Summary 获取ClusterRole详情
-// @Description 获取指定ClusterRole的详细信息
-// @Tags RBAC ClusterRole管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param name path string true "ClusterRole名称"
-// @Success 200 {object} utils.ApiResponse{data=model.ClusterRoleInfo}
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 404 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role/details/{cluster_id}/{name} [get]
 func (cra *ClusterRoleAPI) GetClusterRoleDetails(c *gin.Context) {
 	var req model.ClusterRoleGetReq
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -123,16 +98,6 @@ func (cra *ClusterRoleAPI) GetClusterRoleDetails(c *gin.Context) {
 }
 
 // CreateClusterRole 创建ClusterRole
-// @Summary 创建ClusterRole
-// @Description 在指定集群中创建新的ClusterRole
-// @Tags RBAC ClusterRole管理
-// @Accept json
-// @Produce json
-// @Param clusterrole body model.CreateClusterRoleReq true "ClusterRole创建信息"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role/create [post]
 func (cra *ClusterRoleAPI) CreateClusterRole(c *gin.Context) {
 	var req model.CreateClusterRoleReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -151,16 +116,6 @@ func (cra *ClusterRoleAPI) CreateClusterRole(c *gin.Context) {
 }
 
 // UpdateClusterRole 更新ClusterRole
-// @Summary 更新ClusterRole
-// @Description 更新指定ClusterRole的配置信息
-// @Tags RBAC ClusterRole管理
-// @Accept json
-// @Produce json
-// @Param clusterrole body model.UpdateClusterRoleReq true "ClusterRole更新信息"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role/update [put]
 func (cra *ClusterRoleAPI) UpdateClusterRole(c *gin.Context) {
 	var req model.UpdateClusterRoleReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -179,17 +134,6 @@ func (cra *ClusterRoleAPI) UpdateClusterRole(c *gin.Context) {
 }
 
 // DeleteClusterRole 删除ClusterRole
-// @Summary 删除ClusterRole
-// @Description 删除指定的ClusterRole
-// @Tags RBAC ClusterRole管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param name path string true "ClusterRole名称"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role/delete/{cluster_id}/{name} [delete]
 func (cra *ClusterRoleAPI) DeleteClusterRole(c *gin.Context) {
 	var req model.DeleteClusterRoleReq
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -208,17 +152,6 @@ func (cra *ClusterRoleAPI) DeleteClusterRole(c *gin.Context) {
 }
 
 // GetClusterRoleYaml 获取ClusterRole的YAML配置
-// @Summary 获取ClusterRole的YAML配置
-// @Description 获取指定ClusterRole的YAML格式配置
-// @Tags RBAC ClusterRole管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param name path string true "ClusterRole名称"
-// @Success 200 {object} utils.ApiResponse{data=string}
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role/yaml/{cluster_id}/{name} [get]
 func (cra *ClusterRoleAPI) GetClusterRoleYaml(c *gin.Context) {
 	var req model.ClusterRoleGetReq
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -237,16 +170,6 @@ func (cra *ClusterRoleAPI) GetClusterRoleYaml(c *gin.Context) {
 }
 
 // UpdateClusterRoleYaml 更新ClusterRole的YAML配置
-// @Summary 更新ClusterRole的YAML配置
-// @Description 通过YAML更新指定ClusterRole的配置
-// @Tags RBAC ClusterRole管理
-// @Accept json
-// @Produce json
-// @Param yaml body model.ClusterRoleYamlReq true "ClusterRole YAML更新信息"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role/yaml [put]
 func (cra *ClusterRoleAPI) UpdateClusterRoleYaml(c *gin.Context) {
 	var req model.ClusterRoleYamlReq
 	if err := c.ShouldBindJSON(&req); err != nil {

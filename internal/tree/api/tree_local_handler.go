@@ -60,18 +60,6 @@ func (h *TreeLocalHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetTreeLocalList 获取树节点列表
-// @Summary 获取树节点列表
-// @Description 获取完整的树结构节点列表
-// @Tags 本地资源树管理
-// @Accept json
-// @Produce json
-// @Param keyword query string false "搜索关键词"
-// @Param node_type query string false "节点类型"
-// @Success 200 {object} utils.ApiResponse{data=[]model.TreeLocalResource} "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/tree/local/list [get]
 func (h *TreeLocalHandler) GetTreeLocalList(ctx *gin.Context) {
 	var req model.GetTreeLocalResourceListReq
 
@@ -81,17 +69,6 @@ func (h *TreeLocalHandler) GetTreeLocalList(ctx *gin.Context) {
 }
 
 // GetTreeLocalDetail 获取本地资源详情
-// @Summary 获取本地资源详情
-// @Description 根据ID获取本地资源的详细信息
-// @Tags 本地资源树管理
-// @Accept json
-// @Produce json
-// @Param id path int true "资源ID"
-// @Success 200 {object} utils.ApiResponse{data=model.TreeLocalResource} "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/tree/local/detail/{id} [get]
 func (h *TreeLocalHandler) GetTreeLocalDetail(ctx *gin.Context) {
 	var req model.GetTreeLocalResourceDetailReq
 
@@ -109,17 +86,6 @@ func (h *TreeLocalHandler) GetTreeLocalDetail(ctx *gin.Context) {
 }
 
 // CreateTreeLocal 创建本地资源
-// @Summary 创建本地资源
-// @Description 创建新的本地资源
-// @Tags 本地资源树管理
-// @Accept json
-// @Produce json
-// @Param request body model.CreateTreeLocalResourceReq true "创建本地资源请求参数"
-// @Success 200 {object} utils.ApiResponse "创建成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/tree/local/create [post]
 func (h *TreeLocalHandler) CreateTreeLocal(ctx *gin.Context) {
 	var req model.CreateTreeLocalResourceReq
 
@@ -134,18 +100,6 @@ func (h *TreeLocalHandler) CreateTreeLocal(ctx *gin.Context) {
 }
 
 // UpdateTreeLocal 更新本地资源
-// @Summary 更新本地资源
-// @Description 根据ID更新本地资源信息
-// @Tags 本地资源树管理
-// @Accept json
-// @Produce json
-// @Param id path int true "资源ID"
-// @Param request body model.UpdateTreeLocalResourceReq true "更新本地资源请求参数"
-// @Success 200 {object} utils.ApiResponse "更新成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/tree/local/update/{id} [put]
 func (h *TreeLocalHandler) UpdateTreeLocal(ctx *gin.Context) {
 	var req model.UpdateTreeLocalResourceReq
 
@@ -163,17 +117,6 @@ func (h *TreeLocalHandler) UpdateTreeLocal(ctx *gin.Context) {
 }
 
 // DeleteTreeLocal 删除本地资源
-// @Summary 删除本地资源
-// @Description 根据ID删除本地资源
-// @Tags 本地资源树管理
-// @Accept json
-// @Produce json
-// @Param id path int true "资源ID"
-// @Success 200 {object} utils.ApiResponse "删除成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/tree/local/delete/{id} [delete]
 func (h *TreeLocalHandler) DeleteTreeLocal(ctx *gin.Context) {
 	var req model.DeleteTreeLocalResourceReq
 
@@ -191,17 +134,6 @@ func (h *TreeLocalHandler) DeleteTreeLocal(ctx *gin.Context) {
 }
 
 // ConnectTerminal 连接终端
-// @Summary 连接终端
-// @Description 通过WebSocket连接到指定本地资源的终端
-// @Tags 本地资源树管理
-// @Accept json
-// @Produce json
-// @Param id path int true "资源ID"
-// @Success 101 {string} string "WebSocket连接成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/tree/local/terminal/{id} [get]
 func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 	var req model.GetTreeLocalResourceDetailReq
 
@@ -252,18 +184,6 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 }
 
 // BindTreeLocal 绑定本地资源
-// @Summary 绑定本地资源
-// @Description 将本地资源绑定到指定节点
-// @Tags 本地资源树管理
-// @Accept json
-// @Produce json
-// @Param id path int true "资源ID"
-// @Param request body model.BindTreeLocalResourceReq true "绑定本地资源请求参数"
-// @Success 200 {object} utils.ApiResponse "绑定成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/tree/local/bind/{id} [post]
 func (h *TreeLocalHandler) BindTreeLocal(ctx *gin.Context) {
 	var req model.BindTreeLocalResourceReq
 
@@ -282,18 +202,6 @@ func (h *TreeLocalHandler) BindTreeLocal(ctx *gin.Context) {
 }
 
 // UnbindTreeLocal 解绑本地资源
-// @Summary 解绑本地资源
-// @Description 将本地资源从节点解绑
-// @Tags 本地资源树管理
-// @Accept json
-// @Produce json
-// @Param id path int true "资源ID"
-// @Param request body model.UnBindTreeLocalResourceReq true "解绑本地资源请求参数"
-// @Success 200 {object} utils.ApiResponse "解绑成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/tree/local/unbind/{id} [post]
 func (h *TreeLocalHandler) UnbindTreeLocal(ctx *gin.Context) {
 	var req model.UnBindTreeLocalResourceReq
 

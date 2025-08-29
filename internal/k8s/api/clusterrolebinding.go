@@ -62,19 +62,6 @@ func (crba *ClusterRoleBindingAPI) RegisterRouters(server *gin.Engine) {
 }
 
 // GetClusterRoleBindingList 获取ClusterRoleBinding列表
-// @Summary 获取ClusterRoleBinding列表
-// @Description 获取指定集群中的ClusterRoleBinding列表，支持分页和关键字搜索
-// @Tags RBAC ClusterRoleBinding管理
-// @Accept json
-// @Produce json
-// @Param cluster_id query int true "集群ID"
-// @Param keyword query string false "搜索关键字"
-// @Param page query int false "页码，默认1"
-// @Param page_size query int false "每页数量，默认10"
-// @Success 200 {object} utils.ApiResponse{data=model.ListResp[model.ClusterRoleBindingInfo]}
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role-binding/list [get]
 func (crba *ClusterRoleBindingAPI) GetClusterRoleBindingList(c *gin.Context) {
 	var req model.ClusterRoleBindingListReq
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -93,18 +80,6 @@ func (crba *ClusterRoleBindingAPI) GetClusterRoleBindingList(c *gin.Context) {
 }
 
 // GetClusterRoleBindingDetails 获取ClusterRoleBinding详情
-// @Summary 获取ClusterRoleBinding详情
-// @Description 获取指定ClusterRoleBinding的详细信息
-// @Tags RBAC ClusterRoleBinding管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param name path string true "ClusterRoleBinding名称"
-// @Success 200 {object} utils.ApiResponse{data=model.ClusterRoleBindingInfo}
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 404 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role-binding/details/{cluster_id}/{name} [get]
 func (crba *ClusterRoleBindingAPI) GetClusterRoleBindingDetails(c *gin.Context) {
 	var req model.ClusterRoleBindingGetReq
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -123,16 +98,6 @@ func (crba *ClusterRoleBindingAPI) GetClusterRoleBindingDetails(c *gin.Context) 
 }
 
 // CreateClusterRoleBinding 创建ClusterRoleBinding
-// @Summary 创建ClusterRoleBinding
-// @Description 在指定集群中创建新的ClusterRoleBinding
-// @Tags RBAC ClusterRoleBinding管理
-// @Accept json
-// @Produce json
-// @Param clusterrolebinding body model.CreateClusterRoleBindingReq true "ClusterRoleBinding创建信息"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role-binding/create [post]
 func (crba *ClusterRoleBindingAPI) CreateClusterRoleBinding(c *gin.Context) {
 	var req model.CreateClusterRoleBindingReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -151,16 +116,6 @@ func (crba *ClusterRoleBindingAPI) CreateClusterRoleBinding(c *gin.Context) {
 }
 
 // UpdateClusterRoleBinding 更新ClusterRoleBinding
-// @Summary 更新ClusterRoleBinding
-// @Description 更新指定ClusterRoleBinding的配置信息
-// @Tags RBAC ClusterRoleBinding管理
-// @Accept json
-// @Produce json
-// @Param clusterrolebinding body model.UpdateClusterRoleBindingReq true "ClusterRoleBinding更新信息"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role-binding/update [put]
 func (crba *ClusterRoleBindingAPI) UpdateClusterRoleBinding(c *gin.Context) {
 	var req model.UpdateClusterRoleBindingReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -179,17 +134,6 @@ func (crba *ClusterRoleBindingAPI) UpdateClusterRoleBinding(c *gin.Context) {
 }
 
 // DeleteClusterRoleBinding 删除ClusterRoleBinding
-// @Summary 删除ClusterRoleBinding
-// @Description 删除指定的ClusterRoleBinding
-// @Tags RBAC ClusterRoleBinding管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param name path string true "ClusterRoleBinding名称"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role-binding/delete/{cluster_id}/{name} [delete]
 func (crba *ClusterRoleBindingAPI) DeleteClusterRoleBinding(c *gin.Context) {
 	var req model.DeleteClusterRoleBindingReq
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -208,17 +152,6 @@ func (crba *ClusterRoleBindingAPI) DeleteClusterRoleBinding(c *gin.Context) {
 }
 
 // GetClusterRoleBindingYaml 获取ClusterRoleBinding的YAML配置
-// @Summary 获取ClusterRoleBinding的YAML配置
-// @Description 获取指定ClusterRoleBinding的YAML格式配置
-// @Tags RBAC ClusterRoleBinding管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param name path string true "ClusterRoleBinding名称"
-// @Success 200 {object} utils.ApiResponse{data=string}
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role-binding/yaml/{cluster_id}/{name} [get]
 func (crba *ClusterRoleBindingAPI) GetClusterRoleBindingYaml(c *gin.Context) {
 	var req model.ClusterRoleBindingGetReq
 	if err := c.ShouldBindUri(&req); err != nil {
@@ -237,16 +170,6 @@ func (crba *ClusterRoleBindingAPI) GetClusterRoleBindingYaml(c *gin.Context) {
 }
 
 // UpdateClusterRoleBindingYaml 更新ClusterRoleBinding的YAML配置
-// @Summary 更新ClusterRoleBinding的YAML配置
-// @Description 通过YAML更新指定ClusterRoleBinding的配置
-// @Tags RBAC ClusterRoleBinding管理
-// @Accept json
-// @Produce json
-// @Param yaml body model.ClusterRoleBindingYamlReq true "ClusterRoleBinding YAML更新信息"
-// @Success 200 {object} utils.ApiResponse
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Router /api/v1/k8s/cluster-role-binding/yaml [put]
 func (crba *ClusterRoleBindingAPI) UpdateClusterRoleBindingYaml(c *gin.Context) {
 	var req model.ClusterRoleBindingYamlReq
 	if err := c.ShouldBindJSON(&req); err != nil {

@@ -63,22 +63,6 @@ func (h *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetConfigMapList 获取ConfigMap列表
-// @Summary 获取ConfigMap列表
-// @Description 根据集群和命名空间获取ConfigMap列表，支持标签和字段选择器过滤
-// @Tags 配置管理
-// @Accept json
-// @Produce json
-// @Param cluster_id query int true "集群ID"
-// @Param namespace query string false "命名空间，为空时获取所有命名空间"
-// @Param label_selector query string false "标签选择器"
-// @Param field_selector query string false "字段选择器"
-// @Param limit query int false "限制结果数量"
-// @Param continue query string false "分页续订令牌"
-// @Success 200 {object} utils.ApiResponse{data=[]model.K8sConfigMap} "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/configmaps/list [get]
-// @Security BearerAuth
 func (h *K8sConfigMapHandler) GetConfigMapList(ctx *gin.Context) {
 	var req model.K8sListReq
 
@@ -94,20 +78,6 @@ func (h *K8sConfigMapHandler) GetConfigMapList(ctx *gin.Context) {
 }
 
 // GetConfigMap 获取单个ConfigMap详情
-// @Summary 获取ConfigMap详情
-// @Description 根据集群ID、命名空间和名称获取指定ConfigMap的详细信息
-// @Tags 配置管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace path string true "命名空间"
-// @Param name path string true "ConfigMap名称"
-// @Success 200 {object} utils.ApiResponse{data=model.K8sConfigMap} "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 404 {object} utils.ApiResponse "ConfigMap不存在"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/configmaps/{cluster_id}/{namespace}/{name} [get]
-// @Security BearerAuth
 func (h *K8sConfigMapHandler) GetConfigMap(ctx *gin.Context) {
 	var req model.K8sResourceIdentifierReq
 
@@ -135,18 +105,6 @@ func (h *K8sConfigMapHandler) GetConfigMap(ctx *gin.Context) {
 }
 
 // CreateConfigMap 创建ConfigMap
-// @Summary 创建ConfigMap
-// @Description 在指定集群和命名空间中创建新的ConfigMap
-// @Tags 配置管理
-// @Accept json
-// @Produce json
-// @Param request body model.ConfigMapCreateReq true "ConfigMap创建请求"
-// @Success 200 {object} utils.ApiResponse "创建成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 409 {object} utils.ApiResponse "ConfigMap已存在"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/configmaps/create [post]
-// @Security BearerAuth
 func (h *K8sConfigMapHandler) CreateConfigMap(ctx *gin.Context) {
 	var req model.ConfigMapCreateReq
 
@@ -156,18 +114,6 @@ func (h *K8sConfigMapHandler) CreateConfigMap(ctx *gin.Context) {
 }
 
 // UpdateConfigMap 更新ConfigMap
-// @Summary 更新ConfigMap
-// @Description 更新指定的ConfigMap配置数据
-// @Tags 配置管理
-// @Accept json
-// @Produce json
-// @Param request body model.ConfigMapUpdateReq true "ConfigMap更新请求"
-// @Success 200 {object} utils.ApiResponse "更新成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 404 {object} utils.ApiResponse "ConfigMap不存在"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/configmaps/update [put]
-// @Security BearerAuth
 func (h *K8sConfigMapHandler) UpdateConfigMap(ctx *gin.Context) {
 	var req model.ConfigMapUpdateReq
 
@@ -177,20 +123,6 @@ func (h *K8sConfigMapHandler) UpdateConfigMap(ctx *gin.Context) {
 }
 
 // DeleteConfigMap 删除ConfigMap
-// @Summary 删除ConfigMap
-// @Description 删除指定的ConfigMap资源
-// @Tags 配置管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace path string true "命名空间"
-// @Param name path string true "ConfigMap名称"
-// @Success 200 {object} utils.ApiResponse "删除成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 404 {object} utils.ApiResponse "ConfigMap不存在"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/configmaps/{cluster_id}/{namespace}/{name} [delete]
-// @Security BearerAuth
 func (h *K8sConfigMapHandler) DeleteConfigMap(ctx *gin.Context) {
 	var req model.K8sResourceIdentifierReq
 
@@ -218,20 +150,6 @@ func (h *K8sConfigMapHandler) DeleteConfigMap(ctx *gin.Context) {
 }
 
 // GetConfigMapYAML 获取ConfigMap的YAML配置
-// @Summary 获取ConfigMap的YAML配置
-// @Description 获取指定ConfigMap的完整YAML配置文件
-// @Tags 配置管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace path string true "命名空间"
-// @Param name path string true "ConfigMap名称"
-// @Success 200 {object} utils.ApiResponse{data=string} "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 404 {object} utils.ApiResponse "ConfigMap不存在"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/configmaps/{cluster_id}/{namespace}/{name}/yaml [get]
-// @Security BearerAuth
 func (h *K8sConfigMapHandler) GetConfigMapYAML(ctx *gin.Context) {
 	var req model.K8sResourceIdentifierReq
 

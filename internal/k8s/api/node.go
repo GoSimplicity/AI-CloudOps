@@ -69,17 +69,6 @@ func (k *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetNodeList 获取节点列表
-// @Summary 获取集群节点列表
-// @Description 根据集群ID获取指定K8s集群中的所有节点列表
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param id path int true "集群ID"
-// @Success 200 {object} utils.ApiResponse{data=[]model.K8sNode} "成功获取节点列表"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/list/{id} [get]
-// @Security BearerAuth
 func (k *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
 	clusterID, err := utils.GetParamID(ctx)
 	if err != nil {
@@ -93,18 +82,6 @@ func (k *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
 }
 
 // GetNodeDetail 获取指定名称的节点详情
-// @Summary 获取节点详细信息
-// @Description 根据节点名称获取指定节点的详细信息，包括状态、资源使用情况等
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param node_name path string true "节点名称"
-// @Param id query int true "集群ID"
-// @Success 200 {object} utils.ApiResponse "成功获取节点详情"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/detail/{node_name} [get]
-// @Security BearerAuth
 func (k *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
 	name, err := utils.GetParamCustomName(ctx, "node_name")
 	if err != nil {
@@ -124,17 +101,6 @@ func (k *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
 }
 
 // AddLabelNodes 为节点添加标签
-// @Summary 为节点添加标签
-// @Description 为指定的K8s节点添加标签，支持批量操作
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param request body model.LabelK8sNodesReq true "添加标签请求参数"
-// @Success 200 {object} utils.ApiResponse "成功添加标签"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/labels/add [post]
-// @Security BearerAuth
 func (k *K8sNodeHandler) AddLabelNodes(ctx *gin.Context) {
 	var req model.LabelK8sNodesReq
 
@@ -144,17 +110,6 @@ func (k *K8sNodeHandler) AddLabelNodes(ctx *gin.Context) {
 }
 
 // DeleteLabelNodes 删除节点标签
-// @Summary 删除节点标签
-// @Description 删除指定K8s节点的标签，支持批量操作
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param request body model.LabelK8sNodesReq true "删除标签请求参数"
-// @Success 200 {object} utils.ApiResponse "成功删除标签"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/labels/delete [delete]
-// @Security BearerAuth
 func (k *K8sNodeHandler) DeleteLabelNodes(ctx *gin.Context) {
 	var req model.LabelK8sNodesReq
 	// 确保操作类型为删除
@@ -166,18 +121,6 @@ func (k *K8sNodeHandler) DeleteLabelNodes(ctx *gin.Context) {
 }
 
 // GetNodeResources 获取节点资源使用情况
-// @Summary 获取节点资源使用情况
-// @Description 根据集群ID和节点名称获取指定节点的CPU、内存等资源使用情况和分配详情
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param node_name path string true "节点名称"
-// @Success 200 {object} utils.ApiResponse{data=interface{}} "成功获取节点资源信息"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/cluster/{cluster_id}/{node_name}/resources [get]
-// @Security BearerAuth
 func (k *K8sNodeHandler) GetNodeResources(ctx *gin.Context) {
 	var req model.NodeResourcesReq
 
@@ -202,18 +145,6 @@ func (k *K8sNodeHandler) GetNodeResources(ctx *gin.Context) {
 }
 
 // GetNodeEvents 获取节点事件
-// @Summary 获取节点事件列表
-// @Description 根据集群ID和节点名称获取指定节点的相关事件信息，包括警告和正常事件
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param node_name path string true "节点名称"
-// @Success 200 {object} utils.ApiResponse{data=[]interface{}} "成功获取节点事件列表"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/cluster/{cluster_id}/{node_name}/events [get]
-// @Security BearerAuth
 func (k *K8sNodeHandler) GetNodeEvents(ctx *gin.Context) {
 	var req model.NodeEventsReq
 
@@ -238,17 +169,6 @@ func (k *K8sNodeHandler) GetNodeEvents(ctx *gin.Context) {
 }
 
 // DrainNode 驱逐节点上的所有Pod
-// @Summary 驱逐节点上的所有Pod
-// @Description 将指定节点标记为不可调度，并驱逐其上的所有Pod，支持多种驱逐选项如强制驱逐、忽略DaemonSet等
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param request body model.NodeDrainReq true "驱逐节点请求参数"
-// @Success 200 {object} utils.ApiResponse{data=model.NodeDrainResponse} "成功驱逐节点"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/drain [post]
-// @Security BearerAuth
 func (k *K8sNodeHandler) DrainNode(ctx *gin.Context) {
 	var req model.NodeDrainReq
 
@@ -258,17 +178,6 @@ func (k *K8sNodeHandler) DrainNode(ctx *gin.Context) {
 }
 
 // CordonNode 禁止节点调度新的Pod
-// @Summary 禁止节点调度新的Pod
-// @Description 将指定节点标记为不可调度，新的Pod将不会被调度到该节点上，但现有Pod不受影响
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param request body model.NodeCordonReq true "禁止调度请求参数"
-// @Success 200 {object} utils.ApiResponse{data=model.NodeCordonResponse} "成功禁止节点调度"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/cordon [post]
-// @Security BearerAuth
 func (k *K8sNodeHandler) CordonNode(ctx *gin.Context) {
 	var req model.NodeCordonReq
 
@@ -278,17 +187,6 @@ func (k *K8sNodeHandler) CordonNode(ctx *gin.Context) {
 }
 
 // UncordonNode 解除节点调度限制
-// @Summary 解除节点调度限制
-// @Description 移除节点的不可调度标记，使该节点重新可以接受新Pod的调度
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param request body model.NodeUncordonReq true "解除调度限制请求参数"
-// @Success 200 {object} utils.ApiResponse{data=model.NodeUncordonResponse} "成功解除节点调度限制"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/uncordon [post]
-// @Security BearerAuth
 func (k *K8sNodeHandler) UncordonNode(ctx *gin.Context) {
 	var req model.NodeUncordonReq
 
@@ -298,18 +196,6 @@ func (k *K8sNodeHandler) UncordonNode(ctx *gin.Context) {
 }
 
 // GetNodeTaints 获取节点污点列表
-// @Summary 获取节点污点列表
-// @Description 根据集群ID和节点名称获取指定节点的污点配置列表
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param node_name path string true "节点名称"
-// @Success 200 {object} utils.ApiResponse{data=[]model.NodeTaintEntity} "成功获取节点污点列表"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/{cluster_id}/{node_name}/taints [get]
-// @Security BearerAuth
 func (k *K8sNodeHandler) GetNodeTaints(ctx *gin.Context) {
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
@@ -329,17 +215,6 @@ func (k *K8sNodeHandler) GetNodeTaints(ctx *gin.Context) {
 }
 
 // AddNodeTaints 添加节点污点
-// @Summary 添加节点污点
-// @Description 为指定的Kubernetes节点添加污点配置
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param request body model.TaintK8sNodesReq true "添加污点请求参数"
-// @Success 200 {object} utils.ApiResponse{data=model.NodeTaintResponse} "成功添加污点"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/taints/add [post]
-// @Security BearerAuth
 func (k *K8sNodeHandler) AddNodeTaints(ctx *gin.Context) {
 	var req model.TaintK8sNodesReq
 	// 确保操作类型为添加
@@ -351,17 +226,6 @@ func (k *K8sNodeHandler) AddNodeTaints(ctx *gin.Context) {
 }
 
 // DeleteNodeTaints 删除节点污点
-// @Summary 删除节点污点
-// @Description 删除指定Kubernetes节点的污点配置
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param request body model.TaintK8sNodesReq true "删除污点请求参数"
-// @Success 200 {object} utils.ApiResponse{data=model.NodeTaintResponse} "成功删除污点"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/taints/delete [delete]
-// @Security BearerAuth
 func (k *K8sNodeHandler) DeleteNodeTaints(ctx *gin.Context) {
 	var req model.TaintK8sNodesReq
 	// 确保操作类型为删除
@@ -373,17 +237,6 @@ func (k *K8sNodeHandler) DeleteNodeTaints(ctx *gin.Context) {
 }
 
 // CheckTaintYaml 检查污点YAML配置
-// @Summary 检查污点YAML配置
-// @Description 验证节点污点的YAML配置是否正确
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param request body model.TaintK8sNodesReq true "污点YAML检查请求参数"
-// @Success 200 {object} utils.ApiResponse "检查通过"
-// @Failure 400 {object} utils.ApiResponse "参数错误或YAML格式错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/taints/check [post]
-// @Security BearerAuth
 func (k *K8sNodeHandler) CheckTaintYaml(ctx *gin.Context) {
 	var req model.TaintK8sNodesReq
 
@@ -393,17 +246,6 @@ func (k *K8sNodeHandler) CheckTaintYaml(ctx *gin.Context) {
 }
 
 // SwitchNodeSchedule 切换节点调度状态
-// @Summary 切换节点调度状态
-// @Description 启用或禁用Kubernetes节点的调度功能
-// @Tags 节点管理
-// @Accept json
-// @Produce json
-// @Param request body model.ScheduleK8sNodesReq true "节点调度切换请求参数"
-// @Success 200 {object} utils.ApiResponse "操作成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/k8s/nodes/schedule/switch [post]
-// @Security BearerAuth
 func (k *K8sNodeHandler) SwitchNodeSchedule(ctx *gin.Context) {
 	var req model.ScheduleK8sNodesReq
 

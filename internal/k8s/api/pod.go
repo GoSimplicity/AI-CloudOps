@@ -60,21 +60,6 @@ func (k *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetPodListByNamespace 获取Pod列表
-// @Summary 获取Pod列表
-// @Description 根据命名空间获取Pod列表
-// @Tags Pod管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace query string false "命名空间"
-// @Param label_selector query string false "标签选择器"
-// @Param field_selector query string false "字段选择器"
-// @Param limit query int false "限制数量"
-// @Success 200 {object} utils.ApiResponse{data=[]object}
-// @Failure 400 {object} utils.ApiResponse
-// @Failure 500 {object} utils.ApiResponse
-// @Security BearerAuth
-// @Router /api/k8s/pods/{cluster_id} [get]
 func (k *K8sPodHandler) GetPodListByNamespace(ctx *gin.Context) {
 	var req model.K8sGetResourceListReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -92,19 +77,6 @@ func (k *K8sPodHandler) GetPodListByNamespace(ctx *gin.Context) {
 }
 
 // GetPodContainers 获取Pod的容器列表
-// @Summary 获取Pod的容器列表
-// @Description 获取指定Pod的所有容器信息
-// @Tags Pod管理
-// @Accept json
-// @Produce json
-// @Param id path int true "集群ID"
-// @Param podName path string true "Pod名称"
-// @Param namespace query string true "命名空间"
-// @Success 200 {object} utils.ApiResponse{data=[]object} "成功获取容器列表"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/k8s/pods/{id}/{podName}/containers [get]
 func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 	var req model.PodContainersReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -122,18 +94,6 @@ func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 }
 
 // GetPodsListByNodeName 根据节点名获取Pod列表
-// @Summary 根据节点名获取Pod列表
-// @Description 获取指定节点上运行的所有Pod列表
-// @Tags Pod管理
-// @Accept json
-// @Produce json
-// @Param id path int true "集群ID"
-// @Param name query string true "节点名称"
-// @Success 200 {object} utils.ApiResponse{data=[]object} "成功获取Pod列表"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/k8s/pods/{id}/node [get]
 func (k *K8sPodHandler) GetPodsListByNodeName(ctx *gin.Context) {
 	var req model.PodsByNodeReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -151,20 +111,6 @@ func (k *K8sPodHandler) GetPodsListByNodeName(ctx *gin.Context) {
 }
 
 // GetContainerLogs 获取容器日志
-// @Summary 获取容器日志
-// @Description 获取指定Pod中容器的运行日志
-// @Tags Pod管理
-// @Accept json
-// @Produce json
-// @Param id path int true "集群ID"
-// @Param podName path string true "Pod名称"
-// @Param container path string true "容器名称"
-// @Param namespace query string true "命名空间"
-// @Success 200 {object} utils.ApiResponse{data=string} "成功获取容器日志"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/k8s/pods/{id}/{podName}/{container}/logs [get]
 func (k *K8sPodHandler) GetContainerLogs(ctx *gin.Context) {
 	var req model.PodLogReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -182,19 +128,6 @@ func (k *K8sPodHandler) GetContainerLogs(ctx *gin.Context) {
 }
 
 // GetPodYaml 获取Pod的YAML配置
-// @Summary 获取Pod的YAML配置
-// @Description 获取指定Pod的完整YAML配置文件
-// @Tags Pod管理
-// @Accept json
-// @Produce json
-// @Param id path int true "集群ID"
-// @Param podName path string true "Pod名称"
-// @Param namespace query string true "命名空间"
-// @Success 200 {object} utils.ApiResponse{data=string} "成功获取YAML配置"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/k8s/pods/{id}/{podName}/yaml [get]
 func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 	var req model.K8sGetResourceYamlReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -212,19 +145,6 @@ func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 }
 
 // DeletePod 删除Pod
-// @Summary 删除Pod
-// @Description 删除指定命名空间中的Pod
-// @Tags Pod管理
-// @Accept json
-// @Produce json
-// @Param id path int true "集群ID"
-// @Param namespace query string true "命名空间"
-// @Param podName query string true "Pod名称"
-// @Success 200 {object} utils.ApiResponse "成功删除Pod"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/k8s/pods/delete/{id} [delete]
 func (k *K8sPodHandler) DeletePod(ctx *gin.Context) {
 	var req model.K8sDeleteResourceReq
 	if err := ctx.ShouldBindUri(&req); err != nil {

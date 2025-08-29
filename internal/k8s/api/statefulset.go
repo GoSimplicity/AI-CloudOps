@@ -64,16 +64,6 @@ func (h *K8sStatefulSetHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetStatefulSetList 获取StatefulSet列表
-// @Summary 获取StatefulSet列表
-// @Description 根据集群和命名空间获取StatefulSet列表
-// @Tags 工作负载管理
-// @Accept json
-// @Produce json
-// @Param cluster_id query int true "集群ID"
-// @Param namespace query string false "命名空间"
-// @Success 200 {object} utils.ApiResponse{data=[]model.K8sStatefulSet} "获取成功"
-// @Router /api/k8s/statefulsets/list [get]
-// @Security BearerAuth
 func (h *K8sStatefulSetHandler) GetStatefulSetList(ctx *gin.Context) {
 	var req model.K8sListReq
 
@@ -88,17 +78,6 @@ func (h *K8sStatefulSetHandler) GetStatefulSetList(ctx *gin.Context) {
 }
 
 // GetStatefulSet 获取单个StatefulSet详情
-// @Summary 获取StatefulSet详情
-// @Description 根据集群ID、命名空间和名称获取指定StatefulSet的详细信息
-// @Tags 工作负载管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace path string true "命名空间"
-// @Param name path string true "StatefulSet名称"
-// @Success 200 {object} utils.ApiResponse{data=model.K8sStatefulSet} "获取成功"
-// @Router /api/k8s/statefulsets/{cluster_id}/{namespace}/{name} [get]
-// @Security BearerAuth
 func (h *K8sStatefulSetHandler) GetStatefulSet(ctx *gin.Context) {
 	var req model.K8sResourceIdentifierReq
 
@@ -118,15 +97,6 @@ func (h *K8sStatefulSetHandler) GetStatefulSet(ctx *gin.Context) {
 }
 
 // CreateStatefulSet 创建StatefulSet
-// @Summary 创建StatefulSet
-// @Description 在指定集群和命名空间中创建新的StatefulSet
-// @Tags 工作负载管理
-// @Accept json
-// @Produce json
-// @Param request body model.StatefulSetCreateReq true "StatefulSet创建请求"
-// @Success 200 {object} utils.ApiResponse "创建成功"
-// @Router /api/k8s/statefulsets/create [post]
-// @Security BearerAuth
 func (h *K8sStatefulSetHandler) CreateStatefulSet(ctx *gin.Context) {
 	var req model.StatefulSetCreateReq
 
@@ -136,15 +106,6 @@ func (h *K8sStatefulSetHandler) CreateStatefulSet(ctx *gin.Context) {
 }
 
 // UpdateStatefulSet 更新StatefulSet
-// @Summary 更新StatefulSet
-// @Description 更新指定的StatefulSet配置
-// @Tags 工作负载管理
-// @Accept json
-// @Produce json
-// @Param request body model.StatefulSetUpdateReq true "StatefulSet更新请求"
-// @Success 200 {object} utils.ApiResponse "更新成功"
-// @Router /api/k8s/statefulsets/update [put]
-// @Security BearerAuth
 func (h *K8sStatefulSetHandler) UpdateStatefulSet(ctx *gin.Context) {
 	var req model.StatefulSetUpdateReq
 
@@ -154,15 +115,6 @@ func (h *K8sStatefulSetHandler) UpdateStatefulSet(ctx *gin.Context) {
 }
 
 // ScaleStatefulSet 扩缩容StatefulSet
-// @Summary 扩缩容StatefulSet
-// @Description 调整StatefulSet的副本数量
-// @Tags 工作负载管理
-// @Accept json
-// @Produce json
-// @Param request body model.StatefulSetScaleReq true "StatefulSet扩缩容请求"
-// @Success 200 {object} utils.ApiResponse "扩缩容成功"
-// @Router /api/k8s/statefulsets/scale [post]
-// @Security BearerAuth
 func (h *K8sStatefulSetHandler) ScaleStatefulSet(ctx *gin.Context) {
 	var req model.StatefulSetScaleReq
 
@@ -172,17 +124,6 @@ func (h *K8sStatefulSetHandler) ScaleStatefulSet(ctx *gin.Context) {
 }
 
 // DeleteStatefulSet 删除StatefulSet
-// @Summary 删除StatefulSet
-// @Description 删除指定的StatefulSet资源
-// @Tags 工作负载管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace path string true "命名空间"
-// @Param name path string true "StatefulSet名称"
-// @Success 200 {object} utils.ApiResponse "删除成功"
-// @Router /api/k8s/statefulsets/{cluster_id}/{namespace}/{name} [delete]
-// @Security BearerAuth
 func (h *K8sStatefulSetHandler) DeleteStatefulSet(ctx *gin.Context) {
 	var req model.K8sResourceIdentifierReq
 
@@ -202,17 +143,6 @@ func (h *K8sStatefulSetHandler) DeleteStatefulSet(ctx *gin.Context) {
 }
 
 // GetStatefulSetYAML 获取StatefulSet的YAML配置
-// @Summary 获取StatefulSet的YAML配置
-// @Description 获取指定StatefulSet的完整YAML配置文件
-// @Tags 工作负载管理
-// @Accept json
-// @Produce json
-// @Param cluster_id path int true "集群ID"
-// @Param namespace path string true "命名空间"
-// @Param name path string true "StatefulSet名称"
-// @Success 200 {object} utils.ApiResponse{data=string} "获取成功"
-// @Router /api/k8s/statefulsets/{cluster_id}/{namespace}/{name}/yaml [get]
-// @Security BearerAuth
 func (h *K8sStatefulSetHandler) GetStatefulSetYAML(ctx *gin.Context) {
 	var req model.K8sResourceIdentifierReq
 

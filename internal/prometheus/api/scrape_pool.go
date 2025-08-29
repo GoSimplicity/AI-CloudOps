@@ -61,19 +61,6 @@ func (s *ScrapePoolHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetMonitorScrapePoolList 获取监控采集池列表
-// @Summary 获取采集池列表
-// @Description 获取所有监控采集池的分页列表
-// @Tags 采集管理
-// @Accept json
-// @Produce json
-// @Param page query int false "页码" default(1)
-// @Param size query int false "每页数量" default(10)
-// @Param keyword query string false "搜索关键词"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/scrape_pools/list [get]
-// @Security BearerAuth
 func (s *ScrapePoolHandler) GetMonitorScrapePoolList(ctx *gin.Context) {
 	var req model.GetMonitorScrapePoolListReq
 
@@ -83,17 +70,6 @@ func (s *ScrapePoolHandler) GetMonitorScrapePoolList(ctx *gin.Context) {
 }
 
 // CreateMonitorScrapePool 创建监控采集池
-// @Summary 创建采集池
-// @Description 创建新的监控采集池配置
-// @Tags 采集管理
-// @Accept json
-// @Produce json
-// @Param request body model.CreateMonitorScrapePoolReq true "创建采集池请求参数"
-// @Success 200 {object} utils.ApiResponse "创建成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/scrape_pools/create [post]
-// @Security BearerAuth
 func (s *ScrapePoolHandler) CreateMonitorScrapePool(ctx *gin.Context) {
 	var req model.CreateMonitorScrapePoolReq
 
@@ -107,18 +83,6 @@ func (s *ScrapePoolHandler) CreateMonitorScrapePool(ctx *gin.Context) {
 }
 
 // UpdateMonitorScrapePool 更新监控采集池
-// @Summary 更新采集池
-// @Description 更新指定的监控采集池配置
-// @Tags 采集管理
-// @Accept json
-// @Produce json
-// @Param id path int true "采集池ID"
-// @Param request body model.UpdateMonitorScrapePoolReq true "更新采集池请求参数"
-// @Success 200 {object} utils.ApiResponse "更新成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/scrape_pools/update/{id} [put]
-// @Security BearerAuth
 func (s *ScrapePoolHandler) UpdateMonitorScrapePool(ctx *gin.Context) {
 	var req model.UpdateMonitorScrapePoolReq
 
@@ -135,17 +99,6 @@ func (s *ScrapePoolHandler) UpdateMonitorScrapePool(ctx *gin.Context) {
 }
 
 // DeleteMonitorScrapePool 删除监控采集池
-// @Summary 删除采集池
-// @Description 删除指定ID的监控采集池
-// @Tags 采集管理
-// @Accept json
-// @Produce json
-// @Param id path int true "采集池ID"
-// @Success 200 {object} utils.ApiResponse "删除成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/scrape_pools/delete/{id} [delete]
-// @Security BearerAuth
 func (s *ScrapePoolHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
 	var req model.DeleteMonitorScrapePoolReq
 
@@ -163,17 +116,6 @@ func (s *ScrapePoolHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
 }
 
 // GetMonitorScrapePoolDetail 获取监控采集池详情
-// @Summary 获取采集池详情
-// @Description 根据ID获取指定监控采集池的详细信息
-// @Tags 采集管理
-// @Accept json
-// @Produce json
-// @Param id path int true "采集池ID"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/scrape_pools/detail/{id} [get]
-// @Security BearerAuth
 func (s *ScrapePoolHandler) GetMonitorScrapePoolDetail(ctx *gin.Context) {
 	var req model.GetMonitorScrapePoolDetailReq
 
