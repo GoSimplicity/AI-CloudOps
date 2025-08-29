@@ -217,3 +217,137 @@ type BatchDeleteClustersReq struct {
 type RefreshClusterReq struct {
 	ID int `json:"id" binding:"required,gt=0"` // 集群ID
 }
+
+// ClusterHealthResponse 集群健康检查响应
+type ClusterHealthResponse struct {
+	ClusterID       int                     `json:"cluster_id"`       // 集群ID
+	ClusterName     string                  `json:"cluster_name"`     // 集群名称
+	Status          string                  `json:"status"`           // 健康状态: healthy, unhealthy, unknown
+	Connected       bool                    `json:"connected"`        // 是否连接成功
+	Version         string                  `json:"version"`          // K8s版本
+	ApiServerAddr   string                  `json:"api_server_addr"`  // API Server地址
+	NodeCount       int                     `json:"node_count"`       // 节点数量
+	NamespaceCount  int                     `json:"namespace_count"`  // 命名空间数量
+	LastCheckTime   string                  `json:"last_check_time"`  // 最后检查时间
+	ResponseTime    string                  `json:"response_time"`    // 响应时间
+	ErrorMessage    string                  `json:"error_message"`    // 错误信息
+	ComponentStatus []ComponentHealthStatus `json:"component_status"` // 组件状态
+	ResourceSummary ClusterResourceSummary  `json:"resource_summary"` // 资源概览
+}
+
+// ComponentHealthStatus 组件健康状态
+type ComponentHealthStatus struct {
+	Name      string `json:"name"`      // 组件名称
+	Status    string `json:"status"`    // 状态: healthy, unhealthy
+	Message   string `json:"message"`   // 状态信息
+	Timestamp string `json:"timestamp"` // 时间戳
+}
+
+// ClusterResourceSummary 集群资源概览
+type ClusterResourceSummary struct {
+	TotalCPU    string `json:"total_cpu"`    // 总CPU
+	TotalMemory string `json:"total_memory"` // 总内存
+	UsedCPU     string `json:"used_cpu"`     // 已使用CPU
+	UsedMemory  string `json:"used_memory"`  // 已使用内存
+	TotalPods   int    `json:"total_pods"`   // 总Pod数量
+	RunningPods int    `json:"running_pods"` // 运行中Pod数量
+	PendingPods int    `json:"pending_pods"` // 等待中Pod数量
+	FailedPods  int    `json:"failed_pods"`  // 失败Pod数量
+}
+
+// ClusterStatsResponse 集群统计信息响应
+type ClusterStatsResponse struct {
+	ClusterID      int                `json:"cluster_id"`       // 集群ID
+	ClusterName    string             `json:"cluster_name"`     // 集群名称
+	NodeStats      NodeStatsInfo      `json:"node_stats"`       // 节点统计
+	PodStats       PodStatsInfo       `json:"pod_stats"`        // Pod统计
+	NamespaceStats NamespaceStatsInfo `json:"namespace_stats"`  // 命名空间统计
+	WorkloadStats  WorkloadStatsInfo  `json:"workload_stats"`   // 工作负载统计
+	ResourceStats  ResourceStatsInfo  `json:"resource_stats"`   // 资源统计
+	StorageStats   StorageStatsInfo   `json:"storage_stats"`    // 存储统计
+	NetworkStats   NetworkStatsInfo   `json:"network_stats"`    // 网络统计
+	EventStats     EventStatsInfo     `json:"event_stats"`      // 事件统计
+	LastUpdateTime string             `json:"last_update_time"` // 最后更新时间
+}
+
+// NodeStatsInfo 节点统计信息
+type NodeStatsInfo struct {
+	TotalNodes    int `json:"total_nodes"`     // 总节点数
+	ReadyNodes    int `json:"ready_nodes"`     // 就绪节点数
+	NotReadyNodes int `json:"not_ready_nodes"` // 未就绪节点数
+	MasterNodes   int `json:"master_nodes"`    // 主节点数
+	WorkerNodes   int `json:"worker_nodes"`    // 工作节点数
+}
+
+// PodStatsInfo Pod统计信息
+type PodStatsInfo struct {
+	TotalPods     int `json:"total_pods"`     // 总Pod数
+	RunningPods   int `json:"running_pods"`   // 运行中Pod数
+	PendingPods   int `json:"pending_pods"`   // 等待中Pod数
+	SucceededPods int `json:"succeeded_pods"` // 成功Pod数
+	FailedPods    int `json:"failed_pods"`    // 失败Pod数
+	UnknownPods   int `json:"unknown_pods"`   // 未知状态Pod数
+}
+
+// NamespaceStatsInfo 命名空间统计信息
+type NamespaceStatsInfo struct {
+	TotalNamespaces  int      `json:"total_namespaces"`  // 总命名空间数
+	ActiveNamespaces int      `json:"active_namespaces"` // 活跃命名空间数
+	SystemNamespaces int      `json:"system_namespaces"` // 系统命名空间数
+	UserNamespaces   int      `json:"user_namespaces"`   // 用户命名空间数
+	TopNamespaces    []string `json:"top_namespaces"`    // 资源使用量前几的命名空间
+}
+
+// WorkloadStatsInfo 工作负载统计信息
+type WorkloadStatsInfo struct {
+	Deployments  int `json:"deployments"`  // Deployment数量
+	StatefulSets int `json:"statefulsets"` // StatefulSet数量
+	DaemonSets   int `json:"daemonsets"`   // DaemonSet数量
+	Jobs         int `json:"jobs"`         // Job数量
+	CronJobs     int `json:"cronjobs"`     // CronJob数量
+	Services     int `json:"services"`     // Service数量
+	Ingresses    int `json:"ingresses"`    // Ingress数量
+	ConfigMaps   int `json:"configmaps"`   // ConfigMap数量
+	Secrets      int `json:"secrets"`      // Secret数量
+}
+
+// ResourceStatsInfo 资源统计信息
+type ResourceStatsInfo struct {
+	TotalCPU           string  `json:"total_cpu"`           // 总CPU
+	TotalMemory        string  `json:"total_memory"`        // 总内存
+	TotalStorage       string  `json:"total_storage"`       // 总存储
+	UsedCPU            string  `json:"used_cpu"`            // 已使用CPU
+	UsedMemory         string  `json:"used_memory"`         // 已使用内存
+	UsedStorage        string  `json:"used_storage"`        // 已使用存储
+	CPUUtilization     float64 `json:"cpu_utilization"`     // CPU使用率
+	MemoryUtilization  float64 `json:"memory_utilization"`  // 内存使用率
+	StorageUtilization float64 `json:"storage_utilization"` // 存储使用率
+}
+
+// StorageStatsInfo 存储统计信息
+type StorageStatsInfo struct {
+	TotalPV        int    `json:"total_pv"`        // 总PV数量
+	BoundPV        int    `json:"bound_pv"`        // 已绑定PV数量
+	AvailablePV    int    `json:"available_pv"`    // 可用PV数量
+	TotalPVC       int    `json:"total_pvc"`       // 总PVC数量
+	BoundPVC       int    `json:"bound_pvc"`       // 已绑定PVC数量
+	PendingPVC     int    `json:"pending_pvc"`     // 等待中PVC数量
+	StorageClasses int    `json:"storage_classes"` // 存储类数量
+	TotalCapacity  string `json:"total_capacity"`  // 总容量
+}
+
+// NetworkStatsInfo 网络统计信息
+type NetworkStatsInfo struct {
+	Services        int `json:"services"`         // Service数量
+	Endpoints       int `json:"endpoints"`        // Endpoint数量
+	Ingresses       int `json:"ingresses"`        // Ingress数量
+	NetworkPolicies int `json:"network_policies"` // 网络策略数量
+}
+
+// EventStatsInfo 事件统计信息
+type EventStatsInfo struct {
+	TotalEvents   int `json:"total_events"`   // 总事件数
+	WarningEvents int `json:"warning_events"` // 警告事件数
+	NormalEvents  int `json:"normal_events"`  // 正常事件数
+	RecentEvents  int `json:"recent_events"`  // 最近1小时事件数
+}

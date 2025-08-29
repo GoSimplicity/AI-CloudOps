@@ -42,22 +42,21 @@ import (
 )
 
 type NodeService interface {
-	// ListNodeByClusterName 获取指定集群的节点列表
 	ListNodeByClusterName(ctx context.Context, id int) ([]*model.K8sNode, error)
-	// GetNodeDetail 获取指定节点详情
 	GetNodeDetail(ctx context.Context, id int, name string) (*model.K8sNode, error)
-	// AddOrUpdateNodeLabel 添加或删除指定节点的 Label
 	AddOrUpdateNodeLabel(ctx context.Context, req *model.LabelK8sNodesReq) error
-	// GetNodeResources 获取节点资源信息
 	GetNodeResources(ctx context.Context, id int) (*model.NodeResources, error)
-	// GetNodeEvents 获取节点事件
 	GetNodeEvents(ctx context.Context, id int, nodeName string) ([]model.OneEvent, error)
+	DrainNode(ctx context.Context, req *model.NodeDrainReq) (*model.NodeDrainResponse, error)
+	CordonNode(ctx context.Context, req *model.NodeCordonReq) (*model.NodeCordonResponse, error)
+	UncordonNode(ctx context.Context, req *model.NodeUncordonReq) (*model.NodeUncordonResponse, error)
+	GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]model.NodeTaintEntity, error)
 }
 
 type nodeService struct {
-	clusterDao  dao.ClusterDAO      // 保持对DAO的依赖
-	client      client.K8sClient    // 保持向后兼容
-	nodeManager manager.NodeManager // 新的依赖注入
+	clusterDao  dao.ClusterDAO
+	client      client.K8sClient
+	nodeManager manager.NodeManager
 	l           *zap.Logger
 }
 
@@ -328,4 +327,224 @@ func (n *nodeService) GetNodeEvents(ctx context.Context, id int, nodeName string
 	}
 
 	return events, nil
+}
+
+// DrainNode 驱逐节点上的所有Pod
+func (n *nodeService) DrainNode(ctx context.Context, req *model.NodeDrainReq) (*model.NodeDrainResponse, error) {
+	cluster, err := n.clusterDao.GetClusterByID(ctx, req.ClusterID)
+	if err != nil {
+		return nil, fmt.Errorf("获取集群信息失败: %w", err)
+	}
+
+	kubeClient, err := n.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 首先获取节点信息
+	node, err := kubeClient.CoreV1().Nodes().Get(ctx, req.NodeName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("获取节点 %s 信息失败: %w", req.NodeName, err)
+	}
+
+	// 标记节点为不可调度（cordon）
+	node.Spec.Unschedulable = true
+	_, err = kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("标记节点 %s 不可调度失败: %w", req.NodeName, err)
+	}
+
+	// 获取节点上的所有Pod
+	pods, err := kubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", req.NodeName),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("获取节点 %s 上的Pod列表失败: %w", req.NodeName, err)
+	}
+
+	var drainedPods []string
+	var skippedPods []string
+
+	// 驱逐Pod
+	for _, pod := range pods.Items {
+		// 跳过系统Pod和DaemonSet Pod（如果配置了忽略）
+		if req.IgnoreDaemonsets && isDaemonSetPod(&pod) {
+			skippedPods = append(skippedPods, pod.Name)
+			continue
+		}
+
+		// 跳过静态Pod
+		if isStaticPod(&pod) {
+			skippedPods = append(skippedPods, pod.Name)
+			continue
+		}
+
+		// 删除Pod（模拟驱逐）
+		err := kubeClient.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{
+			GracePeriodSeconds: func() *int64 {
+				if req.GracePeriodSeconds > 0 {
+					grace := int64(req.GracePeriodSeconds)
+					return &grace
+				}
+				return nil
+			}(),
+		})
+		if err != nil {
+			n.l.Warn("删除Pod失败", zap.Error(err), zap.String("pod", pod.Name))
+			skippedPods = append(skippedPods, pod.Name)
+		} else {
+			drainedPods = append(drainedPods, pod.Name)
+		}
+	}
+
+	n.l.Info("节点驱逐完成", zap.String("nodeName", req.NodeName), zap.Int("drainedCount", len(drainedPods)))
+
+	return &model.NodeDrainResponse{
+		NodeName:    req.NodeName,
+		DrainedPods: drainedPods,
+		SkippedPods: skippedPods,
+		Status:      "success",
+		Message:     "节点驱逐完成",
+		Duration:    "completed", // 简化实现
+	}, nil
+}
+
+// CordonNode 禁止节点调度新的Pod
+func (n *nodeService) CordonNode(ctx context.Context, req *model.NodeCordonReq) (*model.NodeCordonResponse, error) {
+	cluster, err := n.clusterDao.GetClusterByID(ctx, req.ClusterID)
+	if err != nil {
+		return nil, fmt.Errorf("获取集群信息失败: %w", err)
+	}
+
+	kubeClient, err := n.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取节点信息
+	node, err := kubeClient.CoreV1().Nodes().Get(ctx, req.NodeName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("获取节点 %s 信息失败: %w", req.NodeName, err)
+	}
+
+	// 检查节点是否已经被封锁
+	if node.Spec.Unschedulable {
+		return &model.NodeCordonResponse{
+			NodeName: req.NodeName,
+			Status:   "already_cordoned",
+			Message:  "节点已经被封锁",
+		}, nil
+	}
+
+	// 标记节点为不可调度
+	node.Spec.Unschedulable = true
+	_, err = kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("封锁节点 %s 失败: %w", req.NodeName, err)
+	}
+
+	n.l.Info("节点封锁成功", zap.String("nodeName", req.NodeName))
+
+	return &model.NodeCordonResponse{
+		NodeName: req.NodeName,
+		Status:   "success",
+		Message:  "节点已成功封锁",
+	}, nil
+}
+
+// UncordonNode 解除节点调度限制
+func (n *nodeService) UncordonNode(ctx context.Context, req *model.NodeUncordonReq) (*model.NodeUncordonResponse, error) {
+	cluster, err := n.clusterDao.GetClusterByID(ctx, req.ClusterID)
+	if err != nil {
+		return nil, fmt.Errorf("获取集群信息失败: %w", err)
+	}
+
+	kubeClient, err := n.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取节点信息
+	node, err := kubeClient.CoreV1().Nodes().Get(ctx, req.NodeName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("获取节点 %s 信息失败: %w", req.NodeName, err)
+	}
+
+	// 检查节点是否需要解封
+	if !node.Spec.Unschedulable {
+		return &model.NodeUncordonResponse{
+			NodeName: req.NodeName,
+			Status:   "already_uncordoned",
+			Message:  "节点已经可以调度",
+		}, nil
+	}
+
+	// 移除不可调度标记
+	node.Spec.Unschedulable = false
+	_, err = kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("解封节点 %s 失败: %w", req.NodeName, err)
+	}
+
+	n.l.Info("节点解封成功", zap.String("nodeName", req.NodeName))
+
+	return &model.NodeUncordonResponse{
+		NodeName: req.NodeName,
+		Status:   "success",
+		Message:  "节点已成功解封",
+	}, nil
+}
+
+// 辅助函数：检查是否为DaemonSet Pod
+func isDaemonSetPod(pod *corev1.Pod) bool {
+	for _, ownerRef := range pod.OwnerReferences {
+		if ownerRef.Kind == "DaemonSet" {
+			return true
+		}
+	}
+	return false
+}
+
+// 辅助函数：检查是否为静态Pod
+func isStaticPod(pod *corev1.Pod) bool {
+	return pod.Annotations["kubernetes.io/config.source"] == "file"
+}
+
+// GetNodeTaints 获取节点污点列表
+func (n *nodeService) GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]model.NodeTaintEntity, error) {
+	cluster, err := n.clusterDao.GetClusterByID(ctx, clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("获取集群信息失败: %w", err)
+	}
+
+	kubeClient, err := n.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		n.l.Error("获取 Kubernetes 客户端失败", zap.Error(err))
+		return nil, err
+	}
+
+	// 获取节点信息
+	node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err)
+	}
+
+	// 转换污点信息为实体格式
+	var taintEntities []model.NodeTaintEntity
+	for _, taint := range node.Spec.Taints {
+		taintEntity := model.NodeTaintEntity{
+			Key:    taint.Key,
+			Value:  taint.Value,
+			Effect: string(taint.Effect),
+		}
+		if taint.TimeAdded != nil {
+			taintEntity.TimeAdded = taint.TimeAdded.Format("2006-01-02 15:04:05")
+		}
+		taintEntities = append(taintEntities, taintEntity)
+	}
+
+	return taintEntities, nil
 }
