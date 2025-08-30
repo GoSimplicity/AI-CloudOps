@@ -149,23 +149,45 @@ func (cm *clusterManager) RefreshAllClusters(ctx context.Context) error {
 }
 
 func (cm *clusterManager) InitializeAllClusters(ctx context.Context) error {
-	clusters, err := cm.dao.ListAllClusters(ctx)
-	if err != nil {
-		cm.logger.Error("获取所有集群失败", zap.Error(err))
-		return err
-	}
+	page := 1
+	size := 10
 
-	for _, cluster := range clusters {
-		if cluster.KubeConfigContent == "" {
-			cm.logger.Warn("集群的 KubeConfig 内容为空，跳过初始化", zap.Int("ClusterID", cluster.ID))
-			continue
-		}
-
-		_, err := cm.client.GetKubeClient(cluster.ID)
+	for {
+		clusters, total, err := cm.dao.GetClusterList(ctx, &model.ListClustersReq{
+			ListReq: model.ListReq{
+				Page: page,
+				Size: size,
+			},
+		})
 		if err != nil {
-			cm.logger.Error("初始化 Kubernetes 客户端失败", zap.Int("ClusterID", cluster.ID), zap.Error(err))
-			continue
+			cm.logger.Error("获取所有集群失败", zap.Error(err))
+			return err
 		}
+
+		// 如果没有集群了，退出循环
+		if len(clusters) == 0 {
+			break
+		}
+
+		for _, cluster := range clusters {
+			if cluster.KubeConfigContent == "" {
+				cm.logger.Warn("集群的 KubeConfig 内容为空，跳过初始化", zap.Int("ClusterID", cluster.ID))
+				continue
+			}
+
+			_, err := cm.client.GetKubeClient(cluster.ID)
+			if err != nil {
+				cm.logger.Error("初始化 Kubernetes 客户端失败", zap.Int("ClusterID", cluster.ID), zap.Error(err))
+				continue
+			}
+		}
+
+		// 如果已经处理完所有集群，退出循环
+		if int64(page*size) >= total {
+			break
+		}
+
+		page++
 	}
 
 	return nil

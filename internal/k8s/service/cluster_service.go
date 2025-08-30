@@ -43,7 +43,7 @@ import (
 )
 
 type ClusterService interface {
-	ListAllClusters(ctx context.Context, req *model.ListClustersReq) (model.ListResp[*model.K8sCluster], error)
+	ListClusters(ctx context.Context, req *model.ListClustersReq) (model.ListResp[*model.K8sCluster], error)
 	CreateCluster(ctx context.Context, req *model.CreateClusterReq) error
 	UpdateCluster(ctx context.Context, req *model.UpdateClusterReq) error
 	DeleteCluster(ctx context.Context, req *model.DeleteClusterReq) error
@@ -69,23 +69,15 @@ func NewClusterService(dao dao.ClusterDAO, client client.K8sClient, clusterMgr m
 	}
 }
 
-// ListAllClusters 获取所有 Kubernetes 集群
-func (c *clusterService) ListAllClusters(ctx context.Context, req *model.ListClustersReq) (model.ListResp[*model.K8sCluster], error) {
+// ListClusters 获取所有 Kubernetes 集群
+func (c *clusterService) ListClusters(ctx context.Context, req *model.ListClustersReq) (model.ListResp[*model.K8sCluster], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sCluster]{}, fmt.Errorf("获取集群列表请求不能为空")
 	}
 
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-
-	if req.Size <= 0 {
-		req.Size = 10
-	}
-
 	list, total, err := c.dao.GetClusterList(ctx, req)
 	if err != nil {
-		c.l.Error("ListAllClusters: 查询所有集群失败", zap.Error(err))
+		c.l.Error("ListClusters: 查询所有集群失败", zap.Error(err))
 		return model.ListResp[*model.K8sCluster]{}, fmt.Errorf("查询所有集群失败: %w", err)
 	}
 

@@ -49,13 +49,13 @@ func (k *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
 		k8sGroup.GET("/clusters/list", k.GetClusterList)
-		k8sGroup.GET("/clusters/detail/:id", k.GetCluster)
+		k8sGroup.GET("/clusters/:id/detail", k.GetCluster)
 		k8sGroup.POST("/clusters/create", k.CreateCluster)
-		k8sGroup.PUT("/clusters/update/:id", k.UpdateCluster)
-		k8sGroup.DELETE("/clusters/delete/:id", k.DeleteCluster)
-		k8sGroup.POST("/clusters/refresh/:id", k.RefreshCluster)
-		k8sGroup.GET("/clusters/health/:id", k.CheckClusterHealth)
-		k8sGroup.GET("/clusters/stats/:id", k.GetClusterStats)
+		k8sGroup.PUT("/clusters/:id/update", k.UpdateCluster)
+		k8sGroup.DELETE("/clusters/:id/delete", k.DeleteCluster)
+		k8sGroup.POST("/clusters/:id/refresh", k.RefreshCluster)
+		k8sGroup.GET("/clusters/:id/health", k.CheckClusterHealth)
+		k8sGroup.GET("/clusters/:id/stats", k.GetClusterStats)
 	}
 }
 
@@ -64,7 +64,7 @@ func (k *K8sClusterHandler) GetClusterList(ctx *gin.Context) {
 	var req model.ListClustersReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.clusterService.ListAllClusters(ctx, &req)
+		return k.clusterService.ListClusters(ctx, &req)
 	})
 }
 

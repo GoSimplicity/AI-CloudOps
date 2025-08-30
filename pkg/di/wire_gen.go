@@ -36,13 +36,10 @@ import (
 	service2 "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	api6 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	dao4 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
-	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	service5 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
-	"github.com/hibiken/asynq"
-	"go.uber.org/zap"
 )
 
 import (
@@ -73,61 +70,61 @@ func ProvideCmd() *Cmd {
 	notAuthService := service3.NewNotAuthService(logger)
 	notAuthHandler := api3.NewNotAuthHandler(notAuthService)
 	clusterDAO := dao3.NewClusterDAO(db, logger)
-	k8sClientFactory := client.NewK8sClient(logger, clusterDAO)
-	clusterManager := manager.NewClusterManager(logger, k8sClientFactory, clusterDAO)
-	clusterService := service4.NewClusterService(clusterDAO, k8sClientFactory, clusterManager, logger)
+	k8sClient := client.NewK8sClient(logger, clusterDAO)
+	clusterManager := manager.NewClusterManager(logger, k8sClient, clusterDAO)
+	clusterService := service4.NewClusterService(clusterDAO, k8sClient, clusterManager, logger)
 	k8sClusterHandler := api4.NewK8sClusterHandler(logger, clusterService)
-	deploymentManager := manager.NewDeploymentManager(k8sClientFactory, logger)
-	deploymentService := service4.NewDeploymentService(clusterDAO, k8sClientFactory, deploymentManager, logger)
+	deploymentManager := manager.NewDeploymentManager(k8sClient, logger)
+	deploymentService := service4.NewDeploymentService(clusterDAO, k8sClient, deploymentManager, logger)
 	k8sDeploymentHandler := api4.NewK8sDeploymentHandler(logger, deploymentService)
-	namespaceService := service4.NewNamespaceService(clusterDAO, k8sClientFactory, logger)
+	namespaceService := service4.NewNamespaceService(clusterDAO, k8sClient, logger)
 	k8sNamespaceHandler := api4.NewK8sNamespaceHandler(logger, namespaceService)
-	nodeManager := manager.NewNodeManager(k8sClientFactory, logger)
-	nodeService := service4.NewNodeService(clusterDAO, k8sClientFactory, nodeManager, logger)
-	taintManager := manager.NewTaintManager(clusterDAO, k8sClientFactory, logger)
+	nodeManager := manager.NewNodeManager(k8sClient, logger)
+	nodeService := service4.NewNodeService(clusterDAO, k8sClient, nodeManager, logger)
+	taintManager := manager.NewTaintManager(clusterDAO, k8sClient, logger)
 	taintService := service4.NewTaintService(taintManager, logger)
 	k8sNodeHandler := api4.NewK8sNodeHandler(logger, nodeService, taintService)
-	podManager := manager.NewPodManager(k8sClientFactory, logger)
-	podService := service4.NewPodService(clusterDAO, k8sClientFactory, podManager, logger)
+	podManager := manager.NewPodManager(k8sClient, logger)
+	podService := service4.NewPodService(clusterDAO, k8sClient, podManager, logger)
 	k8sPodHandler := api4.NewK8sPodHandler(logger, podService)
-	svcService := service4.NewSvcService(clusterDAO, k8sClientFactory, logger)
+	svcService := service4.NewSvcService(clusterDAO, k8sClient, logger)
 	k8sSvcHandler := api4.NewK8sSvcHandler(logger, svcService)
 	k8sTaintHandler := api4.NewK8sTaintHandler(logger, taintService)
 	yamlTemplateDAO := dao3.NewYamlTemplateDAO(db, logger)
 	yamlTaskDAO := dao3.NewYamlTaskDAO(db, logger)
-	yamlManager := manager.NewYamlManager(yamlTemplateDAO, yamlTaskDAO, clusterDAO, k8sClientFactory, logger)
+	yamlManager := manager.NewYamlManager(yamlTemplateDAO, yamlTaskDAO, clusterDAO, k8sClient, logger)
 	yamlTaskService := service4.NewYamlTaskService(yamlManager, logger)
 	k8sYamlTaskHandler := api4.NewK8sYamlTaskHandler(logger, yamlTaskService)
 	yamlTemplateService := service4.NewYamlTemplateService(yamlManager, logger)
 	k8sYamlTemplateHandler := api4.NewK8sYamlTemplateHandler(logger, yamlTemplateService)
-	configMapManager := manager.NewConfigMapManager(k8sClientFactory, logger)
-	configMapService := service4.NewConfigMapService(k8sClientFactory, configMapManager, logger)
+	configMapManager := manager.NewConfigMapManager(k8sClient, logger)
+	configMapService := service4.NewConfigMapService(k8sClient, configMapManager, logger)
 	k8sConfigMapHandler := api4.NewK8sConfigMapHandler(logger, configMapService)
-	secretManager := manager.NewSecretManager(k8sClientFactory, logger)
-	secretService := service4.NewSecretService(k8sClientFactory, secretManager, logger)
+	secretManager := manager.NewSecretManager(k8sClient, logger)
+	secretService := service4.NewSecretService(k8sClient, secretManager, logger)
 	k8sSecretHandler := api4.NewK8sSecretHandler(logger, secretService)
-	daemonSetManager := manager.NewDaemonSetManager(k8sClientFactory)
-	daemonSetService := service4.NewDaemonSetService(clusterDAO, k8sClientFactory, daemonSetManager, logger)
+	daemonSetManager := manager.NewDaemonSetManager(k8sClient)
+	daemonSetService := service4.NewDaemonSetService(clusterDAO, k8sClient, daemonSetManager, logger)
 	k8sDaemonSetHandler := api4.NewK8sDaemonSetHandler(logger, daemonSetService)
-	eventManager := manager.NewEventManager(k8sClientFactory, logger)
-	eventService := service4.NewEventService(clusterDAO, k8sClientFactory, eventManager, logger)
+	eventManager := manager.NewEventManager(k8sClient, logger)
+	eventService := service4.NewEventService(clusterDAO, k8sClient, eventManager, logger)
 	k8sEventHandler := api4.NewK8sEventHandler(logger, eventService)
-	pvManager := manager.NewPVManager(logger, k8sClientFactory)
-	pvService := service4.NewPVService(clusterDAO, k8sClientFactory, pvManager, logger)
+	pvManager := manager.NewPVManager(logger, k8sClient)
+	pvService := service4.NewPVService(clusterDAO, k8sClient, pvManager, logger)
 	k8sPVHandler := api4.NewK8sPVHandler(logger, pvService)
-	pvcManager := manager.NewPVCManager(logger, k8sClientFactory)
-	pvcService := service4.NewPVCService(clusterDAO, k8sClientFactory, pvcManager, logger)
+	pvcManager := manager.NewPVCManager(logger, k8sClient)
+	pvcService := service4.NewPVCService(clusterDAO, k8sClient, pvcManager, logger)
 	k8sPVCHandler := api4.NewK8sPVCHandler(logger, pvcService)
-	ingressManager := manager.NewIngressManager(logger, k8sClientFactory)
-	ingressService := service4.NewIngressService(clusterDAO, k8sClientFactory, ingressManager, logger)
+	ingressManager := manager.NewIngressManager(logger, k8sClient)
+	ingressService := service4.NewIngressService(clusterDAO, k8sClient, ingressManager, logger)
 	k8sIngressHandler := api4.NewK8sIngressHandler(logger, ingressService)
-	statefulSetManager := manager.NewStatefulSetManager(k8sClientFactory)
-	statefulSetService := service4.NewStatefulSetService(k8sClientFactory, statefulSetManager, logger)
+	statefulSetManager := manager.NewStatefulSetManager(k8sClient)
+	statefulSetService := service4.NewStatefulSetService(k8sClient, statefulSetManager, logger)
 	k8sStatefulSetHandler := api4.NewK8sStatefulSetHandler(logger, statefulSetService)
-	serviceAccountManager := manager.NewServiceAccountManager(logger, k8sClientFactory)
+	serviceAccountManager := manager.NewServiceAccountManager(logger, k8sClient)
 	serviceAccountService := service4.NewServiceAccountService(clusterDAO, serviceAccountManager, logger)
 	k8sServiceAccountHandler := api4.NewK8sServiceAccountHandler(logger, serviceAccountService)
-	rbacManager := manager.NewRBACManager(logger, k8sClientFactory)
+	rbacManager := manager.NewRBACManager(logger, k8sClient)
 	serviceRoleService := service4.NewRoleService(clusterDAO, rbacManager, logger)
 	roleAPI := api4.NewRoleAPI(serviceRoleService, logger)
 	clusterRoleService := service4.NewClusterRoleService(clusterDAO, rbacManager, logger)
@@ -211,7 +208,7 @@ func ProvideCmd() *Cmd {
 	notificationHandler := api6.NewNotificationHandler(workorderNotificationService)
 	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, systemHandler, notAuthHandler, k8sClusterHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sTaintHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sConfigMapHandler, k8sSecretHandler, k8sDaemonSetHandler, k8sEventHandler, k8sPVHandler, k8sPVCHandler, k8sIngressHandler, k8sStatefulSetHandler, k8sServiceAccountHandler, roleAPI, clusterRoleAPI, roleBindingAPI, clusterRoleBindingAPI, rbacapi, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, notificationHandler)
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
-	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClientFactory, clusterManager, monitorCache)
+	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache)
 	cmd := &Cmd{
 		Server:    engine,
 		Bootstrap: applicationBootstrap,
@@ -262,42 +259,3 @@ var NotificationSet = wire.NewSet(
 	InitNotificationConfig,
 	InitNotificationManager,
 )
-
-// NotificationConfigAdapter 通知配置适配器
-type NotificationConfigAdapter struct {
-	config *NotificationConfig
-}
-
-// GetEmail 获取邮箱配置
-func (a *NotificationConfigAdapter) GetEmail() notification.EmailConfig {
-	emailConfig := a.config.GetEmail()
-	if emailConfig == nil {
-		return nil
-	}
-	return emailConfig
-}
-
-// GetFeishu 获取飞书配置
-func (a *NotificationConfigAdapter) GetFeishu() notification.FeishuConfig {
-	feishuConfig := a.config.GetFeishu()
-	if feishuConfig == nil {
-		return nil
-	}
-	return feishuConfig
-}
-
-// InitNotificationConfig 初始化通知配置
-func InitNotificationConfig() notification.NotificationConfig {
-	return &NotificationConfigAdapter{
-		config: &GlobalConfig.Notification,
-	}
-}
-
-// InitNotificationManager 初始化通知管理器
-func InitNotificationManager(config3 notification.NotificationConfig, asynqClient *asynq.Client, logger *zap.Logger) *notification.Manager {
-	manager2, err := notification.NewManager(config3, asynqClient, logger)
-	if err != nil {
-		panic(err)
-	}
-	return manager2
-}

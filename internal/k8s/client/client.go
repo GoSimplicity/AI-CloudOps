@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/openkruise/kruise-api/client/clientset/versioned"
 	"go.uber.org/zap"
 	discovery2 "k8s.io/client-go/discovery"
@@ -138,25 +139,52 @@ func (k *k8sClient) GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClie
 }
 
 func (k *k8sClient) RefreshClients(ctx context.Context) error {
-	clusters, err := k.dao.ListAllClusters(ctx)
-	if err != nil {
-		return fmt.Errorf("获取集群列表失败: %w", err)
-	}
+	page := 1
+	size := 10
+	var allErrors []error
 
-	var errors []error
-	for _, cluster := range clusters {
-		if cluster.KubeConfigContent == "" {
-			continue
+	for {
+		req := &model.ListClustersReq{
+			ListReq: model.ListReq{
+				Page: page,
+				Size: size,
+			},
 		}
 
-		_, err := k.initClusterClients(cluster.ID)
+		clusters, total, err := k.dao.GetClusterList(ctx, req)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("集群%d: %w", cluster.ID, err))
+			return fmt.Errorf("获取集群列表失败: %w", err)
 		}
+
+		// 如果没有集群了，退出循环
+		if len(clusters) == 0 {
+			break
+		}
+
+		var errors []error
+		for _, cluster := range clusters {
+			if cluster.KubeConfigContent == "" {
+				continue
+			}
+
+			_, err := k.initClusterClients(cluster.ID)
+			if err != nil {
+				errors = append(errors, fmt.Errorf("集群%d: %w", cluster.ID, err))
+			}
+		}
+
+		allErrors = append(allErrors, errors...)
+
+		// 如果已经处理完所有集群，退出循环
+		if int64(page*size) >= total {
+			break
+		}
+
+		page++
 	}
 
-	if len(errors) > 0 {
-		return fmt.Errorf("刷新%d个集群失败", len(errors))
+	if len(allErrors) > 0 {
+		return fmt.Errorf("刷新%d个集群失败", len(allErrors))
 	}
 
 	return nil

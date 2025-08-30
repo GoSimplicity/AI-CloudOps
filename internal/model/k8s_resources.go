@@ -33,17 +33,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// K8sNamespace Kubernetes命名空间响应信息
-type K8sNamespace struct {
-	Name              string            `json:"name"`
-	UID               string            `json:"uid"`
-	Status            string            `json:"status"`
-	CreationTimestamp time.Time         `json:"creation_timestamp"`
-	Labels            map[string]string `json:"labels"`
-	Annotations       map[string]string `json:"annotations"`
-	ResourceQuota     *ResourceQuota    `json:"resource_quota,omitempty"`
-}
-
 // ResourceQuota 资源配额信息
 type ResourceQuota struct {
 	CpuLimit       string `json:"cpu_limit"`
