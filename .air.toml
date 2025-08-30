@@ -11,9 +11,8 @@ tmp_dir = "tmp"
 # 构建命令
 pre_cmd = [
     "echo '🔄 开始构建...'",
-    "echo '📄 自动生成 Swagger 文档（无需手动注释）...'",
-    "go generate",
-    "echo '✅ Swagger 文档已自动更新'"
+    "echo '📄 检查 Swagger 文档生成设置...'",
+    "if [ \"${SWAGGER_ENABLED:-true}\" = \"false\" ]; then echo '⏭️ Swagger 文档生成已禁用，跳过生成'; else echo '📄 自动生成 Swagger 文档...'; go generate; echo '✅ Swagger 文档已自动更新'; fi"
 ]
 
 # 编译后的二进制文件名
@@ -44,7 +43,7 @@ include_file = ["main.go"]
 exclude_file = []
 
 # 排除的文件，支持正则
-exclude_regex = ["_test.go$", "docs/.*"]
+exclude_regex = ["_test.go$", "docs/.*", "tmp/.*", "tools/swagger-auto-gen/swagger-auto-gen$", "pkg/di/wire_gen.go$"]
 
 # 删除构建产物
 exclude_unchanged = false

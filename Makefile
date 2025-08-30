@@ -11,9 +11,17 @@ swagger-manual:
 # 自动生成 Swagger API 文档（无需手动注释，自动同步到 docs.go）
 swagger:
 	@echo "🚀 正在生成API文档..."
-	@echo "📄 使用标准swag工具生成文档..."
-	@bash scripts/swagger-helper.sh generate
+	@echo "📄 使用自动生成工具生成文档..."
+	@bash scripts/generate-swagger.sh
 	@echo "✅ Swagger 文档生成完成！"
+
+# 禁用 Swagger 生成（设置环境变量）
+swagger-disable:
+	@echo "🔒 禁用 Swagger 文档生成..."
+	@export SWAGGER_ENABLED=false
+	@export SWAGGER_VERBOSE=false
+	@echo "✅ Swagger 生成已禁用"
+	@echo "💡 提示: 使用 'export SWAGGER_ENABLED=false' 永久禁用"
 
 # 兼容旧的命令名
 openai: swagger

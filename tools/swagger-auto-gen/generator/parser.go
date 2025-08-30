@@ -130,10 +130,6 @@ func (p *Parser) parseFile(file *ast.File, packagePath string) {
 
 // parseStruct 解析结构体
 func (p *Parser) parseStruct(name string, structType *ast.StructType, packagePath string) {
-	if p.verbose {
-		fmt.Printf("📦 解析结构体: %s (包: %s)\n", name, packagePath)
-	}
-
 	structInfo := &StructInfo{
 		Name:          name,
 		Fields:        make([]FieldInfo, 0),
@@ -152,8 +148,7 @@ func (p *Parser) parseStruct(name string, structType *ast.StructType, packagePat
 	p.structs[fullName] = structInfo
 
 	if p.verbose {
-		fmt.Printf("✅ 结构体解析完成: %s (字段数: %d, 嵌入类型数: %d)\n",
-			name, len(structInfo.Fields), len(structInfo.EmbeddedTypes))
+		fmt.Printf("✅ 结构体解析完成: %s (字段数: %d)\n", name, len(structInfo.Fields))
 	}
 }
 
@@ -163,9 +158,6 @@ func (p *Parser) parseStructField(field *ast.Field, structInfo *StructInfo) {
 	if len(field.Names) == 0 {
 		embeddedType := p.exprToString(field.Type)
 		structInfo.EmbeddedTypes = append(structInfo.EmbeddedTypes, embeddedType)
-		if p.verbose {
-			fmt.Printf("  🔗 嵌入类型: %s\n", embeddedType)
-		}
 		return
 	}
 
@@ -193,12 +185,6 @@ func (p *Parser) parseStructField(field *ast.Field, structInfo *StructInfo) {
 		}
 
 		structInfo.Fields = append(structInfo.Fields, fieldInfo)
-
-		if p.verbose {
-			fmt.Printf("  📋 字段: %s %s (json: %s, form: %s, uri: %s, required: %t)\n",
-				fieldInfo.Name, fieldInfo.Type, fieldInfo.JSONName,
-				fieldInfo.FormName, fieldInfo.URIName, fieldInfo.Required)
-		}
 	}
 }
 
@@ -325,26 +311,19 @@ func (p *Parser) parseRoutes() error {
 	// 查找web.go中的路由注册
 	webFiles, err := filepath.Glob(filepath.Join(p.projectRoot, "pkg/di/web.go"))
 	if err != nil {
-		return err
+		return fmt.Errorf("查找web.go文件失败: %w", err)
 	}
 
 	for _, webFile := range webFiles {
 		if err := p.parseWebFile(webFile); err != nil {
-			return err
+			return fmt.Errorf("解析web文件%s失败: %w", webFile, err)
 		}
 	}
 
 	// 查找各个handler中的RegisterRouters方法
 	registeredCount := 0
-	if p.verbose {
-		fmt.Printf("🔍 开始查找 RegisterRouters/RegisterRoutes 方法...\n")
-	}
 
 	for handlerKey, handler := range p.handlers {
-		if p.verbose && strings.Contains(strings.ToLower(handler.Name), "register") {
-			fmt.Printf("🔍 发现注册相关方法: %s -> %s (接收者: %s)\n", handlerKey, handler.Name, handler.ReceiverType)
-		}
-
 		if handler.Name == "RegisterRouters" || handler.Name == "RegisterRoutes" {
 			if p.verbose {
 				fmt.Printf("🔧 正在解析路由注册方法: %s (接收者: %s)\n", handlerKey, handler.ReceiverType)
@@ -353,9 +332,9 @@ func (p *Parser) parseRoutes() error {
 				if p.verbose {
 					fmt.Printf("⚠️  解析路由注册失败 %s: %v\n", handlerKey, err)
 				}
-			} else {
-				registeredCount++
+				continue
 			}
+			registeredCount++
 		}
 	}
 
@@ -370,7 +349,7 @@ func (p *Parser) parseRoutes() error {
 func (p *Parser) parseWebFile(filePath string) error {
 	file, err := parser.ParseFile(p.fileSet, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return err
+		return fmt.Errorf("解析文件%s失败: %w", filePath, err)
 	}
 
 	// 查找InitGinServer函数

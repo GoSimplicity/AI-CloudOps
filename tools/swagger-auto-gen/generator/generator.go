@@ -141,9 +141,6 @@ func (g *SwaggerGenerator) buildPaths(doc *SwaggerDoc) {
 		endpoint := g.buildEndpoint(route)
 		doc.Paths[path][method] = endpoint
 
-		if g.verbose {
-			fmt.Printf("📝 添加端点: %s %s\n", route.Method, path)
-		}
 	}
 }
 
@@ -247,8 +244,7 @@ func (g *SwaggerGenerator) generateParameters(route RouteInfo) []Parameter {
 	parameters := make([]Parameter, 0)
 
 	if route.HandlerInfo == nil || route.HandlerInfo.FuncDecl == nil || route.HandlerInfo.FuncDecl.Body == nil {
-		// 回退到传统方式
-		return g.generateLegacyParameters(route)
+		return parameters
 	}
 
 	// 分析函数体中的参数绑定调用
@@ -277,11 +273,6 @@ func (g *SwaggerGenerator) generateParameters(route RouteInfo) []Parameter {
 			},
 		})
 		break // 只处理第一个body绑定
-	}
-
-	// 4. 如果没有发现任何绑定，使用传统方式分析
-	if len(bindingInfo.URIBindings) == 0 && len(bindingInfo.QueryBindings) == 0 && len(bindingInfo.BodyBindings) == 0 {
-		parameters = g.generateLegacyParameters(route)
 	}
 
 	return parameters
@@ -489,44 +480,6 @@ func (g *SwaggerGenerator) extractQueryParametersFromStruct(structName string) [
 	return parameters
 }
 
-// generateLegacyParameters 使用传统方式生成参数（兼容旧代码）
-func (g *SwaggerGenerator) generateLegacyParameters(route RouteInfo) []Parameter {
-	parameters := make([]Parameter, 0)
-
-	// 路径参数
-	pathParams := g.extractPathParams(route.Path)
-	for _, param := range pathParams {
-		parameters = append(parameters, Parameter{
-			Name:        param,
-			In:          "path",
-			Type:        "string",
-			Required:    true,
-			Description: fmt.Sprintf("%s ID", param),
-		})
-	}
-
-	// 智能决定是否需要查询参数
-	if g.shouldAddQueryParams(route) {
-		queryParams := g.extractQueryParams(route.HandlerInfo)
-		parameters = append(parameters, queryParams...)
-
-		// 为列表接口添加通用分页参数
-		if g.isListEndpoint(route) {
-			parameters = append(parameters, g.getCommonPaginationParams()...)
-		}
-	}
-
-	// 请求体参数
-	if g.hasRequestBody(route.Method) {
-		bodyParam := g.generateBodyParameter(route)
-		if bodyParam != nil {
-			parameters = append(parameters, *bodyParam)
-		}
-	}
-
-	return parameters
-}
-
 // getFieldDescription 获取字段描述
 func (g *SwaggerGenerator) getFieldDescription(field FieldInfo) string {
 	if field.Description != "" {
@@ -550,82 +503,6 @@ func (g *SwaggerGenerator) mapGoTypeToSwagger(goType string) string {
 		return "string"
 	default:
 		return "string"
-	}
-}
-
-// shouldAddQueryParams 判断是否应该添加查询参数
-func (g *SwaggerGenerator) shouldAddQueryParams(route RouteInfo) bool {
-	// POST/PUT/PATCH的非列表接口通常不需要查询参数
-	if g.hasRequestBody(route.Method) && !g.isListEndpoint(route) {
-		return false
-	}
-
-	// GET请求通常需要查询参数
-	if route.Method == "GET" {
-		return true
-	}
-
-	// DELETE请求有时需要查询参数
-	if route.Method == "DELETE" && !strings.Contains(route.Path, ":") {
-		return true
-	}
-
-	return false
-}
-
-// isListEndpoint 判断是否是列表接口
-func (g *SwaggerGenerator) isListEndpoint(route RouteInfo) bool {
-	path := strings.ToLower(route.Path)
-
-	// 包含 list 关键词
-	if strings.Contains(path, "/list") {
-		return true
-	}
-
-	// GET请求且没有路径参数，通常是列表接口
-	if route.Method == "GET" && !strings.Contains(route.Path, ":") {
-		// 排除明确的非列表接口
-		excludePatterns := []string{
-			"/detail", "/info", "/profile", "/config", "/health", "/status",
-			"/login", "/logout", "/refresh", "/statistics",
-		}
-
-		for _, pattern := range excludePatterns {
-			if strings.Contains(path, pattern) {
-				return false
-			}
-		}
-
-		return true
-	}
-
-	return false
-}
-
-// getCommonPaginationParams 获取通用分页参数
-func (g *SwaggerGenerator) getCommonPaginationParams() []Parameter {
-	return []Parameter{
-		{
-			Name:        "page",
-			In:          "query",
-			Type:        "integer",
-			Description: "页码",
-			Required:    false,
-		},
-		{
-			Name:        "size",
-			In:          "query",
-			Type:        "integer",
-			Description: "每页数量",
-			Required:    false,
-		},
-		{
-			Name:        "search",
-			In:          "query",
-			Type:        "string",
-			Description: "搜索关键词",
-			Required:    false,
-		},
 	}
 }
 
@@ -726,9 +603,6 @@ func (g *SwaggerGenerator) buildDefinitions(doc *SwaggerDoc) {
 			shortName := g.getShortName(name)
 			doc.Definitions[shortName] = definition
 
-			if g.verbose {
-				fmt.Printf("📋 添加定义: %s\n", shortName)
-			}
 		}
 	}
 }
@@ -859,188 +733,9 @@ func (g *SwaggerGenerator) extractPathParams(path string) []string {
 	return params
 }
 
-// extractQueryParams 从函数参数提取查询参数
-func (g *SwaggerGenerator) extractQueryParams(handler *HandlerInfo) []Parameter {
-	parameters := make([]Parameter, 0)
-
-	if handler == nil || handler.FuncDecl == nil || handler.FuncDecl.Body == nil {
-		return parameters
-	}
-
-	// 分析函数体中的实际参数使用
-	queryParams := g.analyzeQueryUsage(handler.FuncDecl.Body)
-	for paramName, paramInfo := range queryParams {
-		parameters = append(parameters, Parameter{
-			Name:        paramName,
-			In:          "query",
-			Type:        paramInfo.Type,
-			Description: paramInfo.Description,
-			Required:    paramInfo.Required,
-		})
-	}
-
-	return parameters
-}
-
-// ParamInfo 参数信息
-type ParamInfo struct {
-	Type        string
-	Description string
-	Required    bool
-}
-
-// analyzeQueryUsage 分析函数体中的查询参数使用
-func (g *SwaggerGenerator) analyzeQueryUsage(body *ast.BlockStmt) map[string]ParamInfo {
-	queryParams := make(map[string]ParamInfo)
-
-	// 遍历函数体语句，查找 c.Query() 调用
-	ast.Inspect(body, func(n ast.Node) bool {
-		if callExpr, ok := n.(*ast.CallExpr); ok {
-			if selectorExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-				// 检查是否是 c.Query() 调用
-				if selectorExpr.Sel.Name == "Query" && len(callExpr.Args) > 0 {
-					if basicLit, ok := callExpr.Args[0].(*ast.BasicLit); ok {
-						paramName := strings.Trim(basicLit.Value, "\"")
-						if paramName != "" {
-							queryParams[paramName] = ParamInfo{
-								Type:        "string",
-								Description: fmt.Sprintf("%s参数", paramName),
-								Required:    false,
-							}
-						}
-					}
-				}
-			}
-		}
-		return true
-	})
-
-	return queryParams
-}
-
 // hasRequestBody 检查是否有请求体
 func (g *SwaggerGenerator) hasRequestBody(method string) bool {
 	return method == "POST" || method == "PUT" || method == "PATCH"
-}
-
-// generateBodyParameter 生成请求体参数
-func (g *SwaggerGenerator) generateBodyParameter(route RouteInfo) *Parameter {
-	if !g.hasRequestBody(route.Method) {
-		return nil
-	}
-
-	// 分析函数体中实际使用的请求结构体
-	requestStruct := g.analyzeRequestStruct(route.HandlerInfo)
-
-	param := &Parameter{
-		Name:        "body",
-		In:          "body",
-		Description: "请求体",
-		Schema: &Schema{
-			Type: "object",
-		},
-	}
-
-	// 如果找到了具体的请求结构体，使用它的Schema引用
-	if requestStruct != "" {
-		param.Schema.Ref = fmt.Sprintf("#/definitions/%s", requestStruct)
-		param.Schema.Type = ""
-	}
-
-	return param
-}
-
-// analyzeRequestStruct 分析请求结构体
-func (g *SwaggerGenerator) analyzeRequestStruct(handler *HandlerInfo) string {
-	if handler == nil || handler.FuncDecl == nil || handler.FuncDecl.Body == nil {
-		return ""
-	}
-
-	var requestStruct string
-
-	// 遍历函数体，查找 c.ShouldBindJSON() 或类似的调用
-	ast.Inspect(handler.FuncDecl.Body, func(n ast.Node) bool {
-		if callExpr, ok := n.(*ast.CallExpr); ok {
-			if selectorExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-				// 检查是否是绑定方法
-				methodName := selectorExpr.Sel.Name
-				isBindMethod := methodName == "ShouldBindJSON" ||
-					methodName == "ShouldBind" ||
-					methodName == "ShouldBindUri" ||
-					methodName == "BindJSON" ||
-					methodName == "Bind"
-
-				if isBindMethod && len(callExpr.Args) > 0 {
-					// 分析参数，提取结构体类型
-					if unaryExpr, ok := callExpr.Args[0].(*ast.UnaryExpr); ok {
-						if unaryExpr.Op.String() == "&" {
-							if ident, ok := unaryExpr.X.(*ast.Ident); ok {
-								// 查找变量声明来确定类型
-								structType := g.findVariableType(handler.FuncDecl.Body, ident.Name)
-								if structType != "" {
-									requestStruct = g.getShortName(structType)
-									return false // 找到了，停止遍历
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-		return true
-	})
-
-	return requestStruct
-}
-
-// findVariableType 查找变量的类型声明
-func (g *SwaggerGenerator) findVariableType(body *ast.BlockStmt, varName string) string {
-	var varType string
-
-	ast.Inspect(body, func(n ast.Node) bool {
-		// 查找变量声明语句 var req model.UserLoginReq
-		if declStmt, ok := n.(*ast.DeclStmt); ok {
-			if genDecl, ok := declStmt.Decl.(*ast.GenDecl); ok {
-				for _, spec := range genDecl.Specs {
-					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-						for i, name := range valueSpec.Names {
-							if name.Name == varName && valueSpec.Type != nil {
-								varType = g.exprToString(valueSpec.Type)
-								return false
-							}
-							// 处理短声明 req := model.UserLoginReq{}
-							if name.Name == varName && i < len(valueSpec.Values) {
-								if compositeLit, ok := valueSpec.Values[i].(*ast.CompositeLit); ok {
-									varType = g.exprToString(compositeLit.Type)
-									return false
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-
-		// 查找短声明语句 req := model.UserLoginReq{}
-		if assignStmt, ok := n.(*ast.AssignStmt); ok {
-			if assignStmt.Tok.String() == ":=" {
-				for i, lhs := range assignStmt.Lhs {
-					if ident, ok := lhs.(*ast.Ident); ok {
-						if ident.Name == varName && i < len(assignStmt.Rhs) {
-							if compositeLit, ok := assignStmt.Rhs[i].(*ast.CompositeLit); ok {
-								varType = g.exprToString(compositeLit.Type)
-								return false
-							}
-						}
-					}
-				}
-			}
-		}
-
-		return true
-	})
-
-	return varType
 }
 
 // exprToString 将表达式转换为字符串
@@ -1084,31 +779,25 @@ func (g *SwaggerGenerator) needsAuth(route RouteInfo) bool {
 // shouldIncludeStruct 检查是否应该包含结构体
 func (g *SwaggerGenerator) shouldIncludeStruct(structInfo *StructInfo) bool {
 	// 排除一些内部结构体
-	excludePatterns := []string{
-		"wire",
-		"test",
-		"Test",
-		"Mock",
-		"mock",
-	}
+	excludePatterns := []string{"wire", "test", "Test", "Mock", "mock"}
+
+	name := structInfo.Name
+	pkg := structInfo.Package
 
 	for _, pattern := range excludePatterns {
-		if strings.Contains(structInfo.Name, pattern) ||
-			strings.Contains(structInfo.Package, pattern) {
+		if strings.Contains(name, pattern) || strings.Contains(pkg, pattern) {
 			return false
 		}
 	}
 
 	// 只包含有JSON标签的结构体
-	hasJSONTags := false
 	for _, field := range structInfo.Fields {
 		if field.JSONName != "" && field.JSONName != "-" {
-			hasJSONTags = true
-			break
+			return true
 		}
 	}
 
-	return hasJSONTags
+	return false
 }
 
 // getShortName 获取短名称
@@ -1133,8 +822,12 @@ func (g *SwaggerGenerator) isCustomType(typeName string) bool {
 
 // removeDuplicates 移除重复项
 func (g *SwaggerGenerator) removeDuplicates(slice []string) []string {
-	keys := make(map[string]bool)
-	result := make([]string, 0)
+	if len(slice) <= 1 {
+		return slice
+	}
+
+	keys := make(map[string]bool, len(slice))
+	result := make([]string, 0, len(slice))
 
 	for _, item := range slice {
 		if !keys[item] {
@@ -1154,11 +847,11 @@ func (g *SwaggerGenerator) writeJSON(doc *SwaggerDoc) error {
 
 	data, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("JSON序列化失败: %w", err)
 	}
 
 	if err := os.WriteFile(jsonFile, data, 0644); err != nil {
-		return err
+		return fmt.Errorf("写入JSON文件失败: %w", err)
 	}
 
 	if g.verbose {
@@ -1174,11 +867,11 @@ func (g *SwaggerGenerator) writeYAML(doc *SwaggerDoc) error {
 
 	data, err := yaml.Marshal(doc)
 	if err != nil {
-		return err
+		return fmt.Errorf("YAML序列化失败: %w", err)
 	}
 
 	if err := os.WriteFile(yamlFile, data, 0644); err != nil {
-		return err
+		return fmt.Errorf("写入YAML文件失败: %w", err)
 	}
 
 	if g.verbose {
@@ -1194,40 +887,30 @@ func (g *SwaggerGenerator) writeGoDoc(doc *SwaggerDoc) error {
 
 	jsonData, err := json.Marshal(doc)
 	if err != nil {
-		return err
+		return fmt.Errorf("JSON序列化失败: %w", err)
 	}
 
-	content := fmt.Sprintf(`// Code generated by swagger-auto-gen. DO NOT EDIT.
+	// 使用模板生成内容
+	content := strings.ReplaceAll(DocsGoTemplate, "{{.DocJSON}}", string(jsonData))
+	content = strings.ReplaceAll(content, "{{.Version}}", doc.Info.Version)
+	content = strings.ReplaceAll(content, "{{.Host}}", doc.Host)
+	content = strings.ReplaceAll(content, "{{.BasePath}}", doc.BasePath)
+	content = strings.ReplaceAll(content, "{{.Title}}", doc.Info.Title)
+	content = strings.ReplaceAll(content, "{{.Description}}", doc.Info.Description)
+	content = strings.ReplaceAll(content, "{{.InstanceName}}", "swagger")
 
-package docs
-
-import "github.com/swaggo/swag"
-
-const docTemplate = `+"`%s`"+`
-
-// SwaggerInfo holds exported Swagger Info so clients can modify it
-var SwaggerInfo = &swag.Spec{
-	Version:          "%s",
-	Host:             "%s",
-	BasePath:         "%s",
-	Schemes:          []string{%s},
-	Title:            "%s",
-	Description:      "%s",
-	InfoInstanceName: "swagger",
-	SwaggerTemplate:  docTemplate,
-	LeftDelim:        "{{",
-	RightDelim:       "}}",
-}
-
-func init() {
-	swag.Register(SwaggerInfo.InstanceName(), SwaggerInfo)
-}
-`, string(jsonData), doc.Info.Version, doc.Host, doc.BasePath,
-		`"`+strings.Join(doc.Schemes, `", "`)+`"`,
-		doc.Info.Title, doc.Info.Description)
+	// 处理 Schemes 数组
+	var schemesStr string
+	for i, scheme := range doc.Schemes {
+		if i > 0 {
+			schemesStr += ", "
+		}
+		schemesStr += `"` + scheme + `"`
+	}
+	content = strings.ReplaceAll(content, "{{range .Schemes}}\"{{.}}\", {{end}}", schemesStr)
 
 	if err := os.WriteFile(goFile, []byte(content), 0644); err != nil {
-		return err
+		return fmt.Errorf("写入Go文件失败: %w", err)
 	}
 
 	if g.verbose {
