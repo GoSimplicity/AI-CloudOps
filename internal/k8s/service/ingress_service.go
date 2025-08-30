@@ -42,23 +42,14 @@ import (
 )
 
 type IngressService interface {
-	// 获取Ingress列表
 	GetIngressList(ctx context.Context, req *model.K8sIngressListReq) ([]*model.K8sIngressEntity, error)
 	GetIngressesByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sIngressEntity, error)
-
-	// 获取Ingress详情
 	GetIngress(ctx context.Context, clusterID int, namespace, name string) (*model.K8sIngressEntity, error)
 	GetIngressYaml(ctx context.Context, clusterID int, namespace, name string) (string, error)
-
-	// Ingress操作
 	CreateIngress(ctx context.Context, req *model.K8sIngressCreateReq) error
 	UpdateIngress(ctx context.Context, req *model.K8sIngressUpdateReq) error
 	DeleteIngress(ctx context.Context, req *model.K8sIngressDeleteReq) error
-
-	// 批量操作
 	BatchDeleteIngresses(ctx context.Context, req *model.K8sIngressBatchDeleteReq) error
-
-	// 高级功能（TODO实现）
 	GetIngressEvents(ctx context.Context, req *model.K8sIngressEventReq) ([]*model.K8sEvent, error)
 	TestIngressTLS(ctx context.Context, req *model.K8sIngressTLSTestReq) (*model.K8sTLSTestResult, error)
 	CheckIngressBackendHealth(ctx context.Context, req *model.K8sIngressBackendHealthReq) ([]*model.K8sBackendHealth, error)

@@ -31,6 +31,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 )
 
+
+
 // K8sStatefulSetEntity Kubernetes StatefulSet数据库实体
 type K8sStatefulSetEntity struct {
 	Model

@@ -90,7 +90,7 @@ func (k *K8sNamespaceHandler) GetClusterNamespacesForSelect(ctx *gin.Context) {
 
 // CreateNamespace 创建新的命名空间
 func (k *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
-	var req model.CreateNamespaceReq
+	var req model.K8sNamespaceCreateReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.namespaceService.CreateNamespace(ctx, req)
@@ -137,7 +137,7 @@ func (k *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 
 // UpdateNamespace 更新指定命名空间
 func (k *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
-	var req model.UpdateNamespaceReq
+	var req model.K8sNamespaceUpdateReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.namespaceService.UpdateNamespace(ctx, req)

@@ -56,13 +56,12 @@ type NodeManager interface {
 }
 
 type nodeManager struct {
-	clientFactory client.K8sClientFactory
+	clientFactory client.K8sClient
 	logger        *zap.Logger
 }
 
 // NewNodeManager 创建新的 Node 管理器实例
-// 通过构造函数注入客户端工厂依赖
-func NewNodeManager(clientFactory client.K8sClientFactory, logger *zap.Logger) NodeManager {
+func NewNodeManager(clientFactory client.K8sClient, logger *zap.Logger) NodeManager {
 	return &nodeManager{
 		clientFactory: clientFactory,
 		logger:        logger,
@@ -70,7 +69,6 @@ func NewNodeManager(clientFactory client.K8sClientFactory, logger *zap.Logger) N
 }
 
 // getClients 私有方法：获取 Kubernetes 客户端和 Metrics 客户端
-// 封装客户端获取逻辑，统一错误处理
 func (n *nodeManager) getClients(clusterID int) (*kubernetes.Clientset, *metricsClient.Clientset, error) {
 	kubeClient, err := n.clientFactory.GetKubeClient(clusterID)
 	if err != nil {

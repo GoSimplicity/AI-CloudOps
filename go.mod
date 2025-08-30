@@ -22,6 +22,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mark3labs/mcp-go v0.25.0
 	github.com/openkruise/kruise-api v1.7.0
+	github.com/pingcap/errors v0.11.4
 	github.com/prometheus/alertmanager v0.27.0
 	github.com/prometheus/common v0.55.0
 	github.com/prometheus/prometheus v0.54.1

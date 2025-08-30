@@ -23,32 +23,30 @@
  *
  */
 
-package constants
+package utils
 
-import "errors"
+import (
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 
-var (
-	ErrorK8sClientNotReady     = errors.New("k8s client not ready")
-	ErrorMetricsClientNotReady = errors.New("metrics client not ready")
-
-	ErrorNodeNotFound       = errors.New("node not found")
-	ErrorTaintsKeyDuplicate = errors.New("taints key exist")
-
-	// 新增的K8s业务错误常量
-	ErrK8sClientInit        = errors.New("k8s client initialization failed")
-	ErrK8sResourceList      = errors.New("k8s resource list failed")
-	ErrK8sResourceGet       = errors.New("k8s resource get failed")
-	ErrK8sResourceDelete    = errors.New("k8s resource delete failed")
-	ErrK8sResourceCreate    = errors.New("k8s resource create failed")
-	ErrK8sResourceUpdate    = errors.New("k8s resource update failed")
-	ErrK8sResourceOperation = errors.New("k8s resource operation failed")
-	ErrInvalidParam         = errors.New("invalid parameter")
-	ErrNotImplemented       = errors.New("feature not implemented")
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// 集群状态常量，统一使用，避免魔法字符串
-const (
-	StatusPending = "PENDING"
-	StatusRunning = "RUNNING"
-	StatusError   = "ERROR"
-)
+// ConvertToMetaV1ListOptions 将K8sGetResourceListReq转换为metav1.ListOptions
+func ConvertToMetaV1ListOptions(req *model.K8sGetResourceListReq) metav1.ListOptions {
+	return metav1.ListOptions{
+		LabelSelector: req.LabelSelector,
+		FieldSelector: req.FieldSelector,
+		Limit:         req.Limit,
+		Continue:      req.Continue,
+	}
+}
+
+// ConvertK8sListReqToMetaV1ListOptions 将K8sListReq转换为metav1.ListOptions
+func ConvertK8sListReqToMetaV1ListOptions(req *model.K8sListReq) metav1.ListOptions {
+	return metav1.ListOptions{
+		LabelSelector: req.LabelSelector,
+		FieldSelector: req.FieldSelector,
+		Limit:         req.Limit,
+		Continue:      req.Continue,
+	}
+}

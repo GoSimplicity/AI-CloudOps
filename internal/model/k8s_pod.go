@@ -27,8 +27,20 @@ package model
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
-	core "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 )
+
+// ResourceRequirements 资源要求
+type ResourceRequirements struct {
+	Requests K8sResourceList `json:"requests,omitempty" gorm:"type:text;serializer:json;comment:资源请求"` // 资源请求
+	Limits   K8sResourceList `json:"limits,omitempty" gorm:"type:text;serializer:json;comment:资源限制"`   // 资源限制
+}
+
+// K8sResourceList K8s资源列表
+type K8sResourceList struct {
+	CPU    string `json:"cpu,omitempty" gorm:"size:50;comment:CPU 数量，例如 '500m', '2'"`     // CPU 数量，例如 "500m", "2"
+	Memory string `json:"memory,omitempty" gorm:"size:50;comment:内存数量，例如 '1Gi', '512Mi'"` // 内存数量，例如 "1Gi", "512Mi"
+}
 
 // K8sPod 单个 Pod 的模型
 type K8sPod struct {
@@ -102,8 +114,8 @@ type K8sHTTPGetAction struct {
 
 // K8sPodReq 创建 Pod 的请求结构
 type K8sPodReq struct {
-	ClusterId int       `json:"cluster_id" binding:"required"` // 集群名称，必填
-	Pod       *core.Pod `json:"pod"`                           // Pod 对象
+	ClusterId int         `json:"cluster_id" binding:"required"` // 集群名称，必填
+	Pod       *corev1.Pod `json:"pod"`                           // Pod 对象
 }
 
 // K8sDeploymentReq Deployment 相关请求结构
@@ -116,18 +128,18 @@ type K8sDeploymentReq struct {
 
 // K8sConfigMapReq ConfigMap 相关请求结构
 type K8sConfigMapReq struct {
-	ClusterId      int             `json:"cluster_id" binding:"required"` // 集群id，必填
-	Namespace      string          `json:"namespace"`                     // 命名空间，可选, 删除用
-	ConfigMapNames []string        `json:"config_map_names"`              // ConfigMap 名称，可选， 删除用
-	ConfigMap      *core.ConfigMap `json:"config_map"`                    // ConfigMap 对象, 可选
+	ClusterId      int               `json:"cluster_id" binding:"required"` // 集群id，必填
+	Namespace      string            `json:"namespace"`                     // 命名空间，可选, 删除用
+	ConfigMapNames []string          `json:"config_map_names"`              // ConfigMap 名称，可选， 删除用
+	ConfigMap      *corev1.ConfigMap `json:"config_map"`                    // ConfigMap 对象, 可选
 }
 
 // K8sServiceReq Service 相关请求结构
 type K8sServiceReq struct {
-	ClusterId    int           `json:"cluster_id" binding:"required"` // 集群id，必填
-	Namespace    string        `json:"namespace"`                     // 命名空间，必填
-	ServiceNames []string      `json:"service_names"`                 // Service 名称，可选
-	ServiceYaml  *core.Service `json:"service_yaml"`                  // Service 对象, 可选
+	ClusterId    int             `json:"cluster_id" binding:"required"` // 集群id，必填
+	Namespace    string          `json:"namespace"`                     // 命名空间，必填
+	ServiceNames []string        `json:"service_names"`                 // Service 名称，可选
+	ServiceYaml  *corev1.Service `json:"service_yaml"`                  // Service 对象, 可选
 }
 
 // PodListReq 获取Pod列表请求

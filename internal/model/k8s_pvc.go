@@ -31,6 +31,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+// K8sPVCUsageInfo PVC使用信息
+type K8sPVCUsageInfo struct {
+	Total     string  `json:"total"`      // 总容量
+	Used      string  `json:"used"`       // 已使用
+	Available string  `json:"available"`  // 可用
+	UsageRate float64 `json:"usage_rate"` // 使用率
+}
+
 // K8sPVCEntity Kubernetes PersistentVolumeClaim数据库实体
 type K8sPVCEntity struct {
 	Model

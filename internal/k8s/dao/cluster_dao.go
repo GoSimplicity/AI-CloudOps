@@ -34,6 +34,7 @@ import (
 )
 
 type ClusterDAO interface {
+	GetClusterList(ctx context.Context, req *model.ListClustersReq) ([]*model.K8sCluster, int64, error)
 	ListAllClusters(ctx context.Context) ([]*model.K8sCluster, error)
 	CreateCluster(ctx context.Context, cluster *model.K8sCluster) error
 	UpdateCluster(ctx context.Context, cluster *model.K8sCluster) error
@@ -54,6 +55,38 @@ func NewClusterDAO(db *gorm.DB, l *zap.Logger) ClusterDAO {
 		db: db,
 		l:  l,
 	}
+}
+
+// ListAllClusters 获取所有集群
+func (c *clusterDAO) GetClusterList(ctx context.Context, req *model.ListClustersReq) ([]*model.K8sCluster, int64, error) {
+	var clusters []*model.K8sCluster
+	var total int64
+
+	query := c.db.WithContext(ctx).Model(&model.K8sCluster{})
+
+	if req.Status != "" {
+		query = query.Where("status = ?", req.Status)
+	}
+
+	if req.Env != "" {
+		query = query.Where("env = ?", req.Env)
+	}
+
+	if req.Search != "" {
+		query = query.Where("name LIKE ?", "%"+req.Search+"%")
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		c.l.Error("GetClusterList 查询所有集群失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	if err := query.Find(&clusters).Error; err != nil {
+		c.l.Error("GetClusterList 查询所有集群失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	return clusters, total, nil
 }
 
 // ListAllClusters 获取所有集群

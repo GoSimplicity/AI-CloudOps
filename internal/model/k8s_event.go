@@ -31,6 +31,58 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+// EventSource 事件源
+type EventSource struct {
+	Component string `json:"component" gorm:"size:100;comment:组件名称"` // 组件名称
+	Host      string `json:"host" gorm:"size:200;comment:主机名"`       // 主机名
+}
+
+// EventInvolvedObject 事件涉及的对象
+type EventInvolvedObject struct {
+	Kind       string `json:"kind" gorm:"size:50;comment:对象类型"`          // 对象类型
+	Name       string `json:"name" gorm:"size:200;comment:对象名称"`         // 对象名称
+	Namespace  string `json:"namespace" gorm:"size:100;comment:命名空间"`    // 命名空间
+	UID        string `json:"uid" gorm:"size:100;comment:对象UID"`         // 对象UID
+	APIVersion string `json:"api_version" gorm:"size:100;comment:API版本"` // API版本
+}
+
+// K8sEventStatistics 事件统计
+type K8sEventStatistics struct {
+	TotalEvents   int                `json:"total_events"`   // 总事件数
+	WarningEvents int                `json:"warning_events"` // 警告事件数
+	NormalEvents  int                `json:"normal_events"`  // 正常事件数
+	TopReasons    []EventReasonCount `json:"top_reasons"`    // 主要原因统计
+	TopSources    []EventSourceCount `json:"top_sources"`    // 主要来源统计
+}
+
+// EventReasonCount 事件原因统计
+type EventReasonCount struct {
+	Reason string `json:"reason"` // 原因
+	Count  int    `json:"count"`  // 数量
+}
+
+// EventSourceCount 事件来源统计
+type EventSourceCount struct {
+	Source string `json:"source"` // 来源
+	Count  int    `json:"count"`  // 数量
+}
+
+// K8sEventTimelineItem 事件时间线项
+type K8sEventTimelineItem struct {
+	Timestamp time.Time `json:"timestamp"` // 时间戳
+	Type      string    `json:"type"`      // 事件类型
+	Reason    string    `json:"reason"`    // 原因
+	Message   string    `json:"message"`   // 消息
+	Object    string    `json:"object"`    // 对象
+}
+
+// K8sEventCleanupResult 事件清理结果
+type K8sEventCleanupResult struct {
+	CleanedCount int      `json:"cleaned_count"` // 清理数量
+	ErrorCount   int      `json:"error_count"`   // 错误数量
+	Errors       []string `json:"errors"`        // 错误列表
+}
+
 // K8sEventEntity Kubernetes Event数据库实体
 type K8sEventEntity struct {
 	Model

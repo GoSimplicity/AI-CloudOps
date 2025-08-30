@@ -31,6 +31,36 @@ import (
 	core "k8s.io/api/core/v1"
 )
 
+// NodeResources 节点资源信息
+type NodeResources struct {
+	NodeName string `json:"node_name"` // 节点名称
+	CPU      string `json:"cpu"`       // CPU总量
+	Memory   string `json:"memory"`    // 内存总量
+	Storage  string `json:"storage"`   // 存储总量
+	Pods     string `json:"pods"`      // Pod总量
+	Status   string `json:"status"`    // 节点状态
+	Ready    bool   `json:"ready"`     // 节点是否就绪
+}
+
+// Taint 污点信息
+type Taint struct {
+	Key    string `json:"key" binding:"required"`                                                // Taint 的键
+	Value  string `json:"value,omitempty"`                                                       // Taint 的值
+	Effect string `json:"effect" binding:"required,oneof=NoSchedule PreferNoSchedule NoExecute"` // Taint 的效果，例如 "NoSchedule", "PreferNoSchedule", "NoExecute"
+}
+
+// OneEvent 单个事件信息
+type OneEvent struct {
+	Type      string `json:"type"`       // 事件类型，例如 "Normal", "Warning"
+	Component string `json:"component"`  // 事件的组件来源，例如 "kubelet"
+	Reason    string `json:"reason"`     // 事件的原因，例如 "NodeReady"
+	Message   string `json:"message"`    // 事件的详细消息
+	FirstTime string `json:"first_time"` // 事件第一次发生的时间，例如 "2024-04-27T10:00:00Z"
+	LastTime  string `json:"last_time"`  // 事件最近一次发生的时间，例如 "2024-04-27T12:00:00Z"
+	Object    string `json:"object"`     // 事件关联的对象信息，例如 "kind:Node name:node-1"
+	Count     int    `json:"count"`      // 事件发生的次数
+}
+
 // K8sNode Kubernetes 节点
 type K8sNode struct {
 	Name              string               `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:节点名称"`    // 节点名称
