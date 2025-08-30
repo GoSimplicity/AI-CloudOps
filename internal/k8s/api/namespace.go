@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -62,19 +60,13 @@ func (k *K8sNamespaceHandler) RegisterRouters(router *gin.Engine) {
 func (k *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
 	var req model.K8sNamespaceCreateReq
 
-	clusterID, err := utils.GetParamCustomName(ctx, "cluster_id")
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	clusterIDInt, err := strconv.Atoi(clusterID)
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterIDInt
+	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.namespaceService.CreateNamespace(ctx, &req)
@@ -85,7 +77,7 @@ func (k *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
 func (k *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
 	var req model.K8sNamespaceDeleteReq
 
-	clusterID, err := utils.GetParamCustomName(ctx, "cluster_id")
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -97,13 +89,7 @@ func (k *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
 		return
 	}
 
-	clusterIDInt, err := strconv.Atoi(clusterID)
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterIDInt
+	req.ClusterID = clusterID
 	req.Name = name
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
@@ -115,7 +101,7 @@ func (k *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
 func (k *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 	var req model.K8sNamespaceGetDetailsReq
 
-	clusterID, err := utils.GetParamCustomName(ctx, "cluster_id")
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -127,13 +113,7 @@ func (k *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 		return
 	}
 
-	clusterIDInt, err := strconv.Atoi(clusterID)
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterIDInt
+	req.ClusterID = clusterID
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -145,7 +125,7 @@ func (k *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 func (k *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
 	var req model.K8sNamespaceUpdateReq
 
-	clusterID, err := utils.GetParamCustomName(ctx, "cluster_id")
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -157,13 +137,7 @@ func (k *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
 		return
 	}
 
-	clusterIDInt, err := strconv.Atoi(clusterID)
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterIDInt
+	req.ClusterID = clusterID
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -175,19 +149,13 @@ func (k *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
 func (k *K8sNamespaceHandler) ListNamespaces(ctx *gin.Context) {
 	var req model.K8sNamespaceListReq
 
-	clusterID, err := utils.GetParamCustomName(ctx, "cluster_id")
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	clusterIDInt, err := strconv.Atoi(clusterID)
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterIDInt
+	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return k.namespaceService.ListNamespaces(ctx, &req)

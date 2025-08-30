@@ -84,7 +84,7 @@ func ProvideCmd() *Cmd {
 	nodeService := service4.NewNodeService(clusterDAO, k8sClient, nodeManager, logger)
 	taintManager := manager.NewTaintManager(clusterDAO, k8sClient, logger)
 	taintService := service4.NewTaintService(taintManager, logger)
-	k8sNodeHandler := api4.NewK8sNodeHandler(logger, nodeService, taintService)
+	k8sNodeHandler := api4.NewK8sNodeHandler(nodeService, taintService)
 	podManager := manager.NewPodManager(k8sClient, logger)
 	podService := service4.NewPodService(clusterDAO, k8sClient, podManager, logger)
 	k8sPodHandler := api4.NewK8sPodHandler(logger, podService)

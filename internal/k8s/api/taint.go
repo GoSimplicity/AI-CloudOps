@@ -58,16 +58,16 @@ func (k *K8sTaintHandler) RegisterRouters(server *gin.Engine) {
 
 // AddTaintsNodes 为节点添加 Taint
 func (k *K8sTaintHandler) AddTaintsNodes(ctx *gin.Context) {
-	var req model.TaintK8sNodesReq
+	var req model.AddNodeTaintsReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.taintService.AddOrUpdateNodeTaint(ctx, &req)
+		return nil, k.taintService.AddNodeTaint(ctx, &req)
 	})
 }
 
 // ScheduleEnableSwitchNodes 启用或切换节点调度
 func (k *K8sTaintHandler) ScheduleEnableSwitchNodes(ctx *gin.Context) {
-	var req model.ScheduleK8sNodesReq
+	var req model.NodeCordonReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.BatchEnableSwitchNodes(ctx, &req)
@@ -76,7 +76,7 @@ func (k *K8sTaintHandler) ScheduleEnableSwitchNodes(ctx *gin.Context) {
 
 // TaintYamlCheck 检查节点 Taint 的 YAML 配置
 func (k *K8sTaintHandler) TaintYamlCheck(ctx *gin.Context) {
-	var req model.TaintK8sNodesReq
+	var req model.CheckTaintYamlReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.CheckTaintYaml(ctx, &req)
@@ -85,16 +85,16 @@ func (k *K8sTaintHandler) TaintYamlCheck(ctx *gin.Context) {
 
 // DeleteTaintsNodes 删除节点 Taint
 func (k *K8sTaintHandler) DeleteTaintsNodes(ctx *gin.Context) {
-	var req model.TaintK8sNodesReq
+	var req model.DeleteNodeTaintsReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.taintService.AddOrUpdateNodeTaint(ctx, &req)
+		return nil, k.taintService.DeleteNodeTaint(ctx, &req)
 	})
 }
 
 // DrainPods 清空节点上的 Pods
 func (k *K8sTaintHandler) DrainPods(ctx *gin.Context) {
-	var req model.K8sClusterNodesReq
+	var req model.DrainNodeReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.DrainPods(ctx, &req)

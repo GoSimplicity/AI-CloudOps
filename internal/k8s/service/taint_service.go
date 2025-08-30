@@ -35,18 +35,53 @@ import (
 
 type TaintService interface {
 	// CheckTaintYaml 检查 Taint YAML 配置是否合法
-	CheckTaintYaml(ctx context.Context, taint *model.TaintK8sNodesReq) error
-	// BatchEnableSwitchNodes 批量启用或禁用节点
-	BatchEnableSwitchNodes(ctx context.Context, req *model.ScheduleK8sNodesReq) error
-	// AddOrUpdateNodeTaint 添加或更新节点的 Taint
-	AddOrUpdateNodeTaint(ctx context.Context, taint *model.TaintK8sNodesReq) error
-	// DrainPods 驱逐 Pod
-	DrainPods(ctx context.Context, req *model.K8sClusterNodesReq) error
+	CheckTaintYaml(ctx context.Context, taint *model.CheckTaintYamlReq) error
+	BatchEnableSwitchNodes(ctx context.Context, req *model.NodeCordonReq) error
+	AddOrUpdateNodeTaint(ctx context.Context, taint *model.AddNodeTaintsReq) error
+	DrainPods(ctx context.Context, req *model.DrainNodeReq) error
+	DeleteNodeTaint(ctx context.Context, taint *model.DeleteNodeTaintsReq) error
+	SwitchNodeSchedule(ctx context.Context, req *model.SwitchNodeScheduleReq) error
+	AddNodeTaint(ctx context.Context, taint *model.AddNodeTaintsReq) error
 }
 
 type taintService struct {
 	manager manager.TaintManager
 	logger  *zap.Logger
+}
+
+// AddNodeTaint implements TaintService.
+func (t *taintService) AddNodeTaint(ctx context.Context, taint *model.AddNodeTaintsReq) error {
+	panic("unimplemented")
+}
+
+// DeleteNodeTaint implements TaintService.
+func (t *taintService) DeleteNodeTaint(ctx context.Context, taint *model.DeleteNodeTaintsReq) error {
+	panic("unimplemented")
+}
+
+// SwitchNodeSchedule implements TaintService.
+func (t *taintService) SwitchNodeSchedule(ctx context.Context, req *model.SwitchNodeScheduleReq) error {
+	panic("unimplemented")
+}
+
+// AddOrUpdateNodeTaint implements TaintService.
+func (t *taintService) AddOrUpdateNodeTaint(ctx context.Context, taint *model.AddNodeTaintsReq) error {
+	panic("unimplemented")
+}
+
+// BatchEnableSwitchNodes implements TaintService.
+func (t *taintService) BatchEnableSwitchNodes(ctx context.Context, req *model.NodeCordonReq) error {
+	panic("unimplemented")
+}
+
+// CheckTaintYaml implements TaintService.
+func (t *taintService) CheckTaintYaml(ctx context.Context, taint *model.CheckTaintYamlReq) error {
+	panic("unimplemented")
+}
+
+// DrainPods implements TaintService.
+func (t *taintService) DrainPods(ctx context.Context, req *model.DrainNodeReq) error {
+	panic("unimplemented")
 }
 
 func NewTaintService(manager manager.TaintManager, logger *zap.Logger) TaintService {
@@ -56,22 +91,22 @@ func NewTaintService(manager manager.TaintManager, logger *zap.Logger) TaintServ
 	}
 }
 
-// CheckTaintYaml 检查 Taint YAML 配置是否合法
-func (t *taintService) CheckTaintYaml(ctx context.Context, req *model.TaintK8sNodesReq) error {
-	return t.manager.CheckTaintYaml(ctx, req.ClusterID, req.NodeName, req.TaintYaml)
-}
+// // CheckTaintYaml 检查 Taint YAML 配置是否合法
+// func (t *taintService) CheckTaintYaml(ctx context.Context, req *model.AddNodeTaintsReq) error {
+// 	return t.manager.CheckTaintYaml(ctx, req.ClusterID, req.NodeName, req.TaintYaml)
+// }
 
-// BatchEnableSwitchNodes 批量启用或禁用节点
-func (t *taintService) BatchEnableSwitchNodes(ctx context.Context, req *model.ScheduleK8sNodesReq) error {
-	return t.manager.BatchEnableSwitchNodes(ctx, req.ClusterID, req.NodeName, req.ScheduleEnable)
-}
+// // BatchEnableSwitchNodes 批量启用或禁用节点
+// func (t *taintService) BatchEnableSwitchNodes(ctx context.Context, req *model.BatchEnableSwitchNodesReq) error {
+// 	return t.manager.BatchEnableSwitchNodes(ctx, req.ClusterID, req.NodeName, req.ScheduleEnable)
+// }
 
-// AddOrUpdateNodeTaint 更新节点的 Taint
-func (t *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.TaintK8sNodesReq) error {
-	return t.manager.AddOrUpdateNodeTaint(ctx, req.ClusterID, req.NodeName, req.TaintYaml, req.ModType)
-}
+// // AddOrUpdateNodeTaint 更新节点的 Taint
+// func (t *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.TaintK8sNodesReq) error {
+// 	return t.manager.AddOrUpdateNodeTaint(ctx, req.ClusterID, req.NodeName, req.TaintYaml, req.ModType)
+// }
 
-// DrainPods 并发驱逐 Pods
-func (t *taintService) DrainPods(ctx context.Context, req *model.K8sClusterNodesReq) error {
-	return t.manager.DrainPods(ctx, req.ClusterID, req.NodeName)
-}
+// // DrainPods 并发驱逐 Pods
+// func (t *taintService) DrainPods(ctx context.Context, req *model.K8sClusterNodesReq) error {
+// 	return t.manager.DrainPods(ctx, req.ClusterID, req.NodeName)
+// }

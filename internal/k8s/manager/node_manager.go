@@ -30,7 +30,6 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -133,25 +132,25 @@ func (n *nodeManager) GetNodeList(ctx context.Context, clusterID int, listOption
 // BuildK8sNode 构建详细的 K8sNode 模型
 // 整合节点基本信息、Pod 列表、事件和资源使用情况
 func (n *nodeManager) BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node) (*model.K8sNode, error) {
-	kubeClient, metricsClient, err := n.getClients(clusterID)
-	if err != nil {
-		return nil, err
-	}
+	// kubeClient, metricsClient, err := n.getClients(clusterID)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	// 使用 utils 包中的工具函数构建 K8sNode
-	k8sNode, err := utils.BuildK8sNode(ctx, clusterID, node, kubeClient, metricsClient)
-	if err != nil {
-		n.logger.Error("构建 K8sNode 失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("nodeName", node.Name),
-			zap.Error(err))
-		return nil, fmt.Errorf("构建 K8sNode 失败: %w", err)
-	}
+	// // 使用 utils 包中的工具函数构建 K8sNode
+	// k8sNode, err := utils.BuildK8sNode(ctx, clusterID, node, kubeClient, metricsClient)
+	// if err != nil {
+	// 	n.logger.Error("构建 K8sNode 失败",
+	// 		zap.Int("clusterID", clusterID),
+	// 		zap.String("nodeName", node.Name),
+	// 		zap.Error(err))
+	// 	return nil, fmt.Errorf("构建 K8sNode 失败: %w", err)
+	// }
 
-	n.logger.Debug("成功构建 K8sNode",
-		zap.Int("clusterID", clusterID),
-		zap.String("nodeName", node.Name))
-	return k8sNode, nil
+	// n.logger.Debug("成功构建 K8sNode",
+	// 	zap.Int("clusterID", clusterID),
+	// 	zap.String("nodeName", node.Name))
+	return nil, nil
 }
 
 // DrainNode 驱逐节点上的所有 Pod（排水）
