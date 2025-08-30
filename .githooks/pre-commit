@@ -106,15 +106,13 @@ if [ "$SKIP_BUILD" = "1" ]; then
     warning_msg "跳过编译检查 (SKIP_BUILD=1)"
 else
     info_msg "步骤 4/4: 执行编译检查..."
-    if ! go build -o /tmp/build-check ./...; then
+    if ! go build ./...; then
         error_exit "代码编译失败，请修复编译错误后重新提交
         
 如果这是已知的依赖问题，可以临时跳过：
 SKIP_BUILD=1 git commit -m '你的提交信息'"
     fi
 
-    # 清理临时文件
-    rm -f /tmp/build-check
     success_msg "编译检查通过"
 fi
 

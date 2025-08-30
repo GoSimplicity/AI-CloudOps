@@ -700,7 +700,14 @@ func (cm *cronManager) StartCheckK8sStatusManager(ctx context.Context) error {
 func (cm *cronManager) checkK8sStatusWithRetry(ctx context.Context) error {
 	cm.logger.Info("开始检查k8s状态")
 
-	clusters, err := cm.k8sDao.ListAllClusters(ctx)
+	// 使用GetClusterList获取所有集群，设置一个大的page size来获取所有集群
+	req := &model.ListClustersReq{
+		ListReq: model.ListReq{
+			Page: 1,
+			Size: 1000, // 设置一个足够大的值来获取所有集群
+		},
+	}
+	clusters, _, err := cm.k8sDao.GetClusterList(ctx, req)
 	if err != nil {
 		cm.logger.Error("获取k8s集群列表失败", zap.Error(err))
 		return fmt.Errorf("获取k8s集群列表失败: %w", err)
@@ -761,20 +768,23 @@ func (cm *cronManager) checkK8sStatusWithRetry(ctx context.Context) error {
 
 // checkClusterStatus 检查单个集群状态
 func (cm *cronManager) checkClusterStatus(ctx context.Context, cluster *model.K8sCluster) error {
+	var statusStr string
 	if err := cm.clusterMgr.CheckClusterStatus(ctx, cluster.ID); err != nil {
 		cm.logger.Warn("集群连接检查失败",
 			zap.Error(err),
 			zap.String("cluster", cluster.Name))
-		cluster.Status = constants.StatusError
+		cluster.Status = model.StatusError
+		statusStr = constants.StatusError
 	} else {
-		cluster.Status = constants.StatusRunning
+		cluster.Status = model.StatusRunning
+		statusStr = constants.StatusRunning
 	}
 
-	if err := cm.k8sDao.UpdateClusterStatus(ctx, cluster.ID, cluster.Status); err != nil {
+	if err := cm.k8sDao.UpdateClusterStatus(ctx, cluster.ID, statusStr); err != nil {
 		cm.logger.Error("更新集群状态失败",
 			zap.Error(err),
 			zap.String("cluster", cluster.Name),
-			zap.String("status", cluster.Status))
+			zap.String("status", statusStr))
 		return fmt.Errorf("更新集群[%s]状态失败: %w", cluster.Name, err)
 	}
 

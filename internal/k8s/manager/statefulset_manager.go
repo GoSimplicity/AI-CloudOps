@@ -52,11 +52,11 @@ type StatefulSetManager interface {
 }
 
 type statefulSetManager struct {
-	clientFactory client.K8sClientFactory
+	clientFactory client.K8sClient
 }
 
 // NewStatefulSetManager 创建新的 StatefulSet 管理器
-func NewStatefulSetManager(clientFactory client.K8sClientFactory) StatefulSetManager {
+func NewStatefulSetManager(clientFactory client.K8sClient) StatefulSetManager {
 	return &statefulSetManager{
 		clientFactory: clientFactory,
 	}

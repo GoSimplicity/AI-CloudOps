@@ -57,13 +57,13 @@ type PodManager interface {
 }
 
 type podManager struct {
-	clientFactory client.K8sClientFactory
+	clientFactory client.K8sClient
 	logger        *zap.Logger
 }
 
 // NewPodManager 创建新的 Pod 管理器实例
 // 通过构造函数注入客户端工厂依赖
-func NewPodManager(clientFactory client.K8sClientFactory, logger *zap.Logger) PodManager {
+func NewPodManager(clientFactory client.K8sClient, logger *zap.Logger) PodManager {
 	return &podManager{
 		clientFactory: clientFactory,
 		logger:        logger,

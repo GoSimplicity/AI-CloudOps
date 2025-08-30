@@ -100,7 +100,7 @@ func (p *podService) GetPodsByNamespace(ctx context.Context, clusterID int, name
 		return nil, err
 	}
 
-	return k8sutils.BuildK8sPods(podList), nil
+	return k8sutils.BuildK8sPods(podList.Items), nil
 }
 
 // GetContainersByPod 获取指定 Pod 中的容器列表
@@ -165,7 +165,7 @@ func (p *podService) GetPodsByNodeName(ctx context.Context, clusterID int, nodeN
 		return nil, err
 	}
 
-	return k8sutils.BuildK8sPods(pods), nil
+	return k8sutils.BuildK8sPods(pods.Items), nil
 }
 
 // DeletePod 删除 Pod

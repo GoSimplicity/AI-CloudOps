@@ -427,3 +427,29 @@ type IngressTLSReq struct {
 	Hosts      []string `json:"hosts" comment:"主机列表"`
 	SecretName string   `json:"secret_name" comment:"Secret名称"`
 }
+
+// K8sTLSTestResult Ingress TLS证书测试结果
+type K8sTLSTestResult struct {
+	Host             string `json:"host"`               // 测试主机名
+	Port             int    `json:"port"`               // 测试端口
+	Valid            bool   `json:"valid"`              // 证书是否有效
+	CertIssuer       string `json:"cert_issuer"`        // 证书颁发者
+	CertSubject      string `json:"cert_subject"`       // 证书主体
+	CertExpiry       string `json:"cert_expiry"`        // 证书过期时间
+	CertDNSNames     string `json:"cert_dns_names"`     // 证书DNS名称
+	CertSerialNumber string `json:"cert_serial_number"` // 证书序列号
+	ErrorMessage     string `json:"error_message"`      // 错误信息
+	TestTime         string `json:"test_time"`          // 测试时间
+}
+
+// K8sBackendHealth Ingress后端健康状态
+type K8sBackendHealth struct {
+	ServiceName  string `json:"service_name"`  // 服务名称
+	ServicePort  int    `json:"service_port"`  // 服务端口
+	PodName      string `json:"pod_name"`      // Pod名称
+	PodIP        string `json:"pod_ip"`        // Pod IP
+	Ready        bool   `json:"ready"`         // 是否就绪
+	Status       string `json:"status"`        // 状态描述
+	CheckTime    string `json:"check_time"`    // 检查时间
+	ErrorMessage string `json:"error_message"` // 错误信息
+}

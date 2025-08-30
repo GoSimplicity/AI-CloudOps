@@ -60,13 +60,13 @@ type DeploymentManager interface {
 }
 
 type deploymentManager struct {
-	clientFactory client.K8sClientFactory
+	clientFactory client.K8sClient
 	logger        *zap.Logger
 }
 
 // NewDeploymentManager 创建新的 Deployment 管理器实例
 // 通过构造函数注入客户端工厂依赖
-func NewDeploymentManager(clientFactory client.K8sClientFactory, logger *zap.Logger) DeploymentManager {
+func NewDeploymentManager(clientFactory client.K8sClient, logger *zap.Logger) DeploymentManager {
 	return &deploymentManager{
 		clientFactory: clientFactory,
 		logger:        logger,
