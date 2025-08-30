@@ -309,7 +309,7 @@ func (kvl *KeyValueList) AddTag(key, value string) {
 	if kvl == nil || key == "" {
 		return
 	}
-	
+
 	// 查找是否已存在
 	for i, kv := range *kvl {
 		if kv.Key == key {
@@ -317,7 +317,7 @@ func (kvl *KeyValueList) AddTag(key, value string) {
 			return
 		}
 	}
-	
+
 	// 不存在则添加
 	*kvl = append(*kvl, KeyValue{Key: key, Value: value})
 }
@@ -327,7 +327,7 @@ func (kvl *KeyValueList) RemoveTag(key string) {
 	if kvl == nil {
 		return
 	}
-	
+
 	for i, kv := range *kvl {
 		if kv.Key == key {
 			*kvl = append((*kvl)[:i], (*kvl)[i+1:]...)

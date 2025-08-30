@@ -14,7 +14,7 @@ var SwaggerInfo = &swag.Spec{
 	Version:          "1.0.0",
 	Host:             "localhost:8889",
 	BasePath:         "/",
-	Schemes:          []string{ "http", "https" },
+	Schemes:          []string{"http", "https"},
 	Title:            "AI-CloudOps API",
 	Description:      "AI-CloudOps云原生运维平台API文档 (自动生成)",
 	InfoInstanceName: "swagger",

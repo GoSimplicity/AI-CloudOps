@@ -31,8 +31,6 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 )
 
-
-
 // ====================== 内部结构体 ======================
 
 // IngressRule Ingress规则(内部使用)

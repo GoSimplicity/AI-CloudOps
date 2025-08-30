@@ -66,7 +66,7 @@ func ConvertLabelsToKeyValueList(labels map[string]string) model.KeyValueList {
 	if labels == nil {
 		return model.KeyValueList{}
 	}
-	
+
 	var result model.KeyValueList
 	for key, value := range labels {
 		result = append(result, model.KeyValue{
