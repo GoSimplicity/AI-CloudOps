@@ -47,16 +47,15 @@ func NewK8sNamespaceHandler(logger *zap.Logger, namespaceService service.Namespa
 
 func (k *K8sNamespaceHandler) RegisterRouters(router *gin.Engine) {
 	k8sGroup := router.Group("/api/k8s")
-	namespaces := k8sGroup.Group("/namespaces")
 	{
-		namespaces.GET("/list", k.GetClusterNamespacesForCascade)      // 获取级联选择的命名空间列表
-		namespaces.GET("/select/:id", k.GetClusterNamespacesForSelect) // 获取用于选择的命名空间列表
-		namespaces.POST("/create", k.CreateNamespace)                  // 创建新的命名空间
-		namespaces.DELETE("/delete/:id", k.DeleteNamespace)            // 删除指定的命名空间
-		namespaces.GET("/:id", k.GetNamespaceDetails)                  // 获取指定命名空间的详情
-		namespaces.POST("/update", k.UpdateNamespace)                  // 更新指定命名空间
-		namespaces.GET("/:id/resources", k.GetNamespaceResources)      // 获取命名空间中的资源
-		namespaces.GET("/:id/events", k.GetNamespaceEvents)            // 获取命名空间事件
+		k8sGroup.GET("/namespaces/list", k.GetClusterNamespacesForCascade)      // 获取级联选择的命名空间列表
+		k8sGroup.GET("/namespaces/select/:id", k.GetClusterNamespacesForSelect) // 获取用于选择的命名空间列表
+		k8sGroup.POST("/namespaces/create", k.CreateNamespace)                  // 创建新的命名空间
+		k8sGroup.DELETE("/namespaces/delete/:id", k.DeleteNamespace)            // 删除指定的命名空间
+		k8sGroup.GET("/namespaces/:id", k.GetNamespaceDetails)                  // 获取指定命名空间的详情
+		k8sGroup.POST("/namespaces/update", k.UpdateNamespace)                  // 更新指定命名空间
+		k8sGroup.GET("/namespaces/:id/resources", k.GetNamespaceResources)      // 获取命名空间中的资源
+		k8sGroup.GET("/namespaces/:id/events", k.GetNamespaceEvents)            // 获取命名空间事件
 	}
 }
 

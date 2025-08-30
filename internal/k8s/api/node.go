@@ -59,12 +59,11 @@ func (k *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.POST("/nodes/drain", k.DrainNode)                                  // 驱逐节点
 		k8sGroup.POST("/nodes/uncordon", k.UncordonNode)                            // 解除节点调度限制
 		k8sGroup.POST("/nodes/cordon", k.CordonNode)                                // 禁止节点调度
-		// 污点管理
-		k8sGroup.GET("/nodes/:cluster_id/:node_name/taints", k.GetNodeTaints) // 获取节点污点列表
-		k8sGroup.POST("/nodes/taints/add", k.AddNodeTaints)                   // 添加节点污点
-		k8sGroup.DELETE("/nodes/taints/delete", k.DeleteNodeTaints)           // 删除节点污点
-		k8sGroup.POST("/nodes/taints/check", k.CheckTaintYaml)                // 检查污点YAML配置
-		k8sGroup.POST("/nodes/schedule/switch", k.SwitchNodeSchedule)         // 切换节点调度状态
+		k8sGroup.GET("/nodes/:cluster_id/:node_name/taints", k.GetNodeTaints)       // 获取节点污点列表
+		k8sGroup.POST("/nodes/taints/add", k.AddNodeTaints)                         // 添加节点污点
+		k8sGroup.DELETE("/nodes/taints/delete", k.DeleteNodeTaints)                 // 删除节点污点
+		k8sGroup.POST("/nodes/taints/check", k.CheckTaintYaml)                      // 检查污点YAML配置
+		k8sGroup.POST("/nodes/schedule/switch", k.SwitchNodeSchedule)               // 切换节点调度状态
 	}
 }
 

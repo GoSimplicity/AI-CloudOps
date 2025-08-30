@@ -46,14 +46,12 @@ func NewSendGroupHandler(alertSendService alertEventService.AlertManagerSendServ
 
 func (s *SendGroupHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
-
-	sendGroups := monitorGroup.Group("/send_groups")
 	{
-		sendGroups.GET("/list", s.GetMonitorSendGroupList)
-		sendGroups.GET("/detail/:id", s.GetMonitorSendGroup)
-		sendGroups.POST("/create", s.CreateMonitorSendGroup)
-		sendGroups.PUT("/update/:id", s.UpdateMonitorSendGroup)
-		sendGroups.DELETE("/delete/:id", s.DeleteMonitorSendGroup)
+		monitorGroup.GET("/send_groups/list", s.GetMonitorSendGroupList)
+		monitorGroup.GET("/send_groups/detail/:id", s.GetMonitorSendGroup)
+		monitorGroup.POST("/send_groups/create", s.CreateMonitorSendGroup)
+		monitorGroup.PUT("/send_groups/update/:id", s.UpdateMonitorSendGroup)
+		monitorGroup.DELETE("/send_groups/delete/:id", s.DeleteMonitorSendGroup)
 	}
 }
 

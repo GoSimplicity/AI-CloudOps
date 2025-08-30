@@ -48,24 +48,18 @@ func NewK8sDaemonSetHandler(logger *zap.Logger, daemonSetService service.DaemonS
 func (k *K8sDaemonSetHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 
-	daemonSets := k8sGroup.Group("/daemonsets")
 	{
-		// 基础操作
-		daemonSets.GET("/list", k.GetDaemonSetList)                   // 获取DaemonSet列表
-		daemonSets.GET("/:cluster_id", k.GetDaemonSetsByNamespace)    // 根据命名空间获取DaemonSet列表
-		daemonSets.GET("/:cluster_id/:name", k.GetDaemonSet)          // 获取单个DaemonSet详情
-		daemonSets.GET("/:cluster_id/:name/yaml", k.GetDaemonSetYaml) // 获取DaemonSet YAML配置
-		daemonSets.POST("/create", k.CreateDaemonSet)                 // 创建DaemonSet
-		daemonSets.PUT("/update", k.UpdateDaemonSet)                  // 更新DaemonSet
-		daemonSets.DELETE("/delete", k.DeleteDaemonSet)               // 删除DaemonSet
-		daemonSets.POST("/restart", k.RestartDaemonSet)               // 重启DaemonSet
-
-		// 批量操作
-
-		// 高级功能
-		daemonSets.GET("/:cluster_id/:name/history", k.GetDaemonSetHistory)    // 获取DaemonSet历史版本
-		daemonSets.GET("/:cluster_id/:name/events", k.GetDaemonSetEvents)      // 获取DaemonSet事件
-		daemonSets.GET("/:cluster_id/:name/node-pods", k.GetDaemonSetNodePods) // 获取指定节点的DaemonSet Pod
+		k8sGroup.GET("/daemonsets/list", k.GetDaemonSetList)                            // 获取DaemonSet列表
+		k8sGroup.GET("/daemonsets/:cluster_id", k.GetDaemonSetsByNamespace)             // 根据命名空间获取DaemonSet列表
+		k8sGroup.GET("/daemonsets/:cluster_id/:name", k.GetDaemonSet)                   // 获取单个DaemonSet详情
+		k8sGroup.GET("/daemonsets/:cluster_id/:name/yaml", k.GetDaemonSetYaml)          // 获取DaemonSet YAML配置
+		k8sGroup.POST("/daemonsets/create", k.CreateDaemonSet)                          // 创建DaemonSet
+		k8sGroup.PUT("/daemonsets/update", k.UpdateDaemonSet)                           // 更新DaemonSet
+		k8sGroup.DELETE("/daemonsets/delete", k.DeleteDaemonSet)                        // 删除DaemonSet
+		k8sGroup.POST("/daemonsets/restart", k.RestartDaemonSet)                        // 重启DaemonSet
+		k8sGroup.GET("/daemonsets/:cluster_id/:name/history", k.GetDaemonSetHistory)    // 获取DaemonSet历史版本
+		k8sGroup.GET("/daemonsets/:cluster_id/:name/events", k.GetDaemonSetEvents)      // 获取DaemonSet事件
+		k8sGroup.GET("/daemonsets/:cluster_id/:name/node-pods", k.GetDaemonSetNodePods) // 获取指定节点的DaemonSet Pod
 	}
 }
 

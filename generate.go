@@ -28,13 +28,12 @@
 // Run `go generate` in the project root to execute all generation tasks.
 package main
 
-// Generate Swagger API documentation (Auto-generated, no manual annotations required)
 //go:generate bash -c "echo '🔄 正在生成 Swagger 文档...'"
 //go:generate bash -c "echo '[INFO] 使用自动生成模式（无需手动注释）...'"
 //go:generate bash -c "echo '[INFO] 构建自动生成工具...'"
-//go:generate bash -c "cd tools/swagger-auto-gen && go build -o ../../bin/swagger-auto-gen ."
+//go:generate bash -c "cd tools/swagger-auto-gen && go build -o swagger-auto-gen ."
 //go:generate bash -c "echo '[INFO] 分析项目结构并生成文档...'"
-//go:generate bash -c "./bin/swagger-auto-gen -root . -output ./docs -v"
+//go:generate bash -c "./tools/swagger-auto-gen/swagger-auto-gen -root . -output ./docs -v"
 //go:generate bash -c "if [ -f docs/swagger.json ]; then echo '[SUCCESS] 文档生成成功！文件大小: $(du -h docs/swagger.json | cut -f1)'; else echo '[ERROR] 文档生成失败'; fi"
 //go:generate bash -c "echo '[INFO] 访问地址: http://localhost:8889/swagger/index.html'"
 //go:generate bash -c "echo '✅ Swagger 文档生成完成！'"

@@ -28,6 +28,7 @@ package generator
 import (
 	"encoding/json"
 	"fmt"
+	"go/ast"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -245,6 +246,253 @@ func (g *SwaggerGenerator) generateTags(route RouteInfo) []string {
 func (g *SwaggerGenerator) generateParameters(route RouteInfo) []Parameter {
 	parameters := make([]Parameter, 0)
 
+	if route.HandlerInfo == nil || route.HandlerInfo.FuncDecl == nil || route.HandlerInfo.FuncDecl.Body == nil {
+		// 回退到传统方式
+		return g.generateLegacyParameters(route)
+	}
+
+	// 分析函数体中的参数绑定调用
+	bindingInfo := g.analyzeParameterBindings(route.HandlerInfo.FuncDecl.Body)
+
+	// 1. 处理路径参数（URI绑定）
+	for structName, _ := range bindingInfo.URIBindings {
+		uriParams := g.extractURIParametersFromStruct(structName)
+		parameters = append(parameters, uriParams...)
+	}
+
+	// 2. 处理查询参数（Query绑定）
+	for structName, _ := range bindingInfo.QueryBindings {
+		queryParams := g.extractQueryParametersFromStruct(structName)
+		parameters = append(parameters, queryParams...)
+	}
+
+	// 3. 处理请求体参数（Body绑定）
+	for structName, _ := range bindingInfo.BodyBindings {
+		parameters = append(parameters, Parameter{
+			Name:        "body",
+			In:          "body",
+			Description: "请求体",
+			Schema: &Schema{
+				Ref: fmt.Sprintf("#/definitions/%s", g.getShortName(structName)),
+			},
+		})
+		break // 只处理第一个body绑定
+	}
+
+	// 4. 如果没有发现任何绑定，使用传统方式分析
+	if len(bindingInfo.URIBindings) == 0 && len(bindingInfo.QueryBindings) == 0 && len(bindingInfo.BodyBindings) == 0 {
+		parameters = g.generateLegacyParameters(route)
+	}
+
+	return parameters
+}
+
+// ParameterBindingInfo 参数绑定信息
+type ParameterBindingInfo struct {
+	URIBindings   map[string]bool // 结构体名 -> 是否存在
+	QueryBindings map[string]bool // 结构体名 -> 是否存在
+	BodyBindings  map[string]bool // 结构体名 -> 是否存在
+}
+
+// analyzeParameterBindings 分析函数体中的参数绑定调用
+func (g *SwaggerGenerator) analyzeParameterBindings(body *ast.BlockStmt) *ParameterBindingInfo {
+	bindingInfo := &ParameterBindingInfo{
+		URIBindings:   make(map[string]bool),
+		QueryBindings: make(map[string]bool),
+		BodyBindings:  make(map[string]bool),
+	}
+
+	// 遍历函数体，查找绑定调用
+	ast.Inspect(body, func(n ast.Node) bool {
+		if callExpr, ok := n.(*ast.CallExpr); ok {
+			if selectorExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+				methodName := selectorExpr.Sel.Name
+
+				// 检查不同的绑定方法
+				switch methodName {
+				case "ShouldBindUri":
+					if structType := g.extractStructFromBindCall(callExpr, body); structType != "" {
+						bindingInfo.URIBindings[structType] = true
+					}
+				case "ShouldBindQuery":
+					if structType := g.extractStructFromBindCall(callExpr, body); structType != "" {
+						bindingInfo.QueryBindings[structType] = true
+					}
+				case "ShouldBind", "ShouldBindJSON":
+					if structType := g.extractStructFromBindCall(callExpr, body); structType != "" {
+						bindingInfo.BodyBindings[structType] = true
+					}
+				case "HandleRequest":
+					// 检查 utils.HandleRequest 的第二个参数
+					if len(callExpr.Args) >= 2 {
+						if structType := g.extractStructFromHandleRequest(callExpr.Args[1], body); structType != "" {
+							bindingInfo.BodyBindings[structType] = true
+						}
+					}
+				}
+			}
+		}
+		return true
+	})
+
+	return bindingInfo
+}
+
+// extractStructFromBindCall 从绑定调用中提取结构体类型
+func (g *SwaggerGenerator) extractStructFromBindCall(callExpr *ast.CallExpr, body *ast.BlockStmt) string {
+	if len(callExpr.Args) == 0 {
+		return ""
+	}
+
+	// 处理 &req 形式的参数
+	if unaryExpr, ok := callExpr.Args[0].(*ast.UnaryExpr); ok {
+		if unaryExpr.Op.String() == "&" {
+			if ident, ok := unaryExpr.X.(*ast.Ident); ok {
+				// 查找变量声明来确定类型
+				return g.findVariableTypeInFunction(body, ident.Name)
+			}
+		}
+	}
+
+	return ""
+}
+
+// extractStructFromHandleRequest 从HandleRequest调用中提取结构体类型
+func (g *SwaggerGenerator) extractStructFromHandleRequest(arg ast.Expr, body *ast.BlockStmt) string {
+	// 处理 &req 形式的参数
+	if unaryExpr, ok := arg.(*ast.UnaryExpr); ok {
+		if unaryExpr.Op.String() == "&" {
+			if ident, ok := unaryExpr.X.(*ast.Ident); ok {
+				return g.findVariableTypeInFunction(body, ident.Name)
+			}
+		}
+	}
+
+	// 处理 nil 参数
+	if ident, ok := arg.(*ast.Ident); ok {
+		if ident.Name == "nil" {
+			return ""
+		}
+	}
+
+	return ""
+}
+
+// findVariableTypeInFunction 在函数中查找变量类型
+func (g *SwaggerGenerator) findVariableTypeInFunction(body *ast.BlockStmt, varName string) string {
+	var varType string
+
+	ast.Inspect(body, func(n ast.Node) bool {
+		// 查找变量声明语句 var req model.UserLoginReq
+		if declStmt, ok := n.(*ast.DeclStmt); ok {
+			if genDecl, ok := declStmt.Decl.(*ast.GenDecl); ok {
+				for _, spec := range genDecl.Specs {
+					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+						for i, name := range valueSpec.Names {
+							if name.Name == varName && valueSpec.Type != nil {
+								varType = g.exprToString(valueSpec.Type)
+								return false
+							}
+							// 处理短声明 req := model.UserLoginReq{}
+							if name.Name == varName && i < len(valueSpec.Values) {
+								if compositeLit, ok := valueSpec.Values[i].(*ast.CompositeLit); ok {
+									varType = g.exprToString(compositeLit.Type)
+									return false
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// 查找短声明语句 req := model.UserLoginReq{}
+		if assignStmt, ok := n.(*ast.AssignStmt); ok {
+			if assignStmt.Tok.String() == ":=" {
+				for i, lhs := range assignStmt.Lhs {
+					if ident, ok := lhs.(*ast.Ident); ok {
+						if ident.Name == varName && i < len(assignStmt.Rhs) {
+							if compositeLit, ok := assignStmt.Rhs[i].(*ast.CompositeLit); ok {
+								varType = g.exprToString(compositeLit.Type)
+								return false
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return true
+	})
+
+	return varType
+}
+
+// extractURIParametersFromStruct 从结构体中提取URI参数
+func (g *SwaggerGenerator) extractURIParametersFromStruct(structName string) []Parameter {
+	parameters := make([]Parameter, 0)
+
+	structs := g.parser.GetStructs()
+	structInfo, exists := structs[structName]
+	if !exists {
+		return parameters
+	}
+
+	// 遍历结构体字段，查找有 uri tag 的字段
+	for _, field := range structInfo.Fields {
+		if field.URIName != "" {
+			param := Parameter{
+				Name:        field.URIName,
+				In:          "path",
+				Type:        g.mapGoTypeToSwagger(field.Type),
+				Description: g.getFieldDescription(field),
+				Required:    true, // URI参数总是必需的
+			}
+			parameters = append(parameters, param)
+		}
+	}
+
+	return parameters
+}
+
+// extractQueryParametersFromStruct 从结构体中提取查询参数
+func (g *SwaggerGenerator) extractQueryParametersFromStruct(structName string) []Parameter {
+	parameters := make([]Parameter, 0)
+
+	structs := g.parser.GetStructs()
+	structInfo, exists := structs[structName]
+	if !exists {
+		return parameters
+	}
+
+	// 处理继承的基础结构体（如 ListReq）
+	for _, embedded := range structInfo.EmbeddedTypes {
+		if embeddedParams := g.extractQueryParametersFromStruct(embedded); len(embeddedParams) > 0 {
+			parameters = append(parameters, embeddedParams...)
+		}
+	}
+
+	// 遍历结构体字段，查找有 form tag 的字段
+	for _, field := range structInfo.Fields {
+		if field.FormName != "" {
+			param := Parameter{
+				Name:        field.FormName,
+				In:          "query",
+				Type:        g.mapGoTypeToSwagger(field.Type),
+				Description: g.getFieldDescription(field),
+				Required:    field.Required,
+			}
+			parameters = append(parameters, param)
+		}
+	}
+
+	return parameters
+}
+
+// generateLegacyParameters 使用传统方式生成参数（兼容旧代码）
+func (g *SwaggerGenerator) generateLegacyParameters(route RouteInfo) []Parameter {
+	parameters := make([]Parameter, 0)
+
 	// 路径参数
 	pathParams := g.extractPathParams(route.Path)
 	for _, param := range pathParams {
@@ -257,10 +505,15 @@ func (g *SwaggerGenerator) generateParameters(route RouteInfo) []Parameter {
 		})
 	}
 
-	// 查询参数 (从函数参数推断)
-	if route.HandlerInfo != nil {
+	// 智能决定是否需要查询参数
+	if g.shouldAddQueryParams(route) {
 		queryParams := g.extractQueryParams(route.HandlerInfo)
 		parameters = append(parameters, queryParams...)
+
+		// 为列表接口添加通用分页参数
+		if g.isListEndpoint(route) {
+			parameters = append(parameters, g.getCommonPaginationParams()...)
+		}
 	}
 
 	// 请求体参数
@@ -272,6 +525,108 @@ func (g *SwaggerGenerator) generateParameters(route RouteInfo) []Parameter {
 	}
 
 	return parameters
+}
+
+// getFieldDescription 获取字段描述
+func (g *SwaggerGenerator) getFieldDescription(field FieldInfo) string {
+	if field.Description != "" {
+		return field.Description
+	}
+	return fmt.Sprintf("%s参数", field.Name)
+}
+
+// mapGoTypeToSwagger 将Go类型映射为Swagger类型
+func (g *SwaggerGenerator) mapGoTypeToSwagger(goType string) string {
+	switch {
+	case strings.HasPrefix(goType, "string"):
+		return "string"
+	case strings.HasPrefix(goType, "int"), strings.HasPrefix(goType, "uint"):
+		return "integer"
+	case strings.HasPrefix(goType, "float"):
+		return "number"
+	case strings.HasPrefix(goType, "bool"):
+		return "boolean"
+	case strings.HasPrefix(goType, "time.Time"):
+		return "string"
+	default:
+		return "string"
+	}
+}
+
+// shouldAddQueryParams 判断是否应该添加查询参数
+func (g *SwaggerGenerator) shouldAddQueryParams(route RouteInfo) bool {
+	// POST/PUT/PATCH的非列表接口通常不需要查询参数
+	if g.hasRequestBody(route.Method) && !g.isListEndpoint(route) {
+		return false
+	}
+
+	// GET请求通常需要查询参数
+	if route.Method == "GET" {
+		return true
+	}
+
+	// DELETE请求有时需要查询参数
+	if route.Method == "DELETE" && !strings.Contains(route.Path, ":") {
+		return true
+	}
+
+	return false
+}
+
+// isListEndpoint 判断是否是列表接口
+func (g *SwaggerGenerator) isListEndpoint(route RouteInfo) bool {
+	path := strings.ToLower(route.Path)
+
+	// 包含 list 关键词
+	if strings.Contains(path, "/list") {
+		return true
+	}
+
+	// GET请求且没有路径参数，通常是列表接口
+	if route.Method == "GET" && !strings.Contains(route.Path, ":") {
+		// 排除明确的非列表接口
+		excludePatterns := []string{
+			"/detail", "/info", "/profile", "/config", "/health", "/status",
+			"/login", "/logout", "/refresh", "/statistics",
+		}
+
+		for _, pattern := range excludePatterns {
+			if strings.Contains(path, pattern) {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	return false
+}
+
+// getCommonPaginationParams 获取通用分页参数
+func (g *SwaggerGenerator) getCommonPaginationParams() []Parameter {
+	return []Parameter{
+		{
+			Name:        "page",
+			In:          "query",
+			Type:        "integer",
+			Description: "页码",
+			Required:    false,
+		},
+		{
+			Name:        "size",
+			In:          "query",
+			Type:        "integer",
+			Description: "每页数量",
+			Required:    false,
+		},
+		{
+			Name:        "search",
+			In:          "query",
+			Type:        "string",
+			Description: "搜索关键词",
+			Required:    false,
+		},
+	}
 }
 
 // generateResponses 生成响应
@@ -506,22 +861,61 @@ func (g *SwaggerGenerator) extractPathParams(path string) []string {
 
 // extractQueryParams 从函数参数提取查询参数
 func (g *SwaggerGenerator) extractQueryParams(handler *HandlerInfo) []Parameter {
-	// 这里可以进一步分析函数体中的c.Query()调用
-	// 目前返回一些常见的查询参数
-	return []Parameter{
-		{
-			Name:        "page",
-			In:          "query",
-			Type:        "integer",
-			Description: "页码",
-		},
-		{
-			Name:        "size",
-			In:          "query",
-			Type:        "integer",
-			Description: "每页数量",
-		},
+	parameters := make([]Parameter, 0)
+
+	if handler == nil || handler.FuncDecl == nil || handler.FuncDecl.Body == nil {
+		return parameters
 	}
+
+	// 分析函数体中的实际参数使用
+	queryParams := g.analyzeQueryUsage(handler.FuncDecl.Body)
+	for paramName, paramInfo := range queryParams {
+		parameters = append(parameters, Parameter{
+			Name:        paramName,
+			In:          "query",
+			Type:        paramInfo.Type,
+			Description: paramInfo.Description,
+			Required:    paramInfo.Required,
+		})
+	}
+
+	return parameters
+}
+
+// ParamInfo 参数信息
+type ParamInfo struct {
+	Type        string
+	Description string
+	Required    bool
+}
+
+// analyzeQueryUsage 分析函数体中的查询参数使用
+func (g *SwaggerGenerator) analyzeQueryUsage(body *ast.BlockStmt) map[string]ParamInfo {
+	queryParams := make(map[string]ParamInfo)
+
+	// 遍历函数体语句，查找 c.Query() 调用
+	ast.Inspect(body, func(n ast.Node) bool {
+		if callExpr, ok := n.(*ast.CallExpr); ok {
+			if selectorExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+				// 检查是否是 c.Query() 调用
+				if selectorExpr.Sel.Name == "Query" && len(callExpr.Args) > 0 {
+					if basicLit, ok := callExpr.Args[0].(*ast.BasicLit); ok {
+						paramName := strings.Trim(basicLit.Value, "\"")
+						if paramName != "" {
+							queryParams[paramName] = ParamInfo{
+								Type:        "string",
+								Description: fmt.Sprintf("%s参数", paramName),
+								Required:    false,
+							}
+						}
+					}
+				}
+			}
+		}
+		return true
+	})
+
+	return queryParams
 }
 
 // hasRequestBody 检查是否有请求体
@@ -535,13 +929,137 @@ func (g *SwaggerGenerator) generateBodyParameter(route RouteInfo) *Parameter {
 		return nil
 	}
 
-	return &Parameter{
+	// 分析函数体中实际使用的请求结构体
+	requestStruct := g.analyzeRequestStruct(route.HandlerInfo)
+
+	param := &Parameter{
 		Name:        "body",
 		In:          "body",
 		Description: "请求体",
 		Schema: &Schema{
 			Type: "object",
 		},
+	}
+
+	// 如果找到了具体的请求结构体，使用它的Schema引用
+	if requestStruct != "" {
+		param.Schema.Ref = fmt.Sprintf("#/definitions/%s", requestStruct)
+		param.Schema.Type = ""
+	}
+
+	return param
+}
+
+// analyzeRequestStruct 分析请求结构体
+func (g *SwaggerGenerator) analyzeRequestStruct(handler *HandlerInfo) string {
+	if handler == nil || handler.FuncDecl == nil || handler.FuncDecl.Body == nil {
+		return ""
+	}
+
+	var requestStruct string
+
+	// 遍历函数体，查找 c.ShouldBindJSON() 或类似的调用
+	ast.Inspect(handler.FuncDecl.Body, func(n ast.Node) bool {
+		if callExpr, ok := n.(*ast.CallExpr); ok {
+			if selectorExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+				// 检查是否是绑定方法
+				methodName := selectorExpr.Sel.Name
+				isBindMethod := methodName == "ShouldBindJSON" ||
+					methodName == "ShouldBind" ||
+					methodName == "ShouldBindUri" ||
+					methodName == "BindJSON" ||
+					methodName == "Bind"
+
+				if isBindMethod && len(callExpr.Args) > 0 {
+					// 分析参数，提取结构体类型
+					if unaryExpr, ok := callExpr.Args[0].(*ast.UnaryExpr); ok {
+						if unaryExpr.Op.String() == "&" {
+							if ident, ok := unaryExpr.X.(*ast.Ident); ok {
+								// 查找变量声明来确定类型
+								structType := g.findVariableType(handler.FuncDecl.Body, ident.Name)
+								if structType != "" {
+									requestStruct = g.getShortName(structType)
+									return false // 找到了，停止遍历
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return true
+	})
+
+	return requestStruct
+}
+
+// findVariableType 查找变量的类型声明
+func (g *SwaggerGenerator) findVariableType(body *ast.BlockStmt, varName string) string {
+	var varType string
+
+	ast.Inspect(body, func(n ast.Node) bool {
+		// 查找变量声明语句 var req model.UserLoginReq
+		if declStmt, ok := n.(*ast.DeclStmt); ok {
+			if genDecl, ok := declStmt.Decl.(*ast.GenDecl); ok {
+				for _, spec := range genDecl.Specs {
+					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+						for i, name := range valueSpec.Names {
+							if name.Name == varName && valueSpec.Type != nil {
+								varType = g.exprToString(valueSpec.Type)
+								return false
+							}
+							// 处理短声明 req := model.UserLoginReq{}
+							if name.Name == varName && i < len(valueSpec.Values) {
+								if compositeLit, ok := valueSpec.Values[i].(*ast.CompositeLit); ok {
+									varType = g.exprToString(compositeLit.Type)
+									return false
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// 查找短声明语句 req := model.UserLoginReq{}
+		if assignStmt, ok := n.(*ast.AssignStmt); ok {
+			if assignStmt.Tok.String() == ":=" {
+				for i, lhs := range assignStmt.Lhs {
+					if ident, ok := lhs.(*ast.Ident); ok {
+						if ident.Name == varName && i < len(assignStmt.Rhs) {
+							if compositeLit, ok := assignStmt.Rhs[i].(*ast.CompositeLit); ok {
+								varType = g.exprToString(compositeLit.Type)
+								return false
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return true
+	})
+
+	return varType
+}
+
+// exprToString 将表达式转换为字符串
+func (g *SwaggerGenerator) exprToString(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.StarExpr:
+		return "*" + g.exprToString(t.X)
+	case *ast.ArrayType:
+		return "[]" + g.exprToString(t.Elt)
+	case *ast.SelectorExpr:
+		return g.exprToString(t.X) + "." + t.Sel.Name
+	case *ast.MapType:
+		return "map[" + g.exprToString(t.Key) + "]" + g.exprToString(t.Value)
+	case *ast.InterfaceType:
+		return "interface{}"
+	default:
+		return "unknown"
 	}
 }
 
@@ -600,22 +1118,6 @@ func (g *SwaggerGenerator) getShortName(fullName string) string {
 		return parts[len(parts)-1]
 	}
 	return fullName
-}
-
-// mapGoTypeToSwagger 映射Go类型到Swagger类型
-func (g *SwaggerGenerator) mapGoTypeToSwagger(goType string) string {
-	switch goType {
-	case "string":
-		return "string"
-	case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
-		return "integer"
-	case "float32", "float64":
-		return "number"
-	case "bool":
-		return "boolean"
-	default:
-		return "string"
-	}
 }
 
 // isCustomType 检查是否是自定义类型

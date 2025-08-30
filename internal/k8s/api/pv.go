@@ -47,24 +47,17 @@ func NewK8sPVHandler(logger *zap.Logger, pvService service.PVService) *K8sPVHand
 
 func (k *K8sPVHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
-	pvs := k8sGroup.Group("/pvs")
 	{
-		// 基础操作
-		pvs.GET("/list", k.GetPVList)                   // 获取PV列表
-		pvs.GET("/:cluster_id", k.GetPVsByCluster)      // 根据集群获取PV列表
-		pvs.GET("/:cluster_id/:name", k.GetPV)          // 获取单个PV详情
-		pvs.GET("/:cluster_id/:name/yaml", k.GetPVYaml) // 获取PV YAML配置
-		pvs.POST("/create", k.CreatePV)                 // 创建PV
-		pvs.PUT("/update", k.UpdatePV)                  // 更新PV
-		pvs.DELETE("/delete", k.DeletePV)               // 删除PV
-
-		// 批量操作
-
-		// 高级功能
-		pvs.GET("/:cluster_id/:name/events", k.GetPVEvents) // 获取PV事件
-		pvs.GET("/:cluster_id/:name/usage", k.GetPVUsage)   // 获取PV使用情况
-		pvs.POST("/:cluster_id/:name/reclaim", k.ReclaimPV) // 回收PV
+		k8sGroup.GET("/pvs/list", k.GetPVList)                       // 获取PV列表
+		k8sGroup.GET("/pvs/:cluster_id", k.GetPVsByCluster)          // 根据集群获取PV列表
+		k8sGroup.GET("/pvs/:cluster_id/:name", k.GetPV)              // 获取单个PV详情
+		k8sGroup.GET("/pvs/:cluster_id/:name/yaml", k.GetPVYaml)     // 获取PV YAML配置
+		k8sGroup.POST("/pvs/create", k.CreatePV)                     // 创建PV
+		k8sGroup.PUT("/pvs/update", k.UpdatePV)                      // 更新PV
+		k8sGroup.DELETE("/pvs/delete", k.DeletePV)                   // 删除PV
+		k8sGroup.GET("/pvs/:cluster_id/:name/events", k.GetPVEvents) // 获取PV事件
+		k8sGroup.GET("/pvs/:cluster_id/:name/usage", k.GetPVUsage)   // 获取PV使用情况
+		k8sGroup.POST("/pvs/:cluster_id/:name/reclaim", k.ReclaimPV) // 回收PV
 	}
 }
 

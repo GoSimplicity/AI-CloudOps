@@ -49,15 +49,13 @@ func NewK8sYamlTemplateHandler(logger *zap.Logger, yamlTemplateService service.Y
 
 func (k *K8sYamlTemplateHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
-	yamlTemplates := k8sGroup.Group("/yaml_templates")
 	{
-		yamlTemplates.GET("/list", k.GetYamlTemplateList)         // 获取 YAML 模板列表
-		yamlTemplates.POST("/create", k.CreateYamlTemplate)       // 创建新的 YAML 模板
-		yamlTemplates.POST("/check", k.CheckYamlTemplate)         // 检查 YAML 模板是否可用
-		yamlTemplates.POST("/update", k.UpdateYamlTemplate)       // 更新指定 ID 的 YAML 模板
-		yamlTemplates.DELETE("/delete/:id", k.DeleteYamlTemplate) // 删除指定 ID 的 YAML 模板
-		yamlTemplates.GET("/:id/yaml", k.GetYamlTemplateDetail)
+		k8sGroup.GET("/yaml_templates/list", k.GetYamlTemplateList)         // 获取 YAML 模板列表
+		k8sGroup.POST("/yaml_templates/create", k.CreateYamlTemplate)       // 创建新的 YAML 模板
+		k8sGroup.POST("/yaml_templates/check", k.CheckYamlTemplate)         // 检查 YAML 模板是否可用
+		k8sGroup.POST("/yaml_templates/update", k.UpdateYamlTemplate)       // 更新指定 ID 的 YAML 模板
+		k8sGroup.DELETE("/yaml_templates/delete/:id", k.DeleteYamlTemplate) // 删除指定 ID 的 YAML 模板
+		k8sGroup.GET("/yaml_templates/:id/yaml", k.GetYamlTemplateDetail)
 	}
 }
 

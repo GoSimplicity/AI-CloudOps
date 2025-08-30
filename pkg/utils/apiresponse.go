@@ -92,7 +92,6 @@ type ApiResponse struct {
 	Code    int         `json:"code"`    // 状态码，表示业务逻辑的状态，而非HTTP状态码
 	Data    interface{} `json:"data"`    // 响应数据
 	Message string      `json:"message"` // 反馈信息
-	Type    string      `json:"type"`    // 消息类型
 }
 
 // 定义操作成功和失败的常量状态码
@@ -112,7 +111,6 @@ func ApiData(c *gin.Context, code int, data interface{}, message string) {
 		Code:    code,
 		Data:    data,
 		Message: message,
-		Type:    "",
 	})
 }
 
@@ -157,7 +155,6 @@ func BadRequest(c *gin.Context, code int, data interface{}, message string) {
 		Code:    code,
 		Data:    data,
 		Message: message,
-		Type:    "",
 	})
 }
 
@@ -167,7 +164,6 @@ func Forbidden(c *gin.Context, data interface{}, message string) {
 		Code:    http.StatusForbidden,
 		Data:    data,
 		Message: message,
-		Type:    "",
 	})
 }
 
@@ -177,7 +173,6 @@ func Unauthorized(c *gin.Context, code int, data interface{}, message string) {
 		Code:    code,
 		Data:    data,
 		Message: message,
-		Type:    "",
 	})
 }
 
@@ -187,7 +182,6 @@ func InternalServerError(c *gin.Context, code int, data interface{}, message str
 		Code:    code,
 		Data:    data,
 		Message: message,
-		Type:    "",
 	})
 }
 

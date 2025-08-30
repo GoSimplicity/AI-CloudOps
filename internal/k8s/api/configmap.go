@@ -49,16 +49,13 @@ func NewK8sConfigMapHandler(logger *zap.Logger, configMapService service.ConfigM
 
 func (h *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
-	configMaps := k8sGroup.Group("/configmaps")
 	{
-		configMaps.GET("/list", h.GetConfigMapList)                           // 获取ConfigMap列表
-		configMaps.GET("/:cluster_id/:namespace/:name", h.GetConfigMap)       // 获取单个ConfigMap详情
-		configMaps.POST("/create", h.CreateConfigMap)                         // 创建ConfigMap
-		configMaps.PUT("/update", h.UpdateConfigMap)                          // 更新ConfigMap
-		configMaps.DELETE("/:cluster_id/:namespace/:name", h.DeleteConfigMap) // 删除ConfigMap
-
-		configMaps.GET("/:cluster_id/:namespace/:name/yaml", h.GetConfigMapYAML) // 获取ConfigMap的YAML配置
+		k8sGroup.GET("/configmaps/list", h.GetConfigMapList)                              // 获取ConfigMap列表
+		k8sGroup.GET("/configmaps/:cluster_id/:namespace/:name", h.GetConfigMap)          // 获取单个ConfigMap详情
+		k8sGroup.POST("/configmaps/create", h.CreateConfigMap)                            // 创建ConfigMap
+		k8sGroup.PUT("/configmaps/update", h.UpdateConfigMap)                             // 更新ConfigMap
+		k8sGroup.DELETE("/configmaps/:cluster_id/:namespace/:name", h.DeleteConfigMap)    // 删除ConfigMap
+		k8sGroup.GET("/configmaps/:cluster_id/:namespace/:name/yaml", h.GetConfigMapYAML) // 获取ConfigMap的YAML配置
 	}
 }
 

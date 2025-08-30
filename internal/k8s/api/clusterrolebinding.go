@@ -46,18 +46,16 @@ func NewClusterRoleBindingAPI(clusterRoleBindingService *service.ClusterRoleBind
 }
 
 func (crba *ClusterRoleBindingAPI) RegisterRouters(server *gin.Engine) {
-	k8sGroup := server.Group("/api/v1/k8s")
+	k8sGroup := server.Group("/api/k8s")
 
-	clusterRoleBindings := k8sGroup.Group("/cluster-role-binding")
 	{
-		clusterRoleBindings.GET("/list", crba.GetClusterRoleBindingList)                         // 获取ClusterRoleBinding列表
-		clusterRoleBindings.GET("/details/:cluster_id/:name", crba.GetClusterRoleBindingDetails) // 获取ClusterRoleBinding详情
-		clusterRoleBindings.POST("/create", crba.CreateClusterRoleBinding)                       // 创建ClusterRoleBinding
-		clusterRoleBindings.PUT("/update", crba.UpdateClusterRoleBinding)                        // 更新ClusterRoleBinding
-		clusterRoleBindings.DELETE("/delete/:cluster_id/:name", crba.DeleteClusterRoleBinding)   // 删除ClusterRoleBinding
-
-		clusterRoleBindings.GET("/yaml/:cluster_id/:name", crba.GetClusterRoleBindingYaml) // 获取ClusterRoleBinding YAML
-		clusterRoleBindings.PUT("/yaml", crba.UpdateClusterRoleBindingYaml)                // 更新ClusterRoleBinding YAML
+		k8sGroup.GET("/cluster-role-binding/list", crba.GetClusterRoleBindingList)                         // 获取ClusterRoleBinding列表
+		k8sGroup.GET("/cluster-role-binding/details/:cluster_id/:name", crba.GetClusterRoleBindingDetails) // 获取ClusterRoleBinding详情
+		k8sGroup.POST("/cluster-role-binding/create", crba.CreateClusterRoleBinding)                       // 创建ClusterRoleBinding
+		k8sGroup.PUT("/cluster-role-binding/update", crba.UpdateClusterRoleBinding)                        // 更新ClusterRoleBinding
+		k8sGroup.DELETE("/cluster-role-binding/delete/:cluster_id/:name", crba.DeleteClusterRoleBinding)   // 删除ClusterRoleBinding
+		k8sGroup.GET("/cluster-role-binding/yaml/:cluster_id/:name", crba.GetClusterRoleBindingYaml)       // 获取ClusterRoleBinding YAML
+		k8sGroup.PUT("/cluster-role-binding/yaml", crba.UpdateClusterRoleBindingYaml)                      // 更新ClusterRoleBinding YAML
 	}
 }
 

@@ -73,22 +73,25 @@ func (K8sNode) TableName() string {
 
 // LabelK8sNodesReq 定义为节点添加标签的请求结构
 type LabelK8sNodesReq struct {
-	*K8sClusterNodesReq
-	ModType string   `json:"mod_type" binding:"required,oneof=add del"` // 操作类型，必填，值为 "add" 或 "del"
-	Labels  []string `json:"labels" binding:"required"`                 // 标签键值对，必填
+	NodeName  string   `json:"node_name" binding:"required"`              // 节点名称，必填
+	ClusterID int      `json:"cluster_id" binding:"required"`             // 集群ID，必填
+	ModType   string   `json:"mod_type" binding:"required,oneof=add del"` // 操作类型，必填，值为 "add" 或 "del"
+	Labels    []string `json:"labels" binding:"required"`                 // 标签键值对，必填
 }
 
 // TaintK8sNodesReq 定义为节点添加或删除 Taint 的请求结构
 type TaintK8sNodesReq struct {
-	*K8sClusterNodesReq
-	ModType   string `json:"mod_type"`             // 操作类型，值为 "add" 或 "del"
-	TaintYaml string `json:"taint_yaml,omitempty"` // 可选的 Taint YAML 字符串，用于验证或其他用途
+	NodeName  string `json:"node_name" binding:"required"`  // 节点名称，必填
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID，必填
+	ModType   string `json:"mod_type"`                      // 操作类型，值为 "add" 或 "del"
+	TaintYaml string `json:"taint_yaml,omitempty"`          // 可选的 Taint YAML 字符串，用于验证或其他用途
 }
 
 // ScheduleK8sNodesReq 定义调度节点的请求结构
 type ScheduleK8sNodesReq struct {
-	*K8sClusterNodesReq
-	ScheduleEnable bool `json:"schedule_enable"`
+	NodeName       string `json:"node_name" binding:"required"`  // 节点名称，必填
+	ClusterID      int    `json:"cluster_id" binding:"required"` // 集群ID，必填
+	ScheduleEnable bool   `json:"schedule_enable"`
 }
 
 // NodeListReq 获取节点列表请求
@@ -133,6 +136,12 @@ type NodeResourcesReq struct {
 }
 
 type NodeEventsReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`
+	NodeName  string `json:"node_name" binding:"required" comment:"节点名称"`
+}
+
+// K8sClusterNodesReq 定义集群节点操作的请求结构
+type K8sClusterNodesReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`
 	NodeName  string `json:"node_name" binding:"required" comment:"节点名称"`
 }

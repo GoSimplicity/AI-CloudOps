@@ -137,7 +137,7 @@ func (n *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.Label
 	// }
 
 	// 临时实现：直接通过client获取
-	cluster, err := n.clusterDao.GetClusterByID(ctx, req.ClusterId)
+	cluster, err := n.clusterDao.GetClusterByID(ctx, req.ClusterID)
 	if err != nil {
 		return fmt.Errorf("获取集群信息失败: %w", err)
 	}

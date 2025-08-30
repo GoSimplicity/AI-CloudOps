@@ -51,12 +51,11 @@ func (k *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.GET("/clusters/list", k.GetAllClusters)
 		k8sGroup.GET("/clusters/detail/:id", k.GetCluster)
 		k8sGroup.POST("/clusters/create", k.CreateCluster)
-		k8sGroup.POST("/clusters/update", k.UpdateCluster)
+		k8sGroup.PUT("/clusters/update/:id", k.UpdateCluster)
 		k8sGroup.DELETE("/clusters/delete/:id", k.DeleteCluster)
-
 		k8sGroup.POST("/clusters/refresh/:id", k.RefreshCluster)
 		k8sGroup.GET("/clusters/health/:id", k.CheckClusterHealth)
-		k8sGroup.GET("/clusters/stats/:id", k.GetClusterStats)
+		k8sGroup.GET("/clusters/stats/:id", k.GetClusterStats) // 获取集群统计信息
 	}
 }
 
@@ -88,8 +87,26 @@ func (k *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
 
 	req.UserID = uc.Uid
 
+	// 将请求转换为K8sCluster
+	cluster := &model.K8sCluster{
+		Name:                 req.Name,
+		NameZh:               req.NameZh,
+		UserID:               req.UserID,
+		CpuRequest:           req.CpuRequest,
+		CpuLimit:             req.CpuLimit,
+		MemoryRequest:        req.MemoryRequest,
+		MemoryLimit:          req.MemoryLimit,
+		RestrictedNameSpace:  req.RestrictedNameSpace,
+		Status:               req.Status,
+		Env:                  req.Env,
+		Version:              req.Version,
+		ApiServerAddr:        req.ApiServerAddr,
+		KubeConfigContent:    req.KubeConfigContent,
+		ActionTimeoutSeconds: req.ActionTimeoutSeconds,
+	}
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.clusterService.CreateCluster(ctx, &req.K8sCluster)
+		return nil, k.clusterService.CreateCluster(ctx, cluster)
 	})
 }
 
@@ -97,8 +114,35 @@ func (k *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
 func (k *K8sClusterHandler) UpdateCluster(ctx *gin.Context) {
 	var req model.ClusterUpdateReq
 
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ID = id
+
+	// 将请求转换为K8sCluster
+	cluster := &model.K8sCluster{
+		Model:                model.Model{ID: req.ID},
+		Name:                 req.Name,
+		NameZh:               req.NameZh,
+		UserID:               req.UserID,
+		CpuRequest:           req.CpuRequest,
+		CpuLimit:             req.CpuLimit,
+		MemoryRequest:        req.MemoryRequest,
+		MemoryLimit:          req.MemoryLimit,
+		RestrictedNameSpace:  req.RestrictedNameSpace,
+		Status:               req.Status,
+		Env:                  req.Env,
+		Version:              req.Version,
+		ApiServerAddr:        req.ApiServerAddr,
+		KubeConfigContent:    req.KubeConfigContent,
+		ActionTimeoutSeconds: req.ActionTimeoutSeconds,
+	}
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.clusterService.UpdateCluster(ctx, &req.K8sCluster)
+		return nil, k.clusterService.UpdateCluster(ctx, cluster)
 	})
 }
 

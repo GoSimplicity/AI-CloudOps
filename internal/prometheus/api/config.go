@@ -45,14 +45,12 @@ func NewMonitorConfigHandler(svc configService.MonitorConfigService) *MonitorCon
 
 func (h *MonitorConfigHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
-
-	configs := monitorGroup.Group("/configs")
 	{
-		configs.GET("/list", h.GetMonitorConfigList)
-		configs.GET("/detail/:id", h.GetMonitorConfig)
-		configs.POST("/create", h.CreateMonitorConfig)
-		configs.PUT("/update/:id", h.UpdateMonitorConfig)
-		configs.DELETE("/delete/:id", h.DeleteMonitorConfig)
+		monitorGroup.GET("/configs/list", h.GetMonitorConfigList)
+		monitorGroup.GET("/configs/detail/:id", h.GetMonitorConfig)
+		monitorGroup.POST("/configs/create", h.CreateMonitorConfig)
+		monitorGroup.PUT("/configs/update/:id", h.UpdateMonitorConfig)
+		monitorGroup.DELETE("/configs/delete/:id", h.DeleteMonitorConfig)
 	}
 }
 

@@ -47,24 +47,17 @@ func NewK8sIngressHandler(logger *zap.Logger, ingressService service.IngressServ
 
 func (k *K8sIngressHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
-	ingresses := k8sGroup.Group("/ingresses")
 	{
-		// 基础操作
-		ingresses.GET("/list", k.GetIngressList)                   // 获取Ingress列表
-		ingresses.GET("/:cluster_id", k.GetIngressesByNamespace)   // 根据命名空间获取Ingress列表
-		ingresses.GET("/:cluster_id/:name", k.GetIngress)          // 获取单个Ingress详情
-		ingresses.GET("/:cluster_id/:name/yaml", k.GetIngressYaml) // 获取Ingress YAML配置
-		ingresses.POST("/create", k.CreateIngress)                 // 创建Ingress
-		ingresses.PUT("/update", k.UpdateIngress)                  // 更新Ingress
-		ingresses.DELETE("/delete", k.DeleteIngress)               // 删除Ingress
-
-		// 批量操作
-
-		// 高级功能
-		ingresses.GET("/:cluster_id/:name/events", k.GetIngressEvents)                  // 获取Ingress事件
-		ingresses.POST("/:cluster_id/:name/tls-test", k.TestIngressTLS)                 // 测试Ingress TLS证书
-		ingresses.GET("/:cluster_id/:name/backend-health", k.CheckIngressBackendHealth) // 检查后端健康状态
+		k8sGroup.GET("/ingresses/list", k.GetIngressList)                                        // 获取Ingress列表
+		k8sGroup.GET("/ingresses/:cluster_id", k.GetIngressesByNamespace)                        // 根据命名空间获取Ingress列表
+		k8sGroup.GET("/ingresses/:cluster_id/:name", k.GetIngress)                               // 获取单个Ingress详情
+		k8sGroup.GET("/ingresses/:cluster_id/:name/yaml", k.GetIngressYaml)                      // 获取Ingress YAML配置
+		k8sGroup.POST("/ingresses/create", k.CreateIngress)                                      // 创建Ingress
+		k8sGroup.PUT("/ingresses/update", k.UpdateIngress)                                       // 更新Ingress
+		k8sGroup.DELETE("/ingresses/delete", k.DeleteIngress)                                    // 删除Ingress
+		k8sGroup.GET("/ingresses/:cluster_id/:name/events", k.GetIngressEvents)                  // 获取Ingress事件
+		k8sGroup.POST("/ingresses/:cluster_id/:name/tls-test", k.TestIngressTLS)                 // 测试Ingress TLS证书
+		k8sGroup.GET("/ingresses/:cluster_id/:name/backend-health", k.CheckIngressBackendHealth) // 检查后端健康状态
 	}
 }
 

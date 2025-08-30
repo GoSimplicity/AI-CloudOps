@@ -49,17 +49,14 @@ func NewK8sStatefulSetHandler(logger *zap.Logger, statefulSetService service.Sta
 
 func (h *K8sStatefulSetHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
-	statefulSets := k8sGroup.Group("/statefulsets")
 	{
-		statefulSets.GET("/list", h.GetStatefulSetList)                           // 获取StatefulSet列表
-		statefulSets.GET("/:cluster_id/:namespace/:name", h.GetStatefulSet)       // 获取单个StatefulSet详情
-		statefulSets.POST("/create", h.CreateStatefulSet)                         // 创建StatefulSet
-		statefulSets.PUT("/update", h.UpdateStatefulSet)                          // 更新StatefulSet
-		statefulSets.POST("/scale", h.ScaleStatefulSet)                           // 扩缩容StatefulSet
-		statefulSets.DELETE("/:cluster_id/:namespace/:name", h.DeleteStatefulSet) // 删除StatefulSet
-
-		statefulSets.GET("/:cluster_id/:namespace/:name/yaml", h.GetStatefulSetYAML) // 获取StatefulSet的YAML配置
+		k8sGroup.GET("/statefulsets/list", h.GetStatefulSetList)                              // 获取StatefulSet列表
+		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name", h.GetStatefulSet)          // 获取单个StatefulSet详情
+		k8sGroup.POST("/statefulsets/create", h.CreateStatefulSet)                            // 创建StatefulSet
+		k8sGroup.PUT("/statefulsets/update", h.UpdateStatefulSet)                             // 更新StatefulSet
+		k8sGroup.POST("/statefulsets/scale", h.ScaleStatefulSet)                              // 扩缩容StatefulSet
+		k8sGroup.DELETE("/statefulsets/:cluster_id/:namespace/:name", h.DeleteStatefulSet)    // 删除StatefulSet
+		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name/yaml", h.GetStatefulSetYAML) // 获取StatefulSet的YAML配置
 	}
 }
 

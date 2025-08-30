@@ -46,18 +46,15 @@ func NewClusterRoleAPI(clusterRoleService *service.ClusterRoleService, logger *z
 }
 
 func (cra *ClusterRoleAPI) RegisterRouters(server *gin.Engine) {
-	k8sGroup := server.Group("/api/v1/k8s")
-
-	clusterRoles := k8sGroup.Group("/cluster-role")
+	k8sGroup := server.Group("/api/k8s")
 	{
-		clusterRoles.GET("/list", cra.GetClusterRoleList)                         // 获取ClusterRole列表
-		clusterRoles.GET("/details/:cluster_id/:name", cra.GetClusterRoleDetails) // 获取ClusterRole详情
-		clusterRoles.POST("/create", cra.CreateClusterRole)                       // 创建ClusterRole
-		clusterRoles.PUT("/update", cra.UpdateClusterRole)                        // 更新ClusterRole
-		clusterRoles.DELETE("/delete/:cluster_id/:name", cra.DeleteClusterRole)   // 删除ClusterRole
-
-		clusterRoles.GET("/yaml/:cluster_id/:name", cra.GetClusterRoleYaml) // 获取ClusterRole YAML
-		clusterRoles.PUT("/yaml", cra.UpdateClusterRoleYaml)                // 更新ClusterRole YAML
+		k8sGroup.GET("/cluster-role/list", cra.GetClusterRoleList)                         // 获取ClusterRole列表
+		k8sGroup.GET("/cluster-role/details/:cluster_id/:name", cra.GetClusterRoleDetails) // 获取ClusterRole详情
+		k8sGroup.POST("/cluster-role/create", cra.CreateClusterRole)                       // 创建ClusterRole
+		k8sGroup.PUT("/cluster-role/update", cra.UpdateClusterRole)                        // 更新ClusterRole
+		k8sGroup.DELETE("/cluster-role/delete/:cluster_id/:name", cra.DeleteClusterRole)   // 删除ClusterRole
+		k8sGroup.GET("/cluster-role/yaml/:cluster_id/:name", cra.GetClusterRoleYaml)       // 获取ClusterRole YAML
+		k8sGroup.PUT("/cluster-role/yaml", cra.UpdateClusterRoleYaml)                      // 更新ClusterRole YAML
 	}
 }
 

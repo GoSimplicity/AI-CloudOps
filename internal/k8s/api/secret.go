@@ -49,16 +49,13 @@ func NewK8sSecretHandler(logger *zap.Logger, secretService service.SecretService
 
 func (h *K8sSecretHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
-	secrets := k8sGroup.Group("/secrets")
 	{
-		secrets.GET("/list", h.GetSecretList)                           // 获取Secret列表
-		secrets.GET("/:cluster_id/:namespace/:name", h.GetSecret)       // 获取单个Secret详情
-		secrets.POST("/create", h.CreateSecret)                         // 创建Secret
-		secrets.PUT("/update", h.UpdateSecret)                          // 更新Secret
-		secrets.DELETE("/:cluster_id/:namespace/:name", h.DeleteSecret) // 删除Secret
-
-		secrets.GET("/:cluster_id/:namespace/:name/yaml", h.GetSecretYAML) // 获取Secret的YAML配置
+		k8sGroup.GET("/secrets/list", h.GetSecretList)                              // 获取Secret列表
+		k8sGroup.GET("/secrets/:cluster_id/:namespace/:name", h.GetSecret)          // 获取单个Secret详情
+		k8sGroup.POST("/secrets/create", h.CreateSecret)                            // 创建Secret
+		k8sGroup.PUT("/secrets/update", h.UpdateSecret)                             // 更新Secret
+		k8sGroup.DELETE("/secrets/:cluster_id/:namespace/:name", h.DeleteSecret)    // 删除Secret
+		k8sGroup.GET("/secrets/:cluster_id/:namespace/:name/yaml", h.GetSecretYAML) // 获取Secret的YAML配置
 	}
 }
 

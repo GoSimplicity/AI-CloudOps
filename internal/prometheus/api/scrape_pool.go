@@ -49,14 +49,12 @@ func NewScrapePoolHandler(l *zap.Logger, scrapePoolService scrapeJobService.Scra
 
 func (s *ScrapePoolHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
-
-	scrapePools := monitorGroup.Group("/scrape_pools")
 	{
-		scrapePools.GET("/list", s.GetMonitorScrapePoolList)
-		scrapePools.POST("/create", s.CreateMonitorScrapePool)
-		scrapePools.PUT("/update/:id", s.UpdateMonitorScrapePool)
-		scrapePools.DELETE("/delete/:id", s.DeleteMonitorScrapePool)
-		scrapePools.GET("/detail/:id", s.GetMonitorScrapePoolDetail)
+		monitorGroup.GET("/scrape_pools/list", s.GetMonitorScrapePoolList)
+		monitorGroup.POST("/scrape_pools/create", s.CreateMonitorScrapePool)
+		monitorGroup.PUT("/scrape_pools/update/:id", s.UpdateMonitorScrapePool)
+		monitorGroup.DELETE("/scrape_pools/delete/:id", s.DeleteMonitorScrapePool)
+		monitorGroup.GET("/scrape_pools/detail/:id", s.GetMonitorScrapePoolDetail)
 	}
 }
 

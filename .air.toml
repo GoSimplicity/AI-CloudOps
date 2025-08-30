@@ -12,7 +12,7 @@ tmp_dir = "tmp"
 pre_cmd = [
     "echo '🔄 开始构建...'",
     "echo '📄 自动生成 Swagger 文档（无需手动注释）...'",
-    "make swagger",
+    "go generate",
     "echo '✅ Swagger 文档已自动更新'"
 ]
 
@@ -35,7 +35,7 @@ exclude_ext = ["_test.go"]
 include_dir = ["cmd", "internal", "pkg", "config"]
 
 # 排除的目录
-exclude_dir = ["tmp", "vendor", "docs", "image", ".git", "node_modules"]
+exclude_dir = ["tmp", "vendor", "image", ".git", "node_modules"]
 
 # 监控的文件
 include_file = ["main.go"]

@@ -47,16 +47,12 @@ func NewK8sDeploymentHandler(logger *zap.Logger, deploymentService service.Deplo
 
 func (k *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
-	deployments := k8sGroup.Group("/deployments")
 	{
-		deployments.GET("/:id", k.GetDeployListByNamespace) // 根据命名空间获取部署列表
-		deployments.GET("/:id/yaml", k.GetDeployYaml)       // 获取指定部署的 YAML 配置
-		deployments.POST("/update", k.UpdateDeployment)     // 更新指定 deployment
-
-		deployments.DELETE("/delete/:id", k.DeleteDeployment)
-
-		deployments.POST("/restart/:id", k.RestartDeployment)
+		k8sGroup.GET("/deployments/:id", k.GetDeployListByNamespace) // 根据命名空间获取部署列表
+		k8sGroup.GET("/deployments/:id/yaml", k.GetDeployYaml)       // 获取指定部署的 YAML 配置
+		k8sGroup.POST("/deployments/update", k.UpdateDeployment)     // 更新指定 deployment
+		k8sGroup.DELETE("/deployments/delete/:id", k.DeleteDeployment)
+		k8sGroup.POST("/deployments/restart/:id", k.RestartDeployment)
 	}
 }
 

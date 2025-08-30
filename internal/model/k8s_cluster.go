@@ -87,24 +87,48 @@ type UpdateNamespaceReq struct {
 	Annotations []string `json:"annotations,omitempty"` // 命名空间注解
 }
 
-// K8sClusterNodesReq 定义集群节点请求的基础结构
-type K8sClusterNodesReq struct {
-	ClusterId int    `json:"cluster_id" binding:"required"` // 集群id，必填
-	NodeName  string `json:"node_name" binding:"required"`  // 节点名称列表，必填
-}
-
 // ClusterListReq 获取集群列表请求
 type ClusterListReq struct {
+	ListReq
+	Status string `json:"status" form:"status"` // 集群状态过滤
+	Env    string `json:"env" form:"env"`       // 环境过滤
 }
 
 // ClusterCreateReq 创建集群请求
 type ClusterCreateReq struct {
-	K8sCluster
+	Name                 string     `json:"name" binding:"required,min=1,max=200"`    // 集群名称
+	NameZh               string     `json:"name_zh" binding:"required,min=1,max=500"` // 集群中文名称
+	UserID               int        `json:"user_id" `                                 // 创建者用户ID
+	CpuRequest           string     `json:"cpu_request,omitempty" `                   // CPU 请求量
+	CpuLimit             string     `json:"cpu_limit,omitempty" `                     // CPU 限制量
+	MemoryRequest        string     `json:"memory_request,omitempty" `                // 内存请求量
+	MemoryLimit          string     `json:"memory_limit,omitempty" `                  // 内存限制量
+	RestrictedNameSpace  StringList `json:"restricted_name_space" `                   // 资源限制命名空间
+	Status               string     `json:"status" `                                  // 集群状态
+	Env                  string     `json:"env,omitempty" `                           // 集群环境
+	Version              string     `json:"version,omitempty" `                       // 集群版本
+	ApiServerAddr        string     `json:"api_server_addr,omitempty" `               // API Server 地址
+	KubeConfigContent    string     `json:"kube_config_content,omitempty" `           // kubeConfig 内容
+	ActionTimeoutSeconds int        `json:"action_timeout_seconds,omitempty" `        // 操作超时时间（秒）
 }
 
 // ClusterUpdateReq 更新集群请求
 type ClusterUpdateReq struct {
-	K8sCluster
+	ID                   int        `json:"id" form:"id" uri:"id" binding:"required" comment:"集群ID"`
+	Name                 string     `json:"name" binding:"required,min=1,max=200"`    // 集群名称
+	NameZh               string     `json:"name_zh" binding:"required,min=1,max=500"` // 集群中文名称
+	UserID               int        `json:"user_id" `                                 // 创建者用户ID
+	CpuRequest           string     `json:"cpu_request,omitempty" `                   // CPU 请求量
+	CpuLimit             string     `json:"cpu_limit,omitempty" `                     // CPU 限制量
+	MemoryRequest        string     `json:"memory_request,omitempty" `                // 内存请求量
+	MemoryLimit          string     `json:"memory_limit,omitempty" `                  // 内存限制量
+	RestrictedNameSpace  StringList `json:"restricted_name_space" `                   // 资源限制命名空间
+	Status               string     `json:"status" `                                  // 集群状态
+	Env                  string     `json:"env,omitempty" `                           // 集群环境
+	Version              string     `json:"version,omitempty" `                       // 集群版本
+	ApiServerAddr        string     `json:"api_server_addr,omitempty" `               // API Server 地址
+	KubeConfigContent    string     `json:"kube_config_content,omitempty" `           // kubeConfig 内容
+	ActionTimeoutSeconds int        `json:"action_timeout_seconds,omitempty" `        // 操作超时时间（秒）
 }
 
 // ClusterDeleteReq 删除集群请求
@@ -140,26 +164,6 @@ type Event struct {
 	LastTimestamp  time.Time        `json:"last_timestamp"`  // 最后一次发生时间
 	Count          int32            `json:"count"`           // 事件发生次数
 	Source         core.EventSource `json:"source"`          // 事件来源
-}
-
-// ClusterEntity 集群响应实体
-type ClusterEntity struct {
-	ID                   int      `json:"id"`                     // 集群ID
-	Name                 string   `json:"name"`                   // 集群名称
-	NameZh               string   `json:"name_zh"`                // 集群中文名称
-	UserID               int      `json:"user_id"`                // 创建者用户ID
-	CpuRequest           string   `json:"cpu_request"`            // CPU请求量
-	CpuLimit             string   `json:"cpu_limit"`              // CPU限制量
-	MemoryRequest        string   `json:"memory_request"`         // 内存请求量
-	MemoryLimit          string   `json:"memory_limit"`           // 内存限制量
-	RestrictedNameSpace  []string `json:"restricted_name_space"`  // 限制的命名空间
-	Status               string   `json:"status"`                 // 集群状态
-	Env                  string   `json:"env"`                    // 集群环境
-	Version              string   `json:"version"`                // 集群版本
-	ApiServerAddr        string   `json:"api_server_addr"`        // API服务器地址
-	ActionTimeoutSeconds int      `json:"action_timeout_seconds"` // 操作超时时间
-	CreatedAt            string   `json:"created_at"`             // 创建时间
-	UpdatedAt            string   `json:"updated_at"`             // 更新时间
 }
 
 // CreateClusterReq 创建集群请求

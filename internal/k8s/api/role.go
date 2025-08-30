@@ -46,18 +46,15 @@ func NewRoleAPI(roleService *service.RoleService, logger *zap.Logger) *RoleAPI {
 }
 
 func (ra *RoleAPI) RegisterRouters(server *gin.Engine) {
-	k8sGroup := server.Group("/api/v1/k8s")
-
-	roles := k8sGroup.Group("/role")
+	k8sGroup := server.Group("/api/k8s")
 	{
-		roles.GET("/list", ra.GetRoleList)                                    // 获取Role列表
-		roles.GET("/details/:cluster_id/:namespace/:name", ra.GetRoleDetails) // 获取Role详情
-		roles.POST("/create", ra.CreateRole)                                  // 创建Role
-		roles.PUT("/update", ra.UpdateRole)                                   // 更新Role
-		roles.DELETE("/delete/:cluster_id/:namespace/:name", ra.DeleteRole)   // 删除Role
-
-		roles.GET("/yaml/:cluster_id/:namespace/:name", ra.GetRoleYaml) // 获取Role YAML
-		roles.PUT("/yaml", ra.UpdateRoleYaml)                           // 更新Role YAML
+		k8sGroup.GET("/role/list", ra.GetRoleList)                                    // 获取Role列表
+		k8sGroup.GET("/role/details/:cluster_id/:namespace/:name", ra.GetRoleDetails) // 获取Role详情
+		k8sGroup.POST("/role/create", ra.CreateRole)                                  // 创建Role
+		k8sGroup.PUT("/role/update", ra.UpdateRole)                                   // 更新Role
+		k8sGroup.DELETE("/role/delete/:cluster_id/:namespace/:name", ra.DeleteRole)   // 删除Role
+		k8sGroup.GET("/role/yaml/:cluster_id/:namespace/:name", ra.GetRoleYaml)       // 获取Role YAML
+		k8sGroup.PUT("/role/yaml", ra.UpdateRoleYaml)                                 // 更新Role YAML
 	}
 }
 

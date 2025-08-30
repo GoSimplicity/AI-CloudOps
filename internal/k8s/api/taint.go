@@ -47,14 +47,12 @@ func NewK8sTaintHandler(logger *zap.Logger, taintService service.TaintService) *
 
 func (k *K8sTaintHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
-	nodes := k8sGroup.Group("/taints")
 	{
-		nodes.POST("/add", k.AddTaintsNodes)                      // 为节点添加 Taint
-		nodes.POST("/enable_switch", k.ScheduleEnableSwitchNodes) // 启用或切换节点调度
-		nodes.POST("/taint_check", k.TaintYamlCheck)              // 检查节点 Taint 的 YAML 配置
-		nodes.DELETE("/delete", k.DeleteTaintsNodes)              // 删除节点 Taint
-		nodes.POST("/drain", k.DrainPods)                         // 清空节点上的 Pods
+		k8sGroup.POST("/taints/add", k.AddTaintsNodes)                      // 为节点添加 Taint
+		k8sGroup.POST("/taints/enable_switch", k.ScheduleEnableSwitchNodes) // 启用或切换节点调度
+		k8sGroup.POST("/taints/taint_check", k.TaintYamlCheck)              // 检查节点 Taint 的 YAML 配置
+		k8sGroup.DELETE("/taints/delete", k.DeleteTaintsNodes)              // 删除节点 Taint
+		k8sGroup.POST("/taints/drain", k.DrainPods)                         // 清空节点上的 Pods
 	}
 }
 

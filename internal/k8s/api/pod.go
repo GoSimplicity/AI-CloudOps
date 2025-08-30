@@ -47,15 +47,13 @@ func NewK8sPodHandler(logger *zap.Logger, podService service.PodService) *K8sPod
 
 func (k *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
-	pods := k8sGroup.Group("/pods")
 	{
-		pods.GET("/:id", k.GetPodListByNamespace)
-		pods.GET("/:id/node", k.GetPodsListByNodeName)
-		pods.GET("/:id/:podName/containers", k.GetPodContainers)
-		pods.GET("/:id/:podName/:container/logs", k.GetContainerLogs)
-		pods.GET("/:id/:podName/yaml", k.GetPodYaml)
-		pods.DELETE("/delete/:id", k.DeletePod)
+		k8sGroup.GET("/pods/:id", k.GetPodListByNamespace)
+		k8sGroup.GET("/pods/:id/node", k.GetPodsListByNodeName)
+		k8sGroup.GET("/pods/:id/:podName/containers", k.GetPodContainers)
+		k8sGroup.GET("/pods/:id/:podName/:container/logs", k.GetContainerLogs)
+		k8sGroup.GET("/pods/:id/:podName/yaml", k.GetPodYaml)
+		k8sGroup.DELETE("/pods/delete/:id", k.DeletePod)
 	}
 }
 

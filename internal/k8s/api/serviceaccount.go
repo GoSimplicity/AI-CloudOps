@@ -48,20 +48,17 @@ func NewK8sServiceAccountHandler(logger *zap.Logger, serviceAccountService servi
 }
 
 func (h *K8sServiceAccountHandler) RegisterRouters(server *gin.Engine) {
-	k8sGroup := server.Group("/api/v1/k8s")
-
-	serviceAccountGroup := k8sGroup.Group("/serviceaccount")
+	k8sGroup := server.Group("/api/k8s")
 	{
-		serviceAccountGroup.GET("/list", h.GetServiceAccountList)       // 获取ServiceAccount列表
-		serviceAccountGroup.GET("/details", h.GetServiceAccountDetails) // 获取ServiceAccount详情
-		serviceAccountGroup.POST("/create", h.CreateServiceAccount)     // 创建ServiceAccount
-		serviceAccountGroup.PUT("/update", h.UpdateServiceAccount)      // 更新ServiceAccount
-		serviceAccountGroup.DELETE("/delete", h.DeleteServiceAccount)   // 删除ServiceAccount
-
-		serviceAccountGroup.GET("/statistics", h.GetServiceAccountStatistics) // 获取ServiceAccount统计信息
-		serviceAccountGroup.POST("/token", h.GetServiceAccountToken)          // 获取ServiceAccount令牌
-		serviceAccountGroup.GET("/yaml", h.GetServiceAccountYaml)             // 获取ServiceAccount YAML
-		serviceAccountGroup.PUT("/yaml", h.UpdateServiceAccountYaml)          // 更新ServiceAccount YAML
+		k8sGroup.GET("/serviceaccount/list", h.GetServiceAccountList)             // 获取ServiceAccount列表
+		k8sGroup.GET("/serviceaccount/details", h.GetServiceAccountDetails)       // 获取ServiceAccount详情
+		k8sGroup.POST("/serviceaccount/create", h.CreateServiceAccount)           // 创建ServiceAccount
+		k8sGroup.PUT("/serviceaccount/update", h.UpdateServiceAccount)            // 更新ServiceAccount
+		k8sGroup.DELETE("/serviceaccount/delete", h.DeleteServiceAccount)         // 删除ServiceAccount
+		k8sGroup.GET("/serviceaccount/statistics", h.GetServiceAccountStatistics) // 获取ServiceAccount统计信息
+		k8sGroup.POST("/serviceaccount/token", h.GetServiceAccountToken)          // 获取ServiceAccount令牌
+		k8sGroup.GET("/serviceaccount/yaml", h.GetServiceAccountYaml)             // 获取ServiceAccount YAML
+		k8sGroup.PUT("/serviceaccount/yaml", h.UpdateServiceAccountYaml)          // 更新ServiceAccount YAML
 	}
 }
 

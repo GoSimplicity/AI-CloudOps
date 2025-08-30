@@ -47,27 +47,18 @@ func NewK8sEventHandler(logger *zap.Logger, eventService service.EventService) *
 
 func (k *K8sEventHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
-	events := k8sGroup.Group("/events")
 	{
-		// 基础操作
-		events.GET("/list", k.GetEventList)                // 获取Event列表
-		events.GET("/:cluster_id", k.GetEventsByNamespace) // 根据命名空间获取Event列表
-		events.GET("/:cluster_id/:name", k.GetEvent)       // 获取单个Event详情
-
-		// 根据对象获取事件
-		events.GET("/by-object", k.GetEventsByObject)         // 根据对象获取相关事件
-		events.GET("/by-pod", k.GetEventsByPod)               // 获取Pod相关事件
-		events.GET("/by-deployment", k.GetEventsByDeployment) // 获取Deployment相关事件
-		events.GET("/by-service", k.GetEventsByService)       // 获取Service相关事件
-		events.GET("/by-node", k.GetEventsByNode)             // 获取Node相关事件
-
-		// 事件分析
-		events.GET("/statistics", k.GetEventStatistics) // 获取事件统计
-		events.GET("/timeline", k.GetEventTimeline)     // 获取事件时间线
-
-		// 事件管理
-		events.POST("/cleanup", k.CleanupOldEvents) // 清理旧事件
+		k8sGroup.GET("/events/list", k.GetEventList)                   // 获取Event列表
+		k8sGroup.GET("/events/:cluster_id", k.GetEventsByNamespace)    // 根据命名空间获取Event列表
+		k8sGroup.GET("/events/:cluster_id/:name", k.GetEvent)          // 获取单个Event详情
+		k8sGroup.GET("/events/by-object", k.GetEventsByObject)         // 根据对象获取相关事件
+		k8sGroup.GET("/events/by-pod", k.GetEventsByPod)               // 获取Pod相关事件
+		k8sGroup.GET("/events/by-deployment", k.GetEventsByDeployment) // 获取Deployment相关事件
+		k8sGroup.GET("/events/by-service", k.GetEventsByService)       // 获取Service相关事件
+		k8sGroup.GET("/events/by-node", k.GetEventsByNode)             // 获取Node相关事件
+		k8sGroup.GET("/events/statistics", k.GetEventStatistics)       // 获取事件统计
+		k8sGroup.GET("/events/timeline", k.GetEventTimeline)           // 获取事件时间线
+		k8sGroup.POST("/events/cleanup", k.CleanupOldEvents)           // 清理旧事件
 	}
 }
 

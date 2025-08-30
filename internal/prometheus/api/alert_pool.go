@@ -44,14 +44,12 @@ func NewAlertPoolHandler(svc alertEventService.AlertManagerPoolService) *AlertPo
 
 func (a *AlertPoolHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
-
-	alertManagerPools := monitorGroup.Group("/alert_manager_pools")
 	{
-		alertManagerPools.GET("/list", a.GetMonitorAlertManagerPoolList)
-		alertManagerPools.POST("/create", a.CreateMonitorAlertManagerPool)
-		alertManagerPools.PUT("/update/:id", a.UpdateMonitorAlertManagerPool)
-		alertManagerPools.DELETE("/delete/:id", a.DeleteMonitorAlertManagerPool)
-		alertManagerPools.GET("/detail/:id", a.GetMonitorAlertManagerPool)
+		monitorGroup.GET("/alert_manager_pools/list", a.GetMonitorAlertManagerPoolList)
+		monitorGroup.POST("/alert_manager_pools/create", a.CreateMonitorAlertManagerPool)
+		monitorGroup.PUT("/alert_manager_pools/update/:id", a.UpdateMonitorAlertManagerPool)
+		monitorGroup.DELETE("/alert_manager_pools/delete/:id", a.DeleteMonitorAlertManagerPool)
+		monitorGroup.GET("/alert_manager_pools/detail/:id", a.GetMonitorAlertManagerPool)
 	}
 }
 

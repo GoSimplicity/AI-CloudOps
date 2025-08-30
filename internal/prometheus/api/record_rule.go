@@ -46,14 +46,12 @@ func NewRecordRuleHandler(alertRecordService alertEventService.AlertManagerRecor
 
 func (r *RecordRuleHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
-
-	recordRules := monitorGroup.Group("/record_rules")
 	{
-		recordRules.GET("/list", r.GetMonitorRecordRuleList)
-		recordRules.POST("/create", r.CreateMonitorRecordRule)
-		recordRules.PUT("/update/:id", r.UpdateMonitorRecordRule)
-		recordRules.DELETE("/delete/:id", r.DeleteMonitorRecordRule)
-		recordRules.GET("/detail/:id", r.GetMonitorRecordRule)
+		monitorGroup.GET("/record_rules/list", r.GetMonitorRecordRuleList)
+		monitorGroup.POST("/record_rules/create", r.CreateMonitorRecordRule)
+		monitorGroup.PUT("/record_rules/update/:id", r.UpdateMonitorRecordRule)
+		monitorGroup.DELETE("/record_rules/delete/:id", r.DeleteMonitorRecordRule)
+		monitorGroup.GET("/record_rules/detail/:id", r.GetMonitorRecordRule)
 	}
 }
 

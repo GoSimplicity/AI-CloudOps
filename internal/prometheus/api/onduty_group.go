@@ -44,19 +44,16 @@ func NewOnDutyGroupHandler(alertOnDutyService alert.AlertManagerOnDutyService) *
 
 func (o *OnDutyGroupHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
-
-	// 值班组相关路由
-	onDutyGroups := monitorGroup.Group("/onduty_groups")
 	{
-		onDutyGroups.GET("/list", o.GetMonitorOnDutyGroupList)
-		onDutyGroups.POST("/create", o.CreateMonitorOnDutyGroup)
-		onDutyGroups.POST("/changes", o.CreateMonitorOnDutyGroupChange)
-		onDutyGroups.GET("/changes/:id", o.GetMonitorOnDutyGroupChangeList)
-		onDutyGroups.PUT("/update/:id", o.UpdateMonitorOnDutyGroup)
-		onDutyGroups.DELETE("/delete/:id", o.DeleteMonitorOnDutyGroup)
-		onDutyGroups.GET("/detail/:id", o.GetMonitorOnDutyGroup)
-		onDutyGroups.GET("/future_plan/:id", o.GetMonitorOnDutyGroupFuturePlan)
-		onDutyGroups.GET("/history/:id", o.GetMonitorOnDutyHistory)
+		monitorGroup.GET("/onduty_groups/list", o.GetMonitorOnDutyGroupList)
+		monitorGroup.POST("/onduty_groups/create", o.CreateMonitorOnDutyGroup)
+		monitorGroup.POST("/onduty_groups/changes", o.CreateMonitorOnDutyGroupChange)
+		monitorGroup.GET("/onduty_groups/changes/:id", o.GetMonitorOnDutyGroupChangeList)
+		monitorGroup.PUT("/onduty_groups/update/:id", o.UpdateMonitorOnDutyGroup)
+		monitorGroup.DELETE("/onduty_groups/delete/:id", o.DeleteMonitorOnDutyGroup)
+		monitorGroup.GET("/onduty_groups/detail/:id", o.GetMonitorOnDutyGroup)
+		monitorGroup.GET("/onduty_groups/future_plan/:id", o.GetMonitorOnDutyGroupFuturePlan)
+		monitorGroup.GET("/onduty_groups/history/:id", o.GetMonitorOnDutyHistory)
 	}
 }
 

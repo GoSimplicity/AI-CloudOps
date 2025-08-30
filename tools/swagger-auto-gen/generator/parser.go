@@ -128,6 +128,99 @@ func (p *Parser) parseFile(file *ast.File, packagePath string) {
 	})
 }
 
+// parseStruct 解析结构体
+func (p *Parser) parseStruct(name string, structType *ast.StructType, packagePath string) {
+	if p.verbose {
+		fmt.Printf("📦 解析结构体: %s (包: %s)\n", name, packagePath)
+	}
+
+	structInfo := &StructInfo{
+		Name:          name,
+		Fields:        make([]FieldInfo, 0),
+		Package:       packagePath,
+		EmbeddedTypes: make([]string, 0),
+	}
+
+	if structType.Fields != nil {
+		for _, field := range structType.Fields.List {
+			p.parseStructField(field, structInfo)
+		}
+	}
+
+	// 构建完整的结构体名称（包含包路径）
+	fullName := fmt.Sprintf("%s.%s", packagePath, name)
+	p.structs[fullName] = structInfo
+
+	if p.verbose {
+		fmt.Printf("✅ 结构体解析完成: %s (字段数: %d, 嵌入类型数: %d)\n",
+			name, len(structInfo.Fields), len(structInfo.EmbeddedTypes))
+	}
+}
+
+// parseStructField 解析结构体字段
+func (p *Parser) parseStructField(field *ast.Field, structInfo *StructInfo) {
+	// 处理嵌入类型（匿名字段）
+	if len(field.Names) == 0 {
+		embeddedType := p.exprToString(field.Type)
+		structInfo.EmbeddedTypes = append(structInfo.EmbeddedTypes, embeddedType)
+		if p.verbose {
+			fmt.Printf("  🔗 嵌入类型: %s\n", embeddedType)
+		}
+		return
+	}
+
+	// 处理命名字段
+	for _, name := range field.Names {
+		if !name.IsExported() {
+			continue // 跳过未导出的字段
+		}
+
+		fieldType := p.exprToString(field.Type)
+		tag := ""
+		if field.Tag != nil {
+			tag = field.Tag.Value
+		}
+
+		fieldInfo := FieldInfo{
+			Name:        name.Name,
+			Type:        fieldType,
+			Tag:         tag,
+			JSONName:    p.extractJSONName(tag),
+			FormName:    p.extractFormName(tag),
+			URIName:     p.extractURIName(tag),
+			Required:    p.isRequired(tag),
+			Description: p.extractDescription(tag),
+		}
+
+		structInfo.Fields = append(structInfo.Fields, fieldInfo)
+
+		if p.verbose {
+			fmt.Printf("  📋 字段: %s %s (json: %s, form: %s, uri: %s, required: %t)\n",
+				fieldInfo.Name, fieldInfo.Type, fieldInfo.JSONName,
+				fieldInfo.FormName, fieldInfo.URIName, fieldInfo.Required)
+		}
+	}
+}
+
+// extractDescription 从tag或注释中提取描述
+func (p *Parser) extractDescription(tag string) string {
+	// 从comment tag中提取描述
+	re := regexp.MustCompile(`comment:"([^"]*)"`)
+	matches := re.FindStringSubmatch(tag)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+
+	// 从gorm tag中提取描述
+	re = regexp.MustCompile(`gorm:"[^"]*comment:([^;"]*)[;"]*"`)
+	matches = re.FindStringSubmatch(tag)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+
+	return ""
+}
+
 // parseHandler 解析处理函数
 func (p *Parser) parseHandler(funcDecl *ast.FuncDecl, packagePath string) {
 	handlerName := funcDecl.Name.Name
@@ -142,20 +235,31 @@ func (p *Parser) parseHandler(funcDecl *ast.FuncDecl, packagePath string) {
 		}
 	}
 
-	// 检查是否是RegisterRouters/RegisterRoutes方法或gin.Context处理器
+	// 检查是否是路由注册器、gin.Context处理器或者是Handler结构体的方法
 	isRouteRegister := handlerName == "RegisterRouters" || handlerName == "RegisterRoutes"
 	isGinHandler := false
+	isHandlerMethod := false
 
 	if funcDecl.Type.Params != nil && len(funcDecl.Type.Params.List) > 0 {
 		for _, param := range funcDecl.Type.Params.List {
-			if p.isGinContext(param.Type) || p.isGinEngine(param.Type) {
+			if p.isGinContext(param.Type) {
+				isGinHandler = true
+				break
+			}
+			if p.isGinEngine(param.Type) {
 				isGinHandler = true
 				break
 			}
 		}
 	}
 
-	if isRouteRegister || isGinHandler {
+	// 检查是否是Handler结构体的方法（包含"Handler"的接收者类型）
+	if receiverType != "" && strings.Contains(receiverType, "Handler") {
+		isHandlerMethod = true
+	}
+
+	// 只有当函数是导出的且满足条件时才解析
+	if funcDecl.Name.IsExported() && (isRouteRegister || isGinHandler || isHandlerMethod) {
 		handlerInfo := &HandlerInfo{
 			Name:         handlerName,
 			FuncDecl:     funcDecl,
@@ -173,8 +277,10 @@ func (p *Parser) parseHandler(funcDecl *ast.FuncDecl, packagePath string) {
 		if p.verbose {
 			if isRouteRegister {
 				fmt.Printf("📝 找到路由注册器: %s (方法: %s)\n", key, handlerName)
-			} else {
-				fmt.Printf("📝 找到处理器: %s (方法: %s)\n", key, handlerName)
+			} else if isGinHandler {
+				fmt.Printf("📝 找到Gin处理器: %s (方法: %s)\n", key, handlerName)
+			} else if isHandlerMethod {
+				fmt.Printf("📝 找到Handler方法: %s (方法: %s)\n", key, handlerName)
 			}
 		}
 	}
@@ -212,45 +318,6 @@ func (p *Parser) isGinEngine(expr ast.Expr) bool {
 		}
 	}
 	return false
-}
-
-// parseStruct 解析结构体
-func (p *Parser) parseStruct(name string, structType *ast.StructType, packagePath string) {
-	if structType.Fields == nil {
-		return
-	}
-
-	structInfo := &StructInfo{
-		Name:    name,
-		Package: packagePath,
-		Fields:  make([]FieldInfo, 0),
-	}
-
-	for _, field := range structType.Fields.List {
-		for _, fieldName := range field.Names {
-			fieldInfo := FieldInfo{
-				Name: fieldName.Name,
-				Type: p.exprToString(field.Type),
-			}
-
-			// 解析标签
-			if field.Tag != nil {
-				tag := strings.Trim(field.Tag.Value, "`")
-				fieldInfo.Tag = tag
-				fieldInfo.JSONName = p.extractJSONName(tag)
-				fieldInfo.Required = !strings.Contains(tag, "omitempty")
-			}
-
-			structInfo.Fields = append(structInfo.Fields, fieldInfo)
-		}
-	}
-
-	key := fmt.Sprintf("%s.%s", packagePath, name)
-	p.structs[key] = structInfo
-
-	if p.verbose {
-		fmt.Printf("🏗️  找到结构体: %s (字段数: %d)\n", key, len(structInfo.Fields))
-	}
 }
 
 // parseRoutes 解析路由注册
@@ -370,8 +437,14 @@ func (p *Parser) parseRegisterRoutes(handler *HandlerInfo) error {
 	}
 
 	// 第二遍：解析路由定义
+	routesFound := 0
 	for _, stmt := range handler.FuncDecl.Body.List {
-		p.parseRoutesInStatement(stmt, routeGroups, handler)
+		routesInStmt := p.parseRoutesInStatement(stmt, routeGroups, handler)
+		routesFound += routesInStmt
+	}
+
+	if p.verbose {
+		fmt.Printf("✅ %s.%s 解析完成，找到 %d 个路由\n", handler.ReceiverType, handler.Name, routesFound)
 	}
 
 	return nil
@@ -408,7 +481,9 @@ func (p *Parser) findRouteGroups(stmt ast.Stmt, routeGroups map[string]string) {
 }
 
 // parseRoutesInStatement 在语句中解析路由
-func (p *Parser) parseRoutesInStatement(stmt ast.Stmt, routeGroups map[string]string, handler *HandlerInfo) {
+func (p *Parser) parseRoutesInStatement(stmt ast.Stmt, routeGroups map[string]string, handler *HandlerInfo) int {
+	routesCount := 0
+
 	switch s := stmt.(type) {
 	case *ast.BlockStmt:
 		// 解析块中的路由（通常在 {} 中）
@@ -416,16 +491,20 @@ func (p *Parser) parseRoutesInStatement(stmt ast.Stmt, routeGroups map[string]st
 			fmt.Printf("🔍 解析代码块中的路由 (语句数: %d)\n", len(s.List))
 		}
 		for _, subStmt := range s.List {
-			p.parseRoutesInStatement(subStmt, routeGroups, handler)
+			routesCount += p.parseRoutesInStatement(subStmt, routeGroups, handler)
 		}
 	case *ast.ExprStmt:
 		// 解析表达式语句中的路由定义
-		p.parseRouteExprStatement(s, routeGroups, handler)
+		if p.parseRouteExprStatement(s, routeGroups, handler) {
+			routesCount++
+		}
 	}
+
+	return routesCount
 }
 
 // parseRouteExprStatement 解析路由表达式语句
-func (p *Parser) parseRouteExprStatement(stmt *ast.ExprStmt, routeGroups map[string]string, handler *HandlerInfo) {
+func (p *Parser) parseRouteExprStatement(stmt *ast.ExprStmt, routeGroups map[string]string, handler *HandlerInfo) bool {
 	if callExpr, ok := stmt.X.(*ast.CallExpr); ok {
 		if selectorExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
 			method := strings.ToUpper(selectorExpr.Sel.Name)
@@ -444,12 +523,27 @@ func (p *Parser) parseRouteExprStatement(stmt *ast.ExprStmt, routeGroups map[str
 
 				// 获取处理函数名
 				var handlerFunc string
+				var targetHandler *HandlerInfo
+
 				if selectorExpr2, ok := callExpr.Args[1].(*ast.SelectorExpr); ok {
 					if ident, ok := selectorExpr2.X.(*ast.Ident); ok {
-						handlerFunc = fmt.Sprintf("%s.%s", ident.Name, selectorExpr2.Sel.Name)
+						methodName := selectorExpr2.Sel.Name
+						// 处理 h.methodName 或 k.methodName 的情况，通常指向当前handler
+						receiverShort := strings.ToLower(handler.ReceiverType)
+						if ident.Name == "h" || ident.Name == "a" || ident.Name == "k" ||
+							ident.Name == "u" || strings.HasPrefix(receiverShort, ident.Name) {
+							handlerFunc = methodName
+							targetHandler = p.findHandlerMethod(handler.ReceiverType, methodName)
+							if targetHandler == nil {
+								targetHandler = handler // 如果找不到，使用当前handler
+							}
+						} else {
+							handlerFunc = fmt.Sprintf("%s.%s", ident.Name, methodName)
+						}
 					}
 				} else if ident, ok := callExpr.Args[1].(*ast.Ident); ok {
 					handlerFunc = ident.Name
+					targetHandler = handler
 				}
 
 				// 获取路由组前缀
@@ -466,12 +560,17 @@ func (p *Parser) parseRouteExprStatement(stmt *ast.ExprStmt, routeGroups map[str
 					fullPath = groupPath + path
 				}
 
+				// 如果还没有找到targetHandler，再次尝试查找
+				if targetHandler == nil && handlerFunc != "" {
+					targetHandler = p.findHandlerMethod(handler.ReceiverType, handlerFunc)
+				}
+
 				// 创建路由信息
 				route := RouteInfo{
 					Method:      method,
 					Path:        fullPath,
 					Handler:     handlerFunc,
-					HandlerInfo: handler,
+					HandlerInfo: targetHandler,
 					Group:       groupPath,
 				}
 
@@ -480,11 +579,33 @@ func (p *Parser) parseRouteExprStatement(stmt *ast.ExprStmt, routeGroups map[str
 				if p.verbose {
 					fmt.Printf("🚏 找到路由: %s %s -> %s\n", method, fullPath, handlerFunc)
 				}
+
+				return true
 			} else if p.verbose && p.isHTTPMethod(method) {
 				fmt.Printf("⚠️  HTTP方法 %s 参数不足 (参数数量: %d)\n", method, len(callExpr.Args))
 			}
 		}
 	}
+
+	return false
+}
+
+// findHandlerMethod 查找handler方法
+func (p *Parser) findHandlerMethod(receiverType, methodName string) *HandlerInfo {
+	// 首先尝试完整匹配
+	key := fmt.Sprintf("%s.%s", receiverType, methodName)
+	if handler, exists := p.handlers[key]; exists {
+		return handler
+	}
+
+	// 然后遍历所有handlers查找匹配的方法
+	for _, handler := range p.handlers {
+		if handler.ReceiverType == receiverType && handler.Name == methodName {
+			return handler
+		}
+	}
+
+	return nil
 }
 
 // isHTTPMethod 检查是否是HTTP方法
@@ -520,16 +641,44 @@ func (p *Parser) exprToString(expr ast.Expr) string {
 
 // extractJSONName 从标签中提取JSON名称
 func (p *Parser) extractJSONName(tag string) string {
-	re := regexp.MustCompile(`json:"([^"]*)"`)
-	matches := re.FindStringSubmatch(tag)
+	return p.extractTagValue(tag, "json")
+}
+
+// extractFormName 从标签中提取Form名称
+func (p *Parser) extractFormName(tag string) string {
+	return p.extractTagValue(tag, "form")
+}
+
+// extractURIName 从标签中提取URI名称
+func (p *Parser) extractURIName(tag string) string {
+	return p.extractTagValue(tag, "uri")
+}
+
+// extractTagValue 从标签中提取指定tag的值
+func (p *Parser) extractTagValue(tagString, tagName string) string {
+	pattern := fmt.Sprintf(`%s:"([^"]*)"`, tagName)
+	re := regexp.MustCompile(pattern)
+	matches := re.FindStringSubmatch(tagString)
 	if len(matches) > 1 {
-		jsonTag := matches[1]
-		parts := strings.Split(jsonTag, ",")
-		if len(parts) > 0 && parts[0] != "" {
+		tagValue := matches[1]
+		parts := strings.Split(tagValue, ",")
+		if len(parts) > 0 && parts[0] != "" && parts[0] != "-" {
 			return parts[0]
 		}
 	}
 	return ""
+}
+
+// isRequired 检查字段是否必需
+func (p *Parser) isRequired(tag string) bool {
+	// 检查binding tag中是否包含required
+	re := regexp.MustCompile(`binding:"([^"]*)"`)
+	matches := re.FindStringSubmatch(tag)
+	if len(matches) > 1 {
+		bindingTag := matches[1]
+		return strings.Contains(bindingTag, "required")
+	}
+	return false
 }
 
 // GetHandlers 获取所有处理器

@@ -46,14 +46,12 @@ func NewScrapeJobHandler(scrapeJobService scrapeJobService.ScrapeJobService) *Sc
 
 func (s *ScrapeJobHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
-
-	scrapeJobs := monitorGroup.Group("/scrape_jobs")
 	{
-		scrapeJobs.GET("/list", s.GetMonitorScrapeJobList)
-		scrapeJobs.GET("/detail/:id", s.GetMonitorScrapeJobDetail)
-		scrapeJobs.POST("/create", s.CreateMonitorScrapeJob)
-		scrapeJobs.PUT("/update/:id", s.UpdateMonitorScrapeJob)
-		scrapeJobs.DELETE("/delete/:id", s.DeleteMonitorScrapeJob)
+		monitorGroup.GET("/scrape_jobs/list", s.GetMonitorScrapeJobList)
+		monitorGroup.GET("/scrape_jobs/detail/:id", s.GetMonitorScrapeJobDetail)
+		monitorGroup.POST("/scrape_jobs/create", s.CreateMonitorScrapeJob)
+		monitorGroup.PUT("/scrape_jobs/update/:id", s.UpdateMonitorScrapeJob)
+		monitorGroup.DELETE("/scrape_jobs/delete/:id", s.DeleteMonitorScrapeJob)
 	}
 }
 

@@ -156,20 +156,24 @@ type RouteInfo struct {
 
 // StructInfo 结构体信息
 type StructInfo struct {
-	Name    string
-	Fields  []FieldInfo
-	Package string
-	File    string
+	Name          string
+	Fields        []FieldInfo
+	Package       string
+	File          string
+	EmbeddedTypes []string // 嵌入的类型列表（如 ListReq）
 }
 
 // FieldInfo 字段信息
 type FieldInfo struct {
-	Name        string
-	Type        string
-	Tag         string
-	JSONName    string
-	Required    bool
-	Description string
+	Name         string
+	Type         string
+	Tag          string
+	JSONName     string
+	FormName     string // form tag 用于查询参数
+	URIName      string // uri tag 用于路径参数
+	Required     bool
+	Description  string
+	EmbeddedType string // 嵌套类型名称（如果是嵌套结构体）
 }
 
 // PackageInfo 包信息

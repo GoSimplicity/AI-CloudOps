@@ -47,14 +47,12 @@ func NewK8sYamlTaskHandler(logger *zap.Logger, yamlTaskService service.YamlTaskS
 
 func (k *K8sYamlTaskHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
-	yamlTasks := k8sGroup.Group("/yaml_tasks")
 	{
-		yamlTasks.GET("/list", k.GetYamlTaskList)         // 获取 YAML 任务列表
-		yamlTasks.POST("/create", k.CreateYamlTask)       // 创建新的 YAML 任务
-		yamlTasks.POST("/update", k.UpdateYamlTask)       // 更新指定 ID 的 YAML 任务
-		yamlTasks.POST("/apply/:id", k.ApplyYamlTask)     // 应用指定 ID 的 YAML 任务
-		yamlTasks.DELETE("/delete/:id", k.DeleteYamlTask) // 删除指定 ID 的 YAML 任务
+		k8sGroup.GET("/yaml_tasks/list", k.GetYamlTaskList)         // 获取 YAML 任务列表
+		k8sGroup.POST("/yaml_tasks/create", k.CreateYamlTask)       // 创建新的 YAML 任务
+		k8sGroup.POST("/yaml_tasks/update", k.UpdateYamlTask)       // 更新指定 ID 的 YAML 任务
+		k8sGroup.POST("/yaml_tasks/apply/:id", k.ApplyYamlTask)     // 应用指定 ID 的 YAML 任务
+		k8sGroup.DELETE("/yaml_tasks/delete/:id", k.DeleteYamlTask) // 删除指定 ID 的 YAML 任务
 	}
 }
 

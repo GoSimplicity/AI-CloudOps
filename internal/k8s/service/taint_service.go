@@ -58,20 +58,20 @@ func NewTaintService(manager manager.TaintManager, logger *zap.Logger) TaintServ
 
 // CheckTaintYaml 检查 Taint YAML 配置是否合法
 func (t *taintService) CheckTaintYaml(ctx context.Context, req *model.TaintK8sNodesReq) error {
-	return t.manager.CheckTaintYaml(ctx, req.ClusterId, req.NodeName, req.TaintYaml)
+	return t.manager.CheckTaintYaml(ctx, req.ClusterID, req.NodeName, req.TaintYaml)
 }
 
 // BatchEnableSwitchNodes 批量启用或禁用节点
 func (t *taintService) BatchEnableSwitchNodes(ctx context.Context, req *model.ScheduleK8sNodesReq) error {
-	return t.manager.BatchEnableSwitchNodes(ctx, req.ClusterId, req.NodeName, req.ScheduleEnable)
+	return t.manager.BatchEnableSwitchNodes(ctx, req.ClusterID, req.NodeName, req.ScheduleEnable)
 }
 
 // AddOrUpdateNodeTaint 更新节点的 Taint
 func (t *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.TaintK8sNodesReq) error {
-	return t.manager.AddOrUpdateNodeTaint(ctx, req.ClusterId, req.NodeName, req.TaintYaml, req.ModType)
+	return t.manager.AddOrUpdateNodeTaint(ctx, req.ClusterID, req.NodeName, req.TaintYaml, req.ModType)
 }
 
 // DrainPods 并发驱逐 Pods
 func (t *taintService) DrainPods(ctx context.Context, req *model.K8sClusterNodesReq) error {
-	return t.manager.DrainPods(ctx, req.ClusterId, req.NodeName)
+	return t.manager.DrainPods(ctx, req.ClusterID, req.NodeName)
 }

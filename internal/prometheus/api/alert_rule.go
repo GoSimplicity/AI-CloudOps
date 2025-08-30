@@ -45,15 +45,13 @@ func NewAlertRuleHandler(svc alertService.AlertManagerRuleService) *AlertRuleHan
 
 func (a *AlertRuleHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
-
-	alertRules := monitorGroup.Group("/alert_rules")
 	{
-		alertRules.GET("/list", a.GetMonitorAlertRuleList)
-		alertRules.GET("/detail/:id", a.GetMonitorAlertRule)
-		alertRules.POST("/promql_check", a.PromqlExprCheck)
-		alertRules.POST("/create", a.CreateMonitorAlertRule)
-		alertRules.PUT("/update/:id", a.UpdateMonitorAlertRule)
-		alertRules.DELETE("/delete/:id", a.DeleteMonitorAlertRule)
+		monitorGroup.GET("/alert_rules/list", a.GetMonitorAlertRuleList)
+		monitorGroup.GET("/alert_rules/detail/:id", a.GetMonitorAlertRule)
+		monitorGroup.POST("/alert_rules/promql_check", a.PromqlExprCheck)
+		monitorGroup.POST("/alert_rules/create", a.CreateMonitorAlertRule)
+		monitorGroup.PUT("/alert_rules/update/:id", a.UpdateMonitorAlertRule)
+		monitorGroup.DELETE("/alert_rules/delete/:id", a.DeleteMonitorAlertRule)
 	}
 }
 

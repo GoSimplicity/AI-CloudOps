@@ -46,18 +46,15 @@ func NewRoleBindingAPI(roleBindingService *service.RoleBindingService, logger *z
 }
 
 func (rba *RoleBindingAPI) RegisterRouters(server *gin.Engine) {
-	k8sGroup := server.Group("/api/v1/k8s")
-
-	roleBindings := k8sGroup.Group("/role-binding")
+	k8sGroup := server.Group("/api/k8s")
 	{
-		roleBindings.GET("/list", rba.GetRoleBindingList)                                    // 获取RoleBinding列表
-		roleBindings.GET("/details/:cluster_id/:namespace/:name", rba.GetRoleBindingDetails) // 获取RoleBinding详情
-		roleBindings.POST("/create", rba.CreateRoleBinding)                                  // 创建RoleBinding
-		roleBindings.PUT("/update", rba.UpdateRoleBinding)                                   // 更新RoleBinding
-		roleBindings.DELETE("/delete/:cluster_id/:namespace/:name", rba.DeleteRoleBinding)   // 删除RoleBinding
-
-		roleBindings.GET("/yaml/:cluster_id/:namespace/:name", rba.GetRoleBindingYaml) // 获取RoleBinding YAML
-		roleBindings.PUT("/yaml", rba.UpdateRoleBindingYaml)                           // 更新RoleBinding YAML
+		k8sGroup.GET("/role-binding/list", rba.GetRoleBindingList)                                    // 获取RoleBinding列表
+		k8sGroup.GET("/role-binding/details/:cluster_id/:namespace/:name", rba.GetRoleBindingDetails) // 获取RoleBinding详情
+		k8sGroup.POST("/role-binding/create", rba.CreateRoleBinding)                                  // 创建RoleBinding
+		k8sGroup.PUT("/role-binding/update", rba.UpdateRoleBinding)                                   // 更新RoleBinding
+		k8sGroup.DELETE("/role-binding/delete/:cluster_id/:namespace/:name", rba.DeleteRoleBinding)   // 删除RoleBinding
+		k8sGroup.GET("/role-binding/yaml/:cluster_id/:namespace/:name", rba.GetRoleBindingYaml)       // 获取RoleBinding YAML
+		k8sGroup.PUT("/role-binding/yaml", rba.UpdateRoleBindingYaml)                                 // 更新RoleBinding YAML
 	}
 }
 

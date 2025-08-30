@@ -48,14 +48,12 @@ func NewRBACAPI(rbacService *service.RBACService, logger *zap.Logger) *RBACAPI {
 }
 
 func (ra *RBACAPI) RegisterRouters(server *gin.Engine) {
-	k8sGroup := server.Group("/api/v1/k8s")
-
-	rbac := k8sGroup.Group("/rbac")
+	k8sGroup := server.Group("/api/k8s")
 	{
-		rbac.GET("/statistics/:cluster_id", ra.GetRBACStatistics)               // 获取RBAC统计信息
-		rbac.POST("/check-permissions", ra.CheckPermissions)                    // 检查权限
-		rbac.POST("/subject-permissions/:cluster_id", ra.GetSubjectPermissions) // 获取主体权限
-		rbac.GET("/resource-verbs", ra.GetResourceVerbs)                        // 获取资源动作列表
+		k8sGroup.GET("/rbac/statistics/:cluster_id", ra.GetRBACStatistics)               // 获取RBAC统计信息
+		k8sGroup.POST("/rbac/check-permissions", ra.CheckPermissions)                    // 检查权限
+		k8sGroup.POST("/rbac/subject-permissions/:cluster_id", ra.GetSubjectPermissions) // 获取主体权限
+		k8sGroup.GET("/rbac/resource-verbs", ra.GetResourceVerbs)                        // 获取资源动作列表
 	}
 }
 

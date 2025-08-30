@@ -45,13 +45,11 @@ func NewAlertEventHandler(svc alertEventService.AlertManagerEventService) *Alert
 
 func (a *AlertEventHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
-
-	alertEvents := monitorGroup.Group("/alert_events")
 	{
-		alertEvents.GET("/list", a.GetMonitorAlertEventList)
-		alertEvents.POST("/silence/:id", a.EventAlertSilence)
-		alertEvents.POST("/claim/:id", a.EventAlertClaim)
-		alertEvents.POST("/unsilence/:id", a.EventAlertUnSilence)
+		monitorGroup.GET("/alert_events/list", a.GetMonitorAlertEventList)
+		monitorGroup.POST("/alert_events/silence/:id", a.EventAlertSilence)
+		monitorGroup.POST("/alert_events/claim/:id", a.EventAlertClaim)
+		monitorGroup.POST("/alert_events/unsilence/:id", a.EventAlertUnSilence)
 	}
 }
 
