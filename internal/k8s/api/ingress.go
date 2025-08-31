@@ -30,17 +30,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type K8sIngressHandler struct {
-	logger         *zap.Logger
 	ingressService service.IngressService
 }
 
-func NewK8sIngressHandler(logger *zap.Logger, ingressService service.IngressService) *K8sIngressHandler {
+func NewK8sIngressHandler(ingressService service.IngressService) *K8sIngressHandler {
 	return &K8sIngressHandler{
-		logger:         logger,
+
 		ingressService: ingressService,
 	}
 }

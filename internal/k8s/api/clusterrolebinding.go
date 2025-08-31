@@ -30,18 +30,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type ClusterRoleBindingAPI struct {
 	clusterRoleBindingService *service.ClusterRoleBindingService
-	logger                    *zap.Logger
 }
 
-func NewClusterRoleBindingAPI(clusterRoleBindingService *service.ClusterRoleBindingService, logger *zap.Logger) *ClusterRoleBindingAPI {
+func NewClusterRoleBindingAPI(clusterRoleBindingService *service.ClusterRoleBindingService) *ClusterRoleBindingAPI {
 	return &ClusterRoleBindingAPI{
 		clusterRoleBindingService: clusterRoleBindingService,
-		logger:                    logger,
 	}
 }
 
@@ -69,7 +66,7 @@ func (crba *ClusterRoleBindingAPI) GetClusterRoleBindingList(c *gin.Context) {
 
 	result, err := crba.clusterRoleBindingService.GetClusterRoleBindingList(c.Request.Context(), &req)
 	if err != nil {
-		crba.logger.Error("获取ClusterRoleBinding列表失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "获取ClusterRoleBinding列表失败")
 		return
 	}
@@ -87,7 +84,7 @@ func (crba *ClusterRoleBindingAPI) GetClusterRoleBindingDetails(c *gin.Context) 
 
 	result, err := crba.clusterRoleBindingService.GetClusterRoleBindingDetails(c.Request.Context(), &req)
 	if err != nil {
-		crba.logger.Error("获取ClusterRoleBinding详情失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "获取ClusterRoleBinding详情失败")
 		return
 	}
@@ -105,7 +102,7 @@ func (crba *ClusterRoleBindingAPI) CreateClusterRoleBinding(c *gin.Context) {
 
 	err := crba.clusterRoleBindingService.CreateClusterRoleBinding(c.Request.Context(), &req)
 	if err != nil {
-		crba.logger.Error("创建ClusterRoleBinding失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "创建ClusterRoleBinding失败")
 		return
 	}
@@ -123,7 +120,7 @@ func (crba *ClusterRoleBindingAPI) UpdateClusterRoleBinding(c *gin.Context) {
 
 	err := crba.clusterRoleBindingService.UpdateClusterRoleBinding(c.Request.Context(), &req)
 	if err != nil {
-		crba.logger.Error("更新ClusterRoleBinding失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "更新ClusterRoleBinding失败")
 		return
 	}
@@ -141,7 +138,7 @@ func (crba *ClusterRoleBindingAPI) DeleteClusterRoleBinding(c *gin.Context) {
 
 	err := crba.clusterRoleBindingService.DeleteClusterRoleBinding(c.Request.Context(), &req)
 	if err != nil {
-		crba.logger.Error("删除ClusterRoleBinding失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "删除ClusterRoleBinding失败")
 		return
 	}
@@ -159,7 +156,7 @@ func (crba *ClusterRoleBindingAPI) GetClusterRoleBindingYaml(c *gin.Context) {
 
 	yamlContent, err := crba.clusterRoleBindingService.GetClusterRoleBindingYaml(c.Request.Context(), &req)
 	if err != nil {
-		crba.logger.Error("获取ClusterRoleBinding YAML失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "获取ClusterRoleBinding YAML失败")
 		return
 	}
@@ -177,7 +174,7 @@ func (crba *ClusterRoleBindingAPI) UpdateClusterRoleBindingYaml(c *gin.Context) 
 
 	err := crba.clusterRoleBindingService.UpdateClusterRoleBindingYaml(c.Request.Context(), &req)
 	if err != nil {
-		crba.logger.Error("更新ClusterRoleBinding YAML失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "更新ClusterRoleBinding YAML失败")
 		return
 	}

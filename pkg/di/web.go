@@ -51,7 +51,6 @@ func InitGinServer(
 	k8sNodeHdl *k8sApi.K8sNodeHandler,
 	k8sPodHdl *k8sApi.K8sPodHandler,
 	k8sSvcHdl *k8sApi.K8sSvcHandler,
-	k8sTaintHdl *k8sApi.K8sTaintHandler,
 	k8sYamlTaskHdl *k8sApi.K8sYamlTaskHandler,
 	k8sYamlTemplateHdl *k8sApi.K8sYamlTemplateHandler,
 	k8sConfigMapHdl *k8sApi.K8sConfigMapHandler,
@@ -113,7 +112,6 @@ func InitGinServer(
 	k8sNodeHdl.RegisterRouters(server)
 	k8sPodHdl.RegisterRouters(server)
 	k8sSvcHdl.RegisterRouters(server)
-	k8sTaintHdl.RegisterRouters(server)
 	k8sYamlTaskHdl.RegisterRouters(server)
 	k8sYamlTemplateHdl.RegisterRouters(server)
 	k8sConfigMapHdl.RegisterRouters(server)

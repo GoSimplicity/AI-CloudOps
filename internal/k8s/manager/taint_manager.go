@@ -41,42 +41,38 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
-// TaintManager 节点污点管理接口
+const (
+	ModTypeAdd    = "add"
+	ModTypeDelete = "delete"
+	ModTypeUpdate = "update"
+)
+
 type TaintManager interface {
-	// CheckTaintYaml 检查 Taint YAML 配置是否合法
 	CheckTaintYaml(ctx context.Context, clusterID int, nodeName string, taintYaml string) error
-	// BatchEnableSwitchNodes 批量启用或禁用节点调度
-	BatchEnableSwitchNodes(ctx context.Context, clusterID int, nodeName string, scheduleEnable bool) error
-	// AddOrUpdateNodeTaint 添加或更新节点的 Taint
+	EnableSwitchNode(ctx context.Context, clusterID int, nodeName string, scheduleEnable bool) error
 	AddOrUpdateNodeTaint(ctx context.Context, clusterID int, nodeName string, taintYaml string, modType string) error
-	// DrainPods 驱逐节点上的 Pod
 	DrainPods(ctx context.Context, clusterID int, nodeName string) error
-	// GetNodeTaints 获取节点当前的 Taint 列表
 	GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]corev1.Taint, error)
 }
 
 type taintManager struct {
-	clusterDao dao.ClusterDAO
 	client     client.K8sClient
+	clusterDao dao.ClusterDAO
 	logger     *zap.Logger
 }
 
-// NewTaintManager 创建 TaintManager 实例
-func NewTaintManager(clusterDao dao.ClusterDAO, client client.K8sClient, logger *zap.Logger) TaintManager {
+func NewTaintManager(client client.K8sClient, clusterDao dao.ClusterDAO, logger *zap.Logger) TaintManager {
 	return &taintManager{
-		clusterDao: clusterDao,
 		client:     client,
+		clusterDao: clusterDao,
 		logger:     logger,
 	}
 }
 
-// CheckTaintYaml 检查 Taint YAML 配置是否合法
 func (tm *taintManager) CheckTaintYaml(ctx context.Context, clusterID int, nodeName string, taintYaml string) error {
 	var taintsToProcess []corev1.Taint
 	if err := yaml.UnmarshalStrict([]byte(taintYaml), &taintsToProcess); err != nil {
-		tm.logger.Error("解析 Taint YAML 配置失败",
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
+		tm.logger.Error("解析 Taint YAML 配置失败", zap.Error(err), zap.String("nodeName", nodeName))
 		return fmt.Errorf("解析 Taint YAML 配置失败: %w", err)
 	}
 
@@ -89,177 +85,131 @@ func (tm *taintManager) CheckTaintYaml(ctx context.Context, clusterID int, nodeN
 		taintsKey[taint.Key] = struct{}{}
 	}
 
-	// 验证集群和节点存在性
 	cluster, err := tm.clusterDao.GetClusterByID(ctx, clusterID)
 	if err != nil {
-		tm.logger.Error("获取集群信息失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
+		tm.logger.Error("获取集群信息失败", zap.Error(err), zap.Int("clusterID", clusterID))
 		return fmt.Errorf("获取集群信息失败: %w", err)
 	}
 
 	kubeClient, err := tm.client.GetKubeClient(cluster.ID)
 	if err != nil {
-		tm.logger.Error("获取 Kubernetes 客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
+		tm.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
 		return fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
 	}
 
-	// 验证节点存在
 	_, err = kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 	if err != nil {
-		tm.logger.Error("获取节点信息失败",
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
+		tm.logger.Error("获取节点信息失败", zap.Error(err), zap.String("nodeName", nodeName))
 		return fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err)
 	}
 
 	return nil
 }
 
-// BatchEnableSwitchNodes 批量启用或禁用节点调度
-func (tm *taintManager) BatchEnableSwitchNodes(ctx context.Context, clusterID int, nodeName string, scheduleEnable bool) error {
+func (tm *taintManager) EnableSwitchNode(ctx context.Context, clusterID int, nodeName string, scheduleEnable bool) error {
 	cluster, err := tm.clusterDao.GetClusterByID(ctx, clusterID)
 	if err != nil {
-		tm.logger.Error("获取集群信息失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
+		tm.logger.Error("获取集群信息失败", zap.Error(err), zap.Int("clusterID", clusterID))
 		return fmt.Errorf("获取集群信息失败: %w", err)
 	}
 
 	kubeClient, err := tm.client.GetKubeClient(cluster.ID)
 	if err != nil {
-		tm.logger.Error("获取 Kubernetes 客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
+		tm.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
 		return fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
 	}
 
-	// 获取节点信息
 	node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 	if err != nil {
-		tm.logger.Error("获取节点信息失败",
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
+		tm.logger.Error("获取节点信息失败", zap.Error(err), zap.String("nodeName", nodeName))
 		return fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err)
 	}
 
-	// 更新节点调度状态
 	node.Spec.Unschedulable = !scheduleEnable
 	if _, err := kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
-		tm.logger.Error("更新节点调度状态失败",
-			zap.String("nodeName", nodeName),
-			zap.Bool("scheduleEnable", scheduleEnable),
-			zap.Error(err))
+		tm.logger.Error("更新节点调度状态失败", zap.Error(err),
+			zap.String("nodeName", nodeName), zap.Bool("scheduleEnable", scheduleEnable))
 		return fmt.Errorf("更新节点 %s 调度状态失败: %w", nodeName, err)
 	}
 
-	tm.logger.Info("更新节点调度状态成功",
-		zap.String("nodeName", nodeName),
-		zap.Bool("scheduleEnable", scheduleEnable))
+	tm.logger.Info("更新节点调度状态成功", zap.String("nodeName", nodeName), zap.Bool("scheduleEnable", scheduleEnable))
 	return nil
 }
 
-// AddOrUpdateNodeTaint 添加或更新节点的 Taint
 func (tm *taintManager) AddOrUpdateNodeTaint(ctx context.Context, clusterID int, nodeName string, taintYaml string, modType string) error {
 	cluster, err := tm.clusterDao.GetClusterByID(ctx, clusterID)
 	if err != nil {
-		tm.logger.Error("获取集群信息失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
+		tm.logger.Error("获取集群信息失败", zap.Error(err), zap.Int("clusterID", clusterID))
 		return fmt.Errorf("获取集群信息失败: %w", err)
 	}
 
 	kubeClient, err := tm.client.GetKubeClient(cluster.ID)
 	if err != nil {
-		tm.logger.Error("获取 Kubernetes 客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
+		tm.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
 		return fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
 	}
 
-	// 解析 Taint YAML 配置
 	var taintsToProcess []corev1.Taint
 	if err := yaml.UnmarshalStrict([]byte(taintYaml), &taintsToProcess); err != nil {
-		tm.logger.Error("解析 Taint YAML 配置失败",
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
+		tm.logger.Error("解析 Taint YAML 配置失败", zap.Error(err), zap.String("nodeName", nodeName))
 		return fmt.Errorf("解析 Taint YAML 配置失败: %w", err)
 	}
 
-	// 获取节点信息
 	node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 	if err != nil {
-		tm.logger.Error("获取节点信息失败",
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
+		tm.logger.Error("获取节点信息失败", zap.Error(err), zap.String("nodeName", nodeName))
 		return fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err)
 	}
 
-	// 根据操作类型处理 taint
 	switch modType {
-	case "add":
+	case ModTypeAdd:
 		node.Spec.Taints = tm.mergeTaints(node.Spec.Taints, taintsToProcess)
-	case "del":
+	case ModTypeDelete:
 		node.Spec.Taints = tm.removeTaints(node.Spec.Taints, taintsToProcess)
+	case ModTypeUpdate:
+		node.Spec.Taints = tm.updateTaints(node.Spec.Taints, taintsToProcess)
 	default:
 		errMsg := fmt.Sprintf("未知的修改类型: %s", modType)
 		tm.logger.Error(errMsg, zap.String("nodeName", nodeName))
 		return errors.New(errMsg)
 	}
 
-	// 更新节点信息
 	if _, err := kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
-		tm.logger.Error("更新节点 Taint 失败",
-			zap.String("nodeName", nodeName),
-			zap.String("modType", modType),
-			zap.Error(err))
+		tm.logger.Error("更新节点 Taint 失败", zap.Error(err),
+			zap.String("nodeName", nodeName), zap.String("modType", modType))
 		return fmt.Errorf("更新节点 %s Taint 失败: %w", nodeName, err)
 	}
 
-	tm.logger.Info("更新节点 Taint 成功",
-		zap.String("nodeName", nodeName),
-		zap.String("modType", modType))
+	tm.logger.Info("更新节点 Taint 成功", zap.String("nodeName", nodeName), zap.String("modType", modType))
 	return nil
 }
 
-// DrainPods 驱逐节点上的 Pod
 func (tm *taintManager) DrainPods(ctx context.Context, clusterID int, nodeName string) error {
 	cluster, err := tm.clusterDao.GetClusterByID(ctx, clusterID)
 	if err != nil {
-		tm.logger.Error("获取集群信息失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
+		tm.logger.Error("获取集群信息失败", zap.Error(err), zap.Int("clusterID", clusterID))
 		return fmt.Errorf("获取集群信息失败: %w", err)
 	}
 
 	kubeClient, err := tm.client.GetKubeClient(cluster.ID)
 	if err != nil {
-		tm.logger.Error("获取 Kubernetes 客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
+		tm.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
 		return fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
 	}
 
-	// 获取节点上的所有 Pod
 	pods, err := kubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
 	})
 	if err != nil {
-		tm.logger.Error("获取节点 Pod 列表失败",
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
+		tm.logger.Error("获取节点 Pod 列表失败", zap.Error(err), zap.String("nodeName", nodeName))
 		return fmt.Errorf("获取节点 %s Pod 列表失败: %w", nodeName, err)
 	}
 
 	if len(pods.Items) == 0 {
-		tm.logger.Info("节点上没有需要驱逐的 Pod",
-			zap.String("nodeName", nodeName))
+		tm.logger.Info("节点上没有需要驱逐的 Pod", zap.String("nodeName", nodeName))
 		return nil
 	}
 
-	// 配置驱逐模板
 	evictionTemplate := &policyv1.Eviction{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "policy/v1",
@@ -270,105 +220,80 @@ func (tm *taintManager) DrainPods(ctx context.Context, clusterID int, nodeName s
 		},
 	}
 
-	// 并发驱逐 Pods
 	g, ctx := errgroup.WithContext(ctx)
 	var evictedCount int
 
 	for _, pod := range pods.Items {
-		pod := pod // 避免闭包引用问题
+		pod := pod
 		g.Go(func() error {
 			eviction := evictionTemplate.DeepCopy()
 			eviction.Name = pod.Name
 			eviction.Namespace = pod.Namespace
 
-			// 驱逐 Pod
 			if err := kubeClient.PolicyV1().Evictions(eviction.Namespace).Evict(ctx, eviction); err != nil {
-				tm.logger.Error("驱逐 Pod 失败",
-					zap.String("nodeName", nodeName),
-					zap.String("podName", pod.Name),
-					zap.String("namespace", pod.Namespace),
-					zap.Error(err))
+				tm.logger.Error("驱逐 Pod 失败", zap.Error(err),
+					zap.String("nodeName", nodeName), zap.String("podName", pod.Name), zap.String("namespace", pod.Namespace))
 				return fmt.Errorf("驱逐 Pod %s/%s 失败: %w", pod.Namespace, pod.Name, err)
 			}
 
 			evictedCount++
 			tm.logger.Debug("驱逐 Pod 成功",
-				zap.String("nodeName", nodeName),
-				zap.String("podName", pod.Name),
-				zap.String("namespace", pod.Namespace))
+				zap.String("nodeName", nodeName), zap.String("podName", pod.Name), zap.String("namespace", pod.Namespace))
 			return nil
 		})
 	}
 
-	// 等待所有驱逐操作完成
 	if err := g.Wait(); err != nil {
 		return fmt.Errorf("在驱逐节点 %s 的 Pod 时遇到错误: %w", nodeName, err)
 	}
 
 	tm.logger.Info("节点 Pod 驱逐完成",
-		zap.String("nodeName", nodeName),
-		zap.Int("totalPods", len(pods.Items)),
-		zap.Int("evictedPods", evictedCount))
+		zap.String("nodeName", nodeName), zap.Int("totalPods", len(pods.Items)), zap.Int("evictedPods", evictedCount))
 
 	return nil
 }
 
-// GetNodeTaints 获取节点当前的 Taint 列表
 func (tm *taintManager) GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]corev1.Taint, error) {
 	cluster, err := tm.clusterDao.GetClusterByID(ctx, clusterID)
 	if err != nil {
-		tm.logger.Error("获取集群信息失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
+		tm.logger.Error("获取集群信息失败", zap.Error(err), zap.Int("clusterID", clusterID))
 		return nil, fmt.Errorf("获取集群信息失败: %w", err)
 	}
 
 	kubeClient, err := tm.client.GetKubeClient(cluster.ID)
 	if err != nil {
-		tm.logger.Error("获取 Kubernetes 客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
+		tm.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
 		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
 	}
 
-	// 获取节点信息
 	node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 	if err != nil {
-		tm.logger.Error("获取节点信息失败",
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
+		tm.logger.Error("获取节点信息失败", zap.Error(err), zap.String("nodeName", nodeName))
 		return nil, fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err)
 	}
 
 	return node.Spec.Taints, nil
 }
 
-// mergeTaints 合并 Taint 列表，新的 Taint 会覆盖同 key 的旧 Taint
 func (tm *taintManager) mergeTaints(existingTaints, newTaints []corev1.Taint) []corev1.Taint {
 	result := make([]corev1.Taint, 0, len(existingTaints)+len(newTaints))
 
-	// 创建一个 map 来跟踪新的 taint keys
 	newTaintKeys := make(map[string]struct{})
 	for _, taint := range newTaints {
 		newTaintKeys[taint.Key] = struct{}{}
 	}
 
-	// 添加不冲突的现有 taints
 	for _, taint := range existingTaints {
 		if _, exists := newTaintKeys[taint.Key]; !exists {
 			result = append(result, taint)
 		}
 	}
 
-	// 添加所有新的 taints
 	result = append(result, newTaints...)
-
 	return result
 }
 
-// removeTaints 从现有 Taint 列表中移除指定的 Taint
 func (tm *taintManager) removeTaints(existingTaints, taintsToRemove []corev1.Taint) []corev1.Taint {
-	// 创建一个 map 来跟踪要移除的 taint keys
 	removeKeys := make(map[string]struct{})
 	for _, taint := range taintsToRemove {
 		removeKeys[taint.Key] = struct{}{}
@@ -377,6 +302,38 @@ func (tm *taintManager) removeTaints(existingTaints, taintsToRemove []corev1.Tai
 	var result []corev1.Taint
 	for _, taint := range existingTaints {
 		if _, shouldRemove := removeKeys[taint.Key]; !shouldRemove {
+			result = append(result, taint)
+		}
+	}
+
+	return result
+}
+
+func (tm *taintManager) updateTaints(existingTaints, newTaints []corev1.Taint) []corev1.Taint {
+	// 创建新污点的键映射
+	newTaintMap := make(map[string]corev1.Taint)
+	for _, taint := range newTaints {
+		newTaintMap[taint.Key] = taint
+	}
+
+	result := make([]corev1.Taint, 0, len(existingTaints))
+	for _, taint := range existingTaints {
+		if newTaint, shouldUpdate := newTaintMap[taint.Key]; !shouldUpdate {
+			result = append(result, taint)
+		} else {
+			// 如果存在新的污点，使用新的污点替换旧的
+			result = append(result, newTaint)
+		}
+	}
+
+	// 添加新的污点（不在现有污点中的）
+	existingKeys := make(map[string]struct{})
+	for _, taint := range existingTaints {
+		existingKeys[taint.Key] = struct{}{}
+	}
+
+	for _, taint := range newTaints {
+		if _, exists := existingKeys[taint.Key]; !exists {
 			result = append(result, taint)
 		}
 	}

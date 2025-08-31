@@ -43,15 +43,6 @@ const (
 	NodeStatusError                                    // 异常
 )
 
-// NodeResources 资源信息结构
-type NodeResources struct {
-	Used     string  `json:"used"`     // 已使用量
-	Total    string  `json:"total"`    // 总量
-	Percent  float64 `json:"percent"`  // 使用百分比
-	Requests string  `json:"requests"` // 请求量
-	Limits   string  `json:"limits"`   // 限制量
-}
-
 // K8sNode Kubernetes 节点
 type K8sNode struct {
 	// 基础信息
@@ -64,11 +55,11 @@ type K8sNode struct {
 	InternalIP       string               `json:"internal_ip"`        // 节点内部IP
 	ExternalIP       string               `json:"external_ip"`        // 节点外部IP（如果有）
 	HostName         string               `json:"hostname"`           // 主机名
-	CPU              NodeResources        `json:"cpu"`                // CPU 资源信息
-	Memory           NodeResources        `json:"memory"`             // 内存资源信息
-	Storage          NodeResources        `json:"storage"`            // 存储资源信息
-	Pods             NodeResources        `json:"pods"`               // Pod 资源信息
-	EphemeralStorage NodeResources        `json:"ephemeral_storage"`  // 临时存储信息
+	CPU              NodeResource         `json:"cpu"`                // CPU 资源信息
+	Memory           NodeResource         `json:"memory"`             // 内存资源信息
+	Storage          NodeResource         `json:"storage"`            // 存储资源信息
+	Pods             NodeResource         `json:"pods"`               // Pod 资源信息
+	EphemeralStorage NodeResource         `json:"ephemeral_storage"`  // 临时存储信息
 	KubeletVersion   string               `json:"kubelet_version"`    // Kubelet 版本
 	KubeProxyVersion string               `json:"kube_proxy_version"` // KubeProxy 版本
 	ContainerRuntime string               `json:"container_runtime"`  // 容器运行时
@@ -84,6 +75,15 @@ type K8sNode struct {
 	CreatedAt        time.Time            `json:"created_at"`         // 创建时间
 	UpdatedAt        time.Time            `json:"updated_at"`         // 更新时间
 	RawNode          *core.Node           `json:"-"`                  // 原始 Node 对象，不序列化到 JSON
+}
+
+// NodeResource 资源信息结构
+type NodeResource struct {
+	Used     string  `json:"used"`     // 已使用量
+	Total    string  `json:"total"`    // 总量
+	Percent  float64 `json:"percent"`  // 使用百分比
+	Requests string  `json:"requests"` // 请求量
+	Limits   string  `json:"limits"`   // 限制量
 }
 
 // NodeEvent 节点事件
@@ -145,8 +145,8 @@ type DeleteLabelNodesReq struct {
 	LabelKeys []string `json:"label_keys" binding:"required"` // 要删除的标签键
 }
 
-// GetNodeResourcesReq 获取节点资源请求
-type GetNodeResourcesReq struct {
+// GetNodeResourceReq 获取节点资源请求
+type GetNodeResourceReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
 	NodeName  string `json:"node_name"`                     // 节点名称列表（可选，为空则获取所有节点）
 }
@@ -171,14 +171,14 @@ type DrainNodeReq struct {
 
 // NodeCordonReq 禁止节点调度请求
 type NodeCordonReq struct {
-	ClusterID int      `json:"cluster_id" binding:"required"` // 集群ID
-	NodeNames []string `json:"node_names" binding:"required"` // 节点名称列表
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	NodeName  string `json:"node_name" binding:"required"`  // 节点名称
 }
 
 // NodeUncordonReq 解除节点调度限制请求
 type NodeUncordonReq struct {
-	ClusterID int      `json:"cluster_id" binding:"required"` // 集群ID
-	NodeNames []string `json:"node_names" binding:"required"` // 节点名称列表
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	NodeName  string `json:"node_name" binding:"required"`  // 节点名称
 }
 
 // GetNodeTaintsReq 获取节点污点请求
@@ -219,16 +219,4 @@ type SwitchNodeScheduleReq struct {
 type GetNodeMetricsReq struct {
 	ClusterID int      `json:"cluster_id" binding:"required"` // 集群ID
 	NodeNames []string `json:"node_names"`                    // 节点名称列表（可选）
-}
-
-// NodeListResponse 节点列表响应
-type NodeListResponse struct {
-	Total int       `json:"total"` // 总数
-	Items []K8sNode `json:"items"` // 节点列表
-}
-
-// NodeResourcesResponse 节点资源响应
-type NodeResourcesResponse struct {
-	NodeName  string        `json:"node_name"` // 节点名称
-	Resources NodeResources `json:"resources"` // 资源信息
 }

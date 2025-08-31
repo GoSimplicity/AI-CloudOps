@@ -30,249 +30,397 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
-// NodeManager Node 资源管理器，负责节点相关的业务逻辑
-// 通过依赖注入接收客户端工厂，实现业务逻辑与客户端创建的解耦
 type NodeManager interface {
-	// Node 查询
 	GetNode(ctx context.Context, clusterID int, nodeName string) (*corev1.Node, error)
-	GetNodeList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) (*corev1.NodeList, error)
-
-	// Node 详细信息构建
+	GetNodeList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) (*corev1.NodeList, int64, error)
 	BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node) (*model.K8sNode, error)
-
-	// Node 操作
-	DrainNode(ctx context.Context, clusterID int, nodeName string) error
+	DrainNode(ctx context.Context, clusterID int, nodeName string, options *utils.DrainOptions) error
 	CordonNode(ctx context.Context, clusterID int, nodeName string) error
 	UncordonNode(ctx context.Context, clusterID int, nodeName string) error
+	AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string, overwrite bool) error
+	DeleteNodeLabels(ctx context.Context, clusterID int, nodeName string, labelKeys []string) error
+	GetNodeResource(ctx context.Context, clusterID int, nodeName string) (*model.NodeResource, error)
+	GetNodeEvents(ctx context.Context, clusterID int, nodeName string, limit int) ([]*model.NodeEvent, int64, error)
+	GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]*model.NodeTaintEntity, int64, error)
+	GetNodeMetrics(ctx context.Context, clusterID int, nodeNames []string) ([]*model.NodeMetrics, int64, error)
 }
 
 type nodeManager struct {
-	clientFactory client.K8sClient
-	logger        *zap.Logger
+	client client.K8sClient
+	logger *zap.Logger
 }
 
-// NewNodeManager 创建新的 Node 管理器实例
-func NewNodeManager(clientFactory client.K8sClient, logger *zap.Logger) NodeManager {
+func NewNodeManager(client client.K8sClient, logger *zap.Logger) NodeManager {
 	return &nodeManager{
-		clientFactory: clientFactory,
-		logger:        logger,
+		client: client,
+		logger: logger,
 	}
 }
 
-// getClients 私有方法：获取 Kubernetes 客户端和 Metrics 客户端
-func (n *nodeManager) getClients(clusterID int) (*kubernetes.Clientset, *metricsClient.Clientset, error) {
-	kubeClient, err := n.clientFactory.GetKubeClient(clusterID)
-	if err != nil {
-		n.logger.Error("获取 Kubernetes 客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
-		return nil, nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
+func (m *nodeManager) GetNode(ctx context.Context, clusterID int, nodeName string) (*corev1.Node, error) {
+	if nodeName == "" {
+		return nil, fmt.Errorf("节点名称不能为空")
 	}
 
-	// Metrics 客户端是可选的，获取失败不影响基本功能
-	metricsClient, err := n.clientFactory.GetMetricsClient(clusterID)
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		n.logger.Warn("获取 Metrics 客户端失败，将在无指标模式下运行",
-			zap.Int("clusterID", clusterID), zap.Error(err))
-		return kubeClient, nil, nil
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
-	return kubeClient, metricsClient, nil
-}
-
-// GetNode 获取单个节点
-func (n *nodeManager) GetNode(ctx context.Context, clusterID int, nodeName string) (*corev1.Node, error) {
-	kubeClient, _, err := n.getClients(clusterID)
+	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 	if err != nil {
-		return nil, err
+		m.logger.Error("获取节点失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+		return nil, fmt.Errorf("获取节点失败: %w", err)
 	}
 
-	node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-	if err != nil {
-		n.logger.Error("获取 Node 失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取 Node 失败: %w", err)
-	}
-
-	n.logger.Debug("成功获取 Node",
-		zap.Int("clusterID", clusterID),
-		zap.String("nodeName", nodeName))
 	return node, nil
 }
 
-// GetNodeList 获取节点列表
-func (n *nodeManager) GetNodeList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) (*corev1.NodeList, error) {
-	kubeClient, _, err := n.getClients(clusterID)
+func (m *nodeManager) GetNodeList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) (*corev1.NodeList, int64, error) {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		return nil, err
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return nil, 0, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
-	nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, listOptions)
+	nodeList, err := clientset.CoreV1().Nodes().List(ctx, listOptions)
 	if err != nil {
-		n.logger.Error("获取 Node 列表失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取 Node 列表失败: %w", err)
+		m.logger.Error("获取节点列表失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return nil, 0, fmt.Errorf("获取节点列表失败: %w", err)
 	}
 
-	n.logger.Debug("成功获取 Node 列表",
-		zap.Int("clusterID", clusterID),
-		zap.Int("count", len(nodeList.Items)))
-	return nodeList, nil
+	return nodeList, int64(len(nodeList.Items)), nil
 }
 
-// BuildK8sNode 构建详细的 K8sNode 模型
-// 整合节点基本信息、Pod 列表、事件和资源使用情况
-func (n *nodeManager) BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node) (*model.K8sNode, error) {
-	// kubeClient, metricsClient, err := n.getClients(clusterID)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// // 使用 utils 包中的工具函数构建 K8sNode
-	// k8sNode, err := utils.BuildK8sNode(ctx, clusterID, node, kubeClient, metricsClient)
-	// if err != nil {
-	// 	n.logger.Error("构建 K8sNode 失败",
-	// 		zap.Int("clusterID", clusterID),
-	// 		zap.String("nodeName", node.Name),
-	// 		zap.Error(err))
-	// 	return nil, fmt.Errorf("构建 K8sNode 失败: %w", err)
-	// }
-
-	// n.logger.Debug("成功构建 K8sNode",
-	// 	zap.Int("clusterID", clusterID),
-	// 	zap.String("nodeName", node.Name))
-	return nil, nil
-}
-
-// DrainNode 驱逐节点上的所有 Pod（排水）
-func (n *nodeManager) DrainNode(ctx context.Context, clusterID int, nodeName string) error {
-	kubeClient, _, err := n.getClients(clusterID)
+func (m *nodeManager) BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node) (*model.K8sNode, error) {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		return err
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
-	// 获取节点上的所有 Pod
-	pods, err := kubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+	metricsClient, err := m.client.GetMetricsClient(clusterID)
+	if err != nil {
+		m.logger.Warn("获取Metrics客户端失败，将在无指标模式下运行", zap.Error(err), zap.Int("clusterID", clusterID))
+	}
+
+	k8sNode, err := utils.BuildK8sNode(ctx, clusterID, node, clientset, metricsClient)
+	if err != nil {
+		m.logger.Error("构建K8sNode失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", node.Name))
+		return nil, fmt.Errorf("构建K8sNode失败: %w", err)
+	}
+
+	return k8sNode, nil
+}
+
+func (m *nodeManager) DrainNode(ctx context.Context, clusterID int, nodeName string, options *utils.DrainOptions) error {
+	if nodeName == "" {
+		return fmt.Errorf("节点名称不能为空")
+	}
+
+	clientset, err := m.client.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+
+	pods, err := clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
 	})
 	if err != nil {
-		n.logger.Error("获取节点 Pod 列表失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
-		return fmt.Errorf("获取节点 Pod 列表失败: %w", err)
+		m.logger.Error("获取节点Pod列表失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+		return fmt.Errorf("获取节点Pod列表失败: %w", err)
 	}
 
-	// 删除非系统 Pod（驱逐）
 	for _, pod := range pods.Items {
-		// 跳过系统命名空间的 Pod
-		if pod.Namespace == "kube-system" || pod.Namespace == "kube-public" || pod.Namespace == "kube-node-lease" {
+		if utils.ShouldSkipPodDrain(pod, options) {
 			continue
 		}
 
-		// 跳过由 DaemonSet 管理的 Pod
-		isDaemonSetPod := false
-		for _, ownerRef := range pod.OwnerReferences {
-			if ownerRef.Kind == "DaemonSet" {
-				isDaemonSetPod = true
-				break
-			}
-		}
-		if isDaemonSetPod {
-			continue
-		}
+		deleteOptions := utils.BuildDeleteOptions(options.GracePeriodSeconds)
 
-		err := kubeClient.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
+		err := clientset.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, deleteOptions)
 		if err != nil {
-			n.logger.Error("驱逐 Pod 失败",
-				zap.Int("clusterID", clusterID),
-				zap.String("nodeName", nodeName),
-				zap.String("podName", pod.Name),
-				zap.String("namespace", pod.Namespace),
-				zap.Error(err))
-			// 继续处理其他 Pod，不因单个 Pod 失败而停止整个操作
+			m.logger.Error("驱逐Pod失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName), zap.String("podName", pod.Name))
 		}
 	}
 
-	n.logger.Info("成功驱逐节点",
-		zap.Int("clusterID", clusterID),
-		zap.String("nodeName", nodeName))
+	m.logger.Info("节点驱逐完成", zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
 	return nil
 }
 
-// CordonNode 标记节点为不可调度
-func (n *nodeManager) CordonNode(ctx context.Context, clusterID int, nodeName string) error {
-	kubeClient, _, err := n.getClients(clusterID)
-	if err != nil {
-		return err
+func (m *nodeManager) CordonNode(ctx context.Context, clusterID int, nodeName string) error {
+	if nodeName == "" {
+		return fmt.Errorf("节点名称不能为空")
 	}
 
-	// 获取当前节点
-	node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		n.logger.Error("获取 Node 失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
-		return fmt.Errorf("获取 Node 失败: %w", err)
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
-	// 设置节点为不可调度
+	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		m.logger.Error("获取节点失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+		return fmt.Errorf("获取节点失败: %w", err)
+	}
+
 	node.Spec.Unschedulable = true
-	_, err = kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 	if err != nil {
-		n.logger.Error("标记节点不可调度失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
+		m.logger.Error("标记节点不可调度失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
 		return fmt.Errorf("标记节点不可调度失败: %w", err)
 	}
 
-	n.logger.Info("成功标记节点为不可调度",
-		zap.Int("clusterID", clusterID),
-		zap.String("nodeName", nodeName))
+	m.logger.Info("节点已标记为不可调度", zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
 	return nil
 }
 
-// UncordonNode 标记节点为可调度
-func (n *nodeManager) UncordonNode(ctx context.Context, clusterID int, nodeName string) error {
-	kubeClient, _, err := n.getClients(clusterID)
-	if err != nil {
-		return err
+func (m *nodeManager) UncordonNode(ctx context.Context, clusterID int, nodeName string) error {
+	if nodeName == "" {
+		return fmt.Errorf("节点名称不能为空")
 	}
 
-	// 获取当前节点
-	node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		n.logger.Error("获取 Node 失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
-		return fmt.Errorf("获取 Node 失败: %w", err)
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
-	// 设置节点为可调度
+	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		m.logger.Error("获取节点失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+		return fmt.Errorf("获取节点失败: %w", err)
+	}
+
 	node.Spec.Unschedulable = false
-	_, err = kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 	if err != nil {
-		n.logger.Error("标记节点可调度失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("nodeName", nodeName),
-			zap.Error(err))
+		m.logger.Error("标记节点可调度失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
 		return fmt.Errorf("标记节点可调度失败: %w", err)
 	}
 
-	n.logger.Info("成功标记节点为可调度",
-		zap.Int("clusterID", clusterID),
-		zap.String("nodeName", nodeName))
+	m.logger.Info("节点已标记为可调度", zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
 	return nil
+}
+
+func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string, overwrite bool) error {
+	if nodeName == "" {
+		return fmt.Errorf("节点名称不能为空")
+	}
+	if len(labels) == 0 {
+		return fmt.Errorf("标签不能为空")
+	}
+
+	clientset, err := m.client.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+
+	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		m.logger.Error("获取节点失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+		return fmt.Errorf("获取节点失败: %w", err)
+	}
+
+	if node.Labels == nil {
+		node.Labels = make(map[string]string)
+	}
+
+	for key, value := range labels {
+		if _, exists := node.Labels[key]; exists && !overwrite {
+			continue
+		}
+		node.Labels[key] = value
+	}
+
+	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		m.logger.Error("更新节点标签失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+		return fmt.Errorf("更新节点标签失败: %w", err)
+	}
+
+	m.logger.Info("节点标签更新成功", zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+	return nil
+}
+
+func (m *nodeManager) DeleteNodeLabels(ctx context.Context, clusterID int, nodeName string, labelKeys []string) error {
+	if nodeName == "" {
+		return fmt.Errorf("节点名称不能为空")
+	}
+	if len(labelKeys) == 0 {
+		return fmt.Errorf("标签键不能为空")
+	}
+
+	clientset, err := m.client.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+
+	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		m.logger.Error("获取节点失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+		return fmt.Errorf("获取节点失败: %w", err)
+	}
+
+	if node.Labels != nil {
+		for _, key := range labelKeys {
+			delete(node.Labels, key)
+		}
+	}
+
+	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		m.logger.Error("删除节点标签失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+		return fmt.Errorf("删除节点标签失败: %w", err)
+	}
+
+	m.logger.Info("节点标签删除成功", zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+	return nil
+}
+
+func (m *nodeManager) GetNodeResource(ctx context.Context, clusterID int, nodeName string) (*model.NodeResource, error) {
+	if nodeName == "" {
+		return nil, fmt.Errorf("节点名称不能为空")
+	}
+
+	clientset, err := m.client.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+
+	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		m.logger.Error("获取节点失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+		return nil, fmt.Errorf("获取节点失败: %w", err)
+	}
+
+	resource := utils.BuildNodeResource(ctx, clientset, node)
+	return resource, nil
+}
+
+func (m *nodeManager) GetNodeEvents(ctx context.Context, clusterID int, nodeName string, limit int) ([]*model.NodeEvent, int64, error) {
+	if nodeName == "" {
+		return nil, 0, fmt.Errorf("节点名称不能为空")
+	}
+
+	clientset, err := m.client.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return nil, 0, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+
+	eventList, err := clientset.CoreV1().Events("").List(ctx, metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("involvedObject.name=%s", nodeName),
+	})
+	if err != nil {
+		m.logger.Error("获取节点事件失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+		return nil, 0, fmt.Errorf("获取节点事件失败: %w", err)
+	}
+
+	var events []*model.NodeEvent
+	count := 0
+	for _, event := range eventList.Items {
+		if limit > 0 && count >= limit {
+			break
+		}
+
+		nodeEvent := &model.NodeEvent{
+			Type:           event.Type,
+			Reason:         event.Reason,
+			Message:        event.Message,
+			Component:      event.Source.Component,
+			Host:           event.Source.Host,
+			FirstTimestamp: event.FirstTimestamp.Time,
+			LastTimestamp:  event.LastTimestamp.Time,
+			Count:          event.Count,
+		}
+		events = append(events, nodeEvent)
+		count++
+	}
+
+	return events, int64(count), nil
+}
+
+func (m *nodeManager) GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]*model.NodeTaintEntity, int64, error) {
+	if nodeName == "" {
+		return nil, 0, fmt.Errorf("节点名称不能为空")
+	}
+
+	clientset, err := m.client.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return nil, 0, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+
+	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		m.logger.Error("获取节点失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+		return nil, 0, fmt.Errorf("获取节点失败: %w", err)
+	}
+
+	var taints []*model.NodeTaintEntity
+	for _, taint := range node.Spec.Taints {
+		taintEntity := &model.NodeTaintEntity{
+			Key:    taint.Key,
+			Value:  taint.Value,
+			Effect: string(taint.Effect),
+		}
+		taints = append(taints, taintEntity)
+	}
+
+	return taints, int64(len(taints)), nil
+}
+
+func (m *nodeManager) GetNodeMetrics(ctx context.Context, clusterID int, nodeNames []string) ([]*model.NodeMetrics, int64, error) {
+
+	metricsClient, err := m.client.GetMetricsClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Metrics客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return nil, 0, fmt.Errorf("获取Metrics客户端失败: %w", err)
+	}
+
+	nodeMetricsList, err := metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		m.logger.Error("获取节点指标失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return nil, 0, fmt.Errorf("获取节点指标失败: %w", err)
+	}
+
+	var metrics []*model.NodeMetrics
+	for _, nodeMetrics := range nodeMetricsList.Items {
+		if len(nodeNames) > 0 {
+			found := false
+			for _, name := range nodeNames {
+				if nodeMetrics.Name == name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
+		metric := &model.NodeMetrics{
+			NodeName:  nodeMetrics.Name,
+			Timestamp: nodeMetrics.Timestamp,
+			Window:    nodeMetrics.Window,
+			Usage:     nodeMetrics.Usage,
+		}
+		metrics = append(metrics, metric)
+	}
+
+	return metrics, int64(len(metrics)), nil
 }

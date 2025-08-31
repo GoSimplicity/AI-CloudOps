@@ -30,18 +30,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type RoleBindingAPI struct {
 	roleBindingService *service.RoleBindingService
-	logger             *zap.Logger
 }
 
-func NewRoleBindingAPI(roleBindingService *service.RoleBindingService, logger *zap.Logger) *RoleBindingAPI {
+func NewRoleBindingAPI(roleBindingService *service.RoleBindingService) *RoleBindingAPI {
 	return &RoleBindingAPI{
 		roleBindingService: roleBindingService,
-		logger:             logger,
 	}
 }
 
@@ -68,7 +65,7 @@ func (rba *RoleBindingAPI) GetRoleBindingList(c *gin.Context) {
 
 	result, err := rba.roleBindingService.GetRoleBindingList(c.Request.Context(), &req)
 	if err != nil {
-		rba.logger.Error("获取RoleBinding列表失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "获取RoleBinding列表失败")
 		return
 	}
@@ -86,7 +83,7 @@ func (rba *RoleBindingAPI) GetRoleBindingDetails(c *gin.Context) {
 
 	result, err := rba.roleBindingService.GetRoleBindingDetails(c.Request.Context(), &req)
 	if err != nil {
-		rba.logger.Error("获取RoleBinding详情失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "获取RoleBinding详情失败")
 		return
 	}
@@ -104,7 +101,7 @@ func (rba *RoleBindingAPI) CreateRoleBinding(c *gin.Context) {
 
 	err := rba.roleBindingService.CreateRoleBinding(c.Request.Context(), &req)
 	if err != nil {
-		rba.logger.Error("创建RoleBinding失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "创建RoleBinding失败")
 		return
 	}
@@ -122,7 +119,7 @@ func (rba *RoleBindingAPI) UpdateRoleBinding(c *gin.Context) {
 
 	err := rba.roleBindingService.UpdateRoleBinding(c.Request.Context(), &req)
 	if err != nil {
-		rba.logger.Error("更新RoleBinding失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "更新RoleBinding失败")
 		return
 	}
@@ -140,7 +137,7 @@ func (rba *RoleBindingAPI) DeleteRoleBinding(c *gin.Context) {
 
 	err := rba.roleBindingService.DeleteRoleBinding(c.Request.Context(), &req)
 	if err != nil {
-		rba.logger.Error("删除RoleBinding失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "删除RoleBinding失败")
 		return
 	}
@@ -158,7 +155,7 @@ func (rba *RoleBindingAPI) GetRoleBindingYaml(c *gin.Context) {
 
 	yamlContent, err := rba.roleBindingService.GetRoleBindingYaml(c.Request.Context(), &req)
 	if err != nil {
-		rba.logger.Error("获取RoleBinding YAML失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "获取RoleBinding YAML失败")
 		return
 	}
@@ -176,7 +173,7 @@ func (rba *RoleBindingAPI) UpdateRoleBindingYaml(c *gin.Context) {
 
 	err := rba.roleBindingService.UpdateRoleBindingYaml(c.Request.Context(), &req)
 	if err != nil {
-		rba.logger.Error("更新RoleBinding YAML失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "更新RoleBinding YAML失败")
 		return
 	}

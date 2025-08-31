@@ -32,17 +32,14 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type K8sYamlTemplateHandler struct {
-	logger              *zap.Logger
 	yamlTemplateService service.YamlTemplateService
 }
 
-func NewK8sYamlTemplateHandler(logger *zap.Logger, yamlTemplateService service.YamlTemplateService) *K8sYamlTemplateHandler {
+func NewK8sYamlTemplateHandler(yamlTemplateService service.YamlTemplateService) *K8sYamlTemplateHandler {
 	return &K8sYamlTemplateHandler{
-		logger:              logger,
 		yamlTemplateService: yamlTemplateService,
 	}
 }

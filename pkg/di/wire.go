@@ -83,7 +83,6 @@ var HandlerSet = wire.NewSet(
 	k8sHandler.NewK8sDeploymentHandler,
 	k8sHandler.NewK8sNamespaceHandler,
 	k8sHandler.NewK8sSvcHandler,
-	k8sHandler.NewK8sTaintHandler,
 	k8sHandler.NewK8sYamlTaskHandler,
 	k8sHandler.NewK8sYamlTemplateHandler,
 	k8sHandler.NewK8sConfigMapHandler,

@@ -30,17 +30,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type K8sEventHandler struct {
-	logger       *zap.Logger
 	eventService service.EventService
 }
 
-func NewK8sEventHandler(logger *zap.Logger, eventService service.EventService) *K8sEventHandler {
+func NewK8sEventHandler(eventService service.EventService) *K8sEventHandler {
 	return &K8sEventHandler{
-		logger:       logger,
+
 		eventService: eventService,
 	}
 }

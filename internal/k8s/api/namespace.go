@@ -30,17 +30,14 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type K8sNamespaceHandler struct {
-	logger           *zap.Logger
 	namespaceService service.NamespaceService
 }
 
-func NewK8sNamespaceHandler(logger *zap.Logger, namespaceService service.NamespaceService) *K8sNamespaceHandler {
+func NewK8sNamespaceHandler(namespaceService service.NamespaceService) *K8sNamespaceHandler {
 	return &K8sNamespaceHandler{
-		logger:           logger,
 		namespaceService: namespaceService,
 	}
 }

@@ -32,17 +32,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type K8sSecretHandler struct {
-	logger        *zap.Logger
 	secretService service.SecretService
 }
 
-func NewK8sSecretHandler(logger *zap.Logger, secretService service.SecretService) *K8sSecretHandler {
+func NewK8sSecretHandler(secretService service.SecretService) *K8sSecretHandler {
 	return &K8sSecretHandler{
-		logger:        logger,
+
 		secretService: secretService,
 	}
 }

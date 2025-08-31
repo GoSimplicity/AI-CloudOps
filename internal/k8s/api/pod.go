@@ -30,17 +30,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type K8sPodHandler struct {
-	logger     *zap.Logger
 	podService service.PodService
 }
 
-func NewK8sPodHandler(logger *zap.Logger, podService service.PodService) *K8sPodHandler {
+func NewK8sPodHandler(podService service.PodService) *K8sPodHandler {
 	return &K8sPodHandler{
-		logger:     logger,
+
 		podService: podService,
 	}
 }
