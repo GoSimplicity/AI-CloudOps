@@ -46,7 +46,7 @@ const (
 	EventReasonCreated
 	EventReasonDeleted
 	EventReasonUpdated
-	EventReasonRestarted
+	EventRestarted
 	EventReasonStarted
 	EventReasonStopped
 	EventReasonFailed
@@ -65,13 +65,13 @@ const (
 )
 
 // EventSeverity 事件严重程度
-type EventSeverity int8
+type EventSeverity string
 
 const (
-	EventSeverityLow EventSeverity = iota + 1
-	EventSeverityMedium
-	EventSeverityHigh
-	EventSeverityCritical
+	EventSeverityLow      EventSeverity = "Low"
+	EventSeverityMedium   EventSeverity = "Medium"
+	EventSeverityHigh     EventSeverity = "High"
+	EventSeverityCritical EventSeverity = "Critical"
 )
 
 // K8sEvent k8s事件
@@ -173,24 +173,115 @@ type EventTimeline struct {
 	Timeline []EventTimelineItem `json:"timeline"` // 时间线
 }
 
-// EventListReq 事件列表查询请求 - 通用查询参数
-type EventListReq struct {
-	ListReq
-	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required"`
-	Namespace string `json:"namespace" form:"namespace"`
+// GetEventListReq 获取事件列表请求
+type GetEventListReq struct {
+	ClusterID          int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace          string `json:"namespace" form:"namespace" comment:"命名空间"`
+	LabelSelector      string `json:"label_selector" form:"label_selector" comment:"标签选择器"`
+	FieldSelector      string `json:"field_selector" form:"field_selector" comment:"字段选择器"`
+	EventType          string `json:"event_type" form:"event_type" comment:"事件类型：Normal,Warning"`
+	Reason             string `json:"reason" form:"reason" comment:"事件原因"`
+	Source             string `json:"source" form:"source" comment:"事件源组件"`
+	InvolvedObjectKind string `json:"involved_object_kind" form:"involved_object_kind" comment:"涉及对象类型"`
+	InvolvedObjectName string `json:"involved_object_name" form:"involved_object_name" comment:"涉及对象名称"`
+	LimitDays          int    `json:"limit_days" form:"limit_days" comment:"限制天数"`
+	Limit              int64  `json:"limit" form:"limit" comment:"限制结果数量"`
+	Continue           string `json:"continue" form:"continue" comment:"分页续订令牌"`
 }
 
-// EventStatisticsReq 事件统计请求
-type EventStatisticsReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"`
-	Namespace string `json:"namespace"`
+// GetEventDetailReq 获取事件详情请求
+type GetEventDetailReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" binding:"required" comment:"事件名称"`
 }
 
-// EventCleanupReq 事件清理请求
-type EventCleanupReq struct {
-	ClusterID  int        `json:"cluster_id" binding:"required"`
-	Namespace  string     `json:"namespace"`                             // 空则清理所有namespace
-	BeforeTime *time.Time `json:"before_time"`                           // 清理此时间之前的事件
-	DaysToKeep int        `json:"days_to_keep"`                          // 保留最近N天，与before_time二选一
-	DryRun     int8       `json:"dry_run" binding:"required,oneof= 1 2"` // 模拟运行，不实际删除
+// GetEventsByPodReq 获取Pod相关事件请求
+type GetEventsByPodReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`
+	PodName   string `json:"pod_name" binding:"required" comment:"Pod名称"`
+}
+
+// GetEventsByDeploymentReq 获取Deployment相关事件请求
+type GetEventsByDeploymentReq struct {
+	ClusterID      int    `json:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace      string `json:"namespace" binding:"required" comment:"命名空间"`
+	DeploymentName string `json:"deployment_name" binding:"required" comment:"Deployment名称"`
+}
+
+// GetEventsByServiceReq 获取Service相关事件请求
+type GetEventsByServiceReq struct {
+	ClusterID   int    `json:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace   string `json:"namespace" binding:"required" comment:"命名空间"`
+	ServiceName string `json:"service_name" binding:"required" comment:"Service名称"`
+}
+
+// GetEventsByNodeReq 获取Node相关事件请求
+type GetEventsByNodeReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`
+	NodeName  string `json:"node_name" binding:"required" comment:"Node名称"`
+}
+
+// GetEventStatisticsReq 获取事件统计请求
+type GetEventStatisticsReq struct {
+	ClusterID int       `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string    `json:"namespace" form:"namespace" comment:"命名空间"`
+	StartTime time.Time `json:"start_time" form:"start_time" comment:"开始时间"`
+	EndTime   time.Time `json:"end_time" form:"end_time" comment:"结束时间"`
+	GroupBy   string    `json:"group_by" form:"group_by" comment:"分组方式：type,reason,object,severity"`
+}
+
+// GetEventSummaryReq 获取事件汇总请求
+type GetEventSummaryReq struct {
+	ClusterID int       `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string    `json:"namespace" form:"namespace" comment:"命名空间"`
+	StartTime time.Time `json:"start_time" form:"start_time" comment:"开始时间"`
+	EndTime   time.Time `json:"end_time" form:"end_time" comment:"结束时间"`
+}
+
+// GetEventTimelineReq 获取事件时间线请求
+type GetEventTimelineReq struct {
+	ClusterID  int       `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace  string    `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`
+	ObjectKind string    `json:"object_kind" form:"object_kind" binding:"required" comment:"对象类型"`
+	ObjectName string    `json:"object_name" form:"object_name" binding:"required" comment:"对象名称"`
+	StartTime  time.Time `json:"start_time" form:"start_time" comment:"开始时间"`
+	EndTime    time.Time `json:"end_time" form:"end_time" comment:"结束时间"`
+}
+
+// GetEventTrendsReq 获取事件趋势请求
+type GetEventTrendsReq struct {
+	ClusterID int       `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string    `json:"namespace" form:"namespace" comment:"命名空间"`
+	StartTime time.Time `json:"start_time" form:"start_time" comment:"开始时间"`
+	EndTime   time.Time `json:"end_time" form:"end_time" comment:"结束时间"`
+	Interval  string    `json:"interval" form:"interval" comment:"时间间隔：1m,5m,15m,1h,1d"`
+	EventType string    `json:"event_type" form:"event_type" comment:"事件类型：Normal,Warning"`
+}
+
+// GetEventGroupDataReq 获取事件分组数据请求
+type GetEventGroupDataReq struct {
+	ClusterID int       `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string    `json:"namespace" form:"namespace" comment:"命名空间"`
+	GroupBy   string    `json:"group_by" form:"group_by" binding:"required" comment:"分组方式：type,reason,object,severity"`
+	StartTime time.Time `json:"start_time" form:"start_time" comment:"开始时间"`
+	EndTime   time.Time `json:"end_time" form:"end_time" comment:"结束时间"`
+	Limit     int       `json:"limit" form:"limit" comment:"限制结果数量"`
+}
+
+// DeleteEventReq 删除事件请求
+type DeleteEventReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" binding:"required" comment:"事件名称"`
+}
+
+// CleanupOldEventsReq 清理旧事件请求
+type CleanupOldEventsReq struct {
+	ClusterID  int       `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace  string    `json:"namespace" form:"namespace" comment:"命名空间"`
+	BeforeTime time.Time `json:"before_time" form:"before_time" binding:"required" comment:"清理此时间之前的事件"`
+	EventType  string    `json:"event_type" form:"event_type" comment:"事件类型：Normal,Warning"`
+	DryRun     bool      `json:"dry_run" form:"dry_run" comment:"是否为试运行"`
 }

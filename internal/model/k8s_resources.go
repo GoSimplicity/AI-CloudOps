@@ -407,8 +407,6 @@ type PortForwardPort struct {
 	RemotePort int `json:"remote_port" binding:"required" comment:"远程端口"`
 }
 
-// ==================== 通用资源操作请求结构体 ====================
-
 // K8sGetResourceReq 获取单个k8s资源请求
 type K8sGetResourceReq struct {
 	ClusterID    int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`

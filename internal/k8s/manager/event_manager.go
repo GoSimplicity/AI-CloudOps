@@ -40,14 +40,20 @@ type EventManager interface {
 	// 基础操作
 	GetEvent(ctx context.Context, clusterID int, namespace, name string) (*corev1.Event, error)
 	ListEvents(ctx context.Context, clusterID int, namespace string) (*corev1.EventList, error)
+	ListEventsWithTotal(ctx context.Context, clusterID int, namespace string) (*corev1.EventList, int64, error)
 	ListAllEvents(ctx context.Context, clusterID int) (*corev1.EventList, error)
+	ListAllEventsWithTotal(ctx context.Context, clusterID int) (*corev1.EventList, int64, error)
 	DeleteEvent(ctx context.Context, clusterID int, namespace, name string, options metav1.DeleteOptions) error
 
 	// 业务功能
 	ListEventsByObject(ctx context.Context, clusterID int, namespace string, objectKind, objectName string) (*corev1.EventList, error)
+	ListEventsByObjectWithTotal(ctx context.Context, clusterID int, namespace string, objectKind, objectName string) (*corev1.EventList, int64, error)
 	ListEventsBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.EventList, error)
+	ListEventsBySelectorWithTotal(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.EventList, int64, error)
 	ListEventsByFieldSelector(ctx context.Context, clusterID int, namespace string, fieldSelector string) (*corev1.EventList, error)
+	ListEventsByFieldSelectorWithTotal(ctx context.Context, clusterID int, namespace string, fieldSelector string) (*corev1.EventList, int64, error)
 	ListRecentEvents(ctx context.Context, clusterID int, namespace string, limitSeconds int64) (*corev1.EventList, error)
+	ListRecentEventsWithTotal(ctx context.Context, clusterID int, namespace string, limitSeconds int64) (*corev1.EventList, int64, error)
 }
 
 // eventManager Event管理器实现
@@ -100,6 +106,17 @@ func (m *eventManager) ListEvents(ctx context.Context, clusterID int, namespace 
 	return events, nil
 }
 
+// ListEventsWithTotal 获取指定命名空间的Event列表及总数
+func (m *eventManager) ListEventsWithTotal(ctx context.Context, clusterID int, namespace string) (*corev1.EventList, int64, error) {
+	events, err := m.ListEvents(ctx, clusterID, namespace)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total := int64(len(events.Items))
+	return events, total, nil
+}
+
 // ListAllEvents 获取所有命名空间的Event列表
 func (m *eventManager) ListAllEvents(ctx context.Context, clusterID int) (*corev1.EventList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
@@ -115,6 +132,17 @@ func (m *eventManager) ListAllEvents(ctx context.Context, clusterID int) (*corev
 	}
 
 	return events, nil
+}
+
+// ListAllEventsWithTotal 获取所有命名空间的Event列表及总数
+func (m *eventManager) ListAllEventsWithTotal(ctx context.Context, clusterID int) (*corev1.EventList, int64, error) {
+	events, err := m.ListAllEvents(ctx, clusterID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total := int64(len(events.Items))
+	return events, total, nil
 }
 
 // DeleteEvent 删除Event
@@ -159,6 +187,17 @@ func (m *eventManager) ListEventsByObject(ctx context.Context, clusterID int, na
 	return events, nil
 }
 
+// ListEventsByObjectWithTotal 根据对象获取Event列表及总数
+func (m *eventManager) ListEventsByObjectWithTotal(ctx context.Context, clusterID int, namespace string, objectKind, objectName string) (*corev1.EventList, int64, error) {
+	events, err := m.ListEventsByObject(ctx, clusterID, namespace, objectKind, objectName)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total := int64(len(events.Items))
+	return events, total, nil
+}
+
 // ListEventsBySelector 根据标签选择器获取Event列表
 func (m *eventManager) ListEventsBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.EventList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
@@ -180,6 +219,17 @@ func (m *eventManager) ListEventsBySelector(ctx context.Context, clusterID int, 
 	}
 
 	return events, nil
+}
+
+// ListEventsBySelectorWithTotal 根据标签选择器获取Event列表及总数
+func (m *eventManager) ListEventsBySelectorWithTotal(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.EventList, int64, error) {
+	events, err := m.ListEventsBySelector(ctx, clusterID, namespace, selector)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total := int64(len(events.Items))
+	return events, total, nil
 }
 
 // ListEventsByFieldSelector 根据字段选择器获取Event列表
@@ -205,6 +255,17 @@ func (m *eventManager) ListEventsByFieldSelector(ctx context.Context, clusterID 
 	return events, nil
 }
 
+// ListEventsByFieldSelectorWithTotal 根据字段选择器获取Event列表及总数
+func (m *eventManager) ListEventsByFieldSelectorWithTotal(ctx context.Context, clusterID int, namespace string, fieldSelector string) (*corev1.EventList, int64, error) {
+	events, err := m.ListEventsByFieldSelector(ctx, clusterID, namespace, fieldSelector)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total := int64(len(events.Items))
+	return events, total, nil
+}
+
 // ListRecentEvents 获取最近的Event列表
 func (m *eventManager) ListRecentEvents(ctx context.Context, clusterID int, namespace string, limitSeconds int64) (*corev1.EventList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
@@ -226,4 +287,15 @@ func (m *eventManager) ListRecentEvents(ctx context.Context, clusterID int, name
 	}
 
 	return events, nil
+}
+
+// ListRecentEventsWithTotal 获取最近的Event列表及总数
+func (m *eventManager) ListRecentEventsWithTotal(ctx context.Context, clusterID int, namespace string, limitSeconds int64) (*corev1.EventList, int64, error) {
+	events, err := m.ListRecentEvents(ctx, clusterID, namespace, limitSeconds)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total := int64(len(events.Items))
+	return events, total, nil
 }

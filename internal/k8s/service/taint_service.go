@@ -144,11 +144,11 @@ func (t *taintService) SwitchNodeSchedule(ctx context.Context, req *model.Switch
 		return fmt.Errorf("节点名称不能为空")
 	}
 
-	if err := t.manager.EnableSwitchNode(ctx, req.ClusterID, req.NodeName, req.Enable); err != nil {
+	if err := t.manager.EnableSwitchNode(ctx, req.ClusterID, req.NodeName, req.Enable == 1); err != nil {
 		t.logger.Error("切换节点调度状态失败",
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("nodeName", req.NodeName),
-			zap.Bool("enable", req.Enable),
+			zap.Bool("enable", req.Enable == 1),
 			zap.Error(err))
 		return err
 	}

@@ -46,178 +46,260 @@ func NewK8sEventHandler(eventService service.EventService) *K8sEventHandler {
 func (k *K8sEventHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/events/list", k.GetEventList)                   // 获取Event列表
-		k8sGroup.GET("/events/:cluster_id", k.GetEventsByNamespace)    // 根据命名空间获取Event列表
-		k8sGroup.GET("/events/:cluster_id/:name", k.GetEvent)          // 获取单个Event详情
-		k8sGroup.GET("/events/by-object", k.GetEventsByObject)         // 根据对象获取相关事件
-		k8sGroup.GET("/events/by-pod", k.GetEventsByPod)               // 获取Pod相关事件
-		k8sGroup.GET("/events/by-deployment", k.GetEventsByDeployment) // 获取Deployment相关事件
-		k8sGroup.GET("/events/by-service", k.GetEventsByService)       // 获取Service相关事件
-		k8sGroup.GET("/events/by-node", k.GetEventsByNode)             // 获取Node相关事件
-		k8sGroup.GET("/events/statistics", k.GetEventStatistics)       // 获取事件统计
-		k8sGroup.GET("/events/timeline", k.GetEventTimeline)           // 获取事件时间线
-		k8sGroup.POST("/events/cleanup", k.CleanupOldEvents)           // 清理旧事件
+		k8sGroup.GET("/events/list", k.GetEventList)                                                           // 获取事件列表
+		k8sGroup.GET("/events/:cluster_id/:namespace/detail/:name", k.GetEventDetail)                          // 获取单个事件详情
+		k8sGroup.GET("/events/:cluster_id/:namespace/by-pod/:pod_name", k.GetEventsByPod)                      // 获取Pod相关事件
+		k8sGroup.GET("/events/:cluster_id/:namespace/by-deployment/:deployment_name", k.GetEventsByDeployment) // 获取Deployment相关事件
+		k8sGroup.GET("/events/:cluster_id/:namespace/by-service/:service_name", k.GetEventsByService)          // 获取Service相关事件
+		k8sGroup.GET("/events/:cluster_id/by-node/:node_name", k.GetEventsByNode)                              // 获取Node相关事件
+		k8sGroup.GET("/events/statistics", k.GetEventStatistics)                                               // 获取事件统计信息
+		k8sGroup.GET("/events/summary", k.GetEventSummary)                                                     // 获取事件汇总
+		k8sGroup.GET("/events/timeline", k.GetEventTimeline)                                                   // 获取事件时间线
+		k8sGroup.GET("/events/trends", k.GetEventTrends)                                                       // 获取事件趋势
+		k8sGroup.GET("/events/group", k.GetEventGroupData)                                                     // 获取事件分组数据
+		k8sGroup.DELETE("/events/:cluster_id/:namespace/delete/:name", k.DeleteEvent)                          // 删除单个事件
+		k8sGroup.POST("/events/cleanup", k.CleanupOldEvents)                                                   // 清理旧事件
 	}
 }
 
 // GetEventList 获取Event列表
 func (k *K8sEventHandler) GetEventList(ctx *gin.Context) {
-	var req model.K8sEventListReq
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
+	var req model.GetEventListReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return k.eventService.GetEventList(ctx, &req)
 	})
 }
 
-// GetEventsByNamespace 根据命名空间获取Event列表
-func (k *K8sEventHandler) GetEventsByNamespace(ctx *gin.Context) {
-	var req model.K8sGetResourceListReq
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
+// GetEventDetail 获取Event详情
+func (k *K8sEventHandler) GetEventDetail(ctx *gin.Context) {
+	var req model.GetEventDetailReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.eventService.GetEventsByNamespace(ctx, req.ClusterID, req.Namespace)
-	})
-}
-
-// GetEvent 获取Event详情
-func (k *K8sEventHandler) GetEvent(ctx *gin.Context) {
-	var req model.K8sGetResourceReq
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.eventService.GetEvent(ctx, req.ClusterID, req.Namespace, req.ResourceName)
-	})
-}
-
-// GetEventsByObject 根据对象获取相关事件
-func (k *K8sEventHandler) GetEventsByObject(ctx *gin.Context) {
-	var req model.K8sEventByObjectReq
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.eventService.GetEventsByObject(ctx, &req)
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.eventService.GetEvent(ctx, &req)
 	})
 }
 
 // GetEventsByPod 获取Pod相关事件
 func (k *K8sEventHandler) GetEventsByPod(ctx *gin.Context) {
-	var req struct {
-		ClusterID int    `form:"cluster_id" binding:"required"`
-		Namespace string `form:"namespace" binding:"required"`
-		PodName   string `form:"pod_name" binding:"required"`
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+	var req model.GetEventsByPodReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.eventService.GetEventsByPod(ctx, req.ClusterID, req.Namespace, req.PodName)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	podName, err := utils.GetParamCustomName(ctx, "pod_name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.PodName = podName
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.eventService.GetEventsByPod(ctx, &req)
 	})
 }
 
 // GetEventsByDeployment 获取Deployment相关事件
 func (k *K8sEventHandler) GetEventsByDeployment(ctx *gin.Context) {
-	var req struct {
-		ClusterID      int    `form:"cluster_id" binding:"required"`
-		Namespace      string `form:"namespace" binding:"required"`
-		DeploymentName string `form:"deployment_name" binding:"required"`
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+	var req model.GetEventsByDeploymentReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.eventService.GetEventsByDeployment(ctx, req.ClusterID, req.Namespace, req.DeploymentName)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	deploymentName, err := utils.GetParamCustomName(ctx, "deployment_name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.DeploymentName = deploymentName
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.eventService.GetEventsByDeployment(ctx, &req)
 	})
 }
 
 // GetEventsByService 获取Service相关事件
 func (k *K8sEventHandler) GetEventsByService(ctx *gin.Context) {
-	var req struct {
-		ClusterID   int    `form:"cluster_id" binding:"required"`
-		Namespace   string `form:"namespace" binding:"required"`
-		ServiceName string `form:"service_name" binding:"required"`
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+	var req model.GetEventsByServiceReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.eventService.GetEventsByService(ctx, req.ClusterID, req.Namespace, req.ServiceName)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	serviceName, err := utils.GetParamCustomName(ctx, "service_name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.ServiceName = serviceName
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.eventService.GetEventsByService(ctx, &req)
 	})
 }
 
 // GetEventsByNode 获取Node相关事件
 func (k *K8sEventHandler) GetEventsByNode(ctx *gin.Context) {
-	var req struct {
-		ClusterID int    `form:"cluster_id" binding:"required"`
-		NodeName  string `form:"node_name" binding:"required"`
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+	var req model.GetEventsByNodeReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.eventService.GetEventsByNode(ctx, req.ClusterID, req.NodeName)
+	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.NodeName = nodeName
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.eventService.GetEventsByNode(ctx, &req)
 	})
 }
 
 // GetEventStatistics 获取事件统计
 func (k *K8sEventHandler) GetEventStatistics(ctx *gin.Context) {
-	var req model.K8sEventStatisticsReq
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
+	var req model.GetEventStatisticsReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return k.eventService.GetEventStatistics(ctx, &req)
+	})
+}
+
+// GetEventSummary 获取事件汇总
+func (k *K8sEventHandler) GetEventSummary(ctx *gin.Context) {
+	var req model.GetEventSummaryReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.eventService.GetEventSummary(ctx, &req)
 	})
 }
 
 // GetEventTimeline 获取事件时间线
 func (k *K8sEventHandler) GetEventTimeline(ctx *gin.Context) {
-	var req model.K8sEventTimelineReq
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+	var req model.GetEventTimelineReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.eventService.GetEventTimeline(ctx, &req)
+	})
+}
+
+// GetEventTrends 获取事件趋势
+func (k *K8sEventHandler) GetEventTrends(ctx *gin.Context) {
+	var req model.GetEventTrendsReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.eventService.GetEventTrends(ctx, &req)
+	})
+}
+
+// GetEventGroupData 获取事件分组数据
+func (k *K8sEventHandler) GetEventGroupData(ctx *gin.Context) {
+	var req model.GetEventGroupDataReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.eventService.GetEventGroupData(ctx, &req)
+	})
+}
+
+// DeleteEvent 删除单个事件
+func (k *K8sEventHandler) DeleteEvent(ctx *gin.Context) {
+	var req model.DeleteEventReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.eventService.GetEventTimeline(ctx, &req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.eventService.DeleteEvent(ctx, &req)
 	})
 }
 
 // CleanupOldEvents 清理旧事件
 func (k *K8sEventHandler) CleanupOldEvents(ctx *gin.Context) {
-	var req model.K8sEventCleanupReq
+	var req model.CleanupOldEventsReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.eventService.CleanupOldEvents(ctx, &req)
+		return nil, k.eventService.CleanupOldEvents(ctx, &req)
 	})
 }
