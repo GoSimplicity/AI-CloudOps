@@ -44,7 +44,7 @@ type NodeManager interface {
 	DrainNode(ctx context.Context, clusterID int, nodeName string, options *utils.DrainOptions) error
 	CordonNode(ctx context.Context, clusterID int, nodeName string) error
 	UncordonNode(ctx context.Context, clusterID int, nodeName string) error
-	AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string, overwrite bool) error
+	AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string, overwrite int8) error
 	DeleteNodeLabels(ctx context.Context, clusterID int, nodeName string, labelKeys []string) error
 	GetNodeResource(ctx context.Context, clusterID int, nodeName string) (*model.NodeResource, error)
 	GetNodeEvents(ctx context.Context, clusterID int, nodeName string, limit int) ([]*model.NodeEvent, int64, error)
@@ -213,7 +213,7 @@ func (m *nodeManager) UncordonNode(ctx context.Context, clusterID int, nodeName 
 	return nil
 }
 
-func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string, overwrite bool) error {
+func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string, overwrite int8) error {
 	if nodeName == "" {
 		return fmt.Errorf("节点名称不能为空")
 	}
@@ -238,7 +238,7 @@ func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, 
 	}
 
 	for key, value := range labels {
-		if _, exists := node.Labels[key]; exists && !overwrite {
+		if _, exists := node.Labels[key]; exists && overwrite == 1 {
 			continue
 		}
 		node.Labels[key] = value

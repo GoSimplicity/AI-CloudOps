@@ -45,11 +45,10 @@ const (
 
 // K8sNode Kubernetes 节点
 type K8sNode struct {
-	// 基础信息
 	Name             string               `json:"name"`                                         // 节点名称
 	ClusterID        int                  `json:"cluster_id"`                                   // 所属集群ID
 	Status           NodeStatus           `json:"status"`                                       // 节点状态
-	Schedulable      bool                 `json:"schedulable"`                                  // 节点是否可调度
+	Schedulable      int8                 `json:"schedulable" binding:"required,oneof=1 2"`     // 节点是否可调度
 	Roles            []string             `json:"roles" gorm:"type:text;serializer:json"`       // 节点角色，例如 master, worker
 	Age              string               `json:"age"`                                          // 节点存在时间，例如 5d
 	InternalIP       string               `json:"internal_ip"`                                  // 节点内部IP
@@ -117,11 +116,8 @@ type NodeMetrics struct {
 type GetNodeListReq struct {
 	ListReq
 	ClusterID     int          `json:"cluster_id" binding:"required"` // 集群ID
-	NodeNames     []string     `json:"node_names"`                    // 指定节点名称列表（可选）
 	Status        []NodeStatus `json:"status"`                        // 状态过滤
-	Roles         []string     `json:"roles"`                         // 角色过滤
 	LabelSelector string       `json:"label_selector"`                // 标签选择器
-	FieldSelector string       `json:"field_selector"`                // 字段选择器
 }
 
 // GetNodeDetailReq 获取节点详情请求
@@ -132,10 +128,10 @@ type GetNodeDetailReq struct {
 
 // AddLabelNodesReq 添加节点标签请求
 type AddLabelNodesReq struct {
-	ClusterID int               `json:"cluster_id" binding:"required"` // 集群ID
-	NodeName  string            `json:"node_name" binding:"required"`  // 节点名称
-	Labels    map[string]string `json:"labels" binding:"required"`     // 要添加的标签
-	Overwrite bool              `json:"overwrite"`                     // 是否覆盖已存在的标签
+	ClusterID int               `json:"cluster_id" binding:"required"`          // 集群ID
+	NodeName  string            `json:"node_name" binding:"required"`           // 节点名称
+	Labels    map[string]string `json:"labels" binding:"required"`              // 要添加的标签
+	Overwrite int8              `json:"overwrite" binding:"required,oneof=1 2"` // 是否覆盖已存在的标签
 }
 
 // DeleteLabelNodesReq 删除节点标签请求
@@ -160,13 +156,13 @@ type GetNodeEventsReq struct {
 
 // DrainNodeReq 驱逐节点请求
 type DrainNodeReq struct {
-	ClusterID          int    `json:"cluster_id" binding:"required"` // 集群ID
-	NodeName           string `json:"node_name" binding:"required"`  // 节点名称
-	Force              bool   `json:"force"`                         // 是否强制驱逐
-	IgnoreDaemonSets   bool   `json:"ignore_daemon_sets"`            // 是否忽略DaemonSet
-	DeleteLocalData    bool   `json:"delete_local_data"`             // 是否删除本地数据
-	GracePeriodSeconds int    `json:"grace_period_seconds"`          // 优雅关闭时间(秒)
-	TimeoutSeconds     int    `json:"timeout_seconds"`               // 超时时间(秒)
+	ClusterID          int    `json:"cluster_id" binding:"required"`                   // 集群ID
+	NodeName           string `json:"node_name" binding:"required"`                    // 节点名称
+	Force              int8   `json:"force" binding:"required,oneof=1 2"`              // 是否强制驱逐
+	IgnoreDaemonSets   int8   `json:"ignore_daemon_sets" binding:"required,oneof=1 2"` // 是否忽略DaemonSet
+	DeleteLocalData    int8   `json:"delete_local_data" binding:"required,oneof=1 2"`  // 是否删除本地数据
+	GracePeriodSeconds int    `json:"grace_period_seconds"`                            // 优雅关闭时间(秒)
+	TimeoutSeconds     int    `json:"timeout_seconds"`                                 // 超时时间(秒)
 }
 
 // NodeCordonReq 禁止节点调度请求
@@ -210,9 +206,9 @@ type CheckTaintYamlReq struct {
 
 // SwitchNodeScheduleReq 切换节点调度状态请求
 type SwitchNodeScheduleReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	NodeName  string `json:"node_name" binding:"required"`  // 节点名称
-	Enable    bool   `json:"enable"`                        // 是否启用调度
+	ClusterID int    `json:"cluster_id" binding:"required"`       // 集群ID
+	NodeName  string `json:"node_name" binding:"required"`        // 节点名称
+	Enable    int8   `json:"enable" binding:"required,oneof=1 2"` // 是否启用调度
 }
 
 // GetNodeMetricsReq 获取节点指标请求

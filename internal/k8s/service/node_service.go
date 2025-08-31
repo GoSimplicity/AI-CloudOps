@@ -91,14 +91,8 @@ func (n *nodeService) GetNodeList(ctx context.Context, req *model.GetNodeListReq
 	nodes := nodeList.Items
 
 	// 根据条件过滤节点
-	if len(req.NodeNames) > 0 {
-		nodes = utils.FilterNodesByNames(nodes, req.NodeNames)
-	}
 	if len(req.Status) > 0 {
 		nodes = utils.FilterNodesByStatus(nodes, req.Status)
-	}
-	if len(req.Roles) > 0 {
-		nodes = utils.FilterNodesByRoles(nodes, req.Roles)
 	}
 
 	// 分页处理
@@ -197,7 +191,7 @@ func (n *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.AddLa
 		return fmt.Errorf("添加节点标签失败: %w", err)
 	}
 
-	n.l.Info("AddOrUpdateNodeLabel: 成功添加节点标签", zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Any("labels", req.Labels), zap.Bool("overwrite", req.Overwrite))
+	n.l.Info("AddOrUpdateNodeLabel: 成功添加节点标签", zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Any("labels", req.Labels), zap.Bool("overwrite", req.Overwrite == 1))
 	return nil
 }
 

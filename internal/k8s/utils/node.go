@@ -42,9 +42,9 @@ import (
 
 // DrainOptions 驱逐节点选项
 type DrainOptions struct {
-	Force              bool // 是否强制驱逐
-	IgnoreDaemonSets   bool // 是否忽略DaemonSet
-	DeleteLocalData    bool // 是否删除本地数据
+	Force              int8 // 是否强制驱逐
+	IgnoreDaemonSets   int8 // 是否忽略DaemonSet
+	DeleteLocalData    int8 // 是否删除本地数据
 	GracePeriodSeconds int  // 优雅关闭时间(秒)
 	TimeoutSeconds     int  // 超时时间(秒)
 }
@@ -59,7 +59,10 @@ func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClie
 	status := getNodeStatus(node)
 
 	// 判断是否可调度
-	schedulable := !node.Spec.Unschedulable
+	schedulable := int8(1)
+	if node.Spec.Unschedulable {
+		schedulable = int8(2)
+	}
 
 	// 获取节点角色
 	roles := getNodeRoles(node)
@@ -375,10 +378,6 @@ func BuildNodeListOptions(req *model.GetNodeListReq) metav1.ListOptions {
 		options.LabelSelector = req.LabelSelector
 	}
 
-	if req.FieldSelector != "" {
-		options.FieldSelector = req.FieldSelector
-	}
-
 	return options
 }
 
@@ -500,23 +499,6 @@ func BuildNodeListPagination(nodes []corev1.Node, page, size int) ([]corev1.Node
 	return nodes[start:end], total
 }
 
-// ApplyNodeFilters 应用所有节点过滤器
-func ApplyNodeFilters(nodes []corev1.Node, req *model.GetNodeListReq) []corev1.Node {
-	filtered := nodes
-
-	if len(req.NodeNames) > 0 {
-		filtered = FilterNodesByNames(filtered, req.NodeNames)
-	}
-	if len(req.Status) > 0 {
-		filtered = FilterNodesByStatus(filtered, req.Status)
-	}
-	if len(req.Roles) > 0 {
-		filtered = FilterNodesByRoles(filtered, req.Roles)
-	}
-
-	return filtered
-}
-
 // IsDaemonSetPod 判断是否为DaemonSet Pod
 func IsDaemonSetPod(pod corev1.Pod) bool {
 	for _, ownerRef := range pod.OwnerReferences {
@@ -545,12 +527,12 @@ func BuildDeleteOptions(gracePeriodSeconds int) metav1.DeleteOptions {
 // ShouldSkipPodDrain 判断是否应该跳过Pod驱逐
 func ShouldSkipPodDrain(pod corev1.Pod, options *DrainOptions) bool {
 	// 跳过系统命名空间的Pod（除非强制）
-	if !options.Force && IsSystemNamespace(pod.Namespace) {
+	if options.Force == 1 && IsSystemNamespace(pod.Namespace) {
 		return true
 	}
 
 	// 跳过DaemonSet Pod（除非设置忽略）
-	if IsDaemonSetPod(pod) && !options.IgnoreDaemonSets {
+	if IsDaemonSetPod(pod) && options.IgnoreDaemonSets == 1 {
 		return true
 	}
 

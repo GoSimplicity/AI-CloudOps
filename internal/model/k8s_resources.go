@@ -238,21 +238,6 @@ type K8sSecret struct {
 	Events            []K8sEvent        `json:"events,omitempty"`
 }
 
-// K8sEvent Kubernetes事件响应信息
-type K8sEvent struct {
-	Name              string                 `json:"name"`
-	Namespace         string                 `json:"namespace"`
-	Type              string                 `json:"type"`
-	Reason            string                 `json:"reason"`
-	Message           string                 `json:"message"`
-	Source            corev1.EventSource     `json:"source"`
-	InvolvedObject    corev1.ObjectReference `json:"involved_object"`
-	FirstTimestamp    time.Time              `json:"first_timestamp"`
-	LastTimestamp     time.Time              `json:"last_timestamp"`
-	Count             int32                  `json:"count"`
-	CreationTimestamp time.Time              `json:"creation_timestamp"`
-}
-
 // K8sNetworkPolicy Kubernetes NetworkPolicy响应信息
 type K8sNetworkPolicy struct {
 	Name              string                                  `json:"name"`
