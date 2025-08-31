@@ -107,7 +107,7 @@ func ProvideCmd() *Cmd {
 	daemonSetService := service4.NewDaemonSetService(clusterDAO, k8sClient, daemonSetManager, logger)
 	k8sDaemonSetHandler := api4.NewK8sDaemonSetHandler(daemonSetService)
 	eventManager := manager.NewEventManager(k8sClient, logger)
-	eventService := service4.NewEventService(clusterDAO, k8sClient, eventManager, logger)
+	eventService := service4.NewEventService(eventManager, logger)
 	k8sEventHandler := api4.NewK8sEventHandler(eventService)
 	pvManager := manager.NewPVManager(logger, k8sClient)
 	pvService := service4.NewPVService(clusterDAO, k8sClient, pvManager, logger)
