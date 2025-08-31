@@ -30,6 +30,8 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,7 +39,7 @@ import (
 
 type NamespaceManager interface {
 	GetNamespace(ctx context.Context, clusterID int, name string) (*corev1.Namespace, error)
-	ListNamespaces(ctx context.Context, clusterID int) (*corev1.NamespaceList, int64, error)
+	ListNamespaces(ctx context.Context, clusterID int, status string, labels model.KeyValueList) (*corev1.NamespaceList, int64, error)
 	CreateNamespace(ctx context.Context, clusterID int, namespace *corev1.Namespace) (*corev1.Namespace, error)
 	UpdateNamespace(ctx context.Context, clusterID int, namespace *corev1.Namespace) (*corev1.Namespace, error)
 	DeleteNamespace(ctx context.Context, clusterID int, name string, options metav1.DeleteOptions) error
@@ -71,7 +73,7 @@ func (m *namespaceManager) GetNamespace(ctx context.Context, clusterID int, name
 	return namespace, nil
 }
 
-func (m *namespaceManager) ListNamespaces(ctx context.Context, clusterID int) (*corev1.NamespaceList, int64, error) {
+func (m *namespaceManager) ListNamespaces(ctx context.Context, clusterID int, status string, labels model.KeyValueList) (*corev1.NamespaceList, int64, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
 		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
@@ -84,10 +86,30 @@ func (m *namespaceManager) ListNamespaces(ctx context.Context, clusterID int) (*
 		return nil, 0, fmt.Errorf("获取命名空间列表失败: %w", err)
 	}
 
-	// 获取命名空间总数
-	total := int64(len(namespaces.Items))
+	// 在 manager 层应用过滤条件
+	filteredNamespaces := namespaces.Items
 
-	return namespaces, total, nil
+	// 根据状态过滤
+	if status != "" {
+		filteredNamespaces = utils.FilterNamespacesByStatus(filteredNamespaces, status)
+	}
+
+	// 根据标签过滤
+	if len(labels) > 0 {
+		filteredNamespaces = utils.FilterNamespacesByLabels(filteredNamespaces, labels)
+	}
+
+	// 返回过滤后的结果
+	result := &corev1.NamespaceList{
+		TypeMeta: namespaces.TypeMeta,
+		ListMeta: namespaces.ListMeta,
+		Items:    filteredNamespaces,
+	}
+
+	// 返回过滤后的总数
+	total := int64(len(filteredNamespaces))
+
+	return result, total, nil
 }
 
 func (m *namespaceManager) CreateNamespace(ctx context.Context, clusterID int, namespace *corev1.Namespace) (*corev1.Namespace, error) {

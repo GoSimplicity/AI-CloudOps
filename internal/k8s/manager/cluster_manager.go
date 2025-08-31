@@ -29,7 +29,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -73,7 +72,7 @@ func (cm *clusterManager) CreateCluster(ctx context.Context, cluster *model.K8sC
 	// 初始化k8s客户端
 	client, err := cm.client.GetKubeClient(cluster.ID)
 	if err != nil {
-		cm.dao.UpdateClusterStatus(ctx, cluster.ID, constants.StatusError)
+		cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusError)
 		return fmt.Errorf("初始化客户端失败: %w", err)
 	}
 
@@ -83,7 +82,7 @@ func (cm *clusterManager) CreateCluster(ctx context.Context, cluster *model.K8sC
 	}
 
 	// 更新集群状态为运行中
-	cm.dao.UpdateClusterStatus(ctx, cluster.ID, constants.StatusRunning)
+	cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusRunning)
 
 	cm.logger.Info("创建集群成功", zap.Int("clusterID", cluster.ID))
 	return nil
@@ -131,12 +130,12 @@ func (cm *clusterManager) RefreshCluster(ctx context.Context, clusterID int) err
 	// 检查集群连接
 	if err := cm.client.CheckClusterConnection(clusterID); err != nil {
 		cm.logger.Error("集群连接检查失败", zap.Int("clusterID", clusterID), zap.Error(err))
-		cm.dao.UpdateClusterStatus(ctx, clusterID, constants.StatusError)
+		cm.dao.UpdateClusterStatus(ctx, clusterID, model.StatusError)
 		return fmt.Errorf("集群连接检查失败: %w", err)
 	}
 
 	// 更新集群状态
-	if err := cm.dao.UpdateClusterStatus(ctx, clusterID, constants.StatusRunning); err != nil {
+	if err := cm.dao.UpdateClusterStatus(ctx, clusterID, model.StatusRunning); err != nil {
 		cm.logger.Error("更新集群状态失败", zap.Int("clusterID", clusterID), zap.Error(err))
 		return fmt.Errorf("更新集群状态失败: %w", err)
 	}

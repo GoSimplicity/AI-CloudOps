@@ -39,7 +39,7 @@ type ClusterDAO interface {
 	GetClusterList(ctx context.Context, req *model.ListClustersReq) ([]*model.K8sCluster, int64, error)
 	CreateCluster(ctx context.Context, cluster *model.K8sCluster) error
 	UpdateCluster(ctx context.Context, cluster *model.K8sCluster) error
-	UpdateClusterStatus(ctx context.Context, id int, status string) error
+	UpdateClusterStatus(ctx context.Context, id int, status model.ClusterStatus) error
 	DeleteCluster(ctx context.Context, id int) error
 	GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error)
 	GetClusterByName(ctx context.Context, name string) (*model.K8sCluster, error)
@@ -176,25 +176,25 @@ func (c *clusterDAO) UpdateCluster(ctx context.Context, cluster *model.K8sCluste
 }
 
 // UpdateClusterStatus 更新集群状态
-func (c *clusterDAO) UpdateClusterStatus(ctx context.Context, id int, status string) error {
+func (c *clusterDAO) UpdateClusterStatus(ctx context.Context, id int, status model.ClusterStatus) error {
 	if id <= 0 {
 		c.l.Error("UpdateClusterStatus: 集群ID不有效", zap.Int("id", id))
 		return errors.New("集群ID不有效")
 	}
 
-	if status == "" {
+	if status == model.StatusError {
 		c.l.Error("UpdateClusterStatus: 状态不能为空")
 		return errors.New("状态不能为空")
 	}
 
 	result := c.db.WithContext(ctx).Model(&model.K8sCluster{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"status": status,
+		"status": int8(status),
 	})
 
 	if result.Error != nil {
 		c.l.Error("UpdateClusterStatus: 更新集群状态失败",
 			zap.Int("id", id),
-			zap.String("status", status),
+			zap.Int8("status", int8(status)),
 			zap.Error(result.Error))
 		return fmt.Errorf("更新集群状态失败: %w", result.Error)
 	}

@@ -27,19 +27,13 @@ package model
 
 // K8sNamespace Kubernetes 命名空间数据库实体
 type K8sNamespace struct {
-	Model
-	ClusterID     int            `json:"cluster_id" gorm:"index;not null;comment:所属集群ID"`                        // 所属集群ID
-	Name          string         `json:"name" binding:"required,min=1,max=200" gorm:"size:200;comment:命名空间名称"`   // 命名空间名称
-	UID           string         `json:"uid" gorm:"size:100;comment:命名空间UID"`                                    // 命名空间UID
-	Status        string         `json:"status" gorm:"size:50;comment:命名空间状态"`                                   // 命名空间状态
-	Phase         string         `json:"phase" gorm:"size:50;comment:命名空间阶段"`                                    // 命名空间阶段
-	Labels        KeyValueList   `json:"labels" gorm:"type:text;serializer:json;comment:标签"`                     // 标签
-	Annotations   KeyValueList   `json:"annotations" gorm:"type:text;serializer:json;comment:注解"`                // 注解
-	ResourceQuota *ResourceQuota `json:"resource_quota,omitempty" gorm:"type:text;serializer:json;comment:资源配额"` // 资源配额
-}
-
-func (k *K8sNamespace) TableName() string {
-	return "cl_k8s_namespaces"
+	ClusterID   int          `json:"cluster_id"`                             // 所属集群ID
+	Name        string       `json:"name" binding:"required,min=1,max=200" ` // 命名空间名称
+	UID         string       `json:"uid"`                                    // 命名空间UID
+	Status      string       `json:"status" `                                // 命名空间状态
+	Phase       string       `json:"phase" `                                 // 命名空间阶段
+	Labels      KeyValueList `json:"labels" `                                // 标签
+	Annotations KeyValueList `json:"annotations" `                           // 注解
 }
 
 // K8sNamespaceListReq 命名空间列表查询请求

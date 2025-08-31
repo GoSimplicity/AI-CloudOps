@@ -33,7 +33,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
@@ -768,23 +767,20 @@ func (cm *cronManager) checkK8sStatusWithRetry(ctx context.Context) error {
 
 // checkClusterStatus 检查单个集群状态
 func (cm *cronManager) checkClusterStatus(ctx context.Context, cluster *model.K8sCluster) error {
-	var statusStr string
 	if err := cm.clusterMgr.CheckClusterStatus(ctx, cluster.ID); err != nil {
 		cm.logger.Warn("集群连接检查失败",
 			zap.Error(err),
 			zap.String("cluster", cluster.Name))
 		cluster.Status = model.StatusError
-		statusStr = constants.StatusError
 	} else {
 		cluster.Status = model.StatusRunning
-		statusStr = constants.StatusRunning
 	}
 
-	if err := cm.k8sDao.UpdateClusterStatus(ctx, cluster.ID, statusStr); err != nil {
+	if err := cm.k8sDao.UpdateClusterStatus(ctx, cluster.ID, cluster.Status); err != nil {
 		cm.logger.Error("更新集群状态失败",
 			zap.Error(err),
 			zap.String("cluster", cluster.Name),
-			zap.String("status", statusStr))
+			zap.Int8("status", int8(cluster.Status)))
 		return fmt.Errorf("更新集群[%s]状态失败: %w", cluster.Name, err)
 	}
 

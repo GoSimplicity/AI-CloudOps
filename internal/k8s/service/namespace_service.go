@@ -252,45 +252,46 @@ func (n *namespaceService) ListNamespaces(ctx context.Context, req *model.K8sNam
 		return model.ListResp[*model.K8sNamespace]{}, fmt.Errorf("集群 ID 不能为空")
 	}
 
-	// 使用 NamespaceManager 获取命名空间列表
-	namespaceList, total, err := n.namespaceManager.ListNamespaces(ctx, req.ClusterID)
+	namespaceList, total, err := n.namespaceManager.ListNamespaces(ctx, req.ClusterID, req.Status, req.Labels)
 	if err != nil {
 		n.l.Error("ListNamespaces: 获取命名空间列表失败", zap.Error(err), zap.Int("clusterID", req.ClusterID))
 		return model.ListResp[*model.K8sNamespace]{}, fmt.Errorf("获取命名空间列表失败: %w", err)
 	}
 
-	// 转换为切片以便过滤
 	namespaces := namespaceList.Items
 
-	// 根据状态过滤
-	if req.Status != "" {
-		namespaces = utils.FilterNamespacesByStatus(namespaces, req.Status)
+	// 设置默认分页参数
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.Size <= 0 {
+		req.Size = 10
 	}
 
-	// 根据标签过滤
-	if len(req.Labels) > 0 {
-		namespaces = utils.FilterNamespacesByLabels(namespaces, req.Labels)
+	// 计算分页参数
+	start := (req.Page - 1) * req.Size
+	end := start + req.Size
+
+	// 获取实际数组长度
+	namespacesLength := len(namespaces)
+
+	// 边界检查
+	if start >= namespacesLength {
+		// 超出范围，返回空数据
+		return model.ListResp[*model.K8sNamespace]{
+			Total: total,
+			Items: []*model.K8sNamespace{},
+		}, nil
 	}
-
-	var start int64
-	var end int64
-
-	// 计算分页
-	start = int64(req.Page-1) * int64(req.Size)
-	end = start + int64(req.Size)
-
-	if start > total {
-		start = total
+	if end > namespacesLength {
+		end = namespacesLength
 	}
-	if end > total {
-		end = total
+	if start < 0 {
+		start = 0
 	}
 
 	// 获取当前页数据
-	var pagedNamespaces []corev1.Namespace
-	if start < total {
-		pagedNamespaces = namespaces[start:end]
-	}
+	pagedNamespaces := namespaces[start:end]
 
 	// 转换为响应格式
 	var items []*model.K8sNamespace

@@ -707,13 +707,13 @@ func IsSystemNamespace(name string) bool {
 	return false
 }
 
-func GetComponentStatuses(ctx context.Context, kubeClient kubernetes.Interface) ([]model.ComponentHealthStatus, error) {
+func GetComponentStatuses(ctx context.Context, kubeClient kubernetes.Interface) ([]*model.ComponentHealthStatus, int64, error) {
 	componentStatuses, err := kubeClient.CoreV1().ComponentStatuses().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("获取组件状态失败: %w", err)
+		return nil, 0, fmt.Errorf("获取组件状态失败: %w", err)
 	}
 
-	var componentStatusList []model.ComponentHealthStatus
+	var componentStatusList []*model.ComponentHealthStatus
 	for _, cs := range componentStatuses.Items {
 		status := "healthy"
 		message := "正常"
@@ -727,12 +727,12 @@ func GetComponentStatuses(ctx context.Context, kubeClient kubernetes.Interface) 
 			}
 		}
 
-		componentStatusList = append(componentStatusList, model.ComponentHealthStatus{
+		componentStatusList = append(componentStatusList, &model.ComponentHealthStatus{
 			Name:      cs.Name,
 			Status:    status,
 			Message:   message,
 			Timestamp: time.Now().Format(time.DateTime),
 		})
 	}
-	return componentStatusList, nil
+	return componentStatusList, int64(len(componentStatuses.Items)), nil
 }

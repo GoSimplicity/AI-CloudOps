@@ -45,10 +45,3 @@ var (
 	ErrInvalidParam         = errors.New("invalid parameter")
 	ErrNotImplemented       = errors.New("feature not implemented")
 )
-
-// 集群状态常量，统一使用，避免魔法字符串
-const (
-	StatusPending = "PENDING"
-	StatusRunning = "RUNNING"
-	StatusError   = "ERROR"
-)

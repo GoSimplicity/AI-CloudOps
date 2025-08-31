@@ -49,8 +49,8 @@ type ClusterService interface {
 	DeleteCluster(ctx context.Context, req *model.DeleteClusterReq) error
 	GetClusterByID(ctx context.Context, req *model.GetClusterReq) (*model.K8sCluster, error)
 	RefreshClusterStatus(ctx context.Context, req *model.RefreshClusterReq) error
-	CheckClusterHealth(ctx context.Context, req *model.CheckClusterHealthReq) (*model.K8sCluster, error)
-	GetClusterStats(ctx context.Context, req *model.GetClusterStatsReq) (*model.K8sCluster, error)
+	CheckClusterHealth(ctx context.Context, req *model.CheckClusterHealthReq) (model.ListResp[*model.ComponentHealthStatus], error)
+	GetClusterStats(ctx context.Context, req *model.GetClusterStatsReq) (*model.ClusterStats, error)
 }
 
 type clusterService struct {
@@ -150,7 +150,7 @@ func (c *clusterService) CreateCluster(ctx context.Context, req *model.CreateClu
 		MemoryRequest:        req.MemoryRequest,
 		MemoryLimit:          req.MemoryLimit,
 		RestrictNamespace:    req.RestrictNamespace,
-		Status:               req.Status,
+		Status:               model.StatusRunning,
 		Env:                  req.Env,
 		Version:              req.Version,
 		ApiServerAddr:        req.ApiServerAddr,
@@ -227,7 +227,7 @@ func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 		ActionTimeoutSeconds: req.ActionTimeoutSeconds,
 		Tags:                 req.Tags,
 		RestrictNamespace:    req.RestrictNamespace,
-		Status:               req.Status,
+		Status:               model.StatusRunning,
 		Env:                  req.Env,
 		Version:              req.Version,
 		CpuRequest:           req.CpuRequest,
@@ -312,19 +312,19 @@ func (c *clusterService) RefreshClusterStatus(ctx context.Context, req *model.Re
 }
 
 // CheckClusterHealth 检查集群健康状态
-func (c *clusterService) CheckClusterHealth(ctx context.Context, req *model.CheckClusterHealthReq) (*model.K8sCluster, error) {
+func (c *clusterService) CheckClusterHealth(ctx context.Context, req *model.CheckClusterHealthReq) (model.ListResp[*model.ComponentHealthStatus], error) {
 	if req == nil || req.ID <= 0 {
-		return nil, fmt.Errorf("检查集群健康状态请求参数不能为空")
+		return model.ListResp[*model.ComponentHealthStatus]{}, fmt.Errorf("检查集群健康状态请求参数不能为空")
 	}
 
 	cluster, err := c.dao.GetClusterByID(ctx, req.ID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("集群不存在，ID: %d", req.ID)
+			return model.ListResp[*model.ComponentHealthStatus]{}, fmt.Errorf("集群不存在，ID: %d", req.ID)
 		}
 
 		c.l.Error("CheckClusterHealth: 查询集群失败", zap.Int("clusterID", req.ID), zap.Error(err))
-		return nil, fmt.Errorf("查询集群失败: %w", err)
+		return model.ListResp[*model.ComponentHealthStatus]{}, fmt.Errorf("查询集群失败: %w", err)
 	}
 
 	// 清理敏感信息
@@ -335,14 +335,14 @@ func (c *clusterService) CheckClusterHealth(ctx context.Context, req *model.Chec
 	kubeClient, err := c.client.GetKubeClient(cluster.ID)
 	if err != nil {
 		c.l.Error("CheckClusterHealth: 获取客户端失败", zap.Error(err))
-		return cluster, nil
+		return model.ListResp[*model.ComponentHealthStatus]{}, nil
 	}
 
 	// 检查服务器版本
 	version, err := kubeClient.Discovery().ServerVersion()
 	if err != nil {
 		c.l.Error("CheckClusterHealth: 连接失败", zap.Error(err))
-		return cluster, nil
+		return model.ListResp[*model.ComponentHealthStatus]{}, nil
 	}
 
 	// 更新集群版本和状态
@@ -350,17 +350,20 @@ func (c *clusterService) CheckClusterHealth(ctx context.Context, req *model.Chec
 	cluster.Status = model.StatusRunning
 
 	// 获取组件状态
-	cluster.ComponentStatus, err = utils.GetComponentStatuses(ctx, kubeClient)
+	componentStatuses, total, err := utils.GetComponentStatuses(ctx, kubeClient)
 	if err != nil {
 		c.l.Warn("CheckClusterHealth: 获取组件状态失败", zap.Error(err))
 		// 不影响整体健康检查结果
 	}
 
-	return cluster, nil
+	return model.ListResp[*model.ComponentHealthStatus]{
+		Total: total,
+		Items: componentStatuses,
+	}, nil
 }
 
 // GetClusterStats 获取集群统计信息
-func (c *clusterService) GetClusterStats(ctx context.Context, req *model.GetClusterStatsReq) (*model.K8sCluster, error) {
+func (c *clusterService) GetClusterStats(ctx context.Context, req *model.GetClusterStatsReq) (*model.ClusterStats, error) {
 	if req == nil || req.ID <= 0 {
 		return nil, fmt.Errorf("获取集群统计信息请求参数不能为空")
 	}
@@ -420,8 +423,5 @@ func (c *clusterService) GetClusterStats(ctx context.Context, req *model.GetClus
 			zap.String("errors", strings.Join(errors, "; ")))
 	}
 
-	// 设置统计信息到集群对象
-	cluster.ClusterStats = *stats
-
-	return cluster, nil
+	return stats, nil
 }

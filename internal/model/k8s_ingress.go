@@ -60,7 +60,7 @@ type IngressBackend struct {
 // IngressServiceBackendPort 服务后端端口(内部使用)
 type IngressServiceBackendPort struct {
 	Name string                        `json:"name"`
-	Port IngressServiceBackendPortSpec `json:"port"`
+	Port IngressServiceBackendPortSpec `json:"port" gorm:"type:text;serializer:json"`
 }
 
 // IngressServiceBackendPortSpec 服务后端端口规格(内部使用)

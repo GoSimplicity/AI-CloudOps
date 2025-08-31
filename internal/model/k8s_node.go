@@ -46,35 +46,35 @@ const (
 // K8sNode Kubernetes 节点
 type K8sNode struct {
 	// 基础信息
-	Name             string               `json:"name"`               // 节点名称
-	ClusterID        int                  `json:"cluster_id"`         // 所属集群ID
-	Status           NodeStatus           `json:"status"`             // 节点状态
-	Schedulable      bool                 `json:"schedulable"`        // 节点是否可调度
-	Roles            []string             `json:"roles"`              // 节点角色，例如 master, worker
-	Age              string               `json:"age"`                // 节点存在时间，例如 5d
-	InternalIP       string               `json:"internal_ip"`        // 节点内部IP
-	ExternalIP       string               `json:"external_ip"`        // 节点外部IP（如果有）
-	HostName         string               `json:"hostname"`           // 主机名
-	CPU              NodeResource         `json:"cpu"`                // CPU 资源信息
-	Memory           NodeResource         `json:"memory"`             // 内存资源信息
-	Storage          NodeResource         `json:"storage"`            // 存储资源信息
-	Pods             NodeResource         `json:"pods"`               // Pod 资源信息
-	EphemeralStorage NodeResource         `json:"ephemeral_storage"`  // 临时存储信息
-	KubeletVersion   string               `json:"kubelet_version"`    // Kubelet 版本
-	KubeProxyVersion string               `json:"kube_proxy_version"` // KubeProxy 版本
-	ContainerRuntime string               `json:"container_runtime"`  // 容器运行时
-	OperatingSystem  string               `json:"operating_system"`   // 操作系统
-	Architecture     string               `json:"architecture"`       // 系统架构
-	KernelVersion    string               `json:"kernel_version"`     // 内核版本
-	OSImage          string               `json:"os_image"`           // 操作系统镜像
-	Labels           map[string]string    `json:"labels"`             // 节点标签
-	Annotations      map[string]string    `json:"annotations"`        // 节点注解
-	Conditions       []core.NodeCondition `json:"conditions"`         // 节点条件
-	Taints           []core.Taint         `json:"taints"`             // 节点污点
-	Events           []NodeEvent          `json:"events"`             // 节点相关事件
-	CreatedAt        time.Time            `json:"created_at"`         // 创建时间
-	UpdatedAt        time.Time            `json:"updated_at"`         // 更新时间
-	RawNode          *core.Node           `json:"-"`                  // 原始 Node 对象，不序列化到 JSON
+	Name             string               `json:"name"`                                         // 节点名称
+	ClusterID        int                  `json:"cluster_id"`                                   // 所属集群ID
+	Status           NodeStatus           `json:"status"`                                       // 节点状态
+	Schedulable      bool                 `json:"schedulable"`                                  // 节点是否可调度
+	Roles            []string             `json:"roles" gorm:"type:text;serializer:json"`       // 节点角色，例如 master, worker
+	Age              string               `json:"age"`                                          // 节点存在时间，例如 5d
+	InternalIP       string               `json:"internal_ip"`                                  // 节点内部IP
+	ExternalIP       string               `json:"external_ip"`                                  // 节点外部IP（如果有）
+	HostName         string               `json:"hostname"`                                     // 主机名
+	CPU              NodeResource         `json:"cpu"`                                          // CPU 资源信息
+	Memory           NodeResource         `json:"memory"`                                       // 内存资源信息
+	Storage          NodeResource         `json:"storage"`                                      // 存储资源信息
+	Pods             NodeResource         `json:"pods"`                                         // Pod 资源信息
+	EphemeralStorage NodeResource         `json:"ephemeral_storage"`                            // 临时存储信息
+	KubeletVersion   string               `json:"kubelet_version"`                              // Kubelet 版本
+	KubeProxyVersion string               `json:"kube_proxy_version"`                           // KubeProxy 版本
+	ContainerRuntime string               `json:"container_runtime"`                            // 容器运行时
+	OperatingSystem  string               `json:"operating_system"`                             // 操作系统
+	Architecture     string               `json:"architecture"`                                 // 系统架构
+	KernelVersion    string               `json:"kernel_version"`                               // 内核版本
+	OSImage          string               `json:"os_image"`                                     // 操作系统镜像
+	Labels           map[string]string    `json:"labels" gorm:"type:text;serializer:json"`      // 节点标签
+	Annotations      map[string]string    `json:"annotations" gorm:"type:text;serializer:json"` // 节点注解
+	Conditions       []core.NodeCondition `json:"conditions" gorm:"type:text;serializer:json"`  // 节点条件
+	Taints           []core.Taint         `json:"taints" gorm:"type:text;serializer:json"`      // 节点污点
+	Events           []NodeEvent          `json:"events" gorm:"type:text;serializer:json"`      // 节点相关事件
+	CreatedAt        time.Time            `json:"created_at"`                                   // 创建时间
+	UpdatedAt        time.Time            `json:"updated_at"`                                   // 更新时间
+	RawNode          *core.Node           `json:"-"`                                            // 原始 Node 对象，不序列化到 JSON
 }
 
 // NodeResource 资源信息结构
