@@ -33,12 +33,12 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
 const (
@@ -53,6 +53,7 @@ type TaintManager interface {
 	AddOrUpdateNodeTaint(ctx context.Context, clusterID int, nodeName string, taintYaml string, modType string) error
 	DrainPods(ctx context.Context, clusterID int, nodeName string) error
 	GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]corev1.Taint, error)
+	DeleteNodeTaintsByKeys(ctx context.Context, clusterID int, nodeName string, taintKeys []string) error
 }
 
 type taintManager struct {
@@ -70,9 +71,9 @@ func NewTaintManager(client client.K8sClient, clusterDao dao.ClusterDAO, logger 
 }
 
 func (tm *taintManager) CheckTaintYaml(ctx context.Context, clusterID int, nodeName string, taintYaml string) error {
-	var taintsToProcess []corev1.Taint
-	if err := yaml.UnmarshalStrict([]byte(taintYaml), &taintsToProcess); err != nil {
-		tm.logger.Error("解析 Taint YAML 配置失败", zap.Error(err), zap.String("nodeName", nodeName))
+	taintsToProcess, err := utils.ParseTaintYaml(taintYaml)
+	if err != nil {
+		tm.logger.Error("解析 Taint YAML 配置失败", zap.Error(err), zap.String("nodeName", nodeName), zap.String("yamlData", taintYaml))
 		return fmt.Errorf("解析 Taint YAML 配置失败: %w", err)
 	}
 
@@ -149,9 +150,9 @@ func (tm *taintManager) AddOrUpdateNodeTaint(ctx context.Context, clusterID int,
 		return fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
 	}
 
-	var taintsToProcess []corev1.Taint
-	if err := yaml.UnmarshalStrict([]byte(taintYaml), &taintsToProcess); err != nil {
-		tm.logger.Error("解析 Taint YAML 配置失败", zap.Error(err), zap.String("nodeName", nodeName))
+	taintsToProcess, err := utils.ParseTaintYaml(taintYaml)
+	if err != nil {
+		tm.logger.Error("解析 Taint YAML 配置失败", zap.Error(err), zap.String("nodeName", nodeName), zap.String("yamlData", taintYaml))
 		return fmt.Errorf("解析 Taint YAML 配置失败: %w", err)
 	}
 
@@ -339,4 +340,48 @@ func (tm *taintManager) updateTaints(existingTaints, newTaints []corev1.Taint) [
 	}
 
 	return result
+}
+
+func (tm *taintManager) DeleteNodeTaintsByKeys(ctx context.Context, clusterID int, nodeName string, taintKeys []string) error {
+	cluster, err := tm.clusterDao.GetClusterByID(ctx, clusterID)
+	if err != nil {
+		tm.logger.Error("获取集群信息失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return fmt.Errorf("获取集群信息失败: %w", err)
+	}
+
+	kubeClient, err := tm.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		tm.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
+	}
+
+	node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+	if err != nil {
+		tm.logger.Error("获取节点信息失败", zap.Error(err), zap.String("nodeName", nodeName))
+		return fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err)
+	}
+
+	// 直接根据键删除污点，不需要解析 YAML
+	removeKeys := make(map[string]struct{})
+	for _, key := range taintKeys {
+		removeKeys[key] = struct{}{}
+	}
+
+	var remainingTaints []corev1.Taint
+	for _, taint := range node.Spec.Taints {
+		if _, shouldRemove := removeKeys[taint.Key]; !shouldRemove {
+			remainingTaints = append(remainingTaints, taint)
+		}
+	}
+
+	node.Spec.Taints = remainingTaints
+
+	if _, err := kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
+		tm.logger.Error("删除节点 Taint 失败", zap.Error(err),
+			zap.String("nodeName", nodeName), zap.Strings("taintKeys", taintKeys))
+		return fmt.Errorf("删除节点 %s Taint 失败: %w", nodeName, err)
+	}
+
+	tm.logger.Info("删除节点 Taint 成功", zap.String("nodeName", nodeName), zap.Strings("taintKeys", taintKeys))
+	return nil
 }

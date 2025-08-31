@@ -28,7 +28,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -103,31 +102,11 @@ func (t *taintService) DeleteNodeTaint(ctx context.Context, req *model.DeleteNod
 		return fmt.Errorf("污点键列表不能为空")
 	}
 
-	// 构建要删除的污点键字符串
-	taintKeysStr := strings.Join(req.TaintKeys, ",")
-
-	// 构建删除污点的YAML（使用空值表示删除）
-	var taintsToDelete []model.NodeTaintEntity
-	for _, key := range req.TaintKeys {
-		taintsToDelete = append(taintsToDelete, model.NodeTaintEntity{
-			Key: key,
-		})
-	}
-
-	yamlData, err := utils.BuildTaintYaml(taintsToDelete)
-	if err != nil {
-		t.logger.Error("构建删除污点YAML失败",
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("nodeName", req.NodeName),
-			zap.Error(err))
-		return fmt.Errorf("构建删除污点YAML失败: %w", err)
-	}
-
-	if err := t.manager.AddOrUpdateNodeTaint(ctx, req.ClusterID, req.NodeName, yamlData, manager.ModTypeDelete); err != nil {
+	if err := t.manager.DeleteNodeTaintsByKeys(ctx, req.ClusterID, req.NodeName, req.TaintKeys); err != nil {
 		t.logger.Error("删除节点污点失败",
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("nodeName", req.NodeName),
-			zap.String("taintKeys", taintKeysStr),
+			zap.Strings("taintKeys", req.TaintKeys),
 			zap.Error(err))
 		return err
 	}
