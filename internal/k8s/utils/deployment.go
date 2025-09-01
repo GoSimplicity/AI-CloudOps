@@ -121,6 +121,11 @@ func BuildK8sDeployment(ctx context.Context, clusterID int, deployment appsv1.De
 
 // getDeploymentStatus 获取部署状态
 func getDeploymentStatus(deployment appsv1.Deployment) model.K8sDeploymentStatus {
+	// 首先检查是否处于暂停状态
+	if deployment.Spec.Paused {
+		return model.K8sDeploymentStatusPaused
+	}
+
 	// 如果副本数为0，认为是停止状态
 	if GetInt32Value(deployment.Spec.Replicas) == 0 {
 		return model.K8sDeploymentStatusStopped
@@ -189,6 +194,8 @@ func FilterDeploymentsByStatus(deployments []appsv1.Deployment, status string) [
 			statusStr = "running"
 		case model.K8sDeploymentStatusStopped:
 			statusStr = "stopped"
+		case model.K8sDeploymentStatusPaused:
+			statusStr = "paused"
 		case model.K8sDeploymentStatusError:
 			statusStr = "error"
 		default:

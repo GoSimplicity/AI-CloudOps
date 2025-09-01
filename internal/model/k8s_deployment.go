@@ -39,6 +39,7 @@ type K8sDeploymentStatus int8
 const (
 	K8sDeploymentStatusRunning K8sDeploymentStatus = iota + 1 // 运行中
 	K8sDeploymentStatusStopped                                // 停止
+	K8sDeploymentStatusPaused                                 // 暂停
 	K8sDeploymentStatusError                                  // 异常
 )
 

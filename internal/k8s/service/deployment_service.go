@@ -295,6 +295,8 @@ func (d *deploymentService) GetDeploymentList(ctx context.Context, req *model.Ge
 				statusStr = "running"
 			case model.K8sDeploymentStatusStopped:
 				statusStr = "stopped"
+			case model.K8sDeploymentStatusPaused:
+				statusStr = "paused"
 			case model.K8sDeploymentStatusError:
 				statusStr = "error"
 			default:
