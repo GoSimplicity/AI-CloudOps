@@ -26,9 +26,24 @@
 package service
 
 import (
+	"archive/tar"
 	"context"
 	"fmt"
+	"github.com/gin-gonic/gin"
+
 	"io"
+	"k8s.io/apimachinery/pkg/util/httpstream"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/client-go/transport/spdy"
+	"k8s.io/kubectl/pkg/scheme"
+	"mime/multipart"
+	"net/http"
+	"net/url"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -40,6 +55,8 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	pkgutils "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -68,15 +85,24 @@ type PodService interface {
 	BatchDeletePods(ctx context.Context, req *model.K8sBatchDeleteReq) error
 
 	// 高级功能
-	ExecInPod(ctx context.Context, req *model.PodExecReq) error
+	ExecInPod(ctx *gin.Context, req *model.PodExecReq) error
 	PortForward(ctx context.Context, req *model.PodPortForwardReq) error
+	DownloadPodFile(ctx *gin.Context, req *model.PodFileReq) error
+	UploadFileToFile(ctx *gin.Context, req *model.PodFileReq) error
+}
+
+type fileWithHeader struct {
+	file   multipart.File
+	header *multipart.FileHeader
 }
 
 type podService struct {
 	dao        dao.ClusterDAO
 	client     client.K8sClient   // 保持向后兼容
 	podManager manager.PodManager // 新的依赖注入
-	logger     *zap.Logger
+
+	//term   terminal.Interface
+	logger *zap.Logger
 }
 
 func NewPodService(dao dao.ClusterDAO, client client.K8sClient, podManager manager.PodManager, logger *zap.Logger) PodService {
@@ -85,6 +111,7 @@ func NewPodService(dao dao.ClusterDAO, client client.K8sClient, podManager manag
 		client:     client,     // 保持向后兼容，某些方法可能仍需要
 		podManager: podManager, // 使用新的 manager
 		logger:     logger,
+		//term:       term,
 	}
 }
 
@@ -407,14 +434,266 @@ func (p *podService) convertPodToResponse(pod *corev1.Pod) *model.K8sPodResponse
 	}
 }
 
-// ExecInPod Pod命令执行（占位实现）
-func (p *podService) ExecInPod(ctx context.Context, req *model.PodExecReq) error {
-	// TODO: 实现Pod命令执行功能
-	return pkg.NewBusinessError(constants.ErrNotImplemented, "Pod命令执行功能尚未实现")
+// ExecInPod Pod命令执行
+func (p *podService) ExecInPod(ctx *gin.Context, req *model.PodExecReq) error {
+
+	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
+	if err != nil {
+		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
+	}
+
+	restConfig, err := p.getRestConfig(ctx, req.ClusterID)
+	if err != nil {
+		p.logger.Error("获取Kubeconfig配置失败",
+			zap.Error(err))
+		return err
+	}
+
+	conn, err := pkgutils.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	if err != nil {
+		p.logger.Error("升级ws失败", zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrorWsUpgradeFailed, "初始化ws失败")
+	}
+
+	if len(req.Shell) > 0 {
+		req.Shell = "sh"
+	}
+
+	terminal.NewTerminalerHandler(kubeClient, restConfig).
+		HandleSession(ctx.Request.Context(), req.Shell, req.Namespace, req.PodName, req.Container, conn)
+
+	return nil
 }
 
-// PortForward Pod端口转发（占位实现）
+func (p *podService) UploadFileToFile(ctx *gin.Context, req *model.PodFileReq) error {
+
+	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
+	if err != nil {
+		p.logger.Error("获取Kubernetes客户端失败",
+			zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
+	}
+
+	restConfig, err := p.getRestConfig(ctx, req.ClusterID)
+	if err != nil {
+		p.logger.Error("获取Kubeconfig配置失败",
+			zap.Error(err))
+		return err
+	}
+
+	targetDir := req.FilePath
+	if targetDir == "" {
+		targetDir = "/"
+	}
+	// 解析上传的文件
+	files, err := parseMultipartFiles(ctx)
+	if err != nil {
+		return err
+	}
+
+	reader, writer := io.Pipe()
+	go func() {
+		defer writer.Close()
+		if tarErr := writeFilesToTar(files, writer); tarErr != nil {
+			p.logger.Error("打包文件成 tar 失败", zap.Error(tarErr))
+			_ = writer.CloseWithError(tarErr)
+		}
+	}()
+
+	execReq := kubeClient.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(req.PodName).
+		Namespace(req.Namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Container: req.ContainerName,
+			Command:   []string{"tar", "-xmf", "-", "-C", targetDir},
+			Stdin:     true,
+			Stdout:    false,
+			Stderr:    true,
+			TTY:       false,
+		}, scheme.ParameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(restConfig, http.MethodPost, execReq.URL())
+	if err != nil {
+		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "创建 Executor 失败")
+	}
+
+	if err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdin:             reader,
+		Stdout:            nil,
+		Stderr:            ctx.Writer,
+		TerminalSizeQueue: nil,
+	}); err != nil {
+		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "执行上传失败")
+	}
+	return nil
+}
+
+// PortForward Pod端口转发
 func (p *podService) PortForward(ctx context.Context, req *model.PodPortForwardReq) error {
-	// TODO: 实现Pod端口转发功能
-	return pkg.NewBusinessError(constants.ErrNotImplemented, "Pod端口转发功能尚未实现")
+
+	// 获取 restconfig
+	restConfig, err := p.getRestConfig(ctx, req.ClusterID)
+	if err != nil {
+		return err
+	}
+
+	// 构造 SPDY dialer
+	dialer, err := p.buildDialer(restConfig, req.Namespace, req.ResourceName)
+	if err != nil {
+		return err
+	}
+
+	// 构造端口映射
+	portsSpec := buildPortsSpec(req.Ports)
+
+	// 创建 PortForwarder
+	stopChan := make(chan struct{}, 1)
+	readyChan := make(chan struct{})
+	forwarder, err := portforward.New(dialer, portsSpec, stopChan, readyChan, io.Discard, io.Discard)
+	if err != nil {
+		return pkg.NewBusinessError(constants.ErrK8sPortForward, err.Error())
+	}
+
+	// 自动关闭转发
+	go func() {
+		<-ctx.Done()
+		close(stopChan)
+	}()
+
+	// 异步开启转发
+	go func() {
+		if err := forwarder.ForwardPorts(); err != nil {
+			p.logger.Error("创建端口转发失败",
+				zap.Error(err),
+				zap.Strings("ports", portsSpec),
+			)
+		}
+
+	}()
+	// 等待就绪
+	<-readyChan
+	return nil
+}
+
+// DownloadPodFile 实现Pod内文件下载
+func (p *podService) DownloadPodFile(ctx *gin.Context, req *model.PodFileReq) error {
+
+	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
+	if err != nil {
+		p.logger.Error("获取Kubernetes客户端失败",
+			zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
+	}
+
+	restConfig, err := p.getRestConfig(ctx, req.ClusterID)
+	if err != nil {
+		return err
+	}
+
+	fileName := filepath.Base(req.FilePath)
+	ctx.Header("Content-Disposition", fmt.Sprintf(`attachment; filename=%s.tar`, fileName))
+	ctx.Header("Content-Type", "application/octet-stream")
+
+	reader, err := k8sutils.NewPodFileStreamPipe(
+		ctx, restConfig, kubeClient, req.Namespace, req.PodName, req.ContainerName, req.FilePath)
+
+	if err != nil {
+		p.logger.Error("创建Pod文件流失败",
+			zap.Error(err),
+			zap.String("Namespace", req.Namespace),
+			zap.String("PodName", req.PodName),
+			zap.String("ContainerName", req.ContainerName),
+			zap.String("FilePath", req.FilePath),
+		)
+		return pkg.NewBusinessError(constants.ErrPodFileStream, "无法创建 Pod 文件流")
+	}
+	defer reader.Close()
+	// 把流复制到响应
+	if _, err := io.Copy(ctx.Writer, reader); err != nil {
+		p.logger.Error("文件下载过程中出错", zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrPodFileStream, "下载文件过程中发生错误")
+	}
+	return nil
+}
+
+func (p *podService) getRestConfig(ctx context.Context, clusterID int) (*rest.Config, error) {
+	cluster, err := p.dao.GetClusterByID(ctx, clusterID)
+	if err != nil {
+		p.logger.Error("获取集群信息失败", zap.Error(err))
+		return nil, pkg.NewBusinessError(constants.ErrK8sClusterInfo, "无法获取集群信息")
+	}
+
+	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
+	if err != nil {
+		p.logger.Error("解析 kubeconfig 失败", zap.Error(err))
+		return nil, pkg.NewBusinessError(constants.ErrK8sParseKubeConfig, "无法解析 kubeconfig")
+	}
+	restConfig.QPS = 100
+	restConfig.Burst = 200
+	return restConfig, nil
+}
+
+func (p *podService) buildDialer(restConfig *rest.Config, namespace, podName string) (httpstream.Dialer, error) {
+	roundTripper, upgrader, err := spdy.RoundTripperFor(restConfig)
+	if err != nil {
+		return nil, pkg.NewBusinessError(constants.ErrK8sPortForward, err.Error())
+	}
+	// 基础 API URL
+	baseURL, err := url.Parse(restConfig.Host)
+	if err != nil {
+		return nil, fmt.Errorf("非法 k8s API host: %w", err)
+	}
+
+	podPath := path.Join("/api/v1/namespaces", namespace, "pods", podName, "portforward")
+	finalURL := baseURL.ResolveReference(&url.URL{Path: podPath})
+	return spdy.NewDialer(upgrader, &http.Client{Transport: roundTripper}, http.MethodPost, finalURL), nil
+}
+
+func buildPortsSpec(ports []model.PortForwardPort) []string {
+	specs := make([]string, len(ports))
+	for i, port := range ports {
+		specs[i] = fmt.Sprintf("%d:%d", port.LocalPort, port.RemotePort)
+	}
+	return specs
+}
+
+func parseMultipartFiles(ctx *gin.Context) ([]fileWithHeader, error) {
+	if err := ctx.Request.ParseMultipartForm(10 << 20); err != nil {
+		return nil, pkg.NewBusinessError(constants.ErrK8sResourceDelete, "读取上传文件失败")
+	}
+	files := make([]fileWithHeader, 0)
+	for name := range ctx.Request.MultipartForm.File {
+		file, header, err := ctx.Request.FormFile(name)
+		if err != nil {
+			return nil, pkg.NewBusinessError(constants.ErrK8sResourceDelete, "解析上传文件失败")
+		}
+		files = append(files, fileWithHeader{file: file, header: header})
+	}
+	return files, nil
+}
+func writeFilesToTar(files []fileWithHeader, w io.Writer) error {
+	tarWriter := tar.NewWriter(w)
+	defer tarWriter.Close()
+	for _, f := range files {
+		func(f fileWithHeader) {
+			defer f.file.Close()
+			hdr := &tar.Header{
+				Name: f.header.Filename,
+				Mode: 0600,
+				Size: f.header.Size,
+			}
+			if err := tarWriter.WriteHeader(hdr); err != nil {
+				_ = w.(io.WriteCloser).Close()
+				return
+			}
+			if _, err := io.Copy(tarWriter, f.file); err != nil {
+				_ = w.(io.WriteCloser).Close()
+				return
+			}
+		}(f)
+	}
+	return nil
 }

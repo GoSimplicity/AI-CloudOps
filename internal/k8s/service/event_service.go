@@ -56,6 +56,7 @@ type EventService interface {
 	GetEventsByDeployment(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sEventEntity, error)
 	GetEventsByService(ctx context.Context, clusterID int, namespace, serviceName string) ([]*model.K8sEventEntity, error)
 	GetEventsByNode(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sEventEntity, error)
+	GetEventsByIngress(ctx context.Context, clusterID int, ns, ingressName string) ([]*model.K8sEventEntity, error)
 
 	// 事件统计和分析
 	GetEventStatistics(ctx context.Context, req *model.K8sEventStatisticsReq) (*model.K8sEventStatistics, error)
@@ -217,6 +218,18 @@ func (e *eventService) GetEventsByNode(ctx context.Context, clusterID int, nodeN
 		Namespace:  "", // Node是集群级别资源，不需要namespace
 		ObjectName: nodeName,
 		ObjectKind: "Node",
+		LimitDays:  7, // 默认7天内的事件
+	}
+	return e.GetEventsByObject(ctx, req)
+}
+
+// GetEventsByIngress 获取Ingress相关事件
+func (e *eventService) GetEventsByIngress(ctx context.Context, clusterID int, namespace, ingressName string) ([]*model.K8sEventEntity, error) {
+	req := &model.K8sEventByObjectReq{
+		ClusterID:  clusterID,
+		Namespace:  namespace,
+		ObjectName: ingressName,
+		ObjectKind: "Ingress",
 		LimitDays:  7, // 默认7天内的事件
 	}
 	return e.GetEventsByObject(ctx, req)

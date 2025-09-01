@@ -54,6 +54,10 @@ func (k *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.GET("/pods/:id/:podName/:container/logs", k.GetContainerLogs)
 		k8sGroup.GET("/pods/:id/:podName/yaml", k.GetPodYaml)
 		k8sGroup.DELETE("/pods/delete/:id", k.DeletePod)
+		k8sGroup.GET("/pods/:id/:namespace/:podName/:container/download_file", k.DownloadPodFile)
+		k8sGroup.POST("/pods/:id/:namespace/:podName/:container/upload_file", k.UploadFileToPod)
+		k8sGroup.POST("/pods/:id/:namespace/:podName/port_forward", k.PortForward)
+		k8sGroup.POST("/pods/:id/:namespace/:podName/:container/exec", k.HandlePodTerminalSession)
 	}
 }
 
@@ -156,5 +160,74 @@ func (k *K8sPodHandler) DeletePod(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, k.podService.DeletePod(ctx, req.ClusterID, req.Namespace, req.ResourceName)
+	})
+}
+
+// DownloadPodFile 下载pod内文件
+func (k *K8sPodHandler) DownloadPodFile(ctx *gin.Context) {
+	var req model.PodFileReq
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, k.podService.DownloadPodFile(ctx, &req)
+	})
+}
+
+// UploadFileToPod 上传文件至pod
+func (k *K8sPodHandler) UploadFileToPod(ctx *gin.Context) {
+	var req model.PodFileReq
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, k.podService.UploadFileToFile(ctx, &req)
+	})
+}
+
+// PortForward Pod端口转发
+func (k *K8sPodHandler) PortForward(ctx *gin.Context) {
+	var req model.PodPortForwardReq
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, k.podService.PortForward(ctx, &req)
+	})
+}
+
+// HandlePodTerminalSession Pod shell终端
+func (k *K8sPodHandler) HandlePodTerminalSession(ctx *gin.Context) {
+	var req model.PodExecReq
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, k.podService.ExecInPod(ctx, &req)
 	})
 }

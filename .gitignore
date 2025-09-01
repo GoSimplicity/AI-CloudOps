@@ -98,6 +98,7 @@ venv
 *.njsproj
 *.sln
 *.sw?
+go.mod
 .history
 config/config.yaml
 data/prometheus

@@ -60,6 +60,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
@@ -123,6 +124,7 @@ var HandlerSet = wire.NewSet(
 	workorderHandler.NewNotificationHandler,
 	treeHandler.NewTreeNodeHandler,
 	treeHandler.NewTreeLocalHandler,
+	terminal.NewTerminalerHandler(),
 )
 
 var ServiceSet = wire.NewSet(

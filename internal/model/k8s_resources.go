@@ -477,7 +477,7 @@ type K8sBaseReq struct {
 // K8sResourceIdentifierReq K8s资源标识请求结构
 type K8sResourceIdentifierReq struct {
 	K8sBaseReq
-	ResourceName string `json:"resource_name" binding:"required" comment:"资源名称"`
+	ResourceName string `json:"resource_name" uri:"resource_name" binding:"required" comment:"资源名称"`
 }
 
 // K8sListReq K8s资源列表查询请求结构
@@ -617,19 +617,26 @@ type PodLogReq struct {
 
 // PodExecReq Pod执行命令请求
 type PodExecReq struct {
-	K8sResourceIdentifierReq
-	Container string   `json:"container" comment:"容器名称"`
-	Command   []string `json:"command" binding:"required" comment:"执行的命令"`
-	Stdin     bool     `json:"stdin" comment:"是否启用标准输入"`
-	Stdout    bool     `json:"stdout" comment:"是否启用标准输出"`
-	Stderr    bool     `json:"stderr" comment:"是否启用标准错误"`
-	TTY       bool     `json:"tty" comment:"是否分配TTY"`
+	//K8sResourceIdentifierReq
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	PodName   string `json:"pod_name" uri:"pod_name" binding:"required" comment:"Pod名称"`
+	Container string `json:"container" uri:"container" binding:"required" comment:"容器名称"`
+	Shell     string `json:"shell" form:"shell" binding:"omitempty,oneof=bash sh" comment:"shell"`
+
+	//Command   []string `json:"command" binding:"required" comment:"执行的命令"`
+	//Stdin  bool `json:"stdin" comment:"是否启用标准输入"`
+	//Stdout bool `json:"stdout" comment:"是否启用标准输出"`
+	//Stderr bool `json:"stderr" comment:"是否启用标准错误"`
+	//TTY    bool `json:"tty" comment:"是否分配TTY"`
 }
 
 // PodPortForwardReq Pod端口转发请求
 type PodPortForwardReq struct {
-	K8sResourceIdentifierReq
-	Ports []PortForwardPort `json:"ports" binding:"required" comment:"端口转发配置"`
+	ClusterID    int               `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace    string            `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	ResourceName string            `json:"resource_name" uri:"resource_name" binding:"required" comment:"资源名称"`
+	Ports        []PortForwardPort `json:"ports" binding:"required" comment:"端口转发配置"`
 }
 
 // PodContainersReq 获取Pod容器列表请求
@@ -762,4 +769,13 @@ type YamlTemplateCheckReq struct {
 type YamlTemplateGetReq struct {
 	ID        int `json:"id" binding:"required" comment:"模板ID"`
 	ClusterId int `json:"cluster_id" binding:"required" comment:"集群ID"`
+}
+
+// PodFileReq Pod文件上传下载请求
+type PodFileReq struct {
+	Namespace     string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	PodName       string `json:"pod_name" uri:"podName" binding:"required" comment:"Pod名称"`
+	ContainerName string `json:"container_name" uri:"container" binding:"required" comment:"Container名称"`
+	FilePath      string `json:"file_path" form:"file_path" binding:"required" uri:"file_path" comment:"文件路径"`
+	ClusterID     int    `json:"cluster_id" uri:"cluster_id" comment:"对应集群ID"`
 }

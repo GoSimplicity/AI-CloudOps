@@ -48,14 +48,14 @@ func NewK8sIngressHandler(logger *zap.Logger, ingressService service.IngressServ
 func (k *K8sIngressHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/ingresses/list", k.GetIngressList)                                        // 获取Ingress列表
-		k8sGroup.GET("/ingresses/:cluster_id", k.GetIngressesByNamespace)                        // 根据命名空间获取Ingress列表
-		k8sGroup.GET("/ingresses/:cluster_id/:name", k.GetIngress)                               // 获取单个Ingress详情
-		k8sGroup.GET("/ingresses/:cluster_id/:name/yaml", k.GetIngressYaml)                      // 获取Ingress YAML配置
-		k8sGroup.POST("/ingresses/create", k.CreateIngress)                                      // 创建Ingress
-		k8sGroup.PUT("/ingresses/update", k.UpdateIngress)                                       // 更新Ingress
-		k8sGroup.DELETE("/ingresses/delete", k.DeleteIngress)                                    // 删除Ingress
-		k8sGroup.GET("/ingresses/:cluster_id/:name/events", k.GetIngressEvents)                  // 获取Ingress事件
+		k8sGroup.GET("/ingresses/list", k.GetIngressList)                   // 获取Ingress列表
+		k8sGroup.GET("/ingresses/:cluster_id", k.GetIngressesByNamespace)   // 根据命名空间获取Ingress列表
+		k8sGroup.GET("/ingresses/:cluster_id/:name", k.GetIngress)          // 获取单个Ingress详情
+		k8sGroup.GET("/ingresses/:cluster_id/:name/yaml", k.GetIngressYaml) // 获取Ingress YAML配置
+		k8sGroup.POST("/ingresses/create", k.CreateIngress)                 // 创建Ingress
+		k8sGroup.PUT("/ingresses/update", k.UpdateIngress)                  // 更新Ingress
+		k8sGroup.DELETE("/ingresses/delete", k.DeleteIngress)               // 删除Ingress
+		//k8sGroup.GET("/ingresses/:cluster_id/:name/events", k.GetIngressEvents)                  // 获取Ingress事件
 		k8sGroup.POST("/ingresses/:cluster_id/:name/tls-test", k.TestIngressTLS)                 // 测试Ingress TLS证书
 		k8sGroup.GET("/ingresses/:cluster_id/:name/backend-health", k.CheckIngressBackendHealth) // 检查后端健康状态
 	}
@@ -149,23 +149,6 @@ func (k *K8sIngressHandler) DeleteIngress(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.ingressService.DeleteIngress(ctx, &req)
-	})
-}
-
-// GetIngressEvents 获取Ingress事件
-func (k *K8sIngressHandler) GetIngressEvents(ctx *gin.Context) {
-	var req model.K8sIngressEventReq
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.ingressService.GetIngressEvents(ctx, &req)
 	})
 }
 

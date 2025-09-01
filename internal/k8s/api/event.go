@@ -56,6 +56,7 @@ func (k *K8sEventHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.GET("/events/by-deployment", k.GetEventsByDeployment) // 获取Deployment相关事件
 		k8sGroup.GET("/events/by-service", k.GetEventsByService)       // 获取Service相关事件
 		k8sGroup.GET("/events/by-node", k.GetEventsByNode)             // 获取Node相关事件
+		k8sGroup.GET("/events/by-ingress", k.GetEventsByIngress)       // 获取Ingress相关事件
 		k8sGroup.GET("/events/statistics", k.GetEventStatistics)       // 获取事件统计
 		k8sGroup.GET("/events/timeline", k.GetEventTimeline)           // 获取事件时间线
 		k8sGroup.POST("/events/cleanup", k.CleanupOldEvents)           // 清理旧事件
@@ -186,6 +187,23 @@ func (k *K8sEventHandler) GetEventsByNode(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return k.eventService.GetEventsByNode(ctx, req.ClusterID, req.NodeName)
+	})
+}
+
+// GetEventsByIngress 获取Ingress相关事件
+func (k *K8sEventHandler) GetEventsByIngress(ctx *gin.Context) {
+	var req struct {
+		ClusterID   int    `form:"cluster_id" binding:"required"`
+		Namespace   string `form:"namespace" binding:"required"`
+		IngressName string `form:"ingress_name" binding:"required"`
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return k.eventService.GetEventsByIngress(ctx, req.ClusterID, req.Namespace, req.IngressName)
 	})
 }
 

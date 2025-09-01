@@ -10,9 +10,9 @@ jwt:
   expiration: 3600
 redis:
   addr: "localhost:6379"
-  password: "v6SxhWHyZC7S"
+  password: "Dc19941028#"
 mysql:
-  addr: "root:root@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local"
+  addr: "root:Dc19941028#@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local"
 tree:
   check_status_cron: "@every 300s"
   password_encryption_key: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"

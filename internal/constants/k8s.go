@@ -30,6 +30,9 @@ import "errors"
 var (
 	ErrorK8sClientNotReady     = errors.New("k8s client not ready")
 	ErrorMetricsClientNotReady = errors.New("metrics client not ready")
+	ErrK8sClusterInfo          = errors.New("k8s cluster info get failed")
+	ErrK8sParseKubeConfig      = errors.New("k8s kube config parse failed")
+	ErrK8sPortForward          = errors.New("k8s port forward failed")
 
 	ErrorNodeNotFound       = errors.New("node not found")
 	ErrorTaintsKeyDuplicate = errors.New("taints key exist")
@@ -44,6 +47,9 @@ var (
 	ErrK8sResourceOperation = errors.New("k8s resource operation failed")
 	ErrInvalidParam         = errors.New("invalid parameter")
 	ErrNotImplemented       = errors.New("feature not implemented")
+	ErrPodFileStream        = errors.New("pod file stream failed")
+
+	ErrorWsUpgradeFailed = errors.New("websocket upgrade failed")
 )
 
 // 集群状态常量，统一使用，避免魔法字符串
