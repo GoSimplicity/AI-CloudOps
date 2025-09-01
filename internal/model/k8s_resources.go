@@ -46,24 +46,6 @@ type ResourceQuota struct {
 	ConfigMapLimit string `json:"configmap_limit"`
 }
 
-// K8sDeployment Kubernetes Deployment响应信息
-type K8sDeployment struct {
-	Name              string            `json:"name"`
-	UID               string            `json:"uid"`
-	Namespace         string            `json:"namespace"`
-	Replicas          int32             `json:"replicas"`
-	ReadyReplicas     int32             `json:"ready_replicas"`
-	AvailableReplicas int32             `json:"available_replicas"`
-	UpdatedReplicas   int32             `json:"updated_replicas"`
-	Strategy          string            `json:"strategy"`
-	Labels            map[string]string `json:"labels"`
-	Annotations       map[string]string `json:"annotations"`
-	CreationTimestamp time.Time         `json:"creation_timestamp"`
-	Images            []string          `json:"images"`
-	Age               string            `json:"age"`
-	Events            []K8sEvent        `json:"events,omitempty"`
-}
-
 // K8sStatefulSet Kubernetes StatefulSet响应信息
 type K8sStatefulSet struct {
 	Name              string            `json:"name"`
@@ -103,32 +85,7 @@ type K8sDaemonSet struct {
 	Events             []K8sEvent        `json:"events,omitempty"`
 }
 
-// K8sService Kubernetes Service响应信息
-type K8sService struct {
-	Name              string            `json:"name"`
-	UID               string            `json:"uid"`
-	Namespace         string            `json:"namespace"`
-	Type              string            `json:"type"`
-	ClusterIP         string            `json:"cluster_ip"`
-	ExternalIPs       []string          `json:"external_ips,omitempty"`
-	LoadBalancerIP    string            `json:"load_balancer_ip,omitempty"`
-	Ports             []ServicePort     `json:"ports"`
-	Selector          map[string]string `json:"selector"`
-	Labels            map[string]string `json:"labels"`
-	Annotations       map[string]string `json:"annotations"`
-	CreationTimestamp time.Time         `json:"creation_timestamp"`
-	Age               string            `json:"age"`
-	Events            []K8sEvent        `json:"events,omitempty"`
-}
-
-// ServicePort 服务端口信息
-type ServicePort struct {
-	Name       string `json:"name"`
-	Port       int32  `json:"port"`
-	TargetPort string `json:"target_port"`
-	NodePort   int32  `json:"node_port,omitempty"`
-	Protocol   string `json:"protocol"`
-}
+// ServicePort 服务端口信息 - 已在k8s_service.go中定义
 
 // K8sIngress Kubernetes Ingress响应信息
 type K8sIngress struct {
@@ -401,11 +358,7 @@ type NodeSelectorRequirementRequest struct {
 	Values   []string `json:"values,omitempty" comment:"值列表"`
 }
 
-// PortForwardPort 端口转发端口配置
-type PortForwardPort struct {
-	LocalPort  int `json:"local_port" binding:"required" comment:"本地端口"`
-	RemotePort int `json:"remote_port" binding:"required" comment:"远程端口"`
-}
+// PortForwardPort 端口转发端口配置 - 已在k8s_service.go中定义
 
 // K8sGetResourceReq 获取单个k8s资源请求
 type K8sGetResourceReq struct {
@@ -572,8 +525,6 @@ type StatefulSetScaleReq struct {
 	Replicas int32 `json:"replicas" binding:"required,min=0" comment:"副本数量"`
 }
 
-// ==================== Pod专用请求结构体 ====================
-
 // PodLogReq Pod日志查询请求
 type PodLogReq struct {
 	K8sResourceIdentifierReq
@@ -602,6 +553,11 @@ type PodExecReq struct {
 type PodPortForwardReq struct {
 	K8sResourceIdentifierReq
 	Ports []PortForwardPort `json:"ports" binding:"required" comment:"端口转发配置"`
+}
+
+type PortForwardPort struct {
+	LocalPort  int `json:"local_port" binding:"required" comment:"本地端口"`
+	RemotePort int `json:"remote_port" binding:"required" comment:"远程端口"`
 }
 
 // PodContainersReq 获取Pod容器列表请求

@@ -385,7 +385,6 @@ func (m *nodeManager) GetNodeTaints(ctx context.Context, clusterID int, nodeName
 }
 
 func (m *nodeManager) GetNodeMetrics(ctx context.Context, clusterID int, nodeNames []string) ([]*model.NodeMetrics, int64, error) {
-
 	metricsClient, err := m.client.GetMetricsClient(clusterID)
 	if err != nil {
 		m.logger.Error("获取Metrics客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))

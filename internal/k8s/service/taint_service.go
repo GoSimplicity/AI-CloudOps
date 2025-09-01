@@ -57,7 +57,7 @@ func NewTaintService(manager manager.TaintManager, logger *zap.Logger) TaintServ
 	}
 }
 
-// AddNodeTaint implements TaintService.
+// AddNodeTaint 添加节点污点
 func (t *taintService) AddNodeTaint(ctx context.Context, req *model.AddNodeTaintsReq) error {
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("集群ID不能为空")
@@ -90,7 +90,7 @@ func (t *taintService) AddNodeTaint(ctx context.Context, req *model.AddNodeTaint
 	return nil
 }
 
-// DeleteNodeTaint implements TaintService.
+// DeleteNodeTaint 删除节点污点
 func (t *taintService) DeleteNodeTaint(ctx context.Context, req *model.DeleteNodeTaintsReq) error {
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("集群ID不能为空")
@@ -114,7 +114,7 @@ func (t *taintService) DeleteNodeTaint(ctx context.Context, req *model.DeleteNod
 	return nil
 }
 
-// SwitchNodeSchedule implements TaintService.
+// SwitchNodeSchedule 切换节点调度状态
 func (t *taintService) SwitchNodeSchedule(ctx context.Context, req *model.SwitchNodeScheduleReq) error {
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("集群ID不能为空")
@@ -135,7 +135,7 @@ func (t *taintService) SwitchNodeSchedule(ctx context.Context, req *model.Switch
 	return nil
 }
 
-// AddOrUpdateNodeTaint implements TaintService.
+// AddOrUpdateNodeTaint 添加或更新节点污点
 func (t *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.AddNodeTaintsReq) error {
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("集群ID不能为空")
@@ -168,7 +168,7 @@ func (t *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.AddN
 	return nil
 }
 
-// BatchEnableSwitchNodes implements TaintService.
+// BatchEnableSwitchNodes 批量切换节点调度状态
 func (t *taintService) EnableSwitchNode(ctx context.Context, req *model.NodeCordonReq) error {
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("集群ID不能为空")
@@ -189,7 +189,7 @@ func (t *taintService) EnableSwitchNode(ctx context.Context, req *model.NodeCord
 	return nil
 }
 
-// CheckTaintYaml implements TaintService.
+// CheckTaintYaml 检查污点YAML配置
 func (t *taintService) CheckTaintYaml(ctx context.Context, req *model.CheckTaintYamlReq) error {
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("集群ID不能为空")
@@ -212,7 +212,7 @@ func (t *taintService) CheckTaintYaml(ctx context.Context, req *model.CheckTaint
 	return nil
 }
 
-// DrainPods implements TaintService.
+// DrainPods 驱逐节点Pod
 func (t *taintService) DrainPods(ctx context.Context, req *model.DrainNodeReq) error {
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("集群ID不能为空")

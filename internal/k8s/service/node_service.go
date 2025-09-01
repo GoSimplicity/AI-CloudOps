@@ -56,15 +56,15 @@ type nodeService struct {
 	clusterDao  dao.ClusterDAO
 	client      client.K8sClient
 	nodeManager manager.NodeManager
-	l           *zap.Logger
+	logger      *zap.Logger
 }
 
-func NewNodeService(clusterDao dao.ClusterDAO, client client.K8sClient, nodeManager manager.NodeManager, l *zap.Logger) NodeService {
+func NewNodeService(clusterDao dao.ClusterDAO, client client.K8sClient, nodeManager manager.NodeManager, logger *zap.Logger) NodeService {
 	return &nodeService{
 		clusterDao:  clusterDao,
 		client:      client,
 		nodeManager: nodeManager,
-		l:           l,
+		logger:      logger,
 	}
 }
 
@@ -84,7 +84,7 @@ func (n *nodeService) GetNodeList(ctx context.Context, req *model.GetNodeListReq
 	// 使用 NodeManager 获取节点列表
 	nodeList, total, err := n.nodeManager.GetNodeList(ctx, req.ClusterID, listOptions)
 	if err != nil {
-		n.l.Error("GetNodeList: 获取节点列表失败", zap.Error(err), zap.Int("clusterID", req.ClusterID))
+		n.logger.Error("GetNodeList: 获取节点列表失败", zap.Error(err), zap.Int("clusterID", req.ClusterID))
 		return model.ListResp[*model.K8sNode]{}, fmt.Errorf("获取节点列表失败: %w", err)
 	}
 
@@ -117,7 +117,7 @@ func (n *nodeService) GetNodeList(ctx context.Context, req *model.GetNodeListReq
 	for _, node := range pagedNodes {
 		k8sNode, err := n.nodeManager.BuildK8sNode(ctx, req.ClusterID, node)
 		if err != nil {
-			n.l.Warn("GetNodeList: 构建节点信息失败", zap.Error(err), zap.String("nodeName", node.Name))
+			n.logger.Warn("GetNodeList: 构建节点信息失败", zap.Error(err), zap.String("nodeName", node.Name))
 			continue
 		}
 		items = append(items, k8sNode)
@@ -146,14 +146,14 @@ func (n *nodeService) GetNodeDetail(ctx context.Context, req *model.GetNodeDetai
 	// 使用 NodeManager 获取节点
 	node, err := n.nodeManager.GetNode(ctx, req.ClusterID, req.NodeName)
 	if err != nil {
-		n.l.Error("GetNodeDetail: 获取节点失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
+		n.logger.Error("GetNodeDetail: 获取节点失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
 		return nil, fmt.Errorf("获取节点失败: %w", err)
 	}
 
 	// 使用 NodeManager 构建详细信息
 	k8sNode, err := n.nodeManager.BuildK8sNode(ctx, req.ClusterID, *node)
 	if err != nil {
-		n.l.Error("GetNodeDetail: 构建节点详细信息失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
+		n.logger.Error("GetNodeDetail: 构建节点详细信息失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
 		return nil, fmt.Errorf("构建节点详细信息失败: %w", err)
 	}
 
@@ -180,18 +180,18 @@ func (n *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.AddLa
 
 	// 验证标签
 	if err := utils.ValidateNodeLabels(req.Labels); err != nil {
-		n.l.Error("AddOrUpdateNodeLabel: 标签验证失败", zap.Error(err))
+		n.logger.Error("AddOrUpdateNodeLabel: 标签验证失败", zap.Error(err))
 		return fmt.Errorf("标签验证失败: %w", err)
 	}
 
 	// 使用 NodeManager 添加或更新节点标签
 	err := n.nodeManager.AddOrUpdateNodeLabels(ctx, req.ClusterID, req.NodeName, req.Labels, req.Overwrite)
 	if err != nil {
-		n.l.Error("AddOrUpdateNodeLabel: 添加节点标签失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Any("labels", req.Labels))
+		n.logger.Error("AddOrUpdateNodeLabel: 添加节点标签失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Any("labels", req.Labels))
 		return fmt.Errorf("添加节点标签失败: %w", err)
 	}
 
-	n.l.Info("AddOrUpdateNodeLabel: 成功添加节点标签", zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Any("labels", req.Labels), zap.Bool("overwrite", req.Overwrite == 1))
+	n.logger.Info("AddOrUpdateNodeLabel: 成功添加节点标签", zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Any("labels", req.Labels), zap.Bool("overwrite", req.Overwrite == 1))
 	return nil
 }
 
@@ -216,11 +216,11 @@ func (n *nodeService) DeleteNodeLabel(ctx context.Context, req *model.DeleteLabe
 	// 使用 NodeManager 删除节点标签
 	err := n.nodeManager.DeleteNodeLabels(ctx, req.ClusterID, req.NodeName, req.LabelKeys)
 	if err != nil {
-		n.l.Error("DeleteNodeLabel: 删除节点标签失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Strings("labelKeys", req.LabelKeys))
+		n.logger.Error("DeleteNodeLabel: 删除节点标签失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Strings("labelKeys", req.LabelKeys))
 		return fmt.Errorf("删除节点标签失败: %w", err)
 	}
 
-	n.l.Info("DeleteNodeLabel: 成功删除节点标签", zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Strings("labelKeys", req.LabelKeys))
+	n.logger.Info("DeleteNodeLabel: 成功删除节点标签", zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Strings("labelKeys", req.LabelKeys))
 
 	return nil
 }
@@ -242,7 +242,7 @@ func (n *nodeService) GetNodeResource(ctx context.Context, req *model.GetNodeRes
 	// 使用 NodeManager 获取节点资源
 	resources, err := n.nodeManager.GetNodeResource(ctx, req.ClusterID, req.NodeName)
 	if err != nil {
-		n.l.Error("GetNodeResource: 获取节点资源失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
+		n.logger.Error("GetNodeResource: 获取节点资源失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
 		return nil, fmt.Errorf("获取节点资源失败: %w", err)
 	}
 
@@ -270,7 +270,7 @@ func (n *nodeService) GetNodeEvents(ctx context.Context, req *model.GetNodeEvent
 	// 使用 NodeManager 获取节点事件
 	events, total, err := n.nodeManager.GetNodeEvents(ctx, req.ClusterID, req.NodeName, req.Limit)
 	if err != nil {
-		n.l.Error("GetNodeEvents: 获取节点事件失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
+		n.logger.Error("GetNodeEvents: 获取节点事件失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
 		return model.ListResp[*model.NodeEvent]{}, fmt.Errorf("获取节点事件失败: %w", err)
 	}
 
@@ -297,7 +297,7 @@ func (n *nodeService) GetNodeTaints(ctx context.Context, req *model.GetNodeTaint
 	// 使用 NodeManager 获取节点污点
 	taints, total, err := n.nodeManager.GetNodeTaints(ctx, req.ClusterID, req.NodeName)
 	if err != nil {
-		n.l.Error("GetNodeTaints: 获取节点污点失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
+		n.logger.Error("GetNodeTaints: 获取节点污点失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
 		return model.ListResp[*model.NodeTaintEntity]{}, fmt.Errorf("获取节点污点失败: %w", err)
 	}
 
@@ -330,7 +330,7 @@ func (n *nodeService) DrainNode(ctx context.Context, req *model.DrainNodeReq) er
 		TimeoutSeconds:     req.TimeoutSeconds,
 	})
 	if err != nil {
-		n.l.Error("DrainNode: 驱逐节点失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
+		n.logger.Error("DrainNode: 驱逐节点失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
 		return fmt.Errorf("驱逐节点失败: %w", err)
 	}
 
@@ -353,7 +353,7 @@ func (n *nodeService) CordonNode(ctx context.Context, req *model.NodeCordonReq) 
 
 	// 使用 NodeManager 禁止节点调度
 	if err := n.nodeManager.CordonNode(ctx, req.ClusterID, req.NodeName); err != nil {
-		n.l.Error("CordonNode: 禁止节点调度失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
+		n.logger.Error("CordonNode: 禁止节点调度失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
 		return fmt.Errorf("禁止节点 %s 调度失败: %w", req.NodeName, err)
 	}
 
@@ -376,7 +376,7 @@ func (n *nodeService) UncordonNode(ctx context.Context, req *model.NodeUncordonR
 
 	// 使用 NodeManager 解除节点调度限制
 	if err := n.nodeManager.UncordonNode(ctx, req.ClusterID, req.NodeName); err != nil {
-		n.l.Error("UncordonNode: 解除节点调度限制失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
+		n.logger.Error("UncordonNode: 解除节点调度限制失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
 		return fmt.Errorf("解除节点 %s 调度限制失败: %w", req.NodeName, err)
 	}
 
@@ -396,7 +396,7 @@ func (n *nodeService) GetNodeMetrics(ctx context.Context, req *model.GetNodeMetr
 	// 使用 NodeManager 获取节点指标
 	metrics, total, err := n.nodeManager.GetNodeMetrics(ctx, req.ClusterID, req.NodeNames)
 	if err != nil {
-		n.l.Error("GetNodeMetrics: 获取节点指标失败", zap.Error(err), zap.Int("clusterID", req.ClusterID))
+		n.logger.Error("GetNodeMetrics: 获取节点指标失败", zap.Error(err), zap.Int("clusterID", req.ClusterID))
 		return model.ListResp[*model.NodeMetrics]{}, fmt.Errorf("获取节点指标失败: %w", err)
 	}
 

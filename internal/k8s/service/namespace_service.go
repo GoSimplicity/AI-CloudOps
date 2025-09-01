@@ -49,14 +49,14 @@ type NamespaceService interface {
 type namespaceService struct {
 	client           client.K8sClient
 	namespaceManager manager.NamespaceManager
-	l                *zap.Logger
+	logger           *zap.Logger
 }
 
-func NewNamespaceService(client client.K8sClient, namespaceManager manager.NamespaceManager, l *zap.Logger) NamespaceService {
+func NewNamespaceService(client client.K8sClient, namespaceManager manager.NamespaceManager, logger *zap.Logger) NamespaceService {
 	return &namespaceService{
 		client:           client,
 		namespaceManager: namespaceManager,
-		l:                l,
+		logger:           logger,
 	}
 }
 
@@ -76,19 +76,19 @@ func (n *namespaceService) CreateNamespace(ctx context.Context, req *model.K8sNa
 
 	// 验证命名空间名称
 	if err := utils.ValidateNamespaceName(req.Name); err != nil {
-		n.l.Error("CreateNamespace: 命名空间名称验证失败", zap.Error(err), zap.String("name", req.Name))
+		n.logger.Error("CreateNamespace: 命名空间名称验证失败", zap.Error(err), zap.String("name", req.Name))
 		return fmt.Errorf("命名空间名称验证失败: %w", err)
 	}
 
 	// 验证标签
 	if err := utils.ValidateLabels(req.Labels); err != nil {
-		n.l.Error("CreateNamespace: 标签验证失败", zap.Error(err))
+		n.logger.Error("CreateNamespace: 标签验证失败", zap.Error(err))
 		return fmt.Errorf("标签验证失败: %w", err)
 	}
 
 	// 验证注解
 	if err := utils.ValidateAnnotations(req.Annotations); err != nil {
-		n.l.Error("CreateNamespace: 注解验证失败", zap.Error(err))
+		n.logger.Error("CreateNamespace: 注解验证失败", zap.Error(err))
 		return fmt.Errorf("注解验证失败: %w", err)
 	}
 
@@ -108,7 +108,7 @@ func (n *namespaceService) CreateNamespace(ctx context.Context, req *model.K8sNa
 	// 使用 NamespaceManager 创建命名空间
 	_, err := n.namespaceManager.CreateNamespace(ctx, req.ClusterID, namespace)
 	if err != nil {
-		n.l.Error("CreateNamespace: 创建命名空间失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", req.Name))
+		n.logger.Error("CreateNamespace: 创建命名空间失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", req.Name))
 		return fmt.Errorf("创建命名空间失败: %w", err)
 	}
 
@@ -148,7 +148,7 @@ func (n *namespaceService) DeleteNamespace(ctx context.Context, req *model.K8sNa
 	// 使用 NamespaceManager 删除命名空间
 	err := n.namespaceManager.DeleteNamespace(ctx, req.ClusterID, req.Name, deleteOptions)
 	if err != nil {
-		n.l.Error("DeleteNamespace: 删除命名空间失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", req.Name))
+		n.logger.Error("DeleteNamespace: 删除命名空间失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", req.Name))
 		return fmt.Errorf("删除命名空间失败: %w", err)
 	}
 
@@ -172,7 +172,7 @@ func (n *namespaceService) GetNamespaceDetails(ctx context.Context, req *model.K
 	// 使用 NamespaceManager 获取命名空间详情
 	namespace, err := n.namespaceManager.GetNamespace(ctx, req.ClusterID, req.Name)
 	if err != nil {
-		n.l.Error("GetNamespaceDetails: 获取命名空间详情失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", req.Name))
+		n.logger.Error("GetNamespaceDetails: 获取命名空间详情失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", req.Name))
 		return nil, fmt.Errorf("获取命名空间详情失败: %w", err)
 	}
 
@@ -207,20 +207,20 @@ func (n *namespaceService) UpdateNamespace(ctx context.Context, req *model.K8sNa
 
 	// 验证标签
 	if err := utils.ValidateLabels(req.Labels); err != nil {
-		n.l.Error("UpdateNamespace: 标签验证失败", zap.Error(err))
+		n.logger.Error("UpdateNamespace: 标签验证失败", zap.Error(err))
 		return fmt.Errorf("标签验证失败: %w", err)
 	}
 
 	// 验证注解
 	if err := utils.ValidateAnnotations(req.Annotations); err != nil {
-		n.l.Error("UpdateNamespace: 注解验证失败", zap.Error(err))
+		n.logger.Error("UpdateNamespace: 注解验证失败", zap.Error(err))
 		return fmt.Errorf("注解验证失败: %w", err)
 	}
 
 	// 获取现有命名空间
 	namespace, err := n.namespaceManager.GetNamespace(ctx, req.ClusterID, req.Name)
 	if err != nil {
-		n.l.Error("UpdateNamespace: 获取命名空间失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", req.Name))
+		n.logger.Error("UpdateNamespace: 获取命名空间失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", req.Name))
 		return fmt.Errorf("获取命名空间失败: %w", err)
 	}
 
@@ -235,7 +235,7 @@ func (n *namespaceService) UpdateNamespace(ctx context.Context, req *model.K8sNa
 	// 使用 NamespaceManager 更新命名空间
 	_, err = n.namespaceManager.UpdateNamespace(ctx, req.ClusterID, namespace)
 	if err != nil {
-		n.l.Error("UpdateNamespace: 更新命名空间失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", req.Name))
+		n.logger.Error("UpdateNamespace: 更新命名空间失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", req.Name))
 		return fmt.Errorf("更新命名空间失败: %w", err)
 	}
 
@@ -254,7 +254,7 @@ func (n *namespaceService) ListNamespaces(ctx context.Context, req *model.K8sNam
 
 	namespaceList, total, err := n.namespaceManager.ListNamespaces(ctx, req.ClusterID, req.Status, req.Labels)
 	if err != nil {
-		n.l.Error("ListNamespaces: 获取命名空间列表失败", zap.Error(err), zap.Int("clusterID", req.ClusterID))
+		n.logger.Error("ListNamespaces: 获取命名空间列表失败", zap.Error(err), zap.Int("clusterID", req.ClusterID))
 		return model.ListResp[*model.K8sNamespace]{}, fmt.Errorf("获取命名空间列表失败: %w", err)
 	}
 
