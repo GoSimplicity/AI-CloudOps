@@ -27,131 +27,633 @@ package manager
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 )
 
-// DaemonSetManager 定义 DaemonSet 资源管理接口
 type DaemonSetManager interface {
-	// DaemonSet CRUD 操作
 	CreateDaemonSet(ctx context.Context, clusterID int, namespace string, daemonSet *appsv1.DaemonSet) error
 	GetDaemonSet(ctx context.Context, clusterID int, namespace, name string) (*appsv1.DaemonSet, error)
-	GetDaemonSetList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*appsv1.DaemonSetList, error)
+	GetDaemonSetList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sDaemonSet, error)
 	UpdateDaemonSet(ctx context.Context, clusterID int, namespace string, daemonSet *appsv1.DaemonSet) error
 	DeleteDaemonSet(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
-
-	// DaemonSet 操作
 	RestartDaemonSet(ctx context.Context, clusterID int, namespace, name string) error
-
-	// 批量操作
 	BatchDeleteDaemonSets(ctx context.Context, clusterID int, namespace string, daemonSetNames []string) error
 	BatchRestartDaemonSets(ctx context.Context, clusterID int, namespace string, daemonSetNames []string) error
+	GetDaemonSetEvents(ctx context.Context, clusterID int, namespace, daemonSetName string, limit int) ([]*model.K8sDaemonSetEvent, int64, error)
+	GetDaemonSetHistory(ctx context.Context, clusterID int, namespace, daemonSetName string) ([]*model.K8sDaemonSetHistory, int64, error)
+	GetDaemonSetPods(ctx context.Context, clusterID int, namespace, daemonSetName string) ([]*model.K8sPod, int64, error)
+	GetDaemonSetMetrics(ctx context.Context, clusterID int, namespace, daemonSetName string) (*model.K8sDaemonSetMetrics, error)
+	RollbackDaemonSet(ctx context.Context, clusterID int, namespace, name string, revision int64) error
 }
 
 type daemonSetManager struct {
 	clientFactory client.K8sClient
+	logger        *zap.Logger
 }
 
-// NewDaemonSetManager 创建新的 DaemonSet 管理器
-func NewDaemonSetManager(clientFactory client.K8sClient) DaemonSetManager {
+func NewDaemonSetManager(clientFactory client.K8sClient, logger *zap.Logger) DaemonSetManager {
 	return &daemonSetManager{
 		clientFactory: clientFactory,
+		logger:        logger,
 	}
+}
+
+// getKubeClient 获取 Kubernetes 客户端
+func (d *daemonSetManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
+	kubeClient, err := d.clientFactory.GetKubeClient(clusterID)
+	if err != nil {
+		d.logger.Error("获取 Kubernetes 客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
+		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
+	}
+	return kubeClient, nil
 }
 
 // CreateDaemonSet 创建 DaemonSet
 func (d *daemonSetManager) CreateDaemonSet(ctx context.Context, clusterID int, namespace string, daemonSet *appsv1.DaemonSet) error {
-	clientset, err := d.clientFactory.GetKubeClient(clusterID)
+	if daemonSet == nil {
+		return fmt.Errorf("daemonSet 不能为空")
+	}
+
+	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	_, err = clientset.AppsV1().DaemonSets(namespace).Create(ctx, daemonSet, metav1.CreateOptions{})
-	return err
+	_, err = kubeClient.AppsV1().DaemonSets(namespace).Create(ctx, daemonSet, metav1.CreateOptions{})
+	if err != nil {
+		d.logger.Error("创建 DaemonSet 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", daemonSet.Name),
+			zap.Error(err))
+		return fmt.Errorf("创建 DaemonSet 失败: %w", err)
+	}
+
+	d.logger.Info("成功创建 DaemonSet",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", daemonSet.Name))
+
+	return nil
 }
 
 // GetDaemonSet 获取单个 DaemonSet
 func (d *daemonSetManager) GetDaemonSet(ctx context.Context, clusterID int, namespace, name string) (*appsv1.DaemonSet, error) {
-	clientset, err := d.clientFactory.GetKubeClient(clusterID)
+	if name == "" {
+		return nil, fmt.Errorf("DaemonSet name 不能为空")
+	}
+
+	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	return clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	daemonSet, err := kubeClient.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		d.logger.Error("获取 DaemonSet 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取 DaemonSet 失败: %w", err)
+	}
+
+	return daemonSet, nil
 }
 
 // GetDaemonSetList 获取 DaemonSet 列表
-func (d *daemonSetManager) GetDaemonSetList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*appsv1.DaemonSetList, error) {
-	clientset, err := d.clientFactory.GetKubeClient(clusterID)
+func (d *daemonSetManager) GetDaemonSetList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sDaemonSet, error) {
+	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	return clientset.AppsV1().DaemonSets(namespace).List(ctx, listOptions)
+	daemonSetList, err := kubeClient.AppsV1().DaemonSets(namespace).List(ctx, listOptions)
+	if err != nil {
+		d.logger.Error("获取 DaemonSet 列表失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取 DaemonSet 列表失败: %w", err)
+	}
+
+	var k8sDaemonSets []*model.K8sDaemonSet
+	for _, daemonSet := range daemonSetList.Items {
+		k8sDaemonSet, err := utils.BuildK8sDaemonSet(ctx, clusterID, daemonSet)
+		if err != nil {
+			d.logger.Warn("构建 K8sDaemonSet 失败",
+				zap.String("daemonSetName", daemonSet.Name),
+				zap.Error(err))
+			continue
+		}
+		k8sDaemonSets = append(k8sDaemonSets, k8sDaemonSet)
+	}
+
+	return k8sDaemonSets, nil
 }
 
 // UpdateDaemonSet 更新 DaemonSet
 func (d *daemonSetManager) UpdateDaemonSet(ctx context.Context, clusterID int, namespace string, daemonSet *appsv1.DaemonSet) error {
-	clientset, err := d.clientFactory.GetKubeClient(clusterID)
+	if daemonSet == nil {
+		return fmt.Errorf("daemonSet 不能为空")
+	}
+
+	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	_, err = clientset.AppsV1().DaemonSets(namespace).Update(ctx, daemonSet, metav1.UpdateOptions{})
-	return err
+	_, err = kubeClient.AppsV1().DaemonSets(namespace).Update(ctx, daemonSet, metav1.UpdateOptions{})
+	if err != nil {
+		d.logger.Error("更新 DaemonSet 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", daemonSet.Name),
+			zap.Error(err))
+		return fmt.Errorf("更新 DaemonSet 失败: %w", err)
+	}
+
+	d.logger.Info("成功更新 DaemonSet",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", daemonSet.Name))
+
+	return nil
 }
 
 // DeleteDaemonSet 删除 DaemonSet
 func (d *daemonSetManager) DeleteDaemonSet(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
-	clientset, err := d.clientFactory.GetKubeClient(clusterID)
+	if name == "" {
+		return fmt.Errorf("DaemonSet name 不能为空")
+	}
+
+	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	return clientset.AppsV1().DaemonSets(namespace).Delete(ctx, name, deleteOptions)
+	err = kubeClient.AppsV1().DaemonSets(namespace).Delete(ctx, name, deleteOptions)
+	if err != nil {
+		d.logger.Error("删除 DaemonSet 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return fmt.Errorf("删除 DaemonSet 失败: %w", err)
+	}
+
+	d.logger.Info("成功删除 DaemonSet",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
+
+	return nil
 }
 
 // RestartDaemonSet 重启 DaemonSet
 func (d *daemonSetManager) RestartDaemonSet(ctx context.Context, clusterID int, namespace, name string) error {
-	clientset, err := d.clientFactory.GetKubeClient(clusterID)
+	if name == "" {
+		return fmt.Errorf("DaemonSet name 不能为空")
+	}
+
+	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	// 获取当前 DaemonSet
-	daemonSet, err := clientset.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	// 通过添加注解来触发 DaemonSet 重启
+	patchData := fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, time.Now().Format(time.RFC3339))
+
+	_, err = kubeClient.AppsV1().DaemonSets(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
 	if err != nil {
-		return err
+		d.logger.Error("重启 DaemonSet 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return fmt.Errorf("重启 DaemonSet 失败: %w", err)
 	}
 
-	// 添加重启注解触发重启
-	if daemonSet.Spec.Template.Annotations == nil {
-		daemonSet.Spec.Template.Annotations = make(map[string]string)
-	}
-	daemonSet.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = metav1.Now().Format("2006-01-02T15:04:05Z")
+	d.logger.Info("成功重启 DaemonSet",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
 
-	_, err = clientset.AppsV1().DaemonSets(namespace).Update(ctx, daemonSet, metav1.UpdateOptions{})
-	return err
-}
-
-// BatchDeleteDaemonSets 批量删除 DaemonSet
-func (d *daemonSetManager) BatchDeleteDaemonSets(ctx context.Context, clusterID int, namespace string, daemonSetNames []string) error {
-	for _, name := range daemonSetNames {
-		if err := d.DeleteDaemonSet(ctx, clusterID, namespace, name, metav1.DeleteOptions{}); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
-// BatchRestartDaemonSets 批量重启 DaemonSet
-func (d *daemonSetManager) BatchRestartDaemonSets(ctx context.Context, clusterID int, namespace string, daemonSetNames []string) error {
+// BatchDeleteDaemonSets 批量删除 DaemonSets
+func (d *daemonSetManager) BatchDeleteDaemonSets(ctx context.Context, clusterID int, namespace string, daemonSetNames []string) error {
+	if len(daemonSetNames) == 0 {
+		return fmt.Errorf("DaemonSet names 不能为空")
+	}
+
+	kubeClient, err := d.getKubeClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var errors []string
+
+	deleteOptions := metav1.DeleteOptions{}
+
 	for _, name := range daemonSetNames {
-		if err := d.RestartDaemonSet(ctx, clusterID, namespace, name); err != nil {
-			return err
+		wg.Add(1)
+		go func(daemonSetName string) {
+			defer wg.Done()
+
+			err := kubeClient.AppsV1().DaemonSets(namespace).Delete(ctx, daemonSetName, deleteOptions)
+			if err != nil {
+				mu.Lock()
+				errors = append(errors, fmt.Sprintf("删除 DaemonSet %s 失败: %v", daemonSetName, err))
+				mu.Unlock()
+				d.logger.Error("批量删除 DaemonSet 失败",
+					zap.Int("clusterID", clusterID),
+					zap.String("namespace", namespace),
+					zap.String("name", daemonSetName),
+					zap.Error(err))
+			} else {
+				d.logger.Info("成功删除 DaemonSet",
+					zap.Int("clusterID", clusterID),
+					zap.String("namespace", namespace),
+					zap.String("name", daemonSetName))
+			}
+		}(name)
+	}
+
+	wg.Wait()
+
+	if len(errors) > 0 {
+		return fmt.Errorf("批量删除 DaemonSets 部分失败: %s", strings.Join(errors, "; "))
+	}
+
+	return nil
+}
+
+// BatchRestartDaemonSets 批量重启 DaemonSets
+func (d *daemonSetManager) BatchRestartDaemonSets(ctx context.Context, clusterID int, namespace string, daemonSetNames []string) error {
+	if len(daemonSetNames) == 0 {
+		return fmt.Errorf("DaemonSet names 不能为空")
+	}
+
+	kubeClient, err := d.getKubeClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var errors []string
+
+	restartTime := time.Now().Format(time.RFC3339)
+	patchData := fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, restartTime)
+
+	for _, name := range daemonSetNames {
+		wg.Add(1)
+		go func(daemonSetName string) {
+			defer wg.Done()
+
+			_, err := kubeClient.AppsV1().DaemonSets(namespace).Patch(ctx, daemonSetName, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
+			if err != nil {
+				mu.Lock()
+				errors = append(errors, fmt.Sprintf("重启 DaemonSet %s 失败: %v", daemonSetName, err))
+				mu.Unlock()
+				d.logger.Error("批量重启 DaemonSet 失败",
+					zap.Int("clusterID", clusterID),
+					zap.String("namespace", namespace),
+					zap.String("name", daemonSetName),
+					zap.Error(err))
+			} else {
+				d.logger.Info("成功重启 DaemonSet",
+					zap.Int("clusterID", clusterID),
+					zap.String("namespace", namespace),
+					zap.String("name", daemonSetName))
+			}
+		}(name)
+	}
+
+	wg.Wait()
+
+	if len(errors) > 0 {
+		return fmt.Errorf("批量重启 DaemonSets 部分失败: %s", strings.Join(errors, "; "))
+	}
+
+	return nil
+}
+
+// GetDaemonSetEvents 获取 DaemonSet 相关事件
+func (d *daemonSetManager) GetDaemonSetEvents(ctx context.Context, clusterID int, namespace, daemonSetName string, limit int) ([]*model.K8sDaemonSetEvent, int64, error) {
+	if daemonSetName == "" {
+		return nil, 0, fmt.Errorf("DaemonSet name 不能为空")
+	}
+
+	kubeClient, err := d.getKubeClient(clusterID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 构建字段选择器，过滤与指定 DaemonSet 相关的事件
+	fieldSelector := fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=DaemonSet", daemonSetName)
+
+	listOptions := metav1.ListOptions{
+		FieldSelector: fieldSelector,
+	}
+	if limit > 0 {
+		listOptions.Limit = int64(limit)
+	}
+
+	eventList, err := kubeClient.CoreV1().Events(namespace).List(ctx, listOptions)
+	if err != nil {
+		d.logger.Error("获取 DaemonSet 事件失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("daemonSetName", daemonSetName),
+			zap.Error(err))
+		return nil, 0, fmt.Errorf("获取 DaemonSet 事件失败: %w", err)
+	}
+
+	var events []*model.K8sDaemonSetEvent
+	for _, event := range eventList.Items {
+		k8sEvent, err := utils.BuildK8sDaemonSetEvent(event)
+		if err != nil {
+			d.logger.Warn("构建 K8sDaemonSetEvent 失败",
+				zap.String("eventName", event.Name),
+				zap.Error(err))
+			continue
+		}
+		events = append(events, k8sEvent)
+	}
+
+	return events, int64(len(events)), nil
+}
+
+// GetDaemonSetHistory 获取 DaemonSet 历史版本
+func (d *daemonSetManager) GetDaemonSetHistory(ctx context.Context, clusterID int, namespace, daemonSetName string) ([]*model.K8sDaemonSetHistory, int64, error) {
+	if daemonSetName == "" {
+		return nil, 0, fmt.Errorf("DaemonSet name 不能为空")
+	}
+
+	kubeClient, err := d.getKubeClient(clusterID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 获取与 DaemonSet 相关的 ControllerRevision
+	labelSelector := fmt.Sprintf("controller-revision-hash")
+	listOptions := metav1.ListOptions{
+		LabelSelector: labelSelector,
+	}
+
+	revisionList, err := kubeClient.AppsV1().ControllerRevisions(namespace).List(ctx, listOptions)
+	if err != nil {
+		d.logger.Error("获取 DaemonSet 历史版本失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("daemonSetName", daemonSetName),
+			zap.Error(err))
+		return nil, 0, fmt.Errorf("获取 DaemonSet 历史版本失败: %w", err)
+	}
+
+	var history []*model.K8sDaemonSetHistory
+	for _, revision := range revisionList.Items {
+		// 检查是否属于指定的 DaemonSet
+		if revision.OwnerReferences != nil {
+			for _, owner := range revision.OwnerReferences {
+				if owner.Kind == "DaemonSet" && owner.Name == daemonSetName {
+					k8sHistory, err := utils.BuildK8sDaemonSetHistory(revision)
+					if err != nil {
+						d.logger.Warn("构建 K8sDaemonSetHistory 失败",
+							zap.String("revisionName", revision.Name),
+							zap.Error(err))
+						continue
+					}
+					history = append(history, k8sHistory)
+					break
+				}
+			}
 		}
 	}
+
+	return history, int64(len(history)), nil
+}
+
+// GetDaemonSetPods 获取 DaemonSet 管理的 Pods
+func (d *daemonSetManager) GetDaemonSetPods(ctx context.Context, clusterID int, namespace, daemonSetName string) ([]*model.K8sPod, int64, error) {
+	if daemonSetName == "" {
+		return nil, 0, fmt.Errorf("DaemonSet name 不能为空")
+	}
+
+	kubeClient, err := d.getKubeClient(clusterID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 首先获取 DaemonSet 以获取其标签选择器
+	daemonSet, err := kubeClient.AppsV1().DaemonSets(namespace).Get(ctx, daemonSetName, metav1.GetOptions{})
+	if err != nil {
+		d.logger.Error("获取 DaemonSet 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", daemonSetName),
+			zap.Error(err))
+		return nil, 0, fmt.Errorf("获取 DaemonSet 失败: %w", err)
+	}
+
+	// 构建标签选择器
+	labelSelector := metav1.FormatLabelSelector(daemonSet.Spec.Selector)
+
+	listOptions := metav1.ListOptions{
+		LabelSelector: labelSelector,
+	}
+
+	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, listOptions)
+	if err != nil {
+		d.logger.Error("获取 DaemonSet Pods 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("daemonSetName", daemonSetName),
+			zap.Error(err))
+		return nil, 0, fmt.Errorf("获取 DaemonSet Pods 失败: %w", err)
+	}
+
+	var pods []*model.K8sPod
+	for _, pod := range podList.Items {
+		k8sPod, err := utils.BuildK8sPod(ctx, clusterID, pod)
+		if err != nil {
+			d.logger.Warn("构建 K8sPod 失败",
+				zap.String("podName", pod.Name),
+				zap.Error(err))
+			continue
+		}
+		pods = append(pods, k8sPod)
+	}
+
+	return pods, int64(len(pods)), nil
+}
+
+// GetDaemonSetMetrics 获取 DaemonSet 指标
+func (d *daemonSetManager) GetDaemonSetMetrics(ctx context.Context, clusterID int, namespace, daemonSetName string) (*model.K8sDaemonSetMetrics, error) {
+	if daemonSetName == "" {
+		return nil, fmt.Errorf("DaemonSet name 不能为空")
+	}
+
+	kubeClient, err := d.getKubeClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取 metrics client
+	metricsClient, err := d.clientFactory.GetMetricsClient(clusterID)
+	if err != nil {
+		d.logger.Error("获取 metrics 客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取 metrics 客户端失败: %w", err)
+	}
+
+	// 获取 DaemonSet 管理的 Pods
+	pods, _, err := d.GetDaemonSetPods(ctx, clusterID, namespace, daemonSetName)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pods) == 0 {
+		return &model.K8sDaemonSetMetrics{
+			CPUUsage:    0,
+			MemoryUsage: 0,
+			NodesTotal:  0,
+		}, nil
+	}
+
+	var totalCPU, totalMemory resource.Quantity
+	var cpuUsage, memoryUsage float64
+	var metricsCount int
+
+	// 获取每个 Pod 的指标
+	for _, pod := range pods {
+		podMetrics, err := metricsClient.MetricsV1beta1().PodMetricses(namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+		if err != nil {
+			d.logger.Warn("获取 Pod 指标失败",
+				zap.String("podName", pod.Name),
+				zap.Error(err))
+			continue
+		}
+
+		// 累加所有容器的指标
+		for _, container := range podMetrics.Containers {
+			cpuQuantity := container.Usage[corev1.ResourceCPU]
+			memoryQuantity := container.Usage[corev1.ResourceMemory]
+
+			totalCPU.Add(cpuQuantity)
+			totalMemory.Add(memoryQuantity)
+		}
+		metricsCount++
+	}
+
+	// 计算平均使用率
+	if metricsCount > 0 {
+		cpuUsage = float64(totalCPU.MilliValue()) / 1000                  // 转换为核数
+		memoryUsage = float64(totalMemory.Value()) / (1024 * 1024 * 1024) // 转换为 GB
+	}
+
+	// 获取节点数量（DaemonSet 通常在每个节点上运行一个 Pod）
+	nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		d.logger.Warn("获取节点列表失败", zap.Error(err))
+	}
+
+	metrics := &model.K8sDaemonSetMetrics{
+		CPUUsage:    cpuUsage,
+		MemoryUsage: memoryUsage,
+		NodesTotal:  int32(len(nodeList.Items)),
+	}
+
+	return metrics, nil
+}
+
+// RollbackDaemonSet 回滚 DaemonSet 到指定版本
+func (d *daemonSetManager) RollbackDaemonSet(ctx context.Context, clusterID int, namespace, name string, revision int64) error {
+	if name == "" {
+		return fmt.Errorf("DaemonSet name 不能为空")
+	}
+	if revision <= 0 {
+		return fmt.Errorf("revision 必须大于 0")
+	}
+
+	kubeClient, err := d.getKubeClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	// 获取指定版本的 ControllerRevision
+	revisionName := fmt.Sprintf("%s-%d", name, revision)
+	controllerRevision, err := kubeClient.AppsV1().ControllerRevisions(namespace).Get(ctx, revisionName, metav1.GetOptions{})
+	if err != nil {
+		d.logger.Error("获取 ControllerRevision 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("revisionName", revisionName),
+			zap.Error(err))
+		return fmt.Errorf("获取 ControllerRevision 失败: %w", err)
+	}
+
+	// 获取当前 DaemonSet
+	currentDaemonSet, err := kubeClient.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		d.logger.Error("获取当前 DaemonSet 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return fmt.Errorf("获取当前 DaemonSet 失败: %w", err)
+	}
+
+	// 从 ControllerRevision 中提取 DaemonSet 模板
+	var daemonSetTemplate appsv1.DaemonSet
+	err = utils.ExtractDaemonSetFromRevision(controllerRevision, &daemonSetTemplate)
+	if err != nil {
+		d.logger.Error("从 ControllerRevision 提取 DaemonSet 模板失败",
+			zap.String("revisionName", revisionName),
+			zap.Error(err))
+		return fmt.Errorf("提取 DaemonSet 模板失败: %w", err)
+	}
+
+	// 更新当前 DaemonSet 的 spec
+	currentDaemonSet.Spec = daemonSetTemplate.Spec
+
+	// 执行更新
+	_, err = kubeClient.AppsV1().DaemonSets(namespace).Update(ctx, currentDaemonSet, metav1.UpdateOptions{})
+	if err != nil {
+		d.logger.Error("回滚 DaemonSet 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Int64("revision", revision),
+			zap.Error(err))
+		return fmt.Errorf("回滚 DaemonSet 失败: %w", err)
+	}
+
+	d.logger.Info("成功回滚 DaemonSet",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", name),
+		zap.Int64("revision", revision))
+
 	return nil
 }

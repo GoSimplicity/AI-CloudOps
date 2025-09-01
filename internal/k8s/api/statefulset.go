@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -40,118 +38,384 @@ type K8sStatefulSetHandler struct {
 
 func NewK8sStatefulSetHandler(statefulSetService service.StatefulSetService) *K8sStatefulSetHandler {
 	return &K8sStatefulSetHandler{
-
 		statefulSetService: statefulSetService,
 	}
 }
 
-func (h *K8sStatefulSetHandler) RegisterRouters(server *gin.Engine) {
+func (k *K8sStatefulSetHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/statefulsets/list", h.GetStatefulSetList)                              // 获取StatefulSet列表
-		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name", h.GetStatefulSet)          // 获取单个StatefulSet详情
-		k8sGroup.POST("/statefulsets/create", h.CreateStatefulSet)                            // 创建StatefulSet
-		k8sGroup.PUT("/statefulsets/update", h.UpdateStatefulSet)                             // 更新StatefulSet
-		k8sGroup.POST("/statefulsets/scale", h.ScaleStatefulSet)                              // 扩缩容StatefulSet
-		k8sGroup.DELETE("/statefulsets/:cluster_id/:namespace/:name", h.DeleteStatefulSet)    // 删除StatefulSet
-		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name/yaml", h.GetStatefulSetYAML) // 获取StatefulSet的YAML配置
+		k8sGroup.GET("/statefulsets", k.GetStatefulSetList)
+		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name", k.GetStatefulSetDetails)
+		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name/yaml", k.GetStatefulSetYaml)
+		k8sGroup.POST("/statefulsets", k.CreateStatefulSet)
+		k8sGroup.PUT("/statefulsets/:cluster_id/:namespace/:name", k.UpdateStatefulSet)
+		k8sGroup.DELETE("/statefulsets/:cluster_id/:namespace/:name", k.DeleteStatefulSet)
+		k8sGroup.POST("/statefulsets/:cluster_id/:namespace/:name/restart", k.RestartStatefulSet)
+		k8sGroup.POST("/statefulsets/:cluster_id/:namespace/:name/scale", k.ScaleStatefulSet)
+		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name/metrics", k.GetStatefulSetMetrics)
+		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name/events", k.GetStatefulSetEvents)
+		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name/pods", k.GetStatefulSetPods)
+		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name/history", k.GetStatefulSetHistory)
+		k8sGroup.POST("/statefulsets/:cluster_id/:namespace/:name/rollback", k.RollbackStatefulSet)
 	}
 }
 
 // GetStatefulSetList 获取StatefulSet列表
-func (h *K8sStatefulSetHandler) GetStatefulSetList(ctx *gin.Context) {
-	var req model.K8sListReq
+func (k *K8sStatefulSetHandler) GetStatefulSetList(ctx *gin.Context) {
+	var req model.GetStatefulSetListReq
 
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, "参数绑定错误: "+err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.statefulSetService.GetStatefulSetList(ctx, &req)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.statefulSetService.GetStatefulSetList(ctx, &req)
 	})
 }
 
-// GetStatefulSet 获取单个StatefulSet详情
-func (h *K8sStatefulSetHandler) GetStatefulSet(ctx *gin.Context) {
-	var req model.K8sResourceIdentifierReq
+// GetStatefulSetDetails 获取StatefulSet详情
+func (k *K8sStatefulSetHandler) GetStatefulSetDetails(ctx *gin.Context) {
+	var req model.GetStatefulSetDetailsReq
 
-	clusterIDStr := ctx.Param("cluster_id")
-	clusterID, err := strconv.Atoi(clusterIDStr)
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "无效的集群ID: "+err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	req.ClusterID = clusterID
-	req.Namespace = ctx.Param("namespace")
-	req.ResourceName = ctx.Param("name")
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.statefulSetService.GetStatefulSet(ctx, &req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.statefulSetService.GetStatefulSetDetails(ctx, &req)
+	})
+}
+
+// GetStatefulSetYaml 获取StatefulSet YAML
+func (k *K8sStatefulSetHandler) GetStatefulSetYaml(ctx *gin.Context) {
+	var req model.GetStatefulSetYamlReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.statefulSetService.GetStatefulSetYaml(ctx, &req)
 	})
 }
 
 // CreateStatefulSet 创建StatefulSet
-func (h *K8sStatefulSetHandler) CreateStatefulSet(ctx *gin.Context) {
-	var req model.StatefulSetCreateReq
+func (k *K8sStatefulSetHandler) CreateStatefulSet(ctx *gin.Context) {
+	var req model.CreateStatefulSetReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.statefulSetService.CreateStatefulSet(ctx, &req)
+		return nil, k.statefulSetService.CreateStatefulSet(ctx, &req)
 	})
 }
 
 // UpdateStatefulSet 更新StatefulSet
-func (h *K8sStatefulSetHandler) UpdateStatefulSet(ctx *gin.Context) {
-	var req model.StatefulSetUpdateReq
+func (k *K8sStatefulSetHandler) UpdateStatefulSet(ctx *gin.Context) {
+	var req model.UpdateStatefulSetReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.statefulSetService.UpdateStatefulSet(ctx, &req)
-	})
-}
-
-// ScaleStatefulSet 扩缩容StatefulSet
-func (h *K8sStatefulSetHandler) ScaleStatefulSet(ctx *gin.Context) {
-	var req model.StatefulSetScaleReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.statefulSetService.ScaleStatefulSet(ctx, &req)
+		return nil, k.statefulSetService.UpdateStatefulSet(ctx, &req)
 	})
 }
 
 // DeleteStatefulSet 删除StatefulSet
-func (h *K8sStatefulSetHandler) DeleteStatefulSet(ctx *gin.Context) {
-	var req model.K8sResourceIdentifierReq
+func (k *K8sStatefulSetHandler) DeleteStatefulSet(ctx *gin.Context) {
+	var req model.DeleteStatefulSetReq
 
-	clusterIDStr := ctx.Param("cluster_id")
-	clusterID, err := strconv.Atoi(clusterIDStr)
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "无效的集群ID: "+err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	req.ClusterID = clusterID
-	req.Namespace = ctx.Param("namespace")
-	req.ResourceName = ctx.Param("name")
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.statefulSetService.DeleteStatefulSet(ctx, &req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.statefulSetService.DeleteStatefulSet(ctx, &req)
 	})
 }
 
-// GetStatefulSetYAML 获取StatefulSet的YAML配置
-func (h *K8sStatefulSetHandler) GetStatefulSetYAML(ctx *gin.Context) {
-	var req model.K8sResourceIdentifierReq
+// RestartStatefulSet 重启StatefulSet
+func (k *K8sStatefulSetHandler) RestartStatefulSet(ctx *gin.Context) {
+	var req model.RestartStatefulSetReq
 
-	clusterIDStr := ctx.Param("cluster_id")
-	clusterID, err := strconv.Atoi(clusterIDStr)
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "无效的集群ID: "+err.Error())
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	req.ClusterID = clusterID
-	req.Namespace = ctx.Param("namespace")
-	req.ResourceName = ctx.Param("name")
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.statefulSetService.GetStatefulSetYAML(ctx, &req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.statefulSetService.RestartStatefulSet(ctx, &req)
+	})
+}
+
+// ScaleStatefulSet 缩放StatefulSet
+func (k *K8sStatefulSetHandler) ScaleStatefulSet(ctx *gin.Context) {
+	var req model.ScaleStatefulSetReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.statefulSetService.ScaleStatefulSet(ctx, &req)
+	})
+}
+
+// GetStatefulSetMetrics 获取StatefulSet指标
+func (k *K8sStatefulSetHandler) GetStatefulSetMetrics(ctx *gin.Context) {
+	var req model.GetStatefulSetMetricsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.statefulSetService.GetStatefulSetMetrics(ctx, &req)
+	})
+}
+
+// GetStatefulSetEvents 获取StatefulSet事件
+func (k *K8sStatefulSetHandler) GetStatefulSetEvents(ctx *gin.Context) {
+	var req model.GetStatefulSetEventsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.statefulSetService.GetStatefulSetEvents(ctx, &req)
+	})
+}
+
+// GetStatefulSetPods 获取StatefulSet下的Pod列表
+func (k *K8sStatefulSetHandler) GetStatefulSetPods(ctx *gin.Context) {
+	var req model.GetStatefulSetPodsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.statefulSetService.GetStatefulSetPods(ctx, &req)
+	})
+}
+
+// GetStatefulSetHistory 获取StatefulSet历史
+func (k *K8sStatefulSetHandler) GetStatefulSetHistory(ctx *gin.Context) {
+	var req model.GetStatefulSetHistoryReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.statefulSetService.GetStatefulSetHistory(ctx, &req)
+	})
+}
+
+// RollbackStatefulSet 回滚StatefulSet
+func (k *K8sStatefulSetHandler) RollbackStatefulSet(ctx *gin.Context) {
+	var req model.RollbackStatefulSetReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.statefulSetService.RollbackStatefulSet(ctx, &req)
 	})
 }

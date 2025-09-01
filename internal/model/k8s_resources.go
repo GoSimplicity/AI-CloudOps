@@ -46,45 +46,6 @@ type ResourceQuota struct {
 	ConfigMapLimit string `json:"configmap_limit"`
 }
 
-// K8sStatefulSet Kubernetes StatefulSet响应信息
-type K8sStatefulSet struct {
-	Name              string            `json:"name"`
-	UID               string            `json:"uid"`
-	Namespace         string            `json:"namespace"`
-	Replicas          int32             `json:"replicas"`
-	ReadyReplicas     int32             `json:"ready_replicas"`
-	CurrentReplicas   int32             `json:"current_replicas"`
-	UpdatedReplicas   int32             `json:"updated_replicas"`
-	ServiceName       string            `json:"service_name"`
-	UpdateStrategy    string            `json:"update_strategy"`
-	Labels            map[string]string `json:"labels"`
-	Annotations       map[string]string `json:"annotations"`
-	CreationTimestamp time.Time         `json:"creation_timestamp"`
-	Images            []string          `json:"images"`
-	Age               string            `json:"age"`
-	Events            []K8sEvent        `json:"events,omitempty"`
-}
-
-// K8sDaemonSet Kubernetes DaemonSet响应信息
-type K8sDaemonSet struct {
-	Name               string            `json:"name"`
-	UID                string            `json:"uid"`
-	Namespace          string            `json:"namespace"`
-	DesiredNumber      int32             `json:"desired_number"`
-	CurrentNumber      int32             `json:"current_number"`
-	ReadyNumber        int32             `json:"ready_number"`
-	UpdatedNumber      int32             `json:"updated_number"`
-	AvailableNumber    int32             `json:"available_number"`
-	MisscheduledNumber int32             `json:"misscheduled_number"`
-	UpdateStrategy     string            `json:"update_strategy"`
-	Labels             map[string]string `json:"labels"`
-	Annotations        map[string]string `json:"annotations"`
-	CreationTimestamp  time.Time         `json:"creation_timestamp"`
-	Images             []string          `json:"images"`
-	Age                string            `json:"age"`
-	Events             []K8sEvent        `json:"events,omitempty"`
-}
-
 // ServicePort 服务端口信息 - 已在k8s_service.go中定义
 
 // K8sIngress Kubernetes Ingress响应信息

@@ -28,407 +28,609 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
+	"strings"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
-	"sigs.k8s.io/yaml"
 )
 
 type StatefulSetService interface {
-	GetStatefulSetList(ctx context.Context, req *model.K8sListReq) ([]*model.K8sStatefulSet, error)
-	GetStatefulSet(ctx context.Context, req *model.K8sResourceIdentifierReq) (*model.K8sStatefulSet, error)
-	CreateStatefulSet(ctx context.Context, req *model.StatefulSetCreateReq) error
-	UpdateStatefulSet(ctx context.Context, req *model.StatefulSetUpdateReq) error
-	ScaleStatefulSet(ctx context.Context, req *model.StatefulSetScaleReq) error
-	DeleteStatefulSet(ctx context.Context, req *model.K8sResourceIdentifierReq) error
-	BatchDeleteStatefulSets(ctx context.Context, req *model.K8sBatchDeleteReq) error
-	GetStatefulSetYAML(ctx context.Context, req *model.K8sResourceIdentifierReq) (string, error)
+	GetStatefulSetList(ctx context.Context, req *model.GetStatefulSetListReq) (model.ListResp[*model.K8sStatefulSet], error)
+	GetStatefulSetDetails(ctx context.Context, req *model.GetStatefulSetDetailsReq) (*model.K8sStatefulSet, error)
+	GetStatefulSetYaml(ctx context.Context, req *model.GetStatefulSetYamlReq) (*model.K8sYaml, error)
+	CreateStatefulSet(ctx context.Context, req *model.CreateStatefulSetReq) error
+	UpdateStatefulSet(ctx context.Context, req *model.UpdateStatefulSetReq) error
+	DeleteStatefulSet(ctx context.Context, req *model.DeleteStatefulSetReq) error
+	RestartStatefulSet(ctx context.Context, req *model.RestartStatefulSetReq) error
+	ScaleStatefulSet(ctx context.Context, req *model.ScaleStatefulSetReq) error
+	GetStatefulSetMetrics(ctx context.Context, req *model.GetStatefulSetMetricsReq) (*model.K8sStatefulSetMetrics, error)
+	GetStatefulSetEvents(ctx context.Context, req *model.GetStatefulSetEventsReq) (model.ListResp[*model.K8sStatefulSetEvent], error)
+	GetStatefulSetPods(ctx context.Context, req *model.GetStatefulSetPodsReq) (model.ListResp[*model.K8sPod], error)
+	GetStatefulSetHistory(ctx context.Context, req *model.GetStatefulSetHistoryReq) (model.ListResp[*model.K8sStatefulSetHistory], error)
+	RollbackStatefulSet(ctx context.Context, req *model.RollbackStatefulSetReq) error
 }
 
 type statefulSetService struct {
-	k8sClient          client.K8sClient           // 保持向后兼容
-	statefulSetManager manager.StatefulSetManager // 新的依赖注入
+	statefulSetManager manager.StatefulSetManager
 	logger             *zap.Logger
 }
 
-func NewStatefulSetService(k8sClient client.K8sClient, statefulSetManager manager.StatefulSetManager, logger *zap.Logger) StatefulSetService {
+func NewStatefulSetService(statefulSetManager manager.StatefulSetManager, logger *zap.Logger) StatefulSetService {
 	return &statefulSetService{
-		k8sClient:          k8sClient,
 		statefulSetManager: statefulSetManager,
 		logger:             logger,
 	}
 }
 
-// GetStatefulSetList 获取StatefulSet列表
-func (s *statefulSetService) GetStatefulSetList(ctx context.Context, req *model.K8sListReq) ([]*model.K8sStatefulSet, error) {
-	// 使用 StatefulSetManager 获取列表
-	listOptions := utils.ConvertK8sListReqToMetaV1ListOptions(req)
-	statefulSetList, err := s.statefulSetManager.GetStatefulSetList(ctx, req.ClusterID, req.Namespace, listOptions)
-	if err != nil {
-		s.logger.Error("获取StatefulSet列表失败", zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", req.Namespace))
-		return nil, fmt.Errorf("获取StatefulSet列表失败: %w", err)
-	}
-
-	result := make([]*model.K8sStatefulSet, 0, len(statefulSetList.Items))
-	for _, sts := range statefulSetList.Items {
-		k8sStatefulSet := s.convertToK8sStatefulSet(&sts)
-		result = append(result, k8sStatefulSet)
-	}
-
-	s.logger.Info("成功获取StatefulSet列表",
-		zap.Int("cluster_id", req.ClusterID),
-		zap.String("namespace", req.Namespace),
-		zap.Int("count", len(result)))
-
-	return result, nil
-}
-
-// GetStatefulSet 获取单个StatefulSet详情
-func (s *statefulSetService) GetStatefulSet(ctx context.Context, req *model.K8sResourceIdentifierReq) (*model.K8sStatefulSet, error) {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	sts, err := clientset.AppsV1().StatefulSets(req.Namespace).Get(ctx, req.ResourceName, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil, fmt.Errorf("StatefulSet不存在: %s/%s", req.Namespace, req.ResourceName)
-		}
-		s.logger.Error("获取StatefulSet失败", zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.String("name", req.ResourceName))
-		return nil, fmt.Errorf("获取StatefulSet失败: %w", err)
-	}
-
-	result := s.convertToK8sStatefulSet(sts)
-	return result, nil
-}
-
 // CreateStatefulSet 创建StatefulSet
-func (s *statefulSetService) CreateStatefulSet(ctx context.Context, req *model.StatefulSetCreateReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+func (s *statefulSetService) CreateStatefulSet(ctx context.Context, req *model.CreateStatefulSetReq) error {
+	if req == nil {
+		return fmt.Errorf("创建StatefulSet请求不能为空")
 	}
 
-	// 构造StatefulSet对象
-	sts := s.buildStatefulSetFromCreateRequest(req)
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
 
-	_, err = clientset.AppsV1().StatefulSets(req.Namespace).Create(ctx, sts, metav1.CreateOptions{})
+	if req.Name == "" {
+		return fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.ServiceName == "" {
+		return fmt.Errorf("服务名称不能为空")
+	}
+
+	// 从请求构建StatefulSet对象
+	statefulSet, err := utils.BuildStatefulSetFromRequest(req)
 	if err != nil {
-		if errors.IsAlreadyExists(err) {
-			return fmt.Errorf("StatefulSet已存在: %s/%s", req.Namespace, req.Name)
-		}
-		s.logger.Error("创建StatefulSet失败", zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID),
+		s.logger.Error("CreateStatefulSet: 构建StatefulSet对象失败",
+			zap.Error(err),
+			zap.String("name", req.Name))
+		return fmt.Errorf("构建StatefulSet对象失败: %w", err)
+	}
+
+	// 验证StatefulSet配置
+	if err := utils.ValidateStatefulSet(statefulSet); err != nil {
+		s.logger.Error("CreateStatefulSet: StatefulSet配置验证失败",
+			zap.Error(err),
+			zap.String("name", req.Name))
+		return fmt.Errorf("statefulSet配置验证失败: %w", err)
+	}
+
+	err = s.statefulSetManager.CreateStatefulSet(ctx, req.ClusterID, req.Namespace, statefulSet)
+	if err != nil {
+		s.logger.Error("CreateStatefulSet: 创建StatefulSet失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name))
 		return fmt.Errorf("创建StatefulSet失败: %w", err)
 	}
 
-	s.logger.Info("成功创建StatefulSet",
-		zap.Int("cluster_id", req.ClusterID),
-		zap.String("namespace", req.Namespace),
-		zap.String("name", req.Name))
+	return nil
+}
+
+// DeleteStatefulSet 删除StatefulSet
+func (s *statefulSetService) DeleteStatefulSet(ctx context.Context, req *model.DeleteStatefulSetReq) error {
+	if req == nil {
+		return fmt.Errorf("删除StatefulSet请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	err := s.statefulSetManager.DeleteStatefulSet(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
+	if err != nil {
+		s.logger.Error("DeleteStatefulSet: 删除StatefulSet失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("删除StatefulSet失败: %w", err)
+	}
 
 	return nil
 }
 
-// UpdateStatefulSet 更新StatefulSet
-func (s *statefulSetService) UpdateStatefulSet(ctx context.Context, req *model.StatefulSetUpdateReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+// GetStatefulSetDetails 获取StatefulSet详情
+func (s *statefulSetService) GetStatefulSetDetails(ctx context.Context, req *model.GetStatefulSetDetailsReq) (*model.K8sStatefulSet, error) {
+	if req == nil {
+		return nil, fmt.Errorf("获取StatefulSet详情请求不能为空")
 	}
 
-	// 先获取现有的StatefulSet
-	existingSts, err := clientset.AppsV1().StatefulSets(req.Namespace).Get(ctx, req.ResourceName, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return fmt.Errorf("StatefulSet不存在: %s/%s", req.Namespace, req.ResourceName)
-		}
-		return fmt.Errorf("获取StatefulSet失败: %w", err)
+	if req.ClusterID <= 0 {
+		return nil, fmt.Errorf("集群ID不能为空")
 	}
 
-	// 更新StatefulSet
-	s.updateStatefulSetFromUpdateRequest(existingSts, req)
+	if req.Namespace == "" {
+		return nil, fmt.Errorf("命名空间不能为空")
+	}
 
-	_, err = clientset.AppsV1().StatefulSets(req.Namespace).Update(ctx, existingSts, metav1.UpdateOptions{})
+	if req.Name == "" {
+		return nil, fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	statefulSet, err := s.statefulSetManager.GetStatefulSet(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		s.logger.Error("更新StatefulSet失败", zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID),
+		s.logger.Error("GetStatefulSetDetails: 获取StatefulSet失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
-			zap.String("name", req.ResourceName))
-		return fmt.Errorf("更新StatefulSet失败: %w", err)
+			zap.String("name", req.Name))
+		return nil, fmt.Errorf("获取StatefulSet失败: %w", err)
 	}
 
-	s.logger.Info("成功更新StatefulSet",
-		zap.Int("cluster_id", req.ClusterID),
+	// 构建详细信息
+	k8sStatefulSet, err := utils.BuildK8sStatefulSet(ctx, req.ClusterID, *statefulSet)
+	if err != nil {
+		s.logger.Error("GetStatefulSetDetails: 构建StatefulSet详细信息失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return nil, fmt.Errorf("构建StatefulSet详细信息失败: %w", err)
+	}
+
+	return k8sStatefulSet, nil
+}
+
+// GetStatefulSetEvents 获取StatefulSet事件
+func (s *statefulSetService) GetStatefulSetEvents(ctx context.Context, req *model.GetStatefulSetEventsReq) (model.ListResp[*model.K8sStatefulSetEvent], error) {
+	if req == nil {
+		return model.ListResp[*model.K8sStatefulSetEvent]{}, fmt.Errorf("获取StatefulSet事件请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return model.ListResp[*model.K8sStatefulSetEvent]{}, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return model.ListResp[*model.K8sStatefulSetEvent]{}, fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return model.ListResp[*model.K8sStatefulSetEvent]{}, fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	// 设置默认限制数量
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 100 // 默认获取100个事件
+	}
+
+	events, total, err := s.statefulSetManager.GetStatefulSetEvents(ctx, req.ClusterID, req.Namespace, req.Name, limit)
+	if err != nil {
+		s.logger.Error("GetStatefulSetEvents: 获取StatefulSet事件失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return model.ListResp[*model.K8sStatefulSetEvent]{}, fmt.Errorf("获取StatefulSet事件失败: %w", err)
+	}
+
+	return model.ListResp[*model.K8sStatefulSetEvent]{
+		Total: total,
+		Items: events,
+	}, nil
+}
+
+// GetStatefulSetHistory 获取StatefulSet版本历史
+func (s *statefulSetService) GetStatefulSetHistory(ctx context.Context, req *model.GetStatefulSetHistoryReq) (model.ListResp[*model.K8sStatefulSetHistory], error) {
+	if req == nil {
+		return model.ListResp[*model.K8sStatefulSetHistory]{}, fmt.Errorf("获取StatefulSet历史请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return model.ListResp[*model.K8sStatefulSetHistory]{}, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return model.ListResp[*model.K8sStatefulSetHistory]{}, fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return model.ListResp[*model.K8sStatefulSetHistory]{}, fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	history, total, err := s.statefulSetManager.GetStatefulSetHistory(ctx, req.ClusterID, req.Namespace, req.Name)
+	if err != nil {
+		s.logger.Error("GetStatefulSetHistory: 获取StatefulSet历史失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return model.ListResp[*model.K8sStatefulSetHistory]{}, fmt.Errorf("获取StatefulSet历史失败: %w", err)
+	}
+
+	return model.ListResp[*model.K8sStatefulSetHistory]{
+		Total: total,
+		Items: history,
+	}, nil
+}
+
+// GetStatefulSetList 获取StatefulSet列表
+func (s *statefulSetService) GetStatefulSetList(ctx context.Context, req *model.GetStatefulSetListReq) (model.ListResp[*model.K8sStatefulSet], error) {
+	if req == nil {
+		return model.ListResp[*model.K8sStatefulSet]{}, fmt.Errorf("获取StatefulSet列表请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return model.ListResp[*model.K8sStatefulSet]{}, fmt.Errorf("集群ID不能为空")
+	}
+
+	// 构建查询选项
+	listOptions := utils.BuildStatefulSetListOptions(req)
+
+	k8sStatefulSets, err := s.statefulSetManager.GetStatefulSetList(ctx, req.ClusterID, req.Namespace, listOptions)
+	if err != nil {
+		s.logger.Error("GetStatefulSetList: 获取StatefulSet列表失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace))
+		return model.ListResp[*model.K8sStatefulSet]{}, fmt.Errorf("获取StatefulSet列表失败: %w", err)
+	}
+
+	// 根据状态过滤
+	var filteredStatefulSets []*model.K8sStatefulSet
+	if req.Status != "" {
+		// 根据状态过滤
+		for _, k8sStatefulSet := range k8sStatefulSets {
+			var statusStr string
+			switch k8sStatefulSet.Status {
+			case model.K8sStatefulSetStatusRunning:
+				statusStr = "running"
+			case model.K8sStatefulSetStatusStopped:
+				statusStr = "stopped"
+			case model.K8sStatefulSetStatusUpdating:
+				statusStr = "updating"
+			case model.K8sStatefulSetStatusError:
+				statusStr = "error"
+			default:
+				statusStr = "unknown"
+			}
+			if strings.EqualFold(statusStr, req.Status) {
+				filteredStatefulSets = append(filteredStatefulSets, k8sStatefulSet)
+			}
+		}
+	} else {
+		filteredStatefulSets = k8sStatefulSets
+	}
+
+	// 分页处理
+	page := req.Page
+	size := req.Size
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 {
+		size = 10 // 默认每页显示10条
+	}
+
+	pagedItems, total := utils.PaginateK8sStatefulSets(filteredStatefulSets, page, size)
+
+	return model.ListResp[*model.K8sStatefulSet]{
+		Total: total,
+		Items: pagedItems,
+	}, nil
+}
+
+// GetStatefulSetMetrics 获取StatefulSet指标
+func (s *statefulSetService) GetStatefulSetMetrics(ctx context.Context, req *model.GetStatefulSetMetricsReq) (*model.K8sStatefulSetMetrics, error) {
+	if req == nil {
+		return nil, fmt.Errorf("获取StatefulSet指标请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return nil, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return nil, fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	// 使用 StatefulSetManager 获取真实的指标数据
+	metrics, err := s.statefulSetManager.GetStatefulSetMetrics(ctx, req.ClusterID, req.Namespace, req.Name)
+	if err != nil {
+		s.logger.Error("GetStatefulSetMetrics: 获取StatefulSet指标失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return nil, fmt.Errorf("获取StatefulSet指标失败: %w", err)
+	}
+
+	s.logger.Debug("GetStatefulSetMetrics: 成功获取StatefulSet指标",
+		zap.Int("clusterID", req.ClusterID),
 		zap.String("namespace", req.Namespace),
-		zap.String("name", req.ResourceName))
+		zap.String("name", req.Name),
+		zap.Float64("cpuUsage", metrics.CPUUsage),
+		zap.Float64("memoryUsage", metrics.MemoryUsage))
+
+	return metrics, nil
+}
+
+// GetStatefulSetPods 获取StatefulSet下的Pod列表
+func (s *statefulSetService) GetStatefulSetPods(ctx context.Context, req *model.GetStatefulSetPodsReq) (model.ListResp[*model.K8sPod], error) {
+	if req == nil {
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取StatefulSet Pods请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	pods, total, err := s.statefulSetManager.GetStatefulSetPods(ctx, req.ClusterID, req.Namespace, req.Name)
+	if err != nil {
+		s.logger.Error("GetStatefulSetPods: 获取StatefulSet Pod失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取StatefulSet Pod失败: %w", err)
+	}
+
+	return model.ListResp[*model.K8sPod]{
+		Total: total,
+		Items: pods,
+	}, nil
+}
+
+// GetStatefulSetYaml 获取StatefulSet YAML
+func (s *statefulSetService) GetStatefulSetYaml(ctx context.Context, req *model.GetStatefulSetYamlReq) (*model.K8sYaml, error) {
+	if req == nil {
+		return nil, fmt.Errorf("获取StatefulSet YAML请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return nil, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return nil, fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	statefulSet, err := s.statefulSetManager.GetStatefulSet(ctx, req.ClusterID, req.Namespace, req.Name)
+	if err != nil {
+		s.logger.Error("GetStatefulSetYaml: 获取StatefulSet失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return nil, fmt.Errorf("获取StatefulSet失败: %w", err)
+	}
+
+	// 转换为YAML
+	yamlContent, err := utils.StatefulSetToYAML(statefulSet)
+	if err != nil {
+		s.logger.Error("GetStatefulSetYaml: 转换为YAML失败",
+			zap.Error(err),
+			zap.String("statefulSetName", statefulSet.Name))
+		return nil, fmt.Errorf("转换为YAML失败: %w", err)
+	}
+
+	return &model.K8sYaml{
+		YAML: yamlContent,
+	}, nil
+}
+
+// RestartStatefulSet 重启StatefulSet
+func (s *statefulSetService) RestartStatefulSet(ctx context.Context, req *model.RestartStatefulSetReq) error {
+	if req == nil {
+		return fmt.Errorf("重启StatefulSet请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	err := s.statefulSetManager.RestartStatefulSet(ctx, req.ClusterID, req.Namespace, req.Name)
+	if err != nil {
+		s.logger.Error("RestartStatefulSet: 重启StatefulSet失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("重启StatefulSet失败: %w", err)
+	}
+
+	return nil
+}
+
+// RollbackStatefulSet 回滚StatefulSet
+func (s *statefulSetService) RollbackStatefulSet(ctx context.Context, req *model.RollbackStatefulSetReq) error {
+	if req == nil {
+		return fmt.Errorf("回滚StatefulSet请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	if req.Revision <= 0 {
+		return fmt.Errorf("回滚版本号必须大于0")
+	}
+
+	err := s.statefulSetManager.RollbackStatefulSet(ctx, req.ClusterID, req.Namespace, req.Name, req.Revision)
+	if err != nil {
+		s.logger.Error("RollbackStatefulSet: 回滚StatefulSet失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name),
+			zap.Int64("revision", req.Revision))
+		return fmt.Errorf("回滚StatefulSet失败: %w", err)
+	}
 
 	return nil
 }
 
 // ScaleStatefulSet 扩缩容StatefulSet
-func (s *statefulSetService) ScaleStatefulSet(ctx context.Context, req *model.StatefulSetScaleReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+func (s *statefulSetService) ScaleStatefulSet(ctx context.Context, req *model.ScaleStatefulSetReq) error {
+	if req == nil {
+		return fmt.Errorf("扩缩容StatefulSet请求不能为空")
 	}
 
-	scale, err := clientset.AppsV1().StatefulSets(req.Namespace).GetScale(ctx, req.ResourceName, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return fmt.Errorf("StatefulSet不存在: %s/%s", req.Namespace, req.ResourceName)
-		}
-		return fmt.Errorf("获取StatefulSet Scale失败: %w", err)
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
 	}
 
-	scale.Spec.Replicas = req.Replicas
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
 
-	_, err = clientset.AppsV1().StatefulSets(req.Namespace).UpdateScale(ctx, req.ResourceName, scale, metav1.UpdateOptions{})
+	if req.Name == "" {
+		return fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	if req.Replicas < 0 {
+		return fmt.Errorf("副本数不能为负数")
+	}
+
+	err := s.statefulSetManager.ScaleStatefulSet(ctx, req.ClusterID, req.Namespace, req.Name, req.Replicas)
 	if err != nil {
-		s.logger.Error("扩缩容StatefulSet失败", zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID),
+		s.logger.Error("ScaleStatefulSet: 扩缩容StatefulSet失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
-			zap.String("name", req.ResourceName),
+			zap.String("name", req.Name),
 			zap.Int32("replicas", req.Replicas))
 		return fmt.Errorf("扩缩容StatefulSet失败: %w", err)
 	}
 
-	s.logger.Info("成功扩缩容StatefulSet",
-		zap.Int("cluster_id", req.ClusterID),
-		zap.String("namespace", req.Namespace),
-		zap.String("name", req.ResourceName),
-		zap.Int32("replicas", req.Replicas))
-
 	return nil
 }
 
-// DeleteStatefulSet 删除StatefulSet
-func (s *statefulSetService) DeleteStatefulSet(ctx context.Context, req *model.K8sResourceIdentifierReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+// UpdateStatefulSet 更新StatefulSet
+func (s *statefulSetService) UpdateStatefulSet(ctx context.Context, req *model.UpdateStatefulSetReq) error {
+	if req == nil {
+		return fmt.Errorf("更新StatefulSet请求不能为空")
 	}
 
-	err = clientset.AppsV1().StatefulSets(req.Namespace).Delete(ctx, req.ResourceName, metav1.DeleteOptions{})
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	existingStatefulSet, err := s.statefulSetManager.GetStatefulSet(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			return fmt.Errorf("StatefulSet不存在: %s/%s", req.Namespace, req.ResourceName)
-		}
-		s.logger.Error("删除StatefulSet失败", zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID),
+		s.logger.Error("UpdateStatefulSet: 获取现有StatefulSet失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
-			zap.String("name", req.ResourceName))
-		return fmt.Errorf("删除StatefulSet失败: %w", err)
+			zap.String("name", req.Name))
+		return fmt.Errorf("获取现有StatefulSet失败: %w", err)
 	}
 
-	s.logger.Info("成功删除StatefulSet",
-		zap.Int("cluster_id", req.ClusterID),
-		zap.String("namespace", req.Namespace),
-		zap.String("name", req.ResourceName))
+	updatedStatefulSet := existingStatefulSet.DeepCopy()
 
-	return nil
-}
-
-// BatchDeleteStatefulSets 批量删除StatefulSet
-func (s *statefulSetService) BatchDeleteStatefulSets(ctx context.Context, req *model.K8sBatchDeleteReq) error {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	var failedDeletes []string
-	successCount := 0
-
-	for _, name := range req.ResourceNames {
-		err = clientset.AppsV1().StatefulSets(req.Namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	// 如果提供了YAML，使用YAML内容
+	if req.YAML != "" {
+		yamlStatefulSet, err := utils.YAMLToStatefulSet(req.YAML)
 		if err != nil {
-			if !errors.IsNotFound(err) {
-				failedDeletes = append(failedDeletes, fmt.Sprintf("%s: %v", name, err))
+			s.logger.Error("UpdateStatefulSet: 解析YAML失败",
+				zap.Error(err),
+				zap.String("name", req.Name))
+			return fmt.Errorf("解析YAML失败: %w", err)
+		}
+		updatedStatefulSet.Spec = yamlStatefulSet.Spec
+		updatedStatefulSet.Labels = yamlStatefulSet.Labels
+		updatedStatefulSet.Annotations = yamlStatefulSet.Annotations
+	} else {
+		// 更新基本字段
+		if req.Replicas > 0 {
+			updatedStatefulSet.Spec.Replicas = &req.Replicas
+		}
+		if len(req.Images) > 0 {
+			for i, image := range req.Images {
+				if i < len(updatedStatefulSet.Spec.Template.Spec.Containers) {
+					updatedStatefulSet.Spec.Template.Spec.Containers[i].Image = image
+				}
 			}
-		} else {
-			successCount++
+		}
+		if req.Labels != nil {
+			updatedStatefulSet.Labels = req.Labels
+			updatedStatefulSet.Spec.Template.Labels = req.Labels
+		}
+		if req.Annotations != nil {
+			updatedStatefulSet.Annotations = req.Annotations
+		}
+		if req.ServiceName != "" {
+			updatedStatefulSet.Spec.ServiceName = req.ServiceName
 		}
 	}
 
-	if len(failedDeletes) > 0 {
-		return fmt.Errorf("部分StatefulSet删除失败: %v", failedDeletes)
+	// 验证更新后的StatefulSet配置
+	if err := utils.ValidateStatefulSet(updatedStatefulSet); err != nil {
+		s.logger.Error("UpdateStatefulSet: StatefulSet配置验证失败",
+			zap.Error(err),
+			zap.String("name", req.Name))
+		return fmt.Errorf("statefulSet配置验证失败: %w", err)
 	}
 
-	s.logger.Info("批量删除StatefulSet完成",
-		zap.Int("cluster_id", req.ClusterID),
-		zap.String("namespace", req.Namespace),
-		zap.Int("success_count", successCount))
+	err = s.statefulSetManager.UpdateStatefulSet(ctx, req.ClusterID, req.Namespace, updatedStatefulSet)
+	if err != nil {
+		s.logger.Error("UpdateStatefulSet: 更新StatefulSet失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("更新StatefulSet失败: %w", err)
+	}
 
 	return nil
-}
-
-// GetStatefulSetYAML 获取StatefulSet的YAML配置
-func (s *statefulSetService) GetStatefulSetYAML(ctx context.Context, req *model.K8sResourceIdentifierReq) (string, error) {
-	clientset, err := s.k8sClient.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", req.ClusterID))
-		return "", fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	sts, err := clientset.AppsV1().StatefulSets(req.Namespace).Get(ctx, req.ResourceName, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return "", fmt.Errorf("StatefulSet不存在: %s/%s", req.Namespace, req.ResourceName)
-		}
-		return "", fmt.Errorf("获取StatefulSet失败: %w", err)
-	}
-
-	// 清除不需要的字段
-	sts.ManagedFields = nil
-	sts.Status = appsv1.StatefulSetStatus{}
-
-	yamlData, err := yaml.Marshal(sts)
-	if err != nil {
-		s.logger.Error("转换StatefulSet为YAML失败", zap.Error(err))
-		return "", fmt.Errorf("转换StatefulSet为YAML失败: %w", err)
-	}
-
-	return string(yamlData), nil
-}
-
-// convertToK8sStatefulSet 将Kubernetes StatefulSet转换为模型对象
-func (s *statefulSetService) convertToK8sStatefulSet(sts *appsv1.StatefulSet) *model.K8sStatefulSet {
-	// 提取镜像信息
-	images := make([]string, 0)
-	for _, container := range sts.Spec.Template.Spec.Containers {
-		images = append(images, container.Image)
-	}
-
-	return &model.K8sStatefulSet{
-		Name:              sts.Name,
-		UID:               string(sts.UID),
-		Namespace:         sts.Namespace,
-		Replicas:          *sts.Spec.Replicas,
-		ReadyReplicas:     sts.Status.ReadyReplicas,
-		CurrentReplicas:   sts.Status.CurrentReplicas,
-		UpdatedReplicas:   sts.Status.UpdatedReplicas,
-		ServiceName:       sts.Spec.ServiceName,
-		UpdateStrategy:    string(sts.Spec.UpdateStrategy.Type),
-		Labels:            sts.Labels,
-		Annotations:       sts.Annotations,
-		CreationTimestamp: sts.CreationTimestamp.Time,
-		Images:            images,
-		Age:               time.Since(sts.CreationTimestamp.Time).String(),
-	}
-}
-
-// buildStatefulSetFromCreateRequest 从创建请求构建StatefulSet对象
-func (s *statefulSetService) buildStatefulSetFromCreateRequest(req *model.StatefulSetCreateReq) *appsv1.StatefulSet {
-	// 构建容器端口
-	ports := make([]corev1.ContainerPort, 0, len(req.Ports))
-	for _, port := range req.Ports {
-		ports = append(ports, corev1.ContainerPort{
-			Name:          port.Name,
-			ContainerPort: port.ContainerPort,
-			Protocol:      corev1.Protocol(port.Protocol),
-		})
-	}
-
-	// 构建环境变量
-	envVars := make([]corev1.EnvVar, 0, len(req.Env))
-	for _, env := range req.Env {
-		envVar := corev1.EnvVar{
-			Name:  env.Name,
-			Value: env.Value,
-		}
-		envVars = append(envVars, envVar)
-	}
-
-	// 构建资源需求
-	resources := corev1.ResourceRequirements{}
-	if req.Resources.Requests.CPU != "" || req.Resources.Requests.Memory != "" {
-		resources.Requests = corev1.ResourceList{}
-		if req.Resources.Requests.CPU != "" {
-			if cpu, err := resource.ParseQuantity(req.Resources.Requests.CPU); err == nil {
-				resources.Requests[corev1.ResourceCPU] = cpu
-			}
-		}
-		if req.Resources.Requests.Memory != "" {
-			if memory, err := resource.ParseQuantity(req.Resources.Requests.Memory); err == nil {
-				resources.Requests[corev1.ResourceMemory] = memory
-			}
-		}
-	}
-
-	return &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        req.Name,
-			Namespace:   req.Namespace,
-			Labels:      req.Labels,
-			Annotations: req.Annotations,
-		},
-		Spec: appsv1.StatefulSetSpec{
-			Replicas:    ptr.To(req.Replicas),
-			ServiceName: req.ServiceName,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: req.Labels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: req.Labels,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:      req.Name,
-							Image:     req.Image,
-							Ports:     ports,
-							Env:       envVars,
-							Resources: resources,
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-// updateStatefulSetFromUpdateRequest 从更新请求更新StatefulSet对象
-func (s *statefulSetService) updateStatefulSetFromUpdateRequest(sts *appsv1.StatefulSet, req *model.StatefulSetUpdateReq) {
-	if req.Replicas != nil {
-		sts.Spec.Replicas = req.Replicas
-	}
-
-	if req.Image != "" {
-		for i := range sts.Spec.Template.Spec.Containers {
-			sts.Spec.Template.Spec.Containers[i].Image = req.Image
-		}
-	}
-
-	if req.Labels != nil {
-		sts.Labels = req.Labels
-		sts.Spec.Template.Labels = req.Labels
-	}
-
-	if req.Annotations != nil {
-		sts.Annotations = req.Annotations
-	}
 }
