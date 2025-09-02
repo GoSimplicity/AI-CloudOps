@@ -43,6 +43,9 @@ type DeploymentService interface {
 	GetDeploymentYaml(ctx context.Context, req *model.GetDeploymentYamlReq) (*model.K8sYaml, error)
 	CreateDeployment(ctx context.Context, req *model.CreateDeploymentReq) error
 	UpdateDeployment(ctx context.Context, req *model.UpdateDeploymentReq) error
+	// YAML相关方法
+	CreateDeploymentByYaml(ctx context.Context, req *model.CreateDeploymentByYamlReq) error
+	UpdateDeploymentByYaml(ctx context.Context, req *model.UpdateDeploymentByYamlReq) error
 	DeleteDeployment(ctx context.Context, req *model.DeleteDeploymentReq) error
 	RestartDeployment(ctx context.Context, req *model.RestartDeploymentReq) error
 	ScaleDeployment(ctx context.Context, req *model.ScaleDeploymentReq) error
@@ -576,37 +579,23 @@ func (d *deploymentService) UpdateDeployment(ctx context.Context, req *model.Upd
 
 	updatedDeployment := existingDeployment.DeepCopy()
 
-	// 如果提供了YAML，使用YAML内容
-	if req.YAML != "" {
-		yamlDeployment, err := utils.YAMLToDeployment(req.YAML)
-		if err != nil {
-			d.logger.Error("UpdateDeployment: 解析YAML失败",
-				zap.Error(err),
-				zap.String("name", req.Name))
-			return fmt.Errorf("解析YAML失败: %w", err)
-		}
-		updatedDeployment.Spec = yamlDeployment.Spec
-		updatedDeployment.Labels = yamlDeployment.Labels
-		updatedDeployment.Annotations = yamlDeployment.Annotations
-	} else {
-		// 更新基本字段
-		if req.Replicas > 0 {
-			updatedDeployment.Spec.Replicas = &req.Replicas
-		}
-		if len(req.Images) > 0 {
-			for i, image := range req.Images {
-				if i < len(updatedDeployment.Spec.Template.Spec.Containers) {
-					updatedDeployment.Spec.Template.Spec.Containers[i].Image = image
-				}
+	// 更新基本字段
+	if req.Replicas > 0 {
+		updatedDeployment.Spec.Replicas = &req.Replicas
+	}
+	if len(req.Images) > 0 {
+		for i, image := range req.Images {
+			if i < len(updatedDeployment.Spec.Template.Spec.Containers) {
+				updatedDeployment.Spec.Template.Spec.Containers[i].Image = image
 			}
 		}
-		if req.Labels != nil {
-			updatedDeployment.Labels = req.Labels
-			updatedDeployment.Spec.Template.Labels = req.Labels
-		}
-		if req.Annotations != nil {
-			updatedDeployment.Annotations = req.Annotations
-		}
+	}
+	if req.Labels != nil {
+		updatedDeployment.Labels = req.Labels
+		updatedDeployment.Spec.Template.Labels = req.Labels
+	}
+	if req.Annotations != nil {
+		updatedDeployment.Annotations = req.Annotations
 	}
 
 	// 验证更新后的Deployment配置
@@ -688,6 +677,90 @@ func (d *deploymentService) ResumeDeployment(ctx context.Context, req *model.Res
 			zap.String("name", req.Name))
 		return fmt.Errorf("恢复Deployment失败: %w", err)
 	}
+
+	return nil
+}
+
+// CreateDeploymentByYaml 通过YAML创建Deployment
+func (d *deploymentService) CreateDeploymentByYaml(ctx context.Context, req *model.CreateDeploymentByYamlReq) error {
+	if req == nil {
+		return fmt.Errorf("通过YAML创建Deployment请求不能为空")
+	}
+
+	if req.YAML == "" {
+		return fmt.Errorf("YAML内容不能为空")
+	}
+
+	d.logger.Info("开始通过YAML创建Deployment",
+		zap.Int("cluster_id", req.ClusterID))
+
+	// 从YAML构建Deployment对象
+	deployment, err := utils.BuildDeploymentFromYaml(req)
+	if err != nil {
+		d.logger.Error("从YAML构建Deployment失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.Error(err))
+		return fmt.Errorf("从YAML构建Deployment失败: %w", err)
+	}
+
+	// 使用现有的创建方法
+	err = d.deploymentManager.CreateDeployment(ctx, req.ClusterID, deployment.Namespace, deployment)
+	if err != nil {
+		d.logger.Error("通过YAML创建Deployment失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", deployment.Namespace),
+			zap.String("name", deployment.Name),
+			zap.Error(err))
+		return fmt.Errorf("通过YAML创建Deployment失败: %w", err)
+	}
+
+	d.logger.Info("通过YAML创建Deployment成功",
+		zap.Int("cluster_id", req.ClusterID))
+
+	return nil
+}
+
+// UpdateDeploymentByYaml 通过YAML更新Deployment
+func (d *deploymentService) UpdateDeploymentByYaml(ctx context.Context, req *model.UpdateDeploymentByYamlReq) error {
+	if req == nil {
+		return fmt.Errorf("通过YAML更新Deployment请求不能为空")
+	}
+
+	if req.YAML == "" {
+		return fmt.Errorf("YAML内容不能为空")
+	}
+
+	d.logger.Info("开始通过YAML更新Deployment",
+		zap.Int("cluster_id", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+
+	// 从YAML构建Deployment对象
+	deployment, err := utils.BuildDeploymentFromYamlForUpdate(req)
+	if err != nil {
+		d.logger.Error("从YAML构建Deployment失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name),
+			zap.Error(err))
+		return fmt.Errorf("从YAML构建Deployment失败: %w", err)
+	}
+
+	// 使用现有的更新方法
+	err = d.deploymentManager.UpdateDeployment(ctx, req.ClusterID, req.Namespace, deployment)
+	if err != nil {
+		d.logger.Error("通过YAML更新Deployment失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name),
+			zap.Error(err))
+		return fmt.Errorf("通过YAML更新Deployment失败: %w", err)
+	}
+
+	d.logger.Info("通过YAML更新Deployment成功",
+		zap.Int("cluster_id", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
 
 	return nil
 }

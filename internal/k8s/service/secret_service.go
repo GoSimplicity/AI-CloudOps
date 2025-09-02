@@ -45,8 +45,11 @@ type SecretService interface {
 	GetSecret(ctx context.Context, req *model.K8sResourceIdentifierReq) (*model.K8sSecret, error)
 	CreateSecret(ctx context.Context, req *model.SecretCreateReq) error
 	UpdateSecret(ctx context.Context, req *model.SecretUpdateReq) error
+	// YAML相关方法
+	CreateSecretByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error
+	UpdateSecretByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error
 	DeleteSecret(ctx context.Context, req *model.K8sResourceIdentifierReq) error
-	BatchDeleteSecrets(ctx context.Context, req *model.K8sBatchDeleteReq) error
+
 	GetSecretYAML(ctx context.Context, req *model.K8sResourceIdentifierReq) (string, error)
 }
 
@@ -220,26 +223,6 @@ func (s *secretService) DeleteSecret(ctx context.Context, req *model.K8sResource
 	return nil
 }
 
-// BatchDeleteSecrets 批量删除Secret
-func (s *secretService) BatchDeleteSecrets(ctx context.Context, req *model.K8sBatchDeleteReq) error {
-	// 使用 SecretManager 批量删除 Secret
-	err := s.secretManager.BatchDeleteSecrets(ctx, req.ClusterID, req.Namespace, req.ResourceNames, metav1.DeleteOptions{})
-	if err != nil {
-		s.logger.Error("批量删除Secret失败", zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.Strings("resource_names", req.ResourceNames))
-		return fmt.Errorf("批量删除Secret失败: %w", err)
-	}
-
-	s.logger.Info("批量删除Secret完成",
-		zap.Int("cluster_id", req.ClusterID),
-		zap.String("namespace", req.Namespace),
-		zap.Int("total_count", len(req.ResourceNames)))
-
-	return nil
-}
-
 // GetSecretYAML 获取Secret的YAML配置
 func (s *secretService) GetSecretYAML(ctx context.Context, req *model.K8sResourceIdentifierReq) (string, error) {
 	// 使用 SecretManager 获取 Secret
@@ -270,6 +253,18 @@ func (s *secretService) GetSecretYAML(ctx context.Context, req *model.K8sResourc
 		zap.String("name", req.ResourceName))
 
 	return string(yamlData), nil
+}
+
+// CreateSecretByYaml 通过YAML创建Secret
+func (s *secretService) CreateSecretByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error {
+	// TODO: 实现通过YAML创建Secret的逻辑
+	return fmt.Errorf("CreateSecretByYaml方法暂未实现")
+}
+
+// UpdateSecretByYaml 通过YAML更新Secret
+func (s *secretService) UpdateSecretByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error {
+	// TODO: 实现通过YAML更新Secret的逻辑
+	return fmt.Errorf("UpdateSecretByYaml方法暂未实现")
 }
 
 // convertToK8sSecret 将Kubernetes Secret转换为模型对象

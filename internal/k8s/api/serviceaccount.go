@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -40,148 +38,352 @@ type K8sServiceAccountHandler struct {
 
 func NewK8sServiceAccountHandler(serviceAccountService service.ServiceAccountService) *K8sServiceAccountHandler {
 	return &K8sServiceAccountHandler{
-
 		serviceAccountService: serviceAccountService,
 	}
 }
 
-func (h *K8sServiceAccountHandler) RegisterRouters(server *gin.Engine) {
+func (s *K8sServiceAccountHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/serviceaccount/list", h.GetServiceAccountList)             // 获取ServiceAccount列表
-		k8sGroup.GET("/serviceaccount/details", h.GetServiceAccountDetails)       // 获取ServiceAccount详情
-		k8sGroup.POST("/serviceaccount/create", h.CreateServiceAccount)           // 创建ServiceAccount
-		k8sGroup.PUT("/serviceaccount/update", h.UpdateServiceAccount)            // 更新ServiceAccount
-		k8sGroup.DELETE("/serviceaccount/delete", h.DeleteServiceAccount)         // 删除ServiceAccount
-		k8sGroup.GET("/serviceaccount/statistics", h.GetServiceAccountStatistics) // 获取ServiceAccount统计信息
-		k8sGroup.POST("/serviceaccount/token", h.GetServiceAccountToken)          // 获取ServiceAccount令牌
-		k8sGroup.GET("/serviceaccount/yaml", h.GetServiceAccountYaml)             // 获取ServiceAccount YAML
-		k8sGroup.PUT("/serviceaccount/yaml", h.UpdateServiceAccountYaml)          // 更新ServiceAccount YAML
+		k8sGroup.GET("/serviceaccounts", s.GetServiceAccountList)                                         // 获取 ServiceAccount 列表
+		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/details", s.GetServiceAccountDetails) // 获取 ServiceAccount 详情
+		k8sGroup.POST("/serviceaccounts", s.CreateServiceAccount)                                         // 创建 ServiceAccount
+		k8sGroup.PUT("/serviceaccounts/:cluster_id/:namespace/:name/update", s.UpdateServiceAccount)      // 更新 ServiceAccount
+		k8sGroup.DELETE("/serviceaccounts/:cluster_id/:namespace/:name", s.DeleteServiceAccount)          // 删除单个 ServiceAccount
+		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/yaml", s.GetServiceAccountYaml)       // 获取 ServiceAccount YAML
+		k8sGroup.PUT("/serviceaccounts/:cluster_id/:namespace/:name/yaml", s.UpdateServiceAccountYaml)    // 更新 ServiceAccount YAML
+		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/events", s.GetServiceAccountEvents)   // 获取 ServiceAccount 事件
+		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/usage", s.GetServiceAccountUsage)     // 获取 ServiceAccount 使用分析
+		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/metrics", s.GetServiceAccountMetrics) // 获取 ServiceAccount 指标
+		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/token", s.GetServiceAccountToken)     // 获取 ServiceAccount 令牌
+		k8sGroup.POST("/serviceaccounts/token", s.CreateServiceAccountToken)                              // 创建 ServiceAccount 令牌
 	}
 }
 
-// GetServiceAccountList 获取ServiceAccount列表
-func (h *K8sServiceAccountHandler) GetServiceAccountList(ctx *gin.Context) {
-	var req model.ServiceAccountListReq
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
+// GetServiceAccountList 获取 ServiceAccount 列表
+func (s *K8sServiceAccountHandler) GetServiceAccountList(ctx *gin.Context) {
+	var req model.GetServiceAccountListReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.serviceAccountService.GetServiceAccountList(ctx, &req)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.serviceAccountService.GetServiceAccountList(ctx, &req)
 	})
 }
 
-// GetServiceAccountDetails 获取ServiceAccount详情
-func (h *K8sServiceAccountHandler) GetServiceAccountDetails(ctx *gin.Context) {
-	clusterIDStr := ctx.Query("cluster_id")
-	namespace := ctx.Query("namespace")
-	name := ctx.Query("name")
+// GetServiceAccountDetails 获取 ServiceAccount 详情
+func (s *K8sServiceAccountHandler) GetServiceAccountDetails(ctx *gin.Context) {
+	var req model.GetServiceAccountDetailsReq
 
-	if clusterIDStr == "" || namespace == "" || name == "" {
-		utils.BadRequestError(ctx, "缺少必要参数: cluster_id, namespace, name")
-		return
-	}
-
-	clusterID, err := strconv.Atoi(clusterIDStr)
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "cluster_id必须是有效的整数")
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.serviceAccountService.GetServiceAccountDetails(ctx, clusterID, namespace, name)
-	})
-}
-
-// CreateServiceAccount 创建ServiceAccount
-func (h *K8sServiceAccountHandler) CreateServiceAccount(ctx *gin.Context) {
-	var req model.ServiceAccountCreateReq
-	if err := ctx.ShouldBindJSON(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.serviceAccountService.CreateServiceAccount(ctx, &req)
-	})
-}
-
-// UpdateServiceAccount 更新ServiceAccount
-func (h *K8sServiceAccountHandler) UpdateServiceAccount(ctx *gin.Context) {
-	var req model.ServiceAccountUpdateReq
-	if err := ctx.ShouldBindJSON(&req); err != nil {
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.serviceAccountService.UpdateServiceAccount(ctx, &req)
-	})
-}
-
-// DeleteServiceAccount 删除ServiceAccount
-func (h *K8sServiceAccountHandler) DeleteServiceAccount(ctx *gin.Context) {
-	var req model.ServiceAccountDeleteReq
-	if err := ctx.ShouldBindJSON(&req); err != nil {
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.serviceAccountService.DeleteServiceAccount(ctx, &req)
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.serviceAccountService.GetServiceAccountDetails(ctx, &req)
 	})
 }
 
-// GetServiceAccountStatistics 获取ServiceAccount统计信息
-func (h *K8sServiceAccountHandler) GetServiceAccountStatistics(ctx *gin.Context) {
-	var req model.ServiceAccountStatisticsReq
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+// CreateServiceAccount 创建 ServiceAccount
+func (s *K8sServiceAccountHandler) CreateServiceAccount(ctx *gin.Context) {
+	var req model.CreateServiceAccountReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, s.serviceAccountService.CreateServiceAccount(ctx, &req)
+	})
+}
+
+// UpdateServiceAccount 更新 ServiceAccount
+func (s *K8sServiceAccountHandler) UpdateServiceAccount(ctx *gin.Context) {
+	var req model.UpdateServiceAccountReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.serviceAccountService.GetServiceAccountStatistics(ctx, &req)
-	})
-}
-
-// GetServiceAccountToken 获取ServiceAccount令牌
-func (h *K8sServiceAccountHandler) GetServiceAccountToken(ctx *gin.Context) {
-	var req model.ServiceAccountTokenReq
-	if err := ctx.ShouldBindJSON(&req); err != nil {
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.serviceAccountService.GetServiceAccountToken(ctx, &req)
-	})
-}
-
-// GetServiceAccountYaml 获取ServiceAccount的YAML配置
-func (h *K8sServiceAccountHandler) GetServiceAccountYaml(ctx *gin.Context) {
-	var req model.ServiceAccountYamlReq
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return h.serviceAccountService.GetServiceAccountYaml(ctx, &req)
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, s.serviceAccountService.UpdateServiceAccount(ctx, &req)
 	})
 }
 
-// UpdateServiceAccountYaml 更新ServiceAccount的YAML配置
-func (h *K8sServiceAccountHandler) UpdateServiceAccountYaml(ctx *gin.Context) {
-	var req model.ServiceAccountUpdateYamlReq
-	if err := ctx.ShouldBindJSON(&req); err != nil {
+// DeleteServiceAccount 删除 ServiceAccount
+func (s *K8sServiceAccountHandler) DeleteServiceAccount(ctx *gin.Context) {
+	var req model.DeleteServiceAccountReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.serviceAccountService.UpdateServiceAccountYaml(ctx, &req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, s.serviceAccountService.DeleteServiceAccount(ctx, &req)
+	})
+}
+
+// GetServiceAccountYaml 获取 ServiceAccount YAML
+func (s *K8sServiceAccountHandler) GetServiceAccountYaml(ctx *gin.Context) {
+	var req model.GetServiceAccountYamlReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.serviceAccountService.GetServiceAccountYaml(ctx, &req)
+	})
+}
+
+// UpdateServiceAccountYaml 更新 ServiceAccount YAML
+func (s *K8sServiceAccountHandler) UpdateServiceAccountYaml(ctx *gin.Context) {
+	var req model.UpdateServiceAccountYamlReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, s.serviceAccountService.UpdateServiceAccountYaml(ctx, &req)
+	})
+}
+
+// GetServiceAccountEvents 获取 ServiceAccount 事件
+func (s *K8sServiceAccountHandler) GetServiceAccountEvents(ctx *gin.Context) {
+	var req model.GetServiceAccountEventsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.serviceAccountService.GetServiceAccountEvents(ctx, &req)
+	})
+}
+
+// GetServiceAccountUsage 获取 ServiceAccount 使用分析
+func (s *K8sServiceAccountHandler) GetServiceAccountUsage(ctx *gin.Context) {
+	var req model.GetServiceAccountUsageReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.serviceAccountService.GetServiceAccountUsage(ctx, &req)
+	})
+}
+
+// GetServiceAccountMetrics 获取 ServiceAccount 指标
+func (s *K8sServiceAccountHandler) GetServiceAccountMetrics(ctx *gin.Context) {
+	var req model.GetServiceAccountMetricsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.serviceAccountService.GetServiceAccountMetrics(ctx, &req)
+	})
+}
+
+// GetServiceAccountToken 获取 ServiceAccount 令牌
+func (s *K8sServiceAccountHandler) GetServiceAccountToken(ctx *gin.Context) {
+	var req model.GetServiceAccountTokenReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.serviceAccountService.GetServiceAccountToken(ctx, &req)
+	})
+}
+
+// CreateServiceAccountToken 创建 ServiceAccount 令牌
+func (s *K8sServiceAccountHandler) CreateServiceAccountToken(ctx *gin.Context) {
+	var req model.CreateServiceAccountTokenReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return s.serviceAccountService.CreateServiceAccountToken(ctx, &req)
 	})
 }

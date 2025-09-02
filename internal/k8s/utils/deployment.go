@@ -408,12 +408,7 @@ func BuildDeploymentFromRequest(req *model.CreateDeploymentReq) (*appsv1.Deploym
 		return nil, fmt.Errorf("请求不能为空")
 	}
 
-	// 如果提供了YAML，优先使用YAML
-	if req.YAML != "" {
-		return YAMLToDeployment(req.YAML)
-	}
-
-	// 否则从请求字段构建
+	// 从请求字段构建
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
@@ -722,4 +717,67 @@ func ConvertToK8sDeployment(deployment *appsv1.Deployment) *model.K8sDeployment 
 		UpdatedAt:         time.Now(),
 		RawDeployment:     deployment,
 	}
+}
+
+// BuildDeploymentFromYaml 从YAML构建Deployment对象
+func BuildDeploymentFromYaml(req *model.CreateDeploymentByYamlReq) (*appsv1.Deployment, error) {
+	if req == nil {
+		return nil, fmt.Errorf("请求不能为空")
+	}
+
+	if req.YAML == "" {
+		return nil, fmt.Errorf("YAML内容不能为空")
+	}
+
+	deployment, err := YAMLToDeployment(req.YAML)
+	if err != nil {
+		return nil, err
+	}
+
+	// YAML中必须包含namespace和name信息
+	if deployment.Namespace == "" {
+		return nil, fmt.Errorf("YAML中必须指定namespace")
+	}
+
+	if deployment.Name == "" {
+		return nil, fmt.Errorf("YAML中必须指定name")
+	}
+
+	return deployment, nil
+}
+
+// BuildDeploymentFromYamlForUpdate 从YAML构建Deployment对象用于更新
+func BuildDeploymentFromYamlForUpdate(req *model.UpdateDeploymentByYamlReq) (*appsv1.Deployment, error) {
+	if req == nil {
+		return nil, fmt.Errorf("请求不能为空")
+	}
+
+	if req.YAML == "" {
+		return nil, fmt.Errorf("YAML内容不能为空")
+	}
+
+	deployment, err := YAMLToDeployment(req.YAML)
+	if err != nil {
+		return nil, err
+	}
+
+	// 确保YAML中的namespace和name与请求参数一致
+	if deployment.Namespace != "" && deployment.Namespace != req.Namespace {
+		return nil, fmt.Errorf("YAML中的namespace (%s) 与请求参数不一致 (%s)", deployment.Namespace, req.Namespace)
+	}
+
+	if deployment.Name != "" && deployment.Name != req.Name {
+		return nil, fmt.Errorf("YAML中的name (%s) 与请求参数不一致 (%s)", deployment.Name, req.Name)
+	}
+
+	// 如果YAML中没有指定，使用请求参数
+	if deployment.Namespace == "" {
+		deployment.Namespace = req.Namespace
+	}
+
+	if deployment.Name == "" {
+		deployment.Name = req.Name
+	}
+
+	return deployment, nil
 }

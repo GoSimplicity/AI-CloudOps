@@ -44,6 +44,9 @@ type SvcService interface {
 	GetServiceYaml(ctx context.Context, req *model.GetServiceYamlReq) (*model.K8sYaml, error)
 	CreateService(ctx context.Context, req *model.CreateServiceReq) error
 	UpdateService(ctx context.Context, req *model.UpdateServiceReq) error
+	// YAML相关方法
+	CreateServiceByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error
+	UpdateServiceByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error
 	DeleteService(ctx context.Context, req *model.DeleteServiceReq) error
 	GetServiceEndpoints(ctx context.Context, req *model.GetServiceEndpointsReq) ([]*model.K8sServiceEndpoint, error)
 	GetServiceMetrics(ctx context.Context, req *model.GetServiceMetricsReq) (*model.K8sServiceMetrics, error)
@@ -563,4 +566,16 @@ func (s *svcService) UpdateService(ctx context.Context, req *model.UpdateService
 		zap.String("name", req.Name))
 
 	return nil
+}
+
+// CreateServiceByYaml 通过YAML创建Service
+func (s *svcService) CreateServiceByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error {
+	// TODO: 实现通过YAML创建Service的逻辑
+	return fmt.Errorf("CreateServiceByYaml方法暂未实现")
+}
+
+// UpdateServiceByYaml 通过YAML更新Service
+func (s *svcService) UpdateServiceByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error {
+	// TODO: 实现通过YAML更新Service的逻辑
+	return fmt.Errorf("UpdateServiceByYaml方法暂未实现")
 }

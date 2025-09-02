@@ -27,6 +27,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
@@ -48,8 +49,11 @@ type IngressService interface {
 	GetIngressYaml(ctx context.Context, clusterID int, namespace, name string) (string, error)
 	CreateIngress(ctx context.Context, req *model.K8sIngressCreateReq) error
 	UpdateIngress(ctx context.Context, req *model.K8sIngressUpdateReq) error
+	// YAML相关方法
+	CreateIngressByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error
+	UpdateIngressByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error
 	DeleteIngress(ctx context.Context, req *model.K8sIngressDeleteReq) error
-	BatchDeleteIngresses(ctx context.Context, req *model.K8sIngressBatchDeleteReq) error
+
 	GetIngressEvents(ctx context.Context, req *model.K8sIngressEventReq) ([]*model.K8sEvent, error)
 	TestIngressTLS(ctx context.Context, req *model.K8sIngressTLSTestReq) (*model.K8sTLSTestResult, error)
 	CheckIngressBackendHealth(ctx context.Context, req *model.K8sIngressBackendHealthReq) ([]*model.K8sBackendHealth, error)
@@ -249,12 +253,6 @@ func (i *ingressService) DeleteIngress(ctx context.Context, req *model.K8sIngres
 	return nil
 }
 
-// BatchDeleteIngresses 批量删除Ingress
-func (i *ingressService) BatchDeleteIngresses(ctx context.Context, req *model.K8sIngressBatchDeleteReq) error {
-	// TODO: 实现批量删除功能
-	return pkg.NewBusinessError(constants.ErrNotImplemented, "批量删除Ingress功能尚未实现")
-}
-
 // GetIngressEvents 获取Ingress事件
 func (i *ingressService) GetIngressEvents(ctx context.Context, req *model.K8sIngressEventReq) ([]*model.K8sEvent, error) {
 	// TODO: 实现获取事件功能
@@ -353,4 +351,16 @@ func (i *ingressService) convertIngressToEntity(ingress *networkingv1.Ingress, c
 		Status:            status,
 		Hosts:             hosts,
 	}
+}
+
+// CreateIngressByYaml 通过YAML创建Ingress
+func (i *ingressService) CreateIngressByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error {
+	// TODO: 实现通过YAML创建Ingress的逻辑
+	return fmt.Errorf("CreateIngressByYaml方法暂未实现")
+}
+
+// UpdateIngressByYaml 通过YAML更新Ingress
+func (i *ingressService) UpdateIngressByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error {
+	// TODO: 实现通过YAML更新Ingress的逻辑
+	return fmt.Errorf("UpdateIngressByYaml方法暂未实现")
 }

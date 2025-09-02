@@ -146,7 +146,7 @@ type GetDeploymentYamlReq struct {
 	Name      string `json:"name"`       // Deployment名称
 }
 
-// CreateDeploymentReq 创建Deployment请求
+// CreateDeploymentReq 创建Deployment请求（通过配置字段）
 type CreateDeploymentReq struct {
 	ClusterID   int               `json:"cluster_id" binding:"required"` // 集群ID
 	Name        string            `json:"name" binding:"required"`       // Deployment名称
@@ -156,10 +156,9 @@ type CreateDeploymentReq struct {
 	Labels      map[string]string `json:"labels"`                        // 标签
 	Annotations map[string]string `json:"annotations"`                   // 注解
 	Spec        DeploymentSpec    `json:"spec"`                          // Deployment规格
-	YAML        string            `json:"yaml"`                          // YAML内容
 }
 
-// UpdateDeploymentReq 更新Deployment请求
+// UpdateDeploymentReq 更新Deployment请求（通过配置字段）
 type UpdateDeploymentReq struct {
 	ClusterID   int               `json:"cluster_id"`  // 集群ID
 	Name        string            `json:"name"`        // Deployment名称
@@ -169,7 +168,20 @@ type UpdateDeploymentReq struct {
 	Labels      map[string]string `json:"labels"`      // 标签
 	Annotations map[string]string `json:"annotations"` // 注解
 	Spec        DeploymentSpec    `json:"spec"`        // Deployment规格
-	YAML        string            `json:"yaml"`        // YAML内容
+}
+
+// CreateDeploymentByYamlReq 通过YAML创建Deployment请求
+type CreateDeploymentByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+// UpdateDeploymentByYamlReq 通过YAML更新Deployment请求
+type UpdateDeploymentByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" binding:"required"`  // 命名空间
+	Name      string `json:"name" binding:"required"`       // Deployment名称
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
 }
 
 // DeleteDeploymentReq 删除Deployment请求

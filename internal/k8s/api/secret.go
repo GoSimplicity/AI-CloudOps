@@ -54,6 +54,10 @@ func (h *K8sSecretHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.PUT("/secrets/update", h.UpdateSecret)                             // 更新Secret
 		k8sGroup.DELETE("/secrets/:cluster_id/:namespace/:name", h.DeleteSecret)    // 删除Secret
 		k8sGroup.GET("/secrets/:cluster_id/:namespace/:name/yaml", h.GetSecretYAML) // 获取Secret的YAML配置
+
+		// YAML操作
+		k8sGroup.POST("/secrets/yaml", h.CreateSecretByYaml)                             // 通过YAML创建Secret
+		k8sGroup.PUT("/secrets/:cluster_id/:namespace/:name/yaml", h.UpdateSecretByYaml) // 通过YAML更新Secret
 	}
 }
 
@@ -168,5 +172,49 @@ func (h *K8sSecretHandler) GetSecretYAML(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.secretService.GetSecretYAML(ctx, &req)
+	})
+}
+
+// YAML操作方法
+
+// CreateSecretByYaml 通过YAML创建Secret
+func (h *K8sSecretHandler) CreateSecretByYaml(ctx *gin.Context) {
+	var req model.CreateResourceByYamlReq
+	req.ResourceType = model.ResourceTypeSecret
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.secretService.CreateSecretByYaml(ctx, &req)
+	})
+}
+
+// UpdateSecretByYaml 通过YAML更新Secret
+func (h *K8sSecretHandler) UpdateSecretByYaml(ctx *gin.Context) {
+	var req model.UpdateResourceByYamlReq
+	req.ResourceType = model.ResourceTypeSecret
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.secretService.UpdateSecretByYaml(ctx, &req)
 	})
 }

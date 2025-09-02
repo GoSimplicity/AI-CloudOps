@@ -27,6 +27,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
@@ -53,10 +54,12 @@ type PVCService interface {
 	// PVC操作
 	CreatePVC(ctx context.Context, req *model.K8sPVCCreateReq) error
 	UpdatePVC(ctx context.Context, req *model.K8sPVCUpdateReq) error
+	// YAML相关方法
+	CreatePVCByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error
+	UpdatePVCByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error
 	DeletePVC(ctx context.Context, req *model.K8sPVCDeleteReq) error
 
 	// 批量操作
-	BatchDeletePVCs(ctx context.Context, req *model.K8sPVCBatchDeleteReq) error
 
 	// 高级功能（TODO实现）
 	GetPVCEvents(ctx context.Context, req *model.K8sPVCEventReq) ([]*model.K8sEvent, error)
@@ -262,12 +265,6 @@ func (p *pvcService) DeletePVC(ctx context.Context, req *model.K8sPVCDeleteReq) 
 	return nil
 }
 
-// BatchDeletePVCs 批量删除PVC
-func (p *pvcService) BatchDeletePVCs(ctx context.Context, req *model.K8sPVCBatchDeleteReq) error {
-	// TODO: 实现批量删除功能
-	return pkg.NewBusinessError(constants.ErrNotImplemented, "批量删除PVC功能尚未实现")
-}
-
 // GetPVCEvents 获取PVC事件
 func (p *pvcService) GetPVCEvents(ctx context.Context, req *model.K8sPVCEventReq) ([]*model.K8sEvent, error) {
 	// TODO: 实现PVC事件获取功能
@@ -342,4 +339,16 @@ func (p *pvcService) convertPVCToEntity(pvc *corev1.PersistentVolumeClaim, clust
 		CreationTimestamp: pvc.CreationTimestamp.Time,
 		Age:               age,
 	}
+}
+
+// CreatePVCByYaml 通过YAML创建PVC
+func (p *pvcService) CreatePVCByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error {
+	// TODO: 实现通过YAML创建PVC的逻辑
+	return fmt.Errorf("CreatePVCByYaml方法暂未实现")
+}
+
+// UpdatePVCByYaml 通过YAML更新PVC
+func (p *pvcService) UpdatePVCByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error {
+	// TODO: 实现通过YAML更新PVC的逻辑
+	return fmt.Errorf("UpdatePVCByYaml方法暂未实现")
 }

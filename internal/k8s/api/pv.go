@@ -46,13 +46,18 @@ func NewK8sPVHandler(pvService service.PVService) *K8sPVHandler {
 func (k *K8sPVHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/pvs/list", k.GetPVList)                       // 获取PV列表
-		k8sGroup.GET("/pvs/:cluster_id", k.GetPVsByCluster)          // 根据集群获取PV列表
-		k8sGroup.GET("/pvs/:cluster_id/:name", k.GetPV)              // 获取单个PV详情
-		k8sGroup.GET("/pvs/:cluster_id/:name/yaml", k.GetPVYaml)     // 获取PV YAML配置
-		k8sGroup.POST("/pvs/create", k.CreatePV)                     // 创建PV
-		k8sGroup.PUT("/pvs/update", k.UpdatePV)                      // 更新PV
-		k8sGroup.DELETE("/pvs/delete", k.DeletePV)                   // 删除PV
+		k8sGroup.GET("/pvs/list", k.GetPVList)                   // 获取PV列表
+		k8sGroup.GET("/pvs/:cluster_id", k.GetPVsByCluster)      // 根据集群获取PV列表
+		k8sGroup.GET("/pvs/:cluster_id/:name", k.GetPV)          // 获取单个PV详情
+		k8sGroup.GET("/pvs/:cluster_id/:name/yaml", k.GetPVYaml) // 获取PV YAML配置
+		k8sGroup.POST("/pvs/create", k.CreatePV)                 // 创建PV
+		k8sGroup.PUT("/pvs/update", k.UpdatePV)                  // 更新PV
+		k8sGroup.DELETE("/pvs/delete", k.DeletePV)               // 删除PV
+
+		// YAML操作
+		k8sGroup.POST("/pvs/yaml", k.CreatePVByYaml)                  // 通过YAML创建PV
+		k8sGroup.PUT("/pvs/:cluster_id/:name/yaml", k.UpdatePVByYaml) // 通过YAML更新PV
+
 		k8sGroup.GET("/pvs/:cluster_id/:name/events", k.GetPVEvents) // 获取PV事件
 		k8sGroup.GET("/pvs/:cluster_id/:name/usage", k.GetPVUsage)   // 获取PV使用情况
 		k8sGroup.POST("/pvs/:cluster_id/:name/reclaim", k.ReclaimPV) // 回收PV
@@ -186,5 +191,43 @@ func (k *K8sPVHandler) ReclaimPV(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.pvService.ReclaimPV(ctx, req.ClusterID, req.Name)
+	})
+}
+
+// YAML操作方法
+
+// CreatePVByYaml 通过YAML创建PV
+func (k *K8sPVHandler) CreatePVByYaml(ctx *gin.Context) {
+	var req model.CreateResourceByYamlReq
+	req.ResourceType = model.ResourceTypePV
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.pvService.CreatePVByYaml(ctx, &req)
+	})
+}
+
+// UpdatePVByYaml 通过YAML更新PV
+func (k *K8sPVHandler) UpdatePVByYaml(ctx *gin.Context) {
+	var req model.UpdateResourceByYamlReq
+	req.ResourceType = model.ResourceTypePV
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Name = name
+	// PV是集群级别资源，没有namespace
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.pvService.UpdatePVByYaml(ctx, &req)
 	})
 }

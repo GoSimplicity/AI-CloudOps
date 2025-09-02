@@ -126,14 +126,6 @@ type K8sPVDeleteReq struct {
 	Force              bool   `json:"force" comment:"是否强制删除"`                       // 是否强制删除
 }
 
-// K8sPVBatchDeleteRequest 批量删除PV请求
-type K8sPVBatchDeleteReq struct {
-	ClusterID          int      `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
-	Names              []string `json:"names" binding:"required" comment:"PV名称列表"`    // PV名称列表，必填
-	GracePeriodSeconds *int64   `json:"grace_period_seconds" comment:"优雅删除时间（秒）"`     // 优雅删除时间
-	Force              bool     `json:"force" comment:"是否强制删除"`                       // 是否强制删除
-}
-
 // K8sPVEventRequest 获取PV事件请求
 type K8sPVEventReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填

@@ -45,8 +45,11 @@ type ConfigMapService interface {
 	GetConfigMap(ctx context.Context, req *model.K8sResourceIdentifierReq) (*model.K8sConfigMap, error)
 	CreateConfigMap(ctx context.Context, req *model.ConfigMapCreateReq) error
 	UpdateConfigMap(ctx context.Context, req *model.ConfigMapUpdateReq) error
+	// YAML相关方法
+	CreateConfigMapByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error
+	UpdateConfigMapByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error
 	DeleteConfigMap(ctx context.Context, req *model.K8sResourceIdentifierReq) error
-	BatchDeleteConfigMaps(ctx context.Context, req *model.K8sBatchDeleteReq) error
+
 	GetConfigMapYAML(ctx context.Context, req *model.K8sResourceIdentifierReq) (string, error)
 }
 
@@ -214,26 +217,6 @@ func (s *configMapService) DeleteConfigMap(ctx context.Context, req *model.K8sRe
 	return nil
 }
 
-// BatchDeleteConfigMaps 批量删除ConfigMap
-func (s *configMapService) BatchDeleteConfigMaps(ctx context.Context, req *model.K8sBatchDeleteReq) error {
-	// 使用 ConfigMapManager 批量删除 ConfigMap
-	err := s.configMapManager.BatchDeleteConfigMaps(ctx, req.ClusterID, req.Namespace, req.ResourceNames, metav1.DeleteOptions{})
-	if err != nil {
-		s.logger.Error("批量删除ConfigMap失败", zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.Strings("resource_names", req.ResourceNames))
-		return fmt.Errorf("批量删除ConfigMap失败: %w", err)
-	}
-
-	s.logger.Info("批量删除ConfigMap完成",
-		zap.Int("cluster_id", req.ClusterID),
-		zap.String("namespace", req.Namespace),
-		zap.Int("total_count", len(req.ResourceNames)))
-
-	return nil
-}
-
 // GetConfigMapYAML 获取ConfigMap的YAML配置
 func (s *configMapService) GetConfigMapYAML(ctx context.Context, req *model.K8sResourceIdentifierReq) (string, error) {
 	// 使用 ConfigMapManager 获取 ConfigMap
@@ -279,4 +262,16 @@ func (s *configMapService) convertToK8sConfigMap(configMap *corev1.ConfigMap) *m
 		CreationTimestamp: configMap.CreationTimestamp.Time,
 		Age:               time.Since(configMap.CreationTimestamp.Time).String(),
 	}
+}
+
+// CreateConfigMapByYaml 通过YAML创建ConfigMap
+func (c *configMapService) CreateConfigMapByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error {
+	// TODO: 实现通过YAML创建ConfigMap的逻辑
+	return fmt.Errorf("CreateConfigMapByYaml方法暂未实现")
+}
+
+// UpdateConfigMapByYaml 通过YAML更新ConfigMap
+func (c *configMapService) UpdateConfigMapByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error {
+	// TODO: 实现通过YAML更新ConfigMap的逻辑
+	return fmt.Errorf("UpdateConfigMapByYaml方法暂未实现")
 }

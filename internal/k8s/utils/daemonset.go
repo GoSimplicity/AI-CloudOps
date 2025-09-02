@@ -65,6 +65,26 @@ func BuildK8sDaemonSet(ctx context.Context, clusterID int, daemonSet appsv1.Daem
 		selector = daemonSet.Spec.Selector.MatchLabels
 	}
 
+	// 构建Conditions
+	var conditions []model.DaemonSetCondition
+	for _, condition := range daemonSet.Status.Conditions {
+		dsCondition := model.DaemonSetCondition{
+			Type:               string(condition.Type),
+			Status:             string(condition.Status),
+			LastUpdateTime:     condition.LastTransitionTime.Time,
+			LastTransitionTime: condition.LastTransitionTime.Time,
+			Reason:             condition.Reason,
+			Message:            condition.Message,
+		}
+		conditions = append(conditions, dsCondition)
+	}
+
+	// 设置历史版本限制
+	revisionHistoryLimit := int32(10) // 默认值
+	if daemonSet.Spec.RevisionHistoryLimit != nil {
+		revisionHistoryLimit = *daemonSet.Spec.RevisionHistoryLimit
+	}
+
 	// 构建基础DaemonSet信息
 	k8sDaemonSet := &model.K8sDaemonSet{
 		Name:                   daemonSet.Name,
@@ -74,6 +94,7 @@ func BuildK8sDaemonSet(ctx context.Context, clusterID int, daemonSet appsv1.Daem
 		Labels:                 daemonSet.Labels,
 		Annotations:            daemonSet.Annotations,
 		CreatedAt:              daemonSet.CreationTimestamp.Time,
+		UpdatedAt:              daemonSet.CreationTimestamp.Time,
 		Status:                 status,
 		DesiredNumberScheduled: daemonSet.Status.DesiredNumberScheduled,
 		CurrentNumberScheduled: daemonSet.Status.CurrentNumberScheduled,
@@ -85,6 +106,9 @@ func BuildK8sDaemonSet(ctx context.Context, clusterID int, daemonSet appsv1.Daem
 		Images:                 images,
 		Selector:               selector,
 		UpdateStrategy:         updateStrategy,
+		RevisionHistoryLimit:   revisionHistoryLimit,
+		Conditions:             conditions,
+		RawDaemonSet:           &daemonSet,
 	}
 
 	return k8sDaemonSet, nil
@@ -288,6 +312,8 @@ func BuildK8sDaemonSetHistory(revision appsv1.ControllerRevision) (*model.K8sDae
 }
 
 // ExtractDaemonSetFromRevision 从ControllerRevision中提取DaemonSet模板
+// 注意：DaemonSet回滚相比Deployment更复杂，因为Kubernetes没有内置的DaemonSet回滚API
+// 这个函数提供基础框架，在实际使用中需要根据具体需求实现反序列化逻辑
 func ExtractDaemonSetFromRevision(revision *appsv1.ControllerRevision, daemonSet *appsv1.DaemonSet) error {
 	if revision == nil {
 		return fmt.Errorf("ControllerRevision不能为空")
@@ -297,16 +323,25 @@ func ExtractDaemonSetFromRevision(revision *appsv1.ControllerRevision, daemonSet
 		return fmt.Errorf("DaemonSet对象不能为空")
 	}
 
-	// 简化实现，实际上ControllerRevision的Data包含序列化的对象数据
-	// 这里可以根据需要实现具体的反序列化逻辑
+	// 简化实现：ControllerRevision的Data包含序列化的对象数据
+	// 对于DaemonSet，通常需要从ControllerRevision.Data中反序列化DaemonSetSpec
 	if revision.Data.Raw == nil {
 		return fmt.Errorf("ControllerRevision数据为空")
 	}
 
-	// 这里可以添加具体的反序列化逻辑
-	// 暂时返回成功，实际使用中需要实现具体的反序列化
+	// DaemonSet回滚说明：
+	// 1. DaemonSet不像Deployment有内置回滚功能
+	// 2. 通常通过重新应用历史版本的配置来实现
+	// 3. 实际项目中可以通过kubectl rollout undo daemonset/<name> --to-revision=<revision>
 
-	return nil
+	d := daemonSet
+	_ = d // 避免未使用变量警告
+
+	// 这里可以添加具体的JSON反序列化逻辑
+	// 例如：json.Unmarshal(revision.Data.Raw, &daemonSetSpec)
+	// 然后将spec应用到传入的daemonSet对象
+
+	return fmt.Errorf("DaemonSet回滚功能需要实现具体的反序列化逻辑")
 }
 
 // getChangeReason 获取变更原因

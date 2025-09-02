@@ -376,20 +376,6 @@ type K8sListReq struct {
 	Continue      string `json:"continue" comment:"分页续订令牌"`
 }
 
-// K8sBatchDeleteReq K8s资源批量删除请求结构
-type K8sBatchDeleteReq struct {
-	K8sBaseReq
-	ResourceNames []string `json:"resource_names" binding:"required" comment:"资源名称列表"`
-}
-
-// K8sBatchOperationReq K8s资源批量操作请求结构
-type K8sBatchOperationReq struct {
-	K8sBaseReq
-	ResourceNames []string `json:"resource_names" binding:"required" comment:"资源名称列表"`
-	Operation     string   `json:"operation" binding:"required,oneof=restart scale delete" comment:"操作类型：restart|scale|delete"`
-	Parameters    any      `json:"parameters" comment:"操作参数"`
-}
-
 // K8sYamlApplyReq K8s YAML应用请求结构
 type K8sYamlApplyReq struct {
 	K8sBaseReq
@@ -436,18 +422,6 @@ type SecretUpdateReq struct {
 	StringData  map[string]string `json:"string_data" comment:"明文数据"`
 	Labels      map[string]string `json:"labels" comment:"标签"`
 	Annotations map[string]string `json:"annotations" comment:"注解"`
-}
-
-// DeploymentBatchDeleteReq 批量删除Deployment请求
-type DeploymentBatchDeleteReq struct {
-	K8sBaseReq
-	DeploymentNames []string `json:"deployment_names" binding:"required" comment:"Deployment名称列表"`
-}
-
-// DeploymentBatchRestartReq 批量重启Deployment请求
-type DeploymentBatchRestartReq struct {
-	K8sBaseReq
-	DeploymentNames []string `json:"deployment_names" binding:"required" comment:"Deployment名称列表"`
 }
 
 // StatefulSetCreateReq 创建StatefulSet请求

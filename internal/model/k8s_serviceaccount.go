@@ -27,27 +27,40 @@ package model
 
 import (
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
-// ====================== ServiceAccount Response结构体 ======================
+// ServiceAccountStatus ServiceAccount状态枚举
+type ServiceAccountStatus int8
 
-// K8sServiceAccountResponse ServiceAccount响应结构
-type K8sServiceAccountResponse struct {
+const (
+	ServiceAccountStatusActive   ServiceAccountStatus = iota + 1 // 活跃
+	ServiceAccountStatusInactive                                 // 非活跃
+	ServiceAccountStatusError                                    // 异常
+)
+
+// K8sServiceAccount Kubernetes ServiceAccount模型
+type K8sServiceAccount struct {
 	Name                         string                 `json:"name"`                            // ServiceAccount名称
-	UID                          string                 `json:"uid"`                             // UID
 	Namespace                    string                 `json:"namespace"`                       // 命名空间
-	ClusterID                    int                    `json:"cluster_id"`                      // 集群ID
-	Labels                       map[string]string      `json:"labels"`                          // 标签
-	Annotations                  map[string]string      `json:"annotations"`                     // 注解
-	CreationTimestamp            time.Time              `json:"creation_timestamp"`              // 创建时间
+	ClusterID                    int                    `json:"cluster_id"`                      // 所属集群ID
+	UID                          string                 `json:"uid"`                             // ServiceAccount UID
+	Status                       ServiceAccountStatus   `json:"status"`                          // ServiceAccount状态
+	Labels                       map[string]string      `json:"labels"`                          // ServiceAccount标签
+	Annotations                  map[string]string      `json:"annotations"`                     // ServiceAccount注解
+	AutomountServiceAccountToken *BoolValue             `json:"automount_service_account_token"` // 是否自动挂载ServiceAccount Token
+	Secrets                      []ServiceAccountSecret `json:"secrets"`                         // 关联的Secrets
+	ImagePullSecrets             []ServiceAccountSecret `json:"image_pull_secrets"`              // 关联的ImagePullSecrets
+	ResourceVersion              string                 `json:"resource_version"`                // 资源版本
 	Age                          string                 `json:"age"`                             // 存在时间
 	SecretsCount                 int                    `json:"secrets_count"`                   // Secrets数量
 	ImagePullSecretsCount        int                    `json:"image_pull_secrets_count"`        // ImagePullSecrets数量
-	AutomountServiceAccountToken *bool                  `json:"automount_service_account_token"` // 是否自动挂载ServiceAccount Token
-	Secrets                      []ServiceAccountSecret `json:"secrets,omitempty"`               // Secrets列表
-	ImagePullSecrets             []ServiceAccountSecret `json:"image_pull_secrets,omitempty"`    // ImagePullSecrets列表
-	Token                        string                 `json:"token,omitempty"`                 // Token（详情页时返回）
-	CACert                       string                 `json:"ca_cert,omitempty"`               // CA证书（详情页时返回）
+	RoleBindingCount             int                    `json:"role_binding_count"`              // 关联的RoleBinding数量
+	ClusterRoleBindingCount      int                    `json:"cluster_role_binding_count"`      // 关联的ClusterRoleBinding数量
+	IsSystemAccount              BoolValue              `json:"is_system_account"`               // 是否为系统账户
+	CreationTimestamp            time.Time              `json:"creation_timestamp"`              // 创建时间
+	RawServiceAccount            *corev1.ServiceAccount `json:"-"`                               // 原始ServiceAccount对象，不序列化
 }
 
 // ServiceAccountSecret ServiceAccount关联的Secret信息
@@ -57,105 +70,54 @@ type ServiceAccountSecret struct {
 	Type      string `json:"type"`      // Secret类型
 }
 
-// ====================== ServiceAccount请求结构体 ======================
-
-// ServiceAccountListReq ServiceAccount列表查询请求
-type ServiceAccountListReq struct {
-	ClusterID     int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
-	Namespace     string `json:"namespace" form:"namespace" comment:"命名空间"`                      // 命名空间
-	LabelSelector string `json:"label_selector" form:"label_selector" comment:"标签选择器"`           // 标签选择器
-	FieldSelector string `json:"field_selector" form:"field_selector" comment:"字段选择器"`           // 字段选择器
-	Page          int    `json:"page" form:"page" comment:"页码"`                                  // 页码
-	PageSize      int    `json:"page_size" form:"page_size" comment:"每页大小"`                      // 每页大小
+// K8sServiceAccountEvent ServiceAccount相关事件
+type K8sServiceAccountEvent struct {
+	Type      string    `json:"type"`       // 事件类型 (Normal, Warning)
+	Reason    string    `json:"reason"`     // 事件原因
+	Message   string    `json:"message"`    // 事件消息
+	Source    string    `json:"source"`     // 事件源
+	FirstTime time.Time `json:"first_time"` // 首次发生时间
+	LastTime  time.Time `json:"last_time"`  // 最后发生时间
+	Count     int32     `json:"count"`      // 发生次数
 }
 
-// ServiceAccountCreateReq ServiceAccount创建请求
-type ServiceAccountCreateReq struct {
-	ClusterID                    int               `json:"cluster_id" binding:"required" comment:"集群ID"`                         // 集群ID，必填
-	Namespace                    string            `json:"namespace" binding:"required" comment:"命名空间"`                          // 命名空间，必填
-	Name                         string            `json:"name" binding:"required" comment:"ServiceAccount名称"`                   // ServiceAccount名称，必填
-	Labels                       map[string]string `json:"labels" comment:"标签"`                                                  // 标签
-	Annotations                  map[string]string `json:"annotations" comment:"注解"`                                             // 注解
-	AutomountServiceAccountToken *bool             `json:"automount_service_account_token" comment:"是否自动挂载ServiceAccount Token"` // 是否自动挂载ServiceAccount Token
-	ImagePullSecrets             []string          `json:"image_pull_secrets" comment:"ImagePullSecrets列表"`                      // ImagePullSecrets列表
+// K8sServiceAccountMetrics ServiceAccount指标信息
+type K8sServiceAccountMetrics struct {
+	ServiceAccountName       string    `json:"service_account_name"`        // ServiceAccount名称
+	Namespace                string    `json:"namespace"`                   // 命名空间
+	TotalRoleBindings        int       `json:"total_role_bindings"`         // 总RoleBinding数
+	TotalClusterRoleBindings int       `json:"total_cluster_role_bindings"` // 总ClusterRoleBinding数
+	TotalSecrets             int       `json:"total_secrets"`               // 总Secrets数
+	TotalImagePullSecrets    int       `json:"total_image_pull_secrets"`    // 总ImagePullSecrets数
+	TokensCreated            int       `json:"tokens_created"`              // 创建的Token数
+	PodsUsingAccount         int       `json:"pods_using_account"`          // 使用该账户的Pod数
+	IsActive                 BoolValue `json:"is_active"`                   // 是否活跃
+	AutomountEnabled         BoolValue `json:"automount_enabled"`           // 是否启用自动挂载
+	SecurityRisk             string    `json:"security_risk"`               // 安全风险等级 (Low, Medium, High)
+	LastUsed                 time.Time `json:"last_used"`                   // 最后使用时间
+	LastUpdated              time.Time `json:"last_updated"`                // 最后更新时间
 }
 
-// ServiceAccountUpdateReq ServiceAccount更新请求
-type ServiceAccountUpdateReq struct {
-	ClusterID                    int               `json:"cluster_id" binding:"required" comment:"集群ID"`                         // 集群ID，必填
-	Namespace                    string            `json:"namespace" binding:"required" comment:"命名空间"`                          // 命名空间，必填
-	Name                         string            `json:"name" binding:"required" comment:"ServiceAccount名称"`                   // ServiceAccount名称，必填
-	Labels                       map[string]string `json:"labels" comment:"标签"`                                                  // 标签
-	Annotations                  map[string]string `json:"annotations" comment:"注解"`                                             // 注解
-	AutomountServiceAccountToken *bool             `json:"automount_service_account_token" comment:"是否自动挂载ServiceAccount Token"` // 是否自动挂载ServiceAccount Token
-	ImagePullSecrets             []string          `json:"image_pull_secrets" comment:"ImagePullSecrets列表"`                      // ImagePullSecrets列表
+// K8sServiceAccountUsage ServiceAccount使用情况
+type K8sServiceAccountUsage struct {
+	ServiceAccountName   string                         `json:"service_account_name"`  // ServiceAccount名称
+	Namespace            string                         `json:"namespace"`             // 命名空间
+	RoleBindings         []RoleBindingSimpleInfo        `json:"role_bindings"`         // 关联的RoleBinding
+	ClusterRoleBindings  []ClusterRoleBindingSimpleInfo `json:"cluster_role_bindings"` // 关联的ClusterRoleBinding
+	EffectivePermissions []PolicyRule                   `json:"effective_permissions"` // 有效权限
+	Secrets              []ServiceAccountSecret         `json:"secrets"`               // 关联的Secrets
+	ImagePullSecrets     []ServiceAccountSecret         `json:"image_pull_secrets"`    // 关联的ImagePullSecrets
+	UsedByPods           []string                       `json:"used_by_pods"`          // 使用该账户的Pod列表
+	IsUsed               BoolValue                      `json:"is_used"`               // 是否被使用
+	RiskLevel            string                         `json:"risk_level"`            // 风险等级
+	LastAccessed         *time.Time                     `json:"last_accessed"`         // 最后访问时间
 }
 
-// ServiceAccountDeleteReq ServiceAccount删除请求
-type ServiceAccountDeleteReq struct {
-	ClusterID          int    `json:"cluster_id" binding:"required" comment:"集群ID"`       // 集群ID，必填
-	Namespace          string `json:"namespace" binding:"required" comment:"命名空间"`        // 命名空间，必填
-	Name               string `json:"name" binding:"required" comment:"ServiceAccount名称"` // ServiceAccount名称，必填
-	GracePeriodSeconds *int64 `json:"grace_period_seconds" comment:"优雅删除时间"`              // 优雅删除时间
-	Force              bool   `json:"force" comment:"是否强制删除"`                             // 是否强制删除
-}
-
-// ServiceAccountBatchDeleteReq ServiceAccount批量删除请求
-type ServiceAccountBatchDeleteReq struct {
-	ClusterID          int      `json:"cluster_id" binding:"required" comment:"集群ID"`          // 集群ID，必填
-	Namespace          string   `json:"namespace" binding:"required" comment:"命名空间"`           // 命名空间，必填
-	Names              []string `json:"names" binding:"required" comment:"ServiceAccount名称列表"` // ServiceAccount名称列表，必填
-	GracePeriodSeconds *int64   `json:"grace_period_seconds" comment:"优雅删除时间"`                 // 优雅删除时间
-	Force              bool     `json:"force" comment:"是否强制删除"`                                // 是否强制删除
-}
-
-// ServiceAccountStatisticsReq ServiceAccount统计信息请求
-type ServiceAccountStatisticsReq struct {
-	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
-	Namespace string `json:"namespace" form:"namespace" comment:"命名空间"`                      // 命名空间，可选
-}
-
-// ServiceAccountStatisticsResp ServiceAccount统计信息响应
-type ServiceAccountStatisticsResp struct {
-	TotalCount                int `json:"total_count"`                   // 总数量
-	ActiveCount               int `json:"active_count"`                  // 活跃数量
-	WithSecretsCount          int `json:"with_secrets_count"`            // 含有Secrets的数量
-	WithImagePullSecretsCount int `json:"with_image_pull_secrets_count"` // 含有ImagePullSecrets的数量
-	AutoMountEnabledCount     int `json:"auto_mount_enabled_count"`      // 启用自动挂载的数量
-}
-
-// ServiceAccountTokenReq ServiceAccount Token请求
-type ServiceAccountTokenReq struct {
-	ClusterID         int    `json:"cluster_id" binding:"required" comment:"集群ID"`          // 集群ID，必填
-	Namespace         string `json:"namespace" binding:"required" comment:"命名空间"`           // 命名空间，必填
-	Name              string `json:"name" binding:"required" comment:"ServiceAccount名称"`    // ServiceAccount名称，必填
-	ExpirationSeconds *int64 `json:"expiration_seconds" comment:"Token过期时间（秒），不设置则使用系统默认值"` // Token过期时间（秒）
-}
-
-// ServiceAccountTokenResp ServiceAccount Token响应
-type ServiceAccountTokenResp struct {
-	Token               string     `json:"token"`                          // Token
+// K8sServiceAccountToken ServiceAccount Token信息
+type K8sServiceAccountToken struct {
+	Token               string     `json:"token"`                          // Token内容
 	ExpirationTimestamp *time.Time `json:"expiration_timestamp,omitempty"` // 过期时间
+	Audience            []string   `json:"audience,omitempty"`             // 受众
+	BoundObjectRef      *string    `json:"bound_object_ref,omitempty"`     // 绑定对象引用
+	CreatedAt           time.Time  `json:"created_at"`                     // 创建时间
 }
-
-// ServiceAccountYamlReq ServiceAccount YAML请求
-type ServiceAccountYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`       // 集群ID，必填
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`        // 命名空间，必填
-	Name      string `json:"name" binding:"required" comment:"ServiceAccount名称"` // ServiceAccount名称，必填
-}
-
-// ServiceAccountYamlResp ServiceAccount YAML响应
-type ServiceAccountYamlResp struct {
-	YAML string `json:"yaml"` // YAML内容
-}
-
-// ServiceAccountUpdateYamlReq ServiceAccount YAML更新请求
-type ServiceAccountUpdateYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`       // 集群ID，必填
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`        // 命名空间，必填
-	Name      string `json:"name" binding:"required" comment:"ServiceAccount名称"` // ServiceAccount名称，必填
-	YAML      string `json:"yaml" binding:"required" comment:"YAML内容"`           // YAML内容，必填
-}
-
-// ====================== ServiceAccount内部转换用的结构体 ======================

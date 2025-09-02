@@ -96,7 +96,14 @@ func (d *deploymentManager) CreateDeployment(ctx context.Context, clusterID int,
 		return err
 	}
 
-	_, err = kubeClient.AppsV1().Deployments(namespace).Create(ctx, deployment, metav1.CreateOptions{})
+	// 如果deployment对象中没有指定namespace，使用参数中的namespace
+	targetNamespace := deployment.Namespace
+	if targetNamespace == "" {
+		targetNamespace = namespace
+		deployment.Namespace = namespace
+	}
+
+	_, err = kubeClient.AppsV1().Deployments(targetNamespace).Create(ctx, deployment, metav1.CreateOptions{})
 	if err != nil {
 		d.logger.Error("创建 Deployment 失败",
 			zap.Int("clusterID", clusterID),

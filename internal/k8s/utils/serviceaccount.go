@@ -33,12 +33,12 @@ import (
 )
 
 // BuildServiceAccountResponse 构建ServiceAccount响应结构
-func BuildServiceAccountResponse(sa *corev1.ServiceAccount, clusterID int) *model.K8sServiceAccountResponse {
+func BuildServiceAccountResponse(sa *corev1.ServiceAccount, clusterID int) *model.K8sServiceAccount {
 	if sa == nil {
 		return nil
 	}
 
-	response := &model.K8sServiceAccountResponse{
+	response := &model.K8sServiceAccount{
 		Name:                         sa.Name,
 		UID:                          string(sa.UID),
 		Namespace:                    sa.Namespace,
@@ -49,7 +49,7 @@ func BuildServiceAccountResponse(sa *corev1.ServiceAccount, clusterID int) *mode
 		Age:                          utils.GetAge(sa.CreationTimestamp.Time),
 		SecretsCount:                 len(sa.Secrets),
 		ImagePullSecretsCount:        len(sa.ImagePullSecrets),
-		AutomountServiceAccountToken: sa.AutomountServiceAccountToken,
+		AutomountServiceAccountToken: model.PtrBoolToPtrBoolValue(sa.AutomountServiceAccountToken),
 	}
 
 	// 构建Secrets列表

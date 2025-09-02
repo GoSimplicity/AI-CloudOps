@@ -30,121 +30,291 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
-type RoleAPI struct {
-	roleService *service.RoleService
-	logger      *zap.Logger
+type K8sRoleHandler struct {
+	roleService service.RoleService
 }
 
-func NewRoleAPI(roleService *service.RoleService, logger *zap.Logger) *RoleAPI {
-	return &RoleAPI{
+func NewK8sRoleHandler(roleService service.RoleService) *K8sRoleHandler {
+	return &K8sRoleHandler{
 		roleService: roleService,
-		logger:      logger,
 	}
 }
 
-func (ra *RoleAPI) RegisterRouters(server *gin.Engine) {
+func (k *K8sRoleHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/role/list", ra.GetRoleList)                                    // 获取Role列表
-		k8sGroup.GET("/role/details/:cluster_id/:namespace/:name", ra.GetRoleDetails) // 获取Role详情
-		k8sGroup.POST("/role/create", ra.CreateRole)                                  // 创建Role
-		k8sGroup.PUT("/role/update", ra.UpdateRole)                                   // 更新Role
-		k8sGroup.DELETE("/role/delete/:cluster_id/:namespace/:name", ra.DeleteRole)   // 删除Role
-		k8sGroup.GET("/role/yaml/:cluster_id/:namespace/:name", ra.GetRoleYaml)       // 获取Role YAML
-		k8sGroup.PUT("/role/yaml", ra.UpdateRoleYaml)                                 // 更新Role YAML
+		// Role 基本操作
+		k8sGroup.GET("/roles", k.GetRoleList)                                 // 获取列表
+		k8sGroup.GET("/roles/:cluster_id/:namespace/:name", k.GetRoleDetails) // 获取详情
+		k8sGroup.POST("/roles", k.CreateRole)                                 // 创建
+		k8sGroup.PUT("/roles/:cluster_id/:namespace/:name", k.UpdateRole)     // 更新
+		k8sGroup.DELETE("/roles/:cluster_id/:namespace/:name", k.DeleteRole)  // 删除
+
+		// Role YAML 操作
+		k8sGroup.GET("/roles/:cluster_id/:namespace/:name/yaml", k.GetRoleYaml)    // 获取YAML
+		k8sGroup.PUT("/roles/:cluster_id/:namespace/:name/yaml", k.UpdateRoleYaml) // 更新YAML
+
+		// Role 扩展功能
+		k8sGroup.GET("/roles/:cluster_id/:namespace/:name/events", k.GetRoleEvents)   // 获取事件
+		k8sGroup.GET("/roles/:cluster_id/:namespace/:name/usage", k.GetRoleUsage)     // 获取使用情况
+		k8sGroup.GET("/roles/:cluster_id/:namespace/:name/metrics", k.GetRoleMetrics) // 获取指标
 	}
 }
 
-// GetRoleList 获取Role列表
-func (ra *RoleAPI) GetRoleList(c *gin.Context) {
-	var req model.RoleListReq
-	if err := c.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
+func (k *K8sRoleHandler) GetRoleList(ctx *gin.Context) {
+	var req model.GetRoleListReq
 
-	utils.HandleRequest(c, nil, func() (interface{}, error) {
-		return ra.roleService.GetRoleList(c.Request.Context(), &req)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.roleService.GetRoleList(ctx, &req)
 	})
 }
 
-// GetRoleDetails 获取Role详情
-func (ra *RoleAPI) GetRoleDetails(c *gin.Context) {
-	var req model.RoleGetReq
-	if err := c.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
+func (k *K8sRoleHandler) GetRoleDetails(ctx *gin.Context) {
+	var req model.GetRoleDetailsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(c, nil, func() (interface{}, error) {
-		return ra.roleService.GetRoleDetails(c.Request.Context(), &req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.roleService.GetRoleDetails(ctx, &req)
 	})
 }
 
-// CreateRole 创建Role
-func (ra *RoleAPI) CreateRole(c *gin.Context) {
+func (k *K8sRoleHandler) CreateRole(ctx *gin.Context) {
 	var req model.CreateRoleReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
 
-	utils.HandleRequest(c, nil, func() (interface{}, error) {
-		return nil, ra.roleService.CreateRole(c.Request.Context(), &req)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.roleService.CreateRole(ctx, &req)
 	})
 }
 
-// UpdateRole 更新Role
-func (ra *RoleAPI) UpdateRole(c *gin.Context) {
+func (k *K8sRoleHandler) UpdateRole(ctx *gin.Context) {
 	var req model.UpdateRoleReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(c, nil, func() (interface{}, error) {
-		return nil, ra.roleService.UpdateRole(c.Request.Context(), &req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.roleService.UpdateRole(ctx, &req)
 	})
 }
 
-// DeleteRole 删除Role
-func (ra *RoleAPI) DeleteRole(c *gin.Context) {
+func (k *K8sRoleHandler) DeleteRole(ctx *gin.Context) {
 	var req model.DeleteRoleReq
-	if err := c.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(c, nil, func() (interface{}, error) {
-		return nil, ra.roleService.DeleteRole(c.Request.Context(), &req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.roleService.DeleteRole(ctx, &req)
 	})
 }
 
-// GetRoleYaml 获取Role的YAML配置
-func (ra *RoleAPI) GetRoleYaml(c *gin.Context) {
-	var req model.RoleGetReq
-	if err := c.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
+func (k *K8sRoleHandler) GetRoleYaml(ctx *gin.Context) {
+	var req model.GetRoleYamlReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(c, nil, func() (interface{}, error) {
-		return ra.roleService.GetRoleYaml(c.Request.Context(), &req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.roleService.GetRoleYaml(ctx, &req)
 	})
 }
 
-// UpdateRoleYaml 更新Role的YAML配置
-func (ra *RoleAPI) UpdateRoleYaml(c *gin.Context) {
-	var req model.RoleYamlReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
+func (k *K8sRoleHandler) UpdateRoleYaml(ctx *gin.Context) {
+	var req model.UpdateRoleYamlReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(c, nil, func() (interface{}, error) {
-		return nil, ra.roleService.UpdateRoleYaml(c.Request.Context(), &req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.roleService.UpdateRoleYaml(ctx, &req)
+	})
+}
+
+func (k *K8sRoleHandler) GetRoleEvents(ctx *gin.Context) {
+	var req model.GetRoleEventsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.roleService.GetRoleEvents(ctx, &req)
+	})
+}
+
+func (k *K8sRoleHandler) GetRoleUsage(ctx *gin.Context) {
+	var req model.GetRoleUsageReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.roleService.GetRoleUsage(ctx, &req)
+	})
+}
+
+func (k *K8sRoleHandler) GetRoleMetrics(ctx *gin.Context) {
+	var req model.GetRoleMetricsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.roleService.GetRoleMetrics(ctx, &req)
 	})
 }

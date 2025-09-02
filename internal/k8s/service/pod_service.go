@@ -27,9 +27,9 @@ package service
 
 import (
 	"context"
-	"fmt"
+
 	"io"
-	"strings"
+
 	"time"
 
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -65,7 +65,6 @@ type PodService interface {
 	DeletePodWithOptions(ctx context.Context, req *model.K8sDeleteResourceReq) error
 
 	// 批量操作
-	BatchDeletePods(ctx context.Context, req *model.K8sBatchDeleteReq) error
 
 	// 高级功能
 	ExecInPod(ctx context.Context, req *model.PodExecReq) error
@@ -312,37 +311,6 @@ func (p *podService) DeletePodWithOptions(ctx context.Context, req *model.K8sDel
 	p.logger.Info("成功删除Pod",
 		zap.String("Namespace", req.Namespace),
 		zap.String("PodName", req.ResourceName))
-	return nil
-}
-
-// BatchDeletePods 批量删除Pod
-func (p *podService) BatchDeletePods(ctx context.Context, req *model.K8sBatchDeleteReq) error {
-	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
-
-	var errors []string
-	for _, podName := range req.ResourceNames {
-		err := kubeClient.CoreV1().Pods(req.Namespace).Delete(ctx, podName, metav1.DeleteOptions{})
-		if err != nil {
-			errorMsg := fmt.Sprintf("删除Pod %s 失败: %v", podName, err)
-			errors = append(errors, errorMsg)
-			p.logger.Error("批量删除Pod中的单个Pod失败",
-				zap.String("PodName", podName),
-				zap.Error(err))
-		}
-	}
-
-	if len(errors) > 0 {
-		return pkg.NewBusinessError(constants.ErrK8sResourceDelete,
-			fmt.Sprintf("批量删除失败，详情: %s", strings.Join(errors, "; ")))
-	}
-
-	p.logger.Info("成功批量删除Pod",
-		zap.String("Namespace", req.Namespace),
-		zap.Int("Count", len(req.ResourceNames)))
 	return nil
 }
 

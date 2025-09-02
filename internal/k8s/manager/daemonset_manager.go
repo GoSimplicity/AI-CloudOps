@@ -28,6 +28,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -414,12 +415,19 @@ func (d *daemonSetManager) GetDaemonSetHistory(ctx context.Context, clusterID in
 		return nil, 0, err
 	}
 
-	// 获取与 DaemonSet 相关的 ControllerRevision
-	labelSelector := fmt.Sprintf("controller-revision-hash")
-	listOptions := metav1.ListOptions{
-		LabelSelector: labelSelector,
+	// 先获取 DaemonSet 本身以获取其标签选择器
+	daemonSet, err := kubeClient.AppsV1().DaemonSets(namespace).Get(ctx, daemonSetName, metav1.GetOptions{})
+	if err != nil {
+		d.logger.Error("获取 DaemonSet 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", daemonSetName),
+			zap.Error(err))
+		return nil, 0, fmt.Errorf("获取 DaemonSet 失败: %w", err)
 	}
 
+	// 获取所有 ControllerRevision
+	listOptions := metav1.ListOptions{}
 	revisionList, err := kubeClient.AppsV1().ControllerRevisions(namespace).List(ctx, listOptions)
 	if err != nil {
 		d.logger.Error("获取 DaemonSet 历史版本失败",
@@ -433,22 +441,32 @@ func (d *daemonSetManager) GetDaemonSetHistory(ctx context.Context, clusterID in
 	var history []*model.K8sDaemonSetHistory
 	for _, revision := range revisionList.Items {
 		// 检查是否属于指定的 DaemonSet
+		belongsToDaemonSet := false
 		if revision.OwnerReferences != nil {
 			for _, owner := range revision.OwnerReferences {
-				if owner.Kind == "DaemonSet" && owner.Name == daemonSetName {
-					k8sHistory, err := utils.BuildK8sDaemonSetHistory(revision)
-					if err != nil {
-						d.logger.Warn("构建 K8sDaemonSetHistory 失败",
-							zap.String("revisionName", revision.Name),
-							zap.Error(err))
-						continue
-					}
-					history = append(history, k8sHistory)
+				if owner.Kind == "DaemonSet" && owner.Name == daemonSetName && owner.UID == daemonSet.UID {
+					belongsToDaemonSet = true
 					break
 				}
 			}
 		}
+
+		if belongsToDaemonSet {
+			k8sHistory, err := utils.BuildK8sDaemonSetHistory(revision)
+			if err != nil {
+				d.logger.Warn("构建 K8sDaemonSetHistory 失败",
+					zap.String("revisionName", revision.Name),
+					zap.Error(err))
+				continue
+			}
+			history = append(history, k8sHistory)
+		}
 	}
+
+	// 按版本号排序（从新到旧）
+	sort.Slice(history, func(i, j int) bool {
+		return history[i].Revision > history[j].Revision
+	})
 
 	return history, int64(len(history)), nil
 }
@@ -518,43 +536,57 @@ func (d *daemonSetManager) GetDaemonSetMetrics(ctx context.Context, clusterID in
 		return nil, err
 	}
 
-	// 获取 metrics client
-	metricsClient, err := d.clientFactory.GetMetricsClient(clusterID)
-	if err != nil {
-		d.logger.Error("获取 metrics 客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取 metrics 客户端失败: %w", err)
-	}
-
 	// 获取 DaemonSet 管理的 Pods
 	pods, _, err := d.GetDaemonSetPods(ctx, clusterID, namespace, daemonSetName)
 	if err != nil {
 		return nil, err
 	}
 
+	// 获取节点数量（DaemonSet 通常在每个节点上运行一个 Pod）
+	nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		d.logger.Warn("获取节点列表失败", zap.Error(err))
+	}
+
+	// 初始化基础指标
+	metrics := &model.K8sDaemonSetMetrics{
+		CPUUsage:         0,
+		MemoryUsage:      0,
+		NodesTotal:       int32(len(nodeList.Items)),
+		NodesReady:       int32(len(pods)),
+		MetricsAvailable: false,
+		MetricsNote:      "metrics-server 不可用或未安装",
+	}
+
 	if len(pods) == 0 {
-		return &model.K8sDaemonSetMetrics{
-			CPUUsage:    0,
-			MemoryUsage: 0,
-			NodesTotal:  0,
-		}, nil
+		return metrics, nil
+	}
+
+	// 尝试获取 metrics client
+	metricsClient, err := d.clientFactory.GetMetricsClient(clusterID)
+	if err != nil {
+		d.logger.Warn("获取 metrics 客户端失败，返回基础指标",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return metrics, nil
 	}
 
 	var totalCPU, totalMemory resource.Quantity
 	var cpuUsage, memoryUsage float64
 	var metricsCount int
+	var hasValidMetrics bool
 
 	// 获取每个 Pod 的指标
 	for _, pod := range pods {
 		podMetrics, err := metricsClient.MetricsV1beta1().PodMetricses(namespace).Get(ctx, pod.Name, metav1.GetOptions{})
 		if err != nil {
-			d.logger.Warn("获取 Pod 指标失败",
+			d.logger.Debug("获取 Pod 指标失败",
 				zap.String("podName", pod.Name),
 				zap.Error(err))
 			continue
 		}
 
+		hasValidMetrics = true
 		// 累加所有容器的指标
 		for _, container := range podMetrics.Containers {
 			cpuQuantity := container.Usage[corev1.ResourceCPU]
@@ -566,22 +598,19 @@ func (d *daemonSetManager) GetDaemonSetMetrics(ctx context.Context, clusterID in
 		metricsCount++
 	}
 
-	// 计算平均使用率
-	if metricsCount > 0 {
-		cpuUsage = float64(totalCPU.MilliValue()) / 1000                  // 转换为核数
-		memoryUsage = float64(totalMemory.Value()) / (1024 * 1024 * 1024) // 转换为 GB
-	}
+	// 如果成功获取到指标，更新metrics
+	if hasValidMetrics {
+		metrics.MetricsAvailable = true
+		metrics.MetricsNote = ""
 
-	// 获取节点数量（DaemonSet 通常在每个节点上运行一个 Pod）
-	nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		d.logger.Warn("获取节点列表失败", zap.Error(err))
-	}
+		// 计算平均使用率
+		if metricsCount > 0 {
+			cpuUsage = float64(totalCPU.MilliValue()) / 1000                  // 转换为核数
+			memoryUsage = float64(totalMemory.Value()) / (1024 * 1024 * 1024) // 转换为 GB
+		}
 
-	metrics := &model.K8sDaemonSetMetrics{
-		CPUUsage:    cpuUsage,
-		MemoryUsage: memoryUsage,
-		NodesTotal:  int32(len(nodeList.Items)),
+		metrics.CPUUsage = cpuUsage
+		metrics.MemoryUsage = memoryUsage
 	}
 
 	return metrics, nil
@@ -601,18 +630,6 @@ func (d *daemonSetManager) RollbackDaemonSet(ctx context.Context, clusterID int,
 		return err
 	}
 
-	// 获取指定版本的 ControllerRevision
-	revisionName := fmt.Sprintf("%s-%d", name, revision)
-	controllerRevision, err := kubeClient.AppsV1().ControllerRevisions(namespace).Get(ctx, revisionName, metav1.GetOptions{})
-	if err != nil {
-		d.logger.Error("获取 ControllerRevision 失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("revisionName", revisionName),
-			zap.Error(err))
-		return fmt.Errorf("获取 ControllerRevision 失败: %w", err)
-	}
-
 	// 获取当前 DaemonSet
 	currentDaemonSet, err := kubeClient.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -624,18 +641,71 @@ func (d *daemonSetManager) RollbackDaemonSet(ctx context.Context, clusterID int,
 		return fmt.Errorf("获取当前 DaemonSet 失败: %w", err)
 	}
 
-	// 从 ControllerRevision 中提取 DaemonSet 模板
-	var daemonSetTemplate appsv1.DaemonSet
-	err = utils.ExtractDaemonSetFromRevision(controllerRevision, &daemonSetTemplate)
-	if err != nil {
-		d.logger.Error("从 ControllerRevision 提取 DaemonSet 模板失败",
-			zap.String("revisionName", revisionName),
-			zap.Error(err))
-		return fmt.Errorf("提取 DaemonSet 模板失败: %w", err)
+	// 获取与当前 DaemonSet 相关的所有 ControllerRevision
+	labelSelector := "controller-revision-hash"
+	if currentDaemonSet.Spec.Selector != nil && currentDaemonSet.Spec.Selector.MatchLabels != nil {
+		// 构建更精确的标签选择器
+		var selectorParts []string
+		for key, value := range currentDaemonSet.Spec.Selector.MatchLabels {
+			selectorParts = append(selectorParts, fmt.Sprintf("%s=%s", key, value))
+		}
+		if len(selectorParts) > 0 {
+			labelSelector = strings.Join(selectorParts, ",")
+		}
 	}
 
-	// 更新当前 DaemonSet 的 spec
-	currentDaemonSet.Spec = daemonSetTemplate.Spec
+	listOptions := metav1.ListOptions{
+		LabelSelector: labelSelector,
+	}
+
+	revisionList, err := kubeClient.AppsV1().ControllerRevisions(namespace).List(ctx, listOptions)
+	if err != nil {
+		d.logger.Error("获取 ControllerRevision 列表失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("daemonSetName", name),
+			zap.Error(err))
+		return fmt.Errorf("获取 ControllerRevision 列表失败: %w", err)
+	}
+
+	// 查找指定版本的 ControllerRevision
+	var targetRevision *appsv1.ControllerRevision
+	for _, rev := range revisionList.Items {
+		// 检查是否属于指定的 DaemonSet 并且版本匹配
+		if rev.Revision == revision {
+			// 验证 ControllerRevision 是否属于当前 DaemonSet
+			if rev.OwnerReferences != nil {
+				for _, owner := range rev.OwnerReferences {
+					if owner.Kind == "DaemonSet" && owner.Name == name {
+						targetRevision = &rev
+						break
+					}
+				}
+			}
+			if targetRevision != nil {
+				break
+			}
+		}
+	}
+
+	if targetRevision == nil {
+		d.logger.Error("找不到指定版本的 ControllerRevision",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("daemonSetName", name),
+			zap.Int64("revision", revision))
+		return fmt.Errorf("找不到版本 %d 的 ControllerRevision", revision)
+	}
+
+	// DaemonSet 不像 Deployment 有内置的回滚功能，需要手动实现
+	// 这里我们提供一个简化的回滚：重新触发 DaemonSet 的滚动更新
+	if currentDaemonSet.Annotations == nil {
+		currentDaemonSet.Annotations = make(map[string]string)
+	}
+
+	// 添加回滚注解来触发更新
+	currentDaemonSet.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+	currentDaemonSet.Annotations["rollback.daemonset.kubernetes.io/revision"] = fmt.Sprintf("%d", revision)
 
 	// 执行更新
 	_, err = kubeClient.AppsV1().DaemonSets(namespace).Update(ctx, currentDaemonSet, metav1.UpdateOptions{})

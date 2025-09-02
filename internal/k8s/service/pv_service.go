@@ -27,6 +27,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
@@ -53,10 +54,12 @@ type PVService interface {
 	// PV操作
 	CreatePV(ctx context.Context, req *model.K8sPVCreateReq) error
 	UpdatePV(ctx context.Context, req *model.K8sPVUpdateReq) error
+	// YAML相关方法
+	CreatePVByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error
+	UpdatePVByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error
 	DeletePV(ctx context.Context, req *model.K8sPVDeleteReq) error
 
 	// 批量操作
-	BatchDeletePVs(ctx context.Context, req *model.K8sPVBatchDeleteReq) error
 
 	// 高级功能（TODO实现）
 	GetPVEvents(ctx context.Context, req *model.K8sPVEventReq) ([]*model.K8sEvent, error)
@@ -247,12 +250,6 @@ func (p *pvService) DeletePV(ctx context.Context, req *model.K8sPVDeleteReq) err
 	return nil
 }
 
-// BatchDeletePVs 批量删除PV
-func (p *pvService) BatchDeletePVs(ctx context.Context, req *model.K8sPVBatchDeleteReq) error {
-	// TODO: 实现批量删除功能
-	return pkg.NewBusinessError(constants.ErrNotImplemented, "批量删除PV功能尚未实现")
-}
-
 // GetPVEvents 获取PV事件
 func (p *pvService) GetPVEvents(ctx context.Context, req *model.K8sPVEventReq) ([]*model.K8sEvent, error) {
 	// TODO: 实现获取事件功能
@@ -319,4 +316,16 @@ func (p *pvService) convertPVToEntity(pv *corev1.PersistentVolume, clusterID int
 		CreationTimestamp: pv.CreationTimestamp.Time,
 		Age:               age,
 	}
+}
+
+// CreatePVByYaml 通过YAML创建PV
+func (p *pvService) CreatePVByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error {
+	// TODO: 实现通过YAML创建PV的逻辑
+	return fmt.Errorf("CreatePVByYaml方法暂未实现")
+}
+
+// UpdatePVByYaml 通过YAML更新PV
+func (p *pvService) UpdatePVByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error {
+	// TODO: 实现通过YAML更新PV的逻辑
+	return fmt.Errorf("UpdatePVByYaml方法暂未实现")
 }

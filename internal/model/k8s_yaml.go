@@ -53,3 +53,135 @@ type K8sYamlTemplate struct {
 func (r *K8sYamlTemplate) TableName() string {
 	return "cl_k8s_yaml_template"
 }
+
+// K8sResourceType K8s资源类型枚举
+type K8sResourceType string
+
+const (
+	ResourceTypeDeployment  K8sResourceType = "deployment"
+	ResourceTypeService     K8sResourceType = "service"
+	ResourceTypePod         K8sResourceType = "pod"
+	ResourceTypeConfigMap   K8sResourceType = "configmap"
+	ResourceTypeSecret      K8sResourceType = "secret"
+	ResourceTypeIngress     K8sResourceType = "ingress"
+	ResourceTypePV          K8sResourceType = "persistentvolume"
+	ResourceTypePVC         K8sResourceType = "persistentvolumeclaim"
+	ResourceTypeDaemonSet   K8sResourceType = "daemonset"
+	ResourceTypeStatefulSet K8sResourceType = "statefulset"
+	ResourceTypeJob         K8sResourceType = "job"
+	ResourceTypeCronJob     K8sResourceType = "cronjob"
+)
+
+// CreateResourceByYamlReq 通过YAML创建K8s资源的通用请求
+type CreateResourceByYamlReq struct {
+	ClusterID    int             `json:"cluster_id" binding:"required"`    // 集群ID
+	ResourceType K8sResourceType `json:"resource_type" binding:"required"` // 资源类型
+	YAML         string          `json:"yaml" binding:"required"`          // YAML内容
+}
+
+// UpdateResourceByYamlReq 通过YAML更新K8s资源的通用请求
+type UpdateResourceByYamlReq struct {
+	ClusterID    int             `json:"cluster_id" binding:"required"`    // 集群ID
+	ResourceType K8sResourceType `json:"resource_type" binding:"required"` // 资源类型
+	Namespace    string          `json:"namespace" binding:"required"`     // 命名空间
+	Name         string          `json:"name" binding:"required"`          // 资源名称
+	YAML         string          `json:"yaml" binding:"required"`          // YAML内容
+}
+
+// ApplyResourceByYamlReq 应用YAML到K8s集群的请求
+type ApplyResourceByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+	DryRun    bool   `json:"dry_run"`                       // 是否为试运行
+}
+
+// ValidateYamlReq 验证YAML格式的请求
+type ValidateYamlReq struct {
+	YAML string `json:"yaml" binding:"required"` // YAML内容
+}
+
+// ConvertToYamlReq 将资源配置转换为YAML的请求
+type ConvertToYamlReq struct {
+	ClusterID    int             `json:"cluster_id" binding:"required"`    // 集群ID
+	ResourceType K8sResourceType `json:"resource_type" binding:"required"` // 资源类型
+	Config       interface{}     `json:"config" binding:"required"`        // 资源配置信息
+}
+
+// ===== 各种资源的YAML操作请求结构体 =====
+
+// ConfigMap YAML 请求结构体
+type CreateConfigMapByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+type UpdateConfigMapByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" binding:"required"`  // 命名空间
+	Name      string `json:"name" binding:"required"`       // ConfigMap名称
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+// Secret YAML 请求结构体
+type CreateSecretByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+type UpdateSecretByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" binding:"required"`  // 命名空间
+	Name      string `json:"name" binding:"required"`       // Secret名称
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+// Service YAML 请求结构体
+type CreateServiceByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+type UpdateServiceByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" binding:"required"`  // 命名空间
+	Name      string `json:"name" binding:"required"`       // Service名称
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+// Ingress YAML 请求结构体
+type CreateIngressByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+type UpdateIngressByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" binding:"required"`  // 命名空间
+	Name      string `json:"name" binding:"required"`       // Ingress名称
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+// PV YAML 请求结构体
+type CreatePVByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+type UpdatePVByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	Name      string `json:"name" binding:"required"`       // PV名称
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+// PVC YAML 请求结构体
+type CreatePVCByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+type UpdatePVCByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" binding:"required"`  // 命名空间
+	Name      string `json:"name" binding:"required"`       // PVC名称
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}

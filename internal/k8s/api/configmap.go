@@ -54,6 +54,10 @@ func (h *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.PUT("/configmaps/update", h.UpdateConfigMap)                             // 更新ConfigMap
 		k8sGroup.DELETE("/configmaps/:cluster_id/:namespace/:name", h.DeleteConfigMap)    // 删除ConfigMap
 		k8sGroup.GET("/configmaps/:cluster_id/:namespace/:name/yaml", h.GetConfigMapYAML) // 获取ConfigMap的YAML配置
+
+		// YAML操作
+		k8sGroup.POST("/configmaps/yaml", h.CreateConfigMapByYaml)                             // 通过YAML创建ConfigMap
+		k8sGroup.PUT("/configmaps/:cluster_id/:namespace/:name/yaml", h.UpdateConfigMapByYaml) // 通过YAML更新ConfigMap
 	}
 }
 
@@ -168,5 +172,49 @@ func (h *K8sConfigMapHandler) GetConfigMapYAML(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.configMapService.GetConfigMapYAML(ctx, &req)
+	})
+}
+
+// YAML操作方法
+
+// CreateConfigMapByYaml 通过YAML创建ConfigMap
+func (h *K8sConfigMapHandler) CreateConfigMapByYaml(ctx *gin.Context) {
+	var req model.CreateResourceByYamlReq
+	req.ResourceType = model.ResourceTypeConfigMap
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.configMapService.CreateConfigMapByYaml(ctx, &req)
+	})
+}
+
+// UpdateConfigMapByYaml 通过YAML更新ConfigMap
+func (h *K8sConfigMapHandler) UpdateConfigMapByYaml(ctx *gin.Context) {
+	var req model.UpdateResourceByYamlReq
+	req.ResourceType = model.ResourceTypeConfigMap
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.configMapService.UpdateConfigMapByYaml(ctx, &req)
 	})
 }

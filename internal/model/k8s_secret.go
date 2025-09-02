@@ -100,15 +100,6 @@ type K8sSecretDeleteReq struct {
 	Force              bool   `json:"force" comment:"是否强制删除"`                       // 是否强制删除
 }
 
-// K8sSecretBatchDeleteRequest 批量删除Secret请求
-type K8sSecretBatchDeleteReq struct {
-	ClusterID          int      `json:"cluster_id" binding:"required" comment:"集群ID"`  // 集群ID，必填
-	Namespace          string   `json:"namespace" binding:"required" comment:"命名空间"`   // 命名空间，必填
-	Names              []string `json:"names" binding:"required" comment:"Secret名称列表"` // Secret名称列表，必填
-	GracePeriodSeconds *int64   `json:"grace_period_seconds" comment:"优雅删除时间（秒）"`      // 优雅删除时间
-	Force              bool     `json:"force" comment:"是否强制删除"`                        // 是否强制删除
-}
-
 // K8sSecretDataRequest 获取Secret数据请求
 type K8sSecretDataReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填

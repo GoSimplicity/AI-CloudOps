@@ -62,11 +62,11 @@ func InitGinServer(
 	k8sIngressHdl *k8sApi.K8sIngressHandler,
 	k8sStatefulSetHdl *k8sApi.K8sStatefulSetHandler,
 	k8sServiceAccountHdl *k8sApi.K8sServiceAccountHandler,
-	roleHdl *k8sApi.RoleAPI,
-	clusterRoleHdl *k8sApi.ClusterRoleAPI,
-	roleBindingHdl *k8sApi.RoleBindingAPI,
-	clusterRoleBindingHdl *k8sApi.ClusterRoleBindingAPI,
-	rbacHdl *k8sApi.RBACAPI,
+	roleHdl *k8sApi.K8sRoleHandler,
+	clusterRoleHdl *k8sApi.K8sClusterRoleHandler,
+	roleBindingHdl *k8sApi.K8sRoleBindingHandler,
+	clusterRoleBindingHdl *k8sApi.K8sClusterRoleBindingHandler,
+
 	alertEventHdl *prometheusApi.AlertEventHandler,
 	alertPoolHdl *prometheusApi.AlertPoolHandler,
 	alertRuleHdl *prometheusApi.AlertRuleHandler,
@@ -127,7 +127,7 @@ func InitGinServer(
 	clusterRoleHdl.RegisterRouters(server)
 	roleBindingHdl.RegisterRouters(server)
 	clusterRoleBindingHdl.RegisterRouters(server)
-	rbacHdl.RegisterRouters(server)
+
 	formDesignHdl.RegisterRouters(server)
 	processHdl.RegisterRouters(server)
 	templateHdl.RegisterRouters(server)

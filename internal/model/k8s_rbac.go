@@ -25,6 +25,47 @@
 
 package model
 
+// ====================== Bool替代常量定义 ======================
+
+// BoolValue Bool值的int8替代
+type BoolValue int8
+
+const (
+	BoolTrue  BoolValue = 1 // true
+	BoolFalse BoolValue = 2 // false
+)
+
+// BoolToBoolValue 将bool转换为BoolValue
+func BoolToBoolValue(b bool) BoolValue {
+	if b {
+		return BoolTrue
+	}
+	return BoolFalse
+}
+
+// BoolValueToBool 将BoolValue转换为bool
+func BoolValueToBool(bv BoolValue) bool {
+	return bv == BoolTrue
+}
+
+// PtrBoolToPtrBoolValue 将*bool转换为*BoolValue
+func PtrBoolToPtrBoolValue(b *bool) *BoolValue {
+	if b == nil {
+		return nil
+	}
+	bv := BoolToBoolValue(*b)
+	return &bv
+}
+
+// PtrBoolValueToPtrBool 将*BoolValue转换为*bool
+func PtrBoolValueToPtrBool(bv *BoolValue) *bool {
+	if bv == nil {
+		return nil
+	}
+	b := BoolValueToBool(*bv)
+	return &b
+}
+
 // ====================== RBAC响应结构体 ======================
 
 // RoleInfo Role信息
@@ -120,7 +161,60 @@ type RBACStatistics struct {
 
 // ====================== Role请求结构体 ======================
 
-// RoleListReq Role列表请求参数
+// GetRoleListReq Role列表请求参数
+type GetRoleListReq struct {
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" form:"namespace" comment:"命名空间"`
+	Keyword   string `json:"keyword" form:"keyword" comment:"关键字搜索"`
+	Page      int    `json:"page" form:"page" comment:"页码"`
+	PageSize  int    `json:"page_size" form:"page_size" comment:"页面大小"`
+}
+
+// GetRoleDetailsReq 获取Role详情请求
+type GetRoleDetailsReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Namespace string `json:"namespace" comment:"命名空间"`
+	Name      string `json:"name" comment:"Role名称"`
+}
+
+// GetRoleYamlReq 获取Role YAML请求
+type GetRoleYamlReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Namespace string `json:"namespace" comment:"命名空间"`
+	Name      string `json:"name" comment:"Role名称"`
+}
+
+// UpdateRoleYamlReq 更新Role YAML请求
+type UpdateRoleYamlReq struct {
+	ClusterID   int    `json:"cluster_id" comment:"集群ID"`
+	Namespace   string `json:"namespace" comment:"命名空间"`
+	Name        string `json:"name" comment:"Role名称"`
+	YamlContent string `json:"yaml_content" binding:"required" comment:"YAML内容"`
+}
+
+// GetRoleEventsReq 获取Role事件请求
+type GetRoleEventsReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Namespace string `json:"namespace" comment:"命名空间"`
+	Name      string `json:"name" comment:"Role名称"`
+	Limit     int    `json:"limit" form:"limit" comment:"事件数量限制"`
+}
+
+// GetRoleUsageReq 获取Role使用情况请求
+type GetRoleUsageReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Namespace string `json:"namespace" comment:"命名空间"`
+	Name      string `json:"name" comment:"Role名称"`
+}
+
+// GetRoleMetricsReq 获取Role指标请求
+type GetRoleMetricsReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Namespace string `json:"namespace" comment:"命名空间"`
+	Name      string `json:"name" comment:"Role名称"`
+}
+
+// RoleListReq Role列表请求参数（兼容性）
 type RoleListReq struct {
 	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace string `json:"namespace" form:"namespace" comment:"命名空间"`
@@ -129,7 +223,7 @@ type RoleListReq struct {
 	PageSize  int    `json:"page_size" form:"page_size" comment:"页面大小"`
 }
 
-// RoleGetReq 获取单个Role请求
+// RoleGetReq 获取单个Role请求（兼容性）
 type RoleGetReq struct {
 	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
@@ -164,15 +258,6 @@ type DeleteRoleReq struct {
 	Name      string `json:"name" uri:"name" binding:"required" comment:"Role名称"`
 }
 
-// BatchDeleteRoleReq 批量删除Role请求
-type BatchDeleteRoleReq struct {
-	ClusterID int `json:"cluster_id" binding:"required" comment:"集群ID"`
-	Roles     []struct {
-		Namespace string `json:"namespace" binding:"required" comment:"命名空间"`
-		Name      string `json:"name" binding:"required" comment:"Role名称"`
-	} `json:"roles" binding:"required" comment:"Role列表"`
-}
-
 // RoleYamlReq Role YAML请求
 type RoleYamlReq struct {
 	ClusterID   int    `json:"cluster_id" binding:"required" comment:"集群ID"`
@@ -183,7 +268,55 @@ type RoleYamlReq struct {
 
 // ====================== ClusterRole请求结构体 ======================
 
-// ClusterRoleListReq ClusterRole列表请求参数
+// GetClusterRoleListReq ClusterRole列表请求参数
+type GetClusterRoleListReq struct {
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Keyword   string `json:"keyword" form:"keyword" comment:"关键字搜索"`
+	Page      int    `json:"page" form:"page" comment:"页码"`
+	Size      int    `json:"size" form:"size" comment:"页面大小"`
+	Status    string `json:"status" form:"status" comment:"状态过滤"`
+}
+
+// GetClusterRoleDetailsReq 获取ClusterRole详情请求
+type GetClusterRoleDetailsReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Name      string `json:"name" comment:"ClusterRole名称"`
+}
+
+// GetClusterRoleYamlReq 获取ClusterRole YAML请求
+type GetClusterRoleYamlReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Name      string `json:"name" comment:"ClusterRole名称"`
+}
+
+// UpdateClusterRoleYamlReq 更新ClusterRole YAML请求
+type UpdateClusterRoleYamlReq struct {
+	ClusterID   int    `json:"cluster_id" comment:"集群ID"`
+	Name        string `json:"name" comment:"ClusterRole名称"`
+	YamlContent string `json:"yaml_content" binding:"required" comment:"YAML内容"`
+}
+
+// GetClusterRoleEventsReq 获取ClusterRole事件请求
+type GetClusterRoleEventsReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Name      string `json:"name" comment:"ClusterRole名称"`
+	EventType string `json:"event_type" form:"event_type" comment:"事件类型"`
+	Limit     int    `json:"limit" form:"limit" comment:"限制数量"`
+}
+
+// GetClusterRoleUsageReq 获取ClusterRole使用情况请求
+type GetClusterRoleUsageReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Name      string `json:"name" comment:"ClusterRole名称"`
+}
+
+// GetClusterRoleMetricsReq 获取ClusterRole指标请求
+type GetClusterRoleMetricsReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Name      string `json:"name" comment:"ClusterRole名称"`
+}
+
+// ClusterRoleListReq ClusterRole列表请求参数（保持兼容性）
 type ClusterRoleListReq struct {
 	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
 	Keyword   string `json:"keyword" form:"keyword" comment:"关键字搜索"`
@@ -191,7 +324,7 @@ type ClusterRoleListReq struct {
 	PageSize  int    `json:"page_size" form:"page_size" comment:"页面大小"`
 }
 
-// ClusterRoleGetReq 获取单个ClusterRole请求
+// ClusterRoleGetReq 获取单个ClusterRole请求（保持兼容性）
 type ClusterRoleGetReq struct {
 	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Name      string `json:"name" uri:"name" binding:"required" comment:"ClusterRole名称"`
@@ -220,12 +353,6 @@ type UpdateClusterRoleReq struct {
 type DeleteClusterRoleReq struct {
 	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Name      string `json:"name" uri:"name" binding:"required" comment:"ClusterRole名称"`
-}
-
-// BatchDeleteClusterRoleReq 批量删除ClusterRole请求
-type BatchDeleteClusterRoleReq struct {
-	ClusterID int      `json:"cluster_id" binding:"required" comment:"集群ID"`
-	Names     []string `json:"names" binding:"required" comment:"ClusterRole名称列表"`
 }
 
 // ClusterRoleYamlReq ClusterRole YAML请求
@@ -283,15 +410,6 @@ type DeleteRoleBindingReq struct {
 	Name      string `json:"name" uri:"name" binding:"required" comment:"RoleBinding名称"`
 }
 
-// BatchDeleteRoleBindingReq 批量删除RoleBinding请求
-type BatchDeleteRoleBindingReq struct {
-	ClusterID int `json:"cluster_id" binding:"required" comment:"集群ID"`
-	Bindings  []struct {
-		Namespace string `json:"namespace" binding:"required" comment:"命名空间"`
-		Name      string `json:"name" binding:"required" comment:"RoleBinding名称"`
-	} `json:"bindings" binding:"required" comment:"RoleBinding列表"`
-}
-
 // RoleBindingYamlReq RoleBinding YAML请求
 type RoleBindingYamlReq struct {
 	ClusterID   int    `json:"cluster_id" binding:"required" comment:"集群ID"`
@@ -302,7 +420,53 @@ type RoleBindingYamlReq struct {
 
 // ====================== ClusterRoleBinding请求结构体 ======================
 
-// ClusterRoleBindingListReq ClusterRoleBinding列表请求参数
+// GetClusterRoleBindingListReq ClusterRoleBinding列表请求参数
+type GetClusterRoleBindingListReq struct {
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Keyword   string `json:"keyword" form:"keyword" comment:"关键字搜索"`
+	Page      int    `json:"page" form:"page" comment:"页码"`
+	PageSize  int    `json:"page_size" form:"page_size" comment:"页面大小"`
+}
+
+// GetClusterRoleBindingDetailsReq 获取ClusterRoleBinding详情请求
+type GetClusterRoleBindingDetailsReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Name      string `json:"name" comment:"ClusterRoleBinding名称"`
+}
+
+// GetClusterRoleBindingYamlReq 获取ClusterRoleBinding YAML请求
+type GetClusterRoleBindingYamlReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Name      string `json:"name" comment:"ClusterRoleBinding名称"`
+}
+
+// UpdateClusterRoleBindingYamlReq 更新ClusterRoleBinding YAML请求
+type UpdateClusterRoleBindingYamlReq struct {
+	ClusterID   int    `json:"cluster_id" comment:"集群ID"`
+	Name        string `json:"name" comment:"ClusterRoleBinding名称"`
+	YamlContent string `json:"yaml_content" binding:"required" comment:"YAML内容"`
+}
+
+// GetClusterRoleBindingEventsReq 获取ClusterRoleBinding事件请求
+type GetClusterRoleBindingEventsReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Name      string `json:"name" comment:"ClusterRoleBinding名称"`
+	Limit     int    `json:"limit" form:"limit" comment:"事件数量限制"`
+}
+
+// GetClusterRoleBindingUsageReq 获取ClusterRoleBinding使用情况请求
+type GetClusterRoleBindingUsageReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Name      string `json:"name" comment:"ClusterRoleBinding名称"`
+}
+
+// GetClusterRoleBindingMetricsReq 获取ClusterRoleBinding指标请求
+type GetClusterRoleBindingMetricsReq struct {
+	ClusterID int    `json:"cluster_id" comment:"集群ID"`
+	Name      string `json:"name" comment:"ClusterRoleBinding名称"`
+}
+
+// ClusterRoleBindingListReq ClusterRoleBinding列表请求参数（兼容性）
 type ClusterRoleBindingListReq struct {
 	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
 	Keyword   string `json:"keyword" form:"keyword" comment:"关键字搜索"`
@@ -310,7 +474,7 @@ type ClusterRoleBindingListReq struct {
 	PageSize  int    `json:"page_size" form:"page_size" comment:"页面大小"`
 }
 
-// ClusterRoleBindingGetReq 获取单个ClusterRoleBinding请求
+// ClusterRoleBindingGetReq 获取单个ClusterRoleBinding请求（兼容性）
 type ClusterRoleBindingGetReq struct {
 	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Name      string `json:"name" uri:"name" binding:"required" comment:"ClusterRoleBinding名称"`
@@ -341,12 +505,6 @@ type UpdateClusterRoleBindingReq struct {
 type DeleteClusterRoleBindingReq struct {
 	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Name      string `json:"name" uri:"name" binding:"required" comment:"ClusterRoleBinding名称"`
-}
-
-// BatchDeleteClusterRoleBindingReq 批量删除ClusterRoleBinding请求
-type BatchDeleteClusterRoleBindingReq struct {
-	ClusterID int      `json:"cluster_id" binding:"required" comment:"集群ID"`
-	Names     []string `json:"names" binding:"required" comment:"ClusterRoleBinding名称列表"`
 }
 
 // ClusterRoleBindingYamlReq ClusterRoleBinding YAML请求
@@ -390,11 +548,11 @@ type ResourceInfo struct {
 
 // PermissionResult 权限检查结果
 type PermissionResult struct {
-	Namespace string `json:"namespace"`
-	Resource  string `json:"resource"`
-	Verb      string `json:"verb"`
-	Allowed   bool   `json:"allowed"`
-	Reason    string `json:"reason,omitempty"`
+	Namespace string    `json:"namespace"`
+	Resource  string    `json:"resource"`
+	Verb      string    `json:"verb"`
+	Allowed   BoolValue `json:"allowed"`
+	Reason    string    `json:"reason,omitempty"`
 }
 
 // SubjectPermissionsResponse 主体权限响应
@@ -593,9 +751,9 @@ type RBACMatrixResponse struct {
 
 // RBACMatrixCellEntity RBAC权限矩阵单元格实体
 type RBACMatrixCellEntity struct {
-	Allowed   bool   `json:"allowed"`   // 是否允许
-	RoleName  string `json:"role_name"` // 角色名称
-	Namespace string `json:"namespace"` // 命名空间
+	Allowed   BoolValue `json:"allowed"`   // 是否允许
+	RoleName  string    `json:"role_name"` // 角色名称
+	Namespace string    `json:"namespace"` // 命名空间
 }
 
 // RBACResourceVerbsResponse RBAC资源动作响应
@@ -658,4 +816,160 @@ type SecurityRecommendationEntity struct {
 	Description string `json:"description"` // 描述
 	Priority    string `json:"priority"`    // 优先级
 	Action      string `json:"action"`      // 建议操作
+}
+
+// ====================== 补充缺失的RoleBinding请求结构体 ======================
+
+// GetRoleBindingListReq 获取RoleBinding列表请求
+type GetRoleBindingListReq struct {
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" form:"namespace" comment:"命名空间"`
+	Name      string `json:"name" form:"name" comment:"RoleBinding名称过滤"`
+	LabelKey  string `json:"label_key" form:"label_key" comment:"标签键过滤"`
+	Keyword   string `json:"keyword" form:"keyword" comment:"关键字搜索"`
+	Page      int    `json:"page" form:"page" comment:"页码"`
+	PageSize  int    `json:"page_size" form:"page_size" comment:"页面大小"`
+}
+
+// GetRoleBindingDetailsReq 获取RoleBinding详情请求
+type GetRoleBindingDetailsReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" uri:"name" binding:"required" comment:"RoleBinding名称"`
+}
+
+// GetRoleBindingYamlReq 获取RoleBinding YAML请求
+type GetRoleBindingYamlReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" uri:"name" binding:"required" comment:"RoleBinding名称"`
+}
+
+// UpdateRoleBindingYamlReq 更新RoleBinding YAML请求
+type UpdateRoleBindingYamlReq struct {
+	ClusterID   int    `json:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace   string `json:"namespace" binding:"required" comment:"命名空间"`
+	Name        string `json:"name" binding:"required" comment:"RoleBinding名称"`
+	Yaml        string `json:"yaml" binding:"required" comment:"YAML内容"`
+	YamlContent string `json:"yaml_content" binding:"required" comment:"YAML内容"`
+}
+
+// GetRoleBindingEventsReq 获取RoleBinding事件请求
+type GetRoleBindingEventsReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" uri:"name" binding:"required" comment:"RoleBinding名称"`
+}
+
+// GetRoleBindingUsageReq 获取RoleBinding使用情况请求
+type GetRoleBindingUsageReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" uri:"name" binding:"required" comment:"RoleBinding名称"`
+}
+
+// GetRoleBindingMetricsReq 获取RoleBinding指标请求
+type GetRoleBindingMetricsReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" uri:"name" binding:"required" comment:"RoleBinding名称"`
+}
+
+// ====================== ServiceAccount请求结构体 ======================
+
+// GetServiceAccountListReq 获取ServiceAccount列表请求
+type GetServiceAccountListReq struct {
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" form:"namespace" comment:"命名空间"`
+	Name      string `json:"name" form:"name" comment:"ServiceAccount名称过滤"`
+	LabelKey  string `json:"label_key" form:"label_key" comment:"标签键过滤"`
+	Keyword   string `json:"keyword" form:"keyword" comment:"关键字搜索"`
+	Page      int    `json:"page" form:"page" comment:"页码"`
+	PageSize  int    `json:"page_size" form:"page_size" comment:"页面大小"`
+}
+
+// GetServiceAccountDetailsReq 获取ServiceAccount详情请求
+type GetServiceAccountDetailsReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" uri:"name" binding:"required" comment:"ServiceAccount名称"`
+}
+
+// CreateServiceAccountReq 创建ServiceAccount请求
+type CreateServiceAccountReq struct {
+	ClusterID                    int               `json:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace                    string            `json:"namespace" binding:"required" comment:"命名空间"`
+	Name                         string            `json:"name" binding:"required" comment:"ServiceAccount名称"`
+	Labels                       map[string]string `json:"labels" comment:"标签"`
+	Annotations                  map[string]string `json:"annotations" comment:"注解"`
+	AutomountServiceAccountToken *BoolValue        `json:"automount_service_account_token" comment:"是否自动挂载服务账户令牌"`
+}
+
+// UpdateServiceAccountReq 更新ServiceAccount请求
+type UpdateServiceAccountReq struct {
+	ClusterID                    int               `json:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace                    string            `json:"namespace" binding:"required" comment:"命名空间"`
+	Name                         string            `json:"name" binding:"required" comment:"ServiceAccount名称"`
+	Labels                       map[string]string `json:"labels" comment:"标签"`
+	Annotations                  map[string]string `json:"annotations" comment:"注解"`
+	AutomountServiceAccountToken *BoolValue        `json:"automount_service_account_token" comment:"是否自动挂载服务账户令牌"`
+}
+
+// DeleteServiceAccountReq 删除ServiceAccount请求
+type DeleteServiceAccountReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" uri:"name" binding:"required" comment:"ServiceAccount名称"`
+}
+
+// GetServiceAccountYamlReq 获取ServiceAccount YAML请求
+type GetServiceAccountYamlReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" uri:"name" binding:"required" comment:"ServiceAccount名称"`
+}
+
+// UpdateServiceAccountYamlReq 更新ServiceAccount YAML请求
+type UpdateServiceAccountYamlReq struct {
+	ClusterID   int    `json:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace   string `json:"namespace" binding:"required" comment:"命名空间"`
+	Name        string `json:"name" binding:"required" comment:"ServiceAccount名称"`
+	Yaml        string `json:"yaml" binding:"required" comment:"YAML内容"`
+	YamlContent string `json:"yaml_content" binding:"required" comment:"YAML内容"`
+}
+
+// GetServiceAccountEventsReq 获取ServiceAccount事件请求
+type GetServiceAccountEventsReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" uri:"name" binding:"required" comment:"ServiceAccount名称"`
+}
+
+// GetServiceAccountUsageReq 获取ServiceAccount使用情况请求
+type GetServiceAccountUsageReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" uri:"name" binding:"required" comment:"ServiceAccount名称"`
+}
+
+// GetServiceAccountMetricsReq 获取ServiceAccount指标请求
+type GetServiceAccountMetricsReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" uri:"name" binding:"required" comment:"ServiceAccount名称"`
+}
+
+// GetServiceAccountTokenReq 获取ServiceAccount令牌请求
+type GetServiceAccountTokenReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	Name      string `json:"name" uri:"name" binding:"required" comment:"ServiceAccount名称"`
+}
+
+// CreateServiceAccountTokenReq 创建ServiceAccount令牌请求
+type CreateServiceAccountTokenReq struct {
+	ClusterID  int    `json:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace  string `json:"namespace" binding:"required" comment:"命名空间"`
+	Name       string `json:"name" binding:"required" comment:"ServiceAccount名称"`
+	ExpiryTime *int64 `json:"expiry_time" comment:"令牌过期时间（秒）"`
 }

@@ -32,152 +32,233 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type ClusterRoleBindingAPI struct {
-	clusterRoleBindingService *service.ClusterRoleBindingService
+type K8sClusterRoleBindingHandler struct {
+	clusterRoleBindingService service.ClusterRoleBindingService
 }
 
-func NewClusterRoleBindingAPI(clusterRoleBindingService *service.ClusterRoleBindingService) *ClusterRoleBindingAPI {
-	return &ClusterRoleBindingAPI{
+func NewK8sClusterRoleBindingHandler(clusterRoleBindingService service.ClusterRoleBindingService) *K8sClusterRoleBindingHandler {
+	return &K8sClusterRoleBindingHandler{
 		clusterRoleBindingService: clusterRoleBindingService,
 	}
 }
 
-func (crba *ClusterRoleBindingAPI) RegisterRouters(server *gin.Engine) {
+func (k *K8sClusterRoleBindingHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
 	{
-		k8sGroup.GET("/cluster-role-binding/list", crba.GetClusterRoleBindingList)                         // 获取ClusterRoleBinding列表
-		k8sGroup.GET("/cluster-role-binding/details/:cluster_id/:name", crba.GetClusterRoleBindingDetails) // 获取ClusterRoleBinding详情
-		k8sGroup.POST("/cluster-role-binding/create", crba.CreateClusterRoleBinding)                       // 创建ClusterRoleBinding
-		k8sGroup.PUT("/cluster-role-binding/update", crba.UpdateClusterRoleBinding)                        // 更新ClusterRoleBinding
-		k8sGroup.DELETE("/cluster-role-binding/delete/:cluster_id/:name", crba.DeleteClusterRoleBinding)   // 删除ClusterRoleBinding
-		k8sGroup.GET("/cluster-role-binding/yaml/:cluster_id/:name", crba.GetClusterRoleBindingYaml)       // 获取ClusterRoleBinding YAML
-		k8sGroup.PUT("/cluster-role-binding/yaml", crba.UpdateClusterRoleBindingYaml)                      // 更新ClusterRoleBinding YAML
+		// ClusterRoleBinding 基本操作
+		k8sGroup.GET("/cluster-role-bindings", k.GetClusterRoleBindingList)                      // 获取列表
+		k8sGroup.GET("/cluster-role-bindings/:cluster_id/:name", k.GetClusterRoleBindingDetails) // 获取详情
+		k8sGroup.POST("/cluster-role-bindings", k.CreateClusterRoleBinding)                      // 创建
+		k8sGroup.PUT("/cluster-role-bindings/:cluster_id/:name", k.UpdateClusterRoleBinding)     // 更新
+		k8sGroup.DELETE("/cluster-role-bindings/:cluster_id/:name", k.DeleteClusterRoleBinding)  // 删除
+
+		// ClusterRoleBinding YAML 操作
+		k8sGroup.GET("/cluster-role-bindings/:cluster_id/:name/yaml", k.GetClusterRoleBindingYaml)    // 获取YAML
+		k8sGroup.PUT("/cluster-role-bindings/:cluster_id/:name/yaml", k.UpdateClusterRoleBindingYaml) // 更新YAML
+
+		// ClusterRoleBinding 扩展功能
+		k8sGroup.GET("/cluster-role-bindings/:cluster_id/:name/events", k.GetClusterRoleBindingEvents)   // 获取事件
+		k8sGroup.GET("/cluster-role-bindings/:cluster_id/:name/usage", k.GetClusterRoleBindingUsage)     // 获取使用情况
+		k8sGroup.GET("/cluster-role-bindings/:cluster_id/:name/metrics", k.GetClusterRoleBindingMetrics) // 获取指标
 	}
 }
 
-// GetClusterRoleBindingList 获取ClusterRoleBinding列表
-func (crba *ClusterRoleBindingAPI) GetClusterRoleBindingList(c *gin.Context) {
-	var req model.ClusterRoleBindingListReq
-	if err := c.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
+func (k *K8sClusterRoleBindingHandler) GetClusterRoleBindingList(ctx *gin.Context) {
+	var req model.GetClusterRoleBindingListReq
 
-	result, err := crba.clusterRoleBindingService.GetClusterRoleBindingList(c.Request.Context(), &req)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.clusterRoleBindingService.GetClusterRoleBindingList(ctx, &req)
+	})
+}
+
+func (k *K8sClusterRoleBindingHandler) GetClusterRoleBindingDetails(ctx *gin.Context) {
+	var req model.GetClusterRoleBindingDetailsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "获取ClusterRoleBinding列表失败")
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.SuccessWithData(c, result)
-}
-
-// GetClusterRoleBindingDetails 获取ClusterRoleBinding详情
-func (crba *ClusterRoleBindingAPI) GetClusterRoleBindingDetails(c *gin.Context) {
-	var req model.ClusterRoleBindingGetReq
-	if err := c.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
-
-	result, err := crba.clusterRoleBindingService.GetClusterRoleBindingDetails(c.Request.Context(), &req)
+	name, err := utils.GetParamCustomName(ctx, "name")
 	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "获取ClusterRoleBinding详情失败")
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.SuccessWithData(c, result)
+	req.ClusterID = clusterID
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.clusterRoleBindingService.GetClusterRoleBindingDetails(ctx, &req)
+	})
 }
 
-// CreateClusterRoleBinding 创建ClusterRoleBinding
-func (crba *ClusterRoleBindingAPI) CreateClusterRoleBinding(c *gin.Context) {
+func (k *K8sClusterRoleBindingHandler) CreateClusterRoleBinding(ctx *gin.Context) {
 	var req model.CreateClusterRoleBindingReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
 
-	err := crba.clusterRoleBindingService.CreateClusterRoleBinding(c.Request.Context(), &req)
-	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "创建ClusterRoleBinding失败")
-		return
-	}
-
-	utils.Success(c)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.clusterRoleBindingService.CreateClusterRoleBinding(ctx, &req)
+	})
 }
 
-// UpdateClusterRoleBinding 更新ClusterRoleBinding
-func (crba *ClusterRoleBindingAPI) UpdateClusterRoleBinding(c *gin.Context) {
+func (k *K8sClusterRoleBindingHandler) UpdateClusterRoleBinding(ctx *gin.Context) {
 	var req model.UpdateClusterRoleBindingReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
 
-	err := crba.clusterRoleBindingService.UpdateClusterRoleBinding(c.Request.Context(), &req)
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "更新ClusterRoleBinding失败")
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.Success(c)
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.clusterRoleBindingService.UpdateClusterRoleBinding(ctx, &req)
+	})
 }
 
-// DeleteClusterRoleBinding 删除ClusterRoleBinding
-func (crba *ClusterRoleBindingAPI) DeleteClusterRoleBinding(c *gin.Context) {
+func (k *K8sClusterRoleBindingHandler) DeleteClusterRoleBinding(ctx *gin.Context) {
 	var req model.DeleteClusterRoleBindingReq
-	if err := c.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
 
-	err := crba.clusterRoleBindingService.DeleteClusterRoleBinding(c.Request.Context(), &req)
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "删除ClusterRoleBinding失败")
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.Success(c)
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.clusterRoleBindingService.DeleteClusterRoleBinding(ctx, &req)
+	})
 }
 
-// GetClusterRoleBindingYaml 获取ClusterRoleBinding的YAML配置
-func (crba *ClusterRoleBindingAPI) GetClusterRoleBindingYaml(c *gin.Context) {
-	var req model.ClusterRoleBindingGetReq
-	if err := c.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
+func (k *K8sClusterRoleBindingHandler) GetClusterRoleBindingYaml(ctx *gin.Context) {
+	var req model.GetClusterRoleBindingYamlReq
 
-	yamlContent, err := crba.clusterRoleBindingService.GetClusterRoleBindingYaml(c.Request.Context(), &req)
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "获取ClusterRoleBinding YAML失败")
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.SuccessWithData(c, yamlContent)
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.clusterRoleBindingService.GetClusterRoleBindingYaml(ctx, &req)
+	})
 }
 
-// UpdateClusterRoleBindingYaml 更新ClusterRoleBinding的YAML配置
-func (crba *ClusterRoleBindingAPI) UpdateClusterRoleBindingYaml(c *gin.Context) {
-	var req model.ClusterRoleBindingYamlReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
+func (k *K8sClusterRoleBindingHandler) UpdateClusterRoleBindingYaml(ctx *gin.Context) {
+	var req model.UpdateClusterRoleBindingYamlReq
 
-	err := crba.clusterRoleBindingService.UpdateClusterRoleBindingYaml(c.Request.Context(), &req)
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "更新ClusterRoleBinding YAML失败")
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.Success(c)
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.clusterRoleBindingService.UpdateClusterRoleBindingYaml(ctx, &req)
+	})
+}
+
+func (k *K8sClusterRoleBindingHandler) GetClusterRoleBindingEvents(ctx *gin.Context) {
+	var req model.GetClusterRoleBindingEventsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.clusterRoleBindingService.GetClusterRoleBindingEvents(ctx, &req)
+	})
+}
+
+func (k *K8sClusterRoleBindingHandler) GetClusterRoleBindingUsage(ctx *gin.Context) {
+	var req model.GetClusterRoleBindingUsageReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.clusterRoleBindingService.GetClusterRoleBindingUsage(ctx, &req)
+	})
+}
+
+func (k *K8sClusterRoleBindingHandler) GetClusterRoleBindingMetrics(ctx *gin.Context) {
+	var req model.GetClusterRoleBindingMetricsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.clusterRoleBindingService.GetClusterRoleBindingMetrics(ctx, &req)
+	})
 }

@@ -46,13 +46,18 @@ func NewK8sPVCHandler(pvcService service.PVCService) *K8sPVCHandler {
 func (k *K8sPVCHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/pvcs/list", k.GetPVCList)                       // 获取PVC列表
-		k8sGroup.GET("/pvcs/:cluster_id", k.GetPVCsByNamespace)        // 根据命名空间获取PVC列表
-		k8sGroup.GET("/pvcs/:cluster_id/:name", k.GetPVC)              // 获取单个PVC详情
-		k8sGroup.GET("/pvcs/:cluster_id/:name/yaml", k.GetPVCYaml)     // 获取PVC YAML配置
-		k8sGroup.POST("/pvcs/create", k.CreatePVC)                     // 创建PVC
-		k8sGroup.PUT("/pvcs/update", k.UpdatePVC)                      // 更新PVC
-		k8sGroup.DELETE("/pvcs/delete", k.DeletePVC)                   // 删除PVC
+		k8sGroup.GET("/pvcs/list", k.GetPVCList)                   // 获取PVC列表
+		k8sGroup.GET("/pvcs/:cluster_id", k.GetPVCsByNamespace)    // 根据命名空间获取PVC列表
+		k8sGroup.GET("/pvcs/:cluster_id/:name", k.GetPVC)          // 获取单个PVC详情
+		k8sGroup.GET("/pvcs/:cluster_id/:name/yaml", k.GetPVCYaml) // 获取PVC YAML配置
+		k8sGroup.POST("/pvcs/create", k.CreatePVC)                 // 创建PVC
+		k8sGroup.PUT("/pvcs/update", k.UpdatePVC)                  // 更新PVC
+		k8sGroup.DELETE("/pvcs/delete", k.DeletePVC)               // 删除PVC
+
+		// YAML操作
+		k8sGroup.POST("/pvcs/yaml", k.CreatePVCByYaml)                             // 通过YAML创建PVC
+		k8sGroup.PUT("/pvcs/:cluster_id/:namespace/:name/yaml", k.UpdatePVCByYaml) // 通过YAML更新PVC
+
 		k8sGroup.GET("/pvcs/:cluster_id/:name/events", k.GetPVCEvents) // 获取PVC事件
 		k8sGroup.GET("/pvcs/:cluster_id/:name/usage", k.GetPVCUsage)   // 获取PVC使用情况
 		k8sGroup.POST("/pvcs/:cluster_id/:name/expand", k.ExpandPVC)   // 扩容PVC
@@ -194,5 +199,49 @@ func (k *K8sPVCHandler) ExpandPVC(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.pvcService.ExpandPVC(ctx, &req)
+	})
+}
+
+// YAML操作方法
+
+// CreatePVCByYaml 通过YAML创建PVC
+func (k *K8sPVCHandler) CreatePVCByYaml(ctx *gin.Context) {
+	var req model.CreateResourceByYamlReq
+	req.ResourceType = model.ResourceTypePVC
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.pvcService.CreatePVCByYaml(ctx, &req)
+	})
+}
+
+// UpdatePVCByYaml 通过YAML更新PVC
+func (k *K8sPVCHandler) UpdatePVCByYaml(ctx *gin.Context) {
+	var req model.UpdateResourceByYamlReq
+	req.ResourceType = model.ResourceTypePVC
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.pvcService.UpdatePVCByYaml(ctx, &req)
 	})
 }
