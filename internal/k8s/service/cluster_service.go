@@ -66,7 +66,7 @@ func NewClusterService(dao dao.ClusterDAO, client client.K8sClient, clusterMgr m
 	}
 }
 
-// ListClusters 获取所有 Kubernetes 集群
+// ListClusters 获取集群列表
 func (c *clusterService) ListClusters(ctx context.Context, req *model.ListClustersReq) (model.ListResp[*model.K8sCluster], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sCluster]{}, fmt.Errorf("获取集群列表请求不能为空")
@@ -89,7 +89,7 @@ func (c *clusterService) ListClusters(ctx context.Context, req *model.ListCluste
 	}, nil
 }
 
-// GetClusterByID 根据 ID 获取单个 Kubernetes 集群
+// GetClusterByID 根据ID获取集群
 func (c *clusterService) GetClusterByID(ctx context.Context, req *model.GetClusterReq) (*model.K8sCluster, error) {
 	if req == nil || req.ID <= 0 {
 		return nil, fmt.Errorf("获取集群请求参数不能为空")
@@ -111,7 +111,7 @@ func (c *clusterService) GetClusterByID(ctx context.Context, req *model.GetClust
 	return cluster, nil
 }
 
-// CreateCluster 创建一个新的 Kubernetes 集群
+// CreateCluster 创建集群
 func (c *clusterService) CreateCluster(ctx context.Context, req *model.CreateClusterReq) error {
 	if req == nil {
 		return fmt.Errorf("创建集群请求不能为空")
@@ -182,7 +182,7 @@ func (c *clusterService) CreateCluster(ctx context.Context, req *model.CreateClu
 	return nil
 }
 
-// UpdateCluster 更新指定 ID 的 Kubernetes 集群
+// UpdateCluster 更新集群
 func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClusterReq) error {
 	if req == nil {
 		return fmt.Errorf("更新集群请求不能为空")
@@ -253,7 +253,7 @@ func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 	return nil
 }
 
-// DeleteCluster 删除指定 ID 的 Kubernetes 集群
+// DeleteCluster 删除集群
 func (c *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClusterReq) error {
 	if req == nil || req.ID <= 0 {
 		return fmt.Errorf("删除集群请求参数不能为空")

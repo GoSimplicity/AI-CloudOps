@@ -54,7 +54,7 @@ func (k *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 	}
 }
 
-// GetPodListByNamespace 获取Pod列表
+// GetPodListByNamespace 获取pod列表
 func (k *K8sPodHandler) GetPodListByNamespace(ctx *gin.Context) {
 	var req model.K8sGetResourceListReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -71,7 +71,7 @@ func (k *K8sPodHandler) GetPodListByNamespace(ctx *gin.Context) {
 	})
 }
 
-// GetPodContainers 获取Pod的容器列表
+// GetPodContainers 获取pod容器列表
 func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 	var req model.PodContainersReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -88,7 +88,7 @@ func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 	})
 }
 
-// GetPodsListByNodeName 根据节点名获取Pod列表
+// GetPodsListByNodeName 获取节点pod列表
 func (k *K8sPodHandler) GetPodsListByNodeName(ctx *gin.Context) {
 	var req model.PodsByNodeReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -122,7 +122,7 @@ func (k *K8sPodHandler) GetContainerLogs(ctx *gin.Context) {
 	})
 }
 
-// GetPodYaml 获取Pod的YAML配置
+// GetPodYaml 获取pod的YAML
 func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 	var req model.K8sGetResourceYamlReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -139,7 +139,7 @@ func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 	})
 }
 
-// DeletePod 删除Pod
+// DeletePod 删除pod
 func (k *K8sPodHandler) DeletePod(ctx *gin.Context) {
 	var req model.K8sDeleteResourceReq
 	if err := ctx.ShouldBindUri(&req); err != nil {

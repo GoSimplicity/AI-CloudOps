@@ -69,7 +69,7 @@ func NewDeploymentService(deploymentManager manager.DeploymentManager, logger *z
 	}
 }
 
-// CreateDeployment 创建Deployment
+// CreateDeployment 创建deployment
 func (d *deploymentService) CreateDeployment(ctx context.Context, req *model.CreateDeploymentReq) error {
 	if req == nil {
 		return fmt.Errorf("创建Deployment请求不能为空")
@@ -117,7 +117,7 @@ func (d *deploymentService) CreateDeployment(ctx context.Context, req *model.Cre
 	return nil
 }
 
-// DeleteDeployment 删除Deployment
+// DeleteDeployment 删除deployment
 func (d *deploymentService) DeleteDeployment(ctx context.Context, req *model.DeleteDeploymentReq) error {
 	if req == nil {
 		return fmt.Errorf("删除Deployment请求不能为空")
@@ -148,7 +148,7 @@ func (d *deploymentService) DeleteDeployment(ctx context.Context, req *model.Del
 	return nil
 }
 
-// GetDeploymentDetails 获取Deployment详情
+// GetDeploymentDetails 获取deployment详情
 func (d *deploymentService) GetDeploymentDetails(ctx context.Context, req *model.GetDeploymentDetailsReq) (*model.K8sDeployment, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取Deployment详情请求不能为空")
@@ -190,7 +190,7 @@ func (d *deploymentService) GetDeploymentDetails(ctx context.Context, req *model
 	return k8sDeployment, nil
 }
 
-// GetDeploymentEvents 获取Deployment事件
+// GetDeploymentEvents 获取deployment事件
 func (d *deploymentService) GetDeploymentEvents(ctx context.Context, req *model.GetDeploymentEventsReq) (model.ListResp[*model.K8sDeploymentEvent], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sDeploymentEvent]{}, fmt.Errorf("获取Deployment事件请求不能为空")
@@ -230,7 +230,7 @@ func (d *deploymentService) GetDeploymentEvents(ctx context.Context, req *model.
 	}, nil
 }
 
-// GetDeploymentHistory 获取Deployment版本历史
+// GetDeploymentHistory 获取deployment历史
 func (d *deploymentService) GetDeploymentHistory(ctx context.Context, req *model.GetDeploymentHistoryReq) (model.ListResp[*model.K8sDeploymentHistory], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sDeploymentHistory]{}, fmt.Errorf("获取Deployment历史请求不能为空")
@@ -264,7 +264,7 @@ func (d *deploymentService) GetDeploymentHistory(ctx context.Context, req *model
 	}, nil
 }
 
-// GetDeploymentList 获取Deployment列表
+// GetDeploymentList 获取deployment列表
 func (d *deploymentService) GetDeploymentList(ctx context.Context, req *model.GetDeploymentListReq) (model.ListResp[*model.K8sDeployment], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sDeployment]{}, fmt.Errorf("获取Deployment列表请求不能为空")
@@ -330,7 +330,7 @@ func (d *deploymentService) GetDeploymentList(ctx context.Context, req *model.Ge
 	}, nil
 }
 
-// GetDeploymentPods 获取Deployment下的Pod列表
+// GetDeploymentPods 获取deployment的pod列表
 func (d *deploymentService) GetDeploymentPods(ctx context.Context, req *model.GetDeploymentPodsReq) (model.ListResp[*model.K8sPod], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取Deployment Pods请求不能为空")
@@ -364,7 +364,7 @@ func (d *deploymentService) GetDeploymentPods(ctx context.Context, req *model.Ge
 	}, nil
 }
 
-// GetDeploymentYaml 获取Deployment YAML
+// GetDeploymentYaml 获取deployment YAML
 func (d *deploymentService) GetDeploymentYaml(ctx context.Context, req *model.GetDeploymentYamlReq) (*model.K8sYaml, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取Deployment YAML请求不能为空")
@@ -406,7 +406,7 @@ func (d *deploymentService) GetDeploymentYaml(ctx context.Context, req *model.Ge
 	}, nil
 }
 
-// RestartDeployment 重启Deployment
+// RestartDeployment 重启deployment
 func (d *deploymentService) RestartDeployment(ctx context.Context, req *model.RestartDeploymentReq) error {
 	if req == nil {
 		return fmt.Errorf("重启Deployment请求不能为空")
@@ -473,7 +473,7 @@ func (d *deploymentService) RollbackDeployment(ctx context.Context, req *model.R
 	return nil
 }
 
-// ScaleDeployment 扩缩容Deployment
+// ScaleDeployment 扩缩容deployment
 func (d *deploymentService) ScaleDeployment(ctx context.Context, req *model.ScaleDeploymentReq) error {
 	if req == nil {
 		return fmt.Errorf("扩缩容Deployment请求不能为空")
@@ -509,7 +509,7 @@ func (d *deploymentService) ScaleDeployment(ctx context.Context, req *model.Scal
 	return nil
 }
 
-// UpdateDeployment 更新Deployment
+// UpdateDeployment 更新deployment
 func (d *deploymentService) UpdateDeployment(ctx context.Context, req *model.UpdateDeploymentReq) error {
 	if req == nil {
 		return fmt.Errorf("更新Deployment请求不能为空")
@@ -641,7 +641,7 @@ func (d *deploymentService) ResumeDeployment(ctx context.Context, req *model.Res
 	return nil
 }
 
-// CreateDeploymentByYaml 通过YAML创建Deployment
+// CreateDeploymentByYaml 通过YAML创建deployment
 func (d *deploymentService) CreateDeploymentByYaml(ctx context.Context, req *model.CreateDeploymentByYamlReq) error {
 	if req == nil {
 		return fmt.Errorf("通过YAML创建Deployment请求不能为空")
@@ -680,7 +680,7 @@ func (d *deploymentService) CreateDeploymentByYaml(ctx context.Context, req *mod
 	return nil
 }
 
-// UpdateDeploymentByYaml 通过YAML更新Deployment
+// UpdateDeploymentByYaml 通过YAML更新deployment
 func (d *deploymentService) UpdateDeploymentByYaml(ctx context.Context, req *model.UpdateDeploymentByYamlReq) error {
 	if req == nil {
 		return fmt.Errorf("通过YAML更新Deployment请求不能为空")

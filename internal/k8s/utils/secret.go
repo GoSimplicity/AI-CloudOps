@@ -41,7 +41,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildK8sSecret 构建详细的 K8sSecretEntity 模型
+// BuildK8sSecret 构建secret模型
 func BuildK8sSecret(ctx context.Context, clusterID int, secret corev1.Secret) (*model.K8sSecretEntity, error) {
 	if clusterID <= 0 {
 		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)
@@ -103,7 +103,7 @@ func BuildK8sSecret(ctx context.Context, clusterID int, secret corev1.Secret) (*
 	return k8sSecret, nil
 }
 
-// ConvertToSecretEntity 将 K8sSecretEntity 转换为响应实体
+// ConvertToSecretEntity 转换secret实体
 func ConvertToSecretEntity(secret *model.K8sSecretEntity) *model.SecretEntity {
 	if secret == nil {
 		return nil
@@ -126,7 +126,7 @@ func ConvertToSecretEntity(secret *model.K8sSecretEntity) *model.SecretEntity {
 	}
 }
 
-// BuildSecretFromRequest 从创建请求构建 Kubernetes Secret
+// BuildSecretFromRequest 从请求构建secret
 func BuildSecretFromRequest(req *model.K8sSecretCreateReq) (*corev1.Secret, error) {
 	if req == nil {
 		return nil, fmt.Errorf("创建请求不能为空")

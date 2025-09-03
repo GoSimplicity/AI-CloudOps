@@ -72,7 +72,7 @@ func NewDeploymentManager(clientFactory client.K8sClient, logger *zap.Logger) De
 	}
 }
 
-// getKubeClient 获取 Kubernetes 客户端
+// getKubeClient 获取客户端
 func (d *deploymentManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
 	kubeClient, err := d.clientFactory.GetKubeClient(clusterID)
 	if err != nil {
@@ -82,7 +82,7 @@ func (d *deploymentManager) getKubeClient(clusterID int) (*kubernetes.Clientset,
 	return kubeClient, nil
 }
 
-// CreateDeployment 创建 Deployment
+// CreateDeployment 创建deployment
 func (d *deploymentManager) CreateDeployment(ctx context.Context, clusterID int, namespace string, deployment *appsv1.Deployment) error {
 	if deployment == nil {
 		return fmt.Errorf("deployment 不能为空")
@@ -117,7 +117,7 @@ func (d *deploymentManager) CreateDeployment(ctx context.Context, clusterID int,
 	return nil
 }
 
-// GetDeployment 获取单个 Deployment
+// GetDeployment 获取deployment
 func (d *deploymentManager) GetDeployment(ctx context.Context, clusterID int, namespace, name string) (*appsv1.Deployment, error) {
 	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
@@ -141,7 +141,7 @@ func (d *deploymentManager) GetDeployment(ctx context.Context, clusterID int, na
 	return deployment, nil
 }
 
-// GetDeploymentList 获取 Deployment 列表
+// GetDeploymentList 获取deployment列表
 func (d *deploymentManager) GetDeploymentList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sDeployment, error) {
 	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
@@ -171,7 +171,7 @@ func (d *deploymentManager) GetDeploymentList(ctx context.Context, clusterID int
 	return k8sDeployments, nil
 }
 
-// UpdateDeployment 更新 Deployment
+// UpdateDeployment 更新deployment
 func (d *deploymentManager) UpdateDeployment(ctx context.Context, clusterID int, namespace string, deployment *appsv1.Deployment) error {
 	if deployment == nil {
 		return fmt.Errorf("deployment 不能为空")
@@ -199,7 +199,7 @@ func (d *deploymentManager) UpdateDeployment(ctx context.Context, clusterID int,
 	return nil
 }
 
-// DeleteDeployment 删除 Deployment
+// DeleteDeployment 删除deployment
 func (d *deploymentManager) DeleteDeployment(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
 	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
@@ -223,7 +223,7 @@ func (d *deploymentManager) DeleteDeployment(ctx context.Context, clusterID int,
 	return nil
 }
 
-// RestartDeployment 重启 Deployment
+// RestartDeployment 重启deployment
 func (d *deploymentManager) RestartDeployment(ctx context.Context, clusterID int, namespace, name string) error {
 	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
@@ -251,7 +251,7 @@ func (d *deploymentManager) RestartDeployment(ctx context.Context, clusterID int
 	return nil
 }
 
-// ScaleDeployment 扩缩容 Deployment
+// ScaleDeployment 扩缩容deployment
 func (d *deploymentManager) ScaleDeployment(ctx context.Context, clusterID int, namespace, name string, replicas int32) error {
 	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
@@ -290,7 +290,7 @@ func (d *deploymentManager) ScaleDeployment(ctx context.Context, clusterID int, 
 	return nil
 }
 
-// BatchDeleteDeployments 批量删除 Deployment
+// BatchDeleteDeployments 批量删除deployment
 func (d *deploymentManager) BatchDeleteDeployments(ctx context.Context, clusterID int, namespace string, deploymentNames []string) error {
 	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
@@ -330,7 +330,7 @@ func (d *deploymentManager) BatchDeleteDeployments(ctx context.Context, clusterI
 	return nil
 }
 
-// BatchRestartDeployments 批量重启 Deployment
+// BatchRestartDeployments 批量重启deployment
 func (d *deploymentManager) BatchRestartDeployments(ctx context.Context, clusterID int, namespace string, deploymentNames []string) error {
 	var wg sync.WaitGroup
 	errors := make(chan error, len(deploymentNames))
@@ -365,7 +365,7 @@ func (d *deploymentManager) BatchRestartDeployments(ctx context.Context, cluster
 	return nil
 }
 
-// GetDeploymentEvents 获取 Deployment 事件
+// GetDeploymentEvents 获取deployment事件
 func (d *deploymentManager) GetDeploymentEvents(ctx context.Context, clusterID int, namespace, deploymentName string, limit int) ([]*model.K8sDeploymentEvent, int64, error) {
 	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
@@ -391,7 +391,7 @@ func (d *deploymentManager) GetDeploymentEvents(ctx context.Context, clusterID i
 	return events, total, nil
 }
 
-// GetDeploymentHistory 获取 Deployment 历史版本
+// GetDeploymentHistory 获取deployment历史
 func (d *deploymentManager) GetDeploymentHistory(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sDeploymentHistory, int64, error) {
 	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {
@@ -417,7 +417,7 @@ func (d *deploymentManager) GetDeploymentHistory(ctx context.Context, clusterID 
 	return history, total, nil
 }
 
-// GetDeploymentPods 获取 Deployment 下的 Pod 列表
+// GetDeploymentPods 获取deployment的pod列表
 func (d *deploymentManager) GetDeploymentPods(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sPod, int64, error) {
 	kubeClient, err := d.getKubeClient(clusterID)
 	if err != nil {

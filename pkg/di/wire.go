@@ -131,7 +131,6 @@ var ServiceSet = wire.NewSet(
 	k8sService.NewTaintService,
 	k8sService.NewYamlTaskService,
 	k8sService.NewYamlTemplateService,
-	k8sService.NewYamlService,
 	k8sService.NewConfigMapService,
 	k8sService.NewSecretService,
 	k8sService.NewDaemonSetService,

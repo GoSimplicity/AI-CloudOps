@@ -38,18 +38,17 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// PodManager Pod 资源管理器，负责 Pod 相关的业务逻辑
-// 通过依赖注入接收客户端工厂，实现业务逻辑与客户端创建的解耦
+// PodManager pod管理器
 type PodManager interface {
-	// Pod 查询
+	// pod查询
 	GetPod(ctx context.Context, clusterID int, namespace, name string) (*corev1.Pod, error)
 	GetPodList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.PodList, error)
 	GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) (*corev1.PodList, error)
 
-	// Pod 操作
+	// pod操作
 	DeletePod(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
 
-	// Pod 日志
+	// pod日志
 	GetPodLogs(ctx context.Context, clusterID int, namespace, name string, logOptions *corev1.PodLogOptions) (string, error)
 
 	// 批量操作
@@ -61,8 +60,7 @@ type podManager struct {
 	logger        *zap.Logger
 }
 
-// NewPodManager 创建新的 Pod 管理器实例
-// 通过构造函数注入客户端工厂依赖
+// NewPodManager 创建pod管理器
 func NewPodManager(clientFactory client.K8sClient, logger *zap.Logger) PodManager {
 	return &podManager{
 		clientFactory: clientFactory,
@@ -70,8 +68,7 @@ func NewPodManager(clientFactory client.K8sClient, logger *zap.Logger) PodManage
 	}
 }
 
-// getKubeClient 私有方法：获取 Kubernetes 客户端
-// 封装客户端获取逻辑，统一错误处理
+// getKubeClient 获取客户端
 func (p *podManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
 	kubeClient, err := p.clientFactory.GetKubeClient(clusterID)
 	if err != nil {
@@ -81,7 +78,7 @@ func (p *podManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error)
 	return kubeClient, nil
 }
 
-// GetPod 获取单个 Pod
+// GetPod 获取pod
 func (p *podManager) GetPod(ctx context.Context, clusterID int, namespace, name string) (*corev1.Pod, error) {
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
@@ -105,7 +102,7 @@ func (p *podManager) GetPod(ctx context.Context, clusterID int, namespace, name 
 	return pod, nil
 }
 
-// GetPodList 获取 Pod 列表
+// GetPodList 获取pod列表
 func (p *podManager) GetPodList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.PodList, error) {
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
@@ -128,7 +125,7 @@ func (p *podManager) GetPodList(ctx context.Context, clusterID int, namespace st
 	return podList, nil
 }
 
-// GetPodsByNodeName 获取指定节点上的 Pod 列表
+// GetPodsByNodeName 获取节点pod列表
 func (p *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) (*corev1.PodList, error) {
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
@@ -155,7 +152,7 @@ func (p *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeN
 	return pods, nil
 }
 
-// DeletePod 删除 Pod
+// DeletePod 删除pod
 func (p *podManager) DeletePod(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
@@ -179,7 +176,7 @@ func (p *podManager) DeletePod(ctx context.Context, clusterID int, namespace, na
 	return nil
 }
 
-// GetPodLogs 获取 Pod 日志
+// GetPodLogs 获取pod日志
 func (p *podManager) GetPodLogs(ctx context.Context, clusterID int, namespace, name string, logOptions *corev1.PodLogOptions) (string, error) {
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
@@ -216,7 +213,7 @@ func (p *podManager) GetPodLogs(ctx context.Context, clusterID int, namespace, n
 	return string(logData), nil
 }
 
-// BatchDeletePods 批量删除 Pod
+// BatchDeletePods 批量删除pod
 func (p *podManager) BatchDeletePods(ctx context.Context, clusterID int, namespace string, podNames []string) error {
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {

@@ -46,27 +46,16 @@ import (
 )
 
 type PodService interface {
-	// 获取Pod列表
 	GetPodsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPod, error)
 	GetPodList(ctx context.Context, req *model.K8sGetResourceListReq) ([]*model.K8sPodResponse, error)
 	GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sPod, error)
-
-	// 获取Pod详情
 	GetPod(ctx context.Context, req *model.K8sGetResourceReq) (*model.K8sPodResponse, error)
 	GetPodYaml(ctx context.Context, clusterID int, namespace, podName string) (*corev1.Pod, error)
-
-	// 获取容器相关信息
 	GetContainersByPod(ctx context.Context, clusterID int, namespace string, podName string) ([]*model.K8sPodContainer, error)
 	GetContainerLogs(ctx context.Context, clusterID int, namespace, podName, containerName string) (string, error)
 	GetPodLogs(ctx context.Context, req *model.PodLogReq) (string, error)
-
-	// Pod操作
 	DeletePod(ctx context.Context, clusterId int, namespace, podName string) error
 	DeletePodWithOptions(ctx context.Context, req *model.K8sDeleteResourceReq) error
-
-	// 批量操作
-
-	// 高级功能
 	ExecInPod(ctx context.Context, req *model.PodExecReq) error
 	PortForward(ctx context.Context, req *model.PodPortForwardReq) error
 }
@@ -87,7 +76,7 @@ func NewPodService(dao dao.ClusterDAO, client client.K8sClient, podManager manag
 	}
 }
 
-// GetPodsByNamespace 获取指定命名空间中的 Pod 列表
+// GetPodsByNamespace 获取命名空间中的pod列表
 func (p *podService) GetPodsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPod, error) {
 	// 使用新的 PodManager
 	podList, err := p.podManager.GetPodList(ctx, clusterID, namespace, metav1.ListOptions{})
@@ -136,7 +125,7 @@ func (p *podService) GetContainerLogs(ctx context.Context, clusterID int, namesp
 	return logs, nil
 }
 
-// GetPodYaml 获取指定 Pod 的 YAML 配置
+// GetPodYaml 获取pod的YAML
 func (p *podService) GetPodYaml(ctx context.Context, clusterID int, namespace, podName string) (*corev1.Pod, error) {
 	// 使用新的 PodManager
 	pod, err := p.podManager.GetPod(ctx, clusterID, namespace, podName)
@@ -152,7 +141,7 @@ func (p *podService) GetPodYaml(ctx context.Context, clusterID int, namespace, p
 	return pod, nil
 }
 
-// GetPodsByNodeName 获取指定节点的 Pod 列表
+// GetPodsByNodeName 获取节点的pod列表
 func (p *podService) GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sPod, error) {
 	// 使用新的 PodManager
 	pods, err := p.podManager.GetPodsByNodeName(ctx, clusterID, nodeName)
@@ -167,7 +156,7 @@ func (p *podService) GetPodsByNodeName(ctx context.Context, clusterID int, nodeN
 	return k8sutils.BuildK8sPods(pods.Items), nil
 }
 
-// DeletePod 删除 Pod
+// DeletePod 删除pod
 func (p *podService) DeletePod(ctx context.Context, clusterID int, namespace, podName string) error {
 	// 使用新的 PodManager
 	err := p.podManager.DeletePod(ctx, clusterID, namespace, podName, metav1.DeleteOptions{})
@@ -185,7 +174,7 @@ func (p *podService) DeletePod(ctx context.Context, clusterID int, namespace, po
 
 // ==================== 新增的标准化Service方法 ====================
 
-// GetPodList 获取Pod列表（使用新的请求结构体）
+// GetPodList 获取pod列表
 func (p *podService) GetPodList(ctx context.Context, req *model.K8sGetResourceListReq) ([]*model.K8sPodResponse, error) {
 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
 	if err != nil {
@@ -211,7 +200,7 @@ func (p *podService) GetPodList(ctx context.Context, req *model.K8sGetResourceLi
 	return pods, nil
 }
 
-// GetPod 获取单个Pod详情
+// GetPod 获取pod详情
 func (p *podService) GetPod(ctx context.Context, req *model.K8sGetResourceReq) (*model.K8sPodResponse, error) {
 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
 	if err != nil {
@@ -231,7 +220,7 @@ func (p *podService) GetPod(ctx context.Context, req *model.K8sGetResourceReq) (
 	return p.convertPodToResponse(pod), nil
 }
 
-// GetPodLogs 获取Pod日志（使用新的请求结构体）
+// GetPodLogs 获取pod日志
 func (p *podService) GetPodLogs(ctx context.Context, req *model.PodLogReq) (string, error) {
 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
 	if err != nil {
@@ -280,7 +269,7 @@ func (p *podService) GetPodLogs(ctx context.Context, req *model.PodLogReq) (stri
 	return string(logData), nil
 }
 
-// DeletePodWithOptions 删除Pod（使用新的请求结构体）
+// DeletePodWithOptions 删除pod
 func (p *podService) DeletePodWithOptions(ctx context.Context, req *model.K8sDeleteResourceReq) error {
 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
 	if err != nil {
@@ -375,13 +364,13 @@ func (p *podService) convertPodToResponse(pod *corev1.Pod) *model.K8sPodResponse
 	}
 }
 
-// ExecInPod Pod命令执行（占位实现）
+// ExecInPod pod命令执行
 func (p *podService) ExecInPod(ctx context.Context, req *model.PodExecReq) error {
 	// TODO: 实现Pod命令执行功能
 	return pkg.NewBusinessError(constants.ErrNotImplemented, "Pod命令执行功能尚未实现")
 }
 
-// PortForward Pod端口转发（占位实现）
+// PortForward pod端口转发
 func (p *podService) PortForward(ctx context.Context, req *model.PodPortForwardReq) error {
 	// TODO: 实现Pod端口转发功能
 	return pkg.NewBusinessError(constants.ErrNotImplemented, "Pod端口转发功能尚未实现")

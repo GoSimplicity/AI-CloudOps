@@ -410,7 +410,7 @@ func (k *K8sDeploymentHandler) ResumeDeployment(ctx *gin.Context) {
 
 // YAML操作方法
 
-// CreateDeploymentByYaml 通过YAML创建Deployment
+// CreateDeploymentByYaml 通过YAML创建deployment
 func (k *K8sDeploymentHandler) CreateDeploymentByYaml(ctx *gin.Context) {
 	var req model.CreateDeploymentByYamlReq
 
@@ -419,7 +419,7 @@ func (k *K8sDeploymentHandler) CreateDeploymentByYaml(ctx *gin.Context) {
 	})
 }
 
-// UpdateDeploymentByYaml 通过YAML更新Deployment
+// UpdateDeploymentByYaml 通过YAML更新deployment
 func (k *K8sDeploymentHandler) UpdateDeploymentByYaml(ctx *gin.Context) {
 	var req model.UpdateDeploymentByYamlReq
 

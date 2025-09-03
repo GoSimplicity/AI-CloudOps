@@ -32,7 +32,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// BuildK8sPods 将 Kubernetes Pod 列表转换为内部 Pod 模型列表
+// BuildK8sPods 构建pod列表
 func BuildK8sPods(pods []corev1.Pod) []*model.K8sPod {
 	var k8sPods []*model.K8sPod
 
@@ -52,7 +52,7 @@ func BuildK8sPods(pods []corev1.Pod) []*model.K8sPod {
 	return k8sPods
 }
 
-// BuildK8sContainers 将 Kubernetes Container 列表转换为内部 Container 模型列表
+// BuildK8sContainers 构建容器列表
 func BuildK8sContainers(containers []corev1.Container) []model.K8sPodContainer {
 	var k8sContainers []model.K8sPodContainer
 
@@ -129,7 +129,7 @@ func BuildK8sContainers(containers []corev1.Container) []model.K8sPodContainer {
 	return k8sContainers
 }
 
-// BuildK8sContainersWithPointer 将 Container 模型列表转换为指针列表
+// BuildK8sContainersWithPointer 转换容器指针列表
 func BuildK8sContainersWithPointer(containers []model.K8sPodContainer) []*model.K8sPodContainer {
 	var containerPtrs []*model.K8sPodContainer
 
@@ -162,7 +162,7 @@ func buildK8sProbe(probe *corev1.Probe) *model.K8sProbe {
 	return k8sProbe
 }
 
-// BuildK8sPod 构建单个 K8sPod 模型
+// BuildK8sPod 构建pod模型
 func BuildK8sPod(ctx context.Context, clusterID int, pod corev1.Pod) (*model.K8sPod, error) {
 	status := getPodStatus(pod)
 

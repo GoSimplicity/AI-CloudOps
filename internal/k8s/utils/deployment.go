@@ -43,7 +43,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildK8sDeployment 构建详细的 K8sDeployment 模型
+// BuildK8sDeployment 构建K8sDeployment模型
 func BuildK8sDeployment(ctx context.Context, clusterID int, deployment appsv1.Deployment) (*model.K8sDeployment, error) {
 	if clusterID <= 0 {
 		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)

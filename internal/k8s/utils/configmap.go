@@ -40,7 +40,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildK8sConfigMap 构建详细的 K8sConfigMapEntity 模型
+// BuildK8sConfigMap 构建configmap模型
 func BuildK8sConfigMap(ctx context.Context, clusterID int, configMap corev1.ConfigMap) (*model.K8sConfigMapEntity, error) {
 	if clusterID <= 0 {
 		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)
@@ -101,7 +101,7 @@ func BuildK8sConfigMap(ctx context.Context, clusterID int, configMap corev1.Conf
 	return k8sConfigMap, nil
 }
 
-// ConvertToConfigMapEntity 将 K8sConfigMapEntity 转换为响应实体
+// ConvertToConfigMapEntity 转换configmap实体
 func ConvertToConfigMapEntity(configMap *model.K8sConfigMapEntity) *model.ConfigMapEntity {
 	if configMap == nil {
 		return nil
@@ -123,7 +123,7 @@ func ConvertToConfigMapEntity(configMap *model.K8sConfigMapEntity) *model.Config
 	}
 }
 
-// BuildConfigMapFromRequest 从创建请求构建 Kubernetes ConfigMap
+// BuildConfigMapFromRequest 从请求构建configmap
 func BuildConfigMapFromRequest(req *model.K8sConfigMapCreateReq) (*corev1.ConfigMap, error) {
 	if req == nil {
 		return nil, fmt.Errorf("创建请求不能为空")
