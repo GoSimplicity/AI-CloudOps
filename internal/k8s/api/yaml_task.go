@@ -72,7 +72,7 @@ func (k *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
 			Name:       req.Name,
 			UserID:     req.UserID,
 			TemplateID: req.TemplateID,
-			ClusterId:  req.ClusterId,
+			ClusterID:  req.ClusterID,
 			Variables:  req.Variables,
 			Status:     "Pending",
 		}
@@ -93,7 +93,7 @@ func (k *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
 			Name:       req.Name,
 			UserID:     req.UserID,
 			TemplateID: req.TemplateID,
-			ClusterId:  req.ClusterId,
+			ClusterID:  req.ClusterID,
 			Variables:  req.Variables,
 		}
 		return nil, k.yamlTaskService.UpdateYamlTask(ctx, task)

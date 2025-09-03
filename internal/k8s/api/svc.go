@@ -235,7 +235,6 @@ func (k *K8sSvcHandler) GetServiceEndpoints(ctx *gin.Context) {
 // CreateServiceByYaml 通过YAML创建Service
 func (k *K8sSvcHandler) CreateServiceByYaml(ctx *gin.Context) {
 	var req model.CreateResourceByYamlReq
-	req.ResourceType = model.ResourceTypeService
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.svcService.CreateServiceByYaml(ctx, &req)
@@ -245,7 +244,6 @@ func (k *K8sSvcHandler) CreateServiceByYaml(ctx *gin.Context) {
 // UpdateServiceByYaml 通过YAML更新Service
 func (k *K8sSvcHandler) UpdateServiceByYaml(ctx *gin.Context) {
 	var req model.UpdateResourceByYamlReq
-	req.ResourceType = model.ResourceTypeService
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {

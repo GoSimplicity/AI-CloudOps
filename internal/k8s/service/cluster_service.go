@@ -47,7 +47,6 @@ type ClusterService interface {
 	DeleteCluster(ctx context.Context, req *model.DeleteClusterReq) error
 	GetClusterByID(ctx context.Context, req *model.GetClusterReq) (*model.K8sCluster, error)
 	RefreshClusterStatus(ctx context.Context, req *model.RefreshClusterReq) error
-	CheckClusterHealth(ctx context.Context, req *model.CheckClusterHealthReq) (model.ListResp[*model.ComponentHealthStatus], error)
 }
 
 type clusterService struct {
@@ -306,55 +305,4 @@ func (c *clusterService) RefreshClusterStatus(ctx context.Context, req *model.Re
 	}
 
 	return nil
-}
-
-// CheckClusterHealth 检查集群健康状态
-func (c *clusterService) CheckClusterHealth(ctx context.Context, req *model.CheckClusterHealthReq) (model.ListResp[*model.ComponentHealthStatus], error) {
-	if req == nil || req.ID <= 0 {
-		return model.ListResp[*model.ComponentHealthStatus]{}, fmt.Errorf("检查集群健康状态请求参数不能为空")
-	}
-
-	cluster, err := c.dao.GetClusterByID(ctx, req.ID)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return model.ListResp[*model.ComponentHealthStatus]{}, fmt.Errorf("集群不存在，ID: %d", req.ID)
-		}
-
-		c.logger.Error("CheckClusterHealth: 查询集群失败", zap.Int("clusterID", req.ID), zap.Error(err))
-		return model.ListResp[*model.ComponentHealthStatus]{}, fmt.Errorf("查询集群失败: %w", err)
-	}
-
-	// 清理敏感信息
-	cluster.KubeConfigContent = ""
-	cluster.Status = model.StatusError // 默认设置为错误状态
-
-	// 检查集群连接
-	kubeClient, err := c.client.GetKubeClient(cluster.ID)
-	if err != nil {
-		c.logger.Error("CheckClusterHealth: 获取客户端失败", zap.Error(err))
-		return model.ListResp[*model.ComponentHealthStatus]{}, nil
-	}
-
-	// 检查服务器版本
-	version, err := kubeClient.Discovery().ServerVersion()
-	if err != nil {
-		c.logger.Error("CheckClusterHealth: 连接失败", zap.Error(err))
-		return model.ListResp[*model.ComponentHealthStatus]{}, nil
-	}
-
-	// 更新集群版本和状态
-	cluster.Version = version.String()
-	cluster.Status = model.StatusRunning
-
-	// 获取组件状态
-	componentStatuses, total, err := utils.GetComponentStatuses(ctx, kubeClient)
-	if err != nil {
-		c.logger.Warn("CheckClusterHealth: 获取组件状态失败", zap.Error(err))
-		// 不影响整体健康检查结果
-	}
-
-	return model.ListResp[*model.ComponentHealthStatus]{
-		Total: total,
-		Items: componentStatuses,
-	}, nil
 }

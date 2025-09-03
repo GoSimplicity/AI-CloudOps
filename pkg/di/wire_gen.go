@@ -85,9 +85,6 @@ func ProvideCmd() *Cmd {
 	taintManager := manager.NewTaintManager(k8sClient, clusterDAO, logger)
 	taintService := service4.NewTaintService(taintManager, logger)
 	k8sNodeHandler := api4.NewK8sNodeHandler(nodeService, taintService)
-	podManager := manager.NewPodManager(k8sClient, logger)
-	podService := service4.NewPodService(clusterDAO, k8sClient, podManager, logger)
-	k8sPodHandler := api4.NewK8sPodHandler(podService)
 	serviceManager := manager.NewServiceManager(k8sClient, logger)
 	svcService := service4.NewSvcService(serviceManager, k8sClient, logger)
 	k8sSvcHandler := api4.NewK8sSvcHandler(svcService)
@@ -98,27 +95,12 @@ func ProvideCmd() *Cmd {
 	k8sYamlTaskHandler := api4.NewK8sYamlTaskHandler(yamlTaskService)
 	yamlTemplateService := service4.NewYamlTemplateService(yamlManager, logger)
 	k8sYamlTemplateHandler := api4.NewK8sYamlTemplateHandler(yamlTemplateService)
-	configMapManager := manager.NewConfigMapManager(k8sClient, logger)
-	configMapService := service4.NewConfigMapService(k8sClient, configMapManager, logger)
-	k8sConfigMapHandler := api4.NewK8sConfigMapHandler(configMapService)
-	secretManager := manager.NewSecretManager(k8sClient, logger)
-	secretService := service4.NewSecretService(k8sClient, secretManager, logger)
-	k8sSecretHandler := api4.NewK8sSecretHandler(secretService)
 	daemonSetManager := manager.NewDaemonSetManager(k8sClient, logger)
 	daemonSetService := service4.NewDaemonSetService(daemonSetManager, logger)
 	k8sDaemonSetHandler := api4.NewK8sDaemonSetHandler(daemonSetService)
 	eventManager := manager.NewEventManager(k8sClient, logger)
 	eventService := service4.NewEventService(eventManager, logger)
 	k8sEventHandler := api4.NewK8sEventHandler(eventService)
-	pvManager := manager.NewPVManager(logger, k8sClient)
-	pvService := service4.NewPVService(clusterDAO, k8sClient, pvManager, logger)
-	k8sPVHandler := api4.NewK8sPVHandler(pvService)
-	pvcManager := manager.NewPVCManager(logger, k8sClient)
-	pvcService := service4.NewPVCService(clusterDAO, k8sClient, pvcManager, logger)
-	k8sPVCHandler := api4.NewK8sPVCHandler(pvcService)
-	ingressManager := manager.NewIngressManager(logger, k8sClient)
-	ingressService := service4.NewIngressService(clusterDAO, k8sClient, ingressManager, logger)
-	k8sIngressHandler := api4.NewK8sIngressHandler(ingressService)
 	statefulSetManager := manager.NewStatefulSetManager(k8sClient, logger)
 	statefulSetService := service4.NewStatefulSetService(statefulSetManager, logger)
 	k8sStatefulSetHandler := api4.NewK8sStatefulSetHandler(statefulSetService)
@@ -204,7 +186,7 @@ func ProvideCmd() *Cmd {
 	ecsSSH := ssh.NewSSH(logger)
 	treeLocalHandler := api7.NewTreeLocalHandler(treeLocalService, ecsSSH)
 	notificationHandler := api6.NewNotificationHandler(workorderNotificationService)
-	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, systemHandler, notAuthHandler, k8sClusterHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sPodHandler, k8sSvcHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sConfigMapHandler, k8sSecretHandler, k8sDaemonSetHandler, k8sEventHandler, k8sPVHandler, k8sPVCHandler, k8sIngressHandler, k8sStatefulSetHandler, k8sServiceAccountHandler, k8sRoleHandler, k8sClusterRoleHandler, k8sRoleBindingHandler, k8sClusterRoleBindingHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, notificationHandler)
+	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, systemHandler, notAuthHandler, k8sClusterHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sSvcHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sDaemonSetHandler, k8sEventHandler, k8sStatefulSetHandler, k8sServiceAccountHandler, k8sRoleHandler, k8sClusterRoleHandler, k8sRoleBindingHandler, k8sClusterRoleBindingHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, notificationHandler)
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
 	cronManager := cron.NewCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache)
 	cmd := &Cmd{
@@ -223,9 +205,9 @@ type Cmd struct {
 	Cron      cron.CronManager
 }
 
-var HandlerSet = wire.NewSet(api2.NewRoleHandler, api2.NewApiHandler, api2.NewAuditHandler, api2.NewSystemHandler, api.NewUserHandler, api3.NewNotAuthHandler, api4.NewK8sPodHandler, api4.NewK8sNodeHandler, api4.NewK8sClusterHandler, api4.NewK8sDeploymentHandler, api4.NewK8sNamespaceHandler, api4.NewK8sSvcHandler, api4.NewK8sYamlTaskHandler, api4.NewK8sYamlTemplateHandler, api4.NewK8sConfigMapHandler, api4.NewK8sSecretHandler, api4.NewK8sDaemonSetHandler, api4.NewK8sEventHandler, api4.NewK8sPVHandler, api4.NewK8sPVCHandler, api4.NewK8sIngressHandler, api4.NewK8sStatefulSetHandler, api4.NewK8sServiceAccountHandler, api4.NewK8sRoleHandler, api4.NewK8sClusterRoleHandler, api4.NewK8sRoleBindingHandler, api4.NewK8sClusterRoleBindingHandler, api5.NewAlertPoolHandler, api5.NewMonitorConfigHandler, api5.NewOnDutyGroupHandler, api5.NewRecordRuleHandler, api5.NewAlertRuleHandler, api5.NewSendGroupHandler, api5.NewScrapeJobHandler, api5.NewScrapePoolHandler, api5.NewAlertEventHandler, api6.NewFormDesignHandler, api6.NewInstanceHandler, api6.NewInstanceFlowHandler, api6.NewInstanceCommentHandler, api6.NewInstanceTimeLineHandler, api6.NewTemplateHandler, api6.NewWorkorderProcessHandler, api6.NewCategoryGroupHandler, api6.NewNotificationHandler, api7.NewTreeNodeHandler, api7.NewTreeLocalHandler)
+var HandlerSet = wire.NewSet(api2.NewRoleHandler, api2.NewApiHandler, api2.NewAuditHandler, api2.NewSystemHandler, api.NewUserHandler, api3.NewNotAuthHandler, api4.NewK8sNodeHandler, api4.NewK8sClusterHandler, api4.NewK8sDeploymentHandler, api4.NewK8sNamespaceHandler, api4.NewK8sSvcHandler, api4.NewK8sYamlTaskHandler, api4.NewK8sYamlTemplateHandler, api4.NewK8sDaemonSetHandler, api4.NewK8sEventHandler, api4.NewK8sStatefulSetHandler, api4.NewK8sServiceAccountHandler, api4.NewK8sRoleHandler, api4.NewK8sClusterRoleHandler, api4.NewK8sRoleBindingHandler, api4.NewK8sClusterRoleBindingHandler, api5.NewAlertPoolHandler, api5.NewMonitorConfigHandler, api5.NewOnDutyGroupHandler, api5.NewRecordRuleHandler, api5.NewAlertRuleHandler, api5.NewSendGroupHandler, api5.NewScrapeJobHandler, api5.NewScrapePoolHandler, api5.NewAlertEventHandler, api6.NewFormDesignHandler, api6.NewInstanceHandler, api6.NewInstanceFlowHandler, api6.NewInstanceCommentHandler, api6.NewInstanceTimeLineHandler, api6.NewTemplateHandler, api6.NewWorkorderProcessHandler, api6.NewCategoryGroupHandler, api6.NewNotificationHandler, api7.NewTreeNodeHandler, api7.NewTreeLocalHandler)
 
-var ServiceSet = wire.NewSet(service4.NewClusterService, service4.NewDeploymentService, service4.NewNamespaceService, service4.NewPodService, service4.NewSvcService, service4.NewNodeService, service4.NewTaintService, service4.NewYamlTaskService, service4.NewYamlTemplateService, service4.NewConfigMapService, service4.NewSecretService, service4.NewDaemonSetService, service4.NewEventService, service4.NewPVService, service4.NewPVCService, service4.NewIngressService, service4.NewStatefulSetService, service4.NewServiceAccountService, service4.NewRoleService, service4.NewClusterRoleService, service4.NewRoleBindingService, service4.NewClusterRoleBindingService, service4.NewRBACService, service2.NewUserService, service.NewApiService, service.NewRoleService, service.NewAuditService, service.NewSystemService, alert2.NewAlertManagerEventService, alert2.NewAlertManagerOnDutyService, alert2.NewAlertManagerPoolService, alert2.NewAlertManagerRecordService, alert2.NewAlertManagerRuleService, alert2.NewAlertManagerSendService, scrape2.NewPrometheusScrapeService, scrape2.NewPrometheusPoolService, config2.NewMonitorConfigService, service3.NewNotAuthService, service5.NewFormDesignService, service5.NewInstanceService, service5.NewInstanceFlowService, service5.NewInstanceCommentService, service5.NewWorkorderInstanceTimeLineService, service5.NewWorkorderTemplateService, service5.NewWorkorderProcessService, service5.NewCategoryGroupService, service5.NewWorkorderNotificationService, service6.NewTreeNodeService, service6.NewTreeLocalService)
+var ServiceSet = wire.NewSet(service4.NewClusterService, service4.NewDeploymentService, service4.NewNamespaceService, service4.NewSvcService, service4.NewNodeService, service4.NewTaintService, service4.NewYamlTaskService, service4.NewYamlTemplateService, service4.NewDaemonSetService, service4.NewEventService, service4.NewStatefulSetService, service4.NewServiceAccountService, service4.NewRoleService, service4.NewClusterRoleService, service4.NewRoleBindingService, service4.NewClusterRoleBindingService, service4.NewRBACService, service2.NewUserService, service.NewApiService, service.NewRoleService, service.NewAuditService, service.NewSystemService, alert2.NewAlertManagerEventService, alert2.NewAlertManagerOnDutyService, alert2.NewAlertManagerPoolService, alert2.NewAlertManagerRecordService, alert2.NewAlertManagerRuleService, alert2.NewAlertManagerSendService, scrape2.NewPrometheusScrapeService, scrape2.NewPrometheusPoolService, config2.NewMonitorConfigService, service3.NewNotAuthService, service5.NewFormDesignService, service5.NewInstanceService, service5.NewInstanceFlowService, service5.NewInstanceCommentService, service5.NewWorkorderInstanceTimeLineService, service5.NewWorkorderTemplateService, service5.NewWorkorderProcessService, service5.NewCategoryGroupService, service5.NewWorkorderNotificationService, service6.NewTreeNodeService, service6.NewTreeLocalService)
 
 var DaoSet = wire.NewSet(alert.NewAlertManagerEventDAO, alert.NewAlertManagerOnDutyDAO, alert.NewAlertManagerPoolDAO, alert.NewAlertManagerRecordDAO, alert.NewAlertManagerRuleDAO, alert.NewAlertManagerSendDAO, scrape.NewScrapeJobDAO, scrape.NewScrapePoolDAO, config.NewMonitorConfigDAO, dao2.NewUserDAO, dao.NewRoleDAO, dao.NewApiDAO, dao.NewAuditDAO, dao3.NewClusterDAO, dao3.NewYamlTaskDAO, dao3.NewYamlTemplateDAO, dao4.NewWorkorderFormDesignDAO, dao4.NewTemplateDAO, dao4.NewWorkorderInstanceDAO, dao4.NewProcessDAO, dao4.NewWorkorderCategoryDAO, dao4.NewWorkorderInstanceCommentDAO, dao4.NewInstanceFlowDAO, dao4.NewInstanceTimeLineDAO, dao4.NewNotificationDAO, dao5.NewTreeNodeDAO, dao5.NewTreeLocalDAO)
 
@@ -233,7 +215,7 @@ var SSHSet = wire.NewSet(ssh.NewSSH)
 
 var UtilSet = wire.NewSet(utils.NewJWTHandler)
 
-var ManagerSet = wire.NewSet(manager.NewClusterManager, manager.NewDeploymentManager, manager.NewNamespaceManager, manager.NewPodManager, manager.NewServiceManager, manager.NewNodeManager, manager.NewConfigMapManager, manager.NewSecretManager, manager.NewEventManager, manager.NewStatefulSetManager, manager.NewDaemonSetManager, manager.NewIngressManager, manager.NewPVManager, manager.NewPVCManager, manager.NewRBACManager, manager.NewServiceAccountManager, manager.NewTaintManager, manager.NewYamlManager)
+var ManagerSet = wire.NewSet(manager.NewClusterManager, manager.NewDeploymentManager, manager.NewNamespaceManager, manager.NewServiceManager, manager.NewNodeManager, manager.NewEventManager, manager.NewStatefulSetManager, manager.NewDaemonSetManager, manager.NewRBACManager, manager.NewServiceAccountManager, manager.NewTaintManager, manager.NewYamlManager)
 
 var JobSet = wire.NewSet(startup.NewApplicationBootstrap)
 

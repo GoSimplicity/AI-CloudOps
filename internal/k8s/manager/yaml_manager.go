@@ -115,14 +115,14 @@ func (ym *yamlManager) CreateYamlTemplate(ctx context.Context, template *model.K
 	if err := ym.yamlTemplateDao.CreateYamlTemplate(ctx, template); err != nil {
 		ym.logger.Error("创建 YAML 模板失败",
 			zap.String("templateName", template.Name),
-			zap.Int("clusterID", template.ClusterId),
+			zap.Int("clusterID", template.ClusterID),
 			zap.Error(err))
 		return fmt.Errorf("创建 YAML 模板失败: %w", err)
 	}
 
 	ym.logger.Info("创建 YAML 模板成功",
 		zap.String("templateName", template.Name),
-		zap.Int("clusterID", template.ClusterId))
+		zap.Int("clusterID", template.ClusterID))
 	return nil
 }
 
@@ -158,7 +158,7 @@ func (ym *yamlManager) CheckYamlTemplate(ctx context.Context, template *model.K8
 	}
 
 	// 获取 Kubernetes 客户端进行验证
-	discoveryClient, err := ym.client.GetDiscoveryClient(template.ClusterId)
+	discoveryClient, err := ym.client.GetDiscoveryClient(template.ClusterID)
 	if err != nil {
 		return fmt.Errorf("获取 discovery client 失败: %w", err)
 	}
@@ -178,7 +178,7 @@ func (ym *yamlManager) CheckYamlTemplate(ctx context.Context, template *model.K8
 	}
 
 	// 获取动态客户端
-	dynamicClient, err := ym.client.GetDynamicClient(template.ClusterId)
+	dynamicClient, err := ym.client.GetDynamicClient(template.ClusterID)
 	if err != nil {
 		return fmt.Errorf("获取动态客户端失败: %w", err)
 	}
@@ -290,12 +290,12 @@ func (ym *yamlManager) GetYamlTaskList(ctx context.Context) ([]*model.K8sYamlTas
 // CreateYamlTask 创建任务
 func (ym *yamlManager) CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
 	// 验证模板存在
-	if _, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterId); err != nil {
+	if _, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterID); err != nil {
 		return fmt.Errorf("YAML 模板不存在: %w", err)
 	}
 
 	// 验证集群存在
-	if _, err := ym.clusterDao.GetClusterByID(ctx, task.ClusterId); err != nil {
+	if _, err := ym.clusterDao.GetClusterByID(ctx, task.ClusterID); err != nil {
 		return fmt.Errorf("集群不存在: %w", err)
 	}
 
@@ -323,14 +323,14 @@ func (ym *yamlManager) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTa
 
 	// 如果更新了模板ID，验证模板存在
 	if task.TemplateID > 0 {
-		if _, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterId); err != nil {
+		if _, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterID); err != nil {
 			return fmt.Errorf("YAML 模板不存在: %w", err)
 		}
 	}
 
 	// 如果更新了集群ID，验证集群存在
-	if task.ClusterId > 0 {
-		if _, err := ym.clusterDao.GetClusterByID(ctx, task.ClusterId); err != nil {
+	if task.ClusterID > 0 {
+		if _, err := ym.clusterDao.GetClusterByID(ctx, task.ClusterID); err != nil {
 			return fmt.Errorf("集群不存在: %w", err)
 		}
 	}
@@ -376,7 +376,7 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int) error {
 	}
 
 	// 获取模板内容
-	template, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterId)
+	template, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterID)
 	if err != nil {
 		ym.logger.Error("获取 YAML 模板失败",
 			zap.Int("taskID", taskID),
@@ -401,10 +401,10 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int) error {
 	}
 
 	// 应用 YAML 到集群
-	if err := ym.applyYamlToCluster(ctx, task.ClusterId, yamlContent); err != nil {
+	if err := ym.applyYamlToCluster(ctx, task.ClusterID, yamlContent); err != nil {
 		ym.logger.Error("应用 YAML 到集群失败",
 			zap.Int("taskID", taskID),
-			zap.Int("clusterID", task.ClusterId),
+			zap.Int("clusterID", task.ClusterID),
 			zap.Error(err))
 		task.Status = TaskFailed
 		task.ApplyResult = fmt.Sprintf("应用失败: %v", err)

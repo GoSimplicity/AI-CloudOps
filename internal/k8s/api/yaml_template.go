@@ -87,7 +87,7 @@ func (k *K8sYamlTemplateHandler) CreateYamlTemplate(ctx *gin.Context) {
 			Name:      req.Name,
 			UserID:    req.UserID,
 			Content:   req.Content,
-			ClusterId: req.ClusterId,
+			ClusterID: req.ClusterID,
 		}
 		return nil, k.yamlTemplateService.CreateYamlTemplate(ctx, template)
 	})
@@ -106,7 +106,7 @@ func (k *K8sYamlTemplateHandler) UpdateYamlTemplate(ctx *gin.Context) {
 			Name:      req.Name,
 			UserID:    req.UserID,
 			Content:   req.Content,
-			ClusterId: req.ClusterId,
+			ClusterID: req.ClusterID,
 		}
 		return nil, k.yamlTemplateService.UpdateYamlTemplate(ctx, template)
 	})
@@ -145,7 +145,7 @@ func (k *K8sYamlTemplateHandler) CheckYamlTemplate(ctx *gin.Context) {
 		template := &model.K8sYamlTemplate{
 			Name:      req.Name,
 			Content:   req.Content,
-			ClusterId: req.ClusterId,
+			ClusterID: req.ClusterID,
 		}
 		return nil, k.yamlTemplateService.CheckYamlTemplate(ctx, template)
 	})

@@ -24,19 +24,3 @@
  */
 
 package utils
-
-import (
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
-// ConvertToMetaV1ListOptions 将K8sGetResourceListReq转换为metav1.ListOptions
-func ConvertToMetaV1ListOptions(req *model.K8sGetResourceListReq) metav1.ListOptions {
-	return metav1.ListOptions{
-		LabelSelector: req.LabelSelector,
-		FieldSelector: req.FieldSelector,
-		Limit:         req.Limit,
-		Continue:      req.Continue,
-	}
-}
