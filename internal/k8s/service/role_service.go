@@ -58,7 +58,6 @@ type RoleService interface {
 	// 扩展功能
 	GetRoleEvents(ctx context.Context, req *model.GetRoleEventsReq) ([]*model.K8sRoleEvent, error)
 	GetRoleUsage(ctx context.Context, req *model.GetRoleUsageReq) (*model.K8sRoleUsage, error)
-	GetRoleMetrics(ctx context.Context, req *model.GetRoleMetricsReq) (*model.K8sRoleMetrics, error)
 
 	// 兼容性方法（保持现有API接口兼容）
 	GetRoleListCompat(ctx context.Context, req *model.RoleListReq) (*model.ListResp[model.RoleInfo], error)
@@ -382,25 +381,6 @@ func (r *roleService) GetRoleUsage(ctx context.Context, req *model.GetRoleUsageR
 	}
 
 	return usage, nil
-}
-
-// GetRoleMetrics 获取Role指标
-func (r *roleService) GetRoleMetrics(ctx context.Context, req *model.GetRoleMetricsReq) (*model.K8sRoleMetrics, error) {
-	if req == nil {
-		return nil, fmt.Errorf("获取Role指标请求不能为空")
-	}
-
-	metrics, err := r.rbacManager.GetRoleMetrics(ctx, req.ClusterID, req.Namespace, req.Name)
-	if err != nil {
-		r.logger.Error("GetRoleMetrics: 获取Role指标失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.String("name", req.Name))
-		return nil, fmt.Errorf("获取Role指标失败: %w", err)
-	}
-
-	return metrics, nil
 }
 
 // 兼容性方法实现

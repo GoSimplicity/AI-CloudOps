@@ -38,7 +38,6 @@ type K8sPVCHandler struct {
 
 func NewK8sPVCHandler(pvcService service.PVCService) *K8sPVCHandler {
 	return &K8sPVCHandler{
-
 		pvcService: pvcService,
 	}
 }

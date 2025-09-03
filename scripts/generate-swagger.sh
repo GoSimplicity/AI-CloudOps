@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # AI-CloudOps Swagger 文档生成脚本
-# 自动设置环境变量并生成 Swagger 文档
+# 设置环境变量并生成 Swagger 文档
 
 set -e
 
@@ -24,7 +24,7 @@ echo ""
 
 # 检查工具是否存在
 if [ ! -f "tools/swagger-auto-gen/swagger-auto-gen" ]; then
-    echo "🔧 构建自动生成工具..."
+    echo "🔧 构建生成工具..."
     cd tools/swagger-auto-gen && go build -o swagger-auto-gen . && cd ../..
 fi
 

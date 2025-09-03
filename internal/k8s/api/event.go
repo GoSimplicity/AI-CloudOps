@@ -38,7 +38,6 @@ type K8sEventHandler struct {
 
 func NewK8sEventHandler(eventService service.EventService) *K8sEventHandler {
 	return &K8sEventHandler{
-
 		eventService: eventService,
 	}
 }

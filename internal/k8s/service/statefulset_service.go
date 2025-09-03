@@ -46,7 +46,7 @@ type StatefulSetService interface {
 	DeleteStatefulSet(ctx context.Context, req *model.DeleteStatefulSetReq) error
 	RestartStatefulSet(ctx context.Context, req *model.RestartStatefulSetReq) error
 	ScaleStatefulSet(ctx context.Context, req *model.ScaleStatefulSetReq) error
-	GetStatefulSetMetrics(ctx context.Context, req *model.GetStatefulSetMetricsReq) (*model.K8sStatefulSetMetrics, error)
+
 	GetStatefulSetEvents(ctx context.Context, req *model.GetStatefulSetEventsReq) (model.ListResp[*model.K8sStatefulSetEvent], error)
 	GetStatefulSetPods(ctx context.Context, req *model.GetStatefulSetPodsReq) (model.ListResp[*model.K8sPod], error)
 	GetStatefulSetHistory(ctx context.Context, req *model.GetStatefulSetHistoryReq) (model.ListResp[*model.K8sStatefulSetHistory], error)
@@ -328,45 +328,6 @@ func (s *statefulSetService) GetStatefulSetList(ctx context.Context, req *model.
 		Total: total,
 		Items: pagedItems,
 	}, nil
-}
-
-// GetStatefulSetMetrics 获取StatefulSet指标
-func (s *statefulSetService) GetStatefulSetMetrics(ctx context.Context, req *model.GetStatefulSetMetricsReq) (*model.K8sStatefulSetMetrics, error) {
-	if req == nil {
-		return nil, fmt.Errorf("获取StatefulSet指标请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return nil, fmt.Errorf("集群ID不能为空")
-	}
-
-	if req.Namespace == "" {
-		return nil, fmt.Errorf("命名空间不能为空")
-	}
-
-	if req.Name == "" {
-		return nil, fmt.Errorf("StatefulSet名称不能为空")
-	}
-
-	// 使用 StatefulSetManager 获取真实的指标数据
-	metrics, err := s.statefulSetManager.GetStatefulSetMetrics(ctx, req.ClusterID, req.Namespace, req.Name)
-	if err != nil {
-		s.logger.Error("GetStatefulSetMetrics: 获取StatefulSet指标失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.String("name", req.Name))
-		return nil, fmt.Errorf("获取StatefulSet指标失败: %w", err)
-	}
-
-	s.logger.Debug("GetStatefulSetMetrics: 成功获取StatefulSet指标",
-		zap.Int("clusterID", req.ClusterID),
-		zap.String("namespace", req.Namespace),
-		zap.String("name", req.Name),
-		zap.Float64("cpuUsage", metrics.CPUUsage),
-		zap.Float64("memoryUsage", metrics.MemoryUsage))
-
-	return metrics, nil
 }
 
 // GetStatefulSetPods 获取StatefulSet下的Pod列表

@@ -407,14 +407,3 @@ func getDaemonSetStatusString(status model.K8sDaemonSetStatus) string {
 }
 
 // GetDaemonSetResourceUsage 计算DaemonSet资源使用情况
-func GetDaemonSetResourceUsage(daemonSet *model.K8sDaemonSet) *model.K8sDaemonSetMetrics {
-	if daemonSet == nil {
-		return &model.K8sDaemonSetMetrics{}
-	}
-
-	// 基础指标（实际的CPU和内存使用需要从metrics API获取）
-	return &model.K8sDaemonSetMetrics{
-		CPUUsage:    0.0, // 这里需要从metrics API获取实际数据
-		MemoryUsage: 0.0, // 这里需要从metrics API获取实际数据
-	}
-}

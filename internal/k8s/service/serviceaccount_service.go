@@ -49,7 +49,7 @@ type ServiceAccountService interface {
 	// 扩展功能
 	GetServiceAccountEvents(ctx context.Context, req *model.GetServiceAccountEventsReq) (model.ListResp[*model.K8sServiceAccountEvent], error)
 	GetServiceAccountUsage(ctx context.Context, req *model.GetServiceAccountUsageReq) (*model.K8sServiceAccountUsage, error)
-	GetServiceAccountMetrics(ctx context.Context, req *model.GetServiceAccountMetricsReq) (*model.K8sServiceAccountMetrics, error)
+
 	GetServiceAccountToken(ctx context.Context, req *model.GetServiceAccountTokenReq) (*model.K8sServiceAccountToken, error)
 	CreateServiceAccountToken(ctx context.Context, req *model.CreateServiceAccountTokenReq) (*model.K8sServiceAccountToken, error)
 }
@@ -155,14 +155,6 @@ func (s *serviceAccountService) GetServiceAccountUsage(ctx context.Context, req 
 		return nil, err
 	}
 	return usage, nil
-}
-
-func (s *serviceAccountService) GetServiceAccountMetrics(ctx context.Context, req *model.GetServiceAccountMetricsReq) (*model.K8sServiceAccountMetrics, error) {
-	metrics, err := s.rbacManager.GetServiceAccountMetrics(ctx, req.ClusterID, req.Namespace, req.Name)
-	if err != nil {
-		return nil, err
-	}
-	return metrics, nil
 }
 
 func (s *serviceAccountService) GetServiceAccountToken(ctx context.Context, req *model.GetServiceAccountTokenReq) (*model.K8sServiceAccountToken, error) {

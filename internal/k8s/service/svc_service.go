@@ -49,7 +49,6 @@ type SvcService interface {
 	UpdateServiceByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error
 	DeleteService(ctx context.Context, req *model.DeleteServiceReq) error
 	GetServiceEndpoints(ctx context.Context, req *model.GetServiceEndpointsReq) ([]*model.K8sServiceEndpoint, error)
-	GetServiceMetrics(ctx context.Context, req *model.GetServiceMetricsReq) (*model.K8sServiceMetrics, error)
 	GetServiceEvents(ctx context.Context, req *model.GetServiceEventsReq) ([]*model.K8sServiceEvent, error)
 }
 
@@ -395,45 +394,6 @@ func (s *svcService) GetServiceList(ctx context.Context, req *model.GetServiceLi
 		Total: total,
 		Items: items,
 	}, nil
-}
-
-// GetServiceMetrics 获取Service指标
-func (s *svcService) GetServiceMetrics(ctx context.Context, req *model.GetServiceMetricsReq) (*model.K8sServiceMetrics, error) {
-	if req == nil {
-		return nil, fmt.Errorf("获取Service指标请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return nil, fmt.Errorf("集群ID不能为空")
-	}
-
-	if req.Name == "" {
-		return nil, fmt.Errorf("Service名称不能为空")
-	}
-
-	if req.Namespace == "" {
-		return nil, fmt.Errorf("命名空间不能为空")
-	}
-
-	// 使用ServiceManager获取Service指标
-	metrics, err := s.serviceManager.GetServiceMetrics(ctx, req.ClusterID, req.Namespace, req.Name)
-	if err != nil {
-		s.logger.Error("GetServiceMetrics: 获取Service指标失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.String("name", req.Name))
-		return nil, fmt.Errorf("获取Service指标失败: %w", err)
-	}
-
-	s.logger.Info("GetServiceMetrics: Service指标查询完成",
-		zap.Int("clusterID", req.ClusterID),
-		zap.String("namespace", req.Namespace),
-		zap.String("name", req.Name),
-		zap.Int64("connectionCount", metrics.ConnectionCount),
-		zap.Float64("requestRate", metrics.RequestRate))
-
-	return metrics, nil
 }
 
 // GetServiceYaml 获取Service YAML

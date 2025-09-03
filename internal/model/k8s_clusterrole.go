@@ -90,22 +90,6 @@ type K8sClusterRoleEvent struct {
 	Count     int32     `json:"count"`      // 发生次数
 }
 
-// K8sClusterRoleMetrics ClusterRole指标信息
-type K8sClusterRoleMetrics struct {
-	ClusterRoleName      string    `json:"cluster_role_name"`      // ClusterRole名称
-	TotalClusterBindings int       `json:"total_cluster_bindings"` // 总集群绑定数
-	TotalRoleBindings    int       `json:"total_role_bindings"`    // 总角色绑定数
-	ActiveUsers          int       `json:"active_users"`           // 活跃用户数
-	ActiveGroups         int       `json:"active_groups"`          // 活跃组数
-	ServiceAccounts      int       `json:"service_accounts"`       // 服务账户数
-	PermissionCount      int       `json:"permission_count"`       // 权限数量
-	CrossNamespaceAccess BoolValue `json:"cross_namespace_access"` // 是否有跨命名空间访问
-	ClusterWideAccess    BoolValue `json:"cluster_wide_access"`    // 是否有集群级访问
-	LastUsed             time.Time `json:"last_used"`              // 最后使用时间
-	SecurityRisk         string    `json:"security_risk"`          // 安全风险等级 (Low, Medium, High, Critical)
-	LastUpdated          time.Time `json:"last_updated"`           // 最后更新时间
-}
-
 // K8sClusterRoleUsage ClusterRole使用情况
 type K8sClusterRoleUsage struct {
 	ClusterRoleName string                         `json:"cluster_role_name"` // ClusterRole名称

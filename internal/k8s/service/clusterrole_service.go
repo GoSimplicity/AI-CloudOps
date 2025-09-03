@@ -59,7 +59,6 @@ type ClusterRoleService interface {
 	// 扩展功能
 	GetClusterRoleEvents(ctx context.Context, req *model.GetClusterRoleEventsReq) (model.ListResp[*model.K8sClusterRoleEvent], error)
 	GetClusterRoleUsage(ctx context.Context, req *model.GetClusterRoleUsageReq) (*model.K8sClusterRoleUsage, error)
-	GetClusterRoleMetrics(ctx context.Context, req *model.GetClusterRoleMetricsReq) (*model.K8sClusterRoleMetrics, error)
 
 	// 兼容性方法（保持现有API接口兼容）
 	GetClusterRoleListCompat(ctx context.Context, req *model.ClusterRoleListReq) (*model.ListResp[model.ClusterRoleInfo], error)
@@ -384,36 +383,6 @@ func (c *clusterRoleService) GetClusterRoleUsage(ctx context.Context, req *model
 	}
 
 	return usage, nil
-}
-
-// GetClusterRoleMetrics 获取ClusterRole指标
-func (c *clusterRoleService) GetClusterRoleMetrics(ctx context.Context, req *model.GetClusterRoleMetricsReq) (*model.K8sClusterRoleMetrics, error) {
-	if req == nil {
-		return nil, fmt.Errorf("获取ClusterRole指标请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return nil, fmt.Errorf("集群ID不能为空")
-	}
-
-	if req.Name == "" {
-		return nil, fmt.Errorf("ClusterRole名称不能为空")
-	}
-
-	metrics, err := c.rbacManager.GetClusterRoleMetrics(ctx, req.ClusterID, req.Name)
-	if err != nil {
-		c.logger.Error("GetClusterRoleMetrics: 获取ClusterRole指标失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("name", req.Name))
-		return nil, fmt.Errorf("获取ClusterRole指标失败: %w", err)
-	}
-
-	c.logger.Debug("GetClusterRoleMetrics: 成功获取ClusterRole指标",
-		zap.Int("clusterID", req.ClusterID),
-		zap.String("name", req.Name))
-
-	return metrics, nil
 }
 
 // GetClusterRoleDetailsCompat 获取ClusterRole详情（兼容性方法）

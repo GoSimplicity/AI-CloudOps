@@ -52,8 +52,6 @@ func (k *K8sDaemonSetHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.PUT("/daemonsets/:cluster_id/:namespace/:name", k.UpdateDaemonSet)
 		k8sGroup.DELETE("/daemonsets/:cluster_id/:namespace/:name", k.DeleteDaemonSet)
 		k8sGroup.POST("/daemonsets/:cluster_id/:namespace/:name/restart", k.RestartDaemonSet)
-		k8sGroup.GET("/daemonsets/:cluster_id/:namespace/:name/metrics", k.GetDaemonSetMetrics)
-		k8sGroup.GET("/daemonsets/:cluster_id/:namespace/:name/events", k.GetDaemonSetEvents)
 		k8sGroup.GET("/daemonsets/:cluster_id/:namespace/:name/pods", k.GetDaemonSetPods)
 		k8sGroup.GET("/daemonsets/:cluster_id/:namespace/:name/history", k.GetDaemonSetHistory)
 		k8sGroup.POST("/daemonsets/:cluster_id/:namespace/:name/rollback", k.RollbackDaemonSet)
@@ -230,68 +228,6 @@ func (k *K8sDaemonSetHandler) RestartDaemonSet(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.daemonSetService.RestartDaemonSet(ctx, &req)
-	})
-}
-
-// GetDaemonSetMetrics 获取DaemonSet指标
-func (k *K8sDaemonSetHandler) GetDaemonSetMetrics(ctx *gin.Context) {
-	var req model.GetDaemonSetMetricsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.daemonSetService.GetDaemonSetMetrics(ctx, &req)
-	})
-}
-
-// GetDaemonSetEvents 获取DaemonSet事件
-func (k *K8sDaemonSetHandler) GetDaemonSetEvents(ctx *gin.Context) {
-	var req model.GetDaemonSetEventsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.daemonSetService.GetDaemonSetEvents(ctx, &req)
 	})
 }
 

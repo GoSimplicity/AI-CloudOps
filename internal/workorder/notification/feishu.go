@@ -426,7 +426,7 @@ func (f *FeishuChannel) buildGroupMessage(request *SendRequest) map[string]inter
 			"elements": []map[string]interface{}{
 				{
 					"tag":     "plain_text",
-					"content": "AI-CloudOps 智能运维管理平台自动发送 | 技术支持：400-000-0000",
+					"content": "AI-CloudOps 运维管理平台发送 | 技术支持：400-000-0000",
 				},
 			},
 		},
@@ -544,7 +544,7 @@ func (f *FeishuChannel) buildPrivateMessageContent(request *SendRequest, recipie
 			"elements": []map[string]interface{}{
 				{
 					"tag":     "plain_text",
-					"content": "AI-CloudOps 智能运维管理平台自动发送 | 技术支持：400-000-0000",
+					"content": "AI-CloudOps 运维管理平台发送 | 技术支持：400-000-0000",
 				},
 			},
 		},

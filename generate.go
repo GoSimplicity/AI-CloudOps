@@ -29,8 +29,8 @@
 package main
 
 //go:generate bash -c "echo '🔄 正在生成 Swagger 文档...'"
-//go:generate bash -c "echo '[INFO] 使用自动生成模式（无需手动注释）...'"
-//go:generate bash -c "echo '[INFO] 构建自动生成工具...'"
+//go:generate bash -c "echo '[INFO] 使用生成模式（无需手动注释）...'"
+//go:generate bash -c "echo '[INFO] 构建生成工具...'"
 //go:generate bash -c "cd tools/swagger-auto-gen && go build -o swagger-auto-gen ."
 //go:generate bash -c "echo '[INFO] 分析项目结构并生成文档...'"
 //go:generate bash -c "./tools/swagger-auto-gen/swagger-auto-gen -root . -output ./docs -v"

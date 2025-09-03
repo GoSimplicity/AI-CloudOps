@@ -45,18 +45,15 @@ func NewK8sServiceAccountHandler(serviceAccountService service.ServiceAccountSer
 func (s *K8sServiceAccountHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/serviceaccounts", s.GetServiceAccountList)                                         // 获取 ServiceAccount 列表
-		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/details", s.GetServiceAccountDetails) // 获取 ServiceAccount 详情
-		k8sGroup.POST("/serviceaccounts", s.CreateServiceAccount)                                         // 创建 ServiceAccount
-		k8sGroup.PUT("/serviceaccounts/:cluster_id/:namespace/:name/update", s.UpdateServiceAccount)      // 更新 ServiceAccount
-		k8sGroup.DELETE("/serviceaccounts/:cluster_id/:namespace/:name", s.DeleteServiceAccount)          // 删除单个 ServiceAccount
-		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/yaml", s.GetServiceAccountYaml)       // 获取 ServiceAccount YAML
-		k8sGroup.PUT("/serviceaccounts/:cluster_id/:namespace/:name/yaml", s.UpdateServiceAccountYaml)    // 更新 ServiceAccount YAML
-		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/events", s.GetServiceAccountEvents)   // 获取 ServiceAccount 事件
-		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/usage", s.GetServiceAccountUsage)     // 获取 ServiceAccount 使用分析
-		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/metrics", s.GetServiceAccountMetrics) // 获取 ServiceAccount 指标
-		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/token", s.GetServiceAccountToken)     // 获取 ServiceAccount 令牌
-		k8sGroup.POST("/serviceaccounts/token", s.CreateServiceAccountToken)                              // 创建 ServiceAccount 令牌
+		k8sGroup.GET("/serviceaccounts", s.GetServiceAccountList)
+		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/details", s.GetServiceAccountDetails)
+		k8sGroup.POST("/serviceaccounts", s.CreateServiceAccount)
+		k8sGroup.PUT("/serviceaccounts/:cluster_id/:namespace/:name/update", s.UpdateServiceAccount)
+		k8sGroup.DELETE("/serviceaccounts/:cluster_id/:namespace/:name", s.DeleteServiceAccount)
+		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/yaml", s.GetServiceAccountYaml)
+		k8sGroup.PUT("/serviceaccounts/:cluster_id/:namespace/:name/yaml", s.UpdateServiceAccountYaml)
+		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/token", s.GetServiceAccountToken)
+		k8sGroup.POST("/serviceaccounts/token", s.CreateServiceAccountToken)
 	}
 }
 
@@ -230,99 +227,6 @@ func (s *K8sServiceAccountHandler) UpdateServiceAccountYaml(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, s.serviceAccountService.UpdateServiceAccountYaml(ctx, &req)
-	})
-}
-
-// GetServiceAccountEvents 获取 ServiceAccount 事件
-func (s *K8sServiceAccountHandler) GetServiceAccountEvents(ctx *gin.Context) {
-	var req model.GetServiceAccountEventsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return s.serviceAccountService.GetServiceAccountEvents(ctx, &req)
-	})
-}
-
-// GetServiceAccountUsage 获取 ServiceAccount 使用分析
-func (s *K8sServiceAccountHandler) GetServiceAccountUsage(ctx *gin.Context) {
-	var req model.GetServiceAccountUsageReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return s.serviceAccountService.GetServiceAccountUsage(ctx, &req)
-	})
-}
-
-// GetServiceAccountMetrics 获取 ServiceAccount 指标
-func (s *K8sServiceAccountHandler) GetServiceAccountMetrics(ctx *gin.Context) {
-	var req model.GetServiceAccountMetricsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return s.serviceAccountService.GetServiceAccountMetrics(ctx, &req)
 	})
 }
 

@@ -40,13 +40,3 @@ func ConvertToMetaV1ListOptions(req *model.K8sGetResourceListReq) metav1.ListOpt
 		Continue:      req.Continue,
 	}
 }
-
-// ConvertK8sListReqToMetaV1ListOptions 将K8sListReq转换为metav1.ListOptions
-func ConvertK8sListReqToMetaV1ListOptions(req *model.K8sListReq) metav1.ListOptions {
-	return metav1.ListOptions{
-		LabelSelector: req.LabelSelector,
-		FieldSelector: req.FieldSelector,
-		Limit:         req.Limit,
-		Continue:      req.Continue,
-	}
-}

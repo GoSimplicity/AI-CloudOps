@@ -107,81 +107,77 @@ type ConvertToYamlReq struct {
 	Config       interface{}     `json:"config" binding:"required"`        // 资源配置信息
 }
 
-// ===== 各种资源的YAML操作请求结构体 =====
-
-// ConfigMap YAML 请求结构体
-type CreateConfigMapByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+// YamlTemplateUpdateReq 更新 YAML 模板请求
+type YamlTemplateUpdateReq struct {
+	ID        int    `json:"id" binding:"required"`                // 模板ID
+	Name      string `json:"name" binding:"required,min=1,max=50"` // 模板名称
+	UserID    int    `json:"user_id"`                              // 创建者用户ID（从token中获取）
+	Content   string `json:"content" binding:"required"`           // YAML 模板内容
+	ClusterId int    `json:"cluster_id" binding:"required"`        // 集群ID
 }
 
-type UpdateConfigMapByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	Namespace string `json:"namespace" binding:"required"`  // 命名空间
-	Name      string `json:"name" binding:"required"`       // ConfigMap名称
-	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+// YamlTemplateCheckReq 检查 YAML 模板请求
+type YamlTemplateCheckReq struct {
+	Name      string `json:"name" binding:"required,min=1,max=50"` // 模板名称
+	Content   string `json:"content" binding:"required"`           // YAML 模板内容
+	ClusterId int    `json:"cluster_id" binding:"required"`        // 集群ID
 }
 
-// Secret YAML 请求结构体
-type CreateSecretByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+// YamlTemplateListResponse YAML模板列表响应
+type YamlTemplateListResponse struct {
+	Items      []K8sYamlTemplate `json:"items"`       // 模板列表
+	TotalCount int               `json:"total_count"` // 总数
 }
 
-type UpdateSecretByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	Namespace string `json:"namespace" binding:"required"`  // 命名空间
-	Name      string `json:"name" binding:"required"`       // Secret名称
-	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+// YamlTaskListResponse YAML任务列表响应
+type YamlTaskListResponse struct {
+	Items      []K8sYamlTask `json:"items"`       // 任务列表
+	TotalCount int           `json:"total_count"` // 总数
 }
 
-// Service YAML 请求结构体
-type CreateServiceByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+// YamlTaskExecuteResponse YAML任务执行响应
+type YamlTaskExecuteResponse struct {
+	TaskID      int    `json:"task_id"`      // 任务ID
+	Status      string `json:"status"`       // 执行状态
+	Message     string `json:"message"`      // 执行消息
+	ApplyResult string `json:"apply_result"` // apply结果
+	DryRun      bool   `json:"dry_run"`      // 是否为试运行
 }
 
-type UpdateServiceByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	Namespace string `json:"namespace" binding:"required"`  // 命名空间
-	Name      string `json:"name" binding:"required"`       // Service名称
-	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+// YamlTaskLogsResponse YAML任务日志响应
+type YamlTaskLogsResponse struct {
+	TaskID   int                 `json:"task_id"`   // 任务ID
+	TaskName string              `json:"task_name"` // 任务名称
+	Logs     []YamlTaskLogEntity `json:"logs"`      // 日志列表
 }
 
-// Ingress YAML 请求结构体
-type CreateIngressByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+// YamlTaskLogEntity YAML任务日志实体
+type YamlTaskLogEntity struct {
+	Timestamp string `json:"timestamp"` // 时间戳
+	Level     string `json:"level"`     // 日志级别
+	Message   string `json:"message"`   // 日志消息
+	Source    string `json:"source"`    // 日志来源
 }
 
-type UpdateIngressByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	Namespace string `json:"namespace" binding:"required"`  // 命名空间
-	Name      string `json:"name" binding:"required"`       // Ingress名称
-	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+// YamlTaskStatusResponse YAML任务状态响应
+type YamlTaskStatusResponse struct {
+	TaskID      int    `json:"task_id"`      // 任务ID
+	TaskName    string `json:"task_name"`    // 任务名称
+	Status      string `json:"status"`       // 当前状态
+	Progress    int    `json:"progress"`     // 进度百分比
+	StartTime   string `json:"start_time"`   // 开始时间
+	EndTime     string `json:"end_time"`     // 结束时间
+	Duration    string `json:"duration"`     // 执行时长
+	ApplyResult string `json:"apply_result"` // apply结果
+	ErrorMsg    string `json:"error_msg"`    // 错误消息
 }
 
-// PV YAML 请求结构体
-type CreatePVByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	YAML      string `json:"yaml" binding:"required"`       // YAML内容
-}
-
-type UpdatePVByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	Name      string `json:"name" binding:"required"`       // PV名称
-	YAML      string `json:"yaml" binding:"required"`       // YAML内容
-}
-
-// PVC YAML 请求结构体
-type CreatePVCByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	YAML      string `json:"yaml" binding:"required"`       // YAML内容
-}
-
-type UpdatePVCByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	Namespace string `json:"namespace" binding:"required"`  // 命名空间
-	Name      string `json:"name" binding:"required"`       // PVC名称
-	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+// RenderYamlResponse 渲染YAML响应
+type RenderYamlResponse struct {
+	TemplateID     int               `json:"template_id"`     // 模板ID
+	TemplateName   string            `json:"template_name"`   // 模板名称
+	RenderedYaml   string            `json:"rendered_yaml"`   // 渲染后的YAML
+	Variables      map[string]string `json:"variables"`       // 变量列表
+	ValidateResult bool              `json:"validate_result"` // 验证结果
+	ValidateMsg    string            `json:"validate_msg"`    // 验证消息
 }

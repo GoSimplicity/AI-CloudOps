@@ -1,13 +1,13 @@
 # Swagger Auto-Gen Tool
 
-AI-CloudOps 项目的 Swagger 文档自动生成工具。
+AI-CloudOps 项目的 Swagger 文档生成工具。
 
 ## 功能特性
 
 - 自动解析 Go 代码中的路由和结构体定义
 - 生成符合 OpenAPI 2.0 规范的 Swagger 文档
 - 支持 JSON、YAML 和 Go docs 格式输出
-- 智能识别参数类型（路径、查询、请求体）
+- 识别参数类型（路径、查询、请求体）
 - 支持 Gin 框架的路由解析
 - 生产环境优化，性能高效
 
@@ -113,4 +113,4 @@ SWAGGER_ENABLED=true GIN_MODE=debug go run main.go
 ## 版本要求
 
 - Go 1.21+
-- 依赖包会自动管理，无需手动安装
+- 依赖包会管理，无需手动安装

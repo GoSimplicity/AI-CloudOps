@@ -49,7 +49,6 @@ type NodeService interface {
 	CordonNode(ctx context.Context, req *model.NodeCordonReq) error
 	UncordonNode(ctx context.Context, req *model.NodeUncordonReq) error
 	DeleteNodeLabel(ctx context.Context, req *model.DeleteLabelNodesReq) error
-	GetNodeMetrics(ctx context.Context, req *model.GetNodeMetricsReq) (model.ListResp[*model.NodeMetrics], error)
 }
 
 type nodeService struct {
@@ -381,27 +380,4 @@ func (n *nodeService) UncordonNode(ctx context.Context, req *model.NodeUncordonR
 	}
 
 	return nil
-}
-
-// GetNodeMetrics 获取节点指标
-func (n *nodeService) GetNodeMetrics(ctx context.Context, req *model.GetNodeMetricsReq) (model.ListResp[*model.NodeMetrics], error) {
-	if req == nil {
-		return model.ListResp[*model.NodeMetrics]{}, fmt.Errorf("获取节点指标请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return model.ListResp[*model.NodeMetrics]{}, fmt.Errorf("集群 ID 不能为空")
-	}
-
-	// 使用 NodeManager 获取节点指标
-	metrics, total, err := n.nodeManager.GetNodeMetrics(ctx, req.ClusterID, req.NodeNames)
-	if err != nil {
-		n.logger.Error("GetNodeMetrics: 获取节点指标失败", zap.Error(err), zap.Int("clusterID", req.ClusterID))
-		return model.ListResp[*model.NodeMetrics]{}, fmt.Errorf("获取节点指标失败: %w", err)
-	}
-
-	return model.ListResp[*model.NodeMetrics]{
-		Total: total,
-		Items: metrics,
-	}, nil
 }

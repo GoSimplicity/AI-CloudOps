@@ -49,7 +49,6 @@ type RoleBindingService interface {
 	// 扩展功能
 	GetRoleBindingEvents(ctx context.Context, req *model.GetRoleBindingEventsReq) (model.ListResp[*model.K8sRoleBindingEvent], error)
 	GetRoleBindingUsage(ctx context.Context, req *model.GetRoleBindingUsageReq) (*model.K8sRoleBindingUsage, error)
-	GetRoleBindingMetrics(ctx context.Context, req *model.GetRoleBindingMetricsReq) (*model.K8sRoleBindingMetrics, error)
 }
 
 type roleBindingService struct {
@@ -154,12 +153,4 @@ func (s *roleBindingService) GetRoleBindingUsage(ctx context.Context, req *model
 		return nil, err
 	}
 	return usage, nil
-}
-
-func (s *roleBindingService) GetRoleBindingMetrics(ctx context.Context, req *model.GetRoleBindingMetricsReq) (*model.K8sRoleBindingMetrics, error) {
-	metrics, err := s.rbacManager.GetRoleBindingMetrics(ctx, req.ClusterID, req.Namespace, req.Name)
-	if err != nil {
-		return nil, err
-	}
-	return metrics, nil
 }

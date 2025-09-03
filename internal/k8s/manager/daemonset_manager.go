@@ -38,8 +38,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -57,7 +55,7 @@ type DaemonSetManager interface {
 	GetDaemonSetEvents(ctx context.Context, clusterID int, namespace, daemonSetName string, limit int) ([]*model.K8sDaemonSetEvent, int64, error)
 	GetDaemonSetHistory(ctx context.Context, clusterID int, namespace, daemonSetName string) ([]*model.K8sDaemonSetHistory, int64, error)
 	GetDaemonSetPods(ctx context.Context, clusterID int, namespace, daemonSetName string) ([]*model.K8sPod, int64, error)
-	GetDaemonSetMetrics(ctx context.Context, clusterID int, namespace, daemonSetName string) (*model.K8sDaemonSetMetrics, error)
+
 	RollbackDaemonSet(ctx context.Context, clusterID int, namespace, name string, revision int64) error
 }
 
@@ -523,97 +521,6 @@ func (d *daemonSetManager) GetDaemonSetPods(ctx context.Context, clusterID int, 
 	}
 
 	return pods, int64(len(pods)), nil
-}
-
-// GetDaemonSetMetrics 获取 DaemonSet 指标
-func (d *daemonSetManager) GetDaemonSetMetrics(ctx context.Context, clusterID int, namespace, daemonSetName string) (*model.K8sDaemonSetMetrics, error) {
-	if daemonSetName == "" {
-		return nil, fmt.Errorf("DaemonSet name 不能为空")
-	}
-
-	kubeClient, err := d.getKubeClient(clusterID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 获取 DaemonSet 管理的 Pods
-	pods, _, err := d.GetDaemonSetPods(ctx, clusterID, namespace, daemonSetName)
-	if err != nil {
-		return nil, err
-	}
-
-	// 获取节点数量（DaemonSet 通常在每个节点上运行一个 Pod）
-	nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		d.logger.Warn("获取节点列表失败", zap.Error(err))
-	}
-
-	// 初始化基础指标
-	metrics := &model.K8sDaemonSetMetrics{
-		CPUUsage:         0,
-		MemoryUsage:      0,
-		NodesTotal:       int32(len(nodeList.Items)),
-		NodesReady:       int32(len(pods)),
-		MetricsAvailable: false,
-		MetricsNote:      "metrics-server 不可用或未安装",
-	}
-
-	if len(pods) == 0 {
-		return metrics, nil
-	}
-
-	// 尝试获取 metrics client
-	metricsClient, err := d.clientFactory.GetMetricsClient(clusterID)
-	if err != nil {
-		d.logger.Warn("获取 metrics 客户端失败，返回基础指标",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return metrics, nil
-	}
-
-	var totalCPU, totalMemory resource.Quantity
-	var cpuUsage, memoryUsage float64
-	var metricsCount int
-	var hasValidMetrics bool
-
-	// 获取每个 Pod 的指标
-	for _, pod := range pods {
-		podMetrics, err := metricsClient.MetricsV1beta1().PodMetricses(namespace).Get(ctx, pod.Name, metav1.GetOptions{})
-		if err != nil {
-			d.logger.Debug("获取 Pod 指标失败",
-				zap.String("podName", pod.Name),
-				zap.Error(err))
-			continue
-		}
-
-		hasValidMetrics = true
-		// 累加所有容器的指标
-		for _, container := range podMetrics.Containers {
-			cpuQuantity := container.Usage[corev1.ResourceCPU]
-			memoryQuantity := container.Usage[corev1.ResourceMemory]
-
-			totalCPU.Add(cpuQuantity)
-			totalMemory.Add(memoryQuantity)
-		}
-		metricsCount++
-	}
-
-	// 如果成功获取到指标，更新metrics
-	if hasValidMetrics {
-		metrics.MetricsAvailable = true
-		metrics.MetricsNote = ""
-
-		// 计算平均使用率
-		if metricsCount > 0 {
-			cpuUsage = float64(totalCPU.MilliValue()) / 1000                  // 转换为核数
-			memoryUsage = float64(totalMemory.Value()) / (1024 * 1024 * 1024) // 转换为 GB
-		}
-
-		metrics.CPUUsage = cpuUsage
-		metrics.MemoryUsage = memoryUsage
-	}
-
-	return metrics, nil
 }
 
 // RollbackDaemonSet 回滚 DaemonSet 到指定版本

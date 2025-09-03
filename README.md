@@ -1,4 +1,4 @@
-# AI+CloudOps: AI 驱动的云原生运维平台
+# AI+CloudOps: 云原生运维管理平台
 
 <p align="center">
     <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8.svg?style=flat-square&logo=go" alt="Go Version"></a>
@@ -14,7 +14,7 @@
 
 ## 📖 项目介绍 (Introduction)
 
-**AI+CloudOps** 是一个专为企业设计的、由 AI 驱动的云原生运维管理平台。我们的目标是融合人工智能技术与云原生实践，显著提升运维工作的效率、自动化和智能化水平。
+**AI+CloudOps** 是一个专为企业设计的云原生运维管理平台。我们的目标是融合人工智能技术与云原生实践，显著提升运维工作的效率和水平。
 
 - **后端仓库**: [GoSimplicity/AI-CloudOps](https://github.com/GoSimplicity/AI-CloudOps)
 - **前端仓库**: [GoSimplicity/AI-CloudOps-web](https://github.com/GoSimplicity/AI-CloudOps-web)
@@ -22,12 +22,12 @@
 
 ## ✨ 主要功能 (Features)
 
-- **智能 AIOps**: 通过机器学习分析监控数据和日志，提供智能告警、故障预测及根因分析。
+- **AIOps**: 通过机器学习分析监控数据和日志，提供告警、故障预测及根因分析。
 - **多维度权限管理**: 精细化的用户、角色、权限控制，保障系统和资源安全。
 - **可视化 CMDB**: 以服务树的形式直观展示和管理所有运维资源。
 - **高效工单系统**: 全生命周期追踪工单，从创建、分配到解决，流程清晰，提升协作效率。
-- **深度集成 Prometheus**: 实时监控系统性能，并结合 AI 实现异常的智能预警和自动化响应。
-- **一体化 Kubernetes 管理**: 简化 K8s 集群的日常管理和监控，利用 AI 实现自动化资源调度和优化。
+- **深度集成 Prometheus**: 实时监控系统性能，并结合 AI 实现异常预警和响应。
+- **一体化 Kubernetes 管理**: 简化 K8s 集群的日常管理和监控，利用 AI 实现资源调度和优化。
 
 ## 预览地址
 

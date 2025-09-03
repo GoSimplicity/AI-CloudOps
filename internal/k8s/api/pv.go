@@ -38,7 +38,6 @@ type K8sPVHandler struct {
 
 func NewK8sPVHandler(pvService service.PVService) *K8sPVHandler {
 	return &K8sPVHandler{
-
 		pvService: pvService,
 	}
 }

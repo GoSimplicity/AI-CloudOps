@@ -190,16 +190,6 @@ type K8sServiceEvent struct {
 }
 
 // K8sServiceMetrics Service指标信息
-type K8sServiceMetrics struct {
-	RequestCount    int64     `json:"request_count"`    // 请求总数
-	RequestRate     float64   `json:"request_rate"`     // 请求速率（每秒）
-	ResponseTime    float64   `json:"response_time"`    // 响应时间（毫秒）
-	ErrorRate       float64   `json:"error_rate"`       // 错误率
-	ConnectionCount int64     `json:"connection_count"` // 连接数
-	BandwidthIn     float64   `json:"bandwidth_in"`     // 入站带宽（MB/s）
-	BandwidthOut    float64   `json:"bandwidth_out"`    // 出站带宽（MB/s）
-	LastUpdated     time.Time `json:"last_updated"`     // 最后更新时间
-}
 
 type K8sYaml struct {
 	YAML string `json:"yaml"`

@@ -207,13 +207,6 @@ type GetRoleUsageReq struct {
 	Name      string `json:"name" comment:"Role名称"`
 }
 
-// GetRoleMetricsReq 获取Role指标请求
-type GetRoleMetricsReq struct {
-	ClusterID int    `json:"cluster_id" comment:"集群ID"`
-	Namespace string `json:"namespace" comment:"命名空间"`
-	Name      string `json:"name" comment:"Role名称"`
-}
-
 // RoleListReq Role列表请求参数（兼容性）
 type RoleListReq struct {
 	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
@@ -306,12 +299,6 @@ type GetClusterRoleEventsReq struct {
 
 // GetClusterRoleUsageReq 获取ClusterRole使用情况请求
 type GetClusterRoleUsageReq struct {
-	ClusterID int    `json:"cluster_id" comment:"集群ID"`
-	Name      string `json:"name" comment:"ClusterRole名称"`
-}
-
-// GetClusterRoleMetricsReq 获取ClusterRole指标请求
-type GetClusterRoleMetricsReq struct {
 	ClusterID int    `json:"cluster_id" comment:"集群ID"`
 	Name      string `json:"name" comment:"ClusterRole名称"`
 }
@@ -456,12 +443,6 @@ type GetClusterRoleBindingEventsReq struct {
 
 // GetClusterRoleBindingUsageReq 获取ClusterRoleBinding使用情况请求
 type GetClusterRoleBindingUsageReq struct {
-	ClusterID int    `json:"cluster_id" comment:"集群ID"`
-	Name      string `json:"name" comment:"ClusterRoleBinding名称"`
-}
-
-// GetClusterRoleBindingMetricsReq 获取ClusterRoleBinding指标请求
-type GetClusterRoleBindingMetricsReq struct {
 	ClusterID int    `json:"cluster_id" comment:"集群ID"`
 	Name      string `json:"name" comment:"ClusterRoleBinding名称"`
 }
@@ -868,13 +849,6 @@ type GetRoleBindingUsageReq struct {
 	Name      string `json:"name" uri:"name" binding:"required" comment:"RoleBinding名称"`
 }
 
-// GetRoleBindingMetricsReq 获取RoleBinding指标请求
-type GetRoleBindingMetricsReq struct {
-	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
-	Name      string `json:"name" uri:"name" binding:"required" comment:"RoleBinding名称"`
-}
-
 // ====================== ServiceAccount请求结构体 ======================
 
 // GetServiceAccountListReq 获取ServiceAccount列表请求
@@ -947,13 +921,6 @@ type GetServiceAccountEventsReq struct {
 
 // GetServiceAccountUsageReq 获取ServiceAccount使用情况请求
 type GetServiceAccountUsageReq struct {
-	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
-	Name      string `json:"name" uri:"name" binding:"required" comment:"ServiceAccount名称"`
-}
-
-// GetServiceAccountMetricsReq 获取ServiceAccount指标请求
-type GetServiceAccountMetricsReq struct {
 	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
 	Name      string `json:"name" uri:"name" binding:"required" comment:"ServiceAccount名称"`

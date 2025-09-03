@@ -72,23 +72,6 @@ type K8sRoleBindingEvent struct {
 	Count     int32     `json:"count"`      // 发生次数
 }
 
-// K8sRoleBindingMetrics RoleBinding指标信息
-type K8sRoleBindingMetrics struct {
-	RoleBindingName string    `json:"role_binding_name"` // RoleBinding名称
-	Namespace       string    `json:"namespace"`         // 命名空间
-	RoleName        string    `json:"role_name"`         // 引用的Role名称
-	RoleKind        string    `json:"role_kind"`         // 引用的Role类型 (Role/ClusterRole)
-	SubjectCount    int       `json:"subject_count"`     // 主体数量
-	UserCount       int       `json:"user_count"`        // 用户数量
-	GroupCount      int       `json:"group_count"`       // 组数量
-	ServiceAccount  int       `json:"service_account"`   // 服务账户数量
-	IsActive        BoolValue `json:"is_active"`         // 是否活跃
-	IsOrphaned      BoolValue `json:"is_orphaned"`       // 是否孤立
-	RiskLevel       string    `json:"risk_level"`        // 风险等级 (Low, Medium, High)
-	LastUsed        time.Time `json:"last_used"`         // 最后使用时间
-	LastUpdated     time.Time `json:"last_updated"`      // 最后更新时间
-}
-
 // K8sRoleBindingSubjectSummary RoleBinding主体摘要
 type K8sRoleBindingSubjectSummary struct {
 	RoleBindingName  string       `json:"role_binding_name"` // RoleBinding名称

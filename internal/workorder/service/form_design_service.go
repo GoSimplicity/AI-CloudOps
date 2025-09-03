@@ -80,7 +80,7 @@ func (f *formDesignService) CreateFormDesign(ctx context.Context, formDesignReq 
 		return errors.New("表单结构不能为空")
 	}
 
-	// 为表单字段自动生成ID
+	// 生成表单字段ID
 	f.generateFieldIDs(&formDesignReq.Schema)
 
 	// 校验标签
@@ -151,7 +151,7 @@ func (f *formDesignService) UpdateFormDesign(ctx context.Context, formDesignReq 
 		return errors.New("表单结构不能为空")
 	}
 
-	// 为表单字段自动生成ID
+	// 生成表单字段ID
 	f.generateFieldIDs(&formDesignReq.Schema)
 
 	// 校验标签

@@ -37,7 +37,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 // DrainOptions 驱逐节点选项
@@ -50,7 +49,7 @@ type DrainOptions struct {
 }
 
 // BuildK8sNode 构建详细的 K8sNode 模型
-func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClient *kubernetes.Clientset, metricsClient *metricsClient.Clientset) (*model.K8sNode, error) {
+func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClient *kubernetes.Clientset, metricsClient interface{}) (*model.K8sNode, error) {
 	if clusterID <= 0 {
 		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)
 	}

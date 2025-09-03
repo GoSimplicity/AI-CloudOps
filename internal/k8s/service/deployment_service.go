@@ -49,7 +49,6 @@ type DeploymentService interface {
 	DeleteDeployment(ctx context.Context, req *model.DeleteDeploymentReq) error
 	RestartDeployment(ctx context.Context, req *model.RestartDeploymentReq) error
 	ScaleDeployment(ctx context.Context, req *model.ScaleDeploymentReq) error
-	GetDeploymentMetrics(ctx context.Context, req *model.GetDeploymentMetricsReq) (*model.K8sDeploymentMetrics, error)
 	GetDeploymentEvents(ctx context.Context, req *model.GetDeploymentEventsReq) (model.ListResp[*model.K8sDeploymentEvent], error)
 	GetDeploymentPods(ctx context.Context, req *model.GetDeploymentPodsReq) (model.ListResp[*model.K8sPod], error)
 	GetDeploymentHistory(ctx context.Context, req *model.GetDeploymentHistoryReq) (model.ListResp[*model.K8sDeploymentHistory], error)
@@ -329,45 +328,6 @@ func (d *deploymentService) GetDeploymentList(ctx context.Context, req *model.Ge
 		Total: total,
 		Items: pagedItems,
 	}, nil
-}
-
-// GetDeploymentMetrics 获取Deployment指标
-func (d *deploymentService) GetDeploymentMetrics(ctx context.Context, req *model.GetDeploymentMetricsReq) (*model.K8sDeploymentMetrics, error) {
-	if req == nil {
-		return nil, fmt.Errorf("获取Deployment指标请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return nil, fmt.Errorf("集群ID不能为空")
-	}
-
-	if req.Namespace == "" {
-		return nil, fmt.Errorf("命名空间不能为空")
-	}
-
-	if req.Name == "" {
-		return nil, fmt.Errorf("Deployment名称不能为空")
-	}
-
-	// 使用 DeploymentManager 获取真实的指标数据
-	metrics, err := d.deploymentManager.GetDeploymentMetrics(ctx, req.ClusterID, req.Namespace, req.Name)
-	if err != nil {
-		d.logger.Error("GetDeploymentMetrics: 获取Deployment指标失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.String("name", req.Name))
-		return nil, fmt.Errorf("获取Deployment指标失败: %w", err)
-	}
-
-	d.logger.Debug("GetDeploymentMetrics: 成功获取Deployment指标",
-		zap.Int("clusterID", req.ClusterID),
-		zap.String("namespace", req.Namespace),
-		zap.String("name", req.Name),
-		zap.Float64("cpuUsage", metrics.CPUUsage),
-		zap.Float64("memoryUsage", metrics.MemoryUsage))
-
-	return metrics, nil
 }
 
 // GetDeploymentPods 获取Deployment下的Pod列表

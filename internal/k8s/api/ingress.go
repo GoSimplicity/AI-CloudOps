@@ -38,7 +38,6 @@ type K8sIngressHandler struct {
 
 func NewK8sIngressHandler(ingressService service.IngressService) *K8sIngressHandler {
 	return &K8sIngressHandler{
-
 		ingressService: ingressService,
 	}
 }

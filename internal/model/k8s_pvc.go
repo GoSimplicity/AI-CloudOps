@@ -153,24 +153,6 @@ type K8sPVCBackupReq struct {
 	Description string   `json:"description" comment:"备份描述"`                    // 备份描述
 }
 
-// K8sPVCCloneRequest 克隆PVC请求
-type K8sPVCCloneReq struct {
-	ClusterID   int    `json:"cluster_id" binding:"required" comment:"集群ID"`     // 集群ID，必填
-	Namespace   string `json:"namespace" binding:"required" comment:"命名空间"`      // 命名空间，必填
-	SourceName  string `json:"source_name" binding:"required" comment:"源PVC名称"`  // 源PVC名称，必填
-	TargetName  string `json:"target_name" binding:"required" comment:"目标PVC名称"` // 目标PVC名称，必填
-	Description string `json:"description" comment:"克隆描述"`                       // 克隆描述
-}
-
-// K8sPVCSnapshotRequest 创建PVC快照请求
-type K8sPVCSnapshotReq struct {
-	ClusterID    int    `json:"cluster_id" binding:"required" comment:"集群ID"`    // 集群ID，必填
-	Namespace    string `json:"namespace" binding:"required" comment:"命名空间"`     // 命名空间，必填
-	PVCName      string `json:"pvc_name" binding:"required" comment:"PVC名称"`     // PVC名称，必填
-	SnapshotName string `json:"snapshot_name" binding:"required" comment:"快照名称"` // 快照名称，必填
-	Description  string `json:"description" comment:"快照描述"`                      // 快照描述
-}
-
 // ====================== PVC响应实体 ======================
 
 // PVCEntity PVC响应实体
@@ -215,12 +197,12 @@ type PVCListResponse struct {
 
 // PVCDetailResponse PVC详情响应
 type PVCDetailResponse struct {
-	PVC     PVCEntity        `json:"pvc"`     // PVC信息
-	YAML    string           `json:"yaml"`    // YAML内容
-	Events  []PVCEventEntity `json:"events"`  // 事件列表
-	Usage   PVCUsageEntity   `json:"usage"`   // 使用情况
-	Metrics PVCMetricsEntity `json:"metrics"` // 指标信息
-	PVInfo  PVEntity         `json:"pv_info"` // 绑定的PV信息
+	PVC    PVCEntity        `json:"pvc"`    // PVC信息
+	YAML   string           `json:"yaml"`   // YAML内容
+	Events []PVCEventEntity `json:"events"` // 事件列表
+	Usage  PVCUsageEntity   `json:"usage"`  // 使用情况
+
+	PVInfo PVEntity `json:"pv_info"` // 绑定的PV信息
 }
 
 // PVCEventEntity PVC事件实体
@@ -263,19 +245,6 @@ type PVCMountPointEntity struct {
 }
 
 // PVCMetricsEntity PVC指标实体
-type PVCMetricsEntity struct {
-	CapacityBytes     int64   `json:"capacity_bytes"`      // 容量(字节)
-	UsedBytes         int64   `json:"used_bytes"`          // 已使用(字节)
-	AvailableBytes    int64   `json:"available_bytes"`     // 可用(字节)
-	UsagePercentage   float64 `json:"usage_percentage"`    // 使用率
-	InodeCapacity     int64   `json:"inode_capacity"`      // inode容量
-	InodeUsed         int64   `json:"inode_used"`          // 已使用inode
-	InodeUsagePercent float64 `json:"inode_usage_percent"` // inode使用率
-	IOPSRead          float64 `json:"iops_read"`           // 读IOPS
-	IOPSWrite         float64 `json:"iops_write"`          // 写IOPS
-	ThroughputRead    float64 `json:"throughput_read"`     // 读吞吐量
-	ThroughputWrite   float64 `json:"throughput_write"`    // 写吞吐量
-}
 
 // PVCExpandResponse PVC扩容响应
 type PVCExpandResponse struct {

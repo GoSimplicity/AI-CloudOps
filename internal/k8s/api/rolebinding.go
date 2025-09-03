@@ -45,21 +45,14 @@ func NewK8sRoleBindingHandler(roleBindingService service.RoleBindingService) *K8
 func (k *K8sRoleBindingHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// 基础 CRUD 操作
-		k8sGroup.GET("/rolebindings", k.GetRoleBindingList)                                 // 获取 RoleBinding 列表
-		k8sGroup.GET("/rolebindings/:cluster_id/:namespace/:name", k.GetRoleBindingDetails) // 获取 RoleBinding 详情
-		k8sGroup.POST("/rolebindings", k.CreateRoleBinding)                                 // 创建 RoleBinding
-		k8sGroup.PUT("/rolebindings/:cluster_id/:namespace/:name", k.UpdateRoleBinding)     // 更新 RoleBinding
-		k8sGroup.DELETE("/rolebindings/:cluster_id/:namespace/:name", k.DeleteRoleBinding)  // 删除单个 RoleBinding
+		k8sGroup.GET("/rolebindings", k.GetRoleBindingList)
+		k8sGroup.GET("/rolebindings/:cluster_id/:namespace/:name", k.GetRoleBindingDetails)
+		k8sGroup.POST("/rolebindings", k.CreateRoleBinding)
+		k8sGroup.PUT("/rolebindings/:cluster_id/:namespace/:name", k.UpdateRoleBinding)
+		k8sGroup.DELETE("/rolebindings/:cluster_id/:namespace/:name", k.DeleteRoleBinding)
+		k8sGroup.GET("/rolebindings/:cluster_id/:namespace/:name/yaml", k.GetRoleBindingYaml)
+		k8sGroup.PUT("/rolebindings/:cluster_id/:namespace/:name/yaml", k.UpdateRoleBindingYaml)
 
-		// YAML 操作
-		k8sGroup.GET("/rolebindings/:cluster_id/:namespace/:name/yaml", k.GetRoleBindingYaml)    // 获取 RoleBinding YAML
-		k8sGroup.PUT("/rolebindings/:cluster_id/:namespace/:name/yaml", k.UpdateRoleBindingYaml) // 更新 RoleBinding YAML
-
-		// 扩展功能
-		k8sGroup.GET("/rolebindings/:cluster_id/:namespace/:name/events", k.GetRoleBindingEvents)   // 获取 RoleBinding 事件
-		k8sGroup.GET("/rolebindings/:cluster_id/:namespace/:name/usage", k.GetRoleBindingUsage)     // 获取 RoleBinding 使用分析
-		k8sGroup.GET("/rolebindings/:cluster_id/:namespace/:name/metrics", k.GetRoleBindingMetrics) // 获取 RoleBinding 指标
 	}
 }
 
@@ -189,91 +182,5 @@ func (k *K8sRoleBindingHandler) UpdateRoleBindingYaml(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.roleBindingService.UpdateRoleBindingYaml(ctx, &req)
-	})
-}
-
-// GetRoleBindingEvents 获取 RoleBinding 事件
-func (k *K8sRoleBindingHandler) GetRoleBindingEvents(ctx *gin.Context) {
-	var req model.GetRoleBindingEventsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.roleBindingService.GetRoleBindingEvents(ctx, &req)
-	})
-}
-
-// GetRoleBindingUsage 获取 RoleBinding 使用分析
-func (k *K8sRoleBindingHandler) GetRoleBindingUsage(ctx *gin.Context) {
-	var req model.GetRoleBindingUsageReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.roleBindingService.GetRoleBindingUsage(ctx, &req)
-	})
-}
-
-// GetRoleBindingMetrics 获取 RoleBinding 指标
-func (k *K8sRoleBindingHandler) GetRoleBindingMetrics(ctx *gin.Context) {
-	var req model.GetRoleBindingMetricsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.roleBindingService.GetRoleBindingMetrics(ctx, &req)
 	})
 }

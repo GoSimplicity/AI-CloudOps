@@ -377,17 +377,6 @@ func getStatefulSetStatusString(status model.K8sStatefulSetStatus) string {
 }
 
 // GetStatefulSetResourceUsage 计算StatefulSet资源使用情况
-func GetStatefulSetResourceUsage(statefulSet *model.K8sStatefulSet) *model.K8sStatefulSetMetrics {
-	if statefulSet == nil {
-		return &model.K8sStatefulSetMetrics{}
-	}
-
-	// 基础指标（实际的CPU和内存使用需要从metrics API获取）
-	return &model.K8sStatefulSetMetrics{
-		CPUUsage:    0.0, // 这里需要从metrics API获取实际数据
-		MemoryUsage: 0.0, // 这里需要从metrics API获取实际数据
-	}
-}
 
 // parseIntOrPercent 解析整数或百分比字符串
 func parseIntOrPercent(value string) *intstr.IntOrString {

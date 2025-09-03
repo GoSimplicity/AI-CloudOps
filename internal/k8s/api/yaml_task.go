@@ -38,7 +38,6 @@ type K8sYamlTaskHandler struct {
 
 func NewK8sYamlTaskHandler(yamlTaskService service.YamlTaskService) *K8sYamlTaskHandler {
 	return &K8sYamlTaskHandler{
-
 		yamlTaskService: yamlTaskService,
 	}
 }

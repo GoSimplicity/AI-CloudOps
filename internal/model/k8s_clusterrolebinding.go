@@ -162,32 +162,6 @@ type ClusterRoleBindingDuplicateInfo struct {
 	Reason        string   `json:"reason"`         // 重复原因
 }
 
-// K8sClusterRoleBindingMetrics ClusterRoleBinding指标
-type K8sClusterRoleBindingMetrics struct {
-	ClusterRoleBindingName string                             `json:"cluster_role_binding_name"`        // ClusterRoleBinding名称
-	ClusterRoleName        string                             `json:"cluster_role_name"`                // 关联的ClusterRole名称
-	SubjectCount           int                                `json:"subject_count"`                    // 主体数量
-	UserCount              int                                `json:"user_count"`                       // 用户数量
-	GroupCount             int                                `json:"group_count"`                      // 组数量
-	ServiceAccountCount    int                                `json:"service_account_count"`            // 服务账户数量
-	TotalSubjects          int                                `json:"total_subjects"`                   // 总主体数量
-	ActiveUsers            int                                `json:"active_users"`                     // 活跃用户数量
-	ActiveGroups           int                                `json:"active_groups"`                    // 活跃用户组数量
-	ServiceAccounts        int                                `json:"service_accounts"`                 // ServiceAccount数量
-	PermissionCount        int                                `json:"permission_count"`                 // 权限数量
-	ClusterWideAccess      BoolValue                          `json:"cluster_wide_access"`              // 集群级访问权限
-	RiskLevel              string                             `json:"risk_level"`                       // 风险等级
-	PermissionScope        string                             `json:"permission_scope"`                 // 权限范围
-	LastUsed               time.Time                          `json:"last_used"`                        // 最后使用时间
-	SecurityRisk           string                             `json:"security_risk"`                    // 安全风险等级
-	ComplianceStatus       string                             `json:"compliance_status"`                // 合规状态
-	LastAuditTime          time.Time                          `json:"last_audit_time"`                  // 最后审计时间
-	PermissionUsageStats   *ClusterRoleBindingUsageStats      `json:"permission_usage_stats,omitempty"` // 权限使用统计
-	RecommendedActions     []ClusterRoleBindingRecommendation `json:"recommended_actions,omitempty"`    // 推荐操作
-	CreationTimestamp      time.Time                          `json:"creation_timestamp"`               // 创建时间
-	LastUpdated            time.Time                          `json:"last_updated"`                     // 最后更新时间
-}
-
 // ClusterRoleBindingUsageStats ClusterRoleBinding使用统计
 type ClusterRoleBindingUsageStats struct {
 	ResourceTypes      []string                          `json:"resource_types"`                 // 涉及的资源类型

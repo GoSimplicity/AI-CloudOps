@@ -102,20 +102,6 @@ type K8sStatefulSetEvent struct {
 }
 
 // K8sStatefulSetMetrics StatefulSet指标信息
-type K8sStatefulSetMetrics struct {
-	CPUUsage         float64   `json:"cpu_usage"`              // CPU使用率
-	MemoryUsage      float64   `json:"memory_usage"`           // 内存使用率
-	NetworkIn        float64   `json:"network_in"`             // 网络入流量（MB/s）
-	NetworkOut       float64   `json:"network_out"`            // 网络出流量（MB/s）
-	DiskUsage        float64   `json:"disk_usage"`             // 磁盘使用率
-	ReplicasReady    int32     `json:"replicas_ready"`         // 就绪副本数
-	ReplicasTotal    int32     `json:"replicas_total"`         // 总副本数
-	RestartCount     int32     `json:"restart_count"`          // 重启次数
-	AvailabilityRate float64   `json:"availability_rate"`      // 可用性
-	LastUpdated      time.Time `json:"last_updated"`           // 最后更新时间
-	MetricsAvailable bool      `json:"metrics_available"`      // 是否有详细指标数据（需要metrics-server）
-	MetricsNote      string    `json:"metrics_note,omitempty"` // 指标说明信息
-}
 
 type K8sStatefulSetHistory struct {
 	Revision int64     `json:"revision"` // 版本

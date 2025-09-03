@@ -71,20 +71,6 @@ type K8sRoleEvent struct {
 	Count     int32     `json:"count"`      // 发生次数
 }
 
-// K8sRoleMetrics Role指标信息
-type K8sRoleMetrics struct {
-	RoleName        string    `json:"role_name"`        // Role名称
-	Namespace       string    `json:"namespace"`        // 命名空间
-	TotalBindings   int       `json:"total_bindings"`   // 总绑定数
-	ActiveUsers     int       `json:"active_users"`     // 活跃用户数
-	ActiveGroups    int       `json:"active_groups"`    // 活跃组数
-	ServiceAccounts int       `json:"service_accounts"` // 服务账户数
-	PermissionCount int       `json:"permission_count"` // 权限数量
-	LastUsed        time.Time `json:"last_used"`        // 最后使用时间
-	SecurityRisk    string    `json:"security_risk"`    // 安全风险等级 (Low, Medium, High)
-	LastUpdated     time.Time `json:"last_updated"`     // 最后更新时间
-}
-
 // K8sRoleUsage Role使用情况
 type K8sRoleUsage struct {
 	RoleName     string                  `json:"role_name"`     // Role名称

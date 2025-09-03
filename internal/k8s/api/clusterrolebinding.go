@@ -45,21 +45,13 @@ func NewK8sClusterRoleBindingHandler(clusterRoleBindingService service.ClusterRo
 func (k *K8sClusterRoleBindingHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// ClusterRoleBinding 基本操作
-		k8sGroup.GET("/cluster-role-bindings", k.GetClusterRoleBindingList)                      // 获取列表
-		k8sGroup.GET("/cluster-role-bindings/:cluster_id/:name", k.GetClusterRoleBindingDetails) // 获取详情
-		k8sGroup.POST("/cluster-role-bindings", k.CreateClusterRoleBinding)                      // 创建
-		k8sGroup.PUT("/cluster-role-bindings/:cluster_id/:name", k.UpdateClusterRoleBinding)     // 更新
-		k8sGroup.DELETE("/cluster-role-bindings/:cluster_id/:name", k.DeleteClusterRoleBinding)  // 删除
-
-		// ClusterRoleBinding YAML 操作
-		k8sGroup.GET("/cluster-role-bindings/:cluster_id/:name/yaml", k.GetClusterRoleBindingYaml)    // 获取YAML
-		k8sGroup.PUT("/cluster-role-bindings/:cluster_id/:name/yaml", k.UpdateClusterRoleBindingYaml) // 更新YAML
-
-		// ClusterRoleBinding 扩展功能
-		k8sGroup.GET("/cluster-role-bindings/:cluster_id/:name/events", k.GetClusterRoleBindingEvents)   // 获取事件
-		k8sGroup.GET("/cluster-role-bindings/:cluster_id/:name/usage", k.GetClusterRoleBindingUsage)     // 获取使用情况
-		k8sGroup.GET("/cluster-role-bindings/:cluster_id/:name/metrics", k.GetClusterRoleBindingMetrics) // 获取指标
+		k8sGroup.GET("/cluster-role-bindings", k.GetClusterRoleBindingList)
+		k8sGroup.GET("/cluster-role-bindings/:cluster_id/:name", k.GetClusterRoleBindingDetails)
+		k8sGroup.POST("/cluster-role-bindings", k.CreateClusterRoleBinding)
+		k8sGroup.PUT("/cluster-role-bindings/:cluster_id/:name", k.UpdateClusterRoleBinding)
+		k8sGroup.DELETE("/cluster-role-bindings/:cluster_id/:name", k.DeleteClusterRoleBinding)
+		k8sGroup.GET("/cluster-role-bindings/:cluster_id/:name/yaml", k.GetClusterRoleBindingYaml)
+		k8sGroup.PUT("/cluster-role-bindings/:cluster_id/:name/yaml", k.UpdateClusterRoleBindingYaml)
 	}
 }
 
@@ -191,74 +183,5 @@ func (k *K8sClusterRoleBindingHandler) UpdateClusterRoleBindingYaml(ctx *gin.Con
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.clusterRoleBindingService.UpdateClusterRoleBindingYaml(ctx, &req)
-	})
-}
-
-func (k *K8sClusterRoleBindingHandler) GetClusterRoleBindingEvents(ctx *gin.Context) {
-	var req model.GetClusterRoleBindingEventsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.clusterRoleBindingService.GetClusterRoleBindingEvents(ctx, &req)
-	})
-}
-
-func (k *K8sClusterRoleBindingHandler) GetClusterRoleBindingUsage(ctx *gin.Context) {
-	var req model.GetClusterRoleBindingUsageReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.clusterRoleBindingService.GetClusterRoleBindingUsage(ctx, &req)
-	})
-}
-
-func (k *K8sClusterRoleBindingHandler) GetClusterRoleBindingMetrics(ctx *gin.Context) {
-	var req model.GetClusterRoleBindingMetricsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.clusterRoleBindingService.GetClusterRoleBindingMetrics(ctx, &req)
 	})
 }

@@ -508,13 +508,6 @@ type PodsByNodeReq struct {
 	NodeName  string `json:"node_name" form:"node_name" binding:"required" comment:"节点名称"`
 }
 
-// DeploymentRestartReq 重启Deployment请求
-type DeploymentRestartReq struct {
-	ClusterID      int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace      string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`
-	DeploymentName string `json:"deployment_name" form:"deployment_name" binding:"required" comment:"Deployment名称"`
-}
-
 // ==================== 响应结构体 ====================
 
 // K8sPodResponse Kubernetes Pod响应信息
@@ -581,16 +574,6 @@ type YamlTaskUpdateReq struct {
 	Variables  StringList `json:"variables" comment:"yaml变量，格式k=v,k=v"`
 }
 
-// YamlTaskApplyReq 应用YAML任务请求
-type YamlTaskApplyReq struct {
-	ID int `json:"id" binding:"required" comment:"任务ID"`
-}
-
-// YamlTaskDeleteReq 删除YAML任务请求
-type YamlTaskDeleteReq struct {
-	ID int `json:"id" binding:"required" comment:"任务ID"`
-}
-
 // YamlTemplateCreateReq 创建YAML模板请求
 type YamlTemplateCreateReq struct {
 	Name      string `json:"name" binding:"required,min=1,max=50" comment:"模板名称"`
@@ -599,30 +582,431 @@ type YamlTemplateCreateReq struct {
 	ClusterId int    `json:"cluster_id" comment:"对应集群ID"`
 }
 
-// YamlTemplateUpdateReq 更新YAML模板请求
-type YamlTemplateUpdateReq struct {
-	ID        int    `json:"id" binding:"required" comment:"模板ID"`
-	Name      string `json:"name" binding:"required,min=1,max=50" comment:"模板名称"`
-	UserID    int    `json:"user_id" comment:"创建者用户ID"`
-	Content   string `json:"content" binding:"required" comment:"yaml模板内容"`
-	ClusterId int    `json:"cluster_id" comment:"对应集群ID"`
+// ==================== Resource相关请求结构体 ====================
+
+// ResourceOverviewReq 资源概览请求
+type ResourceOverviewReq struct {
+	ClusterID int `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 }
 
-// YamlTemplateDeleteReq 删除YAML模板请求
-type YamlTemplateDeleteReq struct {
-	ID        int `json:"id" binding:"required" comment:"模板ID"`
-	ClusterId int `json:"cluster_id" binding:"required" comment:"集群ID"`
+// ResourceStatisticsReq 资源统计请求
+type ResourceStatisticsReq struct {
+	ClusterID int `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 }
 
-// YamlTemplateCheckReq 检查YAML模板请求
-type YamlTemplateCheckReq struct {
-	Name      string `json:"name" binding:"required,min=1,max=50" comment:"模板名称"`
-	Content   string `json:"content" binding:"required" comment:"yaml模板内容"`
-	ClusterId int    `json:"cluster_id" comment:"对应集群ID"`
+// ResourceDistributionReq 资源分布请求
+type ResourceDistributionReq struct {
+	ClusterID int `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 }
 
-// YamlTemplateGetReq 获取YAML模板详情请求
-type YamlTemplateGetReq struct {
-	ID        int `json:"id" binding:"required" comment:"模板ID"`
-	ClusterId int `json:"cluster_id" binding:"required" comment:"集群ID"`
+// ResourceTrendReq 资源趋势请求
+type ResourceTrendReq struct {
+	ClusterID int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+	Period    string `json:"period" form:"period" comment:"时间周期: 1h, 6h, 24h, 7d, 30d"`
+}
+
+// ResourceUtilizationReq 资源利用率请求
+type ResourceUtilizationReq struct {
+	ClusterID int `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+}
+
+// ResourceHealthReq 资源健康请求
+type ResourceHealthReq struct {
+	ClusterID int `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+}
+
+// WorkloadDistributionReq 工作负载分布请求
+type WorkloadDistributionReq struct {
+	ClusterID int `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+}
+
+// NamespaceResourcesReq 命名空间资源请求
+type NamespaceResourcesReq struct {
+	ClusterID int `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+}
+
+// StorageOverviewReq 存储概览请求
+type StorageOverviewReq struct {
+	ClusterID int `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+}
+
+// NetworkOverviewReq 网络概览请求
+type NetworkOverviewReq struct {
+	ClusterID int `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
+}
+
+// CompareClusterResourcesReq 对比集群资源请求
+type CompareClusterResourcesReq struct {
+	ClusterIDs []int `json:"cluster_ids" binding:"required,min=2,max=10" comment:"要对比的集群ID列表"`
+}
+
+// ==================== Resource相关响应结构体 ====================
+
+// ResourceOverview 资源概览响应
+type ResourceOverview struct {
+	ClusterID       int              `json:"cluster_id"`
+	ClusterName     string           `json:"cluster_name"`
+	Status          string           `json:"status"`
+	Version         string           `json:"version"`
+	NodeSummary     NodeSummary      `json:"node_summary"`
+	PodSummary      PodSummary       `json:"pod_summary"`
+	ResourceSummary ResourceSummary  `json:"resource_summary"`
+	HealthStatus    ClusterHealth    `json:"health_status"`
+	TopNamespaces   []NamespaceUsage `json:"top_namespaces"`
+	RecentEvents    []EventSummary   `json:"recent_events"`
+}
+
+// NodeSummary 节点汇总
+type NodeSummary struct {
+	Total      int     `json:"total"`
+	Ready      int     `json:"ready"`
+	NotReady   int     `json:"not_ready"`
+	Master     int     `json:"master"`
+	Worker     int     `json:"worker"`
+	HealthRate float64 `json:"health_rate"`
+}
+
+// PodSummary Pod汇总
+type PodSummary struct {
+	Total      int     `json:"total"`
+	Running    int     `json:"running"`
+	Pending    int     `json:"pending"`
+	Failed     int     `json:"failed"`
+	Succeeded  int     `json:"succeeded"`
+	HealthRate float64 `json:"health_rate"`
+}
+
+// ResourceSummary 资源汇总
+type ResourceSummary struct {
+	CPU     ResourceUsage `json:"cpu"`
+	Memory  ResourceUsage `json:"memory"`
+	Storage ResourceUsage `json:"storage"`
+}
+
+// ResourceUsage 资源使用情况
+type ResourceUsage struct {
+	Total       string  `json:"total"`
+	Used        string  `json:"used"`
+	Available   string  `json:"available"`
+	Utilization float64 `json:"utilization"`
+}
+
+// ClusterHealth 集群健康状态
+type ClusterHealth struct {
+	OverallStatus string                  `json:"overall_status"`
+	Score         int                     `json:"score"`
+	Components    []ComponentHealthStatus `json:"components"`
+	Issues        []string                `json:"issues"`
+}
+
+// NamespaceUsage 命名空间使用情况
+type NamespaceUsage struct {
+	Name     string `json:"name"`
+	PodCount int    `json:"pod_count"`
+	CPUUsage string `json:"cpu_usage"`
+	MemUsage string `json:"memory_usage"`
+	IsSystem bool   `json:"is_system"`
+	Status   string `json:"status"`
+}
+
+// ResourceDistribution 资源分布响应
+type ResourceDistribution struct {
+	ClusterID          int                     `json:"cluster_id"`
+	NodeDistribution   []NodeResourceDistrib   `json:"node_distribution"`
+	NSDistribution     []NSResourceDistrib     `json:"namespace_distribution"`
+	WorkloadDistrib    WorkloadDistribution    `json:"workload_distribution"`
+	ResourceAllocation ResourceAllocationChart `json:"resource_allocation"`
+}
+
+// NodeResourceDistrib 节点资源分布
+type NodeResourceDistrib struct {
+	NodeName   string  `json:"node_name"`
+	Role       string  `json:"role"`
+	CPU        string  `json:"cpu"`
+	Memory     string  `json:"memory"`
+	Storage    string  `json:"storage"`
+	PodCount   int     `json:"pod_count"`
+	CPUUtil    float64 `json:"cpu_utilization"`
+	MemoryUtil float64 `json:"memory_utilization"`
+	Status     string  `json:"status"`
+}
+
+// NSResourceDistrib 命名空间资源分布
+type NSResourceDistrib struct {
+	Namespace  string  `json:"namespace"`
+	PodCount   int     `json:"pod_count"`
+	CPURequest string  `json:"cpu_request"`
+	CPULimit   string  `json:"cpu_limit"`
+	MemRequest string  `json:"memory_request"`
+	MemLimit   string  `json:"memory_limit"`
+	CPUUtil    float64 `json:"cpu_utilization"`
+	MemoryUtil float64 `json:"memory_utilization"`
+	IsSystem   bool    `json:"is_system"`
+}
+
+// WorkloadDistribution 工作负载分布
+type WorkloadDistribution struct {
+	Deployments     int                `json:"deployments"`
+	StatefulSets    int                `json:"statefulsets"`
+	DaemonSets      int                `json:"daemonsets"`
+	Jobs            int                `json:"jobs"`
+	CronJobs        int                `json:"cronjobs"`
+	Services        int                `json:"services"`
+	ConfigMaps      int                `json:"configmaps"`
+	Secrets         int                `json:"secrets"`
+	Ingresses       int                `json:"ingresses"`
+	WorkloadsByNS   []NSWorkloadCount  `json:"workloads_by_namespace"`
+	ResourcesByType []WorkloadResource `json:"resources_by_type"`
+}
+
+// NSWorkloadCount 命名空间工作负载数量
+type NSWorkloadCount struct {
+	Namespace string         `json:"namespace"`
+	Count     int            `json:"count"`
+	Types     map[string]int `json:"types"`
+}
+
+// WorkloadResource 工作负载资源使用
+type WorkloadResource struct {
+	Type       string `json:"type"`
+	Count      int    `json:"count"`
+	CPURequest string `json:"cpu_request"`
+	CPULimit   string `json:"cpu_limit"`
+	MemRequest string `json:"memory_request"`
+	MemLimit   string `json:"memory_limit"`
+}
+
+// ResourceAllocationChart 资源分配图表数据
+type ResourceAllocationChart struct {
+	CPUChart    PieChartData `json:"cpu_chart"`
+	MemoryChart PieChartData `json:"memory_chart"`
+	PodChart    PieChartData `json:"pod_chart"`
+}
+
+// PieChartData 饼图数据
+type PieChartData struct {
+	Labels []string  `json:"labels"`
+	Values []float64 `json:"values"`
+	Colors []string  `json:"colors"`
+}
+
+// ResourceTrend 资源趋势响应
+type ResourceTrend struct {
+	ClusterID   int               `json:"cluster_id"`
+	Period      string            `json:"period"`
+	TimeRange   TimeRange         `json:"time_range"`
+	CPUTrend    TrendData         `json:"cpu_trend"`
+	MemoryTrend TrendData         `json:"memory_trend"`
+	PodTrend    TrendData         `json:"pod_trend"`
+	NodeTrend   TrendData         `json:"node_trend"`
+	Predictions []ResourcePredict `json:"predictions"`
+}
+
+// TrendData 趋势数据
+type TrendData struct {
+	Timestamps []string  `json:"timestamps"`
+	Values     []float64 `json:"values"`
+	Unit       string    `json:"unit"`
+	Max        float64   `json:"max"`
+	Min        float64   `json:"min"`
+	Avg        float64   `json:"avg"`
+}
+
+// ResourcePredict 资源预测
+type ResourcePredict struct {
+	Resource    string  `json:"resource"`
+	PredictDays int     `json:"predict_days"`
+	Tendency    string  `json:"tendency"`
+	Confidence  float64 `json:"confidence"`
+	Value       float64 `json:"value"`
+	Suggestion  string  `json:"suggestion"`
+}
+
+// ResourceUtilization 资源利用率响应
+type ResourceUtilization struct {
+	ClusterID       int                 `json:"cluster_id"`
+	OverallUtil     UtilizationSummary  `json:"overall_utilization"`
+	NodeUtils       []NodeUtilization   `json:"node_utilizations"`
+	NSUtils         []NSUtilization     `json:"namespace_utilizations"`
+	UtilChart       UtilizationChart    `json:"utilization_chart"`
+	Recommendations []UtilizationAdvice `json:"recommendations"`
+}
+
+// UtilizationSummary 利用率汇总
+type UtilizationSummary struct {
+	CPU     float64 `json:"cpu"`
+	Memory  float64 `json:"memory"`
+	Storage float64 `json:"storage"`
+	Network float64 `json:"network"`
+	Overall float64 `json:"overall"`
+}
+
+// NodeUtilization 节点利用率
+type NodeUtilization struct {
+	NodeName   string  `json:"node_name"`
+	CPU        float64 `json:"cpu"`
+	Memory     float64 `json:"memory"`
+	Storage    float64 `json:"storage"`
+	PodCount   int     `json:"pod_count"`
+	Status     string  `json:"status"`
+	Efficiency string  `json:"efficiency"`
+}
+
+// NSUtilization 命名空间利用率
+type NSUtilization struct {
+	Namespace string  `json:"namespace"`
+	CPU       float64 `json:"cpu"`
+	Memory    float64 `json:"memory"`
+	PodCount  int     `json:"pod_count"`
+	IsSystem  bool    `json:"is_system"`
+}
+
+// UtilizationChart 利用率图表
+type UtilizationChart struct {
+	HeatmapData [][]float64 `json:"heatmap_data"`
+	XLabels     []string    `json:"x_labels"`
+	YLabels     []string    `json:"y_labels"`
+}
+
+// UtilizationAdvice 利用率建议
+type UtilizationAdvice struct {
+	Type        string  `json:"type"`
+	Priority    string  `json:"priority"`
+	Resource    string  `json:"resource"`
+	Target      string  `json:"target"`
+	Current     float64 `json:"current"`
+	Suggested   float64 `json:"suggested"`
+	Description string  `json:"description"`
+	Impact      string  `json:"impact"`
+}
+
+// ResourceHealth 资源健康响应
+type ResourceHealth struct {
+	ClusterID        int                `json:"cluster_id"`
+	OverallHealth    HealthScore        `json:"overall_health"`
+	ComponentHealth  []ComponentHealth  `json:"component_health"`
+	ResourceIssues   []ResourceIssue    `json:"resource_issues"`
+	HealthTrend      []HealthTrendPoint `json:"health_trend"`
+	ActionableAlerts []ActionableAlert  `json:"actionable_alerts"`
+}
+
+// HealthScore 健康评分
+type HealthScore struct {
+	Score       int      `json:"score"`
+	Level       string   `json:"level"`
+	Description string   `json:"description"`
+	Factors     []string `json:"factors"`
+}
+
+// ComponentHealth 组件健康
+type ComponentHealth struct {
+	Component string   `json:"component"`
+	Status    string   `json:"status"`
+	Score     int      `json:"score"`
+	Issues    int      `json:"issues"`
+	LastCheck string   `json:"last_check"`
+	Details   []string `json:"details"`
+}
+
+// ResourceIssue 资源问题
+type ResourceIssue struct {
+	Type        string `json:"type"`
+	Severity    string `json:"severity"`
+	Resource    string `json:"resource"`
+	Namespace   string `json:"namespace"`
+	Description string `json:"description"`
+	Since       string `json:"since"`
+	Suggestion  string `json:"suggestion"`
+}
+
+// HealthTrendPoint 健康趋势点
+type HealthTrendPoint struct {
+	Timestamp string `json:"timestamp"`
+	Score     int    `json:"score"`
+	Issues    int    `json:"issues"`
+}
+
+// ActionableAlert 可操作警报
+type ActionableAlert struct {
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Severity    string   `json:"severity"`
+	Actions     []string `json:"actions"`
+	CreatedAt   string   `json:"created_at"`
+}
+
+// AllClustersSummary 所有集群汇总
+type AllClustersSummary struct {
+	TotalClusters      int                     `json:"total_clusters"`
+	HealthyClusters    int                     `json:"healthy_clusters"`
+	UnhealthyClusters  int                     `json:"unhealthy_clusters"`
+	TotalResources     GlobalResourceSummary   `json:"total_resources"`
+	ClustersOverview   []ClusterBriefSummary   `json:"clusters_overview"`
+	ResourceComparison ResourceComparisonChart `json:"resource_comparison"`
+	AlertsSummary      GlobalAlertsSummary     `json:"alerts_summary"`
+}
+
+// GlobalResourceSummary 全局资源汇总
+type GlobalResourceSummary struct {
+	TotalNodes   int     `json:"total_nodes"`
+	TotalPods    int     `json:"total_pods"`
+	TotalCPU     string  `json:"total_cpu"`
+	TotalMemory  string  `json:"total_memory"`
+	TotalStorage string  `json:"total_storage"`
+	AvgCPUUtil   float64 `json:"avg_cpu_utilization"`
+	AvgMemUtil   float64 `json:"avg_memory_utilization"`
+}
+
+// ClusterBriefSummary 集群简要汇总
+type ClusterBriefSummary struct {
+	ClusterID   int     `json:"cluster_id"`
+	ClusterName string  `json:"cluster_name"`
+	Status      string  `json:"status"`
+	HealthScore int     `json:"health_score"`
+	NodeCount   int     `json:"node_count"`
+	PodCount    int     `json:"pod_count"`
+	CPUUtil     float64 `json:"cpu_utilization"`
+	MemoryUtil  float64 `json:"memory_utilization"`
+	Issues      int     `json:"issues"`
+}
+
+// ResourceComparisonChart 资源对比图表
+type ResourceComparisonChart struct {
+	ClusterNames []string            `json:"cluster_names"`
+	CPUData      []float64           `json:"cpu_data"`
+	MemoryData   []float64           `json:"memory_data"`
+	PodData      []float64           `json:"pod_data"`
+	Detailed     []ClusterComparison `json:"detailed"`
+}
+
+// ClusterComparison 集群对比
+type ClusterComparison struct {
+	ClusterName string  `json:"cluster_name"`
+	CPU         string  `json:"cpu"`
+	Memory      string  `json:"memory"`
+	Nodes       int     `json:"nodes"`
+	Pods        int     `json:"pods"`
+	Efficiency  float64 `json:"efficiency"`
+}
+
+// GlobalAlertsSummary 全局警报汇总
+type GlobalAlertsSummary struct {
+	TotalAlerts     int            `json:"total_alerts"`
+	CriticalAlerts  int            `json:"critical_alerts"`
+	WarningAlerts   int            `json:"warning_alerts"`
+	InfoAlerts      int            `json:"info_alerts"`
+	AlertsByCluster map[string]int `json:"alerts_by_cluster"`
+	TopAlerts       []GlobalAlert  `json:"top_alerts"`
+}
+
+// GlobalAlert 全局警报
+type GlobalAlert struct {
+	ClusterName string `json:"cluster_name"`
+	Type        string `json:"type"`
+	Message     string `json:"message"`
+	Severity    string `json:"severity"`
+	Count       int    `json:"count"`
+	FirstSeen   string `json:"first_seen"`
+	LastSeen    string `json:"last_seen"`
 }

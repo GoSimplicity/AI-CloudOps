@@ -27,7 +27,6 @@ type RBACManager interface {
 	DeleteRole(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
 	GetRoleEvents(ctx context.Context, clusterID int, namespace, name string, limit int) ([]*model.K8sRoleEvent, int64, error)
 	GetRoleUsage(ctx context.Context, clusterID int, namespace, name string) (*model.K8sRoleUsage, error)
-	GetRoleMetrics(ctx context.Context, clusterID int, namespace, name string) (*model.K8sRoleMetrics, error)
 
 	// ClusterRole 操作
 	CreateClusterRole(ctx context.Context, clusterID int, clusterRole *rbacv1.ClusterRole) error
@@ -40,7 +39,6 @@ type RBACManager interface {
 	// ClusterRole 扩展功能
 	GetClusterRoleEvents(ctx context.Context, clusterID int, name string, limit int) ([]*model.K8sClusterRoleEvent, int64, error)
 	GetClusterRoleUsage(ctx context.Context, clusterID int, name string) (*model.K8sClusterRoleUsage, error)
-	GetClusterRoleMetrics(ctx context.Context, clusterID int, name string) (*model.K8sClusterRoleMetrics, error)
 
 	// RoleBinding 操作
 	CreateRoleBinding(ctx context.Context, clusterID int, namespace string, roleBinding *rbacv1.RoleBinding) error
@@ -53,7 +51,6 @@ type RBACManager interface {
 	// RoleBinding 扩展功能
 	GetRoleBindingEvents(ctx context.Context, clusterID int, namespace, name string) (model.ListResp[*model.K8sRoleBindingEvent], error)
 	GetRoleBindingUsage(ctx context.Context, clusterID int, namespace, name string) (*model.K8sRoleBindingUsage, error)
-	GetRoleBindingMetrics(ctx context.Context, clusterID int, namespace, name string) (*model.K8sRoleBindingMetrics, error)
 
 	// ClusterRoleBinding 操作
 	CreateClusterRoleBinding(ctx context.Context, clusterID int, clusterRoleBinding *rbacv1.ClusterRoleBinding) error
@@ -64,7 +61,6 @@ type RBACManager interface {
 	DeleteClusterRoleBinding(ctx context.Context, clusterID int, name string, deleteOptions metav1.DeleteOptions) error
 	GetClusterRoleBindingEvents(ctx context.Context, clusterID int, name string, limit int) ([]*model.K8sClusterRoleBindingEvent, int64, error)
 	GetClusterRoleBindingUsage(ctx context.Context, clusterID int, name string) (*model.K8sClusterRoleBindingUsage, error)
-	GetClusterRoleBindingMetrics(ctx context.Context, clusterID int, name string) (*model.K8sClusterRoleBindingMetrics, error)
 
 	// ServiceAccount 操作
 	CreateServiceAccount(ctx context.Context, clusterID int, namespace string, serviceAccount *corev1.ServiceAccount) error
@@ -77,7 +73,7 @@ type RBACManager interface {
 	// ServiceAccount 扩展功能
 	GetServiceAccountEvents(ctx context.Context, clusterID int, namespace, name string) (model.ListResp[*model.K8sServiceAccountEvent], error)
 	GetServiceAccountUsage(ctx context.Context, clusterID int, namespace, name string) (*model.K8sServiceAccountUsage, error)
-	GetServiceAccountMetrics(ctx context.Context, clusterID int, namespace, name string) (*model.K8sServiceAccountMetrics, error)
+
 	GetServiceAccountToken(ctx context.Context, clusterID int, namespace, name string) (*model.K8sServiceAccountToken, error)
 	CreateServiceAccountToken(ctx context.Context, clusterID int, namespace, name string, expiryTime *int64) (*model.K8sServiceAccountToken, error)
 
@@ -1431,32 +1427,6 @@ func (r *rbacManager) GetClusterRoleUsage(ctx context.Context, clusterID int, na
 	return usage, nil
 }
 
-// GetClusterRoleMetrics 获取ClusterRole指标
-func (r *rbacManager) GetClusterRoleMetrics(ctx context.Context, clusterID int, name string) (*model.K8sClusterRoleMetrics, error) {
-	kubeClient, err := r.client.GetKubeClient(clusterID)
-	if err != nil {
-		r.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, err
-	}
-
-	metrics, err := utils.GetClusterRoleMetrics(ctx, kubeClient, name)
-	if err != nil {
-		r.logger.Error("获取ClusterRole指标失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("name", name),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取ClusterRole指标失败: %w", err)
-	}
-
-	r.logger.Debug("成功获取ClusterRole指标",
-		zap.Int("clusterID", clusterID),
-		zap.String("name", name))
-
-	return metrics, nil
-}
-
 // GetRoleEvents 获取Role事件
 func (r *rbacManager) GetRoleEvents(ctx context.Context, clusterID int, namespace, name string, limit int) ([]*model.K8sRoleEvent, int64, error) {
 	kubeClient, err := r.client.GetKubeClient(clusterID)
@@ -1512,34 +1482,6 @@ func (r *rbacManager) GetRoleUsage(ctx context.Context, clusterID int, namespace
 		zap.String("name", name))
 
 	return usage, nil
-}
-
-// GetRoleMetrics 获取Role指标
-func (r *rbacManager) GetRoleMetrics(ctx context.Context, clusterID int, namespace, name string) (*model.K8sRoleMetrics, error) {
-	kubeClient, err := r.client.GetKubeClient(clusterID)
-	if err != nil {
-		r.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, err
-	}
-
-	metrics, err := utils.GetRoleMetrics(ctx, kubeClient, namespace, name)
-	if err != nil {
-		r.logger.Error("获取Role指标失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("name", name),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取Role指标失败: %w", err)
-	}
-
-	r.logger.Debug("成功获取Role指标",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
-
-	return metrics, nil
 }
 
 // isSubjectInBinding 辅助方法：检查主体是否在绑定列表中
@@ -1635,34 +1577,6 @@ func (r *rbacManager) GetRoleBindingUsage(ctx context.Context, clusterID int, na
 		zap.String("name", name))
 
 	return usage, nil
-}
-
-// GetRoleBindingMetrics 获取RoleBinding指标
-func (r *rbacManager) GetRoleBindingMetrics(ctx context.Context, clusterID int, namespace, name string) (*model.K8sRoleBindingMetrics, error) {
-	kubeClient, err := r.client.GetKubeClient(clusterID)
-	if err != nil {
-		r.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, err
-	}
-
-	metrics, err := utils.GetRoleBindingMetrics(ctx, kubeClient, namespace, name)
-	if err != nil {
-		r.logger.Error("获取RoleBinding指标失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("name", name),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取RoleBinding指标失败: %w", err)
-	}
-
-	r.logger.Debug("成功获取RoleBinding指标",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
-
-	return metrics, nil
 }
 
 // ======================== ServiceAccount 操作实现 ========================
@@ -1880,34 +1794,6 @@ func (r *rbacManager) GetServiceAccountUsage(ctx context.Context, clusterID int,
 	return usage, nil
 }
 
-// GetServiceAccountMetrics 获取ServiceAccount指标
-func (r *rbacManager) GetServiceAccountMetrics(ctx context.Context, clusterID int, namespace, name string) (*model.K8sServiceAccountMetrics, error) {
-	kubeClient, err := r.client.GetKubeClient(clusterID)
-	if err != nil {
-		r.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, err
-	}
-
-	metrics, err := utils.GetServiceAccountMetrics(ctx, kubeClient, namespace, name)
-	if err != nil {
-		r.logger.Error("获取ServiceAccount指标失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("name", name),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取ServiceAccount指标失败: %w", err)
-	}
-
-	r.logger.Debug("成功获取ServiceAccount指标",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
-
-	return metrics, nil
-}
-
 // GetServiceAccountToken 获取ServiceAccount令牌
 func (r *rbacManager) GetServiceAccountToken(ctx context.Context, clusterID int, namespace, name string) (*model.K8sServiceAccountToken, error) {
 	kubeClient, err := r.client.GetKubeClient(clusterID)
@@ -2017,30 +1903,4 @@ func (r *rbacManager) GetClusterRoleBindingUsage(ctx context.Context, clusterID 
 		zap.String("name", name))
 
 	return usage, nil
-}
-
-// GetClusterRoleBindingMetrics 获取ClusterRoleBinding指标
-func (r *rbacManager) GetClusterRoleBindingMetrics(ctx context.Context, clusterID int, name string) (*model.K8sClusterRoleBindingMetrics, error) {
-	kubeClient, err := r.client.GetKubeClient(clusterID)
-	if err != nil {
-		r.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, err
-	}
-
-	metrics, err := utils.GetClusterRoleBindingMetrics(ctx, kubeClient, name)
-	if err != nil {
-		r.logger.Error("获取ClusterRoleBinding指标失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("name", name),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取ClusterRoleBinding指标失败: %w", err)
-	}
-
-	r.logger.Debug("成功获取ClusterRoleBinding指标",
-		zap.Int("clusterID", clusterID),
-		zap.String("name", name))
-
-	return metrics, nil
 }

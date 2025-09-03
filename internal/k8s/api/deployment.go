@@ -45,30 +45,20 @@ func NewK8sDeploymentHandler(deploymentService service.DeploymentService) *K8sDe
 func (k *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// 基本CRUD操作（通过配置字段）
 		k8sGroup.GET("/deployments", k.GetDeploymentList)
 		k8sGroup.GET("/deployments/:cluster_id/:namespace/:name", k.GetDeploymentDetails)
 		k8sGroup.GET("/deployments/:cluster_id/:namespace/:name/yaml", k.GetDeploymentYaml)
 		k8sGroup.POST("/deployments", k.CreateDeployment)
 		k8sGroup.PUT("/deployments/:cluster_id/:namespace/:name", k.UpdateDeployment)
 		k8sGroup.DELETE("/deployments/:cluster_id/:namespace/:name", k.DeleteDeployment)
-
-		// YAML操作
 		k8sGroup.POST("/deployments/yaml", k.CreateDeploymentByYaml)
 		k8sGroup.PUT("/deployments/:cluster_id/:namespace/:name/yaml", k.UpdateDeploymentByYaml)
-
-		// 部署管理操作
 		k8sGroup.POST("/deployments/:cluster_id/:namespace/:name/restart", k.RestartDeployment)
 		k8sGroup.POST("/deployments/:cluster_id/:namespace/:name/scale", k.ScaleDeployment)
 		k8sGroup.POST("/deployments/:cluster_id/:namespace/:name/pause", k.PauseDeployment)
 		k8sGroup.POST("/deployments/:cluster_id/:namespace/:name/resume", k.ResumeDeployment)
 		k8sGroup.POST("/deployments/:cluster_id/:namespace/:name/rollback", k.RollbackDeployment)
-
-		// 监控和查询操作
-		k8sGroup.GET("/deployments/:cluster_id/:namespace/:name/metrics", k.GetDeploymentMetrics)
-		k8sGroup.GET("/deployments/:cluster_id/:namespace/:name/events", k.GetDeploymentEvents)
 		k8sGroup.GET("/deployments/:cluster_id/:namespace/:name/pods", k.GetDeploymentPods)
-		k8sGroup.GET("/deployments/:cluster_id/:namespace/:name/history", k.GetDeploymentHistory)
 	}
 }
 
@@ -265,66 +255,6 @@ func (k *K8sDeploymentHandler) ScaleDeployment(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.deploymentService.ScaleDeployment(ctx, &req)
-	})
-}
-
-func (k *K8sDeploymentHandler) GetDeploymentMetrics(ctx *gin.Context) {
-	var req model.GetDeploymentMetricsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.deploymentService.GetDeploymentMetrics(ctx, &req)
-	})
-}
-
-func (k *K8sDeploymentHandler) GetDeploymentEvents(ctx *gin.Context) {
-	var req model.GetDeploymentEventsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.deploymentService.GetDeploymentEvents(ctx, &req)
 	})
 }
 

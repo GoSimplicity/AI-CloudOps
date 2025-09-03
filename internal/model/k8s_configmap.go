@@ -52,10 +52,13 @@ func (k *K8sConfigMapEntity) TableName() string {
 	return "cl_k8s_configmaps"
 }
 
-// K8sConfigMapListRequest ConfigMap列表查询请求
-type K8sConfigMapListReq struct {
+// ====================== 补充缺失的ConfigMap请求结构体 ======================
+
+// GetConfigMapListReq 获取ConfigMap列表请求
+type GetConfigMapListReq struct {
 	ClusterID     int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace     string `json:"namespace" form:"namespace" comment:"命名空间"`                      // 命名空间
+	Name          string `json:"name" form:"name" comment:"ConfigMap名称过滤"`                       // ConfigMap名称过滤
 	LabelSelector string `json:"label_selector" form:"label_selector" comment:"标签选择器"`           // 标签选择器
 	FieldSelector string `json:"field_selector" form:"field_selector" comment:"字段选择器"`           // 字段选择器
 	DataKey       string `json:"data_key" form:"data_key" comment:"数据键过滤"`                       // 数据键过滤
@@ -95,38 +98,6 @@ type K8sConfigMapDeleteReq struct {
 	Name               string `json:"name" binding:"required" comment:"ConfigMap名称"` // ConfigMap名称，必填
 	GracePeriodSeconds *int64 `json:"grace_period_seconds" comment:"优雅删除时间（秒）"`      // 优雅删除时间
 	Force              bool   `json:"force" comment:"是否强制删除"`                        // 是否强制删除
-}
-
-// K8sConfigMapDataRequest 获取ConfigMap数据请求
-type K8sConfigMapDataReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`  // 集群ID，必填
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`   // 命名空间，必填
-	Name      string `json:"name" binding:"required" comment:"ConfigMap名称"` // ConfigMap名称，必填
-	Key       string `json:"key" comment:"数据键，为空则获取所有"`                     // 数据键，为空则获取所有
-}
-
-// K8sConfigMapEventRequest 获取ConfigMap事件请求
-type K8sConfigMapEventReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`  // 集群ID，必填
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`   // 命名空间，必填
-	Name      string `json:"name" binding:"required" comment:"ConfigMap名称"` // ConfigMap名称，必填
-	LimitDays int    `json:"limit_days" comment:"限制天数内的事件"`                 // 限制天数内的事件
-}
-
-// K8sConfigMapUsageRequest 获取ConfigMap使用情况请求
-type K8sConfigMapUsageReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`  // 集群ID，必填
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`   // 命名空间，必填
-	Name      string `json:"name" binding:"required" comment:"ConfigMap名称"` // ConfigMap名称，必填
-}
-
-// K8sConfigMapBackupRequest 备份ConfigMap请求
-type K8sConfigMapBackupReq struct {
-	ClusterID   int      `json:"cluster_id" binding:"required" comment:"集群ID"`     // 集群ID，必填
-	Namespace   string   `json:"namespace" binding:"required" comment:"命名空间"`      // 命名空间，必填
-	Names       []string `json:"names" binding:"required" comment:"ConfigMap名称列表"` // ConfigMap名称列表，必填
-	BackupName  string   `json:"backup_name" binding:"required" comment:"备份名称"`    // 备份名称，必填
-	Description string   `json:"description" comment:"备份描述"`                       // 备份描述
 }
 
 // ====================== ConfigMap响应实体 ======================

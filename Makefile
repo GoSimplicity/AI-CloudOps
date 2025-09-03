@@ -8,10 +8,10 @@ swagger-manual:
 	@echo "API文档已生成到 docs/ 目录"
 	@echo "访问地址: http://localhost:8889/swagger/index.html"
 
-# 自动生成 Swagger API 文档（无需手动注释，自动同步到 docs.go）
+# 生成 Swagger API 文档（无需手动注释，同步到 docs.go）
 swagger:
 	@echo "🚀 正在生成API文档..."
-	@echo "📄 使用自动生成工具生成文档..."
+	@echo "📄 使用生成工具生成文档..."
 	@bash scripts/generate-swagger.sh
 	@echo "✅ Swagger 文档生成完成！"
 
@@ -83,18 +83,18 @@ swagger-clean:
 	@rm -f docs/docs.go docs/swagger.json docs/swagger.yaml
 	@echo "✅ 文档已清理"
 
-# 完整的 Swagger 工作流（包含自动同步）
+# 完整的 Swagger 工作流（包含同步）
 swagger-all: swagger-clean swagger swagger-validate swagger-check
 	@echo "🎉 Swagger 文档生成并同步完成！"
 
-# 安装 Git hooks 和自动同步机制
+# 安装 Git hooks 和同步机制
 swagger-setup:
-	@echo "设置 Swagger 自动生成和同步..."
+	@echo "设置 Swagger 生成和同步..."
 	@bash scripts/setup-git-hooks.sh
 
-# 启用自动监控模式（开发时使用）
+# 启用监控模式（开发时使用）
 swagger-watch:
-	@echo "⚠️  自动监控功能已被禁用以防止循环生成问题"
+	@echo "⚠️  监控功能已被禁用以防止循环生成问题"
 	@echo "💡 建议手动使用: make swagger"
 	@echo "🔧 如需启用监控，请联系开发者进行安全配置"
 
@@ -104,7 +104,7 @@ build-with-docs: swagger
 	@go build -o bin/ai-cloudops main.go
 	@echo "✅ 构建完成，可执行文件: bin/ai-cloudops"
 
-# 开发模式启动（自动生成文档）
+# 开发模式启动（生成文档）
 dev-with-docs: swagger
 	@echo "开发模式启动（包含最新文档）..."
 	@go run main.go
@@ -121,13 +121,13 @@ install-dev-tools:
 	@go install github.com/swaggo/swag/cmd/swag@latest
 	@echo "✅ 开发工具安装完成"
 
-# 使用 Air 启动开发服务器（支持热重载和自动生成 Swagger）
+# 使用 Air 启动开发服务器（支持热重载和生成 Swagger）
 dev-air: 
 	@if ! command -v air &> /dev/null; then \
 		echo "❌ air 工具未安装，正在安装..."; \
 		go install github.com/air-verse/air@latest; \
 	fi
-	@echo "🚀 启动开发服务器 (Air + 自动 Swagger 生成)..."
+	@echo "🚀 启动开发服务器 (Air + Swagger 生成)..."
 	@air
 
 # 检查文档同步状态
@@ -152,7 +152,7 @@ dev-setup: swagger-setup install-dev-tools
 	@echo "可用命令:"
 	@echo "  make dev-air           # 使用 Air 热重载启动"
 	@echo "  make swagger-watch     # 监控 Swagger 文档变化"
-	@echo "  make swagger           # 生成文档并自动同步"
+	@echo "  make swagger           # 生成文档并同步"
 	@echo "  make swagger-sync      # 手动同步文档"
 	@echo "  make swagger-sync-check # 检查同步状态"
 	@echo "  go generate            # 使用 Go generate 生成文档"

@@ -53,8 +53,6 @@ func (k *K8sStatefulSetHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.DELETE("/statefulsets/:cluster_id/:namespace/:name", k.DeleteStatefulSet)
 		k8sGroup.POST("/statefulsets/:cluster_id/:namespace/:name/restart", k.RestartStatefulSet)
 		k8sGroup.POST("/statefulsets/:cluster_id/:namespace/:name/scale", k.ScaleStatefulSet)
-		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name/metrics", k.GetStatefulSetMetrics)
-		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name/events", k.GetStatefulSetEvents)
 		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name/pods", k.GetStatefulSetPods)
 		k8sGroup.GET("/statefulsets/:cluster_id/:namespace/:name/history", k.GetStatefulSetHistory)
 		k8sGroup.POST("/statefulsets/:cluster_id/:namespace/:name/rollback", k.RollbackStatefulSet)
@@ -262,68 +260,6 @@ func (k *K8sStatefulSetHandler) ScaleStatefulSet(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.statefulSetService.ScaleStatefulSet(ctx, &req)
-	})
-}
-
-// GetStatefulSetMetrics 获取StatefulSet指标
-func (k *K8sStatefulSetHandler) GetStatefulSetMetrics(ctx *gin.Context) {
-	var req model.GetStatefulSetMetricsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.statefulSetService.GetStatefulSetMetrics(ctx, &req)
-	})
-}
-
-// GetStatefulSetEvents 获取StatefulSet事件
-func (k *K8sStatefulSetHandler) GetStatefulSetEvents(ctx *gin.Context) {
-	var req model.GetStatefulSetEventsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.Name = name
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.statefulSetService.GetStatefulSetEvents(ctx, &req)
 	})
 }
 

@@ -40,7 +40,6 @@ type K8sConfigMapHandler struct {
 
 func NewK8sConfigMapHandler(configMapService service.ConfigMapService) *K8sConfigMapHandler {
 	return &K8sConfigMapHandler{
-
 		configMapService: configMapService,
 	}
 }
@@ -48,16 +47,14 @@ func NewK8sConfigMapHandler(configMapService service.ConfigMapService) *K8sConfi
 func (h *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/configmaps/list", h.GetConfigMapList)                              // 获取ConfigMap列表
-		k8sGroup.GET("/configmaps/:cluster_id/:namespace/:name", h.GetConfigMap)          // 获取单个ConfigMap详情
-		k8sGroup.POST("/configmaps/create", h.CreateConfigMap)                            // 创建ConfigMap
-		k8sGroup.PUT("/configmaps/update", h.UpdateConfigMap)                             // 更新ConfigMap
-		k8sGroup.DELETE("/configmaps/:cluster_id/:namespace/:name", h.DeleteConfigMap)    // 删除ConfigMap
-		k8sGroup.GET("/configmaps/:cluster_id/:namespace/:name/yaml", h.GetConfigMapYAML) // 获取ConfigMap的YAML配置
-
-		// YAML操作
-		k8sGroup.POST("/configmaps/yaml", h.CreateConfigMapByYaml)                             // 通过YAML创建ConfigMap
-		k8sGroup.PUT("/configmaps/:cluster_id/:namespace/:name/yaml", h.UpdateConfigMapByYaml) // 通过YAML更新ConfigMap
+		k8sGroup.GET("/configmaps/list", h.GetConfigMapList)
+		k8sGroup.GET("/configmaps/:cluster_id/:namespace/:name", h.GetConfigMap)
+		k8sGroup.POST("/configmaps/create", h.CreateConfigMap)
+		k8sGroup.PUT("/configmaps/update", h.UpdateConfigMap)
+		k8sGroup.DELETE("/configmaps/:cluster_id/:namespace/:name", h.DeleteConfigMap)
+		k8sGroup.GET("/configmaps/:cluster_id/:namespace/:name/yaml", h.GetConfigMapYAML)
+		k8sGroup.POST("/configmaps/yaml", h.CreateConfigMapByYaml)
+		k8sGroup.PUT("/configmaps/:cluster_id/:namespace/:name/yaml", h.UpdateConfigMapByYaml)
 	}
 }
 

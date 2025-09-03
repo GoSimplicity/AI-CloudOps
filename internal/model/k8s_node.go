@@ -29,7 +29,6 @@ import (
 	"time"
 
 	core "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // NodeStatus 节点状态枚举
@@ -105,12 +104,6 @@ type NodeTaintEntity struct {
 }
 
 // NodeMetrics 节点指标信息
-type NodeMetrics struct {
-	NodeName  string            `json:"node_name"` // 节点名称
-	Timestamp metav1.Time       `json:"timestamp"` // 采集时间
-	Window    metav1.Duration   `json:"window"`    // 时间窗口
-	Usage     core.ResourceList `json:"usage"`     // 资源使用量
-}
 
 // GetNodeListReq 获取节点列表请求
 type GetNodeListReq struct {

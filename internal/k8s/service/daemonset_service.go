@@ -45,7 +45,7 @@ type DaemonSetService interface {
 	UpdateDaemonSet(ctx context.Context, req *model.UpdateDaemonSetReq) error
 	DeleteDaemonSet(ctx context.Context, req *model.DeleteDaemonSetReq) error
 	RestartDaemonSet(ctx context.Context, req *model.RestartDaemonSetReq) error
-	GetDaemonSetMetrics(ctx context.Context, req *model.GetDaemonSetMetricsReq) (*model.K8sDaemonSetMetrics, error)
+
 	GetDaemonSetEvents(ctx context.Context, req *model.GetDaemonSetEventsReq) (model.ListResp[*model.K8sDaemonSetEvent], error)
 	GetDaemonSetPods(ctx context.Context, req *model.GetDaemonSetPodsReq) (model.ListResp[*model.K8sPod], error)
 	GetDaemonSetHistory(ctx context.Context, req *model.GetDaemonSetHistoryReq) (model.ListResp[*model.K8sDaemonSetHistory], error)
@@ -321,45 +321,6 @@ func (d *daemonSetService) GetDaemonSetList(ctx context.Context, req *model.GetD
 		Total: total,
 		Items: pagedItems,
 	}, nil
-}
-
-// GetDaemonSetMetrics 获取DaemonSet指标
-func (d *daemonSetService) GetDaemonSetMetrics(ctx context.Context, req *model.GetDaemonSetMetricsReq) (*model.K8sDaemonSetMetrics, error) {
-	if req == nil {
-		return nil, fmt.Errorf("获取DaemonSet指标请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return nil, fmt.Errorf("集群ID不能为空")
-	}
-
-	if req.Namespace == "" {
-		return nil, fmt.Errorf("命名空间不能为空")
-	}
-
-	if req.Name == "" {
-		return nil, fmt.Errorf("DaemonSet名称不能为空")
-	}
-
-	// 使用 DaemonSetManager 获取真实的指标数据
-	metrics, err := d.daemonSetManager.GetDaemonSetMetrics(ctx, req.ClusterID, req.Namespace, req.Name)
-	if err != nil {
-		d.logger.Error("GetDaemonSetMetrics: 获取DaemonSet指标失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.String("name", req.Name))
-		return nil, fmt.Errorf("获取DaemonSet指标失败: %w", err)
-	}
-
-	d.logger.Debug("GetDaemonSetMetrics: 成功获取DaemonSet指标",
-		zap.Int("clusterID", req.ClusterID),
-		zap.String("namespace", req.Namespace),
-		zap.String("name", req.Name),
-		zap.Float64("cpuUsage", metrics.CPUUsage),
-		zap.Float64("memoryUsage", metrics.MemoryUsage))
-
-	return metrics, nil
 }
 
 // GetDaemonSetPods 获取DaemonSet下的Pod列表

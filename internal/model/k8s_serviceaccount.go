@@ -81,23 +81,6 @@ type K8sServiceAccountEvent struct {
 	Count     int32     `json:"count"`      // 发生次数
 }
 
-// K8sServiceAccountMetrics ServiceAccount指标信息
-type K8sServiceAccountMetrics struct {
-	ServiceAccountName       string    `json:"service_account_name"`        // ServiceAccount名称
-	Namespace                string    `json:"namespace"`                   // 命名空间
-	TotalRoleBindings        int       `json:"total_role_bindings"`         // 总RoleBinding数
-	TotalClusterRoleBindings int       `json:"total_cluster_role_bindings"` // 总ClusterRoleBinding数
-	TotalSecrets             int       `json:"total_secrets"`               // 总Secrets数
-	TotalImagePullSecrets    int       `json:"total_image_pull_secrets"`    // 总ImagePullSecrets数
-	TokensCreated            int       `json:"tokens_created"`              // 创建的Token数
-	PodsUsingAccount         int       `json:"pods_using_account"`          // 使用该账户的Pod数
-	IsActive                 BoolValue `json:"is_active"`                   // 是否活跃
-	AutomountEnabled         BoolValue `json:"automount_enabled"`           // 是否启用自动挂载
-	SecurityRisk             string    `json:"security_risk"`               // 安全风险等级 (Low, Medium, High)
-	LastUsed                 time.Time `json:"last_used"`                   // 最后使用时间
-	LastUpdated              time.Time `json:"last_updated"`                // 最后更新时间
-}
-
 // K8sServiceAccountUsage ServiceAccount使用情况
 type K8sServiceAccountUsage struct {
 	ServiceAccountName   string                         `json:"service_account_name"`  // ServiceAccount名称

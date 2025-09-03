@@ -193,7 +193,7 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 		sendRequest.Templates["workorder_id"] = fmt.Sprintf("%d", testInstanceID)
 		sendRequest.Templates["serial_number"] = fmt.Sprintf("WO-%d", testInstanceID)
 		sendRequest.Templates["title"] = "AI-CloudOps 测试工单 - 系统功能验证"
-		sendRequest.Templates["description"] = "这是一个AI-CloudOps智能运维管理平台的系统测试工单，用于验证通知功能的完整性和可靠性。"
+		sendRequest.Templates["description"] = "这是一个AI-CloudOps运维管理平台的系统测试工单，用于验证通知功能的完整性和可靠性。"
 		sendRequest.Templates["operator_name"] = "系统管理员"
 		sendRequest.Templates["assignee_name"] = "运维工程师"
 		sendRequest.Templates["priority_level"] = fmt.Sprintf("%d", int(notificationConfig.Priority))
@@ -204,7 +204,7 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 		sendRequest.Templates["event_type"] = notification.GetEventTypeText("test")
 		sendRequest.Templates["notification_time"] = time.Now().Format("2006-01-02 15:04:05")
 		sendRequest.Templates["company_name"] = "AI-CloudOps"
-		sendRequest.Templates["platform_name"] = "智能运维管理平台"
+		sendRequest.Templates["platform_name"] = "运维管理平台"
 		sendRequest.Templates["department"] = "技术运维部"
 		sendRequest.Templates["test_content"] = "本次测试验证了系统通知功能的完整性，包括邮件发送、飞书消息推送等多个渠道的有效性。"
 
@@ -564,7 +564,7 @@ func (n *workorderNotificationService) buildMessageContent(notificationConfig *m
 	sendRequest.Templates["event_type_text"] = notification.GetEventTypeText(eventType)
 	sendRequest.Templates["notification_time"] = time.Now().Format("2006-01-02 15:04:05")
 	sendRequest.Templates["company_name"] = "AI-CloudOps"
-	sendRequest.Templates["platform_name"] = "智能运维管理平台"
+	sendRequest.Templates["platform_name"] = "运维管理平台"
 	sendRequest.Templates["department"] = "技术运维部"
 
 	// 处理处理人名称
@@ -604,7 +604,7 @@ func (n *workorderNotificationService) buildMessageContent(notificationConfig *m
 	if content == "" {
 		content = fmt.Sprintf(`尊敬的用户，您好！
 
-您收到一条来自AI-CloudOps智能运维管理平台的工单通知：
+您收到一条来自AI-CloudOps运维管理平台的工单通知：
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 工单基本信息
@@ -627,7 +627,7 @@ func (n *workorderNotificationService) buildMessageContent(notificationConfig *m
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-此消息由AI-CloudOps智能运维管理平台自动发送，请及时处理相关工单。
+此消息由AI-CloudOps运维管理平台发送，请及时处理相关工单。
 如有疑问，请联系技术运维部门。
 
 AI-CloudOps 技术运维部

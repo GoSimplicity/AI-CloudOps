@@ -59,7 +59,6 @@ type ClusterRoleBindingService interface {
 	// 扩展功能
 	GetClusterRoleBindingEvents(ctx context.Context, req *model.GetClusterRoleBindingEventsReq) ([]*model.K8sClusterRoleBindingEvent, error)
 	GetClusterRoleBindingUsage(ctx context.Context, req *model.GetClusterRoleBindingUsageReq) (*model.K8sClusterRoleBindingUsage, error)
-	GetClusterRoleBindingMetrics(ctx context.Context, req *model.GetClusterRoleBindingMetricsReq) (*model.K8sClusterRoleBindingMetrics, error)
 
 	// 兼容性方法（保持现有API接口兼容）
 	GetClusterRoleBindingListCompat(ctx context.Context, req *model.ClusterRoleBindingListReq) (*model.ListResp[model.ClusterRoleBindingInfo], error)
@@ -397,24 +396,6 @@ func (c *clusterRoleBindingService) GetClusterRoleBindingUsage(ctx context.Conte
 	}
 
 	return usage, nil
-}
-
-// GetClusterRoleBindingMetrics 获取ClusterRoleBinding指标
-func (c *clusterRoleBindingService) GetClusterRoleBindingMetrics(ctx context.Context, req *model.GetClusterRoleBindingMetricsReq) (*model.K8sClusterRoleBindingMetrics, error) {
-	if req == nil {
-		return nil, fmt.Errorf("获取ClusterRoleBinding指标请求不能为空")
-	}
-
-	metrics, err := c.rbacManager.GetClusterRoleBindingMetrics(ctx, req.ClusterID, req.Name)
-	if err != nil {
-		c.logger.Error("GetClusterRoleBindingMetrics: 获取ClusterRoleBinding指标失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("name", req.Name))
-		return nil, fmt.Errorf("获取ClusterRoleBinding指标失败: %w", err)
-	}
-
-	return metrics, nil
 }
 
 // 兼容性方法 - 保留旧接口以避免破坏性更改

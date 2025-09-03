@@ -38,7 +38,6 @@ type K8sPodHandler struct {
 
 func NewK8sPodHandler(podService service.PodService) *K8sPodHandler {
 	return &K8sPodHandler{
-
 		podService: podService,
 	}
 }

@@ -49,7 +49,6 @@ type NodeManager interface {
 	GetNodeResource(ctx context.Context, clusterID int, nodeName string) (*model.NodeResource, error)
 	GetNodeEvents(ctx context.Context, clusterID int, nodeName string, limit int) ([]*model.NodeEvent, int64, error)
 	GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]*model.NodeTaintEntity, int64, error)
-	GetNodeMetrics(ctx context.Context, clusterID int, nodeNames []string) ([]*model.NodeMetrics, int64, error)
 }
 
 type nodeManager struct {
@@ -107,12 +106,7 @@ func (m *nodeManager) BuildK8sNode(ctx context.Context, clusterID int, node core
 		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
-	metricsClient, err := m.client.GetMetricsClient(clusterID)
-	if err != nil {
-		m.logger.Warn("获取Metrics客户端失败，将在无指标模式下运行", zap.Error(err), zap.Int("clusterID", clusterID))
-	}
-
-	k8sNode, err := utils.BuildK8sNode(ctx, clusterID, node, clientset, metricsClient)
+	k8sNode, err := utils.BuildK8sNode(ctx, clusterID, node, clientset, nil)
 	if err != nil {
 		m.logger.Error("构建K8sNode失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", node.Name))
 		return nil, fmt.Errorf("构建K8sNode失败: %w", err)
@@ -382,44 +376,4 @@ func (m *nodeManager) GetNodeTaints(ctx context.Context, clusterID int, nodeName
 	}
 
 	return taints, int64(len(taints)), nil
-}
-
-func (m *nodeManager) GetNodeMetrics(ctx context.Context, clusterID int, nodeNames []string) ([]*model.NodeMetrics, int64, error) {
-	metricsClient, err := m.client.GetMetricsClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Metrics客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
-		return nil, 0, fmt.Errorf("获取Metrics客户端失败: %w", err)
-	}
-
-	nodeMetricsList, err := metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		m.logger.Error("获取节点指标失败", zap.Error(err), zap.Int("clusterID", clusterID))
-		return nil, 0, fmt.Errorf("获取节点指标失败: %w", err)
-	}
-
-	var metrics []*model.NodeMetrics
-	for _, nodeMetrics := range nodeMetricsList.Items {
-		if len(nodeNames) > 0 {
-			found := false
-			for _, name := range nodeNames {
-				if nodeMetrics.Name == name {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
-		}
-
-		metric := &model.NodeMetrics{
-			NodeName:  nodeMetrics.Name,
-			Timestamp: nodeMetrics.Timestamp,
-			Window:    nodeMetrics.Window,
-			Usage:     nodeMetrics.Usage,
-		}
-		metrics = append(metrics, metric)
-	}
-
-	return metrics, int64(len(metrics)), nil
 }

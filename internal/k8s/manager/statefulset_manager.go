@@ -37,8 +37,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -57,7 +55,7 @@ type StatefulSetManager interface {
 	GetStatefulSetEvents(ctx context.Context, clusterID int, namespace, statefulSetName string, limit int) ([]*model.K8sStatefulSetEvent, int64, error)
 	GetStatefulSetHistory(ctx context.Context, clusterID int, namespace, statefulSetName string) ([]*model.K8sStatefulSetHistory, int64, error)
 	GetStatefulSetPods(ctx context.Context, clusterID int, namespace, statefulSetName string) ([]*model.K8sPod, int64, error)
-	GetStatefulSetMetrics(ctx context.Context, clusterID int, namespace, statefulSetName string) (*model.K8sStatefulSetMetrics, error)
+
 	RollbackStatefulSet(ctx context.Context, clusterID int, namespace, name string, revision int64) error
 }
 
@@ -465,7 +463,7 @@ func (s *statefulSetManager) GetStatefulSetHistory(ctx context.Context, clusterI
 	}
 
 	// 获取与 StatefulSet 相关的 ControllerRevision
-	labelSelector := fmt.Sprintf("controller-revision-hash")
+	labelSelector := "controller-revision-hash"
 	listOptions := metav1.ListOptions{
 		LabelSelector: labelSelector,
 	}
@@ -555,83 +553,6 @@ func (s *statefulSetManager) GetStatefulSetPods(ctx context.Context, clusterID i
 	}
 
 	return pods, int64(len(pods)), nil
-}
-
-// GetStatefulSetMetrics 获取 StatefulSet 指标
-func (s *statefulSetManager) GetStatefulSetMetrics(ctx context.Context, clusterID int, namespace, statefulSetName string) (*model.K8sStatefulSetMetrics, error) {
-	if statefulSetName == "" {
-		return nil, fmt.Errorf("StatefulSet name 不能为空")
-	}
-
-	// 获取 metrics client
-	metricsClient, err := s.clientFactory.GetMetricsClient(clusterID)
-	if err != nil {
-		s.logger.Error("获取 metrics 客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取 metrics 客户端失败: %w", err)
-	}
-
-	// 获取 StatefulSet 管理的 Pods
-	pods, _, err := s.GetStatefulSetPods(ctx, clusterID, namespace, statefulSetName)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(pods) == 0 {
-		return &model.K8sStatefulSetMetrics{
-			CPUUsage:      0,
-			MemoryUsage:   0,
-			ReplicasReady: 0,
-			ReplicasTotal: 0,
-		}, nil
-	}
-
-	var totalCPU, totalMemory resource.Quantity
-	var cpuUsage, memoryUsage float64
-	var readyPods int32
-	var metricsCount int
-
-	// 获取每个 Pod 的指标
-	for _, pod := range pods {
-		// 统计就绪的 Pod
-		if pod.Status == "Running" {
-			readyPods++
-		}
-
-		podMetrics, err := metricsClient.MetricsV1beta1().PodMetricses(namespace).Get(ctx, pod.Name, metav1.GetOptions{})
-		if err != nil {
-			s.logger.Warn("获取 Pod 指标失败",
-				zap.String("podName", pod.Name),
-				zap.Error(err))
-			continue
-		}
-
-		// 累加所有容器的指标
-		for _, container := range podMetrics.Containers {
-			cpuQuantity := container.Usage[corev1.ResourceCPU]
-			memoryQuantity := container.Usage[corev1.ResourceMemory]
-
-			totalCPU.Add(cpuQuantity)
-			totalMemory.Add(memoryQuantity)
-		}
-		metricsCount++
-	}
-
-	// 计算平均使用率
-	if metricsCount > 0 {
-		cpuUsage = float64(totalCPU.MilliValue()) / 1000                  // 转换为核数
-		memoryUsage = float64(totalMemory.Value()) / (1024 * 1024 * 1024) // 转换为 GB
-	}
-
-	metrics := &model.K8sStatefulSetMetrics{
-		CPUUsage:      cpuUsage,
-		MemoryUsage:   memoryUsage,
-		ReplicasReady: readyPods,
-		ReplicasTotal: int32(len(pods)),
-	}
-
-	return metrics, nil
 }
 
 // RollbackStatefulSet 回滚 StatefulSet 到指定版本

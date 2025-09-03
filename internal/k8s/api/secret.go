@@ -40,7 +40,6 @@ type K8sSecretHandler struct {
 
 func NewK8sSecretHandler(secretService service.SecretService) *K8sSecretHandler {
 	return &K8sSecretHandler{
-
 		secretService: secretService,
 	}
 }
