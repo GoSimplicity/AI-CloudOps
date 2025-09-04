@@ -180,14 +180,14 @@ func run() error {
 			}()
 			_ = cmd.Cron.StartPrometheusConfigRefreshManager(ctx)
 		}()
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("StartCheckK8sStatusManager panic: %v", r)
-				}
-			}()
-			_ = cmd.Cron.StartCheckK8sStatusManager(ctx)
-		}()
+		// go func() {
+		// 	defer func() {
+		// 		if r := recover(); r != nil {
+		// 			log.Printf("StartCheckK8sStatusManager panic: %v", r)
+		// 		}
+		// 	}()
+		// 	_ = cmd.Cron.StartCheckK8sStatusManager(ctx)
+		// }()
 		log.Printf("系统启动完成")
 	} else {
 		log.Printf("降级模式运行")

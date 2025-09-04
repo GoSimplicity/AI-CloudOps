@@ -26,9 +26,30 @@
 package manager
 
 import (
+	"archive/tar"
 	"context"
 	"fmt"
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
+	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils/query"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/retry"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"io"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/httpstream"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/kubectl/pkg/scheme"
+	"mime/multipart"
+	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
@@ -38,32 +59,41 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// PodManager Pod 资源管理器，负责 Pod 相关的业务逻辑
-// 通过依赖注入接收客户端工厂，实现业务逻辑与客户端创建的解耦
+/*
+PodManager Pod 资源管理器，负责 Pod 相关的业务逻辑
+通过依赖注入接收客户端工厂，实现业务逻辑与客户端创建的解耦
+*/
 type PodManager interface {
-	// Pod 查询
+	// GetPod Pod 查询
 	GetPod(ctx context.Context, clusterID int, namespace, name string) (*corev1.Pod, error)
-	GetPodList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.PodList, error)
+	// GetPodsByNodeName 获取指定节点上的 Pod 列表
 	GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) (*corev1.PodList, error)
-
-	// Pod 操作
+	// GetPodList Pod 列表查询
+	GetPodList(ctx context.Context, clusterID int, namespace string, queryParams *query.Query) (*model.ListResp[*model.K8sPod], error)
+	// DeletePod Pod 删除操作
 	DeletePod(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
-
-	// Pod 日志
-	GetPodLogs(ctx context.Context, clusterID int, namespace, name string, logOptions *corev1.PodLogOptions) (string, error)
-
-	// 批量操作
-	BatchDeletePods(ctx context.Context, clusterID int, namespace string, podNames []string) error
+	// GetPodLogs Pod 日志
+	GetPodLogs(ctx context.Context, clusterID int, namespace, name string, logOptions *corev1.PodLogOptions) (io.ReadCloser, error)
+	// BatchDeletePods  批量操作
+	BatchDeletePods(ctx context.Context, clusterID int, namespace string, podNames []string, deleteOptions metav1.DeleteOptions) error
+	// PodTerminalSession  Pod 终端
+	PodTerminalSession(ctx context.Context, clusterID int, namespace, pod, container, shell string, conn *websocket.Conn, config *rest.Config) error
+	// UploadFileToPod Pod 文件上传
+	UploadFileToPod(ctx *gin.Context, clusterID int, namespace, pod, container, filePath string, config *rest.Config) error
+	// PortForward Pod 端口映射
+	PortForward(ctx context.Context, ports []string, dialer httpstream.Dialer) error
+	// DownloadPodFile Pod 文件下载
+	DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string, config *rest.Config) (*k8sutils.PodFileStreamPipe, error)
 }
 
 type podManager struct {
-	clientFactory client.K8sClientFactory
+	clientFactory client.K8sClient
 	logger        *zap.Logger
 }
 
 // NewPodManager 创建新的 Pod 管理器实例
 // 通过构造函数注入客户端工厂依赖
-func NewPodManager(clientFactory client.K8sClientFactory, logger *zap.Logger) PodManager {
+func NewPodManager(clientFactory client.K8sClient, logger *zap.Logger) PodManager {
 	return &podManager{
 		clientFactory: clientFactory,
 		logger:        logger,
@@ -106,26 +136,76 @@ func (p *podManager) GetPod(ctx context.Context, clusterID int, namespace, name 
 }
 
 // GetPodList 获取 Pod 列表
-func (p *podManager) GetPodList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.PodList, error) {
+func (p *podManager) GetPodList(ctx context.Context, clusterID int, namespace string, queryParams *query.Query) (*model.ListResp[*model.K8sPod], error) {
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, listOptions)
+	podList, err := kubeClient.CoreV1().Pods(namespace).
+		List(ctx, metav1.ListOptions{LabelSelector: queryParams.Selector().String()})
+
 	if err != nil {
 		p.logger.Error("获取 Pod 列表失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.Error(err))
-		return nil, fmt.Errorf("获取 Pod 列表失败: %w", err)
+
+		return nil, err
 	}
 
-	p.logger.Debug("成功获取 Pod 列表",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.Int("count", len(podList.Items)))
-	return podList, nil
+	objects := make([]runtime.Object, len(podList.Items))
+	filtered := make([]runtime.Object, 0)
+
+	for _, item := range podList.Items {
+		objects = append(objects, item.DeepCopy())
+	}
+
+	for _, object := range objects {
+		selected := true
+		for field, value := range queryParams.Filters {
+			if !p.filterPodFunc(object, query.Filter{Field: field, Value: value}) {
+				selected = false
+				break
+			}
+		}
+
+		if selected {
+			filtered = append(filtered, object)
+		}
+	}
+
+	sort.Slice(filtered, func(n, m int) bool {
+		if !queryParams.Ascending {
+			return p.sortPodFunc(filtered[n], filtered[m], queryParams.SortBy)
+		}
+		return !p.sortPodFunc(filtered[n], filtered[m], queryParams.SortBy)
+	})
+
+	total := len(filtered)
+	if queryParams.Pagination == nil {
+		queryParams.Pagination = query.DefaultPagination
+	}
+
+	start, end := queryParams.Pagination.GetValidPagination(total)
+
+	items := make([]*model.K8sPod, 0, end-start)
+	for _, o := range filtered[start:end] {
+		pod, ok := o.(*corev1.Pod)
+		if ok {
+			podModel := utils.ConvertToK8sPod(pod)
+			podModel.ClusterID = clusterID
+			items = append(items, podModel)
+		}
+	}
+
+	p.logger.Debug("成功获取 Pod 列表", zap.Int("clusterID", clusterID), zap.String("namespace", namespace),
+		zap.Int("count", len(filtered)))
+
+	return &model.ListResp[*model.K8sPod]{
+		Items: items,
+		Total: int64(len(filtered)),
+	}, nil
 }
 
 // GetPodsByNodeName 获取指定节点上的 Pod 列表
@@ -180,70 +260,267 @@ func (p *podManager) DeletePod(ctx context.Context, clusterID int, namespace, na
 }
 
 // GetPodLogs 获取 Pod 日志
-func (p *podManager) GetPodLogs(ctx context.Context, clusterID int, namespace, name string, logOptions *corev1.PodLogOptions) (string, error) {
+func (p *podManager) GetPodLogs(ctx context.Context, clusterID int, namespace, name string, logOptions *corev1.PodLogOptions) (io.ReadCloser, error) {
 	kubeClient, err := p.getKubeClient(clusterID)
+
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	podLogRequest := kubeClient.CoreV1().Pods(namespace).GetLogs(name, logOptions)
-	podLogs, err := podLogRequest.Stream(ctx)
+
+	stream, err := podLogRequest.Stream(ctx)
 	if err != nil {
 		p.logger.Error("获取 Pod 日志流失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
 			zap.Error(err))
-		return "", fmt.Errorf("获取 Pod 日志流失败: %w", err)
+		return stream, fmt.Errorf("获取 Pod 日志流失败: %w", err)
 	}
-	defer podLogs.Close()
-
-	logData, err := io.ReadAll(podLogs)
-	if err != nil {
-		p.logger.Error("读取 Pod 日志数据失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("name", name),
-			zap.Error(err))
-		return "", fmt.Errorf("读取 Pod 日志数据失败: %w", err)
-	}
-
-	p.logger.Debug("成功获取 Pod 日志",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("name", name),
-		zap.Int("logSize", len(logData)))
-	return string(logData), nil
+	return stream, err
 }
 
 // BatchDeletePods 批量删除 Pod
-func (p *podManager) BatchDeletePods(ctx context.Context, clusterID int, namespace string, podNames []string) error {
+func (p *podManager) BatchDeletePods(ctx context.Context, clusterID int, namespace string, podNames []string, deleteOpts metav1.DeleteOptions) error {
+	kubeClient, err := p.getKubeClient(clusterID)
+
+	if err != nil {
+		return err
+	}
+
+	tasks := make([]retry.WrapperTask, 0, len(podNames))
+	for _, name := range podNames {
+
+		tasks = append(tasks, retry.WrapperTask{
+			Backoff: retry.DefaultBackoff,
+
+			Task: func(ctx context.Context) error {
+				if err := kubeClient.CoreV1().Pods(namespace).Delete(ctx, name, deleteOpts); err != nil {
+					p.logger.Error("删除Pod失败", zap.Error(err),
+						zap.Int("cluster_id", clusterID),
+						zap.String("namespace", namespace),
+						zap.String("name", name))
+				}
+				return nil
+			},
+			RetryCheck: func(err error) bool {
+				return k8serrors.IsTimeout(err) ||
+					k8serrors.IsTooManyRequests(err) ||
+					k8serrors.IsServerTimeout(err) ||
+					k8serrors.IsConflict(err)
+			},
+		})
+	}
+	err = retry.RunRetryWithConcurrency(ctx, 3, tasks)
+	if err != nil {
+		p.logger.Warn("批量删除Pod失败",
+			zap.Error(err))
+
+		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "批量删除Pod失败")
+	}
+	return nil
+}
+
+func (p *podManager) PodTerminalSession(
+	ctx context.Context,
+	clusterID int,
+	namespace, pod, container, shell string,
+	conn *websocket.Conn,
+	config *rest.Config,
+) error {
+
+	kubeClient, err := p.clientFactory.GetKubeClient(clusterID)
+	if err != nil {
+		return err
+	}
+
+	if len(shell) == 0 {
+		shell = "sh"
+	}
+
+	terminal.NewTerminalerHandler(kubeClient, config).
+		HandleSession(ctx, shell, namespace, pod, container, conn)
+	return nil
+}
+
+func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace, pod, container, filePath string, config *rest.Config) error {
+
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	var errors []string
-	for _, podName := range podNames {
-		err := kubeClient.CoreV1().Pods(namespace).Delete(ctx, podName, metav1.DeleteOptions{})
-		if err != nil {
-			errorMsg := fmt.Sprintf("删除 Pod %s 失败: %v", podName, err)
-			errors = append(errors, errorMsg)
-			p.logger.Error("批量删除中的单个 Pod 失败",
-				zap.Int("clusterID", clusterID),
-				zap.String("namespace", namespace),
-				zap.String("podName", podName),
-				zap.Error(err))
+	targetDir := filePath
+	if targetDir == "" {
+		targetDir = "/"
+	}
+	// 解析上传的文件
+	files, err := parseMultipartFiles(ctx)
+	if err != nil {
+		return err
+	}
+
+	reader, writer := io.Pipe()
+	go func() {
+		defer writer.Close()
+		if tarErr := writeFilesToTar(files, writer); tarErr != nil {
+			p.logger.Error("打包文件成 tar 失败", zap.Error(tarErr))
+			_ = writer.CloseWithError(tarErr)
 		}
+	}()
+
+	execReq := kubeClient.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(pod).
+		Namespace(namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Container: container,
+			Command:   []string{"tar", "-xmf", "-", "-C", targetDir},
+			Stdin:     true,
+			Stdout:    false,
+			Stderr:    true,
+			TTY:       false,
+		}, scheme.ParameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(config, http.MethodPost, execReq.URL())
+	if err != nil {
+		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "创建 Executor 失败")
 	}
 
-	if len(errors) > 0 {
-		return fmt.Errorf("批量删除失败，详情: %s", strings.Join(errors, "; "))
+	if err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdin:             reader,
+		Stdout:            nil,
+		Stderr:            ctx.Writer,
+		TerminalSizeQueue: nil,
+	}); err != nil {
+		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "执行上传失败")
+	}
+	return nil
+}
+
+func (p *podManager) PortForward(ctx context.Context, ports []string, dialer httpstream.Dialer) error {
+
+	// 创建 PortForwarder
+	stopChan := make(chan struct{}, 1)
+	readyChan := make(chan struct{})
+
+	forwarder, err := portforward.New(dialer, ports, stopChan, readyChan, io.Discard, io.Discard)
+	if err != nil {
+		return pkg.NewBusinessError(constants.ErrK8sPortForward, err.Error())
 	}
 
-	p.logger.Info("成功批量删除 Pod",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.Int("count", len(podNames)))
+	// 自动关闭转发
+	go func() {
+		<-ctx.Done()
+		close(stopChan)
+	}()
+
+	// 异步开启转发
+	go func() {
+		if err := forwarder.ForwardPorts(); err != nil {
+			p.logger.Error("创建端口转发失败",
+				zap.Error(err),
+				zap.Strings("ports", ports),
+			)
+			return
+		}
+	}()
+	// 等待就绪
+	<-readyChan
+	return nil
+}
+
+func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string, config *rest.Config) (*k8sutils.PodFileStreamPipe, error) {
+	kubeClient, err := p.getKubeClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	reader, err := k8sutils.NewPodFileStreamPipe(
+		ctx, config, kubeClient, namespace, pod, container, filePath)
+
+	if err != nil {
+		p.logger.Error("创建Pod文件流失败",
+			zap.Error(err),
+			zap.String("Namespace", namespace),
+			zap.String("PodName", pod),
+			zap.String("ContainerName", container),
+			zap.String("FilePath", filePath),
+		)
+	}
+	return reader, err
+}
+
+func (p *podManager) filterPodFunc(object runtime.Object, filter query.Filter) bool {
+	pod, ok := object.(*corev1.Pod)
+	if !ok {
+		return false
+	}
+	switch filter.Field {
+	case query.FieldStatus:
+		return strings.EqualFold(utils.PodStatus(pod), string(filter.Value))
+	case query.FieldSearch:
+		return strings.Contains(pod.Name, string(filter.Value))
+	default:
+		return query.DefaultObjectMetaFilter(pod.ObjectMeta, filter)
+	}
+}
+
+func (p *podManager) sortPodFunc(left runtime.Object, right runtime.Object, field query.Field) bool {
+	leftPod, ok := left.(*corev1.Pod)
+	if !ok {
+		return false
+	}
+	rightPod, ok := right.(*corev1.Pod)
+	if !ok {
+		return false
+	}
+
+	return query.DefaultObjectMetaCompare(leftPod.ObjectMeta, rightPod.ObjectMeta, field)
+}
+
+type fileWithHeader struct {
+	file   multipart.File
+	header *multipart.FileHeader
+}
+
+func parseMultipartFiles(ctx *gin.Context) ([]fileWithHeader, error) {
+	if err := ctx.Request.ParseMultipartForm(10 << 20); err != nil {
+		return nil, pkg.NewBusinessError(constants.ErrK8sResourceDelete, "读取上传文件失败")
+	}
+	files := make([]fileWithHeader, 0)
+	for name := range ctx.Request.MultipartForm.File {
+		file, header, err := ctx.Request.FormFile(name)
+		if err != nil {
+			return nil, pkg.NewBusinessError(constants.ErrK8sResourceDelete, "解析上传文件失败")
+		}
+		files = append(files, fileWithHeader{file: file, header: header})
+	}
+	return files, nil
+}
+
+func writeFilesToTar(files []fileWithHeader, w io.Writer) error {
+	tarWriter := tar.NewWriter(w)
+	defer tarWriter.Close()
+	for _, f := range files {
+		func(f fileWithHeader) {
+			defer f.file.Close()
+			hdr := &tar.Header{
+				Name: f.header.Filename,
+				Mode: 0600,
+				Size: f.header.Size,
+			}
+			if err := tarWriter.WriteHeader(hdr); err != nil {
+				_ = w.(io.WriteCloser).Close()
+				return
+			}
+			if _, err := io.Copy(tarWriter, f.file); err != nil {
+				_ = w.(io.WriteCloser).Close()
+				return
+			}
+		}(f)
+	}
 	return nil
 }

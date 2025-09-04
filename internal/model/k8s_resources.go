@@ -33,17 +33,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// K8sNamespace Kubernetes命名空间响应信息
-type K8sNamespace struct {
-	Name              string            `json:"name"`
-	UID               string            `json:"uid"`
-	Status            string            `json:"status"`
-	CreationTimestamp time.Time         `json:"creation_timestamp"`
-	Labels            map[string]string `json:"labels"`
-	Annotations       map[string]string `json:"annotations"`
-	ResourceQuota     *ResourceQuota    `json:"resource_quota,omitempty"`
-}
-
 // ResourceQuota 资源配额信息
 type ResourceQuota struct {
 	CpuLimit       string `json:"cpu_limit"`
@@ -55,24 +44,6 @@ type ResourceQuota struct {
 	ServicesLimit  string `json:"services_limit"`
 	SecretsLimit   string `json:"secrets_limit"`
 	ConfigMapLimit string `json:"configmap_limit"`
-}
-
-// K8sDeployment Kubernetes Deployment响应信息
-type K8sDeployment struct {
-	Name              string            `json:"name"`
-	UID               string            `json:"uid"`
-	Namespace         string            `json:"namespace"`
-	Replicas          int32             `json:"replicas"`
-	ReadyReplicas     int32             `json:"ready_replicas"`
-	AvailableReplicas int32             `json:"available_replicas"`
-	UpdatedReplicas   int32             `json:"updated_replicas"`
-	Strategy          string            `json:"strategy"`
-	Labels            map[string]string `json:"labels"`
-	Annotations       map[string]string `json:"annotations"`
-	CreationTimestamp time.Time         `json:"creation_timestamp"`
-	Images            []string          `json:"images"`
-	Age               string            `json:"age"`
-	Events            []K8sEvent        `json:"events,omitempty"`
 }
 
 // K8sStatefulSet Kubernetes StatefulSet响应信息
@@ -114,36 +85,12 @@ type K8sDaemonSet struct {
 	Events             []K8sEvent        `json:"events,omitempty"`
 }
 
-// K8sService Kubernetes Service响应信息
-type K8sService struct {
-	Name              string            `json:"name"`
-	UID               string            `json:"uid"`
-	Namespace         string            `json:"namespace"`
-	Type              string            `json:"type"`
-	ClusterIP         string            `json:"cluster_ip"`
-	ExternalIPs       []string          `json:"external_ips,omitempty"`
-	LoadBalancerIP    string            `json:"load_balancer_ip,omitempty"`
-	Ports             []ServicePort     `json:"ports"`
-	Selector          map[string]string `json:"selector"`
-	Labels            map[string]string `json:"labels"`
-	Annotations       map[string]string `json:"annotations"`
-	CreationTimestamp time.Time         `json:"creation_timestamp"`
-	Age               string            `json:"age"`
-	Events            []K8sEvent        `json:"events,omitempty"`
-}
-
-// ServicePort 服务端口信息
-type ServicePort struct {
-	Name       string `json:"name"`
-	Port       int32  `json:"port"`
-	TargetPort string `json:"target_port"`
-	NodePort   int32  `json:"node_port,omitempty"`
-	Protocol   string `json:"protocol"`
-}
+// ServicePort 服务端口信息 - 已在k8s_service.go中定义
 
 // K8sIngress Kubernetes Ingress响应信息
 type K8sIngress struct {
 	Name              string              `json:"name"`
+	ClusterID         int                 `json:"cluster_id"`
 	UID               string              `json:"uid"`
 	Namespace         string              `json:"namespace"`
 	IngressClassName  string              `json:"ingress_class_name"`
@@ -153,8 +100,10 @@ type K8sIngress struct {
 	Labels            map[string]string   `json:"labels"`
 	Annotations       map[string]string   `json:"annotations"`
 	CreationTimestamp time.Time           `json:"creation_timestamp"`
+	Status            string              `json:"status"`
 	Age               string              `json:"age"`
 	Events            []K8sEvent          `json:"events,omitempty"`
+	Hosts             []string            `json:"hosts"`
 }
 
 // IngressServicePort Ingress服务端口信息
@@ -247,21 +196,6 @@ type K8sSecret struct {
 	CreationTimestamp time.Time         `json:"creation_timestamp"`
 	Age               string            `json:"age"`
 	Events            []K8sEvent        `json:"events,omitempty"`
-}
-
-// K8sEvent Kubernetes事件响应信息
-type K8sEvent struct {
-	Name              string                 `json:"name"`
-	Namespace         string                 `json:"namespace"`
-	Type              string                 `json:"type"`
-	Reason            string                 `json:"reason"`
-	Message           string                 `json:"message"`
-	Source            corev1.EventSource     `json:"source"`
-	InvolvedObject    corev1.ObjectReference `json:"involved_object"`
-	FirstTimestamp    time.Time              `json:"first_timestamp"`
-	LastTimestamp     time.Time              `json:"last_timestamp"`
-	Count             int32                  `json:"count"`
-	CreationTimestamp time.Time              `json:"creation_timestamp"`
 }
 
 // K8sNetworkPolicy Kubernetes NetworkPolicy响应信息
@@ -427,13 +361,7 @@ type NodeSelectorRequirementRequest struct {
 	Values   []string `json:"values,omitempty" comment:"值列表"`
 }
 
-// PortForwardPort 端口转发端口配置
-type PortForwardPort struct {
-	LocalPort  int `json:"local_port" binding:"required" comment:"本地端口"`
-	RemotePort int `json:"remote_port" binding:"required" comment:"远程端口"`
-}
-
-// ==================== 通用资源操作请求结构体 ====================
+// PortForwardPort 端口转发端口配置 - 已在k8s_service.go中定义
 
 // K8sGetResourceReq 获取单个k8s资源请求
 type K8sGetResourceReq struct {
@@ -600,12 +528,12 @@ type StatefulSetScaleReq struct {
 	Replicas int32 `json:"replicas" binding:"required,min=0" comment:"副本数量"`
 }
 
-// ==================== Pod专用请求结构体 ====================
-
 // PodLogReq Pod日志查询请求
 type PodLogReq struct {
-	K8sResourceIdentifierReq
-	Container    string `json:"container" comment:"容器名称"`
+	ClusterID    int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群id"`
+	Namespace    string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
+	PodName      string `json:"pod_name" uri:"pod_name" binding:"required" comment:"Pod名称"`
+	Container    string `json:"container" uri:"container" binding:"required" comment:"容器名称"`
 	Follow       bool   `json:"follow" comment:"是否持续跟踪"`
 	Previous     bool   `json:"previous" comment:"是否获取前一个容器的日志"`
 	SinceSeconds *int64 `json:"since_seconds" comment:"获取多少秒内的日志"`
@@ -635,8 +563,13 @@ type PodExecReq struct {
 type PodPortForwardReq struct {
 	ClusterID    int               `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace    string            `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
-	ResourceName string            `json:"resource_name" uri:"resource_name" binding:"required" comment:"资源名称"`
+	ResourceName string            `json:"pod_name" uri:"pod_name" binding:"required" comment:"资源名称"`
 	Ports        []PortForwardPort `json:"ports" binding:"required" comment:"端口转发配置"`
+}
+
+type PortForwardPort struct {
+	LocalPort  int `json:"local_port" binding:"required" comment:"本地端口"`
+	RemotePort int `json:"remote_port" binding:"required" comment:"远程端口"`
 }
 
 // PodContainersReq 获取Pod容器列表请求
@@ -649,7 +582,7 @@ type PodContainersReq struct {
 // PodsByNodeReq 根据节点获取Pod列表请求
 type PodsByNodeReq struct {
 	ClusterID int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	NodeName  string `json:"node_name" form:"node_name" binding:"required" comment:"节点名称"`
+	NodeName  string `json:"node_name" form:"node_name" uri:"node_name" binding:"required" comment:"节点名称"`
 }
 
 // DeploymentRestartReq 重启Deployment请求
@@ -774,8 +707,8 @@ type YamlTemplateGetReq struct {
 // PodFileReq Pod文件上传下载请求
 type PodFileReq struct {
 	Namespace     string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
-	PodName       string `json:"pod_name" uri:"podName" binding:"required" comment:"Pod名称"`
-	ContainerName string `json:"container_name" uri:"container" binding:"required" comment:"Container名称"`
+	PodName       string `json:"pod_name" uri:"pod_name" binding:"required" comment:"Pod名称"`
+	ContainerName string `json:"container" uri:"container" binding:"required" comment:"Container名称"`
 	FilePath      string `json:"file_path" form:"file_path" binding:"required" uri:"file_path" comment:"文件路径"`
 	ClusterID     int    `json:"cluster_id" uri:"cluster_id" comment:"对应集群ID"`
 }

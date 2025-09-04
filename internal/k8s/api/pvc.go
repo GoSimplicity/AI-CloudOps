@@ -30,17 +30,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type K8sPVCHandler struct {
-	logger     *zap.Logger
 	pvcService service.PVCService
 }
 
-func NewK8sPVCHandler(logger *zap.Logger, pvcService service.PVCService) *K8sPVCHandler {
+func NewK8sPVCHandler(pvcService service.PVCService) *K8sPVCHandler {
 	return &K8sPVCHandler{
-		logger:     logger,
+
 		pvcService: pvcService,
 	}
 }

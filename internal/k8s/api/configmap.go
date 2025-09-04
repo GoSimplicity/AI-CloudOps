@@ -32,17 +32,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type K8sConfigMapHandler struct {
-	logger           *zap.Logger
 	configMapService service.ConfigMapService
 }
 
-func NewK8sConfigMapHandler(logger *zap.Logger, configMapService service.ConfigMapService) *K8sConfigMapHandler {
+func NewK8sConfigMapHandler(configMapService service.ConfigMapService) *K8sConfigMapHandler {
 	return &K8sConfigMapHandler{
-		logger:           logger,
+
 		configMapService: configMapService,
 	}
 }

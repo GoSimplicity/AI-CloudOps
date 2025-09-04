@@ -32,7 +32,7 @@ func (d tcpDialer) DialContext(ctx context.Context, address string, opts ConnOpt
 }
 
 func SockConn(ctx context.Context, daemon string, opts ConnOptions) (net.Conn, error) {
-	daemonURL, err := url.Parse(daemon)
+	daemonUrl, err := url.Parse(daemon)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not parse url %q", daemon)
 	}
@@ -41,13 +41,13 @@ func SockConn(ctx context.Context, daemon string, opts ConnOptions) (net.Conn, e
 		dialer  ProtocolDialer
 		address string
 	)
-	
-	switch strings.ToLower(daemonURL.Scheme) {
+
+	switch strings.ToLower(daemonUrl.Scheme) {
 	case "tcp":
 		dialer = tcpDialer{}
-		address = daemonURL.Host
+		address = daemonUrl.Host
 	default:
-		return nil, errors.New("unsupported protocol")
+		return nil, errors.Errorf("unsupported protocol scheme %q", daemonUrl.Scheme)
 	}
 
 	conn, err := dialer.DialContext(ctx, address, opts)

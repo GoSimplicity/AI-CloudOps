@@ -171,19 +171,19 @@ func ValidateUniqueResource[T any](ctx context.Context, getResourceFunc func(con
 // GetAge 计算资源创建时间到现在的时间差，返回易读格式
 func GetAge(creationTime time.Time) string {
 	duration := time.Since(creationTime)
-	
+
 	if duration < time.Minute {
 		return fmt.Sprintf("%ds", int(duration.Seconds()))
 	}
-	
+
 	if duration < time.Hour {
 		return fmt.Sprintf("%dm", int(duration.Minutes()))
 	}
-	
+
 	if duration < 24*time.Hour {
 		return fmt.Sprintf("%dh", int(duration.Hours()))
 	}
-	
+
 	days := int(duration.Hours() / 24)
 	return fmt.Sprintf("%dd", days)
 }

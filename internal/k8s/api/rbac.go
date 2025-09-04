@@ -32,18 +32,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type RBACAPI struct {
 	rbacService *service.RBACService
-	logger      *zap.Logger
 }
 
-func NewRBACAPI(rbacService *service.RBACService, logger *zap.Logger) *RBACAPI {
+func NewRBACAPI(rbacService *service.RBACService) *RBACAPI {
 	return &RBACAPI{
 		rbacService: rbacService,
-		logger:      logger,
 	}
 }
 
@@ -68,7 +65,7 @@ func (ra *RBACAPI) GetRBACStatistics(c *gin.Context) {
 
 	result, err := ra.rbacService.GetRBACStatistics(c.Request.Context(), clusterID)
 	if err != nil {
-		ra.logger.Error("获取RBAC统计信息失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "获取RBAC统计信息失败")
 		return
 	}
@@ -86,7 +83,7 @@ func (ra *RBACAPI) CheckPermissions(c *gin.Context) {
 
 	result, err := ra.rbacService.CheckPermissions(c.Request.Context(), &req)
 	if err != nil {
-		ra.logger.Error("检查权限失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "检查权限失败")
 		return
 	}
@@ -116,7 +113,7 @@ func (ra *RBACAPI) GetSubjectPermissions(c *gin.Context) {
 
 	result, err := ra.rbacService.GetSubjectPermissions(c.Request.Context(), req)
 	if err != nil {
-		ra.logger.Error("获取主体权限失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "获取主体权限失败")
 		return
 	}
@@ -128,7 +125,7 @@ func (ra *RBACAPI) GetSubjectPermissions(c *gin.Context) {
 func (ra *RBACAPI) GetResourceVerbs(c *gin.Context) {
 	result, err := ra.rbacService.GetResourceVerbs(c.Request.Context())
 	if err != nil {
-		ra.logger.Error("获取资源动作列表失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "获取资源动作列表失败")
 		return
 	}

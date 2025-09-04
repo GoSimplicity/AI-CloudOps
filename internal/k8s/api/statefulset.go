@@ -32,17 +32,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type K8sStatefulSetHandler struct {
-	logger             *zap.Logger
 	statefulSetService service.StatefulSetService
 }
 
-func NewK8sStatefulSetHandler(logger *zap.Logger, statefulSetService service.StatefulSetService) *K8sStatefulSetHandler {
+func NewK8sStatefulSetHandler(statefulSetService service.StatefulSetService) *K8sStatefulSetHandler {
 	return &K8sStatefulSetHandler{
-		logger:             logger,
+
 		statefulSetService: statefulSetService,
 	}
 }

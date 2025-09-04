@@ -27,20 +27,19 @@ package api
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils/query"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type K8sIngressHandler struct {
-	logger         *zap.Logger
 	ingressService service.IngressService
 }
 
-func NewK8sIngressHandler(logger *zap.Logger, ingressService service.IngressService) *K8sIngressHandler {
+func NewK8sIngressHandler(ingressService service.IngressService) *K8sIngressHandler {
 	return &K8sIngressHandler{
-		logger:         logger,
+
 		ingressService: ingressService,
 	}
 }
@@ -48,98 +47,89 @@ func NewK8sIngressHandler(logger *zap.Logger, ingressService service.IngressServ
 func (k *K8sIngressHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/ingresses/list", k.GetIngressList)                   // 获取Ingress列表
-		k8sGroup.GET("/ingresses/:cluster_id", k.GetIngressesByNamespace)   // 根据命名空间获取Ingress列表
-		k8sGroup.GET("/ingresses/:cluster_id/:name", k.GetIngress)          // 获取单个Ingress详情
-		k8sGroup.GET("/ingresses/:cluster_id/:name/yaml", k.GetIngressYaml) // 获取Ingress YAML配置
-		k8sGroup.POST("/ingresses/create", k.CreateIngress)                 // 创建Ingress
-		k8sGroup.PUT("/ingresses/update", k.UpdateIngress)                  // 更新Ingress
-		k8sGroup.DELETE("/ingresses/delete", k.DeleteIngress)               // 删除Ingress
+		k8sGroup.GET("/ingresses/:cluster_id", k.GetIngressList)                   // 获取Ingress列表
+		k8sGroup.GET("/ingresses/:cluster_id/:namespace/:name", k.GetIngress)      // 获取单个Ingress详情
+		k8sGroup.GET("/ingresses/:cluster_id/:name/yaml", k.GetIngressYaml)        // 获取Ingress YAML配置
+		k8sGroup.DELETE("/ingresses/:cluster_id/:namespace", k.BatchDeleteIngress) // 获取Ingress YAML配置
+		k8sGroup.POST("/ingresses/create", k.CreateIngress)                        // 创建Ingress
+		k8sGroup.PUT("/ingresses/update", k.UpdateIngress)                         // 更新Ingress
+		k8sGroup.DELETE("/ingresses/delete", k.DeleteIngress)                      // 删除Ingress
 		//k8sGroup.GET("/ingresses/:cluster_id/:name/events", k.GetIngressEvents)                  // 获取Ingress事件
-		k8sGroup.POST("/ingresses/:cluster_id/:name/tls-test", k.TestIngressTLS)                 // 测试Ingress TLS证书
+		k8sGroup.POST("/ingresses/:cluster_id/tls-test", k.TestIngressTLS)                       // 测试Ingress TLS证书
 		k8sGroup.GET("/ingresses/:cluster_id/:name/backend-health", k.CheckIngressBackendHealth) // 检查后端健康状态
 	}
 }
 
 // GetIngressList 获取Ingress列表
 func (k *K8sIngressHandler) GetIngressList(ctx *gin.Context) {
-	var req model.K8sIngressListReq
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
+	var req model.GetIngressListReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.ingressService.GetIngressList(ctx, &req)
-	})
-}
-
-// GetIngressesByNamespace 根据命名空间获取Ingress列表
-func (k *K8sIngressHandler) GetIngressesByNamespace(ctx *gin.Context) {
-	var req model.K8sGetResourceListReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.ingressService.GetIngressesByNamespace(ctx, req.ClusterID, req.Namespace)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		// 分页相关参数
+		queryParams := query.ParseQueryWithParameters(ctx)
+
+		return k.ingressService.GetIngressList(ctx, queryParams, &req)
 	})
 }
 
 // GetIngress 获取Ingress详情
 func (k *K8sIngressHandler) GetIngress(ctx *gin.Context) {
-	var req model.K8sGetResourceReq
+	var req = new(model.GetIngressDetailsReq)
+
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.ingressService.GetIngress(ctx, req.ClusterID, req.Namespace, req.ResourceName)
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return k.ingressService.GetIngressDetails(ctx, req)
 	})
 }
 
 // GetIngressYaml 获取Ingress的YAML配置
 func (k *K8sIngressHandler) GetIngressYaml(ctx *gin.Context) {
-	var req model.K8sGetResourceYamlReq
+	var req = new(model.GetIngressYamlReq)
+
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.ingressService.GetIngressYaml(ctx, req.ClusterID, req.Namespace, req.ResourceName)
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return k.ingressService.GetIngressYaml(ctx, req)
 	})
 }
 
 // CreateIngress 创建Ingress
 func (k *K8sIngressHandler) CreateIngress(ctx *gin.Context) {
-	var req model.K8sIngressCreateReq
+	var req = new(model.K8sIngressCreateOrUpdateReq)
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.ingressService.CreateIngress(ctx, &req)
+	if err := ctx.ShouldBindUri(req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return nil, k.ingressService.CreateIngress(ctx, req)
 	})
 }
 
 // UpdateIngress 更新Ingress
 func (k *K8sIngressHandler) UpdateIngress(ctx *gin.Context) {
-	var req model.K8sIngressUpdateReq
+	var req = new(model.K8sIngressCreateOrUpdateReq)
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.ingressService.UpdateIngress(ctx, &req)
+	if err := ctx.ShouldBindUri(req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return nil, k.ingressService.UpdateIngress(ctx, req)
 	})
 }
 
@@ -147,21 +137,41 @@ func (k *K8sIngressHandler) UpdateIngress(ctx *gin.Context) {
 func (k *K8sIngressHandler) DeleteIngress(ctx *gin.Context) {
 	var req model.K8sIngressDeleteReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.ingressService.DeleteIngress(ctx, &req)
-	})
-}
-
-// TestIngressTLS 测试Ingress TLS证书
-func (k *K8sIngressHandler) TestIngressTLS(ctx *gin.Context) {
-	var req model.K8sIngressTLSTestReq
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.ingressService.TestIngressTLS(ctx, &req)
+		return nil, k.ingressService.DeleteIngress(ctx, &req)
+	})
+}
+
+// BatchDeleteIngress 批量删除Ingress
+func (k *K8sIngressHandler) BatchDeleteIngress(ctx *gin.Context) {
+	var req = new(model.K8sIngressBatchDeleteReq)
+
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return nil, k.ingressService.BatchDeleteIngresses(ctx, req)
+	})
+}
+
+// TestIngressTLS 测试Ingress TLS证书
+func (k *K8sIngressHandler) TestIngressTLS(ctx *gin.Context) {
+	var req = new(model.K8sIngressTLSTestReq)
+
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return k.ingressService.TestIngressTLS(ctx, req)
 	})
 }
 

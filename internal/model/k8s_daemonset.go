@@ -31,6 +31,18 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 )
 
+// DaemonSetUpdateStrategy DaemonSet更新策略
+type DaemonSetUpdateStrategy struct {
+	Type          string                          `json:"type" gorm:"size:50;comment:更新策略类型"`              // 更新策略类型
+	RollingUpdate *DaemonSetRollingUpdateStrategy `json:"rolling_update" gorm:"type:text;serializer:json"` // 滚动更新策略
+}
+
+// DaemonSetRollingUpdateStrategy DaemonSet滚动更新策略
+type DaemonSetRollingUpdateStrategy struct {
+	MaxUnavailable *int32 `json:"max_unavailable" gorm:"comment:最大不可用数量"` // 最大不可用数量
+	MaxSurge       *int32 `json:"max_surge" gorm:"comment:最大超出数量"`        // 最大超出数量
+}
+
 // K8sDaemonSetEntity Kubernetes DaemonSet数据库实体
 type K8sDaemonSetEntity struct {
 	Model

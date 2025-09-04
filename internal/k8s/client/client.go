@@ -35,7 +35,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/openkruise/kruise-api/client/clientset/versioned"
 	"go.uber.org/zap"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	discovery2 "k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -44,170 +43,176 @@ import (
 	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
-// K8sClientFactory 是 Kubernetes 客户端工厂接口，负责客户端的创建、管理和连接维护
-// 遵循单一职责原则：仅负责客户端的生命周期管理，不包含业务逻辑
-type K8sClientFactory interface {
-	// 客户端初始化与管理
-	InitClient(ctx context.Context, clusterID int, kubeConfig *rest.Config) error
-	RefreshClients(ctx context.Context) error
-	RemoveCluster(clusterID int)
-
-	// 客户端获取方法 - 各种类型的 Kubernetes 客户端
+type K8sClient interface {
 	GetKubeClient(clusterID int) (*kubernetes.Clientset, error)
 	GetKruiseClient(clusterID int) (*versioned.Clientset, error)
 	GetMetricsClient(clusterID int) (*metricsClient.Clientset, error)
 	GetDynamicClient(clusterID int) (*dynamic.DynamicClient, error)
 	GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error)
-
-	// 连接状态检查与管理
+	RefreshClients(ctx context.Context) error
+	RemoveCluster(clusterID int)
 	CheckClusterConnection(clusterID int) error
-	UpdateClusterMetaFromLive(ctx context.Context, clusterID int) error
 }
-
-// K8sClient 保持向后兼容的接口别名
-// 建议新代码使用 K8sClientFactory
-type K8sClient = K8sClientFactory
 
 type k8sClient struct {
-	sync.RWMutex
-	KubeClients       map[int]*kubernetes.Clientset
-	KruiseClients     map[int]*versioned.Clientset
-	MetricsClients    map[int]*metricsClient.Clientset
-	DynamicClients    map[int]*dynamic.DynamicClient
-	RestConfigs       map[int]*rest.Config
-	DiscoveryClients  map[int]*discovery2.DiscoveryClient
-	ClusterNamespaces map[string][]string
-	LastProbeErrors   map[int]string
-	logger            *zap.Logger
-	dao               dao.ClusterDAO
+	mu      sync.RWMutex
+	clients map[int]*clusterClients
+	dao     dao.ClusterDAO
+	logger  *zap.Logger
 }
 
-// NewK8sClientFactory 创建新的 Kubernetes 客户端工厂实例
-func NewK8sClientFactory(logger *zap.Logger, dao dao.ClusterDAO) K8sClientFactory {
-	return &k8sClient{
-		KubeClients:       make(map[int]*kubernetes.Clientset),
-		KruiseClients:     make(map[int]*versioned.Clientset),
-		MetricsClients:    make(map[int]*metricsClient.Clientset),
-		DynamicClients:    make(map[int]*dynamic.DynamicClient),
-		RestConfigs:       make(map[int]*rest.Config),
-		DiscoveryClients:  make(map[int]*discovery2.DiscoveryClient),
-		ClusterNamespaces: make(map[string][]string),
-		LastProbeErrors:   make(map[int]string),
-		logger:            logger,
-		dao:               dao,
-	}
+type clusterClients struct {
+	kube      *kubernetes.Clientset
+	kruise    *versioned.Clientset
+	metrics   *metricsClient.Clientset
+	dynamic   *dynamic.DynamicClient
+	discovery *discovery2.DiscoveryClient
+	config    *rest.Config
 }
 
-// NewK8sClient 保持向后兼容的构造函数
-// 建议新代码使用 NewK8sClientFactory
 func NewK8sClient(logger *zap.Logger, dao dao.ClusterDAO) K8sClient {
-	return NewK8sClientFactory(logger, dao)
+	return &k8sClient{
+		clients: make(map[int]*clusterClients),
+		dao:     dao,
+		logger:  logger,
+	}
 }
 
-// InitClient 初始化Kubernetes客户端
-func (k *k8sClient) InitClient(ctx context.Context, clusterID int, kubeConfig *rest.Config) error {
-	if kubeConfig == nil {
-		return fmt.Errorf("kubeConfig 不能为空")
+func (k *k8sClient) GetKubeClient(clusterID int) (*kubernetes.Clientset, error) {
+	k.mu.RLock()
+	clients, exists := k.clients[clusterID]
+	k.mu.RUnlock()
+
+	if exists && clients.kube != nil {
+		return clients.kube, nil
 	}
 
-	k.Lock()
-	defer k.Unlock()
+	return k.initClusterClients(clusterID)
+}
 
-	if _, exists := k.KubeClients[clusterID]; exists {
-		k.logger.Debug("客户端已初始化，跳过", zap.Int("ClusterID", clusterID))
-		return nil
+func (k *k8sClient) GetKruiseClient(clusterID int) (*versioned.Clientset, error) {
+	k.mu.RLock()
+	clients, exists := k.clients[clusterID]
+	k.mu.RUnlock()
+
+	if !exists || clients.kruise == nil {
+		return nil, fmt.Errorf("集群%d的kruise client不可用", clusterID)
 	}
 
-	if kubeConfig.Timeout == 0 {
-		kubeConfig.Timeout = 10 * time.Second
+	return clients.kruise, nil
+}
+
+func (k *k8sClient) GetMetricsClient(clusterID int) (*metricsClient.Clientset, error) {
+	k.mu.RLock()
+	clients, exists := k.clients[clusterID]
+	k.mu.RUnlock()
+
+	if !exists || clients.metrics == nil {
+		return nil, fmt.Errorf("集群%d的metrics client不可用", clusterID)
 	}
 
-	k.RestConfigs[clusterID] = kubeConfig
+	return clients.metrics, nil
+}
 
-	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
-	if err != nil {
-		k.logger.Error("创建Kubernetes客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
-		return fmt.Errorf("创建Kubernetes客户端失败: %w", err)
-	}
-	k.KubeClients[clusterID] = kubeClient
+func (k *k8sClient) GetDynamicClient(clusterID int) (*dynamic.DynamicClient, error) {
+	k.mu.RLock()
+	clients, exists := k.clients[clusterID]
+	k.mu.RUnlock()
 
-	kruiseClient, err := versioned.NewForConfig(kubeConfig)
-	if err != nil {
-		k.logger.Warn("创建Kruise客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
-	} else {
-		k.KruiseClients[clusterID] = kruiseClient
+	if !exists || clients.dynamic == nil {
+		return nil, fmt.Errorf("集群%d的dynamic client不可用", clusterID)
 	}
 
-	metricsClientSet, err := metricsClient.NewForConfig(kubeConfig)
-	if err != nil {
-		k.logger.Warn("创建Metrics客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
-	} else {
-		k.MetricsClients[clusterID] = metricsClientSet
+	return clients.dynamic, nil
+}
+
+func (k *k8sClient) GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error) {
+	k.mu.RLock()
+	clients, exists := k.clients[clusterID]
+	k.mu.RUnlock()
+
+	if !exists || clients.discovery == nil {
+		return nil, fmt.Errorf("cluster %d discovery client not available", clusterID)
 	}
 
-	dynamicClient, err := dynamic.NewForConfig(kubeConfig)
-	if err != nil {
-		k.logger.Error("创建动态客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
-		return fmt.Errorf("创建动态客户端失败: %w", err)
-	}
-	k.DynamicClients[clusterID] = dynamicClient
+	return clients.discovery, nil
+}
 
-	discoveryClient, err := discovery2.NewDiscoveryClientForConfig(kubeConfig)
-	if err != nil {
-		k.logger.Error("创建Discovery客户端失败", zap.Error(err), zap.Int("ClusterID", clusterID))
-		return fmt.Errorf("创建Discovery客户端失败: %w", err)
-	}
-	k.DiscoveryClients[clusterID] = discoveryClient
+func (k *k8sClient) RefreshClients(ctx context.Context) error {
+	page := 1
+	size := 10
+	var allErrors []error
 
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	namespaces, err := k.getNamespacesDirectly(ctx, kubeClient)
-	if err != nil {
-		k.LastProbeErrors[clusterID] = err.Error()
-		k.logger.Warn("获取命名空间失败", zap.Error(err), zap.Int("ClusterID", clusterID))
-	} else {
-		host := kubeConfig.Host
-		if host == "" {
-			host = fmt.Sprintf("cluster-%d", clusterID)
+	for {
+		req := &model.ListClustersReq{
+			ListReq: model.ListReq{
+				Page: page,
+				Size: size,
+			},
 		}
-		k.ClusterNamespaces[host] = namespaces
-		delete(k.LastProbeErrors, clusterID)
+
+		clusters, total, err := k.dao.GetClusterList(ctx, req)
+		if err != nil {
+			return fmt.Errorf("获取集群列表失败: %w", err)
+		}
+
+		// 如果没有集群了，退出循环
+		if len(clusters) == 0 {
+			break
+		}
+
+		var errors []error
+		for _, cluster := range clusters {
+			if cluster.KubeConfigContent == "" {
+				continue
+			}
+
+			_, err := k.initClusterClients(cluster.ID)
+			if err != nil {
+				errors = append(errors, fmt.Errorf("集群%d: %w", cluster.ID, err))
+			}
+		}
+
+		allErrors = append(allErrors, errors...)
+
+		// 如果已经处理完所有集群，退出循环
+		if int64(page*size) >= total {
+			break
+		}
+
+		page++
 	}
 
-	k.logger.Info("客户端初始化成功", zap.Int("ClusterID", clusterID))
+	if len(allErrors) > 0 {
+		return fmt.Errorf("刷新%d个集群失败", len(allErrors))
+	}
+
 	return nil
 }
 
-// getNamespacesDirectly 获取命名空间列表
-func (k *k8sClient) getNamespacesDirectly(ctx context.Context, kubeClient *kubernetes.Clientset) ([]string, error) {
-	namespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+func (k *k8sClient) RemoveCluster(clusterID int) {
+	k.mu.Lock()
+	delete(k.clients, clusterID)
+	k.mu.Unlock()
+
+	k.logger.Info("removed cluster clients", zap.Int("clusterID", clusterID))
+}
+
+func (k *k8sClient) CheckClusterConnection(clusterID int) error {
+	client, err := k.GetKubeClient(clusterID)
 	if err != nil {
-		return nil, fmt.Errorf("获取命名空间失败: %w", err)
+		return fmt.Errorf("获取kube client失败: %w", err)
 	}
 
-	nsList := make([]string, len(namespaces.Items))
-	for i, ns := range namespaces.Items {
-		nsList[i] = ns.Name
+	_, err = client.Discovery().ServerVersion()
+	if err != nil {
+		return fmt.Errorf("连接集群失败: %w", err)
 	}
-	return nsList, nil
+
+	return nil
 }
 
-// GetKubeClient 获取Kubernetes客户端
-func (k *k8sClient) GetKubeClient(clusterID int) (*kubernetes.Clientset, error) {
-	k.RLock()
-	client, exists := k.KubeClients[clusterID]
-	k.RUnlock()
-
-	if exists {
-		return client, nil
-	}
-
-	return k.initClientFromDB(clusterID)
-}
-
-// initClientFromDB 从数据库初始化客户端
-func (k *k8sClient) initClientFromDB(clusterID int) (*kubernetes.Clientset, error) {
+func (k *k8sClient) initClusterClients(clusterID int) (*kubernetes.Clientset, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -217,191 +222,34 @@ func (k *k8sClient) initClientFromDB(clusterID int) (*kubernetes.Clientset, erro
 	}
 
 	if cluster.KubeConfigContent == "" {
-		return nil, fmt.Errorf("集群 %d 的 KubeConfig 内容为空", clusterID)
+		return nil, fmt.Errorf("集群%d的kubeconfig为空", clusterID)
 	}
 
-	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
+	config, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
 	if err != nil {
-		return nil, fmt.Errorf("解析 kubeconfig 失败: %w", err)
+		return nil, fmt.Errorf("解析kubeconfig失败: %w", err)
 	}
 
-	if err := k.InitClient(ctx, clusterID, restConfig); err != nil {
-		return nil, fmt.Errorf("初始化 Kubernetes 客户端失败: %w", err)
-	}
+	config.Timeout = 10 * time.Second
 
-	k.RLock()
-	client, exists := k.KubeClients[clusterID]
-	k.RUnlock()
+	clients := &clusterClients{config: config}
 
-	if !exists {
-		return nil, fmt.Errorf("集群 %d 的 KubeClient 初始化失败", clusterID)
-	}
-
-	return client, nil
-}
-
-// GetKruiseClient 获取Kruise客户端
-func (k *k8sClient) GetKruiseClient(clusterID int) (*versioned.Clientset, error) {
-	k.RLock()
-	client, exists := k.KruiseClients[clusterID]
-	k.RUnlock()
-
-	if !exists {
-		return nil, fmt.Errorf("集群 %d 的 KruiseClient 未初始化", clusterID)
-	}
-
-	return client, nil
-}
-
-// GetMetricsClient 获取Metrics客户端
-func (k *k8sClient) GetMetricsClient(clusterID int) (*metricsClient.Clientset, error) {
-	k.RLock()
-	client, exists := k.MetricsClients[clusterID]
-	k.RUnlock()
-
-	if !exists {
-		return nil, fmt.Errorf("集群 %d 的 MetricsClient 未初始化", clusterID)
-	}
-
-	return client, nil
-}
-
-// GetDynamicClient 获取动态客户端
-func (k *k8sClient) GetDynamicClient(clusterID int) (*dynamic.DynamicClient, error) {
-	k.RLock()
-	client, exists := k.DynamicClients[clusterID]
-	k.RUnlock()
-
-	if !exists {
-		return nil, fmt.Errorf("集群 %d 的 DynamicClient 未初始化", clusterID)
-	}
-
-	return client, nil
-}
-
-// GetDiscoveryClient 获取Discovery客户端
-func (k *k8sClient) GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error) {
-	k.RLock()
-	client, exists := k.DiscoveryClients[clusterID]
-	k.RUnlock()
-
-	if !exists {
-		return nil, fmt.Errorf("集群 %d 的 DiscoveryClient 未初始化", clusterID)
-	}
-
-	return client, nil
-}
-
-// RefreshClients 刷新所有客户端
-func (k *k8sClient) RefreshClients(ctx context.Context) error {
-	clusters, err := k.dao.ListAllClusters(ctx)
+	// 创建 kubernetes 客户端（必需）
+	clients.kube, err = kubernetes.NewForConfig(config)
 	if err != nil {
-		k.logger.Error("获取所有集群失败", zap.Error(err))
-		return err
+		return nil, fmt.Errorf("创建kubernetes client失败: %w", err)
 	}
 
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(clusters))
+	// 创建其他客户端（可选）
+	clients.kruise, _ = versioned.NewForConfig(config)
+	clients.metrics, _ = metricsClient.NewForConfig(config)
+	clients.dynamic, _ = dynamic.NewForConfig(config)
+	clients.discovery, _ = discovery2.NewDiscoveryClientForConfig(config)
 
-	for _, cluster := range clusters {
-		if cluster.KubeConfigContent == "" {
-			k.logger.Warn("集群的 KubeConfig 内容为空，跳过初始化", zap.Int("ClusterID", cluster.ID))
-			continue
-		}
+	k.mu.Lock()
+	k.clients[clusterID] = clients
+	k.mu.Unlock()
 
-		wg.Add(1)
-		go func(c *model.K8sCluster) {
-			defer wg.Done()
-
-			restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(c.KubeConfigContent))
-			if err != nil {
-				k.logger.Error("解析 kubeconfig 失败", zap.Int("ClusterID", c.ID), zap.Error(err))
-				errChan <- fmt.Errorf("解析集群 %d 的 kubeconfig 失败: %w", c.ID, err)
-				return
-			}
-
-			if err := k.InitClient(ctx, c.ID, restConfig); err != nil {
-				k.logger.Error("初始化 Kubernetes 客户端失败", zap.Int("ClusterID", c.ID), zap.Error(err))
-				errChan <- fmt.Errorf("初始化集群 %d 的客户端失败: %w", c.ID, err)
-			}
-		}(cluster)
-	}
-
-	wg.Wait()
-	close(errChan)
-
-	var errs []error
-	for err := range errChan {
-		errs = append(errs, err)
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("刷新客户端时发生 %d 个错误，第一个错误: %w", len(errs), errs[0])
-	}
-
-	return nil
-}
-
-// RemoveCluster 清理集群客户端
-func (k *k8sClient) RemoveCluster(clusterID int) {
-	k.Lock()
-	defer k.Unlock()
-
-	delete(k.KubeClients, clusterID)
-	delete(k.KruiseClients, clusterID)
-	delete(k.MetricsClients, clusterID)
-	delete(k.DynamicClients, clusterID)
-	delete(k.RestConfigs, clusterID)
-	delete(k.DiscoveryClients, clusterID)
-	delete(k.LastProbeErrors, clusterID)
-
-	k.logger.Info("已清理集群客户端", zap.Int("ClusterID", clusterID))
-}
-
-// CheckClusterConnection 检查集群连接
-func (k *k8sClient) CheckClusterConnection(clusterID int) error {
-	client, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		k.logger.Error("获取集群客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
-		k.LastProbeErrors[clusterID] = err.Error()
-		return fmt.Errorf("获取集群客户端失败: %w", err)
-	}
-
-	// 检查集群版本
-	version, err := client.Discovery().ServerVersion()
-	if err != nil {
-		k.logger.Error("检查集群连接失败", zap.Int("clusterID", clusterID), zap.Error(err))
-		k.LastProbeErrors[clusterID] = err.Error()
-		return fmt.Errorf("检查集群连接失败: %w", err)
-	}
-
-	k.logger.Debug("集群连接成功", zap.Int("clusterID", clusterID), zap.String("version", version.String()))
-	delete(k.LastProbeErrors, clusterID)
-	return nil
-}
-
-// UpdateClusterMetaFromLive 更新集群元信息
-func (k *k8sClient) UpdateClusterMetaFromLive(ctx context.Context, clusterID int) error {
-	kubeClient, err := k.GetKubeClient(clusterID)
-	if err != nil {
-		return fmt.Errorf("获取集群客户端失败: %w", err)
-	}
-
-	v, err := kubeClient.Discovery().ServerVersion()
-	if err != nil {
-		return fmt.Errorf("获取集群版本失败: %w", err)
-	}
-
-	k.RLock()
-	restCfg := k.RestConfigs[clusterID]
-	k.RUnlock()
-	host := ""
-	if restCfg != nil {
-		host = restCfg.Host
-	}
-
-	if err := k.dao.UpdateCluster(ctx, &model.K8sCluster{Model: model.Model{ID: clusterID}, Version: v.String(), ApiServerAddr: host}); err != nil {
-		k.logger.Warn("回写集群版本信息失败", zap.Int("ClusterID", clusterID), zap.Error(err))
-	}
-	return nil
+	k.logger.Info("initialized cluster clients", zap.Int("clusterID", clusterID))
+	return clients.kube, nil
 }

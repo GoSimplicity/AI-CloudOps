@@ -31,72 +31,56 @@ import (
 	"sort"
 	"time"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type EventService interface {
-	// 获取Event列表
-	GetEventList(ctx context.Context, req *model.K8sEventListReq) ([]*model.K8sEventEntity, error)
-	GetEventsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sEventEntity, error)
-
-	// 获取Event详情
-	GetEvent(ctx context.Context, clusterID int, namespace, name string) (*model.K8sEventEntity, error)
-
-	// 根据对象获取相关事件
-	GetEventsByObject(ctx context.Context, req *model.K8sEventByObjectReq) ([]*model.K8sEventEntity, error)
-	GetEventsByPod(ctx context.Context, clusterID int, namespace, podName string) ([]*model.K8sEventEntity, error)
-	GetEventsByDeployment(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sEventEntity, error)
-	GetEventsByService(ctx context.Context, clusterID int, namespace, serviceName string) ([]*model.K8sEventEntity, error)
-	GetEventsByNode(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sEventEntity, error)
-	GetEventsByIngress(ctx context.Context, clusterID int, ns, ingressName string) ([]*model.K8sEventEntity, error)
-
-	// 事件统计和分析
-	GetEventStatistics(ctx context.Context, req *model.K8sEventStatisticsReq) (*model.K8sEventStatistics, error)
-	GetEventTimeline(ctx context.Context, req *model.K8sEventTimelineReq) ([]*model.K8sEventTimelineItem, error)
-
-	// 事件清理
-	CleanupOldEvents(ctx context.Context, req *model.K8sEventCleanupReq) (*model.K8sEventCleanupResult, error)
+	GetEventList(ctx context.Context, req *model.GetEventListReq) (model.ListResp[*model.K8sEvent], error)
+	GetEvent(ctx context.Context, req *model.GetEventDetailReq) (*model.K8sEvent, error)
+	GetEventsByPod(ctx context.Context, req *model.GetEventsByPodReq) (model.ListResp[*model.K8sEvent], error)
+	GetEventsByDeployment(ctx context.Context, req *model.GetEventsByDeploymentReq) (model.ListResp[*model.K8sEvent], error)
+	GetEventsByService(ctx context.Context, req *model.GetEventsByServiceReq) (model.ListResp[*model.K8sEvent], error)
+	GetEventsByNode(ctx context.Context, req *model.GetEventsByNodeReq) (model.ListResp[*model.K8sEvent], error)
+	GetEventStatistics(ctx context.Context, req *model.GetEventStatisticsReq) (*model.EventStatistics, error)
+	GetEventSummary(ctx context.Context, req *model.GetEventSummaryReq) (*model.EventSummary, error)
+	GetEventTimeline(ctx context.Context, req *model.GetEventTimelineReq) (model.ListResp[*model.EventTimelineItem], error)
+	GetEventTrends(ctx context.Context, req *model.GetEventTrendsReq) (model.ListResp[*model.EventTrend], error)
+	GetEventGroupData(ctx context.Context, req *model.GetEventGroupDataReq) (model.ListResp[*model.EventGroupData], error)
+	GetEventsByIngress(ctx context.Context, req *model.K8sIngressEventReq) (model.ListResp[*model.K8sEvent], error)
+	DeleteEvent(ctx context.Context, req *model.DeleteEventReq) error
+	CleanupOldEvents(ctx context.Context, req *model.CleanupOldEventsReq) error
 }
 
 type eventService struct {
-	dao          dao.ClusterDAO       // 保持对DAO的依赖
-	client       client.K8sClient     // 保持向后兼容
 	eventManager manager.EventManager // 新的依赖注入
 	logger       *zap.Logger
 }
 
 // NewEventService 创建新的 EventService 实例
-func NewEventService(dao dao.ClusterDAO, client client.K8sClient, eventManager manager.EventManager, logger *zap.Logger) EventService {
+func NewEventService(eventManager manager.EventManager, logger *zap.Logger) EventService {
 	return &eventService{
-		dao:          dao,
-		client:       client,
 		eventManager: eventManager,
 		logger:       logger,
 	}
 }
 
 // GetEventList 获取Event列表
-func (e *eventService) GetEventList(ctx context.Context, req *model.K8sEventListReq) ([]*model.K8sEventEntity, error) {
-	// 使用 EventManager 获取 Event 列表
-	eventList, err := e.eventManager.ListEvents(ctx, req.ClusterID, req.Namespace)
+func (e *eventService) GetEventList(ctx context.Context, req *model.GetEventListReq) (model.ListResp[*model.K8sEvent], error) {
+	// 使用 EventManager 获取 Event 列表和总数
+	eventList, total, err := e.eventManager.ListEventsWithTotal(ctx, req.ClusterID, req.Namespace)
 	if err != nil {
 		e.logger.Error("获取Event列表失败",
 			zap.String("Namespace", req.Namespace),
 			zap.Error(err))
-		return nil, fmt.Errorf("获取Event列表失败: %w", err)
+		return model.ListResp[*model.K8sEvent]{}, fmt.Errorf("获取Event列表失败: %w", err)
 	}
 
-	events := make([]*model.K8sEventEntity, 0, len(eventList.Items))
+	events := make([]*model.K8sEvent, 0, len(eventList.Items))
 	for _, event := range eventList.Items {
-		eventEntity := e.convertEventToEntity(&event, req.ClusterID)
+		eventEntity := e.eventManager.ConvertEventToK8sEvent(&event, req.ClusterID)
 
 		// 根据请求参数进行过滤
 		if req.EventType != "" && event.Type != req.EventType {
@@ -128,282 +112,161 @@ func (e *eventService) GetEventList(ctx context.Context, req *model.K8sEventList
 
 	// 按时间排序（最新的在前）
 	sort.Slice(events, func(i, j int) bool {
-		return events[i].CreationTimestamp.After(events[j].CreationTimestamp)
+		return events[i].LastTimestamp.After(events[j].LastTimestamp)
 	})
 
-	return events, nil
-}
-
-// GetEventsByNamespace 根据命名空间获取Event列表（保持向后兼容）
-func (e *eventService) GetEventsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sEventEntity, error) {
-	req := &model.K8sEventListReq{
-		ClusterID: clusterID,
-		Namespace: namespace,
+	// 如果没有过滤条件，使用原始total；否则使用过滤后的数量
+	filteredTotal := total
+	if req.EventType != "" || req.Reason != "" || req.Source != "" ||
+		req.InvolvedObjectKind != "" || req.InvolvedObjectName != "" || req.LimitDays > 0 {
+		filteredTotal = int64(len(events))
 	}
-	return e.GetEventList(ctx, req)
+
+	return model.ListResp[*model.K8sEvent]{Items: events, Total: filteredTotal}, nil
 }
 
 // GetEvent 获取单个Event详情
-func (e *eventService) GetEvent(ctx context.Context, clusterID int, namespace, name string) (*model.K8sEventEntity, error) {
+func (e *eventService) GetEvent(ctx context.Context, req *model.GetEventDetailReq) (*model.K8sEvent, error) {
 	// 使用 EventManager 获取单个 Event
-	event, err := e.eventManager.GetEvent(ctx, clusterID, namespace, name)
+	event, err := e.eventManager.GetEvent(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		e.logger.Error("获取Event详情失败",
-			zap.String("Namespace", namespace),
-			zap.String("Name", name),
+			zap.String("Namespace", req.Namespace),
+			zap.String("Name", req.Name),
 			zap.Error(err))
 		return nil, fmt.Errorf("获取Event详情失败: %w", err)
 	}
 
-	return e.convertEventToEntity(event, clusterID), nil
+	return e.eventManager.ConvertEventToK8sEvent(event, req.ClusterID), nil
 }
 
 // GetEventsByObject 根据对象获取相关事件
-func (e *eventService) GetEventsByObject(ctx context.Context, req *model.K8sEventByObjectReq) ([]*model.K8sEventEntity, error) {
-	fieldSelector := "involvedObject.name=" + req.ObjectName + ",involvedObject.kind=" + req.ObjectKind
-	if req.ObjectUID != "" {
-		fieldSelector += ",involvedObject.uid=" + req.ObjectUID
+func (e *eventService) GetEventsByObject(ctx context.Context, clusterID int, namespace, objectKind, objectName, objectUID string, limitDays int) (model.ListResp[*model.K8sEvent], error) {
+	fieldSelector := "involvedObject.name=" + objectName + ",involvedObject.kind=" + objectKind
+	if objectUID != "" {
+		fieldSelector += ",involvedObject.uid=" + objectUID
 	}
 
-	eventReq := &model.K8sEventListReq{
-		ClusterID:     req.ClusterID,
-		Namespace:     req.Namespace,
+	eventReq := &model.GetEventListReq{
+		ClusterID:     clusterID,
+		Namespace:     namespace,
 		FieldSelector: fieldSelector,
-		LimitDays:     req.LimitDays,
+		LimitDays:     limitDays,
 	}
 
 	return e.GetEventList(ctx, eventReq)
 }
 
 // GetEventsByPod 获取Pod相关事件
-func (e *eventService) GetEventsByPod(ctx context.Context, clusterID int, namespace, podName string) ([]*model.K8sEventEntity, error) {
-	req := &model.K8sEventByObjectReq{
-		ClusterID:  clusterID,
-		Namespace:  namespace,
-		ObjectName: podName,
-		ObjectKind: "Pod",
-		LimitDays:  7, // 默认7天内的事件
-	}
-	return e.GetEventsByObject(ctx, req)
+func (e *eventService) GetEventsByPod(ctx context.Context, req *model.GetEventsByPodReq) (model.ListResp[*model.K8sEvent], error) {
+	return e.GetEventsByObject(ctx, req.ClusterID, req.Namespace, "Pod", req.PodName, "", 7)
 }
 
 // GetEventsByDeployment 获取Deployment相关事件
-func (e *eventService) GetEventsByDeployment(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sEventEntity, error) {
-	req := &model.K8sEventByObjectReq{
-		ClusterID:  clusterID,
-		Namespace:  namespace,
-		ObjectName: deploymentName,
-		ObjectKind: "Deployment",
-		LimitDays:  7, // 默认7天内的事件
-	}
-	return e.GetEventsByObject(ctx, req)
+func (e *eventService) GetEventsByDeployment(ctx context.Context, req *model.GetEventsByDeploymentReq) (model.ListResp[*model.K8sEvent], error) {
+	return e.GetEventsByObject(ctx, req.ClusterID, req.Namespace, "Deployment", req.DeploymentName, "", 7)
 }
 
 // GetEventsByService 获取Service相关事件
-func (e *eventService) GetEventsByService(ctx context.Context, clusterID int, namespace, serviceName string) ([]*model.K8sEventEntity, error) {
-	req := &model.K8sEventByObjectReq{
-		ClusterID:  clusterID,
-		Namespace:  namespace,
-		ObjectName: serviceName,
-		ObjectKind: "Service",
-		LimitDays:  7, // 默认7天内的事件
-	}
-	return e.GetEventsByObject(ctx, req)
+func (e *eventService) GetEventsByService(ctx context.Context, req *model.GetEventsByServiceReq) (model.ListResp[*model.K8sEvent], error) {
+	return e.GetEventsByObject(ctx, req.ClusterID, req.Namespace, "Service", req.ServiceName, "", 7)
 }
 
 // GetEventsByNode 获取Node相关事件
-func (e *eventService) GetEventsByNode(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sEventEntity, error) {
-	req := &model.K8sEventByObjectReq{
-		ClusterID:  clusterID,
-		Namespace:  "", // Node是集群级别资源，不需要namespace
-		ObjectName: nodeName,
-		ObjectKind: "Node",
-		LimitDays:  7, // 默认7天内的事件
-	}
-	return e.GetEventsByObject(ctx, req)
+func (e *eventService) GetEventsByNode(ctx context.Context, req *model.GetEventsByNodeReq) (model.ListResp[*model.K8sEvent], error) {
+	return e.GetEventsByObject(ctx, req.ClusterID, "", "Node", req.NodeName, "", 7)
 }
 
 // GetEventsByIngress 获取Ingress相关事件
-func (e *eventService) GetEventsByIngress(ctx context.Context, clusterID int, namespace, ingressName string) ([]*model.K8sEventEntity, error) {
-	req := &model.K8sEventByObjectReq{
-		ClusterID:  clusterID,
-		Namespace:  namespace,
-		ObjectName: ingressName,
-		ObjectKind: "Ingress",
-		LimitDays:  7, // 默认7天内的事件
-	}
-	return e.GetEventsByObject(ctx, req)
+func (e *eventService) GetEventsByIngress(ctx context.Context, req *model.K8sIngressEventReq) (model.ListResp[*model.K8sEvent], error) {
+	return e.GetEventsByObject(ctx, req.ClusterID, "", "Ingress", req.IngressName, "", 7)
 }
 
 // GetEventStatistics 获取事件统计
-func (e *eventService) GetEventStatistics(ctx context.Context, req *model.K8sEventStatisticsReq) (*model.K8sEventStatistics, error) {
-	kubeClient, err := e.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		e.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, fmt.Errorf("无法连接到Kubernetes集群: %w", err)
+func (e *eventService) GetEventStatistics(ctx context.Context, req *model.GetEventStatisticsReq) (*model.EventStatistics, error) {
+	// 参数验证
+	if req.ClusterID <= 0 {
+		return nil, fmt.Errorf("无效的集群ID: %d", req.ClusterID)
 	}
 
-	// 获取所有事件
-	events, err := kubeClient.CoreV1().Events(req.Namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		e.logger.Error("获取事件列表失败", zap.Error(err))
-		return nil, fmt.Errorf("获取事件列表失败: %w", err)
+	// 调用EventManager的方法
+	return e.eventManager.GetEventStatistics(ctx, req.ClusterID, req.Namespace, req.StartTime, req.EndTime)
+}
+
+// GetEventSummary 获取事件汇总
+func (e *eventService) GetEventSummary(ctx context.Context, req *model.GetEventSummaryReq) (*model.EventSummary, error) {
+	// 参数验证
+	if req.ClusterID <= 0 {
+		return nil, fmt.Errorf("无效的集群ID: %d", req.ClusterID)
 	}
 
-	stats := &model.K8sEventStatistics{
-		TotalEvents:   len(events.Items),
-		NormalEvents:  0,
-		WarningEvents: 0,
-		TopReasons:    []model.EventReasonCount{},
-		TopSources:    []model.EventSourceCount{},
-	}
-
-	// 统计事件
-	reasonCounts := make(map[string]int)
-	sourceCounts := make(map[string]int)
-
-	for _, event := range events.Items {
-		switch event.Type {
-		case "Normal":
-			stats.NormalEvents++
-		case "Warning":
-			stats.WarningEvents++
-		}
-
-		// 统计原因
-		if event.Reason != "" {
-			reasonCounts[event.Reason]++
-		}
-
-		// 统计来源
-		if event.Source.Component != "" {
-			sourceCounts[event.Source.Component]++
-		}
-	}
-
-	// 转换为排序列表
-	for reason, count := range reasonCounts {
-		stats.TopReasons = append(stats.TopReasons, model.EventReasonCount{
-			Reason: reason,
-			Count:  count,
-		})
-	}
-
-	for source, count := range sourceCounts {
-		stats.TopSources = append(stats.TopSources, model.EventSourceCount{
-			Source: source,
-			Count:  count,
-		})
-	}
-
-	return stats, nil
+	// 调用EventManager的方法
+	return e.eventManager.GetEventSummary(ctx, req.ClusterID, req.Namespace, req.StartTime, req.EndTime)
 }
 
 // GetEventTimeline 获取事件时间线
-func (e *eventService) GetEventTimeline(ctx context.Context, req *model.K8sEventTimelineReq) ([]*model.K8sEventTimelineItem, error) {
-	kubeClient, err := e.client.GetKubeClient(req.ClusterID)
+func (e *eventService) GetEventTimeline(ctx context.Context, req *model.GetEventTimelineReq) (model.ListResp[*model.EventTimelineItem], error) {
+	// 参数验证
+	if req.ClusterID <= 0 {
+		return model.ListResp[*model.EventTimelineItem]{}, fmt.Errorf("无效的集群ID: %d", req.ClusterID)
+	}
+
+	// 调用EventManager的方法
+	timelineItems, err := e.eventManager.GetEventTimeline(ctx, req.ClusterID, req.Namespace, req.ObjectKind, req.ObjectName)
 	if err != nil {
-		e.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, fmt.Errorf("无法连接到Kubernetes集群: %w", err)
+		return model.ListResp[*model.EventTimelineItem]{}, err
 	}
 
-	// 获取事件列表
-	listOptions := metav1.ListOptions{}
-	if req.InvolvedObjectName != "" && req.InvolvedObjectKind != "" {
-		listOptions.FieldSelector = fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s",
-			req.InvolvedObjectName, req.InvolvedObjectKind)
+	return model.ListResp[*model.EventTimelineItem]{Items: timelineItems, Total: int64(len(timelineItems))}, nil
+}
+
+// GetEventTrends 获取事件趋势
+func (e *eventService) GetEventTrends(ctx context.Context, req *model.GetEventTrendsReq) (model.ListResp[*model.EventTrend], error) {
+	// 参数验证
+	if req.ClusterID <= 0 {
+		return model.ListResp[*model.EventTrend]{}, fmt.Errorf("无效的集群ID: %d", req.ClusterID)
 	}
 
-	events, err := kubeClient.CoreV1().Events(req.Namespace).List(ctx, listOptions)
+	// 调用EventManager的方法
+	trends, err := e.eventManager.GetEventTrends(ctx, req.ClusterID, req.Namespace, req.EventType, req.Interval, req.StartTime, req.EndTime)
 	if err != nil {
-		e.logger.Error("获取事件列表失败", zap.Error(err))
-		return nil, fmt.Errorf("获取事件列表失败: %w", err)
+		return model.ListResp[*model.EventTrend]{}, err
 	}
 
-	var timelineItems []*model.K8sEventTimelineItem
-	for _, event := range events.Items {
-		timelineItems = append(timelineItems, &model.K8sEventTimelineItem{
-			Timestamp: event.LastTimestamp.Time,
-			Type:      event.Type,
-			Reason:    event.Reason,
-			Message:   event.Message,
-			Object:    fmt.Sprintf("%s/%s", event.InvolvedObject.Kind, event.InvolvedObject.Name),
-		})
+	return model.ListResp[*model.EventTrend]{Items: trends, Total: int64(len(trends))}, nil
+}
+
+// GetEventGroupData 获取事件分组数据
+func (e *eventService) GetEventGroupData(ctx context.Context, req *model.GetEventGroupDataReq) (model.ListResp[*model.EventGroupData], error) {
+	// 参数验证
+	if req.ClusterID <= 0 {
+		return model.ListResp[*model.EventGroupData]{}, fmt.Errorf("无效的集群ID: %d", req.ClusterID)
 	}
 
-	// 按时间排序（最新的在前）
-	sort.Slice(timelineItems, func(i, j int) bool {
-		return timelineItems[i].Timestamp.After(timelineItems[j].Timestamp)
-	})
+	// 调用EventManager的方法
+	groupData, err := e.eventManager.GetEventGroupData(ctx, req.ClusterID, req.Namespace, req.GroupBy, req.StartTime, req.EndTime, req.Limit)
+	if err != nil {
+		return model.ListResp[*model.EventGroupData]{}, err
+	}
 
-	return timelineItems, nil
+	return model.ListResp[*model.EventGroupData]{Items: groupData, Total: int64(len(groupData))}, nil
+}
+
+// DeleteEvent 删除事件
+func (e *eventService) DeleteEvent(ctx context.Context, req *model.DeleteEventReq) error {
+	return e.eventManager.DeleteEvent(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
 }
 
 // CleanupOldEvents 清理旧事件
-func (e *eventService) CleanupOldEvents(ctx context.Context, req *model.K8sEventCleanupReq) (*model.K8sEventCleanupResult, error) {
-	kubeClient, err := e.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		e.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
+func (e *eventService) CleanupOldEvents(ctx context.Context, req *model.CleanupOldEventsReq) error {
+	// 参数验证
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("无效的集群ID: %d", req.ClusterID)
+	}
+	if req.BeforeTime.IsZero() {
+		return fmt.Errorf("清理截止时间不能为空")
 	}
 
-	// 获取所有事件
-	events, err := kubeClient.CoreV1().Events(req.Namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		e.logger.Error("获取事件列表失败", zap.Error(err))
-		return nil, pkg.NewBusinessError(constants.ErrK8sResourceOperation, "获取事件列表失败")
-	}
-
-	result := &model.K8sEventCleanupResult{
-		CleanedCount: 0,
-		ErrorCount:   0,
-		Errors:       []string{},
-	}
-
-	// 计算截止时间
-	cutoffTime := time.Now().AddDate(0, 0, -req.DaysToKeep)
-
-	// 删除旧事件
-	for _, event := range events.Items {
-		if event.LastTimestamp.Time.Before(cutoffTime) {
-			err := kubeClient.CoreV1().Events(req.Namespace).Delete(ctx, event.Name, metav1.DeleteOptions{})
-			if err != nil {
-				e.logger.Warn("删除事件失败",
-					zap.String("event", event.Name),
-					zap.Error(err))
-				result.ErrorCount++
-				result.Errors = append(result.Errors, fmt.Sprintf("删除事件 %s 失败: %v", event.Name, err))
-			} else {
-				result.CleanedCount++
-			}
-		}
-	}
-
-	e.logger.Info("事件清理完成",
-		zap.String("namespace", req.Namespace),
-		zap.Int("total", len(events.Items)),
-		zap.Int("cleaned", result.CleanedCount),
-		zap.Int("failed", result.ErrorCount))
-
-	return result, nil
-}
-
-// convertEventToEntity 将Kubernetes Event对象转换为实体模型
-func (e *eventService) convertEventToEntity(event *corev1.Event, clusterID int) *model.K8sEventEntity {
-	return &model.K8sEventEntity{
-		Name:              event.Name,
-		Namespace:         event.Namespace,
-		ClusterID:         clusterID,
-		UID:               string(event.UID),
-		Type:              event.Type,
-		Reason:            event.Reason,
-		Message:           event.Message,
-		Source:            event.Source,
-		InvolvedObject:    event.InvolvedObject,
-		Count:             event.Count,
-		FirstTimestamp:    event.FirstTimestamp.Time,
-		LastTimestamp:     event.LastTimestamp.Time,
-		CreationTimestamp: event.CreationTimestamp.Time,
-		Age:               pkg.GetAge(event.CreationTimestamp.Time),
-	}
+	// 调用EventManager的方法
+	return e.eventManager.CleanupOldEvents(ctx, req.ClusterID, req.Namespace, req.BeforeTime)
 }

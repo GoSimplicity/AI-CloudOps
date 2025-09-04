@@ -30,18 +30,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type ClusterRoleAPI struct {
 	clusterRoleService *service.ClusterRoleService
-	logger             *zap.Logger
 }
 
-func NewClusterRoleAPI(clusterRoleService *service.ClusterRoleService, logger *zap.Logger) *ClusterRoleAPI {
+func NewClusterRoleAPI(clusterRoleService *service.ClusterRoleService) *ClusterRoleAPI {
 	return &ClusterRoleAPI{
 		clusterRoleService: clusterRoleService,
-		logger:             logger,
 	}
 }
 
@@ -68,7 +65,7 @@ func (cra *ClusterRoleAPI) GetClusterRoleList(c *gin.Context) {
 
 	result, err := cra.clusterRoleService.GetClusterRoleList(c.Request.Context(), &req)
 	if err != nil {
-		cra.logger.Error("获取ClusterRole列表失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "获取ClusterRole列表失败")
 		return
 	}
@@ -86,7 +83,7 @@ func (cra *ClusterRoleAPI) GetClusterRoleDetails(c *gin.Context) {
 
 	result, err := cra.clusterRoleService.GetClusterRoleDetails(c.Request.Context(), &req)
 	if err != nil {
-		cra.logger.Error("获取ClusterRole详情失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "获取ClusterRole详情失败")
 		return
 	}
@@ -104,7 +101,7 @@ func (cra *ClusterRoleAPI) CreateClusterRole(c *gin.Context) {
 
 	err := cra.clusterRoleService.CreateClusterRole(c.Request.Context(), &req)
 	if err != nil {
-		cra.logger.Error("创建ClusterRole失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "创建ClusterRole失败")
 		return
 	}
@@ -122,7 +119,7 @@ func (cra *ClusterRoleAPI) UpdateClusterRole(c *gin.Context) {
 
 	err := cra.clusterRoleService.UpdateClusterRole(c.Request.Context(), &req)
 	if err != nil {
-		cra.logger.Error("更新ClusterRole失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "更新ClusterRole失败")
 		return
 	}
@@ -140,7 +137,7 @@ func (cra *ClusterRoleAPI) DeleteClusterRole(c *gin.Context) {
 
 	err := cra.clusterRoleService.DeleteClusterRole(c.Request.Context(), &req)
 	if err != nil {
-		cra.logger.Error("删除ClusterRole失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "删除ClusterRole失败")
 		return
 	}
@@ -158,7 +155,7 @@ func (cra *ClusterRoleAPI) GetClusterRoleYaml(c *gin.Context) {
 
 	yamlContent, err := cra.clusterRoleService.GetClusterRoleYaml(c.Request.Context(), &req)
 	if err != nil {
-		cra.logger.Error("获取ClusterRole YAML失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "获取ClusterRole YAML失败")
 		return
 	}
@@ -176,7 +173,7 @@ func (cra *ClusterRoleAPI) UpdateClusterRoleYaml(c *gin.Context) {
 
 	err := cra.clusterRoleService.UpdateClusterRoleYaml(c.Request.Context(), &req)
 	if err != nil {
-		cra.logger.Error("更新ClusterRole YAML失败", zap.Error(err))
+
 		utils.InternalServerError(c, 500, nil, "更新ClusterRole YAML失败")
 		return
 	}

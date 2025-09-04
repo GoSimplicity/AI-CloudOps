@@ -51,11 +51,11 @@ type DaemonSetManager interface {
 }
 
 type daemonSetManager struct {
-	clientFactory client.K8sClientFactory
+	clientFactory client.K8sClient
 }
 
 // NewDaemonSetManager 创建新的 DaemonSet 管理器
-func NewDaemonSetManager(clientFactory client.K8sClientFactory) DaemonSetManager {
+func NewDaemonSetManager(clientFactory client.K8sClient) DaemonSetManager {
 	return &daemonSetManager{
 		clientFactory: clientFactory,
 	}
