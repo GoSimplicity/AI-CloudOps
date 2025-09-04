@@ -146,6 +146,28 @@ func convertEnvVars(envs []corev1.EnvVar) []model.K8sEnvVar {
 	return res
 }
 
+// buildK8sProbe 辅助函数：转换探测配置
+func buildK8sProbe(probe *corev1.Probe) *model.K8sProbe {
+	k8sProbe := &model.K8sProbe{
+		InitialDelaySeconds: int(probe.InitialDelaySeconds),
+		PeriodSeconds:       int(probe.PeriodSeconds),
+		TimeoutSeconds:      int(probe.TimeoutSeconds),
+		SuccessThreshold:    int(probe.SuccessThreshold),
+		FailureThreshold:    int(probe.FailureThreshold),
+	}
+
+	// 转换 HTTP GET 探测
+	if probe.HTTPGet != nil {
+		k8sProbe.HTTPGet = &model.K8sHTTPGetAction{
+			Path:   probe.HTTPGet.Path,
+			Port:   probe.HTTPGet.Port.IntValue(),
+			Scheme: string(probe.HTTPGet.Scheme),
+		}
+	}
+
+	return k8sProbe
+}
+
 func convertContainerPorts(ports []corev1.ContainerPort) []model.K8sContainerPort {
 	if len(ports) == 0 {
 		return nil
