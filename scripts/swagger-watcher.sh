@@ -10,7 +10,7 @@ NC='\033[0m'
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-echo -e "${RED}⚠️  WARNING: 自动监控功能已被禁用以防止循环生成问题${NC}"
+echo -e "${RED}⚠️  WARNING: 监控功能已被禁用以防止循环生成问题${NC}"
 echo -e "${YELLOW}💡 如需监控，请手动运行: bash scripts/swagger-auto-sync.sh watch${NC}"
 echo -e "${GREEN}🔧 建议使用: make swagger (手动同步)${NC}"
 

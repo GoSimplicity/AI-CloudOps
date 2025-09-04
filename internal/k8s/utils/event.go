@@ -213,8 +213,8 @@ func GroupEventsByObject(events []corev1.Event) map[string][]corev1.Event {
 }
 
 // ConvertEventToK8sEvent 将 corev1.Event 转换为 model.K8sEvent
-func ConvertEventToK8sEvent(event corev1.Event) *model.K8sEvent {
-	return &model.K8sEvent{
+func ConvertEventToK8sEvent(event corev1.Event) model.K8sEvent {
+	return model.K8sEvent{
 		Name:           event.Name,
 		Namespace:      event.Namespace,
 		UID:            string(event.UID),

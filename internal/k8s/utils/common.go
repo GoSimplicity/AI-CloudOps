@@ -27,11 +27,8 @@ package utils
 
 import (
 	"fmt"
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -45,26 +42,6 @@ const (
 	statusFailed      = "Failed"
 	statusEvicted     = "Evicted"
 )
-
-// ConvertToMetaV1ListOptions 将K8sGetResourceListReq转换为metav1.ListOptions
-func ConvertToMetaV1ListOptions(req *model.K8sGetResourceListReq) metav1.ListOptions {
-	return metav1.ListOptions{
-		LabelSelector: req.LabelSelector,
-		FieldSelector: req.FieldSelector,
-		Limit:         req.Limit,
-		Continue:      req.Continue,
-	}
-}
-
-// ConvertK8sListReqToMetaV1ListOptions 将K8sListReq转换为metav1.ListOptions
-func ConvertK8sListReqToMetaV1ListOptions(req *model.K8sListReq) metav1.ListOptions {
-	return metav1.ListOptions{
-		LabelSelector: req.LabelSelector,
-		FieldSelector: req.FieldSelector,
-		Limit:         req.Limit,
-		Continue:      req.Continue,
-	}
-}
 
 func ConvertUnstructuredToYAML(obj *unstructured.Unstructured) (string, error) {
 	jsonBytes, err := obj.MarshalJSON()

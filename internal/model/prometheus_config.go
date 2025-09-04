@@ -40,7 +40,7 @@ const (
 	ConfigStatusInactive int8 = 2 // 非激活状态
 )
 
-// MonitorConfig 监控配置模型 - 由 cache 自动生成和管理
+// MonitorConfig 监控配置模型 - 由缓存生成和管理
 type MonitorConfig struct {
 	Model
 	Name              string `json:"name" gorm:"size:100;not null;comment:配置名称"`

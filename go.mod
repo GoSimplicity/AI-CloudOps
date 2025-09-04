@@ -20,6 +20,7 @@ require (
 	github.com/hibiken/asynq v0.22.0
 	github.com/imdario/mergo v0.3.16
 	github.com/joho/godotenv v1.5.1
+	github.com/jonboulle/clockwork v0.5.0
 	github.com/mark3labs/mcp-go v0.25.0
 	github.com/openkruise/kruise-api v1.7.0
 	github.com/pingcap/errors v0.11.4
@@ -45,13 +46,13 @@ require (
 	gorm.io/gorm v1.25.11
 	gorm.io/plugin/soft_delete v1.2.1
 	k8s.io/api v0.34.0
-	k8s.io/apiextensions-apiserver v0.28.9
 	k8s.io/apimachinery v0.34.0
 	k8s.io/cli-runtime v0.34.0
 	k8s.io/client-go v0.34.0
+	k8s.io/klog/v2 v2.130.1
+	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
 	k8s.io/kubectl v0.34.0
 	k8s.io/metrics v0.34.0
-	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -129,7 +130,6 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -204,8 +204,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gorm.io/driver/postgres v1.5.7 // indirect
 	k8s.io/component-base v0.34.0 // indirect
-	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b // indirect
+	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397 // indirect
 	sigs.k8s.io/controller-runtime v0.16.6 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/kustomize/api v0.20.1 // indirect

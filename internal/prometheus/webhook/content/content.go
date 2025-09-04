@@ -314,7 +314,7 @@ func (wc *webhookContent) buildFeishuCardContent(
 
 // SentFeishuGroup 发送消息到 Feishu 群聊
 func (wc *webhookContent) SentFeishuGroup(ctx context.Context, msg string, robotToken string) error {
-	// 构建 Feishu 群聊机器人 API URL
+	// 构建 Feishu 群聊 API URL
 	url := fmt.Sprintf("%s/%s", viper.GetString("webhook.im_feishu.group_message_api"), robotToken)
 
 	// 发送 HTTP POST 请求
@@ -359,7 +359,7 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 			continue
 		}
 
-		// 构建 Feishu 私聊机器人 API URL
+		// 构建 Feishu 私聊 API URL
 		url := "https://open.feishu.cn/open-apis/im/v1/messages"
 
 		// 构建请求头

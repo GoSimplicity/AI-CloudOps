@@ -49,38 +49,20 @@ const (
 	TaskSucceeded = "Succeeded"
 )
 
-// YamlManager YAML模板和任务统一管理接口
+// YamlManager YAML模板和任务管理
 type YamlManager interface {
-	// ========== YAML 模板管理 ==========
-	// GetYamlTemplateList 获取 YAML 模板列表
 	GetYamlTemplateList(ctx context.Context, clusterID int) ([]*model.K8sYamlTemplate, error)
-	// CreateYamlTemplate 创建 YAML 模板
 	CreateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
-	// CheckYamlTemplate 检查 YAML 模板是否正确
 	CheckYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
-	// UpdateYamlTemplate 更新 YAML 模板
 	UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
-	// DeleteYamlTemplate 删除 YAML 模板
 	DeleteYamlTemplate(ctx context.Context, templateID int, clusterID int) error
-	// GetYamlTemplateDetail 获取 YAML 模板详情
 	GetYamlTemplateDetail(ctx context.Context, templateID int, clusterID int) (string, error)
-
-	// ========== YAML 任务管理 ==========
-	// GetYamlTaskList 获取 YAML 任务列表
 	GetYamlTaskList(ctx context.Context) ([]*model.K8sYamlTask, error)
-	// CreateYamlTask 创建 YAML 任务
 	CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
-	// UpdateYamlTask 更新 YAML 任务
 	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
-	// DeleteYamlTask 删除 YAML 任务
 	DeleteYamlTask(ctx context.Context, taskID int) error
-	// ApplyYamlTask 应用 YAML 任务
 	ApplyYamlTask(ctx context.Context, taskID int) error
-
-	// ========== 工具方法 ==========
-	// ValidateYamlContent 验证 YAML 内容格式
 	ValidateYamlContent(ctx context.Context, content string) error
-	// ParseYamlTemplate 解析模板并替换变量
 	ParseYamlTemplate(ctx context.Context, templateContent string, variables []string) (string, error)
 }
 
@@ -92,7 +74,7 @@ type yamlManager struct {
 	logger          *zap.Logger
 }
 
-// NewYamlManager 创建 YamlManager 实例
+// NewYamlManager 创建YamlManager实例
 func NewYamlManager(
 	yamlTemplateDao dao.YamlTemplateDAO,
 	yamlTaskDao dao.YamlTaskDAO,
@@ -109,9 +91,7 @@ func NewYamlManager(
 	}
 }
 
-// ========== YAML 模板管理实现 ==========
-
-// GetYamlTemplateList 获取 YAML 模板列表
+// GetYamlTemplateList 获取模板列表
 func (ym *yamlManager) GetYamlTemplateList(ctx context.Context, clusterID int) ([]*model.K8sYamlTemplate, error) {
 	templates, err := ym.yamlTemplateDao.ListAllYamlTemplates(ctx, clusterID)
 	if err != nil {
@@ -124,7 +104,7 @@ func (ym *yamlManager) GetYamlTemplateList(ctx context.Context, clusterID int) (
 	return templates, nil
 }
 
-// CreateYamlTemplate 创建 YAML 模板
+// CreateYamlTemplate 创建模板
 func (ym *yamlManager) CreateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
 	// 校验 YAML 格式
 	if err := ym.ValidateYamlContent(ctx, template.Content); err != nil {
@@ -135,18 +115,18 @@ func (ym *yamlManager) CreateYamlTemplate(ctx context.Context, template *model.K
 	if err := ym.yamlTemplateDao.CreateYamlTemplate(ctx, template); err != nil {
 		ym.logger.Error("创建 YAML 模板失败",
 			zap.String("templateName", template.Name),
-			zap.Int("clusterID", template.ClusterId),
+			zap.Int("clusterID", template.ClusterID),
 			zap.Error(err))
 		return fmt.Errorf("创建 YAML 模板失败: %w", err)
 	}
 
 	ym.logger.Info("创建 YAML 模板成功",
 		zap.String("templateName", template.Name),
-		zap.Int("clusterID", template.ClusterId))
+		zap.Int("clusterID", template.ClusterID))
 	return nil
 }
 
-// CheckYamlTemplate 检查 YAML 模板是否正确
+// CheckYamlTemplate 检查模板格式
 func (ym *yamlManager) CheckYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
 	// 基础校验
 	if template == nil {
@@ -178,7 +158,7 @@ func (ym *yamlManager) CheckYamlTemplate(ctx context.Context, template *model.K8
 	}
 
 	// 获取 Kubernetes 客户端进行验证
-	discoveryClient, err := ym.client.GetDiscoveryClient(template.ClusterId)
+	discoveryClient, err := ym.client.GetDiscoveryClient(template.ClusterID)
 	if err != nil {
 		return fmt.Errorf("获取 discovery client 失败: %w", err)
 	}
@@ -198,7 +178,7 @@ func (ym *yamlManager) CheckYamlTemplate(ctx context.Context, template *model.K8
 	}
 
 	// 获取动态客户端
-	dynamicClient, err := ym.client.GetDynamicClient(template.ClusterId)
+	dynamicClient, err := ym.client.GetDynamicClient(template.ClusterID)
 	if err != nil {
 		return fmt.Errorf("获取动态客户端失败: %w", err)
 	}
@@ -225,7 +205,7 @@ func (ym *yamlManager) CheckYamlTemplate(ctx context.Context, template *model.K8
 	return nil
 }
 
-// UpdateYamlTemplate 更新 YAML 模板
+// UpdateYamlTemplate 更新模板
 func (ym *yamlManager) UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
 	// 校验 YAML 格式
 	if err := ym.ValidateYamlContent(ctx, template.Content); err != nil {
@@ -247,7 +227,7 @@ func (ym *yamlManager) UpdateYamlTemplate(ctx context.Context, template *model.K
 	return nil
 }
 
-// DeleteYamlTemplate 删除 YAML 模板
+// DeleteYamlTemplate 删除模板
 func (ym *yamlManager) DeleteYamlTemplate(ctx context.Context, templateID int, clusterID int) error {
 	// 检查是否有任务正在使用该模板
 	tasks, err := ym.yamlTaskDao.GetYamlTaskByTemplateID(ctx, templateID)
@@ -282,7 +262,7 @@ func (ym *yamlManager) DeleteYamlTemplate(ctx context.Context, templateID int, c
 	return nil
 }
 
-// GetYamlTemplateDetail 获取 YAML 模板详情
+// GetYamlTemplateDetail 获取模板详情
 func (ym *yamlManager) GetYamlTemplateDetail(ctx context.Context, templateID int, clusterID int) (string, error) {
 	template, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, templateID, clusterID)
 	if err != nil {
@@ -296,9 +276,7 @@ func (ym *yamlManager) GetYamlTemplateDetail(ctx context.Context, templateID int
 	return template.Content, nil
 }
 
-// ========== YAML 任务管理实现 ==========
-
-// GetYamlTaskList 获取 YAML 任务列表
+// GetYamlTaskList 获取任务列表
 func (ym *yamlManager) GetYamlTaskList(ctx context.Context) ([]*model.K8sYamlTask, error) {
 	tasks, err := ym.yamlTaskDao.ListAllYamlTasks(ctx)
 	if err != nil {
@@ -309,15 +287,15 @@ func (ym *yamlManager) GetYamlTaskList(ctx context.Context) ([]*model.K8sYamlTas
 	return tasks, nil
 }
 
-// CreateYamlTask 创建 YAML 任务
+// CreateYamlTask 创建任务
 func (ym *yamlManager) CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
 	// 验证模板存在
-	if _, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterId); err != nil {
+	if _, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterID); err != nil {
 		return fmt.Errorf("YAML 模板不存在: %w", err)
 	}
 
 	// 验证集群存在
-	if _, err := ym.clusterDao.GetClusterByID(ctx, task.ClusterId); err != nil {
+	if _, err := ym.clusterDao.GetClusterByID(ctx, task.ClusterID); err != nil {
 		return fmt.Errorf("集群不存在: %w", err)
 	}
 
@@ -336,7 +314,7 @@ func (ym *yamlManager) CreateYamlTask(ctx context.Context, task *model.K8sYamlTa
 	return nil
 }
 
-// UpdateYamlTask 更新 YAML 任务
+// UpdateYamlTask 更新任务
 func (ym *yamlManager) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
 	// 验证任务存在
 	if _, err := ym.yamlTaskDao.GetYamlTaskByID(ctx, task.ID); err != nil {
@@ -345,14 +323,14 @@ func (ym *yamlManager) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTa
 
 	// 如果更新了模板ID，验证模板存在
 	if task.TemplateID > 0 {
-		if _, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterId); err != nil {
+		if _, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterID); err != nil {
 			return fmt.Errorf("YAML 模板不存在: %w", err)
 		}
 	}
 
 	// 如果更新了集群ID，验证集群存在
-	if task.ClusterId > 0 {
-		if _, err := ym.clusterDao.GetClusterByID(ctx, task.ClusterId); err != nil {
+	if task.ClusterID > 0 {
+		if _, err := ym.clusterDao.GetClusterByID(ctx, task.ClusterID); err != nil {
 			return fmt.Errorf("集群不存在: %w", err)
 		}
 	}
@@ -376,7 +354,7 @@ func (ym *yamlManager) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTa
 	return nil
 }
 
-// DeleteYamlTask 删除 YAML 任务
+// DeleteYamlTask 删除任务
 func (ym *yamlManager) DeleteYamlTask(ctx context.Context, taskID int) error {
 	if err := ym.yamlTaskDao.DeleteYamlTask(ctx, taskID); err != nil {
 		ym.logger.Error("删除 YAML 任务失败",
@@ -389,7 +367,7 @@ func (ym *yamlManager) DeleteYamlTask(ctx context.Context, taskID int) error {
 	return nil
 }
 
-// ApplyYamlTask 应用 YAML 任务
+// ApplyYamlTask 应用任务
 func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int) error {
 	// 获取任务信息
 	task, err := ym.yamlTaskDao.GetYamlTaskByID(ctx, taskID)
@@ -398,7 +376,7 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int) error {
 	}
 
 	// 获取模板内容
-	template, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterId)
+	template, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterID)
 	if err != nil {
 		ym.logger.Error("获取 YAML 模板失败",
 			zap.Int("taskID", taskID),
@@ -423,10 +401,10 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int) error {
 	}
 
 	// 应用 YAML 到集群
-	if err := ym.applyYamlToCluster(ctx, task.ClusterId, yamlContent); err != nil {
+	if err := ym.applyYamlToCluster(ctx, task.ClusterID, yamlContent); err != nil {
 		ym.logger.Error("应用 YAML 到集群失败",
 			zap.Int("taskID", taskID),
-			zap.Int("clusterID", task.ClusterId),
+			zap.Int("clusterID", task.ClusterID),
 			zap.Error(err))
 		task.Status = TaskFailed
 		task.ApplyResult = fmt.Sprintf("应用失败: %v", err)
@@ -449,9 +427,7 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int) error {
 	return nil
 }
 
-// ========== 工具方法实现 ==========
-
-// ValidateYamlContent 验证 YAML 内容格式
+// ValidateYamlContent 验证YAML格式
 func (ym *yamlManager) ValidateYamlContent(ctx context.Context, content string) error {
 	if strings.TrimSpace(content) == "" {
 		return fmt.Errorf("YAML 内容不能为空")
@@ -466,7 +442,7 @@ func (ym *yamlManager) ValidateYamlContent(ctx context.Context, content string) 
 	return nil
 }
 
-// ParseYamlTemplate 解析模板并替换变量
+// ParseYamlTemplate 解析模板变量
 func (ym *yamlManager) ParseYamlTemplate(ctx context.Context, templateContent string, variables []string) (string, error) {
 	yamlContent := templateContent
 
@@ -483,7 +459,7 @@ func (ym *yamlManager) ParseYamlTemplate(ctx context.Context, templateContent st
 	return yamlContent, nil
 }
 
-// applyYamlToCluster 应用 YAML 到 Kubernetes 集群
+// applyYamlToCluster 应用YAML到集群
 func (ym *yamlManager) applyYamlToCluster(ctx context.Context, clusterID int, yamlContent string) error {
 	// 转换 YAML 为 JSON
 	jsonData, err := yaml.ToJSON([]byte(yamlContent))

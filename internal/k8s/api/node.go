@@ -49,9 +49,6 @@ func (k *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
 	{
 		k8sGroup.GET("/nodes/:cluster_id/list", k.GetNodeList)
 		k8sGroup.GET("/nodes/:cluster_id/:node_name/detail", k.GetNodeDetail)
-		k8sGroup.GET("/nodes/:cluster_id/:node_name/resource", k.GetNodeResource)
-		k8sGroup.GET("/nodes/:cluster_id/:node_name/events", k.GetNodeEvents)
-		k8sGroup.GET("/nodes/:cluster_id/metrics", k.GetNodeMetrics)
 		k8sGroup.POST("/nodes/:cluster_id/:node_name/labels/add", k.AddLabelNodes)
 		k8sGroup.DELETE("/nodes/:cluster_id/:node_name/labels/delete", k.DeleteLabelNodes)
 		k8sGroup.POST("/nodes/:cluster_id/:node_name/drain", k.DrainNode)
@@ -147,54 +144,6 @@ func (k *K8sNodeHandler) DeleteLabelNodes(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.nodeService.DeleteNodeLabel(ctx, &req)
-	})
-}
-
-// GetNodeResources 获取节点资源使用情况
-func (k *K8sNodeHandler) GetNodeResource(ctx *gin.Context) {
-	var req model.GetNodeResourceReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.NodeName = nodeName
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.nodeService.GetNodeResource(ctx, &req)
-	})
-}
-
-// GetNodeEvents 获取节点事件
-func (k *K8sNodeHandler) GetNodeEvents(ctx *gin.Context) {
-	var req model.GetNodeEventsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.NodeName = nodeName
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.nodeService.GetNodeEvents(ctx, &req)
 	})
 }
 
@@ -387,22 +336,5 @@ func (k *K8sNodeHandler) SwitchNodeSchedule(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.taintService.SwitchNodeSchedule(ctx, &req)
-	})
-}
-
-// GetNodeMetrics 获取节点指标信息
-func (k *K8sNodeHandler) GetNodeMetrics(ctx *gin.Context) {
-	var req model.GetNodeMetricsReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.nodeService.GetNodeMetrics(ctx, &req)
 	})
 }

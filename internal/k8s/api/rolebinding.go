@@ -32,151 +32,155 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type RoleBindingAPI struct {
-	roleBindingService *service.RoleBindingService
+type K8sRoleBindingHandler struct {
+	roleBindingService service.RoleBindingService
 }
 
-func NewRoleBindingAPI(roleBindingService *service.RoleBindingService) *RoleBindingAPI {
-	return &RoleBindingAPI{
+func NewK8sRoleBindingHandler(roleBindingService service.RoleBindingService) *K8sRoleBindingHandler {
+	return &K8sRoleBindingHandler{
 		roleBindingService: roleBindingService,
 	}
 }
 
-func (rba *RoleBindingAPI) RegisterRouters(server *gin.Engine) {
+func (k *K8sRoleBindingHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/role-binding/list", rba.GetRoleBindingList)                                    // 获取RoleBinding列表
-		k8sGroup.GET("/role-binding/details/:cluster_id/:namespace/:name", rba.GetRoleBindingDetails) // 获取RoleBinding详情
-		k8sGroup.POST("/role-binding/create", rba.CreateRoleBinding)                                  // 创建RoleBinding
-		k8sGroup.PUT("/role-binding/update", rba.UpdateRoleBinding)                                   // 更新RoleBinding
-		k8sGroup.DELETE("/role-binding/delete/:cluster_id/:namespace/:name", rba.DeleteRoleBinding)   // 删除RoleBinding
-		k8sGroup.GET("/role-binding/yaml/:cluster_id/:namespace/:name", rba.GetRoleBindingYaml)       // 获取RoleBinding YAML
-		k8sGroup.PUT("/role-binding/yaml", rba.UpdateRoleBindingYaml)                                 // 更新RoleBinding YAML
+		k8sGroup.GET("/rolebindings", k.GetRoleBindingList)
+		k8sGroup.GET("/rolebindings/:cluster_id/:namespace/:name", k.GetRoleBindingDetails)
+		k8sGroup.POST("/rolebindings", k.CreateRoleBinding)
+		k8sGroup.PUT("/rolebindings/:cluster_id/:namespace/:name", k.UpdateRoleBinding)
+		k8sGroup.DELETE("/rolebindings/:cluster_id/:namespace/:name", k.DeleteRoleBinding)
+		k8sGroup.GET("/rolebindings/:cluster_id/:namespace/:name/yaml", k.GetRoleBindingYaml)
+		k8sGroup.PUT("/rolebindings/:cluster_id/:namespace/:name/yaml", k.UpdateRoleBindingYaml)
+
 	}
 }
 
-// GetRoleBindingList 获取RoleBinding列表
-func (rba *RoleBindingAPI) GetRoleBindingList(c *gin.Context) {
-	var req model.RoleBindingListReq
-	if err := c.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
+// GetRoleBindingList 获取 RoleBinding 列表
+func (k *K8sRoleBindingHandler) GetRoleBindingList(ctx *gin.Context) {
+	var req model.GetRoleBindingListReq
 
-	result, err := rba.roleBindingService.GetRoleBindingList(c.Request.Context(), &req)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.roleBindingService.GetRoleBindingList(ctx, &req)
+	})
+}
+
+// GetRoleBindingDetails 获取 RoleBinding 详情
+func (k *K8sRoleBindingHandler) GetRoleBindingDetails(ctx *gin.Context) {
+	var req model.GetRoleBindingDetailsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "获取RoleBinding列表失败")
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.SuccessWithData(c, result)
-}
-
-// GetRoleBindingDetails 获取RoleBinding详情
-func (rba *RoleBindingAPI) GetRoleBindingDetails(c *gin.Context) {
-	var req model.RoleBindingGetReq
-	if err := c.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
-
-	result, err := rba.roleBindingService.GetRoleBindingDetails(c.Request.Context(), &req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "获取RoleBinding详情失败")
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.SuccessWithData(c, result)
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.roleBindingService.GetRoleBindingDetails(ctx, &req)
+	})
 }
 
-// CreateRoleBinding 创建RoleBinding
-func (rba *RoleBindingAPI) CreateRoleBinding(c *gin.Context) {
+// CreateRoleBinding 创建 RoleBinding
+func (k *K8sRoleBindingHandler) CreateRoleBinding(ctx *gin.Context) {
 	var req model.CreateRoleBindingReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
 
-	err := rba.roleBindingService.CreateRoleBinding(c.Request.Context(), &req)
-	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "创建RoleBinding失败")
-		return
-	}
-
-	utils.Success(c)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.roleBindingService.CreateRoleBinding(ctx, &req)
+	})
 }
 
-// UpdateRoleBinding 更新RoleBinding
-func (rba *RoleBindingAPI) UpdateRoleBinding(c *gin.Context) {
+// UpdateRoleBinding 更新 RoleBinding
+func (k *K8sRoleBindingHandler) UpdateRoleBinding(ctx *gin.Context) {
 	var req model.UpdateRoleBindingReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
 
-	err := rba.roleBindingService.UpdateRoleBinding(c.Request.Context(), &req)
-	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "更新RoleBinding失败")
-		return
-	}
-
-	utils.Success(c)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.roleBindingService.UpdateRoleBinding(ctx, &req)
+	})
 }
 
-// DeleteRoleBinding 删除RoleBinding
-func (rba *RoleBindingAPI) DeleteRoleBinding(c *gin.Context) {
+// DeleteRoleBinding 删除 RoleBinding
+func (k *K8sRoleBindingHandler) DeleteRoleBinding(ctx *gin.Context) {
 	var req model.DeleteRoleBindingReq
-	if err := c.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
 
-	err := rba.roleBindingService.DeleteRoleBinding(c.Request.Context(), &req)
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "删除RoleBinding失败")
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.Success(c)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.roleBindingService.DeleteRoleBinding(ctx, &req)
+	})
 }
 
-// GetRoleBindingYaml 获取RoleBinding的YAML配置
-func (rba *RoleBindingAPI) GetRoleBindingYaml(c *gin.Context) {
-	var req model.RoleBindingGetReq
-	if err := c.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
+// GetRoleBindingYaml 获取 RoleBinding YAML
+func (k *K8sRoleBindingHandler) GetRoleBindingYaml(ctx *gin.Context) {
+	var req model.GetRoleBindingYamlReq
 
-	yamlContent, err := rba.roleBindingService.GetRoleBindingYaml(c.Request.Context(), &req)
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "获取RoleBinding YAML失败")
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.SuccessWithData(c, yamlContent)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.roleBindingService.GetRoleBindingYaml(ctx, &req)
+	})
 }
 
-// UpdateRoleBindingYaml 更新RoleBinding的YAML配置
-func (rba *RoleBindingAPI) UpdateRoleBindingYaml(c *gin.Context) {
-	var req model.RoleBindingYamlReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequestError(c, err.Error())
-		return
-	}
+// UpdateRoleBindingYaml 更新 RoleBinding YAML
+func (k *K8sRoleBindingHandler) UpdateRoleBindingYaml(ctx *gin.Context) {
+	var req model.UpdateRoleBindingYamlReq
 
-	err := rba.roleBindingService.UpdateRoleBindingYaml(c.Request.Context(), &req)
-	if err != nil {
-
-		utils.InternalServerError(c, 500, nil, "更新RoleBinding YAML失败")
-		return
-	}
-
-	utils.Success(c)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.roleBindingService.UpdateRoleBindingYaml(ctx, &req)
+	})
 }

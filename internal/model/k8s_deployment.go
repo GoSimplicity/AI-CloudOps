@@ -102,20 +102,6 @@ type K8sDeploymentEvent struct {
 }
 
 // K8sDeploymentMetrics Deployment指标信息
-type K8sDeploymentMetrics struct {
-	CPUUsage         float64   `json:"cpu_usage"`              // CPU使用率
-	MemoryUsage      float64   `json:"memory_usage"`           // 内存使用率
-	NetworkIn        float64   `json:"network_in"`             // 网络入流量（MB/s）
-	NetworkOut       float64   `json:"network_out"`            // 网络出流量（MB/s）
-	DiskUsage        float64   `json:"disk_usage"`             // 磁盘使用率
-	ReplicasReady    int32     `json:"replicas_ready"`         // 就绪副本数
-	ReplicasTotal    int32     `json:"replicas_total"`         // 总副本数
-	RestartCount     int32     `json:"restart_count"`          // 重启次数
-	AvailabilityRate float64   `json:"availability_rate"`      // 可用性
-	LastUpdated      time.Time `json:"last_updated"`           // 最后更新时间
-	MetricsAvailable bool      `json:"metrics_available"`      // 是否有详细指标数据（需要metrics-server）
-	MetricsNote      string    `json:"metrics_note,omitempty"` // 指标说明信息
-}
 
 type K8sDeploymentHistory struct {
 	Revision int64     `json:"revision"` // 版本
@@ -146,7 +132,7 @@ type GetDeploymentYamlReq struct {
 	Name      string `json:"name"`       // Deployment名称
 }
 
-// CreateDeploymentReq 创建Deployment请求
+// CreateDeploymentReq 创建Deployment请求（通过配置字段）
 type CreateDeploymentReq struct {
 	ClusterID   int               `json:"cluster_id" binding:"required"` // 集群ID
 	Name        string            `json:"name" binding:"required"`       // Deployment名称
@@ -156,10 +142,9 @@ type CreateDeploymentReq struct {
 	Labels      map[string]string `json:"labels"`                        // 标签
 	Annotations map[string]string `json:"annotations"`                   // 注解
 	Spec        DeploymentSpec    `json:"spec"`                          // Deployment规格
-	YAML        string            `json:"yaml"`                          // YAML内容
 }
 
-// UpdateDeploymentReq 更新Deployment请求
+// UpdateDeploymentReq 更新Deployment请求（通过配置字段）
 type UpdateDeploymentReq struct {
 	ClusterID   int               `json:"cluster_id"`  // 集群ID
 	Name        string            `json:"name"`        // Deployment名称
@@ -169,7 +154,20 @@ type UpdateDeploymentReq struct {
 	Labels      map[string]string `json:"labels"`      // 标签
 	Annotations map[string]string `json:"annotations"` // 注解
 	Spec        DeploymentSpec    `json:"spec"`        // Deployment规格
-	YAML        string            `json:"yaml"`        // YAML内容
+}
+
+// CreateDeploymentByYamlReq 通过YAML创建Deployment请求
+type CreateDeploymentByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+// UpdateDeploymentByYamlReq 通过YAML更新Deployment请求
+type UpdateDeploymentByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" binding:"required"`  // 命名空间
+	Name      string `json:"name" binding:"required"`       // Deployment名称
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
 }
 
 // DeleteDeploymentReq 删除Deployment请求

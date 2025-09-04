@@ -53,10 +53,13 @@ func (k *K8sSecretEntity) TableName() string {
 	return "cl_k8s_secrets"
 }
 
-// K8sSecretListRequest Secret列表查询请求
-type K8sSecretListReq struct {
+// ====================== 补充缺失的Secret请求结构体 ======================
+
+// GetSecretListReq 获取Secret列表请求
+type GetSecretListReq struct {
 	ClusterID     int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace     string `json:"namespace" form:"namespace" comment:"命名空间"`                      // 命名空间
+	Name          string `json:"name" form:"name" comment:"Secret名称过滤"`                          // Secret名称过滤
 	LabelSelector string `json:"label_selector" form:"label_selector" comment:"标签选择器"`           // 标签选择器
 	FieldSelector string `json:"field_selector" form:"field_selector" comment:"字段选择器"`           // 字段选择器
 	Type          string `json:"type" form:"type" comment:"Secret类型过滤"`                          // Secret类型过滤
@@ -98,48 +101,6 @@ type K8sSecretDeleteReq struct {
 	Name               string `json:"name" binding:"required" comment:"Secret名称"`   // Secret名称，必填
 	GracePeriodSeconds *int64 `json:"grace_period_seconds" comment:"优雅删除时间（秒）"`     // 优雅删除时间
 	Force              bool   `json:"force" comment:"是否强制删除"`                       // 是否强制删除
-}
-
-// K8sSecretBatchDeleteRequest 批量删除Secret请求
-type K8sSecretBatchDeleteReq struct {
-	ClusterID          int      `json:"cluster_id" binding:"required" comment:"集群ID"`  // 集群ID，必填
-	Namespace          string   `json:"namespace" binding:"required" comment:"命名空间"`   // 命名空间，必填
-	Names              []string `json:"names" binding:"required" comment:"Secret名称列表"` // Secret名称列表，必填
-	GracePeriodSeconds *int64   `json:"grace_period_seconds" comment:"优雅删除时间（秒）"`      // 优雅删除时间
-	Force              bool     `json:"force" comment:"是否强制删除"`                        // 是否强制删除
-}
-
-// K8sSecretDataRequest 获取Secret数据请求
-type K8sSecretDataReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
-	Name      string `json:"name" binding:"required" comment:"Secret名称"`   // Secret名称，必填
-	Key       string `json:"key" comment:"数据键，为空则获取所有"`                    // 数据键，为空则获取所有
-	Decode    bool   `json:"decode" comment:"是否解码数据"`                      // 是否解码数据
-}
-
-// K8sSecretEventRequest 获取Secret事件请求
-type K8sSecretEventReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
-	Name      string `json:"name" binding:"required" comment:"Secret名称"`   // Secret名称，必填
-	LimitDays int    `json:"limit_days" comment:"限制天数内的事件"`                // 限制天数内的事件
-}
-
-// K8sSecretUsageRequest 获取Secret使用情况请求
-type K8sSecretUsageReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
-	Name      string `json:"name" binding:"required" comment:"Secret名称"`   // Secret名称，必填
-}
-
-// K8sSecretBackupRequest 备份Secret请求
-type K8sSecretBackupReq struct {
-	ClusterID   int      `json:"cluster_id" binding:"required" comment:"集群ID"`  // 集群ID，必填
-	Namespace   string   `json:"namespace" binding:"required" comment:"命名空间"`   // 命名空间，必填
-	Names       []string `json:"names" binding:"required" comment:"Secret名称列表"` // Secret名称列表，必填
-	BackupName  string   `json:"backup_name" binding:"required" comment:"备份名称"` // 备份名称，必填
-	Description string   `json:"description" comment:"备份描述"`                    // 备份描述
 }
 
 // ====================== Secret响应实体 ======================

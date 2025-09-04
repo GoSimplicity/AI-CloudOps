@@ -25,7 +25,6 @@
 
 package model
 
-// ENV映射
 type Env int8
 
 const (
@@ -36,7 +35,6 @@ const (
 	EnvPress                // 灰度环境
 )
 
-// Status 集群状态
 type ClusterStatus int8
 
 const (
@@ -114,16 +112,6 @@ type RefreshClusterReq struct {
 	ID int `json:"id" form:"id" uri:"id" binding:"required" comment:"集群ID"`
 }
 
-// CheckClusterHealthReq 检查集群健康请求
-type CheckClusterHealthReq struct {
-	ID int `json:"id" form:"id" uri:"id" binding:"required" comment:"集群ID"`
-}
-
-// GetClusterStatsReq 获取集群统计请求
-type GetClusterStatsReq struct {
-	ID int `json:"id" form:"id" uri:"id" binding:"required" comment:"集群ID"`
-}
-
 // GetClusterReq 获取单个集群请求
 type GetClusterReq struct {
 	ID int `json:"id" form:"id" uri:"id" binding:"required" comment:"集群ID"`
@@ -132,116 +120,6 @@ type GetClusterReq struct {
 // ListClustersReq 获取集群列表请求
 type ListClustersReq struct {
 	ListReq
-	Status string `json:"status" form:"status"` // 集群状态过滤
-	Env    string `json:"env" form:"env"`       // 环境过滤
-}
-
-// RefreshClusterStatusReq 刷新集群状态请求
-type RefreshClusterStatusReq struct {
-	ID int `json:"id" form:"id" uri:"id" binding:"required"`
-}
-
-// ComponentHealthStatus 组件健康状态
-type ComponentHealthStatus struct {
-	Name      string `json:"name"`      // 组件名称
-	Status    string `json:"status"`    // 状态: healthy, unhealthy
-	Message   string `json:"message"`   // 状态信息
-	Timestamp string `json:"timestamp"` // 时间戳
-}
-
-// ClusterStats 集群统计信息
-type ClusterStats struct {
-	ClusterID      int            `json:"cluster_id"`       // 集群ID
-	ClusterName    string         `json:"cluster_name"`     // 集群名称
-	LastUpdateTime string         `json:"last_update_time"` // 最后更新时间
-	NodeStats      NodeStats      `json:"node_stats"`       // 节点统计
-	PodStats       PodStats       `json:"pod_stats"`        // Pod统计
-	NamespaceStats NamespaceStats `json:"namespace_stats"`  // 命名空间统计
-	WorkloadStats  WorkloadStats  `json:"workload_stats"`   // 工作负载统计
-	ResourceStats  ResourceStats  `json:"resource_stats"`   // 资源统计
-	StorageStats   StorageStats   `json:"storage_stats"`    // 存储统计
-	NetworkStats   NetworkStats   `json:"network_stats"`    // 网络统计
-	EventStats     EventStats     `json:"event_stats"`      // 事件统计
-}
-
-// NodeStats 节点统计
-type NodeStats struct {
-	TotalNodes    int `json:"total_nodes"`     // 总节点数
-	ReadyNodes    int `json:"ready_nodes"`     // 就绪节点数
-	NotReadyNodes int `json:"not_ready_nodes"` // 未就绪节点数
-	MasterNodes   int `json:"master_nodes"`    // 主节点数
-	WorkerNodes   int `json:"worker_nodes"`    // 工作节点数
-}
-
-// PodStats Pod统计
-type PodStats struct {
-	TotalPods     int `json:"total_pods"`     // 总Pod数
-	RunningPods   int `json:"running_pods"`   // 运行中Pod数
-	PendingPods   int `json:"pending_pods"`   // 等待中Pod数
-	SucceededPods int `json:"succeeded_pods"` // 成功Pod数
-	FailedPods    int `json:"failed_pods"`    // 失败Pod数
-	UnknownPods   int `json:"unknown_pods"`   // 未知状态Pod数
-}
-
-// NamespaceStats 命名空间统计
-type NamespaceStats struct {
-	TotalNamespaces  int      `json:"total_namespaces"`  // 总命名空间数
-	ActiveNamespaces int      `json:"active_namespaces"` // 活跃命名空间数
-	SystemNamespaces int      `json:"system_namespaces"` // 系统命名空间数
-	UserNamespaces   int      `json:"user_namespaces"`   // 用户命名空间数
-	TopNamespaces    []string `json:"top_namespaces"`    // 资源使用较多的命名空间
-}
-
-// WorkloadStats 工作负载统计
-type WorkloadStats struct {
-	Deployments  int `json:"deployments"`  // Deployment数量
-	StatefulSets int `json:"statefulsets"` // StatefulSet数量
-	DaemonSets   int `json:"daemonsets"`   // DaemonSet数量
-	Jobs         int `json:"jobs"`         // Job数量
-	CronJobs     int `json:"cronjobs"`     // CronJob数量
-	Services     int `json:"services"`     // Service数量
-	ConfigMaps   int `json:"configmaps"`   // ConfigMap数量
-	Secrets      int `json:"secrets"`      // Secret数量
-	Ingresses    int `json:"ingresses"`    // Ingress数量
-}
-
-// ResourceStats 资源统计
-type ResourceStats struct {
-	TotalCPU           string  `json:"total_cpu"`           // 总CPU
-	TotalMemory        string  `json:"total_memory"`        // 总内存
-	TotalStorage       string  `json:"total_storage"`       // 总存储
-	UsedCPU            string  `json:"used_cpu"`            // 已使用CPU
-	UsedMemory         string  `json:"used_memory"`         // 已使用内存
-	UsedStorage        string  `json:"used_storage"`        // 已使用存储
-	CPUUtilization     float64 `json:"cpu_utilization"`     // CPU使用率
-	MemoryUtilization  float64 `json:"memory_utilization"`  // 内存使用率
-	StorageUtilization float64 `json:"storage_utilization"` // 存储使用率
-}
-
-// StorageStats 存储统计
-type StorageStats struct {
-	TotalPV        int    `json:"total_pv"`        // 总PV数量
-	BoundPV        int    `json:"bound_pv"`        // 已绑定PV数量
-	AvailablePV    int    `json:"available_pv"`    // 可用PV数量
-	TotalPVC       int    `json:"total_pvc"`       // 总PVC数量
-	BoundPVC       int    `json:"bound_pvc"`       // 已绑定PVC数量
-	PendingPVC     int    `json:"pending_pvc"`     // 等待中PVC数量
-	StorageClasses int    `json:"storage_classes"` // 存储类数量
-	TotalCapacity  string `json:"total_capacity"`  // 总容量
-}
-
-// NetworkStats 网络统计
-type NetworkStats struct {
-	Services        int `json:"services"`         // Service数量
-	Endpoints       int `json:"endpoints"`        // Endpoint数量
-	Ingresses       int `json:"ingresses"`        // Ingress数量
-	NetworkPolicies int `json:"network_policies"` // NetworkPolicy数量
-}
-
-// EventStats 事件统计
-type EventStats struct {
-	TotalEvents   int `json:"total_events"`   // 总事件数
-	WarningEvents int `json:"warning_events"` // 警告事件数
-	NormalEvents  int `json:"normal_events"`  // 正常事件数
-	RecentEvents  int `json:"recent_events"`  // 最近事件数（1小时内）
+	Status string `json:"status" form:"status"`
+	Env    string `json:"env" form:"env"`
 }

@@ -93,7 +93,7 @@ func (e *EmailChannel) Send(ctx context.Context, request *SendRequest) (*SendRes
 		}))
 	}
 
-	// 智能检测并设置SMTP配置
+	// 检测并设置SMTP配置
 	smtpHost, smtpPort, useTLS := e.detectSMTPConfig(e.config.GetUsername())
 
 	// SMTP连接
@@ -738,13 +738,13 @@ func (e *EmailChannel) buildEmailContent(request *SendRequest) string {
             </div>
             
             <div class="footer">
-                <div class="footer-brand">AI-CloudOps 智能运维管理平台</div>
+                <div class="footer-brand">AI-CloudOps 运维管理平台</div>
                 <div class="footer-links">
                     <a href="#">帮助中心</a>
                     <a href="#">技术支持</a>
                     <a href="#">系统状态</a>
                 </div>
-                <div class="footer-text">此邮件由AI-CloudOps系统自动发送，请勿直接回复</div>
+                <div class="footer-text">此邮件由AI-CloudOps系统发送，请勿直接回复</div>
                 <div class="footer-text">如有疑问请联系技术支持 | 服务热线：400-000-0000</div>
                 <div class="footer-text">Copyright © 2024 AI-CloudOps. All rights reserved.</div>
             </div>

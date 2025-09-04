@@ -80,8 +80,8 @@ type K8sEvent struct {
 	Namespace          string            `json:"namespace"`                     // 命名空间
 	UID                string            `json:"uid"`                           // UID
 	ClusterID          int               `json:"cluster_id"`                    // 集群ID
-	Type               string            `json:"type"`                          // Normal, Warning
-	Reason             string            `json:"reason"`                        // 事件原因，如：BackOff, Pulled, Created
+	Type               EventType         `json:"type"`                          // Normal, Warning
+	Reason             EventReason       `json:"reason"`                        // 事件原因，如：BackOff, Pulled, Created
 	Message            string            `json:"message"`                       // 详细消息
 	Severity           EventSeverity     `json:"severity"`                      // 严重程度：low, medium, high, critical
 	FirstTimestamp     time.Time         `json:"first_timestamp"`               // 首次发生时间

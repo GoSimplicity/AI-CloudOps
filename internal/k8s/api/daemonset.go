@@ -38,96 +38,100 @@ type K8sDaemonSetHandler struct {
 
 func NewK8sDaemonSetHandler(daemonSetService service.DaemonSetService) *K8sDaemonSetHandler {
 	return &K8sDaemonSetHandler{
-
 		daemonSetService: daemonSetService,
 	}
 }
 
 func (k *K8sDaemonSetHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
-
 	{
-		k8sGroup.GET("/daemonsets/list", k.GetDaemonSetList)                            // 获取DaemonSet列表
-		k8sGroup.GET("/daemonsets/:cluster_id", k.GetDaemonSetsByNamespace)             // 根据命名空间获取DaemonSet列表
-		k8sGroup.GET("/daemonsets/:cluster_id/:name", k.GetDaemonSet)                   // 获取单个DaemonSet详情
-		k8sGroup.GET("/daemonsets/:cluster_id/:name/yaml", k.GetDaemonSetYaml)          // 获取DaemonSet YAML配置
-		k8sGroup.POST("/daemonsets/create", k.CreateDaemonSet)                          // 创建DaemonSet
-		k8sGroup.PUT("/daemonsets/update", k.UpdateDaemonSet)                           // 更新DaemonSet
-		k8sGroup.DELETE("/daemonsets/delete", k.DeleteDaemonSet)                        // 删除DaemonSet
-		k8sGroup.POST("/daemonsets/restart", k.RestartDaemonSet)                        // 重启DaemonSet
-		k8sGroup.GET("/daemonsets/:cluster_id/:name/history", k.GetDaemonSetHistory)    // 获取DaemonSet历史版本
-		k8sGroup.GET("/daemonsets/:cluster_id/:name/events", k.GetDaemonSetEvents)      // 获取DaemonSet事件
-		k8sGroup.GET("/daemonsets/:cluster_id/:name/node-pods", k.GetDaemonSetNodePods) // 获取指定节点的DaemonSet Pod
+		k8sGroup.GET("/daemonsets", k.GetDaemonSetList)
+		k8sGroup.GET("/daemonsets/:cluster_id/:namespace/:name", k.GetDaemonSetDetails)
+		k8sGroup.GET("/daemonsets/:cluster_id/:namespace/:name/yaml", k.GetDaemonSetYaml)
+		k8sGroup.POST("/daemonsets", k.CreateDaemonSet)
+		k8sGroup.PUT("/daemonsets/:cluster_id/:namespace/:name", k.UpdateDaemonSet)
+		k8sGroup.DELETE("/daemonsets/:cluster_id/:namespace/:name", k.DeleteDaemonSet)
+		k8sGroup.POST("/daemonsets/:cluster_id/:namespace/:name/restart", k.RestartDaemonSet)
+		k8sGroup.GET("/daemonsets/:cluster_id/:namespace/:name/pods", k.GetDaemonSetPods)
+		k8sGroup.GET("/daemonsets/:cluster_id/:namespace/:name/history", k.GetDaemonSetHistory)
+		k8sGroup.POST("/daemonsets/:cluster_id/:namespace/:name/rollback", k.RollbackDaemonSet)
 	}
 }
 
 // GetDaemonSetList 获取DaemonSet列表
 func (k *K8sDaemonSetHandler) GetDaemonSetList(ctx *gin.Context) {
-	var req model.K8sDaemonSetListReq
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
+	var req model.GetDaemonSetListReq
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return k.daemonSetService.GetDaemonSetList(ctx, &req)
 	})
 }
 
-// GetDaemonSetsByNamespace 根据命名空间获取DaemonSet列表
-func (k *K8sDaemonSetHandler) GetDaemonSetsByNamespace(ctx *gin.Context) {
-	var req model.K8sGetResourceListReq
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+// GetDaemonSetDetails 获取DaemonSet详情
+func (k *K8sDaemonSetHandler) GetDaemonSetDetails(ctx *gin.Context) {
+	var req model.GetDaemonSetDetailsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.daemonSetService.GetDaemonSetsByNamespace(ctx, req.ClusterID, req.Namespace)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.daemonSetService.GetDaemonSetDetails(ctx, &req)
 	})
 }
 
-// GetDaemonSet 获取DaemonSet详情
-func (k *K8sDaemonSetHandler) GetDaemonSet(ctx *gin.Context) {
-	var req model.K8sGetResourceReq
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.daemonSetService.GetDaemonSet(ctx, req.ClusterID, req.Namespace, req.ResourceName)
-	})
-}
-
-// GetDaemonSetYaml 获取DaemonSet的YAML配置
+// GetDaemonSetYaml 获取DaemonSet YAML
 func (k *K8sDaemonSetHandler) GetDaemonSetYaml(ctx *gin.Context) {
-	var req model.K8sGetResourceYamlReq
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+	var req model.GetDaemonSetYamlReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.daemonSetService.GetDaemonSetYaml(ctx, req.ClusterID, req.Namespace, req.ResourceName)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.daemonSetService.GetDaemonSetYaml(ctx, &req)
 	})
 }
 
 // CreateDaemonSet 创建DaemonSet
 func (k *K8sDaemonSetHandler) CreateDaemonSet(ctx *gin.Context) {
-	var req model.K8sDaemonSetCreateReq
+	var req model.CreateDaemonSetReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.daemonSetService.CreateDaemonSet(ctx, &req)
@@ -136,7 +140,29 @@ func (k *K8sDaemonSetHandler) CreateDaemonSet(ctx *gin.Context) {
 
 // UpdateDaemonSet 更新DaemonSet
 func (k *K8sDaemonSetHandler) UpdateDaemonSet(ctx *gin.Context) {
-	var req model.K8sDaemonSetUpdateReq
+	var req model.UpdateDaemonSetReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.daemonSetService.UpdateDaemonSet(ctx, &req)
@@ -145,7 +171,29 @@ func (k *K8sDaemonSetHandler) UpdateDaemonSet(ctx *gin.Context) {
 
 // DeleteDaemonSet 删除DaemonSet
 func (k *K8sDaemonSetHandler) DeleteDaemonSet(ctx *gin.Context) {
-	var req model.K8sDaemonSetDeleteReq
+	var req model.DeleteDaemonSetReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.daemonSetService.DeleteDaemonSet(ctx, &req)
@@ -154,60 +202,124 @@ func (k *K8sDaemonSetHandler) DeleteDaemonSet(ctx *gin.Context) {
 
 // RestartDaemonSet 重启DaemonSet
 func (k *K8sDaemonSetHandler) RestartDaemonSet(ctx *gin.Context) {
-	var req model.K8sDaemonSetRestartReq
+	var req model.RestartDaemonSetReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.daemonSetService.RestartDaemonSet(ctx, &req)
 	})
 }
 
-// GetDaemonSetHistory 获取DaemonSet历史版本
-func (k *K8sDaemonSetHandler) GetDaemonSetHistory(ctx *gin.Context) {
-	var req model.K8sDaemonSetHistoryReq
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+// GetDaemonSetPods 获取DaemonSet下的Pod列表
+func (k *K8sDaemonSetHandler) GetDaemonSetPods(ctx *gin.Context) {
+	var req model.GetDaemonSetPodsReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.daemonSetService.GetDaemonSetPods(ctx, &req)
+	})
+}
+
+// GetDaemonSetHistory 获取DaemonSet历史
+func (k *K8sDaemonSetHandler) GetDaemonSetHistory(ctx *gin.Context) {
+	var req model.GetDaemonSetHistoryReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return k.daemonSetService.GetDaemonSetHistory(ctx, &req)
 	})
 }
 
-// GetDaemonSetEvents 获取DaemonSet事件
-func (k *K8sDaemonSetHandler) GetDaemonSetEvents(ctx *gin.Context) {
-	var req model.K8sDaemonSetEventReq
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+// RollbackDaemonSet 回滚DaemonSet
+func (k *K8sDaemonSetHandler) RollbackDaemonSet(ctx *gin.Context) {
+	var req model.RollbackDaemonSetReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.daemonSetService.GetDaemonSetEvents(ctx, &req)
-	})
-}
-
-// GetDaemonSetNodePods 获取DaemonSet在指定节点的Pod
-func (k *K8sDaemonSetHandler) GetDaemonSetNodePods(ctx *gin.Context) {
-	var req model.K8sDaemonSetNodePodsReq
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.daemonSetService.GetDaemonSetNodePods(ctx, &req)
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.daemonSetService.RollbackDaemonSet(ctx, &req)
 	})
 }

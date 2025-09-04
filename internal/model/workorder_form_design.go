@@ -65,7 +65,7 @@ func (WorkorderFormDesign) TableName() string {
 
 // FormField 表单字段定义
 type FormField struct {
-	ID          string   `json:"id"`                       // 字段唯一标识（系统自动生成）
+	ID          string   `json:"id"`                       // 字段唯一标识
 	Name        string   `json:"name" binding:"required"`  // 字段名称
 	Type        string   `json:"type" binding:"required"`  // 字段类型
 	Label       string   `json:"label" binding:"required"` // 字段标签

@@ -49,7 +49,6 @@ type EventService interface {
 	GetEventTimeline(ctx context.Context, req *model.GetEventTimelineReq) (model.ListResp[*model.EventTimelineItem], error)
 	GetEventTrends(ctx context.Context, req *model.GetEventTrendsReq) (model.ListResp[*model.EventTrend], error)
 	GetEventGroupData(ctx context.Context, req *model.GetEventGroupDataReq) (model.ListResp[*model.EventGroupData], error)
-	GetEventsByIngress(ctx context.Context, req *model.K8sIngressEventReq) (model.ListResp[*model.K8sEvent], error)
 	DeleteEvent(ctx context.Context, req *model.DeleteEventReq) error
 	CleanupOldEvents(ctx context.Context, req *model.CleanupOldEventsReq) error
 }
@@ -175,11 +174,6 @@ func (e *eventService) GetEventsByService(ctx context.Context, req *model.GetEve
 // GetEventsByNode 获取Node相关事件
 func (e *eventService) GetEventsByNode(ctx context.Context, req *model.GetEventsByNodeReq) (model.ListResp[*model.K8sEvent], error) {
 	return e.GetEventsByObject(ctx, req.ClusterID, "", "Node", req.NodeName, "", 7)
-}
-
-// GetEventsByIngress 获取Ingress相关事件
-func (e *eventService) GetEventsByIngress(ctx context.Context, req *model.K8sIngressEventReq) (model.ListResp[*model.K8sEvent], error) {
-	return e.GetEventsByObject(ctx, req.ClusterID, "", "Ingress", req.IngressName, "", 7)
 }
 
 // GetEventStatistics 获取事件统计

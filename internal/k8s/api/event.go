@@ -38,7 +38,6 @@ type K8sEventHandler struct {
 
 func NewK8sEventHandler(eventService service.EventService) *K8sEventHandler {
 	return &K8sEventHandler{
-
 		eventService: eventService,
 	}
 }
@@ -51,7 +50,6 @@ func (k *K8sEventHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.GET("/events/:cluster_id/:namespace/by-pod/:pod_name", k.GetEventsByPod)                      // 获取Pod相关事件
 		k8sGroup.GET("/events/:cluster_id/:namespace/by-deployment/:deployment_name", k.GetEventsByDeployment) // 获取Deployment相关事件
 		k8sGroup.GET("/events/:cluster_id/:namespace/by-service/:service_name", k.GetEventsByService)          // 获取Service相关事件
-		k8sGroup.GET("/events/:cluster_id/:namespace/by-ingress/:ingress_name", k.GetEventsByIngress)          // 获取Ingress相关事件
 		k8sGroup.GET("/events/:cluster_id/by-node/:node_name", k.GetEventsByNode)                              // 获取Node相关事件
 		k8sGroup.GET("/events/statistics", k.GetEventStatistics)                                               // 获取事件统计信息
 		k8sGroup.GET("/events/summary", k.GetEventSummary)                                                     // 获取事件汇总
@@ -302,36 +300,5 @@ func (k *K8sEventHandler) CleanupOldEvents(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.eventService.CleanupOldEvents(ctx, &req)
-	})
-}
-
-// GetEventsByIngress 获取Ingress相关事件
-func (k *K8sEventHandler) GetEventsByIngress(ctx *gin.Context) {
-	var req model.K8sIngressEventReq
-
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	ingressName, err := utils.GetParamCustomName(ctx, "ingress_name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.IngressName = ingressName
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.eventService.GetEventsByIngress(ctx, &req)
 	})
 }

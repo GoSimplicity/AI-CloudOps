@@ -60,7 +60,7 @@ func NewNamespaceService(client client.K8sClient, namespaceManager manager.Names
 	}
 }
 
-// CreateNamespace 创建新的命名空间
+// CreateNamespace 创建命名空间
 func (n *namespaceService) CreateNamespace(ctx context.Context, req *model.K8sNamespaceCreateReq) error {
 	if req == nil {
 		return fmt.Errorf("创建命名空间请求不能为空")
@@ -115,7 +115,7 @@ func (n *namespaceService) CreateNamespace(ctx context.Context, req *model.K8sNa
 	return nil
 }
 
-// DeleteNamespace 删除指定的命名空间
+// DeleteNamespace 删除命名空间
 func (n *namespaceService) DeleteNamespace(ctx context.Context, req *model.K8sNamespaceDeleteReq) error {
 	if req == nil {
 		return fmt.Errorf("删除命名空间请求不能为空")
@@ -155,7 +155,7 @@ func (n *namespaceService) DeleteNamespace(ctx context.Context, req *model.K8sNa
 	return nil
 }
 
-// GetNamespaceDetails 获取指定命名空间的详细信息
+// GetNamespaceDetails 获取命名空间详情
 func (n *namespaceService) GetNamespaceDetails(ctx context.Context, req *model.K8sNamespaceGetDetailsReq) (*model.K8sNamespace, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取命名空间详情请求不能为空")
@@ -191,7 +191,7 @@ func (n *namespaceService) GetNamespaceDetails(ctx context.Context, req *model.K
 	}, nil
 }
 
-// UpdateNamespace 更新指定命名空间
+// UpdateNamespace 更新命名空间
 func (n *namespaceService) UpdateNamespace(ctx context.Context, req *model.K8sNamespaceUpdateReq) error {
 	if req == nil {
 		return fmt.Errorf("更新命名空间请求不能为空")

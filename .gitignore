@@ -108,3 +108,4 @@ docs/docs.go
 docs/swagger.json
 docs/swagger.yaml
 tools/swagger-auto-gen/swagger-auto-gen
+go.sum

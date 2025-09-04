@@ -38,7 +38,6 @@ type K8sSvcHandler struct {
 
 func NewK8sSvcHandler(svcService service.SvcService) *K8sSvcHandler {
 	return &K8sSvcHandler{
-
 		svcService: svcService,
 	}
 }
@@ -52,9 +51,9 @@ func (k *K8sSvcHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.POST("/services", k.CreateService)                                             // 创建Service
 		k8sGroup.PUT("/services/:cluster_id/:namespace/:name", k.UpdateService)                 // 更新Service
 		k8sGroup.DELETE("/services/:cluster_id/:namespace/:name", k.DeleteService)              // 删除Service
+		k8sGroup.POST("/services/yaml", k.CreateServiceByYaml)                                  // 通过YAML创建Service
+		k8sGroup.PUT("/services/:cluster_id/:namespace/:name/yaml", k.UpdateServiceByYaml)      // 通过YAML更新Service
 		k8sGroup.GET("/services/:cluster_id/:namespace/:name/endpoints", k.GetServiceEndpoints) // 获取Service端点
-		k8sGroup.GET("/services/:cluster_id/:namespace/:name/metrics", k.GetServiceMetrics)     // 获取Service指标
-		k8sGroup.GET("/services/:cluster_id/:namespace/:name/events", k.GetServiceEvents)       // 获取Service事件
 	}
 }
 
@@ -231,40 +230,20 @@ func (k *K8sSvcHandler) GetServiceEndpoints(ctx *gin.Context) {
 	})
 }
 
-// GetServiceMetrics 获取Service指标
-func (k *K8sSvcHandler) GetServiceMetrics(ctx *gin.Context) {
-	var req model.GetServiceMetricsReq
+// YAML操作方法
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	name, err := utils.GetParamCustomName(ctx, "name")
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ClusterID = clusterID
-	req.Namespace = namespace
-	req.Name = name
+// CreateServiceByYaml 通过YAML创建Service
+func (k *K8sSvcHandler) CreateServiceByYaml(ctx *gin.Context) {
+	var req model.CreateResourceByYamlReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.svcService.GetServiceMetrics(ctx, &req)
+		return nil, k.svcService.CreateServiceByYaml(ctx, &req)
 	})
 }
 
-// GetServiceEvents 获取Service事件
-func (k *K8sSvcHandler) GetServiceEvents(ctx *gin.Context) {
-	var req model.GetServiceEventsReq
+// UpdateServiceByYaml 通过YAML更新Service
+func (k *K8sSvcHandler) UpdateServiceByYaml(ctx *gin.Context) {
+	var req model.UpdateResourceByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
@@ -289,6 +268,6 @@ func (k *K8sSvcHandler) GetServiceEvents(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.svcService.GetServiceEvents(ctx, &req)
+		return nil, k.svcService.UpdateServiceByYaml(ctx, &req)
 	})
 }

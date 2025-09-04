@@ -83,7 +83,7 @@ func (y *yamlTemplateDAO) UpdateYamlTemplate(ctx context.Context, yaml *model.K8
 		return fmt.Errorf("invalid yaml ID")
 	}
 
-	if err := y.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", yaml.ID, yaml.ClusterId).Updates(yaml).Error; err != nil {
+	if err := y.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", yaml.ID, yaml.ClusterID).Updates(yaml).Error; err != nil {
 		y.l.Error("UpdateYamlTemplate 更新Yaml模板失败", zap.Int("yamlID", yaml.ID), zap.Error(err))
 		return err
 	}

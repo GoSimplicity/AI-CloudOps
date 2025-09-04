@@ -94,7 +94,7 @@ func (g *SwaggerGenerator) buildSwaggerDoc() *SwaggerDoc {
 		Info: SwaggerInfo{
 			Title:       "AI-CloudOps API",
 			Version:     "1.0.0",
-			Description: "AI-CloudOps云原生运维平台API文档 (自动生成)",
+			Description: "AI-CloudOps云原生运维平台API文档",
 		},
 		Host:        "localhost:8889",
 		BasePath:    "/",

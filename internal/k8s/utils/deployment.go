@@ -36,14 +36,14 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
+
 	"sigs.k8s.io/yaml"
 )
 
-// BuildK8sDeployment 构建详细的 K8sDeployment 模型
+// BuildK8sDeployment 构建K8sDeployment模型
 func BuildK8sDeployment(ctx context.Context, clusterID int, deployment appsv1.Deployment) (*model.K8sDeployment, error) {
 	if clusterID <= 0 {
 		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)
@@ -408,12 +408,7 @@ func BuildDeploymentFromRequest(req *model.CreateDeploymentReq) (*appsv1.Deploym
 		return nil, fmt.Errorf("请求不能为空")
 	}
 
-	// 如果提供了YAML，优先使用YAML
-	if req.YAML != "" {
-		return YAMLToDeployment(req.YAML)
-	}
-
-	// 否则从请求字段构建
+	// 从请求字段构建
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
@@ -521,136 +516,6 @@ func PaginateK8sDeployments(deployments []*model.K8sDeployment, page, size int) 
 }
 
 // CalculateDeploymentMetrics 计算 Deployment 指标
-func CalculateDeploymentMetrics(deployment *appsv1.Deployment, pods []corev1.Pod, podMetrics []metricsv1beta1.PodMetrics) (*model.K8sDeploymentMetrics, error) {
-	if deployment == nil {
-		return nil, fmt.Errorf("deployment 不能为空")
-	}
-
-	metrics := &model.K8sDeploymentMetrics{
-		ReplicasReady:    deployment.Status.ReadyReplicas,
-		ReplicasTotal:    GetInt32Value(deployment.Spec.Replicas),
-		LastUpdated:      time.Now(),
-		AvailabilityRate: 100.0,
-	}
-
-	// 如果没有 Pod，返回基础指标
-	if len(pods) == 0 {
-		metrics.MetricsAvailable = false
-		metrics.MetricsNote = "无Pod实例，返回基础指标"
-		return metrics, nil
-	}
-
-	// 计算重启次数
-	var totalRestarts int32
-	runningPods := 0
-	for _, pod := range pods {
-		// 统计运行中的 Pod
-		if pod.Status.Phase == corev1.PodRunning {
-			runningPods++
-		}
-
-		// 统计容器重启次数
-		for _, containerStatus := range pod.Status.ContainerStatuses {
-			totalRestarts += containerStatus.RestartCount
-		}
-	}
-	metrics.RestartCount = totalRestarts
-
-	// 计算可用性
-	if len(pods) > 0 {
-		metrics.AvailabilityRate = float64(runningPods) / float64(len(pods)) * 100.0
-	}
-
-	// 如果没有 Pod 指标，返回当前指标
-	if len(podMetrics) == 0 {
-		metrics.MetricsAvailable = false
-		metrics.MetricsNote = "无Pod指标数据，返回基础指标"
-		return metrics, nil
-	}
-
-	// 聚合 Pod 指标
-	totalCPU := resource.NewQuantity(0, resource.DecimalSI)
-	totalMemory := resource.NewQuantity(0, resource.BinarySI)
-
-	for _, podMetric := range podMetrics {
-		for _, container := range podMetric.Containers {
-			// CPU 使用量（单位：m cores）
-			if cpu, ok := container.Usage[corev1.ResourceCPU]; ok {
-				totalCPU.Add(cpu)
-			}
-
-			// 内存使用量（单位：bytes）
-			if memory, ok := container.Usage[corev1.ResourceMemory]; ok {
-				totalMemory.Add(memory)
-			}
-		}
-	}
-
-	// 计算 CPU 使用率（转换为毫核）
-	cpuMilliCores := totalCPU.MilliValue()
-
-	// 计算总的 CPU 请求量和限制量
-	totalCPURequests := resource.NewQuantity(0, resource.DecimalSI)
-	totalCPULimits := resource.NewQuantity(0, resource.DecimalSI)
-	totalMemoryRequests := resource.NewQuantity(0, resource.BinarySI)
-	totalMemoryLimits := resource.NewQuantity(0, resource.BinarySI)
-
-	for _, pod := range pods {
-		if pod.Status.Phase != corev1.PodRunning && pod.Status.Phase != corev1.PodPending {
-			continue
-		}
-
-		for _, container := range pod.Spec.Containers {
-			// CPU 请求和限制
-			if cpuReq := container.Resources.Requests[corev1.ResourceCPU]; !cpuReq.IsZero() {
-				totalCPURequests.Add(cpuReq)
-			}
-			if cpuLimit := container.Resources.Limits[corev1.ResourceCPU]; !cpuLimit.IsZero() {
-				totalCPULimits.Add(cpuLimit)
-			}
-
-			// 内存请求和限制
-			if memReq := container.Resources.Requests[corev1.ResourceMemory]; !memReq.IsZero() {
-				totalMemoryRequests.Add(memReq)
-			}
-			if memLimit := container.Resources.Limits[corev1.ResourceMemory]; !memLimit.IsZero() {
-				totalMemoryLimits.Add(memLimit)
-			}
-		}
-	}
-
-	// 计算使用率
-	if !totalCPURequests.IsZero() {
-		metrics.CPUUsage = float64(cpuMilliCores) / float64(totalCPURequests.MilliValue()) * 100.0
-	} else if !totalCPULimits.IsZero() {
-		metrics.CPUUsage = float64(cpuMilliCores) / float64(totalCPULimits.MilliValue()) * 100.0
-	}
-
-	if !totalMemoryRequests.IsZero() {
-		metrics.MemoryUsage = float64(totalMemory.Value()) / float64(totalMemoryRequests.Value()) * 100.0
-	} else if !totalMemoryLimits.IsZero() {
-		metrics.MemoryUsage = float64(totalMemory.Value()) / float64(totalMemoryLimits.Value()) * 100.0
-	}
-
-	// 限制使用率不超过 100%
-	if metrics.CPUUsage > 100.0 {
-		metrics.CPUUsage = 100.0
-	}
-	if metrics.MemoryUsage > 100.0 {
-		metrics.MemoryUsage = 100.0
-	}
-
-	// TODO: 网络和磁盘指标需要额外的收集机制，暂时设为 0
-	metrics.NetworkIn = 0.0
-	metrics.NetworkOut = 0.0
-	metrics.DiskUsage = 0.0
-
-	// 成功获取详细指标数据
-	metrics.MetricsAvailable = true
-	metrics.MetricsNote = "已获取详细的资源使用指标"
-
-	return metrics, nil
-}
 
 // ConvertToK8sDeployment 将 appsv1.Deployment 转换为 model.K8sDeployment
 func ConvertToK8sDeployment(deployment *appsv1.Deployment) *model.K8sDeployment {
@@ -722,4 +587,67 @@ func ConvertToK8sDeployment(deployment *appsv1.Deployment) *model.K8sDeployment 
 		UpdatedAt:         time.Now(),
 		RawDeployment:     deployment,
 	}
+}
+
+// BuildDeploymentFromYaml 从YAML构建Deployment对象
+func BuildDeploymentFromYaml(req *model.CreateDeploymentByYamlReq) (*appsv1.Deployment, error) {
+	if req == nil {
+		return nil, fmt.Errorf("请求不能为空")
+	}
+
+	if req.YAML == "" {
+		return nil, fmt.Errorf("YAML内容不能为空")
+	}
+
+	deployment, err := YAMLToDeployment(req.YAML)
+	if err != nil {
+		return nil, err
+	}
+
+	// YAML中必须包含namespace和name信息
+	if deployment.Namespace == "" {
+		return nil, fmt.Errorf("YAML中必须指定namespace")
+	}
+
+	if deployment.Name == "" {
+		return nil, fmt.Errorf("YAML中必须指定name")
+	}
+
+	return deployment, nil
+}
+
+// BuildDeploymentFromYamlForUpdate 从YAML构建Deployment对象用于更新
+func BuildDeploymentFromYamlForUpdate(req *model.UpdateDeploymentByYamlReq) (*appsv1.Deployment, error) {
+	if req == nil {
+		return nil, fmt.Errorf("请求不能为空")
+	}
+
+	if req.YAML == "" {
+		return nil, fmt.Errorf("YAML内容不能为空")
+	}
+
+	deployment, err := YAMLToDeployment(req.YAML)
+	if err != nil {
+		return nil, err
+	}
+
+	// 确保YAML中的namespace和name与请求参数一致
+	if deployment.Namespace != "" && deployment.Namespace != req.Namespace {
+		return nil, fmt.Errorf("YAML中的namespace (%s) 与请求参数不一致 (%s)", deployment.Namespace, req.Namespace)
+	}
+
+	if deployment.Name != "" && deployment.Name != req.Name {
+		return nil, fmt.Errorf("YAML中的name (%s) 与请求参数不一致 (%s)", deployment.Name, req.Name)
+	}
+
+	// 如果YAML中没有指定，使用请求参数
+	if deployment.Namespace == "" {
+		deployment.Namespace = req.Namespace
+	}
+
+	if deployment.Name == "" {
+		deployment.Name = req.Name
+	}
+
+	return deployment, nil
 }

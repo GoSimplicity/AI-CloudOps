@@ -126,14 +126,6 @@ type K8sPVDeleteReq struct {
 	Force              bool   `json:"force" comment:"是否强制删除"`                       // 是否强制删除
 }
 
-// K8sPVBatchDeleteRequest 批量删除PV请求
-type K8sPVBatchDeleteReq struct {
-	ClusterID          int      `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
-	Names              []string `json:"names" binding:"required" comment:"PV名称列表"`    // PV名称列表，必填
-	GracePeriodSeconds *int64   `json:"grace_period_seconds" comment:"优雅删除时间（秒）"`     // 优雅删除时间
-	Force              bool     `json:"force" comment:"是否强制删除"`                       // 是否强制删除
-}
-
 // K8sPVEventRequest 获取PV事件请求
 type K8sPVEventReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
@@ -145,21 +137,6 @@ type K8sPVEventReq struct {
 type K8sPVUsageReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Name      string `json:"name" binding:"required" comment:"PV名称"`       // PV名称，必填
-}
-
-// K8sPVExpandRequest 扩容PV请求
-type K8sPVExpandReq struct {
-	ClusterID   int    `json:"cluster_id" binding:"required" comment:"集群ID"`  // 集群ID，必填
-	Name        string `json:"name" binding:"required" comment:"PV名称"`        // PV名称，必填
-	NewCapacity string `json:"new_capacity" binding:"required" comment:"新容量"` // 新容量，必填
-}
-
-// K8sPVBackupRequest 备份PV请求
-type K8sPVBackupReq struct {
-	ClusterID   int      `json:"cluster_id" binding:"required" comment:"集群ID"`  // 集群ID，必填
-	Names       []string `json:"names" binding:"required" comment:"PV名称列表"`     // PV名称列表，必填
-	BackupName  string   `json:"backup_name" binding:"required" comment:"备份名称"` // 备份名称，必填
-	Description string   `json:"description" comment:"备份描述"`                    // 备份描述
 }
 
 // ====================== PV响应实体 ======================
@@ -239,11 +216,11 @@ type PVListResponse struct {
 
 // PVDetailResponse PV详情响应
 type PVDetailResponse struct {
-	PV      PVEntity        `json:"pv"`      // PV信息
-	YAML    string          `json:"yaml"`    // YAML内容
-	Events  []PVEventEntity `json:"events"`  // 事件列表
-	Usage   PVUsageEntity   `json:"usage"`   // 使用情况
-	Metrics PVMetricsEntity `json:"metrics"` // 指标信息
+	PV     PVEntity        `json:"pv"`     // PV信息
+	YAML   string          `json:"yaml"`   // YAML内容
+	Events []PVEventEntity `json:"events"` // 事件列表
+	Usage  PVUsageEntity   `json:"usage"`  // 使用情况
+
 }
 
 // PVEventEntity PV事件实体
@@ -276,19 +253,6 @@ type PVUsedByEntity struct {
 }
 
 // PVMetricsEntity PV指标实体
-type PVMetricsEntity struct {
-	CapacityBytes     int64   `json:"capacity_bytes"`      // 容量(字节)
-	UsedBytes         int64   `json:"used_bytes"`          // 已使用(字节)
-	AvailableBytes    int64   `json:"available_bytes"`     // 可用(字节)
-	UsagePercentage   float64 `json:"usage_percentage"`    // 使用率
-	InodeCapacity     int64   `json:"inode_capacity"`      // inode容量
-	InodeUsed         int64   `json:"inode_used"`          // 已使用inode
-	InodeUsagePercent float64 `json:"inode_usage_percent"` // inode使用率
-	IOPSRead          float64 `json:"iops_read"`           // 读IOPS
-	IOPSWrite         float64 `json:"iops_write"`          // 写IOPS
-	ThroughputRead    float64 `json:"throughput_read"`     // 读吞吐量
-	ThroughputWrite   float64 `json:"throughput_write"`    // 写吞吐量
-}
 
 // PVExpandResponse PV扩容响应
 type PVExpandResponse struct {

@@ -199,7 +199,7 @@ func buildTemplateVariables(request *SendRequest) map[string]string {
 
 	// ===== 企业信息变量 =====
 	variables["company_name"] = "AI-CloudOps"
-	variables["platform_name"] = "智能运维管理平台"
+	variables["platform_name"] = "运维管理平台"
 	variables["department"] = "技术运维部"
 	variables["service_hotline"] = "400-000-0000"
 	variables["copyright"] = "Copyright © 2024 AI-CloudOps. All rights reserved."

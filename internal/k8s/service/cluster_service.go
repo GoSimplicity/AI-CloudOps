@@ -28,8 +28,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"strings"
-	"time"
 
 	"gorm.io/gorm"
 
@@ -49,8 +47,6 @@ type ClusterService interface {
 	DeleteCluster(ctx context.Context, req *model.DeleteClusterReq) error
 	GetClusterByID(ctx context.Context, req *model.GetClusterReq) (*model.K8sCluster, error)
 	RefreshClusterStatus(ctx context.Context, req *model.RefreshClusterReq) error
-	CheckClusterHealth(ctx context.Context, req *model.CheckClusterHealthReq) (model.ListResp[*model.ComponentHealthStatus], error)
-	GetClusterStats(ctx context.Context, req *model.GetClusterStatsReq) (*model.ClusterStats, error)
 }
 
 type clusterService struct {
@@ -69,7 +65,7 @@ func NewClusterService(dao dao.ClusterDAO, client client.K8sClient, clusterMgr m
 	}
 }
 
-// ListClusters 获取所有 Kubernetes 集群
+// ListClusters 获取集群列表
 func (c *clusterService) ListClusters(ctx context.Context, req *model.ListClustersReq) (model.ListResp[*model.K8sCluster], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sCluster]{}, fmt.Errorf("获取集群列表请求不能为空")
@@ -92,7 +88,7 @@ func (c *clusterService) ListClusters(ctx context.Context, req *model.ListCluste
 	}, nil
 }
 
-// GetClusterByID 根据 ID 获取单个 Kubernetes 集群
+// GetClusterByID 根据ID获取集群
 func (c *clusterService) GetClusterByID(ctx context.Context, req *model.GetClusterReq) (*model.K8sCluster, error) {
 	if req == nil || req.ID <= 0 {
 		return nil, fmt.Errorf("获取集群请求参数不能为空")
@@ -114,7 +110,7 @@ func (c *clusterService) GetClusterByID(ctx context.Context, req *model.GetClust
 	return cluster, nil
 }
 
-// CreateCluster 创建一个新的 Kubernetes 集群
+// CreateCluster 创建集群
 func (c *clusterService) CreateCluster(ctx context.Context, req *model.CreateClusterReq) error {
 	if req == nil {
 		return fmt.Errorf("创建集群请求不能为空")
@@ -185,7 +181,7 @@ func (c *clusterService) CreateCluster(ctx context.Context, req *model.CreateClu
 	return nil
 }
 
-// UpdateCluster 更新指定 ID 的 Kubernetes 集群
+// UpdateCluster 更新集群
 func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClusterReq) error {
 	if req == nil {
 		return fmt.Errorf("更新集群请求不能为空")
@@ -256,7 +252,7 @@ func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 	return nil
 }
 
-// DeleteCluster 删除指定 ID 的 Kubernetes 集群
+// DeleteCluster 删除集群
 func (c *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClusterReq) error {
 	if req == nil || req.ID <= 0 {
 		return fmt.Errorf("删除集群请求参数不能为空")
@@ -309,119 +305,4 @@ func (c *clusterService) RefreshClusterStatus(ctx context.Context, req *model.Re
 	}
 
 	return nil
-}
-
-// CheckClusterHealth 检查集群健康状态
-func (c *clusterService) CheckClusterHealth(ctx context.Context, req *model.CheckClusterHealthReq) (model.ListResp[*model.ComponentHealthStatus], error) {
-	if req == nil || req.ID <= 0 {
-		return model.ListResp[*model.ComponentHealthStatus]{}, fmt.Errorf("检查集群健康状态请求参数不能为空")
-	}
-
-	cluster, err := c.dao.GetClusterByID(ctx, req.ID)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return model.ListResp[*model.ComponentHealthStatus]{}, fmt.Errorf("集群不存在，ID: %d", req.ID)
-		}
-
-		c.logger.Error("CheckClusterHealth: 查询集群失败", zap.Int("clusterID", req.ID), zap.Error(err))
-		return model.ListResp[*model.ComponentHealthStatus]{}, fmt.Errorf("查询集群失败: %w", err)
-	}
-
-	// 清理敏感信息
-	cluster.KubeConfigContent = ""
-	cluster.Status = model.StatusError // 默认设置为错误状态
-
-	// 检查集群连接
-	kubeClient, err := c.client.GetKubeClient(cluster.ID)
-	if err != nil {
-		c.logger.Error("CheckClusterHealth: 获取客户端失败", zap.Error(err))
-		return model.ListResp[*model.ComponentHealthStatus]{}, nil
-	}
-
-	// 检查服务器版本
-	version, err := kubeClient.Discovery().ServerVersion()
-	if err != nil {
-		c.logger.Error("CheckClusterHealth: 连接失败", zap.Error(err))
-		return model.ListResp[*model.ComponentHealthStatus]{}, nil
-	}
-
-	// 更新集群版本和状态
-	cluster.Version = version.String()
-	cluster.Status = model.StatusRunning
-
-	// 获取组件状态
-	componentStatuses, total, err := utils.GetComponentStatuses(ctx, kubeClient)
-	if err != nil {
-		c.logger.Warn("CheckClusterHealth: 获取组件状态失败", zap.Error(err))
-		// 不影响整体健康检查结果
-	}
-
-	return model.ListResp[*model.ComponentHealthStatus]{
-		Total: total,
-		Items: componentStatuses,
-	}, nil
-}
-
-// GetClusterStats 获取集群统计信息
-func (c *clusterService) GetClusterStats(ctx context.Context, req *model.GetClusterStatsReq) (*model.ClusterStats, error) {
-	if req == nil || req.ID <= 0 {
-		return nil, fmt.Errorf("获取集群统计信息请求参数不能为空")
-	}
-
-	cluster, err := c.dao.GetClusterByID(ctx, req.ID)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("集群不存在，ID: %d", req.ID)
-		}
-
-		c.logger.Error("GetClusterStats: 查询集群失败", zap.Int("clusterID", req.ID), zap.Error(err))
-		return nil, fmt.Errorf("查询集群失败: %w", err)
-	}
-
-	// 清理敏感信息
-	cluster.KubeConfigContent = ""
-
-	kubeClient, err := c.client.GetKubeClient(cluster.ID)
-	if err != nil {
-		c.logger.Error("GetClusterStats: 获取客户端失败", zap.Error(err))
-		return nil, fmt.Errorf("获取客户端失败: %w", err)
-	}
-
-	stats := &model.ClusterStats{
-		ClusterID:      cluster.ID,
-		ClusterName:    cluster.Name,
-		LastUpdateTime: time.Now().Format(time.DateTime),
-	}
-
-	// 定义统计收集函数
-	collectFuncs := []struct {
-		name string
-		fn   func() error
-	}{
-		{"节点统计", func() error { return utils.CollectNodeStats(ctx, kubeClient, stats) }},
-		{"Pod统计", func() error { return utils.CollectPodStats(ctx, kubeClient, stats) }},
-		{"命名空间统计", func() error { return utils.CollectNamespaceStats(ctx, kubeClient, stats) }},
-		{"工作负载统计", func() error { return utils.CollectWorkloadStats(ctx, kubeClient, stats) }},
-		{"资源统计", func() error { return utils.CollectResourceStats(ctx, kubeClient, stats) }},
-		{"存储统计", func() error { return utils.CollectStorageStats(ctx, kubeClient, stats) }},
-		{"网络统计", func() error { return utils.CollectNetworkStats(ctx, kubeClient, stats) }},
-		{"事件统计", func() error { return utils.CollectEventStats(ctx, kubeClient, stats) }},
-	}
-
-	// 收集统计信息
-	var errors []string
-	for _, collect := range collectFuncs {
-		if err := collect.fn(); err != nil {
-			errors = append(errors, fmt.Sprintf("%s: %s", collect.name, err.Error()))
-		}
-	}
-
-	// 记录收集过程中的错误（不影响返回结果）
-	if len(errors) > 0 {
-		c.logger.Warn("GetClusterStats: 部分统计信息收集失败",
-			zap.Int("clusterID", req.ID),
-			zap.String("errors", strings.Join(errors, "; ")))
-	}
-
-	return stats, nil
 }

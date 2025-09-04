@@ -132,7 +132,7 @@ func (i *ingressService) GetIngressYaml(ctx context.Context, req *model.GetIngre
 	return d, nil
 }
 
-// CreateIngress TODO 创建Ingress
+// CreateIngress 创建ingress
 func (i *ingressService) CreateIngress(ctx context.Context, req *model.K8sIngressCreateOrUpdateReq) error {
 
 	cfg, err := i.getRestConfig(ctx, req.ClusterID)
@@ -151,7 +151,7 @@ func (i *ingressService) CreateIngress(ctx context.Context, req *model.K8sIngres
 	return nil
 }
 
-// UpdateIngress TODO 更新Ingress
+// UpdateIngress
 func (i *ingressService) UpdateIngress(ctx context.Context, req *model.K8sIngressCreateOrUpdateReq) error {
 
 	cfg, err := i.getRestConfig(ctx, req.ClusterID)

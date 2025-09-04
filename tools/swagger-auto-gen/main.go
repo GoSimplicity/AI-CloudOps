@@ -85,7 +85,7 @@ func main() {
 	}
 
 	if *verbose {
-		fmt.Println("🚀 AI-CloudOps 自动 Swagger 文档生成器")
+		fmt.Println("🚀 AI-CloudOps Swagger 文档生成器")
 		fmt.Printf("📁 项目根目录: %s\n", absRoot)
 		fmt.Printf("📄 输出目录: %s\n", absOutput)
 		fmt.Printf("⚙️ 环境配置: SWAGGER_ENABLED=%v\n", isEnvTrue("SWAGGER_ENABLED"))

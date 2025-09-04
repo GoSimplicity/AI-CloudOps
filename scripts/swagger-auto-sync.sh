@@ -63,9 +63,9 @@ check_sync_needed() {
     return 1
 }
 
-# 自动同步文档
+# 同步文档
 auto_sync() {
-    log_info "🔄 开始自动同步 Swagger 文档..."
+    log_info "🔄 开始同步 Swagger 文档..."
     
     if check_sync_needed; then
         log_info "执行同步操作..."
@@ -90,7 +90,7 @@ auto_sync() {
     fi
 }
 
-# 监控模式 - 文件变化时自动同步
+# 监控模式 - 文件变化时同步
 watch_mode() {
     log_info "🔍 启动文件监控模式..."
     log_info "监控目录: docs/"
@@ -209,14 +209,14 @@ install_tools() {
 
 # 显示帮助信息
 show_help() {
-    echo "Swagger 文档自动同步工具"
+    echo "Swagger 文档同步工具"
     echo ""
     echo "用法:"
     echo "  bash scripts/swagger-auto-sync.sh <command>"
     echo ""
     echo "命令:"
-    echo "  sync          自动检查并同步文档"
-    echo "  watch         监控文件变化并自动同步"
+    echo "  sync          检查并同步文档"
+    echo "  watch         监控文件变化并同步"
     echo "  force         强制重新生成并同步"
     echo "  verify        验证当前同步状态"
     echo "  install       安装文件监控工具"

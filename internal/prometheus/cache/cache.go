@@ -67,7 +67,7 @@ func NewMonitorCache(
 	}
 }
 
-// MonitorCacheManager 监控缓存管理入口
+// MonitorCacheManager 监控缓存入口
 func (mc *monitorCache) MonitorCacheManager(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, DefaultTaskTimeout)
 	defer cancel()

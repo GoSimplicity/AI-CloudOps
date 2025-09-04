@@ -51,8 +51,6 @@ func (k *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.PUT("/clusters/:id/update", k.UpdateCluster)
 		k8sGroup.DELETE("/clusters/:id/delete", k.DeleteCluster)
 		k8sGroup.POST("/clusters/:id/refresh", k.RefreshCluster)
-		k8sGroup.GET("/clusters/:id/health", k.CheckClusterHealth)
-		k8sGroup.GET("/clusters/:id/stats", k.GetClusterStats)
 	}
 }
 
@@ -138,37 +136,5 @@ func (k *K8sClusterHandler) RefreshCluster(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.clusterService.RefreshClusterStatus(ctx, &req)
-	})
-}
-
-func (k *K8sClusterHandler) CheckClusterHealth(ctx *gin.Context) {
-	var req model.CheckClusterHealthReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ID = id
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.clusterService.CheckClusterHealth(ctx, &req)
-	})
-}
-
-func (k *K8sClusterHandler) GetClusterStats(ctx *gin.Context) {
-	var req model.GetClusterStatsReq
-
-	id, err := utils.GetParamID(ctx)
-	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
-		return
-	}
-
-	req.ID = id
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.clusterService.GetClusterStats(ctx, &req)
 	})
 }
