@@ -161,6 +161,82 @@ func convertContainerPorts(ports []corev1.ContainerPort) []model.K8sContainerPor
 	return res
 }
 
+// BuildK8sContainers 构建容器列表
+func BuildK8sContainers(containers []corev1.Container) []*model.K8sPodContainer {
+	var k8sContainers []*model.K8sPodContainer
+
+	for _, container := range containers {
+		k8sContainer := &model.K8sPodContainer{
+			Name:            container.Name,
+			Image:           container.Image,
+			Command:         model.StringList(container.Command),
+			Args:            model.StringList(container.Args),
+			ImagePullPolicy: string(container.ImagePullPolicy),
+		}
+
+		// 转换环境变量
+		for _, env := range container.Env {
+			k8sContainer.Envs = append(k8sContainer.Envs, model.K8sEnvVar{
+				Name:  env.Name,
+				Value: env.Value,
+			})
+		}
+
+		// 转换端口配置
+		for _, port := range container.Ports {
+			k8sContainer.Ports = append(k8sContainer.Ports, model.K8sContainerPort{
+				Name:          port.Name,
+				ContainerPort: int(port.ContainerPort),
+				Protocol:      string(port.Protocol),
+			})
+		}
+
+		// 转换卷挂载
+		for _, volumeMount := range container.VolumeMounts {
+			k8sContainer.VolumeMounts = append(k8sContainer.VolumeMounts, model.K8sVolumeMount{
+				Name:      volumeMount.Name,
+				MountPath: volumeMount.MountPath,
+				ReadOnly:  volumeMount.ReadOnly,
+				SubPath:   volumeMount.SubPath,
+			})
+		}
+
+		// 转换资源要求
+		k8sContainer.Resources = model.ResourceRequirements{}
+
+		if container.Resources.Requests != nil {
+			if cpu, ok := container.Resources.Requests[corev1.ResourceCPU]; ok {
+				k8sContainer.Resources.Requests.CPU = cpu.String()
+			}
+			if memory, ok := container.Resources.Requests[corev1.ResourceMemory]; ok {
+				k8sContainer.Resources.Requests.Memory = memory.String()
+			}
+		}
+
+		if container.Resources.Limits != nil {
+			if cpu, ok := container.Resources.Limits[corev1.ResourceCPU]; ok {
+				k8sContainer.Resources.Limits.CPU = cpu.String()
+			}
+			if memory, ok := container.Resources.Limits[corev1.ResourceMemory]; ok {
+				k8sContainer.Resources.Limits.Memory = memory.String()
+			}
+		}
+
+		// 转换存活探测
+		if container.LivenessProbe != nil {
+			k8sContainer.LivenessProbe = buildK8sProbe(container.LivenessProbe)
+		}
+
+		// 转换就绪探测
+		if container.ReadinessProbe != nil {
+			k8sContainer.ReadinessProbe = buildK8sProbe(container.ReadinessProbe)
+		}
+
+		k8sContainers = append(k8sContainers, k8sContainer)
+	}
+
+	return k8sContainers
+}
 func convertVolumeMounts(mounts []corev1.VolumeMount) []model.K8sVolumeMount {
 	if len(mounts) == 0 {
 		return nil
