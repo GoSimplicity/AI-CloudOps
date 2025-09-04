@@ -152,7 +152,7 @@ func (k *K8sPodHandler) GetContainerLogs(ctx *gin.Context) {
 
 // GetPodYaml 获取Pod的YAML配置
 func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
-	var req model.K8sGetResourceYamlReq
+	var req = new(model.K8sGetPodReq)
 
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
@@ -163,8 +163,8 @@ func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 	//	return
 	//}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.podService.GetPodYaml(ctx, req.ClusterID, req.Namespace, req.ResourceName)
+	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+		return k.podService.GetPodYaml(ctx, req)
 	})
 }
 

@@ -64,7 +64,7 @@ type PodService interface {
 	GetPodList(ctx context.Context, queryParams *query.Query, req *model.GetPodListReq) (*model.ListResp[*model.K8sPod], error)
 	GetPodsByNodeName(ctx context.Context, req *model.PodsByNodeReq) ([]*model.K8sPod, error)
 	GetPod(ctx context.Context, req *model.K8sGetPodReq) (*model.K8sPod, error)
-	GetPodYaml(ctx context.Context, clusterID int, namespace, podName string) (string, error)
+	GetPodYaml(ctx context.Context, req *model.K8sGetPodReq) (string, error)
 	GetContainersByPod(ctx context.Context, req *model.PodContainersReq) ([]*model.K8sPodContainer, error)
 	GetPodLogs(ctx *gin.Context, req *model.PodLogReq) error
 	DeletePodWithOptions(ctx context.Context, req *model.K8sDeletePodReq) error
@@ -108,9 +108,9 @@ func (p *podService) GetContainersByPod(ctx context.Context, req *model.PodConta
 }
 
 // GetPodYaml 获取指定 Pod 的 YAML 配置
-func (p *podService) GetPodYaml(ctx context.Context, clusterID int, namespace, podName string) (string, error) {
+func (p *podService) GetPodYaml(ctx context.Context, req *model.K8sGetPodReq) (string, error) {
 
-	pod, err := p.podManager.GetPod(ctx, clusterID, namespace, podName)
+	pod, err := p.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.PodName)
 	if err != nil {
 		return "", err
 	}
@@ -212,7 +212,7 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.PodLogReq) error {
 	ctx.Writer.WriteHeader(http.StatusOK)
 
 	reader := bufio.NewReader(stream)
-	
+
 	streamCtx, cancel := context.WithCancel(ctx.Request.Context())
 
 	wait.UntilWithContext(streamCtx, func(context.Context) {
