@@ -26,6 +26,7 @@
 package utils
 
 import (
+	"context"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -254,5 +255,44 @@ func PodStatus(pod *corev1.Pod) string {
 		return statusUpdating
 	default:
 		return statusUnknown
+	}
+}
+
+// BuildK8sPod 构建pod模型
+func BuildK8sPod(ctx context.Context, clusterID int, pod corev1.Pod) (*model.K8sPod, error) {
+	status := getPodStatus(pod)
+
+	k8sPod := &model.K8sPod{
+		Name:        pod.Name,
+		Namespace:   pod.Namespace,
+		Status:      status,
+		NodeName:    pod.Spec.NodeName,
+		Labels:      pod.Labels,
+		Annotations: pod.Annotations,
+		Containers:  BuildK8sContainers(pod.Spec.Containers),
+	}
+
+	return k8sPod, nil
+}
+
+// getPodStatus 获取Pod状态
+func getPodStatus(pod corev1.Pod) string {
+	switch pod.Status.Phase {
+	case corev1.PodRunning:
+		// 检查所有容器是否就绪
+		for _, condition := range pod.Status.Conditions {
+			if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+				return "Running"
+			}
+		}
+		return "Pending"
+	case corev1.PodSucceeded:
+		return "Succeeded"
+	case corev1.PodFailed:
+		return "Failed"
+	case corev1.PodPending:
+		return "Pending"
+	default:
+		return "Unknown"
 	}
 }
