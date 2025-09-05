@@ -100,7 +100,7 @@ venv
 *.sw?
 go.mod
 .history
-config/config.yaml
+#config/config.yaml
 data/prometheus
 Prompt1.md
 Prompt2.md
@@ -109,3 +109,4 @@ docs/swagger.json
 docs/swagger.yaml
 tools/swagger-auto-gen/swagger-auto-gen
 go.sum
+config

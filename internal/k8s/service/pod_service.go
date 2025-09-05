@@ -30,6 +30,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils/query"
+	utilsStream "github.com/GoSimplicity/AI-CloudOps/pkg/utils/stream"
 	"github.com/gin-gonic/gin"
 	"io"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -43,6 +44,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -192,41 +194,56 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.PodLogReq) error {
 	if req.SinceTime != "" {
 		sinceTime, err := time.Parse(time.RFC3339, req.SinceTime)
 		if err != nil {
-			p.logger.Error("解析时间参数失败", zap.String("SinceTime", req.SinceTime), zap.Error(err))
+			p.logger.Error("解析时间参数失败", zap.String("sinceTime", req.SinceTime), zap.Error(err))
 			return pkg.NewBusinessError(constants.ErrInvalidParam, "时间参数格式错误")
 		}
 		metaTime := metav1.NewTime(sinceTime)
 		logOptions.SinceTime = &metaTime
 	}
-
-	stream, err := p.podManager.GetPodLogs(ctx.Request.Context(), req.ClusterID, req.Namespace, req.Container, logOptions)
-
+	out, err := p.podManager.GetPodLogs(ctx, req.ClusterID, req.Namespace, req.Container, logOptions)
 	if err != nil {
-		return pkg.NewBusinessError(constants.ErrK8sGetPodLogs, "获取 Pod 日志失败")
+		return err
 	}
-	defer stream.Close()
 
-	ctx.Writer.Header().Set("Content-Type", "text/event-stream")
-	ctx.Writer.Header().Set("Cache-Control", "no-cache")
-	ctx.Writer.Header().Set("Connection", "keep-alive")
-	ctx.Writer.WriteHeader(http.StatusOK)
+	utilsStream.SseStream(ctx, func(ctx context.Context, msgChan chan interface{}) {
 
-	reader := bufio.NewReader(stream)
+		defer func() {
+			if err = out.Close(); err != nil {
+				p.logger.Error("关闭 Pod 日志流失败", zap.Error(err))
+			}
+		}()
 
-	streamCtx, cancel := context.WithCancel(ctx.Request.Context())
+		reader := bufio.NewReader(out)
+		wait.UntilWithContext(ctx, func(ctx context.Context) {
 
-	wait.UntilWithContext(streamCtx, func(context.Context) {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			ctx.SSEvent("error", fmt.Sprintf("Failed reading stream: %v", err))
-			ctx.Writer.Flush()
-			cancel()
-			return
-		}
-		ctx.SSEvent("podLog", line)
-	}, 0)
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					line = strings.TrimSpace(line)
+					if len(line) > 0 {
+						msgChan <- line
+					}
+					return
+				}
+				p.logger.Error("读取 Pod 日志失败", zap.Error(err))
+				return
+			}
+			// 处理 \r 覆盖输出
+			if strings.ContainsRune(line, '\r') {
+				segments := strings.Split(line, "\r")
+				for _, seg := range segments {
+					seg = strings.TrimSpace(seg)
+					if seg != "" {
+						msgChan <- seg
+					}
+				}
+			} else {
+				msgChan <- strings.TrimSpace(line)
+			}
+		}, 0)
+	}, p.logger)
 
-	return nil
+	return err
 }
 
 // DeletePodWithOptions 删除Pod

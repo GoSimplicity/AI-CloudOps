@@ -146,6 +146,7 @@ func (k *K8sPodHandler) GetContainerLogs(ctx *gin.Context) {
 	}
 
 	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+
 		return nil, k.podService.GetPodLogs(ctx, req)
 	})
 }

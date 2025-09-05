@@ -118,7 +118,6 @@ func (t *terminaler) HandleSession(ctx context.Context, shell, namespace, podNam
 	go wait.UntilWithContext(ctx, func(ctx context.Context) {
 
 		if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeWait)); err != nil {
-			//klog.V(4).Infof("failed to send ping packet: %s, closing websocket connection", err)
 			cancel()
 			_ = conn.Close()
 		}
