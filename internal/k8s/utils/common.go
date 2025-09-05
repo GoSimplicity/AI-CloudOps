@@ -24,3 +24,33 @@
  */
 
 package utils
+
+import (
+	"fmt"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/yaml"
+)
+
+const (
+	statusPending     = "Pending"
+	statusUnknown     = "Unknown"
+	statusReady       = "Ready"
+	statusTerminating = "Terminating"
+	statusRunning     = "Running"
+	statusUpdating    = "Updating"
+	statusSucceeded   = "Succeeded"
+	statusFailed      = "Failed"
+	statusEvicted     = "Evicted"
+)
+
+func ConvertUnstructuredToYAML(obj *unstructured.Unstructured) (string, error) {
+	jsonBytes, err := obj.MarshalJSON()
+	if err != nil {
+		return "", fmt.Errorf("无法序列化unstructured对象为json: %v", err)
+	}
+	yamlBytes, err := yaml.JSONToYAML(jsonBytes)
+	if err != nil {
+		return "", fmt.Errorf("无法将json转换为yaml: %v", err)
+	}
+	return string(yamlBytes), nil
+}

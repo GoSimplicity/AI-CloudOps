@@ -124,7 +124,7 @@ func (k *K8sIngressEntity) TableName() string {
 	return "cl_k8s_ingresses"
 }
 
-// K8sIngressListRequest Ingress列表查询请求
+// K8sIngressListReq Ingress列表查询请求
 type K8sIngressListReq struct {
 	ClusterID        int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID，必填
 	Namespace        string `json:"namespace" form:"namespace" comment:"命名空间"`                        // 命名空间
@@ -137,20 +137,15 @@ type K8sIngressListReq struct {
 	PageSize         int    `json:"page_size" form:"page_size" comment:"每页大小"`                        // 每页大小
 }
 
-// K8sIngressCreateRequest 创建Ingress请求
-type K8sIngressCreateReq struct {
-	ClusterID        int                   `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
-	Namespace        string                `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
-	Name             string                `json:"name" binding:"required" comment:"Ingress名称"`  // Ingress名称，必填
-	IngressClassName *string               `json:"ingress_class_name" comment:"Ingress类名"`       // Ingress类名
-	Rules            []IngressRuleReq      `json:"rules" binding:"required" comment:"Ingress规则"` // Ingress规则，必填
-	TLS              []IngressTLSReq       `json:"tls" comment:"TLS配置"`                          // TLS配置
-	Labels           map[string]string     `json:"labels" comment:"标签"`                          // 标签
-	Annotations      map[string]string     `json:"annotations" comment:"注解"`                     // 注解
-	IngressYaml      *networkingv1.Ingress `json:"ingress_yaml" comment:"Ingress YAML对象"`        // Ingress YAML对象
+// K8sIngressCreateOrUpdateReq 创建或更新Ingress请求
+type K8sIngressCreateOrUpdateReq struct {
+	ClusterID   int    `json:"cluster_id" binding:"required" comment:"集群ID"`             // 集群ID，必填
+	Namespace   string `json:"namespace" binding:"required" comment:"命名空间"`              // 命名空间，必填
+	Name        string `json:"name" binding:"required" comment:"Ingress名称"`              // Ingress名称，必填
+	IngressYaml string `json:"ingress_yaml" binding:"required" comment:"Ingress YAML对象"` // Ingress YAML对象
 }
 
-// K8sIngressUpdateRequest 更新Ingress请求
+// K8sIngressUpdateReq 更新Ingress请求
 type K8sIngressUpdateReq struct {
 	ClusterID        int                   `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace        string                `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
@@ -163,32 +158,42 @@ type K8sIngressUpdateReq struct {
 	IngressYaml      *networkingv1.Ingress `json:"ingress_yaml" comment:"Ingress YAML对象"`        // Ingress YAML对象
 }
 
-// K8sIngressDeleteRequest 删除Ingress请求
+// K8sIngressDeleteReq 删除Ingress请求
 type K8sIngressDeleteReq struct {
-	ClusterID          int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
-	Namespace          string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
-	Name               string `json:"name" binding:"required" comment:"Ingress名称"`  // Ingress名称，必填
-	GracePeriodSeconds *int64 `json:"grace_period_seconds" comment:"优雅删除时间（秒）"`     // 优雅删除时间
-	Force              bool   `json:"force" comment:"是否强制删除"`                       // 是否强制删除
+	ClusterID          int    `json:"cluster_id" binding:"required,gt=0" comment:"集群ID"` // 集群ID，必填
+	Namespace          string `json:"namespace" binding:"required" comment:"命名空间"`       // 命名空间，必填
+	Name               string `json:"name" binding:"required" comment:"Ingress名称"`       // Ingress名称，必填
+	GracePeriodSeconds *int64 `json:"grace_period_seconds" comment:"优雅删除时间（秒）"`          // 优雅删除时间
+	Force              bool   `json:"force" comment:"是否强制删除"`                            // 是否强制删除
 }
 
-// K8sIngressEventRequest 获取Ingress事件请求
+// K8sIngressBatchDeleteReq 批量删除Ingress请求
+type K8sIngressBatchDeleteReq struct {
+	ClusterID          int      `json:"cluster_id"  uri:"required,gt=0" comment:"集群ID"` // 集群ID，必填
+	Namespace          string   `json:"namespace" uri:"required" comment:"命名空间"`        // 命名空间，必填
+	Names              []string `json:"names" binding:"required" comment:"Ingress名称列表"` // Ingress名称列表，必填
+	GracePeriodSeconds *int64   `json:"grace_period_seconds" comment:"优雅删除时间（秒）"`       // 优雅删除时间
+	Force              bool     `json:"force" comment:"是否强制删除"`                         // 是否强制删除
+}
+
+// K8sIngressEventReq 获取Ingress事件请求
 type K8sIngressEventReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
-	Name      string `json:"name" binding:"required" comment:"Ingress名称"`  // Ingress名称，必填
-	LimitDays int    `json:"limit_days" comment:"限制天数内的事件"`                // 限制天数内的事件
+	ClusterID   int    `json:"cluster_id,gt=0" binding:"required" comment:"集群ID"` // 集群ID，必填
+	Namespace   string `json:"namespace" binding:"required" comment:"命名空间"`       // 命名空间，必填
+	IngressName string `json:"name" binding:"required" comment:"Ingress名称"`       // Ingress名称，必填
+	LimitDays   int    `json:"limit_days" comment:"限制天数内的事件"`                     // 限制天数内的事件
 }
 
-// K8sIngressTLSTestRequest Ingress TLS证书测试请求
+// K8sIngressTLSTestReq Ingress TLS证书测试请求
 type K8sIngressTLSTestReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
-	Name      string `json:"name" binding:"required" comment:"Ingress名称"`  // Ingress名称，必填
-	Host      string `json:"host" binding:"required" comment:"测试主机名"`      // 测试主机名，必填
+	ClusterID int `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
+	//Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
+	//Name      string `json:"name" binding:"required" comment:"Ingress名称"`  // Ingress名称，必填
+	Host string `json:"host" form:"host" binding:"required" comment:"测试主机名"` // 测试主机名，必填
+	Port int    `json:"port" form:"port" binding:"omitempty,gt=0,lte=65535" comment:"端口"`
 }
 
-// K8sIngressBackendHealthRequest 检查Ingress后端健康状态请求
+// K8sIngressBackendHealthReq 检查Ingress后端健康状态请求
 type K8sIngressBackendHealthReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID，必填
 	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间，必填
@@ -443,4 +448,73 @@ type K8sBackendHealth struct {
 	Status       string `json:"status"`        // 状态描述
 	CheckTime    string `json:"check_time"`    // 检查时间
 	ErrorMessage string `json:"error_message"` // 错误信息
+}
+
+// GetIngressListReq 获取Ingress列表请求参数结构体s
+type GetIngressListReq struct {
+	ListReq
+
+	ClusterID int               `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	Namespace string            `json:"namespace" form:"namespace" binding:"omitempty"` // 命名空间
+	Labels    map[string]string `json:"labels" form:"labels" binding:"omitempty"`       // 标签
+	Status    string            `json:"status" form:"status" binding:"omitempty"`       // Ingress状态
+}
+
+// GetIngressDetailsReq 获取Ingress详情请求
+type GetIngressDetailsReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
+	Name      string `json:"name" uri:"name" binding:"required"`             // Ingress名称
+}
+
+type GetIngressYamlReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
+	Name      string `json:"name" uri:"name" binding:"required"`             // Ingress名称
+}
+
+// GetIngressEventsReq 获取Ingress事件请求
+type GetIngressEventsReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required" uri:"cluster_id"`                        // 集群ID
+	Namespace string `json:"namespace" binding:"required" uri:"namespace"`                          // 命名空间
+	Name      string `json:"name" binding:"required" uri:"name"`                                    // Ingress名称
+	EventType string `json:"event_type" binding:"omitempty,oneof=normal warning" form:"event_type"` // 事件类型
+	Limit     int    `json:"limit" binding:"required,gt=0,lte=100" form:"limit"`                    // 限制数量
+}
+
+type K8sIngress struct {
+	Name              string              `json:"name"`
+	ClusterID         int                 `json:"cluster_id"`
+	UID               string              `json:"uid"`
+	Namespace         string              `json:"namespace"`
+	IngressClassName  string              `json:"ingress_class_name"`
+	Rules             []IngressRule       `json:"rules"`
+	TLS               []IngressTLS        `json:"tls,omitempty"`
+	LoadBalancer      IngressLoadBalancer `json:"load_balancer"`
+	Labels            map[string]string   `json:"labels"`
+	Annotations       map[string]string   `json:"annotations"`
+	CreationTimestamp time.Time           `json:"creation_timestamp"`
+	Status            string              `json:"status"`
+	Age               string              `json:"age"`
+	Events            []K8sEvent          `json:"events,omitempty"`
+	Hosts             []string            `json:"hosts"`
+}
+
+// IngressServicePort Ingress服务端口信息
+type IngressServicePort struct {
+	Name   string `json:"name,omitempty"`
+	Number int32  `json:"number,omitempty"`
+}
+
+// IngressIngress Ingress入口信息
+type IngressIngress struct {
+	IP       string               `json:"ip,omitempty"`
+	Hostname string               `json:"hostname,omitempty"`
+	Ports    []IngressIngressPort `json:"ports,omitempty"`
+}
+
+// IngressIngressPort Ingress入口端口信息
+type IngressIngressPort struct {
+	Port     int32  `json:"port"`
+	Protocol string `json:"protocol"`
 }

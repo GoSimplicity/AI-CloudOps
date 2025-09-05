@@ -59,6 +59,7 @@ import (
 	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
@@ -92,6 +93,8 @@ var HandlerSet = wire.NewSet(
 	k8sHandler.NewK8sClusterRoleHandler,
 	k8sHandler.NewK8sRoleBindingHandler,
 	k8sHandler.NewK8sClusterRoleBindingHandler,
+	k8sHandler.NewK8sIngressHandler,
+	k8sHandler.NewK8sPodHandler,
 
 	promHandler.NewAlertPoolHandler,
 	promHandler.NewMonitorConfigHandler,
@@ -113,6 +116,7 @@ var HandlerSet = wire.NewSet(
 	workorderHandler.NewNotificationHandler,
 	treeHandler.NewTreeNodeHandler,
 	treeHandler.NewTreeLocalHandler,
+	terminal.NewTerminalerHandler,
 )
 
 var ServiceSet = wire.NewSet(
@@ -133,6 +137,9 @@ var ServiceSet = wire.NewSet(
 	k8sService.NewRoleBindingService,
 	k8sService.NewClusterRoleBindingService,
 	k8sService.NewRBACService,
+	k8sService.NewIngressService,
+	k8sService.NewPodService,
+
 	userService.NewUserService,
 	authService.NewApiService,
 	authService.NewRoleService,
@@ -178,6 +185,7 @@ var DaoSet = wire.NewSet(
 	k8sDao.NewClusterDAO,
 	k8sDao.NewYamlTaskDAO,
 	k8sDao.NewYamlTemplateDAO,
+
 	workorderDao.NewWorkorderFormDesignDAO,
 	workorderDao.NewTemplateDAO,
 	workorderDao.NewWorkorderInstanceDAO,

@@ -178,7 +178,6 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 		utils.ErrorWithMessage(ctx, "连接ECS实例失败: "+err.Error())
 		return
 	}
-
 	// 进行 web-ssh 命令通信
 	h.ssh.Web2SSH(ws)
 }

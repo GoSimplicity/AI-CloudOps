@@ -305,7 +305,7 @@ func DeleteWithId(l *zap.Logger, funcName string, timeout int, url string, param
 // HandleRequest 用于统一处理请求绑定和响应
 func HandleRequest(ctx *gin.Context, req interface{}, action func() (interface{}, error)) {
 	if req != nil {
-		// 如果提供了绑定对象，执行数据绑定
+		// json / form 如果提供了绑定对象，执行数据绑定
 		if err := ctx.ShouldBind(req); err != nil {
 			BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
 			return

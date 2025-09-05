@@ -25,353 +25,401 @@
 
 package service
 
-// import (
-// 	"context"
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils/query"
+	utilsStream "github.com/GoSimplicity/AI-CloudOps/pkg/utils/stream"
+	"github.com/gin-gonic/gin"
+	"io"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/httpstream"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/transport/spdy"
+	"net/http"
+	"net/url"
+	"path"
+	"path/filepath"
+	"strings"
+	"time"
 
-// 	"io"
+	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
-// 	"time"
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	pkgutils "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"go.uber.org/zap"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
-// 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
-// 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+type PodService interface {
+	GetPodList(ctx context.Context, queryParams *query.Query, req *model.GetPodListReq) (*model.ListResp[*model.K8sPod], error)
+	GetPodsByNodeName(ctx context.Context, req *model.PodsByNodeReq) ([]*model.K8sPod, error)
+	GetPod(ctx context.Context, req *model.K8sGetPodReq) (*model.K8sPod, error)
+	GetPodYaml(ctx context.Context, req *model.K8sGetPodReq) (string, error)
+	GetContainersByPod(ctx context.Context, req *model.PodContainersReq) ([]*model.K8sPodContainer, error)
+	GetPodLogs(ctx *gin.Context, req *model.PodLogReq) error
+	DeletePodWithOptions(ctx context.Context, req *model.K8sDeletePodReq) error
+	BatchDeletePods(ctx context.Context, req *model.K8sPodBatchDeleteReq) error
+	ExecInPod(ctx *gin.Context, req *model.PodExecReq) error
+	PortForward(ctx context.Context, req *model.PodPortForwardReq) error
+	DownloadPodFile(ctx *gin.Context, req *model.PodFileReq) error
+	UploadFileToPod(ctx *gin.Context, req *model.PodFileReq) error
+}
 
-// 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
-// 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-// 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
-// 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
-// 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-// 	"go.uber.org/zap"
-// 	corev1 "k8s.io/api/core/v1"
-// 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-// )
+type podService struct {
+	dao        dao.ClusterDAO
+	client     client.K8sClient   // 保持向后兼容
+	podManager manager.PodManager // 新的依赖注入
+	logger     *zap.Logger
+}
 
-// type PodService interface {
-// 	GetPodsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPod, error)
-// 	GetPodList(ctx context.Context, req *model.K8sGetResourceListReq) ([]*model.K8sPodResponse, error)
-// 	GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sPod, error)
-// 	GetPod(ctx context.Context, req *model.K8sGetResourceReq) (*model.K8sPodResponse, error)
-// 	GetPodYaml(ctx context.Context, clusterID int, namespace, podName string) (*corev1.Pod, error)
-// 	GetContainersByPod(ctx context.Context, clusterID int, namespace string, podName string) ([]*model.K8sPodContainer, error)
-// 	GetContainerLogs(ctx context.Context, clusterID int, namespace, podName, containerName string) (string, error)
-// 	GetPodLogs(ctx context.Context, req *model.PodLogReq) (string, error)
-// 	DeletePod(ctx context.Context, clusterId int, namespace, podName string) error
-// 	DeletePodWithOptions(ctx context.Context, req *model.K8sDeleteResourceReq) error
-// 	ExecInPod(ctx context.Context, req *model.PodExecReq) error
-// 	PortForward(ctx context.Context, req *model.PodPortForwardReq) error
-// }
+func NewPodService(dao dao.ClusterDAO, client client.K8sClient, podManager manager.PodManager, logger *zap.Logger) PodService {
+	return &podService{
+		dao:        dao,
+		client:     client,     // 保持向后兼容，某些方法可能仍需要
+		podManager: podManager, // 使用新的 manager
+		logger:     logger,
+	}
+}
 
-// type podService struct {
-// 	dao        dao.ClusterDAO
-// 	client     client.K8sClient   // 保持向后兼容
-// 	podManager manager.PodManager // 新的依赖注入
-// 	logger     *zap.Logger
-// }
+// GetContainersByPod 获取指定 Pod 中的容器列表
+func (p *podService) GetContainersByPod(ctx context.Context, req *model.PodContainersReq) ([]*model.K8sPodContainer, error) {
+	// 使用新的 PodManager
+	pod, err := p.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.PodName)
+	if err != nil {
+		p.logger.Error("获取 Pod 失败",
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("pod_ame", req.PodName),
+			zap.Error(err))
+		return nil, err
+	}
 
-// func NewPodService(dao dao.ClusterDAO, client client.K8sClient, podManager manager.PodManager, logger *zap.Logger) PodService {
-// 	return &podService{
-// 		dao:        dao,
-// 		client:     client,     // 保持向后兼容，某些方法可能仍需要
-// 		podManager: podManager, // 使用新的 manager
-// 		logger:     logger,
-// 	}
-// }
+	return k8sutils.ConvertK8sContainers(pod.Spec.Containers), nil
+}
 
-// // GetPodsByNamespace 获取命名空间中的pod列表
-// func (p *podService) GetPodsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPod, error) {
-// 	// 使用新的 PodManager
-// 	podList, err := p.podManager.GetPodList(ctx, clusterID, namespace, metav1.ListOptions{})
-// 	if err != nil {
-// 		p.logger.Error("获取 Pod 列表失败",
-// 			zap.Int("clusterID", clusterID),
-// 			zap.String("namespace", namespace),
-// 			zap.Error(err))
-// 		return nil, err
-// 	}
+// GetPodYaml 获取指定 Pod 的 YAML 配置
+func (p *podService) GetPodYaml(ctx context.Context, req *model.K8sGetPodReq) (string, error) {
 
-// 	return k8sutils.BuildK8sPods(podList.Items), nil
-// }
+	pod, err := p.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.PodName)
+	if err != nil {
+		return "", err
+	}
 
-// // GetContainersByPod 获取指定 Pod 中的容器列表
-// func (p *podService) GetContainersByPod(ctx context.Context, clusterID int, namespace, podName string) ([]*model.K8sPodContainer, error) {
-// 	// 使用新的 PodManager
-// 	pod, err := p.podManager.GetPod(ctx, clusterID, namespace, podName)
-// 	if err != nil {
-// 		p.logger.Error("获取 Pod 失败",
-// 			zap.Int("clusterID", clusterID),
-// 			zap.String("namespace", namespace),
-// 			zap.String("podName", podName),
-// 			zap.Error(err))
-// 		return nil, err
-// 	}
+	m, err := runtime.DefaultUnstructuredConverter.ToUnstructured(pod)
+	if err != nil {
+		return "", pkg.NewBusinessError(constants.ErrK8sResourceGet, "获取Pod yaml失败")
+	}
 
-// 	return k8sutils.BuildK8sContainersWithPointer(k8sutils.BuildK8sContainers(pod.Spec.Containers)), nil
-// }
+	unstructuredObj := &unstructured.Unstructured{Object: m}
 
-// // GetContainerLogs 获取指定容器的日志
-// func (p *podService) GetContainerLogs(ctx context.Context, clusterID int, namespace, podName, containerName string) (string, error) {
-// 	// 使用新的 PodManager
-// 	logOptions := &corev1.PodLogOptions{Container: containerName}
-// 	logs, err := p.podManager.GetPodLogs(ctx, clusterID, namespace, podName, logOptions)
-// 	if err != nil {
-// 		p.logger.Error("获取容器日志失败",
-// 			zap.Int("clusterID", clusterID),
-// 			zap.String("namespace", namespace),
-// 			zap.String("podName", podName),
-// 			zap.String("containerName", containerName),
-// 			zap.Error(err))
-// 		return "", err
-// 	}
+	d, err := utils.ConvertUnstructuredToYAML(unstructuredObj)
+	if err != nil {
+		p.logger.Error("序列化Ingress为yaml失败", zap.Error(err))
+		return "", pkg.NewBusinessError(constants.ErrK8sResourceOperation, "序列化Pod失败")
+	}
 
-// 	return logs, nil
-// }
+	return d, nil
+}
 
-// // GetPodYaml 获取pod的YAML
-// func (p *podService) GetPodYaml(ctx context.Context, clusterID int, namespace, podName string) (*corev1.Pod, error) {
-// 	// 使用新的 PodManager
-// 	pod, err := p.podManager.GetPod(ctx, clusterID, namespace, podName)
-// 	if err != nil {
-// 		p.logger.Error("获取 Pod YAML 失败",
-// 			zap.Int("clusterID", clusterID),
-// 			zap.String("namespace", namespace),
-// 			zap.String("podName", podName),
-// 			zap.Error(err))
-// 		return nil, err
-// 	}
+// GetPodsByNodeName 获取指定节点的 Pod 列表
+func (p *podService) GetPodsByNodeName(ctx context.Context, req *model.PodsByNodeReq) ([]*model.K8sPod, error) {
+	// 使用新的 PodManager
+	pods, err := p.podManager.GetPodsByNodeName(ctx, req.ClusterID, req.NodeName)
+	if err != nil {
+		p.logger.Error("获取节点 Pod 列表失败",
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("nodeName", req.NodeName),
+			zap.Error(err))
+		return nil, err
+	}
 
-// 	return pod, nil
-// }
+	return k8sutils.ConvertToK8sPods(pods.Items), nil
+}
 
-// // GetPodsByNodeName 获取节点的pod列表
-// func (p *podService) GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sPod, error) {
-// 	// 使用新的 PodManager
-// 	pods, err := p.podManager.GetPodsByNodeName(ctx, clusterID, nodeName)
-// 	if err != nil {
-// 		p.logger.Error("获取节点 Pod 列表失败",
-// 			zap.Int("clusterID", clusterID),
-// 			zap.String("nodeName", nodeName),
-// 			zap.Error(err))
-// 		return nil, err
-// 	}
+// GetPodList 获取Pod列表
+func (p *podService) GetPodList(ctx context.Context, queryParam *query.Query, req *model.GetPodListReq) (*model.ListResp[*model.K8sPod], error) {
 
-// 	return k8sutils.BuildK8sPods(pods.Items), nil
-// }
+	_ = queryParam.AppendLabelSelector(req.Labels)
 
-// // DeletePod 删除pod
-// func (p *podService) DeletePod(ctx context.Context, clusterID int, namespace, podName string) error {
-// 	// 使用新的 PodManager
-// 	err := p.podManager.DeletePod(ctx, clusterID, namespace, podName, metav1.DeleteOptions{})
-// 	if err != nil {
-// 		p.logger.Error("删除 Pod 失败",
-// 			zap.Int("clusterID", clusterID),
-// 			zap.String("namespace", namespace),
-// 			zap.String("podName", podName),
-// 			zap.Error(err))
-// 		return err
-// 	}
+	if req.Namespace == "" {
+		req.Namespace = corev1.NamespaceAll
+	}
 
-// 	return nil
-// }
+	pods, err := p.podManager.GetPodList(ctx, req.ClusterID, req.Namespace, queryParam)
+	if err != nil {
+		p.logger.Error("获取Ingress列表失败",
+			zap.String("namespace", req.Namespace),
+			zap.Error(err))
 
-// // ==================== 新增的标准化Service方法 ====================
+		return nil, pkg.NewBusinessError(constants.ErrK8sResourceList, "获取Ingress列表失败")
+	}
+	return pods, nil
+}
 
-// // GetPodList 获取pod列表
-// func (p *podService) GetPodList(ctx context.Context, req *model.K8sGetResourceListReq) ([]*model.K8sPodResponse, error) {
-// 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
-// 	if err != nil {
-// 		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-// 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-// 	}
+// GetPod 获取单个Pod详情
+func (p *podService) GetPod(ctx context.Context, req *model.K8sGetPodReq) (*model.K8sPod, error) {
 
-// 	listOptions := k8sutils.ConvertToMetaV1ListOptions(req)
-// 	podList, err := kubeClient.CoreV1().Pods(req.Namespace).List(ctx, listOptions)
-// 	if err != nil {
-// 		p.logger.Error("获取Pod列表失败",
-// 			zap.String("Namespace", req.Namespace),
-// 			zap.Error(err))
-// 		return nil, pkg.NewBusinessError(constants.ErrK8sResourceList, "获取Pod列表失败")
-// 	}
+	pod, err := p.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.PodName)
+	if err != nil {
+		return nil, pkg.NewBusinessError(constants.ErrK8sResourceGet, "获取Pod详情失败")
+	}
+	return k8sutils.ConvertToK8sPod(pod), nil
+}
 
-// 	pods := make([]*model.K8sPodResponse, 0, len(podList.Items))
-// 	for _, pod := range podList.Items {
-// 		podResponse := p.convertPodToResponse(&pod)
-// 		pods = append(pods, podResponse)
-// 	}
+// GetPodLogs 获取Pod日志
+func (p *podService) GetPodLogs(ctx *gin.Context, req *model.PodLogReq) error {
 
-// 	return pods, nil
-// }
+	logOptions := &corev1.PodLogOptions{
+		Container:    req.Container,
+		Follow:       req.Follow,
+		Previous:     req.Previous,
+		SinceSeconds: req.SinceSeconds,
+		Timestamps:   req.Timestamps,
+		TailLines:    req.TailLines,
+		LimitBytes:   req.LimitBytes,
+	}
 
-// // GetPod 获取pod详情
-// func (p *podService) GetPod(ctx context.Context, req *model.K8sGetResourceReq) (*model.K8sPodResponse, error) {
-// 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
-// 	if err != nil {
-// 		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-// 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-// 	}
+	if req.SinceTime != "" {
+		sinceTime, err := time.Parse(time.RFC3339, req.SinceTime)
+		if err != nil {
+			p.logger.Error("解析时间参数失败", zap.String("sinceTime", req.SinceTime), zap.Error(err))
+			return pkg.NewBusinessError(constants.ErrInvalidParam, "时间参数格式错误")
+		}
+		metaTime := metav1.NewTime(sinceTime)
+		logOptions.SinceTime = &metaTime
+	}
+	out, err := p.podManager.GetPodLogs(ctx, req.ClusterID, req.Namespace, req.Container, logOptions)
+	if err != nil {
+		return err
+	}
 
-// 	pod, err := kubeClient.CoreV1().Pods(req.Namespace).Get(ctx, req.ResourceName, metav1.GetOptions{})
-// 	if err != nil {
-// 		p.logger.Error("获取Pod详情失败",
-// 			zap.String("Namespace", req.Namespace),
-// 			zap.String("PodName", req.ResourceName),
-// 			zap.Error(err))
-// 		return nil, pkg.NewBusinessError(constants.ErrK8sResourceGet, "获取Pod详情失败")
-// 	}
+	utilsStream.SseStream(ctx, func(ctx context.Context, msgChan chan interface{}) {
 
-// 	return p.convertPodToResponse(pod), nil
-// }
+		defer func() {
+			if err = out.Close(); err != nil {
+				p.logger.Error("关闭 Pod 日志流失败", zap.Error(err))
+			}
+		}()
 
-// // GetPodLogs 获取pod日志
-// func (p *podService) GetPodLogs(ctx context.Context, req *model.PodLogReq) (string, error) {
-// 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
-// 	if err != nil {
-// 		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-// 		return "", pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-// 	}
+		reader := bufio.NewReader(out)
+		wait.UntilWithContext(ctx, func(ctx context.Context) {
 
-// 	logOptions := &corev1.PodLogOptions{
-// 		Container:    req.Container,
-// 		Follow:       req.Follow,
-// 		Previous:     req.Previous,
-// 		SinceSeconds: req.SinceSeconds,
-// 		Timestamps:   req.Timestamps,
-// 		TailLines:    req.TailLines,
-// 		LimitBytes:   req.LimitBytes,
-// 	}
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					line = strings.TrimSpace(line)
+					if len(line) > 0 {
+						msgChan <- line
+					}
+					return
+				}
+				p.logger.Error("读取 Pod 日志失败", zap.Error(err))
+				return
+			}
+			// 处理 \r 覆盖输出
+			if strings.ContainsRune(line, '\r') {
+				segments := strings.Split(line, "\r")
+				for _, seg := range segments {
+					seg = strings.TrimSpace(seg)
+					if seg != "" {
+						msgChan <- seg
+					}
+				}
+			} else {
+				msgChan <- strings.TrimSpace(line)
+			}
+		}, 0)
+	}, p.logger)
 
-// 	if req.SinceTime != "" {
-// 		sinceTime, err := time.Parse(time.RFC3339, req.SinceTime)
-// 		if err != nil {
-// 			p.logger.Error("解析时间参数失败", zap.String("SinceTime", req.SinceTime), zap.Error(err))
-// 			return "", pkg.NewBusinessError(constants.ErrInvalidParam, "时间参数格式错误")
-// 		}
-// 		metaTime := metav1.NewTime(sinceTime)
-// 		logOptions.SinceTime = &metaTime
-// 	}
+	return err
+}
 
-// 	podLogRequest := kubeClient.CoreV1().Pods(req.Namespace).GetLogs(req.ResourceName, logOptions)
-// 	podLogs, err := podLogRequest.Stream(ctx)
-// 	if err != nil {
-// 		p.logger.Error("获取Pod日志失败",
-// 			zap.String("Namespace", req.Namespace),
-// 			zap.String("PodName", req.ResourceName),
-// 			zap.String("Container", req.Container),
-// 			zap.Error(err))
-// 		return "", pkg.NewBusinessError(constants.ErrK8sResourceOperation, "获取Pod日志失败")
-// 	}
-// 	defer podLogs.Close()
+// DeletePodWithOptions 删除Pod
+func (p *podService) DeletePodWithOptions(ctx context.Context, req *model.K8sDeletePodReq) error {
+	var deleteOpts = metav1.DeleteOptions{
+		GracePeriodSeconds: req.GracePeriodSeconds,
+		PropagationPolicy: func() *metav1.DeletionPropagation {
+			if req.Force {
+				policy := metav1.DeletePropagationBackground
+				return &policy
+			}
+			return nil
+		}(),
+	}
 
-// 	logData, err := io.ReadAll(podLogs)
-// 	if err != nil {
-// 		p.logger.Error("读取日志数据失败", zap.Error(err))
-// 		return "", pkg.NewBusinessError(constants.ErrK8sResourceOperation, "读取日志数据失败")
-// 	}
+	if err := p.podManager.DeletePod(ctx, req.ClusterID, req.Namespace, req.PodName, deleteOpts); err != nil {
+		return err
+	}
 
-// 	return string(logData), nil
-// }
+	p.logger.Info("成功删除Pod",
+		zap.String("Namespace", req.Namespace),
+		zap.String("PodName", req.PodName))
+	return nil
+}
 
-// // DeletePodWithOptions 删除pod
-// func (p *podService) DeletePodWithOptions(ctx context.Context, req *model.K8sDeleteResourceReq) error {
-// 	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
-// 	if err != nil {
-// 		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-// 		return pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-// 	}
+// BatchDeletePods 批量删除Pod
+func (p *podService) BatchDeletePods(ctx context.Context, req *model.K8sPodBatchDeleteReq) error {
 
-// 	deleteOptions := metav1.DeleteOptions{}
-// 	if req.GracePeriodSeconds != nil {
-// 		deleteOptions.GracePeriodSeconds = req.GracePeriodSeconds
-// 	}
+	var deleteOpts = metav1.DeleteOptions{
+		GracePeriodSeconds: req.GracePeriodSeconds,
+		PropagationPolicy: func() *metav1.DeletionPropagation {
+			if req.Force {
+				policy := metav1.DeletePropagationBackground
+				return &policy
+			}
+			return nil
+		}(),
+	}
 
-// 	if req.Force {
-// 		// 强制删除需要设置GracePeriodSeconds为0
-// 		zero := int64(0)
-// 		deleteOptions.GracePeriodSeconds = &zero
-// 	}
+	if err := p.podManager.BatchDeletePods(ctx, req.ClusterID, req.Namespace, req.Names, deleteOpts); err != nil {
+		return err
+	}
 
-// 	err = kubeClient.CoreV1().Pods(req.Namespace).Delete(ctx, req.ResourceName, deleteOptions)
-// 	if err != nil {
-// 		p.logger.Error("删除Pod失败",
-// 			zap.String("Namespace", req.Namespace),
-// 			zap.String("PodName", req.ResourceName),
-// 			zap.Error(err))
-// 		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "删除Pod失败")
-// 	}
+	p.logger.Info("成功批量删除Pod",
+		zap.String("Namespace", req.Namespace),
+		zap.Int("Count", len(req.Names)))
+	return nil
+}
 
-// 	p.logger.Info("成功删除Pod",
-// 		zap.String("Namespace", req.Namespace),
-// 		zap.String("PodName", req.ResourceName))
-// 	return nil
-// }
+// ExecInPod Pod命令执行
+func (p *podService) ExecInPod(ctx *gin.Context, req *model.PodExecReq) error {
 
-// // convertPodToResponse 将Kubernetes Pod对象转换为响应模型
-// func (p *podService) convertPodToResponse(pod *corev1.Pod) *model.K8sPodResponse {
-// 	// 计算重启次数
-// 	var totalRestartCount int32
-// 	containers := make([]model.ContainerInfo, 0, len(pod.Spec.Containers))
+	restConfig, err := p.getRestConfig(ctx, req.ClusterID)
+	if err != nil {
+		p.logger.Error("获取Kubeconfig配置失败",
+			zap.Error(err))
+		return err
+	}
 
-// 	for _, container := range pod.Spec.Containers {
-// 		containerInfo := model.ContainerInfo{
-// 			Name:  container.Name,
-// 			Image: container.Image,
-// 			Resources: model.ContainerResources{
-// 				CpuRequest:    container.Resources.Requests.Cpu().String(),
-// 				CpuLimit:      container.Resources.Limits.Cpu().String(),
-// 				MemoryRequest: container.Resources.Requests.Memory().String(),
-// 				MemoryLimit:   container.Resources.Limits.Memory().String(),
-// 			},
-// 			Ports:        container.Ports,
-// 			Env:          container.Env,
-// 			VolumeMounts: container.VolumeMounts,
-// 		}
+	conn, err := pkgutils.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	if err != nil {
+		p.logger.Error("升级ws失败", zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrorWsUpgradeFailed, "初始化ws失败")
+	}
 
-// 		// 从容器状态获取重启次数和状态
-// 		for _, containerStatus := range pod.Status.ContainerStatuses {
-// 			if containerStatus.Name == container.Name {
-// 				containerInfo.RestartCount = containerStatus.RestartCount
-// 				containerInfo.Ready = containerStatus.Ready
-// 				totalRestartCount += containerStatus.RestartCount
+	return p.podManager.PodTerminalSession(ctx,
+		req.ClusterID, req.Namespace, req.PodName, req.Container, req.Shell, conn, restConfig)
+}
 
-// 				if containerStatus.State.Running != nil {
-// 					containerInfo.Status = "Running"
-// 				} else if containerStatus.State.Waiting != nil {
-// 					containerInfo.Status = "Waiting"
-// 				} else if containerStatus.State.Terminated != nil {
-// 					containerInfo.Status = "Terminated"
-// 				}
-// 				break
-// 			}
-// 		}
+// UploadFileToPod 上传文件到pod
+func (p *podService) UploadFileToPod(ctx *gin.Context, req *model.PodFileReq) error {
 
-// 		containers = append(containers, containerInfo)
-// 	}
+	restConfig, err := p.getRestConfig(ctx, req.ClusterID)
+	if err != nil {
+		p.logger.Error("获取Kubeconfig配置失败",
+			zap.Error(err))
+		return err
+	}
+	return p.podManager.UploadFileToPod(ctx, req.ClusterID, req.Namespace, req.PodName,
+		req.ContainerName, req.FilePath, restConfig)
+}
 
-// 	return &model.K8sPodResponse{
-// 		Name:              pod.Name,
-// 		UID:               string(pod.UID),
-// 		Namespace:         pod.Namespace,
-// 		Status:            string(pod.Status.Phase),
-// 		Phase:             string(pod.Status.Phase),
-// 		NodeName:          pod.Spec.NodeName,
-// 		PodIP:             pod.Status.PodIP,
-// 		HostIP:            pod.Status.HostIP,
-// 		RestartCount:      totalRestartCount,
-// 		Age:               pkg.GetAge(pod.CreationTimestamp.Time),
-// 		Labels:            pod.Labels,
-// 		Annotations:       pod.Annotations,
-// 		OwnerReferences:   pod.OwnerReferences,
-// 		CreationTimestamp: pod.CreationTimestamp.Time,
-// 		Containers:        containers,
-// 	}
-// }
+// PortForward Pod端口转发
+func (p *podService) PortForward(ctx context.Context, req *model.PodPortForwardReq) error {
 
-// // ExecInPod pod命令执行
-// func (p *podService) ExecInPod(ctx context.Context, req *model.PodExecReq) error {
-// 	// TODO: 实现Pod命令执行功能
-// 	return pkg.NewBusinessError(constants.ErrNotImplemented, "Pod命令执行功能尚未实现")
-// }
+	// 获取 restconfig
+	restConfig, err := p.getRestConfig(ctx, req.ClusterID)
+	if err != nil {
+		return err
+	}
+	// 构造端口映射
+	portsSpec := buildPortsSpec(req.Ports)
 
-// // PortForward pod端口转发
-// func (p *podService) PortForward(ctx context.Context, req *model.PodPortForwardReq) error {
-// 	// TODO: 实现Pod端口转发功能
-// 	return pkg.NewBusinessError(constants.ErrNotImplemented, "Pod端口转发功能尚未实现")
-// }
+	// 构造 SPDY dialer
+	dialer, err := p.buildDialer(restConfig, req.Namespace, req.ResourceName)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	return p.podManager.PortForward(ctx, portsSpec, dialer)
+}
+
+// DownloadPodFile 实现Pod内文件下载
+func (p *podService) DownloadPodFile(ctx *gin.Context, req *model.PodFileReq) error {
+
+	restConfig, err := p.getRestConfig(ctx, req.ClusterID)
+	if err != nil {
+		return err
+	}
+
+	fileName := filepath.Base(req.FilePath)
+	ctx.Header("Content-Disposition", fmt.Sprintf(`attachment; filename=%s.tar`, fileName))
+	ctx.Header("Content-Type", "application/octet-stream")
+
+	reader, err := p.podManager.DownloadPodFile(ctx.Request.Context(),
+		req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath, restConfig)
+
+	if err != nil {
+		p.logger.Error("创建Pod文件流失败",
+			zap.Error(err),
+			zap.String("Namespace", req.Namespace),
+			zap.String("PodName", req.PodName),
+			zap.String("ContainerName", req.ContainerName),
+			zap.String("FilePath", req.FilePath),
+		)
+		return pkg.NewBusinessError(constants.ErrPodFileStream, "无法创建 Pod 文件流")
+	}
+	defer reader.Close()
+	// 把流复制到响应
+	if _, err := io.Copy(ctx.Writer, reader); err != nil {
+		p.logger.Error("文件下载过程中出错", zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrPodFileStream, "下载文件过程中发生错误")
+	}
+	return nil
+}
+
+func (p *podService) getRestConfig(ctx context.Context, clusterID int) (*rest.Config, error) {
+	cluster, err := p.dao.GetClusterByID(ctx, clusterID)
+	if err != nil {
+		p.logger.Error("获取集群信息失败", zap.Error(err))
+		return nil, pkg.NewBusinessError(constants.ErrK8sClusterInfo, "无法获取集群信息")
+	}
+
+	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
+	if err != nil {
+		p.logger.Error("解析 kubeconfig 失败", zap.Error(err))
+		return nil, pkg.NewBusinessError(constants.ErrK8sParseKubeConfig, "无法解析 kubeconfig")
+	}
+	restConfig.QPS = 100
+	restConfig.Burst = 200
+	return restConfig, nil
+}
+
+func (p *podService) buildDialer(restConfig *rest.Config, namespace, podName string) (httpstream.Dialer, error) {
+	roundTripper, upgrader, err := spdy.RoundTripperFor(restConfig)
+	if err != nil {
+		return nil, pkg.NewBusinessError(constants.ErrK8sPortForward, err.Error())
+	}
+	// 基础 API URL
+	baseURL, err := url.Parse(restConfig.Host)
+	if err != nil {
+		return nil, fmt.Errorf("非法 k8s API host: %w", err)
+	}
+
+	podPath := path.Join("/api/v1/namespaces", namespace, "pods", podName, "portforward")
+	finalURL := baseURL.ResolveReference(&url.URL{Path: podPath})
+	return spdy.NewDialer(upgrader, &http.Client{Transport: roundTripper}, http.MethodPost, finalURL), nil
+}
+
+func buildPortsSpec(ports []model.PortForwardPort) []string {
+	specs := make([]string, len(ports))
+	for i, port := range ports {
+		specs[i] = fmt.Sprintf("%d:%d", port.LocalPort, port.RemotePort)
+	}
+	return specs
+}
