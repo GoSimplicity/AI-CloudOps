@@ -13,6 +13,7 @@
 terraform
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+.gitignore
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
@@ -109,4 +110,5 @@ docs/swagger.json
 docs/swagger.yaml
 tools/swagger-auto-gen/swagger-auto-gen
 go.sum
-config
+go.mod
+#config
