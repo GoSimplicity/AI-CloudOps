@@ -63,23 +63,19 @@ func NewIngressManager(logger *zap.Logger, client client.K8sClient) IngressManag
 // CreateIngress 创建Ingress
 func (i *ingressManager) CreateIngress(ctx context.Context, clusterID int, namespace string, kubeConfig *rest.Config, yml string) error {
 
-	applier, err := apply.NewApplier(ctx, namespace, kubeConfig)
-	if err != nil {
-		i.logger.Error("获取Apply对象失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.Error(err))
-		return err
-	}
+	_, err := apply.CreateOrPatchResource(ctx, &apply.ResourceApplyParams{
+		ApplyStr:  yml,
+		ClusterID: clusterID,
+		Cfg:       kubeConfig,
+	}, i.logger)
 
-	err = applier.Apply(strings.NewReader(yml))
 	if err != nil {
 		i.logger.Error("创建Ingress失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
-			//zap.String("name", ingress.Name),
 			zap.Error(err))
 	}
+
 	return err
 }
 
@@ -179,21 +175,16 @@ func (i *ingressManager) GetIngressList(ctx context.Context, clusterID int, name
 // UpdateIngress 更新Ingress
 func (i *ingressManager) UpdateIngress(ctx context.Context, clusterID int, namespace string, kubeConfig *rest.Config, yml string) error {
 
-	applier, err := apply.NewApplier(ctx, namespace, kubeConfig)
-	if err != nil {
-		i.logger.Error("获取Apply对象失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.Error(err))
-		return err
-	}
+	_, err := apply.CreateOrPatchResource(ctx, &apply.ResourceApplyParams{
+		ApplyStr:  yml,
+		ClusterID: clusterID,
+		Cfg:       kubeConfig,
+	}, i.logger)
 
-	err = applier.Apply(strings.NewReader(yml))
 	if err != nil {
 		i.logger.Error("创建Ingress失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
-			//zap.String("name", ingress.Name),
 			zap.Error(err))
 	}
 	return err
