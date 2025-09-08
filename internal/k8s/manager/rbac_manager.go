@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -25,8 +26,6 @@ type RBACManager interface {
 	GetRoleListRaw(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*rbacv1.RoleList, error)
 	UpdateRole(ctx context.Context, clusterID int, namespace string, role *rbacv1.Role) error
 	DeleteRole(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
-	GetRoleEvents(ctx context.Context, clusterID int, namespace, name string, limit int) ([]*model.K8sRoleEvent, int64, error)
-	GetRoleUsage(ctx context.Context, clusterID int, namespace, name string) (*model.K8sRoleUsage, error)
 
 	// ClusterRole 操作
 	CreateClusterRole(ctx context.Context, clusterID int, clusterRole *rbacv1.ClusterRole) error
@@ -35,10 +34,6 @@ type RBACManager interface {
 	GetClusterRoleListRaw(ctx context.Context, clusterID int, listOptions metav1.ListOptions) (*rbacv1.ClusterRoleList, error)
 	UpdateClusterRole(ctx context.Context, clusterID int, clusterRole *rbacv1.ClusterRole) error
 	DeleteClusterRole(ctx context.Context, clusterID int, name string, deleteOptions metav1.DeleteOptions) error
-
-	// ClusterRole 扩展功能
-	GetClusterRoleEvents(ctx context.Context, clusterID int, name string, limit int) ([]*model.K8sClusterRoleEvent, int64, error)
-	GetClusterRoleUsage(ctx context.Context, clusterID int, name string) (*model.K8sClusterRoleUsage, error)
 
 	// RoleBinding 操作
 	CreateRoleBinding(ctx context.Context, clusterID int, namespace string, roleBinding *rbacv1.RoleBinding) error
@@ -59,6 +54,7 @@ type RBACManager interface {
 	GetClusterRoleBindingListRaw(ctx context.Context, clusterID int, listOptions metav1.ListOptions) (*rbacv1.ClusterRoleBindingList, error)
 	UpdateClusterRoleBinding(ctx context.Context, clusterID int, clusterRoleBinding *rbacv1.ClusterRoleBinding) error
 	DeleteClusterRoleBinding(ctx context.Context, clusterID int, name string, deleteOptions metav1.DeleteOptions) error
+	// ClusterRoleBinding 扩展功能
 	GetClusterRoleBindingEvents(ctx context.Context, clusterID int, name string, limit int) ([]*model.K8sClusterRoleBindingEvent, int64, error)
 	GetClusterRoleBindingUsage(ctx context.Context, clusterID int, name string) (*model.K8sClusterRoleBindingUsage, error)
 
@@ -70,9 +66,7 @@ type RBACManager interface {
 	UpdateServiceAccount(ctx context.Context, clusterID int, namespace string, serviceAccount *corev1.ServiceAccount) error
 	DeleteServiceAccount(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
 
-	// ServiceAccount 扩展功能
-	GetServiceAccountEvents(ctx context.Context, clusterID int, namespace, name string) (model.ListResp[*model.K8sServiceAccountEvent], error)
-	GetServiceAccountUsage(ctx context.Context, clusterID int, namespace, name string) (*model.K8sServiceAccountUsage, error)
+	// ServiceAccount 扩展功能已移动到事件模块
 
 	GetServiceAccountToken(ctx context.Context, clusterID int, namespace, name string) (*model.K8sServiceAccountToken, error)
 	CreateServiceAccountToken(ctx context.Context, clusterID int, namespace, name string, expiryTime *int64) (*model.K8sServiceAccountToken, error)
@@ -97,6 +91,12 @@ type RBACManager interface {
 	CheckPermissions(ctx context.Context, req *model.CheckPermissionsReq) ([]model.PermissionResult, error)
 	GetSubjectPermissions(ctx context.Context, req *model.SubjectPermissionsReq) (*model.SubjectPermissionsResponse, error)
 	GetResourceVerbs(ctx context.Context) (*model.ResourceVerbsResponse, error)
+
+	// Role/ClusterRole 扩展功能
+	GetRoleEvents(ctx context.Context, clusterID int, namespace, name string, limit int) ([]*model.K8sRoleEvent, int64, error)
+	GetRoleUsage(ctx context.Context, clusterID int, namespace, name string) (*model.K8sRoleUsage, error)
+	GetClusterRoleEvents(ctx context.Context, clusterID int, name string, limit int) ([]*model.K8sClusterRoleEvent, int64, error)
+	GetClusterRoleUsage(ctx context.Context, clusterID int, name string) (*model.K8sClusterRoleUsage, error)
 }
 
 type rbacManager struct {
@@ -309,7 +309,7 @@ func (r *rbacManager) GetClusterRoleList(ctx context.Context, clusterID int, lis
 	// 转换为model结构
 	var k8sClusterRoles []*model.K8sClusterRole
 	for _, clusterRole := range clusterRoleList.Items {
-		k8sClusterRole := utils.ConvertToK8sClusterRole(&clusterRole)
+		k8sClusterRole := utils.ConvertClusterRoleToModel(&clusterRole, clusterID)
 		k8sClusterRoles = append(k8sClusterRoles, k8sClusterRole)
 	}
 
@@ -1373,117 +1373,6 @@ func (r *rbacManager) GetResourceVerbs(ctx context.Context) (*model.ResourceVerb
 	return response, nil
 }
 
-// GetClusterRoleEvents 获取ClusterRole事件
-func (r *rbacManager) GetClusterRoleEvents(ctx context.Context, clusterID int, name string, limit int) ([]*model.K8sClusterRoleEvent, int64, error) {
-	kubeClient, err := r.client.GetKubeClient(clusterID)
-	if err != nil {
-		r.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, 0, err
-	}
-
-	events, total, err := utils.GetClusterRoleEvents(ctx, kubeClient, name, limit)
-	if err != nil {
-		r.logger.Error("获取ClusterRole事件失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("name", name),
-			zap.Error(err))
-		return nil, 0, fmt.Errorf("获取ClusterRole事件失败: %w", err)
-	}
-
-	r.logger.Debug("成功获取ClusterRole事件",
-		zap.Int("clusterID", clusterID),
-		zap.String("name", name),
-		zap.Int("count", len(events)),
-		zap.Int64("total", total))
-
-	return events, total, nil
-}
-
-// GetClusterRoleUsage 获取ClusterRole使用情况
-func (r *rbacManager) GetClusterRoleUsage(ctx context.Context, clusterID int, name string) (*model.K8sClusterRoleUsage, error) {
-	kubeClient, err := r.client.GetKubeClient(clusterID)
-	if err != nil {
-		r.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, err
-	}
-
-	usage, err := utils.GetClusterRoleUsage(ctx, kubeClient, name)
-	if err != nil {
-		r.logger.Error("获取ClusterRole使用情况失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("name", name),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取ClusterRole使用情况失败: %w", err)
-	}
-
-	r.logger.Debug("成功获取ClusterRole使用情况",
-		zap.Int("clusterID", clusterID),
-		zap.String("name", name))
-
-	return usage, nil
-}
-
-// GetRoleEvents 获取Role事件
-func (r *rbacManager) GetRoleEvents(ctx context.Context, clusterID int, namespace, name string, limit int) ([]*model.K8sRoleEvent, int64, error) {
-	kubeClient, err := r.client.GetKubeClient(clusterID)
-	if err != nil {
-		r.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, 0, err
-	}
-
-	events, total, err := utils.GetRoleEvents(ctx, kubeClient, namespace, name, limit)
-	if err != nil {
-		r.logger.Error("获取Role事件失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("name", name),
-			zap.Error(err))
-		return nil, 0, fmt.Errorf("获取Role事件失败: %w", err)
-	}
-
-	r.logger.Debug("成功获取Role事件",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("name", name),
-		zap.Int64("total", total))
-
-	return events, total, nil
-}
-
-// GetRoleUsage 获取Role使用情况
-func (r *rbacManager) GetRoleUsage(ctx context.Context, clusterID int, namespace, name string) (*model.K8sRoleUsage, error) {
-	kubeClient, err := r.client.GetKubeClient(clusterID)
-	if err != nil {
-		r.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, err
-	}
-
-	usage, err := utils.GetRoleUsage(ctx, kubeClient, namespace, name)
-	if err != nil {
-		r.logger.Error("获取Role使用情况失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("name", name),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取Role使用情况失败: %w", err)
-	}
-
-	r.logger.Debug("成功获取Role使用情况",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
-
-	return usage, nil
-}
-
 // isSubjectInBinding 辅助方法：检查主体是否在绑定列表中
 func (r *rbacManager) isSubjectInBinding(subject model.Subject, subjects []rbacv1.Subject) bool {
 	for _, s := range subjects {
@@ -1498,8 +1387,6 @@ func (r *rbacManager) isSubjectInBinding(subject model.Subject, subjects []rbacv
 	return false
 }
 
-// ======================== RoleBinding 操作实现 ========================
-
 // GetRoleBindingList 获取RoleBinding列表（返回model格式）
 func (r *rbacManager) GetRoleBindingList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sRoleBinding, error) {
 	roleBindingList, err := r.GetRoleBindingListRaw(ctx, clusterID, namespace, listOptions)
@@ -1510,7 +1397,7 @@ func (r *rbacManager) GetRoleBindingList(ctx context.Context, clusterID int, nam
 	// 转换为model结构
 	var k8sRoleBindings []*model.K8sRoleBinding
 	for _, roleBinding := range roleBindingList.Items {
-		k8sRoleBinding := utils.ConvertToK8sRoleBinding(&roleBinding, clusterID)
+		k8sRoleBinding := utils.ConvertK8sRoleBindingToRoleBindingInfo(&roleBinding, clusterID)
 		k8sRoleBindings = append(k8sRoleBindings, k8sRoleBinding)
 	}
 
@@ -1522,7 +1409,9 @@ func (r *rbacManager) GetRoleBindingList(ctx context.Context, clusterID int, nam
 	return k8sRoleBindings, nil
 }
 
-// GetRoleBindingEvents 获取RoleBinding事件
+// ======================== ServiceAccount 操作实现 ========================
+
+// GetRoleBindingEvents 获取指定 RoleBinding 的事件
 func (r *rbacManager) GetRoleBindingEvents(ctx context.Context, clusterID int, namespace, name string) (model.ListResp[*model.K8sRoleBindingEvent], error) {
 	kubeClient, err := r.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -1532,26 +1421,35 @@ func (r *rbacManager) GetRoleBindingEvents(ctx context.Context, clusterID int, n
 		return model.ListResp[*model.K8sRoleBindingEvent]{}, err
 	}
 
-	events, err := utils.GetRoleBindingEvents(ctx, kubeClient, namespace, name)
+	// Kubernetes 事件过滤：命名空间资源 RoleBinding
+	fieldSelector := fmt.Sprintf("involvedObject.kind=RoleBinding,involvedObject.name=%s", name)
+	eventList, err := kubeClient.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{FieldSelector: fieldSelector})
 	if err != nil {
 		r.logger.Error("获取RoleBinding事件失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
 			zap.Error(err))
-		return model.ListResp[*model.K8sRoleBindingEvent]{}, fmt.Errorf("获取RoleBinding事件失败: %w", err)
+		return model.ListResp[*model.K8sRoleBindingEvent]{}, err
 	}
 
-	r.logger.Debug("成功获取RoleBinding事件",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("name", name),
-		zap.Int("count", len(events.Items)))
+	events := make([]*model.K8sRoleBindingEvent, 0, len(eventList.Items))
+	for _, ev := range eventList.Items {
+		events = append(events, &model.K8sRoleBindingEvent{
+			Type:      ev.Type,
+			Reason:    ev.Reason,
+			Message:   ev.Message,
+			Source:    ev.Source.Component,
+			FirstTime: ev.FirstTimestamp.Time,
+			LastTime:  ev.LastTimestamp.Time,
+			Count:     ev.Count,
+		})
+	}
 
-	return events, nil
+	return model.ListResp[*model.K8sRoleBindingEvent]{Items: events, Total: int64(len(events))}, nil
 }
 
-// GetRoleBindingUsage 获取RoleBinding使用分析
+// GetRoleBindingUsage 获取 RoleBinding 使用情况
 func (r *rbacManager) GetRoleBindingUsage(ctx context.Context, clusterID int, namespace, name string) (*model.K8sRoleBindingUsage, error) {
 	kubeClient, err := r.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -1561,25 +1459,106 @@ func (r *rbacManager) GetRoleBindingUsage(ctx context.Context, clusterID int, na
 		return nil, err
 	}
 
-	usage, err := utils.GetRoleBindingUsage(ctx, kubeClient, namespace, name)
+	rb, err := kubeClient.RbacV1().RoleBindings(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		r.logger.Error("获取RoleBinding使用情况失败",
+		r.logger.Error("获取RoleBinding失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
 			zap.Error(err))
-		return nil, fmt.Errorf("获取RoleBinding使用情况失败: %w", err)
+		return nil, err
 	}
 
-	r.logger.Debug("成功获取RoleBinding使用情况",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
+	usage := &model.K8sRoleBindingUsage{
+		RoleBindingName: name,
+		Namespace:       namespace,
+		RoleName:        rb.RoleRef.Name,
+		RoleKind:        rb.RoleRef.Kind,
+		SubjectAnalysis: model.K8sRoleBindingSubjectSummary{
+			RoleBindingName:  name,
+			Namespace:        namespace,
+			Users:            []string{},
+			Groups:           []string{},
+			ServiceAccounts:  []string{},
+			EffectiveRules:   []model.PolicyRule{},
+			TotalPermissions: 0,
+			RiskAssessment:   "low",
+		},
+		DependencyStatus: model.K8sRoleBindingDependency{
+			RoleBindingName: name,
+			Namespace:       namespace,
+			RoleName:        rb.RoleRef.Name,
+			RoleKind:        rb.RoleRef.Kind,
+			RoleExists:      model.BoolFalse,
+			SubjectsExist:   []string{},
+			MissingSubjects: []string{},
+			IsHealthy:       model.BoolFalse,
+		},
+		AccessPatterns:  []model.AccessPattern{},
+		SecurityRisks:   []model.SecurityRisk{},
+		Recommendations: []string{},
+		LastAnalyzed:    time.Now(),
+		AnalysisScore:   0,
+	}
+
+	// 检查Role是否存在并拉取权限
+	switch rb.RoleRef.Kind {
+	case "Role":
+		role, err := kubeClient.RbacV1().Roles(namespace).Get(ctx, rb.RoleRef.Name, metav1.GetOptions{})
+		if err == nil {
+			usage.DependencyStatus.RoleExists = model.BoolTrue
+			usage.DependencyStatus.IsHealthy = model.BoolTrue
+			for _, rule := range role.Rules {
+				usage.SubjectAnalysis.EffectiveRules = append(usage.SubjectAnalysis.EffectiveRules, model.PolicyRule{
+					APIGroups:       rule.APIGroups,
+					Resources:       rule.Resources,
+					Verbs:           rule.Verbs,
+					ResourceNames:   rule.ResourceNames,
+					NonResourceURLs: rule.NonResourceURLs,
+				})
+			}
+			usage.SubjectAnalysis.TotalPermissions = len(usage.SubjectAnalysis.EffectiveRules)
+		}
+	case "ClusterRole":
+		cr, err := kubeClient.RbacV1().ClusterRoles().Get(ctx, rb.RoleRef.Name, metav1.GetOptions{})
+		if err == nil {
+			usage.DependencyStatus.RoleExists = model.BoolTrue
+			usage.DependencyStatus.IsHealthy = model.BoolTrue
+			for _, rule := range cr.Rules {
+				usage.SubjectAnalysis.EffectiveRules = append(usage.SubjectAnalysis.EffectiveRules, model.PolicyRule{
+					APIGroups:       rule.APIGroups,
+					Resources:       rule.Resources,
+					Verbs:           rule.Verbs,
+					ResourceNames:   rule.ResourceNames,
+					NonResourceURLs: rule.NonResourceURLs,
+				})
+			}
+			usage.SubjectAnalysis.TotalPermissions = len(usage.SubjectAnalysis.EffectiveRules)
+		}
+	}
+
+	// 主体分类与存在性记录
+	for _, s := range rb.Subjects {
+		key := s.Name
+		switch s.Kind {
+		case "User":
+			usage.SubjectAnalysis.Users = append(usage.SubjectAnalysis.Users, key)
+			usage.DependencyStatus.SubjectsExist = append(usage.DependencyStatus.SubjectsExist, key)
+		case "Group":
+			usage.SubjectAnalysis.Groups = append(usage.SubjectAnalysis.Groups, key)
+			usage.DependencyStatus.SubjectsExist = append(usage.DependencyStatus.SubjectsExist, key)
+		case "ServiceAccount":
+			sa := s.Name
+			if s.Namespace != "" {
+				sa = s.Namespace + "/" + s.Name
+			}
+			usage.SubjectAnalysis.ServiceAccounts = append(usage.SubjectAnalysis.ServiceAccounts, sa)
+			usage.DependencyStatus.SubjectsExist = append(usage.DependencyStatus.SubjectsExist, sa)
+		}
+	}
 
 	return usage, nil
 }
-
-// ======================== ServiceAccount 操作实现 ========================
 
 // CreateServiceAccount 创建ServiceAccount
 func (r *rbacManager) CreateServiceAccount(ctx context.Context, clusterID int, namespace string, serviceAccount *corev1.ServiceAccount) error {
@@ -1642,7 +1621,7 @@ func (r *rbacManager) GetServiceAccountList(ctx context.Context, clusterID int, 
 	// 转换为model结构
 	var k8sServiceAccounts []*model.K8sServiceAccount
 	for _, serviceAccount := range serviceAccountList.Items {
-		k8sServiceAccount := utils.ConvertToK8sServiceAccount(&serviceAccount, clusterID)
+		k8sServiceAccount := utils.BuildServiceAccountResponse(&serviceAccount, clusterID)
 		k8sServiceAccounts = append(k8sServiceAccounts, k8sServiceAccount)
 	}
 
@@ -1737,63 +1716,6 @@ func (r *rbacManager) DeleteServiceAccount(ctx context.Context, clusterID int, n
 	return nil
 }
 
-// GetServiceAccountEvents 获取ServiceAccount事件
-func (r *rbacManager) GetServiceAccountEvents(ctx context.Context, clusterID int, namespace, name string) (model.ListResp[*model.K8sServiceAccountEvent], error) {
-	kubeClient, err := r.client.GetKubeClient(clusterID)
-	if err != nil {
-		r.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return model.ListResp[*model.K8sServiceAccountEvent]{}, err
-	}
-
-	events, err := utils.GetServiceAccountEvents(ctx, kubeClient, namespace, name)
-	if err != nil {
-		r.logger.Error("获取ServiceAccount事件失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("name", name),
-			zap.Error(err))
-		return model.ListResp[*model.K8sServiceAccountEvent]{}, fmt.Errorf("获取ServiceAccount事件失败: %w", err)
-	}
-
-	r.logger.Debug("成功获取ServiceAccount事件",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("name", name),
-		zap.Int("count", len(events.Items)))
-
-	return events, nil
-}
-
-// GetServiceAccountUsage 获取ServiceAccount使用分析
-func (r *rbacManager) GetServiceAccountUsage(ctx context.Context, clusterID int, namespace, name string) (*model.K8sServiceAccountUsage, error) {
-	kubeClient, err := r.client.GetKubeClient(clusterID)
-	if err != nil {
-		r.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return nil, err
-	}
-
-	usage, err := utils.GetServiceAccountUsage(ctx, kubeClient, namespace, name)
-	if err != nil {
-		r.logger.Error("获取ServiceAccount使用情况失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("name", name),
-			zap.Error(err))
-		return nil, fmt.Errorf("获取ServiceAccount使用情况失败: %w", err)
-	}
-
-	r.logger.Debug("成功获取ServiceAccount使用情况",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
-
-	return usage, nil
-}
-
 // GetServiceAccountToken 获取ServiceAccount令牌
 func (r *rbacManager) GetServiceAccountToken(ctx context.Context, clusterID int, namespace, name string) (*model.K8sServiceAccountToken, error) {
 	kubeClient, err := r.client.GetKubeClient(clusterID)
@@ -1852,7 +1774,278 @@ func (r *rbacManager) CreateServiceAccountToken(ctx context.Context, clusterID i
 
 // ======================== ClusterRoleBinding 扩展功能实现 ========================
 
-// GetClusterRoleBindingEvents 获取ClusterRoleBinding事件
+// GetRoleEvents 获取指定 Role 的事件
+func (r *rbacManager) GetRoleEvents(ctx context.Context, clusterID int, namespace, name string, limit int) ([]*model.K8sRoleEvent, int64, error) {
+	kubeClient, err := r.client.GetKubeClient(clusterID)
+	if err != nil {
+		r.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, 0, err
+	}
+
+	fieldSelector := fmt.Sprintf("involvedObject.kind=Role,involvedObject.name=%s", name)
+	eventList, err := kubeClient.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{FieldSelector: fieldSelector})
+	if err != nil {
+		r.logger.Error("获取Role事件失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return nil, 0, err
+	}
+
+	var results []*model.K8sRoleEvent
+	count := 0
+	for _, ev := range eventList.Items {
+		if limit > 0 && count >= limit {
+			break
+		}
+		results = append(results, &model.K8sRoleEvent{
+			Type:      ev.Type,
+			Reason:    ev.Reason,
+			Message:   ev.Message,
+			Source:    ev.Source.Component,
+			FirstTime: ev.FirstTimestamp.Time,
+			LastTime:  ev.LastTimestamp.Time,
+			Count:     ev.Count,
+		})
+		count++
+	}
+
+	return results, int64(count), nil
+}
+
+// GetRoleUsage 获取 Role 使用情况
+func (r *rbacManager) GetRoleUsage(ctx context.Context, clusterID int, namespace, name string) (*model.K8sRoleUsage, error) {
+	kubeClient, err := r.client.GetKubeClient(clusterID)
+	if err != nil {
+		r.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	role, err := kubeClient.RbacV1().Roles(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		r.logger.Error("获取Role失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// 列出命名空间内 RoleBinding，查找引用该 Role 的绑定
+	rbList, err := kubeClient.RbacV1().RoleBindings(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		r.logger.Error("获取RoleBinding列表失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.Error(err))
+		return nil, err
+	}
+
+	usage := &model.K8sRoleUsage{
+		RoleName:    name,
+		Namespace:   namespace,
+		Bindings:    []model.RoleBindingSimpleInfo{},
+		Subjects:    []model.Subject{},
+		Permissions: []model.PolicyRule{},
+		IsUsed:      model.BoolFalse,
+	}
+
+	// 绑定与主体
+	subjectSeen := make(map[string]struct{})
+	for _, rb := range rbList.Items {
+		if rb.RoleRef.Kind != "Role" || rb.RoleRef.Name != name {
+			continue
+		}
+
+		bindingInfo := model.RoleBindingSimpleInfo{
+			Name:      rb.Name,
+			Namespace: rb.Namespace,
+			Subjects:  []model.Subject{},
+		}
+		for _, s := range rb.Subjects {
+			sub := model.Subject{Kind: s.Kind, Name: s.Name, Namespace: s.Namespace, APIGroup: s.APIGroup}
+			bindingInfo.Subjects = append(bindingInfo.Subjects, sub)
+			key := fmt.Sprintf("%s/%s/%s", sub.Kind, sub.Name, sub.Namespace)
+			if _, ok := subjectSeen[key]; !ok {
+				usage.Subjects = append(usage.Subjects, sub)
+				subjectSeen[key] = struct{}{}
+			}
+		}
+
+		usage.Bindings = append(usage.Bindings, bindingInfo)
+	}
+
+	if len(usage.Bindings) > 0 {
+		usage.IsUsed = model.BoolTrue
+	}
+
+	// 权限
+	for _, rule := range role.Rules {
+		usage.Permissions = append(usage.Permissions, model.PolicyRule{
+			APIGroups:       rule.APIGroups,
+			Resources:       rule.Resources,
+			Verbs:           rule.Verbs,
+			ResourceNames:   rule.ResourceNames,
+			NonResourceURLs: rule.NonResourceURLs,
+		})
+	}
+
+	return usage, nil
+}
+
+// GetClusterRoleEvents 获取指定 ClusterRole 的事件（跨所有命名空间）
+func (r *rbacManager) GetClusterRoleEvents(ctx context.Context, clusterID int, name string, limit int) ([]*model.K8sClusterRoleEvent, int64, error) {
+	kubeClient, err := r.client.GetKubeClient(clusterID)
+	if err != nil {
+		r.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, 0, err
+	}
+
+	fieldSelector := fmt.Sprintf("involvedObject.kind=ClusterRole,involvedObject.name=%s", name)
+	eventList, err := kubeClient.CoreV1().Events("").List(ctx, metav1.ListOptions{FieldSelector: fieldSelector})
+	if err != nil {
+		r.logger.Error("获取ClusterRole事件失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("name", name),
+			zap.Error(err))
+		return nil, 0, err
+	}
+
+	var results []*model.K8sClusterRoleEvent
+	count := 0
+	for _, ev := range eventList.Items {
+		if limit > 0 && count >= limit {
+			break
+		}
+		results = append(results, &model.K8sClusterRoleEvent{
+			Type:      ev.Type,
+			Reason:    ev.Reason,
+			Message:   ev.Message,
+			Source:    ev.Source.Component,
+			FirstTime: ev.FirstTimestamp.Time,
+			LastTime:  ev.LastTimestamp.Time,
+			Count:     ev.Count,
+		})
+		count++
+	}
+
+	return results, int64(count), nil
+}
+
+// GetClusterRoleUsage 获取 ClusterRole 使用情况
+func (r *rbacManager) GetClusterRoleUsage(ctx context.Context, clusterID int, name string) (*model.K8sClusterRoleUsage, error) {
+	kubeClient, err := r.client.GetKubeClient(clusterID)
+	if err != nil {
+		r.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	clusterRole, err := kubeClient.RbacV1().ClusterRoles().Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		r.logger.Error("获取ClusterRole失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("name", name),
+			zap.Error(err))
+		return nil, err
+	}
+
+	usage := &model.K8sClusterRoleUsage{
+		ClusterRoleName: name,
+		ClusterBindings: []model.ClusterRoleBindingSimpleInfo{},
+		RoleBindings:    []model.RoleBindingSimpleInfo{},
+		Subjects:        []model.Subject{},
+		Permissions:     []model.PolicyRule{},
+		IsUsed:          model.BoolFalse,
+		AggregatedRoles: []string{},
+	}
+
+	// ClusterRoleBinding（集群范围）
+	crbList, err := kubeClient.RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		r.logger.Error("获取ClusterRoleBinding列表失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	subjectSeen := make(map[string]struct{})
+	for _, crb := range crbList.Items {
+		if crb.RoleRef.Kind != "ClusterRole" || crb.RoleRef.Name != name {
+			continue
+		}
+		info := model.ClusterRoleBindingSimpleInfo{
+			Name:     crb.Name,
+			Subjects: []model.Subject{},
+		}
+		for _, s := range crb.Subjects {
+			sub := model.Subject{Kind: s.Kind, Name: s.Name, Namespace: s.Namespace, APIGroup: s.APIGroup}
+			info.Subjects = append(info.Subjects, sub)
+			key := fmt.Sprintf("%s/%s/%s", sub.Kind, sub.Name, sub.Namespace)
+			if _, ok := subjectSeen[key]; !ok {
+				usage.Subjects = append(usage.Subjects, sub)
+				subjectSeen[key] = struct{}{}
+			}
+		}
+		usage.ClusterBindings = append(usage.ClusterBindings, info)
+	}
+
+	// RoleBinding（命名空间范围，可能引用ClusterRole）
+	rbList, err := kubeClient.RbacV1().RoleBindings("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		r.logger.Error("获取RoleBinding列表失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, err
+	}
+	for _, rb := range rbList.Items {
+		if rb.RoleRef.Kind != "ClusterRole" || rb.RoleRef.Name != name {
+			continue
+		}
+		info := model.RoleBindingSimpleInfo{
+			Name:      rb.Name,
+			Namespace: rb.Namespace,
+			Subjects:  []model.Subject{},
+		}
+		for _, s := range rb.Subjects {
+			sub := model.Subject{Kind: s.Kind, Name: s.Name, Namespace: s.Namespace, APIGroup: s.APIGroup}
+			info.Subjects = append(info.Subjects, sub)
+			key := fmt.Sprintf("%s/%s/%s", sub.Kind, sub.Name, sub.Namespace)
+			if _, ok := subjectSeen[key]; !ok {
+				usage.Subjects = append(usage.Subjects, sub)
+				subjectSeen[key] = struct{}{}
+			}
+		}
+		usage.RoleBindings = append(usage.RoleBindings, info)
+	}
+
+	if len(usage.ClusterBindings) > 0 || len(usage.RoleBindings) > 0 {
+		usage.IsUsed = model.BoolTrue
+	}
+
+	// 权限
+	for _, rule := range clusterRole.Rules {
+		usage.Permissions = append(usage.Permissions, model.PolicyRule{
+			APIGroups:       rule.APIGroups,
+			Resources:       rule.Resources,
+			Verbs:           rule.Verbs,
+			ResourceNames:   rule.ResourceNames,
+			NonResourceURLs: rule.NonResourceURLs,
+		})
+	}
+
+	return usage, nil
+}
+
+// GetClusterRoleBindingEvents 获取指定 ClusterRoleBinding 的事件（集群范围）
 func (r *rbacManager) GetClusterRoleBindingEvents(ctx context.Context, clusterID int, name string, limit int) ([]*model.K8sClusterRoleBindingEvent, int64, error) {
 	kubeClient, err := r.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -1862,24 +2055,40 @@ func (r *rbacManager) GetClusterRoleBindingEvents(ctx context.Context, clusterID
 		return nil, 0, err
 	}
 
-	events, total, err := utils.GetClusterRoleBindingEvents(ctx, kubeClient, name, limit)
+	// ClusterRoleBinding 是非命名空间资源，事件通常在 kube-system 或空命名空间中，
+	// 这里按 involvedObject.kind/name 过滤并查询所有命名空间事件
+	fieldSelector := fmt.Sprintf("involvedObject.kind=ClusterRoleBinding,involvedObject.name=%s", name)
+	eventList, err := kubeClient.CoreV1().Events("").List(ctx, metav1.ListOptions{FieldSelector: fieldSelector})
 	if err != nil {
 		r.logger.Error("获取ClusterRoleBinding事件失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("name", name),
 			zap.Error(err))
-		return nil, 0, fmt.Errorf("获取ClusterRoleBinding事件失败: %w", err)
+		return nil, 0, err
 	}
 
-	r.logger.Debug("成功获取ClusterRoleBinding事件",
-		zap.Int("clusterID", clusterID),
-		zap.String("name", name),
-		zap.Int64("total", total))
+	var results []*model.K8sClusterRoleBindingEvent
+	count := 0
+	for _, ev := range eventList.Items {
+		if limit > 0 && count >= limit {
+			break
+		}
+		results = append(results, &model.K8sClusterRoleBindingEvent{
+			Type:      ev.Type,
+			Reason:    ev.Reason,
+			Message:   ev.Message,
+			Source:    ev.Source.Component,
+			FirstTime: ev.FirstTimestamp.Time,
+			LastTime:  ev.LastTimestamp.Time,
+			Count:     ev.Count,
+		})
+		count++
+	}
 
-	return events, total, nil
+	return results, int64(count), nil
 }
 
-// GetClusterRoleBindingUsage 获取ClusterRoleBinding使用情况
+// GetClusterRoleBindingUsage 获取 ClusterRoleBinding 使用情况
 func (r *rbacManager) GetClusterRoleBindingUsage(ctx context.Context, clusterID int, name string) (*model.K8sClusterRoleBindingUsage, error) {
 	kubeClient, err := r.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -1889,18 +2098,65 @@ func (r *rbacManager) GetClusterRoleBindingUsage(ctx context.Context, clusterID 
 		return nil, err
 	}
 
-	usage, err := utils.GetClusterRoleBindingUsage(ctx, kubeClient, name)
+	crb, err := kubeClient.RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		r.logger.Error("获取ClusterRoleBinding使用情况失败",
+		r.logger.Error("获取ClusterRoleBinding失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("name", name),
 			zap.Error(err))
-		return nil, fmt.Errorf("获取ClusterRoleBinding使用情况失败: %w", err)
+		return nil, err
 	}
 
-	r.logger.Debug("成功获取ClusterRoleBinding使用情况",
-		zap.Int("clusterID", clusterID),
-		zap.String("name", name))
+	usage := &model.K8sClusterRoleBindingUsage{
+		ClusterRoleBindingName: crb.Name,
+		ClusterRoleName:        crb.RoleRef.Name,
+		Subjects:               []model.Subject{},
+		SubjectCount:           0,
+		UserCount:              0,
+		GroupCount:             0,
+		ServiceAccountCount:    0,
+		IsSystemBinding:        model.BoolToBoolValue(strings.HasPrefix(crb.RoleRef.Name, "system:")),
+		RiskLevel:              "low",
+		CreationTimestamp:      crb.CreationTimestamp.Time,
+		LastUpdated:            crb.CreationTimestamp.Time,
+	}
+
+	for _, s := range crb.Subjects {
+		usage.Subjects = append(usage.Subjects, model.Subject{Kind: s.Kind, Name: s.Name, Namespace: s.Namespace, APIGroup: s.APIGroup})
+		switch s.Kind {
+		case "User":
+			usage.UserCount++
+		case "Group":
+			usage.GroupCount++
+		case "ServiceAccount":
+			usage.ServiceAccountCount++
+		}
+	}
+	usage.SubjectCount = len(usage.Subjects)
+
+	// 尝试补充 ClusterRole 信息
+	if crb.RoleRef.Kind == "ClusterRole" {
+		if clusterRole, err := kubeClient.RbacV1().ClusterRoles().Get(ctx, crb.RoleRef.Name, metav1.GetOptions{}); err == nil {
+			rules := []model.PolicyRule{}
+			for _, rule := range clusterRole.Rules {
+				rules = append(rules, model.PolicyRule{
+					APIGroups:       rule.APIGroups,
+					Resources:       rule.Resources,
+					Verbs:           rule.Verbs,
+					ResourceNames:   rule.ResourceNames,
+					NonResourceURLs: rule.NonResourceURLs,
+				})
+			}
+			usage.ClusterRoleInfo = &model.ClusterRoleBindingRoleInfo{
+				Name:         clusterRole.Name,
+				Kind:         crb.RoleRef.Kind,
+				Permissions:  rules,
+				RiskLevel:    "low",
+				IsSystemRole: model.BoolToBoolValue(strings.HasPrefix(clusterRole.Name, "system:")),
+				CreatedAt:    clusterRole.CreationTimestamp.Time,
+			}
+		}
+	}
 
 	return usage, nil
 }

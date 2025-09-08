@@ -47,21 +47,23 @@ func NewK8sNodeHandler(nodeService service.NodeService, taintService service.Tai
 func (k *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/nodes/:cluster_id/list", k.GetNodeList)
-		k8sGroup.GET("/nodes/:cluster_id/:node_name/detail", k.GetNodeDetail)
-		k8sGroup.POST("/nodes/:cluster_id/:node_name/labels/add", k.AddLabelNodes)
-		k8sGroup.DELETE("/nodes/:cluster_id/:node_name/labels/delete", k.DeleteLabelNodes)
-		k8sGroup.POST("/nodes/:cluster_id/:node_name/drain", k.DrainNode)
-		k8sGroup.POST("/nodes/:cluster_id/:node_name/cordon", k.CordonNode)
-		k8sGroup.POST("/nodes/:cluster_id/:node_name/uncordon", k.UncordonNode)
-		k8sGroup.POST("/nodes/:cluster_id/:node_name/schedule/switch", k.SwitchNodeSchedule)
-		k8sGroup.GET("/nodes/:cluster_id/:node_name/taints", k.GetNodeTaints)
-		k8sGroup.POST("/nodes/:cluster_id/:node_name/taints/add", k.AddNodeTaints)
-		k8sGroup.DELETE("/nodes/:cluster_id/:node_name/taints/delete", k.DeleteNodeTaints)
-		k8sGroup.POST("/nodes/:cluster_id/:node_name/taints/check", k.CheckTaintYaml)
+		// Node基础管理
+		k8sGroup.GET("/clusters/:cluster_id/nodes", k.GetNodeList)                                    // 获取Node列表
+		k8sGroup.GET("/clusters/:cluster_id/nodes/:node_name", k.GetNodeDetail)                       // 获取Node详情
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/labels", k.AddLabelNodes)               // 添加Node标签
+		k8sGroup.DELETE("/clusters/:cluster_id/nodes/:node_name/labels", k.DeleteLabelNodes)          // 删除Node标签
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/drain", k.DrainNode)                    // 驱逐Node
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/cordon", k.CordonNode)                  // 封锁Node
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/uncordon", k.UncordonNode)              // 解封Node
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/schedule/switch", k.SwitchNodeSchedule) // 切换Node调度状态
+		k8sGroup.GET("/clusters/:cluster_id/nodes/:node_name/taints", k.GetNodeTaints)                // 获取Node污点
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/taints", k.AddNodeTaints)               // 添加Node污点
+		k8sGroup.DELETE("/clusters/:cluster_id/nodes/:node_name/taints", k.DeleteNodeTaints)          // 删除Node污点
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/taints/check", k.CheckTaintYaml)        // 检查污点YAML
 	}
 }
 
+// GetNodeList 获取Node列表
 func (k *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
 	var req model.GetNodeListReq
 

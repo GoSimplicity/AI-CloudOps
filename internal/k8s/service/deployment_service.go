@@ -37,31 +37,40 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// DeploymentService Deployment业务服务接口
 type DeploymentService interface {
+	// 基础 CRUD 操作
+	CreateDeployment(ctx context.Context, req *model.CreateDeploymentReq) error
 	GetDeploymentList(ctx context.Context, req *model.GetDeploymentListReq) (model.ListResp[*model.K8sDeployment], error)
 	GetDeploymentDetails(ctx context.Context, req *model.GetDeploymentDetailsReq) (*model.K8sDeployment, error)
 	GetDeploymentYaml(ctx context.Context, req *model.GetDeploymentYamlReq) (*model.K8sYaml, error)
-	CreateDeployment(ctx context.Context, req *model.CreateDeploymentReq) error
 	UpdateDeployment(ctx context.Context, req *model.UpdateDeploymentReq) error
-	// YAML相关方法
+	DeleteDeployment(ctx context.Context, req *model.DeleteDeploymentReq) error
+
+	// YAML 操作
 	CreateDeploymentByYaml(ctx context.Context, req *model.CreateDeploymentByYamlReq) error
 	UpdateDeploymentByYaml(ctx context.Context, req *model.UpdateDeploymentByYamlReq) error
-	DeleteDeployment(ctx context.Context, req *model.DeleteDeploymentReq) error
+
+	// 扩展操作
 	RestartDeployment(ctx context.Context, req *model.RestartDeploymentReq) error
 	ScaleDeployment(ctx context.Context, req *model.ScaleDeploymentReq) error
-	GetDeploymentEvents(ctx context.Context, req *model.GetDeploymentEventsReq) (model.ListResp[*model.K8sDeploymentEvent], error)
-	GetDeploymentPods(ctx context.Context, req *model.GetDeploymentPodsReq) (model.ListResp[*model.K8sPod], error)
-	GetDeploymentHistory(ctx context.Context, req *model.GetDeploymentHistoryReq) (model.ListResp[*model.K8sDeploymentHistory], error)
 	RollbackDeployment(ctx context.Context, req *model.RollbackDeploymentReq) error
 	PauseDeployment(ctx context.Context, req *model.PauseDeploymentReq) error
 	ResumeDeployment(ctx context.Context, req *model.ResumeDeploymentReq) error
+
+	// 关联资源查询
+	GetDeploymentEvents(ctx context.Context, req *model.GetDeploymentEventsReq) (model.ListResp[*model.K8sDeploymentEvent], error)
+	GetDeploymentPods(ctx context.Context, req *model.GetDeploymentPodsReq) (model.ListResp[*model.K8sPod], error)
+	GetDeploymentHistory(ctx context.Context, req *model.GetDeploymentHistoryReq) (model.ListResp[*model.K8sDeploymentHistory], error)
 }
 
+// deploymentService Deployment业务服务实现
 type deploymentService struct {
 	deploymentManager manager.DeploymentManager
 	logger            *zap.Logger
 }
 
+// NewDeploymentService 创建新的Deployment业务服务实例
 func NewDeploymentService(deploymentManager manager.DeploymentManager, logger *zap.Logger) DeploymentService {
 	return &deploymentService{
 		deploymentManager: deploymentManager,

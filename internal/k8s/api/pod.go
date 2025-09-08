@@ -27,7 +27,6 @@ package api
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils/query"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
@@ -47,215 +46,440 @@ func NewK8sPodHandler(podService service.PodService) *K8sPodHandler {
 func (k *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/pods/:cluster_id", k.GetPodList)
-		k8sGroup.GET("/pods/:cluster_id/:node_name", k.GetPodsListByNodeName)
-		k8sGroup.GET("/pods/:cluster_id/:namespace/:pod_name", k.GetPodDetail) // 获取单个Ingress详情
-		k8sGroup.GET("/pods/:cluster_id/:namespace/:pod_name/containers", k.GetPodContainers)
-		k8sGroup.GET("/pods/:cluster_id/:namespace/:pod_name/:container/logs", k.GetContainerLogs)
-		k8sGroup.GET("/pods/:cluster_id/:namespace/:pod_name/yaml", k.GetPodYaml)
-		k8sGroup.DELETE("/pods/delete/:cluster_id/:namespace/:pod_name", k.DeletePod)
-		k8sGroup.GET("/pods/:cluster_id/:namespace/:pod_name/:container/download_file", k.DownloadPodFile)
-		k8sGroup.POST("/pods/:cluster_id/:namespace/:pod_name/:container/upload_file", k.UploadFileToPod)
-		k8sGroup.POST("/pods/:cluster_id/:namespace/:pod_name/port_forward", k.PortForward)
-		k8sGroup.POST("/pods/:cluster_id/:namespace/:pod_name/:container/exec", k.HandlePodTerminalSession)
+		// Pod基础管理
+		k8sGroup.GET("/clusters/:cluster_id/pods", k.GetPodList)                                                                // 获取Pod列表
+		k8sGroup.GET("/clusters/:cluster_id/pods/:namespace/:name", k.GetPodDetails)                                            // 获取Pod详情
+		k8sGroup.GET("/clusters/:cluster_id/pods/:namespace/:name/yaml", k.GetPodYaml)                                          // 获取Pod YAML
+		k8sGroup.POST("/clusters/:cluster_id/pods", k.CreatePod)                                                                // 创建Pod
+		k8sGroup.POST("/clusters/:cluster_id/pods/yaml", k.CreatePodByYaml)                                                     // 通过YAML创建Pod
+		k8sGroup.PUT("/clusters/:cluster_id/pods/:namespace/:name", k.UpdatePod)                                                // 更新Pod
+		k8sGroup.PUT("/clusters/:cluster_id/pods/:namespace/:name/yaml", k.UpdatePodByYaml)                                     // 通过YAML更新Pod
+		k8sGroup.DELETE("/clusters/:cluster_id/pods/:namespace/:name", k.DeletePod)                                             // 删除Pod
+		k8sGroup.GET("/clusters/:cluster_id/pods/:namespace/:pod_name/containers", k.GetPodContainers)                          // 获取Pod容器列表
+		k8sGroup.GET("/clusters/:cluster_id/pods/:namespace/:pod_name/containers/:container/logs", k.GetPodLogs)                // 获取容器日志
+		k8sGroup.POST("/clusters/:cluster_id/pods/:namespace/:pod_name/containers/:container/exec", k.PodExec)                  // Pod执行命令
+		k8sGroup.POST("/clusters/:cluster_id/pods/:namespace/:pod_name/port-forward", k.PodPortForward)                         // Pod端口转发
+		k8sGroup.POST("/clusters/:cluster_id/pods/:namespace/:pod_name/containers/:container/files/upload", k.PodFileUpload)    // Pod文件上传
+		k8sGroup.GET("/clusters/:cluster_id/pods/:namespace/:pod_name/containers/:container/files/download", k.PodFileDownload) // Pod文件下载
 	}
 }
 
-// GetPodDetail 获取Pod列表
-func (k *K8sPodHandler) GetPodDetail(ctx *gin.Context) {
-	var req = new(model.K8sGetPodReq)
+// GetPodDetails 获取Pod详情
+func (k *K8sPodHandler) GetPodDetails(ctx *gin.Context) {
+	var req model.GetPodDetailsReq
 
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, req, func() (interface{}, error) {
-		return k.podService.GetPod(ctx, req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.podService.GetPodDetails(ctx, &req)
 	})
 }
 
 // GetPodList 获取Pod列表
 func (k *K8sPodHandler) GetPodList(ctx *gin.Context) {
-	var req = new(model.GetPodListReq)
+	var req model.GetPodListReq
 
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, req, func() (interface{}, error) {
-		// 分页相关参数
-		queryParams := query.ParseQueryWithParameters(ctx)
+	req.ClusterID = clusterID
 
-		return k.podService.GetPodList(ctx, queryParams, req)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.podService.GetPodList(ctx, &req)
 	})
 }
 
 // GetPodContainers 获取Pod的容器列表
 func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
-	var req = new(model.PodContainersReq)
+	var req model.GetPodContainersReq
 
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, req, func() (interface{}, error) {
-		return k.podService.GetContainersByPod(ctx, req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	podName, err := utils.GetParamCustomName(ctx, "pod_name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.PodName = podName
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.podService.GetPodContainers(ctx, &req)
 	})
 }
 
-// GetPodsListByNodeName 根据节点名获取Pod列表
-func (k *K8sPodHandler) GetPodsListByNodeName(ctx *gin.Context) {
-	var req = new(model.PodsByNodeReq)
+// GetPodLogs 获取容器日志
+func (k *K8sPodHandler) GetPodLogs(ctx *gin.Context) {
+	var req model.GetPodLogsReq
 
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
-		return
-	}
-	//if err := ctx.ShouldBindUri(&req); err != nil {
-	//	utils.BadRequestError(ctx, err.Error())
-	//	return
-	//}
-	//if err := ctx.ShouldBindQuery(&req); err != nil {
-	//	utils.BadRequestError(ctx, err.Error())
-	//	return
-	//}
-
-	utils.HandleRequest(ctx, req, func() (interface{}, error) {
-		return k.podService.GetPodsByNodeName(ctx, req)
-	})
-}
-
-// GetContainerLogs 获取容器日志
-func (k *K8sPodHandler) GetContainerLogs(ctx *gin.Context) {
-	var req = new(model.PodLogReq)
-	//if err := ctx.ShouldBindUri(&req); err != nil {
-	//	utils.BadRequestError(ctx, err.Error())
-	//	return
-	//}
-	//if err := ctx.ShouldBindQuery(&req); err != nil {
-	//	utils.BadRequestError(ctx, err.Error())
-	//	return
-	//}
-
-	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, req, func() (interface{}, error) {
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
 
-		return nil, k.podService.GetPodLogs(ctx, req)
+	podName, err := utils.GetParamCustomName(ctx, "pod_name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	container, err := utils.GetParamCustomName(ctx, "container")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.PodName = podName
+	req.Container = container
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.podService.GetPodLogs(ctx, &req)
 	})
 }
 
 // GetPodYaml 获取Pod的YAML配置
 func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
-	var req = new(model.K8sGetPodReq)
+	var req model.GetPodYamlReq
 
-	if err := ctx.ShouldBindUri(&req); err != nil {
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	//if err := ctx.ShouldBindQuery(&req); err != nil {
-	//	utils.BadRequestError(ctx, err.Error())
-	//	return
-	//}
 
-	utils.HandleRequest(ctx, req, func() (interface{}, error) {
-		return k.podService.GetPodYaml(ctx, req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.podService.GetPodYaml(ctx, &req)
+	})
+}
+
+// CreatePod 创建Pod
+func (k *K8sPodHandler) CreatePod(ctx *gin.Context) {
+	var req model.CreatePodReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.podService.CreatePod(ctx, &req)
+	})
+}
+
+// CreatePodByYaml 通过YAML创建Pod
+func (k *K8sPodHandler) CreatePodByYaml(ctx *gin.Context) {
+	var req model.CreatePodByYamlReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.podService.CreatePodByYaml(ctx, &req)
+	})
+}
+
+// UpdatePod 更新Pod
+func (k *K8sPodHandler) UpdatePod(ctx *gin.Context) {
+	var req model.UpdatePodReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.podService.UpdatePod(ctx, &req)
+	})
+}
+
+// UpdatePodByYaml 通过YAML更新Pod
+func (k *K8sPodHandler) UpdatePodByYaml(ctx *gin.Context) {
+	var req model.UpdatePodByYamlReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.podService.UpdatePodByYaml(ctx, &req)
 	})
 }
 
 // DeletePod 删除Pod
 func (k *K8sPodHandler) DeletePod(ctx *gin.Context) {
-	var req = new(model.K8sDeletePodReq)
+	var req model.DeletePodReq
 
-	if err := ctx.ShouldBindUri(&req); err != nil {
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	//if err := ctx.ShouldBindQuery(&req); err != nil {
-	//	utils.BadRequestError(ctx, err.Error())
-	//	return
-	//}
 
-	utils.HandleRequest(ctx, req, func() (interface{}, error) {
-		return nil, k.podService.DeletePodWithOptions(ctx, req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.podService.DeletePod(ctx, &req)
 	})
 }
 
-// DownloadPodFile 下载pod内文件
-func (k *K8sPodHandler) DownloadPodFile(ctx *gin.Context) {
-	var req = new(model.PodFileReq)
+// PodExec Pod执行命令
+func (k *K8sPodHandler) PodExec(ctx *gin.Context) {
+	var req model.PodExecReq
 
-	if err := ctx.ShouldBindUri(&req); err != nil {
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	//if err := ctx.ShouldBindQuery(&req); err != nil {
-	//	utils.BadRequestError(ctx, err.Error())
-	//	return
-	//}
 
-	utils.HandleRequest(ctx, req, func() (interface{}, error) {
-		return nil, k.podService.DownloadPodFile(ctx, req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	podName, err := utils.GetParamCustomName(ctx, "pod_name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	container, err := utils.GetParamCustomName(ctx, "container")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.PodName = podName
+	req.Container = container
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.podService.PodExec(ctx, &req)
 	})
 }
 
-// UploadFileToPod 上传文件至pod
-func (k *K8sPodHandler) UploadFileToPod(ctx *gin.Context) {
-	var req = new(model.PodFileReq)
+// PodPortForward Pod端口转发
+func (k *K8sPodHandler) PodPortForward(ctx *gin.Context) {
+	var req model.PodPortForwardReq
 
-	if err := ctx.ShouldBindUri(&req); err != nil {
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	//if err := ctx.ShouldBindQuery(&req); err != nil {
-	//	utils.BadRequestError(ctx, err.Error())
-	//	return
-	//}
 
-	utils.HandleRequest(ctx, req, func() (interface{}, error) {
-		return nil, k.podService.UploadFileToPod(ctx, req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	podName, err := utils.GetParamCustomName(ctx, "pod_name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.PodName = podName
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.podService.PodPortForward(ctx, &req)
 	})
 }
 
-// PortForward Pod端口转发
-func (k *K8sPodHandler) PortForward(ctx *gin.Context) {
-	var req = new(model.PodPortForwardReq)
+// PodFileUpload Pod文件上传
+func (k *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
+	var req model.PodFileUploadReq
 
-	if err := ctx.ShouldBindUri(&req); err != nil {
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	//if err := ctx.ShouldBindBodyWithJSON(&req); err != nil {
-	//	utils.BadRequestError(ctx, err.Error())
-	//	return
-	//}
 
-	utils.HandleRequest(ctx, req, func() (interface{}, error) {
-		return nil, k.podService.PortForward(ctx, req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	podName, err := utils.GetParamCustomName(ctx, "pod_name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	container, err := utils.GetParamCustomName(ctx, "container")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.PodName = podName
+	req.ContainerName = container
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.podService.PodFileUpload(ctx, &req)
 	})
 }
 
-// HandlePodTerminalSession Pod shell终端
-func (k *K8sPodHandler) HandlePodTerminalSession(ctx *gin.Context) {
-	var req = new(model.PodExecReq)
+// PodFileDownload Pod文件下载
+func (k *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
+	var req model.PodFileDownloadReq
 
-	if err := ctx.ShouldBindUri(&req); err != nil {
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	//
-	//if err := ctx.ShouldBindQuery(&req); err != nil {
-	//	utils.BadRequestError(ctx, err.Error())
-	//	return
-	//}
 
-	utils.HandleRequest(ctx, req, func() (interface{}, error) {
-		return nil, k.podService.ExecInPod(ctx, req)
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	podName, err := utils.GetParamCustomName(ctx, "pod_name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	container, err := utils.GetParamCustomName(ctx, "container")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.PodName = podName
+	req.ContainerName = container
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.podService.PodFileDownload(ctx, &req)
 	})
 }

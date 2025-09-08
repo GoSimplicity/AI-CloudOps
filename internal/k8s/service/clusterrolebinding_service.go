@@ -105,13 +105,11 @@ func (c *clusterRoleBindingService) GetClusterRoleBindingList(ctx context.Contex
 	// 转换为模型格式
 	var k8sClusterRoleBindings []*model.K8sClusterRoleBinding
 	for i := range clusterRoleBindingList.Items {
-		k8sClusterRoleBinding := k8sutils.ConvertToK8sClusterRoleBinding(&clusterRoleBindingList.Items[i])
-		if k8sClusterRoleBinding != nil {
-			k8sClusterRoleBinding.ClusterID = req.ClusterID
-
-			// 关键字过滤
-			if req.Keyword == "" || strings.Contains(k8sClusterRoleBinding.Name, req.Keyword) {
-				k8sClusterRoleBindings = append(k8sClusterRoleBindings, k8sClusterRoleBinding)
+		crbModel := k8sutils.ConvertToK8sClusterRoleBinding(&clusterRoleBindingList.Items[i])
+		if crbModel != nil {
+			crbModel.ClusterID = req.ClusterID
+			if req.Keyword == "" || strings.Contains(crbModel.Name, req.Keyword) {
+				k8sClusterRoleBindings = append(k8sClusterRoleBindings, crbModel)
 			}
 		}
 	}
@@ -204,13 +202,9 @@ func (c *clusterRoleBindingService) GetClusterRoleBindingDetails(ctx context.Con
 		return nil, fmt.Errorf("获取ClusterRoleBinding失败: %w", err)
 	}
 
-	k8sClusterRoleBinding, err := k8sutils.BuildK8sClusterRoleBinding(ctx, req.ClusterID, *clusterRoleBinding)
-	if err != nil {
-		c.logger.Error("GetClusterRoleBindingDetails: 构建ClusterRoleBinding失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("name", req.Name))
-		return nil, fmt.Errorf("构建ClusterRoleBinding失败: %w", err)
+	k8sClusterRoleBinding := k8sutils.ConvertToK8sClusterRoleBinding(clusterRoleBinding)
+	if k8sClusterRoleBinding != nil {
+		k8sClusterRoleBinding.ClusterID = req.ClusterID
 	}
 
 	c.logger.Debug("GetClusterRoleBindingDetails: 获取ClusterRoleBinding详情成功",

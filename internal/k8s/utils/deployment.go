@@ -27,6 +27,7 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -274,13 +275,17 @@ func GetDeploymentPods(ctx context.Context, kubeClient *kubernetes.Clientset, na
 	total := int64(len(podList.Items))
 	var pods []*model.K8sPod
 	for _, pod := range podList.Items {
+		// 转换标签和注解为JSON字符串
+		labelsJSON, _ := json.Marshal(pod.Labels)
+		annotationsJSON, _ := json.Marshal(pod.Annotations)
+
 		k8sPod := &model.K8sPod{
 			Name:        pod.Name,
 			Namespace:   pod.Namespace,
 			Status:      string(pod.Status.Phase),
 			NodeName:    pod.Spec.NodeName,
-			Labels:      pod.Labels,
-			Annotations: pod.Annotations,
+			Labels:      string(labelsJSON),
+			Annotations: string(annotationsJSON),
 		}
 		pods = append(pods, k8sPod)
 	}

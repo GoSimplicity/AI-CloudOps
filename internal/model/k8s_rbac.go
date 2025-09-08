@@ -349,7 +349,10 @@ type ClusterRoleYamlReq struct {
 	YamlContent string `json:"yaml_content" binding:"required" comment:"YAML内容"`
 }
 
-// ====================== RoleBinding请求结构体 ======================
+type CreateClusterRoleByYamlReq struct {
+	ClusterID   int    `json:"cluster_id" binding:"required" comment:"集群ID"`
+	YamlContent string `json:"yaml_content" binding:"required" comment:"YAML内容"`
+}
 
 // RoleBindingListReq RoleBinding列表请求参数
 type RoleBindingListReq struct {
@@ -404,8 +407,6 @@ type RoleBindingYamlReq struct {
 	Name        string `json:"name" binding:"required" comment:"RoleBinding名称"`
 	YamlContent string `json:"yaml_content" binding:"required" comment:"YAML内容"`
 }
-
-// ====================== ClusterRoleBinding请求结构体 ======================
 
 // GetClusterRoleBindingListReq ClusterRoleBinding列表请求参数
 type GetClusterRoleBindingListReq struct {

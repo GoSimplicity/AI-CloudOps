@@ -51,7 +51,7 @@ type ClusterRoleService interface {
 	CreateClusterRole(ctx context.Context, req *model.CreateClusterRoleReq) error
 	UpdateClusterRole(ctx context.Context, req *model.UpdateClusterRoleReq) error
 	DeleteClusterRole(ctx context.Context, req *model.DeleteClusterRoleReq) error
-
+	CreateClusterRoleByYaml(ctx context.Context, req *model.CreateClusterRoleByYamlReq) error
 	// YAML 操作
 	GetClusterRoleYaml(ctx context.Context, req *model.GetClusterRoleYamlReq) (*model.K8sYaml, error)
 	UpdateClusterRoleYaml(ctx context.Context, req *model.UpdateClusterRoleYamlReq) error
@@ -224,13 +224,9 @@ func (c *clusterRoleService) GetClusterRoleDetails(ctx context.Context, req *mod
 	}
 
 	// 构建详细信息
-	k8sClusterRole, err := utils.BuildK8sClusterRole(ctx, req.ClusterID, *clusterRole)
-	if err != nil {
-		c.logger.Error("GetClusterRoleDetails: 构建ClusterRole详细信息失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("name", req.Name))
-		return nil, fmt.Errorf("构建ClusterRole详细信息失败: %w", err)
+	k8sClusterRole := utils.ConvertClusterRoleToModel(clusterRole, req.ClusterID)
+	if k8sClusterRole == nil {
+		return nil, fmt.Errorf("构建ClusterRole详细信息失败")
 	}
 
 	return k8sClusterRole, nil
@@ -330,21 +326,7 @@ func (c *clusterRoleService) GetClusterRoleEvents(ctx context.Context, req *mode
 		return model.ListResp[*model.K8sClusterRoleEvent]{}, fmt.Errorf("获取ClusterRole事件请求不能为空")
 	}
 
-	if req.ClusterID <= 0 {
-		return model.ListResp[*model.K8sClusterRoleEvent]{}, fmt.Errorf("集群ID不能为空")
-	}
-
-	if req.Name == "" {
-		return model.ListResp[*model.K8sClusterRoleEvent]{}, fmt.Errorf("ClusterRole名称不能为空")
-	}
-
-	// 设置默认限制数量
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 100 // 默认获取100个事件
-	}
-
-	events, total, err := c.rbacManager.GetClusterRoleEvents(ctx, req.ClusterID, req.Name, limit)
+	events, total, err := c.rbacManager.GetClusterRoleEvents(ctx, req.ClusterID, req.Name, req.Limit)
 	if err != nil {
 		c.logger.Error("GetClusterRoleEvents: 获取ClusterRole事件失败",
 			zap.Error(err),
@@ -353,24 +335,13 @@ func (c *clusterRoleService) GetClusterRoleEvents(ctx context.Context, req *mode
 		return model.ListResp[*model.K8sClusterRoleEvent]{}, fmt.Errorf("获取ClusterRole事件失败: %w", err)
 	}
 
-	return model.ListResp[*model.K8sClusterRoleEvent]{
-		Total: total,
-		Items: events,
-	}, nil
+	return model.ListResp[*model.K8sClusterRoleEvent]{Total: total, Items: events}, nil
 }
 
 // GetClusterRoleUsage 获取ClusterRole使用情况
 func (c *clusterRoleService) GetClusterRoleUsage(ctx context.Context, req *model.GetClusterRoleUsageReq) (*model.K8sClusterRoleUsage, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取ClusterRole使用情况请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return nil, fmt.Errorf("集群ID不能为空")
-	}
-
-	if req.Name == "" {
-		return nil, fmt.Errorf("ClusterRole名称不能为空")
 	}
 
 	usage, err := c.rbacManager.GetClusterRoleUsage(ctx, req.ClusterID, req.Name)
@@ -518,6 +489,23 @@ func (c *clusterRoleService) UpdateClusterRoleYamlCompat(ctx context.Context, re
 	err = c.rbacManager.UpdateClusterRole(ctx, req.ClusterID, &clusterRole)
 	if err != nil {
 		return fmt.Errorf("failed to update cluster role: %w", err)
+	}
+
+	return nil
+}
+
+// CreateClusterRoleByYaml 通过YAML创建ClusterRole
+func (c *clusterRoleService) CreateClusterRoleByYaml(ctx context.Context, req *model.CreateClusterRoleByYamlReq) error {
+	var clusterRole rbacv1.ClusterRole
+	err := yaml.Unmarshal([]byte(req.YamlContent), &clusterRole)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal yaml: %w", err)
+	}
+
+	// 使用 RBACManager 创建 ClusterRole
+	err = c.rbacManager.CreateClusterRole(ctx, req.ClusterID, &clusterRole)
+	if err != nil {
+		return fmt.Errorf("failed to create cluster role: %w", err)
 	}
 
 	return nil

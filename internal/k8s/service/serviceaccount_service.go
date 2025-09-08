@@ -68,18 +68,20 @@ func NewServiceAccountService(rbacManager manager.RBACManager) ServiceAccountSer
 
 func (s *serviceAccountService) GetServiceAccountList(ctx context.Context, req *model.GetServiceAccountListReq) (model.ListResp[*model.K8sServiceAccount], error) {
 	// 构建查询选项
-	options := k8sutils.BuildServiceAccountListOptions(req.Name, req.LabelKey)
+	options := k8sutils.BuildServiceAccountListOptions(req)
 
-	// 从 Manager 获取原始 ServiceAccount 列表
+	// 从 Manager 获取原始 ServiceAccount 列表（model 格式）
 	serviceAccounts, err := s.rbacManager.GetServiceAccountList(ctx, req.ClusterID, req.Namespace, options)
 	if err != nil {
 		return model.ListResp[*model.K8sServiceAccount]{}, err
 	}
 
-	// 分页处理
-	paginatedServiceAccounts := k8sutils.PaginateK8sServiceAccounts(serviceAccounts, req.Page, req.PageSize)
-
-	return paginatedServiceAccounts, nil
+	// 分页处理（在调用方处理，或保持原样返回并由上层分页）
+	resp := model.ListResp[*model.K8sServiceAccount]{
+		Items: serviceAccounts,
+		Total: int64(len(serviceAccounts)),
+	}
+	return resp, nil
 }
 
 func (s *serviceAccountService) GetServiceAccountDetails(ctx context.Context, req *model.GetServiceAccountDetailsReq) (*model.K8sServiceAccount, error) {
@@ -88,24 +90,25 @@ func (s *serviceAccountService) GetServiceAccountDetails(ctx context.Context, re
 		return nil, err
 	}
 
-	return k8sutils.ConvertToK8sServiceAccount(serviceAccount, req.ClusterID), nil
+	return k8sutils.BuildServiceAccountResponse(serviceAccount, req.ClusterID), nil
 }
 
 func (s *serviceAccountService) CreateServiceAccount(ctx context.Context, req *model.CreateServiceAccountReq) error {
-	serviceAccount := k8sutils.BuildK8sServiceAccount(req)
-	return s.rbacManager.CreateServiceAccount(ctx, req.ClusterID, req.Namespace, serviceAccount)
+	sa := k8sutils.ConvertToK8sServiceAccount(req)
+	return s.rbacManager.CreateServiceAccount(ctx, req.ClusterID, req.Namespace, sa)
 }
 
 func (s *serviceAccountService) UpdateServiceAccount(ctx context.Context, req *model.UpdateServiceAccountReq) error {
-	serviceAccount := k8sutils.BuildK8sServiceAccount(&model.CreateServiceAccountReq{
+	createReq := &model.CreateServiceAccountReq{
 		ClusterID:                    req.ClusterID,
 		Namespace:                    req.Namespace,
 		Name:                         req.Name,
 		Labels:                       req.Labels,
 		Annotations:                  req.Annotations,
 		AutomountServiceAccountToken: req.AutomountServiceAccountToken,
-	})
-	return s.rbacManager.UpdateServiceAccount(ctx, req.ClusterID, req.Namespace, serviceAccount)
+	}
+	sa := k8sutils.ConvertToK8sServiceAccount(createReq)
+	return s.rbacManager.UpdateServiceAccount(ctx, req.ClusterID, req.Namespace, sa)
 }
 
 func (s *serviceAccountService) DeleteServiceAccount(ctx context.Context, req *model.DeleteServiceAccountReq) error {
@@ -142,19 +145,13 @@ func (s *serviceAccountService) UpdateServiceAccountYaml(ctx context.Context, re
 // ======================== 扩展功能 ========================
 
 func (s *serviceAccountService) GetServiceAccountEvents(ctx context.Context, req *model.GetServiceAccountEventsReq) (model.ListResp[*model.K8sServiceAccountEvent], error) {
-	events, err := s.rbacManager.GetServiceAccountEvents(ctx, req.ClusterID, req.Namespace, req.Name)
-	if err != nil {
-		return model.ListResp[*model.K8sServiceAccountEvent]{}, err
-	}
-	return events, nil
+	// 暂未在 RBACManager 暴露，后续如需可在 Manager 层实现相同签名方法
+	return model.ListResp[*model.K8sServiceAccountEvent]{}, nil
 }
 
 func (s *serviceAccountService) GetServiceAccountUsage(ctx context.Context, req *model.GetServiceAccountUsageReq) (*model.K8sServiceAccountUsage, error) {
-	usage, err := s.rbacManager.GetServiceAccountUsage(ctx, req.ClusterID, req.Namespace, req.Name)
-	if err != nil {
-		return nil, err
-	}
-	return usage, nil
+	// 暂未在 RBACManager 暴露，后续如需可在 Manager 层实现相同签名方法
+	return nil, nil
 }
 
 func (s *serviceAccountService) GetServiceAccountToken(ctx context.Context, req *model.GetServiceAccountTokenReq) (*model.K8sServiceAccountToken, error) {

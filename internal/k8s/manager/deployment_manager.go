@@ -42,29 +42,39 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+// DeploymentManager Deployment资源管理器接口
 type DeploymentManager interface {
+	// 基础 CRUD 操作
 	CreateDeployment(ctx context.Context, clusterID int, namespace string, deployment *appsv1.Deployment) error
 	GetDeployment(ctx context.Context, clusterID int, namespace, name string) (*appsv1.Deployment, error)
 	GetDeploymentList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sDeployment, error)
 	UpdateDeployment(ctx context.Context, clusterID int, namespace string, deployment *appsv1.Deployment) error
 	DeleteDeployment(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
+
+	// 扩展操作
 	RestartDeployment(ctx context.Context, clusterID int, namespace, name string) error
 	ScaleDeployment(ctx context.Context, clusterID int, namespace, name string, replicas int32) error
-	BatchDeleteDeployments(ctx context.Context, clusterID int, namespace string, deploymentNames []string) error
-	BatchRestartDeployments(ctx context.Context, clusterID int, namespace string, deploymentNames []string) error
-	GetDeploymentEvents(ctx context.Context, clusterID int, namespace, deploymentName string, limit int) ([]*model.K8sDeploymentEvent, int64, error)
-	GetDeploymentHistory(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sDeploymentHistory, int64, error)
-	GetDeploymentPods(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sPod, int64, error)
-
 	RollbackDeployment(ctx context.Context, clusterID int, namespace, name string, revision int64) error
 	PauseDeployment(ctx context.Context, clusterID int, namespace, name string) error
 	ResumeDeployment(ctx context.Context, clusterID int, namespace, name string) error
+
+	// 批量操作
+	BatchDeleteDeployments(ctx context.Context, clusterID int, namespace string, deploymentNames []string) error
+	BatchRestartDeployments(ctx context.Context, clusterID int, namespace string, deploymentNames []string) error
+
+	// 关联资源查询
+	GetDeploymentEvents(ctx context.Context, clusterID int, namespace, deploymentName string, limit int) ([]*model.K8sDeploymentEvent, int64, error)
+	GetDeploymentHistory(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sDeploymentHistory, int64, error)
+	GetDeploymentPods(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sPod, int64, error)
 }
+
+// deploymentManager Deployment资源管理器实现
 type deploymentManager struct {
 	clientFactory client.K8sClient
 	logger        *zap.Logger
 }
 
+// NewDeploymentManager 创建新的Deployment管理器实例
 func NewDeploymentManager(clientFactory client.K8sClient, logger *zap.Logger) DeploymentManager {
 	return &deploymentManager{
 		clientFactory: clientFactory,
@@ -72,12 +82,14 @@ func NewDeploymentManager(clientFactory client.K8sClient, logger *zap.Logger) De
 	}
 }
 
-// getKubeClient 获取客户端
+// getKubeClient 私有方法：获取Kubernetes客户端
 func (d *deploymentManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
 	kubeClient, err := d.clientFactory.GetKubeClient(clusterID)
 	if err != nil {
-		d.logger.Error("获取 Kubernetes 客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
-		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
+		d.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 	return kubeClient, nil
 }

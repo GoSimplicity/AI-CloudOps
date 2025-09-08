@@ -26,311 +26,315 @@
 package model
 
 import (
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
-// ResourceRequirements 资源要求
-type ResourceRequirements struct {
-	Requests K8sResourceList `json:"requests,omitempty" gorm:"type:text;serializer:json;comment:资源请求"` // 资源请求
-	Limits   K8sResourceList `json:"limits,omitempty" gorm:"type:text;serializer:json;comment:资源限制"`   // 资源限制
-}
-
-// K8sResourceList K8s资源列表
-type K8sResourceList struct {
-	CPU    string `json:"cpu,omitempty" gorm:"size:50;comment:CPU 数量，例如 '500m', '2'"`       // CPU 数量，例如 "500m", "2"
-	Memory string `json:"memory,omitempty" gorm:"size:50;comment:内存数量，例如 '1Gi', '512Mi'"` // 内存数量，例如 "1Gi", "512Mi"
-}
-
-// K8sPod 单个 Pod 的模型
+// K8sPod Kubernetes Pod模型
 type K8sPod struct {
-	Model
-	// 元信息
-	UID         string            `json:"uid" gorm:"size:64;comment:K8s Pod 的 UID"`
-	ClusterID   int               `json:"cluster_id"`
-	Name        string            `json:"name" binding:"required,min=1,max=200" gorm:"size:200;comment:Pod 名称"`
-	Namespace   string            `json:"namespace" binding:"required,min=1,max=200" gorm:"size:200;comment:所属命名空间"`
-	Labels      map[string]string `json:"labels" gorm:"type:text;serializer:json;comment:Pod 标签"`
-	Annotations map[string]string `json:"annotations" gorm:"type:text;serializer:json;comment:Pod 注解"`
-	// 状态信息
-	Status   string `json:"status" gorm:"comment:Pod 状态，例如 Running, Pending"`
-	NodeName string `json:"node_name" gorm:"index;comment:Pod 所在节点"`
-	PodIP    string `json:"pod_ip" gorm:"size:64;comment:Pod IP 地址"`
-	HostIP   string `json:"host_ip" gorm:"size:64;comment:宿主机 IP 地址"`
-	// 容器信息
-	Containers     []*K8sPodContainer `json:"containers" gorm:"-"` // 普通容器
-	InitContainers []*K8sPodContainer `json:"init_containers" gorm:"-"`
-	Conditions     []*PodCondition    `json:"conditions" gorm:"-"`
-
-	// 时间
-	StartTime *time.Time `json:"start_time" gorm:"comment:Pod 启动时间"`
-	CreatedAt time.Time  `json:"created_at" gorm:"comment:记录创建时间"`
-	UpdatedAt time.Time  `json:"updated_at" gorm:"comment:记录更新时间"`
-	// 原始对象（调试/透传用）
-	RawPod *corev1.Pod `json:"-" gorm:"-"`
+	ClusterID         int64      `json:"cluster_id"`         // 集群ID
+	Name              string     `json:"name"`               // Pod名称
+	Namespace         string     `json:"namespace"`          // 所属命名空间
+	UID               string     `json:"uid"`                // Pod UID
+	Labels            string     `json:"labels"`             // 标签(JSON字符串)
+	Annotations       string     `json:"annotations"`        // 注解(JSON字符串)
+	Status            string     `json:"status"`             // Pod状态
+	Phase             string     `json:"phase"`              // Pod阶段
+	NodeName          string     `json:"node_name"`          // 所在节点
+	PodIP             string     `json:"pod_ip"`             // Pod IP地址
+	HostIP            string     `json:"host_ip"`            // 宿主机IP地址
+	QosClass          string     `json:"qos_class"`          // QoS等级
+	RestartCount      int32      `json:"restart_count"`      // 重启次数
+	Ready             string     `json:"ready"`              // 就绪状态(如"1/1")
+	ServiceAccount    string     `json:"service_account"`    // 服务账户
+	RestartPolicy     string     `json:"restart_policy"`     // 重启策略
+	DNSPolicy         string     `json:"dns_policy"`         // DNS策略
+	Conditions        string     `json:"conditions"`         // Pod条件(JSON字符串)
+	Containers        string     `json:"containers"`         // 容器列表(JSON字符串)
+	InitContainers    string     `json:"init_containers"`    // 初始化容器列表(JSON字符串)
+	Volumes           string     `json:"volumes"`            // 卷列表(JSON字符串)
+	CreationTimestamp time.Time  `json:"creation_timestamp"` // 创建时间
+	StartTime         *time.Time `json:"start_time"`         // 启动时间
+	DeletionTimestamp *time.Time `json:"deletion_timestamp"` // 删除时间戳
+	OwnerReferences   string     `json:"owner_references"`   // 所有者引用(JSON字符串)
+	ResourceVersion   string     `json:"resource_version"`   // 资源版本
+	Generation        int64      `json:"generation"`         // 生成版本号
+	Spec              string     `json:"spec"`               // Pod规格(JSON字符串)
 }
 
-// PodCondition 对应 Kubernetes PodCondition
+// PodContainer Pod容器信息
+type PodContainer struct {
+	Name            string                  `json:"name"`              // 容器名称
+	Image           string                  `json:"image"`             // 容器镜像
+	Command         []string                `json:"command"`           // 启动命令
+	Args            []string                `json:"args"`              // 启动参数
+	Envs            []PodEnvVar             `json:"envs"`              // 环境变量
+	Ports           []PodContainerPort      `json:"ports"`             // 容器端口
+	Resources       PodResourceRequirements `json:"resources"`         // 资源要求
+	VolumeMounts    []PodVolumeMount        `json:"volume_mounts"`     // 卷挂载
+	LivenessProbe   *PodProbe               `json:"liveness_probe"`    // 存活探测
+	ReadinessProbe  *PodProbe               `json:"readiness_probe"`   // 就绪探测
+	ImagePullPolicy string                  `json:"image_pull_policy"` // 镜像拉取策略
+	Ready           bool                    `json:"ready"`             // 是否就绪
+	RestartCount    int32                   `json:"restart_count"`     // 重启次数
+	State           PodContainerState       `json:"state"`             // 容器状态
+}
+
+// PodEnvVar 环境变量
+type PodEnvVar struct {
+	Name  string `json:"name"`  // 环境变量名称
+	Value string `json:"value"` // 环境变量值
+}
+
+// PodContainerPort 容器端口
+type PodContainerPort struct {
+	Name          string `json:"name"`           // 端口名称
+	ContainerPort int32  `json:"container_port"` // 容器端口号
+	Protocol      string `json:"protocol"`       // 协议类型
+}
+
+// PodResourceRequirements 资源要求
+type PodResourceRequirements struct {
+	Requests PodResourceList `json:"requests"` // 资源请求
+	Limits   PodResourceList `json:"limits"`   // 资源限制
+}
+
+// PodResourceList 资源列表
+type PodResourceList struct {
+	CPU    string `json:"cpu"`    // CPU数量
+	Memory string `json:"memory"` // 内存数量
+}
+
+// PodVolumeMount 卷挂载
+type PodVolumeMount struct {
+	Name      string `json:"name"`       // 卷名称
+	MountPath string `json:"mount_path"` // 挂载路径
+	ReadOnly  bool   `json:"read_only"`  // 是否只读
+	SubPath   string `json:"sub_path"`   // 子路径
+}
+
+// PodProbe 探测配置
+type PodProbe struct {
+	HTTPGet             *PodHTTPGetAction `json:"http_get"`              // HTTP GET探测
+	InitialDelaySeconds int32             `json:"initial_delay_seconds"` // 初始延迟时间
+	PeriodSeconds       int32             `json:"period_seconds"`        // 探测间隔时间
+	TimeoutSeconds      int32             `json:"timeout_seconds"`       // 探测超时时间
+	SuccessThreshold    int32             `json:"success_threshold"`     // 成功阈值
+	FailureThreshold    int32             `json:"failure_threshold"`     // 失败阈值
+}
+
+// PodHTTPGetAction HTTP GET探测动作
+type PodHTTPGetAction struct {
+	Path   string `json:"path"`   // 探测路径
+	Port   int32  `json:"port"`   // 探测端口
+	Scheme string `json:"scheme"` // 协议类型
+}
+
+// PodContainerState 容器状态
+type PodContainerState struct {
+	Waiting    *PodContainerStateWaiting    `json:"waiting"`    // 等待状态
+	Running    *PodContainerStateRunning    `json:"running"`    // 运行状态
+	Terminated *PodContainerStateTerminated `json:"terminated"` // 终止状态
+}
+
+// PodContainerStateWaiting 容器等待状态
+type PodContainerStateWaiting struct {
+	Reason  string `json:"reason"`  // 等待原因
+	Message string `json:"message"` // 等待消息
+}
+
+// PodContainerStateRunning 容器运行状态
+type PodContainerStateRunning struct {
+	StartedAt time.Time `json:"started_at"` // 开始时间
+}
+
+// PodContainerStateTerminated 容器终止状态
+type PodContainerStateTerminated struct {
+	ExitCode    int32     `json:"exit_code"`    // 退出码
+	Signal      int32     `json:"signal"`       // 信号
+	Reason      string    `json:"reason"`       // 终止原因
+	Message     string    `json:"message"`      // 终止消息
+	StartedAt   time.Time `json:"started_at"`   // 开始时间
+	FinishedAt  time.Time `json:"finished_at"`  // 结束时间
+	ContainerID string    `json:"container_id"` // 容器ID
+}
+
+// PodCondition Pod条件
 type PodCondition struct {
-	Type               string    `json:"type" gorm:"comment:条件类型"`
-	Status             string    `json:"status" gorm:"comment:条件状态"`
-	LastProbeTime      time.Time `json:"last_probe_time,omitempty"`
-	LastTransitionTime time.Time `json:"last_transition_time,omitempty"`
-	Reason             string    `json:"reason,omitempty"`
-	Message            string    `json:"message,omitempty"`
-}
-
-func (k *K8sPod) TableName() string {
-	return "cl_k8s_pods"
-}
-
-// K8sPodContainer Pod 中单个容器的模型
-type K8sPodContainer struct {
-	Name            string               `json:"name" binding:"required,min=1,max=200" gorm:"size:200;comment:容器名称"`          // 容器名称
-	Image           string               `json:"image" binding:"required" gorm:"size:500;comment:容器镜像"`                       // 容器镜像
-	Command         StringList           `json:"command,omitempty" gorm:"type:text;serializer:json;comment:启动命令组"`           // 启动命令组
-	Args            StringList           `json:"args,omitempty" gorm:"type:text;serializer:json;comment:启动参数，空格分隔"`       // 启动参数
-	Envs            []K8sEnvVar          `json:"envs,omitempty" gorm:"type:text;serializer:json;comment:环境变量组"`              // 环境变量组
-	Ports           []K8sContainerPort   `json:"ports,omitempty" gorm:"type:text;serializer:json;comment:容器端口配置"`           // 容器端口配置
-	Resources       ResourceRequirements `json:"resources,omitempty" gorm:"type:text;serializer:json;comment:资源请求与限制"`     // 资源请求与限制
-	VolumeMounts    []K8sVolumeMount     `json:"volume_mounts,omitempty" gorm:"type:text;serializer:json;comment:卷挂载配置"`     // 卷挂载配置
-	LivenessProbe   *K8sProbe            `json:"liveness_probe,omitempty" gorm:"type:text;serializer:json;comment:存活探测配置"`  // 存活探测配置
-	ReadinessProbe  *K8sProbe            `json:"readiness_probe,omitempty" gorm:"type:text;serializer:json;comment:就绪探测配置"` // 就绪探测配置
-	ImagePullPolicy string               `json:"image_pull_policy,omitempty" gorm:"size:50;comment:镜像拉取策略"`                 // 镜像拉取策略，例如 "Always", "IfNotPresent", "Never"
-}
-
-// K8sEnvVar 环境变量的键值对
-type K8sEnvVar struct {
-	Name  string `json:"name" binding:"required" gorm:"size:100;comment:环境变量名称"` // 环境变量名称
-	Value string `json:"value" gorm:"size:500;comment:环境变量值"`                     // 环境变量值
-}
-
-// K8sContainerPort 容器的端口配置
-type K8sContainerPort struct {
-	Name          string `json:"name,omitempty" gorm:"size:100;comment:端口名称"`             // 端口名称（可选）
-	ContainerPort int    `json:"container_port" binding:"required" gorm:"comment:容器端口号"` // 容器端口号
-	Protocol      string `json:"protocol,omitempty" gorm:"size:10;comment:协议类型"`          // 协议类型，例如 "TCP", "UDP"
-}
-
-// K8sVolumeMount 卷的挂载配置
-type K8sVolumeMount struct {
-	Name      string `json:"name" binding:"required" gorm:"size:100;comment:卷名称"`         // 卷名称，必填，长度限制为100字符
-	MountPath string `json:"mount_path" binding:"required" gorm:"size:255;comment:挂载路径"` // 挂载路径，必填，长度限制为255字符
-	ReadOnly  bool   `json:"read_only,omitempty" gorm:"comment:是否只读"`                    // 是否只读
-	SubPath   string `json:"sub_path,omitempty" gorm:"size:255;comment:子路径"`              // 子路径（可选），长度限制为255字符
-}
-
-// K8sProbe 探测配置
-type K8sProbe struct {
-	HTTPGet *K8sHTTPGetAction `json:"http_get,omitempty" gorm:"type:text;serializer:json;comment:HTTP GET 探测配置"` // HTTP GET 探测
-	// TCPSocket 和 Exec 探测也可以根据需要添加
-	InitialDelaySeconds int `json:"initial_delay_seconds" gorm:"comment:探测初始延迟时间（秒）"` // 探测初始延迟时间
-	PeriodSeconds       int `json:"period_seconds" gorm:"comment:探测间隔时间（秒）"`            // 探测间隔时间
-	TimeoutSeconds      int `json:"timeout_seconds" gorm:"comment:探测超时时间（秒）"`           // 探测超时时间
-	SuccessThreshold    int `json:"success_threshold" gorm:"comment:探测成功阈值"`             // 探测成功阈值
-	FailureThreshold    int `json:"failure_threshold" gorm:"comment:探测失败阈值"`             // 探测失败阈值
-}
-
-// K8sHTTPGetAction HTTP GET 探测动作
-type K8sHTTPGetAction struct {
-	Path   string `json:"path" binding:"required" gorm:"size:255;comment:探测路径"` // 探测路径，必填，长度限制为255字符
-	Port   int    `json:"port" binding:"required" gorm:"comment:探测端口号"`        // 探测端口号，必填
-	Scheme string `json:"scheme,omitempty" gorm:"size:10;comment:协议类型"`         // 协议类型，例如 "HTTP", "HTTPS"，长度限制为10字符
-}
-
-// K8sPodReq 创建 Pod 的请求结构
-type K8sPodReq struct {
-	ClusterId int         `json:"cluster_id" binding:"required"` // 集群名称，必填
-	Pod       *corev1.Pod `json:"pod"`                           // Pod 对象
-}
-
-// K8sDeploymentReq Deployment 相关请求结构
-type K8sDeploymentReq struct {
-	ClusterId       int                `json:"cluster_id" binding:"required"` // 集群名称，必填
-	Namespace       string             `json:"namespace" binding:"required"`  // 命名空间，必填
-	DeploymentNames []string           `json:"deployment_names"`              // Deployment 名称，可选
-	DeploymentYaml  *appsv1.Deployment `json:"deployment_yaml"`               // Deployment 对象, 可选
-}
-
-// K8sConfigMapReq ConfigMap 相关请求结构
-type K8sConfigMapReq struct {
-	ClusterId      int               `json:"cluster_id" binding:"required"` // 集群id，必填
-	Namespace      string            `json:"namespace"`                     // 命名空间，可选, 删除用
-	ConfigMapNames []string          `json:"config_map_names"`              // ConfigMap 名称，可选， 删除用
-	ConfigMap      *corev1.ConfigMap `json:"config_map"`                    // ConfigMap 对象, 可选
-}
-
-// K8sServiceReq Service 相关请求结构
-type K8sServiceReq struct {
-	ClusterId    int             `json:"cluster_id" binding:"required"` // 集群id，必填
-	Namespace    string          `json:"namespace"`                     // 命名空间，必填
-	ServiceNames []string        `json:"service_names"`                 // Service 名称，可选
-	ServiceYaml  *corev1.Service `json:"service_yaml"`                  // Service 对象, 可选
+	Type               string    `json:"type"`                 // 条件类型
+	Status             string    `json:"status"`               // 条件状态
+	LastProbeTime      time.Time `json:"last_probe_time"`      // 最后探测时间
+	LastTransitionTime time.Time `json:"last_transition_time"` // 最后转换时间
+	Reason             string    `json:"reason"`               // 原因
+	Message            string    `json:"message"`              // 消息
 }
 
 // GetPodListReq 获取Pod列表请求
 type GetPodListReq struct {
 	ListReq
-
-	ClusterID int               `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace string            `json:"namespace" form:"namespace" comment:"命名空间"`
-	Labels    map[string]string `json:"labels" form:"labels" binding:"omitempty"` // 标签
+	ClusterID int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" form:"namespace"`                                       // 命名空间
+	Status    string `json:"status" form:"status"`                                             // Pod状态
 }
 
-// PodGetReq 获取单个Pod请求
-type PodGetReq struct {
-	ClusterID int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`
-	PodName   string `json:"pod_name" form:"pod_name" uri:"pod_name" binding:"required" comment:"Pod名称"`
+// GetPodDetailsReq 获取Pod详情请求
+type GetPodDetailsReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
+	Name      string `json:"name" uri:"name" binding:"required"`             // Pod名称
 }
 
-// PodCreateReq 创建Pod请求
-type PodCreateReq struct {
-	ClusterID   int               `json:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace   string            `json:"namespace" binding:"required" comment:"命名空间"`
-	Name        string            `json:"name" binding:"required" comment:"Pod名称"`
-	YAML        string            `json:"yaml" binding:"required" comment:"YAML配置"`
-	Labels      map[string]string `json:"labels" comment:"标签"`
-	Annotations map[string]string `json:"annotations" comment:"注解"`
+// GetPodYamlReq 获取Pod YAML请求
+type GetPodYamlReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
+	Name      string `json:"name" uri:"name" binding:"required"`             // Pod名称
 }
 
-// PodUpdateReq 更新Pod请求
-type PodUpdateReq struct {
-	ClusterID   int               `json:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace   string            `json:"namespace" binding:"required" comment:"命名空间"`
-	Name        string            `json:"name" binding:"required" comment:"Pod名称"`
-	YAML        string            `json:"yaml" binding:"required" comment:"YAML配置"`
-	Labels      map[string]string `json:"labels" comment:"标签"`
-	Annotations map[string]string `json:"annotations" comment:"注解"`
+// CreatePodReq 创建Pod请求
+type CreatePodReq struct {
+	ClusterID      int                  `json:"cluster_id" binding:"required"` // 集群ID
+	Name           string               `json:"name" binding:"required"`       // Pod名称
+	Namespace      string               `json:"namespace" binding:"required"`  // 命名空间
+	Labels         map[string]string    `json:"labels"`                        // 标签
+	Annotations    map[string]string    `json:"annotations"`                   // 注解
+	Containers     []CreatePodContainer `json:"containers" binding:"required"` // 容器列表
+	InitContainers []CreatePodContainer `json:"init_containers"`               // 初始化容器列表
+	RestartPolicy  string               `json:"restart_policy"`                // 重启策略
+	NodeSelector   map[string]string    `json:"node_selector"`                 // 节点选择器
+	Tolerations    []corev1.Toleration  `json:"tolerations"`                   // 容忍度
+	Affinity       *corev1.Affinity     `json:"affinity"`                      // 亲和性
+	Volumes        []corev1.Volume      `json:"volumes"`                       // 卷
+	HostNetwork    bool                 `json:"host_network"`                  // 是否使用主机网络
+	HostPID        bool                 `json:"host_pid"`                      // 是否使用主机PID
+	DNSPolicy      string               `json:"dns_policy"`                    // DNS策略
+	ServiceAccount string               `json:"service_account"`               // 服务账户
 }
 
-// PodDeleteReq 删除Pod请求
-type PodDeleteReq struct {
-	ClusterID          int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace          string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`
-	PodName            string `json:"pod_name" form:"pod_name" binding:"required" comment:"Pod名称"`
-	GracePeriodSeconds *int64 `json:"grace_period_seconds" comment:"优雅删除时间"`
-	Force              bool   `json:"force" comment:"是否强制删除"`
+// CreatePodContainer 创建Pod容器配置
+type CreatePodContainer struct {
+	Name            string                  `json:"name" binding:"required"`  // 容器名称
+	Image           string                  `json:"image" binding:"required"` // 容器镜像
+	Command         []string                `json:"command"`                  // 启动命令
+	Args            []string                `json:"args"`                     // 启动参数
+	Envs            []PodEnvVar             `json:"envs"`                     // 环境变量
+	Ports           []PodContainerPort      `json:"ports"`                    // 容器端口
+	Resources       PodResourceRequirements `json:"resources"`                // 资源要求
+	VolumeMounts    []PodVolumeMount        `json:"volume_mounts"`            // 卷挂载
+	LivenessProbe   *PodProbe               `json:"liveness_probe"`           // 存活探测
+	ReadinessProbe  *PodProbe               `json:"readiness_probe"`          // 就绪探测
+	ImagePullPolicy string                  `json:"image_pull_policy"`        // 镜像拉取策略
+	WorkingDir      string                  `json:"working_dir"`              // 工作目录
+	SecurityContext *corev1.SecurityContext `json:"security_context"`         // 安全上下文
 }
 
-// PodEntity Pod响应实体
-type PodEntity struct {
+// CreatePodByYamlReq 通过YAML创建Pod请求
+type CreatePodByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+// UpdatePodReq 更新Pod请求
+type UpdatePodReq struct {
+	ClusterID   int               `json:"cluster_id"`  // 集群ID
 	Name        string            `json:"name"`        // Pod名称
 	Namespace   string            `json:"namespace"`   // 命名空间
-	UID         string            `json:"uid"`         // Pod UID
-	NodeName    string            `json:"node_name"`   // 所在节点
-	Status      string            `json:"status"`      // Pod状态
-	PodIP       string            `json:"pod_ip"`      // Pod IP
-	HostIP      string            `json:"host_ip"`     // 宿主机IP
-	QosClass    string            `json:"qos_class"`   // QoS等级
-	Restarts    int32             `json:"restarts"`    // 重启次数
-	Age         string            `json:"age"`         // 存在时间
-	Ready       string            `json:"ready"`       // 就绪状态
 	Labels      map[string]string `json:"labels"`      // 标签
 	Annotations map[string]string `json:"annotations"` // 注解
-	CreatedAt   string            `json:"created_at"`  // 创建时间
 }
 
-// PodListResponse Pod列表响应
-type PodListResponse struct {
-	Items      []PodEntity `json:"items"`       // Pod列表
-	TotalCount int         `json:"total_count"` // 总数
+// UpdatePodByYamlReq 通过YAML更新Pod请求
+type UpdatePodByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" binding:"required"`  // 命名空间
+	Name      string `json:"name" binding:"required"`       // Pod名称
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
 }
 
-// K8sPodListResponse Pod 列表响应 (保持向后兼容)
-type K8sPodListResponse struct {
-	Pods       []K8sPod `json:"pods"`        // Pod 列表
-	TotalCount int      `json:"total_count"` // 总数
+// DeletePodReq 删除Pod请求
+type DeletePodReq struct {
+	ClusterID          int    `json:"cluster_id" binding:"required"` // 集群ID
+	Namespace          string `json:"namespace" binding:"required"`  // 命名空间
+	Name               string `json:"name" binding:"required"`       // Pod名称
+	GracePeriodSeconds *int64 `json:"grace_period_seconds"`          // 优雅删除时间（秒）
+	Force              bool   `json:"force"`                         // 是否强制删除
 }
 
-// K8sPodBatchDeleteReq 批量删除Pod请求
-type K8sPodBatchDeleteReq struct {
-	ClusterID          int      `json:"cluster_id" binding:"required" comment:"集群ID"`                          // 集群ID，必填
-	Namespace          string   `json:"namespace" binding:"required" comment:"命名空间"`                         // 命名空间，必填
-	Names              []string `json:"names" binding:"required" comment:"Pod名称列表"`                          // Ingress名称列表，必填
-	GracePeriodSeconds *int64   `json:"grace_period_seconds" binding:"required,gt=0" comment:"优雅删除时间（秒）"` // 优雅删除时间
-	Force              bool     `json:"force" comment:"是否强制删除"`                                            // 是否强制删除
+// BatchDeletePodsReq 批量删除Pod请求
+type BatchDeletePodsReq struct {
+	ClusterID          int      `json:"cluster_id" binding:"required"` // 集群ID
+	Namespace          string   `json:"namespace" binding:"required"`  // 命名空间
+	Names              []string `json:"names" binding:"required"`      // Pod名称列表
+	GracePeriodSeconds *int64   `json:"grace_period_seconds"`          // 优雅删除时间（秒）
+	Force              bool     `json:"force"`                         // 是否强制删除
 }
 
-// K8sDeletePodReq 删除Pod资源请求
-type K8sDeletePodReq struct {
-	ClusterID          int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace          string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`
-	PodName            string `json:"pod_name" form:"pod_name" binding:"required" comment:"pod名称"`
-	GracePeriodSeconds *int64 `json:"grace_period_seconds" form:"grace_period_seconds" comment:"优雅删除时间"`
-	Force              bool   `json:"force" form:"force" comment:"是否强制删除"`
+// GetPodsByNodeReq 根据节点获取Pod列表请求
+type GetPodsByNodeReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	NodeName  string `json:"node_name" uri:"node_name" binding:"required"`   // 节点名称
 }
 
-// K8sGetPodReq 获取单个k8s资源请求
-type K8sGetPodReq struct {
-	ClusterID int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace string `json:"namespace" form:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
-	PodName   string `json:"pod_name" form:"pod_name" uri:"pod_name" binding:"required" comment:"资源名称"`
+// GetPodContainersReq 获取Pod容器列表请求
+type GetPodContainersReq struct {
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
+	PodName   string `json:"pod_name" uri:"pod_name" binding:"required"`     // Pod名称
+}
+
+// GetPodLogsReq Pod日志查询请求
+type GetPodLogsReq struct {
+	ClusterID    int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	Namespace    string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
+	PodName      string `json:"pod_name" uri:"pod_name" binding:"required"`     // Pod名称
+	Container    string `json:"container" uri:"container" binding:"required"`   // 容器名称
+	Follow       bool   `json:"follow"`                                         // 是否持续跟踪
+	Previous     bool   `json:"previous"`                                       // 是否获取前一个容器的日志
+	SinceSeconds *int64 `json:"since_seconds"`                                  // 获取多少秒内的日志
+	SinceTime    string `json:"since_time"`                                     // 从指定时间开始获取日志
+	Timestamps   bool   `json:"timestamps"`                                     // 是否显示时间戳
+	TailLines    *int64 `json:"tail_lines"`                                     // 获取最后几行日志
+	LimitBytes   *int64 `json:"limit_bytes"`                                    // 限制日志字节数
 }
 
 // PodExecReq Pod执行命令请求
 type PodExecReq struct {
-	//K8sResourceIdentifierReq
-	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
-	PodName   string `json:"pod_name" uri:"pod_name" binding:"required" comment:"Pod名称"`
-	Container string `json:"container" uri:"container" binding:"required" comment:"容器名称"`
-	Shell     string `json:"shell" form:"shell" binding:"omitempty,oneof=bash sh" comment:"shell"`
-
-	//Command   []string `json:"command" binding:"required" comment:"执行的命令"`
-	//Stdin  bool `json:"stdin" comment:"是否启用标准输入"`
-	//Stdout bool `json:"stdout" comment:"是否启用标准输出"`
-	//Stderr bool `json:"stderr" comment:"是否启用标准错误"`
-	//TTY    bool `json:"tty" comment:"是否分配TTY"`
+	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	Namespace string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
+	PodName   string `json:"pod_name" uri:"pod_name" binding:"required"`     // Pod名称
+	Container string `json:"container" uri:"container" binding:"required"`   // 容器名称
+	Shell     string `json:"shell" form:"shell"`                             // shell类型
 }
 
 // PodPortForwardReq Pod端口转发请求
 type PodPortForwardReq struct {
-	ClusterID    int               `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace    string            `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
-	ResourceName string            `json:"pod_name" uri:"pod_name" binding:"required" comment:"资源名称"`
-	Ports        []PortForwardPort `json:"ports" binding:"required" comment:"端口转发配置"`
+	ClusterID int                  `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	Namespace string               `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
+	PodName   string               `json:"pod_name" uri:"pod_name" binding:"required"`     // Pod名称
+	Ports     []PodPortForwardPort `json:"ports" binding:"required"`                       // 端口转发配置
 }
 
-type PortForwardPort struct {
-	LocalPort  int `json:"local_port" binding:"required" comment:"本地端口"`
-	RemotePort int `json:"remote_port" binding:"required" comment:"远程端口"`
+// PodPortForwardPort 端口转发端口配置
+type PodPortForwardPort struct {
+	LocalPort  int `json:"local_port" binding:"required"`  // 本地端口
+	RemotePort int `json:"remote_port" binding:"required"` // 远程端口
 }
 
-// PodContainersReq 获取Pod容器列表请求
-type PodContainersReq struct {
-	ClusterID int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`
-	PodName   string `json:"pod_name" form:"pod_name" uri:"pod_name" binding:"required" comment:"Pod名称"`
+// PodFileUploadReq Pod文件上传请求
+type PodFileUploadReq struct {
+	ClusterID     int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	Namespace     string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
+	PodName       string `json:"pod_name" uri:"pod_name" binding:"required"`     // Pod名称
+	ContainerName string `json:"container" uri:"container" binding:"required"`   // 容器名称
+	FilePath      string `json:"file_path" uri:"file_path" binding:"required"`   // 文件路径
 }
 
-// PodsByNodeReq 根据节点获取Pod列表请求
-type PodsByNodeReq struct {
-	ClusterID int    `json:"cluster_id" form:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群ID"`
-	NodeName  string `json:"node_name" form:"node_name" uri:"node_name" binding:"required" comment:"节点名称"`
-}
-
-// PodFileReq Pod文件上传下载请求
-type PodFileReq struct {
-	Namespace     string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
-	PodName       string `json:"pod_name" uri:"pod_name" binding:"required" comment:"Pod名称"`
-	ContainerName string `json:"container" uri:"container" binding:"required" comment:"Container名称"`
-	FilePath      string `json:"file_path" form:"file_path" binding:"required" uri:"file_path" comment:"文件路径"`
-	ClusterID     int    `json:"cluster_id" uri:"cluster_id" comment:"对应集群ID"`
-}
-
-// PodLogReq Pod日志查询请求
-type PodLogReq struct {
-	ClusterID    int    `json:"cluster_id" uri:"cluster_id" binding:"required" comment:"集群id"`
-	Namespace    string `json:"namespace" uri:"namespace" binding:"required" comment:"命名空间"`
-	PodName      string `json:"pod_name" uri:"pod_name" binding:"required" comment:"Pod名称"`
-	Container    string `json:"container" uri:"container" binding:"required" comment:"容器名称"`
-	Follow       bool   `json:"follow" comment:"是否持续跟踪"`
-	Previous     bool   `json:"previous" comment:"是否获取前一个容器的日志"`
-	SinceSeconds *int64 `json:"since_seconds" comment:"获取多少秒内的日志"`
-	SinceTime    string `json:"since_time" comment:"从指定时间开始获取日志"`
-	Timestamps   bool   `json:"timestamps" comment:"是否显示时间戳"`
-	TailLines    *int64 `json:"tail_lines" comment:"获取最后几行日志"`
-	LimitBytes   *int64 `json:"limit_bytes" comment:"限制日志字节数"`
+// PodFileDownloadReq Pod文件下载请求
+type PodFileDownloadReq struct {
+	ClusterID     int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
+	Namespace     string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
+	PodName       string `json:"pod_name" uri:"pod_name" binding:"required"`     // Pod名称
+	ContainerName string `json:"container" uri:"container" binding:"required"`   // 容器名称
+	FilePath      string `json:"file_path" uri:"file_path" binding:"required"`   // 文件路径
 }

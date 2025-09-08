@@ -195,8 +195,6 @@ type K8sYaml struct {
 	YAML string `json:"yaml"`
 }
 
-// Service相关请求模型
-
 // GetServiceListReq Service列表请求
 type GetServiceListReq struct {
 	ListReq

@@ -1,12 +1,21 @@
 package utils
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
 )
 
+// ConvertToK8sIngress 将 Kubernetes Ingress 转换为内部 Ingress 模型
 func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8sIngress {
+	if ingress == nil {
+		return nil
+	}
 	// 提取主机列表
 	hosts := make([]string, 0)
 	for _, rule := range ingress.Spec.Rules {
@@ -38,10 +47,11 @@ func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8
 			paths := make([]model.IngressHTTPIngressPath, 0, len(rule.HTTP.Paths))
 			for _, path := range rule.HTTP.Paths {
 				ingressPath := model.IngressHTTPIngressPath{
-					Path: path.Path,
+					Path:    path.Path,
+					Backend: path.Backend,
 				}
 				if path.PathType != nil {
-					ingressPath.PathType = string(*path.PathType)
+					ingressPath.PathType = path.PathType
 				}
 				paths = append(paths, ingressPath)
 			}
@@ -67,40 +77,271 @@ func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8
 	loadBalancer := model.IngressLoadBalancer{}
 
 	return &model.K8sIngress{
-		Name:              ingress.Name,
-		Namespace:         ingress.Namespace,
-		ClusterID:         clusterID,
-		UID:               string(ingress.UID),
-		IngressClassName:  ingressClassName,
-		Rules:             rules,
-		TLS:               tls,
-		LoadBalancer:      loadBalancer,
-		Labels:            ingress.Labels,
-		Annotations:       ingress.Annotations,
-		CreationTimestamp: ingress.CreationTimestamp.Time,
-		Age:               age,
-		Status:            status,
-		Hosts:             hosts,
+		Name:             ingress.Name,
+		Namespace:        ingress.Namespace,
+		ClusterID:        clusterID,
+		UID:              string(ingress.UID),
+		IngressClassName: &ingressClassName,
+		Rules:            rules,
+		TLS:              tls,
+		LoadBalancer:     loadBalancer,
+		Labels:           ingress.Labels,
+		Annotations:      ingress.Annotations,
+		CreatedAt:        ingress.CreationTimestamp.Time,
+		Age:              age,
+		Status:           convertIngressStatusToEnum(status),
+		Hosts:            hosts,
+		RawIngress:       ingress,
 	}
 }
 
+// IngressStatus 获取Ingress状态
 func IngressStatus(item *networkingv1.Ingress) string {
 	if item == nil {
-		return statusUnknown
+		return StatusUnknown
 	}
 	// 如果正在删除
 	if item.DeletionTimestamp != nil {
-		return statusTerminating
+		return StatusTerminating
 	}
 	lb := item.Status.LoadBalancer
 	ingressList := lb.Ingress
 	if len(ingressList) == 0 {
-		return statusPending
+		return StatusPending
 	}
 	for _, entry := range ingressList {
 		if entry.IP != "" || entry.Hostname != "" {
-			return statusReady
+			return StatusReady
 		}
 	}
-	return statusUnknown
+	return StatusUnknown
+}
+
+// ValidateIngress 验证Ingress配置
+func ValidateIngress(ingress *networkingv1.Ingress) error {
+	if ingress == nil {
+		return fmt.Errorf("ingress不能为空")
+	}
+
+	if ingress.Name == "" {
+		return fmt.Errorf("ingress名称不能为空")
+	}
+
+	if ingress.Namespace == "" {
+		return fmt.Errorf("namespace不能为空")
+	}
+
+	// 验证规则
+	for i, rule := range ingress.Spec.Rules {
+		if rule.HTTP != nil {
+			for j, path := range rule.HTTP.Paths {
+				if path.Backend.Service == nil {
+					return fmt.Errorf("规则%d路径%d的后端服务不能为空", i, j)
+				}
+				if path.Backend.Service.Name == "" {
+					return fmt.Errorf("规则%d路径%d的后端服务名称不能为空", i, j)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// IngressToYAML 将Ingress转换为YAML
+func IngressToYAML(ingress *networkingv1.Ingress) (string, error) {
+	if ingress == nil {
+		return "", fmt.Errorf("ingress不能为空")
+	}
+
+	// 清理不需要的字段
+	cleanIngress := ingress.DeepCopy()
+	cleanIngress.Status = networkingv1.IngressStatus{}
+	cleanIngress.ManagedFields = nil
+	cleanIngress.ResourceVersion = ""
+	cleanIngress.UID = ""
+	cleanIngress.CreationTimestamp = metav1.Time{}
+	cleanIngress.Generation = 0
+
+	yamlBytes, err := yaml.Marshal(cleanIngress)
+	if err != nil {
+		return "", fmt.Errorf("转换为YAML失败: %w", err)
+	}
+
+	return string(yamlBytes), nil
+}
+
+// YAMLToIngress 将YAML转换为Ingress
+func YAMLToIngress(yamlContent string) (*networkingv1.Ingress, error) {
+	if yamlContent == "" {
+		return nil, fmt.Errorf("YAML内容不能为空")
+	}
+
+	var ingress networkingv1.Ingress
+	err := yaml.Unmarshal([]byte(yamlContent), &ingress)
+	if err != nil {
+		return nil, fmt.Errorf("解析YAML失败: %w", err)
+	}
+
+	return &ingress, nil
+}
+
+// IsIngressReady 判断Ingress是否就绪
+func IsIngressReady(ingress networkingv1.Ingress) bool {
+	return IngressStatus(&ingress) == StatusReady
+}
+
+// GetIngressAge 获取Ingress年龄
+func GetIngressAge(ingress networkingv1.Ingress) string {
+	age := time.Since(ingress.CreationTimestamp.Time)
+	days := int(age.Hours() / 24)
+	if days > 0 {
+		return fmt.Sprintf("%dd", days)
+	}
+	hours := int(age.Hours())
+	if hours > 0 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	minutes := int(age.Minutes())
+	return fmt.Sprintf("%dm", minutes)
+}
+
+// BuildIngressFromSpec 从CreateIngressReq构建Ingress对象
+func BuildIngressFromSpec(req *model.CreateIngressReq) (*networkingv1.Ingress, error) {
+	if req == nil {
+		return nil, fmt.Errorf("请求不能为空")
+	}
+
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   req.Namespace,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: req.IngressClassName,
+		},
+	}
+
+	// 构建规则
+	if len(req.Rules) > 0 {
+		ingress.Spec.Rules = make([]networkingv1.IngressRule, 0, len(req.Rules))
+		for _, rule := range req.Rules {
+			ingressRule := networkingv1.IngressRule{
+				Host: rule.Host,
+			}
+
+			if len(rule.HTTP.Paths) > 0 {
+				httpRule := &networkingv1.HTTPIngressRuleValue{
+					Paths: make([]networkingv1.HTTPIngressPath, 0, len(rule.HTTP.Paths)),
+				}
+
+				for _, path := range rule.HTTP.Paths {
+					httpPath := networkingv1.HTTPIngressPath{
+						Path:    path.Path,
+						Backend: path.Backend,
+					}
+					if path.PathType != nil {
+						pathType := networkingv1.PathType(*path.PathType)
+						httpPath.PathType = &pathType
+					}
+					httpRule.Paths = append(httpRule.Paths, httpPath)
+				}
+				ingressRule.HTTP = httpRule
+			}
+
+			ingress.Spec.Rules = append(ingress.Spec.Rules, ingressRule)
+		}
+	}
+
+	// 构建TLS配置
+	if len(req.TLS) > 0 {
+		ingress.Spec.TLS = make([]networkingv1.IngressTLS, 0, len(req.TLS))
+		for _, tls := range req.TLS {
+			ingress.Spec.TLS = append(ingress.Spec.TLS, networkingv1.IngressTLS{
+				Hosts:      tls.Hosts,
+				SecretName: tls.SecretName,
+			})
+		}
+	}
+
+	return ingress, nil
+}
+
+// BuildIngressFromUpdateSpec 从UpdateIngressReq构建Ingress对象
+func BuildIngressFromUpdateSpec(req *model.UpdateIngressReq) (*networkingv1.Ingress, error) {
+	if req == nil {
+		return nil, fmt.Errorf("请求不能为空")
+	}
+
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   req.Namespace,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: req.IngressClassName,
+		},
+	}
+
+	// 构建规则
+	if len(req.Rules) > 0 {
+		ingress.Spec.Rules = make([]networkingv1.IngressRule, 0, len(req.Rules))
+		for _, rule := range req.Rules {
+			ingressRule := networkingv1.IngressRule{
+				Host: rule.Host,
+			}
+
+			if len(rule.HTTP.Paths) > 0 {
+				httpRule := &networkingv1.HTTPIngressRuleValue{
+					Paths: make([]networkingv1.HTTPIngressPath, 0, len(rule.HTTP.Paths)),
+				}
+
+				for _, path := range rule.HTTP.Paths {
+					httpPath := networkingv1.HTTPIngressPath{
+						Path:    path.Path,
+						Backend: path.Backend,
+					}
+					if path.PathType != nil {
+						pathType := networkingv1.PathType(*path.PathType)
+						httpPath.PathType = &pathType
+					}
+					httpRule.Paths = append(httpRule.Paths, httpPath)
+				}
+				ingressRule.HTTP = httpRule
+			}
+
+			ingress.Spec.Rules = append(ingress.Spec.Rules, ingressRule)
+		}
+	}
+
+	// 构建TLS配置
+	if len(req.TLS) > 0 {
+		ingress.Spec.TLS = make([]networkingv1.IngressTLS, 0, len(req.TLS))
+		for _, tls := range req.TLS {
+			ingress.Spec.TLS = append(ingress.Spec.TLS, networkingv1.IngressTLS{
+				Hosts:      tls.Hosts,
+				SecretName: tls.SecretName,
+			})
+		}
+	}
+
+	return ingress, nil
+}
+
+// convertIngressStatusToEnum 转换状态字符串为枚举值
+func convertIngressStatusToEnum(status string) model.K8sIngressStatus {
+	switch status {
+	case StatusRunning, StatusReady:
+		return model.K8sIngressStatusRunning
+	case StatusPending:
+		return model.K8sIngressStatusPending
+	case StatusTerminating, StatusFailed:
+		return model.K8sIngressStatusFailed
+	default:
+		return model.K8sIngressStatusPending
+	}
 }

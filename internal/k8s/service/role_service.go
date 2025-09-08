@@ -104,10 +104,8 @@ func (r *roleService) GetRoleList(ctx context.Context, req *model.GetRoleListReq
 	// 转换为模型格式
 	var k8sRoles []*model.K8sRole
 	for i := range roleList.Items {
-		k8sRole := k8sutils.ConvertToK8sRole(&roleList.Items[i])
+		k8sRole := k8sutils.ConvertRoleToModel(&roleList.Items[i], req.ClusterID)
 		if k8sRole != nil {
-			k8sRole.ClusterID = req.ClusterID
-
 			// 关键字过滤
 			if req.Keyword == "" || strings.Contains(k8sRole.Name, req.Keyword) {
 				k8sRoles = append(k8sRoles, k8sRole)
@@ -157,14 +155,13 @@ func (r *roleService) GetRoleDetails(ctx context.Context, req *model.GetRoleDeta
 		return nil, fmt.Errorf("获取Role失败: %w", err)
 	}
 
-	k8sRole, err := k8sutils.BuildK8sRole(ctx, req.ClusterID, req.Namespace, *role)
-	if err != nil {
+	k8sRole := k8sutils.ConvertRoleToModel(role, req.ClusterID)
+	if k8sRole == nil {
 		r.logger.Error("GetRoleDetails: 构建Role失败",
-			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name))
-		return nil, fmt.Errorf("构建Role失败: %w", err)
+		return nil, fmt.Errorf("构建Role失败")
 	}
 
 	r.logger.Debug("GetRoleDetails: 获取Role详情成功",

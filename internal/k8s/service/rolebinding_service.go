@@ -65,7 +65,7 @@ func NewRoleBindingService(rbacManager manager.RBACManager) RoleBindingService {
 
 func (s *roleBindingService) GetRoleBindingList(ctx context.Context, req *model.GetRoleBindingListReq) (model.ListResp[*model.K8sRoleBinding], error) {
 	// 构建查询选项
-	options := k8sutils.BuildRoleBindingListOptions(req.Name, req.LabelKey)
+	options := k8sutils.BuildRoleBindingListOptions(req)
 
 	// 从 Manager 获取原始 RoleBinding 列表
 	roleBindings, err := s.rbacManager.GetRoleBindingList(ctx, req.ClusterID, req.Namespace, options)
@@ -74,7 +74,10 @@ func (s *roleBindingService) GetRoleBindingList(ctx context.Context, req *model.
 	}
 
 	// 分页处理
-	paginatedRoleBindings := k8sutils.PaginateK8sRoleBindings(roleBindings, req.Page, req.PageSize)
+	paginatedRoleBindings, err := k8sutils.PaginateK8sRoleBindings(roleBindings, req.Page, req.PageSize)
+	if err != nil {
+		return model.ListResp[*model.K8sRoleBinding]{}, err
+	}
 
 	return paginatedRoleBindings, nil
 }
@@ -85,16 +88,16 @@ func (s *roleBindingService) GetRoleBindingDetails(ctx context.Context, req *mod
 		return nil, err
 	}
 
-	return k8sutils.ConvertToK8sRoleBinding(roleBinding, req.ClusterID), nil
+	return k8sutils.ConvertK8sRoleBindingToRoleBindingInfo(roleBinding, req.ClusterID), nil
 }
 
 func (s *roleBindingService) CreateRoleBinding(ctx context.Context, req *model.CreateRoleBindingReq) error {
-	roleBinding := k8sutils.BuildK8sRoleBinding(req)
+	roleBinding := k8sutils.ConvertToK8sRoleBinding(req)
 	return s.rbacManager.CreateRoleBinding(ctx, req.ClusterID, req.Namespace, roleBinding)
 }
 
 func (s *roleBindingService) UpdateRoleBinding(ctx context.Context, req *model.UpdateRoleBindingReq) error {
-	roleBinding := k8sutils.BuildK8sRoleBinding(&model.CreateRoleBindingReq{
+	roleBinding := &model.CreateRoleBindingReq{
 		ClusterID:   req.ClusterID,
 		Namespace:   req.Namespace,
 		Name:        req.Name,
@@ -102,8 +105,8 @@ func (s *roleBindingService) UpdateRoleBinding(ctx context.Context, req *model.U
 		Subjects:    req.Subjects,
 		Labels:      req.Labels,
 		Annotations: req.Annotations,
-	})
-	return s.rbacManager.UpdateRoleBinding(ctx, req.ClusterID, req.Namespace, roleBinding)
+	}
+	return s.rbacManager.UpdateRoleBinding(ctx, req.ClusterID, req.Namespace, k8sutils.ConvertToK8sRoleBinding(roleBinding))
 }
 
 func (s *roleBindingService) DeleteRoleBinding(ctx context.Context, req *model.DeleteRoleBindingReq) error {

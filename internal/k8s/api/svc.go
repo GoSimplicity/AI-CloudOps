@@ -45,21 +45,30 @@ func NewK8sSvcHandler(svcService service.SvcService) *K8sSvcHandler {
 func (k *K8sSvcHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/services", k.GetServiceList)                                             // 获取Service列表
-		k8sGroup.GET("/services/:cluster_id/:namespace/:name", k.GetServiceDetails)             // 获取Service详情
-		k8sGroup.GET("/services/:cluster_id/:namespace/:name/yaml", k.GetServiceYaml)           // 获取Service YAML
-		k8sGroup.POST("/services", k.CreateService)                                             // 创建Service
-		k8sGroup.PUT("/services/:cluster_id/:namespace/:name", k.UpdateService)                 // 更新Service
-		k8sGroup.DELETE("/services/:cluster_id/:namespace/:name", k.DeleteService)              // 删除Service
-		k8sGroup.POST("/services/yaml", k.CreateServiceByYaml)                                  // 通过YAML创建Service
-		k8sGroup.PUT("/services/:cluster_id/:namespace/:name/yaml", k.UpdateServiceByYaml)      // 通过YAML更新Service
-		k8sGroup.GET("/services/:cluster_id/:namespace/:name/endpoints", k.GetServiceEndpoints) // 获取Service端点
+		// Service基础管理
+		k8sGroup.GET("/clusters/:cluster_id/services", k.GetServiceList)                                 // 获取Service列表
+		k8sGroup.GET("/clusters/:cluster_id/services/:namespace/:name", k.GetServiceDetails)             // 获取Service详情
+		k8sGroup.GET("/clusters/:cluster_id/services/:namespace/:name/yaml", k.GetServiceYaml)           // 获取Service YAML
+		k8sGroup.POST("/clusters/:cluster_id/services", k.CreateService)                                 // 创建Service
+		k8sGroup.POST("/clusters/:cluster_id/services/yaml", k.CreateServiceByYaml)                      // 通过YAML创建Service
+		k8sGroup.PUT("/clusters/:cluster_id/services/:namespace/:name", k.UpdateService)                 // 更新Service
+		k8sGroup.PUT("/clusters/:cluster_id/services/:namespace/:name/yaml", k.UpdateServiceByYaml)      // 通过YAML更新Service
+		k8sGroup.DELETE("/clusters/:cluster_id/services/:namespace/:name", k.DeleteService)              // 删除Service
+		k8sGroup.GET("/clusters/:cluster_id/services/:namespace/:name/endpoints", k.GetServiceEndpoints) // 获取Service端点
 	}
 }
 
 // GetServiceList 获取Service列表
 func (k *K8sSvcHandler) GetServiceList(ctx *gin.Context) {
 	var req model.GetServiceListReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return k.svcService.GetServiceList(ctx, &req)
@@ -131,6 +140,14 @@ func (k *K8sSvcHandler) GetServiceYaml(ctx *gin.Context) {
 // CreateService 创建Service
 func (k *K8sSvcHandler) CreateService(ctx *gin.Context) {
 	var req model.CreateServiceReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.svcService.CreateService(ctx, &req)
@@ -235,6 +252,14 @@ func (k *K8sSvcHandler) GetServiceEndpoints(ctx *gin.Context) {
 // CreateServiceByYaml 通过YAML创建Service
 func (k *K8sSvcHandler) CreateServiceByYaml(ctx *gin.Context) {
 	var req model.CreateResourceByYamlReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.svcService.CreateServiceByYaml(ctx, &req)

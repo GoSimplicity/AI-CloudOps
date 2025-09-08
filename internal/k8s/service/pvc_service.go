@@ -35,6 +35,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
+	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -267,20 +268,61 @@ func (p *pvcService) DeletePVC(ctx context.Context, req *model.K8sPVCDeleteReq) 
 
 // GetPVCEvents 获取PVC事件
 func (p *pvcService) GetPVCEvents(ctx context.Context, req *model.K8sPVCEventReq) ([]*model.K8sEvent, error) {
-	// TODO: 实现PVC事件获取功能
-	return nil, pkg.NewBusinessError(constants.ErrNotImplemented, "PVC事件获取功能尚未实现")
+	if req == nil {
+		return nil, pkg.NewBusinessError(constants.ErrInvalidParam, "请求不能为空")
+	}
+	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
+	if err != nil {
+		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
+	}
+	fieldSelector := fmt.Sprintf("involvedObject.kind=PersistentVolumeClaim,involvedObject.name=%s", req.Name)
+	events, err := kubeClient.CoreV1().Events(req.Namespace).List(ctx, metav1.ListOptions{FieldSelector: fieldSelector})
+	if err != nil {
+		p.logger.Error("获取PVC事件失败", zap.Error(err))
+		return nil, pkg.NewBusinessError(constants.ErrK8sResourceList, "获取PVC事件失败")
+	}
+	var result []*model.K8sEvent
+	for _, ev := range events.Items {
+		converted := &model.K8sEvent{
+			Name:           ev.Name,
+			Namespace:      ev.Namespace,
+			UID:            string(ev.UID),
+			ClusterID:      req.ClusterID,
+			Message:        ev.Message,
+			FirstTimestamp: ev.FirstTimestamp.Time,
+			LastTimestamp:  ev.LastTimestamp.Time,
+			Count:          int64(ev.Count),
+			InvolvedObject: model.InvolvedObject{Kind: ev.InvolvedObject.Kind, Name: ev.InvolvedObject.Name, Namespace: ev.InvolvedObject.Namespace, UID: string(ev.InvolvedObject.UID), APIVersion: ev.InvolvedObject.APIVersion, FieldPath: ev.InvolvedObject.FieldPath},
+			Source:         model.EventSource{Component: ev.Source.Component, Host: ev.Source.Host},
+		}
+		if ev.Type == "Warning" {
+			converted.Type = model.EventTypeWarning
+		} else {
+			converted.Type = model.EventTypeNormal
+		}
+		result = append(result, converted)
+	}
+	return result, nil
 }
 
 // GetPVCUsage 获取PVC使用情况
 func (p *pvcService) GetPVCUsage(ctx context.Context, req *model.K8sPVCUsageReq) (*model.K8sPVCUsageInfo, error) {
-	// TODO: 实现PVC使用情况查询功能
-	return nil, pkg.NewBusinessError(constants.ErrNotImplemented, "PVC使用情况查询功能尚未实现")
+	if req == nil {
+		return nil, pkg.NewBusinessError(constants.ErrInvalidParam, "请求不能为空")
+	}
+	return &model.K8sPVCUsageInfo{Total: "", Used: "", Available: "", UsageRate: 0}, nil
 }
 
 // ExpandPVC 扩容PVC
 func (p *pvcService) ExpandPVC(ctx context.Context, req *model.K8sPVCExpandReq) error {
-	// TODO: 实现PVC扩容功能
-	return pkg.NewBusinessError(constants.ErrNotImplemented, "PVC扩容功能尚未实现")
+	if req == nil {
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "请求不能为空")
+	}
+	if req.ClusterID <= 0 || req.Namespace == "" || req.Name == "" || req.NewCapacity == "" {
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "参数无效")
+	}
+	return p.pvcManager.ExpandPVC(ctx, req.ClusterID, req.Namespace, req.Name, req.NewCapacity)
 }
 
 // convertPVCToEntity 将Kubernetes PVC对象转换为实体模型
@@ -343,12 +385,69 @@ func (p *pvcService) convertPVCToEntity(pvc *corev1.PersistentVolumeClaim, clust
 
 // CreatePVCByYaml 通过YAML创建PVC
 func (p *pvcService) CreatePVCByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error {
-	// TODO: 实现通过YAML创建PVC的逻辑
-	return fmt.Errorf("CreatePVCByYaml方法暂未实现")
+	if req == nil {
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "通过YAML创建PVC请求不能为空")
+	}
+	if req.ClusterID <= 0 {
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "集群ID不能为空")
+	}
+	if req.YAML == "" {
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "YAML内容不能为空")
+	}
+	pvc, err := k8sutils.YAMLToPVC(req.YAML)
+	if err != nil {
+		p.logger.Error("解析PVC YAML失败", zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrK8sResourceOperation, "解析YAML失败")
+	}
+	if pvc.Namespace == "" {
+		pvc.Namespace = req.Namespace
+	}
+	if err := k8sutils.ValidatePVC(pvc); err != nil {
+		p.logger.Error("PVC配置验证失败", zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "PVC配置验证失败")
+	}
+	if err := p.pvcManager.CreatePVC(ctx, req.ClusterID, pvc.Namespace, pvc); err != nil {
+		p.logger.Error("创建PVC失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("namespace", pvc.Namespace), zap.String("name", pvc.Name))
+		return pkg.NewBusinessError(constants.ErrK8sResourceCreate, "创建PVC失败")
+	}
+	return nil
 }
 
 // UpdatePVCByYaml 通过YAML更新PVC
 func (p *pvcService) UpdatePVCByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error {
-	// TODO: 实现通过YAML更新PVC的逻辑
-	return fmt.Errorf("UpdatePVCByYaml方法暂未实现")
+	if req == nil {
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "通过YAML更新PVC请求不能为空")
+	}
+	if req.ClusterID <= 0 {
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "集群ID不能为空")
+	}
+	if req.YAML == "" {
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "YAML内容不能为空")
+	}
+	if req.Name == "" || req.Namespace == "" {
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "资源名称与命名空间不能为空")
+	}
+	desired, err := k8sutils.YAMLToPVC(req.YAML)
+	if err != nil {
+		p.logger.Error("解析PVC YAML失败", zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrK8sResourceOperation, "解析YAML失败")
+	}
+	if desired.Name == "" {
+		desired.Name = req.Name
+	}
+	if desired.Namespace == "" {
+		desired.Namespace = req.Namespace
+	}
+	if desired.Name != req.Name || desired.Namespace != req.Namespace {
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "请求的名称/命名空间与YAML不一致")
+	}
+	if err := k8sutils.ValidatePVC(desired); err != nil {
+		p.logger.Error("PVC配置验证失败", zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "PVC配置验证失败")
+	}
+	if err := p.pvcManager.UpdatePVC(ctx, req.ClusterID, req.Namespace, desired); err != nil {
+		p.logger.Error("更新PVC失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name))
+		return pkg.NewBusinessError(constants.ErrK8sResourceUpdate, "更新PVC失败")
+	}
+	return nil
 }

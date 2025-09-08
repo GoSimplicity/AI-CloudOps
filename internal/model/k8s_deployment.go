@@ -132,7 +132,7 @@ type GetDeploymentYamlReq struct {
 	Name      string `json:"name"`       // Deployment名称
 }
 
-// CreateDeploymentReq 创建Deployment请求（通过配置字段）
+// CreateDeploymentReq 创建Deployment请求
 type CreateDeploymentReq struct {
 	ClusterID   int               `json:"cluster_id" binding:"required"` // 集群ID
 	Name        string            `json:"name" binding:"required"`       // Deployment名称
@@ -144,7 +144,7 @@ type CreateDeploymentReq struct {
 	Spec        DeploymentSpec    `json:"spec"`                          // Deployment规格
 }
 
-// UpdateDeploymentReq 更新Deployment请求（通过配置字段）
+// UpdateDeploymentReq 更新Deployment请求
 type UpdateDeploymentReq struct {
 	ClusterID   int               `json:"cluster_id"`  // 集群ID
 	Name        string            `json:"name"`        // Deployment名称

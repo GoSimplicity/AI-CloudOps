@@ -542,13 +542,8 @@ func (s *statefulSetManager) GetStatefulSetPods(ctx context.Context, clusterID i
 
 	var pods []*model.K8sPod
 	for _, pod := range podList.Items {
-		k8sPod, err := utils.BuildK8sPod(ctx, clusterID, pod)
-		if err != nil {
-			s.logger.Warn("构建 K8sPod 失败",
-				zap.String("podName", pod.Name),
-				zap.Error(err))
-			continue
-		}
+		k8sPod := utils.ConvertToK8sPod(&pod)
+		k8sPod.ClusterID = int64(clusterID)
 		pods = append(pods, k8sPod)
 	}
 

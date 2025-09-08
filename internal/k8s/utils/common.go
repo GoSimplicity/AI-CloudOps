@@ -27,30 +27,40 @@ package utils
 
 import (
 	"fmt"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 )
 
+// K8s资源状态常量定义
 const (
-	statusPending     = "Pending"
-	statusUnknown     = "Unknown"
-	statusReady       = "Ready"
-	statusTerminating = "Terminating"
-	statusRunning     = "Running"
-	statusUpdating    = "Updating"
-	statusSucceeded   = "Succeeded"
-	statusFailed      = "Failed"
-	statusEvicted     = "Evicted"
+	// 通用状态
+	StatusPending     = "Pending"
+	StatusUnknown     = "Unknown"
+	StatusReady       = "Ready"
+	StatusTerminating = "Terminating"
+	StatusRunning     = "Running"
+	StatusUpdating    = "Updating"
+	StatusSucceeded   = "Succeeded"
+	StatusFailed      = "Failed"
+	StatusEvicted     = "Evicted"
 )
 
+// ConvertUnstructuredToYAML 将Unstructured对象转换为YAML字符串
 func ConvertUnstructuredToYAML(obj *unstructured.Unstructured) (string, error) {
+	if obj == nil {
+		return "", fmt.Errorf("unstructured对象不能为空")
+	}
+
 	jsonBytes, err := obj.MarshalJSON()
 	if err != nil {
-		return "", fmt.Errorf("无法序列化unstructured对象为json: %v", err)
+		return "", fmt.Errorf("序列化unstructured对象失败: %w", err)
 	}
+
 	yamlBytes, err := yaml.JSONToYAML(jsonBytes)
 	if err != nil {
-		return "", fmt.Errorf("无法将json转换为yaml: %v", err)
+		return "", fmt.Errorf("JSON转换为YAML失败: %w", err)
 	}
+
 	return string(yamlBytes), nil
 }

@@ -29,6 +29,12 @@ import (
 	"archive/tar"
 	"context"
 	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"sort"
+	"strings"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -39,7 +45,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"io"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/httpstream"
@@ -47,10 +52,6 @@ import (
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
-	"mime/multipart"
-	"net/http"
-	"sort"
-	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"go.uber.org/zap"
@@ -70,6 +71,10 @@ type PodManager interface {
 	GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) (*corev1.PodList, error)
 	// GetPodList Pod 列表查询
 	GetPodList(ctx context.Context, clusterID int, namespace string, queryParams *query.Query) (*model.ListResp[*model.K8sPod], error)
+	// CreatePod Pod 创建操作
+	CreatePod(ctx context.Context, clusterID int, pod *corev1.Pod) (*corev1.Pod, error)
+	// UpdatePod Pod 更新操作
+	UpdatePod(ctx context.Context, clusterID int, pod *corev1.Pod) (*corev1.Pod, error)
 	// DeletePod Pod 删除操作
 	DeletePod(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
 	// GetPodLogs Pod 日志
@@ -194,7 +199,7 @@ func (p *podManager) GetPodList(ctx context.Context, clusterID int, namespace st
 		pod, ok := o.(*corev1.Pod)
 		if ok {
 			podModel := utils.ConvertToK8sPod(pod)
-			podModel.ClusterID = clusterID
+			podModel.ClusterID = int64(clusterID)
 			items = append(items, podModel)
 		}
 	}
@@ -451,6 +456,54 @@ func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespa
 		)
 	}
 	return reader, err
+}
+
+// CreatePod 创建 Pod
+func (p *podManager) CreatePod(ctx context.Context, clusterID int, pod *corev1.Pod) (*corev1.Pod, error) {
+	kubeClient, err := p.getKubeClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	createdPod, err := kubeClient.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
+	if err != nil {
+		p.logger.Error("创建 Pod 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", pod.Namespace),
+			zap.String("name", pod.Name),
+			zap.Error(err))
+		return nil, fmt.Errorf("创建 Pod 失败: %w", err)
+	}
+
+	p.logger.Info("成功创建 Pod",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", pod.Namespace),
+		zap.String("name", pod.Name))
+	return createdPod, nil
+}
+
+// UpdatePod 更新 Pod
+func (p *podManager) UpdatePod(ctx context.Context, clusterID int, pod *corev1.Pod) (*corev1.Pod, error) {
+	kubeClient, err := p.getKubeClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	updatedPod, err := kubeClient.CoreV1().Pods(pod.Namespace).Update(ctx, pod, metav1.UpdateOptions{})
+	if err != nil {
+		p.logger.Error("更新 Pod 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", pod.Namespace),
+			zap.String("name", pod.Name),
+			zap.Error(err))
+		return nil, fmt.Errorf("更新 Pod 失败: %w", err)
+	}
+
+	p.logger.Info("成功更新 Pod",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", pod.Namespace),
+		zap.String("name", pod.Name))
+	return updatedPod, nil
 }
 
 func (p *podManager) filterPodFunc(object runtime.Object, filter query.Filter) bool {

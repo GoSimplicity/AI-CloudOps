@@ -530,12 +530,92 @@ func (s *svcService) UpdateService(ctx context.Context, req *model.UpdateService
 
 // CreateServiceByYaml 通过YAML创建Service
 func (s *svcService) CreateServiceByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error {
-	// TODO: 实现通过YAML创建Service的逻辑
-	return fmt.Errorf("CreateServiceByYaml方法暂未实现")
+	if req == nil {
+		return fmt.Errorf("通过YAML创建Service请求不能为空")
+	}
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+	if req.YAML == "" {
+		return fmt.Errorf("YAML内容不能为空")
+	}
+
+	svc, err := utils.YAMLToService(req.YAML)
+	if err != nil {
+		s.logger.Error("CreateServiceByYaml: 解析YAML失败", zap.Error(err))
+		return fmt.Errorf("解析YAML失败: %w", err)
+	}
+	if svc.Namespace == "" {
+		svc.Namespace = req.Namespace
+	}
+	if err := utils.ValidateService(svc); err != nil {
+		s.logger.Error("CreateServiceByYaml: Service配置验证失败", zap.Error(err))
+		return fmt.Errorf("Service配置验证失败: %w", err)
+	}
+	if _, err := s.serviceManager.CreateService(ctx, req.ClusterID, svc); err != nil {
+		s.logger.Error("CreateServiceByYaml: 创建Service失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", svc.Namespace),
+			zap.String("name", svc.Name))
+		return fmt.Errorf("创建Service失败: %w", err)
+	}
+
+	s.logger.Info("CreateServiceByYaml: Service创建成功",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", svc.Namespace),
+		zap.String("name", svc.Name))
+	return nil
 }
 
 // UpdateServiceByYaml 通过YAML更新Service
 func (s *svcService) UpdateServiceByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error {
-	// TODO: 实现通过YAML更新Service的逻辑
-	return fmt.Errorf("UpdateServiceByYaml方法暂未实现")
+	if req == nil {
+		return fmt.Errorf("通过YAML更新Service请求不能为空")
+	}
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+	if req.YAML == "" {
+		return fmt.Errorf("YAML内容不能为空")
+	}
+	if req.Name == "" {
+		return fmt.Errorf("Service名称不能为空")
+	}
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	desired, err := utils.YAMLToService(req.YAML)
+	if err != nil {
+		s.logger.Error("UpdateServiceByYaml: 解析YAML失败", zap.Error(err))
+		return fmt.Errorf("解析YAML失败: %w", err)
+	}
+	if desired.Name == "" {
+		desired.Name = req.Name
+	}
+	if desired.Namespace == "" {
+		desired.Namespace = req.Namespace
+	}
+	if desired.Name != req.Name || desired.Namespace != req.Namespace {
+		return fmt.Errorf("请求的名称/命名空间与YAML不一致")
+	}
+	if err := utils.ValidateService(desired); err != nil {
+		s.logger.Error("UpdateServiceByYaml: Service配置验证失败", zap.Error(err))
+		return fmt.Errorf("Service配置验证失败: %w", err)
+	}
+	if _, err := s.serviceManager.UpdateService(ctx, req.ClusterID, desired); err != nil {
+		s.logger.Error("UpdateServiceByYaml: 更新Service失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("更新Service失败: %w", err)
+	}
+
+	s.logger.Info("UpdateServiceByYaml: Service更新成功",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+	return nil
 }

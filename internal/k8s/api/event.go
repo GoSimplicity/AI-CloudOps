@@ -45,25 +45,34 @@ func NewK8sEventHandler(eventService service.EventService) *K8sEventHandler {
 func (k *K8sEventHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/events/list", k.GetEventList)                                                           // 获取事件列表
-		k8sGroup.GET("/events/:cluster_id/:namespace/detail/:name", k.GetEventDetail)                          // 获取单个事件详情
-		k8sGroup.GET("/events/:cluster_id/:namespace/by-pod/:pod_name", k.GetEventsByPod)                      // 获取Pod相关事件
-		k8sGroup.GET("/events/:cluster_id/:namespace/by-deployment/:deployment_name", k.GetEventsByDeployment) // 获取Deployment相关事件
-		k8sGroup.GET("/events/:cluster_id/:namespace/by-service/:service_name", k.GetEventsByService)          // 获取Service相关事件
-		k8sGroup.GET("/events/:cluster_id/by-node/:node_name", k.GetEventsByNode)                              // 获取Node相关事件
-		k8sGroup.GET("/events/statistics", k.GetEventStatistics)                                               // 获取事件统计信息
-		k8sGroup.GET("/events/summary", k.GetEventSummary)                                                     // 获取事件汇总
-		k8sGroup.GET("/events/timeline", k.GetEventTimeline)                                                   // 获取事件时间线
-		k8sGroup.GET("/events/trends", k.GetEventTrends)                                                       // 获取事件趋势
-		k8sGroup.GET("/events/group", k.GetEventGroupData)                                                     // 获取事件分组数据
-		k8sGroup.DELETE("/events/:cluster_id/:namespace/delete/:name", k.DeleteEvent)                          // 删除单个事件
-		k8sGroup.POST("/events/cleanup", k.CleanupOldEvents)                                                   // 清理旧事件
+		// Event基础管理
+		k8sGroup.GET("/clusters/:cluster_id/events", k.GetEventList)                                                  // 获取事件列表
+		k8sGroup.GET("/clusters/:cluster_id/events/:namespace/:name", k.GetEventDetail)                               // 获取单个事件详情
+		k8sGroup.DELETE("/clusters/:cluster_id/events/:namespace/:name", k.DeleteEvent)                               // 删除单个事件
+		k8sGroup.GET("/clusters/:cluster_id/events/:namespace/pods/:pod_name", k.GetEventsByPod)                      // 获取Pod相关事件
+		k8sGroup.GET("/clusters/:cluster_id/events/:namespace/deployments/:deployment_name", k.GetEventsByDeployment) // 获取Deployment相关事件
+		k8sGroup.GET("/clusters/:cluster_id/events/:namespace/services/:service_name", k.GetEventsByService)          // 获取Service相关事件
+		k8sGroup.GET("/clusters/:cluster_id/events/nodes/:node_name", k.GetEventsByNode)                              // 获取Node相关事件
+		k8sGroup.GET("/clusters/:cluster_id/events/statistics", k.GetEventStatistics)                                 // 获取事件统计信息
+		k8sGroup.GET("/clusters/:cluster_id/events/summary", k.GetEventSummary)                                       // 获取事件汇总
+		k8sGroup.GET("/clusters/:cluster_id/events/timeline", k.GetEventTimeline)                                     // 获取事件时间线
+		k8sGroup.GET("/clusters/:cluster_id/events/trends", k.GetEventTrends)                                         // 获取事件趋势
+		k8sGroup.GET("/clusters/:cluster_id/events/groups", k.GetEventGroupData)                                      // 获取事件分组数据
+		k8sGroup.POST("/clusters/:cluster_id/events/cleanup", k.CleanupOldEvents)                                     // 清理旧事件
 	}
 }
 
 // GetEventList 获取Event列表
 func (k *K8sEventHandler) GetEventList(ctx *gin.Context) {
 	var req model.GetEventListReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return k.eventService.GetEventList(ctx, &req)
