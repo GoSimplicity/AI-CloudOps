@@ -44,27 +44,27 @@ func NewK8sNodeHandler(nodeService service.NodeService, taintService service.Tai
 	}
 }
 
-func (k *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
+func (h *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
 		// Node基础管理
-		k8sGroup.GET("/clusters/:cluster_id/nodes", k.GetNodeList)                                    // 获取Node列表
-		k8sGroup.GET("/clusters/:cluster_id/nodes/:node_name", k.GetNodeDetail)                       // 获取Node详情
-		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/labels", k.AddLabelNodes)               // 添加Node标签
-		k8sGroup.DELETE("/clusters/:cluster_id/nodes/:node_name/labels", k.DeleteLabelNodes)          // 删除Node标签
-		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/drain", k.DrainNode)                    // 驱逐Node
-		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/cordon", k.CordonNode)                  // 封锁Node
-		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/uncordon", k.UncordonNode)              // 解封Node
-		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/schedule/switch", k.SwitchNodeSchedule) // 切换Node调度状态
-		k8sGroup.GET("/clusters/:cluster_id/nodes/:node_name/taints", k.GetNodeTaints)                // 获取Node污点
-		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/taints", k.AddNodeTaints)               // 添加Node污点
-		k8sGroup.DELETE("/clusters/:cluster_id/nodes/:node_name/taints", k.DeleteNodeTaints)          // 删除Node污点
-		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/taints/check", k.CheckTaintYaml)        // 检查污点YAML
+		k8sGroup.GET("/clusters/:cluster_id/nodes", h.GetNodeList)                                    // 获取Node列表
+		k8sGroup.GET("/clusters/:cluster_id/nodes/:node_name", h.GetNodeDetail)                       // 获取Node详情
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/labels", h.AddLabelNodes)               // 添加Node标签
+		k8sGroup.DELETE("/clusters/:cluster_id/nodes/:node_name/labels", h.DeleteLabelNodes)          // 删除Node标签
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/drain", h.DrainNode)                    // 驱逐Node
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/cordon", h.CordonNode)                  // 封锁Node
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/uncordon", h.UncordonNode)              // 解封Node
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/schedule/switch", h.SwitchNodeSchedule) // 切换Node调度状态
+		k8sGroup.GET("/clusters/:cluster_id/nodes/:node_name/taints", h.GetNodeTaints)                // 获取Node污点
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/taints", h.AddNodeTaints)               // 添加Node污点
+		k8sGroup.DELETE("/clusters/:cluster_id/nodes/:node_name/taints", h.DeleteNodeTaints)          // 删除Node污点
+		k8sGroup.POST("/clusters/:cluster_id/nodes/:node_name/taints/check", h.CheckTaintYaml)        // 检查污点YAML
 	}
 }
 
 // GetNodeList 获取Node列表
-func (k *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
+func (h *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
 	var req model.GetNodeListReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -76,11 +76,11 @@ func (k *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.nodeService.GetNodeList(ctx, &req)
+		return h.nodeService.GetNodeList(ctx, &req)
 	})
 }
 
-func (k *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
+func (h *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
 	var req model.GetNodeDetailReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -99,11 +99,11 @@ func (k *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
 	req.NodeName = nodeName
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.nodeService.GetNodeDetail(ctx, &req)
+		return h.nodeService.GetNodeDetail(ctx, &req)
 	})
 }
 
-func (k *K8sNodeHandler) AddLabelNodes(ctx *gin.Context) {
+func (h *K8sNodeHandler) AddLabelNodes(ctx *gin.Context) {
 	var req model.AddLabelNodesReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -122,11 +122,11 @@ func (k *K8sNodeHandler) AddLabelNodes(ctx *gin.Context) {
 	req.NodeName = nodeName
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.nodeService.AddOrUpdateNodeLabel(ctx, &req)
+		return nil, h.nodeService.AddOrUpdateNodeLabel(ctx, &req)
 	})
 }
 
-func (k *K8sNodeHandler) DeleteLabelNodes(ctx *gin.Context) {
+func (h *K8sNodeHandler) DeleteLabelNodes(ctx *gin.Context) {
 	var req model.DeleteLabelNodesReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -145,12 +145,12 @@ func (k *K8sNodeHandler) DeleteLabelNodes(ctx *gin.Context) {
 	req.NodeName = nodeName
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.nodeService.DeleteNodeLabel(ctx, &req)
+		return nil, h.nodeService.DeleteNodeLabel(ctx, &req)
 	})
 }
 
 // DrainNode 驱逐节点上的所有Pod
-func (k *K8sNodeHandler) DrainNode(ctx *gin.Context) {
+func (h *K8sNodeHandler) DrainNode(ctx *gin.Context) {
 	var req model.DrainNodeReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -169,12 +169,12 @@ func (k *K8sNodeHandler) DrainNode(ctx *gin.Context) {
 	req.NodeName = nodeName
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.nodeService.DrainNode(ctx, &req)
+		return nil, h.nodeService.DrainNode(ctx, &req)
 	})
 }
 
 // CordonNode 禁止节点调度新的Pod
-func (k *K8sNodeHandler) CordonNode(ctx *gin.Context) {
+func (h *K8sNodeHandler) CordonNode(ctx *gin.Context) {
 	var req model.NodeCordonReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -193,12 +193,12 @@ func (k *K8sNodeHandler) CordonNode(ctx *gin.Context) {
 	req.NodeName = nodeName
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.nodeService.CordonNode(ctx, &req)
+		return nil, h.nodeService.CordonNode(ctx, &req)
 	})
 }
 
 // UncordonNode 解除节点调度限制
-func (k *K8sNodeHandler) UncordonNode(ctx *gin.Context) {
+func (h *K8sNodeHandler) UncordonNode(ctx *gin.Context) {
 	var req model.NodeUncordonReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -217,12 +217,12 @@ func (k *K8sNodeHandler) UncordonNode(ctx *gin.Context) {
 	req.NodeName = nodeName
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.nodeService.UncordonNode(ctx, &req)
+		return nil, h.nodeService.UncordonNode(ctx, &req)
 	})
 }
 
 // GetNodeTaints 获取节点污点列表
-func (k *K8sNodeHandler) GetNodeTaints(ctx *gin.Context) {
+func (h *K8sNodeHandler) GetNodeTaints(ctx *gin.Context) {
 	var req model.GetNodeTaintsReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -241,12 +241,12 @@ func (k *K8sNodeHandler) GetNodeTaints(ctx *gin.Context) {
 	req.NodeName = nodeName
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.nodeService.GetNodeTaints(ctx, &req)
+		return h.nodeService.GetNodeTaints(ctx, &req)
 	})
 }
 
 // AddNodeTaints 添加节点污点
-func (k *K8sNodeHandler) AddNodeTaints(ctx *gin.Context) {
+func (h *K8sNodeHandler) AddNodeTaints(ctx *gin.Context) {
 	var req model.AddNodeTaintsReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -265,12 +265,12 @@ func (k *K8sNodeHandler) AddNodeTaints(ctx *gin.Context) {
 	req.NodeName = nodeName
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.taintService.AddNodeTaint(ctx, &req)
+		return nil, h.taintService.AddNodeTaint(ctx, &req)
 	})
 }
 
 // DeleteNodeTaints 删除节点污点
-func (k *K8sNodeHandler) DeleteNodeTaints(ctx *gin.Context) {
+func (h *K8sNodeHandler) DeleteNodeTaints(ctx *gin.Context) {
 	var req model.DeleteNodeTaintsReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -289,12 +289,12 @@ func (k *K8sNodeHandler) DeleteNodeTaints(ctx *gin.Context) {
 	req.NodeName = nodeName
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.taintService.DeleteNodeTaint(ctx, &req)
+		return nil, h.taintService.DeleteNodeTaint(ctx, &req)
 	})
 }
 
 // CheckTaintYaml 检查污点YAML配置
-func (k *K8sNodeHandler) CheckTaintYaml(ctx *gin.Context) {
+func (h *K8sNodeHandler) CheckTaintYaml(ctx *gin.Context) {
 	var req model.CheckTaintYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -313,12 +313,12 @@ func (k *K8sNodeHandler) CheckTaintYaml(ctx *gin.Context) {
 	req.NodeName = nodeName
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.taintService.CheckTaintYaml(ctx, &req)
+		return nil, h.taintService.CheckTaintYaml(ctx, &req)
 	})
 }
 
 // SwitchNodeSchedule 切换节点调度状态
-func (k *K8sNodeHandler) SwitchNodeSchedule(ctx *gin.Context) {
+func (h *K8sNodeHandler) SwitchNodeSchedule(ctx *gin.Context) {
 	var req model.SwitchNodeScheduleReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -337,6 +337,6 @@ func (k *K8sNodeHandler) SwitchNodeSchedule(ctx *gin.Context) {
 	req.NodeName = nodeName
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.taintService.SwitchNodeSchedule(ctx, &req)
+		return nil, h.taintService.SwitchNodeSchedule(ctx, &req)
 	})
 }

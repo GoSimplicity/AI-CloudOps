@@ -28,13 +28,11 @@ package utils
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -66,9 +64,10 @@ func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClie
 	// 获取节点角色
 	roles := getNodeRoles(node)
 
-	// 获取节点 IP
+	// 获取节点 IP 和主机名
 	internalIP := getNodeInternalIP(node)
 	externalIP := getNodeExternalIP(node)
+	hostname := getNodeHostname(node)
 
 	// 获取节点的年龄
 	age := calculateAge(node.CreationTimestamp.Time)
@@ -83,7 +82,7 @@ func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClie
 		Age:              age,
 		InternalIP:       internalIP,
 		ExternalIP:       externalIP,
-		HostName:         node.Status.NodeInfo.MachineID,
+		HostName:         hostname,
 		KubeletVersion:   node.Status.NodeInfo.KubeletVersion,
 		KubeProxyVersion: node.Status.NodeInfo.KubeProxyVersion,
 		ContainerRuntime: node.Status.NodeInfo.ContainerRuntimeVersion,
@@ -100,127 +99,7 @@ func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClie
 		RawNode:          &node,
 	}
 
-	// 获取节点资源信息
-	if node.Status.Capacity != nil {
-		k8sNode.CPU = buildResourceInfo("cpu", node.Status.Capacity, node.Status.Allocatable, kubeClient, ctx, node.Name)
-		k8sNode.Memory = buildResourceInfo("memory", node.Status.Capacity, node.Status.Allocatable, kubeClient, ctx, node.Name)
-		k8sNode.Storage = buildResourceInfo("storage", node.Status.Capacity, node.Status.Allocatable, kubeClient, ctx, node.Name)
-		k8sNode.EphemeralStorage = buildResourceInfo("ephemeral-storage", node.Status.Capacity, node.Status.Allocatable, kubeClient, ctx, node.Name)
-		k8sNode.Pods = buildPodResourceInfo(node.Status.Capacity, kubeClient, ctx, node.Name)
-	}
-
-	// 获取节点事件
-	events, err := getNodeEvents(ctx, kubeClient, node.Name, 10)
-	if err == nil {
-		k8sNode.Events = events
-	}
-
 	return k8sNode, nil
-}
-
-// buildResourceInfo 构建资源信息
-func buildResourceInfo(resourceName string, capacity, allocatable corev1.ResourceList, kubeClient *kubernetes.Clientset, ctx context.Context, nodeName string) model.NodeResource {
-	resourceInfo := model.NodeResource{}
-
-	// 获取容量信息
-	if cap, ok := capacity[corev1.ResourceName(resourceName)]; ok {
-		resourceInfo.Total = cap.String()
-	}
-
-	// 获取可分配信息
-	if alloc, ok := allocatable[corev1.ResourceName(resourceName)]; ok {
-		resourceInfo.Requests = alloc.String()
-	}
-
-	// 计算已使用量和限制量（基于Pod的请求量和限制量）
-	if kubeClient != nil {
-		pods, err := kubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{
-			FieldSelector: "spec.nodeName=" + nodeName,
-		})
-		if err == nil {
-			var used resource.Quantity
-			var limits resource.Quantity
-
-			for _, pod := range pods.Items {
-				// 跳过已完成或失败的Pod
-				if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
-					continue
-				}
-
-				for _, container := range pod.Spec.Containers {
-					// 计算请求量
-					if req := container.Resources.Requests; req != nil {
-						if resReq := req[corev1.ResourceName(resourceName)]; !resReq.IsZero() {
-							used.Add(resReq)
-						}
-					}
-
-					// 计算限制量
-					if limit := container.Resources.Limits; limit != nil {
-						if resLimit := limit[corev1.ResourceName(resourceName)]; !resLimit.IsZero() {
-							limits.Add(resLimit)
-						}
-					}
-				}
-
-				// 处理InitContainers
-				for _, initContainer := range pod.Spec.InitContainers {
-					if req := initContainer.Resources.Requests; req != nil {
-						if resReq := req[corev1.ResourceName(resourceName)]; !resReq.IsZero() {
-							used.Add(resReq)
-						}
-					}
-
-					if limit := initContainer.Resources.Limits; limit != nil {
-						if resLimit := limit[corev1.ResourceName(resourceName)]; !resLimit.IsZero() {
-							limits.Add(resLimit)
-						}
-					}
-				}
-			}
-
-			resourceInfo.Used = used.String()
-			resourceInfo.Limits = limits.String()
-
-			// 计算使用百分比（基于可分配资源）
-			if allocQuantity, ok := allocatable[corev1.ResourceName(resourceName)]; ok && !allocQuantity.IsZero() {
-				resourceInfo.Percent = float64(used.MilliValue()) / float64(allocQuantity.MilliValue()) * 100
-				// 确保百分比不超过100%
-				if resourceInfo.Percent > 100 {
-					resourceInfo.Percent = 100
-				}
-			}
-		}
-	}
-
-	return resourceInfo
-}
-
-// buildPodResourceInfo 构建Pod资源信息
-func buildPodResourceInfo(capacity corev1.ResourceList, kubeClient *kubernetes.Clientset, ctx context.Context, nodeName string) model.NodeResource {
-	resourceInfo := model.NodeResource{}
-
-	// 获取Pod容量信息
-	if cap, ok := capacity[corev1.ResourcePods]; ok {
-		resourceInfo.Total = cap.String()
-	}
-
-	// 获取当前运行的Pod数量
-	if kubeClient != nil {
-		pods, err := kubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{
-			FieldSelector: "spec.nodeName=" + nodeName,
-		})
-		if err == nil {
-			resourceInfo.Used = fmt.Sprintf("%d", len(pods.Items))
-
-			// 计算使用百分比
-			if capQuantity, ok := capacity[corev1.ResourcePods]; ok && !capQuantity.IsZero() {
-				resourceInfo.Percent = float64(len(pods.Items)) / float64(capQuantity.Value()) * 100
-			}
-		}
-	}
-
-	return resourceInfo
 }
 
 // getNodeStatus 获取节点状态
@@ -278,6 +157,16 @@ func getNodeExternalIP(node corev1.Node) string {
 	return ""
 }
 
+// getNodeHostname 获取节点主机名
+func getNodeHostname(node corev1.Node) string {
+	for _, address := range node.Status.Addresses {
+		if address.Type == corev1.NodeHostName {
+			return address.Address
+		}
+	}
+	return node.Name // 如果没有找到主机名，返回节点名称
+}
+
 // calculateAge 计算年龄
 func calculateAge(creationTime time.Time) string {
 	age := time.Since(creationTime)
@@ -291,66 +180,6 @@ func calculateAge(creationTime time.Time) string {
 	}
 	minutes := int(age.Minutes())
 	return fmt.Sprintf("%dm", minutes)
-}
-
-// getNodeEvents 获取节点事件
-func getNodeEvents(ctx context.Context, kubeClient *kubernetes.Clientset, nodeName string, limit int) ([]model.NodeEvent, error) {
-	eventList, err := kubeClient.CoreV1().Events("").List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s", nodeName),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// 按时间排序
-	sort.Slice(eventList.Items, func(i, j int) bool {
-		return eventList.Items[i].LastTimestamp.Time.After(eventList.Items[j].LastTimestamp.Time)
-	})
-
-	var events []model.NodeEvent
-	count := 0
-	for _, event := range eventList.Items {
-		if limit > 0 && count >= limit {
-			break
-		}
-
-		nodeEvent := model.NodeEvent{
-			Type:           event.Type,
-			Reason:         event.Reason,
-			Message:        event.Message,
-			Component:      event.Source.Component,
-			Host:           event.Source.Host,
-			FirstTimestamp: event.FirstTimestamp.Time,
-			LastTimestamp:  event.LastTimestamp.Time,
-			Count:          event.Count,
-		}
-		events = append(events, nodeEvent)
-		count++
-	}
-
-	return events, nil
-}
-
-// BuildNodeResources 构建节点资源信息
-func BuildNodeResource(ctx context.Context, kubeClient *kubernetes.Clientset, node *corev1.Node) *model.NodeResource {
-	if node == nil {
-		return &model.NodeResource{}
-	}
-
-	if node.Status.Capacity == nil {
-		return &model.NodeResource{}
-	}
-
-	// 获取CPU资源信息
-	cpuInfo := buildResourceInfo("cpu", node.Status.Capacity, node.Status.Allocatable, kubeClient, ctx, node.Name)
-
-	return &model.NodeResource{
-		Used:     cpuInfo.Used,
-		Total:    cpuInfo.Total,
-		Percent:  cpuInfo.Percent,
-		Requests: cpuInfo.Requests,
-		Limits:   cpuInfo.Limits,
-	}
 }
 
 // ValidateNodeLabels 验证节点标签
@@ -523,10 +352,27 @@ func BuildDeleteOptions(gracePeriodSeconds int) metav1.DeleteOptions {
 	return deleteOptions
 }
 
+// IsSystemNamespace 判断是否为系统命名空间
+func IsSystemNamespace(namespace string) bool {
+	systemNamespaces := []string{
+		"kube-system",
+		"kube-public",
+		"kube-node-lease",
+		"default",
+	}
+
+	for _, ns := range systemNamespaces {
+		if namespace == ns {
+			return true
+		}
+	}
+	return false
+}
+
 // ShouldSkipPodDrain 判断是否应该跳过Pod驱逐
 func ShouldSkipPodDrain(pod corev1.Pod, options *DrainOptions) bool {
 	// 跳过系统命名空间的Pod（除非强制）
-	if options.Force == 1 && IsSystemNamespace(pod.Namespace) {
+	if options.Force != 1 && IsSystemNamespace(pod.Namespace) {
 		return true
 	}
 
@@ -536,4 +382,54 @@ func ShouldSkipPodDrain(pod corev1.Pod, options *DrainOptions) bool {
 	}
 
 	return false
+}
+
+// ValidateBasicParams 验证基础参数
+func ValidateBasicParams(clusterID int, nodeName string) error {
+	if clusterID <= 0 {
+		return fmt.Errorf("集群 ID 不能为空")
+	}
+	if nodeName == "" {
+		return fmt.Errorf("节点名称不能为空")
+	}
+	return nil
+}
+
+// ValidateNodeName 验证节点名称
+func ValidateNodeName(nodeName string) error {
+	if nodeName == "" {
+		return fmt.Errorf("节点名称不能为空")
+	}
+	return nil
+}
+
+// ValidateNodeLabelsMap 验证节点标签映射
+func ValidateNodeLabelsMap(labels map[string]string) error {
+	if len(labels) == 0 {
+		return fmt.Errorf("标签不能为空")
+	}
+	return ValidateNodeLabels(labels)
+}
+
+// ValidateLabelKeys 验证标签键
+func ValidateLabelKeys(labelKeys []string) error {
+	if len(labelKeys) == 0 {
+		return fmt.Errorf("标签键不能为空")
+	}
+	return nil
+}
+
+// BuildNodeTaints 构建节点污点列表
+func BuildNodeTaints(taints []corev1.Taint) ([]*model.NodeTaint, int64) {
+	var taintEntities []*model.NodeTaint
+	for _, taint := range taints {
+		taintEntity := &model.NodeTaint{
+			Key:    taint.Key,
+			Value:  taint.Value,
+			Effect: string(taint.Effect),
+		}
+		taintEntities = append(taintEntities, taintEntity)
+	}
+
+	return taintEntities, int64(len(taintEntities))
 }

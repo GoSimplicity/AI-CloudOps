@@ -68,7 +68,7 @@ func NewClusterService(dao dao.ClusterDAO, client client.K8sClient, clusterMgr m
 // ListClusters 获取集群列表
 func (c *clusterService) ListClusters(ctx context.Context, req *model.ListClustersReq) (model.ListResp[*model.K8sCluster], error) {
 	if req == nil {
-		return model.ListResp[*model.K8sCluster]{}, fmt.Errorf("获取集群列表请求不能为空")
+		return model.ListResp[*model.K8sCluster]{}, fmt.Errorf("获取集群列表请求参数不能为空")
 	}
 
 	list, total, err := c.dao.GetClusterList(ctx, req)
@@ -78,9 +78,7 @@ func (c *clusterService) ListClusters(ctx context.Context, req *model.ListCluste
 	}
 
 	// 清理敏感信息
-	for _, cluster := range list {
-		cluster.KubeConfigContent = ""
-	}
+	utils.CleanClusterSensitiveInfoList(list)
 
 	return model.ListResp[*model.K8sCluster]{
 		Total: total,
@@ -90,22 +88,25 @@ func (c *clusterService) ListClusters(ctx context.Context, req *model.ListCluste
 
 // GetClusterByID 根据ID获取集群
 func (c *clusterService) GetClusterByID(ctx context.Context, req *model.GetClusterReq) (*model.K8sCluster, error) {
-	if req == nil || req.ID <= 0 {
+	if req == nil {
 		return nil, fmt.Errorf("获取集群请求参数不能为空")
+	}
+
+	// 验证集群ID
+	if err := utils.ValidateClusterID(req.ID); err != nil {
+		return nil, err
 	}
 
 	cluster, err := c.dao.GetClusterByID(ctx, req.ID)
 	if err != nil {
-		c.logger.Error("GetClusterByID: 查询集群失败", zap.Int("clusterID", req.ID), zap.Error(err))
+		c.logger.Error("GetClusterByID: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return nil, fmt.Errorf("查询集群失败: %w", err)
 	}
 
-	if cluster == nil {
-		return nil, fmt.Errorf("集群不存在，ID: %d", req.ID)
+	// 验证集群是否存在
+	if err := utils.ValidateClusterExists(cluster, req.ID); err != nil {
+		return nil, err
 	}
-
-	// 清理敏感信息
-	cluster.KubeConfigContent = ""
 
 	return cluster, nil
 }
@@ -113,19 +114,12 @@ func (c *clusterService) GetClusterByID(ctx context.Context, req *model.GetClust
 // CreateCluster 创建集群
 func (c *clusterService) CreateCluster(ctx context.Context, req *model.CreateClusterReq) error {
 	if req == nil {
-		return fmt.Errorf("创建集群请求不能为空")
+		return fmt.Errorf("创建集群请求参数不能为空")
 	}
 
-	if req.Name == "" {
-		return fmt.Errorf("集群名称不能为空")
-	}
-
-	if req.ApiServerAddr == "" {
-		return fmt.Errorf("API Server 地址不能为空")
-	}
-
-	if req.KubeConfigContent == "" {
-		return fmt.Errorf("KubeConfig 内容不能为空")
+	// 验证创建集群参数
+	if err := utils.ValidateClusterCreateParams(req.Name, req.ApiServerAddr, req.KubeConfigContent); err != nil {
+		return err
 	}
 
 	// 检查集群名称是否已存在
@@ -184,11 +178,12 @@ func (c *clusterService) CreateCluster(ctx context.Context, req *model.CreateClu
 // UpdateCluster 更新集群
 func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClusterReq) error {
 	if req == nil {
-		return fmt.Errorf("更新集群请求不能为空")
+		return fmt.Errorf("更新集群请求参数不能为空")
 	}
 
-	if req.ID <= 0 {
-		return fmt.Errorf("集群 ID 不能为空")
+	// 验证更新集群参数
+	if err := utils.ValidateClusterUpdateParams(req.ID); err != nil {
+		return err
 	}
 
 	// 检查集群是否存在
@@ -198,7 +193,7 @@ func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 			return fmt.Errorf("集群不存在，ID: %d", req.ID)
 		}
 
-		c.logger.Error("UpdateCluster: 查询集群失败", zap.Int("clusterID", req.ID), zap.Error(err))
+		c.logger.Error("UpdateCluster: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("查询集群失败: %w", err)
 	}
 
@@ -254,8 +249,13 @@ func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 
 // DeleteCluster 删除集群
 func (c *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClusterReq) error {
-	if req == nil || req.ID <= 0 {
+	if req == nil {
 		return fmt.Errorf("删除集群请求参数不能为空")
+	}
+
+	// 验证集群ID
+	if err := utils.ValidateClusterID(req.ID); err != nil {
+		return err
 	}
 
 	// 检查集群是否存在
@@ -265,7 +265,7 @@ func (c *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClu
 			return fmt.Errorf("集群不存在，ID: %d", req.ID)
 		}
 
-		c.logger.Error("DeleteCluster: 查询集群失败", zap.Int("clusterID", req.ID), zap.Error(err))
+		c.logger.Error("DeleteCluster: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("查询集群失败: %w", err)
 	}
 
@@ -274,7 +274,7 @@ func (c *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClu
 
 	// 删除集群记录
 	if err := c.dao.DeleteCluster(ctx, req.ID); err != nil {
-		c.logger.Error("DeleteCluster: 删除集群失败", zap.Int("clusterID", req.ID), zap.Error(err))
+		c.logger.Error("DeleteCluster: 删除集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("删除集群失败: %w", err)
 	}
 
@@ -283,8 +283,13 @@ func (c *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClu
 
 // RefreshClusterStatus 刷新集群状态
 func (c *clusterService) RefreshClusterStatus(ctx context.Context, req *model.RefreshClusterReq) error {
-	if req == nil || req.ID <= 0 {
+	if req == nil {
 		return fmt.Errorf("刷新集群状态请求参数不能为空")
+	}
+
+	// 验证集群ID
+	if err := utils.ValidateClusterID(req.ID); err != nil {
+		return err
 	}
 
 	// 检查集群是否存在
@@ -294,7 +299,7 @@ func (c *clusterService) RefreshClusterStatus(ctx context.Context, req *model.Re
 			return fmt.Errorf("集群不存在，ID: %d", req.ID)
 		}
 
-		c.logger.Error("RefreshClusterStatus: 查询集群失败", zap.Int("clusterID", req.ID), zap.Error(err))
+		c.logger.Error("RefreshClusterStatus: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("查询集群失败: %w", err)
 	}
 

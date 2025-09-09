@@ -70,7 +70,7 @@ func (t *taintService) AddNodeTaint(ctx context.Context, req *model.AddNodeTaint
 	}
 
 	// 构建污点YAML
-	yamlData, err := utils.BuildTaintYaml(req.Taints)
+	yamlData, err := utils.BuildTaintYamlFromK8sTaints(req.Taints)
 	if err != nil {
 		t.logger.Error("构建污点YAML失败",
 			zap.Int("clusterID", req.ClusterID),
@@ -148,7 +148,7 @@ func (t *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.AddN
 	}
 
 	// 构建污点YAML
-	yamlData, err := utils.BuildTaintYaml(req.Taints)
+	yamlData, err := utils.BuildTaintYamlFromK8sTaints(req.Taints)
 	if err != nil {
 		t.logger.Error("构建污点YAML失败",
 			zap.Int("clusterID", req.ClusterID),

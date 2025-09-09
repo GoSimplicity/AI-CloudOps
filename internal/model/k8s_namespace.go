@@ -25,7 +25,7 @@
 
 package model
 
-// K8sNamespace Kubernetes 命名空间数据库实体
+// K8sNamespace Kubernetes 命名空间
 type K8sNamespace struct {
 	ClusterID   int          `json:"cluster_id"`                             // 所属集群ID
 	Name        string       `json:"name" binding:"required,min=1,max=200" ` // 命名空间名称
@@ -39,9 +39,11 @@ type K8sNamespace struct {
 // K8sNamespaceListReq 命名空间列表查询请求
 type K8sNamespaceListReq struct {
 	ListReq
-	ClusterID int          `json:"cluster_id" form:"cluster_id" binding:"required"` // 集群ID，必填
-	Status    string       `json:"status" form:"status"`                            // 状态过滤
-	Labels    KeyValueList `json:"labels" form:"labels"`                            // 标签
+	ClusterID     int          `json:"cluster_id" form:"cluster_id" binding:"required"` // 集群ID，必填
+	Status        string       `json:"status" form:"status"`                            // 状态过滤
+	Labels        KeyValueList `json:"labels" form:"labels"`                            // 标签
+	LabelSelector string       `json:"label_selector" form:"label_selector"`            // 标签选择器
+	Search        string       `json:"search" form:"search"`                            // 搜索关键字（用于过滤命名空间名称）
 }
 
 // K8sNamespaceCreateReq 创建命名空间请求

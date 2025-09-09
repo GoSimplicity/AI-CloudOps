@@ -122,8 +122,8 @@ func GetTaintsByKeys(taints []corev1.Taint, keys []string) []corev1.Taint {
 	return result
 }
 
-// BuildTaintYaml 构建污点YAML字符串
-func BuildTaintYaml(taints []model.NodeTaintEntity) (string, error) {
+// BuildTaintYaml 构建污点YAML字符串 (从NodeTaintEntity)
+func BuildTaintYaml(taints []model.NodeTaint) (string, error) {
 	var k8sTaints []corev1.Taint
 	for _, taint := range taints {
 		k8sTaint := corev1.Taint{
@@ -135,6 +135,16 @@ func BuildTaintYaml(taints []model.NodeTaintEntity) (string, error) {
 	}
 
 	yamlData, err := yaml.Marshal(k8sTaints)
+	if err != nil {
+		return "", fmt.Errorf("序列化污点YAML失败: %w", err)
+	}
+
+	return string(yamlData), nil
+}
+
+// BuildTaintYamlFromK8sTaints 构建污点YAML字符串 (从corev1.Taint)
+func BuildTaintYamlFromK8sTaints(taints []corev1.Taint) (string, error) {
+	yamlData, err := yaml.Marshal(taints)
 	if err != nil {
 		return "", fmt.Errorf("序列化污点YAML失败: %w", err)
 	}

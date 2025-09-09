@@ -72,17 +72,21 @@ func (cm *clusterManager) CreateCluster(ctx context.Context, cluster *model.K8sC
 	// 初始化k8s客户端
 	client, err := cm.client.GetKubeClient(cluster.ID)
 	if err != nil {
+		cm.logger.Error("初始化客户端失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
 		cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusError)
 		return fmt.Errorf("初始化客户端失败: %w", err)
 	}
 
 	// 添加集群资源限制
 	if err := utils.AddClusterResourceLimit(ctx, client, cluster); err != nil {
-		cm.logger.Warn("添加集群资源限制失败", zap.Error(err))
+		cm.logger.Warn("添加集群资源限制失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
 	}
 
 	// 更新集群状态为运行中
-	cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusRunning)
+	if err := cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusRunning); err != nil {
+		cm.logger.Error("更新集群状态失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+		return fmt.Errorf("更新集群状态失败: %w", err)
+	}
 
 	cm.logger.Info("创建集群成功", zap.Int("clusterID", cluster.ID))
 	return nil
@@ -104,13 +108,20 @@ func (cm *clusterManager) UpdateCluster(ctx context.Context, cluster *model.K8sC
 	// 重新初始化k8s客户端
 	client, err := cm.client.GetKubeClient(cluster.ID)
 	if err != nil {
-		cm.logger.Error("初始化客户端失败", zap.Error(err))
+		cm.logger.Error("初始化客户端失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+		cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusError)
 		return fmt.Errorf("初始化客户端失败: %w", err)
 	}
 
 	// 添加集群资源限制
 	if err := utils.AddClusterResourceLimit(ctx, client, cluster); err != nil {
-		cm.logger.Warn("添加集群资源限制失败", zap.Error(err))
+		cm.logger.Warn("添加集群资源限制失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+	}
+
+	// 更新集群状态为运行中
+	if err := cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusRunning); err != nil {
+		cm.logger.Error("更新集群状态失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+		return fmt.Errorf("更新集群状态失败: %w", err)
 	}
 
 	return nil
@@ -148,47 +159,69 @@ func (cm *clusterManager) RefreshAllClusters(ctx context.Context) error {
 }
 
 func (cm *clusterManager) InitializeAllClusters(ctx context.Context) error {
+	const pageSize = 50 // 增加页大小以提高性能
 	page := 1
-	size := 10
+
+	cm.logger.Info("开始初始化所有集群客户端")
 
 	for {
 		clusters, total, err := cm.dao.GetClusterList(ctx, &model.ListClustersReq{
 			ListReq: model.ListReq{
 				Page: page,
-				Size: size,
+				Size: pageSize,
 			},
 		})
 		if err != nil {
-			cm.logger.Error("获取所有集群失败", zap.Error(err))
-			return err
+			cm.logger.Error("获取集群列表失败", zap.Int("page", page), zap.Error(err))
+			return fmt.Errorf("获取集群列表失败: %w", err)
 		}
 
-		// 如果没有集群了，退出循环
+		// 如果没有更多集群，退出循环
 		if len(clusters) == 0 {
 			break
 		}
 
+		cm.logger.Info("正在初始化集群批次",
+			zap.Int("page", page),
+			zap.Int("count", len(clusters)),
+			zap.Int64("total", total))
+
+		// 初始化当前批次的集群
+		successCount := 0
 		for _, cluster := range clusters {
 			if cluster.KubeConfigContent == "" {
-				cm.logger.Warn("集群的 KubeConfig 内容为空，跳过初始化", zap.Int("ClusterID", cluster.ID))
+				cm.logger.Warn("集群的 KubeConfig 内容为空，跳过初始化",
+					zap.Int("clusterID", cluster.ID),
+					zap.String("clusterName", cluster.Name))
 				continue
 			}
 
-			_, err := cm.client.GetKubeClient(cluster.ID)
-			if err != nil {
-				cm.logger.Error("初始化 Kubernetes 客户端失败", zap.Int("ClusterID", cluster.ID), zap.Error(err))
+			if _, err := cm.client.GetKubeClient(cluster.ID); err != nil {
+				cm.logger.Error("初始化 Kubernetes 客户端失败",
+					zap.Int("clusterID", cluster.ID),
+					zap.String("clusterName", cluster.Name),
+					zap.Error(err))
+				// 更新失败集群的状态
+				cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusError)
 				continue
 			}
+			successCount++
 		}
 
+		cm.logger.Info("批次初始化完成",
+			zap.Int("page", page),
+			zap.Int("successCount", successCount),
+			zap.Int("totalInBatch", len(clusters)))
+
 		// 如果已经处理完所有集群，退出循环
-		if int64(page*size) >= total {
+		if int64(page*pageSize) >= total {
 			break
 		}
 
 		page++
 	}
 
+	cm.logger.Info("所有集群客户端初始化完成")
 	return nil
 }
 

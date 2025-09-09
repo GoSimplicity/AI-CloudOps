@@ -306,3 +306,29 @@ func ValidateImageName(image string) error {
 
 	return nil
 }
+
+// ValidateClusterCreateParams 验证创建集群的参数
+func ValidateClusterCreateParams(name, apiServerAddr, kubeConfigContent string) error {
+	if name == "" {
+		return fmt.Errorf("集群名称不能为空")
+	}
+
+	if apiServerAddr == "" {
+		return fmt.Errorf("API Server 地址不能为空")
+	}
+
+	if kubeConfigContent == "" {
+		return fmt.Errorf("KubeConfig 内容不能为空")
+	}
+
+	return nil
+}
+
+// ValidateClusterUpdateParams 验证更新集群的参数
+func ValidateClusterUpdateParams(id int) error {
+	if id <= 0 {
+		return fmt.Errorf("集群 ID 不能为空")
+	}
+
+	return nil
+}

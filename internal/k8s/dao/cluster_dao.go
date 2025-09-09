@@ -182,9 +182,9 @@ func (c *clusterDAO) UpdateClusterStatus(ctx context.Context, id int, status mod
 		return errors.New("集群ID不有效")
 	}
 
-	if status == model.StatusError {
-		c.l.Error("UpdateClusterStatus: 状态不能为空")
-		return errors.New("状态不能为空")
+	if status <= 0 {
+		c.l.Error("UpdateClusterStatus: 状态值无效", zap.Int8("status", int8(status)))
+		return errors.New("状态值无效")
 	}
 
 	result := c.db.WithContext(ctx).Model(&model.K8sCluster{}).Where("id = ?", id).Updates(map[string]interface{}{

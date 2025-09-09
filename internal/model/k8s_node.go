@@ -42,6 +42,13 @@ const (
 	NodeStatusError                                    // 异常
 )
 
+// NodeTaint 节点污点
+type NodeTaint struct {
+	Key    string `json:"key"`    // 污点键
+	Value  string `json:"value"`  // 污点值
+	Effect string `json:"effect"` // 污点效果
+}
+
 // K8sNode Kubernetes 节点
 type K8sNode struct {
 	Name             string               `json:"name"`                                         // 节点名称
@@ -53,11 +60,6 @@ type K8sNode struct {
 	InternalIP       string               `json:"internal_ip"`                                  // 节点内部IP
 	ExternalIP       string               `json:"external_ip"`                                  // 节点外部IP（如果有）
 	HostName         string               `json:"hostname"`                                     // 主机名
-	CPU              NodeResource         `json:"cpu"`                                          // CPU 资源信息
-	Memory           NodeResource         `json:"memory"`                                       // 内存资源信息
-	Storage          NodeResource         `json:"storage"`                                      // 存储资源信息
-	Pods             NodeResource         `json:"pods"`                                         // Pod 资源信息
-	EphemeralStorage NodeResource         `json:"ephemeral_storage"`                            // 临时存储信息
 	KubeletVersion   string               `json:"kubelet_version"`                              // Kubelet 版本
 	KubeProxyVersion string               `json:"kube_proxy_version"`                           // KubeProxy 版本
 	ContainerRuntime string               `json:"container_runtime"`                            // 容器运行时
@@ -69,41 +71,10 @@ type K8sNode struct {
 	Annotations      map[string]string    `json:"annotations" gorm:"type:text;serializer:json"` // 节点注解
 	Conditions       []core.NodeCondition `json:"conditions" gorm:"type:text;serializer:json"`  // 节点条件
 	Taints           []core.Taint         `json:"taints" gorm:"type:text;serializer:json"`      // 节点污点
-	Events           []NodeEvent          `json:"events" gorm:"type:text;serializer:json"`      // 节点相关事件
 	CreatedAt        time.Time            `json:"created_at"`                                   // 创建时间
 	UpdatedAt        time.Time            `json:"updated_at"`                                   // 更新时间
 	RawNode          *core.Node           `json:"-"`                                            // 原始 Node 对象，不序列化到 JSON
 }
-
-// NodeResource 资源信息结构
-type NodeResource struct {
-	Used     string  `json:"used"`     // 已使用量
-	Total    string  `json:"total"`    // 总量
-	Percent  float64 `json:"percent"`  // 使用百分比
-	Requests string  `json:"requests"` // 请求量
-	Limits   string  `json:"limits"`   // 限制量
-}
-
-// NodeEvent 节点事件
-type NodeEvent struct {
-	Type           string    `json:"type"`            // 事件类型 (Normal, Warning)
-	Reason         string    `json:"reason"`          // 事件原因
-	Message        string    `json:"message"`         // 事件消息
-	Component      string    `json:"component"`       // 事件来源组件
-	Host           string    `json:"host"`            // 主机
-	FirstTimestamp time.Time `json:"first_timestamp"` // 首次发生时间
-	LastTimestamp  time.Time `json:"last_timestamp"`  // 最后发生时间
-	Count          int32     `json:"count"`           // 发生次数
-}
-
-// NodeTaintEntity 节点污点实体
-type NodeTaintEntity struct {
-	Key    string `json:"key" binding:"required"`    // 污点键
-	Value  string `json:"value"`                     // 污点值
-	Effect string `json:"effect" binding:"required"` // 污点效果: NoSchedule, PreferNoSchedule, NoExecute
-}
-
-// NodeMetrics 节点指标信息
 
 // GetNodeListReq 获取节点列表请求
 type GetNodeListReq struct {
@@ -132,19 +103,6 @@ type DeleteLabelNodesReq struct {
 	ClusterID int      `json:"cluster_id" binding:"required"` // 集群ID
 	NodeName  string   `json:"node_name" binding:"required"`  // 节点名称
 	LabelKeys []string `json:"label_keys" binding:"required"` // 要删除的标签键
-}
-
-// GetNodeResourceReq 获取节点资源请求
-type GetNodeResourceReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	NodeName  string `json:"node_name"`                     // 节点名称列表（可选，为空则获取所有节点）
-}
-
-// GetNodeEventsReq 获取节点事件请求
-type GetNodeEventsReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
-	NodeName  string `json:"node_name" binding:"required"`  // 节点名称
-	Limit     int    `json:"limit"`                         // 事件数量限制
 }
 
 // DrainNodeReq 驱逐节点请求
@@ -178,9 +136,9 @@ type GetNodeTaintsReq struct {
 
 // AddNodeTaintsReq 添加节点污点请求
 type AddNodeTaintsReq struct {
-	ClusterID int               `json:"cluster_id" binding:"required"` // 集群ID
-	NodeName  string            `json:"node_name" binding:"required"`  // 节点名称
-	Taints    []NodeTaintEntity `json:"taints" binding:"required"`     // 要添加的污点
+	ClusterID int          `json:"cluster_id" binding:"required"` // 集群ID
+	NodeName  string       `json:"node_name" binding:"required"`  // 节点名称
+	Taints    []core.Taint `json:"taints" binding:"required"`     // 要添加的污点
 }
 
 // DeleteNodeTaintsReq 删除节点污点请求
@@ -202,10 +160,4 @@ type SwitchNodeScheduleReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required"`       // 集群ID
 	NodeName  string `json:"node_name" binding:"required"`        // 节点名称
 	Enable    int8   `json:"enable" binding:"required,oneof=1 2"` // 是否启用调度
-}
-
-// GetNodeMetricsReq 获取节点指标请求
-type GetNodeMetricsReq struct {
-	ClusterID int      `json:"cluster_id" binding:"required"` // 集群ID
-	NodeNames []string `json:"node_names"`                    // 节点名称列表（可选）
 }

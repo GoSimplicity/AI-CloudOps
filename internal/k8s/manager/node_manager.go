@@ -46,9 +46,7 @@ type NodeManager interface {
 	UncordonNode(ctx context.Context, clusterID int, nodeName string) error
 	AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string, overwrite int8) error
 	DeleteNodeLabels(ctx context.Context, clusterID int, nodeName string, labelKeys []string) error
-	GetNodeResource(ctx context.Context, clusterID int, nodeName string) (*model.NodeResource, error)
-	GetNodeEvents(ctx context.Context, clusterID int, nodeName string, limit int) ([]*model.NodeEvent, int64, error)
-	GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]*model.NodeTaintEntity, int64, error)
+	GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]*model.NodeTaint, int64, error)
 }
 
 type nodeManager struct {
@@ -64,8 +62,8 @@ func NewNodeManager(client client.K8sClient, logger *zap.Logger) NodeManager {
 }
 
 func (m *nodeManager) GetNode(ctx context.Context, clusterID int, nodeName string) (*corev1.Node, error) {
-	if nodeName == "" {
-		return nil, fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateNodeName(nodeName); err != nil {
+		return nil, err
 	}
 
 	clientset, err := m.client.GetKubeClient(clusterID)
@@ -116,8 +114,8 @@ func (m *nodeManager) BuildK8sNode(ctx context.Context, clusterID int, node core
 }
 
 func (m *nodeManager) DrainNode(ctx context.Context, clusterID int, nodeName string, options *utils.DrainOptions) error {
-	if nodeName == "" {
-		return fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateNodeName(nodeName); err != nil {
+		return err
 	}
 
 	clientset, err := m.client.GetKubeClient(clusterID)
@@ -152,8 +150,8 @@ func (m *nodeManager) DrainNode(ctx context.Context, clusterID int, nodeName str
 }
 
 func (m *nodeManager) CordonNode(ctx context.Context, clusterID int, nodeName string) error {
-	if nodeName == "" {
-		return fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateNodeName(nodeName); err != nil {
+		return err
 	}
 
 	clientset, err := m.client.GetKubeClient(clusterID)
@@ -180,8 +178,8 @@ func (m *nodeManager) CordonNode(ctx context.Context, clusterID int, nodeName st
 }
 
 func (m *nodeManager) UncordonNode(ctx context.Context, clusterID int, nodeName string) error {
-	if nodeName == "" {
-		return fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateNodeName(nodeName); err != nil {
+		return err
 	}
 
 	clientset, err := m.client.GetKubeClient(clusterID)
@@ -208,11 +206,11 @@ func (m *nodeManager) UncordonNode(ctx context.Context, clusterID int, nodeName 
 }
 
 func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string, overwrite int8) error {
-	if nodeName == "" {
-		return fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateNodeName(nodeName); err != nil {
+		return err
 	}
-	if len(labels) == 0 {
-		return fmt.Errorf("标签不能为空")
+	if err := utils.ValidateNodeLabelsMap(labels); err != nil {
+		return err
 	}
 
 	clientset, err := m.client.GetKubeClient(clusterID)
@@ -232,7 +230,8 @@ func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, 
 	}
 
 	for key, value := range labels {
-		if _, exists := node.Labels[key]; exists && overwrite == 1 {
+		// 如果标签存在且不允许覆盖，则跳过
+		if _, exists := node.Labels[key]; exists && overwrite == 0 {
 			continue
 		}
 		node.Labels[key] = value
@@ -249,11 +248,11 @@ func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, 
 }
 
 func (m *nodeManager) DeleteNodeLabels(ctx context.Context, clusterID int, nodeName string, labelKeys []string) error {
-	if nodeName == "" {
-		return fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateNodeName(nodeName); err != nil {
+		return err
 	}
-	if len(labelKeys) == 0 {
-		return fmt.Errorf("标签键不能为空")
+	if err := utils.ValidateLabelKeys(labelKeys); err != nil {
+		return err
 	}
 
 	clientset, err := m.client.GetKubeClient(clusterID)
@@ -284,73 +283,9 @@ func (m *nodeManager) DeleteNodeLabels(ctx context.Context, clusterID int, nodeN
 	return nil
 }
 
-func (m *nodeManager) GetNodeResource(ctx context.Context, clusterID int, nodeName string) (*model.NodeResource, error) {
-	if nodeName == "" {
-		return nil, fmt.Errorf("节点名称不能为空")
-	}
-
-	clientset, err := m.client.GetKubeClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-	if err != nil {
-		m.logger.Error("获取节点失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
-		return nil, fmt.Errorf("获取节点失败: %w", err)
-	}
-
-	resource := utils.BuildNodeResource(ctx, clientset, node)
-	return resource, nil
-}
-
-func (m *nodeManager) GetNodeEvents(ctx context.Context, clusterID int, nodeName string, limit int) ([]*model.NodeEvent, int64, error) {
-	if nodeName == "" {
-		return nil, 0, fmt.Errorf("节点名称不能为空")
-	}
-
-	clientset, err := m.client.GetKubeClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
-		return nil, 0, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	eventList, err := clientset.CoreV1().Events("").List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s", nodeName),
-	})
-	if err != nil {
-		m.logger.Error("获取节点事件失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
-		return nil, 0, fmt.Errorf("获取节点事件失败: %w", err)
-	}
-
-	var events []*model.NodeEvent
-	count := 0
-	for _, event := range eventList.Items {
-		if limit > 0 && count >= limit {
-			break
-		}
-
-		nodeEvent := &model.NodeEvent{
-			Type:           event.Type,
-			Reason:         event.Reason,
-			Message:        event.Message,
-			Component:      event.Source.Component,
-			Host:           event.Source.Host,
-			FirstTimestamp: event.FirstTimestamp.Time,
-			LastTimestamp:  event.LastTimestamp.Time,
-			Count:          event.Count,
-		}
-		events = append(events, nodeEvent)
-		count++
-	}
-
-	return events, int64(count), nil
-}
-
-func (m *nodeManager) GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]*model.NodeTaintEntity, int64, error) {
-	if nodeName == "" {
-		return nil, 0, fmt.Errorf("节点名称不能为空")
+func (m *nodeManager) GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]*model.NodeTaint, int64, error) {
+	if err := utils.ValidateNodeName(nodeName); err != nil {
+		return nil, 0, err
 	}
 
 	clientset, err := m.client.GetKubeClient(clusterID)
@@ -365,15 +300,6 @@ func (m *nodeManager) GetNodeTaints(ctx context.Context, clusterID int, nodeName
 		return nil, 0, fmt.Errorf("获取节点失败: %w", err)
 	}
 
-	var taints []*model.NodeTaintEntity
-	for _, taint := range node.Spec.Taints {
-		taintEntity := &model.NodeTaintEntity{
-			Key:    taint.Key,
-			Value:  taint.Value,
-			Effect: string(taint.Effect),
-		}
-		taints = append(taints, taintEntity)
-	}
-
-	return taints, int64(len(taints)), nil
+	taints, total := utils.BuildNodeTaints(node.Spec.Taints)
+	return taints, total, nil
 }

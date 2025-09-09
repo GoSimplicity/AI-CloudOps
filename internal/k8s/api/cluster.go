@@ -42,30 +42,33 @@ func NewK8sClusterHandler(clusterService service.ClusterService) *K8sClusterHand
 	}
 }
 
-func (k *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
+func (h *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/clusters/list", k.GetClusterList)
-		k8sGroup.GET("/clusters/:id/detail", k.GetCluster)
-		k8sGroup.POST("/clusters/create", k.CreateCluster)
-		k8sGroup.PUT("/clusters/:id/update", k.UpdateCluster)
-		k8sGroup.DELETE("/clusters/:id/delete", k.DeleteCluster)
-		k8sGroup.POST("/clusters/:id/refresh", k.RefreshCluster)
+		// 集群基础管理
+		k8sGroup.GET("/cluster/list", h.GetClusterList)                  // 获取集群列表
+		k8sGroup.GET("/cluster/:cluster_id/detail", h.GetCluster)        // 获取集群详情
+		k8sGroup.POST("/cluster/create", h.CreateCluster)                // 创建集群
+		k8sGroup.PUT("/cluster/:cluster_id/update", h.UpdateCluster)     // 更新集群
+		k8sGroup.DELETE("/cluster/:cluster_id/delete", h.DeleteCluster)  // 删除集群
+		k8sGroup.POST("/clusters/:cluster_id/refresh", h.RefreshCluster) // 刷新集群状态
 	}
 }
 
-func (k *K8sClusterHandler) GetClusterList(ctx *gin.Context) {
+// GetClusterList 获取集群列表
+func (h *K8sClusterHandler) GetClusterList(ctx *gin.Context) {
 	var req model.ListClustersReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.clusterService.ListClusters(ctx, &req)
+		return h.clusterService.ListClusters(ctx, &req)
 	})
 }
 
-func (k *K8sClusterHandler) GetCluster(ctx *gin.Context) {
+// GetCluster 获取集群详情
+func (h *K8sClusterHandler) GetCluster(ctx *gin.Context) {
 	var req model.GetClusterReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -74,11 +77,12 @@ func (k *K8sClusterHandler) GetCluster(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.clusterService.GetClusterByID(ctx, &req)
+		return h.clusterService.GetClusterByID(ctx, &req)
 	})
 }
 
-func (k *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
+// CreateCluster 创建集群
+func (h *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
 	var req model.CreateClusterReq
 
 	uc := ctx.MustGet("user").(utils.UserClaims)
@@ -87,14 +91,15 @@ func (k *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
 	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.clusterService.CreateCluster(ctx, &req)
+		return nil, h.clusterService.CreateCluster(ctx, &req)
 	})
 }
 
-func (k *K8sClusterHandler) UpdateCluster(ctx *gin.Context) {
+// UpdateCluster 更新集群
+func (h *K8sClusterHandler) UpdateCluster(ctx *gin.Context) {
 	var req model.UpdateClusterReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -103,14 +108,15 @@ func (k *K8sClusterHandler) UpdateCluster(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.clusterService.UpdateCluster(ctx, &req)
+		return nil, h.clusterService.UpdateCluster(ctx, &req)
 	})
 }
 
-func (k *K8sClusterHandler) DeleteCluster(ctx *gin.Context) {
+// DeleteCluster 删除集群
+func (h *K8sClusterHandler) DeleteCluster(ctx *gin.Context) {
 	var req model.DeleteClusterReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -119,14 +125,15 @@ func (k *K8sClusterHandler) DeleteCluster(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.clusterService.DeleteCluster(ctx, &req)
+		return nil, h.clusterService.DeleteCluster(ctx, &req)
 	})
 }
 
-func (k *K8sClusterHandler) RefreshCluster(ctx *gin.Context) {
+// RefreshCluster 刷新集群状态
+func (h *K8sClusterHandler) RefreshCluster(ctx *gin.Context) {
 	var req model.RefreshClusterReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -135,6 +142,6 @@ func (k *K8sClusterHandler) RefreshCluster(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.clusterService.RefreshClusterStatus(ctx, &req)
+		return nil, h.clusterService.RefreshClusterStatus(ctx, &req)
 	})
 }

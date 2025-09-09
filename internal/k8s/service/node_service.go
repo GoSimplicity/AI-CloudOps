@@ -34,17 +34,15 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+
 	"go.uber.org/zap"
-	corev1 "k8s.io/api/core/v1"
 )
 
 type NodeService interface {
 	GetNodeList(ctx context.Context, req *model.GetNodeListReq) (model.ListResp[*model.K8sNode], error)
 	GetNodeDetail(ctx context.Context, req *model.GetNodeDetailReq) (*model.K8sNode, error)
 	AddOrUpdateNodeLabel(ctx context.Context, req *model.AddLabelNodesReq) error
-	GetNodeResource(ctx context.Context, req *model.GetNodeResourceReq) (*model.NodeResource, error)
-	GetNodeEvents(ctx context.Context, req *model.GetNodeEventsReq) (model.ListResp[*model.NodeEvent], error)
-	GetNodeTaints(ctx context.Context, req *model.GetNodeTaintsReq) (model.ListResp[*model.NodeTaintEntity], error)
+	GetNodeTaints(ctx context.Context, req *model.GetNodeTaintsReq) (model.ListResp[*model.NodeTaint], error)
 	DrainNode(ctx context.Context, req *model.DrainNodeReq) error
 	CordonNode(ctx context.Context, req *model.NodeCordonReq) error
 	UncordonNode(ctx context.Context, req *model.NodeUncordonReq) error
@@ -70,7 +68,7 @@ func NewNodeService(clusterDao dao.ClusterDAO, client client.K8sClient, nodeMana
 // GetNodeList 获取节点列表
 func (n *nodeService) GetNodeList(ctx context.Context, req *model.GetNodeListReq) (model.ListResp[*model.K8sNode], error) {
 	if req == nil {
-		return model.ListResp[*model.K8sNode]{}, fmt.Errorf("获取节点列表请求不能为空")
+		return model.ListResp[*model.K8sNode]{}, fmt.Errorf("获取节点列表请求参数不能为空")
 	}
 
 	if req.ClusterID <= 0 {
@@ -94,22 +92,9 @@ func (n *nodeService) GetNodeList(ctx context.Context, req *model.GetNodeListReq
 		nodes = utils.FilterNodesByStatus(nodes, req.Status)
 	}
 
-	// 分页处理
-	start := int64(req.Page-1) * int64(req.Size)
-	end := start + int64(req.Size)
-
-	if start > total {
-		start = total
-	}
-	if end > total {
-		end = total
-	}
-
-	// 获取当前页数据
-	var pagedNodes []corev1.Node
-	if start < total {
-		pagedNodes = nodes[start:end]
-	}
+	// 使用工具函数进行分页处理
+	pagedNodes, totalAfterFilter := utils.BuildNodeListPagination(nodes, req.Page, req.Size)
+	total = totalAfterFilter
 
 	// 转换为响应格式
 	var items []*model.K8sNode
@@ -131,15 +116,11 @@ func (n *nodeService) GetNodeList(ctx context.Context, req *model.GetNodeListReq
 // GetNodeDetail 获取节点详情
 func (n *nodeService) GetNodeDetail(ctx context.Context, req *model.GetNodeDetailReq) (*model.K8sNode, error) {
 	if req == nil {
-		return nil, fmt.Errorf("获取节点详情请求不能为空")
+		return nil, fmt.Errorf("获取节点详情请求参数不能为空")
 	}
 
-	if req.ClusterID <= 0 {
-		return nil, fmt.Errorf("集群 ID 不能为空")
-	}
-
-	if req.NodeName == "" {
-		return nil, fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateBasicParams(req.ClusterID, req.NodeName); err != nil {
+		return nil, err
 	}
 
 	// 使用 NodeManager 获取节点
@@ -162,15 +143,11 @@ func (n *nodeService) GetNodeDetail(ctx context.Context, req *model.GetNodeDetai
 // AddOrUpdateNodeLabel 添加或更新节点标签
 func (n *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.AddLabelNodesReq) error {
 	if req == nil {
-		return fmt.Errorf("添加节点标签请求不能为空")
+		return fmt.Errorf("添加节点标签请求参数不能为空")
 	}
 
-	if req.ClusterID <= 0 {
-		return fmt.Errorf("集群 ID 不能为空")
-	}
-
-	if req.NodeName == "" {
-		return fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateBasicParams(req.ClusterID, req.NodeName); err != nil {
+		return err
 	}
 
 	if len(req.Labels) == 0 {
@@ -178,7 +155,7 @@ func (n *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.AddLa
 	}
 
 	// 验证标签
-	if err := utils.ValidateNodeLabels(req.Labels); err != nil {
+	if err := utils.ValidateNodeLabelsMap(req.Labels); err != nil {
 		n.logger.Error("AddOrUpdateNodeLabel: 标签验证失败", zap.Error(err))
 		return fmt.Errorf("标签验证失败: %w", err)
 	}
@@ -197,15 +174,11 @@ func (n *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.AddLa
 // DeleteNodeLabel 删除节点标签
 func (n *nodeService) DeleteNodeLabel(ctx context.Context, req *model.DeleteLabelNodesReq) error {
 	if req == nil {
-		return fmt.Errorf("删除节点标签请求不能为空")
+		return fmt.Errorf("删除节点标签请求参数不能为空")
 	}
 
-	if req.ClusterID <= 0 {
-		return fmt.Errorf("集群 ID 不能为空")
-	}
-
-	if req.NodeName == "" {
-		return fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateBasicParams(req.ClusterID, req.NodeName); err != nil {
+		return err
 	}
 
 	if len(req.LabelKeys) == 0 {
@@ -224,83 +197,24 @@ func (n *nodeService) DeleteNodeLabel(ctx context.Context, req *model.DeleteLabe
 	return nil
 }
 
-// GetNodeResource 获取节点资源
-func (n *nodeService) GetNodeResource(ctx context.Context, req *model.GetNodeResourceReq) (*model.NodeResource, error) {
-	if req == nil {
-		return nil, fmt.Errorf("获取节点资源请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return nil, fmt.Errorf("集群 ID 不能为空")
-	}
-
-	if req.NodeName == "" {
-		return nil, fmt.Errorf("节点名称不能为空")
-	}
-
-	// 使用 NodeManager 获取节点资源
-	resources, err := n.nodeManager.GetNodeResource(ctx, req.ClusterID, req.NodeName)
-	if err != nil {
-		n.logger.Error("GetNodeResource: 获取节点资源失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
-		return nil, fmt.Errorf("获取节点资源失败: %w", err)
-	}
-
-	if resources != nil {
-		return resources, nil
-	}
-
-	return &model.NodeResource{}, nil
-}
-
-// GetNodeEvents 获取节点事件
-func (n *nodeService) GetNodeEvents(ctx context.Context, req *model.GetNodeEventsReq) (model.ListResp[*model.NodeEvent], error) {
-	if req == nil {
-		return model.ListResp[*model.NodeEvent]{}, fmt.Errorf("获取节点事件请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return model.ListResp[*model.NodeEvent]{}, fmt.Errorf("集群 ID 不能为空")
-	}
-
-	if req.NodeName == "" {
-		return model.ListResp[*model.NodeEvent]{}, fmt.Errorf("节点名称不能为空")
-	}
-
-	// 使用 NodeManager 获取节点事件
-	events, total, err := n.nodeManager.GetNodeEvents(ctx, req.ClusterID, req.NodeName, req.Limit)
-	if err != nil {
-		n.logger.Error("GetNodeEvents: 获取节点事件失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
-		return model.ListResp[*model.NodeEvent]{}, fmt.Errorf("获取节点事件失败: %w", err)
-	}
-
-	return model.ListResp[*model.NodeEvent]{
-		Total: total,
-		Items: events,
-	}, nil
-}
-
 // GetNodeTaints 获取节点污点
-func (n *nodeService) GetNodeTaints(ctx context.Context, req *model.GetNodeTaintsReq) (model.ListResp[*model.NodeTaintEntity], error) {
+func (n *nodeService) GetNodeTaints(ctx context.Context, req *model.GetNodeTaintsReq) (model.ListResp[*model.NodeTaint], error) {
 	if req == nil {
-		return model.ListResp[*model.NodeTaintEntity]{}, fmt.Errorf("获取节点污点请求不能为空")
+		return model.ListResp[*model.NodeTaint]{}, fmt.Errorf("获取节点污点请求参数不能为空")
 	}
 
-	if req.ClusterID <= 0 {
-		return model.ListResp[*model.NodeTaintEntity]{}, fmt.Errorf("集群 ID 不能为空")
-	}
-
-	if req.NodeName == "" {
-		return model.ListResp[*model.NodeTaintEntity]{}, fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateBasicParams(req.ClusterID, req.NodeName); err != nil {
+		return model.ListResp[*model.NodeTaint]{}, err
 	}
 
 	// 使用 NodeManager 获取节点污点
 	taints, total, err := n.nodeManager.GetNodeTaints(ctx, req.ClusterID, req.NodeName)
 	if err != nil {
 		n.logger.Error("GetNodeTaints: 获取节点污点失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
-		return model.ListResp[*model.NodeTaintEntity]{}, fmt.Errorf("获取节点污点失败: %w", err)
+		return model.ListResp[*model.NodeTaint]{}, fmt.Errorf("获取节点污点失败: %w", err)
 	}
 
-	return model.ListResp[*model.NodeTaintEntity]{
+	return model.ListResp[*model.NodeTaint]{
 		Total: total,
 		Items: taints,
 	}, nil
@@ -309,15 +223,11 @@ func (n *nodeService) GetNodeTaints(ctx context.Context, req *model.GetNodeTaint
 // DrainNode 驱逐节点
 func (n *nodeService) DrainNode(ctx context.Context, req *model.DrainNodeReq) error {
 	if req == nil {
-		return fmt.Errorf("驱逐节点请求不能为空")
+		return fmt.Errorf("驱逐节点请求参数不能为空")
 	}
 
-	if req.ClusterID <= 0 {
-		return fmt.Errorf("集群 ID 不能为空")
-	}
-
-	if req.NodeName == "" {
-		return fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateBasicParams(req.ClusterID, req.NodeName); err != nil {
+		return err
 	}
 
 	// 使用 NodeManager 驱逐节点
@@ -339,15 +249,11 @@ func (n *nodeService) DrainNode(ctx context.Context, req *model.DrainNodeReq) er
 // CordonNode 禁止节点调度
 func (n *nodeService) CordonNode(ctx context.Context, req *model.NodeCordonReq) error {
 	if req == nil {
-		return fmt.Errorf("禁止节点调度请求不能为空")
+		return fmt.Errorf("禁止节点调度请求参数不能为空")
 	}
 
-	if req.ClusterID <= 0 {
-		return fmt.Errorf("集群 ID 不能为空")
-	}
-
-	if req.NodeName == "" {
-		return fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateBasicParams(req.ClusterID, req.NodeName); err != nil {
+		return err
 	}
 
 	// 使用 NodeManager 禁止节点调度
@@ -362,15 +268,11 @@ func (n *nodeService) CordonNode(ctx context.Context, req *model.NodeCordonReq) 
 // UncordonNode 解除节点调度限制
 func (n *nodeService) UncordonNode(ctx context.Context, req *model.NodeUncordonReq) error {
 	if req == nil {
-		return fmt.Errorf("解除节点调度限制请求不能为空")
+		return fmt.Errorf("解除节点调度限制请求参数不能为空")
 	}
 
-	if req.ClusterID <= 0 {
-		return fmt.Errorf("集群 ID 不能为空")
-	}
-
-	if req.NodeName == "" {
-		return fmt.Errorf("节点名称不能为空")
+	if err := utils.ValidateBasicParams(req.ClusterID, req.NodeName); err != nil {
+		return err
 	}
 
 	// 使用 NodeManager 解除节点调度限制

@@ -46,11 +46,11 @@ func (k *K8sNamespaceHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
 		// Namespace基础管理
-		k8sGroup.GET("/clusters/:cluster_id/namespaces", k.ListNamespaces)            // 获取Namespace列表
-		k8sGroup.GET("/clusters/:cluster_id/namespaces/:name", k.GetNamespaceDetails) // 获取Namespace详情
-		k8sGroup.POST("/clusters/:cluster_id/namespaces", k.CreateNamespace)          // 创建Namespace
-		k8sGroup.PUT("/clusters/:cluster_id/namespaces/:name", k.UpdateNamespace)     // 更新Namespace
-		k8sGroup.DELETE("/clusters/:cluster_id/namespaces/:name", k.DeleteNamespace)  // 删除Namespace
+		k8sGroup.GET("/clusters/:cluster_id/namespace/list", k.ListNamespaces)              // 获取Namespace列表
+		k8sGroup.GET("/clusters/:cluster_id/namespace/:name/detail", k.GetNamespaceDetails) // 获取Namespace详情
+		k8sGroup.POST("/clusters/:cluster_id/namespace/create", k.CreateNamespace)          // 创建Namespace
+		k8sGroup.PUT("/clusters/:cluster_id/namespace/:name/update", k.UpdateNamespace)     // 更新Namespace
+		k8sGroup.DELETE("/clusters/:cluster_id/namespace/:name/delete", k.DeleteNamespace)  // 删除Namespace
 	}
 }
 

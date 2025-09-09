@@ -42,6 +42,7 @@ type NamespaceManager interface {
 	// 基础 CRUD 操作
 	CreateNamespace(ctx context.Context, clusterID int, namespace *corev1.Namespace) (*corev1.Namespace, error)
 	GetNamespace(ctx context.Context, clusterID int, name string) (*corev1.Namespace, error)
+	GetNamespaceList(ctx context.Context, clusterID int, options metav1.ListOptions) (*corev1.NamespaceList, error)
 	ListNamespaces(ctx context.Context, clusterID int, status string, labels model.KeyValueList) (*corev1.NamespaceList, int64, error)
 	UpdateNamespace(ctx context.Context, clusterID int, namespace *corev1.Namespace) (*corev1.Namespace, error)
 	DeleteNamespace(ctx context.Context, clusterID int, name string, options metav1.DeleteOptions) error
@@ -76,6 +77,23 @@ func (m *namespaceManager) GetNamespace(ctx context.Context, clusterID int, name
 	}
 
 	return namespace, nil
+}
+
+// GetNamespaceList 获取Namespace列表（使用ListOptions）
+func (m *namespaceManager) GetNamespaceList(ctx context.Context, clusterID int, options metav1.ListOptions) (*corev1.NamespaceList, error) {
+	clientset, err := m.clientFactory.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+
+	namespaceList, err := clientset.CoreV1().Namespaces().List(ctx, options)
+	if err != nil {
+		m.logger.Error("获取命名空间列表失败", zap.Error(err), zap.Int("clusterID", clusterID))
+		return nil, fmt.Errorf("获取命名空间列表失败: %w", err)
+	}
+
+	return namespaceList, nil
 }
 
 // ListNamespaces 获取Namespace列表

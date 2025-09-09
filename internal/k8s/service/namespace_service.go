@@ -81,7 +81,7 @@ func (n *namespaceService) CreateNamespace(ctx context.Context, req *model.K8sNa
 	}
 
 	// 验证标签
-	if err := utils.ValidateLabels(req.Labels); err != nil {
+	if err := utils.ValidateNodeLabelsMap(utils.ConvertKeyValueListToLabels(req.Labels)); err != nil {
 		n.logger.Error("CreateNamespace: 标签验证失败", zap.Error(err))
 		return fmt.Errorf("标签验证失败: %w", err)
 	}
@@ -206,7 +206,7 @@ func (n *namespaceService) UpdateNamespace(ctx context.Context, req *model.K8sNa
 	}
 
 	// 验证标签
-	if err := utils.ValidateLabels(req.Labels); err != nil {
+	if err := utils.ValidateNodeLabelsMap(utils.ConvertKeyValueListToLabels(req.Labels)); err != nil {
 		n.logger.Error("UpdateNamespace: 标签验证失败", zap.Error(err))
 		return fmt.Errorf("标签验证失败: %w", err)
 	}
@@ -252,7 +252,17 @@ func (n *namespaceService) ListNamespaces(ctx context.Context, req *model.K8sNam
 		return model.ListResp[*model.K8sNamespace]{}, fmt.Errorf("集群 ID 不能为空")
 	}
 
-	namespaceList, total, err := n.namespaceManager.ListNamespaces(ctx, req.ClusterID, req.Status, req.Labels)
+	// 验证过滤参数
+	if err := utils.ValidateNamespaceFilters(req); err != nil {
+		n.logger.Error("ListNamespaces: 过滤参数验证失败", zap.Error(err))
+		return model.ListResp[*model.K8sNamespace]{}, fmt.Errorf("过滤参数验证失败: %w", err)
+	}
+
+	// 构建查询选项
+	listOptions := utils.BuildNamespaceListOptions(req)
+
+	// 使用 NamespaceManager 获取命名空间列表
+	namespaceList, err := n.namespaceManager.GetNamespaceList(ctx, req.ClusterID, listOptions)
 	if err != nil {
 		n.logger.Error("ListNamespaces: 获取命名空间列表失败", zap.Error(err), zap.Int("clusterID", req.ClusterID))
 		return model.ListResp[*model.K8sNamespace]{}, fmt.Errorf("获取命名空间列表失败: %w", err)
@@ -260,38 +270,24 @@ func (n *namespaceService) ListNamespaces(ctx context.Context, req *model.K8sNam
 
 	namespaces := namespaceList.Items
 
-	// 设置默认分页参数
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-	if req.Size <= 0 {
-		req.Size = 10
+	// 根据条件过滤命名空间
+	if req.Status != "" {
+		namespaces = utils.FilterNamespacesByStatus(namespaces, req.Status)
 	}
 
-	// 计算分页参数
-	start := (req.Page - 1) * req.Size
-	end := start + req.Size
-
-	// 获取实际数组长度
-	namespacesLength := len(namespaces)
-
-	// 边界检查
-	if start >= namespacesLength {
-		// 超出范围，返回空数据
-		return model.ListResp[*model.K8sNamespace]{
-			Total: total,
-			Items: []*model.K8sNamespace{},
-		}, nil
-	}
-	if end > namespacesLength {
-		end = namespacesLength
-	}
-	if start < 0 {
-		start = 0
+	// 根据搜索关键字过滤
+	if req.Search != "" {
+		namespaces = utils.FilterNamespacesBySearch(namespaces, req.Search)
 	}
 
-	// 获取当前页数据
-	pagedNamespaces := namespaces[start:end]
+	// 根据标签过滤（如果没有使用标签选择器）
+	if len(req.Labels) > 0 && req.LabelSelector == "" {
+		labelsMap := utils.ConvertKeyValueListToLabels(req.Labels)
+		namespaces = utils.FilterNamespacesByLabels(namespaces, labelsMap)
+	}
+
+	// 使用工具函数进行分页处理
+	pagedNamespaces, total := utils.BuildNamespaceListPagination(namespaces, req.Page, req.Size)
 
 	// 转换为响应格式
 	var items []*model.K8sNamespace

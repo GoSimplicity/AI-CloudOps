@@ -26,6 +26,9 @@
 package utils
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -91,17 +94,12 @@ func ConvertToK8sNamespace(name string, labels, annotations model.KeyValueList) 
 }
 
 // BuildNamespaceListOptions 构建Namespace列表选项
-func BuildNamespaceListOptions(labelSelector, fieldSelector string) metav1.ListOptions {
+func BuildNamespaceListOptions(req *model.K8sNamespaceListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
 	// 添加标签选择器
-	if labelSelector != "" {
-		options.LabelSelector = labelSelector
-	}
-
-	// 添加字段选择器
-	if fieldSelector != "" {
-		options.FieldSelector = fieldSelector
+	if req.LabelSelector != "" {
+		options.LabelSelector = req.LabelSelector
 	}
 
 	return options
@@ -174,4 +172,92 @@ func GetNamespaceResourceQuota(namespace *corev1.Namespace) map[string]string {
 	}
 
 	return quota
+}
+
+// FilterNamespacesBySearch 根据搜索关键字过滤命名空间
+func FilterNamespacesBySearch(namespaces []corev1.Namespace, search string) []corev1.Namespace {
+	if search == "" {
+		return namespaces
+	}
+
+	search = strings.ToLower(search)
+	var filtered []corev1.Namespace
+	for _, ns := range namespaces {
+		// 搜索命名空间名称
+		if strings.Contains(strings.ToLower(ns.Name), search) {
+			filtered = append(filtered, ns)
+			continue
+		}
+
+		// 搜索标签
+		for key, value := range ns.Labels {
+			if strings.Contains(strings.ToLower(key), search) ||
+				strings.Contains(strings.ToLower(value), search) {
+				filtered = append(filtered, ns)
+				break
+			}
+		}
+	}
+	return filtered
+}
+
+// FilterNamespacesByName 根据命名空间名称过滤
+func FilterNamespacesByName(namespaces []corev1.Namespace, nameFilter string) []corev1.Namespace {
+	if nameFilter == "" {
+		return namespaces
+	}
+
+	nameFilter = strings.ToLower(nameFilter)
+	var filtered []corev1.Namespace
+	for _, ns := range namespaces {
+		if strings.Contains(strings.ToLower(ns.Name), nameFilter) {
+			filtered = append(filtered, ns)
+		}
+	}
+	return filtered
+}
+
+// BuildNamespaceListPagination 构建命名空间列表分页逻辑
+func BuildNamespaceListPagination(namespaces []corev1.Namespace, page, size int) ([]corev1.Namespace, int64) {
+	total := int64(len(namespaces))
+	if total == 0 {
+		return []corev1.Namespace{}, 0
+	}
+
+	// 设置默认分页参数
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 {
+		size = 10
+	}
+
+	start := int64((page - 1) * size)
+	end := start + int64(size)
+
+	if start >= total {
+		return []corev1.Namespace{}, total
+	}
+	if end > total {
+		end = total
+	}
+
+	return namespaces[start:end], total
+}
+
+// ValidateNamespaceFilters 验证命名空间过滤参数
+func ValidateNamespaceFilters(req *model.K8sNamespaceListReq) error {
+	if req == nil {
+		return nil
+	}
+
+	// 验证标签选择器格式（简单验证）
+	if req.LabelSelector != "" {
+		// 可以添加更复杂的标签选择器格式验证
+		if strings.Contains(req.LabelSelector, "..") {
+			return fmt.Errorf("invalid label selector format")
+		}
+	}
+
+	return nil
 }
