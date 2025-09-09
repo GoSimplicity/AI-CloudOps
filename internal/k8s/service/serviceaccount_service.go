@@ -27,10 +27,14 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"go.uber.org/zap"
+	authv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -41,51 +45,99 @@ type ServiceAccountService interface {
 	CreateServiceAccount(ctx context.Context, req *model.CreateServiceAccountReq) error
 	UpdateServiceAccount(ctx context.Context, req *model.UpdateServiceAccountReq) error
 	DeleteServiceAccount(ctx context.Context, req *model.DeleteServiceAccountReq) error
+	CreateServiceAccountByYaml(ctx context.Context, req *model.CreateServiceAccountByYamlReq) error
 
 	// YAML 操作
 	GetServiceAccountYaml(ctx context.Context, req *model.GetServiceAccountYamlReq) (*model.K8sYaml, error)
-	UpdateServiceAccountYaml(ctx context.Context, req *model.UpdateServiceAccountYamlReq) error
+	UpdateServiceAccountYaml(ctx context.Context, req *model.UpdateServiceAccountByYamlReq) error
 
-	// 扩展功能
-	GetServiceAccountEvents(ctx context.Context, req *model.GetServiceAccountEventsReq) (model.ListResp[*model.K8sServiceAccountEvent], error)
-	GetServiceAccountUsage(ctx context.Context, req *model.GetServiceAccountUsageReq) (*model.K8sServiceAccountUsage, error)
-
-	GetServiceAccountToken(ctx context.Context, req *model.GetServiceAccountTokenReq) (*model.K8sServiceAccountToken, error)
-	CreateServiceAccountToken(ctx context.Context, req *model.CreateServiceAccountTokenReq) (*model.K8sServiceAccountToken, error)
+	// Token管理
+	GetServiceAccountToken(ctx context.Context, req *model.GetServiceAccountTokenReq) (*model.ServiceAccountTokenInfo, error)
+	CreateServiceAccountToken(ctx context.Context, req *model.CreateServiceAccountTokenReq) (*model.ServiceAccountTokenInfo, error)
 }
 
 type serviceAccountService struct {
-	rbacManager manager.RBACManager
+	serviceAccountManager manager.ServiceAccountManager
+	logger                *zap.Logger
 }
 
-func NewServiceAccountService(rbacManager manager.RBACManager) ServiceAccountService {
+func NewServiceAccountService(serviceAccountManager manager.ServiceAccountManager, logger *zap.Logger) ServiceAccountService {
 	return &serviceAccountService{
-		rbacManager: rbacManager,
+		serviceAccountManager: serviceAccountManager,
+		logger:                logger,
 	}
 }
-
-// ======================== 基础 CRUD 操作 ========================
 
 func (s *serviceAccountService) GetServiceAccountList(ctx context.Context, req *model.GetServiceAccountListReq) (model.ListResp[*model.K8sServiceAccount], error) {
 	// 构建查询选项
 	options := k8sutils.BuildServiceAccountListOptions(req)
 
-	// 从 Manager 获取原始 ServiceAccount 列表（model 格式）
-	serviceAccounts, err := s.rbacManager.GetServiceAccountList(ctx, req.ClusterID, req.Namespace, options)
+	// 从 Manager 获取原始 ServiceAccount 列表
+	serviceAccountList, err := s.serviceAccountManager.GetServiceAccountList(ctx, req.ClusterID, req.Namespace, options)
 	if err != nil {
 		return model.ListResp[*model.K8sServiceAccount]{}, err
 	}
 
-	// 分页处理（在调用方处理，或保持原样返回并由上层分页）
-	resp := model.ListResp[*model.K8sServiceAccount]{
-		Items: serviceAccounts,
-		Total: int64(len(serviceAccounts)),
+	// 转换并过滤
+	var filtered []*model.K8sServiceAccount
+	keyword := strings.TrimSpace(req.Keyword)
+	for _, sa := range serviceAccountList.Items {
+		entity := k8sutils.BuildServiceAccountResponse(&sa, req.ClusterID)
+		if entity == nil {
+			continue
+		}
+		if keyword != "" {
+			// 名称、标签、注解关键字匹配
+			match := strings.Contains(entity.Name, keyword)
+			if !match {
+				for k, v := range entity.Labels {
+					if strings.Contains(k, keyword) || strings.Contains(v, keyword) {
+						match = true
+						break
+					}
+				}
+			}
+			if !match {
+				for k, v := range entity.Annotations {
+					if strings.Contains(k, keyword) || strings.Contains(v, keyword) {
+						match = true
+						break
+					}
+				}
+			}
+			if !match {
+				continue
+			}
+		}
+		filtered = append(filtered, entity)
 	}
-	return resp, nil
+
+	// 分页
+	page := req.Page
+	pageSize := req.PageSize
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	start := (page - 1) * pageSize
+	end := start + pageSize
+	if start > len(filtered) {
+		start = len(filtered)
+	}
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+
+	return model.ListResp[*model.K8sServiceAccount]{
+		Items: filtered[start:end],
+		Total: int64(len(filtered)),
+	}, nil
 }
 
 func (s *serviceAccountService) GetServiceAccountDetails(ctx context.Context, req *model.GetServiceAccountDetailsReq) (*model.K8sServiceAccount, error) {
-	serviceAccount, err := s.rbacManager.GetServiceAccount(ctx, req.ClusterID, req.Namespace, req.Name)
+	serviceAccount, err := s.serviceAccountManager.GetServiceAccount(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +147,7 @@ func (s *serviceAccountService) GetServiceAccountDetails(ctx context.Context, re
 
 func (s *serviceAccountService) CreateServiceAccount(ctx context.Context, req *model.CreateServiceAccountReq) error {
 	sa := k8sutils.ConvertToK8sServiceAccount(req)
-	return s.rbacManager.CreateServiceAccount(ctx, req.ClusterID, req.Namespace, sa)
+	return s.serviceAccountManager.CreateServiceAccount(ctx, req.ClusterID, req.Namespace, sa)
 }
 
 func (s *serviceAccountService) UpdateServiceAccount(ctx context.Context, req *model.UpdateServiceAccountReq) error {
@@ -106,19 +158,21 @@ func (s *serviceAccountService) UpdateServiceAccount(ctx context.Context, req *m
 		Labels:                       req.Labels,
 		Annotations:                  req.Annotations,
 		AutomountServiceAccountToken: req.AutomountServiceAccountToken,
+		ImagePullSecrets:             req.ImagePullSecrets,
+		Secrets:                      req.Secrets,
 	}
 	sa := k8sutils.ConvertToK8sServiceAccount(createReq)
-	return s.rbacManager.UpdateServiceAccount(ctx, req.ClusterID, req.Namespace, sa)
+	return s.serviceAccountManager.UpdateServiceAccount(ctx, req.ClusterID, req.Namespace, sa)
 }
 
 func (s *serviceAccountService) DeleteServiceAccount(ctx context.Context, req *model.DeleteServiceAccountReq) error {
-	return s.rbacManager.DeleteServiceAccount(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
+	return s.serviceAccountManager.DeleteServiceAccount(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
 }
 
 // ======================== YAML 操作 ========================
 
 func (s *serviceAccountService) GetServiceAccountYaml(ctx context.Context, req *model.GetServiceAccountYamlReq) (*model.K8sYaml, error) {
-	serviceAccount, err := s.rbacManager.GetServiceAccount(ctx, req.ClusterID, req.Namespace, req.Name)
+	serviceAccount, err := s.serviceAccountManager.GetServiceAccount(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -133,39 +187,57 @@ func (s *serviceAccountService) GetServiceAccountYaml(ctx context.Context, req *
 	}, nil
 }
 
-func (s *serviceAccountService) UpdateServiceAccountYaml(ctx context.Context, req *model.UpdateServiceAccountYamlReq) error {
-	serviceAccount, err := k8sutils.YAMLToServiceAccount(req.Yaml)
+func (s *serviceAccountService) UpdateServiceAccountYaml(ctx context.Context, req *model.UpdateServiceAccountByYamlReq) error {
+	serviceAccount, err := k8sutils.YAMLToServiceAccount(req.YamlContent)
 	if err != nil {
 		return err
 	}
 
-	return s.rbacManager.UpdateServiceAccount(ctx, req.ClusterID, req.Namespace, serviceAccount)
+	return s.serviceAccountManager.UpdateServiceAccount(ctx, req.ClusterID, req.Namespace, serviceAccount)
 }
 
-// ======================== 扩展功能 ========================
+func (s *serviceAccountService) CreateServiceAccountByYaml(ctx context.Context, req *model.CreateServiceAccountByYamlReq) error {
+	serviceAccount, err := k8sutils.YAMLToServiceAccount(req.YamlContent)
+	if err != nil {
+		return err
+	}
 
-func (s *serviceAccountService) GetServiceAccountEvents(ctx context.Context, req *model.GetServiceAccountEventsReq) (model.ListResp[*model.K8sServiceAccountEvent], error) {
-	// 暂未在 RBACManager 暴露，后续如需可在 Manager 层实现相同签名方法
-	return model.ListResp[*model.K8sServiceAccountEvent]{}, nil
+	return s.serviceAccountManager.CreateServiceAccount(ctx, req.ClusterID, serviceAccount.Namespace, serviceAccount)
 }
 
-func (s *serviceAccountService) GetServiceAccountUsage(ctx context.Context, req *model.GetServiceAccountUsageReq) (*model.K8sServiceAccountUsage, error) {
-	// 暂未在 RBACManager 暴露，后续如需可在 Manager 层实现相同签名方法
-	return nil, nil
-}
-
-func (s *serviceAccountService) GetServiceAccountToken(ctx context.Context, req *model.GetServiceAccountTokenReq) (*model.K8sServiceAccountToken, error) {
-	token, err := s.rbacManager.GetServiceAccountToken(ctx, req.ClusterID, req.Namespace, req.Name)
+func (s *serviceAccountService) GetServiceAccountToken(ctx context.Context, req *model.GetServiceAccountTokenReq) (*model.ServiceAccountTokenInfo, error) {
+	// Get existing tokens - this is a simplified implementation
+	tokens, err := s.serviceAccountManager.GetServiceAccountTokens(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		return nil, err
 	}
-	return token, nil
+
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("no tokens found for service account %s", req.Name)
+	}
+
+	// Return the first token (simplified)
+	return &model.ServiceAccountTokenInfo{
+		Token: tokens[0],
+	}, nil
 }
 
-func (s *serviceAccountService) CreateServiceAccountToken(ctx context.Context, req *model.CreateServiceAccountTokenReq) (*model.K8sServiceAccountToken, error) {
-	token, err := s.rbacManager.CreateServiceAccountToken(ctx, req.ClusterID, req.Namespace, req.Name, req.ExpiryTime)
+func (s *serviceAccountService) CreateServiceAccountToken(ctx context.Context, req *model.CreateServiceAccountTokenReq) (*model.ServiceAccountTokenInfo, error) {
+	// Create token request
+	tokenRequest := &authv1.TokenRequest{
+		Spec: authv1.TokenRequestSpec{
+			ExpirationSeconds: req.ExpirationSeconds,
+		},
+	}
+
+	tokenResp, err := s.serviceAccountManager.CreateServiceAccountToken(ctx, req.ClusterID, req.Namespace, req.ServiceAccountName, tokenRequest)
 	if err != nil {
 		return nil, err
 	}
-	return token, nil
+
+	return &model.ServiceAccountTokenInfo{
+		Token:             tokenResp.Status.Token,
+		ExpirationSeconds: req.ExpirationSeconds,
+		ExpirationTime:    tokenResp.Status.ExpirationTimestamp.Time.Format("2006-01-02T15:04:05Z"),
+	}, nil
 }

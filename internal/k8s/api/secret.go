@@ -25,195 +25,243 @@
 
 package api
 
-// import (
-// 	"strconv"
+import (
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/gin-gonic/gin"
+)
 
-// 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
-// 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-// 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-// 	"github.com/gin-gonic/gin"
-// )
+// K8sSecretHandler Secret处理器
+type K8sSecretHandler struct {
+	secretService service.SecretService
+}
 
-// type K8sSecretHandler struct {
-// 	secretService service.SecretService
-// }
+// NewK8sSecretHandler 创建Secret处理器
+func NewK8sSecretHandler(secretService service.SecretService) *K8sSecretHandler {
+	return &K8sSecretHandler{
+		secretService: secretService,
+	}
+}
 
-// func NewK8sSecretHandler(secretService service.SecretService) *K8sSecretHandler {
-// 	return &K8sSecretHandler{
-// 		secretService: secretService,
-// 	}
-// }
+// RegisterRouters 注册路由（集群作用域）
+func (h *K8sSecretHandler) RegisterRouters(server *gin.Engine) {
+	k8sGroup := server.Group("/api/k8s")
+	{
+		k8sGroup.GET("/clusters/:cluster_id/secrets", h.GetSecretList)
+		k8sGroup.GET("/clusters/:cluster_id/secrets/:namespace/:name", h.GetSecret)
+		k8sGroup.GET("/clusters/:cluster_id/secrets/:namespace/:name/yaml", h.GetSecretYAML)
+		k8sGroup.POST("/clusters/:cluster_id/secrets", h.CreateSecret)
+		k8sGroup.PUT("/clusters/:cluster_id/secrets/:namespace/:name", h.UpdateSecret)
+		k8sGroup.DELETE("/clusters/:cluster_id/secrets/:namespace/:name", h.DeleteSecret)
+		k8sGroup.POST("/clusters/:cluster_id/secrets/yaml", h.CreateSecretByYaml)
+		k8sGroup.PUT("/clusters/:cluster_id/secrets/:namespace/:name/yaml", h.UpdateSecretByYaml)
+	}
+}
 
-// func (h *K8sSecretHandler) RegisterRouters(server *gin.Engine) {
-// 	k8sGroup := server.Group("/api/k8s")
-// 	{
-// 		k8sGroup.GET("/secrets/list", h.GetSecretList)                              // 获取Secret列表
-// 		k8sGroup.GET("/secrets/:cluster_id/:namespace/:name", h.GetSecret)          // 获取单个Secret详情
-// 		k8sGroup.POST("/secrets/create", h.CreateSecret)                            // 创建Secret
-// 		k8sGroup.PUT("/secrets/update", h.UpdateSecret)                             // 更新Secret
-// 		k8sGroup.DELETE("/secrets/:cluster_id/:namespace/:name", h.DeleteSecret)    // 删除Secret
-// 		k8sGroup.GET("/secrets/:cluster_id/:namespace/:name/yaml", h.GetSecretYAML) // 获取Secret的YAML配置
+// GetSecretList 获取Secret列表
+func (h *K8sSecretHandler) GetSecretList(ctx *gin.Context) {
+	var req model.GetSecretListReq
 
-// 		// YAML操作
-// 		k8sGroup.POST("/secrets/yaml", h.CreateSecretByYaml)                             // 通过YAML创建Secret
-// 		k8sGroup.PUT("/secrets/:cluster_id/:namespace/:name/yaml", h.UpdateSecretByYaml) // 通过YAML更新Secret
-// 	}
-// }
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		utils.BadRequestError(ctx, "参数绑定错误: "+err.Error())
+		return
+	}
+	req.ClusterID = clusterID
 
-// // GetSecretList 获取Secret列表
-// func (h *K8sSecretHandler) GetSecretList(ctx *gin.Context) {
-// 	var req model.K8sListReq
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.secretService.GetSecretList(ctx, &req)
+	})
+}
 
-// 	// 从查询参数中获取请求参数
-// 	if err := ctx.ShouldBindQuery(&req); err != nil {
-// 		utils.BadRequestError(ctx, "参数绑定错误: "+err.Error())
-// 		return
-// 	}
+// GetSecret 获取单个Secret详情
+func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
+	var req model.K8sSecretDeleteReq
 
-// 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return h.secretService.GetSecretList(ctx, &req)
-// 	})
-// }
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	ns, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	req.ClusterID = clusterID
+	req.Namespace = ns
+	req.Name = name
 
-// // GetSecret 获取单个Secret详情
-// func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
-// 	var req model.K8sResourceIdentifierReq
+	if req.Namespace == "" || req.Name == "" {
+		utils.BadRequestError(ctx, "命名空间和Secret名称不能为空")
+		return
+	}
 
-// 	// 从路径参数中获取请求参数
-// 	clusterIDStr := ctx.Param("cluster_id")
-// 	clusterID, err := strconv.Atoi(clusterIDStr)
-// 	if err != nil {
-// 		utils.BadRequestError(ctx, "无效的集群ID: "+err.Error())
-// 		return
-// 	}
-// 	req.ClusterID = clusterID
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.secretService.GetSecret(ctx, &req)
+	})
+}
 
-// 	req.Namespace = ctx.Param("namespace")
-// 	req.ResourceName = ctx.Param("name")
+// CreateSecret 创建Secret
+func (h *K8sSecretHandler) CreateSecret(ctx *gin.Context) {
+	var req model.K8sSecretCreateReq
 
-// 	// 验证必要参数
-// 	if req.Namespace == "" || req.ResourceName == "" {
-// 		utils.BadRequestError(ctx, "命名空间和Secret名称不能为空")
-// 		return
-// 	}
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	req.ClusterID = clusterID
 
-// 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return h.secretService.GetSecret(ctx, &req)
-// 	})
-// }
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.secretService.CreateSecret(ctx, &req)
+	})
+}
 
-// // CreateSecret 创建Secret
-// func (h *K8sSecretHandler) CreateSecret(ctx *gin.Context) {
-// 	var req model.SecretCreateReq
+// UpdateSecret 更新Secret
+func (h *K8sSecretHandler) UpdateSecret(ctx *gin.Context) {
+	var req model.K8sSecretUpdateReq
 
-// 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-// 		return nil, h.secretService.CreateSecret(ctx, &req)
-// 	})
-// }
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	ns, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	req.ClusterID = clusterID
+	req.Namespace = ns
+	req.Name = name
 
-// // UpdateSecret 更新Secret
-// func (h *K8sSecretHandler) UpdateSecret(ctx *gin.Context) {
-// 	var req model.SecretUpdateReq
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.secretService.UpdateSecret(ctx, &req)
+	})
+}
 
-// 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-// 		return nil, h.secretService.UpdateSecret(ctx, &req)
-// 	})
-// }
+// DeleteSecret 删除Secret
+func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
+	var req model.K8sSecretDeleteReq
 
-// // DeleteSecret 删除Secret
-// func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
-// 	var req model.K8sResourceIdentifierReq
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	ns, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	req.ClusterID = clusterID
+	req.Namespace = ns
+	req.Name = name
 
-// 	// 从路径参数中获取请求参数
-// 	clusterIDStr := ctx.Param("cluster_id")
-// 	clusterID, err := strconv.Atoi(clusterIDStr)
-// 	if err != nil {
-// 		utils.BadRequestError(ctx, "无效的集群ID: "+err.Error())
-// 		return
-// 	}
-// 	req.ClusterID = clusterID
+	if req.Namespace == "" || req.Name == "" {
+		utils.BadRequestError(ctx, "命名空间和Secret名称不能为空")
+		return
+	}
 
-// 	req.Namespace = ctx.Param("namespace")
-// 	req.ResourceName = ctx.Param("name")
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, h.secretService.DeleteSecret(ctx, &req)
+	})
+}
 
-// 	// 验证必要参数
-// 	if req.Namespace == "" || req.ResourceName == "" {
-// 		utils.BadRequestError(ctx, "命名空间和Secret名称不能为空")
-// 		return
-// 	}
+// GetSecretYAML 获取Secret的YAML配置
+func (h *K8sSecretHandler) GetSecretYAML(ctx *gin.Context) {
+	var req model.K8sSecretDeleteReq
 
-// 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return nil, h.secretService.DeleteSecret(ctx, &req)
-// 	})
-// }
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	ns, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	req.ClusterID = clusterID
+	req.Namespace = ns
+	req.Name = name
 
-// // GetSecretYAML 获取Secret的YAML配置
-// func (h *K8sSecretHandler) GetSecretYAML(ctx *gin.Context) {
-// 	var req model.K8sResourceIdentifierReq
+	if req.Namespace == "" || req.Name == "" {
+		utils.BadRequestError(ctx, "命名空间和Secret名称不能为空")
+		return
+	}
 
-// 	// 从路径参数中获取请求参数
-// 	clusterIDStr := ctx.Param("cluster_id")
-// 	clusterID, err := strconv.Atoi(clusterIDStr)
-// 	if err != nil {
-// 		utils.BadRequestError(ctx, "无效的集群ID: "+err.Error())
-// 		return
-// 	}
-// 	req.ClusterID = clusterID
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.secretService.GetSecretYAML(ctx, &req)
+	})
+}
 
-// 	req.Namespace = ctx.Param("namespace")
-// 	req.ResourceName = ctx.Param("name")
+// CreateSecretByYaml 通过YAML创建Secret
+func (h *K8sSecretHandler) CreateSecretByYaml(ctx *gin.Context) {
+	var req model.CreateResourceByYamlReq
 
-// 	// 验证必要参数
-// 	if req.Namespace == "" || req.ResourceName == "" {
-// 		utils.BadRequestError(ctx, "命名空间和Secret名称不能为空")
-// 		return
-// 	}
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	req.ClusterID = clusterID
 
-// 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return h.secretService.GetSecretYAML(ctx, &req)
-// 	})
-// }
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.secretService.CreateSecretByYaml(ctx, &req)
+	})
+}
 
-// // YAML操作方法
+// UpdateSecretByYaml 通过YAML更新Secret
+func (h *K8sSecretHandler) UpdateSecretByYaml(ctx *gin.Context) {
+	var req model.UpdateResourceByYamlReq
 
-// // CreateSecretByYaml 通过YAML创建Secret
-// func (h *K8sSecretHandler) CreateSecretByYaml(ctx *gin.Context) {
-// 	var req model.CreateResourceByYamlReq
-// 	req.ResourceType = model.ResourceTypeSecret
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	ns, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	req.ClusterID = clusterID
+	req.Namespace = ns
+	req.Name = name
 
-// 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-// 		return nil, h.secretService.CreateSecretByYaml(ctx, &req)
-// 	})
-// }
-
-// // UpdateSecretByYaml 通过YAML更新Secret
-// func (h *K8sSecretHandler) UpdateSecretByYaml(ctx *gin.Context) {
-// 	var req model.UpdateResourceByYamlReq
-// 	req.ResourceType = model.ResourceTypeSecret
-
-// 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-// 	if err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
-
-// 	namespace, err := utils.GetParamCustomName(ctx, "namespace")
-// 	if err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
-
-// 	name, err := utils.GetParamCustomName(ctx, "name")
-// 	if err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
-
-// 	req.ClusterID = clusterID
-// 	req.Namespace = namespace
-// 	req.Name = name
-
-// 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-// 		return nil, h.secretService.UpdateSecretByYaml(ctx, &req)
-// 	})
-// }
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.secretService.UpdateSecretByYaml(ctx, &req)
+	})
+}

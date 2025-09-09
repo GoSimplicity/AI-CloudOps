@@ -201,7 +201,7 @@ func (s *K8sServiceAccountHandler) GetServiceAccountYaml(ctx *gin.Context) {
 
 // UpdateServiceAccountYaml 更新 ServiceAccount YAML
 func (s *K8sServiceAccountHandler) UpdateServiceAccountYaml(ctx *gin.Context) {
-	var req model.UpdateServiceAccountYamlReq
+	var req model.UpdateServiceAccountByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
@@ -285,7 +285,7 @@ func (s *K8sServiceAccountHandler) CreateServiceAccountToken(ctx *gin.Context) {
 
 	req.ClusterID = clusterID
 	req.Namespace = namespace
-	req.Name = name
+	req.ServiceAccountName = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return s.serviceAccountService.CreateServiceAccountToken(ctx, &req)

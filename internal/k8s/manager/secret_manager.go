@@ -49,6 +49,7 @@ type SecretManager interface {
 
 	// 业务功能
 	ListSecretsBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.SecretList, error)
+	ListSecretsBySelectors(ctx context.Context, clusterID int, namespace string, labelSelector string, fieldSelector string) (*corev1.SecretList, error)
 	ListSecretsByType(ctx context.Context, clusterID int, namespace string, secretType corev1.SecretType) (*corev1.SecretList, error)
 	GetSecretData(ctx context.Context, clusterID int, namespace, name string, key string) ([]byte, error)
 	UpdateSecretData(ctx context.Context, clusterID int, namespace, name string, data map[string][]byte) (*corev1.Secret, error)
@@ -212,6 +213,33 @@ func (m *secretManager) ListSecretsBySelector(ctx context.Context, clusterID int
 	if err != nil {
 		m.logger.Error("根据选择器获取Secret列表失败", zap.Error(err),
 			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("selector", selector))
+		return nil, fmt.Errorf("根据选择器获取Secret列表失败: %w", err)
+	}
+
+	return secrets, nil
+}
+
+// ListSecretsBySelectors 根据 label 与 field 选择器获取Secret列表
+func (m *secretManager) ListSecretsBySelectors(ctx context.Context, clusterID int, namespace string, labelSelector string, fieldSelector string) (*corev1.SecretList, error) {
+	clientset, err := m.client.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+
+	listOptions := metav1.ListOptions{}
+	if labelSelector != "" {
+		listOptions.LabelSelector = labelSelector
+	}
+	if fieldSelector != "" {
+		listOptions.FieldSelector = fieldSelector
+	}
+
+	secrets, err := clientset.CoreV1().Secrets(namespace).List(ctx, listOptions)
+	if err != nil {
+		m.logger.Error("根据选择器获取Secret列表失败", zap.Error(err),
+			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace),
+			zap.String("label_selector", labelSelector), zap.String("field_selector", fieldSelector))
 		return nil, fmt.Errorf("根据选择器获取Secret列表失败: %w", err)
 	}
 

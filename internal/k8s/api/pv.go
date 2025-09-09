@@ -25,208 +25,220 @@
 
 package api
 
-// import (
-// 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
-// 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-// 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-// 	"github.com/gin-gonic/gin"
-// )
+import (
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/gin-gonic/gin"
+)
 
-// type K8sPVHandler struct {
-// 	pvService service.PVService
-// }
+type K8sPVHandler struct {
+	pvService service.PVService
+}
 
-// func NewK8sPVHandler(pvService service.PVService) *K8sPVHandler {
-// 	return &K8sPVHandler{
-// 		pvService: pvService,
-// 	}
-// }
+func NewK8sPVHandler(pvService service.PVService) *K8sPVHandler {
+	return &K8sPVHandler{
+		pvService: pvService,
+	}
+}
 
-// func (k *K8sPVHandler) RegisterRouters(server *gin.Engine) {
-// 	k8sGroup := server.Group("/api/k8s")
-// 	{
-// 		k8sGroup.GET("/pvs/list", k.GetPVList)                   // 获取PV列表
-// 		k8sGroup.GET("/pvs/:cluster_id", k.GetPVsByCluster)      // 根据集群获取PV列表
-// 		k8sGroup.GET("/pvs/:cluster_id/:name", k.GetPV)          // 获取单个PV详情
-// 		k8sGroup.GET("/pvs/:cluster_id/:name/yaml", k.GetPVYaml) // 获取PV YAML配置
-// 		k8sGroup.POST("/pvs/create", k.CreatePV)                 // 创建PV
-// 		k8sGroup.PUT("/pvs/update", k.UpdatePV)                  // 更新PV
-// 		k8sGroup.DELETE("/pvs/delete", k.DeletePV)               // 删除PV
+func (k *K8sPVHandler) RegisterRouters(server *gin.Engine) {
+	k8sGroup := server.Group("/api/k8s")
+	{
+		k8sGroup.GET("/clusters/:cluster_id/pvs", k.GetPVList)
+		k8sGroup.GET("/clusters/:cluster_id/pvs/:name", k.GetPVDetails)
+		k8sGroup.GET("/clusters/:cluster_id/pvs/:name/yaml", k.GetPVYaml)
+		k8sGroup.POST("/clusters/:cluster_id/pvs", k.CreatePV)
+		k8sGroup.POST("/clusters/:cluster_id/pvs/yaml", k.CreatePVByYaml)
+		k8sGroup.PUT("/clusters/:cluster_id/pvs/:name", k.UpdatePV)
+		k8sGroup.PUT("/clusters/:cluster_id/pvs/:name/yaml", k.UpdatePVByYaml)
+		k8sGroup.DELETE("/clusters/:cluster_id/pvs/:name", k.DeletePV)
+		k8sGroup.POST("/clusters/:cluster_id/pvs/:name/reclaim", k.ReclaimPV)
+	}
+}
 
-// 		// YAML操作
-// 		k8sGroup.POST("/pvs/yaml", k.CreatePVByYaml)                  // 通过YAML创建PV
-// 		k8sGroup.PUT("/pvs/:cluster_id/:name/yaml", k.UpdatePVByYaml) // 通过YAML更新PV
+func (k *K8sPVHandler) GetPVList(ctx *gin.Context) {
+	var req model.GetPVListReq
 
-// 		k8sGroup.GET("/pvs/:cluster_id/:name/events", k.GetPVEvents) // 获取PV事件
-// 		k8sGroup.GET("/pvs/:cluster_id/:name/usage", k.GetPVUsage)   // 获取PV使用情况
-// 		k8sGroup.POST("/pvs/:cluster_id/:name/reclaim", k.ReclaimPV) // 回收PV
-// 	}
-// }
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
 
-// // GetPVList 获取PV列表
-// func (k *K8sPVHandler) GetPVList(ctx *gin.Context) {
-// 	var req model.K8sPVListReq
-// 	if err := ctx.ShouldBindQuery(&req); err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
+	req.ClusterID = clusterID
 
-// 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.pvService.GetPVList(ctx, &req)
-// 	})
-// }
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.pvService.GetPVList(ctx, &req)
+	})
+}
 
-// // GetPVsByCluster 根据集群获取PV列表
-// func (k *K8sPVHandler) GetPVsByCluster(ctx *gin.Context) {
-// 	var req struct {
-// 		ClusterID int `uri:"cluster_id" binding:"required"`
-// 	}
-// 	if err := ctx.ShouldBindUri(&req); err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
+func (k *K8sPVHandler) GetPVDetails(ctx *gin.Context) {
+	var req model.GetPVDetailsReq
 
-// 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.pvService.GetPVsByCluster(ctx, req.ClusterID)
-// 	})
-// }
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
 
-// // GetPV 获取PV详情
-// func (k *K8sPVHandler) GetPV(ctx *gin.Context) {
-// 	var req struct {
-// 		ClusterID int    `uri:"cluster_id" binding:"required"`
-// 		Name      string `uri:"name" binding:"required"`
-// 	}
-// 	if err := ctx.ShouldBindUri(&req); err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
 
-// 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.pvService.GetPV(ctx, req.ClusterID, req.Name)
-// 	})
-// }
+	req.ClusterID = clusterID
+	req.Name = name
 
-// // GetPVYaml 获取PV的YAML配置
-// func (k *K8sPVHandler) GetPVYaml(ctx *gin.Context) {
-// 	var req struct {
-// 		ClusterID int    `uri:"cluster_id" binding:"required"`
-// 		Name      string `uri:"name" binding:"required"`
-// 	}
-// 	if err := ctx.ShouldBindUri(&req); err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.pvService.GetPV(ctx, req.ClusterID, req.Name)
+	})
+}
 
-// 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.pvService.GetPVYaml(ctx, req.ClusterID, req.Name)
-// 	})
-// }
+func (k *K8sPVHandler) GetPVYaml(ctx *gin.Context) {
+	var req model.GetPVYamlReq
 
-// // CreatePV 创建PV
-// func (k *K8sPVHandler) CreatePV(ctx *gin.Context) {
-// 	var req model.K8sPVCreateReq
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
 
-// 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-// 		return nil, k.pvService.CreatePV(ctx, &req)
-// 	})
-// }
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
 
-// // UpdatePV 更新PV
-// func (k *K8sPVHandler) UpdatePV(ctx *gin.Context) {
-// 	var req model.K8sPVUpdateReq
+	req.ClusterID = clusterID
+	req.Name = name
 
-// 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-// 		return nil, k.pvService.UpdatePV(ctx, &req)
-// 	})
-// }
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.pvService.GetPVYaml(ctx, req.ClusterID, req.Name)
+	})
+}
 
-// // DeletePV 删除PV
-// func (k *K8sPVHandler) DeletePV(ctx *gin.Context) {
-// 	var req model.K8sPVDeleteReq
+func (k *K8sPVHandler) CreatePV(ctx *gin.Context) {
+	var req model.CreatePVReq
 
-// 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-// 		return nil, k.pvService.DeletePV(ctx, &req)
-// 	})
-// }
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
 
-// // GetPVEvents 获取PV事件
-// func (k *K8sPVHandler) GetPVEvents(ctx *gin.Context) {
-// 	var req model.K8sPVEventReq
-// 	if err := ctx.ShouldBindUri(&req); err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
-// 	if err := ctx.ShouldBindQuery(&req); err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
+	req.ClusterID = clusterID
 
-// 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.pvService.GetPVEvents(ctx, &req)
-// 	})
-// }
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.pvService.CreatePV(ctx, &req)
+	})
+}
 
-// // GetPVUsage 获取PV使用情况
-// func (k *K8sPVHandler) GetPVUsage(ctx *gin.Context) {
-// 	var req model.K8sPVUsageReq
-// 	if err := ctx.ShouldBindUri(&req); err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
+func (k *K8sPVHandler) CreatePVByYaml(ctx *gin.Context) {
+	var req model.CreatePVByYamlReq
 
-// 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.pvService.GetPVUsage(ctx, &req)
-// 	})
-// }
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
 
-// // ReclaimPV 回收PV
-// func (k *K8sPVHandler) ReclaimPV(ctx *gin.Context) {
-// 	var req model.K8sPVReclaimReq
-// 	if err := ctx.ShouldBindUri(&req); err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
+	req.ClusterID = clusterID
 
-// 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-// 		return nil, k.pvService.ReclaimPV(ctx, req.ClusterID, req.Name)
-// 	})
-// }
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.pvService.CreatePVByYaml(ctx, &req)
+	})
+}
 
-// // YAML操作方法
+func (k *K8sPVHandler) UpdatePV(ctx *gin.Context) {
+	var req model.UpdatePVReq
 
-// // CreatePVByYaml 通过YAML创建PV
-// func (k *K8sPVHandler) CreatePVByYaml(ctx *gin.Context) {
-// 	var req model.CreateResourceByYamlReq
-// 	req.ResourceType = model.ResourceTypePV
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
 
-// 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-// 		return nil, k.pvService.CreatePVByYaml(ctx, &req)
-// 	})
-// }
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
 
-// // UpdatePVByYaml 通过YAML更新PV
-// func (k *K8sPVHandler) UpdatePVByYaml(ctx *gin.Context) {
-// 	var req model.UpdateResourceByYamlReq
-// 	req.ResourceType = model.ResourceTypePV
+	req.ClusterID = clusterID
+	req.Name = name
 
-// 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
-// 	if err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.pvService.UpdatePV(ctx, &req)
+	})
+}
 
-// 	name, err := utils.GetParamCustomName(ctx, "name")
-// 	if err != nil {
-// 		utils.BadRequestError(ctx, err.Error())
-// 		return
-// 	}
+func (k *K8sPVHandler) UpdatePVByYaml(ctx *gin.Context) {
+	var req model.UpdatePVByYamlReq
 
-// 	req.ClusterID = clusterID
-// 	req.Name = name
-// 	// PV是集群级别资源，没有namespace
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
 
-// 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-// 		return nil, k.pvService.UpdatePVByYaml(ctx, &req)
-// 	})
-// }
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.pvService.UpdatePVByYaml(ctx, &req)
+	})
+}
+
+func (k *K8sPVHandler) DeletePV(ctx *gin.Context) {
+	var req model.DeletePVReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.pvService.DeletePV(ctx, &req)
+	})
+}
+
+func (k *K8sPVHandler) ReclaimPV(ctx *gin.Context) {
+	var req model.ReclaimPVReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Name = name
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.pvService.ReclaimPV(ctx, &req)
+	})
+}

@@ -26,9 +26,6 @@
 package model
 
 import (
-	"encoding/json"
-	"fmt"
-	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -73,63 +70,6 @@ type ServicePort struct {
 	TargetPort  intstr.IntOrString `json:"target_port"`            // 目标端口
 	NodePort    int32              `json:"node_port,omitempty"`    // 节点端口（NodePort类型）
 	AppProtocol *string            `json:"app_protocol,omitempty"` // 应用协议
-}
-
-// MarshalJSON 自定义JSON序列化
-func (sp *ServicePort) MarshalJSON() ([]byte, error) {
-	type Alias ServicePort
-	aux := struct {
-		*Alias
-		TargetPort interface{} `json:"target_port"`
-	}{
-		Alias: (*Alias)(sp),
-	}
-
-	// 处理TargetPort字段
-	if sp.TargetPort.Type == intstr.Int {
-		aux.TargetPort = sp.TargetPort.IntVal
-	} else {
-		aux.TargetPort = sp.TargetPort.StrVal
-	}
-
-	return json.Marshal(aux)
-}
-
-// UnmarshalJSON 自定义JSON反序列化
-func (sp *ServicePort) UnmarshalJSON(data []byte) error {
-	type Alias ServicePort
-	aux := struct {
-		*Alias
-		TargetPort interface{} `json:"target_port"`
-	}{
-		Alias: (*Alias)(sp),
-	}
-
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-
-	// 处理TargetPort字段
-	switch v := aux.TargetPort.(type) {
-	case float64:
-		// JSON数字默认解析为float64
-		sp.TargetPort = intstr.FromInt32(int32(v))
-	case int:
-		sp.TargetPort = intstr.FromInt32(int32(v))
-	case int32:
-		sp.TargetPort = intstr.FromInt32(v)
-	case string:
-		// 尝试解析为数字，失败则作为字符串处理
-		if intVal, err := strconv.Atoi(v); err == nil {
-			sp.TargetPort = intstr.FromInt32(int32(intVal))
-		} else {
-			sp.TargetPort = intstr.FromString(v)
-		}
-	default:
-		return fmt.Errorf("无效的target_port类型: %T", v)
-	}
-
-	return nil
 }
 
 // K8sServiceEndpoint k8s service端点信息

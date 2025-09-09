@@ -45,13 +45,14 @@ func NewK8sRoleBindingHandler(roleBindingService service.RoleBindingService) *K8
 func (k *K8sRoleBindingHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/rolebindings", k.GetRoleBindingList)
-		k8sGroup.GET("/rolebindings/:cluster_id/:namespace/:name", k.GetRoleBindingDetails)
-		k8sGroup.POST("/rolebindings", k.CreateRoleBinding)
-		k8sGroup.PUT("/rolebindings/:cluster_id/:namespace/:name", k.UpdateRoleBinding)
-		k8sGroup.DELETE("/rolebindings/:cluster_id/:namespace/:name", k.DeleteRoleBinding)
-		k8sGroup.GET("/rolebindings/:cluster_id/:namespace/:name/yaml", k.GetRoleBindingYaml)
-		k8sGroup.PUT("/rolebindings/:cluster_id/:namespace/:name/yaml", k.UpdateRoleBindingYaml)
+		// Unify to /clusters/:cluster_id/rolebindings style
+		k8sGroup.GET("/clusters/:cluster_id/rolebindings", k.GetRoleBindingList)
+		k8sGroup.GET("/clusters/:cluster_id/rolebindings/:namespace/:name", k.GetRoleBindingDetails)
+		k8sGroup.POST("/clusters/:cluster_id/rolebindings", k.CreateRoleBinding)
+		k8sGroup.PUT("/clusters/:cluster_id/rolebindings/:namespace/:name", k.UpdateRoleBinding)
+		k8sGroup.DELETE("/clusters/:cluster_id/rolebindings/:namespace/:name", k.DeleteRoleBinding)
+		k8sGroup.GET("/clusters/:cluster_id/rolebindings/:namespace/:name/yaml", k.GetRoleBindingYaml)
+		k8sGroup.PUT("/clusters/:cluster_id/rolebindings/:namespace/:name/yaml", k.UpdateRoleBindingYaml)
 
 	}
 }
@@ -59,6 +60,13 @@ func (k *K8sRoleBindingHandler) RegisterRouters(server *gin.Engine) {
 // GetRoleBindingList 获取 RoleBinding 列表
 func (k *K8sRoleBindingHandler) GetRoleBindingList(ctx *gin.Context) {
 	var req model.GetRoleBindingListReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return k.roleBindingService.GetRoleBindingList(ctx, &req)
@@ -178,7 +186,7 @@ func (k *K8sRoleBindingHandler) GetRoleBindingYaml(ctx *gin.Context) {
 
 // UpdateRoleBindingYaml 更新 RoleBinding YAML
 func (k *K8sRoleBindingHandler) UpdateRoleBindingYaml(ctx *gin.Context) {
-	var req model.UpdateRoleBindingYamlReq
+	var req model.UpdateRoleBindingByYamlReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.roleBindingService.UpdateRoleBindingYaml(ctx, &req)

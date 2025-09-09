@@ -31,12 +31,13 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
 
-// ConvertToPVCEntity 将 Kubernetes PVC 转换为内部 PVC 实体模型
-func ConvertToPVCEntity(pvc *corev1.PersistentVolumeClaim, clusterID int) *model.K8sPVCEntity {
+// ConvertToPVCEntity 将 Kubernetes PVC 转换为内部 PVC 模型
+func ConvertToPVCEntity(pvc *corev1.PersistentVolumeClaim, clusterID int) *model.K8sPVC {
 	if pvc == nil {
 		return nil
 	}
@@ -74,7 +75,7 @@ func ConvertToPVCEntity(pvc *corev1.PersistentVolumeClaim, clusterID int) *model
 		volumeMode = string(*pvc.Spec.VolumeMode)
 	}
 
-	return &model.K8sPVCEntity{
+	return &model.K8sPVC{
 		Name:         pvc.Name,
 		Namespace:    pvc.Namespace,
 		UID:          string(pvc.UID),
@@ -91,12 +92,12 @@ func ConvertToPVCEntity(pvc *corev1.PersistentVolumeClaim, clusterID int) *model
 }
 
 // ConvertToPVCEntities 批量转换 PVC 列表
-func ConvertToPVCEntities(pvcs []corev1.PersistentVolumeClaim, clusterID int) []*model.K8sPVCEntity {
+func ConvertToPVCEntities(pvcs []corev1.PersistentVolumeClaim, clusterID int) []*model.K8sPVC {
 	if len(pvcs) == 0 {
 		return nil
 	}
 
-	results := make([]*model.K8sPVCEntity, 0, len(pvcs))
+	results := make([]*model.K8sPVC, 0, len(pvcs))
 	for _, pvc := range pvcs {
 		if entity := ConvertToPVCEntity(&pvc, clusterID); entity != nil {
 			results = append(results, entity)
@@ -106,7 +107,7 @@ func ConvertToPVCEntities(pvcs []corev1.PersistentVolumeClaim, clusterID int) []
 }
 
 // BuildPVCListOptions 构建 PVC 列表查询选项
-func BuildPVCListOptions(req *model.K8sPVCListReq) metav1.ListOptions {
+func BuildPVCListOptions(req *model.GetPVCListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
 	// 构建标签选择器
@@ -168,6 +169,128 @@ func PVCToYAML(pvc *corev1.PersistentVolumeClaim) (string, error) {
 	}
 
 	return string(yamlBytes), nil
+}
+
+// ConvertCreatePVCReqToPVC 将创建PVC请求转换为Kubernetes PVC对象
+func ConvertCreatePVCReqToPVC(req *model.CreatePVCReq) *corev1.PersistentVolumeClaim {
+	if req == nil {
+		return nil
+	}
+
+	// 转换访问模式
+	var accessModes []corev1.PersistentVolumeAccessMode
+	for _, mode := range req.AccessModes {
+		accessModes = append(accessModes, corev1.PersistentVolumeAccessMode(mode))
+	}
+
+	// 转换卷模式
+	var volumeMode *corev1.PersistentVolumeMode
+	if req.VolumeMode != "" {
+		vm := corev1.PersistentVolumeMode(req.VolumeMode)
+		volumeMode = &vm
+	}
+
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   req.Namespace,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: accessModes,
+			VolumeMode:  volumeMode,
+		},
+	}
+
+	// 设置存储类
+	if req.StorageClass != "" {
+		pvc.Spec.StorageClassName = &req.StorageClass
+	}
+
+	// 设置卷名
+	if req.VolumeName != "" {
+		pvc.Spec.VolumeName = req.VolumeName
+	}
+
+	// 设置资源请求
+	if req.RequestStorage != "" {
+		pvc.Spec.Resources = corev1.VolumeResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceStorage: resource.MustParse(req.RequestStorage),
+			},
+		}
+	}
+
+	// 设置选择器
+	if len(req.Selector) > 0 {
+		pvc.Spec.Selector = &metav1.LabelSelector{
+			MatchLabels: req.Selector,
+		}
+	}
+
+	return pvc
+}
+
+// ConvertUpdatePVCReqToPVC 将更新PVC请求转换为Kubernetes PVC对象
+func ConvertUpdatePVCReqToPVC(req *model.UpdatePVCReq) *corev1.PersistentVolumeClaim {
+	if req == nil {
+		return nil
+	}
+
+	// 转换访问模式
+	var accessModes []corev1.PersistentVolumeAccessMode
+	for _, mode := range req.AccessModes {
+		accessModes = append(accessModes, corev1.PersistentVolumeAccessMode(mode))
+	}
+
+	// 转换卷模式
+	var volumeMode *corev1.PersistentVolumeMode
+	if req.VolumeMode != "" {
+		vm := corev1.PersistentVolumeMode(req.VolumeMode)
+		volumeMode = &vm
+	}
+
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   req.Namespace,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: accessModes,
+			VolumeMode:  volumeMode,
+		},
+	}
+
+	// 设置存储类
+	if req.StorageClass != "" {
+		pvc.Spec.StorageClassName = &req.StorageClass
+	}
+
+	// 设置卷名
+	if req.VolumeName != "" {
+		pvc.Spec.VolumeName = req.VolumeName
+	}
+
+	// 设置资源请求
+	if req.RequestStorage != "" {
+		pvc.Spec.Resources = corev1.VolumeResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceStorage: resource.MustParse(req.RequestStorage),
+			},
+		}
+	}
+
+	// 设置选择器
+	if len(req.Selector) > 0 {
+		pvc.Spec.Selector = &metav1.LabelSelector{
+			MatchLabels: req.Selector,
+		}
+	}
+
+	return pvc
 }
 
 // YAMLToPVC 将 YAML 转换为 PVC

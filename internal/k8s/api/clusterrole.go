@@ -45,14 +45,15 @@ func NewK8sClusterRoleHandler(clusterRoleService service.ClusterRoleService) *K8
 func (k *K8sClusterRoleHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/clusterroles/:cluster_id/list", k.GetClusterRoleList)
-		k8sGroup.GET("/clusterroles/:cluster_id/:name/details", k.GetClusterRoleDetails)
-		k8sGroup.GET("/clusterroles/:cluster_id/:name/yaml", k.GetClusterRoleYaml)
-		k8sGroup.POST("/clusterroles/:cluster_id/create", k.CreateClusterRole)
-		k8sGroup.POST("/clusterroles/:cluster_id/create-yaml", k.CreateClusterRoleByYaml)
-		k8sGroup.PUT("/clusterroles/:cluster_id/:name/update", k.UpdateClusterRole)
-		k8sGroup.DELETE("/clusterroles/:cluster_id/:name/delete", k.DeleteClusterRole)
-		k8sGroup.PUT("/clusterroles/:cluster_id/:name/update-yaml", k.UpdateClusterRoleByYaml)
+		// Unify to /clusters/:cluster_id/clusterroles style
+		k8sGroup.GET("/clusters/:cluster_id/clusterroles", k.GetClusterRoleList)
+		k8sGroup.GET("/clusters/:cluster_id/clusterroles/:name", k.GetClusterRoleDetails)
+		k8sGroup.GET("/clusters/:cluster_id/clusterroles/:name/yaml", k.GetClusterRoleYaml)
+		k8sGroup.POST("/clusters/:cluster_id/clusterroles", k.CreateClusterRole)
+		k8sGroup.POST("/clusters/:cluster_id/clusterroles/yaml", k.CreateClusterRoleByYaml)
+		k8sGroup.PUT("/clusters/:cluster_id/clusterroles/:name", k.UpdateClusterRole)
+		k8sGroup.DELETE("/clusters/:cluster_id/clusterroles/:name", k.DeleteClusterRole)
+		k8sGroup.PUT("/clusters/:cluster_id/clusterroles/:name/yaml", k.UpdateClusterRoleByYaml)
 	}
 }
 
@@ -181,7 +182,7 @@ func (k *K8sClusterRoleHandler) UpdateClusterRole(ctx *gin.Context) {
 
 // UpdateClusterRoleYaml 通过YAML更新ClusterRole
 func (k *K8sClusterRoleHandler) UpdateClusterRoleByYaml(ctx *gin.Context) {
-	var req model.UpdateClusterRoleYamlReq
+	var req model.UpdateClusterRoleByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {

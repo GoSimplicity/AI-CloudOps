@@ -95,6 +95,7 @@ var HandlerSet = wire.NewSet(
 	k8sHandler.NewK8sClusterRoleBindingHandler,
 	k8sHandler.NewK8sIngressHandler,
 	k8sHandler.NewK8sPodHandler,
+	k8sHandler.NewK8sConfigMapHandler,
 
 	promHandler.NewAlertPoolHandler,
 	promHandler.NewMonitorConfigHandler,
@@ -136,9 +137,12 @@ var ServiceSet = wire.NewSet(
 	k8sService.NewClusterRoleService,
 	k8sService.NewRoleBindingService,
 	k8sService.NewClusterRoleBindingService,
-	k8sService.NewRBACService,
 	k8sService.NewIngressService,
 	k8sService.NewPodService,
+	k8sService.NewConfigMapService,
+	k8sService.NewSecretService,
+	k8sService.NewPVService,
+	k8sService.NewPVCService,
 
 	userService.NewUserService,
 	authService.NewApiService,
@@ -216,10 +220,17 @@ var ManagerSet = wire.NewSet(
 	manager.NewEventManager,
 	manager.NewStatefulSetManager,
 	manager.NewDaemonSetManager,
-	manager.NewRBACManager,           // RBAC 权限管理器
-	manager.NewServiceAccountManager, // ServiceAccount 管理器
-	manager.NewTaintManager,          // 节点污点管理器
-	manager.NewYamlManager,           // YAML 模板和任务管理器
+	manager.NewServiceAccountManager,
+	manager.NewTaintManager,
+	manager.NewYamlManager,
+	manager.NewConfigMapManager,
+	manager.NewSecretManager,
+	manager.NewPVManager,
+	manager.NewPVCManager,
+	manager.NewClusterRoleManager,
+	manager.NewClusterRoleBindingManager,
+	manager.NewRoleManager,
+	manager.NewRoleBindingManager,
 )
 
 var JobSet = wire.NewSet(

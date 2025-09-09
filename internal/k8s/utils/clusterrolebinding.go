@@ -27,7 +27,6 @@ package utils
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -49,21 +48,16 @@ func ConvertToK8sClusterRoleBinding(crb *rbacv1.ClusterRoleBinding) *model.K8sCl
 	if crb == nil {
 		return nil
 	}
-	status := model.ClusterRoleBindingStatusActive
-	isSystem := model.BoolFalse
-	if strings.HasPrefix(crb.RoleRef.Name, "system:") {
-		isSystem = model.BoolTrue
-	}
 	return &model.K8sClusterRoleBinding{
 		Name:                  crb.Name,
 		UID:                   string(crb.UID),
+		CreationTimestamp:     crb.CreationTimestamp.Time.Format("2006-01-02T15:04:05Z07:00"),
 		Labels:                crb.Labels,
 		Annotations:           crb.Annotations,
 		RoleRef:               ConvertK8sRoleRefToModel(crb.RoleRef),
 		Subjects:              ConvertK8sSubjectsToModel(crb.Subjects),
 		ResourceVersion:       crb.ResourceVersion,
-		Status:                status,
-		IsSystemBinding:       isSystem,
+		Age:                   CalculateAge(crb.CreationTimestamp.Time),
 		RawClusterRoleBinding: crb,
 	}
 }
@@ -88,15 +82,15 @@ func PaginateK8sClusterRoleBindings(clusterRoleBindings []*model.K8sClusterRoleB
 	return clusterRoleBindings[start:end], total
 }
 
-// ConvertK8sClusterRoleBindingToClusterRoleBindingInfo 将K8s ClusterRoleBinding转换为ClusterRoleBindingInfo
-func ConvertK8sClusterRoleBindingToClusterRoleBindingInfo(clusterRoleBinding *rbacv1.ClusterRoleBinding, clusterID int) model.ClusterRoleBindingInfo {
+// ConvertK8sClusterRoleBindingToClusterRoleBindingInfo 将K8s ClusterRoleBinding转换为K8sClusterRoleBinding
+func ConvertK8sClusterRoleBindingToClusterRoleBindingInfo(clusterRoleBinding *rbacv1.ClusterRoleBinding, clusterID int) model.K8sClusterRoleBinding {
 	if clusterRoleBinding == nil {
-		return model.ClusterRoleBindingInfo{}
+		return model.K8sClusterRoleBinding{}
 	}
 
 	age := CalculateAge(clusterRoleBinding.CreationTimestamp.Time)
 
-	return model.ClusterRoleBindingInfo{
+	return model.K8sClusterRoleBinding{
 		Name:              clusterRoleBinding.Name,
 		ClusterID:         clusterID,
 		UID:               string(clusterRoleBinding.UID),

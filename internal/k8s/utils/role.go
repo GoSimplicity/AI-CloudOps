@@ -82,16 +82,16 @@ func PaginateK8sRoles(roles []*model.K8sRole, page, pageSize int) ([]*model.K8sR
 	return roles[start:end], total
 }
 
-// ConvertK8sRoleToRoleInfo 将K8s Role转换为兼容的 RoleInfo
-func ConvertK8sRoleToRoleInfo(role *rbacv1.Role, clusterID int) model.RoleInfo {
+// ConvertK8sRoleToRoleInfo 将K8s Role转换为K8sRole
+func ConvertK8sRoleToRoleInfo(role *rbacv1.Role, clusterID int) model.K8sRole {
 	if role == nil {
-		return model.RoleInfo{}
+		return model.K8sRole{}
 	}
 
 	ageDuration := time.Since(role.CreationTimestamp.Time)
 	age := formatAge(ageDuration)
 
-	return model.RoleInfo{
+	return model.K8sRole{
 		Name:              role.Name,
 		Namespace:         role.Namespace,
 		ClusterID:         clusterID,
@@ -102,32 +102,6 @@ func ConvertK8sRoleToRoleInfo(role *rbacv1.Role, clusterID int) model.RoleInfo {
 		Rules:             ConvertK8sPolicyRulesToModel(role.Rules),
 		ResourceVersion:   role.ResourceVersion,
 		Age:               age,
-	}
-}
-
-// ConvertRoleToModel 将 K8s Role 转换为内部模型 K8sRole
-func ConvertRoleToModel(role *rbacv1.Role, clusterID int) *model.K8sRole {
-	if role == nil {
-		return nil
-	}
-
-	age := formatAge(time.Since(role.CreationTimestamp.Time))
-
-	return &model.K8sRole{
-		Name:              role.Name,
-		Namespace:         role.Namespace,
-		ClusterID:         clusterID,
-		UID:               string(role.UID),
-		Status:            model.RoleStatusActive,
-		Labels:            role.Labels,
-		Annotations:       role.Annotations,
-		Rules:             ConvertK8sPolicyRulesToModel(role.Rules),
-		ResourceVersion:   role.ResourceVersion,
-		Age:               age,
-		BindingCount:      0,
-		ActiveSubjects:    0,
-		IsSystemRole:      model.BoolFalse,
-		CreationTimestamp: role.CreationTimestamp.Time,
 		RawRole:           role,
 	}
 }

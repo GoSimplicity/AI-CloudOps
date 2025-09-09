@@ -24,3 +24,60 @@
  */
 
 package utils
+
+import (
+	"fmt"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
+)
+
+// BuildConfigMapListOptions 构建 ConfigMap 列表查询参数
+func BuildConfigMapListOptions(labelSelector string) metav1.ListOptions {
+	options := metav1.ListOptions{}
+	if labelSelector != "" {
+		options.LabelSelector = labelSelector
+	}
+	return options
+}
+
+// CleanConfigMapForYAML 清理系统字段，便于导出 YAML
+func CleanConfigMapForYAML(cm *corev1.ConfigMap) *corev1.ConfigMap {
+	if cm == nil {
+		return nil
+	}
+	cleaned := cm.DeepCopy()
+	cleaned.ObjectMeta.ResourceVersion = ""
+	cleaned.ObjectMeta.UID = ""
+	cleaned.ObjectMeta.SelfLink = ""
+	cleaned.ObjectMeta.CreationTimestamp = metav1.Time{}
+	cleaned.ObjectMeta.Generation = 0
+	cleaned.ObjectMeta.ManagedFields = nil
+	return cleaned
+}
+
+// ConfigMapToYAML 将 ConfigMap 转换为 YAML 字符串
+func ConfigMapToYAML(cm *corev1.ConfigMap) (string, error) {
+	if cm == nil {
+		return "", fmt.Errorf("ConfigMap 不能为空")
+	}
+	clean := CleanConfigMapForYAML(cm)
+	b, err := yaml.Marshal(clean)
+	if err != nil {
+		return "", fmt.Errorf("转换为YAML失败: %w", err)
+	}
+	return string(b), nil
+}
+
+// YAMLToConfigMap 将 YAML 反序列化为 ConfigMap
+func YAMLToConfigMap(y string) (*corev1.ConfigMap, error) {
+	if y == "" {
+		return nil, fmt.Errorf("YAML 字符串不能为空")
+	}
+	var cm corev1.ConfigMap
+	if err := yaml.Unmarshal([]byte(y), &cm); err != nil {
+		return nil, fmt.Errorf("解析YAML失败: %w", err)
+	}
+	return &cm, nil
+}

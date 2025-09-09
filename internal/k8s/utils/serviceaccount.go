@@ -54,34 +54,26 @@ func BuildServiceAccountResponse(sa *corev1.ServiceAccount, clusterID int) *mode
 		ClusterID:                    clusterID,
 		Labels:                       sa.Labels,
 		Annotations:                  sa.Annotations,
-		CreationTimestamp:            sa.CreationTimestamp.Time,
+		CreationTimestamp:            sa.CreationTimestamp.Time.Format(time.RFC3339),
 		Age:                          utils.GetAge(sa.CreationTimestamp.Time),
-		SecretsCount:                 len(sa.Secrets),
-		ImagePullSecretsCount:        len(sa.ImagePullSecrets),
-		AutomountServiceAccountToken: model.PtrBoolToPtrBoolValue(sa.AutomountServiceAccountToken),
+		AutomountServiceAccountToken: sa.AutomountServiceAccountToken,
+		ResourceVersion:              sa.ResourceVersion,
+		RawServiceAccount:            sa,
 	}
 
-	// 构建Secrets列表
+	// 转换Secrets列表
 	if len(sa.Secrets) > 0 {
-		response.Secrets = make([]model.ServiceAccountSecret, 0, len(sa.Secrets))
+		response.Secrets = make([]string, 0, len(sa.Secrets))
 		for _, secret := range sa.Secrets {
-			response.Secrets = append(response.Secrets, model.ServiceAccountSecret{
-				Name:      secret.Name,
-				Namespace: sa.Namespace,
-				Type:      "kubernetes.io/service-account-token", // 默认类型
-			})
+			response.Secrets = append(response.Secrets, secret.Name)
 		}
 	}
 
-	// 构建ImagePullSecrets列表
+	// 转换ImagePullSecrets列表
 	if len(sa.ImagePullSecrets) > 0 {
-		response.ImagePullSecrets = make([]model.ServiceAccountSecret, 0, len(sa.ImagePullSecrets))
+		response.ImagePullSecrets = make([]string, 0, len(sa.ImagePullSecrets))
 		for _, secret := range sa.ImagePullSecrets {
-			response.ImagePullSecrets = append(response.ImagePullSecrets, model.ServiceAccountSecret{
-				Name:      secret.Name,
-				Namespace: sa.Namespace,
-				Type:      "kubernetes.io/dockercfg", // 默认类型
-			})
+			response.ImagePullSecrets = append(response.ImagePullSecrets, secret.Name)
 		}
 	}
 
@@ -122,7 +114,7 @@ func PaginateK8sServiceAccounts(serviceAccounts []corev1.ServiceAccount, page, p
 
 // ConvertToK8sServiceAccount 将内部模型转换为Kubernetes ServiceAccount对象
 func ConvertToK8sServiceAccount(req *model.CreateServiceAccountReq) *corev1.ServiceAccount {
-	return &corev1.ServiceAccount{
+	sa := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
 			Namespace:   req.Namespace,
@@ -130,6 +122,26 @@ func ConvertToK8sServiceAccount(req *model.CreateServiceAccountReq) *corev1.Serv
 			Annotations: req.Annotations,
 		},
 	}
+
+	if req.AutomountServiceAccountToken != nil {
+		sa.AutomountServiceAccountToken = req.AutomountServiceAccountToken
+	}
+
+	if len(req.ImagePullSecrets) > 0 {
+		sa.ImagePullSecrets = make([]corev1.LocalObjectReference, 0, len(req.ImagePullSecrets))
+		for _, n := range req.ImagePullSecrets {
+			sa.ImagePullSecrets = append(sa.ImagePullSecrets, corev1.LocalObjectReference{Name: n})
+		}
+	}
+
+	if len(req.Secrets) > 0 {
+		sa.Secrets = make([]corev1.ObjectReference, 0, len(req.Secrets))
+		for _, n := range req.Secrets {
+			sa.Secrets = append(sa.Secrets, corev1.ObjectReference{Name: n, Namespace: req.Namespace})
+		}
+	}
+
+	return sa
 }
 
 // BuildK8sServiceAccount 构建K8s ServiceAccount对象
@@ -174,7 +186,7 @@ func YAMLToServiceAccount(yamlStr string) (*corev1.ServiceAccount, error) {
 }
 
 // GetServiceAccountToken 使用 TokenRequest API 获取 ServiceAccount 的短期令牌
-func GetServiceAccountToken(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, name string) (*model.K8sServiceAccountToken, error) {
+func GetServiceAccountToken(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, name string) (*model.ServiceAccountTokenInfo, error) {
 	if kubeClient == nil {
 		return nil, fmt.Errorf("kubeClient 不能为空")
 	}
@@ -194,19 +206,22 @@ func GetServiceAccountToken(ctx context.Context, kubeClient *kubernetes.Clientse
 		expPtr = &t
 	}
 
-	resp := &model.K8sServiceAccountToken{
-		Token:               tr.Status.Token,
-		ExpirationTimestamp: expPtr,
-		Audience:            tr.Spec.Audiences,
-		BoundObjectRef:      nil,
-		CreatedAt:           time.Now(),
+	resp := &model.ServiceAccountTokenInfo{
+		Token:             tr.Status.Token,
+		ExpirationSeconds: tr.Spec.ExpirationSeconds,
+		CreationTimestamp: time.Now().Format(time.RFC3339),
+		ExpirationTime:    "",
+	}
+
+	if expPtr != nil {
+		resp.ExpirationTime = expPtr.Format(time.RFC3339)
 	}
 
 	return resp, nil
 }
 
 // CreateServiceAccountToken 为 ServiceAccount 创建指定过期时间的令牌
-func CreateServiceAccountToken(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, name string, expiryTime *int64) (*model.K8sServiceAccountToken, error) {
+func CreateServiceAccountToken(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, name string, expiryTime *int64) (*model.ServiceAccountTokenInfo, error) {
 	if kubeClient == nil {
 		return nil, fmt.Errorf("kubeClient 不能为空")
 	}
@@ -227,12 +242,15 @@ func CreateServiceAccountToken(ctx context.Context, kubeClient *kubernetes.Clien
 		expPtr = &t
 	}
 
-	resp := &model.K8sServiceAccountToken{
-		Token:               tr.Status.Token,
-		ExpirationTimestamp: expPtr,
-		Audience:            tr.Spec.Audiences,
-		BoundObjectRef:      nil,
-		CreatedAt:           time.Now(),
+	resp := &model.ServiceAccountTokenInfo{
+		Token:             tr.Status.Token,
+		ExpirationSeconds: tr.Spec.ExpirationSeconds,
+		CreationTimestamp: time.Now().Format(time.RFC3339),
+		ExpirationTime:    "",
+	}
+
+	if expPtr != nil {
+		resp.ExpirationTime = expPtr.Format(time.RFC3339)
 	}
 
 	return resp, nil

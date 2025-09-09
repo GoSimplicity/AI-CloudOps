@@ -333,15 +333,15 @@ func PaginateK8sClusterRoles(clusterRoles []*model.K8sClusterRole, page, pageSiz
 	return clusterRoles[start:end], total
 }
 
-// ConvertK8sClusterRoleToClusterRoleInfo 将K8s ClusterRole转换为ClusterRoleInfo
-func ConvertK8sClusterRoleToClusterRoleInfo(clusterRole *rbacv1.ClusterRole, clusterID int) model.ClusterRoleInfo {
+// ConvertK8sClusterRoleToClusterRoleInfo 将K8s ClusterRole转换为K8sClusterRole
+func ConvertK8sClusterRoleToClusterRoleInfo(clusterRole *rbacv1.ClusterRole, clusterID int) model.K8sClusterRole {
 	if clusterRole == nil {
-		return model.ClusterRoleInfo{}
+		return model.K8sClusterRole{}
 	}
 
 	age := GetClusterRoleAge(*clusterRole)
 
-	return model.ClusterRoleInfo{
+	return model.K8sClusterRole{
 		Name:              clusterRole.Name,
 		ClusterID:         clusterID,
 		UID:               string(clusterRole.UID),

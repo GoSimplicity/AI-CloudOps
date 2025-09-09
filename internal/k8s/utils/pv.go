@@ -31,12 +31,13 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 )
 
-// ConvertToPVEntity 将 Kubernetes PV 转换为内部 PV 实体模型
-func ConvertToPVEntity(pv *corev1.PersistentVolume, clusterID int) *model.K8sPVEntity {
+// ConvertToPVEntity 将 Kubernetes PV 转换为内部 PV 模型
+func ConvertToPVEntity(pv *corev1.PersistentVolume, clusterID int) *model.K8sPV {
 	if pv == nil {
 		return nil
 	}
@@ -77,7 +78,7 @@ func ConvertToPVEntity(pv *corev1.PersistentVolume, clusterID int) *model.K8sPVE
 		_ = fmt.Sprintf("%s/%s", pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name)
 	}
 
-	return &model.K8sPVEntity{
+	return &model.K8sPV{
 		Name:          pv.Name,
 		UID:           string(pv.UID),
 		ClusterID:     clusterID,
@@ -93,12 +94,12 @@ func ConvertToPVEntity(pv *corev1.PersistentVolume, clusterID int) *model.K8sPVE
 }
 
 // ConvertToPVEntities 批量转换 PV 列表
-func ConvertToPVEntities(pvs []corev1.PersistentVolume, clusterID int) []*model.K8sPVEntity {
+func ConvertToPVEntities(pvs []corev1.PersistentVolume, clusterID int) []*model.K8sPV {
 	if len(pvs) == 0 {
 		return nil
 	}
 
-	results := make([]*model.K8sPVEntity, 0, len(pvs))
+	results := make([]*model.K8sPV, 0, len(pvs))
 	for _, pv := range pvs {
 		if entity := ConvertToPVEntity(&pv, clusterID); entity != nil {
 			results = append(results, entity)
@@ -108,7 +109,7 @@ func ConvertToPVEntities(pvs []corev1.PersistentVolume, clusterID int) []*model.
 }
 
 // BuildPVListOptions 构建 PV 列表查询选项
-func BuildPVListOptions(req *model.K8sPVListReq) metav1.ListOptions {
+func BuildPVListOptions(req *model.GetPVListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
 	// 构建标签选择器
@@ -222,4 +223,118 @@ func IsPVBound(pv corev1.PersistentVolume) bool {
 // IsPVAvailable 判断 PV 是否可用
 func IsPVAvailable(pv corev1.PersistentVolume) bool {
 	return pv.Status.Phase == corev1.VolumeAvailable
+}
+
+// ConvertCreatePVReqToPV 将创建PV请求转换为Kubernetes PV对象
+func ConvertCreatePVReqToPV(req *model.CreatePVReq) *corev1.PersistentVolume {
+	if req == nil {
+		return nil
+	}
+
+	// 转换访问模式
+	var accessModes []corev1.PersistentVolumeAccessMode
+	for _, mode := range req.AccessModes {
+		accessModes = append(accessModes, corev1.PersistentVolumeAccessMode(mode))
+	}
+
+	// 转换回收策略
+	var reclaimPolicy corev1.PersistentVolumeReclaimPolicy
+	if req.ReclaimPolicy != "" {
+		reclaimPolicy = corev1.PersistentVolumeReclaimPolicy(req.ReclaimPolicy)
+	} else {
+		reclaimPolicy = corev1.PersistentVolumeReclaimDelete
+	}
+
+	// 转换卷模式
+	var volumeMode *corev1.PersistentVolumeMode
+	if req.VolumeMode != "" {
+		vm := corev1.PersistentVolumeMode(req.VolumeMode)
+		volumeMode = &vm
+	}
+
+	pv := &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Spec: corev1.PersistentVolumeSpec{
+			AccessModes:                   accessModes,
+			PersistentVolumeReclaimPolicy: reclaimPolicy,
+			StorageClassName:              req.StorageClass,
+			VolumeMode:                    volumeMode,
+		},
+	}
+
+	// 设置容量
+	if req.Capacity != "" {
+		pv.Spec.Capacity = corev1.ResourceList{
+			corev1.ResourceStorage: resource.MustParse(req.Capacity),
+		}
+	}
+
+	// 设置卷源 - 这里简化处理，实际可能需要更复杂的转换逻辑
+	if len(req.VolumeSource) > 0 {
+		// 这里需要根据具体的卷源类型进行转换
+		// 暂时留空，需要根据实际需求实现
+	}
+
+	return pv
+}
+
+// ConvertUpdatePVReqToPV 将更新PV请求转换为Kubernetes PV对象
+func ConvertUpdatePVReqToPV(req *model.UpdatePVReq) *corev1.PersistentVolume {
+	if req == nil {
+		return nil
+	}
+
+	// 转换访问模式
+	var accessModes []corev1.PersistentVolumeAccessMode
+	for _, mode := range req.AccessModes {
+		accessModes = append(accessModes, corev1.PersistentVolumeAccessMode(mode))
+	}
+
+	// 转换回收策略
+	var reclaimPolicy corev1.PersistentVolumeReclaimPolicy
+	if req.ReclaimPolicy != "" {
+		reclaimPolicy = corev1.PersistentVolumeReclaimPolicy(req.ReclaimPolicy)
+	} else {
+		reclaimPolicy = corev1.PersistentVolumeReclaimDelete
+	}
+
+	// 转换卷模式
+	var volumeMode *corev1.PersistentVolumeMode
+	if req.VolumeMode != "" {
+		vm := corev1.PersistentVolumeMode(req.VolumeMode)
+		volumeMode = &vm
+	}
+
+	pv := &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Spec: corev1.PersistentVolumeSpec{
+			AccessModes:                   accessModes,
+			PersistentVolumeReclaimPolicy: reclaimPolicy,
+			StorageClassName:              req.StorageClass,
+			VolumeMode:                    volumeMode,
+		},
+	}
+
+	// 设置容量
+	if req.Capacity != "" {
+		pv.Spec.Capacity = corev1.ResourceList{
+			corev1.ResourceStorage: resource.MustParse(req.Capacity),
+		}
+	}
+
+	// 设置卷源 - 这里简化处理，实际可能需要更复杂的转换逻辑
+	if len(req.VolumeSource) > 0 {
+		// 这里需要根据具体的卷源类型进行转换
+		// 暂时留空，需要根据实际需求实现
+	}
+
+	return pv
 }
