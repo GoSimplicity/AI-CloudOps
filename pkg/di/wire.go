@@ -60,6 +60,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
@@ -80,15 +81,25 @@ var HandlerSet = wire.NewSet(
 	authHandler.NewSystemHandler,
 	userHandler.NewUserHandler,
 	notAuthHandler.NewNotAuthHandler,
-	k8sHandler.NewK8sPodHandler,
 	k8sHandler.NewK8sNodeHandler,
 	k8sHandler.NewK8sClusterHandler,
 	k8sHandler.NewK8sDeploymentHandler,
 	k8sHandler.NewK8sNamespaceHandler,
 	k8sHandler.NewK8sSvcHandler,
-	k8sHandler.NewK8sTaintHandler,
 	k8sHandler.NewK8sYamlTaskHandler,
 	k8sHandler.NewK8sYamlTemplateHandler,
+	k8sHandler.NewK8sDaemonSetHandler,
+	k8sHandler.NewK8sEventHandler,
+	k8sHandler.NewK8sStatefulSetHandler,
+	k8sHandler.NewK8sServiceAccountHandler,
+	k8sHandler.NewK8sRoleHandler,
+	k8sHandler.NewK8sClusterRoleHandler,
+	k8sHandler.NewK8sRoleBindingHandler,
+	k8sHandler.NewK8sClusterRoleBindingHandler,
+	k8sHandler.NewK8sIngressHandler,
+	k8sHandler.NewK8sPodHandler,
+	k8sHandler.NewK8sConfigMapHandler,
+
 	promHandler.NewAlertPoolHandler,
 	promHandler.NewMonitorConfigHandler,
 	promHandler.NewOnDutyGroupHandler,
@@ -109,18 +120,33 @@ var HandlerSet = wire.NewSet(
 	workorderHandler.NewNotificationHandler,
 	treeHandler.NewTreeNodeHandler,
 	treeHandler.NewTreeLocalHandler,
+	terminal.NewTerminalerHandler,
 )
 
 var ServiceSet = wire.NewSet(
 	k8sService.NewClusterService,
 	k8sService.NewDeploymentService,
 	k8sService.NewNamespaceService,
-	k8sService.NewPodService,
 	k8sService.NewSvcService,
 	k8sService.NewNodeService,
 	k8sService.NewTaintService,
 	k8sService.NewYamlTaskService,
 	k8sService.NewYamlTemplateService,
+	k8sService.NewDaemonSetService,
+	k8sService.NewEventService,
+	k8sService.NewStatefulSetService,
+	k8sService.NewServiceAccountService,
+	k8sService.NewRoleService,
+	k8sService.NewClusterRoleService,
+	k8sService.NewRoleBindingService,
+	k8sService.NewClusterRoleBindingService,
+	k8sService.NewIngressService,
+	k8sService.NewPodService,
+	k8sService.NewConfigMapService,
+	k8sService.NewSecretService,
+	k8sService.NewPVService,
+	k8sService.NewPVCService,
+
 	userService.NewUserService,
 	authService.NewApiService,
 	authService.NewRoleService,
@@ -167,6 +193,7 @@ var DaoSet = wire.NewSet(
 	k8sDao.NewClusterDAO,
 	k8sDao.NewYamlTaskDAO,
 	k8sDao.NewYamlTemplateDAO,
+
 	workorderDao.NewWorkorderFormDesignDAO,
 	workorderDao.NewTemplateDAO,
 	workorderDao.NewWorkorderInstanceDAO,
@@ -188,8 +215,29 @@ var UtilSet = wire.NewSet(
 	ijwt.NewJWTHandler,
 )
 
-var JobSet = wire.NewSet(
+var ManagerSet = wire.NewSet(
 	manager.NewClusterManager,
+	manager.NewDeploymentManager,
+	manager.NewNamespaceManager,
+	manager.NewServiceManager,
+	manager.NewNodeManager,
+	manager.NewEventManager,
+	manager.NewStatefulSetManager,
+	manager.NewDaemonSetManager,
+	manager.NewServiceAccountManager,
+	manager.NewTaintManager,
+	manager.NewYamlManager,
+	manager.NewConfigMapManager,
+	manager.NewSecretManager,
+	manager.NewPVManager,
+	manager.NewPVCManager,
+	manager.NewClusterRoleManager,
+	manager.NewClusterRoleBindingManager,
+	manager.NewRoleManager,
+	manager.NewRoleBindingManager,
+)
+
+var JobSet = wire.NewSet(
 	startup.NewApplicationBootstrap,
 )
 
@@ -226,44 +274,6 @@ var NotificationSet = wire.NewSet(
 	InitNotificationManager,
 )
 
-// NotificationConfigAdapter 通知配置适配器
-type NotificationConfigAdapter struct {
-	config *NotificationConfig
-}
-
-// GetEmail 获取邮箱配置
-func (a *NotificationConfigAdapter) GetEmail() notification.EmailConfig {
-	emailConfig := a.config.GetEmail()
-	if emailConfig == nil {
-		return nil
-	}
-	return emailConfig
-}
-
-// GetFeishu 获取飞书配置
-func (a *NotificationConfigAdapter) GetFeishu() notification.FeishuConfig {
-	feishuConfig := a.config.GetFeishu()
-	if feishuConfig == nil {
-		return nil
-	}
-	return feishuConfig
-}
-
-// InitNotificationConfig 初始化通知配置
-func InitNotificationConfig() notification.NotificationConfig {
-	return &NotificationConfigAdapter{
-		config: &GlobalConfig.Notification,
-	}
-}
-
-// InitNotificationManager 初始化通知管理器
-func InitNotificationManager(config notification.NotificationConfig, asynqClient *asynq.Client, logger *zap.Logger) *notification.Manager {
-	manager, err := notification.NewManager(config, asynqClient, logger)
-	if err != nil {
-		panic(err)
-	}
-	return manager
-}
 
 func ProvideCmd() *Cmd {
 	wire.Build(
@@ -274,6 +284,7 @@ func ProvideCmd() *Cmd {
 		SSHSet,
 		UtilSet,
 		JobSet,
+		ManagerSet,
 		CacheSet,
 		ClientSet,
 		NotificationSet,

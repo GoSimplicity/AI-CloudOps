@@ -30,31 +30,25 @@ import "errors"
 var (
 	ErrorK8sClientNotReady     = errors.New("k8s client not ready")
 	ErrorMetricsClientNotReady = errors.New("metrics client not ready")
+	ErrK8sClusterInfo          = errors.New("k8s cluster info get failed")
+	ErrK8sParseKubeConfig      = errors.New("k8s kube config parse failed")
 
 	ErrorNodeNotFound       = errors.New("node not found")
 	ErrorTaintsKeyDuplicate = errors.New("taints key exist")
-)
+	ErrorWsUpgradeFailed    = errors.New("websocket upgrade failed")
 
-// 集群状态常量，统一使用，避免魔法字符串
-const (
-	StatusPending = "PENDING"
-	StatusRunning = "RUNNING"
-	StatusError   = "ERROR"
-)
-
-// K8s 资源默认配置常量
-const (
-	// 默认资源限制
-	DefaultCPULimit      = "1000m"
-	DefaultMemoryLimit   = "1Gi"
-	DefaultCPURequest    = "500m"
-	DefaultMemoryRequest = "512Mi"
-
-	// 默认名称
-	DefaultLimitRangeName = "default-limits"
-	DefaultQuotaName      = "default-quota"
-
-	// 模拟使用量（用于测试和演示）
-	MockCPUUsage    = "300m"
-	MockMemoryUsage = "256Mi"
+	// 新增的K8s业务错误常量
+	ErrK8sClientInit            = errors.New("k8s client initialization failed")
+	ErrK8sResourceList          = errors.New("k8s resource list failed")
+	ErrK8sResourceGet           = errors.New("k8s resource get failed")
+	ErrK8sResourceDelete        = errors.New("k8s resource delete failed")
+	ErrK8sResourceCreate        = errors.New("k8s resource create failed")
+	ErrK8sResourceUpdate        = errors.New("k8s resource update failed")
+	ErrK8sResourceOperation     = errors.New("k8s resource operation failed")
+	ErrInvalidParam             = errors.New("invalid parameter")
+	ErrNotImplemented           = errors.New("feature not implemented")
+	ErrPodFileStream            = errors.New("pod file stream failed")
+	ErrK8sGetPodLogs            = errors.New("k8s get pod logs failed")
+	ErrK8sPortForward           = errors.New("k8s port forward failed")
+	ErrorK8sIngressHealthFailed = errors.New("k8s ingress check health failed")
 )

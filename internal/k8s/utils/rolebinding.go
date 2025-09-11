@@ -1,0 +1,172 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
+package utils
+
+import (
+	"fmt"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
+)
+
+// BuildRoleBindingListOptions 构建RoleBinding列表选项
+func BuildRoleBindingListOptions(req *model.GetRoleBindingListReq) metav1.ListOptions {
+	options := metav1.ListOptions{}
+
+	// 构建选项的逻辑可以在这里添加
+
+	return options
+}
+
+// ConvertToK8sRoleBinding 将内部模型转换为Kubernetes RoleBinding对象
+func ConvertToK8sRoleBinding(req *model.CreateRoleBindingReq) *rbacv1.RoleBinding {
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   req.Namespace,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		RoleRef:  ConvertRoleRefToK8s(req.RoleRef),
+		Subjects: ConvertSubjectsToK8s(req.Subjects),
+	}
+}
+
+// PaginateK8sRoleBindings 对RoleBinding列表进行分页（基于内部模型）
+func PaginateK8sRoleBindings(roleBindings []*model.K8sRoleBinding, page, pageSize int) (model.ListResp[*model.K8sRoleBinding], error) {
+	resp := model.ListResp[*model.K8sRoleBinding]{
+		Items: []*model.K8sRoleBinding{},
+		Total: int64(len(roleBindings)),
+	}
+	if len(roleBindings) == 0 {
+		return resp, nil
+	}
+
+	if page <= 0 || pageSize <= 0 {
+		resp.Items = roleBindings
+		return resp, nil
+	}
+
+	start := (page - 1) * pageSize
+	end := start + pageSize
+	if start >= len(roleBindings) {
+		return resp, nil
+	}
+	if end > len(roleBindings) {
+		end = len(roleBindings)
+	}
+	resp.Items = roleBindings[start:end]
+	return resp, nil
+}
+
+// BuildK8sRoleBinding 构建K8s RoleBinding对象
+func BuildK8sRoleBinding(name, namespace string, labels, annotations model.KeyValueList, roleRef model.RoleRef, subjects []model.Subject) *rbacv1.RoleBinding {
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			Labels:      ConvertKeyValueListToLabels(labels),
+			Annotations: ConvertKeyValueListToLabels(annotations),
+		},
+		RoleRef:  ConvertRoleRefToK8s(roleRef),
+		Subjects: ConvertSubjectsToK8s(subjects),
+	}
+}
+
+// ConvertRoleRefToK8s 将模型RoleRef转换为K8s RoleRef
+func ConvertRoleRefToK8s(roleRef model.RoleRef) rbacv1.RoleRef {
+	return rbacv1.RoleRef{
+		APIGroup: roleRef.APIGroup,
+		Kind:     roleRef.Kind,
+		Name:     roleRef.Name,
+	}
+}
+
+// ConvertSubjectsToK8s 将模型Subject列表转换为K8s Subject列表
+func ConvertSubjectsToK8s(subjects []model.Subject) []rbacv1.Subject {
+	if len(subjects) == 0 {
+		return nil
+	}
+
+	k8sSubjects := make([]rbacv1.Subject, 0, len(subjects))
+	for _, subject := range subjects {
+		k8sSubjects = append(k8sSubjects, rbacv1.Subject{
+			Kind:      subject.Kind,
+			APIGroup:  subject.APIGroup,
+			Name:      subject.Name,
+			Namespace: subject.Namespace,
+		})
+	}
+
+	return k8sSubjects
+}
+
+// RoleBindingToYAML 将RoleBinding转换为YAML
+func RoleBindingToYAML(roleBinding *rbacv1.RoleBinding) (string, error) {
+	if roleBinding == nil {
+		return "", fmt.Errorf("RoleBinding不能为空")
+	}
+
+	data, err := yaml.Marshal(roleBinding)
+	if err != nil {
+		return "", fmt.Errorf("转换为YAML失败: %w", err)
+	}
+
+	return string(data), nil
+}
+
+// YAMLToRoleBinding 将YAML转换为RoleBinding
+func YAMLToRoleBinding(yamlStr string) (*rbacv1.RoleBinding, error) {
+	if yamlStr == "" {
+		return nil, fmt.Errorf("YAML字符串不能为空")
+	}
+
+	var roleBinding rbacv1.RoleBinding
+	err := yaml.Unmarshal([]byte(yamlStr), &roleBinding)
+	if err != nil {
+		return nil, fmt.Errorf("解析YAML失败: %w", err)
+	}
+
+	return &roleBinding, nil
+}
+
+// ConvertK8sRoleBindingToRoleBindingInfo 将K8s RoleBinding转换为RoleBindingInfo
+func ConvertK8sRoleBindingToRoleBindingInfo(roleBinding *rbacv1.RoleBinding, clusterID int) *model.K8sRoleBinding {
+	if roleBinding == nil {
+		return nil
+	}
+
+	return &model.K8sRoleBinding{
+		Name:      roleBinding.Name,
+		Namespace: roleBinding.Namespace,
+		ClusterID: clusterID,
+		Labels:    roleBinding.Labels,
+		RoleRef:   ConvertK8sRoleRefToModel(roleBinding.RoleRef),
+		Subjects:  ConvertK8sSubjectsToModel(roleBinding.Subjects),
+	}
+}

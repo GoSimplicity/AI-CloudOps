@@ -346,6 +346,7 @@ func (n *notificationDAO) IncrementSentCount(ctx context.Context, id int) error 
 	}
 	return nil
 }
+
 // GetActiveNotificationsByEventType 根据事件类型和流程ID获取活跃的通知配置
 func (n *notificationDAO) GetActiveNotificationsByEventType(ctx context.Context, eventType string, processID int) ([]*model.WorkorderNotification, error) {
 	var notifications []*model.WorkorderNotification

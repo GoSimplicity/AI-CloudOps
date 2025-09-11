@@ -32,6 +32,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -71,6 +72,29 @@ import (
 // @in                          header
 // @name                        Authorization
 // @description					Bearer Token认证
+
+// 检查环境变量是否为true
+func isEnvTrue(key string) bool {
+	value := strings.ToLower(os.Getenv(key))
+	return value == "true" || value == "1" || value == "yes" || value == "y" || value == "on"
+}
+
+// 检查是否应该启用Swagger
+func shouldEnableSwagger() bool {
+	// 优先检查环境变量
+	if swaggerEnabled := os.Getenv("SWAGGER_ENABLED"); swaggerEnabled != "" {
+		return isEnvTrue("SWAGGER_ENABLED")
+	}
+
+	// 检查配置文件
+	if viper.IsSet("swagger.enabled") {
+		return viper.GetBool("swagger.enabled")
+	}
+
+	// 默认情况下，开发环境启用，生产环境禁用
+	env := strings.ToLower(os.Getenv("GIN_MODE"))
+	return env != "release" && env != "production"
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -114,8 +138,17 @@ func run() error {
 		})
 	})
 
-	// 注册Swagger文档路由
-	cmd.Server.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// 条件注册Swagger文档路由
+	if shouldEnableSwagger() {
+		cmd.Server.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+		if viper.GetBool("server.debug") {
+			log.Printf("Swagger文档已启用: http://localhost:%s/swagger/index.html", viper.GetString("server.port"))
+		}
+	} else {
+		if viper.GetBool("server.debug") {
+			log.Printf("Swagger文档已禁用")
+		}
+	}
 
 	// mock数据
 	if viper.GetBool("mock.enabled") && di.IsDBAvailable(db) {
@@ -147,14 +180,14 @@ func run() error {
 			}()
 			_ = cmd.Cron.StartPrometheusConfigRefreshManager(ctx)
 		}()
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("StartCheckK8sStatusManager panic: %v", r)
-				}
-			}()
-			_ = cmd.Cron.StartCheckK8sStatusManager(ctx)
-		}()
+		// go func() {
+		// 	defer func() {
+		// 		if r := recover(); r != nil {
+		// 			log.Printf("StartCheckK8sStatusManager panic: %v", r)
+		// 		}
+		// 	}()
+		// 	_ = cmd.Cron.StartCheckK8sStatusManager(ctx)
+		// }()
 		log.Printf("系统启动完成")
 	} else {
 		log.Printf("降级模式运行")
@@ -227,9 +260,11 @@ func showBootInfo(port string) {
 	fmt.Printf("%s  ", color.GreenString("➜"))
 	fmt.Printf("%s    ", color.New(color.Bold).Sprint("Local:"))
 	fmt.Printf("%s\n", color.MagentaString("http://localhost:%s/", port))
-	fmt.Printf("%s  ", color.GreenString("➜"))
-	fmt.Printf("%s  ", color.New(color.Bold).Sprint("Swagger:"))
-	fmt.Printf("%s\n", color.MagentaString("http://localhost:%s/swagger/index.html", port))
+	if shouldEnableSwagger() {
+		fmt.Printf("%s  ", color.GreenString("➜"))
+		fmt.Printf("%s  ", color.New(color.Bold).Sprint("Swagger:"))
+		fmt.Printf("%s\n", color.MagentaString("http://localhost:%s/swagger/index.html", port))
+	}
 	for _, ip := range ips {
 		fmt.Printf("%s  ", color.GreenString("➜"))
 		fmt.Printf("%s  ", color.New(color.Bold).Sprint("Network:"))

@@ -1,10 +1,5 @@
 package model
 
-import (
-	"fmt"
-	"time"
-)
-
 // System 系统硬件信息
 type System struct {
 	Model
@@ -31,55 +26,6 @@ type System struct {
 	LastUpdateTime int64   `json:"last_update_time" gorm:"comment:最后更新时间;autoUpdateTime"` // 最后更新时间
 }
 
-// GetMemoryUsagePercentage 获取内存使用率百分比
-func (s *System) GetMemoryUsagePercentage() float64 {
-	if s.MemoryTotal == 0 {
-		return 0
-	}
-	return float64(s.MemoryUsed) / float64(s.MemoryTotal) * 100
-}
-
-// GetDiskUsagePercentage 获取磁盘使用率百分比
-func (s *System) GetDiskUsagePercentage() float64 {
-	if s.DiskTotal == 0 {
-		return 0
-	}
-	return float64(s.DiskUsed) / float64(s.DiskTotal) * 100
-}
-
-// GetUptimeFormatted 获取格式化的运行时间
-func (s *System) GetUptimeFormatted() string {
-	duration := time.Duration(s.Uptime) * time.Second
-	days := int(duration.Hours()) / 24
-	hours := int(duration.Hours()) % 24
-	minutes := int(duration.Minutes()) % 60
-
-	if days > 0 {
-		return fmt.Sprintf("%d天%d小时%d分钟", days, hours, minutes)
-	} else if hours > 0 {
-		return fmt.Sprintf("%d小时%d分钟", hours, minutes)
-	} else {
-		return fmt.Sprintf("%d分钟", minutes)
-	}
-}
-
-// FormatBytes 格式化字节大小
-func FormatBytes(bytes uint64, unit string) string {
-	if unit == "GB" {
-		if bytes < 1024 {
-			return fmt.Sprintf("%.2f GB", float64(bytes))
-		}
-		tb := float64(bytes) / 1024
-		return fmt.Sprintf("%.2f TB", tb)
-	}
-
-	if bytes < 1024 {
-		return fmt.Sprintf("%.2f MB", float64(bytes))
-	}
-	gb := float64(bytes) / 1024
-	return fmt.Sprintf("%.2f GB", gb)
-}
-
 // SystemInfoResponse 系统信息响应结构
 type SystemInfoResponse struct {
 	*System
@@ -89,20 +35,3 @@ type SystemInfoResponse struct {
 	SystemStatus         string `json:"system_status"`          // 系统状态
 }
 
-// ToResponse 转换为响应格式
-func (s *System) ToResponse() *SystemInfoResponse {
-	status := "健康"
-	if s.CPUUsage > 80 || s.GetMemoryUsagePercentage() > 85 || s.GetDiskUsagePercentage() > 90 {
-		status = "告警"
-	} else if s.CPUUsage > 60 || s.GetMemoryUsagePercentage() > 70 || s.GetDiskUsagePercentage() > 80 {
-		status = "注意"
-	}
-
-	return &SystemInfoResponse{
-		System:               s,
-		MemoryUsageFormatted: fmt.Sprintf("%s / %s", FormatBytes(s.MemoryUsed, "MB"), FormatBytes(s.MemoryTotal, "MB")),
-		DiskUsageFormatted:   fmt.Sprintf("%s / %s", FormatBytes(s.DiskUsed, "GB"), FormatBytes(s.DiskTotal, "GB")),
-		UptimeFormatted:      s.GetUptimeFormatted(),
-		SystemStatus:         status,
-	}
-}

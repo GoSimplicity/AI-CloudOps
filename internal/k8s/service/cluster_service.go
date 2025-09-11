@@ -31,202 +31,283 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 
 	"go.uber.org/zap"
 )
 
 type ClusterService interface {
-	ListAllClusters(ctx context.Context) ([]*model.K8sCluster, error)
-	CreateCluster(ctx context.Context, cluster *model.K8sCluster) error
-	UpdateCluster(ctx context.Context, cluster *model.K8sCluster) error
-	DeleteCluster(ctx context.Context, id int) error
-	BatchDeleteClusters(ctx context.Context, ids []int) error
-	GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error)
-	RefreshClusterStatus(ctx context.Context, id int) error
+	ListClusters(ctx context.Context, req *model.ListClustersReq) (model.ListResp[*model.K8sCluster], error)
+	CreateCluster(ctx context.Context, req *model.CreateClusterReq) error
+	UpdateCluster(ctx context.Context, req *model.UpdateClusterReq) error
+	DeleteCluster(ctx context.Context, req *model.DeleteClusterReq) error
+	GetClusterByID(ctx context.Context, req *model.GetClusterReq) (*model.K8sCluster, error)
+	RefreshClusterStatus(ctx context.Context, req *model.RefreshClusterReq) error
 }
 
 type clusterService struct {
 	dao        dao.ClusterDAO
 	client     client.K8sClient
 	clusterMgr manager.ClusterManager
-	l          *zap.Logger
+	logger     *zap.Logger
 }
 
-func NewClusterService(dao dao.ClusterDAO, client client.K8sClient, clusterMgr manager.ClusterManager, l *zap.Logger) ClusterService {
+func NewClusterService(dao dao.ClusterDAO, client client.K8sClient, clusterMgr manager.ClusterManager, logger *zap.Logger) ClusterService {
 	return &clusterService{
 		dao:        dao,
 		client:     client,
 		clusterMgr: clusterMgr,
-		l:          l,
+		logger:     logger,
 	}
 }
 
-// ListAllClusters 获取所有 Kubernetes 集群
-func (c *clusterService) ListAllClusters(ctx context.Context) ([]*model.K8sCluster, error) {
-	list, err := c.dao.ListAllClusters(ctx)
-	if err != nil {
-		c.l.Error("ListAllClusters: 查询所有集群失败", zap.Error(err))
-		return nil, fmt.Errorf("查询所有集群失败: %w", err)
+// ListClusters 获取集群列表
+func (c *clusterService) ListClusters(ctx context.Context, req *model.ListClustersReq) (model.ListResp[*model.K8sCluster], error) {
+	if req == nil {
+		return model.ListResp[*model.K8sCluster]{}, fmt.Errorf("获取集群列表请求参数不能为空")
 	}
 
-	return c.buildListResponse(list), nil
+	list, total, err := c.dao.GetClusterList(ctx, req)
+	if err != nil {
+		c.logger.Error("ListClusters: 查询所有集群失败", zap.Error(err))
+		return model.ListResp[*model.K8sCluster]{}, fmt.Errorf("查询所有集群失败: %w", err)
+	}
+
+	// 清理敏感信息
+	utils.CleanClusterSensitiveInfoList(list)
+
+	return model.ListResp[*model.K8sCluster]{
+		Total: total,
+		Items: list,
+	}, nil
 }
 
-// GetClusterByID 根据 ID 获取单个 Kubernetes 集群
-func (c *clusterService) GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error) {
-	cluster, err := c.dao.GetClusterByID(ctx, id)
+// GetClusterByID 根据ID获取集群
+func (c *clusterService) GetClusterByID(ctx context.Context, req *model.GetClusterReq) (*model.K8sCluster, error) {
+	if req == nil {
+		return nil, fmt.Errorf("获取集群请求参数不能为空")
+	}
+
+	// 验证集群ID
+	if err := utils.ValidateClusterID(req.ID); err != nil {
+		return nil, err
+	}
+
+	cluster, err := c.dao.GetClusterByID(ctx, req.ID)
 	if err != nil {
-		c.l.Error("GetClusterByID: 查询集群失败", zap.Int("clusterID", id), zap.Error(err))
+		c.logger.Error("GetClusterByID: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return nil, fmt.Errorf("查询集群失败: %w", err)
 	}
+
+	// 验证集群是否存在
+	if err := utils.ValidateClusterExists(cluster, req.ID); err != nil {
+		return nil, err
+	}
+
 	return cluster, nil
 }
 
-// CreateCluster 创建一个新的 Kubernetes 集群
-func (c *clusterService) CreateCluster(ctx context.Context, cluster *model.K8sCluster) (err error) {
-	// 检查集群是否存在
-	existingCluster, err := c.dao.GetClusterByName(ctx, cluster.Name)
+// CreateCluster 创建集群
+func (c *clusterService) CreateCluster(ctx context.Context, req *model.CreateClusterReq) error {
+	if req == nil {
+		return fmt.Errorf("创建集群请求参数不能为空")
+	}
+
+	// 验证创建集群参数
+	if err := utils.ValidateClusterCreateParams(req.Name, req.ApiServerAddr, req.KubeConfigContent); err != nil {
+		return err
+	}
+
+	// 检查集群名称是否已存在
+	existingCluster, err := c.dao.GetClusterByName(ctx, req.Name)
 	if err != nil && err != gorm.ErrRecordNotFound {
-		c.l.Error("CreateCluster: 查询集群失败", zap.Error(err))
+		c.logger.Error("CreateCluster: 查询集群失败", zap.Error(err))
 		return fmt.Errorf("查询集群失败: %w", err)
 	}
 
 	if existingCluster != nil {
-		c.l.Error("CreateCluster: 集群已存在", zap.String("clusterName", cluster.Name))
-		return fmt.Errorf("集群名称 %s 已存在", cluster.Name)
+		return fmt.Errorf("集群名称 %s 已存在", req.Name)
 	}
 
-	cluster.Status = constants.StatusPending
+	cluster := &model.K8sCluster{
+		Name:                 req.Name,
+		CpuRequest:           req.CpuRequest,
+		CpuLimit:             req.CpuLimit,
+		MemoryRequest:        req.MemoryRequest,
+		MemoryLimit:          req.MemoryLimit,
+		RestrictNamespace:    req.RestrictNamespace,
+		Status:               model.StatusRunning,
+		Env:                  req.Env,
+		Version:              req.Version,
+		ApiServerAddr:        req.ApiServerAddr,
+		KubeConfigContent:    req.KubeConfigContent,
+		ActionTimeoutSeconds: req.ActionTimeoutSeconds,
+		CreateUserName:       req.CreateUserName,
+		CreateUserID:         req.CreateUserID,
+		Tags:                 req.Tags,
+	}
+
+	// 验证资源配置
+	if err := utils.ValidateResourceQuantities(cluster); err != nil {
+		return fmt.Errorf("资源配置验证失败: %w", err)
+	}
 
 	// 创建集群记录
 	if err := c.dao.CreateCluster(ctx, cluster); err != nil {
-		c.l.Error("CreateCluster: 创建集群记录失败", zap.Error(err))
+		c.logger.Error("CreateCluster: 创建集群记录失败", zap.Error(err))
 		return fmt.Errorf("创建集群记录失败: %w", err)
 	}
 
 	// 使用集群管理器创建集群
 	if err := c.clusterMgr.CreateCluster(ctx, cluster); err != nil {
-		c.l.Error("CreateCluster: 创建集群失败", zap.Error(err))
+		c.logger.Error("CreateCluster: 创建集群失败", zap.Error(err))
+		// 回滚数据库记录
+		if rollbackErr := c.dao.DeleteCluster(ctx, cluster.ID); rollbackErr != nil {
+			c.logger.Error("CreateCluster: 回滚失败", zap.Error(rollbackErr))
+		}
 		return fmt.Errorf("创建集群失败: %w", err)
 	}
 
-	c.l.Info("CreateCluster: 成功创建 Kubernetes 集群", zap.Int("clusterID", cluster.ID))
 	return nil
 }
 
-// UpdateCluster 更新指定 ID 的 Kubernetes 集群
-func (c *clusterService) UpdateCluster(ctx context.Context, cluster *model.K8sCluster) error {
-	if cluster == nil {
-		return fmt.Errorf("集群参数不能为空")
+// UpdateCluster 更新集群
+func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClusterReq) error {
+	if req == nil {
+		return fmt.Errorf("更新集群请求参数不能为空")
+	}
+
+	// 验证更新集群参数
+	if err := utils.ValidateClusterUpdateParams(req.ID); err != nil {
+		return err
 	}
 
 	// 检查集群是否存在
-	existingCluster, err := c.dao.GetClusterByID(ctx, cluster.ID)
+	existingCluster, err := c.dao.GetClusterByID(ctx, req.ID)
 	if err != nil {
-		c.l.Error("UpdateCluster: 查询集群失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("集群不存在，ID: %d", req.ID)
+		}
+
+		c.logger.Error("UpdateCluster: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("查询集群失败: %w", err)
 	}
 
-	if existingCluster == nil {
-		return fmt.Errorf("集群不存在，ID: %d", cluster.ID)
+	// 检查集群名称是否冲突
+	if req.Name != "" && req.Name != existingCluster.Name {
+		conflictCluster, err := c.dao.GetClusterByName(ctx, req.Name)
+		if err != nil && err != gorm.ErrRecordNotFound {
+			c.logger.Error("UpdateCluster: 查询集群名称冲突失败", zap.Error(err))
+			return fmt.Errorf("查询集群名称冲突失败: %w", err)
+		}
+		if conflictCluster != nil {
+			return fmt.Errorf("集群名称 %s 已存在", req.Name)
+		}
+	}
+
+	// 构建更新的集群对象
+	cluster := &model.K8sCluster{
+		Model:                model.Model{ID: req.ID},
+		Name:                 req.Name,
+		ApiServerAddr:        req.ApiServerAddr,
+		KubeConfigContent:    req.KubeConfigContent,
+		ActionTimeoutSeconds: req.ActionTimeoutSeconds,
+		Tags:                 req.Tags,
+		RestrictNamespace:    req.RestrictNamespace,
+		Status:               model.StatusRunning,
+		Env:                  req.Env,
+		Version:              req.Version,
+		CpuRequest:           req.CpuRequest,
+		CpuLimit:             req.CpuLimit,
+		MemoryRequest:        req.MemoryRequest,
+		MemoryLimit:          req.MemoryLimit,
+	}
+
+	// 验证资源配置
+	if err := utils.ValidateResourceQuantities(cluster); err != nil {
+		return fmt.Errorf("资源配置验证失败: %w", err)
 	}
 
 	// 更新集群记录
 	if err := c.dao.UpdateCluster(ctx, cluster); err != nil {
-		c.l.Error("UpdateCluster: 更新集群失败", zap.Error(err), zap.Int("clusterID", cluster.ID))
+		c.logger.Error("UpdateCluster: 更新集群失败", zap.Error(err), zap.Int("clusterID", cluster.ID))
 		return fmt.Errorf("更新集群失败: %w", err)
 	}
 
 	// 使用集群管理器更新集群
 	if err := c.clusterMgr.UpdateCluster(ctx, cluster); err != nil {
-		c.l.Error("UpdateCluster: 更新集群客户端失败", zap.Error(err))
+		c.logger.Error("UpdateCluster: 更新集群客户端失败", zap.Error(err))
 		return fmt.Errorf("更新集群客户端失败: %w", err)
 	}
 
-	c.l.Info("UpdateCluster: 成功更新 Kubernetes 集群", zap.Int("clusterID", cluster.ID))
 	return nil
 }
 
-// DeleteCluster 删除指定 ID 的 Kubernetes 集群
-func (c *clusterService) DeleteCluster(ctx context.Context, id int) error {
+// DeleteCluster 删除集群
+func (c *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClusterReq) error {
+	if req == nil {
+		return fmt.Errorf("删除集群请求参数不能为空")
+	}
+
+	// 验证集群ID
+	if err := utils.ValidateClusterID(req.ID); err != nil {
+		return err
+	}
+
 	// 检查集群是否存在
-	existingCluster, err := c.dao.GetClusterByID(ctx, id)
+	_, err := c.dao.GetClusterByID(ctx, req.ID)
 	if err != nil {
-		c.l.Error("DeleteCluster: 查询集群失败", zap.Int("clusterID", id), zap.Error(err))
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("集群不存在，ID: %d", req.ID)
+		}
+
+		c.logger.Error("DeleteCluster: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("查询集群失败: %w", err)
 	}
 
-	if existingCluster == nil {
-		return fmt.Errorf("集群不存在，ID: %d", id)
-	}
-
 	// 删除集群客户端
-	c.client.RemoveCluster(id)
+	c.client.RemoveCluster(req.ID)
 
 	// 删除集群记录
-	if err := c.dao.DeleteCluster(ctx, id); err != nil {
-		c.l.Error("DeleteCluster: 删除集群失败", zap.Int("clusterID", id), zap.Error(err))
+	if err := c.dao.DeleteCluster(ctx, req.ID); err != nil {
+		c.logger.Error("DeleteCluster: 删除集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("删除集群失败: %w", err)
 	}
 
-	c.l.Info("DeleteCluster: 成功删除 Kubernetes 集群", zap.Int("clusterID", id))
-	return nil
-}
-
-// BatchDeleteClusters 批量删除 Kubernetes 集群
-func (c *clusterService) BatchDeleteClusters(ctx context.Context, ids []int) error {
-	if len(ids) == 0 {
-		return fmt.Errorf("删除ID列表不能为空")
-	}
-
-	// 删除集群客户端
-	for _, id := range ids {
-		c.client.RemoveCluster(id)
-	}
-
-	if err := c.dao.BatchDeleteClusters(ctx, ids); err != nil {
-		c.l.Error("BatchDeleteClusters: 批量删除集群失败", zap.Ints("clusterIDs", ids), zap.Error(err))
-		return fmt.Errorf("批量删除集群失败: %w", err)
-	}
-
-	c.l.Info("BatchDeleteClusters: 成功批量删除 Kubernetes 集群", zap.Ints("clusterIDs", ids))
 	return nil
 }
 
 // RefreshClusterStatus 刷新集群状态
-func (c *clusterService) RefreshClusterStatus(ctx context.Context, id int) error {
-	cluster, err := c.dao.GetClusterByID(ctx, id)
+func (c *clusterService) RefreshClusterStatus(ctx context.Context, req *model.RefreshClusterReq) error {
+	if req == nil {
+		return fmt.Errorf("刷新集群状态请求参数不能为空")
+	}
+
+	// 验证集群ID
+	if err := utils.ValidateClusterID(req.ID); err != nil {
+		return err
+	}
+
+	// 检查集群是否存在
+	_, err := c.dao.GetClusterByID(ctx, req.ID)
 	if err != nil {
-		c.l.Error("RefreshClusterStatus: 查询集群失败", zap.Int("clusterID", id), zap.Error(err))
+		if err == gorm.ErrRecordNotFound {
+			return fmt.Errorf("集群不存在，ID: %d", req.ID)
+		}
+
+		c.logger.Error("RefreshClusterStatus: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("查询集群失败: %w", err)
 	}
 
-	if cluster == nil {
-		return fmt.Errorf("集群不存在，ID: %d", id)
-	}
-
 	// 使用集群管理器刷新集群状态
-	if err := c.clusterMgr.RefreshCluster(ctx, id); err != nil {
-		c.l.Error("RefreshClusterStatus: 刷新集群状态失败", zap.Error(err))
+	if err := c.clusterMgr.RefreshCluster(ctx, req.ID); err != nil {
+		c.logger.Error("RefreshClusterStatus: 刷新集群状态失败", zap.Error(err))
 		return fmt.Errorf("刷新集群状态失败: %w", err)
 	}
 
-	c.l.Info("RefreshClusterStatus: 成功刷新集群状态", zap.Int("clusterID", id))
 	return nil
-}
-
-func (c *clusterService) buildListResponse(clusters []*model.K8sCluster) []*model.K8sCluster {
-	result := make([]*model.K8sCluster, len(clusters))
-	for i, cluster := range clusters {
-		clusterCopy := *cluster
-		clusterCopy.KubeConfigContent = ""
-		result[i] = &clusterCopy
-	}
-
-	return result
 }

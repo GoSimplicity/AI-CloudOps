@@ -41,6 +41,7 @@ var skipAuthPaths = map[string]bool{
 	"/api/user/signup":        true,
 	"/api/user/profile":       true,
 	"/api/user/codes":         true,
+	"/favicon.ico":            true,
 }
 
 // 预定义静态资源和WebSocket路径前缀

@@ -27,6 +27,7 @@ package api
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
+	systemutils "github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
@@ -50,61 +51,34 @@ func (h *SystemHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // GetSystemInfo 获取系统基本信息
-// @Summary 获取系统信息
-// @Description 获取当前运行平台的系统硬件信息，用于平台欢迎页面展示
-// @Tags 系统管理
-// @Accept json
-// @Produce json
-// @Success 200 {object} utils.ApiResponse{data=model.SystemInfoResponse} "获取成功"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/system/info [get]
 func (h *SystemHandler) GetSystemInfo(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		system, err := h.svc.GetCurrentSystemInfo(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return system.ToResponse(), nil
+		return systemutils.ToResponse(system), nil
 	})
 }
 
 // GetSystemMetrics 获取系统性能指标
-// @Summary 获取系统性能指标
-// @Description 获取系统的CPU、内存、磁盘、网络等性能指标
-// @Tags 系统管理
-// @Accept json
-// @Produce json
-// @Success 200 {object} utils.ApiResponse{data=model.SystemInfoResponse} "获取成功"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/system/metrics [get]
 func (h *SystemHandler) GetSystemMetrics(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		system, err := h.svc.GetSystemMetrics(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return system.ToResponse(), nil
+		return systemutils.ToResponse(system), nil
 	})
 }
 
 // RefreshSystemInfo 刷新系统信息
-// @Summary 刷新系统信息
-// @Description 立即刷新并更新系统硬件信息到数据库
-// @Tags 系统管理
-// @Accept json
-// @Produce json
-// @Success 200 {object} utils.ApiResponse{data=model.SystemInfoResponse} "刷新成功"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/system/refresh [post]
 func (h *SystemHandler) RefreshSystemInfo(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		system, err := h.svc.RefreshSystemInfo(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return system.ToResponse(), nil
+		return systemutils.ToResponse(system), nil
 	})
 }

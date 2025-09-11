@@ -46,31 +46,16 @@ func NewRecordRuleHandler(alertRecordService alertEventService.AlertManagerRecor
 
 func (r *RecordRuleHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
-
-	recordRules := monitorGroup.Group("/record_rules")
 	{
-		recordRules.GET("/list", r.GetMonitorRecordRuleList)
-		recordRules.POST("/create", r.CreateMonitorRecordRule)
-		recordRules.PUT("/update/:id", r.UpdateMonitorRecordRule)
-		recordRules.DELETE("/delete/:id", r.DeleteMonitorRecordRule)
-		recordRules.GET("/detail/:id", r.GetMonitorRecordRule)
+		monitorGroup.GET("/record_rules/list", r.GetMonitorRecordRuleList)
+		monitorGroup.POST("/record_rules/create", r.CreateMonitorRecordRule)
+		monitorGroup.PUT("/record_rules/update/:id", r.UpdateMonitorRecordRule)
+		monitorGroup.DELETE("/record_rules/delete/:id", r.DeleteMonitorRecordRule)
+		monitorGroup.GET("/record_rules/detail/:id", r.GetMonitorRecordRule)
 	}
 }
 
 // GetMonitorRecordRuleList 获取预聚合规则列表
-// @Summary 获取预聚合规则列表
-// @Description 获取所有预聚合规则的分页列表
-// @Tags 规则管理
-// @Accept json
-// @Produce json
-// @Param page query int false "页码" default(1)
-// @Param size query int false "每页数量" default(10)
-// @Param keyword query string false "搜索关键词"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/record_rules/list [get]
-// @Security BearerAuth
 func (r *RecordRuleHandler) GetMonitorRecordRuleList(ctx *gin.Context) {
 	var req model.GetMonitorRecordRuleListReq
 
@@ -80,17 +65,6 @@ func (r *RecordRuleHandler) GetMonitorRecordRuleList(ctx *gin.Context) {
 }
 
 // CreateMonitorRecordRule 创建新的预聚合规则
-// @Summary 创建预聚合规则
-// @Description 创建新的监控预聚合规则配置
-// @Tags 规则管理
-// @Accept json
-// @Produce json
-// @Param request body model.CreateMonitorRecordRuleReq true "创建预聚合规则请求参数"
-// @Success 200 {object} utils.ApiResponse "创建成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/record_rules/create [post]
-// @Security BearerAuth
 func (r *RecordRuleHandler) CreateMonitorRecordRule(ctx *gin.Context) {
 	var req model.CreateMonitorRecordRuleReq
 
@@ -104,18 +78,6 @@ func (r *RecordRuleHandler) CreateMonitorRecordRule(ctx *gin.Context) {
 }
 
 // UpdateMonitorRecordRule 更新现有的预聚合规则
-// @Summary 更新预聚合规则
-// @Description 更新指定的监控预聚合规则配置
-// @Tags 规则管理
-// @Accept json
-// @Produce json
-// @Param id path int true "预聚合规则ID"
-// @Param request body model.UpdateMonitorRecordRuleReq true "更新预聚合规则请求参数"
-// @Success 200 {object} utils.ApiResponse "更新成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/record_rules/update/{id} [put]
-// @Security BearerAuth
 func (r *RecordRuleHandler) UpdateMonitorRecordRule(ctx *gin.Context) {
 	var req model.UpdateMonitorRecordRuleReq
 
@@ -133,17 +95,6 @@ func (r *RecordRuleHandler) UpdateMonitorRecordRule(ctx *gin.Context) {
 }
 
 // DeleteMonitorRecordRule 删除指定的预聚合规则
-// @Summary 删除预聚合规则
-// @Description 删除指定ID的监控预聚合规则
-// @Tags 规则管理
-// @Accept json
-// @Produce json
-// @Param id path int true "预聚合规则ID"
-// @Success 200 {object} utils.ApiResponse "删除成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/record_rules/delete/{id} [delete]
-// @Security BearerAuth
 func (r *RecordRuleHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
 	var req model.DeleteMonitorRecordRuleReq
 
@@ -161,17 +112,6 @@ func (r *RecordRuleHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
 }
 
 // GetMonitorRecordRule 获取指定的预聚合规则详情
-// @Summary 获取预聚合规则详情
-// @Description 根据ID获取指定预聚合规则的详细信息
-// @Tags 规则管理
-// @Accept json
-// @Produce json
-// @Param id path int true "预聚合规则ID"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/record_rules/detail/{id} [get]
-// @Security BearerAuth
 func (r *RecordRuleHandler) GetMonitorRecordRule(ctx *gin.Context) {
 	var req model.GetMonitorRecordRuleReq
 

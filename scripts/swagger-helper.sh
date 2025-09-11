@@ -71,9 +71,32 @@ generate_docs() {
 check_annotations() {
     log_info "检查 Swagger 注解完整性..."
     
-    # 统计 API 函数
-    local total_funcs=$(find internal/*/api -name "*.go" -exec grep -l "func.*Handler" {} \; | xargs grep -c "func.*Handler.*" | awk -F: '{sum += $2} END {print sum}')
-    local swagger_funcs=$(find internal/*/api -name "*.go" -exec grep -c "@Summary" {} \; | awk '{sum += $1} END {print sum}')
+    # 统计 API 函数 - 修复语法错误
+    echo "正在统计 API 函数..."
+    find internal/*/api -name "*.go" -exec grep -c "func.*Handler" {} \; -exec echo {} \; | paste - - | while read count file; do
+        echo "$file:$count"
+    done
+    
+    echo "包含 Swagger 注解的函数:"
+    find internal/*/api -name "*.go" -exec grep -c "@Summary" {} \; -exec echo {} \; | paste - - | while read count file; do
+        echo "$file:$count"
+    done
+    
+    # 计算总数 - 使用更安全的方法
+    local total_funcs=0
+    local swagger_funcs=0
+    
+    while IFS=: read -r file count; do
+        if [[ "$count" =~ ^[0-9]+$ ]]; then
+            total_funcs=$((total_funcs + count))
+        fi
+    done < <(find internal/*/api -name "*.go" -exec grep -c "func.*Handler" {} \; -exec echo {} \; | paste - -)
+    
+    while IFS=: read -r file count; do
+        if [[ "$count" =~ ^[0-9]+$ ]]; then
+            swagger_funcs=$((swagger_funcs + count))
+        fi
+    done < <(find internal/*/api -name "*.go" -exec grep -c "@Summary" {} \; -exec echo {} \; | paste - -)
     
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "📊 Swagger 注解统计报告"
@@ -81,7 +104,8 @@ check_annotations() {
     echo "总 API 处理函数数量: $total_funcs"
     echo "包含 @Summary 注解的函数: $swagger_funcs"
     
-    if [ "$swagger_funcs" -lt "$total_funcs" ]; then
+    # 使用数字比较而不是字符串比较
+    if [[ "$swagger_funcs" -lt "$total_funcs" ]] && [[ "$total_funcs" -gt 0 ]]; then
         local missing=$((total_funcs - swagger_funcs))
         log_warning "发现 $missing 个函数缺少 Swagger 注解"
         
@@ -113,8 +137,8 @@ validate_docs() {
     fi
     
     # 统计 API 数量
-    local api_count=$(grep -o '"paths"' docs/swagger.json | wc -l)
-    local method_count=$(grep -o '"get"\|"post"\|"put"\|"delete"\|"patch"' docs/swagger.json | wc -l)
+    local api_count=$(grep -c '"paths"' docs/swagger.json || echo "0")
+    local method_count=$(grep -o '"get"\|"post"\|"put"\|"delete"\|"patch"' docs/swagger.json | wc -l || echo "0")
     
     log_success "文档验证通过"
     echo "  - swagger.json: $(du -h docs/swagger.json | cut -f1)"

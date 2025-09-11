@@ -28,223 +28,660 @@ package service
 import (
 	"context"
 	"fmt"
-	"sync"
-	"time"
+	"strings"
 
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
-	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// DeploymentService Deployment业务服务接口
 type DeploymentService interface {
-	GetDeploymentsByNamespace(ctx context.Context, id int, namespace string) ([]*appsv1.Deployment, error)
-	UpdateDeployment(ctx context.Context, deployment *model.K8sDeploymentRequest) error
-	BatchDeleteDeployment(ctx context.Context, id int, namespace string, deploymentNames []string) error
-	DeleteDeployment(ctx context.Context, id int, namespace, deploymentName string) error
-	BatchRestartDeployments(ctx context.Context, req *model.K8sDeploymentRequest) error
-	RestartDeployment(ctx context.Context, id int, namespace, deploymentName string) error
-	GetDeploymentYaml(ctx context.Context, id int, namespace, deploymentName string) (string, error)
+	CreateDeployment(ctx context.Context, req *model.CreateDeploymentReq) error
+	GetDeploymentList(ctx context.Context, req *model.GetDeploymentListReq) (model.ListResp[*model.K8sDeployment], error)
+	GetDeploymentDetails(ctx context.Context, req *model.GetDeploymentDetailsReq) (*model.K8sDeployment, error)
+	GetDeploymentYaml(ctx context.Context, req *model.GetDeploymentYamlReq) (*model.K8sYaml, error)
+	UpdateDeployment(ctx context.Context, req *model.UpdateDeploymentReq) error
+	DeleteDeployment(ctx context.Context, req *model.DeleteDeploymentReq) error
+	CreateDeploymentByYaml(ctx context.Context, req *model.CreateDeploymentByYamlReq) error
+	UpdateDeploymentByYaml(ctx context.Context, req *model.UpdateDeploymentByYamlReq) error
+	RestartDeployment(ctx context.Context, req *model.RestartDeploymentReq) error
+	ScaleDeployment(ctx context.Context, req *model.ScaleDeploymentReq) error
+	RollbackDeployment(ctx context.Context, req *model.RollbackDeploymentReq) error
+	PauseDeployment(ctx context.Context, req *model.PauseDeploymentReq) error
+	ResumeDeployment(ctx context.Context, req *model.ResumeDeploymentReq) error
+	GetDeploymentPods(ctx context.Context, req *model.GetDeploymentPodsReq) (model.ListResp[*model.K8sPod], error)
+	GetDeploymentHistory(ctx context.Context, req *model.GetDeploymentHistoryReq) (model.ListResp[*model.K8sDeploymentHistory], error)
 }
 
+// deploymentService Deployment业务服务实现
 type deploymentService struct {
-	dao    dao.ClusterDAO
-	client client.K8sClient
-	logger *zap.Logger
+	deploymentManager manager.DeploymentManager
+	logger            *zap.Logger
 }
 
-// NewDeploymentService 创建新的 DeploymentService 实例
-func NewDeploymentService(dao dao.ClusterDAO, client client.K8sClient, logger *zap.Logger) DeploymentService {
+// NewDeploymentService 创建新的Deployment业务服务实例
+func NewDeploymentService(deploymentManager manager.DeploymentManager, logger *zap.Logger) DeploymentService {
 	return &deploymentService{
-		dao:    dao,
-		client: client,
-		logger: logger,
+		deploymentManager: deploymentManager,
+		logger:            logger,
 	}
 }
 
-// GetDeploymentsByNamespace 获取指定命名空间下的所有 Deployment
-func (d *deploymentService) GetDeploymentsByNamespace(ctx context.Context, id int, namespace string) ([]*appsv1.Deployment, error) {
-	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
+// CreateDeployment 创建deployment
+func (d *deploymentService) CreateDeployment(ctx context.Context, req *model.CreateDeploymentReq) error {
+	if req == nil {
+		return fmt.Errorf("创建Deployment请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("Deployment名称不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	// 从请求构建Deployment对象
+	deployment, err := utils.BuildDeploymentFromRequest(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Kubernetes client: %w", err)
+		d.logger.Error("CreateDeployment: 构建Deployment对象失败",
+			zap.Error(err),
+			zap.String("name", req.Name))
+		return fmt.Errorf("构建Deployment对象失败: %w", err)
 	}
 
-	deployments, err := kubeClient.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
+	// 验证Deployment配置
+	if err := utils.ValidateDeployment(deployment); err != nil {
+		d.logger.Error("CreateDeployment: Deployment配置验证失败",
+			zap.Error(err),
+			zap.String("name", req.Name))
+		return fmt.Errorf("deployment配置验证失败: %w", err)
+	}
+
+	err = d.deploymentManager.CreateDeployment(ctx, req.ClusterID, req.Namespace, deployment)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Deployment list: %w", err)
-	}
-
-	result := make([]*appsv1.Deployment, len(deployments.Items))
-	for i := range deployments.Items {
-		result[i] = &deployments.Items[i]
-	}
-
-	return result, nil
-}
-
-// GetDeploymentYaml 获取指定 Deployment 的 YAML 定义
-func (d *deploymentService) GetDeploymentYaml(ctx context.Context, id int, namespace, deploymentName string) (string, error) {
-	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
-	if err != nil {
-		return "", fmt.Errorf("failed to get Kubernetes client: %w", err)
-	}
-
-	deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
-	if err != nil {
-		return "", fmt.Errorf("failed to get Deployment: %w", err)
-	}
-
-	yamlData, err := yaml.Marshal(deployment)
-	if err != nil {
-		return "", fmt.Errorf("failed to serialize Deployment YAML: %w", err)
-	}
-
-	return string(yamlData), nil
-}
-
-// UpdateDeployment 更新 Deployment
-func (d *deploymentService) UpdateDeployment(ctx context.Context, deploymentResource *model.K8sDeploymentRequest) error {
-	kubeClient, err := pkg.GetKubeClient(deploymentResource.ClusterId, d.client, d.logger)
-	if err != nil {
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
-	}
-
-	existingDeployment, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Get(ctx, deploymentResource.DeploymentYaml.Name, metav1.GetOptions{})
-
-	if err != nil {
-		return fmt.Errorf("failed to get existing Deployment: %w", err)
-	}
-
-	existingDeployment.Spec = deploymentResource.DeploymentYaml.Spec
-
-	if _, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Update(ctx, existingDeployment, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("failed to update Deployment: %w", err)
+		d.logger.Error("CreateDeployment: 创建Deployment失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("创建Deployment失败: %w", err)
 	}
 
 	return nil
 }
 
-// BatchDeleteDeployment 批量删除 Deployment
-func (d *deploymentService) BatchDeleteDeployment(ctx context.Context, id int, namespace string, deploymentNames []string) error {
-	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
+// DeleteDeployment 删除deployment
+func (d *deploymentService) DeleteDeployment(ctx context.Context, req *model.DeleteDeploymentReq) error {
+	if req == nil {
+		return fmt.Errorf("删除Deployment请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("Deployment名称不能为空")
+	}
+
+	err := d.deploymentManager.DeleteDeployment(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
-	}
-
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(deploymentNames))
-
-	for _, name := range deploymentNames {
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-			if err := kubeClient.AppsV1().Deployments(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
-				errChan <- fmt.Errorf("failed to delete Deployment '%s': %w", name, err)
-			}
-		}(name)
-	}
-
-	wg.Wait()
-	close(errChan)
-
-	var errs []error
-	for err := range errChan {
-		errs = append(errs, err)
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("errors occurred while deleting Deployments: %v", errs)
+		d.logger.Error("DeleteDeployment: 删除Deployment失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("删除Deployment失败: %w", err)
 	}
 
 	return nil
 }
 
-// BatchRestartDeployments 批量重启 Deployment
-func (d *deploymentService) BatchRestartDeployments(ctx context.Context, deploymentResource *model.K8sDeploymentRequest) error {
-	kubeClient, err := pkg.GetKubeClient(deploymentResource.ClusterId, d.client, d.logger)
+// GetDeploymentDetails 获取deployment详情
+func (d *deploymentService) GetDeploymentDetails(ctx context.Context, req *model.GetDeploymentDetailsReq) (*model.K8sDeployment, error) {
+	if req == nil {
+		return nil, fmt.Errorf("获取Deployment详情请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return nil, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return nil, fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("Deployment名称不能为空")
+	}
+
+	deployment, err := d.deploymentManager.GetDeployment(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+		d.logger.Error("GetDeploymentDetails: 获取Deployment失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return nil, fmt.Errorf("获取Deployment失败: %w", err)
 	}
 
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(deploymentResource.DeploymentNames))
-
-	for _, deploy := range deploymentResource.DeploymentNames {
-		wg.Add(1)
-		go func(deploy string) {
-			defer wg.Done()
-			deployment, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Get(ctx, deploy, metav1.GetOptions{})
-			if err != nil {
-				errChan <- fmt.Errorf("failed to get Deployment '%s': %w", deploy, err)
-				return
-			}
-
-			if deployment.Spec.Template.Annotations == nil {
-				deployment.Spec.Template.Annotations = make(map[string]string)
-			}
-			deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
-
-			if _, err := kubeClient.AppsV1().Deployments(deploymentResource.Namespace).Update(ctx, deployment, metav1.UpdateOptions{}); err != nil {
-				errChan <- fmt.Errorf("failed to update Deployment '%s': %w", deploy, err)
-			}
-		}(deploy)
+	// 构建详细信息
+	k8sDeployment, err := utils.BuildK8sDeployment(ctx, req.ClusterID, *deployment)
+	if err != nil {
+		d.logger.Error("GetDeploymentDetails: 构建Deployment详细信息失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return nil, fmt.Errorf("构建Deployment详细信息失败: %w", err)
 	}
 
-	wg.Wait()
-	close(errChan)
+	return k8sDeployment, nil
+}
 
-	var errs []error
-	for err := range errChan {
-		errs = append(errs, err)
+// GetDeploymentHistory 获取deployment历史
+func (d *deploymentService) GetDeploymentHistory(ctx context.Context, req *model.GetDeploymentHistoryReq) (model.ListResp[*model.K8sDeploymentHistory], error) {
+	if req == nil {
+		return model.ListResp[*model.K8sDeploymentHistory]{}, fmt.Errorf("获取Deployment历史请求不能为空")
 	}
 
-	if len(errs) > 0 {
-		return fmt.Errorf("errors occurred while restarting Deployments: %v", errs)
+	if req.ClusterID <= 0 {
+		return model.ListResp[*model.K8sDeploymentHistory]{}, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return model.ListResp[*model.K8sDeploymentHistory]{}, fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return model.ListResp[*model.K8sDeploymentHistory]{}, fmt.Errorf("Deployment名称不能为空")
+	}
+
+	history, total, err := d.deploymentManager.GetDeploymentHistory(ctx, req.ClusterID, req.Namespace, req.Name)
+	if err != nil {
+		d.logger.Error("GetDeploymentHistory: 获取部署历史失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return model.ListResp[*model.K8sDeploymentHistory]{}, fmt.Errorf("获取部署历史失败: %w", err)
+	}
+
+	return model.ListResp[*model.K8sDeploymentHistory]{
+		Total: total,
+		Items: history,
+	}, nil
+}
+
+// GetDeploymentList 获取deployment列表
+func (d *deploymentService) GetDeploymentList(ctx context.Context, req *model.GetDeploymentListReq) (model.ListResp[*model.K8sDeployment], error) {
+	if req == nil {
+		return model.ListResp[*model.K8sDeployment]{}, fmt.Errorf("获取Deployment列表请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return model.ListResp[*model.K8sDeployment]{}, fmt.Errorf("集群ID不能为空")
+	}
+
+	// 构建查询选项
+	listOptions := utils.BuildDeploymentListOptions(req)
+
+	k8sDeployments, err := d.deploymentManager.GetDeploymentList(ctx, req.ClusterID, req.Namespace, listOptions)
+	if err != nil {
+		d.logger.Error("GetDeploymentList: 获取Deployment列表失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace))
+		return model.ListResp[*model.K8sDeployment]{}, fmt.Errorf("获取Deployment列表失败: %w", err)
+	}
+
+	// 根据状态过滤
+	var filteredDeployments []*model.K8sDeployment
+	if req.Status != "" {
+		// 根据状态过滤
+		for _, k8sDeployment := range k8sDeployments {
+			var statusStr string
+			switch k8sDeployment.Status {
+			case model.K8sDeploymentStatusRunning:
+				statusStr = "running"
+			case model.K8sDeploymentStatusStopped:
+				statusStr = "stopped"
+			case model.K8sDeploymentStatusPaused:
+				statusStr = "paused"
+			case model.K8sDeploymentStatusError:
+				statusStr = "error"
+			default:
+				statusStr = "unknown"
+			}
+			if strings.EqualFold(statusStr, req.Status) {
+				filteredDeployments = append(filteredDeployments, k8sDeployment)
+			}
+		}
+	} else {
+		filteredDeployments = k8sDeployments
+	}
+
+	// 分页处理
+	page := req.Page
+	size := req.Size
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 {
+		size = 10 // 默认每页显示10条
+	}
+
+	pagedItems, total := utils.PaginateK8sDeployments(filteredDeployments, page, size)
+
+	return model.ListResp[*model.K8sDeployment]{
+		Total: total,
+		Items: pagedItems,
+	}, nil
+}
+
+// GetDeploymentPods 获取deployment的pod列表
+func (d *deploymentService) GetDeploymentPods(ctx context.Context, req *model.GetDeploymentPodsReq) (model.ListResp[*model.K8sPod], error) {
+	if req == nil {
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取Deployment Pods请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("Deployment名称不能为空")
+	}
+
+	pods, total, err := d.deploymentManager.GetDeploymentPods(ctx, req.ClusterID, req.Namespace, req.Name)
+	if err != nil {
+		d.logger.Error("GetDeploymentPods: 获取部署Pod失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取部署Pod失败: %w", err)
+	}
+
+	return model.ListResp[*model.K8sPod]{
+		Total: total,
+		Items: pods,
+	}, nil
+}
+
+// GetDeploymentYaml 获取deployment YAML
+func (d *deploymentService) GetDeploymentYaml(ctx context.Context, req *model.GetDeploymentYamlReq) (*model.K8sYaml, error) {
+	if req == nil {
+		return nil, fmt.Errorf("获取Deployment YAML请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return nil, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return nil, fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("Deployment名称不能为空")
+	}
+
+	deployment, err := d.deploymentManager.GetDeployment(ctx, req.ClusterID, req.Namespace, req.Name)
+	if err != nil {
+		d.logger.Error("GetDeploymentYaml: 获取Deployment失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return nil, fmt.Errorf("获取Deployment失败: %w", err)
+	}
+
+	// 转换为YAML
+	yamlContent, err := utils.DeploymentToYAML(deployment)
+	if err != nil {
+		d.logger.Error("GetDeploymentYaml: 转换为YAML失败",
+			zap.Error(err),
+			zap.String("deploymentName", deployment.Name))
+		return nil, fmt.Errorf("转换为YAML失败: %w", err)
+	}
+
+	return &model.K8sYaml{
+		YAML: yamlContent,
+	}, nil
+}
+
+// RestartDeployment 重启deployment
+func (d *deploymentService) RestartDeployment(ctx context.Context, req *model.RestartDeploymentReq) error {
+	if req == nil {
+		return fmt.Errorf("重启Deployment请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("Deployment名称不能为空")
+	}
+
+	err := d.deploymentManager.RestartDeployment(ctx, req.ClusterID, req.Namespace, req.Name)
+	if err != nil {
+		d.logger.Error("RestartDeployment: 重启Deployment失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("重启Deployment失败: %w", err)
 	}
 
 	return nil
 }
 
-// DeleteDeployment 删除指定的 Deployment
-func (d *deploymentService) DeleteDeployment(ctx context.Context, id int, namespace, deploymentName string) error {
-	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
-	if err != nil {
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+// RollbackDeployment 回滚Deployment
+func (d *deploymentService) RollbackDeployment(ctx context.Context, req *model.RollbackDeploymentReq) error {
+	if req == nil {
+		return fmt.Errorf("回滚Deployment请求不能为空")
 	}
 
-	if err := kubeClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metav1.DeleteOptions{}); err != nil {
-		return fmt.Errorf("failed to delete Deployment '%s': %w", deploymentName, err)
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("Deployment名称不能为空")
+	}
+
+	if req.Revision <= 0 {
+		return fmt.Errorf("回滚版本号必须大于0")
+	}
+
+	err := d.deploymentManager.RollbackDeployment(ctx, req.ClusterID, req.Namespace, req.Name, req.Revision)
+	if err != nil {
+		d.logger.Error("RollbackDeployment: 回滚Deployment失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name),
+			zap.Int64("revision", req.Revision))
+		return fmt.Errorf("回滚Deployment失败: %w", err)
 	}
 
 	return nil
 }
 
-// RestartDeployment 重启指定的 Deployment
-func (d *deploymentService) RestartDeployment(ctx context.Context, id int, namespace, deploymentName string) error {
-	kubeClient, err := pkg.GetKubeClient(id, d.client, d.logger)
+// ScaleDeployment 扩缩容deployment
+func (d *deploymentService) ScaleDeployment(ctx context.Context, req *model.ScaleDeploymentReq) error {
+	if req == nil {
+		return fmt.Errorf("扩缩容Deployment请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("Deployment名称不能为空")
+	}
+
+	if req.Replicas < 0 {
+		return fmt.Errorf("副本数不能为负数")
+	}
+
+	err := d.deploymentManager.ScaleDeployment(ctx, req.ClusterID, req.Namespace, req.Name, req.Replicas)
 	if err != nil {
-		return fmt.Errorf("failed to get Kubernetes client: %w", err)
+		d.logger.Error("ScaleDeployment: 扩缩容Deployment失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name),
+			zap.Int32("replicas", req.Replicas))
+		return fmt.Errorf("扩缩容Deployment失败: %w", err)
 	}
 
-	deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+	return nil
+}
+
+// UpdateDeployment 更新deployment
+func (d *deploymentService) UpdateDeployment(ctx context.Context, req *model.UpdateDeploymentReq) error {
+	if req == nil {
+		return fmt.Errorf("更新Deployment请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("Deployment名称不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	existingDeployment, err := d.deploymentManager.GetDeployment(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		return fmt.Errorf("failed to get Deployment '%s': %w", deploymentName, err)
+		d.logger.Error("UpdateDeployment: 获取现有Deployment失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("获取现有Deployment失败: %w", err)
 	}
 
-	if deployment.Spec.Template.Annotations == nil {
-		deployment.Spec.Template.Annotations = make(map[string]string)
+	updatedDeployment := existingDeployment.DeepCopy()
+
+	// 更新基本字段
+	if req.Replicas > 0 {
+		updatedDeployment.Spec.Replicas = &req.Replicas
+	}
+	if len(req.Images) > 0 {
+		for i, image := range req.Images {
+			if i < len(updatedDeployment.Spec.Template.Spec.Containers) {
+				updatedDeployment.Spec.Template.Spec.Containers[i].Image = image
+			}
+		}
+	}
+	if req.Labels != nil {
+		updatedDeployment.Labels = req.Labels
+		updatedDeployment.Spec.Template.Labels = req.Labels
+	}
+	if req.Annotations != nil {
+		updatedDeployment.Annotations = req.Annotations
 	}
 
-	deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
-
-	if _, err := kubeClient.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("failed to update Deployment '%s': %w", deploymentName, err)
+	// 验证更新后的Deployment配置
+	if err := utils.ValidateDeployment(updatedDeployment); err != nil {
+		d.logger.Error("UpdateDeployment: Deployment配置验证失败",
+			zap.Error(err),
+			zap.String("name", req.Name))
+		return fmt.Errorf("deployment配置验证失败: %w", err)
 	}
+
+	err = d.deploymentManager.UpdateDeployment(ctx, req.ClusterID, req.Namespace, updatedDeployment)
+	if err != nil {
+		d.logger.Error("UpdateDeployment: 更新Deployment失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("更新Deployment失败: %w", err)
+	}
+
+	return nil
+}
+
+// PauseDeployment 暂停Deployment
+func (d *deploymentService) PauseDeployment(ctx context.Context, req *model.PauseDeploymentReq) error {
+	if req == nil {
+		return fmt.Errorf("暂停Deployment请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("Deployment名称不能为空")
+	}
+
+	err := d.deploymentManager.PauseDeployment(ctx, req.ClusterID, req.Namespace, req.Name)
+	if err != nil {
+		d.logger.Error("PauseDeployment: 暂停Deployment失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("暂停Deployment失败: %w", err)
+	}
+
+	return nil
+}
+
+// ResumeDeployment 恢复Deployment
+func (d *deploymentService) ResumeDeployment(ctx context.Context, req *model.ResumeDeploymentReq) error {
+	if req == nil {
+		return fmt.Errorf("恢复Deployment请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("Deployment名称不能为空")
+	}
+
+	err := d.deploymentManager.ResumeDeployment(ctx, req.ClusterID, req.Namespace, req.Name)
+	if err != nil {
+		d.logger.Error("ResumeDeployment: 恢复Deployment失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("恢复Deployment失败: %w", err)
+	}
+
+	return nil
+}
+
+// CreateDeploymentByYaml 通过YAML创建deployment
+func (d *deploymentService) CreateDeploymentByYaml(ctx context.Context, req *model.CreateDeploymentByYamlReq) error {
+	if req == nil {
+		return fmt.Errorf("通过YAML创建Deployment请求不能为空")
+	}
+
+	if req.YAML == "" {
+		return fmt.Errorf("YAML内容不能为空")
+	}
+
+	d.logger.Info("开始通过YAML创建Deployment",
+		zap.Int("cluster_id", req.ClusterID))
+
+	// 从YAML构建Deployment对象
+	deployment, err := utils.BuildDeploymentFromYaml(req)
+	if err != nil {
+		d.logger.Error("从YAML构建Deployment失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.Error(err))
+		return fmt.Errorf("从YAML构建Deployment失败: %w", err)
+	}
+
+	// 使用现有的创建方法
+	err = d.deploymentManager.CreateDeployment(ctx, req.ClusterID, deployment.Namespace, deployment)
+	if err != nil {
+		d.logger.Error("通过YAML创建Deployment失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", deployment.Namespace),
+			zap.String("name", deployment.Name),
+			zap.Error(err))
+		return fmt.Errorf("通过YAML创建Deployment失败: %w", err)
+	}
+
+	d.logger.Info("通过YAML创建Deployment成功",
+		zap.Int("cluster_id", req.ClusterID))
+
+	return nil
+}
+
+// UpdateDeploymentByYaml 通过YAML更新deployment
+func (d *deploymentService) UpdateDeploymentByYaml(ctx context.Context, req *model.UpdateDeploymentByYamlReq) error {
+	if req == nil {
+		return fmt.Errorf("通过YAML更新Deployment请求不能为空")
+	}
+
+	if req.YAML == "" {
+		return fmt.Errorf("YAML内容不能为空")
+	}
+
+	d.logger.Info("开始通过YAML更新Deployment",
+		zap.Int("cluster_id", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+
+	// 从YAML构建Deployment对象
+	deployment, err := utils.BuildDeploymentFromYamlForUpdate(req)
+	if err != nil {
+		d.logger.Error("从YAML构建Deployment失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name),
+			zap.Error(err))
+		return fmt.Errorf("从YAML构建Deployment失败: %w", err)
+	}
+
+	// 使用现有的更新方法
+	err = d.deploymentManager.UpdateDeployment(ctx, req.ClusterID, req.Namespace, deployment)
+	if err != nil {
+		d.logger.Error("通过YAML更新Deployment失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name),
+			zap.Error(err))
+		return fmt.Errorf("通过YAML更新Deployment失败: %w", err)
+	}
+
+	d.logger.Info("通过YAML更新Deployment成功",
+		zap.Int("cluster_id", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
 
 	return nil
 }

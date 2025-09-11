@@ -66,13 +66,12 @@ func (m *K8sClientMock) populateMockData() {
 	clusters := []model.K8sCluster{
 		{
 			Name:          "Cluster-1",
-			NameZh:        "集群-1",
-			UserID:        1,
+			CreateUserID:  1,
 			CpuRequest:    "100m",
 			CpuLimit:      "200m",
 			MemoryRequest: "256Mi",
 			MemoryLimit:   "512Mi",
-			Env:           "prod",
+			Env:           model.EnvDev,
 			Version:       "v1.32.0",
 			ApiServerAddr: "https://api.cluster1.example.com",
 			KubeConfigContent: `

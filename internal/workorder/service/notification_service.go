@@ -1,3 +1,28 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package service
 
 import (
@@ -12,6 +37,7 @@ import (
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
+	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -167,7 +193,7 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 		sendRequest.Templates["workorder_id"] = fmt.Sprintf("%d", testInstanceID)
 		sendRequest.Templates["serial_number"] = fmt.Sprintf("WO-%d", testInstanceID)
 		sendRequest.Templates["title"] = "AI-CloudOps 测试工单 - 系统功能验证"
-		sendRequest.Templates["description"] = "这是一个AI-CloudOps智能运维管理平台的系统测试工单，用于验证通知功能的完整性和可靠性。"
+		sendRequest.Templates["description"] = "这是一个AI-CloudOps运维管理平台的系统测试工单，用于验证通知功能的完整性和可靠性。"
 		sendRequest.Templates["operator_name"] = "系统管理员"
 		sendRequest.Templates["assignee_name"] = "运维工程师"
 		sendRequest.Templates["priority_level"] = fmt.Sprintf("%d", int(notificationConfig.Priority))
@@ -178,10 +204,9 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 		sendRequest.Templates["event_type"] = notification.GetEventTypeText("test")
 		sendRequest.Templates["notification_time"] = time.Now().Format("2006-01-02 15:04:05")
 		sendRequest.Templates["company_name"] = "AI-CloudOps"
-		sendRequest.Templates["platform_name"] = "智能运维管理平台"
+		sendRequest.Templates["platform_name"] = "运维管理平台"
 		sendRequest.Templates["department"] = "技术运维部"
 		sendRequest.Templates["test_content"] = "本次测试验证了系统通知功能的完整性，包括邮件发送、飞书消息推送等多个渠道的有效性。"
-
 		response, err := n.notificationMgr.SendNotification(ctx, sendRequest)
 
 		log := &model.WorkorderNotificationLog{
@@ -532,13 +557,13 @@ func (n *workorderNotificationService) buildMessageContent(notificationConfig *m
 	sendRequest.Templates["operator_name"] = instance.OperatorName
 	sendRequest.Templates["priority_level"] = fmt.Sprintf("%d", int(instance.Priority))
 	sendRequest.Templates["priority_text"] = notification.FormatPriority(instance.Priority)
-	sendRequest.Templates["status"] = model.GetInstanceStatusName(instance.Status)
+	sendRequest.Templates["status"] = utils.GetInstanceStatusName(instance.Status)
 	sendRequest.Templates["created_time"] = instance.CreatedAt.Format("2006-01-02 15:04:05")
 	sendRequest.Templates["event_type"] = notification.GetEventTypeText(eventType)
 	sendRequest.Templates["event_type_text"] = notification.GetEventTypeText(eventType)
 	sendRequest.Templates["notification_time"] = time.Now().Format("2006-01-02 15:04:05")
 	sendRequest.Templates["company_name"] = "AI-CloudOps"
-	sendRequest.Templates["platform_name"] = "智能运维管理平台"
+	sendRequest.Templates["platform_name"] = "运维管理平台"
 	sendRequest.Templates["department"] = "技术运维部"
 
 	// 处理处理人名称
@@ -578,7 +603,7 @@ func (n *workorderNotificationService) buildMessageContent(notificationConfig *m
 	if content == "" {
 		content = fmt.Sprintf(`尊敬的用户，您好！
 
-您收到一条来自AI-CloudOps智能运维管理平台的工单通知：
+您收到一条来自AI-CloudOps运维管理平台的工单通知：
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 工单基本信息
@@ -601,14 +626,14 @@ func (n *workorderNotificationService) buildMessageContent(notificationConfig *m
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-此消息由AI-CloudOps智能运维管理平台自动发送，请及时处理相关工单。
+此消息由AI-CloudOps运维管理平台发送，请及时处理相关工单。
 如有疑问，请联系技术运维部门。
 
 AI-CloudOps 技术运维部
 发送时间：%s`,
 			instance.SerialNumber,
 			instance.Title,
-			model.GetInstanceStatusName(instance.Status),
+			utils.GetInstanceStatusName(instance.Status),
 			notification.FormatPriority(instance.Priority),
 			instance.OperatorName,
 			assigneeName,

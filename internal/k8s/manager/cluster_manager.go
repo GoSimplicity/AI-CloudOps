@@ -28,18 +28,12 @@ package manager
 import (
 	"context"
 	"fmt"
-	"sync"
-	"time"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 type ClusterManager interface {
@@ -70,58 +64,31 @@ func (cm *clusterManager) CreateCluster(ctx context.Context, cluster *model.K8sC
 		return fmt.Errorf("集群配置不能为空")
 	}
 
-	const (
-		maxRetries     = 5
-		baseRetryDelay = 5 * time.Second
-		maxConcurrent  = 5
-		initTimeout    = 5 * time.Second
-	)
-
-	var (
-		retryCount int
-		lastError  error
-	)
-
-	if err := cm.validateResourceQuantities(cluster); err != nil {
-		cm.dao.UpdateClusterStatus(ctx, cluster.ID, constants.StatusError)
-		cm.logger.Error("资源配额格式验证失败", zap.Error(err))
-		return err
+	// 验证资源配额格式
+	if err := utils.ValidateResourceQuantities(cluster); err != nil {
+		cm.logger.Warn("资源配额格式验证失败", zap.Error(err))
 	}
 
-	for retryCount < maxRetries {
-		select {
-		case <-ctx.Done():
-			cm.dao.UpdateClusterStatus(ctx, cluster.ID, constants.StatusError)
-			return ctx.Err()
-		default:
-			if err := cm.processClusterConfig(ctx, cluster, retryCount, initTimeout, maxConcurrent); err != nil {
-				lastError = err
-				retryCount++
-
-				if retryCount < maxRetries {
-					delay := time.Duration(retryCount) * baseRetryDelay
-					cm.logger.Info("任务重试",
-						zap.Int("重试次数", retryCount),
-						zap.Duration("延迟时间", delay),
-						zap.Error(lastError))
-					time.Sleep(delay)
-					continue
-				}
-
-				cm.dao.UpdateClusterStatus(ctx, cluster.ID, constants.StatusError)
-				cm.logger.Error("达到最大重试次数，任务失败",
-					zap.Int("最大重试次数", maxRetries),
-					zap.Error(lastError))
-				return lastError
-			}
-
-			cm.dao.UpdateClusterStatus(ctx, cluster.ID, constants.StatusRunning)
-			// 回写集群元信息（版本、APIServer地址），忽略错误
-			_ = cm.client.UpdateClusterMetaFromLive(ctx, cluster.ID)
-			return nil
-		}
+	// 初始化k8s客户端
+	client, err := cm.client.GetKubeClient(cluster.ID)
+	if err != nil {
+		cm.logger.Error("初始化客户端失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+		cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusError)
+		return fmt.Errorf("初始化客户端失败: %w", err)
 	}
 
+	// 添加集群资源限制
+	if err := utils.AddClusterResourceLimit(ctx, client, cluster); err != nil {
+		cm.logger.Warn("添加集群资源限制失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+	}
+
+	// 更新集群状态为运行中
+	if err := cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusRunning); err != nil {
+		cm.logger.Error("更新集群状态失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+		return fmt.Errorf("更新集群状态失败: %w", err)
+	}
+
+	cm.logger.Info("创建集群成功", zap.Int("clusterID", cluster.ID))
 	return nil
 }
 
@@ -130,104 +97,61 @@ func (cm *clusterManager) UpdateCluster(ctx context.Context, cluster *model.K8sC
 		return fmt.Errorf("集群配置不能为空")
 	}
 
-	if err := cm.validateResourceQuantities(cluster); err != nil {
-		return fmt.Errorf("资源配额验证失败: %w", err)
+	// 验证资源配额格式
+	if err := utils.ValidateResourceQuantities(cluster); err != nil {
+		cm.logger.Warn("资源配额验证失败", zap.Error(err))
 	}
 
-	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
+	// 先移除旧的客户端
+	cm.client.RemoveCluster(cluster.ID)
+
+	// 重新初始化k8s客户端
+	client, err := cm.client.GetKubeClient(cluster.ID)
 	if err != nil {
-		return fmt.Errorf("解析kubeconfig失败: %w", err)
-	}
-
-	if err := cm.client.InitClient(ctx, cluster.ID, restConfig); err != nil {
+		cm.logger.Error("初始化客户端失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+		cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusError)
 		return fmt.Errorf("初始化客户端失败: %w", err)
 	}
 
-	// 回写集群元信息（Version、APIServer）
-	_ = cm.client.UpdateClusterMetaFromLive(ctx, cluster.ID)
+	// 添加集群资源限制
+	if err := utils.AddClusterResourceLimit(ctx, client, cluster); err != nil {
+		cm.logger.Warn("添加集群资源限制失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+	}
+
+	// 更新集群状态为运行中
+	if err := cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusRunning); err != nil {
+		cm.logger.Error("更新集群状态失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+		return fmt.Errorf("更新集群状态失败: %w", err)
+	}
 
 	return nil
 }
 
 func (cm *clusterManager) RefreshCluster(ctx context.Context, clusterID int) error {
-	const (
-		maxRetries     = 3
-		baseRetryDelay = 3 * time.Second
-	)
-
-	var (
-		retryCount int
-		lastError  error
-	)
-
-	for retryCount < maxRetries {
-		select {
-		case <-ctx.Done():
-			cm.logger.Error("刷新集群任务被取消", zap.Int("clusterID", clusterID))
-			return ctx.Err()
-		default:
-			cluster, err := cm.dao.GetClusterByID(ctx, clusterID)
-			if err != nil {
-				lastError = fmt.Errorf("获取集群信息失败: %w", err)
-				cm.logger.Error("获取集群信息失败",
-					zap.Int("clusterID", clusterID),
-					zap.Error(err))
-				retryCount++
-				if retryCount < maxRetries {
-					delay := time.Duration(retryCount) * baseRetryDelay
-					cm.logger.Info("任务重试",
-						zap.Int("重试次数", retryCount),
-						zap.Duration("延迟时间", delay),
-						zap.Error(lastError))
-					time.Sleep(delay)
-					continue
-				}
-				return lastError
-			}
-
-			if cluster == nil {
-				cm.logger.Error("集群不存在", zap.Int("clusterID", clusterID))
-				return fmt.Errorf("集群不存在，ID: %d", clusterID)
-			}
-
-			if err := cm.client.CheckClusterConnection(clusterID); err != nil {
-				cm.logger.Error("集群连接检查失败",
-					zap.Int("clusterID", clusterID),
-					zap.Error(err))
-
-				if updateErr := cm.dao.UpdateClusterStatus(ctx, clusterID, constants.StatusError); updateErr != nil {
-					cm.logger.Error("更新集群状态失败",
-						zap.Int("clusterID", clusterID),
-						zap.Error(updateErr))
-				}
-
-				lastError = fmt.Errorf("集群连接检查失败: %w", err)
-				retryCount++
-				if retryCount < maxRetries {
-					delay := time.Duration(retryCount) * baseRetryDelay
-					cm.logger.Info("任务重试",
-						zap.Int("重试次数", retryCount),
-						zap.Duration("延迟时间", delay),
-						zap.Error(lastError))
-					time.Sleep(delay)
-					continue
-				}
-				return lastError
-			}
-
-			if err := cm.dao.UpdateClusterStatus(ctx, clusterID, constants.StatusRunning); err != nil {
-				cm.logger.Error("更新集群状态失败",
-					zap.Int("clusterID", clusterID),
-					zap.Error(err))
-				return fmt.Errorf("更新集群状态失败: %w", err)
-			}
-
-			cm.logger.Info("成功刷新集群状态", zap.Int("clusterID", clusterID))
-			return nil
-		}
+	cluster, err := cm.dao.GetClusterByID(ctx, clusterID)
+	if err != nil {
+		cm.logger.Error("获取集群信息失败", zap.Int("clusterID", clusterID), zap.Error(err))
+		return err
 	}
 
-	return fmt.Errorf("达到最大重试次数，任务失败: %w", lastError)
+	if cluster == nil {
+		return fmt.Errorf("集群不存在，ID: %d", clusterID)
+	}
+
+	// 检查集群连接
+	if err := cm.client.CheckClusterConnection(clusterID); err != nil {
+		cm.logger.Error("集群连接检查失败", zap.Int("clusterID", clusterID), zap.Error(err))
+		cm.dao.UpdateClusterStatus(ctx, clusterID, model.StatusError)
+		return fmt.Errorf("集群连接检查失败: %w", err)
+	}
+
+	// 更新集群状态
+	if err := cm.dao.UpdateClusterStatus(ctx, clusterID, model.StatusRunning); err != nil {
+		cm.logger.Error("更新集群状态失败", zap.Int("clusterID", clusterID), zap.Error(err))
+		return fmt.Errorf("更新集群状态失败: %w", err)
+	}
+
+	return nil
 }
 
 func (cm *clusterManager) RefreshAllClusters(ctx context.Context) error {
@@ -235,192 +159,72 @@ func (cm *clusterManager) RefreshAllClusters(ctx context.Context) error {
 }
 
 func (cm *clusterManager) InitializeAllClusters(ctx context.Context) error {
-	clusters, err := cm.dao.ListAllClusters(ctx)
-	if err != nil {
-		cm.logger.Error("获取所有集群失败", zap.Error(err))
-		return err
-	}
+	const pageSize = 50 // 增加页大小以提高性能
+	page := 1
 
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(clusters))
+	cm.logger.Info("开始初始化所有集群客户端")
 
-	for _, cluster := range clusters {
-		if cluster.KubeConfigContent == "" {
-			cm.logger.Warn("集群的 KubeConfig 内容为空，跳过初始化", zap.Int("ClusterID", cluster.ID))
-			continue
+	for {
+		clusters, total, err := cm.dao.GetClusterList(ctx, &model.ListClustersReq{
+			ListReq: model.ListReq{
+				Page: page,
+				Size: pageSize,
+			},
+		})
+		if err != nil {
+			cm.logger.Error("获取集群列表失败", zap.Int("page", page), zap.Error(err))
+			return fmt.Errorf("获取集群列表失败: %w", err)
 		}
 
-		wg.Add(1)
-		go func(c *model.K8sCluster) {
-			defer wg.Done()
+		// 如果没有更多集群，退出循环
+		if len(clusters) == 0 {
+			break
+		}
 
-			restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(c.KubeConfigContent))
-			if err != nil {
-				cm.logger.Error("解析 kubeconfig 失败", zap.Int("ClusterID", c.ID), zap.Error(err))
-				errChan <- fmt.Errorf("解析集群 %d 的 kubeconfig 失败: %w", c.ID, err)
-				return
+		cm.logger.Info("正在初始化集群批次",
+			zap.Int("page", page),
+			zap.Int("count", len(clusters)),
+			zap.Int64("total", total))
+
+		// 初始化当前批次的集群
+		successCount := 0
+		for _, cluster := range clusters {
+			if cluster.KubeConfigContent == "" {
+				cm.logger.Warn("集群的 KubeConfig 内容为空，跳过初始化",
+					zap.Int("clusterID", cluster.ID),
+					zap.String("clusterName", cluster.Name))
+				continue
 			}
 
-			if err := cm.client.InitClient(ctx, c.ID, restConfig); err != nil {
-				cm.logger.Error("初始化 Kubernetes 客户端失败", zap.Int("ClusterID", c.ID), zap.Error(err))
-				errChan <- fmt.Errorf("初始化集群 %d 的客户端失败: %w", c.ID, err)
+			if _, err := cm.client.GetKubeClient(cluster.ID); err != nil {
+				cm.logger.Error("初始化 Kubernetes 客户端失败",
+					zap.Int("clusterID", cluster.ID),
+					zap.String("clusterName", cluster.Name),
+					zap.Error(err))
+				// 更新失败集群的状态
+				cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusError)
+				continue
 			}
-		}(cluster)
+			successCount++
+		}
+
+		cm.logger.Info("批次初始化完成",
+			zap.Int("page", page),
+			zap.Int("successCount", successCount),
+			zap.Int("totalInBatch", len(clusters)))
+
+		// 如果已经处理完所有集群，退出循环
+		if int64(page*pageSize) >= total {
+			break
+		}
+
+		page++
 	}
 
-	wg.Wait()
-	close(errChan)
-
-	var errs []error
-	for err := range errChan {
-		errs = append(errs, err)
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("初始化客户端时发生 %d 个错误，第一个错误: %w", len(errs), errs[0])
-	}
-
+	cm.logger.Info("所有集群客户端初始化完成")
 	return nil
 }
 
 func (cm *clusterManager) CheckClusterStatus(ctx context.Context, clusterID int) error {
 	return cm.client.CheckClusterConnection(clusterID)
-}
-
-func (cm *clusterManager) validateResourceQuantities(cluster *model.K8sCluster) error {
-	if cluster.CpuRequest == "" {
-		cluster.CpuRequest = constants.DefaultCPURequest
-	}
-	if cluster.MemoryRequest == "" {
-		cluster.MemoryRequest = constants.DefaultMemoryRequest
-	}
-	if cluster.CpuLimit == "" {
-		cluster.CpuLimit = constants.DefaultCPULimit
-	}
-	if cluster.MemoryLimit == "" {
-		cluster.MemoryLimit = constants.DefaultMemoryLimit
-	}
-
-	// 解析资源字符串，避免直接按字符串比较
-	cpuReq, err := resource.ParseQuantity(cluster.CpuRequest)
-	if err != nil {
-		return fmt.Errorf("CPU 请求量格式错误: %w", err)
-	}
-	cpuLim, err := resource.ParseQuantity(cluster.CpuLimit)
-	if err != nil {
-		return fmt.Errorf("CPU 限制量格式错误: %w", err)
-	}
-	if cpuReq.Cmp(cpuLim) > 0 {
-		cluster.CpuRequest = cluster.CpuLimit
-	}
-
-	memReq, err := resource.ParseQuantity(cluster.MemoryRequest)
-	if err != nil {
-		return fmt.Errorf("内存请求量格式错误: %w", err)
-	}
-	memLim, err := resource.ParseQuantity(cluster.MemoryLimit)
-	if err != nil {
-		return fmt.Errorf("内存限制量格式错误: %w", err)
-	}
-	if memReq.Cmp(memLim) > 0 {
-		cluster.MemoryRequest = cluster.MemoryLimit
-	}
-
-	return nil
-}
-
-func (cm *clusterManager) processClusterConfig(ctx context.Context, cluster *model.K8sCluster, _ int, initTimeout time.Duration, maxConcurrent int) error {
-	ctx, cancel := context.WithTimeout(ctx, initTimeout)
-	defer cancel()
-
-	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
-	if err != nil {
-		return err
-	}
-
-	if err := cm.client.InitClient(ctx, cluster.ID, restConfig); err != nil {
-		return err
-	}
-
-	kubeClient, err := cm.client.GetKubeClient(cluster.ID)
-	if err != nil {
-		return err
-	}
-
-	if len(cluster.RestrictedNameSpace) == 0 {
-		cluster.RestrictedNameSpace = []string{"default"}
-	}
-
-	return cm.processNamespaces(ctx, kubeClient, cluster, maxConcurrent)
-}
-
-func (cm *clusterManager) processNamespaces(ctx context.Context, kubeClient *kubernetes.Clientset, cluster *model.K8sCluster, maxConcurrent int) error {
-	var wg sync.WaitGroup
-
-	semaphore := make(chan struct{}, maxConcurrent)
-	errChan := make(chan error, len(cluster.RestrictedNameSpace))
-
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(cluster.ActionTimeoutSeconds)*time.Second)
-	defer cancel()
-
-	for _, ns := range cluster.RestrictedNameSpace {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			wg.Add(1)
-			go func(namespace string) {
-				defer wg.Done()
-				semaphore <- struct{}{}
-				defer func() { <-semaphore }()
-
-				if err := cm.configureNamespace(ctx, kubeClient, namespace, cluster); err != nil {
-					select {
-					case errChan <- err:
-					default:
-					}
-					cancel()
-				}
-			}(ns)
-		}
-	}
-
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-		close(errChan)
-	}()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-errChan:
-		if err != nil {
-			return err
-		}
-	case <-done:
-	}
-
-	return nil
-}
-
-func (cm *clusterManager) configureNamespace(ctx context.Context, kubeClient *kubernetes.Clientset, namespace string, cluster *model.K8sCluster) error {
-	if namespace == "" {
-		return fmt.Errorf("命名空间名称为空")
-	}
-
-	if err := utils.EnsureNamespace(ctx, kubeClient, namespace); err != nil {
-		return fmt.Errorf("确保命名空间 %s 存在失败: %w", namespace, err)
-	}
-
-	if err := utils.ApplyLimitRange(ctx, kubeClient, namespace, cluster); err != nil {
-		return fmt.Errorf("应用 LimitRange 到命名空间 %s 失败: %w", namespace, err)
-	}
-
-	if err := utils.ApplyResourceQuota(ctx, kubeClient, namespace, cluster); err != nil {
-		return fmt.Errorf("应用 ResourceQuota 到命名空间 %s 失败: %w", namespace, err)
-	}
-
-	return nil
 }

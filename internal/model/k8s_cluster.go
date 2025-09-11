@@ -25,90 +25,101 @@
 
 package model
 
-import (
-	"time"
+type Env int8
 
-	core "k8s.io/api/core/v1"
+const (
+	EnvProd  Env = iota + 1 // 生产环境
+	EnvDev                  // 开发环境
+	EnvStage                // 预发环境
+	EnvRc                   // 测试环境
+	EnvPress                // 灰度环境
+)
+
+type ClusterStatus int8
+
+const (
+	StatusRunning ClusterStatus = iota + 1 // 运行中
+	StatusStopped                          // 停止
+	StatusError                            // 异常
 )
 
 // K8sCluster Kubernetes 集群的配置
 type K8sCluster struct {
 	Model
-	Name                 string     `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:集群名称"`      // 集群名称
-	NameZh               string     `json:"name_zh" binding:"required,min=1,max=500" gorm:"size:100;comment:集群中文名称"` // 集群中文名称
-	UserID               int        `json:"user_id" gorm:"comment:创建者用户ID"`                                          // 创建者用户ID
-	CpuRequest           string     `json:"cpu_request,omitempty" gorm:"comment:CPU 请求量"`                            // CPU 请求量
-	CpuLimit             string     `json:"cpu_limit,omitempty" gorm:"comment:CPU 限制量"`                              // CPU 限制量
-	MemoryRequest        string     `json:"memory_request,omitempty" gorm:"comment:内存请求量"`                           // 内存请求量
-	MemoryLimit          string     `json:"memory_limit,omitempty" gorm:"comment:内存限制量"`                             // 内存限制量
-	RestrictedNameSpace  StringList `json:"restricted_name_space" gorm:"comment:资源限制命名空间"`                           // 资源限制命名空间
-	Status               string     `json:"status" gorm:"comment:集群状态"`                                              // 集群状态
-	Env                  string     `json:"env,omitempty" gorm:"comment:集群环境，例如 prod, stage, dev, rc, press"`        // 集群环境
-	Version              string     `json:"version,omitempty" gorm:"comment:集群版本"`                                   // 集群版本
-	ApiServerAddr        string     `json:"api_server_addr,omitempty" gorm:"comment:API Server 地址"`                  // API Server 地址
-	KubeConfigContent    string     `json:"kube_config_content,omitempty" gorm:"type:text;comment:kubeConfig 内容"`    // kubeConfig 内容
-	ActionTimeoutSeconds int        `json:"action_timeout_seconds,omitempty" gorm:"comment:操作超时时间（秒）"`               // 操作超时时间（秒）
+	Name                 string        `json:"name" binding:"required,min=1,max=200" gorm:"size:100;comment:集群名称"`        // 集群名称
+	CpuRequest           string        `json:"cpu_request,omitempty" gorm:"comment:CPU 请求量 (m)"`                          // CPU 请求量
+	CpuLimit             string        `json:"cpu_limit,omitempty" gorm:"comment:CPU 限制量 (m)"`                            // CPU 限制量
+	MemoryRequest        string        `json:"memory_request,omitempty" gorm:"comment:内存请求量 (Mi)"`                        // 内存请求量
+	MemoryLimit          string        `json:"memory_limit,omitempty" gorm:"comment:内存限制量 (Mi)"`                          // 内存限制量
+	RestrictNamespace    StringList    `json:"restrict_namespace" gorm:"comment:资源限制命名空间"`                                // 资源限制命名空间
+	Status               ClusterStatus `json:"status" gorm:"index;comment:集群状态 (1:Running, 2:Stopped, 3:Error)"`          // 集群状态
+	Env                  Env           `json:"env,omitempty" gorm:"comment:集群环境 (1:Prod, 2:Dev, 3:Stage, 4:Rc, 5:Press)"` // 集群环境
+	Version              string        `json:"version,omitempty" gorm:"comment:集群版本"`                                     // 集群版本
+	ApiServerAddr        string        `json:"api_server_addr,omitempty" gorm:"comment:API Server 地址"`                    // API Server 地址
+	KubeConfigContent    string        `json:"kube_config_content,omitempty" gorm:"type:text;comment:kubeConfig 内容"`      // kubeConfig 内容
+	ActionTimeoutSeconds int           `json:"action_timeout_seconds,omitempty" gorm:"comment:操作超时时间（秒）"`                 // 操作超时时间（秒）
+	CreateUserName       string        `json:"create_user_name,omitempty" gorm:"comment:创建者用户名"`                          // 创建者用户名
+	CreateUserID         int           `json:"create_user_id,omitempty" gorm:"comment:创建者用户ID"`                           // 创建者用户ID
+	Tags                 KeyValueList  `json:"tags,omitempty" gorm:"type:text;serializer:json;comment:标签"`                // 标签
 }
 
 func (k8sCluster *K8sCluster) TableName() string {
 	return "cl_k8s_clusters"
 }
 
-// ClusterNamespaces 表示一个集群及其命名空间列表
-type ClusterNamespaces struct {
-	ClusterName string      `json:"cluster_name"` // 集群名称
-	ClusterId   int         `json:"cluster_id"`   // 集群ID
-	Namespaces  []Namespace `json:"namespaces"`   // 命名空间列表
+// CreateClusterReq 创建集群请求
+type CreateClusterReq struct {
+	Name                 string       `json:"name" binding:"required,min=1,max=200"` // 集群名称
+	CpuRequest           string       `json:"cpu_request,omitempty"`                 // CPU 请求量
+	CpuLimit             string       `json:"cpu_limit,omitempty"`                   // CPU 限制量
+	MemoryRequest        string       `json:"memory_request,omitempty"`              // 内存请求量
+	MemoryLimit          string       `json:"memory_limit,omitempty"`                // 内存限制量
+	RestrictNamespace    StringList   `json:"restrict_namespace"`                    // 资源限制命名空间
+	Env                  Env          `json:"env,omitempty"`                         // 集群环境
+	Version              string       `json:"version,omitempty"`                     // 集群版本
+	ApiServerAddr        string       `json:"api_server_addr,omitempty"`             // API Server 地址
+	KubeConfigContent    string       `json:"kube_config_content,omitempty"`         // kubeConfig 内容
+	ActionTimeoutSeconds int          `json:"action_timeout_seconds,omitempty"`      // 操作超时时间（秒）
+	CreateUserName       string       `json:"create_user_name,omitempty"`            // 创建者用户名
+	CreateUserID         int          `json:"create_user_id,omitempty"`              // 创建者用户ID
+	Tags                 KeyValueList `json:"tags,omitempty"`                        // 标签
 }
 
-// Namespace 命名空间响应结构体
-type Namespace struct {
-	Name         string    `json:"name"`                  // 命名空间名称
-	UID          string    `json:"uid"`                   // 命名空间唯一标识符
-	Status       string    `json:"status"`                // 命名空间状态，例如 Active
-	CreationTime time.Time `json:"creation_time"`         // 创建时间
-	Labels       []string  `json:"labels,omitempty"`      // 命名空间标签
-	Annotations  []string  `json:"annotations,omitempty"` // 命名空间注解
+// UpdateClusterReq 更新集群请求
+type UpdateClusterReq struct {
+	ID                   int          `json:"id" form:"id" uri:"id" binding:"required" comment:"集群ID"`
+	Name                 string       `json:"name" binding:"required,min=1,max=200"` // 集群名称
+	CpuRequest           string       `json:"cpu_request,omitempty"`                 // CPU 请求量
+	CpuLimit             string       `json:"cpu_limit,omitempty"`                   // CPU 限制量
+	MemoryRequest        string       `json:"memory_request,omitempty"`              // 内存请求量
+	MemoryLimit          string       `json:"memory_limit,omitempty"`                // 内存限制量
+	RestrictNamespace    StringList   `json:"restrict_namespace"`                    // 资源限制命名空间
+	Env                  Env          `json:"env,omitempty"`                         // 集群环境
+	Version              string       `json:"version,omitempty"`                     // 集群版本
+	ApiServerAddr        string       `json:"api_server_addr,omitempty"`             // API Server 地址
+	KubeConfigContent    string       `json:"kube_config_content,omitempty"`         // kubeConfig 内容
+	ActionTimeoutSeconds int          `json:"action_timeout_seconds,omitempty"`      // 操作超时时间（秒）
+	Tags                 KeyValueList `json:"tags,omitempty"`                        // 标签
 }
 
-// CreateNamespaceRequest 创建新的命名空间请求结构体
-type CreateNamespaceRequest struct {
-	ClusterId   int      `json:"cluster_id" binding:"required"`
-	Name        string   `json:"namespace" binding:"required"`
-	Labels      []string `json:"labels,omitempty"`      // 命名空间标签
-	Annotations []string `json:"annotations,omitempty"` // 命名空间注解
+// DeleteClusterReq 删除集群请求
+type DeleteClusterReq struct {
+	ID int `json:"id" form:"id" uri:"id" binding:"required" comment:"集群ID"`
 }
 
-// UpdateNamespaceRequest 更新命名空间请求结构体
-type UpdateNamespaceRequest struct {
-	ClusterId   int      `json:"cluster_id" binding:"required"`
-	Name        string   `json:"namespace" binding:"required"`
-	Labels      []string `json:"labels,omitempty"`      // 命名空间标签
-	Annotations []string `json:"annotations,omitempty"` // 命名空间注解
+// RefreshClusterReq 刷新集群请求
+type RefreshClusterReq struct {
+	ID int `json:"id" form:"id" uri:"id" binding:"required" comment:"集群ID"`
 }
 
-// K8sClusterNodesRequest 定义集群节点请求的基础结构
-type K8sClusterNodesRequest struct {
-	ClusterId int    `json:"cluster_id" binding:"required"` // 集群id，必填
-	NodeName  string `json:"node_name" binding:"required"`  // 节点名称列表，必填
+// GetClusterReq 获取单个集群请求
+type GetClusterReq struct {
+	ID int `json:"id" form:"id" uri:"id" binding:"required" comment:"集群ID"`
 }
 
-// Resource 命名空间中的资源响应结构体
-type Resource struct {
-	Type         string    `json:"type"`          // 资源类型，例如 Pod, Service, Deployment
-	Name         string    `json:"name"`          // 资源名称
-	Namespace    string    `json:"namespace"`     // 所属命名空间
-	Status       string    `json:"status"`        // 资源状态，例如 Running, Pending
-	CreationTime time.Time `json:"creation_time"` // 创建时间
-}
-
-// Event 命名空间事件响应结构体
-type Event struct {
-	Reason         string           `json:"reason"`          // 事件原因
-	Message        string           `json:"message"`         // 事件消息
-	Type           string           `json:"type"`            // 事件类型，例如 Normal, Warning
-	FirstTimestamp time.Time        `json:"first_timestamp"` // 第一次发生时间
-	LastTimestamp  time.Time        `json:"last_timestamp"`  // 最后一次发生时间
-	Count          int32            `json:"count"`           // 事件发生次数
-	Source         core.EventSource `json:"source"`          // 事件来源
+// ListClustersReq 获取集群列表请求
+type ListClustersReq struct {
+	ListReq
+	Status string `json:"status" form:"status"`
+	Env    string `json:"env" form:"env"`
 }

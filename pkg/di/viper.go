@@ -238,7 +238,7 @@ func bindStructEnvVars(t reflect.Type, prefix string) {
 			if envTag != "" {
 				viper.BindEnv(configKey, envTag)
 			} else {
-				// 如果没有env标签，使用配置键自动生成环境变量名
+				// 如果没有env标签，使用配置键生成环境变量名
 				envName := strings.ToUpper(strings.ReplaceAll(configKey, ".", "_"))
 				viper.BindEnv(configKey, envName)
 			}

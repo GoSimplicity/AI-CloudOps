@@ -45,30 +45,17 @@ func NewAlertRuleHandler(svc alertService.AlertManagerRuleService) *AlertRuleHan
 
 func (a *AlertRuleHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
-
-	alertRules := monitorGroup.Group("/alert_rules")
 	{
-		alertRules.GET("/list", a.GetMonitorAlertRuleList)
-		alertRules.GET("/detail/:id", a.GetMonitorAlertRule)
-		alertRules.POST("/promql_check", a.PromqlExprCheck)
-		alertRules.POST("/create", a.CreateMonitorAlertRule)
-		alertRules.PUT("/update/:id", a.UpdateMonitorAlertRule)
-		alertRules.DELETE("/delete/:id", a.DeleteMonitorAlertRule)
+		monitorGroup.GET("/alert_rules/list", a.GetMonitorAlertRuleList)
+		monitorGroup.GET("/alert_rules/detail/:id", a.GetMonitorAlertRule)
+		monitorGroup.POST("/alert_rules/promql_check", a.PromqlExprCheck)
+		monitorGroup.POST("/alert_rules/create", a.CreateMonitorAlertRule)
+		monitorGroup.PUT("/alert_rules/update/:id", a.UpdateMonitorAlertRule)
+		monitorGroup.DELETE("/alert_rules/delete/:id", a.DeleteMonitorAlertRule)
 	}
 }
 
 // CreateMonitorAlertRule 创建新的告警规则
-// @Summary 创建告警规则
-// @Description 创建新的监控告警规则配置
-// @Tags 告警管理
-// @Accept json
-// @Produce json
-// @Param request body model.CreateMonitorAlertRuleReq true "创建告警规则请求参数"
-// @Success 200 {object} utils.ApiResponse "创建成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/alert_rules/create [post]
-// @Security BearerAuth
 func (a *AlertRuleHandler) CreateMonitorAlertRule(ctx *gin.Context) {
 	var req model.CreateMonitorAlertRuleReq
 
@@ -82,18 +69,6 @@ func (a *AlertRuleHandler) CreateMonitorAlertRule(ctx *gin.Context) {
 }
 
 // UpdateMonitorAlertRule 更新现有的告警规则
-// @Summary 更新告警规则
-// @Description 更新指定的监控告警规则配置
-// @Tags 告警管理
-// @Accept json
-// @Produce json
-// @Param id path int true "告警规则ID"
-// @Param request body model.UpdateMonitorAlertRuleReq true "更新告警规则请求参数"
-// @Success 200 {object} utils.ApiResponse "更新成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/alert_rules/update/{id} [put]
-// @Security BearerAuth
 func (a *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
 	var req model.UpdateMonitorAlertRuleReq
 
@@ -111,17 +86,6 @@ func (a *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
 }
 
 // DeleteMonitorAlertRule 删除指定的告警规则
-// @Summary 删除告警规则
-// @Description 删除指定ID的监控告警规则
-// @Tags 告警管理
-// @Accept json
-// @Produce json
-// @Param id path int true "告警规则ID"
-// @Success 200 {object} utils.ApiResponse "删除成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/alert_rules/delete/{id} [delete]
-// @Security BearerAuth
 func (a *AlertRuleHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
 	var req model.DeleteMonitorAlertRuleReq
 
@@ -139,19 +103,6 @@ func (a *AlertRuleHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
 }
 
 // GetMonitorAlertRuleList 获取告警规则列表
-// @Summary 获取告警规则列表
-// @Description 获取所有监控告警规则的分页列表
-// @Tags 告警管理
-// @Accept json
-// @Produce json
-// @Param page query int false "页码" default(1)
-// @Param size query int false "每页数量" default(10)
-// @Param keyword query string false "搜索关键词"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/alert_rules/list [get]
-// @Security BearerAuth
 func (a *AlertRuleHandler) GetMonitorAlertRuleList(ctx *gin.Context) {
 	var req model.GetMonitorAlertRuleListReq
 
@@ -161,17 +112,6 @@ func (a *AlertRuleHandler) GetMonitorAlertRuleList(ctx *gin.Context) {
 }
 
 // PromqlExprCheck 检查 PromQL 表达式的合法性
-// @Summary 验证PromQL表达式
-// @Description 检查和验证PromQL表达式的语法正确性
-// @Tags 告警管理
-// @Accept json
-// @Produce json
-// @Param request body model.PromqlAlertRuleExprCheckReq true "PromQL表达式检查请求参数"
-// @Success 200 {object} utils.ApiResponse "检查成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/alert_rules/promql_check [post]
-// @Security BearerAuth
 func (a *AlertRuleHandler) PromqlExprCheck(ctx *gin.Context) {
 	var promql model.PromqlAlertRuleExprCheckReq
 
@@ -181,17 +121,6 @@ func (a *AlertRuleHandler) PromqlExprCheck(ctx *gin.Context) {
 }
 
 // GetMonitorAlertRule 获取指定的告警规则详情
-// @Summary 获取告警规则详情
-// @Description 根据ID获取指定告警规则的详细信息
-// @Tags 告警管理
-// @Accept json
-// @Produce json
-// @Param id path int true "告警规则ID"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Router /api/monitor/alert_rules/detail/{id} [get]
-// @Security BearerAuth
 func (a *AlertRuleHandler) GetMonitorAlertRule(ctx *gin.Context) {
 	var req model.GetMonitorAlertRuleReq
 

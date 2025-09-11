@@ -92,7 +92,6 @@ type ApiResponse struct {
 	Code    int         `json:"code"`    // 状态码，表示业务逻辑的状态，而非HTTP状态码
 	Data    interface{} `json:"data"`    // 响应数据
 	Message string      `json:"message"` // 反馈信息
-	Type    string      `json:"type"`    // 消息类型
 }
 
 // 定义操作成功和失败的常量状态码
@@ -112,7 +111,6 @@ func ApiData(c *gin.Context, code int, data interface{}, message string) {
 		Code:    code,
 		Data:    data,
 		Message: message,
-		Type:    "",
 	})
 }
 
@@ -157,7 +155,6 @@ func BadRequest(c *gin.Context, code int, data interface{}, message string) {
 		Code:    code,
 		Data:    data,
 		Message: message,
-		Type:    "",
 	})
 }
 
@@ -167,7 +164,6 @@ func Forbidden(c *gin.Context, data interface{}, message string) {
 		Code:    http.StatusForbidden,
 		Data:    data,
 		Message: message,
-		Type:    "",
 	})
 }
 
@@ -177,7 +173,6 @@ func Unauthorized(c *gin.Context, code int, data interface{}, message string) {
 		Code:    code,
 		Data:    data,
 		Message: message,
-		Type:    "",
 	})
 }
 
@@ -187,7 +182,6 @@ func InternalServerError(c *gin.Context, code int, data interface{}, message str
 		Code:    code,
 		Data:    data,
 		Message: message,
-		Type:    "",
 	})
 }
 
@@ -311,7 +305,7 @@ func DeleteWithId(l *zap.Logger, funcName string, timeout int, url string, param
 // HandleRequest 用于统一处理请求绑定和响应
 func HandleRequest(ctx *gin.Context, req interface{}, action func() (interface{}, error)) {
 	if req != nil {
-		// 如果提供了绑定对象，执行数据绑定
+		// json / form 如果提供了绑定对象，执行数据绑定
 		if err := ctx.ShouldBind(req); err != nil {
 			BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
 			return
@@ -344,6 +338,19 @@ func GetParamID(ctx *gin.Context) (int, error) {
 		return 0, fmt.Errorf("'id' 非整数")
 	}
 	return paramID, nil
+}
+
+// GetCustomParamID 从查询参数中解析自定义字段的 ID，并进行类型转换
+func GetCustomParamID(ctx *gin.Context, paramID string) (int, error) {
+	id := ctx.Param(paramID)
+	if id == "" {
+		return 0, fmt.Errorf("缺少 '%s' 参数", paramID)
+	}
+	paramValue, err := strconv.Atoi(id)
+	if err != nil {
+		return 0, fmt.Errorf("'%s' 非整数", paramID)
+	}
+	return paramValue, nil
 }
 
 func GetStringParam(ctx *gin.Context, key string) (string, error) {
@@ -382,11 +389,11 @@ func GetQueryParam[T any](ctx *gin.Context, key string) (T, error) {
 	}
 }
 
-// GetParamName 从查询参数中解析 Name，并进行类型转换
-func GetParamName(ctx *gin.Context) (string, error) {
-	name := ctx.Param("name")
+// GetParamCustomName 从查询参数中解析 Name，并进行类型转换
+func GetParamCustomName(ctx *gin.Context, paramName string) (string, error) {
+	name := ctx.Param(paramName)
 	if name == "" {
-		return "", fmt.Errorf("缺少 'name' 参数")
+		return "", fmt.Errorf("缺少 '%s' 参数", paramName)
 	}
 
 	return name, nil

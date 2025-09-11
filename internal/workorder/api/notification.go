@@ -58,17 +58,6 @@ func (h *NotificationHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // CreateNotification 创建通知配置
-// @Summary 创建工单通知配置
-// @Description 创建新的工单通知配置
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param request body model.CreateWorkorderNotificationReq true "创建通知配置请求参数"
-// @Success 200 {object} utils.ApiResponse "创建成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/notification/create [post]
 func (h *NotificationHandler) CreateNotification(ctx *gin.Context) {
 	var req model.CreateWorkorderNotificationReq
 
@@ -82,18 +71,6 @@ func (h *NotificationHandler) CreateNotification(ctx *gin.Context) {
 }
 
 // UpdateNotification 更新通知配置
-// @Summary 更新工单通知配置
-// @Description 更新指定的工单通知配置信息
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param id path int true "通知配置ID"
-// @Param request body model.UpdateWorkorderNotificationReq true "更新通知配置请求参数"
-// @Success 200 {object} utils.ApiResponse "更新成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/notification/update/{id} [put]
 func (h *NotificationHandler) UpdateNotification(ctx *gin.Context) {
 	var req model.UpdateWorkorderNotificationReq
 
@@ -111,17 +88,6 @@ func (h *NotificationHandler) UpdateNotification(ctx *gin.Context) {
 }
 
 // DeleteNotification 删除通知配置
-// @Summary 删除工单通知配置
-// @Description 删除指定的工单通知配置
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param id path int true "通知配置ID"
-// @Success 200 {object} utils.ApiResponse "删除成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/notification/delete/{id} [delete]
 func (h *NotificationHandler) DeleteNotification(ctx *gin.Context) {
 	var req model.DeleteWorkorderNotificationReq
 
@@ -139,19 +105,6 @@ func (h *NotificationHandler) DeleteNotification(ctx *gin.Context) {
 }
 
 // ListNotification 获取通知配置列表
-// @Summary 获取工单通知配置列表
-// @Description 分页获取工单通知配置列表
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param page query int false "页码"
-// @Param size query int false "每页数量"
-// @Param name query string false "通知配置名称"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/notification/list [get]
 func (h *NotificationHandler) ListNotification(ctx *gin.Context) {
 	var req model.ListWorkorderNotificationReq
 
@@ -161,17 +114,6 @@ func (h *NotificationHandler) ListNotification(ctx *gin.Context) {
 }
 
 // DetailNotification 获取通知配置详情
-// @Summary 获取工单通知配置详情
-// @Description 获取指定工单通知配置的详细信息
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param id path int true "通知配置ID"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/notification/detail/{id} [get]
 func (h *NotificationHandler) DetailNotification(ctx *gin.Context) {
 	var req model.DetailWorkorderNotificationReq
 
@@ -188,19 +130,6 @@ func (h *NotificationHandler) DetailNotification(ctx *gin.Context) {
 }
 
 // GetSendLogs 获取通知发送日志
-// @Summary 获取工单通知发送日志
-// @Description 获取工单通知的发送日志记录
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param page query int false "页码"
-// @Param size query int false "每页数量"
-// @Param notificationId query int false "通知配置ID"
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/notification/logs [get]
 func (h *NotificationHandler) GetSendLogs(ctx *gin.Context) {
 	var req model.ListWorkorderNotificationLogReq
 
@@ -210,17 +139,6 @@ func (h *NotificationHandler) GetSendLogs(ctx *gin.Context) {
 }
 
 // TestSendNotification 测试发送通知
-// @Summary 测试工单通知发送
-// @Description 测试工单通知的发送功能
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param request body model.TestSendWorkorderNotificationReq true "测试发送通知请求参数"
-// @Success 200 {object} utils.ApiResponse "发送成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/notification/test/send [post]
 func (h *NotificationHandler) TestSendNotification(ctx *gin.Context) {
 	var req model.TestSendWorkorderNotificationReq
 
@@ -230,15 +148,6 @@ func (h *NotificationHandler) TestSendNotification(ctx *gin.Context) {
 }
 
 // GetAvailableChannels 获取可用的通知渠道
-// @Summary 获取可用的通知渠道
-// @Description 获取当前系统中可用的通知渠道列表
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Success 200 {object} utils.ApiResponse "获取成功"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/notification/channels [get]
 func (h *NotificationHandler) GetAvailableChannels(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetAvailableChannels(), nil
@@ -246,17 +155,6 @@ func (h *NotificationHandler) GetAvailableChannels(ctx *gin.Context) {
 }
 
 // SendNotificationManually 手动发送通知
-// @Summary 手动发送通知
-// @Description 通过指定渠道手动发送通知
-// @Tags 工单管理
-// @Accept json
-// @Produce json
-// @Param request body model.ManualSendNotificationReq true "手动发送通知请求参数"
-// @Success 200 {object} utils.ApiResponse "发送成功"
-// @Failure 400 {object} utils.ApiResponse "参数错误"
-// @Failure 500 {object} utils.ApiResponse "服务器内部错误"
-// @Security BearerAuth
-// @Router /api/workorder/notification/send [post]
 func (h *NotificationHandler) SendNotificationManually(ctx *gin.Context) {
 	var req model.ManualSendNotificationReq
 
