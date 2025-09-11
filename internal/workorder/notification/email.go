@@ -93,7 +93,6 @@ func (e *EmailChannel) Send(ctx context.Context, request *SendRequest) (*SendRes
 		}))
 	}
 
-	// 检测并设置SMTP配置
 	smtpHost, smtpPort, useTLS := e.detectSMTPConfig(e.config.GetUsername())
 
 	// SMTP连接

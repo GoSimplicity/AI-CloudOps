@@ -50,7 +50,7 @@ type ListReq struct {
 	Search string `json:"search" form:"search" binding:"omitempty"`
 }
 
-// ListResp 通用列表响应
+// ListResp 列表响应
 type ListResp[T any] struct {
 	Items []T   `json:"items"` // 数据列表
 	Total int64 `json:"total"` // 总数

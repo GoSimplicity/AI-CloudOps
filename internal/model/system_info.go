@@ -34,3 +34,4 @@ type SystemInfoResponse struct {
 	UptimeFormatted      string `json:"uptime_formatted"`       // 格式化的运行时间
 	SystemStatus         string `json:"system_status"`          // 系统状态
 }
+

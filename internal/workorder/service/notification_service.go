@@ -207,7 +207,6 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 		sendRequest.Templates["platform_name"] = "运维管理平台"
 		sendRequest.Templates["department"] = "技术运维部"
 		sendRequest.Templates["test_content"] = "本次测试验证了系统通知功能的完整性，包括邮件发送、飞书消息推送等多个渠道的有效性。"
-
 		response, err := n.notificationMgr.SendNotification(ctx, sendRequest)
 
 		log := &model.WorkorderNotificationLog{
