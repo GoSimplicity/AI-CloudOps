@@ -36,14 +36,11 @@ import (
 	service2 "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	api6 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	dao4 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
-	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	service5 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
-	"github.com/hibiken/asynq"
-	"go.uber.org/zap"
 )
 
 import (
@@ -247,4 +244,3 @@ var NotificationSet = wire.NewSet(
 	InitNotificationConfig,
 	InitNotificationManager,
 )
-

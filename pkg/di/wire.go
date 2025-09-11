@@ -57,15 +57,12 @@ import (
 	userService "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	workorderHandler "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
-	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
-	"github.com/hibiken/asynq"
-	"go.uber.org/zap"
 )
 
 type Cmd struct {
@@ -273,7 +270,6 @@ var NotificationSet = wire.NewSet(
 	InitNotificationConfig,
 	InitNotificationManager,
 )
-
 
 func ProvideCmd() *Cmd {
 	wire.Build(

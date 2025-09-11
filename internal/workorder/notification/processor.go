@@ -42,7 +42,6 @@ type Processor struct {
 	logger  *zap.Logger
 }
 
-// NewProcessor 创建通知任务处理器
 func NewProcessor(manager *Manager, logger *zap.Logger) *Processor {
 	return &Processor{
 		manager: manager,
